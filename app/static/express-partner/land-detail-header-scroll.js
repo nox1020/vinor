@@ -144,6 +144,7 @@
   }
 
   function bindMediaFlush() {
+    if (document.querySelector('.land-detail-v2')) return;
     var video = document.getElementById('landVideo');
     var img = document.getElementById('landMainImage');
     var hero = document.querySelector('.land-detail-partner-gallery-hero');
@@ -201,15 +202,16 @@
       queueUpdate();
     }
 
-    window.addEventListener('resize', scheduleGalleryFlush, opts);
-    window.addEventListener('orientationchange', scheduleGalleryFlush, opts);
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', scheduleGalleryFlush, opts);
-      window.visualViewport.addEventListener('scroll', scheduleGalleryFlush, opts);
+    if (!isV2) {
+      window.addEventListener('resize', scheduleGalleryFlush, opts);
+      window.addEventListener('orientationchange', scheduleGalleryFlush, opts);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', scheduleGalleryFlush, opts);
+        window.visualViewport.addEventListener('scroll', scheduleGalleryFlush, opts);
+      }
+      scheduleGalleryFlush();
+      bindMediaFlush();
     }
-
-    scheduleGalleryFlush();
-    bindMediaFlush();
   }
 
   function scheduleBind() {

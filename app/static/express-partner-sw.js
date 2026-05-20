@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.10-logo-v';
+const VERSION = 'v1.0.11-land-detail-init';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -63,6 +63,7 @@ const LOCAL_ASSETS = [
   '/static/express-partner/city-picker.js',
   '/static/express-partner/dashboard-chrome.js',
   '/static/express-partner/express-nav.js',
+  '/static/express-partner/land-detail-page.js',
   '/static/express-partner/land-detail-header-scroll.js',
   '/static/express-partner/land-detail-video-sound.js',
   '/static/express-partner/land-detail-v2.js',

@@ -310,25 +310,6 @@
 
 
 
-  function schedule() {
-
-    requestAnimationFrame(bind);
-
-  }
-
-
-
-  if (document.readyState === 'loading') {
-
-    document.addEventListener('DOMContentLoaded', schedule);
-
-  } else {
-
-    schedule();
-
-  }
-
-  document.addEventListener('vinor:express-page-swap', schedule);
-
+  window.__vinorInitLandDetailV2 = bind;
 })();
 

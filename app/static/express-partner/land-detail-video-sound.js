@@ -120,8 +120,9 @@
   }
 
   function onPageSwap() {
-    teardownLandDetailVideo();
-    requestAnimationFrame(initPartnerLandVideo);
+    if (!isLandDetailActive()) {
+      teardownLandDetailVideo();
+    }
   }
 
   document.addEventListener('click', toggleSound, true);
@@ -132,16 +133,6 @@
     suppressNextClickUntil = Date.now() + 500;
     toggleSound(e);
   }, true);
-
-  function scheduleInit() {
-    requestAnimationFrame(initPartnerLandVideo);
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', scheduleInit);
-  } else {
-    scheduleInit();
-  }
 
   document.addEventListener('vinor:express-page-swap', onPageSwap);
   document.addEventListener('visibilitychange', function () {

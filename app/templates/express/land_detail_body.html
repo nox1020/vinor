@@ -652,7 +652,7 @@
   </div>
 
   {% if land.latitude and land.longitude %}
-  <div id="locationModal" class="fixed inset-0 z-[100] hidden">
+  <div id="locationModal" class="fixed inset-0 z-[100] hidden" data-tg-body-modal>
     <div class="absolute inset-0 bg-black/60" onclick="closeLocationModal()"></div>
     <div class="absolute bottom-0 inset-x-0 bg-white dark:bg-gray-900 land-detail-v2-modal-sheet rounded-t-3xl p-6 space-y-4 animate-slide-up">
       <div class="flex items-center justify-between mb-2">
@@ -754,7 +754,7 @@
   {% endif %}
 
   <!-- مودال تماس -->
-  <div id="contactModal" class="fixed inset-0 z-[200] hidden" style="display: none; flex-direction: column;">
+  <div id="contactModal" class="fixed inset-0 z-[200] hidden" data-tg-body-modal style="display: none; flex-direction: column;">
     <div class="absolute inset-0 bg-black/60" onclick="closeContactModal()"></div>
     <div class="absolute bottom-0 inset-x-0 bg-white dark:bg-gray-900 rounded-t-3xl p-6 space-y-4 animate-slide-up max-h-[80vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-2">
@@ -1160,12 +1160,27 @@
 
       updateDots();
       updateThumbs();
-      setLoading(true);
-      if (hasVideo && currentIndex === 0) {
-        partnerTryPlayVideo();
-        waitForVideoLoad();
+      if (partnerDetailAutoplay) {
+        setLoading(false);
+        if (hasVideo && currentIndex === 0) {
+          partnerTryPlayVideo();
+        } else if (mainImg && !mainImg.classList.contains('hidden')) {
+          if (mainImg.complete && mainImg.naturalWidth > 0) {
+            mainImg.classList.add('is-loaded');
+          } else {
+            mainImg.addEventListener('load', function () {
+              mainImg.classList.add('is-loaded');
+              setLoading(false);
+            }, { once: true });
+          }
+        }
       } else {
-        waitForImageLoad();
+        setLoading(true);
+        if (hasVideo && currentIndex === 0) {
+          waitForVideoLoad();
+        } else {
+          waitForImageLoad();
+        }
       }
 
       try {
@@ -1295,19 +1310,6 @@
       });
     }
 
-    function scheduleLandDetailPageInit() {
-      if (typeof window.vinorTeardownLandDetailVideo === 'function') {
-        window.vinorTeardownLandDetailVideo();
-      } else if (typeof window.vinorExpressStopAllMedia === 'function') {
-        window.vinorExpressStopAllMedia();
-      }
-      requestAnimationFrame(initLandDetailGallery);
-    }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', scheduleLandDetailPageInit);
-    } else {
-      scheduleLandDetailPageInit();
-    }
-    document.addEventListener('vinor:express-page-swap', scheduleLandDetailPageInit);
+    window.__vinorInitLandDetailGallery = initLandDetailGallery;
 
   </script>

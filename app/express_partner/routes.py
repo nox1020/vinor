@@ -3361,6 +3361,16 @@ def land_detail(code: str):
     share_token = ''
     share_url = ''
 
+    # تصاویر با سایز thumb/full برای لود تدریجی سریع‌تر در جزئیات
+    try:
+        from app.utils.images import prepare_variants_dict
+        imgs = land.get('images') or []
+        if imgs and not land.get('images_v2'):
+            land = dict(land)
+            land['images_v2'] = [prepare_variants_dict(str(i)) for i in imgs if i]
+    except Exception:
+        pass
+
     return render_template(
         'express_partner/land_detail.html',
         land=land,
