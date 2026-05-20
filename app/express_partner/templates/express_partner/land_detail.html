@@ -5,16 +5,13 @@
   <style>
     .progressive-img {
       filter: blur(12px);
-      background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
-      transition: filter 0.25s ease, opacity 0.2s ease;
-    }
-    html.dark .progressive-img {
       background: linear-gradient(90deg, #1f2937 0%, #111827 50%, #1f2937 100%);
+      transition: filter 0.25s ease, opacity 0.2s ease;
     }
     .progressive-img.is-loaded {
       filter: blur(0);
     }
-    #landGallery, #landGallery *:not(#landVideoSoundToggle):not(#landVideoSoundIcon) { touch-action: pan-y; }
+    #landGallery, #landGallery *:not(#landVideoSoundToggle):not(#landVideoSoundIcon) { touch-action: pan-x pan-y; }
     #landGallery #landVideo {
       pointer-events: none;
     }
@@ -28,78 +25,44 @@
       display: none !important;
       -webkit-appearance: none;
     }
-    .land-video-sound-btn {
-      border-color: rgba(255, 255, 255, 0.35);
-    }
     .land-video-sound-btn[data-muted="false"] {
       border-color: rgba(52, 211, 153, 0.65);
       background-color: rgba(16, 185, 129, 0.28);
     }
-    /* هدر کاملاً شفاف partner — گالری زیر آن دیده می‌شود */
-    #landDetailPartnerHeader {
-      background: transparent;
-      border: none;
-      box-shadow: none;
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-      transition: opacity 0.22s ease, transform 0.22s ease;
-      will-change: transform, opacity;
-    }
-    #landDetailPartnerHeader.is-header-hidden {
-      opacity: 0;
-      pointer-events: none;
-      transform: translateY(calc(-100% - env(safe-area-inset-top, 0px)));
-    }
-    @media (prefers-reduced-motion: reduce) {
-      #landDetailPartnerHeader {
-        transition: none;
-      }
-    }
-    .land-detail-partner-header-inner {
-      min-height: 3rem;
-      padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
-      padding-bottom: 0.5rem;
-    }
-    @media (min-width: 640px) {
-      .land-detail-partner-header-inner {
-        min-height: 3.25rem;
-      }
-    }
-    /* گالری از لبهٔ فیزیکی بالای صفحه (زیر status bar) */
+
+    /* --- جزئیات v2 (موبایل همکار) --- */
     @media (max-width: 1023px) {
-      html:has(#landDetailPartnerHeader),
-      html:has(#landDetailPartnerHeader) body,
-      html:has(#landDetailPartnerHeader) #tg-page-shell,
-      html:has(#landDetailPartnerHeader) #vinor-express-page-swap,
-      .land-detail-partner-page {
-        background-color: #000 !important;
+      html:has(.land-detail-v2),
+      html:has(.land-detail-v2) body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background-color: #0B111B;
+      }
+      html:has(.land-detail-v2) #tg-page-shell,
+      html:has(.land-detail-v2) #vinor-express-page-swap {
         margin-top: 0 !important;
         padding-top: 0 !important;
       }
-      .land-detail-partner-page > .land-detail-partner-gallery-hero {
-        margin: 0 !important;
+      .land-detail-v2.land-detail-partner-page {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+      }
+      .land-detail-v2 .land-detail-partner-gallery-hero {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
         padding: 0 !important;
         width: 100vw;
         max-width: 100vw;
         margin-left: calc(50% - 50vw) !important;
         margin-right: calc(50% - 50vw) !important;
         overflow: hidden;
-        line-height: 0;
       }
-      .land-detail-partner-page > .max-w-6xl {
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-        background-color: #fff;
-      }
-      html.dark .land-detail-partner-page > .max-w-6xl {
-        background-color: rgb(3 7 18);
-      }
-      .land-detail-partner-gallery-top,
-      .land-detail-partner-gallery-top > .w-full {
+      .land-detail-v2 .land-detail-partner-gallery-top,
+      .land-detail-v2 .land-detail-partner-gallery-top > .relative {
         margin: 0 !important;
         padding: 0 !important;
       }
-      .land-detail-partner-gallery-top #landGallery {
+      .land-detail-v2 #landGallery {
         display: block;
         width: 100%;
         max-width: 100%;
@@ -107,14 +70,40 @@
         margin-top: calc(-1 * env(safe-area-inset-top, 0px)) !important;
         border-radius: 0;
         background: #000;
-        aspect-ratio: 4 / 3;
+      }
+      .land-detail-v2 .land-detail-v2-dots .land-dot {
+        transition: transform 0.2s ease, background-color 0.2s ease;
+      }
+      .land-detail-v2 .land-detail-v2-dots .land-dot.active {
+        background-color: rgb(45 212 191) !important;
+      }
+      .land-detail-v2 [data-land-detail-fav] .vinor-fav-icon.fas {
+        color: rgb(248 113 113);
+      }
+      .land-detail-v2-modal-sheet {
+        background-color: #151d2b !important;
+        border-top: 1px solid rgba(148, 163, 184, 0.2);
+      }
+      .land-detail-v2-modal-sheet a {
+        border-color: rgba(148, 163, 184, 0.25) !important;
+      }
+      .land-detail-v2-modal-sheet a:hover {
+        background-color: rgba(255, 255, 255, 0.05) !important;
       }
     }
-    /* جزئیات فایل: بدون فوتر تب — نوار تماس/معامله چسبیده به پایین viewport */
+
+    @media (min-width: 1024px) {
+      .land-detail-v2.land-detail-partner-page {
+        background-color: rgb(3 7 18);
+      }
+      .land-detail-v2 .land-detail-partner-gallery-hero {
+        display: none;
+      }
+    }
+
     @media (max-width: 639px) {
-      #landPartnerActionBar {
+      #landPartnerActionBar.land-detail-v2-actionbar {
         bottom: 0;
-        padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
       }
     }
   </style>
@@ -127,6 +116,8 @@
 
 {% block scripts %}
   {{ super() }}
+  {% include 'express_partner/partials/vinor_favorites_script.html' %}
   <script src="{{ 'express-partner/land-detail-video-sound.js'|static_version }}"></script>
   <script src="{{ 'express-partner/land-detail-header-scroll.js'|static_version }}"></script>
+  <script src="{{ 'express-partner/land-detail-v2.js'|static_version }}"></script>
 {% endblock %}

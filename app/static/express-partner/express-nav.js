@@ -38,6 +38,26 @@
   var prefetchCache = Object.create(null);
   var prefetchInflight = Object.create(null);
 
+  /** توقف همه ویدیوها قبل از soft-swap — جلوگیری از ادامه صدا در جزئیات/داشبورد */
+  function stopAllExpressMedia() {
+    try {
+      var swap = document.getElementById('vinor-express-page-swap');
+      var roots = swap ? [swap, document] : [document];
+      roots.forEach(function (root) {
+        root.querySelectorAll('video').forEach(function (v) {
+          try {
+            v.pause();
+            v.muted = true;
+            v.defaultMuted = true;
+            v.setAttribute('muted', '');
+          } catch (_) {}
+        });
+      });
+    } catch (_) {}
+  }
+
+  window.vinorExpressStopAllMedia = stopAllExpressMedia;
+
   function normPath(pathname) {
     return (pathname || '').replace(/\/+$/, '') || '/';
   }
@@ -286,6 +306,7 @@
       var newSwap = doc.getElementById('vinor-express-page-swap');
       var newScripts = doc.getElementById('vinor-express-page-scripts');
       if (!newSwap) throw new Error('swap');
+      stopAllExpressMedia();
       swapEl.innerHTML = newSwap.innerHTML;
       swapEl.querySelectorAll('#bottomNavMenu').forEach(function (dup) { dup.remove(); });
       if (scriptsEl && newScripts) {
@@ -339,6 +360,7 @@
   }
 
   function navigateWithAnimation(href, dir) {
+    stopAllExpressMedia();
     if (prefersReducedMotion()) {
       return softNavigate(href, 0);
     }
@@ -389,6 +411,7 @@
       } catch (_) {}
       return navigateWithAnimation(href, dir);
     }
+    stopAllExpressMedia();
     return softNavigate(href, 0);
   }
 

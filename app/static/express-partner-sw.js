@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.7-tab-static-cache';
+const VERSION = 'v1.0.10-logo-v';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -37,6 +37,7 @@ const PRECACHE_URLS = [
   '/express/partner/notes',
   '/express/partner/apply',
   '/express/partner/thanks',
+  '/express/partner/offline',
   // Manifest
   '/express/partner/manifest.webmanifest',
   // Icons (استفاده از آیکون‌های مشترک)
@@ -60,7 +61,15 @@ const LOCAL_ASSETS = [
   '/static/vendor/alpine/alpine-3.14.1.min.js',
   '/static/js/onboarding.js',
   '/static/express-partner/city-picker.js',
-  '/static/express-partner/dashboard-chrome.js'
+  '/static/express-partner/dashboard-chrome.js',
+  '/static/express-partner/express-nav.js',
+  '/static/express-partner/land-detail-header-scroll.js',
+  '/static/express-partner/land-detail-video-sound.js',
+  '/static/express-partner/land-detail-v2.js',
+  '/static/favicon.ico',
+  '/static/favicon-32x32.png',
+  '/static/icons/icon-192.png',
+  '/static/icons/icon-512.png'
 ];
 
 // نصب Service Worker

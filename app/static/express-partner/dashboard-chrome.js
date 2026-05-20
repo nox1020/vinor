@@ -96,11 +96,13 @@
     try {
       if (!window.matchMedia('(max-width: 1023px)').matches) {
         el.cardsRoot.style.height = '';
+        el.cardsRoot.style.removeProperty('--vinor-dash-card-h');
         return;
       }
       var cs = window.getComputedStyle(el.cardsRoot);
       if (cs.display === 'none' || cs.visibility === 'hidden') {
         el.cardsRoot.style.height = '';
+        el.cardsRoot.style.removeProperty('--vinor-dash-card-h');
         return;
       }
       var nav = document.getElementById('bottomNavMenu');
@@ -116,8 +118,22 @@
       var cardNeed = measureTabletCardHeight(el);
       if (cardNeed > 0) available = Math.max(available, cardNeed + 8);
       var prev = parseFloat(String(el.cardsRoot.style.height || '').replace('px', ''), 10);
-      if (Number.isFinite(prev) && Math.abs(prev - available) < 8) return;
+      if (Number.isFinite(prev) && Math.abs(prev - available) < 8) {
+        try {
+          if (window.matchMedia('(max-width: 639px)').matches) {
+            el.cardsRoot.style.setProperty('--vinor-dash-card-h', available + 'px');
+          }
+        } catch (_) {}
+        return;
+      }
       el.cardsRoot.style.height = available + 'px';
+      try {
+        if (window.matchMedia('(max-width: 639px)').matches) {
+          el.cardsRoot.style.setProperty('--vinor-dash-card-h', available + 'px');
+        } else {
+          el.cardsRoot.style.removeProperty('--vinor-dash-card-h');
+        }
+      } catch (_) {}
     } catch (_) {}
   }
 

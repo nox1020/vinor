@@ -223,6 +223,34 @@
       -webkit-appearance: none;
       appearance: none;
     }
+    .card-img-loading {
+      background: linear-gradient(110deg, rgba(15, 23, 42, 0.5) 0%, rgba(30, 41, 59, 0.65) 45%, rgba(15, 23, 42, 0.5) 90%);
+      background-size: 200% 100%;
+      animation: vinorCardImgLoad 1.2s ease-in-out infinite;
+    }
+    html:not(.dark) .card-img-loading {
+      background: linear-gradient(110deg, #e2e8f0 0%, #f1f5f9 45%, #e2e8f0 90%);
+      background-size: 200% 100%;
+    }
+    .card-img-loading .vinor-card-load-ring {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      border: 2px solid rgba(52, 211, 153, 0.25);
+      border-top-color: #34d399;
+      animation: vinorCardLoadSpin 0.75s linear infinite;
+    }
+    @keyframes vinorCardImgLoad {
+      0% { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
+    }
+    @keyframes vinorCardLoadSpin {
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .card-img-loading { animation: none; }
+      .card-img-loading .vinor-card-load-ring { animation: none; }
+    }
     {% block styles %}{% endblock %}
   </style>
 

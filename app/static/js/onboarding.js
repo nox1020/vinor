@@ -249,27 +249,15 @@ class OnboardingTour {
         position: 'top'
       },
       {
-        element: '[data-tour="help-link"]',
-        title: 'راهنمای استفاده 📚',
-        description: 'اگر سوالی دارید یا می‌خواهید نحوه استفاده از پلتفرم را یاد بگیرید، این بخش را مطالعه کنید. راهنمای کامل استفاده از تمام قابلیت‌ها در اینجا موجود است.',
-        position: 'top'
-      },
-      {
         element: '[data-tour="support-link"]',
         title: 'تماس با پشتیبانی 💬',
-        description: 'در صورت بروز مشکل یا نیاز به راهنمایی، می‌توانید از طریق این بخش با تیم پشتیبانی تماس بگیرید. ما همیشه آماده کمک به شما هستیم.',
+        description: 'از این بخش با پشتیبانی تماس بگیرید، راهنمای پلتفرم را بخوانید و در صورت نیاز تور راهنما را دوباره اجرا کنید.',
         position: 'top'
       },
       {
         element: '[data-tour="bottom-nav"]',
         title: 'منوی پایین 📱',
         description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید: فایل‌ها، پورسانت‌ها، اعلان‌ها و پروفایل.',
-        position: 'top'
-      },
-      {
-        element: '[data-tour="restart-tour"]',
-        title: 'اجرای مجدد تور راهنما 🔄',
-        description: 'اگر می‌خواهید دوباره تور راهنما را ببینید یا بخشی از آموزش را مرور کنید، روی این دکمه کلیک کنید. تور از ابتدا شروع می‌شود و تمام بخش‌ها را پوشش می‌دهد.',
         position: 'top'
       }
     ];
@@ -438,37 +426,42 @@ class OnboardingTour {
         position: 'top',
         page: 'profile'
       },
-      // مرحله 17: راهنما
-      {
-        element: '[data-tour="help-link"]',
-        title: 'راهنمای استفاده 📚',
-        description: 'اگر سوالی دارید یا می‌خواهید نحوه استفاده از پلتفرم را یاد بگیرید، این بخش را مطالعه کنید. راهنمای کامل استفاده از تمام قابلیت‌ها در اینجا موجود است.',
-        position: 'top',
-        page: 'profile'
-      },
-      // مرحله 18: پشتیبانی
+      // مرحله 17: پشتیبانی (پروفایل)
       {
         element: '[data-tour="support-link"]',
         title: 'تماس با پشتیبانی 💬',
-        description: 'در صورت بروز مشکل یا نیاز به راهنمایی، می‌توانید از طریق این بخش با تیم پشتیبانی تماس بگیرید. ما همیشه آماده کمک به شما هستیم.',
+        description: 'برای تماس با پشتیبانی، مطالعهٔ راهنما و اجرای مجدد تور، روی این گزینه بزنید تا وارد صفحه پشتیبانی شوید.',
         position: 'top',
-        page: 'profile'
+        page: 'profile',
+        action: 'navigate',
+        actionMessage: 'روی «تماس با پشتیبانی» بزنید. تور در همان صفحه ادامه می‌یابد.',
+        nextUrl: '/express/partner/support'
       },
-      // مرحله 19: منوی پایین
+      // مرحله 18: راهنما (صفحه پشتیبانی)
+      {
+        element: '[data-tour="help-link"]',
+        title: 'راهنمای استفاده 📚',
+        description: 'راهنمای کامل استفاده از پلتفرم را از اینجا مطالعه کنید.',
+        position: 'top',
+        page: 'support',
+        waitForElement: true
+      },
+      // مرحله 19: اجرای مجدد تور (صفحه پشتیبانی)
+      {
+        element: '[data-tour="restart-tour"]',
+        title: 'اجرای مجدد تور راهنما 🔄',
+        description: 'برای مشاهدهٔ دوبارهٔ آموزش‌ها از ابتدا، روی این دکمه بزنید.',
+        position: 'top',
+        page: 'support',
+        waitForElement: true
+      },
+      // مرحله 20: منوی پایین
       {
         element: '[data-tour="bottom-nav"]',
         title: 'منوی پایین 📱',
         description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید: فایل‌ها، پورسانت‌ها، اعلان‌ها و پروفایل.',
         position: 'top',
-        page: 'profile'
-      },
-      // مرحله 20: اجرای مجدد تور
-      {
-        element: '[data-tour="restart-tour"]',
-        title: 'اجرای مجدد تور راهنما 🔄',
-        description: 'اگر می‌خواهید دوباره تور راهنما را ببینید یا بخشی از آموزش را مرور کنید، روی این دکمه کلیک کنید. تور از ابتدا شروع می‌شود و تمام بخش‌ها را پوشش می‌دهد.',
-        position: 'top',
-        page: 'profile'
+        page: 'support'
       }
     ];
   }
@@ -826,7 +819,8 @@ class OnboardingTour {
       'land_detail': '/express/partner/lands',
       'commissions': '/express/partner/commissions',
       'notes': '/express/partner/notes',
-      'profile': '/express/partner/profile'
+      'profile': '/express/partner/profile',
+      'support': '/express/partner/support'
     };
     return paths[page] || '/express/partner/dashboard';
   }
@@ -841,7 +835,9 @@ class OnboardingTour {
     } else if (expectedPage === 'notes') {
       return currentPath.includes('/notes');
     } else if (expectedPage === 'profile') {
-      return currentPath.includes('/profile');
+      return currentPath.includes('/profile') && !currentPath.includes('/profile/');
+    } else if (expectedPage === 'support') {
+      return currentPath.includes('/support');
     }
     return true;
   }

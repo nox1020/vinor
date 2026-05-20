@@ -70,7 +70,27 @@
     ensurePlaying(video);
   }
 
+  function isLandDetailActive() {
+    try {
+      return !!document.getElementById('landGallery') && !!$('landVideo');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function teardownLandDetailVideo() {
+    var video = $('landVideo');
+    if (!video) return;
+    try {
+      video.pause();
+      applyMute(video, true);
+      video.removeAttribute('data-vinor-sound-hooks');
+    } catch (_) {}
+  }
+
   function initPartnerLandVideo() {
+    if (!isLandDetailActive()) return;
+
     var video = $('landVideo');
     var btn = $('landVideoSoundToggle');
     var icon = $('landVideoSoundIcon');
@@ -84,6 +104,7 @@
     video.dataset.vinorSoundHooks = '1';
 
     video.addEventListener('ended', function () {
+      if (!isLandDetailActive()) return;
       try {
         video.currentTime = 0;
         ensurePlaying(video);
@@ -91,9 +112,16 @@
     });
 
     video.addEventListener('pause', function () {
+      if (!isLandDetailActive() || !video.isConnected) return;
       if (video.classList.contains('hidden')) return;
+      if (document.hidden) return;
       ensurePlaying(video);
     });
+  }
+
+  function onPageSwap() {
+    teardownLandDetailVideo();
+    requestAnimationFrame(initPartnerLandVideo);
   }
 
   document.addEventListener('click', toggleSound, true);
@@ -115,7 +143,11 @@
     scheduleInit();
   }
 
-  document.addEventListener('vinor:express-page-swap', scheduleInit);
+  document.addEventListener('vinor:express-page-swap', onPageSwap);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) teardownLandDetailVideo();
+  });
 
   g.vinorInitLandDetailVideoSound = initPartnerLandVideo;
+  g.vinorTeardownLandDetailVideo = teardownLandDetailVideo;
 })(window);

@@ -1,4 +1,4 @@
-﻿  <div class="min-h-screen {% if is_partner_context %}land-detail-partner-page{% endif %} bg-white dark:bg-gray-950 {% if is_partner_context %}max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8{% else %}pb-20{% endif %}">
+﻿  <div class="min-h-screen {% if is_partner_context %}land-detail-partner-page land-detail-v2{% endif %} {% if is_partner_context %}bg-[#0B111B]{% else %}bg-white dark:bg-gray-950{% endif %} {% if is_partner_context %}max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8{% else %}pb-20{% endif %}">
     {% set images = land.images or [] %}
     {% set video = land.video %}
     {% set has_video = video and video.strip() %}
@@ -8,158 +8,7 @@
     {% set primary_image_v2 = images_v2[0] if images_v2 else None %}
 
     {% if is_partner_context %}
-    <section class="land-detail-partner-gallery-hero w-full max-lg:mb-4 max-lg:bg-black">
-      <div class="land-detail-partner-gallery-top relative w-full">
-      <div class="relative w-full pt-0 pb-0 max-lg:pb-0">
-        {% if has_video or primary_image %}
-          {% if video and ("://" in (video|string)) %}
-            {% set video_src = video %}
-          {% elif video and (video|string).startswith('/uploads/') %}
-            {% set video_src = video %}
-          {% elif video and (video|string).startswith('uploads/') %}
-            {% set video_src = '/uploads/' + (video|string)[8:] %}
-          {% elif video and not (video|string).startswith('/') %}
-            {% set video_src = '/uploads/' + (video|string) %}
-          {% else %}
-            {% set video_src = video %}
-          {% endif %}
-
-          <div id="landGallery"
-               class="aspect-[4/3] bg-gray-100 dark:bg-gray-900 relative overflow-hidden rounded-none sm:rounded-xl select-none"
-               {% if not is_partner_context %}
-               data-next-code="{{ next_land.code if next_land else '' }}"
-               data-prev-code="{{ prev_land.code if prev_land else '' }}"
-               {% endif %}>
-            <style>
-              #landGallery, #landGallery *:not(#landVideoSoundToggle):not(#landVideoSoundIcon) { touch-action: pan-y; }
-            </style>
-
-            <div id="landMediaLoading"
-                 class="absolute inset-0 z-40 flex items-center justify-center bg-black/35 backdrop-blur-[1px] text-white transition-opacity duration-200 opacity-0 pointer-events-none"
-                 aria-hidden="true">
-              <div class="flex flex-col items-center gap-2">
-                <div class="w-10 h-10 rounded-full border-2 border-white/40 border-t-white animate-spin"></div>
-                <div class="text-xs font-medium drop-shadow">در حال بارگذاری…</div>
-              </div>
-            </div>
-
-            {% if has_video %}
-            <video id="landVideo"
-                   class="absolute inset-0 z-0 h-full w-full object-cover block"
-                   {% if is_partner_context %}
-                   autoplay loop playsinline
-                   disablepictureinpicture
-                   controlslist="nodownload nofullscreen noremoteplayback"
-                   preload="auto"
-                   {% else %}
-                   controls
-                   onclick="openLightbox('{{ video_src }}')"
-                   {% endif %}>
-              <source src="{{ video_src }}" type="video/mp4">
-              مرورگر شما از پخش ویدیو پشتیبانی نمی‌کند.
-            </video>
-            {% endif %}
-
-            {% if primary_image %}
-              {% if images_v2 and primary_image_v2 %}
-                {% set thumb_src = primary_image_v2.thumb or (primary_image_v2.full or primary_image) %}
-                {% set full_src = primary_image_v2.full or (primary_image_v2.raw or primary_image) %}
-              {% else %}
-                {% if "://" in (primary_image|string) %}
-                  {% set full_src = primary_image %}
-                {% elif (primary_image|string).startswith('/uploads/') %}
-                  {% set full_src = primary_image %}
-                {% elif (primary_image|string).startswith('uploads/') %}
-                  {% set full_src = '/uploads/' + (primary_image|string)[8:] %}
-                {% elif not (primary_image|string).startswith('/') %}
-                  {% set full_src = '/uploads/' + (primary_image|string) %}
-                {% else %}
-                  {% set full_src = primary_image %}
-                {% endif %}
-                {% set thumb_src = full_src %}
-              {% endif %}
-              <img id="landMainImage"
-                   src="{{ thumb_src }}"
-                   data-full="{{ full_src }}"
-                   alt="{{ land.title }}"
-                   class="w-full h-full object-cover {% if has_video %}hidden{% else %}block{% endif %} {% if images_v2 %}progressive-img{% endif %}"
-                   fetchpriority="high" decoding="async">
-            {% endif %}
-
-            {% if total_items > 1 %}
-            {% if not is_partner_context %}
-            <button type="button"
-                    id="landPrev"
-                    class="absolute inset-y-0 right-0 w-12 flex items-center justify-center bg-gradient-to-l from-black/35 to-transparent text-white text-lg focus:outline-none active:scale-95 z-30">
-              <i class="fas fa-chevron-right drop-shadow"></i>
-            </button>
-            <button type="button"
-                    id="landNext"
-                    class="absolute inset-y-0 left-0 w-12 flex items-center justify-center bg-gradient-to-r from-black/35 to-transparent text-white text-lg focus:outline-none active:scale-95 z-30">
-              <i class="fas fa-chevron-left drop-shadow"></i>
-            </button>
-            {% endif %}
-
-            <div class="absolute bottom-2 inset-x-0 flex items-center justify-center gap-1.5 z-30">
-              {% if has_video %}
-              <span class="land-dot w-1.5 h-1.5 rounded-full bg-white/40 active"></span>
-              {% endif %}
-              {% for _ in images %}
-              <span class="land-dot w-1.5 h-1.5 rounded-full bg-white/40 {% if not has_video and loop.first %}active{% endif %}"></span>
-              {% endfor %}
-            </div>
-            {% endif %}
-
-            {% if has_video %}
-            <div class="pointer-events-none absolute inset-0 z-[35] flex items-center justify-center">
-              <button type="button"
-                      id="landVideoSoundToggle"
-                      class="land-video-sound-btn pointer-events-auto relative z-[36] grid h-12 w-12 touch-manipulation place-items-center rounded-full border border-white/30 bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/60"
-                      aria-label="بی‌صدا — برای پخش با صدا بزنید"
-                      aria-pressed="true"
-                      data-muted="true"
-                      title="بی‌صدا">
-                <i id="landVideoSoundIcon" class="fas fa-volume-xmark text-base" aria-hidden="true"></i>
-              </button>
-            </div>
-            {% endif %}
-          </div>
-
-        {% else %}
-          <div class="aspect-[4/3] bg-gray-100 dark:bg-gray-900 flex items-center justify-center rounded-xl">
-            <i class="fas fa-image text-4xl text-gray-300 dark:text-gray-700"></i>
-          </div>
-        {% endif %}
-      </div>
-
-
-      {% if land._assignment_status == 'in_transaction' %}
-      <div class="absolute top-3 left-5 z-20">
-        <span class="inline-flex items-center px-2.5 py-1.5 rounded-full text-[11px] font-semibold bg-orange-500 text-white shadow-sm">
-          در حال معامله
-        </span>
-      </div>
-      {% endif %}
-      <header id="landDetailPartnerHeader" class="fixed top-0 left-0 right-0 z-[55] w-full bg-transparent pointer-events-none">
-        <div class="land-detail-partner-header-inner pointer-events-auto mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 sm:px-4">
-          <a href="{{ url_for('express_partner.dashboard') }}"
-             data-vinor-express-nav="back"
-             class="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)] transition active:opacity-70 sm:h-10 sm:w-10"
-             aria-label="بازگشت">
-            <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
-          </a>
-          <div class="flex min-w-0 flex-1 flex-col items-center px-2">
-            {% if land.code %}
-            <span class="font-mono text-[11px] text-white/75 drop-shadow-[0_1px_3px_rgba(0,0,0,0.65)]">
-              کد {{ land.code }}
-            </span>
-            {% endif %}
-          </div>
-          <div class="h-9 w-9 shrink-0 sm:h-10 sm:w-10" aria-hidden="true"></div>
-        </div>
-      </header>
-      </div>
-    </section>
+    {% include 'express_partner/partials/land_detail_partner_v2.html' %}
     {% endif %}
 
     {% if not is_partner_context %}
@@ -226,7 +75,7 @@
                data-prev-code="{{ prev_land.code if prev_land else '' }}"
                {% endif %}>
             <style>
-              #landGallery, #landGallery *:not(#landVideoSoundToggle):not(#landVideoSoundIcon) { touch-action: pan-y; }
+              #landGallery, #landGallery *:not(#landVideoSoundToggle):not(#landVideoSoundIcon) { touch-action: pan-x pan-y; }
             </style>
 
             <div id="landMediaLoading"
@@ -444,8 +293,8 @@
                       </button>
                     {% else %}
                       <button type="submit" class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 transition">
-                        <i class="fas fa-handshake"></i>
-                        معامله
+                        <i class="fas fa-calendar-check"></i>
+                        درخواست بازدید
                       </button>
                     {% endif %}
                   </form>
@@ -512,8 +361,8 @@
       </div>
     </div>
 
-    <div class="max-w-4xl lg:max-w-6xl mx-auto px-3 sm:px-4 space-y-4">
-      <!-- عنوان و اطلاعات اصلی -->
+    <div class="max-w-4xl lg:max-w-6xl mx-auto px-3 sm:px-4 space-y-4 {% if is_partner_context %}hidden lg:block{% endif %}">
+      <!-- عنوان و اطلاعات اصلی (دسکتاپ همکار) -->
       <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">{{ land.title or '—' }}</h2>
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
@@ -665,40 +514,6 @@
         </div>
         <i class="fas fa-chevron-left text-gray-400 dark:text-gray-500"></i>
       </button>
-
-      <!-- مودال موقعیت -->
-      <div id="locationModal" class="fixed inset-0 z-[100] hidden">
-        <div class="absolute inset-0 bg-black/60" onclick="closeLocationModal()"></div>
-        <div class="absolute bottom-0 inset-x-0 bg-white dark:bg-gray-900 rounded-t-3xl p-6 space-y-4 animate-slide-up">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-lg font-bold text-gray-900 dark:text-white">باز کردن با</h3>
-            <button onclick="closeLocationModal()" class="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center">
-              <i class="fas fa-times text-gray-500"></i>
-            </button>
-          </div>
-          <a href="https://www.google.com/maps?q={{ land.latitude }},{{ land.longitude }}" target="_blank" rel="noopener"
-             class="flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-            <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-              <i class="fab fa-google text-red-500 text-xl"></i>
-            </div>
-            <div class="font-semibold text-gray-900 dark:text-white">Google Maps</div>
-          </a>
-          <a href="https://waze.com/ul?ll={{ land.latitude }},{{ land.longitude }}&navigate=yes" target="_blank" rel="noopener"
-             class="flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-            <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-              <i class="fas fa-route text-blue-500 text-xl"></i>
-            </div>
-            <div class="font-semibold text-gray-900 dark:text-white">Waze</div>
-          </a>
-          <a href="geo:{{ land.latitude }},{{ land.longitude }}"
-             class="flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-            <div class="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-              <i class="fas fa-location-arrow text-purple-500 text-xl"></i>
-            </div>
-            <div class="font-semibold text-gray-900 dark:text-white">مسیریاب پیش‌فرض</div>
-          </a>
-        </div>
-      </div>
       {% endif %}
 
       <!-- لینک صفحه عمومی -->
@@ -819,8 +634,8 @@
           </button>
         {% else %}
           <button type="submit" class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors mt-3">
-            <i class="fas fa-handshake"></i>
-            <span class="text-sm font-medium">معامله</span>
+            <i class="fas fa-calendar-check"></i>
+            <span class="text-sm font-medium">درخواست بازدید</span>
           </button>
         {% endif %}
       </form>
@@ -836,45 +651,80 @@
     </div>
   </div>
 
+  {% if land.latitude and land.longitude %}
+  <div id="locationModal" class="fixed inset-0 z-[100] hidden">
+    <div class="absolute inset-0 bg-black/60" onclick="closeLocationModal()"></div>
+    <div class="absolute bottom-0 inset-x-0 bg-white dark:bg-gray-900 land-detail-v2-modal-sheet rounded-t-3xl p-6 space-y-4 animate-slide-up">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white">باز کردن با</h3>
+        <button type="button" onclick="closeLocationModal()" class="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center">
+          <i class="fas fa-times text-gray-500"></i>
+        </button>
+      </div>
+      <a href="https://www.google.com/maps?q={{ land.latitude }},{{ land.longitude }}" target="_blank" rel="noopener"
+         class="flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+        <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+          <i class="fab fa-google text-red-500 text-xl"></i>
+        </div>
+        <div class="font-semibold text-gray-900 dark:text-white">Google Maps</div>
+      </a>
+      <a href="https://waze.com/ul?ll={{ land.latitude }},{{ land.longitude }}&navigate=yes" target="_blank" rel="noopener"
+         class="flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+        <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+          <i class="fas fa-route text-blue-500 text-xl"></i>
+        </div>
+        <div class="font-semibold text-gray-900 dark:text-white">Waze</div>
+      </a>
+      <a href="geo:{{ land.latitude }},{{ land.longitude }}"
+         class="flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+        <div class="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+          <i class="fas fa-location-arrow text-purple-500 text-xl"></i>
+        </div>
+        <div class="font-semibold text-gray-900 dark:text-white">مسیریاب پیش‌فرض</div>
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
   {% set contact_phone = (land.owner_phone or land.vinor_contact) if is_partner_context else (ref_partner.get('phone') if ref_partner else None) %}
 
   {% if is_partner_context %}
   <!-- دکمه‌های ثابت پایین (Partner - فقط موبایل) -->
   {% set _st = (land._assignment_status|default('active')) %}
-  <div id="landPartnerActionBar" class="fixed bottom-0 inset-x-0 p-4 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 sm:hidden z-50">
-    <div class="grid {{ 'grid-cols-2' if is_approved else 'grid-cols-1' }} gap-3">
-      {% if contact_phone %}
-      <button type="button" onclick="openContactModal()"
-         class="flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold transition-colors">
-        <i class="fas fa-phone"></i>
-        تماس
-      </button>
-      {% else %}
-      <div class="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-300 dark:bg-gray-700 text-gray-500 opacity-50">
-        <i class="fas fa-phone"></i>
-        تماس
-      </div>
-      {% endif %}
-
+  <div id="landPartnerActionBar" class="land-detail-v2-actionbar fixed bottom-0 inset-x-0 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-[#0B111B]/92 backdrop-blur-lg border-t border-slate-800/80 sm:hidden z-50">
+    <div class="grid {{ 'grid-cols-2' if is_approved and _st != 'sold' else 'grid-cols-1' }} gap-3 max-w-lg mx-auto">
       {% if is_approved and _st != 'sold' %}
-      <form method="POST" action="{{ url_for('express_partner.mark_in_transaction', code=land.code) }}" class="h-full">
+      <form method="POST" action="{{ url_for('express_partner.mark_in_transaction', code=land.code) }}" class="h-full order-2 sm:order-1">
         {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
         {% if _st == 'in_transaction' %}
-        <button type="submit" class="w-full h-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold transition-colors">
+        <button type="submit" class="w-full h-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-bold transition-colors shadow-lg shadow-teal-900/30">
           <i class="fas fa-check-circle"></i>
           رفع معامله
         </button>
         {% else %}
-        <button type="submit" class="w-full h-full flex items-center justify-center gap-2 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold transition-colors">
-          <i class="fas fa-handshake"></i>
-          معامله
+        <button type="submit" class="w-full h-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-teal-700/80 hover:bg-teal-600 text-white font-bold transition-colors border border-teal-500/40">
+          <i class="fas fa-calendar-check"></i>
+          درخواست بازدید
         </button>
         {% endif %}
       </form>
       {% elif is_approved %}
-      <div class="flex items-center justify-center gap-2 py-3 rounded-xl bg-green-500 text-white font-bold">
+      <div class="order-2 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-slate-700 text-white font-bold">
         <i class="fas fa-check-double"></i>
         فروخته شد
+      </div>
+      {% endif %}
+
+      {% if contact_phone %}
+      <button type="button" onclick="openContactModal()"
+         class="order-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-[#22c55e] hover:bg-green-400 text-white font-bold transition-colors shadow-lg shadow-green-900/25">
+        <i class="fas fa-phone"></i>
+        تماس
+      </button>
+      {% else %}
+      <div class="order-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-slate-700 text-slate-400 opacity-60">
+        <i class="fas fa-phone"></i>
+        تماس
       </div>
       {% endif %}
     </div>
@@ -960,309 +810,384 @@
       window.location.href = '{{ url_for("express_partner.dashboard") }}';
     }
 
-    document.addEventListener('DOMContentLoaded', function() {
-      // Gallery logic (from partner version)
-      (function(){
-        const galleryEl = document.getElementById('landGallery');
-        if (!galleryEl) return;
-        const mainImg = document.getElementById('landMainImage');
-        const mainVideo = document.getElementById('landVideo');
-        const loadingEl = document.getElementById('landMediaLoading');
-        const hasVideo = !!mainVideo;
-        const partnerDetailAutoplay = {{ 'true' if is_partner_context else 'false' }};
+    function openContactModal() {
+      const modal = document.getElementById('contactModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+      }
+    }
+    function closeContactModal() {
+      const modal = document.getElementById('contactModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+      }
+    }
+    function openLocationModal() {
+      document.getElementById('locationModal')?.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeLocationModal() {
+      document.getElementById('locationModal')?.classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+    function openLightbox(src) {
+      try {
+        const lightbox = document.createElement('div');
+        lightbox.className = 'fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4';
+        lightbox.style.touchAction = 'pan-y';
+        lightbox.onclick = () => lightbox.remove();
+        const content = document.createElement('div');
+        content.className = 'relative w-full h-full flex items-center justify-center';
+        content.onclick = (e) => e.stopPropagation();
+        const img = new Image();
+        img.className = 'max-w-full max-h-full object-contain rounded-lg';
+        img.src = src;
+        content.appendChild(img);
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl hover:bg-white/20 transition-colors';
+        closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+        closeBtn.onclick = (e) => { e.stopPropagation(); lightbox.remove(); };
+        lightbox.appendChild(content);
+        lightbox.appendChild(closeBtn);
+        document.body.appendChild(lightbox);
+      } catch (_) {}
+    }
 
-        function partnerTryPlayVideo() {
-          if (!partnerDetailAutoplay || !mainVideo) return;
-          const soundBtn = document.getElementById('landVideoSoundToggle');
-          const wantMuted = !soundBtn || soundBtn.getAttribute('data-muted') !== 'false';
-          try {
-            mainVideo.muted = wantMuted;
-            if (wantMuted) {
-              mainVideo.setAttribute('muted', '');
-            } else {
-              mainVideo.removeAttribute('muted');
-              mainVideo.volume = 1;
-            }
-          } catch (_) {}
-          try {
-            const p = mainVideo.play();
-            if (p && typeof p.catch === 'function') p.catch(function () {});
-          } catch (_) {}
-        }
+    var landDetailPageAbort = null;
 
-        const images = [
-          {% if images_v2 %}
-            {% for i in images_v2 %}
-              {"thumb": "{{ i.thumb }}", "full": "{{ i.full or i.raw }}"}{% if not loop.last %},{% endif %}
-            {% endfor %}
-          {% else %}
-            {% for img in images %}
-              {"thumb": "{% if '://' in (img|string) %}{{ img }}{% elif (img|string).startswith('/uploads/') %}{{ img }}{% elif (img|string).startswith('uploads/') %}/uploads/{{ (img|string)[8:] }}{% elif not (img|string).startswith('/') %}/uploads/{{ img }}{% else %}{{ img }}{% endif %}", "full": "{% if '://' in (img|string) %}{{ img }}{% elif (img|string).startswith('/uploads/') %}{{ img }}{% elif (img|string).startswith('uploads/') %}/uploads/{{ (img|string)[8:] }}{% elif not (img|string).startswith('/') %}/uploads/{{ img }}{% else %}{{ img }}{% endif %}"}{% if not loop.last %},{% endif %}
-            {% endfor %}
-          {% endif %}
-        ];
+    function initLandDetailGallery() {
+      if (landDetailPageAbort) {
+        try { landDetailPageAbort.abort(); } catch (_) {}
+        landDetailPageAbort = null;
+      }
 
-        {% if video %}
-        const videoSrc = "{% if '://' in (video|string) %}{{ video }}{% elif (video|string).startswith('/uploads/') %}{{ video }}{% elif (video|string).startswith('uploads/') %}/uploads/{{ (video|string)[8:] }}{% elif video and not (video|string).startswith('/') %}/uploads/{{ video }}{% else %}{{ video }}{% endif %}";
-        {% else %}
-        const videoSrc = null;
-        {% endif %}
+      const galleryEl = document.getElementById('landGallery');
+      if (!galleryEl) return;
 
-        const totalItems = (hasVideo ? 1 : 0) + images.length;
-        if (totalItems <= 1) {
-          // Progressive upgrade initial
-          try {
-            if (mainImg && mainImg.dataset.full && mainImg.dataset.full !== mainImg.src) {
-              const hi0 = new Image();
-              hi0.decoding = 'async';
-              hi0.src = mainImg.dataset.full;
-              hi0.addEventListener('load', () => {
-                mainImg.src = mainImg.dataset.full;
-                mainImg.classList.add('is-loaded');
-              }, { once: true });
-              hi0.addEventListener('error', () => mainImg.classList.add('is-loaded'), { once: true });
-            }
-          } catch(_){}
-          return;
-        }
+      landDetailPageAbort = new AbortController();
+      const signal = landDetailPageAbort.signal;
+      const listenOpts = { signal: signal };
+      const passiveOpts = Object.assign({ passive: true }, listenOpts);
 
-        let currentIndex = 0;
-        const dots = Array.from(document.querySelectorAll('.land-dot'));
-        const prevBtn = document.getElementById('landPrev');
-        const nextBtn = document.getElementById('landNext');
-        let loadingFallbackTimer = null;
+      const mainImg = document.getElementById('landMainImage');
+      const mainVideo = document.getElementById('landVideo');
+      const loadingEl = document.getElementById('landMediaLoading');
+      const hasVideo = !!mainVideo;
+      const partnerDetailAutoplay = {{ 'true' if is_partner_context else 'false' }};
 
-        function setLoading(isLoading) {
-          if (!loadingEl) return;
-          if (loadingFallbackTimer) {
-            clearTimeout(loadingFallbackTimer);
-            loadingFallbackTimer = null;
-          }
-          if (isLoading) {
-            loadingEl.classList.remove('opacity-0', 'pointer-events-none');
-            loadingEl.classList.add('opacity-100');
-            loadingEl.setAttribute('aria-hidden', 'false');
-            loadingFallbackTimer = setTimeout(() => {
-              setLoading(false);
-            }, 5000);
+      function partnerTryPlayVideo() {
+        if (!partnerDetailAutoplay || !mainVideo) return;
+        const soundBtn = document.getElementById('landVideoSoundToggle');
+        const wantMuted = !soundBtn || soundBtn.getAttribute('data-muted') !== 'false';
+        try {
+          mainVideo.muted = wantMuted;
+          if (wantMuted) {
+            mainVideo.setAttribute('muted', '');
           } else {
-            loadingEl.classList.add('opacity-0', 'pointer-events-none');
-            loadingEl.classList.remove('opacity-100');
-            loadingEl.setAttribute('aria-hidden', 'true');
+            mainVideo.removeAttribute('muted');
+            mainVideo.volume = 1;
           }
-        }
+        } catch (_) {}
+        try {
+          const p = mainVideo.play();
+          if (p && typeof p.catch === 'function') p.catch(function () {});
+        } catch (_) {}
+      }
 
-        function waitForImageLoad() {
-          if (!mainImg) return setLoading(false);
-          if (mainImg.complete && mainImg.naturalWidth > 0) {
-            return setLoading(false);
+      const images = [
+        {% if images_v2 %}
+          {% for i in images_v2 %}
+            {"thumb": "{{ i.thumb }}", "full": "{{ i.full or i.raw }}"}{% if not loop.last %},{% endif %}
+          {% endfor %}
+        {% else %}
+          {% for img in images %}
+            {"thumb": "{% if '://' in (img|string) %}{{ img }}{% elif (img|string).startswith('/uploads/') %}{{ img }}{% elif (img|string).startswith('uploads/') %}/uploads/{{ (img|string)[8:] }}{% elif not (img|string).startswith('/') %}/uploads/{{ img }}{% else %}{{ img }}{% endif %}", "full": "{% if '://' in (img|string) %}{{ img }}{% elif (img|string).startswith('/uploads/') %}{{ img }}{% elif (img|string).startswith('uploads/') %}/uploads/{{ (img|string)[8:] }}{% elif not (img|string).startswith('/') %}/uploads/{{ img }}{% else %}{{ img }}{% endif %}"}{% if not loop.last %},{% endif %}
+          {% endfor %}
+        {% endif %}
+      ];
+
+      const totalItems = (hasVideo ? 1 : 0) + images.length;
+      if (totalItems <= 1) {
+        try {
+          if (mainImg && mainImg.dataset.full && mainImg.dataset.full !== mainImg.src) {
+            const hi0 = new Image();
+            hi0.decoding = 'async';
+            hi0.src = mainImg.dataset.full;
+            hi0.addEventListener('load', () => {
+              mainImg.src = mainImg.dataset.full;
+              mainImg.classList.add('is-loaded');
+            }, { once: true });
+            hi0.addEventListener('error', () => mainImg.classList.add('is-loaded'), { once: true });
           }
-          const done = () => setLoading(false);
-          mainImg.addEventListener('load', done, { once: true });
-          mainImg.addEventListener('error', done, { once: true });
-        }
+        } catch (_) {}
+        if (partnerDetailAutoplay && mainVideo) partnerTryPlayVideo();
+        return;
+      }
 
-        function waitForVideoLoad() {
-          if (!mainVideo) return setLoading(false);
-          if (mainVideo.readyState >= 2) {
-            return setLoading(false);
-          }
-          const done = () => setLoading(false);
-          mainVideo.addEventListener('loadeddata', done, { once: true });
-          mainVideo.addEventListener('canplay', done, { once: true });
-          mainVideo.addEventListener('error', done, { once: true });
-        }
+      let currentIndex = 0;
+      const dots = Array.from(galleryEl.querySelectorAll('.land-dot'));
+      const thumbButtons = Array.from(document.querySelectorAll('.land-thumb'));
+      const prevBtn = document.getElementById('landPrev');
+      const nextBtn = document.getElementById('landNext');
+      let loadingFallbackTimer = null;
 
-        function updateDots() {
-          if (!dots.length) return;
-          dots.forEach((d, idx) => {
-            if (idx === currentIndex) {
-              d.classList.remove('bg-white/40');
-              d.classList.add('bg-white');
-              d.classList.add('active');
+      function setLoading(isLoading) {
+        if (!loadingEl) return;
+        if (loadingFallbackTimer) {
+          clearTimeout(loadingFallbackTimer);
+          loadingFallbackTimer = null;
+        }
+        if (isLoading) {
+          loadingEl.classList.remove('opacity-0', 'pointer-events-none');
+          loadingEl.classList.add('opacity-100');
+          loadingEl.setAttribute('aria-hidden', 'false');
+          loadingFallbackTimer = setTimeout(() => setLoading(false), 5000);
+        } else {
+          loadingEl.classList.add('opacity-0', 'pointer-events-none');
+          loadingEl.classList.remove('opacity-100');
+          loadingEl.setAttribute('aria-hidden', 'true');
+        }
+      }
+
+      function waitForImageLoad() {
+        if (!mainImg) return setLoading(false);
+        if (mainImg.complete && mainImg.naturalWidth > 0) return setLoading(false);
+        const done = () => setLoading(false);
+        mainImg.addEventListener('load', done, { once: true });
+        mainImg.addEventListener('error', done, { once: true });
+      }
+
+      function waitForVideoLoad() {
+        if (!mainVideo) return setLoading(false);
+        if (mainVideo.readyState >= 2) return setLoading(false);
+        const done = () => setLoading(false);
+        mainVideo.addEventListener('loadeddata', done, { once: true });
+        mainVideo.addEventListener('canplay', done, { once: true });
+        mainVideo.addEventListener('error', done, { once: true });
+      }
+
+      function updateDots() {
+        if (!dots.length) return;
+        var isV2 = !!document.querySelector('.land-detail-v2');
+        dots.forEach((d, idx) => {
+          if (idx === currentIndex) {
+            d.classList.add('active');
+            if (isV2) {
+              d.classList.remove('bg-white/35', 'bg-white/40');
+              d.classList.add('bg-teal-400', 'scale-110');
             } else {
-              d.classList.remove('bg-white');
-              d.classList.remove('active');
+              d.classList.remove('bg-white/40');
+              d.classList.add('bg-white', 'active');
+            }
+          } else {
+            d.classList.remove('active', 'bg-white', 'bg-teal-400', 'scale-110');
+            if (isV2) {
+              d.classList.add('bg-white/35');
+            } else {
               d.classList.add('bg-white/40');
             }
-          });
-        }
-
-        function showItem(idx) {
-          currentIndex = (idx + totalItems) % totalItems;
-          setLoading(true);
-          if (hasVideo && currentIndex === 0) {
-            if (mainVideo) {
-              mainVideo.classList.remove('hidden');
-              mainVideo.classList.add('block');
-            }
-            if (mainImg) {
-              mainImg.classList.add('hidden');
-              mainImg.classList.remove('block');
-            }
-            partnerTryPlayVideo();
-            waitForVideoLoad();
-          } else {
-            const idx = hasVideo ? currentIndex - 1 : currentIndex;
-            const imgObj = images[idx];
-            if (mainImg && imgObj) {
-              const thumb = imgObj.thumb || imgObj.full;
-              const full = imgObj.full || thumb;
-              if (thumb) {
-                mainImg.classList.remove('is-loaded');
-                mainImg.src = thumb;
-                mainImg.dataset.full = full;
-                if (full && full !== thumb) {
-                  const hi = new Image();
-                  hi.decoding = 'async';
-                  hi.src = full;
-                  hi.addEventListener('load', () => { mainImg.src = full; mainImg.classList.add('is-loaded'); }, { once: true });
-                  hi.addEventListener('error', () => mainImg.classList.add('is-loaded'), { once: true });
-                } else {
-                  mainImg.addEventListener('load', () => mainImg.classList.add('is-loaded'), { once: true });
-                }
-              }
-              mainImg.classList.remove('hidden');
-              mainImg.classList.add('block');
-            }
-            if (mainVideo) {
-              mainVideo.classList.add('hidden');
-              mainVideo.classList.remove('block');
-              mainVideo.pause();
-            }
-            waitForImageLoad();
           }
-          updateDots();
-        }
-
-        prevBtn && prevBtn.addEventListener('click', function(e){
-          e.preventDefault();
-          showItem(currentIndex - 1);
-        }, { passive: false });
-        nextBtn && nextBtn.addEventListener('click', function(e){
-          e.preventDefault();
-          showItem(currentIndex + 1);
-        }, { passive: false });
-
-        function isLandVideoSoundTarget(node) {
-          if (!node || !node.closest) return false;
-          return !!(node.closest('#landVideoSoundToggle') || node.closest('#landVideoSoundIcon'));
-        }
-
-        function bindSwipeListeners(el) {
-          if (!el) return;
-          let touchStartX = null;
-          let touchEndX = null;
-          let isPointerDown = false;
-          const SWIPE_THRESHOLD = 20;
-
-          el.addEventListener('touchstart', function(e){
-            if (isLandVideoSoundTarget(e.target)) return;
-            const t = e.touches && e.touches[0];
-            if (!t) return;
-            touchStartX = t.clientX;
-            touchEndX = null;
-          }, { passive: true });
-          el.addEventListener('touchmove', function(e){
-            const t = e.touches && e.touches[0];
-            if (!t || touchStartX === null) return;
-            touchEndX = t.clientX;
-          }, { passive: true });
-          el.addEventListener('touchend', function(e){
-            if (isLandVideoSoundTarget(e.target)) return;
-            if (touchStartX === null) return;
-            const t = (e.changedTouches && e.changedTouches[0]) || null;
-            const endX = (touchEndX !== null) ? touchEndX : (t ? t.clientX : null);
-            if (endX === null) return;
-            const dx = endX - touchStartX;
-            if (Math.abs(dx) > SWIPE_THRESHOLD) {
-              if (dx < 0) showItem(currentIndex + 1);
-              else showItem(currentIndex - 1);
-            }
-            touchStartX = null;
-            touchEndX = null;
-          }, { passive: true });
-
-          el.addEventListener('pointerdown', function(e){
-            if (isLandVideoSoundTarget(e.target)) return;
-            if (e.pointerType === 'mouse' && e.button !== 0) return;
-            isPointerDown = true;
-            touchStartX = e.clientX;
-            touchEndX = null;
-            try { el.setPointerCapture(e.pointerId); } catch(_) {}
-          });
-          el.addEventListener('pointermove', function(e){
-            if (!isPointerDown || touchStartX === null) return;
-            touchEndX = e.clientX;
-          });
-          el.addEventListener('pointerup', function(e){
-            if (isLandVideoSoundTarget(e.target)) return;
-            if (!isPointerDown || touchStartX === null) return;
-            isPointerDown = false;
-            const endX = (touchEndX !== null) ? touchEndX : e.clientX;
-            const dx = endX - touchStartX;
-            if (Math.abs(dx) > SWIPE_THRESHOLD) {
-              if (dx < 0) showItem(currentIndex + 1);
-              else showItem(currentIndex - 1);
-            }
-            touchStartX = null;
-            touchEndX = null;
-            try { el.releasePointerCapture(e.pointerId); } catch(_) {}
-          });
-          el.addEventListener('pointercancel', function(){
-            isPointerDown = false;
-            touchStartX = null;
-            touchEndX = null;
-          });
-        }
-
-        bindSwipeListeners(galleryEl);
-
-        Array.from(document.querySelectorAll('.land-thumb')).forEach(function(btn, thumbIdx) {
-          btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            showItem(thumbIdx);
-          });
         });
-
-        if (partnerDetailAutoplay && mainVideo) {
-          mainVideo.addEventListener('loadeddata', partnerTryPlayVideo, { once: true });
-          mainVideo.addEventListener('canplay', partnerTryPlayVideo, { once: true });
+        var slideLabel = document.getElementById('landGallerySlideLabel');
+        if (slideLabel && totalItems) {
+          slideLabel.textContent = (currentIndex + 1) + ' از ' + totalItems;
         }
+      }
 
-        updateDots();
+      function updateThumbs() {
+        thumbButtons.forEach((btn, thumbIdx) => {
+          const on = thumbIdx === currentIndex;
+          btn.classList.toggle('ring-emerald-400', on);
+          btn.classList.toggle('ring-transparent', !on);
+        });
+      }
+
+      function showItem(idx) {
+        currentIndex = (idx + totalItems) % totalItems;
         setLoading(true);
         if (hasVideo && currentIndex === 0) {
+          if (mainVideo) {
+            mainVideo.classList.remove('hidden');
+            mainVideo.classList.add('block');
+          }
+          if (mainImg) {
+            mainImg.classList.add('hidden');
+            mainImg.classList.remove('block');
+          }
           partnerTryPlayVideo();
           waitForVideoLoad();
         } else {
+          const imageIdx = hasVideo ? currentIndex - 1 : currentIndex;
+          const imgObj = images[imageIdx];
+          if (mainImg && imgObj) {
+            const thumb = imgObj.thumb || imgObj.full;
+            const full = imgObj.full || thumb;
+            if (thumb) {
+              mainImg.classList.remove('is-loaded');
+              mainImg.src = thumb;
+              mainImg.dataset.full = full;
+              if (full && full !== thumb) {
+                const hi = new Image();
+                hi.decoding = 'async';
+                hi.src = full;
+                hi.addEventListener('load', () => { mainImg.src = full; mainImg.classList.add('is-loaded'); }, { once: true });
+                hi.addEventListener('error', () => mainImg.classList.add('is-loaded'), { once: true });
+              } else {
+                mainImg.addEventListener('load', () => mainImg.classList.add('is-loaded'), { once: true });
+              }
+            }
+            mainImg.classList.remove('hidden');
+            mainImg.classList.add('block');
+          }
+          if (mainVideo) {
+            mainVideo.classList.add('hidden');
+            mainVideo.classList.remove('block');
+            mainVideo.pause();
+          }
           waitForImageLoad();
         }
+        updateDots();
+        updateThumbs();
+      }
 
-        // Progressive upgrade initial
-        try {
-          if (mainImg && mainImg.dataset.full && mainImg.dataset.full !== mainImg.src) {
-            const hi = new Image();
-            hi.decoding = 'async';
-            hi.src = mainImg.dataset.full;
-            hi.addEventListener('load', () => { mainImg.src = mainImg.dataset.full; mainImg.classList.add('is-loaded'); }, { once: true });
-            hi.addEventListener('error', () => mainImg.classList.add('is-loaded'), { once: true });
-          } else if (mainImg && mainImg.complete) {
-            mainImg.classList.add('is-loaded');
+      if (prevBtn) {
+        prevBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          showItem(currentIndex - 1);
+        }, Object.assign({ passive: false }, listenOpts));
+      }
+      if (nextBtn) {
+        nextBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          showItem(currentIndex + 1);
+        }, Object.assign({ passive: false }, listenOpts));
+      }
+
+      function isLandVideoSoundTarget(node) {
+        if (!node || !node.closest) return false;
+        return !!(node.closest('#landVideoSoundToggle') || node.closest('#landVideoSoundIcon'));
+      }
+
+      function bindSwipeListeners(el) {
+        if (!el) return;
+        let touchStartX = null;
+        let touchEndX = null;
+        let isPointerDown = false;
+        const SWIPE_THRESHOLD = 20;
+
+        el.addEventListener('touchstart', function (e) {
+          if (isLandVideoSoundTarget(e.target)) return;
+          const t = e.touches && e.touches[0];
+          if (!t) return;
+          touchStartX = t.clientX;
+          touchEndX = null;
+        }, passiveOpts);
+
+        el.addEventListener('touchmove', function (e) {
+          const t = e.touches && e.touches[0];
+          if (!t || touchStartX === null) return;
+          touchEndX = t.clientX;
+        }, passiveOpts);
+
+        el.addEventListener('touchend', function (e) {
+          if (isLandVideoSoundTarget(e.target)) return;
+          if (touchStartX === null) return;
+          const t = (e.changedTouches && e.changedTouches[0]) || null;
+          const endX = (touchEndX !== null) ? touchEndX : (t ? t.clientX : null);
+          if (endX === null) return;
+          const dx = endX - touchStartX;
+          if (Math.abs(dx) > SWIPE_THRESHOLD) {
+            if (dx < 0) showItem(currentIndex + 1);
+            else showItem(currentIndex - 1);
           }
-        } catch(_){}
-      })();
+          touchStartX = null;
+          touchEndX = null;
+        }, passiveOpts);
 
-      // Public-only: vertical swipe navigation between listings
+        el.addEventListener('pointerdown', function (e) {
+          if (isLandVideoSoundTarget(e.target)) return;
+          if (e.pointerType === 'mouse' && e.button !== 0) return;
+          isPointerDown = true;
+          touchStartX = e.clientX;
+          touchEndX = null;
+          try { el.setPointerCapture(e.pointerId); } catch (_) {}
+        }, listenOpts);
+
+        el.addEventListener('pointermove', function (e) {
+          if (!isPointerDown || touchStartX === null) return;
+          touchEndX = e.clientX;
+        }, listenOpts);
+
+        el.addEventListener('pointerup', function (e) {
+          if (isLandVideoSoundTarget(e.target)) return;
+          if (!isPointerDown || touchStartX === null) return;
+          isPointerDown = false;
+          const endX = (touchEndX !== null) ? touchEndX : e.clientX;
+          const dx = endX - touchStartX;
+          if (Math.abs(dx) > SWIPE_THRESHOLD) {
+            if (dx < 0) showItem(currentIndex + 1);
+            else showItem(currentIndex - 1);
+          }
+          touchStartX = null;
+          touchEndX = null;
+          try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+        }, listenOpts);
+
+        el.addEventListener('pointercancel', function () {
+          isPointerDown = false;
+          touchStartX = null;
+          touchEndX = null;
+        }, listenOpts);
+      }
+
+      bindSwipeListeners(galleryEl);
+
+      thumbButtons.forEach(function (btn, thumbIdx) {
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          showItem(thumbIdx);
+        }, listenOpts);
+      });
+
+      if (partnerDetailAutoplay && mainVideo) {
+        mainVideo.addEventListener('loadeddata', partnerTryPlayVideo, { once: true, signal: signal });
+        mainVideo.addEventListener('canplay', partnerTryPlayVideo, { once: true, signal: signal });
+      }
+
+      updateDots();
+      updateThumbs();
+      setLoading(true);
+      if (hasVideo && currentIndex === 0) {
+        partnerTryPlayVideo();
+        waitForVideoLoad();
+      } else {
+        waitForImageLoad();
+      }
+
+      try {
+        if (mainImg && mainImg.dataset.full && mainImg.dataset.full !== mainImg.src) {
+          const hi = new Image();
+          hi.decoding = 'async';
+          hi.src = mainImg.dataset.full;
+          hi.addEventListener('load', () => { mainImg.src = mainImg.dataset.full; mainImg.classList.add('is-loaded'); }, { once: true });
+          hi.addEventListener('error', () => mainImg.classList.add('is-loaded'), { once: true });
+        } else if (mainImg && mainImg.complete) {
+          mainImg.classList.add('is-loaded');
+        }
+      } catch (_) {}
+
       {% if not is_partner_context %}
-      (function() {
-        const galleryEl = document.getElementById('landGallery');
+      (function () {
         const container = document.querySelector('.min-h-screen');
-        if (!galleryEl || !container) return;
+        if (!container) return;
         const nextCode = galleryEl.getAttribute('data-next-code');
         const prevCode = galleryEl.getAttribute('data-prev-code');
         const allLands = {{ all_lands | tojson if all_lands else '[]' }};
-        const currentIndex = {{ current_index if current_index is defined else -1 }};
+        const listIndex = {{ current_index if current_index is defined else -1 }};
         const SCROLL_THRESHOLD = 50;
         const VERTICAL_SWIPE_THRESHOLD = 100;
 
@@ -1278,14 +1203,14 @@
         }
         function getNextCode() {
           if (nextCode) return nextCode;
-          if (allLands.length === 0 || currentIndex < 0) return null;
-          const nextIndex = (currentIndex + 1) % allLands.length;
+          if (allLands.length === 0 || listIndex < 0) return null;
+          const nextIndex = (listIndex + 1) % allLands.length;
           return allLands[nextIndex]?.code || null;
         }
         function getPrevCode() {
           if (prevCode) return prevCode;
-          if (allLands.length === 0 || currentIndex < 0) return null;
-          const prevIndex = (currentIndex - 1 + allLands.length) % allLands.length;
+          if (allLands.length === 0 || listIndex < 0) return null;
+          const prevIndex = (listIndex - 1 + allLands.length) % allLands.length;
           return allLands[prevIndex]?.code || null;
         }
         function handleVerticalSwipe(dy, wasAtBottom, wasAtTop) {
@@ -1302,22 +1227,26 @@
             }
           }
         }
-        let verticalTouchStartY = null, verticalTouchEndY = null, scrollPositionAtStart = null;
-        container.addEventListener('touchstart', function(e) {
+        let verticalTouchStartY = null;
+        let verticalTouchEndY = null;
+        let scrollPositionAtStart = null;
+        container.addEventListener('touchstart', function (e) {
           verticalTouchStartY = e.touches[0].clientY;
           scrollPositionAtStart = { isAtBottom: isAtBottom(), isAtTop: isAtTop() };
-        }, { passive: true });
-        container.addEventListener('touchmove', function(e) {
+        }, passiveOpts);
+        container.addEventListener('touchmove', function (e) {
           verticalTouchEndY = e.touches[0].clientY;
-        }, { passive: true });
-        container.addEventListener('touchend', function() {
+        }, passiveOpts);
+        container.addEventListener('touchend', function () {
           if (verticalTouchStartY !== null && verticalTouchEndY !== null && scrollPositionAtStart) {
             const dy = verticalTouchEndY - verticalTouchStartY;
             handleVerticalSwipe(dy, scrollPositionAtStart.isAtBottom, scrollPositionAtStart.isAtTop);
           }
-          verticalTouchStartY = null; verticalTouchEndY = null; scrollPositionAtStart = null;
-        }, { passive: true });
-        document.addEventListener('keydown', function(e) {
+          verticalTouchStartY = null;
+          verticalTouchEndY = null;
+          scrollPositionAtStart = null;
+        }, passiveOpts);
+        document.addEventListener('keydown', function (e) {
           if (e.key === 'ArrowUp') {
             if (isAtBottom()) {
               const n = getNextCode();
@@ -1329,7 +1258,7 @@
               if (p) { e.preventDefault(); window.location.replace('/express/' + p); }
             }
           }
-        });
+        }, listenOpts);
         const observer = new IntersectionObserver((entries) => {
           entries.forEach(entry => {
             if (entry.isIntersecting) {
@@ -1347,74 +1276,38 @@
         if (footer) observer.observe(footer);
       })();
       {% endif %}
-    });
 
-    // Contact modal
-    function openContactModal() {
-      const modal = document.getElementById('contactModal');
-      if (modal) {
-        modal.classList.remove('hidden');
-        modal.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-      }
-    }
-    function closeContactModal() {
-      const modal = document.getElementById('contactModal');
-      if (modal) {
-        modal.classList.add('hidden');
-        modal.style.display = 'none';
-        document.body.style.overflow = '';
-      }
-    }
-
-    // Location modal
-    function openLocationModal() {
-      document.getElementById('locationModal')?.classList.remove('hidden');
-      document.body.style.overflow = 'hidden';
-    }
-    function closeLocationModal() {
-      document.getElementById('locationModal')?.classList.add('hidden');
-      document.body.style.overflow = '';
-    }
-
-    // Lightbox image/video
-    function openLightbox(src) {
-      try {
-        const lightbox = document.createElement('div');
-        lightbox.className = 'fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4';
-        lightbox.style.touchAction = 'pan-y';
-        lightbox.onclick = () => lightbox.remove();
-        const content = document.createElement('div');
-        content.className = 'relative w-full h-full flex items-center justify-center';
-        content.onclick = (e) => e.stopPropagation();
-        const img = new Image();
-        img.className = 'max-w-full max-h-full object-contain rounded-lg';
-        img.onload = () => {};
-        img.onerror = () => {};
-        img.src = src;
-        content.appendChild(img);
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl hover:bg-white/20 transition-colors';
-        closeBtn.innerHTML = '<i class="fas fa-times"></i>';
-        closeBtn.onclick = (e) => { e.stopPropagation(); lightbox.remove(); };
-        lightbox.appendChild(content);
-        lightbox.appendChild(closeBtn);
-        document.body.appendChild(lightbox);
-      } catch(_) {}
-    }
-
-    // Copy link (public)
-    document.querySelectorAll('.copy-public-link').forEach(function(btn) {
-      btn.addEventListener('click', async function () {
-        const url = btn.dataset.url || window.location.href;
-        try {
-          await navigator.clipboard.writeText(url);
-          const icon = btn.querySelector('i');
-          if (icon) {
-            icon.className = 'fas fa-check text-emerald-600';
-            setTimeout(() => { icon.className = 'fas fa-share-nodes text-sm'; }, 2000);
+      document.querySelectorAll('.copy-public-link').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          const url = btn.dataset.url || window.location.href;
+          try {
+            await navigator.clipboard.writeText(url);
+            const icon = btn.querySelector('i');
+            if (icon) {
+              icon.className = 'fas fa-check text-emerald-600';
+              setTimeout(() => { icon.className = 'fas fa-share-nodes text-sm'; }, 2000);
+            }
+          } catch (error) {
+            console.error(error);
+            alert('امکان کپی لینک وجود ندارد');
           }
-        } catch (error) { console.error(error); alert('امکان کپی لینک وجود ندارد'); }
-      }, { passive: true });
-    });
+        }, passiveOpts);
+      });
+    }
+
+    function scheduleLandDetailPageInit() {
+      if (typeof window.vinorTeardownLandDetailVideo === 'function') {
+        window.vinorTeardownLandDetailVideo();
+      } else if (typeof window.vinorExpressStopAllMedia === 'function') {
+        window.vinorExpressStopAllMedia();
+      }
+      requestAnimationFrame(initLandDetailGallery);
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', scheduleLandDetailPageInit);
+    } else {
+      scheduleLandDetailPageInit();
+    }
+    document.addEventListener('vinor:express-page-swap', scheduleLandDetailPageInit);
+
   </script>

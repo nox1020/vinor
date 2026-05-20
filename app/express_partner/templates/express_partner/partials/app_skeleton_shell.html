@@ -1,151 +1,306 @@
-{# اسکلت اولیهٔ پنل همکار — CSS فقط بدون Tailwind تا قبل از رندر محتوا نمایش داده شود؛ SW همانند skeleton-shell.html کش می‌کند #}
+{# اسکلت اولیه — ۱۰۰٪ inline (CSS/SVG/JS) بدون وابستگی شبکه #}
 <style id="vinor-partner-sk-styles">
   #vinorPartnerSkeletonRoot,
-  #vinorPartnerSkeletonRoot * {
-    pointer-events: none !important;
-  }
+  #vinorPartnerSkeletonRoot * { box-sizing: border-box; pointer-events: none !important; }
   #vinorPartnerSkeletonRoot {
     position: fixed;
     inset: 0;
     z-index: 10050;
     display: flex;
     flex-direction: column;
-    background: #f9fafb;
-    transition: opacity 0.28s ease, visibility 0.28s ease;
-  }
-  html.dark #vinorPartnerSkeletonRoot {
+    font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
     background: #030712;
+    background-image:
+      radial-gradient(ellipse 90% 60% at 50% 0%, rgba(16, 185, 129, 0.18), transparent 58%),
+      linear-gradient(180deg, #030712, #050a0e 50%, #030712);
+    transition: opacity 0.4s ease, visibility 0.4s ease;
   }
-  #vinorPartnerSkeletonRoot.vinor-sk-hidden {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none !important;
+  html:not(.dark) #vinorPartnerSkeletonRoot {
+    background: #f1f5f9;
+    background-image: radial-gradient(ellipse 90% 60% at 50% 0%, rgba(16, 185, 129, 0.1), transparent 58%), linear-gradient(180deg, #f8fafc, #f1f5f9);
   }
-  #vinorPartnerSkeletonRoot .vinor-sk-head {
+  #vinorPartnerSkeletonRoot.vinor-sk-hidden { opacity: 0; visibility: hidden; }
+
+  #vinorPartnerSkeletonRoot .vinor-sk-progress {
     flex-shrink: 0;
-    height: 52px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 12px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-    background: rgba(255, 255, 255, 0.95);
+    height: 3px;
+    background: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
   }
-  html.dark #vinorPartnerSkeletonRoot .vinor-sk-head {
-    background: rgba(17, 24, 39, 0.96);
-    border-bottom-color: rgba(255, 255, 255, 0.08);
+  #vinorPartnerSkeletonRoot .vinor-sk-progress > i {
+    display: block;
+    height: 100%;
+    width: 42%;
+    background: linear-gradient(90deg, transparent, #34d399, #6ee7b7, transparent);
+    animation: vinorSkBar 1.1s ease-in-out infinite;
   }
-  #vinorPartnerSkeletonRoot .vinor-sk-main {
+
+  #vinorPartnerSkeletonRoot .vinor-sk-body {
     flex: 1;
-    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 16px 8px;
+    gap: 20px;
     min-height: 0;
   }
-  #vinorPartnerSkeletonRoot .vinor-sk-bar {
-    border-radius: 10px;
-    background: #e5e7eb;
+
+  #vinorPartnerSkeletonRoot .vinor-sk-hero { text-align: center; }
+  #vinorPartnerSkeletonRoot .vinor-sk-logo-box {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 14px;
   }
-  html.dark #vinorPartnerSkeletonRoot .vinor-sk-bar {
-    background: #374151;
+  #vinorPartnerSkeletonRoot .vinor-sk-ring {
+    position: absolute;
+    inset: -5px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: #34d399;
+    border-right-color: rgba(52, 211, 153, 0.3);
+    animation: vinorSkSpin 0.85s linear infinite;
   }
-  #vinorPartnerSkeletonRoot .vinor-sk-card {
+  #vinorPartnerSkeletonRoot .vinor-sk-logo-svg {
+    display: block;
+    width: 64px;
+    height: 64px;
+    border-radius: 18px;
+  }
+  #vinorPartnerSkeletonRoot .vinor-sk-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: #f8fafc;
+    letter-spacing: 0.02em;
+  }
+  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-title { color: #0f172a; }
+  #vinorPartnerSkeletonRoot .vinor-sk-sub {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+  #vinorPartnerSkeletonRoot .vinor-sk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #6ee7b7;
+    border: 1px solid rgba(52, 211, 153, 0.35);
+    background: rgba(6, 78, 59, 0.45);
+  }
+  #vinorPartnerSkeletonRoot .vinor-sk-badge[hidden] { display: none; }
+  #vinorPartnerSkeletonRoot .vinor-sk-badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 8px #34d399;
+  }
+
+  #vinorPartnerSkeletonRoot .vinor-sk-preview {
+    width: 100%;
+    max-width: 22rem;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  #vinorPartnerSkeletonRoot .vinor-sk-row {
+    display: flex;
+    gap: 10px;
+    min-height: 88px;
+    padding: 10px;
     border-radius: 16px;
-    background: #e5e7eb;
-    min-height: 100px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(15, 23, 42, 0.65);
+    overflow: hidden;
   }
-  html.dark #vinorPartnerSkeletonRoot .vinor-sk-card {
-    background: #1f2937;
+  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-row {
+    border-color: rgba(0, 0, 0, 0.06);
+    background: #fff;
   }
-  /* هماهنگ با منوی واقعی: روشن = سفید/gray مثل هدر؛ تاریک = gray-900 مثل پرتال */
+  #vinorPartnerSkeletonRoot .vinor-sk-thumb {
+    width: 32%;
+    max-width: 5.5rem;
+    flex-shrink: 0;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    position: relative;
+    overflow: hidden;
+  }
+  #vinorPartnerSkeletonRoot .vinor-sk-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+  }
+  #vinorPartnerSkeletonRoot .vinor-sk-line {
+    height: 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.07);
+    position: relative;
+    overflow: hidden;
+  }
+  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-line,
+  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-thumb {
+    background: #e2e8f0;
+  }
+  #vinorPartnerSkeletonRoot .vinor-sk-shine::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+    animation: vinorSkShine 1.4s ease-in-out infinite;
+  }
+  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-shine::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  }
+  #vinorPartnerSkeletonRoot .vinor-sk-d1::after { animation-delay: 0.1s; }
+  #vinorPartnerSkeletonRoot .vinor-sk-d2::after { animation-delay: 0.25s; }
+
   #vinorPartnerSkeletonRoot .vinor-sk-tabs {
     flex-shrink: 0;
-    height: calc(54px + env(safe-area-inset-bottom, 0px));
-    padding-bottom: env(safe-area-inset-bottom, 0px);
     display: flex;
-    align-items: flex-start;
     justify-content: space-around;
-    padding-top: 8px;
-    padding-left: max(12px, env(safe-area-inset-left, 0px));
-    padding-right: max(12px, env(safe-area-inset-right, 0px));
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 -8px 28px rgba(15, 23, 42, 0.06);
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(5, 10, 14, 0.94);
   }
-  html.dark #vinorPartnerSkeletonRoot .vinor-sk-tabs {
-    border-top-color: rgba(255, 255, 255, 0.08);
-    background: rgba(17, 24, 39, 0.96);
-    box-shadow: 0 -10px 36px rgba(0, 0, 0, 0.35);
+  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-tabs {
+    border-top-color: rgba(0, 0, 0, 0.06);
+    background: rgba(255, 255, 255, 0.96);
   }
   #vinorPartnerSkeletonRoot .vinor-sk-tab {
-    width: 48px;
-    height: 30px;
-    border-radius: 999px;
-    background: #e5e7eb;
+    width: 44px;
+    height: 36px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    position: relative;
+    overflow: hidden;
   }
-  html.dark #vinorPartnerSkeletonRoot .vinor-sk-tab {
-    background: #374151;
+  #vinorPartnerSkeletonRoot .vinor-sk-tab.on {
+    background: rgba(16, 185, 129, 0.2);
+    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.35);
   }
-  @keyframes vinorPartnerSkPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.48; }
-  }
-  #vinorPartnerSkeletonRoot .vinor-sk-pulse {
-    animation: vinorPartnerSkPulse 1.15s ease-in-out infinite;
+
+  @keyframes vinorSkShine { 100% { transform: translateX(100%); } }
+  @keyframes vinorSkSpin { to { transform: rotate(360deg); } }
+  @keyframes vinorSkBar {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(320%); }
   }
   @media (prefers-reduced-motion: reduce) {
-    #vinorPartnerSkeletonRoot .vinor-sk-pulse {
-      animation: none;
-      opacity: 0.85;
-    }
+    #vinorPartnerSkeletonRoot .vinor-sk-shine::after,
+    #vinorPartnerSkeletonRoot .vinor-sk-ring,
+    #vinorPartnerSkeletonRoot .vinor-sk-progress > i { animation: none; }
   }
 </style>
-<div id="vinorPartnerSkeletonRoot" aria-hidden="true" data-vinor-partner-skeleton="1">
-  <header class="vinor-sk-head">
-    <span class="vinor-sk-bar vinor-sk-pulse" style="width:36px;height:36px;border-radius:50%"></span>
-    <span class="vinor-sk-bar vinor-sk-pulse" style="flex:1;max-width:42%;height:13px"></span>
-    <span class="vinor-sk-bar vinor-sk-pulse" style="width:36px;height:36px;border-radius:50%"></span>
-  </header>
-  <div class="vinor-sk-main">
-    <div class="vinor-sk-card vinor-sk-pulse" style="min-height:132px"></div>
-    <div class="vinor-sk-card vinor-sk-pulse" style="min-height:96px"></div>
-    <div class="vinor-sk-card vinor-sk-pulse" style="min-height:96px"></div>
+
+<div id="vinorPartnerSkeletonRoot" aria-hidden="true" aria-busy="true" data-vinor-partner-skeleton="1">
+  <div class="vinor-sk-progress" aria-hidden="true"><i></i></div>
+
+  <div class="vinor-sk-body">
+    <div class="vinor-sk-hero">
+      <div class="vinor-sk-logo-box">
+        <div class="vinor-sk-ring" aria-hidden="true"></div>
+        <svg class="vinor-sk-logo-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="64" height="64" rx="18" fill="rgba(16,185,129,0.14)" stroke="rgba(52,211,153,0.45)" stroke-width="1.5"/>
+          <text x="32" y="34" text-anchor="middle" dominant-baseline="central" fill="#34d399" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="36" font-weight="900">V</text>
+        </svg>
+      </div>
+      <div class="vinor-sk-title">وینور اکسپرس</div>
+      <p class="vinor-sk-sub" id="vinorSkStatusText">در حال بارگذاری…</p>
+      <span class="vinor-sk-badge" id="vinorSkOfflineBadge" hidden>
+        <span class="vinor-sk-badge-dot" aria-hidden="true"></span>
+        آماده برای کار آفلاین
+      </span>
+    </div>
+
+    <div class="vinor-sk-preview" aria-hidden="true">
+      <div class="vinor-sk-row">
+        <div class="vinor-sk-thumb vinor-sk-shine vinor-sk-d1"></div>
+        <div class="vinor-sk-lines">
+          <div class="vinor-sk-line vinor-sk-shine" style="width:72%"></div>
+          <div class="vinor-sk-line vinor-sk-shine vinor-sk-d1" style="width:100%"></div>
+          <div class="vinor-sk-line vinor-sk-shine vinor-sk-d2" style="width:48%"></div>
+        </div>
+      </div>
+      <div class="vinor-sk-row" style="opacity:0.75">
+        <div class="vinor-sk-thumb vinor-sk-shine vinor-sk-d2"></div>
+        <div class="vinor-sk-lines">
+          <div class="vinor-sk-line vinor-sk-shine vinor-sk-d2" style="width:60%"></div>
+          <div class="vinor-sk-line vinor-sk-shine" style="width:88%"></div>
+        </div>
+      </div>
+    </div>
   </div>
-  <nav class="vinor-sk-tabs">
-    <span class="vinor-sk-tab vinor-sk-pulse"></span>
-    <span class="vinor-sk-tab vinor-sk-pulse"></span>
-    <span class="vinor-sk-tab vinor-sk-pulse"></span>
-    <span class="vinor-sk-tab vinor-sk-pulse"></span>
+
+  <nav class="vinor-sk-tabs" aria-hidden="true">
+    <span class="vinor-sk-tab on vinor-sk-shine"></span>
+    <span class="vinor-sk-tab vinor-sk-shine vinor-sk-d1"></span>
+    <span class="vinor-sk-tab vinor-sk-shine vinor-sk-d2"></span>
+    <span class="vinor-sk-tab vinor-sk-shine"></span>
   </nav>
 </div>
+
 <script>
 (function () {
+  var MIN_MS = 480;
+  var MAX_MS = 3200;
+  var t0 = Date.now();
+  var done = false;
+
+  function syncOfflineUi() {
+    var on = typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+    var badge = document.getElementById('vinorSkOfflineBadge');
+    var txt = document.getElementById('vinorSkStatusText');
+    if (badge) badge.hidden = on;
+    if (txt) {
+      txt.textContent = on
+        ? 'در حال بارگذاری…'
+        : 'بدون اینترنت — نمایش از حافظهٔ آفلاین';
+    }
+  }
+
   function hidePartnerSkeleton() {
+    if (done) return;
+    done = true;
     var root = document.getElementById('vinorPartnerSkeletonRoot');
     if (!root || root.getAttribute('data-vinor-sk-dismissed') === '1') return;
     root.setAttribute('data-vinor-sk-dismissed', '1');
+    root.setAttribute('aria-busy', 'false');
     root.classList.add('vinor-sk-hidden');
     window.setTimeout(function () {
-      try {
-        root.remove();
-      } catch (_) {}
+      try { root.remove(); } catch (_) {}
       var st = document.getElementById('vinor-partner-sk-styles');
       if (st && st.parentNode) st.parentNode.removeChild(st);
-    }, 320);
+    }, 420);
   }
 
   function scheduleHide() {
-    window.requestAnimationFrame(function () {
-      window.requestAnimationFrame(hidePartnerSkeleton);
-    });
+    var wait = Math.max(0, MIN_MS - (Date.now() - t0));
+    window.setTimeout(function () {
+      if (document.readyState === 'complete') {
+        hidePartnerSkeleton();
+        return;
+      }
+      window.addEventListener('load', hidePartnerSkeleton, { once: true });
+      window.setTimeout(hidePartnerSkeleton, MAX_MS);
+    }, wait);
   }
 
   window.hideVinorPartnerSkeleton = hidePartnerSkeleton;
-
-  window.addEventListener('pageshow', function (ev) {
-    if (ev.persisted) hidePartnerSkeleton();
-  });
+  syncOfflineUi();
+  window.addEventListener('online', syncOfflineUi);
+  window.addEventListener('offline', syncOfflineUi);
+  window.addEventListener('pageshow', function (e) { if (e.persisted) hidePartnerSkeleton(); });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', scheduleHide);

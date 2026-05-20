@@ -203,37 +203,6 @@
           </div>
         </a>
 
-        <a href="{{ url_for('express_partner.help') }}"
-           data-tour="help-link"
-           class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-sky-500/25 hover:bg-[#161e29] sm:p-5">
-          <div class="flex items-center gap-3 sm:gap-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-sky-500/30 bg-sky-500/15 text-sky-400">
-              <i class="fas fa-question-circle text-lg" aria-hidden="true"></i>
-            </div>
-            <div class="min-w-0 flex-1 text-right">
-              <div class="text-sm font-semibold text-white sm:text-base">راهنما</div>
-              <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">راهنمای استفاده از پلتفرم</div>
-            </div>
-            <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-          </div>
-        </a>
-
-        <button type="button"
-                data-tour="restart-tour"
-                onclick="window.onboardingTour && window.onboardingTour.restartTour()"
-                class="profile-menu-card w-full rounded-2xl border border-white/10 bg-[#12181f] p-4 text-right transition hover:border-zinc-500/30 hover:bg-[#161e29] sm:p-5">
-          <div class="flex items-center gap-3 sm:gap-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-600/50 bg-zinc-800/80 text-zinc-400">
-              <i class="fas fa-graduation-cap text-lg" aria-hidden="true"></i>
-            </div>
-            <div class="min-w-0 flex-1 text-right">
-              <div class="text-sm font-semibold text-white sm:text-base">اجرای مجدد تور راهنما</div>
-              <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">مشاهدهٔ دوبارهٔ آموزش‌ها</div>
-            </div>
-            <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-          </div>
-        </button>
-
         <a id="profileSupportLink"
            href="{{ url_for('express_partner.support') }}"
            data-tour="support-link"
@@ -244,7 +213,7 @@
             </div>
             <div class="min-w-0 flex-1 text-right">
               <div class="text-sm font-semibold text-white sm:text-base">تماس با پشتیبانی</div>
-              <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">راهنمایی و پشتیبانی</div>
+              <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">تماس، راهنما و تور آموزشی</div>
             </div>
             <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
           </div>

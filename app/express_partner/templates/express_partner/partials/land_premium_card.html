@@ -1,5 +1,6 @@
 {# Premium listing card (dashboard). Expects: land, is_approved, tour_land_card (bool) #}
 {% set img = (land.images[0] if land.images and land.images[0] else None) %}
+{% set photo_count = land.images|length if land.images else 0 %}
 {% set _st = (land._assignment_status|default('active')|string)|lower|trim %}
 {% set _in_tx = land._in_transaction or (_st == 'in_transaction') %}
 {% set land_m = (land.villa_land_area or land.land_area or land.size or '') %}
@@ -7,116 +8,180 @@
 {% set beds = (land.villa_bedrooms or land.rooms or '') %}
 {% set loc_line = ([land.city, land.location]|select|join('، ')) if (land.city or land.location) else '' %}
 
+{% if img %}
+  {% if "://" in (img|string) %}
+    {% set img_src = img %}
+  {% elif (img|string).startswith('/uploads/') %}
+    {% set img_src = img %}
+  {% elif (img|string).startswith('uploads/') %}
+    {% set img_src = '/uploads/' + (img|string)[8:] %}
+  {% elif not (img|string).startswith('/') %}
+    {% set img_src = '/uploads/' + (img|string) %}
+  {% else %}
+    {% set img_src = img %}
+  {% endif %}
+{% endif %}
+
+{% set video = land.video %}
+{% if video %}
+  {% if "://" in (video|string) %}
+    {% set video_src = video %}
+  {% elif (video|string).startswith('/uploads/') %}
+    {% set video_src = video %}
+  {% elif (video|string).startswith('uploads/') %}
+    {% set video_src = '/uploads/' + (video|string)[8:] %}
+  {% elif not (video|string).startswith('/') %}
+    {% set video_src = '/uploads/' + (video|string) %}
+  {% else %}
+    {% set video_src = video %}
+  {% endif %}
+{% endif %}
+
 <article {% if tour_land_card %}data-tour="land-card"{% endif %}
-         class="group express-card vinor-premium-card relative w-full rounded-2xl overflow-hidden border border-white/10 dark:border-white/10 shadow-lg hover:shadow-xl hover:border-white/20 transition-all duration-200 cursor-pointer touch-manipulation bg-[#030712]{% if flatten_bottom_mobile|default(false) %} max-sm:rounded-b-none{% endif %}"
+         class="group express-card vinor-premium-card relative w-full rounded-2xl overflow-hidden border border-white/10 shadow-md hover:shadow-lg hover:border-white/20 transition-all duration-200 cursor-pointer touch-manipulation bg-[#0f1419] max-sm:bg-[#121a22]"
          data-href="{{ land._detail_url or url_for('express_partner.land_detail', code=land.code) }}"
          role="link"
          tabindex="0">
-  <div class="relative aspect-[3/4] min-h-[260px] sm:min-h-[300px] bg-[#111827]" data-img-wrap>
-    <div class="card-img-loading pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/30 transition-opacity">
-      <div class="w-8 h-8 rounded-full border-2 border-white/40 border-t-transparent animate-spin"></div>
+
+  {# ——— موبایل: کارت افقی (متن + تصویر) مطابق صفحه اصلی ——— #}
+  <div class="vinor-premium-card-mobile flex sm:hidden flex-row items-stretch min-h-[9.5rem]">
+    <div class="relative w-[38%] max-w-[9.5rem] shrink-0 p-2.5 pe-1.5" data-img-wrap>
+      <div class="card-img-loading pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl transition-opacity duration-300">
+        <div class="vinor-card-load-ring" aria-hidden="true"></div>
+      </div>
+      <div class="relative h-full min-h-[7.5rem] rounded-xl overflow-hidden bg-[#1a2332]">
+        {% if video %}
+        <video class="absolute inset-0 w-full h-full object-cover opacity-0" muted loop playsinline preload="none" data-vinor-lazy-video>
+          <source data-src="{{ video_src }}" type="video/mp4">
+          {% if img_src %}
+          <img src="{{ img_src }}" alt="" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+          {% endif %}
+        </video>
+        {% elif img_src %}
+        <img src="{{ img_src }}" alt="{{ land.title or '' }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+        {% else %}
+        <div class="absolute inset-0 grid place-items-center text-neutral-500">
+          <i class="fas fa-image text-2xl opacity-50"></i>
+        </div>
+        {% endif %}
+        <button type="button"
+                data-fav-code="{{ land.code }}"
+                class="pointer-events-auto absolute top-1.5 end-1.5 z-10 grid h-8 w-8 place-items-center rounded-full bg-black/35 text-white backdrop-blur-sm border border-white/20"
+                aria-label="علاقه‌مندی">
+          <i class="far fa-heart text-xs vinor-fav-icon" aria-hidden="true"></i>
+        </button>
+        {% if photo_count > 0 %}
+        <span class="pointer-events-none absolute bottom-1.5 end-1.5 z-10 inline-flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+          <i class="fas fa-camera text-[9px] opacity-80"></i>{{ photo_count }}
+        </span>
+        {% endif %}
+      </div>
     </div>
 
-    {% set video = land.video %}
-    {% if video %}
-      {% if "://" in (video|string) %}
-        {% set video_src = video %}
-      {% elif (video|string).startswith('/uploads/') %}
-        {% set video_src = video %}
-      {% elif (video|string).startswith('uploads/') %}
-        {% set video_src = '/uploads/' + (video|string)[8:] %}
-      {% elif not (video|string).startswith('/') %}
-        {% set video_src = '/uploads/' + (video|string) %}
-      {% else %}
-        {% set video_src = video %}
-      {% endif %}
-      <video class="absolute inset-0 w-full h-full object-cover opacity-0" muted loop playsinline preload="none" data-vinor-lazy-video>
-        <source data-src="{{ video_src }}" type="video/mp4">
-        {% if img %}
-          {% if "://" in (img|string) %}
-            {% set img_src = img %}
-          {% elif (img|string).startswith('/uploads/') %}
-            {% set img_src = img %}
-          {% elif (img|string).startswith('uploads/') %}
-            {% set img_src = '/uploads/' + (img|string)[8:] %}
-          {% elif not (img|string).startswith('/') %}
-            {% set img_src = '/uploads/' + (img|string) %}
-          {% else %}
-            {% set img_src = img %}
+    <div class="flex min-w-0 flex-1 flex-col justify-between gap-2 py-2.5 ps-1 pe-1.5 sm:pe-3">
+      <div class="min-w-0 space-y-1.5">
+        <div class="flex flex-wrap items-center gap-1">
+          {% if is_approved %}
+          <span class="inline-flex items-center gap-0.5 rounded-md border border-emerald-500/40 bg-emerald-950/60 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300">
+            <i class="fas fa-circle-check text-[8px]"></i>
+            تایید کارشناسی
+          </span>
           {% endif %}
-          <img src="{{ img_src }}" alt="{{ land.title or '' }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+          {% if _in_tx %}
+          <span class="inline-flex rounded-md bg-orange-600 px-1.5 py-0.5 text-[9px] font-bold text-white">در حال معامله</span>
+          {% elif _st == 'sold' %}
+          <span class="inline-flex rounded-md bg-emerald-700 px-1.5 py-0.5 text-[9px] font-bold text-white">فروخته شد</span>
+          {% endif %}
+          {% if land._is_expired %}
+          <span class="inline-flex rounded-md bg-red-600 px-1.5 py-0.5 text-[9px] font-medium text-white">منقضی</span>
+          {% endif %}
+        </div>
+        <h3 class="text-[15px] font-bold leading-snug text-white line-clamp-2">{{ land.title or '—' }}</h3>
+        {% if loc_line %}
+        <p class="flex items-center gap-1 text-[11px] text-slate-400 truncate">
+          <i class="fas fa-location-dot text-[10px] shrink-0 text-slate-500"></i>
+          <span class="truncate">{{ loc_line }}</span>
+        </p>
         {% endif %}
-      </video>
-    {% elif img %}
-      {% if "://" in (img|string) %}
-        {% set img_src = img %}
-      {% elif (img|string).startswith('/uploads/') %}
-        {% set img_src = img %}
-      {% elif (img|string).startswith('uploads/') %}
-        {% set img_src = '/uploads/' + (img|string)[8:] %}
-      {% elif not (img|string).startswith('/') %}
-        {% set img_src = '/uploads/' + (img|string) %}
-      {% else %}
-        {% set img_src = img %}
-      {% endif %}
-      <img src="{{ img_src }}" alt="{{ land.title or '' }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
-    {% else %}
-      <div class="absolute inset-0 grid place-items-center text-neutral-500">
-        <i class="fas fa-image text-4xl opacity-60"></i>
+        <div class="pt-0.5">
+          <p class="text-[10px] text-slate-500">قیمت</p>
+          <p class="text-sm font-bold text-white tabular-nums leading-tight">{{ (land.price_total or 0)|toman }}</p>
+        </div>
       </div>
+      {% if is_approved and land._commission_amount %}
+      <div class="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/35 bg-emerald-950/40 px-2 py-1.5">
+        <div class="min-w-0">
+          <p class="text-[9px] text-emerald-400/90">پورسانت شما{% if land._commission_pct %} ({{ land._commission_pct }}٪){% endif %}</p>
+          <p class="text-xs font-bold text-emerald-300 tabular-nums truncate">{{ (land._commission_amount or 0)|toman }}</p>
+        </div>
+        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-900/50 text-emerald-400">
+          <i class="fas fa-wallet text-sm"></i>
+        </span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ——— تبلت/دسکتاپ: کارت عمودی (گالری) ——— #}
+  <div class="relative hidden sm:block aspect-[3/4] min-h-[300px] bg-[#111827]" data-img-wrap>
+    <div class="card-img-loading pointer-events-none absolute inset-0 z-20 flex items-center justify-center transition-opacity duration-300">
+      <div class="vinor-card-load-ring" aria-hidden="true"></div>
+    </div>
+
+    {% if video %}
+    <video class="absolute inset-0 w-full h-full object-cover opacity-0" muted loop playsinline preload="none" data-vinor-lazy-video>
+      <source data-src="{{ video_src }}" type="video/mp4">
+      {% if img_src %}
+      <img src="{{ img_src }}" alt="{{ land.title or '' }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+      {% endif %}
+    </video>
+    {% elif img_src %}
+    <img src="{{ img_src }}" alt="{{ land.title or '' }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+    {% else %}
+    <div class="absolute inset-0 grid place-items-center text-neutral-500">
+      <i class="fas fa-image text-4xl opacity-60"></i>
+    </div>
     {% endif %}
 
     <div class="absolute inset-0 bg-gradient-to-t from-[#030712] via-[#030712]/55 to-transparent z-[1]"></div>
 
-    {# Top row: favorite + special offer #}
     <div class="absolute top-3 z-10 flex w-full items-start justify-between px-3 pointer-events-none">
       <button type="button"
               data-fav-code="{{ land.code }}"
-              class="pointer-events-auto w-9 h-9 rounded-full border border-white/80 bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+              class="pointer-events-auto w-10 h-10 rounded-full border border-white/80 bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
               aria-label="علاقه‌مندی">
         <i class="far fa-heart text-sm vinor-fav-icon" aria-hidden="true"></i>
       </button>
       {% if _in_tx %}
-      <span class="pointer-events-auto rounded-lg bg-orange-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
-        در حال معامله
-      </span>
+      <span class="pointer-events-auto rounded-lg bg-orange-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">در حال معامله</span>
       {% elif _st == 'sold' %}
-      <span class="pointer-events-auto rounded-lg bg-emerald-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
-        فروخته شد
-      </span>
+      <span class="pointer-events-auto rounded-lg bg-emerald-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">فروخته شد</span>
       {% else %}
-      <span class="pointer-events-auto rounded-lg bg-[#d4b996] px-2.5 py-1 text-[11px] font-bold text-neutral-900 shadow-sm">
-        پیشنهاد ویژه
-      </span>
+      <span class="pointer-events-auto rounded-lg bg-[#d4b996] px-2.5 py-1 text-[11px] font-bold text-neutral-900 shadow-sm">پیشنهاد ویژه</span>
       {% endif %}
     </div>
 
-    {# Assignment / expiry ribbons #}
     <div class="absolute top-14 z-10 flex flex-col gap-1.5 ps-3 pointer-events-none">
       {% if land._is_expired %}
-        <span class="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium bg-red-600 text-white shadow">
-          <i class="fas fa-exclamation-circle text-[9px] ms-1"></i>
-          منقضی شده
-        </span>
+      <span class="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium bg-red-600 text-white shadow">
+        <i class="fas fa-exclamation-circle text-[9px] ms-1"></i>منقضی شده
+      </span>
       {% endif %}
       {% if _st == 'closed' %}
-        <span class="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium bg-neutral-700 text-white shadow">بسته</span>
+      <span class="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium bg-neutral-700 text-white shadow">بسته</span>
       {% elif _st == 'pending' %}
-        <span class="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium bg-amber-500 text-neutral-900 shadow">در انتظار</span>
+      <span class="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium bg-amber-500 text-neutral-900 shadow">در انتظار</span>
       {% endif %}
     </div>
 
-    {# Title block — بالای نوار آمار #}
-    <div class="absolute bottom-[4.25rem] left-0 right-0 z-10 px-3 pb-2 pt-6 flex flex-col gap-2">
+    <div class="land-card-title-block absolute bottom-[4.25rem] left-0 right-0 z-10 px-3 pb-2 pt-6 flex flex-col gap-2">
       <div class="flex items-end justify-between gap-2">
         <span class="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#34d399] bg-[#064e3b]/90 px-2.5 py-1 text-[10px] font-semibold text-[#6ee7b7] shadow-sm backdrop-blur-sm">
           <i class="fas fa-circle-check text-[10px]"></i>
           تایید کارشناسی
         </span>
         <div class="min-w-0 flex-1 text-end">
-          <h3 class="text-base sm:text-lg font-bold text-white leading-snug line-clamp-2 drop-shadow-md">
-            {{ land.title or '—' }}
-          </h3>
+          <h3 class="text-lg font-bold text-white leading-snug line-clamp-2 drop-shadow-md">{{ land.title or '—' }}</h3>
           {% if loc_line %}
           <p class="mt-1 flex items-center justify-end gap-1 text-xs text-white/85">
             <span class="truncate">{{ loc_line }}</span>
@@ -133,13 +198,10 @@
       </div>
     </div>
 
-    {# Bottom stats bar — هم‌رنگ با پس‌زمینهٔ پرتال تا نوار مشکی جدا دیده نشود #}
-    <div class="absolute bottom-0 left-0 right-0 z-10 flex border-t border-white/10 bg-[#030712]/85 backdrop-blur-md text-white divide-x divide-white/15 rtl:divide-x-reverse">
+    <div class="absolute bottom-0 left-0 right-0 z-10 flex border-t border-white/10 bg-[#030712]/90 backdrop-blur-md text-white divide-x divide-white/15 rtl:divide-x-reverse">
       <div class="flex-1 min-w-0 px-1 py-2.5 text-center">
         <div class="text-[10px] text-white/55 leading-tight">متراژ زمین</div>
-        <div class="mt-0.5 text-[13px] font-semibold tabular-nums truncate">
-          {% if land_m %}{{ land_m }} متر{% else %}—{% endif %}
-        </div>
+        <div class="mt-0.5 text-[13px] font-semibold tabular-nums truncate">{% if land_m %}{{ land_m }} متر{% else %}—{% endif %}</div>
       </div>
       <div class="flex-1 min-w-0 px-1 py-2.5 text-center">
         <div class="text-[10px] text-white/55 leading-tight">اتاق خواب</div>
@@ -147,13 +209,11 @@
       </div>
       <div class="flex-1 min-w-0 px-1 py-2.5 text-center">
         <div class="text-[10px] text-white/55 leading-tight">متراژ بنا</div>
-        <div class="mt-0.5 text-[13px] font-semibold tabular-nums truncate">
-          {% if built_m %}{{ built_m }} متر{% else %}—{% endif %}
-        </div>
+        <div class="mt-0.5 text-[13px] font-semibold tabular-nums truncate">{% if built_m %}{{ built_m }} متر{% else %}—{% endif %}</div>
       </div>
       <div class="flex-[1.15] min-w-0 px-1 py-2.5 text-center">
         <div class="text-[10px] text-white/55 leading-tight">قیمت</div>
-        <div class="mt-0.5 text-[12px] sm:text-[13px] font-bold tabular-nums leading-tight">{{ (land.price_total or 0)|toman }}</div>
+        <div class="mt-0.5 text-[13px] font-bold tabular-nums leading-tight">{{ (land.price_total or 0)|toman }}</div>
       </div>
     </div>
   </div>
