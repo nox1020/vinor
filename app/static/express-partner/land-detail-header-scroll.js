@@ -126,14 +126,21 @@
     }
   }
 
+  var galleryFlushTimer = null;
+
   function scheduleGalleryFlush() {
+    /* v2: موقعیت گالری با CSS ثابت است؛ flush تکراری margin باعث پرش بعد از ورود می‌شود */
+    if (document.querySelector('.land-detail-v2')) {
+      clearGalleryPull();
+      return;
+    }
+    if (galleryFlushTimer) {
+      window.clearTimeout(galleryFlushTimer);
+      galleryFlushTimer = null;
+    }
     flushPartnerGalleryTop();
     requestAnimationFrame(flushPartnerGalleryTop);
-    window.setTimeout(flushPartnerGalleryTop, 0);
-    window.setTimeout(flushPartnerGalleryTop, 50);
-    window.setTimeout(flushPartnerGalleryTop, 150);
-    window.setTimeout(flushPartnerGalleryTop, 400);
-    window.setTimeout(flushPartnerGalleryTop, 800);
+    galleryFlushTimer = window.setTimeout(flushPartnerGalleryTop, 120);
   }
 
   function bindMediaFlush() {
