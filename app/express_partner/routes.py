@@ -900,14 +900,17 @@ def apply_cancel():
     return redirect(url_for('express_partner.apply_step1'))
 
 
-def _dashboard_selected_city():
+def _dashboard_selected_cities():
     """
-    شهر فیلتر داشبورد.
-    پیش‌فرض: همه شهرها (بدون فیلتر). اگر city در URL باشد همان شهر فیلتر می‌شود.
+    شهرهای فیلتر داشبورد (چندتایی، جدا شده با ویرگول در query).
+    پیش‌فرض: همه شهرها. city= خالی → همه؛ city=تهران,کرج → فقط آن شهرها.
     """
-    if 'city' in request.args:
-        return (request.args.get('city') or '').strip()
-    return ''
+    if 'city' not in request.args:
+        return []
+    raw = (request.args.get('city') or '').strip()
+    if not raw:
+        return []
+    return [p.strip() for p in raw.split(',') if p.strip()]
 
 
 @express_partner_bp.route('/dashboard', methods=['GET'], endpoint='dashboard')
@@ -918,9 +921,10 @@ def dashboard():
 
     # فیلتر جستجو و شهر برای نمایش نتایج در همان داشبورد
     search_query = (request.args.get('q', '') or '').strip().lower()
-    selected_city = _dashboard_selected_city()
+    selected_cities = _dashboard_selected_cities()
+    selected_city = ','.join(selected_cities)
     # برای لینک‌ها: حالت «همه شهرها» باید city= خالی در URL بماند، نه حذف پارامتر
-    city_url = selected_city if ('city' in request.args or selected_city) else None
+    city_url = selected_city if ('city' in request.args or selected_cities) else None
 
     apps = load_express_partner_apps() or []
     my_apps = [a for a in apps if str(a.get("phone")) == me_phone]
@@ -1000,8 +1004,12 @@ def dashboard():
         display_lands = load_express_lands_cached() or []
     except Exception:
         display_lands = []
-    if selected_city:
-        display_lands = [l for l in display_lands if str(l.get('city') or '').strip() == selected_city]
+    if selected_cities:
+        city_set = set(selected_cities)
+        display_lands = [
+            l for l in display_lands
+            if str(l.get('city') or '').strip() in city_set
+        ]
     if search_query:
         terms = search_query.split()
         def _matches(l):
@@ -1149,6 +1157,7 @@ def dashboard():
         "express_partner/dashboard.html",
         profile=profile,
         selected_city=selected_city,
+        selected_cities=selected_cities,
         city_url=city_url,
         is_approved=is_approved,
         has_pending_app=has_pending_app,
@@ -2222,11 +2231,36 @@ def routine_steps_detail():
     return resp
 
 
+def _mark_in_transaction_finish(
+    code: str,
+    *,
+    success: bool,
+    message: str,
+    category: str = 'success',
+    new_status: str | None = None,
+):
+    """پاسخ HTML (redirect) یا JSON برای درخواست AJAX جزئیات فایل."""
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(
+            success=success,
+            message=message,
+            new_status=new_status,
+            category=category,
+        ), (200 if success else 400)
+    if message:
+        flash(message, category)
+    if success:
+        return redirect(url_for('express_partner.land_detail', code=code))
+    return redirect(url_for('express_partner.dashboard'))
+
+
 @express_partner_bp.route('/mark-in-transaction/<code>', methods=['POST'], endpoint='mark_in_transaction')
 @require_partner_access()
 def mark_in_transaction(code: str):
     """Toggle وضعیت ملک بین در حال معامله و فعال - فقط یک همکار می‌تواند معامله کند"""
     me_phone = (session.get("user_phone") or "").strip()
+    success_message = ''
+    success_category = 'success'
     
     try:
         assignments = load_express_assignments() or []
@@ -2242,15 +2276,23 @@ def mark_in_transaction(code: str):
                 break
         
         if my_assignment is None:
-            flash('فایل موردنظر پیدا نشد یا دسترسی شما به آن محدود است.', 'error')
-            return redirect(url_for('express_partner.dashboard'))
+            return _mark_in_transaction_finish(
+                code,
+                success=False,
+                message='فایل موردنظر پیدا نشد یا دسترسی شما به آن محدود است.',
+                category='error',
+            )
         
         current_status = my_assignment.get('status', 'active')
         
         # اگر فایل فروخته شده، امکان تغییر وضعیت نیست
         if current_status == 'sold':
-            flash('این فایل قبلاً فروخته شده و امکان تغییر وضعیت آن وجود ندارد.', 'error')
-            return redirect(url_for('express_partner.dashboard'))
+            return _mark_in_transaction_finish(
+                code,
+                success=False,
+                message='این فایل قبلاً فروخته شده و امکان تغییر وضعیت آن وجود ندارد.',
+                category='error',
+            )
         
         # بررسی آیا فایل توسط همکاری در حال معامله است (چک کردن transaction_holder)
         holder_phone = None
@@ -2263,8 +2305,12 @@ def mark_in_transaction(code: str):
         if holder_phone:
             # فقط همان همکار می‌تواند رفع معامله کند
             if holder_phone != me_phone:
-                flash('این فایل در حال حاضر توسط همکار دیگری در حال معامله است و فقط همان همکار می‌تواند وضعیت را تغییر دهد.', 'error')
-                return redirect(url_for('express_partner.dashboard'))
+                return _mark_in_transaction_finish(
+                    code,
+                    success=False,
+                    message='این فایل در حال حاضر توسط همکار دیگری در حال معامله است و فقط همان همکار می‌تواند وضعیت را تغییر دهد.',
+                    category='error',
+                )
             # همکار صاحب معامله می‌خواهد رفع معامله کند
             new_status = 'active'
         else:
@@ -2274,8 +2320,12 @@ def mark_in_transaction(code: str):
                 if a.get('transaction_holder') == me_phone
             )
             if my_transaction_count >= 2:
-                flash('شما هم‌زمان فقط می‌توانید روی ۲ فایل در حال معامله باشید.', 'error')
-                return redirect(url_for('express_partner.dashboard'))
+                return _mark_in_transaction_finish(
+                    code,
+                    success=False,
+                    message='شما هم‌زمان فقط می‌توانید روی ۲ فایل در حال معامله باشید.',
+                    category='error',
+                )
             # هیچ‌کس معامله نکرده، این همکار می‌تواند معامله کند
             new_status = 'in_transaction'
         
@@ -2308,7 +2358,7 @@ def mark_in_transaction(code: str):
                     
                     if not land:
                         current_app.logger.warning(f"Land {code} not found in cache")
-                        flash('ملک به عنوان «در حال معامله» برای تمامی همکاران علامت‌گذاری شد. (اطلاعات کامل فایل در دسترس نیست)', 'success')
+                        success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد. (اطلاعات کامل فایل در دسترس نیست)'
                     else:
                         # بارگذاری کمیسیون‌های موجود
                         commissions = load_express_commissions() or []
@@ -2381,16 +2431,18 @@ def mark_in_transaction(code: str):
                         
                         if created_count > 0:
                             save_express_commissions(commissions)
-                            flash(f'ملک به عنوان «در حال معامله» علامت‌گذاری شد و پورسانت شما به لیست انتظار اضافه شد.', 'success')
+                            success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد و پورسانت شما به لیست انتظار اضافه شد.'
                         else:
                             if skipped_count > 0:
-                                flash('ملک به عنوان «در حال معامله» علامت‌گذاری شد. (پورسانت شما قبلاً ثبت شده بود)', 'success')
+                                success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد. (پورسانت شما قبلاً ثبت شده بود)'
                             else:
-                                flash('ملک به عنوان «در حال معامله» علامت‌گذاری شد.', 'success')
+                                success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد.'
+                        if not success_message:
+                            success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد.'
                 except Exception as e:
                     current_app.logger.error(f"Error creating commission records: {e}", exc_info=True)
-                    # خطا را لاگ می‌کنیم اما فرآیند را متوقف نمی‌کنیم
-                    flash('ملک به عنوان «در حال معامله» برای تمامی همکاران علامت‌گذاری شد، اما در ثبت پورسانت خطایی رخ داد.', 'warning')
+                    success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد، اما در ثبت پورسانت خطایی رخ داد.'
+                    success_category = 'warning'
             else:
                 # اگر وضعیت از "در حال معامله" به "فعال" برگشت، پورسانت‌های pending مربوط به این فایل را حذف کن
                 try:
@@ -2410,19 +2462,39 @@ def mark_in_transaction(code: str):
                     
                     if removed_count > 0:
                         save_express_commissions(commissions_to_keep)
-                        flash(f'وضعیت ملک به «فعال» برای تمامی همکاران تغییر کرد و {removed_count} پورسانت در انتظار حذف شد.', 'success')
+                        success_message = f'وضعیت ملک به «فعال» تغییر کرد و {removed_count} پورسانت در انتظار حذف شد.'
                     else:
-                        flash('وضعیت ملک به «فعال» برای تمامی همکاران تغییر کرد.', 'success')
+                        success_message = 'وضعیت ملک به «فعال» تغییر کرد.'
                 except Exception as e:
                     current_app.logger.error(f"Error removing commission records: {e}")
-                    flash('وضعیت ملک به «فعال» برای تمامی همکاران تغییر کرد.', 'success')
-        else:
-            flash('در بروزرسانی وضعیت فایل خطایی رخ داد. لطفاً چند لحظه دیگر دوباره تلاش کنید.', 'error')
+                    success_message = 'وضعیت ملک به «فعال» تغییر کرد.'
+            if not success_message:
+                success_message = (
+                    'ملک به عنوان «در حال معامله» علامت‌گذاری شد.'
+                    if new_status == 'in_transaction'
+                    else 'وضعیت ملک به «فعال» تغییر کرد.'
+                )
+            return _mark_in_transaction_finish(
+                code,
+                success=True,
+                message=success_message,
+                category=success_category,
+                new_status=new_status,
+            )
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='در بروزرسانی وضعیت فایل خطایی رخ داد. لطفاً چند لحظه دیگر دوباره تلاش کنید.',
+            category='error',
+        )
     except Exception as e:
         current_app.logger.error(f"Error toggling land transaction status: {e}")
-        flash('در بروزرسانی وضعیت فایل خطایی رخ داد. لطفاً چند لحظه دیگر دوباره تلاش کنید.', 'error')
-    
-    return redirect(url_for('express_partner.dashboard'))
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='در بروزرسانی وضعیت فایل خطایی رخ داد. لطفاً چند لحظه دیگر دوباره تلاش کنید.',
+            category='error',
+        )
 
 
 @express_partner_bp.route('/logout', methods=['POST'], endpoint='logout')
@@ -3371,6 +3443,8 @@ def land_detail(code: str):
     except Exception:
         pass
 
+    is_logged_in = bool(me_phone)
+
     return render_template(
         'express_partner/land_detail.html',
         land=land,
@@ -3378,6 +3452,7 @@ def land_detail(code: str):
         share_token=share_token,
         partner_profile=partner_profile,
         is_approved=is_approved,
+        is_logged_in=is_logged_in,
         is_partner_context=True,
         ref_partner=None,
         brand="وینور",

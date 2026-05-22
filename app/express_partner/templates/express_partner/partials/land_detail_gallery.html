@@ -1,0 +1,138 @@
+{# گالری + نوار ابزار — موبایل و دسکتاپ #}
+{% from 'express_partner/partials/land_detail_macros.html' import upload_url %}
+{% set _st = (land._assignment_status|default('active')) %}
+{% set images = land.images or [] %}
+{% set video = land.video %}
+{% set has_video = video and (video|string|trim) %}
+{% set images_v2 = land.images_v2 or [] %}
+{% set primary_image = images[0] if images else none %}
+{% set primary_v2 = images_v2[0] if images_v2 else none %}
+{% set total_items = (1 if has_video else 0) + images|length %}
+
+<section class="ld-gallery relative" aria-label="گالری فایل">
+  <div id="landGallery" class="ld-gallery__stage aspect-[5/4] sm:aspect-[4/3] bg-black relative overflow-hidden max-lg:rounded-b-[1.75rem] select-none touch-pan-y">
+    {% if has_video or primary_image %}
+    <div id="landMediaLoading" class="ld-gallery__loader pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-200" aria-hidden="true">
+      <div class="w-10 h-10 rounded-full border-2 border-white/30 border-t-white animate-spin" aria-hidden="true"></div>
+    </div>
+
+    <div class="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-28 bg-gradient-to-t from-[#0B111B] to-transparent"></div>
+
+    {% if has_video %}
+    {% set video_src = upload_url(video) %}
+    <video id="landVideo"
+           class="absolute inset-0 z-0 h-full w-full object-cover"
+           muted loop playsinline autoplay preload="metadata"
+           disablepictureinpicture
+           controlslist="nodownload nofullscreen noremoteplayback">
+      <source src="{{ video_src }}" type="video/mp4">
+    </video>
+    {% endif %}
+
+    {% if primary_image %}
+      {% if primary_v2 %}
+        {% set thumb_src = primary_v2.thumb or primary_v2.full or upload_url(primary_image) %}
+        {% set full_src = primary_v2.full or primary_v2.raw or upload_url(primary_image) %}
+      {% else %}
+        {% set thumb_src = upload_url(primary_image) %}
+        {% set full_src = thumb_src %}
+      {% endif %}
+    <img id="landMainImage"
+         src="{{ thumb_src }}"
+         data-full="{{ full_src }}"
+         alt="{{ land.title or '' }}"
+         class="absolute inset-0 z-[1] h-full w-full object-cover {% if has_video %}hidden{% endif %}"
+         fetchpriority="high"
+         decoding="async">
+    {% endif %}
+
+    {% if total_items > 1 %}
+    <div class="ld-gallery__dots absolute bottom-14 inset-x-0 z-20 flex justify-center gap-1.5 pointer-events-none">
+      {% if has_video %}
+      <span class="ld-dot is-active" data-index="0"></span>
+      {% endif %}
+      {% for img in images %}
+      <span class="ld-dot {% if not has_video and loop.first %}is-active{% endif %}" data-index="{{ (1 if has_video else 0) + loop.index0 }}"></span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if has_video %}
+    <div class="absolute inset-x-0 bottom-[4.25rem] z-20 flex justify-center pointer-events-none">
+      <button type="button"
+              id="landVideoSoundToggle"
+              class="pointer-events-auto grid h-11 w-11 place-items-center rounded-full border border-white/25 bg-black/50 text-white backdrop-blur-sm"
+              aria-pressed="true"
+              data-muted="true"
+              aria-label="بی‌صدا">
+        <i id="landVideoSoundIcon" class="fas fa-volume-xmark text-sm" aria-hidden="true"></i>
+      </button>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="absolute inset-0 grid place-items-center text-gray-600">
+      <i class="fas fa-image text-4xl opacity-50" aria-hidden="true"></i>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="ld-gallery__chrome pointer-events-none absolute inset-0 z-40 flex flex-col justify-between max-lg:rounded-b-[1.75rem]">
+    <div class="pointer-events-auto flex items-start justify-between gap-2 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
+      <div class="flex flex-col items-start gap-2 min-w-0">
+        <a href="{{ url_for('express_partner.dashboard') }}"
+           data-vinor-express-nav="back"
+           class="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-sm active:scale-95"
+           aria-label="بازگشت">
+          <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
+        </a>
+        <span id="landTxStatusBadge" class="rounded-lg bg-orange-500 px-2.5 py-1 text-[11px] font-semibold text-white {% if _st != 'in_transaction' %}hidden{% endif %}">در حال معامله</span>
+        {% if _st == 'sold' %}
+        <span class="rounded-lg bg-neutral-600 px-2.5 py-1 text-[11px] font-semibold text-white">فروخته شد</span>
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        {% if land.code %}
+        <button type="button"
+                data-fav-code="{{ land.code }}"
+                data-land-detail-fav
+                class="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-sm"
+                aria-label="علاقه‌مندی">
+          <i class="far fa-heart vinor-fav-icon text-sm" aria-hidden="true"></i>
+        </button>
+        {% endif %}
+        <button type="button" id="landDetailShareBtn" class="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-sm" aria-label="اشتراک">
+          <i class="fas fa-share-nodes text-sm" aria-hidden="true"></i>
+        </button>
+        <div class="relative">
+          <button type="button" id="landDetailMoreBtn" class="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-sm" aria-expanded="false" aria-haspopup="true" aria-label="بیشتر">
+            <i class="fas fa-ellipsis-vertical text-sm" aria-hidden="true"></i>
+          </button>
+          <div id="landDetailMoreMenu" class="hidden absolute top-full left-0 mt-2 min-w-[11rem] rounded-xl border border-white/10 bg-[#151d2b] py-1 text-sm text-white shadow-xl pointer-events-auto" role="menu">
+            {% if land.code %}
+            <button type="button" data-copy-text="{{ land.code }}" class="block w-full px-3 py-2.5 text-start hover:bg-white/5" role="menuitem">کپی کد فایل</button>
+            {% endif %}
+            {% if share_url %}
+            <a href="{{ share_url }}" target="_blank" rel="noopener" class="block w-full px-3 py-2.5 text-start hover:bg-white/5" role="menuitem">صفحه عمومی</a>
+            {% endif %}
+            {% if land.latitude and land.longitude %}
+            <button type="button" data-land-open-location class="block w-full px-3 py-2.5 text-start hover:bg-white/5" role="menuitem">موقعیت روی نقشه</button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if total_items > 1 %}
+    <div class="pointer-events-none flex items-end justify-between gap-2 px-3 pb-3">
+      {% if images|length > 0 %}
+      <span class="rounded-lg border border-white/10 bg-black/45 px-2.5 py-1 text-[11px] text-white backdrop-blur-sm">
+        <i class="fas fa-camera text-[10px] opacity-80 me-1"></i>{{ images|length }}
+      </span>
+      {% else %}<span></span>{% endif %}
+      <span id="landGallerySlideLabel" class="rounded-lg border border-white/10 bg-black/45 px-2.5 py-1 text-[11px] text-white backdrop-blur-sm">
+        ۱ از {{ total_items }}
+      </span>
+    </div>
+    {% endif %}
+  </div>
+</section>

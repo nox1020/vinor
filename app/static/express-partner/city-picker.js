@@ -1,5 +1,5 @@
 /**
- * انتخاب شهر — lazy init، فیلتر بدون بازسازی DOM، debounce جستجو
+ * انتخاب شهر — تک‌انتخابی یا چندانتخابی (data-multi-city)
  */
 (function (g) {
   'use strict';
@@ -48,6 +48,51 @@
     return row.getAttribute('data-city-row');
   }
 
+  function isMulti(modal) {
+    return modal.getAttribute('data-multi-city') === '1';
+  }
+
+  function allCitiesLabel(modal, trigger) {
+    var n = 0;
+    if (trigger) {
+      n = parseInt(trigger.getAttribute('data-cities-count') || '0', 10);
+    }
+    if (!n) {
+      n = parseInt(modal.getAttribute('data-cities-count') || '0', 10);
+    }
+    if (n > 0) return n + ' شهر';
+    return 'همه شهرها';
+  }
+
+  function parseHiddenValue(raw, multi) {
+    var s = (raw || '').trim();
+    if (!s) return multi ? [] : '';
+    if (!multi) return s;
+    return s.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+
+  function joinHiddenValue(pending, multi) {
+    if (multi) {
+      return Array.isArray(pending) ? pending.join(',') : '';
+    }
+    return pending || '';
+  }
+
+  function formatTriggerLabel(modal, pending, trigger, emptyLabel) {
+    var multi = isMulti(modal);
+    var allowAll = modal.getAttribute('data-allow-all') === '1';
+    if (multi) {
+      var arr = Array.isArray(pending) ? pending : [];
+      if (!arr.length) return allCitiesLabel(modal, trigger);
+      if (arr.length === 1) return arr[0];
+      return arr.length + ' شهر';
+    }
+    if (!pending) {
+      return allowAll ? allCitiesLabel(modal, trigger) : emptyLabel;
+    }
+    return pending;
+  }
+
   function setRowSelected(row, on) {
     if (!row) return;
     row.classList.toggle('is-selected', on);
@@ -69,27 +114,47 @@
     }
   }
 
+  function pendingIncludes(pending, value, multi) {
+    if (multi) {
+      return Array.isArray(pending) && pending.indexOf(value) >= 0;
+    }
+    return pending === value;
+  }
+
   function updateSelection(modal, pending) {
+    var multi = isMulti(modal);
     var list = el(modal, 'List');
     if (list) {
       list.querySelectorAll('[data-city-row]').forEach(function (row) {
-        setRowSelected(row, rowValue(row) === pending);
+        var val = rowValue(row);
+        var on;
+        if (multi) {
+          if (val === '') {
+            on = !pending || !pending.length;
+          } else {
+            on = pendingIncludes(pending, val, true);
+          }
+        } else {
+          on = pendingIncludes(pending, val, false);
+        }
+        setRowSelected(row, on);
       });
     }
     var chips = el(modal, 'Chips');
     if (chips) {
       chips.querySelectorAll('[data-city-chip]').forEach(function (chip) {
         var v = chip.getAttribute('data-city-chip') || '';
-        var on = v === pending;
+        var on = multi ? pendingIncludes(pending, v, true) : pending === v;
         chip.classList.toggle('border-emerald-500', on);
         chip.classList.toggle('bg-emerald-500/15', on);
         chip.classList.toggle('text-emerald-300', on);
       });
     }
     var cur = el(modal, 'CurrentLabel');
+    var trigger = document.getElementById(modal.getAttribute('data-trigger-id') || '');
+    var emptyLabel = modal.getAttribute('data-empty-label') || 'انتخاب شهر';
     if (cur) {
-      var allowAll = modal.getAttribute('data-allow-all') === '1';
-      cur.textContent = pending || (allowAll ? 'همه شهرها' : '—');
+      cur.textContent = formatTriggerLabel(modal, pending, trigger, emptyLabel);
     }
   }
 
@@ -139,12 +204,26 @@
     return false;
   }
 
+  function isValidSelection(modal, pending) {
+    var multi = isMulti(modal);
+    if (multi) {
+      var arr = Array.isArray(pending) ? pending : [];
+      if (!arr.length) return modal.getAttribute('data-allow-all') === '1';
+      for (var i = 0; i < arr.length; i++) {
+        if (!isValidCity(modal, arr[i])) return false;
+      }
+      return true;
+    }
+    return isValidCity(modal, pending);
+  }
+
   function initPicker(modal) {
     if (modal.getAttribute('data-cp-ready') === '1') return;
     modal.setAttribute('data-cp-ready', '1');
 
     var overlay = g.vinorExpressModalOverlay;
-    var pending = '';
+    var multi = isMulti(modal);
+    var pending = multi ? [] : '';
     var hidden = document.getElementById(modal.getAttribute('data-hidden-id') || '');
     var label = document.getElementById(modal.getAttribute('data-label-id') || '');
     var trigger = document.getElementById(modal.getAttribute('data-trigger-id') || '');
@@ -162,13 +241,31 @@
     var chips = el(modal, 'Chips');
 
     function readHidden() {
-      return hidden ? (hidden.value || '').trim() : '';
+      return parseHiddenValue(hidden ? hidden.value : '', multi);
     }
 
-    function setPending(c) {
+    function setPendingSingle(c) {
       var x = c == null ? '' : String(c).trim();
       if (!isValidCity(modal, x)) return;
       pending = x;
+      updateSelection(modal, pending);
+    }
+
+    function togglePendingCity(c) {
+      var x = String(c || '').trim();
+      if (x === '') {
+        pending = [];
+        updateSelection(modal, pending);
+        return;
+      }
+      if (!isValidCity(modal, x)) return;
+      if (!Array.isArray(pending)) pending = [];
+      var idx = pending.indexOf(x);
+      if (idx >= 0) {
+        pending.splice(idx, 1);
+      } else {
+        pending.push(x);
+      }
       updateSelection(modal, pending);
     }
 
@@ -194,13 +291,14 @@
     }
 
     function applyPicker() {
-      var v = pending;
-      if (!isValidCity(modal, v)) return;
+      if (!isValidSelection(modal, pending)) return;
+      var v = joinHiddenValue(pending, multi);
       if (hidden) hidden.value = v;
-      if (label) label.textContent = v || (modal.getAttribute('data-allow-all') === '1' ? 'همه شهرها' : emptyLabel);
+      var display = formatTriggerLabel(modal, pending, trigger, emptyLabel);
+      if (label) label.textContent = display;
       if (triggerText) {
-        triggerText.textContent = v || emptyLabel;
-        triggerText.classList.toggle('text-zinc-500', !v);
+        triggerText.textContent = display;
+        triggerText.classList.toggle('text-zinc-500', multi ? !pending.length : !pending);
       }
       closePicker();
       if (applySubmit && form) form.submit();
@@ -220,12 +318,24 @@
         if (e.key !== 'Enter') return;
         var q = (search.value || '').trim();
         var allowAll = modal.getAttribute('data-allow-all') === '1';
-        if (allowAll && !q) { setPending(''); e.preventDefault(); return; }
-        if (q && isValidCity(modal, q)) { setPending(q); e.preventDefault(); return; }
+        if (allowAll && !q) {
+          if (multi) togglePendingCity('');
+          else setPendingSingle('');
+          e.preventDefault();
+          return;
+        }
+        if (q && isValidCity(modal, q)) {
+          if (multi) togglePendingCity(q);
+          else setPendingSingle(q);
+          e.preventDefault();
+          return;
+        }
         if (!list) return;
         var shown = list.querySelectorAll('[data-city-row]:not(.hidden)');
         if (shown.length === 1) {
-          setPending(rowValue(shown[0]));
+          var v = rowValue(shown[0]);
+          if (multi) togglePendingCity(v);
+          else setPendingSingle(v);
           e.preventDefault();
         }
       });
@@ -235,7 +345,9 @@
       list.addEventListener('click', function (e) {
         var row = e.target && e.target.closest && e.target.closest('[data-city-row]');
         if (!row || row.classList.contains('hidden')) return;
-        setPending(rowValue(row));
+        var v = rowValue(row);
+        if (multi) togglePendingCity(v);
+        else setPendingSingle(v);
       });
     }
 
@@ -243,14 +355,18 @@
       chips.addEventListener('click', function (e) {
         var chip = e.target && e.target.closest && e.target.closest('[data-city-chip]');
         if (!chip) return;
-        setPending(chip.getAttribute('data-city-chip') || '');
+        var v = chip.getAttribute('data-city-chip') || '';
+        if (multi) togglePendingCity(v);
+        else setPendingSingle(v);
       });
     }
 
     if (geoQuick) {
       geoQuick.addEventListener('click', function () {
         var pick = firstMajor(modal);
-        if (pick) setPending(pick);
+        if (!pick) return;
+        if (multi) togglePendingCity(pick);
+        else setPendingSingle(pick);
       });
     }
   }

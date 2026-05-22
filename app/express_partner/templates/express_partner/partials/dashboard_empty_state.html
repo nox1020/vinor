@@ -1,5 +1,5 @@
 {# پیام خالی داشبورد — فیلتر فعال یا فهرست خالی #}
-{% set has_filters = fq or ftag or fcat or selected_city %}
+{% set has_filters = fq or ftag or fcat or (selected_cities|default([])|length > 0) or (selected_city|default('')) %}
 <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-8 text-center">
   <div class="flex flex-col items-center gap-3">
     <div class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">

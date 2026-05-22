@@ -196,13 +196,18 @@
   }
 
   function afterPageSwap(navKey) {
-    var showNav = !isLandDetailPath(window.location.pathname);
+    var onDetail = isLandDetailPath(window.location.pathname);
+    var showNav = !onDetail;
     setBottomNavVisible(showNav);
     if (showNav) setBottomNavActive(navKey);
     try {
       var shell = document.getElementById('tg-page-shell');
-      if (shell) shell.scrollTop = 0;
-      window.scrollTo(0, 0);
+      if (!onDetail) {
+        if (shell) shell.scrollTop = 0;
+        window.scrollTo(0, 0);
+      } else if (shell) {
+        shell.scrollTop = 0;
+      }
       var cm = document.getElementById('commissionsPageMain');
       if (cm) cm.scrollTop = 0;
       var cards = document.getElementById('dashboardMobileCardsRoot');
@@ -245,6 +250,7 @@
 
   function playEnterAnimation(dir) {
     if (!dir || prefersReducedMotion()) return;
+    if (isLandDetailPath(window.location.pathname)) return;
     var shell = document.getElementById('tg-page-shell');
     if (!shell) return;
     var rtl = document.documentElement.getAttribute('dir') === 'rtl';
@@ -325,7 +331,9 @@
         } catch (_) {}
       }
       afterPageSwap(navKey);
-      playEnterAnimation(dir);
+      if (!isLandDetailPath(window.location.pathname)) {
+        playEnterAnimation(dir);
+      }
       return true;
     }
 
@@ -361,8 +369,13 @@
 
   function navigateWithAnimation(href, dir) {
     stopAllExpressMedia();
-    if (prefersReducedMotion()) {
-      return softNavigate(href, 0);
+    var toDetail = false;
+    try {
+      var u = parseUrl(href);
+      if (u) toDetail = isLandDetailPath(u.pathname);
+    } catch (_) {}
+    if (prefersReducedMotion() || toDetail) {
+      return softNavigate(href, dir || 0);
     }
     stripNavClasses(document.documentElement);
     var shell = document.getElementById('tg-page-shell');

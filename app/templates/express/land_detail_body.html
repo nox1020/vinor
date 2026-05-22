@@ -1,4 +1,4 @@
-﻿  <div class="min-h-screen {% if is_partner_context %}land-detail-partner-page land-detail-v2{% endif %} {% if is_partner_context %}bg-[#0B111B]{% else %}bg-white dark:bg-gray-950{% endif %} {% if is_partner_context %}max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8{% else %}pb-20{% endif %}">
+  <div class="min-h-screen bg-white dark:bg-gray-950 pb-20">
     {% set images = land.images or [] %}
     {% set video = land.video %}
     {% set has_video = video and video.strip() %}
@@ -6,10 +6,6 @@
     {% set primary_image = images[0] if images else None %}
     {% set images_v2 = land.images_v2 or [] %}
     {% set primary_image_v2 = images_v2[0] if images_v2 else None %}
-
-    {% if is_partner_context %}
-    {% include 'express_partner/partials/land_detail_partner_v2.html' %}
-    {% endif %}
 
     {% if not is_partner_context %}
     <!-- Header (Public context) -->
@@ -912,19 +908,23 @@
 
       const totalItems = (hasVideo ? 1 : 0) + images.length;
       if (totalItems <= 1) {
+        if (mainImg && !mainImg.classList.contains('hidden')) {
+          mainImg.classList.add('is-loaded');
+        }
         try {
           if (mainImg && mainImg.dataset.full && mainImg.dataset.full !== mainImg.src) {
             const hi0 = new Image();
             hi0.decoding = 'async';
             hi0.src = mainImg.dataset.full;
             hi0.addEventListener('load', () => {
-              mainImg.src = mainImg.dataset.full;
+              if (mainImg.src !== mainImg.dataset.full) mainImg.src = mainImg.dataset.full;
               mainImg.classList.add('is-loaded');
             }, { once: true });
             hi0.addEventListener('error', () => mainImg.classList.add('is-loaded'), { once: true });
           }
         } catch (_) {}
         if (partnerDetailAutoplay && mainVideo) partnerTryPlayVideo();
+        if (loadingEl) setLoading(false);
         return;
       }
 
@@ -1008,7 +1008,9 @@
 
       function showItem(idx) {
         currentIndex = (idx + totalItems) % totalItems;
-        setLoading(true);
+        if (!partnerDetailAutoplay) {
+          setLoading(true);
+        }
         if (hasVideo && currentIndex === 0) {
           if (mainVideo) {
             mainVideo.classList.remove('hidden');
@@ -1019,7 +1021,7 @@
             mainImg.classList.remove('block');
           }
           partnerTryPlayVideo();
-          waitForVideoLoad();
+          if (!partnerDetailAutoplay) waitForVideoLoad();
         } else {
           const imageIdx = hasVideo ? currentIndex - 1 : currentIndex;
           const imgObj = images[imageIdx];
@@ -1027,7 +1029,7 @@
             const thumb = imgObj.thumb || imgObj.full;
             const full = imgObj.full || thumb;
             if (thumb) {
-              mainImg.classList.remove('is-loaded');
+              if (!partnerDetailAutoplay) mainImg.classList.remove('is-loaded');
               mainImg.src = thumb;
               mainImg.dataset.full = full;
               if (full && full !== thumb) {
@@ -1048,7 +1050,7 @@
             mainVideo.classList.remove('block');
             mainVideo.pause();
           }
-          waitForImageLoad();
+          if (!partnerDetailAutoplay) waitForImageLoad();
         }
         updateDots();
         updateThumbs();
@@ -1188,9 +1190,12 @@
           const hi = new Image();
           hi.decoding = 'async';
           hi.src = mainImg.dataset.full;
-          hi.addEventListener('load', () => { mainImg.src = mainImg.dataset.full; mainImg.classList.add('is-loaded'); }, { once: true });
+          hi.addEventListener('load', () => {
+            if (mainImg.src !== mainImg.dataset.full) mainImg.src = mainImg.dataset.full;
+            mainImg.classList.add('is-loaded');
+          }, { once: true });
           hi.addEventListener('error', () => mainImg.classList.add('is-loaded'), { once: true });
-        } else if (mainImg && mainImg.complete) {
+        } else if (mainImg) {
           mainImg.classList.add('is-loaded');
         }
       } catch (_) {}

@@ -1,0 +1,33 @@
+{# مودال تماس و موقعیت #}
+{% set contact_phone = land.owner_phone or land.vinor_contact %}
+
+{% if contact_phone %}
+<div id="landContactModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landContactTitle">
+  <div class="ld-modal__backdrop absolute inset-0 bg-black/60" data-land-modal-close></div>
+  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl">
+    <h2 id="landContactTitle" class="text-lg font-bold text-white mb-3">تماس</h2>
+    <a href="tel:{{ contact_phone }}" class="flex items-center justify-center gap-2 w-full rounded-xl bg-[#22c55e] hover:bg-green-400 py-3.5 text-white font-semibold">
+      <i class="fas fa-phone" aria-hidden="true"></i>
+      {{ contact_phone }}
+    </a>
+    <button type="button" data-land-modal-close class="mt-3 w-full py-2.5 text-sm text-gray-400">بستن</button>
+  </div>
+</div>
+{% endif %}
+
+{% if land.latitude and land.longitude %}
+<div id="landLocationModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landLocationTitle">
+  <div class="ld-modal__backdrop absolute inset-0 bg-black/60" data-land-modal-close></div>
+  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl">
+    <h2 id="landLocationTitle" class="text-lg font-bold text-white mb-3">موقعیت</h2>
+    <a href="https://www.google.com/maps?q={{ land.latitude }},{{ land.longitude }}"
+       target="_blank"
+       rel="noopener noreferrer"
+       class="flex items-center justify-center gap-2 w-full rounded-xl bg-teal-600 hover:bg-teal-500 py-3.5 text-white font-semibold">
+      <i class="fas fa-map-location-dot" aria-hidden="true"></i>
+      باز کردن در نقشه
+    </a>
+    <button type="button" data-land-modal-close class="mt-3 w-full py-2.5 text-sm text-gray-400">بستن</button>
+  </div>
+</div>
+{% endif %}

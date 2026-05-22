@@ -8,6 +8,8 @@
 #}
 {% set cp = cp|default('dashCityPicker') %}
 {% set selected = selected|default('') %}
+{% set selected_list = selected_list if selected_list is defined else (selected.split(',') if selected else []) %}
+{% set multi_city = multi_city|default(false) %}
 {% set allow_all = allow_all|default(false) %}
 {% set apply_submit = apply_submit|default(false) %}
 {% set empty_label = empty_label|default('انتخاب شهر') %}
@@ -19,6 +21,7 @@
      data-city-picker-root
      data-cp-prefix="{{ cp }}"
      data-allow-all="{{ '1' if allow_all else '0' }}"
+     data-cities-count="{{ cities|length if cities is defined else 0 }}"
      data-apply-submit="{{ '1' if apply_submit else '0' }}"
      data-form-id="{{ form_id|default('') }}"
      data-hidden-id="{{ hidden_id|default('') }}"
@@ -26,6 +29,7 @@
      data-trigger-id="{{ trigger_id|default('') }}"
      data-trigger-text-id="{{ trigger_text_id|default('') }}"
      data-empty-label="{{ empty_label }}"
+     data-multi-city="{{ '1' if multi_city else '0' }}"
      aria-hidden="true">
   <div class="absolute inset-0 bg-black/70 backdrop-blur-[1px]" data-city-modal-backdrop></div>
   <div class="relative flex min-h-full flex-col justify-end pointer-events-none sm:justify-center sm:p-4">
@@ -39,7 +43,7 @@
                 aria-label="بستن">
           <i class="fas fa-times text-lg" aria-hidden="true"></i>
         </button>
-        <h2 id="{{ cp }}Title" class="text-base font-bold text-white">انتخاب شهر</h2>
+        <h2 id="{{ cp }}Title" class="text-base font-bold text-white">{% if multi_city %}انتخاب شهرها{% else %}انتخاب شهر{% endif %}</h2>
       </div>
 
       <div class="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pt-3">
@@ -55,7 +59,7 @@
           <span class="flex min-w-0 flex-1 items-center justify-end gap-2">
             <span class="min-w-0 text-right">
               <span class="block text-xs font-medium text-emerald-400">موقعیت فعلی</span>
-              <span id="{{ cp }}CurrentLabel" class="block truncate text-sm font-semibold text-white">{{ selected or ('همه شهرها' if allow_all else '—') }}</span>
+              <span id="{{ cp }}CurrentLabel" class="block truncate text-sm font-semibold text-white">{% if multi_city %}{% if selected_list|length == 1 %}{{ selected_list[0] }}{% elif selected_list|length > 1 %}{{ selected_list|length }} شهر انتخاب‌شده{% else %}{{ 'همه شهرها' if allow_all else '—' }}{% endif %}{% else %}{{ selected or ('همه شهرها' if allow_all else '—') }}{% endif %}</span>
             </span>
             <i class="fas fa-location-dot shrink-0 text-lg text-emerald-500" aria-hidden="true"></i>
           </span>
@@ -64,6 +68,9 @@
           </span>
         </button>
 
+        {% if multi_city %}
+        <p class="mb-2 shrink-0 text-right text-xs text-emerald-400/90">چند شهر را می‌توانید همزمان انتخاب کنید</p>
+        {% endif %}
         <p class="mb-2 shrink-0 text-right text-xs text-zinc-500">پیشنهادهای نزدیک</p>
         <div id="{{ cp }}Chips" class="mb-4 flex max-w-full shrink-0 flex-wrap justify-end gap-2">
           {% set ns = namespace(shown=0) %}
@@ -71,7 +78,7 @@
             {% if name in cities and ns.shown < 4 %}
               {% set ns.shown = ns.shown + 1 %}
               <button type="button" data-city-chip="{{ name }}"
-                      class="shrink-0 rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:border-emerald-500/50 hover:bg-emerald-500/10{% if selected == name %} border-emerald-500 bg-emerald-500/15 text-emerald-300{% endif %}">{{ name }}</button>
+                      class="shrink-0 rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:border-emerald-500/50 hover:bg-emerald-500/10{% if name in selected_list %} border-emerald-500 bg-emerald-500/15 text-emerald-300{% endif %}">{{ name }}</button>
             {% endif %}
           {% endfor %}
           {% if ns.shown == 0 %}
@@ -83,17 +90,17 @@
         <div id="{{ cp }}List" class="min-h-[40dvh] flex-1 overflow-y-auto overscroll-contain border-t border-white/10 -mx-4 px-4 pb-2 sm:min-h-0">
           {% if allow_all %}
           <button type="button" data-city-row=""
-                  class="city-picker-row flex w-full items-center gap-2 border-b border-white/5 py-3.5 text-right transition hover:bg-white/[0.04]{% if selected == '' %} is-selected{% endif %}">
-            <span class="city-picker-mark grid h-6 w-6 shrink-0 place-items-center">{% if selected == '' %}<i class="fas fa-check text-emerald-500" aria-hidden="true"></i>{% endif %}</span>
-            <span class="city-picker-name min-w-0 flex-1 truncate text-sm font-medium {% if selected == '' %}text-emerald-400{% else %}text-white{% endif %}">همه شهرها</span>
+                  class="city-picker-row flex w-full items-center gap-2 border-b border-white/5 py-3.5 text-right transition hover:bg-white/[0.04]{% if not selected_list %} is-selected{% endif %}">
+            <span class="city-picker-mark grid h-6 w-6 shrink-0 place-items-center">{% if not selected_list %}<i class="fas fa-check text-emerald-500" aria-hidden="true"></i>{% endif %}</span>
+            <span class="city-picker-name min-w-0 flex-1 truncate text-sm font-medium {% if not selected_list %}text-emerald-400{% else %}text-white{% endif %}">همه شهرها</span>
             <span class="city-picker-chev shrink-0 text-zinc-600"><i class="fas fa-chevron-left text-xs" aria-hidden="true"></i></span>
           </button>
           {% endif %}
           {% for c in (cities or []) %}
           <button type="button" data-city-row="{{ c }}"
-                  class="city-picker-row flex w-full items-center gap-2 border-b border-white/5 py-3.5 text-right transition last:border-b-0 hover:bg-white/[0.04]{% if selected == c %} is-selected{% endif %}">
-            <span class="city-picker-mark grid h-6 w-6 shrink-0 place-items-center">{% if selected == c %}<i class="fas fa-check text-emerald-500" aria-hidden="true"></i>{% endif %}</span>
-            <span class="city-picker-name min-w-0 flex-1 truncate text-sm font-medium {% if selected == c %}text-emerald-400{% else %}text-white{% endif %}">{{ c }}</span>
+                  class="city-picker-row flex w-full items-center gap-2 border-b border-white/5 py-3.5 text-right transition last:border-b-0 hover:bg-white/[0.04]{% if c in selected_list %} is-selected{% endif %}">
+            <span class="city-picker-mark grid h-6 w-6 shrink-0 place-items-center">{% if c in selected_list %}<i class="fas fa-check text-emerald-500" aria-hidden="true"></i>{% endif %}</span>
+            <span class="city-picker-name min-w-0 flex-1 truncate text-sm font-medium {% if c in selected_list %}text-emerald-400{% else %}text-white{% endif %}">{{ c }}</span>
             <span class="city-picker-chev shrink-0 text-zinc-600"><i class="fas fa-chevron-left text-xs" aria-hidden="true"></i></span>
           </button>
           {% endfor %}
@@ -104,7 +111,7 @@
       <div class="shrink-0 border-t border-white/10 bg-[#1a222c] p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
         <button type="button" id="{{ cp }}Apply"
                 class="w-full rounded-xl bg-emerald-600 py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-emerald-500 active:scale-[0.99]">
-          انتخاب شهر
+          {% if multi_city %}تأیید انتخاب{% else %}انتخاب شهر{% endif %}
         </button>
       </div>
     </div>

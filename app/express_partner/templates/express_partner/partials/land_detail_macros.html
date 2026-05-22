@@ -1,0 +1,10 @@
+{# ماکروهای مشترک جزئیات فایل #}
+{% macro upload_url(path) -%}
+  {%- if not path -%}
+  {%- elif "://" in (path|string) -%}{{ path }}
+  {%- elif (path|string).startswith('/uploads/') -%}{{ path }}
+  {%- elif (path|string).startswith('uploads/') -%}/uploads/{{ (path|string)[8:] }}
+  {%- elif not (path|string).startswith('/') -%}/uploads/{{ path }}
+  {%- else -%}{{ path }}
+  {%- endif -%}
+{%- endmacro %}

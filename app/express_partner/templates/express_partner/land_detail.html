@@ -3,118 +3,129 @@
 
 {% block styles %}
   <style>
-    .progressive-img {
-      filter: blur(12px);
-      background: linear-gradient(90deg, #1f2937 0%, #111827 50%, #1f2937 100%);
-      transition: filter 0.25s ease, opacity 0.2s ease;
+    html:has(.land-detail-page) {
+      --ld-footer-h: calc(9.5rem + env(safe-area-inset-bottom, 0px));
     }
-    .progressive-img.is-loaded {
-      filter: blur(0);
+    .land-detail-page {
+      min-height: 100vh;
+      background: #0B111B;
+      padding-bottom: 0;
     }
-    #landGallery, #landGallery *:not(#landVideoSoundToggle):not(#landVideoSoundIcon) { touch-action: pan-x pan-y; }
+    .ld-footer-spacer {
+      min-height: var(--ld-footer-h);
+      height: var(--ld-footer-h);
+      flex-shrink: 0;
+      pointer-events: none;
+    }
+    .ld-main__scroll-pad {
+      padding-bottom: 0.5rem;
+    }
+    @media (max-width: 1023px) {
+      html:has(.land-detail-page) #tg-page-shell {
+        scroll-padding-bottom: var(--ld-footer-h);
+      }
+      html:has(.land-detail-page) body {
+        scroll-padding-bottom: var(--ld-footer-h);
+      }
+    }
+    .ld-price-grid .tabular-nums { font-variant-numeric: tabular-nums; }
+    @media (min-width: 1024px) {
+      .land-detail-page { --ld-footer-h: 0; }
+      .ld-footer-spacer { display: none; }
+      .ld-actions { position: static; border: none; background: transparent; backdrop-filter: none; }
+    }
+    @media (max-width: 1023px) {
+      html:has(.land-detail-page),
+      html:has(.land-detail-page) body {
+        margin: 0;
+        padding: 0;
+        background: #0B111B;
+      }
+      html:has(.land-detail-page) #tg-page-shell,
+      html:has(.land-detail-page) #vinor-express-page-swap {
+        margin-top: 0;
+        padding-top: 0;
+      }
+    }
+    .ld-gallery { position: relative; }
+    .ld-gallery__stage { width: 100%; contain: layout style; }
+    .ld-gallery__chrome { pointer-events: none; }
+    .ld-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.35);
+      transition: transform 0.2s ease, background-color 0.2s ease;
+    }
+    .ld-dot.is-active {
+      width: 18px;
+      background: rgb(45 212 191);
+    }
     #landGallery #landVideo {
       pointer-events: none;
     }
-    #landVideoSoundToggle {
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-    #landGallery #landVideo::-webkit-media-controls,
-    #landGallery #landVideo::-webkit-media-controls-enclosure,
-    #landGallery #landVideo::-webkit-media-controls-panel {
-      display: none !important;
-      -webkit-appearance: none;
-    }
-    .land-video-sound-btn[data-muted="false"] {
+    #landGallery #landVideo::-webkit-media-controls { display: none !important; }
+    #landVideoSoundToggle[data-muted="false"] {
       border-color: rgba(52, 211, 153, 0.65);
       background-color: rgba(16, 185, 129, 0.28);
     }
-
-    /* --- جزئیات v2 (موبایل همکار) --- */
-    @media (max-width: 1023px) {
-      html:has(.land-detail-v2),
-      html:has(.land-detail-v2) body {
-        margin: 0 !important;
-        padding: 0 !important;
-        background-color: #0B111B;
-      }
-      html:has(.land-detail-v2) #tg-page-shell,
-      html:has(.land-detail-v2) #vinor-express-page-swap {
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-      }
-      .land-detail-v2.land-detail-partner-page {
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-      }
-      .land-detail-v2 .land-detail-partner-gallery-hero {
-        margin: 0 !important;
-        padding: 0 !important;
-        width: 100%;
-        max-width: 100%;
-        overflow: hidden;
-      }
-      .land-detail-v2 .land-detail-partner-gallery-top,
-      .land-detail-v2 .land-detail-partner-gallery-top > .relative {
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-      .land-detail-v2 #landGallery {
-        display: block;
-        width: 100%;
-        max-width: 100%;
-        margin: 0 !important;
-        border-radius: 0;
-        background: #000;
-      }
-      .land-detail-v2 .land-detail-v2-dots .land-dot {
-        transition: transform 0.2s ease, background-color 0.2s ease;
-      }
-      .land-detail-v2 .land-detail-v2-dots .land-dot.active {
-        background-color: rgb(45 212 191) !important;
-      }
-      .land-detail-v2 [data-land-detail-fav] .vinor-fav-icon.fas {
-        color: rgb(248 113 113);
-      }
-      .land-detail-v2-modal-sheet {
-        background-color: #151d2b !important;
-        border-top: 1px solid rgba(148, 163, 184, 0.2);
-      }
-      .land-detail-v2-modal-sheet a {
-        border-color: rgba(148, 163, 184, 0.25) !important;
-      }
-      .land-detail-v2-modal-sheet a:hover {
-        background-color: rgba(255, 255, 255, 0.05) !important;
-      }
+    .land-detail-page [data-land-detail-fav] .vinor-fav-icon.fas {
+      color: rgb(248 113 113);
     }
-
-    @media (min-width: 1024px) {
-      .land-detail-v2.land-detail-partner-page {
-        background-color: rgb(3 7 18);
-      }
-      .land-detail-v2 .land-detail-partner-gallery-hero {
-        display: none;
-      }
-    }
-
-    @media (max-width: 639px) {
-      #landPartnerActionBar.land-detail-v2-actionbar {
-        bottom: 0;
-      }
-    }
+    .ld-gallery__loader.is-visible { opacity: 1; }
+    .ld-modal:not(.hidden) { display: flex; }
+    .ld-actions { z-index: 45; }
+    body > .ld-modal { z-index: 200; }
+    #landTxToast.is-success { display: block; border-color: rgba(34, 197, 94, 0.45); background: rgba(6, 78, 59, 0.85); color: #bbf7d0; }
+    #landTxToast.is-error { display: block; border-color: rgba(248, 113, 113, 0.45); background: rgba(127, 29, 29, 0.85); color: #fecaca; }
   </style>
 {% endblock %}
 
 {% block content %}
-  {% set is_partner_context = true %}
-  {% include 'express/land_detail_body.html' %}
+  {% from 'express_partner/partials/land_detail_macros.html' import upload_url %}
+  {% set images = land.images or [] %}
+  {% set video = land.video %}
+  {% set has_video = video and (video|string|trim) %}
+  {% set images_v2 = land.images_v2 or [] %}
+  {% set total_items = (1 if has_video else 0) + images|length %}
+
+  <div id="landDetailPage" class="land-detail-page" data-land-code="{{ land.code or '' }}" data-tx-status="{{ (land._assignment_status|default('active')|string)|lower|trim }}">
+    {% include 'express_partner/partials/land_detail_gallery.html' %}
+    {% include 'express_partner/partials/land_detail_main.html' %}
+    <div class="ld-footer-spacer" aria-hidden="true"></div>
+    {% include 'express_partner/partials/land_detail_actions.html' %}
+    {% include 'express_partner/partials/land_detail_modals.html' %}
+  </div>
+
+  <script type="application/json" id="landDetailConfig">
+  {
+    "hasVideo": {{ 'true' if has_video else 'false' }},
+    "totalItems": {{ total_items }},
+    "shareUrl": {{ (share_url or '')|tojson }},
+    "code": {{ (land.code or '')|tojson }},
+    "slides": [
+      {%- set _slide_first = true -%}
+      {%- if has_video -%}
+      {"type":"video","src":{{ upload_url(video)|tojson }}}
+      {%- set _slide_first = false -%}
+      {%- endif -%}
+      {%- for img in images -%}
+      {%- if not _slide_first %},{% endif -%}
+      {%- set _slide_first = false -%}
+      {%- set v2 = images_v2[loop.index0] if images_v2|length > loop.index0 else none -%}
+      {%- if v2 -%}
+      {"type":"image","thumb":{{ (v2.thumb or v2.full or upload_url(img))|tojson }},"full":{{ (v2.full or v2.raw or upload_url(img))|tojson }}}
+      {%- else -%}
+      {"type":"image","thumb":{{ upload_url(img)|tojson }},"full":{{ upload_url(img)|tojson }}}
+      {%- endif -%}
+      {%- endfor -%}
+    ]
+  }
+  </script>
 {% endblock %}
 
 {% block scripts %}
   {{ super() }}
   {% include 'express_partner/partials/vinor_favorites_script.html' %}
-  <script src="{{ 'express-partner/land-detail-video-sound.js'|static_version }}"></script>
-  <script src="{{ 'express-partner/land-detail-header-scroll.js'|static_version }}"></script>
-  <script src="{{ 'express-partner/land-detail-v2.js'|static_version }}"></script>
-  <script src="{{ 'express-partner/land-detail-page.js'|static_version }}"></script>
+  <script src="{{ 'express-partner/land-detail.js'|static_version }}"></script>
 {% endblock %}

@@ -1,0 +1,41 @@
+{# نوار پایین — تماس و معامله (AJAX فوری) #}
+{% set contact_phone = land.owner_phone or land.vinor_contact %}
+{% set _st = (land._assignment_status|default('active')|string)|lower|trim %}
+{% set show_call = contact_phone %}
+{% set show_tx = is_approved and _st != 'sold' %}
+{% set show_sold = is_approved and _st == 'sold' %}
+{% set action_count = (1 if show_call else 0) + (1 if show_tx else 0) + (1 if show_sold else 0) %}
+
+<footer class="ld-actions fixed inset-x-0 bottom-0 z-50 bg-[#0B111B]/95 backdrop-blur-md border-t border-white/10 pb-[env(safe-area-inset-bottom,0px)]">
+  <div id="landTxToast" class="hidden mx-auto mb-2 max-w-lg rounded-xl border px-3 py-2 text-center text-[11px] font-medium" role="status" aria-live="polite"></div>
+  <div class="max-w-lg mx-auto px-4 pt-0 pb-3">
+    <div class="grid {% if action_count >= 2 %}grid-cols-2{% else %}grid-cols-1{% endif %} gap-3">
+      {% if show_call %}
+      <button type="button"
+              data-land-open-contact
+              class="flex items-center justify-center gap-2 rounded-2xl bg-[#22c55e] hover:bg-green-400 text-white font-bold py-3.5 text-sm shadow-lg shadow-green-900/25 active:scale-[0.98] transition-all">
+        <i class="fas fa-phone" aria-hidden="true"></i>
+        تماس
+      </button>
+      {% endif %}
+
+      {% if show_tx %}
+      <button type="button"
+              id="landTxToggleBtn"
+              data-land-tx-toggle
+              data-land-tx-url="{{ url_for('express_partner.mark_in_transaction', code=land.code) }}"
+              data-land-tx-status="{{ _st }}"
+              data-csrf="{{ csrf_token() }}"
+              class="w-full flex items-center justify-center gap-2 rounded-2xl text-white font-bold py-3.5 text-sm active:scale-[0.98] transition-all disabled:opacity-60 disabled:pointer-events-none {% if _st == 'in_transaction' %}bg-teal-600 hover:bg-teal-500 shadow-lg shadow-teal-900/30{% else %}bg-teal-700/90 hover:bg-teal-600 border border-teal-500/35{% endif %}">
+        <i class="fas {% if _st == 'in_transaction' %}fa-check-circle{% else %}fa-calendar-check{% endif %} land-tx-icon" aria-hidden="true"></i>
+        <span class="land-tx-label">{% if _st == 'in_transaction' %}رفع معامله{% else %}درخواست بازدید{% endif %}</span>
+      </button>
+      {% elif show_sold %}
+      <div class="flex items-center justify-center gap-2 rounded-2xl bg-slate-700 text-slate-300 font-bold py-3.5 text-sm">
+        <i class="fas fa-check-double" aria-hidden="true"></i>
+        فروخته شد
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</footer>

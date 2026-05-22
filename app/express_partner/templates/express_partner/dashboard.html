@@ -17,55 +17,61 @@
   {% set fcat = request.args.get('cat', '') %}
 
   <!-- هدر: نوار جستجو جدا از نوار فیلترها؛ فیلتر با اسکرول به پایین صفحه جمع می‌شود -->
-  <header id="expressDashboardHeader" data-tour="dashboard-header" class="fixed top-0 left-0 right-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 w-full shadow-sm dark:shadow-black/20 transition-shadow duration-300">
+  <header id="expressDashboardHeader" data-tour="dashboard-header" class="fixed top-0 left-0 right-0 z-50 bg-white/95 dark:bg-[#0a0e14]/95 backdrop-blur border-b border-gray-200 dark:border-white/10 w-full shadow-sm dark:shadow-black/30 transition-shadow duration-300">
     <div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 flex flex-col gap-2 transition-[gap,padding-bottom] duration-300 ease-out max-w-6xl mx-auto">
-      {# فقط جستجو + شهر — همیشه ثابت می‌ماند #}
+      {# جستجو + شهر — دو پیل جدا مطابق UI مرجع #}
       <div id="dashboardSearchStrip" class="dashboard-search-strip flex-shrink-0">
-      <div class="flex items-center gap-2">
-      <form method="GET" action="{{ url_for('express_partner.dashboard') }}" class="flex-1 min-w-0" id="searchForm">
-        <input type="hidden" name="city" id="cityInputHidden" value="{{ selected_city }}">
-        {% if ftag %}<input type="hidden" name="tag" value="{{ request.args.get('tag', '') }}">{% endif %}
-        {% if fcat %}<input type="hidden" name="cat" value="{{ fcat }}">{% endif %}
-        <div class="relative w-full">
-          <div class="flex items-center bg-white dark:bg-gray-800 rounded-full border border-gray-300 dark:border-gray-600 focus-within:border-gray-500 dark:focus-within:border-gray-400 transition-colors">
-            <button type="submit"
-                    class="flex-shrink-0 w-9 h-9 mr-1 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-                    aria-label="جستجو">
-              <i class="fas fa-magnifying-glass text-sm"></i>
-            </button>
-            <input type="text"
-                   name="q"
-                   id="searchInput"
-                   value="{{ request.args.get('q', '') }}"
-                   placeholder="جستجو در آگهی‌ها"
-                   autocomplete="off"
-                   class="flex-1 bg-transparent border-0 outline-none text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 py-2.5 pl-2 min-w-0">
-            <div class="flex items-center gap-1 pl-1">
-              {% if cities %}
-              <div class="relative shrink-0" id="cityFilterRoot">
-                <button type="button"
-                        id="cityFilterToggle"
-                        class="h-8 max-w-[9.5rem] shrink-0 truncate pr-3 pl-2 rounded-full bg-gray-100 dark:bg-gray-700 text-[11px] sm:text-xs text-gray-700 dark:text-gray-200 inline-flex items-center gap-1.5"
-                        aria-haspopup="dialog"
-                        aria-controls="dashCityPickerPanel"
-                        aria-expanded="false">
-                  <span id="cityFilterLabel" class="truncate">{{ selected_city or 'همه شهرها' }}</span>
-                  <i class="fa-solid fa-chevron-down shrink-0 text-[10px] text-gray-500 dark:text-gray-400"></i>
-                </button>
-              </div>
-              {% endif %}
+        <div class="flex items-center gap-2">
+          <form method="GET" action="{{ url_for('express_partner.dashboard') }}" class="flex-1 min-w-0" id="searchForm">
+            <input type="hidden" name="city" id="cityInputHidden" value="{{ selected_city }}">
+            {% if ftag %}<input type="hidden" name="tag" value="{{ request.args.get('tag', '') }}">{% endif %}
+            {% if fcat %}<input type="hidden" name="cat" value="{{ fcat }}">{% endif %}
+            <div class="vinor-dash-search-pill relative flex h-[42px] w-full items-center rounded-full border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1a2230] transition-colors focus-within:border-gray-500 dark:focus-within:border-white/35">
+              <button type="button"
+                      class="flex h-full w-10 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                      aria-label="جستجوی صوتی"
+                      tabindex="-1">
+                <i class="fas fa-microphone text-[15px]" aria-hidden="true"></i>
+              </button>
+              <input type="text"
+                     name="q"
+                     id="searchInput"
+                     value="{{ request.args.get('q', '') }}"
+                     placeholder="جستجو در همهٔ آگهی‌ها"
+                     autocomplete="off"
+                     class="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm text-gray-900 outline-none dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500">
               {% if request.args.get('q') %}
               <a href="{{ url_for('express_partner.dashboard', city=city_url, tag=request.args.get('tag') or none, cat=request.args.get('cat') or none) }}"
-                 class="flex-shrink-0 w-7 h-7 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                 class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-100"
                  aria-label="پاک کردن جستجو">
-                <i class="fa-solid fa-xmark text-xs"></i>
+                <i class="fa-solid fa-xmark text-xs" aria-hidden="true"></i>
               </a>
+              {% else %}
+              <button type="submit"
+                      class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200 sm:hidden"
+                      aria-label="جستجو">
+                <i class="fas fa-magnifying-glass text-sm" aria-hidden="true"></i>
+              </button>
               {% endif %}
             </div>
+          </form>
+          {% if cities %}
+          <div class="relative shrink-0" id="cityFilterRoot">
+            <button type="button"
+                    id="cityFilterToggle"
+                    data-cities-count="{{ cities|length }}"
+                    class="vinor-dash-city-pill h-[42px] max-w-[7.5rem] sm:max-w-[9rem] shrink-0 inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1a2230] px-3.5 text-sm font-medium text-gray-800 dark:text-gray-100 transition-colors hover:border-gray-400 dark:hover:border-white/35"
+                    aria-haspopup="dialog"
+                    aria-controls="dashCityPickerPanel"
+                    aria-expanded="false">
+              <i class="fas fa-location-dot shrink-0 text-[15px] text-gray-500 dark:text-gray-400" aria-hidden="true"></i>
+              <span id="cityFilterLabel" class="truncate">
+                {% if selected_cities|length == 1 %}{{ selected_cities[0] }}{% elif selected_cities|length > 1 %}{{ selected_cities|length }} شهر{% else %}{{ cities|length }} شهر{% endif %}
+              </span>
+            </button>
           </div>
+          {% endif %}
         </div>
-      </form>
-      </div>
       </div>
 
       {# فیلترها و دسته‌ها — جدا از جستجو؛ با اسکرول مخفی می‌شوند #}

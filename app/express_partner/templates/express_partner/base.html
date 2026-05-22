@@ -211,6 +211,13 @@
       html[class*="tg-page-leave-"] #tg-page-shell,
       html[class*="tg-page-enter-"] #tg-page-shell { animation: none !important; opacity: 1 !important; transform: none !important; }
     }
+    /* جزئیات فایل: بدون slide روی کل شِل — گالری ثابت می‌ماند */
+    html:has(.land-detail-page)[class*="tg-page-enter-"] #tg-page-shell,
+    html:has(.land-detail-page)[class*="tg-page-leave-"] #tg-page-shell {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
     html.vinor-express-overlay-modal-open #bottomNavMenu {
       visibility: hidden !important;
       opacity: 0 !important;
