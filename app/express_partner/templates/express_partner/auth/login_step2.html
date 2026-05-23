@@ -4,7 +4,7 @@
 
 <div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
   <header class="relative px-4 pt-6 pb-2">
-    <a href="{{ url_for('express_partner.login') }}" class="absolute right-4 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors" aria-label="بازگشت به ورود">
+    <a href="{{ url_for('express_partner.login') }}" class="absolute right-4 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors" aria-label="تغییر شماره موبایل">
       <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
     </a>
     <div class="flex flex-col items-center gap-6 pt-2">
@@ -31,30 +31,12 @@
           </p>
         </div>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            <div class="space-y-2 mb-5" role="status" aria-live="polite">
-              {% for category, msg in messages %}
-                <div class="text-sm rounded-xl px-3 py-2.5 flex items-start gap-2
-                            {% if category in ['success', 'ok'] %}
-                              bg-emerald-500/15 text-emerald-200 border border-emerald-500/25
-                            {% elif category in ['warning'] %}
-                              bg-amber-500/15 text-amber-200 border border-amber-500/25
-                            {% elif category in ['info'] %}
-                              bg-sky-500/15 text-sky-200 border border-sky-500/25
-                            {% else %}
-                              bg-rose-500/15 text-rose-200 border border-rose-500/25
-                            {% endif %}">
-                  <i class="fas mt-0.5 flex-shrink-0 text-xs
-                            {% if category in ['success', 'ok'] %}fa-check-circle{% elif category in ['warning'] %}fa-exclamation-triangle{% elif category in ['info'] %}fa-info-circle{% else %}fa-times-circle{% endif %}"></i>
-                  <span class="flex-1">{{ msg|safe }}</span>
-                </div>
-              {% endfor %}
-            </div>
-          {% endif %}
+        {% with messages = get_flashed_messages(with_categories=true, category_filter=auth_flash_categories) %}
+        {% set stack_id = 'loginStep2Flash' %}
+        {% include 'express_partner/partials/flash_alerts.html' %}
         {% endwith %}
 
-        <form id="otpForm" method="POST" action="{{ url_for('express_partner.verify') }}" class="space-y-6" novalidate>
+        <form id="otpForm" method="POST" action="{{ url_for('express_partner.verify') }}" class="space-y-6" data-auth-skip-click-lock="1" data-auth-skip-submit-lock="1">
           <input type="hidden" name="phone" value="{{ phone }}">
           {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
           <input type="hidden" name="otp_code" id="otpHidden" value="" />
@@ -67,9 +49,9 @@
             {% endfor %}
           </div>
 
-          <button type="submit"
-                  class="w-full rounded-xl bg-emerald-500 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-400 active:scale-[0.99]">
-            ورود به پنل
+          <button type="submit" id="otpSubmitBtn"
+                  class="w-full touch-manipulation select-none rounded-xl bg-emerald-500 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-900/40 transition-[transform,opacity,background-color] duration-75 hover:bg-emerald-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 [-webkit-tap-highlight-color:transparent]">
+            <span data-btn-label>ورود به پنل</span>
           </button>
         </form>
 
@@ -104,12 +86,55 @@
 
 {% set bottom_nav_active = '' %}
 {% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
 
+{% block scripts %}
+{{ super() }}
+{% include 'express_partner/partials/auth_flash_scripts.html' %}
+{% include 'express_partner/partials/auth_submit_feedback.html' %}
 <script>
 (function () {
   const boxes = Array.from(document.querySelectorAll('.otp-box'));
   const hidden = document.getElementById('otpHidden');
   const form = document.getElementById('otpForm');
+  const submitBtn = document.getElementById('otpSubmitBtn');
+  const authBusy = window.vinorAuthSubmitBusy(form, submitBtn, 'در حال ورود…');
+  function unlockOtpInputs() {
+    boxes.forEach(function (b) {
+      b.readOnly = false;
+      b.disabled = false;
+    });
+    if (submitBtn && submitBtn.dataset.vinorAuthBusy) {
+      submitBtn.disabled = false;
+      submitBtn.removeAttribute('aria-busy');
+      delete submitBtn.dataset.vinorAuthBusy;
+      submitBtn.innerHTML = '<span data-btn-label>ورود به پنل</span>';
+    }
+  }
+  if (form && submitBtn) {
+    form.addEventListener('submit', function (e) {
+      hidden.value = otpCodeFromBoxes();
+      var code = hidden.value || '';
+      if (code.length !== 5) {
+        e.preventDefault();
+        unlockOtpInputs();
+        var empty = boxes.find(function (b) { return !b.value; });
+        if (empty) empty.focus();
+        return;
+      }
+      if (!authBusy.isLocked()) {
+        authBusy.lock();
+        boxes.forEach(function (b) { b.readOnly = true; });
+      }
+    }, { capture: true });
+    submitBtn.addEventListener('click', function () {
+      hidden.value = otpCodeFromBoxes();
+      if (hidden.value.length === 5 && !authBusy.isLocked()) {
+        authBusy.lock();
+        boxes.forEach(function (b) { b.readOnly = true; });
+      }
+    });
+  }
   const resendBtn = document.getElementById('resendBtn');
   const timerLine = document.getElementById('timerLine');
   const faDigits = '۰۱۲۳۴۵۶۷۸۹';
@@ -125,13 +150,30 @@
   }
   if (cdEl()) cdEl().textContent = toFaNum(60);
 
+  var otpFa = '۰۱۲۳۴۵۶۷۸۹';
+  var otpAr = '٠١٢٣٤٥٦٧٨٩';
+  function normalizeOtpDigits(raw) {
+    var s = String(raw || '');
+    s = s.replace(/[۰-۹]/g, function (c) { return String(otpFa.indexOf(c)); });
+    s = s.replace(/[٠-٩]/g, function (c) { return String(otpAr.indexOf(c)); });
+    return s.replace(/\D+/g, '');
+  }
+
+  function otpCodeFromBoxes() {
+    return boxes.map(function (b) { return normalizeOtpDigits(b.value); }).join('').slice(0, 5);
+  }
+
   function syncHiddenAndMaybeSubmit() {
-    hidden.value = boxes.map(function (b) { return (b.value || '').replace(/\D/g, ''); }).join('').slice(0, 5);
-    if (hidden.value.length === 5) form.requestSubmit();
+    hidden.value = otpCodeFromBoxes();
+    if (hidden.value.length === 5 && !authBusy.isLocked()) {
+      authBusy.lock();
+      boxes.forEach(function (b) { b.readOnly = true; });
+      form.requestSubmit();
+    }
   }
 
   function fillFromString(str) {
-    var digits = String(str || '').replace(/\D+/g, '').slice(0, 5).split('');
+    var digits = normalizeOtpDigits(str).slice(0, 5).split('');
     if (!digits.length) return;
     boxes.forEach(function (b) { b.value = ''; });
     digits.forEach(function (d, i) {
@@ -143,7 +185,7 @@
   boxes.forEach(function (box, idx) {
     box.addEventListener('input', function () {
       var raw = box.value || '';
-      var cleaned = raw.replace(/\D/g, '');
+      var cleaned = normalizeOtpDigits(raw);
       if (cleaned.length <= 1) {
         box.value = cleaned;
         if (box.value && idx < boxes.length - 1) boxes[idx + 1].focus();
@@ -183,6 +225,10 @@
   try {
     boxes[0].focus();
   } catch (_) {}
+
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) unlockOtpInputs();
+  });
 
   (async function () {
     try {

@@ -350,6 +350,14 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning(f"Express Partner blueprint not available: {e}")
 
+    # AI blueprint
+    try:
+        from .ai import ai_bp
+        app.register_blueprint(ai_bp)
+        app.logger.info("AI blueprint registered: /ai")
+    except Exception as e:
+        app.logger.warning(f"AI blueprint not available: {e}")
+
     # Admin blueprint
     try:
         from admin import admin_bp
@@ -398,6 +406,7 @@ def create_app() -> Flask:
             "express_partner.api_logout",
             "express_partner.api_profile_update",
             "express_partner.logout",
+            "ai.chat",
         ):
             try:
                 f = app.view_functions.get(endpoint)
@@ -522,14 +531,15 @@ def create_app() -> Flask:
             # Public landing pages
             "/partners",
             # Express Partner auth paths (public)
-            "/express/partner/login", "/express/partner/verify", "/express/partner/otp/resend",
+            "/express/partner/login", "/express/partner/login/otp", "/express/partner/verify", "/express/partner/otp/resend",
             "/express/partner/api/login-request", "/express/partner/api/verify",
             # Express listings (public)
             "/express",
             "/public",  # صفحه اکسپلور عمومی - بدون نیاز به ورود
+            "/ai",  # Vinor AI (عمومی)
         }
         # Public dynamic paths (prefix-based)
-        public_prefixes = ("/express/", "/uploads/")
+        public_prefixes = ("/express/", "/uploads/", "/ai/")
         if request.path.startswith(public_prefixes):
             current_app.logger.debug("PASS (public-prefix): %s", request.path)
             return

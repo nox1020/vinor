@@ -1,0 +1,15 @@
+<script>
+(function () {
+  var stack = document.querySelector('[data-flash-stack]');
+  if (!stack) return;
+  stack.querySelectorAll('[data-flash-alert]').forEach(function (el) {
+    var btn = el.querySelector('.flash-alert-dismiss');
+    function dismiss() {
+      el.remove();
+      if (!stack.querySelector('[data-flash-alert]')) stack.remove();
+    }
+    if (btn) btn.addEventListener('click', dismiss);
+    setTimeout(dismiss, 6500);
+  });
+})();
+</script>

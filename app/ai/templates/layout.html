@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}Vinor AI{% endblock %}</title>
+  <meta name="theme-color" content="#050810">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
+  <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
+  <style>
+    html, body { font-family: 'Vazirmatn', sans-serif; }
+    .ai-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.15) transparent; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="min-h-[100dvh] bg-[#050810] text-zinc-100 antialiased">
+  {% block body %}{% endblock %}
+  {% block scripts %}{% endblock %}
+</body>
+</html>

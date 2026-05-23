@@ -201,12 +201,19 @@ def _normalize_phone(phone: str) -> str:
     """Normalize phone number - استفاده از همان تابع notifications"""
     from app.services.notifications import _normalize_user_id
     return _normalize_user_id(phone)
-    p = (phone or "").strip()
-    p = re.sub(r"\D+", "", p)
-    if p.startswith("0098"): p = "0" + p[4:]
-    elif p.startswith("98"): p = "0" + p[2:]
-    if not p.startswith("0"): p = "0" + p
-    return p[:11]
+
+
+def _otp_session_matches(code: str, phone: str) -> bool:
+    if not code or not phone:
+        return False
+    sess_code = str(session.get('otp_code') or '').strip()
+    sess_phone = str(session.get('otp_phone') or '').strip()
+    return sess_code == str(code).strip() and sess_phone == str(phone).strip()
+
+
+def _clear_otp_session() -> None:
+    session.pop('otp_code', None)
+    session.pop('otp_phone', None)
 
 
 def _mark_routine_today(phone: str) -> bool:
@@ -563,10 +570,13 @@ def inject_role_flags():
         except Exception:
             is_vinor_apk = False
 
+    from ..utils.flash_messages import AUTH_FLASH_CATEGORY_FILTER
+
     return {
         "VINOR_IS_EXPRESS_PARTNER": is_express_partner,
         "VAPID_PUBLIC_KEY": vapid_public,
         "is_vinor_apk": is_vinor_apk,
+        "auth_flash_categories": AUTH_FLASH_CATEGORY_FILTER,
     }
 
 
@@ -1923,6 +1933,9 @@ def _clear_express_partner_auth_session() -> None:
 
 @express_partner_bp.route('/login', methods=['GET', 'POST'], endpoint='login')
 def login():
+    from ..utils.flash_messages import purge_non_auth_flashes
+
+    purge_non_auth_flashes()
     try:
         from .referrals import capture_ref_on_login
         capture_ref_on_login()
@@ -1936,23 +1949,25 @@ def login():
             stash_referrer_from_request((session.get('user_phone') or '').strip())
         except Exception:
             pass
-        nxt = request.args.get('next') or session.get('next')
-        if nxt and nxt.startswith('/'):
+        nxt = _login_next_preserve() or _session_next_safe()
+        if nxt:
             return redirect(nxt)
         return redirect(url_for('express_partner.dashboard'))
 
     if request.method == 'POST':
+        from ..utils.flash_messages import FLASH_AUTH_ERROR, FLASH_AUTH_INFO, FLASH_AUTH_WARNING
+
         if not _legal_accepted(request):
             flash('برای ادامه باید <a href="{privacy}" class="underline">حریم خصوصی</a> و <a href="{terms}" class="underline">قوانین استفاده</a> را بپذیرید.'.format(
                 privacy=url_for('express_partner.legal_privacy', next=_login_next_preserve() or ''),
                 terms=url_for('express_partner.legal_terms', next=_login_next_preserve() or ''),
-            ), 'error')
+            ), FLASH_AUTH_ERROR)
             return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
 
         phone_raw = request.form.get('phone', '')
         phone = _normalize_phone(phone_raw)
         if not phone or len(phone) != 11:
-            flash('لطفاً یک شماره موبایل ۱۱ رقمی معتبر وارد کنید.', 'error')
+            flash('لطفاً یک شماره موبایل ۱۱ رقمی معتبر وارد کنید.', FLASH_AUTH_ERROR)
             return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
 
         code = f"{random.randint(10000, 99999)}"
@@ -1964,7 +1979,7 @@ def login():
             from ..services.sms import send_sms_code
             sms_result = send_sms_code(phone, code)
             if sms_result.get('ok'):
-                flash('کد تأیید ارسال شد.', 'info')
+                flash('کد تأیید ارسال شد.', FLASH_AUTH_INFO)
             else:
                 current_app.logger.error(
                     "OTP send failed in login | phone=%s | status=%s | body=%s",
@@ -1972,29 +1987,59 @@ def login():
                     sms_result.get('status'),
                     sms_result.get('body'),
                 )
-                flash('ارسال کد تأیید با خطا مواجه شد. لطفاً دوباره تلاش کنید.', 'warning')
+                flash('ارسال کد تأیید با خطا مواجه شد. لطفاً دوباره تلاش کنید.', FLASH_AUTH_WARNING)
         except Exception:
-            flash('ارسال کد تأیید با خطا مواجه شد. لطفاً دوباره تلاش کنید.', 'warning')
+            flash('ارسال کد تأیید با خطا مواجه شد. لطفاً دوباره تلاش کنید.', FLASH_AUTH_WARNING)
 
-        nxt = request.args.get('next')
+        nxt = _login_next_preserve()
         if nxt:
             session['next'] = nxt
-        return render_template('express_partner/auth/login_step2.html', phone=phone)
+        return redirect(url_for('express_partner.login_otp'))
     return render_template('express_partner/auth/login_step1.html')
+
+
+@express_partner_bp.route('/login/otp', methods=['GET'], endpoint='login_otp')
+def login_otp():
+    """مرحله تأیید OTP — فقط GET (بعد از POST شماره، الگوی PRG)."""
+    from ..utils.flash_messages import FLASH_AUTH_ERROR, purge_non_auth_flashes
+
+    purge_non_auth_flashes()
+    if session.get('user_phone'):
+        nxt = _login_next_preserve() or _session_next_safe()
+        if nxt:
+            return redirect(nxt)
+        return redirect(url_for('express_partner.dashboard'))
+
+    phone = str(session.get('otp_phone') or '').strip()
+    if not phone or not session.get('otp_code'):
+        flash('ابتدا شماره موبایل خود را وارد کنید.', FLASH_AUTH_ERROR)
+        return redirect(url_for('express_partner.login'))
+
+    return render_template('express_partner/auth/login_step2.html', phone=phone)
 
 
 @express_partner_bp.route('/verify', methods=['POST'], endpoint='verify')
 def verify():
+    from ..utils.flash_messages import (
+        FLASH_AUTH_ERROR,
+        FLASH_AUTH_SUCCESS,
+        purge_non_auth_flashes,
+    )
+
+    purge_non_auth_flashes()
     code = (request.form.get('otp_code') or '').strip()
     phone = _normalize_phone(request.form.get('phone') or '')
     if not code or not phone:
-        flash('لطفاً همه فیلدها را به‌درستی تکمیل کنید.', 'error')
+        flash('لطفاً همه فیلدها را به‌درستی تکمیل کنید.', FLASH_AUTH_ERROR)
+        if session.get('otp_phone'):
+            return redirect(url_for('express_partner.login_otp'))
         return redirect(url_for('express_partner.login'))
 
-    if session.get('otp_code') == code and session.get('otp_phone') == phone:
+    if _otp_session_matches(code, phone):
         session['user_id'] = phone
         session['user_phone'] = phone
         session.permanent = True
+        _clear_otp_session()
         _invalidate_partner_session_cache()
         # ensure user exists
         try:
@@ -2008,14 +2053,12 @@ def verify():
             pass
         prof = _partner_profile_for_phone(phone)
         session['VINOR_IS_EXPRESS_PARTNER'] = _is_partner_approved(prof)
-        flash('ورود شما با موفقیت انجام شد.', 'success')
-        nxt = session.pop('next', None)
-        if nxt:
-            return redirect(nxt)
-        # همکار تاییدشده یا کاربر عادی: هر دو به داشبورد (برای کاربر عادی، دسترسی محدود است)
-        return redirect(url_for('express_partner.dashboard'))
+        flash('ورود شما با موفقیت انجام شد.', FLASH_AUTH_SUCCESS)
+        return _redirect_login_next('express_partner.dashboard')
 
-    flash('کد تأیید نادرست است. لطفاً دوباره تلاش کنید.', 'error')
+    flash('کد تأیید نادرست است. لطفاً دوباره تلاش کنید.', FLASH_AUTH_ERROR)
+    if phone and str(session.get('otp_phone') or '').strip() == phone:
+        return redirect(url_for('express_partner.login_otp'))
     return redirect(url_for('express_partner.login'))
 
 
@@ -2065,6 +2108,25 @@ def _login_next_preserve():
     if nxt and nxt.startswith('/') and not nxt.startswith('//'):
         return nxt
     return None
+
+
+def _session_next_safe():
+    raw = session.get('next')
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if raw.startswith('/') and not raw.startswith('//'):
+            return raw
+    return None
+
+
+def _redirect_login_next(fallback_endpoint: str = 'express_partner.dashboard'):
+    """هدایت امن بعد از ورود؛ فقط مسیر نسبی داخلی."""
+    nxt = session.pop('next', None)
+    if isinstance(nxt, str):
+        nxt = nxt.strip()
+        if nxt.startswith('/') and not nxt.startswith('//'):
+            return redirect(nxt)
+    return redirect(url_for(fallback_endpoint))
 
 
 def _legal_accepted(request_obj) -> bool:
@@ -2548,8 +2610,10 @@ def mark_in_transaction(code: str):
 @express_partner_bp.route('/logout', methods=['POST'], endpoint='logout')
 def logout():
     """خروج با POST؛ اعتبار از کوکی سشن (در اپ CSRF معاف است تا توکن کهنه خروج را نشکند)."""
+    from ..utils.flash_messages import FLASH_AUTH_INFO
+
     _clear_express_partner_auth_session()
-    flash('از حساب خارج شدید.', 'info')
+    flash('از حساب خارج شدید.', FLASH_AUTH_INFO)
     r = redirect(url_for('express_partner.login'))
     r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     r.headers['Pragma'] = 'no-cache'
@@ -2603,11 +2667,12 @@ def api_verify():
     phone = _normalize_phone((data.get('phone') or '').strip())
     if not code or not phone:
         return jsonify({'success': False, 'error': 'کد و شماره را وارد کنید.'}), 400
-    if session.get('otp_code') != code or session.get('otp_phone') != phone:
+    if not _otp_session_matches(code, phone):
         return jsonify({'success': False, 'error': 'کد تأیید نادرست است.'}), 400
     session['user_id'] = phone
     session['user_phone'] = phone
     session.permanent = True
+    _clear_otp_session()
     _invalidate_partner_session_cache()
     try:
         from ..utils.storage import load_users, save_users
@@ -2747,8 +2812,9 @@ def profile_edit_page():
     تمام فیلدها فقط روی همان دیکشنری پروفایل همان شماره ذخیره می‌شوند (مجزا از بقیهٔ کاربران).
     """
     me_phone = (session.get('user_phone') or '').strip()
-    from ..utils.flash_messages import purge_stale_land_flashes
+    from ..utils.flash_messages import purge_stale_auth_flashes, purge_stale_land_flashes
     purge_stale_land_flashes()
+    purge_stale_auth_flashes()
     partners = load_express_partners() or []
     profile = next((p for p in partners if str(p.get('phone') or '').strip() == me_phone), None)
     if not profile:
@@ -2962,7 +3028,9 @@ def profile_delete_account():
 
     _invalidate_partner_session_cache()
     _clear_express_partner_auth_session()
-    flash('حساب کاربری شما حذف شد.', 'info')
+    from ..utils.flash_messages import FLASH_AUTH_INFO
+
+    flash('حساب کاربری شما حذف شد.', FLASH_AUTH_INFO)
     r = redirect(url_for('express_partner.login'))
     r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     r.headers['Pragma'] = 'no-cache'
@@ -3420,8 +3488,9 @@ def check_status():
 @require_partner_access(allow_pending=True, allow_guest=True)
 def land_detail(code: str):
     """Express land detail page within partner panel."""
-    from ..utils.flash_messages import purge_stale_land_flashes
+    from ..utils.flash_messages import purge_stale_auth_flashes, purge_stale_land_flashes
     purge_stale_land_flashes()
+    purge_stale_auth_flashes()
     lands = load_ads_cached() or []
     land = next((l for l in lands if l.get('code') == code and l.get('is_express')), None)
 

@@ -1,0 +1,46 @@
+<script>
+(function () {
+  window.vinorAuthSubmitBusy = function (form, btn, busyLabel) {
+    if (!form || !btn) {
+      return {
+        lock: function () {},
+        isLocked: function () { return false; },
+      };
+    }
+    var locked = false;
+    busyLabel = busyLabel || 'لطفاً صبر کنید…';
+
+    function lock() {
+      if (locked) return;
+      locked = true;
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      btn.dataset.vinorAuthBusy = '1';
+      btn.innerHTML =
+        '<span class="inline-flex w-full items-center justify-center gap-2">' +
+        '<i class="fas fa-circle-notch fa-spin text-sm" aria-hidden="true"></i>' +
+        '<span>' + busyLabel + '</span></span>';
+    }
+
+    form.addEventListener('submit', function (e) {
+      if (locked) {
+        e.preventDefault();
+        return;
+      }
+      if (!form.dataset.authSkipSubmitLock) {
+        lock();
+      }
+    }, { capture: true });
+
+    if (!form.dataset.authSkipClickLock) {
+      btn.addEventListener('click', function () {
+        if (locked) return;
+        if (typeof form.reportValidity === 'function' && !form.reportValidity()) return;
+        lock();
+      });
+    }
+
+    return { lock: lock, isLocked: function () { return locked; } };
+  };
+})();
+</script>

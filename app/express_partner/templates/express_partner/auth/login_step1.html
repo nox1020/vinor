@@ -23,30 +23,12 @@
           <p class="text-sm text-zinc-400 leading-relaxed">برای ادامه، شماره موبایل خود را وارد کنید</p>
         </div>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            <div class="space-y-2 mb-5" role="status" aria-live="polite">
-              {% for category, msg in messages %}
-                <div class="text-sm rounded-xl px-3 py-2.5 flex items-start gap-2
-                            {% if category in ['success', 'ok'] %}
-                              bg-emerald-500/15 text-emerald-200 border border-emerald-500/25
-                            {% elif category in ['warning'] %}
-                              bg-amber-500/15 text-amber-200 border border-amber-500/25
-                            {% elif category in ['info'] %}
-                              bg-sky-500/15 text-sky-200 border border-sky-500/25
-                            {% else %}
-                              bg-rose-500/15 text-rose-200 border border-rose-500/25
-                            {% endif %}">
-                  <i class="fas mt-0.5 flex-shrink-0 text-xs
-                            {% if category in ['success', 'ok'] %}fa-check-circle{% elif category in ['warning'] %}fa-exclamation-triangle{% elif category in ['info'] %}fa-info-circle{% else %}fa-times-circle{% endif %}"></i>
-                  <span class="flex-1">{{ msg|safe }}</span>
-                </div>
-              {% endfor %}
-            </div>
-          {% endif %}
+        {% with messages = get_flashed_messages(with_categories=true, category_filter=auth_flash_categories) %}
+        {% set stack_id = 'loginStep1Flash' %}
+        {% include 'express_partner/partials/flash_alerts.html' %}
         {% endwith %}
 
-        <form method="POST" action="{{ url_for('express_partner.login') }}" class="space-y-5" novalidate id="loginStep1Form">
+        <form method="POST" action="{{ url_for('express_partner.login') }}" class="space-y-5" id="loginStep1Form">
           {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
           {% if request.args.get('next') %}<input type="hidden" name="next" value="{{ request.args.get('next') }}">{% endif %}
 
@@ -57,7 +39,8 @@
                 <i class="fas fa-mobile-screen text-lg"></i>
               </span>
               <input id="loginPhone" type="tel" name="phone" required inputmode="numeric" autocomplete="tel" dir="ltr"
-                     placeholder="0912 345 6789"
+                     placeholder="09123456789" minlength="11" maxlength="11" pattern="09[0-9]{9}"
+                     title="شماره موبایل ۱۱ رقمی با ۰۹ شروع شود"
                      class="min-w-0 flex-1 border-0 bg-transparent py-3.5 pl-3 pr-2 text-base font-medium text-white placeholder:text-zinc-600 focus:outline-none focus:ring-0 tabular-nums">
             </div>
           </div>
@@ -85,9 +68,11 @@
           </label>
 
           <button type="submit" id="loginSubmitBtn"
-                  class="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50">
-            ادامه
-            <i class="fas fa-arrow-left text-sm opacity-90" aria-hidden="true"></i>
+                  class="flex w-full touch-manipulation select-none items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-900/40 transition-[transform,opacity,background-color] duration-75 hover:bg-emerald-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 [-webkit-tap-highlight-color:transparent]">
+            <span data-btn-label class="inline-flex items-center justify-center gap-2">
+              ادامه
+              <i class="fas fa-arrow-left text-sm opacity-90" aria-hidden="true"></i>
+            </span>
           </button>
         </form>
       </div>
@@ -127,14 +112,41 @@
 
 {% block scripts %}
 {{ super() }}
+{% include 'express_partner/partials/auth_flash_scripts.html' %}
+{% include 'express_partner/partials/auth_submit_feedback.html' %}
 <script>
 (function () {
+  var form = document.getElementById('loginStep1Form');
   var chk = document.getElementById('acceptLegal');
   var btn = document.getElementById('loginSubmitBtn');
-  if (!chk || !btn) return;
-  function sync() { btn.disabled = !chk.checked; }
+  if (!form || !chk || !btn) return;
+  function sync() { if (!btn.dataset.vinorAuthBusy) btn.disabled = !chk.checked; }
   chk.addEventListener('change', sync);
   sync();
+  window.vinorAuthSubmitBusy(form, btn, 'در حال ارسال کد…');
+
+  var phoneInput = document.getElementById('loginPhone');
+  var faDigits = '۰۱۲۳۴۵۶۷۸۹';
+  var arDigits = '٠١٢٣٤٥٦٧٨٩';
+  function normalizePhoneValue(raw) {
+    var s = String(raw || '');
+    s = s.replace(/[۰-۹]/g, function (c) { return String(faDigits.indexOf(c)); });
+    s = s.replace(/[٠-٩]/g, function (c) { return String(arDigits.indexOf(c)); });
+    return s.replace(/\D+/g, '').slice(0, 11);
+  }
+  if (phoneInput) {
+    phoneInput.addEventListener('input', function () {
+      var pos = phoneInput.selectionStart;
+      var before = phoneInput.value;
+      phoneInput.value = normalizePhoneValue(before);
+      try {
+        if (pos != null) phoneInput.setSelectionRange(pos, pos);
+      } catch (_) {}
+    });
+    form.addEventListener('submit', function () {
+      phoneInput.value = normalizePhoneValue(phoneInput.value);
+    }, { capture: true });
+  }
 })();
 </script>
 {% endblock %}
