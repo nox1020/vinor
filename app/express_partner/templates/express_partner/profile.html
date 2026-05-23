@@ -164,30 +164,34 @@
           </div>
         </a>
 
-        <a href="{{ android_apk_url or '#' }}"
-           id="appUpdateCard"
-           data-tour="app-update-link"
-           aria-label="بروزرسانی اپلیکیشن اندروید"
-           {% if android_apk_url %}download rel="noopener"{% endif %}
-           class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-amber-500/25 hover:bg-[#161e29] sm:p-5 {{ '' if android_apk_url else 'pointer-events-none opacity-70' }}">
-          <div class="flex items-center gap-3 sm:gap-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/15 text-amber-400">
-              <i class="fas fa-download text-lg" aria-hidden="true"></i>
-            </div>
-            <div class="min-w-0 flex-1 text-right">
-              <div class="text-sm font-semibold text-white sm:text-base">بروزرسانی اپلیکیشن</div>
-              <div id="appUpdateSubtitle" class="mt-0.5 text-xs text-zinc-500 sm:text-sm">
-                {% if android_apk_version and android_apk_url %}نسخهٔ جدید برای دانلود آماده است{% elif android_apk_version %}آخرین نسخه: {{ android_apk_version }}{% else %}نسخهٔ جدیدی موجود نیست{% endif %}
+        {% if is_vinor_apk %}
+        <div id="appUpdateCardWrap" class="{% if not show_app_update_card %}hidden{% endif %}">
+          <a href="{{ android_apk_url if show_app_update_card else '#' }}"
+             id="appUpdateCard"
+             data-tour="app-update-link"
+             aria-label="بروزرسانی اپلیکیشن اندروید"
+             {% if show_app_update_card and android_apk_url %}download rel="noopener"{% endif %}
+             class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-amber-500/25 hover:bg-[#161e29] sm:p-5">
+            <div class="flex items-center gap-3 sm:gap-4">
+              <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/15 text-amber-400">
+                <i class="fas fa-download text-lg" aria-hidden="true"></i>
               </div>
-              <div id="appUpdateMeta" class="mt-1.5 flex flex-wrap justify-end gap-1.5 text-[11px] text-zinc-500">
-                {% if android_apk_version %}
-                <span class="inline-flex items-center gap-1 rounded border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-amber-300/90">نسخه {{ android_apk_version }}</span>
-                {% endif %}
+              <div class="min-w-0 flex-1 text-right">
+                <div class="text-sm font-semibold text-white sm:text-base">بروزرسانی اپلیکیشن</div>
+                <div id="appUpdateSubtitle" class="mt-0.5 text-xs text-zinc-500 sm:text-sm">
+                  {% if show_app_update_card %}نسخهٔ جدید برای دانلود آماده است{% else %}در حال بررسی بروزرسانی…{% endif %}
+                </div>
+                <div id="appUpdateMeta" class="mt-1.5 flex flex-wrap justify-end gap-1.5 text-[11px] text-zinc-500">
+                  {% if show_app_update_card and android_apk_version %}
+                  <span class="inline-flex items-center gap-1 rounded border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-amber-300/90">نسخه {{ android_apk_version }}</span>
+                  {% endif %}
+                </div>
               </div>
+              <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
             </div>
-            <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-          </div>
-        </a>
+          </a>
+        </div>
+        {% endif %}
         <a href="{{ url_for('express_partner.top_sellers') }}"
            data-tour="top-sellers-link"
            class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-amber-500/25 hover:bg-[#161e29] sm:p-5">
@@ -325,52 +329,85 @@
   })();
 
   (function() {
-    const card = document.getElementById('appUpdateCard');
-    const sub = document.getElementById('appUpdateSubtitle');
-    const meta = document.getElementById('appUpdateMeta');
+    var wrap = document.getElementById('appUpdateCardWrap');
+    if (!wrap) return;
+    var card = document.getElementById('appUpdateCard');
+    var sub = document.getElementById('appUpdateSubtitle');
+    var meta = document.getElementById('appUpdateMeta');
     if (!card || !sub) return;
-    const serverV = "{{ android_apk_version or '' }}".trim();
-    const serverU = "{{ android_apk_url or '' }}".trim();
-    if (serverV || serverU) return;
+
+    function parseClientVersion() {
+      var ua = navigator.userAgent || '';
+      var m = ua.match(/VinorApp\/(?:Android|WebViewOnly)\/([0-9]+(?:\.[0-9]+)*)/i);
+      return m ? m[1] : '';
+    }
+    function versionParts(v) {
+      return String(v || '').split('.').map(function (p) {
+        var d = (p || '').replace(/\D/g, '');
+        return d ? parseInt(d, 10) : 0;
+      }).filter(function (_, i, arr) { return i < arr.length; });
+    }
+    function isServerNewer(serverV, clientV) {
+      if (!serverV || !clientV) return false;
+      var a = versionParts(clientV);
+      var b = versionParts(serverV);
+      var n = Math.max(a.length, b.length);
+      for (var i = 0; i < n; i++) {
+        var x = a[i] || 0;
+        var y = b[i] || 0;
+        if (x < y) return true;
+        if (x > y) return false;
+      }
+      return false;
+    }
     function absUrl(path) {
       try {
         if (!path) return '';
-        if (path.startsWith('http')) return path;
+        if (path.indexOf('http') === 0) return path;
         return new URL(path, window.location.origin).toString();
       } catch (_) { return path || ''; }
     }
-    async function fetchVersionWithFallback() {
-      const headers = { 'Accept': 'application/json', 'Cache-Control': 'no-cache', 'X-Requested-With': 'XMLHttpRequest' };
-      const urls = ['/api/express/app-version', '/api/app/version'];
+    function showUpdate(v, url) {
+      wrap.classList.remove('hidden');
+      sub.textContent = 'نسخهٔ جدید برای دانلود آماده است';
+      if (meta) meta.innerHTML = '<span class="inline-flex items-center gap-1 rounded border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-amber-300/90">نسخه ' + v + '</span>';
+      card.href = absUrl(url);
+      card.setAttribute('download', '');
+      card.setAttribute('rel', 'noopener');
+    }
+    function hideUpdate() {
+      wrap.classList.add('hidden');
+    }
+
+    if (!wrap.classList.contains('hidden')) return;
+
+    var clientV = parseClientVersion();
+    if (!clientV) {
+      hideUpdate();
+      return;
+    }
+
+    var headers = { 'Accept': 'application/json', 'Cache-Control': 'no-cache', 'X-Requested-With': 'XMLHttpRequest' };
+    var urls = ['/api/express/app-version', '/api/app/version'];
+    (async function () {
       for (var i = 0; i < urls.length; i++) {
         try {
           var res = await fetch(urls[i], { headers: headers, credentials: 'same-origin', cache: 'no-store' });
-          if (res && res.ok) return await res.json();
+          if (!res || !res.ok) continue;
+          var d = await res.json();
+          if (!d || d.success !== true) continue;
+          var v = String(d.android_apk_version || '').trim();
+          var url = String(d.android_apk_url || '').trim();
+          if (v && url && isServerNewer(v, clientV)) {
+            showUpdate(v, url);
+          } else {
+            hideUpdate();
+          }
+          return;
         } catch (_) {}
       }
-      throw new Error('unavailable');
-    }
-    fetchVersionWithFallback()
-      .then(function (d) {
-        if (!d || d.success !== true) throw new Error();
-        var v = String(d.android_apk_version || '').trim();
-        var url = String(d.android_apk_url || '').trim();
-        if (v && url) {
-          sub.textContent = 'نسخهٔ جدید برای دانلود آماده است';
-          if (meta) meta.innerHTML = '<span class="inline-flex items-center gap-1 rounded border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-amber-300/90">نسخه ' + v + '</span>';
-          card.classList.remove('pointer-events-none', 'opacity-70');
-          card.href = absUrl(url);
-          if (card.hasAttribute('download')) { /* keep */ }
-        } else if (v) {
-          sub.textContent = 'آخرین نسخه: ' + v;
-          if (meta) meta.innerHTML = '<span class="inline-flex items-center gap-1 rounded border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-amber-300/90">نسخه ' + v + '</span>';
-        } else {
-          sub.textContent = 'نسخهٔ جدیدی موجود نیست';
-        }
-      })
-      .catch(function () {
-        sub.textContent = 'عدم دسترسی به اطلاعات بروزرسانی';
-      });
+      hideUpdate();
+    })();
   })();
 
   (function() {

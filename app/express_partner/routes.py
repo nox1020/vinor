@@ -2616,10 +2616,17 @@ def profile_page():
     me_name = (profile.get('name') or '').strip()
     # Inject latest APK info from settings for direct rendering
     _settings = _express_settings_cached()
-    android_apk_url = _settings.get('android_apk_url') or ''
-    android_apk_version = _settings.get('android_apk_version') or ''
+    android_apk_url = (_settings.get('android_apk_url') or '').strip()
+    android_apk_version = (_settings.get('android_apk_version') or '').strip()
     android_apk_updated_at = _settings.get('android_apk_updated_at') or ''
     android_apk_size_bytes = _settings.get('android_apk_size_bytes') or ''
+    from ..utils.apk_version import is_vinor_apk_request, should_show_apk_update
+    is_vinor_apk = is_vinor_apk_request(request)
+    show_app_update_card = should_show_apk_update(
+        android_apk_version,
+        apk_url=android_apk_url,
+        req=request,
+    )
     resp = make_response(render_template(
         'express_partner/profile.html',
         me_phone=me_phone,
@@ -2630,6 +2637,8 @@ def profile_page():
         android_apk_version=android_apk_version,
         android_apk_updated_at=android_apk_updated_at,
         android_apk_size_bytes=android_apk_size_bytes,
+        is_vinor_apk=is_vinor_apk,
+        show_app_update_card=show_app_update_card,
     ))
     _append_partner_tab_prefetch(resp)
     return resp
@@ -2651,6 +2660,12 @@ def profile_data():
     _settings = _express_settings_cached()
     android_apk_url = (_settings.get('android_apk_url') or '').strip()
     android_apk_version = (_settings.get('android_apk_version') or '').strip()
+    from ..utils.apk_version import should_show_apk_update
+    show_app_update = should_show_apk_update(
+        android_apk_version,
+        apk_url=android_apk_url,
+        req=request,
+    )
     try:
         from flask_wtf.csrf import generate_csrf
         csrf_token = generate_csrf()
@@ -2662,8 +2677,9 @@ def profile_data():
         'me_name': me_name or 'همکار وینور',
         'avatar_url': avatar_url,
         'is_approved': is_approved,
-        'android_apk_url': android_apk_url,
-        'android_apk_version': android_apk_version,
+        'android_apk_url': android_apk_url if show_app_update else '',
+        'android_apk_version': android_apk_version if show_app_update else '',
+        'show_app_update': show_app_update,
         'csrf_token': csrf_token,
     })
 
