@@ -4,14 +4,12 @@
 
 <div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
   <header class="relative px-4 pt-6 pb-2">
+    {% if not is_vinor_apk %}
     <a href="{{ url_for('main.index') }}" class="absolute right-4 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors" aria-label="بازگشت به سایت">
       <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
     </a>
+    {% endif %}
     <div class="flex flex-col items-center gap-6 pt-2">
-      <a href="{{ url_for('main.index') }}" class="flex items-center gap-2.5" aria-label="وینور">
-        <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700 text-[#0a0a0c] text-xl font-black shadow-lg shadow-amber-500/20">V</span>
-        <span class="text-xl font-extrabold tracking-wide text-amber-400">VINOR</span>
-      </a>
       {% set login_step = 1 %}
       {% include 'express_partner/partials/auth_login_progress.html' %}
     </div>
@@ -48,8 +46,9 @@
           {% endif %}
         {% endwith %}
 
-        <form method="POST" action="{{ url_for('express_partner.login') }}" class="space-y-5" novalidate>
+        <form method="POST" action="{{ url_for('express_partner.login') }}" class="space-y-5" novalidate id="loginStep1Form">
           {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+          {% if request.args.get('next') %}<input type="hidden" name="next" value="{{ request.args.get('next') }}">{% endif %}
 
           <div>
             <label for="loginPhone" class="mb-2 block text-sm font-medium text-zinc-300">شماره موبایل</label>
@@ -63,8 +62,30 @@
             </div>
           </div>
 
-          <button type="submit"
-                  class="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-400 active:scale-[0.99]">
+          <label class="flex items-start gap-3 rounded-xl border border-white/10 bg-[#070b12]/80 px-3 py-3 cursor-pointer transition has-[:checked]:border-emerald-500/40 has-[:checked]:bg-emerald-500/5">
+            <input type="checkbox"
+                   id="acceptLegal"
+                   name="accept_legal"
+                   value="1"
+                   required
+                   checked
+                   class="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-600 bg-[#0a1018] text-emerald-500 focus:ring-emerald-500/40">
+            <span class="text-[11px] leading-relaxed text-zinc-400">
+              <a href="{{ url_for('express_partner.legal_privacy', next=request.args.get('next')) }}"
+                 target="_blank" rel="noopener"
+                 class="font-semibold text-emerald-400/95 underline decoration-emerald-500/40 underline-offset-2 hover:text-emerald-300"
+                 onclick="event.stopPropagation()">حریم خصوصی</a>
+              و
+              <a href="{{ url_for('express_partner.legal_terms', next=request.args.get('next')) }}"
+                 target="_blank" rel="noopener"
+                 class="font-semibold text-emerald-400/95 underline decoration-emerald-500/40 underline-offset-2 hover:text-emerald-300"
+                 onclick="event.stopPropagation()">قوانین استفاده</a>
+              وینور اکسپرس را می‌پذیرم.
+            </span>
+          </label>
+
+          <button type="submit" id="loginSubmitBtn"
+                  class="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50">
             ادامه
             <i class="fas fa-arrow-left text-sm opacity-90" aria-hidden="true"></i>
           </button>
@@ -102,4 +123,18 @@
 
 {% set bottom_nav_active = '' %}
 {% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+(function () {
+  var chk = document.getElementById('acceptLegal');
+  var btn = document.getElementById('loginSubmitBtn');
+  if (!chk || !btn) return;
+  function sync() { btn.disabled = !chk.checked; }
+  chk.addEventListener('change', sync);
+  sync();
+})();
+</script>
 {% endblock %}

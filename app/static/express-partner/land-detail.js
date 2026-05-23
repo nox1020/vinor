@@ -425,6 +425,17 @@
     });
   }
 
+  function initLandFlashes(cfg) {
+    var list = (cfg && cfg.flashMessages) || [];
+    if (!list.length) return;
+    var first = list[0];
+    var text = typeof first === 'string' ? first : (first && first.text);
+    if (!text) return;
+    var cat = typeof first === 'object' && first ? first.category : '';
+    var isError = cat === 'error' || cat === 'danger';
+    showTxToast(text, isError);
+  }
+
   function initDescToggle() {
     var btn = document.getElementById('landDescToggle');
     var shortEl = document.getElementById('landDescText');
@@ -480,6 +491,7 @@
     initShare(cfg);
     initModals();
     initTransactionToggle();
+    initLandFlashes(cfg);
     initDescToggle();
 
     if (typeof window.vinorSyncFavButtons === 'function') {

@@ -97,12 +97,18 @@
     {% include 'express_partner/partials/land_detail_modals.html' %}
   </div>
 
+  {% set land_flash_messages = get_flashed_messages(with_categories=true, category_filter=['land']) %}
   <script type="application/json" id="landDetailConfig">
   {
     "hasVideo": {{ 'true' if has_video else 'false' }},
     "totalItems": {{ total_items }},
     "shareUrl": {{ (share_url or '')|tojson }},
     "code": {{ (land.code or '')|tojson }},
+    "flashMessages": [
+      {%- for category, message in land_flash_messages -%}
+      {"text": {{ message|tojson }}, "category": {{ category|tojson }}}{% if not loop.last %},{% endif %}
+      {%- endfor -%}
+    ],
     "slides": [
       {%- set _slide_first = true -%}
       {%- if has_video -%}

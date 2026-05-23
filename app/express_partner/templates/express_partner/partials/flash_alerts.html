@@ -1,0 +1,23 @@
+{# پیام‌های flash — فقط category مشخص (مثلاً profile)
+   messages: لیست (category, message)
+   stack_id: شناسه ظرف (اختیاری)
+#}
+{% if messages %}
+<div id="{{ stack_id|default('flashAlerts') }}" class="mb-4 space-y-2" data-flash-stack role="region" aria-label="پیام‌های سیستم">
+  {% for category, message in messages %}
+  <div class="flash-alert flex items-start gap-2 rounded-xl border px-3 py-2.5 text-xs leading-relaxed
+              {% if category == 'profile' or category == 'success' %}border-emerald-500/40 bg-emerald-500/10 text-emerald-200
+              {% elif category == 'error' or category == 'danger' %}border-rose-500/40 bg-rose-500/10 text-rose-200
+              {% elif category == 'warning' %}border-amber-500/40 bg-amber-500/10 text-amber-200
+              {% else %}border-white/10 bg-white/5 text-zinc-300{% endif %}"
+       data-flash-alert>
+    <p class="min-w-0 flex-1 text-right">{{ message }}</p>
+    <button type="button"
+            class="flash-alert-dismiss shrink-0 rounded-lg p-1 text-current opacity-60 transition hover:bg-white/10 hover:opacity-100"
+            aria-label="بستن پیام">
+      <i class="fas fa-times text-[11px]" aria-hidden="true"></i>
+    </button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

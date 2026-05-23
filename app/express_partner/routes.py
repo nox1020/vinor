@@ -6,7 +6,8 @@ from typing import Any, Dict, List
 
 from flask import (
     render_template, request, redirect, url_for, session,
-    send_from_directory, current_app, abort, flash, g
+    send_from_directory, current_app, abort, flash, g,
+    has_request_context,
 )
 from functools import wraps
 import random, re, time
@@ -553,9 +554,19 @@ def inject_role_flags():
     except Exception:
         vapid_public = ""
     
+    from ..utils.apk_version import is_vinor_apk_request
+
+    is_vinor_apk = False
+    if has_request_context():
+        try:
+            is_vinor_apk = is_vinor_apk_request(request)
+        except Exception:
+            is_vinor_apk = False
+
     return {
         "VINOR_IS_EXPRESS_PARTNER": is_express_partner,
         "VAPID_PUBLIC_KEY": vapid_public,
+        "is_vinor_apk": is_vinor_apk,
     }
 
 
@@ -1931,11 +1942,18 @@ def login():
         return redirect(url_for('express_partner.dashboard'))
 
     if request.method == 'POST':
+        if not _legal_accepted(request):
+            flash('برای ادامه باید <a href="{privacy}" class="underline">حریم خصوصی</a> و <a href="{terms}" class="underline">قوانین استفاده</a> را بپذیرید.'.format(
+                privacy=url_for('express_partner.legal_privacy', next=_login_next_preserve() or ''),
+                terms=url_for('express_partner.legal_terms', next=_login_next_preserve() or ''),
+            ), 'error')
+            return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
+
         phone_raw = request.form.get('phone', '')
         phone = _normalize_phone(phone_raw)
         if not phone or len(phone) != 11:
             flash('لطفاً یک شماره موبایل ۱۱ رقمی معتبر وارد کنید.', 'error')
-            return redirect(url_for('express_partner.login'))
+            return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
 
         code = f"{random.randint(10000, 99999)}"
         session.update({'otp_code': code, 'otp_phone': phone})
@@ -2028,6 +2046,36 @@ def training():
     return render_template('express_partner/training.html', 
                          hide_header=True,
                          training_video_url=training_video_url)
+
+
+@express_partner_bp.route('/legal/privacy', methods=['GET'], endpoint='legal_privacy')
+def legal_privacy():
+    """حریم خصوصی پنل همکار — عمومی، موبایل‌محور."""
+    return render_template('express_partner/legal/privacy.html', hide_header=True)
+
+
+@express_partner_bp.route('/legal/terms', methods=['GET'], endpoint='legal_terms')
+def legal_terms():
+    """قوانین استفاده پنل همکار — عمومی، موبایل‌محور."""
+    return render_template('express_partner/legal/terms.html', hide_header=True)
+
+
+def _login_next_preserve():
+    nxt = (request.args.get('next') or request.form.get('next') or '').strip()
+    if nxt and nxt.startswith('/') and not nxt.startswith('//'):
+        return nxt
+    return None
+
+
+def _legal_accepted(request_obj) -> bool:
+    if request_obj.form.get('accept_legal') in ('1', 'on', 'true', 'yes'):
+        return True
+    data = request_obj.get_json(silent=True) if request_obj.is_json else None
+    if isinstance(data, dict):
+        val = data.get('accept_legal')
+        if val in (True, 1, '1', 'true', 'yes', 'on'):
+            return True
+    return False
 
 
 @express_partner_bp.route('/cooperation-terms', methods=['GET'], endpoint='cooperation_terms')
@@ -2248,7 +2296,7 @@ def _mark_in_transaction_finish(
             category=category,
         ), (200 if success else 400)
     if message:
-        flash(message, category)
+        flash(message, 'land')
     if success:
         return redirect(url_for('express_partner.land_detail', code=code))
     return redirect(url_for('express_partner.dashboard'))
@@ -2523,6 +2571,12 @@ def api_login_request():
     phone = _normalize_phone(phone_raw)
     if not phone or len(phone) != 11:
         return jsonify({'success': False, 'error': 'شماره موبایل معتبر نیست.'}), 400
+    if not _legal_accepted(request):
+        return jsonify({
+            'success': False,
+            'error': 'پذیرش حریم خصوصی و قوانین استفاده الزامی است.',
+            'legal_required': True,
+        }), 400
     code = f"{random.randint(10000, 99999)}"
     session.update({'otp_code': code, 'otp_phone': phone})
     session.permanent = True
@@ -2693,6 +2747,8 @@ def profile_edit_page():
     تمام فیلدها فقط روی همان دیکشنری پروفایل همان شماره ذخیره می‌شوند (مجزا از بقیهٔ کاربران).
     """
     me_phone = (session.get('user_phone') or '').strip()
+    from ..utils.flash_messages import purge_stale_land_flashes
+    purge_stale_land_flashes()
     partners = load_express_partners() or []
     profile = next((p for p in partners if str(p.get('phone') or '').strip() == me_phone), None)
     if not profile:
@@ -2749,11 +2805,11 @@ def profile_edit_page():
         try:
             save_express_partners(partners)
             _invalidate_partner_session_cache()
-            flash('مشخصات با موفقیت به‌روزرسانی شد.', 'success')
+            flash('مشخصات با موفقیت به‌روزرسانی شد.', 'profile')
         except Exception:
             current_app.logger.error("Failed to save partner profile edits", exc_info=True)
-            flash('خطا در ذخیره مشخصات.', 'error')
-        return redirect(url_for('express_partner.profile'))
+            flash('خطا در ذخیره مشخصات.', 'profile')
+        return redirect(url_for('express_partner.profile_edit'))
 
     me_name = (profile.get('name') or '').strip()
     me_city = (profile.get('city') or '').strip()
@@ -2878,18 +2934,33 @@ def api_profile_update():
 @express_partner_bp.post('/profile/delete-account', endpoint='profile_delete_account')
 @require_partner_access(allow_pending=True)
 def profile_delete_account():
-    """حذف رکورد همکار از لیست و خروج از سشن (غیرقابل بازگشت از این مسیر)."""
+    """حذف داده‌های همکار و خروج از سشن (غیرقابل بازگشت)."""
     me_phone = (session.get('user_phone') or '').strip()
     if not me_phone:
         return redirect(url_for('express_partner.login'))
-    partners = load_express_partners() or []
-    new_partners = [p for p in partners if str(p.get('phone') or '').strip() != me_phone]
-    try:
-        save_express_partners(new_partners)
-    except Exception:
-        current_app.logger.error('Failed to save partners after account delete', exc_info=True)
-        flash('حذف حساب انجام نشد. دوباره تلاش کنید.', 'error')
+
+    if (request.form.get('confirm_delete') or '').strip() != '1':
+        flash('برای حذف حساب، گزینهٔ تأیید را علامت بزنید.', 'profile')
         return redirect(url_for('express_partner.profile_edit'))
+
+    confirm_tail = (request.form.get('confirm_phone_tail') or '').strip()
+    expected_tail = me_phone[-4:] if len(me_phone) >= 4 else me_phone
+    if confirm_tail != expected_tail:
+        flash('۴ رقم آخر شماره موبایل با شمارهٔ حساب شما مطابقت ندارد.', 'profile')
+        return redirect(url_for('express_partner.profile_edit'))
+
+    from ..utils.partner_account import purge_partner_account
+    result = purge_partner_account(me_phone)
+    if not result.get('ok'):
+        current_app.logger.error(
+            'Partner account purge incomplete for %s: %s',
+            me_phone,
+            result.get('errors'),
+        )
+        flash('حذف کامل حساب انجام نشد. لطفاً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.', 'profile')
+        return redirect(url_for('express_partner.profile_edit'))
+
+    _invalidate_partner_session_cache()
     _clear_express_partner_auth_session()
     flash('حساب کاربری شما حذف شد.', 'info')
     r = redirect(url_for('express_partner.login'))
@@ -2975,7 +3046,7 @@ def profile_avatar_upload():
         except Exception:
             pass
     except Exception:
-        flash('خطا در ذخیره تصویر پروفایل.', 'error')
+        flash('خطا در ذخیره تصویر پروفایل.', 'profile')
         return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile'))
     # به‌روزرسانی پروفایل همکار
     partners = load_express_partners() or []
@@ -3349,6 +3420,8 @@ def check_status():
 @require_partner_access(allow_pending=True, allow_guest=True)
 def land_detail(code: str):
     """Express land detail page within partner panel."""
+    from ..utils.flash_messages import purge_stale_land_flashes
+    purge_stale_land_flashes()
     lands = load_ads_cached() or []
     land = next((l for l in lands if l.get('code') == code and l.get('is_express')), None)
 

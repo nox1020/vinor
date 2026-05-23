@@ -8,10 +8,6 @@
       <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
     </a>
     <div class="flex flex-col items-center gap-6 pt-2">
-      <a href="{{ url_for('main.index') }}" class="flex items-center gap-2.5" aria-label="وینور">
-        <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700 text-[#0a0a0c] text-xl font-black shadow-lg shadow-amber-500/20">V</span>
-        <span class="text-xl font-extrabold tracking-wide text-amber-400">VINOR</span>
-      </a>
       {% set login_step = 2 %}
       {% include 'express_partner/partials/auth_login_progress.html' %}
     </div>

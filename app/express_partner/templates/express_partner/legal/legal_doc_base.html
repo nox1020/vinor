@@ -1,0 +1,54 @@
+{% extends 'express_partner/base.html' %}
+{% block head %}
+  <style>
+    .legal-doc h2 { font-size: 0.95rem; font-weight: 700; color: #f4f4f5; margin-top: 0.25rem; }
+    .legal-doc h3 { font-size: 0.85rem; font-weight: 600; color: #e4e4e7; margin-top: 0.75rem; }
+    .legal-doc p { margin-top: 0.5rem; }
+    .legal-doc ul { margin-top: 0.5rem; padding-right: 1.1rem; list-style: disc; }
+    .legal-doc li { margin-top: 0.35rem; }
+    .legal-doc a { color: #6ee7b7; text-decoration: underline; text-underline-offset: 2px; }
+  </style>
+  {{ super() }}
+{% endblock %}
+{% block content %}
+{% set _back = back_href if back_href is defined else (request.args.get('next') or url_for('express_partner.login')) %}
+<div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col">
+  <header class="sticky top-0 z-50 border-b border-white/10 bg-[#050810]/95 backdrop-blur-md">
+    <div class="mx-auto flex h-14 max-w-lg items-center justify-between px-4">
+      <a href="{{ _back }}"
+         class="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+         aria-label="بازگشت">
+        <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
+      </a>
+      <h1 class="pointer-events-none absolute inset-x-0 truncate px-14 text-center text-sm font-bold text-white">{% block doc_heading %}سند حقوقی{% endblock %}</h1>
+      <div class="h-10 w-10 shrink-0" aria-hidden="true"></div>
+    </div>
+  </header>
+
+  <main class="flex-1 px-4 py-5 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
+    <div class="mx-auto w-full max-w-lg">
+      {% block doc_updated_line %}{% endblock %}
+      <article class="legal-doc space-y-5 text-right text-sm leading-[1.85] text-zinc-300">
+        {% block legal_content %}{% endblock %}
+      </article>
+
+      <div class="mt-8 flex flex-col gap-2 sm:flex-row">
+        <a href="{{ url_for('express_partner.legal_privacy', next=request.args.get('next')) }}"
+           class="flex-1 rounded-xl border px-4 py-3 text-center text-xs font-semibold transition
+                  {% if doc_tab == 'privacy' %}border-emerald-500/40 bg-emerald-500/10 text-emerald-300{% else %}border-white/10 bg-white/[0.03] text-zinc-200 hover:border-emerald-500/30{% endif %}">
+          حریم خصوصی
+        </a>
+        <a href="{{ url_for('express_partner.legal_terms', next=request.args.get('next')) }}"
+           class="flex-1 rounded-xl border px-4 py-3 text-center text-xs font-semibold transition
+                  {% if doc_tab == 'terms' %}border-emerald-500/40 bg-emerald-500/10 text-emerald-300{% else %}border-white/10 bg-white/[0.03] text-zinc-200 hover:border-emerald-500/30{% endif %}">
+          قوانین استفاده
+        </a>
+      </div>
+      <a href="{{ _back }}"
+         class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-emerald-500 active:scale-[0.99]">
+        بازگشت به ورود
+      </a>
+    </div>
+  </main>
+</div>
+{% endblock %}

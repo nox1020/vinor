@@ -24,19 +24,8 @@
   <main id="profileEditPage" class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] pt-14 text-zinc-100 sm:pt-16">
     <div class="mx-auto max-w-lg px-4 pb-6 lg:max-w-2xl">
 
-      {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-      <div class="mb-4 space-y-2">
-        {% for category, message in messages %}
-        <div class="rounded-xl border px-3 py-2.5 text-xs leading-relaxed
-                    {% if category == 'success' %}border-emerald-500/40 bg-emerald-500/10 text-emerald-200
-                    {% elif category == 'error' or category == 'danger' %}border-rose-500/40 bg-rose-500/10 text-rose-200
-                    {% else %}border-white/10 bg-white/5 text-zinc-300{% endif %}">
-          {{ message }}
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
+      {% with messages = get_flashed_messages(with_categories=true, category_filter=['profile']) %}
+      {% include 'express_partner/partials/flash_alerts.html' %}
       {% endwith %}
 
       {# آواتار — آپلود جدا؛ ضربه روی تصویر = انتخاب فایل #}
@@ -170,18 +159,24 @@
         </section>
       </form>
 
-      <section class="mt-4 rounded-2xl border border-rose-500/35 bg-rose-950/20 p-4 sm:p-5">
-        <button type="button" id="deleteAccountOpen"
-                class="flex w-full items-center justify-end gap-3 text-right transition hover:opacity-90">
+      <details class="mt-4 rounded-2xl border border-rose-500/25 bg-rose-950/15 open:border-rose-500/35 open:bg-rose-950/20">
+        <summary class="flex cursor-pointer list-none items-center justify-end gap-3 p-4 text-right transition hover:opacity-90 sm:p-5 [&::-webkit-details-marker]:hidden">
           <div class="min-w-0 flex-1">
-            <div class="text-sm font-bold text-rose-400">حذف حساب کاربری</div>
-            <p class="mt-1 text-[11px] leading-relaxed text-rose-200/70">با حذف حساب، اطلاعات شما به صورت دائمی حذف می‌شود.</p>
+            <div class="text-sm font-bold text-rose-400">منطقه خطر — حذف حساب</div>
+            <p class="mt-1 text-[11px] leading-relaxed text-rose-200/60">غیرقابل بازگشت؛ نیاز به تأیید شماره موبایل</p>
           </div>
-          <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-rose-500/40 bg-rose-500/15 text-rose-400" aria-hidden="true">
+          <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-rose-500/35 bg-rose-500/10 text-rose-400" aria-hidden="true">
             <i class="fas fa-trash-alt"></i>
           </span>
-        </button>
-      </section>
+        </summary>
+        <div class="border-t border-rose-500/20 px-4 pb-4 pt-2 sm:px-5 sm:pb-5">
+          <p class="mb-3 text-[11px] leading-relaxed text-zinc-500">پس از حذف، پروفایل، یادداشت‌ها، پورسانت‌ها، حساب‌های بانکی و سایر داده‌های شخصی شما از سیستم پاک می‌شود.</p>
+          <button type="button" id="deleteAccountOpen"
+                  class="w-full rounded-xl border border-rose-500/40 bg-rose-600/20 py-3 text-sm font-bold text-rose-200 transition hover:bg-rose-600/30">
+            شروع فرایند حذف حساب
+          </button>
+        </div>
+      </details>
 
     </div>
   </main>
@@ -195,9 +190,14 @@
   {# فرم واقعی حذف؛ دکمهٔ تأیید داخل مودال با form="" به این فرم وصل است #}
   <form id="profileDeleteForm" method="post" action="{{ url_for('express_partner.profile_delete_account') }}" class="hidden" aria-hidden="true">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="confirm_delete" id="deleteAccountConfirmHidden" value="">
+    <input type="hidden" name="confirm_phone_tail" id="deleteAccountPhoneHidden" value="">
   </form>
 
-  <div id="deleteAccountModal" class="fixed inset-0 z-[85] hidden overflow-y-auto" aria-hidden="true">
+  <div id="deleteAccountModal"
+       data-tg-body-modal
+       class="fixed inset-0 z-[85] hidden overflow-y-auto"
+       aria-hidden="true">
     <div class="absolute inset-0 bg-black/75 backdrop-blur-[2px]" data-delete-modal-backdrop></div>
     <div class="relative flex min-h-full flex-col justify-end pointer-events-none sm:justify-center sm:p-4">
       <div id="deleteAccountModalPanel" role="dialog" aria-modal="true" aria-labelledby="deleteAccountModalTitle"
@@ -230,16 +230,32 @@
               <i class="fas fa-circle-info mt-0.5 shrink-0 text-sky-400" aria-hidden="true"></i>
             </div>
             <ul class="list-inside list-disc space-y-2 pr-1 text-right text-xs leading-relaxed text-zinc-300 marker:text-rose-500">
-              <li>تمام اطلاعات پروفایل و حساب کاربری</li>
-              <li>تراکنش‌ها و سوابق مالی</li>
-              <li>برداشت‌ها و حساب‌های بانکی</li>
-              <li>اعلان‌ها و تنظیمات شخصی</li>
+              <li>پروفایل، آواتار و مشخصات شخصی</li>
+              <li>یادداشت‌ها و فایل‌های شخصی</li>
+              <li>پورسانت‌ها و حساب‌های بانکی</li>
+              <li>تخصیص فایل‌ها و سوابق همکاری شما</li>
             </ul>
           </div>
 
-          <label class="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-[#0f1419] p-3 transition hover:border-white/15">
+          <div class="mt-5">
+            <label for="deleteAccountPhoneConfirm" class="mb-1.5 block text-right text-xs font-medium text-zinc-300">
+              ۴ رقم آخر شماره موبایل خود را وارد کنید
+            </label>
+            <input type="tel"
+                   id="deleteAccountPhoneConfirm"
+                   inputmode="numeric"
+                   autocomplete="off"
+                   maxlength="4"
+                   dir="ltr"
+                   class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-3 text-center text-sm tracking-[0.35em] text-white outline-none transition focus:border-rose-500/50 focus:ring-1 focus:ring-rose-500/30"
+                   placeholder="••••"
+                   aria-describedby="deleteAccountPhoneHint">
+            <p id="deleteAccountPhoneHint" class="mt-1.5 text-right text-[10px] text-zinc-500">برای جلوگیری از حذف تصادفی، تأیید شماره الزامی است.</p>
+          </div>
+
+          <label class="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-[#0f1419] p-3 transition hover:border-white/15">
             <input type="checkbox" id="deleteAccountConfirmCheck" class="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-500 bg-[#0a1018] text-rose-600 focus:ring-rose-500/40">
-            <span class="text-right text-xs leading-relaxed text-zinc-300">من شرایط بالا را خوانده‌ام و تأیید می‌کنم.</span>
+            <span class="text-right text-xs leading-relaxed text-zinc-300">می‌دانم این عمل غیرقابل بازگشت است و تأیید می‌کنم.</span>
           </label>
 
           <div class="mt-6 space-y-3">
@@ -378,35 +394,62 @@
 window.__vinorCloseCityPicker = closeCityPicker;
 })();
 
-(function() {
+function initProfileEditDeleteAccount() {
+  if (!document.getElementById('profileEditPage')) return;
   var overlay = window.vinorExpressModalOverlay;
   var modal = document.getElementById('deleteAccountModal');
   var openBtn = document.getElementById('deleteAccountOpen');
+  if (!modal || !openBtn || !overlay) return;
+  if (modal.dataset.deleteBound === '1') return;
+  modal.dataset.deleteBound = '1';
+
+  if (typeof window.hoistVinorExpressBodyModals === 'function') {
+    window.hoistVinorExpressBodyModals();
+  }
+
   var closeBtn = document.getElementById('deleteAccountModalClose');
   var cancelBtn = document.getElementById('deleteAccountModalCancel');
-  var backdrop = modal && modal.querySelector('[data-delete-modal-backdrop]');
+  var backdrop = modal.querySelector('[data-delete-modal-backdrop]');
   var chk = document.getElementById('deleteAccountConfirmCheck');
+  var phoneInput = document.getElementById('deleteAccountPhoneConfirm');
   var submitBtn = document.getElementById('deleteAccountConfirmSubmit');
-  if (!modal || !openBtn || !overlay) return;
+  var delForm = document.getElementById('profileDeleteForm');
+  var hiddenConfirm = document.getElementById('deleteAccountConfirmHidden');
+  var hiddenPhone = document.getElementById('deleteAccountPhoneHidden');
+  var expectedTail = {{ (me_phone[-4:] if me_phone|length >= 4 else me_phone)|tojson }};
 
   function syncSubmit() {
-    if (submitBtn) submitBtn.disabled = !chk || !chk.checked;
+    var phoneOk = phoneInput && String(phoneInput.value || '').trim() === String(expectedTail || '');
+    var chkOk = chk && chk.checked;
+    if (submitBtn) submitBtn.disabled = !(phoneOk && chkOk);
+  }
+
+  function resetModalFields() {
+    if (chk) chk.checked = false;
+    if (phoneInput) phoneInput.value = '';
+    if (hiddenConfirm) hiddenConfirm.value = '';
+    if (hiddenPhone) hiddenPhone.value = '';
+    syncSubmit();
   }
 
   function openModal() {
+    if (typeof window.hoistVinorExpressBodyModals === 'function') {
+      window.hoistVinorExpressBodyModals();
+    }
+    resetModalFields();
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
     overlay.open();
-    if (chk) chk.checked = false;
-    syncSubmit();
+    if (phoneInput) {
+      try { phoneInput.focus(); } catch (_) {}
+    }
   }
 
   function closeModal() {
     modal.classList.add('hidden');
     modal.setAttribute('aria-hidden', 'true');
     overlay.close();
-    if (chk) chk.checked = false;
-    syncSubmit();
+    resetModalFields();
   }
 
   openBtn.addEventListener('click', openModal);
@@ -414,6 +457,40 @@ window.__vinorCloseCityPicker = closeCityPicker;
   if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
   if (backdrop) backdrop.addEventListener('click', closeModal);
   if (chk) chk.addEventListener('change', syncSubmit);
+  if (phoneInput) {
+    phoneInput.addEventListener('input', function () {
+      phoneInput.value = String(phoneInput.value || '').replace(/\D/g, '').slice(0, 4);
+      syncSubmit();
+    });
+  }
+  if (submitBtn && delForm) {
+    submitBtn.addEventListener('click', function (e) {
+      if (submitBtn.disabled) {
+        e.preventDefault();
+        return;
+      }
+      if (hiddenConfirm) hiddenConfirm.value = '1';
+      if (hiddenPhone && phoneInput) hiddenPhone.value = String(phoneInput.value || '').trim();
+      try { localStorage.removeItem('vinor_dashboard_favs'); } catch (_) {}
+    });
+  }
+}
+
+initProfileEditDeleteAccount();
+document.addEventListener('vinor:express-page-swap', initProfileEditDeleteAccount);
+
+(function() {
+  var stack = document.querySelector('[data-flash-stack]');
+  if (!stack) return;
+  stack.querySelectorAll('[data-flash-alert]').forEach(function (el) {
+    var btn = el.querySelector('.flash-alert-dismiss');
+    function dismiss() {
+      el.remove();
+      if (!stack.querySelector('[data-flash-alert]')) stack.remove();
+    }
+    if (btn) btn.addEventListener('click', dismiss);
+    setTimeout(dismiss, 6500);
+  });
 })();
 
 (function() {
