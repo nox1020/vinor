@@ -1,6 +1,11 @@
 """تنظیمات DeepSeek برای Vinor AI."""
+import os
 
-DEEPSEEK_API_KEY = "sk-c727f78fbebc41f7a5e8b78e9e8de756"
+DEEPSEEK_API_KEY = (
+    os.environ.get("DEEPSEEK_API_KEY")
+    or os.environ.get("VINOR_DEEPSEEK_API_KEY")
+    or "sk-c727f78fbebc41f7a5e8b78e9e8de756"
+).strip()
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 

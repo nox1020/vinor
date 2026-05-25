@@ -37,17 +37,42 @@ def _cache_file() -> str:
 def _load_cache() -> dict[str, Any]:
     path = _cache_file()
     if not os.path.isfile(path):
-        return {"rate": {}, "replies": {}}
+        return {"rate": {}, "replies": {}, "flags": {}}
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, dict):
             data.setdefault("rate", {})
             data.setdefault("replies", {})
+            data.setdefault("flags", {})
             return data
     except Exception:
         pass
-    return {"rate": {}, "replies": {}}
+    return {"rate": {}, "replies": {}, "flags": {}}
+
+
+def mark_api_balance_depleted() -> None:
+    """پس از خطای 402 — ترجیح مدل آفلاین در حالت auto."""
+    data = _load_cache()
+    data.setdefault("flags", {})
+    data["flags"]["api_balance_depleted"] = time.time()
+    _save_cache(data)
+
+
+def is_api_balance_depleted(max_age_sec: int = 86400) -> bool:
+    data = _load_cache()
+    ts = float((data.get("flags") or {}).get("api_balance_depleted") or 0)
+    if not ts:
+        return False
+    return (time.time() - ts) < max_age_sec
+
+
+def clear_api_balance_depleted() -> None:
+    data = _load_cache()
+    flags = data.get("flags") or {}
+    flags.pop("api_balance_depleted", None)
+    data["flags"] = flags
+    _save_cache(data)
 
 
 def _save_cache(data: dict[str, Any]) -> None:
