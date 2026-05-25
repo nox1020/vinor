@@ -129,4 +129,17 @@ def _nf(e):
     return jsonify({"error":"Not Found","path":request.path}), 404
 
 if __name__ == "__main__":
-    app.run(debug=True, host=os.environ.get("FLASK_RUN_HOST","0.0.0.0"), port=int(os.environ.get("FLASK_RUN_PORT","5000")))
+    # با bootstrap آفلاین، reloader دانلود/pip را قطع می‌کند — پیش‌فرض reloader خاموش
+    auto_boot = os.environ.get("VINOR_AI_AUTO_BOOTSTRAP", "1").lower() not in (
+        "0", "false", "no",
+    )
+    use_reloader = os.environ.get(
+        "FLASK_USE_RELOADER",
+        "0" if auto_boot else "1",
+    ).lower() in ("1", "true", "yes")
+    app.run(
+        debug=True,
+        use_reloader=use_reloader,
+        host=os.environ.get("FLASK_RUN_HOST", "0.0.0.0"),
+        port=int(os.environ.get("FLASK_RUN_PORT", "5000")),
+    )

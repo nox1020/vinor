@@ -7,7 +7,8 @@ from typing import Any
 
 from flask import current_app
 
-from .model_paths import default_model_path, models_dir
+from .model_paths import default_model_path, model_file_valid, models_dir
+from .offline_bootstrap import bootstrap_state, is_offline_ready
 from .offline_config import HF_MODEL_FILE, HF_REPO_ID, offline_runtime_config
 
 _llm = None
@@ -16,20 +17,21 @@ _load_error: str | None = None
 
 
 def offline_available() -> bool:
-    path = default_model_path()
-    return bool(path and os.path.isfile(path))
+    return is_offline_ready() or model_file_valid(default_model_path())
 
 
 def offline_status() -> dict[str, Any]:
     path = default_model_path()
+    ready = offline_available()
     return {
-        "available": offline_available(),
-        "model_path": path if offline_available() else "",
+        "available": ready,
+        "model_path": path if ready else "",
         "models_dir": models_dir(),
         "expected_file": HF_MODEL_FILE,
         "hf_repo": HF_REPO_ID,
         "loaded": _llm is not None,
         "load_error": _load_error or "",
+        "bootstrap": bootstrap_state(),
     }
 
 
@@ -38,8 +40,12 @@ def _get_llm():
     if _llm is not None:
         return _llm
     path = default_model_path()
-    if not path or not os.path.isfile(path):
-        _load_error = "فایل مدل GGUF در پوشه ai_models یافت نشد."
+    if not model_file_valid(path):
+        st = bootstrap_state()
+        if st in ("running", "downloading"):
+            _load_error = "مدل آفلاین در حال آماده‌سازی است؛ لطفاً چند دقیقه دیگر تلاش کنید."
+        else:
+            _load_error = "فایل مدل GGUF در پوشه ai_models یافت نشد."
         return None
 
     with _llm_lock:

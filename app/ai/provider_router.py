@@ -1,4 +1,4 @@
-"""انتخاب DeepSeek API در شرایط خاص؛ در بقیهٔ موارد مدل آفلاین."""
+"""اولویت همیشه با مدل آفلاین؛ DeepSeek فقط در حالت صریح یا نبود آفلاین."""
 from __future__ import annotations
 
 import os
@@ -6,44 +6,29 @@ import re
 from typing import Any
 
 from .audience import AUDIENCE_PARTNER
-from .escalations import has_pending_answers
 from .credits import is_api_balance_depleted
 from .offline_engine import offline_available
 
-# موضوعات حساس / پیچیده → ترجیح API
-_API_TRIGGER_PATTERNS = (
-    r"مقایسه",
-    r"تحلیل",
-    r"بهترین\s+فایل",
-    r"پیشنهاد\s+.*فایل",
-    r"چند\s+.*ملک",
-    r"قرارداد",
-    r"حقوقی",
-    r"سند\s+ملک",
-    r"پورسانت\s+دقیق",
-    r"محاسبه\s+پورسانت",
-    r"مذاکره",
-    r"معامله\s+در\s+جریان",
-)
-
 
 def provider_mode() -> str:
-    """offline | api | auto"""
-    raw = (os.environ.get("VINOR_AI_PROVIDER") or "auto").strip().lower()
+    """پیش‌فرض: offline — اولویت همیشه مدل محلی."""
+    raw = (os.environ.get("VINOR_AI_PROVIDER") or "offline").strip().lower()
     if raw in ("offline", "local", "gguf"):
         return "offline"
     if raw in ("api", "deepseek", "cloud"):
         return "api"
-    return "auto"
+    if raw == "auto":
+        return "auto"
+    return "offline"
 
 
-def _has_admin_pending(user_key: str, audience: str) -> bool:
-    if not user_key:
-        return False
-    try:
-        return has_pending_answers(user_key, audience=audience)
-    except Exception:
-        return False
+def _use_api_for_complex_enabled() -> bool:
+    """فقط اگر صریحاً فعال شده — در حالت پیش‌فرض خاموش."""
+    return os.environ.get("VINOR_AI_USE_API_FOR_COMPLEX", "0").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
 
 def _message_needs_api(text: str) -> tuple[bool, str]:
@@ -51,19 +36,12 @@ def _message_needs_api(text: str) -> tuple[bool, str]:
     if not t:
         return False, ""
 
-    max_offline_len = int(os.environ.get("VINOR_AI_API_IF_LONGER_THAN", "420"))
+    max_offline_len = int(os.environ.get("VINOR_AI_API_IF_LONGER_THAN", "2000"))
     if len(t) > max_offline_len:
         return True, "long_message"
 
     if re.search(r"\[\[LAND:", t, flags=re.I):
         return True, "explicit_land_marker"
-
-    if re.search(r"\b[A-Z]{1,3}-?\d{3,}\b", t):
-        return True, "land_code_in_question"
-
-    for pat in _API_TRIGGER_PATTERNS:
-        if re.search(pat, t, flags=re.I):
-            return True, "complex_topic"
 
     force_kw = (os.environ.get("VINOR_AI_FORCE_API_KEYWORDS") or "").strip()
     if force_kw:
@@ -84,35 +62,32 @@ def should_use_deepseek(
 ) -> tuple[bool, str]:
     """
     True = فراخوانی DeepSeek
-    False = مدل آفلاین (اگر نصب باشد)
+    False = مدل آفلاین (پیش‌فرض)
     """
     mode = provider_mode()
-    if mode == "api":
-        return True, "mode_api"
-    if mode == "offline":
-        return False, "mode_offline"
-
-    if not offline_available():
-        return True, "offline_missing"
-
-    if is_api_balance_depleted():
-        return False, "api_balance_depleted"
-
-    needs, why = _message_needs_api(message)
-    if needs:
-        return True, why
-
-    if _has_admin_pending(user_key or "", audience or AUDIENCE_PARTNER):
-        return True, "admin_answers_pending"
-
-    hist = history or []
-    if len(hist) >= int(os.environ.get("VINOR_AI_API_IF_HISTORY_GE", "14")):
-        return True, "long_conversation"
 
     if (message or "").strip().lower() in ("!api", "/api"):
         return True, "user_force_api"
 
-    return False, "default_offline"
+    if mode == "api":
+        return True, "mode_api"
+
+    if mode == "offline":
+        return False, "mode_offline"
+
+    # auto = همان offline-first مگر تنظیمات پیچیده فعال باشد
+    if offline_available():
+        if is_api_balance_depleted():
+            return False, "api_balance_depleted"
+
+        if _use_api_for_complex_enabled():
+            needs, why = _message_needs_api(message)
+            if needs:
+                return True, why
+
+        return False, "default_offline"
+
+    return True, "offline_missing"
 
 
 def allow_api_fallback_after_offline_fail() -> bool:

@@ -2377,6 +2377,7 @@ def ai_chat():
         history_for_api,
         threads_for_ui,
     )
+    from app.ai.http_errors import ai_chat_http_status
     from app.ai.services import generate_reply
 
     phone = (session.get('user_phone') or '').strip()
@@ -2398,7 +2399,7 @@ def ai_chat():
         thread_id=thread_id,
     )
     if not result.get('ok'):
-        return jsonify(result), 400
+        return jsonify(result), ai_chat_http_status(result)
 
     land_codes = result.get('land_codes') or []
     msgs, tid = append_exchange(

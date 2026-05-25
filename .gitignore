@@ -125,3 +125,5 @@ dump.rdb
 # مدل‌های آفلاین AI (حجم زیاد)
 ai_models/*.gguf
 ai_models/**/*.gguf
+instance/ai_models/
+instance/ai_models/**

@@ -5,6 +5,7 @@ from flask import jsonify, redirect, render_template, request, session, url_for
 from . import ai_bp
 from .audience import AUDIENCE_PUBLIC
 from .land_cards import partner_is_approved
+from .http_errors import ai_chat_http_status
 from .services import ai_config, generate_reply
 from .user_key import ai_user_key
 
@@ -131,7 +132,7 @@ def chat():
         thread_id=thread_id,
     )
     if not result.get("ok"):
-        return jsonify(result), 400
+        return jsonify(result), ai_chat_http_status(result)
 
     land_codes = result.get("land_codes") or []
     msgs, tid = append_exchange(

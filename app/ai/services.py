@@ -30,6 +30,7 @@ from .credits import (
 from .escalations import consume_pending_answers, create_escalation
 from .land_cards import collect_land_codes, land_cards_payload
 from .offline_config import offline_runtime_config
+from .offline_bootstrap import bootstrap_state, is_offline_ready, start_offline_bootstrap
 from .offline_engine import call_offline_chat, offline_available, offline_status
 from .provider_router import (
     allow_api_fallback_after_offline_fail,
@@ -47,11 +48,17 @@ def ai_config() -> dict[str, Any]:
     return {
         "enabled": os.environ.get("VINOR_AI_ENABLED", "1").lower() not in ("0", "false", "no"),
         "provider_mode": mode,
-        "provider": "offline" if mode == "offline" or (mode == "auto" and off.get("available")) else "deepseek",
+        "provider": "offline" if off.get("available") else mode,
         "model": os.environ.get("VINOR_AI_MODEL") or DEEPSEEK_MODEL,
         "api_key_set": bool(api_key),
         "offline": off,
+        "bootstrap": bootstrap_state(),
     }
+
+
+def init_ai_runtime(app) -> None:
+    """راه‌اندازی خودکار مدل آفلاین — یک‌بار از create_app."""
+    start_offline_bootstrap(app)
 
 
 def _friendly_deepseek_error(status: int, body: Any) -> str:
@@ -247,15 +254,51 @@ def _invoke_model(
     use_api: bool,
     route_reason: str,
 ) -> dict[str, Any]:
+    """همیشه اول آفلاین؛ API فقط در صورت شکست آفلاین یا درخواست صریح."""
     cfg = ai_config()
+    mode = provider_mode()
 
-    if use_api and cfg["api_key_set"]:
+    if offline_available():
+        off = call_offline_chat(messages)
+        if off.get("ok"):
+            meta = off.get("meta") or {}
+            meta["route_reason"] = route_reason
+            meta["priority"] = "offline_first"
+            off["meta"] = meta
+            return off
+        if mode == "offline" and not allow_api_fallback_after_offline_fail():
+            off["route"] = route_info(False, route_reason)
+            return off
+        if not allow_api_fallback_after_offline_fail():
+            off["route"] = route_info(False, route_reason)
+            return off
+
+    st = bootstrap_state()
+    if st in ("running", "downloading"):
+        return {
+            "ok": False,
+            "error": (
+                "مدل آفلاین در حال آماده‌سازی است "
+                "(دانلود یا بارگذاری). لطفاً ۱–۳ دقیقه دیگر دوباره تلاش کنید."
+            ),
+            "error_code": "bootstrap_pending",
+            "bootstrap": st,
+            "retry_after_sec": 60,
+            "route": route_info(False, "bootstrap_pending"),
+        }
+
+    may_api = (use_api or allow_api_fallback_after_offline_fail()) and cfg["api_key_set"]
+    if may_api:
         result = _call_deepseek(messages)
         if result.get("ok"):
+            meta = result.get("meta") or {}
+            meta["route_reason"] = route_reason
+            meta["priority"] = "api_fallback"
+            result["meta"] = meta
             return result
         if (
             allow_offline_fallback_after_api_fail()
-            and offline_available()
+            and is_offline_ready()
             and (
                 result.get("balance_depleted")
                 or result.get("error_code") == "deepseek_api"
@@ -277,34 +320,15 @@ def _invoke_model(
                 return off
         return result
 
-    if offline_available():
-        off = call_offline_chat(messages)
-        if off.get("ok"):
-            meta = off.get("meta") or {}
-            meta["route_reason"] = route_reason
-            off["meta"] = meta
-            return off
-        if allow_api_fallback_after_offline_fail() and cfg["api_key_set"]:
-            try:
-                current_app.logger.info(
-                    "AI fallback API after offline fail | reason=%s",
-                    route_reason,
-                )
-            except Exception:
-                pass
-            return _call_deepseek(messages)
-        return off
-
-    if cfg["api_key_set"]:
-        return _call_deepseek(messages)
-
     return {
         "ok": False,
         "error": (
-            "مدل آفلاین نصب نشده است. "
-            "دستور: pip install -r requirements-offline.txt "
-            "سپس python scripts/download_offline_ai_model.py"
+            "مدل آفلاین هنوز آماده نیست. "
+            "سرور به‌صورت خودکار در حال دانلود است؛ چند دقیقه بعد تلاش کنید."
         ),
+        "error_code": "bootstrap_pending",
+        "bootstrap": st,
+        "retry_after_sec": 60,
     }
 
 
@@ -390,15 +414,19 @@ def generate_reply(
     if not cfg["enabled"]:
         return {"ok": False, "error": "سرویس هوش مصنوعی موقتاً غیرفعال است."}
 
-    if not cfg["api_key_set"] and not offline_available():
-        return {
-            "ok": False,
-            "error": (
-                "هیچ مدل AI فعال نیست. "
-                "کلید DeepSeek را تنظیم کنید یا مدل آفلاین را دانلود کنید "
-                "(python scripts/download_offline_ai_model.py)."
-            ),
-        }
+    if not offline_available() and not cfg["api_key_set"]:
+        st = bootstrap_state()
+        if st in ("running", "downloading", "error"):
+            return {
+                "ok": False,
+                "error": (
+                    "مدل آفلاین در حال آماده‌سازی است. "
+                    "لطفاً ۱–۳ دقیقه دیگر دوباره تلاش کنید."
+                ),
+                "error_code": "bootstrap_pending",
+                "bootstrap": st,
+                "retry_after_sec": 60,
+            }
 
     guard = apply_credit_guard(key, aud, text)
     if guard is not None:
