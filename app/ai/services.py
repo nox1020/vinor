@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 import requests
@@ -11,11 +12,16 @@ from .config import (
     DEEPSEEK_API_KEY,
     DEEPSEEK_BASE_URL,
     DEEPSEEK_MODEL,
+    ESCALATE_MARKER_RE,
     VINOR_AI_SYSTEM_PROMPT,
 )
+from .context import append_admin_answers_block, build_partner_context
+from .escalations import consume_pending_answers, create_escalation
+from .land_cards import collect_land_codes, land_cards_payload
 
 _MAX_HISTORY = 20
 _MAX_MSG_CHARS = 4000
+_MAX_CONTEXT_CHARS = 14000
 
 
 def ai_config() -> dict[str, Any]:
@@ -27,9 +33,44 @@ def ai_config() -> dict[str, Any]:
     }
 
 
-def _build_messages(text: str, history: list[dict[str, str]] | None) -> list[dict[str, str]]:
+def _strip_escalate_marker(text: str) -> tuple[str, str | None]:
+    """حذف مارکر از پاسخ؛ برگرداندن خلاصه سوال برای ارجاع."""
+    if not text:
+        return "", None
+    m = re.search(ESCALATE_MARKER_RE, text, flags=re.DOTALL)
+    if not m:
+        return text.strip(), None
+    summary = (m.group(1) or "").strip() or None
+    cleaned = re.sub(ESCALATE_MARKER_RE, "", text, flags=re.DOTALL).strip()
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned, summary
+
+
+def _build_system_prompt(phone: str | None) -> str:
+    base = VINOR_AI_SYSTEM_PROMPT
+    if not phone:
+        return base
+    try:
+        ctx = build_partner_context(phone)[:_MAX_CONTEXT_CHARS]
+        notes = consume_pending_answers(phone)
+        ctx = append_admin_answers_block(ctx, notes)
+        return f"{base}\n\n{ctx}"
+    except Exception as exc:
+        try:
+            current_app.logger.warning("AI context build failed: %s", exc)
+        except Exception:
+            pass
+        return base
+
+
+def _build_messages(
+    text: str,
+    history: list[dict[str, str]] | None,
+    *,
+    phone: str | None = None,
+) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": VINOR_AI_SYSTEM_PROMPT},
+        {"role": "system", "content": _build_system_prompt(phone)},
     ]
     if history:
         for item in history[-_MAX_HISTORY:]:
@@ -52,7 +93,7 @@ def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
         "messages": messages,
         "stream": False,
         "max_tokens": 2048,
-        "temperature": 0.7,
+        "temperature": 0.55,
     }
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -119,7 +160,13 @@ def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
     }
 
 
-def generate_reply(message: str, *, history: list[dict[str, str]] | None = None) -> dict[str, Any]:
+def generate_reply(
+    message: str,
+    *,
+    history: list[dict[str, str]] | None = None,
+    phone: str | None = None,
+    thread_id: str | None = None,
+) -> dict[str, Any]:
     text = (message or "").strip()
     if not text:
         return {"ok": False, "error": "پیام خالی است."}
@@ -130,5 +177,43 @@ def generate_reply(message: str, *, history: list[dict[str, str]] | None = None)
     if not cfg["api_key_set"]:
         return {"ok": False, "error": "کلید API تنظیم نشده است."}
 
-    messages = _build_messages(text, history)
-    return _call_deepseek(messages)
+    messages = _build_messages(text, history, phone=phone)
+    result = _call_deepseek(messages)
+    if not result.get("ok"):
+        return result
+
+    raw_reply = result.get("reply") or ""
+    reply, escalate_q = _strip_escalate_marker(raw_reply)
+    reply, land_codes = collect_land_codes(reply, user_text=text, phone=phone or "")
+    escalated = False
+    escalation_id = ""
+
+    if escalate_q is not None:
+        esc = create_escalation(
+            partner_phone=phone or "",
+            question=escalate_q or text[:200],
+            user_message=text,
+            thread_id=thread_id,
+        )
+        if esc.get("ok"):
+            escalated = True
+            escalation_id = str(esc.get("id") or "")
+        if not reply or len(reply) < 20:
+            reply = (
+                "سوال شما را برای تیم وینور ثبت کردم. "
+                "به‌محض دریافت پاسخ از پشتیبانی، در همین گفتگو به شما اطلاع می‌دهم."
+            )
+        elif "ثبت" not in reply and "تیم" not in reply:
+            reply = (
+                reply.rstrip()
+                + "\n\nسوال شما برای تیم وینور ثبت شد؛ به‌زودی در همین چت پاسخ می‌گیرید."
+            )
+
+    result["reply"] = reply
+    result["escalated"] = escalated
+    if escalation_id:
+        result["escalation_id"] = escalation_id
+    if land_codes:
+        result["land_codes"] = land_codes
+        result["land_cards"] = land_cards_payload(phone or "", land_codes)
+    return result

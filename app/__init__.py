@@ -405,7 +405,15 @@ def create_app() -> Flask:
         for endpoint in (
             "express_partner.api_logout",
             "express_partner.api_profile_update",
+            "express_partner.api_login_request",
             "express_partner.logout",
+            "express_partner.login",
+            "express_partner.verify",
+            "express_partner.otp_resend",
+            "express_partner.ai_chat",
+            "express_partner.ai_clear",
+            "express_partner.ai_switch_thread",
+            "express_partner.ai_delete_thread",
             "ai.chat",
         ):
             try:
@@ -440,6 +448,8 @@ def create_app() -> Flask:
             @app.errorhandler(CSRFError)
             def handle_csrf_error(e):
                 from flask import flash
+                from app.utils.flash_messages import FLASH_AUTH_WARNING
+
                 current_app.logger.error(
                     "CSRF_ERROR: %s | path=%s | form=%s | headers=%s",
                     getattr(e, "description", str(e)),
@@ -447,6 +457,22 @@ def create_app() -> Flask:
                     dict(request.form),
                     dict(request.headers),
                 )
+                path = (request.path or "").rstrip("/")
+                auth_paths = {
+                    "/express/partner/login",
+                    "/express/partner/verify",
+                    "/express/partner/otp/resend",
+                    "/express/partner/api/login-request",
+                }
+                if path in auth_paths or path.startswith("/express/partner/login"):
+                    flash(
+                        "جلسه منقضی شده است. صفحه را تازه کنید و دوباره شماره موبایل را وارد کنید.",
+                        FLASH_AUTH_WARNING,
+                    )
+                    try:
+                        return redirect(url_for("express_partner.login"))
+                    except Exception:
+                        return redirect("/express/partner/login")
                 flash("لطفاً صفحه را تازه کنید و دوباره تلاش کنید.", "warning")
                 try:
                     return redirect(request.referrer or url_for("lands.add_land"))
@@ -536,10 +562,9 @@ def create_app() -> Flask:
             # Express listings (public)
             "/express",
             "/public",  # صفحه اکسپلور عمومی - بدون نیاز به ورود
-            "/ai",  # Vinor AI (عمومی)
         }
         # Public dynamic paths (prefix-based)
-        public_prefixes = ("/express/", "/uploads/", "/ai/")
+        public_prefixes = ("/express/", "/uploads/")
         if request.path.startswith(public_prefixes):
             current_app.logger.debug("PASS (public-prefix): %s", request.path)
             return

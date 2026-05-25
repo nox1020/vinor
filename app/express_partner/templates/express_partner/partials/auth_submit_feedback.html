@@ -22,22 +22,14 @@
         '<span>' + busyLabel + '</span></span>';
     }
 
-    form.addEventListener('submit', function (e) {
-      if (locked) {
-        e.preventDefault();
-        return;
-      }
-      if (!form.dataset.authSkipSubmitLock) {
+    if (!form.dataset.authSkipSubmitLock) {
+      form.addEventListener('submit', function (e) {
+        if (locked) {
+          e.preventDefault();
+          return;
+        }
         lock();
-      }
-    }, { capture: true });
-
-    if (!form.dataset.authSkipClickLock) {
-      btn.addEventListener('click', function () {
-        if (locked) return;
-        if (typeof form.reportValidity === 'function' && !form.reportValidity()) return;
-        lock();
-      });
+      }, { capture: true });
     }
 
     return { lock: lock, isLocked: function () { return locked; } };

@@ -1,0 +1,14 @@
+{# پیام چت Vinor AI — متن + کارت فایل (همان land_premium_card) #}
+<div class="ai-msg-wrap flex max-w-[92%] flex-col gap-0 {{ 'mr-auto items-end' if msg.role == 'user' else 'ml-auto items-start' }}"
+     data-role="{{ msg.role }}">
+  {% if msg.content %}
+  <div class="rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words {{ 'border border-emerald-500/25 bg-emerald-500/10 text-emerald-100' if msg.role == 'user' else 'border border-violet-500/20 bg-violet-500/10 text-violet-100' }}">
+    {{ msg.content }}
+  </div>
+  {% endif %}
+  {% if msg.cards_html %}
+  <div class="ai-msg-cards w-full min-w-0 max-w-full">
+    {{ msg.cards_html|safe }}
+  </div>
+  {% endif %}
+</div>

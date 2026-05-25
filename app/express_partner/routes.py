@@ -206,9 +206,17 @@ def _normalize_phone(phone: str) -> str:
 def _otp_session_matches(code: str, phone: str) -> bool:
     if not code or not phone:
         return False
-    sess_code = str(session.get('otp_code') or '').strip()
+    from ..services.sms import normalize_otp_code
+
+    sess_code = normalize_otp_code(str(session.get('otp_code') or ''))
     sess_phone = str(session.get('otp_phone') or '').strip()
-    return sess_code == str(code).strip() and sess_phone == str(phone).strip()
+    norm_code = normalize_otp_code(code)
+    norm_phone = _normalize_phone(phone)
+    return (
+        len(norm_code) == 5
+        and sess_code == norm_code
+        and sess_phone == norm_phone
+    )
 
 
 def _clear_otp_session() -> None:
@@ -1936,6 +1944,8 @@ def login():
     from ..utils.flash_messages import purge_non_auth_flashes
 
     purge_non_auth_flashes()
+    if request.method == 'GET':
+        _clear_otp_session()
     try:
         from .referrals import capture_ref_on_login
         capture_ref_on_login()
@@ -1966,19 +1976,19 @@ def login():
 
         phone_raw = request.form.get('phone', '')
         phone = _normalize_phone(phone_raw)
-        if not phone or len(phone) != 11:
-            flash('لطفاً یک شماره موبایل ۱۱ رقمی معتبر وارد کنید.', FLASH_AUTH_ERROR)
+        from ..services.sms import is_valid_iran_mobile, send_sms_code
+
+        if not is_valid_iran_mobile(phone):
+            flash('لطفاً یک شماره موبایل ۱۱ رقمی معتبر (۰۹…) وارد کنید.', FLASH_AUTH_ERROR)
             return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
 
         code = f"{random.randint(10000, 99999)}"
-        session.update({'otp_code': code, 'otp_phone': phone})
         session.permanent = True
-
-        # Try sending SMS; ignore errors in dev
+        sms_ok = False
         try:
-            from ..services.sms import send_sms_code
             sms_result = send_sms_code(phone, code)
-            if sms_result.get('ok'):
+            sms_ok = bool(sms_result.get('ok'))
+            if sms_ok:
                 flash('کد تأیید ارسال شد.', FLASH_AUTH_INFO)
             else:
                 current_app.logger.error(
@@ -1988,9 +1998,15 @@ def login():
                     sms_result.get('body'),
                 )
                 flash('ارسال کد تأیید با خطا مواجه شد. لطفاً دوباره تلاش کنید.', FLASH_AUTH_WARNING)
-        except Exception:
+        except Exception as exc:
+            current_app.logger.exception("OTP send exception in login | phone=%s", phone)
             flash('ارسال کد تأیید با خطا مواجه شد. لطفاً دوباره تلاش کنید.', FLASH_AUTH_WARNING)
 
+        if not sms_ok:
+            _clear_otp_session()
+            return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
+
+        session.update({'otp_code': code, 'otp_phone': phone})
         nxt = _login_next_preserve()
         if nxt:
             session['next'] = nxt
@@ -2015,7 +2031,12 @@ def login_otp():
         flash('ابتدا شماره موبایل خود را وارد کنید.', FLASH_AUTH_ERROR)
         return redirect(url_for('express_partner.login'))
 
-    return render_template('express_partner/auth/login_step2.html', phone=phone)
+    login_next = _login_next_preserve() or _session_next_safe()
+    return render_template(
+        'express_partner/auth/login_step2.html',
+        phone=phone,
+        login_next=login_next,
+    )
 
 
 @express_partner_bp.route('/verify', methods=['POST'], endpoint='verify')
@@ -2027,10 +2048,12 @@ def verify():
     )
 
     purge_non_auth_flashes()
-    code = (request.form.get('otp_code') or '').strip()
+    from ..services.sms import normalize_otp_code
+
+    code = normalize_otp_code(request.form.get('otp_code') or '')
     phone = _normalize_phone(request.form.get('phone') or '')
-    if not code or not phone:
-        flash('لطفاً همه فیلدها را به‌درستی تکمیل کنید.', FLASH_AUTH_ERROR)
+    if len(code) != 5 or not phone:
+        flash('لطفاً کد ۵ رقمی و شماره موبایل را به‌درستی وارد کنید.', FLASH_AUTH_ERROR)
         if session.get('otp_phone'):
             return redirect(url_for('express_partner.login_otp'))
         return redirect(url_for('express_partner.login'))
@@ -2053,6 +2076,9 @@ def verify():
             pass
         prof = _partner_profile_for_phone(phone)
         session['VINOR_IS_EXPRESS_PARTNER'] = _is_partner_approved(prof)
+        nxt = _login_next_preserve() or _session_next_safe()
+        if nxt:
+            session['next'] = nxt
         flash('ورود شما با موفقیت انجام شد.', FLASH_AUTH_SUCCESS)
         return _redirect_login_next('express_partner.dashboard')
 
@@ -2253,6 +2279,139 @@ def routine_complete():
     resp = make_response(jsonify({"success": True, "date": today, "days": rec.get('days', []), "steps": rec.get('steps', {})}))
     resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+# -------------------------
+# Vinor AI (صفحه داخلی پرتال — چت جدا برای هر کاربر)
+# -------------------------
+@express_partner_bp.get('/ai', endpoint='ai')
+@require_partner_access(allow_pending=True)
+def ai_page():
+    from app.ai.chat_store import (
+        ensure_active_thread,
+        messages_for_ui,
+        threads_for_ui,
+    )
+    from app.ai.services import ai_config
+
+    phone = (session.get('user_phone') or '').strip()
+    ensure_active_thread(phone)
+    threads = threads_for_ui(phone)
+    active_thread_id = next((t['id'] for t in threads if t.get('is_active')), '')
+    resp = make_response(
+        render_template(
+            'express_partner/ai.html',
+            hide_header=True,
+            chat_messages=messages_for_ui(phone),
+            chat_threads=threads,
+            active_thread_id=active_thread_id,
+            ai_cfg=ai_config(),
+            chat_api_url=url_for('express_partner.ai_chat'),
+            clear_api_url=url_for('express_partner.ai_clear'),
+            history_api_url=url_for('express_partner.ai_history'),
+            switch_thread_url=url_for('express_partner.ai_switch_thread'),
+            delete_thread_url=url_for('express_partner.ai_delete_thread'),
+        )
+    )
+    _append_partner_tab_prefetch(resp)
+    return resp
+
+
+@express_partner_bp.get('/ai/history', endpoint='ai_history')
+@require_partner_access(allow_pending=True, json_response=True)
+def ai_history():
+    from app.ai.chat_store import messages_for_ui, threads_for_ui
+
+    phone = (session.get('user_phone') or '').strip()
+    thread_id = (request.args.get('thread_id') or '').strip() or None
+    return jsonify({
+        'ok': True,
+        'threads': threads_for_ui(phone),
+        'messages': messages_for_ui(phone, thread_id),
+        'thread_id': thread_id,
+    })
+
+
+@express_partner_bp.post('/ai/chat', endpoint='ai_chat')
+@require_partner_access(allow_pending=True, json_response=True)
+def ai_chat():
+    from app.ai.chat_store import append_exchange, ensure_active_thread, history_for_api
+    from app.ai.services import generate_reply
+
+    phone = (session.get('user_phone') or '').strip()
+    data = request.get_json(silent=True) or {}
+    message = (data.get('message') or request.form.get('message') or '').strip()
+    thread_id = (data.get('thread_id') or '').strip() or None
+    if not message:
+        return jsonify({'ok': False, 'error': 'پیام خالی است.'}), 400
+
+    if not thread_id:
+        thread_id = ensure_active_thread(phone)
+
+    history = history_for_api(phone, thread_id)
+    result = generate_reply(message, history=history, phone=phone, thread_id=thread_id)
+    if not result.get('ok'):
+        return jsonify(result), 400
+
+    land_codes = result.get('land_codes') or []
+    msgs, tid = append_exchange(
+        phone,
+        message,
+        result.get('reply') or '',
+        thread_id=thread_id,
+        assistant_land_codes=land_codes,
+    )
+    result['messages'] = msgs
+    result['thread_id'] = tid
+    return jsonify(result)
+
+
+@express_partner_bp.post('/ai/clear', endpoint='ai_clear')
+@require_partner_access(allow_pending=True, json_response=True)
+def ai_clear():
+    from app.ai.chat_store import clear_chat
+
+    phone = (session.get('user_phone') or '').strip()
+    tid = clear_chat(phone)
+    return jsonify({'ok': True, 'thread_id': tid})
+
+
+@express_partner_bp.post('/ai/thread/switch', endpoint='ai_switch_thread')
+@require_partner_access(allow_pending=True, json_response=True)
+def ai_switch_thread():
+    from app.ai.chat_store import messages_for_ui, set_active_thread, threads_for_ui
+
+    phone = (session.get('user_phone') or '').strip()
+    data = request.get_json(silent=True) or {}
+    thread_id = (data.get('thread_id') or '').strip()
+    if not thread_id or not set_active_thread(phone, thread_id):
+        return jsonify({'ok': False, 'error': 'گفتگو یافت نشد.'}), 404
+    return jsonify({
+        'ok': True,
+        'thread_id': thread_id,
+        'messages': messages_for_ui(phone, thread_id),
+        'threads': threads_for_ui(phone),
+    })
+
+
+@express_partner_bp.post('/ai/thread/delete', endpoint='ai_delete_thread')
+@require_partner_access(allow_pending=True, json_response=True)
+def ai_delete_thread():
+    from app.ai.chat_store import delete_thread, load_user_record, messages_for_ui, threads_for_ui
+
+    phone = (session.get('user_phone') or '').strip()
+    data = request.get_json(silent=True) or {}
+    thread_id = (data.get('thread_id') or '').strip()
+    if not thread_id or not delete_thread(phone, thread_id):
+        return jsonify({'ok': False, 'error': 'حذف ممکن نیست.'}), 400
+    record = load_user_record(phone)
+    active = record.get('active_id')
+    return jsonify({
+        'ok': True,
+        'thread_id': active,
+        'messages': messages_for_ui(phone, active),
+        'threads': threads_for_ui(phone),
+    })
 
 
 @express_partner_bp.route('/routine/steps', methods=['POST'], endpoint='routine_steps')
@@ -2633,21 +2792,23 @@ def api_login_request():
     data = request.get_json(silent=True) or {}
     phone_raw = (data.get('phone') or '').strip()
     phone = _normalize_phone(phone_raw)
-    if not phone or len(phone) != 11:
-        return jsonify({'success': False, 'error': 'شماره موبایل معتبر نیست.'}), 400
     if not _legal_accepted(request):
         return jsonify({
             'success': False,
             'error': 'پذیرش حریم خصوصی و قوانین استفاده الزامی است.',
             'legal_required': True,
         }), 400
+    from ..services.sms import is_valid_iran_mobile, send_sms_code
+
+    if not is_valid_iran_mobile(phone):
+        return jsonify({'success': False, 'error': 'شماره موبایل معتبر نیست.'}), 400
+
     code = f"{random.randint(10000, 99999)}"
-    session.update({'otp_code': code, 'otp_phone': phone})
     session.permanent = True
     try:
-        from ..services.sms import send_sms_code
         sms_result = send_sms_code(phone, code)
         if not sms_result.get('ok'):
+            _clear_otp_session()
             return jsonify({
                 'success': False,
                 'error': 'ارسال کد ناموفق بود.',
@@ -2655,15 +2816,19 @@ def api_login_request():
                 'details': sms_result.get('body'),
             }), 502
     except Exception:
+        _clear_otp_session()
         return jsonify({'success': False, 'error': 'خطا در ارسال کد تأیید.'}), 502
+    session.update({'otp_code': code, 'otp_phone': phone})
     return jsonify({'success': True, 'message': 'کد تأیید ارسال شد.'})
 
 
 @express_partner_bp.post('/api/verify')
 def api_verify():
     """تأیید کد OTP برای اپ اندروید. ورودی JSON: {"code": "123456", "phone": "09..."}. سشن باید از مرحله login-request باشد."""
+    from ..services.sms import normalize_otp_code
+
     data = request.get_json(silent=True) or {}
-    code = (data.get('code') or '').strip()
+    code = normalize_otp_code(data.get('code') or '')
     phone = _normalize_phone((data.get('phone') or '').strip())
     if not code or not phone:
         return jsonify({'success': False, 'error': 'کد و شماره را وارد کنید.'}), 400
@@ -2691,18 +2856,18 @@ def api_verify():
 def otp_resend():
     # پشتیبانی از JSON (اپ) و form (وب)
     data = request.get_json(silent=True) or {}
+    from ..services.sms import is_valid_iran_mobile, send_sms_code
+
     phone = _normalize_phone(
         (data.get('phone') or request.form.get('phone') or session.get('otp_phone') or '').strip()
     )
-    if not phone or len(phone) != 11:
+    if not is_valid_iran_mobile(phone):
         if request.is_json:
             return jsonify({'ok': False, 'error': 'شماره معتبر نیست.'}), 400
-        return {'ok': False, 'error': 'شماره معتبر نیست.'}, 400
+        return jsonify({'ok': False, 'error': 'شماره معتبر نیست.'}), 400
     try:
         code = f"{random.randint(10000, 99999)}"
-        session.update({'otp_code': code, 'otp_phone': phone})
         session.permanent = True
-        from ..services.sms import send_sms_code
         sms_result = send_sms_code(phone, code)
         if not sms_result.get('ok'):
             if request.is_json:
@@ -2712,14 +2877,15 @@ def otp_resend():
                     'status': sms_result.get('status'),
                     'details': sms_result.get('body'),
                 }), 502
-            return {'ok': False, 'error': 'ارسال مجدد کد ناموفق بود.'}, 502
+            return jsonify({'ok': False, 'error': 'ارسال مجدد کد ناموفق بود.'}), 502
+        session.update({'otp_code': code, 'otp_phone': phone})
         if request.is_json:
             return jsonify({'ok': True, 'message': 'کد تأیید مجدد ارسال شد.'})
-        return {'ok': True}
+        return jsonify({'ok': True})
     except Exception:
         if request.is_json:
             return jsonify({'ok': False, 'error': 'خطا در ارسال مجدد کد.'}), 502
-        return {'ok': False, 'error': 'خطا در ارسال مجدد کد.'}, 502
+        return jsonify({'ok': False, 'error': 'خطا در ارسال مجدد کد.'}), 502
 
 
 @express_partner_bp.route('/profile', methods=['GET'], endpoint='profile')

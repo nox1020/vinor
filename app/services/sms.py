@@ -6,12 +6,19 @@ sms.ir — ارسال OTP و پیامک قالب‌دار/مستقیم.
 اگر روی سرور متغیر SMS_API_KEY ست باشد، همان اولویت دارد.
 """
 import os
+import re
 import requests
 from flask import current_app
 
+# ارقام فارسی/عربی → لاتین
+_DIGIT_TRANSLATION = str.maketrans(
+    "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+    "01234567890123456789",
+)
+
 # ---------------------------------------------------------------------------
-# کلید API و قالب پیامک اعتبارسنجی (OTP) — تعریف در کد (حالت تست / پیش‌فرض)
-# پنل: sms.ir | اندپوینت: POST https://api.sms.ir/v1/send/verify
+# کلید API و قالب پیامک اعتبارسنجی (OTP)
+# پنل: sms.ir | POST https://api.sms.ir/v1/send/verify
 # پارامتر قالب باید با نام CODE در پنل هماهنگ باشد.
 # ---------------------------------------------------------------------------
 SMS_IR_OTP_API_KEY = "AcEcwFoGsqya9QdAii8QWhU51eie84sEbB9I4mJ0gknvm7lg"
@@ -22,22 +29,85 @@ SMS_API_KEY = os.environ.get("SMS_API_KEY") or SMS_IR_OTP_API_KEY
 TEMPLATE_ID = SMS_IR_OTP_TEMPLATE_ID
 DEFAULT_LINE_NUMBER = SMS_IR_DEFAULT_LINE_NUMBER
 
+
+def normalize_iran_mobile(phone: str) -> str:
+    """شماره موبایل ایران → 09xxxxxxxxx (ارقام ASCII) برای sms.ir."""
+    if not phone:
+        return ""
+    s = str(phone).strip().replace(" ", "").replace("-", "").translate(_DIGIT_TRANSLATION)
+    s = re.sub(r"\D+", "", s)
+    if s.startswith("0098") and len(s) >= 14 and s[4:].startswith("9"):
+        s = "0" + s[4:]
+    elif s.startswith("98") and len(s) >= 12 and s[2:].startswith("9"):
+        s = "0" + s[2:]
+    elif s.startswith("9") and len(s) == 10:
+        s = "0" + s
+    if len(s) >= 11:
+        return s[:11]
+    if len(s) == 10:
+        return "0" + s
+    return s
+
+
+def is_valid_iran_mobile(phone: str) -> bool:
+    return bool(phone) and len(phone) == 11 and phone.startswith("09")
+
+
+def normalize_otp_code(code: str) -> str:
+    """کد OTP — فقط ارقام لاتین، حداکثر ۵ رقم."""
+    if not code:
+        return ""
+    s = str(code).strip().translate(_DIGIT_TRANSLATION)
+    return re.sub(r"\D+", "", s)[:5]
+
+
+def _sms_ir_response_ok(status_code: int, body: object) -> bool:
+    """HTTP 2xx + status==1 در بدنهٔ sms.ir."""
+    if not (200 <= status_code < 300):
+        return False
+    if isinstance(body, dict) and body.get("status") is not None:
+        try:
+            return int(body.get("status")) == 1
+        except (TypeError, ValueError):
+            return False
+    return True
+
+
 def send_sms_code(phone: str, code: str) -> dict:
+    mobile = normalize_iran_mobile(phone)
+    if not is_valid_iran_mobile(mobile):
+        return {
+            "ok": False,
+            "status": 0,
+            "body": {"error": "invalid_mobile", "mobile": mobile},
+        }
+
     url = "https://api.sms.ir/v1/send/verify"
-    headers = {"Content-Type":"application/json","Accept":"application/json","x-api-key":SMS_API_KEY}
-    # Note: parameter name must match the template variable in sms.ir panel
-    data = {"mobile": phone, "templateId": TEMPLATE_ID, "parameters":[{"name":"CODE","value":str(code)}]}
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "x-api-key": SMS_API_KEY,
+    }
+    data = {
+        "mobile": mobile,
+        "templateId": TEMPLATE_ID,
+        "parameters": [{"name": "CODE", "value": str(code)}],
+    }
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=10)
         content_type = resp.headers.get("content-type", "")
-        body = resp.json() if content_type.lower().startswith("application/json") else {"raw": resp.text}
-        ok = 200 <= resp.status_code < 300
+        body = (
+            resp.json()
+            if content_type.lower().startswith("application/json")
+            else {"raw": resp.text}
+        )
+        ok = _sms_ir_response_ok(resp.status_code, body)
         if not ok:
             try:
                 current_app.logger.error(
                     "OTP SMS failed | status=%s | phone=%s | body=%s",
                     resp.status_code,
-                    phone,
+                    mobile,
                     body,
                 )
             except Exception:
@@ -45,17 +115,20 @@ def send_sms_code(phone: str, code: str) -> dict:
         return {"ok": ok, "status": resp.status_code, "body": body}
     except Exception as e:
         try:
-            current_app.logger.error("❌ SMS error: %s", e)
+            current_app.logger.error("SMS error: %s", e)
         except Exception:
-            print("❌ SMS error:", e)
+            print("SMS error:", e)
         return {"ok": False, "status": 0, "body": {"error": str(e)}}
 
 
-def send_sms_template(mobile: str, template_id: int, parameters: dict | None = None, api_key: str | None = None) -> dict:
+def send_sms_template(
+    mobile: str,
+    template_id: int,
+    parameters: dict | None = None,
+    api_key: str | None = None,
+) -> dict:
     """
-    ارسال پیامک با استفاده از قالب‌های آماده (Ultra Fast/Verify API در sms.ir).
-    parameters: دیکشنری نام→مقدار برای پارامترهای قالب.
-    خروجی: دیکشنری شامل کلیدهای ok, status, body.
+    ارسال پیامک با قالب آماده (Ultra Fast/Verify API در sms.ir).
     """
     url = "https://api.sms.ir/v1/send/verify"
     headers = {
@@ -68,37 +141,36 @@ def send_sms_template(mobile: str, template_id: int, parameters: dict | None = N
         for name, value in parameters.items():
             params_list.append({"name": str(name), "value": str(value)})
     payload = {
-        "mobile": str(mobile),
+        "mobile": normalize_iran_mobile(mobile) or str(mobile),
         "templateId": int(template_id),
         "parameters": params_list,
     }
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=20)
         content_type = resp.headers.get("content-type", "")
-        body = resp.json() if content_type.lower().startswith("application/json") else {"raw": resp.text}
-        ok = 200 <= resp.status_code < 300
+        body = (
+            resp.json()
+            if content_type.lower().startswith("application/json")
+            else {"raw": resp.text}
+        )
+        ok = _sms_ir_response_ok(resp.status_code, body)
         return {"ok": ok, "status": resp.status_code, "body": body}
     except Exception as e:
         try:
-            current_app.logger.error("❌ SMS template error: %s", e)
+            current_app.logger.error("SMS template error: %s", e)
         except Exception:
-            print("❌ SMS template error:", e)
+            print("SMS template error:", e)
         return {"ok": False, "status": 0, "body": {"error": str(e)}}
 
 
-def send_sms_direct(mobile: str, message: str, line_number: str | None = None, api_key: str | None = None) -> dict:
-    """
-    ارسال پیامک مستقیم بدون قالب (Simple SMS API در sms.ir).
-    mobile: شماره موبایل گیرنده
-    message: متن پیامک
-    line_number: شماره خط اختصاصی (اختیاری، در صورت عدم ارسال از پیش‌فرض استفاده می‌شود)
-    api_key: کلید API (اختیاری)
-    خروجی: دیکشنری شامل کلیدهای ok, status, body.
-    """
-    # استفاده از خط پیش‌فرض در صورت عدم ارسال line_number
+def send_sms_direct(
+    mobile: str,
+    message: str,
+    line_number: str | None = None,
+    api_key: str | None = None,
+) -> dict:
+    """ارسال پیامک مستقیم بدون قالب (bulk API در sms.ir)."""
     final_line_number = line_number or DEFAULT_LINE_NUMBER
-    
-    # sms.ir برای ارسال مستقیم از endpoint /v1/send/bulk استفاده می‌کند
     url = "https://api.sms.ir/v1/send/bulk"
     headers = {
         "Content-Type": "application/json",
@@ -108,19 +180,22 @@ def send_sms_direct(mobile: str, message: str, line_number: str | None = None, a
     payload = {
         "lineNumber": str(final_line_number),
         "messageText": str(message),
-        "mobiles": [str(mobile)],  # لیست شماره‌ها (حتی برای یک شماره)
-        "sendDateTime": None  # ارسال فوری
+        "mobiles": [normalize_iran_mobile(mobile) or str(mobile)],
+        "sendDateTime": None,
     }
-    
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=20)
         content_type = resp.headers.get("content-type", "")
-        body = resp.json() if content_type.lower().startswith("application/json") else {"raw": resp.text}
-        ok = 200 <= resp.status_code < 300
+        body = (
+            resp.json()
+            if content_type.lower().startswith("application/json")
+            else {"raw": resp.text}
+        )
+        ok = _sms_ir_response_ok(resp.status_code, body)
         return {"ok": ok, "status": resp.status_code, "body": body}
     except Exception as e:
         try:
-            current_app.logger.error("❌ SMS direct error: %s", e)
+            current_app.logger.error("SMS direct error: %s", e)
         except Exception:
-            print("❌ SMS direct error:", e)
+            print("SMS direct error:", e)
         return {"ok": False, "status": 0, "body": {"error": str(e)}}

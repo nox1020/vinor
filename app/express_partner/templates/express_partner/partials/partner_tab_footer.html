@@ -7,7 +7,7 @@
     {% set bottom_nav_active = 'dashboard' %}
   {% elif ep in ('express_partner.commissions', 'express_partner.commissions_data') %}
     {% set bottom_nav_active = 'commissions' %}
-  {% elif ep and ep.startswith('ai.') %}
+  {% elif ep in ('express_partner.ai', 'express_partner.ai_chat', 'express_partner.ai_history', 'express_partner.ai_clear', 'express_partner.ai_switch_thread', 'express_partner.ai_delete_thread') or (ep and ep.startswith('ai.')) %}
     {% set bottom_nav_active = 'ai' %}
   {% elif ep and ep.startswith('express_partner.routine') %}
     {% set bottom_nav_active = 'routine' %}

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import jsonify, render_template, request, url_for
+from flask import jsonify, redirect, request, url_for
 
 from . import ai_bp
 from .services import ai_config, generate_reply
@@ -8,11 +8,8 @@ from .services import ai_config, generate_reply
 
 @ai_bp.get("/", endpoint="index")
 def index():
-    return render_template(
-        "index.html",
-        ai_cfg=ai_config(),
-        chat_api_url=url_for("ai.chat"),
-    )
+    """مسیر قدیمی — هدایت به صفحه داخلی پرتال همکار."""
+    return redirect(url_for("express_partner.ai"))
 
 
 @ai_bp.get("/health", endpoint="health")
@@ -23,10 +20,26 @@ def health():
 
 @ai_bp.post("/api/chat", endpoint="chat")
 def chat():
-    data = request.get_json(silent=True) or {}
-    message = (data.get("message") or request.form.get("message") or "").strip()
-    history = data.get("history") if isinstance(data.get("history"), list) else None
-    result = generate_reply(message, history=history)
-    if not result.get("ok"):
-        return jsonify(result), 400
-    return jsonify(result)
+    """سازگاری با مسیر قدیمی — در صورت لاگین، همان منطق پرتال همکار."""
+    from flask import session
+
+    phone = (session.get("user_phone") or "").strip()
+    if phone:
+        from app.ai.chat_store import append_exchange, history_for_api
+
+        data = request.get_json(silent=True) or {}
+        message = (data.get("message") or request.form.get("message") or "").strip()
+        history = history_for_api(phone)
+        result = generate_reply(message, history=history, phone=phone)
+        if result.get("ok"):
+            append_exchange(
+                phone,
+                message,
+                result.get("reply") or "",
+                assistant_land_codes=result.get("land_codes"),
+            )
+        if not result.get("ok"):
+            return jsonify(result), 400
+        return jsonify(result)
+
+    return jsonify({"ok": False, "error": "لطفاً از طریق پرتال همکار وارد شوید."}), 401

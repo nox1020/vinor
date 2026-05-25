@@ -1959,6 +1959,42 @@ def settings():
                            settings=settings_data,
                            pending_count=p, approved_count=a, rejected_count=r)
 
+
+# -----------------------------------------------------------------------------
+# سوالات Vinor AI (ارجاع از چت همکار)
+# -----------------------------------------------------------------------------
+@admin_bp.route('/ai-questions', methods=['GET', 'POST'], endpoint='ai_questions')
+@login_required
+def ai_questions():
+    from app.ai.escalations import answer_escalation, list_pending_for_admin, list_recent_answered
+
+    if request.method == 'POST':
+        eid = (request.form.get('escalation_id') or '').strip()
+        ans = (request.form.get('admin_answer') or '').strip()
+        result = answer_escalation(eid, ans)
+        if result.get('ok'):
+            flash('پاسخ ثبت شد و در چت بعدی همکار نمایش داده می‌شود.', 'success')
+        else:
+            flash(result.get('error') or 'خطا در ثبت پاسخ.', 'error')
+        return redirect(url_for('admin.ai_questions'))
+
+    pending = list_pending_for_admin()
+    answered = list_recent_answered()
+    try:
+        lands = load_json(_lands_path())
+        p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
+    except Exception:
+        p, a, r = 0, 0, 0
+    return render_template(
+        'admin/ai_questions.html',
+        pending=pending,
+        answered=answered,
+        pending_count=p,
+        approved_count=a,
+        rejected_count=r,
+    )
+
+
 # -----------------------------------------------------------------------------
 # فهرست آگهی‌ها (با صفحه‌بندی)
 # -----------------------------------------------------------------------------

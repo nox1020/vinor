@@ -4,7 +4,9 @@
 
 <div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
   <header class="relative px-4 pt-6 pb-2">
-    <a href="{{ url_for('express_partner.login') }}" class="absolute right-4 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors" aria-label="تغییر شماره موبایل">
+    <a href="{{ url_for('express_partner.login', next=login_next) if login_next else url_for('express_partner.login') }}"
+       class="absolute right-4 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"
+       aria-label="تغییر شماره موبایل">
       <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
     </a>
     <div class="flex flex-col items-center gap-6 pt-2">
@@ -36,16 +38,26 @@
         {% include 'express_partner/partials/flash_alerts.html' %}
         {% endwith %}
 
-        <form id="otpForm" method="POST" action="{{ url_for('express_partner.verify') }}" class="space-y-6" data-auth-skip-click-lock="1" data-auth-skip-submit-lock="1">
+        <p id="otpInlineHint" class="mb-3 hidden text-center text-xs text-amber-400/95" role="alert"></p>
+
+        <form id="otpForm" method="POST" action="{{ url_for('express_partner.verify') }}" class="space-y-6"
+              data-auth-skip-click-lock="1" data-auth-skip-submit-lock="1">
+          {% if login_next %}<input type="hidden" name="next" value="{{ login_next }}">{% endif %}
           <input type="hidden" name="phone" value="{{ phone }}">
           {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
           <input type="hidden" name="otp_code" id="otpHidden" value="" />
 
           <div class="flex items-center justify-center gap-2 sm:gap-2.5" dir="ltr" aria-label="ورود کد ۵ رقمی">
-            {% for _ in range(5) %}
+            {% for i in range(5) %}
             <input class="otp-box h-12 w-11 sm:h-14 sm:w-12 shrink-0 rounded-xl border-2 border-zinc-600 bg-[#070b12] text-center text-lg font-bold text-white tabular-nums shadow-inner focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-colors"
-                   inputmode="numeric" maxlength="1" autocomplete="one-time-code" autocapitalize="off" autocorrect="off" pattern="\d"
-                   aria-label="رقم {{ loop.index }}" />
+                   type="text"
+                   inputmode="numeric"
+                   maxlength="1"
+                   {% if i == 0 %}autocomplete="one-time-code" name="otp-digit-1"{% else %}autocomplete="off" aria-hidden="true" tabindex="-1"{% endif %}
+                   autocapitalize="off"
+                   autocorrect="off"
+                   pattern="[0-9]"
+                   aria-label="رقم {{ i + 1 }}" />
             {% endfor %}
           </div>
 
@@ -64,7 +76,8 @@
           </div>
         </div>
 
-        <div class="space-y-3 text-center">
+        <div id="otpResendBlock" class="space-y-3 text-center">
+          <p id="otpResendStatus" class="hidden text-xs text-emerald-400/95" role="status"></p>
           <p id="timer" class="text-xs text-zinc-400">
             <span id="timerLine">ارسال مجدد کد تا <span id="countdown" class="font-semibold text-zinc-200 tabular-nums">۶۰</span> ثانیه دیگر</span>
           </p>
@@ -94,50 +107,21 @@
 {% include 'express_partner/partials/auth_submit_feedback.html' %}
 <script>
 (function () {
-  const boxes = Array.from(document.querySelectorAll('.otp-box'));
-  const hidden = document.getElementById('otpHidden');
-  const form = document.getElementById('otpForm');
-  const submitBtn = document.getElementById('otpSubmitBtn');
-  const authBusy = window.vinorAuthSubmitBusy(form, submitBtn, 'در حال ورود…');
-  function unlockOtpInputs() {
-    boxes.forEach(function (b) {
-      b.readOnly = false;
-      b.disabled = false;
-    });
-    if (submitBtn && submitBtn.dataset.vinorAuthBusy) {
-      submitBtn.disabled = false;
-      submitBtn.removeAttribute('aria-busy');
-      delete submitBtn.dataset.vinorAuthBusy;
-      submitBtn.innerHTML = '<span data-btn-label>ورود به پنل</span>';
-    }
-  }
-  if (form && submitBtn) {
-    form.addEventListener('submit', function (e) {
-      hidden.value = otpCodeFromBoxes();
-      var code = hidden.value || '';
-      if (code.length !== 5) {
-        e.preventDefault();
-        unlockOtpInputs();
-        var empty = boxes.find(function (b) { return !b.value; });
-        if (empty) empty.focus();
-        return;
-      }
-      if (!authBusy.isLocked()) {
-        authBusy.lock();
-        boxes.forEach(function (b) { b.readOnly = true; });
-      }
-    }, { capture: true });
-    submitBtn.addEventListener('click', function () {
-      hidden.value = otpCodeFromBoxes();
-      if (hidden.value.length === 5 && !authBusy.isLocked()) {
-        authBusy.lock();
-        boxes.forEach(function (b) { b.readOnly = true; });
-      }
-    });
-  }
-  const resendBtn = document.getElementById('resendBtn');
-  const timerLine = document.getElementById('timerLine');
-  const faDigits = '۰۱۲۳۴۵۶۷۸۹';
+  var boxes = Array.from(document.querySelectorAll('.otp-box'));
+  var hidden = document.getElementById('otpHidden');
+  var form = document.getElementById('otpForm');
+  var submitBtn = document.getElementById('otpSubmitBtn');
+  var inlineHint = document.getElementById('otpInlineHint');
+  var resendBtn = document.getElementById('resendBtn');
+  var timerLine = document.getElementById('timerLine');
+  var resendStatus = document.getElementById('otpResendStatus');
+  var authBusy = window.vinorAuthSubmitBusy(form, submitBtn, 'در حال ورود…');
+  var resendTimerId = null;
+
+  var faDigits = '۰۱۲۳۴۵۶۷۸۹';
+  var otpFa = '۰۱۲۳۴۵۶۷۸۹';
+  var otpAr = '٠١٢٣٤٥٦٧٨٩';
+
   function toFaNum(n) {
     try {
       return String(n).replace(/\d/g, function (d) { return faDigits[Number(d)]; });
@@ -145,13 +129,22 @@
       return String(n);
     }
   }
+
   function cdEl() {
     return document.getElementById('countdown');
   }
-  if (cdEl()) cdEl().textContent = toFaNum(60);
 
-  var otpFa = '۰۱۲۳۴۵۶۷۸۹';
-  var otpAr = '٠١٢٣٤٥٦٧٨٩';
+  function showHint(msg) {
+    if (!inlineHint) return;
+    if (!msg) {
+      inlineHint.textContent = '';
+      inlineHint.classList.add('hidden');
+      return;
+    }
+    inlineHint.textContent = msg;
+    inlineHint.classList.remove('hidden');
+  }
+
   function normalizeOtpDigits(raw) {
     var s = String(raw || '');
     s = s.replace(/[۰-۹]/g, function (c) { return String(otpFa.indexOf(c)); });
@@ -163,11 +156,60 @@
     return boxes.map(function (b) { return normalizeOtpDigits(b.value); }).join('').slice(0, 5);
   }
 
-  function syncHiddenAndMaybeSubmit() {
-    hidden.value = otpCodeFromBoxes();
-    if (hidden.value.length === 5 && !authBusy.isLocked()) {
+  function unlockOtpInputs() {
+    boxes.forEach(function (b) {
+      b.readOnly = false;
+      b.disabled = false;
+      b.removeAttribute('tabindex');
+      b.classList.remove('border-rose-500/60');
+    });
+    if (boxes[0]) boxes[0].setAttribute('tabindex', '0');
+    for (var i = 1; i < boxes.length; i++) {
+      if (boxes[i]) boxes[i].setAttribute('tabindex', '-1');
+    }
+    if (submitBtn && submitBtn.dataset.vinorAuthBusy) {
+      submitBtn.disabled = false;
+      submitBtn.removeAttribute('aria-busy');
+      delete submitBtn.dataset.vinorAuthBusy;
+      submitBtn.innerHTML = '<span data-btn-label>ورود به پنل</span>';
+    }
+  }
+
+  function lockForSubmit() {
+    if (!authBusy.isLocked()) {
       authBusy.lock();
       boxes.forEach(function (b) { b.readOnly = true; });
+    }
+  }
+
+  function startResendCooldown(seconds) {
+    if (resendTimerId) clearInterval(resendTimerId);
+    var c = seconds;
+    if (resendBtn) resendBtn.disabled = true;
+    if (timerLine) {
+      timerLine.innerHTML = 'ارسال مجدد کد تا <span id="countdown" class="font-semibold text-zinc-200 tabular-nums">' + toFaNum(c) + '</span> ثانیه دیگر';
+    }
+    resendTimerId = setInterval(function () {
+      c--;
+      var el = cdEl();
+      if (el) el.textContent = toFaNum(c);
+      if (c <= 0) {
+        clearInterval(resendTimerId);
+        resendTimerId = null;
+        if (timerLine) timerLine.textContent = 'هنوز کد را دریافت نکردید؟';
+        if (resendBtn) resendBtn.disabled = false;
+      }
+    }, 1000);
+  }
+
+  function syncHidden() {
+    hidden.value = otpCodeFromBoxes();
+  }
+
+  function tryAutoSubmit() {
+    syncHidden();
+    if (hidden.value.length === 5 && !authBusy.isLocked()) {
+      lockForSubmit();
       form.requestSubmit();
     }
   }
@@ -175,15 +217,34 @@
   function fillFromString(str) {
     var digits = normalizeOtpDigits(str).slice(0, 5).split('');
     if (!digits.length) return;
+    showHint('');
     boxes.forEach(function (b) { b.value = ''; });
     digits.forEach(function (d, i) {
       if (boxes[i]) boxes[i].value = d;
     });
-    syncHiddenAndMaybeSubmit();
+    tryAutoSubmit();
+  }
+
+  if (form && submitBtn) {
+    form.addEventListener('submit', function (e) {
+      syncHidden();
+      var code = hidden.value || '';
+      if (code.length !== 5) {
+        e.preventDefault();
+        unlockOtpInputs();
+        showHint('لطفاً هر ۵ رقم کد را وارد کنید.');
+        var empty = boxes.find(function (b) { return !b.value; });
+        if (empty) empty.focus();
+        return;
+      }
+      showHint('');
+      lockForSubmit();
+    }, { capture: true });
   }
 
   boxes.forEach(function (box, idx) {
     box.addEventListener('input', function () {
+      showHint('');
       var raw = box.value || '';
       var cleaned = normalizeOtpDigits(raw);
       if (cleaned.length <= 1) {
@@ -197,14 +258,14 @@
         var last = Math.min(idx + ds.length, boxes.length) - 1;
         if (last >= 0) boxes[last].focus();
       }
-      syncHiddenAndMaybeSubmit();
+      tryAutoSubmit();
     });
     box.addEventListener('keydown', function (e) {
       if (e.key === 'Backspace' && !box.value && idx > 0) {
         e.preventDefault();
         boxes[idx - 1].focus();
         boxes[idx - 1].value = '';
-        syncHiddenAndMaybeSubmit();
+        syncHidden();
       }
       if (e.key === 'ArrowLeft' && idx > 0) {
         e.preventDefault();
@@ -214,11 +275,27 @@
         e.preventDefault();
         boxes[idx + 1].focus();
       }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        syncHidden();
+        if (hidden.value.length === 5) {
+          lockForSubmit();
+          form.requestSubmit();
+        } else {
+          showHint('لطفاً هر ۵ رقم کد را وارد کنید.');
+        }
+      }
     });
     box.addEventListener('paste', function (e) {
       e.preventDefault();
       var val = (e.clipboardData || window.clipboardData).getData('text');
       fillFromString(val);
+    });
+    box.addEventListener('focus', function () {
+      boxes.forEach(function (b, i) {
+        if (i !== idx) b.setAttribute('tabindex', '-1');
+      });
+      box.setAttribute('tabindex', '0');
     });
   });
 
@@ -228,6 +305,15 @@
 
   window.addEventListener('pageshow', function (e) {
     if (e.persisted) unlockOtpInputs();
+  });
+
+  document.addEventListener('paste', function (e) {
+    try {
+      var val = (e.clipboardData || window.clipboardData).getData('text');
+      if (val && document.activeElement && document.activeElement.classList.contains('otp-box')) {
+        fillFromString(val);
+      }
+    } catch (_) {}
   });
 
   (async function () {
@@ -244,63 +330,58 @@
     } catch (_) {}
   })();
 
-  document.addEventListener('paste', function (e) {
-    try {
-      var val = (e.clipboardData || window.clipboardData).getData('text');
-      if (val && document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('otp-box')) {
-        fillFromString(val);
-      }
-    } catch (_) {}
-  });
+  startResendCooldown(60);
 
-  var counter = 60;
-  var t = setInterval(function () {
-    counter--;
-    var el = cdEl();
-    if (el) el.textContent = toFaNum(counter);
-    if (counter <= 0) {
-      clearInterval(t);
-      if (timerLine) timerLine.textContent = 'هنوز کد را دریافت نکردید؟';
-      resendBtn.disabled = false;
-    }
-  }, 1000);
+  function readCsrfToken() {
+    var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    if (!m) return '';
+    try { return decodeURIComponent(m[1]); } catch (_) { return m[1]; }
+  }
 
-  resendBtn.addEventListener('click', async function () {
-    if (resendBtn.disabled) return;
-    try {
-      resendBtn.disabled = true;
-      if (timerLine) timerLine.textContent = 'در حال ارسال مجدد…';
-      var resp = await fetch('{{ url_for("express_partner.otp_resend") }}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ phone: '{{ phone }}' })
-      });
-      var data = await resp.json();
-      if (data && data.ok) {
-        var c = 60;
-        if (timerLine) {
-          timerLine.innerHTML = 'ارسال مجدد کد تا <span id="countdown" class="font-semibold text-zinc-200 tabular-nums">' + toFaNum(c) + '</span> ثانیه دیگر';
+  if (resendBtn) {
+    resendBtn.addEventListener('click', async function () {
+      if (resendBtn.disabled) return;
+      try {
+        resendBtn.disabled = true;
+        if (resendStatus) {
+          resendStatus.textContent = '';
+          resendStatus.classList.add('hidden');
         }
-        var tt = setInterval(function () {
-          c--;
-          var el = cdEl();
-          if (el) el.textContent = toFaNum(c);
-          if (c <= 0) {
-            clearInterval(tt);
-            if (timerLine) timerLine.textContent = 'هنوز کد را دریافت نکردید؟';
-            resendBtn.disabled = false;
+        if (timerLine) timerLine.textContent = 'در حال ارسال مجدد…';
+        var headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+        var csrf = readCsrfToken();
+        if (csrf) headers['X-CSRFToken'] = csrf;
+        var resp = await fetch('{{ url_for("express_partner.otp_resend") }}', {
+          method: 'POST',
+          headers: headers,
+          credentials: 'same-origin',
+          body: JSON.stringify({ phone: '{{ phone }}' })
+        });
+        var data = null;
+        try {
+          data = await resp.json();
+        } catch (_) {}
+        if (resp.ok && data && data.ok) {
+          if (resendStatus) {
+            resendStatus.textContent = 'کد جدید ارسال شد.';
+            resendStatus.classList.remove('hidden');
           }
-        }, 1000);
-      } else {
-        if (timerLine) timerLine.textContent = (data && data.error) ? data.error : 'خطا در ارسال مجدد';
+          unlockOtpInputs();
+          boxes.forEach(function (b) { b.value = ''; });
+          syncHidden();
+          try { boxes[0].focus(); } catch (_) {}
+          startResendCooldown(60);
+        } else {
+          var errMsg = (data && data.error) ? data.error : (resp.ok ? 'خطا در ارسال مجدد' : 'خطا در ارتباط با سرور');
+          if (timerLine) timerLine.textContent = errMsg;
+          setTimeout(function () { resendBtn.disabled = false; }, 2000);
+        }
+      } catch (_) {
+        if (timerLine) timerLine.textContent = 'خطا در ارسال مجدد';
         setTimeout(function () { resendBtn.disabled = false; }, 2000);
       }
-    } catch (_) {
-      if (timerLine) timerLine.textContent = 'خطا در ارسال مجدد';
-      setTimeout(function () { resendBtn.disabled = false; }, 2000);
-    }
-  });
+    });
+  }
 })();
 </script>
 {% endblock %}

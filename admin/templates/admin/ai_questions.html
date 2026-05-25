@@ -1,0 +1,86 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}سوالات Vinor AI{% endblock %}
+{% block page_title %}سوالات Vinor AI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 text-sm text-amber-900 dark:text-amber-100">
+    <p class="font-medium mb-1">راهنما</p>
+    <p class="text-amber-800 dark:text-amber-200/90 leading-6">
+      وقتی AI در چت همکار نتواند از داده‌های داخلی وینور پاسخ دهد، سوال اینجا ثبت می‌شود و پیامک به شماره ادمین (تنظیمات) ارسال می‌شود.
+      پس از ثبت پاسخ، در <strong>گفتگوی بعدی همان همکار</strong> در تب AI پاسخ نمایش داده می‌شود.
+    </p>
+  </div>
+
+  <section>
+    <h2 class="text-sm font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+      <i class="fa-solid fa-clock text-amber-500"></i>
+      در انتظار پاسخ
+      <span class="text-xs font-normal text-gray-500">({{ pending|length }})</span>
+    </h2>
+
+    {% if pending and pending|length > 0 %}
+    <div class="space-y-3">
+      {% for item in pending %}
+      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+        <div class="flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400 mb-3">
+          <span class="ltr font-medium text-gray-800 dark:text-gray-200">{{ item.partner_phone or '—' }}</span>
+          {% if item.created_at %}
+          <span class="jalali-dt" data-dt="{{ item.created_at }}"></span>
+          {% endif %}
+          {% if item.thread_id %}
+          <span>گفتگو: {{ item.thread_id[:8] }}…</span>
+          {% endif %}
+        </div>
+        <p class="text-sm text-gray-900 dark:text-white font-medium mb-1">سوال:</p>
+        <p class="text-sm text-gray-700 dark:text-gray-300 leading-6 mb-2">{{ item.question or '—' }}</p>
+        {% if item.user_message and item.user_message != item.question %}
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">پیام کامل همکار: {{ item.user_message }}</p>
+        {% endif %}
+        <form method="post" action="{{ url_for('admin.ai_questions') }}" class="space-y-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="escalation_id" value="{{ item.id }}">
+          <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400">پاسخ برای همکار</label>
+          <textarea name="admin_answer" rows="3" required
+                    class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white px-3 py-2"
+                    placeholder="پاسخ را بنویسید…"></textarea>
+          <button type="submit"
+                  class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
+            <i class="fa-solid fa-paper-plane text-xs"></i>
+            ثبت پاسخ
+          </button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-500 dark:text-gray-400 py-6 text-center border border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
+      سوال معلقی نیست.
+    </p>
+    {% endif %}
+  </section>
+
+  {% if answered and answered|length > 0 %}
+  <section>
+    <h2 class="text-sm font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+      <i class="fa-solid fa-check text-emerald-500"></i>
+      پاسخ‌داده‌شده اخیر
+    </h2>
+    <div class="space-y-2">
+      {% for item in answered %}
+      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm">
+        <div class="flex flex-wrap gap-2 text-xs text-gray-500 mb-1">
+          <span class="ltr">{{ item.partner_phone }}</span>
+          {% if item.answered_at %}<span class="jalali-dt" data-dt="{{ item.answered_at }}"></span>{% endif %}
+        </div>
+        <p class="text-gray-700 dark:text-gray-300"><span class="font-medium">س:</span> {{ item.question }}</p>
+        <p class="text-gray-600 dark:text-gray-400 mt-1"><span class="font-medium">ج:</span> {{ item.admin_answer }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -28,7 +28,8 @@
         {% include 'express_partner/partials/flash_alerts.html' %}
         {% endwith %}
 
-        <form method="POST" action="{{ url_for('express_partner.login') }}" class="space-y-5" id="loginStep1Form">
+        <form method="POST" action="{{ url_for('express_partner.login') }}" class="space-y-5" id="loginStep1Form"
+              data-auth-skip-click-lock="1" novalidate>
           {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
           {% if request.args.get('next') %}<input type="hidden" name="next" value="{{ request.args.get('next') }}">{% endif %}
 

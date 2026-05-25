@@ -1,0 +1,129 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}Vinor AI | همکار اکسپرس{% endblock %}
+{% block content %}
+
+<header class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md w-full">
+  <div class="relative mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16 sm:px-6">
+    <a href="{{ url_for('express_partner.dashboard') }}"
+       class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+       aria-label="بازگشت">
+      <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
+    </a>
+    <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">Vinor AI</h1>
+    <div class="relative z-10 flex items-center gap-1.5">
+      <button type="button" id="aiHistoryBtn"
+              class="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-300 transition hover:bg-white/10 hover:text-white"
+              aria-expanded="false" aria-controls="aiHistoryPanel">
+        <i class="fas fa-clock-rotate-left text-xs ml-1" aria-hidden="true"></i>
+        تاریخچه
+      </button>
+      <button type="button" id="aiClearBtn"
+              class="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              title="گفتگوی جدید">
+        <i class="fas fa-plus text-xs" aria-hidden="true"></i>
+        <span class="sr-only">گفتگوی جدید</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- پنل تاریخچه گفتگوها -->
+<div id="aiHistoryBackdrop" class="fixed inset-0 z-[55] bg-black/50 opacity-0 pointer-events-none transition-opacity" aria-hidden="true"></div>
+<aside id="aiHistoryPanel"
+       class="fixed top-0 bottom-0 right-0 z-[56] w-[min(100%,20rem)] translate-x-full border-l border-white/10 bg-[#0a1018] shadow-2xl transition-transform duration-300 ease-out flex flex-col pt-[max(3.5rem,env(safe-area-inset-top))] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]"
+       aria-hidden="true" aria-label="تاریخچه گفتگوها">
+  <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
+    <h2 class="text-sm font-bold text-white">تاریخچه گفتگوها</h2>
+    <button type="button" id="aiHistoryClose" class="grid h-9 w-9 place-items-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-white" aria-label="بستن">
+      <i class="fas fa-times" aria-hidden="true"></i>
+    </button>
+  </div>
+  <div id="aiHistoryList" class="flex-1 overflow-y-auto overscroll-contain p-3 space-y-2 ai-scroll">
+    {% if chat_threads %}
+      {% for th in chat_threads %}
+      <button type="button"
+              class="ai-thread-item w-full rounded-xl border px-3 py-2.5 text-right transition {{ 'border-violet-500/40 bg-violet-500/15' if th.is_active else 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]' }}"
+              data-thread-id="{{ th.id }}">
+        <div class="flex items-start justify-between gap-2">
+          <span class="text-xs font-semibold text-white line-clamp-2 leading-snug">{{ th.title }}</span>
+          {% if th.is_active %}
+          <span class="shrink-0 rounded-full bg-violet-500/30 px-1.5 py-0.5 text-[9px] text-violet-200">فعال</span>
+          {% endif %}
+        </div>
+        {% if th.preview %}
+        <p class="mt-1 text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">{{ th.preview }}</p>
+        {% endif %}
+        <p class="mt-1.5 text-[9px] text-zinc-600 flex items-center justify-between gap-2">
+          <span>{{ th.message_count }} پیام</span>
+          <time class="tabular-nums" datetime="{{ th.updated_at or '' }}">{{ th.updated_at[:10] if th.updated_at else '' }}</time>
+        </p>
+      </button>
+      {% endfor %}
+    {% else %}
+      <p class="rounded-xl border border-dashed border-white/10 px-3 py-6 text-center text-xs text-zinc-500">
+        هنوز گفتگویی ذخیره نشده است.<br>اولین پیام خود را بفرستید.
+      </p>
+    {% endif %}
+  </div>
+</aside>
+
+<main id="aiPageMain"
+      class="mx-auto flex w-full max-w-3xl flex-col px-4 text-slate-100 bg-[#030712] lg:pb-16 max-lg:pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]"
+      style="padding-top: 4.25rem; min-height: calc(100dvh + 40px); box-sizing: border-box;">
+
+  <section id="aiChat"
+           class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0a1018]/95 shadow-xl shadow-black/30"
+           style="min-height: calc(100dvh - 8.5rem); max-height: calc(100dvh - 8.5rem);">
+    <div id="aiMessages"
+         class="ai-scroll flex-1 space-y-3 overflow-y-auto p-4 sm:p-5"
+         aria-live="polite"
+         aria-label="گفتگو"
+         data-welcome="سلام! من Vinor AI هستم. سوال خود را درباره همکاری، فایل‌ها و فعالیت در وینور بپرسید.">
+      {% for msg in chat_messages %}
+        {% include 'express_partner/partials/ai_chat_message.html' %}
+      {% endfor %}
+    </div>
+
+    <form id="aiChatForm" class="shrink-0 border-t border-white/10 p-3 sm:p-4" autocomplete="off"
+          data-chat-url="{{ chat_api_url }}"
+          data-history-url="{{ history_api_url }}"
+          data-clear-url="{{ clear_api_url }}"
+          data-switch-url="{{ switch_thread_url }}"
+          data-delete-url="{{ delete_thread_url }}">
+      {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+      <input type="hidden" id="aiActiveThreadId" value="{{ active_thread_id or '' }}">
+      <div class="flex items-end gap-2">
+        <label for="aiInput" class="sr-only">پیام</label>
+        <textarea id="aiInput" name="message" rows="1" required
+                  placeholder="پیام خود را بنویسید…"
+                  class="max-h-32 min-h-[48px] flex-1 resize-none rounded-xl border border-white/10 bg-[#070b12] px-3 py-3 text-sm text-white placeholder:text-zinc-600 focus:border-violet-500/50 focus:outline-none focus:ring-2 focus:ring-violet-500/20"></textarea>
+        <button type="submit" id="aiSendBtn"
+                class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white transition hover:bg-violet-500 disabled:opacity-50">
+          <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p class="mt-2 text-center text-[10px] text-zinc-600">
+        {{ ai_cfg.provider }} · {{ ai_cfg.model }}
+      </p>
+    </form>
+  </section>
+</main>
+
+<style>
+  .ai-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.12) transparent; }
+  #aiHistoryPanel.is-open { transform: translateX(0); }
+  #aiHistoryBackdrop.is-open { opacity: 1; pointer-events: auto; }
+  #aiMessages .ai-msg-cards .ai-land-cards { width: 100%; max-width: min(100%, 22rem); }
+  #aiMessages .ai-msg-cards .vinor-premium-card { cursor: pointer; }
+  #aiMessages .ai-msg-cards .vinor-premium-card-mobile { display: flex !important; }
+  #aiMessages .ai-msg-cards .vinor-premium-card > .hidden.sm\:block { display: none !important; }
+</style>
+
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+{% include 'express_partner/partials/vinor_favorites_script.html' %}
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=4"></script>
+{% endblock %}

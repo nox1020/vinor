@@ -10,9 +10,23 @@
   var TAB_PATHS = {
     '/express/partner/dashboard': 'dashboard',
     '/express/partner/commissions': 'commissions',
+    '/express/partner/ai': 'ai',
     '/express/partner/routine': 'routine',
     '/express/partner/profile': 'profile'
   };
+
+  /** از چت AI به جزئیات فایل — بارگذاری کامل صفحه (soft-swap باعث خالی شدن UI می‌شد) */
+  function isAiChatLandCard(el) {
+    if (!el || !el.closest) return false;
+    return !!(el.closest('#aiMessages') || el.closest('[data-vinor-ai-card]'));
+  }
+
+  function navigateFromAiChatCard(href) {
+    try {
+      sessionStorage.setItem('vinor_land_from', 'ai');
+    } catch (_) {}
+    window.location.assign(href);
+  }
 
   /** مسیرهای زیرصفحه (عمق ۱) — تب والد برای هایلایت فوتر */
   var STACK_PARENT_TAB = {
@@ -29,6 +43,7 @@
 
   var SKIP_PATH_PREFIXES = [
     '/express/partner/login',
+    '/express/partner/login/otp',
     '/express/partner/verify',
     '/express/partner/apply',
     '/express/partner/offline',
@@ -462,7 +477,12 @@
         var cardHref = card.getAttribute('data-href');
         if (cardHref && isPartnerUrl(cardHref)) {
           e.preventDefault();
-          vinorExpressNavigate(cardHref, { forward: true });
+          e.stopPropagation();
+          if (isAiChatLandCard(card)) {
+            navigateFromAiChatCard(cardHref);
+          } else {
+            vinorExpressNavigate(cardHref, { forward: true });
+          }
           return;
         }
       }
