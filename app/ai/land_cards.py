@@ -6,6 +6,7 @@ from typing import Any
 
 from flask import render_template, url_for
 
+from app.ai.audience import AUDIENCE_PARTNER, AUDIENCE_PUBLIC
 from app.ai.context import _assigned_lands, _public_lands_sample
 from app.utils.storage import load_express_partners
 
@@ -30,17 +31,20 @@ def partner_is_approved(phone: str) -> bool:
     return prof.get("status") in ("approved", True)
 
 
-def accessible_lands_map(phone: str) -> dict[str, dict[str, Any]]:
-    """همه فایل‌های قابل نمایش برای همکار: اختصاصی + عمومی."""
+def accessible_lands_map(phone: str, audience: str | None = None) -> dict[str, dict[str, Any]]:
+    """فایل‌های قابل نمایش بر اساس مخاطب."""
+    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
     out: dict[str, dict[str, Any]] = {}
-    for land in _assigned_lands(phone):
-        code = str(land.get("code") or "").strip()
-        if not code:
-            continue
-        item = dict(land)
-        item["_is_public"] = False
-        out[code] = item
-    for land in _public_lands_sample(80):
+    if aud == AUDIENCE_PARTNER:
+        for land in _assigned_lands(phone):
+            code = str(land.get("code") or "").strip()
+            if not code:
+                continue
+            item = dict(land)
+            item["_is_public"] = False
+            out[code] = item
+    limit = 80 if aud == AUDIENCE_PARTNER else 25
+    for land in _public_lands_sample(limit):
         code = str(land.get("code") or "").strip()
         if not code or code in out:
             continue
@@ -53,13 +57,20 @@ def accessible_lands_map(phone: str) -> dict[str, dict[str, Any]]:
     return out
 
 
-def _prepare_land_item(land: dict[str, Any]) -> dict[str, Any]:
+def _prepare_land_item(land: dict[str, Any], audience: str | None = None) -> dict[str, Any]:
     item = dict(land)
     code = str(item.get("code") or "").strip()
+    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
     try:
-        item["_detail_url"] = url_for("express_partner.land_detail", code=code)
+        if aud == AUDIENCE_PUBLIC:
+            item["_detail_url"] = url_for("main.express_detail", code=code)
+        else:
+            item["_detail_url"] = url_for("express_partner.land_detail", code=code)
     except Exception:
-        item["_detail_url"] = f"/express/partner/land/{code}" if code else ""
+        if aud == AUDIENCE_PUBLIC:
+            item["_detail_url"] = f"/express/{code}" if code else ""
+        else:
+            item["_detail_url"] = f"/express/partner/lands/{code}" if code else ""
     return item
 
 
@@ -96,10 +107,11 @@ def collect_land_codes(
     *,
     user_text: str = "",
     phone: str = "",
+    audience: str | None = None,
 ) -> tuple[str, list[str]]:
     """متن تمیز + لیست یکتا کدهای فایل برای کارت."""
     cleaned, from_markers = strip_land_markers(reply_text)
-    lands_map = accessible_lands_map(phone) if phone else {}
+    lands_map = accessible_lands_map(phone, audience) if phone else accessible_lands_map("", audience)
     merged: list[str] = []
     for c in from_markers:
         if c in lands_map and c not in merged:
@@ -113,31 +125,37 @@ def collect_land_codes(
     return cleaned, merged[:5]
 
 
-def resolve_lands(phone: str, codes: list[str]) -> list[dict[str, Any]]:
+def resolve_lands(phone: str, codes: list[str], audience: str | None = None) -> list[dict[str, Any]]:
     if not codes:
         return []
-    lands_map = accessible_lands_map(phone)
+    lands_map = accessible_lands_map(phone, audience)
     out: list[dict[str, Any]] = []
     for code in codes:
         land = lands_map.get(str(code).strip())
         if land:
-            out.append(_prepare_land_item(land))
+            out.append(_prepare_land_item(land, audience))
     return out
 
 
-def render_land_cards_html(phone: str, codes: list[str]) -> str:
+def render_land_cards_html(
+    phone: str,
+    codes: list[str],
+    *,
+    audience: str | None = None,
+) -> str:
     """HTML کارت‌های داشبورد (همان partial)."""
-    lands = resolve_lands(phone, codes)
+    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    lands = resolve_lands(phone, codes, aud)
     if not lands:
         return ""
     parts: list[str] = []
-    approved = partner_is_approved(phone)
+    show_commission = aud == AUDIENCE_PARTNER and partner_is_approved(phone)
     for land in lands:
         parts.append(
             render_template(
                 "express_partner/partials/land_premium_card.html",
                 land=land,
-                is_approved=approved,
+                is_approved=show_commission,
                 tour_land_card=False,
                 for_ai_chat=True,
             )
@@ -155,19 +173,25 @@ def render_land_cards_html(phone: str, codes: list[str]) -> str:
     return wrapper
 
 
-def land_cards_payload(phone: str, codes: list[str]) -> list[dict[str, str]]:
+def land_cards_payload(
+    phone: str,
+    codes: list[str],
+    *,
+    audience: str | None = None,
+) -> list[dict[str, str]]:
     """برای API JSON: کد + HTML هر کارت."""
-    lands = resolve_lands(phone, codes)
+    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    lands = resolve_lands(phone, codes, aud)
     if not lands:
         return []
-    approved = partner_is_approved(phone)
+    show_commission = aud == AUDIENCE_PARTNER and partner_is_approved(phone)
     payload: list[dict[str, str]] = []
     for land in lands:
         code = str(land.get("code") or "").strip()
         html = render_template(
             "express_partner/partials/land_premium_card.html",
             land=land,
-            is_approved=approved,
+            is_approved=show_commission,
             tour_land_card=False,
             for_ai_chat=True,
         )

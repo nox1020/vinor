@@ -186,6 +186,14 @@
     return /^\/express\/partner\/lands\/[^/]+$/.test(normPath(pathname || ''));
   }
 
+  function isAiPagePath(pathname) {
+    return normPath(pathname || '') === '/express/partner/ai';
+  }
+
+  function shouldShowBottomNav(pathname) {
+    return !isLandDetailPath(pathname) && !isAiPagePath(pathname);
+  }
+
   function setBottomNavVisible(show) {
     var nav = document.getElementById('bottomNavMenu');
     if (!nav) return;
@@ -211,8 +219,9 @@
   }
 
   function afterPageSwap(navKey) {
-    var onDetail = isLandDetailPath(window.location.pathname);
-    var showNav = !onDetail;
+    var path = window.location.pathname;
+    var onDetail = isLandDetailPath(path);
+    var showNav = shouldShowBottomNav(path);
     setBottomNavVisible(showNav);
     if (showNav) setBottomNavActive(navKey);
     try {
@@ -546,4 +555,19 @@
     },
     { passive: true }
   );
+
+  function syncBottomNavForCurrentPath() {
+    var path = window.location.pathname;
+    var showNav = shouldShowBottomNav(path);
+    setBottomNavVisible(showNav);
+    if (showNav) {
+      setBottomNavActive(softTabKeyForUrl(window.location.href));
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', syncBottomNavForCurrentPath);
+  } else {
+    syncBottomNavForCurrentPath();
+  }
 })();

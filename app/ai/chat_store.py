@@ -1,4 +1,4 @@
-"""ذخیره تاریخچه چت Vinor AI — چند گفتگو به ازای هر شماره موبایل."""
+"""ذخیره تاریخچه چت Vinor AI — جدا برای همکار و کاربر عادی."""
 from __future__ import annotations
 
 import json
@@ -10,37 +10,52 @@ from typing import Any
 
 from flask import current_app
 
+from app.ai.audience import AUDIENCE_PARTNER, AUDIENCE_PUBLIC
+from app.ai.paths import ai_data_file
+
 _MAX_MESSAGES = 80
 _MAX_THREADS = 30
 _MAX_CONTENT = 4000
 _TITLE_LEN = 48
+_MAX_PREVIEW = 80
 
 
 def _chats_dir() -> str:
-    try:
-        base = current_app.instance_path
-    except Exception:
-        base = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "instance",
-        )
-    path = os.path.join(base, "data", "ai_chats")
+    path = ai_data_file("ai_chats")
     os.makedirs(path, exist_ok=True)
     return path
 
 
-def _phone_key(phone: str) -> str:
-    digits = re.sub(r"\D+", "", str(phone or ""))
-    if not digits:
-        return ""
-    return digits[-11:] if len(digits) >= 11 else digits
+def _normalize_audience(audience: str | None) -> str:
+    return audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
 
 
-def _chat_path(phone: str) -> str | None:
-    key = _phone_key(phone)
+def _storage_key(user_key: str) -> str:
+    digits = re.sub(r"\D+", "", str(user_key or ""))
+    if len(digits) >= 11:
+        return digits[-11:]
+    if len(digits) >= 8:
+        return digits
+    safe = re.sub(r"[^a-zA-Z0-9_-]", "", str(user_key or ""))
+    return safe[:64] if safe else ""
+
+
+def _chat_path(user_key: str, audience: str | None = None) -> str | None:
+    aud = _normalize_audience(audience)
+    key = _storage_key(user_key)
     if not key:
         return None
-    return os.path.join(_chats_dir(), f"{key}.json")
+    subdir = os.path.join(_chats_dir(), aud)
+    os.makedirs(subdir, exist_ok=True)
+    path = os.path.join(subdir, f"{key}.json")
+    if aud == AUDIENCE_PARTNER:
+        legacy = os.path.join(_chats_dir(), f"{key}.json")
+        if os.path.isfile(legacy) and not os.path.isfile(path):
+            try:
+                os.replace(legacy, path)
+            except OSError:
+                pass
+    return path
 
 
 def _now_iso() -> str:
@@ -61,6 +76,37 @@ def _title_from_messages(messages: list[dict[str, Any]]) -> str:
     return "گفتگوی جدید"
 
 
+def _thread_sort_key(th: dict[str, Any]) -> str:
+    return str(th.get("updated_at") or th.get("created_at") or "")
+
+
+def _sort_threads(threads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(threads, key=_thread_sort_key, reverse=True)
+
+
+def _prune_threads(record: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    """حداکثر _MAX_THREADS گفتگو — قدیمی‌ترین حذف می‌شود."""
+    threads = list(record.get("threads") or [])
+    if len(threads) <= _MAX_THREADS:
+        return record, 0
+
+    ordered = _sort_threads(threads)
+    kept = ordered[:_MAX_THREADS]
+    removed = len(ordered) - len(kept)
+    active_id = record.get("active_id")
+    if active_id and not any(t.get("id") == active_id for t in kept):
+        record["active_id"] = kept[0]["id"] if kept else None
+    record["threads"] = kept
+    return record, removed
+
+
+def _finalize_record(record: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    """مرتب‌سازی + محدودیت تعداد گفتگو."""
+    threads = _sort_threads(list(record.get("threads") or []))
+    record["threads"] = threads
+    return _prune_threads(record)
+
+
 def _clean_messages(raw: list) -> list[dict[str, Any]]:
     cleaned: list[dict[str, Any]] = []
     for item in raw or []:
@@ -69,26 +115,32 @@ def _clean_messages(raw: list) -> list[dict[str, Any]]:
         role = str(item.get("role") or "").strip()
         content = str(item.get("content") or "").strip()[:_MAX_CONTENT]
         if role in ("user", "assistant") and content:
-            cleaned.append(
-                {
-                    "role": role,
-                    "content": content,
-                    "created_at": item.get("created_at") or _now_iso(),
-                }
-            )
+            row: dict[str, Any] = {
+                "role": role,
+                "content": content,
+                "created_at": item.get("created_at") or _now_iso(),
+            }
+            if item.get("source"):
+                row["source"] = str(item.get("source"))
+            if item.get("escalation_id"):
+                row["escalation_id"] = str(item.get("escalation_id"))
+            codes = item.get("land_codes")
+            if isinstance(codes, list) and codes:
+                row["land_codes"] = [str(c).strip() for c in codes if str(c).strip()][:5]
+            cleaned.append(row)
     return cleaned[-_MAX_MESSAGES:]
 
 
-def _migrate_legacy(data: dict[str, Any], phone: str) -> dict[str, Any]:
+def _migrate_legacy(data: dict[str, Any], user_key: str) -> dict[str, Any]:
     if isinstance(data.get("threads"), list):
         return data
     msgs = _clean_messages(data.get("messages") if isinstance(data.get("messages"), list) else [])
     if not msgs:
-        return {"phone": _phone_key(phone), "active_id": None, "threads": []}
+        return {"user_key": _storage_key(user_key), "active_id": None, "threads": []}
     tid = str(uuid.uuid4())
     ts = data.get("updated_at") or _now_iso()
     return {
-        "phone": _phone_key(phone),
+        "user_key": _storage_key(user_key),
         "active_id": tid,
         "threads": [
             {
@@ -102,17 +154,17 @@ def _migrate_legacy(data: dict[str, Any], phone: str) -> dict[str, Any]:
     }
 
 
-def load_user_record(phone: str) -> dict[str, Any]:
-    path = _chat_path(phone)
-    key = _phone_key(phone)
+def load_user_record(user_key: str, audience: str | None = None) -> dict[str, Any]:
+    path = _chat_path(user_key, audience)
+    key = _storage_key(user_key)
     if not path or not os.path.isfile(path):
-        return {"phone": key, "active_id": None, "threads": []}
+        return {"user_key": key, "active_id": None, "threads": []}
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, dict):
             raise ValueError("invalid record")
-        record = _migrate_legacy(data, phone)
+        record = _migrate_legacy(data, user_key)
         threads = []
         for th in record.get("threads") or []:
             if not isinstance(th, dict):
@@ -128,30 +180,33 @@ def load_user_record(phone: str) -> dict[str, Any]:
                     "messages": msgs,
                 }
             )
-        threads.sort(key=lambda x: str(x.get("updated_at") or ""), reverse=True)
-        threads = threads[:_MAX_THREADS]
-        active_id = record.get("active_id")
-        if active_id and not any(t["id"] == active_id for t in threads):
-            active_id = threads[0]["id"] if threads else None
-        return {"phone": key, "active_id": active_id, "threads": threads}
+        out = {"user_key": key, "active_id": record.get("active_id"), "threads": threads}
+        out, removed = _finalize_record(out)
+        active_id = out.get("active_id")
+        if active_id and not any(t["id"] == active_id for t in out["threads"]):
+            out["active_id"] = out["threads"][0]["id"] if out["threads"] else None
+        if removed > 0:
+            _save_record(out, user_key, audience)
+        return out
     except Exception as exc:
         try:
-            current_app.logger.warning("ai chat load failed | phone=%s | %s", phone, exc)
+            current_app.logger.warning("ai chat load failed | key=%s | %s", user_key, exc)
         except Exception:
             pass
-        return {"phone": key, "active_id": None, "threads": []}
+        return {"user_key": key, "active_id": None, "threads": []}
 
 
-def _save_record(record: dict[str, Any], phone: str) -> None:
-    path = _chat_path(phone)
+def _save_record(record: dict[str, Any], user_key: str, audience: str | None = None) -> None:
+    path = _chat_path(user_key, audience)
     if not path:
         return
+    record, _ = _finalize_record(record)
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(record, f, ensure_ascii=False, indent=2)
     except Exception as exc:
         try:
-            current_app.logger.error("ai chat save failed | phone=%s | %s", phone, exc)
+            current_app.logger.error("ai chat save failed | key=%s | %s", user_key, exc)
         except Exception:
             pass
 
@@ -170,8 +225,8 @@ def _active_thread(record: dict[str, Any]) -> dict[str, Any] | None:
     return _find_thread(record, record.get("active_id"))
 
 
-def create_thread(phone: str, *, activate: bool = True) -> str:
-    record = load_user_record(phone)
+def create_thread(user_key: str, *, activate: bool = True, audience: str | None = None) -> str:
+    record = load_user_record(user_key, audience)
     tid = str(uuid.uuid4())
     ts = _now_iso()
     thread = {
@@ -181,33 +236,32 @@ def create_thread(phone: str, *, activate: bool = True) -> str:
         "updated_at": ts,
         "messages": [],
     }
-    threads = [thread] + list(record.get("threads") or [])
-    record["threads"] = threads[:_MAX_THREADS]
+    record["threads"] = [thread] + list(record.get("threads") or [])
     if activate:
         record["active_id"] = tid
-    _save_record(record, phone)
+    _save_record(record, user_key, audience)
     return tid
 
 
-def set_active_thread(phone: str, thread_id: str) -> bool:
-    record = load_user_record(phone)
+def set_active_thread(user_key: str, thread_id: str, audience: str | None = None) -> bool:
+    record = load_user_record(user_key, audience)
     if not _find_thread(record, thread_id):
         return False
     record["active_id"] = thread_id
-    _save_record(record, phone)
+    _save_record(record, user_key, audience)
     return True
 
 
-def ensure_active_thread(phone: str) -> str:
-    record = load_user_record(phone)
+def ensure_active_thread(user_key: str, audience: str | None = None) -> str:
+    record = load_user_record(user_key, audience)
     th = _active_thread(record)
     if th:
         return str(th["id"])
-    return create_thread(phone, activate=True)
+    return create_thread(user_key, activate=True, audience=audience)
 
 
-def threads_for_ui(phone: str) -> list[dict[str, Any]]:
-    record = load_user_record(phone)
+def threads_for_ui(user_key: str, audience: str | None = None) -> list[dict[str, Any]]:
+    record = load_user_record(user_key, audience)
     active = record.get("active_id")
     out: list[dict[str, Any]] = []
     for th in record.get("threads") or []:
@@ -215,7 +269,7 @@ def threads_for_ui(phone: str) -> list[dict[str, Any]]:
         preview = ""
         for m in reversed(msgs):
             if isinstance(m, dict) and m.get("role") == "user":
-                preview = str(m.get("content") or "")[:80]
+                preview = str(m.get("content") or "")[:_MAX_PREVIEW]
                 break
         out.append(
             {
@@ -231,15 +285,44 @@ def threads_for_ui(phone: str) -> list[dict[str, Any]]:
     return out
 
 
-def messages_for_ui(phone: str, thread_id: str | None = None) -> list[dict[str, Any]]:
-    record = load_user_record(phone)
+def messages_for_api(
+    user_key: str,
+    thread_id: str | None = None,
+    audience: str | None = None,
+) -> list[dict[str, str]]:
+    """پیام‌های خام برای مدل — بدون رندر کارت (سبک‌تر)."""
+    record = load_user_record(user_key, audience)
     th = _find_thread(record, thread_id) if thread_id else _active_thread(record)
     if not th:
         return []
-    return _enrich_messages_for_ui(phone, list(th.get("messages") or []))
+    out: list[dict[str, str]] = []
+    for item in th.get("messages") or []:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip()
+        content = str(item.get("content") or "").strip()
+        if role in ("user", "assistant") and content:
+            out.append({"role": role, "content": content})
+    return out
 
 
-def _enrich_messages_for_ui(phone: str, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def messages_for_ui(
+    user_key: str,
+    thread_id: str | None = None,
+    audience: str | None = None,
+) -> list[dict[str, Any]]:
+    record = load_user_record(user_key, audience)
+    th = _find_thread(record, thread_id) if thread_id else _active_thread(record)
+    if not th:
+        return []
+    return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience)
+
+
+def _enrich_messages_for_ui(
+    user_key: str,
+    messages: list[dict[str, Any]],
+    audience: str | None = None,
+) -> list[dict[str, Any]]:
     from app.ai.land_cards import render_land_cards_html
 
     out: list[dict[str, Any]] = []
@@ -250,41 +333,39 @@ def _enrich_messages_for_ui(phone: str, messages: list[dict[str, Any]]) -> list[
         codes = row.get("land_codes") or []
         if row.get("role") == "assistant" and codes:
             try:
-                row["cards_html"] = render_land_cards_html(phone, codes)
+                row["cards_html"] = render_land_cards_html(user_key, codes, audience=audience)
             except Exception:
                 row["cards_html"] = ""
         out.append(row)
     return out
 
 
-def history_for_api(phone: str, thread_id: str | None = None) -> list[dict[str, str]]:
-    msgs = messages_for_ui(phone, thread_id)
-    out: list[dict[str, str]] = []
-    for item in msgs:
-        role = str(item.get("role") or "").strip()
-        content = str(item.get("content") or "").strip()
-        if role in ("user", "assistant") and content:
-            out.append({"role": role, "content": content})
-    return out
+def history_for_api(
+    user_key: str,
+    thread_id: str | None = None,
+    audience: str | None = None,
+) -> list[dict[str, str]]:
+    return messages_for_api(user_key, thread_id, audience)
 
 
 def append_exchange(
-    phone: str,
+    user_key: str,
     user_text: str,
     assistant_text: str,
     *,
     thread_id: str | None = None,
     assistant_land_codes: list[str] | None = None,
+    audience: str | None = None,
 ) -> tuple[list[dict[str, Any]], str]:
-    record = load_user_record(phone)
-    tid = thread_id or record.get("active_id") or ensure_active_thread(phone)
-    record = load_user_record(phone)
-    th = _find_thread(record, tid)
+    record = load_user_record(user_key, audience)
+    tid = thread_id or record.get("active_id") or ""
+    th = _find_thread(record, tid) if tid else _active_thread(record)
     if not th:
-        tid = create_thread(phone, activate=True)
-        record = load_user_record(phone)
+        tid = create_thread(user_key, activate=True, audience=audience)
+        record = load_user_record(user_key, audience)
         th = _find_thread(record, tid)
     assert th is not None
+    tid = str(th["id"])
 
     msgs: list[dict[str, Any]] = list(th.get("messages") or [])
     ts = _now_iso()
@@ -307,17 +388,149 @@ def append_exchange(
     th["messages"] = msgs[-_MAX_MESSAGES:]
     th["updated_at"] = ts
     record["active_id"] = tid
-    _save_record(record, phone)
-    return _enrich_messages_for_ui(phone, th["messages"]), tid
+    _save_record(record, user_key, audience)
+    return _enrich_messages_for_ui(user_key, th["messages"], audience), tid
 
 
-def clear_chat(phone: str) -> str:
-    """گفتگوی جدید خالی — thread جدید فعال."""
-    return create_thread(phone, activate=True)
+def inject_admin_reply(
+    user_key: str,
+    answer: str,
+    *,
+    thread_id: str | None = None,
+    audience: str | None = None,
+    question: str = "",
+    escalation_id: str = "",
+) -> bool:
+    """درج پاسخ تیم وینور در همان گفتگو — بلافاصله قابل نمایش در چت."""
+    text = (answer or "").strip()
+    if not text:
+        return False
+
+    record = load_user_record(user_key, audience)
+    tid = (thread_id or "").strip() or str(record.get("active_id") or "").strip()
+    th = _find_thread(record, tid) if tid else _active_thread(record)
+    if not th and tid:
+        ts = _now_iso()
+        th = {
+            "id": tid,
+            "title": "گفتگوی پشتیبانی",
+            "created_at": ts,
+            "updated_at": ts,
+            "messages": [],
+        }
+        record["threads"] = [th] + list(record.get("threads") or [])
+        record["active_id"] = tid
+        _save_record(record, user_key, audience)
+        record = load_user_record(user_key, audience)
+        th = _find_thread(record, tid)
+    if not th:
+        tid = ensure_active_thread(user_key, audience)
+        record = load_user_record(user_key, audience)
+        th = _find_thread(record, tid)
+    if not th:
+        return False
+
+    eid = (escalation_id or "").strip()
+    for item in th.get("messages") or []:
+        if not isinstance(item, dict):
+            continue
+        if eid and str(item.get("escalation_id") or "") == eid:
+            return True
+
+    q = (question or "").strip()
+    intro = "پاسخ تیم وینور"
+    if q:
+        intro += f" (در پاسخ به: {q[:120]}{'…' if len(q) > 120 else ''})"
+    body = f"{intro}:\n\n{text}"
+
+    ts = _now_iso()
+    entry: dict[str, Any] = {
+        "role": "assistant",
+        "content": body[:_MAX_CONTENT],
+        "created_at": ts,
+        "source": "admin_escalation",
+    }
+    if eid:
+        entry["escalation_id"] = eid
+
+    msgs = list(th.get("messages") or [])
+    msgs.append(entry)
+    th["messages"] = msgs[-_MAX_MESSAGES:]
+    th["updated_at"] = ts
+    record["active_id"] = str(th["id"])
+    _save_record(record, user_key, audience)
+    return True
 
 
-def delete_thread(phone: str, thread_id: str) -> bool:
-    record = load_user_record(phone)
+def messages_since(
+    user_key: str,
+    thread_id: str | None,
+    after_iso: str = "",
+    audience: str | None = None,
+    *,
+    after_count: int = 0,
+    exclude_escalation_ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """پیام‌های جدید گفتگوی فعال — برای polling (پاسخ ادمین + پیام‌های بعدی)."""
+    all_msgs = messages_for_ui(user_key, thread_id, audience)
+    if not all_msgs:
+        return []
+
+    exclude = {str(x).strip() for x in (exclude_escalation_ids or []) if str(x).strip()}
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _push(item: dict[str, Any]) -> None:
+        eid = str(item.get("escalation_id") or "").strip()
+        ts = str(item.get("created_at") or "").strip()
+        key = eid or ts or str(item.get("content") or "")[:80]
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(item)
+
+    # برش بر اساس تعداد پیام‌های ذخیره‌شده در کلاینت (قابل‌اعتمادتر از timestamp)
+    if after_count > 0:
+        if after_count < len(all_msgs):
+            for item in all_msgs[after_count:]:
+                _push(item)
+    else:
+        after = (after_iso or "").strip()
+        if after:
+            for item in all_msgs:
+                ts = str(item.get("created_at") or "")
+                if ts > after:
+                    _push(item)
+
+    # پاسخ ادمین ممکن است timestamp قدیمی‌تر از آخرین پیام کاربر داشته باشد — همیشه چک کن
+    for item in all_msgs:
+        if str(item.get("source") or "") != "admin_escalation":
+            continue
+        eid = str(item.get("escalation_id") or "").strip()
+        if eid and eid in exclude:
+            continue
+        _push(item)
+
+    out.sort(key=lambda x: str(x.get("created_at") or ""))
+    return out
+
+
+def clear_chat(user_key: str, audience: str | None = None) -> str:
+    """گفتگوی جدید — اگر گفتگوی فعال خالی است همان را بازنشانی می‌کند."""
+    record = load_user_record(user_key, audience)
+    th = _active_thread(record)
+    if th and not (th.get("messages") or []):
+        ts = _now_iso()
+        th["title"] = "گفتگوی جدید"
+        th["updated_at"] = ts
+        record["active_id"] = th["id"]
+        _save_record(record, user_key, audience)
+        return str(th["id"])
+    return create_thread(user_key, activate=True, audience=audience)
+
+
+def delete_thread(user_key: str, thread_id: str, audience: str | None = None) -> bool:
+    record = load_user_record(user_key, audience)
     before = len(record.get("threads") or [])
     record["threads"] = [t for t in (record.get("threads") or []) if t.get("id") != thread_id]
     if len(record["threads"]) == before:
@@ -335,7 +548,9 @@ def delete_thread(phone: str, thread_id: str) -> bool:
             }
         ]
         record["active_id"] = tid
-    elif record.get("active_id") == thread_id:
-        record["active_id"] = record["threads"][0]["id"]
-    _save_record(record, phone)
+    else:
+        record, _ = _finalize_record(record)
+        if record.get("active_id") == thread_id:
+            record["active_id"] = record["threads"][0]["id"] if record["threads"] else None
+    _save_record(record, user_key, audience)
     return True

@@ -152,6 +152,16 @@ def _register_jinja_filters(app: Flask) -> None:
                 return ''
 
 
+def _flask_instance_path() -> str:
+    """مسیر instance مطلق — روی Passenger با INSTANCE_PATH یا پوشهٔ پروژه."""
+    envp = os.environ.get("INSTANCE_PATH")
+    if envp:
+        return os.path.abspath(envp)
+    return os.path.abspath(
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "instance")
+    )
+
+
 def create_app() -> Flask:
     # اطمینان از MIME صحیح برای فونت‌ها (برخی سرورها پسوند woff2 را نمی‌شناسند)
     try:
@@ -160,7 +170,9 @@ def create_app() -> Flask:
     except Exception:
         pass
 
-    app = Flask(__name__, instance_relative_config=True)
+    instance_folder = _flask_instance_path()
+    os.makedirs(instance_folder, exist_ok=True)
+    app = Flask(__name__, instance_path=instance_folder, instance_relative_config=False)
 
     # ---------- پایه‌های امنیت/پیکربندی ----------
     app.secret_key = os.environ.get("SECRET_KEY") or "super-secret-key-change-this"
@@ -218,6 +230,16 @@ def create_app() -> Flask:
     _ensure_instance_folder(app)
     _setup_logging(app)
     _register_jinja_filters(app)
+
+    try:
+        from .utils.storage import migrate_legacy
+        from .ai.paths import ensure_escalations_file
+
+        with app.app_context():
+            migrate_legacy(app)
+            ensure_escalations_file()
+    except Exception as e:
+        app.logger.warning("Data dir / AI escalations init: %s", e)
 
     # Initialize DB (SQLAlchemy)
     try:
@@ -562,9 +584,10 @@ def create_app() -> Flask:
             # Express listings (public)
             "/express",
             "/public",  # صفحه اکسپلور عمومی - بدون نیاز به ورود
+            "/ai",  # Vinor AI برای کاربر عادی (مهمان با session مهمان)
         }
         # Public dynamic paths (prefix-based)
-        public_prefixes = ("/express/", "/uploads/")
+        public_prefixes = ("/express/", "/uploads/", "/ai/")
         if request.path.startswith(public_prefixes):
             current_app.logger.debug("PASS (public-prefix): %s", request.path)
             return

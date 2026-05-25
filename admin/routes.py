@@ -1973,7 +1973,12 @@ def ai_questions():
         ans = (request.form.get('admin_answer') or '').strip()
         result = answer_escalation(eid, ans)
         if result.get('ok'):
-            flash('پاسخ ثبت شد و در چت بعدی همکار نمایش داده می‌شود.', 'success')
+            n = int(result.get('delivered_count') or 0)
+            sim = int(result.get('similar_count') or 0)
+            msg = f'پاسخ در {n} چت کاربر نمایش داده شد.'
+            if sim:
+                msg += f' ({sim} سوال مشابه دیگر هم پاسخ داده شد.)'
+            flash(msg, 'success')
         else:
             flash(result.get('error') or 'خطا در ثبت پاسخ.', 'error')
         return redirect(url_for('admin.ai_questions'))

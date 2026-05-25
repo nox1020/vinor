@@ -57,7 +57,7 @@ def _fmt_price(val: Any) -> str:
         return str(val or "—")
 
 
-def _land_summary(land: dict[str, Any], *, assigned: bool) -> str:
+def _land_summary(land: dict[str, Any], *, assigned: bool, show_commission: bool = True) -> str:
     code = str(land.get("code") or "").strip()
     title = str(land.get("title") or "—").strip()
     city = str(land.get("city") or "").strip()
@@ -74,7 +74,7 @@ def _land_summary(land: dict[str, Any], *, assigned: bool) -> str:
     pct = land.get("_commission_pct")
     comm = land.get("_commission_amount")
     comm_line = ""
-    if pct or comm:
+    if show_commission and (pct or comm):
         comm_line = f" | پورسانت: {pct or '—'}٪ → {_fmt_price(comm)} تومان"
     desc = str(land.get("description") or land.get("desc") or "").strip()
     if len(desc) > 280:
@@ -192,10 +192,44 @@ def build_partner_context(phone: str) -> str:
     return "\n".join(parts)
 
 
+def build_public_context() -> str:
+    """زمینه برای کاربر عادی — فقط آگهی‌های عمومی و راهنمای خریدار."""
+    settings = load_settings() or {}
+    admin_phone = str(settings.get("partner_application_admin_phone") or "09121471301").strip()
+    cities = load_active_cities() or []
+    public = _public_lands_sample(25)
+    parts = [
+        "=== اطلاعات داخلی وینور برای کاربر عادی (فقط از همین بخش پاسخ بده) ===",
+        "نقش مخاطب: کاربر عادی / خریدار / علاقه‌مند — نه همکار.",
+        f"شهرهای فعال: {', '.join(str(c) for c in cities[:20])}",
+        f"پشتیبانی تماس: {admin_phone}",
+        "",
+        "درباره وینور:",
+        "- پلتفرم موبایل‌محور خرید و فروش زمین، باغ و ویلا با پرونده‌های تأییدشده.",
+        "- آگهی‌های نمایش‌داده‌شده در اکسپرس توسط تیم وینور بررسی شده‌اند.",
+        "",
+        "راهنمای کوتاه خرید امن:",
+        "- مدارک ملک (سند، کد رهگیری و …) را بررسی کنید.",
+        "- بازدید حضوری و مشاوره با تیم وینور پیش از پرداخت.",
+        "- برای همکاری در فروش و پورسانت: ثبت‌نام در بخش همکاری وینور (نه در این چت).",
+        "",
+        f"--- آگهی‌های عمومی اکسپرس ({len(public)} مورد) ---",
+    ]
+    if public:
+        for land in public:
+            item = dict(land)
+            item["_assignment_status"] = "public"
+            item["_is_expired"] = is_ad_expired(land)
+            parts.append(_land_summary(item, assigned=False, show_commission=False))
+    else:
+        parts.append("(فعلاً آگهی فعالی در لیست نیست)")
+    return "\n".join(parts)
+
+
 def append_admin_answers_block(base_context: str, admin_notes: list[dict[str, str]]) -> str:
     if not admin_notes:
         return base_context
-    lines = ["", "--- پاسخ‌های تیم وینور به سوالات قبلی این همکار (الزاماً در پاسخ بگو) ---"]
+    lines = ["", "--- پاسخ‌های تیم وینور به سوالات قبلی این کاربر (الزاماً در پاسخ بگو) ---"]
     for n in admin_notes:
         q = (n.get("question") or "").strip()
         a = (n.get("answer") or "").strip()

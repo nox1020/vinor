@@ -2287,55 +2287,96 @@ def routine_complete():
 @express_partner_bp.get('/ai', endpoint='ai')
 @require_partner_access(allow_pending=True)
 def ai_page():
+    from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import (
         ensure_active_thread,
         messages_for_ui,
         threads_for_ui,
     )
-    from app.ai.services import ai_config
-
     phone = (session.get('user_phone') or '').strip()
-    ensure_active_thread(phone)
-    threads = threads_for_ui(phone)
+    ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
+    threads = threads_for_ui(phone, audience=AUDIENCE_PARTNER)
     active_thread_id = next((t['id'] for t in threads if t.get('is_active')), '')
     resp = make_response(
         render_template(
             'express_partner/ai.html',
             hide_header=True,
-            chat_messages=messages_for_ui(phone),
+            chat_messages=messages_for_ui(phone, audience=AUDIENCE_PARTNER),
             chat_threads=threads,
             active_thread_id=active_thread_id,
-            ai_cfg=ai_config(),
+            ai_audience='partner',
             chat_api_url=url_for('express_partner.ai_chat'),
             clear_api_url=url_for('express_partner.ai_clear'),
             history_api_url=url_for('express_partner.ai_history'),
             switch_thread_url=url_for('express_partner.ai_switch_thread'),
             delete_thread_url=url_for('express_partner.ai_delete_thread'),
+            sync_api_url=url_for('express_partner.ai_sync'),
         )
     )
     _append_partner_tab_prefetch(resp)
     return resp
 
 
+@express_partner_bp.get('/ai/sync', endpoint='ai_sync')
+@require_partner_access(allow_pending=True, json_response=True)
+def ai_sync():
+    from app.ai.audience import AUDIENCE_PARTNER
+    from app.ai.chat_store import messages_since
+
+    phone = (session.get('user_phone') or '').strip()
+    thread_id = (request.args.get('thread_id') or '').strip() or None
+    after = (request.args.get('after') or '').strip()
+    after_count = request.args.get('count', type=int) or 0
+    exclude_esc = [
+        x.strip()
+        for x in (request.args.get('exclude_esc') or '').split(',')
+        if x.strip()
+    ]
+    msgs = messages_since(
+        phone,
+        thread_id,
+        after,
+        audience=AUDIENCE_PARTNER,
+        after_count=max(0, after_count),
+        exclude_escalation_ids=exclude_esc,
+    )
+    return jsonify({
+        'ok': True,
+        'messages': msgs,
+        'thread_id': thread_id,
+        'total': len(msgs),
+    })
+
+
 @express_partner_bp.get('/ai/history', endpoint='ai_history')
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_history():
+    from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import messages_for_ui, threads_for_ui
 
     phone = (session.get('user_phone') or '').strip()
     thread_id = (request.args.get('thread_id') or '').strip() or None
-    return jsonify({
+    threads_only = request.args.get('threads_only', '').lower() in ('1', 'true', 'yes')
+    payload = {
         'ok': True,
-        'threads': threads_for_ui(phone),
-        'messages': messages_for_ui(phone, thread_id),
+        'threads': threads_for_ui(phone, audience=AUDIENCE_PARTNER),
         'thread_id': thread_id,
-    })
+    }
+    if not threads_only:
+        payload['messages'] = messages_for_ui(phone, thread_id, audience=AUDIENCE_PARTNER)
+    return jsonify(payload)
 
 
 @express_partner_bp.post('/ai/chat', endpoint='ai_chat')
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_chat():
-    from app.ai.chat_store import append_exchange, ensure_active_thread, history_for_api
+    from app.ai.audience import AUDIENCE_PARTNER
+    from app.ai.chat_store import (
+        append_exchange,
+        ensure_active_thread,
+        history_for_api,
+        threads_for_ui,
+    )
     from app.ai.services import generate_reply
 
     phone = (session.get('user_phone') or '').strip()
@@ -2346,10 +2387,16 @@ def ai_chat():
         return jsonify({'ok': False, 'error': 'پیام خالی است.'}), 400
 
     if not thread_id:
-        thread_id = ensure_active_thread(phone)
+        thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
 
-    history = history_for_api(phone, thread_id)
-    result = generate_reply(message, history=history, phone=phone, thread_id=thread_id)
+    history = history_for_api(phone, thread_id, audience=AUDIENCE_PARTNER)
+    result = generate_reply(
+        message,
+        history=history,
+        user_key=phone,
+        audience=AUDIENCE_PARTNER,
+        thread_id=thread_id,
+    )
     if not result.get('ok'):
         return jsonify(result), 400
 
@@ -2360,57 +2407,63 @@ def ai_chat():
         result.get('reply') or '',
         thread_id=thread_id,
         assistant_land_codes=land_codes,
+        audience=AUDIENCE_PARTNER,
     )
     result['messages'] = msgs
+    result['audience'] = AUDIENCE_PARTNER
     result['thread_id'] = tid
+    result['threads'] = threads_for_ui(phone, audience=AUDIENCE_PARTNER)
     return jsonify(result)
 
 
 @express_partner_bp.post('/ai/clear', endpoint='ai_clear')
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_clear():
+    from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import clear_chat
 
     phone = (session.get('user_phone') or '').strip()
-    tid = clear_chat(phone)
+    tid = clear_chat(phone, audience=AUDIENCE_PARTNER)
     return jsonify({'ok': True, 'thread_id': tid})
 
 
 @express_partner_bp.post('/ai/thread/switch', endpoint='ai_switch_thread')
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_switch_thread():
+    from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import messages_for_ui, set_active_thread, threads_for_ui
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
     thread_id = (data.get('thread_id') or '').strip()
-    if not thread_id or not set_active_thread(phone, thread_id):
+    if not thread_id or not set_active_thread(phone, thread_id, audience=AUDIENCE_PARTNER):
         return jsonify({'ok': False, 'error': 'گفتگو یافت نشد.'}), 404
     return jsonify({
         'ok': True,
         'thread_id': thread_id,
-        'messages': messages_for_ui(phone, thread_id),
-        'threads': threads_for_ui(phone),
+        'messages': messages_for_ui(phone, thread_id, audience=AUDIENCE_PARTNER),
+        'threads': threads_for_ui(phone, audience=AUDIENCE_PARTNER),
     })
 
 
 @express_partner_bp.post('/ai/thread/delete', endpoint='ai_delete_thread')
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_delete_thread():
+    from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import delete_thread, load_user_record, messages_for_ui, threads_for_ui
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
     thread_id = (data.get('thread_id') or '').strip()
-    if not thread_id or not delete_thread(phone, thread_id):
+    if not thread_id or not delete_thread(phone, thread_id, audience=AUDIENCE_PARTNER):
         return jsonify({'ok': False, 'error': 'حذف ممکن نیست.'}), 400
-    record = load_user_record(phone)
+    record = load_user_record(phone, audience=AUDIENCE_PARTNER)
     active = record.get('active_id')
     return jsonify({
         'ok': True,
         'thread_id': active,
-        'messages': messages_for_ui(phone, active),
-        'threads': threads_for_ui(phone),
+        'messages': messages_for_ui(phone, active, audience=AUDIENCE_PARTNER),
+        'threads': threads_for_ui(phone, audience=AUDIENCE_PARTNER),
     })
 
 

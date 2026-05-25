@@ -1,8 +1,11 @@
 {# پیام چت Vinor AI — متن + کارت فایل (همان land_premium_card) #}
 <div class="ai-msg-wrap flex max-w-[92%] flex-col gap-0 {{ 'mr-auto items-end' if msg.role == 'user' else 'ml-auto items-start' }}"
-     data-role="{{ msg.role }}">
+     data-role="{{ msg.role }}"
+     {% if msg.created_at %}data-created-at="{{ msg.created_at }}"{% endif %}
+     {% if msg.escalation_id %}data-escalation-id="{{ msg.escalation_id }}"{% endif %}
+     {% if msg.source == 'admin_escalation' %}data-admin-reply="1"{% endif %}>
   {% if msg.content %}
-  <div class="rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words {{ 'border border-emerald-500/25 bg-emerald-500/10 text-emerald-100' if msg.role == 'user' else 'border border-violet-500/20 bg-violet-500/10 text-violet-100' }}">
+  <div class="rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words {% if msg.role == 'user' %}border border-emerald-500/25 bg-emerald-500/10 text-emerald-100{% elif msg.source == 'admin_escalation' %}border border-amber-500/35 bg-amber-500/15 text-amber-50{% else %}border border-violet-500/20 bg-violet-500/10 text-violet-100{% endif %}">
     {{ msg.content }}
   </div>
   {% endif %}
