@@ -52,7 +52,7 @@ def _load_cache() -> dict[str, Any]:
 
 
 def mark_api_balance_depleted() -> None:
-    """پس از خطای 402 — ترجیح مدل آفلاین در حالت auto."""
+    """پس از خطای 402 — جلوگیری از درخواست‌های بی‌فایده تا شارژ مجدد."""
     data = _load_cache()
     data.setdefault("flags", {})
     data["flags"]["api_balance_depleted"] = time.time()
@@ -200,6 +200,9 @@ def apply_credit_guard(
     err = validate_message_length(message)
     if err:
         return {"ok": False, "error": err}
+
+    if is_api_balance_depleted():
+        return None
 
     rate_err = check_rate_limit(user_key, audience)
     if rate_err:

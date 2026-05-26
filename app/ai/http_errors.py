@@ -9,4 +9,6 @@ def ai_chat_http_status(result: dict[str, Any]) -> int:
         return 200
     if result.get("rate_limited"):
         return 429
+    if result.get("error_code") == "api_unavailable":
+        return 503
     return 400

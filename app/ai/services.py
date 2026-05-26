@@ -10,12 +10,12 @@ from flask import current_app
 
 from .audience import AUDIENCE_PARTNER, AUDIENCE_PUBLIC
 from .config import (
-    DEEPSEEK_API_KEY,
     DEEPSEEK_BASE_URL,
     DEEPSEEK_MODEL,
     ESCALATE_MARKER_RE,
     VINOR_AI_PARTNER_PROMPT,
     VINOR_AI_PUBLIC_PROMPT,
+    get_deepseek_api_key,
 )
 from .context import append_admin_answers_block, build_partner_context, build_public_context
 from .context_cache import get_partner_context, get_public_context
@@ -23,6 +23,7 @@ from .credits import (
     apply_credit_guard,
     budget_config,
     clear_api_balance_depleted,
+    is_api_balance_depleted,
     mark_api_balance_depleted,
     record_api_call,
     store_cached_reply,
@@ -32,17 +33,13 @@ from .land_cards import collect_land_codes, land_cards_payload
 
 
 def ai_config() -> dict[str, Any]:
-    api_key = (
-        os.environ.get("DEEPSEEK_API_KEY")
-        or os.environ.get("VINOR_DEEPSEEK_API_KEY")
-        or DEEPSEEK_API_KEY
-        or ""
-    ).strip()
+    api_key = get_deepseek_api_key()
     return {
         "enabled": os.environ.get("VINOR_AI_ENABLED", "1").lower() not in ("0", "false", "no"),
         "provider": "deepseek",
-        "model": os.environ.get("VINOR_AI_MODEL") or DEEPSEEK_MODEL,
+        "model": DEEPSEEK_MODEL,
         "api_key_set": bool(api_key),
+        "api_balance_ok": not is_api_balance_depleted(),
     }
 
 
@@ -139,12 +136,7 @@ def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
     model = cfg["model"]
     url = f"{DEEPSEEK_BASE_URL.rstrip('/')}/chat/completions"
     bcfg = budget_config()
-    api_key = (
-        os.environ.get("DEEPSEEK_API_KEY")
-        or os.environ.get("VINOR_DEEPSEEK_API_KEY")
-        or DEEPSEEK_API_KEY
-        or ""
-    ).strip()
+    api_key = get_deepseek_api_key()
     payload = {
         "model": model,
         "messages": messages,
@@ -220,6 +212,52 @@ def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
     }
 
 
+def _escalation_fallback_reply(
+    *,
+    user_key: str,
+    audience: str,
+    user_message: str,
+    thread_id: str | None,
+    reason: str,
+) -> dict[str, Any]:
+    """وقتی API در دسترس نیست — ثبت سوال برای ادمین و پیام به کاربر."""
+    esc = create_escalation(
+        user_key=user_key,
+        audience=audience,
+        question=user_message[:200],
+        user_message=user_message,
+        thread_id=thread_id,
+    )
+    if reason == "balance":
+        intro = (
+            "اعتبار سرویس هوش مصنوعی (DeepSeek) در حال حاضر کافی نیست. "
+        )
+    elif reason == "no_key":
+        intro = "سرویس هوش مصنوعی هنوز پیکربندی نشده است. "
+    else:
+        intro = "پاسخ خودکار AI موقتاً در دسترس نیست. "
+
+    if esc.get("ok"):
+        reply = (
+            intro
+            + "سوال شما برای تیم وینور ثبت شد؛ به‌زودی در همین گفتگو پاسخ می‌گیرید."
+        )
+        out: dict[str, Any] = {
+            "ok": True,
+            "reply": reply,
+            "escalated": True,
+            "escalation_id": str(esc.get("id") or ""),
+            "meta": {"provider": "escalation", "reason": reason},
+        }
+    else:
+        out = {
+            "ok": False,
+            "error": intro + "لطفاً بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.",
+            "error_code": "api_unavailable",
+        }
+    return out
+
+
 def generate_reply(
     message: str,
     *,
@@ -240,7 +278,21 @@ def generate_reply(
     if not cfg["enabled"]:
         return {"ok": False, "error": "سرویس هوش مصنوعی موقتاً غیرفعال است."}
     if not cfg["api_key_set"]:
-        return {"ok": False, "error": "کلید API تنظیم نشده است."}
+        return _escalation_fallback_reply(
+            user_key=key,
+            audience=aud,
+            user_message=text,
+            thread_id=thread_id,
+            reason="no_key",
+        )
+    if is_api_balance_depleted():
+        return _escalation_fallback_reply(
+            user_key=key,
+            audience=aud,
+            user_message=text,
+            thread_id=thread_id,
+            reason="balance",
+        )
 
     guard = apply_credit_guard(key, aud, text)
     if guard is not None:
@@ -253,6 +305,22 @@ def generate_reply(
     messages = _build_messages(text, history, user_key=key, audience=aud)
     result = _call_deepseek(messages)
     if not result.get("ok"):
+        if result.get("balance_depleted"):
+            fallback = _escalation_fallback_reply(
+                user_key=key,
+                audience=aud,
+                user_message=text,
+                thread_id=thread_id,
+                reason="balance",
+            )
+            if fallback.get("ok"):
+                return _finalize_reply(
+                    fallback,
+                    text=text,
+                    user_key=key,
+                    audience=aud,
+                    thread_id=thread_id,
+                )
         return result
 
     record_api_call(key, aud)

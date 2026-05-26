@@ -1,13 +1,17 @@
 """تنظیمات DeepSeek برای Vinor AI."""
 import os
 
-DEEPSEEK_API_KEY = (
-    os.environ.get("DEEPSEEK_API_KEY")
-    or os.environ.get("VINOR_DEEPSEEK_API_KEY")
-    or "sk-c727f78fbebc41f7a5e8b78e9e8de756"
-).strip()
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEEPSEEK_MODEL = "deepseek-chat"
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
+DEEPSEEK_MODEL = os.environ.get("VINOR_AI_MODEL", "deepseek-chat").strip()
+
+
+def get_deepseek_api_key() -> str:
+    """خواندن کلید در زمان فراخوانی (بعد از load_dotenv)."""
+    return (
+        os.environ.get("DEEPSEEK_API_KEY")
+        or os.environ.get("VINOR_DEEPSEEK_API_KEY")
+        or ""
+    ).strip()
 
 ESCALATE_MARKER_RE = r"\[\[ESCALATE(?::([^\]]+))?\]\]"
 

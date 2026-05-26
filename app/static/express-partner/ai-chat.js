@@ -499,7 +499,22 @@
       } catch (_) {}
 
       if (!resp.ok || !data || !data.ok) {
-        throw new Error((data && data.error) || 'خطا در دریافت پاسخ');
+        var errText = (data && data.error) || 'خطا در دریافت پاسخ';
+        if (data && data.escalated && data.reply) {
+          if (data.thread_id) setActiveThreadId(data.thread_id);
+          appendMessage({
+            role: 'assistant',
+            content: data.reply,
+            cards_html: data.cards_html,
+            land_cards: data.land_cards,
+            escalation_id: data.escalation_id,
+          });
+          if (data.threads) applyThreads(data.threads);
+          else await refreshHistory();
+          pollSync();
+          return;
+        }
+        throw new Error(errText);
       }
       if (data.thread_id) setActiveThreadId(data.thread_id);
       appendMessage({
