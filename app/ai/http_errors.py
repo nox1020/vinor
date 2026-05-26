@@ -7,9 +7,6 @@ from typing import Any
 def ai_chat_http_status(result: dict[str, Any]) -> int:
     if not result or result.get("ok"):
         return 200
-    code = str(result.get("error_code") or "").strip()
-    if code in ("bootstrap_pending", "offline_unavailable"):
-        return 503
     if result.get("rate_limited"):
         return 429
     return 400

@@ -499,16 +499,7 @@
       } catch (_) {}
 
       if (!resp.ok || !data || !data.ok) {
-        var errText = (data && data.error) || 'خطا در دریافت پاسخ';
-        if (
-          resp.status === 503 ||
-          (data && (data.error_code === 'bootstrap_pending' || data.bootstrap))
-        ) {
-          errText =
-            errText +
-            ' (مدل در حال دانلود است؛ حدود ۱–۳ دقیقه صبر کنید و دوباره بفرستید.)';
-        }
-        throw new Error(errText);
+        throw new Error((data && data.error) || 'خطا در دریافت پاسخ');
       }
       if (data.thread_id) setActiveThreadId(data.thread_id);
       appendMessage({

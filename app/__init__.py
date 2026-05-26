@@ -372,18 +372,11 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning(f"Express Partner blueprint not available: {e}")
 
-    # AI blueprint + bootstrap خودکار مدل آفلاین
-    os.environ.setdefault("VINOR_AI_PROVIDER", "offline")
-    os.environ.setdefault("VINOR_AI_AUTO_BOOTSTRAP", "1")
+    # AI blueprint (DeepSeek)
     try:
         from .ai import ai_bp
         app.register_blueprint(ai_bp)
         app.logger.info("AI blueprint registered: /ai")
-        try:
-            from app.ai.services import init_ai_runtime
-            init_ai_runtime(app)
-        except Exception as boot_exc:
-            app.logger.warning("Offline AI bootstrap start failed: %s", boot_exc)
     except Exception as e:
         app.logger.warning(f"AI blueprint not available: {e}")
 

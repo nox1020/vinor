@@ -1,4 +1,0 @@
-# وابستگی‌های اختیاری مدل آفلاین Vinor AI
-# pip install -r requirements-offline.txt
-llama-cpp-python>=0.3.0
-huggingface_hub>=0.24.0
