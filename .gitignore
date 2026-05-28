@@ -122,3 +122,17 @@ celerybeat.pid
 # Redis dump
 dump.rdb
 
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+.env
+tmp/
+*.log
+*.zip
+uploads/
+instance/
+*.sqlite3
+*.db
