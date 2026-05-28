@@ -10,7 +10,6 @@
   var TAB_PATHS = {
     '/express/partner/dashboard': 'dashboard',
     '/express/partner/commissions': 'commissions',
-    '/express/partner/ai': 'ai',
     '/express/partner/routine': 'routine',
     '/express/partner/profile': 'profile'
   };
@@ -569,5 +568,19 @@
     document.addEventListener('DOMContentLoaded', syncBottomNavForCurrentPath);
   } else {
     syncBottomNavForCurrentPath();
+  }
+
+  function prefetchMainTabs() {
+    try {
+      ['/express/partner/commissions', '/express/partner/routine', '/express/partner/profile'].forEach(function (path) {
+        prefetchHref(new URL(path, window.location.origin).href);
+      });
+    } catch (_) {}
+  }
+
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(prefetchMainTabs, { timeout: 3500 });
+  } else {
+    window.setTimeout(prefetchMainTabs, 2200);
   }
 })();

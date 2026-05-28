@@ -387,11 +387,9 @@ def get_menu():
         
         # منوی همکار اکسپرس - نمایش در هر دو حالت (وارد شده و وارد نشده)
         # دسترسی‌ها بعداً تنظیم می‌شوند
-        ai_endpoint = 'express_partner.ai' if is_express_partner else 'ai.index'
         partner_menu = [
             {'key': 'dashboard', 'endpoint': 'express_partner.dashboard', 'icon': 'fa-home', 'label': 'وینور'},
             {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-chart-line', 'label': 'پورسانت', 'disabled': not is_express_partner},
-            {'key': 'ai', 'endpoint': ai_endpoint, 'icon': 'fa-wand-magic-sparkles', 'label': 'AI'},
             {'key': 'routine', 'endpoint': 'express_partner.routine', 'icon': 'fa-list-check', 'label': 'روتین', 'disabled': not is_express_partner},
             {'key': 'profile', 'endpoint': 'express_partner.profile', 'icon': 'fa-user', 'label': 'من'}
         ]
@@ -434,7 +432,6 @@ def get_menu():
             'menu': [
                 {'key': 'dashboard', 'url': '/express/partner/dashboard', 'icon': 'fa-home', 'label': 'وینور'},
                 {'key': 'commissions', 'url': '/express/partner/commissions', 'icon': 'fa-chart-line', 'label': 'پورسانت', 'disabled': True},
-                {'key': 'ai', 'url': '/ai', 'icon': 'fa-wand-magic-sparkles', 'label': 'AI'},
                 {'key': 'routine', 'url': '/express/partner/routine', 'icon': 'fa-list-check', 'label': 'روتین', 'disabled': True},
                 {'key': 'profile', 'url': '/express/partner/profile', 'icon': 'fa-user', 'label': 'من'}
             ],

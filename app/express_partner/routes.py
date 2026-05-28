@@ -197,6 +197,25 @@ def _append_partner_tab_prefetch(resp):
     return resp
 
 
+DASHBOARD_INITIAL_CARD_LIMIT = 24
+
+
+def _is_mobile_partner_client() -> bool:
+    """موبایل / WebView اپ — برای حذف HTML دسکتاپ از پاسخ اول."""
+    ua = (request.headers.get("User-Agent") or "").lower()
+    compact = ua.replace(" ", "")
+    if "vinorapp" in compact:
+        return True
+    return any(
+        tok in ua
+        for tok in ("iphone", "ipod", "ipad", "android", "mobile", "webos", "opera mini", "iemobile")
+    )
+
+
+def _dashboard_request_has_filters(search_query: str, selected_cities: list, filter_tag: str, filter_cat: str) -> bool:
+    return bool(search_query or selected_cities or filter_tag or filter_cat)
+
+
 def _normalize_phone(phone: str) -> str:
     """Normalize phone number - استفاده از همان تابع notifications"""
     from app.services.notifications import _normalize_user_id
@@ -1173,6 +1192,13 @@ def dashboard():
     cities = _active_cities_cached()
     # سئو: عنوان و توضیح برای موتورهای جستجو (صفحه فایل‌ها برای همه در دسترس است)
     count = len(assigned_lands)
+    dashboard_mobile_only = _is_mobile_partner_client()
+    has_filters = _dashboard_request_has_filters(search_query, selected_cities, filter_tag, filter_cat)
+    show_all_cards = request.args.get("all") == "1" or has_filters
+    dashboard_lands_truncated = False
+    if not show_all_cards and count > DASHBOARD_INITIAL_CARD_LIMIT:
+        assigned_lands = assigned_lands[:DASHBOARD_INITIAL_CARD_LIMIT]
+        dashboard_lands_truncated = True
     seo_title = "فایل‌های اکسپرس وینور | خرید و فروش ملک و زمین"
     seo_description = f"لیست فایل‌های اکسپرس وینور. {count} فایل معتبر برای خرید و فروش ملک، زمین، ویلا و آپارتمان. مشاهده قیمت و جزئیات."
     try:
@@ -1194,6 +1220,9 @@ def dashboard():
         training_video_url=training_video_url,
         cities=cities,
         assigned_lands=assigned_lands,
+        lands_total_count=count,
+        dashboard_lands_truncated=dashboard_lands_truncated,
+        dashboard_mobile_only=dashboard_mobile_only,
         total_commission=total_commission,
         pending_commission=pending_commission,
         sold_count=sold_count,

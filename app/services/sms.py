@@ -2,32 +2,19 @@
 """
 sms.ir — ارسال OTP و پیامک قالب‌دار/مستقیم.
 
-اعتبارسنجی ورود همکار (کد OTP) از همین فایل با کلید و قالب زیر انجام می‌شود.
-اگر روی سرور متغیر SMS_API_KEY ست باشد، همان اولویت دارد.
+کلید و قالب: api_keys.py در ریشه پروژه.
 """
-import os
 import re
 import requests
 from flask import current_app
+
+from app.services.sms_config import get_sms_api_key, get_sms_line_number, get_sms_template_id
 
 # ارقام فارسی/عربی → لاتین
 _DIGIT_TRANSLATION = str.maketrans(
     "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
     "01234567890123456789",
 )
-
-# ---------------------------------------------------------------------------
-# کلید API و قالب پیامک اعتبارسنجی (OTP)
-# پنل: sms.ir | POST https://api.sms.ir/v1/send/verify
-# پارامتر قالب باید با نام CODE در پنل هماهنگ باشد.
-# ---------------------------------------------------------------------------
-SMS_IR_OTP_API_KEY = "AcEcwFoGsqya9QdAii8QWhU51eie84sEbB9I4mJ0gknvm7lg"
-SMS_IR_OTP_TEMPLATE_ID = 878451
-SMS_IR_DEFAULT_LINE_NUMBER = "300089930616"
-
-SMS_API_KEY = os.environ.get("SMS_API_KEY") or SMS_IR_OTP_API_KEY
-TEMPLATE_ID = SMS_IR_OTP_TEMPLATE_ID
-DEFAULT_LINE_NUMBER = SMS_IR_DEFAULT_LINE_NUMBER
 
 
 def normalize_iran_mobile(phone: str) -> str:
@@ -86,11 +73,11 @@ def send_sms_code(phone: str, code: str) -> dict:
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "x-api-key": SMS_API_KEY,
+        "x-api-key": get_sms_api_key(),
     }
     data = {
         "mobile": mobile,
-        "templateId": TEMPLATE_ID,
+        "templateId": get_sms_template_id(),
         "parameters": [{"name": "CODE", "value": str(code)}],
     }
     try:
@@ -134,7 +121,7 @@ def send_sms_template(
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "x-api-key": (api_key or SMS_API_KEY),
+        "x-api-key": (api_key or get_sms_api_key()),
     }
     params_list = []
     if parameters:
@@ -170,12 +157,12 @@ def send_sms_direct(
     api_key: str | None = None,
 ) -> dict:
     """ارسال پیامک مستقیم بدون قالب (bulk API در sms.ir)."""
-    final_line_number = line_number or DEFAULT_LINE_NUMBER
+    final_line_number = line_number or get_sms_line_number()
     url = "https://api.sms.ir/v1/send/bulk"
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "x-api-key": (api_key or SMS_API_KEY),
+        "x-api-key": (api_key or get_sms_api_key()),
     }
     payload = {
         "lineNumber": str(final_line_number),

@@ -129,59 +129,6 @@
           </a>
         </div>
 
-        {# دسته‌ها — کارت‌های کوچک #}
-        <div class="grid grid-cols-5 gap-1.5 sm:gap-2 pb-1">
-          <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, cat='land_garden') }}"
-             class="flex flex-col items-center justify-center gap-1 rounded-xl border py-2 px-1 text-center transition-colors min-h-[4.5rem]
-                    {% if fcat == 'land_garden' %}
-                    border-amber-400/70 bg-amber-500/10 dark:bg-amber-950/30
-                    {% else %}
-                    border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-800/50 hover:border-amber-400/40
-                    {% endif %}">
-            <i class="fas fa-map text-lg text-amber-500 dark:text-amber-400"></i>
-            <span class="text-[10px] sm:text-[11px] font-semibold text-gray-900 dark:text-white leading-tight">زمین و باغ</span>
-          </a>
-          <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, cat='ویلا') }}"
-             class="flex flex-col items-center justify-center gap-1 rounded-xl border py-2 px-1 text-center transition-colors min-h-[4.5rem]
-                    {% if fcat == 'ویلا' %}
-                    border-amber-400/70 bg-amber-500/10 dark:bg-amber-950/30
-                    {% else %}
-                    border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-800/50 hover:border-amber-400/40
-                    {% endif %}">
-            <i class="fas fa-house text-lg text-amber-500 dark:text-amber-400"></i>
-            <span class="text-[10px] sm:text-[11px] font-semibold text-gray-900 dark:text-white leading-tight">ویلا</span>
-          </a>
-          <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag='deed') }}"
-             class="flex flex-col items-center justify-center gap-1 rounded-xl border py-2 px-1 text-center transition-colors min-h-[4.5rem]
-                    {% if ftag == 'deed' %}
-                    border-emerald-500/70 bg-emerald-500/10 dark:bg-emerald-950/40
-                    {% else %}
-                    border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-800/50 hover:border-emerald-500/40
-                    {% endif %}">
-            <i class="fas fa-file-contract text-lg text-emerald-600 dark:text-emerald-400"></i>
-            <span class="text-[10px] sm:text-[11px] font-semibold text-gray-900 dark:text-white leading-tight">سنددار</span>
-          </a>
-          <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag='invest') }}"
-             class="flex flex-col items-center justify-center gap-1 rounded-xl border py-2 px-1 text-center transition-colors min-h-[4.5rem]
-                    {% if ftag == 'invest' %}
-                    border-amber-400/70 bg-amber-500/10 dark:bg-amber-950/30
-                    {% else %}
-                    border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-800/50 hover:border-amber-400/40
-                    {% endif %}">
-            <i class="fas fa-chart-line text-lg text-amber-500 dark:text-amber-400"></i>
-            <span class="text-[10px] sm:text-[11px] font-semibold text-gray-900 dark:text-white leading-tight">سرمایه‌گذاری</span>
-          </a>
-          <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag='installment') }}"
-             class="flex flex-col items-center justify-center gap-1 rounded-xl border py-2 px-1 text-center transition-colors min-h-[4.5rem]
-                    {% if ftag == 'installment' %}
-                    border-amber-400/70 bg-amber-500/10 dark:bg-amber-950/30
-                    {% else %}
-                    border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-800/50 hover:border-amber-400/40
-                    {% endif %}">
-            <i class="fas fa-coins text-lg text-amber-500 dark:text-amber-400"></i>
-            <span class="text-[10px] sm:text-[11px] font-semibold text-gray-900 dark:text-white leading-tight">اقساطی</span>
-          </a>
-        </div>
       </div>
     </div>
   </div>

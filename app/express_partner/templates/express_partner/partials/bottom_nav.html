@@ -161,11 +161,10 @@
 </style>
 <nav id="bottomNavMenu" data-tour="bottom-nav" class="tg-tabbar-shell fixed inset-x-0 bottom-0 z-[60]" role="navigation" aria-label="منوی اصلی">
   <div class="tg-tabbar-pill mx-auto w-full max-w-full px-3 py-1">
-    <div id="bottomNavItems" class="grid grid-cols-5 gap-0 min-h-[52px] w-full items-center">
+    <div id="bottomNavItems" class="grid grid-cols-4 gap-0 min-h-[52px] w-full items-center">
       {% set nav_items = [
         {'key': 'dashboard', 'endpoint': 'express_partner.dashboard', 'icon': 'fa-home', 'label': 'وینور'},
         {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-chart-line', 'label': 'پورسانت', 'disabled': not VINOR_IS_EXPRESS_PARTNER},
-        {'key': 'ai', 'endpoint': 'express_partner.ai', 'icon': 'fa-wand-magic-sparkles', 'label': 'AI'},
         {'key': 'routine', 'endpoint': 'express_partner.routine', 'icon': 'fa-list-check', 'label': 'روتین', 'disabled': not VINOR_IS_EXPRESS_PARTNER},
         {'key': 'profile', 'endpoint': 'express_partner.profile', 'icon': 'fa-user', 'label': 'من'}
       ] %}
@@ -268,7 +267,7 @@
     return base + (isActive ? 'tg-tab-active ' : '') + (isDisabled ? 'tg-tab-disabled' : '');
   }
 
-  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v2';
+  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v3';
   const MENU_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 
   function readMenuCache() {

@@ -13,7 +13,7 @@
     background-image:
       radial-gradient(ellipse 90% 60% at 50% 0%, rgba(16, 185, 129, 0.18), transparent 58%),
       linear-gradient(180deg, #030712, #050a0e 50%, #030712);
-    transition: opacity 0.4s ease, visibility 0.4s ease;
+    transition: opacity 0.22s ease, visibility 0.22s ease;
   }
   html:not(.dark) #vinorPartnerSkeletonRoot {
     background: #f1f5f9;
@@ -252,8 +252,8 @@
 
 <script>
 (function () {
-  var MIN_MS = 480;
-  var MAX_MS = 3200;
+  var MIN_MS = 0;
+  var MAX_MS = 6000;
   var t0 = Date.now();
   var done = false;
 
@@ -281,19 +281,20 @@
       try { root.remove(); } catch (_) {}
       var st = document.getElementById('vinor-partner-sk-styles');
       if (st && st.parentNode) st.parentNode.removeChild(st);
-    }, 420);
+    }, 180);
+  }
+
+  function pageReady() {
+    var swap = document.getElementById('vinor-express-page-swap');
+    return !!(swap && swap.childElementCount > 0);
   }
 
   function scheduleHide() {
     var wait = Math.max(0, MIN_MS - (Date.now() - t0));
     window.setTimeout(function () {
-      if (document.readyState === 'complete') {
-        hidePartnerSkeleton();
-        return;
-      }
-      window.addEventListener('load', hidePartnerSkeleton, { once: true });
-      window.setTimeout(hidePartnerSkeleton, MAX_MS);
+      if (pageReady()) hidePartnerSkeleton();
     }, wait);
+    window.setTimeout(hidePartnerSkeleton, MAX_MS);
   }
 
   window.hideVinorPartnerSkeleton = hidePartnerSkeleton;
@@ -302,10 +303,28 @@
   window.addEventListener('offline', syncOfflineUi);
   window.addEventListener('pageshow', function (e) { if (e.persisted) hidePartnerSkeleton(); });
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', scheduleHide);
-  } else {
+  function boot() {
+    if (pageReady()) {
+      scheduleHide();
+      return;
+    }
+    var swap = document.getElementById('vinor-express-page-swap');
+    if (swap && typeof MutationObserver !== 'undefined') {
+      var obs = new MutationObserver(function () {
+        if (pageReady()) {
+          try { obs.disconnect(); } catch (_) {}
+          scheduleHide();
+        }
+      });
+      obs.observe(swap, { childList: true, subtree: false });
+    }
     scheduleHide();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
   }
 })();
 </script>

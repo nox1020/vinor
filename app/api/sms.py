@@ -6,7 +6,8 @@ SMS API endpoints for communication with sms.ir
 
 from datetime import datetime
 from flask import Blueprint, jsonify, request, current_app
-from app.services.sms import send_sms_template, SMS_API_KEY
+from app.services.sms import send_sms_template
+from app.services.sms_config import get_sms_api_key
 from app.utils.storage import load_sms_history, save_sms_history
 
 sms_api_bp = Blueprint('sms_api', __name__, url_prefix='/api/sms')
@@ -163,7 +164,7 @@ def sms_status():
         - Service availability
     """
     try:
-        has_api_key = bool(SMS_API_KEY)
+        has_api_key = bool(get_sms_api_key())
         history = load_sms_history(current_app) or []
         total_sent = len([h for h in history if h.get('success')])
         total_failed = len([h for h in history if not h.get('success')])

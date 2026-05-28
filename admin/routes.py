@@ -1456,8 +1456,8 @@ def sms_colleagues():
                 direct_message = (request.form.get('direct_message') or '').strip()
                 line_number_raw = (request.form.get('line_number') or '').strip()
                 # استفاده از پیش‌فرض در صورت خالی بودن
-                from app.services.sms import DEFAULT_LINE_NUMBER
-                line_number = line_number_raw if line_number_raw else DEFAULT_LINE_NUMBER
+                from app.services.sms_config import get_sms_line_number
+                line_number = line_number_raw if line_number_raw else get_sms_line_number()
                 
                 if not direct_message:
                     error = 'متن پیامک الزامی است.'

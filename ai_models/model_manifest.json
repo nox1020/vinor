@@ -1,0 +1,7 @@
+{
+  "filename": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+  "repo_id": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+  "size_bytes": 491400032,
+  "bundled": true,
+  "note": "Upload ai_models/ with project deploy; set VINOR_AI_AUTO_DOWNLOAD=0 on server"
+}

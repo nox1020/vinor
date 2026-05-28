@@ -20,7 +20,10 @@ except Exception:
 # ───────── کانفیگ از Env (ایمن‌تر) ─────────
 PROJECT_PATH = os.getenv("VINOR_PROJECT_PATH", "/home/garmabs2/myapp")
 ALLOWED_BRANCHES = set(os.getenv("VINOR_ALLOWED_BRANCHES", "main").split(","))
-SECRET = os.getenv("VINOR_WEBHOOK_SECRET", "")  # در GitHub هم همین Secret
+try:
+    from app.keys import VINOR_WEBHOOK_SECRET as SECRET
+except Exception:
+    SECRET = os.getenv("VINOR_WEBHOOK_SECRET", "")
 ALLOWED_REPO = os.getenv("VINOR_ALLOWED_REPO", "asman-trader/garmabsard-flask")  # owner/repo
 DEPLOY_LOG = os.getenv("VINOR_DEPLOY_LOG", f"{PROJECT_PATH}/deploy.log")
 LOCK_FILE = os.getenv("VINOR_DEPLOY_LOCK", "/tmp/vinor_deploy.lock" if not IS_WINDOWS else os.path.join(os.getenv("TEMP", "."), "vinor_deploy.lock"))

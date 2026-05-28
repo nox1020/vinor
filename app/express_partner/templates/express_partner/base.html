@@ -62,15 +62,15 @@
     window.tailwind = window.tailwind || {};
     window.tailwind.config = { darkMode: 'class' };
   </script>
-  <!-- Local CSS/fonts for full offline mode -->
+  <!-- Local CSS/fonts — بارگذاری غیرمسدودکننده -->
   <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-solid-900.woff2') }}" type="font/woff2" crossorigin>
-  <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-regular-400.woff2') }}" type="font/woff2" crossorigin>
-  <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-brands-400.woff2') }}" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
-
-  <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
-  <script defer src="{{ url_for('static', filename='vendor/alpine/alpine-3.14.1.min.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}" media="print" onload="this.media='all'">
+  <noscript>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
+  </noscript>
+  <link rel="preload" as="script" href="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}">
 
   <style>
     html { color-scheme: light; }
@@ -267,6 +267,10 @@
 
   {% include 'express_partner/partials/app_skeleton_shell.html' %}
 
+  {# Tailwind/Alpine پایین body — head سبک‌تر، اسکلتون زودتر paint می‌شود #}
+  <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='vendor/alpine/alpine-3.14.1.min.js') }}"></script>
+
   <div id="vinor-express-page-swap">
     {% block content %}{% endblock %}
   </div>
@@ -330,7 +334,9 @@
     (function () {
       window.addEventListener('pageshow', function (ev) {
         try {
-          if (ev.persisted) window.location.reload();
+          if (ev.persisted && typeof window.hideVinorPartnerSkeleton === 'function') {
+            window.hideVinorPartnerSkeleton();
+          }
         } catch (_) {}
       });
     })();
@@ -338,24 +344,17 @@
 
   <script>
     (function(){
-      // ثبت Service Worker جداگانه برای Express Partner
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('{{ url_for("express_partner.service_worker") }}', { 
+      function registerPartnerSw() {
+        if (!('serviceWorker' in navigator)) return;
+        navigator.serviceWorker.register('{{ url_for("express_partner.service_worker") }}', {
           scope: '/express/partner/',
-          updateViaCache: 'none' 
-        })
-          .then(async (reg) => {
-            try {
-              await navigator.serviceWorker.ready;
-              const sw = navigator.serviceWorker.controller || (await (async()=>{
-                try { await reg.update(); } catch {} 
-                return navigator.serviceWorker.controller;
-              })());
-              
-              if (sw) sw.postMessage({ type: 'VINOR_WARMUP', urls: ['/static/express-partner/skeleton-shell.html'] });
-            } catch {} 
-          })
-          .catch(()=>{});
+          updateViaCache: 'none'
+        }).catch(function () {});
+      }
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(registerPartnerSw, { timeout: 5000 });
+      } else {
+        window.setTimeout(registerPartnerSw, 2500);
       }
 
       // --- PWA Install Hooks (Express Partner) ---
@@ -1149,8 +1148,8 @@
     })();
   </script>
 
-  <script src="{{ 'express-partner/premium-card-media.js'|static_version }}"></script>
-  <script src="{{ 'express-partner/express-nav.js'|static_version }}"></script>
+  <script src="{{ 'express-partner/premium-card-media.js'|static_version }}" defer></script>
+  <script src="{{ 'express-partner/express-nav.js'|static_version }}" defer></script>
 
   <script>
     (function (g) {
@@ -1177,11 +1176,11 @@
       };
     })(window);
   </script>
-  <script src="{{ 'express-partner/dashboard-chrome.js'|static_version }}"></script>
+  <script src="{{ 'express-partner/dashboard-chrome.js'|static_version }}" defer></script>
   <script src="{{ 'express-partner/city-picker.js'|static_version }}" defer></script>
 
   <!-- Onboarding Tour System -->
-  <script src="{{ 'js/onboarding.js'|static_version }}"></script>
+  <script src="{{ 'js/onboarding.js'|static_version }}" defer></script>
   
 </body>
 </html>

@@ -53,11 +53,11 @@
         <video class="absolute inset-0 w-full h-full object-cover opacity-0" muted loop playsinline preload="none" data-vinor-lazy-video>
           <source data-src="{{ video_src }}" type="video/mp4">
           {% if img_src %}
-          <img src="{{ img_src }}" alt="" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+          <img src="{{ img_src }}" alt="" {% if card_img_eager|default(false) %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
           {% endif %}
         </video>
         {% elif img_src %}
-        <img src="{{ img_src }}" alt="{{ land.title or '' }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+        <img src="{{ img_src }}" alt="{{ land.title or '' }}" {% if card_img_eager|default(false) %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
         {% else %}
         <div class="absolute inset-0 grid place-items-center text-neutral-500">
           <i class="fas fa-image text-2xl opacity-50"></i>
@@ -131,11 +131,11 @@
     <video class="absolute inset-0 w-full h-full object-cover opacity-0" muted loop playsinline preload="none" data-vinor-lazy-video>
       <source data-src="{{ video_src }}" type="video/mp4">
       {% if img_src %}
-      <img src="{{ img_src }}" alt="{{ land.title or '' }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+      <img src="{{ img_src }}" alt="{{ land.title or '' }}" {% if card_img_eager|default(false) %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
       {% endif %}
     </video>
     {% elif img_src %}
-    <img src="{{ img_src }}" alt="{{ land.title or '' }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+    <img src="{{ img_src }}" alt="{{ land.title or '' }}" {% if card_img_eager|default(false) %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
     {% else %}
     <div class="absolute inset-0 grid place-items-center text-neutral-500">
       <i class="fas fa-image text-4xl opacity-60"></i>
