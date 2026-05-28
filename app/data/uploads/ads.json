@@ -1,7 +1,0 @@
-import json
-import os
-
-def load_ads():
-    ads_path = os.path.join('data', 'ads.json')  # مسیر فایل JSON
-    with open(ads_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
