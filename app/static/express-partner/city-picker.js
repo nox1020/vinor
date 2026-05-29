@@ -302,6 +302,11 @@
       }
       closePicker();
       if (applySubmit && form) form.submit();
+      try {
+        document.dispatchEvent(new CustomEvent('vinor:city-picker-applied', {
+          detail: { hiddenId: hidden ? hidden.id : '', value: v }
+        }));
+      } catch (_) {}
     }
 
     closeFns[modal.id] = closePicker;

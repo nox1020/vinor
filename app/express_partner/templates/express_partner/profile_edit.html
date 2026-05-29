@@ -13,11 +13,11 @@
         <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
       </a>
       <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">ویرایش پروفایل</h1>
-      <button type="submit" form="profileEditForm"
-              class="relative z-10 inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-500 sm:gap-2 sm:px-4 sm:text-sm">
-        <i class="fas fa-check text-[11px] sm:text-xs" aria-hidden="true"></i>
-        <span>ذخیره</span>
-      </button>
+      <div id="profileEditSaveStatus"
+           class="relative z-10 flex h-10 min-w-[4.5rem] shrink-0 items-center justify-end gap-1.5 text-[11px] font-medium text-transparent transition sm:text-xs"
+           data-state="idle"
+           aria-live="polite"
+           aria-atomic="true"></div>
     </div>
   </header>
 
@@ -39,14 +39,17 @@
           <button type="button" id="avatarEditTrigger"
                   class="relative h-28 w-28 shrink-0 overflow-hidden rounded-full border-2 border-white/10 bg-[#0a1018] shadow-lg ring-1 ring-white/5 transition active:scale-[0.98] sm:h-32 sm:w-32"
                   title="تغییر عکس پروفایل">
-            {% if profile and profile.get('avatar') %}
-            <img id="avatarPreviewImg" src="/uploads/{{ profile.get('avatar') }}?v={{ profile.get('avatar_updated_at', 0) }}"
-                 alt="" class="h-full w-full object-cover" referrerpolicy="no-referrer">
-            {% else %}
-            <span id="avatarPreviewFallback" class="flex h-full w-full items-center justify-center text-2xl font-black text-zinc-500 sm:text-3xl">
-              {{ (me_name or (me_phone or '')[-4:])[:2] }}
+            {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
+            <img id="avatarPreviewImg"
+                 src="{% if _avatar %}/uploads/{{ _avatar }}?v={{ profile.get('avatar_updated_at', 0) }}{% endif %}"
+                 alt=""
+                 class="h-full w-full object-cover {% if not _avatar %}hidden{% endif %}"
+                 referrerpolicy="no-referrer"
+                 onerror="this.classList.add('hidden');var f=document.getElementById('avatarPreviewFallback');if(f)f.classList.remove('hidden');">
+            <span id="avatarPreviewFallback"
+                  class="flex h-full w-full items-center justify-center text-2xl font-black text-zinc-500 sm:text-3xl {% if _avatar %}hidden{% endif %}">
+              {{ me_name | avatar_initials }}
             </span>
-            {% endif %}
             <span class="absolute bottom-1 left-1 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-md sm:bottom-1.5 sm:left-1.5" aria-hidden="true">
               <i class="fas fa-camera text-sm"></i>
             </span>
@@ -60,8 +63,7 @@
         </div>
       </form>
 
-      <form id="profileEditForm" method="post" action="{{ url_for('express_partner.profile_edit') }}" class="space-y-4">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div id="profileEditForm" class="space-y-4">
 
         <section class="rounded-2xl border border-white/10 bg-[#12181f] p-4 shadow-xl shadow-black/20 sm:p-5">
           <div class="space-y-5">
@@ -157,7 +159,7 @@
             <span id="bioCounter" class="pointer-events-none absolute bottom-2 left-3 text-[11px] tabular-nums text-zinc-500">0/200</span>
           </div>
         </section>
-      </form>
+      </div>
 
       <details class="mt-4 rounded-2xl border border-rose-500/25 bg-rose-950/15 open:border-rose-500/35 open:bg-rose-950/20">
         <summary class="flex cursor-pointer list-none items-center justify-end gap-3 p-4 text-right transition hover:opacity-90 sm:p-5 [&::-webkit-details-marker]:hidden">
@@ -287,8 +289,7 @@
   var uploading = document.getElementById('avatarUploading');
   var previewImg = document.getElementById('avatarPreviewImg');
   var previewFallback = document.getElementById('avatarPreviewFallback');
-  var csrfInput = form && form.querySelector('input[name="csrf_token"]');
-  var nextInput = form && form.querySelector('input[name="next"]');
+  var avatarApiUrl = {{ url_for('express_partner.api_profile_avatar') | tojson }};
 
   function openLibrary() { if (inputLibrary) inputLibrary.click(); }
   if (trigger) trigger.addEventListener('click', openLibrary);
@@ -299,15 +300,26 @@
     uploading.classList.toggle('flex', on);
   }
 
-  function previewFile(file) {
-    try {
-      var url = URL.createObjectURL(file);
-      if (previewImg) {
-        previewImg.src = url;
-        previewImg.classList.add('object-cover');
-      }
-      if (previewFallback) previewFallback.style.display = 'none';
-    } catch (_) {}
+  function showPreview(url) {
+    var img = previewImg;
+    if (!img && trigger) {
+      img = document.createElement('img');
+      img.id = 'avatarPreviewImg';
+      img.alt = '';
+      img.className = 'h-full w-full object-cover';
+      img.referrerPolicy = 'no-referrer';
+      img.onerror = function () {
+        img.classList.add('hidden');
+        if (previewFallback) previewFallback.classList.remove('hidden');
+      };
+      trigger.insertBefore(img, trigger.firstChild);
+      previewImg = img;
+    }
+    if (img) {
+      img.src = url;
+      img.classList.remove('hidden');
+    }
+    if (previewFallback) previewFallback.classList.add('hidden');
   }
 
   function compressImage(file, maxSide, quality) {
@@ -347,21 +359,24 @@
   function uploadFile(file) {
     if (!form) return;
     showUploading(true);
-    previewFile(file);
+    try { showPreview(URL.createObjectURL(file)); } catch (_) {}
     compressImage(file).then(function (compressed) {
       var fd = new FormData();
       fd.append('avatar', compressed);
-      if (csrfInput) fd.append('csrf_token', csrfInput.value || '');
-      if (nextInput) fd.append('next', nextInput.value || '');
-      return fetch(form.action, { method: 'POST', body: fd, credentials: 'same-origin' });
+      return fetch(avatarApiUrl, { method: 'POST', body: fd, credentials: 'same-origin' });
     }).then(function (res) {
-      if (res && res.ok) {
-        window.location.replace((nextInput && nextInput.value) || window.location.href);
-      } else {
-        form.submit();
+      return res.json().catch(function () { return null; }).then(function (data) {
+        return { res: res, data: data };
+      });
+    }).then(function (out) {
+      if (out.res && out.res.ok && out.data && out.data.success && out.data.avatar_url) {
+        var v = out.data.avatar_updated_at || Date.now();
+        showPreview(out.data.avatar_url + (out.data.avatar_url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + v);
+        return;
       }
+      if (form) form.submit();
     }).catch(function () {
-      form.submit();
+      if (form) form.submit();
     }).finally(function () {
       showUploading(false);
     });
@@ -391,20 +406,190 @@
   update();
 })();
 
-window.__vinorCloseCityPicker = closeCityPicker;
-})();
+function initProfileEditAutosave() {
+  if (!document.getElementById('profileEditPage')) return;
+  var root = document.getElementById('profileEditForm');
+  if (!root || root.dataset.autosaveBound === '1') return;
+  root.dataset.autosaveBound = '1';
+
+  var apiUrl = {{ url_for('express_partner.api_profile_update') | tojson }};
+  var statusEl = document.getElementById('profileEditSaveStatus');
+  var debounceTimer = null;
+  var savedTimer = null;
+  var inflight = null;
+  var lastSavedKey = '';
+
+  var statusBaseClass = 'relative z-10 flex h-10 min-w-[4.5rem] shrink-0 items-center justify-end gap-1.5 text-[11px] font-medium transition sm:text-xs';
+
+  function collectPayload() {
+    var nameEl = document.getElementById('profileName');
+    var landlineEl = document.getElementById('profileLandline');
+    var emailEl = document.getElementById('profileEmail');
+    var cityEl = document.getElementById('profileCityValue');
+    var birthEl = document.getElementById('profileBirth');
+    var bioEl = document.getElementById('bioInput');
+    return {
+      name: String(nameEl && nameEl.value || '').trim().slice(0, 60),
+      landline: String(landlineEl && landlineEl.value || '').trim().slice(0, 20),
+      email: String(emailEl && emailEl.value || '').trim().slice(0, 120),
+      city: String(cityEl && cityEl.value || '').trim(),
+      birth_date: String(birthEl && birthEl.value || '').trim().slice(0, 32),
+      bio: String(bioEl && bioEl.value || '').trim().slice(0, 200)
+    };
+  }
+
+  function updateAvatarInitials(name) {
+    var fallback = document.getElementById('avatarPreviewFallback');
+    if (!fallback) return;
+    var raw = String(name || '').trim().replace(/\u200c/g, ' ');
+    if (!raw) {
+      fallback.textContent = '؟';
+      return;
+    }
+    var parts = raw.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      fallback.textContent = (parts[0].slice(0, 1) + parts[parts.length - 1].slice(0, 1)).trim() || parts[0].slice(0, 1) || '؟';
+      return;
+    }
+    fallback.textContent = raw.length >= 2 ? raw.slice(0, 2) : (raw.slice(0, 1) || '؟');
+  }
+
+  function setStatus(state, message) {
+    if (!statusEl) return;
+    statusEl.dataset.state = state;
+    statusEl.textContent = message || '';
+    statusEl.className = statusBaseClass;
+    if (state === 'saving') {
+      statusEl.classList.add('text-zinc-400');
+    } else if (state === 'saved') {
+      statusEl.classList.add('text-emerald-400');
+    } else if (state === 'error') {
+      statusEl.classList.add('text-rose-400');
+    } else {
+      statusEl.classList.add('text-transparent');
+    }
+  }
+
+  function saveNow() {
+    var payload = collectPayload();
+    var key = JSON.stringify(payload);
+    if (key === lastSavedKey) return;
+
+    if (inflight) {
+      try { inflight.abort(); } catch (_) {}
+    }
+    var ctrl = new AbortController();
+    inflight = ctrl;
+
+    clearTimeout(savedTimer);
+    setStatus('saving', 'در حال ذخیره…');
+
+    fetch(apiUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal
+    }).then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (data) {
+        return { res: res, data: data };
+      });
+    }).then(function (out) {
+      if (ctrl.signal.aborted) return;
+      if (out.res && out.res.ok && out.data && out.data.success) {
+        lastSavedKey = key;
+        updateAvatarInitials(payload.name);
+        setStatus('saved', 'ذخیره شد');
+        savedTimer = setTimeout(function () {
+          if (statusEl && statusEl.dataset.state === 'saved') setStatus('idle', '');
+        }, 2200);
+        return;
+      }
+      setStatus('error', 'خطا در ذخیره');
+    }).catch(function (err) {
+      if (err && err.name === 'AbortError') return;
+      setStatus('error', 'خطا در ذخیره');
+    }).finally(function () {
+      if (inflight === ctrl) inflight = null;
+    });
+  }
+
+  function scheduleSave(delay) {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(saveNow, typeof delay === 'number' ? delay : 650);
+  }
+
+  ['profileName', 'profileLandline', 'profileEmail', 'bioInput'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function () { scheduleSave(); });
+    el.addEventListener('blur', function () { scheduleSave(120); });
+  });
+
+  var birthEl = document.getElementById('profileBirth');
+  if (birthEl) birthEl.addEventListener('change', function () { scheduleSave(0); });
+
+  window.__vinorProfileEditScheduleSave = function () { scheduleSave(0); };
+
+  lastSavedKey = JSON.stringify(collectPayload());
+}
+
+if (!window.__vinorProfileCityHook) {
+  window.__vinorProfileCityHook = true;
+  document.addEventListener('vinor:city-picker-applied', function (e) {
+    var detail = e && e.detail;
+    if (!detail || detail.hiddenId !== 'profileCityValue') return;
+    if (typeof window.__vinorProfileEditScheduleSave === 'function') {
+      window.__vinorProfileEditScheduleSave();
+    }
+  });
+}
+
+initProfileEditAutosave();
+document.addEventListener('vinor:express-page-swap', function () {
+  if (!document.getElementById('profileEditPage')) {
+    window.__vinorProfileEditScheduleSave = null;
+    return;
+  }
+  initProfileEditAutosave();
+});
 
 function initProfileEditDeleteAccount() {
   if (!document.getElementById('profileEditPage')) return;
-  var overlay = window.vinorExpressModalOverlay;
-  var modal = document.getElementById('deleteAccountModal');
+
+  var swapRoot = document.getElementById('vinor-express-page-swap');
   var openBtn = document.getElementById('deleteAccountOpen');
-  if (!modal || !openBtn || !overlay) return;
-  if (modal.dataset.deleteBound === '1') return;
-  modal.dataset.deleteBound = '1';
+  if (!openBtn) return;
+
+  var staleOnBody = document.querySelector('body > #deleteAccountModal');
+  var modalInSwap = swapRoot ? swapRoot.querySelector('#deleteAccountModal') : null;
+  if (staleOnBody && modalInSwap && staleOnBody !== modalInSwap) {
+    try { staleOnBody.remove(); } catch (_) {}
+  }
 
   if (typeof window.hoistVinorExpressBodyModals === 'function') {
     window.hoistVinorExpressBodyModals();
+  }
+
+  var modal = document.getElementById('deleteAccountModal');
+  if (!modal) return;
+
+  var overlay = window.vinorExpressModalOverlay;
+  if (!overlay) {
+    overlay = {
+      open: function () {
+        document.documentElement.classList.add('vinor-express-overlay-modal-open');
+        document.body.style.overflow = 'hidden';
+      },
+      close: function () {
+        document.documentElement.classList.remove('vinor-express-overlay-modal-open');
+        document.body.style.overflow = '';
+      },
+      closeAll: function () {
+        document.documentElement.classList.remove('vinor-express-overlay-modal-open');
+        document.body.style.overflow = '';
+      }
+    };
   }
 
   var closeBtn = document.getElementById('deleteAccountModalClose');
@@ -416,7 +601,7 @@ function initProfileEditDeleteAccount() {
   var delForm = document.getElementById('profileDeleteForm');
   var hiddenConfirm = document.getElementById('deleteAccountConfirmHidden');
   var hiddenPhone = document.getElementById('deleteAccountPhoneHidden');
-  var expectedTail = {{ (me_phone[-4:] if me_phone|length >= 4 else me_phone)|tojson }};
+  var expectedTail = {{ me_phone_tail|tojson }};
 
   function syncSubmit() {
     var phoneOk = phoneInput && String(phoneInput.value || '').trim() === String(expectedTail || '');
@@ -452,31 +637,47 @@ function initProfileEditDeleteAccount() {
     resetModalFields();
   }
 
-  openBtn.addEventListener('click', openModal);
-  if (closeBtn) closeBtn.addEventListener('click', closeModal);
-  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
-  if (backdrop) backdrop.addEventListener('click', closeModal);
-  if (chk) chk.addEventListener('change', syncSubmit);
-  if (phoneInput) {
-    phoneInput.addEventListener('input', function () {
-      phoneInput.value = String(phoneInput.value || '').replace(/\D/g, '').slice(0, 4);
-      syncSubmit();
-    });
+  if (openBtn.dataset.deleteOpenBound !== '1') {
+    openBtn.dataset.deleteOpenBound = '1';
+    openBtn.addEventListener('click', openModal);
   }
-  if (submitBtn && delForm) {
-    submitBtn.addEventListener('click', function (e) {
-      if (submitBtn.disabled) {
-        e.preventDefault();
-        return;
-      }
-      if (hiddenConfirm) hiddenConfirm.value = '1';
-      if (hiddenPhone && phoneInput) hiddenPhone.value = String(phoneInput.value || '').trim();
-      try { localStorage.removeItem('vinor_dashboard_favs'); } catch (_) {}
-    });
+
+  if (modal.dataset.deleteBound !== '1') {
+    modal.dataset.deleteBound = '1';
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+    if (backdrop) backdrop.addEventListener('click', closeModal);
+    if (chk) chk.addEventListener('change', syncSubmit);
+    if (phoneInput) {
+      phoneInput.addEventListener('input', function () {
+        phoneInput.value = String(phoneInput.value || '').replace(/\D/g, '').slice(0, 4);
+        syncSubmit();
+      });
+    }
+    if (submitBtn && delForm) {
+      submitBtn.addEventListener('click', function (e) {
+        if (submitBtn.disabled) {
+          e.preventDefault();
+          return;
+        }
+        if (hiddenConfirm) hiddenConfirm.value = '1';
+        if (hiddenPhone && phoneInput) hiddenPhone.value = String(phoneInput.value || '').trim();
+        try { localStorage.removeItem('vinor_dashboard_favs'); } catch (_) {}
+      });
+    }
   }
 }
 
-initProfileEditDeleteAccount();
+function scheduleProfileEditDeleteInit() {
+  function run() { initProfileEditDeleteAccount(); }
+  if (window.vinorExpressModalOverlay) {
+    run();
+  } else {
+    setTimeout(run, 0);
+  }
+}
+
+scheduleProfileEditDeleteInit();
 document.addEventListener('vinor:express-page-swap', initProfileEditDeleteAccount);
 
 (function() {
@@ -496,7 +697,7 @@ document.addEventListener('vinor:express-page-swap', initProfileEditDeleteAccoun
 (function() {
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-var delM = document.getElementById('deleteAccountModal');
+    var delM = document.getElementById('deleteAccountModal');
     if (delM && !delM.classList.contains('hidden')) {
       var cancelBtn = document.getElementById('deleteAccountModalCancel');
       if (cancelBtn) cancelBtn.click();

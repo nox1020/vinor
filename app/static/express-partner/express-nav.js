@@ -243,6 +243,8 @@
     }
     if (navKey === 'dashboard' && window.__vinorDashboardVoiceSearch) {
       window.__vinorDashboardVoiceSearch.setup();
+    } else if (window.__vinorDashboardVoiceSearch && window.__vinorDashboardVoiceSearch.teardown) {
+      window.__vinorDashboardVoiceSearch.teardown();
     }
     try {
       if (typeof window.hoistVinorExpressBodyModals === 'function') {
@@ -254,6 +256,11 @@
         }
         if (typeof window.removeVinorCommissionModalsFromBody === 'function') {
           window.removeVinorCommissionModalsFromBody();
+        }
+      }
+      if (!document.getElementById('profileEditPage')) {
+        if (typeof window.removeVinorProfileEditModalsFromBody === 'function') {
+          window.removeVinorProfileEditModalsFromBody();
         }
       }
     } catch (_) {}

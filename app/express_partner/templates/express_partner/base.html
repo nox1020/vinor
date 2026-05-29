@@ -312,6 +312,14 @@
       });
     };
 
+    window.removeVinorProfileEditModalsFromBody = function () {
+      try {
+        document.querySelectorAll('body > #deleteAccountModal').forEach(function (el) {
+          el.remove();
+        });
+      } catch (_) {}
+    };
+
     (function hoistExpressPartnerShell() {
       var nav = document.getElementById('bottomNavMenu');
       if (!nav || nav.getAttribute('data-tg-shell-done') === '1') {

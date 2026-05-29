@@ -69,12 +69,17 @@
               <button type="button" id="avatarTrigger"
                       class="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white/15 bg-[#0a1018] ring-2 ring-emerald-500/20 transition hover:ring-emerald-400/40 sm:h-[5rem] sm:w-[5rem]"
                       title="تغییر عکس پروفایل">
-                {% if profile and profile.get('avatar') %}
-                <img src="/uploads/{{ profile.get('avatar') }}?v={{ profile.get('avatar_updated_at', 0) }}"
-                     alt="عکس پروفایل" class="h-full w-full object-cover" referrerpolicy="no-referrer">
-                {% else %}
-                <span class="text-lg font-bold text-zinc-400 sm:text-xl">{{ (me_name or (me_phone or '')[-4:])[:2] }}</span>
-                {% endif %}
+                {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
+                <img id="avatarProfileImg"
+                     src="{% if _avatar %}/uploads/{{ _avatar }}?v={{ profile.get('avatar_updated_at', 0) }}{% endif %}"
+                     alt="عکس پروفایل"
+                     class="h-full w-full object-cover {% if not _avatar %}hidden{% endif %}"
+                     referrerpolicy="no-referrer"
+                     onerror="this.classList.add('hidden');var f=document.getElementById('avatarProfileFallback');if(f)f.classList.remove('hidden');">
+                <span id="avatarProfileFallback"
+                      class="flex h-full w-full items-center justify-center text-lg font-bold text-zinc-400 sm:text-xl {% if _avatar %}hidden{% endif %}">
+                  {{ me_name | avatar_initials }}
+                </span>
               </button>
             </form>
           </div>
@@ -111,7 +116,6 @@
 
       {# منو #}
       <div class="space-y-3 sm:space-y-3.5 lg:mt-0">
-        {% include 'express_partner/partials/commissions_referral.html' %}
         {% if not is_approved %}
         <a href="{{ url_for('express_partner.apply_step1') }}"
            data-tour="apply-link"
@@ -217,6 +221,12 @@
             <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
           </div>
         </a>
+
+        {% if is_approved %}
+        {% include 'express_partner/partials/commissions_referral.html' %}
+        {% else %}
+        {% include 'express_partner/partials/profile_invite_friends.html' %}
+        {% endif %}
       </div>
     </div>
     {% endif %}
@@ -315,11 +325,64 @@
     const trigger = document.getElementById('avatarTrigger');
     const input = document.getElementById('avatarInput');
     const form = document.getElementById('avatarForm');
+    const previewImg = document.getElementById('avatarProfileImg');
+    const previewFallback = document.getElementById('avatarProfileFallback');
+    const avatarApiUrl = {{ url_for('express_partner.api_profile_avatar') | tojson }};
     if (!trigger || !input || !form) return;
     trigger.addEventListener('click', function() { input.click(); });
+
+    function showPreview(url) {
+      if (previewImg) {
+        previewImg.src = url;
+        previewImg.classList.remove('hidden');
+      }
+      if (previewFallback) previewFallback.classList.add('hidden');
+    }
+
+    function compressImage(file) {
+      return new Promise(function (resolve) {
+        try {
+          var img = new Image();
+          img.onload = function () {
+            var w = img.naturalWidth, h = img.naturalHeight;
+            if (!w || !h) return resolve(file);
+            var scale = Math.min(1, 1200 / Math.max(w, h));
+            var canvas = document.createElement('canvas');
+            canvas.width = Math.round(w * scale);
+            canvas.height = Math.round(h * scale);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(function (blob) {
+              resolve(blob ? new File([blob], 'avatar.jpg', { type: 'image/jpeg' }) : file);
+            }, 'image/jpeg', 0.82);
+          };
+          img.onerror = function () { resolve(file); };
+          var fr = new FileReader();
+          fr.onload = function (e) { img.src = e.target.result; };
+          fr.onerror = function () { resolve(file); };
+          fr.readAsDataURL(file);
+        } catch (_) { resolve(file); }
+      });
+    }
+
     input.addEventListener('change', function() {
-      if (!input.files || input.files.length === 0) return;
-      form.submit();
+      if (!input.files || !input.files.length) return;
+      var file = input.files[0];
+      input.value = '';
+      try { showPreview(URL.createObjectURL(file)); } catch (_) {}
+      compressImage(file).then(function (compressed) {
+        var fd = new FormData();
+        fd.append('avatar', compressed);
+        return fetch(avatarApiUrl, { method: 'POST', body: fd, credentials: 'same-origin' });
+      }).then(function (res) {
+        return res.json().catch(function () { return null; }).then(function (data) {
+          if (res.ok && data && data.success && data.avatar_url) {
+            var v = data.avatar_updated_at || Date.now();
+            showPreview(data.avatar_url + '?v=' + v);
+          } else {
+            form.submit();
+          }
+        });
+      }).catch(function () { form.submit(); });
     });
   })();
 

@@ -13,6 +13,14 @@ from functools import wraps
 import random, re, time
 
 from . import express_partner_bp
+from .display import partner_avatar_initials, phone_last4
+
+
+@express_partner_bp.app_template_filter("avatar_initials")
+def _avatar_initials_filter(value: str | None) -> str:
+    return partner_avatar_initials(value)
+
+
 from ..utils.storage import (
     load_express_partner_apps, save_express_partner_apps,
     load_express_partners, load_express_partners_cached, save_express_partners, load_partner_notes, save_partner_notes,
@@ -2205,16 +2213,20 @@ def cooperation_terms():
 @express_partner_bp.route('/invite', methods=['GET'], endpoint='invite_colleagues')
 @require_partner_access(allow_pending=True)
 def invite_colleagues():
-    """صفحهٔ اشتراک لینک دعوت همکار — برای همکاران تأییدشده و سایر کاربران واردشده."""
+    """صفحهٔ اشتراک لینک دعوت — همکاران تأییدشده: دعوت همکار؛ کاربران عادی: دعوت دوستان."""
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None) or {}
     me_name = (profile.get('name') or '').strip()
+    is_approved = _is_partner_approved(profile)
     from ..utils.share_tokens import encode_partner_ref
     ref_token = encode_partner_ref(me_phone)
     apply_next = url_for('express_partner.apply_step1', ref=ref_token)
     invite_url = url_for('express_partner.login', next=apply_next, _external=True)
     inviter = me_name or 'همکار وینور'
-    share_text = f'{inviter} شما را به همکاری در وینور اکسپرس دعوت می‌کند.'
+    if is_approved:
+        share_text = f'{inviter} شما را به همکاری در وینور اکسپرس دعوت می‌کند.'
+    else:
+        share_text = f'{inviter} شما را به وینور دعوت می‌کند.'
     try:
         from .referrals import referral_stats_for_inviter, REFERRAL_BONUS_AMOUNT
         ref_stats = referral_stats_for_inviter(me_phone)
@@ -2234,6 +2246,7 @@ def invite_colleagues():
         invite_url=invite_url,
         share_text=share_text,
         me_name=me_name,
+        is_approved=is_approved,
         ref_stats=ref_stats,
         bonus_per_invite=bonus_per_invite,
     )
@@ -3145,6 +3158,7 @@ def profile_edit_page():
     cities = cities_allowed
     return render_template('express_partner/profile_edit.html',
                            me_phone=me_phone,
+                           me_phone_tail=phone_last4(me_phone),
                            me_name=me_name,
                            me_city=me_city,
                            me_bio=me_bio,
@@ -3258,8 +3272,8 @@ def profile_delete_account():
         flash('برای حذف حساب، گزینهٔ تأیید را علامت بزنید.', 'profile')
         return redirect(url_for('express_partner.profile_edit'))
 
-    confirm_tail = (request.form.get('confirm_phone_tail') or '').strip()
-    expected_tail = me_phone[-4:] if len(me_phone) >= 4 else me_phone
+    confirm_tail = phone_last4(request.form.get('confirm_phone_tail') or '')
+    expected_tail = phone_last4(me_phone)
     if confirm_tail != expected_tail:
         flash('۴ رقم آخر شماره موبایل با شمارهٔ حساب شما مطابقت ندارد.', 'profile')
         return redirect(url_for('express_partner.profile_edit'))
@@ -3363,6 +3377,7 @@ def _save_partner_avatar_upload(me_phone: str, f) -> str | None:
       prof['avatar_updated_at'] = 0
   try:
       save_express_partners(partners)
+      _invalidate_partner_session_cache()
   except Exception:
       current_app.logger.error("Failed to save partner avatar path", exc_info=True)
       return None
@@ -3381,9 +3396,13 @@ def api_profile_avatar():
     rel_path = _save_partner_avatar_upload(me_phone, f)
     if not rel_path:
         return jsonify({'success': False, 'error': 'save_failed'}), 500
+    partners = load_express_partners() or []
+    prof = next((p for p in partners if str(p.get('phone') or '').strip() == me_phone), None)
+    updated_at = int((prof or {}).get('avatar_updated_at') or 0)
     return jsonify({
         'success': True,
         'avatar_url': f'/uploads/{rel_path}',
+        'avatar_updated_at': updated_at,
     })
 
 
@@ -3402,6 +3421,7 @@ def profile_avatar_upload():
     if not rel_path:
         flash('خطا در ذخیره تصویر پروفایل.', 'profile')
         return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile'))
+    flash('عکس پروفایل به‌روز شد.', 'profile')
     return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile'))
 
 
