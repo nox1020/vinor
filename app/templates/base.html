@@ -46,11 +46,12 @@
   <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-solid-900.woff2') }}" type="font/woff2" crossorigin>
   <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-regular-400.woff2') }}" type="font/woff2" crossorigin>
   <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-brands-400.woff2') }}" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
-
-  <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
-  <script defer src="{{ url_for('static', filename='vendor/alpine/alpine-3.14.1.min.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}" media="print" onload="this.media='all'">
+  <noscript>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
+  </noscript>
 
   <style>
     html,body{overscroll-behavior-y:contain;overscroll-behavior-x:auto}
@@ -103,6 +104,9 @@
 </head>
 
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen flex flex-col">
+
+  <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}" defer></script>
+  <script defer src="{{ url_for('static', filename='vendor/alpine/alpine-3.14.1.min.js') }}"></script>
 
   {% include 'partials/main_skeleton_overlay.html' %}
 

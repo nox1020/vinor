@@ -29,6 +29,11 @@ except Exception:
 
 FIRST_VISIT_COOKIE = "vinor_first_visit_done"
 SESSION_COOKIE_NAME = "vinor_session"
+_STATIC_VERSION_CACHE: dict[str, tuple[int, str]] = {}
+
+
+def _flask_debug() -> bool:
+    return os.environ.get("FLASK_DEBUG", "0").strip().lower() in ("1", "true", "yes")
 
 
 def _ensure_instance_folder(app: Flask) -> None:
@@ -76,20 +81,22 @@ def _register_jinja_filters(app: Flask) -> None:
     def static_version(filename):
         """افزودن version query parameter به فایل‌های static برای جلوگیری از کش"""
         try:
-            import os
             from flask import url_for, current_app
-            # در template filter، current_app در دسترس است
+
             static_path = os.path.join(current_app.static_folder, filename)
             if os.path.exists(static_path):
-                # استفاده از modification time به عنوان version
                 mtime = int(os.path.getmtime(static_path))
-                base_url = url_for('static', filename=filename)
-                return f"{base_url}?v={mtime}"
-            return url_for('static', filename=filename)
+                cached = _STATIC_VERSION_CACHE.get(filename)
+                if cached and cached[0] == mtime:
+                    return cached[1]
+                base_url = url_for("static", filename=filename)
+                result = f"{base_url}?v={mtime}"
+                _STATIC_VERSION_CACHE[filename] = (mtime, result)
+                return result
+            return url_for("static", filename=filename)
         except Exception:
-            # Fallback: بدون version
             try:
-                return url_for('static', filename=filename)
+                return url_for("static", filename=filename)
             except Exception:
                 return f"/static/{filename}"
 
@@ -207,7 +214,7 @@ def create_app() -> Flask:
         SESSION_COOKIE_HTTPONLY=True,
         PERMANENT_SESSION_LIFETIME=timedelta(days=180),
         PREFERRED_URL_SCHEME="https" if cookie_secure else "http",
-        TEMPLATES_AUTO_RELOAD=True,
+        TEMPLATES_AUTO_RELOAD=_flask_debug(),
         JSON_AS_ASCII=False,
         UPLOAD_FOLDER=os.environ.get("UPLOAD_FOLDER", default_upload_folder),
         SQLALCHEMY_DATABASE_URI=db_url,
@@ -241,12 +248,17 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning("Data dir / AI escalations init: %s", e)
 
-    # Initialize DB (SQLAlchemy)
+    # Initialize DB (SQLAlchemy) — فقط وقتی لازم است
     try:
         from .extensions import db
         db.init_app(app)
         with app.app_context():
-            db.create_all()
+            if "sqlite" in db_url:
+                db_file = db_url.split("///", 1)[-1]
+                if not os.path.isfile(db_file) or os.environ.get("VINOR_DB_CREATE_ALL", "").strip() == "1":
+                    db.create_all()
+            elif os.environ.get("VINOR_DB_CREATE_ALL", "1").strip() not in ("0", "false", "no"):
+                db.create_all()
     except Exception as e:
         app.logger.warning(f"DB init/create_all skipped: {e}")
 
@@ -525,8 +537,6 @@ def create_app() -> Flask:
         file_path = os.path.join(static_dir, "manifest.webmanifest")
         mimetype = "application/manifest+json"
 
-        current_app.logger.info("Manifest lookup at: %s", file_path)
-
         if os.path.exists(file_path):
             return send_from_directory(static_dir, "manifest.webmanifest", mimetype=mimetype)
 
@@ -559,14 +569,17 @@ def create_app() -> Flask:
     # ---------- Gate ----------
     @app.before_request
     def landing_gate():
+        debug = app.debug or _flask_debug()
         # مسیری که گیت‌وی اصلاً در آن دخالت نکند (پنل ادمین، خودش لایهٔ امنیتی جدا دارد)
         if request.path.startswith("/admin"):
-            current_app.logger.debug("PASS (admin-scope): %s", request.path)
+            if debug:
+                current_app.logger.debug("PASS (admin-scope): %s", request.path)
             return
 
         safe_prefixes = ("/static", "/api", "/uploads")
         if request.path.startswith(safe_prefixes):
-            current_app.logger.debug("PASS (prefix): %s", request.path)
+            if debug:
+                current_app.logger.debug("PASS (prefix): %s", request.path)
             return
 
         safe_paths = {
@@ -590,22 +603,23 @@ def create_app() -> Flask:
         # Public dynamic paths (prefix-based)
         public_prefixes = ("/express/", "/uploads/", "/ai/")
         if request.path.startswith(public_prefixes):
-            current_app.logger.debug("PASS (public-prefix): %s", request.path)
+            if debug:
+                current_app.logger.debug("PASS (public-prefix): %s", request.path)
             return
         if request.path in safe_paths:
-            # صفحه اصلی (/) حالا لندینگ همکاران است و باید عمومی باشد
-            # دیگر کاربران لاگین شده را از / به /app redirect نمی‌کنیم
-            current_app.logger.debug("PASS (path): %s", request.path)
+            if debug:
+                current_app.logger.debug("PASS (path): %s", request.path)
             return
 
         user_logged_in = bool(session.get("user_id") or session.get("user_phone"))
 
         if user_logged_in:
-            current_app.logger.debug("PASS (logged-in): %s", request.path)
+            if debug:
+                current_app.logger.debug("PASS (logged-in): %s", request.path)
             return
 
-        # New policy: All users can access landing page
-        current_app.logger.debug("REDIRECT → / (guest): %s", request.path)
+        if debug:
+            current_app.logger.debug("REDIRECT → / (guest): %s", request.path)
         return redirect(url_for("main.index"))
 
     return app

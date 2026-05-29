@@ -15,7 +15,7 @@ import random, re, time
 from . import express_partner_bp
 from ..utils.storage import (
     load_express_partner_apps, save_express_partner_apps,
-    load_express_partners, save_express_partners, load_partner_notes, save_partner_notes,
+    load_express_partners, load_express_partners_cached, save_express_partners, load_partner_notes, save_partner_notes,
     load_partner_sales, save_partner_sales,
     load_partner_files_meta, save_partner_files_meta,
     load_express_assignments, save_express_assignments, load_express_commissions, load_express_commissions_cached, save_express_commissions,
@@ -49,7 +49,7 @@ def _express_partners_cached() -> List[Dict[str, Any]]:
     if cached is not None:
         return cached
     try:
-        lst = load_express_partners() or []
+        lst = load_express_partners_cached() or []
     except Exception:
         lst = []
     g._express_partners_list_cached = lst

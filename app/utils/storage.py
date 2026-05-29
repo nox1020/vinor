@@ -93,6 +93,9 @@ def migrate_legacy(app=None):
     """
     app = _resolve_app(app)
     inst = data_dir(app)
+    marker = os.path.join(inst, ".legacy_migrated")
+    if os.path.isfile(marker):
+        return
     legacy = legacy_dir(app)
     try:
         for name in ('lands.json','users.json','consults.json','settings.json','notifications.json','reports.json'):
@@ -114,6 +117,12 @@ def migrate_legacy(app=None):
                 _log.warning("Legacy migration issue: %s", e)
         except Exception:
             pass
+    else:
+        try:
+            with open(marker, "w", encoding="utf-8") as f:
+                f.write("ok")
+        except Exception:
+            pass
 
 # -------- IO ساده JSON --------
 def _load(path):
@@ -131,6 +140,23 @@ def _save(path, data):
 # فایل‌های دامنه
 _ADS_CACHE = {"path": None, "mtime": None, "size": None, "data": None}
 _EXPRESS_LANDS_CACHE = {"path": None, "mtime": None, "size": None, "data": None}
+_SETTINGS_CACHE = {"path": None, "mtime": None, "size": None, "data": None}
+_PARTNERS_CACHE = {"path": None, "mtime": None, "size": None, "data": None}
+
+
+def _file_cache_load(cache: dict, path: str, loader):
+    try:
+        st = os.stat(path)
+        mtime = st.st_mtime_ns if hasattr(st, "st_mtime_ns") else int(st.st_mtime * 1e9)
+        size = st.st_size
+    except Exception:
+        mtime = None
+        size = None
+    if cache["path"] == path and cache["mtime"] == mtime and cache["size"] == size and cache["data"] is not None:
+        return cache["data"]
+    data = loader(path)
+    cache.update({"path": path, "mtime": mtime, "size": size, "data": data})
+    return data
 
 def load_ads(app=None):        return _load(ensure_file('LANDS_FILE','lands.json',[],app))
 
@@ -229,7 +255,7 @@ def save_users(items, app=None): return _save(ensure_file('USERS_FILE','users.js
 def load_consults(app=None):        return _load(ensure_file('CONSULTS_FILE','consults.json',[],app))
 def save_consults(items, app=None): return _save(ensure_file('CONSULTS_FILE','consults.json',[],app), items)
 
-def load_settings(app=None):  
+def load_settings(app=None):
     default_settings = {
         "approval_method": "manual",
         "show_submit_button": True,
@@ -246,7 +272,36 @@ def load_settings(app=None):
         "partner_application_admin_phone": "09121471301",
         "partner_application_admin_sms_message": "درخواست همکاری جدید همکار در وینور ثبت شد.",
     }
-    return _load(ensure_file('SETTINGS_FILE','settings.json',default_settings,app))
+    return load_settings_cached(app, default_settings=default_settings)
+
+
+def load_settings_cached(app=None, default_settings=None):
+    if default_settings is None:
+        default_settings = {
+            "approval_method": "manual",
+            "show_submit_button": True,
+            "ad_expiry_days": 30,
+            "android_apk_url": "",
+            "android_apk_version": "",
+            "android_apk_updated_at": "",
+            "android_apk_size_bytes": "",
+            "android_apk_sha256": "",
+            "android_apk_original_name": "",
+            "sms_line_number": "300089930616",
+            "partner_application_sms_message": "درخواست همکاری شما ثبت شد و در حال بررسی است. وینور",
+            "partner_approval_sms_message": "پنل همکاری وینور برای شما فعال شد. وینور",
+            "partner_application_admin_phone": "09121471301",
+            "partner_application_admin_sms_message": "درخواست همکاری جدید همکار در وینور ثبت شد.",
+        }
+    app = _resolve_app(app)
+    path = ensure_file("SETTINGS_FILE", "settings.json", default_settings, app)
+    return _file_cache_load(_SETTINGS_CACHE, path, _load)
+
+
+def load_express_partners_cached(app=None):
+    app = _resolve_app(app)
+    path = ensure_file("EXPRESS_PARTNERS_FILE", "express_partners.json", [], app)
+    return _file_cache_load(_PARTNERS_CACHE, path, _load)
 
 # شهرهای فعال برای همکاری
 def load_active_cities(app=None):        return _load(ensure_file('ACTIVE_CITIES_FILE','active_cities.json',["تهران", "کرج", "اصفهان", "شیراز", "مشهد", "تبریز"],app))
@@ -268,8 +323,11 @@ def save_consultants(items, app=None):    return _save(ensure_file('CONSULTANTS_
 # Express Partners & Applications
 def load_express_partner_apps(app=None):   return _load(ensure_file('EXPRESS_PARTNER_APPS_FILE','express_partner_applications.json',[],app))
 def save_express_partner_apps(items, app=None): return _save(ensure_file('EXPRESS_PARTNER_APPS_FILE','express_partner_applications.json',[],app), items)
-def load_express_partners(app=None):       return _load(ensure_file('EXPRESS_PARTNERS_FILE','express_partners.json',[],app))
-def save_express_partners(items, app=None): return _save(ensure_file('EXPRESS_PARTNERS_FILE','express_partners.json',[],app), items)
+def load_express_partners(app=None):       return load_express_partners_cached(app)
+def save_express_partners(items, app=None):
+    path = ensure_file('EXPRESS_PARTNERS_FILE','express_partners.json',[],app)
+    _save(path, items)
+    _PARTNERS_CACHE.update({"path": None, "mtime": None, "size": None, "data": None})
 def load_express_reposts(app=None):        return _load(ensure_file('EXPRESS_REPOSTS_FILE','express_reposts.json',[],app))
 def save_express_reposts(items, app=None): return _save(ensure_file('EXPRESS_REPOSTS_FILE','express_reposts.json',[],app), items)
 

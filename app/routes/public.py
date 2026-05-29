@@ -10,7 +10,7 @@ from flask import (
 
 from . import main_bp
 from ..utils.storage import data_dir, legacy_dir
-from ..utils.storage import load_express_partners, load_landing_views, save_landing_views
+from ..utils.storage import load_express_partners_cached, load_landing_views, save_landing_views
 from ..utils.images import (
     variant_headers_for_width,
 )
@@ -40,8 +40,8 @@ def _get_cached_settings():
     if cached is not None:
         return cached
     try:
-        from ..utils.storage import load_settings
-        settings = load_settings()
+        from ..utils.storage import load_settings_cached
+        settings = load_settings_cached()
         _mc_set(cache_key, settings, ttl=60)
         return settings
     except Exception:
@@ -59,16 +59,22 @@ def inject_vinor_globals():
     """
     if not has_app_context() or not has_request_context():
         return {}
-    # همکار اکسپرس تأییدشده
+    # همکار اکسپرس تأییدشده — بدون خواندن کل فایل partners روی هر درخواست
     try:
         me = str(session.get("user_phone") or "").strip()
-        _partners = load_express_partners(current_app._get_current_object())
-        is_express_partner = any(
-            isinstance(p, dict)
-            and str(p.get("phone") or "").strip() == me
-            and (str(p.get("status") or "").lower() == "approved" or p.get("status") is True)
-            for p in (_partners or [])
-        )
+        if me and "VINOR_IS_EXPRESS_PARTNER" in session:
+            is_express_partner = bool(session.get("VINOR_IS_EXPRESS_PARTNER"))
+        elif me:
+            partners = load_express_partners_cached(current_app._get_current_object())
+            is_express_partner = any(
+                isinstance(p, dict)
+                and str(p.get("phone") or "").strip() == me
+                and (str(p.get("status") or "").lower() == "approved" or p.get("status") is True)
+                for p in (partners or [])
+            )
+            session["VINOR_IS_EXPRESS_PARTNER"] = is_express_partner
+        else:
+            is_express_partner = False
     except Exception:
         is_express_partner = False
 

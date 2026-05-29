@@ -130,7 +130,7 @@ def _nf(e):
 
 if __name__ == "__main__":
     app.run(
-        debug=True,
+        debug=os.environ.get("FLASK_DEBUG", "1").strip().lower() in ("1", "true", "yes"),
         host=os.environ.get("FLASK_RUN_HOST", "0.0.0.0"),
         port=int(os.environ.get("FLASK_RUN_PORT", "5000")),
     )
