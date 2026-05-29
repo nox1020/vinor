@@ -1,5 +1,5 @@
 {% extends 'express_partner/base.html' %}
-{% block title %}علاقه‌مندی‌ها{% endblock %}
+{% block title %}نشان‌شده‌ها{% endblock %}
 
 {% block content %}
   <header class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md">
@@ -10,7 +10,7 @@
          aria-label="بازگشت">
         <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
       </a>
-      <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">علاقه‌مندی‌ها</h1>
+      <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">نشان‌شده‌ها</h1>
       <div class="h-10 w-10" aria-hidden="true"></div>
     </div>
   </header>
@@ -55,7 +55,7 @@
         hint.textContent = shown + ' مورد نمایش داده شد — ' + (requested - shown) + ' فایل دیگر در دسترس نیست';
         hint.classList.remove('hidden');
       } else if (shown) {
-        hint.textContent = shown + ' مورد علامت‌گذاری شده';
+        hint.textContent = shown + ' مورد نشان‌شده';
         hint.classList.remove('hidden');
       } else {
         hint.classList.add('hidden');
@@ -100,7 +100,7 @@
             }
             afterCardsRendered();
           } else {
-            root.innerHTML = '<p class="text-center text-sm text-red-400">خطا در بارگذاری علاقه‌مندی‌ها</p>';
+            root.innerHTML = '<p class="text-center text-sm text-red-400">خطا در بارگذاری نشان‌شده‌ها</p>';
           }
         })
         .catch(function () {
