@@ -427,6 +427,7 @@ def create_app() -> Flask:
         for endpoint in (
             "express_partner.api_logout",
             "express_partner.api_profile_update",
+            "express_partner.api_profile_avatar",
             "express_partner.api_login_request",
             "express_partner.logout",
             "express_partner.login",
@@ -606,5 +607,13 @@ def create_app() -> Flask:
         # New policy: All users can access landing page
         current_app.logger.debug("REDIRECT → / (guest): %s", request.path)
         return redirect(url_for("main.index"))
+
+    # AI آفلاین: دانلود مدل + pip + warm-up در پس‌زمینه
+    try:
+        from .ai.offline_bootstrap import start_offline_bootstrap
+
+        start_offline_bootstrap(app)
+    except Exception as e:
+        app.logger.warning("AI offline bootstrap skipped: %s", e)
 
     return app

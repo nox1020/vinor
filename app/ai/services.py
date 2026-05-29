@@ -1,4 +1,4 @@
-"""منطق هوش مصنوعی وینور — DeepSeek API."""
+"""منطق هوش مصنوعی وینور — آفلاین (GGUF) + DeepSeek API."""
 from __future__ import annotations
 
 import os
@@ -30,16 +30,31 @@ from .credits import (
 )
 from .escalations import consume_pending_answers, create_escalation
 from .land_cards import collect_land_codes, land_cards_payload
+from .offline_bootstrap import bootstrap_status
+from .offline_config import offline_enabled, provider_mode
+from .offline_engine import is_ready as offline_is_ready
+from .provider_router import call_ai
 
 
 def ai_config() -> dict[str, Any]:
     api_key = get_deepseek_api_key()
+    mode = provider_mode()
+    offline_ready = offline_is_ready()
+    can_offline = offline_enabled() and offline_ready and mode in ("offline", "auto")
+    if can_offline:
+        active = "offline"
+    elif mode == "offline":
+        active = "offline"
+    else:
+        active = "deepseek"
     return {
         "enabled": os.environ.get("VINOR_AI_ENABLED", "1").lower() not in ("0", "false", "no"),
-        "provider": "deepseek",
-        "model": DEEPSEEK_MODEL,
+        "provider": active,
+        "provider_mode": mode,
+        "model": DEEPSEEK_MODEL if active == "deepseek" else bootstrap_status().get("model_path", ""),
         "api_key_set": bool(api_key),
         "api_balance_ok": not is_api_balance_depleted(),
+        "offline": bootstrap_status(),
     }
 
 
@@ -132,11 +147,24 @@ def _build_messages(
 
 
 def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
-    cfg = ai_config()
-    model = cfg["model"]
+    api_key = get_deepseek_api_key()
+    if not api_key:
+        return {
+            "ok": False,
+            "error": "کلید API هوش مصنوعی تنظیم نشده است.",
+            "error_code": "no_api_key",
+        }
+    if is_api_balance_depleted():
+        return {
+            "ok": False,
+            "error": "اعتبار API هوش مصنوعی کافی نیست.",
+            "error_code": "balance_depleted",
+            "balance_depleted": True,
+        }
+
+    model = DEEPSEEK_MODEL
     url = f"{DEEPSEEK_BASE_URL.rstrip('/')}/chat/completions"
     bcfg = budget_config()
-    api_key = get_deepseek_api_key()
     payload = {
         "model": model,
         "messages": messages,
@@ -156,7 +184,11 @@ def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
             current_app.logger.error("DeepSeek request failed: %s", exc)
         except Exception:
             pass
-        return {"ok": False, "error": "اتصال به سرویس هوش مصنوعی برقرار نشد. لطفاً دوباره تلاش کنید."}
+        return {
+            "ok": False,
+            "error": "اتصال به سرویس هوش مصنوعی برقرار نشد. لطفاً دوباره تلاش کنید.",
+            "error_code": "deepseek_network",
+        }
 
     content_type = (resp.headers.get("content-type") or "").lower()
     body: Any
@@ -277,22 +309,6 @@ def generate_reply(
     cfg = ai_config()
     if not cfg["enabled"]:
         return {"ok": False, "error": "سرویس هوش مصنوعی موقتاً غیرفعال است."}
-    if not cfg["api_key_set"]:
-        return _escalation_fallback_reply(
-            user_key=key,
-            audience=aud,
-            user_message=text,
-            thread_id=thread_id,
-            reason="no_key",
-        )
-    if is_api_balance_depleted():
-        return _escalation_fallback_reply(
-            user_key=key,
-            audience=aud,
-            user_message=text,
-            thread_id=thread_id,
-            reason="balance",
-        )
 
     guard = apply_credit_guard(key, aud, text)
     if guard is not None:
@@ -303,27 +319,40 @@ def generate_reply(
         return guard
 
     messages = _build_messages(text, history, user_key=key, audience=aud)
-    result = _call_deepseek(messages)
+    result = call_ai(messages)
     if not result.get("ok"):
-        if result.get("balance_depleted"):
+        from .model_paths import model_is_ready as offline_model_ready
+
+        # مدل آفلاین موجود است → escalation نکن، فقط خطای بارگذاری بده
+        if offline_enabled() and offline_model_ready():
+            return {
+                "ok": False,
+                "error": result.get("error")
+                or "موتور AI آفلاین در حال آماده‌سازی است. لطفاً یک دقیقه دیگر تلاش کنید.",
+                "error_code": result.get("error_code") or "offline_not_ready",
+                "offline_error": result.get("offline_error"),
+            }
+
+        reason = None
+        if result.get("balance_depleted") or is_api_balance_depleted():
+            reason = "balance"
+        elif not cfg["api_key_set"] or result.get("error_code") == "no_api_key":
+            reason = "no_key"
+        if reason:
             fallback = _escalation_fallback_reply(
                 user_key=key,
                 audience=aud,
                 user_message=text,
                 thread_id=thread_id,
-                reason="balance",
+                reason=reason,
             )
             if fallback.get("ok"):
-                return _finalize_reply(
-                    fallback,
-                    text=text,
-                    user_key=key,
-                    audience=aud,
-                    thread_id=thread_id,
-                )
+                return fallback
         return result
 
-    record_api_call(key, aud)
+    meta = result.get("meta") if isinstance(result.get("meta"), dict) else {}
+    if meta.get("provider") == "deepseek":
+        record_api_call(key, aud)
 
     raw_reply = result.get("reply") or ""
     reply, escalate_q = _strip_escalate_marker(raw_reply)

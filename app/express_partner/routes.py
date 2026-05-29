@@ -3286,6 +3286,107 @@ def profile_delete_account():
     return r
 
 
+def _save_partner_avatar_upload(me_phone: str, f) -> str | None:
+  """ذخیره فایل آواتار و به‌روزرسانی پروفایل. مسیر نسبی partner/avatars/... یا None."""
+  if not me_phone or not f or not f.filename:
+      return None
+  base = os.path.join(current_app.instance_path, 'data', 'uploads', 'partner', 'avatars', me_phone)
+  os.makedirs(base, exist_ok=True)
+  try:
+      for fn in os.listdir(base):
+          try:
+              if fn.startswith('avatar.'):
+                  os.remove(os.path.join(base, fn))
+          except Exception:
+              continue
+  except Exception:
+      pass
+  tmp_path = os.path.join(base, '_tmp_upload')
+  final_name = 'avatar.jpg'
+  final_path = os.path.join(base, final_name)
+  try:
+      f.save(tmp_path)
+      converted = False
+      try:
+          from PIL import Image, ImageOps  # type: ignore
+          im = Image.open(tmp_path)
+          try:
+              im = ImageOps.exif_transpose(im)
+          except Exception:
+              pass
+          if im.mode in ("RGBA", "LA"):
+              bg = Image.new("RGB", im.size, (255, 255, 255))
+              bg.paste(im, mask=im.split()[-1])
+              im = bg
+          elif im.mode != "RGB":
+              im = im.convert("RGB")
+          im.thumbnail((1200, 1200), Image.LANCZOS)
+          im.save(final_path, format='JPEG', quality=82, optimize=True)
+          converted = True
+      except Exception:
+          converted = False
+      if not converted:
+          orig_lower = (f.filename or '').lower()
+          ext = '.jpg'
+          for e in ('.jpg', '.jpeg', '.png', '.webp'):
+              if orig_lower.endswith(e):
+                  ext = e
+                  break
+          final_name = 'avatar' + ext
+          final_path = os.path.join(base, final_name)
+          try:
+              import shutil
+              shutil.move(tmp_path, final_path)
+          except Exception:
+              f.stream.seek(0)
+              with open(final_path, 'wb') as out:
+                  out.write(f.read())
+      try:
+          if os.path.exists(tmp_path):
+              os.remove(tmp_path)
+      except Exception:
+          pass
+  except Exception:
+      current_app.logger.error("Failed to save partner avatar file", exc_info=True)
+      return None
+  partners = load_express_partners() or []
+  prof = next((p for p in partners if str(p.get('phone') or '').strip() == me_phone), None)
+  if not prof:
+      prof = {"phone": me_phone}
+      partners.append(prof)
+  rel_path = f'partner/avatars/{me_phone}/{os.path.basename(final_path)}'
+  prof['avatar'] = rel_path
+  try:
+      from time import time as _now
+      prof['avatar_updated_at'] = int(_now())
+  except Exception:
+      prof['avatar_updated_at'] = 0
+  try:
+      save_express_partners(partners)
+  except Exception:
+      current_app.logger.error("Failed to save partner avatar path", exc_info=True)
+      return None
+  return rel_path
+
+
+@express_partner_bp.post('/api/profile/avatar')
+def api_profile_avatar():
+    """آپلود آواتار برای اپ اندروید (multipart، بدون CSRF)."""
+    if not session.get('user_phone'):
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    me_phone = (session.get('user_phone') or '').strip()
+    f = request.files.get('avatar')
+    if not f or not f.filename:
+        return jsonify({'success': False, 'error': 'no_file'}), 400
+    rel_path = _save_partner_avatar_upload(me_phone, f)
+    if not rel_path:
+        return jsonify({'success': False, 'error': 'save_failed'}), 500
+    return jsonify({
+        'success': True,
+        'avatar_url': f'/uploads/{rel_path}',
+    })
+
+
 @express_partner_bp.post('/profile/avatar')
 @require_partner_access(allow_pending=True)
 def profile_avatar_upload():
@@ -3297,91 +3398,10 @@ def profile_avatar_upload():
     f = request.files.get('avatar')
     if not f or not f.filename:
         return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile'))
-    # مسیر ذخیره‌سازی: instance/data/uploads/partner/avatars/<phone>/
-    base = os.path.join(current_app.instance_path, 'data', 'uploads', 'partner', 'avatars', me_phone)
-    os.makedirs(base, exist_ok=True)
-    # حذف آواتارهای قبلی
-    try:
-        for fn in os.listdir(base):
-            try:
-                if fn.startswith('avatar.'):
-                    os.remove(os.path.join(base, fn))
-            except Exception:
-                continue
-    except Exception:
-        pass
-    # ذخیره آواتار جدید با تبدیل به JPEG و کوچک‌سازی سمت سرور (برای موبایل)
-    tmp_path = os.path.join(base, '_tmp_upload')
-    final_name = 'avatar.jpg'
-    final_path = os.path.join(base, final_name)
-    try:
-        f.save(tmp_path)
-        converted = False
-        try:
-            from PIL import Image, ImageOps  # type: ignore
-            im = Image.open(tmp_path)
-            try:
-                im = ImageOps.exif_transpose(im)
-            except Exception:
-                pass
-            if im.mode in ("RGBA", "LA"):
-                bg = Image.new("RGB", im.size, (255, 255, 255))
-                bg.paste(im, mask=im.split()[-1])
-                im = bg
-            elif im.mode != "RGB":
-                im = im.convert("RGB")
-            # کوچک‌سازی: حداکثر ضلع 1200px
-            im.thumbnail((1200, 1200), Image.LANCZOS)
-            im.save(final_path, format='JPEG', quality=82, optimize=True)
-            converted = True
-        except Exception:
-            converted = False
-        # اگر تبدیل موفق نبود، همان فایل را به عنوان fallback ذخیره کنیم
-        if not converted:
-            # اگر نام اصلی پسوند داشت، همان را استفاده کنیم؛ وگرنه jpg
-            orig_lower = (f.filename or '').lower()
-            ext = '.jpg'
-            for e in ('.jpg', '.jpeg', '.png', '.webp'):
-                if orig_lower.endswith(e):
-                    ext = e
-                    break
-            final_name = 'avatar' + ext
-            final_path = os.path.join(base, final_name)
-            # کپی فایل موقت به مسیر نهایی
-            try:
-                import shutil
-                shutil.move(tmp_path, final_path)
-            except Exception:
-                # آخرین تلاش: دوباره ذخیره مستقیم
-                f.stream.seek(0)
-                with open(final_path, 'wb') as out:
-                    out.write(f.read())
-        # پاک‌سازی فایل موقت
-        try:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-        except Exception:
-            pass
-    except Exception:
+    rel_path = _save_partner_avatar_upload(me_phone, f)
+    if not rel_path:
         flash('خطا در ذخیره تصویر پروفایل.', 'profile')
         return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile'))
-    # به‌روزرسانی پروفایل همکار
-    partners = load_express_partners() or []
-    prof = next((p for p in partners if str(p.get('phone') or '').strip() == me_phone), None)
-    if not prof:
-        prof = {"phone": me_phone}
-        partners.append(prof)
-    rel_path = f'partner/avatars/{me_phone}/{os.path.basename(final_path)}'
-    prof['avatar'] = rel_path
-    try:
-        from time import time as _now
-        prof['avatar_updated_at'] = int(_now())
-    except Exception:
-        prof['avatar_updated_at'] = 0
-    try:
-        save_express_partners(partners)
-    except Exception:
-        current_app.logger.error("Failed to save partner avatar path", exc_info=True)
     return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile'))
 
 
