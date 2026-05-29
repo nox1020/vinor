@@ -242,6 +242,11 @@
     } else if (window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.teardown();
     }
+    if (navKey === 'commissions' && window.__vinorCommissionsChrome) {
+      window.__vinorCommissionsChrome.setup({ resetScroll: !onDetail });
+    } else if (window.__vinorCommissionsChrome) {
+      window.__vinorCommissionsChrome.teardown();
+    }
     if (navKey === 'dashboard' && window.__vinorDashboardVoiceSearch) {
       window.__vinorDashboardVoiceSearch.setup();
     } else if (window.__vinorDashboardVoiceSearch && window.__vinorDashboardVoiceSearch.teardown) {

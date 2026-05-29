@@ -88,6 +88,9 @@
         if (spin) spin.classList.remove('fa-spin');
         setHint(false);
         refreshPromise = null;
+        if (window.__vinorCommissionsChrome && window.__vinorCommissionsChrome.sync) {
+          window.__vinorCommissionsChrome.sync();
+        }
       });
       return refreshPromise;
     }
