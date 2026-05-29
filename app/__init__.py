@@ -608,12 +608,4 @@ def create_app() -> Flask:
         current_app.logger.debug("REDIRECT → / (guest): %s", request.path)
         return redirect(url_for("main.index"))
 
-    # AI آفلاین: دانلود مدل + pip + warm-up در پس‌زمینه
-    try:
-        from .ai.offline_bootstrap import start_offline_bootstrap
-
-        start_offline_bootstrap(app)
-    except Exception as e:
-        app.logger.warning("AI offline bootstrap skipped: %s", e)
-
     return app

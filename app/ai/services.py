@@ -1,4 +1,4 @@
-"""منطق هوش مصنوعی وینور — آفلاین (GGUF) + DeepSeek API."""
+"""منطق هوش مصنوعی وینور — DeepSeek API."""
 from __future__ import annotations
 
 import os
@@ -30,31 +30,17 @@ from .credits import (
 )
 from .escalations import consume_pending_answers, create_escalation
 from .land_cards import collect_land_codes, land_cards_payload
-from .offline_bootstrap import bootstrap_status
-from .offline_config import offline_enabled, provider_mode
-from .offline_engine import is_ready as offline_is_ready
 from .provider_router import call_ai
 
 
 def ai_config() -> dict[str, Any]:
     api_key = get_deepseek_api_key()
-    mode = provider_mode()
-    offline_ready = offline_is_ready()
-    can_offline = offline_enabled() and offline_ready and mode in ("offline", "auto")
-    if can_offline:
-        active = "offline"
-    elif mode == "offline":
-        active = "offline"
-    else:
-        active = "deepseek"
     return {
         "enabled": os.environ.get("VINOR_AI_ENABLED", "1").lower() not in ("0", "false", "no"),
-        "provider": active,
-        "provider_mode": mode,
-        "model": DEEPSEEK_MODEL if active == "deepseek" else bootstrap_status().get("model_path", ""),
+        "provider": "deepseek",
+        "model": DEEPSEEK_MODEL,
         "api_key_set": bool(api_key),
         "api_balance_ok": not is_api_balance_depleted(),
-        "offline": bootstrap_status(),
     }
 
 
@@ -321,18 +307,6 @@ def generate_reply(
     messages = _build_messages(text, history, user_key=key, audience=aud)
     result = call_ai(messages)
     if not result.get("ok"):
-        from .model_paths import model_is_ready as offline_model_ready
-
-        # مدل آفلاین موجود است → escalation نکن، فقط خطای بارگذاری بده
-        if offline_enabled() and offline_model_ready():
-            return {
-                "ok": False,
-                "error": result.get("error")
-                or "موتور AI آفلاین در حال آماده‌سازی است. لطفاً یک دقیقه دیگر تلاش کنید.",
-                "error_code": result.get("error_code") or "offline_not_ready",
-                "offline_error": result.get("offline_error"),
-            }
-
         reason = None
         if result.get("balance_depleted") or is_api_balance_depleted():
             reason = "balance"
