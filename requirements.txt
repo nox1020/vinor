@@ -30,7 +30,3 @@ typing_extensions==4.15.0
 urllib3==2.5.0
 werkzeug==2.3.7
 WTForms==3.0.1
-
-# AI آفلاین (روی سرور Linux خودکار نصب می‌شود؛ برای لوکال: pip install -r requirements-offline.txt)
-huggingface_hub>=0.24.0
-llama-cpp-python>=0.3.4

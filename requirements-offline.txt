@@ -1,0 +1,4 @@
+# اختیاری — فقط برای AI آفلاین (روی سرور بدون اینترنت: wheel را در packages/ بگذارید)
+# pip install -r requirements-offline.txt
+huggingface_hub>=0.24.0
+llama-cpp-python>=0.3.4
