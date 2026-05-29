@@ -24,9 +24,10 @@
           {% if fcat %}<input type="hidden" name="cat" value="{{ fcat }}">{% endif %}
           <div class="vinor-dash-search-pill relative flex h-[42px] w-full items-center rounded-full border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1a2230] transition-colors focus-within:border-gray-500 dark:focus-within:border-white/35">
             <button type="button"
-                    class="flex h-full w-10 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                    id="dashboardVoiceSearchBtn"
+                    class="flex h-full w-10 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                     aria-label="جستجوی صوتی"
-                    tabindex="-1">
+                    title="جستجوی صوتی">
               <i class="fas fa-microphone text-[15px]" aria-hidden="true"></i>
             </button>
             <input type="text"

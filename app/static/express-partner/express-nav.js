@@ -241,6 +241,9 @@
     } else if (window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.teardown();
     }
+    if (navKey === 'dashboard' && window.__vinorDashboardVoiceSearch) {
+      window.__vinorDashboardVoiceSearch.setup();
+    }
     try {
       if (typeof window.hoistVinorExpressBodyModals === 'function') {
         window.hoistVinorExpressBodyModals();
