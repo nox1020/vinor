@@ -209,7 +209,11 @@
     compact = want;
     el.header.classList.toggle('dash-header--compact', compact);
     syncPadding(el);
-    window.setTimeout(scheduleCardsHeight, 320);
+    if (!isVerticalCardsViewport()) {
+      window.setTimeout(scheduleCardsHeight, 320);
+    } else {
+      scheduleCardsHeight();
+    }
   }
 
   function updateCompactFromScroll() {

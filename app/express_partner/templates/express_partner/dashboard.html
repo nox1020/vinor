@@ -155,6 +155,11 @@
       #expressDashboardMain {
         transition-property: none !important;
       }
+      /* انیمیشن جمع‌شدن فیلترها باعث می‌شود ارتفاع هدر وسط transition غلط خوانده شود */
+      #dashboardFiltersStrip,
+      #expressDashboardHeader .express-dash-header-inner {
+        transition: none !important;
+      }
     }
     /* موبایل/تبلت: بدون min-height اضافه — فضای خالی تیره زیر کارت‌ها و بالای فوتر ایجاد می‌کرد */
     @media (max-width: 1023px) {
@@ -447,7 +452,7 @@
         const t = e.touches[0];
         touchStart = { x: t.clientX, y: t.clientY };
       },
-      { passive: true }
+      __vinorDashSig ? { passive: true, signal: __vinorDashSig } : { passive: true }
     );
 
     mobileRoot.addEventListener(
@@ -469,7 +474,7 @@
         if (window.vinorExpressNavigate) window.vinorExpressNavigate(href, { forward: true });
         else window.location.assign(href);
       },
-      { passive: true }
+      __vinorDashSig ? { passive: true, signal: __vinorDashSig } : { passive: true }
     );
 
     mobileRoot.addEventListener(
@@ -486,7 +491,7 @@
         if (window.vinorExpressNavigate) window.vinorExpressNavigate(href, { forward: true });
         else window.location.assign(href);
       },
-      false
+      __vinorDashSig ? { signal: __vinorDashSig } : false
     );
   })();
 
@@ -735,16 +740,26 @@
       const sign = (dir === 'next') ? (rtl ? -1 : 1) : (rtl ? 1 : -1);
       track.scrollBy({ left: sign * delta, behavior: 'smooth' });
     }
-    prev.addEventListener('click', ()=>scrollByAmount('prev'));
-    next.addEventListener('click', ()=>scrollByAmount('next'));
+    var hOpts = __vinorDashSig ? { signal: __vinorDashSig } : false;
+    prev.addEventListener('click', function () { scrollByAmount('prev'); }, hOpts);
+    next.addEventListener('click', function () { scrollByAmount('next'); }, hOpts);
   })();
 
   /** رفرش لیست کارت‌ها (ترک موبایل + گرید دسکتاپ) بدون reload کامل صفحه */
   let dashboardRefreshPromise = null;
+  function isDashboardPath() {
+    try {
+      var p = (window.location.pathname || '').replace(/\/+$/, '') || '/';
+      return p === '/express/partner/dashboard';
+    } catch (_) {
+      return false;
+    }
+  }
   async function performRefresh() {
     if (dashboardRefreshPromise) return dashboardRefreshPromise;
     dashboardRefreshPromise = (async () => {
     try {
+      if (!isDashboardPath()) return false;
       const url = new URL(window.location.href);
       url.searchParams.set('_refresh', Date.now().toString());
       const response = await fetch(url.toString(), {
@@ -770,6 +785,7 @@
         if (newTrack && curTrack) willUpdate = true;
         if (newGrid && curGrid) willUpdate = true;
         if (!willUpdate) return false;
+        if (!isDashboardPath()) return false;
         if (curTrack) {
           curTrack.style.opacity = '0.72';
           curTrack.style.transition = 'opacity 0.22s ease';
@@ -785,7 +801,12 @@
               if (newGrid && curGrid) curGrid.innerHTML = newGrid.innerHTML;
               if (curTrack) curTrack.style.opacity = '1';
               if (curGrid) curGrid.style.opacity = '1';
+              var cardsRoot = document.getElementById('dashboardMobileCardsRoot');
+              if (cardsRoot) cardsRoot.scrollTop = 0;
               reinitializeCards();
+              if (window.__vinorDashboardSyncChrome) {
+                window.__vinorDashboardSyncChrome({ expandHeader: true, resetScroll: false });
+              }
             } catch (_) {}
             resolve();
           });
@@ -812,6 +833,7 @@
     let startY = null;
     let maxPull = 0;
     let busy = false;
+    const pullOpts = __vinorDashSig ? { passive: true, signal: __vinorDashSig } : { passive: true };
 
     function isVerticalCardList() {
       try {
@@ -841,38 +863,30 @@
       setHint(0);
     }
 
-    root.addEventListener(
-      'touchstart',
-      function (e) {
-        if (!isVerticalCardList() || busy) return;
-        if (root.scrollTop > TOP_EPS) return;
-        if (!e.touches || e.touches.length !== 1) return;
-        startY = e.touches[0].clientY;
-        maxPull = 0;
-      },
-      { passive: true }
-    );
+    root.addEventListener('touchstart', function (e) {
+      if (!isVerticalCardList() || busy) return;
+      if (root.scrollTop > TOP_EPS) return;
+      if (!e.touches || e.touches.length !== 1) return;
+      startY = e.touches[0].clientY;
+      maxPull = 0;
+    }, pullOpts);
 
-    root.addEventListener(
-      'touchmove',
-      function (e) {
-        if (startY == null || !e.touches || e.touches.length !== 1) return;
-        if (root.scrollTop > TOP_EPS) {
-          resetGesture();
-          return;
-        }
-        const dy = e.touches[0].clientY - startY;
-        if (dy < -12) {
-          resetGesture();
-          return;
-        }
-        if (dy > 0) {
-          maxPull = Math.max(maxPull, dy);
-          setHint(maxPull);
-        }
-      },
-      { passive: true }
-    );
+    root.addEventListener('touchmove', function (e) {
+      if (startY == null || !e.touches || e.touches.length !== 1) return;
+      if (root.scrollTop > TOP_EPS) {
+        resetGesture();
+        return;
+      }
+      const dy = e.touches[0].clientY - startY;
+      if (dy < -12) {
+        resetGesture();
+        return;
+      }
+      if (dy > 0) {
+        maxPull = Math.max(maxPull, dy);
+        setHint(maxPull);
+      }
+    }, pullOpts);
 
     function endPull() {
       if (startY == null) return;
@@ -880,6 +894,9 @@
       resetGesture();
       if (!should || busy) return;
       busy = true;
+      if (window.__vinorDashboardSyncChrome) {
+        window.__vinorDashboardSyncChrome({ expandHeader: true, resetScroll: false });
+      }
       hint.style.maxHeight = '3.25rem';
       hint.classList.remove('opacity-0');
       hint.classList.add('opacity-100');
@@ -891,14 +908,14 @@
           if (spin) spin.classList.remove('fa-spin');
           busy = false;
           setHint(0);
-          if (window.__vinorDashboardChrome && window.__vinorDashboardChrome.sync) {
-            window.__vinorDashboardChrome.sync();
+          if (window.__vinorDashboardSyncChrome) {
+            window.__vinorDashboardSyncChrome({ expandHeader: true, resetScroll: false });
           }
         });
     }
 
-    root.addEventListener('touchend', endPull, { passive: true });
-    root.addEventListener('touchcancel', resetGesture, { passive: true });
+    root.addEventListener('touchend', endPull, pullOpts);
+    root.addEventListener('touchcancel', resetGesture, pullOpts);
   })();
   
   window.performRefresh = performRefresh;
@@ -908,6 +925,9 @@
     if (!ev.detail || ev.detail.navKey !== 'dashboard') return;
     bindDashboardDesktopCards();
     reinitializeCards();
+    if (window.__vinorDashboardSyncChrome) {
+      window.__vinorDashboardSyncChrome({ expandHeader: true, resetScroll: false });
+    }
   }, __vinorDashSig ? { signal: __vinorDashSig } : false);
   /* chrome: dashboard-chrome.js via vinor:express-page-swap */
 </script>
