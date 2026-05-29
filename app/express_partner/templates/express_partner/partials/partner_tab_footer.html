@@ -5,7 +5,7 @@
   {% set ep = request.endpoint or '' %}
   {% if ep in ('express_partner.dashboard', 'express_partner.dashboard_data') %}
     {% set bottom_nav_active = 'dashboard' %}
-  {% elif ep in ('express_partner.commissions', 'express_partner.commissions_data') %}
+  {% elif ep in ('express_partner.commissions', 'express_partner.commissions_data', 'express_partner.commissions_transactions') %}
     {% set bottom_nav_active = 'commissions' %}
   {% elif ep and (ep.startswith('express_partner.profile') or ep.startswith('express_partner.routine') or ep in ('express_partner.notifications', 'express_partner.help', 'express_partner.top_sellers', 'express_partner.notes', 'express_partner.support', 'express_partner.invite_colleagues', 'express_partner.favorites', 'express_partner.api_favorites_cards')) %}
     {% set bottom_nav_active = 'profile' %}

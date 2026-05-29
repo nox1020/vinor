@@ -91,44 +91,93 @@
     }
   }
 
+  function setShellScrollLock(on) {
+    try {
+      if (on) document.documentElement.setAttribute('data-vinor-dash-scroll', '1');
+      else document.documentElement.removeAttribute('data-vinor-dash-scroll');
+    } catch (_) {}
+  }
+
+  function clearCardsHeight(el) {
+    if (!el.cardsRoot) return;
+    el.cardsRoot.style.height = '';
+    el.cardsRoot.style.maxHeight = '';
+    el.cardsRoot.style.minHeight = '';
+    el.cardsRoot.removeAttribute('data-vn-dash-scroll-lock');
+    el.cardsRoot.style.removeProperty('--vinor-dash-card-h');
+    setShellScrollLock(false);
+  }
+
+  function isVerticalCardsViewport() {
+    try {
+      return window.matchMedia('(max-width: 639px)').matches;
+    } catch (_) {
+      return window.innerWidth <= 639;
+    }
+  }
+
   function syncCardsHeight(el) {
     if (!el.cardsRoot) return;
     try {
       if (!window.matchMedia('(max-width: 1023px)').matches) {
-        el.cardsRoot.style.height = '';
-        el.cardsRoot.style.removeProperty('--vinor-dash-card-h');
+        clearCardsHeight(el);
         return;
       }
       var cs = window.getComputedStyle(el.cardsRoot);
       if (cs.display === 'none' || cs.visibility === 'hidden') {
-        el.cardsRoot.style.height = '';
-        el.cardsRoot.style.removeProperty('--vinor-dash-card-h');
+        clearCardsHeight(el);
         return;
       }
-      var nav = document.getElementById('bottomNavMenu');
-      var navTop = nav ? nav.getBoundingClientRect().top : window.innerHeight;
-      if (window.visualViewport) {
-        var lb = window.visualViewport.offsetTop + window.visualViewport.height;
-        navTop = Math.min(navTop, lb);
-      }
       var rootTop = el.cardsRoot.getBoundingClientRect().top;
-      var available = navTop - rootTop;
+      if (!Number.isFinite(rootTop)) return;
+
+      var nav = document.getElementById('bottomNavMenu');
+      var verticalMobile = isVerticalCardsViewport();
+      var available;
+
+      if (verticalMobile) {
+        /*
+          موبایل عمودی: تا انتهای viewport (نه فقط لبهٔ بالای nav) تا پس‌زمینهٔ لیست
+          از زیر منوی شیشه‌ای و safe-area دیده شود — نه body مشکی جدا.
+        */
+        var bottomEdge = window.innerHeight;
+        try {
+          if (window.visualViewport) {
+            bottomEdge = window.visualViewport.offsetTop + window.visualViewport.height;
+          }
+        } catch (_) {}
+        available = bottomEdge - rootTop;
+      } else {
+        var navTop = nav ? nav.getBoundingClientRect().top : window.innerHeight;
+        if (window.visualViewport) {
+          var lb = window.visualViewport.offsetTop + window.visualViewport.height;
+          navTop = Math.min(navTop, lb);
+        }
+        available = navTop - rootTop;
+        var cardNeed = measureTabletCardHeight(el);
+        if (cardNeed > 0) available = Math.max(available, cardNeed + 8);
+        available = Math.ceil(available) + HEIGHT_SLACK_PX;
+      }
+
       if (!Number.isFinite(available)) return;
-      available = Math.max(160, Math.ceil(available) + HEIGHT_SLACK_PX);
-      var cardNeed = measureTabletCardHeight(el);
-      if (cardNeed > 0) available = Math.max(available, cardNeed + 8);
+      available = Math.max(160, Math.ceil(available));
       var prev = parseFloat(String(el.cardsRoot.style.height || '').replace('px', ''), 10);
       if (Number.isFinite(prev) && Math.abs(prev - available) < 8) {
+        setShellScrollLock(isVerticalCardsViewport() && scrollMode === 'cards');
         try {
-          if (window.matchMedia('(max-width: 639px)').matches) {
+          if (isVerticalCardsViewport()) {
             el.cardsRoot.style.setProperty('--vinor-dash-card-h', available + 'px');
           }
         } catch (_) {}
         return;
       }
       el.cardsRoot.style.height = available + 'px';
+      el.cardsRoot.style.maxHeight = available + 'px';
+      el.cardsRoot.style.minHeight = available + 'px';
+      el.cardsRoot.setAttribute('data-vn-dash-scroll-lock', '1');
+      setShellScrollLock(isVerticalCardsViewport() && scrollMode === 'cards');
       try {
-        if (window.matchMedia('(max-width: 639px)').matches) {
+        if (isVerticalCardsViewport()) {
           el.cardsRoot.style.setProperty('--vinor-dash-card-h', available + 'px');
         } else {
           el.cardsRoot.style.removeProperty('--vinor-dash-card-h');
@@ -207,6 +256,7 @@
     if (el.header) {
       el.header.classList.remove('dash-header--compact');
     }
+    clearCardsHeight(el);
     compact = false;
   }
 
@@ -217,6 +267,7 @@
 
     compact = readCompactFromDom(el);
     scrollMode = scrollModeFor(el);
+    setShellScrollLock(scrollMode === 'cards' && isVerticalCardsViewport());
 
     dashAbort = new AbortController();
     var sig = dashAbort.signal;
@@ -266,6 +317,12 @@
           var rom = new ResizeObserver(scheduleCardsHeight);
           rom.observe(el.main);
           resizeObs.push(rom);
+        }
+        var nav = document.getElementById('bottomNavMenu');
+        if (nav) {
+          var ron = new ResizeObserver(scheduleCardsHeight);
+          ron.observe(nav);
+          resizeObs.push(ron);
         }
       }
     } catch (_) {}

@@ -227,9 +227,12 @@
       قبل از اجرای اسکریپت، تخمین قبلی به‌عنوان fallback می‌ماند.
     */
     @media (max-width: 639px) {
-      /* padding main را صفر می‌کنیم تا کارت‌ها از هر دو لبهٔ فیزیکی برسند؛ هشدارها margin جدا می‌گیرند */
       #expressDashboardMain {
         padding-inline: 0 !important;
+        background-color: #f9fafb;
+      }
+      html.dark #expressDashboardMain {
+        background-color: #030712;
       }
       #expressDashboardMain > div:not(#dashboardMobileCardsRoot) {
         margin-inline: 0.75rem;
@@ -241,9 +244,16 @@
       }
       #dashboardMobileCardsRoot {
         --vinor-dash-card-gutter: 0.25rem;
-        height: calc(100dvh - 212px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
         min-height: 14rem;
         -webkit-overflow-scrolling: touch;
+      }
+      html[data-vinor-dash-scroll] #tg-page-shell {
+        overflow: hidden;
+        height: 100dvh;
+        max-height: 100dvh;
+      }
+      html[data-vinor-dash-scroll] body {
+        overflow: hidden;
       }
       #dashboardMobileCardsRoot #cardsTrack {
         align-items: stretch;
@@ -349,6 +359,14 @@
   <div class="hidden lg:grid lg:grid-cols-12 gap-6 mt-2">
     <div class="lg:col-span-8">
       {% include 'express_partner/partials/dashboard_cards_desktop.html' %}
+      {% if dashboard_lands_truncated %}
+      <div class="mt-4 text-center">
+        <a href="{{ url_for('express_partner.dashboard', all=1, q=request.args.get('q') or none, city=city_url, tag=request.args.get('tag') or none, cat=request.args.get('cat') or none) }}"
+           class="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-gray-50 dark:border-white/15 dark:bg-white/5 dark:text-emerald-300 dark:hover:bg-white/10">
+          نمایش همه فایل‌ها ({{ lands_total_count|default(assigned_lands|length) }})
+        </a>
+      </div>
+      {% endif %}
             </div>
 
     {# سایدبار آمار و میانبرها (فایل مجزا) #}
@@ -359,14 +377,6 @@
   {# لیست کارت‌ها در موبایل (اسکرول افقی) - فایل مجزا #}
   {% include 'express_partner/partials/dashboard_cards_mobile.html' %}
 
-  {% if dashboard_lands_truncated %}
-  <div class="px-3 pb-4 pt-2 text-center">
-    <a href="{{ url_for('express_partner.dashboard', all=1, q=request.args.get('q') or none, city=city_url, tag=request.args.get('tag') or none, cat=request.args.get('cat') or none) }}"
-       class="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-white/10">
-      نمایش همه فایل‌ها ({{ lands_total_count|default(assigned_lands|length) }})
-    </a>
-  </div>
-  {% endif %}
 </div>
 
 {% include 'express_partner/partials/partner_tab_footer.html' %}
@@ -852,6 +862,10 @@
           return;
         }
         const dy = e.touches[0].clientY - startY;
+        if (dy < -12) {
+          resetGesture();
+          return;
+        }
         if (dy > 0) {
           maxPull = Math.max(maxPull, dy);
           setHint(maxPull);
@@ -877,6 +891,9 @@
           if (spin) spin.classList.remove('fa-spin');
           busy = false;
           setHint(0);
+          if (window.__vinorDashboardChrome && window.__vinorDashboardChrome.sync) {
+            window.__vinorDashboardChrome.sync();
+          }
         });
     }
 

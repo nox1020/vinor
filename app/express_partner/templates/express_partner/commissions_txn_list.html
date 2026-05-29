@@ -1,0 +1,148 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}همه تراکنش‌ها | پورسانت{% endblock %}
+
+{% block content %}
+  <header class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md">
+    <div class="relative mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16 sm:px-6">
+      <a href="{{ url_for('express_partner.commissions') }}"
+         data-vinor-express-nav="back"
+         class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+         aria-label="بازگشت">
+        <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
+      </a>
+      <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">همه تراکنش‌ها</h1>
+      <div class="h-10 w-10" aria-hidden="true"></div>
+    </div>
+  </header>
+
+  <div id="commissionsTxnScroll"
+       class="fixed inset-x-0 bottom-0 top-14 overflow-y-auto bg-[#030712] overscroll-y-contain text-zinc-100 sm:top-16 lg:pb-0"
+       style="-webkit-overflow-scrolling: touch;">
+    <div class="mx-auto max-w-lg px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] pt-2 sm:max-w-4xl sm:px-6 sm:pt-3">
+      <p id="commTxnCountHint" class="mb-3 text-center text-xs text-zinc-500">
+        {% if items and items|length > 0 %}{{ items|length }} تراکنش{% else %}بدون تراکنش{% endif %}
+      </p>
+
+      <div class="mb-4 flex gap-2 overflow-x-auto no-scrollbar pb-0.5 snap-x snap-mandatory" id="commTxnFilters" role="tablist" aria-label="فیلتر وضعیت">
+        <button type="button" data-comm-txn-filter="all" class="comm-txn-filter snap-start shrink-0 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-semibold text-emerald-300 transition" aria-pressed="true">همه</button>
+        <button type="button" data-comm-txn-filter="pending" class="comm-txn-filter snap-start shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition" aria-pressed="false">در انتظار</button>
+        <button type="button" data-comm-txn-filter="approved" class="comm-txn-filter snap-start shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition" aria-pressed="false">تأیید شده</button>
+        <button type="button" data-comm-txn-filter="paid" class="comm-txn-filter snap-start shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition" aria-pressed="false">پرداخت‌شده</button>
+        <button type="button" data-comm-txn-filter="rejected" class="comm-txn-filter snap-start shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition" aria-pressed="false">رد شده</button>
+      </div>
+
+      <section class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
+        {% if items and items|length > 0 %}
+        <div id="commTxnRows" class="divide-y divide-white/5">
+          {% for c in items %}
+            {% set tour_item = loop.first %}
+            {% include 'express_partner/partials/commission_txn_row.html' %}
+          {% endfor %}
+        </div>
+        <div id="commTxnEmptyFilter" class="hidden px-4 py-10 text-center">
+          <p class="text-sm text-slate-400">تراکنشی با این فیلتر یافت نشد.</p>
+        </div>
+        {% else %}
+        <div class="px-4 py-10 text-center">
+          <div class="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-slate-800/80">
+            <i class="fas fa-receipt text-2xl text-slate-500" aria-hidden="true"></i>
+          </div>
+          <p class="text-sm text-slate-400">هنوز تراکنشی ثبت نشده است.</p>
+          <a href="{{ url_for('express_partner.dashboard') }}"
+             class="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-500">
+            <i class="fas fa-th-large text-[11px]" aria-hidden="true"></i>
+            رفتن به داشبورد
+          </a>
+        </div>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+
+  {% set bottom_nav_active = 'commissions' %}
+  {% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+  (function () {
+    function fmt(dt) {
+      try {
+        var d = new Date(String(dt || '').replace(' ', 'T'));
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleDateString('fa-IR', {
+          timeZone: 'Asia/Tehran',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+      } catch (_) { return ''; }
+    }
+    function applyJalali(scope) {
+      (scope || document).querySelectorAll('.jalali-dt[data-dt]').forEach(function (el) {
+        var formatted = fmt(el.getAttribute('data-dt') || '');
+        el.textContent = formatted || '—';
+      });
+    }
+    applyJalali(document);
+
+    var filters = document.getElementById('commTxnFilters');
+    var rowsRoot = document.getElementById('commTxnRows');
+    var emptyFilter = document.getElementById('commTxnEmptyFilter');
+    var countHint = document.getElementById('commTxnCountHint');
+    if (!filters || !rowsRoot) return;
+
+    var active = 'all';
+
+    function setActiveChip(key) {
+      active = key;
+      filters.querySelectorAll('.comm-txn-filter').forEach(function (btn) {
+        var on = btn.getAttribute('data-comm-txn-filter') === key;
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.classList.toggle('border-emerald-500/40', on);
+        btn.classList.toggle('bg-emerald-500/15', on);
+        btn.classList.toggle('text-emerald-300', on);
+        btn.classList.toggle('font-semibold', on);
+        btn.classList.toggle('border-white/10', !on);
+        btn.classList.toggle('bg-white/5', !on);
+        btn.classList.toggle('text-zinc-400', !on);
+        btn.classList.toggle('font-medium', !on);
+      });
+    }
+
+    function applyFilter() {
+      var shown = 0;
+      rowsRoot.querySelectorAll('[data-commission-status]').forEach(function (row) {
+        var st = String(row.getAttribute('data-commission-status') || 'pending').trim();
+        var visible = active === 'all' || st === active;
+        row.classList.toggle('hidden', !visible);
+        if (visible) shown += 1;
+      });
+      if (emptyFilter) emptyFilter.classList.toggle('hidden', shown > 0);
+      if (countHint) {
+        if (active === 'all') {
+          countHint.textContent = shown + ' تراکنش';
+        } else {
+          countHint.textContent = shown + ' مورد از ' + rowsRoot.querySelectorAll('[data-commission-status]').length;
+        }
+      }
+    }
+
+    filters.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('[data-comm-txn-filter]');
+      if (!btn) return;
+      setActiveChip(btn.getAttribute('data-comm-txn-filter') || 'all');
+      applyFilter();
+    });
+
+    var initial = 'all';
+    try {
+      var q = new URLSearchParams(window.location.search).get('status');
+      if (q && filters.querySelector('[data-comm-txn-filter="' + q + '"]')) initial = q;
+    } catch (_) {}
+    setActiveChip(initial);
+    applyFilter();
+  })();
+  </script>
+{% endblock %}

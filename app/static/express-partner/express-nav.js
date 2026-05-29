@@ -37,10 +37,9 @@
     '/express/partner/top-sellers': 'profile',
     '/express/partner/invite-colleagues': 'profile',
     '/express/partner/training': 'profile',
-    '/express/partner/routine': 'profile'
+    '/express/partner/routine': 'profile',
+    '/express/partner/commissions/transactions': 'commissions'
   };
-
-  var SKIP_PATH_PREFIXES = [
     '/express/partner/login',
     '/express/partner/login/otp',
     '/express/partner/verify',

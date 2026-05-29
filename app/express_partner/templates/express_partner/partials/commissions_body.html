@@ -37,7 +37,7 @@
       }
       #commissionsRefreshMount {
         background-color: #030712;
-        padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+        padding-bottom: 0.5rem;
       }
       html[data-vinor-comm-scroll] #tg-page-shell {
         overflow: hidden;
@@ -87,7 +87,6 @@
     var scrollMount = document.getElementById('commissionsRefreshMount');
     if (!header || !main) return;
 
-    var HEIGHT_SLACK_PX = 10;
     var HEIGHT_EPS_PX = 8;
     var chromeRaf = 0;
     var resizeObs = [];
@@ -128,7 +127,24 @@
           return;
         }
         if (!scrollMount) {
-          clearScrollLockStyles();
+          var guestTop = main.getBoundingClientRect().top;
+          var guestBottom = window.innerHeight;
+          try {
+            if (window.visualViewport) {
+              guestBottom = window.visualViewport.offsetTop + window.visualViewport.height;
+            }
+          } catch (_) {}
+          var guestH = guestBottom - guestTop;
+          if (Number.isFinite(guestTop) && Number.isFinite(guestH)) {
+            guestH = Math.max(200, Math.ceil(guestH));
+            main.style.height = guestH + 'px';
+            main.style.maxHeight = guestH + 'px';
+            main.style.minHeight = guestH + 'px';
+            main.setAttribute('data-vn-comm-scroll-lock', '1');
+            setShellScrollLock(true);
+          } else {
+            clearScrollLockStyles();
+          }
           main.style.paddingBottom = 'calc(5.75rem + env(safe-area-inset-bottom, 0px))';
           return;
         }
@@ -138,16 +154,21 @@
           return;
         }
         var mainTop = main.getBoundingClientRect().top;
-        var navTop = nav.getBoundingClientRect().top;
+        if (!Number.isFinite(mainTop)) return;
+
+        /*
+          تا انتهای viewport (نه فقط لبهٔ بالای nav) تا #030712 از زیر منوی شیشه‌ای
+          و safe-area دیده شود — همان اصلاح داشبورد.
+        */
+        var bottomEdge = window.innerHeight;
         try {
           if (window.visualViewport) {
-            var lb = window.visualViewport.offsetTop + window.visualViewport.height;
-            navTop = Math.min(navTop, lb);
+            bottomEdge = window.visualViewport.offsetTop + window.visualViewport.height;
           }
         } catch (_) {}
-        var available = navTop - mainTop;
+        var available = bottomEdge - mainTop;
         if (!Number.isFinite(available)) return;
-        available = Math.max(200, Math.ceil(available) + HEIGHT_SLACK_PX);
+        available = Math.max(200, Math.ceil(available));
         var prev = parseFloat(String(main.style.height || '').replace('px', ''), 10);
         if (Number.isFinite(prev) && Math.abs(prev - available) < HEIGHT_EPS_PX) return;
         main.style.height = available + 'px';

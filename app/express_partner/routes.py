@@ -1729,6 +1729,33 @@ def commissions_page():
     return resp
 
 
+@express_partner_bp.get('/commissions/transactions', endpoint='commissions_transactions')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def commissions_transactions_page():
+    me_phone = (session.get("user_phone") or "").strip()
+    profile = getattr(g, 'express_partner_profile', None)
+    is_approved = _is_partner_approved(profile)
+    if not is_approved:
+        return redirect(url_for('express_partner.commissions'))
+
+    my_comms = _commissions_for_phone(me_phone)
+    _attach_commission_txn_labels(my_comms)
+    try:
+        my_comms.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    except Exception:
+        pass
+
+    return render_template(
+        "express_partner/commissions_txn_list.html",
+        items=my_comms,
+        hide_header=True,
+        SHOW_SUBMIT_BUTTON=False,
+        brand="وینور",
+        domain="vinor.ir",
+        is_approved=is_approved,
+    )
+
+
 @express_partner_bp.get('/commissions/data', endpoint='commissions_data')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def commissions_data():
