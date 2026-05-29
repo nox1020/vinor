@@ -17,6 +17,7 @@ from .offline_config import (
 )
 from .offline_download import ensure_model_file
 from .offline_engine import is_ready, last_error, warmup
+from .model_paths import model_file_path
 
 _bootstrap_lock = threading.Lock()
 _bootstrap_started = False
@@ -165,12 +166,30 @@ def run_bootstrap(app) -> None:
     with app.app_context():
         try:
             _log(app, "start")
+            missing = _missing_packages()
+            _log(
+                app,
+                f"env passenger={is_passenger()} auto_pip={auto_pip()} "
+                f"auto_download={auto_download()} missing={missing or 'none'}",
+            )
             if is_passenger():
                 _log(app, "Passenger mode: no network pip")
             _ensure_dependencies(app)
-            if auto_download():
-                ok = ensure_model_file()
-                _log(app, f"model download: {'ok' if ok else 'pending/failed'}")
+            from .model_paths import model_is_ready
+
+            if not model_is_ready():
+                if auto_download():
+                    _log(app, "model missing — starting download (may take several minutes)")
+                    ok = ensure_model_file()
+                    _log(app, f"model download: {'ok' if ok else 'pending/failed'}")
+                else:
+                    _log(app, "model missing — upload GGUF to ai_models/ or set VINOR_AI_AUTO_DOWNLOAD=1")
+            else:
+                _log(app, "model file already present")
+            if not model_is_ready():
+                _log(app, f"offline engine not ready: model file missing ({model_file_path()})")
+                return
+            _log(app, "loading model into memory (warm-up)...")
             if warmup():
                 _log(app, "offline engine ready")
             else:
