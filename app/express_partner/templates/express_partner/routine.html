@@ -5,7 +5,8 @@
   <!-- Header — هم‌راستا با پروفایل -->
   <header class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md w-full">
     <div class="relative mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16 sm:px-6">
-      <a href="{{ url_for('express_partner.dashboard') }}"
+      <a href="{{ url_for('express_partner.profile') }}"
+         data-vinor-express-nav="back"
          class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
          aria-label="بازگشت">
         <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
@@ -629,8 +630,8 @@
 
     scheduleBootRoutine();
 
-    document.addEventListener('vinor:express-page-swap', function (ev) {
-      if (!ev.detail || ev.detail.navKey !== 'routine') return;
+    document.addEventListener('vinor:express-page-swap', function () {
+      if (window.location.pathname.replace(/\/+$/, '') !== '/express/partner/routine') return;
       scheduleBootRoutine();
     }, { signal: moduleSig });
   })();

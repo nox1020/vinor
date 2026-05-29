@@ -42,7 +42,8 @@ from .partner_bank_accounts import (
     catalog_public,
 )
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
-from ..services.sms import send_sms_direct
+from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
+from app.services.sms_config import get_sms_line_number
 from flask import jsonify, make_response
 
 
@@ -492,14 +493,9 @@ def require_partner_access(json_response: bool = False, allow_pending: bool = Fa
                     return jsonify({"success": False, "error": "not_approved"}), 403
                 last_app = _get_my_last_application(me_phone)
                 if last_app:
-                    return render_template(
-                        'express_partner/thanks.html',
-                        name=(last_app.get('name') or ''),
-                        pending=True,
-                        waiting=True
-                    )
+                    return redirect(url_for('express_partner.thanks'))
                 flash('برای ورود به پنل، لطفاً ابتدا درخواست همکاری خود را ثبت و تکمیل کنید.', 'warning')
-                return redirect(url_for('express_partner.apply_step1'))
+                return redirect(url_for('express_partner.apply'))
 
             g.express_partner_profile = profile
             return fn(*args, **kwargs)
@@ -681,256 +677,110 @@ def offline_page():
     return render_template('express_partner/offline.html')
 
 
-@express_partner_bp.route('/apply', methods=['GET'], endpoint='apply')
+APPLY_NAME_MAX_LEN = 40
+APPLY_CITY_MAX_LEN = 30
+APPLY_EXPERIENCE_MAX_LEN = 80
+APPLY_NOTE_MAX_LEN = 300
+
+
+def _apply_limits_context() -> dict:
+    return {
+        'apply_name_max': APPLY_NAME_MAX_LEN,
+        'apply_city_max': APPLY_CITY_MAX_LEN,
+        'apply_experience_max': APPLY_EXPERIENCE_MAX_LEN,
+        'apply_note_max': APPLY_NOTE_MAX_LEN,
+    }
+
+
+def _clip_apply_fields(name: str, city: str, experience: str, note: str) -> tuple[str, str, str, str]:
+    return (
+        (name or '').strip()[:APPLY_NAME_MAX_LEN],
+        (city or '').strip()[:APPLY_CITY_MAX_LEN],
+        (experience or '').strip()[:APPLY_EXPERIENCE_MAX_LEN],
+        (note or '').strip()[:APPLY_NOTE_MAX_LEN],
+    )
+
+
+@express_partner_bp.route('/apply', methods=['GET', 'POST'], endpoint='apply')
 def apply():
-    """Backward-compatible: redirect to step1 of multi-step flow"""
+    """درخواست همکاری — تک‌صفحه، کم‌اصطکاک."""
     if not session.get("user_phone"):
         return redirect(url_for("express_partner.login", next=url_for("express_partner.apply")))
-    me_phone = (session.get("user_phone") or "").strip()
-    # اگر قبلاً درخواست ثبت شده، کاربر را به صفحه تشکر ببر
-    last_app = _get_my_last_application(me_phone)
-    if last_app:
-        return render_template('express_partner/thanks.html', name=(last_app.get('name') or ''))
-    return redirect(url_for('express_partner.apply_step1'))
-
-
-@express_partner_bp.route('/apply/step1', methods=['GET', 'POST'], endpoint='apply_step1')
-def apply_step1():
-    if not session.get("user_phone"):
-        return redirect(url_for("express_partner.login", next=url_for("express_partner.apply_step1")))
     me_phone = (session.get("user_phone") or "").strip()
     try:
         from .referrals import stash_referrer_from_request
         stash_referrer_from_request(me_phone)
     except Exception:
         pass
-    # اگر قبلاً درخواست ثبت شده، کاربر را به صفحه تشکر ببر
-    last_app = _get_my_last_application(me_phone)
-    if last_app:
-        return render_template('express_partner/thanks.html', name=(last_app.get('name') or ''))
-    # اگر قبلاً همکار است، به داشبورد برود
-    try:
-        partners = load_express_partners() or []
-        if any(str(p.get('phone')) == me_phone for p in partners if isinstance(p, dict)):
-            return redirect(url_for('express_partner.dashboard'))
-    except Exception:
-        pass
+
+    blocked = _apply_page_guard(me_phone)
+    if blocked is not None:
+        return blocked
+
+    defaults = _apply_form_defaults(me_phone)
+    cities = _active_cities_cached()
 
     if request.method == 'POST':
-        # جلوگیری از ایجاد درخواست موازی
         if _has_active_application(me_phone):
-            last_app = _get_my_last_application(me_phone)
-            return render_template('express_partner/thanks.html', name=(last_app.get('name') if last_app else ''))
-        name = (request.form.get('name') or '').strip()
-        city = (request.form.get('city') or '').strip()
+            return redirect(url_for('express_partner.thanks'))
+        name, city, experience, note = _clip_apply_fields(
+            request.form.get('name') or '',
+            request.form.get('city') or '',
+            request.form.get('experience') or '',
+            request.form.get('note') or '',
+        )
         if not name or not city:
-            flash('لطفاً نام و شهر را وارد کنید.', 'error')
-            return render_template('express_partner/apply_step1.html', name=name, city=city)
-        session['apply_data'] = {**(session.get('apply_data') or {}), 'name': name, 'city': city}
-        return redirect(url_for('express_partner.apply_step2'))
+            flash('نام و شهر فعالیت الزامی است.', 'error')
+            return render_template(
+                'express_partner/apply.html',
+                me_phone=me_phone,
+                name=name,
+                city=city,
+                experience=experience,
+                note=note,
+                cities=cities,
+                **_apply_limits_context(),
+            )
+        if cities and city not in cities:
+            flash('شهر انتخاب‌شده معتبر نیست.', 'error')
+            return render_template(
+                'express_partner/apply.html',
+                me_phone=me_phone,
+                name=name,
+                city=city,
+                experience=experience,
+                note=note,
+                cities=cities,
+                **_apply_limits_context(),
+            )
+        return _submit_partner_application(me_phone, {
+            'name': name,
+            'city': city,
+            'experience': experience,
+            'note': note,
+        })
 
-    data = session.get('apply_data') or {}
-    cities = load_active_cities() or []
-    return render_template('express_partner/apply_step1.html', name=data.get('name',''), city=data.get('city',''), cities=cities)
+    clipped = _clip_apply_fields(
+        defaults['name'], defaults['city'], defaults['experience'], defaults['note'],
+    )
+    return render_template(
+        'express_partner/apply.html',
+        me_phone=me_phone,
+        name=clipped[0],
+        city=clipped[1],
+        experience=clipped[2],
+        note=clipped[3],
+        cities=cities,
+        **_apply_limits_context(),
+    )
 
 
+@express_partner_bp.route('/apply/step1', methods=['GET', 'POST'], endpoint='apply_step1')
 @express_partner_bp.route('/apply/step2', methods=['GET', 'POST'], endpoint='apply_step2')
-def apply_step2():
-    if not session.get("user_phone"):
-        return redirect(url_for("express_partner.login", next=url_for("express_partner.apply_step2")))
-    me_phone = (session.get("user_phone") or "").strip()
-    # اگر قبلاً درخواست ثبت شده، کاربر را به صفحه تشکر ببر
-    last_app = _get_my_last_application(me_phone)
-    if last_app:
-        return render_template('express_partner/thanks.html', name=(last_app.get('name') or ''))
-    # اطمینان از تکمیل step1
-    if not (session.get('apply_data') and session['apply_data'].get('name') and session['apply_data'].get('city')):
-        return redirect(url_for('express_partner.apply_step1'))
-
-    if request.method == 'POST':
-        # جلوگیری از ایجاد درخواست موازی
-        me_phone = (session.get('user_phone') or '').strip()
-        if _has_active_application(me_phone):
-            last_app = _get_my_last_application(me_phone)
-            return render_template('express_partner/thanks.html', name=(last_app.get('name') if last_app else ''))
-        experience = (request.form.get('experience') or '').strip()
-        note = (request.form.get('note') or '').strip()
-        session['apply_data'] = {**(session.get('apply_data') or {}), 'experience': experience, 'note': note}
-        return redirect(url_for('express_partner.apply_step3'))
-
-    data = session.get('apply_data') or {}
-    return render_template('express_partner/apply_step2.html', experience=data.get('experience',''), note=data.get('note',''))
-
-
 @express_partner_bp.route('/apply/step3', methods=['GET', 'POST'], endpoint='apply_step3')
-def apply_step3():
-    if not session.get("user_phone"):
-        return redirect(url_for("express_partner.login", next=url_for("express_partner.apply_step3")))
-    me_phone = (session.get("user_phone") or "").strip()
-    data = session.get('apply_data') or {}
-    # اگر قبلاً درخواست ثبت شده، کاربر را به صفحه تشکر ببر
-    last_app = _get_my_last_application(me_phone)
-    if last_app and request.method == 'GET':
-        return render_template('express_partner/thanks.html', name=(last_app.get('name') or ''))
-    if not (data.get('name') and data.get('city')):
-        return redirect(url_for('express_partner.apply_step1'))
-
-    if request.method == 'POST':
-        # اگر قبلاً درخواست فعال دارد، به صفحه تشکر هدایت شود
-        if _has_active_application(me_phone):
-            last_app = _get_my_last_application(me_phone)
-            session.pop('apply_data', None)
-            return render_template('express_partner/thanks.html', name=(last_app.get('name') if last_app else ''))
-        # ذخیره نهایی
-        apps = load_express_partner_apps() or []
-        partners = load_express_partners() or []
-        if any(str(p.get("phone")) == me_phone for p in partners if isinstance(p, dict)):
-            session.pop('apply_data', None)
-            return redirect(url_for("express_partner.dashboard"))
-
-        new_id = (max([int(x.get("id", 0) or 0) for x in apps if isinstance(x, dict)], default=0) or 0) + 1
-        referrer_phone = ''
-        try:
-            from .referrals import pop_referrer_phone, register_referral_on_application
-            referrer_phone = pop_referrer_phone(me_phone)
-        except Exception:
-            referrer_phone = ''
-        record = {
-            "id": new_id,
-            "name": data.get('name',''),
-            "phone": me_phone,
-            "city": data.get('city',''),
-            "experience": data.get('experience',''),
-            "note": data.get('note',''),
-            "status": "new",
-            "created_at": datetime.utcnow().isoformat()+"Z",
-        }
-        if referrer_phone:
-            record["referred_by_phone"] = referrer_phone
-        apps.append(record)
-        save_express_partner_apps(apps)
-        if referrer_phone:
-            try:
-                register_referral_on_application(
-                    inviter_phone=referrer_phone,
-                    invitee_phone=me_phone,
-                    invitee_name=record.get('name', ''),
-                    application_id=new_id,
-                )
-            except Exception:
-                pass
-        
-        # ارسال پیامک "در حال بررسی" به همکار و اطلاع‌رسانی به ادمین
-        try:
-            settings = load_settings(current_app) or {}
-
-            # Normalize شماره تلفن همکار قبل از ارسال
-            phone_normalized = _normalize_phone(me_phone)
-            
-            # بررسی اعتبار شماره تلفن همکار
-            if phone_normalized and len(phone_normalized) == 11 and phone_normalized.startswith('09'):
-                sms_message = settings.get('partner_application_sms_message', 'درخواست همکاری شما ثبت شد و در حال بررسی است. وینور')
-                sms_line_number = settings.get('sms_line_number', '300089930616')
-                
-                # اگر پیام خالی است، از پیش‌فرض استفاده کن
-                if not sms_message or not sms_message.strip():
-                    sms_message = 'درخواست همکاری شما ثبت شد و در حال بررسی است. وینور'
-                
-                current_app.logger.info(f"Attempting to send SMS to {phone_normalized} (original: {me_phone})")
-                
-                sms_result = send_sms_direct(mobile=phone_normalized, message=sms_message, line_number=sms_line_number)
-                
-                # ذخیره سابقه ارسال پیامک به همکار
-                try:
-                    history = load_sms_history(current_app) or []
-                    record = {
-                        'id': len(history) + 1,
-                        'mobile': phone_normalized,
-                        'recipient_name': data.get('name', ''),
-                        'template_id': None,
-                        'message': sms_message,
-                        'parameters': {},
-                        'success': sms_result.get('ok', False),
-                        'status_code': sms_result.get('status', 0),
-                        'response': sms_result.get('body', {}),
-                        'source': 'express_partner_application',
-                        'created_at': datetime.utcnow().isoformat() + 'Z',
-                        'error': None if sms_result.get('ok') else str(sms_result.get('body', {}).get('message', 'Unknown error'))
-                    }
-                    history.append(record)
-                    if len(history) > 10000:
-                        history = history[-10000:]
-                    save_sms_history(history, current_app)
-                except Exception as hist_err:
-                    current_app.logger.error(f"Failed to save SMS history: {hist_err}")
-                
-                if sms_result.get('ok'):
-                    current_app.logger.info(f"✅ Application confirmation SMS sent successfully to {phone_normalized}")
-                else:
-                    current_app.logger.error(f"❌ Failed to send application confirmation SMS to {phone_normalized}. Status: {sms_result.get('status')}, Body: {sms_result.get('body')}")
-            else:
-                current_app.logger.error(f"❌ Invalid phone number format: {me_phone} -> normalized: {phone_normalized}")
-
-            # ارسال پیامک اطلاع‌رسانی به ادمین درباره درخواست جدید
-            try:
-                admin_phone_raw = settings.get('partner_application_admin_phone', '09121471301')
-                admin_phone = _normalize_phone(admin_phone_raw)
-                admin_sms_message = settings.get('partner_application_admin_sms_message',
-                                                 'درخواست همکاری جدید همکار در وینور ثبت شد.')
-
-                # اگر پیام خالی است، از پیش‌فرض استفاده کن
-                if not admin_sms_message or not admin_sms_message.strip():
-                    admin_sms_message = 'درخواست همکاری جدید همکار در وینور ثبت شد.'
-
-                if admin_phone and len(admin_phone) == 11 and admin_phone.startswith('09'):
-                    current_app.logger.info(f"Attempting to send admin SMS about new partner application to {admin_phone}")
-
-                    admin_sms_result = send_sms_direct(
-                        mobile=admin_phone,
-                        message=admin_sms_message,
-                        line_number=sms_line_number,
-                    )
-
-                    # ذخیره سابقه ارسال پیامک به ادمین
-                    try:
-                        history = load_sms_history(current_app) or []
-                        record_admin = {
-                            'id': len(history) + 1,
-                            'mobile': admin_phone,
-                            'recipient_name': 'admin',
-                            'template_id': None,
-                            'message': admin_sms_message,
-                            'parameters': {},
-                            'success': admin_sms_result.get('ok', False),
-                            'status_code': admin_sms_result.get('status', 0),
-                            'response': admin_sms_result.get('body', {}),
-                            'source': 'express_partner_application_admin',
-                            'created_at': datetime.utcnow().isoformat() + 'Z',
-                            'error': None if admin_sms_result.get('ok') else str(admin_sms_result.get('body', {}).get('message', 'Unknown error'))
-                        }
-                        history.append(record_admin)
-                        if len(history) > 10000:
-                            history = history[-10000:]
-                        save_sms_history(history, current_app)
-                    except Exception as hist_err_admin:
-                        current_app.logger.error(f"Failed to save admin SMS history: {hist_err_admin}")
-
-                    if admin_sms_result.get('ok'):
-                        current_app.logger.info(f"✅ Admin notification SMS sent successfully to {admin_phone}")
-                    else:
-                        current_app.logger.error(f"❌ Failed to send admin notification SMS to {admin_phone}. Status: {admin_sms_result.get('status')}, Body: {admin_sms_result.get('body')}")
-                else:
-                    current_app.logger.error(f"❌ Invalid admin phone format: {admin_phone_raw} -> normalized: {admin_phone}")
-            except Exception as admin_err:
-                current_app.logger.error(f"❌ Error sending admin notification SMS about partner application: {admin_err}", exc_info=True)
-
-        except Exception as e:
-            current_app.logger.error(f"❌ Error in application SMS flow (partner/admin): {e}", exc_info=True)
-        
-        session.pop('apply_data', None)
-        return render_template("express_partner/thanks.html", name=record.get('name',''), brand="وینور", domain="vinor.ir")
-
-    return render_template('express_partner/apply_step3.html', data=data)
+def apply_steps_legacy():
+    """سازگاری با لینک‌های قدیمی — همه به فرم تک‌صفحه."""
+    return redirect(url_for('express_partner.apply'))
 
 
 @express_partner_bp.post('/apply/cancel', endpoint='apply_cancel')
@@ -951,9 +801,262 @@ def apply_cancel():
             continue
     if updated:
         save_express_partner_apps(apps)
-        flash('درخواست شما با موفقیت لغو شد. هر زمان می‌توانید دوباره درخواست همکاری ثبت کنید.', 'info')
-    # اگر درخواستی پیدا نشود (مثلاً قبلاً تأیید/رد یا حذف شده)، بدون خطا فقط به مرحله ۱ برگرد
-    return redirect(url_for('express_partner.apply_step1'))
+        flash('درخواست شما لغو شد. هر زمان می‌توانید دوباره درخواست ثبت کنید.', 'info')
+    session.pop('apply_data', None)
+    return redirect(url_for('express_partner.apply'))
+
+
+def _apply_page_guard(me_phone: str):
+    """همکار تأییدشده → داشبورد؛ درخواست فعال → تشکر؛ در غیر این صورت فرم."""
+    profile = _partner_profile_for_phone(me_phone)
+    if _is_partner_approved(profile):
+        return redirect(url_for('express_partner.dashboard'))
+    if _has_active_application(me_phone):
+        return redirect(url_for('express_partner.thanks'))
+    return None
+
+
+def _apply_form_defaults(me_phone: str) -> dict:
+    data = session.get('apply_data') or {}
+    profile = _partner_profile_for_phone(me_phone) or {}
+    last_app = _get_my_last_application(me_phone)
+    use_last = last_app and not _has_active_application(me_phone)
+    name, city, experience, note = _clip_apply_fields(
+        data.get('name') or profile.get('name') or (last_app.get('name') if use_last else '') or '',
+        data.get('city') or profile.get('city') or (last_app.get('city') if use_last else '') or '',
+        data.get('experience') or (last_app.get('experience') if use_last else '') or '',
+        data.get('note') or (last_app.get('note') if use_last else '') or '',
+    )
+    return {
+        'name': name,
+        'city': city,
+        'experience': experience,
+        'note': note,
+    }
+
+
+def _sync_unapproved_partner_profile(me_phone: str, data: dict) -> None:
+    """اگر رکورد همکار (غیرتأیید) وجود دارد، نام/شهر را هم‌زمان با درخواست به‌روز کن."""
+    partners = load_express_partners() or []
+    profile = next((p for p in partners if str(p.get('phone') or '').strip() == me_phone), None)
+    if not profile or _is_partner_approved(profile):
+        return
+    profile['name'] = data.get('name', '')
+    profile['city'] = data.get('city', '')
+    try:
+        save_express_partners(partners)
+        _invalidate_partner_session_cache()
+    except Exception:
+        current_app.logger.error('Failed to sync partner profile from apply', exc_info=True)
+
+
+def _append_sms_history(entry: dict) -> None:
+    try:
+        history = load_sms_history(current_app) or []
+        entry = dict(entry)
+        entry['id'] = len(history) + 1
+        history.append(entry)
+        if len(history) > 10000:
+            history = history[-10000:]
+        save_sms_history(history, current_app)
+    except Exception as hist_err:
+        current_app.logger.error('Failed to save SMS history: %s', hist_err)
+
+
+def _send_partner_application_sms(me_phone: str, recipient_name: str) -> dict:
+    """پیامک تأیید ثبت درخواست همکاری برای کاربر (+ اطلاع ادمین)."""
+    mobile = normalize_iran_mobile(me_phone)
+    if not is_valid_iran_mobile(mobile):
+        current_app.logger.warning(
+            'Partner application SMS skipped: invalid mobile raw=%r normalized=%r',
+            me_phone,
+            mobile,
+        )
+        return {'ok': False, 'skipped': True, 'error': 'invalid_mobile', 'mobile': mobile}
+
+    settings = load_settings(current_app) or {}
+    sms_message = (settings.get('partner_application_sms_message') or '').strip()
+    if not sms_message:
+        sms_message = 'درخواست همکاری شما ثبت شد و در حال بررسی است. وینور'
+    sms_line_number = (settings.get('sms_line_number') or get_sms_line_number() or '300089930616').strip()
+
+    sms_result = send_sms_direct(mobile=mobile, message=sms_message, line_number=sms_line_number)
+    ok = bool(sms_result.get('ok'))
+    err = None
+    if not ok:
+        body = sms_result.get('body') or {}
+        err = str(body.get('message') or body.get('error') or 'sms_send_failed')
+        current_app.logger.error(
+            'Partner application SMS failed mobile=%s status=%s body=%s',
+            mobile,
+            sms_result.get('status'),
+            body,
+        )
+
+    _append_sms_history({
+        'mobile': mobile,
+        'recipient_name': recipient_name or '',
+        'template_id': None,
+        'message': sms_message,
+        'parameters': {},
+        'success': ok,
+        'status_code': sms_result.get('status', 0),
+        'response': sms_result.get('body', {}),
+        'source': 'express_partner_application',
+        'created_at': datetime.utcnow().isoformat() + 'Z',
+        'error': None if ok else err,
+    })
+
+    try:
+        admin_phone_raw = settings.get('partner_application_admin_phone', '09121471301')
+        admin_phone = normalize_iran_mobile(admin_phone_raw)
+        admin_sms_message = (settings.get('partner_application_admin_sms_message') or '').strip()
+        if not admin_sms_message:
+            admin_sms_message = 'درخواست همکاری جدید همکار در وینور ثبت شد.'
+        if is_valid_iran_mobile(admin_phone):
+            admin_sms_result = send_sms_direct(
+                mobile=admin_phone,
+                message=admin_sms_message,
+                line_number=sms_line_number,
+            )
+            admin_ok = bool(admin_sms_result.get('ok'))
+            admin_err = None if admin_ok else str(
+                (admin_sms_result.get('body') or {}).get('message')
+                or (admin_sms_result.get('body') or {}).get('error')
+                or 'sms_send_failed'
+            )
+            _append_sms_history({
+                'mobile': admin_phone,
+                'recipient_name': 'admin',
+                'template_id': None,
+                'message': admin_sms_message,
+                'parameters': {},
+                'success': admin_ok,
+                'status_code': admin_sms_result.get('status', 0),
+                'response': admin_sms_result.get('body', {}),
+                'source': 'express_partner_application_admin',
+                'created_at': datetime.utcnow().isoformat() + 'Z',
+                'error': admin_err,
+            })
+    except Exception as admin_err:
+        current_app.logger.error('Admin SMS error: %s', admin_err, exc_info=True)
+
+    return {'ok': ok, 'skipped': False, 'error': err, 'mobile': mobile}
+
+
+def _redirect_apply_thanks(name: str, *, fresh_submit: bool, sms_sent: bool | None = None, sms_skipped: bool = False, sms_error: str | None = None):
+    session['apply_thanks_context'] = {
+        'name': name or '',
+        'fresh_submit': bool(fresh_submit),
+        'sms_sent': sms_sent,
+        'sms_skipped': bool(sms_skipped),
+        'sms_error': sms_error,
+    }
+    return redirect(url_for('express_partner.thanks'))
+
+
+@express_partner_bp.route('/thanks', methods=['GET'], endpoint='thanks')
+def apply_thanks():
+    """صفحهٔ تشکر پس از ثبت درخواست همکاری."""
+    if not session.get('user_phone'):
+        return redirect(url_for('express_partner.login', next=url_for('express_partner.apply')))
+    me_phone = (session.get('user_phone') or '').strip()
+    ctx = session.pop('apply_thanks_context', None) or {}
+
+    if ctx.get('fresh_submit'):
+        if ctx.get('sms_sent') is False and not ctx.get('sms_skipped'):
+            flash(
+                'درخواست ثبت شد اما ارسال پیامک تأیید ناموفق بود. درخواست شما در صف بررسی است.',
+                'warning',
+            )
+        elif ctx.get('sms_skipped'):
+            flash(
+                'درخواست ثبت شد. به‌دلیل مشکل در شماره موبایل، پیامک تأیید ارسال نشد.',
+                'warning',
+            )
+        return render_template(
+            'express_partner/thanks.html',
+            name=ctx.get('name') or '',
+            pending_review=False,
+            sms_sent=ctx.get('sms_sent'),
+            sms_skipped=ctx.get('sms_skipped', False),
+        )
+
+    if _is_partner_approved(_partner_profile_for_phone(me_phone)):
+        return redirect(url_for('express_partner.dashboard'))
+
+    if _has_active_application(me_phone):
+        last_app = _get_my_last_application(me_phone) or {}
+        return render_template(
+            'express_partner/thanks.html',
+            name=(last_app.get('name') or ctx.get('name') or ''),
+            pending_review=True,
+            sms_sent=None,
+            sms_skipped=False,
+        )
+
+    return redirect(url_for('express_partner.apply'))
+
+
+def _submit_partner_application(me_phone: str, data: dict):
+    """ثبت نهایی درخواست همکاری."""
+    if _has_active_application(me_phone):
+        session.pop('apply_data', None)
+        return redirect(url_for('express_partner.thanks'))
+
+    if _is_partner_approved(_partner_profile_for_phone(me_phone)):
+        session.pop('apply_data', None)
+        return redirect(url_for("express_partner.dashboard"))
+
+    apps = load_express_partner_apps() or []
+    new_id = (max([int(x.get("id", 0) or 0) for x in apps if isinstance(x, dict)], default=0) or 0) + 1
+    referrer_phone = ''
+    try:
+        from .referrals import pop_referrer_phone, register_referral_on_application
+        referrer_phone = pop_referrer_phone(me_phone)
+    except Exception:
+        referrer_phone = ''
+    record = {
+        "id": new_id,
+        "name": data.get('name', ''),
+        "phone": me_phone,
+        "city": data.get('city', ''),
+        "experience": data.get('experience', ''),
+        "note": data.get('note', ''),
+        "status": "new",
+        "created_at": datetime.utcnow().isoformat() + "Z",
+    }
+    if referrer_phone:
+        record["referred_by_phone"] = referrer_phone
+    apps.append(record)
+    save_express_partner_apps(apps)
+    _sync_unapproved_partner_profile(me_phone, data)
+    if referrer_phone:
+        try:
+            register_referral_on_application(
+                inviter_phone=referrer_phone,
+                invitee_phone=me_phone,
+                invitee_name=record.get('name', ''),
+                application_id=new_id,
+            )
+        except Exception:
+            pass
+
+    sms_out = {'ok': False, 'skipped': True, 'error': 'sms_error'}
+    try:
+        sms_out = _send_partner_application_sms(me_phone, data.get('name', ''))
+    except Exception as e:
+        current_app.logger.error('Application SMS flow error: %s', e, exc_info=True)
+        sms_out = {'ok': False, 'skipped': False, 'error': str(e)}
+
+    session.pop('apply_data', None)
+    return _redirect_apply_thanks(
+        record.get('name', ''),
+        fresh_submit=True,
+        sms_sent=bool(sms_out.get('ok')),
+        sms_skipped=bool(sms_out.get('skipped')),
+        sms_error=sms_out.get('error'),
+    )
 
 
 def _dashboard_selected_cities():
@@ -2220,7 +2323,7 @@ def invite_colleagues():
     is_approved = _is_partner_approved(profile)
     from ..utils.share_tokens import encode_partner_ref
     ref_token = encode_partner_ref(me_phone)
-    apply_next = url_for('express_partner.apply_step1', ref=ref_token)
+    apply_next = url_for('express_partner.apply', ref=ref_token)
     invite_url = url_for('express_partner.login', next=apply_next, _external=True)
     inviter = me_name or 'همکار وینور'
     if is_approved:

@@ -38,11 +38,11 @@
         ورود به پنل همکاران
       </a>
     {% elif partner_status == 'pending' %}
-      <a href="{{ url_for('express_partner.thanks') if 'express_partner.thanks' in current_app.view_functions else url_for('express_partner.apply_step1') }}" class="block text-center px-4 py-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold">
+      <a href="{{ url_for('express_partner.thanks') if 'express_partner.thanks' in current_app.view_functions else url_for('express_partner.apply') }}" class="block text-center px-4 py-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold">
         ادامه پیگیری درخواست همکاری
       </a>
     {% else %}
-      <a href="{{ url_for('express_partner.apply_step1') }}" class="block text-center px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">
+      <a href="{{ url_for('express_partner.apply') }}" class="block text-center px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">
         درخواست همکاری
       </a>
     {% endif %}

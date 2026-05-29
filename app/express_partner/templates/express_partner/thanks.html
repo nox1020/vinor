@@ -12,15 +12,33 @@
   </header>
 
   <main class="px-4 py-8 max-w-lg mx-auto">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="mb-4 space-y-2">
+      {% for category, message in messages %}
+      <div class="rounded-xl border px-4 py-3 text-sm {% if category == 'error' %}border-rose-500/30 bg-rose-950/30 text-rose-200{% elif category == 'warning' %}border-amber-500/30 bg-amber-950/30 text-amber-200{% else %}border-emerald-500/30 bg-emerald-950/30 text-emerald-200{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
     
     <!-- Success Icon -->
     <div class="text-center mb-8">
       <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center animate-bounce-once">
         <i class="fas fa-check text-3xl text-emerald-600 dark:text-emerald-400"></i>
       </div>
-      <h1 class="text-2xl font-bold text-gray-900 dark:text-white">درخواست ثبت شد</h1>
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+        {% if pending_review|default(false) %}درخواست در انتظار بررسی{% else %}درخواست ثبت شد{% endif %}
+      </h1>
       <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">
+        {% if pending_review|default(false) %}
+        {{ name or 'کاربر عزیز' }}، درخواست شما قبلاً ثبت شده و در صف بررسی است
+        {% else %}
         {{ name or 'کاربر عزیز' }}، درخواست شما در صف بررسی قرار گرفت
+        {% endif %}
       </p>
     </div>
 
@@ -39,10 +57,34 @@
 
       <div class="p-4 space-y-3">
         <div class="flex items-start gap-3">
+          {% if sms_sent %}
           <div class="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
             <i class="fas fa-check text-xs text-emerald-600 dark:text-emerald-400"></i>
           </div>
-          <p class="text-sm text-gray-600 dark:text-gray-400">پیامک تأیید ارسال شد</p>
+          <p class="text-sm text-gray-600 dark:text-gray-400">پیامک تأیید به شماره موبایل شما ارسال شد</p>
+          {% elif sms_sent == false and not pending_review|default(false) %}
+          <div class="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i class="fas fa-exclamation text-xs text-amber-600 dark:text-amber-400"></i>
+          </div>
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            {% if sms_skipped|default(false) %}
+            ثبت انجام شد؛ به‌دلیل مشکل در شماره موبایل پیامک ارسال نشد
+            {% else %}
+            ثبت انجام شد؛ ارسال پیامک تأیید ناموفق بود
+            {% endif %}
+          </p>
+          {% else %}
+          <div class="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i class="fas fa-sms text-xs text-gray-400"></i>
+          </div>
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            {% if pending_review|default(false) %}
+            پس از ثبت درخواست، پیامک تأیید ارسال شده است
+            {% else %}
+            پیامک تأیید در صورت موفقیت ارسال، به موبایل شما می‌رسد
+            {% endif %}
+          </p>
+          {% endif %}
         </div>
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0 mt-0.5">

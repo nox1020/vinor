@@ -1,7 +1,168 @@
-{% extends 'express_partner/base.html' %}
-{% block title %}درخواست همکاری وینور اکسپرس{% endblock %}
-{% block content %}
-{% include '../../../templates/main/express_partner_apply.html' %}
-{% endblock %}
-
-
+{% extends 'express_partner/base.html' %}
+{% block title %}درخواست همکاری{% endblock %}
+
+{% block content %}
+<div id="applyPage" class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] pt-14 text-zinc-100 sm:pt-16">
+
+  <header class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md">
+    <div class="relative mx-auto flex h-14 max-w-lg items-center justify-between px-4 sm:h-16 lg:max-w-xl">
+      <a href="{{ url_for('express_partner.profile') }}"
+         class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+         aria-label="بازگشت">
+        <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
+      </a>
+      <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">درخواست همکاری</h1>
+      <div class="h-10 w-10" aria-hidden="true"></div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-lg px-4 py-5 lg:max-w-xl">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="mb-4 space-y-2">
+      {% for category, message in messages %}
+      <div class="rounded-xl border px-4 py-3 text-sm {% if category == 'error' %}border-rose-500/30 bg-rose-950/30 text-rose-200{% else %}border-emerald-500/30 bg-emerald-950/30 text-emerald-200{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="mb-6 text-center">
+      <div class="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-400">
+        <i class="fas fa-handshake text-xl" aria-hidden="true"></i>
+      </div>
+      <h2 class="text-lg font-bold text-white">همکار وینور شوید</h2>
+      <p class="mt-1.5 text-xs leading-relaxed text-zinc-500">فقط نام و شهر — یک کلیک برای ثبت</p>
+    </div>
+
+    <form id="applyForm" method="post" action="{{ url_for('express_partner.apply') }}" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <section class="rounded-2xl border border-white/10 bg-[#12181f] p-4 sm:p-5 space-y-4">
+        <div>
+          <label class="mb-2 block text-right text-xs font-semibold text-zinc-300">شماره موبایل</label>
+          <input type="text" readonly tabindex="-1" dir="ltr"
+                 value="{{ me_phone }}"
+                 class="w-full cursor-not-allowed rounded-xl border border-white/5 bg-[#0d1218] px-3 py-3 text-sm tabular-nums text-zinc-400">
+        </div>
+
+        <div>
+          <label for="applyName" class="mb-2 block text-right text-xs font-semibold text-zinc-300">
+            نام و نام خانوادگی <span class="text-rose-400">*</span>
+          </label>
+          <input id="applyName" type="text" name="name" value="{{ name }}" required maxlength="{{ apply_name_max }}"
+                 autocomplete="name" placeholder="مثال: علی محمدی"
+                 class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-3 text-sm text-white placeholder-zinc-600 outline-none transition focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30">
+          <p class="mt-1.5 text-left text-[11px] tabular-nums text-zinc-500">
+            <span id="applyNameCounter">{{ name|length }}/{{ apply_name_max }}</span>
+            · حداکثر {{ apply_name_max }} کاراکتر
+          </p>
+        </div>
+
+        <div>
+          <label for="applyCity" class="mb-2 block text-right text-xs font-semibold text-zinc-300">
+            شهر فعالیت <span class="text-rose-400">*</span>
+          </label>
+          {% if cities %}
+          <div class="relative">
+            <select id="applyCity" name="city" required
+                    class="w-full appearance-none rounded-xl border border-white/10 bg-[#0a1018] py-3 pl-10 pr-3 text-sm text-white outline-none transition focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30">
+              <option value="" disabled {% if not city %}selected{% endif %} hidden>انتخاب شهر</option>
+              {% for c in cities %}
+              <option value="{{ c }}" {% if city == c %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
+            </select>
+            <i class="fas fa-chevron-down pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500" aria-hidden="true"></i>
+          </div>
+          {% else %}
+          <input id="applyCity" type="text" name="city" value="{{ city }}" required maxlength="{{ apply_city_max }}"
+                 autocomplete="off" placeholder="نام شهر فعالیت"
+                 class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-3 text-sm text-white placeholder-zinc-600 outline-none transition focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30">
+          <p class="mt-1.5 text-left text-[11px] tabular-nums text-zinc-500">حداکثر {{ apply_city_max }} کاراکتر</p>
+          {% endif %}
+        </div>
+      </section>
+
+      <details id="applyOptionalDetails" class="rounded-2xl border border-white/10 bg-[#12181f] open:border-white/15">
+        <summary class="cursor-pointer list-none p-4 text-right text-xs font-semibold text-zinc-400 transition hover:text-zinc-200 sm:p-5 [&::-webkit-details-marker]:hidden">
+          <span class="inline-flex items-center gap-2">
+            <i class="fas fa-plus-circle text-emerald-500/80" aria-hidden="true"></i>
+            اطلاعات تکمیلی (اختیاری)
+          </span>
+        </summary>
+        <div class="space-y-4 border-t border-white/10 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
+          <div>
+            <label for="applyExperience" class="mb-2 block text-right text-xs font-medium text-zinc-400">سابقه در بازار ملک</label>
+            <input id="applyExperience" type="text" name="experience" value="{{ experience }}" maxlength="{{ apply_experience_max }}"
+                   autocomplete="off" placeholder="مثال: ۳ سال مشاور فروش"
+                   class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-3 text-sm text-white placeholder-zinc-600 outline-none transition focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30">
+            <p class="mt-1.5 text-left text-[11px] tabular-nums text-zinc-500">
+              <span id="applyExperienceCounter">{{ experience|length }}/{{ apply_experience_max }}</span>
+              · حداکثر {{ apply_experience_max }} کاراکتر
+            </p>
+          </div>
+          <div>
+            <label for="applyNote" class="mb-2 block text-right text-xs font-medium text-zinc-400">توضیح کوتاه</label>
+            <div class="relative">
+              <textarea id="applyNote" name="note" rows="3" maxlength="{{ apply_note_max }}"
+                        autocomplete="off" placeholder="محله فعالیت، تخصص، هر نکتهٔ مفید…"
+                        class="w-full resize-none rounded-xl border border-white/10 bg-[#0a1018] px-3 pb-7 pt-3 text-sm text-white placeholder-zinc-600 outline-none transition focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30">{{ note }}</textarea>
+              <span id="applyNoteCounter" class="pointer-events-none absolute bottom-2 left-3 text-[11px] tabular-nums text-zinc-500">{{ note|length }}/{{ apply_note_max }}</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <button type="submit" id="applySubmitBtn"
+              class="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-4 text-sm font-bold text-white shadow-lg shadow-emerald-900/30 transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60">
+        <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
+        <span id="applySubmitLabel">ثبت درخواست همکاری</span>
+      </button>
+
+      <p class="text-center text-[11px] leading-relaxed text-zinc-500">
+        پس از ثبت، پیامک تأیید می‌گیرید و ظرف ۲۴ ساعت بررسی می‌شود.
+        <a href="{{ url_for('express_partner.cooperation_terms') }}" class="text-emerald-400/90 hover:underline">شرایط همکاری</a>
+      </p>
+    </form>
+  </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var form = document.getElementById('applyForm');
+  var btn = document.getElementById('applySubmitBtn');
+  var label = document.getElementById('applySubmitLabel');
+  var details = document.getElementById('applyOptionalDetails');
+  if (details && (document.getElementById('applyExperience') || {}).value || (document.getElementById('applyNote') || {}).value) {
+    details.open = true;
+  }
+
+  /* شمارنده فقط بعد از blur/compositionend — نه در input (IME فارسی را قطع می‌کند) */
+  function bindCharCounter(input, max, counterEl) {
+    if (!input || !max || !counterEl) return;
+    function render() {
+      counterEl.textContent = (input.value || '').length + '/' + max;
+    }
+    input.addEventListener('compositionend', render);
+    input.addEventListener('blur', render);
+    render();
+  }
+
+  bindCharCounter(document.getElementById('applyName'), {{ apply_name_max }}, document.getElementById('applyNameCounter'));
+  bindCharCounter(document.getElementById('applyExperience'), {{ apply_experience_max }}, document.getElementById('applyExperienceCounter'));
+  bindCharCounter(document.getElementById('applyNote'), {{ apply_note_max }}, document.getElementById('applyNoteCounter'));
+
+  if (!form || !btn) return;
+  form.addEventListener('submit', function () {
+    btn.disabled = true;
+    if (label) label.textContent = 'در حال ثبت…';
+  });
+})();
+</script>
+{% endblock %}
+

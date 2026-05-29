@@ -161,11 +161,10 @@
 </style>
 <nav id="bottomNavMenu" data-tour="bottom-nav" class="tg-tabbar-shell fixed inset-x-0 bottom-0 z-[60]" role="navigation" aria-label="منوی اصلی">
   <div class="tg-tabbar-pill mx-auto w-full max-w-full px-3 py-1">
-    <div id="bottomNavItems" class="grid grid-cols-4 gap-0 min-h-[52px] w-full items-center">
+    <div id="bottomNavItems" class="grid grid-cols-3 gap-0 min-h-[52px] w-full items-center">
       {% set nav_items = [
         {'key': 'dashboard', 'endpoint': 'express_partner.dashboard', 'icon': 'fa-home', 'label': 'وینور'},
         {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-chart-line', 'label': 'پورسانت', 'disabled': not VINOR_IS_EXPRESS_PARTNER},
-        {'key': 'routine', 'endpoint': 'express_partner.routine', 'icon': 'fa-list-check', 'label': 'روتین', 'disabled': not VINOR_IS_EXPRESS_PARTNER},
         {'key': 'profile', 'endpoint': 'express_partner.profile', 'icon': 'fa-user', 'label': 'من'}
       ] %}
       {% for item in nav_items %}
@@ -267,8 +266,14 @@
     return base + (isActive ? 'tg-tab-active ' : '') + (isDisabled ? 'tg-tab-disabled' : '');
   }
 
-  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v3';
+  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v4';
   const MENU_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+
+  function sanitizeMenu(menuItems) {
+    return (menuItems || []).filter(function (item) {
+      return item && item.key !== 'routine';
+    });
+  }
 
   function readMenuCache() {
     try {
@@ -277,7 +282,7 @@
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.menu) || !parsed.ts) return null;
       if (Date.now() - parsed.ts > MENU_CACHE_MAX_AGE_MS) return null;
-      return parsed.menu;
+      return sanitizeMenu(parsed.menu);
     } catch (_) {
       return null;
     }
@@ -310,8 +315,9 @@
 
       const data = await response.json();
       if (data.success && data.menu && Array.isArray(data.menu)) {
-        writeMenuCache(data.menu);
-        renderMenu(data.menu);
+        var menu = sanitizeMenu(data.menu);
+        writeMenuCache(menu);
+        renderMenu(menu);
       }
     } catch (error) {
       if (!cachedMenu) console.warn('Error loading menu from API:', error);
@@ -319,6 +325,7 @@
   }
 
   function renderMenu(menuItems) {
+    menuItems = sanitizeMenu(menuItems);
     if (!navContainer || !Array.isArray(menuItems) || menuItems.length === 0) return;
 
     navContainer.innerHTML = '';

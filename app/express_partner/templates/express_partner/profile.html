@@ -45,7 +45,7 @@
             <i class="fas fa-right-to-bracket text-xs" aria-hidden="true"></i>
             ورود
           </a>
-          <a href="{{ url_for('express_partner.apply_step1') }}"
+          <a href="{{ url_for('express_partner.apply') }}"
              class="inline-flex items-center gap-2 rounded-xl border border-white/15 px-5 py-2.5 text-sm font-semibold text-zinc-200 transition hover:bg-white/5">
             <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>
             درخواست همکاری
@@ -117,7 +117,7 @@
       {# منو #}
       <div class="space-y-3 sm:space-y-3.5 lg:mt-0">
         {% if not is_approved %}
-        <a href="{{ url_for('express_partner.apply_step1') }}"
+        <a href="{{ url_for('express_partner.apply') }}"
            data-tour="apply-link"
            class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-emerald-500/25 hover:bg-[#161e29] sm:p-5">
           <div class="flex items-center gap-3 sm:gap-4">
@@ -158,6 +158,23 @@
             <div class="min-w-0 flex-1 text-right">
               <div class="text-sm font-semibold text-white sm:text-base">یادداشت‌ها</div>
               <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">یادداشت‌های شخصی</div>
+            </div>
+            <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
+          </div>
+        </a>
+
+        <a href="{{ url_for('express_partner.routine') }}"
+           data-tour="routine-link"
+           class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-violet-500/25 hover:bg-[#161e29] sm:p-5">
+          <div class="flex items-center gap-3 sm:gap-4">
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-500/30 bg-violet-500/15 text-violet-400">
+              <i class="fas fa-list-check text-lg" aria-hidden="true"></i>
+            </div>
+            <div class="min-w-0 flex-1 text-right">
+              <div class="text-sm font-semibold text-white sm:text-base">روتین روزانه</div>
+              <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">
+                {% if is_approved %}ثبت پیشرفت و تقویم فعالیت{% else %}مشاهده و آماده‌سازی برای همکاری{% endif %}
+              </div>
             </div>
             <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
           </div>

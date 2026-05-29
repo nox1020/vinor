@@ -84,6 +84,14 @@
       user-select:none;
       -webkit-touch-callout:none;
     }
+    /* ورودی‌های متنی: انتخاب متن در WebView (user-select سراسری روی * خاموش است) */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([readonly]),
+    textarea,
+    select {
+      -webkit-user-select:text !important;
+      user-select:text !important;
+      -webkit-touch-callout:default;
+    }
     .no-scrollbar{scrollbar-width:none}
     .no-scrollbar::-webkit-scrollbar{display:none;width:0;height:0}
     [x-cloak] { display: none !important; }

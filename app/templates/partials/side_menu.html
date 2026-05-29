@@ -62,7 +62,7 @@
           <span class="text-[15px] font-semibold text-violet-700 dark:text-violet-300">ورود به پنل همکار اکسپرس</span>
         </a>
       {% elif __logged_in %}
-        {{ MenuItem(url_for('express_partner.apply_step1'),  'fa-star',  'درخواست همکاری وینور اکسپرس', True) }}
+        {{ MenuItem(url_for('express_partner.apply'),  'fa-star',  'درخواست همکاری وینور اکسپرس', True) }}
       {% else %}
         {{ MenuItem(url_for('express_partner.login'),  'fa-right-to-bracket',  'ورود همکار اکسپرس', False) }}
       {% endif %}

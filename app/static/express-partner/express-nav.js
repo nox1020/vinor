@@ -10,7 +10,6 @@
   var TAB_PATHS = {
     '/express/partner/dashboard': 'dashboard',
     '/express/partner/commissions': 'commissions',
-    '/express/partner/routine': 'routine',
     '/express/partner/profile': 'profile'
   };
 
@@ -37,7 +36,8 @@
     '/express/partner/support': 'profile',
     '/express/partner/top-sellers': 'profile',
     '/express/partner/invite-colleagues': 'profile',
-    '/express/partner/training': 'profile'
+    '/express/partner/training': 'profile',
+    '/express/partner/routine': 'profile'
   };
 
   var SKIP_PATH_PREFIXES = [
@@ -45,6 +45,7 @@
     '/express/partner/login/otp',
     '/express/partner/verify',
     '/express/partner/apply',
+    '/express/partner/thanks',
     '/express/partner/offline',
     '/express/partner/logout'
   ];
@@ -120,7 +121,7 @@
   }
 
   function tabIndexForKey(key) {
-    var order = ['dashboard', 'commissions', 'routine', 'profile'];
+    var order = ['dashboard', 'commissions', 'profile'];
     var i = order.indexOf(key);
     return i === -1 ? -1 : i;
   }
@@ -582,7 +583,7 @@
 
   function prefetchMainTabs() {
     try {
-      ['/express/partner/commissions', '/express/partner/routine', '/express/partner/profile'].forEach(function (path) {
+      ['/express/partner/commissions', '/express/partner/profile'].forEach(function (path) {
         prefetchHref(new URL(path, window.location.origin).href);
       });
     } catch (_) {}
