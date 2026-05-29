@@ -166,6 +166,23 @@
     return true;
   }
 
+  function clearAuthPrefetchCache() {
+    try {
+      Object.keys(prefetchCache).forEach(function (key) {
+        var path = key.split('?')[0];
+        if (isAuthSoftPath(path)) delete prefetchCache[key];
+      });
+    } catch (_) {}
+  }
+
+  function shouldUsePrefetchCache(href) {
+    try {
+      return !isAuthSoftPath(parseUrl(href).pathname);
+    } catch (_) {
+      return true;
+    }
+  }
+
   function needsFullNavForResponse(requestedHref, resolvedUrl, doc) {
     try {
       var reqPath = normPath(parseUrl(requestedHref).pathname);
@@ -484,13 +501,17 @@
       return true;
     }
 
-    var cached = prefetchCache[targetHref];
+    var cached = shouldUsePrefetchCache(href) ? prefetchCache[targetHref] : null;
     if (cached) {
       try {
         return Promise.resolve(applyHtml(cached, href));
       } catch (_) {
         delete prefetchCache[targetHref];
       }
+    }
+
+    if (isAuthSoftPath(parseUrl(href).pathname)) {
+      clearAuthPrefetchCache();
     }
 
     return fetch(href, {
@@ -513,7 +534,9 @@
           window.location.assign(payload.url || href);
           return false;
         }
-        prefetchCache[normalizeNavHref(payload.url || href)] = payload.html;
+        if (shouldUsePrefetchCache(payload.url || href)) {
+          prefetchCache[normalizeNavHref(payload.url || href)] = payload.html;
+        }
         return applyHtml(payload.html, payload.url || href);
       })
       .catch(function () {
@@ -598,6 +621,7 @@
 
   window.vinorExpressNavigate = vinorExpressNavigate;
   window.vinorExpressPrefetch = prefetchHref;
+  window.vinorExpressClearAuthCache = clearAuthPrefetchCache;
 
   window.addEventListener('popstate', function () {
     if (!document.getElementById('vinor-express-page-swap')) return;

@@ -231,20 +231,33 @@ def _normalize_phone(phone: str) -> str:
     return _normalize_user_id(phone)
 
 
-def _otp_session_matches(code: str, phone: str) -> bool:
-    if not code or not phone:
+def _otp_session_phone() -> str:
+    return _normalize_phone(str(session.get('otp_phone') or ''))
+
+
+def _otp_code_matches_session(code: str) -> bool:
+    """تطبیق کد OTP فقط با سشن — شماره از سشن خوانده می‌شود (نه hidden field کهنه)."""
+    if not code:
         return False
     from ..services.sms import normalize_otp_code
 
     sess_code = normalize_otp_code(str(session.get('otp_code') or ''))
-    sess_phone = str(session.get('otp_phone') or '').strip()
     norm_code = normalize_otp_code(code)
-    norm_phone = _normalize_phone(phone)
+    sess_phone = _otp_session_phone()
     return (
         len(norm_code) == 5
+        and len(sess_code) == 5
         and sess_code == norm_code
-        and sess_phone == norm_phone
+        and bool(sess_phone)
     )
+
+
+def _otp_session_matches(code: str, phone: str) -> bool:
+    if not code or not phone:
+        return False
+    norm_phone = _normalize_phone(phone)
+    sess_phone = _otp_session_phone()
+    return _otp_code_matches_session(code) and sess_phone == norm_phone
 
 
 def _clear_otp_session() -> None:
@@ -2112,7 +2125,10 @@ def login():
 
     purge_non_auth_flashes()
     if request.method == 'GET':
-        _clear_otp_session()
+        if request.args.get('change'):
+            _clear_otp_session()
+        elif session.get('otp_code') and session.get('otp_phone'):
+            return redirect(url_for('express_partner.login_otp', _=str(int(time.time()))))
     try:
         from .referrals import capture_ref_on_login
         capture_ref_on_login()
@@ -2173,11 +2189,21 @@ def login():
             _clear_otp_session()
             return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
 
+        _clear_otp_session()
         session.update({'otp_code': code, 'otp_phone': phone})
+        try:
+            session.modified = True
+        except Exception:
+            pass
         nxt = _login_next_preserve()
         if nxt:
             session['next'] = nxt
-        return redirect(url_for('express_partner.login_otp'))
+        otp_url = url_for('express_partner.login_otp', _=str(int(time.time())))
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            r = redirect(otp_url)
+            r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+            return r
+        return redirect(otp_url)
     return render_template('express_partner/auth/login_step1.html')
 
 
@@ -2218,14 +2244,17 @@ def verify():
     from ..services.sms import normalize_otp_code
 
     code = normalize_otp_code(request.form.get('otp_code') or '')
-    phone = _normalize_phone(request.form.get('phone') or '')
-    if len(code) != 5 or not phone:
-        flash('لطفاً کد ۵ رقمی و شماره موبایل را به‌درستی وارد کنید.', FLASH_AUTH_ERROR)
-        if session.get('otp_phone'):
-            return redirect(url_for('express_partner.login_otp'))
+    sess_phone = _otp_session_phone()
+    if not sess_phone or not session.get('otp_code'):
+        flash('جلسهٔ تأیید منقضی شده. لطفاً دوباره شماره موبایل را وارد کنید.', FLASH_AUTH_ERROR)
         return redirect(url_for('express_partner.login'))
 
-    if _otp_session_matches(code, phone):
+    if len(code) != 5:
+        flash('لطفاً کد ۵ رقمی را به‌درستی وارد کنید.', FLASH_AUTH_ERROR)
+        return redirect(url_for('express_partner.login_otp'))
+
+    if _otp_code_matches_session(code):
+        phone = sess_phone
         session['user_id'] = phone
         session['user_phone'] = phone
         session.permanent = True
@@ -2250,7 +2279,7 @@ def verify():
         return _redirect_login_next('express_partner.dashboard')
 
     flash('کد تأیید نادرست است. لطفاً دوباره تلاش کنید.', FLASH_AUTH_ERROR)
-    if phone and str(session.get('otp_phone') or '').strip() == phone:
+    if _otp_session_phone():
         return redirect(url_for('express_partner.login_otp'))
     return redirect(url_for('express_partner.login'))
 
@@ -3044,7 +3073,12 @@ def api_login_request():
     except Exception:
         _clear_otp_session()
         return jsonify({'success': False, 'error': 'خطا در ارسال کد تأیید.'}), 502
+    _clear_otp_session()
     session.update({'otp_code': code, 'otp_phone': phone})
+    try:
+        session.modified = True
+    except Exception:
+        pass
     return jsonify({'success': True, 'message': 'کد تأیید ارسال شد.'})
 
 
@@ -3055,11 +3089,15 @@ def api_verify():
 
     data = request.get_json(silent=True) or {}
     code = normalize_otp_code(data.get('code') or '')
-    phone = _normalize_phone((data.get('phone') or '').strip())
-    if not code or not phone:
+    sess_phone = _otp_session_phone()
+    if not code or not sess_phone:
         return jsonify({'success': False, 'error': 'کد و شماره را وارد کنید.'}), 400
-    if not _otp_session_matches(code, phone):
+    req_phone = _normalize_phone((data.get('phone') or '').strip())
+    if req_phone and req_phone != sess_phone:
+        return jsonify({'success': False, 'error': 'شماره با جلسهٔ تأیید همخوانی ندارد.'}), 400
+    if not _otp_code_matches_session(code):
         return jsonify({'success': False, 'error': 'کد تأیید نادرست است.'}), 400
+    phone = sess_phone
     session['user_id'] = phone
     session['user_phone'] = phone
     session.permanent = True
@@ -3084,9 +3122,16 @@ def otp_resend():
     data = request.get_json(silent=True) or {}
     from ..services.sms import is_valid_iran_mobile, send_sms_code
 
-    phone = _normalize_phone(
-        (data.get('phone') or request.form.get('phone') or session.get('otp_phone') or '').strip()
+    sess_phone = _otp_session_phone()
+    req_phone = _normalize_phone(
+        (data.get('phone') or request.form.get('phone') or '').strip()
     )
+    if sess_phone:
+        phone = sess_phone
+    else:
+        phone = req_phone
+    if req_phone and sess_phone and req_phone != sess_phone:
+        phone = sess_phone
     if not is_valid_iran_mobile(phone):
         if request.is_json:
             return jsonify({'ok': False, 'error': 'شماره معتبر نیست.'}), 400

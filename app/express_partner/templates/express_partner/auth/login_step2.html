@@ -4,7 +4,7 @@
 
 <div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[env(safe-area-inset-bottom,0px)]">
   <header class="relative px-4 pt-6 pb-2">
-    <a href="{{ url_for('express_partner.login', next=login_next) if login_next else url_for('express_partner.login') }}"
+    <a href="{{ url_for('express_partner.login', change=1, next=login_next) if login_next else url_for('express_partner.login', change=1) }}"
        data-vinor-express-nav="back"
        class="absolute right-4 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"
        aria-label="تغییر شماره موبایل">
@@ -384,7 +384,7 @@
           method: 'POST',
           headers: headers,
           credentials: 'same-origin',
-          body: JSON.stringify({ phone: '{{ phone }}' }),
+          body: JSON.stringify({}),
           signal: sig || undefined
         });
         var data = null;
