@@ -149,10 +149,18 @@
 
   function shouldForceFullNav(fromHref, toHref) {
     try {
-      var fromAuth = isAuthSoftPath(parseUrl(fromHref).pathname);
-      var toAuth = isAuthSoftPath(parseUrl(toHref).pathname);
+      var fromU = parseUrl(fromHref);
+      var toU = parseUrl(toHref);
+      if (!fromU || !toU) return false;
+      var fromAuth = isAuthSoftPath(fromU.pathname);
+      var toAuth = isAuthSoftPath(toU.pathname);
       if (fromAuth && toAuth) return false;
-      if (fromAuth || toAuth) return true;
+      if (toAuth) return !fromAuth;
+      if (fromAuth) {
+        if (normPath(fromU.pathname) === '/express/partner/login/otp') return true;
+        if (softTabKeyForUrl(toHref)) return false;
+        return true;
+      }
     } catch (_) {}
     return false;
   }
@@ -450,17 +458,24 @@
   function prefetchHref(href) {
     var key = normalizeNavHref(href);
     if (!key || prefetchCache[key] || prefetchInflight[key]) return;
+    if (!shouldPrefetchNav(window.location.href, href)) return;
     prefetchInflight[key] = true;
     fetch(href, {
       credentials: 'same-origin',
       headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' }
     })
       .then(function (res) {
-        if (res.ok) return res.text();
-        throw new Error('prefetch');
+        if (!res.ok) throw new Error('prefetch');
+        return res.text().then(function (html) {
+          return { html: html, url: res.url || href };
+        });
       })
-      .then(function (html) {
-        prefetchCache[key] = html;
+      .then(function (payload) {
+        if (!payload || !payload.html) return;
+        var resolved = payload.url || href;
+        var doc = new DOMParser().parseFromString(payload.html, 'text/html');
+        if (needsFullNavForResponse(href, resolved, doc)) return;
+        prefetchCache[normalizeNavHref(resolved)] = payload.html;
       })
       .catch(function () {})
       .finally(function () {
@@ -705,7 +720,11 @@
       var isBack = a.getAttribute('data-vinor-express-nav') === 'back';
 
       if (isTab) {
-        if (prefersReducedMotion()) return;
+        e.preventDefault();
+        if (prefersReducedMotion()) {
+          vinorExpressNavigate(href);
+          return;
+        }
         var tabs = Array.prototype.slice.call(nav.querySelectorAll('#bottomNavItems > a[data-nav-key]'));
         var ti = tabs.indexOf(a);
         var activeEl = nav.querySelector('.tg-tab-active[data-nav-key]');
@@ -760,6 +779,19 @@
       setBottomNavActive(bottomNavKeyForLocation(window.location.href));
     }
   }
+
+  function invalidatePrefetchForHref(href) {
+    try {
+      var key = normalizeNavHref(href);
+      delete prefetchCache[key];
+      var path = normPath(parseUrl(href).pathname);
+      Object.keys(prefetchCache).forEach(function (k) {
+        if (normPath(k.split('?')[0]) === path) delete prefetchCache[k];
+      });
+    } catch (_) {}
+  }
+
+  window.vinorExpressInvalidatePrefetch = invalidatePrefetchForHref;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', syncBottomNavForCurrentPath);
