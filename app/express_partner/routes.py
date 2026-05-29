@@ -3160,7 +3160,7 @@ def otp_resend():
 
 
 @express_partner_bp.route('/profile', methods=['GET'], endpoint='profile')
-@require_partner_access(allow_pending=True)
+@require_partner_access(allow_pending=True, allow_guest=True)
 def profile_page():
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None) or {}
