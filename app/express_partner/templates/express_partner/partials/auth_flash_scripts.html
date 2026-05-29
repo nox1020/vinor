@@ -1,5 +1,6 @@
 <script>
 (function () {
+  var sig = window.__vinorAuthPageSignal;
   var stack = document.querySelector('[data-flash-stack]');
   if (!stack) return;
   stack.querySelectorAll('[data-flash-alert]').forEach(function (el) {
@@ -8,8 +9,11 @@
       el.remove();
       if (!stack.querySelector('[data-flash-alert]')) stack.remove();
     }
-    if (btn) btn.addEventListener('click', dismiss);
-    setTimeout(dismiss, 6500);
+    if (btn) btn.addEventListener('click', dismiss, sig ? { signal: sig } : false);
+    var t = setTimeout(dismiss, 6500);
+    if (typeof window.vinorAuthPageOnAbort === 'function') {
+      window.vinorAuthPageOnAbort(function () { clearTimeout(t); });
+    }
   });
 })();
 </script>

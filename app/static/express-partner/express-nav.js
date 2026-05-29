@@ -42,13 +42,17 @@
   };
 
   var SKIP_PATH_PREFIXES = [
-    '/express/partner/login',
-    '/express/partner/login/otp',
     '/express/partner/verify',
     '/express/partner/apply',
     '/express/partner/thanks',
     '/express/partner/offline',
     '/express/partner/logout'
+  ];
+
+  /** مراحل ورود — ناوبری نرم بین شماره و OTP (نه با تب‌های فوتر) */
+  var AUTH_SOFT_PATHS = [
+    '/express/partner/login',
+    '/express/partner/login/otp'
   ];
 
   var prefetchCache = Object.create(null);
@@ -112,14 +116,76 @@
     }
   }
 
+  function isAuthSoftPath(pathname) {
+    var p = normPath(pathname || '');
+    for (var i = 0; i < AUTH_SOFT_PATHS.length; i++) {
+      if (p === AUTH_SOFT_PATHS[i]) return true;
+    }
+    return false;
+  }
+
+  function isHardSkipPath(pathname) {
+    var p = normPath(pathname || '');
+    for (var i = 0; i < SKIP_PATH_PREFIXES.length; i++) {
+      if (p === SKIP_PATH_PREFIXES[i] || p.indexOf(SKIP_PATH_PREFIXES[i] + '/') === 0) return true;
+    }
+    return false;
+  }
+
+  function isAuthShellDoc(doc) {
+    if (!doc) return false;
+    return !!(doc.getElementById('loginStep1Form') || doc.getElementById('otpForm'));
+  }
+
+  function authNavDirection(fromHref, toHref) {
+    try {
+      var from = normPath(parseUrl(fromHref).pathname);
+      var to = normPath(parseUrl(toHref).pathname);
+      if (from === '/express/partner/login' && to === '/express/partner/login/otp') return 1;
+      if (from === '/express/partner/login/otp' && to === '/express/partner/login') return -1;
+    } catch (_) {}
+    return 0;
+  }
+
+  function shouldForceFullNav(fromHref, toHref) {
+    try {
+      var fromAuth = isAuthSoftPath(parseUrl(fromHref).pathname);
+      var toAuth = isAuthSoftPath(parseUrl(toHref).pathname);
+      if (fromAuth && toAuth) return false;
+      if (fromAuth || toAuth) return true;
+    } catch (_) {}
+    return false;
+  }
+
+  function shouldPrefetchNav(fromHref, toHref) {
+    if (!isPartnerUrl(toHref)) return false;
+    if (shouldForceFullNav(fromHref, toHref)) return false;
+    try {
+      if (isAuthSoftPath(parseUrl(toHref).pathname)) return false;
+    } catch (_) {}
+    return true;
+  }
+
+  function needsFullNavForResponse(requestedHref, resolvedUrl, doc) {
+    try {
+      var reqPath = normPath(parseUrl(requestedHref).pathname);
+      var resPath = normPath(parseUrl(resolvedUrl).pathname);
+      if (!isAuthSoftPath(reqPath) && isAuthShellDoc(doc)) return true;
+      if (isHardSkipPath(resPath)) return true;
+      if (resPath.indexOf(PREFIX) !== 0) return true;
+    } catch (_) {
+      return true;
+    }
+    return false;
+  }
+
   function isPartnerUrl(href) {
     var u = parseUrl(href);
     if (!u || u.origin !== window.location.origin) return false;
     if (u.pathname.indexOf(PREFIX) !== 0) return false;
     var p = normPath(u.pathname);
-    for (var i = 0; i < SKIP_PATH_PREFIXES.length; i++) {
-      if (p === SKIP_PATH_PREFIXES[i] || p.indexOf(SKIP_PATH_PREFIXES[i] + '/') === 0) return false;
-    }
+    if (isAuthSoftPath(p)) return true;
+    if (isHardSkipPath(p)) return false;
     return true;
   }
 
@@ -218,7 +284,7 @@
   }
 
   function shouldShowBottomNav(pathname) {
-    return !isLandDetailPath(pathname) && !isAiPagePath(pathname);
+    return !isLandDetailPath(pathname) && !isAiPagePath(pathname) && !isAuthSoftPath(pathname);
   }
 
   function setBottomNavVisible(show) {
@@ -378,13 +444,21 @@
       return Promise.resolve(false);
     }
 
-    function applyHtml(html) {
+    function applyHtml(html, resolvedHref) {
       if (isStaleNav(gen)) return false;
       var doc = new DOMParser().parseFromString(html, 'text/html');
       var newSwap = doc.getElementById('vinor-express-page-swap');
       var newScripts = doc.getElementById('vinor-express-page-scripts');
       if (!newSwap) throw new Error('swap');
+      var finalHref = resolvedHref || href;
+      if (needsFullNavForResponse(href, finalHref, doc)) {
+        window.location.assign(finalHref);
+        return false;
+      }
       stopAllExpressMedia();
+      if (window.__vinorAuthPageAbort) {
+        try { window.__vinorAuthPageAbort.abort(); } catch (_) {}
+      }
       swapEl.innerHTML = newSwap.innerHTML;
       swapEl.querySelectorAll('#bottomNavMenu').forEach(function (dup) { dup.remove(); });
       if (scriptsEl && newScripts) {
@@ -396,14 +470,14 @@
       if (!opts.fromPopstate) {
         try {
           history.pushState(
-            { vinorExpress: true, tabKey: navKey, depth: navDepthForUrl(href) },
+            { vinorExpress: true, tabKey: navKey, depth: navDepthForUrl(finalHref) },
             '',
-            href
+            finalHref
           );
         } catch (_) {}
       }
       if (isStaleNav(gen)) return false;
-      afterPageSwap(navKey);
+      afterPageSwap(softTabKeyForUrl(finalHref));
       if (!isLandDetailPath(window.location.pathname)) {
         playEnterAnimation(dir);
       }
@@ -413,7 +487,7 @@
     var cached = prefetchCache[targetHref];
     if (cached) {
       try {
-        return Promise.resolve(applyHtml(cached));
+        return Promise.resolve(applyHtml(cached, href));
       } catch (_) {
         delete prefetchCache[targetHref];
       }
@@ -429,12 +503,18 @@
       .then(function (res) {
         if (isStaleNav(gen)) return null;
         if (!res.ok) throw new Error('nav');
-        return res.text();
+        return res.text().then(function (html) {
+          return { html: html, url: res.url || href };
+        });
       })
-      .then(function (html) {
-        if (!html || isStaleNav(gen)) return false;
-        prefetchCache[targetHref] = html;
-        return applyHtml(html);
+      .then(function (payload) {
+        if (!payload || isStaleNav(gen)) return false;
+        if (needsFullNavForResponse(href, payload.url, new DOMParser().parseFromString(payload.html, 'text/html'))) {
+          window.location.assign(payload.url || href);
+          return false;
+        }
+        prefetchCache[normalizeNavHref(payload.url || href)] = payload.html;
+        return applyHtml(payload.html, payload.url || href);
       })
       .catch(function () {
         if (isStaleNav(gen)) return false;
@@ -497,9 +577,15 @@
       return Promise.resolve(false);
     }
     var from = window.location.href;
+    if (shouldForceFullNav(from, href)) {
+      window.location.assign(href);
+      return Promise.resolve(false);
+    }
     var dir = navDirection(from, href, opts.dir);
     if (opts.back) dir = -1;
     if (opts.forward) dir = 1;
+    var authDir = authNavDirection(from, href);
+    if (authDir) dir = authDir;
     if (dir) {
       try {
         sessionStorage.setItem(STORAGE_KEY, String(dir));
@@ -560,6 +646,15 @@
       if (a.getAttribute('target') === '_blank') return;
       var href = a.getAttribute('href');
       if (!href || href === '#' || href.indexOf('javascript:') === 0) return;
+
+      if (shouldForceFullNav(window.location.href, href)) {
+        if (parseUrl(href) && parseUrl(href).pathname.indexOf(PREFIX) === 0) {
+          e.preventDefault();
+          window.location.assign(href);
+        }
+        return;
+      }
+
       if (!isPartnerUrl(href)) return;
 
       var nav = document.getElementById('bottomNavMenu');
@@ -598,7 +693,7 @@
       var a = e.target.closest && e.target.closest('a[href]');
       if (!a) return;
       var href = a.getAttribute('href');
-      if (href && isPartnerUrl(href)) prefetchHref(href);
+      if (href && shouldPrefetchNav(window.location.href, href)) prefetchHref(href);
     },
     { passive: true }
   );
@@ -609,7 +704,7 @@
       var a = e.target.closest && e.target.closest('a[href]');
       if (!a) return;
       var href = a.getAttribute('href');
-      if (href && isPartnerUrl(href)) prefetchHref(href);
+      if (href && shouldPrefetchNav(window.location.href, href)) prefetchHref(href);
     },
     { passive: true }
   );

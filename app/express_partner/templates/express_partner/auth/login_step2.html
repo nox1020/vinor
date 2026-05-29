@@ -2,9 +2,10 @@
 {% block title %}تأیید کد | وینور اکسپرس{% endblock %}
 {% block content %}
 
-<div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
+<div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[env(safe-area-inset-bottom,0px)]">
   <header class="relative px-4 pt-6 pb-2">
     <a href="{{ url_for('express_partner.login', next=login_next) if login_next else url_for('express_partner.login') }}"
+       data-vinor-express-nav="back"
        class="absolute right-4 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"
        aria-label="تغییر شماره موبایل">
       <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
@@ -41,7 +42,7 @@
         <p id="otpInlineHint" class="mb-3 hidden text-center text-xs text-amber-400/95" role="alert"></p>
 
         <form id="otpForm" method="POST" action="{{ url_for('express_partner.verify') }}" class="space-y-6"
-              data-auth-skip-click-lock="1" data-auth-skip-submit-lock="1">
+              data-auth-skip-submit-lock="1">
           {% if login_next %}<input type="hidden" name="next" value="{{ login_next }}">{% endif %}
           <input type="hidden" name="phone" value="{{ phone }}">
           {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
@@ -97,16 +98,19 @@
   </main>
 </div>
 
-{% set bottom_nav_active = '' %}
-{% include 'express_partner/partials/partner_tab_footer.html' %}
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
+{% include 'express_partner/partials/auth_page_lifecycle.html' %}
 {% include 'express_partner/partials/auth_flash_scripts.html' %}
 {% include 'express_partner/partials/auth_submit_feedback.html' %}
 <script>
 (function () {
+  var sig = window.__vinorAuthPageSignal;
+  var sigOpts = sig ? { signal: sig } : false;
+  var passiveSig = sig ? { passive: true, signal: sig } : { passive: true };
+
   var boxes = Array.from(document.querySelectorAll('.otp-box'));
   var hidden = document.getElementById('otpHidden');
   var form = document.getElementById('otpForm');
@@ -117,6 +121,21 @@
   var resendStatus = document.getElementById('otpResendStatus');
   var authBusy = window.vinorAuthSubmitBusy(form, submitBtn, 'در حال ورود…');
   var resendTimerId = null;
+  var webOtpAbort = null;
+
+  function teardownOtpPage() {
+    if (resendTimerId) {
+      clearInterval(resendTimerId);
+      resendTimerId = null;
+    }
+    if (webOtpAbort) {
+      try { webOtpAbort.abort(); } catch (_) {}
+      webOtpAbort = null;
+    }
+  }
+  if (typeof window.vinorAuthPageOnAbort === 'function') {
+    window.vinorAuthPageOnAbort(teardownOtpPage);
+  }
 
   var faDigits = '۰۱۲۳۴۵۶۷۸۹';
   var otpFa = '۰۱۲۳۴۵۶۷۸۹';
@@ -242,7 +261,7 @@
       }
       showHint('');
       lockForSubmit();
-    }, { capture: true });
+    }, sig ? Object.assign({ capture: true, signal: sig }) : { capture: true });
   }
 
   boxes.forEach(function (box, idx) {
@@ -262,7 +281,7 @@
         if (last >= 0) boxes[last].focus();
       }
       tryAutoSubmit();
-    });
+    }, passiveSig);
     box.addEventListener('keydown', function (e) {
       if (e.key === 'Backspace' && !box.value && idx > 0) {
         e.preventDefault();
@@ -288,18 +307,18 @@
           showHint('لطفاً هر ۵ رقم کد را وارد کنید.');
         }
       }
-    });
+    }, sigOpts);
     box.addEventListener('paste', function (e) {
       e.preventDefault();
       var val = (e.clipboardData || window.clipboardData).getData('text');
       fillFromString(val);
-    });
+    }, sigOpts);
     box.addEventListener('focus', function () {
       boxes.forEach(function (b, i) {
         if (i !== idx) b.setAttribute('tabindex', '-1');
       });
       box.setAttribute('tabindex', '0');
-    });
+    }, passiveSig);
   });
 
   try {
@@ -308,7 +327,7 @@
 
   window.addEventListener('pageshow', function (e) {
     if (e.persisted) unlockOtpInputs();
-  });
+  }, passiveSig);
 
   document.addEventListener('paste', function (e) {
     try {
@@ -317,16 +336,23 @@
         fillFromString(val);
       }
     } catch (_) {}
-  });
+  }, passiveSig);
 
   (async function () {
     try {
       if ('OTPCredential' in window && navigator.credentials) {
-        var ac = new AbortController();
-        setTimeout(function () { ac.abort(); }, 60000);
+        webOtpAbort = new AbortController();
+        if (sig) {
+          sig.addEventListener('abort', function () {
+            try { webOtpAbort.abort(); } catch (_) {}
+          }, { once: true });
+        }
+        setTimeout(function () {
+          try { webOtpAbort.abort(); } catch (_) {}
+        }, 60000);
         var cred = await navigator.credentials.get({
           otp: { transport: ['sms'] },
-          signal: ac.signal
+          signal: webOtpAbort.signal
         });
         if (cred && cred.code) fillFromString(cred.code);
       }
@@ -343,7 +369,7 @@
 
   if (resendBtn) {
     resendBtn.addEventListener('click', async function () {
-      if (resendBtn.disabled) return;
+      if (resendBtn.disabled || (sig && sig.aborted)) return;
       try {
         resendBtn.disabled = true;
         if (resendStatus) {
@@ -358,7 +384,8 @@
           method: 'POST',
           headers: headers,
           credentials: 'same-origin',
-          body: JSON.stringify({ phone: '{{ phone }}' })
+          body: JSON.stringify({ phone: '{{ phone }}' }),
+          signal: sig || undefined
         });
         var data = null;
         try {
@@ -383,7 +410,7 @@
         if (timerLine) timerLine.textContent = 'خطا در ارسال مجدد';
         setTimeout(function () { resendBtn.disabled = false; }, 2000);
       }
-    });
+    }, sigOpts);
   }
 })();
 </script>

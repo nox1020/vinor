@@ -1,0 +1,14 @@
+<script>
+(function () {
+  if (window.__vinorAuthPageAbort) {
+    try { window.__vinorAuthPageAbort.abort(); } catch (_) {}
+  }
+  window.__vinorAuthPageAbort = new AbortController();
+  window.__vinorAuthPageSignal = window.__vinorAuthPageAbort.signal;
+
+  window.vinorAuthPageOnAbort = function (fn) {
+    if (!window.__vinorAuthPageSignal || typeof fn !== 'function') return;
+    window.__vinorAuthPageSignal.addEventListener('abort', fn, { once: true });
+  };
+})();
+</script>

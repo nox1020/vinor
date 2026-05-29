@@ -2,7 +2,7 @@
 {% block title %}ورود | وینور اکسپرس{% endblock %}
 {% block content %}
 
-<div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
+<div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[env(safe-area-inset-bottom,0px)]">
   <header class="relative px-4 pt-6 pb-2">
     {% if not is_vinor_apk %}
     <a href="{{ url_for('main.index') }}" class="absolute right-4 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors" aria-label="بازگشت به سایت">
@@ -29,7 +29,7 @@
         {% endwith %}
 
         <form method="POST" action="{{ url_for('express_partner.login') }}" class="space-y-5" id="loginStep1Form"
-              data-auth-skip-click-lock="1" novalidate>
+              data-vinor-auth-ajax="1" novalidate>
           {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
           {% if request.args.get('next') %}<input type="hidden" name="next" value="{{ request.args.get('next') }}">{% endif %}
 
@@ -107,24 +107,28 @@
   </main>
 </div>
 
-{% set bottom_nav_active = '' %}
-{% include 'express_partner/partials/partner_tab_footer.html' %}
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
+{% include 'express_partner/partials/auth_page_lifecycle.html' %}
 {% include 'express_partner/partials/auth_flash_scripts.html' %}
 {% include 'express_partner/partials/auth_submit_feedback.html' %}
 <script>
 (function () {
+  var sig = window.__vinorAuthPageSignal;
+  var sigOpts = sig ? { signal: sig } : false;
+  var passiveSig = sig ? { passive: true, signal: sig } : { passive: true };
+
   var form = document.getElementById('loginStep1Form');
   var chk = document.getElementById('acceptLegal');
   var btn = document.getElementById('loginSubmitBtn');
   if (!form || !chk || !btn) return;
+
   function sync() { if (!btn.dataset.vinorAuthBusy) btn.disabled = !chk.checked; }
-  chk.addEventListener('change', sync);
+  chk.addEventListener('change', sync, sigOpts);
   sync();
-  window.vinorAuthSubmitBusy(form, btn, 'در حال ارسال کد…');
+  var authBusy = window.vinorAuthSubmitBusy(form, btn, 'در حال ارسال کد…');
 
   var phoneInput = document.getElementById('loginPhone');
   var faDigits = '۰۱۲۳۴۵۶۷۸۹';
@@ -143,11 +147,44 @@
       try {
         if (pos != null) phoneInput.setSelectionRange(pos, pos);
       } catch (_) {}
-    });
-    form.addEventListener('submit', function () {
-      phoneInput.value = normalizePhoneValue(phoneInput.value);
-    }, { capture: true });
+    }, passiveSig);
   }
+
+  function otpPath(url) {
+    try {
+      return normPath(new URL(url, window.location.origin).pathname) === '/express/partner/login/otp';
+    } catch (_) {
+      return String(url || '').indexOf('/login/otp') !== -1;
+    }
+  }
+  function normPath(pathname) {
+    return (pathname || '').replace(/\/+$/, '') || '/';
+  }
+
+  form.addEventListener('submit', function (e) {
+    if (phoneInput) phoneInput.value = normalizePhoneValue(phoneInput.value);
+    if (!form.dataset.vinorAuthAjax || authBusy.isLocked()) return;
+    if (!window.vinorExpressNavigate) return;
+    e.preventDefault();
+    authBusy.lock();
+    fetch(form.action, {
+      method: 'POST',
+      body: new FormData(form),
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'text/html' }
+    })
+      .then(function (res) {
+        var target = res.url || form.action;
+        if (otpPath(target)) {
+          return window.vinorExpressNavigate(target, { forward: true, dir: 1 });
+        }
+        window.location.assign(target);
+      })
+      .catch(function () {
+        if (!authBusy.isLocked()) return;
+        try { form.submit(); } catch (_) { window.location.assign(form.action); }
+      });
+  }, sig ? Object.assign({ capture: true, signal: sig }) : { capture: true });
 })();
 </script>
 {% endblock %}
