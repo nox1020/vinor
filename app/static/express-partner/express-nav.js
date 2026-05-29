@@ -301,7 +301,7 @@
   }
 
   function shouldShowBottomNav(pathname) {
-    return !isLandDetailPath(pathname) && !isAiPagePath(pathname) && !isAuthSoftPath(pathname);
+    return !isLandDetailPath(pathname) && !isAiPagePath(pathname);
   }
 
   function setBottomNavVisible(show) {
@@ -328,12 +328,31 @@
     });
   }
 
+  function bottomNavKeyForLocation(href) {
+    try {
+      var u = parseUrl(href || window.location.href);
+      if (!u) return '';
+      var p = normPath(u.pathname);
+      if (isAuthSoftPath(p)) {
+        var nxt = u.searchParams.get('next') || '';
+        if (nxt.indexOf('/profile') !== -1) return 'profile';
+        return '';
+      }
+      return softTabKeyForUrl(href || window.location.href);
+    } catch (_) {
+      return softTabKeyForUrl(href || window.location.href);
+    }
+  }
+
   function afterPageSwap(navKey) {
     var path = window.location.pathname;
     var onDetail = isLandDetailPath(path);
     var showNav = shouldShowBottomNav(path);
     setBottomNavVisible(showNav);
-    if (showNav) setBottomNavActive(navKey);
+    if (showNav) {
+      var tabKey = navKey || bottomNavKeyForLocation(window.location.href);
+      setBottomNavActive(tabKey);
+    }
     try {
       var shell = document.getElementById('tg-page-shell');
       if (!onDetail) {
@@ -738,7 +757,7 @@
     var showNav = shouldShowBottomNav(path);
     setBottomNavVisible(showNav);
     if (showNav) {
-      setBottomNavActive(softTabKeyForUrl(window.location.href));
+      setBottomNavActive(bottomNavKeyForLocation(window.location.href));
     }
   }
 

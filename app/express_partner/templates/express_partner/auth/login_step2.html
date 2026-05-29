@@ -2,7 +2,7 @@
 {% block title %}تأیید کد | وینور اکسپرس{% endblock %}
 {% block content %}
 
-<div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[env(safe-area-inset-bottom,0px)]">
+<div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
   <header class="relative px-4 pt-6 pb-2">
     <a href="{{ url_for('express_partner.login', change=1, next=login_next) if login_next else url_for('express_partner.login', change=1) }}"
        data-vinor-express-nav="back"
@@ -97,6 +97,10 @@
     </div>
   </main>
 </div>
+
+{% set _login_next = login_next or '' %}
+{% set bottom_nav_active = 'profile' if _login_next and '/profile' in _login_next else '' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
 
 {% endblock %}
 

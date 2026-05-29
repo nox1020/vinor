@@ -2,7 +2,7 @@
 {% block title %}ورود | وینور اکسپرس{% endblock %}
 {% block content %}
 
-<div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[env(safe-area-inset-bottom,0px)]">
+<div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
   <header class="relative px-4 pt-6 pb-2">
     {% if not is_vinor_apk %}
     <a href="{{ url_for('main.index') }}" class="absolute right-4 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors" aria-label="بازگشت به سایت">
@@ -106,6 +106,10 @@
     </div>
   </main>
 </div>
+
+{% set _login_next = request.args.get('next', '') %}
+{% set bottom_nav_active = 'profile' if _login_next and '/profile' in _login_next else '' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
 
 {% endblock %}
 
