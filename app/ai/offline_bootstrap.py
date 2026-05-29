@@ -1,4 +1,4 @@
-"""راه‌اندازی خودکار AI آفلاین — pip، دانلود مدل، warm-up."""
+"""راه‌اندازی AI آفلاین — بدون pip در Passenger (فقط warm-up + دانلود)."""
 from __future__ import annotations
 
 import os
@@ -7,7 +7,14 @@ import sys
 import threading
 from pathlib import Path
 
-from .offline_config import auto_bootstrap, auto_download, auto_pip, offline_enabled
+from .offline_config import (
+    auto_bootstrap,
+    auto_download,
+    auto_pip,
+    auto_pip_network,
+    is_passenger,
+    offline_enabled,
+)
 from .offline_download import ensure_model_file
 from .offline_engine import is_ready, last_error, warmup
 
@@ -47,25 +54,40 @@ def _local_wheel_paths(packages: list[str]) -> list[Path]:
     return found
 
 
-def _pip_install(packages: list[str], app=None) -> bool:
-    if not packages:
-        return True
-
+def _pip_install_local(packages: list[str], app=None) -> bool:
     local = _local_wheel_paths(packages)
-    if local:
-        cmd = [sys.executable, "-m", "pip", "install", "--no-index", "--find-links", str(_LOCAL_WHEELS_DIR)]
-        cmd.extend(str(w) for w in local)
-        try:
-            r = subprocess.run(cmd, check=False, timeout=900, capture_output=True, text=True)
-            if r.returncode == 0 and not _missing_packages():
-                if app:
-                    _log(app, f"local wheels ok: {[w.name for w in local]}")
-                return True
-        except Exception as exc:
+    if not local:
+        return False
+    cmd = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--quiet",
+        "--no-index",
+        "--find-links",
+        str(_LOCAL_WHEELS_DIR),
+        *[str(w) for w in local],
+    ]
+    try:
+        r = subprocess.run(cmd, check=False, timeout=120, capture_output=True, text=True)
+        if r.returncode == 0 and not _missing_packages():
             if app:
-                _log(app, f"local wheel install failed: {exc}")
+                _log(app, f"local wheels ok: {[w.name for w in local]}")
+            return True
+        if app:
+            tail = (r.stderr or r.stdout or "").strip()[-300:]
+            _log(app, f"local wheel pip failed: {tail}")
+    except Exception as exc:
+        if app:
+            _log(app, f"local wheel exception: {exc}")
+    return False
 
-    cmd = [sys.executable, "-m", "pip", "install", "--prefer-binary"]
+
+def _pip_install_network(packages: list[str], app=None) -> bool:
+    if not auto_pip_network():
+        return False
+    cmd = [sys.executable, "-m", "pip", "install", "--quiet", "--prefer-binary"]
     if "llama-cpp-python" in packages:
         cmd.extend([
             "--extra-index-url",
@@ -75,14 +97,14 @@ def _pip_install(packages: list[str], app=None) -> bool:
     try:
         r = subprocess.run(cmd, check=False, timeout=900, capture_output=True, text=True)
         if r.returncode != 0:
-            tail = (r.stderr or r.stdout or "").strip()[-500:]
             if app:
-                _log(app, f"pip failed ({r.returncode}): {tail}")
+                tail = (r.stderr or r.stdout or "").strip()[-500:]
+                _log(app, f"network pip failed ({r.returncode}): {tail}")
             return False
         return True
     except Exception as exc:
         if app:
-            _log(app, f"pip exception: {exc}")
+            _log(app, f"network pip exception: {exc}")
         return False
 
 
@@ -90,20 +112,34 @@ def _ensure_dependencies(app=None) -> None:
     missing = _missing_packages()
     if not missing:
         return
+
+    if _pip_install_local(missing, app=app):
+        return
+
     if not auto_pip():
         if app:
-            _log(app, f"missing packages (auto_pip off): {', '.join(missing)}")
+            _log(
+                app,
+                f"llama-cpp missing — install via SSH: "
+                f"pip install --no-index --find-links packages/ packages/llama_cpp*.whl",
+            )
         return
+
+    if is_passenger():
+        if app:
+            _log(app, "skip network pip on Passenger (prevents worker SIGTERM)")
+        return
+
     if app:
-        _log(app, f"pip install: {', '.join(missing)}")
-    _pip_install(missing, app=app)
+        _log(app, f"network pip install: {', '.join(missing)}")
+    _pip_install_network(missing, app=app)
     still = _missing_packages()
     if still and app:
         _log(app, f"still missing: {', '.join(still)}")
 
 
-def ensure_engine_ready(*, sync_pip: bool = True) -> bool:
-    """قبل از هر درخواست چت: مدل + llama-cpp را آماده می‌کند."""
+def ensure_engine_ready(*, sync_pip: bool = False) -> bool:
+    """warm-up موتور — بدون pip در مسیر درخواست وب."""
     if not offline_enabled():
         return False
     if is_ready():
@@ -112,7 +148,7 @@ def ensure_engine_ready(*, sync_pip: bool = True) -> bool:
     with _bootstrap_lock:
         if is_ready():
             return True
-        if sync_pip:
+        if sync_pip and auto_pip() and not is_passenger():
             _ensure_dependencies()
         from .model_paths import model_is_ready
 
@@ -129,6 +165,8 @@ def run_bootstrap(app) -> None:
     with app.app_context():
         try:
             _log(app, "start")
+            if is_passenger():
+                _log(app, "Passenger mode: no network pip")
             _ensure_dependencies(app)
             if auto_download():
                 ok = ensure_model_file()
@@ -162,6 +200,7 @@ def bootstrap_status() -> dict:
 
     return {
         "offline_enabled": offline_enabled(),
+        "passenger": is_passenger(),
         "model_path": str(model_file_path()),
         "model_ready": model_is_ready(),
         "engine_ready": is_ready(),

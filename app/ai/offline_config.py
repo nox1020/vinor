@@ -13,6 +13,14 @@ def is_linux_server() -> bool:
     return sys.platform.startswith("linux")
 
 
+def is_passenger() -> bool:
+    return bool(
+        os.environ.get("PASSENGER_APP_ENV")
+        or os.environ.get("PHUSION_PASSENGER")
+        or os.environ.get("PASSENGER_USE_FEEDBACK_FD")
+    )
+
+
 def offline_enabled() -> bool:
     return _truthy("VINOR_AI_OFFLINE_ENABLED", "1")
 
@@ -22,7 +30,16 @@ def auto_download() -> bool:
 
 
 def auto_pip() -> bool:
-    return _truthy("VINOR_AI_AUTO_PIP", "1")
+    """نصب pip از داخل اپ — روی Passenger پیش‌فرض خاموش (دستی با SSH)."""
+    default = "0" if is_passenger() else "0"
+    return _truthy("VINOR_AI_AUTO_PIP", default)
+
+
+def auto_pip_network() -> bool:
+    """pip از اینترنت — روی Passenger هرگز."""
+    if is_passenger():
+        return False
+    return _truthy("VINOR_AI_AUTO_PIP_NETWORK", "0")
 
 
 def auto_bootstrap() -> bool:

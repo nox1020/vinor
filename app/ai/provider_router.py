@@ -44,7 +44,7 @@ def _try_offline(messages: list[dict[str, str]], *, required: bool = False) -> d
         return {"ok": False, "error_code": "model_missing"}
 
     if not offline_is_ready():
-        ensure_engine_ready(sync_pip=True)
+        ensure_engine_ready(sync_pip=False)
 
     if offline_is_ready():
         result = offline_generate(messages)
