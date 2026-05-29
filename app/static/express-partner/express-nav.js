@@ -40,6 +40,8 @@
     '/express/partner/routine': 'profile',
     '/express/partner/commissions/transactions': 'commissions'
   };
+
+  var SKIP_PATH_PREFIXES = [
     '/express/partner/login',
     '/express/partner/login/otp',
     '/express/partner/verify',
@@ -51,6 +53,8 @@
 
   var prefetchCache = Object.create(null);
   var prefetchInflight = Object.create(null);
+  var navGeneration = 0;
+  var leaveTimerId = 0;
 
   /** توقف همه ویدیوها قبل از soft-swap — جلوگیری از ادامه صدا در جزئیات/داشبورد */
   function stopAllExpressMedia() {
@@ -71,6 +75,30 @@
   }
 
   window.vinorExpressStopAllMedia = stopAllExpressMedia;
+
+  function bumpNavGeneration() {
+    navGeneration += 1;
+    if (leaveTimerId) {
+      window.clearTimeout(leaveTimerId);
+      leaveTimerId = 0;
+    }
+    stripNavClasses(document.documentElement);
+    return navGeneration;
+  }
+
+  function isStaleNav(gen) {
+    return gen !== navGeneration;
+  }
+
+  function normalizeNavHref(href) {
+    try {
+      var u = parseUrl(href);
+      if (!u) return href;
+      return u.pathname + u.search + u.hash;
+    } catch (_) {
+      return href;
+    }
+  }
 
   function normPath(pathname) {
     return (pathname || '').replace(/\/+$/, '') || '/';
@@ -235,6 +263,8 @@
       if (cm) cm.scrollTop = 0;
       var cards = document.getElementById('dashboardMobileCardsRoot');
       if (cards) cards.scrollTop = 0;
+      document.documentElement.removeAttribute('data-vinor-dash-scroll');
+      document.documentElement.removeAttribute('data-vinor-comm-scroll');
     } catch (_) {}
     if (navKey === 'dashboard' && window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.setup({ resetScroll: true, expandHeader: true });
@@ -316,8 +346,9 @@
   }
 
   function prefetchHref(href) {
-    if (!href || prefetchCache[href] || prefetchInflight[href]) return;
-    prefetchInflight[href] = true;
+    var key = normalizeNavHref(href);
+    if (!key || prefetchCache[key] || prefetchInflight[key]) return;
+    prefetchInflight[key] = true;
     fetch(href, {
       credentials: 'same-origin',
       headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' }
@@ -327,17 +358,19 @@
         throw new Error('prefetch');
       })
       .then(function (html) {
-        prefetchCache[href] = html;
+        prefetchCache[key] = html;
       })
       .catch(function () {})
       .finally(function () {
-        delete prefetchInflight[href];
+        delete prefetchInflight[key];
       });
   }
 
   function softNavigate(href, dir, opts) {
     opts = opts || {};
+    var gen = opts.navGen || bumpNavGeneration();
     var navKey = softTabKeyForUrl(href);
+    var targetHref = normalizeNavHref(href);
     var swapEl = document.getElementById('vinor-express-page-swap');
     var scriptsEl = document.getElementById('vinor-express-page-scripts');
     if (!swapEl) {
@@ -346,6 +379,7 @@
     }
 
     function applyHtml(html) {
+      if (isStaleNav(gen)) return false;
       var doc = new DOMParser().parseFromString(html, 'text/html');
       var newSwap = doc.getElementById('vinor-express-page-swap');
       var newScripts = doc.getElementById('vinor-express-page-scripts');
@@ -368,6 +402,7 @@
           );
         } catch (_) {}
       }
+      if (isStaleNav(gen)) return false;
       afterPageSwap(navKey);
       if (!isLandDetailPath(window.location.pathname)) {
         playEnterAnimation(dir);
@@ -375,12 +410,12 @@
       return true;
     }
 
-    var cached = prefetchCache[href];
+    var cached = prefetchCache[targetHref];
     if (cached) {
       try {
         return Promise.resolve(applyHtml(cached));
       } catch (_) {
-        delete prefetchCache[href];
+        delete prefetchCache[targetHref];
       }
     }
 
@@ -392,20 +427,24 @@
       }
     })
       .then(function (res) {
+        if (isStaleNav(gen)) return null;
         if (!res.ok) throw new Error('nav');
         return res.text();
       })
       .then(function (html) {
-        prefetchCache[href] = html;
+        if (!html || isStaleNav(gen)) return false;
+        prefetchCache[targetHref] = html;
         return applyHtml(html);
       })
       .catch(function () {
+        if (isStaleNav(gen)) return false;
         window.location.href = href;
         return false;
       });
   }
 
   function navigateWithAnimation(href, dir) {
+    var gen = bumpNavGeneration();
     stopAllExpressMedia();
     var toDetail = false;
     try {
@@ -413,12 +452,12 @@
       if (u) toDetail = isLandDetailPath(u.pathname);
     } catch (_) {}
     if (prefersReducedMotion() || toDetail) {
-      return softNavigate(href, dir || 0);
+      return softNavigate(href, dir || 0, { navGen: gen });
     }
     stripNavClasses(document.documentElement);
     var shell = document.getElementById('tg-page-shell');
     if (!shell || !dir) {
-      return softNavigate(href, dir || 0);
+      return softNavigate(href, dir || 0, { navGen: gen });
     }
     var rtl = document.documentElement.getAttribute('dir') === 'rtl';
     var leave = rtl
@@ -427,19 +466,24 @@
     document.documentElement.classList.add('tg-nav-transitioning', leave);
     var navigated = false;
     function go() {
-      if (navigated) return;
+      if (navigated || isStaleNav(gen)) return;
       navigated = true;
       document.documentElement.classList.remove('tg-nav-transitioning');
-      softNavigate(href, dir);
+      softNavigate(href, dir, { navGen: gen });
     }
     function onLeave(ev) {
+      if (isStaleNav(gen)) {
+        shell.removeEventListener('animationend', onLeave);
+        return;
+      }
       if (ev.target !== shell) return;
       if (!/^tgLeave/i.test(firstAnimName(ev))) return;
       shell.removeEventListener('animationend', onLeave);
       go();
     }
     shell.addEventListener('animationend', onLeave);
-    setTimeout(function () {
+    leaveTimerId = window.setTimeout(function () {
+      leaveTimerId = 0;
       shell.removeEventListener('animationend', onLeave);
       go();
     }, 160);
