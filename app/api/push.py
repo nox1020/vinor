@@ -43,7 +43,7 @@ def _save_subs(subs: List[Dict[str, Any]]) -> None:
         json.dump(subs, f, ensure_ascii=False, indent=2)
 
 # این توابع را ادمین برای تست هم استفاده می‌کند
-def _send_one(subscription: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+def _send_one(subscription: Dict[str, Any], payload: Dict[str, Any], timeout: int = 10) -> Dict[str, Any]:
     if webpush is None:
         return {'ok': False, 'error': 'PYWEBPUSH_NOT_INSTALLED', 'remove': False}
 
@@ -60,7 +60,7 @@ def _send_one(subscription: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str
             data=data_str,
             vapid_private_key=vapid_private,
             vapid_claims=vapid_claims,
-            timeout=10
+            timeout=max(2, min(int(timeout or 10), 15))
         )
         return {'ok': True}
     except WebPushException as e:
@@ -70,6 +70,71 @@ def _send_one(subscription: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str
         return {'ok': False, 'error': str(e), 'remove': False}
     except Exception as e:
         return {'ok': False, 'error': str(e), 'remove': False}
+
+
+def send_push_batch_background(payload: Dict[str, Any], subs: List[Dict[str, Any]] | None = None) -> None:
+    """ارسال Web Push در پس‌زمینه — پاسخ HTTP را block نمی‌کند."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    app = current_app._get_current_object()
+    subs_snapshot = list(subs) if subs is not None else list(_load_subs() or [])
+    if not subs_snapshot:
+        return
+
+    def _worker() -> None:
+        with app.app_context():
+            if webpush is None or not app.config.get('VAPID_PRIVATE_KEY'):
+                return
+            to_remove: set[str] = set()
+            push_sent = 0
+            push_failed = 0
+
+            def _send(sub: Dict[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any]]:
+                return sub, _send_one(sub, payload, timeout=4)
+
+            try:
+                workers = min(8, max(1, len(subs_snapshot)))
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    futures = [pool.submit(_send, s) for s in subs_snapshot]
+                    for fut in as_completed(futures):
+                        try:
+                            sub, res = fut.result()
+                        except Exception:
+                            push_failed += 1
+                            continue
+                        if res.get('ok'):
+                            push_sent += 1
+                        elif res.get('remove'):
+                            ep = sub.get('endpoint')
+                            if ep:
+                                to_remove.add(ep)
+                        else:
+                            push_failed += 1
+
+                if to_remove:
+                    current = _load_subs() or []
+                    current = [s for s in current if s.get('endpoint') not in to_remove]
+                    _save_subs(current)
+
+                try:
+                    app.logger.info(
+                        f"Background push broadcast: sent={push_sent}, failed={push_failed}, "
+                        f"removed={len(to_remove)}"
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                try:
+                    app.logger.error(f"Background push broadcast failed: {e}", exc_info=True)
+                except Exception:
+                    pass
+
+    threading.Thread(
+        target=_worker,
+        daemon=True,
+        name='vinor-push-broadcast',
+    ).start()
 
 # -------------------------------
 # API: دریافت کلید عمومی
@@ -131,4 +196,4 @@ def list_subs():
 # برخی بخش‌های پروژه ممکن است push_bp را import کنند.
 # -------------------------------
 push_bp = api_push_bp
-__all__ = ['api_push_bp', 'push_bp', '_load_subs', '_save_subs', '_send_one']
+__all__ = ['api_push_bp', 'push_bp', '_load_subs', '_save_subs', '_send_one', 'send_push_batch_background']

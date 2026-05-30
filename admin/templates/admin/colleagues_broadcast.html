@@ -119,7 +119,10 @@
               <i class="fa-solid fa-user-check"></i>
               <span x-text="item.success_count"></span>/<span x-text="item.recipient_count"></span>
             </span>
-            <template x-if="item.push_sent > 0">
+            <template x-if="item.push_queued">
+              <span class="text-blue-500">· پوش در صف</span>
+            </template>
+            <template x-if="!item.push_queued && item.push_sent > 0">
               <span>
                 · <i class="fa-solid fa-bell"></i>
                 <span x-text="item.push_sent"></span> پوش

@@ -49,7 +49,7 @@ def _save_express_document(file, land_code):
     file_path = os.path.join(docs_dir, filename)
     file.save(file_path)
     return filename
-from app.api.push import _load_subs, _send_one, _save_subs
+from app.api.push import _load_subs, _send_one, _save_subs, send_push_batch_background
 from app.services.sms import send_sms_template, send_sms_direct, send_sms_code
 from app.utils.storage import load_users, load_reports, save_reports, save_ads
 from app.utils.storage import (
@@ -1210,7 +1210,7 @@ def _send_colleagues_notification_broadcast(
     from app.services.notification_history import append_broadcast
 
     bid = broadcast_id or str(uuid.uuid4())
-    notify_url = url_for('express_partner.notifications', _external=True)
+    notify_url = '/express/partner/notifications'
     phones = [p['phone'] for p in approved_partners if p.get('phone')]
 
     batch = add_notifications_batch(
@@ -1227,12 +1227,13 @@ def _send_colleagues_notification_broadcast(
 
     push_sent = 0
     push_failed = 0
+    push_queued = False
     try:
         subs = _load_subs() or []
     except Exception:
         subs = []
 
-    if subs:
+    if subs and current_app.config.get('VAPID_PRIVATE_KEY'):
         payload = {
             "title": title,
             "body": body,
@@ -1241,23 +1242,8 @@ def _send_colleagues_notification_broadcast(
             "url": notify_url,
             "sound": "/static/sounds/notify.mp3",
         }
-        for s in subs:
-            try:
-                res = _send_one(s, payload)
-                if res.get('ok'):
-                    push_sent += 1
-                elif res.get('remove'):
-                    try:
-                        subs_updated = _load_subs() or []
-                        subs_updated = [sub for sub in subs_updated if sub.get('endpoint') != s.get('endpoint')]
-                        _save_subs(subs_updated)
-                    except Exception:
-                        pass
-                else:
-                    push_failed += 1
-            except Exception as e:
-                push_failed += 1
-                current_app.logger.error(f"Failed to send push: {e}")
+        send_push_batch_background(payload, subs)
+        push_queued = True
 
     admin_user = session.get('admin_user') or session.get('username') or None
     record = append_broadcast(
@@ -1273,6 +1259,8 @@ def _send_colleagues_notification_broadcast(
         broadcast_id=bid,
         admin_user=admin_user,
     )
+    if push_queued:
+        record['push_queued'] = True
 
     return {
         'broadcast': record,
@@ -1280,6 +1268,7 @@ def _send_colleagues_notification_broadcast(
         'failed': failed,
         'push_sent': push_sent,
         'push_failed': push_failed,
+        'push_queued': push_queued,
     }
 
 
@@ -1364,12 +1353,11 @@ def notifications_colleagues():
                 push_sent = result['push_sent']
                 push_failed = result['push_failed']
                 if failed > 0:
-                    message = (
-                        f'اعلان برای {sent} همکار ثبت شد ({failed} خطا). '
-                        f'{push_sent} پوش ارسال شد ({push_failed} خطا).'
-                    )
+                    message = f'اعلان برای {sent} همکار ثبت شد ({failed} خطا).'
                 else:
-                    message = f'اعلان برای {sent} همکار ثبت و {push_sent} پوش ارسال شد.'
+                    message = f'اعلان برای {sent} همکار ثبت شد.'
+                if result.get('push_queued'):
+                    message += ' ارسال پوش در پس‌زمینه انجام می‌شود.'
                 if is_ajax:
                     return jsonify({
                         'success': True,
@@ -1379,6 +1367,7 @@ def notifications_colleagues():
                         'failed': failed,
                         'push_sent': push_sent,
                         'push_failed': push_failed,
+                        'push_queued': result.get('push_queued', False),
                     })
             except Exception as e:
                 error = f'خطا در ارسال: {str(e)}'

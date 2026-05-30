@@ -209,29 +209,59 @@ def _resolve_user_items(user_id: str) -> List[Dict[str, Any]]:
     return items
 
 
-def _save_all(data: Dict[str, List[Dict[str, Any]]]) -> bool:
+def _load_for_batch() -> Dict[str, List[Dict[str, Any]]]:
+    """بارگذاری سریع برای broadcast — بدون merge/save جانبی."""
+    file_path = _get_notifications_file_path()
+    if not os.path.exists(file_path):
+        return {}
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+    except Exception:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for key, value in raw.items():
+        if not isinstance(value, list):
+            continue
+        nk = _normalize_user_id(key)
+        if not nk:
+            continue
+        items = [n for n in value if isinstance(n, dict)]
+        if nk in out:
+            out[nk].extend(items)
+        else:
+            out[nk] = items
+    return out
+
+
+def _save_all(data: Dict[str, List[Dict[str, Any]]], *, fast: bool = False) -> bool:
     """ذخیره همه اعلان‌ها در فایل"""
     file_path = _get_notifications_file_path()
     
     try:
-        # Normalize کردن همه کلیدها و merge کردن کلیدهای تکراری
-        normalized_data = {}
-        for key, value in data.items():
-            normalized_key = _normalize_user_id(key)
-            if normalized_key and isinstance(value, list):
-                # اگر کلید normalize شده از قبل وجود دارد، merge کن
-                if normalized_key in normalized_data:
-                    # merge کردن لیست‌ها (حذف تکراری‌ها بر اساس id)
-                    existing_ids = {n.get('id') for n in normalized_data[normalized_key] if n.get('id')}
-                    new_items = [n for n in value if isinstance(n, dict) and n.get('id') not in existing_ids]
-                    normalized_data[normalized_key].extend(new_items)
-                    # sort بر اساس created_at (جدیدترین اول)
-                    normalized_data[normalized_key].sort(key=lambda x: x.get('created_at', 0), reverse=True)
-                else:
-                    normalized_data[normalized_key] = [n for n in value if isinstance(n, dict)]
+        if fast:
+            payload = data
+        else:
+            # Normalize کردن همه کلیدها و merge کردن کلیدهای تکراری
+            payload = {}
+            for key, value in data.items():
+                normalized_key = _normalize_user_id(key)
+                if normalized_key and isinstance(value, list):
+                    if normalized_key in payload:
+                        existing_ids = {n.get('id') for n in payload[normalized_key] if n.get('id')}
+                        new_items = [n for n in value if isinstance(n, dict) and n.get('id') not in existing_ids]
+                        payload[normalized_key].extend(new_items)
+                        payload[normalized_key].sort(key=lambda x: x.get('created_at', 0), reverse=True)
+                    else:
+                        payload[normalized_key] = [n for n in value if isinstance(n, dict)]
         
         with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(normalized_data, f, ensure_ascii=False, indent=2)
+            if fast:
+                json.dump(payload, f, ensure_ascii=False, separators=(',', ':'))
+            else:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
 
         _notifications_invalidate_cache()
         return True
@@ -323,7 +353,7 @@ def add_notifications_batch(
     if not user_ids:
         return {"success_count": 0, "failed_count": 0, "notification_ids": []}
 
-    data = _load_all()
+    data = _load_for_batch()
     now = int(time.time())
     title_s = str(title).strip()
     body_s = str(body).strip()
@@ -331,14 +361,20 @@ def add_notifications_batch(
     success_count = 0
     failed_count = 0
     notification_ids: List[str] = []
+    seen_phones: set[str] = set()
 
     for raw_uid in user_ids:
         normalized_user_id = _normalize_user_id(raw_uid)
         if not normalized_user_id or len(normalized_user_id) != 11:
             failed_count += 1
             continue
+        if normalized_user_id in seen_phones:
+            continue
+        seen_phones.add(normalized_user_id)
+
+        notif_id = str(uuid.uuid4())
         notif = {
-            "id": str(uuid.uuid4()),
+            "id": notif_id,
             "title": title_s,
             "body": body_s,
             "type": type_s,
@@ -353,18 +389,17 @@ def add_notifications_batch(
         if source:
             notif["source"] = str(source)
 
-        if normalized_user_id not in data:
-            data[normalized_user_id] = []
-        existing_ids = {n.get("id") for n in data[normalized_user_id] if n.get("id")}
-        if notif["id"] not in existing_ids:
-            data[normalized_user_id].insert(0, notif)
-        if len(data[normalized_user_id]) > 100:
-            data[normalized_user_id] = data[normalized_user_id][:100]
-        data[normalized_user_id].sort(key=lambda x: x.get("created_at", 0), reverse=True)
-        notification_ids.append(notif["id"])
+        bucket = data.get(normalized_user_id)
+        if not isinstance(bucket, list):
+            bucket = []
+            data[normalized_user_id] = bucket
+        bucket.insert(0, notif)
+        if len(bucket) > 100:
+            data[normalized_user_id] = bucket[:100]
+        notification_ids.append(notif_id)
         success_count += 1
 
-    if success_count and not _save_all(data):
+    if success_count and not _save_all(data, fast=True):
         raise RuntimeError("Failed to save batch notifications")
 
     try:
