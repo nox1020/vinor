@@ -43,6 +43,7 @@
       <span class="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-700 px-2.5 py-1 bg-white dark:bg-gray-900">
         <i class="fa-solid fa-bell"></i>
         {{ push_diag.subs_count or 0 }} پوش
+        {% if push_diag.tagged_count %}<span class="text-emerald-600">({{ push_diag.tagged_count }} همکار)</span>{% endif %}
         {% if not push_diag.has_private %}<span class="text-amber-600">!</span>{% endif %}
       </span>
       {% endif %}
@@ -120,7 +121,11 @@
               <span x-text="item.success_count"></span>/<span x-text="item.recipient_count"></span>
             </span>
             <template x-if="item.push_queued">
-              <span class="text-blue-500">· پوش در صف</span>
+              <span class="text-blue-500">
+                · پوش
+                <span x-text="item.push_targets || '…'"></span>
+                در حال ارسال
+              </span>
             </template>
             <template x-if="!item.push_queued && item.push_sent > 0">
               <span>
@@ -273,6 +278,9 @@
           }
           if (data.broadcast) {
             this.items.unshift(data.broadcast);
+            if (data.broadcast.push_queued && data.broadcast.id) {
+              this.pollPushStatus(data.broadcast.id);
+            }
           } else {
             await this.refreshHistory();
           }
@@ -302,6 +310,22 @@
         finally {
           this.loading = false;
           this.$nextTick(() => this.scrollToBottom());
+        }
+      },
+
+      async pollPushStatus(broadcastId) {
+        const url = '{{ url_for("admin.api_colleagues_notification_history") }}?limit=40';
+        for (let i = 0; i < 15; i++) {
+          await new Promise(r => setTimeout(r, 1200));
+          try {
+            const res = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+            const data = await res.json();
+            const item = (data.items || []).find(x => x.id === broadcastId);
+            if (!item) continue;
+            const idx = this.items.findIndex(x => x.id === broadcastId);
+            if (idx >= 0) this.items[idx] = item;
+            if (!item.push_queued) break;
+          } catch (_) {}
         }
       },
     };

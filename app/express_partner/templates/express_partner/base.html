@@ -512,11 +512,15 @@
       }
 
       async function saveSubscription(sub) {
+        const payload = typeof sub.toJSON === 'function' ? sub.toJSON() : Object.assign({}, sub);
+        {% if session.get('user_phone') %}
+        payload.user_phone = "{{ session.get('user_phone') }}";
+        {% endif %}
         const res = await fetch("/api/push/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
-          body: JSON.stringify(sub),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error("ذخیره اشتراک ناموفق بود.");
         return await res.json();
@@ -541,11 +545,15 @@
       async function syncPushSubscriptionToServer(subObj) {
         if (!shouldSyncPushToServer()) return false;
         try {
+          const payload = Object.assign({}, subObj);
+          {% if session.get('user_phone') %}
+          payload.user_phone = "{{ session.get('user_phone') }}";
+          {% endif %}
           const res = await fetch('/api/push/subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify(subObj)
+            body: JSON.stringify(payload)
           });
           if (res && res.ok) {
             markPushSyncedToServer();

@@ -92,6 +92,28 @@ def append_broadcast(
     return record
 
 
+def update_broadcast_push_stats(
+    broadcast_id: str,
+    push_sent: int,
+    push_failed: int,
+) -> bool:
+    if not broadcast_id:
+        return False
+    history = load_broadcast_history()
+    updated = False
+    for item in history:
+        if item.get('id') == broadcast_id:
+            item['push_sent'] = int(push_sent or 0)
+            item['push_failed'] = int(push_failed or 0)
+            item['push_queued'] = False
+            item['push_completed_at'] = int(time.time())
+            updated = True
+            break
+    if updated:
+        return _save_broadcast_history(history)
+    return False
+
+
 def list_broadcasts(limit: int = 40, offset: int = 0) -> List[Dict[str, Any]]:
     history = load_broadcast_history()
     history.sort(key=lambda x: x.get("created_at", 0), reverse=True)

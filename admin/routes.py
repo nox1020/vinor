@@ -1111,6 +1111,7 @@ def notifications_broadcast():
         'has_public': bool(current_app.config.get('VAPID_PUBLIC_KEY')),
         'has_private': bool(current_app.config.get('VAPID_PRIVATE_KEY')),
         'subs_count': len(subs_for_diag or []),
+        'tagged_count': sum(1 for s in (subs_for_diag or []) if s.get('user_phone')),
     }
     if request.method == 'POST':
         title = (request.form.get('title') or '').strip()
@@ -1228,6 +1229,7 @@ def _send_colleagues_notification_broadcast(
     push_sent = 0
     push_failed = 0
     push_queued = False
+    push_targets = 0
     try:
         subs = _load_subs() or []
     except Exception:
@@ -1242,8 +1244,13 @@ def _send_colleagues_notification_broadcast(
             "url": notify_url,
             "sound": "/static/sounds/notify.mp3",
         }
-        send_push_batch_background(payload, subs)
-        push_queued = True
+        push_targets = send_push_batch_background(
+            payload,
+            subs,
+            target_phones=phones,
+            broadcast_id=bid,
+        )
+        push_queued = push_targets > 0
 
     admin_user = session.get('admin_user') or session.get('username') or None
     record = append_broadcast(
@@ -1261,6 +1268,7 @@ def _send_colleagues_notification_broadcast(
     )
     if push_queued:
         record['push_queued'] = True
+        record['push_targets'] = push_targets
 
     return {
         'broadcast': record,
@@ -1293,6 +1301,7 @@ def notifications_colleagues():
         'has_public': bool(current_app.config.get('VAPID_PUBLIC_KEY')),
         'has_private': bool(current_app.config.get('VAPID_PRIVATE_KEY')),
         'subs_count': len(subs_for_diag or []),
+        'tagged_count': sum(1 for s in (subs_for_diag or []) if s.get('user_phone')),
     }
 
     approved_partners = _load_approved_express_partners()
@@ -1357,7 +1366,7 @@ def notifications_colleagues():
                 else:
                     message = f'اعلان برای {sent} همکار ثبت شد.'
                 if result.get('push_queued'):
-                    message += ' ارسال پوش در پس‌زمینه انجام می‌شود.'
+                    message += f' پوش به {result.get("broadcast", {}).get("push_targets", 0)} دستگاه در حال ارسال است.'
                 if is_ajax:
                     return jsonify({
                         'success': True,
