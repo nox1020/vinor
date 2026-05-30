@@ -244,7 +244,8 @@ def _save_all(data: Dict[str, List[Dict[str, Any]]]) -> bool:
 
 
 def add_notification(user_id: str, title: str, body: str, ntype: str = "info",
-                     ad_id: Optional[str] = None, action_url: Optional[str] = None) -> Dict[str, Any]:
+                     ad_id: Optional[str] = None, action_url: Optional[str] = None,
+                     broadcast_id: Optional[str] = None, source: Optional[str] = None) -> Dict[str, Any]:
     """
     افزودن اعلان جدید برای یک کاربر
     """
@@ -271,6 +272,10 @@ def add_notification(user_id: str, title: str, body: str, ntype: str = "info",
         "action_url": action_url,
         "user_id": normalized_user_id,  # ذخیره user_id normalize شده
     }
+    if broadcast_id:
+        notif["broadcast_id"] = str(broadcast_id)
+    if source:
+        notif["source"] = str(source)
     
     # افزودن به لیست اعلان‌های کاربر
     if normalized_user_id not in data:
@@ -302,6 +307,79 @@ def add_notification(user_id: str, title: str, body: str, ntype: str = "info",
         pass
     
     return notif
+
+
+def add_notifications_batch(
+    user_ids: List[str],
+    title: str,
+    body: str,
+    ntype: str = "info",
+    ad_id: Optional[str] = None,
+    action_url: Optional[str] = None,
+    broadcast_id: Optional[str] = None,
+    source: Optional[str] = None,
+) -> Dict[str, Any]:
+    """افزودن یک اعلان برای چند کاربر — یک بار load/save برای سرعت."""
+    if not user_ids:
+        return {"success_count": 0, "failed_count": 0, "notification_ids": []}
+
+    data = _load_all()
+    now = int(time.time())
+    title_s = str(title).strip()
+    body_s = str(body).strip()
+    type_s = str(ntype).strip() or "info"
+    success_count = 0
+    failed_count = 0
+    notification_ids: List[str] = []
+
+    for raw_uid in user_ids:
+        normalized_user_id = _normalize_user_id(raw_uid)
+        if not normalized_user_id or len(normalized_user_id) != 11:
+            failed_count += 1
+            continue
+        notif = {
+            "id": str(uuid.uuid4()),
+            "title": title_s,
+            "body": body_s,
+            "type": type_s,
+            "created_at": now,
+            "is_read": False,
+            "ad_id": ad_id,
+            "action_url": action_url,
+            "user_id": normalized_user_id,
+        }
+        if broadcast_id:
+            notif["broadcast_id"] = str(broadcast_id)
+        if source:
+            notif["source"] = str(source)
+
+        if normalized_user_id not in data:
+            data[normalized_user_id] = []
+        existing_ids = {n.get("id") for n in data[normalized_user_id] if n.get("id")}
+        if notif["id"] not in existing_ids:
+            data[normalized_user_id].insert(0, notif)
+        if len(data[normalized_user_id]) > 100:
+            data[normalized_user_id] = data[normalized_user_id][:100]
+        data[normalized_user_id].sort(key=lambda x: x.get("created_at", 0), reverse=True)
+        notification_ids.append(notif["id"])
+        success_count += 1
+
+    if success_count and not _save_all(data):
+        raise RuntimeError("Failed to save batch notifications")
+
+    try:
+        current_app.logger.info(
+            f"Batch notifications: success={success_count}, failed={failed_count}, "
+            f"broadcast_id={broadcast_id or '-'}"
+        )
+    except Exception:
+        pass
+
+    return {
+        "success_count": success_count,
+        "failed_count": failed_count,
+        "notification_ids": notification_ids,
+    }
 
 
 def get_user_notifications(user_id: str, limit: int = 50) -> List[Dict[str, Any]]:

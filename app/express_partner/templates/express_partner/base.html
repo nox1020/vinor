@@ -556,8 +556,18 @@
       }
 
       // ===== فعال‌سازی خودکار اعلان‌ها در پس‌زمینه =====
+      function isVinorApkClient() {
+        try {
+          return /VinorApp\//i.test(navigator.userAgent || '');
+        } catch (_) {
+          return false;
+        }
+      }
+
       async function autoEnableNotificationsInBackground() {
         try {
+          if (isVinorApkClient()) return;
+
           // بررسی لاگین بودن کاربر
           const isLoggedIn = {{ 'true' if session.get('user_phone') else 'false' }};
           if (!isLoggedIn) return;
@@ -642,6 +652,7 @@
   <script>
     window.VINOR_NOTIFY_CFG = {
       enabled: {{ 'true' if session.get('user_phone') else 'false' }},
+      isVinorApk: {{ 'true' if is_vinor_apk else 'false' }},
       endpoints: {
         list: "/express/partner/api/notifications",
         unread: "{{ url_for('express_partner.get_unread_count') }}",
@@ -698,6 +709,23 @@
         headers['X-CSRFToken'] = cfg.csrfToken;
       }
 
+      function isVinorApkClient() {
+        if (cfg.isVinorApk === true || cfg.isVinorApk === 'true') return true;
+        try {
+          return /VinorApp\//i.test(navigator.userAgent || '');
+        } catch (_) {
+          return false;
+        }
+      }
+
+      function notifyNativeUnread(count) {
+        try {
+          if (window.VinorNativeNotify && typeof window.VinorNativeNotify.onUnreadUpdate === 'function') {
+            window.VinorNativeNotify.onUnreadUpdate(Number(count || 0));
+          }
+        } catch (_) {}
+      }
+
       const state = {
         notifications: [],
         unread: 0,
@@ -749,6 +777,7 @@
         maybePlaySoundForNewNotifications(list);
         state.notifications = list;
         state.unread = Number(unread || 0);
+        notifyNativeUnread(state.unread);
         writeNotifyCache(list, state.unread);
         bootstrapped = true;
         dispatch('vinor:notifications:update', cloneState());
@@ -844,7 +873,7 @@
       function startPolling() {
         if (!enabled) return;
         stopPolling();
-        pollTimer = setInterval(fetchNotifications, 30000);
+        pollTimer = setInterval(fetchNotifications, isVinorApkClient() ? 15000 : 30000);
       }
 
       function stopPolling() {
@@ -871,6 +900,7 @@
             state.notifications = state.notifications.map(n => ({ ...n, is_read: true }));
             state.unread = Number(data.unread_count || 0);
             state.loading = false;
+            notifyNativeUnread(state.unread);
             writeNotifyCache(state.notifications, state.unread);
             dispatch('vinor:notifications:update', cloneState());
             fetchNotifications(true);
@@ -900,6 +930,7 @@
             state.notifications = state.notifications.map(n => n.id === id ? { ...n, is_read: true } : n);
             state.unread = Number(data.unread_count !== undefined ? data.unread_count : Math.max(0, state.unread - 1));
             state.loading = false;
+            notifyNativeUnread(state.unread);
             writeNotifyCache(state.notifications, state.unread);
             dispatch('vinor:notifications:update', cloneState());
           } else {

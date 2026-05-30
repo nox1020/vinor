@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import json
 import re
-import random
+import uuid
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import List, Dict, Any, Optional
@@ -1175,12 +1175,127 @@ def _normalize_phone(phone: str) -> str:
     from app.services.notifications import _normalize_user_id
     return _normalize_user_id(phone)
 
+
+def _load_approved_express_partners() -> List[Dict[str, str]]:
+    try:
+        partners = load_express_partners() or []
+    except Exception:
+        partners = []
+    approved: List[Dict[str, str]] = []
+    for p in partners if isinstance(partners, list) else []:
+        if not isinstance(p, dict):
+            continue
+        phone_raw = str(p.get('phone') or '').strip()
+        if not phone_raw:
+            continue
+        phone_normalized = _normalize_phone(phone_raw)
+        if phone_normalized and len(phone_normalized) == 11:
+            approved.append({
+                'phone': phone_normalized,
+                'name': str(p.get('name') or p.get('full_name') or phone_normalized).strip(),
+            })
+    return approved
+
+
+def _send_colleagues_notification_broadcast(
+    title: str,
+    body: str,
+    ntype: str,
+    approved_partners: List[Dict[str, str]],
+    *,
+    source: str = 'admin_colleagues',
+    broadcast_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    from app.services.notifications import add_notifications_batch
+    from app.services.notification_history import append_broadcast
+
+    bid = broadcast_id or str(uuid.uuid4())
+    notify_url = url_for('express_partner.notifications', _external=True)
+    phones = [p['phone'] for p in approved_partners if p.get('phone')]
+
+    batch = add_notifications_batch(
+        user_ids=phones,
+        title=title,
+        body=body,
+        ntype=ntype,
+        action_url=notify_url,
+        broadcast_id=bid,
+        source=source,
+    )
+    sent = int(batch.get('success_count') or 0)
+    failed = int(batch.get('failed_count') or 0)
+
+    push_sent = 0
+    push_failed = 0
+    try:
+        subs = _load_subs() or []
+    except Exception:
+        subs = []
+
+    if subs:
+        payload = {
+            "title": title,
+            "body": body,
+            "icon": "/static/icons/icon-192.png",
+            "badge": "/static/icons/monochrome-192.png",
+            "url": notify_url,
+            "sound": "/static/sounds/notify.mp3",
+        }
+        for s in subs:
+            try:
+                res = _send_one(s, payload)
+                if res.get('ok'):
+                    push_sent += 1
+                elif res.get('remove'):
+                    try:
+                        subs_updated = _load_subs() or []
+                        subs_updated = [sub for sub in subs_updated if sub.get('endpoint') != s.get('endpoint')]
+                        _save_subs(subs_updated)
+                    except Exception:
+                        pass
+                else:
+                    push_failed += 1
+            except Exception as e:
+                push_failed += 1
+                current_app.logger.error(f"Failed to send push: {e}")
+
+    admin_user = session.get('admin_user') or session.get('username') or None
+    record = append_broadcast(
+        title=title,
+        body=body,
+        ntype=ntype,
+        recipient_count=len(approved_partners),
+        success_count=sent,
+        failed_count=failed,
+        push_sent=push_sent,
+        push_failed=push_failed,
+        source=source,
+        broadcast_id=bid,
+        admin_user=admin_user,
+    )
+
+    return {
+        'broadcast': record,
+        'sent': sent,
+        'failed': failed,
+        'push_sent': push_sent,
+        'push_failed': push_failed,
+    }
+
+
 @admin_bp.route('/notifications/colleagues', methods=['GET', 'POST'])
 @login_required
 def notifications_colleagues():
+    from app.services.notification_history import list_broadcasts, broadcast_stats
+    from app.services.notifications import get_all_notifications_stats
+
     message = None
     error = None
-    # Diagnostics for push configuration/subscribers
+    test_message = None
+    test_error = None
+    test_result = None
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
     try:
         subs_for_diag = _load_subs()
     except Exception:
@@ -1190,143 +1305,12 @@ def notifications_colleagues():
         'has_private': bool(current_app.config.get('VAPID_PRIVATE_KEY')),
         'subs_count': len(subs_for_diag or []),
     }
-    
-    # اجرای merge خودکار کلیدهای تکراری برای اطمینان از صحت داده‌ها
-    try:
-        from app.services.notifications import merge_duplicate_keys
-        merge_result = merge_duplicate_keys()
-        if merge_result.get("merged_count", 0) > 0:
-            current_app.logger.info(f"Admin notifications page: Merged {merge_result['merged_count']} duplicate notification keys")
-    except Exception as e:
-        current_app.logger.warning(f"Admin notifications page: Failed to merge duplicate keys: {e}")
-    
-    # واکشی همکاران
-    try:
-        partners = load_express_partners() or []
-    except Exception:
-        partners = []
-    
-    # همه همکاران را (به‌جز مواردی که شماره ندارند) فعال در نظر بگیر
-    approved_partners = []
-    for p in partners if isinstance(partners, list) else []:
-        if not isinstance(p, dict):
-            continue
-        phone_raw = str(p.get('phone') or '').strip()
-        if phone_raw:
-            phone_normalized = _normalize_phone(phone_raw)
-            if phone_normalized and len(phone_normalized) == 11:
-                approved_partners.append({
-                    'phone': phone_normalized,
-                    'name': p.get('name') or p.get('full_name') or phone_normalized
-                })
-    
-    if request.method == 'POST':
-        title = (request.form.get('title') or '').strip()
-        body  = (request.form.get('body') or '').strip()
-        ntype = (request.form.get('type') or 'info').strip() or 'info'
-        
-        if not title or not body:
-            error = 'عنوان و متن اعلان الزامی است.'
-        elif not approved_partners:
-            error = 'هیچ همکاری یافت نشد.'
-        else:
-            sent = 0
-            failed = 0
-            # ثبت اعلان در in-app notifications برای همکاران
-            # اجرای merge خودکار کلیدهای تکراری قبل از ارسال
-            try:
-                from app.services.notifications import merge_duplicate_keys
-                merge_result = merge_duplicate_keys()
-                if merge_result.get("merged_count", 0) > 0:
-                    current_app.logger.info(f"Admin: Merged {merge_result['merged_count']} duplicate notification keys before sending")
-            except Exception as e:
-                current_app.logger.warning(f"Admin: Failed to merge duplicate keys: {e}")
-            
-            for partner in approved_partners:
-                try:
-                    # partner['phone'] قبلاً normalize شده است
-                    phone_normalized = partner['phone']
-                    if phone_normalized and len(phone_normalized) == 11:
-                        # Log برای debug
-                        current_app.logger.info(f"Admin: Sending notification to partner: {partner['name']} ({phone_normalized})")
-                        add_notification(
-                            user_id=phone_normalized,
-                            title=title,
-                            body=body,
-                            ntype=ntype,
-                            action_url=url_for('express_partner.dashboard', _external=True)
-                        )
-                        sent += 1
-                        current_app.logger.info(f"Admin: Notification sent successfully to {phone_normalized}")
-                    else:
-                        failed += 1
-                        current_app.logger.warning(f"Admin: Invalid phone number format: {partner.get('phone', 'unknown')} (length: {len(phone_normalized) if phone_normalized else 0})")
-                except Exception as e:
-                    failed += 1
-                    current_app.logger.error(f"Admin: Failed to send notification to {partner.get('name', 'unknown')} ({partner.get('phone', 'unknown')}): {e}", exc_info=True)
 
-            # تلاش برای ارسال Web Push با صدا (در کلاینت)
-            # توجه: چون push subscriptions با user_id مرتبط نیستند، 
-            # به همه subscriptions ارسال می‌شود (ممکن است شامل همکاران و غیرهمکاران باشد)
-            push_sent = 0
-            push_failed = 0
-            try:
-                subs = _load_subs()
-            except Exception:
-                subs = []
-            
-            if subs:
-                payload = {
-                    "title": title,
-                    "body": body,
-                    "icon": "/static/icons/icon-192.png",
-                    "badge": "/static/icons/monochrome-192.png",
-                    "url": url_for('express_partner.dashboard', _external=True),
-                    "sound": "/static/sounds/notify.mp3"
-                }
-                for s in subs:
-                    try:
-                        res = _send_one(s, payload)
-                        if res.get('ok'):
-                            push_sent += 1
-                        elif res.get('remove'):
-                            # حذف subscription نامعتبر
-                            try:
-                                subs_updated = _load_subs()
-                                subs_updated = [sub for sub in subs_updated if sub.get('endpoint') != s.get('endpoint')]
-                                _save_subs(subs_updated)
-                            except Exception:
-                                pass
-                        else:
-                            push_failed += 1
-                    except Exception as e:
-                        push_failed += 1
-                        current_app.logger.error(f"Failed to send push: {e}")
-            
-            if failed > 0:
-                message = f'اعلان برای {sent} همکار ثبت شد ({failed} خطا). {push_sent} پوش ارسال شد ({push_failed} خطا).'
-            else:
-                message = f'اعلان برای {sent} همکار ثبت و {push_sent} پوش ارسال شد.'
-            
-            # update diagnostics after send
-            try:
-                subs_for_diag = _load_subs()
-            except Exception:
-                subs_for_diag = []
-            push_diag.update({'subs_count': len(subs_for_diag or [])})
-    
-    # بخش تست سیستم اعلان‌ها
-    test_message = None
-    test_error = None
-    test_result = None
-    
-    # بررسی درخواست تست
+    approved_partners = _load_approved_express_partners()
+
     if request.method == 'POST' and request.form.get('test_action') == 'test':
-        # add_notification در سطح ماژول import شده؛ اینجا دوباره import نشود (UnboundLocalError در مسیر ارسال به همکاران)
         from app.services.notifications import (
             get_user_notifications,
-            get_all_notifications_stats,
-            _load_all,
             _normalize_user_id,
         )
         test_phone = (request.form.get('test_phone') or '').strip()
@@ -1335,46 +1319,83 @@ def notifications_colleagues():
         else:
             try:
                 normalized = _normalize_user_id(test_phone)
-                
-                # افزودن اعلان تست
                 test_notif = add_notification(
                     user_id=normalized,
                     title="تست اعلان",
                     body="این یک اعلان تستی است برای بررسی سیستم.",
-                    ntype="info"
+                    ntype="info",
+                    source="admin_test",
                 )
-                
-                # دریافت اعلان‌ها
                 notifications = get_user_notifications(normalized, limit=10)
-                
-                # آمار کلی
-                stats = get_all_notifications_stats()
-                
-                # بررسی داده‌های خام
-                all_data = _load_all()
-                all_keys = list(all_data.keys())
-                
                 test_result = {
-                    "phone_raw": test_phone,
                     "phone_normalized": normalized,
                     "notification_added": test_notif.get("id") if test_notif else None,
                     "notifications_found": len(notifications),
-                    "notifications_list": notifications[:5],  # فقط 5 تا اول
-                    "all_keys_in_storage": all_keys,
-                    "stats": stats
                 }
-                
-                test_message = f'تست موفقیت‌آمیز بود. اعلان برای {normalized} اضافه شد و {len(notifications)} اعلان پیدا شد.'
+                test_message = f'تست موفق. اعلان برای {normalized} ثبت شد.'
             except Exception as e:
                 test_error = f'خطا در تست: {str(e)}'
                 current_app.logger.error(f"Notification test error: {e}", exc_info=True)
-    
-    # آمار کلی برای تست
+
+        if is_ajax:
+            return jsonify({
+                'success': not test_error,
+                'message': test_message,
+                'error': test_error,
+                'test_result': test_result,
+            })
+
+    elif request.method == 'POST':
+        title = (request.form.get('title') or '').strip()
+        body = (request.form.get('body') or '').strip()
+        ntype = (request.form.get('type') or 'info').strip() or 'info'
+
+        if not title or not body:
+            error = 'عنوان و متن اعلان الزامی است.'
+        elif not approved_partners:
+            error = 'هیچ همکاری یافت نشد.'
+        else:
+            try:
+                result = _send_colleagues_notification_broadcast(
+                    title, body, ntype, approved_partners
+                )
+                sent = result['sent']
+                failed = result['failed']
+                push_sent = result['push_sent']
+                push_failed = result['push_failed']
+                if failed > 0:
+                    message = (
+                        f'اعلان برای {sent} همکار ثبت شد ({failed} خطا). '
+                        f'{push_sent} پوش ارسال شد ({push_failed} خطا).'
+                    )
+                else:
+                    message = f'اعلان برای {sent} همکار ثبت و {push_sent} پوش ارسال شد.'
+                if is_ajax:
+                    return jsonify({
+                        'success': True,
+                        'message': message,
+                        'broadcast': result.get('broadcast'),
+                        'sent': sent,
+                        'failed': failed,
+                        'push_sent': push_sent,
+                        'push_failed': push_failed,
+                    })
+            except Exception as e:
+                error = f'خطا در ارسال: {str(e)}'
+                current_app.logger.error(f"Colleagues notification broadcast failed: {e}", exc_info=True)
+                if is_ajax:
+                    return jsonify({'success': False, 'error': error}), 500
+
+        if is_ajax:
+            return jsonify({'success': False, 'error': error or 'خطا در ارسال'}), 400
+
     try:
-        from app.services.notifications import get_all_notifications_stats
         stats = get_all_notifications_stats()
     except Exception:
         stats = {}
+
+    history = list_broadcasts(limit=40)
+    history_stats = broadcast_stats()
 
     return render_template(
         'admin/colleagues_broadcast.html',
@@ -1382,11 +1403,30 @@ def notifications_colleagues():
         error=error,
         push_diag=push_diag,
         partners_count=len(approved_partners),
+        stats=stats,
+        history=history,
+        history_stats=history_stats,
         test_message=test_message,
         test_error=test_error,
         test_result=test_result,
-        stats=stats
     )
+
+
+@admin_bp.route('/api/notifications/colleagues/history', methods=['GET'])
+@login_required
+def api_colleagues_notification_history():
+    from app.services.notification_history import list_broadcasts, broadcast_stats
+    try:
+        limit = min(100, max(1, int(request.args.get('limit', 40))))
+        offset = max(0, int(request.args.get('offset', 0)))
+    except (TypeError, ValueError):
+        limit, offset = 40, 0
+    items = list_broadcasts(limit=limit, offset=offset)
+    return jsonify({
+        'success': True,
+        'items': items,
+        'stats': broadcast_stats(),
+    })
 
 # -----------------------------------------------------------------------------
 # ارسال پیامک به همکاران (Express Partners)
