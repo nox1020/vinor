@@ -1336,12 +1336,13 @@ def notifications_colleagues():
                 current_app.logger.error(f"Notification test error: {e}", exc_info=True)
 
         if is_ajax:
+            status = 400 if test_error else 200
             return jsonify({
                 'success': not test_error,
                 'message': test_message,
                 'error': test_error,
                 'test_result': test_result,
-            })
+            }), status
 
     elif request.method == 'POST':
         title = (request.form.get('title') or '').strip()

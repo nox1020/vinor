@@ -9,27 +9,41 @@
 
 {% block head %}
 <style>
-  .notify-chat-shell {
-    height: calc(100vh - 8.5rem);
-    min-height: 28rem;
+  .notify-chat-page {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100dvh - 7.5rem);
+    padding-bottom: 4.5rem;
   }
   @media (min-width: 1024px) {
-    .notify-chat-shell { height: calc(100vh - 7rem); }
+    .notify-chat-page {
+      min-height: calc(100dvh - 6rem);
+      padding-bottom: 1rem;
+    }
+  }
+  .notify-chat-shell {
+    flex: 1 1 auto;
+    min-height: 18rem;
+    max-height: calc(100dvh - 14rem);
+  }
+  @media (min-width: 1024px) {
+    .notify-chat-shell { max-height: calc(100dvh - 11rem); }
   }
   .notify-bubble-scroll {
     scrollbar-width: thin;
+    scroll-behavior: smooth;
   }
 </style>
 {% endblock %}
 
 {% block content %}
 <div
-  class="max-w-3xl mx-auto"
+  class="notify-chat-page max-w-3xl mx-auto w-full"
   x-data="adminNotifyChat()"
   x-init="init()"
 >
   <!-- نوار بالا -->
-  <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+  <div class="mb-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
     <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
       <span class="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-700 px-2.5 py-1 bg-white dark:bg-gray-900">
         <i class="fa-solid fa-users"></i>
@@ -37,14 +51,14 @@
       </span>
       <span class="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-700 px-2.5 py-1 bg-white dark:bg-gray-900">
         <i class="fa-solid fa-paper-plane"></i>
-        {{ history_stats.total_broadcasts or 0 }} ارسال
+        <span x-text="items.length">{{ history_stats.total_broadcasts or 0 }}</span> ارسال
       </span>
       {% if push_diag %}
       <span class="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-700 px-2.5 py-1 bg-white dark:bg-gray-900">
         <i class="fa-solid fa-bell"></i>
         {{ push_diag.subs_count or 0 }} پوش
-        {% if push_diag.tagged_count %}<span class="text-emerald-600">({{ push_diag.tagged_count }} همکار)</span>{% endif %}
-        {% if not push_diag.has_private %}<span class="text-amber-600">!</span>{% endif %}
+        {% if push_diag.tagged_count %}<span class="text-emerald-600 dark:text-emerald-400">({{ push_diag.tagged_count }} همکار)</span>{% endif %}
+        {% if not push_diag.has_private %}<span class="text-amber-600" title="VAPID تنظیم نشده">!</span>{% endif %}
       </span>
       {% endif %}
     </div>
@@ -58,33 +72,20 @@
     </button>
   </div>
 
-  {% if message and not error %}
-  <div class="mb-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 text-sm">{{ message }}</div>
-  {% endif %}
-  {% if error %}
-  <div class="mb-3 p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 text-sm">{{ error }}</div>
-  {% endif %}
-
   <!-- پنل تست (جمع‌شونده) -->
-  <div x-show="showTest" x-cloak class="mb-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-    {% if test_message %}
-    <div class="mb-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 text-xs">{{ test_message }}</div>
-    {% endif %}
-    {% if test_error %}
-    <div class="mb-2 p-2 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200 text-xs">{{ test_error }}</div>
-    {% endif %}
-    <form method="post" class="flex flex-wrap gap-2 items-end">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="test_action" value="test">
+  <div x-show="showTest" x-cloak x-transition class="mb-3 shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+    <div x-show="testFlash" x-cloak class="mb-2 p-2 rounded-lg text-xs" :class="testFlashOk ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200'" x-text="testFlash"></div>
+    <form @submit.prevent="runTest" class="flex flex-wrap gap-2 items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" x-ref="testCsrf">
       <div class="flex-1 min-w-[10rem]">
-        <label class="block text-xs text-gray-500 mb-1">شماره تست</label>
-        <input type="text" name="test_phone" class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm" placeholder="09123456789" required>
+        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">شماره تست</label>
+        <input type="text" x-model="testPhone" class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white" placeholder="09123456789" required dir="ltr">
       </div>
-      <button type="submit" class="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm">اجرای تست</button>
+      <button type="submit" class="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white" :disabled="testLoading">
+        <span x-show="!testLoading">اجرای تست</span>
+        <span x-show="testLoading" x-cloak><i class="fa-solid fa-spinner fa-spin"></i></span>
+      </button>
     </form>
-    {% if test_result %}
-    <p class="mt-2 text-xs text-gray-500">نتیجه: {{ test_result.notifications_found }} اعلان برای {{ test_result.phone_normalized }}</p>
-    {% endif %}
   </div>
 
   <!-- شِل چت -->
@@ -92,68 +93,76 @@
 
     <!-- سابقه ارسال -->
     <div
-      id="notifyChatHistory"
-      class="notify-bubble-scroll flex-1 overflow-y-auto px-4 py-4 space-y-3"
+      class="notify-bubble-scroll flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-4"
       x-ref="history"
+      @scroll="onHistoryScroll()"
     >
-      <template x-if="!items.length && !loading">
-        <div class="h-full flex flex-col items-center justify-center text-center text-gray-400 dark:text-gray-500 py-12">
-          <i class="fa-regular fa-comments text-4xl mb-3 opacity-40"></i>
-          <p class="text-sm">هنوز پیامی ارسال نشده</p>
-          <p class="text-xs mt-1">اولین اعلان را از پایین بنویسید</p>
-        </div>
-      </template>
-
-      <template x-for="item in items.slice().reverse()" :key="item.id">
-        <div class="flex flex-col items-start max-w-[88%] mr-auto ml-0">
-          <div
-            class="rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words w-full border"
-            :class="bubbleClass(item.type)"
-          >
-            <div class="font-semibold mb-1" x-text="item.title"></div>
-            <div x-text="item.body"></div>
+      <div class="min-h-full flex flex-col justify-end gap-3">
+        <template x-if="!sortedItems().length && !loading">
+          <div class="flex flex-col items-center justify-center text-center text-gray-400 dark:text-gray-500 py-16">
+            <i class="fa-regular fa-comments text-4xl mb-3 opacity-40"></i>
+            <p class="text-sm font-medium">هنوز پیامی ارسال نشده</p>
+            <p class="text-xs mt-1">اولین اعلان را از پایین بنویسید</p>
           </div>
-          <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400 px-1">
-            <span x-text="formatTime(item.created_at)"></span>
-            <span>·</span>
-            <span>
-              <i class="fa-solid fa-user-check"></i>
-              <span x-text="item.success_count"></span>/<span x-text="item.recipient_count"></span>
-            </span>
-            <template x-if="item.push_queued">
-              <span class="text-blue-500">
-                · پوش
-                <span x-text="item.push_targets || '…'"></span>
-                در حال ارسال
-              </span>
-            </template>
-            <template x-if="!item.push_queued && item.push_sent > 0">
-              <span>
-                · <i class="fa-solid fa-bell"></i>
-                <span x-text="item.push_sent"></span> پوش
-              </span>
-            </template>
-            <template x-if="item.failed_count > 0">
-              <span class="text-rose-500">
-                · <span x-text="item.failed_count"></span> خطا
-              </span>
-            </template>
-          </div>
-        </div>
-      </template>
+        </template>
 
-      <div x-show="loading" class="text-center text-xs text-gray-400 py-2">در حال بارگذاری...</div>
+        <template x-for="item in sortedItems()" :key="item.id">
+          <div class="flex flex-col max-w-[92%] sm:max-w-[85%] mr-auto ml-0 items-end gap-1">
+            <!-- bubble ادمین (سمت راست در RTL) -->
+            <div
+              class="rounded-2xl rounded-br-md px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words w-full border shadow-sm"
+              :class="bubbleClass(item.type)"
+            >
+              <div class="flex items-center justify-between gap-2 mb-1.5">
+                <span class="font-semibold" x-text="item.title"></span>
+                <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full border border-current/20 opacity-80" x-text="typeLabel(item.type)"></span>
+              </div>
+              <div x-text="item.body"></div>
+            </div>
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-500 dark:text-gray-400 px-1">
+              <span x-text="formatTime(item.created_at)"></span>
+              <span aria-hidden="true">·</span>
+              <span title="تحویل in-app">
+                <i class="fa-solid fa-user-check"></i>
+                <span x-text="item.success_count"></span>/<span x-text="item.recipient_count"></span>
+              </span>
+              <template x-if="item.push_queued === true">
+                <span class="text-blue-600 dark:text-blue-400">
+                  · <i class="fa-solid fa-spinner fa-spin"></i>
+                  پوش (<span x-text="item.push_targets || '…'"></span>)
+                </span>
+              </template>
+              <template x-if="item.push_queued !== true && (item.push_sent || 0) > 0">
+                <span>
+                  · <i class="fa-solid fa-bell"></i>
+                  <span x-text="item.push_sent"></span> پوش
+                </span>
+              </template>
+              <template x-if="(item.failed_count || 0) > 0">
+                <span class="text-rose-500 dark:text-rose-400">
+                  · <span x-text="item.failed_count"></span> خطا
+                </span>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <div x-show="loading" x-cloak class="text-center text-xs text-gray-400 py-2">
+          <i class="fa-solid fa-spinner fa-spin"></i> در حال بارگذاری...
+        </div>
+      </div>
     </div>
 
     <!-- فرم ارسال -->
-    <div class="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+    <div class="shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 safe-bottom">
       <form @submit.prevent="sendMessage" class="space-y-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" x-ref="csrf">
         <div class="flex gap-2">
           <input
             type="text"
             x-model="form.title"
-            class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            x-ref="titleInput"
+            class="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             placeholder="عنوان پیام"
             maxlength="120"
             required
@@ -161,7 +170,7 @@
           >
           <select
             x-model="form.type"
-            class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-2 text-sm"
+            class="shrink-0 max-w-[6.5rem] rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             :disabled="sending"
           >
             <option value="info">اطلاعات</option>
@@ -174,12 +183,13 @@
         <div class="flex gap-2 items-end">
           <textarea
             x-model="form.body"
+            x-ref="bodyInput"
             rows="2"
-            class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            class="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             placeholder="متن پیام برای همه همکاران..."
             required
             :disabled="sending"
-            @keydown.enter.exact.prevent="if (!$event.shiftKey) sendMessage()"
+            @keydown.enter="onBodyKeydown($event)"
           ></textarea>
           <button
             type="submit"
@@ -191,9 +201,16 @@
             <i class="fa-solid fa-spinner fa-spin" x-show="sending" x-cloak></i>
           </button>
         </div>
-        <p class="text-[11px] text-gray-400 px-1">Enter برای ارسال · Shift+Enter خط جدید · {{ partners_count or 0 }} گیرنده</p>
+        <p class="text-[11px] text-gray-400 dark:text-gray-500 px-1">Enter = ارسال · Shift+Enter = خط جدید · {{ partners_count or 0 }} گیرنده</p>
       </form>
-      <div x-show="flash" x-cloak x-transition class="mt-2 text-xs rounded-lg px-3 py-2" :class="flashOk ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300'" x-text="flash"></div>
+      <div
+        x-show="flash"
+        x-cloak
+        x-transition
+        class="mt-2 text-xs rounded-lg px-3 py-2"
+        :class="flashOk ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300'"
+        x-text="flash"
+      ></div>
     </div>
   </div>
 </div>
@@ -201,12 +218,14 @@
 <script>
 (function () {
   const INITIAL_ITEMS = {{ history|tojson|safe }};
+  const HISTORY_URL = {{ url_for('admin.api_colleagues_notification_history')|tojson }};
+  const POST_URL = {{ url_for('admin.notifications_colleagues')|tojson }};
 
   function fmtTs(ts) {
     if (!ts) return '—';
     try {
       const d = new Date(Number(ts) * 1000);
-      if (isNaN(d)) return '—';
+      if (isNaN(d.getTime())) return '—';
       return d.toLocaleString('fa-IR', {
         timeZone: 'Asia/Tehran',
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -217,16 +236,30 @@
 
   window.adminNotifyChat = function adminNotifyChat() {
     return {
-      items: Array.isArray(INITIAL_ITEMS) ? INITIAL_ITEMS : [],
+      items: Array.isArray(INITIAL_ITEMS) ? INITIAL_ITEMS.slice() : [],
       loading: false,
       sending: false,
       showTest: false,
+      testPhone: '',
+      testLoading: false,
+      testFlash: '',
+      testFlashOk: true,
       flash: '',
       flashOk: true,
+      stickToBottom: true,
       form: { title: '', body: '', type: 'info' },
 
+      sortedItems() {
+        return this.items.slice().sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+      },
+
       init() {
-        this.$nextTick(() => this.scrollToBottom());
+        this.$nextTick(() => this.scrollToBottom(true));
+      },
+
+      typeLabel(type) {
+        const map = { info: 'اطلاعات', success: 'موفقیت', warning: 'هشدار', error: 'خطا', status: 'وضعیت' };
+        return map[type] || 'اطلاعات';
       },
 
       bubbleClass(type) {
@@ -242,7 +275,15 @@
 
       formatTime(ts) { return fmtTs(ts); },
 
-      scrollToBottom() {
+      onHistoryScroll() {
+        const el = this.$refs.history;
+        if (!el) return;
+        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+        this.stickToBottom = dist < 80;
+      },
+
+      scrollToBottom(force) {
+        if (!force && !this.stickToBottom) return;
         const el = this.$refs.history;
         if (el) el.scrollTop = el.scrollHeight;
       },
@@ -250,7 +291,14 @@
       showFlash(msg, ok) {
         this.flash = msg;
         this.flashOk = ok !== false;
-        setTimeout(() => { this.flash = ''; }, 5000);
+        clearTimeout(this._flashTimer);
+        this._flashTimer = setTimeout(() => { this.flash = ''; }, 5000);
+      },
+
+      onBodyKeydown(e) {
+        if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+        e.preventDefault();
+        this.sendMessage();
       },
 
       async sendMessage() {
@@ -259,6 +307,7 @@
         if (!title || !body || this.sending) return;
 
         this.sending = true;
+        this.stickToBottom = true;
         try {
           const fd = new FormData();
           fd.append('csrf_token', this.$refs.csrf.value);
@@ -266,7 +315,7 @@
           fd.append('body', body);
           fd.append('type', this.form.type || 'info');
 
-          const res = await fetch(window.location.pathname, {
+          const res = await fetch(POST_URL, {
             method: 'POST',
             body: fd,
             credentials: 'same-origin',
@@ -278,7 +327,7 @@
           }
           if (data.broadcast) {
             this.items.unshift(data.broadcast);
-            if (data.broadcast.push_queued && data.broadcast.id) {
+            if (data.broadcast.push_queued === true && data.broadcast.id) {
               this.pollPushStatus(data.broadcast.id);
             }
           } else {
@@ -287,7 +336,10 @@
           this.form.title = '';
           this.form.body = '';
           this.showFlash(data.message || 'ارسال شد', true);
-          this.$nextTick(() => this.scrollToBottom());
+          this.$nextTick(() => {
+            this.scrollToBottom(true);
+            this.$refs.bodyInput && this.$refs.bodyInput.focus();
+          });
         } catch (err) {
           this.showFlash(err.message || 'خطا در ارسال', false);
         } finally {
@@ -295,10 +347,40 @@
         }
       },
 
+      async runTest() {
+        const phone = (this.testPhone || '').trim();
+        if (!phone || this.testLoading) return;
+        this.testLoading = true;
+        this.testFlash = '';
+        try {
+          const fd = new FormData();
+          fd.append('csrf_token', this.$refs.testCsrf.value);
+          fd.append('test_action', 'test');
+          fd.append('test_phone', phone);
+          const res = await fetch(POST_URL, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || 'تست ناموفق بود');
+          }
+          this.testFlashOk = true;
+          this.testFlash = data.message || 'تست موفق بود';
+        } catch (err) {
+          this.testFlashOk = false;
+          this.testFlash = err.message || 'خطا در تست';
+        } finally {
+          this.testLoading = false;
+        }
+      },
+
       async refreshHistory() {
         this.loading = true;
         try {
-          const res = await fetch('{{ url_for("admin.api_colleagues_notification_history") }}?limit=40', {
+          const res = await fetch(HISTORY_URL + '?limit=40', {
             credentials: 'same-origin',
             headers: { 'Accept': 'application/json' },
           });
@@ -309,22 +391,27 @@
         } catch (_) {}
         finally {
           this.loading = false;
-          this.$nextTick(() => this.scrollToBottom());
+          this.$nextTick(() => this.scrollToBottom(true));
         }
       },
 
       async pollPushStatus(broadcastId) {
-        const url = '{{ url_for("admin.api_colleagues_notification_history") }}?limit=40';
         for (let i = 0; i < 15; i++) {
           await new Promise(r => setTimeout(r, 1200));
           try {
-            const res = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+            const res = await fetch(HISTORY_URL + '?limit=40', {
+              credentials: 'same-origin',
+              headers: { 'Accept': 'application/json' },
+            });
             const data = await res.json();
             const item = (data.items || []).find(x => x.id === broadcastId);
             if (!item) continue;
             const idx = this.items.findIndex(x => x.id === broadcastId);
             if (idx >= 0) this.items[idx] = item;
-            if (!item.push_queued) break;
+            if (item.push_queued !== true) {
+              this.$nextTick(() => this.scrollToBottom(false));
+              break;
+            }
           } catch (_) {}
         }
       },
