@@ -269,14 +269,27 @@
     }
   }
 
+  function notifyApkAppReady() {
+    try {
+      if (!/VinorApp\//i.test(navigator.userAgent || '')) return;
+      if (window.VinorNativeShell && typeof window.VinorNativeShell.onAppReady === 'function') {
+        window.VinorNativeShell.onAppReady();
+      }
+    } catch (_) {}
+  }
+
   function hidePartnerSkeleton() {
     if (done) return;
     done = true;
     var root = document.getElementById('vinorPartnerSkeletonRoot');
-    if (!root || root.getAttribute('data-vinor-sk-dismissed') === '1') return;
+    if (!root || root.getAttribute('data-vinor-sk-dismissed') === '1') {
+      notifyApkAppReady();
+      return;
+    }
     root.setAttribute('data-vinor-sk-dismissed', '1');
     root.setAttribute('aria-busy', 'false');
     root.classList.add('vinor-sk-hidden');
+    notifyApkAppReady();
     window.setTimeout(function () {
       try { root.remove(); } catch (_) {}
       var st = document.getElementById('vinor-partner-sk-styles');
