@@ -227,6 +227,9 @@ def create_app() -> Flask:
         VAPID_CLAIMS={"sub": vapid_sub},
         VAPID_CLAIMS_SUB=vapid_sub,
         PUSH_STORE_PATH=os.environ.get("PUSH_STORE_PATH", default_push_store),
+        FCM_SERVICE_ACCOUNT_FILE=os.environ.get("FCM_SERVICE_ACCOUNT_FILE", getattr(Config, "FCM_SERVICE_ACCOUNT_FILE", "")),
+        FCM_GOOGLE_SERVICES_FILE=os.environ.get("FCM_GOOGLE_SERVICES_FILE", getattr(Config, "FCM_GOOGLE_SERVICES_FILE", "")),
+        FCM_PROJECT_ID=os.environ.get("FCM_PROJECT_ID", getattr(Config, "FCM_PROJECT_ID", "")),
         APP_BRAND_NAME="وینور اکسپرس | Vinor Express",
         WTF_CSRF_ENABLED=True,
         WTF_CSRF_TIME_LIMIT=3600,  # 1 hour
@@ -245,6 +248,11 @@ def create_app() -> Flask:
         with app.app_context():
             migrate_legacy(app)
             ensure_escalations_file()
+            try:
+                from app.services.firebase_config import bootstrap_firebase
+                bootstrap_firebase(app)
+            except Exception as fb_err:
+                app.logger.warning("Firebase bootstrap: %s", fb_err)
     except Exception as e:
         app.logger.warning("Data dir / AI escalations init: %s", e)
 
@@ -333,6 +341,14 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning(f"Push API disabled: {e}")
 
+    # FCM API (APK push when app closed)
+    fcm_api_bp = None
+    try:
+        from .api.fcm import api_fcm_bp as _fcm_api_bp
+        fcm_api_bp = _fcm_api_bp
+    except Exception as e:
+        app.logger.warning(f"FCM API disabled: {e}")
+
     # Uploads API (برای سرو فایل‌های /uploads/* و آپلودهای تصویری)
     uploads_bp = None
     try:
@@ -351,6 +367,8 @@ def create_app() -> Flask:
         app.register_blueprint(sms_api_bp)
     if push_api_bp is not None:
         app.register_blueprint(push_api_bp)
+    if fcm_api_bp is not None:
+        app.register_blueprint(fcm_api_bp)
     if uploads_bp is not None:
         app.register_blueprint(uploads_bp)
 
@@ -431,6 +449,12 @@ def create_app() -> Flask:
         if push_api_bp is not None:
             try:
                 csrf.exempt(push_api_bp)
+            except Exception:
+                pass
+
+        if fcm_api_bp is not None:
+            try:
+                csrf.exempt(fcm_api_bp)
             except Exception:
                 pass
 

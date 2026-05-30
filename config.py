@@ -49,6 +49,11 @@ class Config:
     VAPID_PRIVATE_KEY = "dhvthKpfzxwl73td79EM41VuA6CSpvlg6zjTNQQv__A"
     VAPID_SUB = "mailto:admin@vinor.ir"
 
+    # Firebase Cloud Messaging (APK) — مسیر JSON سرویس‌اکانت Firebase Admin
+    FCM_SERVICE_ACCOUNT_FILE = os.environ.get("FCM_SERVICE_ACCOUNT_FILE", "")
+    FCM_GOOGLE_SERVICES_FILE = os.environ.get("FCM_GOOGLE_SERVICES_FILE", "")
+    FCM_PROJECT_ID = os.environ.get("FCM_PROJECT_ID", "")
+
 class DevelopmentConfig(Config):
     DEBUG = True
 

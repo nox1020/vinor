@@ -335,6 +335,17 @@ def add_notification(user_id: str, title: str, body: str, ntype: str = "info",
         )
     except Exception:
         pass
+
+    try:
+        from app.services.fcm_push import send_fcm_to_user_background
+        send_fcm_to_user_background(
+            normalized_user_id,
+            title=str(title).strip(),
+            body=str(body).strip(),
+            url=action_url or "/express/partner/notifications",
+        )
+    except Exception:
+        pass
     
     return notif
 
@@ -401,6 +412,18 @@ def add_notifications_batch(
 
     if success_count and not _save_all(data, fast=True):
         raise RuntimeError("Failed to save batch notifications")
+
+    if success_count:
+        try:
+            from app.services.fcm_push import send_fcm_batch_background
+            send_fcm_batch_background(
+                list(seen_phones),
+                title=title_s,
+                body=body_s,
+                url=action_url or "/express/partner/notifications",
+            )
+        except Exception:
+            pass
 
     try:
         current_app.logger.info(

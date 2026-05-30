@@ -60,6 +60,10 @@
         {% if push_diag.tagged_count %}<span class="text-emerald-600 dark:text-emerald-400">({{ push_diag.tagged_count }} همکار)</span>{% endif %}
         {% if not push_diag.has_private %}<span class="text-amber-600" title="VAPID تنظیم نشده">!</span>{% endif %}
       </span>
+      <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 {{ 'border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300' if push_diag.fcm_send_ready else 'border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300' }}">
+        <i class="fa-solid fa-mobile-screen"></i>
+        FCM {% if push_diag.fcm_send_ready %}فعال{% else %}نیاز به setup{% endif %}
+      </span>
       {% endif %}
     </div>
     <button

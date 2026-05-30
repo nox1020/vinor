@@ -1297,11 +1297,19 @@ def notifications_colleagues():
         subs_for_diag = _load_subs()
     except Exception:
         subs_for_diag = []
+    try:
+        from app.services.firebase_config import get_firebase_status
+        fcm_diag = get_firebase_status()
+    except Exception:
+        fcm_diag = {}
     push_diag = {
         'has_public': bool(current_app.config.get('VAPID_PUBLIC_KEY')),
         'has_private': bool(current_app.config.get('VAPID_PRIVATE_KEY')),
         'subs_count': len(subs_for_diag or []),
         'tagged_count': sum(1 for s in (subs_for_diag or []) if s.get('user_phone')),
+        'fcm_send_ready': bool(fcm_diag.get('send_ready')),
+        'fcm_mobile_ready': bool(fcm_diag.get('mobile_ready')),
+        'fcm_project_id': fcm_diag.get('project_id'),
     }
 
     approved_partners = _load_approved_express_partners()
