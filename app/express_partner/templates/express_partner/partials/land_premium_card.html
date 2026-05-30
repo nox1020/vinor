@@ -80,12 +80,6 @@
     <div class="flex min-w-0 flex-1 flex-col justify-between gap-2 py-2.5 ps-1 pe-1.5 sm:pe-3">
       <div class="min-w-0 space-y-1.5">
         <div class="flex flex-wrap items-center gap-1">
-          {% if is_approved %}
-          <span class="inline-flex items-center gap-0.5 rounded-md border border-emerald-500/40 bg-emerald-950/60 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300">
-            <i class="fas fa-circle-check text-[8px]"></i>
-            تایید کارشناسی
-          </span>
-          {% endif %}
           {% if _in_tx %}
           <span class="inline-flex rounded-md bg-orange-600 px-1.5 py-0.5 text-[9px] font-bold text-white">در حال معامله</span>
           {% elif _st == 'sold' %}
@@ -103,7 +97,6 @@
         </p>
         {% endif %}
         <div class="pt-0.5">
-          <p class="text-[10px] text-slate-500">قیمت</p>
           <p class="text-sm font-bold text-white tabular-nums leading-tight">{{ (land.price_total or 0)|toman }}</p>
         </div>
       </div>
@@ -174,13 +167,8 @@
     </div>
 
     <div class="land-card-title-block absolute bottom-[4.25rem] left-0 right-0 z-10 px-3 pb-2 pt-6 flex flex-col gap-2">
-      <div class="flex items-end justify-between gap-2">
-        <span class="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#34d399] bg-[#064e3b]/90 px-2.5 py-1 text-[10px] font-semibold text-[#6ee7b7] shadow-sm backdrop-blur-sm">
-          <i class="fas fa-circle-check text-[10px]"></i>
-          تایید کارشناسی
-        </span>
-        <div class="min-w-0 flex-1 text-end">
-          <h3 class="text-lg font-bold text-white leading-snug line-clamp-2 drop-shadow-md">{{ land.title or '—' }}</h3>
+      <div class="min-w-0 text-end">
+        <h3 class="text-lg font-bold text-white leading-snug line-clamp-2 drop-shadow-md">{{ land.title or '—' }}</h3>
           {% if loc_line %}
           <p class="mt-1 flex items-center justify-end gap-1 text-xs text-white/85">
             <span class="truncate">{{ loc_line }}</span>
@@ -193,7 +181,6 @@
             {% if land._commission_pct %}<span class="text-emerald-400/90">({{ land._commission_pct }}٪)</span>{% endif %}
           </p>
           {% endif %}
-        </div>
       </div>
     </div>
 
@@ -211,7 +198,6 @@
         <div class="mt-0.5 text-[13px] font-semibold tabular-nums truncate">{% if built_m %}{{ built_m }} متر{% else %}—{% endif %}</div>
       </div>
       <div class="flex-[1.15] min-w-0 px-1 py-2.5 text-center">
-        <div class="text-[10px] text-white/55 leading-tight">قیمت</div>
         <div class="mt-0.5 text-[13px] font-bold tabular-nums leading-tight">{{ (land.price_total or 0)|toman }}</div>
       </div>
     </div>
