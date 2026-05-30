@@ -1,9 +1,11 @@
 {# داشبورد همکار — لیست کارت موبایل/تبلت؛ ارتفاع با dashboard-chrome.js (syncCardsHeight) #}
 <div id="dashboardMobileCardsRoot" class="vinor-dash-cards-bleed relative max-sm:mt-0 mt-2 flex min-h-0 w-full flex-col sm:-mx-4 lg:hidden">
-  <div id="dashboardPullRefreshHint" class="pointer-events-none overflow-hidden transition-[max-height,opacity] duration-200 ease-out max-h-0 opacity-0" aria-live="polite" aria-atomic="true">
-    <div class="flex items-center justify-center gap-2 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-      <i class="fas fa-rotate text-[13px]"></i>
-      <span>رها کنید برای تازه‌سازی فایل‌ها</span>
+  <div id="dashboardPullRefreshHint" class="vinor-dash-ptr pointer-events-none overflow-hidden" aria-hidden="true">
+    <div class="vinor-dash-ptr__ring">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle class="vinor-dash-ptr__track" cx="12" cy="12" r="9"></circle>
+        <circle class="vinor-dash-ptr__arc" cx="12" cy="12" r="9"></circle>
+      </svg>
     </div>
   </div>
   <button type="button" id="cardsPrev" class="hidden sm:flex absolute right-1 top-1/2 z-10 h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800/90 dark:hover:bg-gray-700">
