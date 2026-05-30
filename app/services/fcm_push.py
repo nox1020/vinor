@@ -2,11 +2,16 @@
 """ارسال FCM به APK (حتی وقتی اپ بسته است)."""
 from __future__ import annotations
 
+import base64
+import json
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
 import requests
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 from flask import current_app
 
 from app.services.firebase_config import get_service_account, get_firebase_status
@@ -30,24 +35,59 @@ def _load_service_account():
     return get_service_account()
 
 
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def _service_account_jwt(sa: Dict[str, Any]) -> str:
+    """JWT برای OAuth2 service account — فقط cryptography (بدون google-auth)."""
+    header = _b64url(json.dumps({"alg": "RS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    now = int(time.time())
+    claims = {
+        "iss": sa["client_email"],
+        "scope": _FCM_SCOPE,
+        "aud": "https://oauth2.googleapis.com/token",
+        "iat": now,
+        "exp": now + 3600,
+    }
+    payload = _b64url(json.dumps(claims, separators=(",", ":")).encode())
+    signing_input = f"{header}.{payload}".encode()
+    private_key = serialization.load_pem_private_key(
+        sa["private_key"].encode("utf-8"),
+        password=None,
+    )
+    signature = private_key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
+    return f"{header}.{payload}.{_b64url(signature)}"
+
+
 def _access_token() -> Optional[str]:
-    import time
     now = time.time()
     if _token_cache.get("access_token") and (_token_cache.get("expires_at") or 0) > now + 60:
         return _token_cache["access_token"]
 
     sa = _load_service_account()
-    if not sa:
+    if not sa or not sa.get("private_key") or not sa.get("client_email"):
         return None
     try:
-        from google.oauth2 import service_account
-        from google.auth.transport.requests import Request as GoogleAuthRequest
-
-        creds = service_account.Credentials.from_service_account_info(sa, scopes=[_FCM_SCOPE])
-        creds.refresh(GoogleAuthRequest())
-        _token_cache["access_token"] = creds.token
-        _token_cache["expires_at"] = now + 3300
-        return creds.token
+        jwt = _service_account_jwt(sa)
+        resp = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                "assertion": jwt,
+            },
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"OAuth token HTTP {resp.status_code}: {resp.text[:200]}")
+        data = resp.json()
+        token = data.get("access_token")
+        if not token:
+            raise RuntimeError("OAuth response missing access_token")
+        expires_in = int(data.get("expires_in") or 3600)
+        _token_cache["access_token"] = token
+        _token_cache["expires_at"] = now + max(expires_in - 60, 300)
+        return token
     except Exception as e:
         try:
             current_app.logger.error(f"FCM OAuth token failed: {e}")
