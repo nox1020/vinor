@@ -1,0 +1,45 @@
+{# درخواست‌های برداشت — داخل ناحیهٔ رفرش #}
+{% set _preview_limit = 5 %}
+{% set _rows = (withdrawal_items or [])[:_preview_limit] %}
+<section id="commissionsWithdrawalsList" class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
+  <div class="flex items-center justify-between px-3.5 py-3 border-b border-white/5">
+    <span class="shrink-0 w-16" aria-hidden="true"></span>
+    <h2 class="text-sm font-bold text-white">درخواست‌های برداشت</h2>
+  </div>
+  {% if _rows and _rows|length > 0 %}
+  <div class="divide-y divide-white/5">
+    {% for w in _rows %}
+    <div class="flex items-center gap-2 px-3 py-3 hover:bg-white/[0.03] transition-colors">
+      <div class="shrink-0 w-[4.75rem] text-end space-y-0.5">
+        {% if w.created_at %}
+        <div class="text-[10px] text-slate-500 tabular-nums jalali-dt" data-dt="{{ w.created_at }}"></div>
+        {% endif %}
+        <div class="text-[10px] font-semibold text-slate-300 leading-tight truncate">{{ w.bank_summary or 'حساب بانکی' }}</div>
+      </div>
+      <div class="flex-1 min-w-0 px-1">
+        <p class="text-[11px] text-slate-400 leading-snug text-center">درخواست برداشت</p>
+      </div>
+      <div class="shrink-0 flex flex-col items-center gap-1.5">
+        {% set st = (w.status or 'pending')|trim %}
+        {% if st == 'paid' %}
+          <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-violet-500/20 text-violet-200 border border-violet-500/30">پرداخت‌شده</span>
+        {% elif st == 'rejected' %}
+          <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-red-500/20 text-red-300 border border-red-500/30">رد شده</span>
+        {% elif st in ('approved', 'processing') %}
+          <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-sky-500/20 text-sky-200 border border-sky-500/30">{{ w.status_label }}</span>
+        {% else %}
+          <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-amber-500/20 text-amber-200 border border-amber-500/35">در انتظار بررسی</span>
+        {% endif %}
+      </div>
+      <div class="shrink-0 text-xs font-bold text-amber-300 tabular-nums whitespace-nowrap w-[5.75rem] text-end">
+        −{{ (w.amount or 0)|toman }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="px-4 py-8 text-center">
+    <p class="text-sm text-slate-400">هنوز درخواست برداشتی ثبت نشده است.</p>
+  </div>
+  {% endif %}
+</section>

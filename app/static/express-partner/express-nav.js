@@ -185,7 +185,9 @@
 
   function shouldUsePrefetchCache(href) {
     try {
-      return !isAuthSoftPath(parseUrl(href).pathname);
+      var p = normPath(parseUrl(href).pathname);
+      if (p === '/express/partner/profile/edit') return false;
+      return !isAuthSoftPath(p);
     } catch (_) {
       return true;
     }

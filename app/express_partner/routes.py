@@ -34,12 +34,20 @@ from ..utils.storage import (
     load_express_partner_views, save_express_partner_views,
     load_partner_routines, load_partner_routines_cached, save_partner_routines,
     load_partner_bank_accounts, save_partner_bank_accounts,
+    load_partner_withdrawals, save_partner_withdrawals,
 )
 from .partner_bank_accounts import (
     validate_new_account,
     public_account_dict,
     accounts_for_phone,
     catalog_public,
+)
+from .partner_withdrawals import (
+    withdrawable_balance,
+    validate_new_request,
+    admin_row_dict,
+    withdrawals_for_phone,
+    reserved_withdrawal_total,
 )
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
 from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
@@ -70,16 +78,58 @@ def _partner_profile_for_phone(phone: str) -> Dict[str, Any] | None:
     phone = (phone or '').strip()
     if not phone:
         return None
+    norm = _normalize_phone(phone)
     by_phone = getattr(g, '_express_partner_by_phone', None)
     if by_phone is None:
         partners = _express_partners_cached()
-        by_phone = {
-            str(p.get('phone') or '').strip(): p
-            for p in partners
-            if isinstance(p, dict) and str(p.get('phone') or '').strip()
-        }
+        by_phone = {}
+        for p in partners:
+            if not isinstance(p, dict):
+                continue
+            p_phone = str(p.get('phone') or '').strip()
+            if not p_phone:
+                continue
+            by_phone[p_phone] = p
+            pn = _normalize_phone(p_phone)
+            if pn:
+                by_phone.setdefault(pn, p)
         g._express_partner_by_phone = by_phone
-    return by_phone.get(phone)
+    return by_phone.get(phone) or (by_phone.get(norm) if norm else None)
+
+
+def _find_partner_record(partners: List[Dict[str, Any]], phone: str) -> Dict[str, Any] | None:
+    """یافتن رکورد همکار با تطبیق نرمال‌شدهٔ شماره."""
+    raw = (phone or '').strip()
+    if not raw:
+        return None
+    norm = _normalize_phone(raw)
+    for p in partners:
+        if not isinstance(p, dict):
+            continue
+        p_phone = str(p.get('phone') or '').strip()
+        if not p_phone:
+            continue
+        if p_phone == raw or p_phone == norm or _normalize_phone(p_phone) == norm:
+            return p
+    return None
+
+
+def _canonical_partner_phone(phone: str) -> str:
+    raw = (phone or '').strip()
+    return _normalize_phone(raw) or raw
+
+
+def _get_or_create_partner_record(partners: List[Dict[str, Any]], phone: str) -> Dict[str, Any]:
+    """رکورد همکار برای ذخیره — یک شمارهٔ کانonical در JSON."""
+    prof = _find_partner_record(partners, phone)
+    canonical = _canonical_partner_phone(phone)
+    if prof:
+        if canonical and str(prof.get('phone') or '').strip() != canonical:
+            prof['phone'] = canonical
+        return prof
+    prof = {'phone': canonical}
+    partners.append(prof)
+    return prof
 
 
 def _ensure_session_partner_on_g() -> None:
@@ -118,6 +168,48 @@ def _commissions_for_phone(phone: str) -> List[Dict[str, Any]]:
     mine = [c for c in _express_commissions_cached() if str(c.get('partner_phone') or '').strip() == phone]
     setattr(g, cache_key, mine)
     return mine
+
+
+def _partner_withdrawals_raw() -> List[Dict[str, Any]]:
+    items = load_partner_withdrawals() or []
+    return items if isinstance(items, list) else []
+
+
+def _partner_withdrawable_balance(phone: str) -> int:
+    ph = (phone or '').strip()
+    if not ph:
+        return 0
+    comms = _commissions_for_phone(ph)
+    return withdrawable_balance(comms, _partner_withdrawals_raw(), ph)
+
+
+def _partner_withdrawal_items(phone: str) -> List[Dict[str, Any]]:
+    return withdrawals_for_phone(_partner_withdrawals_raw(), phone)
+
+
+def _partner_pending_withdrawal_total(phone: str) -> int:
+    return reserved_withdrawal_total(_partner_withdrawals_raw(), phone)
+
+
+def _partner_display_name(phone: str) -> str:
+    ph = (phone or '').strip()
+    if not ph:
+        return ''
+    try:
+        profile = getattr(g, 'express_partner_profile', None)
+        if profile and isinstance(profile, dict) and str(profile.get('phone') or '').strip() == ph:
+            name = (str(profile.get('name') or '')).strip()
+            if name:
+                return name
+    except Exception:
+        pass
+    try:
+        for p in _express_partners_cached():
+            if str(p.get('phone') or '').strip() == ph:
+                return (str(p.get('name') or '')).strip()
+    except Exception:
+        pass
+    return ph[-4:] if len(ph) >= 4 else ph
 
 
 def _attach_commission_txn_labels(my_comms: List[Dict[str, Any]]) -> None:
@@ -957,6 +1049,67 @@ def _send_partner_application_sms(me_phone: str, recipient_name: str) -> dict:
     return {'ok': ok, 'skipped': False, 'error': err, 'mobile': mobile}
 
 
+def _format_toman_sms(amount: int) -> str:
+    v = max(0, int(amount or 0))
+    if v == 0:
+        return '0'
+    s = f'{v:,}'
+    return s.replace(',', '،')
+
+
+def _send_withdrawal_admin_sms(
+    *,
+    partner_phone: str,
+    partner_name: str,
+    amount: int,
+    bank_summary: str,
+) -> dict:
+    """اطلاع‌رسانی پیامکی درخواست برداشت جدید به ادمین."""
+    settings = load_settings(current_app) or {}
+    admin_phone_raw = settings.get('partner_application_admin_phone', '09121471301')
+    admin_phone = normalize_iran_mobile(admin_phone_raw)
+    sms_line_number = (settings.get('sms_line_number') or get_sms_line_number() or '300089930616').strip()
+
+    if not is_valid_iran_mobile(admin_phone):
+        current_app.logger.warning('Withdrawal admin SMS skipped: invalid admin phone %r', admin_phone_raw)
+        return {'ok': False, 'skipped': True, 'error': 'invalid_admin_phone'}
+
+    name = (partner_name or '').strip() or partner_phone
+    bank = (bank_summary or '').strip() or '—'
+    amt = _format_toman_sms(amount)
+    msg = (
+        f'درخواست برداشت وینور\n'
+        f'همکار: {name}\n'
+        f'موبایل: {partner_phone}\n'
+        f'مبلغ: {amt} تومان\n'
+        f'حساب: {bank}'
+    )
+    sms_result = send_sms_direct(mobile=admin_phone, message=msg, line_number=sms_line_number)
+    ok = bool(sms_result.get('ok'))
+    err = None
+    if not ok:
+        body = sms_result.get('body') or {}
+        err = str(body.get('message') or body.get('error') or 'sms_send_failed')
+        current_app.logger.error(
+            'Withdrawal admin SMS failed admin=%s status=%s body=%s',
+            admin_phone,
+            sms_result.get('status'),
+            body,
+        )
+    _append_sms_history({
+        'type': 'withdrawal_admin_notify',
+        'mobile': admin_phone,
+        'partner_phone': partner_phone,
+        'message': msg,
+        'ok': ok,
+        'error': err,
+        'status_code': sms_result.get('status', 0),
+        'response': sms_result.get('body', {}),
+        'created_at': datetime.utcnow().isoformat() + 'Z',
+    })
+    return {'ok': ok, 'skipped': False, 'error': err}
+
+
 def _redirect_apply_thanks(name: str, *, fresh_submit: bool, sms_sent: bool | None = None, sms_skipped: bool = False, sms_error: str | None = None):
     session['apply_thanks_context'] = {
         'name': name or '',
@@ -1701,8 +1854,9 @@ def commissions_page():
     approved_count = sum(1 for c in my_comms if _norm_st(c) == 'approved')
     paid_count = sum(1 for c in my_comms if _norm_st(c) == 'paid')
     approved_commission = sum(_i(c.get('commission_amount')) for c in my_comms if _norm_st(c) == 'approved')
-    # موجودی که همکار می‌تواند درخواست برداشت/واریز بزند: پورسانت‌های تأییدشده و هنوز پرداخت‌نشده
-    withdrawable_balance = approved_commission
+    withdrawable_balance = _partner_withdrawable_balance(me_phone)
+    pending_withdrawal_total = _partner_pending_withdrawal_total(me_phone)
+    withdrawal_items = _partner_withdrawal_items(me_phone)
 
     _attach_commission_txn_labels(my_comms)
 
@@ -1730,6 +1884,8 @@ def commissions_page():
         paid_count=paid_count,
         approved_commission=approved_commission,
         withdrawable_balance=withdrawable_balance,
+        pending_withdrawal_total=pending_withdrawal_total,
+        withdrawal_items=withdrawal_items,
         partner_name=partner_name,
         hide_header=True,
         SHOW_SUBMIT_BUTTON=False,
@@ -1794,7 +1950,8 @@ def commissions_data():
             return 'pending'
 
     approved_commission = sum(_i(c.get('commission_amount')) for c in my_comms if _norm_st(c) == 'approved')
-    withdrawable_balance = approved_commission
+    withdrawable_balance = _partner_withdrawable_balance(me_phone)
+    pending_withdrawal_total = _partner_pending_withdrawal_total(me_phone)
     try:
         my_comms = sorted(my_comms, key=lambda x: x.get('created_at', ''), reverse=True)
     except Exception:
@@ -1817,6 +1974,7 @@ def commissions_data():
         'paid_commission': paid_commission,
         'sold_count': sold_count,
         'withdrawable_balance': withdrawable_balance,
+        'pending_withdrawal_total': pending_withdrawal_total,
         'items': items,
     })
 
@@ -1864,10 +2022,14 @@ def bank_accounts_data():
         all_rows = []
     mine = [r for r in all_rows if isinstance(r, dict) and str(r.get('phone') or '').strip() == me_phone]
     mine = _sort_bank_accounts_by_created(mine)
+    w_balance = _partner_withdrawable_balance(me_phone)
+    default_acc = next((a for a in mine if a.get('is_default')), mine[0] if mine else None)
     return jsonify({
         'success': True,
         'accounts': [public_account_dict(r) for r in mine],
         'banks': catalog_public(),
+        'withdrawable_balance': w_balance,
+        'default_account_id': (default_acc or {}).get('id') or '',
     })
 
 
@@ -1936,6 +2098,69 @@ def bank_accounts_set_default():
         current_app.logger.exception('save_partner_bank_accounts default failed')
         return jsonify({'success': False, 'error': 'save_failed'}), 500
     return jsonify({'success': True})
+
+
+@express_partner_bp.post('/withdrawals/request', endpoint='withdrawals_request')
+@require_partner_access(json_response=True)
+def withdrawals_request():
+    """ثبت درخواست برداشت پورسانت توسط همکار."""
+    me_phone = (session.get("user_phone") or "").strip()
+    data = request.get_json(silent=True) or {}
+    amount = data.get('amount')
+    bank_account_id = (data.get('bank_account_id') or data.get('account_id') or '').strip()
+
+    all_banks = load_partner_bank_accounts() or []
+    if not isinstance(all_banks, list):
+        all_banks = []
+    mine_banks = accounts_for_phone(all_banks, me_phone)
+
+    all_wd = load_partner_withdrawals() or []
+    if not isinstance(all_wd, list):
+        all_wd = []
+    comms = _commissions_for_phone(me_phone)
+
+    rec, err = validate_new_request(
+        amount,
+        bank_account_id,
+        me_phone,
+        mine_banks,
+        comms,
+        all_wd,
+    )
+    if err or not rec:
+        return jsonify({'success': False, 'error': err or 'invalid'}), 400
+
+    partner_name = _partner_display_name(me_phone)
+    rec['partner_name'] = partner_name
+    rec['created_at'] = datetime.utcnow().isoformat() + 'Z'
+    rec['updated_at'] = rec['created_at']
+    all_wd.append(rec)
+    try:
+        save_partner_withdrawals(all_wd)
+    except Exception:
+        current_app.logger.exception('save_partner_withdrawals failed')
+        return jsonify({'success': False, 'error': 'save_failed'}), 500
+
+    try:
+        _send_withdrawal_admin_sms(
+            partner_phone=me_phone,
+            partner_name=partner_name,
+            amount=int(rec.get('amount') or 0),
+            bank_summary=str(rec.get('bank_summary') or ''),
+        )
+    except Exception:
+        current_app.logger.exception('withdrawal admin SMS failed')
+
+    return jsonify({
+        'success': True,
+        'request': {
+            'id': rec.get('id'),
+            'amount': rec.get('amount'),
+            'status': rec.get('status'),
+            'bank_summary': rec.get('bank_summary'),
+            'withdrawable_balance': _partner_withdrawable_balance(me_phone),
+        },
+    })
 
 
 @express_partner_bp.post('/notes/add')
@@ -3248,19 +3473,19 @@ def profile_edit_page():
     هر همکار با شمارهٔ session (user_phone) در لیست express_partners شناسایی می‌شود؛
     تمام فیلدها فقط روی همان دیکشنری پروفایل همان شماره ذخیره می‌شوند (مجزا از بقیهٔ کاربران).
     """
-    me_phone = (session.get('user_phone') or '').strip()
+    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     from ..utils.flash_messages import purge_stale_auth_flashes, purge_stale_land_flashes
     purge_stale_land_flashes()
     purge_stale_auth_flashes()
     partners = load_express_partners() or []
-    profile = next((p for p in partners if str(p.get('phone') or '').strip() == me_phone), None)
+    profile = _find_partner_record(partners, me_phone)
     if not profile:
-        profile = {"phone": me_phone}
-        partners.append(profile)
+        profile = {'phone': me_phone}
 
     cities_allowed = _active_cities_cached()
 
     if request.method == 'POST':
+        profile = _get_or_create_partner_record(partners, me_phone)
         name = (request.form.get('name') or '').strip()[:60]
         city = (request.form.get('city') or '').strip()[:60]
         bio = (request.form.get('bio') or '').strip()[:200]
@@ -3350,11 +3575,9 @@ def profile_edit_page():
 @require_partner_access(allow_pending=True)
 def profile_edit_data():
     """API JSON برای اپ اندروید: داده فرم ویرایش پروفایل."""
-    me_phone = (session.get('user_phone') or '').strip()
+    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     partners = load_express_partners() or []
-    profile = next((p for p in partners if str(p.get('phone') or '').strip() == me_phone), None)
-    if not profile:
-        profile = {"phone": me_phone}
+    profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
     me_name = (profile.get('name') or '').strip()
     me_city = (profile.get('city') or '').strip()
     me_bio = (profile.get('bio') or '').strip()
@@ -3383,7 +3606,7 @@ def api_profile_update():
     """به‌روزرسانی نام، شهر، درباره من برای اپ اندروید (بدون CSRF)."""
     if not session.get('user_phone'):
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
-    me_phone = (session.get('user_phone') or '').strip()
+    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
     city = (data.get('city') or '').strip()
@@ -3392,10 +3615,7 @@ def api_profile_update():
     email = (data.get('email') or '').strip()[:120]
     birth_date = (data.get('birth_date') or '').strip()[:32]
     partners = load_express_partners() or []
-    profile = next((p for p in partners if str(p.get('phone') or '').strip() == me_phone), None)
-    if not profile:
-        profile = {"phone": me_phone}
-        partners.append(profile)
+    profile = _get_or_create_partner_record(partners, me_phone)
     cities_allowed = _active_cities_cached()
     if name:
         profile['name'] = name
@@ -3539,11 +3759,8 @@ def _save_partner_avatar_upload(me_phone: str, f) -> str | None:
       current_app.logger.error("Failed to save partner avatar file", exc_info=True)
       return None
   partners = load_express_partners() or []
-  prof = next((p for p in partners if str(p.get('phone') or '').strip() == me_phone), None)
-  if not prof:
-      prof = {"phone": me_phone}
-      partners.append(prof)
-  rel_path = f'partner/avatars/{me_phone}/{os.path.basename(final_path)}'
+  prof = _get_or_create_partner_record(partners, me_phone)
+  rel_path = f'partner/avatars/{_canonical_partner_phone(me_phone) or me_phone}/{os.path.basename(final_path)}'
   prof['avatar'] = rel_path
   try:
       from time import time as _now
@@ -3564,7 +3781,7 @@ def api_profile_avatar():
     """آپلود آواتار برای اپ اندروید (multipart، بدون CSRF)."""
     if not session.get('user_phone'):
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
-    me_phone = (session.get('user_phone') or '').strip()
+    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     f = request.files.get('avatar')
     if not f or not f.filename:
         return jsonify({'success': False, 'error': 'no_file'}), 400
@@ -3572,7 +3789,7 @@ def api_profile_avatar():
     if not rel_path:
         return jsonify({'success': False, 'error': 'save_failed'}), 500
     partners = load_express_partners() or []
-    prof = next((p for p in partners if str(p.get('phone') or '').strip() == me_phone), None)
+    prof = _find_partner_record(partners, me_phone) or {}
     updated_at = int((prof or {}).get('avatar_updated_at') or 0)
     return jsonify({
         'success': True,
@@ -3587,7 +3804,7 @@ def profile_avatar_upload():
     """
     آپلود و تنظیم آواتار پروفایل همکار
     """
-    me_phone = (session.get('user_phone') or '').strip()
+    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     next_url = (request.form.get('next') or request.args.get('next') or '').strip()
     f = request.files.get('avatar')
     if not f or not f.filename:

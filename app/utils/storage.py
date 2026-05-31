@@ -383,6 +383,14 @@ def load_partner_bank_accounts(app=None):
 def save_partner_bank_accounts(items, app=None):
     return _save(ensure_file('EXPRESS_PARTNER_BANK_ACCOUNTS_FILE', 'express_partner_bank_accounts.json', [], app), items)
 
+# درخواست‌های برداشت پورسانت همکار
+def load_partner_withdrawals(app=None):
+    return _load(ensure_file('EXPRESS_PARTNER_WITHDRAWALS_FILE', 'express_partner_withdrawals.json', [], app))
+
+
+def save_partner_withdrawals(items, app=None):
+    return _save(ensure_file('EXPRESS_PARTNER_WITHDRAWALS_FILE', 'express_partner_withdrawals.json', [], app), items)
+
 # SMS History
 def load_sms_history(app=None):    return _load(ensure_file('SMS_HISTORY_FILE','sms_history.json',[],app))
 def save_sms_history(items, app=None): return _save(ensure_file('SMS_HISTORY_FILE','sms_history.json',[],app), items)

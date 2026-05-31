@@ -1,0 +1,86 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}مالی — درخواست‌های برداشت{% endblock %}
+{% block page_title %}مالی{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-base font-semibold text-gray-900 dark:text-white">درخواست‌های برداشت همکاران</h2>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+        {% if pending_count %}<span class="text-amber-600 dark:text-amber-400 font-medium">{{ pending_count }} در انتظار بررسی</span>{% else %}همه درخواست‌ها بررسی شده‌اند{% endif %}
+      </p>
+    </div>
+    <a href="{{ url_for('admin.express_commissions') }}"
+       class="text-xs text-blue-600 dark:text-blue-400 hover:underline">مدیریت پورسانت‌ها</a>
+  </div>
+
+  {% if items and items|length > 0 %}
+  <div class="grid grid-cols-1 gap-3">
+    {% for w in items %}
+    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+        <div class="min-w-0">
+          <h3 class="font-semibold text-sm text-gray-900 dark:text-white">
+            {{ w.partner_name or 'همکار' }}
+            <span class="text-gray-400 font-normal text-xs" dir="ltr">{{ w.phone }}</span>
+          </h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ w.created_at|default('—') }}</p>
+        </div>
+        <div class="text-start shrink-0">
+          <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{{ w.amount|int|toman }}</p>
+          {% set st = w.status or 'pending' %}
+          <span class="inline-flex mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full
+            {% if st == 'pending' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
+            {% elif st == 'paid' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
+            {% elif st == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
+            {% else %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300{% endif %}">
+            {{ w.status_label }}
+          </span>
+        </div>
+      </div>
+
+      <div class="rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 px-3 py-2.5 text-xs space-y-1 mb-3">
+        <div class="flex justify-between gap-2"><span class="text-gray-500">بانک</span><span class="text-gray-900 dark:text-white font-medium">{{ w.bank_name or '—' }}</span></div>
+        <div class="flex justify-between gap-2"><span class="text-gray-500">کارت</span><span class="text-gray-900 dark:text-white font-mono" dir="ltr">{{ w.masked_pan or '—' }}</span></div>
+        <div class="flex justify-between gap-2"><span class="text-gray-500">صاحب حساب</span><span class="text-gray-900 dark:text-white">{{ w.holder_name or '—' }}</span></div>
+      </div>
+
+      {% if w.admin_note %}
+      <p class="text-xs text-gray-600 dark:text-gray-300 mb-3 bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1.5">{{ w.admin_note }}</p>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('admin.financial_withdrawal_status', wid=w.id) }}" class="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="flex-1 min-w-[8rem]">
+          <label class="block text-[10px] text-gray-500 mb-1">تغییر وضعیت</label>
+          <select name="status" class="w-full text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+            <option value="pending" {% if st == 'pending' %}selected{% endif %}>در انتظار بررسی</option>
+            <option value="approved" {% if st == 'approved' %}selected{% endif %}>تأیید شده</option>
+            <option value="processing" {% if st == 'processing' %}selected{% endif %}>در حال پردازش</option>
+            <option value="paid" {% if st == 'paid' %}selected{% endif %}>پرداخت‌شده</option>
+            <option value="rejected" {% if st == 'rejected' %}selected{% endif %}>رد شده</option>
+          </select>
+        </div>
+        <div class="flex-[2] min-w-[10rem]">
+          <label class="block text-[10px] text-gray-500 mb-1">یادداشت (اختیاری)</label>
+          <input type="text" name="admin_note" value="{{ w.admin_note or '' }}"
+                 class="w-full text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                 placeholder="یادداشت داخلی" />
+        </div>
+        <button type="submit" class="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium">
+          ذخیره
+        </button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-10 text-center">
+    <i class="fa-solid fa-money-bill-transfer text-3xl text-gray-300 dark:text-gray-600 mb-3"></i>
+    <p class="text-sm text-gray-500 dark:text-gray-400">هنوز درخواست برداشتی ثبت نشده است.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

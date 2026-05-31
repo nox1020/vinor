@@ -12,11 +12,18 @@
       <div>
         <p class="text-xs font-medium text-slate-400">موجودی قابل برداشت</p>
         <p class="mt-1 text-2xl font-extrabold text-amber-300 tabular-nums tracking-tight">{{ (withdrawable_balance or 0)|toman }}</p>
+        {% if (pending_withdrawal_total or 0)|int > 0 %}
+        <p class="mt-1 text-[11px] text-amber-400/85 tabular-nums">
+          {{ (pending_withdrawal_total or 0)|toman }} در انتظار واریز
+        </p>
+        {% endif %}
       </div>
+      {% set _can_withdraw = (withdrawable_balance or 0)|int > 0 %}
       <button type="button"
               data-open-withdraw-modal
               data-withdrawable-int="{{ (withdrawable_balance or 0)|int }}"
-              class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-amber-500 to-amber-400 text-slate-900 text-sm font-bold py-3 shadow-lg shadow-amber-900/25 hover:from-amber-400 hover:to-amber-300 transition">
+              {% if not _can_withdraw %}disabled aria-disabled="true"{% endif %}
+              class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-amber-500 to-amber-400 text-slate-900 text-sm font-bold py-3 shadow-lg shadow-amber-900/25 hover:from-amber-400 hover:to-amber-300 transition{% if not _can_withdraw %} opacity-45 cursor-not-allowed hover:from-amber-500 hover:to-amber-400{% endif %}">
         <i class="fas fa-wallet text-sm"></i>
         درخواست برداشت
       </button>

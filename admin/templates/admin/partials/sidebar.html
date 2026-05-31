@@ -51,6 +51,18 @@
       <span class="text-sm font-medium">پورسانت‌ها</span>
     </a>
 
+    <!-- مالی -->
+    <a href="{{ url_for('admin.financial_withdrawals') }}" 
+       class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition focusable
+              {% if _endpoint == 'admin.financial_withdrawals' %}
+                bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400
+              {% else %}
+                text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800
+              {% endif %}">
+      <i class="fa-solid fa-money-bill-transfer w-5"></i>
+      <span class="text-sm font-medium">مالی</span>
+    </a>
+
     <!-- فایل‌های همکار -->
     <a href="{{ url_for('admin.express_partner_files') }}" 
        class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition focusable

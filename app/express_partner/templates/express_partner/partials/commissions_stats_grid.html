@@ -41,7 +41,12 @@
       <div class="min-w-0 flex-1">
         <div class="text-[11px] font-semibold text-blue-400">فروش‌های تأیید شده</div>
         <div class="mt-1 text-lg font-bold text-blue-100 tabular-nums leading-tight">{{ (approved_commission or 0)|toman }}</div>
-        <div class="mt-0.5 text-[10px] text-slate-500 tabular-nums">{{ approved_count or 0 }} معامله</div>
+        <div class="mt-0.5 text-[10px] text-slate-500 tabular-nums">
+          {{ approved_count or 0 }} معامله
+          {% if (pending_withdrawal_total or 0)|int > 0 %}
+          · <span class="text-amber-400/90">{{ (pending_withdrawal_total or 0)|toman }} در جریان برداشت</span>
+          {% endif %}
+        </div>
       </div>
       <div class="w-10 h-10 rounded-full bg-blue-500/15 border border-blue-500/25 flex items-center justify-center shrink-0 text-blue-400">
         <i class="fas fa-shield-alt text-sm"></i>

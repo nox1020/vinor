@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import json
 import re
+import random
 import uuid
 from datetime import datetime, timedelta
 from functools import wraps
@@ -50,6 +51,7 @@ def _save_express_document(file, land_code):
     file.save(file_path)
     return filename
 from app.api.push import _load_subs, _send_one, _save_subs, send_push_batch_background
+from app.express_partner.partner_withdrawals import admin_row_dict, apply_paid_withdrawal_to_commissions
 from app.services.sms import send_sms_template, send_sms_direct, send_sms_code
 from app.utils.storage import load_users, load_reports, save_reports, save_ads
 from app.utils.storage import (
@@ -71,6 +73,7 @@ from app.utils.storage import (
     load_express_views,
     load_express_partner_views,
     load_partner_routines, load_partner_routines_cached,
+    load_partner_withdrawals, save_partner_withdrawals,
 )
 
 def _ad_owner_id(ad: Dict[str, Any]) -> Optional[str]:
@@ -3592,6 +3595,110 @@ def express_commission_edit(cid: int):
     
     # GET - نمایش فرم ویرایش
     return render_template('admin/edit_commission.html', commission=commission)
+
+# -----------------------------------------------------------------------------
+# مالی — درخواست‌های برداشت همکاران
+# -----------------------------------------------------------------------------
+def _partner_name_lookup() -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    try:
+        for p in load_express_partners() or []:
+            if not isinstance(p, dict):
+                continue
+            ph = str(p.get('phone') or '').strip()
+            if ph:
+                out[ph] = str(p.get('name') or '').strip()
+    except Exception:
+        pass
+    return out
+
+
+@admin_bp.route('/financial/withdrawals', endpoint='financial_withdrawals')
+@login_required
+def financial_withdrawals():
+    items_raw = load_partner_withdrawals() or []
+    if not isinstance(items_raw, list):
+        items_raw = []
+    name_map = _partner_name_lookup()
+    items = []
+    for row in items_raw:
+        if not isinstance(row, dict):
+            continue
+        r = dict(row)
+        ph = str(r.get('phone') or '').strip()
+        if not (r.get('partner_name') or '').strip() and ph in name_map:
+            r['partner_name'] = name_map[ph]
+        items.append(admin_row_dict(r))
+    items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    pending_count = sum(1 for x in items if (x.get('status') or '') == 'pending')
+    return render_template(
+        'admin/financial_withdrawals.html',
+        items=items,
+        pending_count=pending_count,
+    )
+
+
+@admin_bp.post('/financial/withdrawals/<wid>/status')
+@login_required
+def financial_withdrawal_status(wid: str):
+    new_status = (request.form.get('status') or '').strip()
+    admin_note = (request.form.get('admin_note') or '').strip()
+    allowed = {'pending', 'approved', 'processing', 'paid', 'rejected'}
+    if new_status not in allowed:
+        flash('وضعیت نامعتبر است.', 'error')
+        return redirect(url_for('admin.financial_withdrawals'))
+
+    items = load_partner_withdrawals() or []
+    if not isinstance(items, list):
+        items = []
+    found = False
+    old_status = None
+    withdrawal_row = None
+    for row in items:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get('id') or '') == str(wid):
+            old_status = (str(row.get('status') or 'pending')).strip()
+            withdrawal_row = row
+            row['status'] = new_status
+            row['updated_at'] = iso_z(utcnow())
+            if admin_note:
+                row['admin_note'] = admin_note
+            found = True
+            break
+    if not found:
+        flash('درخواست یافت نشد.', 'error')
+        return redirect(url_for('admin.financial_withdrawals'))
+    try:
+        save_partner_withdrawals(items)
+        if (
+            new_status == 'paid'
+            and old_status != 'paid'
+            and withdrawal_row
+        ):
+            now_iso = iso_z(utcnow())
+            commissions = load_express_commissions() or []
+            if not isinstance(commissions, list):
+                commissions = []
+            allocated = apply_paid_withdrawal_to_commissions(
+                commissions,
+                str(withdrawal_row.get('phone') or '').strip(),
+                int(withdrawal_row.get('amount') or 0),
+                str(withdrawal_row.get('id') or ''),
+                now_iso,
+            )
+            if allocated > 0:
+                save_express_commissions(commissions)
+            elif int(withdrawal_row.get('amount') or 0) > 0:
+                current_app.logger.warning(
+                    'withdrawal %s marked paid but no approved commission allocated',
+                    wid,
+                )
+        flash('وضعیت درخواست بروزرسانی شد.', 'success')
+    except Exception:
+        current_app.logger.exception('save_partner_withdrawals status failed')
+        flash('خطا در ذخیره.', 'error')
+    return redirect(url_for('admin.financial_withdrawals'))
 
 # -----------------------------------------------------------------------------
 # Express Partner Files (upload/list/download/delete by admin)

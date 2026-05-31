@@ -95,6 +95,8 @@
       return refreshPromise;
     }
 
+    window.__vinorCommissionsRefresh = performCommissionsRefresh;
+
     function pullEnabled() {
       try { return window.matchMedia('(max-width: 1023px)').matches; } catch (_) { return true; }
     }
@@ -141,9 +143,42 @@
 <script>
   (function () {
     var API = '/express/partner/bank-accounts';
+    var WITHDRAW_API = '/express/partner/withdrawals/request';
     var overlay = window.vinorExpressModalOverlay;
     var modal = document.getElementById('vnWithdrawModal');
     if (!modal) return;
+
+    function readCsrfToken() {
+      var cfg = window.VINOR_NOTIFY_CFG || {};
+      if (cfg.csrfToken) return cfg.csrfToken;
+      try {
+        var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : '';
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function apiPostHeaders() {
+      var h = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      };
+      var csrf = readCsrfToken();
+      if (csrf) h['X-CSRFToken'] = csrf;
+      return h;
+    }
+
+    function parseJsonResponse(r) {
+      return r.text().then(function (text) {
+        try {
+          return { ok: r.ok, j: JSON.parse(text || '{}') };
+        } catch (_) {
+          return { ok: false, j: { success: false, error: r.status === 302 || r.redirected ? 'csrf' : 'bad_response' } };
+        }
+      });
+    }
 
     var bankModal = document.getElementById('vnBankPickerModal');
     var bankAddModal = document.getElementById('vnBankAddModal');
@@ -181,10 +216,13 @@
     var input = document.getElementById('vnWithdrawAmountInput');
     var fillAll = document.getElementById('vnWithdrawFillAllBtn');
     var submit = document.getElementById('vnWithdrawSubmitBtn');
-    var supportUrl = (modal.getAttribute('data-support-url') || '').trim();
+    var elWithdrawErr = document.getElementById('vnWithdrawFormError');
+    var elWithdrawSuccess = document.getElementById('vnWithdrawFormSuccess');
 
     var maxWithdraw = 0;
     var selectedBankSummary = '';
+    var selectedBankId = '';
+    var withdrawSubmitting = false;
     var bankCatalogCache = null;
     var lastAddedAccountId = null;
     var lastAddedWasDefault = false;
@@ -194,23 +232,15 @@
     var elSheba = document.getElementById('vnBankAddSheba');
     var elHolder = document.getElementById('vnBankAddHolder');
     var elFormErr = document.getElementById('vnBankAddFormError');
-    var elCfErr = document.getElementById('vnBankAddConfirmError');
-    var elCfBank = document.getElementById('vnBankAddCfBank');
-    var elCfPan = document.getElementById('vnBankAddCfPan');
-    var elCfShebaRow = document.getElementById('vnBankAddCfShebaRow');
-    var elCfSheba = document.getElementById('vnBankAddCfSheba');
-    var elCfHolder = document.getElementById('vnBankAddCfHolder');
     var elViewForm = document.getElementById('vnBankAddViewForm');
-    var elViewConfirm = document.getElementById('vnBankAddViewConfirm');
     var elViewSuccess = document.getElementById('vnBankAddViewSuccess');
     var elFooterForm = document.getElementById('vnBankAddFooterForm');
-    var elFooterConfirm = document.getElementById('vnBankAddFooterConfirm');
     var elFooterSuccess = document.getElementById('vnBankAddFooterSuccess');
     var elSuccessCard = document.getElementById('vnBankAddSuccessCard');
     var elDefaultToggle = document.getElementById('vnBankAddDefaultToggle');
-    var btnContinue = document.getElementById('vnBankAddBtnContinue');
     var btnSubmit = document.getElementById('vnBankAddBtnSubmit');
     var btnFinish = document.getElementById('vnBankAddBtnFinish');
+    var bankAddSubmitting = false;
 
     function toFaDigits(s) {
       var p = '۰۱۲۳۴۵۶۷۸۹';
@@ -241,21 +271,60 @@
       input.value = v > 0 ? String(v) : '';
     }
 
-    function syncSubmitHref() {
-      if (!submit || !supportUrl) return;
+    function syncSubmitState() {
       var amt = parseInputDigits();
-      try {
-        var u = new URL(supportUrl, window.location.origin);
-        if (amt > 0) u.searchParams.set('withdraw_amount', String(amt));
-        if (selectedBankSummary) u.searchParams.set('bank_account', selectedBankSummary);
-        submit.setAttribute('href', u.pathname + u.search + u.hash);
-      } catch (_) {
-        var q = [];
-        if (amt > 0) q.push('withdraw_amount=' + encodeURIComponent(String(amt)));
-        if (selectedBankSummary) q.push('bank_account=' + encodeURIComponent(selectedBankSummary));
-        var joiner = supportUrl.indexOf('?') >= 0 ? '&' : '?';
-        submit.setAttribute('href', supportUrl + (q.length ? joiner + q.join('&') : ''));
+      var ok = !withdrawSubmitting && amt > 0 && maxWithdraw > 0 && amt <= maxWithdraw && !!selectedBankId;
+      if (submit) {
+        submit.disabled = !ok;
       }
+    }
+
+    function applyDefaultBankSelection(accounts, defaultId) {
+      if (!accounts || !accounts.length) {
+        selectedBankId = '';
+        selectedBankSummary = '';
+        if (bankSummaryEl) bankSummaryEl.textContent = 'انتخاب حساب بانکی';
+        syncSubmitState();
+        return;
+      }
+      var def = null;
+      if (defaultId) {
+        def = accounts.find(function (a) { return String(a.id || '') === String(defaultId); }) || null;
+      }
+      if (!def) {
+        def = accounts.find(function (a) { return a.is_default; }) || accounts[0];
+      }
+      selectedBankId = def && def.id ? String(def.id) : '';
+      selectedBankSummary = def && def.summary ? String(def.summary) : '';
+      if (bankSummaryEl) {
+        bankSummaryEl.textContent = selectedBankSummary || 'انتخاب حساب بانکی';
+      }
+      syncSubmitState();
+    }
+
+    function prefetchWithdrawBankData() {
+      return fetch(API + '/data', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d || !d.success) return d;
+          bankCatalogCache = d.banks || [];
+          if (typeof d.withdrawable_balance === 'number') {
+            maxWithdraw = Math.max(0, parseInt(String(d.withdrawable_balance), 10) || 0);
+            if (balanceEl) balanceEl.textContent = formatToman(maxWithdraw);
+          }
+          applyDefaultBankSelection(d.accounts || [], d.default_account_id || '');
+          return d;
+        })
+        .catch(function () { return null; });
+    }
+
+    function withdrawErrorMessage(code) {
+      if (code === 'min_amount') return 'حداقل مبلغ برداشت ۱۰٬۰۰۰ تومان است.';
+      if (code === 'missing_bank') return 'حساب بانکی را انتخاب کنید.';
+      if (code === 'invalid_bank') return 'حساب بانکی نامعتبر است.';
+      if (code === 'insufficient_balance') return 'مبلغ بیشتر از موجودی قابل برداشت است.';
+      if (code === 'csrf') return 'خطای امنیتی. صفحه را رفرش کنید.';
+      return 'ثبت درخواست انجام نشد.';
     }
 
     function escAttr(s) {
@@ -362,7 +431,7 @@
           : '';
         return (
           '<button type="button" class="vn-bank-account w-full rounded-2xl border border-white/10 bg-[#252836] p-3 text-start hover:border-white/18 transition" dir="rtl" ' +
-          'data-bank-summary="' + escAttr(a.summary || '') + '" data-default-account="' + (a.is_default ? '1' : '0') + '">' +
+          'data-bank-id="' + escAttr(a.id || '') + '" data-bank-summary="' + escAttr(a.summary || '') + '" data-default-account="' + (a.is_default ? '1' : '0') + '">' +
           '<div class="flex items-start justify-between gap-2">' +
           '<div class="flex items-center gap-2 min-w-0">' +
           '<span class="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-white text-[10px] font-extrabold leading-none" style="background:' + escAttr(a.color || '#455a64') + '">' + escAttr(a.abbr || '') + '</span>' +
@@ -420,25 +489,27 @@
     function resetAddWizard() {
       lastAddedAccountId = null;
       lastAddedWasDefault = false;
+      bankAddSubmitting = false;
       if (elFormErr) { elFormErr.classList.add('hidden'); elFormErr.textContent = ''; }
-      if (elCfErr) { elCfErr.classList.add('hidden'); elCfErr.textContent = ''; }
       if (elPan) elPan.value = '';
       if (elSheba) elSheba.value = '';
       if (elHolder) elHolder.value = '';
       if (elBank) elBank.value = '';
       if (elViewForm) elViewForm.classList.remove('hidden');
-      if (elViewConfirm) elViewConfirm.classList.add('hidden');
       if (elViewSuccess) elViewSuccess.classList.add('hidden');
       if (elFooterForm) elFooterForm.classList.remove('hidden');
-      if (elFooterConfirm) elFooterConfirm.classList.add('hidden');
       if (elFooterSuccess) elFooterSuccess.classList.add('hidden');
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'ثبت حساب';
+      }
       setAddStepper(1);
     }
 
     function setAddStepper(activeStep) {
       if (!bankAddModal) return;
-      var labels = ['اطلاعات کارت', 'تأیید اطلاعات', 'اتمام'];
-      var nums = ['۱', '۲', '۳'];
+      var labels = ['اطلاعات کارت', 'اتمام'];
+      var nums = ['۱', '۲'];
       bankAddModal.querySelectorAll('.vn-add-step').forEach(function (w) {
         var k = parseInt(w.getAttribute('data-step'), 10);
         var circle = w.querySelector('.vn-add-step-circle');
@@ -446,15 +517,15 @@
         if (!circle || !label) return;
         var done = k < activeStep;
         var cur = k === activeStep;
-        if (activeStep === 3) {
-          done = k < 3;
-          cur = k === 3;
+        if (activeStep === 2) {
+          done = k < 2;
+          cur = k === 2;
         }
-        w.classList.toggle('opacity-40', activeStep < 3 && !done && !cur);
-        w.classList.toggle('opacity-100', done || cur || activeStep === 3);
+        w.classList.toggle('opacity-40', activeStep < 2 && !done && !cur);
+        w.classList.toggle('opacity-100', done || cur || activeStep === 2);
         circle.className = 'vn-add-step-circle w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 ';
         label.className = 'vn-add-step-label text-[9px] leading-tight px-0.5 ';
-        if (activeStep === 3) {
+        if (activeStep === 2) {
           circle.className += 'border-emerald-500 bg-emerald-500 text-slate-900';
           circle.innerHTML = '<i class="fas fa-check text-[11px]"></i>';
           label.className += 'text-emerald-400 font-semibold';
@@ -480,11 +551,58 @@
 
     function showAddView(which) {
       if (elViewForm) elViewForm.classList.toggle('hidden', which !== 'form');
-      if (elViewConfirm) elViewConfirm.classList.toggle('hidden', which !== 'confirm');
       if (elViewSuccess) elViewSuccess.classList.toggle('hidden', which !== 'success');
       if (elFooterForm) elFooterForm.classList.toggle('hidden', which !== 'form');
-      if (elFooterConfirm) elFooterConfirm.classList.toggle('hidden', which !== 'confirm');
       if (elFooterSuccess) elFooterSuccess.classList.toggle('hidden', which !== 'success');
+    }
+
+    function bankAddErrorMessage(msg) {
+      if (msg === 'invalid_pan') return 'شماره کارت نامعتبر است.';
+      if (msg === 'invalid_bank') return 'بانک نامعتبر است.';
+      if (msg === 'invalid_holder') return 'نام صاحب حساب نامعتبر است.';
+      if (msg === 'invalid_sheba') return 'شماره شبا نامعتبر است.';
+      return 'ثبت انجام نشد.';
+    }
+
+    function validateBankAddForm() {
+      if (elFormErr) { elFormErr.classList.add('hidden'); elFormErr.textContent = ''; }
+      var bk = elBank && elBank.value;
+      var pan = (elPan && elPan.value) ? elPan.value.replace(/[^\d]/g, '') : '';
+      var holder = (elHolder && elHolder.value) ? elHolder.value.trim() : '';
+      if (!bk) {
+        if (elFormErr) { elFormErr.textContent = 'بانک را انتخاب کنید.'; elFormErr.classList.remove('hidden'); }
+        return null;
+      }
+      if (pan.length !== 16) {
+        if (elFormErr) { elFormErr.textContent = 'شماره کارت باید ۱۶ رقم باشد.'; elFormErr.classList.remove('hidden'); }
+        return null;
+      }
+      if (holder.length < 2) {
+        if (elFormErr) { elFormErr.textContent = 'نام صاحب حساب را وارد کنید.'; elFormErr.classList.remove('hidden'); }
+        return null;
+      }
+      var sheba = (elSheba && elSheba.value) ? elSheba.value.trim() : '';
+      return { bank_key: bk, pan: pan, holder_name: holder, sheba: sheba };
+    }
+
+    function renderBankAddSuccess(acc) {
+      lastAddedAccountId = acc.id || '';
+      lastAddedWasDefault = !!acc.is_default;
+      if (elSuccessCard) {
+        var badge = acc.is_default ? '<div class="flex justify-start mt-2"><span class="rounded-md bg-emerald-500/20 text-emerald-400 text-[9px] font-bold px-1.5 py-0.5 border border-emerald-500/30">پیش‌فرض</span></div>' : '';
+        elSuccessCard.innerHTML =
+          '<div class="rounded-2xl border border-white/10 bg-[#252836] p-3" dir="rtl">' +
+          '<div class="flex items-start justify-between gap-2">' +
+          '<div class="flex items-center gap-2 min-w-0">' +
+          '<span class="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-white text-[10px] font-extrabold" style="background:' + escAttr(acc.color || '#455a64') + '">' + escAttr(acc.abbr || '') + '</span>' +
+          '<span class="text-sm font-bold text-white truncate">' + escAttr(acc.bank_name || '') + '</span></div>' +
+          '<span class="text-slate-400"><i class="fas fa-ellipsis-v"></i></span></div>' +
+          '<p dir="ltr" class="text-[13px] font-medium text-slate-200 text-end mt-2 tabular-nums">' + escAttr(acc.masked_pan || '') + '</p>' +
+          '<p class="text-[10px] text-slate-500 mt-1 text-start">' + escAttr(acc.holder_name || '') + '</p>' + badge + '</div>';
+      }
+      if (elDefaultToggle) elDefaultToggle.checked = !!acc.is_default;
+      showAddView('success');
+      setAddStepper(2);
     }
 
     function openBankAdd() {
@@ -514,13 +632,19 @@
       maxWithdraw = Math.max(0, parseInt(String(raw || '0'), 10) || 0);
       if (balanceEl) balanceEl.textContent = formatToman(maxWithdraw);
       setInputFromInt(0);
-      syncSubmitHref();
+      selectedBankId = '';
+      selectedBankSummary = '';
+      if (bankSummaryEl) bankSummaryEl.textContent = 'در حال بارگذاری…';
+      if (elWithdrawErr) { elWithdrawErr.classList.add('hidden'); elWithdrawErr.textContent = ''; }
+      if (elWithdrawSuccess) { elWithdrawSuccess.classList.add('hidden'); elWithdrawSuccess.textContent = ''; }
+      syncSubmitState();
       hoistCommissionModals();
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
       try { void modal.offsetWidth; } catch (_) {}
       modal.classList.add('vn-withdraw-modal--open');
       overlayOpen();
+      prefetchWithdrawBankData();
       requestAnimationFrame(function () {
         try { if (input) input.focus(); } catch (_) {}
       });
@@ -542,7 +666,9 @@
       if (!t || !t.closest) return;
       if (t.closest('[data-open-withdraw-modal]')) {
         e.preventDefault();
-        openModal(t.closest('[data-open-withdraw-modal]'));
+        var wdBtn = t.closest('[data-open-withdraw-modal]');
+        if (wdBtn && (wdBtn.disabled || wdBtn.getAttribute('aria-disabled') === 'true')) return;
+        openModal(wdBtn);
         return;
       }
       if (t.closest('[data-open-bank-picker]')) {
@@ -594,11 +720,13 @@
         if (bankConfirm.disabled) return;
         var row = bankModal && bankModal.querySelector('.vn-bank-account--selected');
         var sum = row && row.getAttribute('data-bank-summary');
+        var bid = row && row.getAttribute('data-bank-id');
+        if (bid) selectedBankId = bid;
         if (sum && bankSummaryEl) {
           selectedBankSummary = sum;
           bankSummaryEl.textContent = sum;
         }
-        syncSubmitHref();
+        syncSubmitState();
         closeBankPicker();
       });
     }
@@ -610,81 +738,44 @@
       });
     }
 
-    if (btnContinue) {
-      btnContinue.addEventListener('click', function () {
-        if (elFormErr) { elFormErr.classList.add('hidden'); elFormErr.textContent = ''; }
-        var bk = elBank && elBank.value;
-        var pan = (elPan && elPan.value) ? elPan.value.replace(/[^\d]/g, '') : '';
-        var holder = (elHolder && elHolder.value) ? elHolder.value.trim() : '';
-        if (!bk) {
-          if (elFormErr) { elFormErr.textContent = 'بانک را انتخاب کنید.'; elFormErr.classList.remove('hidden'); }
-          return;
-        }
-        if (pan.length !== 16) {
-          if (elFormErr) { elFormErr.textContent = 'شماره کارت باید ۱۶ رقم باشد.'; elFormErr.classList.remove('hidden'); }
-          return;
-        }
-        if (holder.length < 2) {
-          if (elFormErr) { elFormErr.textContent = 'نام صاحب حساب را وارد کنید.'; elFormErr.classList.remove('hidden'); }
-          return;
-        }
-        var bname = elBank.options[elBank.selectedIndex] ? elBank.options[elBank.selectedIndex].text : '';
-        if (elCfBank) elCfBank.textContent = bname;
-        if (elCfPan) elCfPan.textContent = pan.slice(0, 4) + ' **** **** ' + pan.slice(-4);
-        var sh = (elSheba && elSheba.value) ? elSheba.value.trim() : '';
-        if (sh && elCfShebaRow && elCfSheba) {
-          elCfSheba.textContent = sh;
-          elCfShebaRow.classList.remove('hidden');
-        } else if (elCfShebaRow) {
-          elCfShebaRow.classList.add('hidden');
-        }
-        if (elCfHolder) elCfHolder.textContent = holder;
-        showAddView('confirm');
-        setAddStepper(2);
-      });
-    }
-
     if (btnSubmit) {
       btnSubmit.addEventListener('click', function () {
-        if (elCfErr) { elCfErr.classList.add('hidden'); elCfErr.textContent = ''; }
-        var bk = elBank && elBank.value;
-        var pan = (elPan && elPan.value) ? elPan.value.replace(/[^\d]/g, '') : '';
-        var holder = (elHolder && elHolder.value) ? elHolder.value.trim() : '';
-        var sheba = (elSheba && elSheba.value) ? elSheba.value.trim() : '';
+        if (bankAddSubmitting) return;
+        var payload = validateBankAddForm();
+        if (!payload) return;
+        bankAddSubmitting = true;
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = 'در حال ثبت…';
         fetch(API + '/add', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ bank_key: bk, pan: pan, holder_name: holder, sheba: sheba })
+          headers: apiPostHeaders(),
+          body: JSON.stringify(payload)
         })
-          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(parseJsonResponse)
           .then(function (x) {
             if (!x.ok || !x.j.success) {
               var msg = (x.j && x.j.error) ? x.j.error : 'خطا';
-              if (elCfErr) { elCfErr.textContent = msg === 'invalid_pan' ? 'شماره کارت نامعتبر است.' : (msg === 'invalid_bank' ? 'بانک نامعتبر است.' : (msg === 'invalid_holder' ? 'نام صاحب حساب نامعتبر است.' : (msg === 'invalid_sheba' ? 'شماره شبا نامعتبر است.' : 'ثبت انجام نشد.'))); elCfErr.classList.remove('hidden'); }
+              if (elFormErr) {
+                elFormErr.textContent = msg === 'csrf' ? 'خطای امنیتی. صفحه را رفرش کنید و دوباره تلاش کنید.' : bankAddErrorMessage(msg);
+                elFormErr.classList.remove('hidden');
+              }
               return;
             }
-            var acc = x.j.account || {};
-            lastAddedAccountId = acc.id || '';
-            lastAddedWasDefault = !!acc.is_default;
-            if (elSuccessCard) {
-              var badge = acc.is_default ? '<div class="flex justify-start mt-2"><span class="rounded-md bg-emerald-500/20 text-emerald-400 text-[9px] font-bold px-1.5 py-0.5 border border-emerald-500/30">پیش‌فرض</span></div>' : '';
-              elSuccessCard.innerHTML =
-                '<div class="rounded-2xl border border-white/10 bg-[#252836] p-3" dir="rtl">' +
-                '<div class="flex items-start justify-between gap-2">' +
-                '<div class="flex items-center gap-2 min-w-0">' +
-                '<span class="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-white text-[10px] font-extrabold" style="background:' + escAttr(acc.color || '#455a64') + '">' + escAttr(acc.abbr || '') + '</span>' +
-                '<span class="text-sm font-bold text-white truncate">' + escAttr(acc.bank_name || '') + '</span></div>' +
-                '<span class="text-slate-400"><i class="fas fa-ellipsis-v"></i></span></div>' +
-                '<p dir="ltr" class="text-[13px] font-medium text-slate-200 text-end mt-2 tabular-nums">' + escAttr(acc.masked_pan || '') + '</p>' +
-                '<p class="text-[10px] text-slate-500 mt-1 text-start">' + escAttr(acc.holder_name || '') + '</p>' + badge + '</div>';
-            }
-            if (elDefaultToggle) elDefaultToggle.checked = !!acc.is_default;
-            showAddView('success');
-            setAddStepper(3);
+            renderBankAddSuccess(x.j.account || {});
           })
           .catch(function () {
-            if (elCfErr) { elCfErr.textContent = 'خطا در ارتباط با سرور.'; elCfErr.classList.remove('hidden'); }
+            if (elFormErr) {
+              elFormErr.textContent = 'خطا در ارتباط با سرور.';
+              elFormErr.classList.remove('hidden');
+            }
+          })
+          .finally(function () {
+            bankAddSubmitting = false;
+            if (btnSubmit && elViewForm && !elViewForm.classList.contains('hidden')) {
+              btnSubmit.disabled = false;
+              btnSubmit.textContent = 'ثبت حساب';
+            }
           });
       });
     }
@@ -701,7 +792,7 @@
         fetch(API + '/default', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          headers: apiPostHeaders(),
           body: JSON.stringify({ id: id, is_default: want })
         })
           .finally(function () {
@@ -711,10 +802,75 @@
       });
     }
 
+    if (submit) {
+      submit.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (withdrawSubmitting || submit.disabled) return;
+        var amt = parseInputDigits();
+        if (elWithdrawErr) { elWithdrawErr.classList.add('hidden'); elWithdrawErr.textContent = ''; }
+        if (elWithdrawSuccess) { elWithdrawSuccess.classList.add('hidden'); elWithdrawSuccess.textContent = ''; }
+        if (!selectedBankId) {
+          if (elWithdrawErr) { elWithdrawErr.textContent = 'حساب بانکی را انتخاب کنید.'; elWithdrawErr.classList.remove('hidden'); }
+          return;
+        }
+        if (amt <= 0) {
+          if (elWithdrawErr) { elWithdrawErr.textContent = 'مبلغ برداشت را وارد کنید.'; elWithdrawErr.classList.remove('hidden'); }
+          return;
+        }
+        withdrawSubmitting = true;
+        syncSubmitState();
+        submit.textContent = 'در حال ثبت…';
+        fetch(WITHDRAW_API, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: apiPostHeaders(),
+          body: JSON.stringify({ amount: amt, bank_account_id: selectedBankId })
+        })
+          .then(parseJsonResponse)
+          .then(function (x) {
+            if (!x.ok || !x.j.success) {
+              var msg = (x.j && x.j.error) ? x.j.error : 'خطا';
+              if (elWithdrawErr) {
+                elWithdrawErr.textContent = withdrawErrorMessage(msg);
+                elWithdrawErr.classList.remove('hidden');
+              }
+              return;
+            }
+            var req = x.j.request || {};
+            if (typeof req.withdrawable_balance === 'number') {
+              maxWithdraw = Math.max(0, parseInt(String(req.withdrawable_balance), 10) || 0);
+              if (balanceEl) balanceEl.textContent = formatToman(maxWithdraw);
+            }
+            setInputFromInt(0);
+            if (elWithdrawSuccess) {
+              elWithdrawSuccess.textContent = 'درخواست برداشت با موفقیت ثبت شد. پس از بررسی، وجه واریز می‌شود.';
+              elWithdrawSuccess.classList.remove('hidden');
+            }
+            if (window.__vinorCommissionsRefresh) {
+              window.__vinorCommissionsRefresh().catch(function () {});
+            }
+            window.setTimeout(function () { closeModal(); }, 1800);
+          })
+          .catch(function () {
+            if (elWithdrawErr) {
+              elWithdrawErr.textContent = 'خطا در ارتباط با سرور.';
+              elWithdrawErr.classList.remove('hidden');
+            }
+          })
+          .finally(function () {
+            withdrawSubmitting = false;
+            if (submit) {
+              submit.innerHTML = '<i class="fas fa-wallet text-base"></i> درخواست برداشت';
+            }
+            syncSubmitState();
+          });
+      });
+    }
+
     if (fillAll) {
       fillAll.addEventListener('click', function () {
         setInputFromInt(maxWithdraw);
-        syncSubmitHref();
+        syncSubmitState();
       });
     }
 
@@ -723,7 +879,7 @@
         var add = parseInt(chip.getAttribute('data-chip') || '0', 10) || 0;
         var cur = parseInputDigits();
         setInputFromInt(cur + add);
-        syncSubmitHref();
+        syncSubmitState();
       });
     });
 
@@ -733,7 +889,7 @@
         var v = parseInt(digits || '0', 10) || 0;
         if (maxWithdraw > 0 && v > maxWithdraw) v = maxWithdraw;
         input.value = v > 0 ? String(v) : '';
-        syncSubmitHref();
+        syncSubmitState();
       });
     }
 

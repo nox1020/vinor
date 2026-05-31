@@ -82,14 +82,17 @@
         <i class="fas fa-shield-alt text-emerald-500 text-sm mt-0.5 shrink-0"></i>
         <p class="text-[11px] leading-relaxed text-slate-400">برداشت‌ها طی ۱ تا ۳ ساعت کاری انجام می‌شود.</p>
       </div>
+      <p id="vnWithdrawFormError" class="hidden text-xs text-red-400 text-start"></p>
+      <p id="vnWithdrawFormSuccess" class="hidden text-xs text-emerald-400 text-start"></p>
     </div>
     <div class="shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-white/5 bg-[#1C1F2A]">
-      <a id="vnWithdrawSubmitBtn"
-         href="{{ url_for('express_partner.support') }}"
-         class="flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-900 text-sm font-bold py-3.5 shadow-lg shadow-amber-900/20 transition">
+      <button type="button"
+              id="vnWithdrawSubmitBtn"
+              disabled
+              class="flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-900 text-sm font-bold py-3.5 shadow-lg shadow-amber-900/20 transition disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed">
         <i class="fas fa-wallet text-base"></i>
         درخواست برداشت
-      </a>
+      </button>
     </div>
   </div>
 </div>
