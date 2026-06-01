@@ -1,0 +1,46 @@
+{# کارت خلاصه درآمد — مطابق طرح UI #}
+{% set s = comm_stats if comm_stats is defined else {} %}
+{% set _withdrawable = withdrawable_balance if withdrawable_balance is defined else s.get('withdrawable_balance', 0) %}
+{% set _pending_amt = s.get('pending_amount', pending_commission or 0) %}
+{% set _active_wd = s.get('in_withdrawal_amount', pending_withdrawal_total or 0) %}
+{% set _can_withdraw = (_withdrawable or 0)|int > 0 %}
+
+<section data-tour="commissions-summary" class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
+  <div class="px-4 pt-4 pb-3 flex items-center justify-between gap-3 border-b border-white/5">
+    <h2 class="text-sm font-bold text-white">خلاصه درآمد شما</h2>
+    <div class="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+      <i class="fas fa-chart-line text-sm" aria-hidden="true"></i>
+    </div>
+  </div>
+
+  <div class="px-4 py-4">
+    <p class="text-xs text-slate-400 mb-1">موجودی قابل برداشت</p>
+    <p class="text-3xl font-extrabold text-white tabular-nums tracking-tight leading-none">{{ (_withdrawable or 0)|toman }}</p>
+
+    <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5">
+      <div class="min-w-0">
+        <div class="flex items-center gap-1.5 mb-1">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0" aria-hidden="true"></span>
+          <span class="text-[10px] text-slate-400 leading-tight">درخواست برداشت فعال</span>
+        </div>
+        <p class="text-sm font-bold text-amber-300 tabular-nums">{{ (_active_wd or 0)|toman }}</p>
+      </div>
+      <div class="min-w-0 text-start">
+        <div class="flex items-center justify-start gap-1.5 mb-1">
+          <i class="fas fa-clock text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>
+          <span class="text-[10px] text-slate-400 leading-tight">تومان در انتظار تأیید</span>
+        </div>
+        <p class="text-sm font-bold text-white tabular-nums">{{ (_pending_amt or 0)|toman }}</p>
+      </div>
+    </div>
+
+    <button type="button"
+            data-open-withdraw-modal
+            data-withdrawable-int="{{ (_withdrawable or 0)|int }}"
+            {% if not _can_withdraw %}disabled aria-disabled="true"{% endif %}
+            class="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-amber-400 to-amber-500 text-slate-900 text-sm font-bold py-3.5 shadow-lg shadow-amber-900/20 hover:from-amber-300 hover:to-amber-400 transition{% if not _can_withdraw %} opacity-45 cursor-not-allowed hover:from-amber-400 hover:to-amber-500{% endif %}">
+      <i class="fas fa-wallet text-sm" aria-hidden="true"></i>
+      درخواست برداشت
+    </button>
+  </div>
+</section>
