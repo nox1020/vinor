@@ -53,6 +53,7 @@ from .partner_withdrawals import (
     build_partner_txn_feed,
     partner_commission_dashboard,
     reconcile_paid_withdrawals,
+    cancel_partner_withdrawal,
 )
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
 from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
@@ -1870,7 +1871,6 @@ def commissions_page():
     comm_stats = _partner_commission_stats(me_phone, my_comms)
     withdrawable_balance = comm_stats["withdrawable_balance"]
     pending_withdrawal_total = comm_stats["in_withdrawal_amount"]
-    withdrawal_items = _partner_withdrawal_items(me_phone)
 
     _attach_commission_txn_labels(my_comms)
     txn_items = _partner_txn_items(me_phone, my_comms)
@@ -1902,7 +1902,6 @@ def commissions_page():
         withdrawable_balance=withdrawable_balance,
         requestable_balance=withdrawable_balance,
         pending_withdrawal_total=pending_withdrawal_total,
-        withdrawal_items=withdrawal_items,
         partner_name=partner_name,
         hide_header=True,
         SHOW_SUBMIT_BUTTON=False,
@@ -2168,6 +2167,34 @@ def withdrawals_request():
             'withdrawable_balance': _partner_withdrawable_balance(me_phone),
             'requestable_balance': _partner_requestable_balance(me_phone),
         },
+    })
+
+
+@express_partner_bp.post('/withdrawals/<wid>/cancel', endpoint='withdrawals_cancel')
+@require_partner_access(json_response=True)
+def withdrawals_cancel(wid: str):
+    """لغو درخواست برداشت در وضعیت «در انتظار بررسی» توسط همکار."""
+    me_phone = (session.get("user_phone") or "").strip()
+    all_wd = load_partner_withdrawals() or []
+    if not isinstance(all_wd, list):
+        all_wd = []
+    commissions = _express_commissions_cached() or []
+    now_iso = datetime.utcnow().isoformat() + 'Z'
+    ok, err = cancel_partner_withdrawal(all_wd, me_phone, wid, commissions, now_iso)
+    if not ok:
+        code = err or 'cancel_failed'
+        status = 404 if code == 'not_found' else 400
+        return jsonify({'success': False, 'error': code}), status
+    try:
+        save_partner_withdrawals(all_wd)
+        save_express_commissions(commissions)
+    except Exception:
+        current_app.logger.exception('withdrawals_cancel save failed')
+        return jsonify({'success': False, 'error': 'save_failed'}), 500
+    return jsonify({
+        'success': True,
+        'withdrawable_balance': _partner_withdrawable_balance(me_phone),
+        'requestable_balance': _partner_requestable_balance(me_phone),
     })
 
 

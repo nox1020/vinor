@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 RESERVE_STATUSES = frozenset({"pending", "approved", "processing"})
 ACTIVE_WITHDRAWAL_STATUSES = frozenset({"pending", "approved", "processing", "rejected"})
+PARTNER_CANCELLABLE_WITHDRAWAL_STATUSES = frozenset({"pending"})
 # از موجودی قابل برداشت کسر می‌شود: در انتظار بررسی + تأیید ادمین + در حال پردازش
 WITHDRAWABLE_RESERVE_STATUSES = RESERVE_STATUSES
 LOCK_RESERVE_STATUSES = RESERVE_STATUSES
@@ -391,6 +392,7 @@ def status_label(status: str) -> str:
         "processing": "در حال پردازش",
         "paid": "پرداخت‌شده",
         "rejected": "رد شده",
+        "cancelled": "لغو شده",
     }.get(s, s)
 
 
@@ -431,7 +433,57 @@ def withdrawal_to_txn_row(w: Dict[str, Any]) -> Dict[str, Any]:
         "bank_summary": bank,
         "withdrawal_id": w.get("id"),
         "_txn_label": f"برداشت به {bank}",
+        "cancellable": False,
     }
+
+
+def withdrawal_request_to_txn_row(w: Dict[str, Any]) -> Dict[str, Any]:
+    bank = (w.get("bank_summary") or "حساب بانکی").strip()
+    amt = _amount_int(w.get("amount"))
+    st = (str(w.get("status") or "pending")).strip()
+    return {
+        "txn_type": "withdrawal_request",
+        "created_at": w.get("created_at") or w.get("updated_at") or "",
+        "status": st,
+        "commission_amount": -amt if amt > 0 else 0,
+        "withdrawal_amount": amt,
+        "bank_summary": bank,
+        "withdrawal_id": w.get("id"),
+        "withdrawal_status_label": status_label(st),
+        "_txn_label": f"درخواست برداشت به {bank}",
+        "cancellable": st in PARTNER_CANCELLABLE_WITHDRAWAL_STATUSES,
+    }
+
+
+def cancel_partner_withdrawal(
+    withdrawals: List[Dict[str, Any]],
+    phone: str,
+    withdrawal_id: str,
+    commissions: Optional[List[Dict[str, Any]]] = None,
+    cancelled_at: str = "",
+) -> Tuple[bool, Optional[str]]:
+    ph = (phone or "").strip()
+    wid = (withdrawal_id or "").strip()
+    if not ph or not wid:
+        return False, "not_found"
+    for w in withdrawals:
+        if not isinstance(w, dict):
+            continue
+        if str(w.get("id") or "").strip() != wid:
+            continue
+        if str(w.get("phone") or "").strip() != ph:
+            return False, "not_found"
+        st = _withdrawal_status(w)
+        if st not in PARTNER_CANCELLABLE_WITHDRAWAL_STATUSES:
+            return False, "not_cancellable"
+        w["status"] = "cancelled"
+        w["updated_at"] = cancelled_at or w.get("updated_at") or w.get("created_at") or ""
+        w["cancelled_at"] = w["updated_at"]
+        w["cancelled_by"] = "partner"
+        if commissions is not None:
+            release_withdrawal_commissions(commissions, wid)
+        return True, None
+    return False, "not_found"
 
 
 def commission_to_txn_row(c: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -495,8 +547,11 @@ def build_partner_txn_feed(
         if row:
             rows.append(row)
     for w in withdrawals_for_phone(withdrawals, phone):
-        if (w.get("status") or "") == "paid":
+        st = (str(w.get("status") or "pending")).strip()
+        if st == "paid":
             rows.append(withdrawal_to_txn_row(w))
+        else:
+            rows.append(withdrawal_request_to_txn_row(w))
     rows.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return rows
 

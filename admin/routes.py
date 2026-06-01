@@ -3674,6 +3674,9 @@ def financial_withdrawal_status(wid: str):
     if not found:
         flash('درخواست یافت نشد.', 'error')
         return redirect(url_for('admin.financial_withdrawals'))
+    if old_status == 'cancelled':
+        flash('این درخواست توسط همکار لغو شده و قابل تغییر نیست.', 'warning')
+        return redirect(url_for('admin.financial_withdrawals'))
     try:
         save_partner_withdrawals(items)
         commissions = load_express_commissions() or []

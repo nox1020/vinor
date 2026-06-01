@@ -1,0 +1,83 @@
+<script>
+  (function () {
+    var CANCEL_API = '/express/partner/withdrawals';
+    var cancelling = false;
+
+    function readCsrfToken() {
+      var cfg = window.VINOR_NOTIFY_CFG || {};
+      if (cfg.csrfToken) return cfg.csrfToken;
+      try {
+        var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : '';
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function cancelHeaders() {
+      var h = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      };
+      var csrf = readCsrfToken();
+      if (csrf) h['X-CSRFToken'] = csrf;
+      return h;
+    }
+
+    function cancelErrorMessage(code) {
+      if (code === 'not_cancellable') return 'این درخواست دیگر قابل لغو نیست.';
+      if (code === 'not_found') return 'درخواست یافت نشد.';
+      if (code === 'csrf') return 'خطای امنیتی. صفحه را رفرش کنید.';
+      return 'لغو درخواست انجام نشد.';
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('[data-cancel-withdrawal]');
+      if (!btn || cancelling) return;
+      e.preventDefault();
+      var wid = btn.getAttribute('data-cancel-withdrawal') || '';
+      if (!wid) return;
+      if (!window.confirm('درخواست برداشت لغو شود؟ مبلغ به موجودی قابل برداشت برمی‌گردد.')) return;
+      cancelling = true;
+      btn.disabled = true;
+      btn.textContent = '…';
+      fetch(CANCEL_API + '/' + encodeURIComponent(wid) + '/cancel', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: cancelHeaders(),
+        body: '{}'
+      })
+        .then(function (r) {
+          return r.text().then(function (text) {
+            try {
+              return { ok: r.ok, j: JSON.parse(text || '{}') };
+            } catch (_) {
+              return { ok: false, j: { success: false, error: r.status === 302 || r.redirected ? 'csrf' : 'bad_response' } };
+            }
+          });
+        })
+        .then(function (x) {
+          if (!x.ok || !x.j.success) {
+            window.alert(cancelErrorMessage((x.j && x.j.error) || 'cancel_failed'));
+            btn.disabled = false;
+            btn.textContent = 'لغو';
+            return;
+          }
+          if (window.__vinorCommissionsRefresh) {
+            window.__vinorCommissionsRefresh().catch(function () { window.location.reload(); });
+          } else {
+            window.location.reload();
+          }
+        })
+        .catch(function () {
+          window.alert('خطا در ارتباط با سرور.');
+          btn.disabled = false;
+          btn.textContent = 'لغو';
+        })
+        .finally(function () {
+          cancelling = false;
+        });
+    });
+  })();
+</script>
