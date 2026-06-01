@@ -1,0 +1,197 @@
+<script>
+  (function () {
+    var modal = document.getElementById('vnTxnDetailModal');
+    if (!modal) return;
+
+    var overlay = window.vinorExpressModalOverlay;
+    var elTitle = document.getElementById('vnTxnDetailModalTitle');
+    var elType = document.getElementById('vnTxnDetailType');
+    var elAmount = document.getElementById('vnTxnDetailAmount');
+    var elStatus = document.getElementById('vnTxnDetailStatus');
+    var elDesc = document.getElementById('vnTxnDetailDesc');
+    var elDates = document.getElementById('vnTxnDetailDates');
+    var elFields = document.getElementById('vnTxnDetailFields');
+    var elActions = document.getElementById('vnTxnDetailActions');
+    var elCancelBtn = document.getElementById('vnTxnDetailCancelBtn');
+    var currentDetail = null;
+
+    function toFaDigits(s) {
+      var p = '۰۱۲۳۴۵۶۷۸۹';
+      return String(s || '').replace(/[0-9]/g, function (d) { return p[parseInt(d, 10)]; });
+    }
+
+    function formatToman(n) {
+      var v = Math.max(0, parseInt(String(n || '0'), 10) || 0);
+      if (v === 0) return '۰ تومان';
+      var raw = String(v);
+      var rev = raw.split('').reverse().join('');
+      var parts = [];
+      for (var i = 0; i < rev.length; i += 3) {
+        parts.push(rev.slice(i, i + 3));
+      }
+      var joined = parts.join('،').split('').reverse().join('');
+      return toFaDigits(joined) + ' تومان';
+    }
+
+    function fmtDate(dt) {
+      try {
+        var d = new Date(String(dt || '').replace(' ', 'T'));
+        if (isNaN(d.getTime())) return String(dt || '—');
+        return d.toLocaleDateString('fa-IR', {
+          timeZone: 'Asia/Tehran',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch (_) {
+        return String(dt || '—');
+      }
+    }
+
+    function escHtml(s) {
+      return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function statusClass(d) {
+      var t = d.txn_type || '';
+      var st = d.status || '';
+      if (t === 'withdrawal') return 'bg-violet-500/20 text-violet-200 border-violet-500/30';
+      if (t === 'withdrawal_request') {
+        if (st === 'cancelled') return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+        if (st === 'rejected') return 'bg-red-500/20 text-red-300 border-red-500/30';
+        if (st === 'approved' || st === 'processing') return 'bg-sky-500/20 text-sky-200 border-sky-500/30';
+        return 'bg-amber-500/20 text-amber-200 border-amber-500/35';
+      }
+      if (st === 'paid') return 'bg-violet-500/20 text-violet-200 border-violet-500/30';
+      if (st === 'approved') return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/35';
+      if (st === 'rejected') return 'bg-red-500/20 text-red-300 border-red-500/30';
+      return 'bg-amber-500/20 text-amber-200 border-amber-500/35';
+    }
+
+    function amountClass(d) {
+      var sign = d.amount_sign || '+';
+      if (sign === '-') return 'text-amber-300';
+      return 'text-emerald-400';
+    }
+
+    function renderRows(container, items, valueFormatter) {
+      if (!container) return;
+      if (!items || !items.length) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+      }
+      container.classList.remove('hidden');
+      container.innerHTML = items.map(function (item) {
+        var val = valueFormatter ? valueFormatter(item) : escHtml(item.value);
+        return (
+          '<div class="flex items-start justify-between gap-3 px-3.5 py-2.5 text-xs">' +
+          '<span class="text-slate-500 shrink-0">' + escHtml(item.label) + '</span>' +
+          '<span class="text-slate-200 font-medium text-end break-all">' + val + '</span>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    function openDetail(d) {
+      if (!d || !modal) return;
+      currentDetail = d;
+      if (elTitle) elTitle.textContent = d.title || 'جزئیات تراکنش';
+      if (elType) elType.textContent = d.title || '';
+      if (elAmount) {
+        elAmount.textContent = (d.amount_sign || '') + formatToman(d.amount || 0);
+        elAmount.className = 'text-2xl font-extrabold tabular-nums tracking-tight ' + amountClass(d);
+      }
+      if (elStatus) {
+        elStatus.textContent = d.status_label || '';
+        elStatus.className = 'inline-flex px-2.5 py-1 rounded-md text-[10px] font-semibold border ' + statusClass(d);
+      }
+      if (elDesc) {
+        elDesc.textContent = d.description || '';
+        elDesc.classList.toggle('hidden', !(d.description || '').trim());
+      }
+      renderRows(elDates, d.dates || [], function (item) {
+        return escHtml(fmtDate(item.value));
+      });
+      renderRows(elFields, d.fields || [], function (item) {
+        if (item.format === 'toman') return escHtml(formatToman(item.value));
+        return escHtml(item.value);
+      });
+      if (elActions && elCancelBtn) {
+        var showCancel = !!(d.cancellable && d.withdrawal_id);
+        elActions.classList.toggle('hidden', !showCancel);
+        if (showCancel) {
+          elCancelBtn.setAttribute('data-cancel-withdrawal', d.withdrawal_id);
+        } else {
+          elCancelBtn.removeAttribute('data-cancel-withdrawal');
+        }
+      }
+      if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+      }
+      modal.classList.remove('hidden');
+      modal.setAttribute('aria-hidden', 'false');
+      try { void modal.offsetWidth; } catch (_) {}
+      modal.classList.add('vn-txn-detail-modal--open');
+      if (overlay) overlay.open();
+    }
+
+    function closeDetail() {
+      if (!modal) return;
+      var wasOpen = modal.classList.contains('vn-txn-detail-modal--open');
+      modal.classList.remove('vn-txn-detail-modal--open');
+      window.setTimeout(function () {
+        modal.classList.add('hidden');
+      }, 280);
+      modal.setAttribute('aria-hidden', 'true');
+      currentDetail = null;
+      if (wasOpen && overlay) overlay.close();
+    }
+
+    window.__vinorOpenTxnDetail = openDetail;
+    window.__vinorCloseTxnDetail = closeDetail;
+
+    document.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('[data-cancel-withdrawal]')) return;
+      var row = e.target.closest && e.target.closest('[data-txn-detail]');
+      if (!row) return;
+      if (e.target.closest && e.target.closest('button[data-cancel-withdrawal]')) return;
+      var raw = row.getAttribute('data-txn-detail');
+      if (!raw) return;
+      try {
+        openDetail(JSON.parse(raw));
+      } catch (_) {}
+    });
+
+    document.addEventListener('keydown', function (e) {
+      var row = e.target.closest && e.target.closest('[data-txn-detail]');
+      if (!row || (e.key !== 'Enter' && e.key !== ' ')) return;
+      if (e.target.closest && e.target.closest('button')) return;
+      e.preventDefault();
+      var raw = row.getAttribute('data-txn-detail');
+      if (!raw) return;
+      try {
+        openDetail(JSON.parse(raw));
+      } catch (_) {}
+    });
+
+    document.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('[data-close-txn-detail]')) {
+        e.preventDefault();
+        closeDetail();
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal.classList.contains('vn-txn-detail-modal--open')) {
+        closeDetail();
+      }
+    });
+  })();
+</script>

@@ -1,11 +1,16 @@
 {# یک ردیف تراکنش پورسانت یا برداشت — متغیر c #}
 {% set _txn_type = (c.txn_type or 'commission')|trim %}
 {% set _is_wd = _txn_type in ('withdrawal', 'withdrawal_request') %}
-<div class="flex items-center gap-2 px-3 py-3 hover:bg-white/[0.03] transition-colors{% if tour_item %} commission-txn-row-tour{% endif %}"
+{% set _detail = c._txn_detail if c._txn_detail is defined else {} %}
+<div class="flex items-center gap-2 px-3 py-3 hover:bg-white/[0.06] active:bg-white/[0.08] transition-colors cursor-pointer commission-txn-row{% if tour_item %} commission-txn-row-tour{% endif %}"
+     role="button"
+     tabindex="0"
      data-commission-status="{{ (c.status or 'pending')|trim }}"
      data-txn-type="{{ _txn_type }}"
+     {% if _detail %}data-txn-detail='{{ _detail|tojson }}'{% endif %}
      {% if c.withdrawal_id %}data-withdrawal-id="{{ c.withdrawal_id }}"{% endif %}
-     {% if tour_item %}data-tour="commission-item"{% endif %}>
+     {% if tour_item %}data-tour="commission-item"{% endif %}
+     aria-label="مشاهده جزئیات تراکنش">
   <div class="shrink-0 w-[4.75rem] text-end space-y-0.5">
     {% if c.created_at %}
     <div class="text-[10px] text-slate-500 tabular-nums jalali-dt" data-dt="{{ c.created_at }}"></div>
@@ -34,7 +39,8 @@
       {% if c.cancellable %}
       <button type="button"
               data-cancel-withdrawal="{{ c.withdrawal_id }}"
-              class="text-[9px] font-semibold text-red-400/90 hover:text-red-300 transition px-1 py-0.5 rounded border border-transparent hover:border-red-500/30">
+              class="text-[9px] font-semibold text-red-400/90 hover:text-red-300 transition px-1 py-0.5 rounded border border-transparent hover:border-red-500/30"
+              onclick="event.stopPropagation()">
         لغو
       </button>
       {% endif %}
@@ -50,11 +56,14 @@
       <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-amber-500/20 text-amber-200 border border-amber-500/35">در انتظار تأیید</span>
     {% endif %}
   </div>
-  <div class="shrink-0 text-xs font-bold tabular-nums whitespace-nowrap w-[5.75rem] text-end{% if _is_wd %} text-amber-300{% else %} text-emerald-400{% endif %}">
-    {% if _is_wd %}
-      −{{ (c.withdrawal_amount or 0)|toman }}
-    {% else %}
-      {% if (c.commission_amount or 0)|int > 0 %}+{% endif %}{{ (c.commission_amount or 0)|toman }}
-    {% endif %}
+  <div class="shrink-0 flex items-center gap-1">
+    <div class="text-xs font-bold tabular-nums whitespace-nowrap w-[5.25rem] text-end{% if _is_wd %} text-amber-300{% else %} text-emerald-400{% endif %}">
+      {% if _is_wd %}
+        −{{ (c.withdrawal_amount or 0)|toman }}
+      {% else %}
+        {% if (c.commission_amount or 0)|int > 0 %}+{% endif %}{{ (c.commission_amount or 0)|toman }}
+      {% endif %}
+    </div>
+    <i class="fas fa-chevron-left text-[8px] text-slate-600 shrink-0" aria-hidden="true"></i>
   </div>
 </div>

@@ -69,6 +69,7 @@
           } else {
             window.location.reload();
           }
+          if (window.__vinorCloseTxnDetail) window.__vinorCloseTxnDetail();
         })
         .catch(function () {
           window.alert('خطا در ارتباط با سرور.');

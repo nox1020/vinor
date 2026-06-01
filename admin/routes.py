@@ -79,6 +79,7 @@ from app.utils.storage import (
     load_express_partner_views,
     load_partner_routines, load_partner_routines_cached,
     load_partner_withdrawals, save_partner_withdrawals,
+    load_express_visit_requests, save_express_visit_requests,
 )
 
 def _ad_owner_id(ad: Dict[str, Any]) -> Optional[str]:
@@ -3641,6 +3642,84 @@ def financial_withdrawals():
         items=items,
         pending_count=pending_count,
     )
+
+
+@admin_bp.route('/express/visit-requests', endpoint='express_visit_requests')
+@login_required
+def express_visit_requests():
+    from app.express_partner.visit_requests import admin_row_dict as visit_admin_row
+
+    items_raw = load_express_visit_requests() or []
+    if not isinstance(items_raw, list):
+        items_raw = []
+    name_map = _partner_name_lookup()
+    items = []
+    for row in items_raw:
+        if not isinstance(row, dict):
+            continue
+        r = dict(row)
+        ph = str(r.get('partner_phone') or '').strip()
+        if not (r.get('partner_name') or '').strip() and ph in name_map:
+            r['partner_name'] = name_map[ph]
+        items.append(visit_admin_row(r))
+    items.sort(key=lambda x: (x.get('visit_date') or '', x.get('created_at') or ''), reverse=True)
+    pending_count = sum(1 for x in items if (x.get('status') or '') == 'pending')
+    return render_template(
+        'admin/express_visit_requests.html',
+        items=items,
+        pending_count=pending_count,
+    )
+
+
+@admin_bp.post('/express/visit-requests/<vid>/approve')
+@login_required
+def express_visit_request_approve(vid: str):
+    from app.express_partner.visit_requests import approve_visit_request
+
+    items = load_express_visit_requests() or []
+    if not isinstance(items, list):
+        items = []
+    rec, err = approve_visit_request(items, vid)
+    if err == 'not_found':
+        flash('درخواست بازدید یافت نشد.', 'error')
+        return redirect(url_for('admin.express_visit_requests'))
+    if err == 'invalid_status':
+        flash('این درخواست دیگر قابل تأیید نیست.', 'warning')
+        return redirect(url_for('admin.express_visit_requests'))
+    if err == 'already_approved':
+        flash('این درخواست قبلاً تأیید شده است.', 'info')
+        return redirect(url_for('admin.express_visit_requests'))
+    try:
+        save_express_visit_requests(items)
+        name = (rec or {}).get('partner_name') or (rec or {}).get('partner_phone') or 'همکار'
+        flash(f'درخواست بازدید {name} تأیید شد. درخواست معامله برای همکار فعال شد.', 'success')
+    except Exception:
+        flash('خطا در ذخیره وضعیت.', 'error')
+    return redirect(url_for('admin.express_visit_requests'))
+
+
+@admin_bp.post('/express/visit-requests/<vid>/reject')
+@login_required
+def express_visit_request_reject(vid: str):
+    from app.express_partner.visit_requests import reject_visit_request
+
+    admin_note = (request.form.get('admin_note') or '').strip()
+    items = load_express_visit_requests() or []
+    if not isinstance(items, list):
+        items = []
+    rec, err = reject_visit_request(items, vid, admin_note=admin_note)
+    if err == 'not_found':
+        flash('درخواست بازدید یافت نشد.', 'error')
+        return redirect(url_for('admin.express_visit_requests'))
+    if err == 'invalid_status':
+        flash('این درخواست دیگر قابل رد نیست.', 'warning')
+        return redirect(url_for('admin.express_visit_requests'))
+    try:
+        save_express_visit_requests(items)
+        flash('درخواست بازدید رد شد.', 'success')
+    except Exception:
+        flash('خطا در ذخیره وضعیت.', 'error')
+    return redirect(url_for('admin.express_visit_requests'))
 
 
 @admin_bp.post('/financial/withdrawals/<wid>/status')

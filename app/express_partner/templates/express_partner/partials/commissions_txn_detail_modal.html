@@ -1,0 +1,53 @@
+{# مودال جزئیات تراکنش / برداشت #}
+<div id="vnTxnDetailModal"
+     class="vn-txn-detail-modal fixed inset-0 z-[215] hidden flex flex-col justify-end"
+     role="dialog"
+     aria-modal="true"
+     aria-hidden="true"
+     aria-labelledby="vnTxnDetailModalTitle"
+     data-tg-body-modal>
+  <div class="vn-txn-detail-backdrop absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200"
+       data-close-txn-detail aria-hidden="true"></div>
+  <div class="vn-txn-detail-sheet relative w-full max-w-lg mx-auto rounded-t-3xl bg-[#1C1F2A] border-t border-white/10 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] max-h-[min(88vh,640px)] flex flex-col translate-y-full transition-transform duration-300 ease-out">
+    <div class="shrink-0 pt-2 pb-1 flex justify-center">
+      <span class="block w-10 h-1 rounded-full bg-white/20" aria-hidden="true"></span>
+    </div>
+    <div class="shrink-0 px-4 pb-2 flex items-center justify-center relative min-h-[2.5rem]">
+      <button type="button"
+              class="absolute top-1/2 -translate-y-1/2 right-3 w-9 h-9 rounded-full border border-white/10 text-slate-300 hover:bg-white/5 flex items-center justify-center transition"
+              data-close-txn-detail
+              aria-label="بستن">
+        <i class="fas fa-times text-sm"></i>
+      </button>
+      <h2 id="vnTxnDetailModalTitle" class="text-[15px] font-bold text-white">جزئیات تراکنش</h2>
+    </div>
+    <div class="px-4 pb-5 overflow-y-auto flex-1 min-h-0 space-y-4">
+      <div class="text-center space-y-2 pt-1">
+        <p id="vnTxnDetailType" class="text-xs font-medium text-slate-400"></p>
+        <p id="vnTxnDetailAmount" class="text-2xl font-extrabold tabular-nums tracking-tight"></p>
+        <span id="vnTxnDetailStatus" class="inline-flex px-2.5 py-1 rounded-md text-[10px] font-semibold border"></span>
+        <p id="vnTxnDetailDesc" class="text-[11px] text-slate-400 leading-relaxed px-2"></p>
+      </div>
+      <div id="vnTxnDetailDates" class="rounded-2xl bg-[#12141D] border border-white/8 divide-y divide-white/5 hidden"></div>
+      <div id="vnTxnDetailFields" class="rounded-2xl bg-[#12141D] border border-white/8 divide-y divide-white/5 hidden"></div>
+      <div id="vnTxnDetailActions" class="hidden pt-1">
+        <button type="button"
+                id="vnTxnDetailCancelBtn"
+                class="w-full rounded-xl border border-red-500/35 bg-red-500/10 text-red-300 text-sm font-bold py-3 hover:bg-red-500/15 transition">
+          لغو درخواست برداشت
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<style>
+  #vnTxnDetailModal.vn-txn-detail-modal--open {
+    display: flex !important;
+  }
+  #vnTxnDetailModal.vn-txn-detail-modal--open .vn-txn-detail-backdrop {
+    opacity: 1;
+  }
+  #vnTxnDetailModal.vn-txn-detail-modal--open .vn-txn-detail-sheet {
+    transform: translateY(0);
+  }
+</style>

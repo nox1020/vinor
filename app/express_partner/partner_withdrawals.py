@@ -434,6 +434,7 @@ def withdrawal_to_txn_row(w: Dict[str, Any]) -> Dict[str, Any]:
         "withdrawal_id": w.get("id"),
         "_txn_label": f"برداشت به {bank}",
         "cancellable": False,
+        "updated_at": w.get("updated_at") or w.get("created_at") or "",
     }
 
 
@@ -452,6 +453,8 @@ def withdrawal_request_to_txn_row(w: Dict[str, Any]) -> Dict[str, Any]:
         "withdrawal_status_label": status_label(st),
         "_txn_label": f"درخواست برداشت به {bank}",
         "cancellable": st in PARTNER_CANCELLABLE_WITHDRAWAL_STATUSES,
+        "updated_at": w.get("updated_at") or "",
+        "cancelled_at": w.get("cancelled_at") or "",
     }
 
 
@@ -531,6 +534,101 @@ def commission_to_txn_row(c: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return row
 
 
+def _txn_status_label(row: Dict[str, Any]) -> str:
+    txn_type = (row.get("txn_type") or "commission").strip()
+    st = (str(row.get("status") or "pending")).strip()
+    if txn_type == "withdrawal":
+        return "واریز شد"
+    if txn_type == "withdrawal_request":
+        return str(row.get("withdrawal_status_label") or status_label(st))
+    if st == "approved" and row.get("_txn_phase") == "approval":
+        return "تأیید پورسانت"
+    if st == "pending":
+        return "در انتظار تأیید"
+    if st == "approved":
+        return "تأیید شده"
+    if st == "paid":
+        return "پرداخت‌شده"
+    if st == "rejected":
+        return "رد شده"
+    return status_label(st)
+
+
+def _txn_type_title(row: Dict[str, Any]) -> str:
+    txn_type = (row.get("txn_type") or "commission").strip()
+    if txn_type == "withdrawal":
+        return "واریز برداشت"
+    if txn_type == "withdrawal_request":
+        return "درخواست برداشت"
+    if (str(row.get("commission_type") or "")).strip() == "referral":
+        return "پورسانت دعوت"
+    return "پورسانت فروش"
+
+
+def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
+    """دادهٔ نمایش جزئیات تراکنش در مودال همکار."""
+    txn_type = (row.get("txn_type") or "commission").strip()
+    st = (str(row.get("status") or "pending")).strip()
+    is_wd = txn_type in ("withdrawal", "withdrawal_request")
+    amt = _amount_int(row.get("withdrawal_amount") if is_wd else row.get("commission_amount"))
+
+    fields: List[Dict[str, Any]] = []
+    dates: List[Dict[str, Any]] = []
+
+    if is_wd:
+        if row.get("bank_summary"):
+            fields.append({"label": "حساب بانکی", "value": str(row.get("bank_summary") or "")})
+        if row.get("created_at"):
+            dates.append({"label": "تاریخ درخواست", "value": str(row.get("created_at") or "")})
+        updated = str(row.get("updated_at") or "").strip()
+        created = str(row.get("created_at") or "").strip()
+        if updated and updated != created:
+            label = "تاریخ واریز" if txn_type == "withdrawal" else "آخرین بروزرسانی"
+            dates.append({"label": label, "value": updated})
+        if row.get("cancelled_at"):
+            dates.append({"label": "تاریخ لغو", "value": str(row.get("cancelled_at") or "")})
+    else:
+        land = str(row.get("land_code") or "").strip()
+        if land and land != "referral" and (str(row.get("commission_type") or "")).strip() != "referral":
+            fields.append({"label": "کد ملک", "value": land})
+        sale = _amount_int(row.get("sale_amount"))
+        if sale > 0:
+            fields.append({"label": "مبلغ فروش", "value": sale, "format": "toman"})
+        pct_raw = row.get("commission_pct")
+        if pct_raw is not None and str(pct_raw).strip() != "":
+            try:
+                fields.append({"label": "درصد پورسانت", "value": f"{float(pct_raw):g}٪"})
+            except Exception:
+                pass
+        partial = _amount_int(row.get("partial_paid_display"))
+        if partial > 0:
+            fields.append({"label": "واریز شده از این پورسانت", "value": partial, "format": "toman"})
+        if row.get("created_at"):
+            dates.append({"label": "تاریخ ثبت", "value": str(row.get("created_at") or "")})
+        if row.get("approved_at"):
+            dates.append({"label": "تاریخ تأیید", "value": str(row.get("approved_at") or "")})
+        if row.get("paid_at"):
+            dates.append({"label": "تاریخ پرداخت", "value": str(row.get("paid_at") or "")})
+        cid = row.get("id")
+        if cid is not None and str(cid).strip() != "":
+            fields.append({"label": "شناسه پورسانت", "value": str(cid)})
+
+    return {
+        "txn_type": txn_type,
+        "title": _txn_type_title(row),
+        "description": (str(row.get("_txn_label") or "")).strip(),
+        "amount": amt,
+        "amount_sign": "-" if is_wd else "+",
+        "status": st,
+        "status_label": _txn_status_label(row),
+        "fields": fields,
+        "dates": dates,
+        "primary_date": str(row.get("created_at") or ""),
+        "cancellable": bool(row.get("cancellable")),
+        "withdrawal_id": str(row.get("withdrawal_id") or ""),
+    }
+
+
 def build_partner_txn_feed(
     commissions: List[Dict[str, Any]],
     withdrawals: List[Dict[str, Any]],
@@ -553,6 +651,8 @@ def build_partner_txn_feed(
         else:
             rows.append(withdrawal_request_to_txn_row(w))
     rows.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    for r in rows:
+        r["_txn_detail"] = partner_txn_detail(r)
     return rows
 
 

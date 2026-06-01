@@ -35,6 +35,7 @@ from ..utils.storage import (
     load_partner_routines, load_partner_routines_cached, save_partner_routines,
     load_partner_bank_accounts, save_partner_bank_accounts,
     load_partner_withdrawals, save_partner_withdrawals,
+    load_express_visit_requests, save_express_visit_requests,
 )
 from .partner_bank_accounts import (
     validate_new_account,
@@ -54,6 +55,13 @@ from .partner_withdrawals import (
     partner_commission_dashboard,
     reconcile_paid_withdrawals,
     cancel_partner_withdrawal,
+)
+from .visit_requests import (
+    create_visit_request as record_visit_request,
+    partner_open_visit,
+    partner_visit_approved_for_deal,
+    complete_visit_for_deal,
+    resolve_partner_land_tx_state,
 )
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
 from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
@@ -1142,6 +1150,66 @@ def _send_withdrawal_admin_sms(
         'type': 'withdrawal_admin_notify',
         'mobile': admin_phone,
         'partner_phone': partner_phone,
+        'message': msg,
+        'ok': ok,
+        'error': err,
+        'status_code': sms_result.get('status', 0),
+        'response': sms_result.get('body', {}),
+        'created_at': datetime.utcnow().isoformat() + 'Z',
+    })
+    return {'ok': ok, 'skipped': False, 'error': err}
+
+
+def _format_visit_date_sms(iso_date: str) -> str:
+    jalali = format_iso_date_jalali(iso_date)
+    return jalali or (iso_date or '')[:10] or '—'
+
+
+def _send_visit_admin_sms(
+    *,
+    partner_phone: str,
+    partner_name: str,
+    land_code: str,
+    land_title: str,
+    visit_date: str,
+) -> dict:
+    """اطلاع‌رسانی پیامکی درخواست بازدید جدید به ادمین."""
+    settings = load_settings(current_app) or {}
+    admin_phone_raw = settings.get('partner_application_admin_phone', '09121471301')
+    admin_phone = normalize_iran_mobile(admin_phone_raw)
+    sms_line_number = (settings.get('sms_line_number') or get_sms_line_number() or '300089930616').strip()
+
+    if not is_valid_iran_mobile(admin_phone):
+        current_app.logger.warning('Visit admin SMS skipped: invalid admin phone %r', admin_phone_raw)
+        return {'ok': False, 'skipped': True, 'error': 'invalid_admin_phone'}
+
+    name = (partner_name or '').strip() or partner_phone
+    title = (land_title or '').strip() or land_code
+    vdate = _format_visit_date_sms(visit_date)
+    msg = (
+        f'درخواست بازدید وینور\n'
+        f'همکار: {name}\n'
+        f'موبایل: {partner_phone}\n'
+        f'فایل: {title} ({land_code})\n'
+        f'تاریخ بازدید: {vdate}'
+    )
+    sms_result = send_sms_direct(mobile=admin_phone, message=msg, line_number=sms_line_number)
+    ok = bool(sms_result.get('ok'))
+    err = None
+    if not ok:
+        body = sms_result.get('body') or {}
+        err = str(body.get('message') or body.get('error') or 'sms_send_failed')
+        current_app.logger.error(
+            'Visit admin SMS failed admin=%s status=%s body=%s',
+            admin_phone,
+            sms_result.get('status'),
+            body,
+        )
+    _append_sms_history({
+        'type': 'visit_admin_notify',
+        'mobile': admin_phone,
+        'partner_phone': partner_phone,
+        'land_code': land_code,
         'message': msg,
         'ok': ok,
         'error': err,
@@ -3022,20 +3090,258 @@ def _mark_in_transaction_finish(
     message: str,
     category: str = 'success',
     new_status: str | None = None,
+    tx_mode: str | None = None,
+    visit_date: str | None = None,
 ):
     """پاسخ HTML (redirect) یا JSON برای درخواست AJAX جزئیات فایل."""
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return jsonify(
-            success=success,
-            message=message,
-            new_status=new_status,
-            category=category,
-        ), (200 if success else 400)
+        payload = {
+            'success': success,
+            'message': message,
+            'new_status': new_status,
+            'category': category,
+        }
+        if tx_mode:
+            payload['tx_mode'] = tx_mode
+        if visit_date:
+            payload['visit_date'] = visit_date
+            from ..utils.dates import format_iso_date_jalali
+            jalali = format_iso_date_jalali(visit_date)
+            if jalali:
+                payload['visit_date_jalali'] = jalali
+        return jsonify(payload), (200 if success else 400)
     if message:
         flash(message, 'land')
     if success:
         return redirect(url_for('express_partner.land_detail', code=code))
     return redirect(url_for('express_partner.dashboard'))
+
+
+def _partner_land_tx_payload(
+    code: str,
+    me_phone: str,
+    *,
+    is_partner_approved: bool,
+    global_assignment_status: str | None = None,
+) -> dict:
+    assignments = load_express_assignments() or []
+    visit_requests = load_express_visit_requests() or []
+    if not isinstance(visit_requests, list):
+        visit_requests = []
+    gs = global_assignment_status
+    if gs is None:
+        gs = 'active'
+        status_priority = {
+            'sold': 5, 'in_transaction': 4, 'closed': 3, 'pending': 2, 'approved': 1, 'active': 0, '': 0,
+        }
+        for a in assignments:
+            if str(a.get('land_code')) != str(code):
+                continue
+            status = _assignment_display_status(a)
+            if status_priority.get(status, 0) > status_priority.get(gs, 0):
+                gs = status
+    state = resolve_partner_land_tx_state(
+        me_phone=me_phone,
+        land_code=str(code),
+        assignments=assignments,
+        visit_requests=visit_requests,
+        is_partner_approved=is_partner_approved,
+        global_assignment_status=str(gs or 'active'),
+    )
+    return state
+
+
+@express_partner_bp.route('/visit-requests/<code>', methods=['POST'], endpoint='create_visit_request')
+@require_partner_access()
+def create_visit_request(code: str):
+    """ثبت درخواست بازدید با تاریخ انتخاب‌شده."""
+    me_phone = (session.get('user_phone') or '').strip()
+    visit_date = (request.form.get('visit_date') or '').strip()
+    if not visit_date and request.is_json:
+        try:
+            visit_date = ((request.get_json(silent=True) or {}).get('visit_date') or '').strip()
+        except Exception:
+            visit_date = ''
+
+    assignments = load_express_assignments() or []
+    my_assignment = next(
+        (a for a in assignments if str(a.get('land_code')) == str(code) and str(a.get('partner_phone')) == me_phone),
+        None,
+    )
+    if my_assignment is None:
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='فایل موردنظر پیدا نشد یا دسترسی شما به آن محدود است.',
+            category='error',
+        )
+
+    current_status = my_assignment.get('status', 'active')
+    if current_status == 'sold':
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='این فایل قبلاً فروخته شده است.',
+            category='error',
+        )
+
+    holder_phone = None
+    for a in assignments:
+        if str(a.get('land_code')) == str(code) and a.get('transaction_holder'):
+            holder_phone = str(a.get('transaction_holder', ''))
+            break
+    if holder_phone and holder_phone != me_phone:
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='این فایل در حال حاضر توسط همکار دیگری در حال معامله است.',
+            category='error',
+        )
+    if current_status == 'in_transaction' or holder_phone == me_phone:
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='این فایل در حال معامله است؛ ابتدا معامله را رفع کنید.',
+            category='error',
+        )
+
+    lands_all = load_ads_cached() or []
+    land = next((l for l in lands_all if str(l.get('code')) == str(code)), None)
+    land_title = (land.get('title') if land else None) or code
+
+    partners = load_express_partners() or []
+    partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
+    partner_name = (partner_profile.get('name') if partner_profile else None) or me_phone
+
+    visit_requests = load_express_visit_requests() or []
+    if not isinstance(visit_requests, list):
+        visit_requests = []
+
+    rec, err = record_visit_request(
+        visit_requests,
+        partner_phone=me_phone,
+        partner_name=partner_name,
+        land_code=str(code),
+        land_title=str(land_title),
+        visit_date=visit_date,
+    )
+    if err == 'already_pending':
+        open_rec = partner_open_visit(visit_requests, me_phone, str(code))
+        vdate = (open_rec or {}).get('visit_date') or visit_date
+        try:
+            is_pa = _is_partner_approved(partner_profile)
+        except Exception:
+            is_pa = False
+        tx_state = _partner_land_tx_payload(
+            code,
+            me_phone,
+            is_partner_approved=is_pa,
+            global_assignment_status=current_status,
+        )
+        return _mark_in_transaction_finish(
+            code,
+            success=True,
+            message='درخواست بازدید شما قبلاً ثبت شده است.',
+            category='success',
+            new_status='active',
+            tx_mode=tx_state.get('tx_mode') or 'visit_pending',
+            visit_date=vdate,
+        )
+    if err == 'past_date':
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='تاریخ بازدید نمی‌تواند در گذشته باشد.',
+            category='error',
+        )
+    if err == 'date_too_far':
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='تاریخ بازدید حداکثر تا ۹۰ روز آینده قابل انتخاب است.',
+            category='error',
+        )
+    if err or not rec:
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='تاریخ بازدید نامعتبر است.',
+            category='error',
+        )
+
+    save_express_visit_requests(visit_requests)
+    sms_result = _send_visit_admin_sms(
+        partner_phone=me_phone,
+        partner_name=partner_name,
+        land_code=str(code),
+        land_title=str(land_title),
+        visit_date=rec.get('visit_date') or visit_date,
+    )
+    msg = 'درخواست بازدید ثبت شد. پس از تأیید ادمین می‌توانید درخواست معامله ثبت کنید.'
+    if not sms_result.get('ok') and not sms_result.get('skipped'):
+        msg += ' (ارسال پیامک به ادمین ناموفق بود.)'
+
+    try:
+        is_pa = _is_partner_approved(partner_profile)
+    except Exception:
+        is_pa = False
+    tx_state = _partner_land_tx_payload(
+        code,
+        me_phone,
+        is_partner_approved=is_pa,
+        global_assignment_status=current_status,
+    )
+    return _mark_in_transaction_finish(
+        code,
+        success=True,
+        message=msg,
+        category='success',
+        new_status='active',
+        tx_mode=tx_state.get('tx_mode') or 'visit_pending',
+        visit_date=tx_state.get('visit_date') or rec.get('visit_date') or visit_date,
+    )
+
+
+@express_partner_bp.get('/lands/<string:code>/tx-status', endpoint='land_tx_status')
+@require_partner_access()
+def land_tx_status(code: str):
+    """وضعیت دکمه بازدید/معامله — برای به‌روزرسانی خودکار پس از تأیید ادمین."""
+    me_phone = (session.get('user_phone') or '').strip()
+    assignments = load_express_assignments() or []
+    my_assignment = next(
+        (a for a in assignments if str(a.get('land_code')) == str(code) and str(a.get('partner_phone')) == me_phone),
+        None,
+    )
+    if my_assignment is None:
+        return jsonify(success=False, message='دسترسی محدود است.'), 403
+
+    partners = load_express_partners() or []
+    partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
+    try:
+        is_partner_approved = _is_partner_approved(partner_profile)
+    except Exception:
+        is_partner_approved = False
+
+    global_status = 'active'
+    status_priority = {
+        'sold': 5, 'in_transaction': 4, 'closed': 3, 'pending': 2, 'approved': 1, 'active': 0, '': 0,
+    }
+    for a in assignments:
+        if str(a.get('land_code')) != str(code):
+            continue
+        status = _assignment_display_status(a)
+        if status_priority.get(status, 0) > status_priority.get(global_status, 0):
+            global_status = status
+
+    state = _partner_land_tx_payload(
+        code,
+        me_phone,
+        is_partner_approved=is_partner_approved,
+        global_assignment_status=global_status,
+    )
+    resp = jsonify(success=True, **state)
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 @express_partner_bp.route('/mark-in-transaction/<code>', methods=['POST'], endpoint='mark_in_transaction')
@@ -3110,6 +3416,16 @@ def mark_in_transaction(code: str):
                     message='شما هم‌زمان فقط می‌توانید روی ۲ فایل در حال معامله باشید.',
                     category='error',
                 )
+            visit_requests = load_express_visit_requests() or []
+            if not isinstance(visit_requests, list):
+                visit_requests = []
+            if not partner_visit_approved_for_deal(visit_requests, me_phone, code):
+                return _mark_in_transaction_finish(
+                    code,
+                    success=False,
+                    message='برای ثبت درخواست معامله، ابتدا درخواست بازدید شما باید توسط ادمین تأیید شود.',
+                    category='error',
+                )
             # هیچ‌کس معامله نکرده، این همکار می‌تواند معامله کند
             new_status = 'in_transaction'
         
@@ -3132,6 +3448,13 @@ def mark_in_transaction(code: str):
         
         if updated:
             save_express_assignments(assignments)
+
+            if new_status == 'in_transaction':
+                visit_requests = load_express_visit_requests() or []
+                if not isinstance(visit_requests, list):
+                    visit_requests = []
+                if complete_visit_for_deal(visit_requests, me_phone, code):
+                    save_express_visit_requests(visit_requests)
             
             # اگر وضعیت به "در حال معامله" تغییر کرد، رکورد پورسانت ایجاد کن
             if new_status == 'in_transaction':
@@ -3261,12 +3584,20 @@ def mark_in_transaction(code: str):
                     if new_status == 'in_transaction'
                     else 'وضعیت ملک به «فعال» تغییر کرد.'
                 )
+            tx_state = _partner_land_tx_payload(
+                code,
+                me_phone,
+                is_partner_approved=True,
+                global_assignment_status=new_status or 'active',
+            )
             return _mark_in_transaction_finish(
                 code,
                 success=True,
                 message=success_message,
                 category=success_category,
                 new_status=new_status,
+                tx_mode=tx_state.get('tx_mode'),
+                visit_date=tx_state.get('visit_date') or None,
             )
         return _mark_in_transaction_finish(
             code,
@@ -4307,6 +4638,21 @@ def land_detail(code: str):
     else:
         land['_assignment_status'] = global_assignment_status
 
+    visit_requests_list = load_express_visit_requests() or []
+    if not isinstance(visit_requests_list, list):
+        visit_requests_list = []
+    tx_state = resolve_partner_land_tx_state(
+        me_phone=me_phone,
+        land_code=str(code),
+        assignments=assignments,
+        visit_requests=visit_requests_list,
+        is_partner_approved=is_approved,
+        global_assignment_status=global_assignment_status,
+    )
+    land['_visit_date'] = tx_state.get('visit_date') or ''
+    land['_visit_date_jalali'] = tx_state.get('visit_date_jalali') or ''
+    land['_tx_button_mode'] = tx_state.get('tx_mode') or 'visit'
+
     share_token = ''
     share_url = ''
 
@@ -4333,7 +4679,8 @@ def land_detail(code: str):
         is_partner_context=True,
         ref_partner=None,
         brand="وینور",
-        domain="vinor.ir"
+        domain="vinor.ir",
+        visit_date_min=datetime.utcnow().strftime('%Y-%m-%d'),
     )
 
 

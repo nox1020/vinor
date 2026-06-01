@@ -89,7 +89,7 @@
   {% set images_v2 = land.images_v2 or [] %}
   {% set total_items = (1 if has_video else 0) + images|length %}
 
-  <div id="landDetailPage" class="land-detail-page" data-land-code="{{ land.code or '' }}" data-tx-status="{{ (land._assignment_status|default('active')|string)|lower|trim }}">
+  <div id="landDetailPage" class="land-detail-page" data-land-code="{{ land.code or '' }}" data-tx-status="{{ (land._assignment_status|default('active')|string)|lower|trim }}" data-tx-mode="{{ land._tx_button_mode|default('visit') }}">
     {% include 'express_partner/partials/land_detail_gallery.html' %}
     {% include 'express_partner/partials/land_detail_main.html' %}
     <div class="ld-footer-spacer" aria-hidden="true"></div>
@@ -104,6 +104,12 @@
     "totalItems": {{ total_items }},
     "shareUrl": {{ (share_url or '')|tojson }},
     "code": {{ (land.code or '')|tojson }},
+    "txMode": {{ (land._tx_button_mode|default('visit'))|tojson }},
+    "visitDateMin": {{ visit_date_min|default('')|tojson }},
+    "visitDate": {{ (land._visit_date or '')|tojson }},
+    "visitDateJalali": {{ (land._visit_date_jalali or '')|tojson }},
+    "txStatusUrl": {{ url_for('express_partner.land_tx_status', code=land.code)|tojson }},
+    "csrfToken": {{ csrf_token()|tojson }},
     "flashMessages": [
       {%- for category, message in land_flash_messages -%}
       {"text": {{ message|tojson }}, "category": {{ category|tojson }}}{% if not loop.last %},{% endif %}

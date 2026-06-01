@@ -295,19 +295,243 @@
   }
 
   var TX_UI = {
-    active: {
+    visit: {
       label: 'درخواست بازدید',
       icon: 'fa-calendar-check',
       btnClass: 'bg-teal-700/90 hover:bg-teal-600 border border-teal-500/35 shadow-none',
       specLabel: 'فعال',
     },
-    in_transaction: {
+    visit_pending: {
+      label: 'در انتظار تأیید بازدید',
+      icon: 'fa-clock',
+      btnClass: 'bg-slate-600/90 cursor-default opacity-90 shadow-none border-0',
+      specLabel: 'منتظر تأیید ادمین',
+    },
+    deal: {
+      label: 'درخواست معامله',
+      icon: 'fa-handshake',
+      btnClass: 'bg-teal-700/90 hover:bg-teal-600 border border-teal-500/35 shadow-none',
+      specLabel: 'بازدید ثبت‌شده',
+    },
+    release: {
       label: 'رفع معامله',
       icon: 'fa-check-circle',
       btnClass: 'bg-teal-600 hover:bg-teal-500 shadow-lg shadow-teal-900/30 border-0',
       specLabel: 'در حال معامله',
     },
   };
+
+  function statusFromMode(mode) {
+    return mode === 'release' ? 'in_transaction' : 'active';
+  }
+
+  var visitCalState = {
+    viewDate: null,
+    selectedIso: '',
+    minDate: null,
+    maxDate: null,
+    controlsBound: false,
+  };
+
+  var faPersianYM = null;
+  var faPersianDay = null;
+  var faPersianYMParts = null;
+  var faPersianFull = null;
+
+  function initJalaliFormatters() {
+    if (faPersianYM) return;
+    faPersianYM = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric', month: 'long' });
+    faPersianDay = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric' });
+    faPersianYMParts = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric', month: 'numeric' });
+    faPersianFull = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  function toLatinDigits(s) {
+    return String(s).replace(/[\u06F0-\u06F9\u0660-\u0669]/g, function (d) {
+      var code = d.charCodeAt(0);
+      if (code >= 0x06F0) return String(code - 0x06F0);
+      return String(code - 0x0660);
+    });
+  }
+
+  function toLocalISODate(d) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  function parseLocalISODate(iso) {
+    if (!iso) return null;
+    var p = String(iso).split('-');
+    if (p.length < 3) return null;
+    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function getPersianParts(date) {
+    initJalaliFormatters();
+    var y = 0;
+    var m = 0;
+    faPersianYMParts.formatToParts(date).forEach(function (part) {
+      if (part.type === 'year') y = Number(toLatinDigits(part.value));
+      if (part.type === 'month') m = Number(toLatinDigits(part.value));
+    });
+    return { y: y, m: m, d: Number(toLatinDigits(faPersianDay.format(date))) };
+  }
+
+  function getPersianMonthDates(baseDate) {
+    var base = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
+    var py = getPersianParts(base).y;
+    var pm = getPersianParts(base).m;
+    var first = new Date(base);
+    for (var i = 0; i < 40; i++) {
+      var parts = getPersianParts(first);
+      if (parts.y === py && parts.m === pm && parts.d === 1) break;
+      first.setDate(first.getDate() - 1);
+    }
+    var dates = [];
+    var cursor = new Date(first);
+    for (var j = 0; j < 40; j++) {
+      var cp = getPersianParts(cursor);
+      if (cp.y !== py || cp.m !== pm) break;
+      dates.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return dates;
+  }
+
+  function formatIsoToJalali(iso) {
+    var d = parseLocalISODate(iso);
+    if (!d) return iso || '';
+    initJalaliFormatters();
+    return faPersianFull.format(d);
+  }
+
+  function formatIsoToJalaliShort(iso) {
+    var d = parseLocalISODate(iso);
+    if (!d) return iso || '';
+    try {
+      return d.toLocaleDateString('fa-IR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: 'Asia/Tehran',
+      });
+    } catch (e) {
+      return formatIsoToJalali(iso);
+    }
+  }
+
+  function initVisitCalBounds() {
+    var today = new Date();
+    today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    visitCalState.minDate = today;
+    visitCalState.maxDate = new Date(today);
+    visitCalState.maxDate.setDate(visitCalState.maxDate.getDate() + 90);
+    visitCalState.viewDate = new Date(today);
+  }
+
+  function isDateInVisitRange(d) {
+    var iso = toLocalISODate(d);
+    return iso >= toLocalISODate(visitCalState.minDate) && iso <= toLocalISODate(visitCalState.maxDate);
+  }
+
+  function renderVisitCalendar() {
+    var grid = document.getElementById('landVisitCalGrid');
+    var monthLabel = document.getElementById('landVisitCalMonth');
+    if (!grid || !visitCalState.viewDate) return;
+    initJalaliFormatters();
+
+    var monthDates = getPersianMonthDates(visitCalState.viewDate);
+    if (!monthDates.length) return;
+
+    if (monthLabel) monthLabel.textContent = faPersianYM.format(monthDates[0]);
+    grid.innerHTML = '';
+
+    var firstDay = monthDates[0].getDay();
+    var startOffset = firstDay === 6 ? 0 : firstDay + 1;
+    for (var i = 0; i < startOffset; i++) {
+      var ph = document.createElement('div');
+      ph.className = 'aspect-square';
+      grid.appendChild(ph);
+    }
+
+    var todayIso = toLocalISODate(visitCalState.minDate);
+    monthDates.forEach(function (gd) {
+      var iso = toLocalISODate(gd);
+      var enabled = isDateInVisitRange(gd);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = faPersianDay.format(gd);
+      btn.className = 'aspect-square rounded-lg text-xs font-medium transition ' + (
+        !enabled
+          ? 'text-gray-600 cursor-not-allowed opacity-40'
+          : visitCalState.selectedIso === iso
+            ? 'bg-teal-500 text-white ring-2 ring-teal-300'
+            : iso === todayIso
+              ? 'bg-white/10 text-white hover:bg-teal-600/40'
+              : 'text-gray-200 hover:bg-white/10'
+      );
+      btn.disabled = !enabled;
+      if (enabled) {
+        (function (dayIso) {
+          btn.addEventListener('click', function () {
+            visitCalState.selectedIso = dayIso;
+            var hidden = document.getElementById('landVisitDateInput');
+            var selectedEl = document.getElementById('landVisitCalSelected');
+            if (hidden) hidden.value = dayIso;
+            if (selectedEl) selectedEl.textContent = formatIsoToJalali(dayIso);
+            renderVisitCalendar();
+          });
+        })(iso);
+      }
+      grid.appendChild(btn);
+    });
+  }
+
+  function resetVisitCalendarSelection() {
+    visitCalState.selectedIso = '';
+    var hidden = document.getElementById('landVisitDateInput');
+    var selectedEl = document.getElementById('landVisitCalSelected');
+    if (hidden) hidden.value = '';
+    if (selectedEl) selectedEl.textContent = 'تاریخ انتخاب نشده';
+  }
+
+  function initVisitCalendarControls() {
+    if (visitCalState.controlsBound) return;
+    visitCalState.controlsBound = true;
+    initVisitCalBounds();
+
+    var prev = document.getElementById('landVisitCalPrev');
+    var next = document.getElementById('landVisitCalNext');
+    if (prev) {
+      prev.addEventListener('click', function () {
+        visitCalState.viewDate.setDate(visitCalState.viewDate.getDate() - 28);
+        renderVisitCalendar();
+      });
+    }
+    if (next) {
+      next.addEventListener('click', function () {
+        visitCalState.viewDate.setDate(visitCalState.viewDate.getDate() + 28);
+        renderVisitCalendar();
+      });
+    }
+  }
+
+  function updateVisitDateHint(isoDate, jalaliLabel) {
+    var hint = document.getElementById('landVisitDateHint');
+    if (!hint) return;
+    var display = jalaliLabel || formatIsoToJalaliShort(isoDate) || isoDate;
+    if (isoDate || jalaliLabel) {
+      hint.textContent = 'بازدید: ' + display;
+      hint.classList.remove('hidden');
+    } else {
+      hint.textContent = '';
+      hint.classList.add('hidden');
+    }
+    syncFooterSpacer();
+  }
 
   var footerSpacerResizeBound = false;
 
@@ -348,75 +572,264 @@
     }, 2800);
   }
 
-  function applyTxStatus(status) {
+  function getLandCsrf() {
+    var btn = document.getElementById('landTxToggleBtn');
+    var cfg = readConfig();
+    return (btn && btn.getAttribute('data-csrf')) ||
+      (cfg && cfg.csrfToken) ||
+      (window.VINOR_NOTIFY_CFG && window.VINOR_NOTIFY_CFG.csrfToken) ||
+      '';
+  }
+
+  function syncTxButtonDisabled(btn, mode) {
+    if (!btn || btn.tagName !== 'BUTTON') return;
+    btn.disabled = mode === 'visit_pending';
+    btn.setAttribute('aria-disabled', mode === 'visit_pending' ? 'true' : 'false');
+  }
+
+  var visitStatusPollTimer = null;
+
+  function stopVisitStatusPoll() {
+    if (visitStatusPollTimer) {
+      clearInterval(visitStatusPollTimer);
+      visitStatusPollTimer = null;
+    }
+  }
+
+  function fetchLandTxStatus() {
+    var cfg = readConfig();
+    var btn = document.getElementById('landTxToggleBtn');
+    var url = (btn && btn.getAttribute('data-tx-status-url')) || (cfg && cfg.txStatusUrl) || '';
+    if (!url) return Promise.resolve(null);
+    return fetch(url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return res.ok ? data : null;
+      });
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  function initVisitStatusPoll(initialMode) {
+    stopVisitStatusPoll();
+    if (initialMode !== 'visit_pending') return;
+
+    var root = document.querySelector(ROOT_SEL);
+    var prevMode = initialMode;
+
+    function pollOnce() {
+      fetchLandTxStatus().then(function (data) {
+        if (!data || !data.success) return;
+        var mode = data.tx_mode || 'visit';
+        if (mode === prevMode) return;
+        prevMode = mode;
+        applyTxMode(mode, data.visit_date || '', data.visit_date_jalali || '');
+        if (mode === 'deal') {
+          showTxToast('بازدید تأیید شد — اکنون می‌توانید درخواست معامله ثبت کنید.', false);
+          stopVisitStatusPoll();
+        } else if (mode === 'visit') {
+          showTxToast('درخواست بازدید رد شد. می‌توانید تاریخ جدید انتخاب کنید.', false);
+          stopVisitStatusPoll();
+        } else if (mode !== 'visit_pending') {
+          stopVisitStatusPoll();
+        }
+        if (root) root.dataset.txMode = mode;
+      });
+    }
+
+    pollOnce();
+    visitStatusPollTimer = setInterval(pollOnce, 12000);
+  }
+
+  function applyTxMode(mode, visitDate, visitDateJalali) {
     var root = document.querySelector(ROOT_SEL);
     var btn = document.getElementById('landTxToggleBtn');
-    var cfg = TX_UI[status] || TX_UI.active;
-    if (root) root.dataset.txStatus = status;
+    var cfg = TX_UI[mode] || TX_UI.visit;
+    var status = statusFromMode(mode);
+    if (root) {
+      root.dataset.txMode = mode;
+      root.dataset.txStatus = status;
+    }
     if (btn) {
+      btn.setAttribute('data-land-tx-mode', mode);
       btn.setAttribute('data-land-tx-status', status);
       var icon = btn.querySelector('.land-tx-icon');
       var label = btn.querySelector('.land-tx-label');
       if (icon) icon.className = 'fas ' + cfg.icon + ' land-tx-icon';
       if (label) label.textContent = cfg.label;
-      btn.className = 'w-full flex items-center justify-center gap-2 rounded-2xl text-white font-bold py-3.5 text-sm active:scale-[0.98] transition-all disabled:opacity-60 disabled:pointer-events-none ' + cfg.btnClass;
+      btn.className = 'w-full flex items-center justify-center gap-2 rounded-2xl text-white font-bold py-3.5 text-sm active:scale-[0.98] transition-all disabled:opacity-70 disabled:pointer-events-none ' + cfg.btnClass;
+      if (visitDate) {
+        btn.setAttribute('data-visit-date', visitDate);
+      }
+      syncTxButtonDisabled(btn, mode);
     }
     var badge = document.getElementById('landTxStatusBadge');
-    if (badge) badge.classList.toggle('hidden', status !== 'in_transaction');
+    if (badge) badge.classList.toggle('hidden', mode !== 'release');
     var spec = document.querySelector('[data-land-tx-spec-value]');
     if (spec) spec.textContent = cfg.specLabel;
+    if (mode === 'deal' && (visitDate || visitDateJalali)) {
+      updateVisitDateHint(visitDate, visitDateJalali);
+    } else if (mode === 'visit_pending' && (visitDate || visitDateJalali)) {
+      updateVisitDateHint(visitDate, visitDateJalali);
+    } else if (mode === 'visit' || mode === 'release') {
+      updateVisitDateHint('');
+    }
+    if (mode !== 'visit_pending') {
+      stopVisitStatusPoll();
+    }
+  }
+
+  function applyTxStatus(status) {
+    var mode = status === 'in_transaction' ? 'release' : 'visit';
+    applyTxMode(mode);
+  }
+
+  function openVisitModal() {
+    var modal = document.getElementById('landVisitModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    document.documentElement.classList.add('vinor-express-overlay-modal-open');
+    initVisitCalendarControls();
+    initVisitCalBounds();
+    resetVisitCalendarSelection();
+    renderVisitCalendar();
+  }
+
+  function closeVisitModal() {
+    var modal = document.getElementById('landVisitModal');
+    if (modal) modal.classList.add('hidden');
+    document.documentElement.classList.remove('vinor-express-overlay-modal-open');
+  }
+
+  function postLandAction(url, extraFields, onSuccess) {
+    var btn = document.getElementById('landTxToggleBtn');
+    if (!btn) return Promise.reject(new Error('دکمه یافت نشد'));
+    var csrf = getLandCsrf();
+    var body = new FormData();
+    if (csrf) body.append('csrf_token', csrf);
+    if (extraFields) {
+      Object.keys(extraFields).forEach(function (k) {
+        body.append(k, extraFields[k]);
+      });
+    }
+    return fetch(url, {
+      method: 'POST',
+      body: body,
+      credentials: 'same-origin',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        Accept: 'application/json',
+      },
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { ok: res.ok, data: data };
+      });
+    }).then(function (result) {
+      if (!result.ok || !result.data || !result.data.success) {
+        throw new Error((result.data && result.data.message) || 'خطا در انجام عملیات');
+      }
+      if (onSuccess) onSuccess(result.data);
+      return result.data;
+    });
+  }
+
+  function initVisitRequest() {
+    var submitBtn = document.getElementById('landVisitSubmitBtn');
+    var dateInput = document.getElementById('landVisitDateInput');
+    var txBtn = document.getElementById('landTxToggleBtn');
+    if (!submitBtn || !txBtn) return;
+
+    function onSubmit() {
+      if (submitBtn.disabled || submitBtn.dataset.busy === '1') return;
+      var visitDate = dateInput ? (dateInput.value || '').trim() : '';
+      if (!visitDate) {
+        showTxToast('لطفاً تاریخ بازدید را انتخاب کنید.', true);
+        return;
+      }
+      var url = txBtn.getAttribute('data-visit-request-url');
+      if (!url) return;
+
+      submitBtn.dataset.busy = '1';
+      submitBtn.disabled = true;
+
+      postLandAction(url, { visit_date: visitDate }, function (data) {
+        closeVisitModal();
+        var mode = data.tx_mode || 'visit_pending';
+        applyTxMode(mode, data.visit_date || visitDate, data.visit_date_jalali);
+        if (mode === 'visit_pending') initVisitStatusPoll('visit_pending');
+        showTxToast(data.message, false);
+      }).catch(function (err) {
+        showTxToast(err.message || 'خطا در ثبت بازدید', true);
+      }).finally(function () {
+        submitBtn.dataset.busy = '0';
+        submitBtn.disabled = false;
+      });
+    }
+
+    submitBtn.addEventListener('click', onSubmit);
+    addCleanup(function () {
+      submitBtn.removeEventListener('click', onSubmit);
+    });
   }
 
   function initTransactionToggle() {
     var btn = document.getElementById('landTxToggleBtn');
     var root = document.querySelector(ROOT_SEL);
-    if (!btn || !root) return;
+    if (!btn || !root || !btn.hasAttribute('data-land-tx-toggle')) return;
+
+    var cfg = readConfig();
+    var initialMode = (cfg && cfg.txMode) || btn.getAttribute('data-land-tx-mode') || 'visit';
+    var initialVisit = (cfg && cfg.visitDate) || btn.getAttribute('data-visit-date') || '';
+    var initialVisitJalali = (cfg && cfg.visitDateJalali) || '';
+    applyTxMode(initialMode, initialVisit, initialVisitJalali);
+    if (initialMode === 'visit_pending') initVisitStatusPoll('visit_pending');
+    addCleanup(stopVisitStatusPoll);
 
     function onClick() {
       if (btn.disabled || btn.dataset.busy === '1') return;
-      var prev = root.dataset.txStatus || btn.getAttribute('data-land-tx-status') || 'active';
-      var optimistic = prev === 'in_transaction' ? 'active' : 'in_transaction';
+      var mode = btn.getAttribute('data-land-tx-mode') || root.dataset.txMode || 'visit';
+
+      if (mode === 'visit_pending') {
+        showTxToast('درخواست بازدید در انتظار تأیید ادمین است.', false);
+        return;
+      }
+
+      if (mode === 'visit') {
+        openVisitModal();
+        return;
+      }
+
+      var prevMode = mode;
+      var prevStatus = root.dataset.txStatus || btn.getAttribute('data-land-tx-status') || 'active';
+      var prevVisit = btn.getAttribute('data-visit-date') || '';
+      var optimisticMode = prevMode === 'release' ? 'visit' : (prevMode === 'deal' ? 'release' : 'visit');
       var url = btn.getAttribute('data-land-tx-url');
-      var csrf = btn.getAttribute('data-csrf') ||
-        (window.VINOR_NOTIFY_CFG && window.VINOR_NOTIFY_CFG.csrfToken) || '';
 
       btn.dataset.busy = '1';
       btn.disabled = true;
-      applyTxStatus(optimistic);
+      applyTxMode(optimisticMode);
 
-      var body = new FormData();
-      if (csrf) body.append('csrf_token', csrf);
-
-      fetch(url, {
-        method: 'POST',
-        body: body,
-        credentials: 'same-origin',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          Accept: 'application/json',
-        },
-      })
-        .then(function (res) {
-          return res.json().then(function (data) {
-            return { ok: res.ok, data: data };
-          });
-        })
-        .then(function (result) {
-          if (!result.ok || !result.data || !result.data.success) {
-            throw new Error((result.data && result.data.message) || 'خطا در بروزرسانی وضعیت');
-          }
-          var st = result.data.new_status || optimistic;
-          applyTxStatus(st);
-          showTxToast(result.data.message, false);
-        })
-        .catch(function (err) {
-          applyTxStatus(prev);
-          showTxToast(err.message || 'خطا در بروزرسانی', true);
-        })
-        .finally(function () {
-          btn.dataset.busy = '0';
-          btn.disabled = false;
-        });
+      postLandAction(url, null, function (data) {
+        var st = data.new_status || statusFromMode(optimisticMode);
+        var nextMode = data.tx_mode || (st === 'in_transaction' ? 'release' : (prevVisit ? 'deal' : 'visit'));
+        applyTxMode(
+          nextMode,
+          data.visit_date || (nextMode === 'deal' ? prevVisit : ''),
+          data.visit_date_jalali || (nextMode === 'deal' ? formatIsoToJalaliShort(prevVisit) : '')
+        );
+        showTxToast(data.message, false);
+      }).catch(function (err) {
+        applyTxMode(prevMode, prevVisit, formatIsoToJalaliShort(prevVisit));
+        root.dataset.txStatus = prevStatus;
+        showTxToast(err.message || 'خطا در بروزرسانی', true);
+      }).finally(function () {
+        btn.dataset.busy = '0';
+        var currentMode = btn.getAttribute('data-land-tx-mode') || root.dataset.txMode || 'visit';
+        syncTxButtonDisabled(btn, currentMode);
+      });
     }
 
     btn.addEventListener('click', onClick);
@@ -490,6 +903,7 @@
     initMoreMenu();
     initShare(cfg);
     initModals();
+    initVisitRequest();
     initTransactionToggle();
     initLandFlashes(cfg);
     initDescToggle();
