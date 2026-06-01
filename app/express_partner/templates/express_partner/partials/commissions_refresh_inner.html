@@ -1,4 +1,5 @@
 {# محتوای داخل #commissionsRefreshMount — با fetch جایگزین می‌شود؛ کارت موجودی قابل برداشت ابتدا #}
+<span data-commissions-csrf="{{ csrf_token() }}" class="hidden" aria-hidden="true"></span>
 {% include 'express_partner/partials/commissions_withdraw_card.html' %}
 {% include 'express_partner/partials/commissions_stats_grid.html' %}
 {% include 'express_partner/partials/commissions_withdrawals.html' %}

@@ -21,9 +21,7 @@
       </div>
       <div class="shrink-0 flex flex-col items-center gap-1.5">
         {% set st = (w.status or 'pending')|trim %}
-        {% if st == 'paid' %}
-          <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-violet-500/20 text-violet-200 border border-violet-500/30">پرداخت‌شده</span>
-        {% elif st == 'rejected' %}
+        {% if st == 'rejected' %}
           <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-red-500/20 text-red-300 border border-red-500/30">رد شده</span>
         {% elif st in ('approved', 'processing') %}
           <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-sky-500/20 text-sky-200 border border-sky-500/30">{{ w.status_label }}</span>

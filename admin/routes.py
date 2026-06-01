@@ -51,7 +51,12 @@ def _save_express_document(file, land_code):
     file.save(file_path)
     return filename
 from app.api.push import _load_subs, _send_one, _save_subs, send_push_batch_background
-from app.express_partner.partner_withdrawals import admin_row_dict, apply_paid_withdrawal_to_commissions
+from app.express_partner.partner_withdrawals import (
+    admin_row_dict,
+    apply_paid_withdrawal_to_commissions,
+    link_withdrawal_to_commissions,
+    release_withdrawal_commissions,
+)
 from app.services.sms import send_sms_template, send_sms_direct, send_sms_code
 from app.utils.storage import load_users, load_reports, save_reports, save_ads
 from app.utils.storage import (
@@ -3671,29 +3676,60 @@ def financial_withdrawal_status(wid: str):
         return redirect(url_for('admin.financial_withdrawals'))
     try:
         save_partner_withdrawals(items)
+        commissions = load_express_commissions() or []
+        if not isinstance(commissions, list):
+            commissions = []
+        commissions_dirty = False
+        withdrawals_dirty = False
+        if (
+            withdrawal_row
+            and new_status in ("approved", "processing")
+            and old_status not in ("approved", "processing", "paid")
+        ):
+            linked = link_withdrawal_to_commissions(
+                commissions,
+                str(withdrawal_row.get("phone") or "").strip(),
+                int(withdrawal_row.get("amount") or 0),
+                str(withdrawal_row.get("id") or ""),
+                items,
+            )
+            if linked > 0:
+                commissions_dirty = True
+        elif withdrawal_row and new_status == "rejected" and old_status != "rejected":
+            release_withdrawal_commissions(commissions, str(withdrawal_row.get("id") or ""))
+            commissions_dirty = True
         if (
             new_status == 'paid'
             and old_status != 'paid'
             and withdrawal_row
         ):
             now_iso = iso_z(utcnow())
-            commissions = load_express_commissions() or []
-            if not isinstance(commissions, list):
-                commissions = []
-            allocated = apply_paid_withdrawal_to_commissions(
-                commissions,
-                str(withdrawal_row.get('phone') or '').strip(),
-                int(withdrawal_row.get('amount') or 0),
-                str(withdrawal_row.get('id') or ''),
-                now_iso,
-            )
+            wd_amount = int(withdrawal_row.get('amount') or 0)
+            already = int(withdrawal_row.get('commission_allocated_amount') or 0)
+            need = max(0, wd_amount - already)
+            allocated = 0
+            if need > 0:
+                allocated = apply_paid_withdrawal_to_commissions(
+                    commissions,
+                    str(withdrawal_row.get('phone') or '').strip(),
+                    need,
+                    str(withdrawal_row.get('id') or ''),
+                    now_iso,
+                    items,
+                )
             if allocated > 0:
-                save_express_commissions(commissions)
-            elif int(withdrawal_row.get('amount') or 0) > 0:
+                commissions_dirty = True
+                withdrawal_row['commission_allocated_amount'] = already + allocated
+                withdrawals_dirty = True
+            elif wd_amount > 0 and already <= 0:
                 current_app.logger.warning(
                     'withdrawal %s marked paid but no approved commission allocated',
                     wid,
                 )
+        if commissions_dirty:
+            save_express_commissions(commissions)
+        if withdrawals_dirty:
+            save_partner_withdrawals(items)
         flash('وضعیت درخواست بروزرسانی شد.', 'success')
     except Exception:
         current_app.logger.exception('save_partner_withdrawals status failed')

@@ -1,22 +1,28 @@
-{# یک ردیف تراکنش پورسانت — متغیر c #}
+{# یک ردیف تراکنش پورسانت یا برداشت — متغیر c #}
+{% set _txn_type = (c.txn_type or 'commission')|trim %}
 <div class="flex items-center gap-2 px-3 py-3 hover:bg-white/[0.03] transition-colors{% if tour_item %} commission-txn-row-tour{% endif %}"
      data-commission-status="{{ (c.status or 'pending')|trim }}"
+     data-txn-type="{{ _txn_type }}"
      {% if tour_item %}data-tour="commission-item"{% endif %}>
   <div class="shrink-0 w-[4.75rem] text-end space-y-0.5">
     {% if c.created_at %}
     <div class="text-[10px] text-slate-500 tabular-nums jalali-dt" data-dt="{{ c.created_at }}"></div>
     {% endif %}
     <div class="text-[10px] font-semibold text-slate-300 tabular-nums leading-tight">
-      {% if c.commission_type == 'referral' %}دعوت{% else %}کد ملک: {{ c.land_code or '—' }}{% endif %}
+      {% if _txn_type == 'withdrawal' %}برداشت{% elif c.commission_type == 'referral' %}دعوت{% else %}کد ملک: {{ c.land_code or '—' }}{% endif %}
     </div>
   </div>
   <div class="flex-1 min-w-0 px-1">
-    <p class="text-[11px] text-slate-400 leading-snug line-clamp-2 text-center">{{ c._txn_label or 'پورسانت فروش' }}</p>
+    <p class="text-[11px] text-slate-400 leading-snug line-clamp-2 text-center">{{ c._txn_label or 'پورسانت فروش' }}{% if c.partial_paid_display %} <span class="text-slate-500">({{ c.partial_paid_display|toman }} واریز شده)</span>{% endif %}</p>
   </div>
   <div class="shrink-0 flex flex-col items-center gap-1.5">
     {% set st = (c.status or 'pending')|trim %}
-    {% if st == 'paid' %}
+    {% if _txn_type == 'withdrawal' %}
+      <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-violet-500/20 text-violet-200 border border-violet-500/30">واریز شد</span>
+    {% elif st == 'paid' %}
       <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-violet-500/20 text-violet-200 border border-violet-500/30">پرداخت‌شده</span>
+    {% elif st == 'approved' and c._txn_phase == 'approval' %}
+      <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35">تأیید پورسانت</span>
     {% elif st == 'approved' %}
       <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35">تأیید شده</span>
     {% elif st == 'rejected' %}
@@ -25,7 +31,11 @@
       <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-amber-500/20 text-amber-200 border border-amber-500/35">در انتظار تأیید</span>
     {% endif %}
   </div>
-  <div class="shrink-0 text-xs font-bold text-emerald-400 tabular-nums whitespace-nowrap w-[5.75rem] text-end">
-    {% if (c.commission_amount or 0)|int > 0 %}+{% endif %}{{ (c.commission_amount or 0)|toman }}
+  <div class="shrink-0 text-xs font-bold tabular-nums whitespace-nowrap w-[5.75rem] text-end{% if _txn_type == 'withdrawal' %} text-amber-300{% else %} text-emerald-400{% endif %}">
+    {% if _txn_type == 'withdrawal' %}
+      −{{ (c.withdrawal_amount or 0)|toman }}
+    {% else %}
+      {% if (c.commission_amount or 0)|int > 0 %}+{% endif %}{{ (c.commission_amount or 0)|toman }}
+    {% endif %}
   </div>
 </div>

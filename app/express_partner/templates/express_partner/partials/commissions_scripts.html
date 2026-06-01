@@ -82,6 +82,14 @@
         var doc = new DOMParser().parseFromString(html, 'text/html');
         var next = doc.getElementById('commissionsRefreshMount');
         if (next && mount) mount.innerHTML = next.innerHTML;
+        var csrfNode = doc.querySelector('[data-commissions-csrf]');
+        if (csrfNode) {
+          var fresh = csrfNode.getAttribute('data-commissions-csrf') || '';
+          if (fresh) {
+            window.VINOR_NOTIFY_CFG = window.VINOR_NOTIFY_CFG || {};
+            window.VINOR_NOTIFY_CFG.csrfToken = fresh;
+          }
+        }
         applyJalali(mount);
       }).catch(function(){})
       .finally(function(){
@@ -308,10 +316,12 @@
         .then(function (d) {
           if (!d || !d.success) return d;
           bankCatalogCache = d.banks || [];
-          if (typeof d.withdrawable_balance === 'number') {
+          if (typeof d.requestable_balance === 'number') {
+            maxWithdraw = Math.max(0, parseInt(String(d.requestable_balance), 10) || 0);
+          } else if (typeof d.withdrawable_balance === 'number') {
             maxWithdraw = Math.max(0, parseInt(String(d.withdrawable_balance), 10) || 0);
-            if (balanceEl) balanceEl.textContent = formatToman(maxWithdraw);
           }
+          if (balanceEl) balanceEl.textContent = formatToman(maxWithdraw);
           applyDefaultBankSelection(d.accounts || [], d.default_account_id || '');
           return d;
         })
@@ -837,10 +847,12 @@
               return;
             }
             var req = x.j.request || {};
-            if (typeof req.withdrawable_balance === 'number') {
+            if (typeof req.requestable_balance === 'number') {
+              maxWithdraw = Math.max(0, parseInt(String(req.requestable_balance), 10) || 0);
+            } else if (typeof req.withdrawable_balance === 'number') {
               maxWithdraw = Math.max(0, parseInt(String(req.withdrawable_balance), 10) || 0);
-              if (balanceEl) balanceEl.textContent = formatToman(maxWithdraw);
             }
+            if (balanceEl) balanceEl.textContent = formatToman(maxWithdraw);
             setInputFromInt(0);
             if (elWithdrawSuccess) {
               elWithdrawSuccess.textContent = 'درخواست برداشت با موفقیت ثبت شد. پس از بررسی، وجه واریز می‌شود.';

@@ -44,10 +44,15 @@ from .partner_bank_accounts import (
 )
 from .partner_withdrawals import (
     withdrawable_balance,
+    available_for_new_withdrawal,
     validate_new_request,
     admin_row_dict,
     withdrawals_for_phone,
     reserved_withdrawal_total,
+    active_withdrawals_for_phone,
+    build_partner_txn_feed,
+    partner_commission_dashboard,
+    reconcile_paid_withdrawals,
 )
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
 from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
@@ -175,16 +180,52 @@ def _partner_withdrawals_raw() -> List[Dict[str, Any]]:
     return items if isinstance(items, list) else []
 
 
+def _reconcile_partner_commissions(phone: str) -> None:
+    """هم‌تراز کردن برداشت‌های paid با پورسانت‌ها (در صورت نیاز ذخیره)."""
+    ph = (phone or '').strip()
+    if not ph:
+        return
+    wd = _partner_withdrawals_raw()
+    all_comms = _express_commissions_cached() or []
+    dirty = reconcile_paid_withdrawals(all_comms, wd, ph)
+    if dirty:
+        try:
+            save_express_commissions(all_comms)
+            save_partner_withdrawals(wd)
+        except Exception:
+            current_app.logger.exception('reconcile_paid_withdrawals failed')
+
+
+def _partner_commission_stats(phone: str, commissions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    _reconcile_partner_commissions(phone)
+    ph = (phone or '').strip()
+    wd = _partner_withdrawals_raw()
+    all_comms = _express_commissions_cached() or []
+    return partner_commission_dashboard(all_comms, wd, ph)
+
+
 def _partner_withdrawable_balance(phone: str) -> int:
     ph = (phone or '').strip()
     if not ph:
         return 0
-    comms = _commissions_for_phone(ph)
-    return withdrawable_balance(comms, _partner_withdrawals_raw(), ph)
+    _reconcile_partner_commissions(ph)
+    return withdrawable_balance(_express_commissions_cached() or [], _partner_withdrawals_raw(), ph)
+
+
+def _partner_requestable_balance(phone: str) -> int:
+    ph = (phone or '').strip()
+    if not ph:
+        return 0
+    _reconcile_partner_commissions(ph)
+    return available_for_new_withdrawal(_express_commissions_cached() or [], _partner_withdrawals_raw(), ph)
 
 
 def _partner_withdrawal_items(phone: str) -> List[Dict[str, Any]]:
-    return withdrawals_for_phone(_partner_withdrawals_raw(), phone)
+    return active_withdrawals_for_phone(_partner_withdrawals_raw(), phone)
+
+
+def _partner_txn_items(phone: str, commissions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return build_partner_txn_feed(commissions, _partner_withdrawals_raw(), phone)
 
 
 def _partner_pending_withdrawal_total(phone: str) -> int:
@@ -1826,39 +1867,13 @@ def commissions_page():
     is_approved = _is_partner_approved(profile)
     my_comms = _commissions_for_phone(me_phone)
 
-    def _i(v):
-        try:
-            return int(str(v).replace(',', '').strip() or '0')
-        except Exception:
-            return 0
-
-    # کل درآمد: فقط پورسانت‌های تایید شده و پرداخت شده (نه pending و rejected)
-    total_commission = sum(_i(c.get('commission_amount')) for c in my_comms if (c.get('status') or '') in ('approved', 'paid'))
-    
-    # در انتظار: فقط پورسانت‌هایی که status='pending' یا None/خالی است (default به pending)
-    pending_commission = sum(_i(c.get('commission_amount')) for c in my_comms if (c.get('status') or 'pending').strip() == 'pending')
-    
-    # پرداخت شده: فقط پورسانت‌هایی که status='paid'
-    paid_commission = sum(_i(c.get('commission_amount')) for c in my_comms if (c.get('status') or '').strip() == 'paid')
-    
-    # فروش‌های تایید شده: تعداد پورسانت‌هایی که status='approved' یا 'paid' دارند
-    sold_count = sum(1 for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
-
-    def _norm_st(c):
-        try:
-            return (str(c.get('status') or 'pending')).strip()
-        except Exception:
-            return 'pending'
-
-    pending_count = sum(1 for c in my_comms if _norm_st(c) == 'pending')
-    approved_count = sum(1 for c in my_comms if _norm_st(c) == 'approved')
-    paid_count = sum(1 for c in my_comms if _norm_st(c) == 'paid')
-    approved_commission = sum(_i(c.get('commission_amount')) for c in my_comms if _norm_st(c) == 'approved')
-    withdrawable_balance = _partner_withdrawable_balance(me_phone)
-    pending_withdrawal_total = _partner_pending_withdrawal_total(me_phone)
+    comm_stats = _partner_commission_stats(me_phone, my_comms)
+    withdrawable_balance = comm_stats["withdrawable_balance"]
+    pending_withdrawal_total = comm_stats["in_withdrawal_amount"]
     withdrawal_items = _partner_withdrawal_items(me_phone)
 
     _attach_commission_txn_labels(my_comms)
+    txn_items = _partner_txn_items(me_phone, my_comms)
 
     try:
         my_comms.sort(key=lambda x: x.get('created_at',''), reverse=True)
@@ -1874,16 +1889,18 @@ def commissions_page():
 
     resp = make_response(render_template(
         "express_partner/commissions.html",
-        items=my_comms,
-        total_commission=total_commission,
-        pending_commission=pending_commission,
-        paid_commission=paid_commission,
-        sold_count=sold_count,
-        pending_count=pending_count,
-        approved_count=approved_count,
-        paid_count=paid_count,
-        approved_commission=approved_commission,
+        items=txn_items,
+        comm_stats=comm_stats,
+        total_commission=comm_stats["total_confirmed_amount"],
+        pending_commission=comm_stats["pending_amount"],
+        paid_commission=comm_stats["received_amount"],
+        sold_count=comm_stats["total_confirmed_count"],
+        pending_count=comm_stats["pending_count"],
+        approved_count=comm_stats["approved_count"],
+        paid_count=comm_stats["received_count"],
+        approved_commission=comm_stats["approved_amount"],
         withdrawable_balance=withdrawable_balance,
+        requestable_balance=withdrawable_balance,
         pending_withdrawal_total=pending_withdrawal_total,
         withdrawal_items=withdrawal_items,
         partner_name=partner_name,
@@ -1909,14 +1926,11 @@ def commissions_transactions_page():
 
     my_comms = _commissions_for_phone(me_phone)
     _attach_commission_txn_labels(my_comms)
-    try:
-        my_comms.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-    except Exception:
-        pass
+    txn_items = _partner_txn_items(me_phone, my_comms)
 
     return render_template(
         "express_partner/commissions_txn_list.html",
-        items=my_comms,
+        items=txn_items,
         hide_header=True,
         SHOW_SUBMIT_BUTTON=False,
         brand="وینور",
@@ -1931,6 +1945,7 @@ def commissions_data():
     """API JSON برای اپ اندروید: خلاصه و لیست پورسانت‌های همکار جاری."""
     me_phone = (session.get("user_phone") or "").strip()
     my_comms = _commissions_for_phone(me_phone)
+    comm_stats = _partner_commission_stats(me_phone, my_comms)
 
     def _i(v):
         try:
@@ -1938,20 +1953,6 @@ def commissions_data():
         except Exception:
             return 0
 
-    total_commission = sum(_i(c.get('commission_amount')) for c in my_comms if (c.get('status') or '') in ('approved', 'paid'))
-    pending_commission = sum(_i(c.get('commission_amount')) for c in my_comms if (c.get('status') or 'pending').strip() == 'pending')
-    paid_commission = sum(_i(c.get('commission_amount')) for c in my_comms if (c.get('status') or '').strip() == 'paid')
-    sold_count = sum(1 for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
-
-    def _norm_st(c):
-        try:
-            return (str(c.get('status') or 'pending')).strip()
-        except Exception:
-            return 'pending'
-
-    approved_commission = sum(_i(c.get('commission_amount')) for c in my_comms if _norm_st(c) == 'approved')
-    withdrawable_balance = _partner_withdrawable_balance(me_phone)
-    pending_withdrawal_total = _partner_pending_withdrawal_total(me_phone)
     try:
         my_comms = sorted(my_comms, key=lambda x: x.get('created_at', ''), reverse=True)
     except Exception:
@@ -1969,12 +1970,15 @@ def commissions_data():
         })
     return jsonify({
         'success': True,
-        'total_commission': total_commission,
-        'pending_commission': pending_commission,
-        'paid_commission': paid_commission,
-        'sold_count': sold_count,
-        'withdrawable_balance': withdrawable_balance,
-        'pending_withdrawal_total': pending_withdrawal_total,
+        'total_commission': comm_stats['total_confirmed_amount'],
+        'pending_commission': comm_stats['pending_amount'],
+        'paid_commission': comm_stats['received_amount'],
+        'sold_count': comm_stats['total_confirmed_count'],
+        'withdrawable_balance': comm_stats['withdrawable_balance'],
+        'requestable_balance': comm_stats['withdrawable_balance'],
+        'pending_withdrawal_total': comm_stats['in_withdrawal_amount'],
+        'in_withdrawal_amount': comm_stats['in_withdrawal_amount'],
+        'approved_commission': comm_stats['approved_amount'],
         'items': items,
     })
 
@@ -2022,13 +2026,15 @@ def bank_accounts_data():
         all_rows = []
     mine = [r for r in all_rows if isinstance(r, dict) and str(r.get('phone') or '').strip() == me_phone]
     mine = _sort_bank_accounts_by_created(mine)
-    w_balance = _partner_withdrawable_balance(me_phone)
+    comm_stats = _partner_commission_stats(me_phone, _commissions_for_phone(me_phone))
+    w_balance = comm_stats['withdrawable_balance']
     default_acc = next((a for a in mine if a.get('is_default')), mine[0] if mine else None)
     return jsonify({
         'success': True,
         'accounts': [public_account_dict(r) for r in mine],
         'banks': catalog_public(),
         'withdrawable_balance': w_balance,
+        'requestable_balance': w_balance,
         'default_account_id': (default_acc or {}).get('id') or '',
     })
 
@@ -2117,6 +2123,7 @@ def withdrawals_request():
     all_wd = load_partner_withdrawals() or []
     if not isinstance(all_wd, list):
         all_wd = []
+    _reconcile_partner_commissions(me_phone)
     comms = _commissions_for_phone(me_phone)
 
     rec, err = validate_new_request(
@@ -2159,6 +2166,7 @@ def withdrawals_request():
             'status': rec.get('status'),
             'bank_summary': rec.get('bank_summary'),
             'withdrawable_balance': _partner_withdrawable_balance(me_phone),
+            'requestable_balance': _partner_requestable_balance(me_phone),
         },
     })
 
@@ -3201,8 +3209,11 @@ def mark_in_transaction(code: str):
                     # پیدا کردن و حذف پورسانت‌های pending مربوط به این فایل
                     commissions_to_keep = []
                     for c in commissions:
-                        if (str(c.get('land_code')) == str(code) and 
-                            c.get('status') == 'pending'):
+                        if (
+                            str(c.get('land_code')) == str(code)
+                            and str(c.get('partner_phone') or '').strip() == me_phone
+                            and c.get('status') == 'pending'
+                        ):
                             # این پورسانت را حذف می‌کنیم
                             removed_count += 1
                             current_app.logger.info(f"Removed pending commission {c.get('id')} for land {code}")
