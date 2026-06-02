@@ -206,7 +206,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label id="expressSizeLabel" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             متراژ (متر) <span class="text-red-500">*</span>
           </label>
           <input type="number" name="size" required 
@@ -224,6 +224,7 @@
             <option value="">انتخاب کنید</option>
             <option value="زمین" {{ 'selected' if land.category == 'زمین' else '' }}>زمین</option>
             <option value="باغ" {{ 'selected' if land.category == 'باغ' else '' }}>باغ</option>
+            <option value="باغچه" {{ 'selected' if land.category == 'باغچه' else '' }}>باغچه</option>
             <option value="ویلا" {{ 'selected' if land.category == 'ویلا' else '' }}>ویلا</option>
             <option value="آپارتمان" {{ 'selected' if land.category == 'آپارتمان' else '' }}>آپارتمان</option>
             <option value="تجاری" {{ 'selected' if land.category == 'تجاری' else '' }}>تجاری</option>
@@ -251,6 +252,8 @@
         </div>
       </div>
 
+      {% include 'admin/partials/_express_category_specs.html' %}
+
       <div class="mt-6">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           توضیحات
@@ -258,6 +261,14 @@
         <textarea name="description" rows="4" 
                   class="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                   placeholder="توضیحات کامل درباره ملک...">{{ land.description or '' }}</textarea>
+      </div>
+
+      <div class="mt-4">
+        <label class="inline-flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="expert_verified" value="1" id="expert_verified" class="w-4 h-4"
+                 {{ 'checked' if land.expert_verified in (1, '1', true, True) else '' }}>
+          <span class="text-sm text-gray-700 dark:text-gray-300">تایید کارشناسی (نمایش بج روی گالری)</span>
+        </label>
       </div>
     </div>
 

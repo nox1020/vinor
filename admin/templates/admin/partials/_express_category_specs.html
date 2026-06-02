@@ -1,0 +1,253 @@
+{# مشخصات اختصاصی بر اساس دسته — برای فرم ثبت/ویرایش اکسپرس ادمین #}
+{% set land = land or {} %}
+<section id="expressCategorySpecs" class="mt-4 space-y-3 hidden" aria-label="مشخصات اختصاصی دسته">
+  <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">مشخصات اختصاصی</h3>
+
+  <div id="expressSpecsLand" class="hidden space-y-3" data-kind="land">
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">عرض بر (متر)</label>
+        <input type="text" name="frontage" value="{{ land.frontage or '' }}"
+               class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">طول (متر)</label>
+        <input type="text" name="length" value="{{ land.length or '' }}"
+               class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">عرض گذر (متر)</label>
+        <input type="text" name="street_width" value="{{ land.street_width or '' }}"
+               class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">شکل زمین</label>
+        <select name="land_shape" class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+          <option value="">—</option>
+          <option value="مستطیل" {{ 'selected' if land.land_shape == 'مستطیل' else '' }}>مستطیل</option>
+          <option value="مربع" {{ 'selected' if land.land_shape == 'مربع' else '' }}>مربع</option>
+          <option value="هندسی" {{ 'selected' if land.land_shape == 'هندسی' else '' }}>دیگر</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">کاربری</label>
+        <select name="land_use" class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+          <option value="">—</option>
+          <option value="مسکونی" {{ 'selected' if land.land_use == 'مسکونی' else '' }}>مسکونی</option>
+          <option value="کشاورزی" {{ 'selected' if land.land_use == 'کشاورزی' else '' }}>کشاورزی</option>
+          <option value="باغ/ویلایی" {{ 'selected' if land.land_use == 'باغ/ویلایی' else '' }}>باغ/ویلایی</option>
+          <option value="تجاری" {{ 'selected' if land.land_use == 'تجاری' else '' }}>تجاری</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-3 text-sm">
+      <label class="inline-flex items-center gap-2"><input type="checkbox" name="has_fence" value="1" {{ 'checked' if land.has_fence else '' }}> دیوارکشی</label>
+      <label class="inline-flex items-center gap-2"><input type="checkbox" name="has_corner" value="1" {{ 'checked' if land.has_corner else '' }}> نبش</label>
+      <label class="inline-flex items-center gap-2"><input type="checkbox" name="has_well" value="1" {{ 'checked' if land.has_well else '' }}> چاه</label>
+      <label class="inline-flex items-center gap-2"><input type="checkbox" name="has_guardroom" value="1" {{ 'checked' if land.has_guardroom else '' }}> سرایداری</label>
+    </div>
+  </div>
+
+  <div id="expressSpecsGarden" class="hidden space-y-3" data-kind="garden">
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">تعداد درخت</label>
+        <input type="text" name="tree_count" value="{{ land.tree_count or '' }}"
+               class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">سیستم آبیاری</label>
+        <select name="irrigation" class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+          <option value="">—</option>
+          <option value="قطره‌ای" {{ 'selected' if land.irrigation == 'قطره‌ای' else '' }}>قطره‌ای</option>
+          <option value="غرقابی" {{ 'selected' if land.irrigation == 'غرقابی' else '' }}>غرقابی</option>
+          <option value="آبیاری سنتی" {{ 'selected' if land.irrigation == 'آبیاری سنتی' else '' }}>سنتی</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">شکل زمین</label>
+        <select name="land_shape" class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+          <option value="">—</option>
+          <option value="مستطیل" {{ 'selected' if land.land_shape == 'مستطیل' else '' }}>مستطیل</option>
+          <option value="مربع" {{ 'selected' if land.land_shape == 'مربع' else '' }}>مربع</option>
+          <option value="هندسی" {{ 'selected' if land.land_shape == 'هندسی' else '' }}>دیگر</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">کاربری</label>
+        <select name="land_use" class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+          <option value="">—</option>
+          <option value="مسکونی" {{ 'selected' if land.land_use == 'مسکونی' else '' }}>مسکونی</option>
+          <option value="کشاورزی" {{ 'selected' if land.land_use == 'کشاورزی' else '' }}>کشاورزی</option>
+          <option value="باغ/ویلایی" {{ 'selected' if land.land_use == 'باغ/ویلایی' else '' }}>باغ/ویلایی</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">عرض بر (متر)</label>
+        <input type="text" name="frontage" value="{{ land.frontage or '' }}"
+               class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+      </div>
+    </div>
+  </div>
+
+  <div id="expressSpecsVilla" class="hidden grid grid-cols-2 md:grid-cols-3 gap-3" data-kind="villa">
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">متراژ زمین (متر)</label>
+      <input type="text" name="villa_land_area" id="villa_land_area" value="{{ land.villa_land_area or land.land_area or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">متراژ بنا (متر)</label>
+      <input type="text" name="villa_built_area" value="{{ land.villa_built_area or land.built_area or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">اتاق خواب</label>
+      <input type="text" name="villa_bedrooms" value="{{ land.villa_bedrooms or land.rooms or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">سرویس</label>
+      <input type="text" name="villa_bathrooms" value="{{ land.villa_bathrooms or land.bathrooms or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">تراس</label>
+      <select name="villa_terrace" class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+        <option value="">—</option>
+        <option value="1" {{ 'selected' if land.villa_terrace in ('1', 1, true) else '' }}>دارد</option>
+        <option value="0" {{ 'selected' if land.villa_terrace in ('0', 0) else '' }}>ندارد</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">استخر</label>
+      <select name="villa_pool" class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+        <option value="">—</option>
+        <option value="1" {{ 'selected' if land.villa_pool in ('1', 1, true) else '' }}>دارد</option>
+        <option value="0" {{ 'selected' if land.villa_pool in ('0', 0) else '' }}>ندارد</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">جهت</label>
+      <input type="text" name="villa_direction" value="{{ land.villa_direction or land.direction or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">سال ساخت</label>
+      <input type="text" name="year_built" value="{{ land.year_built or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+    </div>
+  </div>
+
+  <div id="expressSpecsApartment" class="hidden grid grid-cols-2 md:grid-cols-3 gap-3" data-kind="apartment">
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">سال ساخت</label>
+      <input type="text" name="year_built" value="{{ land.year_built or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">طبقه</label>
+      <input type="text" name="floor" value="{{ land.floor or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">تعداد اتاق</label>
+      <input type="text" name="rooms" value="{{ land.rooms or land.villa_bedrooms or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">آسانسور</label>
+      <select name="elevator" class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+        <option value="">—</option>
+        <option value="1" {{ 'selected' if land.elevator in ('1', 1, true) else '' }}>دارد</option>
+        <option value="0" {{ 'selected' if land.elevator in ('0', 0) else '' }}>ندارد</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">پارکینگ</label>
+      <select name="parking" class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+        <option value="">—</option>
+        <option value="1" {{ 'selected' if land.parking in ('1', 1, true) else '' }}>دارد</option>
+        <option value="0" {{ 'selected' if land.parking in ('0', 0) else '' }}>ندارد</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">انباری</label>
+      <select name="warehouse" class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+        <option value="">—</option>
+        <option value="1" {{ 'selected' if land.warehouse in ('1', 1, true) else '' }}>دارد</option>
+        <option value="0" {{ 'selected' if land.warehouse in ('0', 0) else '' }}>ندارد</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="expressSpecsCommercial" class="hidden grid grid-cols-2 md:grid-cols-3 gap-3" data-kind="commercial">
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">ویترین/بر (متر)</label>
+      <input type="text" name="front_width" value="{{ land.front_width or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">طبقه</label>
+      <input type="text" name="commercial_floor" value="{{ land.commercial_floor or land.floor or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">مجوز کسب</label>
+      <select name="has_license" class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm">
+        <option value="">—</option>
+        <option value="1" {{ 'selected' if land.has_license in ('1', 1, true) else '' }}>دارد</option>
+        <option value="0" {{ 'selected' if land.has_license in ('0', 0) else '' }}>ندارد</option>
+      </select>
+    </div>
+    <div class="md:col-span-2">
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">نوع کاربری تجاری</label>
+      <input type="text" name="commercial_type" value="{{ land.commercial_type or '' }}"
+             class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm"
+             placeholder="مثلاً پوشاک، رستوران">
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+  const CAT_KIND = {'زمین':'land','باغ':'garden','باغچه':'garden','ویلا':'villa','آپارتمان':'apartment','تجاری':'commercial'};
+  const SIZE_LABELS = {
+    land: 'متراژ زمین (متر)',
+    garden: 'متراژ زمین (متر)',
+    villa: 'متراژ کل / زمین (متر)',
+    apartment: 'متراژ (متر)',
+    commercial: 'متراژ (متر)',
+    other: 'متراژ (متر)'
+  };
+  const sel = document.querySelector('select[name="category"]');
+  const wrap = document.getElementById('expressCategorySpecs');
+  const sizeLbl = document.getElementById('expressSizeLabel');
+  const panels = {
+    land: document.getElementById('expressSpecsLand'),
+    garden: document.getElementById('expressSpecsGarden'),
+    villa: document.getElementById('expressSpecsVilla'),
+    apartment: document.getElementById('expressSpecsApartment'),
+    commercial: document.getElementById('expressSpecsCommercial'),
+  };
+  function kind(){ return CAT_KIND[(sel && sel.value) || ''] || ''; }
+  function sync(){
+    const k = kind();
+    if (wrap) wrap.classList.toggle('hidden', !k);
+    Object.keys(panels).forEach(key => {
+      const el = panels[key];
+      if (el) el.classList.toggle('hidden', key !== k);
+    });
+    if (sizeLbl) sizeLbl.textContent = SIZE_LABELS[k] || SIZE_LABELS.other;
+    panels[k]?.querySelectorAll('input,select').forEach(inp => {
+      inp.disabled = false;
+    });
+    Object.keys(panels).forEach(key => {
+      if (key === k) return;
+      panels[key]?.querySelectorAll('input,select').forEach(inp => { inp.disabled = true; });
+    });
+  }
+  sel?.addEventListener('change', sync);
+  sync();
+})();
+</script>

@@ -145,7 +145,7 @@
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label id="expressSizeLabel" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 متراژ (متر) <span class="text-red-500">*</span>
               </label>
               <input type="text" name="size" required data-format-int
@@ -162,12 +162,15 @@
                 <option value="">انتخاب کنید</option>
                 <option value="زمین">زمین</option>
                 <option value="باغ">باغ</option>
+                <option value="باغچه">باغچه</option>
                 <option value="ویلا">ویلا</option>
                 <option value="آپارتمان">آپارتمان</option>
                 <option value="تجاری">تجاری</option>
               </select>
             </div>
           </div>
+
+          {% include 'admin/partials/_express_category_specs.html' %}
 
           <div class="grid grid-cols-2 gap-3">
             <div>
@@ -219,9 +222,15 @@
                       placeholder="توضیحات کامل..."></textarea>
           </div>
 
-          <div class="flex items-center gap-2 pt-2">
-            <input type="checkbox" name="auto_send_all_partners" value="1" id="auto_send" class="w-4 h-4" checked>
-            <label for="auto_send" class="text-sm text-gray-700 dark:text-gray-300">ارسال خودکار برای تمامی همکاران</label>
+          <div class="flex flex-col gap-2 pt-2">
+            <label class="inline-flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" name="expert_verified" value="1" id="expert_verified" class="w-4 h-4">
+              <span class="text-sm text-gray-700 dark:text-gray-300">تایید کارشناسی (نمایش بج روی گالری)</span>
+            </label>
+            <label class="inline-flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" name="auto_send_all_partners" value="1" id="auto_send" class="w-4 h-4" checked>
+              <span class="text-sm text-gray-700 dark:text-gray-300">ارسال خودکار برای تمامی همکاران</span>
+            </label>
           </div>
         </div>
 

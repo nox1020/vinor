@@ -59,6 +59,7 @@ from app.express_partner.partner_withdrawals import (
 )
 from app.services.sms import send_sms_template, send_sms_direct, send_sms_code
 from app.utils.storage import load_users, load_reports, save_reports, save_ads
+from app.land_category_specs import apply_category_specs_from_form
 from app.utils.storage import (
     load_express_partner_apps,
     save_express_partner_apps,
@@ -2873,6 +2874,7 @@ def add_express_listing():
             'payment_terms': payment_terms,
             'is_express': True,
             'express_status': 'approved',
+            'expert_verified': bool((form.get('expert_verified') or '').strip()),
             'express_documents': documents,
             'vinor_contact': form.get('vinor_contact', '09121234567'),
             'extras': {
@@ -2889,6 +2891,8 @@ def add_express_listing():
             new_express_land['latitude'] = latitude
         if longitude is not None:
             new_express_land['longitude'] = longitude
+
+        apply_category_specs_from_form(new_express_land, form)
         
         # ذخیره در فایل
         lands = load_json(_lands_path())
@@ -2969,10 +2973,15 @@ def edit_express_listing(code):
         land['title'] = form.get('title', '').strip()
         land['location'] = form.get('location', '').strip()
         land['city'] = (form.get('city') or '').strip()
+        land['category'] = (form.get('category') or '').strip()
         land['size'] = form.get('size', '').strip()
         land['price_total'] = int(form.get('price_total', 0) or 0)
         land['price_per_meter'] = int(form.get('price_per_meter', 0) or 0)
         land['description'] = form.get('description', '').strip()
+        if (form.get('expert_verified') or '').strip():
+            land['expert_verified'] = True
+        else:
+            land.pop('expert_verified', None)
         land['vinor_contact'] = form.get('vinor_contact', '09121234567')
         land['payment_method'] = (form.get('payment_method') or '').strip()
         # جزئیات اقساط (اگر اقساطی باشد)
@@ -3070,6 +3079,8 @@ def edit_express_listing(code):
                 land['video'] = new_video
         except Exception:
             pass
+
+        apply_category_specs_from_form(land, form)
         
         # ذخیره تغییرات
         save_json(_lands_path(), lands_list)

@@ -159,6 +159,24 @@ def _register_jinja_filters(app: Flask) -> None:
                 return ''
 
 
+def _register_land_spec_globals(app: Flask) -> None:
+    from .land_category_specs import (
+        land_quick_stats,
+        land_card_footer_stats,
+        land_category_detail_rows,
+        category_kind,
+        price_basis_area,
+        land_expert_verified,
+    )
+
+    app.add_template_global(land_quick_stats, "land_quick_stats")
+    app.add_template_global(land_card_footer_stats, "land_card_footer_stats")
+    app.add_template_global(land_category_detail_rows, "land_category_detail_rows")
+    app.add_template_global(category_kind, "category_kind")
+    app.add_template_global(price_basis_area, "price_basis_area")
+    app.add_template_global(land_expert_verified, "land_expert_verified")
+
+
 def _flask_instance_path() -> str:
     """مسیر instance مطلق — روی Passenger با INSTANCE_PATH یا پوشهٔ پروژه."""
     envp = os.environ.get("INSTANCE_PATH")
@@ -240,6 +258,7 @@ def create_app() -> Flask:
     _ensure_instance_folder(app)
     _setup_logging(app)
     _register_jinja_filters(app)
+    _register_land_spec_globals(app)
 
     try:
         from .utils.storage import migrate_legacy
