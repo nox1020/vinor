@@ -64,6 +64,7 @@ from .visit_requests import (
     visit_date_min_iso,
     resolve_partner_land_tx_state,
 )
+from ..utils.dates import format_iso_date_jalali
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
 from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
 from app.services.sms_config import get_sms_line_number
@@ -3122,7 +3123,6 @@ def _mark_in_transaction_finish(
             payload['tx_mode'] = tx_mode
         if visit_date:
             payload['visit_date'] = visit_date
-            from ..utils.dates import format_iso_date_jalali
             jalali = format_iso_date_jalali(visit_date)
             if jalali:
                 payload['visit_date_jalali'] = jalali

@@ -33,7 +33,7 @@
 {% endif %}
 
 {% set _ld_st = (land._assignment_status|default('active')|string)|lower|trim %}
-{% if is_approved and _ld_st != 'sold' and (land._tx_button_mode|default('visit')) not in ('release', 'blocked', 'hidden') %}
+{% if is_approved and _ld_st != 'sold' and (land._tx_button_mode|default('visit')) in ('visit', 'visit_pending') %}
 <div id="landVisitModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landVisitTitle">
   <div class="ld-modal__backdrop absolute inset-0 bg-black/60" data-land-modal-close></div>
   <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl" data-land-modal-panel>

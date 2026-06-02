@@ -321,62 +321,36 @@
   }
 
   function initModals() {
-    var scope = activeRoot || document;
-    var handlers = [];
-
-    function onCloseClick(ev) {
-      if (ev) {
+    function onDocClick(ev) {
+      if (ev.target.closest('[data-land-modal-close]')) {
         ev.preventDefault();
         ev.stopPropagation();
+        closeLandModals();
+        return;
       }
-      closeLandModals();
-    }
-
-    scope.querySelectorAll('[data-land-open-contact]').forEach(function (el) {
-      function h(ev) {
-        if (ev) ev.preventDefault();
+      if (!activeRoot || !activeRoot.contains(ev.target)) return;
+      if (ev.target.closest('[data-land-open-contact]')) {
+        ev.preventDefault();
         openLandModal('landContactModal');
+        return;
       }
-      el.addEventListener('click', h);
-      handlers.push({ el: el, fn: h });
-    });
-    scope.querySelectorAll('[data-land-open-location]').forEach(function (el) {
-      function h(ev) {
-        if (ev) ev.preventDefault();
+      if (ev.target.closest('[data-land-open-location]')) {
+        ev.preventDefault();
         openLandModal('landLocationModal');
       }
-      el.addEventListener('click', h);
-      handlers.push({ el: el, fn: h });
-    });
-
-    document.querySelectorAll('.ld-modal').forEach(function (modal) {
-      modal.querySelectorAll('[data-land-modal-close]').forEach(function (el) {
-        el.addEventListener('click', onCloseClick);
-        handlers.push({ el: el, fn: onCloseClick });
-      });
-      var panel = modal.querySelector('[data-land-modal-panel]');
-      if (panel) {
-        function stopPanel(ev) { ev.stopPropagation(); }
-        panel.addEventListener('click', stopPanel);
-        handlers.push({ el: panel, fn: stopPanel });
-      }
-    });
+    }
 
     function onEscape(ev) {
       if (ev.key !== 'Escape' || !activeLandModalId) return;
-      onCloseClick(ev);
+      ev.preventDefault();
+      closeLandModals();
     }
-    document.addEventListener('keydown', onEscape);
-    handlers.push({ el: document, fn: onEscape });
 
+    document.addEventListener('click', onDocClick, true);
+    document.addEventListener('keydown', onEscape);
     addCleanup(function () {
-      handlers.forEach(function (x) {
-        if (x.el === document) {
-          x.el.removeEventListener('keydown', x.fn);
-        } else {
-          x.el.removeEventListener('click', x.fn);
-        }
-      });
+      document.removeEventListener('click', onDocClick, true);
+      document.removeEventListener('keydown', onEscape);
       closeLandModals();
     });
   }
@@ -600,6 +574,16 @@
     submitBtn.disabled = !hasDate || submitBtn.dataset.busy === '1';
   }
 
+  function clampVisitCalViewDate() {
+    if (!visitCalState.viewDate || !visitCalState.minDate || !visitCalState.maxDate) return;
+    var t = visitCalState.viewDate.getTime();
+    if (t < visitCalState.minDate.getTime()) {
+      visitCalState.viewDate = new Date(visitCalState.minDate);
+    } else if (t > visitCalState.maxDate.getTime()) {
+      visitCalState.viewDate = new Date(visitCalState.maxDate);
+    }
+  }
+
   function initVisitCalendarControls() {
     if (visitCalState.controlsBound) return;
     visitCalState.controlsBound = true;
@@ -610,12 +594,14 @@
     if (prev) {
       prev.addEventListener('click', function () {
         visitCalState.viewDate.setDate(visitCalState.viewDate.getDate() - 28);
+        clampVisitCalViewDate();
         renderVisitCalendar();
       });
     }
     if (next) {
       next.addEventListener('click', function () {
         visitCalState.viewDate.setDate(visitCalState.viewDate.getDate() + 28);
+        clampVisitCalViewDate();
         renderVisitCalendar();
       });
     }
@@ -744,7 +730,7 @@
     }
 
     pollOnce();
-    visitStatusPollTimer = setInterval(pollOnce, 12000);
+    visitStatusPollTimer = setInterval(pollOnce, 8000);
   }
 
   function applyTxMode(mode, visitDate, visitDateJalali) {
@@ -783,6 +769,23 @@
     if (mode !== 'visit_pending') {
       stopVisitStatusPoll();
     }
+    requestAnimationFrame(function () {
+      syncFooterSpacer();
+    });
+  }
+
+  function focusDetailActionsAfterVisit() {
+    requestAnimationFrame(function () {
+      syncFooterSpacer();
+      var footer = document.querySelector('.ld-actions');
+      if (footer && typeof footer.scrollIntoView === 'function') {
+        try {
+          footer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } catch (e) {
+          footer.scrollIntoView(false);
+        }
+      }
+    });
   }
 
   function applyTxStatus(status) {
@@ -791,7 +794,11 @@
   }
 
   function openVisitModal() {
-    if (!document.getElementById('landVisitModal')) return;
+    var modal = document.getElementById('landVisitModal');
+    if (!modal) {
+      showTxToast('امکان ثبت درخواست بازدید برای این فایل وجود ندارد.', true);
+      return;
+    }
     openLandModal('landVisitModal');
     initVisitCalendarControls();
     initVisitCalBounds();
@@ -805,8 +812,6 @@
   }
 
   function postLandAction(url, extraFields, onSuccess) {
-    var btn = document.getElementById('landTxToggleBtn');
-    if (!btn) return Promise.reject(new Error('دکمه یافت نشد'));
     var csrf = getLandCsrf();
     var body = new FormData();
     if (csrf) body.append('csrf_token', csrf);
@@ -852,19 +857,45 @@
       var url = txBtn.getAttribute('data-visit-request-url');
       if (!url) return;
 
+      var prevLabel = submitBtn.innerHTML;
       submitBtn.dataset.busy = '1';
       submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> در حال ارسال…';
+      closeLandModals();
+
+      var jalaliPreview = formatIsoToJalaliShort(visitDate) || formatIsoToJalali(visitDate);
+      applyTxMode('visit_pending', visitDate, jalaliPreview);
+      initVisitStatusPoll('visit_pending');
+      focusDetailActionsAfterVisit();
 
       postLandAction(url, { visit_date: visitDate }, function (data) {
-        closeLandModals();
         var mode = data.tx_mode || 'visit_pending';
-        applyTxMode(mode, data.visit_date || visitDate, data.visit_date_jalali);
+        applyTxMode(
+          mode,
+          data.visit_date || visitDate,
+          data.visit_date_jalali || jalaliPreview
+        );
         if (mode === 'visit_pending') initVisitStatusPoll('visit_pending');
-        showTxToast(VISIT_SENT_MSG, false);
+        var toastMsg = (data.message && String(data.message).indexOf('قبلاً') !== -1)
+          ? data.message
+          : VISIT_SENT_MSG;
+        showTxToast(toastMsg, false);
+        focusDetailActionsAfterVisit();
+        fetchLandTxStatus().then(function (st) {
+          if (!st || !st.success) return;
+          applyTxMode(
+            st.tx_mode || mode,
+            st.visit_date || visitDate,
+            st.visit_date_jalali || jalaliPreview
+          );
+        });
       }).catch(function (err) {
+        stopVisitStatusPoll();
+        applyTxMode('visit', '', '');
         showTxToast(err.message || 'خطا در ثبت بازدید', true);
       }).finally(function () {
         submitBtn.dataset.busy = '0';
+        submitBtn.innerHTML = prevLabel;
         syncVisitSubmitEnabled();
       });
     }
