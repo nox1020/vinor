@@ -519,6 +519,22 @@ def help_page():
     )
 
 
+@main_bp.route("/privacy", endpoint="privacy")
+def privacy_page():
+    """حریم خصوصی عمومی — آدرس canonical برای فروشگاه‌ها و vinor.ir/privacy"""
+    base_url = request.url_root.rstrip('/')
+    return render_template(
+        'public/privacy.html',
+        seo={
+            'title': 'حریم خصوصی | وینور',
+            'description': 'سیاست حریم خصوصی وینور اکسپرس: وب، پنل همکار و اپ اندروید',
+            'canonical': f"{base_url}/privacy",
+            'og_type': 'website',
+            'og_image': f"{base_url}/static/icons/icon-512.png",
+        },
+    )
+
+
 @main_bp.route("/profile", methods=["GET"], endpoint="profile")
 def profile():
     """

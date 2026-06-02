@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <title>{{ seo.title if seo else 'حریم خصوصی | وینور' }}</title>
+  <meta name="description" content="{{ seo.description if seo else 'سیاست حریم خصوصی وینور اکسپرس — وب، پنل همکار و اپلیکیشن اندروید' }}">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="{{ seo.canonical if seo else request.url }}">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ seo.canonical if seo else request.url }}">
+  <meta property="og:title" content="{{ seo.title if seo else 'حریم خصوصی | وینور' }}">
+  <meta property="og:description" content="{{ seo.description if seo else 'سیاست حریم خصوصی وینور اکسپرس' }}">
+  <meta property="og:image" content="{{ seo.og_image if seo else request.url_root + 'static/icons/icon-512.png' }}">
+
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+  <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
+  <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}" />
+  <style>
+    body { font-family: 'Vazirmatn', sans-serif; }
+    .legal h2 { font-size: 0.9rem; font-weight: 700; color: #fafafa; margin-top: 0.15rem; }
+    .legal p, .legal li { font-size: 0.8125rem; line-height: 1.85; color: #a1a1aa; }
+    .legal ul { margin-top: 0.45rem; padding-right: 1rem; list-style: disc; }
+    .legal li { margin-top: 0.3rem; }
+    .legal a { color: #6ee7b7; text-decoration: underline; text-underline-offset: 2px; }
+    .legal strong { color: #e4e4e7; font-weight: 600; }
+  </style>
+</head>
+<body class="bg-[#050810] text-zinc-100 antialiased">
+{% set _back = request.args.get('next') or url_for('main.index') %}
+<div class="min-h-[100dvh] flex flex-col">
+  <header class="sticky top-0 z-50 border-b border-white/10 bg-[#050810]/95 backdrop-blur-md">
+    <div class="mx-auto flex h-14 max-w-lg items-center justify-between px-4">
+      <a href="{{ _back }}"
+         class="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+         aria-label="بازگشت">
+        <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
+      </a>
+      <h1 class="pointer-events-none absolute inset-x-0 truncate px-14 text-center text-sm font-bold text-white">حریم خصوصی</h1>
+      <div class="h-10 w-10 shrink-0" aria-hidden="true"></div>
+    </div>
+  </header>
+
+  <main class="flex-1 px-4 py-5 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
+    <div class="mx-auto w-full max-w-lg">
+      <p class="mb-4 text-center text-[11px] text-zinc-500">آخرین به‌روزرسانی: ۱۴۰۵/۰۲/۳۰ · vinor.ir</p>
+
+      <article class="legal space-y-5 text-right">
+        <section>
+          <h2>۱. دامنه</h2>
+          <p>
+            این سیاست برای سرویس‌های <strong>وینور اکسپرس</strong> (وب‌سایت vinor.ir، پنل همکاران، و اپلیکیشن اندروید ir.vinor.app) است.
+            با ورود، ثبت‌نام یا استفاده از سرویس، مطالعه و پذیرش این سند را اعلام می‌کنید.
+          </p>
+        </section>
+
+        <section>
+          <h2>۲. داده‌هایی که پردازش می‌کنیم</h2>
+          <ul>
+            <li><strong>شماره موبایل:</strong> احراز هویت با کد یک‌بارمصرف (OTP) و ارتباطات عملیاتی ضروری.</li>
+            <li><strong>پروفایل:</strong> نام، شهر، تصویر، بیو و سایر فیلدهایی که خودتان وارد می‌کنید.</li>
+            <li><strong>فعالیت حرفه‌ای:</strong> فایل‌های تخصیص‌یافته، یادداشت‌ها، درخواست همکاری، پورسانت و سوابق معاملاتی در پنل.</li>
+            <li><strong>اعلان‌ها:</strong> توکن Firebase Cloud Messaging (FCM) برای ارسال اعلان‌های سرویس (در صورت فعال‌سازی توسط شما).</li>
+            <li><strong>فنی و امنیتی:</strong> نوع دستگاه/مرورگر، IP تقریبی، زمان بازدید، لاگ خطا و رویدادهای امنیتی.</li>
+            <li><strong>تسویه (اختیاری):</strong> اطلاعات بانکی لازم برای واریز؛ شماره کارت کامل در پایگاه داده ذخیره نمی‌شود.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>۳. اپلیکیشن اندروید</h2>
+          <p>
+            اپ وینور یک پوستهٔ WebView امن روی HTTPS است و به پنل همکار متصل می‌شود.
+            مجوزهای درخوتی فقط در زمان نیاز و با رضایت شما اعمال می‌شوند:
+          </p>
+          <ul>
+            <li><strong>اینترنت و وضعیت شبکه:</strong> بارگذاری سرویس و بررسی اتصال.</li>
+            <li><strong>اعلان:</strong> نمایش پیام‌های سرویس (Android 13+).</li>
+            <li><strong>دوربین:</strong> بارگذاری تصویر در فرم‌های وب (ورودی capture/file).</li>
+            <li><strong>میکروفون:</strong> ورود صوتی در قابلیت‌های وب (در صورت استفاده).</li>
+          </ul>
+          <p class="mt-2">
+            اپ به پیامک، مخاطبین، موقعیت مکانی، لیست نصب‌شده‌ها یا نصب بی‌رویهٔ APK دسترسی ندارد.
+            خواندن پیامک برای OTP از طریق API تأیید شماره گوگل انجام می‌شود، نه دسترسی READ_SMS.
+          </p>
+        </section>
+
+        <section>
+          <h2>۴. اهداف پردازش</h2>
+          <ul>
+            <li>احراز هویت، مدیریت حساب و ارائه خدمات پنل</li>
+            <li>پیامک OTP و اطلاع‌رسانی‌های ضروری عملیاتی</li>
+            <li>امنیت، پیشگیری از سوءاستفاده، پشتیبانی و بهبود سرویس</li>
+            <li>محاسبه و تسویه پورسانت مطابق قوانین داخلی سامانه</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>۵. اشتراک‌گذاری</h2>
+          <p>
+            داده‌های شخصی شما <strong>فروخته نمی‌شود</strong>.
+            افشا فقط نزد ارائه‌دهندگان فنی (میزبانی، پیامک، Firebase/Google برای OTP و push) در حد لازم،
+            یا در صورت الزام قانونی مجاز است.
+          </p>
+        </section>
+
+        <section>
+          <h2>۶. نگهداری و امنیت</h2>
+          <p>
+            داده‌ها تا زمان نیاز قراردادی یا قانونی نگهداری می‌شوند.
+            پس از حذف حساب، اطلاعات شناسایی‌کننده در بازهٔ معقول پاک یا ناشناس‌سازی می‌گردد.
+            ارتباطات از TLS (HTTPS) استفاده می‌کنند؛ پشتیبان‌گیری ابری دستگاه در اپ غیرفعال است.
+          </p>
+        </section>
+
+        <section>
+          <h2>۷. حقوق شما</h2>
+          <ul>
+            <li>مشاهده و ویرایش پروفایل در پنل</li>
+            <li>درخواست حذف حساب از بخش پروفایل</li>
+            <li>غیرفعال‌سازی اعلان‌ها از تنظیمات سیستم یا اپ</li>
+            <li>تماس با پشتیبانی برای پرسش درباره داده‌ها</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>۸. کوکی و ذخیره محلی</h2>
+          <p>
+            برای نشست ورود از کوکی/سشن استفاده می‌شود.
+            برخی تنظیمات رابط (مثلاً حالت تور یا ترجیحات UI) ممکن است در localStorage مرورگر ذخیره شوند.
+          </p>
+        </section>
+
+        <section>
+          <h2>۹. تغییرات</h2>
+          <p>نسخهٔ به‌روز همین آدرس منتشر می‌شود. ادامهٔ استفاده پس از انتشار، به منزلهٔ آگاهی از تغییرات مهم است.</p>
+        </section>
+
+        <section>
+          <h2>۱۰. تماس</h2>
+          <p>
+            پشتیبانی: <a href="tel:09121471301">۰۹۱۲۱۴۷۱۳۰۱</a> ·
+            <a href="mailto:support@vinor.ir">support@vinor.ir</a>
+          </p>
+        </section>
+      </article>
+
+      <div class="mt-8 flex flex-col gap-2 sm:flex-row">
+        <span class="flex-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-center text-xs font-semibold text-emerald-300">
+          حریم خصوصی
+        </span>
+        <a href="{{ url_for('express_partner.legal_terms', next=request.args.get('next')) }}"
+           class="flex-1 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-center text-xs font-semibold text-zinc-200 transition hover:border-emerald-500/30">
+          قوانین استفاده
+        </a>
+      </div>
+
+      <p class="mt-6 text-center text-[10px] text-zinc-600">© وینور اکسپرس</p>
+    </div>
+  </main>
+</div>
+</body>
+</html>

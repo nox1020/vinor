@@ -33,7 +33,7 @@
       </article>
 
       <div class="mt-8 flex flex-col gap-2 sm:flex-row">
-        <a href="{{ url_for('express_partner.legal_privacy', next=request.args.get('next')) }}"
+        <a href="{{ url_for('main.privacy', next=request.args.get('next')) }}"
            class="flex-1 rounded-xl border px-4 py-3 text-center text-xs font-semibold transition
                   {% if doc_tab == 'privacy' %}border-emerald-500/40 bg-emerald-500/10 text-emerald-300{% else %}border-white/10 bg-white/[0.03] text-zinc-200 hover:border-emerald-500/30{% endif %}">
           حریم خصوصی

@@ -56,6 +56,13 @@ from .partner_withdrawals import (
     reconcile_paid_withdrawals,
     cancel_partner_withdrawal,
 )
+from .routine_auto import (
+    merge_routine_steps_for_phone,
+    routine_detail_for_phone,
+    ROUTINE_STEP_MARKETING,
+    ROUTINE_STEP_VISIT,
+    ROUTINE_STEP_DEAL,
+)
 from .visit_requests import (
     create_visit_request as record_visit_request,
     partner_open_visit,
@@ -642,6 +649,24 @@ def _clear_otp_session() -> None:
     session.pop('otp_phone', None)
 
 
+def _routine_auto_tick(phone: str, *step_ids: str) -> None:
+    """ثبت خودکار تیک روتین برای همکار تأییدشده."""
+    ph = (phone or "").strip()
+    if not ph or not step_ids:
+        return
+    try:
+        partners = load_express_partners_cached() or []
+        prof = next(
+            (p for p in partners if str(p.get("phone") or "").strip() == ph),
+            None,
+        )
+        if not _is_partner_approved(prof):
+            return
+        merge_routine_steps_for_phone(ph, *step_ids)
+    except Exception:
+        current_app.logger.exception("routine auto tick failed phone=%s steps=%s", ph, step_ids)
+
+
 def _mark_routine_today(phone: str) -> bool:
     """ثبت روز جاری برای روتین همکار (بازگشت True در صورت تغییر)."""
     if not phone:
@@ -932,6 +957,7 @@ def track_online_partner():
                     admin_routes_module._update_online_partner(phone, name, ip)
             except Exception:
                 pass
+            _routine_auto_tick(phone, ROUTINE_STEP_MARKETING)
 
         ep = request.endpoint or ''
         if ep.startswith('express_partner.routine'):
@@ -2529,7 +2555,7 @@ def login():
 
         if not _legal_accepted(request):
             flash('برای ادامه باید <a href="{privacy}" class="underline">حریم خصوصی</a> و <a href="{terms}" class="underline">قوانین استفاده</a> را بپذیرید.'.format(
-                privacy=url_for('express_partner.legal_privacy', next=_login_next_preserve() or ''),
+                privacy=url_for('main.privacy', next=_login_next_preserve() or ''),
                 terms=url_for('express_partner.legal_terms', next=_login_next_preserve() or ''),
             ), FLASH_AUTH_ERROR)
             return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
@@ -2692,8 +2718,8 @@ def training():
 
 @express_partner_bp.route('/legal/privacy', methods=['GET'], endpoint='legal_privacy')
 def legal_privacy():
-    """حریم خصوصی پنل همکار — عمومی، موبایل‌محور."""
-    return render_template('express_partner/legal/privacy.html', hide_header=True)
+    """حریم خصوصی — هدایت به آدرس canonical /privacy"""
+    return redirect(url_for('main.privacy', **request.args.to_dict()))
 
 
 @express_partner_bp.route('/legal/terms', methods=['GET'], endpoint='legal_terms')
@@ -3049,61 +3075,30 @@ def ai_delete_thread():
 @express_partner_bp.route('/routine/steps', methods=['POST'], endpoint='routine_steps')
 @require_partner_access(allow_pending=True)
 def routine_steps():
-    """ثبت تعداد مراحل تیک‌خورده برای نمایش در تقویم (پیش‌فرض: امروز؛ قابل تعیین با 'date')."""
+    """وضعیت تیک‌های امروز — فقط خواندنی؛ ثبت خودکار از فعالیت همکار انجام می‌شود."""
     phone = (session.get("user_phone") or "").strip()
+    target_day = datetime.now().strftime('%Y-%m-%d')
     payload = request.get_json(silent=True) or {}
-    # detail: optional list of step ids (strings)
-    detail = payload.get('detail')
-    try:
-        detail = [str(x).strip() for x in (detail or []) if str(x).strip()]
-    except Exception:
-        detail = []
-    count = int(payload.get('count') or (len(detail) if detail else 0))
     req_date = (payload.get('date') or '').strip()
-    # YYYY-MM-DD ساده؛ اگر نامعتبر، روی today
-    try:
-        if req_date:
+    if req_date:
+        try:
             datetime.strptime(req_date, "%Y-%m-%d")
-    except Exception:
-        req_date = ''
-    if count < 0:
-        count = 0
-    if count > 10:
-        count = 10  # سقف معقول
+            target_day = req_date
+        except Exception:
+            pass
 
-    target_day = req_date or datetime.now().strftime('%Y-%m-%d')
-    records = load_partner_routines_cached()
-    rec = next((r for r in records if str(r.get('phone')) == phone), None)
-    if not rec:
-        rec = {"phone": phone, "days": [], "steps": {}, "steps_detail": {}, "updated_at": None}
-        records.append(rec)
-
-    rec.setdefault('days', [])
-    rec.setdefault('steps', {})
-    rec.setdefault('steps_detail', {})
-    # فقط وقتی حداقل یک تیک ثبت است، روز را در لیست days نگه داریم؛ در غیر این صورت حذف شود
-    if count > 0:
-        if target_day not in rec['days']:
-            rec['days'].append(target_day)
-            rec['days'] = sorted(set(rec['days']))
-    else:
-        if target_day in rec['days']:
-            rec['days'] = [d for d in rec['days'] if d != target_day]
-    rec['steps'][target_day] = count
-    # همواره جزئیات امروز را بازنویسی کن (حتی اگر خالی باشد تا داده قدیمی نماند)
-    rec['steps_detail'][target_day] = detail or []
-    rec['updated_at'] = datetime.utcnow().isoformat() + "Z"
-    if not req_date:
-        session['routine_marked_date'] = target_day  # ثبت شده برای امروز
-
-    save_partner_routines(records)
+    detail = routine_detail_for_phone(phone, target_day)
+    count = len(detail)
+    records = load_partner_routines_cached() or []
+    rec = next((r for r in records if str(r.get('phone')) == phone), None) or {}
     resp = make_response(jsonify({
         "success": True,
         "date": target_day,
         "count": count,
         "days": rec.get('days', []),
         "steps": rec.get('steps', {}),
-        "detail": rec.get('steps_detail', {}).get(target_day, [])
+        "detail": detail,
+        "auto": True,
     }))
     resp.headers["Cache-Control"] = "no-store"
     return resp
@@ -3112,23 +3107,14 @@ def routine_steps():
 @express_partner_bp.get('/routine/steps/detail')
 @require_partner_access(allow_pending=True)
 def routine_steps_detail():
-    """برگرداندن لیست تیک‌های روز مشخص شده (detail) برای بازگردانی وضعیت."""
+    """برگرداندن لیست تیک‌های روز مشخص شده (detail) — ثبت خودکار."""
     phone = (session.get("user_phone") or "").strip()
     date = (request.args.get('date') or '').strip()
     if not date:
         date = datetime.now().strftime('%Y-%m-%d')
-    records = load_partner_routines_cached()
-    rec = next((r for r in records if str(r.get('phone')) == phone), None)
-    detail = []
-    if rec and isinstance(rec.get('steps_detail'), dict):
-        try:
-            d = rec['steps_detail'].get(date)
-            if isinstance(d, list):
-                detail = [str(x) for x in d]
-        except Exception:
-            detail = []
-    resp = make_response(jsonify({"success": True, "date": date, "detail": detail}))
-    resp.headers["Cache-Control"] = "public, max-age=20, stale-while-revalidate=40"
+    detail = routine_detail_for_phone(phone, date)
+    resp = make_response(jsonify({"success": True, "date": date, "detail": detail, "auto": True}))
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
     return resp
 
 
@@ -3414,6 +3400,7 @@ def create_visit_request(code: str):
         is_partner_approved=is_pa,
         global_assignment_status=current_status,
     )
+    _routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
     return _mark_in_transaction_finish(
         code,
         success=True,
@@ -3743,6 +3730,8 @@ def mark_in_transaction(code: str):
                     code,
                     new_status,
                 )
+            if new_status == 'in_transaction':
+                _routine_auto_tick(me_phone, ROUTINE_STEP_DEAL)
             return _mark_in_transaction_finish(
                 code,
                 success=True,
@@ -4747,6 +4736,8 @@ def land_detail(code: str):
     partners = load_express_partners() or []
     me_phone = (session.get("user_phone") or "").strip()
     partner_profile = next((p for p in partners if str(p.get("phone")) == me_phone), None)
+    if me_phone and _is_partner_approved(partner_profile):
+        _routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
 
     # محاسبه پورسانت از assignments
     assignments = load_express_assignments() or []

@@ -80,29 +80,32 @@
   <div class="lg:sticky lg:top-20">
     <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 shadow-sm">
       <div class="flex items-center justify-between gap-2">
-        <div class="text-sm sm:text-base font-bold text-gray-900 dark:text-white">پیشرفت امروز</div>
+        <div>
+          <div class="text-sm sm:text-base font-bold text-gray-900 dark:text-white">پیشرفت امروز</div>
+          <p class="mt-0.5 text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400">ثبت خودکار — آنلاین، جزئیات فایل، معامله</p>
+        </div>
         <span id="routineProgressText" class="text-[11px] sm:text-xs px-2 sm:px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 tabular-nums shrink-0">۰ / ۳</span>
       </div>
       <div class="mt-3 h-1.5 sm:h-2 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
         <div id="routineProgressBar" class="h-full bg-emerald-500 rounded-full w-0 transition-[width] duration-300"></div>
       </div>
-      <div class="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
-        <label class="step-chip inline-flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 cursor-pointer select-none transition-colors">
-          <input type="checkbox" class="routine-step sr-only" data-step="1">
+      <div class="mt-4 flex flex-wrap items-center gap-2 sm:gap-3 pointer-events-none" aria-live="polite">
+        <label class="step-chip inline-flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 cursor-default select-none transition-colors">
+          <input type="checkbox" class="routine-step sr-only" data-step="1" disabled tabindex="-1" aria-readonly="true">
           <span class="step-dot w-4 h-4 sm:w-5 sm:h-5 grid place-items-center rounded-full border border-gray-300 text-gray-400 transition-colors">
             <i class="fas fa-check text-[10px] sm:text-xs"></i>
           </span>
           <span class="text-[12px] sm:text-sm">بازاریابی</span>
         </label>
-        <label class="step-chip inline-flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 cursor-pointer select-none transition-colors">
-          <input type="checkbox" class="routine-step sr-only" data-step="2">
+        <label class="step-chip inline-flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 cursor-default select-none transition-colors">
+          <input type="checkbox" class="routine-step sr-only" data-step="2" disabled tabindex="-1" aria-readonly="true">
           <span class="step-dot w-4 h-4 sm:w-5 sm:h-5 grid place-items-center rounded-full border border-gray-300 text-gray-400 transition-colors">
             <i class="fas fa-check text-[10px] sm:text-xs"></i>
           </span>
           <span class="text-[12px] sm:text-sm">بازدید</span>
         </label>
-        <label class="step-chip inline-flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 cursor-pointer select-none transition-colors">
-          <input type="checkbox" class="routine-step sr-only" data-step="3">
+        <label class="step-chip inline-flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 cursor-default select-none transition-colors">
+          <input type="checkbox" class="routine-step sr-only" data-step="3" disabled tabindex="-1" aria-readonly="true">
           <span class="step-dot w-4 h-4 sm:w-5 sm:h-5 grid place-items-center rounded-full border border-gray-300 text-gray-400 transition-colors">
             <i class="fas fa-check text-[10px] sm:text-xs"></i>
           </span>
@@ -201,10 +204,9 @@
     const steps = Array.from(document.querySelectorAll('.routine-step'));
     const progressBar = document.getElementById('routineProgressBar');
     const progressText = document.getElementById('routineProgressText');
-    const resetBtn = document.getElementById('routineReset');
     const monthLabelEl = document.getElementById('routineMonthLabel');
-    const storageKey = 'vinor_routine_steps_v1';
-    const csrfToken = "{{ csrf_token() }}";
+    const REFRESH_MS = 12000;
+    let refreshTimer = null;
 
     const today = new Date();
     function toLocalISODate(d){
@@ -224,13 +226,12 @@
       steps.forEach(function (cb) {
         cb.checked = detail.includes(cb.dataset.step);
       });
-      saveState();
-      syncProgress();
+      syncProgress(false);
     }
 
     function loadState() {
       steps.forEach(function (cb) { cb.checked = false; });
-      fetch('/express/partner/routine/steps/detail?date=' + encodeURIComponent(todayISO), {
+      return fetch('/express/partner/routine/steps/detail?date=' + encodeURIComponent(todayISO), {
         credentials: 'same-origin',
         cache: 'no-store'
       })
@@ -238,31 +239,13 @@
         .then(function (d) {
           if (d && d.success && Array.isArray(d.detail)) {
             applyStepsDetail(d.detail);
-            return;
           }
-          try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            if (Array.isArray(saved) && saved.length) {
-              applyStepsDetail(saved);
-            }
-          } catch (_) {}
         })
-        .catch(function () {
-          try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            if (Array.isArray(saved) && saved.length) {
-              applyStepsDetail(saved);
-            }
-          } catch (_) {}
-        });
+        .catch(function () {});
     }
 
-    function saveState() {
-      const checked = steps.filter(cb => cb.checked).map(cb => cb.dataset.step);
-      try { localStorage.setItem(storageKey, JSON.stringify(checked)); } catch (_) {}
-    }
-
-    function syncProgress() {
+    function syncProgress(updateCalendar) {
+      if (updateCalendar === undefined) updateCalendar = true;
       const total = steps.length || 1;
       const done = steps.filter(cb => cb.checked).length;
       const percent = Math.round((done / total) * 100);
@@ -310,13 +293,21 @@
           dotColorMap[cb.checked ? colorKey : 0].forEach(c => dot.classList.add(c));
         }
       });
-      maybeAutoMark(done, total);
+      if (updateCalendar) {
+        refreshCalendarFromSteps(done);
+      }
     }
 
-    function resetAll(){
-      steps.forEach(cb => cb.checked = false);
-      saveState();
-      syncProgress();
+    function refreshCalendarFromSteps(done) {
+      if (done > 0) {
+        if (!monthDaysDone.includes(todayISO)) {
+          monthDaysDone.push(todayISO);
+        }
+      } else {
+        monthDaysDone = monthDaysDone.filter(d => d !== todayISO);
+      }
+      monthSteps[todayISO] = done;
+      renderCalendar(monthDaysDone);
     }
 
     // --- Jalali (Persian) helpers ---
@@ -459,11 +450,9 @@
             const dres = await fetch(`/express/partner/routine/steps/detail?date=${todayISO}`, { credentials: 'same-origin' });
             const ddata = await dres.json().catch(()=>null);
             if (ddata?.success && Array.isArray(ddata.detail)) {
-              steps.forEach(cb => { cb.checked = ddata.detail.includes(cb.dataset.step); });
+              applyStepsDetail(ddata.detail);
             }
           } catch(_) {}
-          saveState();
-          syncProgress();
         }
       } catch (err) {
         renderCalendar([]);
@@ -495,127 +484,30 @@
     document.getElementById('routinePrev')?.addEventListener('click', gotoPrevMonth, Object.assign({ passive: true }, opts));
     document.getElementById('routineNext')?.addEventListener('click', gotoNextMonth, Object.assign({ passive: true }, opts));
 
-    // --- Resilient saving (debounce, retry, offline queue) ---
-    const SAVE_DEBOUNCE_MS = 250;
-    const MAX_RETRIES = 2;
-    const RETRY_DELAY_MS = 800;
-    const PENDING_KEY = 'vinor_routine_pending_v1';
-    let inflight = false;
-    let queued = false;
-
-    function getCurrentPayload(){
-      const detail = steps.filter(cb => cb.checked).map(cb => cb.dataset.step);
-      const count = detail.length;
-      return { count, detail, date: todayISO };
+    function scheduleRefresh() {
+      if (refreshTimer) clearInterval(refreshTimer);
+      refreshTimer = setInterval(function () {
+        loadState().then(function () { fetchMonthDays(); });
+      }, REFRESH_MS);
     }
 
-    async function flushPayload(payload, attempt = 0){
-      if (!payload) return false;
-      if (!navigator.onLine) {
-        try { localStorage.setItem(PENDING_KEY, JSON.stringify(payload)); } catch(_){}
-        return false;
-      }
-      inflight = true;
-      try{
-        const res = await fetch('/express/partner/routine/steps', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          credentials: 'same-origin',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json().catch(()=>null);
-        if (data?.success) {
-          try { localStorage.removeItem(PENDING_KEY); } catch(_){}
-          monthSteps = data.steps || monthSteps;
-          monthDaysDone = Array.isArray(data.days) ? data.days : monthDaysDone;
-          renderCalendar(monthDaysDone);
-          return true;
-        }
-        throw new Error('server_error');
-      }catch(_err){
-        if (attempt < MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
-          return await flushPayload(payload, attempt + 1);
-        } else {
-          try { localStorage.setItem(PENDING_KEY, JSON.stringify(payload)); } catch(_){}
-          return false;
-        }
-      }finally{
-        inflight = false;
-        if (queued) {
-          queued = false;
-          const nextPayload = getCurrentPayload();
-          flushPayload(nextPayload);
-        }
-      }
-    }
+    try { localStorage.removeItem('vinor_routine_steps_v1'); } catch (_) {}
+    try { localStorage.removeItem('vinor_routine_pending_v1'); } catch (_) {}
 
-    function scheduleSave(){
-      const payload = getCurrentPayload();
-      if (inflight) {
-        queued = true;
-        try { localStorage.setItem(PENDING_KEY, JSON.stringify(payload)); } catch(_){}
-        return;
-      }
-      if (saveTimer) clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        saveTimer = null;
-        flushPayload(payload);
-      }, SAVE_DEBOUNCE_MS);
-    }
-
-    // Try to flush pending on load and when back online
-    (function(){
-      try {
-        const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null');
-        if (pending) { flushPayload(pending); }
-      } catch(_) {}
-      window.addEventListener('online', function () {
-        try {
-          const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null');
-          if (pending) { flushPayload(pending); }
-        } catch(_) {}
-      }, Object.assign({ passive: true }, opts));
-    })();
-
-    function maybeAutoMark(done, total){
-      if (done === total && !autoMarkedToday) {
-        autoMarkedToday = true;
-      }
-      if (done < total && !monthDaysDone.includes(toLocalISODate(today))) {
-        autoMarkedToday = false;
-      }
-      // به‌روزرسانی فوری UI تقویم بر اساس تعداد تیک‌ها
-      if (done > 0) {
-        if (!monthDaysDone.includes(todayISO)) {
-          monthDaysDone.push(todayISO);
-        }
-      } else {
-        monthDaysDone = monthDaysDone.filter(d => d !== todayISO);
-      }
-
-      // همواره تعداد تیک‌ها را به سرور بفرست تا روی تقویم نقطه بگیرد (بلادرنگ)
-      const todayKey = toLocalISODate(today);
-      monthSteps[todayKey] = done;
-      renderCalendar(monthDaysDone);
-      scheduleSave();
-    }
-
-    loadState();
-    syncProgress();
-    fetchMonthDays();
-
-    steps.forEach(function (cb) {
-      cb.addEventListener('change', function () {
-        saveState();
-        syncProgress();
-      }, opts);
+    loadState().then(function () {
+      fetchMonthDays();
+      scheduleRefresh();
     });
 
-    resetBtn?.addEventListener('click', function (e) {
-      e.preventDefault();
-      resetAll();
-    }, opts);
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') {
+        loadState().then(function () { fetchMonthDays(); });
+      }
+    }, Object.assign({ passive: true }, opts));
+
+    window.addEventListener('online', function () {
+      loadState().then(function () { fetchMonthDays(); });
+    }, Object.assign({ passive: true }, opts));
 
     } /* bootRoutine */
 
