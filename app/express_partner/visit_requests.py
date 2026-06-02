@@ -170,6 +170,78 @@ def approve_visit_request(
     return None, "not_found"
 
 
+ADMIN_VISIT_STATUSES = frozenset({
+    PENDING_STATUS,
+    APPROVED_STATUS,
+    COMPLETED_STATUS,
+    CANCELLED_STATUS,
+})
+
+
+def _find_visit_request(
+    requests: List[Dict[str, Any]], request_id: str
+) -> Optional[Dict[str, Any]]:
+    rid = (request_id or "").strip()
+    if not rid:
+        return None
+    for r in requests:
+        if isinstance(r, dict) and str(r.get("id") or "") == rid:
+            return r
+    return None
+
+
+def admin_update_visit_request_status(
+    requests: List[Dict[str, Any]],
+    request_id: str,
+    new_status: str,
+    *,
+    admin_note: str | None = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """تغییر وضعیت درخواست بازدید توسط ادمین — از هر وضعیت به هر وضعیت مجاز."""
+    target = (new_status or "").strip()
+    if target not in ADMIN_VISIT_STATUSES:
+        return None, "invalid_status"
+    rec = _find_visit_request(requests, request_id)
+    if not rec:
+        return None, "not_found"
+    current = (str(rec.get("status") or PENDING_STATUS)).strip()
+    if current == target:
+        if admin_note is not None:
+            new_note = admin_note.strip()
+            prev_note = (str(rec.get("admin_note") or "")).strip()
+            if new_note != prev_note:
+                if new_note:
+                    rec["admin_note"] = new_note
+                else:
+                    rec.pop("admin_note", None)
+                rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
+                return rec, "note_updated"
+        return rec, "unchanged"
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    rec["status"] = target
+    rec["updated_at"] = now_iso
+    if admin_note is not None:
+        note = admin_note.strip()
+        if note:
+            rec["admin_note"] = note
+        else:
+            rec.pop("admin_note", None)
+    if target == APPROVED_STATUS:
+        rec["approved_at"] = now_iso
+        rec.pop("completed_at", None)
+    elif target == COMPLETED_STATUS:
+        rec["completed_at"] = now_iso
+        if not rec.get("approved_at"):
+            rec["approved_at"] = now_iso
+    elif target == PENDING_STATUS:
+        rec.pop("approved_at", None)
+        rec.pop("completed_at", None)
+    elif target == CANCELLED_STATUS:
+        rec.pop("approved_at", None)
+        rec.pop("completed_at", None)
+    return rec, None
+
+
 def reject_visit_request(
     requests: List[Dict[str, Any]], request_id: str, *, admin_note: str = ""
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:

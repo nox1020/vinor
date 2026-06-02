@@ -408,6 +408,9 @@
       if (typeof window.hoistVinorExpressBodyModals === 'function') {
         window.hoistVinorExpressBodyModals();
       }
+      if (onDetail && typeof window.vinorScheduleVisitModalRecovery === 'function') {
+        try { window.vinorScheduleVisitModalRecovery(); } catch (_) {}
+      }
       if (navKey !== 'commissions') {
         if (window.vinorExpressModalOverlay && window.vinorExpressModalOverlay.closeAll) {
           window.vinorExpressModalOverlay.closeAll();

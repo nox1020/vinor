@@ -850,6 +850,7 @@
         } else if (mode === 'visit') {
           showTxToast('درخواست بازدید رد شد. می‌توانید تاریخ جدید انتخاب کنید.', false);
           stopVisitStatusPoll();
+          scheduleVisitModalRecovery();
         } else if (mode !== 'visit_pending') {
           stopVisitStatusPoll();
         }
@@ -897,6 +898,9 @@
     if (mode !== 'visit_pending') {
       stopVisitStatusPoll();
     }
+    if (mode === 'visit') {
+      scheduleVisitModalRecovery();
+    }
     requestAnimationFrame(function () {
       syncFooterSpacer();
     });
@@ -921,33 +925,154 @@
     applyTxMode(mode);
   }
 
+  var visitModalRecoverPromise = null;
+
+  function hoistLandModalsSafe() {
+    try {
+      if (typeof window.hoistVinorExpressBodyModals === 'function') {
+        window.hoistVinorExpressBodyModals();
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function shouldOfferVisitModal() {
+    var btn = document.getElementById('landTxToggleBtn');
+    if (!btn || !btn.hasAttribute('data-land-tx-toggle')) return false;
+    if (!btn.getAttribute('data-visit-request-url')) return false;
+    var cfg = readConfig();
+    var mode = (btn.getAttribute('data-land-tx-mode') || (cfg && cfg.txMode) || '').trim();
+    return mode === 'visit' || mode === 'visit_pending' || mode === 'deal' || mode === 'release';
+  }
+
   function ensureVisitModalEl() {
     var modal = document.getElementById('landVisitModal');
     if (modal) return modal;
-    var root = activeRoot || document.querySelector(ROOT_SEL);
+    var detailPage = document.getElementById('landDetailPage');
+    var root = activeRoot || detailPage || document.querySelector(ROOT_SEL);
     if (root && root.querySelector('#landVisitModal')) {
-      try {
-        if (typeof window.hoistVinorExpressBodyModals === 'function') {
-          window.hoistVinorExpressBodyModals();
-        }
-      } catch (e) { /* ignore */ }
+      hoistLandModalsSafe();
       return document.getElementById('landVisitModal');
     }
     return null;
   }
 
-  function openVisitModal() {
-    var modal = ensureVisitModalEl();
-    if (!modal) {
-      showTxToast('امکان ثبت درخواست بازدید برای این فایل وجود ندارد.', true);
-      return;
+  function injectVisitModalFromNode(modalNode) {
+    if (!modalNode) return null;
+    try {
+      document.querySelectorAll('#landVisitModal').forEach(function (el) {
+        try { el.remove(); } catch (e) { /* ignore */ }
+      });
+    } catch (e) { /* ignore */ }
+    var imported = document.importNode(modalNode, true);
+    var detailPage = document.getElementById('landDetailPage');
+    if (detailPage) {
+      detailPage.appendChild(imported);
+    } else {
+      document.body.appendChild(imported);
     }
+    hoistLandModalsSafe();
+    return document.getElementById('landVisitModal');
+  }
+
+  function fetchVisitModalFromServer() {
+    var path = window.location.pathname + window.location.search;
+    return fetch(path, {
+      credentials: 'same-origin',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        Accept: 'text/html',
+      },
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('fetch');
+        return res.text();
+      })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var modal = doc.getElementById('landVisitModal');
+        if (!modal) {
+          var page = doc.getElementById('landDetailPage');
+          if (page) modal = page.querySelector('#landVisitModal');
+        }
+        return injectVisitModalFromNode(modal);
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function recoverVisitModal() {
+    var modal = ensureVisitModalEl();
+    if (modal) return Promise.resolve(modal);
+
+    if (visitModalRecoverPromise) return visitModalRecoverPromise;
+
+    visitModalRecoverPromise = fetchVisitModalFromServer()
+      .then(function (fetched) {
+        if (fetched) return fetched;
+        hoistLandModalsSafe();
+        return ensureVisitModalEl();
+      })
+      .finally(function () {
+        visitModalRecoverPromise = null;
+      });
+
+    return visitModalRecoverPromise;
+  }
+
+  function rebindVisitModalHandlers() {
+    visitCalState.controlsBound = false;
+    initVisitCalendarControls();
+    bindVisitSubmitHandler();
+  }
+
+  function scheduleVisitModalRecovery() {
+    if (!shouldOfferVisitModal()) return;
+    if (document.getElementById('landVisitModal')) return;
+    recoverVisitModal().then(function (modal) {
+      if (modal) rebindVisitModalHandlers();
+    });
+  }
+
+  function openVisitModalNow() {
     openLandModal('landVisitModal');
     initVisitCalendarControls();
     initVisitCalBounds();
     resetVisitCalendarSelection();
     renderVisitCalendar();
     syncVisitSubmitEnabled();
+  }
+
+  function openVisitModal() {
+    var btn = document.getElementById('landTxToggleBtn');
+    var mode = (btn && btn.getAttribute('data-land-tx-mode')) || '';
+    if (mode && mode !== 'visit') {
+      return;
+    }
+
+    var modal = ensureVisitModalEl();
+    if (modal) {
+      openVisitModalNow();
+      return;
+    }
+
+    if (btn) {
+      btn.dataset.busy = '1';
+      btn.disabled = true;
+    }
+
+    recoverVisitModal().then(function (recovered) {
+      if (btn) {
+        btn.dataset.busy = '0';
+        syncTxButtonDisabled(btn, 'visit');
+      }
+      if (recovered) {
+        rebindVisitModalHandlers();
+        openVisitModalNow();
+        return;
+      }
+      showTxToast('امکان ثبت درخواست بازدید برای این ملک وجود ندارد.', true);
+    });
   }
 
   function closeVisitModal() {
@@ -984,11 +1109,13 @@
     });
   }
 
-  function initVisitRequest() {
+  function bindVisitSubmitHandler() {
     var submitBtn = document.getElementById('landVisitSubmitBtn');
     var dateInput = document.getElementById('landVisitDateInput');
     var txBtn = document.getElementById('landTxToggleBtn');
     if (!submitBtn || !txBtn) return;
+    if (submitBtn.dataset.visitSubmitBound === '1') return;
+    submitBtn.dataset.visitSubmitBound = '1';
 
     function onSubmit() {
       if (submitBtn.disabled || submitBtn.dataset.busy === '1') return;
@@ -1046,7 +1173,12 @@
     submitBtn.addEventListener('click', onSubmit);
     addCleanup(function () {
       submitBtn.removeEventListener('click', onSubmit);
+      delete submitBtn.dataset.visitSubmitBound;
     });
+  }
+
+  function initVisitRequest() {
+    bindVisitSubmitHandler();
   }
 
   function initTransactionToggle() {
@@ -1173,11 +1305,8 @@
     root.dataset.ldInited = '1';
     setBottomNavVisible(false);
 
-    try {
-      if (typeof window.hoistVinorExpressBodyModals === 'function') {
-        window.hoistVinorExpressBodyModals();
-      }
-    } catch (e) { /* ignore */ }
+    hoistLandModalsSafe();
+    scheduleVisitModalRecovery();
 
     var cfg = readConfig();
     initGallery(cfg);
@@ -1211,6 +1340,8 @@
       runCleanup();
     }
   }
+
+  window.vinorScheduleVisitModalRecovery = scheduleVisitModalRecovery;
 
   if (!window.__vinorLandDetailBound) {
     window.__vinorLandDetailBound = true;

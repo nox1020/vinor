@@ -296,7 +296,7 @@
         var id = el.id || '';
         if (id) {
           if (seen[id]) {
-            try { el.remove(); } catch (_) {}
+            /* قبلاً hoist شده (مثلاً در پاس دوم querySelector) — حذف نکن */
             return;
           }
           seen[id] = true;

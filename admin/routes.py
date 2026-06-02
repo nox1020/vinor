@@ -3671,52 +3671,59 @@ def express_visit_requests():
     )
 
 
-@admin_bp.post('/express/visit-requests/<vid>/approve')
+def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
+    from app.express_partner.visit_requests import (
+        APPROVED_STATUS,
+        CANCELLED_STATUS,
+        COMPLETED_STATUS,
+        PENDING_STATUS,
+    )
+
+    name = (rec or {}).get('partner_name') or (rec or {}).get('partner_phone') or 'همکار'
+    labels = {
+        PENDING_STATUS: 'در انتظار تأیید',
+        APPROVED_STATUS: 'تأیید شده',
+        COMPLETED_STATUS: 'معامله ثبت شد',
+        CANCELLED_STATUS: 'رد شده',
+    }
+    label = labels.get(new_status, new_status)
+    if new_status == APPROVED_STATUS:
+        flash(
+            f'وضعیت درخواست بازدید {name} به «{label}» تغییر کرد. درخواست معامله برای همکار فعال شد.',
+            'success',
+        )
+    else:
+        flash(f'وضعیت درخواست بازدید {name} به «{label}» تغییر کرد.', 'success')
+
+
+@admin_bp.post('/express/visit-requests/<vid>/status')
 @login_required
-def express_visit_request_approve(vid: str):
-    from app.express_partner.visit_requests import approve_visit_request
+def express_visit_request_status(vid: str):
+    from app.express_partner.visit_requests import admin_update_visit_request_status
 
-    items = load_express_visit_requests() or []
-    if not isinstance(items, list):
-        items = []
-    rec, err = approve_visit_request(items, vid)
-    if err == 'not_found':
-        flash('درخواست بازدید یافت نشد.', 'error')
-        return redirect(url_for('admin.express_visit_requests'))
-    if err == 'invalid_status':
-        flash('این درخواست دیگر قابل تأیید نیست.', 'warning')
-        return redirect(url_for('admin.express_visit_requests'))
-    if err == 'already_approved':
-        flash('این درخواست قبلاً تأیید شده است.', 'info')
-        return redirect(url_for('admin.express_visit_requests'))
-    try:
-        save_express_visit_requests(items)
-        name = (rec or {}).get('partner_name') or (rec or {}).get('partner_phone') or 'همکار'
-        flash(f'درخواست بازدید {name} تأیید شد. درخواست معامله برای همکار فعال شد.', 'success')
-    except Exception:
-        flash('خطا در ذخیره وضعیت.', 'error')
-    return redirect(url_for('admin.express_visit_requests'))
-
-
-@admin_bp.post('/express/visit-requests/<vid>/reject')
-@login_required
-def express_visit_request_reject(vid: str):
-    from app.express_partner.visit_requests import reject_visit_request
-
+    new_status = (request.form.get('status') or '').strip()
     admin_note = (request.form.get('admin_note') or '').strip()
     items = load_express_visit_requests() or []
     if not isinstance(items, list):
         items = []
-    rec, err = reject_visit_request(items, vid, admin_note=admin_note)
+    rec, err = admin_update_visit_request_status(
+        items, vid, new_status, admin_note=admin_note
+    )
     if err == 'not_found':
         flash('درخواست بازدید یافت نشد.', 'error')
         return redirect(url_for('admin.express_visit_requests'))
     if err == 'invalid_status':
-        flash('این درخواست دیگر قابل رد نیست.', 'warning')
+        flash('وضعیت انتخاب‌شده نامعتبر است.', 'error')
+        return redirect(url_for('admin.express_visit_requests'))
+    if err == 'unchanged':
+        flash('تغییری ذخیره نشد. وضعیت یا یادداشت را ویرایش کنید.', 'info')
         return redirect(url_for('admin.express_visit_requests'))
     try:
         save_express_visit_requests(items)
-        flash('درخواست بازدید رد شد.', 'success')
+        if err == 'note_updated':
+            flash('یادداشت درخواست بازدید ذخیره شد.', 'success')
+        else:
+            _flash_visit_request_status_change(rec or {}, new_status)
     except Exception:
         flash('خطا در ذخیره وضعیت.', 'error')
     return redirect(url_for('admin.express_visit_requests'))
