@@ -179,9 +179,18 @@
       height:100%;
     }
     @media (hover:hover) and (pointer:fine){
-      .express-card:hover{
+      .express-card:not(.vinor-card-sold):hover{
         transform:translateY(-2px);
       }
+    }
+    .vinor-card-sold{
+      opacity:0.52;
+      filter:saturate(0.55);
+      cursor:default;
+      pointer-events:none;
+    }
+    .vinor-card-sold .card-img-loading{
+      opacity:0.35;
     }
     .vinor-premium-card .vinor-fav-icon.text-amber-400{
       font-weight:900;
@@ -482,6 +491,10 @@
 
   /* جمع‌شدن فیلترها: express-partner/dashboard-chrome.js (پایدار در base.html) */
 
+  function isSoldDashboardCard(card) {
+    return !!(card && (card.classList.contains('vinor-card-sold') || card.getAttribute('data-assignment-status') === 'sold'));
+  }
+
   // موبایل: ضربهٔ کوتاه روی کارت → باز کردن جزئیات (اسکرول عمودی به‌صورت native با touch-action کار می‌کند)
   (function () {
     const mobileRoot = document.getElementById('dashboardMobileCardsRoot');
@@ -491,6 +504,7 @@
       const cards = mobileRoot.querySelectorAll('.express-card.vinor-premium-card[data-href]');
       for (let i = 0; i < cards.length; i++) {
         const card = cards[i];
+        if (isSoldDashboardCard(card)) continue;
         const r = card.getBoundingClientRect();
         if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) return card;
       }
@@ -582,7 +596,7 @@
     grid.addEventListener('click', function (e) {
       if (e.target.closest && e.target.closest('[data-fav-code]')) return;
       const card = e.target.closest('.express-card.vinor-premium-card[data-href]');
-      if (!card) return;
+      if (!card || isSoldDashboardCard(card)) return;
       const href = card.getAttribute('data-href');
       if (href) {
         if (window.vinorExpressNavigate) window.vinorExpressNavigate(href, { forward: true });
@@ -591,7 +605,7 @@
     });
     grid.addEventListener('keydown', function (event) {
       const card = event.target.closest && event.target.closest('.express-card.vinor-premium-card[data-href]');
-      if (!card) return;
+      if (!card || isSoldDashboardCard(card)) return;
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         const href = card.getAttribute('data-href');

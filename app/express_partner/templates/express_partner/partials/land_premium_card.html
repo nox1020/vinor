@@ -2,6 +2,7 @@
 {% set img = (land.images[0] if land.images and land.images[0] else None) %}
 {% set photo_count = land.images|length if land.images else 0 %}
 {% set _st = (land._assignment_status|default('active')|string)|lower|trim %}
+{% set _is_sold = (_st == 'sold') %}
 {% set _in_tx = land._in_transaction or (_st == 'in_transaction') %}
 {% set land_m = (land.villa_land_area or land.land_area or land.size or '') %}
 {% set built_m = (land.villa_built_area or land.built_area or '') %}
@@ -38,9 +39,9 @@
 {% endif %}
 
 <article {% if tour_land_card %}data-tour="land-card"{% endif %}{% if for_ai_chat %} data-vinor-ai-card="1"{% endif %}
-         class="group express-card vinor-premium-card relative w-full rounded-2xl overflow-hidden border border-white/10 shadow-md hover:shadow-lg hover:border-white/20 transition-all duration-200 cursor-pointer touch-manipulation bg-[#0f1419] max-sm:bg-[#121a22]"
-         data-href="{{ land._detail_url or url_for('express_partner.land_detail', code=land.code) }}"
-         {% if not for_ai_chat %}role="link" tabindex="0"{% endif %}>
+         class="group express-card vinor-premium-card relative w-full rounded-2xl overflow-hidden border border-white/10 shadow-md transition-all duration-200 touch-manipulation bg-[#0f1419] max-sm:bg-[#121a22]{% if _is_sold %} vinor-card-sold{% else %} cursor-pointer hover:shadow-lg hover:border-white/20{% endif %}"
+         {% if not _is_sold %}data-href="{{ land._detail_url or url_for('express_partner.land_detail', code=land.code) }}"{% else %}data-assignment-status="sold"{% endif %}
+         {% if not for_ai_chat and not _is_sold %}role="link" tabindex="0"{% elif _is_sold %}aria-disabled="true"{% endif %}>
 
   {# ——— موبایل: کارت افقی (متن + تصویر) مطابق صفحه اصلی ——— #}
   <div class="vinor-premium-card-mobile flex sm:hidden flex-row items-stretch min-h-[9.5rem]">

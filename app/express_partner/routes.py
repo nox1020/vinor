@@ -74,6 +74,24 @@ def _sort_by_created_at_desc(items: List[Dict[str, Any]]) -> List[Dict[str, Any]
     return sorted(items, key=lambda x: parse_datetime_safe(x.get('created_at', '1970-01-01')), reverse=True)
 
 
+def _sort_dashboard_lands_sold_last(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """فایل‌های فروخته‌شده در انتهای لیست داشبورد؛ بقیه بر اساس تاریخ (جدیدتر اول)."""
+    from ..utils.dates import parse_datetime_safe
+
+    active: List[Dict[str, Any]] = []
+    sold: List[Dict[str, Any]] = []
+    for item in items:
+        st = (str(item.get('_assignment_status') or 'active')).strip().lower()
+        if st == 'sold':
+            sold.append(item)
+        else:
+            active.append(item)
+    key_fn = lambda x: parse_datetime_safe(x.get('created_at', '1970-01-01'))
+    active.sort(key=key_fn, reverse=True)
+    sold.sort(key=key_fn, reverse=True)
+    return active + sold
+
+
 def _express_partners_cached() -> List[Dict[str, Any]]:
     """در هر درخواست فقط یک‌بار لیست همکاران از دیسک خوانده می‌شود."""
     cached = getattr(g, '_express_partners_list_cached', None)
@@ -511,7 +529,7 @@ def _lands_for_favorite_codes(codes: List[str], me_phone: str) -> List[Dict[str,
         item.setdefault('created_at', land.get('created_at') or '1970-01-01')
         item['_detail_url'] = url_for('express_partner.land_detail', code=code)
         result.append(item)
-    return result
+    return _sort_dashboard_lands_sold_last(result)
 
 
 def _assignment_display_status(assignment: Dict[str, Any] | None) -> str:
@@ -1563,6 +1581,8 @@ def dashboard():
             item['_detail_url'] = url_for('express_partner.land_detail', code=code)
         assigned_lands.append(item)
 
+    assigned_lands = _sort_dashboard_lands_sold_last(assigned_lands)
+
     my_comms = _commissions_for_phone(me_phone)
     # کل درآمد: فقط پورسانت‌های تایید شده و پرداخت شده (نه pending و rejected)
     total_commission = sum(int(c.get('commission_amount') or 0) for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
@@ -1790,7 +1810,7 @@ def dashboard_data():
             item['created_at'] = land.get('created_at') or '1970-01-01'
         assigned_lands.append(item)
 
-    assigned_lands = _sort_by_created_at_desc(assigned_lands)
+    assigned_lands = _sort_dashboard_lands_sold_last(assigned_lands)
     my_comms = _commissions_for_phone(me_phone)
     total_commission = sum(int(c.get('commission_amount') or 0) for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
     pending_commission = sum(int(c.get('commission_amount') or 0) for c in my_comms if (c.get('status') or 'pending').strip() == 'pending')
