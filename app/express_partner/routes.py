@@ -649,8 +649,17 @@ def _clear_otp_session() -> None:
     session.pop('otp_phone', None)
 
 
+def _is_prefetch_request() -> bool:
+    """درخواست prefetch مرورگر — نباید به‌عنوان بازدید واقعی فایل شمرده شود."""
+    dest = (request.headers.get("Sec-Fetch-Dest") or "").lower()
+    if dest == "empty":
+        return True
+    purpose = (request.headers.get("Purpose") or request.headers.get("Sec-Purpose") or "").lower()
+    return "prefetch" in purpose
+
+
 def _routine_auto_tick(phone: str, *step_ids: str) -> None:
-    """ثبت خودکار تیک روتین برای همکار تأییدشده."""
+    """ثبت خودکار تیک روتین برای همکار تأییدشده (مستقل از باز شدن صفحه روتین)."""
     ph = (phone or "").strip()
     if not ph or not step_ids:
         return
@@ -662,7 +671,16 @@ def _routine_auto_tick(phone: str, *step_ids: str) -> None:
         )
         if not _is_partner_approved(prof):
             return
-        merge_routine_steps_for_phone(ph, *step_ids)
+        today = datetime.now().strftime("%Y-%m-%d")
+        have = set(routine_detail_for_phone(ph, today))
+        to_add = [
+            str(s).strip()
+            for s in step_ids
+            if str(s).strip() in ("1", "2", "3") and str(s).strip() not in have
+        ]
+        if not to_add:
+            return
+        merge_routine_steps_for_phone(ph, *to_add)
     except Exception:
         current_app.logger.exception("routine auto tick failed phone=%s steps=%s", ph, step_ids)
 
@@ -931,10 +949,10 @@ def _express_partner_no_store_html(resp):
     return resp
 
 
-# به‌روزرسانی خودکار timestamp همکاران آنلاین در تمام route‌های express_partner
+# به‌روزرسانی خودکار timestamp همکاران آنلاین + آمار روتین در تمام route‌های express_partner
 @express_partner_bp.before_request
 def track_online_partner():
-    """فعالیت آنلاین سبک — بدون نوشتن فایل روتین روی هر درخواست."""
+    """فعالیت آنلاین و تیک بازاریابی روزانه — بدون نیاز به باز کردن صفحه روتین."""
     if not session.get("user_phone"):
         return
     session.permanent = True
@@ -946,6 +964,11 @@ def track_online_partner():
         profile = getattr(g, 'express_partner_profile', None)
         name = (profile.get('name') or '').strip() if profile else None
 
+        today = datetime.now().strftime('%Y-%m-%d')
+        if session.get('_routine_auto_mkt_day') != today:
+            _routine_auto_tick(phone, ROUTINE_STEP_MARKETING)
+            session['_routine_auto_mkt_day'] = today
+
         now_ts = time.time()
         last_ping = session.get('_express_online_ping_ts') or 0
         if now_ts - float(last_ping) >= 120:
@@ -955,32 +978,6 @@ def track_online_partner():
                 if hasattr(admin_routes_module, '_update_online_partner'):
                     ip = request.remote_addr or 'نامشخص'
                     admin_routes_module._update_online_partner(phone, name, ip)
-            except Exception:
-                pass
-            _routine_auto_tick(phone, ROUTINE_STEP_MARKETING)
-
-        ep = request.endpoint or ''
-        if ep.startswith('express_partner.routine'):
-            try:
-                today = datetime.now().strftime('%Y-%m-%d')
-                if session.get('routine_marked_date') != today:
-                    records = load_partner_routines_cached() or []
-                    rec = next((r for r in records if str(r.get('phone')) == phone), None)
-                    changed = False
-                    if not rec:
-                        rec = {"phone": phone, "days": [], "steps": {}, "updated_at": None}
-                        records.append(rec)
-                        changed = True
-                    rec.setdefault('days', [])
-                    rec.setdefault('steps', {})
-                    if today not in rec['days']:
-                        rec['days'].append(today)
-                        rec['days'] = sorted(set(rec['days']))
-                        changed = True
-                    if changed:
-                        rec['updated_at'] = datetime.utcnow().isoformat() + "Z"
-                        save_partner_routines(records)
-                    session['routine_marked_date'] = today
             except Exception:
                 pass
     except Exception:
@@ -3434,6 +3431,8 @@ def land_tx_status(code: str):
         is_partner_approved=is_partner_approved,
         global_assignment_status=ctx['global_status'],
     )
+    if is_partner_approved:
+        _routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
     resp = jsonify(success=True, **state)
     resp.headers['Cache-Control'] = 'no-store'
     return resp
@@ -4736,7 +4735,7 @@ def land_detail(code: str):
     partners = load_express_partners() or []
     me_phone = (session.get("user_phone") or "").strip()
     partner_profile = next((p for p in partners if str(p.get("phone")) == me_phone), None)
-    if me_phone and _is_partner_approved(partner_profile):
+    if me_phone and _is_partner_approved(partner_profile) and not _is_prefetch_request():
         _routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
 
     # محاسبه پورسانت از assignments
