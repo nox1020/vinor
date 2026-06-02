@@ -3727,7 +3727,7 @@ def express_visit_request_reject(vid: str):
 def financial_withdrawal_status(wid: str):
     new_status = (request.form.get('status') or '').strip()
     admin_note = (request.form.get('admin_note') or '').strip()
-    allowed = {'pending', 'approved', 'processing', 'paid', 'rejected'}
+    allowed = {'pending', 'approved', 'rejected'}
     if new_status not in allowed:
         flash('وضعیت نامعتبر است.', 'error')
         return redirect(url_for('admin.financial_withdrawals'))
@@ -3756,6 +3756,9 @@ def financial_withdrawal_status(wid: str):
     if old_status == 'cancelled':
         flash('این درخواست توسط همکار لغو شده و قابل تغییر نیست.', 'warning')
         return redirect(url_for('admin.financial_withdrawals'))
+    if old_status in ('processing', 'paid'):
+        flash('این وضعیت از پنل قابل تغییر نیست.', 'warning')
+        return redirect(url_for('admin.financial_withdrawals'))
     try:
         save_partner_withdrawals(items)
         commissions = load_express_commissions() or []
@@ -3765,7 +3768,7 @@ def financial_withdrawal_status(wid: str):
         withdrawals_dirty = False
         if (
             withdrawal_row
-            and new_status in ("approved", "processing")
+            and new_status == "approved"
             and old_status not in ("approved", "processing", "paid")
         ):
             linked = link_withdrawal_to_commissions(

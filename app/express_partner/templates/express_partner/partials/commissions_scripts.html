@@ -1,6 +1,12 @@
 {# اسکریپت تاریخ شمسی + pull-to-refresh (فقط is_approved) #}
 <script>
   (function(){
+    if (window.__vinorCommPullAbort) {
+      try { window.__vinorCommPullAbort.abort(); } catch (_) {}
+    }
+    window.__vinorCommPullAbort = new AbortController();
+    var pullSignal = window.__vinorCommPullAbort.signal;
+
     function fmt(dt){
       try{
         const d = new Date(String(dt||'').replace(' ','T'));
@@ -116,7 +122,7 @@
       if (commissionsPullScrollTop() > TOP_EPS) return;
       startY = e.touches[0].clientY;
       maxPull = 0;
-    }, { passive: true });
+    }, { passive: true, signal: pullSignal });
 
     main.addEventListener('touchmove', function(e){
       if (!pullEnabled() || startY == null || !e.touches || e.touches.length !== 1) return;
@@ -128,7 +134,7 @@
         maxPull = Math.max(maxPull, dy);
         setHint(maxPull > 48);
       }
-    }, { passive: true });
+    }, { passive: true, signal: pullSignal });
 
     main.addEventListener('touchend', function(){
       if (!pullEnabled() || startY == null) return;
@@ -139,17 +145,23 @@
       if (!ok || busy) return;
       busy = true;
       performCommissionsRefresh().finally(function(){ busy = false; });
-    }, { passive: true });
+    }, { passive: true, signal: pullSignal });
 
     main.addEventListener('touchcancel', function(){
       if (!pullEnabled()) return;
       startY = null; maxPull = 0; setHint(false);
-    }, { passive: true });
+    }, { passive: true, signal: pullSignal });
   })();
 </script>
 
 <script>
   (function () {
+    if (window.__vinorCommModalAbort) {
+      try { window.__vinorCommModalAbort.abort(); } catch (_) {}
+    }
+    window.__vinorCommModalAbort = new AbortController();
+    var modalSignal = window.__vinorCommModalAbort.signal;
+
     var API = '/express/partner/bank-accounts';
     var WITHDRAW_API = '/express/partner/withdrawals/request';
     var overlay = window.vinorExpressModalOverlay;
@@ -705,7 +717,7 @@
         e.preventDefault();
         closeModal();
       }
-    });
+    }, { signal: modalSignal });
 
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
@@ -722,7 +734,7 @@
       if (modal.classList.contains('vn-withdraw-modal--open')) {
         closeModal();
       }
-    });
+    }, { signal: modalSignal });
 
     if (bankConfirm) {
       bankConfirm.addEventListener('click', function (e) {

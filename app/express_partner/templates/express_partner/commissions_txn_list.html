@@ -28,7 +28,6 @@
         <button type="button" data-comm-txn-filter="pending" class="comm-txn-filter snap-start shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition" aria-pressed="false">در انتظار</button>
         <button type="button" data-comm-txn-filter="approved" class="comm-txn-filter snap-start shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition" aria-pressed="false">تأیید شده</button>
         <button type="button" data-comm-txn-filter="withdrawal" class="comm-txn-filter snap-start shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition" aria-pressed="false">برداشت</button>
-        <button type="button" data-comm-txn-filter="paid" class="comm-txn-filter snap-start shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition" aria-pressed="false">پرداخت‌شده</button>
         <button type="button" data-comm-txn-filter="rejected" class="comm-txn-filter snap-start shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition" aria-pressed="false">رد شده</button>
       </div>
 
@@ -123,8 +122,6 @@
           visible = true;
         } else if (active === 'withdrawal') {
           visible = txnType === 'withdrawal' || txnType === 'withdrawal_request';
-        } else if (active === 'paid') {
-          visible = txnType === 'commission' && st === 'paid';
         } else {
           visible = txnType === 'commission' && st === active;
         }
@@ -151,6 +148,7 @@
     var initial = 'all';
     try {
       var q = new URLSearchParams(window.location.search).get('status');
+      if (q === 'paid') q = 'all';
       if (q && filters.querySelector('[data-comm-txn-filter="' + q + '"]')) initial = q;
     } catch (_) {}
     setActiveChip(initial);

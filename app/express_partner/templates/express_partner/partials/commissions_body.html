@@ -39,6 +39,10 @@
         background-color: #030712;
         padding-bottom: 0.5rem;
       }
+      #commissionsRefreshMount > section,
+      #commissionsRefreshMount > section a {
+        touch-action: manipulation;
+      }
       html[data-vinor-comm-scroll] #tg-page-shell {
         overflow: hidden;
         height: 100dvh;
@@ -81,6 +85,11 @@
     if (window.__vinorDashboardChrome) {
       try { window.__vinorDashboardChrome.teardown(); } catch (_) {}
     }
+    if (window.__vinorCommissionsChrome && window.__vinorCommissionsChrome.teardown) {
+      try { window.__vinorCommissionsChrome.teardown(); } catch (_) {}
+    }
+    window.__vinorCommChromeAbort = new AbortController();
+    var chromeSignal = window.__vinorCommChromeAbort.signal;
 
     var MOBILE_MQ = '(max-width: 1023px)';
     var header = document.getElementById('commissionsPageHeader');
@@ -224,10 +233,10 @@
     }
 
     bindObservers();
-    window.addEventListener('resize', scheduleSyncCommissionsChrome, { passive: true });
+    window.addEventListener('resize', scheduleSyncCommissionsChrome, { passive: true, signal: chromeSignal });
     try {
       if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', scheduleSyncCommissionsChrome, { passive: true });
+        window.visualViewport.addEventListener('resize', scheduleSyncCommissionsChrome, { passive: true, signal: chromeSignal });
       }
     } catch (_) {}
     setupCommissionsChrome({ resetScroll: false });
@@ -244,6 +253,10 @@
       setup: setupCommissionsChrome,
       sync: scheduleSyncCommissionsChrome,
       teardown: function () {
+        try {
+          if (window.__vinorCommChromeAbort) window.__vinorCommChromeAbort.abort();
+        } catch (_) {}
+        window.__vinorCommChromeAbort = null;
         clearScrollLockStyles();
         try {
           resizeObs.forEach(function (ro) {

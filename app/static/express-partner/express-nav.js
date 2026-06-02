@@ -187,6 +187,8 @@
     try {
       var p = normPath(parseUrl(href).pathname);
       if (p === '/express/partner/profile/edit') return false;
+      /* پورسانت: HTML عوض می‌شود؛ کش prefetch قدیمی طرح/اسکریپت را خراب می‌کند */
+      if (p === '/express/partner/commissions' || p === '/express/partner/commissions/transactions') return false;
       return !isAuthSoftPath(p);
     } catch (_) {
       return true;
@@ -388,6 +390,12 @@
     } else if (window.__vinorCommissionsChrome) {
       window.__vinorCommissionsChrome.teardown();
     }
+    if (navKey !== 'commissions') {
+      try {
+        if (window.__vinorCommPullAbort) window.__vinorCommPullAbort.abort();
+        if (window.__vinorCommModalAbort) window.__vinorCommModalAbort.abort();
+      } catch (_) {}
+    }
     if (navKey === 'dashboard' && window.__vinorDashboardVoiceSearch) {
       window.__vinorDashboardVoiceSearch.setup();
     } else if (window.__vinorDashboardVoiceSearch && window.__vinorDashboardVoiceSearch.teardown) {
@@ -490,6 +498,12 @@
     var gen = opts.navGen || bumpNavGeneration();
     var navKey = softTabKeyForUrl(href);
     var targetHref = normalizeNavHref(href);
+    try {
+      var tp = normPath(parseUrl(href).pathname);
+      if (tp === '/express/partner/commissions' || tp === '/express/partner/commissions/transactions') {
+        delete prefetchCache[targetHref];
+      }
+    } catch (_) {}
     var swapEl = document.getElementById('vinor-express-page-swap');
     var scriptsEl = document.getElementById('vinor-express-page-scripts');
     if (!swapEl) {

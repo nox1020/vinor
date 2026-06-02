@@ -7,7 +7,9 @@
 {% include 'express_partner/partials/commissions_header.html' %}
 {% include 'express_partner/partials/commissions_body.html' %}
 {% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
 
+{% block scripts %}
 {% if is_approved %}
   {% include 'express_partner/partials/commissions_scripts.html' %}
   {% include 'express_partner/partials/commissions_txn_detail_script.html' %}

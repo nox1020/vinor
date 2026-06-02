@@ -2,14 +2,8 @@
 {% set s = comm_stats if comm_stats is defined else {} %}
 {% set _total = s.get('total_confirmed_amount', total_commission or 0) %}
 {% set _total_cnt = s.get('total_confirmed_count', sold_count or 0) %}
-{% set _pending = s.get('pending_amount', pending_commission or 0) %}
-{% set _pending_cnt = s.get('pending_count', pending_count or 0) %}
-{% set _in_wd = s.get('in_withdrawal_amount', pending_withdrawal_total or 0) %}
-{% set _in_wd_cnt = s.get('in_withdrawal_count', 0) %}
-{% set _received = s.get('received_amount', paid_commission or 0) %}
-{% set _received_cnt = s.get('received_count', paid_count or 0) %}
-{% set _wd_reserve = s.get('withdrawable_reserve_amount', 0) %}
-{% set _pending_wd = s.get('pending_withdrawal_amount', 0) %}
+{% set _wd_paid_amt = s.get('paid_withdrawal_amount', s.get('received_amount', paid_commission or 0)) %}
+{% set _wd_paid_cnt = s.get('paid_withdrawal_count', s.get('received_count', paid_count or 0)) %}
 {% set _txn_url = url_for('express_partner.commissions_transactions') %}
 
 <section data-tour="commissions-stats" class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
@@ -21,12 +15,12 @@
   <div class="divide-y divide-white/5">
     {# کل درآمد تأییدشده #}
     <div class="flex items-center gap-3 px-4 py-3.5">
-      <div class="shrink-0 w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/35 flex items-center justify-center text-amber-400">
-        <i class="fas fa-coins text-base" aria-hidden="true"></i>
+      <div class="comm-row-icon comm-row-icon--amber" aria-hidden="true">
+        <i class="fas fa-coins" aria-hidden="true"></i>
       </div>
       <div class="flex-1 min-w-0 text-start">
-        <p class="text-sm font-semibold text-white">کل درآمد تأیید شده</p>
-        <p class="text-[11px] text-slate-500 mt-0.5">{{ _received_cnt or 0 }} برداشت</p>
+        <p class="text-sm font-semibold text-white">کل درآمد</p>
+        <p class="text-[11px] text-slate-500 mt-0.5">{{ _total_cnt or 0 }} پورسانت تأیید شده</p>
       </div>
       <div class="shrink-0 flex items-center gap-2">
         <span class="text-sm font-bold text-white tabular-nums">{{ (_total or 0)|toman }}</span>
@@ -34,55 +28,23 @@
       </div>
     </div>
 
-    {# در انتظار تأیید #}
+    {# برداشت شده — مجموع درخواست‌های برداشت با وضعیت paid #}
     <div class="flex items-center gap-3 px-4 py-3.5">
-      <div class="shrink-0 w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/35 flex items-center justify-center text-emerald-400">
-        <i class="fas fa-clock text-base" aria-hidden="true"></i>
+      <div class="comm-row-icon comm-row-icon--emerald" aria-hidden="true">
+        <i class="fas fa-circle-check" aria-hidden="true"></i>
       </div>
       <div class="flex-1 min-w-0 text-start">
-        <p class="text-sm font-semibold text-white">در انتظار تأیید</p>
-        <p class="text-[11px] text-slate-500 mt-0.5">{{ _pending_cnt or 0 }} مورد</p>
-      </div>
-      <div class="shrink-0 flex items-center gap-2">
-        <span class="text-sm font-bold text-white tabular-nums">{{ (_pending or 0)|toman }}</span>
-        <i class="fas fa-chevron-left text-[10px] text-slate-600" aria-hidden="true"></i>
-      </div>
-    </div>
-
-    {# واریز شده #}
-    <div class="flex items-center gap-3 px-4 py-3.5">
-      <div class="shrink-0 w-11 h-11 rounded-xl bg-violet-500/10 border border-violet-500/35 flex items-center justify-center text-violet-400">
-        <i class="fas fa-university text-base" aria-hidden="true"></i>
-      </div>
-      <div class="flex-1 min-w-0 text-start">
-        <p class="text-sm font-semibold text-white">واریز شده</p>
-        <p class="text-[11px] text-slate-500 mt-0.5">{{ _received_cnt or 0 }} برداشت</p>
-      </div>
-      <div class="shrink-0 flex items-center gap-2">
-        <span class="text-sm font-bold text-white tabular-nums">{{ (_received or 0)|toman }}</span>
-        <i class="fas fa-chevron-left text-[10px] text-slate-600" aria-hidden="true"></i>
-      </div>
-    </div>
-
-    {# در جریان برداشت #}
-    <div class="flex items-center gap-3 px-4 py-3.5">
-      <div class="shrink-0 w-11 h-11 rounded-xl bg-sky-500/10 border border-sky-500/35 flex items-center justify-center text-sky-400">
-        <i class="fas fa-hourglass-half text-base" aria-hidden="true"></i>
-      </div>
-      <div class="flex-1 min-w-0 text-start">
-        <p class="text-sm font-semibold text-white">در جریان برداشت</p>
-        {% if (_wd_reserve or 0)|int > 0 or (_pending_wd or 0)|int > 0 %}
-        <p class="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
-          {% if (_wd_reserve or 0)|int > 0 %}تأیید/پردازش {{ (_wd_reserve or 0)|toman }}{% endif %}
-          {% if (_wd_reserve or 0)|int > 0 and (_pending_wd or 0)|int > 0 %} · {% endif %}
-          {% if (_pending_wd or 0)|int > 0 %}در انتظار {{ (_pending_wd or 0)|toman }}{% endif %}
+        <p class="text-sm font-semibold text-white">برداشت شده</p>
+        <p class="text-[11px] text-slate-500 mt-0.5">
+          {% if (_wd_paid_cnt or 0)|int > 0 %}
+            {{ _wd_paid_cnt }} درخواست برداشت پرداخت‌شده
+          {% else %}
+            هنوز برداشتی پرداخت نشده
+          {% endif %}
         </p>
-        {% else %}
-        <p class="text-[11px] text-slate-500 mt-0.5">{% if (_in_wd_cnt or 0)|int > 0 %}{{ _in_wd_cnt }} درخواست{% else %}بدون درخواست فعال{% endif %}</p>
-        {% endif %}
       </div>
       <div class="shrink-0 flex items-center gap-2">
-        <span class="text-sm font-bold text-white tabular-nums">{{ (_in_wd or 0)|toman }}</span>
+        <span class="text-sm font-bold text-white tabular-nums">{{ (_wd_paid_amt or 0)|toman }}</span>
         <i class="fas fa-chevron-left text-[10px] text-slate-600" aria-hidden="true"></i>
       </div>
     </div>
@@ -90,8 +52,8 @@
     {# همه تراکنش‌ها #}
     <a href="{{ _txn_url }}"
        class="flex items-center gap-3 px-4 py-3.5 hover:bg-white/[0.03] transition active:bg-white/[0.05]">
-      <div class="shrink-0 w-11 h-11 rounded-xl bg-slate-500/10 border border-slate-500/30 flex items-center justify-center text-slate-400">
-        <i class="fas fa-file-lines text-base" aria-hidden="true"></i>
+      <div class="comm-row-icon comm-row-icon--slate" aria-hidden="true">
+        <i class="fas fa-file-lines" aria-hidden="true"></i>
       </div>
       <div class="flex-1 min-w-0 text-start">
         <p class="text-sm font-semibold text-white">همه تراکنش‌ها</p>

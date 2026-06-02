@@ -3,6 +3,8 @@
 {% set _withdrawable = withdrawable_balance if withdrawable_balance is defined else s.get('withdrawable_balance', 0) %}
 {% set _pending_amt = s.get('pending_amount', pending_commission or 0) %}
 {% set _active_wd = s.get('in_withdrawal_amount', pending_withdrawal_total or 0) %}
+{% set _active_wd_cnt = s.get('in_withdrawal_count', 0) %}
+{% set _has_active_wd = ((_active_wd or 0)|int > 0) or ((_active_wd_cnt or 0)|int > 0) %}
 {% set _can_withdraw = (_withdrawable or 0)|int > 0 %}
 
 <section data-tour="commissions-summary" class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
@@ -20,7 +22,7 @@
     <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5">
       <div class="min-w-0">
         <div class="flex items-center gap-1.5 mb-1">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0" aria-hidden="true"></span>
+          <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0{% if _has_active_wd %} vn-comm-wd-dot--live{% endif %}" aria-hidden="true"></span>
           <span class="text-[10px] text-slate-400 leading-tight">درخواست برداشت فعال</span>
         </div>
         <p class="text-sm font-bold text-amber-300 tabular-nums">{{ (_active_wd or 0)|toman }}</p>
@@ -28,7 +30,7 @@
       <div class="min-w-0 text-start">
         <div class="flex items-center justify-start gap-1.5 mb-1">
           <i class="fas fa-clock text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>
-          <span class="text-[10px] text-slate-400 leading-tight">تومان در انتظار تأیید</span>
+          <span class="text-[10px] text-slate-400 leading-tight">در انتظار تأیید</span>
         </div>
         <p class="text-sm font-bold text-white tabular-nums">{{ (_pending_amt or 0)|toman }}</p>
       </div>

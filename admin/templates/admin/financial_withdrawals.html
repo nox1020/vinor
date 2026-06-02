@@ -54,6 +54,8 @@
 
       {% if st == 'cancelled' %}
       <p class="text-xs text-gray-500 dark:text-gray-400 italic">این درخواست توسط همکار لغو شده است.</p>
+      {% elif st in ('processing', 'paid') %}
+      <p class="text-xs text-gray-600 dark:text-gray-300">وضعیت فعلی: <span class="font-semibold">{{ w.status_label }}</span> — تغییر وضعیت از این بخش برای این مرحله غیرفعال است.</p>
       {% else %}
       <form method="post" action="{{ url_for('admin.financial_withdrawal_status', wid=w.id) }}" class="flex flex-wrap items-end gap-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -62,8 +64,6 @@
           <select name="status" class="w-full text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
             <option value="pending" {% if st == 'pending' %}selected{% endif %}>در انتظار بررسی</option>
             <option value="approved" {% if st == 'approved' %}selected{% endif %}>تأیید شده</option>
-            <option value="processing" {% if st == 'processing' %}selected{% endif %}>در حال پردازش</option>
-            <option value="paid" {% if st == 'paid' %}selected{% endif %}>پرداخت‌شده</option>
             <option value="rejected" {% if st == 'rejected' %}selected{% endif %}>رد شده</option>
           </select>
         </div>
