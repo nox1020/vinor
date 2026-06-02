@@ -921,8 +921,23 @@
     applyTxMode(mode);
   }
 
-  function openVisitModal() {
+  function ensureVisitModalEl() {
     var modal = document.getElementById('landVisitModal');
+    if (modal) return modal;
+    var root = activeRoot || document.querySelector(ROOT_SEL);
+    if (root && root.querySelector('#landVisitModal')) {
+      try {
+        if (typeof window.hoistVinorExpressBodyModals === 'function') {
+          window.hoistVinorExpressBodyModals();
+        }
+      } catch (e) { /* ignore */ }
+      return document.getElementById('landVisitModal');
+    }
+    return null;
+  }
+
+  function openVisitModal() {
+    var modal = ensureVisitModalEl();
     if (!modal) {
       showTxToast('امکان ثبت درخواست بازدید برای این فایل وجود ندارد.', true);
       return;
@@ -1159,9 +1174,6 @@
     setBottomNavVisible(false);
 
     try {
-      if (typeof window.removeVinorLandDetailModalsFromBody === 'function') {
-        window.removeVinorLandDetailModalsFromBody();
-      }
       if (typeof window.hoistVinorExpressBodyModals === 'function') {
         window.hoistVinorExpressBodyModals();
       }

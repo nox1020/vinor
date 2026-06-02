@@ -402,6 +402,9 @@
       window.__vinorDashboardVoiceSearch.teardown();
     }
     try {
+      if (onDetail && typeof window.removeVinorLandDetailModalsFromBody === 'function') {
+        window.removeVinorLandDetailModalsFromBody();
+      }
       if (typeof window.hoistVinorExpressBodyModals === 'function') {
         window.hoistVinorExpressBodyModals();
       }

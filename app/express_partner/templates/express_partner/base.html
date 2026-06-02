@@ -290,7 +290,9 @@
     window.hoistVinorExpressBodyModals = function () {
       /* مودال‌های پرتال: خارج از #tg-page-shell تا z-index بالاتر از نوار پایین باشد */
       var seen = {};
-      document.querySelectorAll('[data-tg-body-modal]').forEach(function (el) {
+
+      function hoistOne(el) {
+        if (!el) return;
         var id = el.id || '';
         if (id) {
           if (seen[id]) {
@@ -298,15 +300,26 @@
             return;
           }
           seen[id] = true;
-          document.querySelectorAll('#' + CSS.escape(id)).forEach(function (dup) {
-            if (dup !== el) {
-              try { dup.remove(); } catch (_) {}
-            }
-          });
+          try {
+            document.querySelectorAll('#' + CSS.escape(id)).forEach(function (dup) {
+              if (dup !== el) {
+                try { dup.remove(); } catch (_) {}
+              }
+            });
+          } catch (_) {}
         }
         if (el.parentNode !== document.body) {
           document.body.appendChild(el);
         }
+      }
+
+      var detailPage = document.getElementById('landDetailPage');
+      if (detailPage) {
+        detailPage.querySelectorAll('[data-tg-body-modal]').forEach(hoistOne);
+      }
+      document.querySelectorAll('[data-tg-body-modal]').forEach(function (el) {
+        if (detailPage && detailPage.contains(el)) return;
+        hoistOne(el);
       });
     };
 
