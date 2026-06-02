@@ -917,8 +917,32 @@
     return dashboardRefreshPromise;
   }
 
+  function onDashboardPageSwap(ev) {
+    if (!ev.detail || ev.detail.navKey !== 'dashboard') return;
+    bindDashboardDesktopCards();
+    reinitializeCards();
+    if (window.__vinorDashboardSyncChrome) {
+      window.__vinorDashboardSyncChrome({ expandHeader: true, resetScroll: false });
+    }
+    if (typeof window.setupVinorDashboardPullRefresh === 'function') {
+      window.setupVinorDashboardPullRefresh();
+    }
+  }
+
+  if (!window.__vinorDashPageSwapBound) {
+    window.__vinorDashPageSwapBound = true;
+    document.addEventListener('vinor:express-page-swap', onDashboardPageSwap);
+  }
+
   /* کشیدن به پایین وقتی لیست در بالاست → تازه‌سازی همهٔ کارت‌ها (فقط اسکرول عمودی موبایل) */
-  (function setupDashboardPullToRefresh() {
+  window.setupVinorDashboardPullRefresh = function setupVinorDashboardPullRefresh() {
+    if (window.__vinorDashPullAbort) {
+      try { window.__vinorDashPullAbort.abort(); } catch (_) {}
+    }
+    window.__vinorDashPullAbort = new AbortController();
+    const pullSig = window.__vinorDashPullAbort.signal;
+    const pullOpts = { passive: true, signal: pullSig };
+
     const root = document.getElementById('dashboardMobileCardsRoot');
     const hint = document.getElementById('dashboardPullRefreshHint');
     const track = document.getElementById('cardsTrack');
@@ -931,7 +955,6 @@
     let startY = null;
     let maxPull = 0;
     let busy = false;
-    const pullOpts = __vinorDashSig ? { passive: true, signal: __vinorDashSig } : { passive: true };
 
     function isVerticalCardList() {
       try {
@@ -1028,19 +1051,11 @@
 
     root.addEventListener('touchend', endPull, pullOpts);
     root.addEventListener('touchcancel', resetGesture, pullOpts);
-  })();
-  
+  };
+
   window.performRefresh = performRefresh;
   window.reinitializeCards = reinitializeCards;
-
-  document.addEventListener('vinor:express-page-swap', function (ev) {
-    if (!ev.detail || ev.detail.navKey !== 'dashboard') return;
-    bindDashboardDesktopCards();
-    reinitializeCards();
-    if (window.__vinorDashboardSyncChrome) {
-      window.__vinorDashboardSyncChrome({ expandHeader: true, resetScroll: false });
-    }
-  }, __vinorDashSig ? { signal: __vinorDashSig } : false);
+  setupVinorDashboardPullRefresh();
   /* chrome: dashboard-chrome.js via vinor:express-page-swap */
 </script>
 {% include 'express_partner/partials/vinor_favorites_script.html' %}

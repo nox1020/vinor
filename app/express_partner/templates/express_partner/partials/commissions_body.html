@@ -79,9 +79,6 @@
 
 <script>
   (function () {
-    if (window.__vinorDashAbort) {
-      try { window.__vinorDashAbort.abort(); } catch (_) {}
-    }
     if (window.__vinorDashboardChrome) {
       try { window.__vinorDashboardChrome.teardown(); } catch (_) {}
     }

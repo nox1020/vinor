@@ -382,6 +382,16 @@
     } catch (_) {}
     if (navKey === 'dashboard' && window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.setup({ resetScroll: true, expandHeader: true });
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          if (typeof window.reinitializeCards === 'function') {
+            try { window.reinitializeCards(); } catch (_) {}
+          }
+          if (typeof window.setupVinorDashboardPullRefresh === 'function') {
+            try { window.setupVinorDashboardPullRefresh(); } catch (_) {}
+          }
+        });
+      });
     } else if (window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.teardown();
     }
