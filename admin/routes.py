@@ -3752,7 +3752,10 @@ def express_visit_request_status(vid: str):
         APPROVED_STATUS,
         admin_update_visit_request_status,
     )
-    from app.express_partner.visit_sms import send_visit_partner_approval_sms
+    from app.express_partner.visit_sms import (
+        notify_partner_land_tx_sms,
+        visit_status_change_event,
+    )
 
     new_status = (request.form.get('status') or '').strip()
     admin_note = (request.form.get('admin_note') or '').strip()
@@ -3782,25 +3785,32 @@ def express_visit_request_status(vid: str):
             flash('یادداشت درخواست بازدید ذخیره شد.', 'success')
         else:
             _flash_visit_request_status_change(rec or {}, new_status)
-            if (
-                new_status == APPROVED_STATUS
-                and prev_status != APPROVED_STATUS
-                and rec
-            ):
-                sms_result = send_visit_partner_approval_sms(
-                    partner_phone=str(rec.get('partner_phone') or ''),
-                    partner_name=str(rec.get('partner_name') or ''),
-                    land_code=str(rec.get('land_code') or ''),
-                    land_title=str(rec.get('land_title') or ''),
-                    visit_date=str(rec.get('visit_date') or ''),
-                )
-                if sms_result.get('ok'):
-                    flash('پیامک تأیید بازدید برای همکار ارسال شد.', 'success')
-                elif not sms_result.get('skipped'):
-                    flash(
-                        'وضعیت تأیید شد، اما ارسال پیامک به همکار ناموفق بود.',
-                        'warning',
-                    )
+            if rec:
+                sms_event = visit_status_change_event(new_status, prev_status)
+                if sms_event:
+                    try:
+                        sms_result = notify_partner_land_tx_sms(
+                            partner_phone=str(rec.get('partner_phone') or ''),
+                            event=sms_event,
+                            land_code=str(rec.get('land_code') or ''),
+                            land_title=str(rec.get('land_title') or ''),
+                            visit_date=str(rec.get('visit_date') or ''),
+                            admin_note=admin_note,
+                            reference_id=str(rec.get('id') or vid),
+                        )
+                        if sms_result.get('ok'):
+                            flash('پیامک وضعیت بازدید برای همکار ارسال شد.', 'success')
+                        elif not sms_result.get('skipped'):
+                            flash(
+                                'وضعیت ذخیره شد، اما ارسال پیامک به همکار ناموفق بود.',
+                                'warning',
+                            )
+                    except Exception:
+                        current_app.logger.exception(
+                            'visit status partner SMS failed vid=%s event=%s',
+                            vid,
+                            sms_event,
+                        )
     except Exception:
         flash('خطا در ذخیره وضعیت.', 'error')
     return redirect(url_for('admin.express_visit_requests'))

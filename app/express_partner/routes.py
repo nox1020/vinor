@@ -3386,6 +3386,20 @@ def create_visit_request(code: str):
         land_title=str(land_title),
         visit_date=rec.get('visit_date') or visit_date,
     )
+    try:
+        from .visit_sms import notify_partner_land_tx_sms
+        notify_partner_land_tx_sms(
+            partner_phone=me_phone,
+            event='visit_submitted',
+            land_code=str(code),
+            land_title=str(land_title),
+            visit_date=str(rec.get('visit_date') or visit_date),
+            reference_id=str(rec.get('id') or ''),
+        )
+    except Exception:
+        current_app.logger.exception(
+            'visit_submitted partner SMS failed phone=%s code=%s', me_phone, code
+        )
     msg = 'درخواست بازدید ارسال شد'
     if not sms_result.get('ok') and not sms_result.get('skipped'):
         msg = 'درخواست بازدید ارسال شد. (ارسال پیامک به ادمین ناموفق بود.)'
@@ -3699,6 +3713,36 @@ def mark_in_transaction(code: str):
                 is_partner_approved=True,
                 global_assignment_status=new_status or 'active',
             )
+            try:
+                from .visit_sms import notify_partner_land_tx_sms
+                lands_all = load_ads_cached() or []
+                land_row = next(
+                    (l for l in lands_all if str(l.get('code')) == str(code)),
+                    None,
+                )
+                land_title_sms = (land_row.get('title') if land_row else None) or str(code)
+                if new_status == 'in_transaction':
+                    notify_partner_land_tx_sms(
+                        partner_phone=me_phone,
+                        event='deal_started',
+                        land_code=str(code),
+                        land_title=str(land_title_sms),
+                        visit_date=str(tx_state.get('visit_date') or ''),
+                    )
+                elif new_status == 'active':
+                    notify_partner_land_tx_sms(
+                        partner_phone=me_phone,
+                        event='deal_released',
+                        land_code=str(code),
+                        land_title=str(land_title_sms),
+                    )
+            except Exception:
+                current_app.logger.exception(
+                    'deal tx partner SMS failed phone=%s code=%s status=%s',
+                    me_phone,
+                    code,
+                    new_status,
+                )
             return _mark_in_transaction_finish(
                 code,
                 success=True,
