@@ -64,12 +64,14 @@
           <i class="fas fa-image text-2xl opacity-50"></i>
         </div>
         {% endif %}
+        {% if not _is_sold %}
         <button type="button"
                 data-fav-code="{{ land.code }}"
                 class="pointer-events-auto absolute top-1.5 end-1.5 z-10 grid h-8 w-8 place-items-center rounded-full bg-black/35 text-white backdrop-blur-sm border border-white/20"
                 aria-label="نشان‌شده">
           <i class="far fa-bookmark text-xs vinor-fav-icon" aria-hidden="true"></i>
         </button>
+        {% endif %}
         {% if photo_count > 0 %}
         <span class="pointer-events-none absolute bottom-1.5 end-1.5 z-10 inline-flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
           <i class="fas fa-camera text-[9px] opacity-80"></i>{{ photo_count }}
@@ -84,7 +86,7 @@
           {% if _in_tx %}
           <span class="inline-flex rounded-md bg-orange-600 px-1.5 py-0.5 text-[9px] font-bold text-white">در حال معامله</span>
           {% elif _st == 'sold' %}
-          <span class="inline-flex rounded-md bg-emerald-700 px-1.5 py-0.5 text-[9px] font-bold text-white">فروخته شد</span>
+          <span class="vinor-sold-badge inline-flex rounded-md bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">فروخته شد</span>
           {% endif %}
           {% if land._is_expired %}
           <span class="inline-flex rounded-md bg-red-600 px-1.5 py-0.5 text-[9px] font-medium text-white">منقضی</span>
@@ -139,16 +141,20 @@
     <div class="absolute inset-0 bg-gradient-to-t from-[#030712] via-[#030712]/55 to-transparent z-[1]"></div>
 
     <div class="absolute top-3 z-10 flex w-full items-start justify-between px-3 pointer-events-none">
+      {% if not _is_sold %}
       <button type="button"
               data-fav-code="{{ land.code }}"
               class="pointer-events-auto w-10 h-10 rounded-full border border-white/80 bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
               aria-label="نشان‌شده">
         <i class="far fa-bookmark text-sm vinor-fav-icon" aria-hidden="true"></i>
       </button>
+      {% else %}
+      <span class="w-10 h-10 shrink-0" aria-hidden="true"></span>
+      {% endif %}
       {% if _in_tx %}
       <span class="pointer-events-auto rounded-lg bg-orange-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">در حال معامله</span>
       {% elif _st == 'sold' %}
-      <span class="pointer-events-auto rounded-lg bg-emerald-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">فروخته شد</span>
+      <span class="vinor-sold-badge pointer-events-auto rounded-lg bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">فروخته شد</span>
       {% else %}
       <span class="pointer-events-auto rounded-lg bg-[#d4b996] px-2.5 py-1 text-[11px] font-bold text-neutral-900 shadow-sm">پیشنهاد ویژه</span>
       {% endif %}

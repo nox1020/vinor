@@ -92,6 +92,221 @@ def _sort_dashboard_lands_sold_last(items: List[Dict[str, Any]]) -> List[Dict[st
     return active + sold
 
 
+def _is_land_sold(land: Dict[str, Any]) -> bool:
+    return (str(land.get('_assignment_status') or 'active')).strip().lower() == 'sold'
+
+
+def _truncate_dashboard_lands(
+    items: List[Dict[str, Any]], limit: int
+) -> tuple[List[Dict[str, Any]], bool]:
+    """نمایش اولیه: تا سقف limit اول فایل‌های غیرفروخته؛ فروخته‌شده فقط اگر جا مانده."""
+    sorted_items = _sort_dashboard_lands_sold_last(items)
+    if len(sorted_items) <= limit:
+        return sorted_items, False
+    active = [x for x in sorted_items if not _is_land_sold(x)]
+    sold = [x for x in sorted_items if _is_land_sold(x)]
+    if len(active) >= limit:
+        return active[:limit], True
+    return active + sold[: max(0, limit - len(active))], True
+
+
+def _build_partner_dashboard_lands(
+    me_phone: str,
+    is_approved: bool,
+    *,
+    search_query: str = '',
+    selected_cities: Optional[List[str]] = None,
+    filter_tag: str = '',
+    filter_cat: str = '',
+) -> tuple[List[Dict[str, Any]], int]:
+    """لیست کارت‌های داشبورد همکار (همه فایل‌های اکسپرس + وضعیت تخصیص)."""
+    from ..utils.dates import is_ad_expired
+
+    ph = (me_phone or '').strip()
+    cities = selected_cities or []
+    q = (search_query or '').strip().lower()
+    tag = (filter_tag or '').strip().lower()
+    cat = (filter_cat or '').strip()
+
+    try:
+        assignments = load_express_assignments() or []
+        _maybe_auto_release_expired_transactions(assignments)
+    except Exception:
+        assignments = []
+
+    my_assignments = [
+        a for a in assignments
+        if str(a.get('partner_phone')) == ph
+        and a.get('status') in (None, 'active', 'pending', 'approved', 'in_transaction', 'sold')
+    ]
+    lands_all = load_ads_cached() or []
+    code_to_land = {str(l.get('code')): l for l in lands_all}
+    expired_count = 0
+
+    try:
+        my_reposts = [r for r in (load_express_reposts() or []) if str(r.get('partner_phone')) == ph]
+        my_reposted_codes = {str(r.get('code')) for r in my_reposts}
+    except Exception:
+        my_reposted_codes = set()
+
+    code_to_assigned: Dict[str, Dict[str, Any]] = {}
+    for a in my_assignments:
+        land = code_to_land.get(str(a.get('land_code')))
+        if not land:
+            continue
+        is_expired = is_ad_expired(land)
+        if is_expired:
+            expired_count += 1
+        item = dict(land)
+        item['_assignment_id'] = a.get('id')
+        item['_assignment_status'] = _assignment_display_status(a)
+        item['_commission_pct'] = a.get('commission_pct')
+        item['_is_expired'] = is_expired
+        if not item.get('created_at'):
+            item['created_at'] = land.get('created_at') or '1970-01-01'
+        try:
+            total_price_str = str(item.get('price_total') or item.get('price') or '0').replace(',', '').strip()
+            total_price = int(total_price_str) if total_price_str else 0
+        except Exception:
+            total_price = 0
+        try:
+            pct = float(item.get('_commission_pct') or 0)
+        except Exception:
+            pct = 0.0
+        item['_commission_amount'] = int(round(total_price * (pct / 100.0))) if (total_price and pct) else 0
+        item['_share_url'] = ''
+        item['_share_token'] = ''
+        item['_reposted_by_me'] = str(item.get('code')) in my_reposted_codes
+        code_to_assigned[str(item.get('code'))] = item
+
+    try:
+        display_lands = load_express_lands_cached() or []
+    except Exception:
+        display_lands = []
+
+    if cities:
+        city_set = set(cities)
+        display_lands = [l for l in display_lands if str(l.get('city') or '').strip() in city_set]
+
+    if q:
+        terms = q.split()
+
+        def _matches(ln: Dict[str, Any]) -> bool:
+            text = ' '.join([
+                str(ln.get('title') or ''),
+                str(ln.get('location') or ''),
+                str(ln.get('city') or ''),
+                str(ln.get('category') or ''),
+                str(ln.get('description') or ''),
+            ]).lower()
+            return all(t in text for t in terms)
+
+        display_lands = [l for l in display_lands if _matches(l)]
+
+    def _land_text_blob(ln: Dict[str, Any]) -> str:
+        parts = [
+            str(ln.get('title') or ''),
+            str(ln.get('description') or ''),
+            str(ln.get('features') or ''),
+            str(ln.get('location') or ''),
+            str(ln.get('category') or ''),
+            str(ln.get('payment_method') or ''),
+        ]
+        return ' '.join(parts).lower()
+
+    if cat == 'land_garden':
+        display_lands = [
+            ln for ln in display_lands
+            if str(ln.get('category') or '').strip() in ('زمین', 'باغ')
+        ]
+    elif cat:
+        display_lands = [
+            ln for ln in display_lands
+            if str(ln.get('category') or '').strip() == cat
+        ]
+
+    if tag == 'pool':
+        display_lands = [ln for ln in display_lands if 'استخر' in _land_text_blob(ln)]
+    elif tag == 'forest':
+        display_lands = [
+            ln for ln in display_lands
+            if any(k in _land_text_blob(ln) for k in ('جنگل', 'جنگلی', 'بوستان'))
+        ]
+    elif tag == 'town':
+        display_lands = [
+            ln for ln in display_lands
+            if any(k in _land_text_blob(ln) for k in ('شهرک', 'شهرکی', 'مجتمع'))
+        ]
+    elif tag == 'urgent':
+        display_lands = [
+            ln for ln in display_lands
+            if any(k in _land_text_blob(ln) for k in ('فوری', 'فرصت', 'فوریت'))
+        ]
+    elif tag == 'deed':
+        display_lands = [
+            ln for ln in display_lands
+            if any(k in _land_text_blob(ln) for k in ('سند', 'سنددار', 'تک‌برگ', 'تک برگ'))
+        ]
+    elif tag == 'invest':
+        display_lands = [
+            ln for ln in display_lands
+            if any(k in _land_text_blob(ln) for k in ('سرمایه', 'سرمایه‌گذاری', 'سودآور'))
+        ]
+    elif tag == 'installment':
+        display_lands = [
+            ln for ln in display_lands
+            if str(ln.get('payment_method') or '').strip() == 'اقساطی'
+            or 'قسط' in _land_text_blob(ln)
+        ]
+
+    display_lands = _sort_by_created_at_desc(display_lands)
+
+    code_to_global_status: Dict[str, str] = {}
+    status_priority = {
+        'sold': 5,
+        'in_transaction': 4,
+        'closed': 3,
+        'pending': 2,
+        'approved': 1,
+        'active': 0,
+        '': 0,
+    }
+    for a in assignments:
+        code_key = str(a.get('land_code') or '')
+        if not code_key:
+            continue
+        status = _assignment_display_status(a)
+        current = code_to_global_status.get(code_key, 'active')
+        if status_priority.get(status, 0) > status_priority.get(current, 0):
+            code_to_global_status[code_key] = status
+
+    assigned_lands: List[Dict[str, Any]] = []
+    for land in display_lands:
+        code = str(land.get('code') or '')
+        item = dict(land)
+        assigned_item = code_to_assigned.get(code)
+        global_status = code_to_global_status.get(code, item.get('_assignment_status') or 'active')
+        if assigned_item and is_approved:
+            item['_assignment_id'] = assigned_item.get('_assignment_id')
+            item['_assignment_status'] = global_status
+            item['_in_transaction'] = global_status == 'in_transaction'
+            item['_commission_pct'] = assigned_item.get('_commission_pct')
+            item['_commission_amount'] = assigned_item.get('_commission_amount', 0)
+            item['_is_expired'] = assigned_item.get('_is_expired', False)
+            item['_share_url'] = assigned_item.get('_share_url', '')
+            item['_share_token'] = assigned_item.get('_share_token', '')
+            item['_reposted_by_me'] = assigned_item.get('_reposted_by_me', False)
+            item['_detail_url'] = url_for('express_partner.land_detail', code=code)
+        else:
+            item.setdefault('created_at', land.get('created_at') or '1970-01-01')
+            item['_assignment_status'] = global_status
+            item['_in_transaction'] = global_status == 'in_transaction'
+            item['_detail_url'] = url_for('express_partner.land_detail', code=code)
+        assigned_lands.append(item)
+
+    return _sort_dashboard_lands_sold_last(assigned_lands), expired_count
+
+
 def _express_partners_cached() -> List[Dict[str, Any]]:
     """در هر درخواست فقط یک‌بار لیست همکاران از دیسک خوانده می‌شود."""
     cached = getattr(g, '_express_partners_list_cached', None)
@@ -1390,198 +1605,17 @@ def dashboard():
         return s
     has_pending_app = any(_norm_status(a.get('status')) in ('pending','under_review','waiting','review') for a in my_apps)
 
-    try:
-        assignments = load_express_assignments() or []
-        _maybe_auto_release_expired_transactions(assignments)
-    except Exception:
-        assignments = []
-    my_assignments = [a for a in assignments if str(a.get('partner_phone')) == me_phone and a.get('status') in (None,'active','pending','approved','in_transaction','sold')]
-    lands_all = load_ads_cached() or []
-    code_to_land = {str(l.get('code')): l for l in lands_all}
-    assigned_lands = []
-    expired_count = 0
-    
-    # بررسی اعتبار فایل‌ها
-    from ..utils.dates import is_ad_expired
-    
-    # وضعیت بازنشرهای من برای رنگ دکمه
-    try:
-        my_reposts = [r for r in (load_express_reposts() or []) if str(r.get('partner_phone')) == me_phone]
-        my_reposted_codes = {str(r.get('code')) for r in my_reposts}
-    except Exception:
-        my_reposted_codes = set()
-
-    for a in my_assignments:
-        land = code_to_land.get(str(a.get('land_code')))
-        if not land:
-            continue
-        
-        # بررسی انقضای فایل
-        is_expired = is_ad_expired(land)
-        if is_expired:
-            expired_count += 1
-        
-        item = dict(land)
-        item['_assignment_id'] = a.get('id')
-        item['_assignment_status'] = _assignment_display_status(a)
-        item['_commission_pct'] = a.get('commission_pct')
-        item['_is_expired'] = is_expired
-        # اطمینان از وجود created_at برای مرتب‌سازی (بر اساس تاریخ ثبت آگهی)
-        # item از dict(land) ساخته شده، پس created_at باید از land بیاید
-        if not item.get('created_at'):
-            item['created_at'] = land.get('created_at') or '1970-01-01'
-        # محاسبه مبلغ پورسانت همکار از روی price_total (اگر موجود) و درصد کمیسیون
-        try:
-            total_price_str = str(item.get('price_total') or item.get('price') or '0').replace(',', '').strip()
-            total_price = int(total_price_str) if total_price_str else 0
-        except Exception:
-            total_price = 0
-        try:
-            pct = float(item.get('_commission_pct') or 0)
-        except Exception:
-            pct = 0.0
-        item['_commission_amount'] = int(round(total_price * (pct / 100.0))) if (total_price and pct) else 0
-        item['_share_url'] = ''
-        item['_share_token'] = ''
-        item['_reposted_by_me'] = str(item.get('code')) in my_reposted_codes
-        # اطمینان از وجود created_at برای مرتب‌سازی (بر اساس تاریخ ثبت آگهی)
-        # item از dict(land) ساخته شده، پس created_at باید از land بیاید
-        if not item.get('created_at'):
-            item['created_at'] = land.get('created_at') or '1970-01-01'
-        assigned_lands.append(item)
-
     is_approved = bool(profile and (profile.get("status") in ("approved", True)))
-
-    # همه فایل‌های اکسپرس برای همه کاربران (وارد نشده، تاییدنشده، تاییدشده) در داشبورد نمایش داده می‌شود.
-    try:
-        display_lands = load_express_lands_cached() or []
-    except Exception:
-        display_lands = []
-    if selected_cities:
-        city_set = set(selected_cities)
-        display_lands = [
-            l for l in display_lands
-            if str(l.get('city') or '').strip() in city_set
-        ]
-    if search_query:
-        terms = search_query.split()
-        def _matches(l):
-            text = ' '.join([
-                str(l.get('title') or ''),
-                str(l.get('location') or ''),
-                str(l.get('city') or ''),
-                str(l.get('category') or ''),
-                str(l.get('description') or ''),
-            ]).lower()
-            return all(t in text for t in terms)
-        display_lands = [l for l in display_lands if _matches(l)]
-
     filter_tag = (request.args.get('tag') or '').strip().lower()
     filter_cat = (request.args.get('cat') or '').strip()
-
-    def _land_text_blob(ln):
-        parts = [
-            str(ln.get('title') or ''),
-            str(ln.get('description') or ''),
-            str(ln.get('features') or ''),
-            str(ln.get('location') or ''),
-            str(ln.get('category') or ''),
-            str(ln.get('payment_method') or ''),
-        ]
-        return ' '.join(parts).lower()
-
-    if filter_cat == 'land_garden':
-        display_lands = [
-            ln for ln in display_lands
-            if str(ln.get('category') or '').strip() in ('زمین', 'باغ')
-        ]
-    elif filter_cat:
-        display_lands = [
-            ln for ln in display_lands
-            if str(ln.get('category') or '').strip() == filter_cat
-        ]
-
-    if filter_tag == 'pool':
-        display_lands = [ln for ln in display_lands if 'استخر' in _land_text_blob(ln)]
-    elif filter_tag == 'forest':
-        display_lands = [
-            ln for ln in display_lands
-            if any(k in _land_text_blob(ln) for k in ('جنگل', 'جنگلی', 'بوستان'))
-        ]
-    elif filter_tag == 'town':
-        display_lands = [
-            ln for ln in display_lands
-            if any(k in _land_text_blob(ln) for k in ('شهرک', 'شهرکی', 'مجتمع'))
-        ]
-    elif filter_tag == 'urgent':
-        display_lands = [
-            ln for ln in display_lands
-            if any(k in _land_text_blob(ln) for k in ('فوری', 'فرصت', 'فوریت'))
-        ]
-    elif filter_tag == 'deed':
-        display_lands = [
-            ln for ln in display_lands
-            if any(k in _land_text_blob(ln) for k in ('سند', 'سنددار', 'تک‌برگ', 'تک برگ'))
-        ]
-    elif filter_tag == 'invest':
-        display_lands = [
-            ln for ln in display_lands
-            if any(k in _land_text_blob(ln) for k in ('سرمایه', 'سرمایه‌گذاری', 'سودآور'))
-        ]
-    elif filter_tag == 'installment':
-        display_lands = [
-            ln for ln in display_lands
-            if str(ln.get('payment_method') or '').strip() == 'اقساطی'
-            or 'قسط' in _land_text_blob(ln)
-        ]
-
-    display_lands = _sort_by_created_at_desc(display_lands)
-
-    # برای همکاران تاییدشده: روی کارت‌هایی که به آن‌ها اختصاص داده شده پورسانت و لینک اشتراک تزریق کن
-    code_to_assigned = {str(item.get('code')): item for item in assigned_lands}
-    code_to_global_status = {}
-    status_priority = {
-        'sold': 5,
-        'in_transaction': 4,
-        'closed': 3,
-        'pending': 2,
-        'approved': 1,
-        'active': 0,
-        '': 0,
-    }
-    for a in assignments:
-        code_key = str(a.get('land_code') or '')
-        if not code_key:
-            continue
-        status = _assignment_display_status(a)
-        current = code_to_global_status.get(code_key, 'active')
-        if status_priority.get(status, 0) > status_priority.get(current, 0):
-            code_to_global_status[code_key] = status
-    assigned_lands = []
-    for land in display_lands:
-        code = str(land.get('code') or '')
-        item = dict(land)
-        assigned_item = code_to_assigned.get(code)
-        global_status = code_to_global_status.get(code, item.get('_assignment_status') or 'active')
-        if assigned_item and is_approved:
-            item['_assignment_id'] = assigned_item.get('_assignment_id')
-            item['_assignment_status'] = global_status
-            item['_in_transaction'] = global_status == 'in_transaction'
-            item['_commission_pct'] = assigned_item.get('_commission_pct')
-            item['_commission_amount'] = assigned_item.get('_commission_amount', 0)
-            item['_is_expired'] = assigned_item.get('_is_expired', False)
-            item['_share_url'] = assigned_item.get('_share_url', '')
-            item['_share_token'] = assigned_item.get('_share_token', '')
-            item['_reposted_by_me'] = assigned_item.get('_reposted_by_me', False)
-            item['_detail_url'] = url_for('express_partner.land_detail', code=code)
-        else:
-            item.setdefault('created_at', land.get('created_at') or '1970-01-01')
-            item['_assignment_status'] = global_status
-            item['_in_transaction'] = global_status == 'in_transaction'
-            item['_detail_url'] = url_for('express_partner.land_detail', code=code)
-        assigned_lands.append(item)
-
-    assigned_lands = _sort_dashboard_lands_sold_last(assigned_lands)
+    assigned_lands, expired_count = _build_partner_dashboard_lands(
+        me_phone,
+        is_approved,
+        search_query=search_query,
+        selected_cities=selected_cities,
+        filter_tag=filter_tag,
+        filter_cat=filter_cat,
+    )
 
     my_comms = _commissions_for_phone(me_phone)
     # کل درآمد: فقط پورسانت‌های تایید شده و پرداخت شده (نه pending و rejected)
@@ -1604,8 +1638,9 @@ def dashboard():
     show_all_cards = request.args.get("all") == "1" or has_filters
     dashboard_lands_truncated = False
     if not show_all_cards and count > DASHBOARD_INITIAL_CARD_LIMIT:
-        assigned_lands = assigned_lands[:DASHBOARD_INITIAL_CARD_LIMIT]
-        dashboard_lands_truncated = True
+        assigned_lands, dashboard_lands_truncated = _truncate_dashboard_lands(
+            assigned_lands, DASHBOARD_INITIAL_CARD_LIMIT
+        )
     seo_title = "فایل‌های اکسپرس وینور | خرید و فروش ملک و زمین"
     seo_description = f"لیست فایل‌های اکسپرس وینور. {count} فایل معتبر برای خرید و فروش ملک، زمین، ویلا و آپارتمان. مشاهده قیمت و جزئیات."
     try:
@@ -1657,6 +1692,12 @@ def dashboard():
 
 def _dashboard_data_payload(me_phone, profile, has_pending_app, assigned_lands, total_commission, pending_commission, sold_count, expired_count, is_approved):
     """ساخت خروجی JSON داشبورد برای اپ اندروید."""
+
+    def _text_field(val, default=''):
+        if val is None:
+            return default
+        return str(val).strip() or default
+
     def _img_url(land):
         imgs = land.get('images') or []
         if isinstance(imgs, str):
@@ -1677,17 +1718,17 @@ def _dashboard_data_payload(me_phone, profile, has_pending_app, assigned_lands, 
             detail_url = ''
         lands_json.append({
             'code': code,
-            'title': (land.get('title') or '—').strip(),
+            'title': _text_field(land.get('title'), '—'),
             'price_total': int(land.get('price_total') or land.get('price') or 0),
             'commission_amount': int(land.get('_commission_amount') or 0),
             'commission_pct': land.get('_commission_pct'),
-            'assignment_status': (land.get('_assignment_status') or 'active').strip(),
+            'assignment_status': _text_field(land.get('_assignment_status'), 'active'),
             'is_expired': bool(land.get('_is_expired')),
-            'size': (land.get('size') or '').strip(),
-            'location': (land.get('location') or '').strip(),
-            'city': (land.get('city') or '').strip(),
-            'category': (land.get('category') or '').strip(),
-            'created_at': (land.get('created_at') or '').strip(),
+            'size': _text_field(land.get('size')),
+            'location': _text_field(land.get('location')),
+            'city': _text_field(land.get('city')),
+            'category': _text_field(land.get('category')),
+            'created_at': _text_field(land.get('created_at')),
             'image_url': _img_url(land),
             'detail_url': detail_url,
         })
@@ -1765,57 +1806,12 @@ def dashboard_data():
             return ''
     has_pending_app = any(_norm_status(a.get('status')) in ('pending', 'under_review', 'waiting', 'review') for a in my_apps)
 
-    try:
-        assignments = load_express_assignments() or []
-        _auto_release_expired_transactions(assignments)
-    except Exception:
-        assignments = []
-    my_assignments = [a for a in assignments if str(a.get('partner_phone')) == me_phone and a.get('status') in (None, 'active', 'pending', 'approved', 'in_transaction', 'sold')]
-    lands_all = load_ads_cached() or []
-    code_to_land = {str(l.get('code')): l for l in lands_all}
-    assigned_lands = []
-    expired_count = 0
-    from ..utils.dates import is_ad_expired
-    try:
-        my_reposts = [r for r in (load_express_reposts() or []) if str(r.get('partner_phone')) == me_phone]
-        my_reposted_codes = {str(r.get('code')) for r in my_reposts}
-    except Exception:
-        my_reposted_codes = set()
-
-    for a in my_assignments:
-        land = code_to_land.get(str(a.get('land_code')))
-        if not land:
-            continue
-        is_expired = is_ad_expired(land)
-        if is_expired:
-            expired_count += 1
-        item = dict(land)
-        item['_assignment_id'] = a.get('id')
-        item['_assignment_status'] = _assignment_display_status(a)
-        item['_commission_pct'] = a.get('commission_pct')
-        item['_is_expired'] = is_expired
-        if not item.get('created_at'):
-            item['created_at'] = land.get('created_at') or '1970-01-01'
-        try:
-            total_price_str = str(item.get('price_total') or item.get('price') or '0').replace(',', '').strip()
-            total_price = int(total_price_str) if total_price_str else 0
-        except Exception:
-            total_price = 0
-        try:
-            pct = float(item.get('_commission_pct') or 0)
-        except Exception:
-            pct = 0.0
-        item['_commission_amount'] = int(round(total_price * (pct / 100.0))) if (total_price and pct) else 0
-        if not item.get('created_at'):
-            item['created_at'] = land.get('created_at') or '1970-01-01'
-        assigned_lands.append(item)
-
-    assigned_lands = _sort_dashboard_lands_sold_last(assigned_lands)
+    is_approved = bool(profile and (profile.get("status") in ("approved", True)))
+    assigned_lands, expired_count = _build_partner_dashboard_lands(me_phone, is_approved)
     my_comms = _commissions_for_phone(me_phone)
     total_commission = sum(int(c.get('commission_amount') or 0) for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
     pending_commission = sum(int(c.get('commission_amount') or 0) for c in my_comms if (c.get('status') or 'pending').strip() == 'pending')
     sold_count = sum(1 for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
-    is_approved = bool(profile and (profile.get("status") in ("approved", True)))
     payload = _dashboard_data_payload(me_phone, profile, has_pending_app, assigned_lands, total_commission, pending_commission, sold_count, expired_count, is_approved)
     # همیشه لیست عمومی را بفرست تا اپ در صورت خالی بودن assigned_lands هم کارت‌ها را نشان دهد
     try:

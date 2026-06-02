@@ -184,13 +184,36 @@
       }
     }
     .vinor-card-sold{
-      opacity:0.52;
-      filter:saturate(0.55);
+      position:relative;
+      isolation:isolate;
       cursor:default;
       pointer-events:none;
     }
+    .vinor-card-sold::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      z-index:4;
+      border-radius:inherit;
+      background:linear-gradient(180deg,rgba(3,7,18,0.28) 0%,rgba(3,7,18,0.5) 100%);
+      pointer-events:none;
+    }
+    .vinor-card-sold [data-img-wrap] img,
+    .vinor-card-sold [data-img-wrap] video{
+      filter:saturate(0.4) brightness(0.72);
+    }
     .vinor-card-sold .card-img-loading{
       opacity:0.35;
+    }
+    .vinor-card-sold .vinor-sold-badge{
+      position:relative;
+      z-index:15;
+      background:rgb(16 185 129)!important;
+      color:#fff!important;
+      border:1px solid rgba(167,243,208,0.55);
+      box-shadow:0 0 0 1px rgba(255,255,255,0.12),0 4px 14px rgba(16,185,129,0.45);
+      filter:none!important;
+      opacity:1!important;
     }
     .vinor-premium-card .vinor-fav-icon.text-amber-400{
       font-weight:900;
@@ -289,7 +312,7 @@
       #dashboardMobileCardsRoot .vinor-premium-card-mobile [data-img-wrap] *:not(button):not(.pointer-events-auto) {
         pointer-events: none;
       }
-      #dashboardMobileCardsRoot .vinor-premium-card-mobile [data-img-wrap] button {
+      #dashboardMobileCardsRoot .vinor-premium-card-mobile:not(.vinor-card-sold) [data-img-wrap] button {
         pointer-events: auto !important;
       }
       #dashboardMobileCardsRoot .vinor-dash-card-tail {
@@ -325,12 +348,12 @@
     #expressDashboardMain .vinor-premium-card [data-img-wrap] * {
       pointer-events: none !important;
     }
-    #expressDashboardMain .vinor-premium-card [data-img-wrap] button,
-    #expressDashboardMain .vinor-premium-card [data-img-wrap] .pointer-events-auto {
+    #expressDashboardMain .vinor-premium-card:not(.vinor-card-sold) [data-img-wrap] button,
+    #expressDashboardMain .vinor-premium-card:not(.vinor-card-sold) [data-img-wrap] .pointer-events-auto {
       pointer-events: auto !important;
     }
     @media (max-width: 639px) {
-      #expressDashboardMain .vinor-premium-card-mobile [data-img-wrap] button {
+      #expressDashboardMain .vinor-premium-card-mobile:not(.vinor-card-sold) [data-img-wrap] button {
         pointer-events: auto !important;
       }
     }
