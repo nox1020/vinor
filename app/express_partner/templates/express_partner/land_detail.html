@@ -73,6 +73,17 @@
       color: rgb(251 191 36);
     }
     .ld-gallery__loader.is-visible { opacity: 1; }
+    #landMainImage {
+      opacity: 0;
+      transition: opacity 0.28s ease;
+    }
+    #landMainImage.is-loaded {
+      opacity: 1;
+    }
+    #landMainImage.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
     .ld-modal.hidden { display: none !important; }
     .ld-modal:not(.hidden) { display: flex; }
     .ld-actions { z-index: 45; }

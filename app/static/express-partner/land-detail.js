@@ -117,14 +117,6 @@
     }
   }
 
-  function setLoader(visible) {
-    var loader = document.getElementById('landMediaLoading');
-    if (!loader) return;
-    loader.classList.toggle('is-visible', !!visible);
-    loader.classList.toggle('opacity-100', !!visible);
-    loader.classList.toggle('opacity-0', !visible);
-  }
-
   function initGallery(cfg) {
     var gallery = document.getElementById('landGallery');
     if (!gallery || !cfg || !cfg.slides || !cfg.slides.length) return;
@@ -135,6 +127,93 @@
     var dots = gallery.querySelectorAll('.ld-dot');
     var label = document.getElementById('landGallerySlideLabel');
     var index = 0;
+    var loadFallbackTimer = null;
+
+    function setLoader(visible) {
+      var loader = document.getElementById('landMediaLoading');
+      if (!loader) return;
+      if (loadFallbackTimer) {
+        clearTimeout(loadFallbackTimer);
+        loadFallbackTimer = null;
+      }
+      if (visible) {
+        loader.classList.add('is-visible', 'opacity-100');
+        loader.classList.remove('opacity-0');
+        loader.setAttribute('aria-hidden', 'false');
+        loadFallbackTimer = setTimeout(function () {
+          setLoader(false);
+        }, 5000);
+      } else {
+        loader.classList.remove('is-visible', 'opacity-100');
+        loader.classList.add('opacity-0');
+        loader.setAttribute('aria-hidden', 'true');
+      }
+    }
+
+    function imageReady(el) {
+      return !!(el && el.complete && el.naturalWidth > 0);
+    }
+
+    function waitForImage(el, done) {
+      if (!el) {
+        done();
+        return;
+      }
+      if (imageReady(el)) {
+        done();
+        return;
+      }
+      var finished = false;
+      function once() {
+        if (finished) return;
+        finished = true;
+        el.removeEventListener('load', once);
+        el.removeEventListener('error', once);
+        done();
+      }
+      el.addEventListener('load', once);
+      el.addEventListener('error', once);
+    }
+
+    function waitForVideo(el, done) {
+      if (!el) {
+        done();
+        return;
+      }
+      if (el.readyState >= 2) {
+        done();
+        return;
+      }
+      var finished = false;
+      function once() {
+        if (finished) return;
+        finished = true;
+        el.removeEventListener('loadeddata', once);
+        el.removeEventListener('canplay', once);
+        el.removeEventListener('error', once);
+        done();
+      }
+      el.addEventListener('loadeddata', once);
+      el.addEventListener('canplay', once);
+      el.addEventListener('error', once);
+    }
+
+    function preloadFullRes(thumb, full, atIndex) {
+      if (!img || !full || full === thumb) return;
+      var hi = new Image();
+      hi.decoding = 'async';
+      hi.onload = function () {
+        if (index !== atIndex) return;
+        var cur = slides[atIndex];
+        if (!cur || cur.type !== 'image') return;
+        var curThumb = cur.thumb || cur.full;
+        var src = img.getAttribute('src') || '';
+        if (src === thumb || src === curThumb) {
+          img.src = full;
+        }
+      };
+      hi.src = full;
+    }
 
     function faDigits(n) {
       return String(n).replace(/\d/g, function (d) {
@@ -145,35 +224,63 @@
     function showImageSlide(slide) {
       if (!img) return;
       if (video) {
-        video.pause();
+        try { video.pause(); } catch (e) { /* ignore */ }
         video.classList.add('hidden');
       }
       img.classList.remove('hidden');
       var thumb = slide.thumb || slide.full;
       var full = slide.full || thumb;
-      if (img.getAttribute('src') === thumb) return;
+      var atIndex = index;
+      var sameSrc = (img.getAttribute('src') || '') === thumb;
+
+      function reveal() {
+        setLoader(false);
+        img.classList.add('is-loaded');
+        preloadFullRes(thumb, full, atIndex);
+      }
+
+      img.classList.remove('is-loaded');
+      img.onload = null;
+      img.onerror = null;
+
+      if (sameSrc) {
+        if (imageReady(img)) {
+          reveal();
+          return;
+        }
+        setLoader(true);
+        waitForImage(img, reveal);
+        return;
+      }
+
       setLoader(true);
       img.onload = function () {
         img.onload = null;
-        setLoader(false);
-        if (full && full !== thumb) {
-          var hi = new Image();
-          var idx = index;
-          hi.onload = function () {
-            var cur = slides[idx];
-            if (cur && cur.type === 'image' && img.getAttribute('src') === thumb) {
-              img.src = full;
-            }
-          };
-          hi.src = full;
-        }
+        img.onerror = null;
+        reveal();
       };
       img.onerror = function () {
+        img.onload = null;
         img.onerror = null;
-        setLoader(false);
+        reveal();
       };
       img.src = thumb;
       img.dataset.full = full;
+    }
+
+    function showVideoSlide() {
+      if (!video) return;
+      if (img) {
+        img.classList.add('hidden');
+        img.classList.remove('is-loaded');
+      }
+      video.classList.remove('hidden');
+      setLoader(true);
+      waitForVideo(video, function () {
+        setLoader(false);
+        video.play().catch(function () {});
+      });
+      video.play().catch(function () {});
     }
 
     function updateUi() {
@@ -185,10 +292,8 @@
       }
       var slide = slides[index];
       if (!slide) return;
-      if (slide.type === 'video' && video) {
-        if (img) img.classList.add('hidden');
-        video.classList.remove('hidden');
-        video.play().catch(function () {});
+      if (slide.type === 'video') {
+        showVideoSlide();
       } else if (slide.type === 'image') {
         showImageSlide(slide);
       }
@@ -220,11 +325,34 @@
       else goTo(index - 1);
     }
 
+    dots.forEach(function (dot, i) {
+      function onDotClick(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var idx = parseInt(dot.getAttribute('data-index'), 10);
+        if (!isNaN(idx)) goTo(idx);
+      }
+      dot.style.pointerEvents = 'auto';
+      dot.style.cursor = 'pointer';
+      dot.addEventListener('click', onDotClick);
+      addCleanup(function () {
+        dot.removeEventListener('click', onDotClick);
+      });
+    });
+
     gallery.addEventListener('touchstart', onTouchStart, { passive: true });
     gallery.addEventListener('touchend', onTouchEnd, { passive: true });
     addCleanup(function () {
       gallery.removeEventListener('touchstart', onTouchStart);
       gallery.removeEventListener('touchend', onTouchEnd);
+      if (loadFallbackTimer) {
+        clearTimeout(loadFallbackTimer);
+        loadFallbackTimer = null;
+      }
+      setLoader(false);
+      if (video) {
+        try { video.pause(); } catch (e2) { /* ignore */ }
+      }
     });
 
     updateUi();
