@@ -7,6 +7,8 @@
   var ROOT_SEL = '.land-detail-page';
   var activeRoot = null;
   var cleanupFns = [];
+  var activeLandModalId = null;
+  var VISIT_SENT_MSG = 'درخواست بازدید ارسال شد';
 
   function readConfig() {
     var el = document.getElementById('landDetailConfig');
@@ -49,8 +51,68 @@
       }
     }
     activeRoot = null;
+    activeLandModalId = null;
     setBottomNavVisible(true);
+    closeLandModals();
+    visitCalState.controlsBound = false;
+    try {
+      if (typeof window.removeVinorLandDetailModalsFromBody === 'function') {
+        window.removeVinorLandDetailModalsFromBody();
+      }
+    } catch (e3) { /* ignore */ }
+  }
+
+  function landModalOverlayOpen() {
+    if (window.vinorExpressModalOverlay && window.vinorExpressModalOverlay.open) {
+      window.vinorExpressModalOverlay.open();
+      return;
+    }
+    document.documentElement.classList.add('vinor-express-overlay-modal-open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function landModalOverlayClose() {
+    if (window.vinorExpressModalOverlay && window.vinorExpressModalOverlay.close) {
+      window.vinorExpressModalOverlay.close();
+      return;
+    }
     document.documentElement.classList.remove('vinor-express-overlay-modal-open');
+    document.body.style.overflow = '';
+  }
+
+  function landModalOverlayCloseAll() {
+    if (window.vinorExpressModalOverlay && window.vinorExpressModalOverlay.closeAll) {
+      window.vinorExpressModalOverlay.closeAll();
+      return;
+    }
+    document.documentElement.classList.remove('vinor-express-overlay-modal-open');
+    document.body.style.overflow = '';
+  }
+
+  function closeLandModals() {
+    document.querySelectorAll('.ld-modal').forEach(function (m) {
+      m.classList.add('hidden');
+      m.setAttribute('aria-hidden', 'true');
+    });
+    activeLandModalId = null;
+    landModalOverlayCloseAll();
+  }
+
+  function openLandModal(id) {
+    var modal = document.getElementById(id);
+    if (!modal) return;
+    closeLandModals();
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    activeLandModalId = id;
+    landModalOverlayOpen();
+    var panel = modal.querySelector('[data-land-modal-panel]') || modal.querySelector('.relative');
+    if (panel) {
+      try {
+        var focusable = panel.querySelector('button:not([disabled]), [href], input:not([disabled])');
+        if (focusable) focusable.focus({ preventScroll: true });
+      } catch (e) { /* ignore */ }
+    }
   }
 
   function setLoader(visible) {
@@ -257,40 +319,63 @@
   }
 
   function initModals() {
-    function open(id) {
-      var m = document.getElementById(id);
-      if (m) {
-        m.classList.remove('hidden');
-        document.documentElement.classList.add('vinor-express-overlay-modal-open');
+    var scope = activeRoot || document;
+    var handlers = [];
+
+    function onCloseClick(ev) {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
       }
-    }
-    function closeAll() {
-      document.querySelectorAll('.ld-modal').forEach(function (m) {
-        m.classList.add('hidden');
-      });
-      document.documentElement.classList.remove('vinor-express-overlay-modal-open');
+      closeLandModals();
     }
 
-    var openHandlers = [];
-    document.querySelectorAll('[data-land-open-contact]').forEach(function (el) {
-      function h() { open('landContactModal'); }
+    scope.querySelectorAll('[data-land-open-contact]').forEach(function (el) {
+      function h(ev) {
+        if (ev) ev.preventDefault();
+        openLandModal('landContactModal');
+      }
       el.addEventListener('click', h);
-      openHandlers.push({ el: el, fn: h });
+      handlers.push({ el: el, fn: h });
     });
-    document.querySelectorAll('[data-land-open-location]').forEach(function (el) {
-      function h() { open('landLocationModal'); }
+    scope.querySelectorAll('[data-land-open-location]').forEach(function (el) {
+      function h(ev) {
+        if (ev) ev.preventDefault();
+        openLandModal('landLocationModal');
+      }
       el.addEventListener('click', h);
-      openHandlers.push({ el: el, fn: h });
+      handlers.push({ el: el, fn: h });
     });
-    document.querySelectorAll('[data-land-modal-close]').forEach(function (el) {
-      el.addEventListener('click', closeAll);
-      openHandlers.push({ el: el, fn: closeAll });
-    });
-    addCleanup(function () {
-      openHandlers.forEach(function (x) {
-        x.el.removeEventListener('click', x.fn);
+
+    document.querySelectorAll('.ld-modal').forEach(function (modal) {
+      modal.querySelectorAll('[data-land-modal-close]').forEach(function (el) {
+        el.addEventListener('click', onCloseClick);
+        handlers.push({ el: el, fn: onCloseClick });
       });
-      closeAll();
+      var panel = modal.querySelector('[data-land-modal-panel]');
+      if (panel) {
+        function stopPanel(ev) { ev.stopPropagation(); }
+        panel.addEventListener('click', stopPanel);
+        handlers.push({ el: panel, fn: stopPanel });
+      }
+    });
+
+    function onEscape(ev) {
+      if (ev.key !== 'Escape' || !activeLandModalId) return;
+      onCloseClick(ev);
+    }
+    document.addEventListener('keydown', onEscape);
+    handlers.push({ el: document, fn: onEscape });
+
+    addCleanup(function () {
+      handlers.forEach(function (x) {
+        if (x.el === document) {
+          x.el.removeEventListener('keydown', x.fn);
+        } else {
+          x.el.removeEventListener('click', x.fn);
+        }
+      });
+      closeLandModals();
     });
   }
 
@@ -483,6 +568,7 @@
             if (hidden) hidden.value = dayIso;
             if (selectedEl) selectedEl.textContent = formatIsoToJalali(dayIso);
             renderVisitCalendar();
+            syncVisitSubmitEnabled();
           });
         })(iso);
       }
@@ -496,6 +582,15 @@
     var selectedEl = document.getElementById('landVisitCalSelected');
     if (hidden) hidden.value = '';
     if (selectedEl) selectedEl.textContent = 'تاریخ انتخاب نشده';
+    syncVisitSubmitEnabled();
+  }
+
+  function syncVisitSubmitEnabled() {
+    var submitBtn = document.getElementById('landVisitSubmitBtn');
+    var dateInput = document.getElementById('landVisitDateInput');
+    if (!submitBtn) return;
+    var hasDate = !!(dateInput && (dateInput.value || '').trim());
+    submitBtn.disabled = !hasDate || submitBtn.dataset.busy === '1';
   }
 
   function initVisitCalendarControls() {
@@ -688,20 +783,25 @@
   }
 
   function openVisitModal() {
-    var modal = document.getElementById('landVisitModal');
-    if (!modal) return;
-    modal.classList.remove('hidden');
-    document.documentElement.classList.add('vinor-express-overlay-modal-open');
+    if (!document.getElementById('landVisitModal')) return;
+    openLandModal('landVisitModal');
     initVisitCalendarControls();
     initVisitCalBounds();
     resetVisitCalendarSelection();
     renderVisitCalendar();
+    syncVisitSubmitEnabled();
   }
 
   function closeVisitModal() {
     var modal = document.getElementById('landVisitModal');
-    if (modal) modal.classList.add('hidden');
-    document.documentElement.classList.remove('vinor-express-overlay-modal-open');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    if (activeLandModalId === 'landVisitModal') {
+      activeLandModalId = null;
+      landModalOverlayCloseAll();
+    }
   }
 
   function postLandAction(url, extraFields, onSuccess) {
@@ -760,12 +860,12 @@
         var mode = data.tx_mode || 'visit_pending';
         applyTxMode(mode, data.visit_date || visitDate, data.visit_date_jalali);
         if (mode === 'visit_pending') initVisitStatusPoll('visit_pending');
-        showTxToast(data.message, false);
+        showTxToast(VISIT_SENT_MSG, false);
       }).catch(function (err) {
         showTxToast(err.message || 'خطا در ثبت بازدید', true);
       }).finally(function () {
         submitBtn.dataset.busy = '0';
-        submitBtn.disabled = false;
+        syncVisitSubmitEnabled();
       });
     }
 
@@ -892,6 +992,9 @@
     setBottomNavVisible(false);
 
     try {
+      if (typeof window.removeVinorLandDetailModalsFromBody === 'function') {
+        window.removeVinorLandDetailModalsFromBody();
+      }
       if (typeof window.hoistVinorExpressBodyModals === 'function') {
         window.hoistVinorExpressBodyModals();
       }

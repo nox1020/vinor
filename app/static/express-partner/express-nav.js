@@ -418,6 +418,9 @@
           window.removeVinorProfileEditModalsFromBody();
         }
       }
+      if (!onDetail && typeof window.removeVinorLandDetailModalsFromBody === 'function') {
+        window.removeVinorLandDetailModalsFromBody();
+      }
     } catch (_) {}
     try {
       if (window.Alpine && typeof window.Alpine.initTree === 'function') {

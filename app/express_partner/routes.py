@@ -3293,9 +3293,9 @@ def create_visit_request(code: str):
         land_title=str(land_title),
         visit_date=rec.get('visit_date') or visit_date,
     )
-    msg = 'درخواست بازدید ثبت شد. پس از تأیید ادمین می‌توانید درخواست معامله ثبت کنید.'
+    msg = 'درخواست بازدید ارسال شد'
     if not sms_result.get('ok') and not sms_result.get('skipped'):
-        msg += ' (ارسال پیامک به ادمین ناموفق بود.)'
+        msg = 'درخواست بازدید ارسال شد. (ارسال پیامک به ادمین ناموفق بود.)'
 
     try:
         is_pa = _is_partner_approved(partner_profile)

@@ -328,6 +328,16 @@
       } catch (_) {}
     };
 
+    window.removeVinorLandDetailModalsFromBody = function () {
+      ['landContactModal', 'landLocationModal', 'landVisitModal'].forEach(function (id) {
+        try {
+          document.querySelectorAll('body > #' + CSS.escape(id)).forEach(function (el) {
+            el.remove();
+          });
+        } catch (_) {}
+      });
+    };
+
     (function hoistExpressPartnerShell() {
       var nav = document.getElementById('bottomNavMenu');
       if (!nav || nav.getAttribute('data-tg-shell-done') === '1') {

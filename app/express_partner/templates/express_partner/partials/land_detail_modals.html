@@ -4,7 +4,7 @@
 {% if contact_phone %}
 <div id="landContactModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landContactTitle">
   <div class="ld-modal__backdrop absolute inset-0 bg-black/60" data-land-modal-close></div>
-  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl">
+  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl" data-land-modal-panel>
     <h2 id="landContactTitle" class="text-lg font-bold text-white mb-3">تماس</h2>
     <a href="tel:{{ contact_phone }}" class="flex items-center justify-center gap-2 w-full rounded-xl bg-[#22c55e] hover:bg-green-400 py-3.5 text-white font-semibold">
       <i class="fas fa-phone" aria-hidden="true"></i>
@@ -18,7 +18,7 @@
 {% if land.latitude and land.longitude %}
 <div id="landLocationModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landLocationTitle">
   <div class="ld-modal__backdrop absolute inset-0 bg-black/60" data-land-modal-close></div>
-  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl">
+  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl" data-land-modal-panel>
     <h2 id="landLocationTitle" class="text-lg font-bold text-white mb-3">موقعیت</h2>
     <a href="https://www.google.com/maps?q={{ land.latitude }},{{ land.longitude }}"
        target="_blank"
@@ -36,7 +36,7 @@
 {% if is_approved and _ld_st != 'sold' and (land._tx_button_mode|default('visit')) not in ('release', 'blocked', 'hidden') %}
 <div id="landVisitModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landVisitTitle">
   <div class="ld-modal__backdrop absolute inset-0 bg-black/60" data-land-modal-close></div>
-  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl">
+  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl" data-land-modal-panel>
     <h2 id="landVisitTitle" class="text-lg font-bold text-white mb-1">درخواست بازدید</h2>
     <p class="text-xs text-gray-400 mb-3">تاریخ بازدید را از تقویم شمسی انتخاب کنید.</p>
 
@@ -62,7 +62,8 @@
     <button type="button"
             id="landVisitSubmitBtn"
             data-visit-submit
-            class="w-full flex items-center justify-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 py-3.5 text-white font-semibold disabled:opacity-50">
+            disabled
+            class="w-full flex items-center justify-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 py-3.5 text-white font-semibold disabled:opacity-50 disabled:pointer-events-none">
       <i class="fas fa-paper-plane" aria-hidden="true"></i>
       ثبت درخواست بازدید
     </button>
