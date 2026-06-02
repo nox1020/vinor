@@ -155,6 +155,22 @@ def grant_referral_commission_for_application(application: Dict[str, Any]) -> bo
     commissions.append(comm)
     save_express_commissions(commissions)
 
+    try:
+        from .commission_sms import notify_partner_commission_txn
+        notify_partner_commission_txn(
+            partner_phone=inviter,
+            event='commission_pending',
+            amount=REFERRAL_BONUS_AMOUNT,
+            land_code=REFERRAL_LAND_CODE,
+            commission_type=COMMISSION_TYPE_REFERRAL,
+            reference_id=str(new_cid),
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            'referral commission_pending SMS failed inviter=%s', inviter
+        )
+
     if ref_rec:
         ref_rec['status'] = 'approved'
         ref_rec['commission_id'] = new_cid

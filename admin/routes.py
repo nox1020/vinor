@@ -3365,6 +3365,17 @@ def express_commission_new():
         'created_at': iso_z(utcnow())
     })
     save_express_commissions(items)
+    try:
+        from app.express_partner.commission_sms import notify_partner_commission_txn
+        notify_partner_commission_txn(
+            partner_phone=partner_phone,
+            event='commission_pending',
+            amount=commission_amount,
+            land_code=land_code,
+            reference_id=str(new_id),
+        )
+    except Exception:
+        current_app.logger.exception('commission_pending SMS failed admin new cid=%s', new_id)
     flash('پورسانت ثبت شد (در انتظار تایید).', 'success')
     return redirect(url_for('admin.express_commissions'))
 
@@ -3430,6 +3441,18 @@ def express_commission_approve(cid: int):
         except Exception as e:
             current_app.logger.error(f"Error updating partner stats: {e}")
 
+        try:
+            from app.express_partner.commission_sms import notify_partner_commission_txn
+            notify_partner_commission_txn(
+                partner_phone=str(commission_record.get('partner_phone') or ''),
+                event='commission_approved',
+                amount=int(commission_record.get('commission_amount') or 0),
+                land_code=str(commission_record.get('land_code') or ''),
+                commission_type=str(commission_record.get('commission_type') or ''),
+                reference_id=str(commission_record.get('id') or cid),
+            )
+        except Exception:
+            current_app.logger.exception('commission_approved SMS failed cid=%s', cid)
         if is_referral:
             flash('پورسانت دعوت همکار تایید شد و آمار همکار به‌روز شد.', 'success')
         else:
@@ -3443,18 +3466,33 @@ def express_commission_approve(cid: int):
 def express_commission_pay(cid: int):
     items = load_express_commissions() or []
     changed = False
+    paid_record = None
     for c in items:
         try:
             if int(c.get('id',0) or 0) == int(cid):
                 if c.get('status') == 'approved':
                     c['status'] = 'paid'
                     c['paid_at'] = iso_z(utcnow())
+                    paid_record = c
                     changed = True
                 break
         except Exception:
             continue
     if changed:
         save_express_commissions(items)
+        if paid_record:
+            try:
+                from app.express_partner.commission_sms import notify_partner_commission_txn
+                notify_partner_commission_txn(
+                    partner_phone=str(paid_record.get('partner_phone') or ''),
+                    event='commission_paid',
+                    amount=int(paid_record.get('commission_amount') or 0),
+                    land_code=str(paid_record.get('land_code') or ''),
+                    commission_type=str(paid_record.get('commission_type') or ''),
+                    reference_id=str(paid_record.get('id') or cid),
+                )
+            except Exception:
+                current_app.logger.exception('commission_paid SMS failed cid=%s', cid)
         flash('پورسانت پرداخت شد.', 'success')
     elif not changed:
         flash('پورسانت باید ابتدا تایید شود.', 'warning')
@@ -3511,7 +3549,18 @@ def express_commission_reject(cid: int):
                     save_express_partners(partners)
             except Exception as e:
                 current_app.logger.error(f"Error updating partner stats after reject: {e}")
-        
+        try:
+            from app.express_partner.commission_sms import notify_partner_commission_txn
+            notify_partner_commission_txn(
+                partner_phone=str(commission_record.get('partner_phone') or ''),
+                event='commission_rejected',
+                amount=int(commission_record.get('commission_amount') or 0),
+                land_code=str(commission_record.get('land_code') or ''),
+                commission_type=str(commission_record.get('commission_type') or ''),
+                reference_id=str(commission_record.get('id') or cid),
+            )
+        except Exception:
+            current_app.logger.exception('commission_rejected SMS failed cid=%s', cid)
         flash('پورسانت رد شد.', 'info')
     elif not changed:
         flash('فقط پورسانت‌های در انتظار یا تایید شده قابل رد هستند.', 'warning')
@@ -3850,6 +3899,28 @@ def financial_withdrawal_status(wid: str):
             save_express_commissions(commissions)
         if withdrawals_dirty:
             save_partner_withdrawals(items)
+        if withdrawal_row and old_status != new_status:
+            wd_event = None
+            if new_status == 'approved':
+                wd_event = 'withdrawal_approved'
+            elif new_status == 'rejected':
+                wd_event = 'withdrawal_rejected'
+            elif new_status == 'paid':
+                wd_event = 'withdrawal_paid'
+            if wd_event:
+                try:
+                    from app.express_partner.commission_sms import notify_partner_commission_txn
+                    notify_partner_commission_txn(
+                        partner_phone=str(withdrawal_row.get('phone') or ''),
+                        event=wd_event,
+                        amount=int(withdrawal_row.get('amount') or 0),
+                        bank_summary=str(withdrawal_row.get('bank_summary') or ''),
+                        reference_id=str(withdrawal_row.get('id') or wid),
+                    )
+                except Exception:
+                    current_app.logger.exception(
+                        'withdrawal status SMS failed wid=%s event=%s', wid, wd_event
+                    )
         flash('وضعیت درخواست بروزرسانی شد.', 'success')
     except Exception:
         current_app.logger.exception('save_partner_withdrawals status failed')

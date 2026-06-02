@@ -2243,6 +2243,18 @@ def withdrawals_request():
     except Exception:
         current_app.logger.exception('withdrawal admin SMS failed')
 
+    try:
+        from .commission_sms import notify_partner_commission_txn
+        notify_partner_commission_txn(
+            partner_phone=me_phone,
+            event='withdrawal_requested',
+            amount=int(rec.get('amount') or 0),
+            bank_summary=str(rec.get('bank_summary') or ''),
+            reference_id=str(rec.get('id') or ''),
+        )
+    except Exception:
+        current_app.logger.exception('withdrawal_requested partner SMS failed')
+
     return jsonify({
         'success': True,
         'request': {
@@ -2271,12 +2283,31 @@ def withdrawals_cancel(wid: str):
         code = err or 'cancel_failed'
         status = 404 if code == 'not_found' else 400
         return jsonify({'success': False, 'error': code}), status
+    cancelled_row = next(
+        (
+            w for w in all_wd
+            if isinstance(w, dict) and str(w.get('id') or '') == str(wid).strip()
+        ),
+        None,
+    )
     try:
         save_partner_withdrawals(all_wd)
         save_express_commissions(commissions)
     except Exception:
         current_app.logger.exception('withdrawals_cancel save failed')
         return jsonify({'success': False, 'error': 'save_failed'}), 500
+    if cancelled_row:
+        try:
+            from .commission_sms import notify_partner_commission_txn
+            notify_partner_commission_txn(
+                partner_phone=me_phone,
+                event='withdrawal_cancelled',
+                amount=int(cancelled_row.get('amount') or 0),
+                bank_summary=str(cancelled_row.get('bank_summary') or ''),
+                reference_id=str(wid),
+            )
+        except Exception:
+            current_app.logger.exception('withdrawal_cancelled partner SMS failed')
     return jsonify({
         'success': True,
         'withdrawable_balance': _partner_withdrawable_balance(me_phone),
@@ -3593,6 +3624,21 @@ def mark_in_transaction(code: str):
                                     
                                     commissions.append(new_commission)
                                     created_count += 1
+                                    try:
+                                        from .commission_sms import notify_partner_commission_txn
+                                        notify_partner_commission_txn(
+                                            partner_phone=partner_phone,
+                                            event='commission_pending',
+                                            amount=commission_amount,
+                                            land_code=str(code),
+                                            reference_id=str(new_id),
+                                        )
+                                    except Exception:
+                                        current_app.logger.exception(
+                                            'commission_pending SMS failed partner=%s land=%s',
+                                            partner_phone,
+                                            code,
+                                        )
                                     current_app.logger.info(f"Created commission record {new_id} for partner {partner_phone} and land {code}: amount={commission_amount}, pct={commission_pct}, price={price_total}")
                                 else:
                                     current_app.logger.warning(f"Commission amount is 0 for partner {partner_phone}, land {code}: price={price_total}, pct={commission_pct}")
