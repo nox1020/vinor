@@ -28,6 +28,38 @@
     }
     applyJalali(document);
 
+    function setupCommIncomeInfoTip(scope) {
+      var root = scope || document;
+      var btn = root.querySelector('[data-comm-income-info-btn]');
+      var tip = root.querySelector('[data-comm-income-info-tip]');
+      if (!btn || !tip || btn.getAttribute('data-vn-info-bound') === '1') return;
+      btn.setAttribute('data-vn-info-bound', '1');
+      var hideTimer = null;
+      function hideTip() {
+        tip.classList.add('hidden');
+        tip.setAttribute('aria-hidden', 'true');
+        btn.setAttribute('aria-expanded', 'false');
+        if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      }
+      function showTip() {
+        tip.classList.remove('hidden');
+        tip.setAttribute('aria-hidden', 'false');
+        btn.setAttribute('aria-expanded', 'true');
+        try {
+          if (navigator.vibrate) navigator.vibrate(12);
+        } catch (_) {}
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(hideTip, 5200);
+      }
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (tip.classList.contains('hidden')) showTip();
+        else hideTip();
+      });
+    }
+    setupCommIncomeInfoTip(document);
+
     var main = document.getElementById('commissionsPageMain');
     var mount = document.getElementById('commissionsRefreshMount');
     if (!main || !mount) return;
@@ -97,6 +129,7 @@
           }
         }
         applyJalali(mount);
+        setupCommIncomeInfoTip(mount);
       }).catch(function(){})
       .finally(function(){
         if (spin) spin.classList.remove('fa-spin');
