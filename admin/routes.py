@@ -3699,13 +3699,22 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
 @admin_bp.post('/express/visit-requests/<vid>/status')
 @login_required
 def express_visit_request_status(vid: str):
-    from app.express_partner.visit_requests import admin_update_visit_request_status
+    from app.express_partner.visit_requests import (
+        APPROVED_STATUS,
+        admin_update_visit_request_status,
+    )
+    from app.express_partner.visit_sms import send_visit_partner_approval_sms
 
     new_status = (request.form.get('status') or '').strip()
     admin_note = (request.form.get('admin_note') or '').strip()
     items = load_express_visit_requests() or []
     if not isinstance(items, list):
         items = []
+    prev_status = ''
+    for row in items:
+        if isinstance(row, dict) and str(row.get('id') or '') == str(vid).strip():
+            prev_status = (str(row.get('status') or '')).strip()
+            break
     rec, err = admin_update_visit_request_status(
         items, vid, new_status, admin_note=admin_note
     )
@@ -3724,6 +3733,25 @@ def express_visit_request_status(vid: str):
             flash('یادداشت درخواست بازدید ذخیره شد.', 'success')
         else:
             _flash_visit_request_status_change(rec or {}, new_status)
+            if (
+                new_status == APPROVED_STATUS
+                and prev_status != APPROVED_STATUS
+                and rec
+            ):
+                sms_result = send_visit_partner_approval_sms(
+                    partner_phone=str(rec.get('partner_phone') or ''),
+                    partner_name=str(rec.get('partner_name') or ''),
+                    land_code=str(rec.get('land_code') or ''),
+                    land_title=str(rec.get('land_title') or ''),
+                    visit_date=str(rec.get('visit_date') or ''),
+                )
+                if sms_result.get('ok'):
+                    flash('پیامک تأیید بازدید برای همکار ارسال شد.', 'success')
+                elif not sms_result.get('skipped'):
+                    flash(
+                        'وضعیت تأیید شد، اما ارسال پیامک به همکار ناموفق بود.',
+                        'warning',
+                    )
     except Exception:
         flash('خطا در ذخیره وضعیت.', 'error')
     return redirect(url_for('admin.express_visit_requests'))

@@ -271,6 +271,7 @@ def load_settings(app=None):
         "partner_approval_sms_message": "پنل همکاری وینور برای شما فعال شد. وینور",
         "partner_application_admin_phone": "09121471301",
         "partner_application_admin_sms_message": "درخواست همکاری جدید همکار در وینور ثبت شد.",
+        "visit_approval_sms_message": "",
     }
     return load_settings_cached(app, default_settings=default_settings)
 
@@ -292,6 +293,7 @@ def load_settings_cached(app=None, default_settings=None):
             "partner_approval_sms_message": "پنل همکاری وینور برای شما فعال شد. وینور",
             "partner_application_admin_phone": "09121471301",
             "partner_application_admin_sms_message": "درخواست همکاری جدید همکار در وینور ثبت شد.",
+            "visit_approval_sms_message": "",
         }
     app = _resolve_app(app)
     path = ensure_file("SETTINGS_FILE", "settings.json", default_settings, app)

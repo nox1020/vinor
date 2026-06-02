@@ -31,11 +31,20 @@
       {% endif %}
     </div>
 
-    {# موقعیت #}
-    {% if loc_line %}
-    <p class="flex items-center gap-1 text-[11px] text-slate-400 mb-4 min-w-0">
-      <i class="fas fa-location-dot text-teal-500 text-[10px] shrink-0" aria-hidden="true"></i>
-      <span class="truncate">{{ loc_line }}</span>
+    {# موقعیت + کد ملک #}
+    {% if loc_line or land.code %}
+    <p class="flex items-center gap-2 text-[11px] text-slate-400 mb-4 min-w-0">
+      {% if loc_line %}
+      <span class="flex items-center gap-1 min-w-0 flex-1">
+        <i class="fas fa-location-dot text-teal-500 text-[10px] shrink-0" aria-hidden="true"></i>
+        <span class="truncate">{{ loc_line }}</span>
+      </span>
+      {% endif %}
+      {% if land.code %}
+      <span class="shrink-0 text-[11px] font-bold text-slate-300 font-mono tabular-nums{% if loc_line %} border-s border-white/10 ps-2{% endif %}" dir="ltr">
+        کد ملک: {{ land.code }}
+      </span>
+      {% endif %}
     </p>
     {% endif %}
 
@@ -187,10 +196,6 @@
         <i class="fas fa-map-location-dot text-teal-400" aria-hidden="true"></i>
         موقعیت ملک
       </button>
-      {% endif %}
-
-      {% if land.code %}
-      <p class="text-[10px] text-slate-600 mt-3 font-mono">کد فایل: {{ land.code }}</p>
       {% endif %}
     </div>
   </div>
