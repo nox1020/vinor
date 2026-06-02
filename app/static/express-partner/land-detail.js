@@ -92,6 +92,7 @@
   function closeLandModals() {
     document.querySelectorAll('.ld-modal').forEach(function (m) {
       m.classList.add('hidden');
+      m.style.display = 'none';
       m.setAttribute('aria-hidden', 'true');
     });
     activeLandModalId = null;
@@ -103,6 +104,7 @@
     if (!modal) return;
     closeLandModals();
     modal.classList.remove('hidden');
+    modal.style.display = 'flex';
     modal.setAttribute('aria-hidden', 'false');
     activeLandModalId = id;
     landModalOverlayOpen();
@@ -509,8 +511,13 @@
   }
 
   function initVisitCalBounds() {
-    var today = new Date();
-    today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    var cfg = readConfig();
+    var minIso = (cfg && cfg.visitDateMin) || '';
+    var today = parseLocalISODate(minIso);
+    if (!today) {
+      today = new Date();
+      today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    }
     visitCalState.minDate = today;
     visitCalState.maxDate = new Date(today);
     visitCalState.maxDate.setDate(visitCalState.maxDate.getDate() + 90);
@@ -678,8 +685,9 @@
 
   function syncTxButtonDisabled(btn, mode) {
     if (!btn || btn.tagName !== 'BUTTON') return;
-    btn.disabled = mode === 'visit_pending';
-    btn.setAttribute('aria-disabled', mode === 'visit_pending' ? 'true' : 'false');
+    var pending = mode === 'visit_pending';
+    btn.disabled = false;
+    btn.setAttribute('aria-disabled', pending ? 'true' : 'false');
   }
 
   var visitStatusPollTimer = null;
@@ -793,15 +801,7 @@
   }
 
   function closeVisitModal() {
-    var modal = document.getElementById('landVisitModal');
-    if (modal) {
-      modal.classList.add('hidden');
-      modal.setAttribute('aria-hidden', 'true');
-    }
-    if (activeLandModalId === 'landVisitModal') {
-      activeLandModalId = null;
-      landModalOverlayCloseAll();
-    }
+    closeLandModals();
   }
 
   function postLandAction(url, extraFields, onSuccess) {
@@ -856,7 +856,7 @@
       submitBtn.disabled = true;
 
       postLandAction(url, { visit_date: visitDate }, function (data) {
-        closeVisitModal();
+        closeLandModals();
         var mode = data.tx_mode || 'visit_pending';
         applyTxMode(mode, data.visit_date || visitDate, data.visit_date_jalali);
         if (mode === 'visit_pending') initVisitStatusPoll('visit_pending');
@@ -893,7 +893,15 @@
       var mode = btn.getAttribute('data-land-tx-mode') || root.dataset.txMode || 'visit';
 
       if (mode === 'visit_pending') {
-        showTxToast('درخواست بازدید در انتظار تأیید ادمین است.', false);
+        var pendingHint = '';
+        var hintEl = document.getElementById('landVisitDateHint');
+        if (hintEl && !hintEl.classList.contains('hidden')) {
+          pendingHint = ' ' + (hintEl.textContent || '').trim();
+        }
+        showTxToast(
+          'درخواست بازدید در انتظار تأیید ادمین است.' + pendingHint,
+          false
+        );
         return;
       }
 

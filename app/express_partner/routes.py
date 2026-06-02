@@ -61,6 +61,7 @@ from .visit_requests import (
     partner_open_visit,
     partner_visit_approved_for_deal,
     complete_visit_for_deal,
+    visit_date_min_iso,
     resolve_partner_land_tx_state,
 )
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
@@ -3133,6 +3134,63 @@ def _mark_in_transaction_finish(
     return redirect(url_for('express_partner.dashboard'))
 
 
+def _express_land_in_catalog(code: str) -> bool:
+    """فایل در لیست اکسپرس (یا آگهی‌ها) وجود دارد."""
+    key = str(code or '').strip()
+    if not key:
+        return False
+    try:
+        express_lands = load_express_lands_cached() or []
+    except Exception:
+        express_lands = []
+    if any(str(l.get('code') or '').strip() == key for l in express_lands):
+        return True
+    try:
+        lands_all = load_ads_cached() or []
+    except Exception:
+        lands_all = []
+    return any(str(l.get('code') or '').strip() == key for l in lands_all)
+
+
+def _express_land_partner_ctx(code: str, me_phone: str) -> Dict[str, Any] | None:
+    """
+    زمینه دسترسی همکار به یک فایل اکسپرس.
+    برای بازدید/وضعیت دکمه، داشتن assignment اختصاصی لازم نیست؛ فایل باید در کاتالوگ باشد.
+    """
+    key = str(code or '').strip()
+    ph = (me_phone or '').strip()
+    if not key or not ph or not _express_land_in_catalog(key):
+        return None
+    assignments = load_express_assignments() or []
+    global_status = 'active'
+    status_priority = {
+        'sold': 5, 'in_transaction': 4, 'closed': 3, 'pending': 2, 'approved': 1, 'active': 0, '': 0,
+    }
+    holder_phone = None
+    for a in assignments:
+        if str(a.get('land_code') or '').strip() != key:
+            continue
+        status = _assignment_display_status(a)
+        if status_priority.get(status, 0) > status_priority.get(global_status, 0):
+            global_status = status
+        th = str(a.get('transaction_holder') or '').strip()
+        if th:
+            holder_phone = th
+    my_assignment = next(
+        (
+            a for a in assignments
+            if str(a.get('land_code') or '').strip() == key
+            and str(a.get('partner_phone') or '').strip() == ph
+        ),
+        None,
+    )
+    return {
+        'global_status': global_status,
+        'holder_phone': holder_phone,
+        'my_assignment': my_assignment,
+    }
+
+
 def _partner_land_tx_payload(
     code: str,
     me_phone: str,
@@ -3179,20 +3237,31 @@ def create_visit_request(code: str):
         except Exception:
             visit_date = ''
 
-    assignments = load_express_assignments() or []
-    my_assignment = next(
-        (a for a in assignments if str(a.get('land_code')) == str(code) and str(a.get('partner_phone')) == me_phone),
-        None,
-    )
-    if my_assignment is None:
+    partners = load_express_partners() or []
+    partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
+    try:
+        is_pa = _is_partner_approved(partner_profile)
+    except Exception:
+        is_pa = False
+    if not is_pa:
         return _mark_in_transaction_finish(
             code,
             success=False,
-            message='فایل موردنظر پیدا نشد یا دسترسی شما به آن محدود است.',
+            message='برای ثبت درخواست بازدید باید حساب همکاری شما تأیید شده باشد.',
             category='error',
         )
 
-    current_status = my_assignment.get('status', 'active')
+    ctx = _express_land_partner_ctx(code, me_phone)
+    if ctx is None:
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='فایل موردنظر پیدا نشد یا در لیست اکسپرس موجود نیست.',
+            category='error',
+        )
+
+    current_status = ctx['global_status']
+    holder_phone = ctx.get('holder_phone')
     if current_status == 'sold':
         return _mark_in_transaction_finish(
             code,
@@ -3201,11 +3270,6 @@ def create_visit_request(code: str):
             category='error',
         )
 
-    holder_phone = None
-    for a in assignments:
-        if str(a.get('land_code')) == str(code) and a.get('transaction_holder'):
-            holder_phone = str(a.get('transaction_holder', ''))
-            break
     if holder_phone and holder_phone != me_phone:
         return _mark_in_transaction_finish(
             code,
@@ -3225,8 +3289,6 @@ def create_visit_request(code: str):
     land = next((l for l in lands_all if str(l.get('code')) == str(code)), None)
     land_title = (land.get('title') if land else None) or code
 
-    partners = load_express_partners() or []
-    partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
     partner_name = (partner_profile.get('name') if partner_profile else None) or me_phone
 
     visit_requests = load_express_visit_requests() or []
@@ -3323,13 +3385,9 @@ def create_visit_request(code: str):
 def land_tx_status(code: str):
     """وضعیت دکمه بازدید/معامله — برای به‌روزرسانی خودکار پس از تأیید ادمین."""
     me_phone = (session.get('user_phone') or '').strip()
-    assignments = load_express_assignments() or []
-    my_assignment = next(
-        (a for a in assignments if str(a.get('land_code')) == str(code) and str(a.get('partner_phone')) == me_phone),
-        None,
-    )
-    if my_assignment is None:
-        return jsonify(success=False, message='دسترسی محدود است.'), 403
+    ctx = _express_land_partner_ctx(code, me_phone)
+    if ctx is None:
+        return jsonify(success=False, message='فایل یافت نشد.'), 404
 
     partners = load_express_partners() or []
     partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
@@ -3338,22 +3396,11 @@ def land_tx_status(code: str):
     except Exception:
         is_partner_approved = False
 
-    global_status = 'active'
-    status_priority = {
-        'sold': 5, 'in_transaction': 4, 'closed': 3, 'pending': 2, 'approved': 1, 'active': 0, '': 0,
-    }
-    for a in assignments:
-        if str(a.get('land_code')) != str(code):
-            continue
-        status = _assignment_display_status(a)
-        if status_priority.get(status, 0) > status_priority.get(global_status, 0):
-            global_status = status
-
     state = _partner_land_tx_payload(
         code,
         me_phone,
         is_partner_approved=is_partner_approved,
-        global_assignment_status=global_status,
+        global_assignment_status=ctx['global_status'],
     )
     resp = jsonify(success=True, **state)
     resp.headers['Cache-Control'] = 'no-store'
@@ -4696,7 +4743,7 @@ def land_detail(code: str):
         ref_partner=None,
         brand="وینور",
         domain="vinor.ir",
-        visit_date_min=datetime.utcnow().strftime('%Y-%m-%d'),
+        visit_date_min=visit_date_min_iso(),
     )
 
 

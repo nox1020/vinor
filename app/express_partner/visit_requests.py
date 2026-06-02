@@ -24,6 +24,11 @@ def _today() -> date:
         return datetime.utcnow().date()
 
 
+def visit_date_min_iso() -> str:
+    """حداقل تاریخ قابل انتخاب بازدید (امروز به وقت تهران)."""
+    return _today().isoformat()
+
+
 def _parse_visit_date(raw: Any) -> Optional[date]:
     s = (str(raw or "")).strip()[:10]
     if not s:

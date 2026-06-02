@@ -73,6 +73,7 @@
       color: rgb(251 191 36);
     }
     .ld-gallery__loader.is-visible { opacity: 1; }
+    .ld-modal.hidden { display: none !important; }
     .ld-modal:not(.hidden) { display: flex; }
     .ld-actions { z-index: 45; }
     body > .ld-modal { z-index: 200; }
@@ -105,7 +106,7 @@
     "shareUrl": {{ (share_url or '')|tojson }},
     "code": {{ (land.code or '')|tojson }},
     "txMode": {{ (land._tx_button_mode|default('visit'))|tojson }},
-    "visitDateMin": {{ visit_date_min|default('')|tojson }},
+    "visitDateMin": {{ (visit_date_min or '')|tojson }},
     "visitDate": {{ (land._visit_date or '')|tojson }},
     "visitDateJalali": {{ (land._visit_date_jalali or '')|tojson }},
     "txStatusUrl": {{ url_for('express_partner.land_tx_status', code=land.code)|tojson }},

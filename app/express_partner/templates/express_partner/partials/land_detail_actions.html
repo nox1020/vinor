@@ -37,8 +37,8 @@
               data-land-tx-status="{{ _st }}"
               {% if land._visit_date %}data-visit-date="{{ land._visit_date }}"{% endif %}
               data-csrf="{{ csrf_token() }}"
-              {% if tx_mode == 'visit_pending' %}disabled aria-disabled="true"{% endif %}
-              class="w-full flex items-center justify-center gap-2 rounded-2xl text-white font-bold py-3.5 text-sm active:scale-[0.98] transition-all disabled:opacity-70 disabled:pointer-events-none {% if tx_mode == 'release' %}bg-teal-600 hover:bg-teal-500 shadow-lg shadow-teal-900/30{% elif tx_mode == 'visit_pending' %}bg-slate-600/90 cursor-default{% else %}bg-teal-700/90 hover:bg-teal-600 border border-teal-500/35{% endif %}">
+              {% if tx_mode == 'visit_pending' %}aria-disabled="true"{% endif %}
+              class="w-full flex items-center justify-center gap-2 rounded-2xl text-white font-bold py-3.5 text-sm active:scale-[0.98] transition-all {% if tx_mode == 'release' %}bg-teal-600 hover:bg-teal-500 shadow-lg shadow-teal-900/30{% elif tx_mode == 'visit_pending' %}bg-slate-600/90{% else %}bg-teal-700/90 hover:bg-teal-600 border border-teal-500/35{% endif %}">
         <i class="fas {% if tx_mode == 'release' %}fa-check-circle{% elif tx_mode == 'deal' %}fa-handshake{% elif tx_mode == 'visit_pending' %}fa-clock{% else %}fa-calendar-check{% endif %} land-tx-icon" aria-hidden="true"></i>
         <span class="land-tx-label">{% if tx_mode == 'release' %}رفع معامله{% elif tx_mode == 'deal' %}درخواست معامله{% elif tx_mode == 'visit_pending' %}در انتظار تأیید بازدید{% else %}درخواست بازدید{% endif %}</span>
       </button>
