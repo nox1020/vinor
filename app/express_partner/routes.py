@@ -1014,12 +1014,27 @@ def inject_role_flags():
         except Exception:
             is_vinor_apk = False
 
+    android_apk_url = ''
+    android_apk_version = ''
+    show_apk_download_banner = False
+    if not is_vinor_apk:
+        try:
+            _apk_settings = _express_settings_cached()
+            android_apk_url = (_apk_settings.get('android_apk_url') or '').strip()
+            android_apk_version = (_apk_settings.get('android_apk_version') or '').strip()
+            show_apk_download_banner = bool(android_apk_url)
+        except Exception:
+            pass
+
     from ..utils.flash_messages import AUTH_FLASH_CATEGORY_FILTER
 
     return {
         "VINOR_IS_EXPRESS_PARTNER": is_express_partner,
         "VAPID_PUBLIC_KEY": vapid_public,
         "is_vinor_apk": is_vinor_apk,
+        "android_apk_url": android_apk_url,
+        "android_apk_version": android_apk_version,
+        "show_apk_download_banner": show_apk_download_banner,
         "auth_flash_categories": AUTH_FLASH_CATEGORY_FILTER,
     }
 

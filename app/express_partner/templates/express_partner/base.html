@@ -231,6 +231,12 @@
       opacity: 0 !important;
       pointer-events: none !important;
     }
+    /* فضای اضافه زیر محتوا وقتی نوار «دانلود اپ» بالای منوی پایین نمایش داده می‌شود (فقط مرورگر) */
+    @media (max-width: 1023px) {
+      html.vinor-has-apk-banner [class*="pb-[calc(5.75rem"] {
+        padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px)) !important;
+      }
+    }
     body > [data-tg-body-modal] {
       z-index: 200;
     }
