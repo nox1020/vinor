@@ -9,34 +9,72 @@
     <div>
       <h2 class="text-base font-semibold text-gray-900 dark:text-white">درخواست‌های برداشت همکاران</h2>
       <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-        {% if pending_count %}<span class="text-amber-600 dark:text-amber-400 font-medium">{{ pending_count }} در انتظار بررسی</span>{% else %}همه درخواست‌ها بررسی شده‌اند{% endif %}
+        {% if active_count %}
+        <span class="text-blue-600 dark:text-blue-400 font-medium">{{ active_count }} فعال</span>
+        ·
+        {% endif %}
+        {% if pending_count %}
+        <span class="text-amber-600 dark:text-amber-400 font-medium">{{ pending_count }} در انتظار</span>
+        {% if approved_count %} · {% endif %}
+        {% endif %}
+        {% if approved_count %}
+        <span class="text-indigo-600 dark:text-indigo-400 font-medium">{{ approved_count }} تأییدشده</span>
+        {% endif %}
+        {% if not active_count and not pending_count and not approved_count %}
+        همه درخواست‌ها بررسی شده‌اند
+        {% endif %}
       </p>
     </div>
     <a href="{{ url_for('admin.express_commissions') }}"
        class="text-xs text-blue-600 dark:text-blue-400 hover:underline">مدیریت پورسانت‌ها</a>
   </div>
 
+  <div class="flex flex-wrap gap-2 text-[11px]">
+    {% macro filter_link(key, label, count) %}
+    <a href="{{ url_for('admin.financial_withdrawals', filter=key) }}"
+       class="px-3 py-1.5 rounded-full border font-medium transition
+              {% if current_filter == key %}border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-600{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300{% endif %}">
+      {{ label }}{% if count is not none %} ({{ count }}){% endif %}
+    </a>
+    {% endmacro %}
+    {{ filter_link('active', 'فعال', active_count) }}
+    {{ filter_link('pending', 'در انتظار', pending_count) }}
+    {{ filter_link('approved', 'تأییدشده', approved_count) }}
+    {{ filter_link('processing', 'در حال پردازش', processing_count) }}
+    {{ filter_link('paid', 'پرداخت‌شده', paid_count) }}
+    {{ filter_link('all', 'همه', all_count) }}
+  </div>
+
   {% if items and items|length > 0 %}
   <div class="grid grid-cols-1 gap-3">
     {% for w in items %}
-    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+    {% set st = w.status or 'pending' %}
+    <div class="bg-white dark:bg-gray-900 border rounded-lg p-4
+                {% if st == 'pending' %}border-amber-200 dark:border-amber-900/50
+                {% elif st == 'approved' %}border-indigo-200 dark:border-indigo-900/50
+                {% elif st == 'processing' %}border-blue-200 dark:border-blue-900/50
+                {% else %}border-gray-200 dark:border-gray-700{% endif %}">
       <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div class="min-w-0">
           <h3 class="font-semibold text-sm text-gray-900 dark:text-white">
             {{ w.partner_name or 'همکار' }}
             <span class="text-gray-400 font-normal text-xs" dir="ltr">{{ w.phone }}</span>
           </h3>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ w.created_at|default('—') }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">ثبت: {{ w.created_at|default('—') }}</p>
+          {% if w.updated_at and w.updated_at != w.created_at %}
+          <p class="text-[10px] text-gray-400 dark:text-gray-500">آخرین بروزرسانی: {{ w.updated_at }}</p>
+          {% endif %}
         </div>
         <div class="text-start shrink-0">
           <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{{ w.amount|int|toman }}</p>
-          {% set st = w.status or 'pending' %}
           <span class="inline-flex mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full
             {% if st == 'pending' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
+            {% elif st == 'approved' %}bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300
+            {% elif st == 'processing' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
             {% elif st == 'paid' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
             {% elif st == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
             {% elif st == 'cancelled' %}bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400
-            {% else %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300{% endif %}">
+            {% else %}bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300{% endif %}">
             {{ w.status_label }}
           </span>
         </div>
@@ -46,6 +84,9 @@
         <div class="flex justify-between gap-2"><span class="text-gray-500">بانک</span><span class="text-gray-900 dark:text-white font-medium">{{ w.bank_name or '—' }}</span></div>
         <div class="flex justify-between gap-2"><span class="text-gray-500">کارت</span><span class="text-gray-900 dark:text-white font-mono" dir="ltr">{{ w.masked_pan or '—' }}</span></div>
         <div class="flex justify-between gap-2"><span class="text-gray-500">صاحب حساب</span><span class="text-gray-900 dark:text-white">{{ w.holder_name or '—' }}</span></div>
+        {% if st == 'paid' and w.commission_allocated_amount %}
+        <div class="flex justify-between gap-2"><span class="text-gray-500">تخصیص پورسانت</span><span class="text-gray-900 dark:text-white tabular-nums">{{ w.commission_allocated_amount|int|toman }}</span></div>
+        {% endif %}
       </div>
 
       {% if w.admin_note %}
@@ -54,17 +95,20 @@
 
       {% if st == 'cancelled' %}
       <p class="text-xs text-gray-500 dark:text-gray-400 italic">این درخواست توسط همکار لغو شده است.</p>
-      {% elif st in ('processing', 'paid') %}
-      <p class="text-xs text-gray-600 dark:text-gray-300">وضعیت فعلی: <span class="font-semibold">{{ w.status_label }}</span> — تغییر وضعیت از این بخش برای این مرحله غیرفعال است.</p>
-      {% else %}
+      {% elif st == 'paid' %}
+      <p class="text-xs text-emerald-600 dark:text-emerald-400">واریز انجام شده — پورسانت‌های مرتبط به وضعیت پرداخت‌شده منتقل شده‌اند.</p>
+      {% elif st == 'rejected' %}
+      <p class="text-xs text-red-600 dark:text-red-400">رد شده — مبلغ به موجودی قابل برداشت همکار برگشته است.</p>
+      {% elif w.is_editable %}
       <form method="post" action="{{ url_for('admin.financial_withdrawal_status', wid=w.id) }}" class="flex flex-wrap items-end gap-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="filter" value="{{ current_filter }}">
         <div class="flex-1 min-w-[8rem]">
           <label class="block text-[10px] text-gray-500 mb-1">تغییر وضعیت</label>
           <select name="status" class="w-full text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-            <option value="pending" {% if st == 'pending' %}selected{% endif %}>در انتظار بررسی</option>
-            <option value="approved" {% if st == 'approved' %}selected{% endif %}>تأیید شده</option>
-            <option value="rejected" {% if st == 'rejected' %}selected{% endif %}>رد شده</option>
+            {% for opt in w.status_options %}
+            <option value="{{ opt.value }}" {% if opt.value == st %}selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
           </select>
         </div>
         <div class="flex-[2] min-w-[10rem]">
@@ -77,6 +121,13 @@
           ذخیره
         </button>
       </form>
+      {% if st == 'pending' %}
+      <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">پس از بررسی حساب بانکی، «تأیید شده» را انتخاب کنید تا مبلغ از موجودی همکار رزرو شود.</p>
+      {% elif st == 'approved' %}
+      <p class="text-xs text-indigo-600 dark:text-indigo-400 mt-2">تأیید شده — برای واریز، «در حال پردازش» یا مستقیم «پرداخت‌شده» را بزنید.</p>
+      {% elif st == 'processing' %}
+      <p class="text-xs text-blue-600 dark:text-blue-400 mt-2">در حال پردازش — پس از واریز به حساب، «پرداخت‌شده» را ثبت کنید.</p>
+      {% endif %}
       {% endif %}
     </div>
     {% endfor %}
@@ -84,7 +135,12 @@
   {% else %}
   <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-10 text-center">
     <i class="fa-solid fa-money-bill-transfer text-3xl text-gray-300 dark:text-gray-600 mb-3"></i>
-    <p class="text-sm text-gray-500 dark:text-gray-400">هنوز درخواست برداشتی ثبت نشده است.</p>
+    <p class="text-sm text-gray-500 dark:text-gray-400">
+      {% if current_filter == 'active' %}درخواست فعالی (در انتظار / تأیید / در حال پردازش) وجود ندارد.{% else %}در این فیلتر درخواستی نیست.{% endif %}
+    </p>
+    {% if current_filter != 'all' %}
+    <a href="{{ url_for('admin.financial_withdrawals', filter='all') }}" class="inline-block mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline">مشاهده همه</a>
+    {% endif %}
   </div>
   {% endif %}
 </div>

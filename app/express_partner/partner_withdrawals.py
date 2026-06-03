@@ -6,8 +6,20 @@ import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
 RESERVE_STATUSES = frozenset({"pending", "approved", "processing"})
-ACTIVE_WITHDRAWAL_STATUSES = frozenset({"pending", "approved", "processing", "rejected"})
+# فعال = از موجودی قابل برداشت کم می‌شود (رد شده و لغوشده فعال نیستند)
+ACTIVE_WITHDRAWAL_STATUSES = RESERVE_STATUSES
+ADMIN_OPEN_STATUSES = frozenset({"pending", "approved", "processing"})
 PARTNER_CANCELLABLE_WITHDRAWAL_STATUSES = frozenset({"pending"})
+
+# انتقال‌های مجاز وضعیت در پنل ادمین
+ADMIN_STATUS_TRANSITIONS: Dict[str, frozenset] = {
+    "pending": frozenset({"pending", "approved", "rejected"}),
+    "approved": frozenset({"approved", "processing", "paid", "rejected"}),
+    "processing": frozenset({"processing", "paid", "rejected"}),
+    "rejected": frozenset({"rejected"}),
+    "paid": frozenset({"paid"}),
+    "cancelled": frozenset({"cancelled"}),
+}
 # از موجودی قابل برداشت کسر می‌شود: در انتظار بررسی + تأیید ادمین + در حال پردازش
 WITHDRAWABLE_RESERVE_STATUSES = RESERVE_STATUSES
 LOCK_RESERVE_STATUSES = RESERVE_STATUSES
@@ -384,6 +396,42 @@ def available_for_new_withdrawal(
     return withdrawable_balance(commissions, withdrawals, phone)
 
 
+def admin_can_transition(old_status: str, new_status: str) -> bool:
+    old = (old_status or "pending").strip().lower()
+    new = (new_status or "").strip().lower()
+    if old == new:
+        return True
+    allowed = ADMIN_STATUS_TRANSITIONS.get(old)
+    return bool(allowed and new in allowed)
+
+
+def admin_status_options(old_status: str) -> List[Dict[str, str]]:
+    """گزینه‌های select ادمین بر اساس وضعیت فعلی."""
+    old = (old_status or "pending").strip().lower()
+    keys = ADMIN_STATUS_TRANSITIONS.get(old, frozenset({old}))
+    order = ("pending", "approved", "processing", "paid", "rejected", "cancelled")
+    out: List[Dict[str, str]] = []
+    for key in order:
+        if key in keys:
+            out.append({"value": key, "label": status_label(key)})
+    return out
+
+
+def withdrawal_filter_bucket(status: str) -> str:
+    st = (status or "pending").strip().lower()
+    if st == "pending":
+        return "pending"
+    if st == "approved":
+        return "approved"
+    if st == "processing":
+        return "processing"
+    if st == "paid":
+        return "paid"
+    if st in ("rejected", "cancelled"):
+        return "closed"
+    return "other"
+
+
 def status_label(status: str) -> str:
     s = (status or "pending").strip()
     return {
@@ -672,6 +720,7 @@ def partner_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
 
 def admin_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     amt = _amount_int(row.get("amount"))
+    st = (str(row.get("status") or "pending")).strip().lower()
     return {
         "id": row.get("id"),
         "phone": row.get("phone") or "",
@@ -682,8 +731,13 @@ def admin_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "bank_name": row.get("bank_name") or "",
         "masked_pan": row.get("masked_pan") or "",
         "holder_name": row.get("holder_name") or "",
-        "status": (row.get("status") or "pending").strip(),
-        "status_label": status_label(str(row.get("status") or "pending")),
+        "status": st,
+        "status_label": status_label(st),
+        "filter_bucket": withdrawal_filter_bucket(st),
+        "is_active": st in ACTIVE_WITHDRAWAL_STATUSES,
+        "is_editable": st in ADMIN_OPEN_STATUSES,
+        "status_options": admin_status_options(st),
+        "commission_allocated_amount": _amount_int(row.get("commission_allocated_amount")),
         "created_at": row.get("created_at") or "",
         "updated_at": row.get("updated_at") or "",
         "admin_note": row.get("admin_note") or "",

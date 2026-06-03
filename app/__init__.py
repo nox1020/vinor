@@ -555,7 +555,7 @@ def create_app() -> Flask:
                 try:
                     return redirect(request.referrer or url_for("lands.add_land"))
                 except Exception:
-                    return redirect(url_for("main.index"))
+                    return redirect(url_for("express_partner.dashboard"))
 
     # ---------- فایل‌های PWA ----------
     # Service Worker وینور غیرفعال شد - فقط همکاران اکسپرس از Service Worker استفاده می‌کنند
@@ -590,7 +590,7 @@ def create_app() -> Flask:
           "description": "وینور؛ تجربه سریع، امن و شفاف برای خرید و فروش زمین، باغ، ویلا و آپارتمان.",
           "dir": "rtl",
           "lang": "fa",
-          "start_url": "/?source=pwa",
+          "start_url": "/express/partner/dashboard?source=pwa",
           "scope": "/",
           "display": "standalone",
           "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
@@ -602,7 +602,7 @@ def create_app() -> Flask:
             { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
           ],
           "shortcuts": [
-            { "name": "همکاری", "short_name": "همکاری", "url": "/partners" }
+            { "name": "داشبورد", "short_name": "داشبورد", "url": "/express/partner/dashboard" }
           ],
           "capture_links": "existing-client-navigate",
           "launch_handler": { "client_mode": "auto" }
@@ -662,7 +662,7 @@ def create_app() -> Flask:
             return
 
         if debug:
-            current_app.logger.debug("REDIRECT → / (guest): %s", request.path)
-        return redirect(url_for("main.index"))
+            current_app.logger.debug("REDIRECT → dashboard (guest): %s", request.path)
+        return redirect(url_for("express_partner.dashboard"))
 
     return app

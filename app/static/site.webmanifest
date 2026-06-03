@@ -5,7 +5,7 @@
   "description": "وینور؛ تجربه سریع، امن و شفاف برای خرید و فروش زمین، باغ، ویلا و آپارتمان.",
   "dir": "rtl",
   "lang": "fa",
-  "start_url": "/?source=pwa",
+  "start_url": "/express/partner/dashboard?source=pwa",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
@@ -22,7 +22,7 @@
     "params": { "title": "title", "text": "text", "url": "url", "files": [{"name":"files","accept":["text/*","image/*","video/*"]}] }
   },
   "shortcuts": [
-    { "name": "همکاری", "short_name": "همکاری", "url": "/partners", "icons": [{"src":"/static/icons/icon-192.png","sizes":"192x192","type":"image/png"}] }
+    { "name": "داشبورد", "short_name": "داشبورد", "url": "/express/partner/dashboard", "icons": [{"src":"/static/icons/icon-192.png","sizes":"192x192","type":"image/png"}] }
   ],
   "protocol_handlers": [
     { "protocol": "web+vinor", "url": "/open?uri=%s" }

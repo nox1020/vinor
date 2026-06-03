@@ -53,6 +53,7 @@ def _save_express_document(file, land_code):
 from app.api.push import _load_subs, _send_one, _save_subs, send_push_batch_background
 from app.express_partner.partner_withdrawals import (
     admin_row_dict,
+    admin_can_transition,
     apply_paid_withdrawal_to_commissions,
     link_withdrawal_to_commissions,
     release_withdrawal_commissions,
@@ -3696,11 +3697,40 @@ def financial_withdrawals():
             r['partner_name'] = name_map[ph]
         items.append(admin_row_dict(r))
     items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-    pending_count = sum(1 for x in items if (x.get('status') or '') == 'pending')
+
+    pending_count = sum(1 for x in items if x.get('status') == 'pending')
+    approved_count = sum(1 for x in items if x.get('status') == 'approved')
+    processing_count = sum(1 for x in items if x.get('status') == 'processing')
+    active_count = sum(1 for x in items if x.get('is_active'))
+    paid_count = sum(1 for x in items if x.get('status') == 'paid')
+
+    flt = (request.args.get('filter') or 'active').strip().lower()
+    if flt == 'all':
+        filtered = items
+    elif flt == 'pending':
+        filtered = [x for x in items if x.get('status') == 'pending']
+    elif flt == 'approved':
+        filtered = [x for x in items if x.get('status') == 'approved']
+    elif flt == 'processing':
+        filtered = [x for x in items if x.get('status') == 'processing']
+    elif flt == 'paid':
+        filtered = [x for x in items if x.get('status') == 'paid']
+    elif flt == 'closed':
+        filtered = [x for x in items if x.get('filter_bucket') == 'closed']
+    else:
+        flt = 'active'
+        filtered = [x for x in items if x.get('is_active')]
+
     return render_template(
         'admin/financial_withdrawals.html',
-        items=items,
+        items=filtered,
+        all_count=len(items),
         pending_count=pending_count,
+        approved_count=approved_count,
+        processing_count=processing_count,
+        active_count=active_count,
+        paid_count=paid_count,
+        current_filter=flt,
     )
 
 
@@ -3827,100 +3857,137 @@ def express_visit_request_status(vid: str):
     return redirect(url_for('admin.express_visit_requests'))
 
 
+def _financial_withdrawals_redirect(filter_hint: str = '') -> str:
+    flt = (filter_hint or request.form.get('filter') or request.args.get('filter') or 'active').strip()
+    if flt:
+        return url_for('admin.financial_withdrawals', filter=flt)
+    return url_for('admin.financial_withdrawals')
+
+
 @admin_bp.post('/financial/withdrawals/<wid>/status')
 @login_required
 def financial_withdrawal_status(wid: str):
-    new_status = (request.form.get('status') or '').strip()
+    new_status = (request.form.get('status') or '').strip().lower()
     admin_note = (request.form.get('admin_note') or '').strip()
-    allowed = {'pending', 'approved', 'rejected'}
-    if new_status not in allowed:
-        flash('وضعیت نامعتبر است.', 'error')
-        return redirect(url_for('admin.financial_withdrawals'))
+    filter_hint = (request.form.get('filter') or 'active').strip()
 
     items = load_partner_withdrawals() or []
     if not isinstance(items, list):
         items = []
-    found = False
-    old_status = None
     withdrawal_row = None
+    old_status = None
     for row in items:
         if not isinstance(row, dict):
             continue
         if str(row.get('id') or '') == str(wid):
-            old_status = (str(row.get('status') or 'pending')).strip()
             withdrawal_row = row
-            row['status'] = new_status
-            row['updated_at'] = iso_z(utcnow())
-            if admin_note:
-                row['admin_note'] = admin_note
-            found = True
+            old_status = (str(row.get('status') or 'pending')).strip().lower()
             break
-    if not found:
+
+    if not withdrawal_row:
         flash('درخواست یافت نشد.', 'error')
-        return redirect(url_for('admin.financial_withdrawals'))
+        return redirect(_financial_withdrawals_redirect(filter_hint))
+
     if old_status == 'cancelled':
         flash('این درخواست توسط همکار لغو شده و قابل تغییر نیست.', 'warning')
-        return redirect(url_for('admin.financial_withdrawals'))
-    if old_status in ('processing', 'paid'):
-        flash('این وضعیت از پنل قابل تغییر نیست.', 'warning')
-        return redirect(url_for('admin.financial_withdrawals'))
+        return redirect(_financial_withdrawals_redirect(filter_hint))
+
+    if old_status == 'paid' and new_status != 'paid':
+        flash('درخواست پرداخت‌شده قابل بازگشت به وضعیت قبلی نیست.', 'warning')
+        return redirect(_financial_withdrawals_redirect(filter_hint))
+
+    if not admin_can_transition(old_status, new_status):
+        flash('تغییر وضعیت انتخاب‌شده مجاز نیست.', 'error')
+        return redirect(_financial_withdrawals_redirect(filter_hint))
+
+    note_only = new_status == old_status
+    if note_only and not admin_note:
+        flash('تغییری ذخیره نشد. وضعیت یا یادداشت را ویرایش کنید.', 'info')
+        return redirect(_financial_withdrawals_redirect(filter_hint))
+
+    wid_str = str(withdrawal_row.get('id') or wid)
+    partner_phone = str(withdrawal_row.get('phone') or '').strip()
+
     try:
-        save_partner_withdrawals(items)
         commissions = load_express_commissions() or []
         if not isinstance(commissions, list):
             commissions = []
         commissions_dirty = False
         withdrawals_dirty = False
-        if (
-            withdrawal_row
-            and new_status == "approved"
-            and old_status not in ("approved", "processing", "paid")
-        ):
-            linked = link_withdrawal_to_commissions(
-                commissions,
-                str(withdrawal_row.get("phone") or "").strip(),
-                int(withdrawal_row.get("amount") or 0),
-                str(withdrawal_row.get("id") or ""),
-                items,
-            )
-            if linked > 0:
-                commissions_dirty = True
-        elif withdrawal_row and new_status == "rejected" and old_status != "rejected":
-            release_withdrawal_commissions(commissions, str(withdrawal_row.get("id") or ""))
-            commissions_dirty = True
-        if (
-            new_status == 'paid'
-            and old_status != 'paid'
-            and withdrawal_row
-        ):
-            now_iso = iso_z(utcnow())
-            wd_amount = int(withdrawal_row.get('amount') or 0)
-            already = int(withdrawal_row.get('commission_allocated_amount') or 0)
-            need = max(0, wd_amount - already)
-            allocated = 0
-            if need > 0:
-                allocated = apply_paid_withdrawal_to_commissions(
+
+        if not note_only:
+            withdrawal_row['status'] = new_status
+            withdrawal_row['updated_at'] = iso_z(utcnow())
+            withdrawals_dirty = True
+
+            if new_status == 'approved' and old_status not in ('approved', 'processing', 'paid'):
+                linked = link_withdrawal_to_commissions(
                     commissions,
-                    str(withdrawal_row.get('phone') or '').strip(),
-                    need,
-                    str(withdrawal_row.get('id') or ''),
-                    now_iso,
+                    partner_phone,
+                    int(withdrawal_row.get('amount') or 0),
+                    wid_str,
                     items,
                 )
-            if allocated > 0:
+                if linked > 0:
+                    commissions_dirty = True
+                elif int(withdrawal_row.get('amount') or 0) > 0:
+                    flash(
+                        'وضعیت تأیید شد؛ پورسانت تأییدشدهٔ کافی برای تخصیص خودکار یافت نشد. قبل از «پرداخت‌شده» بررسی کنید.',
+                        'warning',
+                    )
+
+            if new_status == 'rejected' and old_status != 'rejected':
+                release_withdrawal_commissions(commissions, wid_str)
                 commissions_dirty = True
-                withdrawal_row['commission_allocated_amount'] = already + allocated
-                withdrawals_dirty = True
-            elif wd_amount > 0 and already <= 0:
-                current_app.logger.warning(
-                    'withdrawal %s marked paid but no approved commission allocated',
-                    wid,
-                )
+
+            if new_status == 'pending' and old_status in ('approved', 'processing'):
+                release_withdrawal_commissions(commissions, wid_str)
+                commissions_dirty = True
+
+            if new_status == 'paid' and old_status != 'paid':
+                now_iso = iso_z(utcnow())
+                wd_amount = int(withdrawal_row.get('amount') or 0)
+                already = int(withdrawal_row.get('commission_allocated_amount') or 0)
+                need = max(0, wd_amount - already)
+                allocated = 0
+                if need > 0:
+                    if old_status not in ('approved', 'processing'):
+                        link_withdrawal_to_commissions(
+                            commissions,
+                            partner_phone,
+                            wd_amount,
+                            wid_str,
+                            items,
+                        )
+                        commissions_dirty = True
+                    allocated = apply_paid_withdrawal_to_commissions(
+                        commissions,
+                        partner_phone,
+                        need,
+                        wid_str,
+                        now_iso,
+                        items,
+                    )
+                if allocated > 0:
+                    commissions_dirty = True
+                    withdrawal_row['commission_allocated_amount'] = already + allocated
+                    withdrawals_dirty = True
+                elif wd_amount > 0 and already <= 0:
+                    flash(
+                        'وضعیت «پرداخت‌شده» ثبت شد اما پورسانتی برای تخصیص پیدا نشد. پورسانت‌ها را در بخش مالی بررسی کنید.',
+                        'warning',
+                    )
+
+        if admin_note or (note_only and withdrawal_row.get('admin_note')):
+            withdrawal_row['admin_note'] = admin_note
+            withdrawals_dirty = True
+
         if commissions_dirty:
             save_express_commissions(commissions)
         if withdrawals_dirty:
             save_partner_withdrawals(items)
-        if withdrawal_row and old_status != new_status:
+
+        if not note_only and old_status != new_status:
             wd_event = None
             if new_status == 'approved':
                 wd_event = 'withdrawal_approved'
@@ -3932,21 +3999,36 @@ def financial_withdrawal_status(wid: str):
                 try:
                     from app.express_partner.commission_sms import notify_partner_commission_txn
                     notify_partner_commission_txn(
-                        partner_phone=str(withdrawal_row.get('phone') or ''),
+                        partner_phone=partner_phone,
                         event=wd_event,
                         amount=int(withdrawal_row.get('amount') or 0),
                         bank_summary=str(withdrawal_row.get('bank_summary') or ''),
-                        reference_id=str(withdrawal_row.get('id') or wid),
+                        reference_id=wid_str,
                     )
                 except Exception:
                     current_app.logger.exception(
                         'withdrawal status SMS failed wid=%s event=%s', wid, wd_event
                     )
-        flash('وضعیت درخواست بروزرسانی شد.', 'success')
+
+        if note_only:
+            flash('یادداشت درخواست برداشت ذخیره شد.', 'success')
+        else:
+            labels = {
+                'pending': 'در انتظار بررسی',
+                'approved': 'تأیید شده',
+                'processing': 'در حال پردازش',
+                'paid': 'پرداخت‌شده',
+                'rejected': 'رد شده',
+            }
+            flash(
+                f'وضعیت درخواست به «{labels.get(new_status, new_status)}» تغییر کرد.',
+                'success',
+            )
     except Exception:
         current_app.logger.exception('save_partner_withdrawals status failed')
         flash('خطا در ذخیره.', 'error')
-    return redirect(url_for('admin.financial_withdrawals'))
+
+    return redirect(_financial_withdrawals_redirect(filter_hint))
 
 # -----------------------------------------------------------------------------
 # Express Partner Files (upload/list/download/delete by admin)

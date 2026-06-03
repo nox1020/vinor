@@ -80,7 +80,7 @@ def inject_vinor_globals():
 
     return {
         "VINOR_IS_LOGGED_IN": bool(session.get("user_id")),
-        "VINOR_HOME_URL": url_for("main.index"),
+        "VINOR_HOME_URL": url_for("express_partner.dashboard"),
         "VINOR_BRAND": "وینور اکسپرس",
         "VINOR_DOMAIN": "vinor.ir",
         # نقش‌ها
@@ -94,146 +94,22 @@ def inject_vinor_globals():
 @main_bp.route("/", endpoint="index")
 def index():
     """
-    لندینگ همکاران وینور – معرفی فرصت‌های همکاری
-    اگر کاربر وارد شده باشد، مستقیم به داشبورد همکاران می‌رود.
+    صفحهٔ اصلی vinor.ir — همیشه داشبورد همکار (مهمان یا واردشده).
+    لندینگ معرفی همکاری فقط در /partners است.
     """
-    # بررسی سریع session برای redirect فوری (قبل از هر کار دیگری)
-    # این بررسی باید در ابتدا انجام شود تا redirect فوراً انجام شود
-    user_phone = session.get("user_phone")
-    user_id = session.get("user_id")
-    is_admin = bool(session.get('logged_in'))
-    is_logged_in = bool(user_phone or user_id or is_admin)
-    
-    # اگر کاربر لاگین شده باشد، فوراً redirect می‌کنیم (بدون اجرای کدهای بعدی)
-    if is_logged_in:
-        # بررسی next parameter برای redirect به مسیر هدف
-        nxt = request.args.get('next')
-        if nxt and nxt.startswith('/') and not nxt.startswith('//'):
-            # اطمینان از اینکه next یک مسیر معتبر است
-            resp = redirect(nxt)
-            # اضافه کردن cache headers برای redirect سریع‌تر
-            resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-            resp.headers["Pragma"] = "no-cache"
-            resp.headers["Expires"] = "0"
-            return resp
-        
-        # Redirect به داشبورد مناسب
-        if is_admin:
-            resp = redirect(url_for("admin.dashboard"))
-        else:
-            # برای همکاران اکسپرس، به داشبورد همکاران redirect می‌کنیم
-            # اگر session معتبر نباشد، require_partner_access در داشبورد handle می‌کند
-            resp = redirect(url_for("express_partner.dashboard"))
-        
-        # اضافه کردن cache headers برای redirect سریع‌تر
-        # مهم: نباید cache شود چون redirect بر اساس session است
-        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, private"
-        resp.headers["Pragma"] = "no-cache"
-        resp.headers["Expires"] = "0"
-        resp.headers["Vary"] = "Cookie"  # برای Service Worker که نباید cache کند
-        return resp
-    
-    # ثبت بازدید لندینگ (فقط برای کاربران غیرلاگین و غیرادمین)
-    # بررسی referer برای جلوگیری از tracking درخواست‌های داخلی و رفرش
-    referer = request.headers.get('Referer', '') or ''
-    is_refresh = referer and (request.url in referer or request.path in referer)
-    should_track = (
-        not is_logged_in and 
-        not is_refresh and  # جلوگیری از tracking در رفرش
-        '/admin' not in referer and 
-        '/express/partner' not in referer
-    )
-    
-    # Tracking فقط برای بازدیدهای جدید (نه رفرش)
-    if should_track:
-        try:
-            visitor_ip = request.remote_addr or ''
-            if visitor_ip:
-                # بررسی سریع با cache برای جلوگیری از I/O غیرضروری
-                cache_track_key = f"tracked:{visitor_ip}:{datetime.utcnow().strftime('%Y-%m-%d')}"
-                if _mc_get(cache_track_key):
-                    # قبلاً امروز track شده، skip
-                    pass
-                else:
-                    views = load_landing_views() or []
-                    if not isinstance(views, list):
-                        views = []
-                    
-                    now = datetime.utcnow()
-                    today_str = now.strftime('%Y-%m-%d')
-                    
-                    # بررسی بازدیدهای امروز برای این IP
-                    already_viewed_today = False
-                    for v in views:
-                        try:
-                            v_ip = v.get('ip', '')
-                            v_ts_str = v.get('timestamp', '')
-                            if v_ip == visitor_ip and v_ts_str:
-                                v_dt = datetime.fromisoformat(v_ts_str.replace('Z', '+00:00'))
-                                if v_dt.tzinfo:
-                                    v_dt = v_dt.replace(tzinfo=None)
-                                v_date_str = v_dt.strftime('%Y-%m-%d')
-                                if v_date_str == today_str:
-                                    already_viewed_today = True
-                                    break
-                        except Exception:
-                            continue
-                    
-                    # اگر این IP امروز بازدید نداشته، ثبت کن
-                    if not already_viewed_today:
-                        views.append({
-                            'timestamp': now.isoformat(),
-                            'ip': visitor_ip,
-                            'user_agent': request.headers.get('User-Agent', '')[:200]
-                        })
-                        # نگه داشتن فقط 10000 بازدید اخیر
-                        if len(views) > 10000:
-                            views = views[-10000:]
-                        save_landing_views(views)
-                        # Cache برای جلوگیری از track مجدد در همان روز
-                        _mc_set(cache_track_key, True, ttl=86400)  # 24 ساعت
-        except Exception as e:
-            current_app.logger.error(f"Error tracking landing view: {e}", exc_info=True)
-    
-    # بارگذاری تنظیمات با cache
-    _settings = _get_cached_settings()
-    
-    # Microcache فقط برای کاربران مهمان (غیرلاگین)
-    # برای کاربران لاگین شده cache نمی‌کنیم چون ممکن است محتوای شخصی‌سازی شده داشته باشند
-    if not is_logged_in:
-        cache_key = "page:index"
-        cached = _mc_get(cache_key)
-        if cached:
-            resp = make_response(cached)
-            # استفاده از cache برای رفرش سریع‌تر
-            resp.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
-            resp.headers["ETag"] = f'"{hash(cached) % 1000000}"'
-            return resp
-    
-    # رندر صفحه لندینگ
-    html = render_template(
-        "home/partners.html",
-        brand="وینور",
-        domain="vinor.ir",
-        android_apk_url=_settings.get('android_apk_url') or '',
-        android_apk_version=_settings.get('android_apk_version') or ''
-    )
-    
-    # ذخیره در cache فقط برای کاربران مهمان
-    if not is_logged_in:
-        try:
-            # افزایش TTL برای رفرش سریع‌تر
-            _mc_set("page:index", html, ttl=30)
-        except Exception:
-            pass
-    
-    resp = make_response(html)
-    # بهبود cache headers برای رفرش سریع‌تر
-    if not is_logged_in:
-        resp.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
-        resp.headers["ETag"] = f'"{hash(html) % 1000000}"'
+    nxt = request.args.get('next')
+    if nxt and nxt.startswith('/') and not nxt.startswith('//'):
+        resp = redirect(nxt)
+    elif session.get('logged_in'):
+        resp = redirect(url_for('admin.dashboard'))
     else:
-        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+        q = (request.args.get('q') or '').strip() or None
+        city = (request.args.get('city') or '').strip() or None
+        resp = redirect(url_for('express_partner.dashboard', q=q, city=city))
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    resp.headers['Vary'] = 'Cookie'
     return resp
 
 @main_bp.route("/partners", endpoint="partners")
@@ -333,9 +209,9 @@ def partners():
 def start():
     """
     CTA لندینگ → ست‌کردن کوکی «اولین بازدید انجام شد»
-    سپس به صفحه اصلی (لندینگ همکاران) می‌رویم.
+    سپس به داشبورد همکار می‌رویم.
     """
-    target = url_for("main.index")
+    target = url_for("express_partner.dashboard")
     resp = make_response(redirect(target))
     resp.set_cookie(FIRST_VISIT_COOKIE, "1", max_age=60 * 60 * 24 * 365, samesite="Lax")
     session.permanent = True
