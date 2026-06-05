@@ -371,17 +371,39 @@
     var btn = document.getElementById('landVideoSoundToggle');
     var video = document.getElementById('landVideo');
     var icon = document.getElementById('landVideoSoundIcon');
-    if (!btn || !video) return;
+    if (!video) return;
+
+    function isVideoSlideActive() {
+      if (video.classList.contains('hidden')) return false;
+      var wrap = document.getElementById('landVideoSoundWrap');
+      if (wrap && wrap.classList.contains('hidden')) return false;
+      return true;
+    }
 
     function applyMuted(muted) {
       video.muted = muted;
-      btn.dataset.muted = muted ? 'true' : 'false';
-      btn.setAttribute('aria-pressed', muted ? 'true' : 'false');
-      btn.setAttribute('aria-label', muted ? 'بی‌صدا' : 'با صدا');
+      if (btn) {
+        btn.dataset.muted = muted ? 'true' : 'false';
+        btn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+        btn.setAttribute('aria-label', muted ? 'بی‌صدا' : 'با صدا');
+      }
       if (icon) {
         icon.className = muted ? 'fas fa-volume-xmark text-sm' : 'fas fa-volume-high text-sm';
       }
+      if (!muted) {
+        try { video.volume = 1; } catch (e) { /* ignore */ }
+      }
     }
+
+    function unmuteFromVolumeKey() {
+      if (!isVideoSlideActive()) return false;
+      if (!video.muted) return false;
+      applyMuted(false);
+      video.play().catch(function () {});
+      return true;
+    }
+
+    window.vinorLandDetailHandleVolumeKey = unmuteFromVolumeKey;
 
     function onClick(e) {
       e.stopPropagation();
@@ -390,9 +412,14 @@
     }
 
     applyMuted(true);
-    btn.addEventListener('click', onClick);
+    if (btn) {
+      btn.addEventListener('click', onClick);
+    }
     addCleanup(function () {
-      btn.removeEventListener('click', onClick);
+      if (btn) btn.removeEventListener('click', onClick);
+      if (window.vinorLandDetailHandleVolumeKey === unmuteFromVolumeKey) {
+        delete window.vinorLandDetailHandleVolumeKey;
+      }
       applyMuted(true);
     });
   }
