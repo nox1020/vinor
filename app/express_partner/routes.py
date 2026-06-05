@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -4132,7 +4133,14 @@ def api_profile_update():
     if not session.get('user_phone'):
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+    if not data and request.data:
+        try:
+            data = json.loads(request.data.decode('utf-8') if isinstance(request.data, bytes) else request.data)
+        except Exception:
+            data = {}
+    if not isinstance(data, dict):
+        data = {}
     name = (data.get('name') or '').strip()
     city = (data.get('city') or '').strip()
     bio = (data.get('bio') or '').strip()
@@ -4174,7 +4182,15 @@ def api_profile_update():
     try:
         save_express_partners(partners)
         _invalidate_partner_session_cache()
-        return jsonify({'success': True})
+        return jsonify({
+            'success': True,
+            'me_name': (profile.get('name') or '').strip(),
+            'me_city': (profile.get('city') or '').strip(),
+            'me_bio': (profile.get('bio') or '').strip(),
+            'me_landline': (profile.get('landline') or '').strip(),
+            'me_email': (profile.get('email') or '').strip(),
+            'me_birth_date': (profile.get('birth_date') or '').strip(),
+        })
     except Exception:
         current_app.logger.error("Failed to save partner profile edits", exc_info=True)
         return jsonify({'success': False, 'error': 'save_failed'}), 500

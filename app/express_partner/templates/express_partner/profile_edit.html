@@ -416,13 +416,30 @@ function initProfileEditAutosave() {
   var dataUrl = {{ url_for('express_partner.profile_edit_data') | tojson }};
   var profilePageUrl = {{ url_for('express_partner.profile') | tojson }};
   var profileEditPageUrl = {{ url_for('express_partner.profile_edit') | tojson }};
+  var initialData = {
+    success: true,
+    me_name: {{ me_name | tojson }},
+    me_city: {{ me_city | tojson }},
+    me_bio: {{ me_bio | tojson }},
+    me_landline: {{ me_landline | tojson }},
+    me_email: {{ me_email | tojson }},
+    me_birth_date: {{ me_birth_date | tojson }},
+    avatar_url: {% if profile and profile.get('avatar') %}{{ ('/uploads/' ~ profile.get('avatar')) | tojson }}{% else %}null{% endif %}
+  };
   var statusEl = document.getElementById('profileEditSaveStatus');
   var debounceTimer = null;
   var savedTimer = null;
   var inflight = null;
   var lastSavedKey = '';
+  var formDirty = false;
+  var hydrateDone = false;
 
   var statusBaseClass = 'relative z-10 flex h-10 min-w-[4.5rem] shrink-0 items-center justify-end gap-1.5 text-[11px] font-medium transition sm:text-xs';
+
+  function markDirty() {
+    formDirty = true;
+    root.dataset.userDirty = '1';
+  }
 
   function collectPayload() {
     var nameEl = document.getElementById('profileName');
@@ -499,17 +516,27 @@ function initProfileEditAutosave() {
     }
   }
 
+  function syncSavedKeyFromForm() {
+    lastSavedKey = JSON.stringify(collectPayload());
+  }
+
   function hydrateFromServer() {
     return fetch(dataUrl, {
       method: 'GET',
       credentials: 'same-origin',
-      headers: { Accept: 'application/json' }
+      headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' }
     }).then(function (res) {
+      if (!res.ok) return null;
       return res.json().catch(function () { return null; });
     }).then(function (data) {
-      applyProfileData(data);
-      lastSavedKey = JSON.stringify(collectPayload());
-    }).catch(function () {});
+      if (formDirty || root.dataset.userDirty === '1') return;
+      if (data && data.success) applyProfileData(data);
+      syncSavedKeyFromForm();
+    }).catch(function () {
+      if (!hydrateDone) syncSavedKeyFromForm();
+    }).finally(function () {
+      hydrateDone = true;
+    });
   }
 
   function invalidateProfilePrefetch() {
@@ -552,9 +579,11 @@ function initProfileEditAutosave() {
   }
 
   function saveNow() {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
     var payload = collectPayload();
     var key = JSON.stringify(payload);
-    if (key === lastSavedKey) return;
+    if (key === lastSavedKey) return Promise.resolve(true);
 
     if (inflight) {
       try { inflight.abort(); } catch (_) {}
@@ -565,7 +594,7 @@ function initProfileEditAutosave() {
     clearTimeout(savedTimer);
     setStatus('saving', 'در حال ذخیره…');
 
-    fetch(apiUrl, {
+    return fetch(apiUrl, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -576,29 +605,34 @@ function initProfileEditAutosave() {
         return { res: res, data: data };
       });
     }).then(function (out) {
-      if (ctrl.signal.aborted) return;
+      if (ctrl.signal.aborted) return false;
       if (out.res && out.res.ok && out.data && out.data.success) {
         lastSavedKey = key;
-        updateAvatarInitials(payload.name);
+        formDirty = false;
+        delete root.dataset.userDirty;
+        if (out.data.me_name !== undefined) updateAvatarInitials(out.data.me_name || payload.name);
         invalidateProfilePrefetch();
         setStatus('saved', 'ذخیره شد');
         savedTimer = setTimeout(function () {
           if (statusEl && statusEl.dataset.state === 'saved') setStatus('idle', '');
         }, 2200);
-        return;
+        return true;
       }
       setStatus('error', 'خطا در ذخیره');
+      return false;
     }).catch(function (err) {
-      if (err && err.name === 'AbortError') return;
+      if (err && err.name === 'AbortError') return false;
       setStatus('error', 'خطا در ذخیره');
+      return false;
     }).finally(function () {
       if (inflight === ctrl) inflight = null;
     });
   }
 
   function scheduleSave(delay) {
+    markDirty();
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(saveNow, typeof delay === 'number' ? delay : 650);
+    debounceTimer = setTimeout(function () { saveNow(); }, typeof delay === 'number' ? delay : 650);
   }
 
   ['profileName', 'profileLandline', 'profileEmail', 'bioInput'].forEach(function (id) {
@@ -612,8 +646,39 @@ function initProfileEditAutosave() {
   if (birthEl) birthEl.addEventListener('change', function () { scheduleSave(0); });
 
   window.__vinorProfileEditScheduleSave = function () { scheduleSave(0); };
+  window.__vinorProfileEditFlushSave = function () {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+    return saveNow();
+  };
 
+  applyProfileData(initialData);
+  syncSavedKeyFromForm();
   hydrateFromServer();
+
+  function onPageHide() {
+    if (!formDirty && root.dataset.userDirty !== '1') return;
+    var payload = collectPayload();
+    if (JSON.stringify(payload) === lastSavedKey) return;
+    try {
+      if (navigator.sendBeacon) {
+        var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        navigator.sendBeacon(apiUrl, blob);
+        lastSavedKey = JSON.stringify(payload);
+        formDirty = false;
+        delete root.dataset.userDirty;
+        invalidateProfilePrefetch();
+      } else {
+        saveNow();
+      }
+    } catch (_) {
+      saveNow();
+    }
+  }
+  window.addEventListener('pagehide', onPageHide);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') onPageHide();
+  });
 }
 
 if (!window.__vinorProfileCityHook) {
@@ -631,6 +696,7 @@ initProfileEditAutosave();
 document.addEventListener('vinor:express-page-swap', function () {
   if (!document.getElementById('profileEditPage')) {
     window.__vinorProfileEditScheduleSave = null;
+    window.__vinorProfileEditFlushSave = null;
     return;
   }
   initProfileEditAutosave();

@@ -221,8 +221,16 @@
       });
     }
 
+    function setVideoSoundVisible(visible) {
+      var wrap = document.getElementById('landVideoSoundWrap');
+      if (!wrap) return;
+      wrap.classList.toggle('hidden', !visible);
+      wrap.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+
     function showImageSlide(slide) {
       if (!img) return;
+      setVideoSoundVisible(false);
       if (video) {
         try { video.pause(); } catch (e) { /* ignore */ }
         video.classList.add('hidden');
@@ -270,6 +278,7 @@
 
     function showVideoSlide() {
       if (!video) return;
+      setVideoSoundVisible(true);
       if (img) {
         img.classList.add('hidden');
         img.classList.remove('is-loaded');

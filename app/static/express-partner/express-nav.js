@@ -187,6 +187,7 @@
     try {
       var p = normPath(parseUrl(href).pathname);
       if (p === '/express/partner/profile/edit') return false;
+      if (p === '/express/partner/profile') return false;
       /* پورسانت: HTML عوض می‌شود؛ کش prefetch قدیمی طرح/اسکریپت را خراب می‌کند */
       if (p === '/express/partner/commissions' || p === '/express/partner/commissions/transactions') return false;
       return !isAuthSoftPath(p);
@@ -661,6 +662,21 @@
     }, 160);
   }
 
+  function flushProfileEditBeforeLeave(fromHref, toHref) {
+    try {
+      if (!document.getElementById('profileEditPage')) return Promise.resolve();
+      var fromPath = normPath(parseUrl(fromHref).pathname);
+      var toPath = normPath(parseUrl(toHref).pathname);
+      if (fromPath !== '/express/partner/profile/edit' || fromPath === toPath) {
+        return Promise.resolve();
+      }
+      if (typeof window.__vinorProfileEditFlushSave === 'function') {
+        return Promise.resolve(window.__vinorProfileEditFlushSave());
+      }
+    } catch (_) {}
+    return Promise.resolve();
+  }
+
   function vinorExpressNavigate(href, opts) {
     opts = opts || {};
     if (!href) return Promise.resolve(false);
@@ -669,23 +685,25 @@
       return Promise.resolve(false);
     }
     var from = window.location.href;
-    if (shouldForceFullNav(from, href)) {
-      window.location.assign(href);
-      return Promise.resolve(false);
-    }
-    var dir = navDirection(from, href, opts.dir);
-    if (opts.back) dir = -1;
-    if (opts.forward) dir = 1;
-    var authDir = authNavDirection(from, href);
-    if (authDir) dir = authDir;
-    if (dir) {
-      try {
-        sessionStorage.setItem(STORAGE_KEY, String(dir));
-      } catch (_) {}
-      return navigateWithAnimation(href, dir);
-    }
-    stopAllExpressMedia();
-    return softNavigate(href, 0);
+    return flushProfileEditBeforeLeave(from, href).then(function () {
+      if (shouldForceFullNav(from, href)) {
+        window.location.assign(href);
+        return false;
+      }
+      var dir = navDirection(from, href, opts.dir);
+      if (opts.back) dir = -1;
+      if (opts.forward) dir = 1;
+      var authDir = authNavDirection(from, href);
+      if (authDir) dir = authDir;
+      if (dir) {
+        try {
+          sessionStorage.setItem(STORAGE_KEY, String(dir));
+        } catch (_) {}
+        return navigateWithAnimation(href, dir);
+      }
+      stopAllExpressMedia();
+      return softNavigate(href, 0);
+    });
   }
 
   window.vinorExpressNavigate = vinorExpressNavigate;
@@ -695,7 +713,13 @@
   window.addEventListener('popstate', function () {
     if (!document.getElementById('vinor-express-page-swap')) return;
     if (!isPartnerUrl(window.location.href)) return;
-    softNavigate(window.location.href, 0, { fromPopstate: true });
+    var target = window.location.href;
+    var flush = document.getElementById('profileEditPage') && typeof window.__vinorProfileEditFlushSave === 'function'
+      ? Promise.resolve(window.__vinorProfileEditFlushSave())
+      : Promise.resolve();
+    flush.then(function () {
+      softNavigate(target, 0, { fromPopstate: true });
+    });
   });
 
   document.addEventListener('DOMContentLoaded', function () {
