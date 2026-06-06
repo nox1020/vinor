@@ -60,7 +60,7 @@ from app.express_partner.partner_withdrawals import (
 )
 from app.services.sms import send_sms_template, send_sms_direct, send_sms_code
 from app.utils.storage import load_users, load_reports, save_reports, save_ads
-from app.land_category_specs import apply_category_specs_from_form
+from admin.people_directory import build_admin_people_directory, get_admin_person_by_phone
 from app.utils.storage import (
     load_express_partner_apps,
     save_express_partner_apps,
@@ -80,6 +80,7 @@ from app.utils.storage import (
     load_express_views,
     load_express_partner_views,
     load_partner_routines, load_partner_routines_cached,
+    load_partner_notes,
     load_partner_withdrawals, save_partner_withdrawals,
     load_express_visit_requests, save_express_visit_requests,
 )
@@ -835,28 +836,85 @@ def select_portal():
 @admin_bp.route('/', endpoint='dashboard', strict_slashes=False)
 @login_required
 def dashboard():
-    """داشبورد همکاران - فقط اطلاعات مربوط به همکاران"""
-    try:
-        partners = load_express_partners() or []
-        applications = load_express_partner_apps() or []
-        assignments = load_express_assignments() or []
-        commissions = load_express_commissions() or []
-    except Exception:
-        partners = []
-        applications = []
-        assignments = []
-        commissions = []
-    
-    # شمارش درخواست‌های در انتظار
-    pending_apps = [a for a in applications if isinstance(a, dict) and a.get('status') not in ('approved', 'rejected')]
-    
-    # شمارش کاربران آنلاین
-    online_users_count = _get_online_users_count()
-    
-    # شمارش همکاران آنلاین
-    online_partners_count = _get_online_partners_count()
+    """داشبورد عملیاتی پنل همکاران."""
+    ctx = _admin_dashboard_context()
+    return render_template('admin/dashboard.html', **ctx)
 
-    # جمع روزهای روتین همکاران در ماه جاری
+
+def _admin_dashboard_context() -> Dict[str, Any]:
+    """آمار و صف اقدام برای داشبورد ادمین."""
+    name_map: Dict[str, str] = {}
+    try:
+        for p in load_express_partners() or []:
+            if not isinstance(p, dict):
+                continue
+            ph = str(p.get('phone') or '').strip()
+            if ph:
+                name_map[ph] = str(p.get('name') or '').strip()
+    except Exception:
+        pass
+
+    partners = load_express_partners() or []
+    applications = load_express_partner_apps() or []
+    assignments = load_express_assignments() or []
+    commissions = load_express_commissions() or []
+    withdrawals = load_partner_withdrawals() or []
+    visits = load_express_visit_requests() or []
+
+    if not isinstance(partners, list):
+        partners = []
+    if not isinstance(applications, list):
+        applications = []
+    if not isinstance(assignments, list):
+        assignments = []
+    if not isinstance(commissions, list):
+        commissions = []
+    if not isinstance(withdrawals, list):
+        withdrawals = []
+    if not isinstance(visits, list):
+        visits = []
+
+    pending_apps = [
+        a for a in applications
+        if isinstance(a, dict) and str(a.get('status') or '').lower() not in ('approved', 'rejected')
+    ]
+    pending_commissions = [
+        c for c in commissions
+        if isinstance(c, dict) and str(c.get('status') or '').lower() == 'pending'
+    ]
+    pending_withdrawals = [
+        w for w in withdrawals
+        if isinstance(w, dict) and str(w.get('status') or '').lower() == 'pending'
+    ]
+    open_withdrawals = [
+        w for w in withdrawals
+        if isinstance(w, dict) and str(w.get('status') or '').lower() in ('pending', 'approved', 'processing')
+    ]
+    pending_visits = [
+        v for v in visits
+        if isinstance(v, dict) and str(v.get('status') or '').lower() == 'pending'
+    ]
+    active_assignments = [
+        a for a in assignments
+        if isinstance(a, dict)
+        and str(a.get('status') or 'active').lower() in ('active', 'assigned', 'open')
+    ]
+
+    express_listings_count = 0
+    try:
+        lands = load_json(_lands_path()) or []
+        if isinstance(lands, list):
+            express_listings_count = sum(
+                1 for l in lands
+                if isinstance(l, dict) and l.get('is_express')
+            )
+    except Exception:
+        pass
+
+    online_partners = _get_online_partners_list() or []
+    online_users_count = _get_online_users_count()
+
+    routines_count_month = 0
     try:
         routines = load_partner_routines_cached() or []
         current_month = datetime.now().strftime('%Y-%m')
@@ -868,49 +926,121 @@ def dashboard():
             if isinstance(d, str) and d.startswith(current_month + '-')
         )
     except Exception:
-        routines = []
-        routines_count_month = 0
-    
-    # آمار بازدید لندینگ
-    landing_views_count = 0
-    landing_views_today = 0
-    landing_views_7d = 0
-    try:
-        views = load_landing_views() or []
-        if isinstance(views, list):
-            landing_views_count = len(views)
-            now = datetime.utcnow()
-            today_start = datetime(now.year, now.month, now.day)
-            week_ago = now - timedelta(days=7)
-            for v in views:
-                try:
-                    ts_str = v.get('timestamp', '')
-                    if ts_str:
-                        view_dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
-                        if view_dt.tzinfo:
-                            view_dt = view_dt.replace(tzinfo=None)
-                        if view_dt >= today_start:
-                            landing_views_today += 1
-                        if view_dt >= week_ago:
-                            landing_views_7d += 1
-                except Exception:
-                    pass
-    except Exception as e:
-        current_app.logger.error(f"Error loading landing views: {e}", exc_info=True)
-    
-    return render_template(
-        'admin/dashboard.html',
-        partners_count=len(partners) if isinstance(partners, list) else 0,
-        applications_count=len(pending_apps),
-        assignments_count=len(assignments) if isinstance(assignments, list) else 0,
-        commissions_count=len(commissions) if isinstance(commissions, list) else 0,
-        online_users_count=online_users_count,
-        online_partners_count=online_partners_count,
-        landing_views_count=landing_views_count,
-        landing_views_today=landing_views_today,
-        landing_views_7d=landing_views_7d,
-        routines_count_month=routines_count_month
+        pass
+
+    def _amount(value: Any) -> int:
+        try:
+            return int(float(value or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    def _ts(row: Dict[str, Any], *keys: str) -> str:
+        for key in keys:
+            val = str(row.get(key) or '').strip()
+            if val:
+                return val
+        return ''
+
+    action_queue: List[Dict[str, Any]] = []
+
+    for app in pending_apps[:20]:
+        ph = str(app.get('phone') or '').strip()
+        action_queue.append({
+            'kind': 'application',
+            'icon': 'fa-user-clock',
+            'tone': 'amber',
+            'title': (app.get('name') or name_map.get(ph) or ph or 'درخواست همکاری').strip(),
+            'meta': 'درخواست همکاری · در انتظار تأیید',
+            'url': url_for('admin.express_partners', filter='pending'),
+            'ts': _ts(app, 'created_at'),
+        })
+
+    for c in pending_commissions[:20]:
+        ph = str(c.get('partner_phone') or '').strip()
+        action_queue.append({
+            'kind': 'commission',
+            'icon': 'fa-wallet',
+            'tone': 'blue',
+            'title': name_map.get(ph) or ph or 'همکار',
+            'meta': f"پورسانت {_amount(c.get('commission_amount')):,} ت · کد {c.get('land_code') or '—'}",
+            'url': url_for('admin.express_commissions'),
+            'ts': _ts(c, 'created_at'),
+        })
+
+    for w in pending_withdrawals[:20]:
+        ph = str(w.get('phone') or w.get('partner_phone') or '').strip()
+        action_queue.append({
+            'kind': 'withdrawal',
+            'icon': 'fa-money-bill-transfer',
+            'tone': 'emerald',
+            'title': name_map.get(ph) or ph or 'همکار',
+            'meta': f"درخواست برداشت {_amount(w.get('amount')):,} ت",
+            'url': url_for('admin.financial_withdrawals', filter='pending'),
+            'ts': _ts(w, 'created_at', 'requested_at'),
+        })
+
+    for v in pending_visits[:20]:
+        ph = str(v.get('partner_phone') or '').strip()
+        action_queue.append({
+            'kind': 'visit',
+            'icon': 'fa-calendar-check',
+            'tone': 'indigo',
+            'title': (v.get('partner_name') or name_map.get(ph) or ph or 'همکار').strip(),
+            'meta': (v.get('land_title') or v.get('land_code') or 'بازدید').strip(),
+            'url': url_for('admin.express_visit_requests'),
+            'ts': _ts(v, 'visit_date', 'created_at'),
+        })
+
+    action_queue.sort(key=lambda x: x.get('ts') or '', reverse=True)
+    action_queue = action_queue[:12]
+
+    pending_actions_total = (
+        len(pending_apps) + len(pending_commissions)
+        + len(pending_withdrawals) + len(pending_visits)
     )
+
+    online_preview = []
+    for o in online_partners[:6]:
+        if not isinstance(o, dict):
+            continue
+        ph = str(o.get('phone') or '').strip()
+        online_preview.append({
+            'phone': ph,
+            'name': (o.get('name') or name_map.get(ph) or ph or 'همکار').strip(),
+            'last_activity': o.get('last_activity') or '',
+            'url': url_for('admin.express_partner_detail', phone=ph) if ph else url_for('admin.express_partners', filter='online'),
+        })
+
+    try:
+        _, people_stats = build_admin_people_directory(
+            **_admin_people_directory_kwargs(),
+            detail_level='summary',
+        )
+    except Exception:
+        people_stats = {'total': 0, 'partners': len(partners), 'online': len(online_partners)}
+
+    return {
+        'pending_actions_total': pending_actions_total,
+        'pending_apps_count': len(pending_apps),
+        'pending_commissions_count': len(pending_commissions),
+        'pending_withdrawals_count': len(pending_withdrawals),
+        'open_withdrawals_count': len(open_withdrawals),
+        'pending_visits_count': len(pending_visits),
+        'pending_commissions_amount': sum(_amount(c.get('commission_amount')) for c in pending_commissions),
+        'pending_withdrawals_amount': sum(_amount(w.get('amount')) for w in pending_withdrawals),
+        'partners_count': people_stats.get('partners') or len(partners),
+        'people_total': people_stats.get('total') or 0,
+        'online_partners_count': people_stats.get('online') or len(online_partners),
+        'online_users_count': online_users_count,
+        'assignments_active_count': len(active_assignments),
+        'assignments_total_count': len(assignments),
+        'commissions_total_count': len(commissions),
+        'express_listings_count': express_listings_count,
+        'routines_count_month': routines_count_month,
+        'action_queue': action_queue,
+        'online_preview': online_preview,
+    }
+
 
 @admin_bp.route('/online-users', endpoint='online_users')
 @login_required
@@ -939,171 +1069,14 @@ def online_partners_page():
 @admin_bp.route('/partners/activity', methods=['GET'], endpoint='partners_activity')
 @login_required
 def partners_activity():
-    """گزارش فعالیت همکاران: وضعیت آنلاین + روزهای روتین ماه جاری."""
-    try:
-        partners = load_express_partners() or []
-    except Exception:
-        partners = []
-
-    try:
-        routines = load_partner_routines_cached() or []
-    except Exception:
-        routines = []
-
-    routines_map = {}
-    for r in routines:
-        if not isinstance(r, dict):
-            continue
-        phone_key = str(r.get('phone'))
-        days = r.get('days') or []
-        steps = r.get('steps') or {}
-        routines_map[phone_key] = {"days": days, "steps": steps}
-
-    online_list = _get_online_partners_list()
-    online_map = {str(o.get('phone')): o for o in online_list}
-
-    current_month = datetime.now().strftime('%Y-%m')
-    items = []
-
-    for p in partners:
-        phone = str(p.get('phone') or '')
-        name = p.get('name') or (phone[-4:] if phone else 'همکار')
-        city = p.get('city') or ''
-        rdata = routines_map.get(phone, {}) or {}
-        days_all = rdata.get('days') or []
-        steps_all = rdata.get('steps') or {}
-        days = [d for d in days_all if isinstance(d, str) and d.startswith(current_month + '-')]
-        steps = {k: int(v) for k, v in steps_all.items() if isinstance(k, str) and k.startswith(current_month + '-') and isinstance(v, (int, float))}
-        online = online_map.get(phone)
-        items.append({
-            "phone": phone,
-            "name": name,
-            "city": city,
-            "routine_days": days,
-            "routine_count": len(days),
-            "routine_steps": steps,
-            "routine_step_total": sum(steps.values()) if steps else 0,
-            "last_activity": online.get('last_activity') if online else '',
-            "online": bool(online),
-            "ip": online.get('ip') if online else '',
-        })
-
-    # همکارانی که در لیست ثبت نشده‌اند ولی آنلاین هستند را هم اضافه کن
-    for phone, online in online_map.items():
-        if any(it["phone"] == phone for it in items):
-            continue
-        rdata = routines_map.get(phone, {}) or {}
-        days_all = rdata.get('days') or []
-        steps_all = rdata.get('steps') or {}
-        days = [d for d in days_all if isinstance(d, str) and d.startswith(current_month + '-')]
-        steps = {k: int(v) for k, v in steps_all.items() if isinstance(k, str) and k.startswith(current_month + '-') and isinstance(v, (int, float))}
-        items.append({
-            "phone": phone,
-            "name": online.get('name') or (phone[-4:] if phone else 'همکار'),
-            "city": '',
-            "routine_days": days,
-            "routine_count": len(days),
-            "routine_steps": steps,
-            "routine_step_total": sum(steps.values()) if steps else 0,
-            "last_activity": online.get('last_activity') or '',
-            "online": True,
-            "ip": online.get('ip') or '',
-        })
-
-    # مرتب‌سازی: آنلاین‌ها اول، سپس بر اساس تعداد روتین (و جمع تیک‌ها)، بعد نام
-    items.sort(key=lambda x: (
-        0 if x.get('online') else 1,
-        -int(x.get('routine_count') or 0),
-        -int(x.get('routine_step_total') or 0),
-        x.get('name') or ''
-    ))
-
-    return render_template(
-        'admin/partner_activity.html',
-        items=items,
-        month_label=current_month,
-        total=len(items),
-        online_count=len(online_map),
-        routines_count=sum(it.get('routine_count', 0) for it in items),
-        routines_step_total=sum(it.get('routine_step_total', 0) for it in items)
-    )
+    """فعالیت همکاران → فیلتر آنلاین در لیست یکپارچه."""
+    return redirect(url_for('admin.express_partners', filter='online'))
 
 @admin_bp.route('/users')
 @login_required
 def users_page():
-    try:
-        users = load_users()
-    except Exception:
-        users = []
-
-    # جستجو و مرتب‌سازی ساده
-    q = (request.args.get('q') or '').strip().lower()
-    sort = (request.args.get('sort') or 'created_desc').strip()
-
-    safe_users = users if isinstance(users, list) else []
-    if q:
-        def _hit(u):
-            phone = str(u.get('phone') or u.get('mobile') or '')
-            email = str(u.get('email') or '')
-            name  = str(u.get('name') or u.get('fullname') or '')
-            return (q in phone.lower()) or (q in email.lower()) or (q in name.lower())
-        safe_users = [u for u in safe_users if _hit(u)]
-
-    def _int(v, default=0):
-        try:
-            return int(v)
-        except Exception:
-            return default
-
-    if sort == 'last_login_desc':
-        safe_users.sort(key=lambda u: _int(u.get('last_login_ts') or u.get('last_login'), 0), reverse=True)
-    elif sort == 'last_login_asc':
-        safe_users.sort(key=lambda u: _int(u.get('last_login_ts') or u.get('last_login'), 0))
-    elif sort == 'created_asc':
-        safe_users.sort(key=lambda u: _int(u.get('created_at_ts') or u.get('created_at'), 0))
-    else:  # created_desc
-        safe_users.sort(key=lambda u: _int(u.get('created_at_ts') or u.get('created_at'), 0), reverse=True)
-
-    # آمار
-    total_users = len(users) if isinstance(users, list) else 0
-    active_users = 0
-    new_users_7d = 0
-    verified_users = 0
-    now_ts = int(datetime.utcnow().timestamp())
-    for u in users if isinstance(users, list) else []:
-        if u.get('is_active'):
-            active_users += 1
-        else:
-            ts = _int(u.get('last_login_ts') or u.get('last_login'), 0)
-            if ts and (now_ts - ts) <= 30*24*3600:
-                active_users += 1
-        cts = _int(u.get('created_at_ts') or u.get('created_at'), 0)
-        if cts and (now_ts - cts) <= 7*24*3600:
-            new_users_7d += 1
-        if any(bool(u.get(k)) for k in ('is_verified','verified','phone_verified')):
-            verified_users += 1
-
-    # صفحه‌بندی ساده
-    page = int(request.args.get('page', 1) or 1)
-    per_page = min(int(request.args.get('per_page', 20) or 20), 100)
-    total = len(safe_users)
-    pages = max(1, (total + per_page - 1) // per_page)
-    page = max(1, min(page, pages))
-    start = (page - 1) * per_page
-    items = safe_users[start:start+per_page]
-
-    return render_template(
-        'admin/users.html',
-        users=items,
-        total_users=total_users,
-        active_users=active_users,
-        new_users_7d=new_users_7d,
-        verified_users=verified_users,
-        q=q,
-        sort=sort,
-        page=page,
-        pages=pages,
-    )
+    q = (request.args.get('q') or '').strip()
+    return redirect(url_for('admin.express_partners', q=q, filter='users'))
 
 # -----------------------------------------------------------------------------
 # ارسال اعلان همگانی به همهٔ کاربران
@@ -2944,13 +2917,8 @@ def add_express_listing():
         flash(f'آگهی اکسپرس با کد {new_code} با موفقیت ثبت شد.', 'success')
         return redirect(url_for('admin.express_listings'))
     
-    # GET
-    cleanup_expired_ads()
-    lands = load_json(_lands_path())
-    p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
-    return render_template('admin/add_express_listing.html',
-                          pending_count=p, approved_count=a, rejected_count=r,
-                          cities=cities)
+    # GET — فرم سبک بدون cleanup سنگین
+    return render_template('admin/add_express_listing.html', cities=cities)
 
 @admin_bp.route('/express/<string:code>/edit', methods=['GET', 'POST'])
 @login_required
@@ -3167,36 +3135,90 @@ def serve_express_document(filename):
 @admin_bp.route('/express/partners/applications')
 @login_required
 def express_partner_applications():
+    """درخواست‌های همکاری → فیلتر در انتظار در لیست یکپارچه."""
+    return redirect(url_for('admin.express_partners', filter='pending'))
+
+
+def _lands_title_lookup() -> Dict[str, str]:
+    lookup: Dict[str, str] = {}
     try:
-        items = load_express_partner_apps() or []
-        if not isinstance(items, list):
-            items = []
-        try:
-            items.sort(key=lambda x: x.get('created_at',''), reverse=True)
-        except Exception:
-            pass
+        lands = load_json(_lands_path()) or []
+        if isinstance(lands, list):
+            for land in lands:
+                if not isinstance(land, dict):
+                    continue
+                code = str(land.get('code') or '').strip()
+                if code:
+                    lookup[code] = str(land.get('title') or '').strip()
     except Exception:
-        items = []
-    return render_template('admin/express_partner_applications.html', items=items)
+        pass
+    return lookup
+
+
+def _admin_people_directory_kwargs() -> Dict[str, Any]:
+    return {
+        'normalize_phone': _normalize_phone,
+        'load_users': load_users,
+        'load_express_partners': load_express_partners,
+        'load_express_partner_apps': load_express_partner_apps,
+        'load_express_assignments': load_express_assignments,
+        'load_express_commissions': load_express_commissions,
+        'load_partner_files_meta': load_partner_files_meta,
+        'load_partner_withdrawals': load_partner_withdrawals,
+        'get_online_partners_list': _get_online_partners_list,
+        'load_partner_notes': load_partner_notes,
+        'load_partner_routines_cached': load_partner_routines_cached,
+        'load_express_visit_requests': load_express_visit_requests,
+        'lands_lookup': _lands_title_lookup(),
+    }
+
 
 @admin_bp.route('/express/partners')
 @login_required
 def express_partners():
+    q = (request.args.get('q') or '').strip()
+    filter_kind = (request.args.get('filter') or 'all').strip()
     try:
-        partners = load_express_partners() or []
-        if not isinstance(partners, list):
-            partners = []
+        people, stats = build_admin_people_directory(
+            **_admin_people_directory_kwargs(),
+            q=q,
+            filter_kind=filter_kind,
+            detail_level='summary',
+        )
     except Exception:
-        partners = []
-    
+        current_app.logger.exception('build_admin_people_directory failed')
+        people, stats = [], {'total': 0, 'shown': 0, 'partners': 0, 'pending': 0, 'site_users': 0, 'online': 0}
+    return render_template(
+        'admin/express_partners.html',
+        people=people,
+        stats=stats,
+        q=q,
+        filter_kind=filter_kind,
+    )
+
+
+@admin_bp.route('/express/partners/<path:phone>')
+@login_required
+def express_partner_detail(phone: str):
+    phone = (phone or '').strip()
+    back_q = (request.args.get('q') or '').strip()
+    back_filter = (request.args.get('filter') or 'all').strip()
     try:
-        applications = load_express_partner_apps() or []
-        if not isinstance(applications, list):
-            applications = []
+        person = get_admin_person_by_phone(phone, **_admin_people_directory_kwargs())
     except Exception:
-        applications = []
-    
-    return render_template('admin/express_partners.html', partners=partners, applications=applications)
+        current_app.logger.exception('get_admin_person_by_phone failed')
+        person = None
+    if not person:
+        flash('کاربر یا همکار یافت نشد.', 'warning')
+        return redirect(url_for('admin.express_partners', q=back_q, filter=back_filter))
+    display_name = (person.get('name') or person.get('phone') or 'همکار').strip()
+    return render_template(
+        'admin/express_partner_detail.html',
+        person=person,
+        back_q=back_q,
+        back_filter=back_filter,
+        page_title=f'پروفایل {display_name}',
+    )
 
 
 @admin_bp.post('/express/partners/<string:phone>/delete')
@@ -3228,13 +3250,13 @@ def express_partner_application_delete(aid: int):
         filtered = [app for app in apps if int(app.get('id', 0) or 0) != int(aid)]
         if len(filtered) == len(apps):
             flash('درخواست یافت نشد.', 'warning')
-            return redirect(url_for('admin.express_partner_applications'))
+            return redirect(url_for('admin.express_partners', filter='pending'))
         save_express_partner_apps(filtered)
         flash('درخواست حذف شد.', 'success')
     except Exception as e:
         current_app.logger.error(f"Failed to delete application {aid}: {e}")
         flash('حذف درخواست با خطا مواجه شد.', 'danger')
-    return redirect(url_for('admin.express_partner_applications'))
+    return redirect(url_for('admin.express_partners', filter='pending'))
 
 # -----------------------------------------------------------------------------
 # Express Assignments (assign lands to partners)
@@ -4131,7 +4153,7 @@ def express_partner_application_approve(aid: int):
             continue
     if not target:
         flash('درخواست یافت نشد.', 'warning')
-        return redirect(url_for('admin.express_partner_applications'))
+        return redirect(url_for('admin.express_partners', filter='pending'))
 
     # به فهرست همکاران منتقل و وضعیت را تنظیم کن
     phone = str(target.get('phone') or '').strip()
@@ -4266,7 +4288,7 @@ def express_partner_application_approve(aid: int):
     if (request.headers.get('Accept') or '').lower().find('application/json') >= 0:
         return jsonify({ 'ok': True, 'id': int(aid), 'status': 'approved' })
     flash(f'درخواست تأیید شد و {new_assignments_count} فایل به همکار انتساب یافت.', 'success')
-    return redirect(url_for('admin.express_partner_applications'))
+    return redirect(url_for('admin.express_partners', filter='pending'))
 
 @admin_bp.post('/express/partners/applications/<int:aid>/reject')
 @login_required
@@ -4282,7 +4304,7 @@ def express_partner_application_reject(aid: int):
             continue
     if not target:
         flash('درخواست یافت نشد.', 'warning')
-        return redirect(url_for('admin.express_partner_applications'))
+        return redirect(url_for('admin.express_partners', filter='pending'))
 
     # وضعیت رد شده را فقط برای ثبت زمان در آبجکت نگه می‌داریم
     target['status'] = 'rejected'
@@ -4320,7 +4342,7 @@ def express_partner_application_reject(aid: int):
     if (request.headers.get('Accept') or '').lower().find('application/json') >= 0:
         return jsonify({ 'ok': True, 'id': int(aid), 'status': 'rejected' })
     flash('درخواست رد شد.', 'info')
-    return redirect(url_for('admin.express_partner_applications'))
+    return redirect(url_for('admin.express_partners', filter='pending'))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

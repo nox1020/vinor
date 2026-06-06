@@ -1,1170 +1,234 @@
 {% extends 'admin/base_admin.html' %}
+{% block title %}ثبت آگهی Express{% endblock %}
+{% block page_title %}ثبت آگهی{% endblock %}
 
 {% block head %}
   {{ super() }}
-  <meta name="csrf-token" content="{{ csrf_token() }}">
-  <!-- Leaflet (local) -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.css') }}">
-  <script src="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.min.js') }}"></script>
   <style>
-    /* مخفی کردن هدر و فوتر در صفحه ثبت آگهی */
-    header,
-    nav[class*="fixed bottom-0"],
-    aside[class*="fixed"],
-    div[class*="lg:hidden h-16"] {
-      display: none !important;
-    }
-    /* تنظیم padding برای main content */
-    main {
-      padding-top: 0 !important;
-    }
-    main > div {
-      padding-top: 1rem !important;
-    }
+    .ad-inp{width:100%;border:1px solid rgb(229 231 235);border-radius:.5rem;padding:.5rem .75rem;background:#fff;font-size:.875rem}
+    .dark .ad-inp{border-color:rgb(55 65 81);background:rgb(17 24 39);color:#fff}
+    .ad-inp:focus{outline:2px solid #2563eb;outline-offset:0}
+    .ad-label{display:block;font-size:.75rem;font-weight:500;color:rgb(75 85 99);margin-bottom:.25rem}
+    .dark .ad-label{color:rgb(156 163 175)}
+    .ad-section{border-radius:.75rem;border:1px solid rgb(229 231 235);background:#fff;padding:1rem}
+    .dark .ad-section{border-color:rgb(55 65 81);background:rgb(17 24 39)}
   </style>
 {% endblock %}
 
-{% block title %}افزودن آگهی اکسپرس{% endblock %}
-{% block page_title %}افزودن آگهی اکسپرس{% endblock %}
-
 {% block content %}
-<div class="space-y-4">
-  
-  <!-- Stepper ساده - سبک دیوار -->
-  <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-    <div class="flex items-center justify-between text-xs">
-      <div class="flex items-center gap-2">
-        <span id="step1-indicator" class="w-6 h-6 grid place-items-center rounded-full bg-blue-600 text-white text-xs font-medium">1</span>
-        <span class="hidden sm:inline text-gray-700 dark:text-gray-300">اطلاعات</span>
-      </div>
-      <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
-      <div class="flex items-center gap-2">
-        <span id="step2-indicator" class="w-6 h-6 grid place-items-center rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs">2</span>
-        <span class="hidden sm:inline text-gray-700 dark:text-gray-300">نحوه پرداخت</span>
-      </div>
-      <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
-      <div class="flex items-center gap-2">
-        <span id="step3-indicator" class="w-6 h-6 grid place-items-center rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs">3</span>
-        <span class="hidden sm:inline text-gray-700 dark:text-gray-300">تصاویر</span>
-      </div>
-      <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
-      <div class="flex items-center gap-2">
-        <span id="step4-indicator" class="w-6 h-6 grid place-items-center rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs">4</span>
-        <span class="hidden sm:inline text-gray-700 dark:text-gray-300">ویدئو</span>
-      </div>
-      <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
-      <div class="flex items-center gap-2">
-        <span id="step5-indicator" class="w-6 h-6 grid place-items-center rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs">5</span>
-        <span class="hidden sm:inline text-gray-700 dark:text-gray-300">مدارک</span>
-      </div>
-      <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
-      <div class="flex items-center gap-2">
-        <span id="step6-indicator" class="w-6 h-6 grid place-items-center rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs">6</span>
-        <span class="hidden sm:inline text-gray-700 dark:text-gray-300">بررسی</span>
-      </div>
+<div class="pb-28 lg:pb-8 max-w-3xl mx-auto space-y-4">
+
+  <a href="{{ url_for('admin.express_listings') }}" class="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 dark:hover:text-blue-400">
+    <i class="fa-solid fa-arrow-right"></i>
+    بازگشت به لیست آگهی‌ها
+  </a>
+
+  <!-- نوار محاسبات زنده -->
+  <div class="sticky top-0 z-20 -mx-1 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur shadow-sm">
+    <div class="grid grid-cols-5 gap-1 text-center text-[10px] sm:text-xs">
+      <div><p class="text-gray-400">متراژ</p><p id="stripSize" class="font-bold text-gray-900 dark:text-white tabular-nums">—</p></div>
+      <div><p class="text-gray-400">قیمت</p><p id="stripPrice" class="font-bold text-gray-900 dark:text-white tabular-nums">—</p></div>
+      <div><p class="text-gray-400">هر متر</p><p id="stripPpm" class="font-bold text-gray-900 dark:text-white tabular-nums">—</p></div>
+      <div><p class="text-gray-400">پورسانت</p><p id="stripPct" class="font-bold text-gray-900 dark:text-white tabular-nums">—</p></div>
+      <div><p class="text-gray-400">مبلغ</p><p id="stripComm" class="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">—</p></div>
     </div>
   </div>
 
-  <!-- فرم مرحله‌ای -->
-  <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin.add_express_listing') }}" class="space-y-4" id="expressForm" novalidate>
+  <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin.add_express_listing') }}"
+        id="expressForm" class="space-y-4" novalidate
+        data-leaflet-css="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.css') }}"
+        data-leaflet-js="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.min.js') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    
-    <!-- مرحله 1: اطلاعات اصلی -->
-    <div id="step1" class="step-content">
-      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-          اطلاعات اصلی
-        </h2>
-        
-        <div class="space-y-3">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              عنوان آگهی <span class="text-red-500">*</span>
-            </label>
-            <input type="text" name="title" required 
-                   class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                   placeholder="مثال: زمین باغی 1000 متری">
-          </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                شهر آگهی <span class="text-red-500">*</span>
-              </label>
-              <select name="city" required
-                      class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                <option value="">انتخاب شهر</option>
-                {% for c in cities or [] %}
-                  <option value="{{ c }}" {% if (request.form.get('city') or '') == c %}selected{% endif %}>{{ c }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                موقعیت دقیق‌تر (محله، محدوده) <span class="text-red-500">*</span>
-              </label>
-              <input type="text" name="location" required 
-                     class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                     placeholder="مثال: دشت اول">
-            </div>
-          </div>
+    <!-- ۱. اطلاعات اصلی -->
+    <section class="ad-section space-y-3">
+      <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <span class="w-6 h-6 rounded-full bg-blue-600 text-white text-xs grid place-items-center">1</span>
+        اطلاعات ملک
+      </h2>
 
-          <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-            <div class="flex items-center justify-between mb-3">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                موقعیت دقیق (مختصات جغرافیایی)
-              </label>
-              <button type="button" id="getCurrentLocationBtn" 
-                      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition">
-                <i class="fas fa-crosshairs"></i>
-                موقعیت فعلی
-              </button>
-            </div>
-            
-            <!-- نقشه -->
-            <div id="locationMap" class="w-full h-64 rounded-lg border border-gray-200 dark:border-gray-700 mb-3" style="z-index: 1;"></div>
-            
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">عرض جغرافیایی (Latitude)</label>
-                <input type="number" step="0.000001" name="latitude" id="latitude"
-                       class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                       placeholder="مثال: 35.6892">
-              </div>
-              <div>
-                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">طول جغرافیایی (Longitude)</label>
-                <input type="number" step="0.000001" name="longitude" id="longitude"
-                       class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                       placeholder="مثال: 51.3890">
-              </div>
-            </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              روی نقشه کلیک کنید یا از دکمه "موقعیت فعلی" استفاده کنید
-            </p>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label id="expressSizeLabel" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                متراژ (متر) <span class="text-red-500">*</span>
-              </label>
-              <input type="text" name="size" required data-format-int
-                     class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                     placeholder="1000">
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                دسته‌بندی
-              </label>
-              <select name="category" 
-                      class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                <option value="">انتخاب کنید</option>
-                <option value="زمین">زمین</option>
-                <option value="باغ">باغ</option>
-                <option value="باغچه">باغچه</option>
-                <option value="ویلا">ویلا</option>
-                <option value="آپارتمان">آپارتمان</option>
-                <option value="تجاری">تجاری</option>
-              </select>
-            </div>
-          </div>
-
-          {% include 'admin/partials/_express_category_specs.html' %}
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                قیمت کل (تومان) <span class="text-red-500">*</span>
-              </label>
-              <input type="text" name="price_total" required data-format-int
-                     class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                     placeholder="2000000000">
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                قیمت در متر (تومان)
-                <span class="text-xs text-gray-500 dark:text-gray-400">(محاسبه خودکار)</span>
-              </label>
-              <input type="text" name="price_per_meter" id="price_per_meter" data-format-int readonly
-                     class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200"
-                     placeholder="--">
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                درصد پورسانت (٪) <span class="text-red-500">*</span>
-              </label>
-              <input type="number" step="0.1" min="0" max="100" name="express_commission_pct" id="express_commission_pct" required
-                     class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                     placeholder="1.5">
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                مبلغ پورسانت (تومان)
-              </label>
-              <input type="text" id="express_commission_amount" readonly
-                     class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200"
-                     placeholder="--">
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              توضیحات
-            </label>
-            <textarea name="description" rows="3" 
-                      class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="توضیحات کامل..."></textarea>
-          </div>
-
-          <div class="flex flex-col gap-2 pt-2">
-            <label class="inline-flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" name="expert_verified" value="1" id="expert_verified" class="w-4 h-4">
-              <span class="text-sm text-gray-700 dark:text-gray-300">تایید کارشناسی (نمایش بج روی گالری)</span>
-            </label>
-            <label class="inline-flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" name="auto_send_all_partners" value="1" id="auto_send" class="w-4 h-4" checked>
-              <span class="text-sm text-gray-700 dark:text-gray-300">ارسال خودکار برای تمامی همکاران</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="flex justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
-          <button type="button" onclick="nextStep()" 
-                  class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition focusable flex items-center gap-2">
-            <span>ادامه</span>
-            <i class="fa-solid fa-arrow-left text-xs"></i>
-          </button>
-        </div>
+      <div>
+        <label class="ad-label">عنوان <span class="text-red-500">*</span></label>
+        <input type="text" name="title" required class="ad-inp" placeholder="مثال: زمین ۱۰۰۰ متری دشت اول">
       </div>
-    </div>
 
-    <!-- مرحله 2: نحوه پرداخت -->
-    <div id="step2" class="step-content hidden">
-      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-          نحوه پرداخت
-        </h2>
-
-        <div class="space-y-2">
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            نحوه پرداخت <span class="text-red-500">*</span>
-          </label>
-          <select name="payment_method" id="payment_method" required
-                  class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-            <option value="">انتخاب کنید</option>
-            <option value="نقدی">نقدی</option>
-            <option value="اقساطی">اقساطی</option>
-            <option value="معاوضه">معاوضه</option>
-            <option value="توافقی">توافقی</option>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="ad-label">شهر <span class="text-red-500">*</span></label>
+          <select name="city" required class="ad-inp">
+            <option value="">انتخاب شهر</option>
+            {% for c in cities or [] %}
+              <option value="{{ c }}" {% if (request.form.get('city') or '') == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
           </select>
-          <p class="text-xs text-gray-500 dark:text-gray-400">این مورد در صفحه جزئیات فایل همکار نمایش داده می‌شود.</p>
         </div>
-
-        <!-- جزئیات اقساط (فقط اگر اقساطی باشد) - سبک دیوار -->
-        <div id="installmentsBox" class="hidden bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-          <div class="flex items-center justify-between gap-2 mb-3">
-            <div>
-              <div class="text-sm font-semibold text-gray-900 dark:text-white">جزئیات اقساط</div>
-              <div class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">برای هر قسط، «تعداد ماه» و «مبلغ» را وارد کنید.</div>
-            </div>
-            <button type="button" id="addInstallmentRow"
-                    class="px-3 py-2 rounded-lg text-xs font-medium bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition">
-              <i class="fa-solid fa-plus text-[10px] ml-1"></i>
-              افزودن قسط
-            </button>
-          </div>
-
-          <div id="installmentsRows" class="space-y-2"></div>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">مثال: 12 ماهه / 50,000,000 تومان</p>
-        </div>
-
-        <div class="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-800">
-          <button type="button" onclick="prevStep()"
-                  class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition flex items-center gap-2">
-            <i class="fa-solid fa-arrow-right text-xs"></i>
-            <span>قبلی</span>
-          </button>
-          <button type="button" onclick="nextStep()"
-                  class="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-2">
-            <span>ادامه</span>
-            <i class="fa-solid fa-arrow-left text-xs"></i>
-          </button>
+        <div>
+          <label class="ad-label">محله / موقعیت <span class="text-red-500">*</span></label>
+          <input type="text" name="location" required class="ad-inp" placeholder="مثال: دشت اول">
         </div>
       </div>
-    </div>
 
-    <!-- مرحله 3: تصاویر -->
-    <div id="step3" class="step-content hidden">
-      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-          تصاویر ملک
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div>
+          <label id="expressSizeLabel" class="ad-label">متراژ (متر) <span class="text-red-500">*</span></label>
+          <input type="text" name="size" required data-format-int class="ad-inp" inputmode="numeric" placeholder="1000">
+        </div>
+        <div>
+          <label class="ad-label">دسته</label>
+          <select name="category" class="ad-inp">
+            <option value="">—</option>
+            <option value="زمین">زمین</option>
+            <option value="باغ">باغ</option>
+            <option value="باغچه">باغچه</option>
+            <option value="ویلا">ویلا</option>
+            <option value="آپارتمان">آپارتمان</option>
+            <option value="تجاری">تجاری</option>
+          </select>
+        </div>
+        <div class="col-span-2 sm:col-span-1">
+          <label class="ad-label">پورسانت ٪ <span class="text-red-500">*</span></label>
+          <input type="number" step="0.1" min="0" max="100" name="express_commission_pct" id="express_commission_pct" required class="ad-inp" value="2" placeholder="2">
+        </div>
+      </div>
+
+      {% include 'admin/partials/_express_category_specs.html' %}
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="ad-label">قیمت کل (تومان) <span class="text-red-500">*</span></label>
+          <input type="text" name="price_total" required data-format-int class="ad-inp" inputmode="numeric">
+        </div>
+        <div>
+          <label class="ad-label">قیمت هر متر</label>
+          <input type="text" name="price_per_meter" id="price_per_meter" data-format-int readonly class="ad-inp bg-gray-50 dark:bg-gray-800">
+        </div>
+      </div>
+      <input type="hidden" id="express_commission_amount" value="" tabindex="-1" aria-hidden="true">
+
+      <div>
+        <label class="ad-label">توضیحات</label>
+        <textarea name="description" rows="2" class="ad-inp resize-none" placeholder="اختیاری"></textarea>
+      </div>
+
+      <div class="flex flex-wrap gap-4 text-xs">
+        <label class="inline-flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="expert_verified" value="1" class="w-4 h-4">
+          <span>تأیید کارشناسی</span>
+        </label>
+        <label class="inline-flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="auto_send_all_partners" value="1" checked class="w-4 h-4">
+          <span>ارسال به همه همکاران</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- ۲. موقعیت (اختیاری — نقشه lazy) -->
+    <section class="ad-section space-y-3">
+      <div class="flex items-center justify-between gap-2">
+        <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <span class="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs grid place-items-center">2</span>
+          موقعیت نقشه
+          <span class="text-[10px] font-normal text-gray-400">اختیاری</span>
         </h2>
-        
-        <div id="dropzone" role="button" tabindex="0"
-             class="w-full h-24 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 transition">
-          <i class="fa-solid fa-cloud-arrow-up text-xl text-gray-400 dark:text-gray-500 mb-1"></i>
-          <p class="text-xs font-medium text-gray-600 dark:text-gray-400">انتخاب تصاویر</p>
+        <button type="button" id="toggleMapBtn" class="text-xs text-blue-600 dark:text-blue-400 font-medium">نمایش نقشه</button>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="ad-label">عرض (Lat)</label>
+          <input type="number" step="0.000001" name="latitude" id="latitude" class="ad-inp" dir="ltr">
         </div>
-        <input type="file" id="imagesInput" name="images" accept="image/*" multiple class="hidden">
-        
-        <div id="imagePreview" class="grid grid-cols-3 gap-2"></div>
-
-        <div class="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-800">
-          <button type="button" onclick="prevStep()" 
-                  class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition flex items-center gap-2">
-            <i class="fa-solid fa-arrow-right text-xs"></i>
-            <span>قبلی</span>
-          </button>
-          <button type="button" onclick="nextStep()" 
-                  class="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-2">
-            <span>ادامه</span>
-            <i class="fa-solid fa-arrow-left text-xs"></i>
-          </button>
+        <div>
+          <label class="ad-label">طول (Lng)</label>
+          <input type="number" step="0.000001" name="longitude" id="longitude" class="ad-inp" dir="ltr">
         </div>
       </div>
-    </div>
+      <div id="mapWrap" class="hidden space-y-2">
+        <button type="button" id="getCurrentLocationBtn" class="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white">
+          <i class="fa-solid fa-crosshairs ml-1"></i> موقعیت من
+        </button>
+        <div id="locationMap" class="w-full h-52 rounded-lg border border-gray-200 dark:border-gray-700"></div>
+      </div>
+    </section>
 
-    <!-- مرحله 4: ویدئو -->
-    <div id="step4" class="step-content hidden">
-      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-          ویدئو ملک (اختیاری)
-        </h2>
-
-        <div class="space-y-2">
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            آپلود ویدئو
-          </label>
-          <input type="file" name="video" accept="video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska"
-                 class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-          <p class="text-xs text-gray-500 dark:text-gray-400">
-            فرمت‌های مجاز: MP4 / WEBM / MOV / AVI / MKV
-          </p>
+    <!-- ۳. پرداخت -->
+    <section class="ad-section space-y-3">
+      <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <span class="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs grid place-items-center">3</span>
+        نحوه پرداخت
+      </h2>
+      <select name="payment_method" id="payment_method" required class="ad-inp">
+        <option value="">انتخاب کنید</option>
+        <option value="نقدی">نقدی</option>
+        <option value="اقساطی">اقساطی</option>
+        <option value="معاوضه">معاوضه</option>
+        <option value="توافقی">توافقی</option>
+      </select>
+      <div id="installmentsBox" class="hidden space-y-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800">
+        <div class="flex justify-between items-center">
+          <span class="text-xs font-medium text-gray-600 dark:text-gray-400">اقساط</span>
+          <button type="button" id="addInstallmentRow" class="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700">+ قسط</button>
         </div>
+        <div id="installmentsRows" class="space-y-2"></div>
+      </div>
+    </section>
 
-        <div class="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-          <button type="button" onclick="prevStep()"
-                  class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition flex items-center gap-2">
-            <i class="fa-solid fa-arrow-right text-xs"></i>
-            <span>قبلی</span>
-          </button>
-          <button type="button" onclick="nextStep()"
-                  class="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-2">
-            <span>ادامه</span>
-            <i class="fa-solid fa-arrow-left text-xs"></i>
-          </button>
+    <!-- ۴. رسانه و تماس -->
+    <section class="ad-section space-y-3">
+      <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <span class="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs grid place-items-center">4</span>
+        تصاویر و مدارک
+      </h2>
+
+      <div id="dropzone" role="button" tabindex="0"
+           class="h-20 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 transition">
+        <i class="fa-solid fa-images text-gray-400 mb-1"></i>
+        <span class="text-xs text-gray-500">انتخاب تصاویر (حداکثر ۱۲)</span>
+      </div>
+      <input type="file" id="imagesInput" name="images" accept="image/*" multiple class="hidden">
+      <div id="imagePreview" class="grid grid-cols-4 sm:grid-cols-6 gap-2"></div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="ad-label">ویدئو (اختیاری)</label>
+          <input type="file" name="video" accept="video/mp4,video/webm,video/quicktime" class="ad-inp text-xs file:mr-2">
+        </div>
+        <div>
+          <label class="ad-label">تماس پشتیبانی <span class="text-red-500">*</span></label>
+          <input type="tel" name="vinor_contact" required class="ad-inp" dir="ltr" value="09121234567">
         </div>
       </div>
-    </div>
 
-    <!-- مرحله 5: مدارک -->
-    <div id="step5" class="step-content hidden">
-      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-          مدارک و تماس
-        </h2>
-        
-        <div class="space-y-3">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              سند ملک (PDF)
-            </label>
-            <input type="file" name="document_1" accept=".pdf,.jpg,.jpeg,.png" 
-                   class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              مدارک اضافی (PDF)
-            </label>
-            <input type="file" name="document_2" accept=".pdf,.jpg,.jpeg,.png" 
-                   class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              شماره تماس پشتیبانی <span class="text-red-500">*</span>
-            </label>
-            <input type="tel" name="vinor_contact" required 
-                   class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                   value="09121234567" placeholder="09121234567">
-          </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="ad-label">سند (PDF/عکس)</label>
+          <input type="file" name="document_1" accept=".pdf,.jpg,.jpeg,.png" class="ad-inp text-xs file:mr-2">
         </div>
-
-        <div class="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-          <button type="button" onclick="prevStep()" 
-                  class="px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition focusable flex items-center gap-2">
-            <i class="fa-solid fa-arrow-right text-xs"></i>
-            <span>قبلی</span>
-          </button>
-          <button type="button" onclick="nextStep()" 
-                  class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition focusable flex items-center gap-2">
-            <span>ادامه</span>
-            <i class="fa-solid fa-arrow-left text-xs"></i>
-          </button>
+        <div>
+          <label class="ad-label">مدرک اضافی</label>
+          <input type="file" name="document_2" accept=".pdf,.jpg,.jpeg,.png" class="ad-inp text-xs file:mr-2">
         </div>
       </div>
+    </section>
+
+    <!-- دکمه ثبت — دسکتاپ -->
+    <div class="hidden lg:block">
+      <button type="submit" id="submitBtn"
+              class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition focusable">
+        <i class="fa-solid fa-check ml-1"></i>
+        ثبت و انتشار آگهی
+      </button>
     </div>
-
-    <!-- مرحله 6: بررسی و انتشار -->
-    <div id="step6" class="step-content hidden">
-      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-          بررسی نهایی
-        </h2>
-        
-        <div class="space-y-3 text-sm">
-          <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-            <div class="font-medium mb-2">اطلاعات اصلی</div>
-            <div class="space-y-1 text-gray-600 dark:text-gray-400">
-              <div>عنوان: <span id="summaryTitle" class="font-medium text-gray-900 dark:text-white">-</span></div>
-              <div>موقعیت: <span id="summaryLocation" class="font-medium text-gray-900 dark:text-white">-</span></div>
-              <div>متراژ: <span id="summarySize" class="font-medium text-gray-900 dark:text-white">-</span> متر</div>
-              <div>قیمت کل: <span id="summaryPrice" class="font-medium text-gray-900 dark:text-white">-</span></div>
-              <div>قیمت در متر: <span id="summaryPricePerMeter" class="font-medium text-gray-900 dark:text-white">-</span></div>
-              <div>درصد پورسانت: <span id="summaryCommissionPct" class="font-medium text-gray-900 dark:text-white">-</span></div>
-              <div>مبلغ پورسانت: <span id="summaryCommissionAmount" class="font-medium text-gray-900 dark:text-white">-</span></div>
-            </div>
-          </div>
-          
-          <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-            <div class="font-medium mb-2">تصاویر</div>
-            <div id="summaryImages" class="text-gray-600 dark:text-gray-400">-</div>
-          </div>
-
-          <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-            <div class="font-medium mb-2">نحوه پرداخت</div>
-            <div id="summaryPayment" class="text-gray-600 dark:text-gray-400">-</div>
-            <div id="summaryInstallments" class="text-xs text-gray-500 dark:text-gray-400 mt-1"></div>
-          </div>
-
-          <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-            <div class="font-medium mb-2">ویدئو</div>
-            <div id="summaryVideo" class="text-gray-600 dark:text-gray-400">-</div>
-          </div>
-          
-          <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-            <div class="font-medium mb-2">مدارک</div>
-            <div id="summaryDocuments" class="text-gray-600 dark:text-gray-400">-</div>
-          </div>
-        </div>
-
-        <div class="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-          <button type="button" onclick="prevStep()" 
-                  class="px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition focusable flex items-center gap-2">
-            <i class="fa-solid fa-arrow-right text-xs"></i>
-            <span>قبلی</span>
-          </button>
-          <button id="finalSubmitBtn" type="submit" 
-                  class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition focusable flex items-center gap-2">
-            <i class="fa-solid fa-check text-xs"></i>
-            <span>ثبت آگهی</span>
-          </button>
-        </div>
-        <div id="submitProgressWrap" class="hidden mt-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-900/20 p-3">
-          <div class="flex items-center justify-between text-xs mb-2">
-            <span id="submitProgressStatus" class="text-blue-700 dark:text-blue-300">در حال آماده‌سازی اطلاعات...</span>
-            <span id="submitProgressPercent" class="font-semibold text-blue-700 dark:text-blue-300">0%</span>
-          </div>
-          <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-            <div id="submitProgressBar" class="h-full w-0 bg-blue-600 transition-[width] duration-300 ease-linear"></div>
-          </div>
-          <p class="mt-2 text-xs text-gray-600 dark:text-gray-300">از شکیبایی شما ممنونیم</p>
-        </div>
-      </div>
-    </div>
-
   </form>
-
 </div>
 
-<script>
-let currentStep = 1;
-const totalSteps = 6;
-let selectedImages = [];
+<!-- نوار ثبت — موبایل (بالای bottom nav) -->
+<div class="lg:hidden fixed bottom-16 left-0 right-0 z-30 px-4 py-2 bg-white/95 dark:bg-gray-950/95 border-t border-gray-200 dark:border-gray-800 backdrop-blur">
+  <button type="submit" form="expressForm" id="submitBtnMobile"
+          class="w-full py-3 rounded-xl bg-blue-600 text-white font-bold text-sm">
+    <i class="fa-solid fa-check ml-1"></i>
+    ثبت آگهی
+  </button>
+</div>
 
-function showStep(step) {
-  document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
-  document.getElementById(`step${step}`).classList.remove('hidden');
-  
-  // Update indicators
-  for (let i = 1; i <= 6; i++) {
-    const indicator = document.getElementById(`step${i}-indicator`);
-    if (i <= step) {
-      indicator.classList.remove('bg-gray-200', 'dark:bg-gray-700', 'text-gray-600', 'dark:text-gray-400');
-      indicator.classList.add('bg-blue-600', 'text-white');
-    } else {
-      indicator.classList.remove('bg-blue-600', 'text-white');
-      indicator.classList.add('bg-gray-200', 'dark:bg-gray-700', 'text-gray-600', 'dark:text-gray-400');
-    }
-  }
-  
-  currentStep = step;
-  if (step === 6) updateSummary();
-}
-
-function nextStep() {
-  if (currentStep < totalSteps) showStep(currentStep + 1);
-}
-
-function prevStep() {
-  if (currentStep > 1) showStep(currentStep - 1);
-}
-
-// Image handling
-document.getElementById('dropzone').addEventListener('click', () => {
-  document.getElementById('imagesInput').click();
-});
-
-document.getElementById('imagesInput').addEventListener('change', (e) => {
-  const files = Array.from(e.target.files);
-  selectedImages = [...selectedImages, ...files].slice(0, 10);
-  renderImagePreviews();
-});
-
-function renderImagePreviews() {
-  const container = document.getElementById('imagePreview');
-  container.innerHTML = '';
-  
-  selectedImages.forEach((file, index) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const div = document.createElement('div');
-      div.className = 'relative group';
-      div.innerHTML = `
-        <img src="${e.target.result}" class="w-full h-20 object-cover rounded-lg">
-        <button type="button" onclick="removeImage(${index})" 
-                class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition">
-          ×
-        </button>
-      `;
-      container.appendChild(div);
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function removeImage(index) {
-  selectedImages.splice(index, 1);
-  renderImagePreviews();
-}
-
-function updateSummary() {
-  const form = document.getElementById('expressForm');
-  
-  document.getElementById('summaryTitle').textContent = document.querySelector('input[name="title"]')?.value.trim() || '-';
-  document.getElementById('summaryLocation').textContent = document.querySelector('input[name="location"]')?.value.trim() || '-';
-  
-  // استخراج اعداد خام از فیلدها (از data-raw-value یا value)
-  const sizeEl = document.querySelector('input[name="size"]');
-  const priceEl = document.querySelector('input[name="price_total"]');
-  const commissionPctEl = document.getElementById('express_commission_pct');
-  
-  // استخراج متراژ
-  let sizeRaw = sizeEl?.dataset.rawValue || '';
-  if (!sizeRaw || sizeRaw === '') {
-    const sizeValue = sizeEl?.value || '';
-    sizeRaw = sizeValue.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[^\d]/g, '');
-  }
-  const sizeNum = parseInt(sizeRaw, 10) || 0;
-  document.getElementById('summarySize').textContent = sizeNum > 0 ? sizeNum.toLocaleString('fa-IR') : '-';
-  
-  // استخراج قیمت کل
-  let priceRaw = priceEl?.dataset.rawValue || '';
-  if (!priceRaw || priceRaw === '') {
-    const priceValue = priceEl?.value || '';
-    priceRaw = priceValue.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[^\d]/g, '');
-  }
-  const priceNum = parseInt(priceRaw, 10) || 0;
-  document.getElementById('summaryPrice').textContent = priceNum > 0 ? priceNum.toLocaleString('fa-IR') + ' تومان' : '-';
-  
-  // محاسبه خودکار قیمت در متر
-  let pricePerMeter = 0;
-  if (sizeNum > 0 && priceNum > 0) {
-    pricePerMeter = Math.round(priceNum / sizeNum);
-  }
-  const pricePerMeterInput = document.getElementById('price_per_meter');
-  if (pricePerMeterInput) {
-    // ذخیره مقدار خام در data attribute برای ارسال
-    pricePerMeterInput.dataset.rawValue = pricePerMeter > 0 ? pricePerMeter.toString() : '';
-    // نمایش فرمت شده به کاربر
-    pricePerMeterInput.value = pricePerMeter > 0 ? pricePerMeter.toLocaleString('fa-IR') : '';
-  }
-  
-  // نمایش در خلاصه
-  const summaryPricePerMeter = document.getElementById('summaryPricePerMeter');
-  if (summaryPricePerMeter) {
-    summaryPricePerMeter.textContent = pricePerMeter > 0 ? pricePerMeter.toLocaleString('fa-IR') + ' تومان' : '-';
-  }
-  
-  document.getElementById('summaryImages').textContent = selectedImages.length > 0 ? `${selectedImages.length} تصویر` : 'تصویری انتخاب نشده';
-  const pm = document.querySelector('select[name="payment_method"]')?.value || '';
-  const pmEl = document.getElementById('summaryPayment');
-  if (pmEl) pmEl.textContent = pm ? pm : 'مشخص نشده';
-  const summaryInst = document.getElementById('summaryInstallments');
-  if (summaryInst) {
-    if (pm === 'اقساطی') {
-      const rows = Array.from(document.querySelectorAll('.installment-row'));
-      const items = rows.map(r => {
-        const m = r.querySelector('input[name="installment_months[]"]')?.value || '';
-        const a = r.querySelector('input[name="installment_amounts[]"]')?.value || '';
-        const mNum = parseInt((m || '').replace(/[^\d]/g, ''), 10) || 0;
-        const aNum = parseInt((a || '').replace(/[^\d]/g, ''), 10) || 0;
-        if (mNum > 0 && aNum > 0) return `${mNum} ماهه / ${aNum.toLocaleString('fa-IR')} تومان`;
-        return null;
-      }).filter(Boolean);
-      summaryInst.textContent = items.length ? items.join(' | ') : 'اقساط وارد نشده';
-    } else {
-      summaryInst.textContent = '';
-    }
-  }
-
-  const video = document.querySelector('input[name="video"]')?.files?.[0];
-  document.getElementById('summaryVideo').textContent = (video && video.name) ? video.name : 'ویدئویی آپلود نشده';
-  
-  const doc1 = document.querySelector('input[name="document_1"]')?.files?.[0];
-  const doc2 = document.querySelector('input[name="document_2"]')?.files?.[0];
-  const docs = [];
-  if (doc1 && doc1.name) docs.push(doc1.name);
-  if (doc2 && doc2.name) docs.push(doc2.name);
-  document.getElementById('summaryDocuments').textContent = docs.length > 0 ? docs.join(', ') : 'مدرکی آپلود نشده';
-  
-  // محاسبه و نمایش پورسانت
-  const pctValue = commissionPctEl?.value || '0';
-  const pct = parseFloat(pctValue) || 0;
-  let commissionAmount = 0;
-  if (priceNum > 0 && pct > 0) {
-    commissionAmount = Math.round(priceNum * (pct / 100));
-  }
-  
-  // نمایش درصد پورسانت در خلاصه
-  const summaryCommissionPct = document.getElementById('summaryCommissionPct');
-  if (summaryCommissionPct) {
-    summaryCommissionPct.textContent = pct > 0 ? pct + '%' : '-';
-  }
-  
-  // نمایش مبلغ پورسانت در فیلد
-  const amtInput = document.getElementById('express_commission_amount');
-  if (amtInput) {
-    amtInput.dataset.rawValue = commissionAmount > 0 ? commissionAmount.toString() : '';
-    amtInput.value = commissionAmount > 0 ? commissionAmount.toLocaleString('fa-IR') : '';
-  }
-  
-  // نمایش مبلغ پورسانت در خلاصه
-  const summaryCommissionAmount = document.getElementById('summaryCommissionAmount');
-  if (summaryCommissionAmount) {
-    summaryCommissionAmount.textContent = commissionAmount > 0 ? commissionAmount.toLocaleString('fa-IR') + ' تومان' : '-';
-  }
-}
-
-// Form validation
-let isSubmittingExpressForm = false;
-document.getElementById('expressForm').addEventListener('submit', (e) => {
-  if (isSubmittingExpressForm) {
-    e.preventDefault();
-    return;
-  }
-  const title = document.querySelector('input[name="title"]').value.trim();
-  const location = document.querySelector('input[name="location"]').value.trim();
-  const sizeEl = document.querySelector('input[name="size"]');
-  const priceEl = document.querySelector('input[name="price_total"]');
-  
-  // استخراج اعداد خام (اولویت با data-raw-value)
-  let sizeRaw = sizeEl.dataset.rawValue;
-  let priceRaw = priceEl.dataset.rawValue;
-  
-  // اگر data attribute وجود نداشت، از value استخراج کن
-  if (!sizeRaw || sizeRaw === '') {
-    const sizeValue = sizeEl.value || '';
-    // تبدیل اعداد فارسی به انگلیسی
-    sizeRaw = sizeValue.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[^\d]/g, '');
-  }
-  if (!priceRaw || priceRaw === '') {
-    const priceValue = priceEl.value || '';
-    // تبدیل اعداد فارسی به انگلیسی
-    priceRaw = priceValue.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[^\d]/g, '');
-  }
-  
-  // اعتبارسنجی
-  if (!title || !location || !sizeRaw || !priceRaw) {
-    e.preventDefault();
-    alert('لطفاً فیلدهای اجباری را پر کنید');
-    return;
-  }
-
-  // پرداخت
-  const paymentMethod = (document.getElementById('payment_method')?.value || '').trim();
-  if (!paymentMethod) {
-    e.preventDefault();
-    alert('لطفاً نحوه پرداخت را انتخاب کنید');
-    return;
-  }
-  if (paymentMethod === 'اقساطی') {
-    const rows = Array.from(document.querySelectorAll('.installment-row'));
-    const hasValid = rows.some(r => {
-      const m = r.querySelector('input[name="installment_months[]"]')?.value || '';
-      const a = r.querySelector('input[name="installment_amounts[]"]')?.value || '';
-      const mNum = parseInt((m || '').replace(/[^\d]/g, ''), 10) || 0;
-      const aNum = parseInt((a || '').replace(/[^\d]/g, ''), 10) || 0;
-      return mNum > 0 && aNum > 0;
-    });
-    if (!hasValid) {
-      e.preventDefault();
-      alert('برای پرداخت اقساطی، حداقل یک قسط معتبر (تعداد ماه و مبلغ) وارد کنید');
-      return;
-    }
-  }
-  
-  const sizeNum = parseInt(sizeRaw, 10) || 0;
-  const priceNum = parseInt(priceRaw, 10) || 0;
-  
-  if (sizeNum <= 0 || priceNum <= 0) {
-    e.preventDefault();
-    alert('متراژ و قیمت باید بیشتر از صفر باشند');
-    return;
-  }
-  
-  // قرار دادن اعداد خام قبل از ارسال (بدون فرمت)
-  // مهم: باید مستقیماً value را تغییر دهیم تا در form submit شود
-  sizeEl.value = sizeNum.toString();
-  priceEl.value = priceNum.toString();
-  
-  // محاسبه نهایی قیمت در متر (قبل از ارسال)
-  const pricePerMeterEl = document.getElementById('price_per_meter');
-  if (pricePerMeterEl && sizeNum > 0 && priceNum > 0) {
-    const ppm = Math.round(priceNum / sizeNum);
-    pricePerMeterEl.value = ppm.toString();
-    pricePerMeterEl.dataset.rawValue = ppm.toString();
-  }
-  
-  // محاسبه نهایی مبلغ پورسانت (قبل از ارسال)
-  const commissionPctEl = document.getElementById('express_commission_pct');
-  const commissionAmountEl = document.getElementById('express_commission_amount');
-  if (commissionPctEl && commissionAmountEl && priceNum > 0) {
-    const pct = parseFloat(commissionPctEl.value || '0') || 0;
-    if (pct > 0) {
-      const amount = Math.round(priceNum * (pct / 100));
-      commissionAmountEl.value = amount.toString();
-      commissionAmountEl.dataset.rawValue = amount.toString();
-    } else {
-      commissionAmountEl.value = '';
-      commissionAmountEl.dataset.rawValue = '';
-    }
-  }
-
-  // نمایش وضعیت ثبت در مرحله نهایی
-  const submitBtn = document.getElementById('finalSubmitBtn');
-  const progressWrap = document.getElementById('submitProgressWrap');
-  const progressBar = document.getElementById('submitProgressBar');
-  const progressPercent = document.getElementById('submitProgressPercent');
-  const progressStatus = document.getElementById('submitProgressStatus');
-  const statusSteps = [
-    { to: 22, text: 'در حال آماده‌سازی اطلاعات...' },
-    { to: 48, text: 'در حال آپلود فایل‌ها...' },
-    { to: 72, text: 'در حال پردازش تصاویر...' },
-    { to: 90, text: 'در حال نهایی‌سازی ثبت آگهی...' },
-  ];
-  isSubmittingExpressForm = true;
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.classList.add('opacity-60', 'cursor-not-allowed');
-    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i><span>در حال ثبت...</span>';
-  }
-  if (progressWrap) progressWrap.classList.remove('hidden');
-  if (progressBar) {
-    let p = 0;
-    let stepIdx = 0;
-    progressBar.style.width = p + '%';
-    if (progressPercent) progressPercent.textContent = `${p}%`;
-    if (progressStatus) progressStatus.textContent = statusSteps[0].text;
-    const timer = setInterval(() => {
-      if (p >= 94) {
-        clearInterval(timer);
-        return;
-      }
-      const target = statusSteps[Math.min(stepIdx, statusSteps.length - 1)].to;
-      if (p < target) {
-        p += Math.max(1, Math.ceil((target - p) / 4));
-      } else if (stepIdx < statusSteps.length - 1) {
-        stepIdx += 1;
-        if (progressStatus) progressStatus.textContent = statusSteps[stepIdx].text;
-      } else {
-        p += 1;
-      }
-      p = Math.min(p, 94);
-      progressBar.style.width = p + '%';
-      if (progressPercent) progressPercent.textContent = `${p}%`;
-    }, 180);
-  }
-});
-
-// Payment method behavior
-(function(){
-  const pm = document.getElementById('payment_method');
-  const box = document.getElementById('installmentsBox');
-  const rowsEl = document.getElementById('installmentsRows');
-  const addBtn = document.getElementById('addInstallmentRow');
-  if (!pm || !box || !rowsEl || !addBtn) return;
-
-  function rowTemplate(months = '', amount = '') {
-    return `
-      <div class="installment-row bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-        <div class="grid grid-cols-12 gap-2 items-end">
-          <div class="col-span-5">
-            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">تعداد ماه</label>
-            <input type="number" min="1" name="installment_months[]" value="${months}"
-                   class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                   placeholder="مثلاً 12">
-          </div>
-          <div class="col-span-6">
-            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">مبلغ (تومان)</label>
-            <input type="text" inputmode="numeric" name="installment_amounts[]" value="${amount}"
-                   class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                   placeholder="مثلاً 50000000">
-          </div>
-          <div class="col-span-1 flex justify-end">
-            <button type="button" class="remove-installment w-9 h-9 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-600 dark:text-gray-300 transition">
-              <i class="fa-solid fa-trash text-xs text-red-600 dark:text-red-400"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  function ensureOneRow() {
-    if (!rowsEl.querySelector('.installment-row')) {
-      rowsEl.insertAdjacentHTML('beforeend', rowTemplate('', ''));
-    }
-  }
-
-  function toggle() {
-    const v = (pm.value || '').trim();
-    if (v === 'اقساطی') {
-      box.classList.remove('hidden');
-      ensureOneRow();
-    } else {
-      box.classList.add('hidden');
-    }
-  }
-
-  addBtn.addEventListener('click', () => {
-    rowsEl.insertAdjacentHTML('beforeend', rowTemplate('', ''));
-  });
-
-  rowsEl.addEventListener('click', (e) => {
-    const btn = e.target.closest('.remove-installment');
-    if (!btn) return;
-    const row = btn.closest('.installment-row');
-    if (row) row.remove();
-  });
-
-  pm.addEventListener('change', toggle);
-  toggle();
-})();
-
-// Initialize
-showStep(1);
-
-// نقشه تعاملی برای انتخاب موقعیت
-let locationMap = null;
-let locationMarker = null;
-
-function initLocationMap() {
-  // مختصات پیش‌فرض: تهران
-  const defaultLat = 35.6892;
-  const defaultLon = 51.3890;
-  
-  // بررسی اگر مختصات از قبل وجود دارد
-  const latInput = document.getElementById('latitude');
-  const lonInput = document.getElementById('longitude');
-  let initialLat = defaultLat;
-  let initialLon = defaultLon;
-  
-  if (latInput && latInput.value) {
-    initialLat = parseFloat(latInput.value) || defaultLat;
-  }
-  if (lonInput && lonInput.value) {
-    initialLon = parseFloat(lonInput.value) || defaultLon;
-  }
-  
-  // ایجاد نقشه
-  locationMap = L.map('locationMap').setView([initialLat, initialLon], 13);
-  
-  // افزودن لایه نقشه OpenStreetMap
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19
-  }).addTo(locationMap);
-  
-  // افزودن مارکر اولیه
-  if (latInput && latInput.value && lonInput && lonInput.value) {
-    locationMarker = L.marker([initialLat, initialLon], {
-      draggable: true
-    }).addTo(locationMap);
-  } else {
-    locationMarker = L.marker([initialLat, initialLon], {
-      draggable: true
-    }).addTo(locationMap);
-    updateCoordinates(initialLat, initialLon);
-  }
-  
-  // رویداد کلیک روی نقشه
-  locationMap.on('click', function(e) {
-    const lat = e.latlng.lat;
-    const lon = e.latlng.lng;
-    
-    if (locationMarker) {
-      locationMarker.setLatLng([lat, lon]);
-    } else {
-      locationMarker = L.marker([lat, lon], {
-        draggable: true
-      }).addTo(locationMap);
-    }
-    
-    updateCoordinates(lat, lon);
-  });
-  
-  // رویداد drag مارکر
-  locationMarker.on('dragend', function(e) {
-    const lat = e.target.getLatLng().lat;
-    const lon = e.target.getLatLng().lng;
-    updateCoordinates(lat, lon);
-  });
-  
-  // به‌روزرسانی مختصات هنگام تغییر دستی در فیلدها
-  latInput?.addEventListener('change', function() {
-    const lat = parseFloat(this.value);
-    const lon = parseFloat(lonInput?.value) || initialLon;
-    if (!isNaN(lat) && !isNaN(lon)) {
-      if (locationMarker) {
-        locationMarker.setLatLng([lat, lon]);
-        locationMap.setView([lat, lon], locationMap.getZoom());
-      }
-    }
-  });
-  
-  lonInput?.addEventListener('change', function() {
-    const lat = parseFloat(latInput?.value) || initialLat;
-    const lon = parseFloat(this.value);
-    if (!isNaN(lat) && !isNaN(lon)) {
-      if (locationMarker) {
-        locationMarker.setLatLng([lat, lon]);
-        locationMap.setView([lat, lon], locationMap.getZoom());
-      }
-    }
-  });
-}
-
-function updateCoordinates(lat, lon) {
-  const latInput = document.getElementById('latitude');
-  const lonInput = document.getElementById('longitude');
-  
-  if (latInput) {
-    latInput.value = lat.toFixed(6);
-  }
-  if (lonInput) {
-    lonInput.value = lon.toFixed(6);
-  }
-}
-
-// دریافت موقعیت فعلی دستگاه
-document.getElementById('getCurrentLocationBtn')?.addEventListener('click', function() {
-  const btn = this;
-  const originalText = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال دریافت...';
-  
-  if (!navigator.geolocation) {
-    alert('مرورگر شما از دریافت موقعیت جغرافیایی پشتیبانی نمی‌کند.');
-    btn.disabled = false;
-    btn.innerHTML = originalText;
-    return;
-  }
-  
-  navigator.geolocation.getCurrentPosition(
-    function(position) {
-      const lat = position.coords.latitude;
-      const lon = position.coords.longitude;
-      
-      if (locationMap && locationMarker) {
-        locationMarker.setLatLng([lat, lon]);
-        locationMap.setView([lat, lon], 15);
-        updateCoordinates(lat, lon);
-      } else if (locationMap) {
-        locationMarker = L.marker([lat, lon], {
-          draggable: true
-        }).addTo(locationMap);
-        locationMap.setView([lat, lon], 15);
-        updateCoordinates(lat, lon);
-        
-        locationMarker.on('dragend', function(e) {
-          const lat = e.target.getLatLng().lat;
-          const lon = e.target.getLatLng().lng;
-          updateCoordinates(lat, lon);
-        });
-      }
-      
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-    },
-    function(error) {
-      let errorMsg = 'خطا در دریافت موقعیت: ';
-      switch(error.code) {
-        case error.PERMISSION_DENIED:
-          errorMsg += 'دسترسی به موقعیت جغرافیایی رد شد.';
-          break;
-        case error.POSITION_UNAVAILABLE:
-          errorMsg += 'اطلاعات موقعیت در دسترس نیست.';
-          break;
-        case error.TIMEOUT:
-          errorMsg += 'زمان دریافت موقعیت به پایان رسید.';
-          break;
-        default:
-          errorMsg += 'خطای ناشناخته.';
-          break;
-      }
-      alert(errorMsg);
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-    },
-    {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0
-    }
-  );
-});
-
-// راه‌اندازی نقشه پس از بارگذاری صفحه
-let mapInitialized = false;
-function initMapIfNeeded() {
-  if (!mapInitialized && document.getElementById('locationMap') && typeof L !== 'undefined') {
-    initLocationMap();
-    mapInitialized = true;
-  }
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  // کمی تاخیر برای اطمینان از بارگذاری کامل Leaflet
-  setTimeout(initMapIfNeeded, 500);
-});
-
-// راه‌اندازی نقشه هنگام نمایش مرحله 1
-const originalShowStep = showStep;
-showStep = function(step) {
-  originalShowStep(step);
-  if (step === 1) {
-    setTimeout(initMapIfNeeded, 100);
-  }
-};
-
-// Real-time calculations - محاسبه لحظه‌ای قیمت در متر و پورسانت
-function setupRealTimeCalculations() {
-  const sizeEl = document.querySelector('input[name="size"]');
-  const priceEl = document.querySelector('input[name="price_total"]');
-  const commissionPctEl = document.getElementById('express_commission_pct');
-  
-  // محاسبه قیمت در متر و پورسانت هنگام تغییر متراژ
-  sizeEl?.addEventListener('input', () => {
-    setTimeout(updateSummary, 100); // کمی تاخیر برای اطمینان از به‌روزرسانی data-raw-value
-  });
-  
-  // محاسبه قیمت در متر و پورسانت هنگام تغییر قیمت کل
-  priceEl?.addEventListener('input', () => {
-    setTimeout(updateSummary, 100);
-  });
-  
-  // محاسبه پورسانت هنگام تغییر درصد
-  commissionPctEl?.addEventListener('input', () => {
-    updateSummary();
-  });
-  
-  // محاسبه هنگام blur (خروج از فیلد)
-  sizeEl?.addEventListener('blur', updateSummary);
-  priceEl?.addEventListener('blur', updateSummary);
-}
-
-setupRealTimeCalculations();
-
-// Number formatting - فقط برای نمایش، مقدار خام در data attribute
-(function(){
-  function formatInt(v){
-    const digits = String(v||'').replace(/[^\d]/g,'');
-    if (!digits) return '';
-    const n = parseInt(digits,10);
-    return isNaN(n) ? '' : n.toLocaleString('fa-IR');
-  }
-  
-  function parseNumber(str) {
-    if (!str) return 0;
-    // تبدیل اعداد فارسی به انگلیسی
-    const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
-    const englishDigits = '0123456789';
-    let cleaned = String(str);
-    for (let i = 0; i < persianDigits.length; i++) {
-      cleaned = cleaned.replace(new RegExp(persianDigits[i], 'g'), englishDigits[i]);
-    }
-    // حذف همه کاراکترهای غیر عددی
-    cleaned = cleaned.replace(/[^\d]/g, '');
-    return parseInt(cleaned, 10) || 0;
-  }
-  
-  function hook(el){
-    // فقط اجازه ورود اعداد (انگلیسی و فارسی) و کلیدهای کنترل
-    el.addEventListener('keydown', (e) => {
-      const key = e.key;
-      const isDigit = /[0-9۰-۹]/.test(key);
-      const isControl = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(key);
-      const isModifier = e.ctrlKey || e.metaKey || e.altKey;
-      
-      if (!isDigit && !isControl && !isModifier) {
-        e.preventDefault();
-      }
-    });
-    
-    // در هنگام تایپ: فقط اعداد را نگه دار، فرمت نکن
-    el.addEventListener('input', (e) => {
-      const raw = el.value || '';
-      const digits = raw.replace(/[^\d۰-۹]/g, '');
-      // تبدیل اعداد فارسی به انگلیسی برای ذخیره
-      const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
-      const englishDigits = '0123456789';
-      let cleaned = digits;
-      for (let i = 0; i < persianDigits.length; i++) {
-        cleaned = cleaned.replace(new RegExp(persianDigits[i], 'g'), englishDigits[i]);
-      }
-      
-      // ذخیره مقدار خام
-      el.dataset.rawValue = cleaned;
-      
-      // نمایش همان چیزی که کاربر تایپ کرده (بدون فرمت در حین تایپ)
-      el.value = digits;
-      
-      updateSummary();
-    });
-    
-    // فقط هنگام blur فرمت کن
-    el.addEventListener('blur', () => {
-      const num = parseNumber(el.value);
-      el.dataset.rawValue = num.toString();
-      if (num > 0) {
-        el.value = formatInt(num.toString());
-      } else {
-        el.value = '';
-        el.dataset.rawValue = '';
-      }
-      updateSummary();
-    });
-  }
-  document.querySelectorAll('[data-format-int]').forEach(hook);
-})();
-</script>
+<script src="{{ url_for('static', filename='admin/add-express-listing.js') }}" defer></script>
 {% endblock %}
-

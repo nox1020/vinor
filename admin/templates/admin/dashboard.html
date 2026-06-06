@@ -1,141 +1,236 @@
 {% extends 'admin/base_admin.html' %}
-
-{% block page_title %}داشبورد همکاران{% endblock %}
+{% block page_title %}داشبورد{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
-  
-  <!-- Stats Cards - فقط همکاران -->
-  <div class="grid grid-cols-2 lg:grid-cols-6 gap-4">
-    
-    <!-- همکاران تایید شده -->
-    <a href="{{ url_for('admin.express_partners') }}" 
-       class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition focusable">
-      <div class="flex items-center gap-3 mb-2">
-        <div class="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-          <i class="fa-solid fa-users text-gray-600 dark:text-gray-400 text-lg"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs text-gray-500 dark:text-gray-400">همکاران</p>
-          <p class="text-xl font-semibold text-gray-900 dark:text-white">{{ partners_count or 0 }}</p>
-        </div>
-      </div>
-    </a>
 
-    <!-- درخواست‌های در انتظار -->
-    <a href="{{ url_for('admin.express_partner_applications') }}" 
-       class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition focusable">
-      <div class="flex items-center gap-3 mb-2">
-        <div class="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-          <i class="fa-solid fa-clock text-gray-600 dark:text-gray-400 text-lg"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs text-gray-500 dark:text-gray-400">درخواست‌ها</p>
-          <p class="text-xl font-semibold text-gray-900 dark:text-white">{{ applications_count or 0 }}</p>
-        </div>
-      </div>
-    </a>
-
-    <!-- انتساب‌ها -->
-    <a href="{{ url_for('admin.express_assignments') }}" 
-       class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition focusable">
-      <div class="flex items-center gap-3 mb-2">
-        <div class="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-          <i class="fa-solid fa-link text-gray-600 dark:text-gray-400 text-lg"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs text-gray-500 dark:text-gray-400">انتساب‌ها</p>
-          <p class="text-xl font-semibold text-gray-900 dark:text-white">{{ assignments_count or 0 }}</p>
-        </div>
-      </div>
-    </a>
-
-    <!-- پورسانت‌ها -->
-    <a href="{{ url_for('admin.express_commissions') }}" 
-       class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition focusable">
-      <div class="flex items-center gap-3 mb-2">
-        <div class="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-          <i class="fa-solid fa-wallet text-gray-600 dark:text-gray-400 text-lg"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs text-gray-500 dark:text-gray-400">پورسانت‌ها</p>
-          <p class="text-xl font-semibold text-gray-900 dark:text-white">{{ commissions_count or 0 }}</p>
-        </div>
-      </div>
-    </a>
-
-    <!-- کاربران آنلاین -->
-    <a href="{{ url_for('admin.online_users') }}" 
-       class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition focusable">
-      <div class="flex items-center gap-3 mb-2">
-        <div class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-          <i class="fa-solid fa-circle text-green-500 dark:text-green-400 text-lg"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs text-gray-500 dark:text-gray-400">کاربران آنلاین</p>
-          <p class="text-xl font-semibold text-gray-900 dark:text-white">{{ online_users_count or 0 }}</p>
-        </div>
-      </div>
-    </a>
-
-    <!-- همکاران آنلاین -->
-    <a href="{{ url_for('admin.online_partners') }}"
-       class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition focusable">
-      <div class="flex items-center gap-3 mb-2">
-        <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-          <i class="fa-solid fa-user-check text-blue-500 dark:text-blue-400 text-lg"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs text-gray-500 dark:text-gray-400">همکاران آنلاین</p>
-          <p class="text-xl font-semibold text-gray-900 dark:text-white">{{ online_partners_count or 0 }}</p>
-        </div>
-      </div>
-    </a>
-
-    <!-- فعالیت روتین همکاران -->
-    <a href="{{ url_for('admin.partners_activity') }}"
-       class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition focusable">
-      <div class="flex items-center gap-3 mb-2">
-        <div class="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
-          <i class="fa-solid fa-bolt text-amber-600 dark:text-amber-400 text-lg"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs text-gray-500 dark:text-gray-400">روزهای روتین ثبت‌شده (ماه)</p>
-          <p class="text-xl font-semibold text-gray-900 dark:text-white">{{ routines_count_month or 0 }}</p>
-        </div>
-      </div>
-    </a>
-
-    <!-- بازدید لندینگ -->
-    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-      <div class="flex items-center gap-3 mb-2">
-        <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-          <i class="fa-solid fa-chart-line text-purple-500 dark:text-purple-400 text-lg"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs text-gray-500 dark:text-gray-400">بازدید لندینگ</p>
-          <p class="text-xl font-semibold text-gray-900 dark:text-white">{{ landing_views_count or 0 }}</p>
-        </div>
-      </div>
-      <div class="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-        <div class="flex items-center justify-between text-xs">
-          <span class="text-gray-500 dark:text-gray-400">امروز</span>
-          <span class="font-medium text-gray-900 dark:text-white">{{ landing_views_today or 0 }}</span>
-        </div>
-        <div class="flex items-center justify-between text-xs mt-1">
-          <span class="text-gray-500 dark:text-gray-400">۷ روز گذشته</span>
-          <span class="font-medium text-gray-900 dark:text-white">{{ landing_views_7d or 0 }}</span>
-        </div>
-      </div>
+  <!-- خوش‌آمد + خلاصه -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-bold text-gray-900 dark:text-white">خلاصه امروز</h2>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+        {% if pending_actions_total and pending_actions_total > 0 %}
+          <span class="text-amber-600 dark:text-amber-400 font-medium">{{ pending_actions_total }} مورد</span> منتظر اقدام شماست.
+        {% else %}
+          همه چیز به‌روز است — مورد فوری در صف نیست.
+        {% endif %}
+      </p>
     </div>
-
+    <a href="{{ url_for('admin.express_partners') }}"
+       class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition">
+      <i class="fa-solid fa-users"></i>
+      کاربران و همکاران
+    </a>
   </div>
 
-  <!-- Quick Actions - Divar Style -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-    
+  <!-- نیاز به اقدام -->
+  <section>
+    <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 px-1">نیاز به اقدام</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+
+      <a href="{{ url_for('admin.express_partners', filter='pending') }}"
+         class="relative rounded-xl border p-4 transition hover:shadow-md focusable
+                {% if pending_apps_count %}border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10{% else %}border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900{% endif %}">
+        {% if pending_apps_count %}<span class="absolute top-3 left-3 w-2 h-2 rounded-full bg-amber-500"></span>{% endif %}
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg grid place-items-center {% if pending_apps_count %}bg-amber-100 dark:bg-amber-900/40 text-amber-600{% else %}bg-gray-100 dark:bg-gray-800 text-gray-400{% endif %}">
+            <i class="fa-solid fa-user-clock"></i>
+          </div>
+          <div>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400">درخواست همکاری</p>
+            <p class="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ pending_apps_count or 0 }}</p>
+          </div>
+        </div>
+      </a>
+
+      <a href="{{ url_for('admin.express_commissions') }}"
+         class="relative rounded-xl border p-4 transition hover:shadow-md focusable
+                {% if pending_commissions_count %}border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10{% else %}border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900{% endif %}">
+        {% if pending_commissions_count %}<span class="absolute top-3 left-3 w-2 h-2 rounded-full bg-blue-500"></span>{% endif %}
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg grid place-items-center {% if pending_commissions_count %}bg-blue-100 dark:bg-blue-900/40 text-blue-600{% else %}bg-gray-100 dark:bg-gray-800 text-gray-400{% endif %}">
+            <i class="fa-solid fa-wallet"></i>
+          </div>
+          <div>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400">پورسانت</p>
+            <p class="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ pending_commissions_count or 0 }}</p>
+          </div>
+        </div>
+      </a>
+
+      <a href="{{ url_for('admin.financial_withdrawals', filter='pending') }}"
+         class="relative rounded-xl border p-4 transition hover:shadow-md focusable
+                {% if pending_withdrawals_count %}border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10{% else %}border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900{% endif %}">
+        {% if pending_withdrawals_count %}<span class="absolute top-3 left-3 w-2 h-2 rounded-full bg-emerald-500"></span>{% endif %}
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg grid place-items-center {% if pending_withdrawals_count %}bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600{% else %}bg-gray-100 dark:bg-gray-800 text-gray-400{% endif %}">
+            <i class="fa-solid fa-money-bill-transfer"></i>
+          </div>
+          <div>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400">برداشت</p>
+            <p class="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ pending_withdrawals_count or 0 }}</p>
+          </div>
+        </div>
+      </a>
+
+      <a href="{{ url_for('admin.express_visit_requests') }}"
+         class="relative rounded-xl border p-4 transition hover:shadow-md focusable
+                {% if pending_visits_count %}border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/10{% else %}border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900{% endif %}">
+        {% if pending_visits_count %}<span class="absolute top-3 left-3 w-2 h-2 rounded-full bg-indigo-500"></span>{% endif %}
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg grid place-items-center {% if pending_visits_count %}bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600{% else %}bg-gray-100 dark:bg-gray-800 text-gray-400{% endif %}">
+            <i class="fa-solid fa-calendar-check"></i>
+          </div>
+          <div>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400">بازدید</p>
+            <p class="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ pending_visits_count or 0 }}</p>
+          </div>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- صف کار -->
+    <section class="lg:col-span-2 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+        <h3 class="text-sm font-bold text-gray-900 dark:text-white">صف کار اخیر</h3>
+        <span class="text-[11px] text-gray-400">{{ action_queue|length if action_queue else 0 }} مورد</span>
+      </div>
+      {% if action_queue and action_queue|length > 0 %}
+        <ul class="divide-y divide-gray-100 dark:divide-gray-800">
+          {% for item in action_queue %}
+            <li>
+              <a href="{{ item.url }}" class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-950/50 transition">
+                <div class="w-9 h-9 rounded-lg grid place-items-center shrink-0
+                            {% if item.tone == 'amber' %}bg-amber-100 dark:bg-amber-900/30 text-amber-600
+                            {% elif item.tone == 'blue' %}bg-blue-100 dark:bg-blue-900/30 text-blue-600
+                            {% elif item.tone == 'emerald' %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600
+                            {% else %}bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600{% endif %}">
+                  <i class="fa-solid {{ item.icon }} text-sm"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white truncate">{{ item.title }}</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ item.meta }}</p>
+                </div>
+                {% if item.ts %}
+                  <span class="text-[10px] text-gray-400 shrink-0 jalali-dt" data-dt="{{ item.ts }}"></span>
+                {% endif %}
+                <i class="fa-solid fa-chevron-left text-[10px] text-gray-300 dark:text-gray-600 shrink-0"></i>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="px-4 py-10 text-center">
+          <i class="fa-solid fa-circle-check text-3xl text-emerald-400 mb-2"></i>
+          <p class="text-sm text-gray-500 dark:text-gray-400">مورد معلقی برای بررسی نیست.</p>
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- آنلاین + میانبر -->
+    <div class="space-y-4">
+
+      <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+          <h3 class="text-sm font-bold text-gray-900 dark:text-white">همکاران آنلاین</h3>
+          <a href="{{ url_for('admin.express_partners', filter='online') }}" class="text-[11px] text-blue-600 dark:text-blue-400">همه</a>
+        </div>
+        {% if online_preview and online_preview|length > 0 %}
+          <ul class="divide-y divide-gray-100 dark:divide-gray-800">
+            {% for p in online_preview %}
+              <li>
+                <a href="{{ p.url }}" class="flex items-center gap-2.5 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-950/50">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ p.name }}</p>
+                    <p class="text-[10px] text-gray-400 font-mono ltr" dir="ltr">{{ p.phone }}</p>
+                  </div>
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="px-4 py-6 text-sm text-center text-gray-400">همکار آنلاینی نیست.</p>
+        {% endif %}
+      </section>
+
+      <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+        <h3 class="text-sm font-bold text-gray-900 dark:text-white mb-3">دسترسی سریع</h3>
+        <div class="grid grid-cols-2 gap-2">
+          {% set shortcuts = [
+            (url_for('admin.add_express_listing'), 'fa-plus', 'ثبت آگهی'),
+            (url_for('admin.express_assignments'), 'fa-link', 'انتساب'),
+            (url_for('admin.express_commissions'), 'fa-wallet', 'پورسانت'),
+            (url_for('admin.financial_withdrawals'), 'fa-money-bill-transfer', 'برداشت'),
+            (url_for('admin.notifications_colleagues'), 'fa-bell', 'اعلان'),
+            (url_for('admin.sms_colleagues'), 'fa-sms', 'پیامک'),
+          ] %}
+          {% for href, icon, label in shortcuts %}
+            <a href="{{ href }}" class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition text-center">
+              <i class="fa-solid {{ icon }} text-gray-600 dark:text-gray-400"></i>
+              <span class="text-[11px] font-medium text-gray-700 dark:text-gray-300">{{ label }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      </section>
+
+    </div>
   </div>
+
+  <!-- نمای کلی -->
+  <section>
+    <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 px-1">نمای کلی</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {% set overview = [
+        ('کل اشخاص', people_total or 0, url_for('admin.express_partners'), ''),
+        ('همکار تأیید', partners_count or 0, url_for('admin.express_partners', filter='partners'), ''),
+        ('انتساب فعال', assignments_active_count or 0, url_for('admin.express_assignments'), 'از ' ~ (assignments_total_count or 0)),
+        ('آگهی Express', express_listings_count or 0, url_for('admin.express_listings'), ''),
+        ('روتین این ماه', routines_count_month or 0, url_for('admin.express_partners'), 'روز ثبت‌شده'),
+        ('کاربر آنلاین', online_users_count or 0, url_for('admin.online_users'), 'سایت'),
+      ] %}
+      {% for label, value, href, sub in overview %}
+        <a href="{{ href }}" class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 hover:border-gray-300 dark:hover:border-gray-600 transition">
+          <p class="text-[10px] text-gray-500 dark:text-gray-400">{{ label }}</p>
+          <p class="text-xl font-bold tabular-nums text-gray-900 dark:text-white mt-0.5">{{ value }}</p>
+          {% if sub %}<p class="text-[10px] text-gray-400 mt-0.5">{{ sub }}</p>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% if pending_commissions_amount or pending_withdrawals_amount %}
+  <section class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950/50 px-4 py-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
+    {% if pending_commissions_amount %}
+      <span><i class="fa-solid fa-wallet ml-1 text-blue-500"></i>پورسانت در انتظار: <strong class="tabular-nums text-gray-900 dark:text-white">{{ "{:,}".format(pending_commissions_amount) }}</strong> ت</span>
+    {% endif %}
+    {% if pending_withdrawals_amount %}
+      <span><i class="fa-solid fa-money-bill-transfer ml-1 text-emerald-500"></i>برداشت در انتظار: <strong class="tabular-nums text-gray-900 dark:text-white">{{ "{:,}".format(pending_withdrawals_amount) }}</strong> ت</span>
+    {% endif %}
+    {% if open_withdrawals_count and open_withdrawals_count > pending_withdrawals_count %}
+      <span><i class="fa-solid fa-hourglass-half ml-1 text-amber-500"></i>{{ open_withdrawals_count }} برداشت در کل فرایند</span>
+    {% endif %}
+  </section>
+  {% endif %}
 
 </div>
-{% endblock %}
 
+<script>
+(function(){
+  function fmt(dt){
+    try{
+      const d = new Date(String(dt||'').replace(' ','T'));
+      if (isNaN(d)) return '';
+      return d.toLocaleString('fa-IR', { timeZone: 'Asia/Tehran', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    }catch(_){ return ''; }
+  }
+  document.querySelectorAll('.jalali-dt[data-dt]').forEach(el=>{
+    el.textContent = fmt(el.getAttribute('data-dt')||'') || '';
+  });
+})();
+</script>
+{% endblock %}
