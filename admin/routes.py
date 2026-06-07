@@ -420,10 +420,14 @@ def _default_settings() -> Dict[str, Any]:
         'approval_method': 'manual',
         'ad_expiry_days': 30,  # 0 = نامحدود
         'show_submit_button': True,
+        'ad_post_price_toman': 10000,
         # Android APK info
         'android_apk_url': '',
         'android_apk_version': '',
         'android_apk_updated_at': '',
+        'android_apk_size_bytes': '',
+        'android_apk_sha256': '',
+        'android_apk_original_name': '',
         # تنظیمات SMS
         'sms_line_number': '300089930616',  # شماره خط اختصاصی SMS
         # پیام درخواست همکاری (برای همکار)
@@ -437,23 +441,22 @@ def _default_settings() -> Dict[str, Any]:
     }
 
 def get_settings() -> Dict[str, Any]:
-    settings_file = _settings_path()
-    data: Dict[str, Any] = {}
-    if os.path.exists(settings_file):
-        with open(settings_file, 'r', encoding='utf-8') as f:
-            try:
-                data = json.load(f) or {}
-            except json.JSONDecodeError:
-                data = {}
+    from app.utils.storage import load_settings
+
+    data: Dict[str, Any] = dict(load_settings() or {})
     defaults = _default_settings()
     for k, v in defaults.items():
         data.setdefault(k, v)
     return data
 
 def save_settings(new_data: Dict[str, Any]) -> None:
+    from app.utils.storage import ensure_file, _SETTINGS_CACHE
+
     data = get_settings()
     data.update({k: v for k, v in new_data.items() if v is not None})
-    save_json(_settings_path(), data)
+    path = ensure_file('SETTINGS_FILE', 'settings.json', _default_settings())
+    save_json(path, data)
+    _SETTINGS_CACHE.update({"path": None, "mtime": None, "size": None, "data": None})
 
 # -----------------------------------------------------------------------------
 # تاریخ/زمان
@@ -1875,7 +1878,10 @@ def notifications_test():
 @login_required
 def settings():
     if request.method == 'POST':
+        defaults = _default_settings()
         approval_method = request.form.get('approval_method', 'manual')
+        if approval_method not in ('manual', 'auto'):
+            approval_method = 'manual'
 
         # مقدار انتخابی از UI: 0 (نامحدود) یا 30/60/90
         raw_exp = request.form.get('ad_expiry_days', '30')
@@ -1896,21 +1902,34 @@ def settings():
             post_price_toman = 0
 
         # تنظیمات SMS
-        sms_line_number = request.form.get('sms_line_number', '300089930616') or '300089930616'
-        partner_application_sms_message = request.form.get('partner_application_sms_message', '').strip()
-        partner_approval_sms_message = request.form.get('partner_approval_sms_message', '').strip()
-        partner_application_admin_phone = (request.form.get('partner_application_admin_phone', '').strip() or
-                                           '09121471301')
-        partner_application_admin_sms_message = request.form.get('partner_application_admin_sms_message', '').strip()
+        sms_line_number = (request.form.get('sms_line_number', '').strip()
+                           or defaults['sms_line_number'])
+        partner_application_sms_message = (
+            request.form.get('partner_application_sms_message', '').strip()
+            or defaults['partner_application_sms_message']
+        )
+        partner_approval_sms_message = (
+            request.form.get('partner_approval_sms_message', '').strip()
+            or defaults['partner_approval_sms_message']
+        )
+        partner_application_admin_phone = (
+            request.form.get('partner_application_admin_phone', '').strip()
+            or defaults['partner_application_admin_phone']
+        )
+        partner_application_admin_sms_message = (
+            request.form.get('partner_application_admin_sms_message', '').strip()
+            or defaults['partner_application_admin_sms_message']
+        )
 
         # Android APK upload/version
         android_apk_version = (request.form.get('android_apk_version') or '').strip()
         android_apk_url = None
         f = request.files.get('android_apk')
+        apk_uploaded = bool(f and f.filename)
         android_apk_size_bytes = None
         android_apk_sha256 = None
         android_apk_original_name = None
-        if f and f.filename:
+        if apk_uploaded:
             try:
                 # Validate extension and (approx) size
                 fname_lower = f.filename.lower()
@@ -1956,7 +1975,10 @@ def settings():
         current = get_settings()
         if android_apk_url is None:
             android_apk_url = current.get('android_apk_url', '') or ''
-        android_apk_updated_at = datetime.utcnow().isoformat() + 'Z' if android_apk_url else (current.get('android_apk_updated_at') or '')
+        if apk_uploaded and android_apk_url:
+            android_apk_updated_at = datetime.utcnow().isoformat() + 'Z'
+        else:
+            android_apk_updated_at = current.get('android_apk_updated_at') or ''
         if not android_apk_version:
             android_apk_version = current.get('android_apk_version', '') or ''
         if android_apk_original_name is None:
@@ -2553,6 +2575,48 @@ def reject_land(code):
 # -----------------------------------------------------------------------------
 # Express Listings Management
 # -----------------------------------------------------------------------------
+def _express_land_price_int(land: Dict[str, Any]) -> int:
+    try:
+        raw = str(land.get('price_total') or land.get('price') or '0').replace(',', '').strip()
+        return int(raw) if raw else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def _enrich_admin_express_land(
+    land: Dict[str, Any],
+    *,
+    public_views: int = 0,
+    partner_views: int = 0,
+    assignment_count: int = 0,
+) -> Dict[str, Any]:
+    """فیلدهای نمایشی کارت پریمیوم ادمین."""
+    express_status = str(land.get('express_status') or land.get('status') or 'approved').strip().lower()
+    land['_assignment_status'] = 'sold' if express_status == 'sold' else 'active'
+
+    extras = land.get('extras') if isinstance(land.get('extras'), dict) else {}
+    pct_raw = extras.get('express_commission_pct', land.get('express_commission_pct'))
+    try:
+        pct = float(pct_raw) if pct_raw not in (None, '') else 0.0
+    except (TypeError, ValueError):
+        pct = 0.0
+    land['_commission_pct'] = pct
+
+    price_int = _express_land_price_int(land)
+    comm_amt = extras.get('express_commission_amount')
+    if comm_amt in (None, '') and price_int and pct:
+        comm_amt = int(round(price_int * (pct / 100.0)))
+    try:
+        land['_commission_amount'] = int(comm_amt or 0)
+    except (TypeError, ValueError):
+        land['_commission_amount'] = 0
+
+    land['_public_views_count'] = public_views
+    land['_partner_views_count'] = partner_views
+    land['_assignment_count'] = assignment_count
+    return land
+
+
 @admin_bp.route('/express')
 @login_required
 def express_listings():
@@ -2560,57 +2624,89 @@ def express_listings():
     cleanup_expired_ads()
     lands_data = load_json(_lands_path())
     lands_list = lands_data if isinstance(lands_data, list) else []
-    
-    # فیلتر آگهی‌های اکسپرس
-    express_lands = [land for land in lands_list if land.get('is_express', False)]
-    
-    # محاسبه تعداد بازدید هر فایل (عمومی + همکاران)
-    # بازدیدهای عمومی
+
+    express_all = [land for land in lands_list if land.get('is_express', False)]
+
     public_views_data = load_express_views() or []
     if not isinstance(public_views_data, list):
         public_views_data = []
-    
-    # بازدیدهای همکاران
+
     partner_views_data = load_express_partner_views() or []
     if not isinstance(partner_views_data, list):
         partner_views_data = []
-    
-    # شمارش بازدیدهای عمومی بر اساس code
-    public_views_count_by_code = {}
+
+    public_views_count_by_code: Dict[str, int] = {}
     for v in public_views_data:
         try:
-            v_code = v.get('code', '')
+            v_code = str(v.get('code') or '')
             if v_code:
                 public_views_count_by_code[v_code] = public_views_count_by_code.get(v_code, 0) + 1
         except Exception:
             pass
-    
-    # شمارش بازدیدهای همکاران بر اساس code
-    partner_views_count_by_code = {}
+
+    partner_views_count_by_code: Dict[str, int] = {}
     for v in partner_views_data:
         try:
-            v_code = v.get('code', '')
+            v_code = str(v.get('code') or '')
             if v_code:
                 partner_views_count_by_code[v_code] = partner_views_count_by_code.get(v_code, 0) + 1
         except Exception:
             pass
-    
-    # اضافه کردن تعداد بازدید به هر فایل
+
+    assignment_count_by_code: Dict[str, int] = {}
+    for a in (load_express_assignments() or []):
+        try:
+            code = str(a.get('land_code') or '')
+            if code:
+                assignment_count_by_code[code] = assignment_count_by_code.get(code, 0) + 1
+        except Exception:
+            pass
+
+    filter_kind = (request.args.get('filter') or 'all').strip().lower()
+    express_lands = list(express_all)
+    if filter_kind == 'sold':
+        express_lands = [
+            l for l in express_lands
+            if str(l.get('express_status') or '').strip().lower() == 'sold'
+        ]
+    elif filter_kind == 'active':
+        express_lands = [
+            l for l in express_lands
+            if str(l.get('express_status') or '').strip().lower() != 'sold'
+        ]
+
     for land in express_lands:
-        land_code = land.get('code', '')
-        land['_public_views_count'] = public_views_count_by_code.get(land_code, 0)
-        land['_partner_views_count'] = partner_views_count_by_code.get(land_code, 0)
-    
+        code = str(land.get('code') or '')
+        _enrich_admin_express_land(
+            land,
+            public_views=public_views_count_by_code.get(code, 0),
+            partner_views=partner_views_count_by_code.get(code, 0),
+            assignment_count=assignment_count_by_code.get(code, 0),
+        )
+
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", PER_PAGE_DEFAULT))
     pagination = paginate(express_lands, page, per_page)
-    
-    p, a, r = counts_by_status(express_lands)
+
+    sold_count = sum(
+        1 for l in express_all
+        if str(l.get('express_status') or '').strip().lower() == 'sold'
+    )
+    stats = {
+        'total': len(express_all),
+        'active': len(express_all) - sold_count,
+        'sold': sold_count,
+        'shown': len(express_lands),
+    }
+
+    p, a, r = counts_by_status(express_all)
     return render_template(
         'admin/express_listings.html',
         lands=pagination["items"],
         pagination={"page": pagination["page"], "pages": pagination["pages"]},
-        pending_count=p, approved_count=a, rejected_count=r
+        pending_count=p, approved_count=a, rejected_count=r,
+        filter_kind=filter_kind,
+        stats=stats,
     )
 
 

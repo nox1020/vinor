@@ -20,6 +20,7 @@
       {% if show_call %}
       <button type="button"
               data-land-open-contact
+              data-tour="contact-btn"
               class="flex items-center justify-center gap-2 rounded-2xl bg-[#22c55e] hover:bg-green-400 text-white font-bold py-3.5 text-sm shadow-lg shadow-green-900/25 active:scale-[0.98] transition-all">
         <i class="fas fa-phone" aria-hidden="true"></i>
         تماس
@@ -30,6 +31,7 @@
       <button type="button"
               id="landTxToggleBtn"
               data-land-tx-toggle
+              data-tour="transaction-btn"
               data-land-tx-mode="{{ tx_mode }}"
               data-land-tx-url="{{ url_for('express_partner.mark_in_transaction', code=land.code) }}"
               data-visit-request-url="{{ url_for('express_partner.create_visit_request', code=land.code) }}"

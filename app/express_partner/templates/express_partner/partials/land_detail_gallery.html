@@ -9,7 +9,7 @@
 {% set primary_v2 = images_v2[0] if images_v2 else none %}
 {% set total_items = (1 if has_video else 0) + images|length %}
 
-<section class="ld-gallery relative" aria-label="گالری فایل">
+<section class="ld-gallery relative" aria-label="گالری فایل" data-tour="land-image">
   <div id="landGallery" class="ld-gallery__stage aspect-[5/4] sm:aspect-[4/3] bg-black relative overflow-hidden max-lg:rounded-b-[1.75rem] select-none touch-pan-y">
     {% if has_video or primary_image %}
     <div id="landMediaLoading" class="ld-gallery__loader is-visible pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/40 opacity-100 transition-opacity duration-200" aria-hidden="false">
@@ -109,7 +109,7 @@
           <i class="far fa-bookmark vinor-fav-icon text-sm" aria-hidden="true"></i>
         </button>
         {% endif %}
-        <button type="button" id="landDetailShareBtn" class="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-sm" aria-label="اشتراک">
+        <button type="button" id="landDetailShareBtn" data-tour="share-btn" class="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-sm" aria-label="اشتراک">
           <i class="fas fa-share-nodes text-sm" aria-hidden="true"></i>
         </button>
         <div class="relative">

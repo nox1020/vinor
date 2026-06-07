@@ -1,10 +1,13 @@
-{# داشبورد همکار - گرید کارت‌ها در دسکتاپ #}
+{# دسکتاپ — گرید دو ستونه کارت افقی (الگوی دیوار) #}
+{% include 'express_partner/partials/dashboard_guest_coop_cta.html' %}
 {% if assigned_lands|length == 0 %}
   {% include 'express_partner/partials/dashboard_empty_state.html' %}
 {% else %}
-  <div id="cardsGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+  <div id="cardsGrid" class="grid grid-cols-2 gap-3">
     {% for land in assigned_lands %}
-      {% set tour_land_card = false %}
+      {% set tour_land_card = loop.first %}
+      {% set card_img_eager = loop.index <= 4 %}
+      {% set card_layout = 'horizontal' %}
       {% include 'express_partner/partials/land_premium_card.html' %}
     {% endfor %}
   </div>

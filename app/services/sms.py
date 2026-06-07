@@ -40,6 +40,31 @@ def is_valid_iran_mobile(phone: str) -> bool:
     return bool(phone) and len(phone) == 11 and phone.startswith("09")
 
 
+def sms_is_infrastructure_error(error: object) -> bool:
+    """خطاهای شبکه/اتصال — کاربر نباید پیام خطای پیامک ببیند."""
+    if error is None:
+        return True
+    e = str(error).lower()
+    if e in ("invalid_mobile",):
+        return False
+    markers = (
+        "connection",
+        "connectionpool",
+        "timeout",
+        "timed out",
+        "getaddrinfo",
+        "name resolution",
+        "failed to resolve",
+        "max retries",
+        "network",
+        "refused",
+        "unreachable",
+        "ssl",
+        "certificate",
+    )
+    return any(m in e for m in markers)
+
+
 def normalize_otp_code(code: str) -> str:
     """کد OTP — فقط ارقام لاتین، حداکثر ۵ رقم."""
     if not code:

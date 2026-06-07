@@ -1,0 +1,182 @@
+{# کارت پریمیوم آگهی اکسپرس — سبک پنل همکار + اکشن‌های ادمین #}
+{% set img = (land.images[0] if land.images and land.images[0] else None) %}
+{% set photo_count = land.images|length if land.images else 0 %}
+{% set _st = (land._assignment_status|default('active')|string)|lower|trim %}
+{% set _is_sold = (_st == 'sold') %}
+{% set footer_stats = land_card_footer_stats(land) %}
+{% set loc_line = ([land.city, land.location]|select|join('، ')) if (land.city or land.location) else '' %}
+
+{% if img %}
+  {% if "://" in (img|string) %}
+    {% set img_src = img %}
+  {% elif (img|string).startswith('/uploads/') %}
+    {% set img_src = img %}
+  {% elif (img|string).startswith('uploads/') %}
+    {% set img_src = '/uploads/' + (img|string)[8:] %}
+  {% elif not (img|string).startswith('/') %}
+    {% set img_src = '/uploads/' + (img|string) %}
+  {% else %}
+    {% set img_src = img %}
+  {% endif %}
+{% endif %}
+
+{% set video = land.video %}
+{% if video %}
+  {% if "://" in (video|string) %}
+    {% set video_src = video %}
+  {% elif (video|string).startswith('/uploads/') %}
+    {% set video_src = video %}
+  {% elif (video|string).startswith('uploads/') %}
+    {% set video_src = '/uploads/' + (video|string)[8:] %}
+  {% elif not (video|string).startswith('/') %}
+    {% set video_src = '/uploads/' + (video|string) %}
+  {% else %}
+    {% set video_src = video %}
+  {% endif %}
+{% endif %}
+
+<article class="admin-express-card express-card vinor-premium-card relative w-full rounded-2xl overflow-hidden border border-white/10 shadow-md bg-[#0f1419] max-sm:bg-[#121a22]{% if _is_sold %} admin-card-sold{% endif %}">
+
+  {# ——— موبایل: افقی ——— #}
+  <div class="vinor-premium-card-mobile flex sm:hidden flex-col">
+    <div class="flex flex-row items-stretch min-h-[9.5rem]">
+      <div class="relative w-[38%] max-w-[9.5rem] shrink-0 p-2.5 pe-1.5" data-img-wrap>
+        <div class="card-img-loading pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl transition-opacity duration-300">
+          <div class="vinor-card-load-ring" aria-hidden="true"></div>
+        </div>
+        <div class="relative h-full min-h-[7.5rem] rounded-xl overflow-hidden bg-[#1a2332]">
+          {% if video %}
+          <video class="absolute inset-0 w-full h-full object-cover opacity-0" muted loop playsinline preload="none" data-vinor-lazy-video>
+            <source data-src="{{ video_src }}" type="video/mp4">
+            {% if img_src %}
+            <img src="{{ img_src }}" alt="" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+            {% endif %}
+          </video>
+          {% elif img_src %}
+          <img src="{{ img_src }}" alt="{{ land.title or '' }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+          {% else %}
+          <div class="absolute inset-0 grid place-items-center text-neutral-500">
+            <i class="fas fa-image text-2xl opacity-50"></i>
+          </div>
+          {% endif %}
+          {% if photo_count > 0 %}
+          <span class="pointer-events-none absolute bottom-1.5 end-1.5 z-10 inline-flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+            <i class="fas fa-camera text-[9px] opacity-80"></i>{{ photo_count }}
+          </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="flex min-w-0 flex-1 flex-col justify-between gap-2 py-2.5 ps-1 pe-1.5">
+        <div class="min-w-0 space-y-1.5">
+          <div class="flex flex-wrap items-center gap-1">
+            {% if _is_sold %}
+            <span class="inline-flex rounded-md bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">فروخته شد</span>
+            {% else %}
+            <span class="inline-flex rounded-md bg-[#d4b996] px-1.5 py-0.5 text-[9px] font-bold text-neutral-900">اکسپرس</span>
+            {% endif %}
+            <span class="inline-flex rounded-md bg-black/40 px-1.5 py-0.5 text-[9px] text-white/80 tabular-nums">#{{ land.code }}</span>
+          </div>
+          <h3 class="text-[15px] font-bold leading-snug text-white line-clamp-2">{{ land.title or '—' }}</h3>
+          {% if loc_line %}
+          <p class="flex items-center gap-1 text-[11px] text-slate-400 truncate">
+            <i class="fas fa-location-dot text-[10px] shrink-0 text-slate-500"></i>
+            <span class="truncate">{{ loc_line }}</span>
+          </p>
+          {% endif %}
+          <p class="text-sm font-bold text-white tabular-nums leading-tight">{{ (land.price_total or 0)|toman }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2 text-[10px] text-slate-400">
+          <span title="بازدید عمومی"><i class="fas fa-globe text-blue-400"></i> {{ land._public_views_count or 0 }}</span>
+          <span title="بازدید همکار"><i class="fas fa-users text-emerald-400"></i> {{ land._partner_views_count or 0 }}</span>
+          <span title="انتساب"><i class="fas fa-user-check text-amber-400"></i> {{ land._assignment_count or 0 }}</span>
+          {% if land._commission_amount %}
+          <span class="text-emerald-400/90">{{ (land._commission_amount or 0)|toman }} {% if land._commission_pct %}({{ land._commission_pct }}٪){% endif %}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% include 'admin/partials/express_listing_card_actions.html' %}
+  </div>
+
+  {# ——— دسکتاپ: عمودی ——— #}
+  <div class="hidden sm:flex sm:flex-col">
+    <div class="relative aspect-[3/4] min-h-[300px] bg-[#111827]" data-img-wrap>
+      <div class="card-img-loading pointer-events-none absolute inset-0 z-20 flex items-center justify-center transition-opacity duration-300">
+        <div class="vinor-card-load-ring" aria-hidden="true"></div>
+      </div>
+
+      {% if video %}
+      <video class="absolute inset-0 w-full h-full object-cover opacity-0" muted loop playsinline preload="none" data-vinor-lazy-video>
+        <source data-src="{{ video_src }}" type="video/mp4">
+        {% if img_src %}
+        <img src="{{ img_src }}" alt="{{ land.title or '' }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+        {% endif %}
+      </video>
+      {% elif img_src %}
+      <img src="{{ img_src }}" alt="{{ land.title or '' }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+      {% else %}
+      <div class="absolute inset-0 grid place-items-center text-neutral-500">
+        <i class="fas fa-image text-4xl opacity-60"></i>
+      </div>
+      {% endif %}
+
+      <div class="absolute inset-0 bg-gradient-to-t from-[#030712] via-[#030712]/55 to-transparent z-[1]"></div>
+
+      <div class="absolute top-3 z-10 flex w-full items-start justify-between px-3 pointer-events-none">
+        <span class="rounded-lg bg-black/45 px-2 py-1 text-[10px] font-medium text-white/90 backdrop-blur-sm tabular-nums">#{{ land.code }}</span>
+        {% if _is_sold %}
+        <span class="rounded-lg bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">فروخته شد</span>
+        {% else %}
+        <span class="rounded-lg bg-[#d4b996] px-2.5 py-1 text-[11px] font-bold text-neutral-900 shadow-sm">اکسپرس</span>
+        {% endif %}
+      </div>
+
+      <div class="absolute top-14 z-10 flex flex-wrap gap-1.5 px-3 pointer-events-none">
+        <span class="inline-flex items-center gap-1 rounded-md bg-black/45 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
+          <i class="fas fa-globe text-blue-300 text-[9px]"></i>{{ land._public_views_count or 0 }}
+        </span>
+        <span class="inline-flex items-center gap-1 rounded-md bg-black/45 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
+          <i class="fas fa-users text-emerald-300 text-[9px]"></i>{{ land._partner_views_count or 0 }}
+        </span>
+        <span class="inline-flex items-center gap-1 rounded-md bg-black/45 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
+          <i class="fas fa-user-check text-amber-300 text-[9px]"></i>{{ land._assignment_count or 0 }} انتساب
+        </span>
+      </div>
+
+      <div class="land-card-title-block absolute bottom-[4.25rem] left-0 right-0 z-10 px-3 pb-2 pt-6 flex flex-col gap-2">
+        <div class="min-w-0 text-end">
+          <h3 class="text-lg font-bold text-white leading-snug line-clamp-2 drop-shadow-md">{{ land.title or '—' }}</h3>
+          {% if loc_line %}
+          <p class="mt-1 flex items-center justify-end gap-1 text-xs text-white/85">
+            <span class="truncate">{{ loc_line }}</span>
+            <i class="fas fa-location-dot text-[11px] text-white/70 shrink-0"></i>
+          </p>
+          {% endif %}
+          {% if land._commission_amount %}
+          <p class="mt-1 text-[11px] font-medium text-emerald-300">
+            پورسانت: {{ (land._commission_amount or 0)|toman }}
+            {% if land._commission_pct %}<span class="text-emerald-400/90">({{ land._commission_pct }}٪)</span>{% endif %}
+          </p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="absolute bottom-0 left-0 right-0 z-10 flex border-t border-white/10 bg-[#030712]/90 backdrop-blur-md text-white divide-x divide-white/15 rtl:divide-x-reverse">
+        {% for st in footer_stats %}
+        <div class="flex-1 min-w-0 px-1 py-2.5 text-center">
+          <div class="text-[10px] text-white/55 leading-tight">{{ st.label }}</div>
+          <div class="mt-0.5 text-[13px] font-semibold tabular-nums truncate">{{ st.value }}</div>
+        </div>
+        {% endfor %}
+        <div class="flex-[1.15] min-w-0 px-1 py-2.5 text-center">
+          <div class="text-[10px] text-white/55 leading-tight">قیمت</div>
+          <div class="mt-0.5 text-[13px] font-bold tabular-nums leading-tight">{{ (land.price_total or 0)|toman }}</div>
+        </div>
+      </div>
+    </div>
+
+    {% include 'admin/partials/express_listing_card_actions.html' %}
+  </div>
+</article>

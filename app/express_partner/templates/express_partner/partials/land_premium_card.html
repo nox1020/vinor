@@ -36,13 +36,16 @@
   {% endif %}
 {% endif %}
 
+{% set _card_layout = card_layout|default('responsive') %}
+{% set _horizontal_only = (_card_layout == 'horizontal') %}
+
 <article {% if tour_land_card %}data-tour="land-card"{% endif %}{% if for_ai_chat %} data-vinor-ai-card="1"{% endif %}
          class="group express-card vinor-premium-card relative w-full rounded-2xl overflow-hidden border border-white/10 shadow-md transition-all duration-200 touch-manipulation bg-[#0f1419] max-sm:bg-[#121a22]{% if _is_sold %} vinor-card-sold{% else %} cursor-pointer hover:shadow-lg hover:border-white/20{% endif %}"
          {% if not _is_sold %}data-href="{{ land._detail_url or url_for('express_partner.land_detail', code=land.code) }}"{% else %}data-assignment-status="sold"{% endif %}
          {% if not for_ai_chat and not _is_sold %}role="link" tabindex="0"{% elif _is_sold %}aria-disabled="true"{% endif %}>
 
-  {# ——— موبایل: کارت افقی (متن + تصویر) مطابق صفحه اصلی ——— #}
-  <div class="vinor-premium-card-mobile flex sm:hidden flex-row items-stretch min-h-[9.5rem]">
+  {# ——— کارت افقی (موبایل / دسکتاپ داشبورد) ——— #}
+  <div class="vinor-premium-card-mobile flex flex-row items-stretch min-h-[9.5rem]{% if not _horizontal_only %} sm:hidden{% endif %}">
     <div class="relative w-[38%] max-w-[9.5rem] shrink-0 p-2.5 pe-1.5" data-img-wrap>
       <div class="card-img-loading pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl transition-opacity duration-300">
         <div class="vinor-card-load-ring" aria-hidden="true"></div>
@@ -115,8 +118,8 @@
     </div>
   </div>
 
-  {# ——— تبلت/دسکتاپ: کارت عمودی (گالری) ——— #}
-  <div class="relative hidden sm:block aspect-[3/4] min-h-[300px] bg-[#111827]" data-img-wrap>
+  {# ——— تبلت+: گالری عمودی (فقط responsive) ——— #}
+  <div class="relative {% if _horizontal_only %}hidden{% else %}hidden sm:block{% endif %} aspect-[3/4] min-h-[300px] bg-[#111827]" data-img-wrap>
     <div class="card-img-loading pointer-events-none absolute inset-0 z-20 flex items-center justify-center transition-opacity duration-300">
       <div class="vinor-card-load-ring" aria-hidden="true"></div>
     </div>

@@ -1,0 +1,88 @@
+{# مودال فیلتر — فقط موبایل/تبلت #}
+<div id="dashFilterModal"
+     class="lg:hidden fixed inset-0 z-[80] hidden"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="dashFilterModalTitle"
+     aria-hidden="true">
+  <button type="button"
+          id="dashFilterBackdrop"
+          class="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+          aria-label="بستن"></button>
+
+  <div class="absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg pointer-events-none">
+    <div class="pointer-events-auto rounded-t-2xl border border-gray-200/80 bg-white shadow-xl dark:border-white/10 dark:bg-[#121820] max-h-[min(85vh,32rem)] flex flex-col">
+
+      <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-white/10">
+        <h2 id="dashFilterModalTitle" class="text-base font-bold text-gray-900 dark:text-white">فیلتر فایل‌ها</h2>
+        <button type="button" id="dashFilterClose"
+                class="grid h-8 w-8 place-items-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10"
+                aria-label="بستن">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto px-4 py-4">
+        {% include 'express_partner/partials/dashboard_filter_options.html' %}
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var modal = document.getElementById('dashFilterModal');
+  var toggle = document.getElementById('dashFilterToggle');
+  var backdrop = document.getElementById('dashFilterBackdrop');
+  var closeBtn = document.getElementById('dashFilterClose');
+  if (!modal || !toggle) return;
+
+  function overlayApi() {
+    return window.vinorExpressModalOverlay || null;
+  }
+
+  function syncOverlay(open) {
+    var ov = overlayApi();
+    if (ov) {
+      if (open) ov.open();
+      else ov.close();
+      return;
+    }
+    document.documentElement.classList.toggle('vinor-express-overlay-modal-open', open);
+    try {
+      document.body.style.overflow = open ? 'hidden' : '';
+    } catch (_) {}
+  }
+
+  function isOpen() {
+    return !modal.classList.contains('hidden');
+  }
+
+  function openModal() {
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    toggle.setAttribute('aria-expanded', 'true');
+    syncOverlay(true);
+  }
+
+  function closeModal() {
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    toggle.setAttribute('aria-expanded', 'false');
+    syncOverlay(false);
+  }
+
+  toggle.addEventListener('click', openModal);
+  backdrop && backdrop.addEventListener('click', closeModal);
+  closeBtn && closeBtn.addEventListener('click', closeModal);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && isOpen()) closeModal();
+  });
+
+  /* بستن فیلتر بعد از انتخاب شهر (submit فرم) */
+  document.addEventListener('vinor:city-picker-applied', function () {
+    if (isOpen()) closeModal();
+  });
+})();
+</script>

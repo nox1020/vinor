@@ -1,250 +1,210 @@
 {% extends "admin/base_admin.html" %}
+{% block title %}تنظیمات کلی{% endblock %}
+{% block page_title %}تنظیمات کلی{% endblock %}
+
 {% block content %}
-<div class="p-4 sm:p-6">
+<div class="space-y-5 max-w-3xl">
 
-  <!-- عنوان صفحه -->
-  <h1 class="text-xl sm:text-2xl font-bold text-vinor-700 dark:text-vinor-600 mb-6 flex items-center gap-2">
-    <i class="fa-solid fa-sliders"></i>
-    تنظیمات سایت
-  </h1>
-
-  <!-- پیام‌ها -->
-  {% with messages = get_flashed_messages(with_categories=True) %}
-    {% if messages %}
-      {% for category, msg in messages %}
-        <div class="mb-4 text-sm rounded-lg px-3 py-2
-                    {% if category in ['success'] %}bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-200
-                    {% elif category in ['warning'] %}bg-yellow-50 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-200
-                    {% elif category in ['info'] %}bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200
-                    {% else %}bg-red-50 text-red-700 dark:bg-red-900/40 dark:text-red-200{% endif %}">
-          {{ msg }}
-        </div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
-
-  <!-- فرم تنظیمات -->
-  <form method="post"
-        action="{{ url_for('admin.settings') }}"
-        class="bg-white dark:bg-gray-800 shadow rounded-xl border border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-5 space-y-5"
-        enctype="multipart/form-data"
-        autocomplete="off">
-    <!-- CSRF -->
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <!-- روش تایید آگهی‌ها -->
-    <div class="space-y-2">
-      <label for="approval_method" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-        روش تأیید آگهی‌ها
-      </label>
-      <select id="approval_method" name="approval_method"
-              class="block w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600
-                     text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2
-                     focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent">
-        <option value="manual" {% if settings.approval_method == 'manual' %}selected{% endif %}>تأیید دستی</option>
-        <option value="auto" {% if settings.approval_method == 'auto' %}selected{% endif %}>تأیید خودکار</option>
-      </select>
-      <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-        در حالت «تأیید خودکار»، آگهی‌ها بلافاصله پس از ارسال منتشر می‌شوند.
-      </p>
-    </div>
-
-  <!-- هزینه ثبت هر آگهی (تومان) -->
-  <div class="space-y-2">
-    <label for="ad_post_price_toman" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-      هزینه ثبت هر آگهی (تومان)
-    </label>
-    <input id="ad_post_price_toman" name="ad_post_price_toman" type="number" min="0"
-           value="{{ settings.ad_post_price_toman or 10000 }}"
-           class="block w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent">
-    <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">مبلغ پیش‌فرض: ۱۰٬۰۰۰ تومان. صفر = رایگان.</p>
+  <div>
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+      <i class="fa-solid fa-sliders text-vinor-600"></i>
+      تنظیمات سایت
+    </h2>
+    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      تأیید آگهی، هزینه ثبت، پیامک‌ها و اپ اندروید
+    </p>
   </div>
 
-    <!-- نمایش دکمه ثبت آگهی -->
-    <div class="space-y-2">
-      <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
-        <input type="checkbox" name="show_submit_button" class="rounded border-gray-300 dark:border-gray-600"
+  <form method="post"
+        action="{{ url_for('admin.settings') }}"
+        class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm px-4 sm:px-6 py-5 space-y-6"
+        enctype="multipart/form-data"
+        autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <!-- آگهی‌ها -->
+    <section class="space-y-4">
+      <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <i class="fa-solid fa-bullhorn text-vinor-600"></i>
+        آگهی‌ها
+      </h3>
+
+      <div class="space-y-2">
+        <label for="approval_method" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+          روش تأیید آگهی‌ها
+        </label>
+        <select id="approval_method" name="approval_method"
+                class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600
+                       text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2
+                       focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent">
+          <option value="manual" {% if settings.approval_method == 'manual' %}selected{% endif %}>تأیید دستی</option>
+          <option value="auto" {% if settings.approval_method == 'auto' %}selected{% endif %}>تأیید خودکار</option>
+        </select>
+        <p class="text-xs text-gray-500 dark:text-gray-400">
+          در حالت «تأیید خودکار»، آگهی‌ها بلافاصله پس از ارسال منتشر می‌شوند.
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <label for="ad_post_price_toman" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+          هزینه ثبت هر آگهی (تومان)
+        </label>
+        <input id="ad_post_price_toman" name="ad_post_price_toman" type="number" min="0" step="1000"
+               value="{{ settings.ad_post_price_toman or 10000 }}"
+               class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent">
+        <p class="text-xs text-gray-500 dark:text-gray-400">پیش‌فرض ۱۰٬۰۰۰ تومان — صفر یعنی رایگان.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label for="ad_expiry_days" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+          مدت اعتبار آگهی
+        </label>
+        <select id="ad_expiry_days" name="ad_expiry_days"
+                class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600
+                       text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2
+                       focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent">
+          <option value="0"  {% if (settings.ad_expiry_days|int) == 0 %}selected{% endif %}>نامحدود</option>
+          <option value="30" {% if (settings.ad_expiry_days|int) == 30 %}selected{% endif %}>۳۰ روز</option>
+          <option value="60" {% if (settings.ad_expiry_days|int) == 60 %}selected{% endif %}>۶۰ روز</option>
+          <option value="90" {% if (settings.ad_expiry_days|int) == 90 %}selected{% endif %}>۹۰ روز</option>
+        </select>
+      </div>
+
+      <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+        <input type="checkbox" name="show_submit_button"
+               class="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-vinor-600 focus:ring-vinor-600"
                {% if settings.show_submit_button %}checked{% endif %}>
-        نمایش دکمه «ثبت آگهی جدید» در سایت
+        <span>
+          <span class="font-semibold block">نمایش دکمه «ثبت آگهی جدید» در سایت</span>
+          <span class="text-xs text-gray-500 dark:text-gray-400">میانبرهای ثبت در هدر و فوتر موبایل مخفی می‌شوند.</span>
+        </span>
       </label>
-      <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-        با غیرفعال‌کردن، میانبرهای «+ ثبت آگهی» در هدر، فوتر موبایل و جستجوی سریع مخفی می‌شوند.
-      </p>
-    </div>
+    </section>
 
-<!-- مدت اعتبار آگهی -->
-<div class="space-y-2">
-  <label for="ad_expiry_days" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-    مدت اعتبار آگهی
-  </label>
+    <div class="border-t border-gray-200 dark:border-gray-700"></div>
 
-  <select id="ad_expiry_days" name="ad_expiry_days"
-          class="block w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600
-                 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2
-                 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent">
-    <option value="0"  {% if (settings.ad_expiry_days|int) == 0 %}selected{% endif %}>نامحدود</option>
-    <option value="30" {% if (settings.ad_expiry_days|int) == 30 %}selected{% endif %}>۳۰ روز</option>
-    <option value="60" {% if (settings.ad_expiry_days|int) == 60 %}selected{% endif %}>۶۰ روز</option>
-    <option value="90" {% if (settings.ad_expiry_days|int) == 90 %}selected{% endif %}>۹۰ روز</option>
-  </select>
+    <!-- SMS -->
+    <section class="space-y-4">
+      <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <i class="fa-solid fa-sms text-vinor-600"></i>
+        پیامک
+      </h3>
 
-  <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-    اگر «نامحدود» را انتخاب کنید، آگهی تاریخ انقضا نخواهد داشت و حذف خودکار نمی‌شود.
-  </p>
-</div>
-
-    <!-- جداکننده -->
-    <div class="border-t border-gray-200 dark:border-gray-700 my-6"></div>
-
-    <!-- تنظیمات SMS -->
-    <div class="space-y-4">
-      <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <i class="fa-solid fa-sms"></i>
-        تنظیمات پیامک
-      </h2>
-
-      <!-- شماره خط اختصاصی SMS -->
       <div class="space-y-2">
         <label for="sms_line_number" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
           شماره خط اختصاصی SMS
         </label>
-        <input id="sms_line_number" name="sms_line_number" type="text"
+        <input id="sms_line_number" name="sms_line_number" type="text" dir="ltr"
                value="{{ settings.sms_line_number or '300089930616' }}"
-               class="block w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
+               class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
                placeholder="300089930616">
-        <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-          شماره خط اختصاصی برای ارسال پیامک‌های مستقیم (بدون قالب)
-        </p>
       </div>
-    </div>
+    </section>
 
-    <!-- جداکننده -->
-    <div class="border-t border-gray-200 dark:border-gray-700 my-6"></div>
+    <div class="border-t border-gray-200 dark:border-gray-700"></div>
 
-    <!-- تنظیمات اپ اندروید -->
-    <div class="space-y-4">
-      <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <i class="fa-brands fa-android"></i>
-        اپلیکیشن اندروید وینور
-      </h2>
+    <!-- Android APK -->
+    <section class="space-y-4">
+      <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <i class="fa-brands fa-android text-vinor-600"></i>
+        اپلیکیشن اندروید
+      </h3>
 
       <div class="grid sm:grid-cols-2 gap-4">
         <div class="space-y-2">
           <label for="android_apk_version" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
             نسخه (Version)
           </label>
-          <input id="android_apk_version" name="android_apk_version" type="text"
+          <input id="android_apk_version" name="android_apk_version" type="text" dir="ltr"
                  value="{{ settings.android_apk_version or '' }}"
-                 class="block w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
-                 placeholder="مثلاً 1.0.3">
-          <p class="text-xs text-gray-500 dark:text-gray-400">اختیاری اما توصیه‌شده برای نمایش در لندینگ.</p>
+                 class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
+                 placeholder="1.0.3">
         </div>
         <div class="space-y-2">
           <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-            فایل APK (آخرین نسخه)
+            فایل APK جدید
           </label>
-          <input type="file" name="android_apk" accept=".apk" 
-                 class="block w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-gray-300 dark:file:border-gray-600 file:bg-white dark:file:bg-gray-900 file:text-gray-700 dark:file:text-gray-200">
-          <p class="text-xs text-gray-500 dark:text-gray-400">با انتخاب فایل جدید، لینک دانلود در لندینگ به‌روزرسانی می‌شود.</p>
+          <input type="file" name="android_apk" accept=".apk,application/vnd.android.package-archive"
+                 class="block w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-gray-300 dark:file:border-gray-600 file:bg-white dark:file:bg-gray-950 file:text-gray-700 dark:file:text-gray-200">
+          <p class="text-xs text-gray-500 dark:text-gray-400">حداکثر ۲۰۰ مگابایت — فقط با آپلود جدید، تاریخ بروزرسانی عوض می‌شود.</p>
         </div>
       </div>
 
       {% if settings.android_apk_url %}
-      <div class="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-        <i class="fa-solid fa-link"></i>
-        <span>لینک فعلی: </span>
-        <a class="text-blue-600 dark:text-blue-400 underline break-all" href="{{ settings.android_apk_url }}" target="_blank" rel="noopener">
-          {{ settings.android_apk_url }}
-        </a>
-      </div>
-      <div class="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-        <div>آخرین بروزرسانی: {{ settings.android_apk_updated_at or '—' }}</div>
-        {% if settings.android_apk_size_bytes %}
-        <div>حجم فایل: {{ (settings.android_apk_size_bytes|string) ~ ' بایت' }}</div>
-        {% endif %}
-        {% if settings.android_apk_sha256 %}
-        <div class="break-all">SHA256: <code>{{ settings.android_apk_sha256 }}</code></div>
-        {% endif %}
+      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950/60 p-3 space-y-2 text-sm">
+        <div class="flex items-start gap-2 text-gray-700 dark:text-gray-300">
+          <i class="fa-solid fa-link mt-0.5 text-vinor-600"></i>
+          <a class="text-blue-600 dark:text-blue-400 underline break-all" href="{{ settings.android_apk_url }}" target="_blank" rel="noopener">
+            {{ settings.android_apk_url }}
+          </a>
+        </div>
+        <div class="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+          <div>آخرین بروزرسانی: {{ settings.android_apk_updated_at or '—' }}</div>
+          {% if settings.android_apk_size_bytes %}
+          {% set sz = settings.android_apk_size_bytes|int %}
+          <div>حجم فایل:
+            {% if sz >= 1048576 %}{{ '%.1f'|format(sz / 1048576) }} مگابایت
+            {% elif sz >= 1024 %}{{ '%.0f'|format(sz / 1024) }} کیلوبایت
+            {% else %}{{ sz }} بایت{% endif %}
+          </div>
+          {% endif %}
+          {% if settings.android_apk_sha256 %}
+          <div class="break-all font-mono text-[11px]">SHA256: {{ settings.android_apk_sha256 }}</div>
+          {% endif %}
+        </div>
       </div>
       {% endif %}
-    </div>
+    </section>
 
-    <!-- جداکننده -->
-    <div class="border-t border-gray-200 dark:border-gray-700 my-6"></div>
+    <div class="border-t border-gray-200 dark:border-gray-700"></div>
 
-    <!-- تنظیمات درخواست همکاری -->
-    <div class="space-y-4">
-      <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <i class="fa-solid fa-handshake"></i>
-        تنظیمات درخواست همکاری
-      </h2>
+    <!-- همکاری -->
+    <section class="space-y-4">
+      <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <i class="fa-solid fa-handshake text-vinor-600"></i>
+        درخواست همکاری
+      </h3>
 
-      <!-- پیام SMS درخواست همکاری -->
       <div class="space-y-2">
         <label for="partner_application_sms_message" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-          متن پیامک درخواست همکاری
+          پیامک ثبت درخواست (برای همکار)
         </label>
-        <textarea id="partner_application_sms_message" name="partner_application_sms_message" rows="4"
-                  class="block w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
-                  placeholder="درخواست همکاری شما ثبت شد و در حال بررسی است. وینور">{{ settings.partner_application_sms_message or 'درخواست همکاری شما ثبت شد و در حال بررسی است. وینور' }}</textarea>
-        <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-          این پیامک پس از ثبت درخواست همکاری در مرحله 3 به همکار ارسال می‌شود.
-        </p>
+        <textarea id="partner_application_sms_message" name="partner_application_sms_message" rows="3"
+                  class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent">{{ settings.partner_application_sms_message or 'درخواست همکاری شما ثبت شد و در حال بررسی است. وینور' }}</textarea>
       </div>
 
-      <!-- پیام SMS تایید همکاری -->
       <div class="space-y-2">
         <label for="partner_approval_sms_message" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-          متن پیامک تایید همکاری
+          پیامک تأیید همکاری (برای همکار)
         </label>
-        <textarea id="partner_approval_sms_message" name="partner_approval_sms_message" rows="4"
-                  class="block w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
-                  placeholder="پنل همکاری وینور برای شما فعال شد. وینور">{{ settings.partner_approval_sms_message or 'پنل همکاری وینور برای شما فعال شد. وینور' }}</textarea>
-        <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-          این پیامک پس از تایید درخواست همکاری توسط ادمین به همکار ارسال می‌شود.
-        </p>
+        <textarea id="partner_approval_sms_message" name="partner_approval_sms_message" rows="3"
+                  class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent">{{ settings.partner_approval_sms_message or 'پنل همکاری وینور برای شما فعال شد. وینور' }}</textarea>
       </div>
 
-      <!-- شماره و پیامک ادمین برای درخواست جدید -->
-      <div class="space-y-4">
-        <!-- شماره ادمین -->
-        <div class="space-y-2">
-          <label for="partner_application_admin_phone" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-            شماره موبایل ادمین برای دریافت پیامک درخواست جدید
-          </label>
-          <input id="partner_application_admin_phone"
-                 name="partner_application_admin_phone"
-                 type="text"
-                 value="{{ settings.partner_application_admin_phone or '09121471301' }}"
-                 class="block w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
-                 placeholder="09121471301">
-          <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-            به این شماره، هنگام ثبت هر درخواست همکاری جدید، پیامک اطلاع‌رسانی ارسال می‌شود.
-          </p>
-        </div>
-
-        <!-- متن پیامک برای ادمین -->
-        <div class="space-y-2">
-          <label for="partner_application_admin_sms_message" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-            متن پیامک درخواست همکاری جدید برای ادمین
-          </label>
-          <textarea id="partner_application_admin_sms_message"
-                    name="partner_application_admin_sms_message"
-                    rows="3"
-                    class="block w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
-                    placeholder="درخواست همکاری جدید همکار در وینور ثبت شد.">{{ settings.partner_application_admin_sms_message or 'درخواست همکاری جدید همکار در وینور ثبت شد.' }}</textarea>
-          <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-            می‌توانید نام و شماره همکار را هم در بدنه پیامک بنویسید؛ فعلاً متن ثابت برای همه درخواست‌ها استفاده می‌شود.
-          </p>
-        </div>
+      <div class="space-y-2">
+        <label for="partner_application_admin_phone" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+          موبایل ادمین (پیامک صف اقدام)
+        </label>
+        <input id="partner_application_admin_phone" name="partner_application_admin_phone" type="text" dir="ltr"
+               value="{{ settings.partner_application_admin_phone or '09121471301' }}"
+               class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
+               placeholder="09121471301">
+        <p class="text-xs text-gray-500 dark:text-gray-400">درخواست همکاری، برداشت، بازدید و پورسانت در انتظار — بلافاصله پیامک می‌شود.</p>
       </div>
-    </div>
 
+      <div class="space-y-2">
+        <label for="partner_application_admin_sms_message" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+          پیامک درخواست همکاری (برای ادمین)
+        </label>
+        <textarea id="partner_application_admin_sms_message" name="partner_application_admin_sms_message" rows="2"
+                  class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent">{{ settings.partner_application_admin_sms_message or 'درخواست همکاری جدید همکار در وینور ثبت شد.' }}</textarea>
+        <p class="text-xs text-gray-500 dark:text-gray-400">اختیاری: <code dir="ltr">{name}</code> و <code dir="ltr">{phone}</code></p>
+    </section>
 
-    <div class="flex items-center justify-end">
+    <div class="flex items-center justify-end pt-2">
       <button type="submit"
               class="inline-flex items-center gap-2 bg-vinor-600 hover:bg-vinor-700 text-white
-                     font-semibold text-sm sm:text-base px-5 py-2.5 rounded-lg transition">
+                     font-semibold text-sm px-5 py-2.5 rounded-lg transition focusable">
         <i class="fa-solid fa-floppy-disk"></i>
         ذخیره تنظیمات
       </button>

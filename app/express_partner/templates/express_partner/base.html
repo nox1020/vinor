@@ -226,10 +226,15 @@
       opacity: 1 !important;
       transform: none !important;
     }
-    html.vinor-express-overlay-modal-open #bottomNavMenu {
+    html.vinor-express-overlay-modal-open #bottomNavMenu,
+    html:has(#dashFilterModal:not(.hidden)) #bottomNavMenu {
       visibility: hidden !important;
       opacity: 0 !important;
       pointer-events: none !important;
+    }
+    html.vinor-express-overlay-modal-open .vinor-apk-download-strip,
+    html:has(#dashFilterModal:not(.hidden)) .vinor-apk-download-strip {
+      display: none !important;
     }
     /* فضای اضافه زیر محتوا وقتی نوار «دانلود اپ» بالای منوی پایین نمایش داده می‌شود (فقط مرورگر) */
     @media (max-width: 1023px) {

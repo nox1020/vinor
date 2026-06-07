@@ -1,0 +1,66 @@
+{# گزینه‌های فیلتر — مشترک بین مودال موبایل و سایدبار دسکتاپ #}
+{% if fq is not defined %}{% set fq = request.args.get('q', '') %}{% endif %}
+{% if ftag is not defined %}{% set ftag = (request.args.get('tag', '') or '')|lower %}{% endif %}
+{% if fcat is not defined %}{% set fcat = request.args.get('cat', '') %}{% endif %}
+{% if selected_cities is not defined %}
+  {% set _city_raw = request.args.get('city') if 'city' in request.args else '' %}
+  {% set selected_cities = _city_raw.split(',') if _city_raw else [] %}
+{% endif %}
+{% if city_url is not defined %}
+  {% if selected_city is not defined %}
+    {% set selected_city = selected_cities|join(',') %}
+  {% endif %}
+  {% set city_url = selected_city if ('city' in request.args or selected_cities|default([])) else none %}
+{% endif %}
+
+{% macro opt_href(tag=none, cat=none) -%}
+{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag=tag, cat=cat) }}
+{%- endmacro %}
+
+{% macro filter_chip(label, href, active) %}
+<a href="{{ href }}"
+   class="inline-flex items-center justify-center rounded-lg border px-2.5 py-1.5 text-xs transition-colors
+          {% if active %}
+          border-emerald-500/50 bg-emerald-500/12 font-semibold text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300
+          {% else %}
+          border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-300 dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:border-white/20
+          {% endif %}">
+  {{ label }}
+</a>
+{% endmacro %}
+
+{% include 'express_partner/partials/dashboard_filter_city.html' %}
+
+<section>
+  <p class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">ویژگی</p>
+  <div class="flex flex-wrap gap-1.5">
+    {{ filter_chip('همه', opt_href(tag=none, cat=fcat or none), not ftag) }}
+    {{ filter_chip('استخر', opt_href(tag='pool', cat=fcat or none), ftag == 'pool') }}
+    {{ filter_chip('جنگل', opt_href(tag='forest', cat=fcat or none), ftag == 'forest') }}
+    {{ filter_chip('شهرک', opt_href(tag='town', cat=fcat or none), ftag == 'town') }}
+    {{ filter_chip('فوری', opt_href(tag='urgent', cat=fcat or none), ftag == 'urgent') }}
+    {{ filter_chip('سند', opt_href(tag='deed', cat=fcat or none), ftag == 'deed') }}
+    {{ filter_chip('اقساط', opt_href(tag='installment', cat=fcat or none), ftag == 'installment') }}
+  </div>
+</section>
+
+<section class="mt-4">
+  <p class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">نوع ملک</p>
+  <div class="flex flex-wrap gap-1.5">
+    {{ filter_chip('همه', opt_href(tag=ftag or none, cat=none), not fcat) }}
+    {{ filter_chip('زمین/باغ', opt_href(tag=ftag or none, cat='land_garden'), fcat == 'land_garden') }}
+    {{ filter_chip('ویلا', opt_href(tag=ftag or none, cat='ویلا'), fcat == 'ویلا') }}
+    {{ filter_chip('آپارتمان', opt_href(tag=ftag or none, cat='آپارتمان'), fcat == 'آپارتمان') }}
+    {{ filter_chip('تجاری', opt_href(tag=ftag or none, cat='تجاری'), fcat == 'تجاری') }}
+  </div>
+</section>
+
+{% if ftag or fcat or selected_cities|length > 0 %}
+<div class="mt-4 pt-3 border-t border-gray-100 dark:border-white/10">
+  <a href="{{ url_for('express_partner.dashboard', q=fq or none) }}"
+     class="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">
+    <i class="fa-solid fa-rotate-left text-[10px]"></i>
+    پاک کردن فیلترها
+  </a>
+</div>
+{% endif %}

@@ -1,242 +1,126 @@
 {% extends 'admin/base_admin.html' %}
+{% block title %}آگهی‌های اکسپرس{% endblock %}
+{% block page_title %}آگهی‌های اکسپرس{% endblock %}
 
 {% block head %}
   {{ super() }}
   <style>
-    /* مخفی کردن فوتر اصلی در صفحه لیست آگهی‌ها */
-    nav[class*="fixed bottom-0"][class*="grid grid-cols-5"] {
-      display: none !important;
+    #adminExpressListings .express-card {
+      transition: box-shadow .2s ease, border-color .2s ease;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
     }
-    /* حذف spacer فوتر اصلی */
-    div[class*="h-16"] {
-      display: none !important;
+    #adminExpressCards > .express-card { height: 100%; }
+    @media (hover: hover) and (pointer: fine) {
+      #adminExpressListings .express-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+    }
+    .admin-card-sold [data-img-wrap] img,
+    .admin-card-sold [data-img-wrap] video {
+      filter: saturate(0.45) brightness(0.75);
+    }
+    .admin-card-sold::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      border-radius: inherit;
+      background: linear-gradient(180deg, rgba(3, 7, 18, 0.2) 0%, rgba(3, 7, 18, 0.45) 100%);
+      pointer-events: none;
+    }
+    .card-img-loading {
+      background: linear-gradient(110deg, rgba(15, 23, 42, 0.5) 0%, rgba(30, 41, 59, 0.65) 45%, rgba(15, 23, 42, 0.5) 90%);
+      background-size: 200% 100%;
+      animation: vinorCardImgLoad 1.2s ease-in-out infinite;
+    }
+    .card-img-loading .vinor-card-load-ring {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      border: 2px solid rgba(52, 211, 153, 0.25);
+      border-top-color: #34d399;
+      animation: vinorCardLoadSpin 0.75s linear infinite;
+    }
+    @keyframes vinorCardImgLoad {
+      0% { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
+    }
+    @keyframes vinorCardLoadSpin {
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .card-img-loading { animation: none; }
+      .card-img-loading .vinor-card-load-ring { animation: none; }
     }
   </style>
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div id="adminExpressListings" class="space-y-5">
 
-  <!-- هدر صفحه - سبک دیوار -->
-  <div>
-    <h1 class="text-lg font-semibold text-gray-900 dark:text-white">آگهی‌های اکسپرس</h1>
+  <!-- آمار -->
+  <div class="grid grid-cols-3 gap-2 sm:gap-3">
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+      <p class="text-[11px] text-gray-500 dark:text-gray-400">کل آگهی</p>
+      <p class="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{{ stats.total or 0 }}</p>
+    </div>
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+      <p class="text-[11px] text-gray-500 dark:text-gray-400">فعال</p>
+      <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{{ stats.active or 0 }}</p>
+    </div>
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+      <p class="text-[11px] text-gray-500 dark:text-gray-400">فروخته‌شده</p>
+      <p class="text-lg font-bold text-amber-600 dark:text-amber-400 tabular-nums">{{ stats.sold or 0 }}</p>
+    </div>
+  </div>
+
+  <!-- فیلتر -->
+  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+    <div class="flex flex-wrap gap-2 text-xs">
+      {% set tabs = [
+        ('all', 'همه', stats.total),
+        ('active', 'فعال', stats.active),
+        ('sold', 'فروخته‌شده', stats.sold),
+      ] %}
+      {% for key, label, count in tabs %}
+        <a href="{{ url_for('admin.express_listings', filter=key) }}"
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition
+                  {% if (filter_kind or 'all') == key %}
+                    border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300
+                  {% else %}
+                    border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300
+                  {% endif %}">
+          {{ label }}
+          <span class="font-semibold tabular-nums">{{ count or 0 }}</span>
+        </a>
+      {% endfor %}
+    </div>
   </div>
 
   {% if lands and lands|length > 0 %}
-    <!-- کارت‌های آگهی اکسپرس - سبک دیوار -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div id="adminExpressCards" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
       {% for land in lands %}
-        {# نرمال‌سازی تصویر کاور #}
-        {% set _imgs = [] %}
-        {% if land.images %}
-          {% if land.images is string %}
-            {% set _imgs = [land.images] %}
-          {% elif land.images is iterable %}
-            {% set _imgs = land.images %}
-          {% endif %}
-        {% endif %}
-        {% set cover = (_imgs[0] if _imgs and _imgs|length > 0 else None) %}
-
-        <article class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
-          
-          <!-- تصویر کاور - سبک دیوار -->
-          {% if cover %}
-            <div class="relative aspect-[4/3] bg-gray-100 dark:bg-gray-800 overflow-hidden">
-              {% if '://' in cover %}
-                <img src="{{ cover }}" class="w-full h-full object-cover" alt="{{ land.title or 'عکس آگهی' }}">
-              {% else %}
-                {% set path = cover.lstrip('/') %}
-                {% if path.startswith('uploads/') %}
-                  <img src="/{{ path }}" class="w-full h-full object-cover" alt="{{ land.title or 'عکس آگهی' }}">
-                {% else %}
-                  <img src="/uploads/{{ path }}" class="w-full h-full object-cover" alt="{{ land.title or 'عکس آگهی' }}">
-                {% endif %}
-              {% endif %}
-              
-              <!-- برچسب وضعیت - سبک دیوار -->
-              {% if land.express_status == 'sold' %}
-              <div class="absolute top-2 left-2">
-                <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-600 text-white">
-                  <i class="fa-solid fa-check-double text-[10px] ml-1"></i>
-                  فروخته شد
-                </span>
-              </div>
-              {% else %}
-              <div class="absolute top-2 left-2">
-                <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-600 text-white">
-                  <i class="fa-solid fa-star text-[10px] ml-1"></i>
-                  اکسپرس
-                </span>
-              </div>
-              {% endif %}
-            </div>
-          {% else %}
-            <div class="aspect-[4/3] bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-              <i class="fa-solid fa-image text-3xl text-gray-300 dark:text-gray-700"></i>
-            </div>
-          {% endif %}
-
-          <!-- محتوای کارت - سبک دیوار -->
-          <div class="p-4 space-y-3">
-            <!-- عنوان -->
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white line-clamp-2">
-              {{ land.title or 'بدون عنوان' }}
-            </h3>
-            
-            <!-- اطلاعات اصلی -->
-            <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-              {% if land.location %}
-              <div class="flex items-center gap-2">
-                <i class="fa-solid fa-location-dot text-xs"></i>
-                <span class="truncate">{{ land.location }}</span>
-              </div>
-              {% endif %}
-              
-              {% if land.size %}
-              <div class="flex items-center gap-2">
-                <i class="fa-solid fa-ruler-combined text-xs"></i>
-                <span>{{ "{:,}".format(land.size | int) }} متر</span>
-              </div>
-              {% endif %}
-              
-              {% if land.category %}
-              <div class="flex items-center gap-2">
-                <i class="fa-solid fa-tag text-xs"></i>
-                <span>{{ land.category }}</span>
-              </div>
-              {% endif %}
-            </div>
-
-            <!-- قیمت - سبک دیوار -->
-            <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
-              <div class="flex items-center justify-between">
-                <span class="text-xs text-gray-500 dark:text-gray-400">قیمت کل</span>
-                <span class="text-base font-semibold text-gray-900 dark:text-white">
-                  {{ "{:,}".format(land.price_total | int) if land.price_total else "نامشخص" }} تومان
-                </span>
-              </div>
-              {% if land.price_per_meter %}
-              <div class="flex items-center justify-between mt-1">
-                <span class="text-xs text-gray-500 dark:text-gray-400">قیمت در متر</span>
-                <span class="text-sm text-gray-700 dark:text-gray-300">
-                  {{ "{:,}".format(land.price_per_meter | int) }} تومان
-                </span>
-              </div>
-              {% endif %}
-            </div>
-
-            <!-- اطلاعات تماس - سبک دیوار -->
-            {% if land.vinor_contact %}
-            <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
-              <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <i class="fa-solid fa-phone text-xs"></i>
-                <span>{{ land.vinor_contact }}</span>
-              </div>
-            </div>
-            {% endif %}
-
-            <!-- مدارک - سبک دیوار -->
-            {% if land.express_documents and land.express_documents|length > 0 %}
-            <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
-              <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">مدارک تأییدشده:</div>
-              <div class="flex flex-wrap gap-1">
-                {% for doc in land.express_documents[:3] %}
-                  <span class="inline-flex items-center gap-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-xs">
-                    <i class="fa-regular fa-file-pdf text-red-500 text-[10px]"></i>
-                    {{ doc.split('_')[-1] if '_' in doc else doc }}
-                  </span>
-                {% endfor %}
-                {% if land.express_documents|length > 3 %}
-                  <span class="text-xs text-gray-500 dark:text-gray-400">+{{ land.express_documents|length - 3 }} بیشتر</span>
-                {% endif %}
-              </div>
-            </div>
-            {% endif %}
-
-            <!-- دکمه‌های عملیات - سبک دیوار -->
-            <div class="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
-              <div class="grid grid-cols-1 gap-2">
-                <a href="{{ url_for('admin.edit_express_listing', code=land.code) }}"
-                   class="flex items-center justify-center gap-1.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 text-sm px-3 py-2 rounded-lg transition focusable">
-                  <i class="fa-regular fa-pen-to-square text-xs"></i>
-                  ویرایش
-                </a>
-              </div>
-              
-              <div class="grid grid-cols-2 gap-2">
-                {% if land.express_status == 'sold' %}
-                <form method="post" action="{{ url_for('admin.toggle_express_sold', code=land.code) }}" class="inline">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="w-full flex items-center justify-center gap-1.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 text-sm px-3 py-2 rounded-lg transition focusable">
-                    <i class="fa-solid fa-rotate-left text-xs"></i>
-                    در انتظار فروش
-                  </button>
-                </form>
-                {% else %}
-                <form method="post" action="{{ url_for('admin.toggle_express_sold', code=land.code) }}" class="inline">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="w-full flex items-center justify-center gap-1.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 text-sm px-3 py-2 rounded-lg transition focusable">
-                    <i class="fa-solid fa-check-double text-xs"></i>
-                    فروخته شد
-                  </button>
-                </form>
-                {% endif %}
-                
-                <form method="post" action="{{ url_for('admin.delete_express_listing', code=land.code) }}" class="inline js-delete-listing-form" data-listing-title="{{ land.title or 'بدون عنوان' }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="w-full flex items-center justify-center gap-1.5 bg-white dark:bg-gray-900 border border-red-300 dark:border-red-700 hover:border-red-400 dark:hover:border-red-600 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded-lg transition focusable">
-                    <i class="fa-solid fa-trash text-xs"></i>
-                    حذف
-                  </button>
-                </form>
-              </div>
-            </div>
-
-            <!-- اطلاعات اضافی - سبک دیوار -->
-            <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
-              <div class="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
-                <div class="flex items-center gap-3">
-                  <span>کد: {{ land.code }}</span>
-                  <div class="flex items-center gap-2">
-                    {% if land._public_views_count is defined %}
-                    <div class="flex items-center gap-1 text-blue-600 dark:text-blue-400" title="بازدید عمومی">
-                      <i class="fa-solid fa-globe text-xs"></i>
-                      <span class="font-medium">{{ land._public_views_count or 0 }}</span>
-                    </div>
-                    {% endif %}
-                    {% if land._partner_views_count is defined %}
-                    <div class="flex items-center gap-1 text-green-600 dark:text-green-400" title="بازدید همکاران">
-                      <i class="fa-solid fa-users text-xs"></i>
-                      <span class="font-medium">{{ land._partner_views_count or 0 }}</span>
-                    </div>
-                    {% endif %}
-                  </div>
-                </div>
-                <span class="jalali-dt" data-dt="{{ land.created_at or '' }}"></span>
-              </div>
-            </div>
-          </div>
-        </article>
+        {% include 'admin/partials/express_listing_card.html' %}
       {% endfor %}
     </div>
 
-    <!-- صفحه‌بندی - سبک دیوار -->
     {% if pagination and pagination.pages > 1 %}
       <div class="flex justify-center">
         <nav class="flex items-center gap-2">
           {% if pagination.page > 1 %}
-            <a href="?page={{ pagination.page - 1 }}" 
+            <a href="?page={{ pagination.page - 1 }}&filter={{ filter_kind or 'all' }}"
                class="px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300 text-sm transition focusable">
               قبلی
             </a>
           {% endif %}
-          
-          <span class="px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white text-sm font-medium">
+          <span class="px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white text-sm font-medium tabular-nums">
             {{ pagination.page }} از {{ pagination.pages }}
           </span>
-          
           {% if pagination.page < pagination.pages %}
-            <a href="?page={{ pagination.page + 1 }}" 
+            <a href="?page={{ pagination.page + 1 }}&filter={{ filter_kind or 'all' }}"
                class="px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300 text-sm transition focusable">
               بعدی
             </a>
@@ -246,37 +130,29 @@
     {% endif %}
 
   {% else %}
-    <!-- حالت خالی - سبک دیوار -->
-    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
-      <div class="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center mx-auto mb-4">
-        <i class="fa-solid fa-star text-2xl text-gray-400 dark:text-gray-600"></i>
+    <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-10 text-center">
+      <div class="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl grid place-items-center mx-auto mb-4">
+        <i class="fa-solid fa-layer-group text-2xl text-gray-400 dark:text-gray-600"></i>
       </div>
-      <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-2">هنوز آگهی اکسپرس ثبت نشده</h3>
-      <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">برای شروع، اولین آگهی اکسپرس را ثبت کنید</p>
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-2">
+        {% if filter_kind == 'sold' %}
+          آگهی فروخته‌شده‌ای نیست
+        {% elif filter_kind == 'active' %}
+          آگهی فعالی نیست
+        {% else %}
+          هنوز آگهی اکسپرس ثبت نشده
+        {% endif %}
+      </h3>
+      <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">از دکمه «ثبت آگهی» در نوار پایین استفاده کنید</p>
       <a href="{{ url_for('admin.add_express_listing') }}"
-         class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition focusable">
-        <i class="fa-solid fa-plus text-sm"></i>
-        افزودن آگهی اکسپرس
+         class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-4 py-2 rounded-lg transition focusable">
+        <i class="fa-solid fa-plus"></i>
+        ثبت آگهی جدید
       </a>
     </div>
   {% endif %}
 
 </div>
-
-{% block bottom_footer %}
-<!-- فوتر ثبت آگهی - سبک دیوار -->
-<nav class="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800">
-  <div class="px-4 py-3 max-w-7xl mx-auto">
-    <a href="{{ url_for('admin.add_express_listing') }}"
-       class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-3 rounded-lg transition focusable">
-      <i class="fa-solid fa-plus text-base"></i>
-      ثبت آگهی جدید
-    </a>
-  </div>
-</nav>
-<!-- Spacer for bottom footer -->
-<div class="h-20"></div>
-{% endblock %}
 
 <!-- Delete confirmation modal -->
 <div id="deleteListingModal" class="hidden fixed inset-0 z-[70]">
@@ -309,52 +185,59 @@
     </div>
   </div>
 </div>
+{% endblock %}
 
-<script>
-(function(){
-  let pendingDeleteForm = null;
-  const modal = document.getElementById('deleteListingModal');
-  const titleEl = document.getElementById('deleteListingTitle');
-  const cancelBtn = document.getElementById('deleteListingCancelBtn');
-  const confirmBtn = document.getElementById('deleteListingConfirmBtn');
+{% block scripts %}
+  <script src="{{ url_for('static', filename='express-partner/premium-card-media.js') }}"></script>
+  <script>
+  (function(){
+    if (window.vinorInitPremiumCards) {
+      window.vinorInitPremiumCards(document.getElementById('adminExpressCards'));
+    }
 
-  function closeDeleteModal() {
-    if (!modal) return;
-    modal.classList.add('hidden');
-    pendingDeleteForm = null;
-  }
+    let pendingDeleteForm = null;
+    const modal = document.getElementById('deleteListingModal');
+    const titleEl = document.getElementById('deleteListingTitle');
+    const cancelBtn = document.getElementById('deleteListingCancelBtn');
+    const confirmBtn = document.getElementById('deleteListingConfirmBtn');
 
-  document.querySelectorAll('.js-delete-listing-form').forEach(form => {
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      pendingDeleteForm = form;
-      if (titleEl) titleEl.textContent = form.dataset.listingTitle || 'بدون عنوان';
-      modal?.classList.remove('hidden');
+    function closeDeleteModal() {
+      if (!modal) return;
+      modal.classList.add('hidden');
+      pendingDeleteForm = null;
+    }
+
+    document.querySelectorAll('.js-delete-listing-form').forEach(form => {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        pendingDeleteForm = form;
+        if (titleEl) titleEl.textContent = form.dataset.listingTitle || 'بدون عنوان';
+        modal?.classList.remove('hidden');
+      });
     });
-  });
 
-  cancelBtn?.addEventListener('click', closeDeleteModal);
-  modal?.addEventListener('click', function(e) {
-    if (e.target === modal || e.target.classList.contains('bg-black/50')) closeDeleteModal();
-  });
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeDeleteModal();
-  });
-  confirmBtn?.addEventListener('click', function() {
-    if (pendingDeleteForm) pendingDeleteForm.submit();
-  });
+    cancelBtn?.addEventListener('click', closeDeleteModal);
+    modal?.addEventListener('click', function(e) {
+      if (e.target === modal || e.target.classList.contains('bg-black/50')) closeDeleteModal();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeDeleteModal();
+    });
+    confirmBtn?.addEventListener('click', function() {
+      if (pendingDeleteForm) pendingDeleteForm.submit();
+    });
 
-  function fmt(dt){
-    try{
-      const d = new Date(String(dt||'').replace(' ','T'));
-      if (isNaN(d)) return '';
-      return d.toLocaleString('fa-IR', { timeZone: 'Asia/Tehran', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
-    }catch(_){ return ''; }
-  }
-  document.querySelectorAll('.jalali-dt[data-dt]').forEach(el=>{
-    const raw = el.getAttribute('data-dt')||'';
-    el.textContent = fmt(raw) || '—';
-  });
-})();
-</script>
+    function fmt(dt){
+      try{
+        const d = new Date(String(dt||'').replace(' ','T'));
+        if (isNaN(d)) return '';
+        return d.toLocaleString('fa-IR', { timeZone: 'Asia/Tehran', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+      }catch(_){ return ''; }
+    }
+    document.querySelectorAll('.jalali-dt[data-dt]').forEach(el=>{
+      const raw = el.getAttribute('data-dt')||'';
+      el.textContent = fmt(raw) || '—';
+    });
+  })();
+  </script>
 {% endblock %}

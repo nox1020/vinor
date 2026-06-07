@@ -114,6 +114,37 @@
     }
   }
 
+  function cpPrefix(modal) {
+    return modal.getAttribute('data-cp-prefix') || '';
+  }
+
+  function pickerTriggers(modal) {
+    var cp = cpPrefix(modal);
+    var nodes = document.querySelectorAll('[data-city-picker-open="' + cp + '"]');
+    if (nodes.length) return nodes;
+    var legacy = document.getElementById(modal.getAttribute('data-trigger-id') || '');
+    return legacy ? [legacy] : [];
+  }
+
+  function pickerLabels(modal) {
+    var cp = cpPrefix(modal);
+    var nodes = document.querySelectorAll('[data-city-picker-label="' + cp + '"]');
+    if (nodes.length) return nodes;
+    var legacy = document.getElementById(modal.getAttribute('data-label-id') || '');
+    return legacy ? [legacy] : [];
+  }
+
+  function pickerTriggerRef(modal) {
+    var triggers = pickerTriggers(modal);
+    return triggers.length ? triggers[0] : null;
+  }
+
+  function setTriggersExpanded(modal, on) {
+    pickerTriggers(modal).forEach(function (trigger) {
+      trigger.setAttribute('aria-expanded', on ? 'true' : 'false');
+    });
+  }
+
   function pendingIncludes(pending, value, multi) {
     if (multi) {
       return Array.isArray(pending) && pending.indexOf(value) >= 0;
@@ -151,7 +182,7 @@
       });
     }
     var cur = el(modal, 'CurrentLabel');
-    var trigger = document.getElementById(modal.getAttribute('data-trigger-id') || '');
+    var trigger = pickerTriggerRef(modal);
     var emptyLabel = modal.getAttribute('data-empty-label') || 'انتخاب شهر';
     if (cur) {
       cur.textContent = formatTriggerLabel(modal, pending, trigger, emptyLabel);
@@ -225,9 +256,7 @@
     var multi = isMulti(modal);
     var pending = multi ? [] : '';
     var hidden = document.getElementById(modal.getAttribute('data-hidden-id') || '');
-    var label = document.getElementById(modal.getAttribute('data-label-id') || '');
-    var trigger = document.getElementById(modal.getAttribute('data-trigger-id') || '');
-    var triggerText = document.getElementById(modal.getAttribute('data-trigger-text-id') || '');
+    var trigger = pickerTriggerRef(modal);
     var form = document.getElementById(modal.getAttribute('data-form-id') || '');
     var applySubmit = modal.getAttribute('data-apply-submit') === '1';
     var emptyLabel = modal.getAttribute('data-empty-label') || 'انتخاب شهر';
@@ -274,7 +303,7 @@
       if (search) search.value = '';
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
-      if (trigger) trigger.setAttribute('aria-expanded', 'true');
+      setTriggersExpanded(modal, true);
       overlay.open();
       filterList(modal, '');
       updateSelection(modal, pending);
@@ -285,7 +314,7 @@
       if (search) search.value = '';
       modal.classList.add('hidden');
       modal.setAttribute('aria-hidden', 'true');
-      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+      setTriggersExpanded(modal, false);
       overlay.close();
       filterList(modal, '');
     }
@@ -295,7 +324,10 @@
       var v = joinHiddenValue(pending, multi);
       if (hidden) hidden.value = v;
       var display = formatTriggerLabel(modal, pending, trigger, emptyLabel);
-      if (label) label.textContent = display;
+      pickerLabels(modal).forEach(function (label) {
+        label.textContent = display;
+      });
+      var triggerText = document.getElementById(modal.getAttribute('data-trigger-text-id') || '');
       if (triggerText) {
         triggerText.textContent = display;
         triggerText.classList.toggle('text-zinc-500', multi ? !pending.length : !pending);
@@ -378,12 +410,13 @@
 
   function boot() {
     document.querySelectorAll('[data-city-picker-root]').forEach(function (modal) {
-      var trigger = document.getElementById(modal.getAttribute('data-trigger-id') || '');
-      if (!trigger || trigger.getAttribute('data-cp-bound') === '1') return;
-      trigger.setAttribute('data-cp-bound', '1');
-      trigger.addEventListener('click', function () {
-        initPicker(modal);
-        if (modal._cpOpen) modal._cpOpen();
+      initPicker(modal);
+      pickerTriggers(modal).forEach(function (trigger) {
+        if (trigger.getAttribute('data-cp-bound') === '1') return;
+        trigger.setAttribute('data-cp-bound', '1');
+        trigger.addEventListener('click', function () {
+          if (modal._cpOpen) modal._cpOpen();
+        });
       });
     });
   }

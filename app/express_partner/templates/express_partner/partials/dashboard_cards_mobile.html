@@ -1,5 +1,5 @@
-{# داشبورد همکار — لیست کارت موبایل/تبلت؛ ارتفاع با dashboard-chrome.js (syncCardsHeight) #}
-<div id="dashboardMobileCardsRoot" class="vinor-dash-cards-bleed relative max-sm:mt-0 mt-2 flex min-h-0 w-full flex-col sm:-mx-4 lg:hidden">
+{# داشبورد — لیست عمودی کارت افقی (موبایل، تبلت، و WebView) #}
+<div id="dashboardMobileCardsRoot" class="vinor-dash-cards-bleed relative max-sm:mt-0 mt-2 flex min-h-0 w-full flex-col lg:hidden">
   <div id="dashboardPullRefreshHint" class="vinor-dash-ptr pointer-events-none overflow-hidden" aria-hidden="true">
     <div class="vinor-dash-ptr__ring">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -8,26 +8,23 @@
       </svg>
     </div>
   </div>
-  <button type="button" id="cardsPrev" class="hidden sm:flex absolute right-1 top-1/2 z-10 h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800/90 dark:hover:bg-gray-700">
-    <i class="fas fa-chevron-right"></i>
-  </button>
-  <button type="button" id="cardsNext" class="hidden sm:flex absolute left-1 top-1/2 z-10 h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800/90 dark:hover:bg-gray-700">
-    <i class="fas fa-chevron-left"></i>
-  </button>
 
-  {# موبایل: اسکرول عمودی روی root — تبلت: اسکرول افقی فقط روی track #}
   <div id="cardsTrack"
-       class="no-scrollbar flex w-full min-h-0 flex-1 flex-col items-stretch gap-3 overflow-y-visible pb-4 max-sm:gap-2.5 max-sm:pb-4 sm:flex-row sm:flex-nowrap sm:items-stretch sm:overflow-x-auto sm:overflow-y-hidden sm:overscroll-x-contain sm:pb-4 sm:snap-x sm:snap-mandatory sm:[-webkit-overflow-scrolling:touch]">
+       class="no-scrollbar flex w-full min-h-0 flex-1 flex-col items-stretch gap-3 overflow-y-visible pb-4 max-sm:gap-2.5 max-sm:pb-4">
     <div id="dashboardCompactSentinel" class="vinor-dash-card-slot pointer-events-none h-px shrink-0 opacity-0" aria-hidden="true"></div>
+    <div class="vinor-dash-card-slot shrink-0 w-full">
+      {% include 'express_partner/partials/dashboard_guest_coop_cta.html' %}
+    </div>
     {% if assigned_lands|length == 0 %}
-    <div class="vinor-dash-card-slot shrink-0 w-full sm:snap-start sm:w-[min(400px,calc(100vw-0.75rem))]">
+    <div class="vinor-dash-card-slot shrink-0 w-full">
       {% include 'express_partner/partials/dashboard_empty_state.html' %}
     </div>
     {% endif %}
     {% for land in assigned_lands %}
-      <div class="vinor-dash-card-slot shrink-0 w-full sm:snap-start sm:w-[min(400px,calc(100vw-0.75rem))]">
+      <div class="vinor-dash-card-slot shrink-0 w-full">
         {% set tour_land_card = loop.first %}
         {% set card_img_eager = loop.index <= 2 %}
+        {% set card_layout = 'horizontal' %}
         {% include 'express_partner/partials/land_premium_card.html' %}
       </div>
     {% endfor %}
@@ -40,8 +37,7 @@
     </div>
     {% endif %}
     {% if assigned_lands|length > 0 %}
-    {# فضای اسکرول زیر آخرین کارت — بدون پس‌زمینهٔ جدا تا نوار مشکی دیده نشود #}
-    <div class="vinor-dash-card-tail relative z-0 mt-0 hidden shrink-0 max-sm:block sm:hidden"
+    <div class="vinor-dash-card-tail relative z-0 mt-0 shrink-0 max-sm:block sm:hidden"
          style="height: calc(5rem + env(safe-area-inset-bottom, 0px));"
          aria-hidden="true"></div>
     {% endif %}

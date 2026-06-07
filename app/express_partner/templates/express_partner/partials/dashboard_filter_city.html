@@ -1,0 +1,25 @@
+{# انتخاب شهر — داخل پنل فیلتر (مودال / سایدبار) #}
+{% if selected_cities is not defined %}
+  {% set _city_raw = request.args.get('city') if 'city' in request.args else '' %}
+  {% set selected_cities = _city_raw.split(',') if _city_raw else [] %}
+{% endif %}
+{% if cities %}
+<section class="pb-4 mb-4 border-b border-gray-100 dark:border-white/10">
+  <p class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">شهر</p>
+  <button type="button"
+          data-city-picker-open="dashCityPicker"
+          data-cities-count="{{ cities|length }}"
+          class="flex w-full items-center justify-between gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 transition hover:border-gray-300 dark:border-white/10 dark:bg-white/5 dark:text-gray-100 dark:hover:border-white/20"
+          aria-haspopup="dialog"
+          aria-controls="dashCityPickerPanel"
+          aria-expanded="false">
+    <span class="flex min-w-0 items-center gap-2">
+      <i class="fas fa-location-dot shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true"></i>
+      <span data-city-picker-label="dashCityPicker" class="truncate font-medium">
+        {% if selected_cities|length == 1 %}{{ selected_cities[0] }}{% elif selected_cities|length > 1 %}{{ selected_cities|length }} شهر{% else %}{{ cities|length }} شهر{% endif %}
+      </span>
+    </span>
+    <i class="fas fa-chevron-left shrink-0 text-[10px] text-gray-400" aria-hidden="true"></i>
+  </button>
+</section>
+{% endif %}

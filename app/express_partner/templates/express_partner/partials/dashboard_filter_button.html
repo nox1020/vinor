@@ -1,0 +1,35 @@
+{# دکمه واحد فیلتر — ویژگی + نوع ملک در مودال #}
+{% if fq is not defined %}
+  {% set fq = request.args.get('q', '') %}
+{% endif %}
+{% if ftag is not defined %}
+  {% set ftag = (request.args.get('tag', '') or '')|lower %}
+{% endif %}
+{% if fcat is not defined %}
+  {% set fcat = request.args.get('cat', '') %}
+{% endif %}
+{% if selected_cities is not defined %}
+  {% set _city_raw = request.args.get('city') if 'city' in request.args else '' %}
+  {% set selected_cities = _city_raw.split(',') if _city_raw else [] %}
+{% endif %}
+{% set filter_active = ftag or fcat or selected_cities|length > 0 %}
+
+<button type="button"
+        id="dashFilterToggle"
+        data-tour="dashboard-filters"
+        class="vinor-dash-filter-btn lg:hidden relative h-[42px] w-[42px] sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 rounded-full border sm:px-3 text-sm font-medium transition-colors
+               {% if filter_active %}
+               border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300
+               {% else %}
+               border-gray-300 dark:border-white/20 bg-white dark:bg-[#1a2230] text-gray-700 dark:text-gray-100 hover:border-gray-400 dark:hover:border-white/35
+               {% endif %}"
+        aria-haspopup="dialog"
+        aria-controls="dashFilterModal"
+        aria-expanded="false"
+        aria-label="فیلتر فایل‌ها">
+  <i class="fas fa-sliders text-[13px] opacity-80" aria-hidden="true"></i>
+  <span class="hidden sm:inline">فیلتر</span>
+  {% if filter_active %}
+  <span class="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#1a2230]" aria-hidden="true"></span>
+  {% endif %}
+</button>

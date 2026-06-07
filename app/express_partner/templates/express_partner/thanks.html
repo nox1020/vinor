@@ -62,7 +62,7 @@
             <i class="fas fa-check text-xs text-emerald-600 dark:text-emerald-400"></i>
           </div>
           <p class="text-sm text-gray-600 dark:text-gray-400">پیامک تأیید به شماره موبایل شما ارسال شد</p>
-          {% elif sms_sent == false and not pending_review|default(false) %}
+          {% elif sms_sent == false and not pending_review|default(false) and not sms_infra|default(false) %}
           <div class="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
             <i class="fas fa-exclamation text-xs text-amber-600 dark:text-amber-400"></i>
           </div>

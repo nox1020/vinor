@@ -15,7 +15,20 @@
   <!-- Tailwind (local) -->
   <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
   <script>
-    tailwind.config = { darkMode: 'class' };
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            vinor: {
+              50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
+              400: '#60a5fa', 500: '#3b82f6', 600: '#0ea5e9', 700: '#0284c7',
+              800: '#1e40af', 900: '#1e3a8a',
+            },
+          },
+        },
+      },
+    };
   </script>
 
   <!-- Font Awesome -->

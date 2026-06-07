@@ -58,92 +58,19 @@
               {% endif %}
             </div>
           </form>
-              {% if cities %}
-          <div class="relative shrink-0" id="cityFilterRoot">
-                <button type="button"
-                        id="cityFilterToggle"
-                    data-cities-count="{{ cities|length }}"
-                    class="vinor-dash-city-pill h-[42px] max-w-[7.5rem] sm:max-w-[9rem] shrink-0 inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1a2230] px-3.5 text-sm font-medium text-gray-800 dark:text-gray-100 transition-colors hover:border-gray-400 dark:hover:border-white/35"
-                    aria-haspopup="dialog"
-                    aria-controls="dashCityPickerPanel"
-                        aria-expanded="false">
-              <i class="fas fa-location-dot shrink-0 text-[15px] text-gray-500 dark:text-gray-400" aria-hidden="true"></i>
-              <span id="cityFilterLabel" class="truncate">
-                {% if selected_cities|length == 1 %}{{ selected_cities[0] }}{% elif selected_cities|length > 1 %}{{ selected_cities|length }} شهر{% else %}{{ cities|length }} شهر{% endif %}
-              </span>
-                </button>
-              </div>
-              {% endif %}
+          {% include 'express_partner/partials/dashboard_filter_button.html' %}
       </div>
-      </div>
-
-      {# فیلترها و دسته‌ها — جدا از جستجو؛ با اسکرول مخفی می‌شوند #}
-      <div id="dashboardFiltersStrip" class="dashboard-filters-strip overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-out opacity-100">
-        <div class="space-y-2 pt-0">
-
-      {# ردیف چیپ‌ها — اسکرول افقی در موبایل #}
-      <div data-tour="dashboard-filters" class="flex gap-2 overflow-x-auto no-scrollbar pb-0.5 -mx-1 px-1 snap-x snap-mandatory">
-        <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url) }}"
-           class="snap-start shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-colors
-                  {% if not ftag and not fcat %}
-                  bg-emerald-800 text-white dark:bg-emerald-900 dark:text-emerald-50 ring-1 ring-emerald-700/60
-                  {% else %}
-                  border border-gray-300 bg-gray-50 text-gray-800 dark:border-gray-600 dark:bg-gray-800/70 dark:text-gray-100 hover:border-emerald-500/50 dark:hover:border-emerald-600
-                  {% endif %}">
-          همه فیلترها
-        </a>
-        <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag='pool', cat=fcat or none) }}"
-           class="snap-start shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium border transition-colors
-                  {% if ftag == 'pool' %}
-                  border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-500
-                  {% else %}
-                  border-gray-300 bg-white text-gray-800 dark:border-gray-600 dark:bg-gray-800/40 dark:text-gray-100
-                  {% endif %}">
-          <i class="fas fa-person-swimming text-[13px] opacity-90"></i>
-          استخردار
-        </a>
-        <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag='forest', cat=fcat or none) }}"
-           class="snap-start shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium border transition-colors
-                  {% if ftag == 'forest' %}
-                  border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-500
-                  {% else %}
-                  border-gray-300 bg-white text-gray-800 dark:border-gray-600 dark:bg-gray-800/40 dark:text-gray-100
-                  {% endif %}">
-          <i class="fas fa-tree text-[13px] opacity-90"></i>
-          جنگلی
-        </a>
-        <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag='town', cat=fcat or none) }}"
-           class="snap-start shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium border transition-colors
-                  {% if ftag == 'town' %}
-                  border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-500
-                  {% else %}
-                  border-gray-300 bg-white text-gray-800 dark:border-gray-600 dark:bg-gray-800/40 dark:text-gray-100
-                  {% endif %}">
-          <i class="fas fa-city text-[13px] opacity-90"></i>
-          شهرکی
-        </a>
-        <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag='urgent', cat=fcat or none) }}"
-           class="snap-start shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium border transition-colors
-                  {% if ftag == 'urgent' %}
-                  border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-500
-                  {% else %}
-                  border-gray-300 bg-white text-gray-800 dark:border-gray-600 dark:bg-gray-800/40 dark:text-gray-100
-                  {% endif %}">
-          <i class="fas fa-location-dot text-[13px] opacity-90"></i>
-          فوری
-        </a>
-      </div>
-
-        </div>
       </div>
     </div>
   </header>
+
+  {% include 'express_partner/partials/dashboard_filter_modal.html' %}
 
   {% if cities %}
   {% include 'express_partner/partials/dashboard_city_sheet.html' %}
   {% endif %}
 
-<div id="expressDashboardMain" class="max-w-6xl mx-auto px-3 sm:px-4 max-lg:pb-0 lg:pb-16 transition-[padding-top] duration-300 ease-out" style="padding-top: 14.25rem">
+<div id="expressDashboardMain" class="max-w-6xl mx-auto px-3 sm:px-4 max-lg:pb-0 lg:pb-16 transition-[padding-top] duration-300 ease-out" style="padding-top: 6.25rem">
 
   <style>
     /*
@@ -161,7 +88,6 @@
         transition: none !important;
       }
     }
-    /* موبایل/تبلت: بدون min-height اضافه — فضای خالی تیره زیر کارت‌ها و بالای فوتر ایجاد می‌کرد */
     @media (max-width: 1023px) {
       #expressDashboardMain {
         min-height: 0;
@@ -174,9 +100,9 @@
       flex-direction:column;
       min-height:0;
     }
-    /* ارتفاع یکسان فقط در گرید دسکتاپ؛ روی ترک موبایل stretch + min-height ترک، اسکرول سند را می‌خورد */
     #cardsGrid > .express-card{
-      height:100%;
+      height:auto;
+      flex-shrink:0;
     }
     @media (hover:hover) and (pointer:fine){
       .express-card:not(.vinor-card-sold):hover{
@@ -219,7 +145,7 @@
       font-weight:900;
     }
     #dashboardFiltersStrip{
-      max-height:min(100vh,28rem);
+      display:none;
     }
     #expressDashboardHeader.dash-header--compact #dashboardFiltersStrip{
       max-height:0 !important;
@@ -327,21 +253,25 @@
     html.dark #dashboardMobileCardsRoot #cardsTrack {
       background-color: #030712;
     }
-    /* تبلت: اسکرول افقی فقط روی #cardsTrack؛ root فقط viewport ثابت می‌دهد */
+    /* تبلت: لیست عمودی کارت افقی — اسکرول با صفحه */
     @media (min-width: 640px) and (max-width: 1023px) {
       #dashboardMobileCardsRoot {
-        min-height: 12rem;
-        overflow: hidden;
-        touch-action: manipulation;
+        min-height: 0;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: visible;
       }
       #dashboardMobileCardsRoot #cardsTrack {
-        flex: 1 1 auto;
-        min-height: 0;
-        touch-action: pan-x;
         padding-inline: 0;
         padding-left: max(0.25rem, env(safe-area-inset-left, 0px));
         padding-right: max(0.25rem, env(safe-area-inset-right, 0px));
         gap: 0.625rem;
+      }
+      #dashboardMobileCardsRoot .vinor-premium-card-mobile [data-img-wrap] *:not(button):not(.pointer-events-auto) {
+        pointer-events: none;
+      }
+      #dashboardMobileCardsRoot .vinor-premium-card-mobile:not(.vinor-card-sold) [data-img-wrap] button {
+        pointer-events: auto !important;
       }
     }
     /* لایه‌های مطلق داخل تصویر؛ دکمه علاقه‌مندی و برچسب‌ها با pe:auto */
@@ -356,6 +286,9 @@
       #expressDashboardMain .vinor-premium-card-mobile:not(.vinor-card-sold) [data-img-wrap] button {
         pointer-events: auto !important;
       }
+    }
+    #cardsGrid .vinor-premium-card-mobile:not(.vinor-card-sold) [data-img-wrap] button {
+      pointer-events: auto !important;
     }
     /* pull-to-refresh — اسپینر مینیمال (بدون متن، شبیه Chrome) */
     .vinor-dash-ptr {
@@ -450,9 +383,10 @@
   <div id="dashboardCompactSentinelDesktop" class="hidden lg:block h-px w-full pointer-events-none opacity-0" aria-hidden="true"></div>
 
   {% if not dashboard_mobile_only %}
-  <!-- Desktop layout: grid + sticky sidebar (Divar style) -->
-  <div class="hidden lg:grid lg:grid-cols-12 gap-6 mt-2">
-    <div class="lg:col-span-8">
+  <!-- دسکتاپ: سایدبار فیلتر (راست) + گرید دو ستونه کارت -->
+  <div class="hidden lg:grid lg:grid-cols-12 gap-5 mt-2">
+    {% include 'express_partner/partials/dashboard_desktop_sidebar.html' %}
+    <div class="lg:col-span-9 min-w-0">
       {% include 'express_partner/partials/dashboard_cards_desktop.html' %}
       {% if dashboard_lands_truncated %}
       <div class="mt-4 text-center">
@@ -462,10 +396,7 @@
         </a>
       </div>
       {% endif %}
-            </div>
-
-    {# سایدبار آمار و میانبرها (فایل مجزا) #}
-    {% include 'express_partner/partials/dashboard_sidebar.html' %}
+    </div>
   </div>
   {% endif %}
 
@@ -808,7 +739,7 @@
   function reinitializeCards() {
     initLazyCardVideos(document);
     if (typeof window.vinorInitPremiumCards === 'function') {
-      window.vinorInitPremiumCards(document.getElementById('cardsTrack') || document);
+      window.vinorInitPremiumCards(document.getElementById('cardsTrack') || document.getElementById('cardsGrid') || document);
     } else {
       initDashboardCardMedia(document);
     }

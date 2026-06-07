@@ -77,18 +77,7 @@
   }
 
   function measureTabletCardHeight(el) {
-    try {
-      if (!window.matchMedia('(min-width: 640px) and (max-width: 1023px)').matches) return 0;
-      var track = document.getElementById('cardsTrack');
-      if (!track || !el.cardsRoot || !el.cardsRoot.contains(track)) return 0;
-      var slot = track.querySelector('.snap-start');
-      if (!slot) return 0;
-      var card = slot.querySelector('.vinor-premium-card') || slot;
-      var h = card.getBoundingClientRect().height;
-      return Number.isFinite(h) && h > 0 ? Math.ceil(h) : 0;
-    } catch (_) {
-      return 0;
-    }
+    return 0;
   }
 
   function setShellScrollLock(on) {
@@ -119,7 +108,7 @@
   function syncCardsHeight(el) {
     if (!el.cardsRoot) return;
     try {
-      if (!window.matchMedia('(max-width: 1023px)').matches) {
+      if (!window.matchMedia('(max-width: 639px)').matches) {
         clearCardsHeight(el);
         return;
       }

@@ -1,0 +1,54 @@
+{# دعوت به همکاری — مهمان و کاربر غیرهمکار؛ داخل لیست کارت‌ها #}
+{% if not is_approved|default(false) %}
+<section class="vinor-dash-coop-cta w-full mb-3 max-sm:mb-0 sm:mb-0 lg:mb-4" aria-label="دعوت به همکاری">
+  <div class="relative overflow-hidden rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-900 p-3.5 shadow-lg shadow-emerald-950/20 max-sm:p-3 sm:p-4 lg:p-5">
+    <div class="pointer-events-none absolute -left-8 -top-10 h-28 w-28 rounded-full bg-white/10 blur-2xl" aria-hidden="true"></div>
+    <div class="pointer-events-none absolute -bottom-10 -right-6 h-28 w-28 rounded-full bg-amber-400/15 blur-2xl" aria-hidden="true"></div>
+
+    <div class="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div class="min-w-0 flex-1">
+        <span class="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-50">
+          <i class="fas fa-star text-[8px] text-amber-200" aria-hidden="true"></i>
+          فرصت همکاری
+        </span>
+        <h2 class="mt-1.5 text-[15px] font-extrabold leading-snug text-white sm:text-base lg:text-lg">
+          {% if has_pending_app|default(false) %}
+          درخواستت ثبت شده — پس از تأیید پنل کامل فعال می‌شود
+          {% else %}
+          با وینور همکار شو، از فروش ملک درآمد بگیر
+          {% endif %}
+        </h2>
+        <p class="mt-1 text-[11px] leading-relaxed text-emerald-50/90 sm:text-xs lg:text-sm">
+          فایل آماده · پورسانت شفاف · پشتیبانی تیم
+        </p>
+      </div>
+
+      <div class="flex shrink-0 gap-2 sm:w-auto sm:flex-col lg:w-[9.5rem]">
+        {% if has_pending_app|default(false) %}
+        <a href="{{ url_for('express_partner.thanks') }}"
+           class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-bold text-emerald-800 shadow-md transition hover:bg-emerald-50 active:scale-[0.98] sm:flex-none sm:px-4 sm:py-2.5 sm:text-sm">
+          <i class="fas fa-clock text-[10px] sm:text-xs" aria-hidden="true"></i>
+          وضعیت درخواست
+        </a>
+        {% elif session.get('user_phone') %}
+        <a href="{{ url_for('express_partner.apply') }}"
+           class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-bold text-emerald-800 shadow-md transition hover:bg-emerald-50 active:scale-[0.98] sm:flex-none sm:px-4 sm:py-2.5 sm:text-sm">
+          <i class="fas fa-user-plus text-[10px] sm:text-xs" aria-hidden="true"></i>
+          ثبت درخواست
+        </a>
+        {% else %}
+        <a href="{{ url_for('express_partner.login', next=url_for('express_partner.apply')) }}"
+           class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-bold text-emerald-800 shadow-md transition hover:bg-emerald-50 active:scale-[0.98] sm:flex-none sm:px-4 sm:py-2.5 sm:text-sm">
+          <i class="fas fa-user-plus text-[10px] sm:text-xs" aria-hidden="true"></i>
+          شروع همکاری
+        </a>
+        {% endif %}
+        <a href="{{ url_for('express_partner.cooperation_terms') }}"
+           class="inline-flex flex-1 items-center justify-center gap-1 rounded-xl border border-white/25 bg-white/5 px-2.5 py-2 text-[11px] font-semibold text-white/95 transition hover:bg-white/10 sm:flex-none sm:text-xs">
+          شرایط
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+{% endif %}

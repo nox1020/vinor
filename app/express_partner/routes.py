@@ -74,7 +74,12 @@ from .visit_requests import (
 )
 from ..utils.dates import format_iso_date_jalali
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
-from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
+from ..services.sms import (
+    send_sms_direct,
+    normalize_iran_mobile,
+    is_valid_iran_mobile,
+    sms_is_infrastructure_error,
+)
 from app.services.sms_config import get_sms_line_number
 from flask import jsonify, make_response
 
@@ -1315,12 +1320,22 @@ def _send_partner_application_sms(me_phone: str, recipient_name: str) -> dict:
     if not ok:
         body = sms_result.get('body') or {}
         err = str(body.get('message') or body.get('error') or 'sms_send_failed')
-        current_app.logger.error(
-            'Partner application SMS failed mobile=%s status=%s body=%s',
-            mobile,
-            sms_result.get('status'),
-            body,
-        )
+        if sms_is_infrastructure_error(err):
+            time.sleep(0.6)
+            sms_result = send_sms_direct(mobile=mobile, message=sms_message, line_number=sms_line_number)
+            ok = bool(sms_result.get('ok'))
+            if ok:
+                err = None
+            else:
+                body = sms_result.get('body') or {}
+                err = str(body.get('message') or body.get('error') or err)
+        if not ok:
+            current_app.logger.error(
+                'Partner application SMS failed mobile=%s status=%s body=%s',
+                mobile,
+                sms_result.get('status'),
+                body,
+            )
 
     _append_sms_history({
         'mobile': mobile,
@@ -1337,48 +1352,22 @@ def _send_partner_application_sms(me_phone: str, recipient_name: str) -> dict:
     })
 
     try:
-        admin_phone_raw = settings.get('partner_application_admin_phone', '09121471301')
-        admin_phone = normalize_iran_mobile(admin_phone_raw)
-        admin_sms_message = (settings.get('partner_application_admin_sms_message') or '').strip()
-        if not admin_sms_message:
-            admin_sms_message = 'درخواست همکاری جدید همکار در وینور ثبت شد.'
-        if is_valid_iran_mobile(admin_phone):
-            admin_sms_result = send_sms_direct(
-                mobile=admin_phone,
-                message=admin_sms_message,
-                line_number=sms_line_number,
-            )
-            admin_ok = bool(admin_sms_result.get('ok'))
-            admin_err = None if admin_ok else str(
-                (admin_sms_result.get('body') or {}).get('message')
-                or (admin_sms_result.get('body') or {}).get('error')
-                or 'sms_send_failed'
-            )
-            _append_sms_history({
-                'mobile': admin_phone,
-                'recipient_name': 'admin',
-                'template_id': None,
-                'message': admin_sms_message,
-                'parameters': {},
-                'success': admin_ok,
-                'status_code': admin_sms_result.get('status', 0),
-                'response': admin_sms_result.get('body', {}),
-                'source': 'express_partner_application_admin',
-                'created_at': datetime.utcnow().isoformat() + 'Z',
-                'error': admin_err,
-            })
+        from .admin_action_sms import notify_admin_pending_action
+        notify_admin_pending_action(
+            'application',
+            partner_name=recipient_name,
+            partner_phone=mobile,
+        )
     except Exception as admin_err:
         current_app.logger.error('Admin SMS error: %s', admin_err, exc_info=True)
 
-    return {'ok': ok, 'skipped': False, 'error': err, 'mobile': mobile}
-
-
-def _format_toman_sms(amount: int) -> str:
-    v = max(0, int(amount or 0))
-    if v == 0:
-        return '0'
-    s = f'{v:,}'
-    return s.replace(',', '،')
+    return {
+        'ok': ok,
+        'skipped': False,
+        'error': err,
+        'mobile': mobile,
+        'infra_error': (not ok) and sms_is_infrastructure_error(err),
+    }
 
 
 def _send_withdrawal_admin_sms(
@@ -1389,49 +1378,14 @@ def _send_withdrawal_admin_sms(
     bank_summary: str,
 ) -> dict:
     """اطلاع‌رسانی پیامکی درخواست برداشت جدید به ادمین."""
-    settings = load_settings(current_app) or {}
-    admin_phone_raw = settings.get('partner_application_admin_phone', '09121471301')
-    admin_phone = normalize_iran_mobile(admin_phone_raw)
-    sms_line_number = (settings.get('sms_line_number') or get_sms_line_number() or '300089930616').strip()
-
-    if not is_valid_iran_mobile(admin_phone):
-        current_app.logger.warning('Withdrawal admin SMS skipped: invalid admin phone %r', admin_phone_raw)
-        return {'ok': False, 'skipped': True, 'error': 'invalid_admin_phone'}
-
-    name = (partner_name or '').strip() or partner_phone
-    bank = (bank_summary or '').strip() or '—'
-    amt = _format_toman_sms(amount)
-    msg = (
-        f'درخواست برداشت وینور\n'
-        f'همکار: {name}\n'
-        f'موبایل: {partner_phone}\n'
-        f'مبلغ: {amt} تومان\n'
-        f'حساب: {bank}'
+    from .admin_action_sms import notify_admin_pending_action
+    return notify_admin_pending_action(
+        'withdrawal',
+        partner_phone=partner_phone,
+        partner_name=partner_name,
+        amount=amount,
+        bank_summary=bank_summary,
     )
-    sms_result = send_sms_direct(mobile=admin_phone, message=msg, line_number=sms_line_number)
-    ok = bool(sms_result.get('ok'))
-    err = None
-    if not ok:
-        body = sms_result.get('body') or {}
-        err = str(body.get('message') or body.get('error') or 'sms_send_failed')
-        current_app.logger.error(
-            'Withdrawal admin SMS failed admin=%s status=%s body=%s',
-            admin_phone,
-            sms_result.get('status'),
-            body,
-        )
-    _append_sms_history({
-        'type': 'withdrawal_admin_notify',
-        'mobile': admin_phone,
-        'partner_phone': partner_phone,
-        'message': msg,
-        'ok': ok,
-        'error': err,
-        'status_code': sms_result.get('status', 0),
-        'response': sms_result.get('body', {}),
-        'created_at': datetime.utcnow().isoformat() + 'Z',
-    })
-    return {'ok': ok, 'skipped': False, 'error': err}
 
 
 def _format_visit_date_sms(iso_date: str) -> str:
@@ -1448,59 +1402,25 @@ def _send_visit_admin_sms(
     visit_date: str,
 ) -> dict:
     """اطلاع‌رسانی پیامکی درخواست بازدید جدید به ادمین."""
-    settings = load_settings(current_app) or {}
-    admin_phone_raw = settings.get('partner_application_admin_phone', '09121471301')
-    admin_phone = normalize_iran_mobile(admin_phone_raw)
-    sms_line_number = (settings.get('sms_line_number') or get_sms_line_number() or '300089930616').strip()
-
-    if not is_valid_iran_mobile(admin_phone):
-        current_app.logger.warning('Visit admin SMS skipped: invalid admin phone %r', admin_phone_raw)
-        return {'ok': False, 'skipped': True, 'error': 'invalid_admin_phone'}
-
-    name = (partner_name or '').strip() or partner_phone
-    title = (land_title or '').strip() or land_code
-    vdate = _format_visit_date_sms(visit_date)
-    msg = (
-        f'درخواست بازدید وینور\n'
-        f'همکار: {name}\n'
-        f'موبایل: {partner_phone}\n'
-        f'فایل: {title} ({land_code})\n'
-        f'تاریخ بازدید: {vdate}'
+    from .admin_action_sms import notify_admin_pending_action
+    return notify_admin_pending_action(
+        'visit',
+        partner_phone=partner_phone,
+        partner_name=partner_name,
+        land_code=land_code,
+        land_title=land_title,
+        visit_date=_format_visit_date_sms(visit_date),
     )
-    sms_result = send_sms_direct(mobile=admin_phone, message=msg, line_number=sms_line_number)
-    ok = bool(sms_result.get('ok'))
-    err = None
-    if not ok:
-        body = sms_result.get('body') or {}
-        err = str(body.get('message') or body.get('error') or 'sms_send_failed')
-        current_app.logger.error(
-            'Visit admin SMS failed admin=%s status=%s body=%s',
-            admin_phone,
-            sms_result.get('status'),
-            body,
-        )
-    _append_sms_history({
-        'type': 'visit_admin_notify',
-        'mobile': admin_phone,
-        'partner_phone': partner_phone,
-        'land_code': land_code,
-        'message': msg,
-        'ok': ok,
-        'error': err,
-        'status_code': sms_result.get('status', 0),
-        'response': sms_result.get('body', {}),
-        'created_at': datetime.utcnow().isoformat() + 'Z',
-    })
-    return {'ok': ok, 'skipped': False, 'error': err}
 
 
-def _redirect_apply_thanks(name: str, *, fresh_submit: bool, sms_sent: bool | None = None, sms_skipped: bool = False, sms_error: str | None = None):
+def _redirect_apply_thanks(name: str, *, fresh_submit: bool, sms_sent: bool | None = None, sms_skipped: bool = False, sms_error: str | None = None, sms_infra_error: bool = False):
     session['apply_thanks_context'] = {
         'name': name or '',
         'fresh_submit': bool(fresh_submit),
         'sms_sent': sms_sent,
         'sms_skipped': bool(sms_skipped),
         'sms_error': sms_error,
+        'sms_infra_error': bool(sms_infra_error),
     }
     return redirect(url_for('express_partner.thanks'))
 
@@ -1514,22 +1434,29 @@ def apply_thanks():
     ctx = session.pop('apply_thanks_context', None) or {}
 
     if ctx.get('fresh_submit'):
-        if ctx.get('sms_sent') is False and not ctx.get('sms_skipped'):
-            flash(
-                'درخواست ثبت شد اما ارسال پیامک تأیید ناموفق بود. درخواست شما در صف بررسی است.',
-                'warning',
-            )
-        elif ctx.get('sms_skipped'):
+        sms_sent = ctx.get('sms_sent')
+        sms_skipped = ctx.get('sms_skipped', False)
+        sms_infra = ctx.get('sms_infra_error', False)
+        # خطای زیرساخت (شبکه/DNS) — پیام خنثی؛ فقط در لاگ ثبت شده
+        if sms_sent is False and sms_infra:
+            sms_sent = None
+        elif sms_sent is False and sms_skipped:
             flash(
                 'درخواست ثبت شد. به‌دلیل مشکل در شماره موبایل، پیامک تأیید ارسال نشد.',
+                'warning',
+            )
+        elif sms_sent is False:
+            flash(
+                'درخواست ثبت شد اما ارسال پیامک تأیید ناموفق بود. درخواست شما در صف بررسی است.',
                 'warning',
             )
         return render_template(
             'express_partner/thanks.html',
             name=ctx.get('name') or '',
             pending_review=False,
-            sms_sent=ctx.get('sms_sent'),
-            sms_skipped=ctx.get('sms_skipped', False),
+            sms_sent=sms_sent,
+            sms_skipped=sms_skipped and sms_sent is not False,
+            sms_infra=sms_infra,
         )
 
     if _is_partner_approved(_partner_profile_for_phone(me_phone)):
@@ -1597,7 +1524,13 @@ def _submit_partner_application(me_phone: str, data: dict):
         sms_out = _send_partner_application_sms(me_phone, data.get('name', ''))
     except Exception as e:
         current_app.logger.error('Application SMS flow error: %s', e, exc_info=True)
-        sms_out = {'ok': False, 'skipped': False, 'error': str(e)}
+        err_msg = str(e)
+        sms_out = {
+            'ok': False,
+            'skipped': False,
+            'error': err_msg,
+            'infra_error': sms_is_infrastructure_error(err_msg),
+        }
 
     session.pop('apply_data', None)
     return _redirect_apply_thanks(
@@ -1606,6 +1539,7 @@ def _submit_partner_application(me_phone: str, data: dict):
         sms_sent=bool(sms_out.get('ok')),
         sms_skipped=bool(sms_out.get('skipped')),
         sms_error=sms_out.get('error'),
+        sms_infra_error=bool(sms_out.get('infra_error')),
     )
 
 
@@ -3640,6 +3574,21 @@ def mark_in_transaction(code: str):
                                     
                                     commissions.append(new_commission)
                                     created_count += 1
+                                    try:
+                                        from .admin_action_sms import notify_admin_pending_action
+                                        notify_admin_pending_action(
+                                            'commission',
+                                            partner_phone=partner_phone,
+                                            partner_name=_partner_display_name(partner_phone),
+                                            land_code=str(code),
+                                            amount=commission_amount,
+                                        )
+                                    except Exception:
+                                        current_app.logger.exception(
+                                            'commission pending admin SMS failed partner=%s land=%s',
+                                            partner_phone,
+                                            code,
+                                        )
                                     try:
                                         from .commission_sms import notify_partner_commission_txn
                                         notify_partner_commission_txn(

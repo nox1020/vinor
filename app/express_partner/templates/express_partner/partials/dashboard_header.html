@@ -54,88 +54,15 @@
             {% endif %}
           </div>
         </form>
-        {% if cities %}
-        <div class="relative shrink-0" id="cityFilterRoot">
-          <button type="button"
-                  id="cityFilterToggle"
-                  data-cities-count="{{ cities|length }}"
-                  class="vinor-dash-city-pill h-[42px] max-w-[7.5rem] sm:max-w-[9rem] shrink-0 inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1a2230] px-3.5 text-sm font-medium text-gray-800 dark:text-gray-100 transition-colors hover:border-gray-400 dark:hover:border-white/35"
-                  aria-haspopup="dialog"
-                  aria-controls="dashCityPickerPanel"
-                  aria-expanded="false">
-            <i class="fas fa-location-dot shrink-0 text-[15px] text-gray-500 dark:text-gray-400" aria-hidden="true"></i>
-            <span id="cityFilterLabel" class="truncate">
-              {% if selected_cities|length == 1 %}{{ selected_cities[0] }}{% elif selected_cities|length > 1 %}{{ selected_cities|length }} شهر{% else %}{{ cities|length }} شهر{% endif %}
-            </span>
-          </button>
-        </div>
-        {% endif %}
+        {% include 'express_partner/partials/dashboard_filter_button.html' %}
       </div>
     </div>
 
-    {# بنر «همکار ما باشی» در dashboard اصلی داخل #expressDashboardMain (زیر هدر/فیلتر) رندر می‌شود #}
-
-    {# فیلترها و دسته‌ها — جدا از جستجو؛ با اسکرول مخفی می‌شوند #}
-    <div id="dashboardFiltersStrip" class="dashboard-filters-strip overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-out opacity-100">
-      <div class="space-y-2 pt-0">
-
-        {# ردیف چیپ‌ها — اسکرول افقی در موبایل #}
-        <div data-tour="dashboard-filters" class="flex gap-2 overflow-x-auto no-scrollbar pb-0.5 -mx-1 px-1 snap-x snap-mandatory">
-          <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url) }}"
-             class="snap-start shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-colors
-                    {% if not ftag and not fcat %}
-                    bg-emerald-800 text-white dark:bg-emerald-900 dark:text-emerald-50 ring-1 ring-emerald-700/60
-                    {% else %}
-                    border border-gray-300 bg-gray-50 text-gray-800 dark:border-gray-600 dark:bg-gray-800/70 dark:text-gray-100 hover:border-emerald-500/50 dark:hover:border-emerald-600
-                    {% endif %}">
-            همه فیلترها
-          </a>
-          <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag='pool') }}"
-             class="snap-start shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium border transition-colors
-                    {% if ftag == 'pool' %}
-                    border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-500
-                    {% else %}
-                    border-gray-300 bg-white text-gray-800 dark:border-gray-600 dark:bg-gray-800/40 dark:text-gray-100
-                    {% endif %}">
-            <i class="fas fa-person-swimming text-[13px] opacity-90"></i>
-            استخردار
-          </a>
-          <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag='forest') }}"
-             class="snap-start shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium border transition-colors
-                    {% if ftag == 'forest' %}
-                    border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-500
-                    {% else %}
-                    border-gray-300 bg-white text-gray-800 dark:border-gray-600 dark:bg-gray-800/40 dark:text-gray-100
-                    {% endif %}">
-            <i class="fas fa-tree text-[13px] opacity-90"></i>
-            جنگلی
-          </a>
-          <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag='town') }}"
-             class="snap-start shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium border transition-colors
-                    {% if ftag == 'town' %}
-                    border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-500
-                    {% else %}
-                    border-gray-300 bg-white text-gray-800 dark:border-gray-600 dark:bg-gray-800/40 dark:text-gray-100
-                    {% endif %}">
-            <i class="fas fa-city text-[13px] opacity-90"></i>
-            شهرکی
-          </a>
-          <a href="{{ url_for('express_partner.dashboard', q=fq or none, city=city_url, tag='urgent') }}"
-             class="snap-start shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium border transition-colors
-                    {% if ftag == 'urgent' %}
-                    border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-500
-                    {% else %}
-                    border-gray-300 bg-white text-gray-800 dark:border-gray-600 dark:bg-gray-800/40 dark:text-gray-100
-                    {% endif %}">
-            <i class="fas fa-location-dot text-[13px] opacity-90"></i>
-            فوری
-          </a>
-        </div>
-
-      </div>
-    </div>
+    {# بنر «همکار ما باشی» در dashboard اصلی داخل #expressDashboardMain (زیر هدر) رندر می‌شود #}
   </div>
 </header>
+
+{% include 'express_partner/partials/dashboard_filter_modal.html' %}
 
 {% if cities %}
 {% include 'express_partner/partials/dashboard_city_sheet.html' %}

@@ -23,6 +23,38 @@ class OnboardingTour {
     );
   }
 
+  isDashboardPath(path = window.location.pathname) {
+    return path.includes('/dashboard') || path === '/express/partner/' || path === '/express/partner';
+  }
+
+  isLandDetailPath(path = window.location.pathname) {
+    return path.includes('/lands/') || path.includes('/land_detail');
+  }
+
+  findTourElement(selector) {
+    const nodes = document.querySelectorAll(selector);
+    for (const el of nodes) {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) return el;
+    }
+    return nodes.length ? nodes[0] : null;
+  }
+
+  persistTourNavigation(nextStepIndex, targetUrl) {
+    sessionStorage.setItem('vinor_tour_step', nextStepIndex.toString());
+    sessionStorage.setItem('vinor_tour_data', JSON.stringify(this.tourData));
+    if (targetUrl && this.isLandDetailPath(targetUrl)) {
+      sessionStorage.setItem('vinor_tour_land_url', targetUrl);
+    }
+    window.location.href = targetUrl;
+  }
+
+  clearTourSession() {
+    sessionStorage.removeItem('vinor_tour_step');
+    sessionStorage.removeItem('vinor_tour_data');
+    sessionStorage.removeItem('vinor_start_full_tour');
+  }
+
   init() {
     if (this.isAuthPage()) return;
 
@@ -31,65 +63,59 @@ class OnboardingTour {
     const tourData = sessionStorage.getItem('vinor_tour_data');
     
     if (tourStep !== null && tourData) {
-      // تور باید ادامه یابد
-      this.tourData = JSON.parse(tourData);
-      this.currentStep = parseInt(tourStep);
+      try {
+        this.tourData = JSON.parse(tourData);
+      } catch (e) {
+        console.warn('Invalid tour session data, clearing.', e);
+        this.clearTourSession();
+        return;
+      }
+      this.currentStep = parseInt(tourStep, 10);
+      if (Number.isNaN(this.currentStep)) {
+        this.clearTourSession();
+        return;
+      }
       this.isActive = true;
-      
-      // تاخیر کوتاه برای اطمینان از لود شدن صفحه
+
       setTimeout(() => {
         this.createOverlay();
         this.showStep(this.currentStep);
       }, 500);
-      
-      // پاک کردن sessionStorage
-      sessionStorage.removeItem('vinor_tour_step');
-      sessionStorage.removeItem('vinor_tour_data');
       return;
     }
 
-    // بررسی اینکه آیا باید تور کامل شروع شود
     const startFullTour = sessionStorage.getItem('vinor_start_full_tour');
     if (startFullTour === 'true') {
       sessionStorage.removeItem('vinor_start_full_tour');
       setTimeout(() => {
         this.startTour(true);
-      }, 2000);
-      return;
-    }
-
-    // تور فقط در اولین ورود به‌صورت خودکار نمایش داده می‌شود (بعد از بستن یا اتمام، دیگر تکرار نمی‌شود)
-    const hasSeenTour = localStorage.getItem('vinor_onboarding_completed');
-    if (!hasSeenTour) {
-      setTimeout(() => {
-        this.startTour();
-      }, 2000);
+      }, 800);
     }
   }
 
   startTour(force = false) {
     if (this.isActive && !force) return;
-    
+
+    if (force && this.isActive) {
+      this.removeTourUiImmediate();
+      this.isActive = false;
+    }
+
     this.isActive = true;
     this.currentStep = 0;
-    
-    // اگر force است (اجرای مجدد)، تور کامل را اجرا کن
+
     if (force) {
       this.tourData = this.getFullTour();
-      // اگر در صفحه dashboard نیستیم، ابتدا به dashboard برو
-      const path = window.location.pathname;
-      if (!path.includes('/dashboard') && path !== '/express/partner/' && path !== '/express/partner') {
-        // ذخیره تور برای اجرا بعد از redirect
+      if (!this.isDashboardPath()) {
         sessionStorage.setItem('vinor_start_full_tour', 'true');
         window.location.href = '/express/partner/dashboard';
         return;
       }
     } else {
-      // تعیین تور بر اساس صفحه فعلی (فقط برای اولین بار)
       const path = window.location.pathname;
-      if (path.includes('/dashboard') || path === '/express/partner/' || path === '/express/partner') {
+      if (this.isDashboardPath(path)) {
         this.tourData = this.getDashboardTour();
-      } else if (path.includes('/lands/') || path.includes('/land_detail')) {
+      } else if (this.isLandDetailPath(path)) {
         this.tourData = this.getLandDetailTour();
       } else if (path.includes('/commissions')) {
         this.tourData = this.getCommissionsTour();
@@ -97,8 +123,9 @@ class OnboardingTour {
         this.tourData = this.getNotesTour();
       } else if (path.includes('/profile')) {
         this.tourData = this.getProfileTour();
+      } else if (path.includes('/support')) {
+        this.tourData = this.getSupportTour();
       } else {
-        // تور پیش‌فرض برای داشبورد
         this.tourData = this.getDashboardTour();
       }
     }
@@ -258,6 +285,29 @@ class OnboardingTour {
         element: '[data-tour="bottom-nav"]',
         title: 'منوی پایین 📱',
         description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید: فایل‌ها، پورسانت‌ها، اعلان‌ها و پروفایل.',
+        position: 'top'
+      }
+    ];
+  }
+
+  getSupportTour() {
+    return [
+      {
+        element: '[data-tour="help-link"]',
+        title: 'راهنمای استفاده 📚',
+        description: 'راهنمای کامل استفاده از پلتفرم را از اینجا مطالعه کنید.',
+        position: 'top'
+      },
+      {
+        element: '[data-tour="restart-tour"]',
+        title: 'اجرای تور راهنما 🔄',
+        description: 'برای مشاهدهٔ آموزش‌های پلتفرم از ابتدا، روی این دکمه بزنید.',
+        position: 'top'
+      },
+      {
+        element: '[data-tour="bottom-nav"]',
+        title: 'منوی پایین 📱',
+        description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید.',
         position: 'top'
       }
     ];
@@ -467,6 +517,10 @@ class OnboardingTour {
   }
 
   createOverlay() {
+    if (this.overlay || this.tooltip) {
+      this.removeTourUiImmediate();
+    }
+
     // ایجاد overlay
     this.overlay = document.createElement('div');
     this.overlay.className = 'onboarding-overlay';
@@ -606,11 +660,15 @@ class OnboardingTour {
     // بررسی اینکه آیا در صفحه صحیح هستیم
     if (step.page) {
       const currentPath = window.location.pathname;
-      const expectedPath = this.getExpectedPath(step.page);
       const isOnCorrectPage = this.isOnCorrectPage(currentPath, step.page);
-      
+
       if (!isOnCorrectPage) {
-        // باید به صفحه صحیح redirect کنیم
+        const expectedPath = this.getExpectedPath(step.page);
+        if (!expectedPath) {
+          console.warn(`Tour step ${index + 1}: skipping — page unavailable (${step.page})`);
+          setTimeout(() => this.showStep(index + 1), 300);
+          return;
+        }
         sessionStorage.setItem('vinor_tour_step', index.toString());
         sessionStorage.setItem('vinor_tour_data', JSON.stringify(this.tourData));
         window.location.href = expectedPath;
@@ -618,45 +676,40 @@ class OnboardingTour {
       }
     }
 
-    let element = document.querySelector(step.element);
+    this.clearTourSession();
+
+    let element = this.findTourElement(step.element);
     
     // اگر المنت پیدا نشد و waitForElement فعال است، منتظر بمان
     if (!element && step.waitForElement) {
       let attempts = 0;
       const maxAttempts = 20; // 10 ثانیه
       const checkElement = setInterval(() => {
-        element = document.querySelector(step.element);
+        element = this.findTourElement(step.element);
         attempts++;
         if (element || attempts >= maxAttempts) {
           clearInterval(checkElement);
           if (!element) {
-            // اگر بعد از 10 ثانیه هم پیدا نشد، لاگ کن و به مرحله بعد برو
             console.warn(`Tour step ${index + 1}: Element not found after waiting: ${step.element}`);
             this.showStep(index + 1);
             return;
           }
-          // المنت پیدا شد، ادامه بده
-          this.showStep(index);
+          this.renderStep(index, element, step);
         }
       }, 500);
       return;
     }
 
     if (!element) {
-      // اگر المنت پیدا نشد، لاگ کن و به مرحله بعد برو
       console.warn(`Tour step ${index + 1}: Element not found: ${step.element}`);
-      // اگر المنت مهم است (waitForElement) و پیدا نشد، تور را متوقف کن
-      if (step.waitForElement) {
-        console.error(`Tour stopped: Required element not found: ${step.element}`);
-        this.completeTour(false);
-        return;
-      }
-      // در غیر این صورت به مرحله بعد برو
-      setTimeout(() => this.showStep(index + 1), 500);
+      setTimeout(() => this.showStep(index + 1), 300);
       return;
     }
 
-    // محاسبه موقعیت
+    this.renderStep(index, element, step);
+  }
+
+  renderStep(index, element, step) {
     const rect = element.getBoundingClientRect();
     const position = this.calculatePosition(rect, step.position);
 
@@ -770,11 +823,7 @@ class OnboardingTour {
         }
 
         if (targetUrl) {
-          // ذخیره وضعیت تور
-          sessionStorage.setItem('vinor_tour_step', (index + 1).toString());
-          sessionStorage.setItem('vinor_tour_data', JSON.stringify(this.tourData));
-          // رفتن به صفحه بعدی
-          window.location.href = targetUrl;
+          this.persistTourNavigation(index + 1, targetUrl);
         } else {
           // اگر المنت یک دکمه است که فرم را نمایش می‌دهد (مثل دکمه + در notes)
           // بررسی اینکه آیا المنت onclick دارد که فرم را نمایش می‌دهد
@@ -814,9 +863,13 @@ class OnboardingTour {
   }
 
   getExpectedPath(page) {
+    if (page === 'land_detail') {
+      const landUrl = sessionStorage.getItem('vinor_tour_land_url');
+      return landUrl && this.isLandDetailPath(landUrl) ? landUrl : null;
+    }
+
     const paths = {
       'dashboard': '/express/partner/dashboard',
-      'land_detail': '/express/partner/lands',
       'commissions': '/express/partner/commissions',
       'notes': '/express/partner/notes',
       'profile': '/express/partner/profile',
@@ -827,13 +880,13 @@ class OnboardingTour {
 
   isOnCorrectPage(currentPath, expectedPage) {
     if (expectedPage === 'dashboard') {
-      return currentPath.includes('/dashboard') || currentPath === '/express/partner/' || currentPath === '/express/partner';
+      return this.isDashboardPath(currentPath);
     } else if (expectedPage === 'land_detail') {
-      return currentPath.includes('/lands/') || currentPath.includes('/land_detail');
+      return this.isLandDetailPath(currentPath);
     } else if (expectedPage === 'commissions') {
-      return currentPath.includes('/commissions');
+      return /\/commissions\/?$/.test(currentPath);
     } else if (expectedPage === 'notes') {
-      return currentPath.includes('/notes');
+      return /\/notes\/?$/.test(currentPath);
     } else if (expectedPage === 'profile') {
       return currentPath.includes('/profile') && !currentPath.includes('/profile/');
     } else if (expectedPage === 'support') {
@@ -843,15 +896,12 @@ class OnboardingTour {
   }
 
   navigateToNext(url) {
-    sessionStorage.setItem('vinor_tour_step', (this.currentStep + 1).toString());
-    sessionStorage.setItem('vinor_tour_data', JSON.stringify(this.tourData));
-    window.location.href = url;
+    this.persistTourNavigation(this.currentStep + 1, url);
   }
 
   autoNavigateToNext(stepIndex) {
-    // برای auto-navigate، باید URL را از المنت بگیریم یا action را اجرا کنیم
     const step = this.tourData[stepIndex];
-    const element = document.querySelector(step.element);
+    const element = this.findTourElement(step.element);
     
     if (!element) {
       // اگر المنت پیدا نشد، به مرحله بعد برو
@@ -890,13 +940,8 @@ class OnboardingTour {
     }
 
     if (targetUrl) {
-      // ذخیره وضعیت تور
-      sessionStorage.setItem('vinor_tour_step', (stepIndex + 1).toString());
-      sessionStorage.setItem('vinor_tour_data', JSON.stringify(this.tourData));
-      // رفتن به صفحه بعدی
-      window.location.href = targetUrl;
+      this.persistTourNavigation(stepIndex + 1, targetUrl);
     } else {
-      // اگر URL پیدا نشد، به مرحله بعد برو (شاید المنت بعدی در همان صفحه باشد)
       console.warn('Could not find URL for auto-navigate, proceeding to next step');
       this.nextStep();
     }
@@ -1059,34 +1104,54 @@ class OnboardingTour {
     }
   }
 
-  closeTour() {
-    // بستن تور و ذخیرهٔ «دیده‌شدن» تا فقط بار اول به‌صورت خودکار نمایش داده شود
-    this.completeTour(true);
+  removeTourUiImmediate() {
+    const backdrop = document.querySelector('.onboarding-backdrop');
+    if (backdrop) backdrop.remove();
+
+    if (this.overlay) {
+      this.overlay.remove();
+      this.overlay = null;
+    }
+    if (this.tooltip) {
+      this.tooltip.remove();
+      this.tooltip = null;
+    }
+
+    document.querySelectorAll('.onboarding-highlight').forEach(el => {
+      el.classList.remove('onboarding-highlight');
+      el.style.outline = '';
+      el.style.outlineOffset = '';
+      el.style.zIndex = '';
+      el.style.position = '';
+      el.style.transition = '';
+    });
   }
 
-  completeTour(saveCompletion = true) {
-    // همیشه ذخیره کن که کاربر تور را دیده (اولین ورود تمام شد)؛ اجرای مجدد از پروفایل امکان‌پذیر است
-    localStorage.setItem('vinor_onboarding_completed', 'true');
-    
-    // حذف backdrop
+  closeTour() {
+    this.completeTour();
+  }
+
+  completeTour() {
     const backdrop = document.querySelector('.onboarding-backdrop');
     if (backdrop) {
       backdrop.style.opacity = '0';
       setTimeout(() => backdrop.remove(), 300);
     }
-    
-    // حذف overlay و tooltip با انیمیشن
+
     if (this.overlay) {
       this.overlay.style.opacity = '0';
-      setTimeout(() => this.overlay.remove(), 300);
+      const overlay = this.overlay;
+      setTimeout(() => overlay.remove(), 300);
+      this.overlay = null;
     }
     if (this.tooltip) {
       this.tooltip.style.opacity = '0';
       this.tooltip.style.transform = 'scale(0.95) translateY(-10px)';
-      setTimeout(() => this.tooltip.remove(), 300);
+      const tooltip = this.tooltip;
+      setTimeout(() => tooltip.remove(), 300);
+      this.tooltip = null;
     }
 
-    // حذف highlight
     document.querySelectorAll('.onboarding-highlight').forEach(el => {
       el.classList.remove('onboarding-highlight');
       el.style.outline = '';
@@ -1096,23 +1161,24 @@ class OnboardingTour {
       el.style.transition = '';
     });
 
-    // پاک کردن sessionStorage برای تور در حال اجرا
-    sessionStorage.removeItem('vinor_tour_step');
-    sessionStorage.removeItem('vinor_tour_data');
-    sessionStorage.removeItem('vinor_start_full_tour');
-
+    sessionStorage.removeItem('vinor_tour_land_url');
+    this.clearTourSession();
     this.isActive = false;
   }
 
   restartTour() {
-    localStorage.removeItem('vinor_onboarding_completed');
-    // شروع تور کامل از dashboard
-    const path = window.location.pathname;
-    if (!path.includes('/dashboard') && path !== '/express/partner/' && path !== '/express/partner') {
+    if (this.isActive) {
+      this.removeTourUiImmediate();
+      this.isActive = false;
+    }
+
+    sessionStorage.removeItem('vinor_tour_land_url');
+
+    if (!this.isDashboardPath()) {
       sessionStorage.setItem('vinor_start_full_tour', 'true');
       window.location.href = '/express/partner/dashboard';
     } else {
-      this.startTour(true);
+      setTimeout(() => this.startTour(true), 200);
     }
   }
 }
@@ -1120,7 +1186,7 @@ class OnboardingTour {
 // ایجاد instance جهانی
 window.onboardingTour = new OnboardingTour();
 
-// شروع خودکار تور فقط پس از لود کامل صفحه
+// بارگذاری اسکریپت — تور فقط با درخواست کاربر (صفحه پشتیبانی) شروع می‌شود
 if (document.readyState === 'complete') {
   window.onboardingTour.init();
 } else {
