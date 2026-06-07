@@ -308,8 +308,8 @@ class OnboardingTour {
       },
       {
         element: '[data-tour="help-link"]',
-        title: 'راهنما 📚',
-        description: 'راهنمای پلتفرم و اجرای مجدد تور آموزشی از این آیکن در بالای صفحه در دسترس است.',
+        title: 'راهنمای همکار 📚',
+        description: 'اصول همکاری با وینور، مسیر کار در پنل و پاسخ سوالات پرتکرار همکاران اینجاست.',
         position: 'bottom'
       },
       {
@@ -522,8 +522,8 @@ class OnboardingTour {
       // مرحله 18: راهنما (صفحه پشتیبانی)
       {
         element: '[data-tour="help-link"]',
-        title: 'راهنمای استفاده 📚',
-        description: 'راهنمای کامل استفاده از پلتفرم را از اینجا مطالعه کنید.',
+        title: 'راهنمای همکار 📚',
+        description: 'اصول وینور، مسیر فایل تا پورسانت و سوالات پرتکرار همکاران را از اینجا بخوانید.',
         position: 'top',
         page: 'support',
         action: 'navigate',

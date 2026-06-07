@@ -2,138 +2,200 @@
 {% block title %}راهنما | وینور اکسپرس{% endblock %}
 {% block content %}
 
-  <!-- Header - سبک دیوار (تمام‌عرض) -->
   <header class="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 w-full">
     <div class="w-full px-4 h-14 flex items-center justify-between">
-      <a href="{{ url_for('express_partner.profile') }}" class="w-9 h-9 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="بازگشت">
+      <a href="{{ url_for('express_partner.support') }}" data-vinor-express-nav="back" class="w-9 h-9 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="بازگشت به پشتیبانی">
         <i class="fas fa-arrow-right text-gray-600 dark:text-gray-400"></i>
       </a>
-      <h1 class="text-sm font-bold text-gray-900 dark:text-white">راهنما</h1>
+      <h1 class="text-sm font-bold text-gray-900 dark:text-white">راهنمای همکار</h1>
       <div class="w-9"></div>
     </div>
   </header>
 
 <div class="max-w-6xl mx-auto pt-0 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
 
-  <!-- درباره وینور -->
-  <section class="mt-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-    <h2 class="text-base font-bold text-gray-900 dark:text-white mb-3">درباره وینور</h2>
-    <p class="text-sm text-gray-700 dark:text-gray-300 leading-6 mb-3">
-      وینور پلتفرم هوشمند خرید و فروش زمین، باغ و ویلاست که با تمرکز بر سرعت، سادگی و امنیت ساخته شده. 
-      با پرونده‌های تأیید‌شده، فیلترهای دقیق و پشتیبانی تا عقد قرارداد، تجربه‌ای مطمئن و سریع خواهید داشت.
-    </p>
-    <div class="flex flex-wrap gap-2 mt-3">
-      <span class="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-gray-700 dark:text-gray-300">
-        پرونده‌های تأییدشده
-      </span>
-      <span class="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-gray-700 dark:text-gray-300">
-        فیلترهای هوشمند
-      </span>
-      <span class="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-gray-700 dark:text-gray-300">
-        پشتیبانی کامل
-      </span>
-    </div>
-  </section>
-
-  <!-- سوالات پرتکرار -->
-  <section class="mt-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-    <h2 class="text-base font-bold text-gray-900 dark:text-white mb-3">سوالات پرتکرار</h2>
-    
-    <div class="space-y-4">
-      <div>
-        <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1.5">وینور چیست؟</h3>
-        <p class="text-sm text-gray-700 dark:text-gray-300 leading-6">
-          وینور یک پلتفرم موبایل‌محور برای خرید و فروش زمین، باغ، ویلا و آپارتمان است که تجربه‌ای سریع، امن و شفاف برای معاملات ملکی فراهم می‌کند.
-        </p>
+  <section class="mt-4 rounded-xl border border-emerald-200/70 dark:border-emerald-900/40 bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-950/30 dark:via-gray-900 dark:to-gray-900 p-4">
+    <div class="flex items-start gap-3">
+      <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white grid place-items-center shrink-0">
+        <i class="fas fa-leaf"></i>
       </div>
-
-      <div>
-        <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1.5">چطور آگهی ثبت کنم؟</h3>
-        <p class="text-sm text-gray-700 dark:text-gray-300 leading-6">
-          با ورود به حساب کاربری، از منوی اصلی گزینه ثبت آگهی رایگان را انتخاب کنید. اطلاعات ملک را وارد کرده و تصاویر مربوطه را آپلود کنید.
-        </p>
-      </div>
-
-      <div>
-        <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1.5">آگهی چه زمانی نمایش داده می‌شود؟</h3>
-        <p class="text-sm text-gray-700 dark:text-gray-300 leading-6">
-          آگهی‌های شما پس از بررسی و تأیید تیم وینور نمایش داده می‌شوند. اگر تنظیمات سایت در حالت تأیید خودکار باشد، آگهی بلافاصله فعال خواهد شد.
-        </p>
-      </div>
-
-      <div>
-        <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1.5">چطور مطمئن شوم مدارک معتبر هستند؟</h3>
-        <p class="text-sm text-gray-700 dark:text-gray-300 leading-6">
-          وینور تنها آگهی‌هایی را نمایش می‌دهد که دارای مدارک معتبر مانند سند مادر، کد رهگیری، بنچاق و قولنامه باشند. این موضوع باعث افزایش امنیت معاملات می‌شود.
+      <div class="min-w-0">
+        <h2 class="text-sm font-bold text-gray-900 dark:text-white">وینور اکسپرس چیست؟</h2>
+        <p class="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed mt-1.5">
+          وینور پلتفرم تخصصی خرید و فروش <strong class="font-semibold">زمین، باغ و ویلا</strong> است.
+          در پنل همکاران، شما روی <strong class="font-semibold">فایل‌های تأییدشده</strong> کار می‌کنید:
+          معرفی به مشتری، هماهنگی بازدید، پیگیری معامله و دریافت پورسانت — همه در یک مسیر شفاف و قابل پیگیری.
         </p>
       </div>
     </div>
   </section>
 
-  <!-- راهنمای خرید امن -->
-  <section class="mt-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-    <h2 class="text-base font-bold text-gray-900 dark:text-white mb-3">راهنمای خرید امن</h2>
-    
-    <div class="space-y-3">
-      <div class="flex gap-2">
-        <span class="text-emerald-600 dark:text-emerald-400 text-sm font-semibold flex-shrink-0">1.</span>
-        <p class="text-sm text-gray-700 dark:text-gray-300 leading-6">
-          قبل از هر چیز، مدارک ملک را بررسی کنید. سند مادر، کد رهگیری و بنچاق باید معتبر باشند.
-        </p>
-      </div>
+  <section class="mt-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+    <h2 class="text-sm font-bold text-gray-900 dark:text-white mb-3">اصول همکاری با وینور</h2>
+    <ul class="space-y-2.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+      <li class="flex gap-2">
+        <i class="fas fa-shield-halved text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0"></i>
+        <span><strong class="text-gray-900 dark:text-white">فایل معتبر:</strong> هر فایل قبل از انتشار بررسی می‌شود؛ اطلاعات را دقیق به مشتری منتقل کنید.</span>
+      </li>
+      <li class="flex gap-2">
+        <i class="fas fa-eye text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0"></i>
+        <span><strong class="text-gray-900 dark:text-white">شفافیت:</strong> قیمت، جزئیات و مبلغ پورسانت در پنل مشخص است؛ از قول‌های خارج از فایل خودداری کنید.</span>
+      </li>
+      <li class="flex gap-2">
+        <i class="fas fa-route text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0"></i>
+        <span><strong class="text-gray-900 dark:text-white">مسیر یکپارچه:</strong> بازدید و معامله از داخل پنل ثبت می‌شود تا پیگیری و پرداخت پورسانت درست انجام شود.</span>
+      </li>
+      <li class="flex gap-2">
+        <i class="fas fa-user-lock text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0"></i>
+        <span><strong class="text-gray-900 dark:text-white">احترام به داده:</strong> تصاویر، قیمت‌ها و اطلاعات مشتری را فقط برای کار حرفه‌ای استفاده کنید.</span>
+      </li>
+    </ul>
+  </section>
 
-      <div class="flex gap-2">
-        <span class="text-emerald-600 dark:text-emerald-400 text-sm font-semibold flex-shrink-0">2.</span>
-        <p class="text-sm text-gray-700 dark:text-gray-300 leading-6">
-          از طریق مشاور وینور با فروشنده تماس بگیرید و جزئیات بیشتری دریافت کنید.
-        </p>
-      </div>
+  <section class="mt-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+    <h2 class="text-sm font-bold text-gray-900 dark:text-white mb-3">مسیر کار در پنل</h2>
+    <ol class="space-y-3">
+      <li class="flex gap-3">
+        <span class="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-[11px] font-bold grid place-items-center shrink-0">۱</span>
+        <div>
+          <p class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">مشاهده فایل‌ها</p>
+          <p class="text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 mt-0.5 leading-relaxed">از داشبورد فایل مناسب را انتخاب کنید؛ فیلتر شهر و نوع ملک کمک می‌کند.</p>
+        </div>
+      </li>
+      <li class="flex gap-3">
+        <span class="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold grid place-items-center shrink-0">۲</span>
+        <div>
+          <p class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">بازاریابی و معرفی</p>
+          <p class="text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 mt-0.5 leading-relaxed">فایل را کامل بخوانید و برای مشتری واقعی توضیح دهید؛ لینک اشتراک‌گذاری در جزئیات فایل است.</p>
+        </div>
+      </li>
+      <li class="flex gap-3">
+        <span class="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[11px] font-bold grid place-items-center shrink-0">۳</span>
+        <div>
+          <p class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">درخواست بازدید</p>
+          <p class="text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 mt-0.5 leading-relaxed">بعد از جذب مشتری جدی، تاریخ بازدید را در پنل ثبت کنید. پس از تأیید تیم، مسیر معامله فعال می‌شود.</p>
+        </div>
+      </li>
+      <li class="flex gap-3">
+        <span class="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold grid place-items-center shrink-0">۴</span>
+        <div>
+          <p class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">ثبت معامله</p>
+          <p class="text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 mt-0.5 leading-relaxed">وقتی مشتری تصمیم گرفت، وضعیت «در حال معامله» را ثبت کنید. پس از نهایی شدن فروش، پورسانت شما محاسبه می‌شود.</p>
+        </div>
+      </li>
+      <li class="flex gap-3">
+        <span class="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[11px] font-bold grid place-items-center shrink-0">۵</span>
+        <div>
+          <p class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">پورسانت و برداشت</p>
+          <p class="text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 mt-0.5 leading-relaxed">از بخش پورسانت‌ها وضعیت درآمد را ببینید و درخواست برداشت ثبت کنید.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
 
-      <div class="flex gap-2">
-        <span class="text-emerald-600 dark:text-emerald-400 text-sm font-semibold flex-shrink-0">3.</span>
-        <p class="text-sm text-gray-700 dark:text-gray-300 leading-6">
-          بازدید حضوری از ملک انجام دهید و تمام جزئیات را بررسی کنید.
+  <section class="mt-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+      <h2 class="text-sm font-bold text-gray-900 dark:text-white">سوالات پرتکرار همکاران</h2>
+    </div>
+    <div class="divide-y divide-gray-100 dark:divide-gray-800">
+      <details class="group px-4 py-3">
+        <summary class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white cursor-pointer list-none flex items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+          چطور همکار وینور شوم؟
+          <i class="fas fa-chevron-down text-[10px] text-gray-400 transition-transform group-open:rotate-180"></i>
+        </summary>
+        <p class="mt-2 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+          درخواست همکاری را ثبت کنید. پس از بررسی تیم وینور، دسترسی کامل پنل فعال می‌شود.
+          تا قبل از تأیید، برخی بخش‌ها محدود یا فقط قابل مشاهده هستند.
         </p>
-      </div>
-
-      <div class="flex gap-2">
-        <span class="text-emerald-600 dark:text-emerald-400 text-sm font-semibold flex-shrink-0">4.</span>
-        <p class="text-sm text-gray-700 dark:text-gray-300 leading-6">
-          قبل از پرداخت هر مبلغی، قرارداد را با دقت مطالعه کنید و در صورت نیاز از مشاور حقوقی کمک بگیرید.
+      </details>
+      <details class="group px-4 py-3">
+        <summary class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white cursor-pointer list-none flex items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+          «فایل» یعنی چه؟
+          <i class="fas fa-chevron-down text-[10px] text-gray-400 transition-transform group-open:rotate-180"></i>
+        </summary>
+        <p class="mt-2 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+          هر فایل یک ملک آماده معرفی است: تصاویر، قیمت، موقعیت، مدارک و مبلغ پورسانت.
+          فایل‌ها متعلق به شبکه وینور هستند و همکار آن‌ها را برای جذب مشتری و بستن معامله استفاده می‌کند.
         </p>
-      </div>
-
-      <div class="flex gap-2">
-        <span class="text-emerald-600 dark:text-emerald-400 text-sm font-semibold flex-shrink-0">5.</span>
-        <p class="text-sm text-gray-700 dark:text-gray-300 leading-6">
-          تمام پرداخت‌ها را از طریق روش‌های امن انجام دهید و رسید دریافت کنید.
+      </details>
+      <details class="group px-4 py-3">
+        <summary class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white cursor-pointer list-none flex items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+          پورسانت چطور ثبت می‌شود؟
+          <i class="fas fa-chevron-down text-[10px] text-gray-400 transition-transform group-open:rotate-180"></i>
+        </summary>
+        <p class="mt-2 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+          مبلغ پورسانت روی هر فایل نمایش داده می‌شود. پس از ثبت و تأیید معامله موفق، پورسانت در حساب شما ثبت می‌شود.
+          جزئیات و تاریخچه در بخش «پورسانت‌ها» قابل مشاهده است.
         </p>
-      </div>
+      </details>
+      <details class="group px-4 py-3">
+        <summary class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white cursor-pointer list-none flex items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+          بازدید را از کجا ثبت کنم؟
+          <i class="fas fa-chevron-down text-[10px] text-gray-400 transition-transform group-open:rotate-180"></i>
+        </summary>
+        <p class="mt-2 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+          داخل صفحه جزئیات همان فایل، تاریخ بازدید را انتخاب و درخواست را ارسال کنید.
+          بدون ثبت بازدید تأییدشده، مسیر رسمی معامله و پیگیری پورسانت کامل نمی‌شود.
+        </p>
+      </details>
+      <details class="group px-4 py-3">
+        <summary class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white cursor-pointer list-none flex items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+          چطور با پشتیبانی در ارتباط باشم؟
+          <i class="fas fa-chevron-down text-[10px] text-gray-400 transition-transform group-open:rotate-180"></i>
+        </summary>
+        <p class="mt-2 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+          از بخش پشتیبانی تیکت بفرستید. پاسخ در تب «سوابق» نمایش داده می‌شود.
+          برای مسائل فوری حساب، مالی یا فنی، دسته مناسب را انتخاب کنید تا سریع‌تر بررسی شود.
+        </p>
+      </details>
     </div>
   </section>
+
+  <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <a href="{{ url_for('express_partner.training') }}"
+       class="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 hover:border-emerald-400/50 transition">
+      <span class="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 grid place-items-center shrink-0">
+        <i class="fas fa-route text-sm"></i>
+      </span>
+      <span class="min-w-0 text-right">
+        <span class="block text-xs font-bold text-gray-900 dark:text-white">آموزش ۳ مرحله‌ای</span>
+        <span class="block text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">بازاریابی · بازدید · معامله</span>
+      </span>
+    </a>
+    <a href="{{ url_for('express_partner.commissions') }}"
+       class="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 hover:border-blue-400/50 transition">
+      <span class="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 grid place-items-center shrink-0">
+        <i class="fas fa-wallet text-sm"></i>
+      </span>
+      <span class="min-w-0 text-right">
+        <span class="block text-xs font-bold text-gray-900 dark:text-white">پورسانت‌ها</span>
+        <span class="block text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">درآمد و برداشت</span>
+      </span>
+    </a>
+  </div>
 
   <button type="button"
           data-tour="restart-tour"
           onclick="window.onboardingTour && window.onboardingTour.restartTour()"
-          class="mt-4 w-full text-right bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 transition hover:border-gray-400 dark:hover:border-gray-600">
+          class="mt-3 w-full text-right bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 transition hover:border-gray-400 dark:hover:border-gray-600">
     <div class="flex items-center gap-3">
       <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
         <i class="fas fa-graduation-cap text-gray-600 dark:text-gray-400"></i>
       </div>
       <div class="flex-1 min-w-0 text-right">
         <h3 class="text-sm font-semibold text-gray-900 dark:text-white">اجرای تور راهنما</h3>
-        <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">آموزش گام‌به‌گام پلتفرم</p>
+        <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">آموزش گام‌به‌گام پنل همکاران</p>
       </div>
       <i class="fas fa-chevron-left text-gray-400 dark:text-gray-500 shrink-0 text-sm"></i>
     </div>
   </button>
 
-  <div class="text-center text-xs text-gray-500 dark:text-gray-400 mt-4">
-    © ۱۴۰۵ وینور اکسپرس | vinor.ir
-  </div>
+  <p class="text-center text-[10px] text-gray-400 dark:text-gray-500 mt-4 px-2">
+    پاسخ‌گویی پشتیبانی: شنبه تا پنجشنبه ۹–۱۸ · جمعه ۱۰–۱۴
+  </p>
 
+  {% set bottom_nav_active = '' %}
   {% include 'express_partner/partials/partner_tab_footer.html' %}
 
 </div>
 {% endblock %}
-
