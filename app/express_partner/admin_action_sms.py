@@ -89,6 +89,21 @@ def _build_message(action: str, settings: dict, **kw: Any) -> str:
             f'مبلغ: {amt} تومان'
         )
 
+    if action == 'ticket':
+        subj = (kw.get('subject') or '').strip() or 'تیکت پشتیبانی'
+        preview = (kw.get('detail') or kw.get('message') or '').strip()
+        if len(preview) > 80:
+            preview = preview[:80] + '…'
+        lines = [
+            'وینور — تیکت پشتیبانی جدید',
+            f'همکار: {name}',
+            f'موبایل: {phone}',
+            f'موضوع: {subj}',
+        ]
+        if preview:
+            lines.append(f'متن: {preview}')
+        return '\n'.join(lines)
+
     detail = (kw.get('detail') or '').strip()
     return f'وینور — مورد جدید در صف اقدام ادمین\n{detail or name}'
 
@@ -96,7 +111,7 @@ def _build_message(action: str, settings: dict, **kw: Any) -> str:
 def notify_admin_pending_action(action: str, **kwargs: Any) -> dict:
     """
     بلافاصله پس از ایجاد هر مورد در صف اقدام داشبورد ادمین، پیامک به شمارهٔ تنظیمات.
-    action: application | withdrawal | visit | commission
+    action: application | withdrawal | visit | commission | ticket
     """
     settings = load_settings(current_app) or {}
     admin_phone = normalize_iran_mobile(

@@ -123,6 +123,8 @@ class OnboardingTour {
         this.tourData = this.getNotesTour();
       } else if (path.includes('/profile')) {
         this.tourData = this.getProfileTour();
+      } else if (path.includes('/help')) {
+        this.tourData = this.getHelpTour();
       } else if (path.includes('/support')) {
         this.tourData = this.getSupportTour();
       } else {
@@ -264,6 +266,12 @@ class OnboardingTour {
         position: 'top'
       },
       {
+        element: '[data-tour="routine-link"]',
+        title: 'آمار فعالیت شما 📊',
+        description: 'روتین روزانه و تقویم پیشرفت همکاری را اینجا ببینید. بازاریابی، بازدید و معامله به‌صورت خودکار ثبت می‌شود.',
+        position: 'top'
+      },
+      {
         element: '[data-tour="notifications-link"]',
         title: 'اعلان‌ها 🔔',
         description: 'تمام اعلان‌های مهم مانند تایید پورسانت، فایل‌های جدید و پیام‌های سیستم در این بخش نمایش داده می‌شود. تعداد اعلان‌های خوانده نشده روی آیکون نمایش داده می‌شود.',
@@ -277,8 +285,8 @@ class OnboardingTour {
       },
       {
         element: '[data-tour="support-link"]',
-        title: 'تماس با پشتیبانی 💬',
-        description: 'از این بخش با پشتیبانی تماس بگیرید، راهنمای پلتفرم را بخوانید و در صورت نیاز تور راهنما را دوباره اجرا کنید.',
+        title: 'پشتیبانی 💬',
+        description: 'از این بخش تیکت ارسال کنید، پاسخ‌ها را ببینید و به راهنمای پلتفرم دسترسی داشته باشید.',
         position: 'top'
       },
       {
@@ -293,11 +301,28 @@ class OnboardingTour {
   getSupportTour() {
     return [
       {
-        element: '[data-tour="help-link"]',
-        title: 'راهنمای استفاده 📚',
-        description: 'راهنمای کامل استفاده از پلتفرم را از اینجا مطالعه کنید.',
+        element: '[data-tour="ticket-form"]',
+        title: 'ارسال تیکت 🎫',
+        description: 'دسته را انتخاب کنید، متن را بنویسید و تیکت را ارسال کنید. پاسخ در تب «سوابق» نمایش داده می‌شود.',
         position: 'top'
       },
+      {
+        element: '[data-tour="help-link"]',
+        title: 'راهنما 📚',
+        description: 'راهنمای پلتفرم و اجرای مجدد تور آموزشی از این آیکن در بالای صفحه در دسترس است.',
+        position: 'bottom'
+      },
+      {
+        element: '[data-tour="bottom-nav"]',
+        title: 'منوی پایین 📱',
+        description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید.',
+        position: 'top'
+      }
+    ];
+  }
+
+  getHelpTour() {
+    return [
       {
         element: '[data-tour="restart-tour"]',
         title: 'اجرای تور راهنما 🔄',
@@ -460,6 +485,13 @@ class OnboardingTour {
         position: 'top',
         page: 'profile'
       },
+      {
+        element: '[data-tour="routine-link"]',
+        title: 'آمار فعالیت شما 📊',
+        description: 'روتین روزانه و تقویم پیشرفت همکاری را اینجا ببینید. بازاریابی، بازدید و معامله به‌صورت خودکار ثبت می‌شود.',
+        position: 'top',
+        page: 'profile'
+      },
       // مرحله 15: اعلان‌ها
       {
         element: '[data-tour="notifications-link"]',
@@ -479,12 +511,12 @@ class OnboardingTour {
       // مرحله 17: پشتیبانی (پروفایل)
       {
         element: '[data-tour="support-link"]',
-        title: 'تماس با پشتیبانی 💬',
-        description: 'برای تماس با پشتیبانی، مطالعهٔ راهنما و اجرای مجدد تور، روی این گزینه بزنید تا وارد صفحه پشتیبانی شوید.',
+        title: 'پشتیبانی 💬',
+        description: 'برای ارسال تیکت، مشاهده پاسخ‌ها و مطالعهٔ راهنما، روی این گزینه بزنید.',
         position: 'top',
         page: 'profile',
         action: 'navigate',
-        actionMessage: 'روی «تماس با پشتیبانی» بزنید. تور در همان صفحه ادامه می‌یابد.',
+        actionMessage: 'روی «پشتیبانی» بزنید. تور در همان صفحه ادامه می‌یابد.',
         nextUrl: '/express/partner/support'
       },
       // مرحله 18: راهنما (صفحه پشتیبانی)
@@ -494,15 +526,18 @@ class OnboardingTour {
         description: 'راهنمای کامل استفاده از پلتفرم را از اینجا مطالعه کنید.',
         position: 'top',
         page: 'support',
+        action: 'navigate',
+        actionMessage: 'روی «راهنما» بزنید. تور در صفحه راهنما ادامه می‌یابد.',
+        nextUrl: '/express/partner/help',
         waitForElement: true
       },
-      // مرحله 19: اجرای مجدد تور (صفحه پشتیبانی)
+      // مرحله 19: اجرای مجدد تور (صفحه راهنما)
       {
         element: '[data-tour="restart-tour"]',
         title: 'اجرای مجدد تور راهنما 🔄',
         description: 'برای مشاهدهٔ دوبارهٔ آموزش‌ها از ابتدا، روی این دکمه بزنید.',
         position: 'top',
-        page: 'support',
+        page: 'help',
         waitForElement: true
       },
       // مرحله 20: منوی پایین
@@ -511,7 +546,7 @@ class OnboardingTour {
         title: 'منوی پایین 📱',
         description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید: فایل‌ها، پورسانت‌ها، اعلان‌ها و پروفایل.',
         position: 'top',
-        page: 'support'
+        page: 'help'
       }
     ];
   }
@@ -873,7 +908,8 @@ class OnboardingTour {
       'commissions': '/express/partner/commissions',
       'notes': '/express/partner/notes',
       'profile': '/express/partner/profile',
-      'support': '/express/partner/support'
+      'support': '/express/partner/support',
+      'help': '/express/partner/help'
     };
     return paths[page] || '/express/partner/dashboard';
   }
@@ -891,6 +927,8 @@ class OnboardingTour {
       return currentPath.includes('/profile') && !currentPath.includes('/profile/');
     } else if (expectedPage === 'support') {
       return currentPath.includes('/support');
+    } else if (expectedPage === 'help') {
+      return /\/help\/?$/.test(currentPath);
     }
     return true;
   }

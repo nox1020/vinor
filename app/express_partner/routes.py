@@ -37,6 +37,7 @@ from ..utils.storage import (
     load_partner_bank_accounts, save_partner_bank_accounts,
     load_partner_withdrawals, save_partner_withdrawals,
     load_express_visit_requests, save_express_visit_requests,
+    load_support_tickets, save_support_tickets,
 )
 from .partner_bank_accounts import (
     validate_new_account,
@@ -72,6 +73,16 @@ from .visit_requests import (
     visit_date_min_iso,
     resolve_partner_land_tx_state,
 )
+from .support_tickets import (
+    MESSAGE_MAX_LEN,
+    MESSAGE_MIN_LEN,
+    TICKET_CATEGORIES,
+    create_support_ticket,
+    partner_ticket_error_message,
+    partner_ticket_stats,
+    tickets_for_phone,
+)
+from .admin_action_sms import notify_admin_pending_action
 from ..utils.dates import format_iso_date_jalali
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
 from ..services.sms import (
@@ -2634,11 +2645,93 @@ def verify():
     return redirect(url_for('express_partner.login'))
 
 
-@express_partner_bp.route('/support', methods=['GET'], endpoint='support')
+@express_partner_bp.route('/support', methods=['GET', 'POST'], endpoint='support')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def support():
-    """صفحه پشتیبانی مجزا برای Express Partner"""
-    return render_template('express_partner/support.html', hide_header=True)
+    """صفحه پشتیبانی — ارسال و پیگیری تیکت."""
+    me_phone = (session.get('user_phone') or '').strip()
+    profile = getattr(g, 'express_partner_profile', None) or {}
+    me_name = (profile.get('name') or '').strip() if profile else ''
+
+    if request.method == 'POST':
+        if not me_phone:
+            flash('برای ارسال تیکت ابتدا وارد حساب خود شوید.', 'warning')
+            return redirect(url_for('express_partner.login', next=url_for('express_partner.support')))
+
+        category = (request.form.get('category') or 'other').strip()
+        subject = (request.form.get('subject') or '').strip()
+        message = (request.form.get('message') or '').strip()
+
+        tickets = load_support_tickets() or []
+        if not isinstance(tickets, list):
+            tickets = []
+        rec, err = create_support_ticket(
+            tickets,
+            user_phone=me_phone,
+            user_name=me_name or me_phone,
+            category=category,
+            subject=subject,
+            message=message,
+        )
+        if err:
+            flash(partner_ticket_error_message(err, tickets, me_phone), 'profile')
+            return redirect(url_for('express_partner.support', tab='new'))
+        if not rec:
+            flash('ارسال تیکت ناموفق بود. دوباره تلاش کنید.', 'profile')
+            return redirect(url_for('express_partner.support', tab='new'))
+
+        try:
+            save_support_tickets(tickets)
+        except Exception:
+            current_app.logger.error('Failed to save support ticket', exc_info=True)
+            flash('خطا در ثبت تیکت.', 'profile')
+            return redirect(url_for('express_partner.support', tab='new'))
+
+        try:
+            notify_admin_pending_action(
+                'ticket',
+                partner_phone=me_phone,
+                partner_name=me_name or me_phone,
+                subject=rec.get('subject') or '',
+                detail=(rec.get('message') or '')[:120],
+            )
+        except Exception:
+            current_app.logger.exception('support ticket admin SMS failed')
+
+        flash('تیکت شما ثبت شد. پاسخ از طریق همین صفحه نمایش داده می‌شود.', 'profile')
+        return redirect(url_for('express_partner.support', tab='list'))
+
+    user_tickets: List[Dict[str, Any]] = []
+    ticket_stats: Dict[str, Any] = {
+        'open_count': 0,
+        'total_count': 0,
+        'daily_remaining': 0,
+        'open_remaining': 0,
+        'cooldown_seconds': 0,
+        'can_submit': False,
+        'block_reason': '',
+    }
+    tab = (request.args.get('tab') or '').strip().lower()
+    if me_phone:
+        all_tickets = load_support_tickets() or []
+        if isinstance(all_tickets, list):
+            user_tickets = tickets_for_phone(all_tickets, me_phone, limit=50)
+            ticket_stats = partner_ticket_stats(all_tickets, me_phone)
+    if tab not in ('new', 'list'):
+        tab = 'list' if user_tickets else 'new'
+
+    return render_template(
+        'express_partner/support.html',
+        hide_header=True,
+        me_phone=me_phone,
+        me_name=me_name,
+        tickets=user_tickets,
+        ticket_stats=ticket_stats,
+        ticket_tab=tab,
+        ticket_categories=TICKET_CATEGORIES,
+        message_min_len=MESSAGE_MIN_LEN,
+        message_max_len=MESSAGE_MAX_LEN,
+    )
 
 
 @express_partner_bp.route('/help', methods=['GET'], endpoint='help')
@@ -3940,6 +4033,90 @@ def profile_data():
     })
 
 
+def _normalize_profile_birth_date(birth_date: str, prev_birth: str = '') -> str:
+    """سال-only از UI را با تاریخ کامل قبلی ادغام می‌کند."""
+    birth_date = (birth_date or '').strip()[:32]
+    prev_birth = (prev_birth or '').strip()
+    if not birth_date:
+        return ''
+    if prev_birth and '/' in prev_birth:
+        parts = [p.strip() for p in prev_birth.split('/') if p.strip()]
+        head = parts[0] if parts else ''
+        if head and birth_date.isdigit() and len(birth_date) <= 4:
+            if birth_date == head:
+                return prev_birth
+            if len(parts) >= 2:
+                return birth_date + '/' + '/'.join(parts[1:])
+    return birth_date
+
+
+def _apply_partner_profile_fields(
+    profile: Dict[str, Any],
+    *,
+    name: str,
+    city: str,
+    bio: str,
+    landline: str,
+    email: str,
+    birth_date: str,
+    cities_allowed: List[str] | None,
+) -> Dict[str, Any]:
+    """به‌روزرسانی فیلدهای قابل ویریش پروفایل همکار روی همان dict."""
+    prev_birth = (profile.get('birth_date') or '').strip()
+    birth_date = _normalize_profile_birth_date(birth_date, prev_birth)
+    name = (name or '').strip()[:60]
+    city = (city or '').strip()[:60]
+    bio = (bio or '').strip()[:200]
+    landline = (landline or '').strip()[:20]
+    email = (email or '').strip()[:120]
+
+    if name:
+        profile['name'] = name
+    else:
+        profile.pop('name', None)
+    if city:
+        if cities_allowed and city not in cities_allowed:
+            city = ''
+        if city:
+            profile['city'] = city
+        else:
+            profile.pop('city', None)
+    else:
+        profile.pop('city', None)
+    if bio:
+        profile['bio'] = bio
+    else:
+        profile.pop('bio', None)
+    if landline:
+        profile['landline'] = landline
+    else:
+        profile.pop('landline', None)
+    if email:
+        profile['email'] = email
+    else:
+        profile.pop('email', None)
+    if birth_date:
+        profile['birth_date'] = birth_date
+    else:
+        profile.pop('birth_date', None)
+    return profile
+
+
+def _profile_edit_json(profile: Dict[str, Any], me_phone: str) -> Dict[str, Any]:
+    avatar = (profile.get('avatar') or '').strip()
+    return {
+        'success': True,
+        'me_phone': me_phone,
+        'me_name': (profile.get('name') or '').strip(),
+        'me_city': (profile.get('city') or '').strip(),
+        'me_bio': (profile.get('bio') or '').strip(),
+        'me_landline': (profile.get('landline') or '').strip(),
+        'me_email': (profile.get('email') or '').strip(),
+        'me_birth_date': (profile.get('birth_date') or '').strip(),
+        'avatar_url': (f'/uploads/{avatar}' if avatar else None),
+    }
+
+
 @express_partner_bp.route('/profile/edit', methods=['GET', 'POST'], endpoint='profile_edit')
 @require_partner_access(allow_pending=True)
 def profile_edit_page():
@@ -3961,50 +4138,16 @@ def profile_edit_page():
 
     if request.method == 'POST':
         profile = _get_or_create_partner_record(partners, me_phone)
-        name = (request.form.get('name') or '').strip()[:60]
-        city = (request.form.get('city') or '').strip()[:60]
-        bio = (request.form.get('bio') or '').strip()[:200]
-        landline = (request.form.get('landline') or '').strip()[:20]
-        email = (request.form.get('email') or '').strip()[:120]
-        birth_date = (request.form.get('birth_date') or '').strip()[:32]
-        prev_birth = (profile.get('birth_date') or '').strip()
-        if birth_date and prev_birth and '/' in prev_birth:
-            parts = [p.strip() for p in prev_birth.split('/') if p.strip()]
-            head = parts[0] if parts else ''
-            if head and birth_date.isdigit() and len(birth_date) <= 4:
-                if birth_date == head:
-                    birth_date = prev_birth
-                elif len(parts) >= 2:
-                    birth_date = birth_date + '/' + '/'.join(parts[1:])
-        if name:
-            profile['name'] = name
-        else:
-            profile.pop('name', None)
-        if city:
-            if cities_allowed and city not in cities_allowed:
-                city = ''
-            if city:
-                profile['city'] = city
-            else:
-                profile.pop('city', None)
-        else:
-            profile.pop('city', None)
-        if bio:
-            profile['bio'] = bio
-        else:
-            profile.pop('bio', None)
-        if landline:
-            profile['landline'] = landline
-        else:
-            profile.pop('landline', None)
-        if email:
-            profile['email'] = email
-        else:
-            profile.pop('email', None)
-        if birth_date:
-            profile['birth_date'] = birth_date
-        else:
-            profile.pop('birth_date', None)
+        _apply_partner_profile_fields(
+            profile,
+            name=request.form.get('name') or '',
+            city=request.form.get('city') or '',
+            bio=request.form.get('bio') or '',
+            landline=request.form.get('landline') or '',
+            email=request.form.get('email') or '',
+            birth_date=request.form.get('birth_date') or '',
+            cities_allowed=cities_allowed,
+        )
         try:
             save_express_partners(partners)
             _invalidate_partner_session_cache()
@@ -4053,34 +4196,19 @@ def profile_edit_data():
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     partners = load_express_partners() or []
     profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
-    me_name = (profile.get('name') or '').strip()
-    me_city = (profile.get('city') or '').strip()
-    me_bio = (profile.get('bio') or '').strip()
-    me_landline = (profile.get('landline') or '').strip()
-    me_email = (profile.get('email') or '').strip()
-    me_birth_date = (profile.get('birth_date') or '').strip()
-    avatar = (profile.get('avatar') or '').strip()
-    avatar_url = (f"/uploads/{avatar}" if avatar else None)
     cities = _active_cities_cached()
-    return jsonify({
-        'success': True,
-        'me_phone': me_phone,
-        'me_name': me_name,
-        'me_city': me_city,
-        'me_bio': me_bio,
-        'me_landline': me_landline,
-        'me_email': me_email,
-        'me_birth_date': me_birth_date,
-        'avatar_url': avatar_url,
-        'cities': cities if isinstance(cities, list) else [],
-    })
+    payload = _profile_edit_json(profile, me_phone)
+    payload['cities'] = cities if isinstance(cities, list) else []
+    resp = jsonify(payload)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
 
 
 @express_partner_bp.post('/api/profile/update')
+@require_partner_access(allow_pending=True, json_response=True)
 def api_profile_update():
-    """به‌روزرسانی نام، شهر، درباره من برای اپ اندروید (بدون CSRF)."""
-    if not session.get('user_phone'):
-        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    """به‌روزرسانی نام، شهر، درباره من برای وب و اپ (JSON)."""
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     data = request.get_json(silent=True)
     if not data and request.data:
@@ -4090,56 +4218,23 @@ def api_profile_update():
             data = {}
     if not isinstance(data, dict):
         data = {}
-    name = (data.get('name') or '').strip()
-    city = (data.get('city') or '').strip()
-    bio = (data.get('bio') or '').strip()
-    landline = (data.get('landline') or '').strip()[:20]
-    email = (data.get('email') or '').strip()[:120]
-    birth_date = (data.get('birth_date') or '').strip()[:32]
     partners = load_express_partners() or []
     profile = _get_or_create_partner_record(partners, me_phone)
     cities_allowed = _active_cities_cached()
-    if name:
-        profile['name'] = name
-    else:
-        profile.pop('name', None)
-    if city:
-        if cities_allowed and city not in cities_allowed:
-            city = ''
-        if city:
-            profile['city'] = city
-        else:
-            profile.pop('city', None)
-    else:
-        profile.pop('city', None)
-    if bio:
-        profile['bio'] = bio[:200]
-    else:
-        profile.pop('bio', None)
-    if landline:
-        profile['landline'] = landline
-    else:
-        profile.pop('landline', None)
-    if email:
-        profile['email'] = email
-    else:
-        profile.pop('email', None)
-    if birth_date:
-        profile['birth_date'] = birth_date
-    else:
-        profile.pop('birth_date', None)
+    _apply_partner_profile_fields(
+        profile,
+        name=data.get('name') or '',
+        city=data.get('city') or '',
+        bio=data.get('bio') or '',
+        landline=data.get('landline') or '',
+        email=data.get('email') or '',
+        birth_date=data.get('birth_date') or '',
+        cities_allowed=cities_allowed,
+    )
     try:
         save_express_partners(partners)
         _invalidate_partner_session_cache()
-        return jsonify({
-            'success': True,
-            'me_name': (profile.get('name') or '').strip(),
-            'me_city': (profile.get('city') or '').strip(),
-            'me_bio': (profile.get('bio') or '').strip(),
-            'me_landline': (profile.get('landline') or '').strip(),
-            'me_email': (profile.get('email') or '').strip(),
-            'me_birth_date': (profile.get('birth_date') or '').strip(),
-        })
+        return jsonify(_profile_edit_json(profile, me_phone))
     except Exception:
         current_app.logger.error("Failed to save partner profile edits", exc_info=True)
         return jsonify({'success': False, 'error': 'save_failed'}), 500

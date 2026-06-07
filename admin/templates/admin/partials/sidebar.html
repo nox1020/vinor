@@ -12,7 +12,7 @@
 ] %}
 {% set _comm_active = _endpoint in [
   'admin.notifications_colleagues', 'admin.sms_colleagues', 'admin.sms_history',
-  'admin.notifications_broadcast'
+  'admin.notifications_broadcast', 'admin.support_tickets', 'admin.support_ticket_reply'
 ] %}
 {% set _sys_active = _endpoint in [
   'admin.express_cities', 'admin.ai_questions', 'admin.settings'
@@ -85,6 +85,7 @@
     </button>
     <div x-show="commOpen" class="space-y-0.5 mt-0.5 mr-2">
       <a href="{{ url_for('admin.notifications_colleagues') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.notifications_colleagues', 'admin.notifications_broadcast'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-bell w-4 text-[13px]"></i>نوتیفیکیشن</a>
+      <a href="{{ url_for('admin.support_tickets') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.support_tickets', 'admin.support_ticket_reply'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-ticket w-4 text-[13px]"></i>تیکت پشتیبانی</a>
       <a href="{{ url_for('admin.sms_colleagues') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.sms_colleagues', 'admin.sms_history'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-sms w-4 text-[13px]"></i>پیامک</a>
     </div>
 

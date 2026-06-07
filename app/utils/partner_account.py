@@ -85,6 +85,8 @@ def purge_partner_account(phone: str) -> dict[str, Any]:
         save_partner_routines,
         load_partner_sales,
         save_partner_sales,
+        load_support_tickets,
+        save_support_tickets,
     )
 
     ph = _norm_phone(phone)
@@ -179,6 +181,13 @@ def purge_partner_account(phone: str) -> dict[str, Any]:
     except Exception:
         current_app.logger.error('purge: referrals failed', exc_info=True)
         errors.append('referrals')
+
+    try:
+        tickets = load_support_tickets() or []
+        save_support_tickets(_filter_not_phone(tickets, ph, 'user_phone'))
+    except Exception:
+        current_app.logger.error('purge: support tickets failed', exc_info=True)
+        errors.append('support_tickets')
 
     _delete_avatar_dir(ph)
 

@@ -8,6 +8,7 @@
   <header id="profileEditHeader" class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md">
     <div class="relative mx-auto flex h-14 max-w-lg items-center justify-between px-4 sm:h-16 lg:max-w-2xl">
       <a href="{{ url_for('express_partner.profile') }}"
+         data-vinor-express-nav="back"
          class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
          aria-label="بازگشت">
         <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
@@ -409,8 +410,13 @@
 function initProfileEditAutosave() {
   if (!document.getElementById('profileEditPage')) return;
   var root = document.getElementById('profileEditForm');
-  if (!root || root.dataset.autosaveBound === '1') return;
-  root.dataset.autosaveBound = '1';
+  if (!root) return;
+
+  if (window.__vinorProfileEditAutosaveCtrl) {
+    try { window.__vinorProfileEditAutosaveCtrl.abort(); } catch (_) {}
+  }
+  window.__vinorProfileEditAutosaveCtrl = new AbortController();
+  var pageSignal = window.__vinorProfileEditAutosaveCtrl.signal;
 
   var apiUrl = {{ url_for('express_partner.api_profile_update') | tojson }};
   var dataUrl = {{ url_for('express_partner.profile_edit_data') | tojson }};
@@ -429,10 +435,10 @@ function initProfileEditAutosave() {
   var statusEl = document.getElementById('profileEditSaveStatus');
   var debounceTimer = null;
   var savedTimer = null;
-  var inflight = null;
   var lastSavedKey = '';
   var formDirty = false;
-  var hydrateDone = false;
+  var saveGeneration = 0;
+  var listenersBound = false;
 
   var statusBaseClass = 'relative z-10 flex h-10 min-w-[4.5rem] shrink-0 items-center justify-end gap-1.5 text-[11px] font-medium transition sm:text-xs';
 
@@ -483,7 +489,7 @@ function initProfileEditAutosave() {
       var year = '';
       var rawBirth = String(data.me_birth_date || '').trim();
       if (rawBirth) {
-        year = rawBirth.indexOf('/') >= 0 ? rawBirth.split('/', 1)[0].trim() : rawBirth;
+        year = rawBirth.indexOf('/') >= 0 ? rawBirth.split('/')[0].trim() : rawBirth;
       }
       if (year) {
         var hasOpt = false;
@@ -524,18 +530,26 @@ function initProfileEditAutosave() {
     return fetch(dataUrl, {
       method: 'GET',
       credentials: 'same-origin',
-      headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' }
+      cache: 'no-store',
+      headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+      signal: pageSignal
     }).then(function (res) {
       if (!res.ok) return null;
       return res.json().catch(function () { return null; });
     }).then(function (data) {
-      if (formDirty || root.dataset.userDirty === '1') return;
-      if (data && data.success) applyProfileData(data);
+      if (data && data.success) {
+        applyProfileData(data);
+        syncSavedKeyFromForm();
+        formDirty = false;
+        delete root.dataset.userDirty;
+        return;
+      }
+      applyProfileData(initialData);
       syncSavedKeyFromForm();
-    }).catch(function () {
-      if (!hydrateDone) syncSavedKeyFromForm();
-    }).finally(function () {
-      hydrateDone = true;
+    }).catch(function (err) {
+      if (err && err.name === 'AbortError') return;
+      applyProfileData(initialData);
+      syncSavedKeyFromForm();
     });
   }
 
@@ -585,32 +599,28 @@ function initProfileEditAutosave() {
     var key = JSON.stringify(payload);
     if (key === lastSavedKey) return Promise.resolve(true);
 
-    if (inflight) {
-      try { inflight.abort(); } catch (_) {}
-    }
-    var ctrl = new AbortController();
-    inflight = ctrl;
-
+    var gen = ++saveGeneration;
     clearTimeout(savedTimer);
     setStatus('saving', 'در حال ذخیره…');
 
     return fetch(apiUrl, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(payload),
-      signal: ctrl.signal
+      signal: pageSignal
     }).then(function (res) {
       return res.json().catch(function () { return null; }).then(function (data) {
         return { res: res, data: data };
       });
     }).then(function (out) {
-      if (ctrl.signal.aborted) return false;
+      if (gen !== saveGeneration) return false;
       if (out.res && out.res.ok && out.data && out.data.success) {
-        lastSavedKey = key;
+        applyProfileData(out.data);
+        syncSavedKeyFromForm();
         formDirty = false;
         delete root.dataset.userDirty;
-        if (out.data.me_name !== undefined) updateAvatarInitials(out.data.me_name || payload.name);
         invalidateProfilePrefetch();
         setStatus('saved', 'ذخیره شد');
         savedTimer = setTimeout(function () {
@@ -622,10 +632,9 @@ function initProfileEditAutosave() {
       return false;
     }).catch(function (err) {
       if (err && err.name === 'AbortError') return false;
+      if (gen !== saveGeneration) return false;
       setStatus('error', 'خطا در ذخیره');
       return false;
-    }).finally(function () {
-      if (inflight === ctrl) inflight = null;
     });
   }
 
@@ -635,15 +644,18 @@ function initProfileEditAutosave() {
     debounceTimer = setTimeout(function () { saveNow(); }, typeof delay === 'number' ? delay : 650);
   }
 
-  ['profileName', 'profileLandline', 'profileEmail', 'bioInput'].forEach(function (id) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('input', function () { scheduleSave(); });
-    el.addEventListener('blur', function () { scheduleSave(120); });
-  });
-
-  var birthEl = document.getElementById('profileBirth');
-  if (birthEl) birthEl.addEventListener('change', function () { scheduleSave(0); });
+  function bindFieldListeners() {
+    if (listenersBound) return;
+    listenersBound = true;
+    ['profileName', 'profileLandline', 'profileEmail', 'bioInput'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', function () { scheduleSave(); }, { signal: pageSignal });
+      el.addEventListener('blur', function () { scheduleSave(120); }, { signal: pageSignal });
+    });
+    var birthEl = document.getElementById('profileBirth');
+    if (birthEl) birthEl.addEventListener('change', function () { scheduleSave(0); }, { signal: pageSignal });
+  }
 
   window.__vinorProfileEditScheduleSave = function () { scheduleSave(0); };
   window.__vinorProfileEditFlushSave = function () {
@@ -652,33 +664,38 @@ function initProfileEditAutosave() {
     return saveNow();
   };
 
-  applyProfileData(initialData);
-  syncSavedKeyFromForm();
-  hydrateFromServer();
+  hydrateFromServer().finally(function () {
+    bindFieldListeners();
+  });
 
   function onPageHide() {
+    if (!document.getElementById('profileEditPage')) return;
     if (!formDirty && root.dataset.userDirty !== '1') return;
     var payload = collectPayload();
     if (JSON.stringify(payload) === lastSavedKey) return;
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
     try {
-      if (navigator.sendBeacon) {
-        var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-        navigator.sendBeacon(apiUrl, blob);
-        lastSavedKey = JSON.stringify(payload);
-        formDirty = false;
-        delete root.dataset.userDirty;
-        invalidateProfilePrefetch();
-      } else {
-        saveNow();
-      }
+      fetch(apiUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        keepalive: true,
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      lastSavedKey = JSON.stringify(payload);
+      formDirty = false;
+      delete root.dataset.userDirty;
+      invalidateProfilePrefetch();
     } catch (_) {
       saveNow();
     }
   }
-  window.addEventListener('pagehide', onPageHide);
+  window.addEventListener('pagehide', onPageHide, { signal: pageSignal });
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') onPageHide();
-  });
+  }, { signal: pageSignal });
 }
 
 if (!window.__vinorProfileCityHook) {
@@ -695,6 +712,10 @@ if (!window.__vinorProfileCityHook) {
 initProfileEditAutosave();
 document.addEventListener('vinor:express-page-swap', function () {
   if (!document.getElementById('profileEditPage')) {
+    if (window.__vinorProfileEditAutosaveCtrl) {
+      try { window.__vinorProfileEditAutosaveCtrl.abort(); } catch (_) {}
+      window.__vinorProfileEditAutosaveCtrl = null;
+    }
     window.__vinorProfileEditScheduleSave = null;
     window.__vinorProfileEditFlushSave = null;
     return;
