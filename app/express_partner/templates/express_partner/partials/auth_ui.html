@@ -1,0 +1,32 @@
+{# پالت و کلاس‌های مشترک صفحات ورود / تأیید OTP — هم‌راستا با پروفایل و داشبورد #}
+{% macro auth_page() -%}
+min-h-[100dvh] bg-[#050a0e] text-zinc-100 flex flex-col
+{%- endmacro %}
+
+{% macro auth_header_btn() -%}
+flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white
+{%- endmacro %}
+
+{% macro auth_input() -%}
+w-full rounded-xl border-2 border-emerald-500/40 bg-[#0a1018] py-3.5 pl-11 pr-4 text-base font-medium text-white placeholder:text-zinc-600 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 tabular-nums transition-colors
+{%- endmacro %}
+
+{% macro auth_clear_btn() -%}
+absolute left-3 top-1/2 -translate-y-1/2 hidden h-6 w-6 items-center justify-center rounded-full bg-zinc-700/80 text-zinc-300 hover:bg-zinc-600 transition-colors
+{%- endmacro %}
+
+{% macro auth_link() -%}
+font-semibold text-emerald-400 hover:text-emerald-300 underline decoration-emerald-500/30 underline-offset-2
+{%- endmacro %}
+
+{% macro auth_action_link() -%}
+shrink-0 font-semibold text-emerald-400 transition-colors enabled:hover:text-emerald-300 disabled:text-zinc-600 disabled:cursor-not-allowed
+{%- endmacro %}
+
+{% macro auth_btn_primary(extra='') -%}
+flex w-full touch-manipulation select-none items-center justify-center rounded-xl bg-emerald-500 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-900/30 transition-[transform,opacity,background-color] duration-75 hover:bg-emerald-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 [-webkit-tap-highlight-color:transparent] {{ extra }}
+{%- endmacro %}
+
+{% macro auth_footer() -%}
+sticky bottom-0 border-t border-white/10 bg-[#050a0e]/95 backdrop-blur-sm px-5 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-3
+{%- endmacro %}

@@ -1,4 +1,5 @@
-{% extends 'express_partner/base.html' %}
+{% extends 'express_partner/auth_base.html' %}
+{% from 'express_partner/partials/auth_ui.html' import auth_page, auth_header_btn, auth_input, auth_clear_btn, auth_action_link, auth_btn_primary, auth_footer %}
 {% block title %}تایید شماره موبایل | وینور اکسپرس{% endblock %}
 
 {% set _fa = '۰۱۲۳۴۵۶۷۸۹' %}
@@ -18,21 +19,23 @@
 
 {% block content %}
 
-<div class="min-h-[100dvh] bg-[#1a1a1a] text-zinc-100 flex flex-col">
+<div class="{{ auth_page() }}">
   <header class="relative flex items-center justify-center px-4 pt-5 pb-3">
     <h1 class="text-base font-bold text-white">تایید شماره موبایل</h1>
     <a href="{{ url_for('express_partner.login', change=1, next=login_next) if login_next else url_for('express_partner.login', change=1) }}"
        data-vinor-express-nav="back"
-       class="absolute right-4 top-5 flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 hover:text-white transition-colors"
+       class="absolute right-4 top-5 {{ auth_header_btn() }}"
        aria-label="تغییر شماره موبایل">
-      <i class="fas fa-arrow-right text-base" aria-hidden="true"></i>
+      <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
     </a>
   </header>
 
   <main class="flex-1 px-5 pt-6">
     <div class="mx-auto w-full max-w-md">
-      <div class="flex items-center gap-2">
-        <i class="fas fa-comment-dots text-lg text-zinc-400" aria-hidden="true"></i>
+      <div class="flex items-center gap-2.5">
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-400">
+          <i class="fas fa-comment-dots text-sm" aria-hidden="true"></i>
+        </span>
         <span class="text-lg font-bold text-white tabular-nums" dir="ltr">{{ format_phone_display(phone) }}</span>
       </div>
       <p class="mt-2 text-sm text-zinc-400">کد تأیید به شماره بالا فرستاده شد.</p>
@@ -42,7 +45,7 @@
       {% include 'express_partner/partials/flash_alerts.html' %}
       {% endwith %}
 
-      <p id="otpInlineHint" class="mt-4 hidden text-sm text-amber-400/95" role="alert"></p>
+      <p id="otpInlineHint" class="mt-4 hidden text-sm text-amber-300/95" role="alert"></p>
 
       <form id="otpForm" method="POST" action="{{ url_for('express_partner.verify') }}" class="mt-6"
             data-auth-skip-submit-lock="1">
@@ -55,9 +58,9 @@
                  maxlength="5" autocapitalize="off" autocorrect="off" dir="ltr"
                  placeholder=""
                  aria-label="کد تأیید ۵ رقمی"
-                 class="w-full rounded-lg border border-[#a62626]/70 bg-[#2a2a2a] py-3.5 pl-11 pr-4 text-base font-medium text-white tracking-widest tabular-nums focus:border-[#a62626] focus:outline-none focus:ring-1 focus:ring-[#a62626]/50 transition-colors">
+                 class="{{ auth_input() }} tracking-widest">
           <button type="button" id="otpClearBtn"
-                  class="absolute left-3 top-1/2 -translate-y-1/2 hidden h-6 w-6 items-center justify-center rounded-full bg-zinc-600/80 text-zinc-300 hover:bg-zinc-500 transition-colors"
+                  class="{{ auth_clear_btn() }}"
                   aria-label="پاک کردن">
             <i class="fas fa-xmark text-xs" aria-hidden="true"></i>
           </button>
@@ -65,11 +68,11 @@
 
         <div class="mt-4 flex items-start justify-between gap-3 text-xs">
           <button type="button" id="resendBtn" disabled
-                  class="shrink-0 font-semibold text-[#a62626] disabled:text-zinc-600 disabled:cursor-not-allowed transition-colors enabled:hover:text-[#c62828]">
+                  class="{{ auth_action_link() }}">
             درخواست دوباره
           </button>
           <p id="timerLine" class="flex items-center gap-1.5 text-zinc-500 text-left">
-            <i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i>
+            <i class="fas fa-circle-info text-[10px] shrink-0 text-emerald-500/70" aria-hidden="true"></i>
             <span>لطفاً برای دریافت کد کمی صبر کنید</span>
           </p>
         </div>
@@ -78,10 +81,10 @@
     </div>
   </main>
 
-  <footer class="sticky bottom-0 px-5 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-3 bg-[#1a1a1a]">
+  <footer class="{{ auth_footer() }}">
     <div class="mx-auto w-full max-w-md">
       <button type="submit" form="otpForm" id="otpSubmitBtn"
-              class="w-full touch-manipulation select-none rounded-lg bg-[#a62626] py-3.5 text-base font-bold text-white transition-[transform,opacity,background-color] duration-75 hover:bg-[#b83232] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 [-webkit-tap-highlight-color:transparent]">
+              class="{{ auth_btn_primary('w-full') }}">
         <span data-btn-label>ورود</span>
       </button>
     </div>
@@ -91,7 +94,6 @@
 {% endblock %}
 
 {% block scripts %}
-{{ super() }}
 {% include 'express_partner/partials/auth_page_lifecycle.html' %}
 {% include 'express_partner/partials/auth_flash_scripts.html' %}
 {% include 'express_partner/partials/auth_submit_feedback.html' %}
@@ -110,9 +112,12 @@
   var resendBtn = document.getElementById('resendBtn');
   var timerLine = document.getElementById('timerLine');
   var resendStatus = document.getElementById('otpResendStatus');
+  submitBtn.dataset.vinorAuthLabel = 'ورود';
   var authBusy = window.vinorAuthSubmitBusy(form, submitBtn, 'در حال ورود…');
   var resendTimerId = null;
   var webOtpAbort = null;
+  var verifyInflight = false;
+  var timerIcon = '<i class="fas fa-circle-info text-[10px] shrink-0 text-emerald-500/70" aria-hidden="true"></i>';
 
   function teardownOtpPage() {
     if (resendTimerId) { clearInterval(resendTimerId); resendTimerId = null; }
@@ -163,12 +168,7 @@
 
   function unlockOtpInputs() {
     if (otpInput) { otpInput.readOnly = false; otpInput.disabled = false; }
-    if (submitBtn && submitBtn.dataset.vinorAuthBusy) {
-      submitBtn.disabled = false;
-      submitBtn.removeAttribute('aria-busy');
-      delete submitBtn.dataset.vinorAuthBusy;
-      submitBtn.innerHTML = '<span data-btn-label>ورود</span>';
-    }
+    authBusy.unlock();
     syncSubmitBtn();
   }
 
@@ -179,23 +179,68 @@
     }
   }
 
+  function submitOtpAjax() {
+    if (!form || verifyInflight || authBusy.isLocked()) return;
+    var code = normalizeOtpDigits(otpInput && otpInput.value);
+    if (otpInput) otpInput.value = code;
+    if (code.length !== OTP_LEN) return;
+    verifyInflight = true;
+    showHint('');
+    lockForSubmit();
+    fetch(form.action, {
+      method: 'POST',
+      body: new FormData(form),
+      credentials: 'same-origin',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        Accept: 'application/json'
+      }
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        }).catch(function () {
+          return { ok: false, data: null };
+        });
+      })
+      .then(function (payload) {
+        verifyInflight = false;
+        var data = payload.data || {};
+        if (payload.ok && data.ok && data.redirect) {
+          if (window.vinorExpressClearPrefetchCache) window.vinorExpressClearPrefetchCache();
+          window.location.replace(data.redirect);
+          return;
+        }
+        unlockOtpInputs();
+        showHint((data && data.error) || 'خطا در تأیید کد.');
+        if (data && data.redirect) {
+          setTimeout(function () { window.location.assign(data.redirect); }, 900);
+        }
+      })
+      .catch(function () {
+        verifyInflight = false;
+        unlockOtpInputs();
+        try { form.submit(); } catch (_) {}
+      });
+  }
+
   function startResendCooldown(seconds) {
     if (resendTimerId) clearInterval(resendTimerId);
     var c = seconds;
     if (resendBtn) resendBtn.disabled = true;
     if (timerLine) {
-      timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>ارسال مجدد تا ' + toFaNum(c) + ' ثانیه دیگر</span>';
+      timerLine.innerHTML = timerIcon + '<span>ارسال مجدد تا ' + toFaNum(c) + ' ثانیه دیگر</span>';
     }
     resendTimerId = setInterval(function () {
       c--;
       if (timerLine) {
-        timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>ارسال مجدد تا ' + toFaNum(c) + ' ثانیه دیگر</span>';
+        timerLine.innerHTML = timerIcon + '<span>ارسال مجدد تا ' + toFaNum(c) + ' ثانیه دیگر</span>';
       }
       if (c <= 0) {
         clearInterval(resendTimerId);
         resendTimerId = null;
         if (timerLine) {
-          timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>لطفاً برای دریافت کد کمی صبر کنید</span>';
+          timerLine.innerHTML = timerIcon + '<span>لطفاً برای دریافت کد کمی صبر کنید</span>';
         }
         if (resendBtn) resendBtn.disabled = false;
       }
@@ -211,8 +256,7 @@
     syncClearBtn();
     syncSubmitBtn();
     if (digits.length === OTP_LEN && !authBusy.isLocked()) {
-      lockForSubmit();
-      form.requestSubmit();
+      submitOtpAjax();
     }
   }
 
@@ -224,6 +268,7 @@
       otpInput.value = normalizeOtpDigits(otpInput.value);
       syncClearBtn();
       syncSubmitBtn();
+      if (normalizeOtpDigits(otpInput.value).length === OTP_LEN) submitOtpAjax();
     }, passiveSig);
 
     otpInput.addEventListener('paste', function (e) {
@@ -236,8 +281,7 @@
       if (e.key === 'Enter') {
         e.preventDefault();
         if (normalizeOtpDigits(otpInput.value).length === OTP_LEN) {
-          lockForSubmit();
-          form.requestSubmit();
+          submitOtpAjax();
         } else {
           showHint('لطفاً کد ۵ رقمی را کامل وارد کنید.');
         }
@@ -256,17 +300,16 @@
 
   if (form && submitBtn) {
     form.addEventListener('submit', function (e) {
+      e.preventDefault();
       var code = normalizeOtpDigits(otpInput && otpInput.value);
       if (otpInput) otpInput.value = code;
       if (code.length !== OTP_LEN) {
-        e.preventDefault();
         unlockOtpInputs();
         showHint('لطفاً کد ۵ رقمی را کامل وارد کنید.');
         if (otpInput) otpInput.focus();
         return;
       }
-      showHint('');
-      lockForSubmit();
+      submitOtpAjax();
     }, sig ? Object.assign({ capture: true, signal: sig }) : { capture: true });
   }
 
@@ -310,7 +353,7 @@
         resendBtn.disabled = true;
         if (resendStatus) { resendStatus.textContent = ''; resendStatus.classList.add('hidden'); }
         if (timerLine) {
-          timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>در حال ارسال…</span>';
+          timerLine.innerHTML = timerIcon + '<span>در حال ارسال…</span>';
         }
         var headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
         var csrf = readCsrfToken();
@@ -338,13 +381,13 @@
         } else {
           var errMsg = (data && data.error) ? data.error : (resp.ok ? 'خطا در ارسال مجدد' : 'خطا در ارتباط با سرور');
           if (timerLine) {
-            timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>' + errMsg + '</span>';
+            timerLine.innerHTML = timerIcon + '<span>' + errMsg + '</span>';
           }
           setTimeout(function () { resendBtn.disabled = false; }, 2000);
         }
       } catch (_) {
         if (timerLine) {
-          timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>خطا در ارسال مجدد</span>';
+          timerLine.innerHTML = timerIcon + '<span>خطا در ارسال مجدد</span>';
         }
         setTimeout(function () { resendBtn.disabled = false; }, 2000);
       }

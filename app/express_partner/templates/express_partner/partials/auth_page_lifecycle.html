@@ -10,5 +10,9 @@
     if (!window.__vinorAuthPageSignal || typeof fn !== 'function') return;
     window.__vinorAuthPageSignal.addEventListener('abort', fn, { once: true });
   };
+
+  if (window.vinorExpressClearAuthCache) {
+    try { window.vinorExpressClearAuthCache(); } catch (_) {}
+  }
 })();
 </script>

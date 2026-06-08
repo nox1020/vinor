@@ -38,6 +38,7 @@
     '/express/partner/invite-colleagues': 'profile',
     '/express/partner/training': 'profile',
     '/express/partner/routine': 'profile',
+    '/express/partner/cooperation-terms': 'dashboard',
     '/express/partner/commissions/transactions': 'commissions'
   };
 
@@ -169,18 +170,56 @@
     if (!isPartnerUrl(toHref)) return false;
     if (shouldForceFullNav(fromHref, toHref)) return false;
     try {
-      if (isAuthSoftPath(parseUrl(toHref).pathname)) return false;
+      var toPath = normPath(parseUrl(toHref).pathname);
+      var fromPath = normPath(parseUrl(fromHref).pathname);
+      if (isAuthSoftPath(toPath) && toPath === '/express/partner/login/otp' && fromPath === '/express/partner/login') {
+        return true;
+      }
+      if (isAuthSoftPath(toPath)) return false;
     } catch (_) {}
     return true;
   }
 
-  function clearAuthPrefetchCache() {
+  function currentAuthSegment() {
     try {
-      Object.keys(prefetchCache).forEach(function (key) {
-        var path = key.split('?')[0];
-        if (isAuthSoftPath(path)) delete prefetchCache[key];
-      });
+      var meta = document.querySelector('meta[name="vinor-express-auth"]');
+      return (meta && meta.getAttribute('content')) || 'guest';
+    } catch (_) {
+      return 'guest';
+    }
+  }
+
+  function authSegmentFromDoc(doc) {
+    if (!doc) return '';
+    try {
+      var meta = doc.querySelector('meta[name="vinor-express-auth"]');
+      return (meta && meta.getAttribute('content')) || 'guest';
+    } catch (_) {
+      return 'guest';
+    }
+  }
+
+  function syncAuthSegmentFromDoc(doc) {
+    try {
+      var next = authSegmentFromDoc(doc);
+      var meta = document.querySelector('meta[name="vinor-express-auth"]');
+      if (meta && next) meta.setAttribute('content', next);
     } catch (_) {}
+  }
+
+  function navCacheKey(href) {
+    return currentAuthSegment() + '::' + normalizeNavHref(href);
+  }
+
+  function clearAllPrefetchCache() {
+    try {
+      prefetchCache = Object.create(null);
+      prefetchInflight = Object.create(null);
+    } catch (_) {}
+  }
+
+  function clearAuthPrefetchCache() {
+    clearAllPrefetchCache();
   }
 
   function shouldUsePrefetchCache(href) {
@@ -188,9 +227,9 @@
       var p = normPath(parseUrl(href).pathname);
       if (p === '/express/partner/profile/edit') return false;
       if (p === '/express/partner/profile') return false;
-      /* پورسانت: HTML عوض می‌شود؛ کش prefetch قدیمی طرح/اسکریپت را خراب می‌کند */
       if (p === '/express/partner/commissions' || p === '/express/partner/commissions/transactions') return false;
-      return !isAuthSoftPath(p);
+      if (isAuthSoftPath(p)) return p === '/express/partner/login/otp';
+      return true;
     } catch (_) {
       return true;
     }
@@ -200,6 +239,8 @@
     try {
       var reqPath = normPath(parseUrl(requestedHref).pathname);
       var resPath = normPath(parseUrl(resolvedUrl).pathname);
+      var docAuth = authSegmentFromDoc(doc);
+      if (docAuth && docAuth !== currentAuthSegment()) return true;
       if (!isAuthSoftPath(reqPath) && isAuthShellDoc(doc)) return true;
       if (isHardSkipPath(resPath)) return true;
       if (resPath.indexOf(PREFIX) !== 0) return true;
@@ -486,7 +527,7 @@
   }
 
   function prefetchHref(href) {
-    var key = normalizeNavHref(href);
+    var key = navCacheKey(href);
     if (!key || prefetchCache[key] || prefetchInflight[key]) return;
     if (!shouldPrefetchNav(window.location.href, href)) return;
     prefetchInflight[key] = true;
@@ -505,7 +546,7 @@
         var resolved = payload.url || href;
         var doc = new DOMParser().parseFromString(payload.html, 'text/html');
         if (needsFullNavForResponse(href, resolved, doc)) return;
-        prefetchCache[normalizeNavHref(resolved)] = payload.html;
+        prefetchCache[navCacheKey(resolved)] = payload.html;
       })
       .catch(function () {})
       .finally(function () {
@@ -517,7 +558,7 @@
     opts = opts || {};
     var gen = opts.navGen || bumpNavGeneration();
     var navKey = softTabKeyForUrl(href);
-    var targetHref = normalizeNavHref(href);
+    var targetHref = navCacheKey(href);
     try {
       var tp = normPath(parseUrl(href).pathname);
       if (tp === '/express/partner/commissions' || tp === '/express/partner/commissions/transactions') {
@@ -546,6 +587,7 @@
       if (window.__vinorAuthPageAbort) {
         try { window.__vinorAuthPageAbort.abort(); } catch (_) {}
       }
+      syncAuthSegmentFromDoc(doc);
       swapEl.innerHTML = newSwap.innerHTML;
       swapEl.querySelectorAll('#bottomNavMenu').forEach(function (dup) { dup.remove(); });
       if (scriptsEl && newScripts) {
@@ -605,7 +647,7 @@
           return false;
         }
         if (shouldUsePrefetchCache(payload.url || href)) {
-          prefetchCache[normalizeNavHref(payload.url || href)] = payload.html;
+          prefetchCache[navCacheKey(payload.url || href)] = payload.html;
         }
         return applyHtml(payload.html, payload.url || href);
       })
@@ -709,6 +751,7 @@
   window.vinorExpressNavigate = vinorExpressNavigate;
   window.vinorExpressPrefetch = prefetchHref;
   window.vinorExpressClearAuthCache = clearAuthPrefetchCache;
+  window.vinorExpressClearPrefetchCache = clearAllPrefetchCache;
 
   window.addEventListener('popstate', function () {
     if (!document.getElementById('vinor-express-page-swap')) return;
@@ -841,11 +884,11 @@
 
   function invalidatePrefetchForHref(href) {
     try {
-      var key = normalizeNavHref(href);
+      var key = navCacheKey(href);
       delete prefetchCache[key];
       var path = normPath(parseUrl(href).pathname);
       Object.keys(prefetchCache).forEach(function (k) {
-        if (normPath(k.split('?')[0]) === path) delete prefetchCache[k];
+        if (normPath(k.split('::')[1] || k.split('?')[0]) === path) delete prefetchCache[k];
       });
     } catch (_) {}
   }

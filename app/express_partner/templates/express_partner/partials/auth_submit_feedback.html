@@ -22,6 +22,15 @@
         '<span>' + busyLabel + '</span></span>';
     }
 
+    function unlock() {
+      if (!locked) return;
+      locked = false;
+      btn.removeAttribute('aria-busy');
+      delete btn.dataset.vinorAuthBusy;
+      btn.innerHTML = '<span data-btn-label>' + (btn.dataset.vinorAuthLabel || 'ادامه') + '</span>';
+      btn.disabled = false;
+    }
+
     if (!form.dataset.authSkipSubmitLock) {
       form.addEventListener('submit', function (e) {
         if (locked) {
@@ -32,7 +41,7 @@
       }, { capture: true });
     }
 
-    return { lock: lock, isLocked: function () { return locked; } };
+    return { lock: lock, unlock: unlock, isLocked: function () { return locked; } };
   };
 })();
 </script>

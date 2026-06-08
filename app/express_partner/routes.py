@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import threading
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -666,6 +667,93 @@ def _clear_otp_session() -> None:
     session.pop('otp_phone', None)
 
 
+def _auth_wants_json() -> bool:
+    if request.is_json:
+        return True
+    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+        return False
+    accept = (request.headers.get('Accept') or '').lower()
+    return 'application/json' in accept
+
+
+def _store_otp_session(phone: str, code: str) -> None:
+    _clear_otp_session()
+    session.permanent = True
+    session.update({'otp_code': code, 'otp_phone': phone})
+    try:
+        session.modified = True
+    except Exception:
+        pass
+
+
+def _dispatch_otp_sms(phone: str, code: str) -> None:
+    """ارسال OTP در پس‌زمینه — پاسخ HTTP بلافاصله برگردد."""
+    app = current_app._get_current_object()
+
+    def _worker() -> None:
+        with app.app_context():
+            try:
+                from ..services.sms import send_sms_code
+
+                result = send_sms_code(phone, code)
+                if not result.get('ok'):
+                    app.logger.error(
+                        'async OTP SMS failed | phone=%s | status=%s | body=%s',
+                        phone,
+                        result.get('status'),
+                        result.get('body'),
+                    )
+            except Exception:
+                app.logger.exception('async OTP SMS exception | phone=%s', phone)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def _ensure_user_record_background(phone: str) -> None:
+    app = current_app._get_current_object()
+
+    def _worker() -> None:
+        with app.app_context():
+            try:
+                from ..utils.storage import load_users, save_users
+
+                users = load_users()
+                if any(u.get('phone') == phone for u in users):
+                    return
+                users.append({
+                    'phone': phone,
+                    'registered_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                })
+                save_users(users)
+            except Exception:
+                app.logger.exception('background user record failed | phone=%s', phone)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def _finalize_partner_login(phone: str) -> str:
+    session['user_id'] = phone
+    session['user_phone'] = phone
+    session.permanent = True
+    _clear_otp_session()
+    _invalidate_partner_session_cache()
+    _ensure_user_record_background(phone)
+    prof = _partner_profile_for_phone(phone)
+    session['VINOR_IS_EXPRESS_PARTNER'] = _is_partner_approved(prof)
+    nxt = _login_next_preserve() or _session_next_safe()
+    if nxt:
+        try:
+            session.pop('next', None)
+        except Exception:
+            pass
+        return nxt
+    return url_for('express_partner.dashboard')
+
+
+def _login_otp_redirect_url() -> str:
+    return url_for('express_partner.login_otp', _=str(int(time.time())))
+
+
 def _is_prefetch_request() -> bool:
     """درخواست prefetch مرورگر — نباید به‌عنوان بازدید واقعی فایل شمرده شود."""
     dest = (request.headers.get("Sec-Fetch-Dest") or "").lower()
@@ -1045,8 +1133,16 @@ def inject_role_flags():
 
     from ..utils.flash_messages import AUTH_FLASH_CATEGORY_FILTER
 
+    if not me:
+        vinor_express_auth_segment = "guest"
+    elif is_express_partner:
+        vinor_express_auth_segment = "partner"
+    else:
+        vinor_express_auth_segment = "user"
+
     return {
         "VINOR_IS_EXPRESS_PARTNER": is_express_partner,
+        "vinor_express_auth_segment": vinor_express_auth_segment,
         "VAPID_PUBLIC_KEY": vapid_public,
         "is_vinor_apk": is_vinor_apk,
         "android_apk_url": android_apk_url,
@@ -2489,12 +2585,12 @@ def login():
         if request.args.get('change'):
             _clear_otp_session()
         elif session.get('otp_code') and session.get('otp_phone'):
-            return redirect(url_for('express_partner.login_otp', _=str(int(time.time()))))
-    try:
-        from .referrals import capture_ref_on_login
-        capture_ref_on_login()
-    except Exception:
-        pass
+            return redirect(_login_otp_redirect_url())
+        try:
+            from .referrals import capture_ref_on_login
+            capture_ref_on_login()
+        except Exception:
+            pass
     # اگر از قبل لاگین است، مستقیم به داشبورد (یا مسیر هدف) برود
     if session.get("user_phone"):
         session.permanent = True
@@ -2511,7 +2607,12 @@ def login():
     if request.method == 'POST':
         from ..utils.flash_messages import FLASH_AUTH_ERROR, FLASH_AUTH_INFO, FLASH_AUTH_WARNING
 
+        wants_json = _auth_wants_json()
+
         if not _legal_accepted(request):
+            msg = 'برای ادامه باید حریم خصوصی و قوانین استفاده را بپذیرید.'
+            if wants_json:
+                return jsonify({'ok': False, 'error': msg}), 400
             flash('برای ادامه باید <a href="{privacy}" class="underline">حریم خصوصی</a> و <a href="{terms}" class="underline">قوانین استفاده</a> را بپذیرید.'.format(
                 privacy=url_for('main.privacy', next=_login_next_preserve() or ''),
                 terms=url_for('express_partner.legal_terms', next=_login_next_preserve() or ''),
@@ -2520,50 +2621,33 @@ def login():
 
         phone_raw = request.form.get('phone', '')
         phone = _normalize_phone(phone_raw)
-        from ..services.sms import is_valid_iran_mobile, send_sms_code
+        from ..services.sms import is_valid_iran_mobile
 
         if not is_valid_iran_mobile(phone):
-            flash('لطفاً یک شماره موبایل ۱۱ رقمی معتبر (۰۹…) وارد کنید.', FLASH_AUTH_ERROR)
+            msg = 'لطفاً یک شماره موبایل ۱۱ رقمی معتبر (۰۹…) وارد کنید.'
+            if wants_json:
+                return jsonify({'ok': False, 'error': msg}), 400
+            flash(msg, FLASH_AUTH_ERROR)
             return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
 
         code = f"{random.randint(10000, 99999)}"
-        session.permanent = True
-        sms_ok = False
-        try:
-            sms_result = send_sms_code(phone, code)
-            sms_ok = bool(sms_result.get('ok'))
-            if sms_ok:
-                flash('کد تأیید ارسال شد.', FLASH_AUTH_INFO)
-            else:
-                current_app.logger.error(
-                    "OTP send failed in login | phone=%s | status=%s | body=%s",
-                    phone,
-                    sms_result.get('status'),
-                    sms_result.get('body'),
-                )
-                flash('ارسال کد تأیید با خطا مواجه شد. لطفاً دوباره تلاش کنید.', FLASH_AUTH_WARNING)
-        except Exception as exc:
-            current_app.logger.exception("OTP send exception in login | phone=%s", phone)
-            flash('ارسال کد تأیید با خطا مواجه شد. لطفاً دوباره تلاش کنید.', FLASH_AUTH_WARNING)
+        _store_otp_session(phone, code)
+        _dispatch_otp_sms(phone, code)
 
-        if not sms_ok:
-            _clear_otp_session()
-            return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
-
-        _clear_otp_session()
-        session.update({'otp_code': code, 'otp_phone': phone})
-        try:
-            session.modified = True
-        except Exception:
-            pass
         nxt = _login_next_preserve()
         if nxt:
             session['next'] = nxt
-        otp_url = url_for('express_partner.login_otp', _=str(int(time.time())))
+
+        otp_url = _login_otp_redirect_url()
+        if wants_json:
+            r = jsonify({'ok': True, 'redirect': otp_url})
+            r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+            return r
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             r = redirect(otp_url)
             r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
             return r
+        flash('کد تأیید ارسال شد.', FLASH_AUTH_INFO)
         return redirect(otp_url)
     return render_template('express_partner/auth/login_step1.html')
 
@@ -2601,45 +2685,40 @@ def verify():
         purge_non_auth_flashes,
     )
 
-    purge_non_auth_flashes()
+    wants_json = _auth_wants_json()
+    if not wants_json:
+        purge_non_auth_flashes()
     from ..services.sms import normalize_otp_code
 
     code = normalize_otp_code(request.form.get('otp_code') or '')
     sess_phone = _otp_session_phone()
     if not sess_phone or not session.get('otp_code'):
-        flash('جلسهٔ تأیید منقضی شده. لطفاً دوباره شماره موبایل را وارد کنید.', FLASH_AUTH_ERROR)
+        msg = 'جلسهٔ تأیید منقضی شده. لطفاً دوباره شماره موبایل را وارد کنید.'
+        if wants_json:
+            return jsonify({'ok': False, 'error': msg, 'redirect': url_for('express_partner.login')}), 400
+        flash(msg, FLASH_AUTH_ERROR)
         return redirect(url_for('express_partner.login'))
 
     if len(code) != 5:
-        flash('لطفاً کد ۵ رقمی را به‌درستی وارد کنید.', FLASH_AUTH_ERROR)
+        msg = 'لطفاً کد ۵ رقمی را به‌درستی وارد کنید.'
+        if wants_json:
+            return jsonify({'ok': False, 'error': msg}), 400
+        flash(msg, FLASH_AUTH_ERROR)
         return redirect(url_for('express_partner.login_otp'))
 
     if _otp_code_matches_session(code):
-        phone = sess_phone
-        session['user_id'] = phone
-        session['user_phone'] = phone
-        session.permanent = True
-        _clear_otp_session()
-        _invalidate_partner_session_cache()
-        # ensure user exists
-        try:
-            from ..utils.storage import load_users, save_users
-            users = load_users()
-            if not any(u.get('phone') == phone for u in users):
-                from datetime import datetime
-                users.append({'phone': phone, 'registered_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
-                save_users(users)
-        except Exception:
-            pass
-        prof = _partner_profile_for_phone(phone)
-        session['VINOR_IS_EXPRESS_PARTNER'] = _is_partner_approved(prof)
-        nxt = _login_next_preserve() or _session_next_safe()
-        if nxt:
-            session['next'] = nxt
+        dest = _finalize_partner_login(sess_phone)
+        if wants_json:
+            r = jsonify({'ok': True, 'redirect': dest})
+            r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+            return r
         flash('ورود شما با موفقیت انجام شد.', FLASH_AUTH_SUCCESS)
-        return _redirect_login_next('express_partner.dashboard')
+        return redirect(dest)
 
-    flash('کد تأیید نادرست است. لطفاً دوباره تلاش کنید.', FLASH_AUTH_ERROR)
+    msg = 'کد تأیید نادرست است. لطفاً دوباره تلاش کنید.'
+    if wants_json:
+        return jsonify({'ok': False, 'error': msg}), 400
+    flash(msg, FLASH_AUTH_ERROR)
     if _otp_session_phone():
         return redirect(url_for('express_partner.login_otp'))
     return redirect(url_for('express_partner.login'))
@@ -3846,32 +3925,14 @@ def api_login_request():
             'error': 'پذیرش حریم خصوصی و قوانین استفاده الزامی است.',
             'legal_required': True,
         }), 400
-    from ..services.sms import is_valid_iran_mobile, send_sms_code
+    from ..services.sms import is_valid_iran_mobile
 
     if not is_valid_iran_mobile(phone):
         return jsonify({'success': False, 'error': 'شماره موبایل معتبر نیست.'}), 400
 
     code = f"{random.randint(10000, 99999)}"
-    session.permanent = True
-    try:
-        sms_result = send_sms_code(phone, code)
-        if not sms_result.get('ok'):
-            _clear_otp_session()
-            return jsonify({
-                'success': False,
-                'error': 'ارسال کد ناموفق بود.',
-                'status': sms_result.get('status'),
-                'details': sms_result.get('body'),
-            }), 502
-    except Exception:
-        _clear_otp_session()
-        return jsonify({'success': False, 'error': 'خطا در ارسال کد تأیید.'}), 502
-    _clear_otp_session()
-    session.update({'otp_code': code, 'otp_phone': phone})
-    try:
-        session.modified = True
-    except Exception:
-        pass
+    _store_otp_session(phone, code)
+    _dispatch_otp_sms(phone, code)
     return jsonify({'success': True, 'message': 'کد تأیید ارسال شد.'})
 
 
@@ -3890,22 +3951,7 @@ def api_verify():
         return jsonify({'success': False, 'error': 'شماره با جلسهٔ تأیید همخوانی ندارد.'}), 400
     if not _otp_code_matches_session(code):
         return jsonify({'success': False, 'error': 'کد تأیید نادرست است.'}), 400
-    phone = sess_phone
-    session['user_id'] = phone
-    session['user_phone'] = phone
-    session.permanent = True
-    _clear_otp_session()
-    _invalidate_partner_session_cache()
-    try:
-        from ..utils.storage import load_users, save_users
-        users = load_users()
-        if not any(u.get('phone') == phone for u in users):
-            users.append({'phone': phone, 'registered_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
-            save_users(users)
-    except Exception:
-        pass
-    prof = _partner_profile_for_phone(phone)
-    session['VINOR_IS_EXPRESS_PARTNER'] = _is_partner_approved(prof)
+    _finalize_partner_login(sess_phone)
     return jsonify({'success': True, 'message': 'ورود با موفقیت انجام شد.'})
 
 
@@ -3913,7 +3959,7 @@ def api_verify():
 def otp_resend():
     # پشتیبانی از JSON (اپ) و form (وب)
     data = request.get_json(silent=True) or {}
-    from ..services.sms import is_valid_iran_mobile, send_sms_code
+    from ..services.sms import is_valid_iran_mobile
 
     sess_phone = _otp_session_phone()
     req_phone = _normalize_phone(
@@ -3931,18 +3977,8 @@ def otp_resend():
         return jsonify({'ok': False, 'error': 'شماره معتبر نیست.'}), 400
     try:
         code = f"{random.randint(10000, 99999)}"
-        session.permanent = True
-        sms_result = send_sms_code(phone, code)
-        if not sms_result.get('ok'):
-            if request.is_json:
-                return jsonify({
-                    'ok': False,
-                    'error': 'ارسال مجدد کد ناموفق بود.',
-                    'status': sms_result.get('status'),
-                    'details': sms_result.get('body'),
-                }), 502
-            return jsonify({'ok': False, 'error': 'ارسال مجدد کد ناموفق بود.'}), 502
-        session.update({'otp_code': code, 'otp_phone': phone})
+        _store_otp_session(phone, code)
+        _dispatch_otp_sms(phone, code)
         if request.is_json:
             return jsonify({'ok': True, 'message': 'کد تأیید مجدد ارسال شد.'})
         return jsonify({'ok': True})
@@ -3953,7 +3989,7 @@ def otp_resend():
 
 
 @express_partner_bp.route('/profile', methods=['GET'], endpoint='profile')
-@require_partner_access(allow_pending=True)
+@require_partner_access(allow_pending=True, allow_guest=True)
 def profile_page():
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None) or {}
