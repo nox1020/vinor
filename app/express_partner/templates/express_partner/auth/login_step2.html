@@ -1,106 +1,92 @@
 {% extends 'express_partner/base.html' %}
-{% block title %}تأیید کد | وینور اکسپرس{% endblock %}
+{% block title %}تایید شماره موبایل | وینور اکسپرس{% endblock %}
+
+{% set _fa = '۰۱۲۳۴۵۶۷۸۹' %}
+{% macro fa_num(s) -%}
+{%- for c in s|string -%}
+{%- if c.isdigit() -%}{{ _fa[c|int] }}{%- else -%}{{ c }}{%- endif -%}
+{%- endfor -%}
+{%- endmacro %}
+{% macro format_phone_display(p) -%}
+{%- set d = p|replace(' ', '')|replace('-', '') -%}
+{%- if d|length >= 11 -%}
+{{ fa_num(d[0:4]) }} {{ fa_num(d[4:7]) }} {{ fa_num(d[7:11]) }}
+{%- else -%}
+{{ fa_num(d) }}
+{%- endif -%}
+{%- endmacro %}
+
 {% block content %}
 
-<div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
-  <header class="relative px-4 pt-6 pb-2">
+<div class="min-h-[100dvh] bg-[#1a1a1a] text-zinc-100 flex flex-col">
+  <header class="relative flex items-center justify-center px-4 pt-5 pb-3">
+    <h1 class="text-base font-bold text-white">تایید شماره موبایل</h1>
     <a href="{{ url_for('express_partner.login', change=1, next=login_next) if login_next else url_for('express_partner.login', change=1) }}"
        data-vinor-express-nav="back"
-       class="absolute right-4 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"
+       class="absolute right-4 top-5 flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 hover:text-white transition-colors"
        aria-label="تغییر شماره موبایل">
-      <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
+      <i class="fas fa-arrow-right text-base" aria-hidden="true"></i>
     </a>
-    <div class="flex flex-col items-center gap-6 pt-2">
-      {% set login_step = 2 %}
-      {% include 'express_partner/partials/auth_login_progress.html' %}
-    </div>
   </header>
 
-  <main class="flex-1 px-4 pt-4">
+  <main class="flex-1 px-5 pt-6">
     <div class="mx-auto w-full max-w-md">
-      <div class="rounded-2xl border border-white/10 bg-[#0c1018] p-6 sm:p-7 shadow-xl shadow-black/40">
-        <div class="mb-5 flex justify-center">
-          <div class="flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-400">
-            <i class="fas fa-mobile-screen-button text-2xl" aria-hidden="true"></i>
-          </div>
-        </div>
-
-        <div class="text-center space-y-2 mb-5">
-          <h2 class="text-xl font-bold text-white">تأیید کد پیامکی</h2>
-          <p class="text-sm text-zinc-400 leading-relaxed">
-            کد ۵ رقمی ارسال‌شده به
-            <span class="font-semibold text-emerald-400 tabular-nums" dir="ltr">{{ phone }}</span>
-            را وارد کنید
-          </p>
-        </div>
-
-        {% with messages = get_flashed_messages(with_categories=true, category_filter=auth_flash_categories) %}
-        {% set stack_id = 'loginStep2Flash' %}
-        {% include 'express_partner/partials/flash_alerts.html' %}
-        {% endwith %}
-
-        <p id="otpInlineHint" class="mb-3 hidden text-center text-xs text-amber-400/95" role="alert"></p>
-
-        <form id="otpForm" method="POST" action="{{ url_for('express_partner.verify') }}" class="space-y-6"
-              data-auth-skip-submit-lock="1">
-          {% if login_next %}<input type="hidden" name="next" value="{{ login_next }}">{% endif %}
-          <input type="hidden" name="phone" value="{{ phone }}">
-          {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
-          <input type="hidden" name="otp_code" id="otpHidden" value="" />
-
-          <div class="flex items-center justify-center gap-2 sm:gap-2.5" dir="ltr" aria-label="ورود کد ۵ رقمی">
-            {% for i in range(5) %}
-            <input class="otp-box h-12 w-11 sm:h-14 sm:w-12 shrink-0 rounded-xl border-2 border-zinc-600 bg-[#070b12] text-center text-lg font-bold text-white tabular-nums shadow-inner focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-colors"
-                   type="text"
-                   inputmode="numeric"
-                   maxlength="1"
-                   {% if i == 0 %}autocomplete="one-time-code" name="otp-digit-1"{% else %}autocomplete="off" aria-hidden="true" tabindex="-1"{% endif %}
-                   autocapitalize="off"
-                   autocorrect="off"
-                   pattern="[0-9]"
-                   aria-label="رقم {{ i + 1 }}" />
-            {% endfor %}
-          </div>
-
-          <button type="submit" id="otpSubmitBtn"
-                  class="w-full touch-manipulation select-none rounded-xl bg-emerald-500 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-900/40 transition-[transform,opacity,background-color] duration-75 hover:bg-emerald-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 [-webkit-tap-highlight-color:transparent]">
-            <span data-btn-label>ورود به پنل</span>
-          </button>
-        </form>
-
-        <div class="relative my-6">
-          <div class="absolute inset-0 flex items-center" aria-hidden="true">
-            <div class="w-full border-t border-zinc-700/80"></div>
-          </div>
-          <div class="relative flex justify-center">
-            <span class="bg-[#0c1018] px-3 text-xs text-zinc-500">یا</span>
-          </div>
-        </div>
-
-        <div id="otpResendBlock" class="space-y-3 text-center">
-          <p id="otpResendStatus" class="hidden text-xs text-emerald-400/95" role="status"></p>
-          <p id="timer" class="text-xs text-zinc-400">
-            <span id="timerLine">ارسال مجدد کد تا <span id="countdown" class="font-semibold text-zinc-200 tabular-nums">۶۰</span> ثانیه دیگر</span>
-          </p>
-          <button type="button" id="resendBtn" disabled
-                  class="inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-zinc-500 bg-zinc-900/80 py-3 text-sm font-semibold text-zinc-200 transition enabled:hover:border-zinc-400 enabled:hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-45 disabled:border-zinc-700">
-            <i class="fas fa-message" aria-hidden="true"></i>
-            ارسال مجدد کد
-          </button>
-        </div>
+      <div class="flex items-center gap-2">
+        <i class="fas fa-comment-dots text-lg text-zinc-400" aria-hidden="true"></i>
+        <span class="text-lg font-bold text-white tabular-nums" dir="ltr">{{ format_phone_display(phone) }}</span>
       </div>
+      <p class="mt-2 text-sm text-zinc-400">کد تأیید به شماره بالا فرستاده شد.</p>
 
-      <p class="mt-10 flex items-center justify-center gap-2 text-center text-xs text-zinc-500">
-        <i class="fas fa-lock text-[10px] text-emerald-600/80" aria-hidden="true"></i>
-        وینور اکسپرس — سریع و حرفه‌ای
-      </p>
+      {% with messages = get_flashed_messages(with_categories=true, category_filter=auth_flash_categories) %}
+      {% set stack_id = 'loginStep2Flash' %}
+      {% include 'express_partner/partials/flash_alerts.html' %}
+      {% endwith %}
+
+      <p id="otpInlineHint" class="mt-4 hidden text-sm text-amber-400/95" role="alert"></p>
+
+      <form id="otpForm" method="POST" action="{{ url_for('express_partner.verify') }}" class="mt-6"
+            data-auth-skip-submit-lock="1">
+        {% if login_next %}<input type="hidden" name="next" value="{{ login_next }}">{% endif %}
+        <input type="hidden" name="phone" value="{{ phone }}">
+        {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+
+        <div class="relative">
+          <input id="otpInput" type="text" name="otp_code" inputmode="numeric" autocomplete="one-time-code"
+                 maxlength="5" autocapitalize="off" autocorrect="off" dir="ltr"
+                 placeholder=""
+                 aria-label="کد تأیید ۵ رقمی"
+                 class="w-full rounded-lg border border-[#a62626]/70 bg-[#2a2a2a] py-3.5 pl-11 pr-4 text-base font-medium text-white tracking-widest tabular-nums focus:border-[#a62626] focus:outline-none focus:ring-1 focus:ring-[#a62626]/50 transition-colors">
+          <button type="button" id="otpClearBtn"
+                  class="absolute left-3 top-1/2 -translate-y-1/2 hidden h-6 w-6 items-center justify-center rounded-full bg-zinc-600/80 text-zinc-300 hover:bg-zinc-500 transition-colors"
+                  aria-label="پاک کردن">
+            <i class="fas fa-xmark text-xs" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <div class="mt-4 flex items-start justify-between gap-3 text-xs">
+          <button type="button" id="resendBtn" disabled
+                  class="shrink-0 font-semibold text-[#a62626] disabled:text-zinc-600 disabled:cursor-not-allowed transition-colors enabled:hover:text-[#c62828]">
+            درخواست دوباره
+          </button>
+          <p id="timerLine" class="flex items-center gap-1.5 text-zinc-500 text-left">
+            <i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i>
+            <span>لطفاً برای دریافت کد کمی صبر کنید</span>
+          </p>
+        </div>
+        <p id="otpResendStatus" class="mt-2 hidden text-xs text-emerald-400/95" role="status"></p>
+      </form>
     </div>
   </main>
-</div>
 
-{% set _login_next = login_next or '' %}
-{% set bottom_nav_active = 'profile' if _login_next and '/profile' in _login_next else '' %}
-{% include 'express_partner/partials/partner_tab_footer.html' %}
+  <footer class="sticky bottom-0 px-5 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-3 bg-[#1a1a1a]">
+    <div class="mx-auto w-full max-w-md">
+      <button type="submit" form="otpForm" id="otpSubmitBtn"
+              class="w-full touch-manipulation select-none rounded-lg bg-[#a62626] py-3.5 text-base font-bold text-white transition-[transform,opacity,background-color] duration-75 hover:bg-[#b83232] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 [-webkit-tap-highlight-color:transparent]">
+        <span data-btn-label>ورود</span>
+      </button>
+    </div>
+  </footer>
+</div>
 
 {% endblock %}
 
@@ -115,8 +101,9 @@
   var sigOpts = sig ? { signal: sig } : false;
   var passiveSig = sig ? { passive: true, signal: sig } : { passive: true };
 
-  var boxes = Array.from(document.querySelectorAll('.otp-box'));
-  var hidden = document.getElementById('otpHidden');
+  var OTP_LEN = 5;
+  var otpInput = document.getElementById('otpInput');
+  var clearBtn = document.getElementById('otpClearBtn');
   var form = document.getElementById('otpForm');
   var submitBtn = document.getElementById('otpSubmitBtn');
   var inlineHint = document.getElementById('otpInlineHint');
@@ -128,14 +115,8 @@
   var webOtpAbort = null;
 
   function teardownOtpPage() {
-    if (resendTimerId) {
-      clearInterval(resendTimerId);
-      resendTimerId = null;
-    }
-    if (webOtpAbort) {
-      try { webOtpAbort.abort(); } catch (_) {}
-      webOtpAbort = null;
-    }
+    if (resendTimerId) { clearInterval(resendTimerId); resendTimerId = null; }
+    if (webOtpAbort) { try { webOtpAbort.abort(); } catch (_) {} webOtpAbort = null; }
   }
   if (typeof window.vinorAuthPageOnAbort === 'function') {
     window.vinorAuthPageOnAbort(teardownOtpPage);
@@ -146,24 +127,13 @@
   var otpAr = '٠١٢٣٤٥٦٧٨٩';
 
   function toFaNum(n) {
-    try {
-      return String(n).replace(/\d/g, function (d) { return faDigits[Number(d)]; });
-    } catch (_) {
-      return String(n);
-    }
-  }
-
-  function cdEl() {
-    return document.getElementById('countdown');
+    try { return String(n).replace(/\d/g, function (d) { return faDigits[Number(d)]; }); }
+    catch (_) { return String(n); }
   }
 
   function showHint(msg) {
     if (!inlineHint) return;
-    if (!msg) {
-      inlineHint.textContent = '';
-      inlineHint.classList.add('hidden');
-      return;
-    }
+    if (!msg) { inlineHint.textContent = ''; inlineHint.classList.add('hidden'); return; }
     inlineHint.textContent = msg;
     inlineHint.classList.remove('hidden');
   }
@@ -172,36 +142,40 @@
     var s = String(raw || '');
     s = s.replace(/[۰-۹]/g, function (c) { return String(otpFa.indexOf(c)); });
     s = s.replace(/[٠-٩]/g, function (c) { return String(otpAr.indexOf(c)); });
-    return s.replace(/\D+/g, '');
+    return s.replace(/\D+/g, '').slice(0, OTP_LEN);
   }
 
-  function otpCodeFromBoxes() {
-    return boxes.map(function (b) { return normalizeOtpDigits(b.value); }).join('').slice(0, 5);
+  function syncClearBtn() {
+    if (!clearBtn || !otpInput) return;
+    if (otpInput.value.length) {
+      clearBtn.classList.remove('hidden');
+      clearBtn.classList.add('flex');
+    } else {
+      clearBtn.classList.add('hidden');
+      clearBtn.classList.remove('flex');
+    }
+  }
+
+  function syncSubmitBtn() {
+    if (!submitBtn || submitBtn.dataset.vinorAuthBusy) return;
+    submitBtn.disabled = normalizeOtpDigits(otpInput && otpInput.value).length !== OTP_LEN;
   }
 
   function unlockOtpInputs() {
-    boxes.forEach(function (b) {
-      b.readOnly = false;
-      b.disabled = false;
-      b.removeAttribute('tabindex');
-      b.classList.remove('border-rose-500/60');
-    });
-    if (boxes[0]) boxes[0].setAttribute('tabindex', '0');
-    for (var i = 1; i < boxes.length; i++) {
-      if (boxes[i]) boxes[i].setAttribute('tabindex', '-1');
-    }
+    if (otpInput) { otpInput.readOnly = false; otpInput.disabled = false; }
     if (submitBtn && submitBtn.dataset.vinorAuthBusy) {
       submitBtn.disabled = false;
       submitBtn.removeAttribute('aria-busy');
       delete submitBtn.dataset.vinorAuthBusy;
-      submitBtn.innerHTML = '<span data-btn-label>ورود به پنل</span>';
+      submitBtn.innerHTML = '<span data-btn-label>ورود</span>';
     }
+    syncSubmitBtn();
   }
 
   function lockForSubmit() {
     if (!authBusy.isLocked()) {
       authBusy.lock();
-      boxes.forEach(function (b) { b.readOnly = true; });
+      if (otpInput) otpInput.readOnly = true;
     }
   }
 
@@ -210,57 +184,85 @@
     var c = seconds;
     if (resendBtn) resendBtn.disabled = true;
     if (timerLine) {
-      timerLine.innerHTML = 'ارسال مجدد کد تا <span id="countdown" class="font-semibold text-zinc-200 tabular-nums">' + toFaNum(c) + '</span> ثانیه دیگر';
+      timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>ارسال مجدد تا ' + toFaNum(c) + ' ثانیه دیگر</span>';
     }
     resendTimerId = setInterval(function () {
       c--;
-      var el = cdEl();
-      if (el) el.textContent = toFaNum(c);
+      if (timerLine) {
+        timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>ارسال مجدد تا ' + toFaNum(c) + ' ثانیه دیگر</span>';
+      }
       if (c <= 0) {
         clearInterval(resendTimerId);
         resendTimerId = null;
-        if (timerLine) timerLine.textContent = 'هنوز کد را دریافت نکردید؟';
+        if (timerLine) {
+          timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>لطفاً برای دریافت کد کمی صبر کنید</span>';
+        }
         if (resendBtn) resendBtn.disabled = false;
       }
     }, 1000);
   }
 
-  function syncHidden() {
-    hidden.value = otpCodeFromBoxes();
-  }
-
-  function tryAutoSubmit() {
-    syncHidden();
-    if (hidden.value.length === 5 && !authBusy.isLocked()) {
+  function fillFromString(str) {
+    if (!otpInput) return;
+    var digits = normalizeOtpDigits(str);
+    if (!digits.length) return;
+    showHint('');
+    otpInput.value = digits;
+    syncClearBtn();
+    syncSubmitBtn();
+    if (digits.length === OTP_LEN && !authBusy.isLocked()) {
       lockForSubmit();
       form.requestSubmit();
     }
   }
 
-  function fillFromString(str) {
-    var digits = normalizeOtpDigits(str).slice(0, 5).split('');
-    if (!digits.length) return;
-    showHint('');
-    boxes.forEach(function (b) { b.value = ''; });
-    digits.forEach(function (d, i) {
-      if (boxes[i]) boxes[i].value = d;
-    });
-    tryAutoSubmit();
+  window.vinorFillOtpFromApp = fillFromString;
+
+  if (otpInput) {
+    otpInput.addEventListener('input', function () {
+      showHint('');
+      otpInput.value = normalizeOtpDigits(otpInput.value);
+      syncClearBtn();
+      syncSubmitBtn();
+    }, passiveSig);
+
+    otpInput.addEventListener('paste', function (e) {
+      e.preventDefault();
+      var val = (e.clipboardData || window.clipboardData).getData('text');
+      fillFromString(val);
+    }, sigOpts);
+
+    otpInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (normalizeOtpDigits(otpInput.value).length === OTP_LEN) {
+          lockForSubmit();
+          form.requestSubmit();
+        } else {
+          showHint('لطفاً کد ۵ رقمی را کامل وارد کنید.');
+        }
+      }
+    }, sigOpts);
   }
 
-  /** پر کردن OTP از اپ اندروید (خواندن پیامک) */
-  window.vinorFillOtpFromApp = fillFromString;
+  if (clearBtn && otpInput) {
+    clearBtn.addEventListener('click', function () {
+      otpInput.value = '';
+      syncClearBtn();
+      syncSubmitBtn();
+      otpInput.focus();
+    }, sigOpts);
+  }
 
   if (form && submitBtn) {
     form.addEventListener('submit', function (e) {
-      syncHidden();
-      var code = hidden.value || '';
-      if (code.length !== 5) {
+      var code = normalizeOtpDigits(otpInput && otpInput.value);
+      if (otpInput) otpInput.value = code;
+      if (code.length !== OTP_LEN) {
         e.preventDefault();
         unlockOtpInputs();
-        showHint('لطفاً هر ۵ رقم کد را وارد کنید.');
-        var empty = boxes.find(function (b) { return !b.value; });
-        if (empty) empty.focus();
+        showHint('لطفاً کد ۵ رقمی را کامل وارد کنید.');
+        if (otpInput) otpInput.focus();
         return;
       }
       showHint('');
@@ -268,78 +270,10 @@
     }, sig ? Object.assign({ capture: true, signal: sig }) : { capture: true });
   }
 
-  boxes.forEach(function (box, idx) {
-    box.addEventListener('input', function () {
-      showHint('');
-      var raw = box.value || '';
-      var cleaned = normalizeOtpDigits(raw);
-      if (cleaned.length <= 1) {
-        box.value = cleaned;
-        if (box.value && idx < boxes.length - 1) boxes[idx + 1].focus();
-      } else {
-        var ds = cleaned.slice(0, 5 - idx).split('');
-        ds.forEach(function (d, i) {
-          if (boxes[idx + i]) boxes[idx + i].value = d;
-        });
-        var last = Math.min(idx + ds.length, boxes.length) - 1;
-        if (last >= 0) boxes[last].focus();
-      }
-      tryAutoSubmit();
-    }, passiveSig);
-    box.addEventListener('keydown', function (e) {
-      if (e.key === 'Backspace' && !box.value && idx > 0) {
-        e.preventDefault();
-        boxes[idx - 1].focus();
-        boxes[idx - 1].value = '';
-        syncHidden();
-      }
-      if (e.key === 'ArrowLeft' && idx > 0) {
-        e.preventDefault();
-        boxes[idx - 1].focus();
-      }
-      if (e.key === 'ArrowRight' && idx < boxes.length - 1) {
-        e.preventDefault();
-        boxes[idx + 1].focus();
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        syncHidden();
-        if (hidden.value.length === 5) {
-          lockForSubmit();
-          form.requestSubmit();
-        } else {
-          showHint('لطفاً هر ۵ رقم کد را وارد کنید.');
-        }
-      }
-    }, sigOpts);
-    box.addEventListener('paste', function (e) {
-      e.preventDefault();
-      var val = (e.clipboardData || window.clipboardData).getData('text');
-      fillFromString(val);
-    }, sigOpts);
-    box.addEventListener('focus', function () {
-      boxes.forEach(function (b, i) {
-        if (i !== idx) b.setAttribute('tabindex', '-1');
-      });
-      box.setAttribute('tabindex', '0');
-    }, passiveSig);
-  });
-
-  try {
-    boxes[0].focus();
-  } catch (_) {}
+  try { if (otpInput) otpInput.focus(); } catch (_) {}
 
   window.addEventListener('pageshow', function (e) {
     if (e.persisted) unlockOtpInputs();
-  }, passiveSig);
-
-  document.addEventListener('paste', function (e) {
-    try {
-      var val = (e.clipboardData || window.clipboardData).getData('text');
-      if (val && document.activeElement && document.activeElement.classList.contains('otp-box')) {
-        fillFromString(val);
-      }
-    } catch (_) {}
   }, passiveSig);
 
   (async function () {
@@ -351,9 +285,7 @@
             try { webOtpAbort.abort(); } catch (_) {}
           }, { once: true });
         }
-        setTimeout(function () {
-          try { webOtpAbort.abort(); } catch (_) {}
-        }, 60000);
+        setTimeout(function () { try { webOtpAbort.abort(); } catch (_) {} }, 60000);
         var cred = await navigator.credentials.get({
           otp: { transport: ['sms'] },
           signal: webOtpAbort.signal
@@ -376,12 +308,11 @@
       if (resendBtn.disabled || (sig && sig.aborted)) return;
       try {
         resendBtn.disabled = true;
-        if (resendStatus) {
-          resendStatus.textContent = '';
-          resendStatus.classList.add('hidden');
+        if (resendStatus) { resendStatus.textContent = ''; resendStatus.classList.add('hidden'); }
+        if (timerLine) {
+          timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>در حال ارسال…</span>';
         }
-        if (timerLine) timerLine.textContent = 'در حال ارسال مجدد…';
-        var headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+        var headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
         var csrf = readCsrfToken();
         if (csrf) headers['X-CSRFToken'] = csrf;
         var resp = await fetch('{{ url_for("express_partner.otp_resend") }}', {
@@ -392,26 +323,29 @@
           signal: sig || undefined
         });
         var data = null;
-        try {
-          data = await resp.json();
-        } catch (_) {}
+        try { data = await resp.json(); } catch (_) {}
         if (resp.ok && data && data.ok) {
           if (resendStatus) {
             resendStatus.textContent = 'کد جدید ارسال شد.';
             resendStatus.classList.remove('hidden');
           }
           unlockOtpInputs();
-          boxes.forEach(function (b) { b.value = ''; });
-          syncHidden();
-          try { boxes[0].focus(); } catch (_) {}
+          if (otpInput) otpInput.value = '';
+          syncClearBtn();
+          syncSubmitBtn();
+          try { otpInput.focus(); } catch (_) {}
           startResendCooldown(60);
         } else {
           var errMsg = (data && data.error) ? data.error : (resp.ok ? 'خطا در ارسال مجدد' : 'خطا در ارتباط با سرور');
-          if (timerLine) timerLine.textContent = errMsg;
+          if (timerLine) {
+            timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>' + errMsg + '</span>';
+          }
           setTimeout(function () { resendBtn.disabled = false; }, 2000);
         }
       } catch (_) {
-        if (timerLine) timerLine.textContent = 'خطا در ارسال مجدد';
+        if (timerLine) {
+          timerLine.innerHTML = '<i class="fas fa-circle-info text-[10px] shrink-0" aria-hidden="true"></i><span>خطا در ارسال مجدد</span>';
+        }
         setTimeout(function () { resendBtn.disabled = false; }, 2000);
       }
     }, sigOpts);
