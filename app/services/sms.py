@@ -94,14 +94,18 @@ def send_sms_code(phone: str, code: str) -> dict:
     """
     ارسال OTP با قالب sms.ir.
 
-    متن قالب (CODE مثلاً 38415):
+    متن قالب در پنل sms.ir:
         کد ورود شما : (آن را در اختیار هیچ کس نگذارید)
         https://vinor.ir
-        <#> CODE
-        @vinor.ir #CODE
-        HASH
+        <#> #CODE#
+        @vinor.ir ##CODE#
+        #HASH#
 
-    پارامتر HASH فقط وقتی SMS_RETRIEVER_HASH در api_keys تنظیم شده باشد فرستاده می‌شود.
+    نمونه خروجی (CODE=38415):
+        ...
+        <#> 38415
+        @vinor.ir #38415
+        4R707/AKLt0
     """
     mobile = normalize_iran_mobile(phone)
     if not is_valid_iran_mobile(mobile):
