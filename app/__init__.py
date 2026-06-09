@@ -414,6 +414,17 @@ def create_app() -> Flask:
         except Exception:
             return resp
 
+    @app.after_request
+    def apply_seo_robots_headers(resp):
+        """X-Robots-Tag for private/auth/dashboard pages."""
+        try:
+            from .utils.seo import apply_x_robots_tag
+            logged_in = bool(session.get("user_phone") or session.get("user_id"))
+            apply_x_robots_tag(resp, request.path or "", logged_in=logged_in)
+        except Exception:
+            pass
+        return resp
+
     # Express Partner blueprint
     try:
         from .express_partner import express_partner_bp
@@ -633,6 +644,7 @@ def create_app() -> Flask:
             "/healthz", "/diag", "/connection",
             # Public help pages (accessible بدون لاگین)
             "/help", "/راهنما",
+            "/privacy",
             # Public landing pages
             "/partners",
             # Express Partner auth paths (public)

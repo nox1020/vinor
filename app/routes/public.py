@@ -448,3 +448,85 @@ def profile():
     resp.headers["Vary"] = "Cookie"
     return resp
 
+
+# -------------------------
+# SEO: robots.txt, sitemap, legacy private URLs
+# -------------------------
+from ..utils.seo import (
+    apply_x_robots_tag,
+    build_robots_txt,
+    build_sitemap_entries,
+    render_sitemap_xml,
+)
+
+
+@main_bp.route("/robots.txt", endpoint="robots_txt")
+def robots_txt():
+    body = build_robots_txt()
+    resp = make_response(body, 200)
+    resp.mimetype = "text/plain; charset=utf-8"
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
+@main_bp.route("/sitemap.xml", endpoint="sitemap_xml")
+def sitemap_xml():
+    entries = build_sitemap_entries(current_app._get_current_object())
+    body = render_sitemap_xml(entries)
+    resp = make_response(body, 200)
+    resp.mimetype = "application/xml; charset=utf-8"
+    resp.headers["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=600"
+    return resp
+
+
+def _legacy_redirect(endpoint: str, **kwargs):
+    """Redirect legacy private/app URLs to current express partner routes."""
+    from flask import session as _session
+
+    resp = redirect(url_for(endpoint, **kwargs), code=302)
+    return apply_x_robots_tag(resp, request.path, logged_in=bool(_session.get("user_phone")))
+
+
+@main_bp.route("/app")
+@main_bp.route("/app/")
+def legacy_app_shell():
+    return _legacy_redirect("express_partner.dashboard")
+
+
+@main_bp.route("/my-lands")
+@main_bp.route("/my-lands/")
+def legacy_my_lands():
+    if session.get("user_phone"):
+        return _legacy_redirect("express_partner.dashboard")
+    return _legacy_redirect("express_partner.login", next=url_for("express_partner.dashboard"))
+
+
+@main_bp.route("/settings")
+@main_bp.route("/settings/")
+def legacy_settings():
+    if session.get("user_phone"):
+        return _legacy_redirect("express_partner.profile")
+    return _legacy_redirect("express_partner.login", next=url_for("express_partner.profile"))
+
+
+@main_bp.route("/careers/consultant/apply")
+@main_bp.route("/careers/consultant/apply/")
+def legacy_careers_apply():
+    return _legacy_redirect("express_partner.apply")
+
+
+@main_bp.route("/consultant/dashboard")
+@main_bp.route("/consultant/dashboard/")
+def legacy_consultant_dashboard():
+    if session.get("user_phone"):
+        return _legacy_redirect("express_partner.dashboard")
+    return _legacy_redirect("express_partner.login", next=url_for("express_partner.dashboard"))
+
+
+@main_bp.route("/express/partner/my-properties")
+@main_bp.route("/express/partner/my-properties/")
+def legacy_partner_my_properties():
+    if session.get("user_phone"):
+        return _legacy_redirect("express_partner.dashboard")
+    return _legacy_redirect("express_partner.login", next=url_for("express_partner.dashboard"))
+

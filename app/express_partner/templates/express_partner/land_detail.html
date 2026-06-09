@@ -1,5 +1,10 @@
 {% extends 'express_partner/base.html' %}
-{% block title %}{{ land.title or 'جزئیات فایل' }} | وینور اکسپرس{% endblock %}
+{% block title %}{{ (seo.title if seo else None) or ((land.title or 'جزئیات فایل') ~ ' | وینور اکسپرس') }}{% endblock %}
+
+{% block head %}
+  {{ super() }}
+  {% include 'express_partner/partials/land_seo_head.html' %}
+{% endblock %}
 
 {% block styles %}
   <style>

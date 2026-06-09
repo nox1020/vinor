@@ -3,7 +3,6 @@
 {% block head %}
   {{ super() }}
   <meta name="description" content="{{ seo_description | default('فایل‌های اکسپرس وینور | خرید و فروش ملک و زمین') }}">
-  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
   {% if canonical_url %}
   <link rel="canonical" href="{{ canonical_url }}">
   {% endif %}

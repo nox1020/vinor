@@ -1,0 +1,23 @@
+{% if seo %}
+  <meta name="description" content="{{ seo.description }}">
+  <meta name="keywords" content="{{ seo.keywords }}">
+  <meta name="author" content="وینور اکسپرس | vinor.ir">
+  <link rel="canonical" href="{{ seo.canonical }}">
+  <meta property="og:type" content="{{ seo.og_type or 'product' }}">
+  <meta property="og:url" content="{{ seo.canonical }}">
+  <meta property="og:title" content="{{ seo.title }}">
+  <meta property="og:description" content="{{ seo.description }}">
+  <meta property="og:image" content="{{ seo.og_image }}">
+  <meta property="og:locale" content="fa_IR">
+  {% if seo.price %}
+  <meta property="product:price:amount" content="{{ seo.price }}">
+  <meta property="product:price:currency" content="{{ seo.currency or 'IRR' }}">
+  {% endif %}
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ seo.title }}">
+  <meta name="twitter:description" content="{{ seo.description }}">
+  <meta name="twitter:image" content="{{ seo.og_image }}">
+  {% if seo.json_ld %}
+  <script type="application/ld+json">{{ seo.json_ld | tojson }}</script>
+  {% endif %}
+{% endif %}

@@ -1160,6 +1160,17 @@ def inject_role_flags():
             pass
 
     from ..utils.flash_messages import AUTH_FLASH_CATEGORY_FILTER
+    from ..utils.seo import robots_meta_content
+
+    vinor_robots_meta = "noindex, nofollow"
+    if has_request_context():
+        try:
+            vinor_robots_meta = robots_meta_content(
+                request.path or "",
+                logged_in=bool(me),
+            )
+        except Exception:
+            pass
 
     if not me:
         vinor_express_auth_segment = "guest"
@@ -1177,12 +1188,19 @@ def inject_role_flags():
         "android_apk_version": android_apk_version,
         "show_apk_download_banner": show_apk_download_banner,
         "auth_flash_categories": AUTH_FLASH_CATEGORY_FILTER,
+        "vinor_robots_meta": vinor_robots_meta,
     }
 
 
 # -------------------------
 # PWA Routes (Separate from main VINOR PWA)
 # -------------------------
+@express_partner_bp.route('/', methods=['GET'], endpoint='partner_root')
+def partner_root():
+    """Legacy /express/partner → public dashboard."""
+    return redirect(url_for('express_partner.dashboard'), code=302)
+
+
 @express_partner_bp.route('/manifest.webmanifest', methods=['GET'], endpoint='manifest')
 def serve_manifest():
     """Serve Express Partner manifest separately"""
@@ -4925,9 +4943,21 @@ def land_detail(code: str):
 
     is_logged_in = bool(me_phone)
 
+    try:
+        canonical_url = url_for('express_partner.land_detail', code=code, _external=True)
+    except Exception:
+        canonical_url = f"https://vinor.ir/express/partner/lands/{code}"
+
+    from ..utils.seo import build_land_seo, similar_lands
+    express_lands = load_express_lands_cached() or []
+    seo = build_land_seo(land, canonical_url=canonical_url)
+    related_lands = similar_lands(land, express_lands, limit=6)
+
     return render_template(
         'express_partner/land_detail.html',
         land=land,
+        seo=seo,
+        related_lands=related_lands,
         share_url=share_url,
         share_token=share_token,
         partner_profile=partner_profile,
