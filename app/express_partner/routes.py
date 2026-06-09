@@ -4953,11 +4953,20 @@ def land_detail(code: str):
     seo = build_land_seo(land, canonical_url=canonical_url)
     related_lands = similar_lands(land, express_lands, limit=6)
 
+    sold_count = 0
+    if me_phone:
+        my_comms = _commissions_for_phone(me_phone)
+        sold_count = sum(
+            1 for c in my_comms
+            if (c.get('status') or '').strip() in ('approved', 'paid')
+        )
+
     return render_template(
         'express_partner/land_detail.html',
         land=land,
         seo=seo,
         related_lands=related_lands,
+        sold_count=sold_count,
         share_url=share_url,
         share_token=share_token,
         partner_profile=partner_profile,
