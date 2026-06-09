@@ -49,7 +49,10 @@ textarea, select {
   right: 1rem;
   top: 1.25rem;
 }
-.vinor-auth-main { flex: 1 1 auto; padding: 1.5rem 1.25rem 0; }
+.vinor-auth-main {
+  flex: 1 1 auto;
+  padding: 1.5rem 1.25rem calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
 .vinor-auth-container { width: 100%; max-width: 28rem; margin: 0 auto; }
 .vinor-auth-heading {
   margin: 0;
@@ -74,13 +77,17 @@ textarea, select {
 }
 .vinor-auth-field { position: relative; }
 .vinor-auth-footer {
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
+  z-index: 45;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(5, 10, 14, 0.95);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-  padding: 0.75rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  background: rgba(5, 10, 14, 0.98);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
 }
 
 /* --- controls --- */
@@ -106,15 +113,18 @@ textarea, select {
   box-sizing: border-box;
   width: 100%;
   border-radius: 0.75rem;
-  border: 2px solid rgba(16, 185, 129, 0.4);
+  border: 2px solid rgba(16, 185, 129, 0.45);
   background: #0a1018;
-  padding: 0.875rem 1rem 0.875rem 2.75rem;
+  padding: 0.875rem 1rem;
   font-size: 1rem;
   font-weight: 500;
   font-family: inherit;
   color: #fff;
   font-variant-numeric: tabular-nums;
   transition: border-color 0.15s, box-shadow 0.15s;
+}
+.vinor-auth-field:has(.vinor-auth-clear) .vinor-auth-input {
+  padding-left: 2.75rem;
 }
 .vinor-auth-input::placeholder { color: #52525b; }
 .vinor-auth-input:focus {
@@ -165,6 +175,22 @@ textarea, select {
 .vinor-auth-btn:hover:not(:disabled) { background: #34d399; }
 .vinor-auth-btn:active:not(:disabled) { transform: scale(0.98); }
 .vinor-auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ورود: بدون منوی پایین پنل — مثل دیوار */
+html.vinor-auth-flow #bottomNavMenu,
+html:has(.vinor-auth-page) #bottomNavMenu {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+html.vinor-auth-flow .vinor-apk-download-strip,
+html:has(.vinor-auth-page) .vinor-apk-download-strip {
+  display: none !important;
+}
+html.vinor-auth-flow.vinor-has-apk-banner [class*="pb-[calc(5.75rem"] {
+  padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px)) !important;
+}
+
 .vinor-auth-link {
   font-weight: 600;
   color: #34d399;

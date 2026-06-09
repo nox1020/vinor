@@ -361,7 +361,15 @@
   }
 
   function shouldShowBottomNav(pathname) {
-    return !isLandDetailPath(pathname) && !isAiPagePath(pathname);
+    var p = normPath(pathname || window.location.pathname || '');
+    return !isLandDetailPath(p) && !isAiPagePath(p) && !isAuthSoftPath(p);
+  }
+
+  function syncAuthFlowClass(pathname) {
+    try {
+      var onAuth = isAuthSoftPath(normPath(pathname || window.location.pathname));
+      document.documentElement.classList.toggle('vinor-auth-flow', onAuth);
+    } catch (_) {}
   }
 
   function setBottomNavVisible(show) {
@@ -411,6 +419,7 @@
       }
     } catch (_) {}
     var path = window.location.pathname;
+    syncAuthFlowClass(path);
     var onDetail = isLandDetailPath(path);
     var showNav = shouldShowBottomNav(path);
     setBottomNavVisible(showNav);
@@ -910,6 +919,7 @@
 
   function syncBottomNavForCurrentPath() {
     var path = window.location.pathname;
+    syncAuthFlowClass(path);
     var showNav = shouldShowBottomNav(path);
     setBottomNavVisible(showNav);
     if (showNav) {
