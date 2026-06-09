@@ -8,7 +8,12 @@ import re
 import requests
 from flask import current_app
 
-from app.services.sms_config import get_sms_api_key, get_sms_line_number, get_sms_template_id
+from app.services.sms_config import (
+    get_sms_api_key,
+    get_sms_line_number,
+    get_sms_retriever_hash,
+    get_sms_template_id,
+)
 
 # ارقام فارسی/عربی → لاتین
 _DIGIT_TRANSLATION = str.maketrans(
@@ -86,6 +91,18 @@ def _sms_ir_response_ok(status_code: int, body: object) -> bool:
 
 
 def send_sms_code(phone: str, code: str) -> dict:
+    """
+    ارسال OTP با قالب sms.ir.
+
+    متن قالب (CODE مثلاً 38415):
+        کد ورود شما : (آن را در اختیار هیچ کس نگذارید)
+        https://vinor.ir
+        <#> CODE
+        @vinor.ir #CODE
+        HASH
+
+    پارامتر HASH فقط وقتی SMS_RETRIEVER_HASH در api_keys تنظیم شده باشد فرستاده می‌شود.
+    """
     mobile = normalize_iran_mobile(phone)
     if not is_valid_iran_mobile(mobile):
         return {
@@ -105,6 +122,17 @@ def send_sms_code(phone: str, code: str) -> dict:
         "templateId": get_sms_template_id(),
         "parameters": [{"name": "CODE", "value": str(code)}],
     }
+    retriever_hash = get_sms_retriever_hash()
+    if retriever_hash:
+        data["parameters"].append({"name": "HASH", "value": retriever_hash})
+    else:
+        try:
+            current_app.logger.warning(
+                "SMS_RETRIEVER_HASH is empty — APK auto-fill needs hash as last line after "
+                "@vinor.ir #CODE (see AppSignatureHelper logcat)."
+            )
+        except Exception:
+            pass
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=10)
         content_type = resp.headers.get("content-type", "")

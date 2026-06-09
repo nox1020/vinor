@@ -14,6 +14,7 @@ from api_keys import (  # noqa: E402
     DEEPSEEK_MODEL,
     SMS_API_KEY,
     SMS_LINE_NUMBER,
+    SMS_RETRIEVER_HASH,
     SMS_TEMPLATE_ID,
     VINOR_WEBHOOK_SECRET,
 )
@@ -25,11 +26,13 @@ __all__ = [
     "SMS_API_KEY",
     "SMS_TEMPLATE_ID",
     "SMS_LINE_NUMBER",
+    "SMS_RETRIEVER_HASH",
     "VINOR_WEBHOOK_SECRET",
     "get_deepseek_api_key",
     "get_sms_api_key",
     "get_sms_template_id",
     "get_sms_line_number",
+    "get_sms_retriever_hash",
 ]
 
 
@@ -50,3 +53,7 @@ def get_sms_template_id() -> int:
 
 def get_sms_line_number() -> str:
     return (SMS_LINE_NUMBER or "300089930616").strip()
+
+
+def get_sms_retriever_hash() -> str:
+    return (SMS_RETRIEVER_HASH or "").strip()
