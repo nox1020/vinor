@@ -2612,7 +2612,11 @@ def download_file(fid: int):
 # -------------------------
 def _clear_express_partner_auth_session() -> None:
     """فقط خروج از حساب همکار؛ سشن ادمین یا پیش‌نویس apply_data حذف نمی‌شود."""
-    for k in ('user_id', 'user_phone', 'otp_code', 'otp_phone', 'next'):
+    for k in (
+        'user_id', 'user_phone', 'otp_code', 'otp_phone', 'next',
+        'VINOR_IS_EXPRESS_PARTNER',
+        '_routine_auto_mkt_day', '_express_online_ping_ts',
+    ):
         session.pop(k, None)
     if not session.get('logged_in'):
         session.permanent = False
@@ -3950,7 +3954,8 @@ def logout():
 
     _clear_express_partner_auth_session()
     flash('از حساب خارج شدید.', FLASH_AUTH_INFO)
-    r = redirect(url_for('express_partner.login'))
+    dest = url_for('express_partner.dashboard')
+    r = redirect(dest)
     r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     r.headers['Pragma'] = 'no-cache'
     return r
@@ -3958,9 +3963,13 @@ def logout():
 
 @express_partner_bp.post('/api/logout')
 def api_logout():
-    """خروج برای اپ اندروید (بدون CSRF؛ با کوکی سشن)."""
+    """خروج برای اپ اندروید / WebView (بدون CSRF؛ با کوکی سشن)."""
     _clear_express_partner_auth_session()
-    return jsonify({'success': True})
+    dest = url_for('express_partner.dashboard')
+    resp = jsonify({'success': True, 'redirect': dest})
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
 
 
 @express_partner_bp.post('/api/login-request')

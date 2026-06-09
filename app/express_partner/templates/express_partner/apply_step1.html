@@ -150,15 +150,19 @@
       modal.classList.remove('flex');
       enableScroll();
     };
-    const loginUrlFallback = "{{ url_for('express_partner.login') }}";
+    const loginUrlFallback = "{{ url_for('express_partner.dashboard') }}";
+    const logoutApiUrl = "{{ url_for('express_partner.api_logout') }}";
     let logoutBusy = false;
     window.confirmLogout = async function() {
       if (!modal || logoutBusy) return;
+      hideLogoutConfirm();
+      logoutBusy = true;
+      if (window.vinorExpressLogout) {
+        window.vinorExpressLogout(loginUrlFallback);
+        return;
+      }
       const formId = modal.dataset.targetForm;
       const form = formId ? document.getElementById(formId) : null;
-      hideLogoutConfirm();
-      if (!form) return;
-      logoutBusy = true;
       try {
         if (window.caches && window.caches.keys) {
           var keys = await window.caches.keys();
@@ -168,9 +172,17 @@
         }
       } catch (_) {}
       try {
-        form.submit();
+        await fetch(logoutApiUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        });
+      } catch (_) {}
+      try {
+        if (form) form.submit();
+        else window.location.replace(loginUrlFallback + '?_=' + Date.now());
       } catch (_) {
-        window.location.href = loginUrlFallback + '?_nc=' + Date.now();
+        window.location.replace(loginUrlFallback + '?_=' + Date.now());
       }
     };
   })();

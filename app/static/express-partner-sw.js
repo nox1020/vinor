@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.18-auth-login';
+const VERSION = 'v1.0.19-logout-fix';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -156,12 +156,16 @@ self.addEventListener('fetch', (event) => {
           })());
           return;
         }
-        /* فرم‌های وب (شامل خروج): redirect: manual تا مرورگر خودش 302 را دنبال کند.
-           با redirect: follow پاسخ نهایی ۲۰۰ برمی‌گردد و URL/کوکی گاهی با UI هم‌خوان نمی‌ماند. */
+        /* فرم‌های وب (شامل خروج): برای logout redirect را follow کن تا WebView/APK درست دنبال کند */
         if (isExpressPartnerRoute(url)) {
           event.respondWith((async () => {
             try {
-              return await fetch(request, { redirect: 'manual', credentials: 'include' });
+              var pathNorm = url.pathname.replace(/\/+$/, '') || '/';
+              var isLogout = pathNorm === '/express/partner/logout';
+              return await fetch(request, {
+                redirect: isLogout ? 'follow' : 'manual',
+                credentials: 'include'
+              });
             } catch (_) {
               return new Response('Offline', { status: 503 });
             }

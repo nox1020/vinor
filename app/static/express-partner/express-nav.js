@@ -159,13 +159,9 @@
       if (!fromU || !toU) return false;
       var fromAuth = isAuthSoftPath(fromU.pathname);
       var toAuth = isAuthSoftPath(toU.pathname);
+      // فقط جابه‌جایی بین شماره و OTP نرم است؛ auth و اپ shell متفاوت دارند
       if (fromAuth && toAuth) return false;
-      if (toAuth) return false;
-      if (fromAuth) {
-        if (normPath(fromU.pathname) === '/express/partner/login/otp') return true;
-        if (softTabKeyForUrl(toHref)) return false;
-        return true;
-      }
+      if (fromAuth || toAuth) return true;
     } catch (_) {}
     return false;
   }
@@ -239,12 +235,22 @@
     }
   }
 
+  function isCurrentAuthShell() {
+    try {
+      if (document.getElementById('loginStep1Form') || document.getElementById('otpForm')) return true;
+      return document.documentElement.classList.contains('vinor-auth-flow');
+    } catch (_) {
+      return false;
+    }
+  }
+
   function needsFullNavForResponse(requestedHref, resolvedUrl, doc) {
     try {
       var reqPath = normPath(parseUrl(requestedHref).pathname);
       var resPath = normPath(parseUrl(resolvedUrl).pathname);
       var docAuth = authSegmentFromDoc(doc);
       if (docAuth && docAuth !== currentAuthSegment()) return true;
+      if (isCurrentAuthShell() && !isAuthShellDoc(doc) && !isAuthSoftPath(resPath)) return true;
       if (!isAuthSoftPath(reqPath) && isAuthShellDoc(doc)) return true;
       if (isHardSkipPath(resPath)) return true;
       if (resPath.indexOf(PREFIX) !== 0) return true;
@@ -782,6 +788,53 @@
   }
   window.vinorPostLoginNavigate = vinorPostLoginNavigate;
 
+  function clearExpressPartnerCaches() {
+    clearAllPrefetchCache();
+    try {
+      if (window.caches && window.caches.keys) {
+        return window.caches.keys().then(function (keys) {
+          return Promise.all(keys.filter(function (k) {
+            return k.indexOf('express-partner-') === 0;
+          }).map(function (k) { return window.caches.delete(k); }));
+        });
+      }
+    } catch (_) {}
+    return Promise.resolve();
+  }
+
+  /** خروج امن: API + پاک‌سازی کش + بارگذاری کامل (APK/WebView/PWA) */
+  function vinorExpressLogout(destUrl) {
+    bumpNavGeneration();
+    stopAllExpressMedia();
+    if (window.__vinorAuthPageAbort) {
+      try { window.__vinorAuthPageAbort.abort(); } catch (_) {}
+    }
+    var dest = destUrl || '/express/partner/dashboard';
+    var apiUrl = '/express/partner/api/logout';
+    return fetch(apiUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          if (data && data.redirect) dest = data.redirect;
+          return clearExpressPartnerCaches();
+        });
+      })
+      .catch(function () {
+        return clearExpressPartnerCaches();
+      })
+      .then(function () {
+        try { sessionStorage.removeItem(STORAGE_KEY); } catch (_) {}
+        try { document.documentElement.classList.remove('vinor-auth-flow'); } catch (_) {}
+        var u = dest;
+        u += (u.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
+        window.location.replace(u);
+      });
+  }
+  window.vinorExpressLogout = vinorExpressLogout;
+
   window.addEventListener('popstate', function (ev) {
     if (!document.getElementById('vinor-express-page-swap')) return;
     if (!isPartnerUrl(window.location.href)) return;
@@ -849,6 +902,11 @@
       if (a.getAttribute('download')) return;
       if (a.getAttribute('target') === '_blank') return;
       var href = a.getAttribute('href');
+      if (a.getAttribute('data-vinor-express-full-nav') === '1') {
+        e.preventDefault();
+        if (href) window.location.assign(href);
+        return;
+      }
       if (!href || href === '#' || href.indexOf('javascript:') === 0) return;
 
       if (shouldForceFullNav(window.location.href, href)) {
