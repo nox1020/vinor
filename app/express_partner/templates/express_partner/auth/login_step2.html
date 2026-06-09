@@ -95,6 +95,7 @@
 
 {% block scripts %}
 {% include 'express_partner/partials/auth_page_lifecycle.html' %}
+{% include 'express_partner/partials/auth_apk_otp_bridge.html' %}
 {% include 'express_partner/partials/auth_flash_scripts.html' %}
 {% include 'express_partner/partials/auth_submit_feedback.html' %}
 <script>
@@ -126,6 +127,8 @@
   if (typeof window.vinorAuthPageOnAbort === 'function') {
     window.vinorAuthPageOnAbort(teardownOtpPage);
   }
+
+  if (window.vinorApkOtpPageReady) window.vinorApkOtpPageReady();
 
   var faDigits = '۰۱۲۳۴۵۶۷۸۹';
   var otpFa = '۰۱۲۳۴۵۶۷۸۹';
@@ -377,6 +380,7 @@
           syncClearBtn();
           syncSubmitBtn();
           try { otpInput.focus(); } catch (_) {}
+          if (window.vinorApkRestartOtpRetriever) window.vinorApkRestartOtpRetriever();
           startResendCooldown(60);
         } else {
           var errMsg = (data && data.error) ? data.error : (resp.ok ? 'خطا در ارسال مجدد' : 'خطا در ارتباط با سرور');

@@ -1,0 +1,19 @@
+<script>
+(function () {
+  function vinorApkRestartOtpRetriever() {
+    try {
+      if (typeof VinorOtpBridge === 'undefined') return;
+      if (VinorOtpBridge.restartRetriever) VinorOtpBridge.restartRetriever();
+    } catch (_) {}
+  }
+  function vinorApkOtpPageReady() {
+    try {
+      if (typeof VinorOtpBridge === 'undefined') return;
+      if (VinorOtpBridge.onOtpPageReady) VinorOtpBridge.onOtpPageReady();
+      else if (VinorOtpBridge.restartRetriever) VinorOtpBridge.restartRetriever();
+    } catch (_) {}
+  }
+  window.vinorApkRestartOtpRetriever = vinorApkRestartOtpRetriever;
+  window.vinorApkOtpPageReady = vinorApkOtpPageReady;
+})();
+</script>

@@ -399,6 +399,11 @@
   }
 
   function afterPageSwap(navKey) {
+    try {
+      if (typeof VinorOtpBridge !== 'undefined' && VinorOtpBridge.onUrlChanged) {
+        VinorOtpBridge.onUrlChanged(String(window.location.href || ''));
+      }
+    } catch (_) {}
     var path = window.location.pathname;
     var onDetail = isLandDetailPath(path);
     var showNav = shouldShowBottomNav(path);

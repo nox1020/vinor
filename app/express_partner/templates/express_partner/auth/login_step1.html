@@ -74,6 +74,7 @@
 
 {% block scripts %}
 {% include 'express_partner/partials/auth_page_lifecycle.html' %}
+{% include 'express_partner/partials/auth_apk_otp_bridge.html' %}
 {% include 'express_partner/partials/auth_flash_scripts.html' %}
 {% include 'express_partner/partials/auth_submit_feedback.html' %}
 <script>
@@ -209,6 +210,7 @@
         if (!authBusy.isLocked()) return;
         var data = payload.data || {};
         if (payload.ok && data.ok && data.redirect) {
+          if (window.vinorApkRestartOtpRetriever) window.vinorApkRestartOtpRetriever();
           goOtpPage(data.redirect);
           return;
         }
