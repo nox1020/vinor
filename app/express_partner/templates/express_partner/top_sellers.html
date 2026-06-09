@@ -5,7 +5,10 @@
   <!-- Header - سبک دیوار (تمام‌عرض) -->
   <header class="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 w-full">
     <div class="w-full px-4 h-14 flex items-center justify-between">
-      <a href="{{ url_for('express_partner.profile') }}" class="w-9 h-9 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="بازگشت">
+      <a href="{{ url_for('express_partner.profile') }}"
+         data-vinor-express-nav="back"
+         class="w-9 h-9 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+         aria-label="بازگشت">
         <i class="fas fa-arrow-right text-gray-600 dark:text-gray-400"></i>
       </a>
       <h1 class="text-sm font-bold text-gray-900 dark:text-white">فروشنده‌های برتر</h1>

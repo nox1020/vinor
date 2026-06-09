@@ -99,7 +99,11 @@
     try {
       var u = parseUrl(href);
       if (!u) return href;
-      return u.pathname + u.search + u.hash;
+      if (isAuthSoftPath(u.pathname)) {
+        u.searchParams.delete('_');
+      }
+      var qs = u.searchParams.toString();
+      return u.pathname + (qs ? '?' + qs : '') + u.hash;
     } catch (_) {
       return href;
     }
@@ -156,7 +160,7 @@
       var fromAuth = isAuthSoftPath(fromU.pathname);
       var toAuth = isAuthSoftPath(toU.pathname);
       if (fromAuth && toAuth) return false;
-      if (toAuth) return !fromAuth;
+      if (toAuth) return false;
       if (fromAuth) {
         if (normPath(fromU.pathname) === '/express/partner/login/otp') return true;
         if (softTabKeyForUrl(toHref)) return false;
@@ -275,6 +279,8 @@
   function navDepthForUrl(url) {
     try {
       var p = normPath(parseUrl(url).pathname);
+      if (p === '/express/partner/login') return 0;
+      if (p === '/express/partner/login/otp') return 1;
       if (TAB_PATHS[p]) return 0;
       if (STACK_PARENT_TAB[p]) return 1;
       if (/^\/express\/partner\/lands\/[^/]+$/.test(p)) return 2;
@@ -612,6 +618,9 @@
       }
       if (isStaleNav(gen)) return false;
       afterPageSwap(softTabKeyForUrl(finalHref));
+      try {
+        window.__vinorExpressNavDepth = navDepthForUrl(finalHref);
+      } catch (_) {}
       if (!isLandDetailPath(window.location.pathname)) {
         playEnterAnimation(dir);
       }
@@ -625,10 +634,6 @@
       } catch (_) {
         delete prefetchCache[targetHref];
       }
-    }
-
-    if (isAuthSoftPath(parseUrl(href).pathname)) {
-      clearAuthPrefetchCache();
     }
 
     return fetch(href, {
@@ -732,6 +737,9 @@
       return Promise.resolve(false);
     }
     var from = window.location.href;
+    try {
+      window.__vinorExpressLastHref = from;
+    } catch (_) {}
     return flushProfileEditBeforeLeave(from, href).then(function () {
       if (shouldForceFullNav(from, href)) {
         window.location.assign(href);
@@ -758,15 +766,37 @@
   window.vinorExpressClearAuthCache = clearAuthPrefetchCache;
   window.vinorExpressClearPrefetchCache = clearAllPrefetchCache;
 
-  window.addEventListener('popstate', function () {
+  function vinorPostLoginNavigate(dest) {
+    if (!dest) return;
+    clearAuthPrefetchCache();
+    window.location.replace(dest);
+  }
+  window.vinorPostLoginNavigate = vinorPostLoginNavigate;
+
+  window.addEventListener('popstate', function (ev) {
     if (!document.getElementById('vinor-express-page-swap')) return;
     if (!isPartnerUrl(window.location.href)) return;
     var target = window.location.href;
+    var dir = 0;
+    try {
+      var prevDepth = window.__vinorExpressNavDepth;
+      var nextDepth = ev.state && typeof ev.state.depth === 'number'
+        ? ev.state.depth
+        : navDepthForUrl(target);
+      if (typeof prevDepth === 'number') {
+        if (nextDepth > prevDepth) dir = 1;
+        else if (nextDepth < prevDepth) dir = -1;
+      }
+      var authDir = authNavDirection(window.__vinorExpressLastHref || '', target);
+      if (authDir) dir = authDir;
+      window.__vinorExpressNavDepth = nextDepth;
+      window.__vinorExpressLastHref = target;
+    } catch (_) {}
     var flush = document.getElementById('profileEditPage') && typeof window.__vinorProfileEditFlushSave === 'function'
       ? Promise.resolve(window.__vinorProfileEditFlushSave())
       : Promise.resolve();
     flush.then(function () {
-      softNavigate(target, 0, { fromPopstate: true });
+      softNavigate(target, dir, { fromPopstate: true });
     });
   });
 

@@ -736,10 +736,13 @@ def _finalize_partner_login(phone: str) -> str:
     session['user_phone'] = phone
     session.permanent = True
     _clear_otp_session()
-    _invalidate_partner_session_cache()
     _ensure_user_record_background(phone)
-    prof = _partner_profile_for_phone(phone)
-    session['VINOR_IS_EXPRESS_PARTNER'] = _is_partner_approved(prof)
+    # نقش همکار روی اولین درخواست بعد از ورود محاسبه می‌شود — بدون بارگذاری لیست همکاران در مسیر verify
+    try:
+        session.pop('VINOR_IS_EXPRESS_PARTNER', None)
+        session.modified = True
+    except Exception:
+        pass
     nxt = _login_next_preserve() or _session_next_safe()
     if nxt:
         try:
@@ -751,7 +754,7 @@ def _finalize_partner_login(phone: str) -> str:
 
 
 def _login_otp_redirect_url() -> str:
-    return url_for('express_partner.login_otp', _=str(int(time.time())))
+    return url_for('express_partner.login_otp')
 
 
 def _is_prefetch_request() -> bool:
@@ -788,6 +791,40 @@ def _routine_auto_tick(phone: str, *step_ids: str) -> None:
         merge_routine_steps_for_phone(ph, *to_add)
     except Exception:
         current_app.logger.exception("routine auto tick failed phone=%s steps=%s", ph, step_ids)
+
+
+def _defer_routine_auto_tick(phone: str, *step_ids: str) -> None:
+    """روتین روزانه را در پس‌زمینه ثبت کن — مسیر ورود/OTP مسدود نشود."""
+    app = current_app._get_current_object()
+    ph = (phone or "").strip()
+    steps = tuple(step_ids)
+
+    def _worker() -> None:
+        with app.app_context():
+            try:
+                _routine_auto_tick(ph, *steps)
+            except Exception:
+                app.logger.exception("deferred routine auto tick failed phone=%s", ph)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def _defer_online_partner_ping(phone: str, name: str | None, ip: str) -> None:
+    app = current_app._get_current_object()
+    ph = (phone or '').strip()
+    nm = (name or '').strip() or None
+    addr = (ip or 'نامشخص').strip()
+
+    def _worker() -> None:
+        with app.app_context():
+            try:
+                import admin.routes as admin_routes_module
+                if hasattr(admin_routes_module, '_update_online_partner'):
+                    admin_routes_module._update_online_partner(ph, nm, addr)
+            except Exception:
+                pass
+
+    threading.Thread(target=_worker, daemon=True).start()
 
 
 def _mark_routine_today(phone: str) -> bool:
@@ -1065,26 +1102,17 @@ def track_online_partner():
         phone = (session.get("user_phone") or "").strip()
         if not phone:
             return
-        _ensure_session_partner_on_g()
-        profile = getattr(g, 'express_partner_profile', None)
-        name = (profile.get('name') or '').strip() if profile else None
 
         today = datetime.now().strftime('%Y-%m-%d')
         if session.get('_routine_auto_mkt_day') != today:
-            _routine_auto_tick(phone, ROUTINE_STEP_MARKETING)
             session['_routine_auto_mkt_day'] = today
+            _defer_routine_auto_tick(phone, ROUTINE_STEP_MARKETING)
 
         now_ts = time.time()
         last_ping = session.get('_express_online_ping_ts') or 0
         if now_ts - float(last_ping) >= 120:
             session['_express_online_ping_ts'] = now_ts
-            try:
-                import admin.routes as admin_routes_module
-                if hasattr(admin_routes_module, '_update_online_partner'):
-                    ip = request.remote_addr or 'نامشخص'
-                    admin_routes_module._update_online_partner(phone, name, ip)
-            except Exception:
-                pass
+            _defer_online_partner_ping(phone, None, request.remote_addr or 'نامشخص')
     except Exception:
         pass
 
@@ -1973,7 +2001,7 @@ def api_repost_remove():
         return jsonify({'ok': False, 'error': 'persist_failed'}), 500
 
 @express_partner_bp.get('/favorites', endpoint='favorites')
-@require_partner_access(allow_pending=True, allow_guest=True)
+@require_partner_access(allow_pending=True)
 def favorites_page():
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None)
@@ -1989,7 +2017,7 @@ def favorites_page():
 
 
 @express_partner_bp.post('/api/favorites/cards')
-@require_partner_access(allow_pending=True, allow_guest=True)
+@require_partner_access(allow_pending=True, json_response=True)
 def api_favorites_cards():
     """HTML کارت‌های علاقه‌مندی برای کدهای ارسالی از localStorage."""
     me_phone = (session.get('user_phone') or '').strip()
@@ -2711,6 +2739,10 @@ def verify():
         if wants_json:
             r = jsonify({'ok': True, 'redirect': dest})
             r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+            try:
+                r.headers['Link'] = f'<{dest}>; rel=preload; as=document'
+            except Exception:
+                pass
             return r
         flash('ورود شما با موفقیت انجام شد.', FLASH_AUTH_SUCCESS)
         return redirect(dest)
@@ -4439,7 +4471,7 @@ def profile_avatar_upload():
 
 
 @express_partner_bp.route('/top-sellers', methods=['GET'], endpoint='top_sellers')
-@require_partner_access(allow_pending=True)
+@require_partner_access(allow_pending=True, allow_guest=True)
 def top_sellers_page():
     """صفحه فروشنده‌های برتر"""
     try:
@@ -4557,45 +4589,16 @@ def delete_sale(sid: int):
 @express_partner_bp.get('/notifications', endpoint='notifications')
 @require_partner_access(allow_pending=True)
 def notifications_page():
-    from app.services.notifications import get_user_notifications, unread_count, _normalize_user_id, merge_duplicate_keys
-    
-    me_phone_raw = (session.get("user_phone") or "").strip()
-    # استفاده از همان تابع normalize که در notifications.py استفاده می‌شود
-    me_phone = _normalize_user_id(me_phone_raw) if me_phone_raw else ""
-    
-    # اجرای merge خودکار کلیدهای تکراری (فقط یک بار)
-    try:
-        merge_result = merge_duplicate_keys()
-        if merge_result.get("merged_count", 0) > 0:
-            try:
-                from flask import current_app
-                current_app.logger.info(f"Page: Merged {merge_result['merged_count']} duplicate keys")
-            except Exception:
-                pass
-    except Exception:
-        pass
-    
-    # Debug logging
-    try:
-        from flask import current_app
-        current_app.logger.info(f"Page: Getting notifications for phone: {me_phone_raw} -> normalized: {me_phone}")
-    except Exception:
-        pass
-    
-    notifications = get_user_notifications(me_phone, limit=200)
-    unread = unread_count(me_phone)
-    
-    try:
-        from flask import current_app
-        current_app.logger.info(f"Page: Found {len(notifications)} notifications for {me_phone}")
-    except Exception:
-        pass
-    
-    return render_template(
+    me_phone = _normalize_phone((session.get('user_phone') or '').strip())
+    notifications = get_user_notifications(me_phone, limit=80) if me_phone else []
+    unread = unread_count(me_phone) if me_phone else 0
+    resp = make_response(render_template(
         'express_partner/notifications.html',
         notifications=notifications,
         unread_count=unread,
-    )
+    ))
+    _append_partner_tab_prefetch(resp)
+    return resp
 
 
 # -------------------------

@@ -1,0 +1,21 @@
+{# flash مخصوص صفحات ورود — بدون وابستگی به Tailwind #}
+{% if messages %}
+<div id="{{ stack_id|default('flashAlerts') }}" class="vinor-auth-flash-stack" data-flash-stack role="region" aria-label="پیام‌های سیستم">
+  {% for category, message in messages %}
+  <div class="vinor-auth-flash
+              {% if category in ['profile', 'auth_success'] or category in ['success', 'ok'] %}vinor-auth-flash--success
+              {% elif category in ['error', 'danger', 'auth_error'] %}vinor-auth-flash--error
+              {% elif category in ['warning', 'auth_warning'] %}vinor-auth-flash--warning
+              {% elif category in ['info', 'auth_info'] %}vinor-auth-flash--info
+              {% endif %}"
+       data-flash-alert>
+    <p>{% if category == 'auth_error' %}{{ message|safe }}{% else %}{{ message }}{% endif %}</p>
+    <button type="button"
+            class="vinor-auth-flash-dismiss flash-alert-dismiss"
+            aria-label="بستن پیام">
+      <i class="fas fa-times" style="font-size:11px" aria-hidden="true"></i>
+    </button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

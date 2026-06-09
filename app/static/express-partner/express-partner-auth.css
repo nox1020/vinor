@@ -1,0 +1,325 @@
+/* صفحات ورود / OTP — CSS استاتیک (بدون Tailwind CDN، بدون FOUC) */
+html, body {
+  margin: 0;
+  min-height: 100%;
+  min-height: 100dvh;
+  background: #050a0e;
+  color: #f4f4f5;
+  color-scheme: dark;
+}
+body {
+  font-family: 'Vazirmatn', Tahoma, sans-serif;
+  overscroll-behavior-y: contain;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+textarea, select {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+#tg-page-shell { min-height: 100dvh; background: #050a0e; }
+
+/* --- layout --- */
+.vinor-auth-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #050a0e;
+  color: #f4f4f5;
+}
+.vinor-auth-topbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem 1rem 0.75rem;
+}
+.vinor-auth-topbar-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+}
+.vinor-auth-topbar-action {
+  position: absolute;
+  right: 1rem;
+  top: 1.25rem;
+}
+.vinor-auth-topbar-back {
+  position: absolute;
+  right: 1rem;
+  top: 1.25rem;
+}
+.vinor-auth-main { flex: 1 1 auto; padding: 1.5rem 1.25rem 0; }
+.vinor-auth-container { width: 100%; max-width: 28rem; margin: 0 auto; }
+.vinor-auth-heading {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.375;
+  color: #fff;
+}
+.vinor-auth-lead {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #a1a1aa;
+}
+.vinor-auth-form { margin-top: 2rem; }
+.vinor-auth-form--otp { margin-top: 1.5rem; }
+.vinor-auth-legal {
+  margin: 1.25rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.625;
+  color: #a1a1aa;
+}
+.vinor-auth-field { position: relative; }
+.vinor-auth-footer {
+  position: sticky;
+  bottom: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(5, 10, 14, 0.95);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  padding: 0.75rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* --- controls --- */
+.vinor-auth-header-btn {
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #a1a1aa;
+  text-decoration: none;
+  transition: background-color 0.15s, color 0.15s;
+}
+.vinor-auth-header-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.vinor-auth-header-btn i { font-size: 0.875rem; }
+.vinor-auth-input {
+  box-sizing: border-box;
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 2px solid rgba(16, 185, 129, 0.4);
+  background: #0a1018;
+  padding: 0.875rem 1rem 0.875rem 2.75rem;
+  font-size: 1rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.vinor-auth-input::placeholder { color: #52525b; }
+.vinor-auth-input:focus {
+  border-color: #34d399;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+}
+.vinor-auth-input--otp { letter-spacing: 0.2em; }
+.vinor-auth-clear {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  height: 1.5rem;
+  width: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 9999px;
+  background: rgba(63, 63, 70, 0.8);
+  color: #d4d4d8;
+  cursor: pointer;
+  padding: 0;
+}
+.vinor-auth-clear.is-visible { display: flex; }
+.vinor-auth-clear i { font-size: 0.75rem; }
+.vinor-auth-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: none;
+  border-radius: 0.75rem;
+  background: #10b981;
+  padding: 0.875rem;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: inherit;
+  color: #fff;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 10px 15px -3px rgba(6, 78, 59, 0.3);
+  transition: transform 0.075s, opacity 0.075s, background-color 0.15s;
+}
+.vinor-auth-btn:hover:not(:disabled) { background: #34d399; }
+.vinor-auth-btn:active:not(:disabled) { transform: scale(0.98); }
+.vinor-auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.vinor-auth-link {
+  font-weight: 600;
+  color: #34d399;
+  text-decoration: underline;
+  text-decoration-color: rgba(16, 185, 129, 0.3);
+  text-underline-offset: 2px;
+}
+.vinor-auth-link:hover { color: #6ee7b7; }
+.vinor-auth-action-link {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  font-family: inherit;
+  font-weight: 600;
+  color: #34d399;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.vinor-auth-action-link:hover:not(:disabled) { color: #6ee7b7; }
+.vinor-auth-action-link:disabled { color: #52525b; cursor: not-allowed; }
+
+/* --- OTP step --- */
+.vinor-auth-phone-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+.vinor-auth-phone-icon {
+  display: flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+}
+.vinor-auth-phone-icon i { font-size: 0.875rem; }
+.vinor-auth-phone-num {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.vinor-auth-otp-meta {
+  margin-top: 1rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+}
+.vinor-auth-timer {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  color: #71717a;
+  text-align: left;
+}
+.vinor-auth-timer i {
+  font-size: 10px;
+  flex-shrink: 0;
+  color: rgba(16, 185, 129, 0.7);
+}
+
+/* --- hints / status --- */
+.vinor-auth-hint {
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  display: none;
+}
+.vinor-auth-hint.is-visible { display: block; }
+.vinor-auth-hint--error { color: rgba(252, 165, 165, 0.95); }
+.vinor-auth-hint--warn { color: rgba(252, 211, 77, 0.95); }
+.vinor-auth-hint--ok {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: rgba(52, 211, 153, 0.95);
+}
+.vinor-auth-hint--ok.is-visible { display: block; }
+
+/* --- flash alerts --- */
+.vinor-auth-flash-stack {
+  margin: 1rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.vinor-auth-flash {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.625;
+  color: #d4d4d8;
+}
+.vinor-auth-flash p { margin: 0; flex: 1 1 auto; min-width: 0; text-align: right; }
+.vinor-auth-flash--success { border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.1); color: #a7f3d0; }
+.vinor-auth-flash--error { border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.1); color: #fecdd3; }
+.vinor-auth-flash--warning { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.1); color: #fde68a; }
+.vinor-auth-flash--info { border-color: rgba(14, 165, 233, 0.4); background: rgba(14, 165, 233, 0.1); color: #bae6fd; }
+.vinor-auth-flash-dismiss {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 0.5rem;
+  background: transparent;
+  padding: 0.25rem;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.vinor-auth-flash-dismiss:hover { opacity: 1; background: rgba(255, 255, 255, 0.1); }
+
+/* --- nav animations (soft nav) — هم‌تراز با base.html پنل --- */
+html[class*="tg-page-leave-"] #tg-page-shell,
+html[class*="tg-page-enter-"] #tg-page-shell { backface-visibility: hidden; }
+@keyframes tgLeaveRtlFwd { to { opacity: 0.9; transform: translate3d(11px, 0, 0); } }
+@keyframes tgEnterRtlFwd {
+  from { opacity: 0.93; transform: translate3d(-13px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes tgLeaveRtlBack { to { opacity: 0.9; transform: translate3d(-11px, 0, 0); } }
+@keyframes tgEnterRtlBack {
+  from { opacity: 0.93; transform: translate3d(13px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes tgLeaveLtrFwd { to { opacity: 0.9; transform: translate3d(-11px, 0, 0); } }
+@keyframes tgEnterLtrFwd {
+  from { opacity: 0.93; transform: translate3d(13px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes tgLeaveLtrBack { to { opacity: 0.9; transform: translate3d(11px, 0, 0); } }
+@keyframes tgEnterLtrBack {
+  from { opacity: 0.93; transform: translate3d(-13px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+html.tg-page-leave-rtl-forward #tg-page-shell { animation: tgLeaveRtlFwd 0.12s cubic-bezier(0.45, 0, 0.55, 1) forwards; }
+html.tg-page-enter-rtl-forward #tg-page-shell { animation: tgEnterRtlFwd 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+html.tg-page-leave-rtl-back #tg-page-shell { animation: tgLeaveRtlBack 0.12s cubic-bezier(0.45, 0, 0.55, 1) forwards; }
+html.tg-page-enter-rtl-back #tg-page-shell { animation: tgEnterRtlBack 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+html.tg-page-leave-ltr-forward #tg-page-shell { animation: tgLeaveLtrFwd 0.12s cubic-bezier(0.45, 0, 0.55, 1) forwards; }
+html.tg-page-enter-ltr-forward #tg-page-shell { animation: tgEnterLtrFwd 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+html.tg-page-leave-ltr-back #tg-page-shell { animation: tgLeaveLtrBack 0.12s cubic-bezier(0.45, 0, 0.55, 1) forwards; }
+html.tg-page-enter-ltr-back #tg-page-shell { animation: tgEnterLtrBack 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+html.tg-nav-transitioning #bottomNavMenu { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  html[class*="tg-page-leave-"] #tg-page-shell,
+  html[class*="tg-page-enter-"] #tg-page-shell { animation: none !important; opacity: 1 !important; transform: none !important; }
+}

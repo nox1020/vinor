@@ -1,58 +1,30 @@
-<!DOCTYPE html>
-<html lang="fa" dir="rtl" class="dark">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
-  <title>{% block title %}ورود | وینور اکسپرس{% endblock %}</title>
-  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-  <meta name="theme-color" content="#050a0e">
-  <meta name="vinor-express-auth" content="{{ vinor_express_auth_segment|default('guest') }}">
-  <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-solid-900.woff2') }}" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
-  <script>
-    window.tailwind = window.tailwind || {};
-    window.tailwind.config = { darkMode: 'class' };
-    document.documentElement.classList.add('dark');
-  </script>
-  <style>
-    html, body { margin: 0; min-height: 100%; min-height: 100dvh; background: #050a0e; color-scheme: dark; }
-    body { font-family: 'Vazirmatn', sans-serif; overscroll-behavior-y: contain; }
-    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
-    textarea, select {
-      -webkit-user-select: text !important;
-      user-select: text !important;
-    }
-    #tg-page-shell { min-height: 100dvh; background: #050a0e; }
-    html[class*="tg-page-leave-"] #tg-page-shell,
-    html[class*="tg-page-enter-"] #tg-page-shell { backface-visibility: hidden; }
-    @keyframes tgLeaveRtlFwd { to { opacity: 0.92; transform: translate3d(10px, 0, 0); } }
-    @keyframes tgEnterRtlFwd { from { opacity: 0.94; transform: translate3d(-12px, 0, 0); } to { opacity: 1; transform: none; } }
-    @keyframes tgLeaveRtlBack { to { opacity: 0.92; transform: translate3d(-10px, 0, 0); } }
-    @keyframes tgEnterRtlBack { from { opacity: 0.94; transform: translate3d(12px, 0, 0); } to { opacity: 1; transform: none; } }
-    html.tg-page-leave-rtl-forward #tg-page-shell { animation: tgLeaveRtlFwd 0.1s ease-out forwards; }
-    html.tg-page-enter-rtl-forward #tg-page-shell { animation: tgEnterRtlFwd 0.14s ease-out forwards; }
-    html.tg-page-leave-rtl-back #tg-page-shell { animation: tgLeaveRtlBack 0.1s ease-out forwards; }
-    html.tg-page-enter-rtl-back #tg-page-shell { animation: tgEnterRtlBack 0.14s ease-out forwards; }
-    @media (prefers-reduced-motion: reduce) {
-      html[class*="tg-page-leave-"] #tg-page-shell,
-      html[class*="tg-page-enter-"] #tg-page-shell { animation: none !important; opacity: 1 !important; transform: none !important; }
-    }
-    {% block styles %}{% endblock %}
-  </style>
-  {% block head %}{% endblock %}
-</head>
-<body class="bg-[#050a0e] text-zinc-100">
-  <div id="tg-page-shell">
-    <div id="vinor-express-page-swap">{% block content %}{% endblock %}</div>
-  </div>
-  <div id="vinor-express-page-scripts" hidden aria-hidden="true">{% block scripts %}{% endblock %}</div>
-  <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
-  <script src="{{ 'express-partner/express-nav.js'|static_version }}" defer></script>
-  <script>
-    window.hoistVinorExpressBodyModals = function () {};
-    window.vinorExpressStopAllMedia = function () {};
-  </script>
-</body>
-</html>
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+  <title>{% block title %}ورود | وینور اکسپرس{% endblock %}</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <meta name="theme-color" content="#050a0e">
+  <meta name="vinor-express-auth" content="{{ vinor_express_auth_segment|default('guest') }}">
+  <link rel="preload" as="font" href="{{ url_for('static', filename='fonts/vazirmatn-regular.woff2') }}" type="font/woff2" crossorigin>
+  <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-solid-900.woff2') }}" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <link rel="stylesheet" href="{{ 'express-partner/express-partner-auth.css'|static_version }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div id="tg-page-shell">
+    <div id="vinor-express-page-swap">{% block content %}{% endblock %}</div>
+  </div>
+  <div id="vinor-express-page-scripts" hidden aria-hidden="true">{% block scripts %}{% endblock %}</div>
+  <script src="{{ 'express-partner/express-nav.js'|static_version }}" defer></script>
+  <script>
+    window.hoistVinorExpressBodyModals = function () {};
+    window.vinorExpressStopAllMedia = function () {};
+  </script>
+</body>
+</html>
+

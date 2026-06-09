@@ -1,146 +1,135 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}اعلان‌ها | وینور اکسپرس{% endblock %}
+
 {% block content %}
+<script>window.__VINOR_NOTIFY_SEED__={{ {'notifications': notifications, 'unread': unread_count|default(0)}|tojson }};</script>
+<div x-data="vinorNotificationsPage(window.__VINOR_NOTIFY_SEED__.notifications, window.__VINOR_NOTIFY_SEED__.unread)" x-init="init()">
 
-<script>
-  // قرار دادن داده‌های اعلان‌ها در یک متغیر JavaScript قبل از initialize شدن Alpine.js
-  window.__NOTIFICATIONS_INIT_DATA__ = {
-    notifications: {{ notifications|tojson|safe }},
-    unreadCount: {{ unread_count|default(0) }}
-  };
-</script>
+<header class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md">
+  <div class="relative mx-auto flex h-14 max-w-6xl items-center justify-between gap-2 px-4 sm:h-16 sm:px-6">
+    <a href="{{ url_for('express_partner.profile') }}"
+       data-vinor-express-nav="back"
+       class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+       aria-label="بازگشت">
+      <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
+    </a>
+    <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">اعلان‌های من</h1>
+    <button type="button"
+            class="relative z-10 shrink-0 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 sm:py-2 sm:text-xs"
+            :disabled="loading || unreadCount === 0"
+            @click="markAll()">
+      همه خوانده
+    </button>
+  </div>
+</header>
 
-<div x-data="vinorNotificationsPage(window.__NOTIFICATIONS_INIT_DATA__.notifications, window.__NOTIFICATIONS_INIT_DATA__.unreadCount)">
-  <header class="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 w-full">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
-      <a href="{{ url_for('express_partner.dashboard') }}" class="w-9 h-9 sm:w-10 sm:h-10 shrink-0 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="بازگشت">
-        <i class="fas fa-arrow-right text-gray-600 dark:text-gray-400 sm:text-lg"></i>
-      </a>
-      <h1 class="text-sm sm:text-base font-bold text-gray-900 dark:text-white truncate text-center flex-1 min-w-0">اعلان‌های من</h1>
-      <button type="button"
-              class="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg shrink-0 text-[11px] sm:text-xs font-medium border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition disabled:opacity-50"
-              :disabled="loading || unreadCount === 0"
-              @click="markAll()">
-        همه خوانده
-      </button>
-    </div>
-  </header>
+<div class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] pt-14 text-zinc-100 sm:pt-16 lg:pb-16">
 
-  <div class="max-w-6xl mx-auto pt-0 px-4 sm:px-6 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
-    
-    <!-- Push Prompt Component -->
-    <div x-data="pushPromptComponent()" x-init="checkSubscription()" class="mt-4">
+  <div class="mx-auto max-w-lg px-4 sm:px-6">
 
-      <!-- کارت درخواست اجازه Push Notifications - سبک دیوار -->
-      <div x-show="showPrompt" 
+    <!-- Push prompt — deferred so list paints first -->
+    <div x-data="pushPromptComponent()" x-init="deferCheck()" class="mt-4">
+      <div x-show="showPrompt"
+           x-cloak
            x-transition:enter="transition ease-out duration-200"
-           x-transition:enter-start="opacity-0 transform scale-95"
-           x-transition:enter-end="opacity-100 transform scale-100"
+           x-transition:enter-start="opacity-0 scale-95"
+           x-transition:enter-end="opacity-100 scale-100"
            x-transition:leave="transition ease-in duration-150"
-           x-transition:leave-start="opacity-100 transform scale-100"
-           x-transition:leave-end="opacity-0 transform scale-95"
-           class="bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+           x-transition:leave-start="opacity-100 scale-100"
+           x-transition:leave-end="opacity-0 scale-95"
+           class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
         <div class="flex items-start gap-3">
-          <div class="flex-shrink-0 w-11 h-11 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-            <i class="fas fa-bell text-blue-600 dark:text-blue-400 text-base"></i>
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/15">
+            <i class="fas fa-bell text-base text-emerald-400"></i>
           </div>
-          <div class="flex-1 min-w-0">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">فعال‌سازی اعلان‌های فوری</h3>
-            <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">برای دریافت اعلان‌های فوری از طریق مرورگر، لطفاً اجازه ارسال اعلان را فعال کنید.</p>
+          <div class="min-w-0 flex-1">
+            <h3 class="mb-1 text-sm font-semibold text-white">فعال‌سازی اعلان‌های فوری</h3>
+            <p class="mb-3 text-xs leading-relaxed text-zinc-400">برای دریافت اعلان‌های فوری از مرورگر، اجازه ارسال اعلان را فعال کنید.</p>
             <div class="flex items-center gap-2">
               <button type="button"
                       @click="enablePush()"
                       :disabled="loading"
-                      class="px-4 py-2 rounded-lg text-xs font-medium border border-blue-600 dark:border-blue-500 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                      class="flex items-center gap-2 rounded-lg border border-emerald-500 bg-emerald-600 px-4 py-2 text-xs font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50">
                 <i class="fas" :class="loading ? 'fa-spinner fa-spin' : 'fa-check'"></i>
-                <span x-text="loading ? 'در حال فعال‌سازی...' : 'فعال‌سازی اعلان‌ها'"></span>
+                <span x-text="loading ? 'در حال فعال‌سازی...' : 'فعال‌سازی'"></span>
               </button>
               <button type="button"
                       @click="dismiss()"
-                      class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
+                      class="rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-zinc-400 transition hover:bg-white/5 hover:text-white">
                 بعداً
               </button>
             </div>
           </div>
           <button type="button"
                   @click="dismiss()"
-                  class="flex-shrink-0 w-7 h-7 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors">
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-300">
             <i class="fas fa-times text-xs"></i>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Notifications List -->
-    <div class="mt-4">
-      <!-- Loading State -->
-      <div x-show="loading && items.length === 0" x-cloak>
-        <div class="space-y-3">
-          <div class="h-20 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse"></div>
-          <div class="h-20 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse"></div>
-          <div class="h-20 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse"></div>
-        </div>
-      </div>
+    <!-- Loading skeleton (only when no SSR data) -->
+    <div x-show="loading && items.length === 0" x-cloak class="mt-4 space-y-3">
+      <div class="h-20 animate-pulse rounded-xl bg-white/5"></div>
+      <div class="h-20 animate-pulse rounded-xl bg-white/5"></div>
+      <div class="h-20 animate-pulse rounded-xl bg-white/5"></div>
+    </div>
 
-      <!-- Empty State -->
-      <div x-show="!loading && items.length === 0" x-cloak>
-        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
-          <div class="w-16 h-16 mx-auto mb-3 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 dark:text-gray-500">
-            <i class="fas fa-bell-slash text-2xl"></i>
-          </div>
-          <p class="text-sm text-gray-600 dark:text-gray-400">اعلانی برای نمایش وجود ندارد.</p>
+    <!-- Empty -->
+    <div x-show="!loading && items.length === 0" x-cloak class="mt-8">
+      <div class="rounded-xl border border-white/10 bg-white/[0.03] p-12 text-center">
+        <div class="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/5 text-zinc-600">
+          <i class="fas fa-bell-slash text-2xl"></i>
         </div>
+        <p class="text-sm text-zinc-500">اعلانی برای نمایش وجود ندارد.</p>
       </div>
+    </div>
 
-      <!-- لیست اعلان‌ها - سبک دیوار -->
-      <div class="space-y-3 sm:space-y-4" x-show="!loading && items.length > 0" x-cloak>
+    <!-- List -->
+    <div class="mt-4 space-y-3 sm:space-y-4" x-show="items.length > 0">
       <template x-for="(notif, index) in items" :key="notif.id || ('notif-' + index)">
-        <article class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-5 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200"
-                 :class="!notif.is_read ? 'border-r-4 border-r-blue-500' : ''">
+        <article class="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/20 sm:p-5"
+                 :class="!notif.is_read ? 'border-r-2 border-r-emerald-500' : ''">
           <div class="flex items-start gap-3">
-            <!-- آیکون - سبک دیوار -->
-            <div class="flex-shrink-0 w-11 h-11 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-center"
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5"
                  :class="{
-                   'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20': notif.type === 'info',
-                   'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20': notif.type === 'success',
-                   'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20': notif.type === 'warning',
-                   'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20': notif.type === 'error'
+                   'border-blue-500/30 bg-blue-500/10': notif.type === 'info',
+                   'border-emerald-500/30 bg-emerald-500/10': notif.type === 'success',
+                   'border-amber-500/30 bg-amber-500/10': notif.type === 'warning',
+                   'border-red-500/30 bg-red-500/10': notif.type === 'error'
                  }">
               <i class="fas text-base"
                  :class="{
-                   'fa-info-circle text-blue-600 dark:text-blue-400': notif.type === 'info',
-                   'fa-check-circle text-green-600 dark:text-green-400': notif.type === 'success',
-                   'fa-exclamation-triangle text-amber-600 dark:text-amber-400': notif.type === 'warning',
-                   'fa-times-circle text-red-600 dark:text-red-400': notif.type === 'error',
-                   'fa-bell text-gray-600 dark:text-gray-400': !['info', 'success', 'warning', 'error'].includes(notif.type)
+                   'fa-info-circle text-blue-400': notif.type === 'info',
+                   'fa-check-circle text-emerald-400': notif.type === 'success',
+                   'fa-exclamation-triangle text-amber-400': notif.type === 'warning',
+                   'fa-times-circle text-red-400': notif.type === 'error',
+                   'fa-bell text-zinc-400': !['info', 'success', 'warning', 'error'].includes(notif.type)
                  }"></i>
             </div>
-            
-            <!-- محتوا - سبک دیوار -->
-            <div class="flex-1 min-w-0">
-              <div class="flex items-start justify-between gap-3 mb-2">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-white leading-snug" x-text="notif.title || 'اعلان جدید'"></h3>
-                <div class="flex items-center gap-2 flex-shrink-0">
-                  <span x-show="!notif.is_read" class="w-2 h-2 bg-blue-500 rounded-full"></span>
-                  <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap" x-text="formatDate(notif.created_at)"></span>
+            <div class="min-w-0 flex-1">
+              <div class="mb-2 flex items-start justify-between gap-3">
+                <h3 class="text-sm font-semibold leading-snug text-white" x-text="notif.title || 'اعلان جدید'"></h3>
+                <div class="flex shrink-0 items-center gap-2">
+                  <span x-show="!notif.is_read" class="h-2 w-2 rounded-full bg-emerald-400"></span>
+                  <span class="whitespace-nowrap text-xs text-zinc-500" x-text="formatDate(notif.created_at)"></span>
                 </div>
               </div>
-              <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-3" x-text="notif.body"></p>
-              
-              <!-- دکمه‌های عملیاتی - سبک دیوار -->
-              <div class="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+              <p class="mb-3 text-sm leading-relaxed text-zinc-300" x-text="notif.body"></p>
+              <div class="flex items-center gap-2 border-t border-white/5 pt-2">
                 <button type="button"
-                        class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                         :disabled="notif.is_read"
                         @click.prevent="markRead(notif)">
-                  <i class="fas fa-check text-[10px] mr-1.5"></i>
+                  <i class="fas fa-check mr-1.5 text-[10px]"></i>
                   خوانده شد
                 </button>
                 <button type="button"
                         x-show="notif.action_url"
-                        class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
+                        class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/5 hover:text-white"
                         @click="openLink(notif.action_url)">
-                  <i class="fas fa-arrow-left text-[10px] mr-1.5"></i>
+                  <i class="fas fa-arrow-left mr-1.5 text-[10px]"></i>
                   جزئیات
                 </button>
               </div>
@@ -151,221 +140,162 @@
     </div>
   </div>
 
+  {% set bottom_nav_active = 'profile' %}
   {% include 'express_partner/partials/partner_tab_footer.html' %}
-  </div>
 </div>
+</div>
+{% endblock %}
 
-<script>
-  (function() {
-    // VAPID Public Key از base template
-    const VAPID_PUBLIC_KEY = "{{ VAPID_PUBLIC_KEY|default('', true) }}";
+{% block scripts %}
+  {{ super() }}
+  <script>
+  (function () {
+    var VAPID_PUBLIC_KEY = {{ VAPID_PUBLIC_KEY|default('', true)|tojson }};
 
     function urlBase64ToUint8Array(base64String) {
-      const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-      const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-      const rawData = atob(base64);
-      const outputArray = new Uint8Array(rawData.length);
-      for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+      var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      var rawData = atob(base64);
+      var outputArray = new Uint8Array(rawData.length);
+      for (var i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
       return outputArray;
     }
 
     async function getServiceWorkerRegistration() {
       if (!('serviceWorker' in navigator)) return null;
-      let reg = await navigator.serviceWorker.getRegistration('{{ url_for("express_partner.service_worker") }}');
+      var reg = await navigator.serviceWorker.getRegistration({{ url_for('express_partner.service_worker')|tojson }});
       if (!reg) {
-        reg = await navigator.serviceWorker.register('{{ url_for("express_partner.service_worker") }}', { scope: '/express/partner/' }).catch(() => null);
+        reg = await navigator.serviceWorker.register({{ url_for('express_partner.service_worker')|tojson }}, { scope: '/express/partner/' }).catch(function () { return null; });
       }
       return reg;
     }
 
-    // تعریف Alpine component برای push prompt - اطمینان از اینکه قبل از استفاده تعریف شده است
     function definePushPromptComponent() {
-      if (typeof Alpine === 'undefined') {
-        // اگر Alpine هنوز لود نشده، صبر کن
-        setTimeout(definePushPromptComponent, 50);
-        return;
-      }
+      if (typeof Alpine === 'undefined') return;
+      if (Alpine.data('pushPromptComponent')) return;
 
-      // اگر قبلاً تعریف شده، دوباره تعریف نکن
-      if (Alpine.data('pushPromptComponent')) {
-        return;
-      }
-
-      Alpine.data('pushPromptComponent', () => ({
-        showPrompt: false,
-        loading: false,
-        async checkSubscription() {
-          try {
-            // بررسی اینکه آیا مرورگر از notifications پشتیبانی می‌کند
-            if (!('Notification' in window) || !('serviceWorker' in navigator) || !VAPID_PUBLIC_KEY) {
-              this.showPrompt = false;
-              return;
-            }
-
-            // بررسی permission
-            const permission = Notification.permission;
-            if (permission === 'denied') {
-              this.showPrompt = false;
-              return;
-            }
-
-            // بررسی subscription موجود
-            const reg = await getServiceWorkerRegistration();
-            if (!reg) {
-              const dismissed = localStorage.getItem('vinor_express_push_prompt_dismissed');
-              if (dismissed !== '1') {
-                this.showPrompt = true;
-              }
-              return;
-            }
-
-            const subscription = await reg.pushManager.getSubscription().catch(() => null);
-            if (subscription) {
-              // اگر subscription وجود دارد، آن را در سرور ثبت کن (اگر قبلاً ثبت نشده)
-              try {
-                const subObj = subscription.toJSON();
-                await fetch('/api/push/subscribe', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  credentials: 'same-origin',
-                  body: JSON.stringify(subObj)
-                });
-              } catch(_) {}
-              this.showPrompt = false;
+      Alpine.data('pushPromptComponent', function () {
+        return {
+          showPrompt: false,
+          loading: false,
+          deferCheck: function () {
+            var self = this;
+            var run = function () { self.checkSubscription(); };
+            if (typeof requestIdleCallback === 'function') {
+              requestIdleCallback(run, { timeout: 3500 });
             } else {
-              // اگر subscription وجود ندارد، prompt را نمایش بده
-              const dismissed = localStorage.getItem('vinor_express_push_prompt_dismissed');
-              if (dismissed !== '1') {
+              setTimeout(run, 900);
+            }
+          },
+          checkSubscription: async function () {
+            try {
+              if (!('Notification' in window) || !('serviceWorker' in navigator) || !VAPID_PUBLIC_KEY) {
+                this.showPrompt = false;
+                return;
+              }
+              var permission = Notification.permission;
+              if (permission === 'denied') {
+                this.showPrompt = false;
+                return;
+              }
+              var reg = await getServiceWorkerRegistration();
+              if (!reg) {
+                if (localStorage.getItem('vinor_express_push_prompt_dismissed') !== '1') {
+                  this.showPrompt = true;
+                }
+                return;
+              }
+              var subscription = await reg.pushManager.getSubscription().catch(function () { return null; });
+              if (subscription) {
+                try {
+                  await fetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(subscription.toJSON())
+                  });
+                } catch (_) {}
+                this.showPrompt = false;
+              } else if (localStorage.getItem('vinor_express_push_prompt_dismissed') !== '1') {
                 this.showPrompt = true;
               }
-            }
-          } catch(err) {
-            console.debug('Error checking push subscription:', err);
-            this.showPrompt = false;
-          }
-        },
-        async enablePush() {
-          this.loading = true;
-
-          try {
-            // درخواست permission
-            if (!('Notification' in window)) {
-              alert('مرورگر شما از اعلان پشتیبانی نمی‌کند.');
-              this.loading = false;
-              return;
-            }
-
-            let permission = Notification.permission;
-            if (permission === 'default') {
-              permission = await Notification.requestPermission();
-            }
-
-            if (permission !== 'granted') {
-              alert('برای دریافت اعلان‌ها، لطفاً اجازه ارسال اعلان را فعال کنید.');
-              this.loading = false;
+            } catch (_) {
               this.showPrompt = false;
-              return;
             }
-
-            // دریافت service worker registration
-            const reg = await getServiceWorkerRegistration();
-            if (!reg) {
-              alert('خطا در ثبت Service Worker. لطفاً صفحه را رفرش کنید.');
-              this.loading = false;
-              return;
-            }
-
-            // بررسی subscription موجود
-            let subscription = await reg.pushManager.getSubscription().catch(() => null);
-            if (subscription) {
-              // اگر subscription وجود دارد، آن را در سرور ثبت کن
-              try {
-                const subObj = subscription.toJSON();
-                const res = await fetch('/api/push/subscribe', {
+          },
+          enablePush: async function () {
+            this.loading = true;
+            try {
+              if (!('Notification' in window)) {
+                alert('مرورگر شما از اعلان پشتیبانی نمی‌کند.');
+                return;
+              }
+              var permission = Notification.permission;
+              if (permission === 'default') {
+                permission = await Notification.requestPermission();
+              }
+              if (permission !== 'granted') {
+                alert('برای دریافت اعلان‌ها، لطفاً اجازه ارسال اعلان را فعال کنید.');
+                this.showPrompt = false;
+                return;
+              }
+              var reg = await getServiceWorkerRegistration();
+              if (!reg) {
+                alert('خطا در ثبت Service Worker. لطفاً صفحه را رفرش کنید.');
+                return;
+              }
+              var subscription = await reg.pushManager.getSubscription().catch(function () { return null; });
+              if (subscription) {
+                var res = await fetch('/api/push/subscribe', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   credentials: 'same-origin',
-                  body: JSON.stringify(subObj)
+                  body: JSON.stringify(subscription.toJSON())
                 });
                 if (res.ok) {
                   this.showPrompt = false;
                   localStorage.setItem('vinor_express_notifications_auto_enabled', '1');
                   localStorage.removeItem('vinor_express_push_prompt_dismissed');
                 }
-              } catch(_) {}
-              this.loading = false;
-              return;
-            }
-
-            // ایجاد subscription جدید
-            if (!VAPID_PUBLIC_KEY) {
-              alert('خطا در تنظیمات اعلان‌ها. لطفاً با پشتیبانی تماس بگیرید.');
-              this.loading = false;
-              return;
-            }
-
-            const appServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-            subscription = await reg.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: appServerKey
-            });
-
-            // ثبت subscription در سرور
-            const subObj = subscription.toJSON();
-            const res = await fetch('/api/push/subscribe', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'same-origin',
-              body: JSON.stringify(subObj)
-            });
-
-            if (res.ok) {
-              this.showPrompt = false;
-              localStorage.setItem('vinor_express_notifications_auto_enabled', '1');
-              localStorage.removeItem('vinor_express_push_prompt_dismissed');
-            } else {
-              throw new Error('خطا در ثبت اشتراک');
-            }
-          } catch(err) {
-            console.error('Error enabling push notifications:', err);
-            // نمایش پیام خطا به صورت user-friendly
-            const errorMsg = err.message || 'خطا در فعال‌سازی اعلان‌ها';
-            if (errorMsg.includes('VAPID') || errorMsg.includes('key')) {
-              alert('خطا در تنظیمات اعلان‌ها. لطفاً با پشتیبانی تماس بگیرید.');
-            } else if (errorMsg.includes('permission') || errorMsg.includes('اجازه')) {
-              alert('برای دریافت اعلان‌ها، لطفاً اجازه ارسال اعلان را فعال کنید.');
-            } else {
+                return;
+              }
+              if (!VAPID_PUBLIC_KEY) {
+                alert('خطا در تنظیمات اعلان‌ها. لطفاً با پشتیبانی تماس بگیرید.');
+                return;
+              }
+              subscription = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+              });
+              var subRes = await fetch('/api/push/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(subscription.toJSON())
+              });
+              if (subRes.ok) {
+                this.showPrompt = false;
+                localStorage.setItem('vinor_express_notifications_auto_enabled', '1');
+                localStorage.removeItem('vinor_express_push_prompt_dismissed');
+              } else {
+                throw new Error('subscribe failed');
+              }
+            } catch (err) {
               alert('خطا در فعال‌سازی اعلان‌ها. لطفاً دوباره تلاش کنید.');
+            } finally {
+              this.loading = false;
             }
-          } finally {
-            this.loading = false;
+          },
+          dismiss: function () {
+            this.showPrompt = false;
+            localStorage.setItem('vinor_express_push_prompt_dismissed', '1');
           }
-        },
-        dismiss() {
-          this.showPrompt = false;
-          localStorage.setItem('vinor_express_push_prompt_dismissed', '1');
-        }
-      }));
-    }
-
-    // تلاش برای تعریف component - هم از طریق event و هم مستقیم
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        if (typeof Alpine !== 'undefined') {
-          definePushPromptComponent();
-        } else {
-          document.addEventListener('alpine:init', definePushPromptComponent);
-        }
+        };
       });
-    } else {
-      if (typeof Alpine !== 'undefined') {
-        definePushPromptComponent();
-      } else {
-        document.addEventListener('alpine:init', definePushPromptComponent);
-      }
     }
+
+    document.addEventListener('alpine:init', definePushPromptComponent);
+    if (typeof Alpine !== 'undefined') definePushPromptComponent();
   })();
-</script>
-
+  </script>
 {% endblock %}
-

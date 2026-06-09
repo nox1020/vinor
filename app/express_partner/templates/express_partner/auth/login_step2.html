@@ -2,6 +2,14 @@
 {% from 'express_partner/partials/auth_ui.html' import auth_page, auth_header_btn, auth_input, auth_clear_btn, auth_action_link, auth_btn_primary, auth_footer %}
 {% block title %}تایید شماره موبایل | وینور اکسپرس{% endblock %}
 
+{% block head %}
+  {# پیش‌بارگذاری دارایی‌های داشبورد هنگام انتظار برای OTP — ورود بعد از تأیید سریع‌تر #}
+  <link rel="preload" as="script" href="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}">
+  <link rel="prefetch" href="{{ 'express-partner/dashboard-chrome.js'|static_version }}" as="script">
+  <link rel="prefetch" href="{{ 'express-partner/premium-card-media.js'|static_version }}" as="script">
+  <link rel="prefetch" href="{{ 'express-partner/dashboard-voice-search.js'|static_version }}" as="script">
+{% endblock %}
+
 {% set _fa = '۰۱۲۳۴۵۶۷۸۹' %}
 {% macro fa_num(s) -%}
 {%- for c in s|string -%}
@@ -20,71 +28,71 @@
 {% block content %}
 
 <div class="{{ auth_page() }}">
-  <header class="relative flex items-center justify-center px-4 pt-5 pb-3">
-    <h1 class="text-base font-bold text-white">تایید شماره موبایل</h1>
+  <header class="vinor-auth-topbar">
+    <h1 class="vinor-auth-topbar-title">تایید شماره موبایل</h1>
     <a href="{{ url_for('express_partner.login', change=1, next=login_next) if login_next else url_for('express_partner.login', change=1) }}"
        data-vinor-express-nav="back"
-       class="absolute right-4 top-5 {{ auth_header_btn() }}"
+       class="{{ auth_header_btn() }} vinor-auth-topbar-back"
        aria-label="تغییر شماره موبایل">
-      <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
+      <i class="fas fa-arrow-right" aria-hidden="true"></i>
     </a>
   </header>
 
-  <main class="flex-1 px-5 pt-6">
-    <div class="mx-auto w-full max-w-md">
-      <div class="flex items-center gap-2.5">
-        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-400">
-          <i class="fas fa-comment-dots text-sm" aria-hidden="true"></i>
+  <main class="vinor-auth-main">
+    <div class="vinor-auth-container">
+      <div class="vinor-auth-phone-row">
+        <span class="vinor-auth-phone-icon">
+          <i class="fas fa-comment-dots" aria-hidden="true"></i>
         </span>
-        <span class="text-lg font-bold text-white tabular-nums" dir="ltr">{{ format_phone_display(phone) }}</span>
+        <span class="vinor-auth-phone-num" dir="ltr">{{ format_phone_display(phone) }}</span>
       </div>
-      <p class="mt-2 text-sm text-zinc-400">کد تأیید به شماره بالا فرستاده شد.</p>
+      <p class="vinor-auth-lead">کد تأیید به شماره بالا فرستاده شد.</p>
 
       {% with messages = get_flashed_messages(with_categories=true, category_filter=auth_flash_categories) %}
       {% set stack_id = 'loginStep2Flash' %}
-      {% include 'express_partner/partials/flash_alerts.html' %}
+      {% include 'express_partner/partials/auth_flash_alerts.html' %}
       {% endwith %}
 
-      <p id="otpInlineHint" class="mt-4 hidden text-sm text-amber-300/95" role="alert"></p>
+      <p id="otpInlineHint" class="vinor-auth-hint vinor-auth-hint--warn" role="alert"></p>
 
-      <form id="otpForm" method="POST" action="{{ url_for('express_partner.verify') }}" class="mt-6"
+      <form id="otpForm" method="POST" action="{{ url_for('express_partner.verify') }}" class="vinor-auth-form vinor-auth-form--otp"
             data-auth-skip-submit-lock="1">
         {% if login_next %}<input type="hidden" name="next" value="{{ login_next }}">{% endif %}
         <input type="hidden" name="phone" value="{{ phone }}">
         {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
 
-        <div class="relative">
+        <div class="vinor-auth-field">
           <input id="otpInput" type="text" name="otp_code" inputmode="numeric" autocomplete="one-time-code"
                  maxlength="5" autocapitalize="off" autocorrect="off" dir="ltr"
                  placeholder=""
                  aria-label="کد تأیید ۵ رقمی"
-                 class="{{ auth_input() }} tracking-widest">
+                 class="{{ auth_input('vinor-auth-input--otp') }}">
           <button type="button" id="otpClearBtn"
                   class="{{ auth_clear_btn() }}"
                   aria-label="پاک کردن">
-            <i class="fas fa-xmark text-xs" aria-hidden="true"></i>
+            <i class="fas fa-xmark" aria-hidden="true"></i>
           </button>
         </div>
 
-        <div class="mt-4 flex items-start justify-between gap-3 text-xs">
+        <div class="vinor-auth-otp-meta">
           <button type="button" id="resendBtn" disabled
                   class="{{ auth_action_link() }}">
             درخواست دوباره
           </button>
-          <p id="timerLine" class="flex items-center gap-1.5 text-zinc-500 text-left">
-            <i class="fas fa-circle-info text-[10px] shrink-0 text-emerald-500/70" aria-hidden="true"></i>
+          <p id="timerLine" class="vinor-auth-timer">
+            <i class="fas fa-circle-info" aria-hidden="true"></i>
             <span>لطفاً برای دریافت کد کمی صبر کنید</span>
           </p>
         </div>
-        <p id="otpResendStatus" class="mt-2 hidden text-xs text-emerald-400/95" role="status"></p>
+        <p id="otpResendStatus" class="vinor-auth-hint vinor-auth-hint--ok" role="status"></p>
       </form>
     </div>
   </main>
 
   <footer class="{{ auth_footer() }}">
-    <div class="mx-auto w-full max-w-md">
+    <div class="vinor-auth-container">
       <button type="submit" form="otpForm" id="otpSubmitBtn"
-              class="{{ auth_btn_primary('w-full') }}">
+              class="{{ auth_btn_primary() }}">
         <span data-btn-label>ورود</span>
       </button>
     </div>
@@ -118,7 +126,7 @@
   var resendTimerId = null;
   var webOtpAbort = null;
   var verifyInflight = false;
-  var timerIcon = '<i class="fas fa-circle-info text-[10px] shrink-0 text-emerald-500/70" aria-hidden="true"></i>';
+  var timerIcon = '<i class="fas fa-circle-info" aria-hidden="true"></i>';
 
   function teardownOtpPage() {
     if (resendTimerId) { clearInterval(resendTimerId); resendTimerId = null; }
@@ -141,9 +149,13 @@
 
   function showHint(msg) {
     if (!inlineHint) return;
-    if (!msg) { inlineHint.textContent = ''; inlineHint.classList.add('hidden'); return; }
+    if (!msg) {
+      inlineHint.textContent = '';
+      inlineHint.classList.remove('is-visible');
+      return;
+    }
     inlineHint.textContent = msg;
-    inlineHint.classList.remove('hidden');
+    inlineHint.classList.add('is-visible');
   }
 
   function normalizeOtpDigits(raw) {
@@ -155,13 +167,8 @@
 
   function syncClearBtn() {
     if (!clearBtn || !otpInput) return;
-    if (otpInput.value.length) {
-      clearBtn.classList.remove('hidden');
-      clearBtn.classList.add('flex');
-    } else {
-      clearBtn.classList.add('hidden');
-      clearBtn.classList.remove('flex');
-    }
+    if (otpInput.value.length) clearBtn.classList.add('is-visible');
+    else clearBtn.classList.remove('is-visible');
   }
 
   function syncSubmitBtn() {
@@ -182,6 +189,16 @@
     }
   }
 
+  function goAfterLogin(dest) {
+    if (!dest) return;
+    if (window.vinorPostLoginNavigate) {
+      window.vinorPostLoginNavigate(dest);
+      return;
+    }
+    if (window.vinorExpressClearAuthCache) window.vinorExpressClearAuthCache();
+    window.location.replace(dest);
+  }
+
   function submitOtpAjax() {
     if (!form || verifyInflight || authBusy.isLocked()) return;
     var code = normalizeOtpDigits(otpInput && otpInput.value);
@@ -194,6 +211,7 @@
       method: 'POST',
       body: new FormData(form),
       credentials: 'same-origin',
+      keepalive: true,
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
         Accept: 'application/json'
@@ -207,17 +225,16 @@
         });
       })
       .then(function (payload) {
-        verifyInflight = false;
         var data = payload.data || {};
         if (payload.ok && data.ok && data.redirect) {
-          if (window.vinorExpressClearPrefetchCache) window.vinorExpressClearPrefetchCache();
-          window.location.replace(data.redirect);
+          goAfterLogin(data.redirect);
           return;
         }
+        verifyInflight = false;
         unlockOtpInputs();
         showHint((data && data.error) || 'خطا در تأیید کد.');
         if (data && data.redirect) {
-          setTimeout(function () { window.location.assign(data.redirect); }, 900);
+          setTimeout(function () { goAfterLogin(data.redirect); }, 400);
         }
       })
       .catch(function () {
@@ -354,7 +371,10 @@
       if (resendBtn.disabled || (sig && sig.aborted)) return;
       try {
         resendBtn.disabled = true;
-        if (resendStatus) { resendStatus.textContent = ''; resendStatus.classList.add('hidden'); }
+        if (resendStatus) {
+          resendStatus.textContent = '';
+          resendStatus.classList.remove('is-visible');
+        }
         if (timerLine) {
           timerLine.innerHTML = timerIcon + '<span>در حال ارسال…</span>';
         }
@@ -373,7 +393,7 @@
         if (resp.ok && data && data.ok) {
           if (resendStatus) {
             resendStatus.textContent = 'کد جدید ارسال شد.';
-            resendStatus.classList.remove('hidden');
+            resendStatus.classList.add('is-visible');
           }
           unlockOtpInputs();
           if (otpInput) otpInput.value = '';

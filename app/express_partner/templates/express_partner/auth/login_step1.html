@@ -4,36 +4,36 @@
 {% block content %}
 
 <div class="{{ auth_page() }}">
-  <header class="relative flex items-center justify-center px-4 pt-5 pb-3">
-    <h1 class="text-base font-bold text-white">تأیید شماره موبایل</h1>
+  <header class="vinor-auth-topbar">
+    <h1 class="vinor-auth-topbar-title">تأیید شماره موبایل</h1>
     {% if not is_vinor_apk %}
     <a href="{{ url_for('main.index') }}"
-       class="absolute right-4 top-5 {{ auth_header_btn() }}"
+       class="{{ auth_header_btn() }} vinor-auth-topbar-action"
        aria-label="بستن">
-      <i class="fas fa-xmark text-sm" aria-hidden="true"></i>
+      <i class="fas fa-xmark" aria-hidden="true"></i>
     </a>
     {% endif %}
   </header>
 
-  <main class="flex-1 px-5 pt-6">
-    <div class="mx-auto w-full max-w-md">
-      <h2 class="text-2xl font-bold text-white leading-snug">شماره موبایل خود را وارد کنید</h2>
-      <p class="mt-2 text-sm text-zinc-400">کد تأیید به این شماره پیامک می‌شود.</p>
+  <main class="vinor-auth-main">
+    <div class="vinor-auth-container">
+      <h2 class="vinor-auth-heading">شماره موبایل خود را وارد کنید</h2>
+      <p class="vinor-auth-lead">کد تأیید به این شماره پیامک می‌شود.</p>
 
       {% with messages = get_flashed_messages(with_categories=true, category_filter=auth_flash_categories) %}
       {% set stack_id = 'loginStep1Flash' %}
-      {% include 'express_partner/partials/flash_alerts.html' %}
+      {% include 'express_partner/partials/auth_flash_alerts.html' %}
       {% endwith %}
 
-      <p id="loginInlineHint" class="mt-4 hidden text-sm text-rose-300/95" role="alert"></p>
+      <p id="loginInlineHint" class="vinor-auth-hint vinor-auth-hint--error" role="alert"></p>
 
-      <form method="POST" action="{{ url_for('express_partner.login') }}" class="mt-8" id="loginStep1Form"
+      <form method="POST" action="{{ url_for('express_partner.login') }}" class="vinor-auth-form" id="loginStep1Form"
             data-vinor-auth-ajax="1" data-auth-skip-submit-lock="1" novalidate>
         {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
         {% if request.args.get('next') %}<input type="hidden" name="next" value="{{ request.args.get('next') }}">{% endif %}
         <input type="hidden" name="accept_legal" value="1">
 
-        <div class="relative">
+        <div class="vinor-auth-field">
           <input id="loginPhone" type="tel" name="phone" required inputmode="numeric" autocomplete="tel" dir="ltr"
                  placeholder="09123456789" minlength="11" maxlength="11" pattern="09[0-9]{9}"
                  title="شماره موبایل ۱۱ رقمی با ۰۹ شروع شود"
@@ -41,11 +41,11 @@
           <button type="button" id="loginPhoneClear"
                   class="{{ auth_clear_btn() }}"
                   aria-label="پاک کردن">
-            <i class="fas fa-xmark text-xs" aria-hidden="true"></i>
+            <i class="fas fa-xmark" aria-hidden="true"></i>
           </button>
         </div>
 
-        <p class="mt-5 text-xs leading-relaxed text-zinc-400">
+        <p class="vinor-auth-legal">
           با ورود به وینور اکسپرس،
           <a href="{{ url_for('express_partner.legal_terms', next=request.args.get('next')) }}"
              target="_blank" rel="noopener"
@@ -61,7 +61,7 @@
   </main>
 
   <footer class="{{ auth_footer() }}">
-    <div class="mx-auto w-full max-w-md">
+    <div class="vinor-auth-container">
       <button type="submit" form="loginStep1Form" id="loginSubmitBtn"
               class="{{ auth_btn_primary() }}">
         <span data-btn-label>بعدی</span>
@@ -122,20 +122,19 @@
 
   function syncClearBtn() {
     if (!clearBtn || !phoneInput) return;
-    if (phoneInput.value.length) {
-      clearBtn.classList.remove('hidden');
-      clearBtn.classList.add('flex');
-    } else {
-      clearBtn.classList.add('hidden');
-      clearBtn.classList.remove('flex');
-    }
+    if (phoneInput.value.length) clearBtn.classList.add('is-visible');
+    else clearBtn.classList.remove('is-visible');
   }
 
   function showHint(msg) {
     if (!inlineHint) return;
-    if (!msg) { inlineHint.textContent = ''; inlineHint.classList.add('hidden'); return; }
+    if (!msg) {
+      inlineHint.textContent = '';
+      inlineHint.classList.remove('is-visible');
+      return;
+    }
     inlineHint.textContent = msg;
-    inlineHint.classList.remove('hidden');
+    inlineHint.classList.add('is-visible');
   }
 
   function syncSubmitBtn() {
@@ -154,8 +153,7 @@
     phoneInput.addEventListener('input', function () {
       showHint('');
       var pos = phoneInput.selectionStart;
-      var before = phoneInput.value;
-      phoneInput.value = normalizePhoneValue(before);
+      phoneInput.value = normalizePhoneValue(phoneInput.value);
       try { if (pos != null) phoneInput.setSelectionRange(pos, pos); } catch (_) {}
       syncClearBtn();
       syncSubmitBtn();
@@ -176,6 +174,9 @@
   setTimeout(prefetchOtpPage, 80);
 
   function goOtpPage(url) {
+    if (window.vinorExpressInvalidatePrefetch) {
+      try { window.vinorExpressInvalidatePrefetch(url); } catch (_) {}
+    }
     if (window.vinorExpressNavigate) {
       window.vinorExpressNavigate(url, { forward: 1 });
       return;

@@ -1,151 +1,28 @@
 {% extends 'express_partner/base.html' %}
+{% from 'express_partner/partials/auth_ui.html' import auth_header_btn, auth_btn_primary, auth_footer %}
 {% block title %}شرایط همکاری | وینور اکسپرس{% endblock %}
 
 {% block head %}
 <style>
-  .coop-page {
-    --coop-bg: #050a0e;
-    --coop-card: #12181f;
-    --coop-card-soft: #0f151c;
-    --coop-green: #22c55e;
-    --coop-green-dim: rgba(34, 197, 94, 0.15);
+  .coop-shell {
+    --coop-emerald: #22c55e;
+    min-height: 100dvh;
+    background: #050a0e;
   }
-  .coop-hero-glow {
-    background: radial-gradient(ellipse 80% 90% at 85% 50%, rgba(34, 197, 94, 0.18), transparent 55%);
+  .coop-hero-mesh {
+    background:
+      radial-gradient(ellipse 120% 80% at 100% 0%, rgba(34, 197, 94, 0.22), transparent 50%),
+      radial-gradient(ellipse 80% 60% at 0% 100%, rgba(16, 185, 129, 0.08), transparent 45%),
+      linear-gradient(165deg, #0c1812 0%, #12181f 48%, #0a1018 100%);
   }
-  .coop-hero-art {
-    position: relative;
-    width: 7.5rem;
-    height: 6.5rem;
-    flex-shrink: 0;
+  .coop-income-glow {
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.12), 0 12px 40px rgba(0, 0, 0, 0.35);
   }
-  .coop-folder {
-    position: absolute;
-    right: 0.25rem;
-    top: 0.75rem;
-    width: 5.5rem;
-    height: 4.25rem;
-    border-radius: 0.65rem 0.65rem 0.45rem 0.45rem;
-    background: linear-gradient(145deg, #1a2330 0%, #0d1218 100%);
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  .coop-sticky-actions {
+    padding-bottom: calc(11rem + env(safe-area-inset-bottom, 0px));
   }
-  .coop-folder-tab {
-    position: absolute;
-    top: -0.55rem;
-    right: 0.85rem;
-    width: 2.2rem;
-    height: 0.75rem;
-    border-radius: 0.35rem 0.35rem 0 0;
-    background: #1a2330;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-bottom: none;
-  }
-  .coop-folder-v {
-    position: absolute;
-    left: 50%;
-    top: 52%;
-    transform: translate(-50%, -50%);
-    width: 1.75rem;
-    height: 1.75rem;
-    border-radius: 9999px;
-    background: linear-gradient(135deg, #4ade80, #16a34a);
-    color: #052e16;
-    font-size: 0.85rem;
-    font-weight: 900;
-    display: grid;
-    place-items: center;
-    box-shadow: 0 4px 14px rgba(34,197,94,0.45);
-  }
-  .coop-thumb {
-    position: absolute;
-    width: 1.65rem;
-    height: 1.15rem;
-    border-radius: 0.25rem;
-    border: 1px solid rgba(255,255,255,0.12);
-    background: linear-gradient(160deg, #334155, #1e293b);
-    overflow: hidden;
-  }
-  .coop-thumb::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(34,197,94,0.25), transparent 60%);
-  }
-  .coop-thumb-1 { right: 0.5rem; top: -0.35rem; transform: rotate(-8deg); }
-  .coop-thumb-2 { right: 2.1rem; top: -0.55rem; transform: rotate(6deg); }
-  .coop-coin {
-    position: absolute;
-    left: 0;
-    bottom: 0.15rem;
-    width: 2.75rem;
-    height: 2.75rem;
-    border-radius: 9999px;
-    background: linear-gradient(145deg, #4ade80 0%, #15803d 100%);
-    border: 2px solid rgba(255,255,255,0.25);
-    box-shadow: 0 6px 18px rgba(34,197,94,0.4);
-    display: grid;
-    place-items: center;
-    font-size: 1.1rem;
-    font-weight: 900;
-    color: #052e16;
-  }
-  .coop-step-card {
-    background: var(--coop-card);
-    border: 1px solid rgba(255,255,255,0.06);
-  }
-  .coop-step-num {
-    width: 1.35rem;
-    height: 1.35rem;
-    border-radius: 9999px;
-    background: var(--coop-green);
-    color: #052e16;
-    font-size: 0.65rem;
-    font-weight: 800;
-    display: grid;
-    place-items: center;
-    margin-inline: auto;
-  }
-  .coop-step-arrow {
-    color: rgba(34, 197, 94, 0.55);
-    font-size: 0.55rem;
-    align-self: center;
-    padding-top: 1.1rem;
-  }
-  .coop-money-stack {
-    position: relative;
-    width: 4.5rem;
-    height: 3.75rem;
-    flex-shrink: 0;
-  }
-  .coop-bill {
-    position: absolute;
-    left: 50%;
-    width: 3.4rem;
-    height: 1.55rem;
-    border-radius: 0.3rem;
-    transform: translateX(-50%);
-    background: linear-gradient(135deg, #4ade80, #16a34a);
-    border: 1px solid rgba(255,255,255,0.2);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-  }
-  .coop-bill:nth-child(1) { bottom: 0; z-index: 1; }
-  .coop-bill:nth-child(2) { bottom: 0.55rem; z-index: 2; opacity: 0.92; }
-  .coop-bill:nth-child(3) { bottom: 1.1rem; z-index: 3; }
-  .coop-bill-band {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    font-size: 0.7rem;
-    font-weight: 900;
-    color: #052e16;
-  }
-  .coop-stat-divider {
-    width: 1px;
-    align-self: stretch;
-    background: rgba(255,255,255,0.08);
-    min-height: 2.5rem;
+  .coop-action-bar {
+    bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
   }
 </style>
 {% endblock %}
@@ -155,7 +32,8 @@
 <header class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md">
   <div class="relative mx-auto flex h-14 max-w-lg items-center justify-center px-4">
     <a href="{{ url_for('express_partner.dashboard') }}"
-       class="absolute right-4 grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/5 text-emerald-400 transition hover:bg-white/10 hover:text-emerald-300"
+       data-vinor-express-nav="back"
+       class="absolute right-4 {{ auth_header_btn() }} text-emerald-400 hover:text-emerald-300"
        aria-label="بازگشت">
       <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
     </a>
@@ -163,125 +41,132 @@
   </div>
 </header>
 
-<main class="coop-page min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] pt-14 text-zinc-100">
-  <div class="mx-auto max-w-lg space-y-4 px-4 py-4">
+<main class="coop-shell coop-sticky-actions pt-14 text-zinc-100">
+  <div class="mx-auto max-w-lg space-y-5 px-4 py-5 pb-4">
 
-    {# بنر بالا #}
-    <section class="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-[#0f2a1a] via-[#12181f] to-[#0a1018] p-4 shadow-xl shadow-black/30">
-      <div class="pointer-events-none absolute inset-0 coop-hero-glow" aria-hidden="true"></div>
-      <div class="relative flex items-center gap-3">
+    {# —— بنر —— #}
+    <section class="coop-hero-mesh relative overflow-hidden rounded-2xl border border-emerald-500/25 p-5 shadow-xl shadow-black/40">
+      <div class="pointer-events-none absolute -left-6 top-8 h-24 w-24 rounded-full bg-emerald-400/10 blur-2xl" aria-hidden="true"></div>
+      <div class="relative flex items-start gap-4">
+        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 text-emerald-400 shadow-lg shadow-emerald-950/30">
+          <i class="fas fa-handshake text-2xl" aria-hidden="true"></i>
+        </div>
         <div class="min-w-0 flex-1">
-          <h2 class="text-lg font-extrabold leading-snug text-white sm:text-xl">
+          <p class="text-[11px] font-semibold text-emerald-400/90">فرصت همکاری</p>
+          <h2 class="mt-1 text-xl font-extrabold leading-snug text-white">
             فروش فایل، <span class="text-emerald-400">پورسانت بگیر</span>
           </h2>
-          <p class="mt-2 text-xs leading-relaxed text-zinc-300 sm:text-sm">
+          <p class="mt-2.5 text-sm leading-relaxed text-zinc-300">
             وینور فایل‌های آماده با قیمت و پورسانت مشخص را در اختیارت قرار داده است. بفروش و پورسانتت را دریافت کن.
           </p>
         </div>
-        <div class="coop-hero-art" aria-hidden="true">
-          <div class="coop-thumb coop-thumb-1"></div>
-          <div class="coop-thumb coop-thumb-2"></div>
-          <div class="coop-folder-tab"></div>
-          <div class="coop-folder">
-            <span class="coop-folder-v">V</span>
+      </div>
+    </section>
+
+    {# —— مراحل —— #}
+    <section aria-label="مراحل همکاری">
+      <h3 class="mb-3 px-0.5 text-xs font-bold text-zinc-400">چطور کار می‌کند؟</h3>
+      <ol class="space-y-3">
+        <li class="relative flex gap-3 rounded-2xl border border-white/[0.07] bg-[#12181f] p-4">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-sm font-black text-emerald-950 shadow-md shadow-emerald-900/40">۱</div>
+          <div class="min-w-0 flex-1 pt-0.5">
+            <div class="flex items-center gap-2">
+              <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                <i class="fas fa-list-ul text-sm" aria-hidden="true"></i>
+              </span>
+              <h4 class="text-sm font-bold text-white">انتخاب فایل</h4>
+            </div>
+            <p class="mt-2 text-xs leading-relaxed text-zinc-400">فایل مورد نظر را از لیست فایل‌های آماده انتخاب کنید.</p>
           </div>
-          <div class="coop-coin">%</div>
+        </li>
+
+        <li class="relative flex gap-3 rounded-2xl border border-white/[0.07] bg-[#12181f] p-4">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-sm font-black text-emerald-950 shadow-md shadow-emerald-900/40">۲</div>
+          <div class="min-w-0 flex-1 pt-0.5">
+            <div class="flex items-center gap-2">
+              <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
+              </span>
+              <h4 class="text-sm font-bold text-white">فروش فایل</h4>
+            </div>
+            <p class="mt-2 text-xs leading-relaxed text-zinc-400">فایل را به مشتری معرفی کنید و معامله را نهایی کنید.</p>
+          </div>
+        </li>
+
+        <li class="relative flex gap-3 rounded-2xl border border-white/[0.07] bg-[#12181f] p-4">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-sm font-black text-emerald-950 shadow-md shadow-emerald-900/40">۳</div>
+          <div class="min-w-0 flex-1 pt-0.5">
+            <div class="flex items-center gap-2">
+              <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                <i class="fas fa-wallet text-sm" aria-hidden="true"></i>
+              </span>
+              <h4 class="text-sm font-bold text-white">دریافت پورسانت</h4>
+            </div>
+            <p class="mt-2 text-xs leading-relaxed text-zinc-400">بعد از تأیید فروش، پورسانت شما واریز می‌شود.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    {# —— مثال درآمد —— #}
+    <section class="coop-income-glow rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-[#12181f] to-[#0d1218] p-4">
+      <div class="flex items-center gap-2">
+        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
+          <i class="fas fa-coins text-sm" aria-hidden="true"></i>
+        </span>
+        <p class="text-sm font-bold text-emerald-400">مثال درآمد شما</p>
+      </div>
+
+      <div class="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-center">
+        <div class="min-w-0 px-1">
+          <p class="text-[10px] font-medium text-zinc-500">قیمت فایل</p>
+          <p class="mt-1.5 text-sm font-bold tabular-nums leading-tight text-white">{{ 5000000000|toman(false) }}</p>
+          <p class="mt-0.5 text-[10px] text-zinc-500">تومان</p>
+        </div>
+        <div class="min-w-0 border-x border-white/[0.08] px-1">
+          <p class="text-[10px] font-medium text-zinc-500">پورسانت شما</p>
+          <p class="mt-1.5 text-sm font-bold tabular-nums leading-tight text-emerald-400">{{ 100000000|toman(false) }}</p>
+          <p class="mt-0.5 text-[10px] text-zinc-500">تومان</p>
+        </div>
+        <div class="min-w-0 px-1">
+          <p class="text-[10px] font-medium text-zinc-500">نوع ملک</p>
+          <p class="mt-1.5 text-sm font-bold leading-tight text-white">ویلا ۲۵۰ متری</p>
+          <p class="mt-0.5 text-[10px] text-zinc-400">دماوند</p>
         </div>
       </div>
     </section>
 
-    {# مراحل همکاری #}
-    <section class="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-start gap-1" aria-label="مراحل همکاری">
-      <article class="coop-step-card rounded-xl p-2.5 text-center">
-        <div class="coop-step-num">۱</div>
-        <div class="mx-auto mt-2 grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
-          <i class="fas fa-list-ul text-sm" aria-hidden="true"></i>
-        </div>
-        <h3 class="mt-2 text-[11px] font-bold text-white">انتخاب فایل</h3>
-        <p class="mt-1 text-[9px] leading-relaxed text-zinc-400">فایل مورد نظر را از لیست فایل‌های آماده انتخاب کنید.</p>
-      </article>
-      <i class="fas fa-chevron-left coop-step-arrow" aria-hidden="true"></i>
-
-      <article class="coop-step-card rounded-xl p-2.5 text-center">
-        <div class="coop-step-num">۲</div>
-        <div class="mx-auto mt-2 grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
-          <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
-        </div>
-        <h3 class="mt-2 text-[11px] font-bold text-white">فروش فایل</h3>
-        <p class="mt-1 text-[9px] leading-relaxed text-zinc-400">فایل را به مشتری معرفی کنید و معامله را نهایی کنید.</p>
-      </article>
-      <i class="fas fa-chevron-left coop-step-arrow" aria-hidden="true"></i>
-
-      <article class="coop-step-card rounded-xl p-2.5 text-center">
-        <div class="coop-step-num">۳</div>
-        <div class="mx-auto mt-2 grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
-          <i class="fas fa-wallet text-sm" aria-hidden="true"></i>
-        </div>
-        <h3 class="mt-2 text-[11px] font-bold text-white">دریافت پورسانت</h3>
-        <p class="mt-1 text-[9px] leading-relaxed text-zinc-400">بعد از تأیید فروش، پورسانت شما واریز می‌شود.</p>
-      </article>
-    </section>
-
-    {# مثال درآمد #}
-    <section class="rounded-2xl border border-white/10 bg-[#12181f] p-4">
-      <div class="flex items-center gap-4">
-        <div class="coop-money-stack" aria-hidden="true">
-          <div class="coop-bill"><span class="coop-bill-band">V</span></div>
-          <div class="coop-bill"></div>
-          <div class="coop-bill"></div>
-        </div>
-        <div class="min-w-0 flex-1">
-          <p class="text-xs font-bold text-emerald-400">مثال درآمد شما</p>
-          <div class="mt-3 flex items-stretch gap-2 text-center">
-            <div class="min-w-0 flex-1">
-              <p class="text-[9px] text-zinc-500">قیمت فایل</p>
-              <p class="mt-0.5 text-[11px] font-bold tabular-nums text-white">{{ 5000000000|toman(false) }}</p>
-              <p class="text-[9px] text-zinc-500">تومان</p>
-            </div>
-            <div class="coop-stat-divider" aria-hidden="true"></div>
-            <div class="min-w-0 flex-1">
-              <p class="text-[9px] text-zinc-500">پورسانت شما</p>
-              <p class="mt-0.5 text-[11px] font-bold tabular-nums text-emerald-400">{{ 100000000|toman(false) }}</p>
-              <p class="text-[9px] text-zinc-500">تومان</p>
-            </div>
-            <div class="coop-stat-divider" aria-hidden="true"></div>
-            <div class="min-w-0 flex-1">
-              <p class="text-[9px] text-zinc-500">نوع ملک</p>
-              <p class="mt-0.5 text-[11px] font-bold leading-snug text-white">ویلا ۲۵۰ متری</p>
-              <p class="text-[9px] text-zinc-400">دماوند</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <p class="text-center text-[10px] leading-relaxed text-zinc-500 px-2">
+    <p class="rounded-xl border border-amber-500/15 bg-amber-500/[0.06] px-3.5 py-3 text-center text-[11px] leading-relaxed text-amber-100/85">
+      <i class="fas fa-circle-info ml-1 text-[10px] text-amber-400/80" aria-hidden="true"></i>
       ثبت درخواست به معنی تأیید نهایی نیست. تیم وینور پس از بررسی، نتیجه را از طریق پنل یا پیامک اطلاع می‌دهد.
     </p>
 
-    {# دکمه‌ها #}
-    <div class="space-y-2.5 pt-1">
+  </div>
+
+  {# —— دکمه‌های ثابت پایین —— #}
+  <footer class="{{ auth_footer() }} coop-action-bar fixed left-0 right-0 z-40">
+    <div class="mx-auto max-w-lg space-y-2.5">
       {% if session.get('user_phone') %}
       <a href="{{ url_for('express_partner.apply') }}"
-         class="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-900/30 transition hover:bg-emerald-400 active:scale-[0.98]">
+         class="{{ auth_btn_primary() }} gap-2">
         <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>
-        شروع همکاری
+        <span>شروع همکاری</span>
       </a>
       {% else %}
       <a href="{{ url_for('express_partner.login', next=url_for('express_partner.apply')) }}"
-         class="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-900/30 transition hover:bg-emerald-400 active:scale-[0.98]">
+         class="{{ auth_btn_primary() }} gap-2">
         <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>
-        شروع همکاری
+        <span>شروع همکاری</span>
       </a>
       {% endif %}
       <a href="{{ url_for('express_partner.dashboard') }}"
-         class="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-emerald-500/45 bg-transparent py-3.5 text-sm font-bold text-emerald-400 transition hover:bg-emerald-500/10 active:scale-[0.98]">
+         data-vinor-express-nav="1"
+         class="flex w-full touch-manipulation items-center justify-center gap-2 rounded-xl border-2 border-emerald-500/40 bg-transparent py-3.5 text-sm font-bold text-emerald-400 transition hover:bg-emerald-500/10 active:scale-[0.98]">
         <i class="fas fa-list text-xs" aria-hidden="true"></i>
         مشاهده فایل‌های آماده
       </a>
     </div>
-
-  </div>
+  </footer>
 </main>
 
 {% set bottom_nav_active = 'dashboard' %}

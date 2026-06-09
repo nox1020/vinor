@@ -399,13 +399,7 @@ def get_menu():
         for item in partner_menu:
             menu_item = dict(item)
             try:
-                if not is_logged_in and item.get('key') == 'profile':
-                    menu_item['url'] = url_for(
-                        'express_partner.login',
-                        next=url_for('express_partner.profile'),
-                    )
-                else:
-                    menu_item['url'] = url_for(item['endpoint'])
+                menu_item['url'] = url_for(item['endpoint'])
             except Exception as url_error:
                 # در صورت خطا، از endpoint به عنوان URL استفاده کن
                 current_app.logger.debug(f"Error generating URL for {item['endpoint']}: {url_error}")
@@ -435,7 +429,7 @@ def get_menu():
             'menu': [
                 {'key': 'dashboard', 'url': '/express/partner/dashboard', 'icon': 'fa-home', 'label': 'وینور'},
                 {'key': 'commissions', 'url': '/express/partner/commissions', 'icon': 'fa-chart-line', 'label': 'پورسانت', 'disabled': True},
-                {'key': 'profile', 'url': '/express/partner/login?next=%2Fexpress%2Fpartner%2Fprofile', 'icon': 'fa-user', 'label': 'من'}
+                {'key': 'profile', 'url': '/express/partner/profile', 'icon': 'fa-user', 'label': 'من'}
             ],
             'is_logged_in': False,
             'is_express_partner': False
