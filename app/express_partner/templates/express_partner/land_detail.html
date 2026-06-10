@@ -97,14 +97,20 @@
     #landTxToast.is-error { display: block; border-color: rgba(248, 113, 113, 0.45); background: rgba(127, 29, 29, 0.85); color: #fecaca; }
     .ld-partner-copy { -webkit-tap-highlight-color: transparent; }
     .ld-partner-copy:active { opacity: 0.88; }
-    .ld-download-btn { position: relative; overflow: visible; }
+    .ld-download-btn { position: relative; overflow: visible; isolation: isolate; }
     .ld-download-btn[data-busy="1"] { opacity: 0.88; pointer-events: none; }
     .ld-download-btn .ld-download-ring {
       position: absolute;
-      inset: -3px;
-      width: calc(100% + 6px);
-      height: calc(100% + 6px);
+      top: -3px;
+      right: -3px;
+      bottom: -3px;
+      left: -3px;
+      display: block;
+      width: auto;
+      height: auto;
+      max-width: none;
       transform: rotate(-90deg);
+      transform-origin: center center;
       pointer-events: none;
       opacity: 0;
       transition: opacity 0.2s ease;

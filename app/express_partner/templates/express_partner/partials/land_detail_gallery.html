@@ -112,14 +112,14 @@
         {% if is_approved and (has_video or images|length > 0) %}
         <button type="button"
                 id="landDetailDownloadBtn"
-                class="ld-download-btn grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-sm"
+                class="ld-download-btn flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-sm"
                 aria-label="دانلود تصاویر و ویدیو"
                 data-busy="0">
           <svg class="ld-download-ring" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
-            <circle class="ld-download-ring__track" cx="20" cy="20" r="17"></circle>
-            <circle class="ld-download-ring__progress" cx="20" cy="20" r="17"></circle>
+            <circle class="ld-download-ring__track" cx="20" cy="20" r="17" fill="none"></circle>
+            <circle class="ld-download-ring__progress" cx="20" cy="20" r="17" fill="none"></circle>
           </svg>
-          <i class="fas fa-download text-sm relative z-[1]" aria-hidden="true"></i>
+          <i class="fas fa-download text-sm relative z-[1] pointer-events-none" aria-hidden="true"></i>
         </button>
         {% endif %}
         <div class="relative">
