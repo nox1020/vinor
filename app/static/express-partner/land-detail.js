@@ -1299,6 +1299,180 @@
     showTxToast(text, isError);
   }
 
+  function initPartnerMarketing(cfg) {
+    if (!cfg || !cfg.isApprovedPartner) return;
+
+    function copyPartnerText(text, label) {
+      var value = String(text || '').trim();
+      if (!value) return;
+      function done(ok) {
+        showTxToast(ok ? (label + ' کپی شد') : 'کپی انجام نشد', !ok);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value).then(function () { done(true); }).catch(function () { done(false); });
+        return;
+      }
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = value;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        done(document.execCommand('copy'));
+        ta.remove();
+      } catch (e) {
+        done(false);
+      }
+    }
+
+    document.querySelectorAll('[data-land-copy]').forEach(function (el) {
+      function onCopy(ev) {
+        if (ev.target.closest('#landDescToggle')) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        var kind = el.getAttribute('data-land-copy') || '';
+        var text = kind === 'title'
+          ? (cfg.marketingTitle || '')
+          : kind === 'description'
+            ? (cfg.marketingDescription || '')
+            : '';
+        var label = kind === 'title' ? 'عنوان' : 'توضیحات';
+        copyPartnerText(text, label);
+      }
+      el.addEventListener('click', onCopy);
+      addCleanup(function () {
+        el.removeEventListener('click', onCopy);
+      });
+    });
+
+    var downloadBtn = document.getElementById('landDetailDownloadBtn');
+    if (!downloadBtn) return;
+
+    var RING_LEN = 106.8;
+    var progressEl = downloadBtn.querySelector('.ld-download-ring__progress');
+    var hideRingTimer = null;
+
+    function setDownloadProgress(ratio) {
+      var p = Math.max(0, Math.min(1, ratio || 0));
+      if (progressEl) {
+        progressEl.style.strokeDashoffset = String(RING_LEN * (1 - p));
+      }
+      downloadBtn.classList.toggle('is-downloading', p > 0 && p < 1);
+      if (p >= 1) {
+        downloadBtn.classList.add('is-downloading');
+      }
+    }
+
+    function startDownloadProgress() {
+      if (hideRingTimer) {
+        clearTimeout(hideRingTimer);
+        hideRingTimer = null;
+      }
+      downloadBtn.classList.add('is-downloading');
+      setDownloadProgress(0.06);
+    }
+
+    function finishDownloadProgress(ok) {
+      setDownloadProgress(ok ? 1 : 0);
+      hideRingTimer = setTimeout(function () {
+        downloadBtn.classList.remove('is-downloading');
+        if (progressEl) progressEl.style.strokeDashoffset = String(RING_LEN);
+        hideRingTimer = null;
+      }, ok ? 520 : 280);
+    }
+
+    function extFromUrl(url, fallback) {
+      try {
+        var path = String(url || '').split('?')[0];
+        var m = path.match(/\.([a-z0-9]{2,5})$/i);
+        if (m) return m[1].toLowerCase();
+      } catch (e) { /* ignore */ }
+      return fallback || 'jpg';
+    }
+
+    function triggerBlobDownload(blob, filename) {
+      var a = document.createElement('a');
+      var obj = URL.createObjectURL(blob);
+      a.href = obj;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () {
+        URL.revokeObjectURL(obj);
+        a.remove();
+      }, 8000);
+    }
+
+    function downloadBlobItem(item) {
+      return fetch(item.url, { credentials: 'same-origin' })
+        .then(function (res) {
+          if (!res.ok) throw new Error('download');
+          return res.blob();
+        })
+        .then(function (blob) {
+          var name = item.filename || ('vinor_' + (cfg.code || 'file') + '.' + extFromUrl(item.url, item.type === 'video' ? 'mp4' : 'jpg'));
+          return { blob: blob, filename: name };
+        });
+    }
+
+    function onDownloadClick() {
+      var items = (cfg.marketingMedia || []).filter(function (it) { return it && it.url; });
+      if (!items.length) {
+        showTxToast('فایلی برای دانلود نیست', true);
+        return;
+      }
+      if (downloadBtn.dataset.busy === '1') return;
+      downloadBtn.dataset.busy = '1';
+      startDownloadProgress();
+      showTxToast('در حال دانلود هم‌زمان ' + items.length + ' فایل…', false);
+
+      var total = items.length;
+      var completed = 0;
+      function tickProgress() {
+        completed += 1;
+        setDownloadProgress(completed / total);
+      }
+
+      Promise.all(items.map(function (item) {
+        return downloadBlobItem(item)
+          .then(function (result) {
+            tickProgress();
+            return result;
+          })
+          .catch(function (err) {
+            tickProgress();
+            throw err;
+          });
+      }))
+        .then(function (results) {
+          results.forEach(function (r) {
+            triggerBlobDownload(r.blob, r.filename);
+          });
+          finishDownloadProgress(true);
+          showTxToast('دانلود ' + results.length + ' فایل آغاز شد', false);
+        })
+        .catch(function () {
+          finishDownloadProgress(false);
+          showTxToast('خطا در دانلود — دوباره تلاش کنید', true);
+        })
+        .finally(function () {
+          downloadBtn.dataset.busy = '0';
+        });
+    }
+
+    downloadBtn.addEventListener('click', onDownloadClick);
+    addCleanup(function () {
+      downloadBtn.removeEventListener('click', onDownloadClick);
+      delete downloadBtn.dataset.busy;
+      if (hideRingTimer) clearTimeout(hideRingTimer);
+      downloadBtn.classList.remove('is-downloading');
+      if (progressEl) progressEl.style.strokeDashoffset = String(RING_LEN);
+    });
+  }
+
   function initDescToggle() {
     var btn = document.getElementById('landDescToggle');
     var shortEl = document.getElementById('landDescText');
@@ -1353,6 +1527,7 @@
     initVisitRequest();
     initTransactionToggle();
     initLandFlashes(cfg);
+    initPartnerMarketing(cfg);
     initDescToggle();
 
     if (typeof window.vinorSyncFavButtons === 'function') {

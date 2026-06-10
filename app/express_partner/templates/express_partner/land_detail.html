@@ -95,6 +95,34 @@
     body > .ld-modal { z-index: 200; }
     #landTxToast.is-success { display: block; border-color: rgba(34, 197, 94, 0.45); background: rgba(6, 78, 59, 0.85); color: #bbf7d0; }
     #landTxToast.is-error { display: block; border-color: rgba(248, 113, 113, 0.45); background: rgba(127, 29, 29, 0.85); color: #fecaca; }
+    .ld-partner-copy { -webkit-tap-highlight-color: transparent; }
+    .ld-partner-copy:active { opacity: 0.88; }
+    .ld-download-btn { position: relative; overflow: visible; }
+    .ld-download-btn .ld-download-ring {
+      position: absolute;
+      inset: -3px;
+      width: calc(100% + 6px);
+      height: calc(100% + 6px);
+      transform: rotate(-90deg);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .ld-download-btn.is-downloading .ld-download-ring { opacity: 1; }
+    .ld-download-ring__track {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.12);
+      stroke-width: 2.5;
+    }
+    .ld-download-ring__progress {
+      fill: none;
+      stroke: #34d399;
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-dasharray: 106.8;
+      stroke-dashoffset: 106.8;
+      transition: stroke-dashoffset 0.22s ease;
+    }
   </style>
 {% endblock %}
 
@@ -105,6 +133,7 @@
   {% set has_video = video and (video|string|trim) %}
   {% set images_v2 = land.images_v2 or [] %}
   {% set total_items = (1 if has_video else 0) + images|length %}
+  {% set desc = (land.description or land.desc or '')|trim %}
 
   <div id="landDetailPage" class="land-detail-page" data-land-code="{{ land.code or '' }}" data-tx-status="{{ (land._assignment_status|default('active')|string)|lower|trim }}" data-tx-mode="{{ land._tx_button_mode|default('visit') }}">
     {% include 'express_partner/partials/land_detail_gallery.html' %}
@@ -127,6 +156,25 @@
     "visitDateJalali": {{ (land._visit_date_jalali or '')|tojson }},
     "txStatusUrl": {{ url_for('express_partner.land_tx_status', code=land.code)|tojson }},
     "csrfToken": {{ csrf_token()|tojson }},
+    "isApprovedPartner": {{ 'true' if is_approved else 'false' }},
+    "marketingTitle": {{ (land.title or '')|tojson }},
+    "marketingDescription": {{ desc|tojson }},
+    "marketingMedia": [
+      {%- if is_approved -%}
+      {%- set _media_first = true -%}
+      {%- if has_video -%}
+      {"type":"video","url":{{ upload_url(video)|tojson }},"filename":{{ ((land.code or 'file') ~ '_video.mp4')|tojson }}}
+      {%- set _media_first = false -%}
+      {%- endif -%}
+      {%- for img in images -%}
+      {%- if not _media_first %},{% endif -%}
+      {%- set _media_first = false -%}
+      {%- set v2 = images_v2[loop.index0] if images_v2|length > loop.index0 else none -%}
+      {%- set full_u = (v2.full or v2.raw or upload_url(img)) if v2 else upload_url(img) -%}
+      {"type":"image","url":{{ full_u|tojson }},"filename":{{ ((land.code or 'file') ~ '_' ~ loop.index ~ '.jpg')|tojson }}}
+      {%- endfor -%}
+      {%- endif -%}
+    ],
     "flashMessages": [
       {%- for category, message in land_flash_messages -%}
       {"text": {{ message|tojson }}, "category": {{ category|tojson }}}{% if not loop.last %},{% endif %}

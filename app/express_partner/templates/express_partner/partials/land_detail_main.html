@@ -19,7 +19,8 @@
     {% include 'express_partner/partials/first_sale_gift_banner.html' %}
 
     {# عنوان #}
-    <h1 class="mb-2 text-[15px] sm:text-base font-bold text-white leading-snug">{{ land.title or 'فایل' }}</h1>
+    <h1 class="mb-2 text-[15px] sm:text-base font-bold text-white leading-snug{% if is_approved %} ld-partner-copy cursor-pointer{% endif %}"
+        {% if is_approved %}data-land-copy="title" title="برای کپی عنوان ضربه بزنید"{% endif %}>{{ land.title or 'فایل' }}</h1>
 
     {# موقعیت + کد ملک #}
     {% if loc_line or land.code %}
@@ -120,8 +121,14 @@
     <div class="ld-main__scroll-pad">
       {# معرفی ملک #}
       {% if desc %}
-      <section class="ld-desc" aria-labelledby="ld-desc-heading">
-        <h2 id="ld-desc-heading" class="text-sm font-bold text-white mb-2">معرفی ملک</h2>
+      <section class="ld-desc{% if is_approved %} ld-partner-copy cursor-pointer{% endif %}" aria-labelledby="ld-desc-heading"
+               {% if is_approved %}data-land-copy="description" title="برای کپی توضیحات ضربه بزنید"{% endif %}>
+        <h2 id="ld-desc-heading" class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+          معرفی ملک
+          {% if is_approved %}
+          <span class="text-[10px] font-normal text-teal-400/80">(ضربه برای کپی)</span>
+          {% endif %}
+        </h2>
         <p id="landDescText" class="text-[12px] text-slate-400 leading-relaxed whitespace-pre-line">{{ desc_short }}{% if desc_long %}…{% endif %}</p>
         {% if desc_long %}
         <p id="landDescFull" class="hidden text-[12px] text-slate-400 leading-relaxed whitespace-pre-line">{{ desc }}</p>
