@@ -97,39 +97,28 @@
     #landTxToast.is-error { display: block; border-color: rgba(248, 113, 113, 0.45); background: rgba(127, 29, 29, 0.85); color: #fecaca; }
     .ld-partner-copy { -webkit-tap-highlight-color: transparent; }
     .ld-partner-copy:active { opacity: 0.88; }
-    .ld-download-btn { position: relative; overflow: visible; isolation: isolate; }
-    .ld-download-btn[data-busy="1"] { opacity: 0.88; pointer-events: none; }
-    .ld-download-btn .ld-download-ring {
+    .ld-download-wrap { -webkit-tap-highlight-color: transparent; }
+    .ld-download-wrap .ld-download-ring {
       position: absolute;
-      top: -3px;
-      right: -3px;
-      bottom: -3px;
-      left: -3px;
-      display: block;
-      width: auto;
-      height: auto;
-      max-width: none;
-      transform: rotate(-90deg);
-      transform-origin: center center;
+      inset: -2px;
+      border-radius: 9999px;
       pointer-events: none;
       opacity: 0;
-      transition: opacity 0.2s ease;
+      transition: opacity 0.18s ease;
     }
-    .ld-download-btn.is-downloading .ld-download-ring { opacity: 1; }
-    .ld-download-ring__track {
-      fill: none;
-      stroke: rgba(255, 255, 255, 0.12);
-      stroke-width: 2.5;
+    .ld-download-wrap.is-downloading .ld-download-ring { opacity: 1; }
+    .ld-download-ring--track {
+      border: 2px solid rgba(255, 255, 255, 0.14);
+      box-sizing: border-box;
     }
-    .ld-download-ring__progress {
-      fill: none;
-      stroke: #34d399;
-      stroke-width: 2.5;
-      stroke-linecap: round;
-      stroke-dasharray: 106.8;
-      stroke-dashoffset: 106.8;
-      transition: stroke-dashoffset 0.22s ease;
+    .ld-download-ring--progress {
+      --ld-dl-p: 0;
+      background: conic-gradient(from -90deg, #34d399 calc(var(--ld-dl-p) * 1turn), transparent 0);
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
+      mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
+      transition: opacity 0.18s ease;
     }
+    .ld-download-wrap[data-busy="1"] button { opacity: 0.88; pointer-events: none; }
   </style>
 {% endblock %}
 

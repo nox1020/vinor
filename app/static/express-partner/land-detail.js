@@ -1306,6 +1306,253 @@
     showTxToast(text, isError);
   }
 
+  function initLandDetailDownload(cfg) {
+    var downloadBtn = document.getElementById('landDetailDownloadBtn');
+    var downloadWrap = downloadBtn && downloadBtn.closest('.ld-download-wrap');
+    if (!downloadBtn || !downloadWrap) return;
+
+    var hideRingTimer = null;
+
+    function isVinorNativeApp() {
+      return /VinorApp\//i.test(navigator.userAgent || '');
+    }
+
+    function nativeDownloadAvailable() {
+      try {
+        return isVinorNativeApp() &&
+          window.VinorNativeDownload &&
+          typeof window.VinorNativeDownload.downloadUrl === 'function';
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function absMediaUrl(url) {
+      var u = String(url || '').trim();
+      if (!u) return '';
+      if (/^https?:\/\//i.test(u)) return u;
+      if (u.charAt(0) === '/') return window.location.origin + u;
+      return window.location.origin + '/' + u;
+    }
+
+    function delay(ms) {
+      return new Promise(function (resolve) {
+        setTimeout(resolve, ms);
+      });
+    }
+
+    function extFromUrl(url, fallback) {
+      try {
+        var path = String(url || '').split('?')[0];
+        var m = path.match(/\.([a-z0-9]{2,5})$/i);
+        if (m) return m[1].toLowerCase();
+      } catch (e) { /* ignore */ }
+      return fallback || 'jpg';
+    }
+
+    function defaultFilename(item) {
+      if (item.filename) return item.filename;
+      var code = (cfg && cfg.code) || 'file';
+      var ext = extFromUrl(item.url, item.type === 'video' ? 'mp4' : 'jpg');
+      if (item.type === 'video') return code + '_video.' + ext;
+      return code + '_image.' + ext;
+    }
+
+    function getMediaItems() {
+      return (cfg.marketingMedia || []).filter(function (it) {
+        return it && it.url;
+      });
+    }
+
+    function setDownloadProgress(ratio) {
+      var p = Math.max(0, Math.min(1, Number(ratio) || 0));
+      downloadWrap.style.setProperty('--ld-dl-p', String(p));
+      downloadWrap.classList.toggle('is-downloading', p > 0);
+    }
+
+    function resetDownloadProgress() {
+      downloadWrap.classList.remove('is-downloading');
+      downloadWrap.style.setProperty('--ld-dl-p', '0');
+      downloadBtn.removeAttribute('aria-busy');
+    }
+
+    function startDownloadProgress() {
+      if (hideRingTimer) {
+        clearTimeout(hideRingTimer);
+        hideRingTimer = null;
+      }
+      downloadBtn.setAttribute('aria-busy', 'true');
+      setDownloadProgress(0.06);
+    }
+
+    function finishDownloadProgress(ok) {
+      setDownloadProgress(ok ? 1 : 0);
+      hideRingTimer = setTimeout(function () {
+        resetDownloadProgress();
+        hideRingTimer = null;
+      }, ok ? 520 : 280);
+    }
+
+    function triggerBlobDownload(blob, filename) {
+      var a = document.createElement('a');
+      var obj = URL.createObjectURL(blob);
+      a.href = obj;
+      a.download = filename;
+      a.rel = 'noopener';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () {
+        URL.revokeObjectURL(obj);
+        a.remove();
+      }, 8000);
+    }
+
+    function fetchMediaBlob(item) {
+      return fetch(item.url, { credentials: 'same-origin' })
+        .then(function (res) {
+          if (!res.ok) throw new Error('download');
+          return res.blob();
+        })
+        .then(function (blob) {
+          return { blob: blob, filename: defaultFilename(item) };
+        });
+    }
+
+    function staggerBlobDownloads(results) {
+      var chain = Promise.resolve();
+      results.forEach(function (r, idx) {
+        chain = chain.then(function () {
+          triggerBlobDownload(r.blob, r.filename);
+          return idx < results.length - 1 ? delay(360) : delay(0);
+        });
+      });
+      return chain;
+    }
+
+    function downloadViaNative(items) {
+      var bridge = window.VinorNativeDownload;
+      var total = items.length;
+      var enqueued = 0;
+      return new Promise(function (resolve) {
+        var i = 0;
+        function next() {
+          if (i >= total) {
+            resolve({
+              ok: enqueued > 0,
+              saved: enqueued,
+              total: total,
+              failCount: total - enqueued
+            });
+            return;
+          }
+          try {
+            bridge.downloadUrl(absMediaUrl(items[i].url), defaultFilename(items[i]));
+            enqueued += 1;
+          } catch (e) { /* ignore */ }
+          i += 1;
+          setDownloadProgress(i / total);
+          setTimeout(next, i < total ? 320 : 0);
+        }
+        next();
+      });
+    }
+
+    function downloadViaWeb(items) {
+      var total = items.length;
+      var completed = 0;
+      function tickProgress() {
+        completed += 1;
+        setDownloadProgress(completed / total);
+      }
+
+      return Promise.all(items.map(function (item) {
+        return fetchMediaBlob(item)
+          .then(function (result) {
+            tickProgress();
+            return { ok: true, result: result };
+          })
+          .catch(function () {
+            tickProgress();
+            return { ok: false };
+          });
+      })).then(function (outcomes) {
+        var okItems = outcomes.filter(function (o) { return o.ok; }).map(function (o) { return o.result; });
+        var failCount = outcomes.length - okItems.length;
+        if (!okItems.length) {
+          return { ok: false, saved: 0, total: total, failCount: failCount };
+        }
+        return staggerBlobDownloads(okItems).then(function () {
+          return { ok: true, saved: okItems.length, total: total, failCount: failCount };
+        });
+      });
+    }
+
+    function showDownloadResult(result, useNative) {
+      if (!result || !result.ok) {
+        finishDownloadProgress(false);
+        showTxToast('خطا در دانلود — دوباره تلاش کنید', true);
+        return;
+      }
+      finishDownloadProgress(true);
+      if (useNative) {
+        showTxToast(
+          result.failCount > 0
+            ? ('دانلود ' + result.saved + ' از ' + result.total + ' فایل در پوشه Downloads')
+            : ('دانلود ' + result.saved + ' فایل در پوشه Downloads'),
+          false
+        );
+        return;
+      }
+      showTxToast(
+        result.failCount > 0
+          ? ('دانلود ' + result.saved + ' از ' + result.total + ' فایل آغاز شد')
+          : ('دانلود ' + result.saved + ' فایل آغاز شد'),
+        false
+      );
+    }
+
+    function onDownloadClick() {
+      var items = getMediaItems();
+      if (!items.length) {
+        showTxToast('فایلی برای دانلود نیست', true);
+        return;
+      }
+      if (downloadWrap.dataset.busy === '1') return;
+
+      downloadWrap.dataset.busy = '1';
+      startDownloadProgress();
+
+      var useNative = nativeDownloadAvailable();
+      showTxToast(
+        useNative
+          ? ('در حال افزودن ' + items.length + ' فایل به دانلود…')
+          : ('در حال دانلود ' + items.length + ' فایل…'),
+        false
+      );
+
+      Promise.resolve(useNative ? downloadViaNative(items) : downloadViaWeb(items))
+        .then(function (result) {
+          showDownloadResult(result, useNative);
+        })
+        .catch(function () {
+          finishDownloadProgress(false);
+          showTxToast('خطا در دانلود — دوباره تلاش کنید', true);
+        })
+        .finally(function () {
+          downloadWrap.dataset.busy = '0';
+        });
+    }
+
+    downloadBtn.addEventListener('click', onDownloadClick);
+    addCleanup(function () {
+      downloadBtn.removeEventListener('click', onDownloadClick);
+      delete downloadWrap.dataset.busy;
+      if (hideRingTimer) clearTimeout(hideRingTimer);
+      resetDownloadProgress();
+    });
+  }
+
   function initPartnerMarketing(cfg) {
     if (!cfg || !cfg.isApprovedPartner) return;
 
@@ -1354,244 +1601,7 @@
       });
     });
 
-    var downloadBtn = document.getElementById('landDetailDownloadBtn');
-    if (!downloadBtn) return;
-
-    var RING_LEN = 106.8;
-    var progressEl = downloadBtn.querySelector('.ld-download-ring__progress');
-    var hideRingTimer = null;
-
-    function isVinorNativeApp() {
-      return /VinorApp\//i.test(navigator.userAgent || '');
-    }
-
-    function nativeDownloadAvailable() {
-      try {
-        return isVinorNativeApp() &&
-          window.VinorNativeDownload &&
-          typeof window.VinorNativeDownload.downloadUrl === 'function';
-      } catch (e) {
-        return false;
-      }
-    }
-
-    function absMediaUrl(url) {
-      var u = String(url || '').trim();
-      if (!u) return '';
-      if (/^https?:\/\//i.test(u)) return u;
-      if (u.charAt(0) === '/') return window.location.origin + u;
-      return window.location.origin + '/' + u;
-    }
-
-    function delay(ms) {
-      return new Promise(function (resolve) {
-        setTimeout(resolve, ms);
-      });
-    }
-
-    function defaultFilename(item) {
-      return 'vinor_' + (cfg.code || 'file') + '.' + extFromUrl(item.url, item.type === 'video' ? 'mp4' : 'jpg');
-    }
-
-    function setDownloadProgress(ratio) {
-      var p = Math.max(0, Math.min(1, ratio || 0));
-      if (progressEl) {
-        progressEl.style.strokeDashoffset = String(RING_LEN * (1 - p));
-      }
-      downloadBtn.classList.toggle('is-downloading', p > 0 && p < 1);
-      if (p >= 1) {
-        downloadBtn.classList.add('is-downloading');
-      }
-    }
-
-    function startDownloadProgress() {
-      if (hideRingTimer) {
-        clearTimeout(hideRingTimer);
-        hideRingTimer = null;
-      }
-      downloadBtn.classList.add('is-downloading');
-      downloadBtn.setAttribute('aria-busy', 'true');
-      setDownloadProgress(0.06);
-    }
-
-    function finishDownloadProgress(ok) {
-      setDownloadProgress(ok ? 1 : 0);
-      hideRingTimer = setTimeout(function () {
-        downloadBtn.classList.remove('is-downloading');
-        downloadBtn.removeAttribute('aria-busy');
-        if (progressEl) progressEl.style.strokeDashoffset = String(RING_LEN);
-        hideRingTimer = null;
-      }, ok ? 520 : 280);
-    }
-
-    function extFromUrl(url, fallback) {
-      try {
-        var path = String(url || '').split('?')[0];
-        var m = path.match(/\.([a-z0-9]{2,5})$/i);
-        if (m) return m[1].toLowerCase();
-      } catch (e) { /* ignore */ }
-      return fallback || 'jpg';
-    }
-
-    function triggerBlobDownload(blob, filename) {
-      var a = document.createElement('a');
-      var obj = URL.createObjectURL(blob);
-      a.href = obj;
-      a.download = filename;
-      a.rel = 'noopener';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(function () {
-        URL.revokeObjectURL(obj);
-        a.remove();
-      }, 8000);
-    }
-
-    function downloadBlobItem(item) {
-      return fetch(item.url, { credentials: 'same-origin' })
-        .then(function (res) {
-          if (!res.ok) throw new Error('download');
-          return res.blob();
-        })
-        .then(function (blob) {
-          var name = item.filename || defaultFilename(item);
-          return { blob: blob, filename: name };
-        });
-    }
-
-    function staggerBlobDownloads(results) {
-      var chain = Promise.resolve();
-      results.forEach(function (r, idx) {
-        chain = chain.then(function () {
-          triggerBlobDownload(r.blob, r.filename);
-          return idx < results.length - 1 ? delay(360) : delay(0);
-        });
-      });
-      return chain;
-    }
-
-    function downloadViaNative(items) {
-      var bridge = window.VinorNativeDownload;
-      var total = items.length;
-      var enqueued = 0;
-      return new Promise(function (resolve) {
-        var i = 0;
-        function next() {
-          if (i >= total) {
-            resolve({
-              ok: enqueued > 0,
-              saved: enqueued,
-              total: total,
-              failCount: total - enqueued
-            });
-            return;
-          }
-          var item = items[i];
-          var url = absMediaUrl(item.url);
-          var name = item.filename || defaultFilename(item);
-          try {
-            bridge.downloadUrl(url, name);
-            enqueued += 1;
-          } catch (e) { /* ignore */ }
-          i += 1;
-          setDownloadProgress(i / total);
-          setTimeout(next, i < total ? 320 : 0);
-        }
-        next();
-      });
-    }
-
-    function downloadViaWeb(items) {
-      var total = items.length;
-      var completed = 0;
-      function tickProgress() {
-        completed += 1;
-        setDownloadProgress(completed / total);
-      }
-
-      return Promise.all(items.map(function (item) {
-        return downloadBlobItem(item)
-          .then(function (result) {
-            tickProgress();
-            return { ok: true, result: result };
-          })
-          .catch(function () {
-            tickProgress();
-            return { ok: false };
-          });
-      })).then(function (outcomes) {
-        var okItems = outcomes.filter(function (o) { return o.ok; }).map(function (o) { return o.result; });
-        var failCount = outcomes.length - okItems.length;
-        if (!okItems.length) {
-          return { ok: false, saved: 0, total: total, failCount: failCount };
-        }
-        return staggerBlobDownloads(okItems).then(function () {
-          return { ok: true, saved: okItems.length, total: total, failCount: failCount };
-        });
-      });
-    }
-
-    function onDownloadClick() {
-      var items = (cfg.marketingMedia || []).filter(function (it) { return it && it.url; });
-      if (!items.length) {
-        showTxToast('فایلی برای دانلود نیست', true);
-        return;
-      }
-      if (downloadBtn.dataset.busy === '1') return;
-      downloadBtn.dataset.busy = '1';
-      startDownloadProgress();
-
-      var useNative = nativeDownloadAvailable();
-      showTxToast(
-        useNative
-          ? ('در حال افزودن ' + items.length + ' فایل به دانلود…')
-          : ('در حال دانلود ' + items.length + ' فایل…'),
-        false
-      );
-
-      var job = useNative ? downloadViaNative(items) : downloadViaWeb(items);
-
-      Promise.resolve(job)
-        .then(function (result) {
-          if (!result || !result.ok) {
-            finishDownloadProgress(false);
-            showTxToast('خطا در دانلود — دوباره تلاش کنید', true);
-            return;
-          }
-          finishDownloadProgress(true);
-          if (useNative) {
-            if (result.failCount > 0) {
-              showTxToast('دانلود ' + result.saved + ' از ' + result.total + ' فایل در پوشه Downloads', false);
-            } else {
-              showTxToast('دانلود ' + result.saved + ' فایل در پوشه Downloads', false);
-            }
-            return;
-          }
-          if (result.failCount > 0) {
-            showTxToast('دانلود ' + result.saved + ' از ' + result.total + ' فایل آغاز شد', false);
-          } else {
-            showTxToast('دانلود ' + result.saved + ' فایل آغاز شد', false);
-          }
-        })
-        .catch(function () {
-          finishDownloadProgress(false);
-          showTxToast('خطا در دانلود — دوباره تلاش کنید', true);
-        })
-        .finally(function () {
-          downloadBtn.dataset.busy = '0';
-        });
-    }
-
-    downloadBtn.addEventListener('click', onDownloadClick);
-    addCleanup(function () {
-      downloadBtn.removeEventListener('click', onDownloadClick);
-      delete downloadBtn.dataset.busy;
-      downloadBtn.removeAttribute('aria-busy');
-      if (hideRingTimer) clearTimeout(hideRingTimer);
-      downloadBtn.classList.remove('is-downloading');
-      if (progressEl) progressEl.style.strokeDashoffset = String(RING_LEN);
-    });
+    initLandDetailDownload(cfg);
   }
 
   function initDescToggle() {
