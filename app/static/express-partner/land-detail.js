@@ -469,9 +469,16 @@
   function initShare(cfg) {
     var btn = document.getElementById('landDetailShareBtn');
     if (!btn) return;
+    function closeMoreMenu() {
+      var menu = document.getElementById('landDetailMoreMenu');
+      var moreBtn = document.getElementById('landDetailMoreBtn');
+      if (menu) menu.classList.add('hidden');
+      if (moreBtn) moreBtn.setAttribute('aria-expanded', 'false');
+    }
     function onShare() {
       var url = (cfg && cfg.shareUrl) || window.location.href;
       var title = document.title || 'فایل';
+      closeMoreMenu();
       if (navigator.share) {
         navigator.share({ title: title, url: url }).catch(function () {});
       } else if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1354,6 +1361,38 @@
     var progressEl = downloadBtn.querySelector('.ld-download-ring__progress');
     var hideRingTimer = null;
 
+    function isVinorNativeApp() {
+      return /VinorApp\//i.test(navigator.userAgent || '');
+    }
+
+    function nativeDownloadAvailable() {
+      try {
+        return isVinorNativeApp() &&
+          window.VinorNativeDownload &&
+          typeof window.VinorNativeDownload.downloadUrl === 'function';
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function absMediaUrl(url) {
+      var u = String(url || '').trim();
+      if (!u) return '';
+      if (/^https?:\/\//i.test(u)) return u;
+      if (u.charAt(0) === '/') return window.location.origin + u;
+      return window.location.origin + '/' + u;
+    }
+
+    function delay(ms) {
+      return new Promise(function (resolve) {
+        setTimeout(resolve, ms);
+      });
+    }
+
+    function defaultFilename(item) {
+      return 'vinor_' + (cfg.code || 'file') + '.' + extFromUrl(item.url, item.type === 'video' ? 'mp4' : 'jpg');
+    }
+
     function setDownloadProgress(ratio) {
       var p = Math.max(0, Math.min(1, ratio || 0));
       if (progressEl) {
@@ -1371,6 +1410,7 @@
         hideRingTimer = null;
       }
       downloadBtn.classList.add('is-downloading');
+      downloadBtn.setAttribute('aria-busy', 'true');
       setDownloadProgress(0.06);
     }
 
@@ -1378,6 +1418,7 @@
       setDownloadProgress(ok ? 1 : 0);
       hideRingTimer = setTimeout(function () {
         downloadBtn.classList.remove('is-downloading');
+        downloadBtn.removeAttribute('aria-busy');
         if (progressEl) progressEl.style.strokeDashoffset = String(RING_LEN);
         hideRingTimer = null;
       }, ok ? 520 : 280);
@@ -1397,6 +1438,7 @@
       var obj = URL.createObjectURL(blob);
       a.href = obj;
       a.download = filename;
+      a.rel = 'noopener';
       a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
@@ -1413,9 +1455,81 @@
           return res.blob();
         })
         .then(function (blob) {
-          var name = item.filename || ('vinor_' + (cfg.code || 'file') + '.' + extFromUrl(item.url, item.type === 'video' ? 'mp4' : 'jpg'));
+          var name = item.filename || defaultFilename(item);
           return { blob: blob, filename: name };
         });
+    }
+
+    function staggerBlobDownloads(results) {
+      var chain = Promise.resolve();
+      results.forEach(function (r, idx) {
+        chain = chain.then(function () {
+          triggerBlobDownload(r.blob, r.filename);
+          return idx < results.length - 1 ? delay(360) : delay(0);
+        });
+      });
+      return chain;
+    }
+
+    function downloadViaNative(items) {
+      var bridge = window.VinorNativeDownload;
+      var total = items.length;
+      var enqueued = 0;
+      return new Promise(function (resolve) {
+        var i = 0;
+        function next() {
+          if (i >= total) {
+            resolve({
+              ok: enqueued > 0,
+              saved: enqueued,
+              total: total,
+              failCount: total - enqueued
+            });
+            return;
+          }
+          var item = items[i];
+          var url = absMediaUrl(item.url);
+          var name = item.filename || defaultFilename(item);
+          try {
+            bridge.downloadUrl(url, name);
+            enqueued += 1;
+          } catch (e) { /* ignore */ }
+          i += 1;
+          setDownloadProgress(i / total);
+          setTimeout(next, i < total ? 320 : 0);
+        }
+        next();
+      });
+    }
+
+    function downloadViaWeb(items) {
+      var total = items.length;
+      var completed = 0;
+      function tickProgress() {
+        completed += 1;
+        setDownloadProgress(completed / total);
+      }
+
+      return Promise.all(items.map(function (item) {
+        return downloadBlobItem(item)
+          .then(function (result) {
+            tickProgress();
+            return { ok: true, result: result };
+          })
+          .catch(function () {
+            tickProgress();
+            return { ok: false };
+          });
+      })).then(function (outcomes) {
+        var okItems = outcomes.filter(function (o) { return o.ok; }).map(function (o) { return o.result; });
+        var failCount = outcomes.length - okItems.length;
+        if (!okItems.length) {
+          return { ok: false, saved: 0, total: total, failCount: failCount };
+        }
+        return staggerBlobDownloads(okItems).then(function () {
+          return { ok: true, saved: okItems.length, total: total, failCount: failCount };
+        });
+      });
     }
 
     function onDownloadClick() {
@@ -1427,32 +1541,38 @@
       if (downloadBtn.dataset.busy === '1') return;
       downloadBtn.dataset.busy = '1';
       startDownloadProgress();
-      showTxToast('در حال دانلود هم‌زمان ' + items.length + ' فایل…', false);
 
-      var total = items.length;
-      var completed = 0;
-      function tickProgress() {
-        completed += 1;
-        setDownloadProgress(completed / total);
-      }
+      var useNative = nativeDownloadAvailable();
+      showTxToast(
+        useNative
+          ? ('در حال افزودن ' + items.length + ' فایل به دانلود…')
+          : ('در حال دانلود ' + items.length + ' فایل…'),
+        false
+      );
 
-      Promise.all(items.map(function (item) {
-        return downloadBlobItem(item)
-          .then(function (result) {
-            tickProgress();
-            return result;
-          })
-          .catch(function (err) {
-            tickProgress();
-            throw err;
-          });
-      }))
-        .then(function (results) {
-          results.forEach(function (r) {
-            triggerBlobDownload(r.blob, r.filename);
-          });
+      var job = useNative ? downloadViaNative(items) : downloadViaWeb(items);
+
+      Promise.resolve(job)
+        .then(function (result) {
+          if (!result || !result.ok) {
+            finishDownloadProgress(false);
+            showTxToast('خطا در دانلود — دوباره تلاش کنید', true);
+            return;
+          }
           finishDownloadProgress(true);
-          showTxToast('دانلود ' + results.length + ' فایل آغاز شد', false);
+          if (useNative) {
+            if (result.failCount > 0) {
+              showTxToast('دانلود ' + result.saved + ' از ' + result.total + ' فایل در پوشه Downloads', false);
+            } else {
+              showTxToast('دانلود ' + result.saved + ' فایل در پوشه Downloads', false);
+            }
+            return;
+          }
+          if (result.failCount > 0) {
+            showTxToast('دانلود ' + result.saved + ' از ' + result.total + ' فایل آغاز شد', false);
+          } else {
+            showTxToast('دانلود ' + result.saved + ' فایل آغاز شد', false);
+          }
         })
         .catch(function () {
           finishDownloadProgress(false);
@@ -1467,6 +1587,7 @@
     addCleanup(function () {
       downloadBtn.removeEventListener('click', onDownloadClick);
       delete downloadBtn.dataset.busy;
+      downloadBtn.removeAttribute('aria-busy');
       if (hideRingTimer) clearTimeout(hideRingTimer);
       downloadBtn.classList.remove('is-downloading');
       if (progressEl) progressEl.style.strokeDashoffset = String(RING_LEN);

@@ -113,7 +113,8 @@
         <button type="button"
                 id="landDetailDownloadBtn"
                 class="ld-download-btn grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-sm"
-                aria-label="دانلود تصاویر و ویدیو">
+                aria-label="دانلود تصاویر و ویدیو"
+                data-busy="0">
           <svg class="ld-download-ring" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
             <circle class="ld-download-ring__track" cx="20" cy="20" r="17"></circle>
             <circle class="ld-download-ring__progress" cx="20" cy="20" r="17"></circle>
@@ -121,14 +122,12 @@
           <i class="fas fa-download text-sm relative z-[1]" aria-hidden="true"></i>
         </button>
         {% endif %}
-        <button type="button" id="landDetailShareBtn" data-tour="share-btn" class="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-sm" aria-label="اشتراک">
-          <i class="fas fa-share-nodes text-sm" aria-hidden="true"></i>
-        </button>
         <div class="relative">
           <button type="button" id="landDetailMoreBtn" class="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-sm" aria-expanded="false" aria-haspopup="true" aria-label="بیشتر">
             <i class="fas fa-ellipsis-vertical text-sm" aria-hidden="true"></i>
           </button>
           <div id="landDetailMoreMenu" class="hidden absolute top-full left-0 mt-2 min-w-[11rem] rounded-xl border border-white/10 bg-[#151d2b] py-1 text-sm text-white shadow-xl pointer-events-auto" role="menu">
+            <button type="button" id="landDetailShareBtn" data-tour="share-btn" class="block w-full px-3 py-2.5 text-start hover:bg-white/5" role="menuitem">اشتراک‌گذاری</button>
             {% if land.code %}
             <button type="button" data-copy-text="{{ land.code }}" class="block w-full px-3 py-2.5 text-start hover:bg-white/5" role="menuitem">کپی کد فایل</button>
             {% endif %}
