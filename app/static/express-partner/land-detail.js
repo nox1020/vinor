@@ -215,11 +215,14 @@
         };
         hi.src = full;
       };
-      if (typeof window.requestIdleCallback === 'function') {
-        window.requestIdleCallback(run, { timeout: 1800 });
-      } else {
-        setTimeout(run, 500);
-      }
+      setTimeout(function () {
+        if (index !== atIndex) return;
+        if (typeof window.requestIdleCallback === 'function') {
+          window.requestIdleCallback(run, { timeout: 5000 });
+        } else {
+          run();
+        }
+      }, 2500);
     }
 
     function faDigits(n) {

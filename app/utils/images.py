@@ -68,6 +68,39 @@ def build_variant_url(base_url: str, width: int, quality: int, fmt: str = "webp"
     return f"{base_url}{joiner}{params}"
 
 
+_KNOWN_VARIANTS: Dict[str, Tuple[int, int, str]] = {
+    "thumb": (THUMB_WIDTH, THUMB_QUALITY, "thumb"),
+    "full": (FULL_WIDTH, FULL_QUALITY, "full"),
+    "avatar": (AVATAR_DISPLAY_WIDTH, AVATAR_DISPLAY_QUALITY, "avatar"),
+}
+
+
+def resolve_variant_generation(
+    width: int,
+    quality: int,
+    variant_kind: str = "",
+) -> Tuple[int, int, str]:
+    """
+    نگاشت درخواست w/q/variant به پوشه کش استاندارد (__variants__/thumb|full|avatar).
+    migration و upload از همین پوشه‌ها استفاده می‌کنند — جلوگیری از ساخت دوباره با w400_q55.
+    """
+    kind = (variant_kind or "").strip().lower()
+    if kind in _KNOWN_VARIANTS:
+        return _KNOWN_VARIANTS[kind]
+    if width > 0 and quality > 0:
+        for preset in _KNOWN_VARIANTS.values():
+            w, q, folder = preset
+            if width == w and quality == q:
+                return w, q, folder
+        return width, quality, f"w{width}_q{quality}"
+    return 0, quality or 80, ""
+
+
+def variant_file_abs(upload_root: str, rel_path: str, folder: str, fmt: str = "webp") -> str:
+    """مسیر مطلق فایل واریانت از پیش ساخته‌شده (اگر وجود داشته باشد)."""
+    _rel, abs_path = _variant_paths(upload_root, rel_path, folder, fmt.lower())
+    return abs_path
+
 def _safe_open_image(src_path: str) -> Optional[Image.Image]:
     if not _PIL_OK:
         return None

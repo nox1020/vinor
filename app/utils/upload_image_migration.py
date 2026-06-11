@@ -337,13 +337,30 @@ def maybe_migrate_upload_images(
         _release_migration_lock(lock_fd)
 
 
-_STARTUP_DELAY_SEC = 8
-_AUTO_BATCH_SIZE = 30
+def has_pending_upload_image_migration(app=None) -> bool:
+    """آیا تصویری هست که هنوز migrate نشده؟"""
+    from flask import current_app as ca
+
+    app = app or ca
+    state = _load_state(app)
+    for upload_root in collect_upload_roots(app):
+        for _, rel in iter_upload_image_files(upload_root):
+            if not _is_processed(state, upload_root, rel):
+                return True
+    return False
+
+
+_STARTUP_DELAY_SEC = 30
+_AUTO_BATCH_SIZE = 15
 _AUTO_MAX_ROUNDS = 300
 
 
 def _migration_loop(app: Flask) -> None:
     time.sleep(_STARTUP_DELAY_SEC)
+    with app.app_context():
+        if not has_pending_upload_image_migration(app):
+            app.logger.info("Upload image migration auto-run skipped (nothing pending)")
+            return
     app.logger.info("Upload image migration auto-run started")
     rounds = 0
     idle_rounds = 0
@@ -393,7 +410,7 @@ def schedule_upload_image_migration(app: Flask) -> None:
         name="vinor-upload-image-migration",
     ).start()
     app.logger.info(
-        "Upload image migration auto-run enabled (~%ss after boot, batch=%s)",
+        "Upload image migration auto-run enabled (~%ss after boot if pending, batch=%s)",
         _STARTUP_DELAY_SEC,
         _AUTO_BATCH_SIZE,
     )

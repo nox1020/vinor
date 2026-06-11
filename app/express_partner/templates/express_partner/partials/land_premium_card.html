@@ -52,11 +52,11 @@
         <video class="absolute inset-0 w-full h-full object-cover opacity-0" muted loop playsinline preload="none" data-vinor-lazy-video>
           <source data-src="{{ video_src }}" type="video/mp4">
           {% if img_src %}
-          <img {% if _img_eager %}src="{{ img_src }}" loading="eager" fetchpriority="high"{% else %}data-src="{{ img_src }}" data-vinor-lazy-img{% endif %} alt="" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+          <img src="{{ img_src }}" alt="" {% if _img_eager %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %} class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
           {% endif %}
         </video>
         {% elif img_src %}
-        <img {% if _img_eager %}src="{{ img_src }}" loading="eager" fetchpriority="high"{% else %}data-src="{{ img_src }}" data-vinor-lazy-img{% endif %} alt="{{ land.title or '' }}" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+        <img src="{{ img_src }}" alt="{{ land.title or '' }}" {% if _img_eager %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %} class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
         {% else %}
         <div class="absolute inset-0 grid place-items-center text-neutral-500">
           <i class="fas fa-image text-2xl opacity-50"></i>
@@ -125,11 +125,11 @@
     <video class="absolute inset-0 w-full h-full object-cover opacity-0" muted loop playsinline preload="none" data-vinor-lazy-video>
       <source data-src="{{ video_src }}" type="video/mp4">
       {% if img_src %}
-      <img {% if _img_eager %}src="{{ img_src }}" loading="eager" fetchpriority="high"{% else %}data-src="{{ img_src }}" data-vinor-lazy-img{% endif %} alt="{{ land.title or '' }}" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+      <img src="{{ img_src }}" alt="{{ land.title or '' }}" {% if _img_eager %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %} class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
       {% endif %}
     </video>
     {% elif img_src %}
-    <img {% if _img_eager %}src="{{ img_src }}" loading="eager" fetchpriority="high"{% else %}data-src="{{ img_src }}" data-vinor-lazy-img{% endif %} alt="{{ land.title or '' }}" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+    <img src="{{ img_src }}" alt="{{ land.title or '' }}" {% if _img_eager %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %} class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
     {% else %}
     <div class="absolute inset-0 grid place-items-center text-neutral-500">
       <i class="fas fa-image text-4xl opacity-60"></i>

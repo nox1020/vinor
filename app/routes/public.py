@@ -248,18 +248,21 @@ def uploaded_file(filename):
         width = int(request.args.get("w", 0) or 0)
         quality = int(request.args.get("q", 0) or 0) or 80
         fmt = (request.args.get("fmt") or "webp").lower()
+        variant_kind = (request.args.get("variant") or "").strip()
     except Exception:
         width = 0
         quality = 80
         fmt = "webp"
+        variant_kind = ""
 
     def _generate_variant(root: str, safe_name: str):
-        if width <= 0:
+        from app.utils.images import generate_variant, resolve_variant_generation
+
+        gen_w, gen_q, folder = resolve_variant_generation(width, quality, variant_kind)
+        if gen_w <= 0 or not folder:
             return None
         try:
-            from app.utils.images import generate_variant  # محلی برای جلوگیری از چرخه
-
-            variant_rel = generate_variant(root, safe_name, width, quality, f"w{width}_q{quality}", fmt.upper())
+            variant_rel = generate_variant(root, safe_name, gen_w, gen_q, folder, fmt.upper())
             if not variant_rel:
                 return None
             abs_path = os.path.join(root, variant_rel)
@@ -267,7 +270,7 @@ def uploaded_file(filename):
             if os.path.isfile(abs_path):
                 vdir, vfile = os.path.split(abs_path)
                 resp = send_from_directory(vdir, vfile)
-                resp.headers["Cache-Control"] = variant_headers_for_width(width)
+                resp.headers["Cache-Control"] = variant_headers_for_width(gen_w)
                 resp.headers["Content-Type"] = "image/webp"
                 return resp
         except Exception as e:

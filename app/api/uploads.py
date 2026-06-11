@@ -141,21 +141,26 @@ def serve_uploads(filename: str):
       - variant: thumb|full (صرفاً برای دیباگ)
     """
     def _try_variant(root: str, safe_name: str):
+        from app.utils.images import generate_variant, resolve_variant_generation
+
         try:
             width = int(request.args.get("w", 0) or 0)
             quality = int(request.args.get("q", 0) or 0) or 80
             fmt = (request.args.get("fmt") or "webp").lower()
+            variant_kind = (request.args.get("variant") or "").strip()
         except Exception:
             width = 0
             quality = 80
             fmt = "webp"
+            variant_kind = ""
 
-        if width <= 0:
+        gen_w, gen_q, folder = resolve_variant_generation(width, quality, variant_kind)
+        if gen_w <= 0 or not folder:
             return None
 
         variant_abs = None
         try:
-            variant_abs = generate_variant_path(root, safe_name, width, quality, fmt)
+            variant_abs = generate_variant_path(root, safe_name, gen_w, gen_q, folder, fmt)
         except Exception:
             variant_abs = None
 
@@ -164,15 +169,14 @@ def serve_uploads(filename: str):
 
         variant_dir, variant_file = os.path.split(variant_abs)
         resp = send_from_directory(variant_dir, variant_file)
-        resp.headers["Cache-Control"] = variant_headers_for_width(width)
+        resp.headers["Cache-Control"] = variant_headers_for_width(gen_w)
         resp.headers["Content-Type"] = "image/webp"
         return resp
 
-    def generate_variant_path(root: str, safe_name: str, width: int, quality: int, fmt: str):
-        # استفاده از همان ساختار __variants__/... برای کش دیسکی
-        from app.utils.images import generate_variant  # محلی برای جلوگیری از چرخه
+    def generate_variant_path(root: str, safe_name: str, width: int, quality: int, folder: str, fmt: str):
+        from app.utils.images import generate_variant
 
-        variant_rel = generate_variant(root, safe_name, width, quality, f"w{width}_q{quality}", fmt.upper())
+        variant_rel = generate_variant(root, safe_name, width, quality, folder, fmt.upper())
         if not variant_rel:
             return None
         abs_path = os.path.join(root, variant_rel)
