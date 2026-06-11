@@ -58,6 +58,7 @@ from app.express_partner.partner_withdrawals import (
     link_withdrawal_to_commissions,
     release_withdrawal_commissions,
 )
+from app.land_category_specs import apply_category_specs_from_form
 from app.services.sms import send_sms_template, send_sms_direct, send_sms_code
 from app.utils.storage import load_users, load_reports, save_reports, save_ads
 from admin.people_directory import build_admin_people_directory, get_admin_person_by_phone
@@ -2991,6 +2992,14 @@ def add_express_listing():
         lands = load_json(_lands_path())
         lands.append(new_express_land)
         save_ads(lands)
+
+        try:
+            from app.express_partner.new_land_sms import notify_all_partners_new_express_land_background
+            notify_all_partners_new_express_land_background(new_express_land)
+        except Exception:
+            current_app.logger.exception(
+                'New express land partner SMS queue failed code=%s', new_code
+            )
         
         # ارسال نوتیفیکیشن به کاربران منطقه
         # در صورت انتخاب «ارسال خودکار برای تمامی همکاران» → ساخت انتساب برای همه + اعلان
