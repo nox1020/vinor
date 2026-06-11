@@ -6,20 +6,15 @@
 {% set _in_tx = land._in_transaction or (_st == 'in_transaction') %}
 {% set footer_stats = land_card_footer_stats(land) %}
 {% set loc_line = ([land.city, land.location]|select|join('، ')) if (land.city or land.location) else '' %}
+{% set _img_eager = card_img_eager|default(false) %}
 
 {% if img %}
   {% if land.image_thumb %}
     {% set img_src = land.image_thumb %}
   {% elif "://" in (img|string) %}
     {% set img_src = img %}
-  {% elif (img|string).startswith('/uploads/') %}
-    {% set img_src = img %}
-  {% elif (img|string).startswith('uploads/') %}
-    {% set img_src = '/uploads/' + (img|string)[8:] %}
-  {% elif not (img|string).startswith('/') %}
-    {% set img_src = '/uploads/' + (img|string) %}
   {% else %}
-    {% set img_src = img %}
+    {% set img_src = img|image_thumb_url %}
   {% endif %}
 {% endif %}
 
@@ -57,11 +52,11 @@
         <video class="absolute inset-0 w-full h-full object-cover opacity-0" muted loop playsinline preload="none" data-vinor-lazy-video>
           <source data-src="{{ video_src }}" type="video/mp4">
           {% if img_src %}
-          <img src="{{ img_src }}" alt="" {% if card_img_eager|default(false) %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+          <img {% if _img_eager %}src="{{ img_src }}" loading="eager" fetchpriority="high"{% else %}data-src="{{ img_src }}" data-vinor-lazy-img{% endif %} alt="" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
           {% endif %}
         </video>
         {% elif img_src %}
-        <img src="{{ img_src }}" alt="{{ land.title or '' }}" {% if card_img_eager|default(false) %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+        <img {% if _img_eager %}src="{{ img_src }}" loading="eager" fetchpriority="high"{% else %}data-src="{{ img_src }}" data-vinor-lazy-img{% endif %} alt="{{ land.title or '' }}" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
         {% else %}
         <div class="absolute inset-0 grid place-items-center text-neutral-500">
           <i class="fas fa-image text-2xl opacity-50"></i>
@@ -130,11 +125,11 @@
     <video class="absolute inset-0 w-full h-full object-cover opacity-0" muted loop playsinline preload="none" data-vinor-lazy-video>
       <source data-src="{{ video_src }}" type="video/mp4">
       {% if img_src %}
-      <img src="{{ img_src }}" alt="{{ land.title or '' }}" {% if card_img_eager|default(false) %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+      <img {% if _img_eager %}src="{{ img_src }}" loading="eager" fetchpriority="high"{% else %}data-src="{{ img_src }}" data-vinor-lazy-img{% endif %} alt="{{ land.title or '' }}" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
       {% endif %}
     </video>
     {% elif img_src %}
-    <img src="{{ img_src }}" alt="{{ land.title or '' }}" {% if card_img_eager|default(false) %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
+    <img {% if _img_eager %}src="{{ img_src }}" loading="eager" fetchpriority="high"{% else %}data-src="{{ img_src }}" data-vinor-lazy-img{% endif %} alt="{{ land.title or '' }}" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-200" data-card-img>
     {% else %}
     <div class="absolute inset-0 grid place-items-center text-neutral-500">
       <i class="fas fa-image text-4xl opacity-60"></i>

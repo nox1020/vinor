@@ -31,11 +31,11 @@
 
     {% if primary_image %}
       {% if primary_v2 %}
-        {% set thumb_src = primary_v2.thumb or primary_v2.full or upload_url(primary_image) %}
-        {% set full_src = primary_v2.full or primary_v2.raw or upload_url(primary_image) %}
+        {% set thumb_src = primary_v2.thumb or (primary_image|image_thumb_url) %}
+        {% set full_src = primary_v2.full or (primary_image|image_display_full_url) %}
       {% else %}
-        {% set thumb_src = upload_url(primary_image) %}
-        {% set full_src = thumb_src %}
+        {% set thumb_src = primary_image|image_thumb_url %}
+        {% set full_src = primary_image|image_display_full_url %}
       {% endif %}
     <img id="landMainImage"
          src="{{ thumb_src }}"

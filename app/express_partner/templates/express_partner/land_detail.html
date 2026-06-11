@@ -187,9 +187,9 @@
       {%- set _slide_first = false -%}
       {%- set v2 = images_v2[loop.index0] if images_v2|length > loop.index0 else none -%}
       {%- if v2 -%}
-      {"type":"image","thumb":{{ (v2.thumb or v2.full or upload_url(img))|tojson }},"full":{{ (v2.full or v2.raw or upload_url(img))|tojson }}}
+      {"type":"image","thumb":{{ (v2.thumb or (img|image_thumb_url))|tojson }},"full":{{ (v2.full or (img|image_display_full_url))|tojson }}}
       {%- else -%}
-      {"type":"image","thumb":{{ upload_url(img)|tojson }},"full":{{ upload_url(img)|tojson }}}
+      {"type":"image","thumb":{{ (img|image_thumb_url)|tojson }},"full":{{ (img|image_display_full_url)|tojson }}}
       {%- endif -%}
       {%- endfor -%}
     ]

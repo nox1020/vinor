@@ -200,19 +200,26 @@
 
     function preloadFullRes(thumb, full, atIndex) {
       if (!img || !full || full === thumb) return;
-      var hi = new Image();
-      hi.decoding = 'async';
-      hi.onload = function () {
-        if (index !== atIndex) return;
-        var cur = slides[atIndex];
-        if (!cur || cur.type !== 'image') return;
-        var curThumb = cur.thumb || cur.full;
-        var src = img.getAttribute('src') || '';
-        if (src === thumb || src === curThumb) {
-          img.src = full;
-        }
+      var run = function () {
+        var hi = new Image();
+        hi.decoding = 'async';
+        hi.onload = function () {
+          if (index !== atIndex) return;
+          var cur = slides[atIndex];
+          if (!cur || cur.type !== 'image') return;
+          var curThumb = cur.thumb || cur.full;
+          var src = img.getAttribute('src') || '';
+          if (src === thumb || src === curThumb) {
+            img.src = full;
+          }
+        };
+        hi.src = full;
       };
-      hi.src = full;
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 1800 });
+      } else {
+        setTimeout(run, 500);
+      }
     }
 
     function faDigits(n) {

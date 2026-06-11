@@ -23,6 +23,24 @@ def _avatar_initials_filter(value: str | None) -> str:
     return partner_avatar_initials(value)
 
 
+@express_partner_bp.app_template_filter("image_thumb_url")
+def _image_thumb_url_filter(value: str | None) -> str:
+    from ..utils.images import display_thumb_url
+    return display_thumb_url(value)
+
+
+@express_partner_bp.app_template_filter("image_display_full_url")
+def _image_display_full_url_filter(value: str | None) -> str:
+    from ..utils.images import display_full_url
+    return display_full_url(value)
+
+
+@express_partner_bp.app_template_filter("avatar_display_url")
+def _avatar_display_url_filter(value: str | None, version: Any = "") -> str:
+    from ..utils.images import display_avatar_url
+    return display_avatar_url(value, version)
+
+
 from ..utils.storage import (
     load_express_partner_apps, save_express_partner_apps,
     load_express_partners, load_express_partners_cached, save_express_partners, load_partner_notes, save_partner_notes,
@@ -941,6 +959,11 @@ def _lands_for_favorite_codes(codes: List[str], me_phone: str) -> List[Dict[str,
             item['_is_expired'] = is_ad_expired(land)
         item.setdefault('created_at', land.get('created_at') or '1970-01-01')
         item['_detail_url'] = url_for('express_partner.land_detail', code=code)
+        try:
+            from ..utils.images import enrich_land_image_variants
+            item = enrich_land_image_variants(item)
+        except Exception:
+            pass
         result.append(item)
     return _sort_dashboard_lands_sold_last(result)
 
@@ -1846,22 +1869,12 @@ def dashboard():
 
 def _dashboard_data_payload(me_phone, profile, has_pending_app, assigned_lands, total_commission, pending_commission, sold_count, expired_count, is_approved):
     """ساخت خروجی JSON داشبورد برای اپ اندروید."""
+    from ..utils.images import partner_card_image_url
 
     def _text_field(val, default=''):
         if val is None:
             return default
         return str(val).strip() or default
-
-    def _img_url(land):
-        imgs = land.get('images') or []
-        if isinstance(imgs, str):
-            imgs = [imgs] if imgs else []
-        first = imgs[0] if imgs else None
-        if not first:
-            return None
-        if isinstance(first, str) and (first.startswith('http') or first.startswith('/')):
-            return first if first.startswith('/') else None
-        return f"/uploads/{first}" if first else None
 
     lands_json = []
     for land in assigned_lands:
@@ -1883,7 +1896,7 @@ def _dashboard_data_payload(me_phone, profile, has_pending_app, assigned_lands, 
             'city': _text_field(land.get('city')),
             'category': _text_field(land.get('category')),
             'created_at': _text_field(land.get('created_at')),
-            'image_url': _img_url(land),
+            'image_url': partner_card_image_url(land) or None,
             'detail_url': detail_url,
         })
     out = {
@@ -1902,16 +1915,11 @@ def _dashboard_data_payload(me_phone, profile, has_pending_app, assigned_lands, 
 
 def _public_lands_payload(limit=50):
     """لیست فایل‌های عمومی اکسپرس برای نمایش به مهمان در اپ (بدون لاگین)."""
+    from ..utils.images import partner_card_image_url
+
     def _img_url(land):
-        imgs = land.get('images') or []
-        if isinstance(imgs, str):
-            imgs = [imgs] if imgs else []
-        first = imgs[0] if imgs else None
-        if not first:
-            return None
-        if isinstance(first, str) and (first.startswith('http') or first.startswith('/')):
-            return first if first.startswith('/') else None
-        return f"/uploads/{first}" if first else None
+        url = partner_card_image_url(land if isinstance(land, dict) else {})
+        return url or None
 
     try:
         express_lands = load_express_lands_cached() or []
@@ -4131,7 +4139,8 @@ def profile_data():
         is_approved = False
     me_name = (profile.get('name') or '').strip()
     avatar = (profile.get('avatar') or '').strip()
-    avatar_url = (f"/uploads/{avatar}" if avatar else None)
+    from ..utils.images import display_avatar_url
+    avatar_url = display_avatar_url(avatar, profile.get('avatar_updated_at')) if avatar else None
     _settings = _express_settings_cached()
     android_apk_url = (_settings.get('android_apk_url') or '').strip()
     android_apk_version = (_settings.get('android_apk_version') or '').strip()
@@ -4232,6 +4241,7 @@ def _apply_partner_profile_fields(
 
 def _profile_edit_json(profile: Dict[str, Any], me_phone: str) -> Dict[str, Any]:
     avatar = (profile.get('avatar') or '').strip()
+    from ..utils.images import display_avatar_url
     return {
         'success': True,
         'me_phone': me_phone,
@@ -4241,7 +4251,7 @@ def _profile_edit_json(profile: Dict[str, Any], me_phone: str) -> Dict[str, Any]
         'me_landline': (profile.get('landline') or '').strip(),
         'me_email': (profile.get('email') or '').strip(),
         'me_birth_date': (profile.get('birth_date') or '').strip(),
-        'avatar_url': (f'/uploads/{avatar}' if avatar else None),
+        'avatar_url': display_avatar_url(avatar, profile.get('avatar_updated_at')) if avatar else None,
     }
 
 
@@ -4487,9 +4497,10 @@ def api_profile_avatar():
     partners = load_express_partners() or []
     prof = _find_partner_record(partners, me_phone) or {}
     updated_at = int((prof or {}).get('avatar_updated_at') or 0)
+    from ..utils.images import display_avatar_url
     return jsonify({
         'success': True,
-        'avatar_url': f'/uploads/{rel_path}',
+        'avatar_url': display_avatar_url(rel_path, updated_at),
         'avatar_updated_at': updated_at,
     })
 

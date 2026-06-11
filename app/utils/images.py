@@ -24,11 +24,13 @@ except Exception:  # pragma: no cover - fallback when Pillow is missing
     _PIL_OK = False
 
 THUMB_WIDTH = 400
-THUMB_QUALITY = 60
-FULL_WIDTH = 1400
-FULL_QUALITY = 80
+THUMB_QUALITY = 55
+FULL_WIDTH = 1200
+FULL_QUALITY = 75
 ORIGINAL_MAX_SIDE = 2400
 ORIGINAL_QUALITY = 90
+AVATAR_DISPLAY_WIDTH = 256
+AVATAR_DISPLAY_QUALITY = 72
 DEFAULT_FMT = "WEBP"
 ALLOWED_IMAGE_EXTS = frozenset({"jpg", "jpeg", "png", "gif", "webp"})
 
@@ -296,8 +298,35 @@ def save_processed_form_image(file_storage, upload_folder: str) -> Optional[str]
     return f"uploads/{filename}"
 
 
+def display_thumb_url(url: Optional[str]) -> str:
+    """WebP فشرده برای کارت‌ها و لیست — هرگز فایل اصلی."""
+    base = normalize_upload_url(url)
+    if not base:
+        return ""
+    return build_variant_url(base, THUMB_WIDTH, THUMB_QUALITY, "webp", "thumb")
+
+
+def display_full_url(url: Optional[str]) -> str:
+    """WebP با کیفیت متوسط برای گالری — نه فایل اصلی."""
+    base = normalize_upload_url(url)
+    if not base:
+        return ""
+    return build_variant_url(base, FULL_WIDTH, FULL_QUALITY, "webp", "full")
+
+
+def display_avatar_url(url: Optional[str], version: Any = "") -> str:
+    base = normalize_upload_url(url)
+    if not base:
+        return ""
+    out = build_variant_url(base, AVATAR_DISPLAY_WIDTH, AVATAR_DISPLAY_QUALITY, "webp", "avatar")
+    if version not in (None, ""):
+        joiner = "&" if "?" in out else "?"
+        out = f"{out}{joiner}v={version}"
+    return out
+
+
 def enrich_land_image_variants(land: Dict[str, Any]) -> Dict[str, Any]:
-    """thumb/full برای نمایش کارت و جزئیات — raw برای دانلود."""
+    """thumb/full برای نمایش — raw فقط برای دانلود."""
     if not isinstance(land, dict):
         return land
     imgs = land.get("images") or []
@@ -309,11 +338,26 @@ def enrich_land_image_variants(land: Dict[str, Any]) -> Dict[str, Any]:
         item = dict(land)
         item["images_v2"] = [prepare_variants_dict(str(i)) for i in imgs if i]
 
+    first_raw = str(imgs[0]) if imgs else ""
     v2_list = item.get("images_v2") or []
     if v2_list and isinstance(v2_list[0], dict):
         cover = v2_list[0]
-        item["image_thumb"] = cover.get("thumb") or ""
-        item["image_full"] = cover.get("full") or ""
-        item["image_raw"] = cover.get("raw") or ""
+        item["image_thumb"] = cover.get("thumb") or display_thumb_url(first_raw)
+        item["image_full"] = cover.get("full") or display_full_url(first_raw)
+        item["image_raw"] = cover.get("raw") or normalize_upload_url(first_raw)
+    else:
+        item["image_thumb"] = display_thumb_url(first_raw)
+        item["image_full"] = display_full_url(first_raw)
+        item["image_raw"] = normalize_upload_url(first_raw)
     return item
+
+
+def partner_card_image_url(land: Dict[str, Any]) -> str:
+    """URL بهینه برای کارت همکار."""
+    enriched = enrich_land_image_variants(land if isinstance(land, dict) else {})
+    thumb = enriched.get("image_thumb") if isinstance(enriched, dict) else ""
+    if thumb:
+        return str(thumb)
+    imgs = land.get("images") or [] if isinstance(land, dict) else []
+    return display_thumb_url(str(imgs[0])) if imgs else ""
 

@@ -44,7 +44,7 @@
                   title="تغییر عکس پروفایل">
             {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
             <img id="avatarPreviewImg"
-                 src="{% if _avatar %}/uploads/{{ _avatar }}?v={{ profile.get('avatar_updated_at', 0) }}{% endif %}"
+                 src="{% if _avatar %}{{ _avatar|avatar_display_url(profile.get('avatar_updated_at', 0)) }}{% endif %}"
                  alt=""
                  class="h-full w-full object-cover {% if not _avatar %}hidden{% endif %}"
                  referrerpolicy="no-referrer"
@@ -407,7 +407,7 @@ function initProfileEditSave() {
     me_city: {{ me_city | tojson }},
     me_bio: {{ me_bio | tojson }},
     me_birth_date: {{ me_birth_date | tojson }},
-    avatar_url: {% if profile and profile.get('avatar') %}{{ ('/uploads/' ~ profile.get('avatar')) | tojson }}{% else %}null{% endif %}
+    avatar_url: {% if profile and profile.get('avatar') %}{{ (profile.get('avatar')|avatar_display_url(profile.get('avatar_updated_at', 0))) | tojson }}{% else %}null{% endif %}
   };
   var saveBtn = document.getElementById('profileEditSaveBtn');
   var saveBtnIcon = document.getElementById('profileEditSaveBtnIcon');

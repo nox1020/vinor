@@ -145,7 +145,7 @@
                       title="تغییر عکس پروفایل">
                 {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
                 <img id="avatarProfileImg"
-                     src="{% if _avatar %}/uploads/{{ _avatar }}?v={{ profile.get('avatar_updated_at', 0) }}{% endif %}"
+                     src="{% if _avatar %}{{ _avatar|avatar_display_url(profile.get('avatar_updated_at', 0)) }}{% endif %}"
                      alt="عکس پروفایل"
                      class="h-full w-full object-cover {% if not _avatar %}hidden{% endif %}"
                      referrerpolicy="no-referrer"
