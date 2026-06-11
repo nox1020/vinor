@@ -271,11 +271,17 @@ def migrate_all_upload_images(
             _mark_processed(state, upload_root, rel_path)
             stats["processed"] += 1
 
+            if not dry_run and stats["processed"] % 3 == 0:
+                if renames:
+                    stats["refs_updated"] += apply_upload_path_renames(renames, app)
+                    renames.clear()
+                _save_state(state, app)
+
         if limit is not None and stats["processed"] >= limit:
             break
 
     if renames and not dry_run:
-        stats["refs_updated"] = apply_upload_path_renames(renames, app)
+        stats["refs_updated"] += apply_upload_path_renames(renames, app)
 
     if not dry_run:
         state["last_run_at"] = datetime.utcnow().isoformat() + "Z"
@@ -316,33 +322,58 @@ def _release_migration_lock(fd: Optional[int]) -> None:
         pass
 
 
-def maybe_migrate_upload_images(*, force: bool = False, dry_run: bool = False) -> Dict[str, Any]:
+def maybe_migrate_upload_images(
+    *,
+    force: bool = False,
+    dry_run: bool = False,
+    limit: Optional[int] = None,
+) -> Dict[str, Any]:
     lock_fd = _try_acquire_migration_lock(current_app)
     if lock_fd is None:
         return {"skipped": True, "reason": "another_worker_running"}
     try:
-        return migrate_all_upload_images(force=force, dry_run=dry_run)
+        return migrate_all_upload_images(force=force, dry_run=dry_run, limit=limit)
     finally:
         _release_migration_lock(lock_fd)
 
 
+_STARTUP_DELAY_SEC = 8
+_AUTO_BATCH_SIZE = 30
+_AUTO_MAX_ROUNDS = 300
+
+
 def _migration_loop(app: Flask) -> None:
-    time.sleep(90)
-    batch = 0
-    while batch < 20:
+    time.sleep(_STARTUP_DELAY_SEC)
+    app.logger.info("Upload image migration auto-run started")
+    rounds = 0
+    idle_rounds = 0
+
+    while rounds < _AUTO_MAX_ROUNDS and idle_rounds < 2:
+        rounds += 1
         try:
             with app.app_context():
-                result = maybe_migrate_upload_images()
-                if result.get("skipped"):
-                    return
-                processed = int(result.get("processed") or 0)
-                if processed == 0:
-                    return
+                result = maybe_migrate_upload_images(limit=_AUTO_BATCH_SIZE)
         except Exception:
-            app.logger.exception("Upload image migration batch failed")
-            return
-        batch += 1
-        time.sleep(5)
+            app.logger.exception("Upload image migration auto-run batch failed")
+            break
+
+        if result.get("skipped") and result.get("reason") == "another_worker_running":
+            time.sleep(15)
+            continue
+
+        if result.get("skipped"):
+            break
+
+        processed = int(result.get("processed") or 0)
+        if processed == 0:
+            idle_rounds += 1
+        else:
+            idle_rounds = 0
+            app.logger.info("Upload image migration auto-run batch: %s", result)
+
+        time.sleep(2 if processed >= _AUTO_BATCH_SIZE else 1)
+
+    app.logger.info("Upload image migration auto-run finished (rounds=%s)", rounds)
 
 
 def schedule_upload_image_migration(app: Flask) -> None:
@@ -351,7 +382,9 @@ def schedule_upload_image_migration(app: Flask) -> None:
         "true",
         "yes",
     ):
-        app.logger.info("Upload image migration disabled via VINOR_DISABLE_UPLOAD_IMAGE_MIGRATION")
+        app.logger.info(
+            "Upload image migration auto-run disabled (VINOR_DISABLE_UPLOAD_IMAGE_MIGRATION)"
+        )
         return
     threading.Thread(
         target=_migration_loop,
@@ -359,4 +392,8 @@ def schedule_upload_image_migration(app: Flask) -> None:
         daemon=True,
         name="vinor-upload-image-migration",
     ).start()
-    app.logger.info("Upload image migration scheduled (background after deploy)")
+    app.logger.info(
+        "Upload image migration auto-run enabled (~%ss after boot, batch=%s)",
+        _STARTUP_DELAY_SEC,
+        _AUTO_BATCH_SIZE,
+    )

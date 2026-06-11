@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""فشرده‌سازی تصاویر آپلودشده قبلی + ساخت واریانت نمایش.
+"""مهاجرت دستی تصاویر (اختیاری — با restart اپ به‌صورت خودکار هم اجرا می‌شود).
 
-پس از دیپلوی روی سرور (یک‌بار یا برای catch-up):
+فقط در صورت نیاز:
   python scripts/migrate_upload_images.py
-
-همه فایل‌ها:
   python scripts/migrate_upload_images.py --force
-
-فقط تست:
-  python scripts/migrate_upload_images.py --dry-run --limit 5
 """
 from __future__ import annotations
 
