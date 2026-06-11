@@ -148,12 +148,33 @@ def _save_state(state: Dict[str, Any]) -> None:
     _save(path, state)
 
 
-def _append_sms_history(entry: dict) -> None:
+def _dedup_key(sms_type: str, mobile: str) -> str:
+    return f"{sms_type}:{mobile}"
+
+
+def _sent_today_from_state(state: Dict[str, Any], sms_type: str, mobile: str) -> bool:
+    today = _jalali_today_key()
+    sent = state.get("sent_today") if isinstance(state.get("sent_today"), dict) else {}
+    return sent.get(_dedup_key(sms_type, mobile)) == today
+
+
+def _mark_sent_today(state: Dict[str, Any], sms_type: str, mobile: str) -> None:
+    today = _jalali_today_key()
+    sent = state.get("sent_today")
+    if not isinstance(sent, dict) or sent.get("_date") != today:
+        sent = {"_date": today}
+    sent[_dedup_key(sms_type, mobile)] = today
+    state["sent_today"] = sent
+
+
+def _append_sms_history_entries(entries: List[dict]) -> None:
+    if not entries:
+        return
     try:
         history = load_sms_history(current_app) or []
         if not isinstance(history, list):
             history = []
-        history.append(entry)
+        history.extend(entries)
         if len(history) > 10000:
             history = history[-10000:]
         save_sms_history(history, current_app)
@@ -161,23 +182,33 @@ def _append_sms_history(entry: dict) -> None:
         current_app.logger.exception("Failed to append celebration SMS history")
 
 
-def _already_sent_today(sms_type: str, mobile: str) -> bool:
-    today = _jalali_today_key()
+def _try_acquire_run_lock() -> Optional[int]:
+    """قفل بین workerهای Passenger — فقط یک پروسه job روزانه را اجرا کند."""
+    if os.name != "posix":
+        return -1
     try:
-        history = load_sms_history(current_app) or []
+        import fcntl
+
+        from ..utils.storage import data_dir
+
+        lock_path = os.path.join(data_dir(current_app), "celebration_sms.run.lock")
+        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return fd
     except Exception:
-        return False
-    for row in reversed(history[-500:]):
-        if not isinstance(row, dict):
-            continue
-        if row.get("type") != sms_type or row.get("mobile") != mobile:
-            continue
-        if row.get("jalali_date") == today:
-            return True
-        created = str(row.get("created_at") or "")[:10]
-        if created == _tehran_now().strftime("%Y-%m-%d"):
-            return True
-    return False
+        return None
+
+
+def _release_run_lock(fd: Optional[int]) -> None:
+    if fd is None or fd < 0:
+        return
+    try:
+        import fcntl
+
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+    except Exception:
+        pass
 
 
 def build_birthday_sms_message(*, name: str, jm: int, jd: int) -> str:
@@ -288,10 +319,12 @@ def _send_celebration_sms(
     name: str,
     message: str,
     line_number: str,
+    state: Dict[str, Any],
+    history_batch: List[dict],
     dry_run: bool = False,
     extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    if _already_sent_today(sms_type, mobile):
+    if _sent_today_from_state(state, sms_type, mobile):
         return {"ok": True, "skipped": True, "reason": "already_sent_today"}
 
     if dry_run:
@@ -301,6 +334,7 @@ def _send_celebration_sms(
             mobile,
             message.replace("\n", " | "),
         )
+        _mark_sent_today(state, sms_type, mobile)
         return {"ok": True, "skipped": False, "dry_run": True}
 
     result = send_sms_direct(mobile=mobile, message=message, line_number=line_number)
@@ -326,11 +360,13 @@ def _send_celebration_sms(
     }
     if extra:
         entry.update(extra)
-    _append_sms_history(entry)
+    history_batch.append(entry)
+    if ok:
+        _mark_sent_today(state, sms_type, mobile)
     return {"ok": ok, "skipped": False, "error": err}
 
 
-def run_daily_celebration_sms(*, dry_run: bool = False) -> Dict[str, Any]:
+def run_daily_celebration_sms(*, dry_run: bool = False, state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """بررسی امروز و ارسال پیامک تبریک تولد / سالگرد عضویت."""
     _, jm_now, jd_now = _jalali_today()
     settings = load_settings(current_app) or {}
@@ -338,6 +374,8 @@ def run_daily_celebration_sms(*, dry_run: bool = False) -> Dict[str, Any]:
         settings.get("sms_line_number") or get_sms_line_number() or "300089930616"
     ).strip()
 
+    run_state = state if isinstance(state, dict) else _load_state()
+    history_batch: List[dict] = []
     recipients = _collect_recipients()
     stats = {
         "date": _jalali_today_key(),
@@ -364,6 +402,8 @@ def run_daily_celebration_sms(*, dry_run: bool = False) -> Dict[str, Any]:
                 name=name,
                 message=msg,
                 line_number=line_number,
+                state=run_state,
+                history_batch=history_batch,
                 dry_run=dry_run,
                 extra={"birth_date": person.get("birth_date")},
             )
@@ -386,6 +426,8 @@ def run_daily_celebration_sms(*, dry_run: bool = False) -> Dict[str, Any]:
                     name=name,
                     message=msg,
                     line_number=line_number,
+                    state=run_state,
+                    history_batch=history_batch,
                     dry_run=dry_run,
                     extra={
                         "membership_years": years,
@@ -398,6 +440,10 @@ def run_daily_celebration_sms(*, dry_run: bool = False) -> Dict[str, Any]:
                     stats["anniversary_sent"] += 1
                 else:
                     stats["anniversary_failed"] += 1
+
+    if not dry_run:
+        _append_sms_history_entries(history_batch)
+        _save_state(run_state)
 
     current_app.logger.info(
         "Daily celebration SMS date=%s birthday=%s/%s anniversary=%s/%s dry_run=%s",
@@ -422,16 +468,29 @@ def maybe_run_daily_celebration_sms(*, force: bool = False, dry_run: bool = Fals
     if not force and now.hour < 9:
         return {"skipped": True, "reason": "before_9am_tehran", "date": today}
 
-    result = run_daily_celebration_sms(dry_run=dry_run)
-    if not dry_run:
-        state["last_run_date"] = today
-        state["last_run_at"] = datetime.utcnow().isoformat() + "Z"
-        state["last_result"] = result
-        _save_state(state)
-    return result
+    lock_fd = _try_acquire_run_lock()
+    if lock_fd is None:
+        return {"skipped": True, "reason": "another_worker_running", "date": today}
+
+    try:
+        state = _load_state()
+        if not force and state.get("last_run_date") == today:
+            return {"skipped": True, "reason": "already_ran_today", "date": today}
+
+        result = run_daily_celebration_sms(dry_run=dry_run, state=state)
+        if not dry_run:
+            state["last_run_date"] = today
+            state["last_run_at"] = datetime.utcnow().isoformat() + "Z"
+            state["last_result"] = result
+            _save_state(state)
+        return result
+    finally:
+        _release_run_lock(lock_fd)
 
 
 def _scheduler_loop(app: Flask) -> None:
+    # بعد از بالا آمدن کامل اپ — از فشار همزمان با اولین درخواست‌ها جلوگیری می‌کند
+    time.sleep(300)
     while True:
         try:
             with app.app_context():
@@ -442,10 +501,14 @@ def _scheduler_loop(app: Flask) -> None:
 
 
 def schedule_daily_celebration_sms(app: Flask) -> None:
-    """زمان‌بندی ساعتی — برای سرورهای بدون cron."""
-    flag = os.environ.get("VINOR_DISABLE_CELEBRATION_SMS", "").strip().lower()
-    if flag in ("1", "true", "yes"):
+    """زمان‌بندی ساعتی — فقط با VINOR_CELEBRATION_SMS_SCHEDULER=1 فعال شود."""
+    if os.environ.get("VINOR_DISABLE_CELEBRATION_SMS", "").strip().lower() in ("1", "true", "yes"):
         app.logger.info("Celebration SMS scheduler disabled via VINOR_DISABLE_CELEBRATION_SMS")
+        return
+    if os.environ.get("VINOR_CELEBRATION_SMS_SCHEDULER", "").strip().lower() not in ("1", "true", "yes"):
+        app.logger.info(
+            "Celebration SMS in-process scheduler off (use cron script or set VINOR_CELEBRATION_SMS_SCHEDULER=1)"
+        )
         return
     threading.Thread(
         target=_scheduler_loop,
