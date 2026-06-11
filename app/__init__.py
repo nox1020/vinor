@@ -272,6 +272,11 @@ def create_app() -> Flask:
                 bootstrap_firebase(app)
             except Exception as fb_err:
                 app.logger.warning("Firebase bootstrap: %s", fb_err)
+            try:
+                from app.utils.upload_image_migration import schedule_upload_image_migration
+                schedule_upload_image_migration(app)
+            except Exception as mig_err:
+                app.logger.warning("Upload image migration not scheduled: %s", mig_err)
     except Exception as e:
         app.logger.warning("Data dir / AI escalations init: %s", e)
 

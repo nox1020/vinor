@@ -166,7 +166,7 @@
       {%- if not _media_first %},{% endif -%}
       {%- set _media_first = false -%}
       {%- set v2 = images_v2[loop.index0] if images_v2|length > loop.index0 else none -%}
-      {%- set full_u = (v2.full or v2.raw or upload_url(img)) if v2 else upload_url(img) -%}
+      {%- set full_u = (v2.raw or upload_url(img)) if v2 else upload_url(img) -%}
       {"type":"image","url":{{ full_u|tojson }},"filename":{{ ((land.code or 'file') ~ '_' ~ loop.index ~ '.jpg')|tojson }}}
       {%- endfor -%}
       {%- endif -%}

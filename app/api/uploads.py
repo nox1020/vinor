@@ -15,20 +15,13 @@ from flask import Blueprint, current_app, request, jsonify, send_from_directory
 from app.utils.storage import legacy_dir
 from app.utils.images import (
     generate_thumb_and_full,
+    process_image_bytes,
     THUMB_WIDTH,
     THUMB_QUALITY,
     FULL_WIDTH,
     FULL_QUALITY,
     variant_headers_for_width,
 )
-from werkzeug.utils import secure_filename
-from io import BytesIO
-
-try:
-    from PIL import Image, ImageOps
-    _PIL_OK = True
-except Exception:
-    _PIL_OK = False
 
 uploads_bp = Blueprint("uploads", __name__)
 
@@ -75,43 +68,6 @@ def _validate_file(fieldname: str = "file") -> Tuple[bytes, str]:
     return raw, ext
 
 
-def _process_image_bytes(raw: bytes, ext_hint: str) -> Tuple[bytes, str]:
-    """
-    Resize and compress image to a web-friendly size.
-    - Keeps GIF as-is to avoid breaking animations
-    - Otherwise, outputs optimized JPEG (RGB, max 1600x1600, quality ~82)
-    Returns: (processed_bytes, output_ext)
-    """
-    # Keep GIF untouched
-    if (ext_hint or '').lower() == 'gif' or not _PIL_OK:
-        return raw, ext_hint
-
-    try:
-        with Image.open(BytesIO(raw)) as im:
-            # Auto-orient using EXIF
-            try:
-                im = ImageOps.exif_transpose(im)
-            except Exception:
-                pass
-
-            # Convert to RGB, flatten alpha onto white background
-            if im.mode in ("RGBA", "LA"):
-                bg = Image.new("RGB", im.size, (255, 255, 255))
-                bg.paste(im, mask=im.split()[-1])
-                im = bg
-            elif im.mode != 'RGB':
-                im = im.convert('RGB')
-
-            # Resize to fit within 1600x1600 preserving aspect ratio
-            im.thumbnail((1600, 1600), Image.LANCZOS)
-
-            buf = BytesIO()
-            im.save(buf, format='JPEG', quality=82, optimize=True, progressive=True)
-            return buf.getvalue(), 'jpg'
-    except Exception:
-        # On any processing error, fall back to original bytes
-        return raw, ext_hint
-
 @uploads_bp.post("/api/uploads/images")
 def upload_image():
     """
@@ -125,8 +81,7 @@ def upload_image():
     """
     try:
         raw, ext = _validate_file("file")
-        # Resize/compress
-        raw, out_ext = _process_image_bytes(raw, ext)
+        raw, out_ext = process_image_bytes(raw, ext)
 
         base_dir = current_app.config.get("UPLOAD_FOLDER")
         if not base_dir:

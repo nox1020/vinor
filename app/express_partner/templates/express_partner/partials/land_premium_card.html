@@ -8,7 +8,9 @@
 {% set loc_line = ([land.city, land.location]|select|join('، ')) if (land.city or land.location) else '' %}
 
 {% if img %}
-  {% if "://" in (img|string) %}
+  {% if land.image_thumb %}
+    {% set img_src = land.image_thumb %}
+  {% elif "://" in (img|string) %}
     {% set img_src = img %}
   {% elif (img|string).startswith('/uploads/') %}
     {% set img_src = img %}

@@ -330,6 +330,11 @@ def _build_partner_dashboard_lands(
             item['_assignment_status'] = global_status
             item['_in_transaction'] = global_status == 'in_transaction'
             item['_detail_url'] = url_for('express_partner.land_detail', code=code)
+        try:
+            from app.utils.images import enrich_land_image_variants
+            item = enrich_land_image_variants(item)
+        except Exception:
+            pass
         assigned_lands.append(item)
 
     return _sort_dashboard_lands_sold_last(assigned_lands), expired_count
@@ -4953,11 +4958,8 @@ def land_detail(code: str):
 
     # تصاویر با سایز thumb/full برای لود تدریجی سریع‌تر در جزئیات
     try:
-        from app.utils.images import prepare_variants_dict
-        imgs = land.get('images') or []
-        if imgs and not land.get('images_v2'):
-            land = dict(land)
-            land['images_v2'] = [prepare_variants_dict(str(i)) for i in imgs if i]
+        from app.utils.images import enrich_land_image_variants
+        land = enrich_land_image_variants(dict(land) if isinstance(land, dict) else land)
     except Exception:
         pass
 

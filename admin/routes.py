@@ -2251,27 +2251,32 @@ def _normalize_images_from_form(form, files) -> List[str]:
     پذیرش هر دو ورودی:
     - images[] متنی (URL/مسیر)
     - images فایل
-    ذخیره فایل‌ها در static/uploads و برگرداندن مسیر نسبی مثل 'uploads/filename.jpg'
+    ذخیره فایل‌ها در static/uploads با فشرده‌سازی خودکار + واریانت نمایش
     """
+    from app.utils.images import save_processed_form_image
+
     image_urls: List[str] = []
 
-    # متنی
     text_list = form.getlist('images') or []
     for t in text_list:
         t = (t or '').strip()
         if t:
             image_urls.append(t)
 
-    # فایل
     upload_files = files.getlist('images')
     if upload_files:
         upload_folder = _uploads_root()
         os.makedirs(upload_folder, exist_ok=True)
         for f in upload_files:
             if f and f.filename:
-                filename = secure_filename(f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}__{f.filename}")
-                f.save(os.path.join(upload_folder, filename))
-                image_urls.append(f'uploads/{filename}')
+                stored = save_processed_form_image(f, upload_folder)
+                if stored:
+                    image_urls.append(stored)
+                else:
+                    filename = secure_filename(f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}__{f.filename}")
+                    f.stream.seek(0)
+                    f.save(os.path.join(upload_folder, filename))
+                    image_urls.append(f'uploads/{filename}')
 
     return image_urls
 
@@ -2862,13 +2867,14 @@ def add_express_listing():
         # پردازش تصاویر (از input multiple)
         images = []
         if 'images' in files:
+            from app.utils.images import save_processed_form_image
             upload_folder = _uploads_root()
             os.makedirs(upload_folder, exist_ok=True)
             for file in files.getlist('images'):
                 if file.filename:
-                    filename = secure_filename(f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}__{file.filename}")
-                    file.save(os.path.join(upload_folder, filename))
-                    images.append(f'uploads/{filename}')
+                    stored = save_processed_form_image(file, upload_folder)
+                    if stored:
+                        images.append(stored)
         
         # کمیسیون همکاران (الزامی)
         pct_raw = (form.get('express_commission_pct') or '').strip()
@@ -3122,15 +3128,16 @@ def edit_express_listing(code):
             pass  # اگر مقدار نامعتبر بود، تغییر نمی‌دهیم
         
         # اضافه کردن تصاویر جدید
+        from app.utils.images import save_processed_form_image
         for i in range(1, 4):  # image_1, image_2, image_3
             img_key = f'image_{i}'
             if img_key in files and files[img_key].filename:
                 file = files[img_key]
                 upload_folder = _uploads_root()
                 os.makedirs(upload_folder, exist_ok=True)
-                filename = secure_filename(f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}__{file.filename}")
-                file.save(os.path.join(upload_folder, filename))
-                land.setdefault('images', []).append(f'uploads/{filename}')
+                stored = save_processed_form_image(file, upload_folder)
+                if stored:
+                    land.setdefault('images', []).append(stored)
         
         # اضافه کردن مدارک جدید
         for key, file in files.items():
