@@ -236,6 +236,12 @@ def express_detail(code):
 @main_bp.route("/uploads/<path:filename>", endpoint="uploaded_file")
 def uploaded_file(filename):
     """سرو فایل‌های آپلود — بدون پردازش یا واریانت."""
+    from ..utils.images import redirect_if_legacy_variant_request
+
+    legacy_redirect = redirect_if_legacy_variant_request()
+    if legacy_redirect is not None:
+        return legacy_redirect
+
     cache_hdr = "public, max-age=86400, stale-while-revalidate=86400"
 
     def _maybe_set_apk_download_name(resp):

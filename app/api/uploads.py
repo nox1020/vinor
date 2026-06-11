@@ -95,6 +95,12 @@ def upload_image():
 @uploads_bp.get("/uploads/<path:filename>")
 def serve_uploads(filename: str):
     """سرو فایل‌های آپلود — بدون پردازش."""
+    from app.utils.images import redirect_if_legacy_variant_request
+
+    legacy_redirect = redirect_if_legacy_variant_request()
+    if legacy_redirect is not None:
+        return legacy_redirect
+
     cache_hdr = "public, max-age=86400, stale-while-revalidate=86400"
     base_dir = current_app.config.get("UPLOAD_FOLDER")
     safe_path = os.path.normpath(filename).replace("\\", "/")

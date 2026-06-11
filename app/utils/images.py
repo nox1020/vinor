@@ -40,6 +40,16 @@ def normalize_upload_url(value: Optional[str]) -> str:
     return "/uploads/" + s
 
 
+def redirect_if_legacy_variant_request():
+    """اگر کلاینت قدیمی ?w=&variant= فرستاد، به URL خام redirect کن."""
+    from flask import redirect, request
+
+    qs = request.query_string.decode("utf-8", errors="ignore") if request.query_string else ""
+    if qs and any(m in qs for m in _LEGACY_VARIANT_MARKERS):
+        return redirect(request.path, code=301)
+    return None
+
+
 def sanitize_land_media(land: Dict[str, Any]) -> Dict[str, Any]:
     """پاک‌سازی images_v2 و URLهای قدیمی با query فشرده‌سازی."""
     if not isinstance(land, dict):
