@@ -71,11 +71,6 @@ def _prepare_land_item(land: dict[str, Any], audience: str | None = None) -> dic
             item["_detail_url"] = f"/express/{code}" if code else ""
         else:
             item["_detail_url"] = f"/express/partner/lands/{code}" if code else ""
-    try:
-        from app.utils.images import enrich_land_image_variants
-        item = enrich_land_image_variants(item)
-    except Exception:
-        pass
     return item
 
 

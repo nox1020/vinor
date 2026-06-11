@@ -22,10 +22,10 @@
     {% set video_src = upload_url(video) %}
     <video id="landVideo"
            class="absolute inset-0 z-0 h-full w-full object-cover"
-           muted loop playsinline autoplay preload="metadata"
+           muted loop playsinline preload="none"
            disablepictureinpicture
-           controlslist="nodownload nofullscreen noremoteplayback">
-      <source src="{{ video_src }}" type="video/mp4">
+           controlslist="nodownload nofullscreen noremoteplayback"
+           data-vinor-defer-src="{{ video_src }}">
     </video>
     {% endif %}
 

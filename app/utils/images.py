@@ -386,11 +386,46 @@ def enrich_land_image_variants(land: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def partner_card_image_url(land: Dict[str, Any]) -> str:
-    """URL بهینه برای کارت همکار."""
-    enriched = enrich_land_image_variants(land if isinstance(land, dict) else {})
-    thumb = enriched.get("image_thumb") if isinstance(enriched, dict) else ""
+    """URL بهینه برای کارت همکار — بدون enrich سنگین."""
+    if not isinstance(land, dict):
+        return ""
+    thumb = land.get("image_thumb")
     if thumb:
         return str(thumb)
-    imgs = land.get("images") or [] if isinstance(land, dict) else []
+    imgs = land.get("images") or []
     return display_thumb_url(str(imgs[0])) if imgs else ""
+
+
+def try_cached_variant_abs(
+    upload_root: str,
+    rel_path: str,
+    width: int,
+    quality: int,
+    variant_kind: str = "",
+    fmt: str = "webp",
+) -> Optional[str]:
+    """مسیر فایل واریانت کش‌شده — بدون Pillow."""
+    gen_w, gen_q, folder = resolve_variant_generation(width, quality, variant_kind)
+    if gen_w <= 0 or not folder or not upload_root or not rel_path:
+        return None
+    abs_path = variant_file_abs(upload_root, rel_path, folder, fmt)
+    return abs_path if os.path.isfile(abs_path) else None
+
+
+def warm_variant_async(app, upload_root: str, rel_path: str, width: int, quality: int, variant_kind: str = "", fmt: str = "WEBP") -> None:
+    """ساخت واریانت در پس‌زمینه — درخواست فعلی اصل را سرو می‌کند."""
+    import threading
+
+    gen_w, gen_q, folder = resolve_variant_generation(width, quality, variant_kind)
+    if gen_w <= 0 or not folder:
+        return
+
+    def _run() -> None:
+        try:
+            with app.app_context():
+                generate_variant(upload_root, rel_path, gen_w, gen_q, folder, fmt)
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True, name="vinor-warm-variant").start()
 

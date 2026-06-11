@@ -198,33 +198,6 @@
       el.addEventListener('error', once);
     }
 
-    function preloadFullRes(thumb, full, atIndex) {
-      if (!img || !full || full === thumb) return;
-      var run = function () {
-        var hi = new Image();
-        hi.decoding = 'async';
-        hi.onload = function () {
-          if (index !== atIndex) return;
-          var cur = slides[atIndex];
-          if (!cur || cur.type !== 'image') return;
-          var curThumb = cur.thumb || cur.full;
-          var src = img.getAttribute('src') || '';
-          if (src === thumb || src === curThumb) {
-            img.src = full;
-          }
-        };
-        hi.src = full;
-      };
-      setTimeout(function () {
-        if (index !== atIndex) return;
-        if (typeof window.requestIdleCallback === 'function') {
-          window.requestIdleCallback(run, { timeout: 5000 });
-        } else {
-          run();
-        }
-      }, 2500);
-    }
-
     function faDigits(n) {
       return String(n).replace(/\d/g, function (d) {
         return '۰۱۲۳۴۵۶۷۸۹'[d];
@@ -254,7 +227,6 @@
       function reveal() {
         setLoader(false);
         img.classList.add('is-loaded');
-        preloadFullRes(thumb, full, atIndex);
       }
 
       img.classList.remove('is-loaded');
@@ -294,6 +266,16 @@
         img.classList.remove('is-loaded');
       }
       video.classList.remove('hidden');
+      var deferSrc = video.getAttribute('data-vinor-defer-src');
+      if (deferSrc && !video.dataset.vinorSrcLoaded) {
+        video.innerHTML = '';
+        var source = document.createElement('source');
+        source.src = deferSrc;
+        source.type = 'video/mp4';
+        video.appendChild(source);
+        video.dataset.vinorSrcLoaded = '1';
+        try { video.load(); } catch (e) { /* ignore */ }
+      }
       setLoader(true);
       waitForVideo(video, function () {
         setLoader(false);
@@ -373,6 +355,15 @@
         try { video.pause(); } catch (e2) { /* ignore */ }
       }
     });
+
+    if (slides.length > 1 && slides[0] && slides[0].type === 'video') {
+      for (var si = 0; si < slides.length; si++) {
+        if (slides[si].type === 'image') {
+          index = si;
+          break;
+        }
+      }
+    }
 
     updateUi();
   }

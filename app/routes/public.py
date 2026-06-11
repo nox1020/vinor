@@ -256,25 +256,26 @@ def uploaded_file(filename):
         variant_kind = ""
 
     def _generate_variant(root: str, safe_name: str):
-        from app.utils.images import generate_variant, resolve_variant_generation
+        from app.utils.images import (
+            resolve_variant_generation,
+            try_cached_variant_abs,
+            warm_variant_async,
+        )
 
         gen_w, gen_q, folder = resolve_variant_generation(width, quality, variant_kind)
         if gen_w <= 0 or not folder:
             return None
         try:
-            variant_rel = generate_variant(root, safe_name, gen_w, gen_q, folder, fmt.upper())
-            if not variant_rel:
-                return None
-            abs_path = os.path.join(root, variant_rel)
-            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-            if os.path.isfile(abs_path):
+            abs_path = try_cached_variant_abs(root, safe_name, width, quality, variant_kind, fmt)
+            if abs_path:
                 vdir, vfile = os.path.split(abs_path)
                 resp = send_from_directory(vdir, vfile)
                 resp.headers["Cache-Control"] = variant_headers_for_width(gen_w)
                 resp.headers["Content-Type"] = "image/webp"
                 return resp
+            warm_variant_async(current_app._get_current_object(), root, safe_name, width, quality, variant_kind, fmt.upper())
         except Exception as e:
-            current_app.logger.debug("Variant generation failed: %s", e, exc_info=True)
+            current_app.logger.debug("Variant serve failed: %s", e, exc_info=True)
         return None
 
     def _maybe_set_apk_download_name(resp):

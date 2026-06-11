@@ -141,7 +141,11 @@ def serve_uploads(filename: str):
       - variant: thumb|full (صرفاً برای دیباگ)
     """
     def _try_variant(root: str, safe_name: str):
-        from app.utils.images import generate_variant, resolve_variant_generation
+        from app.utils.images import (
+            resolve_variant_generation,
+            try_cached_variant_abs,
+            warm_variant_async,
+        )
 
         try:
             width = int(request.args.get("w", 0) or 0)
@@ -158,30 +162,18 @@ def serve_uploads(filename: str):
         if gen_w <= 0 or not folder:
             return None
 
-        variant_abs = None
         try:
-            variant_abs = generate_variant_path(root, safe_name, gen_w, gen_q, folder, fmt)
+            abs_path = try_cached_variant_abs(root, safe_name, width, quality, variant_kind, fmt)
+            if abs_path:
+                variant_dir, variant_file = os.path.split(abs_path)
+                resp = send_from_directory(variant_dir, variant_file)
+                resp.headers["Cache-Control"] = variant_headers_for_width(gen_w)
+                resp.headers["Content-Type"] = "image/webp"
+                return resp
+            warm_variant_async(current_app._get_current_object(), root, safe_name, width, quality, variant_kind, fmt.upper())
         except Exception:
-            variant_abs = None
-
-        if not variant_abs:
-            return None
-
-        variant_dir, variant_file = os.path.split(variant_abs)
-        resp = send_from_directory(variant_dir, variant_file)
-        resp.headers["Cache-Control"] = variant_headers_for_width(gen_w)
-        resp.headers["Content-Type"] = "image/webp"
-        return resp
-
-    def generate_variant_path(root: str, safe_name: str, width: int, quality: int, folder: str, fmt: str):
-        from app.utils.images import generate_variant
-
-        variant_rel = generate_variant(root, safe_name, width, quality, folder, fmt.upper())
-        if not variant_rel:
-            return None
-        abs_path = os.path.join(root, variant_rel)
-        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-        return abs_path
+            current_app.logger.debug("Variant serve skipped", exc_info=True)
+        return None
 
     base_dir = current_app.config.get("UPLOAD_FOLDER")
     if base_dir:

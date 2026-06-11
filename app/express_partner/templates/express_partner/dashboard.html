@@ -730,9 +730,6 @@
 
     observeVideos(desktopVideos, null);
     observeVideos(mobileVideos, mobileScrollRoot);
-
-    const eager = mobileVideos[0] || desktopVideos[0];
-    if (eager) loadLazyCardVideo(eager);
   }
 
   function reinitializeCards() {

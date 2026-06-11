@@ -403,6 +403,13 @@ def schedule_upload_image_migration(app: Flask) -> None:
             "Upload image migration auto-run disabled (VINOR_DISABLE_UPLOAD_IMAGE_MIGRATION)"
         )
         return
+    try:
+        with app.app_context():
+            if not has_pending_upload_image_migration(app):
+                app.logger.info("Upload image migration skipped at boot (nothing pending)")
+                return
+    except Exception:
+        pass
     threading.Thread(
         target=_migration_loop,
         args=(app,),

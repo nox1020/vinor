@@ -348,11 +348,6 @@ def _build_partner_dashboard_lands(
             item['_assignment_status'] = global_status
             item['_in_transaction'] = global_status == 'in_transaction'
             item['_detail_url'] = url_for('express_partner.land_detail', code=code)
-        try:
-            from app.utils.images import enrich_land_image_variants
-            item = enrich_land_image_variants(item)
-        except Exception:
-            pass
         assigned_lands.append(item)
 
     return _sort_dashboard_lands_sold_last(assigned_lands), expired_count
@@ -632,7 +627,7 @@ def _append_partner_tab_prefetch(resp):
     return resp
 
 
-DASHBOARD_INITIAL_CARD_LIMIT = 24
+DASHBOARD_INITIAL_CARD_LIMIT = 12
 
 
 def _is_mobile_partner_client() -> bool:
@@ -959,11 +954,6 @@ def _lands_for_favorite_codes(codes: List[str], me_phone: str) -> List[Dict[str,
             item['_is_expired'] = is_ad_expired(land)
         item.setdefault('created_at', land.get('created_at') or '1970-01-01')
         item['_detail_url'] = url_for('express_partner.land_detail', code=code)
-        try:
-            from ..utils.images import enrich_land_image_variants
-            item = enrich_land_image_variants(item)
-        except Exception:
-            pass
         result.append(item)
     return _sort_dashboard_lands_sold_last(result)
 
@@ -1970,6 +1960,8 @@ def dashboard_data():
 
     is_approved = bool(profile and (profile.get("status") in ("approved", True)))
     assigned_lands, expired_count = _build_partner_dashboard_lands(me_phone, is_approved)
+    if len(assigned_lands) > DASHBOARD_INITIAL_CARD_LIMIT:
+        assigned_lands, _ = _truncate_dashboard_lands(assigned_lands, DASHBOARD_INITIAL_CARD_LIMIT)
     my_comms = _commissions_for_phone(me_phone)
     total_commission = sum(int(c.get('commission_amount') or 0) for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
     pending_commission = sum(int(c.get('commission_amount') or 0) for c in my_comms if (c.get('status') or 'pending').strip() == 'pending')
