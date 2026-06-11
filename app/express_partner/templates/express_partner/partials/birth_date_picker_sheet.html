@@ -1,0 +1,143 @@
+{# انتخاب تاریخ تولد — bottom sheet با چرخ اسکرول (سبک تلگرام) #}
+<div id="birthDatePickerModal"
+     class="birth-date-picker-modal fixed inset-0 z-[86] hidden overflow-hidden"
+     data-tg-body-modal
+     data-birth-picker-root
+     aria-hidden="true">
+  <div class="absolute inset-0 bg-black/70 backdrop-blur-[1px] birth-date-picker-backdrop" data-birth-modal-backdrop></div>
+  <div class="relative flex min-h-full flex-col justify-end pointer-events-none">
+    <div id="birthDatePickerPanel"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="birthDatePickerTitle"
+         class="birth-date-picker-panel pointer-events-auto mx-auto w-full max-w-lg translate-y-full transition-transform duration-300 ease-out">
+      <div class="rounded-t-[1.35rem] border-t border-white/10 bg-[#17212b] shadow-2xl pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
+        <div class="flex justify-center pt-2.5 pb-1" aria-hidden="true">
+          <span class="h-1 w-10 rounded-full bg-white/25"></span>
+        </div>
+
+        <div class="relative flex items-center justify-center border-b border-white/8 px-4 py-3">
+          <button type="button"
+                  id="birthDatePickerClose"
+                  class="absolute left-3 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full text-zinc-400 transition hover:bg-white/10 hover:text-white"
+                  aria-label="بستن">
+            <i class="fas fa-times text-lg" aria-hidden="true"></i>
+          </button>
+          <h2 id="birthDatePickerTitle" class="text-[15px] font-semibold text-white">تاریخ تولد</h2>
+          <button type="button"
+                  id="birthDatePickerConfirm"
+                  class="absolute right-3 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-emerald-500/15 text-emerald-400 transition hover:bg-emerald-500/25 hover:text-emerald-300"
+                  aria-label="تأیید">
+            <i class="fas fa-check text-base" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <div class="px-3 pt-2 pb-1">
+          <div class="tg-birth-wheels-wrap relative mx-auto max-w-md">
+            <div class="tg-birth-wheel-highlight" aria-hidden="true"></div>
+            <div class="tg-birth-wheel-labels pointer-events-none absolute inset-x-0 top-0 z-[2] grid grid-cols-3 px-1 pt-1 text-center text-[10px] font-medium text-zinc-500">
+              <span>روز</span>
+              <span>ماه</span>
+              <span>سال</span>
+            </div>
+            <div class="tg-birth-wheels grid grid-cols-3 gap-0 px-1">
+              <div class="tg-birth-wheel-col" id="birthWheelDay" data-wheel="day" tabindex="0" aria-label="روز"></div>
+              <div class="tg-birth-wheel-col" id="birthWheelMonth" data-wheel="month" tabindex="0" aria-label="ماه"></div>
+              <div class="tg-birth-wheel-col" id="birthWheelYear" data-wheel="year" tabindex="0" aria-label="سال"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-4 pt-2 pb-3 text-center">
+          <button type="button"
+                  id="birthDatePickerClear"
+                  class="text-xs font-medium text-sky-400/90 transition hover:text-sky-300">
+            پاک کردن تاریخ تولد
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .birth-date-picker-modal.birth-date-picker-modal--open {
+    display: block !important;
+  }
+  .birth-date-picker-modal.birth-date-picker-modal--open .birth-date-picker-backdrop {
+    opacity: 1;
+  }
+  .birth-date-picker-backdrop {
+    opacity: 0;
+    transition: opacity 0.22s ease;
+  }
+  .birth-date-picker-modal.birth-date-picker-modal--open .birth-date-picker-panel {
+    transform: translateY(0);
+  }
+  .tg-birth-wheels-wrap {
+    height: 228px;
+  }
+  .tg-birth-wheel-highlight {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 44px;
+    margin-top: 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .tg-birth-wheels {
+    position: relative;
+    z-index: 1;
+    height: 228px;
+    padding-top: 18px;
+  }
+  .tg-birth-wheel-col {
+    height: 210px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    touch-action: pan-y;
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 78%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 78%, transparent 100%);
+  }
+  .tg-birth-wheel-col::-webkit-scrollbar {
+    display: none;
+  }
+  .tg-birth-wheel-spacer {
+    height: 83px;
+    flex-shrink: 0;
+  }
+  .tg-birth-wheel-item {
+    height: 44px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    scroll-snap-align: center;
+    font-size: 15px;
+    line-height: 1;
+    color: rgba(148, 163, 184, 0.85);
+    font-weight: 500;
+    transition: color 0.12s ease, transform 0.12s ease, opacity 0.12s ease;
+    user-select: none;
+  }
+  .tg-birth-wheel-item.is-active {
+    color: #fff;
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .tg-birth-wheel-item[data-wheel-month] {
+    font-size: 13px;
+  }
+  .tg-birth-wheel-item[data-wheel-month].is-active {
+    font-size: 14px;
+  }
+</style>

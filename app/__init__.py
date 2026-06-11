@@ -621,6 +621,12 @@ def create_app() -> Flask:
         return Response(fallback_json, status=200, mimetype=mimetype)
 
     # ---------- Gate ----------
+    try:
+        from app.express_partner.user_celebration_sms import schedule_daily_celebration_sms
+        schedule_daily_celebration_sms(app)
+    except Exception as e:
+        app.logger.warning("Celebration SMS scheduler not started: %s", e)
+
     @app.before_request
     def landing_gate():
         debug = app.debug or _flask_debug()

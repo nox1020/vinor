@@ -4177,19 +4177,17 @@ def _apply_partner_profile_fields(
     name: str,
     city: str,
     bio: str,
-    landline: str,
-    email: str,
     birth_date: str,
     cities_allowed: List[str] | None,
+    landline: str | None = None,
+    email: str | None = None,
 ) -> Dict[str, Any]:
-    """به‌روزرسانی فیلدهای قابل ویریش پروفایل همکار روی همان dict."""
+    """به‌روزرسانی فیلدهای قابل ویرایش پروفایل همکار روی همان dict."""
     prev_birth = (profile.get('birth_date') or '').strip()
     birth_date = _normalize_profile_birth_date(birth_date, prev_birth)
     name = (name or '').strip()[:60]
     city = (city or '').strip()[:60]
     bio = (bio or '').strip()[:200]
-    landline = (landline or '').strip()[:20]
-    email = (email or '').strip()[:120]
 
     if name:
         profile['name'] = name
@@ -4208,14 +4206,18 @@ def _apply_partner_profile_fields(
         profile['bio'] = bio
     else:
         profile.pop('bio', None)
-    if landline:
-        profile['landline'] = landline
-    else:
-        profile.pop('landline', None)
-    if email:
-        profile['email'] = email
-    else:
-        profile.pop('email', None)
+    if landline is not None:
+        landline = (landline or '').strip()[:20]
+        if landline:
+            profile['landline'] = landline
+        else:
+            profile.pop('landline', None)
+    if email is not None:
+        email = (email or '').strip()[:120]
+        if email:
+            profile['email'] = email
+        else:
+            profile.pop('email', None)
     if birth_date:
         profile['birth_date'] = birth_date
     else:
@@ -4242,7 +4244,7 @@ def _profile_edit_json(profile: Dict[str, Any], me_phone: str) -> Dict[str, Any]
 @require_partner_access(allow_pending=True)
 def profile_edit_page():
     """
-    ویرایش مشخصات همکار: نام، شهر، بیو، تلفن ثابت، ایمیل، تاریخ تولد؛ موبایل فقط نمایش.
+    ویرایش مشخصات همکار: نام، شهر، بیو، تاریخ تولد؛ موبایل فقط نمایش.
     هر همکار با شمارهٔ session (user_phone) در لیست express_partners شناسایی می‌شود؛
     تمام فیلدها فقط روی همان دیکشنری پروفایل همان شماره ذخیره می‌شوند (مجزا از بقیهٔ کاربران).
     """
@@ -4264,8 +4266,6 @@ def profile_edit_page():
             name=request.form.get('name') or '',
             city=request.form.get('city') or '',
             bio=request.form.get('bio') or '',
-            landline=request.form.get('landline') or '',
-            email=request.form.get('email') or '',
             birth_date=request.form.get('birth_date') or '',
             cities_allowed=cities_allowed,
         )
@@ -4281,19 +4281,7 @@ def profile_edit_page():
     me_name = (profile.get('name') or '').strip()
     me_city = (profile.get('city') or '').strip()
     me_bio = (profile.get('bio') or '').strip()
-    me_landline = (profile.get('landline') or '').strip()
-    me_email = (profile.get('email') or '').strip()
     me_birth_date = (profile.get('birth_date') or '').strip()
-    me_birth_year = ''
-    birth_year_custom = False
-    if me_birth_date:
-        me_birth_year = me_birth_date.split('/', 1)[0].strip() if '/' in me_birth_date else me_birth_date
-        if me_birth_year:
-            try:
-                yi = int(me_birth_year)
-                birth_year_custom = yi < 1320 or yi > 1393
-            except ValueError:
-                birth_year_custom = True
     cities = cities_allowed
     return render_template('express_partner/profile_edit.html',
                            me_phone=me_phone,
@@ -4301,11 +4289,7 @@ def profile_edit_page():
                            me_name=me_name,
                            me_city=me_city,
                            me_bio=me_bio,
-                           me_landline=me_landline,
-                           me_email=me_email,
                            me_birth_date=me_birth_date,
-                           me_birth_year=me_birth_year,
-                           birth_year_custom=birth_year_custom,
                            profile=profile,
                            cities=cities)
 
@@ -4330,8 +4314,6 @@ def profile_edit_data():
 @require_partner_access(allow_pending=True, json_response=True)
 def api_profile_update():
     """به‌روزرسانی نام، شهر، درباره من برای وب و اپ (JSON)."""
-    import re
-
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     data = request.get_json(silent=True)
     if not data and request.data:
@@ -4344,9 +4326,6 @@ def api_profile_update():
     name = (data.get('name') or '').strip()[:60]
     if not name:
         return jsonify({'success': False, 'error': 'name_required'}), 400
-    email = (data.get('email') or '').strip()[:120]
-    if email and not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
-        return jsonify({'success': False, 'error': 'invalid_email'}), 400
     partners = load_express_partners() or []
     profile = _get_or_create_partner_record(partners, me_phone)
     cities_allowed = _active_cities_cached()
@@ -4355,8 +4334,6 @@ def api_profile_update():
         name=name,
         city=data.get('city') or '',
         bio=data.get('bio') or '',
-        landline=data.get('landline') or '',
-        email=email,
         birth_date=data.get('birth_date') or '',
         cities_allowed=cities_allowed,
     )

@@ -51,10 +51,7 @@
                  onerror="this.classList.add('hidden');var f=document.getElementById('avatarPreviewFallback');if(f)f.classList.remove('hidden');">
             <span id="avatarPreviewFallback"
                   class="flex h-full w-full items-center justify-center text-2xl font-black text-zinc-500 sm:text-3xl {% if _avatar %}hidden{% endif %}">
-              {{ me_name | avatar_initials }}
-            </span>
-            <span class="absolute bottom-1 left-1 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-md sm:bottom-1.5 sm:left-1.5" aria-hidden="true">
-              <i class="fas fa-camera text-sm"></i>
+              V
             </span>
             <span id="avatarUploading" class="absolute inset-0 hidden items-center justify-center bg-black/50">
               <span class="h-8 w-8 rounded-full border-2 border-white/40 border-t-white animate-spin"></span>
@@ -95,26 +92,6 @@
             </div>
 
             <div>
-              <label for="profileLandline" class="mb-2 flex items-center justify-end gap-2 text-xs font-semibold text-zinc-300 sm:text-sm">
-                <span>شماره تلفن ثابت <span class="font-normal text-zinc-500">(اختیاری)</span></span>
-                <i class="fas fa-phone text-zinc-500" aria-hidden="true"></i>
-              </label>
-              <input id="profileLandline" type="tel" name="landline" value="{{ me_landline }}" maxlength="20" dir="ltr" inputmode="tel"
-                     class="w-full rounded-xl border border-white/10 bg-[#0a1018] py-3 pl-3 pr-3 text-sm text-white placeholder-zinc-600 outline-none transition focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 sm:text-base"
-                     placeholder="مثال: 02112345678">
-            </div>
-
-            <div>
-              <label for="profileEmail" class="mb-2 flex items-center justify-end gap-2 text-xs font-semibold text-zinc-300 sm:text-sm">
-                <span>ایمیل <span class="font-normal text-zinc-500">(اختیاری)</span></span>
-                <i class="fas fa-envelope text-zinc-500" aria-hidden="true"></i>
-              </label>
-              <input id="profileEmail" type="email" name="email" value="{{ me_email }}" maxlength="120" dir="ltr" autocomplete="email"
-                     class="w-full rounded-xl border border-white/10 bg-[#0a1018] py-3 pl-3 pr-3 text-sm text-white placeholder-zinc-600 outline-none transition focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 sm:text-base"
-                     placeholder="example@email.com">
-            </div>
-
-            <div>
               <span class="mb-2 flex items-center justify-end gap-2 text-xs font-semibold text-zinc-300 sm:text-sm">
                 <span>شهر فعالیت</span>
                 <i class="fas fa-location-dot text-zinc-500" aria-hidden="true"></i>
@@ -128,23 +105,20 @@
             </div>
 
             <div>
-              <label for="profileBirth" class="mb-2 flex items-center justify-end gap-2 text-xs font-semibold text-zinc-300 sm:text-sm">
+              <span class="mb-2 flex items-center justify-end gap-2 text-xs font-semibold text-zinc-300 sm:text-sm">
                 <span>تاریخ تولد <span class="font-normal text-zinc-500">(اختیاری)</span></span>
                 <i class="fas fa-calendar-days text-zinc-500" aria-hidden="true"></i>
-              </label>
-              <div class="relative">
-                <select id="profileBirth" name="birth_date"
-                        class="w-full appearance-none rounded-xl border border-white/10 bg-[#0a1018] py-3 pl-10 pr-3 text-sm text-white outline-none transition focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 sm:text-base">
-                  <option value="">انتخاب کنید</option>
-                  {% if birth_year_custom and me_birth_year %}
-                  <option value="{{ me_birth_year }}" selected>{{ me_birth_year }}</option>
-                  {% endif %}
-                  {% for y in range(1393, 1319, -1) %}
-                  <option value="{{ y }}" {% if me_birth_year == (y|string) %}selected{% endif %}>{{ y }}</option>
-                  {% endfor %}
-                </select>
-                <i class="fas fa-chevron-down pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500" aria-hidden="true"></i>
-              </div>
+              </span>
+              <input type="hidden" id="profileBirth" name="birth_date" value="{{ me_birth_date }}">
+              <button type="button"
+                      id="profileBirthTrigger"
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                      aria-controls="birthDatePickerPanel"
+                      class="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-[#0a1018] py-3 pl-3 pr-3 text-right text-sm text-white outline-none transition hover:border-white/15 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 sm:text-base">
+                <span id="profileBirthTriggerText" class="min-w-0 flex-1 truncate text-zinc-500">انتخاب کنید</span>
+                <i class="fas fa-chevron-down pointer-events-none shrink-0 text-xs text-zinc-500" aria-hidden="true"></i>
+              </button>
             </div>
 
           </div>
@@ -191,6 +165,8 @@
   {% include 'express_partner/partials/city_picker_sheet.html' %}
   {% endwith %}
   {% endif %}
+
+  {% include 'express_partner/partials/birth_date_picker_sheet.html' %}
 
   {# فرم واقعی حذف؛ دکمهٔ تأیید داخل مودال با form="" به این فرم وصل است #}
   <form id="profileDeleteForm" method="post" action="{{ url_for('express_partner.profile_delete_account') }}" class="hidden" aria-hidden="true">
@@ -283,6 +259,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ 'express-partner/birth-date-picker.js'|static_version }}"></script>
 <script>
 (function() {
   var trigger = document.getElementById('avatarEditTrigger');
@@ -429,8 +406,6 @@ function initProfileEditSave() {
     me_name: {{ me_name | tojson }},
     me_city: {{ me_city | tojson }},
     me_bio: {{ me_bio | tojson }},
-    me_landline: {{ me_landline | tojson }},
-    me_email: {{ me_email | tojson }},
     me_birth_date: {{ me_birth_date | tojson }},
     avatar_url: {% if profile and profile.get('avatar') %}{{ ('/uploads/' ~ profile.get('avatar')) | tojson }}{% else %}null{% endif %}
   };
@@ -485,15 +460,11 @@ function initProfileEditSave() {
 
   function collectPayload() {
     var nameEl = document.getElementById('profileName');
-    var landlineEl = document.getElementById('profileLandline');
-    var emailEl = document.getElementById('profileEmail');
     var cityEl = document.getElementById('profileCityValue');
     var birthEl = document.getElementById('profileBirth');
     var bioEl = document.getElementById('bioInput');
     return {
       name: String(nameEl && nameEl.value || '').trim().slice(0, 60),
-      landline: String(landlineEl && landlineEl.value || '').trim().slice(0, 20),
-      email: String(emailEl && emailEl.value || '').trim().slice(0, 120),
       city: String(cityEl && cityEl.value || '').trim(),
       birth_date: String(birthEl && birthEl.value || '').trim().slice(0, 32),
       bio: String(bioEl && bioEl.value || '').trim().slice(0, 200)
@@ -503,15 +474,10 @@ function initProfileEditSave() {
   function applyProfileData(data) {
     if (!data || !data.success) return;
     var nameEl = document.getElementById('profileName');
-    var landlineEl = document.getElementById('profileLandline');
-    var emailEl = document.getElementById('profileEmail');
     var cityEl = document.getElementById('profileCityValue');
     var cityText = document.getElementById('cityPickerTriggerText');
-    var birthEl = document.getElementById('profileBirth');
     var bioEl = document.getElementById('bioInput');
     if (nameEl) nameEl.value = data.me_name || '';
-    if (landlineEl) landlineEl.value = data.me_landline || '';
-    if (emailEl) emailEl.value = data.me_email || '';
     if (cityEl) cityEl.value = data.me_city || '';
     if (cityText) {
       cityText.textContent = data.me_city || 'انتخاب شهر';
@@ -521,33 +487,18 @@ function initProfileEditSave() {
       bioEl.value = data.me_bio || '';
       bioEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
-    if (birthEl) {
-      var year = '';
+    if (typeof window.vinorBirthDatePickerApplyFromServer === 'function') {
+      window.vinorBirthDatePickerApplyFromServer(data.me_birth_date || '');
+    } else {
+      var birthEl = document.getElementById('profileBirth');
+      var birthText = document.getElementById('profileBirthTriggerText');
       var rawBirth = String(data.me_birth_date || '').trim();
-      if (rawBirth) {
-        year = rawBirth.indexOf('/') >= 0 ? rawBirth.split('/')[0].trim() : rawBirth;
-      }
-      if (year) {
-        var hasOpt = false;
-        for (var i = 0; i < birthEl.options.length; i++) {
-          if (birthEl.options[i].value === year) {
-            hasOpt = true;
-            break;
-          }
-        }
-        if (!hasOpt) {
-          var opt = document.createElement('option');
-          opt.value = year;
-          opt.textContent = year;
-          opt.selected = true;
-          birthEl.insertBefore(opt, birthEl.options[1] || null);
-        }
-        birthEl.value = year;
-      } else {
-        birthEl.value = '';
+      if (birthEl) birthEl.value = rawBirth;
+      if (birthText) {
+        birthText.textContent = rawBirth || 'انتخاب کنید';
+        birthText.classList.toggle('text-zinc-500', !rawBirth);
       }
     }
-    updateAvatarInitials(data.me_name || '');
     var img = document.getElementById('avatarPreviewImg');
     var fallback = document.getElementById('avatarPreviewFallback');
     if (data.avatar_url && img) {
@@ -607,22 +558,6 @@ function initProfileEditSave() {
     }
   }
 
-  function updateAvatarInitials(name) {
-    var fallback = document.getElementById('avatarPreviewFallback');
-    if (!fallback) return;
-    var raw = String(name || '').trim().replace(/\u200c/g, ' ');
-    if (!raw) {
-      fallback.textContent = '؟';
-      return;
-    }
-    var parts = raw.split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) {
-      fallback.textContent = (parts[0].slice(0, 1) + parts[parts.length - 1].slice(0, 1)).trim() || parts[0].slice(0, 1) || '؟';
-      return;
-    }
-    fallback.textContent = raw.length >= 2 ? raw.slice(0, 2) : (raw.slice(0, 1) || '؟');
-  }
-
   function setSaveButtonFeedback(state, message) {
     if (!saveBtn) return;
     clearTimeout(savedTimer);
@@ -661,12 +596,6 @@ function initProfileEditSave() {
       setSaveButtonFeedback('error', 'نام الزامی است');
       var nameEl = document.getElementById('profileName');
       if (nameEl) try { nameEl.focus(); } catch (_) {}
-      return false;
-    }
-    if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
-      setSaveButtonFeedback('error', 'ایمیل نامعتبر');
-      var emailEl = document.getElementById('profileEmail');
-      if (emailEl) try { emailEl.focus(); } catch (_) {}
       return false;
     }
     return true;
@@ -708,10 +637,6 @@ function initProfileEditSave() {
         setSaveButtonFeedback('error', 'نام الزامی است');
         return false;
       }
-      if (errCode === 'invalid_email') {
-        setSaveButtonFeedback('error', 'ایمیل نامعتبر');
-        return false;
-      }
       if (out.res && (out.res.status === 400 || out.res.status === 403) && !errCode) errCode = 'csrf';
       setSaveButtonFeedback('error', errCode === 'csrf' ? 'خطای امنیتی' : 'خطا در ذخیره');
       return false;
@@ -726,13 +651,11 @@ function initProfileEditSave() {
   function bindFieldListeners() {
     if (listenersBound) return;
     listenersBound = true;
-    ['profileName', 'profileLandline', 'profileEmail', 'bioInput'].forEach(function (id) {
+    ['profileName', 'bioInput'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.addEventListener('input', function () { markDirty(); syncSaveButton(false); }, { signal: pageSignal });
     });
-    var birthEl = document.getElementById('profileBirth');
-    if (birthEl) birthEl.addEventListener('change', function () { markDirty(); syncSaveButton(false); }, { signal: pageSignal });
     if (saveBtn) {
       saveBtn.addEventListener('click', function () {
         if (saveBtn.disabled) return;
@@ -761,6 +684,15 @@ function initProfileEditSave() {
       e.returnValue = '';
     }
   }, { signal: pageSignal });
+}
+
+if (!window.__vinorProfileBirthHook) {
+  window.__vinorProfileBirthHook = true;
+  document.addEventListener('vinor:birth-date-applied', function () {
+    if (typeof window.__vinorProfileEditMarkDirty === 'function') {
+      window.__vinorProfileEditMarkDirty();
+    }
+  });
 }
 
 if (!window.__vinorProfileCityHook) {
