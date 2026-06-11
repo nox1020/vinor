@@ -3,9 +3,6 @@
 {% block head %}
   {{ super() }}
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <!-- Leaflet (local) -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.css') }}">
-  <script src="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.min.js') }}"></script>
 {% endblock %}
 
 {% block content %}
@@ -42,7 +39,11 @@
   {% endwith %}
 
   <!-- فرم ویرایش آگهی اکسپرس -->
-  <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin.edit_express_listing', code=land.code) }}" class="space-y-6">
+  <form id="expressEditForm" method="POST" enctype="multipart/form-data"
+        action="{{ url_for('admin.edit_express_listing', code=land.code) }}"
+        class="space-y-6"
+        data-leaflet-css="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.css') }}"
+        data-leaflet-js="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.min.js') }}">
     <!-- CSRF Token -->
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     
@@ -171,17 +172,23 @@
         <div class="flex items-center justify-between mb-3">
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
             موقعیت دقیق (مختصات جغرافیایی)
+            <span class="text-[10px] font-normal text-gray-400">اختیاری</span>
           </label>
-          <button type="button" id="getCurrentLocationBtn" 
+          <button type="button" id="toggleMapBtn"
+                  class="text-xs text-blue-600 dark:text-blue-400 font-medium">
+            نمایش نقشه
+          </button>
+        </div>
+
+        <div id="mapWrap" class="hidden space-y-3 mb-3">
+          <button type="button" id="getCurrentLocationBtn"
                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition">
             <i class="fas fa-crosshairs"></i>
             موقعیت فعلی
           </button>
+          <div id="locationMap" class="w-full h-64 rounded-lg border border-gray-300 dark:border-gray-700" style="z-index: 1;"></div>
         </div>
-        
-        <!-- نقشه -->
-        <div id="locationMap" class="w-full h-64 rounded-lg border border-gray-300 dark:border-gray-700 mb-3" style="z-index: 1;"></div>
-        
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">عرض جغرافیایی (Latitude)</label>
@@ -206,16 +213,6 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
 
         <div>
-          <label id="expressSizeLabel" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            متراژ (متر) <span class="text-red-500">*</span>
-          </label>
-          <input type="number" name="size" required 
-                 class="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                 value="{{ land.size or '' }}"
-                 placeholder="1000">
-        </div>
-
-        <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             دسته‌بندی
           </label>
@@ -233,10 +230,30 @@
 
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            پورسانت همکار (٪) <span class="text-red-500">*</span>
+          </label>
+          <input type="number" step="0.1" min="0" max="100" name="express_commission_pct" required
+                 class="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                 value="{{ commission_pct or '' }}"
+                 placeholder="مثال: 2">
+        </div>
+
+        <div>
+          <label id="expressSizeLabel" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            متراژ (متر) <span class="text-red-500">*</span>
+          </label>
+          <input type="text" name="size" required data-format-int inputmode="numeric"
+                 class="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                 value="{{ land.size or '' }}"
+                 placeholder="1000">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             قیمت کل (تومان) <span class="text-red-500">*</span>
           </label>
-          <input type="number" name="price_total" required 
-                 class="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+          <input type="text" name="price_total" required data-format-int inputmode="numeric"
+                 class="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                  value="{{ land.price_total or '' }}"
                  placeholder="2000000000">
         </div>
@@ -245,10 +262,10 @@
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             قیمت در متر (تومان)
           </label>
-          <input type="number" name="price_per_meter" 
-                 class="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+          <input type="text" name="price_per_meter" id="price_per_meter" data-format-int readonly
+                 class="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white"
                  value="{{ land.price_per_meter or '' }}"
-                 placeholder="2000000">
+                 placeholder="محاسبه خودکار">
         </div>
       </div>
 
@@ -272,57 +289,48 @@
       </div>
     </div>
 
-    <!-- تصاویر موجود - سبک دیوار -->
-    {% if land.images and land.images|length > 0 %}
-      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-4">
-          تصاویر موجود
-        </h2>
-        
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {% for img in land.images %}
-            <div class="relative">
-              <img src="{{ img if ('://' in img) else (('/uploads/' + img) if not img.startswith('/uploads/') else img) }}" 
-                   class="w-full h-24 object-cover rounded-lg" alt="تصویر {{ loop.index }}">
-              <div class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
-                {{ loop.index }}
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      </div>
-    {% endif %}
-
-    <!-- تصاویر جدید - سبک دیوار -->
-    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-      <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-4">
-        افزودن تصاویر جدید
+    <!-- تصاویر -->
+    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
+      <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+        تصاویر
       </h2>
-      
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+      {% if land.images and land.images|length > 0 %}
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            تصویر جدید
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">تیک بزنید تا هنگام ذخیره حذف شوند:</p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {% for img in land.images %}
+              <label class="relative block cursor-pointer group">
+                <img src="{{ img|admin_thumb_src }}" alt="تصویر {{ loop.index }}"
+                     class="w-full h-24 object-cover rounded-lg border border-gray-200 dark:border-gray-700 group-hover:opacity-80 transition"
+                     loading="lazy" decoding="async">
+                <span class="absolute top-1 right-1 bg-black/60 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">{{ loop.index }}</span>
+                <span class="absolute bottom-1 left-1 flex items-center gap-1 rounded bg-white/90 dark:bg-gray-900/90 px-1.5 py-0.5 text-[10px] text-red-600">
+                  <input type="checkbox" name="remove_images" value="{{ img }}" class="w-3 h-3">
+                  حذف
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          <label class="mt-3 inline-flex items-center gap-2 text-sm text-red-600 dark:text-red-400 cursor-pointer">
+            <input type="checkbox" name="remove_all_images" value="1" class="w-4 h-4">
+            حذف همه تصاویر
           </label>
-          <input type="file" name="image_1" accept="image/*" 
-                 class="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900">
         </div>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            تصویر جدید
-          </label>
-          <input type="file" name="image_2" accept="image/*" 
-                 class="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900">
+      {% else %}
+        <p class="text-sm text-gray-500 dark:text-gray-400">تصویری ثبت نشده است.</p>
+      {% endif %}
+
+      <div>
+        <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">افزودن تصاویر جدید (حداکثر ۱۲)</p>
+        <div id="dropzone" role="button" tabindex="0"
+             class="h-20 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 transition">
+          <i class="fa-solid fa-images text-gray-400 mb-1"></i>
+          <span class="text-xs text-gray-500">انتخاب یا رها کردن تصاویر</span>
         </div>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            تصویر جدید
-          </label>
-          <input type="file" name="image_3" accept="image/*" 
-                 class="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900">
-        </div>
+        <input type="file" id="imagesInput" name="images" accept="image/*" multiple class="hidden">
+        <div id="imagePreview" class="grid grid-cols-4 sm:grid-cols-6 gap-2 mt-3"></div>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">تصاویر جدید با فشرده‌سازی خودکار ذخیره می‌شوند.</p>
       </div>
     </div>
 
@@ -338,7 +346,7 @@
             <div class="text-sm text-gray-700 dark:text-gray-300 truncate">
               ویدئوی فعلی: <span class="font-mono text-xs">{{ land.video }}</span>
             </div>
-            <a href="/{{ land.video.lstrip('/') }}" target="_blank"
+            <a href="{{ land.video|admin_upload_src }}" target="_blank" rel="noopener"
                class="text-blue-600 hover:text-blue-700 text-sm font-medium whitespace-nowrap">
               <i class="fa-solid fa-arrow-up-right-from-square text-xs ml-1"></i> مشاهده
             </a>
@@ -444,249 +452,5 @@
 
 </div>
 
-<script>
-  (function(){
-    const pm = document.getElementById('payment_method');
-    const box = document.getElementById('installmentsBox');
-    const rowsEl = document.getElementById('installmentsRows');
-    const addBtn = document.getElementById('addInstallmentRow');
-    if (!pm || !box || !rowsEl || !addBtn) return;
-
-    function rowTemplate(months = '', amount = '') {
-      return `
-        <div class="installment-row bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-          <div class="grid grid-cols-12 gap-2 items-end">
-            <div class="col-span-5">
-              <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">تعداد ماه</label>
-              <input type="number" min="1" name="installment_months[]" value="${months}"
-                     class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-            </div>
-            <div class="col-span-6">
-              <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">مبلغ (تومان)</label>
-              <input type="text" inputmode="numeric" name="installment_amounts[]" value="${amount}"
-                     class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-            </div>
-            <div class="col-span-1 flex justify-end">
-              <button type="button" class="remove-installment w-9 h-9 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-600 dark:text-gray-300 transition">
-                <i class="fa-solid fa-trash text-xs text-red-600 dark:text-red-400"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    function ensureOneRow() {
-      if (!rowsEl.querySelector('.installment-row')) {
-        rowsEl.insertAdjacentHTML('beforeend', rowTemplate('', ''));
-      }
-    }
-
-    function toggle() {
-      const v = (pm.value || '').trim();
-      if (v === 'اقساطی') {
-        box.classList.remove('hidden');
-        ensureOneRow();
-      } else {
-        box.classList.add('hidden');
-      }
-    }
-
-    addBtn.addEventListener('click', () => {
-      rowsEl.insertAdjacentHTML('beforeend', rowTemplate('', ''));
-    });
-
-    rowsEl.addEventListener('click', (e) => {
-      const btn = e.target.closest('.remove-installment');
-      if (!btn) return;
-      const row = btn.closest('.installment-row');
-      if (row) row.remove();
-    });
-
-    pm.addEventListener('change', toggle);
-    toggle();
-  })();
-</script>
-
-<script>
-// نقشه تعاملی برای انتخاب موقعیت
-let locationMap = null;
-let locationMarker = null;
-
-function initLocationMap() {
-  // مختصات پیش‌فرض: تهران
-  const defaultLat = 35.6892;
-  const defaultLon = 51.3890;
-  
-  // بررسی اگر مختصات از قبل وجود دارد
-  const latInput = document.getElementById('latitude');
-  const lonInput = document.getElementById('longitude');
-  let initialLat = defaultLat;
-  let initialLon = defaultLon;
-  
-  if (latInput && latInput.value) {
-    initialLat = parseFloat(latInput.value) || defaultLat;
-  }
-  if (lonInput && lonInput.value) {
-    initialLon = parseFloat(lonInput.value) || defaultLon;
-  }
-  
-  // ایجاد نقشه
-  locationMap = L.map('locationMap').setView([initialLat, initialLon], 13);
-  
-  // افزودن لایه نقشه OpenStreetMap
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19
-  }).addTo(locationMap);
-  
-  // افزودن مارکر اولیه
-  if (latInput && latInput.value && lonInput && lonInput.value) {
-    locationMarker = L.marker([initialLat, initialLon], {
-      draggable: true
-    }).addTo(locationMap);
-  } else {
-    locationMarker = L.marker([initialLat, initialLon], {
-      draggable: true
-    }).addTo(locationMap);
-    updateCoordinates(initialLat, initialLon);
-  }
-  
-  // رویداد کلیک روی نقشه
-  locationMap.on('click', function(e) {
-    const lat = e.latlng.lat;
-    const lon = e.latlng.lng;
-    
-    if (locationMarker) {
-      locationMarker.setLatLng([lat, lon]);
-    } else {
-      locationMarker = L.marker([lat, lon], {
-        draggable: true
-      }).addTo(locationMap);
-    }
-    
-    updateCoordinates(lat, lon);
-  });
-  
-  // رویداد drag مارکر
-  locationMarker.on('dragend', function(e) {
-    const lat = e.target.getLatLng().lat;
-    const lon = e.target.getLatLng().lng;
-    updateCoordinates(lat, lon);
-  });
-  
-  // به‌روزرسانی مختصات هنگام تغییر دستی در فیلدها
-  latInput?.addEventListener('change', function() {
-    const lat = parseFloat(this.value);
-    const lon = parseFloat(lonInput?.value) || initialLon;
-    if (!isNaN(lat) && !isNaN(lon)) {
-      if (locationMarker) {
-        locationMarker.setLatLng([lat, lon]);
-        locationMap.setView([lat, lon], locationMap.getZoom());
-      }
-    }
-  });
-  
-  lonInput?.addEventListener('change', function() {
-    const lat = parseFloat(latInput?.value) || initialLat;
-    const lon = parseFloat(this.value);
-    if (!isNaN(lat) && !isNaN(lon)) {
-      if (locationMarker) {
-        locationMarker.setLatLng([lat, lon]);
-        locationMap.setView([lat, lon], locationMap.getZoom());
-      }
-    }
-  });
-}
-
-function updateCoordinates(lat, lon) {
-  const latInput = document.getElementById('latitude');
-  const lonInput = document.getElementById('longitude');
-  
-  if (latInput) {
-    latInput.value = lat.toFixed(6);
-  }
-  if (lonInput) {
-    lonInput.value = lon.toFixed(6);
-  }
-}
-
-// دریافت موقعیت فعلی دستگاه
-document.getElementById('getCurrentLocationBtn')?.addEventListener('click', function() {
-  const btn = this;
-  const originalText = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال دریافت...';
-  
-  if (!navigator.geolocation) {
-    alert('مرورگر شما از دریافت موقعیت جغرافیایی پشتیبانی نمی‌کند.');
-    btn.disabled = false;
-    btn.innerHTML = originalText;
-    return;
-  }
-  
-  navigator.geolocation.getCurrentPosition(
-    function(position) {
-      const lat = position.coords.latitude;
-      const lon = position.coords.longitude;
-      
-      if (locationMap && locationMarker) {
-        locationMarker.setLatLng([lat, lon]);
-        locationMap.setView([lat, lon], 15);
-        updateCoordinates(lat, lon);
-      } else if (locationMap) {
-        locationMarker = L.marker([lat, lon], {
-          draggable: true
-        }).addTo(locationMap);
-        locationMap.setView([lat, lon], 15);
-        updateCoordinates(lat, lon);
-        
-        locationMarker.on('dragend', function(e) {
-          const lat = e.target.getLatLng().lat;
-          const lon = e.target.getLatLng().lng;
-          updateCoordinates(lat, lon);
-        });
-      }
-      
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-    },
-    function(error) {
-      let errorMsg = 'خطا در دریافت موقعیت: ';
-      switch(error.code) {
-        case error.PERMISSION_DENIED:
-          errorMsg += 'دسترسی به موقعیت جغرافیایی رد شد.';
-          break;
-        case error.POSITION_UNAVAILABLE:
-          errorMsg += 'اطلاعات موقعیت در دسترس نیست.';
-          break;
-        case error.TIMEOUT:
-          errorMsg += 'زمان دریافت موقعیت به پایان رسید.';
-          break;
-        default:
-          errorMsg += 'خطای ناشناخته.';
-          break;
-      }
-      alert(errorMsg);
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-    },
-    {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0
-    }
-  );
-});
-
-// راه‌اندازی نقشه پس از بارگذاری صفحه
-document.addEventListener('DOMContentLoaded', function() {
-  // کمی تاخیر برای اطمینان از بارگذاری کامل Leaflet
-  setTimeout(function() {
-    if (document.getElementById('locationMap')) {
-      initLocationMap();
-    }
-  }, 500);
-});
-</script>
+<script src="{{ url_for('static', filename='admin/edit-express-listing.js') }}" defer></script>
 {% endblock %}

@@ -246,6 +246,28 @@ except Exception:
     from flask import Blueprint
     admin_bp = Blueprint('admin', __name__, url_prefix='/admin', template_folder='templates')
 
+
+@admin_bp.app_template_filter('admin_upload_src')
+def _admin_upload_src_filter(path: str | None) -> str:
+    if not path:
+        return ''
+    s = str(path).strip()
+    if '://' in s:
+        return s
+    if s.startswith('/uploads/'):
+        return s
+    if s.startswith('uploads/'):
+        return '/' + s
+    if s.startswith('/'):
+        return s
+    return f'/uploads/{s}'
+
+
+@admin_bp.app_template_filter('admin_thumb_src')
+def _admin_thumb_src_filter(path: str | None) -> str:
+    from app.utils.images import display_thumb_url
+    return display_thumb_url(path) or _admin_upload_src_filter(path)
+
 # -----------------------------------------------------------------------------
 # پیکربندی ساده ادمین (برای شروع)
 # -----------------------------------------------------------------------------
@@ -584,6 +606,96 @@ def _delete_ad_images(ad: Dict[str, Any]):
                     pass
     except Exception:
         pass
+
+def _unlink_stored_upload(stored_path: str) -> None:
+    """حذف یک فایل uploads/static از دیسک (تصویر یا ویدیو)."""
+    if not stored_path or not isinstance(stored_path, str):
+        return
+    path = stored_path.strip()
+    if not path:
+        return
+    candidates: List[str] = []
+    if os.path.isabs(path):
+        candidates.append(path)
+    else:
+        if path.startswith('uploads/'):
+            candidates.append(os.path.join(_uploads_root(), path[8:]))
+            candidates.append(os.path.join(_uploads_root(), path))
+        candidates.append(os.path.join(_uploads_root(), os.path.basename(path)))
+        if path.startswith('static/'):
+            candidates.append(os.path.join(current_app.root_path, path))
+    uploads_root = os.path.abspath(_uploads_root())
+    for c in candidates:
+        try:
+            abs_c = os.path.abspath(c)
+            if abs_c.startswith(uploads_root) or '/static/uploads/' in abs_c.replace('\\', '/'):
+                _safe_unlink(abs_c)
+        except Exception:
+            pass
+
+
+def _apply_express_image_edits(land: Dict[str, Any], form, files) -> None:
+    """حذف/افزودن تصاویر + پاک‌سازی images_v2."""
+    images_changed = False
+
+    if (form.get('remove_all_images') or '').strip() in ('1', 'on'):
+        for img in land.get('images') or []:
+            _unlink_stored_upload(str(img))
+        land['images'] = []
+        images_changed = True
+    else:
+        remove_set = {str(x).strip() for x in (form.getlist('remove_images') or []) if str(x).strip()}
+        if remove_set:
+            kept: List[str] = []
+            for img in land.get('images') or []:
+                s = str(img).strip()
+                if s in remove_set:
+                    _unlink_stored_upload(s)
+                    images_changed = True
+                else:
+                    kept.append(img)
+            land['images'] = kept
+
+    new_images = _normalize_images_from_form(form, files)
+    if not new_images:
+        from app.utils.images import save_processed_form_image
+        upload_folder = _uploads_root()
+        os.makedirs(upload_folder, exist_ok=True)
+        for i in range(1, 4):
+            img_key = f'image_{i}'
+            f = files.get(img_key)
+            if f and f.filename:
+                stored = save_processed_form_image(f, upload_folder)
+                if stored:
+                    new_images.append(stored)
+
+    if new_images:
+        land.setdefault('images', []).extend(new_images)
+        images_changed = True
+
+    if images_changed:
+        land.pop('images_v2', None)
+
+
+def _express_commission_from_form(land: Dict[str, Any], form, price_total: int) -> Optional[str]:
+    """به‌روز extras پورسانت؛ خطا = پیام flash."""
+    pct_raw = (form.get('express_commission_pct') or '').strip()
+    if not pct_raw:
+        return None
+    try:
+        pct = float(pct_raw)
+    except (TypeError, ValueError):
+        return 'درصد پورسانت باید عدد معتبر باشد.'
+    if pct <= 0 or pct > 100:
+        return 'درصد پورسانت باید بین ۰ و ۱۰۰ باشد.'
+    extras = land.get('extras')
+    if not isinstance(extras, dict):
+        extras = {}
+    extras['express_commission_pct'] = pct
+    extras['express_commission_amount'] = int(round(price_total * (pct / 100.0))) if price_total else 0
+    land['extras'] = extras
+    return None
+
 
 def cleanup_expired_ads() -> None:
     """حذف کامل آگهی‌های منقضی‌شده از JSON و حذف تصاویرشان."""
@@ -3058,41 +3170,94 @@ def add_express_listing():
 @login_required
 def edit_express_listing(code):
     """ویرایش آگهی اکسپرس"""
-    cleanup_expired_ads()
-    lands_data = load_json(_lands_path())
-    lands_list = lands_data if isinstance(lands_data, list) else []
+    lands_list = load_json(_lands_path())
+    if not isinstance(lands_list, list):
+        lands_list = []
     cities = load_active_cities() or []
-    
+
     land = find_by_code(lands_list, code)
     if not land or not land.get('is_express', False):
         flash('آگهی اکسپرس یافت نشد.', 'warning')
         return redirect(url_for('admin.express_listings'))
-    
+
+    extras = land.get('extras') if isinstance(land.get('extras'), dict) else {}
+    commission_pct = extras.get('express_commission_pct', land.get('express_commission_pct', ''))
+
+    def _render_edit(error_category: str = 'error'):
+        p, a, r = counts_by_status(lands_list)
+        return render_template(
+            'admin/edit_express_listing.html',
+            land=land,
+            pending_count=p,
+            approved_count=a,
+            rejected_count=r,
+            cities=cities,
+            commission_pct=commission_pct,
+        )
+
     if request.method == 'POST':
         form = request.form
         files = request.files
-        
-        # به‌روزرسانی فیلدها
-        land['title'] = form.get('title', '').strip()
-        land['location'] = form.get('location', '').strip()
-        land['city'] = (form.get('city') or '').strip()
+
+        title = form.get('title', '').strip()
+        location = form.get('location', '').strip()
+        city = (form.get('city') or '').strip()
+        size_clean = re.sub(r'[^\d]', '', form.get('size', '') or '')
+        price_clean = re.sub(r'[^\d]', '', form.get('price_total', '') or '')
+
+        if not all([title, location, city, size_clean, price_clean]):
+            flash('لطفاً فیلدهای اجباری را پر کنید.', 'error')
+            return _render_edit()
+
+        if cities and city not in cities:
+            flash('شهر آگهی باید از بین شهرهای فعال انتخاب شود.', 'error')
+            return _render_edit()
+
+        try:
+            size = int(size_clean)
+            price_total = int(price_clean)
+        except (ValueError, TypeError):
+            flash('متراژ و قیمت باید عدد معتبر باشند.', 'error')
+            return _render_edit()
+
+        if size <= 0 or price_total <= 0:
+            flash('متراژ و قیمت باید بیشتر از صفر باشند.', 'error')
+            return _render_edit()
+
+        price_per_meter_raw = form.get('price_per_meter', '').strip()
+        price_per_meter_clean = re.sub(r'[^\d]', '', price_per_meter_raw) if price_per_meter_raw else ''
+        try:
+            price_per_meter = int(price_per_meter_clean) if price_per_meter_clean else 0
+            if price_per_meter <= 0 and size > 0:
+                price_per_meter = int(round(price_total / size))
+        except (ValueError, TypeError):
+            price_per_meter = int(round(price_total / size)) if size > 0 else 0
+
+        comm_err = _express_commission_from_form(land, form, price_total)
+        if comm_err:
+            flash(comm_err, 'error')
+            return _render_edit()
+
+        land['title'] = title
+        land['location'] = location
+        land['city'] = city
         land['category'] = (form.get('category') or '').strip()
-        land['size'] = form.get('size', '').strip()
-        land['price_total'] = int(form.get('price_total', 0) or 0)
-        land['price_per_meter'] = int(form.get('price_per_meter', 0) or 0)
+        land['size'] = size
+        land['price_total'] = price_total
+        land['price_per_meter'] = price_per_meter
         land['description'] = form.get('description', '').strip()
         if (form.get('expert_verified') or '').strip():
             land['expert_verified'] = True
         else:
             land.pop('expert_verified', None)
-        land['vinor_contact'] = form.get('vinor_contact', '09121234567')
+        land['vinor_contact'] = form.get('vinor_contact', '09121234567').strip()
         land['payment_method'] = (form.get('payment_method') or '').strip()
-        # جزئیات اقساط (اگر اقساطی باشد)
+
         try:
             if land.get('payment_method') == 'اقساطی':
                 payment_terms = []
-                months_list = request.form.getlist('installment_months[]')
-                amounts_list = request.form.getlist('installment_amounts[]')
+                months_list = form.getlist('installment_months[]')
+                amounts_list = form.getlist('installment_amounts[]')
                 for i in range(max(len(months_list), len(amounts_list))):
                     m_raw = (months_list[i] if i < len(months_list) else '') or ''
                     a_raw = (amounts_list[i] if i < len(amounts_list) else '') or ''
@@ -3111,8 +3276,7 @@ def edit_express_listing(code):
                 land.pop('payment_terms', None)
         except Exception:
             pass
-        
-        # به‌روزرسانی مختصات جغرافیایی
+
         try:
             lat_str = form.get('latitude', '').strip()
             lon_str = form.get('longitude', '').strip()
@@ -3125,42 +3289,21 @@ def edit_express_listing(code):
             else:
                 land.pop('longitude', None)
         except (ValueError, TypeError):
-            pass  # اگر مقدار نامعتبر بود، تغییر نمی‌دهیم
-        
-        # اضافه کردن تصاویر جدید
-        from app.utils.images import save_processed_form_image
-        for i in range(1, 4):  # image_1, image_2, image_3
-            img_key = f'image_{i}'
-            if img_key in files and files[img_key].filename:
-                file = files[img_key]
-                upload_folder = _uploads_root()
-                os.makedirs(upload_folder, exist_ok=True)
-                stored = save_processed_form_image(file, upload_folder)
-                if stored:
-                    land.setdefault('images', []).append(stored)
-        
-        # اضافه کردن مدارک جدید
+            pass
+
+        _apply_express_image_edits(land, form, files)
+
         for key, file in files.items():
             if key.startswith('document_') and file.filename:
                 doc_filename = _save_express_document(file, code)
                 if doc_filename:
                     land.setdefault('express_documents', []).append(doc_filename)
 
-        # حذف/تغییر ویدئو (اختیاری)
         try:
             if (form.get('remove_video') or '').strip():
                 old_video = land.get('video')
                 if old_video and isinstance(old_video, str):
-                    # حذف فایل ویدئوی قبلی (در uploads)
-                    try:
-                        candidates = [
-                            os.path.join(_uploads_root(), old_video),
-                            os.path.join(_uploads_root(), os.path.basename(old_video)),
-                        ]
-                        for c in candidates:
-                            _safe_unlink(c)
-                    except Exception:
-                        pass
+                    _unlink_stored_upload(old_video)
                 land.pop('video', None)
         except Exception:
             pass
@@ -3168,35 +3311,29 @@ def edit_express_listing(code):
         try:
             new_video = _save_video_from_form(files)
             if new_video:
-                # حذف ویدئوی قبلی
                 old_video = land.get('video')
                 if old_video and isinstance(old_video, str) and old_video != new_video:
-                    try:
-                        candidates = [
-                            os.path.join(_uploads_root(), old_video),
-                            os.path.join(_uploads_root(), os.path.basename(old_video)),
-                        ]
-                        for c in candidates:
-                            _safe_unlink(c)
-                    except Exception:
-                        pass
+                    _unlink_stored_upload(old_video)
                 land['video'] = new_video
         except Exception:
             pass
 
         apply_category_specs_from_form(land, form)
-        
-        # ذخیره تغییرات
-        save_json(_lands_path(), lands_list)
+
+        save_ads(lands_list)
         flash('آگهی اکسپرس با موفقیت به‌روزرسانی شد.', 'success')
         return redirect(url_for('admin.express_listings'))
-    
-    # GET
+
     p, a, r = counts_by_status(lands_list)
-    return render_template('admin/edit_express_listing.html',
-                          land=land,
-                          pending_count=p, approved_count=a, rejected_count=r,
-                          cities=cities)
+    return render_template(
+        'admin/edit_express_listing.html',
+        land=land,
+        pending_count=p,
+        approved_count=a,
+        rejected_count=r,
+        cities=cities,
+        commission_pct=commission_pct,
+    )
 
 @admin_bp.post('/express/<string:code>/delete')
 @login_required
