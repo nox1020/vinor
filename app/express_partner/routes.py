@@ -58,6 +58,7 @@ from .partner_withdrawals import (
     partner_commission_dashboard,
     reconcile_paid_withdrawals,
     cancel_partner_withdrawal,
+    MIN_WITHDRAWAL_AMOUNT,
 )
 from .routine_auto import (
     merge_routine_steps_for_phone,
@@ -737,6 +738,11 @@ def _finalize_partner_login(phone: str) -> str:
     session.permanent = True
     _clear_otp_session()
     _ensure_user_record_background(phone)
+    try:
+        from .referrals import stash_referrer_from_request
+        stash_referrer_from_request(phone)
+    except Exception:
+        pass
     # نقش همکار روی اولین درخواست بعد از ورود محاسبه می‌شود — بدون بارگذاری لیست همکاران در مسیر verify
     try:
         session.pop('VINOR_IS_EXPRESS_PARTNER', None)
@@ -1288,11 +1294,26 @@ def _clip_apply_fields(name: str, city: str, experience: str, note: str) -> tupl
     )
 
 
+def _apply_login_redirect():
+    """ریدایرکت به ورود با حفظ ref دعوت در next."""
+    ref = (request.args.get('ref') or '').strip()
+    next_apply = url_for('express_partner.apply', ref=ref) if ref else url_for('express_partner.apply')
+    try:
+        from .referrals import capture_ref_on_login
+        if ref:
+            session['pending_ref_token'] = ref
+        else:
+            capture_ref_on_login()
+    except Exception:
+        pass
+    return redirect(url_for('express_partner.login', next=next_apply))
+
+
 @express_partner_bp.route('/apply', methods=['GET', 'POST'], endpoint='apply')
 def apply():
     """درخواست همکاری — تک‌صفحه، کم‌اصطکاک."""
     if not session.get("user_phone"):
-        return redirect(url_for("express_partner.login", next=url_for("express_partner.apply")))
+        return _apply_login_redirect()
     me_phone = (session.get("user_phone") or "").strip()
     try:
         from .referrals import stash_referrer_from_request
@@ -2113,6 +2134,7 @@ def commissions_page():
         approved_commission=comm_stats["approved_amount"],
         withdrawable_balance=withdrawable_balance,
         requestable_balance=withdrawable_balance,
+        min_withdrawal_amount=MIN_WITHDRAWAL_AMOUNT,
         pending_withdrawal_total=pending_withdrawal_total,
         partner_name=partner_name,
         hide_header=True,
@@ -2187,6 +2209,7 @@ def commissions_data():
         'sold_count': comm_stats['total_confirmed_count'],
         'withdrawable_balance': comm_stats['withdrawable_balance'],
         'requestable_balance': comm_stats['withdrawable_balance'],
+        'min_withdrawal_amount': MIN_WITHDRAWAL_AMOUNT,
         'pending_withdrawal_total': comm_stats['in_withdrawal_amount'],
         'in_withdrawal_amount': comm_stats['in_withdrawal_amount'],
         'approved_commission': comm_stats['approved_amount'],
@@ -2246,6 +2269,7 @@ def bank_accounts_data():
         'banks': catalog_public(),
         'withdrawable_balance': w_balance,
         'requestable_balance': w_balance,
+        'min_withdrawal_amount': MIN_WITHDRAWAL_AMOUNT,
         'default_account_id': (default_acc or {}).get('id') or '',
     })
 
@@ -2975,7 +2999,7 @@ def invite_colleagues():
             'approved_commission': 0,
             'paid_commission': 0,
         }
-        bonus_per_invite = 1_000_000
+        bonus_per_invite = 500_000
     return render_template(
         'express_partner/invite_colleagues.html',
         invite_url=invite_url,
@@ -4071,12 +4095,14 @@ def profile_page():
         apk_url=android_apk_url,
         req=request,
     )
+    from .referrals import REFERRAL_BONUS_AMOUNT
     resp = make_response(render_template(
         'express_partner/profile.html',
         me_phone=me_phone,
         me_name=me_name,
         profile=profile,
         is_approved=is_approved,
+        referral_bonus_per_invite=REFERRAL_BONUS_AMOUNT,
         android_apk_url=android_apk_url,
         android_apk_version=android_apk_version,
         android_apk_updated_at=android_apk_updated_at,
@@ -4304,6 +4330,8 @@ def profile_edit_data():
 @require_partner_access(allow_pending=True, json_response=True)
 def api_profile_update():
     """به‌روزرسانی نام، شهر، درباره من برای وب و اپ (JSON)."""
+    import re
+
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     data = request.get_json(silent=True)
     if not data and request.data:
@@ -4313,16 +4341,22 @@ def api_profile_update():
             data = {}
     if not isinstance(data, dict):
         data = {}
+    name = (data.get('name') or '').strip()[:60]
+    if not name:
+        return jsonify({'success': False, 'error': 'name_required'}), 400
+    email = (data.get('email') or '').strip()[:120]
+    if email and not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
+        return jsonify({'success': False, 'error': 'invalid_email'}), 400
     partners = load_express_partners() or []
     profile = _get_or_create_partner_record(partners, me_phone)
     cities_allowed = _active_cities_cached()
     _apply_partner_profile_fields(
         profile,
-        name=data.get('name') or '',
+        name=name,
         city=data.get('city') or '',
         bio=data.get('bio') or '',
         landline=data.get('landline') or '',
-        email=data.get('email') or '',
+        email=email,
         birth_date=data.get('birth_date') or '',
         cities_allowed=cities_allowed,
     )

@@ -35,7 +35,7 @@
     '/express/partner/help': 'profile',
     '/express/partner/support': 'profile',
     '/express/partner/top-sellers': 'profile',
-    '/express/partner/invite-colleagues': 'profile',
+    '/express/partner/invite': 'profile',
     '/express/partner/training': 'profile',
     '/express/partner/routine': 'profile',
     '/express/partner/cooperation-terms': 'dashboard',
@@ -521,6 +521,9 @@
     try {
       document.dispatchEvent(new CustomEvent('vinor:city-picker-reinit'));
     } catch (_) {}
+    if (typeof window.setupVinorExpressPullRefresh === 'function') {
+      try { window.setupVinorExpressPullRefresh(); } catch (_) {}
+    }
   }
 
   function playEnterAnimation(dir) {
@@ -729,6 +732,13 @@
     }, 160);
   }
 
+  function confirmLeaveProfileEdit() {
+    if (!document.getElementById('profileEditPage')) return true;
+    if (typeof window.__vinorProfileEditIsDirty !== 'function') return true;
+    if (!window.__vinorProfileEditIsDirty()) return true;
+    return window.confirm('تغییرات ذخیره نشده‌اند. بدون ذخیره خارج می‌شوید؟');
+  }
+
   function flushProfileEditBeforeLeave(fromHref, toHref) {
     try {
       if (!document.getElementById('profileEditPage')) return Promise.resolve();
@@ -737,8 +747,8 @@
       if (fromPath !== '/express/partner/profile/edit' || fromPath === toPath) {
         return Promise.resolve();
       }
-      if (typeof window.__vinorProfileEditFlushSave === 'function') {
-        return Promise.resolve(window.__vinorProfileEditFlushSave());
+      if (!confirmLeaveProfileEdit()) {
+        return Promise.reject(new Error('profile_edit_unsaved'));
       }
     } catch (_) {}
     return Promise.resolve();
@@ -773,10 +783,61 @@
       }
       stopAllExpressMedia();
       return softNavigate(href, 0);
+    }).catch(function (err) {
+      if (err && err.message === 'profile_edit_unsaved') return false;
+      throw err;
     });
   }
 
   window.vinorExpressNavigate = vinorExpressNavigate;
+
+  function vinorExpressSoftRefresh() {
+    var href = window.location.href.split('#')[0];
+    var sep = href.indexOf('?') >= 0 ? '&' : '?';
+    var url = href + sep + '_refresh=' + Date.now();
+    var swapEl = document.getElementById('vinor-express-page-swap');
+    var scriptsEl = document.getElementById('vinor-express-page-scripts');
+    if (!swapEl) {
+      window.location.reload();
+      return Promise.resolve(false);
+    }
+    stopAllExpressMedia();
+    if (window.__vinorAuthPageAbort) {
+      try { window.__vinorAuthPageAbort.abort(); } catch (_) {}
+    }
+    return fetch(url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
+      cache: 'no-store'
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('refresh');
+        return res.text();
+      })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var newSwap = doc.getElementById('vinor-express-page-swap');
+        var newScripts = doc.getElementById('vinor-express-page-scripts');
+        if (!newSwap) throw new Error('swap');
+        syncAuthSegmentFromDoc(doc);
+        swapEl.innerHTML = newSwap.innerHTML;
+        swapEl.querySelectorAll('#bottomNavMenu').forEach(function (dup) { dup.remove(); });
+        if (scriptsEl && newScripts) {
+          scriptsEl.innerHTML = newScripts.innerHTML;
+          runScriptsIn(scriptsEl);
+        }
+        runScriptsIn(swapEl);
+        if (doc.title) document.title = doc.title;
+        afterPageSwap(softTabKeyForUrl(window.location.href));
+        return true;
+      })
+      .catch(function () {
+        window.location.reload();
+        return false;
+      });
+  }
+  window.vinorExpressSoftRefresh = vinorExpressSoftRefresh;
+
   window.vinorExpressPrefetch = prefetchHref;
   window.vinorExpressClearAuthCache = clearAuthPrefetchCache;
   window.vinorExpressClearPrefetchCache = clearAllPrefetchCache;
@@ -854,11 +915,15 @@
       window.__vinorExpressNavDepth = nextDepth;
       window.__vinorExpressLastHref = target;
     } catch (_) {}
-    var flush = document.getElementById('profileEditPage') && typeof window.__vinorProfileEditFlushSave === 'function'
-      ? Promise.resolve(window.__vinorProfileEditFlushSave())
+    var flush = document.getElementById('profileEditPage')
+      ? (confirmLeaveProfileEdit() ? Promise.resolve() : Promise.reject(new Error('profile_edit_unsaved')))
       : Promise.resolve();
     flush.then(function () {
       softNavigate(target, dir, { fromPopstate: true });
+    }).catch(function (err) {
+      if (err && err.message === 'profile_edit_unsaved') {
+        try { history.forward(); } catch (_) {}
+      }
     });
   });
 

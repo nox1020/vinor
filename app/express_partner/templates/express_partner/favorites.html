@@ -111,6 +111,10 @@
     }
 
     window.vinorFavoritesPageLoad = loadFavorites;
+    window.__vinorPagePullRefresh = function () {
+      loadFavorites();
+      return Promise.resolve();
+    };
 
     if (!window.__vinorFavoritesPageBound) {
       window.__vinorFavoritesPageBound = true;

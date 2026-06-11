@@ -273,6 +273,10 @@
     var elWithdrawSuccess = document.getElementById('vnWithdrawFormSuccess');
 
     var maxWithdraw = 0;
+    var minWithdraw = 10000000;
+    if (modal) {
+      minWithdraw = Math.max(0, parseInt(String(modal.getAttribute('data-min-withdraw-int') || '10000000'), 10) || 10000000);
+    }
     var selectedBankSummary = '';
     var selectedBankId = '';
     var withdrawSubmitting = false;
@@ -326,7 +330,7 @@
 
     function syncSubmitState() {
       var amt = parseInputDigits();
-      var ok = !withdrawSubmitting && amt > 0 && maxWithdraw > 0 && amt <= maxWithdraw && !!selectedBankId;
+      var ok = !withdrawSubmitting && amt >= minWithdraw && maxWithdraw >= minWithdraw && amt <= maxWithdraw && !!selectedBankId;
       if (submit) {
         submit.disabled = !ok;
       }
@@ -366,6 +370,9 @@
           } else if (typeof d.withdrawable_balance === 'number') {
             maxWithdraw = Math.max(0, parseInt(String(d.withdrawable_balance), 10) || 0);
           }
+          if (typeof d.min_withdrawal_amount === 'number') {
+            minWithdraw = Math.max(0, parseInt(String(d.min_withdrawal_amount), 10) || minWithdraw);
+          }
           if (balanceEl) balanceEl.textContent = formatToman(maxWithdraw);
           applyDefaultBankSelection(d.accounts || [], d.default_account_id || '');
           return d;
@@ -374,7 +381,7 @@
     }
 
     function withdrawErrorMessage(code) {
-      if (code === 'min_amount') return 'حداقل مبلغ برداشت ۱۰٬۰۰۰ تومان است.';
+      if (code === 'min_amount') return 'حداقل مبلغ برداشت ' + formatToman(minWithdraw) + ' است.';
       if (code === 'missing_bank') return 'حساب بانکی را انتخاب کنید.';
       if (code === 'invalid_bank') return 'حساب بانکی نامعتبر است.';
       if (code === 'insufficient_balance') return 'مبلغ بیشتر از موجودی قابل برداشت است.';
@@ -870,6 +877,14 @@
         }
         if (amt <= 0) {
           if (elWithdrawErr) { elWithdrawErr.textContent = 'مبلغ برداشت را وارد کنید.'; elWithdrawErr.classList.remove('hidden'); }
+          return;
+        }
+        if (amt < minWithdraw) {
+          if (elWithdrawErr) { elWithdrawErr.textContent = withdrawErrorMessage('min_amount'); elWithdrawErr.classList.remove('hidden'); }
+          return;
+        }
+        if (maxWithdraw < minWithdraw) {
+          if (elWithdrawErr) { elWithdrawErr.textContent = 'موجودی قابل برداشت کمتر از کف برداشت (' + formatToman(minWithdraw) + ') است.'; elWithdrawErr.classList.remove('hidden'); }
           return;
         }
         withdrawSubmitting = true;

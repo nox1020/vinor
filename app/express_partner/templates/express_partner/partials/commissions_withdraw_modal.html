@@ -5,6 +5,7 @@
      aria-modal="true"
      aria-hidden="true"
      aria-labelledby="vnWithdrawModalTitle"
+     data-min-withdraw-int="{{ (min_withdrawal_amount or 10000000)|int }}"
      data-tg-body-modal
      data-support-url="{{ url_for('express_partner.support') }}">
   <div class="vn-withdraw-backdrop absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200"
@@ -57,11 +58,12 @@
           </div>
         </div>
         <div class="flex flex-wrap gap-2 justify-start" dir="rtl">
-          <button type="button" class="vn-withdraw-chip rounded-lg bg-[#2a2d3a] text-white text-xs font-semibold px-3 py-2 border border-white/5 hover:bg-white/10 transition" data-chip="100000">+۱۰۰٬۰۰۰</button>
-          <button type="button" class="vn-withdraw-chip rounded-lg bg-[#2a2d3a] text-white text-xs font-semibold px-3 py-2 border border-white/5 hover:bg-white/10 transition" data-chip="200000">+۲۰۰٬۰۰۰</button>
-          <button type="button" class="vn-withdraw-chip rounded-lg bg-[#2a2d3a] text-white text-xs font-semibold px-3 py-2 border border-white/5 hover:bg-white/10 transition" data-chip="500000">+۵۰۰٬۰۰۰</button>
           <button type="button" class="vn-withdraw-chip rounded-lg bg-[#2a2d3a] text-white text-xs font-semibold px-3 py-2 border border-white/5 hover:bg-white/10 transition" data-chip="1000000">+۱٬۰۰۰٬۰۰۰</button>
+          <button type="button" class="vn-withdraw-chip rounded-lg bg-[#2a2d3a] text-white text-xs font-semibold px-3 py-2 border border-white/5 hover:bg-white/10 transition" data-chip="2000000">+۲٬۰۰۰٬۰۰۰</button>
+          <button type="button" class="vn-withdraw-chip rounded-lg bg-[#2a2d3a] text-white text-xs font-semibold px-3 py-2 border border-white/5 hover:bg-white/10 transition" data-chip="5000000">+۵٬۰۰۰٬۰۰۰</button>
+          <button type="button" class="vn-withdraw-chip rounded-lg bg-[#2a2d3a] text-white text-xs font-semibold px-3 py-2 border border-white/5 hover:bg-white/10 transition" data-chip="10000000">+۱۰٬۰۰۰٬۰۰۰</button>
         </div>
+        <p class="text-[11px] text-slate-500 text-start">کف برداشت: {{ (min_withdrawal_amount or 10000000)|toman }}</p>
       </div>
 
       {# حساب مقصد #}

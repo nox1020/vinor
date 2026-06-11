@@ -5,7 +5,9 @@
 {% set _active_wd = s.get('in_withdrawal_amount', pending_withdrawal_total or 0) %}
 {% set _active_wd_cnt = s.get('in_withdrawal_count', 0) %}
 {% set _has_active_wd = ((_active_wd or 0)|int > 0) or ((_active_wd_cnt or 0)|int > 0) %}
-{% set _can_withdraw = (_withdrawable or 0)|int > 0 %}
+{% set _min_wd = (min_withdrawal_amount or 10000000)|int %}
+{% set _can_withdraw = (_withdrawable or 0)|int >= _min_wd %}
+{% set _below_min = ((_withdrawable or 0)|int > 0) and not _can_withdraw %}
 
 <section data-tour="commissions-summary" class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
   <div class="px-4 pt-4 pb-3 flex items-center justify-between gap-3 border-b border-white/5">
@@ -44,5 +46,8 @@
       <i class="fas fa-wallet text-sm" aria-hidden="true"></i>
       درخواست برداشت
     </button>
+    {% if _below_min %}
+    <p class="mt-2 text-[11px] text-slate-500 text-center leading-relaxed">کف برداشت {{ _min_wd|toman }} است.</p>
+    {% endif %}
   </div>
 </section>

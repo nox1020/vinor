@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""پاداش دعوت همکار: ۱ میلیون تومان به ازای هر دعوت تأییدشده."""
+"""پاداش دعوت همکار: ۵۰۰ هزار تومان به ازای هر دعوت تأییدشده."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -16,7 +16,7 @@ from ..utils.storage import (
     save_express_referrals,
 )
 
-REFERRAL_BONUS_AMOUNT = 1_000_000
+REFERRAL_BONUS_AMOUNT = 500_000
 REFERRAL_LAND_CODE = 'referral'
 COMMISSION_TYPE_REFERRAL = 'referral'
 
@@ -96,16 +96,19 @@ def register_referral_on_application(
     save_express_referrals(referrals)
 
 
-def _find_referral_for_application(application: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    referrals = load_express_referrals() or []
+def _find_referral_for_application(
+    application: Dict[str, Any],
+    referrals: Optional[list] = None,
+) -> Optional[Dict[str, Any]]:
+    refs = referrals if referrals is not None else (load_express_referrals() or [])
     app_id = int(application.get('id') or 0)
     invitee = _norm(application.get('phone'))
     inviter = _norm(application.get('referred_by_phone'))
-    for r in referrals:
+    for r in refs:
         if app_id and int(r.get('application_id') or 0) == app_id:
             return r
     if inviter and invitee:
-        for r in referrals:
+        for r in refs:
             if _norm(r.get('inviter_phone')) == inviter and _norm(r.get('invitee_phone')) == invitee:
                 return r
     return None
@@ -131,7 +134,7 @@ def grant_referral_commission_for_application(application: Dict[str, Any]) -> bo
         return False
 
     referrals = load_express_referrals() or []
-    ref_rec = _find_referral_for_application(application)
+    ref_rec = _find_referral_for_application(application, referrals)
     if ref_rec and ref_rec.get('commission_id'):
         return False
 
@@ -193,12 +196,12 @@ def grant_referral_commission_for_application(application: Dict[str, Any]) -> bo
 
 
 def mark_referral_rejected_for_application(application: Dict[str, Any]) -> None:
-    ref_rec = _find_referral_for_application(application)
+    referrals = load_express_referrals() or []
+    ref_rec = _find_referral_for_application(application, referrals)
     if not ref_rec:
         return
     ref_rec['status'] = 'rejected'
     ref_rec['rejected_at'] = datetime.utcnow().isoformat() + 'Z'
-    referrals = load_express_referrals() or []
     save_express_referrals(referrals)
 
 

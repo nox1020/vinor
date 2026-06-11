@@ -14,11 +14,13 @@
         <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
       </a>
       <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">ویرایش پروفایل</h1>
-      <div id="profileEditSaveStatus"
-           class="relative z-10 flex h-10 min-w-[4.5rem] shrink-0 items-center justify-end gap-1.5 text-[11px] font-medium text-transparent transition sm:text-xs"
-           data-state="idle"
-           aria-live="polite"
-           aria-atomic="true"></div>
+      <button type="button"
+              id="profileEditSaveBtn"
+              disabled
+              class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-emerald-500/30 bg-emerald-600 text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-emerald-600"
+              aria-label="ذخیره تغییرات">
+        <i id="profileEditSaveBtnIcon" class="fas fa-check text-sm sm:text-base" aria-hidden="true"></i>
+      </button>
     </div>
   </header>
 
@@ -407,16 +409,16 @@
   update();
 })();
 
-function initProfileEditAutosave() {
+function initProfileEditSave() {
   if (!document.getElementById('profileEditPage')) return;
   var root = document.getElementById('profileEditForm');
   if (!root) return;
 
-  if (window.__vinorProfileEditAutosaveCtrl) {
-    try { window.__vinorProfileEditAutosaveCtrl.abort(); } catch (_) {}
+  if (window.__vinorProfileEditSaveCtrl) {
+    try { window.__vinorProfileEditSaveCtrl.abort(); } catch (_) {}
   }
-  window.__vinorProfileEditAutosaveCtrl = new AbortController();
-  var pageSignal = window.__vinorProfileEditAutosaveCtrl.signal;
+  window.__vinorProfileEditSaveCtrl = new AbortController();
+  var pageSignal = window.__vinorProfileEditSaveCtrl.signal;
 
   var apiUrl = {{ url_for('express_partner.api_profile_update') | tojson }};
   var dataUrl = {{ url_for('express_partner.profile_edit_data') | tojson }};
@@ -432,19 +434,53 @@ function initProfileEditAutosave() {
     me_birth_date: {{ me_birth_date | tojson }},
     avatar_url: {% if profile and profile.get('avatar') %}{{ ('/uploads/' ~ profile.get('avatar')) | tojson }}{% else %}null{% endif %}
   };
-  var statusEl = document.getElementById('profileEditSaveStatus');
-  var debounceTimer = null;
+  var saveBtn = document.getElementById('profileEditSaveBtn');
+  var saveBtnIcon = document.getElementById('profileEditSaveBtnIcon');
   var savedTimer = null;
   var lastSavedKey = '';
   var formDirty = false;
   var saveGeneration = 0;
   var listenersBound = false;
 
-  var statusBaseClass = 'relative z-10 flex h-10 min-w-[4.5rem] shrink-0 items-center justify-end gap-1.5 text-[11px] font-medium transition sm:text-xs';
+  function setSaveBtnIcon(iconClasses, ariaLabel) {
+    var icon = saveBtnIcon || (saveBtn && saveBtn.querySelector('i'));
+    if (icon) icon.className = iconClasses + ' text-sm sm:text-base';
+    if (saveBtn && ariaLabel) saveBtn.setAttribute('aria-label', ariaLabel);
+  }
+
+  function resetSaveBtnAppearance() {
+    if (!saveBtn) return;
+    saveBtn.classList.remove('bg-zinc-600', 'bg-rose-600');
+    saveBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-500', 'border-emerald-500/30');
+    setSaveBtnIcon('fas fa-check', 'ذخیره تغییرات');
+  }
+
+  function readCsrfToken() {
+    var cfg = window.VINOR_NOTIFY_CFG || {};
+    if (cfg.csrfToken) return cfg.csrfToken;
+    try {
+      var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function apiHeaders() {
+    var h = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-Requested-With': 'XMLHttpRequest'
+    };
+    var csrf = readCsrfToken();
+    if (csrf) h['X-CSRFToken'] = csrf;
+    return h;
+  }
 
   function markDirty() {
     formDirty = true;
     root.dataset.userDirty = '1';
+    syncSaveButton();
   }
 
   function collectPayload() {
@@ -526,6 +562,14 @@ function initProfileEditAutosave() {
     lastSavedKey = JSON.stringify(collectPayload());
   }
 
+  function syncSaveButton(saving) {
+    if (!saveBtn) return;
+    var dirty = formDirty || JSON.stringify(collectPayload()) !== lastSavedKey;
+    saveBtn.disabled = !!saving || !dirty;
+    saveBtn.classList.toggle('opacity-40', saveBtn.disabled);
+    saveBtn.classList.toggle('cursor-not-allowed', saveBtn.disabled);
+  }
+
   function hydrateFromServer() {
     return fetch(dataUrl, {
       method: 'GET',
@@ -542,14 +586,17 @@ function initProfileEditAutosave() {
         syncSavedKeyFromForm();
         formDirty = false;
         delete root.dataset.userDirty;
+        syncSaveButton(false);
         return;
       }
       applyProfileData(initialData);
       syncSavedKeyFromForm();
+      syncSaveButton(false);
     }).catch(function (err) {
       if (err && err.name === 'AbortError') return;
       applyProfileData(initialData);
       syncSavedKeyFromForm();
+      syncSaveButton(false);
     });
   }
 
@@ -576,38 +623,69 @@ function initProfileEditAutosave() {
     fallback.textContent = raw.length >= 2 ? raw.slice(0, 2) : (raw.slice(0, 1) || '؟');
   }
 
-  function setStatus(state, message) {
-    if (!statusEl) return;
-    statusEl.dataset.state = state;
-    statusEl.textContent = message || '';
-    statusEl.className = statusBaseClass;
+  function setSaveButtonFeedback(state, message) {
+    if (!saveBtn) return;
+    clearTimeout(savedTimer);
     if (state === 'saving') {
-      statusEl.classList.add('text-zinc-400');
-    } else if (state === 'saved') {
-      statusEl.classList.add('text-emerald-400');
-    } else if (state === 'error') {
-      statusEl.classList.add('text-rose-400');
-    } else {
-      statusEl.classList.add('text-transparent');
+      saveBtn.disabled = true;
+      saveBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500', 'bg-rose-600');
+      saveBtn.classList.add('bg-zinc-600');
+      setSaveBtnIcon('fas fa-spinner fa-spin', 'در حال ذخیره…');
+      return;
     }
+    if (state === 'saved') {
+      resetSaveBtnAppearance();
+      setSaveBtnIcon('fas fa-check', message || 'ذخیره شد');
+      savedTimer = setTimeout(function () {
+        resetSaveBtnAppearance();
+        syncSaveButton(false);
+      }, 2000);
+      return;
+    }
+    if (state === 'error') {
+      saveBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500', 'bg-zinc-600');
+      saveBtn.classList.add('bg-rose-600');
+      setSaveBtnIcon('fas fa-times', message || 'خطا در ذخیره');
+      savedTimer = setTimeout(function () {
+        resetSaveBtnAppearance();
+        syncSaveButton(false);
+      }, 2600);
+      return;
+    }
+    resetSaveBtnAppearance();
+    syncSaveButton(false);
+  }
+
+  function validatePayload(payload) {
+    if (!payload.name) {
+      setSaveButtonFeedback('error', 'نام الزامی است');
+      var nameEl = document.getElementById('profileName');
+      if (nameEl) try { nameEl.focus(); } catch (_) {}
+      return false;
+    }
+    if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+      setSaveButtonFeedback('error', 'ایمیل نامعتبر');
+      var emailEl = document.getElementById('profileEmail');
+      if (emailEl) try { emailEl.focus(); } catch (_) {}
+      return false;
+    }
+    return true;
   }
 
   function saveNow() {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
     var payload = collectPayload();
     var key = JSON.stringify(payload);
     if (key === lastSavedKey) return Promise.resolve(true);
+    if (!validatePayload(payload)) return Promise.resolve(false);
 
     var gen = ++saveGeneration;
-    clearTimeout(savedTimer);
-    setStatus('saving', 'در حال ذخیره…');
+    setSaveButtonFeedback('saving');
 
     return fetch(apiUrl, {
       method: 'POST',
       credentials: 'same-origin',
       cache: 'no-store',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: apiHeaders(),
       body: JSON.stringify(payload),
       signal: pageSignal
     }).then(function (res) {
@@ -622,26 +700,27 @@ function initProfileEditAutosave() {
         formDirty = false;
         delete root.dataset.userDirty;
         invalidateProfilePrefetch();
-        setStatus('saved', 'ذخیره شد');
-        savedTimer = setTimeout(function () {
-          if (statusEl && statusEl.dataset.state === 'saved') setStatus('idle', '');
-        }, 2200);
+        setSaveButtonFeedback('saved', 'ذخیره شد');
         return true;
       }
-      setStatus('error', 'خطا در ذخیره');
+      var errCode = out.data && out.data.error;
+      if (errCode === 'name_required') {
+        setSaveButtonFeedback('error', 'نام الزامی است');
+        return false;
+      }
+      if (errCode === 'invalid_email') {
+        setSaveButtonFeedback('error', 'ایمیل نامعتبر');
+        return false;
+      }
+      if (out.res && (out.res.status === 400 || out.res.status === 403) && !errCode) errCode = 'csrf';
+      setSaveButtonFeedback('error', errCode === 'csrf' ? 'خطای امنیتی' : 'خطا در ذخیره');
       return false;
     }).catch(function (err) {
       if (err && err.name === 'AbortError') return false;
       if (gen !== saveGeneration) return false;
-      setStatus('error', 'خطا در ذخیره');
+      setSaveButtonFeedback('error', 'خطا در ذخیره');
       return false;
     });
-  }
-
-  function scheduleSave(delay) {
-    markDirty();
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(function () { saveNow(); }, typeof delay === 'number' ? delay : 650);
   }
 
   function bindFieldListeners() {
@@ -650,51 +729,37 @@ function initProfileEditAutosave() {
     ['profileName', 'profileLandline', 'profileEmail', 'bioInput'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener('input', function () { scheduleSave(); }, { signal: pageSignal });
-      el.addEventListener('blur', function () { scheduleSave(120); }, { signal: pageSignal });
+      el.addEventListener('input', function () { markDirty(); syncSaveButton(false); }, { signal: pageSignal });
     });
     var birthEl = document.getElementById('profileBirth');
-    if (birthEl) birthEl.addEventListener('change', function () { scheduleSave(0); }, { signal: pageSignal });
+    if (birthEl) birthEl.addEventListener('change', function () { markDirty(); syncSaveButton(false); }, { signal: pageSignal });
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function () {
+        if (saveBtn.disabled) return;
+        saveNow();
+      }, { signal: pageSignal });
+    }
   }
 
-  window.__vinorProfileEditScheduleSave = function () { scheduleSave(0); };
-  window.__vinorProfileEditFlushSave = function () {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-    return saveNow();
+  window.__vinorProfileEditIsDirty = function () {
+    return formDirty || JSON.stringify(collectPayload()) !== lastSavedKey;
   };
+  window.__vinorProfileEditMarkDirty = function () {
+    markDirty();
+    syncSaveButton(false);
+  };
+  window.__vinorProfileEditSave = saveNow;
+  window.__vinorProfileEditFlushSave = saveNow;
 
   hydrateFromServer().finally(function () {
     bindFieldListeners();
   });
 
-  function onPageHide() {
-    if (!document.getElementById('profileEditPage')) return;
-    if (!formDirty && root.dataset.userDirty !== '1') return;
-    var payload = collectPayload();
-    if (JSON.stringify(payload) === lastSavedKey) return;
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-    try {
-      fetch(apiUrl, {
-        method: 'POST',
-        credentials: 'same-origin',
-        keepalive: true,
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      lastSavedKey = JSON.stringify(payload);
-      formDirty = false;
-      delete root.dataset.userDirty;
-      invalidateProfilePrefetch();
-    } catch (_) {
-      saveNow();
+  window.addEventListener('beforeunload', function (e) {
+    if (window.__vinorProfileEditIsDirty && window.__vinorProfileEditIsDirty()) {
+      e.preventDefault();
+      e.returnValue = '';
     }
-  }
-  window.addEventListener('pagehide', onPageHide, { signal: pageSignal });
-  document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'hidden') onPageHide();
   }, { signal: pageSignal });
 }
 
@@ -703,24 +768,26 @@ if (!window.__vinorProfileCityHook) {
   document.addEventListener('vinor:city-picker-applied', function (e) {
     var detail = e && e.detail;
     if (!detail || detail.hiddenId !== 'profileCityValue') return;
-    if (typeof window.__vinorProfileEditScheduleSave === 'function') {
-      window.__vinorProfileEditScheduleSave();
+    if (typeof window.__vinorProfileEditMarkDirty === 'function') {
+      window.__vinorProfileEditMarkDirty();
     }
   });
 }
 
-initProfileEditAutosave();
+initProfileEditSave();
 document.addEventListener('vinor:express-page-swap', function () {
   if (!document.getElementById('profileEditPage')) {
-    if (window.__vinorProfileEditAutosaveCtrl) {
-      try { window.__vinorProfileEditAutosaveCtrl.abort(); } catch (_) {}
-      window.__vinorProfileEditAutosaveCtrl = null;
+    if (window.__vinorProfileEditSaveCtrl) {
+      try { window.__vinorProfileEditSaveCtrl.abort(); } catch (_) {}
+      window.__vinorProfileEditSaveCtrl = null;
     }
-    window.__vinorProfileEditScheduleSave = null;
+    window.__vinorProfileEditMarkDirty = null;
+    window.__vinorProfileEditSave = null;
     window.__vinorProfileEditFlushSave = null;
+    window.__vinorProfileEditIsDirty = null;
     return;
   }
-  initProfileEditAutosave();
+  initProfileEditSave();
 });
 
 function initProfileEditDeleteAccount() {

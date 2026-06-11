@@ -275,9 +275,39 @@
     @keyframes vinorCardLoadSpin {
       to { transform: rotate(360deg); }
     }
+    #vinorExpressPullHint {
+      position: fixed;
+      top: calc(env(safe-area-inset-top, 0px) + 3.25rem);
+      left: 50%;
+      z-index: 55;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      margin-left: -1rem;
+      border-radius: 9999px;
+      border: 2px solid rgba(52, 211, 153, 0.28);
+      border-top-color: #34d399;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-8px) scale(0.92);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+    #vinorExpressPullHint.is-visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    #vinorExpressPullHint.is-refreshing {
+      animation: vinorCardLoadSpin 0.75s linear infinite;
+    }
+    @media (min-width: 1024px) {
+      #vinorExpressPullHint { display: none !important; }
+    }
     @media (prefers-reduced-motion: reduce) {
       .card-img-loading { animation: none; }
       .card-img-loading .vinor-card-load-ring { animation: none; }
+      #vinorExpressPullHint.is-refreshing { animation: none; }
     }
     {% block styles %}{% endblock %}
   </style>
@@ -296,6 +326,7 @@
   <div id="vinor-express-page-swap">
     {% block content %}{% endblock %}
   </div>
+  <div id="vinorExpressPullHint" aria-hidden="true" aria-live="polite"></div>
   <div id="vinor-express-page-scripts" hidden aria-hidden="true">
     {% block scripts %}{% endblock %}
   </div>
@@ -1162,6 +1193,7 @@
 
   <script src="{{ 'express-partner/premium-card-media.js'|static_version }}" defer></script>
   <script src="{{ 'express-partner/express-nav.js'|static_version }}" defer></script>
+  <script src="{{ 'express-partner/express-pull-refresh.js'|static_version }}" defer></script>
 
   <script>
     (function (g) {

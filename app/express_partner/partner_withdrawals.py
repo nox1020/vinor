@@ -24,6 +24,9 @@ ADMIN_STATUS_TRANSITIONS: Dict[str, frozenset] = {
 WITHDRAWABLE_RESERVE_STATUSES = RESERVE_STATUSES
 LOCK_RESERVE_STATUSES = RESERVE_STATUSES
 
+# کف برداشت پورسانت (تومان)
+MIN_WITHDRAWAL_AMOUNT = 10_000_000
+
 
 def _amount_int(v: Any) -> int:
     try:
@@ -756,7 +759,7 @@ def validate_new_request(
     acc_id = (bank_account_id or "").strip()
     amount = _amount_int(amount_raw)
 
-    if amount < 10000:
+    if amount < MIN_WITHDRAWAL_AMOUNT:
         return None, "min_amount"
     if not acc_id:
         return None, "missing_bank"

@@ -23,7 +23,8 @@
         </p>
         {% endif %}
       </div>
-      {% set _can_withdraw = (withdrawable_balance or 0)|int > 0 %}
+      {% set _min_wd = (min_withdrawal_amount or 10000000)|int %}
+      {% set _can_withdraw = (withdrawable_balance or 0)|int >= _min_wd %}
       <button type="button"
               data-open-withdraw-modal
               data-withdrawable-int="{{ (withdrawable_balance or 0)|int }}"

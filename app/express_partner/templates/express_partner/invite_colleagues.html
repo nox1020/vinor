@@ -65,21 +65,13 @@
         <p id="inviteCopyHint" class="mt-2 hidden text-xs text-emerald-400">لینک کپی شد.</p>
       </section>
 
-      <section class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <section>
         <button type="button"
                 id="inviteShareBtn"
-                class="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[#12181f] px-4 py-3.5 text-sm font-semibold text-white transition hover:border-emerald-500/30 hover:bg-[#161e29]">
+                class="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[#12181f] px-4 py-3.5 text-sm font-semibold text-white transition hover:border-emerald-500/30 hover:bg-[#161e29]">
           <i class="fas fa-share-nodes text-emerald-400" aria-hidden="true"></i>
           اشتراک‌گذاری
         </button>
-        <a id="inviteWhatsappBtn"
-           href="#"
-           target="_blank"
-           rel="noopener"
-           class="flex items-center justify-center gap-2 rounded-2xl border border-emerald-600/30 bg-emerald-950/50 px-4 py-3.5 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-900/40">
-          <i class="fab fa-whatsapp text-lg" aria-hidden="true"></i>
-          واتساپ
-        </a>
       </section>
 
       <p class="text-center text-xs text-zinc-500 leading-relaxed px-2">
@@ -102,42 +94,46 @@
     var copyBtn = document.getElementById('inviteCopyBtn');
     var copyHint = document.getElementById('inviteCopyHint');
     var shareBtn = document.getElementById('inviteShareBtn');
-    var waBtn = document.getElementById('inviteWhatsappBtn');
 
     function fullMessage() {
       return shareText + '\n' + inviteUrl;
     }
 
-    if (waBtn) {
-      var waUrl = new URL('https://wa.me/');
-      waUrl.searchParams.set('text', fullMessage());
-      waBtn.href = waUrl.toString();
-    }
-
     async function copyLink() {
       var text = inviteUrl || (input && input.value) || '';
+      var ok = false;
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(text);
-        } else if (input) {
-          input.select();
-          document.execCommand('copy');
-        }
-        if (copyHint) {
-          copyHint.classList.remove('hidden');
-          setTimeout(function () { copyHint.classList.add('hidden'); }, 2000);
-        }
-        if (copyBtn) {
-          var prev = copyBtn.textContent;
-          copyBtn.textContent = 'کپی شد';
-          setTimeout(function () { copyBtn.textContent = prev; }, 2000);
+          ok = true;
         }
       } catch (_) {}
+      if (!ok && input) {
+        try {
+          input.removeAttribute('readonly');
+          input.focus();
+          input.select();
+          if (input.setSelectionRange) input.setSelectionRange(0, text.length);
+          ok = document.execCommand('copy');
+          input.setAttribute('readonly', '');
+          input.blur();
+        } catch (_) {}
+      }
+      if (!ok) return;
+      if (copyHint) {
+        copyHint.classList.remove('hidden');
+        setTimeout(function () { copyHint.classList.add('hidden'); }, 2000);
+      }
+      if (copyBtn) {
+        var prev = copyBtn.textContent;
+        copyBtn.textContent = 'کپی شد';
+        setTimeout(function () { copyBtn.textContent = prev; }, 2000);
+      }
     }
 
     copyBtn && copyBtn.addEventListener('click', copyLink);
     shareBtn && shareBtn.addEventListener('click', async function () {
-      var payload = { title: {% if is_approved %}'دعوت به وینور اکسپرس'{% else %}'دعوت به وینور'{% endif %}, text: shareText, url: inviteUrl };
+      var payload = { title: {% if is_approved %}'دعوت به وینور اکسپرس'{% else %}'دعوت به وینور'{% endif %}, text: fullMessage(), url: inviteUrl };
       try {
         if (navigator.share) {
           await navigator.share(payload);
