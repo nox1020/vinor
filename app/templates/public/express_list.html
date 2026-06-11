@@ -189,8 +189,8 @@
         {% for land in lands %}
           {% set img = (land.images[0] if land.images and land.images[0] else None) %}
           {% set video = land.video %}
-          {% set thumb_src = land.image_thumb if land.image_thumb else None %}
-          {% set full_src = land.image_full if land.image_full else None %}
+          {% set thumb_src = None %}
+          {% set full_src = None %}
           {% set _detail_url = url_for('express_partner.land_detail', code=land.code) %}
           <a href="{{ _detail_url }}" 
              class="instagram-item"
@@ -464,8 +464,8 @@
         const cover = images[0] || null;
         const video = land.video;
         const coverUrlRaw = cover ? getMediaUrl(cover) : '';
-        const coverThumb = land.image_thumb || coverUrlRaw;
-        const coverFull = land.image_full || land.image_raw || coverUrlRaw;
+        const coverThumb = coverUrlRaw;
+        const coverFull = coverUrlRaw;
         const videoUrl = video ? getMediaUrl(video) : '';
         const title = land.title || '';
 

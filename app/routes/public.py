@@ -11,9 +11,6 @@ from flask import (
 from . import main_bp
 from ..utils.storage import data_dir, legacy_dir
 from ..utils.storage import load_express_partners_cached, load_landing_views, save_landing_views
-from ..utils.images import (
-    variant_headers_for_width,
-)
 from datetime import datetime
 from time import time as _now
 
@@ -238,45 +235,8 @@ def express_detail(code):
 
 @main_bp.route("/uploads/<path:filename>", endpoint="uploaded_file")
 def uploaded_file(filename):
-    """
-    سرو فایل‌های آپلود:
-      1) ابتدا از UPLOAD_FOLDER (مسیر جدید تاریخ‌محور)
-      2) سپس از instance/data/uploads
-      3) سپس از <root>/data/uploads (legacy)
-    """
-    try:
-        width = int(request.args.get("w", 0) or 0)
-        quality = int(request.args.get("q", 0) or 0) or 80
-        fmt = (request.args.get("fmt") or "webp").lower()
-        variant_kind = (request.args.get("variant") or "").strip()
-    except Exception:
-        width = 0
-        quality = 80
-        fmt = "webp"
-        variant_kind = ""
-
-    def _generate_variant(root: str, safe_name: str):
-        from app.utils.images import (
-            resolve_variant_generation,
-            try_cached_variant_abs,
-            warm_variant_async,
-        )
-
-        gen_w, gen_q, folder = resolve_variant_generation(width, quality, variant_kind)
-        if gen_w <= 0 or not folder:
-            return None
-        try:
-            abs_path = try_cached_variant_abs(root, safe_name, width, quality, variant_kind, fmt)
-            if abs_path:
-                vdir, vfile = os.path.split(abs_path)
-                resp = send_from_directory(vdir, vfile)
-                resp.headers["Cache-Control"] = variant_headers_for_width(gen_w)
-                resp.headers["Content-Type"] = "image/webp"
-                return resp
-            warm_variant_async(current_app._get_current_object(), root, safe_name, width, quality, variant_kind, fmt.upper())
-        except Exception as e:
-            current_app.logger.debug("Variant serve failed: %s", e, exc_info=True)
-        return None
+    """سرو فایل‌های آپلود — بدون پردازش یا واریانت."""
+    cache_hdr = "public, max-age=86400, stale-while-revalidate=86400"
 
     def _maybe_set_apk_download_name(resp):
         try:
@@ -290,13 +250,11 @@ def uploaded_file(filename):
                 wanted_url = str(settings.get('android_apk_url') or '')
                 orig_name = str(settings.get('android_apk_original_name') or '').strip()
                 if wanted_url and orig_name:
-                    # match by basename to ensure we are serving the configured APK
                     try:
                         wanted_base = os.path.basename(wanted_url)
                     except Exception:
                         wanted_base = ''
                     if wanted_base and wanted_base == os.path.basename(fn_norm):
-                        # Force download with the original client filename
                         try:
                             disp = "attachment; filename*=UTF-8''" + quote(orig_name) + f"; filename=\"{orig_name}\""
                             resp.headers['Content-Disposition'] = disp
@@ -305,51 +263,32 @@ def uploaded_file(filename):
         except Exception:
             pass
         return resp
-    # اول مسیر تنظیم‌شده در کانفیگ
+
     try:
         base_cfg = current_app.config.get("UPLOAD_FOLDER")
         if base_cfg:
             fp_cfg = os.path.join(base_cfg, filename)
             if os.path.isfile(fp_cfg):
-                # تلاش برای سرو واریانت
-                variant_resp = _generate_variant(base_cfg, filename)
-                if variant_resp:
-                    return variant_resp
                 resp = send_from_directory(base_cfg, filename)
                 resp = _maybe_set_apk_download_name(resp)
-                try:
-                    if width > 0:
-                        resp.headers["Cache-Control"] = variant_headers_for_width(width)
-                    else:
-                        resp.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=86400"
-                except Exception:
-                    pass
+                resp.headers["Cache-Control"] = cache_hdr
                 return resp
     except Exception:
         pass
 
-    # سپس مسیر instance/data/uploads و legacy data/uploads
-    upload_roots = (
+    for folder in (
         os.path.join(data_dir(), "uploads"),
         os.path.join(legacy_dir(), "uploads"),
-    )
-    for folder in upload_roots:
+    ):
         fp = os.path.join(folder, filename)
         if os.path.isfile(fp):
-            variant_resp = _generate_variant(folder, filename)
-            if variant_resp:
-                return variant_resp
             resp = send_from_directory(folder, filename)
             resp = _maybe_set_apk_download_name(resp)
-            try:
-                resp.headers["Cache-Control"] = variant_headers_for_width(width) if width > 0 else "public, max-age=86400, stale-while-revalidate=86400"
-            except Exception:
-                pass
+            resp.headers["Cache-Control"] = cache_hdr
             return resp
-    # در نهایت: static/uploads (تصاویر ذخیره‌شده در static)
+
     try:
         static_root = current_app.static_folder
-        # پشتیبانی از هر دو ورودی: 'uploads/...' یا فقط '...'
         candidates = []
         if filename.startswith('uploads/'):
             candidates.append(os.path.join(static_root, filename))
@@ -362,13 +301,11 @@ def uploaded_file(filename):
                 fn = os.path.basename(cand)
                 resp = send_from_directory(os.path.join(static_root, rel_dir), fn)
                 resp = _maybe_set_apk_download_name(resp)
-                try:
-                    resp.headers["Cache-Control"] = variant_headers_for_width(width) if width > 0 else "public, max-age=86400, stale-while-revalidate=86400"
-                except Exception:
-                    pass
+                resp.headers["Cache-Control"] = cache_hdr
                 return resp
     except Exception:
         pass
+
     abort(404, description="File not found")
 
 

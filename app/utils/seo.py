@@ -225,13 +225,9 @@ def _is_thin_land(land: dict) -> bool:
 def _land_og_image(land: dict, site_root: str) -> str:
     root = site_root.rstrip("/")
     imgs = land.get("images") or []
-    images_v2 = land.get("images_v2") or []
-    if images_v2 and isinstance(images_v2[0], dict):
-        src = images_v2[0].get("full") or images_v2[0].get("thumb") or ""
-        if src:
-            return _abs_url(src, root)
     if imgs:
-        return _abs_url(str(imgs[0]), root)
+        from app.utils.images import normalize_upload_url
+        return _abs_url(normalize_upload_url(str(imgs[0])), root)
     return f"{root}/static/icons/icon-512.png"
 
 

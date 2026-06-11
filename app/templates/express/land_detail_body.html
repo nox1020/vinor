@@ -4,8 +4,6 @@
     {% set has_video = video and video.strip() %}
     {% set total_items = (1 if has_video else 0) + images|length %}
     {% set primary_image = images[0] if images else None %}
-    {% set images_v2 = land.images_v2 or [] %}
-    {% set primary_image_v2 = images_v2[0] if images_v2 else None %}
 
     {% if not is_partner_context %}
     <!-- Header (Public context) -->
@@ -101,10 +99,6 @@
             {% endif %}
 
             {% if primary_image %}
-              {% if images_v2 and primary_image_v2 %}
-                {% set thumb_src = primary_image_v2.thumb or (primary_image_v2.full or primary_image) %}
-                {% set full_src = primary_image_v2.full or (primary_image_v2.raw or primary_image) %}
-              {% else %}
                 {% if "://" in (primary_image|string) %}
                   {% set full_src = primary_image %}
                 {% elif (primary_image|string).startswith('/uploads/') %}
@@ -116,13 +110,11 @@
                 {% else %}
                   {% set full_src = primary_image %}
                 {% endif %}
-                {% set thumb_src = full_src %}
-              {% endif %}
               <img id="landMainImage"
-                   src="{{ thumb_src }}"
+                   src="{{ full_src }}"
                    data-full="{{ full_src }}"
                    alt="{{ land.title }}"
-                   class="w-full h-full object-cover cursor-pointer {% if has_video %}hidden{% else %}block{% endif %} {% if images_v2 %}progressive-img{% endif %}"
+                   class="w-full h-full object-cover cursor-pointer {% if has_video %}hidden{% else %}block{% endif %}"
                    fetchpriority="high" decoding="async"
                    onclick="openLightbox(this.dataset.full || this.src)">
             {% endif %}
@@ -179,10 +171,7 @@
               </div>
             </button>
             {% endif %}
-            {% for img in (images_v2 if images_v2 else images) %}
-              {% if images_v2 %}
-                {% set t = img.thumb %}
-              {% else %}
+            {% for img in images %}
                 {% if "://" in (img|string) %}
                   {% set t = img %}
                 {% elif (img|string).startswith('/uploads/') %}
@@ -194,7 +183,6 @@
                 {% else %}
                   {% set t = img %}
                 {% endif %}
-              {% endif %}
               <button type="button" class="land-thumb w-20 h-16 rounded-md overflow-hidden bg-gray-200 dark:bg-gray-800 flex-shrink-0 ring-1 ring-transparent hover:ring-emerald-400 transition">
                 <img src="{{ t }}" alt="" class="w-full h-full object-cover">
               </button>
@@ -895,15 +883,9 @@
       }
 
       const images = [
-        {% if images_v2 %}
-          {% for i in images_v2 %}
-            {"thumb": "{{ i.thumb }}", "full": "{{ i.full or i.raw }}"}{% if not loop.last %},{% endif %}
-          {% endfor %}
-        {% else %}
           {% for img in images %}
             {"thumb": "{% if '://' in (img|string) %}{{ img }}{% elif (img|string).startswith('/uploads/') %}{{ img }}{% elif (img|string).startswith('uploads/') %}/uploads/{{ (img|string)[8:] }}{% elif not (img|string).startswith('/') %}/uploads/{{ img }}{% else %}{{ img }}{% endif %}", "full": "{% if '://' in (img|string) %}{{ img }}{% elif (img|string).startswith('/uploads/') %}{{ img }}{% elif (img|string).startswith('uploads/') %}/uploads/{{ (img|string)[8:] }}{% elif not (img|string).startswith('/') %}/uploads/{{ img }}{% else %}{{ img }}{% endif %}"}{% if not loop.last %},{% endif %}
           {% endfor %}
-        {% endif %}
       ];
 
       const totalItems = (hasVideo ? 1 : 0) + images.length;

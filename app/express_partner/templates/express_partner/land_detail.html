@@ -127,7 +127,6 @@
   {% set images = land.images or [] %}
   {% set video = land.video %}
   {% set has_video = video and (video|string|trim) %}
-  {% set images_v2 = land.images_v2 or [] %}
   {% set total_items = (1 if has_video else 0) + images|length %}
   {% set desc = (land.description or land.desc or '')|trim %}
 
@@ -165,9 +164,7 @@
       {%- for img in images -%}
       {%- if not _media_first %},{% endif -%}
       {%- set _media_first = false -%}
-      {%- set v2 = images_v2[loop.index0] if images_v2|length > loop.index0 else none -%}
-      {%- set full_u = (v2.raw or upload_url(img)) if v2 else upload_url(img) -%}
-      {"type":"image","url":{{ full_u|tojson }},"filename":{{ ((land.code or 'file') ~ '_' ~ loop.index ~ '.jpg')|tojson }}}
+      {"type":"image","url":{{ upload_url(img)|tojson }},"filename":{{ ((land.code or 'file') ~ '_' ~ loop.index ~ '.jpg')|tojson }}}
       {%- endfor -%}
       {%- endif -%}
     ],
@@ -185,12 +182,8 @@
       {%- for img in images -%}
       {%- if not _slide_first %},{% endif -%}
       {%- set _slide_first = false -%}
-      {%- set v2 = images_v2[loop.index0] if images_v2|length > loop.index0 else none -%}
-      {%- if v2 -%}
-      {"type":"image","thumb":{{ (v2.thumb or (img|image_thumb_url))|tojson }},"full":{{ (v2.full or (img|image_display_full_url))|tojson }}}
-      {%- else -%}
-      {"type":"image","thumb":{{ (img|image_thumb_url)|tojson }},"full":{{ (img|image_display_full_url)|tojson }}}
-      {%- endif -%}
+      {%- set img_u = upload_url(img) -%}
+      {"type":"image","thumb":{{ img_u|tojson }},"full":{{ img_u|tojson }}}
       {%- endfor -%}
     ]
   }

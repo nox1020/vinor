@@ -263,11 +263,6 @@ def _admin_upload_src_filter(path: str | None) -> str:
     return f'/uploads/{s}'
 
 
-@admin_bp.app_template_filter('admin_thumb_src')
-def _admin_thumb_src_filter(path: str | None) -> str:
-    from app.utils.images import display_thumb_url
-    return display_thumb_url(path) or _admin_upload_src_filter(path)
-
 # -----------------------------------------------------------------------------
 # پیکربندی ساده ادمین (برای شروع)
 # -----------------------------------------------------------------------------
@@ -635,7 +630,7 @@ def _unlink_stored_upload(stored_path: str) -> None:
 
 
 def _apply_express_image_edits(land: Dict[str, Any], form, files) -> None:
-    """حذف/افزودن تصاویر + پاک‌سازی images_v2."""
+    """حذف/افزودن تصاویر."""
     images_changed = False
 
     if (form.get('remove_all_images') or '').strip() in ('1', 'on'):
@@ -658,14 +653,14 @@ def _apply_express_image_edits(land: Dict[str, Any], form, files) -> None:
 
     new_images = _normalize_images_from_form(form, files)
     if not new_images:
-        from app.utils.images import save_processed_form_image
+        from app.utils.images import save_upload_image
         upload_folder = _uploads_root()
         os.makedirs(upload_folder, exist_ok=True)
         for i in range(1, 4):
             img_key = f'image_{i}'
             f = files.get(img_key)
             if f and f.filename:
-                stored = save_processed_form_image(f, upload_folder)
+                stored = save_upload_image(f, upload_folder)
                 if stored:
                     new_images.append(stored)
 
@@ -2363,9 +2358,8 @@ def _normalize_images_from_form(form, files) -> List[str]:
     پذیرش هر دو ورودی:
     - images[] متنی (URL/مسیر)
     - images فایل
-    ذخیره فایل‌ها در static/uploads با فشرده‌سازی خودکار + واریانت نمایش
     """
-    from app.utils.images import save_processed_form_image
+    from app.utils.images import save_upload_image
 
     image_urls: List[str] = []
 
@@ -2381,7 +2375,7 @@ def _normalize_images_from_form(form, files) -> List[str]:
         os.makedirs(upload_folder, exist_ok=True)
         for f in upload_files:
             if f and f.filename:
-                stored = save_processed_form_image(f, upload_folder)
+                stored = save_upload_image(f, upload_folder)
                 if stored:
                     image_urls.append(stored)
                 else:
@@ -2979,12 +2973,12 @@ def add_express_listing():
         # پردازش تصاویر (از input multiple)
         images = []
         if 'images' in files:
-            from app.utils.images import save_processed_form_image
+            from app.utils.images import save_upload_image
             upload_folder = _uploads_root()
             os.makedirs(upload_folder, exist_ok=True)
             for file in files.getlist('images'):
                 if file.filename:
-                    stored = save_processed_form_image(file, upload_folder)
+                    stored = save_upload_image(file, upload_folder)
                     if stored:
                         images.append(stored)
         

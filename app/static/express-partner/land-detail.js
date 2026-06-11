@@ -20,6 +20,22 @@
     }
   }
 
+  function stripLegacyVariantQuery(url) {
+    var u = String(url || '').trim();
+    if (!u || u.indexOf('?') === -1) return u;
+    var parts = u.split('?', 2);
+    var qs = parts[1] || '';
+    if (/(\bw=|\bq=|\bfmt=|\bvariant=)/.test(qs)) return parts[0];
+    return u;
+  }
+
+  function cleanSlideMedia(slide) {
+    if (!slide || slide.type !== 'image') return slide;
+    var thumb = stripLegacyVariantQuery(slide.thumb || slide.full || '');
+    var full = stripLegacyVariantQuery(slide.full || slide.thumb || thumb);
+    return { type: 'image', thumb: thumb, full: full };
+  }
+
   function addCleanup(fn) {
     cleanupFns.push(fn);
   }
@@ -121,7 +137,7 @@
     var gallery = document.getElementById('landGallery');
     if (!gallery || !cfg || !cfg.slides || !cfg.slides.length) return;
 
-    var slides = cfg.slides;
+    var slides = cfg.slides.map(cleanSlideMedia);
     var video = document.getElementById('landVideo');
     var img = document.getElementById('landMainImage');
     var dots = gallery.querySelectorAll('.ld-dot');

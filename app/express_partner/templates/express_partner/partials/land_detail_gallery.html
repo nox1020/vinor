@@ -4,9 +4,7 @@
 {% set images = land.images or [] %}
 {% set video = land.video %}
 {% set has_video = video and (video|string|trim) %}
-{% set images_v2 = land.images_v2 or [] %}
 {% set primary_image = images[0] if images else none %}
-{% set primary_v2 = images_v2[0] if images_v2 else none %}
 {% set total_items = (1 if has_video else 0) + images|length %}
 
 <section class="ld-gallery relative" aria-label="گالری فایل" data-tour="land-image">
@@ -30,16 +28,10 @@
     {% endif %}
 
     {% if primary_image %}
-      {% if primary_v2 %}
-        {% set thumb_src = primary_v2.thumb or (primary_image|image_thumb_url) %}
-        {% set full_src = primary_v2.full or (primary_image|image_display_full_url) %}
-      {% else %}
-        {% set thumb_src = primary_image|image_thumb_url %}
-        {% set full_src = primary_image|image_display_full_url %}
-      {% endif %}
+      {% set img_url = upload_url(primary_image) %}
     <img id="landMainImage"
-         src="{{ thumb_src }}"
-         data-full="{{ full_src }}"
+         src="{{ img_url }}"
+         data-full="{{ img_url }}"
          alt="{{ land.title or '' }}"
          class="absolute inset-0 z-[1] h-full w-full object-cover {% if has_video %}hidden{% endif %}"
          fetchpriority="high"

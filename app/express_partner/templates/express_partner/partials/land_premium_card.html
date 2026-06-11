@@ -9,9 +9,7 @@
 {% set _img_eager = card_img_eager|default(false) %}
 
 {% if img %}
-  {% if land.image_thumb %}
-    {% set img_src = land.image_thumb %}
-  {% elif "://" in (img|string) %}
+  {% if "://" in (img|string) %}
     {% set img_src = img %}
   {% else %}
     {% set img_src = img|image_thumb_url %}

@@ -1,10 +1,19 @@
 {# ماکروهای مشترک جزئیات فایل #}
 {% macro upload_url(path) -%}
   {%- if not path -%}
-  {%- elif "://" in (path|string) -%}{{ path }}
-  {%- elif (path|string).startswith('/uploads/') -%}{{ path }}
-  {%- elif (path|string).startswith('uploads/') -%}/uploads/{{ (path|string)[8:] }}
-  {%- elif not (path|string).startswith('/') -%}/uploads/{{ path }}
-  {%- else -%}{{ path }}
+  {%- else -%}
+    {%- set p = (path|string) -%}
+    {%- if "?" in p -%}
+      {%- set qs = p.split("?", 1)[1] -%}
+      {%- if "w=" in qs or "q=" in qs or "fmt=" in qs or "variant=" in qs -%}
+        {%- set p = p.split("?", 1)[0] -%}
+      {%- endif -%}
+    {%- endif -%}
+    {%- if "://" in p -%}{{ p }}
+    {%- elif p.startswith('/uploads/') -%}{{ p }}
+    {%- elif p.startswith('uploads/') -%}/uploads/{{ p[8:] }}
+    {%- elif not p.startswith('/') -%}/uploads/{{ p }}
+    {%- else -%}{{ p }}
+    {%- endif -%}
   {%- endif -%}
 {%- endmacro %}

@@ -25,14 +25,14 @@ def _avatar_initials_filter(value: str | None) -> str:
 
 @express_partner_bp.app_template_filter("image_thumb_url")
 def _image_thumb_url_filter(value: str | None) -> str:
-    from ..utils.images import display_thumb_url
-    return display_thumb_url(value)
+    from ..utils.images import normalize_upload_url
+    return normalize_upload_url(value)
 
 
 @express_partner_bp.app_template_filter("image_display_full_url")
 def _image_display_full_url_filter(value: str | None) -> str:
-    from ..utils.images import display_full_url
-    return display_full_url(value)
+    from ..utils.images import normalize_upload_url
+    return normalize_upload_url(value)
 
 
 @express_partner_bp.app_template_filter("avatar_display_url")
@@ -167,6 +167,7 @@ def _build_partner_dashboard_lands(
 ) -> tuple[List[Dict[str, Any]], int]:
     """لیست کارت‌های داشبورد همکار (همه فایل‌های اکسپرس + وضعیت تخصیص)."""
     from ..utils.dates import is_ad_expired
+    from ..utils.images import sanitize_land_media
 
     ph = (me_phone or '').strip()
     cities = selected_cities or []
@@ -348,7 +349,7 @@ def _build_partner_dashboard_lands(
             item['_assignment_status'] = global_status
             item['_in_transaction'] = global_status == 'in_transaction'
             item['_detail_url'] = url_for('express_partner.land_detail', code=code)
-        assigned_lands.append(item)
+        assigned_lands.append(sanitize_land_media(item))
 
     return _sort_dashboard_lands_sold_last(assigned_lands), expired_count
 
@@ -4394,7 +4395,7 @@ def profile_delete_account():
 
 
 def _save_partner_avatar_upload(me_phone: str, f) -> str | None:
-  """ذخیره فایل آواتار و به‌روزرسانی پروفایل. مسیر نسبی partner/avatars/... یا None."""
+  """ذخیره فایل آواتار بدون پردازش. مسیر نسبی partner/avatars/... یا None."""
   if not me_phone or not f or not f.filename:
       return None
   base = os.path.join(current_app.instance_path, 'data', 'uploads', 'partner', 'avatars', me_phone)
@@ -4408,51 +4409,17 @@ def _save_partner_avatar_upload(me_phone: str, f) -> str | None:
               continue
   except Exception:
       pass
-  tmp_path = os.path.join(base, '_tmp_upload')
-  final_name = 'avatar.jpg'
+  orig_lower = (f.filename or '').lower()
+  ext = '.jpg'
+  for e in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
+      if orig_lower.endswith(e):
+          ext = e
+          break
+  final_name = 'avatar' + ext
   final_path = os.path.join(base, final_name)
   try:
-      f.save(tmp_path)
-      converted = False
-      try:
-          from PIL import Image, ImageOps  # type: ignore
-          im = Image.open(tmp_path)
-          try:
-              im = ImageOps.exif_transpose(im)
-          except Exception:
-              pass
-          if im.mode in ("RGBA", "LA"):
-              bg = Image.new("RGB", im.size, (255, 255, 255))
-              bg.paste(im, mask=im.split()[-1])
-              im = bg
-          elif im.mode != "RGB":
-              im = im.convert("RGB")
-          im.thumbnail((1200, 1200), Image.LANCZOS)
-          im.save(final_path, format='JPEG', quality=82, optimize=True)
-          converted = True
-      except Exception:
-          converted = False
-      if not converted:
-          orig_lower = (f.filename or '').lower()
-          ext = '.jpg'
-          for e in ('.jpg', '.jpeg', '.png', '.webp'):
-              if orig_lower.endswith(e):
-                  ext = e
-                  break
-          final_name = 'avatar' + ext
-          final_path = os.path.join(base, final_name)
-          try:
-              import shutil
-              shutil.move(tmp_path, final_path)
-          except Exception:
-              f.stream.seek(0)
-              with open(final_path, 'wb') as out:
-                  out.write(f.read())
-      try:
-          if os.path.exists(tmp_path):
-              os.remove(tmp_path)
-      except Exception:
-          pass
+      f.stream.seek(0)
+      f.save(final_path)
   except Exception:
       current_app.logger.error("Failed to save partner avatar file", exc_info=True)
       return None
@@ -4959,12 +4926,9 @@ def land_detail(code: str):
     share_token = ''
     share_url = ''
 
-    # تصاویر با سایز thumb/full برای لود تدریجی سریع‌تر در جزئیات
-    try:
-        from app.utils.images import enrich_land_image_variants
-        land = enrich_land_image_variants(dict(land) if isinstance(land, dict) else land)
-    except Exception:
-        pass
+    # تصاویر — URL خام بدون واریانت
+    from ..utils.images import sanitize_land_media
+    land = sanitize_land_media(dict(land) if isinstance(land, dict) else land)
 
     is_logged_in = bool(me_phone)
 

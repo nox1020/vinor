@@ -301,7 +301,7 @@
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
             {% for img in land.images %}
               <label class="relative block cursor-pointer group">
-                <img src="{{ img|admin_thumb_src }}" alt="تصویر {{ loop.index }}"
+                <img src="{{ img|admin_upload_src }}" alt="تصویر {{ loop.index }}"
                      class="w-full h-24 object-cover rounded-lg border border-gray-200 dark:border-gray-700 group-hover:opacity-80 transition"
                      loading="lazy" decoding="async">
                 <span class="absolute top-1 right-1 bg-black/60 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">{{ loop.index }}</span>
