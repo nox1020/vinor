@@ -1,6 +1,4 @@
-{# هدر مراحل درخواست همکاری — شیشه‌ای + نوار پیشرفت
-   متغیرها: apply_step_num (1-3), apply_step_progress (33|66|100)
-#}
+{# هدر مراحل درخواست همکاری — pill شیشه‌ای + نوار پیشرفت #}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_back_link, ep_header_spacer %}
 {% set _step = apply_step_num|default(1)|int %}
 {% set _progress = apply_step_progress|default(33)|int %}
@@ -9,20 +7,24 @@
 {% set _title = apply_step_title|default('درخواست همکاری') %}
 
 {{ ep_header_start(sticky=true) }}
-<div class="ep-partner-header-inner max-w-lg mx-auto w-full">
-  {% if _close_icon %}
-  <a href="{{ _back }}" class="ep-partner-header-btn" aria-label="بستن">
-    <i class="fas fa-times ep-partner-header-btn-icon"></i>
-  </a>
-  {% else %}
-  {{ ep_back_link(_back, nav_back=false) }}
-  {% endif %}
-  <div class="ep-partner-header-center">
-    <h1 class="ep-partner-header-title">{{ _title }}</h1>
-    <p class="ep-partner-header-subtitle is-filtered">{{ _step }}/۳</p>
-  </div>
-  <div class="ep-partner-header-right">
-    <span class="text-xs font-semibold text-violet-600 dark:text-violet-400 tabular-nums">{{ _step }}/۳</span>
+<div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 max-w-lg mx-auto ep-partner-header-inner--auto">
+  <div class="flex items-center gap-2">
+    {% if _close_icon %}
+    <a href="{{ _back }}" class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn" aria-label="بستن">
+      <i class="fas fa-times ep-partner-header-btn-icon"></i>
+    </a>
+    {% else %}
+    {{ ep_back_link(_back, nav_back=false) }}
+    {% endif %}
+    <div class="vinor-dash-glass-pill ep-header-title-pill flex min-h-[42px] min-w-0 flex-1 items-center justify-center rounded-full px-3 py-1">
+      <div class="min-w-0 w-full text-center">
+        <h1 class="ep-partner-header-title">{{ _title }}</h1>
+        <p class="ep-partner-header-subtitle is-filtered">{{ _step }}/۳</p>
+      </div>
+    </div>
+    <div class="shrink-0 flex min-w-[42px] items-center justify-end">
+      <span class="text-xs font-semibold text-violet-600 dark:text-violet-400 tabular-nums">{{ _step }}/۳</span>
+    </div>
   </div>
 </div>
 <div class="h-1 bg-black/[0.06] dark:bg-white/10" aria-hidden="true">

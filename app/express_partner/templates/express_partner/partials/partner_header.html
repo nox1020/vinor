@@ -1,21 +1,21 @@
-{# هدر یکپارچه همکار — شیشه‌ای مثل bottom nav
+{# هدر یکپارچه همکار — شِل شفاف + pill شیشه‌ای 42px (مثل پورسانت/داشبورد)
    {% from '...partner_header.html' import ep_header_start, ep_header_end, ep_header_row, ep_back_link, ep_header_spacer %}
 #}
 
 {% macro ep_back_link(href, nav_back=true, aria_label='بازگشت', class='') %}
 <a href="{{ href }}"
    {% if nav_back %}data-vinor-express-nav="back"{% endif %}
-   class="ep-partner-header-btn {{ class }}"
+   class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn {{ class }}"
    aria-label="{{ aria_label }}">
   <i class="fas fa-arrow-right ep-partner-header-btn-icon" aria-hidden="true"></i>
 </a>
 {% endmacro %}
 
 {% macro ep_header_spacer() %}
-<div class="ep-partner-header-btn-spacer" aria-hidden="true"></div>
+<div class="comm-header-glass-btn-spacer" aria-hidden="true"></div>
 {% endmacro %}
 
-{% macro ep_header_start(id='', tour='', sticky=false, pointer_shell=false, extra_class='') %}
+{% macro ep_header_start(id='', tour='', sticky=false, pointer_shell=true, extra_class='') %}
 <header{% if id %} id="{{ id }}"{% endif %}{% if tour %} data-tour="{{ tour }}"{% endif %}
         class="ep-partner-header{% if sticky %} ep-partner-header--sticky{% endif %}{% if pointer_shell %} ep-partner-header--shell-none{% endif %} {{ extra_class }}">
   <div class="ep-partner-header-bar">
@@ -26,17 +26,21 @@
 </header>
 {% endmacro %}
 
-{% macro ep_header_row(title, back_url, subtitle='', subtitle_id='', back_nav=true, inner_class='max-w-6xl mx-auto w-full', pointer_auto=false, center_class='') %}
-<div class="ep-partner-header-inner {{ inner_class }}{% if pointer_auto %} ep-partner-header-inner--auto{% endif %}">
-  {{ ep_back_link(back_url, back_nav) }}
-  <div class="ep-partner-header-center {{ center_class }}">
-    <h1 class="ep-partner-header-title">{{ title }}</h1>
-    {% if subtitle_id or subtitle %}
-    <p{% if subtitle_id %} id="{{ subtitle_id }}"{% endif %} class="ep-partner-header-subtitle">{{ subtitle }}</p>
-    {% endif %}
-  </div>
-  <div class="ep-partner-header-right">
-    {% if caller %}{{ caller() }}{% else %}{{ ep_header_spacer() }}{% endif %}
+{% macro ep_header_row(title, back_url, subtitle='', subtitle_id='', back_nav=true, inner_class='max-w-6xl mx-auto w-full', center_class='') %}
+<div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 {{ inner_class }} ep-partner-header-inner--auto">
+  <div class="flex items-center gap-2">
+    {{ ep_back_link(back_url, back_nav) }}
+    <div class="vinor-dash-glass-pill ep-header-title-pill flex min-w-0 flex-1 items-center justify-center rounded-full px-3 sm:px-4{% if subtitle_id or subtitle %} min-h-[42px] py-1{% else %} h-[42px]{% endif %}">
+      <div class="min-w-0 w-full text-center {{ center_class }}">
+        <h1 class="ep-partner-header-title">{{ title }}</h1>
+        {% if subtitle_id or subtitle %}
+        <p{% if subtitle_id %} id="{{ subtitle_id }}"{% endif %} class="ep-partner-header-subtitle">{{ subtitle }}</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="shrink-0 flex min-w-[42px] items-center justify-end">
+      {% if caller %}{{ caller() }}{% else %}{{ ep_header_spacer() }}{% endif %}
+    </div>
   </div>
 </div>
 {% endmacro %}

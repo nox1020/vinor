@@ -754,6 +754,64 @@ def _ensure_user_record_background(phone: str) -> None:
     threading.Thread(target=_worker, daemon=True).start()
 
 
+def _login_next_preserve():
+    nxt = (request.args.get('next') or request.form.get('next') or '').strip()
+    if nxt and nxt.startswith('/') and not nxt.startswith('//'):
+        return nxt
+    return None
+
+
+def _session_next_safe():
+    raw = session.get('next')
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if raw.startswith('/') and not raw.startswith('//'):
+            return raw
+    return None
+
+
+def _is_phone_approved_partner(phone: str) -> bool:
+    """همکار تأییدشده — از کش درون‌پردازشی partners (بدون I/O تکراری)."""
+    phone = (phone or '').strip()
+    if not phone:
+        return False
+    try:
+        return _is_partner_approved(_partner_profile_for_phone(phone))
+    except Exception:
+        return False
+
+
+def _cache_session_partner_role(is_partner: bool) -> None:
+    try:
+        session['VINOR_IS_EXPRESS_PARTNER'] = bool(is_partner)
+        session.modified = True
+    except Exception:
+        pass
+
+
+def _default_post_login_url(phone: str) -> str:
+    """پیش‌فرض بعد از ورود: همکار → پورسانت، کاربر عادی → داشبورد."""
+    is_partner = _is_phone_approved_partner(phone)
+    _cache_session_partner_role(is_partner)
+    if is_partner:
+        return url_for('express_partner.commissions')
+    return url_for('express_partner.dashboard')
+
+
+def _redirect_after_login(phone: str | None = None) -> str:
+    """مسیر صریح next/session اولویت دارد؛ وگرنه پیش‌فرض نقش."""
+    nxt = _login_next_preserve() or _session_next_safe()
+    ph = (phone or session.get('user_phone') or '').strip()
+    if nxt:
+        try:
+            session.pop('next', None)
+        except Exception:
+            pass
+        _cache_session_partner_role(_is_phone_approved_partner(ph))
+        return nxt
+    return _default_post_login_url(ph)
+
+
 def _finalize_partner_login(phone: str) -> str:
     session['user_id'] = phone
     session['user_phone'] = phone
@@ -765,20 +823,12 @@ def _finalize_partner_login(phone: str) -> str:
         stash_referrer_from_request(phone)
     except Exception:
         pass
-    # نقش همکار روی اولین درخواست بعد از ورود محاسبه می‌شود — بدون بارگذاری لیست همکاران در مسیر verify
     try:
         session.pop('VINOR_IS_EXPRESS_PARTNER', None)
         session.modified = True
     except Exception:
         pass
-    nxt = _login_next_preserve() or _session_next_safe()
-    if nxt:
-        try:
-            session.pop('next', None)
-        except Exception:
-            pass
-        return nxt
-    return url_for('express_partner.dashboard')
+    return _redirect_after_login(phone)
 
 
 def _login_otp_redirect_url() -> str:
@@ -1225,7 +1275,9 @@ def inject_role_flags():
 # -------------------------
 @express_partner_bp.route('/', methods=['GET'], endpoint='partner_root')
 def partner_root():
-    """Legacy /express/partner → public dashboard."""
+    """Legacy /express/partner → داشبورد یا پورسانت بر اساس نقش."""
+    if session.get('user_phone'):
+        return redirect(_redirect_after_login(), code=302)
     return redirect(url_for('express_partner.dashboard'), code=302)
 
 
@@ -2113,6 +2165,10 @@ def commissions_page():
     comm_stats = _partner_commission_stats(me_phone, my_comms)
     withdrawable_balance = comm_stats["withdrawable_balance"]
     pending_withdrawal_total = comm_stats["in_withdrawal_amount"]
+    financial_snapshot = _commission_financial_snapshot(
+        comm_stats,
+        min_withdrawal_amount=MIN_WITHDRAWAL_AMOUNT,
+    )
 
     _attach_commission_txn_labels(my_comms)
     txn_items = _partner_txn_items(me_phone, my_comms)
@@ -2145,6 +2201,7 @@ def commissions_page():
         requestable_balance=withdrawable_balance,
         min_withdrawal_amount=MIN_WITHDRAWAL_AMOUNT,
         pending_withdrawal_total=pending_withdrawal_total,
+        commission_financial_snapshot=financial_snapshot,
         partner_name=partner_name,
         hide_header=True,
         SHOW_SUBMIT_BUTTON=False,
@@ -2226,6 +2283,51 @@ def commissions_data():
         'approved_commission': comm_stats['approved_amount'],
         'items': items,
     })
+
+
+def _commission_financial_snapshot(
+    comm_stats: Dict[str, Any],
+    *,
+    min_withdrawal_amount: int = MIN_WITHDRAWAL_AMOUNT,
+) -> Dict[str, Any]:
+    """خلاصه مالی یکپارچه برای UI وب — منبع حقیقت همان partner_commission_dashboard است."""
+    s = comm_stats if isinstance(comm_stats, dict) else {}
+    wd = int(s.get('withdrawable_balance') or 0)
+    min_wd = int(min_withdrawal_amount or MIN_WITHDRAWAL_AMOUNT)
+    req = int(s.get('requestable_balance') or wd)
+    return {
+        'version': 1,
+        'withdrawable_balance': wd,
+        'requestable_balance': req,
+        'in_withdrawal_amount': int(s.get('in_withdrawal_amount') or 0),
+        'in_withdrawal_count': int(s.get('in_withdrawal_count') or 0),
+        'pending_amount': int(s.get('pending_amount') or 0),
+        'pending_count': int(s.get('pending_count') or 0),
+        'total_confirmed_amount': int(s.get('total_confirmed_amount') or 0),
+        'total_confirmed_count': int(s.get('total_confirmed_count') or 0),
+        'paid_withdrawal_amount': int(
+            s.get('paid_withdrawal_amount') or s.get('received_amount') or 0
+        ),
+        'paid_withdrawal_count': int(
+            s.get('paid_withdrawal_count') or s.get('received_count') or 0
+        ),
+        'min_withdrawal_amount': min_wd,
+        'can_withdraw': wd >= min_wd,
+        'generated_at': datetime.utcnow().isoformat() + 'Z',
+    }
+
+
+@express_partner_bp.get('/commissions/summary', endpoint='commissions_summary')
+@require_partner_access(allow_pending=True, allow_guest=True, json_response=True)
+def commissions_summary():
+    """API سبک: فقط اعداد مالی پورسانت — برای sync امن UI بدون جایگزینی DOM."""
+    me_phone = (session.get("user_phone") or "").strip()
+    comm_stats = _partner_commission_stats(me_phone, _commissions_for_phone(me_phone))
+    snapshot = _commission_financial_snapshot(
+        comm_stats,
+        min_withdrawal_amount=MIN_WITHDRAWAL_AMOUNT,
+    )
+    return jsonify({'success': True, 'snapshot': snapshot})
 
 
 def _sort_bank_accounts_by_created(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -2684,10 +2786,8 @@ def login():
             stash_referrer_from_request((session.get('user_phone') or '').strip())
         except Exception:
             pass
-        nxt = _login_next_preserve() or _session_next_safe()
-        if nxt:
-            return redirect(nxt)
-        return redirect(url_for('express_partner.dashboard'))
+        nxt = _redirect_after_login()
+        return redirect(nxt)
 
     if request.method == 'POST':
         from ..utils.flash_messages import FLASH_AUTH_ERROR, FLASH_AUTH_INFO, FLASH_AUTH_WARNING
@@ -2744,10 +2844,7 @@ def login_otp():
 
     purge_non_auth_flashes()
     if session.get('user_phone'):
-        nxt = _login_next_preserve() or _session_next_safe()
-        if nxt:
-            return redirect(nxt)
-        return redirect(url_for('express_partner.dashboard'))
+        return redirect(_redirect_after_login())
 
     phone = str(session.get('otp_phone') or '').strip()
     if not phone or not session.get('otp_code'):
@@ -2755,10 +2852,12 @@ def login_otp():
         return redirect(url_for('express_partner.login'))
 
     login_next = _login_next_preserve() or _session_next_safe()
+    is_likely_partner = _is_phone_approved_partner(phone)
     return render_template(
         'express_partner/auth/login_step2.html',
         phone=phone,
         login_next=login_next,
+        is_likely_partner=is_likely_partner,
     )
 
 
@@ -2934,22 +3033,6 @@ def legal_privacy():
 def legal_terms():
     """قوانین استفاده پنل همکار — عمومی، موبایل‌محور."""
     return render_template('express_partner/legal/terms.html', hide_header=True)
-
-
-def _login_next_preserve():
-    nxt = (request.args.get('next') or request.form.get('next') or '').strip()
-    if nxt and nxt.startswith('/') and not nxt.startswith('//'):
-        return nxt
-    return None
-
-
-def _session_next_safe():
-    raw = session.get('next')
-    if isinstance(raw, str):
-        raw = raw.strip()
-        if raw.startswith('/') and not raw.startswith('//'):
-            return raw
-    return None
 
 
 def _redirect_login_next(fallback_endpoint: str = 'express_partner.dashboard'):
@@ -4056,8 +4139,8 @@ def api_verify():
         return jsonify({'success': False, 'error': 'شماره با جلسهٔ تأیید همخوانی ندارد.'}), 400
     if not _otp_code_matches_session(code):
         return jsonify({'success': False, 'error': 'کد تأیید نادرست است.'}), 400
-    _finalize_partner_login(sess_phone)
-    return jsonify({'success': True, 'message': 'ورود با موفقیت انجام شد.'})
+    dest = _finalize_partner_login(sess_phone)
+    return jsonify({'success': True, 'message': 'ورود با موفقیت انجام شد.', 'redirect': dest})
 
 
 @express_partner_bp.route('/otp/resend', methods=['POST'], endpoint='otp_resend')

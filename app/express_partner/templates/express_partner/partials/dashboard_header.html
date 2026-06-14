@@ -13,7 +13,7 @@
 {% set ftag = (request.args.get('tag', '') or '')|lower %}
 {% set fcat = request.args.get('cat', '') %}
 
-<header id="expressDashboardHeader" data-tour="dashboard-header" class="ep-partner-header fixed top-0 left-0 right-0 z-50 w-full transition-shadow duration-300">
+<header id="expressDashboardHeader" data-tour="dashboard-header" class="ep-partner-header ep-partner-header--shell-none fixed top-0 left-0 right-0 z-50 w-full transition-shadow duration-300">
   <div class="ep-partner-header-bar">
   <div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 flex flex-col gap-2 transition-[gap,padding-bottom] duration-300 ease-out max-w-6xl mx-auto">
     {# فقط جستجو + شهر — همیشه ثابت می‌ماند #}

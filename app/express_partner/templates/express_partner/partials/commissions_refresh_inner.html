@@ -1,5 +1,6 @@
 {# محتوای داخل #commissionsRefreshMount — با fetch جایگزین می‌شود #}
 <span data-commissions-csrf="{{ csrf_token() }}" class="hidden" aria-hidden="true"></span>
+{% include 'express_partner/partials/commissions_financial_snapshot.html' %}
 {% include 'express_partner/partials/commissions_summary_card.html' %}
 {% include 'express_partner/partials/commissions_income_details.html' %}
 <div class="commissions-scroll-tail pointer-events-none shrink-0" style="height: calc(5rem + env(safe-area-inset-bottom, 0px));" aria-hidden="true"></div>

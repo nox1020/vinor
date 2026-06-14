@@ -5,18 +5,9 @@
   {% set _summary = txn_summary|default({}) %}
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row, ep_back_link %}
 
-  {{ ep_header_start(id='commTxnListHeader', pointer_shell=true) }}
-  <div class="ep-partner-header-inner max-w-6xl mx-auto w-full ep-partner-header-inner--auto">
-    {{ ep_back_link(url_for('express_partner.commissions')) }}
-    <div class="ep-partner-header-center">
-      <h1 class="ep-partner-header-title">همه تراکنش‌ها</h1>
-      <p id="commTxnCountHint"
-         class="ep-partner-header-subtitle"
-         aria-live="polite">
-        {% if items and items|length > 0 %}{{ items|length }} تراکنش{% else %}بدون تراکنش{% endif %}
-      </p>
-    </div>
-    <div class="ep-partner-header-right">
+  {% set _txn_hint = (items|length|string + ' تراکنش') if items and items|length > 0 else 'بدون تراکنش' %}
+  {{ ep_header_start(id='commTxnListHeader') }}
+  {% call ep_header_row('همه تراکنش‌ها', url_for('express_partner.commissions'), subtitle=_txn_hint, subtitle_id='commTxnCountHint', inner_class='max-w-6xl mx-auto w-full') %}
       <button type="button"
               id="commTxnFilterToggle"
               class="ep-partner-header-btn comm-txn-filter-toggle"
@@ -29,8 +20,7 @@
               class="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-2 ring-[#050a0e] hidden"
               aria-hidden="true"></span>
       </button>
-    </div>
-  </div>
+  {% endcall %}
   {{ ep_header_end() }}
 
   <div id="commissionsTxnScroll"
@@ -124,28 +114,7 @@
     #commTxnFilterModal.comm-txn-filter-modal--open { display: flex !important; }
     #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-backdrop { opacity: 1; }
     #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-sheet { transform: translateY(0); }
-    .commissions-page-scroll-pad {
-      padding-top: var(--vn-partner-header-pad, 3.5rem);
-    }
   </style>
-
-  <script>
-  (function () {
-    var header = document.getElementById('commTxnListHeader');
-    if (!header) return;
-    function syncTxnHeaderPad() {
-      var h = Math.ceil(header.getBoundingClientRect().height + 8);
-      document.documentElement.style.setProperty('--vn-partner-header-pad', h + 'px');
-    }
-    syncTxnHeaderPad();
-    try {
-      if (window.ResizeObserver) {
-        new ResizeObserver(syncTxnHeaderPad).observe(header);
-      }
-    } catch (_) {}
-    window.addEventListener('resize', syncTxnHeaderPad, { passive: true });
-  })();
-  </script>
 
   {% set bottom_nav_active = 'commissions' %}
   {% include 'express_partner/partials/partner_tab_footer.html' %}

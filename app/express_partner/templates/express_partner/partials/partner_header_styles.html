@@ -9,8 +9,85 @@
     width: 100%;
     padding-top: env(safe-area-inset-top, 0px);
   }
+  .ep-partner-header--shell-none .ep-partner-header-extra {
+    pointer-events: auto;
+    background: transparent;
+    padding: 0 0.75rem 0.5rem;
+  }
+  @media (min-width: 640px) {
+    .ep-partner-header--shell-none .ep-partner-header-extra {
+      padding-inline: 1rem;
+    }
+  }
+  .ep-partner-header--shell-none .ep-header-title-pill .ep-partner-header-title,
+  .ep-partner-header--shell-none .ep-header-title-pill .ep-partner-header-subtitle,
+  .ep-partner-header--shell-none .comm-header-title-pill .ep-partner-header-title,
+  .ep-partner-header--shell-none .comm-header-title-pill .ep-partner-header-subtitle {
+    text-shadow: none;
+  }
+  .ep-header-title-pill .ep-partner-header-title,
+  .comm-header-title-pill h1 {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: rgb(17 24 39);
+  }
+  html.dark .ep-header-title-pill .ep-partner-header-title,
+  html.dark .comm-header-title-pill h1 {
+    color: #fff;
+  }
+  .ep-partner-header--shell-none .ep-partner-header-right .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text),
+  .ep-partner-header--shell-none .shrink-0 > .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text) {
+    width: 42px;
+    height: 42px;
+  }
+  /* pill گرد 42px — هم‌اندازه داشبورد/پورسانت */
+  .comm-header-glass-btn {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border-radius: 9999px;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+  }
+  .comm-header-glass-btn:active {
+    transform: scale(0.97);
+  }
+  a.comm-header-glass-btn {
+    color: rgb(75 85 99);
+  }
+  html.dark a.comm-header-glass-btn {
+    color: rgb(161 161 170);
+  }
+  .comm-header-title-pill h1 {
+    margin: 0;
+    line-height: 1.25;
+  }
+  .partner-page-scroll-pad,
+  .profile-page-inner,
+  .commissions-page-scroll-pad {
+    padding-top: var(--vn-partner-header-pad, 3.5rem);
+  }
+  @media (min-width: 640px) {
+    .partner-page-scroll-pad,
+    .profile-page-inner,
+    .commissions-page-scroll-pad {
+      padding-top: var(--vn-partner-header-pad, 4rem);
+    }
+  }
   .ep-partner-header--sticky {
     position: sticky;
+    z-index: 40;
+  }
+  .ep-partner-header--sticky + .partner-page-scroll-pad,
+  .ep-partner-header--sticky ~ main,
+  .ep-partner-header--sticky ~ .partner-page-scroll-pad {
+    padding-top: 0;
   }
   .ep-partner-header--shell-none {
     pointer-events: none;
@@ -120,9 +197,10 @@
     justify-content: flex-end;
     min-width: 2.5rem;
   }
-  .ep-partner-header-btn-spacer {
-    width: 2.5rem;
-    height: 2.5rem;
+  .ep-partner-header-btn-spacer,
+  .comm-header-glass-btn-spacer {
+    width: 42px;
+    height: 42px;
     flex-shrink: 0;
   }
   .ep-partner-header-btn {

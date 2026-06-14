@@ -1,0 +1,23 @@
+{# snapshot مالی سرور — منبع حقیقت UI؛ با pull-to-refresh و API sync به‌روز می‌شود #}
+{% if commission_financial_snapshot is defined and commission_financial_snapshot %}
+<script type="application/json" id="vnCommFinancialSnapshot">{{ commission_financial_snapshot|tojson }}</script>
+{% else %}
+  {% set s = comm_stats if comm_stats is defined else {} %}
+  {% set _snap = {
+    'version': 1,
+    'withdrawable_balance': (s.get('withdrawable_balance', withdrawable_balance if withdrawable_balance is defined else 0))|int,
+    'requestable_balance': (s.get('withdrawable_balance', requestable_balance if requestable_balance is defined else (withdrawable_balance if withdrawable_balance is defined else 0)))|int,
+    'in_withdrawal_amount': (s.get('in_withdrawal_amount', pending_withdrawal_total if pending_withdrawal_total is defined else 0))|int,
+    'in_withdrawal_count': (s.get('in_withdrawal_count', 0))|int,
+    'pending_amount': (s.get('pending_amount', pending_commission if pending_commission is defined else 0))|int,
+    'pending_count': (s.get('pending_count', 0))|int,
+    'total_confirmed_amount': (s.get('total_confirmed_amount', total_commission if total_commission is defined else 0))|int,
+    'total_confirmed_count': (s.get('total_confirmed_count', sold_count if sold_count is defined else 0))|int,
+    'paid_withdrawal_amount': (s.get('paid_withdrawal_amount', s.get('received_amount', paid_commission if paid_commission is defined else 0)))|int,
+    'paid_withdrawal_count': (s.get('paid_withdrawal_count', s.get('received_count', paid_count if paid_count is defined else 0)))|int,
+    'min_withdrawal_amount': (min_withdrawal_amount if min_withdrawal_amount is defined else 10000000)|int,
+    'can_withdraw': ((s.get('withdrawable_balance', withdrawable_balance if withdrawable_balance is defined else 0))|int >= (min_withdrawal_amount if min_withdrawal_amount is defined else 10000000)|int),
+    'generated_at': ''
+  } %}
+<script type="application/json" id="vnCommFinancialSnapshot">{{ _snap|tojson }}</script>
+{% endif %}

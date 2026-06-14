@@ -39,9 +39,9 @@
       </div>
       <div class="flex-1 min-w-0 text-start">
         <p class="text-sm font-semibold text-white">کل درآمد</p>
-        <p class="text-[11px] text-slate-500 mt-0.5">{{ _total_cnt or 0 }} پورسانت تأیید شده</p>
+        <p data-comm-total-count class="text-[11px] text-slate-500 mt-0.5">{{ _total_cnt or 0 }} پورسانت تأیید شده</p>
       </div>
-      <span class="shrink-0 text-sm font-bold text-white tabular-nums">{{ (_total or 0)|toman }}</span>
+      <span data-comm-total class="shrink-0 text-sm font-bold text-white tabular-nums">{{ (_total or 0)|toman }}</span>
     </div>
 
     {# برداشت شده — مجموع درخواست‌های برداشت با وضعیت paid #}
@@ -51,7 +51,7 @@
       </div>
       <div class="flex-1 min-w-0 text-start">
         <p class="text-sm font-semibold text-white">برداشت شده</p>
-        <p class="text-[11px] text-slate-500 mt-0.5">
+        <p data-comm-wd-paid-count class="text-[11px] text-slate-500 mt-0.5">
           {% if (_wd_paid_cnt or 0)|int > 0 %}
             {{ _wd_paid_cnt }} درخواست برداشت پرداخت‌شده
           {% else %}
@@ -59,7 +59,7 @@
           {% endif %}
         </p>
       </div>
-      <span class="shrink-0 text-sm font-bold text-white tabular-nums">{{ (_wd_paid_amt or 0)|toman }}</span>
+      <span data-comm-wd-paid class="shrink-0 text-sm font-bold text-white tabular-nums">{{ (_wd_paid_amt or 0)|toman }}</span>
     </div>
 
     {# همه تراکنش‌ها #}

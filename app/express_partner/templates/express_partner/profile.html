@@ -6,27 +6,19 @@
     .profile-hero-glow {
       background: radial-gradient(ellipse 95% 70% at 50% 100%, rgba(34, 197, 94, 0.22), transparent 62%);
     }
-    .profile-page-inner {
-      padding-top: var(--vn-partner-header-pad, 3.5rem);
-    }
-    @media (min-width: 640px) {
-      .profile-page-inner {
-        padding-top: var(--vn-partner-header-pad, 4rem);
-      }
-    }
   </style>
 {% endblock %}
 
 {% block content %}
 
-  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
-  {{ ep_header_start(id='profileExpressHeader', pointer_shell=true) }}
-  {% call ep_header_row('پروفایل', url_for('express_partner.dashboard'), pointer_auto=true) %}
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row, ep_header_spacer %}
+  {{ ep_header_start(id='profileExpressHeader') }}
+  {% call ep_header_row('پروفایل', url_for('express_partner.dashboard')) %}
     {% if me_phone %}
       {% set profile_notifications_dark = true %}
       {% include 'express_partner/partials/notifications_button.html' %}
     {% else %}
-      <div class="ep-partner-header-btn-spacer" aria-hidden="true"></div>
+      {{ ep_header_spacer() }}
     {% endif %}
   {% endcall %}
   {{ ep_header_end() }}
@@ -35,7 +27,7 @@
        class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
 
     {% if not me_phone %}
-    <div class="profile-page-inner mx-auto max-w-lg space-y-3 px-4 sm:space-y-4 sm:px-6">
+    <div class="partner-page-scroll-pad mx-auto max-w-lg space-y-3 px-4 sm:space-y-4 sm:px-6">
       <section class="relative mt-4 overflow-hidden rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-600/90 via-emerald-800/95 to-[#0a1218] p-6 text-center shadow-xl shadow-emerald-950/30 sm:p-7">
         <div class="pointer-events-none absolute -left-10 -top-12 h-32 w-32 rounded-full bg-white/10 blur-2xl" aria-hidden="true"></div>
         <div class="relative">
@@ -131,7 +123,7 @@
     </div>
     {% else %}
 
-    <div class="profile-page-inner mx-auto max-w-6xl space-y-3 px-4 sm:space-y-4 sm:px-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
+    <div class="partner-page-scroll-pad mx-auto max-w-6xl space-y-3 px-4 sm:space-y-4 sm:px-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
       {# کارت هویت #}
       <section data-tour="profile-section"
                id="profileClickableCard"
@@ -327,24 +319,6 @@
     {% set bottom_nav_active = 'profile' %}
     {% include 'express_partner/partials/partner_tab_footer.html' %}
   </div>
-
-  <script>
-  (function () {
-    var header = document.getElementById('profileExpressHeader');
-    if (!header) return;
-    function syncProfileHeaderPad() {
-      var h = Math.ceil(header.getBoundingClientRect().height + 8);
-      document.documentElement.style.setProperty('--vn-partner-header-pad', h + 'px');
-    }
-    syncProfileHeaderPad();
-    try {
-      if (window.ResizeObserver) {
-        new ResizeObserver(syncProfileHeaderPad).observe(header);
-      }
-    } catch (_) {}
-    window.addEventListener('resize', syncProfileHeaderPad, { passive: true });
-  })();
-  </script>
 
   {% if me_phone %}
   <div id="logoutConfirmModal"

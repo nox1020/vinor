@@ -11,6 +11,7 @@
 
 {% block scripts %}
 {% if is_approved %}
+  <script src="{{ url_for('static', filename='express-partner/commissions-financial.js') }}?v=1"></script>
   {% include 'express_partner/partials/commissions_scripts.html' %}
   {% include 'express_partner/partials/commissions_txn_detail_script.html' %}
 {% endif %}

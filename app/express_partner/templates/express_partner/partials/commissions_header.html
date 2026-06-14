@@ -1,19 +1,12 @@
 {# هدر پورسانت — pill شیشه‌ای 42px مثل داشبورد #}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_back_link %}
-{% set s = comm_stats if comm_stats is defined else {} %}
-{% set _withdrawable = withdrawable_balance if withdrawable_balance is defined else s.get('withdrawable_balance', 0) %}
 
-{{ ep_header_start(id='commissionsPageHeader', tour='commissions-header', pointer_shell=true) }}
+{{ ep_header_start(id='commissionsPageHeader', tour='commissions-header') }}
 <div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 max-w-lg lg:max-w-4xl mx-auto">
   <div class="flex items-center gap-2">
     {{ ep_back_link(url_for('express_partner.dashboard'), class='vinor-dash-glass-pill comm-header-glass-btn') }}
     <div class="vinor-dash-glass-pill comm-header-title-pill flex h-[42px] min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 sm:px-4">
       <h1 class="truncate text-sm font-bold text-gray-900 dark:text-white">پورسانت‌های من</h1>
-      {% if is_approved %}
-      <span id="commHeaderBalance"
-            class="shrink-0 text-xs font-bold tabular-nums text-emerald-600 dark:text-emerald-400"
-            aria-label="موجودی قابل برداشت">{{ (_withdrawable or 0)|toman }}</span>
-      {% endif %}
     </div>
     <div class="vinor-dash-glass-pill comm-header-glass-btn pointer-events-none select-none text-amber-500 dark:text-amber-400"
          aria-hidden="true"

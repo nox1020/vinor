@@ -108,6 +108,8 @@
       setHint(true);
       var spin = document.querySelector('#commissionsPullHint .fa-rotate');
       if (spin) spin.classList.add('fa-spin');
+      var fin = window.__vinorCommFinancial;
+      var backupHtml = mount ? mount.innerHTML : '';
       refreshPromise = fetch(window.location.pathname + window.location.search + (window.location.search ? '&' : '?') + '_refresh=' + Date.now(), {
         method: 'GET',
         headers: { 'Accept': 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
@@ -119,7 +121,12 @@
       }).then(function(html){
         var doc = new DOMParser().parseFromString(html, 'text/html');
         var next = doc.getElementById('commissionsRefreshMount');
-        if (next && mount) mount.innerHTML = next.innerHTML;
+        if (!next || !mount) throw new Error('missing_mount');
+        if (fin && typeof fin.validateRefreshDoc === 'function' && !fin.validateRefreshDoc(doc)) {
+          throw new Error('invalid_financial');
+        }
+        if (!next.querySelector('[data-comm-withdrawable]')) throw new Error('missing_summary');
+        mount.innerHTML = next.innerHTML;
         var csrfNode = doc.querySelector('[data-commissions-csrf]');
         if (csrfNode) {
           var fresh = csrfNode.getAttribute('data-commissions-csrf') || '';
@@ -130,10 +137,18 @@
         }
         applyJalali(mount);
         setupCommIncomeInfoTip(mount);
-        var headerBal = document.getElementById('commHeaderBalance');
-        var summaryAmt = mount.querySelector('[data-comm-withdrawable]');
-        if (headerBal && summaryAmt) headerBal.textContent = summaryAmt.textContent.trim();
-      }).catch(function(){})
+        var snap = fin && fin.parseFromRoot ? fin.parseFromRoot(mount) : null;
+        if (fin && fin.apply && snap) {
+          fin.apply(snap);
+        } else if (window.__vinorCommFinancialSync) {
+          return window.__vinorCommFinancialSync();
+        }
+      }).catch(function(){
+        if (mount && backupHtml) mount.innerHTML = backupHtml;
+        if (window.__vinorCommFinancialSync) {
+          return window.__vinorCommFinancialSync().catch(function(){});
+        }
+      })
       .finally(function(){
         if (spin) spin.classList.remove('fa-spin');
         setHint(false);
@@ -920,6 +935,9 @@
             if (elWithdrawSuccess) {
               elWithdrawSuccess.textContent = 'درخواست برداشت با موفقیت ثبت شد. پس از بررسی، وجه واریز می‌شود.';
               elWithdrawSuccess.classList.remove('hidden');
+            }
+            if (window.__vinorCommFinancialSync) {
+              window.__vinorCommFinancialSync().catch(function () {});
             }
             if (window.__vinorCommissionsRefresh) {
               window.__vinorCommissionsRefresh().catch(function () {});

@@ -15,12 +15,14 @@
 <div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col">
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_back_link, ep_header_spacer %}
   {{ ep_header_start(sticky=true) }}
-  <div class="ep-partner-header-inner max-w-lg mx-auto w-full">
-    {{ ep_back_link(_back, nav_back=false) }}
-    <div class="ep-partner-header-center">
-      <h1 class="ep-partner-header-title">{% block doc_heading %}سند حقوقی{% endblock %}</h1>
+  <div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 max-w-lg mx-auto ep-partner-header-inner--auto">
+    <div class="flex items-center gap-2">
+      {{ ep_back_link(_back, nav_back=false) }}
+      <div class="vinor-dash-glass-pill ep-header-title-pill flex h-[42px] min-w-0 flex-1 items-center justify-center rounded-full px-3">
+        <h1 class="ep-partner-header-title">{% block doc_heading %}سند حقوقی{% endblock %}</h1>
+      </div>
+      <div class="shrink-0 flex min-w-[42px] items-center justify-end">{{ ep_header_spacer() }}</div>
     </div>
-    <div class="ep-partner-header-right">{{ ep_header_spacer() }}</div>
   </div>
   {{ ep_header_end() }}
 

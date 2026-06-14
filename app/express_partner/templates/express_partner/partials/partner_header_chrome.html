@@ -1,0 +1,53 @@
+{# همگام‌سازی --vn-partner-header-pad با ارتفاع واقعی هدر fixed #}
+<script>
+(function () {
+  'use strict';
+  if (window.__vinorPartnerHeaderChromeInit) return;
+  window.__vinorPartnerHeaderChromeInit = true;
+
+  var ro = null;
+  var observed = null;
+
+  function activeHeader() {
+    return document.querySelector('header.ep-partner-header:not(.ep-partner-header--sticky)');
+  }
+
+  function syncPartnerHeaderPad() {
+    var header = activeHeader();
+    if (!header) return;
+    var h = Math.ceil(header.getBoundingClientRect().height + 8);
+    document.documentElement.style.setProperty('--vn-partner-header-pad', h + 'px');
+  }
+
+  function bindHeader(header) {
+    if (!header || header === observed) return;
+    observed = header;
+    syncPartnerHeaderPad();
+    try {
+      if (window.ResizeObserver) {
+        if (ro) ro.disconnect();
+        ro = new ResizeObserver(syncPartnerHeaderPad);
+        ro.observe(header);
+      }
+    } catch (_) {}
+  }
+
+  function setup() {
+    bindHeader(activeHeader());
+    syncPartnerHeaderPad();
+  }
+
+  window.__vinorPartnerHeaderPadSync = syncPartnerHeaderPad;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setup);
+  } else {
+    setup();
+  }
+  window.addEventListener('resize', syncPartnerHeaderPad, { passive: true });
+  window.addEventListener('vinor:express-page-swap', function () {
+    observed = null;
+    window.requestAnimationFrame(setup);
+  });
+})();
+</script>

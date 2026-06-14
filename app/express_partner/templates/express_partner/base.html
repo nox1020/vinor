@@ -312,6 +312,7 @@
     {% block styles %}{% endblock %}
   </style>
   {% include 'express_partner/partials/partner_header_styles.html' %}
+  {% include 'express_partner/partials/partner_header_chrome.html' %}
 
   <meta name="robots" content="{{ vinor_robots_meta | default('noindex, nofollow') }}">
   {% block head %}{% endblock %}

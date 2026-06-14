@@ -3,11 +3,16 @@
 {% block title %}تایید شماره موبایل | وینور اکسپرس{% endblock %}
 
 {% block head %}
-  {# پیش‌بارگذاری دارایی‌های داشبورد هنگام انتظار برای OTP — ورود بعد از تأیید سریع‌تر #}
+  {# پیش‌بارگذاری صفحهٔ مقصد هنگام انتظار OTP — همکار: پورسانت، کاربر عادی: داشبورد #}
   <link rel="preload" as="script" href="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}">
+  {% if is_likely_partner|default(false) %}
+  <link rel="prefetch" href="{{ url_for('express_partner.commissions') }}" as="document">
+  {% else %}
+  <link rel="prefetch" href="{{ url_for('express_partner.dashboard') }}" as="document">
   <link rel="prefetch" href="{{ 'express-partner/dashboard-chrome.js'|static_version }}" as="script">
   <link rel="prefetch" href="{{ 'express-partner/premium-card-media.js'|static_version }}" as="script">
   <link rel="prefetch" href="{{ 'express-partner/dashboard-voice-search.js'|static_version }}" as="script">
+  {% endif %}
 {% endblock %}
 
 {% set _fa = '۰۱۲۳۴۵۶۷۸۹' %}
