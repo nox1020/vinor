@@ -60,7 +60,7 @@ from app.express_partner.partner_withdrawals import (
 )
 from app.land_category_specs import apply_category_specs_from_form
 from app.services.sms import send_sms_template, send_sms_direct, send_sms_code
-from app.utils.storage import load_users, load_reports, save_reports, save_ads
+from app.utils.storage import load_users, load_reports, save_reports, save_ads, load_ads_cached, load_express_lands_cached
 from admin.people_directory import build_admin_people_directory, get_admin_person_by_phone
 from app.utils.storage import (
     load_express_partner_apps,
@@ -1031,7 +1031,6 @@ def _admin_dashboard_context() -> Dict[str, Any]:
         pass
 
     online_partners = _get_online_partners_list() or []
-    online_users_count = _get_online_users_count()
 
     routines_count_month = 0
     try:
@@ -1165,7 +1164,6 @@ def _admin_dashboard_context() -> Dict[str, Any]:
         'partners_count': people_stats.get('partners') or len(partners),
         'people_total': people_stats.get('total') or 0,
         'online_partners_count': people_stats.get('online') or len(online_partners),
-        'online_users_count': online_users_count,
         'assignments_active_count': len(active_assignments),
         'assignments_total_count': len(assignments),
         'commissions_total_count': len(commissions),
@@ -3624,17 +3622,112 @@ def express_assignments_clear_all():
 # -----------------------------------------------------------------------------
 # Express Commissions (list/approve/pay)
 # -----------------------------------------------------------------------------
+def _express_commissions_redirect(filter_hint: str = '') -> str:
+    flt = (filter_hint or request.form.get('filter') or request.args.get('filter') or 'pending').strip()
+    if flt:
+        return url_for('admin.express_commissions', filter=flt)
+    return url_for('admin.express_commissions')
+
+
+def _land_title_lookup() -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    try:
+        for land in load_express_lands_cached() or []:
+            if not isinstance(land, dict):
+                continue
+            code = str(land.get('code') or '').strip()
+            if code and code not in out:
+                out[code] = str(land.get('title') or land.get('name') or '').strip()
+    except Exception:
+        pass
+    if len(out) < 50:
+        try:
+            for land in load_ads_cached() or []:
+                if not isinstance(land, dict):
+                    continue
+                code = str(land.get('code') or '').strip()
+                if code and code not in out:
+                    out[code] = str(land.get('title') or land.get('name') or '').strip()
+        except Exception:
+            pass
+    return out
+
+
 @admin_bp.route('/express/commissions')
 @login_required
 def express_commissions():
+    from app.express_partner.commissions_flow import (
+        APPROVED_STATUS,
+        PAID_STATUS,
+        PENDING_STATUS,
+        REJECTED_STATUS,
+        admin_commission_row_dict,
+    )
+
     try:
-        items = load_express_commissions() or []
-        if not isinstance(items, list):
-            items = []
-        items.sort(key=lambda x: x.get('created_at',''), reverse=True)
+        items_raw = load_express_commissions() or []
+        if not isinstance(items_raw, list):
+            items_raw = []
     except Exception:
-        items = []
-    return render_template('admin/express_commissions.html', items=items)
+        items_raw = []
+
+    name_map = _partner_name_lookup()
+    title_map = _land_title_lookup()
+    withdrawals = load_partner_withdrawals() or []
+    if not isinstance(withdrawals, list):
+        withdrawals = []
+
+    items = []
+    for row in items_raw:
+        if not isinstance(row, dict):
+            continue
+        r = dict(row)
+        ph = str(r.get('partner_phone') or '').strip()
+        if not (r.get('partner_name') or '').strip() and ph in name_map:
+            r['partner_name'] = name_map[ph]
+        code = str(r.get('land_code') or '').strip()
+        if code and code != 'referral' and not (r.get('land_title') or '').strip():
+            r['land_title'] = title_map.get(code, '')
+        item = admin_commission_row_dict(r)
+        from app.express_partner.commissions_flow import commission_linked_to_active_withdrawal
+        item['withdrawal_locked'] = commission_linked_to_active_withdrawal(r, withdrawals)
+        items.append(item)
+
+    pending_count = sum(1 for x in items if x.get('status') == PENDING_STATUS)
+    approved_count = sum(1 for x in items if x.get('status') == APPROVED_STATUS)
+    paid_count = sum(1 for x in items if x.get('status') == PAID_STATUS)
+    rejected_count = sum(1 for x in items if x.get('status') == REJECTED_STATUS)
+    active_count = pending_count + approved_count
+
+    flt = (request.args.get('filter') or 'pending').strip().lower()
+    if flt == 'approved':
+        visible = [x for x in items if x.get('status') == APPROVED_STATUS]
+    elif flt == 'paid':
+        visible = [x for x in items if x.get('status') == PAID_STATUS]
+    elif flt == 'rejected':
+        visible = [x for x in items if x.get('status') == REJECTED_STATUS]
+    elif flt == 'active':
+        visible = [x for x in items if x.get('status') in (PENDING_STATUS, APPROVED_STATUS)]
+    elif flt == 'all':
+        visible = items
+    else:
+        flt = 'pending'
+        visible = [x for x in items if x.get('status') == PENDING_STATUS]
+
+    visible.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+    visible.sort(key=lambda x: {PENDING_STATUS: 0, APPROVED_STATUS: 1, PAID_STATUS: 2, REJECTED_STATUS: 3}.get(x.get('status') or '', 9))
+
+    return render_template(
+        'admin/express_commissions.html',
+        items=visible,
+        pending_count=pending_count,
+        approved_count=approved_count,
+        paid_count=paid_count,
+        rejected_count=rejected_count,
+        active_count=active_count,
+        all_count=len(items),
+        current_filter=flt,
+    )
 
 @admin_bp.post('/express/commissions/new')
 @login_required
@@ -3677,11 +3770,12 @@ def express_commission_new():
     except Exception:
         current_app.logger.exception('commission_pending SMS failed admin new cid=%s', new_id)
     flash('پورسانت ثبت شد (در انتظار تایید).', 'success')
-    return redirect(url_for('admin.express_commissions'))
+    return redirect(_express_commissions_redirect('pending'))
 
 @admin_bp.post('/express/commissions/<int:cid>/approve')
 @login_required
 def express_commission_approve(cid: int):
+    filter_hint = (request.form.get('filter') or 'pending').strip()
     items = load_express_commissions() or []
     changed = False
     commission_record = None
@@ -3700,6 +3794,13 @@ def express_commission_approve(cid: int):
     if changed and commission_record:
         save_express_commissions(items)
         is_referral = str(commission_record.get('commission_type') or '').strip() == 'referral'
+
+        if is_referral:
+            try:
+                from app.express_partner.referrals import sync_referral_on_commission_status
+                sync_referral_on_commission_status(commission_record)
+            except Exception as e:
+                current_app.logger.error('Referral sync on commission approve: %s', e)
 
         # تغییر وضعیت فایل به "فروخته شده" در انتساب‌ها (فقط پورسانت فروش ملک)
         if not is_referral:
@@ -3754,101 +3855,118 @@ def express_commission_approve(cid: int):
         except Exception:
             current_app.logger.exception('commission_approved SMS failed cid=%s', cid)
         if is_referral:
-            flash('پورسانت دعوت همکار تایید شد و آمار همکار به‌روز شد.', 'success')
+            flash('پورسانت دعوت همکار تأیید شد و به موجودی قابل برداشت اضافه شد.', 'success')
         else:
-            flash('پورسانت تایید شد، فایل به فروخته شده تغییر کرد و آمار همکار به‌روز شد.', 'success')
+            flash('پورسانت تأیید شد، مبلغ به موجودی همکار اضافه شد و فایل فروخته‌شده علامت خورد.', 'success')
     elif not changed:
         flash('پورسانت قبلاً تایید شده است.', 'warning')
-    return redirect(url_for('admin.express_commissions'))
+    return redirect(_express_commissions_redirect(filter_hint))
 
 @admin_bp.post('/express/commissions/<int:cid>/pay')
 @login_required
 def express_commission_pay(cid: int):
-    items = load_express_commissions() or []
-    changed = False
-    paid_record = None
-    for c in items:
-        try:
-            if int(c.get('id',0) or 0) == int(cid):
-                if c.get('status') == 'approved':
-                    c['status'] = 'paid'
-                    c['paid_at'] = iso_z(utcnow())
-                    paid_record = c
-                    changed = True
-                break
-        except Exception:
-            continue
-    if changed:
-        save_express_commissions(items)
-        if paid_record:
-            try:
-                from app.express_partner.commission_sms import notify_partner_commission_txn
-                notify_partner_commission_txn(
-                    partner_phone=str(paid_record.get('partner_phone') or ''),
-                    event='commission_paid',
-                    amount=int(paid_record.get('commission_amount') or 0),
-                    land_code=str(paid_record.get('land_code') or ''),
-                    commission_type=str(paid_record.get('commission_type') or ''),
-                    reference_id=str(paid_record.get('id') or cid),
-                )
-            except Exception:
-                current_app.logger.exception('commission_paid SMS failed cid=%s', cid)
-        flash('پورسانت پرداخت شد.', 'success')
-    elif not changed:
-        flash('پورسانت باید ابتدا تایید شود.', 'warning')
-    return redirect(url_for('admin.express_commissions'))
+    flash(
+        'واریز پورسانت فقط از مسیر «مالی → درخواست‌های برداشت» انجام می‌شود. '
+        'پس از تأیید پورسانت، همکار درخواست برداشت می‌دهد و شما وضعیت را «پرداخت‌شده» می‌کنید.',
+        'info',
+    )
+    return redirect(url_for('admin.financial_withdrawals', filter='pending'))
 
 @admin_bp.post('/express/commissions/<int:cid>/reject')
 @login_required
 def express_commission_reject(cid: int):
+    from app.express_partner.commissions_flow import commission_reject_blocked_reason
+    from app.express_partner.visit_requests import restore_visit_approved_after_deal_release
+
+    filter_hint = (request.form.get('filter') or 'pending').strip()
     items = load_express_commissions() or []
-    changed = False
+    withdrawals = load_partner_withdrawals() or []
+    if not isinstance(withdrawals, list):
+        withdrawals = []
+
     commission_record = None
     old_status = None
     for c in items:
         try:
-            if int(c.get('id',0) or 0) == int(cid):
+            if int(c.get('id', 0) or 0) == int(cid):
+                commission_record = c
                 old_status = c.get('status')
-                if c.get('status') in ('pending', 'approved'):
-                    c['status'] = 'rejected'
-                    c['rejected_at'] = iso_z(utcnow())
-                    commission_record = c
-                    changed = True
                 break
         except Exception:
             continue
-    if changed and commission_record:
+
+    if not commission_record:
+        flash('پورسانت یافت نشد.', 'error')
+        return redirect(_express_commissions_redirect(filter_hint))
+
+    block = commission_reject_blocked_reason(commission_record, withdrawals)
+    if block:
+        flash(block, 'error')
+        return redirect(_express_commissions_redirect(filter_hint))
+
+    changed = False
+    if commission_record.get('status') in ('pending', 'approved'):
+        commission_record['status'] = 'rejected'
+        commission_record['rejected_at'] = iso_z(utcnow())
+        changed = True
+
+    if changed:
         save_express_commissions(items)
-        
-        # اگر قبلاً تایید شده بود و به آمار اضافه شده بود، از آمار کم کن
+
+        partner_phone = str(commission_record.get('partner_phone', '')).strip()
+        land_code = str(commission_record.get('land_code', '')).strip()
+        is_referral = str(commission_record.get('commission_type') or '').strip() == 'referral'
+
+        if not is_referral and land_code and land_code != 'referral':
+            try:
+                from app.express_partner.commissions_flow import revert_land_assignments_after_deal_cancel
+                assignments = load_express_assignments() or []
+                if old_status == 'pending':
+                    if revert_land_assignments_after_deal_cancel(
+                        assignments,
+                        land_code,
+                        holder_phone=partner_phone,
+                        from_statuses=frozenset({'in_transaction'}),
+                    ):
+                        save_express_assignments(assignments)
+                    visit_requests = load_express_visit_requests() or []
+                    if not isinstance(visit_requests, list):
+                        visit_requests = []
+                    if restore_visit_approved_after_deal_release(
+                        visit_requests, partner_phone, land_code
+                    ):
+                        save_express_visit_requests(visit_requests)
+                elif old_status == 'approved':
+                    if revert_land_assignments_after_deal_cancel(
+                        assignments,
+                        land_code,
+                        from_statuses=frozenset({'sold', 'in_transaction'}),
+                    ):
+                        save_express_assignments(assignments)
+            except Exception as e:
+                current_app.logger.error('Error reverting after commission reject: %s', e)
+
         if old_status == 'approved':
             try:
-                partner_phone = str(commission_record.get('partner_phone', '')).strip()
                 commission_amount = int(commission_record.get('commission_amount') or 0)
                 sale_amount = int(commission_record.get('sale_amount') or 0)
-                
                 if partner_phone:
                     partners = load_express_partners() or []
                     for p in partners:
                         if str(p.get('phone')) == partner_phone:
-                            # کم کردن از کل درآمد
                             current_income = int(p.get('total_income', 0) or 0)
                             p['total_income'] = max(0, current_income - commission_amount)
-                            
-                            # کم کردن از تعداد فروش‌های تایید شده
-                            current_sales = int(p.get('approved_sales_count', 0) or 0)
-                            p['approved_sales_count'] = max(0, current_sales - 1)
-                            
-                            # کم کردن از کل فروش‌های تایید شده
-                            current_total_sales = int(p.get('total_approved_sales', 0) or 0)
-                            p['total_approved_sales'] = max(0, current_total_sales - sale_amount)
-                            
+                            if not is_referral:
+                                current_sales = int(p.get('approved_sales_count', 0) or 0)
+                                p['approved_sales_count'] = max(0, current_sales - 1)
+                                current_total_sales = int(p.get('total_approved_sales', 0) or 0)
+                                p['total_approved_sales'] = max(0, current_total_sales - sale_amount)
                             p['last_updated'] = iso_z(utcnow())
                             break
-                    
                     save_express_partners(partners)
             except Exception as e:
-                current_app.logger.error(f"Error updating partner stats after reject: {e}")
+                current_app.logger.error('Error updating partner stats after reject: %s', e)
+
         try:
             from app.express_partner.commission_sms import notify_partner_commission_txn
             notify_partner_commission_txn(
@@ -3861,10 +3979,18 @@ def express_commission_reject(cid: int):
             )
         except Exception:
             current_app.logger.exception('commission_rejected SMS failed cid=%s', cid)
+
+        if is_referral:
+            try:
+                from app.express_partner.referrals import sync_referral_on_commission_status
+                sync_referral_on_commission_status(commission_record)
+            except Exception as e:
+                current_app.logger.error('Referral sync on commission reject: %s', e)
+
         flash('پورسانت رد شد.', 'info')
-    elif not changed:
-        flash('فقط پورسانت‌های در انتظار یا تایید شده قابل رد هستند.', 'warning')
-    return redirect(url_for('admin.express_commissions'))
+    else:
+        flash('فقط پورسانت‌های در انتظار یا تأییدشده قابل رد هستند.', 'warning')
+    return redirect(_express_commissions_redirect(filter_hint))
 
 @admin_bp.post('/express/commissions/clear-all')
 @login_required
@@ -4025,8 +4151,16 @@ def financial_withdrawals():
 @admin_bp.route('/express/visit-requests', endpoint='express_visit_requests')
 @login_required
 def express_visit_requests():
-    from app.express_partner.visit_requests import admin_row_dict as visit_admin_row
+    from app.express_partner.visit_requests import (
+        APPROVED_STATUS,
+        CANCELLED_STATUS,
+        COMPLETED_STATUS,
+        PENDING_STATUS,
+        admin_row_dict as visit_admin_row,
+        admin_visit_status_options,
+    )
 
+    flt = (request.args.get('filter') or 'pending').strip().lower()
     items_raw = load_express_visit_requests() or []
     if not isinstance(items_raw, list):
         items_raw = []
@@ -4039,13 +4173,44 @@ def express_visit_requests():
         ph = str(r.get('partner_phone') or '').strip()
         if not (r.get('partner_name') or '').strip() and ph in name_map:
             r['partner_name'] = name_map[ph]
-        items.append(visit_admin_row(r))
-    items.sort(key=lambda x: (x.get('visit_date') or '', x.get('created_at') or ''), reverse=True)
-    pending_count = sum(1 for x in items if (x.get('status') or '') == 'pending')
+        item = visit_admin_row(r)
+        item['status_options'] = admin_visit_status_options(item.get('status'))
+        items.append(item)
+
+    pending_count = sum(1 for x in items if x.get('status') == PENDING_STATUS)
+    approved_count = sum(1 for x in items if x.get('status') == APPROVED_STATUS)
+    done_count = sum(1 for x in items if x.get('status') == COMPLETED_STATUS)
+    closed_count = sum(1 for x in items if x.get('status') == CANCELLED_STATUS)
+    active_count = pending_count + approved_count
+
+    if flt == 'approved':
+        visible = [x for x in items if x.get('status') == APPROVED_STATUS]
+    elif flt == 'done':
+        visible = [x for x in items if x.get('status') == COMPLETED_STATUS]
+    elif flt == 'closed':
+        visible = [x for x in items if x.get('status') == CANCELLED_STATUS]
+    elif flt == 'active':
+        visible = [x for x in items if x.get('status') in (PENDING_STATUS, APPROVED_STATUS)]
+    elif flt == 'all':
+        visible = items
+    else:
+        flt = 'pending'
+        visible = [x for x in items if x.get('status') == PENDING_STATUS]
+
+    visible.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+    visible.sort(key=lambda x: {PENDING_STATUS: 0, APPROVED_STATUS: 1, COMPLETED_STATUS: 2, CANCELLED_STATUS: 3}.get(x.get('status') or '', 9))
+    all_count = len(items)
+
     return render_template(
         'admin/express_visit_requests.html',
-        items=items,
+        items=visible,
         pending_count=pending_count,
+        approved_count=approved_count,
+        done_count=done_count,
+        closed_count=closed_count,
+        active_count=active_count,
+        all_count=all_count,
+        current_filter=flt,
     )
 
 
@@ -4079,6 +4244,7 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
 def express_visit_request_status(vid: str):
     from app.express_partner.visit_requests import (
         APPROVED_STATUS,
+        admin_can_transition_visit,
         admin_update_visit_request_status,
     )
     from app.express_partner.visit_sms import (
@@ -4088,6 +4254,7 @@ def express_visit_request_status(vid: str):
 
     new_status = (request.form.get('status') or '').strip()
     admin_note = (request.form.get('admin_note') or '').strip()
+    filter_hint = (request.form.get('filter') or 'pending').strip()
     items = load_express_visit_requests() or []
     if not isinstance(items, list):
         items = []
@@ -4096,18 +4263,23 @@ def express_visit_request_status(vid: str):
         if isinstance(row, dict) and str(row.get('id') or '') == str(vid).strip():
             prev_status = (str(row.get('status') or '')).strip()
             break
+
+    if prev_status and new_status and not admin_can_transition_visit(prev_status, new_status):
+        flash('این تغییر وضعیت مجاز نیست. «معامله ثبت شد» فقط پس از درخواست معامله همکار ثبت می‌شود.', 'error')
+        return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
+
     rec, err = admin_update_visit_request_status(
         items, vid, new_status, admin_note=admin_note
     )
     if err == 'not_found':
         flash('درخواست بازدید یافت نشد.', 'error')
-        return redirect(url_for('admin.express_visit_requests'))
+        return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
     if err == 'invalid_status':
         flash('وضعیت انتخاب‌شده نامعتبر است.', 'error')
-        return redirect(url_for('admin.express_visit_requests'))
+        return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
     if err == 'unchanged':
         flash('تغییری ذخیره نشد. وضعیت یا یادداشت را ویرایش کنید.', 'info')
-        return redirect(url_for('admin.express_visit_requests'))
+        return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
     try:
         save_express_visit_requests(items)
         if err == 'note_updated':
@@ -4142,7 +4314,7 @@ def express_visit_request_status(vid: str):
                         )
     except Exception:
         flash('خطا در ذخیره وضعیت.', 'error')
-    return redirect(url_for('admin.express_visit_requests'))
+    return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
 
 
 @admin_bp.route('/support/tickets', endpoint='support_tickets')
@@ -4551,9 +4723,10 @@ def express_partner_application_approve(aid: int):
     target['approved_at'] = iso_z(utcnow())
     save_express_partners(partners)
 
+    ref_granted = False
     try:
         from app.express_partner.referrals import grant_referral_commission_for_application
-        grant_referral_commission_for_application(target)
+        ref_granted = grant_referral_commission_for_application(target)
     except Exception as ref_err:
         current_app.logger.error('Referral commission on application approve: %s', ref_err, exc_info=True)
 
@@ -4660,7 +4833,11 @@ def express_partner_application_approve(aid: int):
 
     if (request.headers.get('Accept') or '').lower().find('application/json') >= 0:
         return jsonify({ 'ok': True, 'id': int(aid), 'status': 'approved' })
-    flash(f'درخواست تأیید شد و {new_assignments_count} فایل به همکار انتساب یافت.', 'success')
+    msg = f'درخواست تأیید شد و {new_assignments_count} فایل به همکار انتساب یافت.'
+    if ref_granted:
+        from app.express_partner.referrals import REFERRAL_BONUS_AMOUNT
+        msg += f' پورسانت دعوت ({REFERRAL_BONUS_AMOUNT:,} ت) برای معرف در صف پورسانت‌ها ثبت شد.'
+    flash(msg, 'success')
     return redirect(url_for('admin.express_partners', filter='pending'))
 
 @admin_bp.post('/express/partners/applications/<int:aid>/reject')

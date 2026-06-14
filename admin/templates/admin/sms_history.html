@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto p-4 sm:p-6">
+<div class="space-y-5">
   
   <!-- آمار کلی -->
   <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
@@ -84,9 +84,35 @@
     </form>
   </div>
 
-  <!-- جدول سابقه -->
-  <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-    <div class="overflow-x-auto">
+  <!-- کارت‌ها — موبایل -->
+  {% if history and history|length > 0 %}
+  <div class="sm:hidden grid grid-cols-1 gap-3">
+    {% for record in history %}
+    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3.5">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div class="min-w-0">
+          <p class="font-mono text-sm text-gray-900 dark:text-white" dir="ltr">{{ record.mobile or '—' }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ record.recipient_name or '—' }}</p>
+        </div>
+        {% if record.success %}
+        <span class="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">موفق</span>
+        {% else %}
+        <span class="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">ناموفق</span>
+        {% endif %}
+      </div>
+      <p class="text-[10px] text-gray-400 mb-2">{{ record.created_at[:19]|replace('T', ' ') if record.created_at else '—' }}</p>
+      <button type="button" onclick="showDetails({{ loop.index0 }})"
+              class="w-full py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-xs text-blue-600 dark:text-blue-400">
+        جزئیات
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- جدول سابقه — دسکتاپ -->
+  <div class="hidden sm:block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div class="adm-table-wrap">
       <table class="w-full text-sm">
         <thead class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
           <tr>

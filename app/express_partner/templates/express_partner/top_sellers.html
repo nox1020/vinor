@@ -2,21 +2,12 @@
 {% block title %}فروشنده‌های برتر{% endblock %}
 {% block content %}
 
-  <!-- Header - سبک دیوار (تمام‌عرض) -->
-  <header class="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 w-full">
-    <div class="w-full px-4 h-14 flex items-center justify-between">
-      <a href="{{ url_for('express_partner.profile') }}"
-         data-vinor-express-nav="back"
-         class="w-9 h-9 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-         aria-label="بازگشت">
-        <i class="fas fa-arrow-right text-gray-600 dark:text-gray-400"></i>
-      </a>
-      <h1 class="text-sm font-bold text-gray-900 dark:text-white">فروشنده‌های برتر</h1>
-      <div class="w-9"></div>
-    </div>
-  </header>
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+  {{ ep_header_start() }}
+  {% call ep_header_row('فروشنده‌های برتر', url_for('express_partner.profile')) %}{% endcall %}
+  {{ ep_header_end() }}
 
-<div class="max-w-6xl mx-auto pt-0 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
+<div class="max-w-6xl mx-auto pt-14 sm:pt-16 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
 
   {% if top_sellers and top_sellers|length > 0 %}
     <!-- لیست فروشنده‌های برتر - سبک دیوار -->

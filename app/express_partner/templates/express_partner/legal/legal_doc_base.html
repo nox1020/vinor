@@ -13,17 +13,16 @@
 {% block content %}
 {% set _back = back_href if back_href is defined else (request.args.get('next') or url_for('express_partner.login')) %}
 <div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col">
-  <header class="sticky top-0 z-50 border-b border-white/10 bg-[#050810]/95 backdrop-blur-md">
-    <div class="mx-auto flex h-14 max-w-lg items-center justify-between px-4">
-      <a href="{{ _back }}"
-         class="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
-         aria-label="بازگشت">
-        <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
-      </a>
-      <h1 class="pointer-events-none absolute inset-x-0 truncate px-14 text-center text-sm font-bold text-white">{% block doc_heading %}سند حقوقی{% endblock %}</h1>
-      <div class="h-10 w-10 shrink-0" aria-hidden="true"></div>
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_back_link, ep_header_spacer %}
+  {{ ep_header_start(sticky=true) }}
+  <div class="ep-partner-header-inner max-w-lg mx-auto w-full">
+    {{ ep_back_link(_back, nav_back=false) }}
+    <div class="ep-partner-header-center">
+      <h1 class="ep-partner-header-title">{% block doc_heading %}سند حقوقی{% endblock %}</h1>
     </div>
-  </header>
+    <div class="ep-partner-header-right">{{ ep_header_spacer() }}</div>
+  </div>
+  {{ ep_header_end() }}
 
   <main class="flex-1 px-4 py-5 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
     <div class="mx-auto w-full max-w-lg">

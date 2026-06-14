@@ -278,6 +278,27 @@ def complete_visit_for_deal(
     return True
 
 
+def restore_visit_approved_after_deal_release(
+    requests: List[Dict[str, Any]], phone: str, land_code: str
+) -> bool:
+    """پس از رفع معامله، بازدید تأییدشده را برمی‌گرداند تا معامله دوباره ممکن شود."""
+    ph = (phone or "").strip()
+    code = (land_code or "").strip()
+    if not ph or not code:
+        return False
+    for r in requests:
+        if not _match_partner_land(r, ph, code):
+            continue
+        if (str(r.get("status") or "")).strip() != COMPLETED_STATUS:
+            continue
+        now_iso = datetime.utcnow().isoformat() + "Z"
+        r["status"] = APPROVED_STATUS
+        r["updated_at"] = now_iso
+        r.pop("completed_at", None)
+        return True
+    return False
+
+
 def visit_tx_mode(
     assignment_status: str,
     *,
@@ -369,9 +390,15 @@ def admin_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     st = (str(row.get("status") or PENDING_STATUS)).strip()
     labels = {
         PENDING_STATUS: "در انتظار تأیید",
-        APPROVED_STATUS: "تأیید شده",
+        APPROVED_STATUS: "تأیید شده — آماده معامله",
         COMPLETED_STATUS: "معامله ثبت شد",
         CANCELLED_STATUS: "رد شده",
+    }
+    hints = {
+        PENDING_STATUS: "تأیید کنید تا همکار بتواند «درخواست معامله» بزند.",
+        APPROVED_STATUS: "همکار می‌تواند درخواست معامله ثبت کند.",
+        COMPLETED_STATUS: "همکار معامله را شروع کرده — پورسانت در بخش پورسانت‌ها.",
+        CANCELLED_STATUS: "این درخواست بسته شده است.",
     }
     return {
         "id": row.get("id"),
@@ -383,8 +410,60 @@ def admin_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "visit_date_jalali": format_iso_date_jalali(str(row.get("visit_date") or "")),
         "status": st,
         "status_label": labels.get(st, st),
+        "status_hint": hints.get(st, ""),
         "created_at": row.get("created_at") or "",
         "updated_at": row.get("updated_at") or "",
         "approved_at": row.get("approved_at") or "",
         "admin_note": row.get("admin_note") or "",
+        "filter_bucket": visit_filter_bucket(st),
+        "is_editable": st in (PENDING_STATUS, APPROVED_STATUS),
+        "needs_action": st == PENDING_STATUS,
     }
+
+
+ADMIN_VISIT_TRANSITIONS: Dict[str, frozenset] = {
+    PENDING_STATUS: frozenset({PENDING_STATUS, APPROVED_STATUS, CANCELLED_STATUS}),
+    APPROVED_STATUS: frozenset({APPROVED_STATUS, CANCELLED_STATUS}),
+    COMPLETED_STATUS: frozenset({COMPLETED_STATUS}),
+    CANCELLED_STATUS: frozenset({CANCELLED_STATUS}),
+}
+
+
+def visit_filter_bucket(status: str) -> str:
+    st = (status or PENDING_STATUS).strip()
+    if st == PENDING_STATUS:
+        return "pending"
+    if st == APPROVED_STATUS:
+        return "approved"
+    if st == COMPLETED_STATUS:
+        return "done"
+    if st == CANCELLED_STATUS:
+        return "closed"
+    return "other"
+
+
+def admin_can_transition_visit(old_status: str, new_status: str) -> bool:
+    old = (old_status or PENDING_STATUS).strip()
+    new = (new_status or "").strip()
+    if old == new:
+        return True
+    if new == COMPLETED_STATUS:
+        return False
+    allowed = ADMIN_VISIT_TRANSITIONS.get(old, frozenset({old}))
+    return new in allowed
+
+
+def admin_visit_status_options(old_status: str) -> List[Dict[str, str]]:
+    old = (old_status or PENDING_STATUS).strip()
+    keys = ADMIN_VISIT_TRANSITIONS.get(old, frozenset({old}))
+    order = (PENDING_STATUS, APPROVED_STATUS, CANCELLED_STATUS)
+    labels = {
+        PENDING_STATUS: "در انتظار تأیید",
+        APPROVED_STATUS: "تأیید بازدید",
+        CANCELLED_STATUS: "رد درخواست",
+    }
+    out: List[Dict[str, str]] = []
+    for key in order:
+        if key in keys:
+            out.append({"value": key, "label": labels.get(key, key)})
+    return out

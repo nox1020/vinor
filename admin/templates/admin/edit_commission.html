@@ -3,7 +3,7 @@
 {% block page_title %}ویرایش پورسانت{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+<div class="max-w-2xl mx-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 sm:p-6">
   <form method="POST" action="{{ url_for('admin.express_commission_edit', cid=commission.id) }}" class="space-y-4">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     
@@ -19,7 +19,7 @@
              class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
     </div>
     
-    <div class="grid grid-cols-2 gap-3">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">مبلغ فروش (تومان)</label>
         <input type="text" name="sale_amount" value="{{ commission.sale_amount or '' }}" required
@@ -48,12 +48,12 @@
              class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
     </div>
     
-    <div class="flex gap-3 pt-4">
-      <button type="submit" class="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition">
+    <div class="flex flex-col sm:flex-row gap-3 pt-4">
+      <button type="submit" class="w-full sm:flex-1 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition">
         <i class="fa-solid fa-save ml-1"></i>
         ذخیره تغییرات
       </button>
-      <a href="{{ url_for('admin.express_commissions') }}" class="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium transition">
+      <a href="{{ url_for('admin.express_commissions') }}" class="w-full sm:w-auto text-center px-4 py-2.5 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium transition">
         انصراف
       </a>
     </div>

@@ -10,22 +10,15 @@
 {% set _below_min = ((_withdrawable or 0)|int > 0) and not _can_withdraw %}
 
 <section data-tour="commissions-summary" class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
-  <div class="px-4 pt-4 pb-3 flex items-center justify-between gap-3 border-b border-white/5">
-    <h2 class="text-sm font-bold text-white">خلاصه درآمد شما</h2>
-    <div class="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-      <i class="fas fa-chart-line text-sm" aria-hidden="true"></i>
-    </div>
-  </div>
-
   <div class="px-4 py-4">
     <p class="text-xs text-slate-400 mb-1">موجودی قابل برداشت</p>
-    <p class="text-3xl font-extrabold text-white tabular-nums tracking-tight leading-none">{{ (_withdrawable or 0)|toman }}</p>
+    <p class="text-3xl font-extrabold text-white tabular-nums tracking-tight leading-none" data-comm-withdrawable>{{ (_withdrawable or 0)|toman }}</p>
 
     <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5">
       <div class="min-w-0">
         <div class="flex items-center gap-1.5 mb-1">
           <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0{% if _has_active_wd %} vn-comm-wd-dot--live{% endif %}" aria-hidden="true"></span>
-          <span class="text-[10px] text-slate-400 leading-tight">در حال برداشت</span>
+          <span class="text-[10px] text-slate-400 leading-tight">در حال واریز</span>
         </div>
         <p class="text-sm font-bold text-amber-300 tabular-nums">{{ (_active_wd or 0)|toman }}</p>
       </div>

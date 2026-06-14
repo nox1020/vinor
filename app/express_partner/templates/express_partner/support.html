@@ -2,48 +2,47 @@
 {% block title %}پشتیبانی - وینور اکسپرس{% endblock %}
 {% block content %}
 
-  <header class="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 w-full">
-    <div class="w-full px-4 h-14 flex items-center justify-between gap-2">
-      <a href="{{ url_for('express_partner.profile') }}" data-vinor-express-nav="back" class="w-9 h-9 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 shrink-0" aria-label="بازگشت">
-        <i class="fas fa-arrow-right text-gray-600 dark:text-gray-400"></i>
-      </a>
-      <div class="flex-1 min-w-0 text-center">
-        <h1 class="text-sm font-bold text-gray-900 dark:text-white">پشتیبانی</h1>
-        {% if me_phone and ticket_stats.open_count %}
-        <p class="text-[10px] text-amber-600 dark:text-amber-400">{{ ticket_stats.open_count }} تیکت در انتظار پاسخ</p>
-        {% endif %}
-      </div>
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_back_link, ep_header_spacer %}
+  {{ ep_header_start() }}
+  <div class="ep-partner-header-inner max-w-6xl mx-auto w-full">
+    {{ ep_back_link(url_for('express_partner.profile')) }}
+    <div class="ep-partner-header-center">
+      <h1 class="ep-partner-header-title">پشتیبانی</h1>
+      {% if me_phone and ticket_stats.open_count %}
+      <p class="ep-partner-header-subtitle is-filtered">{{ ticket_stats.open_count }} تیکت در انتظار پاسخ</p>
+      {% endif %}
+    </div>
+    <div class="ep-partner-header-right">
       <a href="{{ url_for('express_partner.help') }}"
          data-tour="help-link"
-         class="w-9 h-9 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 shrink-0 text-sky-600 dark:text-sky-400"
+         class="ep-partner-header-btn text-sky-600 dark:text-sky-400"
          aria-label="راهنما">
-        <i class="fas fa-circle-question"></i>
+        <i class="fas fa-circle-question ep-partner-header-btn-icon"></i>
       </a>
     </div>
-
-    {% if me_phone %}
-    <nav class="px-4 pb-2 flex gap-2" aria-label="بخش‌های پشتیبانی">
-      <a href="{{ url_for('express_partner.support', tab='new') }}"
-         class="flex-1 text-center text-xs font-bold py-2 rounded-lg border transition
-                {% if ticket_tab == 'new' %}bg-emerald-600 border-emerald-600 text-white{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800{% endif %}">
-        تیکت جدید
-      </a>
-      <a href="{{ url_for('express_partner.support', tab='list') }}"
-         class="flex-1 text-center text-xs font-bold py-2 rounded-lg border transition relative
-                {% if ticket_tab == 'list' %}bg-gray-900 dark:bg-white border-gray-900 dark:border-white text-white dark:text-gray-900{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800{% endif %}">
-        سوابق
-        {% if ticket_stats.total_count %}
-        <span class="inline-flex min-w-[1.1rem] h-[1.1rem] items-center justify-center rounded-full text-[9px] px-1
-                     {% if ticket_tab == 'list' %}bg-white/20 dark:bg-gray-900/15{% else %}bg-gray-200 dark:bg-gray-700{% endif %}">
-          {{ ticket_stats.total_count }}
-        </span>
-        {% endif %}
-      </a>
-    </nav>
-    {% endif %}
-  </header>
-
-<div class="max-w-6xl mx-auto pt-0 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
+  </div>
+  {% if me_phone %}
+  <nav class="ep-partner-header-extra flex gap-2" aria-label="بخش‌های پشتیبانی">
+    <a href="{{ url_for('express_partner.support', tab='new') }}"
+       class="flex-1 text-center text-xs font-bold py-2 rounded-lg border transition
+              {% if ticket_tab == 'new' %}bg-emerald-600 border-emerald-600 text-white{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800{% endif %}">
+      تیکت جدید
+    </a>
+    <a href="{{ url_for('express_partner.support', tab='list') }}"
+       class="flex-1 text-center text-xs font-bold py-2 rounded-lg border transition relative
+              {% if ticket_tab == 'list' %}bg-gray-900 dark:bg-white border-gray-900 dark:border-white text-white dark:text-gray-900{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800{% endif %}">
+      سوابق
+      {% if ticket_stats.total_count %}
+      <span class="inline-flex min-w-[1.1rem] h-[1.1rem] items-center justify-center rounded-full text-[9px] px-1
+                   {% if ticket_tab == 'list' %}bg-white/20 dark:bg-gray-900/15{% else %}bg-gray-200 dark:bg-gray-700{% endif %}">
+        {{ ticket_stats.total_count }}
+      </span>
+      {% endif %}
+    </a>
+  </nav>
+  {% endif %}
+  {{ ep_header_end() }}
+<div class="max-w-6xl mx-auto px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16 {% if me_phone %}pt-[calc(7.25rem+env(safe-area-inset-top,0px))] sm:pt-[calc(7.75rem+env(safe-area-inset-top,0px))]{% else %}pt-14 sm:pt-16{% endif %}">
 
   {% with messages = get_flashed_messages(with_categories=true, category_filter=['profile']) %}
   {% include 'express_partner/partials/flash_alerts.html' %}

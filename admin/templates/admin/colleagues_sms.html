@@ -1,17 +1,13 @@
 {% extends 'admin/base_admin.html' %}
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 py-4 space-y-6">
+<div class="space-y-5">
   <!-- هدر -->
-  <div class="flex items-center justify-between">
-    <h1 class="text-lg font-bold text-gray-900 dark:text-white">ارسال پیامک به همکاران</h1>
-    <div class="flex gap-2">
-      <a 
-        href="{{ url_for('admin.sms_history') }}" 
-        class="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 text-sm font-medium hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
-      >
-        <i class="fa-solid fa-clock-rotate-left"></i> سابقه کامل
-      </a>
-    </div>
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <h1 class="text-base font-bold text-gray-900 dark:text-white">ارسال پیامک به همکاران</h1>
+    <a href="{{ url_for('admin.sms_history') }}"
+       class="inline-flex items-center justify-center px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300">
+      <i class="fa-solid fa-clock-rotate-left ml-1"></i> سابقه
+    </a>
   </div>
 
   {% if message %}
@@ -53,7 +49,7 @@
   <!-- تب‌های ارسال -->
   <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
     <!-- هدر تب‌ها -->
-    <div class="flex border-b border-gray-200 dark:border-gray-700">
+    <div class="adm-tabs-scroll flex border-b border-gray-200 dark:border-gray-700">
       <button 
         type="button"
         onclick="switchMode('template')"

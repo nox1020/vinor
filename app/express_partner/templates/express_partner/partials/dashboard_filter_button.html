@@ -17,12 +17,7 @@
 <button type="button"
         id="dashFilterToggle"
         data-tour="dashboard-filters"
-        class="vinor-dash-filter-btn lg:hidden relative h-[42px] w-[42px] sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 rounded-full border sm:px-3 text-sm font-medium transition-colors
-               {% if filter_active %}
-               border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300
-               {% else %}
-               border-gray-300 dark:border-white/20 bg-white dark:bg-[#1a2230] text-gray-700 dark:text-gray-100 hover:border-gray-400 dark:hover:border-white/35
-               {% endif %}"
+        class="vinor-dash-filter-btn vinor-dash-glass-pill lg:hidden relative h-[42px] w-[42px] sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 rounded-full sm:px-3 text-sm font-medium transition-colors text-gray-700 dark:text-gray-100{% if filter_active %} is-active text-emerald-800 dark:text-emerald-300{% endif %}"
         aria-haspopup="dialog"
         aria-controls="dashFilterModal"
         aria-expanded="false"
@@ -30,6 +25,6 @@
   <i class="fas fa-sliders text-[13px] opacity-80" aria-hidden="true"></i>
   <span class="hidden sm:inline">فیلتر</span>
   {% if filter_active %}
-  <span class="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#1a2230]" aria-hidden="true"></span>
+  <span class="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-white/80 dark:ring-[#030712]" aria-hidden="true"></span>
   {% endif %}
 </button>

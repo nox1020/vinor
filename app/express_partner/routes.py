@@ -73,6 +73,7 @@ from .partner_withdrawals import (
     reserved_withdrawal_total,
     active_withdrawals_for_phone,
     build_partner_txn_feed,
+    partner_txn_feed_summary,
     partner_commission_dashboard,
     reconcile_paid_withdrawals,
     cancel_partner_withdrawal,
@@ -90,9 +91,11 @@ from .visit_requests import (
     partner_open_visit,
     partner_visit_approved_for_deal,
     complete_visit_for_deal,
+    restore_visit_approved_after_deal_release,
     visit_date_min_iso,
     resolve_partner_land_tx_state,
 )
+from .commissions_flow import commission_blocks_new_deal_record
 from .support_tickets import (
     MESSAGE_MAX_LEN,
     MESSAGE_MIN_LEN,
@@ -2166,10 +2169,12 @@ def commissions_transactions_page():
     my_comms = _commissions_for_phone(me_phone)
     _attach_commission_txn_labels(my_comms)
     txn_items = _partner_txn_items(me_phone, my_comms)
+    txn_summary = partner_txn_feed_summary(txn_items)
 
     return render_template(
         "express_partner/commissions_txn_list.html",
         items=txn_items,
+        txn_summary=txn_summary,
         hide_header=True,
         SHOW_SUBMIT_BUTTON=False,
         brand="وینور",
@@ -3480,6 +3485,14 @@ def create_visit_request(code: str):
             category='error',
         )
 
+    if not ctx.get('my_assignment'):
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='برای این فایل انتساب فعالی برای شما ثبت نشده است. با پشتیبانی تماس بگیرید.',
+            category='error',
+        )
+
     current_status = ctx['global_status']
     holder_phone = ctx.get('holder_phone')
     if current_status == 'sold':
@@ -3790,16 +3803,13 @@ def mark_in_transaction(code: str):
                                 commission_pct = 0.0
                                 current_app.logger.warning(f"Invalid commission_pct for partner {partner_phone}, land {code}: {commission_pct_raw}")
                             
-                            # بررسی اینکه آیا قبلاً برای این همکار و این فایل پورسانتی ثبت شده یا نه
-                            existing_commission = next(
-                                (c for c in commissions 
-                                 if (str(c.get('partner_phone', '')).strip() == partner_phone and 
-                                     str(c.get('land_code')) == str(code))),
-                                None
-                            )
-                            
-                            if existing_commission:
-                                current_app.logger.info(f"Commission already exists for partner {partner_phone} and land {code}, skipping")
+                            # بررسی پورسانت فعال قبلی (ردشده مجدداً قابل ثبت است)
+                            if commission_blocks_new_deal_record(commissions, partner_phone, str(code)):
+                                current_app.logger.info(
+                                    "Active commission already exists for partner %s land %s",
+                                    partner_phone,
+                                    code,
+                                )
                                 skipped_count += 1
                             elif commission_pct > 0:
                                 # محاسبه مبلغ پورسانت
@@ -3868,12 +3878,12 @@ def mark_in_transaction(code: str):
                         
                         if created_count > 0:
                             save_express_commissions(commissions)
-                            success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد و پورسانت شما به لیست انتظار اضافه شد.'
+                            success_message = 'درخواست معامله ثبت شد. پس از تأیید ادمین، مبلغ به موجودی پورسانت شما اضافه می‌شود.'
                         else:
                             if skipped_count > 0:
-                                success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد. (پورسانت شما قبلاً ثبت شده بود)'
+                                success_message = 'درخواست معامله ثبت شد. (پورسانت فعال قبلی برای این فایل وجود دارد.)'
                             else:
-                                success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد.'
+                                success_message = 'درخواست معامله ثبت شد. پس از تأیید ادمین، مبلغ به موجودی پورسانت شما اضافه می‌شود.'
                         if not success_message:
                             success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد.'
                 except Exception as e:
@@ -3881,7 +3891,13 @@ def mark_in_transaction(code: str):
                     success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد، اما در ثبت پورسانت خطایی رخ داد.'
                     success_category = 'warning'
             else:
-                # اگر وضعیت از "در حال معامله" به "فعال" برگشت، پورسانت‌های pending مربوط به این فایل را حذف کن
+                # رفع معامله: بازگرداندن بازدید تأییدشده + حذف پورسانت pending
+                visit_requests = load_express_visit_requests() or []
+                if not isinstance(visit_requests, list):
+                    visit_requests = []
+                if restore_visit_approved_after_deal_release(visit_requests, me_phone, code):
+                    save_express_visit_requests(visit_requests)
+
                 try:
                     commissions = load_express_commissions() or []
                     removed_count = 0

@@ -9,33 +9,84 @@
     <div>
       <h2 class="text-base font-semibold text-gray-900 dark:text-white">درخواست بازدید همکاران</h2>
       <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-        {% if pending_count %}<span class="text-amber-600 dark:text-amber-400 font-medium">{{ pending_count }} در انتظار تأیید</span>{% else %}همه درخواست‌ها بررسی شده‌اند{% endif %}
+        {% if active_count %}
+        <span class="text-teal-600 dark:text-teal-400 font-medium">{{ active_count }} فعال</span>
+        ·
+        {% endif %}
+        {% if pending_count %}
+        <span class="text-amber-600 dark:text-amber-400 font-medium">{{ pending_count }} در انتظار تأیید</span>
+        {% if approved_count %} · {% endif %}
+        {% endif %}
+        {% if approved_count %}
+        <span class="text-blue-600 dark:text-blue-400 font-medium">{{ approved_count }} تأییدشده</span>
+        {% endif %}
+        {% if not active_count and not pending_count %}
+        همه درخواست‌های فعال بررسی شده‌اند
+        {% endif %}
       </p>
     </div>
     <a href="{{ url_for('admin.express_commissions') }}"
        class="text-xs text-blue-600 dark:text-blue-400 hover:underline">مدیریت پورسانت‌ها</a>
   </div>
 
+  <div class="rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/40 px-4 py-3 text-xs text-teal-900 dark:text-teal-100 leading-relaxed">
+    <p class="font-semibold mb-1">گام ۱ از ۳ — جریان فروش</p>
+    <p>۱) تأیید بازدید · ۲) همکار «درخواست معامله» می‌زند (وضعیت «معامله ثبت شد» خودکار است) ·
+    ۳) پورسانت در بخش پورسانت‌ها برای تأیید نهایی.</p>
+  </div>
+
+  <div class="flex flex-wrap gap-2 text-[11px]">
+    {% macro filter_link(key, label, count) %}
+    <a href="{{ url_for('admin.express_visit_requests', filter=key) }}"
+       class="px-3 py-1.5 rounded-full border font-medium transition
+              {% if current_filter == key %}border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-600{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300{% endif %}">
+      {{ label }}{% if count is not none %} ({{ count }}){% endif %}
+    </a>
+    {% endmacro %}
+    {{ filter_link('active', 'فعال', active_count) }}
+    {{ filter_link('pending', 'در انتظار', pending_count) }}
+    {{ filter_link('approved', 'تأییدشده', approved_count) }}
+    {{ filter_link('done', 'معامله‌شده', done_count) }}
+    {{ filter_link('closed', 'رد شده', closed_count) }}
+    {{ filter_link('all', 'همه', all_count) }}
+  </div>
+
   {% if items and items|length > 0 %}
   <div class="grid grid-cols-1 gap-3">
     {% for v in items %}
-    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+    {% set st = v.status or 'pending' %}
+    <div class="bg-white dark:bg-gray-900 border rounded-lg p-4
+                {% if st == 'pending' %}border-amber-200 dark:border-amber-900/50
+                {% elif st == 'approved' %}border-blue-200 dark:border-blue-900/50
+                {% elif st == 'completed' %}border-emerald-200 dark:border-emerald-900/50
+                {% elif st == 'cancelled' %}border-gray-200 dark:border-gray-700
+                {% else %}border-gray-200 dark:border-gray-700{% endif %}">
       <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div class="min-w-0">
           <h3 class="font-semibold text-sm text-gray-900 dark:text-white">
+            {% if v.partner_phone %}
+            <a href="{{ url_for('admin.express_partner_detail', phone=v.partner_phone) }}"
+               class="hover:text-teal-600 dark:hover:text-teal-400 transition">{{ v.partner_name or 'همکار' }}</a>
+            {% else %}
             {{ v.partner_name or 'همکار' }}
+            {% endif %}
+            {% if v.partner_phone %}
             <span class="text-gray-400 font-normal text-xs" dir="ltr">{{ v.partner_phone }}</span>
+            {% endif %}
           </h3>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">ثبت: {{ v.created_at|default('—') }}</p>
+          {% if v.approved_at %}
+          <p class="text-[10px] text-gray-400 dark:text-gray-500">تأیید: {{ v.approved_at }}</p>
+          {% endif %}
         </div>
         <div class="text-start shrink-0">
           <p class="text-sm font-bold text-teal-600 dark:text-teal-400 tabular-nums">{{ v.visit_date_jalali or v.visit_date|default('—') }}</p>
           <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">تاریخ بازدید</p>
-          {% set st = v.status or 'pending' %}
           <span class="inline-flex mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full
             {% if st == 'pending' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
             {% elif st == 'approved' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
             {% elif st == 'completed' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
+            {% elif st == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
             {% else %}bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400{% endif %}">
             {{ v.status_label }}
           </span>
@@ -47,38 +98,84 @@
         <div class="flex justify-between gap-2"><span class="text-gray-500">کد</span><span class="text-gray-900 dark:text-white font-mono" dir="ltr">{{ v.land_code or '—' }}</span></div>
       </div>
 
-      <form method="post" action="{{ url_for('admin.express_visit_request_status', vid=v.id) }}" class="flex flex-wrap items-end gap-2">
+      {% if v.status_hint %}
+      <p class="text-xs mb-3
+        {% if st == 'pending' %}text-amber-700 dark:text-amber-300
+        {% elif st == 'approved' %}text-blue-600 dark:text-blue-400
+        {% elif st == 'completed' %}text-emerald-600 dark:text-emerald-400
+        {% else %}text-gray-500 dark:text-gray-400{% endif %}">
+        {{ v.status_hint }}
+      </p>
+      {% endif %}
+
+      {% if v.admin_note %}
+      <p class="text-xs text-gray-600 dark:text-gray-300 mb-3 bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1.5">{{ v.admin_note }}</p>
+      {% endif %}
+
+      {% if v.needs_action %}
+      <div class="flex flex-wrap gap-2 mb-2">
+        <form method="post" action="{{ url_for('admin.express_visit_request_status', vid=v.id) }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <input type="hidden" name="status" value="approved">
+          <button type="submit"
+                  class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
+            تأیید بازدید
+          </button>
+        </form>
+        <form method="post" action="{{ url_for('admin.express_visit_request_status', vid=v.id) }}" class="inline-flex flex-wrap items-end gap-2 flex-1 min-w-[12rem]">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <input type="hidden" name="status" value="cancelled">
+          <input type="text" name="admin_note"
+                 class="flex-1 min-w-[8rem] text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                 placeholder="دلیل رد (اختیاری)" />
+          <button type="submit"
+                  class="px-3 py-2 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs font-medium">
+            رد درخواست
+          </button>
+        </form>
+      </div>
+      {% elif v.is_editable %}
+      <form method="post" action="{{ url_for('admin.express_visit_request_status', vid=v.id) }}" class="adm-form-row flex flex-wrap items-end gap-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="filter" value="{{ current_filter }}">
         <div class="flex-1 min-w-[8rem]">
-          <label class="block text-[10px] text-gray-500 mb-1">وضعیت</label>
+          <label class="block text-[10px] text-gray-500 mb-1">تغییر وضعیت</label>
           <select name="status" class="w-full text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-            <option value="pending" {% if st == 'pending' %}selected{% endif %}>در انتظار تأیید</option>
-            <option value="approved" {% if st == 'approved' %}selected{% endif %}>تأیید شده</option>
-            <option value="completed" {% if st == 'completed' %}selected{% endif %}>معامله ثبت شد</option>
-            <option value="cancelled" {% if st == 'cancelled' %}selected{% endif %}>رد شده</option>
+            {% for opt in v.status_options %}
+            <option value="{{ opt.value }}" {% if opt.value == st %}selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
           </select>
         </div>
         <div class="flex-[2] min-w-[10rem]">
           <label class="block text-[10px] text-gray-500 mb-1">یادداشت (اختیاری)</label>
           <input type="text" name="admin_note" value="{{ v.admin_note or '' }}"
                  class="w-full text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                 placeholder="یادداشت داخلی یا دلیل رد" />
+                 placeholder="یادداشت داخلی" />
         </div>
         <button type="submit" class="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium">
           ذخیره
         </button>
       </form>
-      {% if st == 'approved' %}
-      <p class="text-xs text-blue-600 dark:text-blue-400 mt-2">با وضعیت «تأیید شده»، درخواست معامله برای همکار روی این فایل فعال است.</p>
       {% elif st == 'completed' %}
-      <p class="text-xs text-emerald-600 dark:text-emerald-400 mt-2">بازدید انجام و معامله ثبت شده است.</p>
+      <a href="{{ url_for('admin.express_commissions') }}"
+         class="inline-flex text-xs text-emerald-600 dark:text-emerald-400 hover:underline">
+        مشاهده پورسانت‌های مرتبط ←
+      </a>
       {% endif %}
     </div>
     {% endfor %}
   </div>
   {% else %}
   <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+    {% if current_filter == 'pending' %}
+    درخواستی در انتظار تأیید نیست.
+    {% elif current_filter == 'all' %}
     هنوز درخواست بازدیدی ثبت نشده است.
+    {% else %}
+    موردی در این فیلتر یافت نشد.
+    {% endif %}
   </div>
   {% endif %}
 

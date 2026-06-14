@@ -183,10 +183,41 @@
     });
   }
 
+  function mainBannerVisible(main) {
+    if (!main) return false;
+    try {
+      var kids = main.children;
+      for (var i = 0; i < kids.length; i++) {
+        var node = kids[i];
+        if (!node || node.id === 'dashboardMobileCardsRoot') continue;
+        var cs = window.getComputedStyle(node);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') continue;
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   function syncPadding(el) {
     if (!el.header || !el.main) return;
     var h = el.header.getBoundingClientRect().height;
-    el.main.style.paddingTop = Math.ceil(h + 6) + 'px';
+    var padPx = Math.ceil(h + 8);
+    var pad = padPx + 'px';
+    try {
+      el.main.style.setProperty('--vn-dash-header-pad', pad);
+    } catch (_) {}
+    var verticalMobile = isVerticalCardsViewport();
+    if (verticalMobile) {
+      el.main.style.paddingTop = '0';
+      var track = document.getElementById('cardsTrack');
+      if (track) {
+        track.style.paddingTop = mainBannerVisible(el.main) ? '0.25rem' : pad;
+      }
+    } else {
+      el.main.style.paddingTop = Math.ceil(h + 6) + 'px';
+      var trackDesktop = document.getElementById('cardsTrack');
+      if (trackDesktop) trackDesktop.style.paddingTop = '';
+    }
     scheduleCardsHeight();
   }
 

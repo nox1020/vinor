@@ -2,23 +2,20 @@
 {% block title %}یادداشت‌های خصوصی | وینور اکسپرس{% endblock %}
 {% block content %}
 
-<header class="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 w-full">
-  <div class="w-full px-4 h-14 flex items-center justify-between">
-    <a href="{{ url_for('express_partner.dashboard') }}" class="w-9 h-9 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="بازگشت">
-      <i class="fas fa-arrow-right text-gray-600 dark:text-gray-400"></i>
-    </a>
-    <h1 class="text-sm font-bold text-gray-900 dark:text-white" data-tour="notes-header">یادداشت‌های خصوصی</h1>
-    <button type="button" 
-            data-tour="notes-add-button"
-            onclick="document.getElementById('addNoteForm').classList.toggle('hidden')"
-            class="w-9 h-9 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-            aria-label="افزودن یادداشت">
-      <i class="fas fa-plus text-sm"></i>
-    </button>
-  </div>
-</header>
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{{ ep_header_start() }}
+{% call ep_header_row('یادداشت‌های خصوصی', url_for('express_partner.dashboard'), back_nav=false) %}
+  <button type="button"
+          data-tour="notes-add-button"
+          onclick="document.getElementById('addNoteForm').classList.toggle('hidden')"
+          class="ep-partner-header-btn"
+          aria-label="افزودن یادداشت">
+    <i class="fas fa-plus ep-partner-header-btn-icon"></i>
+  </button>
+{% endcall %}
+{{ ep_header_end() }}
 
-<div class="max-w-5xl mx-auto pt-4 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
+<div class="max-w-5xl mx-auto pt-14 sm:pt-16 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
   <!-- فرم افزودن یادداشت جدید -->
   <div id="addNoteForm" class="hidden mb-4">
     <form method="POST" action="{{ url_for('express_partner.add_note') }}" class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">

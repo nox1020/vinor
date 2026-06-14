@@ -1,69 +1,101 @@
 {% extends 'admin/base_admin.html' %}
+{% from 'admin/partials/mobile_ui.html' import empty_state %}
+{% block title %}گزارش‌های کاربران{% endblock %}
+{% block page_title %}گزارش‌ها{% endblock %}
+
 {% block content %}
-<div class="max-w-6xl mx-auto px-3 py-4">
-  <div class="flex items-center justify-between mb-4">
-    <h1 class="text-xl font-bold">گزارش‌های کاربران</h1>
-    <a href="{{ url_for('admin.dashboard') }}" class="text-sm text-gray-600">بازگشت به داشبورد</a>
+<div class="space-y-5">
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <h2 class="text-base font-semibold text-gray-900 dark:text-white">گزارش‌های کاربران</h2>
+    <a href="{{ url_for('admin.dashboard') }}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">بازگشت به داشبورد</a>
   </div>
 
-  <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-    <table class="w-full text-sm">
-      <thead class="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200">
-        <tr>
-          <th class="p-2 text-right">#</th>
-          <th class="p-2 text-right">کد آگهی</th>
-          <th class="p-2 text-right">دلیل</th>
-          <th class="p-2 text-right">توضیحات</th>
-          <th class="p-2 text-right">زمان</th>
-          <th class="p-2 text-right">وضعیت</th>
-          <th class="p-2 text-right">اقدام</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in reports %}
-        <tr class="border-t border-gray-100 dark:border-gray-800">
-          <td class="p-2">{{ r.id }}</td>
-          <td class="p-2">
-            <a href="{{ url_for('main.land_detail', code=r.code) }}" class="text-emerald-600 hover:underline" target="_blank">{{ r.code }}</a>
-          </td>
-          <td class="p-2">{{ r.reason }}</td>
-          <td class="p-2 text-gray-600 dark:text-gray-300">{{ r.details }}</td>
-          <td class="p-2 text-gray-500">{{ r.created_at }}</td>
-          <td class="p-2">
-            {% if r.status == 'resolved' %}
-              <span class="px-2 py-1 rounded-full text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">رسیدگی شد</span>
-            {% else %}
-              <span class="px-2 py-1 rounded-full text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">باز</span>
-            {% endif %}
-          </td>
-          <td class="p-2">
-            {% if r.status != 'resolved' %}
-            <form method="post" action="{{ url_for('admin.report_resolve', rid=r.id) }}">
-              <button class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs">بستن/رسیدگی</button>
-            </form>
-            {% else %}
-              <span class="text-xs text-gray-400">—</span>
-            {% endif %}
-          </td>
-        </tr>
+  {% if reports and reports|length > 0 %}
+  <div class="sm:hidden grid grid-cols-1 gap-3">
+    {% for r in reports %}
+    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-3.5">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <a href="{{ url_for('main.land_detail', code=r.code) }}" target="_blank" class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{{ r.code }}</a>
+        {% if r.status == 'resolved' %}
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">رسیدگی شد</span>
         {% else %}
-        <tr>
-          <td colspan="7" class="p-4 text-center text-gray-500">گزارشی ثبت نشده است.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">باز</span>
+        {% endif %}
+      </div>
+      <p class="text-xs text-gray-900 dark:text-white font-medium">{{ r.reason or '—' }}</p>
+      {% if r.details %}<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ r.details }}</p>{% endif %}
+      <p class="text-[10px] text-gray-400 mt-2">{{ r.created_at or '—' }}</p>
+      {% if r.status != 'resolved' %}
+      <form method="post" action="{{ url_for('admin.report_resolve', rid=r.id) }}" class="mt-3">
+        <button class="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium">بستن / رسیدگی</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
   </div>
 
-  <div class="flex items-center justify-center gap-2 mt-4">
+  <div class="hidden sm:block bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
+    <div class="adm-table-wrap">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200">
+          <tr>
+            <th class="p-2 text-right">#</th>
+            <th class="p-2 text-right">کد آگهی</th>
+            <th class="p-2 text-right">دلیل</th>
+            <th class="p-2 text-right">توضیحات</th>
+            <th class="p-2 text-right">زمان</th>
+            <th class="p-2 text-right">وضعیت</th>
+            <th class="p-2 text-right">اقدام</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in reports %}
+          <tr class="border-t border-gray-100 dark:border-gray-800">
+            <td class="p-2">{{ r.id }}</td>
+            <td class="p-2">
+              <a href="{{ url_for('main.land_detail', code=r.code) }}" class="text-emerald-600 hover:underline" target="_blank">{{ r.code }}</a>
+            </td>
+            <td class="p-2">{{ r.reason }}</td>
+            <td class="p-2 text-gray-600 dark:text-gray-300">{{ r.details }}</td>
+            <td class="p-2 text-gray-500">{{ r.created_at }}</td>
+            <td class="p-2">
+              {% if r.status == 'resolved' %}
+                <span class="px-2 py-1 rounded-full text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">رسیدگی شد</span>
+              {% else %}
+                <span class="px-2 py-1 rounded-full text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">باز</span>
+              {% endif %}
+            </td>
+            <td class="p-2">
+              {% if r.status != 'resolved' %}
+              <form method="post" action="{{ url_for('admin.report_resolve', rid=r.id) }}">
+                <button class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs">بستن/رسیدگی</button>
+              </form>
+              {% else %}
+                <span class="text-xs text-gray-400">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  {{ empty_state('گزارشی ثبت نشده است.') }}
+  {% endif %}
+
+  {% if pagination and pagination.pages > 1 %}
+  <div class="flex flex-wrap items-center justify-center gap-2 text-sm">
     {% if pagination.page > 1 %}
-      <a class="px-3 py-1 rounded border" href="?page={{ pagination.page - 1 }}">قبلی</a>
+      <a class="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-xs" href="?page={{ pagination.page - 1 }}">قبلی</a>
     {% endif %}
-    <span class="text-sm">صفحه {{ pagination.page }} از {{ pagination.pages }}</span>
+    <span class="text-xs text-gray-500">صفحه {{ pagination.page }} از {{ pagination.pages }}</span>
     {% if pagination.page < pagination.pages %}
-      <a class="px-3 py-1 rounded border" href="?page={{ pagination.page + 1 }}">بعدی</a>
+      <a class="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-xs" href="?page={{ pagination.page + 1 }}">بعدی</a>
     {% endif %}
   </div>
+  {% endif %}
+
 </div>
 {% endblock %}
-

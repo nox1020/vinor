@@ -482,6 +482,12 @@ def withdrawal_to_txn_row(w: Dict[str, Any]) -> Dict[str, Any]:
         "commission_amount": -amt if amt > 0 else 0,
         "withdrawal_amount": amt,
         "bank_summary": bank,
+        "bank_name": w.get("bank_name") or "",
+        "masked_pan": w.get("masked_pan") or "",
+        "holder_name": w.get("holder_name") or "",
+        "bank_account_id": w.get("bank_account_id") or "",
+        "commission_allocated_amount": _amount_int(w.get("commission_allocated_amount")),
+        "admin_note": w.get("admin_note") or "",
         "withdrawal_id": w.get("id"),
         "_txn_label": f"برداشت به {bank}",
         "cancellable": False,
@@ -500,12 +506,19 @@ def withdrawal_request_to_txn_row(w: Dict[str, Any]) -> Dict[str, Any]:
         "commission_amount": -amt if amt > 0 else 0,
         "withdrawal_amount": amt,
         "bank_summary": bank,
+        "bank_name": w.get("bank_name") or "",
+        "masked_pan": w.get("masked_pan") or "",
+        "holder_name": w.get("holder_name") or "",
+        "bank_account_id": w.get("bank_account_id") or "",
+        "commission_allocated_amount": _amount_int(w.get("commission_allocated_amount")),
+        "admin_note": w.get("admin_note") or "",
         "withdrawal_id": w.get("id"),
         "withdrawal_status_label": status_label(st),
         "_txn_label": f"درخواست برداشت به {bank}",
         "cancellable": st in PARTNER_CANCELLABLE_WITHDRAWAL_STATUSES,
         "updated_at": w.get("updated_at") or "",
         "cancelled_at": w.get("cancelled_at") or "",
+        "cancelled_by": w.get("cancelled_by") or "",
     }
 
 
@@ -624,11 +637,40 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
     amt = _amount_int(row.get("withdrawal_amount") if is_wd else row.get("commission_amount"))
 
     fields: List[Dict[str, Any]] = []
+    wallet_fields: List[Dict[str, Any]] = []
     dates: List[Dict[str, Any]] = []
 
     if is_wd:
-        if row.get("bank_summary"):
-            fields.append({"label": "حساب بانکی", "value": str(row.get("bank_summary") or "")})
+        wid = str(row.get("withdrawal_id") or "").strip()
+        bank_name = str(row.get("bank_name") or "").strip()
+        masked_pan = str(row.get("masked_pan") or "").strip()
+        holder = str(row.get("holder_name") or "").strip()
+        bank_summary = str(row.get("bank_summary") or "").strip()
+        allocated = _amount_int(row.get("commission_allocated_amount"))
+
+        if bank_name:
+            wallet_fields.append({"label": "بانک", "value": bank_name})
+        if masked_pan:
+            wallet_fields.append({"label": "شماره کارت", "value": masked_pan})
+        elif bank_summary:
+            wallet_fields.append({"label": "حساب مقصد", "value": bank_summary})
+        if holder:
+            wallet_fields.append({"label": "صاحب حساب", "value": holder})
+        if bank_summary and masked_pan:
+            wallet_fields.append({"label": "خلاصه حساب", "value": bank_summary})
+
+        fields.append({"label": "مبلغ برداشت", "value": amt, "format": "toman"})
+        if allocated > 0:
+            fields.append({"label": "پورسانت تخصیص‌یافته", "value": allocated, "format": "toman"})
+        if wid:
+            fields.append({"label": "شناسه درخواست", "value": wid})
+        admin_note = str(row.get("admin_note") or "").strip()
+        if admin_note:
+            fields.append({"label": "یادداشت پشتیبانی", "value": admin_note})
+        cancelled_by = str(row.get("cancelled_by") or "").strip()
+        if cancelled_by:
+            fields.append({"label": "لغو توسط", "value": "شما" if cancelled_by == "partner" else cancelled_by})
+
         if row.get("created_at"):
             dates.append({"label": "تاریخ درخواست", "value": str(row.get("created_at") or "")})
         updated = str(row.get("updated_at") or "").strip()
@@ -639,9 +681,16 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
         if row.get("cancelled_at"):
             dates.append({"label": "تاریخ لغو", "value": str(row.get("cancelled_at") or "")})
     else:
+        comm_type = (str(row.get("commission_type") or "")).strip()
         land = str(row.get("land_code") or "").strip()
-        if land and land != "referral" and (str(row.get("commission_type") or "")).strip() != "referral":
+        if comm_type == "referral":
+            fields.append({"label": "نوع", "value": "پورسانت دعوت همکار"})
+            referred = str(row.get("referred_phone") or row.get("referral_phone") or "").strip()
+            if referred:
+                wallet_fields.append({"label": "همکار دعوت‌شده", "value": referred})
+        elif land and land != "referral":
             fields.append({"label": "کد ملک", "value": land})
+
         sale = _amount_int(row.get("sale_amount"))
         if sale > 0:
             fields.append({"label": "مبلغ فروش", "value": sale, "format": "toman"})
@@ -651,9 +700,35 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
                 fields.append({"label": "درصد پورسانت", "value": f"{float(pct_raw):g}٪"})
             except Exception:
                 pass
+        fields.append({"label": "مبلغ پورسانت", "value": amt, "format": "toman"})
         partial = _amount_int(row.get("partial_paid_display"))
         if partial > 0:
             fields.append({"label": "واریز شده از این پورسانت", "value": partial, "format": "toman"})
+            remaining = max(0, amt - partial)
+            if remaining > 0 and st == "approved":
+                fields.append({"label": "مانده قابل برداشت", "value": remaining, "format": "toman"})
+
+        linked = row.get("_linked_withdrawal") if isinstance(row.get("_linked_withdrawal"), dict) else {}
+        wid = str(row.get("withdrawal_id") or linked.get("id") or "").strip()
+        if wid or linked:
+            if wid:
+                wallet_fields.append({"label": "شناسه برداشت مرتبط", "value": wid})
+            link_bank = str(linked.get("bank_summary") or row.get("bank_summary") or "").strip()
+            link_name = str(linked.get("bank_name") or "").strip()
+            link_pan = str(linked.get("masked_pan") or "").strip()
+            if link_name:
+                wallet_fields.append({"label": "بانک مقصد", "value": link_name})
+            if link_pan:
+                wallet_fields.append({"label": "کارت مقصد", "value": link_pan})
+            elif link_bank:
+                wallet_fields.append({"label": "حساب مقصد", "value": link_bank})
+            link_amt = _amount_int(linked.get("amount"))
+            if link_amt > 0:
+                wallet_fields.append({"label": "مبلغ درخواست برداشت", "value": link_amt, "format": "toman"})
+            link_st = str(linked.get("status") or "").strip()
+            if link_st:
+                wallet_fields.append({"label": "وضعیت برداشت", "value": status_label(link_st)})
+
         if row.get("created_at"):
             dates.append({"label": "تاریخ ثبت", "value": str(row.get("created_at") or "")})
         if row.get("approved_at"):
@@ -664,6 +739,10 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
         if cid is not None and str(cid).strip() != "":
             fields.append({"label": "شناسه پورسانت", "value": str(cid)})
 
+    wallet_title = "حساب بانکی / کیف پول" if is_wd else "اطلاعات برداشت مرتبط"
+    if not wallet_fields:
+        wallet_title = ""
+
     return {
         "txn_type": txn_type,
         "title": _txn_type_title(row),
@@ -673,11 +752,60 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
         "status": st,
         "status_label": _txn_status_label(row),
         "fields": fields,
+        "wallet_fields": wallet_fields,
+        "wallet_title": wallet_title,
         "dates": dates,
         "primary_date": str(row.get("created_at") or ""),
         "cancellable": bool(row.get("cancellable")),
         "withdrawal_id": str(row.get("withdrawal_id") or ""),
     }
+
+
+def partner_txn_kind(row: Dict[str, Any]) -> str:
+    txn_type = (row.get("txn_type") or "commission").strip()
+    if txn_type in ("withdrawal", "withdrawal_request"):
+        return "withdrawal"
+    return "commission"
+
+
+def partner_txn_filter_bucket(row: Dict[str, Any]) -> str:
+    """bucket فیلتر UI: pending | approved | paid | closed."""
+    txn_type = (row.get("txn_type") or "commission").strip()
+    st = (str(row.get("status") or "pending")).strip()
+    if txn_type == "withdrawal":
+        return "paid"
+    if txn_type == "withdrawal_request":
+        if st in ("cancelled", "rejected"):
+            return "closed"
+        if st in ("approved", "processing"):
+            return "approved"
+        return "pending"
+    if st == "rejected":
+        return "closed"
+    if st in ("pending", "approved", "paid"):
+        return st
+    return "pending"
+
+
+def partner_txn_feed_summary(rows: List[Dict[str, Any]]) -> Dict[str, int]:
+    summary = {
+        "all": len(rows),
+        "pending": 0,
+        "approved": 0,
+        "paid": 0,
+        "withdrawal": 0,
+        "closed": 0,
+    }
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        bucket = row.get("_txn_filter") or partner_txn_filter_bucket(row)
+        kind = row.get("_txn_kind") or partner_txn_kind(row)
+        if kind == "withdrawal":
+            summary["withdrawal"] += 1
+        if bucket in summary:
+            summary[bucket] += 1
+    return summary
 
 
 def build_partner_txn_feed(
@@ -702,7 +830,29 @@ def build_partner_txn_feed(
         else:
             rows.append(withdrawal_request_to_txn_row(w))
     rows.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    wd_by_id: Dict[str, Dict[str, Any]] = {}
+    for w in withdrawals_for_phone(withdrawals, phone):
+        if not isinstance(w, dict):
+            continue
+        wid = str(w.get("id") or "").strip()
+        if wid:
+            wd_by_id[wid] = w
     for r in rows:
+        if not isinstance(r, dict):
+            continue
+        wid = str(r.get("withdrawal_id") or "").strip()
+        if wid and wid in wd_by_id:
+            w = wd_by_id[wid]
+            r["_linked_withdrawal"] = {
+                "id": wid,
+                "bank_summary": w.get("bank_summary") or "",
+                "bank_name": w.get("bank_name") or "",
+                "masked_pan": w.get("masked_pan") or "",
+                "amount": _amount_int(w.get("amount")),
+                "status": w.get("status") or "",
+            }
+        r["_txn_kind"] = partner_txn_kind(r)
+        r["_txn_filter"] = partner_txn_filter_bucket(r)
         r["_txn_detail"] = partner_txn_detail(r)
     return rows
 

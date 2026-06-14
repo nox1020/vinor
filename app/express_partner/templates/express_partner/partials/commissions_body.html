@@ -1,19 +1,19 @@
 {# بادی پورسانت: روی موبایل اسکرول داخل #commissionsPageMain (مثل dashboardMobileCardsRoot) تا WebView قفل نکند #}
 <main id="commissionsPageMain"
       class="max-w-lg lg:max-w-4xl mx-auto w-full px-4 text-slate-100 bg-[#030712] lg:pb-16 transition-[padding-top] duration-300 ease-out"
-      style="padding-top: 5.75rem">
+      style="--vn-partner-header-pad: 5.75rem">
 
   <style>
+    #commissionsPageMain {
+      padding-top: var(--vn-partner-header-pad, 5.75rem);
+    }
     /*
       موبایل: ارتفاع با JS تا لبهٔ منو + پس‌زمینهٔ یکدست (#030712) تا نوار مشکی WebView زیر لیست دیده نشود.
       transition روی padding-top باعث می‌شود getBoundingClientRect وسط انیمیشن غلط خوانده شود.
     */
     @media (max-width: 1023px) {
-      /*
-        min-height بزرگ (مثل 100dvh+80px) با height ثابت JS تداخل می‌کرد و اسکرول دوتایی
-        (body + main) یا گیر کردن اسکرول می‌ساخت — min-height صفر تا JS قفل کند.
-      */
       #commissionsPageMain {
+        padding-top: 0 !important;
         box-sizing: border-box;
         min-height: 0;
         background-color: #030712;
@@ -26,6 +26,9 @@
         overflow-anchor: none;
         scrollbar-width: none;
         -ms-overflow-style: none;
+      }
+      .commissions-page-scroll-pad {
+        padding-top: var(--vn-partner-header-pad, 5.75rem);
       }
       #commissionsPageMain::-webkit-scrollbar {
         display: none;
@@ -66,12 +69,13 @@
   {% include 'express_partner/partials/commissions_guest.html' %}
 {% else %}
   {% include 'express_partner/partials/commissions_pull_hint.html' %}
-  <div id="commissionsRefreshMount" class="space-y-4 w-full">
+  <div id="commissionsRefreshMount" class="commissions-page-scroll-pad space-y-4 w-full">
     {% include 'express_partner/partials/commissions_refresh_inner.html' %}
   </div>
   {% include 'express_partner/partials/commissions_withdraw_modal.html' %}
   {% include 'express_partner/partials/commissions_bank_picker_modal.html' %}
   {% include 'express_partner/partials/commissions_bank_add_modal.html' %}
+  {% include 'express_partner/partials/commissions_txn_detail_data.html' %}
   {% include 'express_partner/partials/commissions_txn_detail_modal.html' %}
 {% endif %}
 
@@ -118,8 +122,8 @@
     }
 
     function syncCommissionsChromeNow() {
-      var hh = Math.ceil(header.getBoundingClientRect().height + 6);
-      main.style.paddingTop = hh + 'px';
+      var hh = Math.ceil(header.getBoundingClientRect().height + 8);
+      main.style.setProperty('--vn-partner-header-pad', hh + 'px');
       var nav = document.getElementById('bottomNavMenu');
       var nh = 92;
       try {

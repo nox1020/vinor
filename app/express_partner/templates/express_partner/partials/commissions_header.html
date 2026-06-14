@@ -1,12 +1,25 @@
-{# هدر پورسانت — هم‌راستا با هدر پروفایل (تیره، h-14/sm:h-16، max-w-6xl) #}
-<header id="commissionsPageHeader" data-tour="commissions-header" class="fixed top-0 left-0 right-0 z-50 w-full border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md pointer-events-none">
-  <div class="relative mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16 sm:px-6 pointer-events-auto">
-    <a href="{{ url_for('express_partner.dashboard') }}"
-       class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
-       aria-label="بازگشت">
-      <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
-    </a>
-    <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">پورسانت‌های من</h1>
-    <div class="h-10 w-10 shrink-0" aria-hidden="true"></div>
+{# هدر پورسانت — pill شیشه‌ای 42px مثل داشبورد #}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_back_link %}
+{% set s = comm_stats if comm_stats is defined else {} %}
+{% set _withdrawable = withdrawable_balance if withdrawable_balance is defined else s.get('withdrawable_balance', 0) %}
+
+{{ ep_header_start(id='commissionsPageHeader', tour='commissions-header', pointer_shell=true) }}
+<div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 max-w-lg lg:max-w-4xl mx-auto">
+  <div class="flex items-center gap-2">
+    {{ ep_back_link(url_for('express_partner.dashboard'), class='vinor-dash-glass-pill comm-header-glass-btn') }}
+    <div class="vinor-dash-glass-pill comm-header-title-pill flex h-[42px] min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 sm:px-4">
+      <h1 class="truncate text-sm font-bold text-gray-900 dark:text-white">پورسانت‌های من</h1>
+      {% if is_approved %}
+      <span id="commHeaderBalance"
+            class="shrink-0 text-xs font-bold tabular-nums text-emerald-600 dark:text-emerald-400"
+            aria-label="موجودی قابل برداشت">{{ (_withdrawable or 0)|toman }}</span>
+      {% endif %}
+    </div>
+    <div class="vinor-dash-glass-pill comm-header-glass-btn pointer-events-none select-none text-amber-500 dark:text-amber-400"
+         aria-hidden="true"
+         title="پورسانت">
+      <i class="fas fa-chart-line text-[15px]" aria-hidden="true"></i>
+    </div>
   </div>
-</header>
+</div>
+{{ ep_header_end() }}

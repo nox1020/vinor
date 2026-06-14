@@ -41,6 +41,59 @@
     html, body { font-family: 'Vazirmatn', sans-serif; }
     .focusable:focus { outline: 2px solid #2563EB; outline-offset: 2px; }
     [x-cloak] { display: none !important; }
+
+    /* ── Mobile-first admin ── */
+    main { overflow-x: hidden; min-width: 0; }
+    .adm-page { width: 100%; min-width: 0; }
+    .adm-page input[type="text"],
+    .adm-page input[type="tel"],
+    .adm-page input[type="number"],
+    .adm-page input[type="email"],
+    .adm-page input[type="search"],
+    .adm-page input[type="password"],
+    .adm-page input[type="file"],
+    .adm-page select,
+    .adm-page textarea {
+      font-size: 16px;
+    }
+    @media (min-width: 640px) {
+      .adm-page input[type="text"],
+      .adm-page input[type="tel"],
+      .adm-page input[type="number"],
+      .adm-page input[type="email"],
+      .adm-page input[type="search"],
+      .adm-page input[type="password"],
+      .adm-page select,
+      .adm-page textarea {
+        font-size: inherit;
+      }
+    }
+    .adm-filter-row { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+    .adm-table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .adm-table-wrap table { min-width: 36rem; }
+    @media (max-width: 639px) {
+      .adm-action-row { flex-direction: column !important; align-items: stretch !important; }
+      .adm-action-row > form,
+      .adm-action-row > a,
+      .adm-action-row > button { width: 100%; }
+      .adm-action-row .adm-action-side { width: 100%; }
+      .adm-form-row { flex-direction: column !important; align-items: stretch !important; }
+      .adm-form-row > * { width: 100% !important; min-width: 0 !important; flex: none !important; }
+      .adm-form-row button[type="submit"] { width: 100%; }
+      .adm-ops-grid { display: grid !important; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+      .adm-ops-grid form,
+      .adm-ops-grid a,
+      .adm-ops-grid button { width: 100%; justify-content: center; }
+    }
+    details.adm-collapse > summary { list-style: none; }
+    details.adm-collapse > summary::-webkit-details-marker { display: none; }
+    details.adm-collapse[open] .adm-collapse-chevron { transform: rotate(180deg); }
+    .adm-collapse-chevron { transition: transform 0.15s ease; }
+    .adm-tabs-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .adm-tabs-scroll::-webkit-scrollbar { display: none; }
   </style>
 
   {% block head %}{% endblock %}
@@ -48,7 +101,7 @@
 <body class="bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
 
   <!-- Header - Divar Style -->
-  <header class="sticky top-0 z-40 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
+  <header class="sticky top-0 z-40 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 pt-[env(safe-area-inset-top,0px)]">
     <div class="px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <button @click="menuOpen = !menuOpen" 
@@ -101,8 +154,8 @@
   </aside>
 
   <!-- Main Content -->
-  <main class="flex-1 lg:pr-64">
-    <div class="px-4 py-6 max-w-7xl mx-auto">
+  <main class="flex-1 lg:pr-64 min-w-0 overflow-x-hidden">
+    <div class="px-3 py-4 sm:px-4 sm:py-6 max-w-7xl mx-auto adm-page pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-6">
       
       <!-- Flash Messages - Divar Style -->
       {% with messages = get_flashed_messages(with_categories=True) %}
@@ -136,8 +189,8 @@
   </main>
 
   <!-- Bottom Navigation - All Sizes (Divar Style) -->
-  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800">
-    <div class="grid grid-cols-4 gap-0 px-2 py-2">
+  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 pb-[env(safe-area-inset-bottom,0px)]">
+    <div class="grid grid-cols-4 gap-0 px-1 sm:px-2 py-1.5 sm:py-2">
       <a href="{{ url_for('admin.dashboard') }}" 
          class="flex flex-col items-center gap-1 p-2 rounded-lg focusable
                 {% if request.endpoint == 'admin.dashboard' %}text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20{% else %}text-gray-600 dark:text-gray-400{% endif %}">
@@ -166,7 +219,7 @@
   </nav>
 
   <!-- Spacer for bottom nav -->
-  <div class="h-16"></div>
+  <div class="h-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:h-0"></div>
 
   {% block bottom_footer %}{% endblock %}
 

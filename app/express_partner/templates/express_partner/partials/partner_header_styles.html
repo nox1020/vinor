@@ -1,0 +1,335 @@
+<style>
+  /* هدر شیشه‌ای همکار — هماهنگ با tg-tabbar-pill در bottom_nav */
+  .ep-partner-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    width: 100%;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .ep-partner-header--sticky {
+    position: sticky;
+  }
+  .ep-partner-header--shell-none {
+    pointer-events: none;
+  }
+  .ep-partner-header-bar {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(3, 7, 18, 0.28);
+    -webkit-backdrop-filter: saturate(180%) blur(22px);
+    backdrop-filter: saturate(180%) blur(22px);
+    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  }
+  html:not(.dark) .ep-partner-header-bar {
+    border-bottom-color: rgba(15, 23, 42, 0.08);
+    background-color: rgba(255, 255, 255, 0.22);
+    box-shadow:
+      inset 0 -1px 0 rgba(255, 255, 255, 0.55),
+      0 4px 24px rgba(15, 23, 42, 0.04);
+  }
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    html.dark .ep-partner-header-bar {
+      background-color: rgba(10, 14, 20, 0.94);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    html:not(.dark) .ep-partner-header-bar {
+      background-color: rgba(255, 255, 255, 0.96);
+    }
+  }
+  .ep-partner-header-inner {
+    position: relative;
+    display: flex;
+    height: 3.5rem;
+    align-items: center;
+    justify-content: space-between;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  @media (min-width: 640px) {
+    .ep-partner-header-inner {
+      height: 4rem;
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+  .ep-partner-header-inner--auto {
+    pointer-events: auto;
+  }
+  .ep-partner-header-center {
+    pointer-events: none;
+    position: absolute;
+    inset-inline: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-inline: 4.25rem;
+  }
+  @media (min-width: 640px) {
+    .ep-partner-header-center {
+      padding-inline: 6rem;
+    }
+  }
+  .ep-partner-header-title {
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #fff;
+  }
+  html:not(.dark) .ep-partner-header-title {
+    color: rgb(17 24 39);
+  }
+  .ep-partner-header-subtitle {
+    margin-top: 0.125rem;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    font-size: 10px;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    color: rgb(113 113 122);
+  }
+  @media (min-width: 640px) {
+    .ep-partner-header-subtitle {
+      font-size: 11px;
+    }
+  }
+  html:not(.dark) .ep-partner-header-subtitle {
+    color: rgb(107 114 128);
+  }
+  .ep-partner-header-subtitle.is-filtered {
+    color: rgba(52, 211, 153, 0.9);
+  }
+  .ep-partner-header-right {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 2.5rem;
+  }
+  .ep-partner-header-btn-spacer {
+    width: 2.5rem;
+    height: 2.5rem;
+    flex-shrink: 0;
+  }
+  .ep-partner-header-btn {
+    position: relative;
+    z-index: 10;
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.08);
+    color: rgb(161 161 170);
+    text-decoration: none;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  html:not(.dark) .ep-partner-header-btn {
+    border-color: rgba(15, 23, 42, 0.1);
+    background-color: rgba(255, 255, 255, 0.55);
+    color: rgb(75 85 99);
+  }
+  .ep-partner-header-btn:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #fff;
+  }
+  html:not(.dark) .ep-partner-header-btn:hover {
+    border-color: rgba(15, 23, 42, 0.14);
+    background-color: rgba(243, 244, 246, 0.95);
+    color: rgb(17 24 39);
+  }
+  .ep-partner-header-btn:active {
+    transform: scale(0.97);
+  }
+  .ep-partner-header-btn.is-active {
+    border-color: rgba(16, 185, 129, 0.45);
+    background-color: rgba(16, 185, 129, 0.12);
+    color: rgb(110 231 183);
+  }
+  html:not(.dark) .ep-partner-header-btn.is-active {
+    border-color: rgba(5, 150, 105, 0.35);
+    background-color: rgba(16, 185, 129, 0.14);
+    color: rgb(4 120 87);
+  }
+  .ep-partner-header-btn--primary {
+    border-color: rgba(16, 185, 129, 0.35);
+    background-color: rgb(5 150 105);
+    color: #fff;
+  }
+  .ep-partner-header-btn--primary:hover:not(:disabled) {
+    background-color: rgb(16 185 129);
+    color: #fff;
+  }
+  .ep-partner-header-btn--primary:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+  .ep-partner-header-btn--text {
+    width: auto;
+    min-width: 2.5rem;
+    height: auto;
+    min-height: 2.5rem;
+    padding: 0.375rem 0.625rem;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  @media (min-width: 640px) {
+    .ep-partner-header-btn--text {
+      padding: 0.5rem 0.75rem;
+      font-size: 12px;
+    }
+  }
+  .ep-partner-header-btn-icon {
+    font-size: 0.875rem;
+  }
+  @media (min-width: 640px) {
+    .ep-partner-header-btn-icon {
+      font-size: 1rem;
+    }
+  }
+  .ep-partner-header-extra {
+    padding: 0 1rem 0.5rem;
+  }
+  @media (min-width: 640px) {
+    .ep-partner-header-extra {
+      padding-inline: 1.5rem;
+    }
+  }
+  /* هدر شفاف (داشبورد، پورسانت، پروفایل): شِل بدون پس‌زمینه — دکمه‌ها شیشه‌ای مثل bottom nav */
+  .ep-partner-header--shell-none {
+    pointer-events: none;
+  }
+  .ep-partner-header--shell-none .ep-partner-header-bar {
+    background-color: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-bottom: none;
+    box-shadow: none;
+  }
+  .ep-partner-header--shell-none .ep-partner-header-inner,
+  .ep-partner-header--shell-none .express-dash-header-inner {
+    pointer-events: auto;
+    background: transparent;
+  }
+  .ep-partner-header--shell-none .vinor-dash-glass-pill {
+    pointer-events: auto;
+  }
+  .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text) {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background-color: rgba(255, 255, 255, 0.22);
+    -webkit-backdrop-filter: saturate(180%) blur(22px);
+    backdrop-filter: saturate(180%) blur(22px);
+    box-shadow:
+      0 10px 36px rgba(15, 23, 42, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    color: rgb(75 85 99);
+  }
+  html.dark .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text) {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background-color: rgba(3, 7, 18, 0.28);
+    box-shadow:
+      0 14px 44px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    color: rgb(161 161 170);
+  }
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text) {
+      background-color: rgba(243, 244, 246, 0.95);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    html.dark .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text) {
+      background-color: rgba(30, 30, 34, 0.94);
+    }
+  }
+  .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text):hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    background-color: rgba(255, 255, 255, 0.3);
+    color: rgb(17 24 39);
+  }
+  html.dark .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text):hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+  .ep-partner-header--shell-none .ep-partner-header-btn.is-active {
+    border-color: rgba(16, 185, 129, 0.45);
+    background-color: rgba(16, 185, 129, 0.14);
+    color: rgb(110 231 183);
+  }
+  html:not(.dark) .ep-partner-header--shell-none .ep-partner-header-btn.is-active {
+    border-color: rgba(5, 150, 105, 0.35);
+    background-color: rgba(16, 185, 129, 0.14);
+    color: rgb(4 120 87);
+  }
+  .ep-partner-header--shell-none .ep-partner-header-title {
+    text-shadow:
+      0 1px 10px rgba(0, 0, 0, 0.55),
+      0 0 18px rgba(3, 7, 18, 0.35);
+  }
+  html:not(.dark) .ep-partner-header--shell-none .ep-partner-header-title {
+    text-shadow:
+      0 1px 8px rgba(255, 255, 255, 0.92),
+      0 0 14px rgba(255, 255, 255, 0.65);
+  }
+  .ep-partner-header--shell-none .ep-partner-header-subtitle {
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+  }
+  html:not(.dark) .ep-partner-header--shell-none .ep-partner-header-subtitle {
+    text-shadow: 0 1px 6px rgba(255, 255, 255, 0.85);
+  }
+  .vinor-dash-glass-pill {
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background-color: rgba(255, 255, 255, 0.22);
+    -webkit-backdrop-filter: saturate(180%) blur(22px);
+    backdrop-filter: saturate(180%) blur(22px);
+    box-shadow:
+      0 10px 36px rgba(15, 23, 42, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  }
+  html.dark .vinor-dash-glass-pill {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background-color: rgba(3, 7, 18, 0.28);
+    box-shadow:
+      0 14px 44px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .vinor-dash-glass-pill {
+      background-color: rgba(243, 244, 246, 0.95);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    html.dark .vinor-dash-glass-pill {
+      background-color: rgba(30, 30, 34, 0.94);
+    }
+  }
+  .vinor-dash-glass-pill.is-active {
+    border-color: rgba(16, 185, 129, 0.45);
+    background-color: rgba(16, 185, 129, 0.14);
+  }
+  html.dark .vinor-dash-glass-pill.is-active {
+    border-color: rgba(16, 185, 129, 0.4);
+    background-color: rgba(16, 185, 129, 0.15);
+  }
+</style>

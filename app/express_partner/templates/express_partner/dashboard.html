@@ -15,8 +15,9 @@
   {% set ftag = (request.args.get('tag', '') or '')|lower %}
   {% set fcat = request.args.get('cat', '') %}
 
-  <!-- هدر: نوار جستجو جدا از نوار فیلترها؛ فیلتر با اسکرول به پایین صفحه جمع می‌شود -->
-  <header id="expressDashboardHeader" data-tour="dashboard-header" class="fixed top-0 left-0 right-0 z-50 bg-white/95 dark:bg-[#0a0e14]/95 backdrop-blur border-b border-gray-200 dark:border-white/10 w-full shadow-sm dark:shadow-black/30 transition-shadow duration-300">
+  <!-- هدر: نوار جستجو — شیشه‌ای مثل منوی پایین -->
+  <header id="expressDashboardHeader" data-tour="dashboard-header" class="ep-partner-header ep-partner-header--shell-none fixed top-0 left-0 right-0 z-50 w-full transition-shadow duration-300">
+    <div class="ep-partner-header-bar">
     <div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 flex flex-col gap-2 transition-[gap,padding-bottom] duration-300 ease-out max-w-6xl mx-auto">
       {# جستجو + شهر — دو پیل جدا مطابق UI مرجع #}
       <div id="dashboardSearchStrip" class="dashboard-search-strip flex-shrink-0">
@@ -25,7 +26,7 @@
         <input type="hidden" name="city" id="cityInputHidden" value="{{ selected_city }}">
         {% if ftag %}<input type="hidden" name="tag" value="{{ request.args.get('tag', '') }}">{% endif %}
         {% if fcat %}<input type="hidden" name="cat" value="{{ fcat }}">{% endif %}
-            <div class="vinor-dash-search-pill relative flex h-[42px] w-full items-center rounded-full border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1a2230] transition-colors focus-within:border-gray-500 dark:focus-within:border-white/35">
+            <div class="vinor-dash-search-pill vinor-dash-glass-pill relative flex h-[42px] w-full items-center rounded-full transition-colors focus-within:border-emerald-500/40 dark:focus-within:border-emerald-500/35">
               <button type="button"
                       id="dashboardVoiceSearchBtn"
                       class="flex h-full w-10 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
@@ -61,6 +62,7 @@
       </div>
       </div>
     </div>
+    </div>
   </header>
 
   {% include 'express_partner/partials/dashboard_filter_modal.html' %}
@@ -69,7 +71,7 @@
   {% include 'express_partner/partials/dashboard_city_sheet.html' %}
   {% endif %}
 
-<div id="expressDashboardMain" class="max-w-6xl mx-auto px-3 sm:px-4 max-lg:pb-0 lg:pb-16 transition-[padding-top] duration-300 ease-out" style="padding-top: 6.25rem">
+<div id="expressDashboardMain" class="max-w-6xl mx-auto px-3 sm:px-4 max-lg:pb-0 lg:pb-16 transition-[padding-top] duration-300 ease-out" style="--vn-dash-header-pad: 5.5rem">
 
   <style>
     /*
@@ -86,6 +88,9 @@
       #expressDashboardHeader .express-dash-header-inner {
         transition: none !important;
       }
+    }
+    #expressDashboardMain {
+      padding-top: var(--vn-dash-header-pad, 5.5rem);
     }
     @media (max-width: 1023px) {
       #expressDashboardMain {
@@ -190,6 +195,7 @@
     */
     @media (max-width: 639px) {
       #expressDashboardMain {
+        padding-top: 0 !important;
         padding-inline: 0 !important;
         background-color: #f9fafb;
       }
@@ -198,6 +204,7 @@
       }
       #expressDashboardMain > div:not(#dashboardMobileCardsRoot) {
         margin-inline: 0.75rem;
+        padding-top: var(--vn-dash-header-pad, 5.5rem);
       }
       #dashboardMobileCardsRoot.vinor-dash-cards-bleed {
         width: 100%;
@@ -225,7 +232,7 @@
         /* padding فیزیکی چپ/راست — در RTL با padding-inline-start/end گاهی یک طرف اشتباه می‌ماند */
         padding-left: max(var(--vinor-dash-card-gutter), env(safe-area-inset-left, 0px));
         padding-right: max(var(--vinor-dash-card-gutter), env(safe-area-inset-right, 0px));
-        padding-top: 0.25rem;
+        padding-top: var(--vn-dash-header-pad, 5.5rem);
         padding-bottom: 0.5rem;
         gap: 0.75rem;
         box-sizing: border-box;

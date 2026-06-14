@@ -4,22 +4,10 @@
 {% block content %}
 <div class="min-h-screen bg-gray-50 dark:bg-gray-950">
   
-  <!-- Header -->
-  <header class="sticky top-0 z-50 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 w-full">
-    <div class="w-full px-4 h-14 flex items-center justify-between">
-      <a href="{{ url_for('main.index') }}" class="w-9 h-9 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
-        <i class="fas fa-times text-gray-500"></i>
-      </a>
-      <span class="text-sm font-bold text-gray-900 dark:text-white">درخواست همکاری</span>
-      <span class="text-xs text-violet-600 dark:text-violet-400 font-semibold">۱/۳</span>
-    </div>
-    <!-- Progress Bar -->
-    <div class="h-1 bg-gray-200 dark:bg-gray-800">
-      <div class="h-full bg-violet-600 transition-all duration-300" style="width: 33%"></div>
-    </div>
-  </header>
+  {% set apply_step_num = 1 %}{% set apply_step_progress = 33 %}
+  {% include 'express_partner/partials/apply_step_header.html' %}
 
-  <main class="px-4 py-6 max-w-lg mx-auto">
+  <main class="px-4 py-6 max-w-lg mx-auto pt-2">
     
     <!-- Title -->
     <div class="text-center mb-8">

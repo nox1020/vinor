@@ -130,6 +130,9 @@
         }
         applyJalali(mount);
         setupCommIncomeInfoTip(mount);
+        var headerBal = document.getElementById('commHeaderBalance');
+        var summaryAmt = mount.querySelector('[data-comm-withdrawable]');
+        if (headerBal && summaryAmt) headerBal.textContent = summaryAmt.textContent.trim();
       }).catch(function(){})
       .finally(function(){
         if (spin) spin.classList.remove('fa-spin');

@@ -1,0 +1,61 @@
+{# ماکروهای UI موبایل‌محور پنل ادمین #}
+
+{% macro filter_pill(href, label, count=None, active=False, color='blue') %}
+<a href="{{ href }}"
+   class="px-2.5 sm:px-3 py-1.5 rounded-full border font-medium transition text-[11px] sm:text-xs whitespace-nowrap
+          {% if active %}
+            {% if color == 'teal' %}border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-600
+            {% elif color == 'rose' %}border-rose-500 bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-600
+            {% elif color == 'emerald' %}border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-600
+            {% else %}border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-600{% endif %}
+          {% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300{% endif %}">
+  {{ label }}{% if count is not none %} ({{ count }}){% endif %}
+</a>
+{% endmacro %}
+
+{% macro page_header(title, subtitle='', links=[]) %}
+<div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+  <div class="min-w-0 flex-1">
+    <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ title }}</h2>
+    {% if subtitle %}
+    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">{{ subtitle }}</p>
+    {% endif %}
+  </div>
+  {% if links %}
+  <div class="flex flex-wrap gap-2 shrink-0 text-xs">
+    {% for href, label in links %}
+    <a href="{{ href }}" class="text-blue-600 dark:text-blue-400 hover:underline">{{ label }}</a>
+    {% if not loop.last %}<span class="text-gray-300 dark:text-gray-600">|</span>{% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro info_banner(title, body, color='blue') %}
+<div class="rounded-lg border px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs leading-relaxed
+            {% if color == 'teal' %}border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/40 text-teal-900 dark:text-teal-100
+            {% elif color == 'emerald' %}border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100
+            {% else %}border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100{% endif %}">
+  {% if title %}<p class="font-semibold mb-1">{{ title }}</p>{% endif %}
+  <p>{{ body }}</p>
+</div>
+{% endmacro %}
+
+{% macro empty_state(message) %}
+<div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+  {{ message }}
+</div>
+{% endmacro %}
+
+{% macro collapse_form(title, form_action, inner_html) %}
+<details class="adm-collapse rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+  <summary class="px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none flex items-center justify-between gap-2">
+    <span>{{ title }}</span>
+    <i class="fa-solid fa-chevron-down text-[10px] text-gray-400 adm-collapse-chevron"></i>
+  </summary>
+  <form method="post" action="{{ form_action }}" class="px-3 pb-3 sm:px-4 sm:pb-4 pt-1 space-y-3 border-t border-gray-100 dark:border-gray-800">
+    {{ inner_html }}
+  </form>
+</details>
+{% endmacro %}

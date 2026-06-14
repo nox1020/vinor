@@ -2,19 +2,12 @@
 {% block title %}آموزش و دستورالعمل‌ها | روتین ۳ مرحله‌ای{% endblock %}
 {% block content %}
 
-  <header class="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200/80 dark:border-gray-800 w-full shadow-sm shadow-gray-900/5 dark:shadow-none">
-    <div class="w-full px-4 h-14 flex items-center justify-between max-w-4xl mx-auto">
-      <a href="{{ url_for('express_partner.dashboard') }}" class="w-10 h-10 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 transition" aria-label="بازگشت">
-        <i class="fas fa-arrow-right text-gray-600 dark:text-gray-400"></i>
-      </a>
-      <div class="text-center min-w-0 flex-1 px-2">
-        <h1 class="text-sm font-bold text-gray-900 dark:text-white truncate">آموزش و دستورالعمل‌ها</h1>
-      </div>
-      <div class="w-10 h-10 shrink-0" aria-hidden="true"></div>
-    </div>
-  </header>
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+  {{ ep_header_start(sticky=true) }}
+  {% call ep_header_row('آموزش و دستورالعمل‌ها', url_for('express_partner.dashboard'), back_nav=false, inner_class='max-w-4xl mx-auto w-full') %}{% endcall %}
+  {{ ep_header_end() }}
 
-  <main class="max-w-4xl mx-auto px-3 sm:px-5 pb-24 pt-2">
+  <main class="max-w-4xl mx-auto px-3 sm:px-5 pb-24 pt-14 sm:pt-16">
 
     <!-- معرفی -->
     <section class="mt-4 rounded-2xl border border-emerald-200/60 dark:border-emerald-900/50 bg-gradient-to-br from-emerald-50/90 via-white to-white dark:from-emerald-950/40 dark:via-gray-900 dark:to-gray-950 p-4 sm:p-5 shadow-sm" aria-labelledby="training-intro-title">

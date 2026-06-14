@@ -5,24 +5,18 @@
 
 {% block content %}
 
-  <header id="profileEditHeader" class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md">
-    <div class="relative mx-auto flex h-14 max-w-lg items-center justify-between px-4 sm:h-16 lg:max-w-2xl">
-      <a href="{{ url_for('express_partner.profile') }}"
-         data-vinor-express-nav="back"
-         class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
-         aria-label="بازگشت">
-        <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
-      </a>
-      <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">ویرایش پروفایل</h1>
-      <button type="button"
-              id="profileEditSaveBtn"
-              disabled
-              class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-emerald-500/30 bg-emerald-600 text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-emerald-600"
-              aria-label="ذخیره تغییرات">
-        <i id="profileEditSaveBtnIcon" class="fas fa-check text-sm sm:text-base" aria-hidden="true"></i>
-      </button>
-    </div>
-  </header>
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+  {{ ep_header_start(id='profileEditHeader') }}
+  {% call ep_header_row('ویرایش پروفایل', url_for('express_partner.profile'), inner_class='max-w-lg mx-auto w-full lg:max-w-2xl') %}
+    <button type="button"
+            id="profileEditSaveBtn"
+            disabled
+            class="ep-partner-header-btn ep-partner-header-btn--primary"
+            aria-label="ذخیره تغییرات">
+      <i id="profileEditSaveBtnIcon" class="fas fa-check ep-partner-header-btn-icon" aria-hidden="true"></i>
+    </button>
+  {% endcall %}
+  {{ ep_header_end() }}
 
   <main id="profileEditPage" class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] pt-14 text-zinc-100 sm:pt-16">
     <div class="mx-auto max-w-lg px-4 pb-6 lg:max-w-2xl">

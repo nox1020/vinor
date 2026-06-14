@@ -1,176 +1,251 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}مدیریت پورسانت همکاران{% endblock %}
+{% block title %}پورسانت همکاران{% endblock %}
 {% block page_title %}پورسانت‌ها{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-  
-  <!-- فرم ثبت پورسانت جدید - سبک دیوار -->
-  <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-    <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-4">ثبت پورسانت جدید</h2>
-    <form method="post" action="{{ url_for('admin.express_commission_new') }}" class="space-y-3">
+<div class="space-y-5 sm:space-y-6">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0 flex-1">
+      <h2 class="text-base font-semibold text-gray-900 dark:text-white">پورسانت همکاران</h2>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+        {% if pending_count %}
+        <span class="text-amber-600 dark:text-amber-400 font-medium">{{ pending_count }} در انتظار تأیید</span>
+        {% if approved_count %} · {% endif %}
+        {% endif %}
+        {% if approved_count %}
+        <span class="text-blue-600 dark:text-blue-400 font-medium">{{ approved_count }} در موجودی</span>
+        {% endif %}
+        {% if not pending_count and not approved_count %}
+        صف تأیید خالی است
+        {% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2 shrink-0 text-xs">
+      <a href="{{ url_for('admin.express_visit_requests') }}"
+         class="text-teal-600 dark:text-teal-400 hover:underline">بازدیدها</a>
+      <span class="text-gray-300 dark:text-gray-600">|</span>
+      <a href="{{ url_for('admin.financial_withdrawals') }}"
+         class="text-blue-600 dark:text-blue-400 hover:underline">برداشت‌ها</a>
+    </div>
+  </div>
+
+  <div class="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs text-blue-900 dark:text-blue-100 leading-relaxed">
+    <p class="font-semibold mb-1">گام ۲ از ۳ — جریان پورسانت</p>
+    <p>همکار معامله می‌زند → پورسانت «در انتظار» → شما تأیید می‌کنید → مبلغ به موجودی می‌رود →
+    واریز از <a href="{{ url_for('admin.financial_withdrawals') }}" class="underline font-medium">مالی / برداشت</a> (گام ۳).</p>
+  </div>
+
+  <div class="flex flex-wrap gap-1.5 sm:gap-2 text-[11px]">
+    {% macro filter_link(key, label, count) %}
+    <a href="{{ url_for('admin.express_commissions', filter=key) }}"
+       class="px-2.5 sm:px-3 py-1.5 rounded-full border font-medium transition
+              {% if current_filter == key %}border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-600{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300{% endif %}">
+      {{ label }}{% if count is not none %} ({{ count }}){% endif %}
+    </a>
+    {% endmacro %}
+    {{ filter_link('pending', 'در انتظار', pending_count) }}
+    {{ filter_link('active', 'فعال', active_count) }}
+    {{ filter_link('approved', 'در موجودی', approved_count) }}
+    {{ filter_link('paid', 'پرداخت‌شده', paid_count) }}
+    {{ filter_link('rejected', 'رد شده', rejected_count) }}
+    {{ filter_link('all', 'همه', all_count) }}
+  </div>
+
+  <details class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+    <summary class="px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+      ثبت دستی پورسانت (اختیاری)
+    </summary>
+    <form method="post" action="{{ url_for('admin.express_commission_new') }}" class="px-3 pb-3 sm:px-4 sm:pb-4 pt-1 space-y-3 border-t border-gray-100 dark:border-gray-800">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      
+      <p class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">معمولاً پورسانت خودکار پس از «درخواست معامله» ثبت می‌شود.</p>
       <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">شماره همکار</label>
-        <input type="text" name="partner_phone" 
-               class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+        <label class="block text-[10px] text-gray-500 mb-1">شماره همکار</label>
+        <input type="tel" name="partner_phone" dir="ltr"
+               class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                placeholder="09123456789" required>
       </div>
-      
       <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">کد فایل</label>
-        <input type="text" name="land_code" 
-               class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+        <label class="block text-[10px] text-gray-500 mb-1">کد فایل</label>
+        <input type="text" name="land_code" dir="ltr"
+               class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                placeholder="کد فایل" required>
       </div>
-      
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">مبلغ فروش</label>
-          <input type="text" name="sale_amount" 
-                 class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+          <label class="block text-[10px] text-gray-500 mb-1">مبلغ فروش (تومان)</label>
+          <input type="text" name="sale_amount" inputmode="numeric"
+                 class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                  placeholder="مبلغ" required>
         </div>
-        
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">درصد پورسانت</label>
-          <input type="number" step="0.1" min="0" max="100" name="commission_pct" 
-                 class="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+          <label class="block text-[10px] text-gray-500 mb-1">درصد پورسانت</label>
+          <input type="number" step="0.1" min="0" max="100" name="commission_pct"
+                 class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                  placeholder="٪">
         </div>
       </div>
-      
-      <button type="submit" class="w-full px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition focusable">
-        <i class="fa-solid fa-check text-xs ml-1"></i>
-        ثبت
+      <button type="submit" class="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium">
+        ثبت پورسانت
       </button>
     </form>
-  </div>
+  </details>
 
-  <!-- لیست پورسانت‌ها - سبک دیوار -->
-  <div>
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="text-base font-semibold text-gray-900 dark:text-white">لیست پورسانت‌ها</h2>
-      {% if items and items|length > 0 %}
-      <form method="POST" action="{{ url_for('admin.clear_all_commissions') }}" onsubmit="return confirm('آیا از حذف همه پورسانت‌ها اطمینان دارید؟');">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-red-300 dark:border-red-700 hover:border-red-400 dark:hover:border-red-600 text-red-600 dark:text-red-400 font-medium transition focusable">
-          <i class="fa-solid fa-trash text-xs ml-1"></i>
-          حذف همه
-        </button>
-      </form>
+  {% if items and items|length > 0 %}
+  <div class="grid grid-cols-1 gap-3">
+    {% for c in items %}
+    {% set st = c.status or 'pending' %}
+    <div class="bg-white dark:bg-gray-900 border rounded-lg p-3.5 sm:p-4
+                {% if st == 'pending' %}border-amber-200 dark:border-amber-900/50
+                {% elif st == 'approved' %}border-blue-200 dark:border-blue-900/50
+                {% elif st == 'paid' %}border-emerald-200 dark:border-emerald-900/50
+                {% elif st == 'rejected' %}border-gray-200 dark:border-gray-700
+                {% else %}border-gray-200 dark:border-gray-700{% endif %}">
+
+      <div class="flex flex-wrap items-start justify-between gap-2 mb-3">
+        <div class="min-w-0 flex-1">
+          <h3 class="font-semibold text-sm text-gray-900 dark:text-white">
+            {% if c.partner_phone %}
+            <a href="{{ url_for('admin.express_partner_detail', phone=c.partner_phone) }}"
+               class="hover:text-blue-600 dark:hover:text-blue-400 transition">{{ c.partner_name or 'همکار' }}</a>
+            {% else %}
+            {{ c.partner_name or 'همکار' }}
+            {% endif %}
+          </h3>
+          {% if c.partner_phone %}
+          <p class="text-[11px] text-gray-400 mt-0.5" dir="ltr">{{ c.partner_phone }}</p>
+          {% endif %}
+          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">ثبت: {{ c.created_at|default('—') }}</p>
+        </div>
+        <div class="text-start shrink-0">
+          <p class="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{{ c.commission_amount|int|toman }}</p>
+          <span class="inline-flex mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full
+            {% if st == 'pending' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
+            {% elif st == 'approved' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
+            {% elif st == 'paid' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
+            {% elif st == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
+            {% else %}bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400{% endif %}">
+            {{ c.status_label }}
+          </span>
+        </div>
+      </div>
+
+      <div class="rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 px-3 py-2.5 text-xs space-y-1.5 mb-3">
+        {% if c.is_referral %}
+        <div class="flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">نوع</span>
+          <span class="text-emerald-700 dark:text-emerald-300 font-medium text-start">دعوت همکار</span>
+        </div>
+        {% if c.referred_name or c.referred_phone %}
+        <div class="flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">دعوت‌شده</span>
+          <span class="text-gray-900 dark:text-white text-start">{{ c.referred_name or '' }}{% if c.referred_phone %} <span dir="ltr">{{ c.referred_phone }}</span>{% endif %}</span>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">فایل</span>
+          <span class="text-gray-900 dark:text-white font-medium text-start truncate max-w-[60%]">{{ c.land_title or '—' }}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">کد</span>
+          <span class="text-gray-900 dark:text-white font-mono" dir="ltr">{{ c.land_code or '—' }}</span>
+        </div>
+        {% endif %}
+        {% if c.sale_amount %}
+        <div class="flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">مبلغ فروش</span>
+          <span class="text-gray-900 dark:text-white tabular-nums">{{ c.sale_amount|int|toman }}</span>
+        </div>
+        {% endif %}
+        {% if c.commission_pct is not none %}
+        <div class="flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">درصد</span>
+          <span class="text-gray-900 dark:text-white">{{ c.commission_pct }}٪</span>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if c.status_hint %}
+      <p class="text-[11px] sm:text-xs mb-3 leading-relaxed
+        {% if st == 'pending' %}text-amber-700 dark:text-amber-300
+        {% elif st == 'approved' %}text-blue-600 dark:text-blue-400
+        {% elif st == 'paid' %}text-emerald-600 dark:text-emerald-400
+        {% else %}text-gray-500 dark:text-gray-400{% endif %}">
+        {{ c.status_hint }}
+      </p>
+      {% endif %}
+
+      {% if c.withdrawal_locked %}
+      <p class="text-[10px] text-amber-600 dark:text-amber-400 mb-3 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1.5">
+        به درخواست برداشت فعال متصل است — برای رد، ابتدا برداشت را بررسی کنید.
+      </p>
+      {% endif %}
+
+      {% if c.needs_action %}
+      <div class="flex flex-col sm:flex-row gap-2">
+        <form method="post" action="{{ url_for('admin.express_commission_approve', cid=c.id) }}" class="flex-1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <button type="submit"
+                  class="w-full px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
+            تأیید و افزودن به موجودی
+          </button>
+        </form>
+        <form method="post" action="{{ url_for('admin.express_commission_reject', cid=c.id) }}" class="flex-1"
+              onsubmit="return confirm('پورسانت رد شود؟ معامله و بازدید در صورت نیاز بازگردانده می‌شود.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <button type="submit"
+                  class="w-full px-4 py-2.5 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs font-medium">
+            رد پورسانت
+          </button>
+        </form>
+      </div>
+      {% elif st == 'approved' and c.can_reject and not c.withdrawal_locked %}
+      <div class="flex flex-col sm:flex-row gap-2">
+        <a href="{{ url_for('admin.financial_withdrawals', filter='pending') }}"
+           class="flex-1 text-center px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium">
+          مدیریت برداشت‌ها
+        </a>
+        <form method="post" action="{{ url_for('admin.express_commission_reject', cid=c.id) }}" class="flex-1"
+              onsubmit="return confirm('پورسانت تأییدشده رد شود؟ مبلغ از موجودی همکار کسر می‌شود.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <button type="submit"
+                  class="w-full px-4 py-2.5 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs font-medium">
+            رد (استثنا)
+          </button>
+        </form>
+      </div>
+      {% elif st == 'approved' %}
+      <a href="{{ url_for('admin.financial_withdrawals', filter='active') }}"
+         class="inline-flex text-xs text-blue-600 dark:text-blue-400 hover:underline">
+        مدیریت برداشت‌ها ←
+      </a>
+      {% elif st == 'paid' %}
+      <p class="text-[11px] text-emerald-600 dark:text-emerald-400">واریز از مسیر برداشت انجام شده است.</p>
+      {% endif %}
+
+      {% if st == 'pending' %}
+      <p class="mt-2 text-[10px] text-gray-400">
+        <a href="{{ url_for('admin.express_commission_edit', cid=c.id) }}" class="hover:underline">ویرایش مبلغ</a>
+      </p>
       {% endif %}
     </div>
-    
-    {% if items and items|length > 0 %}
-      <div class="grid grid-cols-1 gap-3">
-        {% for c in items %}
-          <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-3">
-                  <div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                    <i class="fa-solid fa-wallet text-gray-600 dark:text-gray-400"></i>
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h3 class="font-semibold text-sm text-gray-900 dark:text-white truncate">{{ c.partner_phone }}</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      {% if c.commission_type == 'referral' %}
-                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">دعوت همکار</span>
-                        {% if c.referred_name %}{{ c.referred_name }}{% endif %}
-                        {% if c.referred_phone %}<span class="ltr">{{ c.referred_phone }}</span>{% endif %}
-                      {% else %}
-                        کد: {{ c.land_code }}
-                      {% endif %}
-                    </p>
-                  </div>
-                </div>
-                
-                <div class="space-y-2 text-sm pt-2 border-t border-gray-200 dark:border-gray-700">
-                  {% if c.sale_amount %}
-                  <div class="flex items-center justify-between">
-                    <span class="text-gray-600 dark:text-gray-400">مبلغ فروش:</span>
-                    <span class="font-medium text-gray-900 dark:text-white">{{ c.sale_amount }} تومان</span>
-                  </div>
-                  {% endif %}
-                  {% if c.commission_pct %}
-                  <div class="flex items-center justify-between">
-                    <span class="text-gray-600 dark:text-gray-400">درصد پورسانت:</span>
-                    <span class="font-medium text-gray-900 dark:text-white">{{ c.commission_pct }}%</span>
-                  </div>
-                  {% endif %}
-                  <div class="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-                    <span class="text-sm font-medium text-gray-900 dark:text-white">مبلغ پورسانت:</span>
-                    <span class="text-base font-semibold text-gray-900 dark:text-white">{{ c.commission_amount or '—' }} تومان</span>
-                  </div>
-                </div>
-                
-                <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                  <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-medium
-                    {% if c.status == 'paid' %}text-green-700 dark:text-green-400
-                    {% elif c.status == 'approved' %}text-blue-700 dark:text-blue-400
-                    {% elif c.status == 'rejected' %}text-red-700 dark:text-red-400
-                    {% else %}text-amber-700 dark:text-amber-400{% endif %}">
-                    <i class="fa-solid text-[10px]
-                      {% if c.status == 'paid' %}fa-check-circle
-                      {% elif c.status == 'approved' %}fa-check
-                      {% elif c.status == 'rejected' %}fa-times-circle
-                      {% else %}fa-clock{% endif %}"></i>
-                    {% if c.status == 'paid' %}پرداخت شده
-                    {% elif c.status == 'approved' %}تایید شده
-                    {% elif c.status == 'rejected' %}رد شده
-                    {% else %}در انتظار{% endif %}
-                  </span>
-                </div>
-              </div>
-              
-              <div class="flex flex-col gap-2 flex-shrink-0">
-                {% if c.status == 'pending' %}
-                  <form method="post" action="{{ url_for('admin.express_commission_approve', cid=c.id) }}" class="inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="w-full px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition focusable">
-                      <i class="fa-solid fa-check text-xs ml-1"></i>
-                      تایید
-                    </button>
-                  </form>
-                  <form method="post" action="{{ url_for('admin.express_commission_reject', cid=c.id) }}" class="inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 text-sm font-medium transition focusable" onclick="return confirm('آیا از رد این پورسانت اطمینان دارید؟')">
-                      <i class="fa-solid fa-times text-xs ml-1"></i>
-                      رد
-                    </button>
-                  </form>
-                {% endif %}
-                {% if c.status in ['pending', 'approved', 'rejected'] %}
-                  <a href="{{ url_for('admin.express_commission_edit', cid=c.id) }}" class="px-3 py-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 text-sm font-medium transition text-center focusable">
-                    <i class="fa-solid fa-edit text-xs ml-1"></i>
-                    ویرایش
-                  </a>
-                {% endif %}
-                {% if c.status == 'approved' %}
-                  <form method="post" action="{{ url_for('admin.express_commission_pay', cid=c.id) }}" class="inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="w-full px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition focusable">
-                      <i class="fa-solid fa-money-bill text-xs ml-1"></i>
-                      پرداخت
-                    </button>
-                  </form>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+    {% if current_filter == 'pending' %}
+    پورسانتی در انتظار تأیید نیست.
+    {% elif current_filter == 'all' %}
+    هنوز پورسانتی ثبت نشده است.
     {% else %}
-      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
-        <div class="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center mx-auto mb-4">
-          <i class="fa-solid fa-wallet text-2xl text-gray-400 dark:text-gray-600"></i>
-        </div>
-        <p class="text-sm text-gray-600 dark:text-gray-400">موردی ثبت نشده است.</p>
-      </div>
+    موردی در این فیلتر یافت نشد.
     {% endif %}
   </div>
+  {% endif %}
 
 </div>
 {% endblock %}

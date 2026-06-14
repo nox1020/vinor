@@ -1,9 +1,10 @@
 {% extends 'admin/base_admin.html' %}
+{% from 'admin/partials/mobile_ui.html' import filter_pill %}
 {% block title %}مالی — درخواست‌های برداشت{% endblock %}
 {% block page_title %}مالی{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-5">
 
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
@@ -29,13 +30,15 @@
        class="text-xs text-blue-600 dark:text-blue-400 hover:underline">مدیریت پورسانت‌ها</a>
   </div>
 
-  <div class="flex flex-wrap gap-2 text-[11px]">
+  <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 text-xs text-emerald-900 dark:text-emerald-100 leading-relaxed">
+    <p class="font-semibold mb-1">جریان واریز به حساب همکار</p>
+    <p>۱) «تأیید شده» — مبلغ از موجودی همکار رزرو می‌شود · ۲) «در حال پردازش» — در حال واریز بانکی ·
+    ۳) «پرداخت‌شده» — پس از واریز واقعی به حساب بانکی ثبت کنید (دستی).</p>
+  </div>
+
+  <div class="adm-filter-row text-[11px]">
     {% macro filter_link(key, label, count) %}
-    <a href="{{ url_for('admin.financial_withdrawals', filter=key) }}"
-       class="px-3 py-1.5 rounded-full border font-medium transition
-              {% if current_filter == key %}border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-600{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300{% endif %}">
-      {{ label }}{% if count is not none %} ({{ count }}){% endif %}
-    </a>
+    {{ filter_pill(url_for('admin.financial_withdrawals', filter=key), label, count, current_filter == key) }}
     {% endmacro %}
     {{ filter_link('active', 'فعال', active_count) }}
     {{ filter_link('pending', 'در انتظار', pending_count) }}
@@ -100,7 +103,7 @@
       {% elif st == 'rejected' %}
       <p class="text-xs text-red-600 dark:text-red-400">رد شده — مبلغ به موجودی قابل برداشت همکار برگشته است.</p>
       {% elif w.is_editable %}
-      <form method="post" action="{{ url_for('admin.financial_withdrawal_status', wid=w.id) }}" class="flex flex-wrap items-end gap-2">
+      <form method="post" action="{{ url_for('admin.financial_withdrawal_status', wid=w.id) }}" class="adm-form-row flex flex-wrap items-end gap-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="filter" value="{{ current_filter }}">
         <div class="flex-1 min-w-[8rem]">
@@ -117,7 +120,7 @@
                  class="w-full text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                  placeholder="یادداشت داخلی" />
         </div>
-        <button type="submit" class="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium">
+        <button type="submit" class="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium">
           ذخیره
         </button>
       </form>

@@ -1,16 +1,11 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}{% if is_approved %}دعوت از همکاران{% else %}دعوت از دوستان{% endif %}{% endblock %}
 {% block content %}
-  <header class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md">
-    <div class="relative mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16 sm:px-6">
-      <a href="{{ url_for('express_partner.profile') }}"
-         class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
-         aria-label="بازگشت">
-        <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
-      </a>
-      <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">{% if is_approved %}دعوت از همکاران{% else %}دعوت از دوستان{% endif %}</h1>      <div class="h-10 w-10" aria-hidden="true"></div>
-    </div>
-  </header>
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+  {% set _invite_title = 'دعوت از همکاران' if is_approved else 'دعوت از دوستان' %}
+  {{ ep_header_start() }}
+  {% call ep_header_row(_invite_title, url_for('express_partner.profile'), back_nav=false) %}{% endcall %}
+  {{ ep_header_end() }}
 
   <div class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] pt-14 text-zinc-100 sm:pt-16 lg:pb-16">
     <div class="mx-auto max-w-lg space-y-4 px-4 sm:px-6">
@@ -24,8 +19,11 @@
             {% if is_approved %}
             <h2 class="text-base font-bold text-white">همکار جدید دعوت کنید</h2>
             <p class="mt-2 text-sm leading-relaxed text-emerald-100/75">
-              به ازای هر دعوت تأییدشده <span class="font-bold text-emerald-300">{{ bonus_per_invite|toman }}</span> پورسانت دریافت می‌کنید که پس از تأیید ادمین به «پورسانت در انتظار تأیید» اضافه می‌شود.
+              به ازای هر همکار دعوت‌شده که تأیید شود، <span class="font-bold text-emerald-300">{{ bonus_per_invite|toman }}</span> پورسانت می‌گیرید.
             </p>
+            <ol class="mt-3 space-y-1.5 text-[11px] text-emerald-100/60 list-none">
+              <li>۱) لینک را بفرستید → ۲) همکار تأیید شود → ۳) پورسانت در «پورسانت‌ها» تأیید شود → ۴) برداشت</li>
+            </ol>
             {% else %}
             <h2 class="text-base font-bold text-white">دوستانت را دعوت کن</h2>
             <p class="mt-2 text-sm leading-relaxed text-sky-100/75">
@@ -37,13 +35,18 @@
       </section>
 
       {% if is_approved %}
-      <section class="grid grid-cols-2 gap-3">        <div class="rounded-2xl border border-white/10 bg-[#12181f] p-4 text-center">
-          <p class="text-[11px] text-zinc-500">تعداد دعوت شما</p>
-          <p class="mt-1 text-2xl font-bold text-white tabular-nums">{{ ref_stats.invite_count or 0 }}</p>
+      <section class="grid grid-cols-2 gap-2 sm:gap-3">
+        <div class="rounded-2xl border border-white/10 bg-[#12181f] p-3 sm:p-4 text-center col-span-2 sm:col-span-1">
+          <p class="text-[10px] sm:text-[11px] text-zinc-500">منتظر تأیید همکار</p>
+          <p class="mt-1 text-xl sm:text-2xl font-bold text-white tabular-nums">{{ ref_stats.waiting_invites or 0 }}</p>
         </div>
-        <div class="rounded-2xl border border-amber-500/25 bg-amber-950/30 p-4 text-center">
-          <p class="text-[11px] text-amber-200/70">پورسانت دعوت در انتظار تأیید</p>
-          <p class="mt-1 text-lg font-bold text-amber-300 tabular-nums">{{ (ref_stats.pending_commission or 0)|toman }}</p>
+        <div class="rounded-2xl border border-amber-500/25 bg-amber-950/30 p-3 sm:p-4 text-center">
+          <p class="text-[10px] sm:text-[11px] text-amber-200/70">پورسانت در انتظار ادمین</p>
+          <p class="mt-1 text-base sm:text-lg font-bold text-amber-300 tabular-nums">{{ (ref_stats.pending_commission or 0)|toman }}</p>
+        </div>
+        <div class="rounded-2xl border border-emerald-500/25 bg-emerald-950/30 p-3 sm:p-4 text-center">
+          <p class="text-[10px] sm:text-[11px] text-emerald-200/70">در موجودی / واریزشده</p>
+          <p class="mt-1 text-base sm:text-lg font-bold text-emerald-300 tabular-nums">{{ (ref_stats.total_earned or 0)|toman }}</p>
         </div>
       </section>
       {% endif %}

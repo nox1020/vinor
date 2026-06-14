@@ -2,7 +2,7 @@
 {% block page_title %}داشبورد{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-5">
 
   <!-- خوش‌آمد + خلاصه -->
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -200,14 +200,13 @@
   <!-- نمای کلی -->
   <section>
     <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 px-1">نمای کلی</h3>
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
       {% set overview = [
         ('کل اشخاص', people_total or 0, url_for('admin.express_partners'), ''),
         ('همکار تأیید', partners_count or 0, url_for('admin.express_partners', filter='partners'), ''),
         ('انتساب فعال', assignments_active_count or 0, url_for('admin.express_assignments'), 'از ' ~ (assignments_total_count or 0)),
         ('آگهی Express', express_listings_count or 0, url_for('admin.express_listings'), ''),
         ('روتین این ماه', routines_count_month or 0, url_for('admin.express_partners'), 'روز ثبت‌شده'),
-        ('کاربر آنلاین', online_users_count or 0, url_for('admin.online_users'), 'سایت'),
       ] %}
       {% for label, value, href, sub in overview %}
         <a href="{{ href }}" class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 hover:border-gray-300 dark:hover:border-gray-600 transition">

@@ -13,7 +13,8 @@
 {% set ftag = (request.args.get('tag', '') or '')|lower %}
 {% set fcat = request.args.get('cat', '') %}
 
-<header id="expressDashboardHeader" data-tour="dashboard-header" class="fixed top-0 left-0 right-0 z-50 bg-white/95 dark:bg-[#0a0e14]/95 backdrop-blur border-b border-gray-200 dark:border-white/10 w-full shadow-sm dark:shadow-black/30 transition-shadow duration-300">
+<header id="expressDashboardHeader" data-tour="dashboard-header" class="ep-partner-header fixed top-0 left-0 right-0 z-50 w-full transition-shadow duration-300">
+  <div class="ep-partner-header-bar">
   <div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 flex flex-col gap-2 transition-[gap,padding-bottom] duration-300 ease-out max-w-6xl mx-auto">
     {# فقط جستجو + شهر — همیشه ثابت می‌ماند #}
     <div id="dashboardSearchStrip" class="dashboard-search-strip flex-shrink-0">
@@ -22,7 +23,7 @@
           <input type="hidden" name="city" id="cityInputHidden" value="{{ selected_city }}">
           {% if ftag %}<input type="hidden" name="tag" value="{{ request.args.get('tag', '') }}">{% endif %}
           {% if fcat %}<input type="hidden" name="cat" value="{{ fcat }}">{% endif %}
-          <div class="vinor-dash-search-pill relative flex h-[42px] w-full items-center rounded-full border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1a2230] transition-colors focus-within:border-gray-500 dark:focus-within:border-white/35">
+          <div class="vinor-dash-search-pill vinor-dash-glass-pill relative flex h-[42px] w-full items-center rounded-full transition-colors focus-within:border-emerald-500/40 dark:focus-within:border-emerald-500/35">
             <button type="button"
                     id="dashboardVoiceSearchBtn"
                     class="flex h-full w-10 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
@@ -59,6 +60,7 @@
     </div>
 
     {# بنر «همکار ما باشی» در dashboard اصلی داخل #expressDashboardMain (زیر هدر) رندر می‌شود #}
+  </div>
   </div>
 </header>
 
