@@ -492,6 +492,13 @@
 
   {% if me_phone and is_vinor_apk %}
   (function() {
+    {% if show_app_update_card|default(false) %}
+    try {
+      window.dispatchEvent(new CustomEvent('vinor:app-update:nav', {
+        detail: { show: true, version: {{ (android_apk_version or '')|tojson }}, url: {{ (android_apk_url or '')|tojson }} }
+      }));
+    } catch (_) {}
+    {% endif %}
     var wrap = document.getElementById('appUpdateCardWrap');
     if (!wrap) return;
     var card = document.getElementById('appUpdateCard');
@@ -537,9 +544,15 @@
       card.href = absUrl(url);
       card.setAttribute('download', '');
       card.setAttribute('rel', 'noopener');
+      try {
+        window.dispatchEvent(new CustomEvent('vinor:app-update:nav', { detail: { show: true, version: v, url: url } }));
+      } catch (_) {}
     }
     function hideUpdate() {
       wrap.classList.add('hidden');
+      try {
+        window.dispatchEvent(new CustomEvent('vinor:app-update:nav', { detail: { show: false } }));
+      } catch (_) {}
     }
 
     if (!wrap.classList.contains('hidden')) return;

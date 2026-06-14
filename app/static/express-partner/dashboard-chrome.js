@@ -198,23 +198,44 @@
     return false;
   }
 
+  function headerGapExtra(el) {
+    var base = 8;
+    if (!el.main || el.main.getAttribute('data-vinor-dash-partner') !== '1') return base;
+    try {
+      var raw = window.getComputedStyle(el.main).getPropertyValue('--vn-dash-header-gap').trim();
+      if (raw) {
+        var n = parseFloat(raw);
+        if (Number.isFinite(n)) return Math.max(0, n);
+      }
+    } catch (_) {}
+    return 2;
+  }
+
   function syncPadding(el) {
     if (!el.header || !el.main) return;
     var h = el.header.getBoundingClientRect().height;
-    var padPx = Math.ceil(h + 8);
+    var gapExtra = headerGapExtra(el);
+    var padPx = Math.ceil(h + gapExtra);
     var pad = padPx + 'px';
     try {
       el.main.style.setProperty('--vn-dash-header-pad', pad);
     } catch (_) {}
     var verticalMobile = isVerticalCardsViewport();
+    var partnerPad = el.main.getAttribute('data-vinor-dash-partner') === '1';
     if (verticalMobile) {
       el.main.style.paddingTop = '0';
       var track = document.getElementById('cardsTrack');
       if (track) {
-        track.style.paddingTop = mainBannerVisible(el.main) ? '0.25rem' : pad;
+        if (mainBannerVisible(el.main)) {
+          track.style.paddingTop = '0.25rem';
+        } else if (partnerPad) {
+          track.style.paddingTop = Math.max(0, padPx - 4) + 'px';
+        } else {
+          track.style.paddingTop = pad;
+        }
       }
     } else {
-      el.main.style.paddingTop = Math.ceil(h + 6) + 'px';
+      el.main.style.paddingTop = Math.ceil(h + (partnerPad ? 3 : 6)) + 'px';
       var trackDesktop = document.getElementById('cardsTrack');
       if (trackDesktop) trackDesktop.style.paddingTop = '';
     }

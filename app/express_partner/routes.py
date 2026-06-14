@@ -1228,12 +1228,26 @@ def inject_role_flags():
     android_apk_url = ''
     android_apk_version = ''
     show_apk_download_banner = False
+    show_app_update_nav = False
     if not is_vinor_apk:
         try:
             _apk_settings = _express_settings_cached()
             android_apk_url = (_apk_settings.get('android_apk_url') or '').strip()
             android_apk_version = (_apk_settings.get('android_apk_version') or '').strip()
             show_apk_download_banner = bool(android_apk_url)
+        except Exception:
+            pass
+    else:
+        try:
+            _apk_settings = _express_settings_cached()
+            android_apk_url = (_apk_settings.get('android_apk_url') or '').strip()
+            android_apk_version = (_apk_settings.get('android_apk_version') or '').strip()
+            from ..utils.apk_version import should_show_apk_update
+            show_app_update_nav = should_show_apk_update(
+                android_apk_version,
+                apk_url=android_apk_url,
+                req=request,
+            )
         except Exception:
             pass
 
@@ -1265,6 +1279,7 @@ def inject_role_flags():
         "android_apk_url": android_apk_url,
         "android_apk_version": android_apk_version,
         "show_apk_download_banner": show_apk_download_banner,
+        "show_app_update_nav": show_app_update_nav,
         "auth_flash_categories": AUTH_FLASH_CATEGORY_FILTER,
         "vinor_robots_meta": vinor_robots_meta,
     }

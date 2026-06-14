@@ -158,6 +158,36 @@
   .tg-tab-badge.is-visible {
     display: inline-flex;
   }
+  .tg-tab-label--update {
+    color: #d97706 !important;
+    font-weight: 700;
+  }
+  .dark .tg-tab-label--update {
+    color: #fbbf24 !important;
+  }
+  .tg-tab-active .tg-tab-label--update {
+    color: #b45309 !important;
+  }
+  .dark .tg-tab-active .tg-tab-label--update {
+    color: #fcd34d !important;
+  }
+  .tg-tab-update-dot {
+    position: absolute;
+    top: -0.05rem;
+    inset-inline-end: -0.15rem;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 9999px;
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px #ffffff;
+    display: none;
+  }
+  .dark .tg-tab-update-dot {
+    box-shadow: 0 0 0 2px rgb(17 24 39);
+  }
+  .tg-tab-update-dot.is-visible {
+    display: block;
+  }
   .vinor-apk-download-strip {
     pointer-events: auto;
     margin: 0 0.75rem 0.5rem;
@@ -258,10 +288,11 @@
                 <i class="fas {{ item.icon }}"></i>
               </span>
               {% if item.key == 'profile' %}
+              <span class="tg-tab-update-dot{% if show_app_update_nav|default(false) %} is-visible{% endif %}" data-role="nav-update-dot" aria-hidden="true"></span>
               <span class="tg-tab-badge" data-role="nav-badge" aria-hidden="true"></span>
               {% endif %}
             </span>
-            <span class="tg-tab-label text-[10px] leading-none max-w-full truncate text-center px-0.5">{{ item.label }}</span>
+            <span class="tg-tab-label text-[10px] leading-none max-w-full truncate text-center px-0.5{% if item.key == 'profile' and show_app_update_nav|default(false) %} tg-tab-label--update{% endif %}">{{ 'بروزرسانی' if item.key == 'profile' and show_app_update_nav|default(false) else item.label }}</span>
           </span>
         </a>
       {% endfor %}
@@ -277,8 +308,15 @@
   const activeKey = '{{ bottom_nav_active }}';
   const unreadUrl = '{{ bottom_nav_unread_url }}';
   const userLoggedIn = {{ 'true' if session.get('user_phone') else 'false' }};
+  const isVinorApk = {{ 'true' if is_vinor_apk|default(false) else 'false' }};
+  const serverShowAppUpdate = {{ 'true' if show_app_update_nav|default(false) else 'false' }};
+  const serverApkVersion = {{ (android_apk_version or '')|tojson }};
+  const serverApkUrl = {{ (android_apk_url or '')|tojson }};
   const navContainer = document.getElementById('bottomNavItems');
   if (!navContainer) return;
+
+  const UPDATE_NAV_KEY = 'vinor_express_app_update_nav_v1';
+  const APP_VERSION_URLS = ['/api/express/app-version', '/api/app/version'];
 
   navContainer.addEventListener('click', function (e) {
     const link = e.target.closest && e.target.closest('a.tg-tab-disabled');
@@ -315,6 +353,131 @@
       el.setAttribute('aria-hidden', 'false');
     }
   }
+
+  function persistUpdateNav(state) {
+    try {
+      if (state && state.show) {
+        sessionStorage.setItem(UPDATE_NAV_KEY, JSON.stringify({
+          show: true,
+          version: state.version || '',
+          url: state.url || '',
+          ts: Date.now()
+        }));
+      } else {
+        sessionStorage.removeItem(UPDATE_NAV_KEY);
+      }
+    } catch (_) {}
+  }
+
+  function readUpdateNav() {
+    try {
+      const raw = sessionStorage.getItem(UPDATE_NAV_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && parsed.show ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function applyUpdateNav(show, opts) {
+    opts = opts || {};
+    const tab = navContainer.querySelector('[data-nav-key="profile"]');
+    if (!tab) return;
+    const label = tab.querySelector('.tg-tab-label');
+    const dot = tab.querySelector('[data-role="nav-update-dot"]');
+    if (!label) return;
+    if (show) {
+      label.textContent = 'بروزرسانی';
+      label.classList.add('tg-tab-label--update');
+      if (dot) dot.classList.add('is-visible');
+      if (opts.url) tab.setAttribute('data-update-url', opts.url);
+      tab.classList.add('tg-tab-has-update');
+      tab.setAttribute('aria-label', 'بروزرسانی اپلیکیشن');
+    } else {
+      label.textContent = 'من';
+      label.classList.remove('tg-tab-label--update');
+      if (dot) dot.classList.remove('is-visible');
+      tab.removeAttribute('data-update-url');
+      tab.classList.remove('tg-tab-has-update');
+      tab.setAttribute('aria-label', 'من');
+    }
+  }
+
+  function syncUpdateNavFromStored() {
+    const stored = readUpdateNav();
+    applyUpdateNav(!!stored, stored || {});
+  }
+
+  function parseClientAppVersion() {
+    const ua = navigator.userAgent || '';
+    const m = ua.match(/VinorApp\/(?:Android|WebViewOnly)\/([0-9]+(?:\.[0-9]+)*)/i);
+    return m ? m[1] : '';
+  }
+
+  function versionParts(v) {
+    return String(v || '').split('.').map(function (p) {
+      const d = (p || '').replace(/\D/g, '');
+      return d ? parseInt(d, 10) : 0;
+    });
+  }
+
+  function isServerApkNewer(serverV, clientV) {
+    if (!serverV || !clientV) return false;
+    const a = versionParts(clientV);
+    const b = versionParts(serverV);
+    const n = Math.max(a.length, b.length);
+    for (let i = 0; i < n; i++) {
+      const x = a[i] || 0;
+      const y = b[i] || 0;
+      if (x < y) return true;
+      if (x > y) return false;
+    }
+    return false;
+  }
+
+  async function refreshUpdateNavFromServer() {
+    if (!isVinorApk) return;
+    const clientV = parseClientAppVersion();
+    if (!clientV) {
+      persistUpdateNav(null);
+      applyUpdateNav(false);
+      return;
+    }
+    const headers = { Accept: 'application/json', 'Cache-Control': 'no-cache', 'X-Requested-With': 'XMLHttpRequest' };
+    for (let i = 0; i < APP_VERSION_URLS.length; i++) {
+      try {
+        const res = await fetch(APP_VERSION_URLS[i], { headers: headers, credentials: 'same-origin', cache: 'no-store' });
+        if (!res || !res.ok) continue;
+        const d = await res.json();
+        if (!d || d.success !== true) continue;
+        const v = String(d.android_apk_version || '').trim();
+        const url = String(d.android_apk_url || '').trim();
+        if (v && url && isServerApkNewer(v, clientV)) {
+          const state = { show: true, version: v, url: url };
+          persistUpdateNav(state);
+          applyUpdateNav(true, state);
+          return;
+        }
+        persistUpdateNav(null);
+        applyUpdateNav(false);
+        return;
+      } catch (_) {}
+    }
+  }
+
+  window.addEventListener('vinor:app-update:nav', function (ev) {
+    try {
+      const d = (ev && ev.detail) || {};
+      if (d.show) {
+        persistUpdateNav(d);
+        applyUpdateNav(true, d);
+      } else {
+        persistUpdateNav(null);
+        applyUpdateNav(false);
+      }
+    } catch (_) {}
+  });
 
   function notifyCenterEnabled() {
     try {
@@ -443,6 +606,11 @@
       iconWrap.appendChild(iconOuter);
 
       if (item.key === 'profile') {
+        const updateDot = document.createElement('span');
+        updateDot.className = 'tg-tab-update-dot';
+        updateDot.setAttribute('data-role', 'nav-update-dot');
+        updateDot.setAttribute('aria-hidden', 'true');
+        iconWrap.appendChild(updateDot);
         const badge = document.createElement('span');
         badge.className = 'tg-tab-badge';
         badge.setAttribute('data-role', 'nav-badge');
@@ -460,16 +628,26 @@
       link.appendChild(stack);
       navContainer.appendChild(link);
     });
+    syncUpdateNavFromStored();
+  }
+
+  if (serverShowAppUpdate) {
+    persistUpdateNav({ show: true, version: serverApkVersion, url: serverApkUrl });
+    applyUpdateNav(true, { version: serverApkVersion, url: serverApkUrl });
+  } else {
+    syncUpdateNavFromStored();
   }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
       loadMenuFromAPI();
       if (!notifyCenterEnabled()) refreshUnreadBadge();
+      if (isVinorApk) refreshUpdateNavFromServer();
     });
   } else {
     loadMenuFromAPI();
     if (!notifyCenterEnabled()) refreshUnreadBadge();
+    if (isVinorApk) refreshUpdateNavFromServer();
   }
 
   window.addEventListener('storage', (e) => {

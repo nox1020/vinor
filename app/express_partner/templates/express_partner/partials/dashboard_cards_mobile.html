@@ -2,13 +2,17 @@
 <div id="dashboardMobileCardsRoot" class="vinor-dash-cards-bleed relative max-sm:mt-0 mt-2 flex min-h-0 w-full flex-col lg:hidden">
   <div id="cardsTrack"
        class="no-scrollbar flex w-full min-h-0 flex-1 flex-col items-stretch gap-3 overflow-y-visible pb-4 max-sm:gap-2.5 max-sm:pb-4">
+    {% if not is_approved|default(false) %}
     <div id="dashboardCompactSentinel" class="vinor-dash-card-slot pointer-events-none h-px shrink-0 opacity-0" aria-hidden="true"></div>
     <div class="vinor-dash-card-slot shrink-0 w-full">
       {% include 'express_partner/partials/dashboard_guest_coop_cta.html' %}
     </div>
+    {% endif %}
+    {% if is_approved|default(false) and (sold_count|default(0) == 0) %}
     <div class="vinor-dash-card-slot shrink-0 w-full">
       {% include 'express_partner/partials/first_sale_gift_banner.html' %}
     </div>
+    {% endif %}
     {% if assigned_lands|length == 0 %}
     <div class="vinor-dash-card-slot shrink-0 w-full">
       {% include 'express_partner/partials/dashboard_empty_state.html' %}
