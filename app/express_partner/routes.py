@@ -1301,7 +1301,7 @@ def serve_manifest():
       "description": "پنل مدیریت همکاران وینور - دسترسی به آگهی‌های تخصیص یافته، کمیسیون‌ها و ابزارهای مدیریت",
       "dir": "rtl",
       "lang": "fa",
-      "start_url": "/express/partner/dashboard?source=pwa",
+      "start_url": "/express/partner/?source=pwa",
       "scope": "/express/partner/",
       "display": "standalone",
       "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
@@ -4878,7 +4878,7 @@ def check_status():
             current_app.logger.info(f"check_status: Is approved: {is_approved}")
             
             if is_approved:
-                redirect_url = url_for("express_partner.dashboard")
+                redirect_url = _default_post_login_url(me_phone)
                 current_app.logger.info(f"check_status: Partner approved, redirecting to: {redirect_url}")
                 return jsonify({
                     "success": True,

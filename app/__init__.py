@@ -601,7 +601,7 @@ def create_app() -> Flask:
           "description": "وینور؛ تجربه سریع، امن و شفاف برای خرید و فروش زمین، باغ، ویلا و آپارتمان.",
           "dir": "rtl",
           "lang": "fa",
-          "start_url": "/express/partner/dashboard?source=pwa",
+          "start_url": "/express/partner/?source=pwa",
           "scope": "/",
           "display": "standalone",
           "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],

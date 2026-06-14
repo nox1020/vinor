@@ -296,64 +296,6 @@
     #cardsGrid .vinor-premium-card-mobile:not(.vinor-card-sold) [data-img-wrap] button {
       pointer-events: auto !important;
     }
-    /* pull-to-refresh — اسپینر مینیمال (بدون متن، شبیه Chrome) */
-    .vinor-dash-ptr {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      max-height: 0;
-      opacity: 0;
-      color: #6b7280;
-      transition: max-height 0.18s ease-out, opacity 0.18s ease-out;
-    }
-    html.dark .vinor-dash-ptr {
-      color: #9ca3af;
-    }
-    .vinor-dash-ptr.is-visible {
-      max-height: 3.75rem;
-      opacity: 1;
-    }
-    .vinor-dash-ptr.is-refreshing {
-      max-height: 3.75rem;
-      opacity: 1;
-    }
-    .vinor-dash-ptr__ring {
-      width: 36px;
-      height: 36px;
-      padding: 0.5rem 0;
-    }
-    .vinor-dash-ptr__ring svg {
-      display: block;
-      width: 100%;
-      height: 100%;
-      transform-origin: center center;
-    }
-    .vinor-dash-ptr__track {
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 2.25;
-      opacity: 0.22;
-    }
-    .vinor-dash-ptr__arc {
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 3;
-      stroke-linecap: round;
-      stroke-dasharray: 56.5;
-      stroke-dashoffset: 56.5;
-      transform-origin: 12px 12px;
-      transform: rotate(-90deg);
-      transition: stroke-dashoffset 0.08s linear;
-    }
-    .vinor-dash-ptr.is-refreshing .vinor-dash-ptr__ring svg {
-      animation: vinor-dash-ptr-spin 0.75s linear infinite;
-    }
-    @keyframes vinor-dash-ptr-spin {
-      to { transform: rotate(360deg); }
-    }
-    #dashboardMobileCardsRoot #cardsTrack.vinor-dash-ptr-shift {
-      will-change: transform;
-    }
   </style>
 
   {# Flash messages removed by request #}
@@ -878,13 +820,10 @@
     const pullOpts = { passive: true, signal: pullSig };
 
     const root = document.getElementById('dashboardMobileCardsRoot');
-    const hint = document.getElementById('dashboardPullRefreshHint');
     const track = document.getElementById('cardsTrack');
-    const arc = hint ? hint.querySelector('.vinor-dash-ptr__arc') : null;
-    if (!root || !hint || !track) return;
+    if (!root || !track) return;
 
     const PULL_TRIGGER_PX = 64;
-    const ARC_LEN = 56.5;
     const TOP_EPS = 8;
     let startY = null;
     let maxPull = 0;
@@ -900,37 +839,9 @@
       }
     }
 
-    function setPullVisual(pullPx, refreshing) {
-      if (refreshing) {
-        hint.classList.add('is-visible', 'is-refreshing');
-        if (arc) arc.style.strokeDashoffset = '0';
-        track.classList.remove('vinor-dash-ptr-shift');
-        track.style.transition = 'transform 0.22s ease-out';
-        track.style.transform = 'translateY(0)';
-        return;
-      }
-      if (pullPx <= 2) {
-        hint.classList.remove('is-visible', 'is-refreshing');
-        if (arc) arc.style.strokeDashoffset = String(ARC_LEN);
-        track.classList.remove('vinor-dash-ptr-shift');
-        track.style.transition = 'transform 0.22s ease-out';
-        track.style.transform = 'translateY(0)';
-        return;
-      }
-      hint.classList.add('is-visible');
-      hint.classList.remove('is-refreshing');
-      const progress = Math.min(pullPx / PULL_TRIGGER_PX, 1);
-      if (arc) arc.style.strokeDashoffset = String(ARC_LEN * (1 - progress));
-      const shift = Math.min(pullPx * 0.32, 26);
-      track.classList.add('vinor-dash-ptr-shift');
-      track.style.transition = 'none';
-      track.style.transform = 'translateY(' + shift + 'px)';
-    }
-
     function resetGesture() {
       startY = null;
       maxPull = 0;
-      if (!busy) setPullVisual(0, false);
     }
 
     root.addEventListener('touchstart', function (e) {
@@ -954,7 +865,6 @@
       }
       if (dy > 0) {
         maxPull = Math.max(maxPull, dy);
-        setPullVisual(maxPull, false);
       }
     }, pullOpts);
 
@@ -963,12 +873,8 @@
       const should = maxPull >= PULL_TRIGGER_PX && root.scrollTop <= TOP_EPS;
       startY = null;
       maxPull = 0;
-      if (!should || busy) {
-        setPullVisual(0, false);
-        return;
-      }
+      if (!should || busy) return;
       busy = true;
-      setPullVisual(PULL_TRIGGER_PX, true);
       if (window.__vinorDashboardSyncChrome) {
         window.__vinorDashboardSyncChrome({ expandHeader: true, resetScroll: false });
       }
@@ -976,7 +882,6 @@
         .catch(function () {})
         .finally(function () {
           busy = false;
-          setPullVisual(0, false);
           if (window.__vinorDashboardSyncChrome) {
             window.__vinorDashboardSyncChrome({ expandHeader: true, resetScroll: false });
           }

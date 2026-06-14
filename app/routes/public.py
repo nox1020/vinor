@@ -91,7 +91,7 @@ def inject_vinor_globals():
 @main_bp.route("/", endpoint="index")
 def index():
     """
-    صفحهٔ اصلی vinor.ir — همیشه داشبورد همکار (مهمان یا واردشده).
+    صفحهٔ اصلی vinor.ir — مهمان → داشبورد؛ واردشده → داشبورد یا پورسانت بر اساس نقش.
     لندینگ معرفی همکاری فقط در /partners است.
     """
     nxt = request.args.get('next')
@@ -99,6 +99,9 @@ def index():
         resp = redirect(nxt)
     elif session.get('logged_in'):
         resp = redirect(url_for('admin.dashboard'))
+    elif session.get('user_phone'):
+        from ..express_partner.routes import _redirect_after_login
+        resp = redirect(_redirect_after_login())
     else:
         q = (request.args.get('q') or '').strip() or None
         city = (request.args.get('city') or '').strip() or None
@@ -129,6 +132,9 @@ def partners():
             return redirect(nxt)
         if is_admin:
             return redirect(url_for("admin.dashboard"))
+        if session.get("user_phone"):
+            from ..express_partner.routes import _redirect_after_login
+            return redirect(_redirect_after_login())
         return redirect(url_for("express_partner.dashboard"))
     
     # ثبت بازدید لندینگ (فقط برای کاربران غیرلاگین و غیرادمین و درخواست‌های مستقیم)
