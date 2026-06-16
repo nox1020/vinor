@@ -244,23 +244,53 @@ def pop_referrer_phone(me_phone: str) -> str:
     return resolve_referrer_for_apply(me_phone)
 
 
-def _referral_commission_is_active(commission_id: Any) -> bool:
+def _find_referral_commission(commission_id: Any) -> Optional[Dict[str, Any]]:
     try:
         cid = int(commission_id or 0)
     except Exception:
+        return None
+    if not cid:
+        return None
+    for c in load_express_commissions() or []:
+        if int(c.get("id") or 0) == cid:
+            return c
+    return None
+
+
+def _referral_commission_is_active(commission_id: Any) -> bool:
+    comm = _find_referral_commission(commission_id)
+    if not comm:
         return False
+    return (str(comm.get("status") or "pending")).strip() in ACTIVE_COMMISSION_STATUSES
+
+
+def _linked_referral_commission_matches_pair(
+    commission_id: Any, inviter: str, invitee: str
+) -> bool:
+    comm = _find_referral_commission(commission_id)
+    if not comm or (comm.get("commission_type") or "") != COMMISSION_TYPE_REFERRAL:
+        return False
+    return _phones_match(comm.get("partner_phone"), inviter) and _phones_match(
+        comm.get("referred_phone"), invitee
+    )
+
+
+def _referral_has_active_commission_for_pair(
+    r: Dict[str, Any], inviter: str, invitee: str
+) -> bool:
+    cid = r.get("commission_id")
     if not cid:
         return False
-    for c in load_express_commissions() or []:
-        if int(c.get("id") or 0) != cid:
-            continue
-        return (str(c.get("status") or "pending")).strip() in ACTIVE_COMMISSION_STATUSES
-    return False
+    return _referral_commission_is_active(cid) and _linked_referral_commission_matches_pair(
+        cid, inviter, invitee
+    )
 
 
 def _referral_pair_can_register_again(r: Dict[str, Any]) -> bool:
     """دعوت ردشده یا بدون پورسانت فعال — برای درخواست جدید همان جفت."""
-    if _referral_commission_is_active(r.get("commission_id")):
+    inviter = _normalize_phone(r.get("inviter_phone") or "")
+    invitee = _normalize_phone(r.get("invitee_phone") or "")
+    if _referral_has_active_commission_for_pair(r, inviter, invitee):
         return False
     st = (str(r.get("status") or "")).strip()
     return st in (REF_REJECTED, REF_INVITE_PENDING, "pending", "", REF_COMMISSION_PENDING)
@@ -287,7 +317,7 @@ def register_referral_on_application(
             continue
         if not _phones_match(r.get("invitee_phone"), invitee):
             continue
-        if _referral_commission_is_active(r.get("commission_id")):
+        if _referral_has_active_commission_for_pair(r, inviter, invitee):
             return
         if _referral_pair_can_register_again(r):
             r["application_id"] = app_id
@@ -435,12 +465,23 @@ def grant_referral_commission_for_application(
         )
         return False, "duplicate_commission"
     if ref_rec and ref_rec.get("commission_id"):
-        if _referral_commission_is_active(ref_rec.get("commission_id")):
+        cid = ref_rec.get("commission_id")
+        if _referral_has_active_commission_for_pair(ref_rec, inviter, invitee):
             log.info(
                 "referral grant skipped: referral record already has active commission_id=%s",
-                ref_rec.get("commission_id"),
+                cid,
             )
             return False, "existing_commission"
+        if not _linked_referral_commission_matches_pair(cid, inviter, invitee):
+            log.warning(
+                "referral grant: clearing mismatched commission_id=%s on referral id=%s "
+                "(inviter=%s invitee=%s app_id=%s)",
+                cid,
+                ref_rec.get("id"),
+                inviter,
+                invitee,
+                application.get("id"),
+            )
         ref_rec.pop("commission_id", None)
         ref_rec.pop("commission_created_at", None)
         ref_rec.pop("commission_approved_at", None)
