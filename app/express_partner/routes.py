@@ -771,9 +771,16 @@ def _session_next_safe():
 
 
 def _post_login_path_only(url: str) -> str:
-    path = (url or '').split('?', 1)[0].strip()
-    if not path:
+    raw = (url or '').strip()
+    if not raw:
         return '/'
+    if '://' in raw:
+        try:
+            from urllib.parse import urlparse
+            raw = urlparse(raw).path or '/'
+        except Exception:
+            pass
+    path = raw.split('?', 1)[0].strip()
     return path.rstrip('/') or '/'
 
 
@@ -787,6 +794,32 @@ def _is_generic_post_login_next(url: str) -> bool:
     if path.startswith('/express/partner/login'):
         return True
     return False
+
+
+def _is_express_soft_nav_request() -> bool:
+    return (request.headers.get('X-Requested-With') or '').strip() == 'XMLHttpRequest'
+
+
+def _is_dashboard_refresh_from_self() -> bool:
+    try:
+        ref = (request.referrer or '').strip()
+        if not ref:
+            return False
+        from urllib.parse import urlparse
+        ref_path = _post_login_path_only(urlparse(ref).path or '/')
+        dash_path = _post_login_path_only(url_for('express_partner.dashboard'))
+        return ref_path == dash_path
+    except Exception:
+        return False
+
+
+def _should_redirect_partner_default_to_commissions() -> bool:
+    """ورود مستقیم/باز کردن اپ → پورسانت؛ ناوبری تب یا رفرش داشبورد → بدون ریدایرکت."""
+    if _is_express_soft_nav_request():
+        return False
+    if _is_dashboard_refresh_from_self():
+        return False
+    return True
 
 
 def _is_phone_approved_partner(phone: str) -> bool:
@@ -1861,6 +1894,18 @@ def dashboard():
     selected_city = ','.join(selected_cities)
     # برای لینک‌ها: حالت «همه شهرها» باید city= خالی در URL بماند، نه حذف پارامتر
     city_url = selected_city if ('city' in request.args or selected_cities) else None
+    filter_tag = (request.args.get('tag') or '').strip().lower()
+    filter_cat = (request.args.get('cat') or '').strip()
+    has_filters = _dashboard_request_has_filters(search_query, selected_cities, filter_tag, filter_cat)
+
+    if (
+        me_phone
+        and _is_partner_approved(profile)
+        and not has_filters
+        and request.args.get('all') != '1'
+        and _should_redirect_partner_default_to_commissions()
+    ):
+        return redirect(url_for('express_partner.commissions'))
 
     apps = load_express_partner_apps() or []
     my_apps = [a for a in apps if str(a.get("phone")) == me_phone]
@@ -1873,9 +1918,7 @@ def dashboard():
         return s
     has_pending_app = any(_norm_status(a.get('status')) in ('pending','under_review','waiting','review') for a in my_apps)
 
-    is_approved = bool(profile and (profile.get("status") in ("approved", True)))
-    filter_tag = (request.args.get('tag') or '').strip().lower()
-    filter_cat = (request.args.get('cat') or '').strip()
+    is_approved = _is_partner_approved(profile)
     assigned_lands, expired_count = _build_partner_dashboard_lands(
         me_phone,
         is_approved,
@@ -1902,7 +1945,6 @@ def dashboard():
     # سئو: عنوان و توضیح برای موتورهای جستجو (صفحه فایل‌ها برای همه در دسترس است)
     count = len(assigned_lands)
     dashboard_mobile_only = _is_mobile_partner_client()
-    has_filters = _dashboard_request_has_filters(search_query, selected_cities, filter_tag, filter_cat)
     show_all_cards = request.args.get("all") == "1" or has_filters
     dashboard_lands_truncated = False
     if not show_all_cards and count > DASHBOARD_INITIAL_CARD_LIMIT:
