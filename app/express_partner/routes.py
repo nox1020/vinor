@@ -3174,11 +3174,14 @@ def invite_colleagues():
     except Exception:
         ref_stats = {
             'invite_count': 0,
+            'waiting_invites': 0,
+            'successful_invites': 0,
             'approved_count': 0,
             'pending_invites': 0,
             'pending_commission': 0,
             'approved_commission': 0,
             'paid_commission': 0,
+            'total_earned': 0,
         }
         bonus_per_invite = 500_000
     return render_template(

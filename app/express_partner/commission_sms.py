@@ -72,6 +72,14 @@ def _build_message(event: str, ctx: Dict[str, Any]) -> str:
             f"وضعیت: در انتظار تأیید"
         )
     if event == "commission_approved":
+        ct = (ctx.get("commission_type") or "").strip()
+        code = (ctx.get("land_code") or "").strip()
+        if ct == "referral" or code == "referral":
+            return (
+                f"وینور اکسپرس\n"
+                f"افزایش پورسانت\n"
+                f"مبلغ: {amt} تومان"
+            )
         return (
             f"وینور اکسپرس\n{title}\n"
             f"مبلغ: {amt} تومان\n"

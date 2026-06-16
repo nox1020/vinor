@@ -4836,7 +4836,7 @@ def express_partner_application_approve(aid: int):
     msg = f'درخواست تأیید شد و {new_assignments_count} فایل به همکار انتساب یافت.'
     if ref_granted:
         from app.express_partner.referrals import REFERRAL_BONUS_AMOUNT
-        msg += f' پورسانت دعوت ({REFERRAL_BONUS_AMOUNT:,} ت) برای معرف در صف پورسانت‌ها ثبت شد.'
+        msg += f' پورسانت دعوت ({REFERRAL_BONUS_AMOUNT:,} ت) به موجودی معرف اضافه شد.'
     flash(msg, 'success')
     return redirect(url_for('admin.express_partners', filter='pending'))
 

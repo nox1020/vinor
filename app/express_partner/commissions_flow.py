@@ -47,7 +47,7 @@ def commission_status_hint(status: str, *, is_referral: bool = False) -> str:
     st = (status or PENDING_STATUS).strip().lower()
     if is_referral:
         hints = {
-            PENDING_STATUS: "پورسانت دعوت همکار — پس از تأیید به موجودی اضافه می‌شود.",
+            PENDING_STATUS: "پورسانت دعوت همکار — در انتظار تأیید (درخواست‌های قدیمی).",
             APPROVED_STATUS: "در موجودی قابل برداشت همکار است.",
             PAID_STATUS: "از طریق درخواست برداشت واریز شده است.",
             REJECTED_STATUS: "این پورسانت رد شده است.",

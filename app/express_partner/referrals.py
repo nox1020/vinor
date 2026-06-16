@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""پاداش دعوت همکار — جریان: لینک → درخواست همکاری → تأیید ادمین → پورسانت pending → تأیید → موجودی."""
+"""پاداش دعوت همکار — جریان: لینک → درخواست همکاری → تأیید ادمین → پورسانت خودکار در موجودی."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,8 +11,10 @@ from flask import request, session
 from ..utils.share_tokens import decode_partner_ref
 from ..utils.storage import (
     load_express_commissions,
+    load_express_partners,
     load_express_referrals,
     save_express_commissions,
+    save_express_partners,
     save_express_referrals,
 )
 from .commissions_flow import ACTIVE_COMMISSION_STATUSES
@@ -146,6 +148,20 @@ def _resolve_inviter_invitee(
     return inviter, invitee, invitee_name
 
 
+def _credit_inviter_partner_income(inviter_phone: str, amount: int) -> None:
+    inviter = _norm(inviter_phone)
+    if not inviter or amount <= 0:
+        return
+    partners = load_express_partners() or []
+    for p in partners:
+        if _norm(p.get("phone")) == inviter:
+            current_income = int(p.get("total_income", 0) or 0)
+            p["total_income"] = current_income + amount
+            p["last_updated"] = _now_iso()
+            break
+    save_express_partners(partners)
+
+
 def grant_referral_commission_for_application(application: Dict[str, Any]) -> bool:
     referrals = load_express_referrals() or []
     ref_rec = _find_referral_for_application(application, referrals)
@@ -172,18 +188,28 @@ def grant_referral_commission_for_application(application: Dict[str, Any]) -> bo
         "referred_phone": invitee,
         "referred_name": invitee_name,
         "application_id": int(application.get("id") or 0),
-        "status": "pending",
+        "status": "approved",
         "created_at": now,
+        "approved_at": now,
     }
     commissions.append(comm)
     save_express_commissions(commissions)
+
+    try:
+        _credit_inviter_partner_income(inviter, REFERRAL_BONUS_AMOUNT)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "referral commission income credit failed inviter=%s", inviter
+        )
 
     try:
         from .commission_sms import notify_partner_commission_txn
 
         notify_partner_commission_txn(
             partner_phone=inviter,
-            event="commission_pending",
+            event="commission_approved",
             amount=REFERRAL_BONUS_AMOUNT,
             land_code=REFERRAL_LAND_CODE,
             commission_type=COMMISSION_TYPE_REFERRAL,
@@ -193,30 +219,14 @@ def grant_referral_commission_for_application(application: Dict[str, Any]) -> bo
         import logging
 
         logging.getLogger(__name__).exception(
-            "referral commission_pending SMS failed inviter=%s", inviter
-        )
-
-    try:
-        from .admin_action_sms import notify_admin_pending_action
-
-        notify_admin_pending_action(
-            "commission",
-            partner_phone=inviter,
-            partner_name=invitee_name or invitee,
-            land_code=REFERRAL_LAND_CODE,
-            amount=REFERRAL_BONUS_AMOUNT,
-        )
-    except Exception:
-        import logging
-
-        logging.getLogger(__name__).exception(
-            "referral commission admin SMS failed inviter=%s", inviter
+            "referral commission_approved SMS failed inviter=%s", inviter
         )
 
     if ref_rec:
-        ref_rec["status"] = REF_COMMISSION_PENDING
+        ref_rec["status"] = REF_COMMISSION_APPROVED
         ref_rec["commission_id"] = new_cid
         ref_rec["commission_created_at"] = now
+        ref_rec["commission_approved_at"] = now
     else:
         rid = (max([int(x.get("id", 0) or 0) for x in referrals if isinstance(x, dict)], default=0) or 0) + 1
         referrals.append(
@@ -226,10 +236,11 @@ def grant_referral_commission_for_application(application: Dict[str, Any]) -> bo
                 "invitee_phone": invitee,
                 "invitee_name": invitee_name,
                 "application_id": int(application.get("id") or 0),
-                "status": REF_COMMISSION_PENDING,
+                "status": REF_COMMISSION_APPROVED,
                 "commission_id": new_cid,
                 "created_at": now,
                 "commission_created_at": now,
+                "commission_approved_at": now,
             }
         )
     save_express_referrals(referrals)

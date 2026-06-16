@@ -4,30 +4,29 @@
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {% set _invite_title = 'دعوت از همکاران' if is_approved else 'دعوت از دوستان' %}
   {{ ep_header_start(id='profileInviteHeader') }}
-  {% call ep_header_row(_invite_title, url_for('express_partner.profile'), back_nav=false) %}{% endcall %}
+  {% call ep_header_row(_invite_title, url_for('express_partner.profile'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
   {{ ep_header_end() }}
 
-  <div class="partner-page-scroll-pad min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
+  <div id="inviteColleaguesPage"
+       class="partner-page-scroll-pad min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
     <div class="mx-auto max-w-lg space-y-4 px-4 sm:px-6">
-      <section class="rounded-2xl border {% if is_approved %}border-emerald-600/35 bg-gradient-to-br from-emerald-950/90{% else %}border-sky-600/35 bg-gradient-to-br from-sky-950/90{% endif %} via-[#12161f] to-[#0f1419] p-5 overflow-hidden relative">
-        <div class="absolute -left-6 -bottom-8 w-28 h-28 rounded-full {% if is_approved %}bg-emerald-500/10{% else %}bg-sky-500/10{% endif %} blur-2xl pointer-events-none"></div>
-        <div class="relative flex items-start gap-4">
-          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border {% if is_approved %}border-emerald-500/25 bg-emerald-500/10 text-emerald-400{% else %}border-sky-500/25 bg-sky-500/10 text-sky-400{% endif %} text-2xl">
+
+      <section class="rounded-2xl border {% if is_approved %}border-emerald-600/35 bg-gradient-to-br from-emerald-950/90{% else %}border-sky-600/35 bg-gradient-to-br from-sky-950/90{% endif %} via-[#12161f] to-[#0f1419] p-4 overflow-hidden relative">
+        <div class="absolute -left-6 -bottom-8 w-28 h-28 rounded-full {% if is_approved %}bg-emerald-500/10{% else %}bg-sky-500/10{% endif %} blur-2xl pointer-events-none" aria-hidden="true"></div>
+        <div class="relative flex items-center gap-3">
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border {% if is_approved %}border-emerald-500/25 bg-emerald-500/10 text-emerald-400{% else %}border-sky-500/25 bg-sky-500/10 text-sky-400{% endif %} text-lg">
             <i class="fas {% if is_approved %}fa-gift{% else %}fa-share-nodes{% endif %}" aria-hidden="true"></i>
           </div>
           <div class="min-w-0 flex-1 text-right">
             {% if is_approved %}
-            <h2 class="text-base font-bold text-white">همکار جدید دعوت کنید</h2>
-            <p class="mt-2 text-sm leading-relaxed text-emerald-100/75">
-              به ازای هر همکار دعوت‌شده که تأیید شود، <span class="font-bold text-emerald-300">{{ bonus_per_invite|toman }}</span> پورسانت می‌گیرید.
+            <h2 class="text-sm font-bold text-white">دعوت همکار</h2>
+            <p class="mt-1 text-xs leading-relaxed text-emerald-100/80">
+              هر همکار تأییدشده، <span class="font-bold text-emerald-300">{{ bonus_per_invite|toman }}</span> به موجودی شما اضافه می‌شود.
             </p>
-            <ol class="mt-3 space-y-1.5 text-[11px] text-emerald-100/60 list-none">
-              <li>۱) لینک را بفرستید → ۲) همکار تأیید شود → ۳) پورسانت در «پورسانت‌ها» تأیید شود → ۴) برداشت</li>
-            </ol>
             {% else %}
-            <h2 class="text-base font-bold text-white">دوستانت را دعوت کن</h2>
-            <p class="mt-2 text-sm leading-relaxed text-sky-100/75">
-              لینک اختصاصی خود را با دوستان به اشتراک بگذار تا آن‌ها هم به وینور بپیوندند.
+            <h2 class="text-sm font-bold text-white">دعوت دوستان</h2>
+            <p class="mt-1 text-xs leading-relaxed text-sky-100/80">
+              لینک زیر را بفرست تا دوستانت راحت‌تر به وینور بپیوندند.
             </p>
             {% endif %}
           </div>
@@ -35,23 +34,20 @@
       </section>
 
       {% if is_approved %}
-      <section class="grid grid-cols-2 gap-2 sm:gap-3">
-        <div class="rounded-2xl border border-white/10 bg-[#12181f] p-3 sm:p-4 text-center col-span-2 sm:col-span-1">
-          <p class="text-[10px] sm:text-[11px] text-zinc-500">منتظر تأیید همکار</p>
-          <p class="mt-1 text-xl sm:text-2xl font-bold text-white tabular-nums">{{ ref_stats.waiting_invites or 0 }}</p>
+      <section class="grid grid-cols-2 gap-2">
+        <div class="rounded-xl border border-white/10 bg-[#12181f] px-2 py-3 text-center">
+          <p class="text-[10px] text-zinc-500 leading-tight">منتظر تأیید</p>
+          <p class="mt-1 text-lg font-bold text-white tabular-nums">{{ ref_stats.waiting_invites or 0 }}</p>
         </div>
-        <div class="rounded-2xl border border-amber-500/25 bg-amber-950/30 p-3 sm:p-4 text-center">
-          <p class="text-[10px] sm:text-[11px] text-amber-200/70">پورسانت در انتظار ادمین</p>
-          <p class="mt-1 text-base sm:text-lg font-bold text-amber-300 tabular-nums">{{ (ref_stats.pending_commission or 0)|toman }}</p>
-        </div>
-        <div class="rounded-2xl border border-emerald-500/25 bg-emerald-950/30 p-3 sm:p-4 text-center">
-          <p class="text-[10px] sm:text-[11px] text-emerald-200/70">در موجودی / واریزشده</p>
-          <p class="mt-1 text-base sm:text-lg font-bold text-emerald-300 tabular-nums">{{ (ref_stats.total_earned or 0)|toman }}</p>
+        <div class="rounded-xl border border-emerald-500/25 bg-emerald-950/25 px-2 py-3 text-center">
+          <p class="text-[10px] text-emerald-200/70 leading-tight">دریافت‌شده</p>
+          <p class="mt-1 text-sm font-bold text-emerald-300 tabular-nums">{{ (ref_stats.total_earned or 0)|toman }}</p>
         </div>
       </section>
       {% endif %}
 
-      <section class="rounded-2xl border border-white/10 bg-[#12181f] p-4 sm:p-5">        <label for="inviteLinkInput" class="block text-xs font-medium text-zinc-500 mb-2">لینک دعوت شما</label>
+      <section class="rounded-2xl border border-white/10 bg-[#12181f] p-4 sm:p-5">
+        <label for="inviteLinkInput" class="mb-2 block text-xs font-medium text-zinc-500">لینک دعوت شما</label>
         <div class="flex items-stretch gap-2">
           <input id="inviteLinkInput"
                  type="text"
@@ -66,31 +62,45 @@
           </button>
         </div>
         <p id="inviteCopyHint" class="mt-2 hidden text-xs text-emerald-400">لینک کپی شد.</p>
-      </section>
-
-      <section>
         <button type="button"
                 id="inviteShareBtn"
-                class="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[#12181f] px-4 py-3.5 text-sm font-semibold text-white transition hover:border-emerald-500/30 hover:bg-[#161e29]">
+                class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#0a1018] px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-500/30 hover:bg-[#101820]">
           <i class="fas fa-share-nodes text-emerald-400" aria-hidden="true"></i>
           اشتراک‌گذاری
         </button>
       </section>
 
-      <p class="text-center text-xs text-zinc-500 leading-relaxed px-2">
-        {% if is_approved %}
-        پس از ثبت‌نام و تأیید همکاری، دوست دعوت‌شده می‌تواند از مزایای پنل همکاران بهره‌مند شود.
-        {% else %}
-        با ثبت‌نام از طریق لینک شما، دوستانت به راحتی به وینور می‌پیوندند.
-        {% endif %}
-      </p>    </div>
+    </div>
 
     {% set bottom_nav_active = 'profile' %}
     {% include 'express_partner/partials/partner_tab_footer.html' %}
   </div>
+{% endblock %}
 
-<script>
+{% block scripts %}
+  {{ super() }}
+  <script>
   (function () {
+    if (window.__vinorCommissionsChrome && window.__vinorCommissionsChrome.teardown) {
+      try { window.__vinorCommissionsChrome.teardown(); } catch (_) {}
+    }
+    if (window.__vinorDashboardChrome && window.__vinorDashboardChrome.teardown) {
+      try { window.__vinorDashboardChrome.teardown(); } catch (_) {}
+    }
+    if (window.__vinorPartnerHeaderChromeSetup) {
+      try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
+    }
+  })();
+  </script>
+  <script>
+  (function () {
+    if (window.__vinorInvitePageCtrl) {
+      try { window.__vinorInvitePageCtrl.abort(); } catch (_) {}
+    }
+    window.__vinorInvitePageCtrl = new AbortController();
+    var sig = window.__vinorInvitePageCtrl.signal;
+    var sigOpts = { signal: sig };
+
     var inviteUrl = {{ invite_url | tojson }};
     var shareText = {{ share_text | tojson }};
     var input = document.getElementById('inviteLinkInput');
@@ -134,17 +144,23 @@
       }
     }
 
-    copyBtn && copyBtn.addEventListener('click', copyLink);
-    shareBtn && shareBtn.addEventListener('click', async function () {
-      var payload = { title: {% if is_approved %}'دعوت به وینور اکسپرس'{% else %}'دعوت به وینور'{% endif %}, text: fullMessage(), url: inviteUrl };
-      try {
-        if (navigator.share) {
-          await navigator.share(payload);
-          return;
-        }
-      } catch (_) {}
-      copyLink();
-    });
+    if (copyBtn) copyBtn.addEventListener('click', copyLink, sigOpts);
+    if (shareBtn) {
+      shareBtn.addEventListener('click', async function () {
+        var payload = {
+          title: {% if is_approved %}'دعوت به وینور اکسپرس'{% else %}'دعوت به وینور'{% endif %},
+          text: fullMessage(),
+          url: inviteUrl
+        };
+        try {
+          if (navigator.share) {
+            await navigator.share(payload);
+            return;
+          }
+        } catch (_) {}
+        copyLink();
+      }, sigOpts);
+    }
   })();
-</script>
+  </script>
 {% endblock %}
