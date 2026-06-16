@@ -6,6 +6,12 @@ def encode_partner_ref(phone: str) -> str:
     phone = (phone or "").strip()
     if not phone:
         return ""
+    try:
+        from app.services.notifications import _normalize_user_id
+
+        phone = _normalize_user_id(phone) or phone
+    except Exception:
+        pass
     token = base64.urlsafe_b64encode(phone.encode()).decode()
     return token.rstrip("=")
 

@@ -128,6 +128,41 @@
 {% block scripts %}
 <script>
 (function () {
+  var params = new URLSearchParams(window.location.search);
+  var ref = params.get('ref');
+  var form = document.getElementById('applyForm');
+  function ensureRefInput(value) {
+    if (!form || !value) return;
+    var input = form.querySelector('input[name="ref"]');
+    if (!input) {
+      input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'ref';
+      form.insertBefore(input, form.firstChild);
+    }
+    input.value = value;
+  }
+  if (ref) {
+    try { localStorage.setItem('vinor_ref', ref); } catch (_) {}
+    ensureRefInput(ref);
+  } else {
+    try {
+      var saved = localStorage.getItem('vinor_ref');
+      if (saved) ensureRefInput(saved);
+    } catch (_) {}
+  }
+  if (form) {
+    form.addEventListener('submit', function () {
+      var input = form.querySelector('input[name="ref"]');
+      if (input && input.value) {
+        try { localStorage.setItem('vinor_ref', input.value); } catch (_) {}
+      }
+    });
+  }
+})();
+</script>
+<script>
+(function () {
   var form = document.getElementById('applyForm');
   var btn = document.getElementById('applySubmitBtn');
   var label = document.getElementById('applySubmitLabel');

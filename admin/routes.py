@@ -4844,6 +4844,14 @@ def express_partner_application_approve(aid: int):
     if ref_granted:
         from app.express_partner.referrals import REFERRAL_BONUS_AMOUNT
         msg += f' پورسانت دعوت ({REFERRAL_BONUS_AMOUNT:,} ت) به موجودی معرف اضافه شد.'
+    elif target.get('referred_by_phone'):
+        current_app.logger.warning(
+            'Referral commission NOT granted for app id=%s invitee=%s inviter=%s',
+            aid,
+            target.get('phone'),
+            target.get('referred_by_phone'),
+        )
+        msg += ' (پورسانت دعوت ثبت نشد — لاگ سرور را بررسی کنید.)'
     flash(msg, 'success')
     return redirect(url_for('admin.express_partners', filter='pending'))
 

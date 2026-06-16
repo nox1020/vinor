@@ -1138,8 +1138,10 @@ def _maybe_auto_release_expired_transactions(assignments: List[Dict[str, Any]]) 
 def _get_my_last_application(phone: str) -> Dict[str, Any] | None:
     """Return latest Express Partner application for a phone, if any."""
     try:
+        from .referrals import _phones_match
+
         apps = load_express_partner_apps() or []
-        mine = [a for a in apps if isinstance(a, dict) and str(a.get('phone')) == str(phone)]
+        mine = [a for a in apps if isinstance(a, dict) and _phones_match(a.get('phone'), phone)]
         if not mine:
             return None
         try:
@@ -1154,17 +1156,17 @@ def _get_my_last_application(phone: str) -> Dict[str, Any] | None:
 def _has_active_application(phone: str) -> bool:
     """Return True if the user already has an in-progress application (not approved/rejected/cancelled)."""
     try:
+        from .referrals import _phones_match
+
         apps = load_express_partner_apps() or []
-        active_statuses = {None, '', 'new', 'pending', 'under_review'}
         for a in apps:
             if not isinstance(a, dict):
                 continue
-            if str(a.get('phone')) != str(phone):
+            if not _phones_match(a.get('phone'), phone):
                 continue
             status = str(a.get('status') or '').strip().lower()
             if status in ('approved', 'rejected', 'cancelled'):
                 continue
-            # anything else counts as active/in-progress
             return True
     except Exception:
         pass
@@ -1448,17 +1450,44 @@ def _clip_apply_fields(name: str, city: str, experience: str, note: str) -> tupl
 
 def _apply_login_redirect():
     """ریدایرکت به ورود با حفظ ref دعوت در next."""
+    from flask import make_response
+    from .referrals import capture_ref_on_login, store_referral_ref_token, set_ref_cookie_on_response
+
     ref = (request.args.get('ref') or '').strip()
     next_apply = url_for('express_partner.apply', ref=ref) if ref else url_for('express_partner.apply')
     try:
-        from .referrals import capture_ref_on_login, store_referral_ref_token
         if ref:
             store_referral_ref_token(ref)
         else:
             capture_ref_on_login()
     except Exception:
         pass
-    return redirect(url_for('express_partner.login', next=next_apply))
+    resp = make_response(redirect(url_for('express_partner.login', next=next_apply)))
+    if ref:
+        set_ref_cookie_on_response(resp, ref)
+    return resp
+
+
+def _apply_invite_ref_value() -> str:
+    try:
+        from .referrals import referral_ref_token_for_session
+        return (request.args.get('ref') or '').strip() or referral_ref_token_for_session()
+    except Exception:
+        return (request.args.get('ref') or '').strip()
+
+
+def _apply_render_with_ref(**ctx):
+    from flask import make_response
+    from .referrals import set_ref_cookie_on_response
+
+    invite_ref = ctx.pop('invite_ref', None)
+    if invite_ref is None:
+        invite_ref = _apply_invite_ref_value()
+    ctx['invite_ref'] = invite_ref
+    resp = make_response(render_template('express_partner/apply.html', **ctx))
+    if invite_ref:
+        set_ref_cookie_on_response(resp, invite_ref)
+    return resp
 
 
 @express_partner_bp.route('/apply', methods=['GET', 'POST'], endpoint='apply')
@@ -1468,8 +1497,13 @@ def apply():
         return _apply_login_redirect()
     me_phone = (session.get("user_phone") or "").strip()
     try:
-        from .referrals import stash_referrer_from_request
+        from .referrals import stash_referrer_from_request, attach_referrer_to_pending_application
         stash_referrer_from_request(me_phone)
+        attach_referrer_to_pending_application(
+            me_phone,
+            query_ref=request.args.get('ref') or '',
+            form_ref=request.form.get('ref') or '',
+        )
     except Exception:
         pass
 
@@ -1491,8 +1525,7 @@ def apply():
         )
         if not name or not city:
             flash('نام و شهر فعالیت الزامی است.', 'error')
-            return render_template(
-                'express_partner/apply.html',
+            return _apply_render_with_ref(
                 me_phone=me_phone,
                 name=name,
                 city=city,
@@ -1503,8 +1536,7 @@ def apply():
             )
         if cities and city not in cities:
             flash('شهر انتخاب‌شده معتبر نیست.', 'error')
-            return render_template(
-                'express_partner/apply.html',
+            return _apply_render_with_ref(
                 me_phone=me_phone,
                 name=name,
                 city=city,
@@ -1523,20 +1555,13 @@ def apply():
     clipped = _clip_apply_fields(
         defaults['name'], defaults['city'], defaults['experience'], defaults['note'],
     )
-    try:
-        from .referrals import referral_ref_token_for_session
-        invite_ref = (request.args.get('ref') or '').strip() or referral_ref_token_for_session()
-    except Exception:
-        invite_ref = (request.args.get('ref') or '').strip()
-    return render_template(
-        'express_partner/apply.html',
+    return _apply_render_with_ref(
         me_phone=me_phone,
         name=clipped[0],
         city=clipped[1],
         experience=clipped[2],
         note=clipped[3],
         cities=cities,
-        invite_ref=invite_ref,
         **_apply_limits_context(),
     )
 
@@ -1746,6 +1771,8 @@ def _send_visit_admin_sms(
 
 
 def _redirect_apply_thanks(name: str, *, fresh_submit: bool, sms_sent: bool | None = None, sms_skipped: bool = False, sms_error: str | None = None, sms_infra_error: bool = False):
+    from .referrals import clear_ref_cookie_on_response
+
     session['apply_thanks_context'] = {
         'name': name or '',
         'fresh_submit': bool(fresh_submit),
@@ -1754,7 +1781,8 @@ def _redirect_apply_thanks(name: str, *, fresh_submit: bool, sms_sent: bool | No
         'sms_error': sms_error,
         'sms_infra_error': bool(sms_infra_error),
     }
-    return redirect(url_for('express_partner.thanks'))
+    resp = redirect(url_for('express_partner.thanks'))
+    return clear_ref_cookie_on_response(resp)
 
 
 @express_partner_bp.route('/thanks', methods=['GET'], endpoint='thanks')

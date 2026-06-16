@@ -11,9 +11,11 @@ from flask import request, session
 from ..utils.share_tokens import decode_partner_ref
 from ..utils.storage import (
     load_express_commissions,
+    load_express_partner_apps,
     load_express_partners,
     load_express_referrals,
     save_express_commissions,
+    save_express_partner_apps,
     save_express_partners,
     save_express_referrals,
 )
@@ -27,6 +29,10 @@ REF_INVITE_PENDING = "pending"
 REF_COMMISSION_PENDING = "commission_pending"
 REF_COMMISSION_APPROVED = "commission_approved"
 REF_REJECTED = "rejected"
+
+REF_COOKIE_NAME = "vinor_ref"
+REF_COOKIE_MAX_AGE = 7 * 24 * 3600
+_APPROVED_PARTNER_STATUSES = frozenset({"approved", "active", "enabled", "ok", "true", "1"})
 
 
 def _normalize_phone(phone: str) -> str:
@@ -81,6 +87,64 @@ def _store_ref_token(token: str) -> None:
         session["referrer_phone"] = inviter
 
 
+def set_ref_cookie_on_response(response, token: str):
+    """پشتیبان ref در کوکی — برای WebView/سشن ناپایدار."""
+    token = (token or "").strip()
+    if not token or response is None:
+        return response
+    try:
+        response.set_cookie(
+            REF_COOKIE_NAME,
+            token,
+            max_age=REF_COOKIE_MAX_AGE,
+            httponly=True,
+            samesite="Lax",
+            secure=bool(getattr(request, "is_secure", False)),
+        )
+    except Exception:
+        pass
+    return response
+
+
+def clear_ref_cookie_on_response(response):
+    if response is None:
+        return response
+    try:
+        response.delete_cookie(REF_COOKIE_NAME)
+    except Exception:
+        pass
+    return response
+
+
+def _ref_token_candidates(*, form_ref: str = "", query_ref: str = "") -> List[str]:
+    seen: set = set()
+    out: List[str] = []
+    for raw in (
+        (query_ref or "").strip(),
+        (form_ref or "").strip(),
+        (session.get("pending_ref_token") or "").strip(),
+        (request.cookies.get(REF_COOKIE_NAME) or "").strip(),
+    ):
+        if raw and raw not in seen:
+            seen.add(raw)
+            out.append(raw)
+    return out
+
+
+def _inviter_is_approved_partner(inviter_phone: str) -> bool:
+    inviter = _normalize_phone(inviter_phone)
+    if not inviter:
+        return False
+    for p in load_express_partners() or []:
+        if not isinstance(p, dict) or not _phones_match(p.get("phone"), inviter):
+            continue
+        if p.get("status") is True:
+            return True
+        st = str(p.get("status") or "").strip().lower()
+        return st in _APPROVED_PARTNER_STATUSES
+    return False
+
+
 def store_referral_ref_token(token: str) -> None:
     _store_ref_token(token)
 
@@ -114,19 +178,61 @@ def resolve_referrer_for_apply(
     query_ref: str = "",
 ) -> str:
     me = _normalize_phone(me_phone)
-    for token in (
-        (query_ref or "").strip(),
-        (form_ref or "").strip(),
-        (session.get("pending_ref_token") or "").strip(),
-    ):
+    for token in _ref_token_candidates(form_ref=form_ref, query_ref=query_ref):
         inviter = _inviter_from_ref_token(token)
-        if inviter and inviter != me:
+        if inviter and inviter != me and _inviter_is_approved_partner(inviter):
             session["referrer_phone"] = inviter
+            session["pending_ref_token"] = token
             return inviter
     inviter = _normalize_phone(session.get("referrer_phone") or "")
-    if inviter and inviter != me:
+    if inviter and inviter != me and _inviter_is_approved_partner(inviter):
         return inviter
     return ""
+
+
+def attach_referrer_to_pending_application(
+    invitee_phone: str,
+    *,
+    form_ref: str = "",
+    query_ref: str = "",
+) -> bool:
+    """اگر درخواست همکاری قبلاً ثبت شده ولی معرف ندارد، ref فعلی را وصل کن."""
+    inviter = resolve_referrer_for_apply(
+        invitee_phone,
+        form_ref=form_ref,
+        query_ref=query_ref,
+    )
+    if not inviter:
+        return False
+
+    apps = load_express_partner_apps() or []
+    changed = False
+    for app in apps:
+        if not isinstance(app, dict):
+            continue
+        if not _phones_match(app.get("phone"), invitee_phone):
+            continue
+        st = str(app.get("status") or "").strip().lower()
+        if st in ("approved", "rejected", "cancelled"):
+            continue
+        existing = _normalize_phone(app.get("referred_by_phone") or "")
+        if existing:
+            if existing == inviter:
+                return True
+            continue
+        app["referred_by_phone"] = inviter
+        changed = True
+        app_id = int(app.get("id") or 0)
+        if app_id:
+            register_referral_on_application(
+                inviter_phone=inviter,
+                invitee_phone=_normalize_phone(app.get("phone") or invitee_phone),
+                invitee_name=(app.get("name") or "").strip(),
+                application_id=app_id,
+            )
+    if changed:
+        save_express_partner_apps(apps)
+    return changed
 
 
 def clear_referrer_session() -> None:
@@ -230,15 +336,40 @@ def _credit_inviter_partner_income(inviter_phone: str, amount: int) -> None:
 
 
 def grant_referral_commission_for_application(application: Dict[str, Any]) -> bool:
+    import logging
+
+    log = logging.getLogger(__name__)
     referrals = load_express_referrals() or []
     ref_rec = _find_referral_for_application(application, referrals)
     inviter, invitee, invitee_name = _resolve_inviter_invitee(application, ref_rec)
 
     if not inviter or not invitee or inviter == invitee:
+        log.warning(
+            "referral grant skipped: invalid phones inviter=%r invitee=%r app_id=%s",
+            inviter,
+            invitee,
+            application.get("id"),
+        )
+        return False
+    if not _inviter_is_approved_partner(inviter):
+        log.warning(
+            "referral grant skipped: inviter not approved partner inviter=%s app_id=%s",
+            inviter,
+            application.get("id"),
+        )
         return False
     if _active_referral_commission_exists(inviter, invitee):
+        log.info(
+            "referral grant skipped: commission already exists inviter=%s invitee=%s",
+            inviter,
+            invitee,
+        )
         return False
     if ref_rec and ref_rec.get("commission_id"):
+        log.info(
+            "referral grant skipped: referral record already has commission_id=%s",
+            ref_rec.get("commission_id"),
+        )
         return False
 
     commissions = load_express_commissions() or []
