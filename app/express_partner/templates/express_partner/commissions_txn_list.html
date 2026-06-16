@@ -1,16 +1,34 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}همه تراکنش‌ها | پورسانت{% endblock %}
 
+{% block head %}
+<style>
+  #commTxnListHeader .comm-txn-filter-toggle.is-active {
+    border-color: rgba(16, 185, 129, 0.45);
+    background-color: rgba(16, 185, 129, 0.14);
+    color: rgb(110 231 183);
+  }
+  html:not(.dark) #commTxnListHeader .comm-txn-filter-toggle.is-active {
+    border-color: rgba(5, 150, 105, 0.35);
+    background-color: rgba(16, 185, 129, 0.14);
+    color: rgb(4 120 87);
+  }
+  #commTxnFilterModal.comm-txn-filter-modal--open { display: flex !important; }
+  #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-backdrop { opacity: 1; }
+  #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-sheet { transform: translateY(0); }
+</style>
+{% endblock %}
+
 {% block content %}
   {% set _summary = txn_summary|default({}) %}
-  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row, ep_back_link %}
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
 
   {% set _txn_hint = (items|length|string + ' تراکنش') if items and items|length > 0 else 'بدون تراکنش' %}
   {{ ep_header_start(id='commTxnListHeader') }}
-  {% call ep_header_row('همه تراکنش‌ها', url_for('express_partner.commissions'), subtitle=_txn_hint, subtitle_id='commTxnCountHint', inner_class='max-w-6xl mx-auto w-full') %}
+  {% call ep_header_row('همه تراکنش‌ها', url_for('express_partner.commissions'), subtitle=_txn_hint, subtitle_id='commTxnCountHint', inner_class='max-w-lg lg:max-w-4xl mx-auto w-full') %}
       <button type="button"
               id="commTxnFilterToggle"
-              class="ep-partner-header-btn comm-txn-filter-toggle"
+              class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn comm-txn-filter-toggle relative"
               aria-haspopup="dialog"
               aria-controls="commTxnFilterModal"
               aria-expanded="false"
@@ -23,11 +41,10 @@
   {% endcall %}
   {{ ep_header_end() }}
 
-  <div id="commissionsTxnScroll"
-       class="fixed inset-x-0 bottom-0 top-0 overflow-y-auto bg-[#030712] overscroll-y-contain text-zinc-100 lg:pb-0"
-       style="-webkit-overflow-scrolling: touch;">
+  <div id="commTxnPage"
+       class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] text-zinc-100 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
     <div id="commTxnScrollInner"
-         class="mx-auto max-w-lg px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] pt-2 sm:max-w-4xl sm:px-6 commissions-page-scroll-pad">
+         class="mx-auto max-w-lg px-4 sm:max-w-4xl sm:px-6">
 
       <section class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
         {% if items and items|length > 0 %}
@@ -110,11 +127,6 @@
       </div>
     </div>
   </div>
-  <style>
-    #commTxnFilterModal.comm-txn-filter-modal--open { display: flex !important; }
-    #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-backdrop { opacity: 1; }
-    #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-sheet { transform: translateY(0); }
-  </style>
 
   {% set bottom_nav_active = 'commissions' %}
   {% include 'express_partner/partials/partner_tab_footer.html' %}
@@ -126,6 +138,19 @@
   {{ super() }}
   <script>
   (function () {
+    if (window.__vinorCommissionsChrome && window.__vinorCommissionsChrome.teardown) {
+      try { window.__vinorCommissionsChrome.teardown(); } catch (_) {}
+    }
+    if (window.__vinorPartnerHeaderChromeSetup) {
+      try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
+    }
+
+    function syncTxnHeaderPad() {
+      try {
+        if (window.__vinorPartnerHeaderPadSync) window.__vinorPartnerHeaderPadSync();
+      } catch (_) {}
+    }
+
     function fmt(dt) {
       try {
         var d = new Date(String(dt || '').replace(' ', 'T'));
@@ -226,6 +251,7 @@
       if (totalRows === 0) {
         countHint.textContent = 'بدون تراکنش';
         countHint.classList.remove('is-filtered');
+        syncTxnHeaderPad();
         return;
       }
       if (active === 'all') {
@@ -235,6 +261,7 @@
         countHint.textContent = shown + ' از ' + totalRows + ' · ' + activeLabelText;
         countHint.classList.add('is-filtered');
       }
+      syncTxnHeaderPad();
     }
 
     function rowMatches(row) {
