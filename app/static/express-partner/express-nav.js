@@ -519,6 +519,13 @@
       window.dispatchEvent(new CustomEvent('vinor:express-page-swap', { detail: { navKey: navKey } }));
     } catch (_) {}
     try {
+      if (typeof window.__vinorPartnerHeaderChromeSetup === 'function') {
+        window.__vinorPartnerHeaderChromeSetup();
+      } else if (typeof window.__vinorPartnerHeaderPadSync === 'function') {
+        window.__vinorPartnerHeaderPadSync();
+      }
+    } catch (_) {}
+    try {
       document.dispatchEvent(new CustomEvent('vinor:city-picker-reinit'));
     } catch (_) {}
     if (typeof window.setupVinorExpressPullRefresh === 'function') {

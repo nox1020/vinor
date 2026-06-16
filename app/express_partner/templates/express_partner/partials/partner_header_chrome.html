@@ -8,14 +8,39 @@
   var ro = null;
   var observed = null;
 
+  function swapRoot() {
+    return document.getElementById('vinor-express-page-swap');
+  }
+
+  function pageHeaders() {
+    var root = swapRoot();
+    var list = root
+      ? root.querySelectorAll('header.ep-partner-header:not(.ep-partner-header--sticky)')
+      : document.querySelectorAll('header.ep-partner-header:not(.ep-partner-header--sticky)');
+    return Array.prototype.slice.call(list || []);
+  }
+
+  function purgeDuplicateHeaders() {
+    var headers = pageHeaders();
+    if (headers.length <= 1) return headers[0] || null;
+    for (var i = 0; i < headers.length - 1; i++) {
+      try { headers[i].remove(); } catch (_) {}
+    }
+    return headers[headers.length - 1];
+  }
+
   function activeHeader() {
-    return document.querySelector('header.ep-partner-header:not(.ep-partner-header--sticky)');
+    return purgeDuplicateHeaders();
   }
 
   function syncPartnerHeaderPad() {
     var header = activeHeader();
-    if (!header) return;
+    if (!header) {
+      try { document.documentElement.style.removeProperty('--vn-partner-header-pad'); } catch (_) {}
+      return;
+    }
     var h = Math.ceil(header.getBoundingClientRect().height + 8);
+    if (h < 48) h = 56;
     document.documentElement.style.setProperty('--vn-partner-header-pad', h + 'px');
   }
 
@@ -33,21 +58,26 @@
   }
 
   function setup() {
+    observed = null;
     bindHeader(activeHeader());
     syncPartnerHeaderPad();
   }
 
+  function scheduleSetup() {
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(setup);
+    });
+  }
+
   window.__vinorPartnerHeaderPadSync = syncPartnerHeaderPad;
+  window.__vinorPartnerHeaderChromeSetup = scheduleSetup;
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setup);
+    document.addEventListener('DOMContentLoaded', scheduleSetup);
   } else {
-    setup();
+    scheduleSetup();
   }
   window.addEventListener('resize', syncPartnerHeaderPad, { passive: true });
-  window.addEventListener('vinor:express-page-swap', function () {
-    observed = null;
-    window.requestAnimationFrame(setup);
-  });
+  window.addEventListener('vinor:express-page-swap', scheduleSetup);
 })();
 </script>

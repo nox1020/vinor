@@ -73,12 +73,22 @@
   .commissions-page-scroll-pad {
     padding-top: var(--vn-partner-header-pad, 3.5rem);
   }
+  .ep-partner-sticky-below-header {
+    top: calc(var(--vn-partner-header-pad, 3.5rem) + 0.35rem);
+  }
   @media (min-width: 640px) {
     .partner-page-scroll-pad,
     .profile-page-inner,
     .commissions-page-scroll-pad {
       padding-top: var(--vn-partner-header-pad, 4rem);
     }
+    .ep-partner-sticky-below-header {
+      top: calc(var(--vn-partner-header-pad, 4rem) + 0.35rem);
+    }
+  }
+  /* جلوگیری از دو هدر پشت‌سرهم بعد از soft-nav */
+  #vinor-express-page-swap header.ep-partner-header ~ header.ep-partner-header {
+    display: none !important;
   }
   .ep-partner-header--sticky {
     position: sticky;
@@ -269,6 +279,12 @@
     padding: 0.375rem 0.625rem;
     font-size: 11px;
     font-weight: 500;
+  }
+  .ep-partner-header--shell-none .shrink-0 > .ep-partner-header-btn--text {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   @media (min-width: 640px) {
     .ep-partner-header-btn--text {

@@ -24,10 +24,10 @@
   {{ ep_header_end() }}
 
   <div id="profilePage"
-       class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
+       class="partner-page-scroll-pad min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
 
     {% if not me_phone %}
-    <div class="partner-page-scroll-pad mx-auto max-w-lg space-y-3 px-4 sm:space-y-4 sm:px-6">
+    <div class="mx-auto max-w-lg space-y-3 px-4 sm:space-y-4 sm:px-6">
       <section class="relative mt-4 overflow-hidden rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-600/90 via-emerald-800/95 to-[#0a1218] p-6 text-center shadow-xl shadow-emerald-950/30 sm:p-7">
         <div class="pointer-events-none absolute -left-10 -top-12 h-32 w-32 rounded-full bg-white/10 blur-2xl" aria-hidden="true"></div>
         <div class="relative">
@@ -123,11 +123,11 @@
     </div>
     {% else %}
 
-    <div class="partner-page-scroll-pad mx-auto max-w-6xl space-y-3 px-4 sm:space-y-4 sm:px-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
+    <div class="mx-auto max-w-6xl space-y-3 px-4 sm:space-y-4 sm:px-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
       {# کارت هویت #}
       <section data-tour="profile-section"
                id="profileClickableCard"
-               class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#141c26] to-[#0d1218] p-5 shadow-xl shadow-black/40 lg:sticky lg:top-20 lg:max-w-none">
+               class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#141c26] to-[#0d1218] p-5 shadow-xl shadow-black/40 lg:sticky lg:max-w-none ep-partner-sticky-below-header">
         <div class="pointer-events-none absolute inset-x-0 bottom-0 h-24 profile-hero-glow" aria-hidden="true"></div>
         <div class="relative flex items-start gap-4">
           <div class="relative shrink-0">
