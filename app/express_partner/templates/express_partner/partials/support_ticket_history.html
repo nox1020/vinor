@@ -3,8 +3,7 @@
   {% for t in tickets %}
   {% set st = t.status or 'open' %}
   <details class="group rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden
-                  {% if t.has_reply %}border-emerald-300/60 dark:border-emerald-800/50{% elif t.is_open %}border-amber-200/80 dark:border-amber-900/40{% endif %}"
-           {% if loop.first and t.has_reply %}open{% elif loop.first and t.is_open %}open{% endif %}>
+                  {% if t.has_reply %}border-emerald-300/60 dark:border-emerald-800/50{% elif t.is_open %}border-amber-200/80 dark:border-amber-900/40{% endif %}">
     <summary class="flex items-center gap-3 px-3 py-3 cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
       <span class="w-2 h-2 rounded-full shrink-0
         {% if t.has_reply %}bg-emerald-500{% elif t.is_open %}bg-amber-400{% else %}bg-gray-300 dark:bg-gray-600{% endif %}"></span>
