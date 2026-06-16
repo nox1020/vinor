@@ -438,13 +438,22 @@
 
   async function refreshUpdateNavFromServer() {
     if (!isVinorApk) return;
+    if (window.VinorNativeAppUpdate && typeof window.VinorNativeAppUpdate.refresh === 'function') {
+      try { window.VinorNativeAppUpdate.refresh(); } catch (_) {}
+      return;
+    }
     const clientV = parseClientAppVersion();
     if (!clientV) {
       persistUpdateNav(null);
       applyUpdateNav(false);
       return;
     }
-    const headers = { Accept: 'application/json', 'Cache-Control': 'no-cache', 'X-Requested-With': 'XMLHttpRequest' };
+    const headers = {
+      Accept: 'application/json',
+      'Cache-Control': 'no-cache',
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-Vinor-App-Version': clientV
+    };
     for (let i = 0; i < APP_VERSION_URLS.length; i++) {
       try {
         const res = await fetch(APP_VERSION_URLS[i], { headers: headers, credentials: 'same-origin', cache: 'no-store' });
@@ -636,6 +645,16 @@
     applyUpdateNav(true, { version: serverApkVersion, url: serverApkUrl });
   } else {
     syncUpdateNavFromStored();
+    try {
+      if (window.VinorNativeAppUpdate && typeof window.VinorNativeAppUpdate.getCachedState === 'function') {
+        var nativeRaw = window.VinorNativeAppUpdate.getCachedState();
+        var nativeState = nativeRaw ? JSON.parse(nativeRaw) : null;
+        if (nativeState && nativeState.show) {
+          persistUpdateNav(nativeState);
+          applyUpdateNav(true, nativeState);
+        }
+      }
+    } catch (_) {}
   }
 
   if (document.readyState === 'loading') {
