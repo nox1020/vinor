@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 from flask import request, session
@@ -244,6 +244,28 @@ def pop_referrer_phone(me_phone: str) -> str:
     return resolve_referrer_for_apply(me_phone)
 
 
+def _referral_commission_is_active(commission_id: Any) -> bool:
+    try:
+        cid = int(commission_id or 0)
+    except Exception:
+        return False
+    if not cid:
+        return False
+    for c in load_express_commissions() or []:
+        if int(c.get("id") or 0) != cid:
+            continue
+        return (str(c.get("status") or "pending")).strip() in ACTIVE_COMMISSION_STATUSES
+    return False
+
+
+def _referral_pair_can_register_again(r: Dict[str, Any]) -> bool:
+    """دعوت ردشده یا بدون پورسانت فعال — برای درخواست جدید همان جفت."""
+    if _referral_commission_is_active(r.get("commission_id")):
+        return False
+    st = (str(r.get("status") or "")).strip()
+    return st in (REF_REJECTED, REF_INVITE_PENDING, "pending", "", REF_COMMISSION_PENDING)
+
+
 def register_referral_on_application(
     *,
     inviter_phone: str,
@@ -256,11 +278,27 @@ def register_referral_on_application(
     if not inviter or not invitee or inviter == invitee:
         return
     referrals = load_express_referrals() or []
+    app_id = int(application_id or 0)
     for r in referrals:
-        if int(r.get("application_id") or 0) == int(application_id):
+        if int(r.get("application_id") or 0) == app_id:
             return
-        if _phones_match(r.get("inviter_phone"), inviter) and _phones_match(r.get("invitee_phone"), invitee):
+    for r in referrals:
+        if not _phones_match(r.get("inviter_phone"), inviter):
+            continue
+        if not _phones_match(r.get("invitee_phone"), invitee):
+            continue
+        if _referral_commission_is_active(r.get("commission_id")):
             return
+        if _referral_pair_can_register_again(r):
+            r["application_id"] = app_id
+            r["status"] = REF_INVITE_PENDING
+            r["invitee_name"] = (invitee_name or r.get("invitee_name") or "").strip()
+            r.pop("commission_id", None)
+            r.pop("commission_created_at", None)
+            r.pop("commission_approved_at", None)
+            r.pop("rejected_at", None)
+            save_express_referrals(referrals)
+        return
     new_id = (max([int(x.get("id", 0) or 0) for x in referrals if isinstance(x, dict)], default=0) or 0) + 1
     referrals.append(
         {
@@ -268,13 +306,32 @@ def register_referral_on_application(
             "inviter_phone": inviter,
             "invitee_phone": invitee,
             "invitee_name": (invitee_name or "").strip(),
-            "application_id": int(application_id),
+            "application_id": app_id,
             "status": REF_INVITE_PENDING,
             "commission_id": None,
             "created_at": _now_iso(),
         }
     )
     save_express_referrals(referrals)
+
+
+def ensure_referral_record_for_application(application: Dict[str, Any]) -> None:
+    """اگر درخواست معرف دارد ولی ردیف referral نیست، قبل از grant بساز."""
+    inviter = _normalize_phone(application.get("referred_by_phone") or "")
+    invitee = _normalize_phone(application.get("phone") or "")
+    if not inviter or not invitee or inviter == invitee:
+        return
+    app_id = int(application.get("id") or 0)
+    if not app_id:
+        return
+    if _find_referral_for_application(application):
+        return
+    register_referral_on_application(
+        inviter_phone=inviter,
+        invitee_phone=invitee,
+        invitee_name=(application.get("name") or "").strip(),
+        application_id=app_id,
+    )
 
 
 def _find_referral_for_application(
@@ -335,10 +392,22 @@ def _credit_inviter_partner_income(inviter_phone: str, amount: int) -> None:
     save_express_partners(partners)
 
 
-def grant_referral_commission_for_application(application: Dict[str, Any]) -> bool:
+REFERRAL_GRANT_REASONS_FA = {
+    "invalid_phones": "شماره معرف یا دعوت‌شده نامعتبر است.",
+    "inviter_not_partner": "معرف در فهرست همکاران تأییدشده نیست.",
+    "duplicate_commission": "پورسانت دعوت این جفت قبلاً ثبت شده است.",
+    "existing_commission": "رکورد دعوت قبلاً به پورسانت وصل شده است.",
+    "no_referrer": "معرف برای این همکار ثبت نشده است.",
+}
+
+
+def grant_referral_commission_for_application(
+    application: Dict[str, Any],
+) -> Tuple[bool, Optional[str]]:
     import logging
 
     log = logging.getLogger(__name__)
+    ensure_referral_record_for_application(application)
     referrals = load_express_referrals() or []
     ref_rec = _find_referral_for_application(application, referrals)
     inviter, invitee, invitee_name = _resolve_inviter_invitee(application, ref_rec)
@@ -350,27 +419,34 @@ def grant_referral_commission_for_application(application: Dict[str, Any]) -> bo
             invitee,
             application.get("id"),
         )
-        return False
+        return False, "invalid_phones"
     if not _inviter_is_approved_partner(inviter):
         log.warning(
             "referral grant skipped: inviter not approved partner inviter=%s app_id=%s",
             inviter,
             application.get("id"),
         )
-        return False
+        return False, "inviter_not_partner"
     if _active_referral_commission_exists(inviter, invitee):
         log.info(
             "referral grant skipped: commission already exists inviter=%s invitee=%s",
             inviter,
             invitee,
         )
-        return False
+        return False, "duplicate_commission"
     if ref_rec and ref_rec.get("commission_id"):
-        log.info(
-            "referral grant skipped: referral record already has commission_id=%s",
-            ref_rec.get("commission_id"),
-        )
-        return False
+        if _referral_commission_is_active(ref_rec.get("commission_id")):
+            log.info(
+                "referral grant skipped: referral record already has active commission_id=%s",
+                ref_rec.get("commission_id"),
+            )
+            return False, "existing_commission"
+        ref_rec.pop("commission_id", None)
+        ref_rec.pop("commission_created_at", None)
+        ref_rec.pop("commission_approved_at", None)
+        if (str(ref_rec.get("status") or "")).strip() == REF_REJECTED:
+            ref_rec["status"] = REF_INVITE_PENDING
+            ref_rec.pop("rejected_at", None)
 
     commissions = load_express_commissions() or []
     new_cid = (max([int(x.get("id", 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
@@ -442,7 +518,25 @@ def grant_referral_commission_for_application(application: Dict[str, Any]) -> bo
             }
         )
     save_express_referrals(referrals)
-    return True
+    return True, None
+
+
+def grant_referral_for_partner_record(partner: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """ثبت دستی/مجدد پورسانت دعوت برای همکار تأییدشده."""
+    inviter = _normalize_phone(partner.get("referred_by_phone") or "")
+    invitee = _normalize_phone(partner.get("phone") or "")
+    if not inviter:
+        return False, "no_referrer"
+    application = {
+        "id": int(partner.get("referral_application_id") or 0),
+        "phone": invitee,
+        "name": (partner.get("name") or "").strip(),
+        "referred_by_phone": inviter,
+    }
+    ok, reason = grant_referral_commission_for_application(application)
+    if ok:
+        partner.pop("referral_grant_pending", None)
+    return ok, reason
 
 
 def mark_referral_rejected_for_application(application: Dict[str, Any]) -> None:

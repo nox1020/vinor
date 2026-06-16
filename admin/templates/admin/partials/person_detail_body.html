@@ -101,7 +101,22 @@
         <div><dt class="text-gray-400">فایل / یادداشت</dt><dd class="font-medium text-gray-800 dark:text-gray-200 tabular-nums">{{ cnt.files or 0 }} / {{ cnt.notes or 0 }}</dd></div>
         <div><dt class="text-gray-400">انتساب</dt><dd class="font-medium text-gray-800 dark:text-gray-200 tabular-nums">{{ cnt.assignments_active or 0 }} فعال از {{ cnt.assignments_total or 0 }}</dd></div>
         <div><dt class="text-gray-400">روتین ماه</dt><dd class="font-medium text-gray-800 dark:text-gray-200 tabular-nums">{{ routine.days_count or 0 }} روز{% if routine.steps_total %} · {{ routine.steps_total }} گام{% endif %}</dd></div>
+        {% if prof.referred_by_phone %}
+        <div class="col-span-2"><dt class="text-gray-400">معرف (دعوت)</dt><dd class="font-medium text-gray-800 dark:text-gray-200 ltr" dir="ltr">{{ prof.referred_by_phone }}</dd></div>
+        {% endif %}
       </dl>
+      {% if (prof.referral_grant_pending or (show_referral_retry|default(false))) and prof.referred_by_phone %}
+        <form method="post" action="{{ url_for('admin.express_partner_retry_referral_grant', phone=person.phone) }}" class="mt-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="q" value="{{ back_q or '' }}">
+          <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">
+          <button type="submit" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white transition">
+            <i class="fa-solid fa-gift"></i>
+            ثبت پورسانت دعوت برای معرف
+          </button>
+          <p class="mt-1.5 text-[10px] text-amber-700 dark:text-amber-300">پورسانت دعوت هنگام تأیید خودکار ثبت نشده بود.</p>
+        </form>
+      {% endif %}
       {% if prof.bio %}
         <p class="mt-3 text-xs text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap bg-gray-50 dark:bg-gray-950 rounded-lg p-3 border border-gray-100 dark:border-gray-800">{{ prof.bio }}</p>
       {% endif %}

@@ -3476,13 +3476,107 @@ def express_partner_detail(phone: str):
         flash('کاربر یا همکار یافت نشد.', 'warning')
         return redirect(url_for('admin.express_partners', q=back_q, filter=back_filter))
     display_name = (person.get('name') or person.get('phone') or 'همکار').strip()
+    show_referral_retry = False
+    try:
+        partner_rec = person.get('partner') or {}
+        prof = person.get('profile') or {}
+        ref_by = (partner_rec.get('referred_by_phone') or prof.get('referred_by_phone') or '').strip()
+        if not ref_by:
+            from app.express_partner.referrals import _normalize_phone, _phones_match
+            from app.utils.storage import load_express_referrals
+            invitee_norm = _normalize_phone(phone)
+            for r in load_express_referrals() or []:
+                if _phones_match(r.get('invitee_phone'), invitee_norm):
+                    ref_by = (r.get('inviter_phone') or '').strip()
+                    if ref_by:
+                        partner_rec['referred_by_phone'] = ref_by
+                        prof['referred_by_phone'] = ref_by
+                        person['profile'] = prof
+                        person['partner'] = partner_rec
+                    break
+        if ref_by and (person.get('access') or {}).get('partner_approved'):
+            prof['referred_by_phone'] = ref_by
+            person['profile'] = prof
+            if partner_rec.get('referral_grant_pending'):
+                show_referral_retry = True
+            else:
+                from app.express_partner.referrals import _active_referral_commission_exists
+                show_referral_retry = not _active_referral_commission_exists(ref_by, phone)
+    except Exception:
+        show_referral_retry = False
     return render_template(
         'admin/express_partner_detail.html',
         person=person,
         back_q=back_q,
         back_filter=back_filter,
         page_title=f'پروفایل {display_name}',
+        show_referral_retry=show_referral_retry,
     )
+
+
+@admin_bp.post('/express/partners/<path:phone>/retry-referral-grant')
+@login_required
+def express_partner_retry_referral_grant(phone: str):
+    from app.services.notifications import _normalize_user_id
+    from app.express_partner.referrals import (
+        REFERRAL_BONUS_AMOUNT,
+        REFERRAL_GRANT_REASONS_FA,
+        grant_referral_for_partner_record,
+    )
+
+    phone = _normalize_user_id((phone or '').strip())
+    back_q = (request.form.get('q') or request.args.get('q') or '').strip()
+    back_filter = (request.form.get('filter') or request.args.get('filter') or 'all').strip()
+    if not phone:
+        flash('شماره همراه معتبر نیست.', 'warning')
+        return redirect(url_for('admin.express_partners', q=back_q, filter=back_filter))
+
+    partners = load_express_partners() or []
+    partner = next(
+        (
+            p for p in partners
+            if isinstance(p, dict) and _normalize_user_id(str(p.get('phone') or '')) == phone
+        ),
+        None,
+    )
+    if not partner:
+        flash('همکار یافت نشد.', 'warning')
+        return redirect(url_for('admin.express_partners', q=back_q, filter=back_filter))
+
+    if not (partner.get('referred_by_phone') or '').strip():
+        from app.express_partner.referrals import _phones_match
+        from app.utils.storage import load_express_referrals
+        for r in load_express_referrals() or []:
+            if _phones_match(r.get('invitee_phone'), phone):
+                inv = (r.get('inviter_phone') or '').strip()
+                if inv:
+                    partner['referred_by_phone'] = inv
+                    try:
+                        partner['referral_application_id'] = int(r.get('application_id') or 0)
+                    except Exception:
+                        pass
+                break
+
+    try:
+        ok, reason = grant_referral_for_partner_record(partner)
+        for p in partners:
+            if isinstance(p, dict) and _normalize_user_id(str(p.get('phone') or '')) == phone:
+                if ok:
+                    p.pop('referral_grant_pending', None)
+                else:
+                    p['referral_grant_pending'] = True
+                break
+        save_express_partners(partners)
+        if ok:
+            flash(f'پورسانت دعوت ({REFERRAL_BONUS_AMOUNT:,} ت) برای معرف ثبت شد.', 'success')
+        else:
+            reason_fa = REFERRAL_GRANT_REASONS_FA.get(reason or '')
+            flash(reason_fa or 'ثبت پورسانت دعوت انجام نشد.', 'warning')
+    except Exception as e:
+        current_app.logger.error('Retry referral grant for %s: %s', phone, e, exc_info=True)
+        flash('خطا در ثبت پورسانت دعوت.', 'danger')
+
+    return redirect(url_for('admin.express_partner_detail', phone=phone, q=back_q, filter=back_filter))
 
 
 @admin_bp.post('/express/partners/<path:phone>/delete')
@@ -4728,14 +4822,38 @@ def express_partner_application_approve(aid: int):
     # وضعیت درخواست (برای لاگ‌کردن قبل از حذف)
     target['status'] = 'approved'
     target['approved_at'] = iso_z(utcnow())
+    ref_by = (target.get('referred_by_phone') or '').strip()
+    if ref_by:
+        try:
+            from app.express_partner.referrals import _normalize_phone as _ref_norm_phone
+            partner['referred_by_phone'] = _ref_norm_phone(ref_by) or ref_by
+        except Exception:
+            partner['referred_by_phone'] = ref_by
+        try:
+            partner['referral_application_id'] = int(target.get('id') or 0)
+        except Exception:
+            pass
+
     save_express_partners(partners)
 
     ref_granted = False
+    ref_skip_reason = None
     try:
-        from app.express_partner.referrals import grant_referral_commission_for_application
-        ref_granted = grant_referral_commission_for_application(target)
+        from app.express_partner.referrals import (
+            REFERRAL_GRANT_REASONS_FA,
+            grant_referral_commission_for_application,
+        )
+        ref_granted, ref_skip_reason = grant_referral_commission_for_application(target)
     except Exception as ref_err:
         current_app.logger.error('Referral commission on application approve: %s', ref_err, exc_info=True)
+        ref_skip_reason = 'exception'
+
+    if ref_by:
+        if ref_granted:
+            partner.pop('referral_grant_pending', None)
+        else:
+            partner['referral_grant_pending'] = True
+        save_express_partners(partners)
 
     # بعد از تایید، خود درخواست از لیست درخواست‌ها حذف شود
     try:
@@ -4845,13 +4963,19 @@ def express_partner_application_approve(aid: int):
         from app.express_partner.referrals import REFERRAL_BONUS_AMOUNT
         msg += f' پورسانت دعوت ({REFERRAL_BONUS_AMOUNT:,} ت) به موجودی معرف اضافه شد.'
     elif target.get('referred_by_phone'):
+        from app.express_partner.referrals import REFERRAL_GRANT_REASONS_FA
+        reason_fa = REFERRAL_GRANT_REASONS_FA.get(ref_skip_reason or '')
         current_app.logger.warning(
-            'Referral commission NOT granted for app id=%s invitee=%s inviter=%s',
+            'Referral commission NOT granted for app id=%s invitee=%s inviter=%s reason=%s',
             aid,
             target.get('phone'),
             target.get('referred_by_phone'),
+            ref_skip_reason or 'unknown',
         )
-        msg += ' (پورسانت دعوت ثبت نشد — لاگ سرور را بررسی کنید.)'
+        if reason_fa:
+            msg += f' (پورسانت دعوت ثبت نشد: {reason_fa})'
+        else:
+            msg += ' (پورسانت دعوت ثبت نشد — لاگ سرور را بررسی کنید.)'
     flash(msg, 'success')
     return redirect(url_for('admin.express_partners', filter='pending'))
 

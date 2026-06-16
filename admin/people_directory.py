@@ -234,6 +234,10 @@ def _build_profile(row: Dict[str, Any]) -> Dict[str, Any]:
 
         'total_income': _amount_int(partner.get('total_income')),
 
+        'referred_by_phone': (partner.get('referred_by_phone') or '').strip(),
+
+        'referral_grant_pending': bool(partner.get('referral_grant_pending')),
+
         'registered_at': (
 
             row.get('created_at')
