@@ -310,8 +310,15 @@ def register_referral_on_application(
     referrals = load_express_referrals() or []
     app_id = int(application_id or 0)
     for r in referrals:
-        if int(r.get("application_id") or 0) == app_id:
-            return
+        if not isinstance(r, dict):
+            continue
+        if int(r.get("application_id") or 0) != app_id:
+            continue
+        if _phones_match(r.get("invitee_phone"), invitee):
+            if _phones_match(r.get("inviter_phone"), inviter):
+                return
+            continue
+        # app_id بازیافت شده برای نفر دیگر — ردیف جدید بساز
     for r in referrals:
         if not _phones_match(r.get("inviter_phone"), inviter):
             continue
@@ -369,16 +376,30 @@ def _find_referral_for_application(
     referrals: Optional[list] = None,
 ) -> Optional[Dict[str, Any]]:
     refs = referrals if referrals is not None else (load_express_referrals() or [])
-    app_id = int(application.get("id") or 0)
     invitee = _normalize_phone(application.get("phone"))
     inviter = _normalize_phone(application.get("referred_by_phone"))
-    for r in refs:
-        if app_id and int(r.get("application_id") or 0) == app_id:
-            return r
+    app_id = int(application.get("id") or 0)
+
     if inviter and invitee:
         for r in refs:
-            if _phones_match(r.get("inviter_phone"), inviter) and _phones_match(r.get("invitee_phone"), invitee):
+            if not isinstance(r, dict):
+                continue
+            if _phones_match(r.get("inviter_phone"), inviter) and _phones_match(
+                r.get("invitee_phone"), invitee
+            ):
                 return r
+
+    if app_id and invitee:
+        for r in refs:
+            if not isinstance(r, dict):
+                continue
+            if int(r.get("application_id") or 0) != app_id:
+                continue
+            if _phones_match(r.get("invitee_phone"), invitee):
+                if inviter and not _phones_match(r.get("inviter_phone"), inviter):
+                    continue
+                return r
+
     return None
 
 
