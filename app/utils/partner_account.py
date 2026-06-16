@@ -3,13 +3,25 @@ from __future__ import annotations
 
 import os
 import shutil
-from typing import Any
+from typing import Any, Dict
 
 from flask import current_app
 
 
 def _norm_phone(phone: str) -> str:
-    return (phone or '').strip()
+    from ..services.notifications import _normalize_user_id
+
+    return _normalize_user_id(phone or '')
+
+
+def _phone_row_matches(row: Dict[str, Any], phone: str, *fields: str) -> bool:
+    ph = _norm_phone(phone)
+    if not ph or not isinstance(row, dict):
+        return False
+    for field in fields:
+        if _norm_phone(str(row.get(field) or '')) == ph:
+            return True
+    return False
 
 
 def _filter_not_phone(items: list, phone: str, *fields: str) -> list:
@@ -18,10 +30,7 @@ def _filter_not_phone(items: list, phone: str, *fields: str) -> list:
         return items
     out = []
     for row in items:
-        if not isinstance(row, dict):
-            out.append(row)
-            continue
-        if any(_norm_phone(str(row.get(f) or '')) == ph for f in fields):
+        if isinstance(row, dict) and _phone_row_matches(row, ph, *fields):
             continue
         out.append(row)
     return out
@@ -87,6 +96,10 @@ def purge_partner_account(phone: str) -> dict[str, Any]:
         save_partner_sales,
         load_support_tickets,
         save_support_tickets,
+        load_express_visit_requests,
+        save_express_visit_requests,
+        load_partner_withdrawals,
+        save_partner_withdrawals,
     )
 
     ph = _norm_phone(phone)
@@ -98,7 +111,7 @@ def purge_partner_account(phone: str) -> dict[str, Any]:
     try:
         partners = load_express_partners() or []
         save_express_partners(
-            [p for p in partners if _norm_phone(str(p.get('phone') or '')) != ph]
+            [p for p in partners if not _phone_row_matches(p, ph, 'phone')]
         )
     except Exception:
         current_app.logger.error('purge: partners failed', exc_info=True)
@@ -107,7 +120,7 @@ def purge_partner_account(phone: str) -> dict[str, Any]:
     try:
         apps = load_express_partner_apps() or []
         save_express_partner_apps(
-            [a for a in apps if _norm_phone(str(a.get('phone') or '')) != ph]
+            [a for a in apps if not _phone_row_matches(a, ph, 'phone')]
         )
     except Exception:
         current_app.logger.error('purge: apps failed', exc_info=True)
@@ -115,7 +128,7 @@ def purge_partner_account(phone: str) -> dict[str, Any]:
 
     try:
         assignments = load_express_assignments() or []
-        kept = [a for a in assignments if _norm_phone(str(a.get('partner_phone') or '')) != ph]
+        kept = [a for a in assignments if not _phone_row_matches(a, ph, 'partner_phone')]
         kept = _clear_transaction_holder(kept, ph)
         save_express_assignments(kept)
     except Exception:
@@ -189,6 +202,68 @@ def purge_partner_account(phone: str) -> dict[str, Any]:
         current_app.logger.error('purge: support tickets failed', exc_info=True)
         errors.append('support_tickets')
 
+    try:
+        visits = load_express_visit_requests() or []
+        save_express_visit_requests(_filter_not_phone(visits, ph, 'partner_phone'))
+    except Exception:
+        current_app.logger.error('purge: visit requests failed', exc_info=True)
+        errors.append('visit_requests')
+
+    try:
+        withdrawals = load_partner_withdrawals() or []
+        save_partner_withdrawals(_filter_not_phone(withdrawals, ph, 'partner_phone'))
+    except Exception:
+        current_app.logger.error('purge: withdrawals failed', exc_info=True)
+        errors.append('withdrawals')
+
     _delete_avatar_dir(ph)
+
+    return {'ok': not errors, 'errors': errors}
+
+
+def admin_purge_person_account(phone: str) -> dict[str, Any]:
+    """حذف کامل حساب کاربر/همکار از پنل ادمین."""
+    from ..utils.storage import (
+        load_consults,
+        save_consults,
+        load_notifications,
+        save_notifications,
+        load_users,
+        save_users,
+    )
+
+    ph = _norm_phone(phone)
+    if not ph:
+        return {'ok': False, 'errors': ['missing_phone']}
+
+    errors: list[str] = list((purge_partner_account(ph).get('errors') or []))
+
+    try:
+        users = load_users() or []
+        save_users([
+            u for u in users
+            if isinstance(u, dict) and not _phone_row_matches(u, ph, 'phone', 'mobile', 'id', 'user_id')
+        ])
+    except Exception:
+        current_app.logger.error('purge: users failed', exc_info=True)
+        errors.append('users')
+
+    try:
+        consults = load_consults() or []
+        save_consults(_filter_not_phone(consults, ph, 'phone'))
+    except Exception:
+        current_app.logger.error('purge: consults failed', exc_info=True)
+        errors.append('consults')
+
+    try:
+        notes_data = load_notifications() or {}
+        if isinstance(notes_data, dict):
+            keys = [k for k in notes_data if _norm_phone(k) == ph]
+            for key in keys:
+                notes_data.pop(key, None)
+            save_notifications(notes_data)
+    except Exception:
+        current_app.logger.error('purge: notifications failed', exc_info=True)
+        errors.append('notifications')
 
     return {'ok': not errors, 'errors': errors}

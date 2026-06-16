@@ -316,9 +316,21 @@
       </a>
       <form method="post" action="{{ url_for('admin.express_partner_delete', phone=person.phone) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" onclick="return confirm('همکار حذف شود؟')"
+        <input type="hidden" name="q" value="{{ back_q or '' }}">
+        <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">
+        <button type="submit" onclick="return confirm('همکار و تمام داده‌های مرتبط حذف شود؟')"
                 class="px-3 py-2 rounded-lg border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 text-xs font-semibold">
-          <i class="fa-solid fa-trash ml-1"></i> حذف
+          <i class="fa-solid fa-trash ml-1"></i> حذف همکار
+        </button>
+      </form>
+    {% elif acc.site_user and person.phone and not acc.partner_approved %}
+      <form method="post" action="{{ url_for('admin.express_partner_delete', phone=person.phone) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="q" value="{{ back_q or '' }}">
+        <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">
+        <button type="submit" onclick="return confirm('کاربر و تمام داده‌های مرتبط حذف شود؟')"
+                class="px-3 py-2 rounded-lg border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 text-xs font-semibold">
+          <i class="fa-solid fa-trash ml-1"></i> حذف کاربر
         </button>
       </form>
     {% endif %}

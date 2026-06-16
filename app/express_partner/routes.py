@@ -4589,8 +4589,8 @@ def profile_delete_account():
         flash('۴ رقم آخر شماره موبایل با شمارهٔ حساب شما مطابقت ندارد.', 'profile')
         return redirect(url_for('express_partner.profile_edit'))
 
-    from ..utils.partner_account import purge_partner_account
-    result = purge_partner_account(me_phone)
+    from ..utils.partner_account import admin_purge_person_account
+    result = admin_purge_person_account(me_phone)
     if not result.get('ok'):
         current_app.logger.error(
             'Partner account purge incomplete for %s: %s',

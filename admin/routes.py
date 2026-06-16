@@ -3485,25 +3485,32 @@ def express_partner_detail(phone: str):
     )
 
 
-@admin_bp.post('/express/partners/<string:phone>/delete')
+@admin_bp.post('/express/partners/<path:phone>/delete')
 @login_required
 def express_partner_delete(phone: str):
-    phone = (phone or '').strip()
+    from app.services.notifications import _normalize_user_id
+    from app.utils.partner_account import admin_purge_person_account
+
+    phone = _normalize_user_id((phone or '').strip())
     if not phone:
         flash('شماره همراه معتبر نیست.', 'warning')
         return redirect(url_for('admin.express_partners'))
+
+    back_q = (request.form.get('q') or request.args.get('q') or '').strip()
+    back_filter = (request.form.get('filter') or request.args.get('filter') or 'all').strip()
+
     try:
-        partners = load_express_partners() or []
-        filtered = [p for p in partners if str(p.get('phone') or '').strip() != phone]
-        if len(filtered) == len(partners):
-            flash('همکار یافت نشد.', 'warning')
-            return redirect(url_for('admin.express_partners'))
-        save_express_partners(filtered)
-        flash('همکار با موفقیت حذف شد.', 'success')
+        result = admin_purge_person_account(phone)
+        if result.get('ok'):
+            flash('حساب کاربر حذف شد.', 'success')
+        else:
+            current_app.logger.error('Admin person delete incomplete for %s: %s', phone, result.get('errors'))
+            flash('حذف کامل انجام نشد. لاگ سرور را بررسی کنید.', 'danger')
     except Exception as e:
-        current_app.logger.error(f"Failed to delete partner {phone}: {e}")
-        flash('خطا در حذف همکار.', 'danger')
-    return redirect(url_for('admin.express_partners'))
+        current_app.logger.error('Failed to delete person %s: %s', phone, e, exc_info=True)
+        flash('خطا در حذف حساب.', 'danger')
+
+    return redirect(url_for('admin.express_partners', q=back_q, filter=back_filter))
 
 
 @admin_bp.post('/express/applications/<int:aid>/delete')
