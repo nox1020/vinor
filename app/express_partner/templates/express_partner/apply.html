@@ -31,8 +31,9 @@
       <p class="mt-1.5 text-xs leading-relaxed text-zinc-500">فقط نام و شهر — یک کلیک برای ثبت</p>
     </div>
 
-    <form id="applyForm" method="post" action="{{ url_for('express_partner.apply') }}" class="space-y-4">
+    <form id="applyForm" method="post" action="{{ url_for('express_partner.apply', ref=invite_ref) if invite_ref else url_for('express_partner.apply') }}" class="space-y-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if invite_ref %}<input type="hidden" name="ref" value="{{ invite_ref }}">{% endif %}
 
       <section class="rounded-2xl border border-white/10 bg-[#12181f] p-4 sm:p-5 space-y-4">
         <div>

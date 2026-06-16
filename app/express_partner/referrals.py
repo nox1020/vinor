@@ -29,8 +29,20 @@ REF_COMMISSION_APPROVED = "commission_approved"
 REF_REJECTED = "rejected"
 
 
+def _normalize_phone(phone: str) -> str:
+    from ..services.notifications import _normalize_user_id
+
+    return _normalize_user_id(phone or "")
+
+
 def _norm(phone: str) -> str:
-    return (phone or "").strip()
+    """نرمال شماره — برای سازگاری با فراخوانی‌های قبلی."""
+    return _normalize_phone(phone)
+
+
+def _phones_match(a: str, b: str) -> bool:
+    na, nb = _normalize_phone(a), _normalize_phone(b)
+    return bool(na and nb and na == nb)
 
 
 def _now_iso() -> str:
@@ -49,30 +61,81 @@ def _ref_from_next_url(next_url: str) -> str:
         return ""
 
 
+def _inviter_from_ref_token(token: str) -> str:
+    token = (token or "").strip()
+    if not token:
+        return ""
+    decoded = decode_partner_ref(token)
+    if not decoded:
+        return ""
+    return _normalize_phone(decoded)
+
+
+def _store_ref_token(token: str) -> None:
+    token = (token or "").strip()
+    if not token:
+        return
+    session["pending_ref_token"] = token
+    inviter = _inviter_from_ref_token(token)
+    if inviter:
+        session["referrer_phone"] = inviter
+
+
+def store_referral_ref_token(token: str) -> None:
+    _store_ref_token(token)
+
+
 def capture_ref_on_login() -> None:
     token = (request.args.get("ref") or "").strip()
     if not token:
         token = _ref_from_next_url(request.args.get("next") or session.get("next") or "")
-    if token:
-        session["pending_ref_token"] = token
+    _store_ref_token(token)
 
 
 def stash_referrer_from_request(me_phone: str) -> None:
-    token = (request.args.get("ref") or session.pop("pending_ref_token", None) or "").strip()
-    if not token:
+    token = (request.args.get("ref") or session.get("pending_ref_token") or "").strip()
+    if token:
+        _store_ref_token(token)
         return
-    inviter = _norm(decode_partner_ref(token))
-    me = _norm(me_phone)
+    inviter = _normalize_phone(session.get("referrer_phone") or "")
+    me = _normalize_phone(me_phone)
     if inviter and inviter != me:
         session["referrer_phone"] = inviter
 
 
-def pop_referrer_phone(me_phone: str) -> str:
-    ref = _norm(session.pop("referrer_phone", None) or "")
-    me = _norm(me_phone)
-    if ref and ref != me:
-        return ref
+def referral_ref_token_for_session() -> str:
+    return (session.get("pending_ref_token") or "").strip()
+
+
+def resolve_referrer_for_apply(
+    me_phone: str,
+    *,
+    form_ref: str = "",
+    query_ref: str = "",
+) -> str:
+    me = _normalize_phone(me_phone)
+    for token in (
+        (query_ref or "").strip(),
+        (form_ref or "").strip(),
+        (session.get("pending_ref_token") or "").strip(),
+    ):
+        inviter = _inviter_from_ref_token(token)
+        if inviter and inviter != me:
+            session["referrer_phone"] = inviter
+            return inviter
+    inviter = _normalize_phone(session.get("referrer_phone") or "")
+    if inviter and inviter != me:
+        return inviter
     return ""
+
+
+def clear_referrer_session() -> None:
+    session.pop("pending_ref_token", None)
+    session.pop("referrer_phone", None)
+
+
+def pop_referrer_phone(me_phone: str) -> str:
+    return resolve_referrer_for_apply(me_phone)
 
 
 def register_referral_on_application(
@@ -82,15 +145,15 @@ def register_referral_on_application(
     invitee_name: str,
     application_id: int,
 ) -> None:
-    inviter = _norm(inviter_phone)
-    invitee = _norm(invitee_phone)
+    inviter = _normalize_phone(inviter_phone)
+    invitee = _normalize_phone(invitee_phone)
     if not inviter or not invitee or inviter == invitee:
         return
     referrals = load_express_referrals() or []
     for r in referrals:
         if int(r.get("application_id") or 0) == int(application_id):
             return
-        if _norm(r.get("inviter_phone")) == inviter and _norm(r.get("invitee_phone")) == invitee:
+        if _phones_match(r.get("inviter_phone"), inviter) and _phones_match(r.get("invitee_phone"), invitee):
             return
     new_id = (max([int(x.get("id", 0) or 0) for x in referrals if isinstance(x, dict)], default=0) or 0) + 1
     referrals.append(
@@ -114,25 +177,27 @@ def _find_referral_for_application(
 ) -> Optional[Dict[str, Any]]:
     refs = referrals if referrals is not None else (load_express_referrals() or [])
     app_id = int(application.get("id") or 0)
-    invitee = _norm(application.get("phone"))
-    inviter = _norm(application.get("referred_by_phone"))
+    invitee = _normalize_phone(application.get("phone"))
+    inviter = _normalize_phone(application.get("referred_by_phone"))
     for r in refs:
         if app_id and int(r.get("application_id") or 0) == app_id:
             return r
     if inviter and invitee:
         for r in refs:
-            if _norm(r.get("inviter_phone")) == inviter and _norm(r.get("invitee_phone")) == invitee:
+            if _phones_match(r.get("inviter_phone"), inviter) and _phones_match(r.get("invitee_phone"), invitee):
                 return r
     return None
 
 
 def _active_referral_commission_exists(inviter: str, invitee: str) -> bool:
+    inv = _normalize_phone(inviter)
+    invt = _normalize_phone(invitee)
     for c in load_express_commissions() or []:
         if (c.get("commission_type") or "") != COMMISSION_TYPE_REFERRAL:
             continue
-        if _norm(c.get("partner_phone")) != inviter:
+        if not _phones_match(c.get("partner_phone"), inv):
             continue
-        if _norm(c.get("referred_phone")) != invitee:
+        if not _phones_match(c.get("referred_phone"), invt):
             continue
         if (str(c.get("status") or "pending")).strip() in ACTIVE_COMMISSION_STATUSES:
             return True
@@ -142,22 +207,24 @@ def _active_referral_commission_exists(inviter: str, invitee: str) -> bool:
 def _resolve_inviter_invitee(
     application: Dict[str, Any], ref_rec: Optional[Dict[str, Any]]
 ) -> tuple:
-    inviter = _norm(application.get("referred_by_phone")) or _norm((ref_rec or {}).get("inviter_phone"))
-    invitee = _norm(application.get("phone")) or _norm((ref_rec or {}).get("invitee_phone"))
+    inviter = _normalize_phone(application.get("referred_by_phone")) or _normalize_phone((ref_rec or {}).get("inviter_phone"))
+    invitee = _normalize_phone(application.get("phone")) or _normalize_phone((ref_rec or {}).get("invitee_phone"))
     invitee_name = (application.get("name") or (ref_rec or {}).get("invitee_name") or "").strip()
     return inviter, invitee, invitee_name
 
 
 def _credit_inviter_partner_income(inviter_phone: str, amount: int) -> None:
-    inviter = _norm(inviter_phone)
+    inviter = _normalize_phone(inviter_phone)
     if not inviter or amount <= 0:
         return
     partners = load_express_partners() or []
     for p in partners:
-        if _norm(p.get("phone")) == inviter:
+        if _phones_match(p.get("phone"), inviter):
             current_income = int(p.get("total_income", 0) or 0)
             p["total_income"] = current_income + amount
             p["last_updated"] = _now_iso()
+            if _normalize_phone(str(p.get("phone") or "")) != inviter:
+                p["phone"] = inviter
             break
     save_express_partners(partners)
 
@@ -292,12 +359,15 @@ def _referral_invite_pending(r: Dict[str, Any]) -> bool:
 
 
 def referral_stats_for_inviter(inviter_phone: str) -> Dict[str, Any]:
-    inviter = _norm(inviter_phone)
-    referrals = [r for r in (load_express_referrals() or []) if _norm(r.get("inviter_phone")) == inviter]
+    inviter = _normalize_phone(inviter_phone)
+    referrals = [
+        r for r in (load_express_referrals() or [])
+        if _phones_match(r.get("inviter_phone"), inviter)
+    ]
     comms = [
         c
         for c in (load_express_commissions() or [])
-        if _norm(c.get("partner_phone")) == inviter
+        if _phones_match(c.get("partner_phone"), inviter)
         and (c.get("commission_type") or "") == COMMISSION_TYPE_REFERRAL
     ]
 

@@ -1451,9 +1451,9 @@ def _apply_login_redirect():
     ref = (request.args.get('ref') or '').strip()
     next_apply = url_for('express_partner.apply', ref=ref) if ref else url_for('express_partner.apply')
     try:
-        from .referrals import capture_ref_on_login
+        from .referrals import capture_ref_on_login, store_referral_ref_token
         if ref:
-            session['pending_ref_token'] = ref
+            store_referral_ref_token(ref)
         else:
             capture_ref_on_login()
     except Exception:
@@ -1523,6 +1523,11 @@ def apply():
     clipped = _clip_apply_fields(
         defaults['name'], defaults['city'], defaults['experience'], defaults['note'],
     )
+    try:
+        from .referrals import referral_ref_token_for_session
+        invite_ref = (request.args.get('ref') or '').strip() or referral_ref_token_for_session()
+    except Exception:
+        invite_ref = (request.args.get('ref') or '').strip()
     return render_template(
         'express_partner/apply.html',
         me_phone=me_phone,
@@ -1531,6 +1536,7 @@ def apply():
         experience=clipped[2],
         note=clipped[3],
         cities=cities,
+        invite_ref=invite_ref,
         **_apply_limits_context(),
     )
 
@@ -1815,14 +1821,22 @@ def _submit_partner_application(me_phone: str, data: dict):
     new_id = (max([int(x.get("id", 0) or 0) for x in apps if isinstance(x, dict)], default=0) or 0) + 1
     referrer_phone = ''
     try:
-        from .referrals import pop_referrer_phone, register_referral_on_application
-        referrer_phone = pop_referrer_phone(me_phone)
+        from .referrals import (
+            clear_referrer_session,
+            register_referral_on_application,
+            resolve_referrer_for_apply,
+        )
+        referrer_phone = resolve_referrer_for_apply(
+            me_phone,
+            form_ref=request.form.get('ref') or '',
+            query_ref=request.args.get('ref') or '',
+        )
     except Exception:
         referrer_phone = ''
     record = {
         "id": new_id,
         "name": data.get('name', ''),
-        "phone": me_phone,
+        "phone": _canonical_partner_phone(me_phone),
         "city": data.get('city', ''),
         "experience": data.get('experience', ''),
         "note": data.get('note', ''),
@@ -1838,10 +1852,11 @@ def _submit_partner_application(me_phone: str, data: dict):
         try:
             register_referral_on_application(
                 inviter_phone=referrer_phone,
-                invitee_phone=me_phone,
+                invitee_phone=record.get('phone', me_phone),
                 invitee_name=record.get('name', ''),
                 application_id=new_id,
             )
+            clear_referrer_session()
         except Exception:
             pass
 
@@ -2930,6 +2945,11 @@ def login_otp():
     from ..utils.flash_messages import FLASH_AUTH_ERROR, purge_non_auth_flashes
 
     purge_non_auth_flashes()
+    try:
+        from .referrals import capture_ref_on_login
+        capture_ref_on_login()
+    except Exception:
+        pass
     if session.get('user_phone'):
         return redirect(_redirect_after_login())
 
@@ -2978,6 +2998,14 @@ def verify():
         return redirect(url_for('express_partner.login_otp'))
 
     if _otp_code_matches_session(code):
+        form_next = (request.form.get('next') or '').strip()
+        if form_next and form_next.startswith('/') and not form_next.startswith('//'):
+            session['next'] = form_next
+        try:
+            from .referrals import capture_ref_on_login
+            capture_ref_on_login()
+        except Exception:
+            pass
         dest = _finalize_partner_login(sess_phone)
         if wants_json:
             r = jsonify({'ok': True, 'redirect': dest})
@@ -3159,9 +3187,9 @@ def invite_colleagues():
     me_name = (profile.get('name') or '').strip()
     is_approved = _is_partner_approved(profile)
     from ..utils.share_tokens import encode_partner_ref
-    ref_token = encode_partner_ref(me_phone)
-    apply_next = url_for('express_partner.apply', ref=ref_token)
-    invite_url = url_for('express_partner.login', next=apply_next, _external=True)
+    canonical_phone = _canonical_partner_phone(me_phone)
+    ref_token = encode_partner_ref(canonical_phone)
+    invite_url = url_for('express_partner.apply', ref=ref_token, _external=True)
     inviter = me_name or 'همکار وینور'
     if is_approved:
         share_text = f'{inviter} شما را به همکاری در وینور اکسپرس دعوت می‌کند.'
