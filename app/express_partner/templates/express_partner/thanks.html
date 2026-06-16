@@ -1,14 +1,193 @@
-  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_spacer %}
+{% extends 'express_partner/base.html' %}
+{% block title %}{% if pending_review %}وضعیت درخواست{% else %}درخواست ثبت شد{% endif %} | وینور اکسپرس{% endblock %}
+
+{% block content %}
+<div id="thanksPage" class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
+
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(sticky=true) }}
-  <div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 max-w-lg mx-auto ep-partner-header-inner--auto">
-    <div class="flex items-center gap-2">
-      {{ ep_header_spacer() }}
-      <div class="vinor-dash-glass-pill ep-header-title-pill flex h-[42px] min-w-0 flex-1 items-center justify-center rounded-full px-3">
-        <h1 class="ep-partner-header-title">وینور اکسپرس</h1>
-      </div>
-      {{ ep_header_spacer() }}
-    </div>
-  </div>
+  {% call ep_header_row('وضعیت درخواست', url_for('express_partner.dashboard'), back_nav=false, inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
   {{ ep_header_end() }}
 
-  <main class="px-4 py-8 max-w-lg mx-auto pt-2">
+  <main id="thanksPageMain" class="partner-page-scroll-pad mx-auto max-w-lg px-4 py-6">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="mb-4 space-y-2">
+      {% for category, message in messages %}
+      <div class="rounded-xl border px-4 py-3 text-sm {% if category in ('error', 'danger') %}border-rose-500/30 bg-rose-950/30 text-rose-200{% elif category == 'warning' %}border-amber-500/30 bg-amber-950/30 text-amber-100{% else %}border-emerald-500/30 bg-emerald-950/30 text-emerald-200{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# —— آیکون و عنوان —— #}
+    <div class="text-center">
+      {% if pending_review %}
+      <div class="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400 shadow-lg shadow-amber-950/20">
+        <i class="fas fa-clock text-2xl" aria-hidden="true"></i>
+      </div>
+      <h2 class="text-lg font-bold text-white">درخواست در حال بررسی است</h2>
+      <p class="mt-2 text-sm leading-relaxed text-zinc-400">
+        {% if name %}<span class="text-zinc-200">{{ name }}</span> عزیز، {% endif %}
+        درخواست همکاری شما ثبت شده و تیم وینور ظرف <strong class="text-zinc-300">۲۴ ساعت</strong> آن را بررسی می‌کند.
+      </p>
+      {% else %}
+      <div class="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-lg shadow-emerald-950/20">
+        <i class="fas fa-check text-2xl" aria-hidden="true"></i>
+      </div>
+      <h2 class="text-lg font-bold text-white">درخواست با موفقیت ثبت شد</h2>
+      <p class="mt-2 text-sm leading-relaxed text-zinc-400">
+        {% if name %}<span class="text-zinc-200">{{ name }}</span> عزیز، {% endif %}
+        درخواست همکاری شما دریافت شد. پس از تأیید، پنل کامل همکار برای شما فعال می‌شود.
+      </p>
+      {% if sms_sent %}
+      <p class="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-300">
+        <i class="fas fa-comment-sms text-[10px]" aria-hidden="true"></i>
+        پیامک تأیید ثبت ارسال شد
+      </p>
+      {% endif %}
+      {% endif %}
+    </div>
+
+    {# —— مراحل —— #}
+    <section class="mt-6 rounded-2xl border border-white/10 bg-[#12181f] p-4 sm:p-5" aria-label="مراحل بعدی">
+      <h3 class="mb-4 text-xs font-bold text-zinc-400">مراحل فعال‌سازی</h3>
+      <ol class="space-y-0">
+        <li class="flex gap-3">
+          <div class="flex flex-col items-center">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30">
+              <i class="fas fa-check text-xs" aria-hidden="true"></i>
+            </span>
+            <span class="my-1 w-px flex-1 min-h-[1.25rem] bg-emerald-500/20" aria-hidden="true"></span>
+          </div>
+          <div class="pb-4 min-w-0">
+            <p class="text-sm font-semibold text-white">ثبت درخواست</p>
+            <p class="mt-0.5 text-xs text-zinc-500">اطلاعات شما در سیستم ثبت شده است</p>
+          </div>
+        </li>
+        <li class="flex gap-3">
+          <div class="flex flex-col items-center">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full {% if pending_review %}bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30 animate-pulse{% else %}bg-zinc-800 text-zinc-500 ring-1 ring-white/10{% endif %}">
+              <i class="fas fa-user-check text-xs" aria-hidden="true"></i>
+            </span>
+            <span class="my-1 w-px flex-1 min-h-[1.25rem] bg-white/5" aria-hidden="true"></span>
+          </div>
+          <div class="pb-4 min-w-0">
+            <p class="text-sm font-semibold text-white">بررسی تیم وینور</p>
+            <p class="mt-0.5 text-xs text-zinc-500">معمولاً کمتر از ۲۴ ساعت</p>
+          </div>
+        </li>
+        <li class="flex gap-3">
+          <div class="flex flex-col items-center">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-zinc-800 text-zinc-600 ring-1 ring-white/5">
+              <i class="fas fa-layer-group text-xs" aria-hidden="true"></i>
+            </span>
+          </div>
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-zinc-400">فعال‌سازی پنل و فایل‌ها</p>
+            <p class="mt-0.5 text-xs text-zinc-600">دسترسی به فایل‌های اکسپرس و پورسانت</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    {# —— راهنما —— #}
+    <section class="mt-4 rounded-2xl border border-white/5 bg-[#0d1218] p-4">
+      <ul class="space-y-2.5 text-xs leading-relaxed text-zinc-500">
+        <li class="flex gap-2">
+          <i class="fas fa-bell mt-0.5 shrink-0 text-emerald-500/70 text-[10px]" aria-hidden="true"></i>
+          <span>پس از تأیید، پیامک فعال‌سازی پنل برای شما ارسال می‌شود.</span>
+        </li>
+        <li class="flex gap-2">
+          <i class="fas fa-mobile-screen mt-0.5 shrink-0 text-emerald-500/70 text-[10px]" aria-hidden="true"></i>
+          <span>می‌توانید همین صفحه را باز نگه دارید یا از دکمه زیر وضعیت را بررسی کنید.</span>
+        </li>
+      </ul>
+    </section>
+
+    {# —— دکمه‌ها —— #}
+    <div class="mt-6 space-y-3">
+      <button type="button" id="thanksCheckStatusBtn"
+              class="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-3.5 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60">
+        <i class="fas fa-rotate-right text-sm" id="thanksCheckStatusIcon" aria-hidden="true"></i>
+        <span id="thanksCheckStatusLabel">بررسی وضعیت تأیید</span>
+      </button>
+      <p id="thanksStatusHint" class="hidden text-center text-xs text-zinc-500"></p>
+
+      <a href="{{ url_for('express_partner.dashboard') }}"
+         data-vinor-express-nav="back"
+         class="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#12181f] py-3.5 text-sm font-semibold text-zinc-300 transition hover:bg-white/5">
+        <i class="fas fa-home text-sm text-zinc-500" aria-hidden="true"></i>
+        بازگشت به داشبورد
+      </a>
+
+      <a href="{{ url_for('express_partner.cooperation_terms') }}"
+         class="block text-center text-[11px] text-emerald-400/80 hover:text-emerald-400 hover:underline">
+        شرایط همکاری وینور
+      </a>
+    </div>
+  </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var btn = document.getElementById('thanksCheckStatusBtn');
+  var icon = document.getElementById('thanksCheckStatusIcon');
+  var label = document.getElementById('thanksCheckStatusLabel');
+  var hint = document.getElementById('thanksStatusHint');
+  var busy = false;
+
+  function setBusy(on) {
+    busy = !!on;
+    if (btn) btn.disabled = on;
+    if (icon) icon.classList.toggle('fa-spin', on);
+  }
+
+  function showHint(msg, ok) {
+    if (!hint) return;
+    hint.textContent = msg || '';
+    hint.classList.remove('hidden', 'text-emerald-400', 'text-zinc-500', 'text-amber-300');
+    hint.classList.add(ok ? 'text-emerald-400' : 'text-zinc-500');
+  }
+
+  function checkStatus() {
+    if (busy) return;
+    setBusy(true);
+    showHint('در حال بررسی…', false);
+    fetch('{{ url_for("express_partner.check_status") }}', {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        var d = res.data || {};
+        if (d.approved && d.redirect_url) {
+          showHint('تأیید شد! در حال ورود به پنل…', true);
+          window.location.href = d.redirect_url;
+          return;
+        }
+        if (res.ok && d.success) {
+          showHint('هنوز در صف بررسی است. کمی بعد دوباره امتحان کنید.', false);
+          return;
+        }
+        showHint('خطا در بررسی وضعیت. دوباره تلاش کنید.', false);
+      })
+      .catch(function () {
+        showHint('اتصال برقرار نشد. اینترنت را بررسی کنید.', false);
+      })
+      .finally(function () { setBusy(false); });
+  }
+
+  if (btn) btn.addEventListener('click', checkStatus);
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') checkStatus();
+  });
+})();
+</script>
+{% endblock %}
