@@ -770,13 +770,37 @@ def _session_next_safe():
     return None
 
 
+def _post_login_path_only(url: str) -> str:
+    path = (url or '').split('?', 1)[0].strip()
+    if not path:
+        return '/'
+    return path.rstrip('/') or '/'
+
+
+def _is_generic_post_login_next(url: str) -> bool:
+    """مسیرهایی که فقط «بعد از ورود به پنل» هستند، نه deep link واقعی."""
+    path = _post_login_path_only(url)
+    if path in ('/', '/express/partner'):
+        return True
+    if path == _post_login_path_only(url_for('express_partner.dashboard')):
+        return True
+    if path.startswith('/express/partner/login'):
+        return True
+    return False
+
+
 def _is_phone_approved_partner(phone: str) -> bool:
     """همکار تأییدشده — از کش درون‌پردازشی partners (بدون I/O تکراری)."""
     phone = (phone or '').strip()
     if not phone:
         return False
     try:
-        return _is_partner_approved(_partner_profile_for_phone(phone))
+        prof = _partner_profile_for_phone(phone)
+        if _is_partner_approved(prof):
+            return True
+        partners = _express_partners_cached()
+        prof = _find_partner_record(partners, phone)
+        return _is_partner_approved(prof)
     except Exception:
         return False
 
@@ -799,22 +823,28 @@ def _default_post_login_url(phone: str) -> str:
 
 
 def _redirect_after_login(phone: str | None = None) -> str:
-    """مسیر صریح next/session اولویت دارد؛ وگرنه پیش‌فرض نقش."""
+    """deep link صریح اولویت دارد؛ مسیرهای عمومی برای همکار → پورسانت."""
     nxt = _login_next_preserve() or _session_next_safe()
-    ph = (phone or session.get('user_phone') or '').strip()
-    if nxt:
+    ph = _canonical_partner_phone(phone or session.get('user_phone') or '')
+    is_partner = _is_phone_approved_partner(ph)
+    _cache_session_partner_role(is_partner)
+    if nxt and not (is_partner and _is_generic_post_login_next(nxt)):
         try:
             session.pop('next', None)
         except Exception:
             pass
-        _cache_session_partner_role(_is_phone_approved_partner(ph))
         return nxt
+    try:
+        session.pop('next', None)
+    except Exception:
+        pass
     return _default_post_login_url(ph)
 
 
 def _finalize_partner_login(phone: str) -> str:
-    session['user_id'] = phone
-    session['user_phone'] = phone
+    canonical = _canonical_partner_phone(phone)
+    session['user_id'] = canonical
+    session['user_phone'] = canonical
     session.permanent = True
     _clear_otp_session()
     _ensure_user_record_background(phone)
@@ -828,7 +858,7 @@ def _finalize_partner_login(phone: str) -> str:
         session.modified = True
     except Exception:
         pass
-    return _redirect_after_login(phone)
+    return _redirect_after_login(canonical)
 
 
 def _login_otp_redirect_url() -> str:
@@ -4885,7 +4915,7 @@ def check_status():
             current_app.logger.error(f"check_status: Error loading partners: {load_err}")
             return jsonify({"success": False, "error": "failed_to_load_partners"}), 500
         
-        profile = next((p for p in partners if str(p.get("phone") or "").strip() == me_phone), None)
+        profile = _find_partner_record(partners, me_phone)
         
         if profile:
             current_app.logger.info(f"check_status: Profile found for {me_phone}, status: {profile.get('status')}")
