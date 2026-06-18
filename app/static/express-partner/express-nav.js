@@ -448,7 +448,9 @@
       document.documentElement.removeAttribute('data-vinor-dash-scroll');
       document.documentElement.removeAttribute('data-vinor-comm-scroll');
     } catch (_) {}
-    if (navKey === 'dashboard' && window.__vinorDashboardChrome) {
+    if (navKey === 'profile' && window.vinorPartnerAvatarCache) {
+      try { window.vinorPartnerAvatarCache.apply(document); } catch (_) {}
+    }
       window.__vinorDashboardChrome.setup({ resetScroll: true, expandHeader: true });
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
@@ -1006,7 +1008,16 @@
         var activeEl = nav.querySelector('.tg-tab-active[data-nav-key]');
         var fi = activeEl ? tabs.indexOf(activeEl) : -1;
         var dir = fi >= 0 && ti >= 0 && fi !== ti ? (ti > fi ? 1 : -1) : 0;
-        if (!dir) return;
+        if (!dir) {
+          try {
+            var curPath = normPath(parseUrl(window.location.href).pathname);
+            var destPath = normPath(parseUrl(href).pathname);
+            if (curPath !== destPath) {
+              vinorExpressNavigate(href);
+            }
+          } catch (_) {}
+          return;
+        }
         e.preventDefault();
         try {
           sessionStorage.setItem(STORAGE_KEY, String(dir));

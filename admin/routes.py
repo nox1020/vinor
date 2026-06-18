@@ -83,6 +83,7 @@ from app.utils.storage import (
     load_partner_routines, load_partner_routines_cached,
     load_partner_notes,
     load_partner_withdrawals, save_partner_withdrawals,
+    load_partner_bank_accounts,
     load_express_visit_requests, save_express_visit_requests,
     load_support_tickets, save_support_tickets,
 )
@@ -2808,6 +2809,11 @@ def express_listings():
             if str(l.get('express_status') or '').strip().lower() != 'sold'
         ]
 
+    express_lands.sort(
+        key=lambda l: str(l.get('created_at') or l.get('updated_at') or ''),
+        reverse=True,
+    )
+
     for land in express_lands:
         code = str(land.get('code') or '')
         _enrich_admin_express_land(
@@ -3429,6 +3435,7 @@ def _admin_people_directory_kwargs() -> Dict[str, Any]:
         'load_express_commissions': load_express_commissions,
         'load_partner_files_meta': load_partner_files_meta,
         'load_partner_withdrawals': load_partner_withdrawals,
+        'load_partner_bank_accounts': load_partner_bank_accounts,
         'get_online_partners_list': _get_online_partners_list,
         'load_partner_notes': load_partner_notes,
         'load_partner_routines_cached': load_partner_routines_cached,

@@ -104,6 +104,8 @@ def serve_uploads(filename: str):
     cache_hdr = "public, max-age=86400, stale-while-revalidate=86400"
     base_dir = current_app.config.get("UPLOAD_FOLDER")
     safe_path = os.path.normpath(filename).replace("\\", "/")
+    if safe_path.startswith("partner/avatars/"):
+        cache_hdr = "public, max-age=31536000, immutable"
 
     if base_dir:
         try:

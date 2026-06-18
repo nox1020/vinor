@@ -135,6 +135,14 @@
             window.VINOR_NOTIFY_CFG.csrfToken = fresh;
           }
         }
+        var nextTxnJson = doc.getElementById('vnTxnDetailsJson');
+        var curTxnJson = document.getElementById('vnTxnDetailsJson');
+        if (nextTxnJson && curTxnJson) {
+          curTxnJson.textContent = nextTxnJson.textContent;
+        }
+        if (typeof window.__vinorInvalidateTxnDetailsCache === 'function') {
+          window.__vinorInvalidateTxnDetailsCache();
+        }
         applyJalali(mount);
         setupCommIncomeInfoTip(mount);
         var snap = fin && fin.parseFromRoot ? fin.parseFromRoot(mount) : null;

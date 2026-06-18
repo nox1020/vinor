@@ -458,11 +458,16 @@ def _commissions_for_phone(phone: str) -> List[Dict[str, Any]]:
     phone = (phone or '').strip()
     if not phone:
         return []
+    from .partner_withdrawals import partner_phones_match
+
     cache_key = '_express_my_comms_' + phone
     cached = getattr(g, cache_key, None)
     if cached is not None:
         return cached
-    mine = [c for c in _express_commissions_cached() if str(c.get('partner_phone') or '').strip() == phone]
+    mine = [
+        c for c in _express_commissions_cached()
+        if isinstance(c, dict) and partner_phones_match(c.get('partner_phone'), phone)
+    ]
     setattr(g, cache_key, mine)
     return mine
 
@@ -813,11 +818,30 @@ def _is_dashboard_refresh_from_self() -> bool:
         return False
 
 
+def _is_express_partner_in_app_referrer() -> bool:
+    """کلیک تب پایین یا لینک داخلی — داشبورد نباید به پورسانت ریدایرکت شود."""
+    try:
+        ref = (request.referrer or '').strip()
+        if not ref:
+            return False
+        from urllib.parse import urlparse
+        ref_path = _post_login_path_only(urlparse(ref).path or '/')
+        if not ref_path.startswith('/express/partner'):
+            return False
+        if ref_path.startswith('/express/partner/login'):
+            return False
+        return True
+    except Exception:
+        return False
+
+
 def _should_redirect_partner_default_to_commissions() -> bool:
-    """ورود مستقیم/باز کردن اپ → پورسانت؛ ناوبری تب یا رفرش داشبورد → بدون ریدایرکت."""
+    """ورود مستقیم/باز کردن اپ → پورسانت؛ ناوبری داخلی یا رفرش داشبورد → بدون ریدایرکت."""
     if _is_express_soft_nav_request():
         return False
     if _is_dashboard_refresh_from_self():
+        return False
+    if _is_express_partner_in_app_referrer():
         return False
     return True
 
@@ -4490,6 +4514,7 @@ def _profile_edit_json(profile: Dict[str, Any], me_phone: str) -> Dict[str, Any]
         'me_email': (profile.get('email') or '').strip(),
         'me_birth_date': (profile.get('birth_date') or '').strip(),
         'avatar_url': display_avatar_url(avatar, profile.get('avatar_updated_at')) if avatar else None,
+        'avatar_updated_at': int(profile.get('avatar_updated_at') or 0) if avatar else 0,
     }
 
 
@@ -5185,7 +5210,51 @@ def land_detail(code: str):
     from ..utils.seo import build_land_seo, similar_lands
     express_lands = load_express_lands_cached() or []
     seo = build_land_seo(land, canonical_url=canonical_url)
-    related_lands = similar_lands(land, express_lands, limit=6)
+    related_raw = similar_lands(land, express_lands, limit=15)
+    related_lands: List[Dict[str, Any]] = []
+    if related_raw:
+        rel_code_status: Dict[str, str] = {}
+        for a in assignments:
+            ck = str(a.get('land_code') or '')
+            if not ck:
+                continue
+            st = _assignment_display_status(a)
+            cur = rel_code_status.get(ck, 'active')
+            if status_priority.get(st, 0) > status_priority.get(cur, 0):
+                rel_code_status[ck] = st
+        my_assign_by_code: Dict[str, Dict[str, Any]] = {}
+        if me_phone:
+            for a in assignments:
+                if str(a.get('partner_phone')) == me_phone:
+                    ck = str(a.get('land_code') or '')
+                    if ck:
+                        my_assign_by_code[ck] = a
+        for item in related_raw:
+            if not isinstance(item, dict):
+                continue
+            ck = str(item.get('code') or '')
+            gs = rel_code_status.get(ck, 'active')
+            if gs == 'sold' or str(item.get('express_status') or '').strip().lower() == 'sold':
+                continue
+            ritem = dict(item)
+            ritem['_assignment_status'] = gs
+            ritem['_in_transaction'] = gs == 'in_transaction'
+            ritem['_detail_url'] = url_for('express_partner.land_detail', code=ck)
+            ass = my_assign_by_code.get(ck)
+            if ass and is_approved and gs not in ('sold', 'closed'):
+                ritem['_assignment_id'] = ass.get('id')
+                ritem['_commission_pct'] = ass.get('commission_pct')
+                try:
+                    total_price = float(ritem.get('price_total') or 0)
+                    pct = float(ass.get('commission_pct') or 0)
+                except Exception:
+                    total_price, pct = 0.0, 0.0
+                ritem['_commission_amount'] = (
+                    int(round(total_price * (pct / 100.0))) if (total_price and pct) else 0
+                )
+            related_lands.append(sanitize_land_media(ritem))
+            if len(related_lands) >= 6:
+                break
 
     sold_count = 0
     if me_phone:

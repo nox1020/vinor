@@ -1682,6 +1682,11 @@
       try { window.vinorSyncFavButtons(root); } catch (e) { /* ignore */ }
     }
 
+    var similarTrack = root.querySelector('#ldSimilarTrack');
+    if (similarTrack && typeof window.vinorInitPremiumCards === 'function') {
+      try { window.vinorInitPremiumCards(similarTrack, similarTrack); } catch (e) { /* ignore */ }
+    }
+
     bindFooterSpacerResize();
     requestAnimationFrame(function () {
       syncFooterSpacer();

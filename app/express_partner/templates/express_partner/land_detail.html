@@ -119,6 +119,41 @@
       transition: opacity 0.18s ease;
     }
     .ld-download-wrap[data-busy="1"] button { opacity: 0.88; pointer-events: none; }
+
+    .ld-similar__track {
+      direction: rtl;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      scroll-padding-inline: 1rem;
+    }
+    .ld-similar__track::-webkit-scrollbar { display: none; }
+    .ld-similar__slot {
+      flex: 0 0 auto;
+      width: min(82vw, 20rem);
+      max-width: 20rem;
+      overflow: hidden;
+      border-radius: 1rem;
+    }
+    .ld-similar .vinor-premium-card {
+      width: 100%;
+      max-width: 100%;
+    }
+    .ld-similar .vinor-premium-card-mobile {
+      display: flex !important;
+      min-height: 8.75rem;
+    }
+    .ld-similar .vinor-premium-card > .hidden.sm\:block { display: none !important; }
+    .ld-similar .vinor-premium-card-mobile [data-img-wrap] *:not(button):not(.pointer-events-auto) {
+      pointer-events: none;
+    }
+    .ld-similar .vinor-premium-card-mobile:not(.vinor-card-sold) [data-img-wrap] button {
+      pointer-events: auto !important;
+    }
+    .ld-similar .vinor-premium-card h3 {
+      font-size: 0.8125rem;
+      line-height: 1.35;
+    }
   </style>
 {% endblock %}
 

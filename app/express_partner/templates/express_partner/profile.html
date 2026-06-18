@@ -10,6 +10,10 @@
       box-sizing: border-box;
     }
   </style>
+  {% set _head_avatar = (profile.get('avatar') or '').strip() if profile else '' %}
+  {% if _head_avatar %}
+  <link rel="preload" as="image" href="{{ _head_avatar|avatar_display_url(profile.get('avatar_updated_at', 0)) }}">
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -141,17 +145,28 @@
                       class="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white/15 bg-[#0a1018] ring-2 ring-emerald-500/20 transition hover:ring-emerald-400/40 sm:h-[5rem] sm:w-[5rem]"
                       title="تغییر عکس پروفایل">
                 {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
+                {% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
                 <img id="avatarProfileImg"
-                     src="{% if _avatar %}{{ _avatar|avatar_display_url(profile.get('avatar_updated_at', 0)) }}{% endif %}"
+                     {% if _avatar_url %}data-avatar-url="{{ _avatar_url }}"{% endif %}
                      alt="عکس پروفایل"
                      class="h-full w-full object-cover {% if not _avatar %}hidden{% endif %}"
+                     decoding="async"
                      referrerpolicy="no-referrer"
                      onerror="this.classList.add('hidden');var f=document.getElementById('avatarProfileFallback');if(f)f.classList.remove('hidden');">
                 <span id="avatarProfileFallback"
                       class="flex h-full w-full items-center justify-center text-lg font-bold text-zinc-400 sm:text-xl {% if _avatar %}hidden{% endif %}">
-                  V
+                  {{ me_name|avatar_initials }}
                 </span>
               </button>
+              {% if _avatar_url %}
+              <script>
+              (function () {
+                if (typeof window.vinorHydratePartnerAvatar === 'function') {
+                  window.vinorHydratePartnerAvatar('avatarProfileImg', 'avatarProfileFallback');
+                }
+              })();
+              </script>
+              {% endif %}
             </form>
           </div>
 
@@ -440,9 +455,12 @@
         if (window.caches && window.caches.keys) {
           var keys = await window.caches.keys();
           await Promise.all(keys.filter(function (k) {
-            return k.indexOf('express-partner-') === 0;
+            return k.indexOf('express-partner-') === 0 || k === 'vinor-partner-avatar-v1';
           }).map(function (k) { return window.caches.delete(k); }));
         }
+      } catch (_) {}
+      try {
+        if (window.vinorPartnerAvatarCache) window.vinorPartnerAvatarCache.clear();
       } catch (_) {}
       try {
         await fetch(logoutApiUrl, {
@@ -475,6 +493,16 @@
     trigger.addEventListener('click', function() { input.click(); }, profileSigOpts);
 
     function showPreview(url) {
+      if (window.vinorPartnerAvatarCache) {
+        window.vinorPartnerAvatarCache.setFromUrl(url).catch(function () {
+          if (previewImg) {
+            previewImg.src = url;
+            previewImg.classList.remove('hidden');
+          }
+          if (previewFallback) previewFallback.classList.add('hidden');
+        });
+        return;
+      }
       if (previewImg) {
         previewImg.src = url;
         previewImg.classList.remove('hidden');
@@ -513,6 +541,9 @@
       input.value = '';
       try { showPreview(URL.createObjectURL(file)); } catch (_) {}
       compressImage(file).then(function (compressed) {
+        if (window.vinorPartnerAvatarCache) {
+          window.vinorPartnerAvatarCache.setFromBlob(compressed, Date.now()).catch(function () {});
+        }
         var fd = new FormData();
         fd.append('avatar', compressed);
         return fetch(avatarApiUrl, { method: 'POST', body: fd, credentials: 'same-origin' });
@@ -527,6 +558,10 @@
         });
       }).catch(function () { form.submit(); });
     }, profileSigOpts);
+
+    if (window.vinorPartnerAvatarCache) {
+      window.vinorPartnerAvatarCache.apply(document);
+    }
   })();
   </script>
 

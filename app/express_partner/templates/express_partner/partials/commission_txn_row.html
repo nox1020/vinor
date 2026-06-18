@@ -1,11 +1,11 @@
 {# کارت تراکنش پورسانت یا برداشت — متغیر c #}
 {% set _txn_type = (c.txn_type or 'commission')|trim %}
 {% set _is_wd = _txn_type in ('withdrawal', 'withdrawal_request') %}
-{% set _detail = c._txn_detail if c._txn_detail is defined else {} %}
+{% set _is_referral = (c.commission_type or '')|trim == 'referral' %}
 {% set _filter = c._txn_filter if c._txn_filter is defined else (c.status or 'pending')|trim %}
 {% set _kind = c._txn_kind if c._txn_kind is defined else ('withdrawal' if _is_wd else 'commission') %}
 {% set st = (c.status or 'pending')|trim %}
-<div class="commission-txn-row px-3.5 py-3 hover:bg-white/[0.04] active:bg-white/[0.07] transition-colors cursor-pointer{% if tour_item %} commission-txn-row-tour{% endif %}"
+<div class="commission-txn-row group px-4 py-3.5 hover:bg-white/[0.035] active:bg-white/[0.06] transition-colors cursor-pointer{% if tour_item %} commission-txn-row-tour{% endif %}{% if _is_referral %} commission-txn-row--referral{% endif %}{% if _is_wd %} commission-txn-row--withdrawal{% endif %}"
      role="button"
      tabindex="0"
      data-commission-status="{{ st }}"
@@ -13,46 +13,53 @@
      data-txn-filter="{{ _filter }}"
      data-txn-kind="{{ _kind }}"
      data-txn-idx="{{ loop.index0 if loop is defined else '' }}"
-     {% if _detail %}data-txn-detail="{{ _detail|tojson|e }}"{% endif %}
      {% if c.withdrawal_id %}data-withdrawal-id="{{ c.withdrawal_id }}"{% endif %}
      {% if tour_item %}data-tour="commission-item"{% endif %}
      aria-label="مشاهده جزئیات تراکنش">
-  <div class="flex items-start gap-3">
-    {# آیکون نوع #}
-    <div class="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border
-      {% if _txn_type == 'withdrawal' %}bg-violet-500/15 border-violet-500/25 text-violet-300
+  <div class="flex items-center gap-3">
+    <div class="commission-txn-row__icon shrink-0
+      {% if _txn_type == 'withdrawal' %}commission-txn-row__icon--violet
       {% elif _txn_type == 'withdrawal_request' %}
-        {% if st in ('cancelled', 'rejected') %}bg-slate-500/15 border-slate-500/25 text-slate-400
-        {% elif st in ('approved', 'processing') %}bg-sky-500/15 border-sky-500/25 text-sky-300
-        {% else %}bg-amber-500/15 border-amber-500/25 text-amber-300{% endif %}
-      {% elif st == 'paid' %}bg-violet-500/15 border-violet-500/25 text-violet-300
-      {% elif st == 'approved' %}bg-emerald-500/15 border-emerald-500/25 text-emerald-300
-      {% elif st == 'rejected' %}bg-red-500/15 border-red-500/25 text-red-300
-      {% else %}bg-amber-500/15 border-amber-500/25 text-amber-300{% endif %}">
+        {% if st in ('cancelled', 'rejected') %}commission-txn-row__icon--muted
+        {% elif st in ('approved', 'processing') %}commission-txn-row__icon--sky
+        {% else %}commission-txn-row__icon--amber{% endif %}
+      {% elif _is_referral %}commission-txn-row__icon--referral
+      {% elif st == 'paid' %}commission-txn-row__icon--violet
+      {% elif st == 'approved' %}commission-txn-row__icon--emerald
+      {% elif st == 'rejected' %}commission-txn-row__icon--red
+      {% else %}commission-txn-row__icon--amber{% endif %}"
+         aria-hidden="true">
       {% if _txn_type == 'withdrawal' %}
-        <i class="fas fa-check text-sm" aria-hidden="true"></i>
+        <i class="fas fa-check"></i>
       {% elif _txn_type == 'withdrawal_request' %}
-        <i class="fas fa-arrow-down text-sm" aria-hidden="true"></i>
-      {% elif c.commission_type == 'referral' %}
-        <i class="fas fa-user-plus text-sm" aria-hidden="true"></i>
+        <i class="fas fa-arrow-down"></i>
+      {% elif _is_referral %}
+        <i class="fas fa-gift"></i>
       {% else %}
-        <i class="fas fa-home text-sm" aria-hidden="true"></i>
+        <i class="fas fa-home"></i>
       {% endif %}
     </div>
 
     <div class="flex-1 min-w-0">
-      <div class="flex items-start justify-between gap-2">
+      <div class="flex items-start justify-between gap-3">
         <div class="min-w-0 flex-1">
-          <p class="text-[13px] font-semibold text-white leading-snug truncate">{{ c._txn_label or 'پورسانت فروش' }}</p>
-          <p class="mt-0.5 text-[10px] text-slate-500 leading-snug">
-            {% if _txn_type == 'withdrawal' %}واریز به حساب
-            {% elif _txn_type == 'withdrawal_request' %}درخواست برداشت
-            {% elif c.commission_type == 'referral' %}پورسانت دعوت
-            {% else %}کد ملک: {{ c.land_code or '—' }}{% endif %}
+          <p class="commission-txn-row__title text-[13px] font-semibold text-white leading-snug truncate">
+            {{ c._txn_label or 'پورسانت فروش' }}
+          </p>
+          <p class="commission-txn-row__meta mt-1 text-[11px] text-slate-500 leading-snug truncate">
+            {% if _txn_type == 'withdrawal' %}
+              واریز به حساب بانکی
+            {% elif _txn_type == 'withdrawal_request' %}
+              {{ c.withdrawal_status_label or 'درخواست برداشت' }}
+            {% elif _is_referral %}
+              پاداش دعوت همکار
+            {% else %}
+              {{ c.land_code or '—' }}
+            {% endif %}
             {% if c.partial_paid_display %} · {{ c.partial_paid_display|toman }} واریز شده{% endif %}
           </p>
         </div>
-        <p class="shrink-0 text-sm font-bold tabular-nums whitespace-nowrap{% if _is_wd %} text-amber-300{% else %} text-emerald-400{% endif %}">
+        <p class="commission-txn-row__amount shrink-0 text-sm font-bold tabular-nums whitespace-nowrap{% if _is_wd %} text-amber-300{% else %} text-emerald-400{% endif %}">
           {% if _is_wd %}
             −{{ (c.withdrawal_amount or 0)|toman }}
           {% else %}
@@ -61,44 +68,44 @@
         </p>
       </div>
 
-      <div class="mt-2 flex items-center justify-between gap-2">
+      <div class="mt-2.5 flex items-center justify-between gap-2">
         {% if c.created_at %}
-        <span class="text-[10px] text-slate-500 tabular-nums jalali-dt" data-dt="{{ c.created_at }}"></span>
+        <time class="commission-txn-row__date text-[10px] text-slate-500 tabular-nums jalali-dt" datetime="{{ c.created_at }}" data-dt="{{ c.created_at }}"></time>
         {% else %}
         <span class="text-[10px] text-slate-600">—</span>
         {% endif %}
-        <div class="flex items-center gap-1.5 shrink-0">
+        <div class="flex items-center gap-2 shrink-0">
           {% if _txn_type == 'withdrawal' %}
-            <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-violet-500/20 text-violet-200 border border-violet-500/30">واریز شد</span>
+            <span class="commission-txn-row__badge commission-txn-row__badge--violet">واریز شد</span>
           {% elif _txn_type == 'withdrawal_request' %}
             {% if st == 'cancelled' %}
-              <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-slate-500/20 text-slate-300 border border-slate-500/30">لغو شده</span>
+              <span class="commission-txn-row__badge commission-txn-row__badge--muted">لغو شده</span>
             {% elif st == 'rejected' %}
-              <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-red-500/20 text-red-300 border border-red-500/30">رد شده</span>
+              <span class="commission-txn-row__badge commission-txn-row__badge--red">رد شده</span>
             {% elif st in ('approved', 'processing') %}
-              <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-sky-500/20 text-sky-200 border border-sky-500/30">{{ c.withdrawal_status_label or 'در جریان' }}</span>
+              <span class="commission-txn-row__badge commission-txn-row__badge--sky">{{ c.withdrawal_status_label or 'در جریان' }}</span>
             {% else %}
-              <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-amber-500/20 text-amber-200 border border-amber-500/35">در انتظار بررسی</span>
+              <span class="commission-txn-row__badge commission-txn-row__badge--amber">در انتظار بررسی</span>
             {% endif %}
           {% elif st == 'paid' %}
-            <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-violet-500/20 text-violet-200 border border-violet-500/30">پرداخت‌شده</span>
+            <span class="commission-txn-row__badge commission-txn-row__badge--violet">پرداخت‌شده</span>
           {% elif st == 'approved' and c._txn_phase == 'approval' %}
-            <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35">تأیید پورسانت</span>
+            <span class="commission-txn-row__badge commission-txn-row__badge--emerald">تأیید پورسانت</span>
           {% elif st == 'approved' %}
-            <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35">تأیید شده</span>
+            <span class="commission-txn-row__badge commission-txn-row__badge--emerald">تأیید شده</span>
           {% elif st == 'rejected' %}
-            <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-red-500/20 text-red-300 border border-red-500/30">رد شده</span>
+            <span class="commission-txn-row__badge commission-txn-row__badge--red">رد شده</span>
           {% else %}
-            <span class="inline-flex px-2 py-0.5 rounded-md text-[9px] font-semibold bg-amber-500/20 text-amber-200 border border-amber-500/35">در انتظار تأیید</span>
+            <span class="commission-txn-row__badge commission-txn-row__badge--amber">در انتظار تأیید</span>
           {% endif %}
-          <i class="fas fa-chevron-left text-[8px] text-slate-600" aria-hidden="true"></i>
+          <i class="fas fa-chevron-left text-[9px] text-slate-600 opacity-0 -translate-x-0.5 transition group-hover:opacity-100 group-hover:translate-x-0" aria-hidden="true"></i>
         </div>
       </div>
 
       {% if _txn_type == 'withdrawal_request' and c.cancellable %}
       <button type="button"
               data-cancel-withdrawal="{{ c.withdrawal_id }}"
-              class="mt-2 w-full rounded-lg border border-red-500/30 bg-red-500/10 py-1.5 text-[10px] font-semibold text-red-300 hover:bg-red-500/15 transition"
+              class="mt-2.5 w-full rounded-lg border border-red-500/30 bg-red-500/10 py-2 text-[11px] font-semibold text-red-300 hover:bg-red-500/15 transition"
               onclick="event.stopPropagation()">
         لغو درخواست
       </button>

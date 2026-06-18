@@ -10,6 +10,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
 
+from app.express_partner.partner_bank_accounts import public_account_dict
+
 from app.express_partner.partner_withdrawals import (
 
     ACTIVE_WITHDRAWAL_STATUSES,
@@ -199,25 +201,41 @@ def _amount_int(value: Any) -> int:
 
 
 def _truncate(text: Any, limit: int = 120) -> str:
-
     s = str(text or '').strip()
-
     if len(s) <= limit:
-
         return s
-
     return s[: limit - 1].rstrip() + '…'
 
 
+def _resolve_admin_avatar_url(partner: Dict[str, Any], user: Dict[str, Any]) -> str:
+    raw = (partner.get('avatar') or partner.get('avatar_url') or user.get('avatar') or '').strip()
+    if not raw:
+        return ''
+    try:
+        from app.utils.images import display_avatar_url
+        ver = partner.get('avatar_updated_at') or user.get('avatar_updated_at') or 0
+        return display_avatar_url(raw, ver)
+    except Exception:
+        if '://' in raw:
+            return raw
+        if raw.startswith('/uploads/'):
+            return raw
+        if raw.startswith('uploads/'):
+            return '/' + raw
+        if raw.startswith('/'):
+            return raw
+        return f'/uploads/{raw}'
 
+
+def _admin_bank_account_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+    out = public_account_dict(row)
+    out['sheba'] = str(row.get('sheba') or '').strip()
+    return out
 
 
 def _build_profile(row: Dict[str, Any]) -> Dict[str, Any]:
-
     partner = row.get('partner') or {}
-
     user = row.get('user') or {}
-
     return {
 
         'landline': (partner.get('landline') or user.get('landline') or '').strip(),
@@ -228,7 +246,9 @@ def _build_profile(row: Dict[str, Any]) -> Dict[str, Any]:
 
         'birth_date': (partner.get('birth_date') or user.get('birth_date') or '').strip(),
 
-        'avatar': (partner.get('avatar') or partner.get('avatar_url') or user.get('avatar') or '').strip(),
+        'avatar': _resolve_admin_avatar_url(partner, user),
+
+        'avatar_updated_at': partner.get('avatar_updated_at') or user.get('avatar_updated_at') or 0,
 
         'commission_pct': partner.get('commission_pct') or '',
 
@@ -278,6 +298,8 @@ def build_admin_people_directory(
 
     load_partner_withdrawals,
 
+    load_partner_bank_accounts=None,
+
     get_online_partners_list,
 
     load_partner_notes=None,
@@ -313,6 +335,8 @@ def build_admin_people_directory(
     files_meta = load_partner_files_meta() or []
 
     withdrawals = load_partner_withdrawals() or []
+
+    bank_rows_raw = (load_partner_bank_accounts() or []) if load_partner_bank_accounts else []
 
     notes = (load_partner_notes() or []) if load_partner_notes else []
 
@@ -678,7 +702,41 @@ def build_admin_people_directory(
 
             'created_at': w.get('created_at') or w.get('requested_at') or '',
 
+            'bank_name': w.get('bank_name') or '',
+
+            'masked_pan': w.get('masked_pan') or '',
+
+            'bank_summary': w.get('bank_summary') or '',
+
         })
+
+
+
+    banks_by_phone: Dict[str, List[Dict[str, Any]]] = {}
+
+    for b in bank_rows_raw if isinstance(bank_rows_raw, list) else []:
+
+        if not isinstance(b, dict):
+
+            continue
+
+        ph = _record_phone(normalize_phone, b, 'phone', 'partner_phone')
+
+        if not ph:
+
+            continue
+
+        banks_by_phone.setdefault(ph, []).append(_admin_bank_account_dict(b))
+
+
+
+    for ph, rows in banks_by_phone.items():
+
+        rows.sort(
+
+            key=lambda x: (not bool(x.get('is_default')), str(x.get('created_at') or '')),
+
+        )
 
 
 
@@ -850,6 +908,10 @@ def build_admin_people_directory(
 
             row['financial'] = partner_commission_dashboard(commissions, withdrawals, phone)
 
+            row['bank_accounts'] = list(banks_by_phone.get(phone, []))
+
+            row['counts']['bank_accounts'] = len(row['bank_accounts'])
+
             lim = max(int(recent_limit or 50), 1)
 
             row['assignments_recent'] = _recent(assign_by_phone.get(phone, []), lim, 'created_at')
@@ -867,6 +929,8 @@ def build_admin_people_directory(
         else:
 
             row['financial'] = {}
+
+            row['bank_accounts'] = []
 
             row['assignments_recent'] = []
 
@@ -910,6 +974,20 @@ def build_admin_people_directory(
 
             row['ip'] = online.get('ip') or ''
 
+        fin = row.get('financial') or {}
+
+        has_balance = bool(
+
+            _amount_int(fin.get('withdrawable_balance'))
+
+            or _amount_int(fin.get('approved_amount'))
+
+            or _amount_int(fin.get('pending_amount'))
+
+            or _amount_int(fin.get('total_confirmed_amount'))
+
+        )
+
         row['access'] = {
 
             'site_user': bool(row.get('user')),
@@ -930,6 +1008,10 @@ def build_admin_people_directory(
 
             'withdrawals': row['counts']['withdrawals_active'] > 0,
 
+            'balance': has_balance,
+
+            'wallet': int(row['counts'].get('bank_accounts') or 0) > 0,
+
             'visits': row['counts']['visits_total'] > 0,
 
             'notes': row['counts']['notes'] > 0,
@@ -948,7 +1030,7 @@ def build_admin_people_directory(
 
         row = people.get(target_phone)
 
-        items = [row] if row and row.get('access') else []
+        items = [row] if row else []
 
     q_norm = (q or '').strip().lower()
 

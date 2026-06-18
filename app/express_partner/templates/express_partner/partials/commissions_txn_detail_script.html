@@ -217,21 +217,16 @@
         var cache = loadTxnDetailsCache();
         if (!isNaN(idx) && cache[idx]) return cache[idx];
       }
-      var raw = row.getAttribute('data-txn-detail');
-      if (!raw) return null;
-      try {
-        return JSON.parse(raw);
-      } catch (_) {
-        return null;
-      }
+      return null;
     }
 
     window.__vinorOpenTxnDetail = openDetail;
     window.__vinorCloseTxnDetail = closeDetail;
+    window.__vinorInvalidateTxnDetailsCache = function () { txnDetailsCache = null; };
 
     document.addEventListener('click', function (e) {
       if (e.target.closest && e.target.closest('[data-cancel-withdrawal]')) return;
-      var row = e.target.closest && e.target.closest('.commission-txn-row[data-txn-idx], .commission-txn-row[data-txn-detail]');
+      var row = e.target.closest && e.target.closest('.commission-txn-row[data-txn-idx]');
       if (!row) return;
       if (e.target.closest && e.target.closest('button[data-cancel-withdrawal]')) return;
       var d = detailFromRow(row);
@@ -239,7 +234,7 @@
     });
 
     document.addEventListener('keydown', function (e) {
-      var row = e.target.closest && e.target.closest('.commission-txn-row[data-txn-idx], .commission-txn-row[data-txn-detail]');
+      var row = e.target.closest && e.target.closest('.commission-txn-row[data-txn-idx]');
       if (!row || (e.key !== 'Enter' && e.key !== ' ')) return;
       if (e.target.closest && e.target.closest('button')) return;
       e.preventDefault();

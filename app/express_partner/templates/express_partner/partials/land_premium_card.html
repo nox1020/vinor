@@ -70,7 +70,7 @@
         {% endif %}
         {% if photo_count > 0 %}
         <span class="pointer-events-none absolute bottom-1.5 end-1.5 z-10 inline-flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
-          <i class="fas fa-camera text-[9px] opacity-80"></i>{{ photo_count }}
+          <i class="fas fa-camera text-[9px] opacity-80"></i>{{ photo_count|fa_digits }}
         </span>
         {% endif %}
       </div>
@@ -99,7 +99,7 @@
           <p class="text-sm font-bold text-white tabular-nums leading-tight">{{ (land.price_total or 0)|toman }}</p>
         </div>
       </div>
-      {% if is_approved and land._commission_amount %}
+      {% if is_approved and land._commission_amount and not _is_sold and not for_similar|default(false) %}
       <div class="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/35 bg-emerald-950/40 px-2 py-1.5">
         <div class="min-w-0">
           <p class="text-[9px] text-emerald-400/90">پورسانت شما{% if land._commission_pct %} ({{ land._commission_pct }}٪){% endif %}</p>
@@ -178,7 +178,7 @@
             <i class="fas fa-location-dot text-[11px] text-white/70 shrink-0"></i>
           </p>
           {% endif %}
-          {% if is_approved and land._commission_amount %}
+          {% if is_approved and land._commission_amount and not _is_sold and not for_similar|default(false) %}
           <p class="mt-1 text-[11px] font-medium text-emerald-300">
             پورسانت شما: {{ (land._commission_amount or 0)|toman }}
             {% if land._commission_pct %}<span class="text-emerald-400/90">({{ land._commission_pct }}٪)</span>{% endif %}

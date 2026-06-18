@@ -4,7 +4,6 @@
 {% set _total_cnt = s.get('total_confirmed_count', sold_count or 0) %}
 {% set _wd_paid_amt = s.get('paid_withdrawal_amount', s.get('received_amount', paid_commission or 0)) %}
 {% set _wd_paid_cnt = s.get('paid_withdrawal_count', s.get('received_count', paid_count or 0)) %}
-{% set _txn_url = url_for('express_partner.commissions_transactions') %}
 
 <section class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
   <div class="px-4 py-3 border-b border-white/5">
@@ -27,7 +26,7 @@
          aria-hidden="true">
       <p><span class="font-semibold text-slate-200">کل درآمد:</span> مجموع پورسانت‌های تأییدشده شما.</p>
       <p class="mt-1.5"><span class="font-semibold text-slate-200">برداشت شده:</span> مجموع درخواست‌های برداشت با وضعیت پرداخت‌شده.</p>
-      <p class="mt-1.5 text-slate-400">برای تاریخچه کامل، «همه تراکنش‌ها» را باز کنید.</p>
+      <p class="mt-1.5 text-slate-400">برای تاریخچه کامل، بخش «تراکنش‌ها و برداشت‌ها» را ببینید.</p>
     </div>
   </div>
 
@@ -39,7 +38,7 @@
       </div>
       <div class="flex-1 min-w-0 text-start">
         <p class="text-sm font-semibold text-white">کل درآمد</p>
-        <p data-comm-total-count class="text-[11px] text-slate-500 mt-0.5">{{ _total_cnt or 0 }} پورسانت تأیید شده</p>
+        <p data-comm-total-count class="text-[11px] text-slate-500 mt-0.5">{{ (_total_cnt or 0)|fa_digits }} پورسانت تأیید شده</p>
       </div>
       <span data-comm-total class="shrink-0 text-sm font-bold text-white tabular-nums">{{ (_total or 0)|toman }}</span>
     </div>
@@ -53,7 +52,7 @@
         <p class="text-sm font-semibold text-white">برداشت شده</p>
         <p data-comm-wd-paid-count class="text-[11px] text-slate-500 mt-0.5">
           {% if (_wd_paid_cnt or 0)|int > 0 %}
-            {{ _wd_paid_cnt }} درخواست برداشت پرداخت‌شده
+            {{ _wd_paid_cnt|fa_digits }} درخواست برداشت پرداخت‌شده
           {% else %}
             هنوز برداشتی پرداخت نشده
           {% endif %}
@@ -61,20 +60,5 @@
       </div>
       <span data-comm-wd-paid class="shrink-0 text-sm font-bold text-white tabular-nums">{{ (_wd_paid_amt or 0)|toman }}</span>
     </div>
-
-    {# همه تراکنش‌ها #}
-    <a href="{{ _txn_url }}"
-       class="flex items-center gap-3 px-4 py-3.5 hover:bg-white/[0.03] transition active:bg-white/[0.05]">
-      <div class="comm-row-icon comm-row-icon--slate" aria-hidden="true">
-        <i class="fas fa-file-lines" aria-hidden="true"></i>
-      </div>
-      <div class="flex-1 min-w-0 text-start">
-        <p class="text-sm font-semibold text-white">همه تراکنش‌ها</p>
-        <p class="text-[11px] text-slate-500 mt-0.5">مشاهده تاریخچه کامل تراکنش‌ها</p>
-      </div>
-      <div class="shrink-0 flex items-center">
-        <i class="fas fa-chevron-left text-[10px] text-slate-500" aria-hidden="true"></i>
-      </div>
-    </a>
   </div>
 </section>

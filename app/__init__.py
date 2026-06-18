@@ -143,6 +143,13 @@ def _register_jinja_filters(app: Flask) -> None:
         except Exception:
             return ""
 
+    @app.template_filter("fa_digits")
+    def fa_digits_filter(value):
+        try:
+            return str(value).translate(str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹'))
+        except Exception:
+            return str(value or '')
+
     @app.template_filter("toman")
     def toman_filter(value, suffix: bool = True):
         try:
@@ -150,7 +157,8 @@ def _register_jinja_filters(app: Flask) -> None:
             if s == '' or s.lower() == 'none':
                 return ''
             num = int(float(s))
-            out = f"{num:,}".replace(",", "٬")
+            grouped = f"{num:,}"
+            out = grouped.replace(',', '،').translate(str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹'))
             return (out + " تومان") if suffix else out
         except Exception:
             try:

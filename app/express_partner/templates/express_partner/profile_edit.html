@@ -37,20 +37,31 @@
                   class="relative h-28 w-28 shrink-0 overflow-hidden rounded-full border-2 border-white/10 bg-[#0a1018] shadow-lg ring-1 ring-white/5 transition active:scale-[0.98] sm:h-32 sm:w-32"
                   title="تغییر عکس پروفایل">
             {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
+            {% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
             <img id="avatarPreviewImg"
-                 src="{% if _avatar %}{{ _avatar|avatar_display_url(profile.get('avatar_updated_at', 0)) }}{% endif %}"
+                 {% if _avatar_url %}data-avatar-url="{{ _avatar_url }}"{% endif %}
                  alt=""
                  class="h-full w-full object-cover {% if not _avatar %}hidden{% endif %}"
+                 decoding="async"
                  referrerpolicy="no-referrer"
                  onerror="this.classList.add('hidden');var f=document.getElementById('avatarPreviewFallback');if(f)f.classList.remove('hidden');">
             <span id="avatarPreviewFallback"
                   class="flex h-full w-full items-center justify-center text-2xl font-black text-zinc-500 sm:text-3xl {% if _avatar %}hidden{% endif %}">
-              V
+              {{ me_name|avatar_initials }}
             </span>
             <span id="avatarUploading" class="absolute inset-0 hidden items-center justify-center bg-black/50">
               <span class="h-8 w-8 rounded-full border-2 border-white/40 border-t-white animate-spin"></span>
             </span>
           </button>
+          {% if _avatar_url %}
+          <script>
+          (function () {
+            if (typeof window.vinorHydratePartnerAvatar === 'function') {
+              window.vinorHydratePartnerAvatar('avatarPreviewImg', 'avatarPreviewFallback');
+            }
+          })();
+          </script>
+          {% endif %}
           <p class="mt-3 max-w-xs text-center text-[11px] leading-relaxed text-zinc-500">
             برای تغییر عکس پروفایل، روی تصویر ضربه بزنید
           </p>
@@ -275,6 +286,16 @@
   }
 
   function showPreview(url) {
+    if (window.vinorPartnerAvatarCache) {
+      window.vinorPartnerAvatarCache.setFromUrl(url).catch(function () {
+        showPreviewDirect(url);
+      });
+      return;
+    }
+    showPreviewDirect(url);
+  }
+
+  function showPreviewDirect(url) {
     var img = previewImg;
     if (!img && trigger) {
       img = document.createElement('img');
@@ -282,6 +303,7 @@
       img.alt = '';
       img.className = 'h-full w-full object-cover';
       img.referrerPolicy = 'no-referrer';
+      img.decoding = 'async';
       img.onerror = function () {
         img.classList.add('hidden');
         if (previewFallback) previewFallback.classList.remove('hidden');
@@ -335,6 +357,9 @@
     showUploading(true);
     try { showPreview(URL.createObjectURL(file)); } catch (_) {}
     compressImage(file).then(function (compressed) {
+      if (window.vinorPartnerAvatarCache) {
+        window.vinorPartnerAvatarCache.setFromBlob(compressed, Date.now()).catch(function () {});
+      }
       var fd = new FormData();
       fd.append('avatar', compressed);
       return fetch(avatarApiUrl, { method: 'POST', body: fd, credentials: 'same-origin' });
@@ -364,6 +389,10 @@
   }
   if (inputCamera) inputCamera.addEventListener('change', onFile);
   if (inputLibrary) inputLibrary.addEventListener('change', onFile);
+
+  if (window.vinorPartnerAvatarCache) {
+    window.vinorPartnerAvatarCache.apply(document);
+  }
 })();
 
 (function() {
@@ -496,10 +525,19 @@ function initProfileEditSave() {
     var img = document.getElementById('avatarPreviewImg');
     var fallback = document.getElementById('avatarPreviewFallback');
     if (data.avatar_url && img) {
-      var v = Date.now();
-      img.src = data.avatar_url + (data.avatar_url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + v;
-      img.classList.remove('hidden');
-      if (fallback) fallback.classList.add('hidden');
+      var v = data.avatar_updated_at || 0;
+      var url = data.avatar_url + (data.avatar_url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + v;
+      if (window.vinorPartnerAvatarCache) {
+        window.vinorPartnerAvatarCache.setFromUrl(url).catch(function () {
+          img.src = url;
+          img.classList.remove('hidden');
+          if (fallback) fallback.classList.add('hidden');
+        });
+      } else {
+        img.src = url;
+        img.classList.remove('hidden');
+        if (fallback) fallback.classList.add('hidden');
+      }
     }
   }
 

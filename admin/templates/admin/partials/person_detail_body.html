@@ -4,31 +4,35 @@
 {% set fin = person.financial or {} %}
 {% set app = person.application %}
 {% set routine = person.routine or {} %}
+{% set _init_src = (person.name or person.phone or '?')|replace(' ', '') %}
+{% set initials = _init_src[:2] if _init_src else '?' %}
 
 <article class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
 
-  <!-- سر -->
-  <div class="p-4 sm:p-5 bg-gradient-to-l from-gray-50 to-white dark:from-gray-950 dark:to-gray-900 border-b border-gray-100 dark:border-gray-800">
-    <div class="flex items-start gap-3">
-      <div class="relative shrink-0">
-        <div class="w-16 h-16 rounded-xl bg-gray-100 dark:bg-gray-800 grid place-items-center text-lg font-bold text-gray-600 dark:text-gray-200 overflow-hidden">
+  <!-- هدر -->
+  <div class="adm-person-hero border-b border-gray-100 dark:border-gray-800 p-4 sm:p-5">
+    <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+      <div class="relative shrink-0 mx-auto sm:mx-0">
+        <div class="w-20 h-20 rounded-2xl bg-gray-100 dark:bg-gray-800 grid place-items-center text-xl font-bold text-gray-600 dark:text-gray-200 overflow-hidden ring-2 ring-white dark:ring-gray-900 shadow-sm">
           {% if prof.avatar %}
-            <img src="{{ prof.avatar }}" alt="" class="w-full h-full object-cover">
+            <img src="{{ prof.avatar }}" alt="" class="w-full h-full object-cover" referrerpolicy="no-referrer"
+                 onerror="this.remove();this.parentElement.textContent='{{ initials }}';">
           {% else %}
-            {{ (person.name or person.phone or '?')[:2] }}
+            {{ initials }}
           {% endif %}
         </div>
         {% if acc.online_now %}
-          <span class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white dark:border-gray-900 bg-emerald-500"></span>
+          <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-900 bg-emerald-500" title="آنلاین"></span>
         {% endif %}
       </div>
-      <div class="flex-1 min-w-0">
-        <div class="flex flex-wrap items-center gap-2">
-          <h2 class="text-xl font-bold text-gray-900 dark:text-white">{{ person.name or 'بدون نام' }}</h2>
+
+      <div class="flex-1 min-w-0 text-center sm:text-right">
+        <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+          <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{{ person.name or 'بدون نام' }}</h2>
           {% if acc.partner_approved %}
-            <span class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">همکار</span>
+            <span class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">همکار تأییدشده</span>
           {% elif acc.partner_pending %}
-            <span class="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[10px] font-semibold">در انتظار</span>
+            <span class="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[10px] font-semibold">در انتظار تأیید</span>
           {% elif acc.site_user %}
             <span class="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-semibold">کاربر سایت</span>
           {% endif %}
@@ -36,56 +40,38 @@
             <span class="px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-[10px] font-semibold">آنلاین</span>
           {% endif %}
         </div>
-        <p class="text-sm text-gray-500 dark:text-gray-400 font-mono mt-1 ltr:text-left" dir="ltr">{{ person.phone or '—' }}</p>
-        <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400 font-mono ltr" dir="ltr">{{ person.phone or '—' }}</p>
+
+        <div class="mt-2 flex flex-wrap justify-center sm:justify-start gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
           {% if person.city %}<span><i class="fa-solid fa-location-dot ml-1"></i>{{ person.city }}</span>{% endif %}
           {% if person.email %}<span class="ltr" dir="ltr">{{ person.email }}</span>{% endif %}
-          {% if prof.landline %}<span class="ltr" dir="ltr"><i class="fa-solid fa-phone ml-1"></i>{{ prof.landline }}</span>{% endif %}
           {% if prof.registered_at %}<span>عضویت: <span class="jalali-dt" data-dt="{{ prof.registered_at }}"></span></span>{% endif %}
           {% if person.last_activity %}<span>آخرین فعالیت: <span class="jalali-dt" data-dt="{{ person.last_activity }}"></span></span>{% endif %}
-          {% if person.ip %}<span class="ltr" dir="ltr">IP: {{ person.ip }}</span>{% endif %}
         </div>
       </div>
     </div>
   </div>
 
-  <!-- دسترسی‌ها و کاربردها -->
-  <section class="px-4 sm:px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-    <h3 class="text-xs font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
-      <i class="fa-solid fa-shield-halved text-blue-500 text-[11px]"></i>
-      دسترسی‌ها و کاربردها
-    </h3>
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-      {% set access_items = [
-        ('ورود / OTP', 'fa-right-to-bracket', acc.portal_login, 'ورود به پورتال'),
-        ('پورتال همکار', 'fa-user-check', acc.partner_approved, 'دسترسی تأیید‌شده'),
-        ('حساب سایت', 'fa-id-card', acc.site_user, 'کاربر ثبت‌نام‌شده'),
-        ('فایل داشبورد', 'fa-layer-group', acc.dashboard_files, 'انتساب فعال'),
-        ('پورسانت', 'fa-wallet', acc.commissions, 'سابقه پورسانت'),
-        ('آپلود فایل', 'fa-folder-open', acc.files_upload, 'فایل بارگذاری‌شده'),
-        ('برداشت', 'fa-money-bill-transfer', acc.withdrawals, 'درخواست باز'),
-        ('بازدید', 'fa-calendar-check', acc.visits, 'درخواست بازدید'),
-        ('یادداشت', 'fa-note-sticky', acc.notes, 'یادداشت شخصی'),
-        ('روتین', 'fa-list-check', acc.routine, 'فعالیت ماه جاری'),
-        ('آنلاین', 'fa-circle', acc.online_now, 'هم‌اکنون متصل'),
-      ] %}
-      {% for label, icon, on, hint in access_items %}
-        <div class="rounded-lg border px-2.5 py-2 text-[11px]
-                    {% if on %}
-                      border-emerald-200 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-900/20
-                    {% else %}
-                      border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 opacity-70
-                    {% endif %}">
-          <div class="flex items-center gap-1.5 font-semibold
-                      {% if on %}text-emerald-800 dark:text-emerald-200{% else %}text-gray-400{% endif %}">
-            <i class="fa-solid {{ icon }} text-[10px]"></i>
-            {{ label }}
-          </div>
-          <p class="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">{{ hint }}</p>
-        </div>
-      {% endfor %}
+  <!-- آمار کلیدی -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 p-4 sm:px-5 border-b border-gray-100 dark:border-gray-800">
+    <div class="adm-person-stat rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-3 py-2.5">
+      <p class="text-[10px] text-gray-400">انتساب فعال</p>
+      <p class="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{{ cnt.assignments_active or 0 }}<span class="text-xs font-normal text-gray-400"> / {{ cnt.assignments_total or 0 }}</span></p>
     </div>
-  </section>
+    <div class="adm-person-stat rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-3 py-2.5">
+      <p class="text-[10px] text-gray-400">پورسانت</p>
+      <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{{ cnt.commissions_total or 0 }}</p>
+    </div>
+    <div class="adm-person-stat rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-3 py-2.5">
+      <p class="text-[10px] text-gray-400">قابل برداشت</p>
+      <p class="text-sm font-bold text-gray-900 dark:text-white tabular-nums leading-tight">{{ (fin.withdrawable_balance or 0)|int|toman }}</p>
+    </div>
+    <div class="adm-person-stat rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-3 py-2.5">
+      <p class="text-[10px] text-gray-400">بازدید</p>
+      <p class="text-lg font-bold text-gray-900 dark:text-white tabular-nums">{{ cnt.visits_total or 0 }}{% if cnt.visits_pending %}<span class="text-xs font-normal text-amber-500"> · {{ cnt.visits_pending }} انتظار</span>{% endif %}</p>
+    </div>
+  </div>
 
   <!-- پروفایل + مالی -->
   <div class="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-gray-100 dark:divide-gray-800 border-b border-gray-100 dark:border-gray-800">
@@ -94,37 +80,53 @@
         <i class="fa-solid fa-id-card text-blue-500 text-[11px]"></i>
         پروفایل
       </h3>
-      <dl class="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+      <dl class="grid grid-cols-2 gap-x-3 gap-y-2.5 text-xs">
         <div><dt class="text-gray-400">درصد پورسانت</dt><dd class="font-medium text-gray-800 dark:text-gray-200">{{ prof.commission_pct or '—' }}{% if prof.commission_pct %}%{% endif %}</dd></div>
         <div><dt class="text-gray-400">تاریخ تولد</dt><dd class="font-medium text-gray-800 dark:text-gray-200">{{ prof.birth_date or '—' }}</dd></div>
-        <div><dt class="text-gray-400">درآمد کل</dt><dd class="font-medium text-gray-800 dark:text-gray-200 tabular-nums">{% if prof.total_income %}{{ "{:,}".format(prof.total_income) }} ت{% else %}—{% endif %}</dd></div>
-        <div><dt class="text-gray-400">فایل / یادداشت</dt><dd class="font-medium text-gray-800 dark:text-gray-200 tabular-nums">{{ cnt.files or 0 }} / {{ cnt.notes or 0 }}</dd></div>
-        <div><dt class="text-gray-400">انتساب</dt><dd class="font-medium text-gray-800 dark:text-gray-200 tabular-nums">{{ cnt.assignments_active or 0 }} فعال از {{ cnt.assignments_total or 0 }}</dd></div>
+        <div><dt class="text-gray-400">تلفن ثابت</dt><dd class="font-medium text-gray-800 dark:text-gray-200 ltr" dir="ltr">{{ prof.landline or '—' }}</dd></div>
         <div><dt class="text-gray-400">روتین ماه</dt><dd class="font-medium text-gray-800 dark:text-gray-200 tabular-nums">{{ routine.days_count or 0 }} روز{% if routine.steps_total %} · {{ routine.steps_total }} گام{% endif %}</dd></div>
+        <div><dt class="text-gray-400">فایل / یادداشت</dt><dd class="font-medium text-gray-800 dark:text-gray-200 tabular-nums">{{ cnt.files or 0 }} / {{ cnt.notes or 0 }}</dd></div>
+        <div><dt class="text-gray-400">درآمد کل</dt><dd class="font-medium text-gray-800 dark:text-gray-200 tabular-nums">{% if prof.total_income %}{{ prof.total_income|int|toman }}{% else %}—{% endif %}</dd></div>
         {% if prof.referred_by_phone %}
-        <div class="col-span-2"><dt class="text-gray-400">معرف (دعوت)</dt><dd class="font-medium text-gray-800 dark:text-gray-200 ltr" dir="ltr">{{ prof.referred_by_phone }}</dd></div>
+        <div class="col-span-2">
+          <dt class="text-gray-400">معرف (دعوت)</dt>
+          <dd class="font-medium mt-0.5">
+            <a href="{{ url_for('admin.express_partner_detail', phone=prof.referred_by_phone, q=back_q or '', filter=back_filter or 'all') }}"
+               class="text-blue-600 dark:text-blue-400 hover:underline ltr inline-flex items-center gap-1" dir="ltr">
+              {{ prof.referred_by_phone }}
+              <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+            </a>
+          </dd>
+        </div>
         {% endif %}
       </dl>
+
       {% if (prof.referral_grant_pending or (show_referral_retry|default(false))) and prof.referred_by_phone %}
-        <form method="post" action="{{ url_for('admin.express_partner_retry_referral_grant', phone=person.phone) }}" class="mt-3">
+        <form method="post" action="{{ url_for('admin.express_partner_retry_referral_grant', phone=person.phone) }}" class="mt-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="q" value="{{ back_q or '' }}">
           <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">
+          <p class="text-[11px] text-amber-800 dark:text-amber-200 mb-2">پورسانت دعوت هنگام تأیید خودکار ثبت نشده بود.</p>
           <button type="submit" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white transition">
             <i class="fa-solid fa-gift"></i>
             ثبت پورسانت دعوت برای معرف
           </button>
-          <p class="mt-1.5 text-[10px] text-amber-700 dark:text-amber-300">پورسانت دعوت هنگام تأیید خودکار ثبت نشده بود.</p>
         </form>
       {% endif %}
+
       {% if prof.bio %}
-        <p class="mt-3 text-xs text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap bg-gray-50 dark:bg-gray-950 rounded-lg p-3 border border-gray-100 dark:border-gray-800">{{ prof.bio }}</p>
+        <p class="mt-3 text-xs text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap bg-gray-50 dark:bg-gray-950 rounded-xl p-3 border border-gray-100 dark:border-gray-800">{{ prof.bio }}</p>
       {% endif %}
+
       {% if app %}
-        <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-          <p class="text-[11px] font-semibold text-amber-600 dark:text-amber-400 mb-1.5">درخواست همکاری</p>
+        <div class="mt-3 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/50 dark:bg-amber-950/20 p-3">
+          <p class="text-[11px] font-semibold text-amber-700 dark:text-amber-300 mb-1.5">درخواست همکاری</p>
           <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-            <p>وضعیت: {% if app.status == 'approved' %}تأیید{% elif app.status == 'rejected' %}رد{% else %}در انتظار{% endif %}</p>
+            <p>وضعیت:
+              {% if app.status == 'approved' %}<span class="text-emerald-600">تأیید</span>
+              {% elif app.status == 'rejected' %}<span class="text-rose-600">رد</span>
+              {% else %}<span class="text-amber-600">در انتظار</span>{% endif %}
+            </p>
             {% if app.experience %}<p>سابقه: {{ app.experience }}</p>{% endif %}
             {% if app.created_at %}<p>ثبت: <span class="jalali-dt" data-dt="{{ app.created_at }}"></span></p>{% endif %}
             {% if app.note %}<p class="whitespace-pre-wrap mt-1 bg-white dark:bg-gray-900 rounded-lg p-2 border border-gray-100 dark:border-gray-800">{{ app.note }}</p>{% endif %}
@@ -136,32 +138,109 @@
     <section class="p-4 sm:px-5 sm:py-4">
       <h3 class="text-xs font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
         <i class="fa-solid fa-wallet text-emerald-500 text-[11px]"></i>
-        مالی
+        موجودی و کیف پول
       </h3>
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+
+      <div class="rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/60 dark:bg-emerald-950/20 px-3 py-3 mb-3">
+        <p class="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium mb-1">موجودی قابل برداشت</p>
+        <p class="text-xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{{ (fin.withdrawable_balance or 0)|int|toman }}</p>
+        {% if fin.withdrawable_reserve_amount or fin.pending_withdrawal_amount %}
+          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1.5">
+            {% if fin.withdrawable_reserve_amount %}رزرو در برداشت: {{ fin.withdrawable_reserve_amount|int|toman }}{% endif %}
+            {% if fin.pending_withdrawal_amount %}{% if fin.withdrawable_reserve_amount %} · {% endif %}در انتظار بررسی: {{ fin.pending_withdrawal_amount|int|toman }}{% endif %}
+          </p>
+        {% endif %}
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 mb-3">
         {% set fin_items = [
-          ('در انتظار', fin.pending_amount),
-          ('تأیید‌شده', fin.approved_amount),
-          ('قابل برداشت', fin.withdrawable_balance),
-          ('در برداشت', fin.in_withdrawal_amount),
-          ('دریافت‌شده', fin.received_amount),
-          ('پرداخت پورسانت', fin.paid_amount),
+          ('در انتظار تأیید', fin.pending_amount),
+          ('تأیید‌شده (خالص)', fin.approved_amount),
+          ('در جریان برداشت', fin.in_withdrawal_amount),
+          ('واریز شده', fin.received_amount),
+          ('پرداخت پورسانت', fin.commission_paid_amount or fin.paid_amount),
+          ('کل تأیید‌شده', fin.total_confirmed_amount),
         ] %}
         {% for label, amount in fin_items %}
-          <div class="rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-2.5 py-2">
+          <div class="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-2.5 py-2">
             <p class="text-[10px] text-gray-400">{{ label }}</p>
-            <p class="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{{ "{:,}".format(amount or 0) }} <span class="text-[10px] font-normal">ت</span></p>
+            <p class="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{{ (amount or 0)|int|toman }}</p>
           </div>
         {% endfor %}
       </div>
+
       {% if cnt.withdrawals_active %}
-        <p class="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
+        <p class="text-[11px] text-amber-600 dark:text-amber-400 mb-3">
           <i class="fa-solid fa-circle-exclamation ml-1"></i>
           {{ cnt.withdrawals_active }} درخواست برداشت فعال
         </p>
       {% endif %}
+
+      <h4 class="text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+        <i class="fa-solid fa-building-columns text-gray-400 text-[10px]"></i>
+        حساب‌های بانکی ({{ person.bank_accounts|length if person.bank_accounts else 0 }})
+      </h4>
+      {% if person.bank_accounts and person.bank_accounts|length > 0 %}
+        <ul class="space-y-2">
+          {% for acc in person.bank_accounts %}
+          <li class="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-3 py-2.5 text-xs">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="font-semibold text-gray-900 dark:text-white">{{ acc.bank_name or 'بانک' }}</p>
+                <p class="text-gray-500 dark:text-gray-400 mt-0.5">{{ acc.holder_name or '—' }}</p>
+              </div>
+              {% if acc.is_default %}
+                <span class="shrink-0 px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[9px] font-semibold">پیش‌فرض</span>
+              {% endif %}
+            </div>
+            <div class="mt-2 space-y-1 text-[11px]">
+              <div class="flex justify-between gap-2">
+                <span class="text-gray-400">کارت</span>
+                <span class="font-mono text-gray-800 dark:text-gray-200 ltr" dir="ltr">{{ acc.masked_pan or '—' }}</span>
+              </div>
+              {% if acc.sheba %}
+              <div class="flex justify-between gap-2">
+                <span class="text-gray-400">شبا</span>
+                <span class="font-mono text-gray-800 dark:text-gray-200 ltr" dir="ltr">{{ acc.sheba }}</span>
+              </div>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-xs text-gray-400 rounded-xl border border-dashed border-gray-200 dark:border-gray-700 px-3 py-4 text-center">حساب بانکی ثبت نشده</p>
+      {% endif %}
     </section>
   </div>
+
+  <!-- دسترسی‌ها -->
+  <section class="px-4 sm:px-5 py-3 border-b border-gray-100 dark:border-gray-800">
+    <h3 class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-2">دسترسی‌ها</h3>
+    <div class="flex flex-wrap gap-1.5">
+      {% set access_items = [
+        ('ورود', acc.portal_login),
+        ('همکار', acc.partner_approved),
+        ('کاربر سایت', acc.site_user),
+        ('فایل داشبورد', acc.dashboard_files),
+        ('پورسانت', acc.commissions),
+        ('موجودی', acc.balance),
+        ('کیف پول', acc.wallet),
+        ('آپلود', acc.files_upload),
+        ('برداشت', acc.withdrawals),
+        ('بازدید', acc.visits),
+        ('یادداشت', acc.notes),
+        ('روتین', acc.routine),
+      ] %}
+      {% for label, on in access_items %}
+        <span class="adm-access-pill inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-medium
+                     {% if on %}is-on border-emerald-300 dark:border-emerald-700{% else %}border-gray-200 dark:border-gray-800 text-gray-400 opacity-60{% endif %}">
+          <i class="fa-solid fa-circle text-[6px] {% if on %}text-emerald-500{% else %}text-gray-300{% endif %}"></i>
+          {{ label }}
+        </span>
+      {% endfor %}
+    </div>
+  </section>
 
   <!-- انتساب‌ها -->
   <section class="px-4 sm:px-5 py-4 border-b border-gray-100 dark:border-gray-800">
@@ -170,10 +249,10 @@
         <i class="fa-solid fa-link text-indigo-500 text-[11px]"></i>
         انتساب‌ها ({{ cnt.assignments_total or 0 }})
       </h3>
-      <a href="{{ url_for('admin.express_assignments') }}" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">مدیریت انتساب</a>
+      <a href="{{ url_for('admin.express_assignments') }}" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">مدیریت</a>
     </div>
     {% if person.assignments_recent and person.assignments_recent|length > 0 %}
-      <div class="overflow-x-auto">
+      <div class="overflow-x-auto -mx-1 px-1">
         <table class="w-full text-xs min-w-[360px]">
           <thead>
             <tr class="text-gray-400 border-b border-gray-100 dark:border-gray-800">
@@ -185,7 +264,7 @@
           </thead>
           <tbody>
             {% for a in person.assignments_recent %}
-            <tr class="border-b border-gray-50 dark:border-gray-800/60 last:border-0">
+            <tr class="border-b border-gray-50 dark:border-gray-800/60 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-950/50">
               <td class="py-2 px-1">
                 <p class="font-medium text-gray-800 dark:text-gray-200">{{ a.land_title or ('کد ' ~ a.land_code) }}</p>
                 {% if a.land_code %}<p class="text-[10px] text-gray-400 font-mono ltr" dir="ltr">{{ a.land_code }}</p>{% endif %}
@@ -203,23 +282,23 @@
         </table>
       </div>
     {% else %}
-      <p class="text-xs text-gray-400">انتسابی ثبت نشده.</p>
+      <p class="text-xs text-gray-400 py-2">انتسابی ثبت نشده.</p>
     {% endif %}
   </section>
 
-  <!-- پورسانت / برداشت / بازدید -->
+  <!-- فعالیت اخیر -->
   <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100 dark:divide-gray-800 border-b border-gray-100 dark:border-gray-800">
     <section class="p-4 sm:px-5 sm:py-4">
       <h3 class="text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-2">پورسانت‌ها ({{ cnt.commissions_total or 0 }})</h3>
       {% if person.commissions_recent and person.commissions_recent|length > 0 %}
-        <ul class="space-y-2 max-h-64 overflow-y-auto">
+        <ul class="space-y-2 max-h-56 overflow-y-auto">
           {% for c in person.commissions_recent %}
           <li class="flex items-start justify-between gap-2 text-xs border-b border-gray-50 dark:border-gray-800/50 pb-2 last:border-0">
             <div class="min-w-0">
-              <p class="text-gray-800 dark:text-gray-200">{{ c.land_title or c.land_code or '—' }}</p>
+              <p class="text-gray-800 dark:text-gray-200 truncate">{{ c.land_title or c.land_code or '—' }}</p>
               <p class="text-[10px] text-gray-400">{{ c.status_label }}</p>
             </div>
-            <span class="shrink-0 font-semibold tabular-nums">{{ "{:,}".format(c.commission_amount or 0) }}</span>
+            <span class="shrink-0 font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{{ (c.commission_amount or 0)|int|toman }}</span>
           </li>
           {% endfor %}
         </ul>
@@ -230,11 +309,16 @@
     <section class="p-4 sm:px-5 sm:py-4">
       <h3 class="text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-2">برداشت‌ها</h3>
       {% if person.withdrawals_recent and person.withdrawals_recent|length > 0 %}
-        <ul class="space-y-2 max-h-64 overflow-y-auto">
+        <ul class="space-y-2 max-h-56 overflow-y-auto">
           {% for w in person.withdrawals_recent %}
           <li class="flex items-center justify-between gap-2 text-xs border-b border-gray-50 dark:border-gray-800/50 pb-2 last:border-0">
-            <span class="text-gray-500">{{ w.status_label }}</span>
-            <span class="font-semibold tabular-nums">{{ "{:,}".format(w.amount or 0) }}</span>
+            <div class="min-w-0">
+              <span class="text-gray-500">{{ w.status_label }}</span>
+              {% if w.bank_summary or w.masked_pan %}
+                <p class="text-[10px] text-gray-400 truncate">{{ w.bank_summary or w.masked_pan }}</p>
+              {% endif %}
+            </div>
+            <span class="font-semibold tabular-nums shrink-0">{{ (w.amount or 0)|int|toman }}</span>
           </li>
           {% endfor %}
         </ul>
@@ -243,15 +327,12 @@
       {% endif %}
     </section>
     <section class="p-4 sm:px-5 sm:py-4">
-      <h3 class="text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-2">
-        بازدیدها ({{ cnt.visits_total or 0 }})
-        {% if cnt.visits_pending %}<span class="text-amber-500 font-normal">· {{ cnt.visits_pending }} در انتظار</span>{% endif %}
-      </h3>
+      <h3 class="text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-2">بازدیدها</h3>
       {% if person.visits_recent and person.visits_recent|length > 0 %}
-        <ul class="space-y-2 max-h-64 overflow-y-auto">
+        <ul class="space-y-2 max-h-56 overflow-y-auto">
           {% for v in person.visits_recent %}
           <li class="text-xs border-b border-gray-50 dark:border-gray-800/50 pb-2 last:border-0">
-            <p class="text-gray-800 dark:text-gray-200">{{ v.land_title or v.land_code or '—' }}</p>
+            <p class="text-gray-800 dark:text-gray-200 truncate">{{ v.land_title or v.land_code or '—' }}</p>
             <p class="text-[10px] text-gray-400">{{ v.status_label }}{% if v.visit_date %} · {{ v.visit_date }}{% endif %}</p>
           </li>
           {% endfor %}
@@ -267,7 +348,7 @@
     <section class="p-4 sm:px-5 sm:py-4">
       <h3 class="text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-2">فایل‌ها ({{ cnt.files or 0 }})</h3>
       {% if person.files_recent and person.files_recent|length > 0 %}
-        <ul class="space-y-1 text-xs text-gray-700 dark:text-gray-300 max-h-48 overflow-y-auto">
+        <ul class="space-y-1 text-xs text-gray-700 dark:text-gray-300 max-h-40 overflow-y-auto">
           {% for f in person.files_recent %}
           <li class="truncate"><i class="fa-solid fa-file ml-1 text-gray-400 text-[10px]"></i>{{ f.filename }}</li>
           {% endfor %}
@@ -279,7 +360,7 @@
     <section class="p-4 sm:px-5 sm:py-4">
       <h3 class="text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-2">یادداشت‌ها ({{ cnt.notes or 0 }})</h3>
       {% if person.notes_recent and person.notes_recent|length > 0 %}
-        <ul class="space-y-2 text-xs text-gray-600 dark:text-gray-400 max-h-48 overflow-y-auto">
+        <ul class="space-y-2 text-xs text-gray-600 dark:text-gray-400 max-h-40 overflow-y-auto">
           {% for n in person.notes_recent %}
           <li class="bg-gray-50 dark:bg-gray-950 rounded-lg p-2 border border-gray-100 dark:border-gray-800">{{ n.content }}</li>
           {% endfor %}
@@ -291,42 +372,42 @@
   </div>
 
   <!-- عملیات -->
-  <div class="px-4 sm:px-5 py-4 bg-gray-50/80 dark:bg-gray-950/50 adm-ops-grid flex flex-wrap gap-2">
+  <div class="px-4 sm:px-5 py-4 bg-gray-50/80 dark:bg-gray-950/50 flex flex-wrap gap-2">
     {% if app and app.id and acc.partner_pending %}
       <form method="post" action="{{ url_for('admin.express_partner_application_approve', aid=app.id) }}" class="w-full sm:w-auto">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" onclick="return confirm('تأیید همکاری؟')"
-                class="w-full inline-flex items-center justify-center px-3 py-2.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700">
+                class="w-full inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition">
           <i class="fa-solid fa-check ml-1"></i> تأیید همکار
         </button>
       </form>
       <form method="post" action="{{ url_for('admin.express_partner_application_reject', aid=app.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" onclick="return confirm('رد درخواست؟')"
-                class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-xs font-semibold">
+                class="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-xs font-semibold">
           <i class="fa-solid fa-times ml-1"></i> رد
         </button>
       </form>
     {% endif %}
     {% if acc.partner_approved and person.phone %}
       <a href="{{ url_for('admin.express_assignments') }}"
-         class="inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300">
+         class="inline-flex items-center px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-900 transition">
         <i class="fa-solid fa-link ml-1"></i> انتساب‌ها
       </a>
       <a href="{{ url_for('admin.express_commissions') }}"
-         class="inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300">
+         class="inline-flex items-center px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-900 transition">
         <i class="fa-solid fa-wallet ml-1"></i> پورسانت
       </a>
       <a href="{{ url_for('admin.financial_withdrawals') }}"
-         class="inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300">
+         class="inline-flex items-center px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-900 transition">
         <i class="fa-solid fa-money-bill-transfer ml-1"></i> برداشت
       </a>
       <a href="{{ url_for('admin.express_partner_files', partner=person.phone) }}"
-         class="inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300">
+         class="inline-flex items-center px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-900 transition">
         <i class="fa-solid fa-folder ml-1"></i> فایل‌ها
       </a>
       <a href="{{ url_for('admin.express_visit_requests') }}"
-         class="inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300">
+         class="inline-flex items-center px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-900 transition">
         <i class="fa-solid fa-calendar-check ml-1"></i> بازدید
       </a>
       <form method="post" action="{{ url_for('admin.express_partner_delete', phone=person.phone) }}">
@@ -334,7 +415,7 @@
         <input type="hidden" name="q" value="{{ back_q or '' }}">
         <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">
         <button type="submit" onclick="return confirm('همکار و تمام داده‌های مرتبط حذف شود؟')"
-                class="px-3 py-2 rounded-lg border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 text-xs font-semibold">
+                class="px-3 py-2 rounded-xl border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 text-xs font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/30 transition">
           <i class="fa-solid fa-trash ml-1"></i> حذف همکار
         </button>
       </form>
@@ -344,7 +425,7 @@
         <input type="hidden" name="q" value="{{ back_q or '' }}">
         <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">
         <button type="submit" onclick="return confirm('کاربر و تمام داده‌های مرتبط حذف شود؟')"
-                class="px-3 py-2 rounded-lg border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 text-xs font-semibold">
+                class="px-3 py-2 rounded-xl border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 text-xs font-semibold">
           <i class="fa-solid fa-trash ml-1"></i> حذف کاربر
         </button>
       </form>
@@ -352,8 +433,10 @@
     {% if app and app.id %}
       <form method="post" action="{{ url_for('admin.express_partner_application_delete', aid=app.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="q" value="{{ back_q or '' }}">
+        <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">
         <button type="submit" onclick="return confirm('درخواست حذف شود؟')"
-                class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-600 dark:text-gray-400">
+                class="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-xs font-semibold text-gray-600 dark:text-gray-400">
           <i class="fa-solid fa-trash-can ml-1"></i> حذف درخواست
         </button>
       </form>

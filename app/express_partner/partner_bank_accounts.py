@@ -125,8 +125,9 @@ def public_account_dict(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def accounts_for_phone(all_rows: List[Dict[str, Any]], phone: str) -> List[Dict[str, Any]]:
-    ph = (phone or "").strip()
-    return [r for r in all_rows if isinstance(r, dict) and str(r.get("phone") or "").strip() == ph]
+    from .partner_withdrawals import partner_phones_match
+
+    return [r for r in all_rows if isinstance(r, dict) and partner_phones_match(r.get("phone"), phone)]
 
 
 def catalog_public() -> List[Dict[str, str]]:

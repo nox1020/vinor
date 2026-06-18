@@ -2,13 +2,42 @@
 {% block title %}{{ page_title or 'پروفایل همکار' }}{% endblock %}
 {% block page_title %}{{ page_title or 'پروفایل همکار' }}{% endblock %}
 
+{% block head %}
+  {{ super() }}
+  <style>
+    .adm-person-hero {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(16, 185, 129, 0.06) 100%);
+    }
+    html.dark .adm-person-hero {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%);
+    }
+    .adm-person-stat {
+      min-height: 4.5rem;
+    }
+    .adm-access-pill.is-on {
+      border-color: rgba(16, 185, 129, 0.35);
+      background: rgba(16, 185, 129, 0.08);
+      color: rgb(4, 120, 87);
+    }
+    html.dark .adm-access-pill.is-on {
+      color: rgb(110, 231, 183);
+      background: rgba(16, 185, 129, 0.12);
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
-<div class="space-y-4">
-  <a href="{{ url_for('admin.express_partners', q=back_q or '', filter=back_filter or 'all') }}"
-     class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-    <i class="fa-solid fa-arrow-right"></i>
-    بازگشت به لیست کاربران
-  </a>
+<div id="adminPartnerDetail" class="space-y-4">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <a href="{{ url_for('admin.express_partners', q=back_q or '', filter=back_filter or 'all') }}"
+       class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+      <i class="fa-solid fa-arrow-right"></i>
+      بازگشت به لیست
+    </a>
+    {% if person.phone %}
+    <p class="text-xs text-gray-400 font-mono ltr" dir="ltr">{{ person.phone }}</p>
+    {% endif %}
+  </div>
 
   {% include 'admin/partials/person_detail_body.html' %}
 </div>

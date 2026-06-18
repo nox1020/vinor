@@ -39,15 +39,29 @@ def _commission_status(c: Dict[str, Any]) -> str:
     return (str(c.get("status") or "pending")).strip()
 
 
+def normalize_partner_phone(phone: str) -> str:
+    try:
+        from app.services.notifications import _normalize_user_id
+
+        return _normalize_user_id(phone or "")
+    except Exception:
+        return (phone or "").strip()
+
+
+def partner_phones_match(a: str, b: str) -> bool:
+    na = normalize_partner_phone(a)
+    nb = normalize_partner_phone(b)
+    return bool(na and nb and na == nb)
+
+
 def approved_gross_commission_total(
     commissions: List[Dict[str, Any]], phone: str
 ) -> int:
-    ph = (phone or "").strip()
     total = 0
     for c in commissions:
         if not isinstance(c, dict):
             continue
-        if str(c.get("partner_phone") or "").strip() != ph:
+        if not partner_phones_match(c.get("partner_phone"), phone):
             continue
         if _commission_status(c) == "approved":
             total += _amount_int(c.get("commission_amount"))
@@ -59,12 +73,11 @@ def _withdrawal_status(w: Dict[str, Any]) -> str:
 
 
 def _active_withdrawal_ids(withdrawals: List[Dict[str, Any]], phone: str) -> set:
-    ph = (phone or "").strip()
     out: set = set()
     for w in withdrawals:
         if not isinstance(w, dict):
             continue
-        if str(w.get("phone") or "").strip() != ph:
+        if not partner_phones_match(w.get("phone"), phone):
             continue
         if _withdrawal_status(w) in LOCK_RESERVE_STATUSES:
             wid = str(w.get("id") or "").strip()
@@ -76,11 +89,10 @@ def _active_withdrawal_ids(withdrawals: List[Dict[str, Any]], phone: str) -> set
 def _partner_commissions_for_phone(
     commissions: List[Dict[str, Any]], phone: str
 ) -> List[Dict[str, Any]]:
-    ph = (phone or "").strip()
     return [
         c
         for c in commissions
-        if isinstance(c, dict) and str(c.get("partner_phone") or "").strip() == ph
+        if isinstance(c, dict) and partner_phones_match(c.get("partner_phone"), phone)
     ]
 
 
@@ -169,7 +181,7 @@ def reconcile_paid_withdrawals(
         w
         for w in withdrawals
         if isinstance(w, dict)
-        and str(w.get("phone") or "").strip() == ph
+        and partner_phones_match(w.get("phone"), phone)
         and _withdrawal_status(w) == "paid"
     ]
     paid_rows.sort(key=lambda x: x.get("updated_at") or x.get("created_at") or "")
@@ -252,12 +264,11 @@ def approved_commission_total(
 def _withdrawal_reserve_total(
     withdrawals: List[Dict[str, Any]], phone: str, statuses: frozenset
 ) -> int:
-    ph = (phone or "").strip()
     total = 0
     for w in withdrawals:
         if not isinstance(w, dict):
             continue
-        if str(w.get("phone") or "").strip() != ph:
+        if not partner_phones_match(w.get("phone"), phone):
             continue
         st = (str(w.get("status") or "pending")).strip().lower()
         if st in statuses:
@@ -288,12 +299,11 @@ def pending_withdrawal_only_total(
 def paid_withdrawal_total(
     withdrawals: List[Dict[str, Any]], phone: str
 ) -> int:
-    ph = (phone or "").strip()
     total = 0
     for w in withdrawals:
         if not isinstance(w, dict):
             continue
-        if str(w.get("phone") or "").strip() != ph:
+        if not partner_phones_match(w.get("phone"), phone):
             continue
         if (str(w.get("status") or "")).strip() == "paid":
             total += _amount_int(w.get("amount"))
@@ -309,7 +319,6 @@ def partner_commission_dashboard(
 
     موجودی قابل برداشت = پورسانت approved − درخواست‌های فعال برداشت.
     """
-    ph = (phone or "").strip()
     pending_amount = pending_count = 0
     approved_gross_amount = approved_gross_count = 0
     paid_amount = paid_count = 0
@@ -317,7 +326,7 @@ def partner_commission_dashboard(
     for c in commissions:
         if not isinstance(c, dict):
             continue
-        if str(c.get("partner_phone") or "").strip() != ph:
+        if not partner_phones_match(c.get("partner_phone"), phone):
             continue
         st = _commission_status(c)
         amt = _amount_int(c.get("commission_amount"))
@@ -334,25 +343,25 @@ def partner_commission_dashboard(
             paid_amount += amt + _amount_int(c.get("partial_paid_total"))
             paid_count += 1
 
-    in_withdrawal_amount = reserved_withdrawal_total(withdrawals, ph)
-    withdrawable_reserve = withdrawable_reserve_total(withdrawals, ph)
-    pending_wd_only = pending_withdrawal_only_total(withdrawals, ph)
+    in_withdrawal_amount = reserved_withdrawal_total(withdrawals, phone)
+    withdrawable_reserve = withdrawable_reserve_total(withdrawals, phone)
+    pending_wd_only = pending_withdrawal_only_total(withdrawals, phone)
     in_withdrawal_count = sum(
         1
         for w in withdrawals
         if isinstance(w, dict)
-        and str(w.get("phone") or "").strip() == ph
+        and partner_phones_match(w.get("phone"), phone)
         and _withdrawal_status(w) in LOCK_RESERVE_STATUSES
     )
-    paid_wd_amount = paid_withdrawal_total(withdrawals, ph)
+    paid_wd_amount = paid_withdrawal_total(withdrawals, phone)
     paid_wd_count = sum(
         1
         for w in withdrawals
         if isinstance(w, dict)
-        and str(w.get("phone") or "").strip() == ph
+        and partner_phones_match(w.get("phone"), phone)
         and _withdrawal_status(w) == "paid"
     )
-    approved_amount = approved_commission_total(commissions, withdrawals, ph)
+    approved_amount = approved_commission_total(commissions, withdrawals, phone)
     withdrawable = approved_amount
     locked_available = approved_amount
     confirmed_amount = approved_gross_amount + paid_amount
@@ -450,12 +459,11 @@ def status_label(status: str) -> str:
 def withdrawals_for_phone(
     withdrawals: List[Dict[str, Any]], phone: str
 ) -> List[Dict[str, Any]]:
-    ph = (phone or "").strip()
     out: List[Dict[str, Any]] = []
     for w in withdrawals:
         if not isinstance(w, dict):
             continue
-        if str(w.get("phone") or "").strip() != ph:
+        if not partner_phones_match(w.get("phone"), phone):
             continue
         out.append(partner_row_dict(w))
     out.sort(key=lambda x: x.get("created_at", ""), reverse=True)
@@ -538,7 +546,7 @@ def cancel_partner_withdrawal(
             continue
         if str(w.get("id") or "").strip() != wid:
             continue
-        if str(w.get("phone") or "").strip() != ph:
+        if not partner_phones_match(w.get("phone"), phone):
             return False, "not_found"
         st = _withdrawal_status(w)
         if st not in PARTNER_CANCELLABLE_WITHDRAWAL_STATUSES:
@@ -814,11 +822,10 @@ def build_partner_txn_feed(
     phone: str,
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    ph = (phone or "").strip()
     for c in commissions:
         if not isinstance(c, dict):
             continue
-        if str(c.get("partner_phone") or "").strip() != ph:
+        if not partner_phones_match(c.get("partner_phone"), phone):
             continue
         row = commission_to_txn_row(c)
         if row:
@@ -905,7 +912,7 @@ def validate_new_request(
     commissions: List[Dict[str, Any]],
     withdrawals: List[Dict[str, Any]],
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    ph = (partner_phone or "").strip()
+    ph = normalize_partner_phone(partner_phone)
     acc_id = (bank_account_id or "").strip()
     amount = _amount_int(amount_raw)
 
@@ -918,7 +925,7 @@ def validate_new_request(
     for r in bank_rows:
         if not isinstance(r, dict):
             continue
-        if str(r.get("phone") or "").strip() != ph:
+        if not partner_phones_match(r.get("phone"), ph):
             continue
         if str(r.get("id") or "").strip() == acc_id:
             bank_rec = r

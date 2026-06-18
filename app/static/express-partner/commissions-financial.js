@@ -74,6 +74,13 @@
     try { el.textContent = JSON.stringify(snapshot); } catch (_) {}
   }
 
+  function setTextIfChanged(el, text) {
+    if (!el) return;
+    var next = String(text || '');
+    if (el.textContent === next) return;
+    el.textContent = next;
+  }
+
   function applyFinancialSnapshot(snapshot) {
     var s = normalizeSnapshot(snapshot);
     if (!isValidSnapshot(s)) return false;
@@ -85,14 +92,11 @@
     var mount = document.getElementById('commissionsRefreshMount');
     var scope = mount || document;
 
-    var wdEl = scope.querySelector('[data-comm-withdrawable]');
-    if (wdEl) wdEl.textContent = wdText;
+    setTextIfChanged(scope.querySelector('[data-comm-withdrawable]'), wdText);
 
-    var inWdEl = scope.querySelector('[data-comm-in-withdrawal]');
-    if (inWdEl) inWdEl.textContent = formatToman(s.in_withdrawal_amount);
+    setTextIfChanged(scope.querySelector('[data-comm-in-withdrawal]'), formatToman(s.in_withdrawal_amount));
 
-    var pendingEl = scope.querySelector('[data-comm-pending]');
-    if (pendingEl) pendingEl.textContent = formatToman(s.pending_amount);
+    setTextIfChanged(scope.querySelector('[data-comm-pending]'), formatToman(s.pending_amount));
 
     var dotEl = scope.querySelector('[data-comm-withdraw-dot]');
     if (dotEl) {
@@ -100,20 +104,19 @@
       dotEl.classList.toggle('vn-comm-wd-dot--live', hasActive);
     }
 
-    var totalEl = scope.querySelector('[data-comm-total]');
-    if (totalEl) totalEl.textContent = formatToman(s.total_confirmed_amount);
+    setTextIfChanged(scope.querySelector('[data-comm-total]'), formatToman(s.total_confirmed_amount));
     var totalCntEl = scope.querySelector('[data-comm-total-count]');
     if (totalCntEl) {
-      totalCntEl.textContent = toFaDigits(String(s.total_confirmed_count || 0)) + ' پورسانت تأیید شده';
+      setTextIfChanged(totalCntEl, toFaDigits(String(s.total_confirmed_count || 0)) + ' پورسانت تأیید شده');
     }
 
-    var paidEl = scope.querySelector('[data-comm-wd-paid]');
-    if (paidEl) paidEl.textContent = formatToman(s.paid_withdrawal_amount);
+    setTextIfChanged(scope.querySelector('[data-comm-wd-paid]'), formatToman(s.paid_withdrawal_amount));
     var paidCntEl = scope.querySelector('[data-comm-wd-paid-count]');
     if (paidCntEl) {
-      paidCntEl.textContent = s.paid_withdrawal_count > 0
+      var paidCntText = s.paid_withdrawal_count > 0
         ? toFaDigits(String(s.paid_withdrawal_count)) + ' درخواست برداشت پرداخت‌شده'
         : 'هنوز برداشتی پرداخت نشده';
+      setTextIfChanged(paidCntEl, paidCntText);
     }
 
     var wdBtn = scope.querySelector('[data-open-withdraw-modal]');
@@ -129,6 +132,9 @@
         wdBtn.classList.add('opacity-45', 'cursor-not-allowed');
       }
     }
+
+    var modalBal = document.getElementById('vnWithdrawModalBalance');
+    setTextIfChanged(modalBal, wdText);
 
     var belowMinEl = scope.querySelector('[data-comm-below-min-note]');
     if (belowMinEl) {
