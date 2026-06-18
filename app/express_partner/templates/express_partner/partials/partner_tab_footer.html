@@ -3,11 +3,20 @@
    برای حالت‌های خاص (ورود، آموزش، …) قبل از include همان متغیر را ست کنید. #}
 {% if bottom_nav_active is not defined %}
   {% set ep = request.endpoint or '' %}
-  {% if ep in ('express_partner.dashboard', 'express_partner.dashboard_data') %}
+  {% if ep in ('express_partner.dashboard', 'express_partner.dashboard_data', 'express_partner.cooperation_terms') %}
     {% set bottom_nav_active = 'dashboard' %}
-  {% elif ep in ('express_partner.commissions', 'express_partner.commissions_data', 'express_partner.commissions_transactions') %}
+  {% elif ep in ('express_partner.commissions', 'express_partner.commissions_data', 'express_partner.commissions_transactions', 'express_partner.commissions_summary') %}
     {% set bottom_nav_active = 'commissions' %}
-  {% elif ep and (ep.startswith('express_partner.profile') or ep.startswith('express_partner.routine') or ep in ('express_partner.notifications', 'express_partner.help', 'express_partner.top_sellers', 'express_partner.notes', 'express_partner.support', 'express_partner.invite_colleagues', 'express_partner.favorites', 'express_partner.api_favorites_cards')) %}
+  {% elif ep and (
+    ep.startswith('express_partner.profile')
+    or ep.startswith('express_partner.routine')
+    or ep in (
+      'express_partner.notifications', 'express_partner.help', 'express_partner.top_sellers',
+      'express_partner.notes', 'express_partner.support', 'express_partner.invite_colleagues',
+      'express_partner.favorites', 'express_partner.training', 'express_partner.legal_privacy',
+      'express_partner.legal_terms', 'express_partner.api_favorites_cards'
+    )
+  ) %}
     {% set bottom_nav_active = 'profile' %}
   {% else %}
     {% set bottom_nav_active = '' %}

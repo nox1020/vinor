@@ -1,19 +1,58 @@
 /**
- * ناوبری سریع پرتال همکار: soft-swap + انیمیشن (مثل تب‌های فوتر) برای همهٔ مسیرهای /express/partner/
+ * ناوبری تخصصی پرتال همکار — soft-swap + انیمیشن برای همهٔ مسیرهای /express/partner/
+ * رجیستری مسیرها: منبع واحد برای تب، عمق، فوتر و prefetch
  */
 (function () {
   'use strict';
 
   var STORAGE_KEY = 'vinor_express_tab_nav_dir';
   var PREFIX = '/express/partner/';
+  var LAND_DETAIL_RE = /^\/express\/partner\/lands\/[^/]+$/;
 
-  var TAB_PATHS = {
-    '/express/partner/dashboard': 'dashboard',
-    '/express/partner/commissions': 'commissions',
-    '/express/partner/profile': 'profile'
+  /** @type {Record<string, {tab: string, depth: number, bottomNav?: boolean, prefetch?: boolean}>} */
+  var ROUTE_REGISTRY = {
+    '/express/partner/dashboard': { tab: 'dashboard', depth: 0, bottomNav: true, prefetch: true },
+    '/express/partner/commissions': { tab: 'commissions', depth: 0, bottomNav: true, prefetch: false },
+    '/express/partner/profile': { tab: 'profile', depth: 0, bottomNav: true, prefetch: false },
+    '/express/partner/profile/edit': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/favorites': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/notes': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/notifications': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/help': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/support': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/top-sellers': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/invite': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/training': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/routine': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/legal/privacy': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/legal/terms': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/cooperation-terms': { tab: 'dashboard', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/commissions/transactions': { tab: 'commissions', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/ai': { tab: '', depth: 1, bottomNav: false, prefetch: false },
+    '/express/partner/login': { tab: '', depth: 0, bottomNav: false, prefetch: false },
+    '/express/partner/login/otp': { tab: '', depth: 1, bottomNav: false, prefetch: true }
   };
 
-  /** از چت AI به جزئیات فایل — بارگذاری کامل صفحه (soft-swap باعث خالی شدن UI می‌شد) */
+  var SKIP_PATH_PREFIXES = [
+    '/express/partner/verify',
+    '/express/partner/apply',
+    '/express/partner/thanks',
+    '/express/partner/offline',
+    '/express/partner/logout'
+  ];
+
+  /** مراحل ورود — ناوبری نرم بین شماره و OTP */
+  var AUTH_SOFT_PATHS = [
+    '/express/partner/login',
+    '/express/partner/login/otp'
+  ];
+
+  var prefetchCache = Object.create(null);
+  var prefetchInflight = Object.create(null);
+  var navGeneration = 0;
+  var leaveTimerId = 0;
+
+  /** از چت AI به جزئیات فایل — بارگذاری کامل (soft-swap UI را خالی می‌کند) */
   function isAiChatLandCard(el) {
     if (!el || !el.closest) return false;
     return !!(el.closest('#aiMessages') || el.closest('[data-vinor-ai-card]'));
@@ -26,40 +65,23 @@
     window.location.assign(href);
   }
 
-  /** مسیرهای زیرصفحه (عمق ۱) — تب والد برای هایلایت فوتر */
-  var STACK_PARENT_TAB = {
-    '/express/partner/profile/edit': 'profile',
-    '/express/partner/favorites': 'profile',
-    '/express/partner/notes': 'profile',
-    '/express/partner/notifications': 'profile',
-    '/express/partner/help': 'profile',
-    '/express/partner/support': 'profile',
-    '/express/partner/top-sellers': 'profile',
-    '/express/partner/invite': 'profile',
-    '/express/partner/training': 'profile',
-    '/express/partner/routine': 'profile',
-    '/express/partner/cooperation-terms': 'dashboard',
-    '/express/partner/commissions/transactions': 'commissions'
-  };
+  function lookupRoute(pathname) {
+    var p = normPath(pathname || '');
+    if (ROUTE_REGISTRY[p]) return ROUTE_REGISTRY[p];
+    if (LAND_DETAIL_RE.test(p)) {
+      return { tab: '', depth: 2, bottomNav: false, prefetch: true };
+    }
+    if (p.indexOf(PREFIX) === 0) {
+      return { tab: '', depth: 1, bottomNav: true, prefetch: true };
+    }
+    return null;
+  }
 
-  var SKIP_PATH_PREFIXES = [
-    '/express/partner/verify',
-    '/express/partner/apply',
-    '/express/partner/thanks',
-    '/express/partner/offline',
-    '/express/partner/logout'
-  ];
-
-  /** مراحل ورود — ناوبری نرم بین شماره و OTP (نه با تب‌های فوتر) */
-  var AUTH_SOFT_PATHS = [
-    '/express/partner/login',
-    '/express/partner/login/otp'
-  ];
-
-  var prefetchCache = Object.create(null);
-  var prefetchInflight = Object.create(null);
-  var navGeneration = 0;
-  var leaveTimerId = 0;
+  function routePrefetchAllowed(pathname) {
+    var cfg = lookupRoute(pathname);
+    if (!cfg) return true;
+    return cfg.prefetch !== false;
+  }
 
   /** توقف همه ویدیوها قبل از soft-swap — جلوگیری از ادامه صدا در جزئیات/داشبورد */
   function stopAllExpressMedia() {
@@ -225,10 +247,9 @@
   function shouldUsePrefetchCache(href) {
     try {
       var p = normPath(parseUrl(href).pathname);
-      if (p === '/express/partner/profile/edit') return false;
-      if (p === '/express/partner/profile') return false;
-      if (p === '/express/partner/commissions' || p === '/express/partner/commissions/transactions') return false;
-      if (isAuthSoftPath(p)) return p === '/express/partner/login/otp';
+      if (!routePrefetchAllowed(p)) return false;
+      if (p === '/express/partner/login/otp') return true;
+      if (isAuthSoftPath(p)) return false;
       return true;
     } catch (_) {
       return true;
@@ -272,11 +293,8 @@
 
   function softTabKeyForUrl(url) {
     try {
-      var p = normPath(parseUrl(url).pathname);
-      if (TAB_PATHS[p]) return TAB_PATHS[p];
-      if (STACK_PARENT_TAB[p]) return STACK_PARENT_TAB[p];
-      if (/^\/express\/partner\/lands\/[^/]+$/.test(p)) return '';
-      return '';
+      var cfg = lookupRoute(parseUrl(url).pathname);
+      return (cfg && cfg.tab) || '';
     } catch (_) {
       return '';
     }
@@ -284,12 +302,8 @@
 
   function navDepthForUrl(url) {
     try {
-      var p = normPath(parseUrl(url).pathname);
-      if (p === '/express/partner/login') return 0;
-      if (p === '/express/partner/login/otp') return 1;
-      if (TAB_PATHS[p]) return 0;
-      if (STACK_PARENT_TAB[p]) return 1;
-      if (/^\/express\/partner\/lands\/[^/]+$/.test(p)) return 2;
+      var cfg = lookupRoute(parseUrl(url).pathname);
+      if (cfg) return cfg.depth;
       return 0;
     } catch (_) {
       return 0;
@@ -359,7 +373,7 @@
   }
 
   function isLandDetailPath(pathname) {
-    return /^\/express\/partner\/lands\/[^/]+$/.test(normPath(pathname || ''));
+    return LAND_DETAIL_RE.test(normPath(pathname || ''));
   }
 
   function isAiPagePath(pathname) {
@@ -367,8 +381,9 @@
   }
 
   function shouldShowBottomNav(pathname) {
-    var p = normPath(pathname || window.location.pathname || '');
-    return !isLandDetailPath(p) && !isAiPagePath(p) && !isAuthSoftPath(p);
+    var cfg = lookupRoute(pathname || window.location.pathname || '');
+    if (cfg) return cfg.bottomNav !== false;
+    return !isLandDetailPath(pathname) && !isAiPagePath(pathname) && !isAuthSoftPath(normPath(pathname || ''));
   }
 
   function syncAuthFlowClass(pathname) {
@@ -451,6 +466,7 @@
     if (navKey === 'profile' && window.vinorPartnerAvatarCache) {
       try { window.vinorPartnerAvatarCache.apply(document); } catch (_) {}
     }
+    if (navKey === 'dashboard' && window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.setup({ resetScroll: true, expandHeader: true });
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
@@ -995,7 +1011,10 @@
 
       var nav = document.getElementById('bottomNavMenu');
       var isTab = nav && nav.contains(a) && a.hasAttribute('data-nav-key');
-      var isBack = a.getAttribute('data-vinor-express-nav') === 'back';
+      var navAttr = a.getAttribute('data-vinor-express-nav');
+      var isBack = navAttr === 'back';
+      var isForward = navAttr === 'forward' || navAttr === '1'
+        || (a.classList && a.classList.contains('profile-menu-card'));
 
       if (isTab) {
         e.preventDefault();
@@ -1029,6 +1048,8 @@
       e.preventDefault();
       if (isBack) {
         vinorExpressNavigate(href, { back: true });
+      } else if (isForward) {
+        vinorExpressNavigate(href, { forward: true });
       } else {
         vinorExpressNavigate(href);
       }
@@ -1058,6 +1079,22 @@
     { passive: true }
   );
 
+  function initExpressNavHistory() {
+    if (!isPartnerUrl(window.location.href)) return;
+    if (isHardSkipPath(window.location.pathname)) return;
+    try {
+      if (!history.state || !history.state.vinorExpress) {
+        history.replaceState({
+          vinorExpress: true,
+          tabKey: softTabKeyForUrl(window.location.href),
+          depth: navDepthForUrl(window.location.href)
+        }, '', window.location.href);
+      }
+      window.__vinorExpressNavDepth = navDepthForUrl(window.location.href);
+      window.__vinorExpressLastHref = window.location.href;
+    } catch (_) {}
+  }
+
   function syncBottomNavForCurrentPath() {
     var path = window.location.pathname;
     syncAuthFlowClass(path);
@@ -1082,8 +1119,12 @@
   window.vinorExpressInvalidatePrefetch = invalidatePrefetchForHref;
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', syncBottomNavForCurrentPath);
+    document.addEventListener('DOMContentLoaded', function () {
+      initExpressNavHistory();
+      syncBottomNavForCurrentPath();
+    });
   } else {
+    initExpressNavHistory();
     syncBottomNavForCurrentPath();
   }
 
