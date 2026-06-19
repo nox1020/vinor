@@ -3,21 +3,8 @@
 {% set _preview = txn_preview|default(true) %}
 {% set _rows = items[:_preview_limit] if _preview else items %}
 <section id="commissionsTxnList" class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
-  <div class="flex items-center justify-between gap-3 px-3.5 py-3 border-b border-white/5">
-    <h2 class="text-sm font-bold text-white">تراکنش‌ها و برداشت‌ها</h2>
-    {% if items and items|length > _preview_limit %}
-    <a href="{{ url_for('express_partner.commissions_transactions') }}"
-       class="text-[11px] font-medium text-emerald-400 flex items-center gap-1 hover:text-emerald-300 transition shrink-0">
-      همه ({{ items|length }})
-      <i class="fas fa-chevron-left text-[9px]" aria-hidden="true"></i>
-    </a>
-    {% elif items and items|length > 0 %}
-    <a href="{{ url_for('express_partner.commissions_transactions') }}"
-       class="text-[11px] font-medium text-emerald-400 flex items-center gap-1 hover:text-emerald-300 transition shrink-0">
-      مشاهده همه
-      <i class="fas fa-chevron-left text-[9px]" aria-hidden="true"></i>
-    </a>
-    {% endif %}
+  <div class="px-3.5 py-3 border-b border-white/5">
+    <h2 class="text-sm font-bold text-white">تراکنش‌ها</h2>
   </div>
   {% if _rows and _rows|length > 0 %}
   <div class="divide-y divide-white/5">

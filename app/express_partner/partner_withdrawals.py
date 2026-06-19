@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 RESERVE_STATUSES = frozenset({"pending", "approved", "processing"})
@@ -26,6 +27,8 @@ LOCK_RESERVE_STATUSES = RESERVE_STATUSES
 
 # کف برداشت پورسانت (تومان)
 MIN_WITHDRAWAL_AMOUNT = 10_000_000
+
+COMMISSION_TYPE_MANUAL_ADJUSTMENT = "manual_adjustment"
 
 
 def _amount_int(v: Any) -> int:
@@ -54,6 +57,19 @@ def partner_phones_match(a: str, b: str) -> bool:
     return bool(na and nb and na == nb)
 
 
+def _signed_amount_int(v: Any) -> int:
+    try:
+        return int(str(v).replace(",", "").strip() or "0")
+    except (TypeError, ValueError):
+        return 0
+
+
+def _approved_line_amount(c: Dict[str, Any]) -> int:
+    if (str(c.get("commission_type") or "")).strip() == COMMISSION_TYPE_MANUAL_ADJUSTMENT:
+        return _signed_amount_int(c.get("commission_amount"))
+    return _amount_int(c.get("commission_amount"))
+
+
 def approved_gross_commission_total(
     commissions: List[Dict[str, Any]], phone: str
 ) -> int:
@@ -64,7 +80,7 @@ def approved_gross_commission_total(
         if not partner_phones_match(c.get("partner_phone"), phone):
             continue
         if _commission_status(c) == "approved":
-            total += _amount_int(c.get("commission_amount"))
+            total += _approved_line_amount(c)
     return total
 
 
@@ -259,6 +275,48 @@ def approved_commission_total(
     gross = approved_gross_commission_total(commissions, ph)
     reserved = withdrawable_reserve_total(withdrawals or [], ph)
     return max(0, gross - reserved)
+
+
+def apply_manual_balance_target(
+    commissions: List[Dict[str, Any]],
+    withdrawals: List[Dict[str, Any]],
+    phone: str,
+    target_withdrawable: int,
+    note: str = "",
+    *,
+    created_at: str = "",
+) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+    """تنظیم موجودی قابل برداشت با ثبت تعدیل دستی (پورسانت approved)."""
+    ph = (phone or "").strip()
+    if not ph:
+        return False, "invalid_phone", None
+    target = max(0, _amount_int(target_withdrawable))
+    current = approved_commission_total(commissions, withdrawals, ph)
+    delta = target - current
+    if delta == 0:
+        return False, "no_change", None
+
+    new_id = (
+        max([int(x.get("id", 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0
+    ) + 1
+    now = (created_at or "").strip() or (datetime.utcnow().isoformat() + "Z")
+    rec: Dict[str, Any] = {
+        "id": new_id,
+        "commission_type": COMMISSION_TYPE_MANUAL_ADJUSTMENT,
+        "partner_phone": ph,
+        "land_code": "manual",
+        "sale_amount": 0,
+        "commission_pct": 0,
+        "commission_amount": delta,
+        "status": "approved",
+        "created_at": now,
+        "approved_at": now,
+        "admin_note": (note or "").strip(),
+        "adjustment_target": target,
+        "adjustment_previous": current,
+    }
+    commissions.append(rec)
+    return True, "ok", rec
 
 
 def _withdrawal_reserve_total(
@@ -497,7 +555,8 @@ def withdrawal_to_txn_row(w: Dict[str, Any]) -> Dict[str, Any]:
         "commission_allocated_amount": _amount_int(w.get("commission_allocated_amount")),
         "admin_note": w.get("admin_note") or "",
         "withdrawal_id": w.get("id"),
-        "_txn_label": f"برداشت به {bank}",
+        "_txn_label": "برداشت",
+        "_txn_meta": bank,
         "cancellable": False,
         "updated_at": w.get("updated_at") or w.get("created_at") or "",
     }
@@ -522,7 +581,8 @@ def withdrawal_request_to_txn_row(w: Dict[str, Any]) -> Dict[str, Any]:
         "admin_note": w.get("admin_note") or "",
         "withdrawal_id": w.get("id"),
         "withdrawal_status_label": status_label(st),
-        "_txn_label": f"درخواست برداشت به {bank}",
+        "_txn_label": "درخواست برداشت",
+        "_txn_meta": bank,
         "cancellable": st in PARTNER_CANCELLABLE_WITHDRAWAL_STATUSES,
         "updated_at": w.get("updated_at") or "",
         "cancelled_at": w.get("cancelled_at") or "",
@@ -632,6 +692,8 @@ def _txn_type_title(row: Dict[str, Any]) -> str:
         return "واریز برداشت"
     if txn_type == "withdrawal_request":
         return "درخواست برداشت"
+    if (str(row.get("commission_type") or "")).strip() == COMMISSION_TYPE_MANUAL_ADJUSTMENT:
+        return "تعدیل موجودی"
     if (str(row.get("commission_type") or "")).strip() == "referral":
         return "پورسانت دعوت"
     return "پورسانت فروش"
@@ -692,10 +754,24 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
         comm_type = (str(row.get("commission_type") or "")).strip()
         land = str(row.get("land_code") or "").strip()
         if comm_type == "referral":
-            fields.append({"label": "نوع", "value": "پورسانت دعوت همکار"})
+            fields.append({"label": "نوع", "value": "پورسانت دعوت"})
+            referred_name = str(row.get("referred_name") or "").strip()
             referred = str(row.get("referred_phone") or row.get("referral_phone") or "").strip()
+            if referred_name:
+                fields.append({"label": "نام همکار", "value": referred_name})
             if referred:
                 wallet_fields.append({"label": "همکار دعوت‌شده", "value": referred})
+        elif comm_type == COMMISSION_TYPE_MANUAL_ADJUSTMENT:
+            fields.append({"label": "نوع", "value": "تعدیل دستی موجودی"})
+            prev = row.get("adjustment_previous")
+            tgt = row.get("adjustment_target")
+            if prev is not None:
+                fields.append({"label": "موجودی قبلی", "value": _amount_int(prev), "format": "toman"})
+            if tgt is not None:
+                fields.append({"label": "موجودی هدف", "value": _amount_int(tgt), "format": "toman"})
+            adj_note = str(row.get("admin_note") or "").strip()
+            if adj_note:
+                fields.append({"label": "یادداشت ادمین", "value": adj_note})
         elif land and land != "referral":
             fields.append({"label": "کد ملک", "value": land})
 
@@ -754,7 +830,7 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "txn_type": txn_type,
         "title": _txn_type_title(row),
-        "description": (str(row.get("_txn_label") or "")).strip(),
+        "description": (str(row.get("_txn_meta") or row.get("_txn_label") or "")).strip(),
         "amount": amt,
         "amount_sign": "-" if is_wd else "+",
         "status": st,

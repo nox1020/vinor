@@ -3521,6 +3521,67 @@ def express_partner_detail(phone: str):
     )
 
 
+@admin_bp.post('/express/partners/<path:phone>/adjust-balance')
+@login_required
+def express_partner_adjust_balance(phone: str):
+    from app.express_partner.partner_withdrawals import (
+        apply_manual_balance_target,
+        partner_commission_dashboard,
+    )
+
+    phone = (phone or '').strip()
+    back_q = (request.form.get('q') or request.args.get('q') or '').strip()
+    back_filter = (request.form.get('filter') or request.args.get('filter') or 'all').strip()
+    redirect_kw = {'phone': phone, 'q': back_q, 'filter': back_filter}
+
+    if not phone:
+        flash('شماره همراه معتبر نیست.', 'warning')
+        return redirect(url_for('admin.express_partners', q=back_q, filter=back_filter))
+
+    raw_target = (request.form.get('balance_target') or '').strip().replace(',', '').replace('،', '')
+    try:
+        target = max(0, int(float(raw_target or '0')))
+    except (TypeError, ValueError):
+        flash('مبلغ موجودی معتبر نیست.', 'warning')
+        return redirect(url_for('admin.express_partner_detail', **redirect_kw))
+
+    note = (request.form.get('admin_note') or '').strip()[:240]
+    commissions = load_express_commissions() or []
+    if not isinstance(commissions, list):
+        commissions = []
+    withdrawals = load_partner_withdrawals() or []
+    if not isinstance(withdrawals, list):
+        withdrawals = []
+
+    ok, reason, rec = apply_manual_balance_target(
+        commissions,
+        withdrawals,
+        phone,
+        target,
+        note,
+        created_at=iso_z(utcnow()),
+    )
+    if not ok:
+        if reason == 'no_change':
+            flash('موجودی تغییری نکرد.', 'info')
+        else:
+            flash('تنظیم موجودی انجام نشد.', 'warning')
+        return redirect(url_for('admin.express_partner_detail', **redirect_kw))
+
+    try:
+        save_express_commissions(commissions)
+    except Exception:
+        current_app.logger.exception('save_express_commissions failed adjust-balance')
+        flash('ذخیره تعدیل موجودی ناموفق بود.', 'danger')
+        return redirect(url_for('admin.express_partner_detail', **redirect_kw))
+
+    after = int(partner_commission_dashboard(commissions, withdrawals, phone).get('withdrawable_balance') or 0)
+    delta = int((rec or {}).get('commission_amount') or 0)
+    sign = 'افزایش' if delta > 0 else 'کاهش'
+    flash(f'موجودی قابل برداشت به {after:,} تومان رسید ({sign} {abs(delta):,} تومان).'.replace(',', '،'), 'success')
+    return redirect(url_for('admin.express_partner_detail', **redirect_kw))
+
+
 @admin_bp.post('/express/partners/<path:phone>/retry-referral-grant')
 @login_required
 def express_partner_retry_referral_grant(phone: str):

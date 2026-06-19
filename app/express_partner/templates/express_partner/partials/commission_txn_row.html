@@ -48,20 +48,22 @@
           </p>
           <p class="commission-txn-row__meta mt-1 text-[11px] text-slate-500 leading-snug truncate">
             {% if _txn_type == 'withdrawal' %}
-              واریز به حساب بانکی
+              {{ c.bank_summary or 'واریز به حساب بانکی' }}
             {% elif _txn_type == 'withdrawal_request' %}
-              {{ c.withdrawal_status_label or 'درخواست برداشت' }}
+              {{ c.withdrawal_status_label or 'درخواست برداشت' }}{% if c.masked_pan %} · {{ c.masked_pan }}{% elif c.bank_name %} · {{ c.bank_name }}{% endif %}
             {% elif _is_referral %}
-              پاداش دعوت همکار
+              {{ c._txn_meta or c.referred_name or c.referred_phone or 'همکار دعوت‌شده' }}
             {% else %}
-              {{ c.land_code or '—' }}
+              {{ c._txn_meta or c.land_code or '—' }}
             {% endif %}
             {% if c.partial_paid_display %} · {{ c.partial_paid_display|toman }} واریز شده{% endif %}
           </p>
         </div>
-        <p class="commission-txn-row__amount shrink-0 text-sm font-bold tabular-nums whitespace-nowrap{% if _is_wd %} text-amber-300{% else %} text-emerald-400{% endif %}">
+        <p class="commission-txn-row__amount shrink-0 text-sm font-bold tabular-nums whitespace-nowrap{% if _is_wd %} text-amber-300{% elif (c.commission_amount or 0)|int < 0 %} text-rose-400{% else %} text-emerald-400{% endif %}">
           {% if _is_wd %}
             −{{ (c.withdrawal_amount or 0)|toman }}
+          {% elif (c.commission_amount or 0)|int < 0 %}
+            −{{ ((c.commission_amount or 0)|int * -1)|toman }}
           {% else %}
             {% if (c.commission_amount or 0)|int > 0 %}+{% endif %}{{ (c.commission_amount or 0)|toman }}
           {% endif %}

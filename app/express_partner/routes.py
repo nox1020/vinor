@@ -564,23 +564,40 @@ def _attach_commission_txn_labels(my_comms: List[Dict[str, Any]]) -> None:
         except Exception:
             lo = {}
     for c in my_comms:
+        if (c.get('commission_type') or '').strip() == 'manual_adjustment':
+            c['_txn_label'] = 'تعدیل موجودی'
+            note = (str(c.get('admin_note') or '')).strip()
+            prev = c.get('adjustment_previous')
+            tgt = c.get('adjustment_target')
+            if note:
+                c['_txn_meta'] = note
+            elif prev is not None and tgt is not None:
+                c['_txn_meta'] = f'از {int(prev):,} به {int(tgt):,} تومان'
+            else:
+                c['_txn_meta'] = 'توسط ادمین'
+            continue
         if (c.get('commission_type') or '').strip() == 'referral':
+            c['_txn_label'] = 'پورسانت دعوت'
             name = (str(c.get('referred_name') or '')).strip()
             phone = (str(c.get('referred_phone') or '')).strip()
-            if name:
-                c['_txn_label'] = f'پورسانت دعوت همکار ({name})'
-            elif phone:
-                c['_txn_label'] = f'پورسانت دعوت همکار ({phone})'
-            else:
-                c['_txn_label'] = 'پورسانت دعوت همکار'
+            c['_txn_meta'] = name or phone or ''
             continue
         L = lo.get(str(c.get('land_code', '') or ''))
+        c['_txn_label'] = 'پورسانت فروش'
+        code = str(c.get('land_code') or '').strip()
         if L:
-            title = (str(L.get('title') or L.get('category') or 'ملک')).strip() or 'ملک'
+            title = (str(L.get('title') or L.get('category') or '')).strip()
             city = (str(L.get('city') or '')).strip()
-            c['_txn_label'] = f'پورسانت فروش {title}' + (f' در {city}' if city else '')
+            parts = []
+            if code:
+                parts.append(code)
+            if title and title != 'ملک':
+                parts.append(title)
+            if city:
+                parts.append(city)
+            c['_txn_meta'] = ' · '.join(parts) if parts else code
         else:
-            c.setdefault('_txn_label', 'پورسانت فروش')
+            c['_txn_meta'] = code
 
 
 def _invalidate_partner_session_cache() -> None:

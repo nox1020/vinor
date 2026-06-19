@@ -5,15 +5,51 @@
 {% block head %}
   {{ super() }}
   <style>
-    .adm-person-hero {
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(16, 185, 129, 0.06) 100%);
+    .adm-pd { --adm-pd-radius: 1rem; }
+    .adm-pd-hero {
+      background: linear-gradient(145deg, rgba(59, 130, 246, 0.07) 0%, rgba(16, 185, 129, 0.05) 55%, transparent 100%);
     }
-    html.dark .adm-person-hero {
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%);
+    html.dark .adm-pd-hero {
+      background: linear-gradient(145deg, rgba(59, 130, 246, 0.14) 0%, rgba(16, 185, 129, 0.08) 55%, transparent 100%);
     }
-    .adm-person-stat {
-      min-height: 4.5rem;
+    .adm-pd-card {
+      border-radius: var(--adm-pd-radius);
+      border: 1px solid rgb(229 231 235);
+      background: rgb(255 255 255);
     }
+    html.dark .adm-pd-card {
+      border-color: rgb(55 65 81);
+      background: rgb(17 24 39);
+    }
+    .adm-pd-kpi {
+      border-radius: 0.85rem;
+      border: 1px solid rgb(243 244 246);
+      background: rgb(249 250 251);
+    }
+    html.dark .adm-pd-kpi {
+      border-color: rgb(31 41 55);
+      background: rgb(3 7 18);
+    }
+    .adm-pd-wallet {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.06));
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+    html.dark .adm-pd-wallet {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(6, 78, 59, 0.2));
+      border-color: rgba(52, 211, 153, 0.2);
+    }
+    .adm-pd-section-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: none;
+    }
+    details.adm-person-collapse > summary { list-style: none; }
+    details.adm-person-collapse > summary::-webkit-details-marker { display: none; }
+    details.adm-person-collapse .adm-collapse-chevron { transition: transform 0.15s ease; }
+    details.adm-person-collapse[open] .adm-collapse-chevron { transform: rotate(180deg); }
+    details.adm-person-collapse[open] > summary { border-bottom: 1px solid rgb(243 244 246); }
+    html.dark details.adm-person-collapse[open] > summary { border-bottom-color: rgb(31 41 55); }
     .adm-access-pill.is-on {
       border-color: rgba(16, 185, 129, 0.35);
       background: rgba(16, 185, 129, 0.08);
@@ -23,21 +59,65 @@
       color: rgb(110, 231, 183);
       background: rgba(16, 185, 129, 0.12);
     }
+    .adm-pd-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.45rem 0.7rem;
+      border-radius: 0.65rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      border: 1px solid rgb(229 231 235);
+      color: rgb(55 65 81);
+      transition: background 0.15s, border-color 0.15s;
+    }
+    html.dark .adm-pd-action {
+      border-color: rgb(55 65 81);
+      color: rgb(209 213 219);
+    }
+    .adm-pd-action:hover {
+      background: rgb(249 250 251);
+      border-color: rgb(209 213 219);
+    }
+    html.dark .adm-pd-action:hover {
+      background: rgb(31 41 55);
+    }
+    .adm-pd-action--danger {
+      border-color: rgb(254 202 202);
+      color: rgb(220 38 38);
+    }
+    html.dark .adm-pd-action--danger {
+      border-color: rgb(127 29 29);
+      color: rgb(252 165 165);
+    }
+    @media (max-width: 1023px) {
+      .adm-pd-sticky-actions {
+        position: sticky;
+        bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+        z-index: 20;
+        margin: 0 -0.25rem;
+        padding: 0.5rem;
+        border-radius: 1rem;
+        border: 1px solid rgb(229 231 235);
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.08);
+      }
+      html.dark .adm-pd-sticky-actions {
+        border-color: rgb(55 65 81);
+        background: rgba(17, 24, 39, 0.92);
+      }
+    }
   </style>
 {% endblock %}
 
 {% block content %}
-<div id="adminPartnerDetail" class="space-y-4">
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <a href="{{ url_for('admin.express_partners', q=back_q or '', filter=back_filter or 'all') }}"
-       class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-      <i class="fa-solid fa-arrow-right"></i>
-      بازگشت به لیست
-    </a>
-    {% if person.phone %}
-    <p class="text-xs text-gray-400 font-mono ltr" dir="ltr">{{ person.phone }}</p>
-    {% endif %}
-  </div>
+<div id="adminPartnerDetail" class="adm-pd space-y-3 max-w-6xl mx-auto">
+  <a href="{{ url_for('admin.express_partners', q=back_q or '', filter=back_filter or 'all') }}"
+     class="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+    <i class="fa-solid fa-arrow-right text-xs"></i>
+    بازگشت به لیست
+  </a>
 
   {% include 'admin/partials/person_detail_body.html' %}
 </div>
