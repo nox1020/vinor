@@ -28,16 +28,15 @@
               <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
                 <i class="fa-solid fa-user text-blue-600 dark:text-blue-400 text-lg"></i>
               </div>
-              <div class="absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-gray-900"></div>
+              <div class="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white dark:border-gray-900 {% if p.online_now %}bg-green-500{% else %}bg-gray-400{% endif %}"></div>
             </div>
             
             <!-- اطلاعات همکار -->
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
                 <h3 class="font-semibold text-gray-900 dark:text-white">{{ p.name or 'همکار' }}</h3>
-                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                  <i class="fa-solid fa-circle text-[6px] ml-1"></i>
-                  آنلاین
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium {% if p.online_now %}bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400{% else %}bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400{% endif %}">
+                  {% if p.online_now %}<i class="fa-solid fa-circle text-[6px] ml-1"></i> آنلاین{% else %}اخیراً آنلاین{% endif %}
                 </span>
               </div>
               <div class="flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">

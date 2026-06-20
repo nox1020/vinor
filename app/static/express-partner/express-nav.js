@@ -37,6 +37,7 @@
     '/express/partner/verify',
     '/express/partner/apply',
     '/express/partner/thanks',
+    '/express/partner/download-app',
     '/express/partner/offline',
     '/express/partner/logout'
   ];

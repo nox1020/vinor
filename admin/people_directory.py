@@ -302,6 +302,8 @@ def build_admin_people_directory(
 
     get_online_partners_list,
 
+    get_recent_online_partners_list=None,
+
     load_partner_notes=None,
 
     load_partner_routines_cached=None,
@@ -362,7 +364,11 @@ def build_admin_people_directory(
 
         str(o.get('phone') or ''): o
 
-        for o in (get_online_partners_list() or [])
+        for o in (
+
+            (get_recent_online_partners_list() if get_recent_online_partners_list else get_online_partners_list()) or []
+
+        )
 
         if isinstance(o, dict)
 
@@ -968,11 +974,17 @@ def build_admin_people_directory(
 
         if online:
 
-            row['online'] = True
+            row['online'] = bool(online.get('online_now'))
 
             row['last_activity'] = online.get('last_activity') or ''
 
             row['ip'] = online.get('ip') or ''
+
+            row['online_timestamp'] = float(online.get('timestamp') or 0)
+
+        else:
+
+            row['online_timestamp'] = 0
 
         fin = row.get('financial') or {}
 
@@ -1078,19 +1090,21 @@ def build_admin_people_directory(
 
     elif fk == 'online':
 
-        items = [r for r in items if r['access'].get('online_now')]
+        items = [r for r in items if float(r.get('online_timestamp') or 0) > 0]
 
+        items.sort(key=lambda r: -float(r.get('online_timestamp') or 0))
 
+    if fk != 'online':
 
-    items.sort(key=lambda r: (
+        items.sort(key=lambda r: (
 
-        0 if r['access'].get('online_now') else 1,
+            0 if r['access'].get('online_now') else 1,
 
-        0 if r['access'].get('partner_pending') else 1,
+            0 if r['access'].get('partner_pending') else 1,
 
-        str(r.get('name') or r.get('phone') or ''),
+            str(r.get('name') or r.get('phone') or ''),
 
-    ))
+        ))
 
 
 
@@ -1107,6 +1121,8 @@ def build_admin_people_directory(
         'site_users': sum(1 for r in people.values() if r['access'].get('site_user')),
 
         'online': sum(1 for r in people.values() if r['access'].get('online_now')),
+
+        'recent_online': sum(1 for r in people.values() if float(r.get('online_timestamp') or 0) > 0),
 
     }
 

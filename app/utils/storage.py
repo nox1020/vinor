@@ -198,11 +198,11 @@ def load_express_lands_cached(app=None):
     if c["path"] == path and c["mtime"] == mtime and c["size"] == size and c["data"] is not None:
         return c["data"]
 
-    # بارگذاری و فیلتر کردن فایل‌های اکسپرس
+    # بارگذاری فایل‌های اکسپرس (شامل فروخته‌شده — مرتب‌سازی در UI همکار)
     all_lands = load_ads_cached(app)
     express_lands = [
-        l for l in all_lands 
-        if l.get('is_express', False) and l.get('express_status') != 'sold'
+        l for l in all_lands
+        if l.get('is_express', False)
     ]
     # مرتب‌سازی بر اساس تاریخ ایجاد (جدیدترین اول)
     express_lands.sort(key=lambda x: x.get('created_at', ''), reverse=True)
@@ -238,8 +238,8 @@ def _update_ads_cache_after_save(path, items):
     _ADS_CACHE.update({"path": path, "mtime": mtime, "size": size, "data": items})
     # به‌روزرسانی کش اکسپرس
     express_lands = [
-        l for l in items 
-        if l.get('is_express', False) and l.get('express_status') != 'sold'
+        l for l in items
+        if l.get('is_express', False)
     ]
     express_lands.sort(key=lambda x: x.get('created_at', ''), reverse=True)
     _EXPRESS_LANDS_CACHE.update({"path": path, "mtime": mtime, "size": size, "data": express_lands})

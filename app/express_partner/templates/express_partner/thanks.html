@@ -23,7 +23,7 @@
     {% endif %}
     {% endwith %}
 
-    {# —— آیکون و عنوان —— #}
+    {# —— تشکر —— #}
     <div class="text-center">
       {% if pending_review %}
       <div class="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400 shadow-lg shadow-amber-950/20">
@@ -52,6 +52,39 @@
       {% endif %}
     </div>
 
+    {# —— دانلود اپ (مرورگر) —— #}
+    {% if show_app_download %}
+    <section class="mt-6 rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.08] to-[#12181f] p-5 sm:p-6" aria-label="دانلود اپلیکیشن">
+      <div class="flex flex-col items-center text-center">
+        <div class="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-900/40">
+          <i class="fa-brands fa-android text-3xl" aria-hidden="true"></i>
+        </div>
+        <h3 class="text-base font-bold text-white">اپلیکیشن وینور را نصب کنید</h3>
+        <p class="mt-2 text-xs leading-relaxed text-zinc-500 max-w-xs">
+          فایل‌های اکسپرس، پورسانت، برداشت و ابزارهای همکاری — همه در اپ موبایل
+        </p>
+        {% if android_apk_version %}
+        <p class="mt-2 text-[11px] text-zinc-500 tabular-nums">نسخه {{ android_apk_version }}{% if android_apk_size_label %} · {{ android_apk_size_label }}{% endif %}</p>
+        {% endif %}
+
+        {% if android_apk_url %}
+        <a href="{{ android_apk_url }}"
+           download
+           rel="noopener"
+           data-vinor-express-full-nav="1"
+           class="mt-4 flex w-full max-w-sm items-center justify-center gap-2.5 rounded-xl bg-emerald-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-900/30 transition hover:bg-emerald-500">
+          <i class="fas fa-download text-base" aria-hidden="true"></i>
+          دانلود اپلیکیشن اندروید
+        </a>
+        {% else %}
+        <p class="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+          لینک دانلود به‌زودی فعال می‌شود. پس از تأیید همکاری، پیامک دریافت می‌کنید.
+        </p>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
     {# —— مراحل —— #}
     <section class="mt-6 rounded-2xl border border-white/10 bg-[#12181f] p-4 sm:p-5" aria-label="مراحل بعدی">
       <h3 class="mb-4 text-xs font-bold text-zinc-400">مراحل فعال‌سازی</h3>
@@ -68,12 +101,26 @@
             <p class="mt-0.5 text-xs text-zinc-500">اطلاعات شما در سیستم ثبت شده است</p>
           </div>
         </li>
+        {% if show_app_download %}
+        <li class="flex gap-3">
+          <div class="flex flex-col items-center">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
+              <i class="fas fa-download text-xs" aria-hidden="true"></i>
+            </span>
+            <span class="my-1 w-px flex-1 min-h-[1.25rem] bg-white/5" aria-hidden="true"></span>
+          </div>
+          <div class="pb-4 min-w-0">
+            <p class="text-sm font-semibold text-white">نصب اپلیکیشن</p>
+            <p class="mt-0.5 text-xs text-zinc-500">برای دسترسی سریع‌تر پس از تأیید همکاری</p>
+          </div>
+        </li>
+        {% endif %}
         <li class="flex gap-3">
           <div class="flex flex-col items-center">
             <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full {% if pending_review %}bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30 animate-pulse{% else %}bg-zinc-800 text-zinc-500 ring-1 ring-white/10{% endif %}">
               <i class="fas fa-user-check text-xs" aria-hidden="true"></i>
             </span>
-            <span class="my-1 w-px flex-1 min-h-[1.25rem] bg-white/5" aria-hidden="true"></span>
+            <span class="my-1 w-px flex-1 min-w-[1.25rem] bg-white/5" aria-hidden="true"></span>
           </div>
           <div class="pb-4 min-w-0">
             <p class="text-sm font-semibold text-white">بررسی تیم وینور</p>
@@ -101,10 +148,17 @@
           <i class="fas fa-bell mt-0.5 shrink-0 text-emerald-500/70 text-[10px]" aria-hidden="true"></i>
           <span>پس از تأیید، پیامک فعال‌سازی پنل برای شما ارسال می‌شود.</span>
         </li>
+        {% if show_app_download %}
+        <li class="flex gap-2">
+          <i class="fas fa-mobile-screen mt-0.5 shrink-0 text-emerald-500/70 text-[10px]" aria-hidden="true"></i>
+          <span>اپ را نصب کنید تا پس از تأیید، مستقیم وارد پنل همکار شوید.</span>
+        </li>
+        {% else %}
         <li class="flex gap-2">
           <i class="fas fa-mobile-screen mt-0.5 shrink-0 text-emerald-500/70 text-[10px]" aria-hidden="true"></i>
           <span>می‌توانید همین صفحه را باز نگه دارید یا از دکمه زیر وضعیت را بررسی کنید.</span>
         </li>
+        {% endif %}
       </ul>
     </section>
 

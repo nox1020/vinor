@@ -106,10 +106,7 @@
     </div>
   </section>
 
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-    <!-- صف کار -->
-    <section class="lg:col-span-2 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+  <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
       <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
         <h3 class="text-sm font-bold text-gray-900 dark:text-white">صف کار اخیر</h3>
         <span class="text-[11px] text-gray-400">{{ action_queue|length if action_queue else 0 }} مورد</span>
@@ -145,73 +142,39 @@
           <p class="text-sm text-gray-500 dark:text-gray-400">مورد معلقی برای بررسی نیست.</p>
         </div>
       {% endif %}
-    </section>
-
-    <!-- آنلاین + میانبر -->
-    <div class="space-y-4">
-
-      <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
-        <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-          <h3 class="text-sm font-bold text-gray-900 dark:text-white">همکاران آنلاین</h3>
-          <a href="{{ url_for('admin.express_partners', filter='online') }}" class="text-[11px] text-blue-600 dark:text-blue-400">همه</a>
-        </div>
-        {% if online_preview and online_preview|length > 0 %}
-          <ul class="divide-y divide-gray-100 dark:divide-gray-800">
-            {% for p in online_preview %}
-              <li>
-                <a href="{{ p.url }}" class="flex items-center gap-2.5 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-950/50">
-                  <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ p.name }}</p>
-                    <p class="text-[10px] text-gray-400 font-mono ltr" dir="ltr">{{ p.phone }}</p>
-                  </div>
-                </a>
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="px-4 py-6 text-sm text-center text-gray-400">همکار آنلاینی نیست.</p>
-        {% endif %}
-      </section>
-
-      <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-        <h3 class="text-sm font-bold text-gray-900 dark:text-white mb-3">دسترسی سریع</h3>
-        <div class="grid grid-cols-2 gap-2">
-          {% set shortcuts = [
-            (url_for('admin.add_express_listing'), 'fa-plus', 'ثبت آگهی'),
-            (url_for('admin.express_assignments'), 'fa-link', 'انتساب'),
-            (url_for('admin.express_commissions'), 'fa-wallet', 'پورسانت'),
-            (url_for('admin.financial_withdrawals'), 'fa-money-bill-transfer', 'برداشت'),
-            (url_for('admin.notifications_colleagues'), 'fa-bell', 'اعلان'),
-            (url_for('admin.sms_colleagues'), 'fa-sms', 'پیامک'),
-          ] %}
-          {% for href, icon, label in shortcuts %}
-            <a href="{{ href }}" class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition text-center">
-              <i class="fa-solid {{ icon }} text-gray-600 dark:text-gray-400"></i>
-              <span class="text-[11px] font-medium text-gray-700 dark:text-gray-300">{{ label }}</span>
-            </a>
-          {% endfor %}
-        </div>
-      </section>
-
-    </div>
-  </div>
+  </section>
 
   <!-- نمای کلی -->
   <section>
     <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 px-1">نمای کلی</h3>
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {% set overview = [
         ('کل اشخاص', people_total or 0, url_for('admin.express_partners'), ''),
         ('همکار تأیید', partners_count or 0, url_for('admin.express_partners', filter='partners'), ''),
+        ('همکاران آنلاین', online_partners_count or 0, url_for('admin.express_partners', filter='online'), 'الان فعال'),
         ('انتساب فعال', assignments_active_count or 0, url_for('admin.express_assignments'), 'از ' ~ (assignments_total_count or 0)),
         ('آگهی Express', express_listings_count or 0, url_for('admin.express_listings'), ''),
         ('روتین این ماه', routines_count_month or 0, url_for('admin.express_partners'), 'روز ثبت‌شده'),
       ] %}
       {% for label, value, href, sub in overview %}
-        <a href="{{ href }}" class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 hover:border-gray-300 dark:hover:border-gray-600 transition">
-          <p class="text-[10px] text-gray-500 dark:text-gray-400">{{ label }}</p>
-          <p class="text-xl font-bold tabular-nums text-gray-900 dark:text-white mt-0.5">{{ value }}</p>
+        <a href="{{ href }}" class="rounded-xl border p-3 transition hover:shadow-md focusable
+                  {% if label == 'همکاران آنلاین' and (online_partners_count or 0) > 0 %}
+                    border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-900/10 hover:border-teal-300 dark:hover:border-teal-700
+                  {% else %}
+                    border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-600
+                  {% endif %}">
+          <p class="text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
+            {% if label == 'همکاران آنلاین' and (online_partners_count or 0) > 0 %}
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+            {% endif %}
+            {{ label }}
+          </p>
+          <p class="text-xl font-bold tabular-nums mt-0.5
+                    {% if label == 'همکاران آنلاین' and (online_partners_count or 0) > 0 %}
+                      text-teal-700 dark:text-teal-300
+                    {% else %}
+                      text-gray-900 dark:text-white
+                    {% endif %}">{{ value }}</p>
           {% if sub %}<p class="text-[10px] text-gray-400 mt-0.5">{{ sub }}</p>{% endif %}
         </a>
       {% endfor %}

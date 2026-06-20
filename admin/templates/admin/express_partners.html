@@ -47,7 +47,7 @@
         ('partners', 'همکار تأیید', stats.partners),
         ('pending', 'در انتظار', stats.pending),
         ('users', 'فقط کاربر', stats.site_users),
-        ('online', 'آنلاین', stats.online),
+        ('online', 'آنلاین', stats.recent_online or stats.online),
       ] %}
       {% for key, label, count in tabs %}
         <a href="{{ url_for('admin.express_partners', filter=key, q=q or '') }}"
@@ -127,7 +127,14 @@
             </div>
 
             <p class="mt-3 text-[10px] text-gray-400 dark:text-gray-500">
+              {% if (filter_kind or '') == 'online' and person.last_activity %}
+                <span class="inline-flex items-center gap-1 {% if acc.online_now %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                  {% if acc.online_now %}<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>آنلاین{% else %}آخرین فعالیت{% endif %}
+                  · <span class="jalali-dt" data-dt="{{ person.last_activity }}"></span>
+                </span>
+              {% else %}
               برای مشاهده پروفایل، مالی، انتساب و دسترسی‌ها کلیک کنید
+              {% endif %}
             </p>
           </div>
         </a>

@@ -291,7 +291,7 @@ def _update_online_user(session_id: str, username: str = None, ip: str = None):
             'timestamp': now.timestamp(),
             'username': username or session.get('username') or 'کاربر',
             'ip': ip or request.remote_addr or 'نامشخص',
-            'last_activity': now.strftime('%Y-%m-%d %H:%M:%S')
+            'last_activity': now.replace(microsecond=0).isoformat() + 'Z',
         }
 
 def _get_online_users_count() -> int:
@@ -335,57 +335,85 @@ def _get_online_users_list() -> List[Dict[str, Any]]:
 # -----------------------------------------------------------------------------
 # ردیابی همکاران آنلاین (Express Partners)
 # -----------------------------------------------------------------------------
-# Dict برای ذخیره اطلاعات همکاران آنلاین
+# Dict برای ذخیره آخرین فعالیت همکاران (آنلاین + اخیراً آنلاین)
 # {phone: {'timestamp': float, 'name': str, 'ip': str, 'last_activity': str}}
 _online_partners = {}
+_ONLINE_NOW_TIMEOUT_S = 5 * 60
+_RECENT_ONLINE_WINDOW_S = 24 * 60 * 60
+_ONLINE_PARTNERS_MAX_AGE_S = 7 * 24 * 60 * 60
+
+
+def _prune_old_online_partners(now: float | None = None) -> None:
+    """حذف رکوردهای خیلی قدیمی برای جلوگیری از رشد بی‌حد حافظه."""
+    ts = now if now is not None else datetime.utcnow().timestamp()
+    stale = [
+        phone for phone, data in _online_partners.items()
+        if isinstance(data, dict) and (ts - float(data.get('timestamp') or 0)) > _ONLINE_PARTNERS_MAX_AGE_S
+    ]
+    for phone in stale:
+        _online_partners.pop(phone, None)
+
+
+def _online_partner_entry(phone: str, data: dict) -> dict:
+    ts = float(data.get('timestamp') or 0)
+    return {
+        'phone': phone,
+        'name': data.get('name', 'همکار'),
+        'ip': data.get('ip', 'نامشخص'),
+        'last_activity': data.get('last_activity', ''),
+        'timestamp': ts,
+        'online_now': (datetime.utcnow().timestamp() - ts) <= _ONLINE_NOW_TIMEOUT_S,
+    }
+
 
 def _update_online_partner(phone: str, name: str = None, ip: str = None):
-    """به‌روزرسانی timestamp آخرین فعالیت همکار"""
-    if phone:
-        now = datetime.utcnow()
-        _online_partners[phone] = {
-            'timestamp': now.timestamp(),
-            'name': name or 'همکار',
-            'ip': ip or 'نامشخص',
-            'last_activity': now.strftime('%Y-%m-%d %H:%M:%S')
-        }
+    """ثبت/به‌روزرسانی آخرین فعالیت همکار (حتی پس از آفلاین شدن باقی می‌ماند)."""
+    ph = _normalize_phone((phone or '').strip()) or (phone or '').strip()
+    if not ph:
+        return
+    now = datetime.utcnow()
+    _online_partners[ph] = {
+        'timestamp': now.timestamp(),
+        'name': name or 'همکار',
+        'ip': ip or 'نامشخص',
+        'last_activity': now.replace(microsecond=0).isoformat() + 'Z',
+    }
+    if len(_online_partners) > 500:
+        _prune_old_online_partners()
+
 
 def _get_online_partners_count() -> int:
-    """شمارش همکاران آنلاین (فعال در 5 دقیقه گذشته)"""
+    """شمارش همکاران آنلاین (فعال در ۵ دقیقه گذشته)."""
     now = datetime.utcnow().timestamp()
-    timeout = 5 * 60  # 5 دقیقه
-    online = 0
-    # پاک‌سازی همکاران منقضی شده
-    expired = [phone for phone, data in _online_partners.items() if isinstance(data, dict) and (now - data.get('timestamp', 0)) > timeout]
-    for phone in expired:
-        _online_partners.pop(phone, None)
-    # شمارش همکاران آنلاین
+    return sum(
+        1 for data in _online_partners.values()
+        if isinstance(data, dict) and (now - float(data.get('timestamp') or 0)) <= _ONLINE_NOW_TIMEOUT_S
+    )
+
+
+def _get_recent_online_partners_list(max_age_seconds: int | None = None) -> List[Dict[str, Any]]:
+    """لیست همکاران با فعالیت اخیر — جدیدترین آنلاین اول."""
+    now = datetime.utcnow().timestamp()
+    window = int(max_age_seconds or _RECENT_ONLINE_WINDOW_S)
+    recent: List[Dict[str, Any]] = []
     for phone, data in _online_partners.items():
-        if isinstance(data, dict) and (now - data.get('timestamp', 0)) <= timeout:
-            online += 1
-    return online
+        if not isinstance(data, dict):
+            continue
+        ts = float(data.get('timestamp') or 0)
+        if ts and (now - ts) <= window:
+            recent.append(_online_partner_entry(phone, data))
+    recent.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+    return recent
 
 
 def _get_online_partners_list() -> List[Dict[str, Any]]:
-    """دریافت لیست همکاران آنلاین با اطلاعات کامل"""
+    """همکاران آنلاین در این لحظه (۵ دقیقه اخیر)."""
     now = datetime.utcnow().timestamp()
-    timeout = 5 * 60  # 5 دقیقه
-    online_list: List[Dict[str, Any]] = []
-    # پاک‌سازی همکاران منقضی شده
-    expired = [phone for phone, data in _online_partners.items() if isinstance(data, dict) and (now - data.get('timestamp', 0)) > timeout]
-    for phone in expired:
-        _online_partners.pop(phone, None)
-    # جمع‌آوری همکاران آنلاین
-    for phone, data in _online_partners.items():
-        if isinstance(data, dict) and (now - data.get('timestamp', 0)) <= timeout:
-            online_list.append({
-                'phone': phone,
-                'name': data.get('name', 'همکار'),
-                'ip': data.get('ip', 'نامشخص'),
-                'last_activity': data.get('last_activity', ''),
-                'timestamp': data.get('timestamp', 0),
-            })
-    # مرتب‌سازی بر اساس timestamp (جدیدترین اول)
+    online_list = [
+        _online_partner_entry(phone, data)
+        for phone, data in _online_partners.items()
+        if isinstance(data, dict) and (now - float(data.get('timestamp') or 0)) <= _ONLINE_NOW_TIMEOUT_S
+    ]
     online_list.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
     return online_list
 
@@ -1191,7 +1219,7 @@ def online_users_page():
 @login_required
 def online_partners_page():
     """صفحه لیست همکاران آنلاین"""
-    online_partners = _get_online_partners_list()
+    online_partners = _get_recent_online_partners_list()
     return render_template(
         'admin/online_partners.html',
         online_partners=online_partners,
@@ -3382,6 +3410,20 @@ def toggle_express_sold(code):
         flash(f'آگهی {code} به حالت در انتظار فروش برگشت.', 'success')
     else:
         land['express_status'] = 'sold'
+        try:
+            assignments = load_express_assignments() or []
+            updated = False
+            for a in assignments:
+                if str(a.get('land_code')) == str(code):
+                    a['status'] = 'sold'
+                    a['sold_at'] = iso_z(utcnow())
+                    a.pop('transaction_holder', None)
+                    a.pop('transaction_started_at', None)
+                    updated = True
+            if updated:
+                save_express_assignments(assignments)
+        except Exception as e:
+            current_app.logger.error('toggle_express_sold assignments: %s', e)
         flash(f'آگهی {code} به فروخته شد تغییر کرد.', 'success')
     
     save_ads(lands_list)
@@ -3437,6 +3479,7 @@ def _admin_people_directory_kwargs() -> Dict[str, Any]:
         'load_partner_withdrawals': load_partner_withdrawals,
         'load_partner_bank_accounts': load_partner_bank_accounts,
         'get_online_partners_list': _get_online_partners_list,
+        'get_recent_online_partners_list': _get_recent_online_partners_list,
         'load_partner_notes': load_partner_notes,
         'load_partner_routines_cached': load_partner_routines_cached,
         'load_express_visit_requests': load_express_visit_requests,

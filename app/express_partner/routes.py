@@ -118,6 +118,18 @@ from app.services.sms_config import get_sms_line_number
 from flask import jsonify, make_response
 
 
+def _express_land_marked_sold(land: Dict[str, Any] | None) -> bool:
+    if not land or not isinstance(land, dict):
+        return False
+    return str(land.get('express_status') or '').strip().lower() == 'sold'
+
+
+def _effective_land_status(global_status: str, land: Dict[str, Any]) -> str:
+    if _express_land_marked_sold(land):
+        return 'sold'
+    return (global_status or 'active').strip().lower() or 'active'
+
+
 def _sort_by_created_at_desc(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     from ..utils.dates import parse_datetime_safe
     return sorted(items, key=lambda x: parse_datetime_safe(x.get('created_at', '1970-01-01')), reverse=True)
@@ -335,7 +347,10 @@ def _build_partner_dashboard_lands(
         code = str(land.get('code') or '')
         item = dict(land)
         assigned_item = code_to_assigned.get(code)
-        global_status = code_to_global_status.get(code, item.get('_assignment_status') or 'active')
+        global_status = _effective_land_status(
+            code_to_global_status.get(code, item.get('_assignment_status') or 'active'),
+            item,
+        )
         if assigned_item and is_approved:
             item['_assignment_id'] = assigned_item.get('_assignment_id')
             item['_assignment_status'] = global_status
@@ -1085,7 +1100,7 @@ def _lands_for_favorite_codes(codes: List[str], me_phone: str) -> List[Dict[str,
         if not land:
             continue
         item = dict(land)
-        global_status = code_to_global_status.get(code, 'active')
+        global_status = _effective_land_status(code_to_global_status.get(code, 'active'), item)
         a = my_by_code.get(code)
         if a and is_approved:
             item['_assignment_id'] = a.get('id')
@@ -1252,7 +1267,7 @@ def require_partner_access(json_response: bool = False, allow_pending: bool = Fa
                     return jsonify({"success": False, "error": "not_approved"}), 403
                 last_app = _get_my_last_application(me_phone)
                 if last_app:
-                    return redirect(url_for('express_partner.thanks'))
+                    return redirect(_post_apply_landing_url(me_phone))
                 flash('برای ورود به پنل، لطفاً ابتدا درخواست همکاری خود را ثبت و تکمیل کنید.', 'warning')
                 return redirect(url_for('express_partner.apply'))
 
@@ -1557,7 +1572,7 @@ def apply():
 
     if request.method == 'POST':
         if _has_active_application(me_phone):
-            return redirect(url_for('express_partner.thanks'))
+            return redirect(_post_apply_landing_url(me_phone))
         name, city, experience, note = _clip_apply_fields(
             request.form.get('name') or '',
             request.form.get('city') or '',
@@ -1638,13 +1653,38 @@ def apply_cancel():
     return redirect(url_for('express_partner.apply'))
 
 
+def _active_application_referred_by(me_phone: str) -> str:
+    """شماره معرف درخواست فعال کاربر، اگر از مسیر دعوت آمده باشد."""
+    try:
+        from .referrals import _phones_match
+
+        apps = load_express_partner_apps() or []
+        for a in apps:
+            if not isinstance(a, dict):
+                continue
+            if not _phones_match(a.get('phone'), me_phone):
+                continue
+            status = str(a.get('status') or '').strip().lower()
+            if status in ('approved', 'rejected', 'cancelled'):
+                continue
+            return (a.get('referred_by_phone') or '').strip()
+    except Exception:
+        pass
+    return ''
+
+
+def _post_apply_landing_url(me_phone: str, *, referrer_phone: str = '') -> str:
+    """پس از ثبت درخواست → صفحه تشکر (شامل دانلود اپ در مرورگر)."""
+    return url_for('express_partner.thanks')
+
+
 def _apply_page_guard(me_phone: str):
-    """همکار تأییدشده → داشبورد؛ درخواست فعال → تشکر؛ در غیر این صورت فرم."""
+    """همکار تأییدشده → داشبورد؛ درخواست فعال → تشکر/دانلود؛ در غیر این صورت فرم."""
     profile = _partner_profile_for_phone(me_phone)
     if _is_partner_approved(profile):
         return redirect(url_for('express_partner.dashboard'))
     if _has_active_application(me_phone):
-        return redirect(url_for('express_partner.thanks'))
+        return redirect(_post_apply_landing_url(me_phone))
     return None
 
 
@@ -1811,10 +1851,16 @@ def _send_visit_admin_sms(
     )
 
 
-def _redirect_apply_thanks(name: str, *, fresh_submit: bool, sms_sent: bool | None = None, sms_skipped: bool = False, sms_error: str | None = None, sms_infra_error: bool = False):
-    from .referrals import clear_ref_cookie_on_response
-
-    session['apply_thanks_context'] = {
+def _apply_post_submit_context(
+    name: str,
+    *,
+    fresh_submit: bool,
+    sms_sent: bool | None = None,
+    sms_skipped: bool = False,
+    sms_error: str | None = None,
+    sms_infra_error: bool = False,
+) -> dict:
+    return {
         'name': name or '',
         'fresh_submit': bool(fresh_submit),
         'sms_sent': sms_sent,
@@ -1822,6 +1868,19 @@ def _redirect_apply_thanks(name: str, *, fresh_submit: bool, sms_sent: bool | No
         'sms_error': sms_error,
         'sms_infra_error': bool(sms_infra_error),
     }
+
+
+def _redirect_apply_thanks(name: str, *, fresh_submit: bool, sms_sent: bool | None = None, sms_skipped: bool = False, sms_error: str | None = None, sms_infra_error: bool = False):
+    from .referrals import clear_ref_cookie_on_response
+
+    session['apply_thanks_context'] = _apply_post_submit_context(
+        name,
+        fresh_submit=fresh_submit,
+        sms_sent=sms_sent,
+        sms_skipped=sms_skipped,
+        sms_error=sms_error,
+        sms_infra_error=sms_infra_error,
+    )
     resp = redirect(url_for('express_partner.thanks'))
     return clear_ref_cookie_on_response(resp)
 
@@ -1853,11 +1912,7 @@ def apply_thanks():
             )
         return render_template(
             'express_partner/thanks.html',
-            name=ctx.get('name') or '',
-            pending_review=False,
-            sms_sent=sms_sent,
-            sms_skipped=sms_skipped and sms_sent is not False,
-            sms_infra=sms_infra,
+            **_thanks_page_kwargs(me_phone, ctx, pending_review=False),
         )
 
     if _is_partner_approved(_partner_profile_for_phone(me_phone)):
@@ -1865,22 +1920,66 @@ def apply_thanks():
 
     if _has_active_application(me_phone):
         last_app = _get_my_last_application(me_phone) or {}
+        ctx = {**ctx, 'name': (last_app.get('name') or ctx.get('name') or '')}
         return render_template(
             'express_partner/thanks.html',
-            name=(last_app.get('name') or ctx.get('name') or ''),
-            pending_review=True,
-            sms_sent=None,
-            sms_skipped=False,
+            **_thanks_page_kwargs(me_phone, ctx, pending_review=True),
         )
 
     return redirect(url_for('express_partner.apply'))
+
+
+def _thanks_page_kwargs(me_phone: str, ctx: dict | None = None, *, pending_review: bool = False) -> dict:
+    """Context for thanks page including optional app download block."""
+    from ..utils.apk_version import is_vinor_apk_request
+
+    ctx = ctx or {}
+    _settings = _express_settings_cached()
+    android_apk_url = (_settings.get('android_apk_url') or '').strip()
+    android_apk_version = (_settings.get('android_apk_version') or '').strip()
+    size_label = ''
+    try:
+        n = int(_settings.get('android_apk_size_bytes') or 0)
+        if n >= 1_048_576:
+            size_label = f'حدود {max(1, round(n / 1_048_576))} مگابایت'
+        elif n >= 1024:
+            size_label = f'حدود {max(1, round(n / 1024))} کیلوبایت'
+    except Exception:
+        size_label = ''
+    last_app = _get_my_last_application(me_phone) or {}
+    is_vinor_apk = bool(has_request_context() and is_vinor_apk_request(request))
+    show_app_download = not is_vinor_apk and (
+        ctx.get('fresh_submit') or pending_review or _has_active_application(me_phone)
+    )
+    sms_sent = ctx.get('sms_sent')
+    sms_skipped = ctx.get('sms_skipped', False)
+    sms_infra = ctx.get('sms_infra_error', False)
+    if sms_sent is False and sms_infra:
+        sms_sent = None
+    return {
+        'name': (ctx.get('name') or last_app.get('name') or '').strip(),
+        'pending_review': pending_review,
+        'sms_sent': sms_sent if (ctx.get('fresh_submit') or not pending_review) else None,
+        'sms_skipped': sms_skipped,
+        'sms_infra': sms_infra,
+        'show_app_download': show_app_download,
+        'android_apk_url': android_apk_url if show_app_download else '',
+        'android_apk_version': android_apk_version if show_app_download else '',
+        'android_apk_size_label': size_label if show_app_download else '',
+    }
+
+
+@express_partner_bp.route('/download-app', methods=['GET'], endpoint='download_app')
+def download_app():
+    """سازگاری با لینک قدیمی — هدایت به صفحه تشکر."""
+    return redirect(url_for('express_partner.thanks'))
 
 
 def _submit_partner_application(me_phone: str, data: dict):
     """ثبت نهایی درخواست همکاری."""
     if _has_active_application(me_phone):
         session.pop('apply_data', None)
-        return redirect(url_for('express_partner.thanks'))
+        return redirect(_post_apply_landing_url(me_phone))
 
     if _is_partner_approved(_partner_profile_for_phone(me_phone)):
         session.pop('apply_data', None)
@@ -5171,8 +5270,8 @@ def land_detail(code: str):
         status = _assignment_display_status(a)
         if status_priority.get(status, 0) > status_priority.get(global_assignment_status, 0):
             global_assignment_status = status
-
-    # وضعیت تایید همکاری برای نمایش مشروط پورسانت
+    if _express_land_marked_sold(land):
+        global_assignment_status = 'sold'
     try:
         is_approved = _is_partner_approved(partner_profile)
     except Exception:

@@ -373,6 +373,44 @@
     }
   </script>
 
+  <script>
+    (function () {
+      function parseAdminDt(raw) {
+        raw = String(raw || '').trim();
+        if (!raw) return null;
+        var s = raw.replace(' ', 'T');
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && !/[zZ]|[+-]\d{2}(:?\d{2})?$/.test(s)) {
+          s += 'Z';
+        }
+        var d = new Date(s);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      function fmtJalaliTehran(d) {
+        return d.toLocaleString('fa-IR', {
+          timeZone: 'Asia/Tehran',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+      window.vinorAdminFormatJalaliDt = function (root) {
+        (root || document).querySelectorAll('.jalali-dt[data-dt]').forEach(function (el) {
+          var d = parseAdminDt(el.getAttribute('data-dt'));
+          el.textContent = d ? fmtJalaliTehran(d) : '—';
+        });
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () {
+          window.vinorAdminFormatJalaliDt();
+        });
+      } else {
+        window.vinorAdminFormatJalaliDt();
+      }
+    })();
+  </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>
