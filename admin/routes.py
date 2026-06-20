@@ -354,13 +354,26 @@ def _prune_old_online_partners(now: float | None = None) -> None:
         _online_partners.pop(phone, None)
 
 
+def _normalize_last_activity_iso(raw: str) -> str:
+    """یکسان‌سازی ISO UTC برای نمایش jalali-dt (زمان تهران در فرانت)."""
+    raw = (raw or '').strip()
+    if not raw:
+        return ''
+    if raw.endswith('Z') or '+' in raw[10:]:
+        return raw
+    s = raw.replace(' ', 'T', 1)
+    if re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}', s):
+        return s + 'Z'
+    return raw
+
+
 def _online_partner_entry(phone: str, data: dict) -> dict:
     ts = float(data.get('timestamp') or 0)
     return {
         'phone': phone,
         'name': data.get('name', 'همکار'),
         'ip': data.get('ip', 'نامشخص'),
-        'last_activity': data.get('last_activity', ''),
+        'last_activity': _normalize_last_activity_iso(data.get('last_activity', '')),
         'timestamp': ts,
         'online_now': (datetime.utcnow().timestamp() - ts) <= _ONLINE_NOW_TIMEOUT_S,
     }
@@ -368,22 +381,26 @@ def _online_partner_entry(phone: str, data: dict) -> dict:
 
 def _update_online_partner(phone: str, name: str = None, ip: str = None):
     """ثبت/به‌روزرسانی آخرین فعالیت همکار (حتی پس از آفلاین شدن باقی می‌ماند)."""
+    _ensure_online_partners_store_loaded()
     ph = _normalize_phone((phone or '').strip()) or (phone or '').strip()
     if not ph:
         return
     now = datetime.utcnow()
+    display_name = _resolve_online_partner_display_name(ph, name)
     _online_partners[ph] = {
         'timestamp': now.timestamp(),
-        'name': name or 'همکار',
+        'name': display_name,
         'ip': ip or 'نامشخص',
         'last_activity': now.replace(microsecond=0).isoformat() + 'Z',
     }
     if len(_online_partners) > 500:
         _prune_old_online_partners()
+    _persist_online_partners_store()
 
 
 def _get_online_partners_count() -> int:
     """شمارش همکاران آنلاین (فعال در ۵ دقیقه گذشته)."""
+    _ensure_online_partners_store_loaded()
     now = datetime.utcnow().timestamp()
     return sum(
         1 for data in _online_partners.values()
@@ -393,6 +410,7 @@ def _get_online_partners_count() -> int:
 
 def _get_recent_online_partners_list(max_age_seconds: int | None = None) -> List[Dict[str, Any]]:
     """لیست همکاران با فعالیت اخیر — جدیدترین آنلاین اول."""
+    _ensure_online_partners_store_loaded()
     now = datetime.utcnow().timestamp()
     window = int(max_age_seconds or _RECENT_ONLINE_WINDOW_S)
     recent: List[Dict[str, Any]] = []
@@ -408,6 +426,7 @@ def _get_recent_online_partners_list(max_age_seconds: int | None = None) -> List
 
 def _get_online_partners_list() -> List[Dict[str, Any]]:
     """همکاران آنلاین در این لحظه (۵ دقیقه اخیر)."""
+    _ensure_online_partners_store_loaded()
     now = datetime.utcnow().timestamp()
     online_list = [
         _online_partner_entry(phone, data)
@@ -459,6 +478,86 @@ def save_json(path: str, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+_online_partners_store_loaded = False
+
+
+def _online_partners_store_path() -> str:
+    try:
+        return os.path.join(current_app.instance_path, 'data', 'online_partners_last_seen.json')
+    except Exception:
+        return ''
+
+
+def _ensure_online_partners_store_loaded() -> None:
+    """بارگذاری آخرین فعالیت همکاران از دیسک (یک‌بار در هر process)."""
+    global _online_partners_store_loaded
+    if _online_partners_store_loaded:
+        return
+    _online_partners_store_loaded = True
+    path = _online_partners_store_path()
+    if not path or not os.path.isfile(path):
+        return
+    try:
+        from app.services.notifications import _normalize_user_id
+        data = load_json(path)
+        if not isinstance(data, dict):
+            return
+        for ph, row in data.items():
+            if not isinstance(row, dict):
+                continue
+            norm = _normalize_user_id(str(ph)) or str(ph).strip()
+            if not norm:
+                continue
+            prev = _online_partners.get(norm) or {}
+            if float(row.get('timestamp') or 0) >= float(prev.get('timestamp') or 0):
+                if row.get('last_activity'):
+                    row['last_activity'] = _normalize_last_activity_iso(str(row.get('last_activity')))
+                _online_partners[norm] = row
+    except Exception:
+        try:
+            current_app.logger.exception('online partners store load failed')
+        except Exception:
+            pass
+
+
+def _persist_online_partners_store() -> None:
+    path = _online_partners_store_path()
+    if not path:
+        return
+    try:
+        save_json(path, _online_partners)
+    except Exception:
+        try:
+            current_app.logger.exception('online partners store save failed')
+        except Exception:
+            pass
+
+
+def _resolve_online_partner_display_name(phone: str, hint: str | None = None) -> str:
+    """نام نمایشی همکار — از hint، رکورد قبلی، یا پروفایل."""
+    hint = (hint or '').strip()
+    if hint and hint != 'همکار':
+        return hint
+    existing = _online_partners.get(phone) or {}
+    prev = (existing.get('name') or '').strip()
+    if prev and prev != 'همکار':
+        return prev
+    try:
+        for p in load_express_partners() or []:
+            if not isinstance(p, dict):
+                continue
+            pph = _normalize_phone(str(p.get('phone') or '')) or str(p.get('phone') or '').strip()
+            if pph != phone:
+                continue
+            nm = (p.get('name') or p.get('full_name') or '').strip()
+            if nm:
+                return nm
+    except Exception:
+        pass
+    return hint or prev or 'همکار'
+
 
 # -----------------------------------------------------------------------------
 # تنظیمات سیستم

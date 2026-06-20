@@ -24,6 +24,26 @@ from app.express_partner.partner_withdrawals import (
 
 
 
+def _build_online_partner_lookup(
+    entries: List[Dict[str, Any]] | None,
+    normalize_phone: Callable[[str], str],
+) -> Dict[str, Dict[str, Any]]:
+    """نگاشت شماره نرمال + خام → آخرین رکورد آنلاین (برای تطابق با people)."""
+    lookup: Dict[str, Dict[str, Any]] = {}
+    for o in entries or []:
+        if not isinstance(o, dict):
+            continue
+        raw = str(o.get('phone') or '').strip()
+        if not raw:
+            continue
+        norm = (normalize_phone(raw) if normalize_phone else raw) or raw
+        for key in {norm, raw}:
+            prev = lookup.get(key)
+            if not prev or float(o.get('timestamp') or 0) >= float(prev.get('timestamp') or 0):
+                lookup[key] = o
+    return lookup
+
+
 def partner_is_approved(profile: Optional[Dict[str, Any]]) -> bool:
 
     if not profile or not isinstance(profile, dict):
@@ -360,19 +380,10 @@ def build_admin_people_directory(
 
 
 
-    online_map = {
-
-        str(o.get('phone') or ''): o
-
-        for o in (
-
-            (get_recent_online_partners_list() if get_recent_online_partners_list else get_online_partners_list()) or []
-
-        )
-
-        if isinstance(o, dict)
-
-    }
+    online_entries = (
+        (get_recent_online_partners_list() if get_recent_online_partners_list else get_online_partners_list()) or []
+    )
+    online_map = _build_online_partner_lookup(online_entries, normalize_phone)
 
 
 

@@ -1019,7 +1019,7 @@ def _defer_online_partner_ping(phone: str, name: str | None, ip: str) -> None:
                 if hasattr(admin_routes_module, '_update_online_partner'):
                     admin_routes_module._update_online_partner(ph, nm, addr)
             except Exception:
-                pass
+                app.logger.exception('online partner ping failed phone=%s', ph)
 
     threading.Thread(target=_worker, daemon=True).start()
 
@@ -1311,7 +1311,14 @@ def track_online_partner():
         last_ping = session.get('_express_online_ping_ts') or 0
         if now_ts - float(last_ping) >= 120:
             session['_express_online_ping_ts'] = now_ts
-            _defer_online_partner_ping(phone, None, request.remote_addr or 'نامشخص')
+            display_name = None
+            try:
+                prof = _partner_profile_for_phone(phone)
+                if prof:
+                    display_name = (prof.get('name') or prof.get('full_name') or '').strip() or None
+            except Exception:
+                pass
+            _defer_online_partner_ping(phone, display_name, request.remote_addr or 'نامشخص')
     except Exception:
         pass
 
