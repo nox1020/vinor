@@ -2667,7 +2667,7 @@ def bank_accounts_data():
 @express_partner_bp.post('/bank-accounts/add', endpoint='bank_accounts_add')
 @require_partner_access(json_response=True)
 def bank_accounts_add():
-    """افزودن حساب؛ شمارهٔ کامل کارت ذخیره نمی‌شود (فقط ۴ رقم اول و ۴ رقم آخر + چک Luhn)."""
+    """افزودن حساب؛ شماره کامل کارت در سرور ذخیره می‌شود (فقط پنل ادمین)؛ در UI همکار ماسک می‌ماند."""
     me_phone = (session.get("user_phone") or "").strip()
     data = request.get_json(silent=True) or {}
     bank_key = (data.get('bank_key') or '').strip().lower()

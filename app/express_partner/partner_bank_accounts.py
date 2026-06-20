@@ -65,6 +65,14 @@ def mask_pan_display(prefix4: str, last4: str) -> str:
     return f"{p[:4]} **** **** {l[-4:]}"
 
 
+def format_pan_display(pan: str) -> str:
+    """نمایش ۱۶ رقم کارت به‌صورت ۴×۴ (فقط پنل ادمین)."""
+    d = _digits(pan)
+    if len(d) != 16:
+        return d
+    return f"{d[0:4]} {d[4:8]} {d[8:12]} {d[12:16]}"
+
+
 def validate_new_account(
     bank_key: str,
     pan16: str,
@@ -95,6 +103,7 @@ def validate_new_account(
         "abbr": bk["abbr"],
         "color": bk["color"],
         "holder_name": name,
+        "pan": pan,
         "pan_prefix4": prefix4,
         "pan_last4": last4,
         "sheba": sheba,
@@ -105,7 +114,7 @@ def validate_new_account(
 
 
 def public_account_dict(row: Dict[str, Any]) -> Dict[str, Any]:
-    """فیلدهای امن برای JSON و UI."""
+    """فیلدهای امن برای JSON و UI (بدون شماره کامل)."""
     pfx = str(row.get("pan_prefix4") or "")[:4]
     lst = str(row.get("pan_last4") or "")[-4:]
     masked = mask_pan_display(pfx, lst)
@@ -122,6 +131,18 @@ def public_account_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "is_default": bool(row.get("is_default")),
         "created_at": row.get("created_at") or "",
     }
+
+
+def admin_account_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+    """فیلدهای حساب بانکی برای پنل ادمین — شامل شماره کارت کامل."""
+    out = public_account_dict(row)
+    out["sheba"] = str(row.get("sheba") or "").strip()
+    pan = _digits(str(row.get("pan") or ""))
+    if len(pan) == 16:
+        out["display_pan"] = format_pan_display(pan)
+    else:
+        out["display_pan"] = out.get("masked_pan") or ""
+    return out
 
 
 def accounts_for_phone(all_rows: List[Dict[str, Any]], phone: str) -> List[Dict[str, Any]]:

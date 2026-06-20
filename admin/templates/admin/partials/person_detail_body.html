@@ -395,7 +395,7 @@
                 {% endif %}
               </div>
               <div class="mt-2 space-y-1 text-[11px] border-t border-gray-200/80 dark:border-gray-800 pt-2">
-                <div class="flex justify-between gap-2"><span class="text-gray-400">کارت</span><span class="font-mono ltr" dir="ltr">{{ bacc.masked_pan or '—' }}</span></div>
+                <div class="flex justify-between gap-2 items-start"><span class="text-gray-400 shrink-0">کارت</span><span class="font-mono ltr text-left break-all tabular-nums" dir="ltr">{{ bacc.display_pan or bacc.masked_pan or '—' }}</span></div>
                 {% if bacc.sheba %}<div class="flex justify-between gap-2"><span class="text-gray-400">شبا</span><span class="font-mono ltr text-[10px]" dir="ltr">{{ bacc.sheba }}</span></div>{% endif %}
               </div>
             </li>

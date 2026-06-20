@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
 
-from app.express_partner.partner_bank_accounts import public_account_dict
+from app.express_partner.partner_bank_accounts import admin_account_dict
 
 from app.express_partner.partner_withdrawals import (
 
@@ -248,9 +248,7 @@ def _resolve_admin_avatar_url(partner: Dict[str, Any], user: Dict[str, Any]) -> 
 
 
 def _admin_bank_account_dict(row: Dict[str, Any]) -> Dict[str, Any]:
-    out = public_account_dict(row)
-    out['sheba'] = str(row.get('sheba') or '').strip()
-    return out
+    return admin_account_dict(row)
 
 
 def _build_profile(row: Dict[str, Any]) -> Dict[str, Any]:
