@@ -24,7 +24,7 @@
       <p class="text-[11px] text-slate-400 text-center mt-1 px-6 leading-relaxed">حساب بانکی خود را برای دریافت وجه انتخاب کنید.</p>
     </div>
 
-    <div class="px-4 pb-4 overflow-y-auto flex-1 min-h-0 space-y-4">
+    <div id="vnBankPickerScroll" class="px-4 pb-4 overflow-y-auto flex-1 min-h-0 space-y-4">
       <button type="button"
               data-open-bank-add
               class="flex items-center gap-3 w-full rounded-2xl border-2 border-dashed border-white/15 bg-[#12141D]/50 px-3 py-3 hover:border-emerald-500/35 hover:bg-[#12141D] transition text-start">
@@ -70,5 +70,19 @@
   }
   #vnBankPickerModal.vn-bank-picker-modal--open .vn-bank-picker-sheet {
     transform: translateY(0);
+  }
+  .vn-bank-account-menu {
+    min-width: 7.5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+  .vn-bank-account-menu:not(.hidden) {
+    display: block;
+  }
+  #vnBankAccountList .vn-bank-account {
+    position: relative;
+    overflow: visible;
+  }
+  #vnBankPickerScroll {
+    overflow-x: hidden;
   }
 </style>

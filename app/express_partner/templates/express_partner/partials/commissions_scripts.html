@@ -307,8 +307,10 @@
     var selectedBankId = '';
     var withdrawSubmitting = false;
     var bankCatalogCache = null;
+    var bankAccountsCache = [];
     var lastAddedAccountId = null;
     var lastAddedWasDefault = false;
+    var editingAccountId = '';
 
     var elBank = document.getElementById('vnBankAddBank');
     var elPan = document.getElementById('vnBankAddPan');
@@ -323,6 +325,7 @@
     var elDefaultToggle = document.getElementById('vnBankAddDefaultToggle');
     var btnSubmit = document.getElementById('vnBankAddBtnSubmit');
     var btnFinish = document.getElementById('vnBankAddBtnFinish');
+    var elBankAddTitle = document.getElementById('vnBankAddTitle');
     var bankAddSubmitting = false;
 
     function toFaDigits(s) {
@@ -457,6 +460,7 @@
         bankAddModal.classList.add('hidden');
       }, 280);
       bankAddModal.setAttribute('aria-hidden', 'true');
+      resetAddWizard();
       if (wasOpen) overlayClose();
     }
 
@@ -466,18 +470,110 @@
       bankAddModal.classList.remove('vn-bank-add-modal--open');
       bankAddModal.classList.add('hidden');
       bankAddModal.setAttribute('aria-hidden', 'true');
+      resetAddWizard();
       if (wasOpen) overlayClose();
+    }
+
+    function pickSelectedBankRow() {
+      if (!bankModal || !selectedBankId) return pickDefaultBankRow();
+      var rows = bankModal.querySelectorAll('.vn-bank-account');
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].getAttribute('data-bank-id') === selectedBankId) return rows[i];
+      }
+      return pickDefaultBankRow();
+    }
+
+    function selectBankAccountRow(row) {
+      if (!row) return;
+      closeAllBankAccountMenus();
+      markBankSelected(row);
     }
 
     function openBankPicker() {
       if (!bankModal) return;
       hoistCommissionModals();
+      closeAllBankAccountMenus();
       bankModal.classList.remove('hidden');
       bankModal.setAttribute('aria-hidden', 'false');
       try { void bankModal.offsetWidth; } catch (_) {}
       bankModal.classList.add('vn-bank-picker-modal--open');
       overlayOpen();
       fetchBankPickerData();
+    }
+
+    function closeAllBankAccountMenus() {
+      if (!bankListEl) return;
+      bankListEl.querySelectorAll('.vn-bank-account-menu').forEach(function (menu) {
+        menu.classList.add('hidden');
+      });
+    }
+
+    function deleteBankAccount(acc) {
+      closeAllBankAccountMenus();
+      if (!acc || !acc.id) return;
+      var label = acc.bank_name || 'این حساب';
+      if (!window.confirm('حذف «' + label + '»؟\nاین عمل قابل بازگشت نیست.')) return;
+      fetch(API + '/delete', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: apiPostHeaders(),
+        body: JSON.stringify({ id: acc.id })
+      })
+        .then(parseJsonResponse)
+        .then(function (x) {
+          if (!x.ok || !x.j.success) {
+            var msg = (x.j && x.j.error) || 'خطا';
+            if (msg === 'active_withdrawal') {
+              window.alert('این حساب در یک درخواست برداشت فعال استفاده شده و تا پایان بررسی قابل حذف نیست.');
+            } else {
+              window.alert('حذف انجام نشد. دوباره تلاش کنید.');
+            }
+            return;
+          }
+          if (selectedBankId === acc.id) {
+            selectedBankId = '';
+            selectedBankSummary = '';
+            if (bankSummaryEl) bankSummaryEl.textContent = 'انتخاب حساب بانکی';
+            syncSubmitState();
+          }
+          fetchBankPickerData();
+        })
+        .catch(function () {
+          window.alert('خطا در ارتباط با سرور.');
+        });
+    }
+
+    function openBankEdit(acc) {
+      if (!acc || !bankAddModal) return;
+      closeAllBankAccountMenus();
+      hoistCommissionModals();
+      if (!bankCatalogCache) {
+        fetch(API + '/data', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d && d.success) bankCatalogCache = d.banks || [];
+            fillBankSelect();
+          })
+          .catch(function () { fillBankSelect(); });
+      } else {
+        fillBankSelect();
+      }
+      resetAddWizard();
+      editingAccountId = acc.id || '';
+      if (elBankAddTitle) elBankAddTitle.textContent = 'ویرایش حساب';
+      if (elBank) elBank.value = acc.bank_key || '';
+      if (elHolder) elHolder.value = acc.holder_name || '';
+      if (elSheba) elSheba.value = acc.sheba || '';
+      if (elPan) {
+        elPan.value = '';
+        elPan.placeholder = acc.masked_pan ? ('فعلی: ' + acc.masked_pan) : 'شماره ۱۶ رقمی کارت';
+      }
+      if (btnSubmit) btnSubmit.textContent = 'ذخیره تغییرات';
+      bankAddModal.classList.remove('hidden');
+      bankAddModal.setAttribute('aria-hidden', 'false');
+      try { void bankAddModal.offsetWidth; } catch (_) {}
+      bankAddModal.classList.add('vn-bank-add-modal--open');
+      overlayOpen();
     }
 
     function markBankSelected(row) {
@@ -501,6 +597,8 @@
 
     function renderBankRows(accounts) {
       if (!bankListEl) return;
+      bankAccountsCache = accounts || [];
+      closeAllBankAccountMenus();
       if (!accounts || !accounts.length) {
         bankListEl.innerHTML = '<p class="text-center text-xs text-slate-500 py-6 leading-relaxed px-2">هنوز حساب بانکی ثبت نکرده‌اید.<br/>با «افزودن حساب جدید» یک کارت اضافه کنید.</p>';
         if (bankConfirm) {
@@ -518,31 +616,76 @@
           ? '<div class="flex justify-start mt-2"><span class="rounded-md bg-emerald-500/20 text-emerald-400 text-[9px] font-bold px-1.5 py-0.5 border border-emerald-500/30">پیش‌فرض</span></div>'
           : '';
         return (
-          '<button type="button" class="vn-bank-account w-full rounded-2xl border border-white/10 bg-[#252836] p-3 text-start hover:border-white/18 transition" dir="rtl" ' +
+          '<div class="vn-bank-account w-full rounded-2xl border border-white/10 bg-[#252836] p-3 text-start hover:border-white/18 transition cursor-pointer" dir="rtl" tabindex="0" role="button" ' +
           'data-bank-id="' + escAttr(a.id || '') + '" data-bank-summary="' + escAttr(a.summary || '') + '" data-default-account="' + (a.is_default ? '1' : '0') + '">' +
           '<div class="flex items-start justify-between gap-2">' +
           '<div class="flex items-center gap-2 min-w-0">' +
           '<span class="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-white text-[10px] font-extrabold leading-none" style="background:' + escAttr(a.color || '#455a64') + '">' + escAttr(a.abbr || '') + '</span>' +
           '<span class="text-sm font-bold text-white truncate">' + escAttr(a.bank_name || '') + '</span></div>' +
-          '<span class="shrink-0 text-slate-400 text-base leading-none pt-0.5 opacity-80" aria-hidden="true"><i class="fas fa-ellipsis-v"></i></span></div>' +
+          '<div class="relative shrink-0 z-10">' +
+          '<button type="button" class="vn-bank-account-menu-btn w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition" aria-label="عملیات حساب" aria-haspopup="true">' +
+          '<i class="fas fa-ellipsis-v"></i></button>' +
+          '<div class="vn-bank-account-menu hidden absolute end-0 bottom-full mb-1 z-30 rounded-xl border border-white/10 bg-[#1C1F2A] py-1 overflow-hidden" role="menu">' +
+          '<button type="button" class="vn-bank-account-edit w-full px-3 py-2.5 text-start text-xs text-slate-200 hover:bg-white/5 flex items-center gap-2" role="menuitem">' +
+          '<i class="fas fa-pen text-[10px] text-slate-400 w-4"></i> ویرایش</button>' +
+          '<button type="button" class="vn-bank-account-delete w-full px-3 py-2.5 text-start text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2" role="menuitem">' +
+          '<i class="fas fa-trash text-[10px] w-4"></i> حذف</button></div></div></div>' +
           '<p dir="ltr" class="text-[13px] font-medium text-slate-200 tracking-wide text-end w-full mt-2 tabular-nums">' + escAttr(a.masked_pan || '') + '</p>' +
           '<p class="text-[10px] text-slate-500 truncate mt-1 text-start">' + escAttr(a.holder_name || '') + '</p>' +
-          defBadge + '</button>'
+          defBadge + '</div>'
         );
       }).join('');
       bankListEl.innerHTML = html;
       bankListEl.querySelectorAll('.vn-bank-account').forEach(function (row) {
         row.addEventListener('click', function (e) {
+          if (e.target.closest('.vn-bank-account-menu-btn') || e.target.closest('.vn-bank-account-menu')) return;
           e.preventDefault();
-          markBankSelected(row);
+          selectBankAccountRow(row);
+        });
+        row.addEventListener('keydown', function (e) {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          if (e.target.closest('.vn-bank-account-menu-btn') || e.target.closest('.vn-bank-account-menu')) return;
+          e.preventDefault();
+          selectBankAccountRow(row);
         });
       });
-      var row0 = pickDefaultBankRow();
+      bankListEl.querySelectorAll('.vn-bank-account-menu-btn').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var menu = btn.parentNode && btn.parentNode.querySelector('.vn-bank-account-menu');
+          var isOpen = menu && !menu.classList.contains('hidden');
+          closeAllBankAccountMenus();
+          if (menu && !isOpen) menu.classList.remove('hidden');
+        });
+      });
+      bankListEl.querySelectorAll('.vn-bank-account-edit').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var row = btn.closest('.vn-bank-account');
+          var id = row && row.getAttribute('data-bank-id');
+          var acc = bankAccountsCache.find(function (a) { return (a.id || '') === id; });
+          if (acc) openBankEdit(acc);
+        });
+      });
+      bankListEl.querySelectorAll('.vn-bank-account-delete').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var row = btn.closest('.vn-bank-account');
+          var id = row && row.getAttribute('data-bank-id');
+          var acc = bankAccountsCache.find(function (a) { return (a.id || '') === id; });
+          if (acc) deleteBankAccount(acc);
+        });
+      });
+      var row0 = pickSelectedBankRow();
       markBankSelected(row0);
     }
 
     function fetchBankPickerData() {
       if (bankListLoading) bankListLoading.classList.remove('hidden');
+      if (bankListEl) bankListEl.innerHTML = '';
       fetch(API + '/data', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
         .then(function (r) { return r.json(); })
         .then(function (d) {
@@ -577,12 +720,17 @@
     function resetAddWizard() {
       lastAddedAccountId = null;
       lastAddedWasDefault = false;
+      editingAccountId = '';
       bankAddSubmitting = false;
       if (elFormErr) { elFormErr.classList.add('hidden'); elFormErr.textContent = ''; }
-      if (elPan) elPan.value = '';
+      if (elPan) {
+        elPan.value = '';
+        elPan.placeholder = 'شماره ۱۶ رقمی کارت';
+      }
       if (elSheba) elSheba.value = '';
       if (elHolder) elHolder.value = '';
       if (elBank) elBank.value = '';
+      if (elBankAddTitle) elBankAddTitle.textContent = 'افزودن حساب جدید';
       if (elViewForm) elViewForm.classList.remove('hidden');
       if (elViewSuccess) elViewSuccess.classList.add('hidden');
       if (elFooterForm) elFooterForm.classList.remove('hidden');
@@ -752,6 +900,9 @@
     document.addEventListener('click', function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
+      if (!t.closest('.vn-bank-account-menu') && !t.closest('.vn-bank-account-menu-btn')) {
+        closeAllBankAccountMenus();
+      }
       if (t.closest('[data-open-withdraw-modal]')) {
         e.preventDefault();
         var wdBtn = t.closest('[data-open-withdraw-modal]');
@@ -831,14 +982,17 @@
         if (bankAddSubmitting) return;
         var payload = validateBankAddForm();
         if (!payload) return;
+        var isEdit = !!editingAccountId;
         bankAddSubmitting = true;
         btnSubmit.disabled = true;
-        btnSubmit.textContent = 'در حال ثبت…';
-        fetch(API + '/add', {
+        btnSubmit.textContent = isEdit ? 'در حال ذخیره…' : 'در حال ثبت…';
+        var submitPayload = payload;
+        if (editingAccountId) submitPayload.id = editingAccountId;
+        fetch(editingAccountId ? (API + '/update') : (API + '/add'), {
           method: 'POST',
           credentials: 'same-origin',
           headers: apiPostHeaders(),
-          body: JSON.stringify(payload)
+          body: JSON.stringify(submitPayload)
         })
           .then(parseJsonResponse)
           .then(function (x) {
@@ -848,6 +1002,18 @@
                 elFormErr.textContent = msg === 'csrf' ? 'خطای امنیتی. صفحه را رفرش کنید و دوباره تلاش کنید.' : bankAddErrorMessage(msg);
                 elFormErr.classList.remove('hidden');
               }
+              return;
+            }
+            if (editingAccountId) {
+              var editedId = editingAccountId;
+              var editedAcc = x.j.account || {};
+              editingAccountId = '';
+              closeBankAdd();
+              if (editedAcc.summary && selectedBankId === editedId && bankSummaryEl) {
+                selectedBankSummary = editedAcc.summary;
+                bankSummaryEl.textContent = editedAcc.summary;
+              }
+              if (bankPickerOpen()) fetchBankPickerData();
               return;
             }
             renderBankAddSuccess(x.j.account || {});
@@ -862,7 +1028,7 @@
             bankAddSubmitting = false;
             if (btnSubmit && elViewForm && !elViewForm.classList.contains('hidden')) {
               btnSubmit.disabled = false;
-              btnSubmit.textContent = 'ثبت حساب';
+              btnSubmit.textContent = isEdit ? 'ذخیره تغییرات' : 'ثبت حساب';
             }
           });
       });

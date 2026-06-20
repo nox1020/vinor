@@ -63,6 +63,7 @@ from .partner_bank_accounts import (
     public_account_dict,
     accounts_for_phone,
     catalog_public,
+    apply_account_fields,
 )
 from .partner_withdrawals import (
     withdrawable_balance,
@@ -2648,7 +2649,7 @@ def bank_accounts_data():
     all_rows = load_partner_bank_accounts() or []
     if not isinstance(all_rows, list):
         all_rows = []
-    mine = [r for r in all_rows if isinstance(r, dict) and str(r.get('phone') or '').strip() == me_phone]
+    mine = accounts_for_phone(all_rows, me_phone)
     mine = _sort_bank_accounts_by_created(mine)
     comm_stats = _partner_commission_stats(me_phone, _commissions_for_phone(me_phone))
     w_balance = comm_stats['withdrawable_balance']
@@ -2694,6 +2695,111 @@ def bank_accounts_add():
         current_app.logger.exception('save_partner_bank_accounts failed')
         return jsonify({'success': False, 'error': 'save_failed'}), 500
     return jsonify({'success': True, 'account': public_account_dict(rec)})
+
+
+def _bank_account_has_active_withdrawal(acc_id: str, phone: str) -> bool:
+    from .partner_withdrawals import ACTIVE_WITHDRAWAL_STATUSES, partner_phones_match
+
+    acc_id = (acc_id or '').strip()
+    if not acc_id:
+        return False
+    for w in load_partner_withdrawals() or []:
+        if not isinstance(w, dict):
+            continue
+        if not partner_phones_match(w.get('phone'), phone):
+            continue
+        if str(w.get('bank_account_id') or '').strip() != acc_id:
+            continue
+        if str(w.get('status') or 'pending').strip().lower() in ACTIVE_WITHDRAWAL_STATUSES:
+            return True
+    return False
+
+
+@express_partner_bp.post('/bank-accounts/update', endpoint='bank_accounts_update')
+@require_partner_access(json_response=True)
+def bank_accounts_update():
+    """ویرایش حساب بانکی ثبت‌شده."""
+    me_phone = (session.get('user_phone') or '').strip()
+    data = request.get_json(silent=True) or {}
+    acc_id = (data.get('id') or '').strip()
+    if not acc_id:
+        return jsonify({'success': False, 'error': 'missing_id'}), 400
+
+    bank_key = (data.get('bank_key') or '').strip().lower()
+    pan = (data.get('pan') or data.get('card_number') or '').strip()
+    holder = (data.get('holder_name') or data.get('holder') or '').strip()
+    sheba_raw = (data.get('sheba') or '').strip()
+
+    all_rows = load_partner_bank_accounts() or []
+    if not isinstance(all_rows, list):
+        all_rows = []
+
+    target = None
+    target_idx = None
+    for i, r in enumerate(all_rows):
+        if not isinstance(r, dict):
+            continue
+        if str(r.get('id') or '').strip() != acc_id:
+            continue
+        if not accounts_for_phone([r], me_phone):
+            return jsonify({'success': False, 'error': 'not_found'}), 404
+        target_idx = i
+        target = r
+        break
+    if target is None or target_idx is None:
+        return jsonify({'success': False, 'error': 'not_found'}), 404
+
+    updated, err = apply_account_fields(target, bank_key, pan, holder, sheba_raw)
+    if err or not updated:
+        return jsonify({'success': False, 'error': err or 'invalid'}), 400
+
+    all_rows[target_idx] = updated
+    try:
+        save_partner_bank_accounts(all_rows)
+    except Exception:
+        current_app.logger.exception('save_partner_bank_accounts update failed')
+        return jsonify({'success': False, 'error': 'save_failed'}), 500
+    return jsonify({'success': True, 'account': public_account_dict(updated)})
+
+
+@express_partner_bp.post('/bank-accounts/delete', endpoint='bank_accounts_delete')
+@require_partner_access(json_response=True)
+def bank_accounts_delete():
+    """حذف حساب بانکی همکار."""
+    me_phone = (session.get('user_phone') or '').strip()
+    data = request.get_json(silent=True) or {}
+    acc_id = (data.get('id') or '').strip()
+    if not acc_id:
+        return jsonify({'success': False, 'error': 'missing_id'}), 400
+
+    if _bank_account_has_active_withdrawal(acc_id, me_phone):
+        return jsonify({'success': False, 'error': 'active_withdrawal'}), 409
+
+    all_rows = load_partner_bank_accounts() or []
+    if not isinstance(all_rows, list):
+        all_rows = []
+
+    mine = accounts_for_phone(all_rows, me_phone)
+    if not any(str(r.get('id') or '').strip() == acc_id for r in mine):
+        return jsonify({'success': False, 'error': 'not_found'}), 404
+
+    from .partner_withdrawals import partner_phones_match
+
+    all_rows = [
+        r for r in all_rows
+        if not (
+            isinstance(r, dict)
+            and str(r.get('id') or '').strip() == acc_id
+            and partner_phones_match(r.get('phone'), me_phone)
+        )
+    ]
+    _rebalance_partner_bank_defaults(all_rows, me_phone)
+    try:
+        save_partner_bank_accounts(all_rows)
+    except Exception:
+        current_app.logger.exception('save_partner_bank_accounts delete failed')
+        return jsonify({'success': False, 'error': 'save_failed'}), 500
+    return jsonify({'success': True})
 
 
 @express_partner_bp.post('/bank-accounts/default', endpoint='bank_accounts_set_default')

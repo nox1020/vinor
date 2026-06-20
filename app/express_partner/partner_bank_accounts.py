@@ -113,6 +113,27 @@ def validate_new_account(
     return rec, None
 
 
+def apply_account_fields(
+    row: Dict[str, Any],
+    bank_key: str,
+    pan16: str,
+    holder_name: str,
+    sheba_raw: str,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """به‌روزرسانی فیلدهای حساب موجود پس از اعتبارسنجی."""
+    rec, err = validate_new_account(bank_key, pan16, holder_name, sheba_raw)
+    if err or not rec:
+        return None, err
+    updated = dict(row)
+    for key in (
+        'bank_key', 'bank_name', 'abbr', 'color', 'holder_name',
+        'pan', 'pan_prefix4', 'pan_last4', 'sheba',
+    ):
+        if key in rec:
+            updated[key] = rec[key]
+    return updated, None
+
+
 def public_account_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     """فیلدهای امن برای JSON و UI (بدون شماره کامل)."""
     pfx = str(row.get("pan_prefix4") or "")[:4]
@@ -126,6 +147,7 @@ def public_account_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "abbr": row.get("abbr") or (bank_by_key(str(row.get("bank_key") or "")) or {}).get("abbr", "بانک"),
         "color": row.get("color") or (bank_by_key(str(row.get("bank_key") or "")) or {}).get("color", "#455a64"),
         "holder_name": row.get("holder_name") or "",
+        "sheba": row.get("sheba") or "",
         "masked_pan": masked,
         "summary": summary,
         "is_default": bool(row.get("is_default")),
