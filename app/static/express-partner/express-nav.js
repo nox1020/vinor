@@ -878,6 +878,13 @@
   function clearExpressPartnerCaches() {
     clearAllPrefetchCache();
     try {
+      if (/VinorApp\//i.test(navigator.userAgent || '') &&
+          window.VinorNativeShell &&
+          typeof window.VinorNativeShell.onPartnerLogout === 'function') {
+        window.VinorNativeShell.onPartnerLogout();
+      }
+    } catch (_) {}
+    try {
       if (window.caches && window.caches.keys) {
         return window.caches.keys().then(function (keys) {
           return Promise.all(keys.filter(function (k) {

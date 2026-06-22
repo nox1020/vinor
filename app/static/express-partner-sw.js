@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.20-raw-uploads';
+const VERSION = 'v1.0.21-apk-offline-nav';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -127,6 +127,60 @@ function isStaticAsset(request) {
   return url.pathname.startsWith('/static/');
 }
 
+function isVinorApkRequest(request) {
+  try {
+    return (request.headers.get('User-Agent') || '').includes('VinorApp/');
+  } catch (_) {
+    return false;
+  }
+}
+
+function isAuthPartnerPath(pathname) {
+  const p = (pathname || '').replace(/\/+$/, '') || '/';
+  return p === '/express/partner/login' ||
+    p === '/express/partner/logout' ||
+    p === '/express/partner/verify';
+}
+
+async function cacheApkNavigation(request, response) {
+  if (!isVinorApkRequest(request) || !response || !response.ok) return;
+  const url = new URL(request.url);
+  if (isAuthPartnerPath(url.pathname)) return;
+  const ct = (response.headers.get('content-type') || '').toLowerCase();
+  if (!ct.includes('text/html')) return;
+  try {
+    const cache = await caches.open(RUNTIME);
+    await cache.put(request, response.clone());
+    await trimCache(RUNTIME, 20);
+  } catch (_) {}
+}
+
+async function matchCachedNavigation(request) {
+  try {
+    const cache = await caches.open(RUNTIME);
+    let hit = await cache.match(request);
+    if (hit) return hit;
+    hit = await cache.match(request, { ignoreSearch: true });
+    if (hit) return hit;
+    const url = new URL(request.url);
+    if (!url.pathname.startsWith('/express/partner/')) return null;
+    const keys = await cache.keys();
+    for (let i = keys.length - 1; i >= 0; i--) {
+      const req = keys[i];
+      try {
+        const u = new URL(req.url);
+        if (u.pathname.startsWith('/express/partner/') && !isAuthPartnerPath(u.pathname)) {
+          hit = await cache.match(req);
+          if (hit) return hit;
+        }
+      } catch (_) {}
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
 // Handle fetch events
 self.addEventListener('fetch', (event) => {
   const { request } = event;
@@ -184,14 +238,17 @@ self.addEventListener('fetch', (event) => {
       
       try {
         const resp = await fetch(request);
-        /* عمداً پاسخ navigate را در runtime cache نمی‌گذاریم؛ صفحات همکار وابسته به کوکی‌اند
-           و کش باعث می‌شود بعد از خروج هنوز UI لاگین دیده شود مگر با چند بار تلاش/رفرش. */
+        if (!isAjaxRequest) {
+          await cacheApkNavigation(request, resp);
+        }
         return resp;
       } catch (_) {
         // برای AJAX requests، از cache استفاده نکن و خطا برگردان
         if (isAjaxRequest) {
           return new Response('Network error', { status: 503 });
         }
+        const runtimeHit = await matchCachedNavigation(request);
+        if (runtimeHit) return runtimeHit;
         const cache = await caches.open(PRECACHE);
         // فقط همان URLهایی که در install به precache اضافه شده‌اند (مثلاً login)
         const cached = await cache.match(request);
