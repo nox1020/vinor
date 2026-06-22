@@ -1,21 +1,167 @@
-{# بنر تبلیغاتی کیف پول — دعوت به فروش و کسب پورسانت #}
+{# بنر تصویری کیف پول — بفروش و پورسانت بگیر #}
+<style>
+  .vn-sell-promo {
+    display: block;
+    border-radius: 1.25rem;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(145deg, #fef3c7 0%, #fde68a 42%, #f5f5f4 42%, #f5f5f4 100%);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    text-decoration: none;
+    color: inherit;
+  }
+  .vn-sell-promo:active {
+    transform: scale(0.985);
+  }
+  .vn-sell-promo__top {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding: 0.85rem 0.85rem 0.65rem;
+    min-height: 7.5rem;
+  }
+  .vn-sell-promo__visual {
+    position: relative;
+    flex: 0 0 42%;
+    max-width: 9.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .vn-sell-promo__phone {
+    position: relative;
+    width: 5.5rem;
+    height: 7rem;
+    border-radius: 1rem;
+    background: linear-gradient(160deg, #1e293b, #0f172a);
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    transform: rotate(-8deg);
+    padding: 0.45rem 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+  }
+  .vn-sell-promo__phone-notch {
+    width: 1.5rem;
+    height: 0.22rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 0 auto 0.15rem;
+  }
+  .vn-sell-promo__pill {
+    border-radius: 0.45rem;
+    padding: 0.22rem 0.3rem;
+    font-size: 0.48rem;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    color: #fff;
+    background: linear-gradient(135deg, #10b981, #059669);
+    box-shadow: 0 3px 8px rgba(5, 150, 105, 0.35);
+  }
+  .vn-sell-promo__pill--mid {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    box-shadow: 0 4px 10px rgba(217, 119, 6, 0.4);
+    transform: scale(1.04);
+  }
+  .vn-sell-promo__arrow {
+    position: absolute;
+    left: 0.15rem;
+    top: 50%;
+    transform: translateY(-50%) rotate(-12deg);
+    color: #f59e0b;
+    font-size: 1.35rem;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    z-index: 2;
+  }
+  .vn-sell-promo__copy {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: start;
+    padding-top: 0.15rem;
+  }
+  .vn-sell-promo__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.62rem;
+    font-weight: 800;
+    color: #047857;
+    margin-bottom: 0.35rem;
+  }
+  .vn-sell-promo__brand i {
+    font-size: 0.7rem;
+  }
+  .vn-sell-promo__title {
+    font-size: 1.05rem;
+    font-weight: 900;
+    line-height: 1.35;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+  }
+  .vn-sell-promo__sub {
+    margin-top: 0.35rem;
+    font-size: 0.68rem;
+    line-height: 1.55;
+    color: #57534e;
+    max-width: 11rem;
+  }
+  .vn-sell-promo__foot {
+    padding: 0.55rem 0.85rem 0.85rem;
+    background: #f5f5f4;
+  }
+  .vn-sell-promo__cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    width: 100%;
+    border-radius: 0.75rem;
+    background: #0f172a;
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 800;
+    padding: 0.62rem 0.85rem;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
+  }
+  .vn-sell-promo__cta i {
+    font-size: 0.7rem;
+    opacity: 0.9;
+  }
+</style>
+
 <a href="{{ url_for('express_partner.dashboard') }}"
-   class="block rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-600/15 via-[#12161f] to-[#0d1117] p-4 overflow-hidden relative transition hover:border-emerald-500/45 active:scale-[0.99]"
+   class="vn-sell-promo"
    aria-label="رفتن به فایل‌ها — بفروش و پورسانت بگیر">
-  <div class="pointer-events-none absolute -left-6 -bottom-8 w-28 h-28 rounded-full bg-emerald-500/10 blur-2xl" aria-hidden="true"></div>
-  <div class="pointer-events-none absolute -top-6 -right-4 w-20 h-20 rounded-full bg-amber-400/10 blur-2xl" aria-hidden="true"></div>
-  <div class="relative flex items-center gap-3">
-    <div class="shrink-0 w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 text-xl shadow-inner">
-      <i class="fas fa-hand-holding-dollar" aria-hidden="true"></i>
+  <div class="vn-sell-promo__top">
+    <div class="vn-sell-promo__visual" aria-hidden="true">
+      <i class="fas fa-long-arrow-alt-left vn-sell-promo__arrow"></i>
+      <div class="vn-sell-promo__phone">
+        <span class="vn-sell-promo__phone-notch"></span>
+        <span class="vn-sell-promo__pill">فایل آماده</span>
+        <span class="vn-sell-promo__pill vn-sell-promo__pill--mid">معرفی مشتری</span>
+        <span class="vn-sell-promo__pill">دریافت پورسانت</span>
+      </div>
     </div>
-    <div class="min-w-0 flex-1 text-start">
-      <p class="text-sm font-extrabold text-white leading-snug">بفروش و پورسانت بگیر</p>
-      <p class="mt-1 text-[11px] text-slate-400 leading-relaxed">
-        فایل‌های آماده را معرفی کن؛ پورسانت شفاف در کیف پولت واریز می‌شود.
-      </p>
+    <div class="vn-sell-promo__copy">
+      <span class="vn-sell-promo__brand">
+        <i class="fas fa-leaf" aria-hidden="true"></i>
+        وینور همکار
+      </span>
+      <p class="vn-sell-promo__title">بفروش و پورسانت بگیر</p>
+      <p class="vn-sell-promo__sub">فایل‌های آماده را معرفی کن؛ پورسانت شفاف در کیف پولت واریز می‌شود.</p>
     </div>
-    <span class="shrink-0 w-9 h-9 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500/15 transition">
-      <i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>
+  </div>
+  <div class="vn-sell-promo__foot">
+    <span class="vn-sell-promo__cta">
+      <i class="fas fa-th-large" aria-hidden="true"></i>
+      مشاهده فایل‌ها
     </span>
   </div>
 </a>
