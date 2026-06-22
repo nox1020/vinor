@@ -1,0 +1,115 @@
+{# نوار آفلاین زیر هدر — مشابه تلگرام #}
+<div id="vinorExpressOfflineBar" class="vinor-express-offline-bar" hidden role="status" aria-live="polite">
+  <div class="vinor-express-offline-bar__inner">
+    <svg class="vinor-express-offline-bar__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M2.5 8.5a15.5 15.5 0 0 1 19 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M5.5 12.2a10.5 10.5 0 0 1 13 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M8.8 15.8a5.5 5.5 0 0 1 6.4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M12 19h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      <path d="M4 4l16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <span id="vinorExpressOfflineBarText">اتصال برقرار نیست</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  if (window.__vinorExpressConnectivityInit) return;
+  window.__vinorExpressConnectivityInit = true;
+
+  var lastOnline = null;
+  var BAR_FALLBACK_H = 28;
+
+  function isApkClient() {
+    return /VinorApp\//i.test(navigator.userAgent || '');
+  }
+
+  function layoutOfflineBar() {
+    var bar = document.getElementById('vinorExpressOfflineBar');
+    if (!bar || bar.hidden) return;
+    var header = null;
+    try {
+      var swap = document.getElementById('vinor-express-page-swap');
+      var list = swap
+        ? swap.querySelectorAll('header.ep-partner-header:not(.ep-partner-header--sticky)')
+        : document.querySelectorAll('header.ep-partner-header:not(.ep-partner-header--sticky)');
+      if (list && list.length) header = list[list.length - 1];
+    } catch (_) {}
+    if (header) {
+      bar.style.top = Math.round(header.getBoundingClientRect().bottom) + 'px';
+    } else {
+      bar.style.top = 'env(safe-area-inset-top, 0px)';
+    }
+    var h = Math.ceil(bar.getBoundingClientRect().height) || BAR_FALLBACK_H;
+    try { document.documentElement.style.setProperty('--vn-partner-offline-bar-h', h + 'px'); } catch (_) {}
+    if (typeof window.__vinorPartnerHeaderPadSync === 'function') {
+      window.__vinorPartnerHeaderPadSync();
+    }
+  }
+
+  window.__vinorExpressOfflineBarLayout = layoutOfflineBar;
+
+  window.vinorExpressSyncConnectivity = function (online, opts) {
+    opts = opts || {};
+    var on = !!online;
+    if (lastOnline === on && !opts.force) return;
+    lastOnline = on;
+
+    var bar = document.getElementById('vinorExpressOfflineBar');
+    var txt = document.getElementById('vinorExpressOfflineBarText');
+    var root = document.documentElement;
+    if (!bar) return;
+
+    if (on) {
+      bar.hidden = true;
+      root.classList.remove('vinor-express-offline');
+      try { root.style.removeProperty('--vn-partner-offline-bar-h'); } catch (_) {}
+    } else {
+      bar.hidden = false;
+      if (txt) {
+        if (opts.message) {
+          txt.textContent = opts.message;
+        } else if (isApkClient()) {
+          txt.textContent = 'اتصال برقرار نیست';
+        } else {
+          txt.textContent = 'آفلاین هستید — نمایش از حافظهٔ کش';
+        }
+      }
+      root.classList.add('vinor-express-offline');
+    }
+
+    layoutOfflineBar();
+  };
+
+  function probeNativeOnline() {
+    try {
+      if (window.VinorConnectivity && typeof window.VinorConnectivity.isOnline === 'function') {
+        return !!window.VinorConnectivity.isOnline();
+      }
+    } catch (_) {}
+    return typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+  }
+
+  function applyFromBrowser() {
+    window.vinorExpressSyncConnectivity(probeNativeOnline(), { force: true });
+  }
+
+  window.addEventListener('online', function () {
+    window.vinorExpressSyncConnectivity(true, { force: true });
+  });
+  window.addEventListener('offline', function () {
+    window.vinorExpressSyncConnectivity(false, { force: true });
+  });
+  window.addEventListener('resize', layoutOfflineBar, { passive: true });
+  window.addEventListener('vinor:express-page-swap', function () {
+    window.requestAnimationFrame(layoutOfflineBar);
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyFromBrowser, { once: true });
+  } else {
+    applyFromBrowser();
+  }
+})();
+</script>

@@ -33,14 +33,28 @@
     return purgeDuplicateHeaders();
   }
 
+  function offlineBarHeight() {
+    var bar = document.getElementById('vinorExpressOfflineBar');
+    if (!bar || bar.hidden) return 0;
+    var h = Math.ceil(bar.getBoundingClientRect().height);
+    return h > 0 ? h : 28;
+  }
+
   function syncPartnerHeaderPad() {
     var header = activeHeader();
     if (!header) {
       try { document.documentElement.style.removeProperty('--vn-partner-header-pad'); } catch (_) {}
+      if (typeof window.__vinorExpressOfflineBarLayout === 'function') {
+        window.__vinorExpressOfflineBarLayout();
+      }
       return;
     }
-    var h = Math.ceil(header.getBoundingClientRect().height + 8);
-    if (h < 48) h = 56;
+    if (typeof window.__vinorExpressOfflineBarLayout === 'function') {
+      window.__vinorExpressOfflineBarLayout();
+    }
+    var offlineH = offlineBarHeight();
+    var h = Math.ceil(header.getBoundingClientRect().height + 8 + offlineH);
+    if (h < 48) h = 56 + offlineH;
     document.documentElement.style.setProperty('--vn-partner-header-pad', h + 'px');
   }
 

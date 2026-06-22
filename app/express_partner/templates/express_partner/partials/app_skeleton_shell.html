@@ -259,6 +259,11 @@
 
   function syncOfflineUi() {
     var on = typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+    try {
+      if (window.VinorConnectivity && typeof window.VinorConnectivity.isOnline === 'function') {
+        on = !!window.VinorConnectivity.isOnline();
+      }
+    } catch (_) {}
     var badge = document.getElementById('vinorSkOfflineBadge');
     var txt = document.getElementById('vinorSkStatusText');
     if (badge) badge.hidden = on;
@@ -266,6 +271,9 @@
       txt.textContent = on
         ? 'در حال بارگذاری…'
         : 'بدون اینترنت — نمایش از حافظهٔ آفلاین';
+    }
+    if (typeof window.vinorExpressSyncConnectivity === 'function') {
+      window.vinorExpressSyncConnectivity(on, { force: true });
     }
   }
 

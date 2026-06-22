@@ -426,4 +426,40 @@
     border-color: rgba(16, 185, 129, 0.4);
     background-color: rgba(16, 185, 129, 0.15);
   }
+  /* نوار آفلاین زیر هدر — مشابه تلگرام */
+  .vinor-express-offline-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 49;
+    pointer-events: none;
+  }
+  .vinor-express-offline-bar[hidden] {
+    display: none !important;
+  }
+  .vinor-express-offline-bar__inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 28px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    color: #78350f;
+    background: rgba(253, 230, 138, 0.96);
+    border-bottom: 1px solid rgba(120, 53, 15, 0.12);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+  }
+  html.dark .vinor-express-offline-bar__inner {
+    color: #fde68a;
+    background: rgba(69, 39, 10, 0.94);
+    border-bottom-color: rgba(253, 230, 138, 0.08);
+  }
+  .vinor-express-offline-bar__icon {
+    flex-shrink: 0;
+    opacity: 0.9;
+  }
 </style>
