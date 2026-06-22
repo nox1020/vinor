@@ -2,6 +2,7 @@
 {% block title %}همه تراکنش‌ها | پورسانت{% endblock %}
 
 {% block head %}
+{% include 'express_partner/partials/commissions_styles.html' %}
 <style>
   #commTxnListHeader .comm-txn-filter-toggle.is-active {
     border-color: rgba(16, 185, 129, 0.45);
@@ -44,7 +45,9 @@
   <div id="commTxnPage"
        class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] text-zinc-100 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
     <div id="commTxnScrollInner"
-         class="mx-auto max-w-lg px-4 sm:max-w-4xl sm:px-6">
+         class="mx-auto max-w-lg px-4 sm:max-w-4xl sm:px-6 space-y-4">
+
+      {% include 'express_partner/partials/commissions_income_details.html' %}
 
       <section class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
         {% if items and items|length > 0 %}
@@ -170,6 +173,32 @@
       });
     }
     applyJalali(document);
+
+    (function setupCommIncomeInfoTip() {
+      var btn = document.querySelector('[data-comm-income-info-btn]');
+      var tip = document.querySelector('[data-comm-income-info-tip]');
+      if (!btn || !tip) return;
+      var hideTimer = null;
+      function hideTip() {
+        tip.classList.add('hidden');
+        tip.setAttribute('aria-hidden', 'true');
+        btn.setAttribute('aria-expanded', 'false');
+        if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      }
+      function showTip() {
+        tip.classList.remove('hidden');
+        tip.setAttribute('aria-hidden', 'false');
+        btn.setAttribute('aria-expanded', 'true');
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(hideTip, 5200);
+      }
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (tip.classList.contains('hidden')) showTip();
+        else hideTip();
+      });
+    })();
 
     var filters = document.getElementById('commTxnFilters');
     var rowsRoot = document.getElementById('commTxnRows');

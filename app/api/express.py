@@ -392,7 +392,7 @@ def get_menu():
         # دسترسی‌ها بعداً تنظیم می‌شوند
         partner_menu = [
             {'key': 'dashboard', 'endpoint': 'express_partner.dashboard', 'icon': 'fa-home', 'label': 'وینور'},
-            {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-chart-line', 'label': 'پورسانت', 'disabled': not is_express_partner},
+            {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not is_express_partner},
             {'key': 'profile', 'endpoint': 'express_partner.profile', 'icon': 'fa-user', 'label': 'من'}
         ]
         
@@ -431,7 +431,7 @@ def get_menu():
             'success': True,
             'menu': [
                 {'key': 'dashboard', 'url': '/express/partner/dashboard', 'icon': 'fa-home', 'label': 'وینور'},
-                {'key': 'commissions', 'url': '/express/partner/commissions', 'icon': 'fa-chart-line', 'label': 'پورسانت', 'disabled': True},
+                {'key': 'commissions', 'url': '/express/partner/commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': True},
                 {'key': 'profile', 'url': '/express/partner/profile', 'icon': 'fa-user', 'label': 'من'}
             ],
             'is_logged_in': False,

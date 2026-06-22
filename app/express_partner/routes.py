@@ -1357,13 +1357,18 @@ def inject_role_flags():
     android_apk_url = ''
     android_apk_version = ''
     show_apk_download_banner = False
+    show_apk_strip = False
+    apk_strip_mode = ''
     show_app_update_nav = False
     if not is_vinor_apk:
         try:
             _apk_settings = _express_settings_cached()
             android_apk_url = (_apk_settings.get('android_apk_url') or '').strip()
             android_apk_version = (_apk_settings.get('android_apk_version') or '').strip()
-            show_apk_download_banner = bool(android_apk_url)
+            if android_apk_url:
+                show_apk_strip = True
+                apk_strip_mode = 'install'
+                show_apk_download_banner = True
         except Exception:
             pass
     else:
@@ -1377,6 +1382,10 @@ def inject_role_flags():
                 apk_url=android_apk_url,
                 req=request,
             )
+            if show_app_update_nav and android_apk_url:
+                show_apk_strip = True
+                apk_strip_mode = 'update'
+                show_apk_download_banner = True
         except Exception:
             pass
 
@@ -1408,6 +1417,8 @@ def inject_role_flags():
         "android_apk_url": android_apk_url,
         "android_apk_version": android_apk_version,
         "show_apk_download_banner": show_apk_download_banner,
+        "show_apk_strip": show_apk_strip,
+        "apk_strip_mode": apk_strip_mode,
         "show_app_update_nav": show_app_update_nav,
         "auth_flash_categories": AUTH_FLASH_CATEGORY_FILTER,
         "vinor_robots_meta": vinor_robots_meta,
@@ -2505,11 +2516,17 @@ def commissions_transactions_page():
     _attach_commission_txn_labels(my_comms)
     txn_items = _partner_txn_items(me_phone, my_comms)
     txn_summary = partner_txn_feed_summary(txn_items)
+    comm_stats = _partner_commission_stats(me_phone, my_comms)
 
     return render_template(
         "express_partner/commissions_txn_list.html",
         items=txn_items,
         txn_summary=txn_summary,
+        comm_stats=comm_stats,
+        total_commission=comm_stats["total_confirmed_amount"],
+        paid_commission=comm_stats.get("paid_withdrawal_amount", comm_stats.get("received_amount", 0)),
+        sold_count=comm_stats["total_confirmed_count"],
+        paid_count=comm_stats.get("paid_withdrawal_count", comm_stats.get("received_count", 0)),
         hide_header=True,
         SHOW_SUBMIT_BUTTON=False,
         brand="وینور",
