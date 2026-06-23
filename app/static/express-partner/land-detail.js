@@ -165,6 +165,15 @@
     var index = 0;
     var loadFallbackTimer = null;
     var LOADER_MAX_MS = 45000;
+    var activeSlideReq = 0;
+
+    function isSwipeControlTarget(node) {
+      if (!node || !node.closest) return false;
+      return !!node.closest(
+        '#landVideoSoundToggle, #landVideoSoundWrap, #landDetailMoreBtn, #landDetailMoreMenu, ' +
+        '#landDetailDownloadBtn, [data-land-detail-fav], [data-vinor-express-nav], .ld-dot'
+      );
+    }
 
     function setLoader(visible) {
       var loader = document.getElementById('landMediaLoading');
@@ -248,8 +257,30 @@
       wrap.setAttribute('aria-hidden', visible ? 'false' : 'true');
     }
 
+    function preloadAdjacentSlides() {
+      if (slides.length < 2) return;
+      var targets = [index - 1, index + 1];
+      targets.forEach(function (offset) {
+        var i = offset;
+        if (i < 0) i = slides.length - 1;
+        if (i >= slides.length) i = 0;
+        var s = slides[i];
+        if (!s || s.type !== 'image') return;
+        var u = s.thumb || s.full;
+        if (!u) return;
+        var pre = new Image();
+        pre.decoding = 'async';
+        pre.src = u;
+      });
+    }
+
     function showImageSlide(slide) {
       if (!img) return;
+      var reqId = ++activeSlideReq;
+      function isStale() {
+        return reqId !== activeSlideReq;
+      }
+
       setVideoSoundVisible(false);
       if (video) {
         try { video.pause(); } catch (e) { /* ignore */ }
@@ -261,9 +292,11 @@
       var sameSrc = (img.getAttribute('src') || '') === thumb;
 
       function reveal(ok) {
+        if (isStale()) return;
         setLoader(false);
         img.classList.add('is-loaded');
         img.classList.toggle('is-broken', ok === false);
+        if (ok !== false) preloadAdjacentSlides();
       }
 
       function bindLoad(src, allowFullFallback) {
@@ -274,12 +307,14 @@
         setLoader(true);
 
         function onLoad() {
+          if (isStale()) return;
           img.onload = null;
           img.onerror = null;
           reveal(true);
         }
 
         function onError() {
+          if (isStale()) return;
           img.onload = null;
           img.onerror = null;
           if (allowFullFallback && !triedFull && full && src !== full) {
@@ -305,6 +340,7 @@
         setLoader(true);
         var waitedFull = false;
         function onSameDone() {
+          if (isStale()) return;
           if (imageReady(img)) {
             reveal(true);
             return;
@@ -324,6 +360,7 @@
     }
 
     function showVideoSlide() {
+      activeSlideReq++;
       if (!video) return;
       setVideoSoundVisible(true);
       if (img) {
@@ -350,8 +387,11 @@
     }
 
     function updateUi() {
-      dots.forEach(function (dot, i) {
-        dot.classList.toggle('is-active', i === index);
+      dots.forEach(function (dot) {
+        var dotIdx = parseInt(dot.getAttribute('data-index'), 10);
+        if (!isNaN(dotIdx)) {
+          dot.classList.toggle('is-active', dotIdx === index);
+        }
       });
       if (label && cfg.totalItems > 1) {
         label.textContent = faDigits(index + 1) + ' از ' + faDigits(cfg.totalItems);
@@ -368,27 +408,103 @@
     function goTo(next) {
       if (next < 0) next = slides.length - 1;
       if (next >= slides.length) next = 0;
+      if (next === index) return;
       index = next;
       updateUi();
     }
 
-    var startX = 0;
-    var tracking = false;
-    var THRESH = 48;
+    function bindGallerySwipe(el) {
+      if (!el) return;
+      var touchStartX = null;
+      var touchEndX = null;
+      var pointerDown = false;
+      var SWIPE_THRESHOLD = 36;
 
-    function onTouchStart(e) {
-      if (!e.touches || !e.touches.length) return;
-      tracking = true;
-      startX = e.touches[0].clientX;
-    }
-    function onTouchEnd(e) {
-      if (!tracking) return;
-      tracking = false;
-      var endX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : startX;
-      var dx = endX - startX;
-      if (Math.abs(dx) < THRESH) return;
-      if (dx > 0) goTo(index + 1);
-      else goTo(index - 1);
+      function handleSwipe(dx) {
+        if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+        if (dx < 0) goTo(index + 1);
+        else goTo(index - 1);
+      }
+
+      function onTouchStart(e) {
+        if (isSwipeControlTarget(e.target)) return;
+        var t = e.touches && e.touches[0];
+        if (!t) return;
+        touchStartX = t.clientX;
+        touchEndX = null;
+      }
+
+      function onTouchMove(e) {
+        var t = e.touches && e.touches[0];
+        if (!t || touchStartX === null) return;
+        touchEndX = t.clientX;
+      }
+
+      function onTouchEnd(e) {
+        if (isSwipeControlTarget(e.target)) return;
+        if (touchStartX === null) return;
+        var t = e.changedTouches && e.changedTouches[0];
+        var endX = touchEndX !== null ? touchEndX : (t ? t.clientX : touchStartX);
+        handleSwipe(endX - touchStartX);
+        touchStartX = null;
+        touchEndX = null;
+      }
+
+      function onTouchCancel() {
+        touchStartX = null;
+        touchEndX = null;
+      }
+
+      function onPointerDown(e) {
+        if (isSwipeControlTarget(e.target)) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        pointerDown = true;
+        touchStartX = e.clientX;
+        touchEndX = null;
+        try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      }
+
+      function onPointerMove(e) {
+        if (!pointerDown || touchStartX === null) return;
+        touchEndX = e.clientX;
+      }
+
+      function onPointerUp(e) {
+        if (isSwipeControlTarget(e.target)) return;
+        if (!pointerDown || touchStartX === null) return;
+        pointerDown = false;
+        var endX = touchEndX !== null ? touchEndX : e.clientX;
+        handleSwipe(endX - touchStartX);
+        touchStartX = null;
+        touchEndX = null;
+        try { el.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      }
+
+      function onPointerCancel() {
+        pointerDown = false;
+        touchStartX = null;
+        touchEndX = null;
+      }
+
+      el.addEventListener('touchstart', onTouchStart, { passive: true });
+      el.addEventListener('touchmove', onTouchMove, { passive: true });
+      el.addEventListener('touchend', onTouchEnd, { passive: true });
+      el.addEventListener('touchcancel', onTouchCancel, { passive: true });
+      el.addEventListener('pointerdown', onPointerDown);
+      el.addEventListener('pointermove', onPointerMove);
+      el.addEventListener('pointerup', onPointerUp);
+      el.addEventListener('pointercancel', onPointerCancel);
+
+      addCleanup(function () {
+        el.removeEventListener('touchstart', onTouchStart);
+        el.removeEventListener('touchmove', onTouchMove);
+        el.removeEventListener('touchend', onTouchEnd);
+        el.removeEventListener('touchcancel', onTouchCancel);
+        el.removeEventListener('pointerdown', onPointerDown);
+        el.removeEventListener('pointermove', onPointerMove);
+        el.removeEventListener('pointerup', onPointerUp);
+        el.removeEventListener('pointercancel', onPointerCancel);
+      });
     }
 
     dots.forEach(function (dot, i) {
@@ -406,11 +522,9 @@
       });
     });
 
-    gallery.addEventListener('touchstart', onTouchStart, { passive: true });
-    gallery.addEventListener('touchend', onTouchEnd, { passive: true });
+    bindGallerySwipe(document.getElementById('landGallerySwipe') || gallery);
+
     addCleanup(function () {
-      gallery.removeEventListener('touchstart', onTouchStart);
-      gallery.removeEventListener('touchend', onTouchEnd);
       if (loadFallbackTimer) {
         clearTimeout(loadFallbackTimer);
         loadFallbackTimer = null;
