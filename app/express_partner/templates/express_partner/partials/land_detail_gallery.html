@@ -28,10 +28,11 @@
     {% endif %}
 
     {% if primary_image %}
-      {% set img_url = upload_url(primary_image) %}
+      {% set img_url = primary_image|image_thumb_url %}
+      {% set img_full = primary_image|image_display_full_url %}
     <img id="landMainImage"
          src="{{ img_url }}"
-         data-full="{{ img_url }}"
+         data-full="{{ img_full }}"
          alt="{{ land.title or '' }}"
          class="absolute inset-0 z-[1] h-full w-full object-cover {% if has_video %}hidden{% endif %}"
          fetchpriority="high"

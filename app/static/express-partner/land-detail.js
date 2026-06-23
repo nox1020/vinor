@@ -25,14 +25,15 @@
     if (!u || u.indexOf('?') === -1) return u;
     var parts = u.split('?', 2);
     var qs = parts[1] || '';
-    if (/(\bw=|\bq=|\bfmt=|\bvariant=)/.test(qs)) return parts[0];
+    if (/(\bfmt=|\bvariant=)/.test(qs)) return parts[0];
     return u;
   }
 
   function cleanSlideMedia(slide) {
     if (!slide || slide.type !== 'image') return slide;
-    var thumb = stripLegacyVariantQuery(slide.thumb || slide.full || '');
-    var full = stripLegacyVariantQuery(slide.full || slide.thumb || thumb);
+    var thumb = String(slide.thumb || slide.full || '').trim();
+    var full = stripLegacyVariantQuery(String(slide.full || slide.thumb || thumb).trim());
+    if (!thumb) thumb = full;
     return { type: 'image', thumb: thumb, full: full };
   }
 
@@ -135,7 +136,26 @@
 
   function initGallery(cfg) {
     var gallery = document.getElementById('landGallery');
-    if (!gallery || !cfg || !cfg.slides || !cfg.slides.length) return;
+    if (!gallery || !cfg || !cfg.slides || !cfg.slides.length) {
+      var loneImg = document.getElementById('landMainImage');
+      if (loneImg && loneImg.getAttribute('src')) {
+        var loneLoader = document.getElementById('landMediaLoading');
+        function loneReveal() {
+          if (loneLoader) {
+            loneLoader.classList.remove('is-visible', 'opacity-100');
+            loneLoader.classList.add('opacity-0');
+            loneLoader.setAttribute('aria-hidden', 'true');
+          }
+          loneImg.classList.add('is-loaded');
+        }
+        if (loneImg.complete && loneImg.naturalWidth > 0) loneReveal();
+        else {
+          loneImg.addEventListener('load', loneReveal, { once: true });
+          loneImg.addEventListener('error', loneReveal, { once: true });
+        }
+      }
+      return;
+    }
 
     var slides = cfg.slides.map(cleanSlideMedia);
     var video = document.getElementById('landVideo');
@@ -144,6 +164,7 @@
     var label = document.getElementById('landGallerySlideLabel');
     var index = 0;
     var loadFallbackTimer = null;
+    var LOADER_MAX_MS = 45000;
 
     function setLoader(visible) {
       var loader = document.getElementById('landMediaLoading');
@@ -158,7 +179,7 @@
         loader.setAttribute('aria-hidden', 'false');
         loadFallbackTimer = setTimeout(function () {
           setLoader(false);
-        }, 5000);
+        }, LOADER_MAX_MS);
       } else {
         loader.classList.remove('is-visible', 'opacity-100');
         loader.classList.add('opacity-0');
@@ -237,41 +258,69 @@
       img.classList.remove('hidden');
       var thumb = slide.thumb || slide.full;
       var full = slide.full || thumb;
-      var atIndex = index;
       var sameSrc = (img.getAttribute('src') || '') === thumb;
 
-      function reveal() {
+      function reveal(ok) {
         setLoader(false);
         img.classList.add('is-loaded');
+        img.classList.toggle('is-broken', ok === false);
       }
 
-      img.classList.remove('is-loaded');
-      img.onload = null;
-      img.onerror = null;
+      function bindLoad(src, allowFullFallback) {
+        var triedFull = false;
+        img.classList.remove('is-loaded', 'is-broken');
+        img.onload = null;
+        img.onerror = null;
+        setLoader(true);
+
+        function onLoad() {
+          img.onload = null;
+          img.onerror = null;
+          reveal(true);
+        }
+
+        function onError() {
+          img.onload = null;
+          img.onerror = null;
+          if (allowFullFallback && !triedFull && full && src !== full) {
+            triedFull = true;
+            bindLoad(full, false);
+            return;
+          }
+          reveal(false);
+        }
+
+        img.onload = onLoad;
+        img.onerror = onError;
+        img.src = src;
+        img.dataset.full = full;
+      }
 
       if (sameSrc) {
         if (imageReady(img)) {
-          reveal();
+          reveal(true);
           return;
         }
+        img.classList.remove('is-loaded', 'is-broken');
         setLoader(true);
-        waitForImage(img, reveal);
+        var waitedFull = false;
+        function onSameDone() {
+          if (imageReady(img)) {
+            reveal(true);
+            return;
+          }
+          if (!waitedFull && full && thumb !== full) {
+            waitedFull = true;
+            bindLoad(full, false);
+            return;
+          }
+          reveal(false);
+        }
+        waitForImage(img, onSameDone);
         return;
       }
 
-      setLoader(true);
-      img.onload = function () {
-        img.onload = null;
-        img.onerror = null;
-        reveal();
-      };
-      img.onerror = function () {
-        img.onload = null;
-        img.onerror = null;
-        reveal();
-      };
-      img.src = thumb;
-      img.dataset.full = full;
+      bindLoad(thumb, thumb !== full);
     }
 
     function showVideoSlide() {

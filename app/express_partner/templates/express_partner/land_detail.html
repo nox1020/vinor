@@ -85,6 +85,10 @@
     #landMainImage.is-loaded {
       opacity: 1;
     }
+    #landMainImage.is-broken {
+      opacity: 0.35;
+      object-fit: contain;
+    }
     #landMainImage.hidden {
       opacity: 0;
       pointer-events: none;
@@ -217,8 +221,9 @@
       {%- for img in images -%}
       {%- if not _slide_first %},{% endif -%}
       {%- set _slide_first = false -%}
-      {%- set img_u = upload_url(img) -%}
-      {"type":"image","thumb":{{ img_u|tojson }},"full":{{ img_u|tojson }}}
+      {%- set img_u = img|image_thumb_url -%}
+      {%- set img_full = img|image_display_full_url -%}
+      {"type":"image","thumb":{{ img_u|tojson }},"full":{{ img_full|tojson }}}
       {%- endfor -%}
     ]
   }

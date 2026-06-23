@@ -6,12 +6,13 @@ Express Listings API endpoints for Vinor Express feature
 
 from flask import Blueprint, jsonify, request, current_app, make_response, session, url_for
 from app.utils.storage import load_express_lands_cached, get_lands_file_stats, load_express_reposts, load_express_partners, load_settings
-from app.utils.images import normalize_upload_url
+from app.utils.images import normalize_upload_url, gallery_display_url
 
 
 def _cover_image_urls(cover) -> tuple[str, str, str]:
     url = normalize_upload_url(cover) if cover else ""
-    return url, url, url
+    thumb = gallery_display_url(cover) if cover else ""
+    return thumb, url, url
 from app.services.notifications import add_notification
 from app.utils.share_tokens import encode_partner_ref
 

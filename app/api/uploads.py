@@ -94,18 +94,41 @@ def upload_image():
 
 @uploads_bp.get("/uploads/<path:filename>")
 def serve_uploads(filename: str):
-    """سرو فایل‌های آپلود — بدون پردازش."""
-    from app.utils.images import redirect_if_legacy_variant_request
+    """سرو فایل‌های آپلود — با پشتیبانی resize اختیاری (?w=&q=)."""
+    from app.utils.images import (
+        make_resized_upload_response,
+        parse_resize_request_args,
+        redirect_if_legacy_variant_request,
+    )
 
     legacy_redirect = redirect_if_legacy_variant_request()
     if legacy_redirect is not None:
         return legacy_redirect
 
+    resize = parse_resize_request_args(request.args)
     cache_hdr = "public, max-age=86400, stale-while-revalidate=86400"
     base_dir = current_app.config.get("UPLOAD_FOLDER")
     safe_path = os.path.normpath(filename).replace("\\", "/")
     if safe_path.startswith("partner/avatars/"):
         cache_hdr = "public, max-age=31536000, immutable"
+
+    abs_path = None
+    if base_dir:
+        candidate = os.path.join(base_dir, safe_path)
+        if os.path.isfile(candidate):
+            abs_path = candidate
+
+    if abs_path is None:
+        legacy_base = os.path.join(legacy_dir(current_app), "uploads")
+        candidate = os.path.join(legacy_base, safe_path)
+        if os.path.isfile(candidate):
+            abs_path = candidate
+
+    if resize and abs_path:
+        max_w, quality = resize
+        resized_resp = make_resized_upload_response(abs_path, max_w, quality)
+        if resized_resp is not None:
+            return resized_resp
 
     if base_dir:
         try:

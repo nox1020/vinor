@@ -9,7 +9,9 @@ from typing import Any, Dict, Optional
 from werkzeug.utils import secure_filename
 
 ALLOWED_IMAGE_EXTS = frozenset({"jpg", "jpeg", "png", "gif", "webp"})
-_LEGACY_VARIANT_MARKERS = ("w=", "q=", "fmt=", "variant=")
+_LEGACY_VARIANT_MARKERS = ("fmt=", "variant=")
+_GALLERY_DISPLAY_MAX_W = 1280
+_GALLERY_DISPLAY_QUALITY = 82
 
 
 def strip_legacy_variant_query(url: str) -> str:
@@ -41,13 +43,74 @@ def normalize_upload_url(value: Optional[str]) -> str:
 
 
 def redirect_if_legacy_variant_request():
-    """اگر کلاینت قدیمی ?w=&variant= فرستاد، به URL خام redirect کن."""
+    """سازگاری با پارامترهای variant= و fmt= قدیمی — به فایل خام redirect."""
     from flask import redirect, request
 
     qs = request.query_string.decode("utf-8", errors="ignore") if request.query_string else ""
     if qs and any(m in qs for m in _LEGACY_VARIANT_MARKERS):
         return redirect(request.path, code=301)
     return None
+
+
+def gallery_display_url(value: Optional[str], max_width: int = _GALLERY_DISPLAY_MAX_W, quality: int = _GALLERY_DISPLAY_QUALITY) -> str:
+    """URL سبک‌تر برای نمایش گالری/کارت — resize سمت سرور با ?w=&q=."""
+    url = normalize_upload_url(value)
+    if not url or "://" in url:
+        return url
+    return f"{url}?w={int(max_width)}&q={int(quality)}"
+
+
+def parse_resize_request_args(args) -> Optional[tuple[int, int]]:
+    """خواندن ?w=&q= از query string — None اگر resize لازم نیست."""
+    try:
+        w = int(args.get("w") or 0)
+    except (TypeError, ValueError):
+        return None
+    if w < 1:
+        return None
+    w = min(w, 2400)
+    try:
+        q = int(args.get("q") or _GALLERY_DISPLAY_QUALITY)
+    except (TypeError, ValueError):
+        q = _GALLERY_DISPLAY_QUALITY
+    q = max(50, min(q, 95))
+    return w, q
+
+
+def resize_image_file(abs_path: str, max_width: int, quality: int) -> Optional[bytes]:
+    """کوچک‌سازی تصویر برای سرو سریع‌تر در موبایل."""
+    try:
+        from io import BytesIO
+
+        from PIL import Image, ImageOps
+
+        with Image.open(abs_path) as im:
+            im = ImageOps.exif_transpose(im)
+            if im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            if im.width > max_width:
+                ratio = max_width / float(im.width)
+                new_h = max(1, int(im.height * ratio))
+                im = im.resize((max_width, new_h), Image.Resampling.LANCZOS)
+            buf = BytesIO()
+            im.save(buf, format="JPEG", quality=quality, optimize=True)
+            return buf.getvalue()
+    except Exception:
+        return None
+
+
+def make_resized_upload_response(abs_path: str, max_width: int, quality: int):
+    """پاسخ Flask برای تصویر resize‌شده — None اگر ناموفق."""
+    resized = resize_image_file(abs_path, max_width, quality)
+    if not resized:
+        return None
+    from flask import make_response
+
+    resp = make_response(resized)
+    resp.headers["Content-Type"] = "image/jpeg"
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    resp.headers["Vary"] = "Accept"
+    return resp
 
 
 def sanitize_land_media(land: Dict[str, Any]) -> Dict[str, Any]:
@@ -132,4 +195,4 @@ def partner_card_image_url(land: Dict[str, Any]) -> str:
     if not isinstance(land, dict):
         return ""
     imgs = land.get("images") or []
-    return normalize_upload_url(str(imgs[0])) if imgs else ""
+    return gallery_display_url(str(imgs[0])) if imgs else ""

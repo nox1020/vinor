@@ -25,8 +25,8 @@ def _avatar_initials_filter(value: str | None) -> str:
 
 @express_partner_bp.app_template_filter("image_thumb_url")
 def _image_thumb_url_filter(value: str | None) -> str:
-    from ..utils.images import normalize_upload_url
-    return normalize_upload_url(value)
+    from ..utils.images import gallery_display_url
+    return gallery_display_url(value)
 
 
 @express_partner_bp.app_template_filter("image_display_full_url")

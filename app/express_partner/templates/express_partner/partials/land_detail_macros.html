@@ -6,7 +6,9 @@
     {%- if "?" in p -%}
       {%- set qs = p.split("?", 1)[1] -%}
       {%- if "w=" in qs or "q=" in qs or "fmt=" in qs or "variant=" in qs -%}
-        {%- set p = p.split("?", 1)[0] -%}
+        {%- if "fmt=" in qs or "variant=" in qs -%}
+          {%- set p = p.split("?", 1)[0] -%}
+        {%- endif -%}
       {%- endif -%}
     {%- endif -%}
     {%- if "://" in p -%}{{ p }}

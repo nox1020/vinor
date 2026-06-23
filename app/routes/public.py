@@ -241,14 +241,28 @@ def express_detail(code):
 
 @main_bp.route("/uploads/<path:filename>", endpoint="uploaded_file")
 def uploaded_file(filename):
-    """سرو فایل‌های آپلود — بدون پردازش یا واریانت."""
-    from ..utils.images import redirect_if_legacy_variant_request
+    """سرو فایل‌های آپلود — با پشتیبانی resize اختیاری (?w=&q=)."""
+    from ..utils.images import (
+        make_resized_upload_response,
+        parse_resize_request_args,
+        redirect_if_legacy_variant_request,
+    )
 
     legacy_redirect = redirect_if_legacy_variant_request()
     if legacy_redirect is not None:
         return legacy_redirect
 
+    resize = parse_resize_request_args(request.args)
     cache_hdr = "public, max-age=86400, stale-while-revalidate=86400"
+    safe_path = os.path.normpath(filename).replace("\\", "/")
+
+    def _try_resized(fp: str):
+        if resize and fp and os.path.isfile(fp):
+            max_w, quality = resize
+            resp = make_resized_upload_response(fp, max_w, quality)
+            if resp is not None:
+                return resp
+        return None
 
     def _maybe_set_apk_download_name(resp):
         try:
@@ -279,9 +293,12 @@ def uploaded_file(filename):
     try:
         base_cfg = current_app.config.get("UPLOAD_FOLDER")
         if base_cfg:
-            fp_cfg = os.path.join(base_cfg, filename)
+            fp_cfg = os.path.join(base_cfg, safe_path)
+            resized = _try_resized(fp_cfg)
+            if resized is not None:
+                return resized
             if os.path.isfile(fp_cfg):
-                resp = send_from_directory(base_cfg, filename)
+                resp = send_from_directory(base_cfg, safe_path)
                 resp = _maybe_set_apk_download_name(resp)
                 resp.headers["Cache-Control"] = cache_hdr
                 return resp
@@ -292,9 +309,12 @@ def uploaded_file(filename):
         os.path.join(data_dir(), "uploads"),
         os.path.join(legacy_dir(), "uploads"),
     ):
-        fp = os.path.join(folder, filename)
+        fp = os.path.join(folder, safe_path)
+        resized = _try_resized(fp)
+        if resized is not None:
+            return resized
         if os.path.isfile(fp):
-            resp = send_from_directory(folder, filename)
+            resp = send_from_directory(folder, safe_path)
             resp = _maybe_set_apk_download_name(resp)
             resp.headers["Cache-Control"] = cache_hdr
             return resp
@@ -302,12 +322,15 @@ def uploaded_file(filename):
     try:
         static_root = current_app.static_folder
         candidates = []
-        if filename.startswith('uploads/'):
+        if (filename.startswith('uploads/'):
             candidates.append(os.path.join(static_root, filename))
             candidates.append(os.path.join(static_root, filename.lstrip('/')))
         else:
             candidates.append(os.path.join(static_root, 'uploads', filename))
         for cand in candidates:
+            resized = _try_resized(cand)
+            if resized is not None:
+                return resized
             if os.path.isfile(cand):
                 rel_dir = os.path.dirname(os.path.relpath(cand, static_root))
                 fn = os.path.basename(cand)
