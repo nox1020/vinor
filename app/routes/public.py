@@ -322,7 +322,7 @@ def uploaded_file(filename):
     try:
         static_root = current_app.static_folder
         candidates = []
-        if (filename.startswith('uploads/'):
+        if filename.startswith('uploads/'):
             candidates.append(os.path.join(static_root, filename))
             candidates.append(os.path.join(static_root, filename.lstrip('/')))
         else:
