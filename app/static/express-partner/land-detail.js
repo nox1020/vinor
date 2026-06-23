@@ -301,34 +301,33 @@
 
       function bindLoad(src, allowFullFallback) {
         var triedFull = false;
-        img.classList.remove('is-loaded', 'is-broken');
-        img.onload = null;
-        img.onerror = null;
         setLoader(true);
 
-        function onLoad() {
+        function attempt(url, canFallback) {
           if (isStale()) return;
-          img.onload = null;
-          img.onerror = null;
-          reveal(true);
+          var pre = new Image();
+          pre.decoding = 'async';
+          pre.onload = function () {
+            if (isStale()) return;
+            img.onload = null;
+            img.onerror = null;
+            img.src = url;
+            img.dataset.full = full;
+            reveal(true);
+          };
+          pre.onerror = function () {
+            if (isStale()) return;
+            if (canFallback && !triedFull && full && url !== full) {
+              triedFull = true;
+              attempt(full, false);
+              return;
+            }
+            reveal(false);
+          };
+          pre.src = url;
         }
 
-        function onError() {
-          if (isStale()) return;
-          img.onload = null;
-          img.onerror = null;
-          if (allowFullFallback && !triedFull && full && src !== full) {
-            triedFull = true;
-            bindLoad(full, false);
-            return;
-          }
-          reveal(false);
-        }
-
-        img.onload = onLoad;
-        img.onerror = onError;
-        img.src = src;
-        img.dataset.full = full;
+        attempt(src, allowFullFallback);
       }
 
       if (sameSrc) {
@@ -386,7 +385,7 @@
       video.play().catch(function () {});
     }
 
-    function updateUi() {
+    function syncGalleryChrome() {
       dots.forEach(function (dot) {
         var dotIdx = parseInt(dot.getAttribute('data-index'), 10);
         if (!isNaN(dotIdx)) {
@@ -396,6 +395,10 @@
       if (label && cfg.totalItems > 1) {
         label.textContent = faDigits(index + 1) + ' از ' + faDigits(cfg.totalItems);
       }
+    }
+
+    function updateUi() {
+      syncGalleryChrome();
       var slide = slides[index];
       if (!slide) return;
       if (slide.type === 'video') {
@@ -410,20 +413,39 @@
       if (next >= slides.length) next = 0;
       if (next === index) return;
       index = next;
-      updateUi();
+      syncGalleryChrome();
+      var slide = slides[index];
+      if (!slide) return;
+      if (slide.type === 'video') {
+        showVideoSlide();
+      } else if (slide.type === 'image') {
+        showImageSlide(slide);
+      }
     }
 
     function bindGallerySwipe(el) {
       if (!el) return;
       var touchStartX = null;
+      var touchStartY = null;
       var touchEndX = null;
-      var pointerDown = false;
-      var SWIPE_THRESHOLD = 36;
+      var swipeAxis = null;
+      var swipeLockUntil = 0;
+      var SWIPE_THRESHOLD = 28;
+      var usePointer = !('ontouchstart' in window);
 
       function handleSwipe(dx) {
+        if (Date.now() < swipeLockUntil) return;
         if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+        swipeLockUntil = Date.now() + 280;
         if (dx < 0) goTo(index + 1);
         else goTo(index - 1);
+      }
+
+      function resetTouch() {
+        touchStartX = null;
+        touchStartY = null;
+        touchEndX = null;
+        swipeAxis = null;
       }
 
       function onTouchStart(e) {
@@ -431,13 +453,25 @@
         var t = e.touches && e.touches[0];
         if (!t) return;
         touchStartX = t.clientX;
+        touchStartY = t.clientY;
         touchEndX = null;
+        swipeAxis = null;
       }
 
       function onTouchMove(e) {
+        if (touchStartX === null || touchStartY === null) return;
         var t = e.touches && e.touches[0];
-        if (!t || touchStartX === null) return;
-        touchEndX = t.clientX;
+        if (!t) return;
+        var dx = t.clientX - touchStartX;
+        var dy = t.clientY - touchStartY;
+        if (!swipeAxis) {
+          if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+          swipeAxis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+        }
+        if (swipeAxis === 'x') {
+          touchEndX = t.clientX;
+          if (e.cancelable) e.preventDefault();
+        }
       }
 
       function onTouchEnd(e) {
@@ -445,16 +479,29 @@
         if (touchStartX === null) return;
         var t = e.changedTouches && e.changedTouches[0];
         var endX = touchEndX !== null ? touchEndX : (t ? t.clientX : touchStartX);
-        handleSwipe(endX - touchStartX);
-        touchStartX = null;
-        touchEndX = null;
+        if (swipeAxis === 'x') handleSwipe(endX - touchStartX);
+        resetTouch();
       }
 
       function onTouchCancel() {
-        touchStartX = null;
-        touchEndX = null;
+        resetTouch();
       }
 
+      el.addEventListener('touchstart', onTouchStart, { passive: true });
+      el.addEventListener('touchmove', onTouchMove, { passive: false });
+      el.addEventListener('touchend', onTouchEnd, { passive: true });
+      el.addEventListener('touchcancel', onTouchCancel, { passive: true });
+
+      addCleanup(function () {
+        el.removeEventListener('touchstart', onTouchStart);
+        el.removeEventListener('touchmove', onTouchMove);
+        el.removeEventListener('touchend', onTouchEnd);
+        el.removeEventListener('touchcancel', onTouchCancel);
+      });
+
+      if (!usePointer) return;
+
+      var pointerDown = false;
       function onPointerDown(e) {
         if (isSwipeControlTarget(e.target)) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -486,20 +533,12 @@
         touchEndX = null;
       }
 
-      el.addEventListener('touchstart', onTouchStart, { passive: true });
-      el.addEventListener('touchmove', onTouchMove, { passive: true });
-      el.addEventListener('touchend', onTouchEnd, { passive: true });
-      el.addEventListener('touchcancel', onTouchCancel, { passive: true });
       el.addEventListener('pointerdown', onPointerDown);
       el.addEventListener('pointermove', onPointerMove);
       el.addEventListener('pointerup', onPointerUp);
       el.addEventListener('pointercancel', onPointerCancel);
 
       addCleanup(function () {
-        el.removeEventListener('touchstart', onTouchStart);
-        el.removeEventListener('touchmove', onTouchMove);
-        el.removeEventListener('touchend', onTouchEnd);
-        el.removeEventListener('touchcancel', onTouchCancel);
         el.removeEventListener('pointerdown', onPointerDown);
         el.removeEventListener('pointermove', onPointerMove);
         el.removeEventListener('pointerup', onPointerUp);
@@ -1816,11 +1855,14 @@
 
   function initLandDetail() {
     var root = document.querySelector(ROOT_SEL);
-    if (!root || root.dataset.ldInited === '1') return;
-
+    if (!root) {
+      runCleanup();
+      return;
+    }
     if (activeRoot && activeRoot !== root) {
       runCleanup();
     }
+    if (root.dataset.ldInited === '1') return;
 
     activeRoot = root;
     root.dataset.ldInited = '1';
@@ -1861,7 +1903,11 @@
   }
 
   function onPageReady() {
-    if (document.querySelector(ROOT_SEL)) {
+    var root = document.querySelector(ROOT_SEL);
+    if (root) {
+      if (activeRoot && activeRoot !== root) {
+        runCleanup();
+      }
       initLandDetail();
     } else {
       runCleanup();
@@ -1869,6 +1915,7 @@
   }
 
   window.vinorScheduleVisitModalRecovery = scheduleVisitModalRecovery;
+  window.vinorLandDetailTeardown = runCleanup;
 
   if (!window.__vinorLandDetailBound) {
     window.__vinorLandDetailBound = true;

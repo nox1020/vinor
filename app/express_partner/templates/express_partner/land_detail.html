@@ -79,7 +79,9 @@
     }
     .ld-gallery__loader.is-visible { opacity: 1; }
     .ld-gallery__swipe {
-      touch-action: pan-y pinch-zoom;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
     #landMainImage {
       opacity: 0;

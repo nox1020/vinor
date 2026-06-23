@@ -639,6 +639,9 @@
         return false;
       }
       stopAllExpressMedia();
+      if (typeof window.vinorLandDetailTeardown === 'function') {
+        try { window.vinorLandDetailTeardown(); } catch (_) {}
+      }
       if (window.__vinorAuthPageAbort) {
         try { window.__vinorAuthPageAbort.abort(); } catch (_) {}
       }
@@ -828,6 +831,9 @@
       return Promise.resolve(false);
     }
     stopAllExpressMedia();
+    if (typeof window.vinorLandDetailTeardown === 'function') {
+      try { window.vinorLandDetailTeardown(); } catch (_) {}
+    }
     if (window.__vinorAuthPageAbort) {
       try { window.__vinorAuthPageAbort.abort(); } catch (_) {}
     }
