@@ -31,15 +31,21 @@ def normalize_upload_url(value: Optional[str]) -> str:
     s = strip_legacy_variant_query(str(value).strip())
     if "://" in s:
         return s
-    if s.startswith("/uploads/"):
-        return s
-    if s.startswith("uploads/"):
-        return "/uploads/" + s[8:]
     if s.startswith("/static/"):
         return s
-    if s.startswith("/"):
-        return "/uploads" + s
-    return "/uploads/" + s
+
+    rel = s
+    if rel.startswith("/uploads/"):
+        rel = rel[len("/uploads/") :]
+    elif rel.startswith("uploads/"):
+        rel = rel[len("uploads/") :]
+    elif rel.startswith("/"):
+        rel = rel.lstrip("/")
+
+    while rel.startswith("uploads/"):
+        rel = rel[len("uploads/") :]
+
+    return f"/uploads/{rel}" if rel else ""
 
 
 def redirect_if_legacy_variant_request():

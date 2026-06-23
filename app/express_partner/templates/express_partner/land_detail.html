@@ -183,56 +183,7 @@
   </div>
 
   {% set land_flash_messages = get_flashed_messages(with_categories=true, category_filter=['land']) %}
-  <script type="application/json" id="landDetailConfig">
-  {
-    "hasVideo": {{ 'true' if has_video else 'false' }},
-    "totalItems": {{ total_items }},
-    "shareUrl": {{ (share_url or '')|tojson }},
-    "code": {{ (land.code or '')|tojson }},
-    "txMode": {{ (land._tx_button_mode|default('visit'))|tojson }},
-    "visitDateMin": {{ (visit_date_min or '')|tojson }},
-    "visitDate": {{ (land._visit_date or '')|tojson }},
-    "visitDateJalali": {{ (land._visit_date_jalali or '')|tojson }},
-    "txStatusUrl": {{ url_for('express_partner.land_tx_status', code=land.code)|tojson }},
-    "csrfToken": {{ csrf_token()|tojson }},
-    "isApprovedPartner": {{ 'true' if is_approved else 'false' }},
-    "marketingTitle": {{ (land.title or '')|tojson }},
-    "marketingDescription": {{ desc|tojson }},
-    "marketingMedia": [
-      {%- if is_approved -%}
-      {%- set _media_first = true -%}
-      {%- if has_video -%}
-      {"type":"video","url":{{ upload_url(video)|tojson }},"filename":{{ ((land.code or 'file') ~ '_video.mp4')|tojson }}}
-      {%- set _media_first = false -%}
-      {%- endif -%}
-      {%- for img in images -%}
-      {%- if not _media_first %},{% endif -%}
-      {%- set _media_first = false -%}
-      {"type":"image","url":{{ upload_url(img)|tojson }},"filename":{{ ((land.code or 'file') ~ '_' ~ loop.index ~ '.jpg')|tojson }}}
-      {%- endfor -%}
-      {%- endif -%}
-    ],
-    "flashMessages": [
-      {%- for category, message in land_flash_messages -%}
-      {"text": {{ message|tojson }}, "category": {{ category|tojson }}}{% if not loop.last %},{% endif %}
-      {%- endfor -%}
-    ],
-    "slides": [
-      {%- set _slide_first = true -%}
-      {%- if has_video -%}
-      {"type":"video","src":{{ upload_url(video)|tojson }}}
-      {%- set _slide_first = false -%}
-      {%- endif -%}
-      {%- for img in images -%}
-      {%- if not _slide_first %},{% endif -%}
-      {%- set _slide_first = false -%}
-      {%- set img_u = img|image_thumb_url -%}
-      {%- set img_full = img|image_display_full_url -%}
-      {"type":"image","thumb":{{ img_u|tojson }},"full":{{ img_full|tojson }}}
-      {%- endfor -%}
-    ]
-  }
-  </script>
+  <script type="application/json" id="landDetailConfig">{{ land_detail_config | tojson }}</script>
 {% endblock %}
 
 {% block scripts %}

@@ -5510,6 +5510,37 @@ def land_detail(code: str):
             if (c.get('status') or '').strip() in ('approved', 'paid')
         )
 
+    from flask import get_flashed_messages
+    from .land_detail_config import build_land_detail_config
+
+    try:
+        from flask_wtf.csrf import generate_csrf
+        csrf_val = generate_csrf()
+    except Exception:
+        csrf_val = ""
+
+    images_list = land.get("images") or []
+    video_val = land.get("video")
+    has_video_flag = bool(video_val and str(video_val).strip())
+    total_items_count = (1 if has_video_flag else 0) + len(images_list)
+    land_flash_messages = [
+        {"text": str(msg), "category": str(cat)}
+        for cat, msg in get_flashed_messages(with_categories=True, category_filter=["land"])
+    ]
+
+    land_detail_config = build_land_detail_config(
+        land,
+        images=images_list,
+        has_video=has_video_flag,
+        total_items=total_items_count,
+        share_url=share_url or "",
+        is_approved=is_approved,
+        visit_date_min=visit_date_min_iso(),
+        flash_messages=land_flash_messages,
+        tx_status_url=url_for("express_partner.land_tx_status", code=code),
+        csrf_token=csrf_val,
+    )
+
     return render_template(
         'express_partner/land_detail.html',
         land=land,
@@ -5526,6 +5557,7 @@ def land_detail(code: str):
         brand="وینور",
         domain="vinor.ir",
         visit_date_min=visit_date_min_iso(),
+        land_detail_config=land_detail_config,
     )
 
 

@@ -16,6 +16,9 @@
     try {
       return JSON.parse(el.textContent || '{}');
     } catch (e) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[vinor land-detail] landDetailConfig parse failed', e);
+      }
       return null;
     }
   }
