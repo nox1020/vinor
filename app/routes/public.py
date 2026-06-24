@@ -11,6 +11,7 @@ from flask import (
 from . import main_bp
 from ..utils.storage import data_dir, legacy_dir
 from ..utils.storage import load_express_partners_cached, load_landing_views, save_landing_views
+from ..utils.short_urls import public_apk_download_url
 from datetime import datetime
 from time import time as _now
 
@@ -45,6 +46,14 @@ def _get_cached_settings():
         return {}
 # ثابت‌ها
 FIRST_VISIT_COOKIE = "vinor_first_visit_done"
+ENAMAD_SEAL_ID = "747402"
+ENAMAD_SEAL_CODE = "RezEMiH776DbFMbxMMPxhhAeTgqLfytW"
+ENAMAD_TRUST_URL = (
+    f"https://trustseal.enamad.ir/?id={ENAMAD_SEAL_ID}&Code={ENAMAD_SEAL_CODE}"
+)
+ENAMAD_LOGO_URL = (
+    f"https://trustseal.enamad.ir/logo.aspx?id={ENAMAD_SEAL_ID}&Code={ENAMAD_SEAL_CODE}"
+)
 
 # -------------------------
 # Context (برای استفادهٔ ساده در تمام قالب‌ها)
@@ -80,6 +89,8 @@ def inject_vinor_globals():
         "VINOR_HOME_URL": url_for("express_partner.dashboard"),
         "VINOR_BRAND": "وینور اکسپرس",
         "VINOR_DOMAIN": "vinor.ir",
+        "enamad_trust_url": ENAMAD_TRUST_URL,
+        "enamad_seal_code": ENAMAD_SEAL_CODE,
         # نقش‌ها
         "VINOR_IS_EXPRESS_PARTNER": is_express_partner,
     }
@@ -197,7 +208,7 @@ def partners():
     html = render_template("home/partners.html",
                            brand="وینور",
                            domain="vinor.ir",
-                           android_apk_url=_settings.get('android_apk_url') or '',
+                           android_apk_url=public_apk_download_url(_settings),
                            android_apk_version=_settings.get('android_apk_version') or '')
     try:
         if not (session.get("user_phone") or session.get("user_id") or is_admin):
@@ -238,6 +249,82 @@ def express_detail(code):
     لینک‌های قدیمی به صفحه جزئیات داخل پنل همکار هدایت می‌شوند.
     """
     return redirect(url_for('express_partner.land_detail', code=code), code=302)
+
+
+@main_bp.route("/r/<ref>", endpoint="short_referral")
+def short_referral(ref: str):
+    """لینک کوتاه دعوت → فرم همکاری با ref در session/cookie."""
+    from flask import make_response
+
+    from ..utils.share_tokens import decode_partner_ref
+
+    token = (ref or "").strip()
+    if not token or not decode_partner_ref(token):
+        return redirect(url_for("express_partner.apply"))
+
+    from app.express_partner.referrals import (
+        set_ref_cookie_on_response,
+        store_referral_ref_token,
+    )
+
+    store_referral_ref_token(token)
+    resp = make_response(redirect(url_for("express_partner.apply")))
+    set_ref_cookie_on_response(resp, token)
+    return resp
+
+
+@main_bp.route("/d", endpoint="short_apk_download")
+def short_apk_download():
+    """لینک کوتاه دانلود APK."""
+    from ..utils.short_urls import apk_file_url_from_settings
+    from ..utils.storage import load_settings
+
+    target = apk_file_url_from_settings(load_settings() or {})
+    if not target:
+        abort(404)
+    if target.startswith(("http://", "https://")):
+        return redirect(target, code=302)
+    return redirect(target, code=302)
+
+
+@main_bp.route("/enamad-seal.png", endpoint="enamad_seal")
+def enamad_seal():
+    """
+    پروکسی لوگوی اینماد — سرور trustseal فقط با Referer دامنهٔ ثبت‌شده تصویر می‌دهد.
+    """
+    cache_key = "enamad_seal_png"
+    cached = _mc_get(cache_key)
+    if cached:
+        resp = make_response(cached)
+        resp.headers["Content-Type"] = "image/png"
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+
+    try:
+        import requests
+
+        upstream = requests.get(
+            ENAMAD_LOGO_URL,
+            headers={"Referer": "https://vinor.ir/"},
+            timeout=12,
+        )
+        if upstream.status_code != 200 or not upstream.content:
+            current_app.logger.warning(
+                "enamad seal upstream %s (len=%s)",
+                upstream.status_code,
+                len(upstream.content or b""),
+            )
+            abort(404)
+        body = upstream.content
+        _mc_set(cache_key, body, ttl=300)
+        resp = make_response(body)
+        resp.headers["Content-Type"] = "image/png"
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+    except Exception as exc:
+        current_app.logger.warning("enamad seal proxy failed: %s", exc)
+        abort(502)
+
 
 @main_bp.route("/uploads/<path:filename>", endpoint="uploaded_file")
 def uploaded_file(filename):

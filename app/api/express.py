@@ -15,6 +15,7 @@ def _cover_image_urls(cover) -> tuple[str, str, str]:
     return thumb, url, url
 from app.services.notifications import add_notification
 from app.utils.share_tokens import encode_partner_ref
+from app.utils.short_urls import public_apk_download_url
 
 express_api_bp = Blueprint('express_api', __name__, url_prefix='/api')
 
@@ -28,7 +29,7 @@ def get_app_version():
         payload = {
             "success": True,
             "android_apk_version": settings.get("android_apk_version") or "",
-            "android_apk_url": settings.get("android_apk_url") or "",
+            "android_apk_url": public_apk_download_url(settings) or "",
             "android_apk_updated_at": settings.get("android_apk_updated_at") or "",
             "android_apk_size_bytes": settings.get("android_apk_size_bytes") or "",
             "android_apk_sha256": settings.get("android_apk_sha256") or "",

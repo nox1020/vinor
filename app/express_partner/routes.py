@@ -1360,12 +1360,15 @@ def inject_role_flags():
     show_apk_strip = False
     apk_strip_mode = ''
     show_app_update_nav = False
+    _raw_apk_url = ''
     if not is_vinor_apk:
         try:
             _apk_settings = _express_settings_cached()
-            android_apk_url = (_apk_settings.get('android_apk_url') or '').strip()
+            _raw_apk_url = (_apk_settings.get('android_apk_url') or '').strip()
             android_apk_version = (_apk_settings.get('android_apk_version') or '').strip()
-            if android_apk_url:
+            if _raw_apk_url:
+                from ..utils.short_urls import public_apk_download_url
+                android_apk_url = public_apk_download_url(_apk_settings, external=False)
                 show_apk_strip = True
                 apk_strip_mode = 'install'
                 show_apk_download_banner = True
@@ -1374,15 +1377,17 @@ def inject_role_flags():
     else:
         try:
             _apk_settings = _express_settings_cached()
-            android_apk_url = (_apk_settings.get('android_apk_url') or '').strip()
+            _raw_apk_url = (_apk_settings.get('android_apk_url') or '').strip()
             android_apk_version = (_apk_settings.get('android_apk_version') or '').strip()
             from ..utils.apk_version import should_show_apk_update
+            from ..utils.short_urls import public_apk_download_url
             show_app_update_nav = should_show_apk_update(
                 android_apk_version,
-                apk_url=android_apk_url,
+                apk_url=_raw_apk_url,
                 req=request,
             )
-            if show_app_update_nav and android_apk_url:
+            if show_app_update_nav and _raw_apk_url:
+                android_apk_url = public_apk_download_url(_apk_settings, external=False)
                 show_apk_strip = True
                 apk_strip_mode = 'update'
                 show_apk_download_banner = True
@@ -1989,8 +1994,10 @@ def _thanks_page_kwargs(me_phone: str, ctx: dict | None = None, *, pending_revie
 
     ctx = ctx or {}
     _settings = _express_settings_cached()
-    android_apk_url = (_settings.get('android_apk_url') or '').strip()
+    _raw_apk_url = (_settings.get('android_apk_url') or '').strip()
     android_apk_version = (_settings.get('android_apk_version') or '').strip()
+    from ..utils.short_urls import public_apk_download_url
+    android_apk_url = public_apk_download_url(_settings, external=False) if _raw_apk_url else ''
     size_label = ''
     try:
         n = int(_settings.get('android_apk_size_bytes') or 0)
@@ -3521,9 +3528,10 @@ def invite_colleagues():
     me_name = (profile.get('name') or '').strip()
     is_approved = _is_partner_approved(profile)
     from ..utils.share_tokens import encode_partner_ref
+    from ..utils.short_urls import public_referral_url
     canonical_phone = _canonical_partner_phone(me_phone)
     ref_token = encode_partner_ref(canonical_phone)
-    invite_url = url_for('express_partner.apply', ref=ref_token, _external=True)
+    invite_url = public_referral_url(ref_token)
     inviter = me_name or 'همکار وینور'
     if is_approved:
         share_text = f'{inviter} شما را به همکاری در وینور اکسپرس دعوت می‌کند.'
@@ -4641,15 +4649,17 @@ def profile_page():
     me_name = (profile.get('name') or '').strip()
     # Inject latest APK info from settings for direct rendering
     _settings = _express_settings_cached()
-    android_apk_url = (_settings.get('android_apk_url') or '').strip()
+    _raw_apk_url = (_settings.get('android_apk_url') or '').strip()
     android_apk_version = (_settings.get('android_apk_version') or '').strip()
+    from ..utils.short_urls import public_apk_download_url
+    android_apk_url = public_apk_download_url(_settings, external=False) if _raw_apk_url else ''
     android_apk_updated_at = _settings.get('android_apk_updated_at') or ''
     android_apk_size_bytes = _settings.get('android_apk_size_bytes') or ''
     from ..utils.apk_version import is_vinor_apk_request, should_show_apk_update
     is_vinor_apk = is_vinor_apk_request(request)
     show_app_update_card = should_show_apk_update(
         android_apk_version,
-        apk_url=android_apk_url,
+        apk_url=_raw_apk_url,
         req=request,
     )
     from .referrals import REFERRAL_BONUS_AMOUNT
@@ -4686,12 +4696,14 @@ def profile_data():
     from ..utils.images import display_avatar_url
     avatar_url = display_avatar_url(avatar, profile.get('avatar_updated_at')) if avatar else None
     _settings = _express_settings_cached()
-    android_apk_url = (_settings.get('android_apk_url') or '').strip()
+    _raw_apk_url = (_settings.get('android_apk_url') or '').strip()
     android_apk_version = (_settings.get('android_apk_version') or '').strip()
+    from ..utils.short_urls import public_apk_download_url
+    android_apk_url = public_apk_download_url(_settings, external=False) if _raw_apk_url else ''
     from ..utils.apk_version import should_show_apk_update
     show_app_update = should_show_apk_update(
         android_apk_version,
-        apk_url=android_apk_url,
+        apk_url=_raw_apk_url,
         req=request,
     )
     try:

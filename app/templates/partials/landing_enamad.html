@@ -1,0 +1,17 @@
+{# نماد اعتماد الکترونیکی — فقط دسکتاپ (lg+) #}
+<div class="hidden lg:flex justify-center pt-2 pb-4">
+  <a referrerpolicy="origin"
+     target="_blank"
+     href="{{ enamad_trust_url }}"
+     class="inline-block opacity-95 hover:opacity-100 transition-opacity"
+     aria-label="نماد اعتماد الکترونیکی اینماد">
+    <img referrerpolicy="origin"
+         src="{{ url_for('main.enamad_seal') }}"
+         alt="نماد اعتماد الکترونیکی"
+         style="cursor:pointer"
+         code="{{ enamad_seal_code }}"
+         width="120"
+         height="120"
+         decoding="async">
+  </a>
+</div>

@@ -396,7 +396,10 @@
         }
       });
       if (label && cfg.totalItems > 1) {
-        label.textContent = faDigits(index + 1) + ' از ' + faDigits(cfg.totalItems);
+        var countEl = label.querySelector('[data-slide-count]');
+        var countText = faDigits(index + 1) + ' از ' + faDigits(cfg.totalItems);
+        if (countEl) countEl.textContent = countText;
+        else label.textContent = countText;
       }
     }
 

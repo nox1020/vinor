@@ -137,14 +137,10 @@
     </div>
 
     {% if total_items > 1 %}
-    <div class="relative z-[2] pointer-events-none flex items-end justify-between gap-2 px-3 pb-3">
-      {% if images|length > 0 %}
-      <span class="rounded-lg border border-white/10 bg-black/45 px-2.5 py-1 text-[11px] text-white backdrop-blur-sm">
-        <i class="fas fa-camera text-[10px] opacity-80 me-1"></i>{{ images|length }}
-      </span>
-      {% else %}<span></span>{% endif %}
-      <span id="landGallerySlideLabel" class="rounded-lg border border-white/10 bg-black/45 px-2.5 py-1 text-[11px] text-white backdrop-blur-sm">
-        ۱ از {{ total_items }}
+    <div class="relative z-[2] pointer-events-none flex items-end justify-end px-3 pb-3">
+      <span id="landGallerySlideLabel" class="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-black/45 px-2.5 py-1 text-[11px] text-white backdrop-blur-sm">
+        <i class="fas fa-camera text-[10px] opacity-80" aria-hidden="true"></i>
+        <span data-slide-count>۱ از {{ total_items }}</span>
       </span>
     </div>
     {% endif %}

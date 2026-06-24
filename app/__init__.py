@@ -661,6 +661,8 @@ def create_app() -> Flask:
             "/privacy",
             # Public landing pages
             "/partners",
+            "/d",
+            "/enamad-seal.png",
             # Express Partner auth paths (public)
             "/express/partner/login", "/express/partner/login/otp", "/express/partner/verify", "/express/partner/otp/resend",
             "/express/partner/api/login-request", "/express/partner/api/verify",
@@ -670,7 +672,7 @@ def create_app() -> Flask:
             "/ai",  # Vinor AI برای کاربر عادی (مهمان با session مهمان)
         }
         # Public dynamic paths (prefix-based)
-        public_prefixes = ("/express/", "/uploads/", "/ai/")
+        public_prefixes = ("/express/", "/uploads/", "/ai/", "/r/")
         if request.path.startswith(public_prefixes):
             if debug:
                 current_app.logger.debug("PASS (public-prefix): %s", request.path)
