@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 
 
@@ -291,6 +291,41 @@ def _build_profile(row: Dict[str, Any]) -> Dict[str, Any]:
         ),
 
     }
+
+
+
+
+
+def _aggregate_activity_stats(rows: Iterable[Dict[str, Any]]) -> Dict[str, int]:
+    """جمع شمارنده‌های فعالیت برای لیست اشخاص."""
+    agg = {
+        'visits_total': 0,
+        'visits_pending': 0,
+        'assignments_active': 0,
+        'assignments_total': 0,
+        'commissions_total': 0,
+        'commissions_approved': 0,
+        'files': 0,
+        'withdrawals_active': 0,
+        'notes': 0,
+        'routine_days': 0,
+    }
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        c = row.get('counts') or {}
+        agg['visits_total'] += int(c.get('visits_total') or 0)
+        agg['visits_pending'] += int(c.get('visits_pending') or 0)
+        agg['assignments_active'] += int(c.get('assignments_active') or 0)
+        agg['assignments_total'] += int(c.get('assignments_total') or 0)
+        agg['commissions_total'] += int(c.get('commissions_total') or 0)
+        agg['commissions_approved'] += int(c.get('commissions_approved') or 0)
+        agg['files'] += int(c.get('files') or 0)
+        agg['withdrawals_active'] += int(c.get('withdrawals_active') or 0)
+        agg['notes'] += int(c.get('notes') or 0)
+        routine = row.get('routine') or {}
+        agg['routine_days'] += int(routine.get('days_count') or 0)
+    return agg
 
 
 
@@ -1101,19 +1136,39 @@ def build_admin_people_directory(
 
         items = [r for r in items if float(r.get('online_timestamp') or 0) > 0]
 
-        items.sort(key=lambda r: -float(r.get('online_timestamp') or 0))
+        def _online_list_rank(row: Dict[str, Any]) -> tuple:
+            acc = row.get('access') or {}
+            if acc.get('partner_approved'):
+                tier = 0
+            elif acc.get('partner_pending'):
+                tier = 1
+            elif acc.get('site_user'):
+                tier = 2
+            else:
+                tier = 3
+            return (tier, -float(row.get('online_timestamp') or 0))
+
+        items.sort(key=_online_list_rank)
 
     if fk != 'online':
 
-        items.sort(key=lambda r: (
+        def _person_list_rank(row: Dict[str, Any]) -> tuple:
+            acc = row.get('access') or {}
+            if acc.get('partner_approved'):
+                tier = 0
+            elif acc.get('partner_pending'):
+                tier = 1
+            elif acc.get('site_user'):
+                tier = 2
+            else:
+                tier = 3
+            return (
+                tier,
+                0 if acc.get('online_now') else 1,
+                str(row.get('name') or row.get('phone') or ''),
+            )
 
-            0 if r['access'].get('online_now') else 1,
-
-            0 if r['access'].get('partner_pending') else 1,
-
-            str(r.get('name') or r.get('phone') or ''),
-
-        ))
+        items.sort(key=_person_list_rank)
 
 
 
@@ -1133,9 +1188,56 @@ def build_admin_people_directory(
 
         'recent_online': sum(1 for r in people.values() if float(r.get('online_timestamp') or 0) > 0),
 
+        'agg': _aggregate_activity_stats(people.values()),
+
+        'agg_shown': _aggregate_activity_stats(items),
+
     }
 
     return items, stats
+
+
+
+
+
+def group_people_for_admin_list(
+    people: List[Dict[str, Any]],
+    filter_kind: str = 'all',
+) -> List[Dict[str, Any]]:
+    """گروه‌بندی لیست ادمین: همکاران بالا، کاربران پایین."""
+    fk = (filter_kind or 'all').strip().lower()
+    if fk != 'all':
+        return [{'key': fk, 'label': None, 'people': list(people or [])}]
+
+    partners: List[Dict[str, Any]] = []
+    pending: List[Dict[str, Any]] = []
+    users: List[Dict[str, Any]] = []
+    other: List[Dict[str, Any]] = []
+    for person in people or []:
+        if not isinstance(person, dict):
+            continue
+        acc = person.get('access') or {}
+        if acc.get('partner_approved'):
+            partners.append(person)
+        elif acc.get('partner_pending'):
+            pending.append(person)
+        elif acc.get('site_user'):
+            users.append(person)
+        else:
+            other.append(person)
+
+    groups: List[Dict[str, Any]] = []
+    if partners:
+        groups.append({'key': 'partners', 'label': 'همکاران', 'people': partners})
+    if pending:
+        groups.append({'key': 'pending', 'label': 'در انتظار تأیید', 'people': pending})
+    if users:
+        groups.append({'key': 'users', 'label': 'کاربران', 'people': users})
+    if other:
+        groups.append({'key': 'other', 'label': 'سایر', 'people': other})
+    return groups
+
+
 
 
 

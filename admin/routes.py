@@ -61,7 +61,11 @@ from app.express_partner.partner_withdrawals import (
 from app.land_category_specs import apply_category_specs_from_form
 from app.services.sms import send_sms_template, send_sms_direct, send_sms_code
 from app.utils.storage import load_users, load_reports, save_reports, save_ads, load_ads_cached, load_express_lands_cached
-from admin.people_directory import build_admin_people_directory, get_admin_person_by_phone
+from admin.people_directory import (
+    build_admin_people_directory,
+    get_admin_person_by_phone,
+    group_people_for_admin_list,
+)
 from app.utils.storage import (
     load_express_partner_apps,
     save_express_partner_apps,
@@ -3520,10 +3524,21 @@ def express_partners():
         )
     except Exception:
         current_app.logger.exception('build_admin_people_directory failed')
-        people, stats = [], {'total': 0, 'shown': 0, 'partners': 0, 'pending': 0, 'site_users': 0, 'online': 0}
+        _empty_agg = {
+            'visits_total': 0, 'visits_pending': 0, 'assignments_active': 0, 'assignments_total': 0,
+            'commissions_total': 0, 'commissions_approved': 0, 'files': 0, 'withdrawals_active': 0,
+            'notes': 0, 'routine_days': 0,
+        }
+        people, stats = [], {
+            'total': 0, 'shown': 0, 'partners': 0, 'pending': 0, 'site_users': 0, 'online': 0,
+            'agg': dict(_empty_agg),
+            'agg_shown': dict(_empty_agg),
+        }
+    people_groups = group_people_for_admin_list(people, filter_kind)
     return render_template(
         'admin/express_partners.html',
         people=people,
+        people_groups=people_groups,
         stats=stats,
         q=q,
         filter_kind=filter_kind,

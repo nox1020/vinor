@@ -1,150 +1,189 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}کاربران و همکاران{% endblock %}
-{% block page_title %}کاربران و همکاران{% endblock %}
+{% block title %}همکاران{% endblock %}
+{% block page_title %}همکاران{% endblock %}
 
 {% block content %}
-<div class="space-y-5">
+{% set agg = stats.agg or {} %}
+{% set agg_shown = stats.agg_shown or {} %}
+{% set filtered = (filter_kind or 'all') != 'all' or (q or '') %}
+{% set display_agg = agg_shown if filtered else agg %}
 
-  <!-- آمار -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
-    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-      <p class="text-[11px] text-gray-500 dark:text-gray-400">کل اشخاص</p>
-      <p class="text-lg font-bold text-gray-900 dark:text-white">{{ stats.total or 0 }}</p>
-    </div>
-    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-      <p class="text-[11px] text-gray-500 dark:text-gray-400">همکار تأیید</p>
-      <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400">{{ stats.partners or 0 }}</p>
-    </div>
-    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-      <p class="text-[11px] text-gray-500 dark:text-gray-400">در انتظار</p>
-      <p class="text-lg font-bold text-amber-600 dark:text-amber-400">{{ stats.pending or 0 }}</p>
-    </div>
-    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-      <p class="text-[11px] text-gray-500 dark:text-gray-400">کاربر سایت</p>
-      <p class="text-lg font-bold text-blue-600 dark:text-blue-400">{{ stats.site_users or 0 }}</p>
-    </div>
-    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 col-span-2 sm:col-span-1">
-      <p class="text-[11px] text-gray-500 dark:text-gray-400">آنلاین</p>
-      <p class="text-lg font-bold text-teal-600 dark:text-teal-400">{{ stats.online or 0 }}</p>
-    </div>
+<div class="max-w-3xl mx-auto space-y-4">
+
+  <!-- خلاصه -->
+  <div class="flex flex-wrap gap-2 text-xs">
+    <span class="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-gray-700 dark:text-gray-300">
+      <span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ stats.total or 0 }}</span> نفر
+    </span>
+    <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-emerald-700 dark:text-emerald-300">
+      <span class="font-semibold tabular-nums">{{ stats.partners or 0 }}</span> همکار
+    </span>
+    {% if (stats.pending or 0) > 0 %}
+    <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 text-amber-700 dark:text-amber-300">
+      <span class="font-semibold tabular-nums">{{ stats.pending }}</span> انتظار
+    </span>
+    {% endif %}
+    {% if (stats.online or 0) > 0 %}
+    <span class="inline-flex items-center gap-1.5 rounded-full border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/20 px-3 py-1.5 text-teal-700 dark:text-teal-300">
+      <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+      <span class="font-semibold tabular-nums">{{ stats.online }}</span> آنلاین
+    </span>
+    {% endif %}
+    <span class="inline-flex items-center gap-1.5 rounded-full border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 px-3 py-1.5 text-violet-700 dark:text-violet-300">
+      <span class="font-semibold tabular-nums">{{ display_agg.visits_total or 0 }}</span> بازدید
+    </span>
   </div>
 
-  <!-- جستجو و فیلتر -->
-  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 space-y-3">
-    <form method="get" class="flex flex-col sm:flex-row gap-2">
+  <!-- جستجو -->
+  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 space-y-3">
+    <form method="get" class="flex gap-2">
       <input type="hidden" name="filter" value="{{ filter_kind or 'all' }}">
-      <input name="q" value="{{ q or '' }}"
-             placeholder="جستجو: نام، موبایل، شهر، ایمیل"
-             class="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm text-gray-900 dark:text-white">
-      <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
-        <i class="fa-solid fa-search ml-1"></i>
+      <input
+        name="q"
+        value="{{ q or '' }}"
+        placeholder="نام، موبایل یا شهر..."
+        class="flex-1 min-w-0 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+      <button type="submit" class="shrink-0 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
         جستجو
       </button>
     </form>
-    <div class="flex flex-wrap gap-2 text-xs">
+
+    <div class="flex flex-wrap gap-1.5">
       {% set tabs = [
-        ('all', 'همه', stats.shown),
-        ('partners', 'همکار تأیید', stats.partners),
-        ('pending', 'در انتظار', stats.pending),
-        ('users', 'فقط کاربر', stats.site_users),
+        ('all', 'همه', stats.total),
+        ('partners', 'همکار', stats.partners),
+        ('pending', 'انتظار', stats.pending),
+        ('users', 'کاربر', stats.site_users),
         ('online', 'آنلاین', stats.recent_online or stats.online),
       ] %}
       {% for key, label, count in tabs %}
-        <a href="{{ url_for('admin.express_partners', filter=key, q=q or '') }}"
-           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition
-                  {% if (filter_kind or 'all') == key %}
-                    border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300
-                  {% else %}
-                    border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300
-                  {% endif %}">
+        <a
+          href="{{ url_for('admin.express_partners', filter=key, q=q or '') }}"
+          class="px-2.5 py-1 rounded-lg text-xs font-medium transition
+            {% if (filter_kind or 'all') == key %}
+              bg-blue-600 text-white
+            {% else %}
+              text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800
+            {% endif %}"
+        >
           {{ label }}
-          <span class="font-semibold tabular-nums">{{ count or 0 }}</span>
+          <span class="tabular-nums opacity-80">{{ count or 0 }}</span>
         </a>
       {% endfor %}
     </div>
+
+    {% if filtered %}
+    <p class="text-[11px] text-gray-500 dark:text-gray-400">
+      {{ stats.shown or 0 }} نفر از {{ stats.total or 0 }}
+    </p>
+    {% endif %}
   </div>
 
-  <!-- کارت‌های فشرده -->
-  {% if people and people|length > 0 %}
-    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-      {% for person in people %}
-        {% set acc = person.access or {} %}
-        {% set cnt = person.counts or {} %}
-        {% set routine = person.routine or {} %}
-        <a href="{{ url_for('admin.express_partner_detail', phone=person.phone, q=q or '', filter=filter_kind or 'all') }}"
-           class="group block rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden transition hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+  <!-- جمع‌ها (جمع‌شونده) -->
+  <details class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm">
+    <summary class="px-4 py-3 cursor-pointer text-gray-700 dark:text-gray-300 font-medium select-none">
+      جمع فعالیت‌ها
+      <span class="text-xs font-normal text-gray-400 mr-1">
+        {% if filtered %}(فیلتر جاری){% else %}(کل){% endif %}
+      </span>
+    </summary>
+    <div class="px-4 pb-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-center border-t border-gray-100 dark:border-gray-800 pt-3">
+      <div>
+        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.visits_total or 0 }}</p>
+        <p class="text-[11px] text-gray-500">بازدید{% if display_agg.visits_pending %} · {{ display_agg.visits_pending }} انتظار{% endif %}</p>
+      </div>
+      <div>
+        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.assignments_active or 0 }}</p>
+        <p class="text-[11px] text-gray-500">انتساب فعال</p>
+      </div>
+      <div>
+        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.commissions_total or 0 }}</p>
+        <p class="text-[11px] text-gray-500">پورسانت</p>
+      </div>
+      <div>
+        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.files or 0 }}</p>
+        <p class="text-[11px] text-gray-500">فایل</p>
+      </div>
+      <div>
+        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.withdrawals_active or 0 }}</p>
+        <p class="text-[11px] text-gray-500">برداشت</p>
+      </div>
+      <div>
+        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.routine_days or 0 }}</p>
+        <p class="text-[11px] text-gray-500">روتین ماه</p>
+      </div>
+    </div>
+  </details>
 
-          <div class="p-4">
-            <div class="flex items-start gap-3">
+  <!-- لیست -->
+  {% if people_groups and people_groups|length > 0 %}
+  <div class="space-y-4">
+    {% for group in people_groups %}
+      {% if group.people and group.people|length > 0 %}
+        {% if group.label %}
+        <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 px-1">{{ group.label }} ({{ group.people|length }})</p>
+        {% endif %}
+        <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800 overflow-hidden">
+          {% for person in group.people %}
+            {% set acc = person.access or {} %}
+            {% set cnt = person.counts or {} %}
+            <a
+              href="{{ url_for('admin.express_partner_detail', phone=person.phone, q=q or '', filter=filter_kind or 'all') }}"
+              class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition group"
+            >
               <div class="relative shrink-0">
-                <div class="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 grid place-items-center text-sm font-bold text-gray-600 dark:text-gray-200">
-                  {{ (person.name or person.phone or '?')[:2] }}
+                <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-sm font-bold text-gray-600 dark:text-gray-300">
+                  {{ (person.name or person.phone or '?')[:1] }}
                 </div>
                 {% if acc.online_now %}
-                  <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-gray-900 bg-emerald-500"></span>
+                <span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-gray-900"></span>
                 {% endif %}
               </div>
+
               <div class="flex-1 min-w-0">
-                <div class="flex items-start justify-between gap-2">
-                  <div class="min-w-0">
-                    <h3 class="font-bold text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">{{ person.name or 'بدون نام' }}</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5 ltr:text-left" dir="ltr">{{ person.phone or '—' }}</p>
-                  </div>
-                  <i class="fa-solid fa-chevron-left text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-blue-500 mt-1 shrink-0"></i>
-                </div>
-                <div class="mt-2 flex flex-wrap gap-1">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                    {{ person.name or 'بدون نام' }}
+                  </span>
                   {% if acc.partner_approved %}
-                    <span class="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">همکار</span>
+                    <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">همکار</span>
                   {% elif acc.partner_pending %}
-                    <span class="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[10px] font-semibold">در انتظار</span>
+                    <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">انتظار</span>
                   {% elif acc.site_user %}
-                    <span class="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-semibold">کاربر</span>
-                  {% endif %}
-                  {% if person.city %}
-                    <span class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[10px]">{{ person.city }}</span>
+                    <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">کاربر</span>
                   {% endif %}
                 </div>
-              </div>
-            </div>
-
-            <div class="mt-3 grid grid-cols-4 gap-1.5 text-center">
-              <div class="rounded-lg bg-gray-50 dark:bg-gray-950 py-1.5">
-                <p class="text-[9px] text-gray-400">انتساب</p>
-                <p class="text-xs font-bold tabular-nums text-gray-900 dark:text-white">{{ cnt.assignments_active or 0 }}</p>
-              </div>
-              <div class="rounded-lg bg-gray-50 dark:bg-gray-950 py-1.5">
-                <p class="text-[9px] text-gray-400">پورسانت</p>
-                <p class="text-xs font-bold tabular-nums text-gray-900 dark:text-white">{{ cnt.commissions_total or 0 }}</p>
-              </div>
-              <div class="rounded-lg bg-gray-50 dark:bg-gray-950 py-1.5">
-                <p class="text-[9px] text-gray-400">بازدید</p>
-                <p class="text-xs font-bold tabular-nums text-gray-900 dark:text-white">{{ cnt.visits_total or 0 }}</p>
-              </div>
-              <div class="rounded-lg bg-gray-50 dark:bg-gray-950 py-1.5">
-                <p class="text-[9px] text-gray-400">روتین</p>
-                <p class="text-xs font-bold tabular-nums text-gray-900 dark:text-white">{{ routine.days_count or 0 }}</p>
-              </div>
-            </div>
-
-            <p class="mt-3 text-[10px] text-gray-400 dark:text-gray-500">
-              {% if (filter_kind or '') == 'online' and person.last_activity %}
-                <span class="inline-flex items-center gap-1 {% if acc.online_now %}text-emerald-600 dark:text-emerald-400{% endif %}">
-                  {% if acc.online_now %}<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>آنلاین{% else %}آخرین فعالیت{% endif %}
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate" dir="ltr">
+                  {{ person.phone or '—' }}
+                  {% if person.city %}<span class="mx-1 opacity-40">·</span><span dir="rtl">{{ person.city }}</span>{% endif %}
+                </p>
+                <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 tabular-nums">
+                  بازدید {{ cnt.visits_total or 0 }}
+                  <span class="mx-1 opacity-40">·</span>
+                  انتساب {{ cnt.assignments_active or 0 }}
+                  <span class="mx-1 opacity-40">·</span>
+                  پورسانت {{ cnt.commissions_total or 0 }}
+                </p>
+                {% if (filter_kind or '') == 'online' and person.last_activity %}
+                <p class="text-[10px] text-gray-400 mt-0.5 {% if acc.online_now %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                  {% if acc.online_now %}آنلاین{% else %}آخرین{% endif %}
                   · <span class="jalali-dt" data-dt="{{ person.last_activity }}"></span>
-                </span>
-              {% else %}
-              برای مشاهده پروفایل، مالی، انتساب و دسترسی‌ها کلیک کنید
-              {% endif %}
-            </p>
-          </div>
-        </a>
-      {% endfor %}
-    </div>
+                </p>
+                {% endif %}
+              </div>
+
+              <i class="fa-solid fa-chevron-left text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-blue-500 shrink-0"></i>
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
   {% else %}
-    <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-10 text-center">
-      <i class="fa-solid fa-users text-4xl text-gray-300 dark:text-gray-700 mb-3"></i>
-      <p class="text-gray-500 dark:text-gray-400">موردی با این فیلتر یافت نشد.</p>
-    </div>
+  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-12 text-center">
+    <p class="text-sm text-gray-500 dark:text-gray-400">موردی یافت نشد.</p>
+  </div>
   {% endif %}
 
 </div>
