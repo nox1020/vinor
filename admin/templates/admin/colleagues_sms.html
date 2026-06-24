@@ -1,447 +1,219 @@
 {% extends 'admin/base_admin.html' %}
+{% block title %}پیامک همکاران{% endblock %}
+{% block page_title %}پیامک همکاران{% endblock %}
+
 {% block content %}
-<div class="space-y-5">
-  <!-- هدر -->
-  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-    <h1 class="text-base font-bold text-gray-900 dark:text-white">ارسال پیامک به همکاران</h1>
-    <a href="{{ url_for('admin.sms_history') }}"
-       class="inline-flex items-center justify-center px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300">
-      <i class="fa-solid fa-clock-rotate-left ml-1"></i> سابقه
-    </a>
-  </div>
+<div class="max-w-2xl mx-auto space-y-4">
 
   {% if message %}
-    <div class="mb-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800">{{ message }}</div>
+  <div class="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 text-sm">
+    {{ message }}
+  </div>
   {% endif %}
   {% if error %}
-    <div class="mb-3 p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800">{{ error }}</div>
+  <div class="p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 text-sm">
+    {{ error }}
+  </div>
   {% endif %}
 
-  <!-- اطلاعات همکاران - سبک دیوار -->
-  <div class="mb-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-    <div class="flex items-center justify-between">
+  <!-- خلاصه -->
+  <div class="flex items-center justify-between gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+    <div>
+      <p class="text-sm font-medium text-gray-900 dark:text-white">گیرندگان</p>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">فقط همکاران تأییدشده با شماره معتبر</p>
+    </div>
+    <span class="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{{ partners_count or 0 }}</span>
+  </div>
+
+  <!-- فرم اصلی: ارسال مستقیم -->
+  <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+    <form method="post" class="space-y-4" onsubmit="return confirmSend({{ partners_count or 0 }});">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="send_mode" value="direct">
+
       <div>
-        <div class="text-sm font-semibold text-gray-900 dark:text-white">تعداد همکاران تایید شده</div>
-        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">این پیامک به همه همکاران تایید شده ارسال می‌شود</div>
+        <label for="direct_message" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
+          متن پیامک
+        </label>
+        <textarea
+          id="direct_message"
+          name="direct_message"
+          rows="5"
+          required
+          maxlength="500"
+          class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="متن پیامک برای همه همکاران..."
+        >{{ form_direct_message or '' }}</textarea>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <span id="charCount">0</span> / 500 کاراکتر
+        </p>
       </div>
-      <div class="text-2xl font-bold text-gray-900 dark:text-white">{{ partners_count or 0 }}</div>
-    </div>
+
+      <details class="text-sm">
+        <summary class="cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+          تنظیمات خط (اختیاری)
+        </summary>
+        <div class="mt-2">
+          <input
+            type="text"
+            name="line_number"
+            value="{{ sms_line_number }}"
+            dir="ltr"
+            class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-mono text-gray-900 dark:text-white"
+          >
+        </div>
+      </details>
+
+      <button
+        type="submit"
+        {% if not partners_count %}disabled{% endif %}
+        class="w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition"
+      >
+        ارسال به {{ partners_count or 0 }} همکار
+      </button>
+    </form>
   </div>
 
-  <!-- لیست همکاران (پیش‌نمایش) -->
-  {% if approved_partners and approved_partners|length > 0 %}
-  <div class="mb-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-    <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">پیش‌نمایش همکاران ({{ approved_partners|length }} مورد اول)</h3>
-    <div class="space-y-2 max-h-48 overflow-y-auto">
-      {% for partner in approved_partners %}
-      <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-        <span class="text-sm text-gray-900 dark:text-white">{{ partner.name }}</span>
-        <span class="text-xs text-gray-500 dark:text-gray-400 font-mono">{{ partner.phone }}</span>
-      </div>
-      {% endfor %}
-    </div>
-    {% if partners_count > approved_partners|length %}
-    <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">و {{ partners_count - approved_partners|length }} همکار دیگر...</p>
-    {% endif %}
-  </div>
-  {% endif %}
-
-  <!-- تب‌های ارسال -->
-  <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-    <!-- هدر تب‌ها -->
-    <div class="adm-tabs-scroll flex border-b border-gray-200 dark:border-gray-700">
-      <button 
-        type="button"
-        onclick="switchMode('template')"
-        id="tab-template"
-        class="flex-1 px-4 py-3 text-sm font-medium transition-colors
-               {% if send_mode == 'template' %}
-                 bg-vinor-50 dark:bg-vinor-900/20 text-vinor-600 dark:text-vinor-400 border-b-2 border-vinor-600
-               {% else %}
-                 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800
-               {% endif %}"
-      >
-        <i class="fa-solid fa-file-lines"></i> ارسال با قالب
-      </button>
-      <button 
-        type="button"
-        onclick="switchMode('direct')"
-        id="tab-direct"
-        class="flex-1 px-4 py-3 text-sm font-medium transition-colors
-               {% if send_mode == 'direct' %}
-                 bg-vinor-50 dark:bg-vinor-900/20 text-vinor-600 dark:text-vinor-400 border-b-2 border-vinor-600
-               {% else %}
-                 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800
-               {% endif %}"
-      >
-        <i class="fa-solid fa-paper-plane"></i> ارسال مستقیم (API)
-      </button>
-    </div>
-
-    <!-- محتوای تب ارسال با قالب -->
-    <div id="content-template" class="{% if send_mode != 'template' %}hidden{% endif %} p-4 space-y-4">
-      <form method="post" class="space-y-4">
+  <!-- حالت پیشرفته: قالب sms.ir -->
+  <details class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden" {% if send_mode == 'template' %}open{% endif %}>
+    <summary class="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+      ارسال با قالب sms.ir (پیشرفته)
+    </summary>
+    <div class="px-4 pb-4 border-t border-gray-100 dark:border-gray-800 pt-4">
+      <form method="post" class="space-y-3" onsubmit="return confirmSend({{ partners_count or 0 }});">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="send_mode" value="template">
-        
+
         <div>
-          <label class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
-            شناسه قالب (Template ID) <span class="text-red-500">*</span>
-          </label>
-          <input 
-            type="number" 
-            name="template_id" 
-            class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-gray-600" 
-            placeholder="مثلاً 878451" 
+          <label class="block text-sm font-medium text-gray-900 dark:text-white mb-1">شناسه قالب</label>
+          <input
+            type="number"
+            name="template_id"
+            value="{{ form_template_id or '' }}"
             required
+            class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+            placeholder="مثلاً 878451"
           >
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">شناسه قالب پیامک در پنل sms.ir</p>
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
-            متن پیام (اختیاری - در صورت نیاز به پارامتر از بخش زیر استفاده کنید)
-          </label>
-          <textarea 
-            name="message_text" 
-            rows="3" 
-            class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-gray-600" 
-            placeholder="متن پیام (در صورت نیاز به پارامتر، از بخش پارامترها استفاده کنید)"
-          ></textarea>
+          <label class="block text-sm font-medium text-gray-900 dark:text-white mb-1">متن / پارامتر MESSAGE (اختیاری)</label>
+          <textarea
+            name="message_text"
+            rows="2"
+            class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+          >{{ form_message_text or '' }}</textarea>
         </div>
 
-        <!-- پارامترهای قالب -->
-        <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
-          <div class="flex items-center justify-between mb-3">
-            <label class="block text-sm font-medium text-gray-900 dark:text-white">
-              پارامترهای قالب (اختیاری)
-            </label>
-            <button 
-              type="button" 
-              id="addParamBtn" 
-              class="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              + افزودن پارامتر
-            </button>
-          </div>
-          <div id="paramsContainer" class="space-y-2">
-            <!-- پارامترها به صورت داینامیک اضافه می‌شوند -->
-          </div>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            پارامترها باید مطابق با قالب تعریف شده در پنل sms.ir باشند. مثال: CODE، NAME، MESSAGE
-          </p>
-        </div>
+        <div id="paramsContainer" class="space-y-2"></div>
+        <button type="button" id="addParamBtn" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+          + پارامتر
+        </button>
 
-        <div class="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-          <button 
-            type="submit" 
-            class="px-4 py-2 rounded-lg bg-vinor-600 text-white text-sm font-medium hover:bg-vinor-700 transition-colors"
-          >
-            ارسال پیامک به همکاران
-          </button>
-          <a 
-            href="{{ url_for('admin.dashboard') }}" 
-            class="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 text-sm font-medium hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
-          >
-            انصراف
-          </a>
-        </div>
+        <button
+          type="submit"
+          {% if not partners_count %}disabled{% endif %}
+          class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+        >
+          ارسال با قالب
+        </button>
       </form>
     </div>
+  </details>
 
-    <!-- محتوای تب ارسال مستقیم -->
-    <div id="content-direct" class="{% if send_mode != 'direct' %}hidden{% endif %} p-4 space-y-4">
-      <form method="post" class="space-y-4">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="send_mode" value="direct">
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
-            متن پیامک <span class="text-red-500">*</span>
-          </label>
-          <textarea 
-            name="direct_message" 
-            rows="6" 
-            class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-gray-600" 
-            placeholder="متن پیامک که می‌خواهید به همکاران ارسال شود..."
-            required
-          ></textarea>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">متن پیامک به صورت مستقیم و بدون استفاده از قالب ارسال می‌شود</p>
-        </div>
+  <!-- سابقه -->
+  <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold text-gray-900 dark:text-white">سابقه اخیر</h2>
+      <a href="{{ url_for('admin.sms_history') }}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+        همه پیامک‌ها
+      </a>
+    </div>
 
-        <div>
-          <label class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
-            شماره خط اختصاصی (اختیاری)
-          </label>
-          <input 
-            type="text" 
-            name="line_number" 
-            value="300089930616"
-            class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-gray-600" 
-            placeholder="300089930616"
-          >
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">شماره خط اختصاصی پیش‌فرض: 300089930616 (می‌توانید تغییر دهید)</p>
-        </div>
+    {% if history_stats and history_stats.total %}
+    <div class="flex gap-3 text-xs text-gray-500 dark:text-gray-400 mb-3">
+      <span>کل: {{ history_stats.total }}</span>
+      <span class="text-emerald-600">موفق: {{ history_stats.sent }}</span>
+      <span class="text-rose-600">ناموفق: {{ history_stats.failed }}</span>
+    </div>
+    {% endif %}
 
-        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-          <p class="text-xs text-blue-800 dark:text-blue-200">
-            <i class="fa-solid fa-info-circle"></i> 
-            <strong>نکته:</strong> در حالت ارسال مستقیم، پیامک بدون استفاده از قالب و به صورت مستقیم از API sms.ir ارسال می‌شود.
+    {% if history and history|length %}
+    <ul class="divide-y divide-gray-100 dark:divide-gray-800">
+      {% for record in history %}
+      <li class="py-2.5 flex items-start justify-between gap-2 text-sm">
+        <div class="min-w-0">
+          <p class="text-gray-900 dark:text-white truncate">
+            {{ record.recipient_name or record.mobile or '—' }}
           </p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 font-mono" dir="ltr">
+            {{ record.mobile or '—' }}
+            ·
+            {% if record.created_at %}{{ record.created_at[:16]|replace('T', ' ') }}{% else %}—{% endif %}
+          </p>
+          {% if record.error %}
+          <p class="text-xs text-rose-600 dark:text-rose-400 mt-0.5 truncate">{{ record.error }}</p>
+          {% endif %}
         </div>
-
-        <div class="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-          <button 
-            type="submit" 
-            class="px-4 py-2 rounded-lg bg-vinor-600 text-white text-sm font-medium hover:bg-vinor-700 transition-colors"
-          >
-            ارسال پیامک به همکاران
-          </button>
-          <a 
-            href="{{ url_for('admin.dashboard') }}" 
-            class="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 text-sm font-medium hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
-          >
-            انصراف
-          </a>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- سابقه ارسال‌ها -->
-  <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-        <i class="fa-solid fa-clock-rotate-left"></i> سابقه ارسال‌های اخیر
-      </h2>
-      {% if history_stats %}
-      <div class="flex gap-4 text-sm">
-        <span class="text-gray-600 dark:text-gray-400">
-          کل: <span class="font-semibold text-gray-900 dark:text-white">{{ history_stats.total }}</span>
+        <span class="shrink-0 text-xs px-2 py-0.5 rounded-full {% if record.success %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300{% else %}bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300{% endif %}">
+          {% if record.success %}موفق{% else %}خطا{% endif %}
         </span>
-        <span class="text-green-600 dark:text-green-400">
-          موفق: <span class="font-semibold">{{ history_stats.sent }}</span>
-        </span>
-        <span class="text-red-600 dark:text-red-400">
-          ناموفق: <span class="font-semibold">{{ history_stats.failed }}</span>
-        </span>
-      </div>
-      {% endif %}
-    </div>
+      </li>
+      {% endfor %}
+    </ul>
 
-    {% if history and history|length > 0 %}
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <tr>
-            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-400">تاریخ</th>
-            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-400">شماره</th>
-            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-400">نام</th>
-            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-400">قالب</th>
-            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-400">وضعیت</th>
-            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-400">جزئیات</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-          {% for record in history %}
-          <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-            <td class="px-3 py-2 text-gray-900 dark:text-white text-xs">
-              {% if record.created_at %}
-                {{ record.created_at[:16]|replace('T', ' ') }}
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="px-3 py-2 text-gray-900 dark:text-white font-mono text-xs">
-              {{ record.mobile or '-' }}
-            </td>
-            <td class="px-3 py-2 text-gray-900 dark:text-white text-xs">
-              {{ record.recipient_name or '-' }}
-            </td>
-            <td class="px-3 py-2 text-gray-900 dark:text-white text-xs">
-              {% if record.template_id %}
-                {{ record.template_id }}
-              {% elif record.source == 'admin_colleagues_direct' %}
-                <span class="text-blue-600 dark:text-blue-400">مستقیم</span>
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="px-3 py-2">
-              {% if record.success %}
-                <span class="px-2 py-0.5 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-medium">✓ موفق</span>
-              {% else %}
-                <span class="px-2 py-0.5 rounded text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-medium">✗ ناموفق</span>
-              {% endif %}
-            </td>
-            <td class="px-3 py-2">
-              <button 
-                onclick="showDetails({{ loop.index0 }})"
-                class="text-vinor-600 dark:text-vinor-400 hover:underline text-xs"
-              >
-                مشاهده
-              </button>
-              <div id="details-{{ loop.index0 }}" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
-                <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onclick="event.stopPropagation()">
-                  <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">جزئیات ارسال</h3>
-                    <button onclick="document.getElementById('details-{{ loop.index0 }}').classList.add('hidden')" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                      <i class="fa-solid fa-xmark"></i>
-                    </button>
-                  </div>
-                  <div class="space-y-3 text-sm">
-                    <div>
-                      <span class="font-semibold text-gray-700 dark:text-gray-300">شماره موبایل:</span>
-                      <span class="text-gray-900 dark:text-white font-mono">{{ record.mobile or '-' }}</span>
-                    </div>
-                    <div>
-                      <span class="font-semibold text-gray-700 dark:text-gray-300">نام گیرنده:</span>
-                      <span class="text-gray-900 dark:text-white">{{ record.recipient_name or '-' }}</span>
-                    </div>
-                    {% if record.template_id %}
-                    <div>
-                      <span class="font-semibold text-gray-700 dark:text-gray-300">شناسه قالب:</span>
-                      <span class="text-gray-900 dark:text-white">{{ record.template_id }}</span>
-                    </div>
-                    <div>
-                      <span class="font-semibold text-gray-700 dark:text-gray-300">پارامترها:</span>
-                      <pre class="mt-1 p-2 bg-gray-50 dark:bg-gray-900 rounded text-xs overflow-x-auto">{{ (record.parameters or {})|tojson(indent=2) }}</pre>
-                    </div>
-                    {% elif record.message %}
-                    <div>
-                      <span class="font-semibold text-gray-700 dark:text-gray-300">متن پیامک:</span>
-                      <div class="mt-1 p-2 bg-gray-50 dark:bg-gray-900 rounded text-sm text-gray-900 dark:text-white">{{ record.message }}</div>
-                    </div>
-                    {% endif %}
-                    <div>
-                      <span class="font-semibold text-gray-700 dark:text-gray-300">کد وضعیت:</span>
-                      <span class="text-gray-900 dark:text-white">{{ record.status_code or '-' }}</span>
-                    </div>
-                    {% if record.error %}
-                    <div>
-                      <span class="font-semibold text-red-700 dark:text-red-300">خطا:</span>
-                      <span class="text-red-600 dark:text-red-400">{{ record.error }}</span>
-                    </div>
-                    {% endif %}
-                    <div>
-                      <span class="font-semibold text-gray-700 dark:text-gray-300">پاسخ API:</span>
-                      <pre class="mt-1 p-2 bg-gray-50 dark:bg-gray-900 rounded text-xs overflow-x-auto">{{ (record.response or {})|tojson(indent=2) }}</pre>
-                    </div>
-                    <div>
-                      <span class="font-semibold text-gray-700 dark:text-gray-300">تاریخ:</span>
-                      <span class="text-gray-900 dark:text-white">{{ record.created_at or '-' }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Pagination برای سابقه -->
     {% if history_total_pages > 1 %}
-    <div class="mt-4 flex items-center justify-between px-3 py-2 border-t border-gray-200 dark:border-gray-700">
-      <div class="text-xs text-gray-600 dark:text-gray-400">
-        صفحه {{ history_page }} از {{ history_total_pages }}
-      </div>
+    <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 text-xs">
+      <span class="text-gray-500">صفحه {{ history_page }} از {{ history_total_pages }}</span>
       <div class="flex gap-2">
         {% if history_page > 1 %}
-        <a 
-          href="?history_page={{ history_page - 1 }}"
-          class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 text-xs hover:border-gray-300 dark:hover:border-gray-600"
-        >
-          قبلی
-        </a>
+        <a href="?history_page={{ history_page - 1 }}" class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">قبلی</a>
         {% endif %}
         {% if history_page < history_total_pages %}
-        <a 
-          href="?history_page={{ history_page + 1 }}"
-          class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 text-xs hover:border-gray-300 dark:hover:border-gray-600"
-        >
-          بعدی
-        </a>
+        <a href="?history_page={{ history_page + 1 }}" class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">بعدی</a>
         {% endif %}
       </div>
     </div>
     {% endif %}
     {% else %}
-    <div class="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
-      هنوز هیچ ارسالی ثبت نشده است
-    </div>
+    <p class="text-sm text-gray-500 dark:text-gray-400 text-center py-6">هنوز ارسالی ثبت نشده</p>
     {% endif %}
   </div>
+
 </div>
 
 <script>
-// مدیریت پارامترهای داینامیک
-let paramIndex = 0;
-
-document.getElementById('addParamBtn')?.addEventListener('click', function() {
-  const container = document.getElementById('paramsContainer');
-  const paramDiv = document.createElement('div');
-  paramDiv.className = 'flex gap-2 items-center';
-  paramDiv.innerHTML = `
-    <input 
-      type="text" 
-      name="param_key[]" 
-      placeholder="نام پارامتر (مثلاً CODE)" 
-      class="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-gray-600"
-    >
-    <input 
-      type="text" 
-      name="param_value[]" 
-      placeholder="مقدار پارامتر" 
-      class="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-gray-600"
-    >
-    <button 
-      type="button" 
-      class="remove-param-btn px-2 py-1 rounded border border-red-300 dark:border-red-600 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30 text-sm"
-    >
-      حذف
-    </button>
-  `;
-  container.appendChild(paramDiv);
-  
-  // اضافه کردن event listener برای دکمه حذف
-  paramDiv.querySelector('.remove-param-btn')?.addEventListener('click', function() {
-    paramDiv.remove();
-  });
-  
-  paramIndex++;
-});
-
-// نمایش جزئیات
-function showDetails(index) {
-  document.getElementById('details-' + index).classList.remove('hidden');
-}
-
-// تغییر حالت ارسال
-function switchMode(mode) {
-  // تغییر تب‌ها
-  document.getElementById('tab-template').classList.remove('bg-vinor-50', 'dark:bg-vinor-900/20', 'text-vinor-600', 'dark:text-vinor-400', 'border-b-2', 'border-vinor-600');
-  document.getElementById('tab-template').classList.add('text-gray-600', 'dark:text-gray-400');
-  document.getElementById('tab-direct').classList.remove('bg-vinor-50', 'dark:bg-vinor-900/20', 'text-vinor-600', 'dark:text-vinor-400', 'border-b-2', 'border-vinor-600');
-  document.getElementById('tab-direct').classList.add('text-gray-600', 'dark:text-gray-400');
-  
-  if (mode === 'template') {
-    document.getElementById('tab-template').classList.remove('text-gray-600', 'dark:text-gray-400');
-    document.getElementById('tab-template').classList.add('bg-vinor-50', 'dark:bg-vinor-900/20', 'text-vinor-600', 'dark:text-vinor-400', 'border-b-2', 'border-vinor-600');
-    document.getElementById('content-template').classList.remove('hidden');
-    document.getElementById('content-direct').classList.add('hidden');
-  } else {
-    document.getElementById('tab-direct').classList.remove('text-gray-600', 'dark:text-gray-400');
-    document.getElementById('tab-direct').classList.add('bg-vinor-50', 'dark:bg-vinor-900/20', 'text-vinor-600', 'dark:text-vinor-400', 'border-b-2', 'border-vinor-600');
-    document.getElementById('content-template').classList.add('hidden');
-    document.getElementById('content-direct').classList.remove('hidden');
+function confirmSend(count) {
+  if (!count) {
+    alert('همکار تأییدشده‌ای برای ارسال وجود ندارد.');
+    return false;
   }
-  
-  // به‌روزرسانی URL بدون reload
-  const url = new URL(window.location);
-  url.searchParams.set('mode', mode);
-  window.history.pushState({}, '', url);
+  return confirm('پیامک به ' + count + ' همکار ارسال شود؟');
 }
+
+(function () {
+  var ta = document.getElementById('direct_message');
+  var counter = document.getElementById('charCount');
+  function updateCount() {
+    if (ta && counter) counter.textContent = (ta.value || '').length;
+  }
+  if (ta) {
+    ta.addEventListener('input', updateCount);
+    updateCount();
+  }
+
+  document.getElementById('addParamBtn')?.addEventListener('click', function () {
+    var container = document.getElementById('paramsContainer');
+    if (!container) return;
+    var row = document.createElement('div');
+    row.className = 'flex gap-2';
+    row.innerHTML =
+      '<input type="text" name="param_key[]" placeholder="نام" class="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm">' +
+      '<input type="text" name="param_value[]" placeholder="مقدار" class="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm">' +
+      '<button type="button" class="text-rose-500 text-xs px-2">حذف</button>';
+    row.querySelector('button').addEventListener('click', function () { row.remove(); });
+    container.appendChild(row);
+  });
+})();
 </script>
 {% endblock %}

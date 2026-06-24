@@ -1,11 +1,7 @@
 {% extends 'admin/base_admin.html' %}
 
-{% block title %}اعلان همکاران | پنل مدیریت وینور{% endblock %}
-
-{% block page_title %}
-<i class="fa-solid fa-bell"></i>
-اعلان همکاران
-{% endblock %}
+{% block title %}اعلان همکاران{% endblock %}
+{% block page_title %}اعلان همکاران{% endblock %}
 
 {% block head %}
 <style>
@@ -23,7 +19,7 @@
   }
   .notify-chat-shell {
     flex: 1 1 auto;
-    min-height: 18rem;
+    min-height: 16rem;
     max-height: calc(100dvh - 14rem);
   }
   @media (min-width: 1024px) {
@@ -38,33 +34,38 @@
 
 {% block content %}
 <div
-  class="notify-chat-page max-w-3xl mx-auto w-full"
+  class="notify-chat-page max-w-2xl mx-auto w-full"
   x-data="adminNotifyChat()"
   x-init="init()"
 >
-  <!-- نوار بالا -->
+  {% if message %}
+  <div class="mb-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 text-sm">
+    {{ message }}
+  </div>
+  {% endif %}
+  {% if error %}
+  <div class="mb-3 p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 text-sm">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  {% if not partners_count %}
+  <div class="mb-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800 text-sm">
+    همکار تأییدشده‌ای برای ارسال اعلان وجود ندارد.
+  </div>
+  {% endif %}
+
+  <!-- خلاصه -->
   <div class="mb-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
     <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
       <span class="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-700 px-2.5 py-1 bg-white dark:bg-gray-900">
         <i class="fa-solid fa-users"></i>
-        {{ partners_count or 0 }} همکار
+        {{ partners_count or 0 }} گیرنده
       </span>
       <span class="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-700 px-2.5 py-1 bg-white dark:bg-gray-900">
         <i class="fa-solid fa-paper-plane"></i>
         <span x-text="items.length">{{ history_stats.total_broadcasts or 0 }}</span> ارسال
       </span>
-      {% if push_diag %}
-      <span class="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-700 px-2.5 py-1 bg-white dark:bg-gray-900">
-        <i class="fa-solid fa-bell"></i>
-        {{ push_diag.subs_count or 0 }} پوش
-        {% if push_diag.tagged_count %}<span class="text-emerald-600 dark:text-emerald-400">({{ push_diag.tagged_count }} همکار)</span>{% endif %}
-        {% if not push_diag.has_private %}<span class="text-amber-600" title="VAPID تنظیم نشده">!</span>{% endif %}
-      </span>
-      <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 {{ 'border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300' if push_diag.fcm_send_ready else 'border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300' }}">
-        <i class="fa-solid fa-mobile-screen"></i>
-        FCM {% if push_diag.fcm_send_ready %}فعال{% else %}نیاز به setup{% endif %}
-      </span>
-      {% endif %}
     </div>
     <button
       type="button"
@@ -76,7 +77,25 @@
     </button>
   </div>
 
-  <!-- پنل تست (جمع‌شونده) -->
+  {% if push_diag %}
+  <details class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+    <summary class="cursor-pointer px-1 py-0.5 hover:text-gray-700 dark:hover:text-gray-300">وضعیت پوش (Web / FCM)</summary>
+    <div class="mt-2 flex flex-wrap gap-2">
+      <span class="rounded-full border border-gray-200 dark:border-gray-700 px-2.5 py-1 bg-white dark:bg-gray-900">
+        {{ push_diag.subs_count or 0 }} اشتراک پوش
+        {% if push_diag.tagged_count %}· {{ push_diag.tagged_count }} با شماره{% endif %}
+      </span>
+      <span class="rounded-full border px-2.5 py-1 {{ 'border-emerald-300 text-emerald-700 dark:text-emerald-300' if push_diag.has_private else 'border-amber-300 text-amber-700 dark:text-amber-300' }}">
+        VAPID {% if push_diag.has_private %}فعال{% else %}تنظیم نشده{% endif %}
+      </span>
+      <span class="rounded-full border px-2.5 py-1 {{ 'border-emerald-300 text-emerald-700 dark:text-emerald-300' if push_diag.fcm_send_ready else 'border-amber-300 text-amber-700 dark:text-amber-300' }}">
+        FCM {% if push_diag.fcm_send_ready %}فعال{% else %}نیاز به setup{% endif %}
+      </span>
+    </div>
+  </details>
+  {% endif %}
+
+  <!-- تست -->
   <div x-show="showTest" x-cloak x-transition class="mb-3 shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
     <div x-show="testFlash" x-cloak class="mb-2 p-2 rounded-lg text-xs" :class="testFlashOk ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200'" x-text="testFlash"></div>
     <form @submit.prevent="runTest" class="flex flex-wrap gap-2 items-end">
@@ -92,10 +111,8 @@
     </form>
   </div>
 
-  <!-- شِل چت -->
+  <!-- چت -->
   <div class="notify-chat-shell flex flex-col rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 overflow-hidden shadow-sm">
-
-    <!-- سابقه ارسال -->
     <div
       class="notify-bubble-scroll flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-4"
       x-ref="history"
@@ -112,7 +129,6 @@
 
         <template x-for="item in sortedItems()" :key="item.id">
           <div class="flex flex-col max-w-[92%] sm:max-w-[85%] mr-auto ml-0 items-end gap-1">
-            <!-- bubble ادمین (سمت راست در RTL) -->
             <div
               class="rounded-2xl rounded-br-md px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words w-full border shadow-sm"
               :class="bubbleClass(item.type)"
@@ -157,7 +173,7 @@
       </div>
     </div>
 
-    <!-- فرم ارسال -->
+    <!-- فرم -->
     <div class="shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 safe-bottom">
       <form @submit.prevent="sendMessage" class="space-y-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" x-ref="csrf">
@@ -167,15 +183,15 @@
             x-model="form.title"
             x-ref="titleInput"
             class="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            placeholder="عنوان پیام"
+            placeholder="عنوان"
             maxlength="120"
             required
-            :disabled="sending"
+            :disabled="sending || partnersCount < 1"
           >
           <select
             x-model="form.type"
             class="shrink-0 max-w-[6.5rem] rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            :disabled="sending"
+            :disabled="sending || partnersCount < 1"
           >
             <option value="info">اطلاعات</option>
             <option value="success">موفقیت</option>
@@ -190,22 +206,24 @@
             x-ref="bodyInput"
             rows="2"
             class="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            placeholder="متن پیام برای همه همکاران..."
+            placeholder="متن اعلان برای همه همکاران تأییدشده..."
             required
-            :disabled="sending"
+            :disabled="sending || partnersCount < 1"
             @keydown.enter="onBodyKeydown($event)"
           ></textarea>
           <button
             type="submit"
             class="shrink-0 w-11 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center disabled:opacity-50 transition-colors"
-            :disabled="sending || !form.title.trim() || !form.body.trim()"
+            :disabled="sending || partnersCount < 1 || !form.title.trim() || !form.body.trim()"
             aria-label="ارسال"
           >
             <i class="fa-solid fa-paper-plane" x-show="!sending"></i>
             <i class="fa-solid fa-spinner fa-spin" x-show="sending" x-cloak></i>
           </button>
         </div>
-        <p class="text-[11px] text-gray-400 dark:text-gray-500 px-1">Enter = ارسال · Shift+Enter = خط جدید · {{ partners_count or 0 }} گیرنده</p>
+        <p class="text-[11px] text-gray-400 dark:text-gray-500 px-1">
+          Enter = ارسال · Shift+Enter = خط جدید · فقط همکاران تأییدشده
+        </p>
       </form>
       <div
         x-show="flash"
@@ -224,11 +242,14 @@
   const INITIAL_ITEMS = {{ history|tojson|safe }};
   const HISTORY_URL = {{ url_for('admin.api_colleagues_notification_history')|tojson }};
   const POST_URL = {{ url_for('admin.notifications_colleagues')|tojson }};
+  const PARTNERS_COUNT = {{ partners_count or 0 }};
+  const INITIAL_FLASH = {{ {'message': message, 'error': error}|tojson|safe }};
 
   function fmtTs(ts) {
     if (!ts) return '—';
     try {
-      const d = new Date(Number(ts) * 1000);
+      const n = Number(ts);
+      const d = new Date(n > 1e12 ? n : n * 1000);
       if (isNaN(d.getTime())) return '—';
       return d.toLocaleString('fa-IR', {
         timeZone: 'Asia/Tehran',
@@ -241,6 +262,7 @@
   window.adminNotifyChat = function adminNotifyChat() {
     return {
       items: Array.isArray(INITIAL_ITEMS) ? INITIAL_ITEMS.slice() : [],
+      partnersCount: PARTNERS_COUNT,
       loading: false,
       sending: false,
       showTest: false,
@@ -258,6 +280,11 @@
       },
 
       init() {
+        if (INITIAL_FLASH.error) {
+          this.showFlash(INITIAL_FLASH.error, false);
+        } else if (INITIAL_FLASH.message) {
+          this.showFlash(INITIAL_FLASH.message, true);
+        }
         this.$nextTick(() => this.scrollToBottom(true));
       },
 
@@ -308,7 +335,10 @@
       async sendMessage() {
         const title = (this.form.title || '').trim();
         const body = (this.form.body || '').trim();
-        if (!title || !body || this.sending) return;
+        if (!title || !body || this.sending || this.partnersCount < 1) return;
+
+        const ok = confirm('اعلان به ' + this.partnersCount + ' همکار تأییدشده ارسال شود؟');
+        if (!ok) return;
 
         this.sending = true;
         this.stickToBottom = true;
@@ -330,7 +360,8 @@
             throw new Error(data.error || 'ارسال ناموفق بود');
           }
           if (data.broadcast) {
-            this.items.unshift(data.broadcast);
+            const exists = this.items.some(x => x.id === data.broadcast.id);
+            if (!exists) this.items.unshift(data.broadcast);
             if (data.broadcast.push_queued === true && data.broadcast.id) {
               this.pollPushStatus(data.broadcast.id);
             }
