@@ -308,8 +308,25 @@ def load_express_partners_cached(app=None):
     return _file_cache_load(_PARTNERS_CACHE, path, _load)
 
 # شهرهای فعال برای همکاری
-def load_active_cities(app=None):        return _load(ensure_file('ACTIVE_CITIES_FILE','active_cities.json',["تهران", "کرج", "اصفهان", "شیراز", "مشهد", "تبریز"],app))
-def save_active_cities(items, app=None): return _save(ensure_file('ACTIVE_CITIES_FILE','active_cities.json',[],app), items)
+def load_active_cities(app=None):
+    from .iran_cities import default_active_cities, normalize_active_tehran_cities
+
+    path = ensure_file("ACTIVE_CITIES_FILE", "active_cities.json", default_active_cities(), app)
+    items = _load(path)
+    if not isinstance(items, list):
+        items = []
+    normalized = normalize_active_tehran_cities(items)
+    if normalized != items:
+        _save(path, normalized)
+        items = normalized
+    return items
+
+
+def save_active_cities(items, app=None):
+    from .iran_cities import normalize_active_tehran_cities
+
+    normalized = normalize_active_tehran_cities(items if isinstance(items, list) else [])
+    return _save(ensure_file("ACTIVE_CITIES_FILE", "active_cities.json", [], app), normalized)
 
 def load_notifications(app=None):        return _load(ensure_file('NOTIFICATIONS_FILE','notifications.json',[],app))
 def save_notifications(items, app=None): return _save(ensure_file('NOTIFICATIONS_FILE','notifications.json',[],app), items)

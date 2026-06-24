@@ -7,12 +7,29 @@
   
   <!-- فرم افزودن شهر جدید - سبک دیوار -->
   <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-    <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">افزودن شهر جدید</h3>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white">افزودن شهر جدید</h3>
+      <form method="post" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_tehran">
+        <button type="submit" class="px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-xs font-medium transition hover:bg-emerald-100 dark:hover:bg-emerald-900/40 focusable">
+          <i class="fas fa-map-location-dot text-xs ml-1"></i>
+          افزودن همه شهرهای استان تهران (۴۸ شهر)
+        </button>
+      </form>
+    </div>
     <form method="post" class="flex flex-col sm:flex-row gap-3">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="add">
-      <input type="text" name="city" placeholder="نام شهر..." required
-             class="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+      <select name="city" required
+              class="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        <option value="">انتخاب شهر استان تهران...</option>
+        {% for city in tehran_cities %}
+          {% if city not in cities %}
+            <option value="{{ city }}">{{ city }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
       <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition focusable">
         <i class="fas fa-plus text-xs ml-1"></i>
         افزودن
@@ -53,7 +70,7 @@
   <!-- راهنما - سبک دیوار -->
   <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 text-sm">
     <p class="font-medium text-gray-900 dark:text-white mb-2">راهنما</p>
-    <p class="text-gray-600 dark:text-gray-400">شهرهای تعریف شده در این بخش، در فرم درخواست همکاری به صورت لیست انتخابی نمایش داده می‌شوند.</p>
+    <p class="text-gray-600 dark:text-gray-400">فقط شهرهای استان تهران در فرم درخواست همکاری نمایش داده می‌شوند. شهرهای سایر استان‌ها (مثل کرج یا اصفهان) پذیرفته نمی‌شوند.</p>
   </div>
 
 </div>

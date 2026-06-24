@@ -28,7 +28,7 @@
         <i class="fas fa-handshake text-xl" aria-hidden="true"></i>
       </div>
       <h2 class="text-lg font-bold text-white">همکار وینور شوید</h2>
-      <p class="mt-1.5 text-xs leading-relaxed text-zinc-500">فقط نام و شهر — یک کلیک برای ثبت</p>
+      <p class="mt-1.5 text-xs leading-relaxed text-zinc-500">نام، کد ملی و شهر فعالیت</p>
     </div>
 
     <form id="applyForm" method="post" action="{{ url_for('express_partner.apply', ref=invite_ref) if invite_ref else url_for('express_partner.apply') }}" class="space-y-4">
@@ -54,6 +54,17 @@
             <span id="applyNameCounter">{{ name|length }}/{{ apply_name_max }}</span>
             · حداکثر {{ apply_name_max }} کاراکتر
           </p>
+        </div>
+
+        <div>
+          <label for="applyNationalId" class="mb-2 block text-right text-xs font-semibold text-zinc-300">
+            کد ملی <span class="text-rose-400">*</span>
+          </label>
+          <input id="applyNationalId" type="text" name="national_id" value="{{ national_id }}" required
+                 inputmode="numeric" autocomplete="off" dir="ltr" maxlength="10" pattern="[0-9]{10}"
+                 placeholder="مثال: 0012345678"
+                 class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-3 text-sm tabular-nums text-white placeholder-zinc-600 outline-none transition focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30">
+          <p class="mt-1.5 text-right text-[11px] text-zinc-500">۱۰ رقم — بدون خط تیره</p>
         </div>
 
         <div>
@@ -185,6 +196,18 @@
   bindCharCounter(document.getElementById('applyName'), {{ apply_name_max }}, document.getElementById('applyNameCounter'));
   bindCharCounter(document.getElementById('applyExperience'), {{ apply_experience_max }}, document.getElementById('applyExperienceCounter'));
   bindCharCounter(document.getElementById('applyNote'), {{ apply_note_max }}, document.getElementById('applyNoteCounter'));
+
+  var nationalIdInput = document.getElementById('applyNationalId');
+  if (nationalIdInput) {
+    nationalIdInput.addEventListener('input', function () {
+      var v = (nationalIdInput.value || '').replace(/[^\d۰-۹٠-٩]/g, '');
+      var map = {'۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9',
+                 '٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'};
+      v = v.replace(/[۰-۹٠-٩]/g, function (ch) { return map[ch] || ch; });
+      if (v.length > 10) v = v.slice(0, 10);
+      if (nationalIdInput.value !== v) nationalIdInput.value = v;
+    });
+  }
 
   if (!form || !btn) return;
   form.addEventListener('submit', function () {

@@ -5015,6 +5015,7 @@ def express_partner_application_approve(aid: int):
     phone = str(target.get('phone') or '').strip()
     name = (target.get('name') or '').strip()
     city = (target.get('city') or '').strip()
+    national_id = (target.get('national_id') or '').strip()
     partner = next((p for p in partners if str(p.get('phone')) == phone), None)
     if not partner:
         partner = {
@@ -5022,12 +5023,18 @@ def express_partner_application_approve(aid: int):
             'name': name,
             'phone': phone,
             'city': city,
+            'national_id': national_id,
             'status': 'approved',
             'created_at': iso_z(utcnow()),
         }
         partners.append(partner)
     else:
-        partner.update({'name': name or partner.get('name'), 'city': city or partner.get('city'), 'status': 'approved'})
+        partner.update({
+            'name': name or partner.get('name'),
+            'city': city or partner.get('city'),
+            'national_id': national_id or partner.get('national_id'),
+            'status': 'approved',
+        })
 
     # وضعیت درخواست (برای لاگ‌کردن قبل از حذف)
     target['status'] = 'approved'
@@ -5257,8 +5264,11 @@ def express_cities():
         action = request.form.get('action')
         
         if action == 'add':
+            from app.utils.iran_cities import is_tehran_city
             new_city = (request.form.get('city') or '').strip()
-            if new_city and new_city not in cities:
+            if new_city and not is_tehran_city(new_city):
+                flash('فقط شهرهای استان تهران مجاز است.', 'warning')
+            elif new_city and new_city not in cities:
                 cities.append(new_city)
                 cities.sort()
                 save_active_cities(cities)
@@ -5272,7 +5282,20 @@ def express_cities():
                 cities.remove(city_to_delete)
                 save_active_cities(cities)
                 flash(f'شهر "{city_to_delete}" حذف شد.', 'info')
+
+        elif action == 'add_tehran':
+            from app.utils.iran_cities import TEHRAN_PROVINCE_CITIES, normalize_active_tehran_cities
+            before = len(cities)
+            cities = normalize_active_tehran_cities(cities)
+            save_active_cities(cities)
+            added = len(cities) - before
+            flash(f'{added} شهر استان تهران به لیست اضافه شد. (مجموع: {len(cities)})', 'success')
         
         return redirect(url_for('admin.express_cities'))
     
-    return render_template('admin/express_cities.html', cities=cities)
+    from app.utils.iran_cities import TEHRAN_PROVINCE_CITIES
+    return render_template(
+        'admin/express_cities.html',
+        cities=cities,
+        tehran_cities=TEHRAN_PROVINCE_CITIES,
+    )

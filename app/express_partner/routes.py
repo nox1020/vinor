@@ -1523,6 +1523,33 @@ def _clip_apply_fields(name: str, city: str, experience: str, note: str) -> tupl
     )
 
 
+def _parse_apply_national_id(raw: str) -> str:
+    from ..utils.iran_ids import normalize_digits
+    return normalize_digits(raw)[:10]
+
+
+def _apply_form_context(
+    me_phone: str,
+    *,
+    name: str = '',
+    city: str = '',
+    national_id: str = '',
+    experience: str = '',
+    note: str = '',
+    cities=None,
+) -> dict:
+    return {
+        'me_phone': me_phone,
+        'name': name,
+        'city': city,
+        'national_id': national_id,
+        'experience': experience,
+        'note': note,
+        'cities': cities if cities is not None else _active_cities_cached(),
+        **_apply_limits_context(),
+    }
+
+
 def _apply_login_redirect():
     """ریدایرکت به ورود با حفظ ref دعوت در next."""
     from flask import make_response
@@ -1598,31 +1625,30 @@ def apply():
             request.form.get('experience') or '',
             request.form.get('note') or '',
         )
-        if not name or not city:
-            flash('نام و شهر فعالیت الزامی است.', 'error')
-            return _apply_render_with_ref(
-                me_phone=me_phone,
-                name=name,
-                city=city,
-                experience=experience,
-                note=note,
-                cities=cities,
-                **_apply_limits_context(),
-            )
+        national_id = _parse_apply_national_id(request.form.get('national_id') or '')
+        if not name or not city or not national_id:
+            flash('نام، کد ملی و شهر فعالیت الزامی است.', 'error')
+            return _apply_render_with_ref(**_apply_form_context(
+                me_phone, name=name, city=city, national_id=national_id,
+                experience=experience, note=note, cities=cities,
+            ))
+        from ..utils.iran_ids import is_valid_iran_national_id
+        if not is_valid_iran_national_id(national_id):
+            flash('کد ملی واردشده معتبر نیست.', 'error')
+            return _apply_render_with_ref(**_apply_form_context(
+                me_phone, name=name, city=city, national_id=national_id,
+                experience=experience, note=note, cities=cities,
+            ))
         if cities and city not in cities:
             flash('شهر انتخاب‌شده معتبر نیست.', 'error')
-            return _apply_render_with_ref(
-                me_phone=me_phone,
-                name=name,
-                city=city,
-                experience=experience,
-                note=note,
-                cities=cities,
-                **_apply_limits_context(),
-            )
+            return _apply_render_with_ref(**_apply_form_context(
+                me_phone, name=name, city=city, national_id=national_id,
+                experience=experience, note=note, cities=cities,
+            ))
         return _submit_partner_application(me_phone, {
             'name': name,
             'city': city,
+            'national_id': national_id,
             'experience': experience,
             'note': note,
         })
@@ -1630,15 +1656,15 @@ def apply():
     clipped = _clip_apply_fields(
         defaults['name'], defaults['city'], defaults['experience'], defaults['note'],
     )
-    return _apply_render_with_ref(
-        me_phone=me_phone,
+    return _apply_render_with_ref(**_apply_form_context(
+        me_phone,
         name=clipped[0],
         city=clipped[1],
+        national_id=defaults.get('national_id', ''),
         experience=clipped[2],
         note=clipped[3],
         cities=cities,
-        **_apply_limits_context(),
-    )
+    ))
 
 
 @express_partner_bp.route('/apply/step1', methods=['GET', 'POST'], endpoint='apply_step1')
@@ -1718,9 +1744,16 @@ def _apply_form_defaults(me_phone: str) -> dict:
         data.get('experience') or (last_app.get('experience') if use_last else '') or '',
         data.get('note') or (last_app.get('note') if use_last else '') or '',
     )
+    national_id = _parse_apply_national_id(
+        data.get('national_id')
+        or profile.get('national_id')
+        or (last_app.get('national_id') if use_last else '')
+        or ''
+    )
     return {
         'name': name,
         'city': city,
+        'national_id': national_id,
         'experience': experience,
         'note': note,
     }
@@ -1734,6 +1767,8 @@ def _sync_unapproved_partner_profile(me_phone: str, data: dict) -> None:
         return
     profile['name'] = data.get('name', '')
     profile['city'] = data.get('city', '')
+    if data.get('national_id'):
+        profile['national_id'] = data.get('national_id')
     try:
         save_express_partners(partners)
         _invalidate_partner_session_cache()
@@ -2024,6 +2059,7 @@ def _submit_partner_application(me_phone: str, data: dict):
         "id": new_id,
         "name": data.get('name', ''),
         "phone": _canonical_partner_phone(me_phone),
+        "national_id": data.get('national_id', ''),
         "city": data.get('city', ''),
         "experience": data.get('experience', ''),
         "note": data.get('note', ''),

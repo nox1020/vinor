@@ -72,6 +72,12 @@
                 <p class="font-medium text-gray-900 dark:text-white">{{ a.city }}</p>
               </div>
               {% endif %}
+              {% if a.national_id %}
+              <div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">کد ملی</p>
+                <p class="font-medium text-gray-900 dark:text-white ltr">{{ a.national_id }}</p>
+              </div>
+              {% endif %}
               {% if a.experience %}
               <div>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">سابقه</p>
