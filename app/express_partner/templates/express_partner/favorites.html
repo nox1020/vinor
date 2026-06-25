@@ -1,6 +1,47 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}نشان‌شده‌ها{% endblock %}
 
+{% block styles %}
+  {{ super() }}
+  <style>
+    #favoritesCardsRoot .express-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #favoritesCardsRoot .vinor-dash-card {
+      border-radius: 0;
+      box-shadow: none;
+      transition: background-color .15s ease;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      #favoritesCardsRoot .vinor-dash-card:not(.vinor-card-sold):hover {
+        background-color: rgba(255, 255, 255, 0.03);
+      }
+    }
+    #favoritesCardsRoot .vinor-card-sold {
+      position: relative;
+      isolation: isolate;
+      cursor: default;
+      pointer-events: none;
+    }
+    #favoritesCardsRoot .vinor-card-sold::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      background: rgba(3, 7, 18, 0.35);
+      pointer-events: none;
+    }
+    #favoritesCardsRoot .vinor-card-sold img {
+      filter: saturate(0.4) brightness(0.72);
+    }
+    #favoritesCardsRoot .vinor-dash-card img {
+      pointer-events: none;
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(id='profileFavoritesHeader') }}
@@ -13,10 +54,10 @@
       <div id="favoritesLoading" class="flex justify-center py-16">
         <div class="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500/40 border-t-emerald-400"></div>
       </div>
-      <div id="favoritesCardsRoot" class="hidden space-y-5"></div>
+      <div id="favoritesCardsRoot" class="hidden w-full"></div>
     </div>
 
-    {% set bottom_nav_active = 'profile' %}
+    {% set bottom_nav_active = 'favorites' %}
     {% include 'express_partner/partials/partner_tab_footer.html' %}
   </div>
 {% endblock %}
@@ -31,11 +72,6 @@
     var hint = document.getElementById('favoritesCountHint');
     var csrf = {{ csrf_token()|tojson }};
     var apiUrl = {{ url_for('express_partner.api_favorites_cards')|tojson }};
-
-    function afterCardsRendered() {
-      if (window.vinorSyncFavButtons) window.vinorSyncFavButtons(root);
-      if (window.vinorInitPremiumCards) window.vinorInitPremiumCards(root, null);
-    }
 
     function updateHint(requested, shown) {
       if (!hint) return;
@@ -90,7 +126,6 @@
               var valKey = d.valid_codes.slice().sort().join('\0');
               if (curKey !== valKey) window.vinorWriteFavs(d.valid_codes);
             }
-            afterCardsRendered();
           } else {
             root.innerHTML = '<p class="text-center text-sm text-red-400">خطا در بارگذاری نشان‌شده‌ها</p>';
           }

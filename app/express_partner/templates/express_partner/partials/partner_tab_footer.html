@@ -7,14 +7,18 @@
     {% set bottom_nav_active = 'dashboard' %}
   {% elif ep in ('express_partner.commissions', 'express_partner.commissions_data', 'express_partner.commissions_transactions', 'express_partner.commissions_summary') %}
     {% set bottom_nav_active = 'commissions' %}
+  {% elif ep in ('express_partner.favorites', 'express_partner.api_favorites_cards') %}
+    {% set bottom_nav_active = 'favorites' %}
+  {% elif ep in ('express_partner.notifications', 'express_partner.get_notifications', 'express_partner.get_unread_count', 'express_partner.mark_notification_read', 'express_partner.mark_all_notifications_read', 'express_partner.notifications_debug') %}
+    {% set bottom_nav_active = 'notifications' %}
   {% elif ep and (
     ep.startswith('express_partner.profile')
     or ep.startswith('express_partner.routine')
     or ep in (
-      'express_partner.notifications', 'express_partner.help', 'express_partner.top_sellers',
+      'express_partner.help', 'express_partner.top_sellers',
       'express_partner.notes', 'express_partner.support', 'express_partner.invite_colleagues',
-      'express_partner.favorites', 'express_partner.training', 'express_partner.legal_privacy',
-      'express_partner.legal_terms', 'express_partner.api_favorites_cards'
+      'express_partner.training', 'express_partner.legal_privacy',
+      'express_partner.legal_terms'
     )
   ) %}
     {% set bottom_nav_active = 'profile' %}

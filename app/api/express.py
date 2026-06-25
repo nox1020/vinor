@@ -394,8 +394,10 @@ def get_menu():
         # دسترسی‌ها بعداً تنظیم می‌شوند
         partner_menu = [
             {'key': 'dashboard', 'endpoint': 'express_partner.dashboard', 'icon': 'fa-home', 'label': 'وینور'},
+            {'key': 'favorites', 'endpoint': 'express_partner.favorites', 'icon': 'fa-bookmark', 'label': 'نشان‌ها', 'disabled': not is_logged_in},
             {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not is_express_partner},
-            {'key': 'profile', 'endpoint': 'express_partner.profile', 'icon': 'fa-user', 'label': 'من'}
+            {'key': 'notifications', 'endpoint': 'express_partner.notifications', 'icon': 'fa-bell', 'label': 'اعلان‌ها', 'disabled': not is_logged_in},
+            {'key': 'profile', 'endpoint': 'express_partner.profile', 'icon': 'fa-user', 'label': 'من'},
         ]
         
         # همیشه منوی همکار را نمایش بده (در هر دو حالت وارد شده و وارد نشده)
@@ -433,8 +435,10 @@ def get_menu():
             'success': True,
             'menu': [
                 {'key': 'dashboard', 'url': '/express/partner/dashboard', 'icon': 'fa-home', 'label': 'وینور'},
+                {'key': 'favorites', 'url': '/express/partner/favorites', 'icon': 'fa-bookmark', 'label': 'نشان‌ها', 'disabled': True},
                 {'key': 'commissions', 'url': '/express/partner/commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': True},
-                {'key': 'profile', 'url': '/express/partner/profile', 'icon': 'fa-user', 'label': 'من'}
+                {'key': 'notifications', 'url': '/express/partner/notifications', 'icon': 'fa-bell', 'label': 'اعلان‌ها', 'disabled': True},
+                {'key': 'profile', 'url': '/express/partner/profile', 'icon': 'fa-user', 'label': 'من'},
             ],
             'is_logged_in': False,
             'is_express_partner': False

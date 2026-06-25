@@ -286,11 +286,13 @@
   </a>
   {% endif %}
   <div class="tg-tabbar-pill mx-auto w-full max-w-full px-3 py-1">
-    <div id="bottomNavItems" class="grid grid-cols-3 gap-0 min-h-[52px] w-full items-center">
+    <div id="bottomNavItems" class="grid grid-cols-5 gap-0 min-h-[52px] w-full items-center">
       {% set profile_nav_url = url_for('express_partner.profile') %}
       {% set nav_items = [
         {'key': 'dashboard', 'endpoint': 'express_partner.dashboard', 'icon': 'fa-home', 'label': 'وینور'},
+        {'key': 'favorites', 'endpoint': 'express_partner.favorites', 'icon': 'fa-bookmark', 'label': 'نشان‌ها', 'disabled': not session.get('user_phone')},
         {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not VINOR_IS_EXPRESS_PARTNER},
+        {'key': 'notifications', 'endpoint': 'express_partner.notifications', 'icon': 'fa-bell', 'label': 'اعلان‌ها', 'disabled': not session.get('user_phone')},
         {'key': 'profile', 'url': profile_nav_url, 'icon': 'fa-user', 'label': 'من'}
       ] %}
       {% for item in nav_items %}
@@ -305,9 +307,10 @@
               <span class="tg-tab-icon flex items-center justify-center">
                 <i class="fas {{ item.icon }}"></i>
               </span>
-              {% if item.key == 'profile' %}
-              <span class="tg-tab-update-dot{% if show_app_update_nav|default(false) %} is-visible{% endif %}" data-role="nav-update-dot" aria-hidden="true"></span>
+              {% if item.key == 'notifications' %}
               <span class="tg-tab-badge" data-role="nav-badge" aria-hidden="true"></span>
+              {% elif item.key == 'profile' %}
+              <span class="tg-tab-update-dot{% if show_app_update_nav|default(false) %} is-visible{% endif %}" data-role="nav-update-dot" aria-hidden="true"></span>
               {% endif %}
             </span>
             <span class="tg-tab-label text-[10px] leading-none max-w-full truncate text-center px-0.5{% if item.key == 'profile' and show_app_update_nav|default(false) %} tg-tab-label--update{% endif %}">{{ 'بروزرسانی' if item.key == 'profile' and show_app_update_nav|default(false) else item.label }}</span>
@@ -364,8 +367,8 @@
     }
   }
 
-  function setProfileBadge(count) {
-    const tab = navContainer.querySelector('[data-nav-key="profile"]');
+  function setNavBadge(navKey, count) {
+    const tab = navContainer.querySelector('[data-nav-key="' + navKey + '"]');
     if (!tab) return;
     const el = tab.querySelector('[data-role="nav-badge"]');
     if (!el) return;
@@ -379,6 +382,10 @@
       el.classList.add('is-visible');
       el.setAttribute('aria-hidden', 'false');
     }
+  }
+
+  function setProfileBadge(count) {
+    setNavBadge('notifications', count);
   }
 
   function persistUpdateNav(state) {
@@ -583,19 +590,19 @@
   }
 
   async function refreshUnreadBadge() {
-    if (!userLoggedIn || notifyCenterEnabled()) return;
+    if (!userLoggedIn) return;
     try {
       const res = await fetch(unreadUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
       if (!res.ok) return;
       const data = await res.json();
-      if (data && data.success) setProfileBadge(data.unread_count || 0);
+      if (data && data.success) setNavBadge('notifications', data.unread_count || 0);
     } catch (_) {}
   }
 
   window.addEventListener('vinor:notifications:update', function (ev) {
     try {
       const u = ev && ev.detail && typeof ev.detail.unread !== 'undefined' ? ev.detail.unread : null;
-      if (u !== null) setProfileBadge(u);
+      if (u !== null) setNavBadge('notifications', u);
     } catch (_) {}
   });
 
@@ -604,7 +611,7 @@
     return base + (isActive ? 'tg-tab-active ' : '') + (isDisabled ? 'tg-tab-disabled' : '');
   }
 
-  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v7';
+  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v8';
   const MENU_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 
   function sanitizeMenu(menuItems) {
@@ -699,17 +706,20 @@
       iconOuter.appendChild(icon);
       iconWrap.appendChild(iconOuter);
 
+      if (item.key === 'notifications') {
+        const badge = document.createElement('span');
+        badge.className = 'tg-tab-badge';
+        badge.setAttribute('data-role', 'nav-badge');
+        badge.setAttribute('aria-hidden', 'true');
+        iconWrap.appendChild(badge);
+      }
+
       if (item.key === 'profile') {
         const updateDot = document.createElement('span');
         updateDot.className = 'tg-tab-update-dot';
         updateDot.setAttribute('data-role', 'nav-update-dot');
         updateDot.setAttribute('aria-hidden', 'true');
         iconWrap.appendChild(updateDot);
-        const badge = document.createElement('span');
-        badge.className = 'tg-tab-badge';
-        badge.setAttribute('data-role', 'nav-badge');
-        badge.setAttribute('aria-hidden', 'true');
-        iconWrap.appendChild(badge);
       }
 
       stack.appendChild(iconWrap);
@@ -723,6 +733,7 @@
       navContainer.appendChild(link);
     });
     syncUpdateNavFromStored();
+    if (userLoggedIn) refreshUnreadBadge();
   }
 
   if (serverShowAppUpdate) {
@@ -752,12 +763,12 @@
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
       loadMenuFromAPI();
-      if (!notifyCenterEnabled()) refreshUnreadBadge();
+      refreshUnreadBadge();
       if (isVinorApkClient()) refreshUpdateNavFromServer();
     });
   } else {
     loadMenuFromAPI();
-    if (!notifyCenterEnabled()) refreshUnreadBadge();
+    refreshUnreadBadge();
     if (isVinorApkClient()) refreshUpdateNavFromServer();
   }
 

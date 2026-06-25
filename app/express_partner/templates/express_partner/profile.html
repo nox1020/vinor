@@ -21,12 +21,7 @@
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row, ep_header_spacer %}
   {{ ep_header_start(id='profileExpressHeader') }}
   {% call ep_header_row('پروفایل', url_for('express_partner.dashboard'), inner_class='max-w-lg lg:max-w-6xl mx-auto w-full') %}
-    {% if me_phone %}
-      {% set profile_notifications_dark = true %}
-      {% include 'express_partner/partials/notifications_button.html' %}
-    {% else %}
-      {{ ep_header_spacer() }}
-    {% endif %}
+    {% include 'express_partner/partials/support_header_button.html' %}
   {% endcall %}
   {{ ep_header_end() }}
 
@@ -72,20 +67,6 @@
         </div>
       </a>
 
-      <a href="{{ url_for('express_partner.login', next=url_for('express_partner.favorites')) }}"
-         class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-amber-500/25 hover:bg-[#161e29] sm:p-5">
-        <div class="flex items-center gap-3 sm:gap-4">
-          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/15 text-amber-400">
-            <i class="fas fa-bookmark text-lg" aria-hidden="true"></i>
-          </div>
-          <div class="min-w-0 flex-1 text-right">
-            <div class="text-sm font-semibold text-white sm:text-base">نشان‌شده‌ها</div>
-            <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">برای مشاهده آگهی‌های ذخیره‌شده وارد شوید</div>
-          </div>
-          <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-        </div>
-      </a>
-
       <a href="{{ url_for('express_partner.routine') }}"
          class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-violet-500/25 hover:bg-[#161e29] sm:p-5">
         <div class="flex items-center gap-3 sm:gap-4">
@@ -109,20 +90,6 @@
           <div class="min-w-0 flex-1 text-right">
             <div class="text-sm font-semibold text-white sm:text-base">فروشنده‌های برتر</div>
             <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">رتبه‌بندی همکاران</div>
-          </div>
-          <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-        </div>
-      </a>
-
-      <a href="{{ url_for('express_partner.support') }}"
-         class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-emerald-500/25 hover:bg-[#161e29] sm:p-5">
-        <div class="flex items-center gap-3 sm:gap-4">
-          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-400">
-            <i class="fas fa-headset text-lg" aria-hidden="true"></i>
-          </div>
-          <div class="min-w-0 flex-1 text-right">
-            <div class="text-sm font-semibold text-white sm:text-base">پشتیبانی</div>
-            <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">سوالات متداول و ارسال تیکت</div>
           </div>
           <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
         </div>
@@ -219,21 +186,6 @@
         </a>
         {% endif %}
 
-        <a href="{{ url_for('express_partner.favorites') }}"
-           data-tour="favorites-link"
-           class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-amber-500/25 hover:bg-[#161e29] sm:p-5">
-          <div class="flex items-center gap-3 sm:gap-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/15 text-amber-400">
-              <i class="fas fa-bookmark text-lg" aria-hidden="true"></i>
-            </div>
-            <div class="min-w-0 flex-1 text-right">
-              <div class="text-sm font-semibold text-white sm:text-base">نشان‌شده‌ها</div>
-              <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">آگهی‌های نشان‌شده در داشبورد</div>
-            </div>
-            <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-          </div>
-        </a>
-
         <a href="{{ url_for('express_partner.notes') }}"
            data-tour="notes-link"
            class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-emerald-500/25 hover:bg-[#161e29] sm:p-5">
@@ -304,22 +256,6 @@
             <div class="min-w-0 flex-1 text-right">
               <div class="text-sm font-semibold text-white sm:text-base">فروشنده‌های برتر</div>
               <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">رتبه‌بندی همکاران</div>
-            </div>
-            <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-          </div>
-        </a>
-
-        <a id="profileSupportLink"
-           href="{{ url_for('express_partner.support') }}"
-           data-tour="support-link"
-           class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-emerald-500/25 hover:bg-[#161e29] sm:p-5">
-          <div class="flex items-center gap-3 sm:gap-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-400">
-              <i class="fas fa-headset text-lg" aria-hidden="true"></i>
-            </div>
-            <div class="min-w-0 flex-1 text-right">
-              <div class="text-sm font-semibold text-white sm:text-base">پشتیبانی</div>
-              <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">ارسال تیکت و پیگیری پاسخ</div>
             </div>
             <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
           </div>
