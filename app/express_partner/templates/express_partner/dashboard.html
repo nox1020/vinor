@@ -99,18 +99,22 @@
       }
     }
     .express-card{
-      transition:box-shadow .2s ease, border-color .2s ease;
       display:flex;
       flex-direction:column;
       min-height:0;
+    }
+    .vinor-dash-card{
+      border-radius:0;
+      box-shadow:none;
+      transition:background-color .15s ease;
     }
     #cardsGrid > .express-card{
       height:auto;
       flex-shrink:0;
     }
     @media (hover:hover) and (pointer:fine){
-      .express-card:not(.vinor-card-sold):hover{
-        transform:translateY(-2px);
+      .vinor-dash-card:not(.vinor-card-sold):hover{
+        background-color:rgba(255,255,255,0.03);
       }
     }
     .vinor-card-sold{
@@ -124,20 +128,19 @@
       position:absolute;
       inset:0;
       z-index:4;
-      border-radius:inherit;
-      background:linear-gradient(180deg,rgba(3,7,18,0.28) 0%,rgba(3,7,18,0.5) 100%);
+      background:rgba(3,7,18,0.35);
       pointer-events:none;
     }
     .vinor-card-sold img{
       filter:saturate(0.4) brightness(0.72);
     }
     .vinor-card-sold .vinor-sold-badge{
-      position:relative;
-      z-index:15;
-      background:rgb(16 185 129)!important;
-      color:#fff!important;
-      border:1px solid rgba(167,243,208,0.55);
-      box-shadow:0 0 0 1px rgba(255,255,255,0.12),0 4px 14px rgba(16,185,129,0.45);
+      position:static;
+      z-index:auto;
+      background:transparent!important;
+      color:rgb(52 211 153)!important;
+      border:none!important;
+      box-shadow:none!important;
       filter:none!important;
       opacity:1!important;
     }
@@ -222,17 +225,16 @@
         width: 100%;
         min-height: 0;
         padding-inline: 0;
-        /* padding فیزیکی چپ/راست — در RTL با padding-inline-start/end گاهی یک طرف اشتباه می‌ماند */
-        padding-left: max(var(--vinor-dash-card-gutter), env(safe-area-inset-left, 0px));
-        padding-right: max(var(--vinor-dash-card-gutter), env(safe-area-inset-right, 0px));
+        padding-left: max(0px, env(safe-area-inset-left, 0px));
+        padding-right: max(0px, env(safe-area-inset-right, 0px));
         padding-top: var(--vn-dash-header-pad, 5.5rem);
         padding-bottom: 0.5rem;
-        gap: 0.75rem;
+        gap: 0;
         box-sizing: border-box;
       }
       #expressDashboardMain[data-vinor-dash-partner="1"] #cardsTrack {
         padding-top: calc(var(--vn-dash-header-pad, 5.5rem) - 0.25rem);
-        gap: 0.5rem;
+        gap: 0;
       }
       #dashboardMobileCardsRoot .vinor-dash-card-slot {
         width: 100%;
@@ -263,9 +265,9 @@
       }
       #dashboardMobileCardsRoot #cardsTrack {
         padding-inline: 0;
-        padding-left: max(0.25rem, env(safe-area-inset-left, 0px));
-        padding-right: max(0.25rem, env(safe-area-inset-right, 0px));
-        gap: 0.625rem;
+        padding-left: max(0px, env(safe-area-inset-left, 0px));
+        padding-right: max(0px, env(safe-area-inset-right, 0px));
+        gap: 0;
       }
       #dashboardMobileCardsRoot .vinor-dash-card img {
         pointer-events: none;
