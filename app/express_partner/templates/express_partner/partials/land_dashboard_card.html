@@ -20,13 +20,13 @@
          class="express-card vinor-dash-card w-full border-b border-white/10 bg-transparent{% if _is_sold %} vinor-card-sold{% else %} cursor-pointer active:bg-white/[0.03]{% endif %}"
          {% if not _is_sold %}data-href="{{ land._detail_url or url_for('express_partner.land_detail', code=land.code) }}" role="link" tabindex="0"{% else %}data-assignment-status="sold" aria-disabled="true"{% endif %}>
 
-  <div class="flex min-h-[6.25rem] flex-row items-stretch gap-3 px-3 py-3 sm:min-h-[6.75rem] sm:px-4 sm:py-3.5">
-    <div class="flex min-w-0 flex-1 flex-col justify-between gap-2 text-right">
-      <h3 class="line-clamp-2 text-[15px] font-bold leading-[1.45] text-white">{{ land.title or '—' }}</h3>
+  <div class="flex min-h-[8rem] flex-row items-stretch gap-3.5 px-3.5 py-3.5 sm:min-h-[8.5rem] sm:gap-4 sm:px-4 sm:py-4">
+    <div class="flex min-w-0 flex-1 flex-col justify-between gap-2.5 text-right">
+      <h3 class="line-clamp-2 text-[16px] font-bold leading-[1.4] text-white sm:text-[17px]">{{ land.title or '—' }}</h3>
 
-      <p class="text-[13px] leading-none text-slate-400 tabular-nums">{{ (land.price_total or 0)|toman }}</p>
+      <p class="text-[14px] leading-none text-slate-400 tabular-nums sm:text-[15px]">{{ (land.price_total or 0)|toman }}</p>
 
-      <p class="truncate text-[12px] leading-snug text-slate-500">
+      <p class="truncate text-[13px] leading-snug text-slate-500">
         {% if _in_tx %}
           <span class="text-orange-400">در حال معامله</span>
         {% elif _is_sold %}
@@ -46,13 +46,13 @@
       </p>
     </div>
 
-    <div class="relative h-[5.5rem] w-[5.5rem] shrink-0 sm:h-[6rem] sm:w-[6rem]">
+    <div class="relative h-[7.5rem] w-[7.5rem] shrink-0 sm:h-[8rem] sm:w-[8rem]">
       <div class="h-full w-full overflow-hidden rounded-xl bg-[#1a2332]">
         {% if img_src %}
         <img src="{{ img_src }}"
              alt=""
-             width="128"
-             height="128"
+             width="160"
+             height="160"
              {% if _img_eager %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %}
              class="h-full w-full object-cover">
         {% else %}
@@ -60,11 +60,11 @@
         {% endif %}
       </div>
       {% if has_video or photo_count > 0 %}
-      <span class="pointer-events-none absolute top-1.5 start-1.5 inline-flex items-center gap-0.5 rounded-md bg-black/60 px-1 py-0.5 text-[10px] font-medium text-white">
+      <span class="pointer-events-none absolute top-2 start-2 inline-flex items-center gap-0.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] font-medium text-white">
         {% if has_video %}
-        <i class="fas fa-video text-[8px] opacity-90" aria-hidden="true"></i>
+        <i class="fas fa-video text-[9px] opacity-90" aria-hidden="true"></i>
         {% else %}
-        <i class="fas fa-camera text-[8px] opacity-90" aria-hidden="true"></i>
+        <i class="fas fa-camera text-[9px] opacity-90" aria-hidden="true"></i>
         {% endif %}
         <span class="tabular-nums">{{ (photo_count if photo_count > 0 else 1)|fa_digits }}</span>
       </span>
