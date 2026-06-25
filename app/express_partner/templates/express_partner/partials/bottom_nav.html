@@ -301,6 +301,7 @@
            class="tg-tab flex flex-col items-center justify-center px-0.5 py-0.5 {{ 'tg-tab-active' if is_active else '' }} {{ 'tg-tab-disabled' if item.disabled else '' }}"
            aria-current="{{ 'page' if is_active else 'false' }}"
            aria-disabled="{{ 'true' if item.disabled else 'false' }}"
+           {% if item.disabled %}tabindex="-1"{% endif %}
            data-nav-key="{{ item.key }}">
           <span class="tg-tab-stack flex flex-col items-center justify-center gap-0.5 px-2 py-1">
             <span class="tg-tab-icon-wrap" aria-hidden="true">
@@ -353,6 +354,13 @@
     if (link) {
       e.preventDefault();
       e.stopPropagation();
+      if (!userLoggedIn) {
+        const key = link.getAttribute('data-nav-key') || '';
+        const dest = (link.getAttribute('href') || '').trim();
+        if ((key === 'favorites' || key === 'notifications') && dest && dest !== '#') {
+          window.location.href = '/express/partner/login?next=' + encodeURIComponent(dest);
+        }
+      }
     }
   }, true);
 
@@ -611,8 +619,41 @@
     return base + (isActive ? 'tg-tab-active ' : '') + (isDisabled ? 'tg-tab-disabled' : '');
   }
 
-  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v8';
+  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v9';
   const MENU_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+
+  const PROFILE_NAV_PATHS = [
+    '/express/partner/profile',
+    '/express/partner/notes',
+    '/express/partner/help',
+    '/express/partner/support',
+    '/express/partner/top-sellers',
+    '/express/partner/invite',
+    '/express/partner/training',
+    '/express/partner/routine',
+    '/express/partner/legal/privacy',
+    '/express/partner/legal/terms'
+  ];
+
+  function resolveActiveNavKey() {
+    let path = '';
+    try {
+      path = (window.location.pathname || '').replace(/\/$/, '') || '';
+    } catch (_) {}
+    if (path === '/express/partner/favorites') return 'favorites';
+    if (path === '/express/partner/notifications') return 'notifications';
+    if (path.indexOf('/express/partner/commissions') === 0) return 'commissions';
+    if (path === '/express/partner/dashboard' || path === '/express/partner/cooperation-terms') return 'dashboard';
+    for (let i = 0; i < PROFILE_NAV_PATHS.length; i++) {
+      const base = PROFILE_NAV_PATHS[i];
+      if (path === base || path.indexOf(base + '/') === 0) return 'profile';
+    }
+    return activeKey || '';
+  }
+
+  window.vinorClearBottomNavMenuCache = function () {
+    try { sessionStorage.removeItem(MENU_CACHE_KEY); } catch (_) {}
+  };
 
   function sanitizeMenu(menuItems) {
     return (menuItems || []).filter(function (item) {
@@ -643,14 +684,14 @@
     const cachedMenu = readMenuCache();
     if (cachedMenu) {
       renderMenu(cachedMenu);
-      return;
     }
 
     try {
       const response = await fetch('/api/menu', {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
-        credentials: 'same-origin'
+        credentials: 'same-origin',
+        cache: 'no-store'
       });
 
       if (!response.ok) {
@@ -673,13 +714,15 @@
     menuItems = sanitizeMenu(menuItems);
     if (!navContainer || !Array.isArray(menuItems) || menuItems.length === 0) return;
 
+    const currentActiveKey = resolveActiveNavKey();
+
     navContainer.innerHTML = '';
     var n = menuItems.length;
     navContainer.className = 'grid gap-0 min-h-[52px] w-full items-center';
     navContainer.style.gridTemplateColumns = 'repeat(' + n + ', minmax(0, 1fr))';
 
     menuItems.forEach(item => {
-      const isActive = activeKey === item.key;
+      const isActive = currentActiveKey === item.key;
       const isDisabled = item.disabled === true;
       const link = document.createElement('a');
       link.href = item.url || '#';
@@ -774,6 +817,7 @@
 
   window.addEventListener('storage', (e) => {
     if (e.key === 'vinor_session' || e.key === 'vinor_user') {
+      try { sessionStorage.removeItem(MENU_CACHE_KEY); } catch (_) {}
       loadMenuFromAPI();
     }
   });

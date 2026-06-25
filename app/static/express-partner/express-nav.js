@@ -15,9 +15,9 @@
     '/express/partner/commissions': { tab: 'commissions', depth: 0, bottomNav: true, prefetch: false },
     '/express/partner/profile': { tab: 'profile', depth: 0, bottomNav: true, prefetch: false },
     '/express/partner/profile/edit': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
-    '/express/partner/favorites': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/favorites': { tab: 'favorites', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/notes': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/notifications': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/notifications': { tab: 'notifications', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/help': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/support': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/top-sellers': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -312,7 +312,7 @@
   }
 
   function tabIndexForKey(key) {
-    var order = ['dashboard', 'commissions', 'profile'];
+    var order = ['dashboard', 'favorites', 'commissions', 'notifications', 'profile'];
     var i = order.indexOf(key);
     return i === -1 ? -1 : i;
   }
@@ -876,6 +876,11 @@
 
   function clearExpressPartnerRuntimeCaches() {
     try {
+      if (typeof window.vinorClearBottomNavMenuCache === 'function') {
+        window.vinorClearBottomNavMenuCache();
+      }
+    } catch (_) {}
+    try {
       if (navigator.serviceWorker && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_PARTNER_RUNTIME' });
       }
@@ -904,6 +909,11 @@
 
   function clearExpressPartnerCaches() {
     clearAllPrefetchCache();
+    try {
+      if (typeof window.vinorClearBottomNavMenuCache === 'function') {
+        window.vinorClearBottomNavMenuCache();
+      }
+    } catch (_) {}
     try {
       if (/VinorApp\//i.test(navigator.userAgent || '') &&
           window.VinorNativeShell &&
@@ -1165,7 +1175,12 @@
 
   function prefetchMainTabs() {
     try {
-      ['/express/partner/commissions', '/express/partner/profile'].forEach(function (path) {
+      [
+        '/express/partner/favorites',
+        '/express/partner/commissions',
+        '/express/partner/notifications',
+        '/express/partner/profile'
+      ].forEach(function (path) {
         prefetchHref(new URL(path, window.location.origin).href);
       });
     } catch (_) {}
