@@ -326,6 +326,22 @@ def enamad_seal():
         abort(502)
 
 
+@main_bp.route("/healthz", endpoint="healthz")
+def healthz():
+    """پین سلامت برای تشخیص آنلاین/آفلاین در کلاینت."""
+    resp = make_response("", 204)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
+
+
+@main_bp.route("/connection", endpoint="connection_check")
+def connection_check():
+    """صفحهٔ بررسی اتصال اینترنت."""
+    resp = make_response(render_template("system/connection.html"))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
+
+
 @main_bp.route("/uploads/<path:filename>", endpoint="uploaded_file")
 def uploaded_file(filename):
     """سرو فایل‌های آپلود — با پشتیبانی resize اختیاری (?w=&q=)."""

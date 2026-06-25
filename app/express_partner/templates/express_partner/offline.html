@@ -209,13 +209,20 @@
           }
           pingEl.textContent = 'پاسخ نامعتبر از سرور';
         } catch (e) {
-          pingEl.textContent = 'اتصال برقرار نیست';
+          pingEl.textContent = 'آفلاین هستید';
           setStatus('آفلاین', { bg: '#fee2e2', fg: '#b91c1c' });
         }
       }
 
       btnRetry.addEventListener('click', () => window.location.reload());
       btnCheck.addEventListener('click', () => ping());
+
+      if (!navigator.onLine) {
+        setStatus('آفلاین', { bg: '#fee2e2', fg: '#b91c1c' });
+        pingEl.textContent = 'آفلاین هستید';
+      } else {
+        ping();
+      }
 
       window.addEventListener('online', () => {
         setStatus('آنلاین', { bg: '#dcfce7', fg: '#166534' });
@@ -224,7 +231,7 @@
       });
       window.addEventListener('offline', () => {
         setStatus('آفلاین', { bg: '#fee2e2', fg: '#b91c1c' });
-        pingEl.textContent = 'همچنان آفلاین هستید';
+        pingEl.textContent = 'آفلاین هستید';
       });
     })();
   </script>

@@ -22,8 +22,7 @@
       <div class="vinor-dash-card-slot shrink-0 w-full">
         {% set tour_land_card = loop.first %}
         {% set card_img_eager = loop.index <= 1 %}
-        {% set card_layout = 'horizontal' %}
-        {% include 'express_partner/partials/land_premium_card.html' %}
+        {% include 'express_partner/partials/land_dashboard_card.html' %}
       </div>
     {% endfor %}
     {% if dashboard_lands_truncated %}

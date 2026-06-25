@@ -50,7 +50,7 @@
           if(res.ok){ statusEl.textContent = '✅ آنلاین هستید. در حال رفرش...'; location.reload(); return; }
           statusEl.textContent = '❌ پاسخ نامعتبر از سرور.';
         }catch(e){
-          statusEl.textContent = '❌ اتصال برقرار نیست.';
+          statusEl.textContent = '❌ آفلاین هستید.';
         }
         btn.disabled = false;
       }

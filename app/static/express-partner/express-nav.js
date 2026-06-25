@@ -874,10 +874,31 @@
   window.vinorExpressClearAuthCache = clearAuthPrefetchCache;
   window.vinorExpressClearPrefetchCache = clearAllPrefetchCache;
 
+  function clearExpressPartnerRuntimeCaches() {
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_PARTNER_RUNTIME' });
+      }
+    } catch (_) {}
+    try {
+      if (window.caches && window.caches.keys) {
+        return window.caches.keys().then(function (keys) {
+          return Promise.all(keys.filter(function (k) {
+            return k.indexOf('express-partner-runtime-') === 0 ||
+              k.indexOf('express-partner-api-') === 0;
+          }).map(function (k) { return window.caches.delete(k); }));
+        });
+      }
+    } catch (_) {}
+    return Promise.resolve();
+  }
+
   function vinorPostLoginNavigate(dest) {
     if (!dest) return;
     clearAuthPrefetchCache();
-    window.location.replace(dest);
+    clearExpressPartnerRuntimeCaches().finally(function () {
+      window.location.replace(dest);
+    });
   }
   window.vinorPostLoginNavigate = vinorPostLoginNavigate;
 
@@ -986,7 +1007,7 @@
       if (typeof e.button === 'number' && e.button !== 0) return;
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
 
-      var card = e.target.closest && e.target.closest('.express-card.vinor-premium-card[data-href]');
+      var card = e.target.closest && e.target.closest('.express-card[data-href]');
       if (card && !e.target.closest('[data-fav-code]')) {
         var cardHref = card.getAttribute('data-href');
         if (cardHref && isPartnerUrl(cardHref)) {

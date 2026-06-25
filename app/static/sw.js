@@ -57,6 +57,7 @@ const PRECACHE_URLS = [
   '/static/icons/icon-512.png',
   '/static/sounds/notify.mp3'
 ];
+const OFFLINE_URL = '/connection';
 // Precache local icon/font assets for full offline
 const LOCAL_ICON_FONT_ASSETS = [
   '/static/vendor/fontawesome/css/all.min.css',

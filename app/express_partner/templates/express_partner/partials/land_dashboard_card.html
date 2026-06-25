@@ -1,0 +1,68 @@
+{# کارت سبک داشبورد همکار — تصویر کوچک، بدون ویدیو/اسپینر/بوکمارک #}
+{% set img = (land.images[0] if land.images and land.images[0] else None) %}
+{% set photo_count = land.images|length if land.images else 0 %}
+{% set _st = (land._assignment_status|default('active')|string)|lower|trim %}
+{% set _is_sold = (_st == 'sold') %}
+{% set _in_tx = land._in_transaction or (_st == 'in_transaction') %}
+{% set loc_line = ([land.city, land.location]|select|join('، ')) if (land.city or land.location) else '' %}
+{% set _img_eager = card_img_eager|default(false) %}
+
+{% if img %}
+  {% if "://" in (img|string) %}
+    {% set img_src = img %}
+  {% else %}
+    {% set img_src = img|dashboard_card_thumb_url %}
+  {% endif %}
+{% endif %}
+
+<article {% if tour_land_card %}data-tour="land-card"{% endif %}
+         class="express-card vinor-dash-card relative w-full overflow-hidden rounded-xl border border-white/10 bg-[#121a22]{% if _is_sold %} vinor-card-sold{% else %} cursor-pointer{% endif %}"
+         {% if not _is_sold %}data-href="{{ land._detail_url or url_for('express_partner.land_detail', code=land.code) }}" role="link" tabindex="0"{% else %}data-assignment-status="sold" aria-disabled="true"{% endif %}>
+
+  <div class="flex min-h-[9rem] flex-row items-stretch">
+    <div class="relative w-[36%] max-w-[9rem] shrink-0 p-2">
+      <div class="relative h-full min-h-[7rem] overflow-hidden rounded-lg bg-[#1a2332]">
+        {% if img_src %}
+        <img src="{{ img_src }}"
+             alt=""
+             width="144"
+             height="112"
+             {% if _img_eager %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %}
+             class="h-full w-full object-cover">
+        {% else %}
+        <div class="grid h-full min-h-[7rem] place-items-center text-[11px] text-neutral-500">بدون تصویر</div>
+        {% endif %}
+        {% if photo_count > 1 %}
+        <span class="pointer-events-none absolute bottom-1 end-1 rounded bg-black/55 px-1 py-px text-[9px] text-white tabular-nums">{{ photo_count|fa_digits }}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="flex min-w-0 flex-1 flex-col justify-between gap-1.5 py-2 pe-2 ps-0.5">
+      <div class="min-w-0 space-y-1">
+        {% if _in_tx or _st == 'sold' or land._is_expired %}
+        <div class="flex flex-wrap gap-1">
+          {% if _in_tx %}
+          <span class="rounded bg-orange-600 px-1 py-0.5 text-[9px] font-bold text-white">معامله</span>
+          {% elif _st == 'sold' %}
+          <span class="vinor-sold-badge rounded bg-emerald-600 px-1 py-0.5 text-[9px] font-bold text-white">فروخته شد</span>
+          {% endif %}
+          {% if land._is_expired %}
+          <span class="rounded bg-red-600 px-1 py-0.5 text-[9px] text-white">منقضی</span>
+          {% endif %}
+        </div>
+        {% endif %}
+        <h3 class="line-clamp-2 text-[14px] font-bold leading-snug text-white">{{ land.title or '—' }}</h3>
+        {% if loc_line %}
+        <p class="truncate text-[11px] text-slate-400">{{ loc_line }}</p>
+        {% endif %}
+        <p class="text-sm font-bold tabular-nums text-white">{{ (land.price_total or 0)|toman }}</p>
+      </div>
+      {% if is_approved and land._commission_amount and not _is_sold %}
+      <p class="truncate text-[10px] font-medium text-emerald-400">
+        پورسانت: {{ (land._commission_amount or 0)|toman }}{% if land._commission_pct %} ({{ land._commission_pct }}٪){% endif %}
+      </p>
+      {% endif %}
+    </div>
+  </div>
+</article>

@@ -60,7 +60,7 @@
           <i class="fas fa-image text-2xl opacity-50"></i>
         </div>
         {% endif %}
-        {% if not _is_sold %}
+        {% if not _is_sold and not hide_card_fav|default(false) %}
         <button type="button"
                 data-fav-code="{{ land.code }}"
                 class="pointer-events-auto absolute top-1.5 end-1.5 z-10 grid h-8 w-8 place-items-center rounded-full bg-black/35 text-white backdrop-blur-sm border border-white/20"

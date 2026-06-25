@@ -29,6 +29,12 @@ def _image_thumb_url_filter(value: str | None) -> str:
     return gallery_display_url(value)
 
 
+@express_partner_bp.app_template_filter("dashboard_card_thumb_url")
+def _dashboard_card_thumb_url_filter(value: str | None) -> str:
+    from ..utils.images import gallery_display_url
+    return gallery_display_url(value, max_width=420, quality=72)
+
+
 @express_partner_bp.app_template_filter("image_display_full_url")
 def _image_display_full_url_filter(value: str | None) -> str:
     from ..utils.images import normalize_upload_url

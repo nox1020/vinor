@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.21-apk-offline-nav';
+const VERSION = 'v1.0.22-offline-cache-fix';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -142,8 +142,15 @@ function isAuthPartnerPath(pathname) {
     p === '/express/partner/verify';
 }
 
+function isNoStoreResponse(response) {
+  if (!response) return true;
+  const cc = (response.headers.get('cache-control') || '').toLowerCase();
+  return cc.includes('no-store') || cc.includes('private');
+}
+
 async function cacheApkNavigation(request, response) {
   if (!isVinorApkRequest(request) || !response || !response.ok) return;
+  if (isNoStoreResponse(response)) return;
   const url = new URL(request.url);
   if (isAuthPartnerPath(url.pathname)) return;
   const ct = (response.headers.get('content-type') || '').toLowerCase();
@@ -161,21 +168,7 @@ async function matchCachedNavigation(request) {
     let hit = await cache.match(request);
     if (hit) return hit;
     hit = await cache.match(request, { ignoreSearch: true });
-    if (hit) return hit;
-    const url = new URL(request.url);
-    if (!url.pathname.startsWith('/express/partner/')) return null;
-    const keys = await cache.keys();
-    for (let i = keys.length - 1; i >= 0; i--) {
-      const req = keys[i];
-      try {
-        const u = new URL(req.url);
-        if (u.pathname.startsWith('/express/partner/') && !isAuthPartnerPath(u.pathname)) {
-          hit = await cache.match(req);
-          if (hit) return hit;
-        }
-      } catch (_) {}
-    }
-    return null;
+    return hit || null;
   } catch (_) {
     return null;
   }
@@ -290,7 +283,7 @@ self.addEventListener('fetch', (event) => {
       const cache = await caches.open(API_CACHE);
       try {
         const resp = await fetch(request);
-        if (resp.ok) {
+        if (resp.ok && !isNoStoreResponse(resp)) {
           await trimCache(API_CACHE, 50);
           cache.put(request, resp.clone());
         }
@@ -390,6 +383,14 @@ self.addEventListener('message', (event) => {
         break;
       case 'SKIP_WAITING':
         self.skipWaiting();
+        break;
+      case 'CLEAR_PARTNER_RUNTIME':
+        event.waitUntil((async () => {
+          try {
+            await caches.delete(RUNTIME);
+            await caches.delete(API_CACHE);
+          } catch (_) {}
+        })());
         break;
       default:
         console.log('Express Partner SW: Unknown message type', event.data.type);

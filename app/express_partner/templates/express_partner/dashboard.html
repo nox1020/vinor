@@ -128,12 +128,8 @@
       background:linear-gradient(180deg,rgba(3,7,18,0.28) 0%,rgba(3,7,18,0.5) 100%);
       pointer-events:none;
     }
-    .vinor-card-sold [data-img-wrap] img,
-    .vinor-card-sold [data-img-wrap] video{
+    .vinor-card-sold img{
       filter:saturate(0.4) brightness(0.72);
-    }
-    .vinor-card-sold .card-img-loading{
-      opacity:0.35;
     }
     .vinor-card-sold .vinor-sold-badge{
       position:relative;
@@ -144,9 +140,6 @@
       box-shadow:0 0 0 1px rgba(255,255,255,0.12),0 4px 14px rgba(16,185,129,0.45);
       filter:none!important;
       opacity:1!important;
-    }
-    .vinor-premium-card .vinor-fav-icon.text-amber-400{
-      font-weight:900;
     }
     #dashboardFiltersStrip{
       display:none;
@@ -245,11 +238,8 @@
         width: 100%;
         margin: 0;
       }
-      #dashboardMobileCardsRoot .vinor-premium-card-mobile [data-img-wrap] *:not(button):not(.pointer-events-auto) {
+      #dashboardMobileCardsRoot .vinor-dash-card img {
         pointer-events: none;
-      }
-      #dashboardMobileCardsRoot .vinor-premium-card-mobile:not(.vinor-card-sold) [data-img-wrap] button {
-        pointer-events: auto !important;
       }
       #dashboardMobileCardsRoot .vinor-dash-card-tail {
         width: 100%;
@@ -277,28 +267,12 @@
         padding-right: max(0.25rem, env(safe-area-inset-right, 0px));
         gap: 0.625rem;
       }
-      #dashboardMobileCardsRoot .vinor-premium-card-mobile [data-img-wrap] *:not(button):not(.pointer-events-auto) {
+      #dashboardMobileCardsRoot .vinor-dash-card img {
         pointer-events: none;
       }
-      #dashboardMobileCardsRoot .vinor-premium-card-mobile:not(.vinor-card-sold) [data-img-wrap] button {
-        pointer-events: auto !important;
-      }
     }
-    /* لایه‌های مطلق داخل تصویر؛ دکمه علاقه‌مندی و برچسب‌ها با pe:auto */
-    #expressDashboardMain .vinor-premium-card [data-img-wrap] * {
-      pointer-events: none !important;
-    }
-    #expressDashboardMain .vinor-premium-card:not(.vinor-card-sold) [data-img-wrap] button,
-    #expressDashboardMain .vinor-premium-card:not(.vinor-card-sold) [data-img-wrap] .pointer-events-auto {
-      pointer-events: auto !important;
-    }
-    @media (max-width: 639px) {
-      #expressDashboardMain .vinor-premium-card-mobile:not(.vinor-card-sold) [data-img-wrap] button {
-        pointer-events: auto !important;
-      }
-    }
-    #cardsGrid .vinor-premium-card-mobile:not(.vinor-card-sold) [data-img-wrap] button {
-      pointer-events: auto !important;
+    #expressDashboardMain .vinor-dash-card img {
+      pointer-events: none;
     }
   </style>
 
@@ -407,7 +381,7 @@
     if (!mobileRoot) return;
 
     function premiumCardUnderPoint(clientX, clientY) {
-      const cards = mobileRoot.querySelectorAll('.express-card.vinor-premium-card[data-href]');
+      const cards = mobileRoot.querySelectorAll('.express-card[data-href]');
       for (let i = 0; i < cards.length; i++) {
         const card = cards[i];
         if (isSoldDashboardCard(card)) continue;
@@ -442,8 +416,6 @@
         const dy = Math.abs(t.clientY - touchStart.y);
         touchStart = null;
         if (dx > 14 || dy > 14) return;
-        const stack = document.elementsFromPoint(t.clientX, t.clientY);
-        if (stack.some(function (el) { return el.closest && el.closest('[data-fav-code]'); })) return;
         const card = premiumCardUnderPoint(t.clientX, t.clientY);
         if (!card) return;
         const href = card.getAttribute('data-href');
@@ -461,7 +433,6 @@
         if (Date.now() < suppressClickUntil) return;
         if (ev.defaultPrevented) return;
         if (typeof ev.button === 'number' && ev.button !== 0) return;
-        if (ev.target.closest && ev.target.closest('[data-fav-code]')) return;
         const card = premiumCardUnderPoint(ev.clientX, ev.clientY);
         if (!card) return;
         const href = card.getAttribute('data-href');
@@ -500,8 +471,7 @@
     if (!grid || grid.dataset.vinorNavBound === '1') return;
     grid.dataset.vinorNavBound = '1';
     grid.addEventListener('click', function (e) {
-      if (e.target.closest && e.target.closest('[data-fav-code]')) return;
-      const card = e.target.closest('.express-card.vinor-premium-card[data-href]');
+      const card = e.target.closest('.express-card[data-href]');
       if (!card || isSoldDashboardCard(card)) return;
       const href = card.getAttribute('data-href');
       if (href) {
@@ -510,7 +480,7 @@
       }
     });
     grid.addEventListener('keydown', function (event) {
-      const card = event.target.closest && event.target.closest('.express-card.vinor-premium-card[data-href]');
+      const card = event.target.closest && event.target.closest('.express-card[data-href]');
       if (!card || isSoldDashboardCard(card)) return;
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
@@ -523,177 +493,8 @@
     });
   }
 
-  function initDashboardCardMedia(scope) {
-    const root = scope || document;
-    root.querySelectorAll('[data-img-wrap]').forEach(function (wrap) {
-      if (wrap.dataset.vinorMediaInit === '1') return;
-      wrap.dataset.vinorMediaInit = '1';
-
-      const img = wrap.querySelector('[data-card-img]');
-      const vid = wrap.querySelector('video');
-      const loader = wrap.querySelector('.card-img-loading');
-
-      function hideLoader() {
-        if (!loader) return;
-        loader.classList.add('opacity-0', 'pointer-events-none');
-        setTimeout(function () {
-          try { loader.remove(); } catch (_) {}
-        }, 250);
-      }
-
-      function showMedia(el) {
-        if (el) el.classList.remove('opacity-0');
-        hideLoader();
-      }
-
-      if (!img && !vid) {
-        hideLoader();
-        return;
-      }
-
-      if (img) {
-        if (img.complete && img.naturalWidth > 0) showMedia(img);
-        else {
-          img.addEventListener('load', function () { showMedia(img); }, { once: true });
-          img.addEventListener('error', hideLoader, { once: true });
-        }
-      }
-
-      if (vid && !(vid.hasAttribute('data-vinor-lazy-video') && vid.dataset.vinorLazyLoaded !== '1')) {
-        const ready = function () { showMedia(vid); };
-        if (vid.readyState >= 2) ready();
-        else {
-          vid.addEventListener('loadeddata', ready, { once: true });
-          vid.addEventListener('error', hideLoader, { once: true });
-        }
-      }
-
-      setTimeout(hideLoader, 8000);
-    });
-  }
-
-  function initLazyCardVideos(scope) {
-    const root = scope || document;
-    const videos = root.querySelectorAll('video[data-vinor-lazy-video]');
-    if (!videos.length) return;
-
-    if (window.__vinorDashLazyIO) {
-      try {
-        window.__vinorDashLazyIO.forEach(function (io) { io.disconnect(); });
-      } catch (_) {}
-    }
-    window.__vinorDashLazyIO = [];
-
-    const mobileRoot = document.getElementById('dashboardMobileCardsRoot');
-    const desktopVideos = [];
-    const mobileVideos = [];
-
-    videos.forEach(function (vid) {
-      if (mobileRoot && mobileRoot.contains(vid)) mobileVideos.push(vid);
-      else desktopVideos.push(vid);
-    });
-
-    function pauseOtherCardVideos(exceptVid) {
-      document.querySelectorAll('video[data-vinor-lazy-video]').forEach(function (v) {
-        if (v === exceptVid) return;
-        try {
-          v.pause();
-          v.muted = true;
-          v.setAttribute('muted', '');
-        } catch (_) {}
-      });
-    }
-
-    function loadLazyCardVideo(vid) {
-      if (vid.dataset.vinorLazyLoaded === '1') {
-        pauseOtherCardVideos(vid);
-        try {
-          vid.muted = true;
-          vid.setAttribute('muted', '');
-          vid.play().catch(function () {});
-        } catch (_) {}
-        return;
-      }
-      const wrap = vid.closest('[data-img-wrap]');
-      const loader = wrap && wrap.querySelector('.card-img-loading');
-
-      function hideLoader() {
-        if (!loader) return;
-        loader.classList.add('opacity-0', 'pointer-events-none');
-        setTimeout(function () {
-          try { loader.remove(); } catch (_) {}
-        }, 250);
-      }
-
-      function showMedia() {
-        vid.classList.remove('opacity-0');
-        hideLoader();
-      }
-
-      vid.addEventListener('loadeddata', showMedia, { once: true });
-      vid.addEventListener('error', hideLoader, { once: true });
-      const source = vid.querySelector('source[data-src]');
-      if (source && source.dataset.src) {
-        source.src = source.dataset.src;
-        vid.load();
-      }
-      try {
-        vid.muted = true;
-        vid.setAttribute('muted', '');
-        pauseOtherCardVideos(vid);
-        vid.play().catch(function () {});
-      } catch (_) {}
-      vid.dataset.vinorLazyLoaded = '1';
-    }
-
-    function observeVideos(list, scrollRoot) {
-      if (!list.length) return;
-      if (!('IntersectionObserver' in window)) {
-        list.forEach(loadLazyCardVideo);
-        return;
-      }
-      var ioOpts = { rootMargin: '80px 0px', threshold: 0.15 };
-      if (scrollRoot) ioOpts.root = scrollRoot;
-      const io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (entry) {
-          var vid = entry.target;
-          if (entry.isIntersecting) {
-            loadLazyCardVideo(vid);
-          } else {
-            try {
-              vid.pause();
-              vid.muted = true;
-              vid.setAttribute('muted', '');
-            } catch (_) {}
-          }
-        });
-      }, ioOpts);
-      list.forEach(function (v) { io.observe(v); });
-      window.__vinorDashLazyIO.push(io);
-    }
-
-    var mobileScrollRoot = null;
-    if (mobileRoot) {
-      try {
-        const cs = window.getComputedStyle(mobileRoot);
-        const oy = cs.overflowY;
-        if (oy === 'auto' || oy === 'scroll') mobileScrollRoot = mobileRoot;
-      } catch (_) {}
-    }
-
-    observeVideos(desktopVideos, null);
-    observeVideos(mobileVideos, mobileScrollRoot);
-  }
-
   function reinitializeCards() {
-    initLazyCardVideos(document);
-    if (typeof window.vinorInitPremiumCards === 'function') {
-      window.vinorInitPremiumCards(document.getElementById('cardsTrack') || document.getElementById('cardsGrid') || document);
-    } else {
-      initDashboardCardMedia(document);
-    }
     applyJalaliDates(document);
-    if (typeof window.vinorSyncFavButtons === 'function') window.vinorSyncFavButtons();
     if (typeof window.__vinorDashboardSyncChrome === 'function') window.__vinorDashboardSyncChrome();
     try {
       if (typeof window.hideVinorPartnerSkeleton === 'function') window.hideVinorPartnerSkeleton();
