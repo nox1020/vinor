@@ -1,6 +1,5 @@
 {# نوار پایین — کپسول شیشه‌ای شناور (blur + نیمه‌شفاف) در همهٔ صفحات پرتال؛ شِل شفاف #}
 {% set bottom_nav_active = bottom_nav_active|default('') %}
-{% set bottom_nav_unread_url = url_for('express_partner.get_unread_count') %}
 <style>
   #bottomNavMenu.tg-tabbar-shell {
     pointer-events: none;
@@ -328,7 +327,6 @@
   try { document.documentElement.classList.add('vinor-has-apk-banner'); } catch (_) {}
   {% endif %}
   const activeKey = '{{ bottom_nav_active }}';
-  const unreadUrl = '{{ bottom_nav_unread_url }}';
   const userLoggedIn = {{ 'true' if session.get('user_phone') else 'false' }};
   const isVinorApk = {{ 'true' if is_vinor_apk|default(false) else 'false' }};
   const serverShowAppUpdate = {{ 'true' if show_app_update_nav|default(false) else 'false' }};
@@ -588,25 +586,6 @@
     } catch (_) {}
   });
 
-  function notifyCenterEnabled() {
-    try {
-      var cfg = window.VINOR_NOTIFY_CFG;
-      return cfg && (cfg.enabled === true || cfg.enabled === 'true');
-    } catch (_) {
-      return false;
-    }
-  }
-
-  async function refreshUnreadBadge() {
-    if (!userLoggedIn) return;
-    try {
-      const res = await fetch(unreadUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data && data.success) setNavBadge('notifications', data.unread_count || 0);
-    } catch (_) {}
-  }
-
   window.addEventListener('vinor:notifications:update', function (ev) {
     try {
       const u = ev && ev.detail && typeof ev.detail.unread !== 'undefined' ? ev.detail.unread : null;
@@ -776,7 +755,6 @@
       navContainer.appendChild(link);
     });
     syncUpdateNavFromStored();
-    if (userLoggedIn) refreshUnreadBadge();
   }
 
   if (serverShowAppUpdate) {
@@ -806,12 +784,10 @@
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
       loadMenuFromAPI();
-      refreshUnreadBadge();
       if (isVinorApkClient()) refreshUpdateNavFromServer();
     });
   } else {
     loadMenuFromAPI();
-    refreshUnreadBadge();
     if (isVinorApkClient()) refreshUpdateNavFromServer();
   }
 

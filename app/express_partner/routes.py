@@ -5173,7 +5173,7 @@ def delete_sale(sid: int):
 @require_partner_access(allow_pending=True)
 def notifications_page():
     me_phone = _normalize_phone((session.get('user_phone') or '').strip())
-    notifications = get_user_notifications(me_phone, limit=80) if me_phone else []
+    notifications = get_user_notifications(me_phone, limit=50) if me_phone else []
     unread = unread_count(me_phone) if me_phone else 0
     resp = make_response(render_template(
         'express_partner/notifications.html',
@@ -5214,10 +5214,12 @@ def get_unread_count():
     me_phone_raw = (session.get("user_phone") or "").strip()
     # استفاده از همان تابع normalize که در notifications.py استفاده می‌شود
     me_phone = _normalize_user_id(me_phone_raw) if me_phone_raw else ""
-    return jsonify({
+    resp = jsonify({
         "success": True,
         "unread_count": unread_count(me_phone)
     })
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 @express_partner_bp.route('/api/notifications/<string:notif_id>/read', methods=['POST'])

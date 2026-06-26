@@ -466,12 +466,12 @@ def mark_read(user_id: str, notif_id: str) -> bool:
     if not normalized_user_id:
         return False
     
-    data = _load_all()
+    data = _load_all_cached()
     items = data.get(normalized_user_id, [])
     
     # اگر با کلید normalize شده پیدا نشد، بررسی همه کلیدها
     if not isinstance(items, list) or not items:
-        for key in data.keys():
+        for key in list(data.keys()):
             normalized_key = _normalize_user_id(key)
             if normalized_key == normalized_user_id:
                 items = data.get(key, [])
@@ -514,12 +514,12 @@ def mark_all_read(user_id: str) -> int:
     if not normalized_user_id:
         return 0
     
-    data = _load_all()
+    data = _load_all_cached()
     items = data.get(normalized_user_id, [])
     
     # اگر با کلید normalize شده پیدا نشد، بررسی همه کلیدها
     if not isinstance(items, list) or not items:
-        for key in data.keys():
+        for key in list(data.keys()):
             normalized_key = _normalize_user_id(key)
             if normalized_key == normalized_user_id:
                 items = data.get(key, [])

@@ -921,6 +921,40 @@
         window.dispatchEvent(new CustomEvent(name, { detail }));
       }
 
+      async function fetchUnreadCount() {
+        if (!enabled || !endpoints.unread) return state.unread;
+        try {
+          const res = await fetch(endpoints.unread, {
+            credentials: 'same-origin',
+            headers: headers
+          });
+          if (!res.ok) {
+            if (res.status === 401) stopPolling();
+            return state.unread;
+          }
+          const data = await res.json();
+          if (!data || data.success !== true) return state.unread;
+          const nextUnread = Number(data.unread_count || 0);
+          if (nextUnread !== state.unread) {
+            state.unread = nextUnread;
+            notifyNativeUnread(nextUnread);
+            writeNotifyCache(state.notifications, nextUnread);
+            dispatch('vinor:notifications:update', cloneState());
+          }
+          return nextUnread;
+        } catch (_) {
+          return state.unread;
+        }
+      }
+
+      function isNotificationsPage() {
+        try {
+          return /\/express\/partner\/notifications\/?$/.test(window.location.pathname || '');
+        } catch (_) {
+          return false;
+        }
+      }
+
       async function fetchNotifications(force = false) {
         if (!enabled) {
           if (!bootstrapped) {
@@ -965,7 +999,7 @@
       function startPolling() {
         if (!enabled) return;
         stopPolling();
-        pollTimer = setInterval(fetchNotifications, isVinorApkClient() ? 15000 : 30000);
+        pollTimer = setInterval(fetchUnreadCount, isVinorApkClient() ? 45000 : 60000);
       }
 
       function stopPolling() {
@@ -995,7 +1029,6 @@
             notifyNativeUnread(state.unread);
             writeNotifyCache(state.notifications, state.unread);
             dispatch('vinor:notifications:update', cloneState());
-            fetchNotifications(true);
           } else {
             console.warn('Vinor notifications markAll failed:', data);
           }
@@ -1036,6 +1069,7 @@
       window.VinorNotifyCenter = {
         getState: cloneState,
         fetchList: fetchNotifications,
+        fetchUnread: fetchUnreadCount,
         markAll,
         markRead
       };
@@ -1046,14 +1080,22 @@
 
       if (enabled) {
         hydrateFromNotifyCache();
-        fetchNotifications(!readNotifyCache());
+        fetchUnreadCount();
+        if (!readNotifyCache()) {
+          fetchNotifications(true);
+        }
         document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible' && isNotifyCacheStale()) {
+          if (document.visibilityState !== 'visible') return;
+          fetchUnreadCount();
+          if (isNotificationsPage() || isNotifyCacheStale()) {
             fetchNotifications(true);
           }
         });
         window.addEventListener('focus', () => {
-          if (isNotifyCacheStale()) fetchNotifications(true);
+          fetchUnreadCount();
+          if (isNotificationsPage() || isNotifyCacheStale()) {
+            fetchNotifications(true);
+          }
         }, { passive: true });
         startPolling();
       } else {
@@ -1104,7 +1146,7 @@
 
             if (typeof VinorNotifyCenter !== 'undefined') {
               const revalidate = function () {
-                VinorNotifyCenter.fetchList(false);
+                VinorNotifyCenter.fetchList(true);
               };
               if (typeof requestIdleCallback === 'function') {
                 requestIdleCallback(revalidate, { timeout: 3500 });
@@ -1157,6 +1199,29 @@
             if (!notifId) return;
             VinorNotifyCenter.markRead(notifId);
           },
+          openNotification(notif) {
+            if (!notif) return;
+            if (!notif.is_read) this.markRead(notif);
+            const url = (notif.action_url || '').trim();
+            if (!url) return;
+            try {
+              if (typeof window.vinorExpressNavigate === 'function' && url.indexOf('/express/partner/') === 0) {
+                window.vinorExpressNavigate(url, { forward: true });
+                return;
+              }
+            } catch (_) {}
+            window.location.href = url;
+          },
+          senderLabel(notif) {
+            if (!notif) return 'وینور';
+            const src = String(notif.source || '').toLowerCase();
+            if (src === 'admin' || src === 'broadcast') return 'وینور';
+            const t = String(notif.type || '').toLowerCase();
+            if (t === 'success') return 'تراکنش';
+            if (t === 'warning') return 'یادآوری';
+            if (t === 'error') return 'هشدار';
+            return 'وینور';
+          },
           openLink(url) {
             if (url) window.location.href = url;
           },
@@ -1177,6 +1242,49 @@
             } catch {
               return '';
             }
+          },
+          formatRelativeDate(ts) {
+            if (!ts) return '';
+            try {
+              const value = typeof ts === 'number' ? ts : Number(ts);
+              const date = String(value).length > 10 ? new Date(value) : new Date(value * 1000);
+              if (isNaN(date.getTime())) return '';
+              const now = Date.now();
+              const diffMin = Math.floor((now - date.getTime()) / 60000);
+              const fa = (n) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+              if (diffMin < 1) return 'همین الان';
+              if (diffMin < 60) return fa(diffMin) + ' دقیقه پیش';
+              const diffHr = Math.floor(diffMin / 60);
+              if (diffHr < 24) return fa(diffHr) + ' ساعت پیش';
+              const startToday = new Date();
+              startToday.setHours(0, 0, 0, 0);
+              const startYesterday = new Date(startToday);
+              startYesterday.setDate(startYesterday.getDate() - 1);
+              if (date >= startToday) {
+                return date.toLocaleTimeString('fa-IR', {
+                  timeZone: 'Asia/Tehran',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
+              }
+              if (date >= startYesterday) return 'دیروز';
+              const diffDay = Math.floor(diffHr / 24);
+              if (diffDay < 7) return fa(diffDay) + ' روز پیش';
+              return date.toLocaleDateString('fa-IR', {
+                timeZone: 'Asia/Tehran',
+                month: 'short',
+                day: 'numeric'
+              });
+            } catch {
+              return '';
+            }
+          },
+          avatarTone(type) {
+            const t = String(type || 'info').toLowerCase();
+            if (t === 'success') return { ring: 'ring-emerald-500/25', bg: 'bg-emerald-500/15', icon: 'fa-check text-emerald-400' };
+            if (t === 'warning') return { ring: 'ring-amber-500/25', bg: 'bg-amber-500/15', icon: 'fa-exclamation text-amber-400' };
+            if (t === 'error') return { ring: 'ring-red-500/25', bg: 'bg-red-500/15', icon: 'fa-times text-red-400' };
+            return { ring: 'ring-sky-500/25', bg: 'bg-sky-500/15', icon: 'fa-bell text-sky-400' };
           },
           iconClass(type) {
             if (type === 'success') return 'fa-check-circle text-green-500';

@@ -1,135 +1,133 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}اعلان‌ها | وینور اکسپرس{% endblock %}
 
+{% block styles %}
+  {{ super() }}
+  <style>
+    .vinor-notify-row {
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .vinor-notify-skel {
+      animation: vinor-notify-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes vinor-notify-pulse {
+      0%, 100% { opacity: 0.45; }
+      50% { opacity: 0.9; }
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
 <script>window.__VINOR_NOTIFY_SEED__={{ {'notifications': notifications, 'unread': unread_count|default(0)}|tojson }};</script>
 <div x-data="vinorNotificationsPage(window.__VINOR_NOTIFY_SEED__.notifications, window.__VINOR_NOTIFY_SEED__.unread)" x-init="init()">
 
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(id='profileNotificationsHeader') }}
-{% call ep_header_row('اعلان‌های من', url_for('express_partner.profile')) %}
-  <button type="button"
-          class="ep-partner-header-btn ep-partner-header-btn--text"
-          :disabled="loading || unreadCount === 0"
-          @click="markAll()">
-    همه خوانده
-  </button>
-{% endcall %}
-{{ ep_header_end() }}
+  {% call ep_header_row('اعلان‌ها', url_for('express_partner.profile')) %}{% endcall %}
+  {{ ep_header_end() }}
 
-<div class="partner-page-scroll-pad min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
+<div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
 
-  <div class="mx-auto max-w-lg px-4 sm:px-6">
+  <div class="mx-auto max-w-lg">
 
-    <!-- Push prompt — deferred so list paints first -->
-    <div x-data="pushPromptComponent()" x-init="deferCheck()" class="mt-4">
+    <!-- نوار وضعیت — شبیه هدر لیست چت دیوار -->
+    <div class="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-2.5 text-xs sm:px-6">
+      <span class="text-zinc-500" x-show="unreadCount > 0" x-cloak>
+        <span class="font-semibold text-white tabular-nums" x-text="unreadCount > 99 ? '۹۹+' : unreadCount"></span>
+        <span class="ms-1">خوانده‌نشده</span>
+      </span>
+      <span class="text-zinc-600" x-show="unreadCount === 0" x-cloak>همه را خوانده‌اید</span>
+      <button type="button"
+              class="shrink-0 font-medium text-sky-400 transition hover:text-sky-300 disabled:pointer-events-none disabled:opacity-35"
+              :disabled="loading || unreadCount === 0"
+              @click="markAll()">
+        خواندن همه
+      </button>
+    </div>
+
+    <!-- بنر push — فشرده -->
+    <div x-data="pushPromptComponent()" x-init="deferCheck()" class="px-4 sm:px-6">
       <div x-show="showPrompt"
            x-cloak
-           x-transition:enter="transition ease-out duration-200"
-           x-transition:enter-start="opacity-0 scale-95"
-           x-transition:enter-end="opacity-100 scale-100"
-           x-transition:leave="transition ease-in duration-150"
-           x-transition:leave-start="opacity-100 scale-100"
-           x-transition:leave-end="opacity-0 scale-95"
-           class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-        <div class="flex items-start gap-3">
-          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/15">
-            <i class="fas fa-bell text-base text-emerald-400"></i>
-          </div>
-          <div class="min-w-0 flex-1">
-            <h3 class="mb-1 text-sm font-semibold text-white">فعال‌سازی اعلان‌های فوری</h3>
-            <p class="mb-3 text-xs leading-relaxed text-zinc-400">برای دریافت اعلان‌های فوری از مرورگر، اجازه ارسال اعلان را فعال کنید.</p>
-            <div class="flex items-center gap-2">
-              <button type="button"
-                      @click="enablePush()"
-                      :disabled="loading"
-                      class="flex items-center gap-2 rounded-lg border border-emerald-500 bg-emerald-600 px-4 py-2 text-xs font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50">
-                <i class="fas" :class="loading ? 'fa-spinner fa-spin' : 'fa-check'"></i>
-                <span x-text="loading ? 'در حال فعال‌سازی...' : 'فعال‌سازی'"></span>
-              </button>
-              <button type="button"
-                      @click="dismiss()"
-                      class="rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-zinc-400 transition hover:bg-white/5 hover:text-white">
-                بعداً
-              </button>
-            </div>
-          </div>
-          <button type="button"
-                  @click="dismiss()"
-                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-300">
-            <i class="fas fa-times text-xs"></i>
-          </button>
+           class="mt-2 flex items-center gap-2.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2.5">
+        <i class="fas fa-bell shrink-0 text-sm text-emerald-400" aria-hidden="true"></i>
+        <p class="min-w-0 flex-1 text-[11px] leading-relaxed text-zinc-400">اعلان فوری مرورگر را فعال کنید</p>
+        <button type="button"
+                @click="enablePush()"
+                :disabled="loading"
+                class="shrink-0 rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white">
+          فعال‌سازی
+        </button>
+        <button type="button" @click="dismiss()" class="shrink-0 p-1 text-zinc-500 hover:text-zinc-300" aria-label="بستن">
+          <i class="fas fa-times text-[10px]"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- اسکلتون -->
+    <div x-show="loading && items.length === 0" x-cloak class="divide-y divide-white/10">
+      <div class="flex items-center gap-3 px-4 py-3.5 sm:px-6" aria-hidden="true">
+        <div class="vinor-notify-skel h-12 w-12 shrink-0 rounded-full bg-white/10"></div>
+        <div class="min-w-0 flex-1 space-y-2">
+          <div class="vinor-notify-skel h-3.5 w-2/5 rounded bg-white/10"></div>
+          <div class="vinor-notify-skel h-3 w-4/5 rounded bg-white/10"></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 px-4 py-3.5 sm:px-6" aria-hidden="true">
+        <div class="vinor-notify-skel h-12 w-12 shrink-0 rounded-full bg-white/10"></div>
+        <div class="min-w-0 flex-1 space-y-2">
+          <div class="vinor-notify-skel h-3.5 w-1/3 rounded bg-white/10"></div>
+          <div class="vinor-notify-skel h-3 w-3/5 rounded bg-white/10"></div>
         </div>
       </div>
     </div>
 
-    <!-- Loading skeleton (only when no SSR data) -->
-    <div x-show="loading && items.length === 0" x-cloak class="mt-4 space-y-3">
-      <div class="h-20 animate-pulse rounded-xl bg-white/5"></div>
-      <div class="h-20 animate-pulse rounded-xl bg-white/5"></div>
-      <div class="h-20 animate-pulse rounded-xl bg-white/5"></div>
-    </div>
-
-    <!-- Empty -->
-    <div x-show="!loading && items.length === 0" x-cloak class="mt-8">
-      <div class="rounded-xl border border-white/10 bg-white/[0.03] p-12 text-center">
-        <div class="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/5 text-zinc-600">
-          <i class="fas fa-bell-slash text-2xl"></i>
-        </div>
-        <p class="text-sm text-zinc-500">اعلانی برای نمایش وجود ندارد.</p>
+    <!-- خالی -->
+    <div x-show="!loading && items.length === 0" x-cloak class="px-4 py-16 text-center sm:px-6">
+      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/5 text-zinc-600">
+        <i class="far fa-comment-dots text-2xl" aria-hidden="true"></i>
       </div>
+      <p class="text-sm font-medium text-zinc-400">اعلانی ندارید</p>
+      <p class="mt-1 text-xs text-zinc-600">وقتی خبری باشد اینجا می‌بینید</p>
     </div>
 
-    <!-- List -->
-    <div class="mt-4 space-y-3 sm:space-y-4" x-show="items.length > 0">
+    <!-- لیست — الگوی ردیف چت دیوار -->
+    <div x-show="items.length > 0" class="divide-y divide-white/10">
       <template x-for="(notif, index) in items" :key="notif.id || ('notif-' + index)">
-        <article class="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/20 sm:p-5"
-                 :class="!notif.is_read ? 'border-r-2 border-r-emerald-500' : ''">
-          <div class="flex items-start gap-3">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5"
-                 :class="{
-                   'border-blue-500/30 bg-blue-500/10': notif.type === 'info',
-                   'border-emerald-500/30 bg-emerald-500/10': notif.type === 'success',
-                   'border-amber-500/30 bg-amber-500/10': notif.type === 'warning',
-                   'border-red-500/30 bg-red-500/10': notif.type === 'error'
-                 }">
-              <i class="fas text-base"
-                 :class="{
-                   'fa-info-circle text-blue-400': notif.type === 'info',
-                   'fa-check-circle text-emerald-400': notif.type === 'success',
-                   'fa-exclamation-triangle text-amber-400': notif.type === 'warning',
-                   'fa-times-circle text-red-400': notif.type === 'error',
-                   'fa-bell text-zinc-400': !['info', 'success', 'warning', 'error'].includes(notif.type)
-                 }"></i>
+        <button type="button"
+                class="vinor-notify-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors sm:px-6 sm:py-4"
+                :class="!notif.is_read ? 'bg-white/[0.03] hover:bg-white/[0.05]' : 'hover:bg-white/[0.02]'"
+                @click="openNotification(notif)">
+          <div class="relative shrink-0">
+            <div class="flex h-12 w-12 items-center justify-center rounded-full ring-1 sm:h-[3.25rem] sm:w-[3.25rem]"
+                 :class="[avatarTone(notif.type).bg, avatarTone(notif.type).ring]">
+              <i class="fas text-base" :class="avatarTone(notif.type).icon" aria-hidden="true"></i>
             </div>
-            <div class="min-w-0 flex-1">
-              <div class="mb-2 flex items-start justify-between gap-3">
-                <h3 class="text-sm font-semibold leading-snug text-white" x-text="notif.title || 'اعلان جدید'"></h3>
-                <div class="flex shrink-0 items-center gap-2">
-                  <span x-show="!notif.is_read" class="h-2 w-2 rounded-full bg-emerald-400"></span>
-                  <span class="whitespace-nowrap text-xs text-zinc-500" x-text="formatDate(notif.created_at)"></span>
-                </div>
-              </div>
-              <p class="mb-3 text-sm leading-relaxed text-zinc-300" x-text="notif.body"></p>
-              <div class="flex items-center gap-2 border-t border-white/5 pt-2">
-                <button type="button"
-                        class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        :disabled="notif.is_read"
-                        @click.prevent="markRead(notif)">
-                  <i class="fas fa-check mr-1.5 text-[10px]"></i>
-                  خوانده شد
-                </button>
-                <button type="button"
-                        x-show="notif.action_url"
-                        class="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/5 hover:text-white"
-                        @click="openLink(notif.action_url)">
-                  <i class="fas fa-arrow-left mr-1.5 text-[10px]"></i>
-                  جزئیات
-                </button>
-              </div>
-            </div>
+            <span x-show="!notif.is_read"
+                  class="absolute top-0.5 end-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#030712]"
+                  aria-hidden="true"></span>
           </div>
-        </article>
+
+          <div class="min-w-0 flex-1">
+            <div class="mb-0.5 flex items-baseline justify-between gap-2">
+              <span class="truncate text-[15px] leading-tight"
+                    :class="!notif.is_read ? 'font-bold text-white' : 'font-medium text-zinc-300'"
+                    x-text="senderLabel(notif)"></span>
+              <span class="shrink-0 text-[11px] leading-none text-zinc-500 tabular-nums"
+                    x-text="formatRelativeDate(notif.created_at)"></span>
+            </div>
+            <p class="truncate text-[13px] leading-snug"
+               :class="!notif.is_read ? 'font-medium text-zinc-200' : 'text-zinc-400'"
+               x-text="notif.title || 'اعلان جدید'"></p>
+            <p class="mt-0.5 line-clamp-2 text-[12px] leading-[1.45] text-zinc-500"
+               x-text="notif.body"></p>
+          </div>
+
+          <i x-show="notif.action_url"
+             class="fas fa-chevron-left shrink-0 text-[10px] text-zinc-600"
+             aria-hidden="true"></i>
+        </button>
       </template>
     </div>
   </div>
@@ -183,6 +181,10 @@
           },
           checkSubscription: async function () {
             try {
+              if (/VinorApp\//i.test(navigator.userAgent || '')) {
+                this.showPrompt = false;
+                return;
+              }
               if (!('Notification' in window) || !('serviceWorker' in navigator) || !VAPID_PUBLIC_KEY) {
                 this.showPrompt = false;
                 return;
