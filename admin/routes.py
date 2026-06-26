@@ -65,6 +65,7 @@ from admin.people_directory import (
     build_admin_people_directory,
     get_admin_person_by_phone,
     group_people_for_admin_list,
+    resolve_admin_person_name,
 )
 from app.utils.storage import (
     load_express_partner_apps,
@@ -3578,9 +3579,18 @@ def express_partner_detail(phone: str):
                         person['profile'] = prof
                         person['partner'] = partner_rec
                     break
-        if ref_by and (person.get('access') or {}).get('partner_approved'):
+        if ref_by:
+            if not (prof.get('referred_by_name') or '').strip():
+                dir_kw = _admin_people_directory_kwargs()
+                prof['referred_by_name'] = resolve_admin_person_name(
+                    ref_by,
+                    normalize_phone=dir_kw['normalize_phone'],
+                    load_users=dir_kw['load_users'],
+                    load_express_partners=dir_kw['load_express_partners'],
+                )
             prof['referred_by_phone'] = ref_by
             person['profile'] = prof
+        if ref_by and (person.get('access') or {}).get('partner_approved'):
             if partner_rec.get('referral_grant_pending'):
                 show_referral_retry = True
             else:

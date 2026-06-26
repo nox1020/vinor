@@ -254,6 +254,7 @@ def _admin_bank_account_dict(row: Dict[str, Any]) -> Dict[str, Any]:
 def _build_profile(row: Dict[str, Any]) -> Dict[str, Any]:
     partner = row.get('partner') or {}
     user = row.get('user') or {}
+    application = row.get('application') or {}
     return {
 
         'landline': (partner.get('landline') or user.get('landline') or '').strip(),
@@ -272,7 +273,13 @@ def _build_profile(row: Dict[str, Any]) -> Dict[str, Any]:
 
         'total_income': _amount_int(partner.get('total_income')),
 
-        'referred_by_phone': (partner.get('referred_by_phone') or '').strip(),
+        'referred_by_phone': (
+            partner.get('referred_by_phone')
+            or application.get('referred_by_phone')
+            or ''
+        ).strip(),
+
+        'referred_by_name': '',
 
         'referral_grant_pending': bool(partner.get('referral_grant_pending')),
 
@@ -293,7 +300,51 @@ def _build_profile(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _enrich_referrer_names(people: Dict[str, Dict[str, Any]]) -> None:
+    """نام معرف را از همان فهرست اشخاص resolve می‌کند."""
+    name_by_phone: Dict[str, str] = {}
+    for row in people.values():
+        ph = str(row.get('phone') or '').strip()
+        if not ph:
+            continue
+        nm = str(row.get('name') or '').strip()
+        if nm:
+            name_by_phone[ph] = nm
+    for row in people.values():
+        prof = row.get('profile')
+        if not isinstance(prof, dict):
+            continue
+        ref_ph = str(prof.get('referred_by_phone') or '').strip()
+        prof['referred_by_name'] = name_by_phone.get(ref_ph, '') if ref_ph else ''
 
+
+def resolve_admin_person_name(
+    phone: str,
+    *,
+    normalize_phone,
+    load_users,
+    load_express_partners,
+) -> str:
+    """نام نمایشی یک شماره (برای معرف وقتی فقط از referrals آمده)."""
+    raw = str(phone or '').strip()
+    if not raw:
+        return ''
+    target = normalize_phone(raw) or raw
+    for pr in load_express_partners() or []:
+        if not isinstance(pr, dict):
+            continue
+        p = normalize_phone(pr.get('phone')) or str(pr.get('phone') or '').strip()
+        if p == target:
+            return str(pr.get('name') or '').strip()
+    for u in load_users() or []:
+        if not isinstance(u, dict):
+            continue
+        p = normalize_phone(u.get('phone') or u.get('mobile')) or str(
+            u.get('phone') or u.get('mobile') or ''
+        ).strip()
+        if p == target:
+            return str(u.get('name') or u.get('fullname') or '').strip()
+    return ''
 
 
 def _aggregate_activity_stats(rows: Iterable[Dict[str, Any]]) -> Dict[str, int]:
@@ -1078,7 +1129,7 @@ def build_admin_people_directory(
 
         }
 
-
+    _enrich_referrer_names(people)
 
     items = list(people.values())
 
@@ -1109,6 +1160,10 @@ def build_admin_people_directory(
                 str(prof.get('landline') or ''),
 
                 str(prof.get('bio') or ''),
+
+                str(prof.get('referred_by_phone') or ''),
+
+                str(prof.get('referred_by_name') or ''),
 
             ]).lower()
 

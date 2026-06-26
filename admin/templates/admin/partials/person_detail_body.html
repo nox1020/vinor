@@ -105,8 +105,10 @@
             <dt class="text-gray-400 mb-0.5">معرف</dt>
             <dd>
               <a href="{{ url_for('admin.express_partner_detail', phone=prof.referred_by_phone, q=back_q or '', filter=back_filter or 'all') }}"
-                 class="text-blue-600 dark:text-blue-400 hover:underline ltr inline-flex items-center gap-1 font-semibold" dir="ltr">
-                {{ prof.referred_by_phone }}<i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                 class="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 font-semibold">
+                {% if prof.referred_by_name %}<span>{{ prof.referred_by_name }}</span><span class="opacity-40 mx-0.5">·</span>{% endif %}
+                <span class="ltr" dir="ltr">{{ prof.referred_by_phone }}</span>
+                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
               </a>
             </dd>
           </div>
