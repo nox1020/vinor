@@ -2,81 +2,399 @@
 {% block title %}ثبت آگهی Express{% endblock %}
 {% block page_title %}ثبت آگهی{% endblock %}
 
+{% block admin_topbar %}{% endblock %}
+{% block admin_bottom_nav %}{% endblock %}
+{% block admin_main_pad_class %}pb-2 lg:pb-6{% endblock %}
+
 {% block head %}
   {{ super() }}
   <style>
-    .ad-inp{width:100%;border:1px solid rgb(229 231 235);border-radius:.5rem;padding:.5rem .75rem;background:#fff;font-size:.875rem}
-    .dark .ad-inp{border-color:rgb(55 65 81);background:rgb(17 24 39);color:#fff}
-    .ad-inp:focus{outline:2px solid #2563eb;outline-offset:0}
-    .ad-label{display:block;font-size:.75rem;font-weight:500;color:rgb(75 85 99);margin-bottom:.25rem}
-    .dark .ad-label{color:rgb(156 163 175)}
-    .ad-section{border-radius:.75rem;border:1px solid rgb(229 231 235);background:#fff;padding:1rem}
-    .dark .ad-section{border-color:rgb(55 65 81);background:rgb(17 24 39)}
+    .dv-page { margin: -1rem -0.75rem 0; }
+    @media (min-width: 640px) { .dv-page { margin: -1.5rem -1rem 0; } }
+
+    .dv-inp, .ad-inp {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      font-size: 0.875rem;
+      color: rgb(17 24 39);
+      padding: 0;
+    }
+    .dark .dv-inp, .dark .ad-inp { color: rgb(243 244 246); }
+    .dv-inp:focus, .ad-inp:focus { outline: none; }
+    .dv-inp::placeholder, .ad-inp::placeholder { color: rgb(156 163 175); }
+    select.dv-inp, select.ad-inp {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: left 0 center;
+      background-size: 1rem;
+      padding-left: 1.25rem;
+    }
+    .dv-inp[readonly], .ad-inp[readonly] { color: rgb(107 114 128); }
+
+    .dv-card {
+      border-radius: 0.75rem;
+      border: 1px solid rgb(229 231 235);
+      background: #fff;
+      overflow: hidden;
+    }
+    .dark .dv-card {
+      border-color: rgb(55 65 81);
+      background: rgb(17 24 39);
+    }
+    .dv-card-title {
+      padding: 0.75rem 1rem 0.25rem;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: rgb(107 114 128);
+      text-transform: uppercase;
+    }
+    .dv-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.875rem 1rem;
+      border-top: 1px solid rgb(243 244 246);
+    }
+    .dark .dv-row { border-top-color: rgb(31 41 55); }
+    .dv-row-stack { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+    .dv-label {
+      flex: 0 0 38%;
+      max-width: 9rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: rgb(55 65 81);
+      line-height: 1.4;
+    }
+    .dark .dv-label { color: rgb(209 213 219); }
+    .dv-field { flex: 1; min-width: 0; }
+    .dv-hint {
+      font-size: 0.6875rem;
+      color: rgb(156 163 175);
+      margin-top: 0.25rem;
+      line-height: 1.5;
+    }
+    .dv-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      width: 100%;
+    }
+    .dv-toggle input[type="checkbox"] {
+      width: 2.75rem;
+      height: 1.5rem;
+      border-radius: 9999px;
+      appearance: none;
+      background: rgb(229 231 235);
+      position: relative;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .dark .dv-toggle input[type="checkbox"] { background: rgb(55 65 81); }
+    .dv-toggle input[type="checkbox"]::after {
+      content: "";
+      position: absolute;
+      top: 0.125rem;
+      right: 0.125rem;
+      width: 1.25rem;
+      height: 1.25rem;
+      border-radius: 9999px;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,.12);
+      transition: transform 0.15s;
+    }
+    .dv-toggle input[type="checkbox"]:checked { background: rgb(37 99 235); }
+    .dv-toggle input[type="checkbox"]:checked::after { transform: translateX(-1.25rem); }
+
+    #dropzone {
+      border: 1.5px dashed rgb(191 219 254);
+      border-radius: 0.75rem;
+      background: rgb(239 246 255 / 0.5);
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .dark #dropzone {
+      border-color: rgb(30 64 175);
+      background: rgb(30 58 138 / 0.15);
+    }
+    #dropzone:hover { border-color: rgb(59 130 246); }
+
+    .dv-media-pick {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      width: 100%;
+      padding: 0.75rem;
+      border: 1.5px dashed rgb(209 213 219);
+      border-radius: 0.75rem;
+      background: rgb(249 250 251 / 0.6);
+      cursor: pointer;
+      text-align: right;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .dark .dv-media-pick {
+      border-color: rgb(55 65 81);
+      background: rgb(17 24 39 / 0.5);
+    }
+    .dv-media-pick:hover { border-color: rgb(59 130 246); background: rgb(239 246 255 / 0.5); }
+    .dark .dv-media-pick:hover { background: rgb(30 58 138 / 0.15); }
+    .dv-media-pick.has-file {
+      border-style: solid;
+      border-color: rgb(191 219 254);
+      background: rgb(239 246 255 / 0.35);
+    }
+    .dark .dv-media-pick.has-file {
+      border-color: rgb(30 64 175);
+      background: rgb(30 58 138 / 0.12);
+    }
+    .dv-media-pick__icon {
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 9999px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      font-size: 0.875rem;
+    }
+    .dv-media-pick__icon--video { background: rgb(219 234 254); color: rgb(37 99 235); }
+    .dark .dv-media-pick__icon--video { background: rgb(30 58 138 / 0.45); color: rgb(147 197 253); }
+    .dv-media-pick__icon--doc { background: rgb(243 244 246); color: rgb(107 114 128); }
+    .dark .dv-media-pick__icon--doc { background: rgb(31 41 55); color: rgb(156 163 175); }
+    .dv-media-pick__body { flex: 1; min-width: 0; }
+    .dv-media-pick__title { font-size: 0.8125rem; font-weight: 600; color: rgb(17 24 39); }
+    .dark .dv-media-pick__title { color: rgb(243 244 246); }
+    .dv-media-pick__hint { font-size: 0.625rem; color: rgb(156 163 175); margin-top: 0.125rem; }
+    .dv-media-pick__name {
+      font-size: 0.6875rem;
+      color: rgb(37 99 235);
+      margin-top: 0.25rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      direction: ltr;
+      text-align: left;
+    }
+    .dark .dv-media-pick__name { color: rgb(147 197 253); }
+    .dv-media-pick__action {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      color: rgb(37 99 235);
+      flex-shrink: 0;
+    }
+    .dark .dv-media-pick__action { color: rgb(147 197 253); }
+    .dv-media-pick__clear {
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: 9999px;
+      display: grid;
+      place-items: center;
+      color: rgb(107 114 128);
+      flex-shrink: 0;
+    }
+    .dv-media-pick__clear:hover { background: rgb(254 226 226); color: rgb(220 38 38); }
+    .dark .dv-media-pick__clear:hover { background: rgb(127 29 29 / 0.35); color: rgb(248 113 113); }
+    #videoPreviewWrap video {
+      width: 100%;
+      border-radius: 0.75rem;
+      border: 1px solid rgb(229 231 235);
+      background: #000;
+      max-height: 12rem;
+    }
+    .dark #videoPreviewWrap video { border-color: rgb(55 65 81); }
+
+    #imagePreview {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.25rem;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+    #imagePreview > div {
+      flex: 0 0 4.5rem;
+      scroll-snap-align: start;
+    }
+    .dv-thumb {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      border: 1px solid rgb(229 231 235);
+      background: rgb(243 244 246);
+    }
+    .dark .dv-thumb { border-color: rgb(55 65 81); background: rgb(31 41 55); }
+    .dv-thumb.is-uploading img { opacity: 0.55; filter: blur(1px); }
+    .dv-thumb.is-error { border-color: rgb(239 68 68); }
+    .dv-thumb-overlay {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      background: rgba(255,255,255,.35); color: rgb(37 99 235);
+    }
+    .dark .dv-thumb-overlay { background: rgba(0,0,0,.35); color: rgb(147 197 253); }
+    .dv-thumb-badge {
+      position: absolute; bottom: 0.25rem; right: 0.25rem;
+      font-size: 0.5625rem; font-weight: 700; padding: 0.125rem 0.375rem;
+      border-radius: 9999px; background: rgba(16,185,129,.92); color: #fff;
+    }
+    @media (min-width: 640px) {
+      #imagePreview {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        overflow-x: visible;
+      }
+      #imagePreview > div { flex: unset; }
+    }
+
+    #expressCategorySpecs .dv-card { border: 0; border-radius: 0; background: transparent; }
+    #expressCategorySpecs input,
+    #expressCategorySpecs select {
+      width: 100%;
+      border: 1px solid rgb(229 231 235);
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: rgb(249 250 251);
+      font-size: 0.8125rem;
+    }
+    .dark #expressCategorySpecs input,
+    .dark #expressCategorySpecs select {
+      border-color: rgb(55 65 81);
+      background: rgb(3 7 18);
+      color: #fff;
+    }
   </style>
 {% endblock %}
 
 {% block content %}
-<div class="pb-28 lg:pb-8 max-w-3xl mx-auto space-y-4">
+<div class="dv-page max-w-lg mx-auto pb-32 lg:pb-8">
 
-  <a href="{{ url_for('admin.express_listings') }}" class="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 dark:hover:text-blue-400">
-    <i class="fa-solid fa-arrow-right"></i>
-    بازگشت به لیست آگهی‌ها
-  </a>
-
-  <!-- نوار محاسبات زنده -->
-  <div class="sticky top-0 z-20 -mx-1 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur shadow-sm">
-    <div class="grid grid-cols-5 gap-1 text-center text-[10px] sm:text-xs">
-      <div><p class="text-gray-400">متراژ</p><p id="stripSize" class="font-bold text-gray-900 dark:text-white tabular-nums">—</p></div>
-      <div><p class="text-gray-400">قیمت</p><p id="stripPrice" class="font-bold text-gray-900 dark:text-white tabular-nums">—</p></div>
-      <div><p class="text-gray-400">هر متر</p><p id="stripPpm" class="font-bold text-gray-900 dark:text-white tabular-nums">—</p></div>
-      <div><p class="text-gray-400">پورسانت</p><p id="stripPct" class="font-bold text-gray-900 dark:text-white tabular-nums">—</p></div>
-      <div><p class="text-gray-400">مبلغ</p><p id="stripComm" class="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">—</p></div>
+  <!-- نوار بالا -->
+  <div class="sticky top-0 z-30 -mx-3 sm:-mx-4 px-3 sm:px-4 py-2.5 mb-2 bg-white/95 dark:bg-gray-950/95 backdrop-blur border-b border-gray-100 dark:border-gray-800 pt-[env(safe-area-inset-top,0px)] flex items-center gap-3">
+    <a href="{{ url_for('admin.express_listings') }}"
+       class="w-9 h-9 shrink-0 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+       aria-label="بازگشت">
+      <i class="fa-solid fa-arrow-right text-sm"></i>
+    </a>
+    <div class="flex-1 min-w-0">
+      <h2 class="text-sm font-bold text-gray-900 dark:text-white truncate">ثبت آگهی اکسپرس</h2>
+      <p class="text-[11px] text-gray-500 dark:text-gray-400">اطلاعات ملک را وارد و منتشر کنید</p>
     </div>
   </div>
 
   <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin.add_express_listing') }}"
-        id="expressForm" class="space-y-4" novalidate
+        id="expressForm" class="space-y-3 px-3 sm:px-4" novalidate
+        data-upload-url="{{ url_for('admin.express_upload_image') }}"
         data-leaflet-css="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.css') }}"
         data-leaflet-js="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.min.js') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div id="uploadedImagesFields" class="hidden" aria-hidden="true"></div>
 
-    <!-- ۱. اطلاعات اصلی -->
-    <section class="ad-section space-y-3">
-      <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <span class="w-6 h-6 rounded-full bg-blue-600 text-white text-xs grid place-items-center">1</span>
-        اطلاعات ملک
-      </h2>
+    <!-- تصاویر و مدارک -->
+    <section class="dv-card">
+      <p class="dv-card-title">تصاویر و مدارک</p>
 
-      <div>
-        <label class="ad-label">عنوان <span class="text-red-500">*</span></label>
-        <input type="text" name="title" required class="ad-inp" placeholder="مثال: زمین ۱۰۰۰ متری دشت اول">
+      <div class="px-4 py-3 space-y-3">
+        <div id="dropzone" role="button" tabindex="0"
+             class="py-5 flex flex-col items-center justify-center cursor-pointer">
+          <div class="w-11 h-11 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 grid place-items-center mb-2">
+            <i class="fa-solid fa-camera text-sm"></i>
+          </div>
+          <span class="text-xs font-semibold text-gray-800 dark:text-gray-100">افزودن عکس</span>
+          <span class="text-[10px] text-gray-500 mt-0.5">حداکثر ۱۲ تصویر · بلافاصله آپلود می‌شود</span>
+        </div>
+        <input type="file" id="imagesInput" accept="image/*" multiple class="hidden">
+        <div id="imagePreview"></div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label class="ad-label">شهر <span class="text-red-500">*</span></label>
-          <select name="city" required class="ad-inp">
+      <div class="px-4 pb-3 space-y-2 border-t border-gray-100 dark:border-gray-800 pt-3">
+        <p class="text-[10px] font-bold uppercase tracking-wide text-gray-400 px-0.5">ویدئو و مدارک <span class="font-normal normal-case">(اختیاری)</span></p>
+
+        <button type="button" id="videoPick" class="dv-media-pick w-full" aria-label="انتخاب ویدئو">
+          <span class="dv-media-pick__icon dv-media-pick__icon--video"><i class="fa-solid fa-video"></i></span>
+          <span class="dv-media-pick__body">
+            <span class="dv-media-pick__title">ویدئو آگهی</span>
+            <span class="dv-media-pick__hint">MP4 · WebM · MOV</span>
+            <span class="dv-media-pick__name hidden" id="videoFileName"></span>
+          </span>
+          <span class="dv-media-pick__action" id="videoPickAction">انتخاب</span>
+          <span class="dv-media-pick__clear hidden" id="videoClear" role="button" tabindex="0" aria-label="حذف ویدئو"><i class="fa-solid fa-xmark text-xs"></i></span>
+        </button>
+        <input type="file" name="video" id="videoInput" accept="video/mp4,video/webm,video/quicktime" class="hidden">
+        <div id="videoPreviewWrap" class="hidden px-1">
+          <video id="videoPreview" controls playsinline preload="metadata"></video>
+        </div>
+
+        <button type="button" class="dv-media-pick w-full doc-pick" data-input="document_1" aria-label="انتخاب سند">
+          <span class="dv-media-pick__icon dv-media-pick__icon--doc"><i class="fa-solid fa-file-lines"></i></span>
+          <span class="dv-media-pick__body">
+            <span class="dv-media-pick__title">سند ملک</span>
+            <span class="dv-media-pick__hint">PDF · JPG · PNG</span>
+            <span class="dv-media-pick__name hidden doc-pick-name"></span>
+          </span>
+          <span class="dv-media-pick__action doc-pick-action">انتخاب</span>
+          <span class="dv-media-pick__clear hidden doc-pick-clear" role="button" tabindex="0" aria-label="حذف سند"><i class="fa-solid fa-xmark text-xs"></i></span>
+        </button>
+        <input type="file" name="document_1" id="document_1" accept=".pdf,.jpg,.jpeg,.png" class="hidden">
+
+        <button type="button" class="dv-media-pick w-full doc-pick" data-input="document_2" aria-label="انتخاب مدرک اضافی">
+          <span class="dv-media-pick__icon dv-media-pick__icon--doc"><i class="fa-solid fa-paperclip"></i></span>
+          <span class="dv-media-pick__body">
+            <span class="dv-media-pick__title">مدرک اضافی</span>
+            <span class="dv-media-pick__hint">PDF · JPG · PNG</span>
+            <span class="dv-media-pick__name hidden doc-pick-name"></span>
+          </span>
+          <span class="dv-media-pick__action doc-pick-action">انتخاب</span>
+          <span class="dv-media-pick__clear hidden doc-pick-clear" role="button" tabindex="0" aria-label="حذف مدرک"><i class="fa-solid fa-xmark text-xs"></i></span>
+        </button>
+        <input type="file" name="document_2" id="document_2" accept=".pdf,.jpg,.jpeg,.png" class="hidden">
+      </div>
+    </section>
+
+    <!-- اطلاعات ملک -->
+    <section class="dv-card">
+      <p class="dv-card-title">اطلاعات ملک</p>
+
+      <div class="dv-row">
+        <label class="dv-label" for="ad_title">عنوان <span class="text-red-500">*</span></label>
+        <div class="dv-field">
+          <input type="text" name="title" id="ad_title" required class="dv-inp"
+                 placeholder="مثال: زمین ۱۰۰۰ متری دشت اول">
+        </div>
+      </div>
+
+      <div class="dv-row">
+        <label class="dv-label" for="ad_city">شهر <span class="text-red-500">*</span></label>
+        <div class="dv-field">
+          <select name="city" id="ad_city" required class="dv-inp">
             <option value="">انتخاب شهر</option>
             {% for c in cities or [] %}
               <option value="{{ c }}" {% if (request.form.get('city') or '') == c %}selected{% endif %}>{{ c }}</option>
             {% endfor %}
           </select>
         </div>
-        <div>
-          <label class="ad-label">محله / موقعیت <span class="text-red-500">*</span></label>
-          <input type="text" name="location" required class="ad-inp" placeholder="مثال: دشت اول">
+      </div>
+
+      <div class="dv-row">
+        <label class="dv-label" for="ad_location">محله <span class="text-red-500">*</span></label>
+        <div class="dv-field">
+          <input type="text" name="location" id="ad_location" required class="dv-inp" placeholder="مثال: دشت اول">
         </div>
       </div>
 
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div>
-          <label id="expressSizeLabel" class="ad-label">متراژ (متر) <span class="text-red-500">*</span></label>
-          <input type="text" name="size" required data-format-int class="ad-inp" inputmode="numeric" placeholder="1000">
+      <div class="dv-row">
+        <label id="expressSizeLabel" class="dv-label" for="ad_size">متراژ <span class="text-red-500">*</span></label>
+        <div class="dv-field">
+          <input type="text" name="size" id="ad_size" required data-format-int class="dv-inp" inputmode="numeric" placeholder="۱۰۰۰" dir="ltr">
         </div>
-        <div>
-          <label class="ad-label">دسته</label>
-          <select name="category" class="ad-inp">
-            <option value="">—</option>
+      </div>
+
+      <div class="dv-row">
+        <label class="dv-label" for="ad_category">دسته</label>
+        <div class="dv-field">
+          <select name="category" id="ad_category" class="dv-inp">
+            <option value="">انتخاب دسته</option>
             <option value="زمین">زمین</option>
             <option value="باغ">باغ</option>
             <option value="باغچه">باغچه</option>
@@ -85,148 +403,137 @@
             <option value="تجاری">تجاری</option>
           </select>
         </div>
-        <div class="col-span-2 sm:col-span-1">
-          <label class="ad-label">پورسانت ٪ <span class="text-red-500">*</span></label>
-          <input type="number" step="0.1" min="0" max="100" name="express_commission_pct" id="express_commission_pct" required class="ad-inp" value="2" placeholder="2">
+      </div>
+
+      <div class="px-4 pb-3 border-t border-gray-100 dark:border-gray-800">
+        {% include 'admin/partials/_express_category_specs.html' %}
+      </div>
+
+      <div class="dv-row">
+        <label class="dv-label" for="ad_price">قیمت کل <span class="text-red-500">*</span></label>
+        <div class="dv-field">
+          <input type="text" name="price_total" id="ad_price" required data-format-int class="dv-inp" inputmode="numeric" placeholder="تومان" dir="ltr">
         </div>
       </div>
 
-      {% include 'admin/partials/_express_category_specs.html' %}
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label class="ad-label">قیمت کل (تومان) <span class="text-red-500">*</span></label>
-          <input type="text" name="price_total" required data-format-int class="ad-inp" inputmode="numeric">
+      <div class="dv-row">
+        <label class="dv-label" for="price_per_meter">قیمت هر متر</label>
+        <div class="dv-field">
+          <input type="text" name="price_per_meter" id="price_per_meter" data-format-int readonly class="dv-inp" dir="ltr" placeholder="خودکار">
         </div>
-        <div>
-          <label class="ad-label">قیمت هر متر</label>
-          <input type="text" name="price_per_meter" id="price_per_meter" data-format-int readonly class="ad-inp bg-gray-50 dark:bg-gray-800">
+      </div>
+
+      <div class="dv-row">
+        <label class="dv-label" for="express_commission_pct">پورسانت ٪ <span class="text-red-500">*</span></label>
+        <div class="dv-field">
+          <input type="number" step="0.1" min="0" max="100" name="express_commission_pct" id="express_commission_pct" required class="dv-inp" value="2" dir="ltr">
         </div>
       </div>
       <input type="hidden" id="express_commission_amount" value="" tabindex="-1" aria-hidden="true">
 
-      <div>
-        <label class="ad-label">توضیحات</label>
-        <textarea name="description" rows="2" class="ad-inp resize-none" placeholder="اختیاری"></textarea>
+      <div class="dv-row dv-row-stack">
+        <label class="dv-label w-full max-w-none" for="ad_desc">توضیحات</label>
+        <div class="dv-field w-full">
+          <textarea name="description" id="ad_desc" rows="3" class="dv-inp resize-none leading-relaxed" placeholder="جزئیات بیشتر درباره ملک (اختیاری)"></textarea>
+        </div>
       </div>
 
-      <div class="flex flex-wrap gap-4 text-xs">
-        <label class="inline-flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" name="expert_verified" value="1" class="w-4 h-4">
-          <span>تأیید کارشناسی</span>
+      <div class="dv-row">
+        <label class="dv-toggle">
+          <span class="dv-label max-w-none flex-1">تأیید کارشناسی</span>
+          <input type="checkbox" name="expert_verified" value="1" checked>
         </label>
-        <label class="inline-flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" name="auto_send_all_partners" value="1" checked class="w-4 h-4">
-          <span>ارسال به همه همکاران</span>
+      </div>
+      <div class="dv-row">
+        <label class="dv-toggle">
+          <span class="dv-label max-w-none flex-1">ارسال به همه همکاران</span>
+          <input type="checkbox" name="auto_send_all_partners" value="1" checked>
         </label>
       </div>
     </section>
 
-    <!-- ۲. موقعیت (اختیاری — نقشه lazy) -->
-    <section class="ad-section space-y-3">
-      <div class="flex items-center justify-between gap-2">
-        <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <span class="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs grid place-items-center">2</span>
-          موقعیت نقشه
-          <span class="text-[10px] font-normal text-gray-400">اختیاری</span>
-        </h2>
-        <button type="button" id="toggleMapBtn" class="text-xs text-blue-600 dark:text-blue-400 font-medium">نمایش نقشه</button>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="ad-label">عرض (Lat)</label>
-          <input type="number" step="0.000001" name="latitude" id="latitude" class="ad-inp" dir="ltr">
-        </div>
-        <div>
-          <label class="ad-label">طول (Lng)</label>
-          <input type="number" step="0.000001" name="longitude" id="longitude" class="ad-inp" dir="ltr">
+    <!-- پرداخت -->
+    <section class="dv-card">
+      <p class="dv-card-title">نحوه پرداخت</p>
+      <div class="dv-row">
+        <label class="dv-label" for="payment_method">روش <span class="text-red-500">*</span></label>
+        <div class="dv-field">
+          <select name="payment_method" id="payment_method" required class="dv-inp">
+            <option value="">انتخاب کنید</option>
+            <option value="نقدی">نقدی</option>
+            <option value="اقساطی">اقساطی</option>
+            <option value="معاوضه">معاوضه</option>
+            <option value="توافقی">توافقی</option>
+          </select>
         </div>
       </div>
-      <div id="mapWrap" class="hidden space-y-2">
-        <button type="button" id="getCurrentLocationBtn" class="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white">
-          <i class="fa-solid fa-crosshairs ml-1"></i> موقعیت من
-        </button>
-        <div id="locationMap" class="w-full h-52 rounded-lg border border-gray-200 dark:border-gray-700"></div>
-      </div>
-    </section>
-
-    <!-- ۳. پرداخت -->
-    <section class="ad-section space-y-3">
-      <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <span class="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs grid place-items-center">3</span>
-        نحوه پرداخت
-      </h2>
-      <select name="payment_method" id="payment_method" required class="ad-inp">
-        <option value="">انتخاب کنید</option>
-        <option value="نقدی">نقدی</option>
-        <option value="اقساطی">اقساطی</option>
-        <option value="معاوضه">معاوضه</option>
-        <option value="توافقی">توافقی</option>
-      </select>
-      <div id="installmentsBox" class="hidden space-y-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800">
-        <div class="flex justify-between items-center">
-          <span class="text-xs font-medium text-gray-600 dark:text-gray-400">اقساط</span>
-          <button type="button" id="addInstallmentRow" class="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700">+ قسط</button>
+      <div id="installmentsBox" class="hidden px-4 pb-4 space-y-2">
+        <div class="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+          <span class="text-xs font-medium text-gray-600 dark:text-gray-400">جزئیات اقساط</span>
+          <button type="button" id="addInstallmentRow"
+                  class="text-xs px-2.5 py-1 rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+            + قسط
+          </button>
         </div>
+        <p class="dv-hint">برای هر قسط، تعداد ماه و مبلغ را وارد کنید.</p>
         <div id="installmentsRows" class="space-y-2"></div>
       </div>
     </section>
 
-    <!-- ۴. رسانه و تماس -->
-    <section class="ad-section space-y-3">
-      <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <span class="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs grid place-items-center">4</span>
-        تصاویر و مدارک
-      </h2>
-
-      <div id="dropzone" role="button" tabindex="0"
-           class="h-20 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 transition">
-        <i class="fa-solid fa-images text-gray-400 mb-1"></i>
-        <span class="text-xs text-gray-500">انتخاب تصاویر (حداکثر ۱۲)</span>
+    <!-- موقعیت -->
+    <section class="dv-card">
+      <div class="flex items-center justify-between gap-2 px-4 pt-3 pb-1">
+        <p class="dv-card-title !p-0">موقعیت نقشه <span class="font-normal normal-case text-gray-400">اختیاری</span></p>
+        <button type="button" id="toggleMapBtn" class="text-xs font-medium text-blue-600 dark:text-blue-400">نمایش نقشه</button>
       </div>
-      <input type="file" id="imagesInput" name="images" accept="image/*" multiple class="hidden">
-      <div id="imagePreview" class="grid grid-cols-4 sm:grid-cols-6 gap-2"></div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label class="ad-label">ویدئو (اختیاری)</label>
-          <input type="file" name="video" accept="video/mp4,video/webm,video/quicktime" class="ad-inp text-xs file:mr-2">
-        </div>
-        <div>
-          <label class="ad-label">تماس پشتیبانی <span class="text-red-500">*</span></label>
-          <input type="tel" name="vinor_contact" required class="ad-inp" dir="ltr" value="09121234567">
+      <div class="dv-row">
+        <label class="dv-label" for="latitude">عرض</label>
+        <div class="dv-field">
+          <input type="number" step="0.000001" name="latitude" id="latitude" class="dv-inp" dir="ltr" placeholder="Lat">
         </div>
       </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label class="ad-label">سند (PDF/عکس)</label>
-          <input type="file" name="document_1" accept=".pdf,.jpg,.jpeg,.png" class="ad-inp text-xs file:mr-2">
+      <div class="dv-row">
+        <label class="dv-label" for="longitude">طول</label>
+        <div class="dv-field">
+          <input type="number" step="0.000001" name="longitude" id="longitude" class="dv-inp" dir="ltr" placeholder="Lng">
         </div>
-        <div>
-          <label class="ad-label">مدرک اضافی</label>
-          <input type="file" name="document_2" accept=".pdf,.jpg,.jpeg,.png" class="ad-inp text-xs file:mr-2">
+      </div>
+      <div id="mapWrap" class="hidden px-4 pb-4 space-y-2">
+        <button type="button" id="getCurrentLocationBtn"
+                class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-blue-600 text-white">
+          <i class="fa-solid fa-crosshairs"></i>
+          موقعیت من
+        </button>
+        <div id="locationMap" class="w-full h-52 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"></div>
+      </div>
+    </section>
+
+    <!-- تماس -->
+    <section class="dv-card">
+      <p class="dv-card-title">تماس</p>
+      <div class="dv-row">
+        <label class="dv-label" for="vinor_contact">شماره پشتیبانی <span class="text-red-500">*</span></label>
+        <div class="dv-field">
+          <input type="tel" name="vinor_contact" id="vinor_contact" required class="dv-inp" dir="ltr" value="09121471301">
         </div>
       </div>
     </section>
 
-    <!-- دکمه ثبت — دسکتاپ -->
-    <div class="hidden lg:block">
+    <!-- دسکتاپ -->
+    <div class="hidden lg:block pt-2">
       <button type="submit" id="submitBtn"
-              class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition focusable">
-        <i class="fa-solid fa-check ml-1"></i>
+              class="w-full py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition focusable shadow-sm">
         ثبت و انتشار آگهی
       </button>
     </div>
   </form>
 </div>
 
-<!-- نوار ثبت — موبایل (بالای bottom nav) -->
-<div class="lg:hidden fixed bottom-16 left-0 right-0 z-30 px-4 py-2 bg-white/95 dark:bg-gray-950/95 border-t border-gray-200 dark:border-gray-800 backdrop-blur">
+<!-- نوار ثبت — موبایل -->
+<div class="lg:hidden fixed bottom-0 left-0 right-0 z-30 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-white/95 dark:bg-gray-950/95 border-t border-gray-200 dark:border-gray-800 backdrop-blur">
   <button type="submit" form="expressForm" id="submitBtnMobile"
-          class="w-full py-3 rounded-xl bg-blue-600 text-white font-bold text-sm">
-    <i class="fa-solid fa-check ml-1"></i>
-    ثبت آگهی
+          class="w-full py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-sm">
+    ثبت و انتشار آگهی
   </button>
 </div>
 

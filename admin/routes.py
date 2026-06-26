@@ -2956,6 +2956,28 @@ def express_transfer():
         flash('خطا در اجرای انتقال.', 'danger')
     return redirect(url_for('admin.dashboard'))
 
+@admin_bp.route('/express/upload-image', methods=['POST'])
+@login_required
+def express_upload_image():
+    """آپلود فوری تصویر هنگام ثبت آگهی (قبل از submit فرم)."""
+    from app.utils.images import normalize_upload_url, save_upload_image
+
+    f = request.files.get('file') or request.files.get('image')
+    if not f or not f.filename:
+        return jsonify({'ok': False, 'error': 'فایلی ارسال نشده است.'}), 400
+
+    upload_folder = _uploads_root()
+    os.makedirs(upload_folder, exist_ok=True)
+    stored = save_upload_image(f, upload_folder)
+    if not stored:
+        return jsonify({'ok': False, 'error': 'ذخیره تصویر ناموفق بود.'}), 400
+
+    return jsonify({
+        'ok': True,
+        'path': stored,
+        'url': normalize_upload_url(stored),
+    })
+
 @admin_bp.route('/express/add', methods=['GET', 'POST'])
 @login_required
 def add_express_listing():
@@ -3026,17 +3048,8 @@ def add_express_listing():
                 if doc_filename:
                     documents.append(doc_filename)
         
-        # پردازش تصاویر (از input multiple)
-        images = []
-        if 'images' in files:
-            from app.utils.images import save_upload_image
-            upload_folder = _uploads_root()
-            os.makedirs(upload_folder, exist_ok=True)
-            for file in files.getlist('images'):
-                if file.filename:
-                    stored = save_upload_image(file, upload_folder)
-                    if stored:
-                        images.append(stored)
+        # پردازش تصاویر (آپلود فوری از hidden یا فایل فرم)
+        images = _normalize_images_from_form(form, files)
         
         # کمیسیون همکاران (الزامی)
         pct_raw = (form.get('express_commission_pct') or '').strip()
@@ -3138,7 +3151,7 @@ def add_express_listing():
             'express_status': 'approved',
             'expert_verified': bool((form.get('expert_verified') or '').strip()),
             'express_documents': documents,
-            'vinor_contact': form.get('vinor_contact', '09121234567'),
+            'vinor_contact': form.get('vinor_contact', '09121471301'),
             'extras': {
                 'express_commission_pct': express_commission_pct,
                 'express_commission_amount': express_commission_amount,
