@@ -62,11 +62,12 @@
     border-right-color: rgba(52, 211, 153, 0.3);
     animation: vinorSkSpin 0.85s linear infinite;
   }
-  #vinorPartnerSkeletonRoot .vinor-sk-logo-svg {
+  #vinorPartnerSkeletonRoot .vinor-sk-logo-img {
     display: block;
     width: 64px;
     height: 64px;
     border-radius: 18px;
+    object-fit: contain;
   }
   #vinorPartnerSkeletonRoot .vinor-sk-title {
     font-size: 17px;
@@ -210,10 +211,7 @@
     <div class="vinor-sk-hero">
       <div class="vinor-sk-logo-box">
         <div class="vinor-sk-ring" aria-hidden="true"></div>
-        <svg class="vinor-sk-logo-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <rect width="64" height="64" rx="18" fill="rgba(16,185,129,0.14)" stroke="rgba(52,211,153,0.45)" stroke-width="1.5"/>
-          <text x="32" y="34" text-anchor="middle" dominant-baseline="central" fill="#34d399" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="36" font-weight="900">V</text>
-        </svg>
+        <img class="vinor-sk-logo-img" src="{{ url_for('static', filename='icons/icon-96.png') }}" alt="" width="64" height="64" decoding="async">
       </div>
       <div class="vinor-sk-title">وینور اکسپرس</div>
       <p class="vinor-sk-sub" id="vinorSkStatusText">در حال بارگذاری…</p>

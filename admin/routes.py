@@ -2978,6 +2978,10 @@ def express_upload_image():
         'url': normalize_upload_url(stored),
     })
 
+def _add_express_listing_form(cities):
+    """رندر فرم ثبت آگهی — با حفظ request.form پس از خطا."""
+    return render_template('admin/add_express_listing.html', cities=cities)
+
 @admin_bp.route('/express/add', methods=['GET', 'POST'])
 @login_required
 def add_express_listing():
@@ -3000,21 +3004,15 @@ def add_express_listing():
         
         if not all([title, location, city, size_clean, price_total_clean]):
             flash('لطفاً فیلدهای اجباری را پر کنید.', 'error')
-            return render_template('admin/add_express_listing.html',
-                                  pending_count=0, approved_count=0, rejected_count=0,
-                                  cities=cities)
+            return _add_express_listing_form(cities)
 
         if cities and city not in cities:
             flash('شهر آگهی باید از بین شهرهای فعال انتخاب شود.', 'error')
-            return render_template('admin/add_express_listing.html',
-                                  pending_count=0, approved_count=0, rejected_count=0,
-                                  cities=cities)
+            return _add_express_listing_form(cities)
         
         if len(title) < 10:
             flash('عنوان باید حداقل ۱۰ کاراکتر باشد.', 'error')
-            return render_template('admin/add_express_listing.html',
-                                  pending_count=0, approved_count=0, rejected_count=0,
-                                  cities=cities)
+            return _add_express_listing_form(cities)
         
         # تبدیل به عدد
         try:
@@ -3022,15 +3020,21 @@ def add_express_listing():
             price_total = int(price_total_clean)
         except (ValueError, TypeError):
             flash('متراژ و قیمت باید عدد معتبر باشند.', 'error')
-            return render_template('admin/add_express_listing.html',
-                                  pending_count=0, approved_count=0, rejected_count=0,
-                                  cities=cities)
+            return _add_express_listing_form(cities)
         
         if size <= 0 or price_total <= 0:
             flash('متراژ و قیمت باید بیشتر از صفر باشند.', 'error')
-            return render_template('admin/add_express_listing.html',
-                                  pending_count=0, approved_count=0, rejected_count=0,
-                                  cities=cities)
+            return _add_express_listing_form(cities)
+
+        payment_method = (form.get('payment_method') or '').strip()
+        if not payment_method:
+            flash('نحوه پرداخت را انتخاب کنید.', 'error')
+            return _add_express_listing_form(cities)
+
+        vinor_contact = re.sub(r'[^\d]', '', (form.get('vinor_contact') or '').strip())
+        if not vinor_contact or len(vinor_contact) < 10:
+            flash('شماره تماس پشتیبانی معتبر نیست.', 'error')
+            return _add_express_listing_form(cities)
         
         # بارگذاری لیست آگهی‌ها برای تولید کد
         lands = load_json(_lands_path())
@@ -3055,20 +3059,15 @@ def add_express_listing():
         pct_raw = (form.get('express_commission_pct') or '').strip()
         if not pct_raw:
             flash('درصد پورسانت الزامی است.', 'error')
-            return render_template('admin/add_express_listing.html',
-                                  pending_count=0, approved_count=0, rejected_count=0,
-                                  cities=cities)
+            return _add_express_listing_form(cities)
         try:
             express_commission_pct = float(pct_raw)
             if express_commission_pct <= 0 or express_commission_pct > 100:
                 flash('درصد پورسانت باید بین ۰ و ۱۰۰ باشد.', 'error')
-                return render_template('admin/add_express_listing.html',
-                                      pending_count=0, approved_count=0, rejected_count=0)
+                return _add_express_listing_form(cities)
         except (ValueError, TypeError):
             flash('درصد پورسانت باید یک عدد معتبر باشد.', 'error')
-            return render_template('admin/add_express_listing.html',
-                                  pending_count=0, approved_count=0, rejected_count=0,
-                                  cities=cities)
+            return _add_express_listing_form(cities)
         # محاسبه قیمت در متر
         price_per_meter_raw = form.get('price_per_meter', '').strip()
         price_per_meter_clean = re.sub(r'[^\d]', '', price_per_meter_raw) if price_per_meter_raw else ''
@@ -3108,7 +3107,6 @@ def add_express_listing():
             video_path = None
 
         # ایجاد آگهی اکسپرس
-        payment_method = (form.get('payment_method') or '').strip()
         payment_terms = []
         try:
             if payment_method == 'اقساطی':
@@ -3129,6 +3127,10 @@ def add_express_listing():
                         payment_terms.append({'months': m, 'amount': a})
         except Exception:
             payment_terms = []
+
+        if payment_method == 'اقساطی' and not payment_terms:
+            flash('برای پرداخت اقساطی حداقل یک قسط معتبر وارد کنید.', 'error')
+            return _add_express_listing_form(cities)
 
         new_express_land = {
             'code': new_code,
@@ -3151,7 +3153,7 @@ def add_express_listing():
             'express_status': 'approved',
             'expert_verified': bool((form.get('expert_verified') or '').strip()),
             'express_documents': documents,
-            'vinor_contact': form.get('vinor_contact', '09121471301'),
+            'vinor_contact': vinor_contact,
             'extras': {
                 'express_commission_pct': express_commission_pct,
                 'express_commission_amount': express_commission_amount,
@@ -3227,7 +3229,7 @@ def add_express_listing():
         return redirect(url_for('admin.express_listings'))
     
     # GET — فرم سبک بدون cleanup سنگین
-    return render_template('admin/add_express_listing.html', cities=cities)
+    return _add_express_listing_form(cities)
 
 @admin_bp.route('/express/<string:code>/edit', methods=['GET', 'POST'])
 @login_required

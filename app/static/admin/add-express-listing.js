@@ -81,6 +81,17 @@
   $$('[data-format-int]', form).forEach(hookIntInput);
   $('#express_commission_pct', form)?.addEventListener('input', recalc);
 
+  function initIntFieldsFromDom() {
+    $$('[data-format-int]', form).forEach((el) => {
+      const n = parseDigits(el.value);
+      if (n > 0) {
+        el.dataset.rawValue = String(n);
+        if (!el.readOnly) el.value = fmt(n);
+      }
+    });
+  }
+  initIntFieldsFromDom();
+
   // Images — آپلود فوری مثل دیوار
   const dropzone = $('#dropzone', form);
   const imagesInput = $('#imagesInput', form);
@@ -90,6 +101,35 @@
   function newImageId() {
     return 'img_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
   }
+
+  function imageUrlFromPath(path) {
+    const p = String(path || '').trim();
+    if (!p) return '';
+    if (p.includes('://')) return p;
+    if (p.startsWith('/')) return p;
+    if (p.startsWith('uploads/')) return '/' + p;
+    return '/uploads/' + p.replace(/^\/+/, '');
+  }
+
+  function restoreImagesFromForm() {
+    if (!hiddenFields) return;
+    $$('input[name="images"]', hiddenFields).forEach((inp) => {
+      const path = (inp.value || '').trim();
+      if (!path) return;
+      const url = imageUrlFromPath(path);
+      imageItems.push({
+        id: newImageId(),
+        file: null,
+        previewUrl: url,
+        path,
+        url,
+        status: 'done',
+      });
+    });
+    if (imageItems.length) renderPreviews();
+  }
+
+  restoreImagesFromForm();
 
   function syncHiddenImageFields() {
     if (!hiddenFields) return;
@@ -161,7 +201,7 @@
     const idx = imageItems.findIndex((x) => x.id === id);
     if (idx < 0) return;
     const item = imageItems[idx];
-    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    if (item.previewUrl && item.file) URL.revokeObjectURL(item.previewUrl);
     imageItems.splice(idx, 1);
     syncHiddenImageFields();
     renderPreviews();
@@ -414,7 +454,7 @@
       '<div><label class="text-[10px] text-gray-500">ماه</label>' +
       '<input type="number" min="1" name="installment_months[]" value="' + (m || '') + '" class="dv-inp ad-inp text-sm !border !border-gray-200 dark:!border-gray-700 !rounded-lg !px-2 !py-1.5 !bg-white dark:!bg-gray-900"></div>' +
       '<div><label class="text-[10px] text-gray-500">مبلغ</label>' +
-      '<input type="text" inputmode="numeric" name="installment_amounts[]" value="' + (a || '') + '" class="dv-inp ad-inp text-sm !border !border-gray-200 dark:!border-gray-700 !rounded-lg !px-2 !py-1.5 !bg-white dark:!bg-gray-900"></div>' +
+      '<input type="text" inputmode="numeric" name="installment_amounts[]" value="' + (a || '') + '" data-format-int class="dv-inp ad-inp text-sm !border !border-gray-200 dark:!border-gray-700 !rounded-lg !px-2 !py-1.5 !bg-white dark:!bg-gray-900"></div>' +
       '<button type="button" class="remove-installment w-9 h-9 rounded-lg border border-gray-200 dark:border-gray-700 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"><i class="fa-solid fa-trash text-xs"></i></button></div>'
     );
   }
@@ -424,14 +464,24 @@
     if (!instBox) return;
     if (v === 'اقساطی') {
       instBox.classList.remove('hidden');
-      if (!instRows.querySelector('.installment-row')) instRows.insertAdjacentHTML('beforeend', instRowHtml('', ''));
+      if (!instRows.querySelector('.installment-row')) {
+        instRows.insertAdjacentHTML('beforeend', instRowHtml('', ''));
+        const row = instRows.querySelector('.installment-row');
+        const amt = row && $('input[name="installment_amounts[]"]', row);
+        if (amt) hookIntInput(amt);
+      }
     } else {
       instBox.classList.add('hidden');
     }
   }
 
   pm?.addEventListener('change', toggleInst);
-  addInst?.addEventListener('click', () => instRows.insertAdjacentHTML('beforeend', instRowHtml('', '')));
+  addInst?.addEventListener('click', () => {
+    instRows.insertAdjacentHTML('beforeend', instRowHtml('', ''));
+    const row = instRows.lastElementChild;
+    const amt = row && $('input[name="installment_amounts[]"]', row);
+    if (amt) hookIntInput(amt);
+  });
   instRows?.addEventListener('click', (e) => {
     const btn = e.target.closest('.remove-installment');
     if (btn) btn.closest('.installment-row')?.remove();
@@ -489,7 +539,6 @@
     locationMap = L.map('locationMap').setView([lat, lon], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(locationMap);
     locationMarker = L.marker([lat, lon], { draggable: true }).addTo(locationMap);
-    if (!latEl?.value) updateCoords(lat, lon);
     locationMap.on('click', (e) => {
       locationMarker.setLatLng(e.latlng);
       updateCoords(e.latlng.lat, e.latlng.lng);
@@ -573,14 +622,19 @@
       alert('عنوان، شهر، موقعیت، متراژ و قیمت الزامی است.');
       return;
     }
+    if (title.length < 10) {
+      e.preventDefault();
+      alert('عنوان باید حداقل ۱۰ کاراکتر باشد.');
+      return;
+    }
     if (!paymentMethod) {
       e.preventDefault();
       alert('نحوه پرداخت را انتخاب کنید.');
       return;
     }
-    if (!contact) {
+    if (!contact || parseDigits(contact).length < 10) {
       e.preventDefault();
-      alert('شماره تماس پشتیبانی الزامی است.');
+      alert('شماره تماس پشتیبانی معتبر نیست.');
       return;
     }
     if (paymentMethod === 'اقساطی') {
@@ -600,6 +654,14 @@
     priceEl.value = String(priceNum);
     const ppmEl = $('#price_per_meter', form);
     if (ppmEl && sizeNum > 0) ppmEl.value = String(Math.round(priceNum / sizeNum));
+    const contactEl = $('input[name="vinor_contact"]', form);
+    if (contactEl) contactEl.value = String(parseDigits(contact));
+    if (paymentMethod === 'اقساطی') {
+      $$('.installment-row', instRows).forEach((r) => {
+        const aEl = $('input[name="installment_amounts[]"]', r);
+        if (aEl) aEl.value = String(parseDigits(aEl.dataset.rawValue || aEl.value));
+      });
+    }
     syncHiddenImageFields();
 
     isSubmitting = true;

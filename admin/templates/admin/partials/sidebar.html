@@ -26,8 +26,11 @@
 }">
 
   <div class="flex items-center justify-between mb-5">
-    <span class="font-semibold text-sm text-gray-900 dark:text-white">وینور همکاران</span>
-    <button @click="menuOpen = false" class="lg:hidden focusable p-1 rounded text-gray-600 dark:text-gray-400">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <img src="{{ url_for('static', filename='icons/icon-48.png') }}" alt="" width="32" height="32" class="rounded-xl object-contain flex-shrink-0" decoding="async">
+      <span class="font-semibold text-sm text-gray-900 dark:text-white truncate">وینور همکاران</span>
+    </div>
+    <button @click="menuOpen = false" class="lg:hidden focusable p-1 rounded text-gray-600 dark:text-gray-400 flex-shrink-0">
       <i class="fa-solid fa-xmark"></i>
     </button>
   </div>

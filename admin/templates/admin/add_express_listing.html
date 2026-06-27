@@ -4,6 +4,8 @@
 
 {% block admin_topbar %}{% endblock %}
 {% block admin_bottom_nav %}{% endblock %}
+{% block admin_sidebar %}{% endblock %}
+{% block admin_main_class %}{% endblock %}
 {% block admin_main_pad_class %}pb-2 lg:pb-6{% endblock %}
 
 {% block head %}
@@ -60,6 +62,7 @@
       border-top: 1px solid rgb(243 244 246);
     }
     .dark .dv-row { border-top-color: rgb(31 41 55); }
+    .dv-card > .dv-row:first-of-type { border-top: 0; }
     .dv-row-stack { flex-direction: column; align-items: stretch; gap: 0.5rem; }
     .dv-label {
       flex: 0 0 38%;
@@ -268,7 +271,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="dv-page max-w-lg mx-auto pb-32 lg:pb-8">
+{% set f = request.form %}
+<div class="dv-page max-w-lg mx-auto pb-32 lg:pb-8 lg:max-w-xl">
 
   <!-- نوار بالا -->
   <div class="sticky top-0 z-30 -mx-3 sm:-mx-4 px-3 sm:px-4 py-2.5 mb-2 bg-white/95 dark:bg-gray-950/95 backdrop-blur border-b border-gray-100 dark:border-gray-800 pt-[env(safe-area-inset-top,0px)] flex items-center gap-3">
@@ -281,6 +285,12 @@
       <h2 class="text-sm font-bold text-gray-900 dark:text-white truncate">ثبت آگهی اکسپرس</h2>
       <p class="text-[11px] text-gray-500 dark:text-gray-400">اطلاعات ملک را وارد و منتشر کنید</p>
     </div>
+    <button type="button"
+            @click="darkMode = !darkMode; localStorage.setItem('theme', darkMode ? 'dark' : 'light')"
+            class="w-9 h-9 shrink-0 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+            aria-label="تغییر تم">
+      <i class="fa-solid" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
+    </button>
   </div>
 
   <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin.add_express_listing') }}"
@@ -289,7 +299,13 @@
         data-leaflet-css="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.css') }}"
         data-leaflet-js="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.min.js') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div id="uploadedImagesFields" class="hidden" aria-hidden="true"></div>
+    <div id="uploadedImagesFields" class="hidden" aria-hidden="true">
+      {% for img in f.getlist('images') %}
+        {% if img %}
+        <input type="hidden" name="images" value="{{ img }}">
+        {% endif %}
+      {% endfor %}
+    </div>
 
     <!-- تصاویر و مدارک -->
     <section class="dv-card">
@@ -360,6 +376,7 @@
         <label class="dv-label" for="ad_title">عنوان <span class="text-red-500">*</span></label>
         <div class="dv-field">
           <input type="text" name="title" id="ad_title" required class="dv-inp"
+                 value="{{ f.get('title', '') }}"
                  placeholder="مثال: زمین ۱۰۰۰ متری دشت اول">
         </div>
       </div>
@@ -370,7 +387,7 @@
           <select name="city" id="ad_city" required class="dv-inp">
             <option value="">انتخاب شهر</option>
             {% for c in cities or [] %}
-              <option value="{{ c }}" {% if (request.form.get('city') or '') == c %}selected{% endif %}>{{ c }}</option>
+              <option value="{{ c }}" {% if (f.get('city') or '') == c %}selected{% endif %}>{{ c }}</option>
             {% endfor %}
           </select>
         </div>
@@ -379,14 +396,16 @@
       <div class="dv-row">
         <label class="dv-label" for="ad_location">محله <span class="text-red-500">*</span></label>
         <div class="dv-field">
-          <input type="text" name="location" id="ad_location" required class="dv-inp" placeholder="مثال: دشت اول">
+          <input type="text" name="location" id="ad_location" required class="dv-inp"
+                 value="{{ f.get('location', '') }}" placeholder="مثال: دشت اول">
         </div>
       </div>
 
       <div class="dv-row">
         <label id="expressSizeLabel" class="dv-label" for="ad_size">متراژ <span class="text-red-500">*</span></label>
         <div class="dv-field">
-          <input type="text" name="size" id="ad_size" required data-format-int class="dv-inp" inputmode="numeric" placeholder="۱۰۰۰" dir="ltr">
+          <input type="text" name="size" id="ad_size" required data-format-int class="dv-inp" inputmode="numeric"
+                 value="{{ f.get('size', '') }}" placeholder="۱۰۰۰" dir="ltr">
         </div>
       </div>
 
@@ -395,12 +414,9 @@
         <div class="dv-field">
           <select name="category" id="ad_category" class="dv-inp">
             <option value="">انتخاب دسته</option>
-            <option value="زمین">زمین</option>
-            <option value="باغ">باغ</option>
-            <option value="باغچه">باغچه</option>
-            <option value="ویلا">ویلا</option>
-            <option value="آپارتمان">آپارتمان</option>
-            <option value="تجاری">تجاری</option>
+            {% for cat in ['زمین', 'باغ', 'باغچه', 'ویلا', 'آپارتمان', 'تجاری'] %}
+            <option value="{{ cat }}" {% if f.get('category') == cat %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
           </select>
         </div>
       </div>
@@ -412,21 +428,24 @@
       <div class="dv-row">
         <label class="dv-label" for="ad_price">قیمت کل <span class="text-red-500">*</span></label>
         <div class="dv-field">
-          <input type="text" name="price_total" id="ad_price" required data-format-int class="dv-inp" inputmode="numeric" placeholder="تومان" dir="ltr">
+          <input type="text" name="price_total" id="ad_price" required data-format-int class="dv-inp" inputmode="numeric"
+                 value="{{ f.get('price_total', '') }}" placeholder="تومان" dir="ltr">
         </div>
       </div>
 
       <div class="dv-row">
         <label class="dv-label" for="price_per_meter">قیمت هر متر</label>
         <div class="dv-field">
-          <input type="text" name="price_per_meter" id="price_per_meter" data-format-int readonly class="dv-inp" dir="ltr" placeholder="خودکار">
+          <input type="text" name="price_per_meter" id="price_per_meter" data-format-int readonly class="dv-inp" dir="ltr"
+                 value="{{ f.get('price_per_meter', '') }}" placeholder="خودکار">
         </div>
       </div>
 
       <div class="dv-row">
         <label class="dv-label" for="express_commission_pct">پورسانت ٪ <span class="text-red-500">*</span></label>
         <div class="dv-field">
-          <input type="number" step="0.1" min="0" max="100" name="express_commission_pct" id="express_commission_pct" required class="dv-inp" value="2" dir="ltr">
+          <input type="number" step="0.1" min="0" max="100" name="express_commission_pct" id="express_commission_pct" required class="dv-inp"
+                 value="{{ f.get('express_commission_pct', '2') }}" dir="ltr">
         </div>
       </div>
       <input type="hidden" id="express_commission_amount" value="" tabindex="-1" aria-hidden="true">
@@ -434,20 +453,22 @@
       <div class="dv-row dv-row-stack">
         <label class="dv-label w-full max-w-none" for="ad_desc">توضیحات</label>
         <div class="dv-field w-full">
-          <textarea name="description" id="ad_desc" rows="3" class="dv-inp resize-none leading-relaxed" placeholder="جزئیات بیشتر درباره ملک (اختیاری)"></textarea>
+          <textarea name="description" id="ad_desc" rows="3" class="dv-inp resize-none leading-relaxed" placeholder="جزئیات بیشتر درباره ملک (اختیاری)">{{ f.get('description', '') }}</textarea>
         </div>
       </div>
 
       <div class="dv-row">
         <label class="dv-toggle">
           <span class="dv-label max-w-none flex-1">تأیید کارشناسی</span>
-          <input type="checkbox" name="expert_verified" value="1" checked>
+          <input type="checkbox" name="expert_verified" value="1"
+                 {% if request.method != 'POST' or f.get('expert_verified') %}checked{% endif %}>
         </label>
       </div>
       <div class="dv-row">
         <label class="dv-toggle">
           <span class="dv-label max-w-none flex-1">ارسال به همه همکاران</span>
-          <input type="checkbox" name="auto_send_all_partners" value="1" checked>
+          <input type="checkbox" name="auto_send_all_partners" value="1"
+                 {% if request.method != 'POST' or f.get('auto_send_all_partners') %}checked{% endif %}>
         </label>
       </div>
     </section>
@@ -460,14 +481,13 @@
         <div class="dv-field">
           <select name="payment_method" id="payment_method" required class="dv-inp">
             <option value="">انتخاب کنید</option>
-            <option value="نقدی">نقدی</option>
-            <option value="اقساطی">اقساطی</option>
-            <option value="معاوضه">معاوضه</option>
-            <option value="توافقی">توافقی</option>
+            {% for pm in ['نقدی', 'اقساطی', 'معاوضه', 'توافقی'] %}
+            <option value="{{ pm }}" {% if f.get('payment_method') == pm %}selected{% endif %}>{{ pm }}</option>
+            {% endfor %}
           </select>
         </div>
       </div>
-      <div id="installmentsBox" class="hidden px-4 pb-4 space-y-2">
+      <div id="installmentsBox" class="{% if f.get('payment_method') != 'اقساطی' %}hidden{% endif %} px-4 pb-4 space-y-2">
         <div class="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
           <span class="text-xs font-medium text-gray-600 dark:text-gray-400">جزئیات اقساط</span>
           <button type="button" id="addInstallmentRow"
@@ -489,13 +509,15 @@
       <div class="dv-row">
         <label class="dv-label" for="latitude">عرض</label>
         <div class="dv-field">
-          <input type="number" step="0.000001" name="latitude" id="latitude" class="dv-inp" dir="ltr" placeholder="Lat">
+          <input type="number" step="0.000001" name="latitude" id="latitude" class="dv-inp" dir="ltr"
+                 value="{{ f.get('latitude', '') }}" placeholder="Lat">
         </div>
       </div>
       <div class="dv-row">
         <label class="dv-label" for="longitude">طول</label>
         <div class="dv-field">
-          <input type="number" step="0.000001" name="longitude" id="longitude" class="dv-inp" dir="ltr" placeholder="Lng">
+          <input type="number" step="0.000001" name="longitude" id="longitude" class="dv-inp" dir="ltr"
+                 value="{{ f.get('longitude', '') }}" placeholder="Lng">
         </div>
       </div>
       <div id="mapWrap" class="hidden px-4 pb-4 space-y-2">
@@ -514,7 +536,8 @@
       <div class="dv-row">
         <label class="dv-label" for="vinor_contact">شماره پشتیبانی <span class="text-red-500">*</span></label>
         <div class="dv-field">
-          <input type="tel" name="vinor_contact" id="vinor_contact" required class="dv-inp" dir="ltr" value="09121471301">
+          <input type="tel" name="vinor_contact" id="vinor_contact" required class="dv-inp" dir="ltr"
+                 value="{{ f.get('vinor_contact', '09121471301') }}">
         </div>
       </div>
     </section>
@@ -537,5 +560,5 @@
   </button>
 </div>
 
-<script src="{{ url_for('static', filename='admin/add-express-listing.js') }}" defer></script>
+<script src="{{ url_for('static', filename='admin/add-express-listing.js') }}?v=3" defer></script>
 {% endblock %}

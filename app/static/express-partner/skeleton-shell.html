@@ -41,12 +41,10 @@
     }
     .logo {
       width: 64px; height: 64px; border-radius: 18px;
-      background: rgba(16,185,129,.14);
-      border: 1px solid rgba(52,211,153,.4);
-      display: grid; place-items: center;
       margin: 0 auto 12px;
+      overflow: hidden;
     }
-    .logo svg { width: 36px; height: 36px; }
+    .logo img { display: block; width: 64px; height: 64px; object-fit: contain; }
     h1 { font-size: 18px; font-weight: 800; }
     .hint { font-size: 13px; line-height: 1.65; color: #94a3b8; max-width: 20rem; }
     .badge {
@@ -103,9 +101,7 @@
   <main>
     <div>
       <div class="logo" aria-hidden="true">
-        <svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <text x="18" y="19" text-anchor="middle" dominant-baseline="central" fill="#34d399" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="22" font-weight="900">V</text>
-        </svg>
+        <img src="/static/icons/icon-96.png" alt="" width="64" height="64" decoding="async">
       </div>
       <h1>وینور اکسپرس</h1>
       <p class="hint" id="offlineHint">آفلاین هستید — نمایش از حافظهٔ آفلاین</p>

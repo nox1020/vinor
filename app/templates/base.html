@@ -90,8 +90,8 @@
     .pwa-welcome{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;background:rgba(17,24,39,.86)}
     .pwa-welcome.hidden{opacity:0;pointer-events:none;transition:opacity .35s ease}
     .pwa-card{display:flex;flex-direction:column;align-items:center;gap:10px;background:#0b1220;border:1px solid #1f2937;border-radius:20px;padding:22px 24px;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.35)}
-    .sprout{display:grid;place-items:center;width:72px;height:72px;border-radius:50%;background:#16a34a;color:#fff;box-shadow:0 8px 20px rgba(22,163,74,.35);animation:sproutPop .9s cubic-bezier(.2,.8,.2,1)}
-    @keyframes sproutPop{0%{transform:scale(.6);filter:blur(2px);opacity:.5}60%{transform:scale(1.06);filter:blur(0);opacity:1}100%{transform:scale(1)}}
+    .vinor-brand-logo{display:block;width:72px;height:72px;border-radius:18px;object-fit:contain;animation:brandLogoPop .9s cubic-bezier(.2,.8,.2,1)}
+    @keyframes brandLogoPop{0%{transform:scale(.6);filter:blur(2px);opacity:.5}60%{transform:scale(1.06);filter:blur(0);opacity:1}100%{transform:scale(1)}}
     /* Offline status bar */
     #offlineBar{position:fixed;bottom:12px;right:12px;left:12px;z-index:60;display:none}
     .offline-bar{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 12px;border-radius:14px;border:1px solid #374151;background:#111827;color:#e5e7eb;box-shadow:0 8px 22px rgba(0,0,0,.35)}
@@ -114,8 +114,8 @@
   <header class="bg-white dark:bg-gray-800 shadow-md sticky top-0 z-30">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
       <a href="{{ url_for('main.index') }}" class="flex items-center gap-3" aria-label="وینور اکسپرس | صفحه اصلی">
-        <span class="bg-green-600 hover:bg-green-700 text-white w-10 h-10 flex items-center justify-center rounded-full text-xl shadow-lg font-bold">
-          <i class="fas fa-seedling animate-pulse"></i>
+        <span class="w-10 h-10 flex-shrink-0 overflow-hidden rounded-2xl shadow-lg">
+          <img src="{{ url_for('static', filename='icons/icon-96.png') }}" alt="" width="40" height="40" class="w-full h-full object-contain" decoding="async">
         </span>
         <span id="brandTitle" class="text-xl sm:text-2xl font-extrabold text-gray-800 dark:text-white">وینور اکسپرس</span>
       </a>
@@ -144,7 +144,7 @@
   <!-- PWA First-run Welcome (mobile only; standalone only; once) -->
   <div id="pwaWelcome" class="pwa-welcome hidden" role="dialog" aria-modal="true" aria-label="خوش‌آمدید">
     <div class="pwa-card">
-      <div class="sprout text-3xl"><i class="fas fa-seedling"></i></div>
+      <img class="vinor-brand-logo" src="{{ url_for('static', filename='icons/icon-96.png') }}" alt="" width="72" height="72" decoding="async">
       <div class="text-center">
         <div class="font-extrabold text-lg">به وینور اکسپرس خوش آمدید</div>
         <div class="text-sm text-gray-300 mt-1">اپ آماده است؛ تجربه‌ای سریع و روان داشته باشید.</div>

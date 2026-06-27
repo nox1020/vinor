@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>{% block title %}پنل مدیریت | وینور{% endblock %}</title>
   <meta name="theme-color" content="#2563EB" />
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}">
   
   <!-- PWA Manifest -->
   <link rel="manifest" href="{{ url_for('admin.admin_manifest') }}" />
@@ -150,13 +153,15 @@
   </aside>
   {% endblock admin_topbar %}
 
+  {% block admin_sidebar %}
   <!-- Desktop Sidebar -->
   <aside class="hidden lg:block fixed top-0 right-0 h-full w-64 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 z-30 overflow-y-auto">
     {% include 'admin/partials/sidebar.html' %}
   </aside>
+  {% endblock admin_sidebar %}
 
   <!-- Main Content -->
-  <main class="flex-1 lg:pr-64 min-w-0 overflow-x-hidden">
+  <main class="flex-1 {% block admin_main_class %}lg:pr-64{% endblock %} min-w-0 overflow-x-hidden">
     <div class="px-3 py-4 sm:px-4 sm:py-6 max-w-7xl mx-auto adm-page {% block admin_main_pad_class %}pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-6{% endblock %}">
       
       <!-- Flash Messages - Divar Style -->
