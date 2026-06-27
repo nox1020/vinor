@@ -222,6 +222,258 @@
     }
     .dark #videoPreviewWrap video { border-color: rgb(55 65 81); }
 
+    .dv-map-entry {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      width: calc(100% - 2rem);
+      margin: 0.25rem 1rem 0.75rem;
+      padding: 0.75rem;
+      border: 1.5px dashed rgb(209 213 219);
+      border-radius: 0.75rem;
+      background: rgb(249 250 251 / 0.6);
+      cursor: pointer;
+      text-align: right;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .dark .dv-map-entry {
+      border-color: rgb(55 65 81);
+      background: rgb(17 24 39 / 0.5);
+    }
+    .dv-map-entry:hover { border-color: rgb(59 130 246); background: rgb(239 246 255 / 0.5); }
+    .dark .dv-map-entry:hover { background: rgb(30 58 138 / 0.15); }
+    .dv-map-entry.has-location {
+      border-style: solid;
+      border-color: rgb(191 219 254);
+      background: rgb(239 246 255 / 0.35);
+    }
+    .dark .dv-map-entry.has-location {
+      border-color: rgb(30 64 175);
+      background: rgb(30 58 138 / 0.12);
+    }
+    .dv-map-entry.is-open {
+      border-color: rgb(59 130 246);
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+      margin-bottom: 0;
+      border-bottom-style: solid;
+    }
+    .dv-map-entry__icon {
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 9999px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      background: rgb(219 234 254);
+      color: rgb(37 99 235);
+      font-size: 0.875rem;
+    }
+    .dark .dv-map-entry__icon {
+      background: rgb(30 58 138 / 0.45);
+      color: rgb(147 197 253);
+    }
+    .dv-map-entry__body { flex: 1; min-width: 0; }
+    .dv-map-entry__title { font-size: 0.8125rem; font-weight: 600; color: rgb(17 24 39); }
+    .dark .dv-map-entry__title { color: rgb(243 244 246); }
+    .dv-map-entry__hint { font-size: 0.625rem; color: rgb(156 163 175); margin-top: 0.125rem; line-height: 1.45; }
+    .dv-map-entry__hint.is-set { color: rgb(37 99 235); font-weight: 600; }
+    .dark .dv-map-entry__hint.is-set { color: rgb(147 197 253); }
+    .dv-map-entry__action {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: rgb(37 99 235);
+      flex-shrink: 0;
+    }
+    .dark .dv-map-entry__action { color: rgb(147 197 253); }
+
+    #mapWrap {
+      margin: 0 1rem 0.75rem;
+      padding: 0.75rem;
+      border: 1.5px solid rgb(59 130 246);
+      border-top: 0;
+      border-radius: 0 0 0.75rem 0.75rem;
+      background: rgb(249 250 251 / 0.35);
+    }
+    .dark #mapWrap {
+      border-color: rgb(59 130 246);
+      background: rgb(17 24 39 / 0.35);
+    }
+    .dv-map-guide {
+      font-size: 0.6875rem;
+      color: rgb(107 114 128);
+      text-align: center;
+      margin-bottom: 0.5rem;
+      line-height: 1.5;
+    }
+    .dv-map-frame {
+      position: relative;
+      width: 100%;
+      height: 14rem;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      border: 1px solid rgb(229 231 235);
+      touch-action: none;
+    }
+    .dark .dv-map-frame { border-color: rgb(55 65 81); }
+    #locationMap { width: 100%; height: 100%; z-index: 0; }
+    .dv-map-pin {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -100%);
+      z-index: 500;
+      pointer-events: none;
+      color: rgb(220 38 38);
+      font-size: 2rem;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,.25));
+      line-height: 1;
+    }
+    .dv-map-pin::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -0.35rem;
+      width: 0.5rem;
+      height: 0.5rem;
+      margin-left: -0.25rem;
+      border-radius: 9999px;
+      background: rgba(0,0,0,.18);
+    }
+    .dv-map-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.625rem;
+    }
+    .dv-map-btn {
+      flex: 1;
+      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      padding: 0.5rem 0.625rem;
+      border-radius: 0.625rem;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      border: 1px solid rgb(229 231 235);
+      background: #fff;
+      color: rgb(55 65 81);
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .dark .dv-map-btn {
+      border-color: rgb(55 65 81);
+      background: rgb(31 41 55);
+      color: rgb(209 213 219);
+    }
+    .dv-map-btn:hover { border-color: rgb(191 219 254); background: rgb(239 246 255); }
+    .dark .dv-map-btn:hover { border-color: rgb(30 64 175); background: rgb(30 58 138 / 0.2); }
+    .dv-map-btn--primary {
+      background: rgb(37 99 235);
+      border-color: rgb(37 99 235);
+      color: #fff;
+      flex: 1.4;
+    }
+    .dv-map-btn--primary:hover { background: rgb(29 78 216); border-color: rgb(29 78 216); }
+    .dv-map-btn:disabled { opacity: 0.55; pointer-events: none; }
+
+    body.dv-map-fs-lock { overflow: hidden; }
+    #mapWrap.is-fullscreen {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      display: flex !important;
+      flex-direction: column;
+      background: #fff;
+    }
+    .dark #mapWrap.is-fullscreen { background: rgb(17 24 39); }
+    #mapWrap.is-fullscreen .dv-map-fs-head { display: flex; }
+    #mapWrap.is-fullscreen .dv-map-guide { display: none; }
+    #mapWrap.is-fullscreen .dv-map-frame {
+      flex: 1;
+      height: auto;
+      min-height: 0;
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
+      border-bottom: 0;
+    }
+    #mapWrap.is-fullscreen .dv-map-toolbar {
+      margin: 0;
+      padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+      border-top: 1px solid rgb(229 231 235);
+      background: #fff;
+    }
+    .dark #mapWrap.is-fullscreen .dv-map-toolbar {
+      border-top-color: rgb(55 65 81);
+      background: rgb(17 24 39);
+    }
+    .dv-map-fs-head {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.625rem 1rem;
+      padding-top: calc(0.625rem + env(safe-area-inset-top, 0px));
+      border-bottom: 1px solid rgb(229 231 235);
+      background: #fff;
+      flex-shrink: 0;
+    }
+    .dark .dv-map-fs-head {
+      border-bottom-color: rgb(55 65 81);
+      background: rgb(17 24 39);
+    }
+    .dv-map-fs-head__title {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: rgb(17 24 39);
+    }
+    .dark .dv-map-fs-head__title { color: rgb(243 244 246); }
+    .dv-map-fs-head__close {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.375rem 0.625rem;
+      border-radius: 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: rgb(37 99 235);
+      background: rgb(239 246 255);
+      border: 0;
+      cursor: pointer;
+    }
+    .dark .dv-map-fs-head__close {
+      color: rgb(147 197 253);
+      background: rgb(30 58 138 / 0.25);
+    }
+    .dv-map-fs-btn {
+      position: absolute;
+      top: 0.5rem;
+      left: 0.5rem;
+      z-index: 600;
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 0.5rem;
+      border: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.95);
+      color: rgb(55 65 81);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      cursor: pointer;
+    }
+    .dark .dv-map-fs-btn {
+      background: rgba(31, 41, 55, 0.95);
+      color: rgb(209 213 219);
+    }
+    .dv-map-fs-btn:hover { background: #fff; color: rgb(37 99 235); }
+    .dark .dv-map-fs-btn:hover { background: rgb(31 41 55); color: rgb(147 197 253); }
+
     #imagePreview {
       display: flex;
       gap: 0.5rem;
@@ -519,33 +771,52 @@
       </div>
     </section>
 
-    <!-- موقعیت -->
-    <section class="dv-card">
-      <div class="flex items-center justify-between gap-2 px-4 pt-3 pb-1">
-        <p class="dv-card-title !p-0">موقعیت نقشه <span class="font-normal normal-case text-gray-400">اختیاری</span></p>
-        <button type="button" id="toggleMapBtn" class="text-xs font-medium text-blue-600 dark:text-blue-400">نمایش نقشه</button>
-      </div>
-      <div class="dv-row">
-        <label class="dv-label" for="latitude">عرض</label>
-        <div class="dv-field">
-          <input type="number" step="0.000001" name="latitude" id="latitude" class="dv-inp" dir="ltr"
-                 value="{{ f.get('latitude', '') }}" placeholder="Lat">
+    <!-- موقعیت نقشه -->
+    <section class="dv-card" id="mapSection">
+      <p class="dv-card-title">موقعیت روی نقشه <span class="font-normal normal-case text-gray-400">اختیاری</span></p>
+
+      <input type="hidden" name="latitude" id="latitude" value="{{ f.get('latitude', '') }}">
+      <input type="hidden" name="longitude" id="longitude" value="{{ f.get('longitude', '') }}">
+
+      <button type="button" id="mapLocationRow" class="dv-map-entry" aria-expanded="false" aria-controls="mapWrap">
+        <span class="dv-map-entry__icon" aria-hidden="true"><i class="fa-solid fa-map-location-dot"></i></span>
+        <span class="dv-map-entry__body">
+          <span class="dv-map-entry__title">انتخاب موقعیت ملک</span>
+          <span class="dv-map-entry__hint" id="mapLocationHint">برای نمایش دقیق‌تر روی نقشه، محل تقریبی را مشخص کنید</span>
+        </span>
+        <span class="dv-map-entry__action" id="mapLocationAction">انتخاب</span>
+      </button>
+
+      <div id="mapWrap" class="hidden" aria-hidden="true">
+        <div class="dv-map-fs-head" id="mapFsHead">
+          <span class="dv-map-fs-head__title">انتخاب موقعیت روی نقشه</span>
+          <button type="button" class="dv-map-fs-head__close" id="mapFullscreenClose" aria-label="خروج از تمام‌صفحه">
+            <i class="fa-solid fa-compress text-[10px]" aria-hidden="true"></i>
+            بستن
+          </button>
         </div>
-      </div>
-      <div class="dv-row">
-        <label class="dv-label" for="longitude">طول</label>
-        <div class="dv-field">
-          <input type="number" step="0.000001" name="longitude" id="longitude" class="dv-inp" dir="ltr"
-                 value="{{ f.get('longitude', '') }}" placeholder="Lng">
+        <p class="dv-map-guide">نقشه را جابه‌جا کنید تا پین روی محل ملک قرار بگیرد</p>
+        <div class="dv-map-frame">
+          <button type="button" class="dv-map-fs-btn" id="mapFullscreenBtn" aria-label="تمام‌صفحه">
+            <i class="fa-solid fa-expand" aria-hidden="true"></i>
+          </button>
+          <div id="locationMap"></div>
+          <div class="dv-map-pin" aria-hidden="true"><i class="fa-solid fa-location-dot"></i></div>
         </div>
-      </div>
-      <div id="mapWrap" class="hidden px-4 pb-4 space-y-2">
-        <button type="button" id="getCurrentLocationBtn"
-                class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-blue-600 text-white">
-          <i class="fa-solid fa-crosshairs"></i>
-          موقعیت من
-        </button>
-        <div id="locationMap" class="w-full h-52 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"></div>
+        <div class="dv-map-toolbar">
+          <button type="button" id="getCurrentLocationBtn" class="dv-map-btn">
+            <i class="fa-solid fa-crosshairs text-[10px]" aria-hidden="true"></i>
+            موقعیت من
+          </button>
+          <button type="button" id="clearMapBtn" class="dv-map-btn">
+            <i class="fa-solid fa-trash-can text-[10px]" aria-hidden="true"></i>
+            حذف
+          </button>
+          <button type="button" id="confirmMapBtn" class="dv-map-btn dv-map-btn--primary">
+            <i class="fa-solid fa-check text-[10px]" aria-hidden="true"></i>
+            تأیید موقعیت
+          </button>
+        </div>
       </div>
     </section>
 
@@ -579,5 +850,5 @@
   </button>
 </div>
 
-<script src="{{ url_for('static', filename='admin/add-express-listing.js') }}?v=4" defer></script>
+<script src="{{ url_for('static', filename='admin/add-express-listing.js') }}?v=6" defer></script>
 {% endblock %}

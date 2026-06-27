@@ -20,7 +20,12 @@
   let imageItems = [];
   let mapReady = false;
   let locationMap = null;
-  let locationMarker = null;
+  let mapDraftLat = null;
+  let mapDraftLon = null;
+  let mapFullscreen = false;
+  const DEFAULT_LAT = 35.6892;
+  const DEFAULT_LON = 51.389;
+  const DEFAULT_ZOOM = 12;
   let isSubmitting = false;
 
   function parseDigits(str) {
@@ -626,7 +631,76 @@
   });
   toggleInst();
 
-  // Lazy map
+  // نقشه — سبک دیوار (پین ثابت وسط، جابه‌جایی نقشه)
+  const mapLocationRow = $('#mapLocationRow', form);
+  const mapWrap = $('#mapWrap', form);
+  const mapLocationHint = $('#mapLocationHint', form);
+  const mapLocationAction = $('#mapLocationAction', form);
+  const latEl = $('#latitude', form);
+  const lonEl = $('#longitude', form);
+
+  function hasMapCoords() {
+    const lat = parseFloat(latEl?.value);
+    const lon = parseFloat(lonEl?.value);
+    return Number.isFinite(lat) && Number.isFinite(lon);
+  }
+
+  function getMapCoords() {
+    if (hasMapCoords()) {
+      return {
+        lat: parseFloat(latEl.value),
+        lon: parseFloat(lonEl.value),
+      };
+    }
+    return { lat: DEFAULT_LAT, lon: DEFAULT_LON };
+  }
+
+  function formatCoord(n) {
+    return Number(n).toFixed(5);
+  }
+
+  function syncMapStatus() {
+    if (!mapLocationHint || !mapLocationRow) return;
+    if (hasMapCoords()) {
+      mapLocationRow.classList.add('has-location');
+      mapLocationHint.textContent =
+        'موقعیت ثبت شد · ' + formatCoord(latEl.value) + ' ، ' + formatCoord(lonEl.value);
+      mapLocationHint.classList.add('is-set');
+      if (mapLocationAction) mapLocationAction.textContent = 'تغییر';
+    } else {
+      mapLocationRow.classList.remove('has-location');
+      mapLocationHint.textContent = 'برای نمایش دقیق‌تر روی نقشه، محل تقریبی را مشخص کنید';
+      mapLocationHint.classList.remove('is-set');
+      if (mapLocationAction) mapLocationAction.textContent = 'انتخاب';
+    }
+  }
+
+  function updateCoords(lat, lon) {
+    if (latEl) latEl.value = Number(lat).toFixed(6);
+    if (lonEl) lonEl.value = Number(lon).toFixed(6);
+  }
+
+  function updateDraftFromMapCenter() {
+    if (!locationMap) return;
+    const c = locationMap.getCenter();
+    mapDraftLat = c.lat;
+    mapDraftLon = c.lng;
+    if (mapLocationHint && mapWrap && !mapWrap.classList.contains('hidden')) {
+      mapLocationHint.textContent =
+        'موقعیت انتخابی · ' + formatCoord(mapDraftLat) + ' ، ' + formatCoord(mapDraftLon);
+      mapLocationHint.classList.add('is-set');
+    }
+  }
+
+  function commitDraftCoords() {
+    if (mapDraftLat == null || mapDraftLon == null) {
+      updateDraftFromMapCenter();
+    }
+    if (mapDraftLat != null && mapDraftLon != null) {
+      updateCoords(mapDraftLat, mapDraftLon);
+    }
+  }
+
   function loadScript(src) {
     return new Promise((resolve, reject) => {
       if (document.querySelector('script[src="' + src + '"]')) {
@@ -651,7 +725,7 @@
 
   async function ensureMap() {
     if (mapReady && locationMap) {
-      locationMap.invalidateSize();
+      setTimeout(() => locationMap.invalidateSize(), 80);
       return;
     }
     const css = form.dataset.leafletCss;
@@ -661,72 +735,160 @@
     initMap();
   }
 
-  function updateCoords(lat, lon) {
-    const latEl = $('#latitude', form);
-    const lonEl = $('#longitude', form);
-    if (latEl) latEl.value = lat.toFixed(6);
-    if (lonEl) lonEl.value = lon.toFixed(6);
-  }
-
   function initMap() {
     if (mapReady || !$('#locationMap') || typeof L === 'undefined') return;
-    const latEl = $('#latitude', form);
-    const lonEl = $('#longitude', form);
-    let lat = parseFloat(latEl?.value) || 35.6892;
-    let lon = parseFloat(lonEl?.value) || 51.389;
-    locationMap = L.map('locationMap').setView([lat, lon], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(locationMap);
-    locationMarker = L.marker([lat, lon], { draggable: true }).addTo(locationMap);
-    locationMap.on('click', (e) => {
-      locationMarker.setLatLng(e.latlng);
-      updateCoords(e.latlng.lat, e.latlng.lng);
-    });
-    locationMarker.on('dragend', (e) => {
-      const p = e.target.getLatLng();
-      updateCoords(p.lat, p.lng);
-    });
+    const { lat, lon } = getMapCoords();
+    const zoom = hasMapCoords() ? 15 : DEFAULT_ZOOM;
+
+    locationMap = L.map('locationMap', {
+      zoomControl: true,
+      attributionControl: true,
+    }).setView([lat, lon], zoom);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap',
+    }).addTo(locationMap);
+
+    locationMap.on('moveend', updateDraftFromMapCenter);
+    locationMap.on('zoomend', updateDraftFromMapCenter);
+
     mapReady = true;
-    setTimeout(() => locationMap.invalidateSize(), 80);
+    setTimeout(() => {
+      locationMap.invalidateSize();
+      updateDraftFromMapCenter();
+    }, 120);
   }
 
-  $('#toggleMapBtn')?.addEventListener('click', async () => {
-    const wrap = $('#mapWrap');
-    const btn = $('#toggleMapBtn');
-    if (wrap.classList.contains('hidden')) {
-      wrap.classList.remove('hidden');
-      if (btn) btn.textContent = 'بستن نقشه';
-      await ensureMap();
+  function setMapFullscreen(on) {
+    mapFullscreen = !!on;
+    mapWrap?.classList.toggle('is-fullscreen', mapFullscreen);
+    document.body.classList.toggle('dv-map-fs-lock', mapFullscreen);
+    const btn = $('#mapFullscreenBtn');
+    const closeBtn = $('#mapFullscreenClose');
+    if (btn) {
+      btn.innerHTML = mapFullscreen
+        ? '<i class="fa-solid fa-compress" aria-hidden="true"></i>'
+        : '<i class="fa-solid fa-expand" aria-hidden="true"></i>';
+      btn.setAttribute('aria-label', mapFullscreen ? 'خروج از تمام‌صفحه' : 'تمام‌صفحه');
+    }
+    if (closeBtn) {
+      closeBtn.setAttribute('aria-label', mapFullscreen ? 'خروج از تمام‌صفحه' : 'بستن');
+    }
+    setTimeout(() => locationMap?.invalidateSize(), 150);
+  }
+
+  function setMapOpen(open, opts) {
+    opts = opts || {};
+    if (!mapWrap || !mapLocationRow) return;
+    if (open) {
+      mapWrap.classList.remove('hidden');
+      mapWrap.setAttribute('aria-hidden', 'false');
+      mapLocationRow.classList.add('is-open');
+      mapLocationRow.setAttribute('aria-expanded', 'true');
+      if (mapLocationAction) mapLocationAction.textContent = 'بستن';
+      if (hasMapCoords()) {
+        mapDraftLat = parseFloat(latEl.value);
+        mapDraftLon = parseFloat(lonEl.value);
+      }
     } else {
-      wrap.classList.add('hidden');
-      if (btn) btn.textContent = 'نمایش نقشه';
+      setMapFullscreen(false);
+      mapWrap.classList.add('hidden');
+      mapWrap.setAttribute('aria-hidden', 'true');
+      mapLocationRow.classList.remove('is-open');
+      mapLocationRow.setAttribute('aria-expanded', 'false');
+      if (!opts.skipStatus) syncMapStatus();
+    }
+  }
+
+  async function openMapPanel() {
+    await ensureMap();
+    const { lat, lon } = getMapCoords();
+    locationMap?.setView([lat, lon], hasMapCoords() ? 15 : DEFAULT_ZOOM);
+    setTimeout(() => {
+      locationMap?.invalidateSize();
+      updateDraftFromMapCenter();
+    }, 100);
+  }
+
+  mapLocationRow?.addEventListener('click', async () => {
+    const isOpen = !mapWrap?.classList.contains('hidden');
+    if (isOpen) {
+      setMapOpen(false);
+      return;
+    }
+    setMapOpen(true);
+    await openMapPanel();
+  });
+
+  $('#confirmMapBtn')?.addEventListener('click', () => {
+    commitDraftCoords();
+    syncMapStatus();
+    setMapFullscreen(false);
+    setMapOpen(false);
+  });
+
+  $('#mapFullscreenBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMapFullscreen(!mapFullscreen);
+  });
+
+  $('#mapFullscreenClose')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMapFullscreen(false);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && mapFullscreen) {
+      e.preventDefault();
+      setMapFullscreen(false);
+    }
+  });
+
+  $('#clearMapBtn')?.addEventListener('click', () => {
+    if (latEl) latEl.value = '';
+    if (lonEl) lonEl.value = '';
+    mapDraftLat = null;
+    mapDraftLon = null;
+    syncMapStatus();
+    if (locationMap) {
+      locationMap.setView([DEFAULT_LAT, DEFAULT_LON], DEFAULT_ZOOM);
+      updateDraftFromMapCenter();
     }
   });
 
   $('#getCurrentLocationBtn')?.addEventListener('click', async () => {
     const btn = $('#getCurrentLocationBtn');
     if (!navigator.geolocation) {
-      alert('مرورگر از موقعیت پشتیبانی نمی‌کند.');
+      alert('مرورگر از موقعیت مکانی پشتیبانی نمی‌کند.');
       return;
     }
-    $('#mapWrap')?.classList.remove('hidden');
-    await ensureMap();
-    btn.disabled = true;
+    setMapOpen(true);
+    await openMapPanel();
+    if (btn) btn.disabled = true;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
-        locationMarker?.setLatLng([lat, lon]);
-        locationMap?.setView([lat, lon], 15);
-        updateCoords(lat, lon);
-        btn.disabled = false;
+        locationMap?.setView([lat, lon], 16);
+        mapDraftLat = lat;
+        mapDraftLon = lon;
+        if (mapLocationHint) {
+          mapLocationHint.textContent =
+            'موقعیت انتخابی · ' + formatCoord(lat) + ' ، ' + formatCoord(lon);
+          mapLocationHint.classList.add('is-set');
+        }
+        if (btn) btn.disabled = false;
       },
       () => {
-        alert('دریافت موقعیت ناموفق بود.');
-        btn.disabled = false;
+        alert('دریافت موقعیت ناموفق بود. دسترسی GPS یا اینترنت را بررسی کنید.');
+        if (btn) btn.disabled = false;
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
   });
+
+  syncMapStatus();
 
   // Submit
   form.addEventListener('submit', (e) => {
