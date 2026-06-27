@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import os
-import shutil
-import sys
+from collections import deque
 from pathlib import Path
 
 try:
@@ -75,16 +73,37 @@ def make_monochrome(img: Image.Image, target: int) -> Image.Image:
     return out
 
 
-def strip_near_black_bg(img: Image.Image, threshold: int = 22) -> Image.Image:
-    """Make outer black background transparent for Android launcher."""
+def strip_outer_black_bg(img: Image.Image, threshold: int = 10) -> Image.Image:
+    """Remove edge-connected pure-black background; keep squircle + inner V."""
     out = img.copy()
     px = out.load()
     w, h = out.size
+
+    def is_outer_bg(x: int, y: int) -> bool:
+        r, g, b, a = px[x, y]
+        return a > 0 and r < threshold and g < threshold and b < threshold
+
+    q: deque[tuple[int, int]] = deque()
+    seen: set[tuple[int, int]] = set()
+
+    for x in range(w):
+        for y in (0, h - 1):
+            if is_outer_bg(x, y):
+                seen.add((x, y))
+                q.append((x, y))
     for y in range(h):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if r < threshold and g < threshold and b < threshold:
-                px[x, y] = (r, g, b, 0)
+        for x in (0, w - 1):
+            if is_outer_bg(x, y) and (x, y) not in seen:
+                seen.add((x, y))
+                q.append((x, y))
+
+    while q:
+        x, y = q.popleft()
+        px[x, y] = (0, 0, 0, 0)
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in seen and is_outer_bg(nx, ny):
+                seen.add((nx, ny))
+                q.append((nx, ny))
     return out
 
 
@@ -118,22 +137,18 @@ def write_apk_icons(src: Image.Image) -> None:
         print("APK res not found, skip Android icons")
         return
 
-    master = strip_near_black_bg(resize_contain(src, 192))
+    master = strip_outer_black_bg(resize_contain(src, 192))
     nodpi = APK_RES / "drawable-nodpi"
     ensure_dir(nodpi)
     master.save(nodpi / "ic_pwa_logo.png")
 
     for folder, size in APK_DENSITIES.items():
-        icon_path = ICONS_DIR / f"icon-{size}.png"
-        if icon_path.is_file():
-            img = strip_near_black_bg(Image.open(icon_path).convert("RGBA"))
-        else:
-            img = strip_near_black_bg(resize_contain(src, size))
+        img = strip_outer_black_bg(resize_contain(src, size))
         out_dir = APK_RES / f"mipmap-{folder}"
         ensure_dir(out_dir)
         img.save(out_dir / "ic_launcher.png")
         img.save(out_dir / "ic_launcher_round.png")
-        print(f"APK {folder}: {size}px")
+        print(f"APK {folder}: {size}px (transparent bg)")
 
     print(f"APK icons -> {APK_RES}")
 
@@ -145,14 +160,22 @@ def main() -> None:
         required=True,
         help="Path to master logo PNG (square, >=512px recommended)",
     )
+    p.add_argument(
+        "--apk-only",
+        action="store_true",
+        help="Regenerate Android launcher/splash assets only",
+    )
     args = p.parse_args()
     source = Path(args.source).resolve()
     if not source.is_file():
         raise SystemExit(f"Source not found: {source}")
 
     src = load_source(source)
-    write_web_icons(src)
-    write_apk_icons(src)
+    if args.apk_only:
+        write_apk_icons(src)
+    else:
+        write_web_icons(src)
+        write_apk_icons(src)
     print("Done.")
 
 
