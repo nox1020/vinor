@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Generate Vinor brand assets from master logo PNG (site, PWA, APK)."""
+"""Generate Vinor brand assets — professional black/white V icon (site, PWA, APK)."""
 from __future__ import annotations
 
 import argparse
-import shutil
 from pathlib import Path
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageDraw
 except ImportError:
     raise SystemExit("Pillow required: pip install Pillow")
 
@@ -15,17 +14,86 @@ ROOT = Path(__file__).resolve().parents[1]
 ICONS_DIR = ROOT / "app" / "static" / "icons"
 STATIC_DIR = ROOT / "app" / "static"
 APK_RES = ROOT.parent / "apk" / "app" / "src" / "main" / "res"
-DEFAULT_SOURCE = ICONS_DIR / "vinor-logo-source.png"
 
 SIZES = [48, 72, 96, 128, 144, 192, 256, 384, 512]
 APK_DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 MONOCHROME_SIZES = [48, 72, 96, 128, 144, 192, 256, 512]
 
 BLACK = (0, 0, 0, 255)
+WHITE = (255, 255, 255, 255)
+TRANSPARENT = (0, 0, 0, 0)
+
+# iOS-style squircle corner radius (~22.37% of edge)
+TILE_RADIUS_RATIO = 0.2237
+# Letter sits in optical center (slightly above geometric center)
+V_LIFT_RATIO = 0.018
 
 
 def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
+
+
+def _v_arm_polygons(size: float) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
+    """Bold geometric V — legs meet at a single apex."""
+    s = float(size)
+    pad_x = s * 0.205
+    top = s * 0.255 - s * V_LIFT_RATIO
+    apex_y = s * 0.755 - s * V_LIFT_RATIO
+    mid = s * 0.5
+    sw = s * 0.108
+
+    left = [
+        (pad_x, top),
+        (pad_x + sw * 1.92, top),
+        (mid, apex_y),
+        (mid - sw, apex_y),
+    ]
+    right = [
+        (s - pad_x, top),
+        (s - pad_x - sw * 1.92, top),
+        (mid, apex_y),
+        (mid + sw, apex_y),
+    ]
+    return left, right
+
+
+def _draw_tile(draw: ImageDraw.ImageDraw, size: int, inset: float = 0.0, fill: tuple[int, ...] = BLACK) -> None:
+    margin = int(size * inset)
+    radius = max(1, int((size - margin * 2) * TILE_RADIUS_RATIO))
+    draw.rounded_rectangle(
+        (margin, margin, size - 1 - margin, size - 1 - margin),
+        radius=radius,
+        fill=fill,
+    )
+
+
+def render_glyph(size: int, color: tuple[int, ...] = WHITE) -> Image.Image:
+    """White V on transparent canvas."""
+    img = Image.new("RGBA", (size, size), TRANSPARENT)
+    draw = ImageDraw.Draw(img)
+    left, right = _v_arm_polygons(size)
+    draw.polygon(left, fill=color)
+    draw.polygon(right, fill=color)
+    return img
+
+
+def render_brand_icon(size: int, tile_inset: float = 0.0) -> Image.Image:
+    """Squircle tile + white V."""
+    img = Image.new("RGBA", (size, size), TRANSPARENT)
+    draw = ImageDraw.Draw(img)
+    _draw_tile(draw, size, inset=tile_inset, fill=BLACK)
+    glyph = render_glyph(size)
+    img.alpha_composite(glyph)
+    return img
+
+
+def render_maskable(size: int, safe_ratio: float = 0.80) -> Image.Image:
+    inset = (1.0 - safe_ratio) * 0.5
+    return render_brand_icon(size, tile_inset=inset)
+
+
+def render_monochrome(size: int) -> Image.Image:
+    return render_glyph(size, WHITE)
 
 
 def load_source(path: Path) -> Image.Image:
@@ -33,33 +101,7 @@ def load_source(path: Path) -> Image.Image:
 
 
 def resize_icon(img: Image.Image, target: int) -> Image.Image:
-    return img.resize((target, target), Image.LANCZOS)
-
-
-def make_maskable(img: Image.Image, target: int, safe_ratio: float = 0.82) -> Image.Image:
-    canvas = Image.new("RGBA", (target, target), BLACK)
-    safe = max(1, int(target * safe_ratio))
-    resized = img.resize((safe, safe), Image.LANCZOS)
-    off = (target - safe) // 2
-    canvas.alpha_composite(resized, (off, off))
-    return canvas
-
-
-def make_monochrome(img: Image.Image, target: int) -> Image.Image:
-    base = resize_icon(img, target)
-    out = Image.new("RGBA", (target, target), (0, 0, 0, 0))
-    px = base.load()
-    opx = out.load()
-    w, h = base.size
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if a < 16:
-                continue
-            lum = (r * 299 + g * 587 + b * 114) / 1000
-            if lum > 180:
-                opx[x, y] = (255, 255, 255, min(255, a))
-    return out
+    return img.resize((target, target), Image.Resampling.LANCZOS)
 
 
 def write_web_icons(src: Image.Image) -> None:
@@ -68,10 +110,10 @@ def write_web_icons(src: Image.Image) -> None:
 
     for size in SIZES:
         resize_icon(src, size).save(ICONS_DIR / f"icon-{size}.png")
-        make_maskable(src, size).save(ICONS_DIR / f"maskable-{size}.png")
+        render_maskable(size).save(ICONS_DIR / f"maskable-{size}.png")
 
     for size in MONOCHROME_SIZES:
-        make_monochrome(src, size).save(ICONS_DIR / f"monochrome-{size}.png")
+        render_monochrome(size).save(ICONS_DIR / f"monochrome-{size}.png")
 
     resize_icon(src, 32).save(STATIC_DIR / "favicon-32x32.png")
     resize_icon(src, 256).save(
@@ -95,9 +137,18 @@ def write_apk_icons(src: Image.Image) -> None:
     if splash_xml.parent.is_dir():
         splash_xml.write_text(
             """<?xml version="1.0" encoding="utf-8"?>
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@drawable/ic_pwa_logo"
-    android:gravity="center" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <path
+        android:fillColor="#000000"
+        android:pathData="M8,26 C8,14 14,8 26,8 H94 C106,8 112,14 112,26 V94 C112,106 106,112 94,112 H26 C14,112 8,106 8,94 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,34 L44,34 L60,88 L76,34 L90,34 L68,90 L52,90 Z" />
+</vector>
 """,
             encoding="utf-8",
         )
@@ -128,12 +179,15 @@ def write_apk_launcher_bg() -> None:
         )
 
 
+def build_master(size: int = 1024) -> Image.Image:
+    return render_brand_icon(size)
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description="Apply Vinor brand logo everywhere")
     p.add_argument(
         "--source",
-        default=str(DEFAULT_SOURCE),
-        help="Master logo PNG (square, rounded black tile + white V)",
+        help="Optional raster override (default: programmatic redesign)",
     )
     p.add_argument(
         "--apk-only",
@@ -141,11 +195,15 @@ def main() -> None:
         help="Regenerate Android launcher/splash assets only",
     )
     args = p.parse_args()
-    source = Path(args.source).resolve()
-    if not source.is_file():
-        raise SystemExit(f"Source not found: {source}")
 
-    src = load_source(source)
+    if args.source:
+        source = Path(args.source).resolve()
+        if not source.is_file():
+            raise SystemExit(f"Source not found: {source}")
+        src = load_source(source)
+    else:
+        src = build_master(1024)
+
     if args.apk_only:
         write_apk_icons(src)
         write_apk_launcher_bg()
