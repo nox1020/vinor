@@ -1,33 +1,35 @@
-{# مودال تماس و موقعیت #}
+{# مودال‌ها — پالت وینور #}
 {% set contact_phone = land.owner_phone or land.vinor_contact %}
 
 {% if contact_phone %}
 <div id="landContactModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landContactTitle">
-  <div class="ld-modal__backdrop absolute inset-0 bg-black/60" data-land-modal-close></div>
-  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl" data-land-modal-panel>
-    <h2 id="landContactTitle" class="text-lg font-bold text-white mb-3">تماس</h2>
-    <a href="tel:{{ contact_phone }}" class="flex items-center justify-center gap-2 w-full rounded-xl bg-[#22c55e] hover:bg-green-400 py-3.5 text-white font-semibold">
+  <div class="ld-modal__backdrop absolute inset-0 bg-black/50" data-land-modal-close></div>
+  <div class="ld-modal__panel relative w-full max-w-md rounded-2xl p-5 shadow-xl" data-land-modal-panel>
+    <h2 id="landContactTitle" class="text-base font-bold mb-1">اطلاعات تماس</h2>
+    <p class="ld-modal__hint mb-4">برای هماهنگی بازدید با مالک تماس بگیرید.</p>
+    <a href="tel:{{ contact_phone }}" class="ld-btn-call flex items-center justify-center gap-2 w-full py-3.5 text-sm rounded-xl">
       <i class="fas fa-phone" aria-hidden="true"></i>
-      {{ contact_phone }}
+      <span dir="ltr">{{ contact_phone }}</span>
     </a>
-    <button type="button" data-land-modal-close class="mt-3 w-full py-2.5 text-sm text-gray-400">بستن</button>
+    <button type="button" data-land-modal-close class="ld-modal__close-btn mt-3 w-full py-2.5 text-sm">بستن</button>
   </div>
 </div>
 {% endif %}
 
 {% if land.latitude and land.longitude %}
 <div id="landLocationModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landLocationTitle">
-  <div class="ld-modal__backdrop absolute inset-0 bg-black/60" data-land-modal-close></div>
-  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl" data-land-modal-panel>
-    <h2 id="landLocationTitle" class="text-lg font-bold text-white mb-3">موقعیت</h2>
+  <div class="ld-modal__backdrop absolute inset-0 bg-black/50" data-land-modal-close></div>
+  <div class="ld-modal__panel relative w-full max-w-md rounded-2xl p-5 shadow-xl" data-land-modal-panel>
+    <h2 id="landLocationTitle" class="text-base font-bold mb-1">موقعیت ملک</h2>
+    <p class="ld-modal__hint mb-4">موقعیت روی نقشه گوگل باز می‌شود.</p>
     <a href="https://www.google.com/maps?q={{ land.latitude }},{{ land.longitude }}"
        target="_blank"
        rel="noopener noreferrer"
-       class="flex items-center justify-center gap-2 w-full rounded-xl bg-teal-600 hover:bg-teal-500 py-3.5 text-white font-semibold">
+       class="ld-btn-tx flex items-center justify-center gap-2 w-full py-3.5 text-sm rounded-xl">
       <i class="fas fa-map-location-dot" aria-hidden="true"></i>
       باز کردن در نقشه
     </a>
-    <button type="button" data-land-modal-close class="mt-3 w-full py-2.5 text-sm text-gray-400">بستن</button>
+    <button type="button" data-land-modal-close class="ld-modal__close-btn mt-3 w-full py-2.5 text-sm">بستن</button>
   </div>
 </div>
 {% endif %}
@@ -37,39 +39,39 @@
 {% set show_tx = is_approved and _ld_st != 'sold' and _tx_mode in ('visit', 'deal', 'release', 'visit_pending') %}
 {% if show_tx %}
 <div id="landVisitModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landVisitTitle">
-  <div class="ld-modal__backdrop absolute inset-0 bg-black/60" data-land-modal-close></div>
-  <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151d2b] p-5 shadow-xl" data-land-modal-panel>
-    <h2 id="landVisitTitle" class="text-lg font-bold text-white mb-1">درخواست بازدید</h2>
-    <p class="text-xs text-gray-400 mb-3">تاریخ بازدید را از تقویم شمسی انتخاب کنید.</p>
+  <div class="ld-modal__backdrop absolute inset-0 bg-black/50" data-land-modal-close></div>
+  <div class="ld-modal__panel relative w-full max-w-md rounded-2xl p-5 shadow-xl" data-land-modal-panel>
+    <h2 id="landVisitTitle" class="text-base font-bold mb-1">درخواست بازدید</h2>
+    <p class="ld-modal__hint mb-3">تاریخ بازدید را از تقویم شمسی انتخاب کنید.</p>
 
-    <div class="rounded-xl border border-white/10 bg-[#0B111B] p-3 mb-3">
+    <div class="ld-cal-wrap mb-3">
       <div class="flex items-center justify-between gap-2 mb-3">
-        <button type="button" id="landVisitCalPrev" class="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 flex items-center justify-center" aria-label="ماه قبل">
+        <button type="button" id="landVisitCalPrev" class="ld-cal-nav" aria-label="ماه قبل">
           <i class="fas fa-chevron-right text-xs" aria-hidden="true"></i>
         </button>
-        <span id="landVisitCalMonth" class="text-sm font-semibold text-white"></span>
-        <button type="button" id="landVisitCalNext" class="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 flex items-center justify-center" aria-label="ماه بعد">
+        <span id="landVisitCalMonth" class="ld-cal-month"></span>
+        <button type="button" id="landVisitCalNext" class="ld-cal-nav" aria-label="ماه بعد">
           <i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>
         </button>
       </div>
-      <div class="grid grid-cols-7 gap-1 text-center text-[10px] text-gray-500 mb-1">
+      <div class="grid grid-cols-7 gap-1 text-center ld-cal-weekday mb-1">
         <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span>
       </div>
       <div id="landVisitCalGrid" class="grid grid-cols-7 gap-1"></div>
     </div>
 
-    <p id="landVisitCalSelected" class="text-sm text-teal-300 text-center mb-3 min-h-[1.25rem]">تاریخ انتخاب نشده</p>
+    <p id="landVisitCalSelected" class="ld-cal-selected text-sm text-center mb-3 min-h-[1.25rem]">تاریخ انتخاب نشده</p>
     <input type="hidden" id="landVisitDateInput" value="" />
 
     <button type="button"
             id="landVisitSubmitBtn"
             data-visit-submit
             disabled
-            class="w-full flex items-center justify-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-500 py-3.5 text-white font-semibold disabled:opacity-50 disabled:pointer-events-none">
+            class="ld-btn-tx w-full flex items-center justify-center gap-2 py-3.5 text-sm rounded-xl disabled:opacity-50 disabled:pointer-events-none">
       <i class="fas fa-paper-plane" aria-hidden="true"></i>
       ثبت درخواست بازدید
     </button>
-    <button type="button" data-land-modal-close class="mt-3 w-full py-2.5 text-sm text-gray-400">انصراف</button>
+    <button type="button" data-land-modal-close class="ld-modal__close-btn mt-3 w-full py-2.5 text-sm">انصراف</button>
   </div>
 </div>
 {% endif %}

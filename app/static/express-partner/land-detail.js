@@ -667,10 +667,16 @@
       close();
     }
 
+    function onMenuClick(e) {
+      e.stopPropagation();
+    }
+
     btn.addEventListener('click', toggle);
+    menu.addEventListener('click', onMenuClick);
     document.addEventListener('click', onDocClick);
     addCleanup(function () {
       btn.removeEventListener('click', toggle);
+      menu.removeEventListener('click', onMenuClick);
       document.removeEventListener('click', onDocClick);
       close();
     });
@@ -755,25 +761,25 @@
     visit: {
       label: 'درخواست بازدید',
       icon: 'fa-calendar-check',
-      btnClass: 'bg-teal-700/90 hover:bg-teal-600 border border-teal-500/35 shadow-none',
+      btnClass: 'ld-btn-tx',
       specLabel: 'فعال',
     },
     visit_pending: {
-      label: 'در انتظار تأیید بازدید',
+      label: 'در انتظار بازدید',
       icon: 'fa-clock',
-      btnClass: 'bg-slate-600/90 cursor-default opacity-90 shadow-none border-0',
+      btnClass: 'ld-btn-tx ld-btn-tx--pending cursor-default',
       specLabel: 'منتظر تأیید ادمین',
     },
     deal: {
       label: 'درخواست معامله',
       icon: 'fa-handshake',
-      btnClass: 'bg-teal-700/90 hover:bg-teal-600 border border-teal-500/35 shadow-none',
+      btnClass: 'ld-btn-tx',
       specLabel: 'بازدید ثبت‌شده',
     },
     release: {
       label: 'رفع معامله',
       icon: 'fa-check-circle',
-      btnClass: 'bg-teal-600 hover:bg-teal-500 shadow-lg shadow-teal-900/30 border-0',
+      btnClass: 'ld-btn-tx ld-btn-tx--release',
       specLabel: 'در حال معامله',
     },
   };
@@ -926,14 +932,14 @@
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = faPersianDay.format(gd);
-      btn.className = 'aspect-square rounded-lg text-xs font-medium transition ' + (
+      btn.className = 'aspect-square rounded-lg text-xs font-medium transition ld-cal-day' + (
         !enabled
-          ? 'text-gray-600 cursor-not-allowed opacity-40'
+          ? ' ld-cal-day--disabled'
           : visitCalState.selectedIso === iso
-            ? 'bg-teal-500 text-white ring-2 ring-teal-300'
+            ? ' ld-cal-day--selected'
             : iso === todayIso
-              ? 'bg-white/10 text-white hover:bg-teal-600/40'
-              : 'text-gray-200 hover:bg-white/10'
+              ? ' ld-cal-day--today'
+              : ' ld-cal-day--default'
       );
       btn.disabled = !enabled;
       if (enabled) {
@@ -1144,9 +1150,9 @@
       btn.setAttribute('data-land-tx-status', status);
       var icon = btn.querySelector('.land-tx-icon');
       var label = btn.querySelector('.land-tx-label');
-      if (icon) icon.className = 'fas ' + cfg.icon + ' land-tx-icon';
+      if (icon) icon.className = 'fas ' + cfg.icon + ' land-tx-icon text-xs';
       if (label) label.textContent = cfg.label;
-      btn.className = 'w-full flex items-center justify-center gap-2 rounded-2xl text-white font-bold py-3.5 text-sm active:scale-[0.98] transition-all disabled:opacity-70 disabled:pointer-events-none ' + cfg.btnClass;
+      btn.className = 'w-full flex items-center justify-center gap-2 py-3 text-sm active:scale-[0.98] transition-transform disabled:opacity-70 disabled:pointer-events-none ' + cfg.btnClass;
       if (visitDate) {
         btn.setAttribute('data-visit-date', visitDate);
       }
@@ -1841,7 +1847,7 @@
       if (expanded) {
         fullEl.classList.add('hidden');
         if (shortEl) shortEl.classList.remove('hidden');
-        if (label) label.textContent = 'بیشتر بخوانید';
+        if (label) label.textContent = 'مشاهده بیشتر';
         if (icon) icon.classList.remove('rotate-180');
       } else {
         fullEl.classList.remove('hidden');
@@ -1891,11 +1897,6 @@
 
     if (typeof window.vinorSyncFavButtons === 'function') {
       try { window.vinorSyncFavButtons(root); } catch (e) { /* ignore */ }
-    }
-
-    var similarTrack = root.querySelector('#ldSimilarTrack');
-    if (similarTrack && typeof window.vinorInitPremiumCards === 'function') {
-      try { window.vinorInitPremiumCards(similarTrack, similarTrack); } catch (e) { /* ignore */ }
     }
 
     bindFooterSpacerResize();

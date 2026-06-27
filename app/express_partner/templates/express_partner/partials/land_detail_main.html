@@ -1,4 +1,4 @@
-{# محتوای جزئیات — مطابق UI مرجع #}
+{# محتوای جزئیات — سبک دیوار #}
 {% set _st = (land._assignment_status|default('active')|string)|lower|trim %}
 {% set _kind = category_kind(land.category) %}
 {% set loc_line = ([land.city, land.location]|select|join('، ')) if (land.city or land.location) else '' %}
@@ -6,150 +6,162 @@
 {% set _basis = price_basis_area(land) %}
 {% set ppm = land.price_per_meter or ((_basis and price_total / _basis)|round(0)|int or 0) %}
 {% set desc = (land.description or land.desc or '')|trim %}
-{% set desc_short = desc[:280] if desc|length > 280 else desc %}
-{% set desc_long = desc|length > 280 %}
-{% set features = land.features or [] %}
+{% set desc_short = desc[:320] if desc|length > 320 else desc %}
+{% set desc_long = desc|length > 320 %}
 {% set deal_label = {'sale': 'فروش', 'presale': 'پیش‌فروش', 'rent': 'اجاره'}.get((land.deal_type or '')|string|lower, land.deal_type or land.payment_method or '') %}
 {% set tx_label = {'in_transaction': 'در حال معامله', 'sold': 'فروخته شد', 'active': 'فعال', 'pending': 'در انتظار', 'approved': 'تأیید شده', 'closed': 'بسته'}.get(_st, _st) %}
 {% set cat_rows = land_category_detail_rows(land) %}
 
-<div class="ld-main max-w-6xl mx-auto px-4 pb-2">
-  <div class="ld-main__body -mt-4 relative z-10 rounded-t-[1.75rem] bg-[#0B111B] pt-4">
+{# سلول‌های ردیف مشخصات کلیدی (دیوار) #}
+{% set ns = namespace(cells=[]) %}
+{% if land.category %}
+  {% set ns.cells = ns.cells + [{'label': 'نوع', 'value': land.category}] %}
+{% endif %}
+{% for row in cat_rows[:3] %}
+  {% set ns.cells = ns.cells + [{'label': row.label, 'value': row.value}] %}
+{% endfor %}
+{% if ppm and ns.cells|length < 4 %}
+  {% set ns.cells = ns.cells + [{'label': 'هر متر', 'value': ppm|toman}] %}
+{% endif %}
+{% set hero_specs = ns.cells %}
 
-    {% include 'express_partner/partials/first_sale_gift_banner.html' %}
+<div class="ld-main max-w-2xl mx-auto">
+  {# ── بلوک قیمت و عنوان ── #}
+  <section class="ld-section" data-tour="land-info">
+    <p class="ld-price-hero tabular-nums mb-1">
+      {{ price_total|toman(False) }}<span class="ld-price-unit">تومان</span>
+    </p>
+    {% if ppm %}
+    <p class="text-xs ld-muted mb-2 tabular-nums">هر متر: {{ ppm|toman }}</p>
+    {% endif %}
 
-    {# عنوان #}
-    <h1 class="mb-2 text-[15px] sm:text-base font-bold text-white leading-snug{% if is_approved %} ld-partner-copy cursor-pointer{% endif %}"
+    <h1 class="text-[15px] font-bold leading-snug mb-2{% if is_approved %} ld-partner-copy cursor-pointer{% endif %}"
+        style="color: var(--ld-text)"
         {% if is_approved %}data-land-copy="title" title="برای کپی عنوان ضربه بزنید"{% endif %}>{{ land.title or 'فایل' }}</h1>
 
-    {# موقعیت + کد ملک #}
-    {% if loc_line or land.code %}
-    <p class="flex items-center gap-2 text-[11px] text-slate-400 mb-4 min-w-0">
+  {% if loc_line or land.code %}
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs ld-muted mb-3">
       {% if loc_line %}
-      <span class="flex items-center gap-1 min-w-0 flex-1">
-        <i class="fas fa-location-dot text-teal-500 text-[10px] shrink-0" aria-hidden="true"></i>
-        <span class="truncate">{{ loc_line }}</span>
-      </span>
-      {% endif %}
-      {% if land.code %}
-      <span class="shrink-0 text-[11px] font-bold text-slate-300 font-mono tabular-nums{% if loc_line %} border-s border-white/10 ps-2{% endif %}" dir="ltr">
-        کد ملک: {{ land.code }}
-      </span>
-      {% endif %}
-    </p>
-    {% endif %}
-
-    {# قیمت — سه ستون #}
-    <div class="ld-price-grid grid grid-cols-3 gap-2 mb-4" data-tour="land-info">
-      <div class="rounded-xl border border-white/10 bg-[#121a22] px-2 py-2.5 text-center min-w-0">
-        <p class="text-[9px] text-slate-500 mb-0.5 leading-tight">کل</p>
-        <p class="text-[11px] font-bold text-white tabular-nums leading-tight">{{ price_total|toman }}</p>
-      </div>
-      <div class="rounded-xl border border-white/10 bg-[#121a22] px-2 py-2.5 text-center min-w-0">
-        <p class="text-[9px] text-slate-500 mb-0.5 leading-tight">قیمت هر متر</p>
-        <p class="text-[11px] font-bold text-white tabular-nums leading-tight">{% if ppm %}{{ ppm|toman }}{% else %}—{% endif %}</p>
-      </div>
-      {% if is_approved and land._commission_amount %}
-      <div class="rounded-xl border border-emerald-500/40 bg-emerald-950/55 px-2 py-2.5 text-center min-w-0">
-        <p class="text-[9px] text-emerald-400/90 mb-0.5 leading-tight">پورسانت شما{% if land._commission_pct %} ({{ land._commission_pct }}٪){% endif %}</p>
-        <p class="text-[11px] font-bold text-emerald-300 tabular-nums leading-tight">{{ land._commission_amount|toman }}</p>
-      </div>
-      {% else %}
-      <div class="rounded-xl border border-white/10 bg-[#121a22] px-2 py-2.5 text-center min-w-0 opacity-60">
-        <p class="text-[9px] text-slate-500 mb-0.5">پورسانت</p>
-        <p class="text-[11px] text-slate-500">—</p>
-      </div>
-      {% endif %}
-    </div>
-
-    {# جدول مشخصات #}
-    {% set has_specs = land.category or _st or deal_label or cat_rows or land.delivery or land.delivery_days or land.handover or (land.payment_method and land.payment_method != deal_label) or (_kind in ('villa', 'apartment') and land.year_built) or (_kind == 'villa' and (land.direction or land.villa_direction)) or (_kind == 'apartment' and (land.floor or land.floors)) or land.docs_status %}
-    {% if has_specs %}
-    <div class="rounded-xl border border-white/10 bg-[#0f1419] overflow-hidden mb-5 divide-y divide-white/5">
-      {% if land.category %}
-      <div class="flex items-center gap-2.5 px-3 py-2.5">
-        <i class="fas fa-house text-teal-500 text-xs w-4 text-center shrink-0" aria-hidden="true"></i>
-        <span class="text-[11px] text-slate-500 shrink-0">نوع ملک</span>
-        <span class="text-[12px] font-medium text-white ms-auto text-left">{{ land.category }}</span>
-      </div>
-      {% endif %}
-      {% for row in cat_rows %}
-      <div class="flex items-center gap-2.5 px-3 py-2.5">
-        <i class="fas {{ row.icon }} text-teal-500 text-xs w-4 text-center shrink-0" aria-hidden="true"></i>
-        <span class="text-[11px] text-slate-500 shrink-0">{{ row.label }}</span>
-        <span class="text-[12px] font-medium text-white ms-auto text-left">{{ row.value }}</span>
-      </div>
-      {% endfor %}
-      {% if _st %}
-      <div class="flex items-center gap-2.5 px-3 py-2.5">
-        <i class="fas fa-handshake text-teal-500 text-xs w-4 text-center shrink-0" aria-hidden="true"></i>
-        <span class="text-[11px] text-slate-500 shrink-0">وضعیت معامله</span>
-        <span class="text-[12px] font-medium text-white ms-auto text-left" data-land-tx-spec-value>{{ tx_label }}</span>
-      </div>
-      {% endif %}
-      {% if deal_label %}
-      <div class="flex items-center gap-2.5 px-3 py-2.5">
-        <i class="fas fa-tag text-teal-500 text-xs w-4 text-center shrink-0" aria-hidden="true"></i>
-        <span class="text-[11px] text-slate-500 shrink-0">نوع فروش</span>
-        <span class="text-[12px] font-medium text-white ms-auto text-left">{{ deal_label }}</span>
-      </div>
-      {% endif %}
-      {% if land.delivery or land.delivery_days or land.handover %}
-      <div class="flex items-center gap-2.5 px-3 py-2.5">
-        <i class="fas fa-truck text-teal-500 text-xs w-4 text-center shrink-0" aria-hidden="true"></i>
-        <span class="text-[11px] text-slate-500 shrink-0">تحویل</span>
-        <span class="text-[12px] font-medium text-white ms-auto text-left">{{ land.delivery or land.handover or (land.delivery_days|string ~ ' روز کاری') }}</span>
-      </div>
-      {% endif %}
-      {% if land.docs_status %}
-      <div class="flex items-center gap-2.5 px-3 py-2.5">
-        <i class="fas fa-file-contract text-teal-500 text-xs w-4 text-center shrink-0" aria-hidden="true"></i>
-        <span class="text-[11px] text-slate-500 shrink-0">وضعیت سند</span>
-        <span class="text-[12px] font-medium text-white ms-auto text-left">{{ land.docs_status }}</span>
-      </div>
-      {% endif %}
-      {% if land.payment_method and land.payment_method != deal_label %}
-      <div class="flex items-center gap-2.5 px-3 py-2.5">
-        <i class="fas fa-credit-card text-teal-500 text-xs w-4 text-center shrink-0" aria-hidden="true"></i>
-        <span class="text-[11px] text-slate-500 shrink-0">نحوه پرداخت</span>
-        <span class="text-[12px] font-medium text-white ms-auto text-left">{{ land.payment_method }}</span>
-      </div>
-      {% endif %}
-    </div>
-    {% endif %}
-
-    <div class="ld-main__scroll-pad">
-      {# معرفی ملک #}
-      {% if desc %}
-      <section class="ld-desc{% if is_approved %} ld-partner-copy cursor-pointer{% endif %}" aria-labelledby="ld-desc-heading"
-               {% if is_approved %}data-land-copy="description" title="برای کپی توضیحات ضربه بزنید"{% endif %}>
-        <h2 id="ld-desc-heading" class="text-sm font-bold text-white mb-2 flex items-center gap-2">
-          معرفی ملک
-          {% if is_approved %}
-          <span class="text-[10px] font-normal text-teal-400/80">(ضربه برای کپی)</span>
-          {% endif %}
-        </h2>
-        <p id="landDescText" class="text-[12px] text-slate-400 leading-relaxed whitespace-pre-line">{{ desc_short }}{% if desc_long %}…{% endif %}</p>
-        {% if desc_long %}
-        <p id="landDescFull" class="hidden text-[12px] text-slate-400 leading-relaxed whitespace-pre-line">{{ desc }}</p>
-        <button type="button" id="landDescToggle" class="mt-2 inline-flex items-center gap-1 text-[12px] text-teal-400 font-medium">
-          <span id="landDescToggleLabel">بیشتر بخوانید</span>
-          <i id="landDescToggleIcon" class="fas fa-chevron-down text-[10px] transition-transform" aria-hidden="true"></i>
-        </button>
-        {% endif %}
-      </section>
-      {% endif %}
-
       {% if land.latitude and land.longitude %}
       <button type="button"
               data-land-open-location
-              class="mt-4 w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#121a22] py-3 text-sm font-medium text-white hover:border-teal-500/40 hover:bg-[#151d2b] transition-colors">
-        <i class="fas fa-map-location-dot text-teal-400" aria-hidden="true"></i>
-        موقعیت ملک
+              class="ld-loc-link inline-flex items-center gap-1 min-w-0 max-w-full text-start"
+              title="مشاهده موقعیت روی نقشه">
+        <i class="fas fa-location-dot text-[10px] shrink-0" aria-hidden="true"></i>
+        <span class="truncate">{{ loc_line }}</span>
+        <i class="fas fa-chevron-left text-[8px] opacity-60 shrink-0" aria-hidden="true"></i>
       </button>
+      {% else %}
+      <span class="inline-flex items-center gap-1 min-w-0">
+        <i class="fas fa-location-dot text-[10px] ld-hint-faint shrink-0" aria-hidden="true"></i>
+        <span class="truncate">{{ loc_line }}</span>
+      </span>
+      {% endif %}
+      {% endif %}
+      {% if land.code and loc_line %}
+      <span class="ld-hint-faint opacity-60" aria-hidden="true">|</span>
+      {% endif %}
+      {% if land.code %}
+      <span class="inline-flex items-center gap-1 shrink-0 font-mono tabular-nums ld-muted" dir="ltr">
+        کد {{ land.code }}
+      </span>
       {% endif %}
     </div>
+    {% endif %}
 
-    {% include 'express_partner/partials/land_similar_listings.html' %}
-  </div>
+    {% if is_approved and land._commission_amount %}
+    <div class="ld-commission-banner">
+      <div class="ld-commission-banner__icon">
+        <i class="fas fa-coins text-sm" aria-hidden="true"></i>
+      </div>
+      <div class="min-w-0 flex-1">
+        <p class="ld-commission-banner__label">پورسانت شما{% if land._commission_pct %} ({{ land._commission_pct }}٪){% endif %}</p>
+        <p class="ld-commission-banner__amount tabular-nums">{{ land._commission_amount|toman }}</p>
+      </div>
+    </div>
+    {% endif %}
+
+    {% include 'express_partner/partials/first_sale_gift_banner.html' %}
+
+    {% if hero_specs %}
+    <div class="ld-spec-row">
+      {% for cell in hero_specs[:4] %}
+      <div class="ld-spec-row__cell">
+        <span class="ld-spec-row__label">{{ cell.label }}</span>
+        <span class="ld-spec-row__value">{{ cell.value }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  {# ── مشخصات تکمیلی ── #}
+  {% set has_extra_specs = (cat_rows[3:]|length > 0) %}
+  {% set has_specs = _st or deal_label or has_extra_specs or land.delivery or land.delivery_days or land.handover or (land.payment_method and land.payment_method != deal_label) or land.docs_status %}
+  {% if has_specs %}
+  <section class="ld-section">
+    <h2 class="ld-section__title">امکانات و ویژگی‌ها</h2>
+    <div class="ld-spec-list">
+      {% for row in cat_rows[3:] %}
+      <div class="ld-spec-list__row">
+        <span class="ld-spec-list__key">{{ row.label }}</span>
+        <span class="ld-spec-list__val">{{ row.value }}</span>
+      </div>
+      {% endfor %}
+      {% if _st %}
+      <div class="ld-spec-list__row">
+        <span class="ld-spec-list__key">وضعیت معامله</span>
+        <span class="ld-spec-list__val" data-land-tx-spec-value>{{ tx_label }}</span>
+      </div>
+      {% endif %}
+      {% if deal_label %}
+      <div class="ld-spec-list__row">
+        <span class="ld-spec-list__key">نوع معامله</span>
+        <span class="ld-spec-list__val">{{ deal_label }}</span>
+      </div>
+      {% endif %}
+      {% if land.delivery or land.delivery_days or land.handover %}
+      <div class="ld-spec-list__row">
+        <span class="ld-spec-list__key">تحویل</span>
+        <span class="ld-spec-list__val">{{ land.delivery or land.handover or (land.delivery_days|string ~ ' روز کاری') }}</span>
+      </div>
+      {% endif %}
+      {% if land.docs_status %}
+      <div class="ld-spec-list__row">
+        <span class="ld-spec-list__key">وضعیت سند</span>
+        <span class="ld-spec-list__val">{{ land.docs_status }}</span>
+      </div>
+      {% endif %}
+      {% if land.payment_method and land.payment_method != deal_label %}
+      <div class="ld-spec-list__row">
+        <span class="ld-spec-list__key">نحوه پرداخت</span>
+        <span class="ld-spec-list__val">{{ land.payment_method }}</span>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ── توضیحات ── #}
+  {% if desc %}
+  <section class="ld-section ld-desc{% if is_approved %} ld-partner-copy cursor-pointer{% endif %}"
+           aria-labelledby="ld-desc-heading"
+           {% if is_approved %}data-land-copy="description" title="برای کپی توضیحات ضربه بزنید"{% endif %}>
+    <h2 id="ld-desc-heading" class="ld-section__title">
+      توضیحات
+      {% if is_approved %}
+      <span class="text-[10px] font-normal ld-hint-faint">(ضربه برای کپی)</span>
+      {% endif %}
+    </h2>
+    <p id="landDescText" class="ld-body-text leading-relaxed whitespace-pre-line">{{ desc_short }}{% if desc_long %}…{% endif %}</p>
+    {% if desc_long %}
+    <p id="landDescFull" class="hidden ld-body-text leading-relaxed whitespace-pre-line">{{ desc }}</p>
+    <button type="button" id="landDescToggle" class="ld-desc-toggle mt-2 inline-flex items-center gap-1">
+      <span id="landDescToggleLabel">مشاهده بیشتر</span>
+      <i id="landDescToggleIcon" class="fas fa-chevron-down text-[10px] transition-transform" aria-hidden="true"></i>
+    </button>
+    {% endif %}
+  </section>
+  {% endif %}
+
 </div>

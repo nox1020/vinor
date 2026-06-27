@@ -1,15 +1,15 @@
 {% if related_lands %}
-<section class="ld-similar mt-6 mb-2 overflow-hidden" aria-label="فایل‌های مشابه">
-  <div class="flex items-center justify-between gap-3 mb-3">
-    <h2 class="text-sm font-bold text-white">فایل‌های مشابه</h2>
+<section class="ld-similar overflow-hidden" aria-label="فایل‌های مشابه">
+  <div class="flex items-center justify-between gap-3 mb-0 ld-similar__title">
+    <h2 class="text-sm font-bold m-0" style="color: var(--ld-text)">آگهی‌های مشابه</h2>
     <a href="{{ url_for('express_partner.dashboard') }}"
-       class="shrink-0 text-[11px] font-medium text-teal-400 hover:text-teal-300 transition-colors">
+       class="ld-link shrink-0 text-[11px] ps-3">
       مشاهده همه
     </a>
   </div>
 
   <div id="ldSimilarTrack"
-       class="ld-similar__track no-scrollbar flex flex-nowrap gap-3 overflow-x-auto overscroll-x-contain snap-x snap-mandatory scroll-smooth pb-1 -mx-4 px-4"
+       class="ld-similar__track no-scrollbar flex flex-nowrap gap-2.5 overflow-x-auto overscroll-x-contain snap-x snap-mandatory scroll-smooth pb-1"
        tabindex="0"
        role="list"
        aria-label="اسکرول افقی فایل‌های مشابه">

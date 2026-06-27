@@ -2861,9 +2861,13 @@ def express_listings():
             if str(l.get('express_status') or '').strip().lower() != 'sold'
         ]
 
+    # جدیدترین اول؛ فروخته‌شده‌ها همیشه پایین لیست (در تب «همه»)
     express_lands.sort(
         key=lambda l: str(l.get('created_at') or l.get('updated_at') or ''),
         reverse=True,
+    )
+    express_lands.sort(
+        key=lambda l: str(l.get('express_status') or '').strip().lower() == 'sold',
     )
 
     for land in express_lands:
