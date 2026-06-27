@@ -1,5 +1,5 @@
-{# نماد اعتماد الکترونیکی — فقط دسکتاپ (lg+) #}
-<div class="hidden lg:flex justify-center pt-2 pb-4">
+{# نماد اعتماد الکترونیکی — enamad_lg_only=false برای نمایش در موبایل #}
+<div class="{{ 'hidden lg:flex' if enamad_lg_only|default(true) else 'flex' }} justify-center pt-2 pb-4">
   <a referrerpolicy="origin"
      target="_blank"
      href="{{ enamad_trust_url }}"
