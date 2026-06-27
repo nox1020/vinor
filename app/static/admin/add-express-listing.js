@@ -9,6 +9,8 @@
 
   const MAX_IMAGES = 12;
   const uploadUrl = form.dataset.uploadUrl || '';
+  const uploadVideoUrl = form.dataset.uploadVideoUrl || '';
+  const uploadDocumentUrl = form.dataset.uploadDocumentUrl || '';
   const csrfToken = () =>
     $('input[name="csrf_token"]', form)?.value ||
     document.querySelector('meta[name="csrf-token"]')?.content ||
@@ -274,11 +276,136 @@
   }
 
   function hasPendingUploads() {
-    return imageItems.some((item) => item.status === 'uploading');
+    return (
+      imageItems.some((item) => item.status === 'uploading') ||
+      mediaUploads.some((m) => m.status === 'uploading')
+    );
   }
 
   function hasUploadErrors() {
-    return imageItems.some((item) => item.status === 'error');
+    return (
+      imageItems.some((item) => item.status === 'error') ||
+      mediaUploads.some((m) => m.status === 'error')
+    );
+  }
+
+  async function postUploadFile(url, file) {
+    if (!url) throw new Error('آدرس آپلود تنظیم نشده');
+    const fd = new FormData();
+    fd.append('file', file);
+    const token = csrfToken();
+    if (token) fd.append('csrf_token', token);
+    const res = await fetch(url, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: token ? { 'X-CSRFToken': token } : {},
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'آپلود ناموفق بود');
+    }
+    return data;
+  }
+
+  function mediaUrlFromPath(path) {
+    const p = String(path || '').trim();
+    if (!p) return '';
+    if (p.includes('://')) return p;
+    if (p.startsWith('/')) return p;
+    if (p.startsWith('uploads/')) return '/' + p;
+    return p;
+  }
+
+  /** @type {Array<{key:string,status:'idle'|'uploading'|'done'|'error',path?:string,url?:string,name?:string,file?:File,error?:string}>} */
+  const mediaUploads = [];
+
+  function getMediaState(key) {
+    let state = mediaUploads.find((m) => m.key === key);
+    if (!state) {
+      state = { key, status: 'idle' };
+      mediaUploads.push(state);
+    }
+    return state;
+  }
+
+  function setPickerUi(pickBtn, state, displayName) {
+    if (!pickBtn) return;
+    const nameEl = pickBtn.querySelector('.doc-pick-name') || pickBtn.querySelector('#videoFileName');
+    const actionEl = pickBtn.querySelector('.doc-pick-action') || pickBtn.querySelector('#videoPickAction');
+    const clearEl = pickBtn.querySelector('.doc-pick-clear') || pickBtn.querySelector('#videoClear');
+
+    pickBtn.classList.remove('has-file', 'is-uploading', 'is-error');
+
+    if (state.status === 'uploading') {
+      pickBtn.classList.add('is-uploading');
+      if (actionEl) actionEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i>';
+      if (clearEl) clearEl.classList.add('hidden');
+      return;
+    }
+
+    if (state.status === 'error') {
+      pickBtn.classList.add('is-error');
+      if (nameEl) {
+        nameEl.textContent = state.error || 'خطا در آپلود';
+        nameEl.classList.remove('hidden');
+      }
+      if (actionEl) actionEl.textContent = 'تلاش مجدد';
+      if (clearEl) clearEl.classList.remove('hidden');
+      return;
+    }
+
+    if (state.status === 'done' && state.path) {
+      pickBtn.classList.add('has-file');
+      if (nameEl) {
+        nameEl.textContent = displayName || state.name || state.path;
+        nameEl.classList.remove('hidden');
+      }
+      if (actionEl) actionEl.textContent = 'تغییر';
+      if (clearEl) clearEl.classList.remove('hidden');
+      return;
+    }
+
+    if (nameEl) {
+      nameEl.textContent = '';
+      nameEl.classList.add('hidden');
+    }
+    if (actionEl) actionEl.textContent = 'انتخاب';
+    if (clearEl) clearEl.classList.add('hidden');
+  }
+
+  async function uploadMediaItem(state, pickBtn, hiddenEl, url, file, displayName) {
+    state.file = file;
+    state.status = 'uploading';
+    state.error = '';
+    setPickerUi(pickBtn, state, displayName);
+    try {
+      const data = await postUploadFile(url, file);
+      state.status = 'done';
+      state.path = data.path;
+      state.url = data.url || mediaUrlFromPath(data.path);
+      state.name = data.name || file.name;
+      if (hiddenEl) hiddenEl.value = data.path;
+    } catch (err) {
+      state.status = 'error';
+      state.error = err && err.message ? err.message : 'خطا در آپلود';
+      if (hiddenEl) hiddenEl.value = '';
+    }
+    setPickerUi(pickBtn, state, displayName || file.name);
+    return state;
+  }
+
+  function clearMediaItem(state, pickBtn, hiddenEl, inputEl, onClear) {
+    state.status = 'idle';
+    state.path = '';
+    state.url = '';
+    state.name = '';
+    state.file = null;
+    state.error = '';
+    if (hiddenEl) hiddenEl.value = '';
+    if (inputEl) inputEl.value = '';
+    setPickerUi(pickBtn, state);
+    if (onClear) onClear();
   }
 
   dropzone?.addEventListener('click', () => imagesInput?.click());
@@ -321,126 +448,137 @@
     }
   });
 
-  // Video & documents — Divar-style pickers
+  // Video & documents — آپلود فوری مثل عکس
   let videoObjectUrl = null;
+
+  const videoPick = $('#videoPick', form);
+  const videoInput = $('#videoInput', form);
+  const uploadedVideoPath = $('#uploadedVideoPath', form);
+  const videoPreviewWrap = $('#videoPreviewWrap');
+  const videoPreview = $('#videoPreview');
+  const videoState = getMediaState('video');
+
+  function clearVideoPreview() {
+    if (videoObjectUrl) {
+      URL.revokeObjectURL(videoObjectUrl);
+      videoObjectUrl = null;
+    }
+    videoPreviewWrap?.classList.add('hidden');
+    if (videoPreview) videoPreview.removeAttribute('src');
+  }
+
+  function showVideoPreview(fileOrUrl) {
+    if (!videoPreview) return;
+    if (videoObjectUrl) {
+      URL.revokeObjectURL(videoObjectUrl);
+      videoObjectUrl = null;
+    }
+    if (fileOrUrl instanceof File) {
+      videoObjectUrl = URL.createObjectURL(fileOrUrl);
+      videoPreview.src = videoObjectUrl;
+    } else if (fileOrUrl) {
+      videoPreview.src = fileOrUrl;
+    }
+    videoPreviewWrap?.classList.remove('hidden');
+  }
+
+  function restoreVideoFromForm() {
+    const path = (uploadedVideoPath?.value || '').trim();
+    if (!path) return;
+    videoState.status = 'done';
+    videoState.path = path;
+    videoState.url = mediaUrlFromPath(path);
+    videoState.name = path.split('/').pop() || path;
+    setPickerUi(videoPick, videoState, videoState.name);
+    showVideoPreview(videoState.url);
+  }
+  restoreVideoFromForm();
+
+  videoPick?.addEventListener('click', (e) => {
+    if (e.target.closest('#videoClear') || e.target.closest('.doc-pick-clear')) return;
+    if (videoState.status === 'uploading') return;
+    if (videoState.status === 'error' && videoState.file) {
+      uploadMediaItem(videoState, videoPick, uploadedVideoPath, uploadVideoUrl, videoState.file);
+      return;
+    }
+    videoInput?.click();
+  });
+
+  $('#videoClear')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearMediaItem(videoState, videoPick, uploadedVideoPath, videoInput, clearVideoPreview);
+  });
+  $('#videoClear')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      clearMediaItem(videoState, videoPick, uploadedVideoPath, videoInput, clearVideoPreview);
+    }
+  });
+
+  videoInput?.addEventListener('change', async () => {
+    const file = videoInput.files?.[0];
+    if (!file) return;
+    showVideoPreview(file);
+    await uploadMediaItem(videoState, videoPick, uploadedVideoPath, uploadVideoUrl, file, file.name);
+    videoInput.value = '';
+    if (videoState.status === 'done' && videoState.url) {
+      showVideoPreview(videoState.url);
+    }
+  });
 
   function bindDocPick(pickBtn) {
     const inputId = pickBtn.getAttribute('data-input');
+    const hiddenId = pickBtn.getAttribute('data-hidden');
     const input = inputId ? document.getElementById(inputId) : null;
+    const hiddenEl = hiddenId ? document.getElementById(hiddenId) : null;
     if (!input) return;
 
-    const nameEl = pickBtn.querySelector('.doc-pick-name');
-    const actionEl = pickBtn.querySelector('.doc-pick-action');
+    const key = hiddenId || inputId;
+    const state = getMediaState(key);
     const clearEl = pickBtn.querySelector('.doc-pick-clear');
 
-    function setEmpty() {
-      pickBtn.classList.remove('has-file');
-      if (nameEl) {
-        nameEl.textContent = '';
-        nameEl.classList.add('hidden');
-      }
-      if (actionEl) actionEl.textContent = 'انتخاب';
-      if (clearEl) clearEl.classList.add('hidden');
+    function restoreDocFromForm() {
+      const path = (hiddenEl?.value || '').trim();
+      if (!path) return;
+      state.status = 'done';
+      state.path = path;
+      state.name = path.replace(/^draft_\d+_/, '') || path.split('/').pop() || path;
+      setPickerUi(pickBtn, state, state.name);
     }
-
-    function setFile(file) {
-      if (!file) {
-        setEmpty();
-        return;
-      }
-      pickBtn.classList.add('has-file');
-      if (nameEl) {
-        nameEl.textContent = file.name;
-        nameEl.classList.remove('hidden');
-      }
-      if (actionEl) actionEl.textContent = 'تغییر';
-      if (clearEl) clearEl.classList.remove('hidden');
-    }
+    restoreDocFromForm();
 
     pickBtn.addEventListener('click', (e) => {
       if (e.target.closest('.doc-pick-clear')) return;
+      if (state.status === 'uploading') return;
+      if (state.status === 'error' && state.file) {
+        uploadMediaItem(state, pickBtn, hiddenEl, uploadDocumentUrl, state.file);
+        return;
+      }
       input.click();
     });
 
     clearEl?.addEventListener('click', (e) => {
       e.stopPropagation();
-      input.value = '';
-      setEmpty();
+      clearMediaItem(state, pickBtn, hiddenEl, input);
     });
     clearEl?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         e.stopPropagation();
-        input.value = '';
-        setEmpty();
+        clearMediaItem(state, pickBtn, hiddenEl, input);
       }
     });
 
-    input.addEventListener('change', () => {
-      setFile(input.files?.[0] || null);
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      await uploadMediaItem(state, pickBtn, hiddenEl, uploadDocumentUrl, file, file.name);
+      input.value = '';
     });
   }
 
   $$('.doc-pick', form).forEach(bindDocPick);
-
-  const videoPick = $('#videoPick', form);
-  const videoInput = $('#videoInput', form);
-  const videoFileName = $('#videoFileName');
-  const videoPickAction = $('#videoPickAction');
-  const videoClear = $('#videoClear');
-  const videoPreviewWrap = $('#videoPreviewWrap');
-  const videoPreview = $('#videoPreview');
-
-  function clearVideo() {
-    if (videoObjectUrl) {
-      URL.revokeObjectURL(videoObjectUrl);
-      videoObjectUrl = null;
-    }
-    if (videoInput) videoInput.value = '';
-    videoPick?.classList.remove('has-file');
-    videoFileName?.classList.add('hidden');
-    if (videoFileName) videoFileName.textContent = '';
-    if (videoPickAction) videoPickAction.textContent = 'انتخاب';
-    videoClear?.classList.add('hidden');
-    videoPreviewWrap?.classList.add('hidden');
-    if (videoPreview) videoPreview.removeAttribute('src');
-  }
-
-  videoPick?.addEventListener('click', (e) => {
-    if (e.target.closest('#videoClear')) return;
-    videoInput?.click();
-  });
-
-  videoClear?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    clearVideo();
-  });
-  videoClear?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      e.stopPropagation();
-      clearVideo();
-    }
-  });
-
-  videoInput?.addEventListener('change', () => {
-    const file = videoInput.files?.[0];
-    if (!file) {
-      clearVideo();
-      return;
-    }
-    videoPick?.classList.add('has-file');
-    if (videoFileName) {
-      videoFileName.textContent = file.name;
-      videoFileName.classList.remove('hidden');
-    }
-    if (videoPickAction) videoPickAction.textContent = 'تغییر';
-    videoClear?.classList.remove('hidden');
-    if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
-    videoObjectUrl = URL.createObjectURL(file);
-    if (videoPreview) videoPreview.src = videoObjectUrl;
-    videoPreviewWrap?.classList.remove('hidden');
-  });
 
   // Payment / installments
   const pm = $('#payment_method', form);
@@ -598,12 +736,12 @@
     }
     if (hasPendingUploads()) {
       e.preventDefault();
-      alert('لطفاً تا پایان آپلود تصاویر صبر کنید.');
+      alert('لطفاً تا پایان آپلود فایل‌ها (تصویر، ویدئو یا مدرک) صبر کنید.');
       return;
     }
     if (hasUploadErrors()) {
       e.preventDefault();
-      alert('برخی تصاویر آپلود نشده‌اند. آن‌ها را حذف کنید یا دوباره تلاش کنید.');
+      alert('برخی فایل‌ها آپلود نشده‌اند. آن‌ها را حذف کنید یا دوباره تلاش کنید.');
       return;
     }
 

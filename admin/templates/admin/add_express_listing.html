@@ -150,6 +150,19 @@
       border-color: rgb(191 219 254);
       background: rgb(239 246 255 / 0.35);
     }
+    .dv-media-pick.is-uploading {
+      border-color: rgb(147 197 253);
+      opacity: 0.85;
+      pointer-events: none;
+    }
+    .dv-media-pick.is-error {
+      border-color: rgb(252 165 165);
+      background: rgb(254 242 242 / 0.5);
+    }
+    .dark .dv-media-pick.is-error {
+      border-color: rgb(185 28 28);
+      background: rgb(127 29 29 / 0.15);
+    }
     .dark .dv-media-pick.has-file {
       border-color: rgb(30 64 175);
       background: rgb(30 58 138 / 0.12);
@@ -296,6 +309,8 @@
   <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin.add_express_listing') }}"
         id="expressForm" class="space-y-3 px-3 sm:px-4" novalidate
         data-upload-url="{{ url_for('admin.express_upload_image') }}"
+        data-upload-video-url="{{ url_for('admin.express_upload_video') }}"
+        data-upload-document-url="{{ url_for('admin.express_upload_document') }}"
         data-leaflet-css="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.css') }}"
         data-leaflet-js="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.min.js') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -325,7 +340,11 @@
       </div>
 
       <div class="px-4 pb-3 space-y-2 border-t border-gray-100 dark:border-gray-800 pt-3">
-        <p class="text-[10px] font-bold uppercase tracking-wide text-gray-400 px-0.5">ویدئو و مدارک <span class="font-normal normal-case">(اختیاری)</span></p>
+        <p class="text-[10px] font-bold uppercase tracking-wide text-gray-400 px-0.5">ویدئو و مدارک <span class="font-normal normal-case">(اختیاری · بلافاصله آپلود می‌شود)</span></p>
+
+        <input type="hidden" name="video" id="uploadedVideoPath" value="{{ f.get('video', '') }}">
+        <input type="hidden" name="document_1" id="uploadedDoc1Path" value="{{ f.get('document_1', '') }}">
+        <input type="hidden" name="document_2" id="uploadedDoc2Path" value="{{ f.get('document_2', '') }}">
 
         <button type="button" id="videoPick" class="dv-media-pick w-full" aria-label="انتخاب ویدئو">
           <span class="dv-media-pick__icon dv-media-pick__icon--video"><i class="fa-solid fa-video"></i></span>
@@ -337,12 +356,12 @@
           <span class="dv-media-pick__action" id="videoPickAction">انتخاب</span>
           <span class="dv-media-pick__clear hidden" id="videoClear" role="button" tabindex="0" aria-label="حذف ویدئو"><i class="fa-solid fa-xmark text-xs"></i></span>
         </button>
-        <input type="file" name="video" id="videoInput" accept="video/mp4,video/webm,video/quicktime" class="hidden">
+        <input type="file" id="videoInput" accept="video/mp4,video/webm,video/quicktime" class="hidden">
         <div id="videoPreviewWrap" class="hidden px-1">
           <video id="videoPreview" controls playsinline preload="metadata"></video>
         </div>
 
-        <button type="button" class="dv-media-pick w-full doc-pick" data-input="document_1" aria-label="انتخاب سند">
+        <button type="button" class="dv-media-pick w-full doc-pick" data-input="document_1_input" data-hidden="uploadedDoc1Path" aria-label="انتخاب سند">
           <span class="dv-media-pick__icon dv-media-pick__icon--doc"><i class="fa-solid fa-file-lines"></i></span>
           <span class="dv-media-pick__body">
             <span class="dv-media-pick__title">سند ملک</span>
@@ -352,9 +371,9 @@
           <span class="dv-media-pick__action doc-pick-action">انتخاب</span>
           <span class="dv-media-pick__clear hidden doc-pick-clear" role="button" tabindex="0" aria-label="حذف سند"><i class="fa-solid fa-xmark text-xs"></i></span>
         </button>
-        <input type="file" name="document_1" id="document_1" accept=".pdf,.jpg,.jpeg,.png" class="hidden">
+        <input type="file" id="document_1_input" accept=".pdf,.jpg,.jpeg,.png" class="hidden">
 
-        <button type="button" class="dv-media-pick w-full doc-pick" data-input="document_2" aria-label="انتخاب مدرک اضافی">
+        <button type="button" class="dv-media-pick w-full doc-pick" data-input="document_2_input" data-hidden="uploadedDoc2Path" aria-label="انتخاب مدرک اضافی">
           <span class="dv-media-pick__icon dv-media-pick__icon--doc"><i class="fa-solid fa-paperclip"></i></span>
           <span class="dv-media-pick__body">
             <span class="dv-media-pick__title">مدرک اضافی</span>
@@ -364,7 +383,7 @@
           <span class="dv-media-pick__action doc-pick-action">انتخاب</span>
           <span class="dv-media-pick__clear hidden doc-pick-clear" role="button" tabindex="0" aria-label="حذف مدرک"><i class="fa-solid fa-xmark text-xs"></i></span>
         </button>
-        <input type="file" name="document_2" id="document_2" accept=".pdf,.jpg,.jpeg,.png" class="hidden">
+        <input type="file" id="document_2_input" accept=".pdf,.jpg,.jpeg,.png" class="hidden">
       </div>
     </section>
 
@@ -560,5 +579,5 @@
   </button>
 </div>
 
-<script src="{{ url_for('static', filename='admin/add-express-listing.js') }}?v=3" defer></script>
+<script src="{{ url_for('static', filename='admin/add-express-listing.js') }}?v=4" defer></script>
 {% endblock %}

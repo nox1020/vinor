@@ -2978,6 +2978,58 @@ def express_upload_image():
         'url': normalize_upload_url(stored),
     })
 
+
+@admin_bp.route('/express/upload-video', methods=['POST'])
+@login_required
+def express_upload_video():
+    """آپلود فوری ویدئو هنگام ثبت آگهی."""
+    from app.utils.images import normalize_upload_url
+
+    f = request.files.get('file') or request.files.get('video')
+    if not f or not f.filename:
+        return jsonify({'ok': False, 'error': 'فایلی ارسال نشده است.'}), 400
+
+    allowed_extensions = {'.mp4', '.webm', '.mov', '.avi', '.mkv'}
+    file_ext = os.path.splitext(f.filename)[1].lower()
+    if file_ext not in allowed_extensions:
+        return jsonify({'ok': False, 'error': 'فرمت ویدئو مجاز نیست.'}), 400
+
+    upload_folder = _uploads_root()
+    os.makedirs(upload_folder, exist_ok=True)
+    filename = secure_filename(f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}__{f.filename}")
+    f.save(os.path.join(upload_folder, filename))
+    stored = f'uploads/{filename}'
+    return jsonify({
+        'ok': True,
+        'path': stored,
+        'url': normalize_upload_url(stored),
+        'name': f.filename,
+    })
+
+
+@admin_bp.route('/express/upload-document', methods=['POST'])
+@login_required
+def express_upload_document():
+    """آپلود فوری مدرک هنگام ثبت آگهی."""
+    f = request.files.get('file') or request.files.get('document')
+    if not f or not f.filename:
+        return jsonify({'ok': False, 'error': 'فایلی ارسال نشده است.'}), 400
+
+    allowed_extensions = {'.pdf', '.jpg', '.jpeg', '.png'}
+    file_ext = os.path.splitext(f.filename)[1].lower()
+    if file_ext not in allowed_extensions:
+        return jsonify({'ok': False, 'error': 'فرمت مدرک مجاز نیست (PDF · JPG · PNG).'}), 400
+
+    stored = _save_express_document(f, 'draft')
+    if not stored:
+        return jsonify({'ok': False, 'error': 'ذخیره مدرک ناموفق بود.'}), 400
+
+    return jsonify({
+        'ok': True,
+        'path': stored,
+        'name': f.filename,
+    })
+
 def _add_express_listing_form(cities):
     """رندر فرم ثبت آگهی — با حفظ request.form پس از خطا."""
     return render_template('admin/add_express_listing.html', cities=cities)
@@ -3044,12 +3096,16 @@ def add_express_listing():
         # تولید کد منحصر به فرد
         new_code = form.get("code") or _next_numeric_code(lands)
         
-        # ذخیره مدارک
+        # ذخیره مدارک (آپلود فوری از hidden یا فایل فرم)
         documents = []
+        for doc_key in ('document_1', 'document_2'):
+            pre = (form.get(doc_key) or '').strip()
+            if pre:
+                documents.append(pre)
         for key, file in files.items():
             if key.startswith('document_') and file.filename:
                 doc_filename = _save_express_document(file, new_code)
-                if doc_filename:
+                if doc_filename and doc_filename not in documents:
                     documents.append(doc_filename)
         
         # پردازش تصاویر (آپلود فوری از hidden یا فایل فرم)
@@ -3099,12 +3155,13 @@ def add_express_listing():
         except (ValueError, TypeError):
             pass  # اگر مقدار نامعتبر بود، None می‌ماند
 
-        # ویدئو (اختیاری)
-        video_path = None
-        try:
-            video_path = _save_video_from_form(files)
-        except Exception:
-            video_path = None
+        # ویدئو (اختیاری — آپلود فوری از hidden یا فایل فرم)
+        video_path = (form.get('video') or '').strip() or None
+        if not video_path:
+            try:
+                video_path = _save_video_from_form(files)
+            except Exception:
+                video_path = None
 
         # ایجاد آگهی اکسپرس
         payment_terms = []
