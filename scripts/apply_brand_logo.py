@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Generate all Vinor brand assets from a single logo PNG (site, PWA, APK)."""
+"""Generate Vinor brand assets (X-style bold V) for site, PWA, and APK."""
 from __future__ import annotations
 
 import argparse
-from collections import deque
 from pathlib import Path
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageDraw
 except ImportError:
     raise SystemExit("Pillow required: pip install Pillow")
 
@@ -20,111 +19,84 @@ SIZES = [48, 72, 96, 128, 144, 192, 256, 384, 512]
 APK_DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 MONOCHROME_SIZES = [48, 72, 96, 128, 144, 192, 256, 512]
 
+BLACK = (0, 0, 0, 255)
+WHITE = (255, 255, 255, 255)
+TRANSPARENT = (0, 0, 0, 0)
+
 
 def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def load_source(path: Path) -> Image.Image:
-    return Image.open(path).convert("RGBA")
+def _v_polygons(size: int, inset: float = 0.20, gap: float = 0.055) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
+    """Geometric bold V (two strokes) sized like the X app icon."""
+    s = float(size)
+    pad = s * inset
+    gap_half = s * gap * 0.5
+    mid = s * 0.5
+    bottom = s - pad
+    top = pad
+    stroke = s * 0.145
+
+    left = [
+        (pad, top),
+        (pad + stroke, top),
+        (mid - gap_half, bottom),
+        (mid - gap_half - stroke, bottom),
+    ]
+    right = [
+        (s - pad, top),
+        (s - pad - stroke, top),
+        (mid + gap_half, bottom),
+        (mid + gap_half + stroke, bottom),
+    ]
+    return left, right
 
 
-def resize_contain(img: Image.Image, target: int) -> Image.Image:
-    canvas = Image.new("RGBA", (target, target), (0, 0, 0, 0))
-    src_w, src_h = img.size
-    scale = min(target / src_w, target / src_h)
-    new_w, new_h = max(1, int(src_w * scale)), max(1, int(src_h * scale))
-    resized = img.resize((new_w, new_h), Image.LANCZOS)
-    off_x = (target - new_w) // 2
-    off_y = (target - new_h) // 2
-    canvas.paste(resized, (off_x, off_y), resized)
+def render_x_glyph(size: int, color: tuple[int, int, int, int] = WHITE) -> Image.Image:
+    """White V on transparent canvas (adaptive-icon foreground / splash mark)."""
+    img = Image.new("RGBA", (size, size), TRANSPARENT)
+    draw = ImageDraw.Draw(img)
+    left, right = _v_polygons(size)
+    draw.polygon(left, fill=color)
+    draw.polygon(right, fill=color)
+    return img
+
+
+def render_x_icon(size: int) -> Image.Image:
+    """Black square + white V (launcher / PWA icon like X)."""
+    img = Image.new("RGBA", (size, size), BLACK)
+    glyph = render_x_glyph(size)
+    img.alpha_composite(glyph)
+    return img
+
+
+def render_x_maskable(size: int, safe_ratio: float = 0.78) -> Image.Image:
+    safe = max(1, int(size * safe_ratio))
+    glyph = render_x_glyph(safe)
+    canvas = Image.new("RGBA", (size, size), BLACK)
+    off = (size - safe) // 2
+    canvas.alpha_composite(glyph, (off, off))
     return canvas
 
 
-def make_maskable(img: Image.Image, target: int, safe_ratio: float = 0.78) -> Image.Image:
-    canvas = Image.new("RGBA", (target, target), (0, 0, 0, 0))
-    safe = int(target * safe_ratio)
-    src_w, src_h = img.size
-    scale = min(safe / src_w, safe / src_h)
-    new_w, new_h = max(1, int(src_w * scale)), max(1, int(src_h * scale))
-    resized = img.resize((new_w, new_h), Image.LANCZOS)
-    off_x = (target - new_w) // 2
-    off_y = (target - new_h) // 2
-    canvas.paste(resized, (off_x, off_y), resized)
-    return canvas
+def render_monochrome(size: int) -> Image.Image:
+    return render_x_glyph(size, WHITE)
 
 
-def make_monochrome(img: Image.Image, target: int) -> Image.Image:
-    """White silhouette for notification badges."""
-    base = resize_contain(img, target)
-    out = Image.new("RGBA", (target, target), (0, 0, 0, 0))
-    px = base.load()
-    opx = out.load()
-    w, h = base.size
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if a < 16:
-                continue
-            lum = (r * 299 + g * 587 + b * 114) / 1000
-            if lum < 18:
-                continue
-            opx[x, y] = (255, 255, 255, min(255, a))
-    return out
-
-
-def strip_outer_black_bg(img: Image.Image, threshold: int = 10) -> Image.Image:
-    """Remove edge-connected pure-black background; keep squircle + inner V."""
-    out = img.copy()
-    px = out.load()
-    w, h = out.size
-
-    def is_outer_bg(x: int, y: int) -> bool:
-        r, g, b, a = px[x, y]
-        return a > 0 and r < threshold and g < threshold and b < threshold
-
-    q: deque[tuple[int, int]] = deque()
-    seen: set[tuple[int, int]] = set()
-
-    for x in range(w):
-        for y in (0, h - 1):
-            if is_outer_bg(x, y):
-                seen.add((x, y))
-                q.append((x, y))
-    for y in range(h):
-        for x in (0, w - 1):
-            if is_outer_bg(x, y) and (x, y) not in seen:
-                seen.add((x, y))
-                q.append((x, y))
-
-    while q:
-        x, y = q.popleft()
-        px[x, y] = (0, 0, 0, 0)
-        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-            if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in seen and is_outer_bg(nx, ny):
-                seen.add((nx, ny))
-                q.append((nx, ny))
-    return out
-
-
-def write_web_icons(src: Image.Image) -> None:
+def write_web_icons() -> None:
     ensure_dir(ICONS_DIR)
-    master = resize_contain(src, 1024)
-    master.save(ICONS_DIR / "vinor-logo-source.png")
+    render_x_icon(1024).save(ICONS_DIR / "vinor-logo-source.png")
 
     for size in SIZES:
-        icon = resize_contain(src, size)
-        icon.save(ICONS_DIR / f"icon-{size}.png")
-        make_maskable(src, size).save(ICONS_DIR / f"maskable-{size}.png")
+        render_x_icon(size).save(ICONS_DIR / f"icon-{size}.png")
+        render_x_maskable(size).save(ICONS_DIR / f"maskable-{size}.png")
 
     for size in MONOCHROME_SIZES:
-        make_monochrome(src, size).save(ICONS_DIR / f"monochrome-{size}.png")
+        render_monochrome(size).save(ICONS_DIR / f"monochrome-{size}.png")
 
-    fav32 = resize_contain(src, 32)
-    fav32.save(STATIC_DIR / "favicon-32x32.png")
-
-    ico_img = resize_contain(src, 256)
-    ico_img.save(
+    render_x_icon(32).save(STATIC_DIR / "favicon-32x32.png")
+    render_x_icon(256).save(
         STATIC_DIR / "favicon.ico",
         format="ICO",
         sizes=[(16, 16), (32, 32), (48, 48)],
@@ -132,50 +104,79 @@ def write_web_icons(src: Image.Image) -> None:
     print(f"Web icons -> {ICONS_DIR}")
 
 
-def write_apk_icons(src: Image.Image) -> None:
+def write_apk_icons() -> None:
     if not APK_RES.is_dir():
         print("APK res not found, skip Android icons")
         return
 
-    master = strip_outer_black_bg(resize_contain(src, 192))
     nodpi = APK_RES / "drawable-nodpi"
     ensure_dir(nodpi)
-    master.save(nodpi / "ic_pwa_logo.png")
+    render_x_glyph(192).save(nodpi / "ic_pwa_logo.png")
 
     for folder, size in APK_DENSITIES.items():
-        img = strip_outer_black_bg(resize_contain(src, size))
+        img = render_x_icon(size)
         out_dir = APK_RES / f"mipmap-{folder}"
         ensure_dir(out_dir)
         img.save(out_dir / "ic_launcher.png")
         img.save(out_dir / "ic_launcher_round.png")
-        print(f"APK {folder}: {size}px (transparent bg)")
+        print(f"APK {folder}: {size}px")
 
     print(f"APK icons -> {APK_RES}")
 
 
-def main() -> None:
-    p = argparse.ArgumentParser(description="Apply Vinor brand logo everywhere")
-    p.add_argument(
-        "--source",
-        required=True,
-        help="Path to master logo PNG (square, >=512px recommended)",
+def write_apk_splash_vector() -> None:
+    path = APK_RES / "drawable" / "vinor_splash_mark.xml"
+    if not path.parent.is_dir():
+        return
+    path.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,28 L42,28 L60,88 L78,28 L96,28 L72,100 L48,100 Z" />
+</vector>
+""",
+        encoding="utf-8",
     )
+    print(f"APK splash vector -> {path}")
+
+
+def write_apk_launcher_bg() -> None:
+    path = APK_RES / "values" / "colors.xml"
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    updated = text.replace(
+        '<color name="ic_launcher_background">#00000000</color>',
+        '<color name="ic_launcher_background">#000000</color>',
+    )
+    if updated != text:
+        path.write_text(updated, encoding="utf-8")
+        print(f"APK launcher bg -> {path}")
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description="Apply Vinor X-style V logo everywhere")
     p.add_argument(
         "--apk-only",
         action="store_true",
         help="Regenerate Android launcher/splash assets only",
     )
     args = p.parse_args()
-    source = Path(args.source).resolve()
-    if not source.is_file():
-        raise SystemExit(f"Source not found: {source}")
 
-    src = load_source(source)
     if args.apk_only:
-        write_apk_icons(src)
+        write_apk_icons()
+        write_apk_splash_vector()
+        write_apk_launcher_bg()
     else:
-        write_web_icons(src)
-        write_apk_icons(src)
+        write_web_icons()
+        write_apk_icons()
+        write_apk_splash_vector()
+        write_apk_launcher_bg()
     print("Done.")
 
 
