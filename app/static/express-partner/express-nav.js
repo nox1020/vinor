@@ -445,6 +445,7 @@
     var p = normPath(pathname || window.location.pathname || '');
     if (!/\/express\/partner\/favorites\/?$/.test(p)) {
       try { delete window.__vinorPagePullRefresh; } catch (_) {}
+      try { delete window.vinorFavoritesPageLoad; } catch (_) {}
     }
   }
 
@@ -577,6 +578,14 @@
         try { window.vinorLandDetailGalleryKick(); } catch (_) {}
         setTimeout(function () {
           try { window.vinorLandDetailGalleryKick(); } catch (_) {}
+        }, 400);
+      });
+    }
+    if (onDetail && typeof window.vinorLandDetailActionsKick === 'function') {
+      requestAnimationFrame(function () {
+        try { window.vinorLandDetailActionsKick(); } catch (_) {}
+        setTimeout(function () {
+          try { window.vinorLandDetailActionsKick(); } catch (_) {}
         }, 400);
       });
     }

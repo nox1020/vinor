@@ -20,26 +20,16 @@
 {% for row in cat_rows[:3] %}
   {% set ns.cells = ns.cells + [{'label': row.label, 'value': row.value}] %}
 {% endfor %}
-{% if ppm and ns.cells|length < 4 %}
-  {% set ns.cells = ns.cells + [{'label': 'هر متر', 'value': ppm|toman}] %}
-{% endif %}
 {% set hero_specs = ns.cells %}
 
 <div class="ld-main max-w-2xl mx-auto">
-  {# ── بلوک قیمت و عنوان ── #}
-  <section class="ld-section" data-tour="land-info">
-    <p class="ld-price-hero tabular-nums mb-1">
-      {{ price_total|toman(False) }}<span class="ld-price-unit">تومان</span>
-    </p>
-    {% if ppm %}
-    <p class="text-xs ld-muted mb-2 tabular-nums">هر متر: {{ ppm|toman }}</p>
-    {% endif %}
-
+  {# ── عنوان و مشخصات کلیدی (سبک دیوار: بدون قیمت در این بلوک) ── #}
+  <section class="ld-section ld-section--head" data-tour="land-info">
     <h1 class="text-[15px] font-bold leading-snug mb-2{% if is_approved %} ld-partner-copy cursor-pointer{% endif %}"
         style="color: var(--ld-text)"
         {% if is_approved %}data-land-copy="title" title="برای کپی عنوان ضربه بزنید"{% endif %}>{{ land.title or 'فایل' }}</h1>
 
-  {% if loc_line or land.code %}
+    {% if loc_line or land.code %}
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs ld-muted mb-3">
       {% if loc_line %}
       {% if land.latitude and land.longitude %}
@@ -69,18 +59,6 @@
     </div>
     {% endif %}
 
-    {% if is_approved and land._commission_amount %}
-    <div class="ld-commission-banner">
-      <div class="ld-commission-banner__icon">
-        <i class="fas fa-coins text-sm" aria-hidden="true"></i>
-      </div>
-      <div class="min-w-0 flex-1">
-        <p class="ld-commission-banner__label">پورسانت شما{% if land._commission_pct %} ({{ land._commission_pct }}٪){% endif %}</p>
-        <p class="ld-commission-banner__amount tabular-nums">{{ land._commission_amount|toman }}</p>
-      </div>
-    </div>
-    {% endif %}
-
     {% include 'express_partner/partials/first_sale_gift_banner.html' %}
 
     {% if hero_specs %}
@@ -95,12 +73,33 @@
     {% endif %}
   </section>
 
-  {# ── مشخصات تکمیلی ── #}
+  {# ── قیمت + پورسانت + امکانات و ویژگی‌ها ── #}
   {% set has_extra_specs = (cat_rows[3:]|length > 0) %}
   {% set has_specs = _st or deal_label or has_extra_specs or land.delivery or land.delivery_days or land.handover or (land.payment_method and land.payment_method != deal_label) or land.docs_status %}
-  {% if has_specs %}
-  <section class="ld-section">
-    <h2 class="ld-section__title">امکانات و ویژگی‌ها</h2>
+  {% set show_features_section = has_specs or price_total or (is_approved and land._commission_amount) %}
+  {% if show_features_section %}
+  <section class="ld-section ld-section--specs">
+    <div class="ld-price-card">
+      <div class="ld-price-card__main">
+        <span class="ld-price-card__amount tabular-nums">{{ price_total|toman(False) }}</span>
+        <span class="ld-price-card__currency">تومان</span>
+      </div>
+      {% if ppm %}
+      <p class="ld-price-card__ppm tabular-nums">هر متر {{ ppm|toman }}</p>
+      {% endif %}
+      {% if is_approved and land._commission_amount %}
+      <div class="ld-price-card__commission">
+        <span class="ld-price-card__commission-label">
+          <i class="fas fa-coins text-[10px] opacity-80" aria-hidden="true"></i>
+          پورسانت شما{% if land._commission_pct %} <span class="ld-price-card__commission-pct">({{ land._commission_pct }}٪)</span>{% endif %}
+        </span>
+        <span class="ld-price-card__commission-val tabular-nums">{{ land._commission_amount|toman }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if has_specs %}
+    <h2 class="ld-section__title ld-section__title--specs">امکانات و ویژگی‌ها</h2>
     <div class="ld-spec-list">
       {% for row in cat_rows[3:] %}
       <div class="ld-spec-list__row">
@@ -139,6 +138,7 @@
       </div>
       {% endif %}
     </div>
+    {% endif %}
   </section>
   {% endif %}
 

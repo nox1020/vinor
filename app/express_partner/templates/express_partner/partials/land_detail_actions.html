@@ -8,7 +8,7 @@
 {% set show_sold = is_approved and _st == 'sold' %}
 {% set action_count = (1 if show_call else 0) + (1 if show_tx else 0) + (1 if show_blocked else 0) + (1 if show_sold else 0) %}
 
-<footer class="ld-actions fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom,0px)]">
+<footer class="ld-actions fixed inset-x-0 bottom-0 z-[70] pb-[env(safe-area-inset-bottom,0px)]" data-land-detail-footer>
   <div id="landTxToast" class="hidden mx-auto mb-1 max-w-lg rounded-lg border px-3 py-2 text-center text-[11px] font-medium" role="status" aria-live="polite"></div>
   {% if land._visit_date_jalali and tx_mode in ('deal', 'visit_pending') %}
   <p id="landVisitDateHint" class="ld-visit-hint text-center text-[10px] mb-0.5 px-4">بازدید: {{ land._visit_date_jalali }}</p>

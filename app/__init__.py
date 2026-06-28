@@ -511,6 +511,9 @@ def create_app() -> Flask:
             "express_partner.ai_clear",
             "express_partner.ai_switch_thread",
             "express_partner.ai_delete_thread",
+            "express_partner.api_favorites_cards",
+            "express_partner.create_visit_request",
+            "express_partner.mark_in_transaction",
             "ai.chat",
         ):
             try:
@@ -573,6 +576,25 @@ def create_app() -> Flask:
                         return redirect(url_for("express_partner.login"))
                     except Exception:
                         return redirect("/express/partner/login")
+                path_api = (request.path or "").startswith("/express/partner/api/")
+                wants_json = (
+                    path_api
+                    or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                    or "application/json" in (request.headers.get("Accept") or "")
+                )
+                if wants_json:
+                    from flask import jsonify
+
+                    return (
+                        jsonify(
+                            {
+                                "ok": False,
+                                "error": "csrf_expired",
+                                "message": "جلسه منقضی شده؛ صفحه را تازه کنید.",
+                            }
+                        ),
+                        400,
+                    )
                 flash("لطفاً صفحه را تازه کنید و دوباره تلاش کنید.", "warning")
                 try:
                     return redirect(request.referrer or url_for("lands.add_land"))

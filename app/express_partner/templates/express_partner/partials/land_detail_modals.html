@@ -1,35 +1,72 @@
-{# مودال‌ها — پالت وینور #}
+{# مودال‌ها — bottom sheet سبک دیوار + پالت وینور #}
 {% set contact_phone = land.owner_phone or land.vinor_contact %}
 
 {% if contact_phone %}
-<div id="landContactModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landContactTitle">
-  <div class="ld-modal__backdrop absolute inset-0 bg-black/50" data-land-modal-close></div>
-  <div class="ld-modal__panel relative w-full max-w-md rounded-2xl p-5 shadow-xl" data-land-modal-panel>
-    <h2 id="landContactTitle" class="text-base font-bold mb-1">اطلاعات تماس</h2>
-    <p class="ld-modal__hint mb-4">برای هماهنگی بازدید با مالک تماس بگیرید.</p>
-    <a href="tel:{{ contact_phone }}" class="ld-btn-call flex items-center justify-center gap-2 w-full py-3.5 text-sm rounded-xl">
-      <i class="fas fa-phone" aria-hidden="true"></i>
-      <span dir="ltr">{{ contact_phone }}</span>
-    </a>
-    <button type="button" data-land-modal-close class="ld-modal__close-btn mt-3 w-full py-2.5 text-sm">بستن</button>
+<div id="landContactModal"
+     class="ld-modal ld-sheet-root hidden fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center sm:items-center sm:p-4"
+     data-tg-body-modal
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="landContactTitle">
+  <div class="ld-sheet__backdrop absolute inset-0" data-land-modal-close aria-hidden="true"></div>
+  <div class="ld-sheet relative w-full sm:max-w-md" data-land-modal-panel>
+    <div class="ld-sheet__handle-wrap" aria-hidden="true"><span class="ld-sheet__handle"></span></div>
+    <header class="ld-sheet__head">
+      <h2 id="landContactTitle" class="ld-sheet__title">تماس با مالک</h2>
+      <button type="button" class="ld-sheet__close" data-land-modal-close aria-label="بستن">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div class="ld-sheet__body ld-sheet__body--center">
+      <div class="ld-sheet__icon ld-sheet__icon--call" aria-hidden="true">
+        <i class="fas fa-phone"></i>
+      </div>
+      <p class="ld-sheet__lead">برای هماهنگی بازدید با مالک تماس بگیرید</p>
+      <p class="ld-sheet__phone tabular-nums" dir="ltr">{{ contact_phone }}</p>
+    </div>
+    <footer class="ld-sheet__foot">
+      <a href="tel:{{ contact_phone }}" class="ld-sheet__btn ld-sheet__btn--primary ld-sheet__btn--call">
+        <i class="fas fa-phone" aria-hidden="true"></i>
+        تماس بگیرید
+      </a>
+      <button type="button" data-land-modal-close class="ld-sheet__btn ld-sheet__btn--ghost">انصراف</button>
+    </footer>
   </div>
 </div>
 {% endif %}
 
 {% if land.latitude and land.longitude %}
-<div id="landLocationModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landLocationTitle">
-  <div class="ld-modal__backdrop absolute inset-0 bg-black/50" data-land-modal-close></div>
-  <div class="ld-modal__panel relative w-full max-w-md rounded-2xl p-5 shadow-xl" data-land-modal-panel>
-    <h2 id="landLocationTitle" class="text-base font-bold mb-1">موقعیت ملک</h2>
-    <p class="ld-modal__hint mb-4">موقعیت روی نقشه گوگل باز می‌شود.</p>
-    <a href="https://www.google.com/maps?q={{ land.latitude }},{{ land.longitude }}"
-       target="_blank"
-       rel="noopener noreferrer"
-       class="ld-btn-tx flex items-center justify-center gap-2 w-full py-3.5 text-sm rounded-xl">
-      <i class="fas fa-map-location-dot" aria-hidden="true"></i>
-      باز کردن در نقشه
-    </a>
-    <button type="button" data-land-modal-close class="ld-modal__close-btn mt-3 w-full py-2.5 text-sm">بستن</button>
+<div id="landLocationModal"
+     class="ld-modal ld-sheet-root hidden fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center sm:items-center sm:p-4"
+     data-tg-body-modal
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="landLocationTitle">
+  <div class="ld-sheet__backdrop absolute inset-0" data-land-modal-close aria-hidden="true"></div>
+  <div class="ld-sheet relative w-full sm:max-w-md" data-land-modal-panel>
+    <div class="ld-sheet__handle-wrap" aria-hidden="true"><span class="ld-sheet__handle"></span></div>
+    <header class="ld-sheet__head">
+      <h2 id="landLocationTitle" class="ld-sheet__title">موقعیت ملک</h2>
+      <button type="button" class="ld-sheet__close" data-land-modal-close aria-label="بستن">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div class="ld-sheet__body ld-sheet__body--center">
+      <div class="ld-sheet__icon ld-sheet__icon--map" aria-hidden="true">
+        <i class="fas fa-map-location-dot"></i>
+      </div>
+      <p class="ld-sheet__lead">موقعیت دقیق ملک روی نقشه گوگل نمایش داده می‌شود</p>
+    </div>
+    <footer class="ld-sheet__foot">
+      <a href="https://www.google.com/maps?q={{ land.latitude }},{{ land.longitude }}"
+         target="_blank"
+         rel="noopener noreferrer"
+         class="ld-sheet__btn ld-sheet__btn--primary ld-sheet__btn--map">
+        <i class="fas fa-location-arrow" aria-hidden="true"></i>
+        باز کردن در نقشه
+      </a>
+      <button type="button" data-land-modal-close class="ld-sheet__btn ld-sheet__btn--ghost">بستن</button>
+    </footer>
   </div>
 </div>
 {% endif %}
@@ -38,40 +75,129 @@
 {% set _tx_mode = land._tx_button_mode|default('visit') %}
 {% set show_tx = is_approved and _ld_st != 'sold' and _tx_mode in ('visit', 'deal', 'release', 'visit_pending') %}
 {% if show_tx %}
-<div id="landVisitModal" class="ld-modal hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4" data-tg-body-modal role="dialog" aria-modal="true" aria-labelledby="landVisitTitle">
-  <div class="ld-modal__backdrop absolute inset-0 bg-black/50" data-land-modal-close></div>
-  <div class="ld-modal__panel relative w-full max-w-md rounded-2xl p-5 shadow-xl" data-land-modal-panel>
-    <h2 id="landVisitTitle" class="text-base font-bold mb-1">درخواست بازدید</h2>
-    <p class="ld-modal__hint mb-3">تاریخ بازدید را از تقویم شمسی انتخاب کنید.</p>
-
-    <div class="ld-cal-wrap mb-3">
-      <div class="flex items-center justify-between gap-2 mb-3">
-        <button type="button" id="landVisitCalPrev" class="ld-cal-nav" aria-label="ماه قبل">
-          <i class="fas fa-chevron-right text-xs" aria-hidden="true"></i>
-        </button>
-        <span id="landVisitCalMonth" class="ld-cal-month"></span>
-        <button type="button" id="landVisitCalNext" class="ld-cal-nav" aria-label="ماه بعد">
-          <i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>
-        </button>
+<div id="landVisitModal"
+     class="ld-modal ld-sheet-root hidden fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center sm:items-center sm:p-4"
+     data-tg-body-modal
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="landVisitTitle">
+  <div class="ld-sheet__backdrop absolute inset-0" data-land-modal-close aria-hidden="true"></div>
+  <div class="ld-sheet ld-sheet--tall relative w-full sm:max-w-md" data-land-modal-panel>
+    <div class="ld-sheet__handle-wrap" aria-hidden="true"><span class="ld-sheet__handle"></span></div>
+    <header class="ld-sheet__head">
+      <h2 id="landVisitTitle" class="ld-sheet__title">درخواست بازدید</h2>
+      <button type="button" class="ld-sheet__close" data-land-modal-close aria-label="بستن">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div class="ld-sheet__body">
+      <p class="ld-sheet__hint">تاریخ پیشنهادی بازدید را انتخاب کنید. پس از ثبت، ادمین درخواست را بررسی می‌کند.</p>
+      <div class="ld-cal-wrap">
+        <div class="ld-cal-head">
+          <button type="button" id="landVisitCalPrev" class="ld-cal-nav" aria-label="ماه قبل">
+            <i class="fas fa-chevron-right text-xs" aria-hidden="true"></i>
+          </button>
+          <span id="landVisitCalMonth" class="ld-cal-month"></span>
+          <button type="button" id="landVisitCalNext" class="ld-cal-nav" aria-label="ماه بعد">
+            <i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="ld-cal-weekdays" aria-hidden="true">
+          <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span>
+        </div>
+        <div id="landVisitCalGrid" class="ld-cal-grid"></div>
       </div>
-      <div class="grid grid-cols-7 gap-1 text-center ld-cal-weekday mb-1">
-        <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span>
+      <div id="landVisitCalSelected" class="ld-cal-selected-pill" role="status">
+        <i class="fas fa-calendar-day text-xs opacity-70" aria-hidden="true"></i>
+        <span class="ld-cal-selected-text">تاریخ انتخاب نشده</span>
       </div>
-      <div id="landVisitCalGrid" class="grid grid-cols-7 gap-1"></div>
+      <input type="hidden" id="landVisitDateInput" value="" />
     </div>
+    <footer class="ld-sheet__foot">
+      <button type="button"
+              id="landVisitSubmitBtn"
+              data-visit-submit
+              disabled
+              class="ld-sheet__btn ld-sheet__btn--primary ld-sheet__btn--tx disabled:opacity-45 disabled:pointer-events-none">
+        <i class="fas fa-paper-plane" aria-hidden="true"></i>
+        ثبت درخواست بازدید
+      </button>
+      <button type="button" data-land-modal-close class="ld-sheet__btn ld-sheet__btn--ghost">انصراف</button>
+    </footer>
+  </div>
+</div>
 
-    <p id="landVisitCalSelected" class="ld-cal-selected text-sm text-center mb-3 min-h-[1.25rem]">تاریخ انتخاب نشده</p>
-    <input type="hidden" id="landVisitDateInput" value="" />
+<div id="landDealModal"
+     class="ld-modal ld-sheet-root hidden fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center sm:items-center sm:p-4"
+     data-tg-body-modal
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="landDealTitle">
+  <div class="ld-sheet__backdrop absolute inset-0" data-land-modal-close aria-hidden="true"></div>
+  <div class="ld-sheet relative w-full sm:max-w-md" data-land-modal-panel>
+    <div class="ld-sheet__handle-wrap" aria-hidden="true"><span class="ld-sheet__handle"></span></div>
+    <header class="ld-sheet__head">
+      <h2 id="landDealTitle" class="ld-sheet__title">درخواست معامله</h2>
+      <button type="button" class="ld-sheet__close" data-land-modal-close aria-label="بستن">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div class="ld-sheet__body">
+      <div class="ld-sheet__icon ld-sheet__icon--deal" aria-hidden="true">
+        <i class="fas fa-handshake"></i>
+      </div>
+      <p class="ld-sheet__lead">با ثبت درخواست، این فایل برای شما «در حال معامله» علامت‌گذاری می‌شود و سایر همکاران تا رفع معامله نمی‌توانند روی آن اقدام کنند.</p>
+      {% if land._visit_date_jalali %}
+      <div class="ld-sheet__info-row">
+        <span class="ld-sheet__info-label">بازدید تأییدشده</span>
+        <span class="ld-sheet__info-value" id="landDealVisitHint">{{ land._visit_date_jalali }}</span>
+      </div>
+      {% else %}
+      <div class="ld-sheet__info-row hidden" id="landDealVisitHintWrap">
+        <span class="ld-sheet__info-label">بازدید تأییدشده</span>
+        <span class="ld-sheet__info-value" id="landDealVisitHint"></span>
+      </div>
+      {% endif %}
+    </div>
+    <footer class="ld-sheet__foot">
+      <button type="button" id="landDealConfirmBtn" class="ld-sheet__btn ld-sheet__btn--primary ld-sheet__btn--tx">
+        <i class="fas fa-check" aria-hidden="true"></i>
+        تأیید و ثبت معامله
+      </button>
+      <button type="button" data-land-modal-close class="ld-sheet__btn ld-sheet__btn--ghost">انصراف</button>
+    </footer>
+  </div>
+</div>
 
-    <button type="button"
-            id="landVisitSubmitBtn"
-            data-visit-submit
-            disabled
-            class="ld-btn-tx w-full flex items-center justify-center gap-2 py-3.5 text-sm rounded-xl disabled:opacity-50 disabled:pointer-events-none">
-      <i class="fas fa-paper-plane" aria-hidden="true"></i>
-      ثبت درخواست بازدید
-    </button>
-    <button type="button" data-land-modal-close class="ld-modal__close-btn mt-3 w-full py-2.5 text-sm">انصراف</button>
+<div id="landReleaseModal"
+     class="ld-modal ld-sheet-root hidden fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center sm:items-center sm:p-4"
+     data-tg-body-modal
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="landReleaseTitle">
+  <div class="ld-sheet__backdrop absolute inset-0" data-land-modal-close aria-hidden="true"></div>
+  <div class="ld-sheet relative w-full sm:max-w-md" data-land-modal-panel>
+    <div class="ld-sheet__handle-wrap" aria-hidden="true"><span class="ld-sheet__handle"></span></div>
+    <header class="ld-sheet__head">
+      <h2 id="landReleaseTitle" class="ld-sheet__title">رفع معامله</h2>
+      <button type="button" class="ld-sheet__close" data-land-modal-close aria-label="بستن">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div class="ld-sheet__body">
+      <div class="ld-sheet__icon ld-sheet__icon--release" aria-hidden="true">
+        <i class="fas fa-unlock"></i>
+      </div>
+      <p class="ld-sheet__lead">با رفع معامله، وضعیت فایل به حالت فعال برمی‌گردد و سایر همکاران دوباره می‌توانند روی آن اقدام کنند.</p>
+      <p class="ld-sheet__hint">اگر معامله لغو شده یا به نتیجه نرسیده، این گزینه را انتخاب کنید.</p>
+    </div>
+    <footer class="ld-sheet__foot">
+      <button type="button" id="landReleaseConfirmBtn" class="ld-sheet__btn ld-sheet__btn--primary ld-sheet__btn--release">
+        <i class="fas fa-check-circle" aria-hidden="true"></i>
+        تأیید رفع معامله
+      </button>
+      <button type="button" data-land-modal-close class="ld-sheet__btn ld-sheet__btn--ghost">انصراف</button>
+    </footer>
   </div>
 </div>
 {% endif %}

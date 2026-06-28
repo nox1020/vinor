@@ -167,7 +167,54 @@
       if (typeof window.removeVinorLandDetailModalsFromBody === 'function') {
         window.removeVinorLandDetailModalsFromBody();
       }
+      removeLandDetailFooterFromBody();
     } catch (e3) { /* ignore */ }
+  }
+
+  function removeLandDetailFooterFromBody() {
+    try {
+      document.querySelectorAll('body > .ld-actions[data-land-detail-footer]').forEach(function (el) {
+        el.remove();
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  function hoistLandDetailFooter() {
+    var page = document.getElementById('landDetailPage') || document.querySelector(ROOT_SEL);
+    if (!page) return null;
+    var footer = page.querySelector('.ld-actions[data-land-detail-footer]') ||
+      page.querySelector('.ld-actions');
+    if (!footer) return null;
+    if (footer.parentNode !== document.body) {
+      document.body.appendChild(footer);
+    }
+    footer.style.zIndex = '70';
+    return footer;
+  }
+
+  function bindContactModalTel() {
+    var modal = document.getElementById('landContactModal');
+    if (!modal) return;
+    var link = modal.querySelector('a[href^="tel:"]');
+    if (!link || link.dataset.ldTelBound === '1') return;
+    link.dataset.ldTelBound = '1';
+    function onTelClick(ev) {
+      var href = String(link.getAttribute('href') || '').trim();
+      if (!href) return;
+      if (isVinorWebView()) {
+        ev.preventDefault();
+        try {
+          window.location.href = href;
+        } catch (e) {
+          window.open(href, '_self');
+        }
+      }
+    }
+    link.addEventListener('click', onTelClick);
+    addCleanup(function () {
+      link.removeEventListener('click', onTelClick);
+      delete link.dataset.ldTelBound;
+    });
   }
 
   function landModalOverlayOpen() {
@@ -198,25 +245,54 @@
   }
 
   function closeLandModals() {
-    document.querySelectorAll('.ld-modal').forEach(function (m) {
-      m.classList.add('hidden');
-      m.style.display = 'none';
-      m.setAttribute('aria-hidden', 'true');
+    document.querySelectorAll('.ld-modal.is-open').forEach(function (m) {
+      m.classList.remove('is-open');
     });
-    activeLandModalId = null;
-    landModalOverlayCloseAll();
+    var toHide = document.querySelectorAll('.ld-modal:not(.hidden)');
+    if (!toHide.length) {
+      activeLandModalId = null;
+      landModalOverlayCloseAll();
+      return;
+    }
+    setTimeout(function () {
+      document.querySelectorAll('.ld-modal').forEach(function (m) {
+        m.classList.add('hidden');
+        m.style.display = 'none';
+        m.setAttribute('aria-hidden', 'true');
+      });
+      activeLandModalId = null;
+      landModalOverlayCloseAll();
+    }, 300);
   }
 
   function openLandModal(id) {
     var modal = document.getElementById(id);
     if (!modal) return;
-    closeLandModals();
+    document.querySelectorAll('.ld-modal.is-open').forEach(function (m) {
+      if (m !== modal) {
+        m.classList.remove('is-open');
+        m.classList.add('hidden');
+        m.style.display = 'none';
+        m.setAttribute('aria-hidden', 'true');
+      }
+    });
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
     modal.setAttribute('aria-hidden', 'false');
     activeLandModalId = id;
     landModalOverlayOpen();
-    var panel = modal.querySelector('[data-land-modal-panel]') || modal.querySelector('.relative');
+    if (id === 'landContactModal') {
+      bindContactModalTel();
+    }
+    if (id === 'landDealModal') {
+      syncDealModalVisitHint();
+    }
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        modal.classList.add('is-open');
+      });
+    });
+    var panel = modal.querySelector('[data-land-modal-panel]');
     if (panel) {
       try {
         var focusable = panel.querySelector('button:not([disabled]), [href], input:not([disabled])');
@@ -863,20 +939,6 @@
         ev.preventDefault();
         ev.stopPropagation();
         closeLandModals();
-        return;
-      }
-      var detailRoot = document.getElementById('landDetailPage');
-      if (!detailRoot) return;
-      var openContact = ev.target.closest('[data-land-open-contact]');
-      if (openContact && detailRoot.contains(openContact)) {
-        ev.preventDefault();
-        openLandModal('landContactModal');
-        return;
-      }
-      var openLocation = ev.target.closest('[data-land-open-location]');
-      if (openLocation && detailRoot.contains(openLocation)) {
-        ev.preventDefault();
-        openLandModal('landLocationModal');
       }
     }
 
@@ -885,6 +947,36 @@
       ev.preventDefault();
       closeLandModals();
     }
+
+    document.querySelectorAll('[data-land-open-contact]').forEach(function (btn) {
+      if (btn.dataset.ldContactBound === '1') return;
+      btn.dataset.ldContactBound = '1';
+      function onContact(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openLandModal('landContactModal');
+      }
+      btn.addEventListener('click', onContact);
+      addCleanup(function () {
+        btn.removeEventListener('click', onContact);
+        delete btn.dataset.ldContactBound;
+      });
+    });
+
+    document.querySelectorAll('[data-land-open-location]').forEach(function (btn) {
+      if (btn.dataset.ldLocationBound === '1') return;
+      btn.dataset.ldLocationBound = '1';
+      function onLocation(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openLandModal('landLocationModal');
+      }
+      btn.addEventListener('click', onLocation);
+      addCleanup(function () {
+        btn.removeEventListener('click', onLocation);
+        delete btn.dataset.ldLocationBound;
+      });
+    });
 
     document.addEventListener('click', onDocClick, true);
     document.addEventListener('keydown', onEscape);
@@ -1043,6 +1135,37 @@
     return iso >= toLocalISODate(visitCalState.minDate) && iso <= toLocalISODate(visitCalState.maxDate);
   }
 
+  function syncVisitSelectedLabel(iso, jalaliText) {
+    var pill = document.getElementById('landVisitCalSelected');
+    var textEl = pill && pill.querySelector('.ld-cal-selected-text');
+    var label = jalaliText || (iso ? formatIsoToJalali(iso) : '') || 'تاریخ انتخاب نشده';
+    if (textEl) textEl.textContent = label;
+    if (pill) {
+      pill.classList.toggle('is-set', !!iso);
+    }
+  }
+
+  function syncDealModalVisitHint() {
+    var btn = document.getElementById('landTxToggleBtn');
+    var hintEl = document.getElementById('landDealVisitHint');
+    var wrap = document.getElementById('landDealVisitHintWrap');
+    if (!hintEl) return;
+    var hint = document.getElementById('landVisitDateHint');
+    var jalali = '';
+    if (hint && !hint.classList.contains('hidden')) {
+      var raw = (hint.textContent || '').replace(/^بازدید:\s*/, '').trim();
+      if (raw) jalali = raw;
+    }
+    if (!jalali && btn) {
+      var vd = btn.getAttribute('data-visit-date') || '';
+      if (vd) jalali = formatIsoToJalaliShort(vd) || vd;
+    }
+    if (jalali) {
+      hintEl.textContent = jalali;
+      if (wrap) wrap.classList.remove('hidden');
+    }
+  }
+
   function renderVisitCalendar() {
     var grid = document.getElementById('landVisitCalGrid');
     var monthLabel = document.getElementById('landVisitCalMonth');
@@ -1070,7 +1193,7 @@
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = faPersianDay.format(gd);
-      btn.className = 'aspect-square rounded-lg text-xs font-medium transition ld-cal-day' + (
+      btn.className = 'ld-cal-day' + (
         !enabled
           ? ' ld-cal-day--disabled'
           : visitCalState.selectedIso === iso
@@ -1085,9 +1208,8 @@
           btn.addEventListener('click', function () {
             visitCalState.selectedIso = dayIso;
             var hidden = document.getElementById('landVisitDateInput');
-            var selectedEl = document.getElementById('landVisitCalSelected');
             if (hidden) hidden.value = dayIso;
-            if (selectedEl) selectedEl.textContent = formatIsoToJalali(dayIso);
+            syncVisitSelectedLabel(dayIso);
             renderVisitCalendar();
             syncVisitSubmitEnabled();
           });
@@ -1100,9 +1222,8 @@
   function resetVisitCalendarSelection() {
     visitCalState.selectedIso = '';
     var hidden = document.getElementById('landVisitDateInput');
-    var selectedEl = document.getElementById('landVisitCalSelected');
     if (hidden) hidden.value = '';
-    if (selectedEl) selectedEl.textContent = 'تاریخ انتخاب نشده';
+    syncVisitSelectedLabel('');
     syncVisitSubmitEnabled();
   }
 
@@ -1317,6 +1438,9 @@
     if (mode === 'visit') {
       scheduleVisitModalRecovery();
     }
+    if (mode === 'deal') {
+      syncDealModalVisitHint();
+    }
     requestAnimationFrame(function () {
       syncFooterSpacer();
     });
@@ -1507,11 +1631,16 @@
         body.append(k, extraFields[k]);
       });
     }
-    var hdrs = {
-      'X-Requested-With': 'XMLHttpRequest',
-      Accept: 'application/json',
-    };
-    if (csrf) hdrs['X-CSRFToken'] = csrf;
+    var hdrs = typeof window.vinorCsrfFetchHeaders === 'function'
+      ? window.vinorCsrfFetchHeaders({
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        })
+      : {
+          'X-Requested-With': 'XMLHttpRequest',
+          Accept: 'application/json',
+        };
+    if (csrf && !hdrs['X-CSRFToken']) hdrs['X-CSRFToken'] = csrf;
     return fetch(url, {
       method: 'POST',
       body: body,
@@ -1615,6 +1744,67 @@
     if (initialMode === 'visit_pending') initVisitStatusPoll('visit_pending');
     addCleanup(stopVisitStatusPoll);
 
+    function executeLandTxToggle(mode) {
+      var prevMode = mode;
+      var prevStatus = root.dataset.txStatus || btn.getAttribute('data-land-tx-status') || 'active';
+      var prevVisit = btn.getAttribute('data-visit-date') || '';
+      var optimisticMode = prevMode === 'release' ? 'visit' : (prevMode === 'deal' ? 'release' : 'visit');
+      var url = btn.getAttribute('data-land-tx-url');
+      var confirmBtn = prevMode === 'deal'
+        ? document.getElementById('landDealConfirmBtn')
+        : document.getElementById('landReleaseConfirmBtn');
+
+      btn.dataset.busy = '1';
+      btn.disabled = true;
+      if (confirmBtn) {
+        confirmBtn.dataset.busy = '1';
+        confirmBtn.disabled = true;
+      }
+      applyTxMode(optimisticMode);
+      closeLandModals();
+
+      postLandAction(url, null, function (data) {
+        var st = data.new_status || statusFromMode(optimisticMode);
+        var nextMode = data.tx_mode || (st === 'in_transaction' ? 'release' : (prevVisit ? 'deal' : 'visit'));
+        applyTxMode(
+          nextMode,
+          data.visit_date || (nextMode === 'deal' ? prevVisit : ''),
+          data.visit_date_jalali || (nextMode === 'deal' ? formatIsoToJalaliShort(prevVisit) : '')
+        );
+        showTxToast(data.message, false);
+      }).catch(function (err) {
+        applyTxMode(prevMode, prevVisit, formatIsoToJalaliShort(prevVisit));
+        root.dataset.txStatus = prevStatus;
+        showTxToast(err.message || 'خطا در بروزرسانی', true);
+      }).finally(function () {
+        btn.dataset.busy = '0';
+        if (confirmBtn) {
+          confirmBtn.dataset.busy = '0';
+          confirmBtn.disabled = false;
+        }
+        var currentMode = btn.getAttribute('data-land-tx-mode') || root.dataset.txMode || 'visit';
+        syncTxButtonDisabled(btn, currentMode);
+      });
+    }
+
+    function bindTxConfirm(modalBtnId, mode) {
+      var confirmBtn = document.getElementById(modalBtnId);
+      if (!confirmBtn || confirmBtn.dataset.ldTxConfirmBound === '1') return;
+      confirmBtn.dataset.ldTxConfirmBound = '1';
+      function onConfirm() {
+        if (confirmBtn.disabled || confirmBtn.dataset.busy === '1') return;
+        executeLandTxToggle(mode);
+      }
+      confirmBtn.addEventListener('click', onConfirm);
+      addCleanup(function () {
+        confirmBtn.removeEventListener('click', onConfirm);
+        delete confirmBtn.dataset.ldTxConfirmBound;
+      });
+    }
+
+    bindTxConfirm('landDealConfirmBtn', 'deal');
+    bindTxConfirm('landReleaseConfirmBtn', 'release');
+
     function onClick() {
       if (btn.disabled || btn.dataset.busy === '1') return;
       var mode = btn.getAttribute('data-land-tx-mode') || root.dataset.txMode || 'visit';
@@ -1637,34 +1827,15 @@
         return;
       }
 
-      var prevMode = mode;
-      var prevStatus = root.dataset.txStatus || btn.getAttribute('data-land-tx-status') || 'active';
-      var prevVisit = btn.getAttribute('data-visit-date') || '';
-      var optimisticMode = prevMode === 'release' ? 'visit' : (prevMode === 'deal' ? 'release' : 'visit');
-      var url = btn.getAttribute('data-land-tx-url');
+      if (mode === 'deal') {
+        openLandModal('landDealModal');
+        return;
+      }
 
-      btn.dataset.busy = '1';
-      btn.disabled = true;
-      applyTxMode(optimisticMode);
-
-      postLandAction(url, null, function (data) {
-        var st = data.new_status || statusFromMode(optimisticMode);
-        var nextMode = data.tx_mode || (st === 'in_transaction' ? 'release' : (prevVisit ? 'deal' : 'visit'));
-        applyTxMode(
-          nextMode,
-          data.visit_date || (nextMode === 'deal' ? prevVisit : ''),
-          data.visit_date_jalali || (nextMode === 'deal' ? formatIsoToJalaliShort(prevVisit) : '')
-        );
-        showTxToast(data.message, false);
-      }).catch(function (err) {
-        applyTxMode(prevMode, prevVisit, formatIsoToJalaliShort(prevVisit));
-        root.dataset.txStatus = prevStatus;
-        showTxToast(err.message || 'خطا در بروزرسانی', true);
-      }).finally(function () {
-        btn.dataset.busy = '0';
-        var currentMode = btn.getAttribute('data-land-tx-mode') || root.dataset.txMode || 'visit';
-        syncTxButtonDisabled(btn, currentMode);
-      });
+      if (mode === 'release') {
+        openLandModal('landReleaseModal');
+        return;
+      }
     }
 
     btn.addEventListener('click', onClick);
@@ -2040,6 +2211,7 @@
     setBottomNavVisible(false);
 
     hoistLandModalsSafe();
+    hoistLandDetailFooter();
     scheduleVisitModalRecovery();
 
     initGallery(cfg);
@@ -2082,6 +2254,19 @@
   window.vinorScheduleVisitModalRecovery = scheduleVisitModalRecovery;
   window.vinorLandDetailTeardown = runCleanup;
   window.vinorLandDetailGalleryKick = kickGalleryMedia;
+  window.vinorLandDetailActionsKick = function vinorLandDetailActionsKick() {
+    var root = document.querySelector(ROOT_SEL);
+    if (!root) return;
+    if (!root.dataset.ldInited || root.dataset.ldInited !== '1') {
+      initLandDetail();
+      return;
+    }
+    hoistLandModalsSafe();
+    hoistLandDetailFooter();
+    syncFooterSpacer();
+    bindContactModalTel();
+    bindVisitSubmitHandler();
+  };
 
   if (!window.__vinorLandDetailBound) {
     window.__vinorLandDetailBound = true;

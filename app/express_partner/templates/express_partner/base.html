@@ -239,6 +239,14 @@
     html:has(#dashFilterModal:not(.hidden)) .vinor-apk-download-strip {
       display: none !important;
     }
+    html:has(.land-detail-page) #bottomNavMenu {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+    body > .ld-actions[data-land-detail-footer] {
+      z-index: 70;
+    }
     /* فضای اضافه زیر محتوا وقتی نوار «دانلود اپ» بالای منوی پایین نمایش داده می‌شود (فقط مرورگر) */
     @media (max-width: 1023px) {
       html.vinor-has-apk-banner [class*="pb-[calc(5.75rem"] {
@@ -339,7 +347,13 @@
     window.vinorReadCsrfToken = function vinorReadCsrfToken() {
       try {
         var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
-        if (m && m[1]) return decodeURIComponent(m[1].trim());
+        if (m && m[1]) {
+          var fromCookie = decodeURIComponent(m[1].trim());
+          if (fromCookie && window.VINOR_NOTIFY_CFG) {
+            window.VINOR_NOTIFY_CFG.csrfToken = fromCookie;
+          }
+          return fromCookie;
+        }
       } catch (_) {}
       try {
         var cfg = window.VINOR_NOTIFY_CFG;
@@ -411,7 +425,7 @@
     };
 
     window.removeVinorLandDetailModalsFromBody = function () {
-      ['landContactModal', 'landLocationModal', 'landVisitModal'].forEach(function (id) {
+      ['landContactModal', 'landLocationModal', 'landVisitModal', 'landDealModal', 'landReleaseModal'].forEach(function (id) {
         try {
           document.querySelectorAll('body > #' + CSS.escape(id)).forEach(function (el) {
             el.remove();
@@ -1322,6 +1336,7 @@
     })();
   </script>
 
+  {% include 'express_partner/partials/vinor_favorites_cards_loader.html' %}
   <script src="{{ 'express-partner/premium-card-media.js'|static_version }}" defer></script>
   <script src="{{ 'express-partner/express-nav.js'|static_version }}" defer></script>
   <script src="{{ 'express-partner/land-detail.js'|static_version }}" defer></script>
