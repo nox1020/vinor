@@ -6,8 +6,9 @@
   {% include 'express_partner/partials/land_seo_head.html' %}
 {% endblock %}
 
-{% block styles %}
-  <style>
+{% block content %}
+  {# CSS داخل swap تا با soft-nav از داشبورد هم اعمال شود (block styles فقط در full load در head می‌آید) #}
+  <style id="vinor-land-detail-styles">
     /* ── جزئیات فایل: چیدمان دیوار + پالت وینور (emerald / تم تیره موبایل) ── */
     html:has(.land-detail-page) {
       --ld-footer-h: calc(5.5rem + env(safe-area-inset-bottom, 0px));
@@ -506,9 +507,6 @@
       line-height: 1.2;
     }
   </style>
-{% endblock %}
-
-{% block content %}
   {% from 'express_partner/partials/land_detail_macros.html' import upload_url %}
   {% set images = land.images or [] %}
   {% set video = land.video %}
@@ -531,5 +529,4 @@
 {% block scripts %}
   {{ super() }}
   {% include 'express_partner/partials/vinor_favorites_script.html' %}
-  <script src="{{ 'express-partner/land-detail.js'|static_version }}"></script>
 {% endblock %}

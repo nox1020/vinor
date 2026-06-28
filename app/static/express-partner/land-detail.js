@@ -730,13 +730,16 @@
         closeLandModals();
         return;
       }
-      if (!activeRoot || !activeRoot.contains(ev.target)) return;
-      if (ev.target.closest('[data-land-open-contact]')) {
+      var detailRoot = document.getElementById('landDetailPage');
+      if (!detailRoot) return;
+      var openContact = ev.target.closest('[data-land-open-contact]');
+      if (openContact && detailRoot.contains(openContact)) {
         ev.preventDefault();
         openLandModal('landContactModal');
         return;
       }
-      if (ev.target.closest('[data-land-open-location]')) {
+      var openLocation = ev.target.closest('[data-land-open-location]');
+      if (openLocation && detailRoot.contains(openLocation)) {
         ev.preventDefault();
         openLandModal('landLocationModal');
       }
@@ -1063,6 +1066,10 @@
   }
 
   function getLandCsrf() {
+    if (typeof window.vinorReadCsrfToken === 'function') {
+      var fromCookie = window.vinorReadCsrfToken();
+      if (fromCookie) return fromCookie;
+    }
     var btn = document.getElementById('landTxToggleBtn');
     var cfg = readConfig();
     return (btn && btn.getAttribute('data-csrf')) ||
@@ -1362,14 +1369,16 @@
         body.append(k, extraFields[k]);
       });
     }
+    var hdrs = {
+      'X-Requested-With': 'XMLHttpRequest',
+      Accept: 'application/json',
+    };
+    if (csrf) hdrs['X-CSRFToken'] = csrf;
     return fetch(url, {
       method: 'POST',
       body: body,
       credentials: 'same-origin',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        Accept: 'application/json',
-      },
+      headers: hdrs,
     }).then(function (res) {
       return res.json().then(function (data) {
         return { ok: res.ok, data: data };

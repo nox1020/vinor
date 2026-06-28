@@ -434,6 +434,29 @@
     }
   }
 
+  function resetSoftNavPageHooks(pathname) {
+    var p = normPath(pathname || window.location.pathname || '');
+    if (!/\/express\/partner\/favorites\/?$/.test(p)) {
+      try { delete window.__vinorPagePullRefresh; } catch (_) {}
+    }
+  }
+
+  function syncPartnerCsrfFromPage() {
+    try {
+      if (typeof window.vinorReadCsrfToken === 'function' && window.VINOR_NOTIFY_CFG) {
+        var cookieTok = window.vinorReadCsrfToken();
+        if (cookieTok) window.VINOR_NOTIFY_CFG.csrfToken = cookieTok;
+      }
+      var cfgEl = document.getElementById('landDetailConfig');
+      if (cfgEl && window.VINOR_NOTIFY_CFG) {
+        var pageCfg = JSON.parse(cfgEl.textContent || '{}');
+        if (pageCfg && pageCfg.csrfToken) {
+          window.VINOR_NOTIFY_CFG.csrfToken = pageCfg.csrfToken;
+        }
+      }
+    } catch (_) {}
+  }
+
   function afterPageSwap(navKey) {
     try {
       if (typeof VinorOtpBridge !== 'undefined' && VinorOtpBridge.onUrlChanged) {
@@ -441,6 +464,8 @@
       }
     } catch (_) {}
     var path = window.location.pathname;
+    resetSoftNavPageHooks(path);
+    syncPartnerCsrfFromPage();
     syncAuthFlowClass(path);
     var onDetail = isLandDetailPath(path);
     var showNav = shouldShowBottomNav(path);

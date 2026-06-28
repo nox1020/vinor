@@ -67,10 +67,7 @@
   {% include 'express_partner/partials/vinor_favorites_script.html' %}
   <script>
   (function () {
-    var root = document.getElementById('favoritesCardsRoot');
-    var loading = document.getElementById('favoritesLoading');
     var hint = document.getElementById('favoritesCountHint');
-    var csrf = {{ csrf_token()|tojson }};
     var apiUrl = {{ url_for('express_partner.api_favorites_cards')|tojson }};
 
     function updateHint(requested, shown) {
@@ -91,7 +88,9 @@
     }
 
     function loadFavorites() {
-      if (!root || !loading) return;
+      var root = document.getElementById('favoritesCardsRoot');
+      var loading = document.getElementById('favoritesLoading');
+      if (!root || !root.isConnected || !loading) return;
       var codes = window.vinorReadFavs ? window.vinorReadFavs() : [];
       loading.classList.remove('hidden');
       root.classList.add('hidden');
@@ -100,12 +99,9 @@
 
       fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRFToken': csrf,
-          'X-Requested-With': 'XMLHttpRequest'
-        },
+        headers: window.vinorCsrfFetchHeaders({
+          'Content-Type': 'application/json'
+        }),
         credentials: 'same-origin',
         body: JSON.stringify({ codes: codes })
       })
@@ -146,7 +142,8 @@
     if (!window.__vinorFavoritesPageBound) {
       window.__vinorFavoritesPageBound = true;
       document.addEventListener('vinor-favs-changed', function () {
-        if (document.getElementById('favoritesCardsRoot')) loadFavorites();
+        var favRoot = document.getElementById('favoritesCardsRoot');
+        if (favRoot && favRoot.isConnected) loadFavorites();
       });
     }
 

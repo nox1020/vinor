@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.22-offline-cache-fix';
+const VERSION = 'v1.0.24-csrf-fix';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -125,6 +125,31 @@ function isStaticAsset(request) {
   const url = new URL(request.url);
   if (!isSameOrigin(url.href)) return false;
   return url.pathname.startsWith('/static/');
+}
+
+/** JS پنل همکار — network-first تا پس از deploy نسخهٔ کهنه cache-first برنگردد */
+function isExpressPartnerScript(pathname) {
+  return pathname.startsWith('/static/express-partner/') && pathname.endsWith('.js');
+}
+
+async function fetchExpressPartnerScript(request) {
+  const cache = await caches.open(RUNTIME);
+  try {
+    const resp = await fetch(request);
+    if (resp.ok) {
+      await cache.put(request, resp.clone());
+    }
+    return resp;
+  } catch (_) {
+    const hit = await cache.match(request);
+    if (hit) return hit;
+    const url = new URL(request.url);
+    const noQuery = new Request(url.pathname, { credentials: 'same-origin' });
+    const precache = await caches.open(PRECACHE);
+    const precached = await precache.match(noQuery);
+    if (precached) return precached;
+    return new Response('Offline', { status: 503 });
+  }
 }
 
 function isVinorApkRequest(request) {
@@ -256,6 +281,10 @@ self.addEventListener('fetch', (event) => {
 
   // Static assets: Cache-first با background update
   if (isStaticAsset(request)) {
+    if (isExpressPartnerScript(url.pathname)) {
+      event.respondWith(fetchExpressPartnerScript(request));
+      return;
+    }
     event.respondWith((async () => {
       const cache = await caches.open(RUNTIME);
       const cached = await cache.match(request);

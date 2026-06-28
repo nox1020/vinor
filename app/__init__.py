@@ -527,6 +527,9 @@ def create_app() -> Flask:
         @app.after_request
         def set_csrf_cookie(resp):
             try:
+                ct = (resp.content_type or "").split(";")[0].strip().lower()
+                if ct != "text/html":
+                    return resp
                 token = generate_csrf()
                 resp.set_cookie(
                     "XSRF-TOKEN",

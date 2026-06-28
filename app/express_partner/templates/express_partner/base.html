@@ -336,6 +336,26 @@
   </div>
 
   <script>
+    window.vinorReadCsrfToken = function vinorReadCsrfToken() {
+      try {
+        var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+        if (m && m[1]) return decodeURIComponent(m[1].trim());
+      } catch (_) {}
+      try {
+        var cfg = window.VINOR_NOTIFY_CFG;
+        if (cfg && cfg.csrfToken) return cfg.csrfToken;
+      } catch (_) {}
+      return '';
+    };
+    window.vinorCsrfFetchHeaders = function vinorCsrfFetchHeaders(extra) {
+      var h = extra ? Object.assign({}, extra) : {};
+      if (!h.Accept) h.Accept = 'application/json';
+      if (!h['X-Requested-With']) h['X-Requested-With'] = 'XMLHttpRequest';
+      var t = window.vinorReadCsrfToken();
+      if (t) h['X-CSRFToken'] = t;
+      return h;
+    };
+
     window.hoistVinorExpressBodyModals = function () {
       /* مودال‌های پرتال: خارج از #tg-page-shell تا z-index بالاتر از نوار پایین باشد */
       var seen = {};
@@ -781,12 +801,11 @@
       const cfg = window.VINOR_NOTIFY_CFG || {};
       const enabled = cfg.enabled === true || cfg.enabled === 'true';
       const endpoints = cfg.endpoints || {};
-      const headers = {
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
-      };
-      if (cfg.csrfToken) {
-        headers['X-CSRFToken'] = cfg.csrfToken;
+      function apiHeaders(extra) {
+        return window.vinorCsrfFetchHeaders(Object.assign({
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }, extra || {}));
       }
 
       function isVinorApkClient() {
@@ -926,7 +945,7 @@
         try {
           const res = await fetch(endpoints.unread, {
             credentials: 'same-origin',
-            headers: headers
+            headers: apiHeaders()
           });
           if (!res.ok) {
             if (res.status === 401) stopPolling();
@@ -1014,7 +1033,7 @@
         try {
           const res = await fetch(endpoints.markAll, {
             method: 'POST',
-            headers,
+            headers: apiHeaders(),
             credentials: 'same-origin'
           });
           if (!res.ok) {
@@ -1043,7 +1062,7 @@
           const url = endpoints.markOneTemplate.replace('__ID__', encodeURIComponent(id));
           const res = await fetch(url, {
             method: 'POST',
-            headers,
+            headers: apiHeaders(),
             credentials: 'same-origin'
           });
           if (!res.ok) {
@@ -1305,6 +1324,7 @@
 
   <script src="{{ 'express-partner/premium-card-media.js'|static_version }}" defer></script>
   <script src="{{ 'express-partner/express-nav.js'|static_version }}" defer></script>
+  <script src="{{ 'express-partner/land-detail.js'|static_version }}" defer></script>
   <script src="{{ 'express-partner/express-pull-refresh.js'|static_version }}" defer></script>
 
   <script>
