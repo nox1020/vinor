@@ -514,7 +514,7 @@
   {% set total_items = (1 if has_video else 0) + images|length %}
   {% set desc = (land.description or land.desc or '')|trim %}
 
-  <div id="landDetailPage" class="land-detail-page" data-land-code="{{ land.code or '' }}" data-tx-status="{{ (land._assignment_status|default('active')|string)|lower|trim }}" data-tx-mode="{{ land._tx_button_mode|default('visit') }}">
+  <div id="landDetailPage" class="land-detail-page" data-vinor-ptr="off" data-land-code="{{ land.code or '' }}" data-tx-status="{{ (land._assignment_status|default('active')|string)|lower|trim }}" data-tx-mode="{{ land._tx_button_mode|default('visit') }}">
     {% include 'express_partner/partials/land_detail_gallery.html' %}
     {% include 'express_partner/partials/land_detail_main.html' %}
     <div class="ld-footer-spacer" aria-hidden="true"></div>

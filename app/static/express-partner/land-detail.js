@@ -65,6 +65,7 @@
     cleanupFns = [];
     if (activeRoot) {
       delete activeRoot.dataset.ldInited;
+      delete activeRoot.dataset.ldLandCode;
       var v = activeRoot.querySelector('#landVideo');
       if (v) {
         try { v.pause(); } catch (e2) { /* ignore */ }
@@ -1290,6 +1291,7 @@
 
     visitModalRecoverPromise = fetchVisitModalFromServer()
       .then(function (fetched) {
+        if (!document.querySelector(ROOT_SEL)) return null;
         if (fetched) return fetched;
         hoistLandModalsSafe();
         return ensureVisitModalEl();
@@ -1303,6 +1305,8 @@
 
   function rebindVisitModalHandlers() {
     visitCalState.controlsBound = false;
+    var submitBtn = document.getElementById('landVisitSubmitBtn');
+    if (submitBtn) delete submitBtn.dataset.visitSubmitBound;
     initVisitCalendarControls();
     bindVisitSubmitHandler();
   }
@@ -1882,17 +1886,28 @@
     }
     if (activeRoot && activeRoot !== root) {
       runCleanup();
+      root = document.querySelector(ROOT_SEL);
+      if (!root) return;
     }
-    if (root.dataset.ldInited === '1') return;
+    var cfg = readConfig();
+    var cfgCode = (cfg && cfg.code) || root.getAttribute('data-land-code') || '';
+    if (root.dataset.ldInited === '1') {
+      if (activeRoot === root && root.dataset.ldLandCode === cfgCode) return;
+      runCleanup();
+      root = document.querySelector(ROOT_SEL);
+      if (!root) return;
+      cfg = readConfig();
+      cfgCode = (cfg && cfg.code) || root.getAttribute('data-land-code') || '';
+    }
 
     activeRoot = root;
     root.dataset.ldInited = '1';
+    root.dataset.ldLandCode = cfgCode;
     setBottomNavVisible(false);
 
     hoistLandModalsSafe();
     scheduleVisitModalRecovery();
 
-    var cfg = readConfig();
     initGallery(cfg);
     initVideoSound();
     initMoreMenu();
