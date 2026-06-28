@@ -40,6 +40,93 @@
     return { type: 'image', thumb: thumb, full: full };
   }
 
+  function isVinorWebView() {
+    return /VinorApp\//i.test(navigator.userAgent || '');
+  }
+
+  function hideGalleryLoader() {
+    var loader = document.getElementById('landMediaLoading');
+    if (!loader) return;
+    loader.classList.remove('is-visible', 'opacity-100');
+    loader.classList.add('opacity-0');
+    loader.setAttribute('aria-hidden', 'true');
+  }
+
+  function kickGalleryMedia() {
+    var root = document.querySelector(ROOT_SEL);
+    if (!root) return;
+
+    var video = document.getElementById('landVideo');
+    if (video && !video.classList.contains('hidden')) {
+      var deferSrc = video.getAttribute('data-vinor-defer-src');
+      if (deferSrc && !video.dataset.vinorSrcLoaded) {
+        video.innerHTML = '';
+        var source = document.createElement('source');
+        source.src = deferSrc;
+        source.type = 'video/mp4';
+        video.appendChild(source);
+        video.dataset.vinorSrcLoaded = '1';
+        try { video.load(); } catch (e) { /* ignore */ }
+      }
+      video.play().catch(function () { /* ignore */ });
+      hideGalleryLoader();
+      return;
+    }
+
+    var img = document.getElementById('landMainImage');
+    if (!img || img.classList.contains('hidden')) return;
+
+    if (img.classList.contains('is-loaded')) {
+      hideGalleryLoader();
+      return;
+    }
+
+    if (img.complete && img.naturalWidth > 0) {
+      img.classList.add('is-loaded');
+      img.classList.remove('is-broken');
+      hideGalleryLoader();
+      return;
+    }
+
+    var src = String(img.getAttribute('src') || img.currentSrc || '').trim();
+    if (!src) {
+      var cfg = readConfig();
+      var slides = (cfg && cfg.slides) || [];
+      for (var i = 0; i < slides.length; i++) {
+        if (slides[i] && slides[i].type === 'image') {
+          src = slides[i].thumb || slides[i].full || '';
+          break;
+        }
+      }
+    }
+    if (!src) return;
+
+    function onOk() {
+      img.classList.add('is-loaded');
+      img.classList.remove('is-broken');
+      hideGalleryLoader();
+    }
+    function onFail() {
+      img.classList.add('is-broken');
+      hideGalleryLoader();
+    }
+
+    img.onload = function () { onOk(); };
+    img.onerror = function () { onFail(); };
+    if (img.getAttribute('src') !== src) {
+      img.src = src;
+    } else {
+      img.src = '';
+      img.src = src;
+    }
+  }
+
+  function scheduleGalleryKick() {
+    requestAnimationFrame(kickGalleryMedia);
+    setTimeout(kickGalleryMedia, 350);
+    setTimeout(kickGalleryMedia, 1500);
+  }
+
   function addCleanup(fn) {
     cleanupFns.push(fn);
   }
@@ -306,6 +393,36 @@
       function bindLoad(src, allowFullFallback) {
         var triedFull = false;
         setLoader(true);
+
+        if (isVinorWebView()) {
+          function directAttempt(url, canFallback) {
+            if (isStale()) return;
+            img.onload = function () {
+              if (isStale()) return;
+              img.onerror = null;
+              img.dataset.full = full;
+              reveal(true);
+            };
+            img.onerror = function () {
+              if (isStale()) return;
+              if (canFallback && !triedFull && full && url !== full) {
+                triedFull = true;
+                directAttempt(full, false);
+                return;
+              }
+              reveal(false);
+            };
+            if (img.getAttribute('src') !== url) {
+              img.src = url;
+            } else {
+              img.src = '';
+              img.src = url;
+            }
+            img.dataset.full = full;
+          }
+          directAttempt(src, allowFullFallback);
+          return;
+        }
 
         function attempt(url, canFallback) {
           if (isStale()) return;
@@ -591,6 +708,23 @@
     }
 
     updateUi();
+
+    var galleryWatchdog = setTimeout(function () {
+      var img = document.getElementById('landMainImage');
+      var loader = document.getElementById('landMediaLoading');
+      if (!img || img.classList.contains('hidden')) return;
+      if (img.classList.contains('is-loaded')) return;
+      if (loader && loader.classList.contains('is-visible')) {
+        kickGalleryMedia();
+      }
+    }, 2800);
+    addCleanup(function () {
+      clearTimeout(galleryWatchdog);
+    });
+
+    if (isVinorWebView()) {
+      scheduleGalleryKick();
+    }
   }
 
   function initVideoSound() {
@@ -1947,11 +2081,15 @@
 
   window.vinorScheduleVisitModalRecovery = scheduleVisitModalRecovery;
   window.vinorLandDetailTeardown = runCleanup;
+  window.vinorLandDetailGalleryKick = kickGalleryMedia;
 
   if (!window.__vinorLandDetailBound) {
     window.__vinorLandDetailBound = true;
     document.addEventListener('DOMContentLoaded', onPageReady);
     document.addEventListener('vinor:express-page-swap', onPageReady);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) kickGalleryMedia();
+    });
   }
   onPageReady();
 })();

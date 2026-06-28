@@ -34,7 +34,8 @@
          alt="{{ land.title or '' }}"
          class="absolute inset-0 z-[1] h-full w-full object-cover {% if has_video %}hidden{% endif %}"
          fetchpriority="high"
-         decoding="async">
+         decoding="async"
+         onload="this.classList.add('is-loaded');var _ldl=document.getElementById('landMediaLoading');if(_ldl){_ldl.classList.remove('is-visible','opacity-100');_ldl.classList.add('opacity-0');_ldl.setAttribute('aria-hidden','true');}">
     {% endif %}
 
     {% if total_items > 1 %}

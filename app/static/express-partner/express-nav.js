@@ -572,6 +572,14 @@
     try {
       window.dispatchEvent(new CustomEvent('vinor:express-page-swap', { detail: { navKey: navKey } }));
     } catch (_) {}
+    if (onDetail && typeof window.vinorLandDetailGalleryKick === 'function') {
+      requestAnimationFrame(function () {
+        try { window.vinorLandDetailGalleryKick(); } catch (_) {}
+        setTimeout(function () {
+          try { window.vinorLandDetailGalleryKick(); } catch (_) {}
+        }, 400);
+      });
+    }
     try {
       if (typeof window.__vinorPartnerHeaderChromeSetup === 'function') {
         window.__vinorPartnerHeaderChromeSetup();
