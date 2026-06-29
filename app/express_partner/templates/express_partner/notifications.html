@@ -1,26 +1,27 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}اعلان‌ها | وینور اکسپرس{% endblock %}
 
-{% block styles %}
-  {{ super() }}
-  <style>
-    .vinor-notify-row {
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-    }
-    .vinor-notify-skel {
-      animation: vinor-notify-pulse 1.2s ease-in-out infinite;
-    }
-    @keyframes vinor-notify-pulse {
-      0%, 100% { opacity: 0.45; }
-      50% { opacity: 0.9; }
-    }
-  </style>
-{% endblock %}
-
 {% block content %}
-<script>window.__VINOR_NOTIFY_SEED__={{ {'notifications': notifications, 'unread': unread_count|default(0)}|tojson }};</script>
-<div x-data="vinorNotificationsPage(window.__VINOR_NOTIFY_SEED__.notifications, window.__VINOR_NOTIFY_SEED__.unread)" x-init="init()">
+<script>window.__VINOR_NOTIFY_SEED__={{ {
+  'notifications': notifications,
+  'unread': unread_count|default(0),
+  'postchi': postchi|default({'preview': 'پیام‌های رسمی وینور', 'subtitle': 'پستچی وینور'}),
+  'postchiUrl': postchi_url|default(url_for('express_partner.postchi'))
+}|tojson }};</script>
+
+<style>
+  .vinor-notify-row {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+</style>
+
+<div x-data="vinorNotificationsPage(
+       window.__VINOR_NOTIFY_SEED__.notifications,
+       window.__VINOR_NOTIFY_SEED__.unread,
+       { postchi: window.__VINOR_NOTIFY_SEED__.postchi, postchiUrl: window.__VINOR_NOTIFY_SEED__.postchiUrl }
+     )"
+     x-init="init()">
 
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(id='profileNotificationsHeader') }}
@@ -65,71 +66,41 @@
       </div>
     </div>
 
-    <!-- اسکلتون -->
-    <div x-show="loading && items.length === 0" x-cloak class="divide-y divide-white/10">
-      <div class="flex items-center gap-3 px-4 py-3.5 sm:px-6" aria-hidden="true">
-        <div class="vinor-notify-skel h-12 w-12 shrink-0 rounded-full bg-white/10"></div>
-        <div class="min-w-0 flex-1 space-y-2">
-          <div class="vinor-notify-skel h-3.5 w-2/5 rounded bg-white/10"></div>
-          <div class="vinor-notify-skel h-3 w-4/5 rounded bg-white/10"></div>
-        </div>
-      </div>
-      <div class="flex items-center gap-3 px-4 py-3.5 sm:px-6" aria-hidden="true">
-        <div class="vinor-notify-skel h-12 w-12 shrink-0 rounded-full bg-white/10"></div>
-        <div class="min-w-0 flex-1 space-y-2">
-          <div class="vinor-notify-skel h-3.5 w-1/3 rounded bg-white/10"></div>
-          <div class="vinor-notify-skel h-3 w-3/5 rounded bg-white/10"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- خالی -->
-    <div x-show="!loading && items.length === 0" x-cloak class="px-4 py-16 text-center sm:px-6">
-      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/5 text-zinc-600">
-        <i class="far fa-comment-dots text-2xl" aria-hidden="true"></i>
-      </div>
-      <p class="text-sm font-medium text-zinc-400">اعلانی ندارید</p>
-      <p class="mt-1 text-xs text-zinc-600">وقتی خبری باشد اینجا می‌بینید</p>
-    </div>
-
-    <!-- لیست — الگوی ردیف چت دیوار -->
-    <div x-show="items.length > 0" class="divide-y divide-white/10">
-      <template x-for="(notif, index) in items" :key="notif.id || ('notif-' + index)">
-        <button type="button"
-                class="vinor-notify-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors sm:px-6 sm:py-4"
-                :class="!notif.is_read ? 'bg-white/[0.03] hover:bg-white/[0.05]' : 'hover:bg-white/[0.02]'"
-                @click="openNotification(notif)">
-          <div class="relative shrink-0">
-            <div class="flex h-12 w-12 items-center justify-center rounded-full ring-1 sm:h-[3.25rem] sm:w-[3.25rem]"
-                 :class="[avatarTone(notif.type).bg, avatarTone(notif.type).ring]">
-              <i class="fas text-base" :class="avatarTone(notif.type).icon" aria-hidden="true"></i>
-            </div>
-            <span x-show="!notif.is_read"
-                  class="absolute top-0.5 end-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#030712]"
-                  aria-hidden="true"></span>
+    <!-- پستچی وینور — ردیف پین‌شده مثل دیوار -->
+    <div class="divide-y divide-white/10 border-b border-white/10">
+      <button type="button"
+              class="vinor-notify-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors sm:px-6 sm:py-4"
+              :class="unreadCount > 0 ? 'bg-white/[0.03] hover:bg-white/[0.05]' : 'hover:bg-white/[0.02]'"
+              @click="openPostchi()">
+        <div class="relative shrink-0">
+          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/25 sm:h-[3.25rem] sm:w-[3.25rem]">
+            <i class="fas fa-paper-plane text-base" aria-hidden="true"></i>
           </div>
+          <span x-show="unreadCount > 0"
+                class="absolute top-0.5 end-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#030712]"
+                aria-hidden="true"></span>
+        </div>
 
-          <div class="min-w-0 flex-1">
-            <div class="mb-0.5 flex items-baseline justify-between gap-2">
-              <span class="truncate text-[15px] leading-tight"
-                    :class="!notif.is_read ? 'font-bold text-white' : 'font-medium text-zinc-300'"
-                    x-text="senderLabel(notif)"></span>
-              <span class="shrink-0 text-[11px] leading-none text-zinc-500 tabular-nums"
-                    x-text="formatRelativeDate(notif.created_at)"></span>
-            </div>
-            <p class="truncate text-[13px] leading-snug"
-               :class="!notif.is_read ? 'font-medium text-zinc-200' : 'text-zinc-400'"
-               x-text="notif.title || 'اعلان جدید'"></p>
-            <p class="mt-0.5 line-clamp-2 text-[12px] leading-[1.45] text-zinc-500"
-               x-text="notif.body"></p>
+        <div class="min-w-0 flex-1">
+          <div class="mb-0.5 flex items-baseline justify-between gap-2">
+            <span class="truncate text-[15px] font-bold leading-tight text-white"
+                  x-text="postchi.subtitle || 'پستچی وینور'"></span>
+            <span class="shrink-0 text-[11px] leading-none text-zinc-500 tabular-nums"
+                  x-show="postchiTime"
+                  x-text="formatRelativeDate(postchiTime)"></span>
           </div>
+          <p class="truncate text-[13px] leading-snug"
+             :class="unreadCount > 0 ? 'font-medium text-zinc-200' : 'text-zinc-400'"
+             x-text="postchi.preview || 'پیام‌های رسمی وینور'"></p>
+        </div>
 
-          <i x-show="notif.action_url"
-             class="fas fa-chevron-left shrink-0 text-[10px] text-zinc-600"
-             aria-hidden="true"></i>
-        </button>
-      </template>
+        <i class="fas fa-chevron-left shrink-0 text-[10px] text-zinc-600" aria-hidden="true"></i>
+      </button>
     </div>
+
+    <p class="px-4 py-10 text-center text-xs leading-relaxed text-zinc-600 sm:px-6">
+      پیام‌های رسمی، وضعیت همکاری و اعلان‌های مهم در گفتگوی پستچی وینور نمایش داده می‌شوند.
+    </p>
   </div>
 
   {% set bottom_nav_active = 'notifications' %}

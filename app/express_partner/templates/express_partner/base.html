@@ -1160,10 +1160,13 @@
           }
         }));
 
-        Alpine.data('vinorNotificationsPage', (initialList = [], initialUnread = 0) => ({
+        Alpine.data('vinorNotificationsPage', (initialList = [], initialUnread = 0, opts = {}) => ({
           items: [],
           unreadCount: 0,
           loading: false,
+          postchi: opts.postchi || { preview: 'پیام‌های رسمی وینور', subtitle: 'پستچی وینور' },
+          postchiUrl: opts.postchiUrl || '/express/partner/postchi',
+          postchiTime: null,
           init() {
             this._onUpdate = (evt) => this.sync(evt.detail);
             window.addEventListener('vinor:notifications:update', this._onUpdate);
@@ -1172,6 +1175,7 @@
             this.items = list;
             this.unreadCount = Number(initialUnread || 0);
             this.loading = false;
+            this.refreshPostchiPreview();
 
             if (typeof window.__vinorNotifySeedFromPage === 'function') {
               window.__vinorNotifySeedFromPage(list, this.unreadCount);
@@ -1193,6 +1197,15 @@
               this.fetchDirectly();
             }
           },
+          refreshPostchiPreview() {
+            const latest = this.items[0];
+            if (!latest) return;
+            const body = String(latest.body || latest.title || '').replace(/\n/g, ' ').trim();
+            if (body) {
+              this.postchi.preview = body.length > 72 ? body.slice(0, 69) + '…' : body;
+            }
+            this.postchiTime = latest.created_at;
+          },
           async fetchDirectly() {
             try {
               this.loading = true;
@@ -1208,6 +1221,7 @@
                 }
                 this.items = data.notifications;
                 this.unreadCount = Number(data.unread_count || 0);
+                this.refreshPostchiPreview();
               }
             } catch (_) {}
             this.loading = false;
@@ -1219,9 +1233,10 @@
           },
           sync(state) {
             if (!state) return;
-            this.items = Array.isArray(state.notifications) ? state.notifications : [];
-            this.unreadCount = Number(state.unread || 0);
+            this.items = Array.isArray(state.notifications) ? state.notifications : this.items;
+            this.unreadCount = Number(state.unread ?? this.unreadCount);
             this.loading = !!state.loading;
+            this.refreshPostchiPreview();
           },
           markAll() {
             VinorNotifyCenter.markAll();
@@ -1239,6 +1254,16 @@
             if (!url) return;
             try {
               if (typeof window.vinorExpressNavigate === 'function' && url.indexOf('/express/partner/') === 0) {
+                window.vinorExpressNavigate(url, { forward: true });
+                return;
+              }
+            } catch (_) {}
+            window.location.href = url;
+          },
+          openPostchi() {
+            const url = (this.postchiUrl || '/express/partner/postchi').trim();
+            try {
+              if (typeof window.vinorExpressNavigate === 'function') {
                 window.vinorExpressNavigate(url, { forward: true });
                 return;
               }

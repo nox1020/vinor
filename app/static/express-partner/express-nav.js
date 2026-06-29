@@ -18,6 +18,7 @@
     '/express/partner/favorites': { tab: 'favorites', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/notes': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/notifications': { tab: 'notifications', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/postchi': { tab: 'notifications', depth: 2, bottomNav: false, prefetch: false },
     '/express/partner/help': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/support': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/top-sellers': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },

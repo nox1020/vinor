@@ -5184,16 +5184,87 @@ def delete_sale(sid: int):
 @express_partner_bp.get('/notifications', endpoint='notifications')
 @require_partner_access(allow_pending=True)
 def notifications_page():
+    from app.services.postchi import postchi_preview
+
     me_phone = _normalize_phone((session.get('user_phone') or '').strip())
     notifications = get_user_notifications(me_phone, limit=50) if me_phone else []
     unread = unread_count(me_phone) if me_phone else 0
+    postchi = postchi_preview(me_phone) if me_phone else {
+        'preview': 'پیام‌های رسمی وینور',
+        'unread': 0,
+        'subtitle': 'پستچی وینور',
+    }
     resp = make_response(render_template(
         'express_partner/notifications.html',
         notifications=notifications,
         unread_count=unread,
+        postchi=postchi,
+        postchi_url=url_for('express_partner.postchi'),
     ))
     _append_partner_tab_prefetch(resp)
     return resp
+
+
+@express_partner_bp.get('/postchi', endpoint='postchi')
+@require_partner_access(allow_pending=True)
+def postchi_page():
+    from app.services.postchi import build_thread
+
+    me_phone = _normalize_phone((session.get('user_phone') or '').strip())
+    messages = build_thread(me_phone) if me_phone else []
+    resp = make_response(render_template(
+        'express_partner/postchi.html',
+        messages=messages,
+        back_url=url_for('express_partner.notifications'),
+        hide_header=True,
+    ))
+    return resp
+
+
+@express_partner_bp.route('/api/postchi/messages', methods=['GET'], endpoint='api_postchi_messages')
+@require_partner_access(json_response=True, allow_pending=True)
+def api_postchi_messages():
+    from app.services.postchi import build_thread
+    from app.services.notifications import _normalize_user_id
+
+    me_phone = _normalize_user_id((session.get('user_phone') or '').strip())
+    messages = build_thread(me_phone) if me_phone else []
+    return jsonify({'success': True, 'messages': messages})
+
+
+@express_partner_bp.route('/api/postchi/send', methods=['POST'], endpoint='api_postchi_send')
+@require_partner_access(json_response=True, allow_pending=True)
+def api_postchi_send():
+    from app.services.postchi import send_user_message
+    from app.services.notifications import _normalize_user_id
+
+    me_phone = _normalize_user_id((session.get('user_phone') or '').strip())
+    if not me_phone:
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    payload = request.get_json(silent=True) or {}
+    text = (payload.get('message') or payload.get('body') or '').strip()
+    if not text:
+        return jsonify({'success': False, 'error': 'empty'}), 400
+    msg = send_user_message(me_phone, text)
+    if not msg:
+        return jsonify({'success': False, 'error': 'failed'}), 400
+    return jsonify({'success': True, 'message': msg})
+
+
+@express_partner_bp.route('/api/postchi/open', methods=['POST'], endpoint='api_postchi_open')
+@require_partner_access(json_response=True, allow_pending=True)
+def api_postchi_open():
+    from app.services.postchi import open_postchi
+    from app.services.notifications import unread_count, _normalize_user_id
+
+    me_phone = _normalize_user_id((session.get('user_phone') or '').strip())
+    if not me_phone:
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    open_postchi(me_phone)
+    return jsonify({
+        'success': True,
+        'unread_count': unread_count(me_phone),
+    })
 
 
 # -------------------------

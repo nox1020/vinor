@@ -129,7 +129,7 @@
 
       <p class="text-center text-[11px] leading-relaxed text-zinc-500">
         پس از ثبت، پیامک تأیید می‌گیرید و ظرف ۲۴ ساعت بررسی می‌شود.
-        <a href="{{ url_for('express_partner.cooperation_terms') }}" class="text-emerald-400/90 hover:underline">شرایط همکاری</a>
+        <a href="{{ url_for('express_partner.cooperation_terms', next=url_for('express_partner.apply')) }}" class="text-emerald-400/90 hover:underline">شرایط همکاری</a>
       </p>
     </form>
   </main>

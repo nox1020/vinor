@@ -1,0 +1,92 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}پستچی وینور{% endblock %}
+
+{% block content %}
+  {% include 'express_partner/partials/postchi_page_styles.html' %}
+
+  <div class="postchi-page" data-vinor-postchi-page x-data="vinorPostchiPage()" x-init="init()">
+
+    <header class="postchi-header" role="banner">
+      <div class="postchi-header__inner mx-auto max-w-2xl">
+        <a href="{{ back_url|default(url_for('express_partner.notifications')) }}"
+           data-vinor-express-nav="back"
+           class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn shrink-0"
+           aria-label="بازگشت">
+          <i class="fas fa-arrow-right ep-partner-header-btn-icon" aria-hidden="true"></i>
+        </a>
+        <div class="flex min-w-0 flex-1 items-center gap-2.5">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/25">
+            <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
+          </div>
+          <div class="min-w-0 text-right">
+            <h1 class="truncate text-sm font-bold text-white">پستچی وینور</h1>
+            <p class="truncate text-[11px] text-zinc-500">پیام‌های رسمی و پشتیبانی</p>
+          </div>
+        </div>
+        <div class="comm-header-glass-btn-spacer shrink-0" aria-hidden="true"></div>
+      </div>
+    </header>
+
+    <div id="postchiMessages"
+         class="postchi-messages mx-auto w-full max-w-2xl"
+         aria-live="polite"
+         aria-label="گفتگو با پستچی وینور">
+      <template x-for="(msg, index) in messages" :key="msg.id || ('m-' + index)">
+        <div>
+          <div x-show="msg.showDaySep" class="postchi-day-sep" aria-hidden="true">
+            <span x-text="msg.dayLabel"></span>
+          </div>
+          <div class="postchi-msg" :class="msg.role === 'out' ? 'postchi-msg--out' : 'postchi-msg--in'">
+            <div class="postchi-bubble" :class="msg.role === 'out' ? 'postchi-bubble--out' : 'postchi-bubble--in'">
+              <span x-text="msg.body"></span>
+              <a x-show="msg.action_url"
+                 :href="msg.action_url"
+                 data-vinor-express-nav
+                 class="postchi-msg__action"
+                 @click.prevent="openAction(msg.action_url)">
+                <span>مشاهده</span>
+                <i class="fas fa-chevron-left text-[9px]" aria-hidden="true"></i>
+              </a>
+            </div>
+            <span class="postchi-msg__time tabular-nums" x-text="msg.timeLabel"></span>
+          </div>
+        </div>
+      </template>
+      <div x-show="loading" class="py-8 text-center text-xs text-zinc-500">در حال بارگذاری…</div>
+    </div>
+
+    <footer class="postchi-composer" aria-label="ارسال پیام">
+      <form class="postchi-composer__inner" @submit.prevent="send()">
+        <label for="postchiInput" class="sr-only">پیام به پستچی وینور</label>
+        <textarea id="postchiInput"
+                  x-model="draft"
+                  @input="autosize($event.target)"
+                  @keydown.enter.prevent="if (!$event.shiftKey) send()"
+                  rows="1"
+                  placeholder="پیام خود را بنویسید…"
+                  class="postchi-input"
+                  :disabled="sending"></textarea>
+        <button type="submit"
+                class="postchi-send"
+                :disabled="sending || !draft.trim()"
+                aria-label="ارسال">
+          <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
+        </button>
+      </form>
+    </footer>
+  </div>
+
+  <script>
+  window.__VINOR_POSTCHI_CFG__ = {
+    messagesUrl: {{ url_for('express_partner.api_postchi_messages')|tojson }},
+    sendUrl: {{ url_for('express_partner.api_postchi_send')|tojson }},
+    openUrl: {{ url_for('express_partner.api_postchi_open')|tojson }},
+    seed: {{ messages|tojson }}
+  };
+  </script>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ 'express-partner/postchi.js'|static_version }}"></script>
+{% endblock %}

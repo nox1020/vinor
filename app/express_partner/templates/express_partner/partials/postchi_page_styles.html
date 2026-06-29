@@ -1,0 +1,154 @@
+<style id="vinor-postchi-styles">
+  .postchi-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    background: #030712;
+    color: #f4f4f5;
+  }
+  .postchi-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    padding-top: env(safe-area-inset-top, 0px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--vn-solid-pill-bg, #111111);
+  }
+  .postchi-header__inner {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-height: 3.25rem;
+    padding: 0.35rem 0.75rem 0.45rem;
+  }
+  .postchi-messages {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.85rem 0.85rem 0.5rem;
+    padding-top: calc(3.75rem + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+  }
+  .postchi-composer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--vn-solid-pill-bg, #111111);
+    padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+  }
+  .postchi-composer__inner {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    max-width: 42rem;
+    margin: 0 auto;
+  }
+  .postchi-input {
+    flex: 1;
+    min-height: 2.75rem;
+    max-height: 7rem;
+    resize: none;
+    border-radius: 1.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #0a0f18;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    color: #fff;
+    outline: none;
+  }
+  .postchi-input:focus {
+    border-color: rgba(16, 185, 129, 0.45);
+  }
+  .postchi-send {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 9999px;
+    background: #059669;
+    color: #fff;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .postchi-send:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .postchi-send:not(:disabled):active {
+    transform: scale(0.95);
+  }
+  .postchi-bubble {
+    max-width: 88%;
+    border-radius: 1rem;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .postchi-bubble--in {
+    margin-inline-end: auto;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #161b24;
+    color: #e4e4e7;
+    border-end-end-radius: 0.25rem;
+  }
+  .postchi-bubble--out {
+    margin-inline-start: auto;
+    border: 1px solid rgba(16, 185, 129, 0.28);
+    background: rgba(16, 185, 129, 0.12);
+    color: #d1fae5;
+    border-end-start-radius: 0.25rem;
+  }
+  .postchi-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.65rem;
+  }
+  .postchi-msg--out {
+    align-items: flex-end;
+  }
+  .postchi-msg--in {
+    align-items: flex-start;
+  }
+  .postchi-msg__time {
+    font-size: 0.625rem;
+    color: #71717a;
+    padding-inline: 0.25rem;
+  }
+  .postchi-msg__action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #34d399;
+    text-decoration: none;
+  }
+  .postchi-day-sep {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0.85rem 0;
+  }
+  .postchi-day-sep span {
+    font-size: 0.625rem;
+    color: #71717a;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 9999px;
+    padding: 0.2rem 0.65rem;
+  }
+  .postchi-row {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+</style>
