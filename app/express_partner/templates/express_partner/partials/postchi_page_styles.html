@@ -1,8 +1,15 @@
 <style id="vinor-postchi-styles">
+  html:has(.postchi-page) #tg-page-shell {
+    overflow: hidden;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
   .postchi-page {
     display: flex;
     flex-direction: column;
-    min-height: 100dvh;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
     background: #030712;
     color: #f4f4f5;
   }
@@ -23,66 +30,36 @@
     min-height: 3.25rem;
     padding: 0.35rem 0.75rem 0.45rem;
   }
+  .postchi-main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    padding-top: calc(3.25rem + env(safe-area-inset-top, 0px));
+  }
   .postchi-messages {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
+    overflow-anchor: none;
     -webkit-overflow-scrolling: touch;
-    padding: 0.85rem 0.85rem 0.5rem;
-    padding-top: calc(3.75rem + env(safe-area-inset-top, 0px));
-    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+    overscroll-behavior: contain;
+    padding: 0.85rem 0.85rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
   }
-  .postchi-composer {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 50;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    background: var(--vn-solid-pill-bg, #111111);
-    padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
-  }
-  .postchi-composer__inner {
-    display: flex;
-    align-items: flex-end;
-    gap: 0.5rem;
-    max-width: 42rem;
-    margin: 0 auto;
-  }
-  .postchi-input {
-    flex: 1;
-    min-height: 2.75rem;
-    max-height: 7rem;
-    resize: none;
-    border-radius: 1.25rem;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: #0a0f18;
-    padding: 0.65rem 0.9rem;
-    font-size: 0.875rem;
-    line-height: 1.45;
-    color: #fff;
-    outline: none;
-  }
-  .postchi-input:focus {
-    border-color: rgba(16, 185, 129, 0.45);
-  }
-  .postchi-send {
-    display: grid;
-    place-items: center;
-    width: 2.75rem;
-    height: 2.75rem;
+  .postchi-scroll-anchor {
+    height: 1px;
+    width: 100%;
     flex-shrink: 0;
-    border: none;
-    border-radius: 9999px;
-    background: #059669;
-    color: #fff;
-    transition: transform 0.15s ease, background 0.15s ease;
+    pointer-events: none;
   }
-  .postchi-send:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-  .postchi-send:not(:disabled):active {
-    transform: scale(0.95);
+  .postchi-messages__loading {
+    padding: 2rem 0;
+    text-align: center;
+    font-size: 0.75rem;
+    color: #71717a;
   }
   .postchi-bubble {
     max-width: 88%;
@@ -124,16 +101,6 @@
     color: #71717a;
     padding-inline: 0.25rem;
   }
-  .postchi-msg__action {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin-top: 0.45rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #34d399;
-    text-decoration: none;
-  }
   .postchi-day-sep {
     display: flex;
     align-items: center;
@@ -146,9 +113,5 @@
     background: rgba(255, 255, 255, 0.05);
     border-radius: 9999px;
     padding: 0.2rem 0.65rem;
-  }
-  .postchi-row {
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
   }
 </style>

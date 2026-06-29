@@ -9,6 +9,9 @@
   'postchiUrl': postchi_url|default(url_for('express_partner.postchi'))
 }|tojson }};</script>
 
+{% from 'express_partner/partials/vinor_official_identity.html' import vinor_official_name, vinor_official_subtitle, vinor_official_avatar %}
+{% include 'express_partner/partials/vinor_official_identity.html' %}
+
 <style>
   .vinor-notify-row {
     -webkit-tap-highlight-color: transparent;
@@ -73,9 +76,7 @@
               :class="unreadCount > 0 ? 'bg-white/[0.03] hover:bg-white/[0.05]' : 'hover:bg-white/[0.02]'"
               @click="openPostchi()">
         <div class="relative shrink-0">
-          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/25 sm:h-[3.25rem] sm:w-[3.25rem]">
-            <i class="fas fa-paper-plane text-base" aria-hidden="true"></i>
-          </div>
+          {{ vinor_official_avatar('md') }}
           <span x-show="unreadCount > 0"
                 class="absolute top-0.5 end-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#030712]"
                 aria-hidden="true"></span>
@@ -83,12 +84,14 @@
 
         <div class="min-w-0 flex-1">
           <div class="mb-0.5 flex items-baseline justify-between gap-2">
-            <span class="truncate text-[15px] font-bold leading-tight text-white"
-                  x-text="postchi.subtitle || 'پستچی وینور'"></span>
+            <span class="min-w-0 text-[15px] font-bold leading-tight text-white">
+              {{ vinor_official_name('پستچی وینور', 'text-[15px] font-bold leading-tight text-white', 'vinor-official-verified--sm') }}
+            </span>
             <span class="shrink-0 text-[11px] leading-none text-zinc-500 tabular-nums"
                   x-show="postchiTime"
                   x-text="formatRelativeDate(postchiTime)"></span>
           </div>
+          {{ vinor_official_subtitle('mb-0.5') }}
           <p class="truncate text-[13px] leading-snug"
              :class="unreadCount > 0 ? 'font-medium text-zinc-200' : 'text-zinc-400'"
              x-text="postchi.preview || 'پیام‌های رسمی وینور'"></p>
