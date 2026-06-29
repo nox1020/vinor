@@ -978,9 +978,15 @@
 
   function clearExpressPartnerCaches() {
     clearAllPrefetchCache();
+    clearAuthPrefetchCache();
     try {
       if (typeof window.vinorClearBottomNavMenuCache === 'function') {
         window.vinorClearBottomNavMenuCache();
+      }
+    } catch (_) {}
+    try {
+      if (window.vinorPartnerAvatarCache) {
+        window.vinorPartnerAvatarCache.clear();
       }
     } catch (_) {}
     try {
@@ -990,16 +996,21 @@
         window.VinorNativeShell.onPartnerLogout();
       }
     } catch (_) {}
+    var runtimeClear = clearExpressPartnerRuntimeCaches();
+    var shellClear;
     try {
       if (window.caches && window.caches.keys) {
-        return window.caches.keys().then(function (keys) {
+        shellClear = window.caches.keys().then(function (keys) {
           return Promise.all(keys.filter(function (k) {
             return k.indexOf('express-partner-') === 0;
           }).map(function (k) { return window.caches.delete(k); }));
         });
       }
     } catch (_) {}
-    return Promise.resolve();
+    if (shellClear && runtimeClear) {
+      return Promise.all([shellClear, runtimeClear]).then(function () {});
+    }
+    return shellClear || runtimeClear || Promise.resolve();
   }
 
   /** خروج امن: API + پاک‌سازی کش + بارگذاری کامل (APK/WebView/PWA) */
@@ -1009,7 +1020,7 @@
     if (window.__vinorAuthPageAbort) {
       try { window.__vinorAuthPageAbort.abort(); } catch (_) {}
     }
-    var dest = destUrl || '/express/partner/dashboard';
+    var dest = destUrl || '/express/partner/login?change=1';
     var apiUrl = '/express/partner/api/logout';
     return fetch(apiUrl, {
       method: 'POST',
@@ -1027,7 +1038,8 @@
       })
       .then(function () {
         try { sessionStorage.removeItem(STORAGE_KEY); } catch (_) {}
-        try { document.documentElement.classList.remove('vinor-auth-flow'); } catch (_) {}
+        try { sessionStorage.removeItem('vinor_express_notifications_auto_enabled'); } catch (_) {}
+        try { document.documentElement.classList.add('vinor-auth-flow'); } catch (_) {}
         var u = dest;
         u += (u.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
         window.location.replace(u);

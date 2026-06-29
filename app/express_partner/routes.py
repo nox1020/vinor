@@ -3212,6 +3212,10 @@ def _clear_express_partner_auth_session() -> None:
         pass
 
 
+def _logout_dest_url() -> str:
+    return url_for('express_partner.login', change=1)
+
+
 @express_partner_bp.route('/login', methods=['GET', 'POST'], endpoint='login')
 def login():
     from ..utils.flash_messages import purge_non_auth_flashes
@@ -4561,7 +4565,7 @@ def logout():
 
     _clear_express_partner_auth_session()
     flash('از حساب خارج شدید.', FLASH_AUTH_INFO)
-    dest = url_for('express_partner.dashboard')
+    dest = _logout_dest_url()
     r = redirect(dest)
     r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     r.headers['Pragma'] = 'no-cache'
@@ -4572,7 +4576,7 @@ def logout():
 def api_logout():
     """خروج برای اپ اندروید / WebView (بدون CSRF؛ با کوکی سشن)."""
     _clear_express_partner_auth_session()
-    dest = url_for('express_partner.dashboard')
+    dest = _logout_dest_url()
     resp = jsonify({'success': True, 'redirect': dest})
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     resp.headers['Pragma'] = 'no-cache'
@@ -4617,6 +4621,11 @@ def api_verify():
         return jsonify({'success': False, 'error': 'شماره با جلسهٔ تأیید همخوانی ندارد.'}), 400
     if not _otp_code_matches_session(code):
         return jsonify({'success': False, 'error': 'کد تأیید نادرست است.'}), 400
+    try:
+        from .referrals import capture_ref_on_login
+        capture_ref_on_login()
+    except Exception:
+        pass
     dest = _finalize_partner_login(sess_phone)
     return jsonify({'success': True, 'message': 'ورود با موفقیت انجام شد.', 'redirect': dest})
 

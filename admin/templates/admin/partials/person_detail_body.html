@@ -414,7 +414,8 @@
   <footer class="border-t border-gray-100 dark:border-gray-800 p-4 sm:px-6 bg-gray-50/90 dark:bg-gray-950/60">
     <div class="adm-pd-sticky-actions lg:static lg:border-0 lg:bg-transparent lg:shadow-none lg:p-0 lg:backdrop-filter-none">
       <div class="flex flex-wrap gap-2 justify-center lg:justify-start">
-        {% if app and app.id and acc.partner_pending %}
+        {% if acc.partner_pending or (acc.site_user and not acc.partner_approved) %}
+          {% if app and app.id %}
           <form method="post" action="{{ url_for('admin.express_partner_application_approve', aid=app.id) }}" class="contents">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" onclick="return confirm('تأیید همکاری؟')"
@@ -428,6 +429,17 @@
               <i class="fa-solid fa-times"></i> رد
             </button>
           </form>
+          {% elif person.phone %}
+          <form method="post" action="{{ url_for('admin.express_partner_approve_by_phone', phone=person.phone) }}" class="contents">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="q" value="{{ back_q or '' }}">
+            <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">
+            <button type="submit" onclick="return confirm('تأیید همکاری؟')"
+                    class="adm-pd-action bg-blue-600 border-blue-600 text-white hover:bg-blue-700">
+              <i class="fa-solid fa-check"></i> تأیید همکار
+            </button>
+          </form>
+          {% endif %}
         {% endif %}
 
         {% if acc.partner_approved and person.phone %}

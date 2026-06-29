@@ -138,7 +138,7 @@
       modal.classList.remove('flex');
       enableScroll();
     };
-    const loginUrlFallback = "{{ url_for('express_partner.dashboard') }}";
+    const loginUrlFallback = "{{ url_for('express_partner.login', change=1) }}";
     const logoutApiUrl = "{{ url_for('express_partner.api_logout') }}";
     let logoutBusy = false;
     window.confirmLogout = async function() {

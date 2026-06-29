@@ -80,6 +80,56 @@
     {% endif %}
   </div>
 
+  <!-- افزودن دستی همکار -->
+  <details class="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 text-sm">
+    <summary class="px-4 py-3 cursor-pointer text-blue-800 dark:text-blue-200 font-medium select-none">
+      <i class="fa-solid fa-user-plus ml-1"></i>
+      افزودن همکار دستی
+    </summary>
+    <form method="post" action="{{ url_for('admin.express_partner_add_manual') }}" class="px-4 pb-4 space-y-3 border-t border-blue-100 dark:border-blue-900/50 pt-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="q" value="{{ q or '' }}">
+      <input type="hidden" name="filter" value="{{ filter_kind or 'all' }}">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="block space-y-1">
+          <span class="text-xs text-gray-600 dark:text-gray-400">نام <span class="text-red-500">*</span></span>
+          <input name="name" required placeholder="نام و نام خانوادگی"
+                 class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm">
+        </label>
+        <label class="block space-y-1">
+          <span class="text-xs text-gray-600 dark:text-gray-400">موبایل <span class="text-red-500">*</span></span>
+          <input name="phone" required dir="ltr" inputmode="tel" placeholder="09123456789"
+                 class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm">
+        </label>
+        <label class="block space-y-1">
+          <span class="text-xs text-gray-600 dark:text-gray-400">شهر</span>
+          <input name="city" placeholder="تهران"
+                 class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm">
+        </label>
+        <label class="block space-y-1">
+          <span class="text-xs text-gray-600 dark:text-gray-400">کد ملی</span>
+          <input name="national_id" dir="ltr" inputmode="numeric" placeholder="اختیاری"
+                 class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm">
+        </label>
+        <label class="block space-y-1 sm:col-span-2">
+          <span class="text-xs text-gray-600 dark:text-gray-400">شماره معرف (اختیاری)</span>
+          <input name="referred_by_phone" dir="ltr" inputmode="tel" placeholder="09..."
+                 class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm">
+        </label>
+      </div>
+      <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+        <input type="checkbox" name="send_sms" value="1" checked class="rounded border-gray-300">
+        ارسال پیامک تأیید همکاری
+      </label>
+      <div class="flex justify-end">
+        <button type="submit" onclick="return confirm('همکار جدید اضافه و تأیید شود؟')"
+                class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
+          افزودن و تأیید
+        </button>
+      </div>
+    </form>
+  </details>
+
   <!-- جمع‌ها (جمع‌شونده) -->
   <details class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm">
     <summary class="px-4 py-3 cursor-pointer text-gray-700 dark:text-gray-300 font-medium select-none">
@@ -129,9 +179,11 @@
             {% set acc = person.access or {} %}
             {% set cnt = person.counts or {} %}
             {% set prof = person.profile or {} %}
+            {% set app = person.application or {} %}
+            <div class="flex items-center gap-2 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition group">
             <a
               href="{{ url_for('admin.express_partner_detail', phone=person.phone, q=q or '', filter=filter_kind or 'all') }}"
-              class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition group"
+              class="flex items-center gap-3 flex-1 min-w-0"
             >
               <div class="relative shrink-0">
                 <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-sm font-bold text-gray-600 dark:text-gray-300">
@@ -183,6 +235,31 @@
 
               <i class="fa-solid fa-chevron-left text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-blue-500 shrink-0"></i>
             </a>
+            {% if acc.partner_pending or (acc.site_user and not acc.partner_approved) %}
+              {% if app and app.id %}
+              <form method="post" action="{{ url_for('admin.express_partner_application_approve', aid=app.id) }}" class="shrink-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" onclick="return confirm('تأیید همکاری {{ person.name or person.phone }}؟')"
+                        class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium whitespace-nowrap"
+                        title="تأیید همکار">
+                  <i class="fa-solid fa-check"></i>
+                </button>
+              </form>
+              {% elif person.phone %}
+              <form method="post" action="{{ url_for('admin.express_partner_approve_by_phone', phone=person.phone) }}" class="shrink-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="q" value="{{ q or '' }}">
+                <input type="hidden" name="filter" value="{{ filter_kind or 'all' }}">
+                <input type="hidden" name="next" value="list">
+                <button type="submit" onclick="return confirm('تأیید همکاری {{ person.name or person.phone }}؟')"
+                        class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium whitespace-nowrap"
+                        title="تأیید همکار">
+                  <i class="fa-solid fa-check"></i>
+                </button>
+              </form>
+              {% endif %}
+            {% endif %}
+            </div>
           {% endfor %}
         </div>
       {% endif %}

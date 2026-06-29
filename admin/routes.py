@@ -60,7 +60,7 @@ from app.express_partner.partner_withdrawals import (
 )
 from app.land_category_specs import apply_category_specs_from_form
 from app.services.sms import send_sms_template, send_sms_direct, send_sms_code
-from app.utils.storage import load_users, load_reports, save_reports, save_ads, load_ads_cached, load_express_lands_cached
+from app.utils.storage import load_users, save_users, load_reports, save_reports, save_ads, load_ads_cached, load_express_lands_cached
 from admin.people_directory import (
     build_admin_people_directory,
     get_admin_person_by_phone,
@@ -5015,32 +5015,71 @@ def express_partner_file_delete(fid: int):
     flash('فایل حذف شد.', 'info')
     return redirect(url_for('admin.express_partner_files', partner=request.args.get('partner') or ''))
 
-@admin_bp.post('/express/partners/applications/<int:aid>/approve')
-@login_required
-def express_partner_application_approve(aid: int):
-    apps = load_express_partner_apps() or []
-    partners = load_express_partners() or []
-    target = None
-    for a in apps:
-        try:
-            if int(a.get('id', 0)) == int(aid):
-                target = a
-                break
-        except Exception:
+def _partner_record_for_phone(partners: List[Dict[str, Any]], phone: str) -> Optional[Dict[str, Any]]:
+    norm = _normalize_phone(phone) or phone.strip()
+    for p in partners:
+        if not isinstance(p, dict):
             continue
-    if not target:
-        flash('درخواست یافت نشد.', 'warning')
-        return redirect(url_for('admin.express_partners', filter='pending'))
+        pph = _normalize_phone(str(p.get('phone') or '')) or str(p.get('phone') or '').strip()
+        if pph == norm:
+            return p
+    return None
 
-    # به فهرست همکاران منتقل و وضعیت را تنظیم کن
-    phone = str(target.get('phone') or '').strip()
-    name = (target.get('name') or '').strip()
-    city = (target.get('city') or '').strip()
-    national_id = (target.get('national_id') or '').strip()
-    partner = next((p for p in partners if str(p.get('phone')) == phone), None)
+
+def _ensure_site_user_record(phone: str) -> None:
+    users = load_users() or []
+    norm = _normalize_phone(phone) or phone.strip()
+    for u in users:
+        if not isinstance(u, dict):
+            continue
+        uph = _normalize_phone(str(u.get('phone') or u.get('mobile') or '')) or str(u.get('phone') or '').strip()
+        if uph == norm:
+            return
+    users.append({
+        'phone': norm,
+        'registered_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    })
+    save_users(users)
+
+
+def _approve_express_partner(
+    *,
+    phone: str,
+    name: str = '',
+    city: str = '',
+    national_id: str = '',
+    referred_by_phone: str = '',
+    application: Optional[Dict[str, Any]] = None,
+    remove_application: bool = True,
+    send_sms: bool = True,
+    send_notification: bool = True,
+    auto_assign_lands: bool = True,
+    source: str = 'admin_partner_approval',
+) -> Dict[str, Any]:
+    """تأیید همکار: ثبت در partners، انتساب فایل، اعلان و پیامک."""
+    from admin.people_directory import partner_is_approved
+
+    phone = _normalize_phone(phone) or str(phone or '').strip()
+    if not phone or len(phone) != 11:
+        return {'ok': False, 'error': 'invalid_phone'}
+
+    name = (name or '').strip()
+    city = (city or '').strip()
+    national_id = (national_id or '').strip()
+    app = dict(application) if isinstance(application, dict) else None
+
+    if app:
+        name = name or (app.get('name') or '').strip()
+        city = city or (app.get('city') or '').strip()
+        national_id = national_id or (app.get('national_id') or '').strip()
+        referred_by_phone = referred_by_phone or (app.get('referred_by_phone') or '').strip()
+
+    partners = load_express_partners() or []
+    partner = _partner_record_for_phone(partners, phone)
+    already_approved = bool(partner and partner_is_approved(partner))
     if not partner:
         partner = {
-            'id': (max([int(x.get('id',0) or 0) for x in partners], default=0) or 0) + 1,
+            'id': (max([int(x.get('id', 0) or 0) for x in partners if isinstance(x, dict)], default=0) or 0) + 1,
             'name': name,
             'phone': phone,
             'city': city,
@@ -5057,34 +5096,41 @@ def express_partner_application_approve(aid: int):
             'status': 'approved',
         })
 
-    # وضعیت درخواست (برای لاگ‌کردن قبل از حذف)
-    target['status'] = 'approved'
-    target['approved_at'] = iso_z(utcnow())
-    ref_by = (target.get('referred_by_phone') or '').strip()
+    ref_by = (referred_by_phone or '').strip()
     if ref_by:
         try:
             from app.express_partner.referrals import _normalize_phone as _ref_norm_phone
             partner['referred_by_phone'] = _ref_norm_phone(ref_by) or ref_by
         except Exception:
             partner['referred_by_phone'] = ref_by
-        try:
-            partner['referral_application_id'] = int(target.get('id') or 0)
-        except Exception:
-            pass
+        if app and app.get('id'):
+            try:
+                partner['referral_application_id'] = int(app.get('id') or 0)
+            except Exception:
+                pass
+
+    if app:
+        app['status'] = 'approved'
+        app['approved_at'] = iso_z(utcnow())
 
     save_express_partners(partners)
 
     ref_granted = False
     ref_skip_reason = None
-    try:
-        from app.express_partner.referrals import (
-            REFERRAL_GRANT_REASONS_FA,
-            grant_referral_commission_for_application,
-        )
-        ref_granted, ref_skip_reason = grant_referral_commission_for_application(target)
-    except Exception as ref_err:
-        current_app.logger.error('Referral commission on application approve: %s', ref_err, exc_info=True)
-        ref_skip_reason = 'exception'
+    if app:
+        try:
+            from app.express_partner.referrals import grant_referral_commission_for_application
+            ref_granted, ref_skip_reason = grant_referral_commission_for_application(app)
+        except Exception as ref_err:
+            current_app.logger.error('Referral commission on partner approve: %s', ref_err, exc_info=True)
+            ref_skip_reason = 'exception'
+    elif ref_by:
+        try:
+            from app.express_partner.referrals import grant_referral_for_partner_record
+            ref_granted, ref_skip_reason = grant_referral_for_partner_record(partner)
+        except Exception as ref_err:
+            current_app.logger.error('Referral commission on manual partner approve: %s', ref_err, exc_info=True)
+            ref_skip_reason = 'exception'
 
     if ref_by:
         if ref_granted:
@@ -5093,77 +5139,65 @@ def express_partner_application_approve(aid: int):
             partner['referral_grant_pending'] = True
         save_express_partners(partners)
 
-    # بعد از تایید، خود درخواست از لیست درخواست‌ها حذف شود
-    try:
-        apps = [a for a in apps if int(a.get('id', 0) or 0) != int(aid)]
-    except Exception:
-        apps = [a for a in apps if a is not target]
-    save_express_partner_apps(apps)
+    if remove_application and app and app.get('id'):
+        apps = load_express_partner_apps() or []
+        aid = int(app.get('id') or 0)
+        try:
+            apps = [a for a in apps if int(a.get('id', 0) or 0) != aid]
+        except Exception:
+            apps = [a for a in apps if a is not app]
+        save_express_partner_apps(apps)
 
-    # انتساب خودکار همه فایل‌های اکسپرس به همکار جدید
-    try:
-        lands = load_json(_lands_path()) or []
-        express_lands = [l for l in lands if l.get('is_express', False)]
-        assignments = load_express_assignments() or []
-        
-        # فایل‌هایی که قبلاً به این همکار انتساب نشده‌اند
-        existing_codes = {a.get('land_code') for a in assignments if a.get('partner_phone') == phone}
-        new_assignments_count = 0
-        
-        for land in express_lands:
-            land_code = land.get('code')
-            if land_code and land_code not in existing_codes:
-                new_id = (max([int(x.get('id', 0) or 0) for x in assignments if isinstance(x, dict)], default=0) or 0) + 1
-                assignments.append({
-                    'id': new_id,
-                    'partner_phone': phone,
-                    'land_code': land_code,
-                    'commission_pct': 2.0,  # درصد پیش‌فرض
-                    'status': 'active',
-                    'created_at': iso_z(utcnow())
-                })
-                new_assignments_count += 1
-        
-        if new_assignments_count > 0:
-            save_express_assignments(assignments)
-    except Exception as e:
-        current_app.logger.error(f"Error auto-assigning lands to partner: {e}")
+    new_assignments_count = 0
+    if auto_assign_lands and not already_approved:
+        try:
+            lands = load_json(_lands_path()) or []
+            express_lands = [l for l in lands if l.get('is_express', False)]
+            assignments = load_express_assignments() or []
+            existing_codes = {
+                a.get('land_code')
+                for a in assignments
+                if _normalize_phone(str(a.get('partner_phone') or '')) == phone
+            }
+            for land in express_lands:
+                land_code = land.get('code')
+                if land_code and land_code not in existing_codes:
+                    new_id = (max([int(x.get('id', 0) or 0) for x in assignments if isinstance(x, dict)], default=0) or 0) + 1
+                    assignments.append({
+                        'id': new_id,
+                        'partner_phone': phone,
+                        'land_code': land_code,
+                        'commission_pct': 2.0,
+                        'status': 'active',
+                        'created_at': iso_z(utcnow()),
+                    })
+                    new_assignments_count += 1
+            if new_assignments_count > 0:
+                save_express_assignments(assignments)
+        except Exception as e:
+            current_app.logger.error('Error auto-assigning lands to partner: %s', e)
 
-    # اعلان به کاربر (با normalize کردن شماره تلفن)
-    try:
-        if phone:
-            phone_normalized = _normalize_phone(phone)
-            if phone_normalized and len(phone_normalized) == 11:
-                add_notification(
-                    user_id=phone_normalized,
-                    title='تأیید همکاری وینور اکسپرس',
-                    body='درخواست شما تأیید شد. اکنون می‌توانید از پنل همکاری استفاده کنید.',
-                    ntype='success',
-                    action_url=url_for('express_partner.dashboard', _external=True)
-                )
-    except Exception as e:
-        current_app.logger.error(f"Error sending approval notification: {e}", exc_info=True)
+    if send_notification:
+        try:
+            add_notification(
+                user_id=phone,
+                title='تأیید همکاری وینور اکسپرس',
+                body='درخواست شما تأیید شد. اکنون می‌توانید از پنل همکاری استفاده کنید.',
+                ntype='success',
+                action_url=url_for('express_partner.dashboard', _external=True),
+            )
+        except Exception as e:
+            current_app.logger.error('Error sending approval notification: %s', e, exc_info=True)
 
-    # ارسال پیامک تایید همکاری
-    try:
-        if phone and len(phone) == 11 and phone.startswith('09'):
+    if send_sms and phone.startswith('09'):
+        try:
             settings = get_settings()
             sms_message = settings.get('partner_approval_sms_message', 'پنل همکاری وینور برای شما فعال شد. وینور')
             sms_line_number = settings.get('sms_line_number', '300089930616')
-            
-            # اگر پیام خالی است، از پیش‌فرض استفاده کن
             if not sms_message or not sms_message.strip():
                 sms_message = 'پنل همکاری وینور برای شما فعال شد. وینور'
-            
-            current_app.logger.info(f"Sending approval SMS to partner: {name} ({phone})")
-            
-            sms_result = send_sms_direct(
-                mobile=phone,
-                message=sms_message,
-                line_number=sms_line_number
-            )
-            
-            # ذخیره سابقه ارسال پیامک
+            current_app.logger.info('Sending approval SMS to partner: %s (%s)', name, phone)
+            sms_result = send_sms_direct(mobile=phone, message=sms_message, line_number=sms_line_number)
             try:
                 history = load_sms_history() or []
                 record = {
@@ -5176,45 +5210,228 @@ def express_partner_application_approve(aid: int):
                     'success': sms_result.get('ok', False),
                     'status_code': sms_result.get('status', 0),
                     'response': sms_result.get('body', {}),
-                    'source': 'admin_partner_approval',
+                    'source': source,
                     'created_at': datetime.now().isoformat(),
-                    'error': None if sms_result.get('ok') else str(sms_result.get('body', {}).get('message', 'Unknown error'))
+                    'error': None if sms_result.get('ok') else str(sms_result.get('body', {}).get('message', 'Unknown error')),
                 }
                 history.append(record)
                 if len(history) > 10000:
                     history = history[-10000:]
                 save_sms_history(history)
             except Exception as hist_err:
-                current_app.logger.error(f"Failed to save SMS history: {hist_err}")
-            
-            if sms_result.get('ok'):
-                current_app.logger.info(f"✅ Partner approval SMS sent successfully to {phone}")
-            else:
-                current_app.logger.error(f"❌ Failed to send partner approval SMS to {phone}. Status: {sms_result.get('status')}, Body: {sms_result.get('body')}")
-    except Exception as sms_err:
-        current_app.logger.error(f"Error sending partner approval SMS: {sms_err}", exc_info=True)
+                current_app.logger.error('Failed to save SMS history: %s', hist_err)
+        except Exception as sms_err:
+            current_app.logger.error('Error sending partner approval SMS: %s', sms_err, exc_info=True)
 
-    if (request.headers.get('Accept') or '').lower().find('application/json') >= 0:
-        return jsonify({ 'ok': True, 'id': int(aid), 'status': 'approved' })
-    msg = f'درخواست تأیید شد و {new_assignments_count} فایل به همکار انتساب یافت.'
-    if ref_granted:
+    return {
+        'ok': True,
+        'phone': phone,
+        'already_approved': already_approved,
+        'new_assignments_count': new_assignments_count,
+        'ref_granted': ref_granted,
+        'ref_skip_reason': ref_skip_reason,
+        'referred_by_phone': ref_by,
+        'application_id': int(app.get('id') or 0) if app else 0,
+    }
+
+
+def _flash_partner_approval_result(result: Dict[str, Any], *, prefix: str = '') -> None:
+    if not result.get('ok'):
+        flash(result.get('error_fa') or 'تأیید همکار انجام نشد.', 'warning')
+        return
+    if result.get('already_approved'):
+        flash(f'{prefix}این شماره قبلاً به‌عنوان همکار تأیید شده است.'.strip(), 'info')
+        return
+    msg = f'{prefix}همکار تأیید شد'
+    n = int(result.get('new_assignments_count') or 0)
+    if n:
+        msg += f' و {n} فایل انتساب یافت'
+    msg += '.'
+    if result.get('ref_granted'):
         from app.express_partner.referrals import REFERRAL_BONUS_AMOUNT
         msg += f' پورسانت دعوت ({REFERRAL_BONUS_AMOUNT:,} ت) به موجودی معرف اضافه شد.'
-    elif target.get('referred_by_phone'):
+    elif result.get('referred_by_phone'):
         from app.express_partner.referrals import REFERRAL_GRANT_REASONS_FA
-        reason_fa = REFERRAL_GRANT_REASONS_FA.get(ref_skip_reason or '')
+        reason_fa = REFERRAL_GRANT_REASONS_FA.get(result.get('ref_skip_reason') or '')
+        if reason_fa:
+            msg += f' (پورسانت دعوت ثبت نشد: {reason_fa})'
+    flash(msg, 'success')
+
+
+@admin_bp.post('/express/partners/add')
+@login_required
+def express_partner_add_manual():
+    """افزودن دستی همکار و تأیید فوری."""
+    back_q = (request.form.get('q') or '').strip()
+    back_filter = (request.form.get('filter') or 'all').strip()
+    redirect_kw = {'q': back_q, 'filter': back_filter}
+
+    phone = _normalize_phone((request.form.get('phone') or '').strip())
+    name = (request.form.get('name') or '').strip()
+    city = (request.form.get('city') or '').strip()
+    national_id = (request.form.get('national_id') or '').strip()
+    referred_by_phone = _normalize_phone((request.form.get('referred_by_phone') or '').strip()) or ''
+    send_sms = request.form.get('send_sms') == '1'
+
+    if not phone or len(phone) != 11:
+        flash('شماره موبایل معتبر نیست (مثال: 09123456789).', 'warning')
+        return redirect(url_for('admin.express_partners', **redirect_kw))
+    if not name:
+        flash('نام همکار الزامی است.', 'warning')
+        return redirect(url_for('admin.express_partners', **redirect_kw))
+
+    if national_id:
+        try:
+            from app.utils.iran_ids import is_valid_iran_national_id
+            if not is_valid_iran_national_id(national_id):
+                flash('کد ملی معتبر نیست.', 'warning')
+                return redirect(url_for('admin.express_partners', **redirect_kw))
+        except Exception:
+            pass
+
+    _ensure_site_user_record(phone)
+
+    apps = load_express_partner_apps() or []
+    application = None
+    for a in apps:
+        if not isinstance(a, dict):
+            continue
+        aph = _normalize_phone(str(a.get('phone') or '')) or str(a.get('phone') or '').strip()
+        if aph == phone:
+            application = a
+            break
+
+    result = _approve_express_partner(
+        phone=phone,
+        name=name,
+        city=city,
+        national_id=national_id,
+        referred_by_phone=referred_by_phone,
+        application=application,
+        remove_application=bool(application),
+        send_sms=send_sms,
+        source='admin_partner_manual_add',
+    )
+    _flash_partner_approval_result(result, prefix='همکار جدید اضافه شد — ')
+    return redirect(url_for('admin.express_partners', **redirect_kw))
+
+
+@admin_bp.post('/express/partners/<path:phone>/approve')
+@login_required
+def express_partner_approve_by_phone(phone: str):
+    """تأیید همکار با شماره (درخواست معلق، کاربر سایت، یا افزودن دستی از پروفایل)."""
+    back_q = (request.form.get('q') or request.args.get('q') or '').strip()
+    back_filter = (request.form.get('filter') or request.args.get('filter') or 'all').strip()
+    redirect_phone = _normalize_phone(phone) or str(phone or '').strip()
+    redirect_kw = {'phone': redirect_phone, 'q': back_q, 'filter': back_filter}
+    list_kw = {'q': back_q, 'filter': back_filter}
+
+    if not redirect_phone or len(redirect_phone) != 11:
+        flash('شماره موبایل معتبر نیست.', 'warning')
+        return redirect(url_for('admin.express_partners', **list_kw))
+
+    person = None
+    try:
+        person = get_admin_person_by_phone(redirect_phone, **_admin_people_directory_kwargs())
+    except Exception:
+        current_app.logger.exception('get_admin_person_by_phone failed on approve')
+
+    prof = (person or {}).get('profile') or {}
+    app = (person or {}).get('application') or {}
+    partner_rec = (person or {}).get('partner') or {}
+
+    name = (request.form.get('name') or prof.get('name') or app.get('name') or partner_rec.get('name') or '').strip()
+    city = (request.form.get('city') or prof.get('city') or app.get('city') or partner_rec.get('city') or '').strip()
+    national_id = (
+        request.form.get('national_id')
+        or prof.get('national_id')
+        or app.get('national_id')
+        or partner_rec.get('national_id')
+        or ''
+    ).strip()
+    referred_by_phone = (
+        request.form.get('referred_by_phone')
+        or prof.get('referred_by_phone')
+        or app.get('referred_by_phone')
+        or partner_rec.get('referred_by_phone')
+        or ''
+    ).strip()
+
+    send_sms = request.form.get('send_sms', '1') == '1'
+    _ensure_site_user_record(redirect_phone)
+
+    application = app if isinstance(app, dict) and app.get('id') else None
+    if not application:
+        for a in load_express_partner_apps() or []:
+            if not isinstance(a, dict):
+                continue
+            aph = _normalize_phone(str(a.get('phone') or '')) or str(a.get('phone') or '').strip()
+            if aph == redirect_phone:
+                application = a
+                break
+
+    result = _approve_express_partner(
+        phone=redirect_phone,
+        name=name,
+        city=city,
+        national_id=national_id,
+        referred_by_phone=referred_by_phone,
+        application=application,
+        remove_application=bool(application),
+        send_sms=send_sms,
+        source='admin_partner_approve_by_phone',
+    )
+
+    if (request.headers.get('Accept') or '').lower().find('application/json') >= 0:
+        return jsonify(result)
+
+    _flash_partner_approval_result(result)
+    next_url = (request.form.get('next') or '').strip()
+    if next_url == 'list':
+        return redirect(url_for('admin.express_partners', **list_kw))
+    return redirect(url_for('admin.express_partner_detail', **redirect_kw))
+
+
+@admin_bp.post('/express/partners/applications/<int:aid>/approve')
+@login_required
+def express_partner_application_approve(aid: int):
+    apps = load_express_partner_apps() or []
+    target = None
+    for a in apps:
+        try:
+            if int(a.get('id', 0)) == int(aid):
+                target = a
+                break
+        except Exception:
+            continue
+    if not target:
+        flash('درخواست یافت نشد.', 'warning')
+        return redirect(url_for('admin.express_partners', filter='pending'))
+
+    phone = str(target.get('phone') or '').strip()
+    result = _approve_express_partner(
+        phone=phone,
+        name=(target.get('name') or '').strip(),
+        city=(target.get('city') or '').strip(),
+        national_id=(target.get('national_id') or '').strip(),
+        application=target,
+        remove_application=True,
+        send_sms=True,
+        source='admin_partner_approval',
+    )
+
+    if (request.headers.get('Accept') or '').lower().find('application/json') >= 0:
+        return jsonify({'ok': True, 'id': int(aid), 'status': 'approved', **result})
+
+    if not result.get('ref_granted') and target.get('referred_by_phone'):
         current_app.logger.warning(
             'Referral commission NOT granted for app id=%s invitee=%s inviter=%s reason=%s',
             aid,
             target.get('phone'),
             target.get('referred_by_phone'),
-            ref_skip_reason or 'unknown',
+            result.get('ref_skip_reason') or 'unknown',
         )
-        if reason_fa:
-            msg += f' (پورسانت دعوت ثبت نشد: {reason_fa})'
-        else:
-            msg += ' (پورسانت دعوت ثبت نشد — لاگ سرور را بررسی کنید.)'
-    flash(msg, 'success')
+    _flash_partner_approval_result(result, prefix='درخواست تأیید شد — ')
     return redirect(url_for('admin.express_partners', filter='pending'))
 
 @admin_bp.post('/express/partners/applications/<int:aid>/reject')
