@@ -11,13 +11,16 @@
     }
   }
 
-  function writeFavs(arr) {
+  function writeFavs(arr, opts) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
     } catch (_) {}
-    try {
-      document.dispatchEvent(new CustomEvent('vinor-favs-changed', { detail: { codes: arr } }));
-    } catch (_) {}
+    var silent = opts && opts.silent;
+    if (!silent) {
+      try {
+        document.dispatchEvent(new CustomEvent('vinor-favs-changed', { detail: { codes: arr } }));
+      } catch (_) {}
+    }
   }
 
   function syncFavButtons(scope) {
@@ -39,7 +42,7 @@
     window.__vinorFavGlobalBound = true;
     document.addEventListener('click', function (ev) {
       var btn = ev.target.closest && ev.target.closest('[data-fav-code]');
-      if (!btn || (!btn.closest('.vinor-premium-card') && !btn.closest('[data-land-detail-fav]'))) return;
+      if (!btn || (!btn.closest('.vinor-premium-card') && !btn.closest('[data-land-detail-fav]') && !btn.closest('[data-favorites-card]'))) return;
       ev.preventDefault();
       ev.stopPropagation();
       var code = String(btn.getAttribute('data-fav-code') || '');

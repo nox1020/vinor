@@ -1,0 +1,86 @@
+<style id="vinor-profile-styles">
+  .profile-menu-row {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    text-decoration: none;
+    color: inherit;
+  }
+  .profile-identity {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+  .profile-identity:active {
+    background-color: rgba(255, 255, 255, 0.03);
+  }
+  .profile-invite-banner {
+    text-decoration: none;
+    color: inherit;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .profile-invite-banner:active {
+    background-color: rgba(255, 255, 255, 0.04);
+  }
+  .profile-sheet-root {
+    align-items: flex-end;
+  }
+  @media (min-width: 640px) {
+    .profile-sheet-root {
+      align-items: center;
+      justify-content: center;
+    }
+  }
+  .profile-sheet__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    transition: opacity 0.22s ease;
+  }
+  .profile-sheet-root.is-open .profile-sheet__backdrop {
+    opacity: 1;
+  }
+  .profile-sheet {
+    position: relative;
+    width: 100%;
+    max-width: 28rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: none;
+    border-radius: 1.25rem 1.25rem 0 0;
+    background: #12181f;
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (min-width: 640px) {
+    .profile-sheet {
+      border-radius: 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      transform: translateY(1.5rem);
+      opacity: 0;
+      transition: transform 0.22s ease, opacity 0.22s ease;
+    }
+    .profile-sheet-root.is-open .profile-sheet {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  .profile-sheet-root.is-open .profile-sheet {
+    transform: translateY(0);
+  }
+  .profile-sheet__handle-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 0.65rem 0 0.25rem;
+  }
+  @media (min-width: 640px) {
+    .profile-sheet__handle-wrap { display: none; }
+  }
+  .profile-sheet__handle {
+    width: 2.25rem;
+    height: 0.25rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.18);
+  }
+</style>

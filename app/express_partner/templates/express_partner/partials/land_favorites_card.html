@@ -1,0 +1,84 @@
+{# کارت نشان‌شده — الگوی دیوار: متن راست، دکمه حذف نشان، تصویر چپ #}
+{% set img = (land.images[0] if land.images and land.images[0] else None) %}
+{% set photo_count = land.images|length if land.images else 0 %}
+{% set has_video = land.video %}
+{% set _st = (land._assignment_status|default('active')|string)|lower|trim %}
+{% set _is_sold = (_st == 'sold') %}
+{% set _in_tx = land._in_transaction or (_st == 'in_transaction') %}
+{% set _reposted = land._reposted_by_me|default(false) %}
+{% set _img_eager = card_img_eager|default(false) %}
+
+{% if img %}
+  {% if "://" in (img|string) %}
+    {% set img_src = img %}
+  {% else %}
+    {% set img_src = img|dashboard_card_thumb_url %}
+  {% endif %}
+{% endif %}
+
+<article class="express-card vinor-dash-card vinor-fav-card w-full bg-transparent{% if _is_sold %} vinor-card-sold{% else %} cursor-pointer active:bg-white/[0.03]{% endif %}"
+         data-favorites-card
+         {% if not _is_sold %}data-href="{{ land._detail_url or url_for('express_partner.land_detail', code=land.code) }}" role="link" tabindex="0"{% else %}data-assignment-status="sold" aria-disabled="true"{% endif %}>
+
+  <div class="flex min-h-[8rem] flex-row items-stretch gap-2 px-3.5 py-3.5 sm:min-h-[8.5rem] sm:gap-2.5 sm:px-4 sm:py-4">
+    <div class="flex min-w-0 flex-1 flex-col justify-between gap-2.5 text-right">
+      <h3 class="line-clamp-2 text-[16px] font-bold leading-[1.4] text-white sm:text-[17px]">{{ land.title or '—' }}</h3>
+
+      <p class="text-[14px] leading-none text-slate-400 tabular-nums sm:text-[15px]">{{ (land.price_total or 0)|toman }}</p>
+
+      <p class="truncate text-[13px] leading-snug text-slate-500">
+        {% if _in_tx %}
+          <span class="text-orange-400">در حال معامله</span>
+        {% elif _is_sold %}
+          <span class="vinor-sold-badge text-emerald-400">فروخته شد</span>
+        {% elif land._is_expired %}
+          <span class="text-red-400">منقضی</span>
+        {% elif _reposted %}
+          <span class="text-rose-400">نردبان شده</span>
+        {% elif is_approved and land._commission_amount and not _is_sold %}
+          <span class="text-emerald-400">پورسانت {{ (land._commission_amount or 0)|toman(false) }} تومان</span>
+        {% endif %}
+        {% if land.city %}
+          <span class="text-slate-500{% if _in_tx or _is_sold or land._is_expired or _reposted or (is_approved and land._commission_amount) %} ms-1{% endif %}">در {{ land.city }}</span>
+        {% elif land.location %}
+          <span class="text-slate-500{% if _in_tx or _is_sold or land._is_expired or _reposted or (is_approved and land._commission_amount) %} ms-1{% endif %}">{{ land.location }}</span>
+        {% endif %}
+      </p>
+    </div>
+
+    {% if land.code %}
+    <button type="button"
+            data-fav-code="{{ land.code }}"
+            class="vinor-fav-remove shrink-0 self-start rounded-full p-2 text-amber-400 transition hover:bg-white/10 active:scale-95"
+            aria-label="حذف از نشان‌شده‌ها"
+            aria-pressed="true">
+      <i class="fas fa-bookmark vinor-fav-icon text-base" aria-hidden="true"></i>
+    </button>
+    {% endif %}
+
+    <div class="relative h-[7.5rem] w-[7.5rem] shrink-0 sm:h-[8rem] sm:w-[8rem]">
+      <div class="h-full w-full overflow-hidden rounded-xl bg-[#1a2332]">
+        {% if img_src %}
+        <img src="{{ img_src }}"
+             alt=""
+             width="160"
+             height="160"
+             {% if _img_eager %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %}
+             class="h-full w-full object-cover">
+        {% else %}
+        <div class="grid h-full place-items-center text-[10px] text-neutral-600">—</div>
+        {% endif %}
+      </div>
+      {% if has_video or photo_count > 0 %}
+      <span class="pointer-events-none absolute top-2 start-2 inline-flex items-center gap-0.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] font-medium text-white">
+        {% if has_video %}
+        <i class="fas fa-video text-[9px] opacity-90" aria-hidden="true"></i>
+        {% else %}
+        <i class="fas fa-camera text-[9px] opacity-90" aria-hidden="true"></i>
+        {% endif %}
+        <span class="tabular-nums">{{ (photo_count if photo_count > 0 else 1)|fa_digits }}</span>
+      </span>
+      {% endif %}
+    </div>
+  </div>
+</article>

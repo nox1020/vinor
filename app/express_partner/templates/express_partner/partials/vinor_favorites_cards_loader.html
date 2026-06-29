@@ -1,6 +1,10 @@
 <script>
 (function () {
   var API_URL = {{ url_for('express_partner.api_favorites_cards')|tojson }};
+  var loadInflight = false;
+  var loadQueued = false;
+  var loadQueuedOpts = null;
+  var activeFetch = null;
 
   function onFavoritesPage() {
     try {
@@ -10,35 +14,145 @@
     }
   }
 
-  function updateHint(requested, shown) {
-    var hint = document.getElementById('favoritesCountHint');
-    if (!hint || !hint.isConnected) return;
-    if (!requested) {
-      hint.classList.add('hidden');
-      return;
+  function faDigits(n) {
+    return String(n).replace(/\d/g, function (d) {
+      return '۰۱۲۳۴۵۶۷۸۹'[d];
+    });
+  }
+
+  function readFavCodes() {
+    if (typeof window.vinorReadFavs === 'function') {
+      return window.vinorReadFavs();
     }
-    if (shown < requested) {
-      hint.textContent = shown + ' مورد نمایش داده شد — ' + (requested - shown) + ' فایل دیگر در دسترس نیست';
-      hint.classList.remove('hidden');
-    } else if (shown) {
-      hint.textContent = shown + ' مورد نشان‌شده';
-      hint.classList.remove('hidden');
-    } else {
-      hint.classList.add('hidden');
+    try {
+      var raw = JSON.parse(localStorage.getItem('vinor_dashboard_favs') || '[]');
+      return Array.isArray(raw) ? raw.map(String) : [];
+    } catch (_) {
+      return [];
     }
   }
 
-  window.vinorLoadFavoritesCards = function vinorLoadFavoritesCards() {
-    if (!onFavoritesPage()) return;
+  function getEmptyHtml() {
+    var tpl = document.getElementById('vinorFavoritesEmptyTpl');
+    if (tpl && tpl.content && tpl.content.firstElementChild) {
+      return tpl.content.firstElementChild.outerHTML;
+    }
+    return '<div class="px-4 py-16 text-center sm:px-6"><p class="text-sm text-zinc-400">نشان‌شده‌ای ثبت نشده</p></div>';
+  }
+
+  function getFavoritesDom() {
+    if (!onFavoritesPage()) return null;
     var root = document.getElementById('favoritesCardsRoot');
     var loading = document.getElementById('favoritesLoading');
-    if (!root || !root.isConnected || !loading) return;
+    if (!root || !root.isConnected || !loading) return null;
+    return { root: root, loading: loading };
+  }
 
-    var codes = window.vinorReadFavs ? window.vinorReadFavs() : [];
-    loading.classList.remove('hidden');
-    root.classList.add('hidden');
-    root.innerHTML = '';
-    updateHint(0, 0);
+  function updateHint(requested, shown) {
+    var hint = document.getElementById('favoritesCountHint');
+    var bar = document.getElementById('favoritesStatusBar');
+    if (!hint || !hint.isConnected) return;
+    if (!requested) {
+      hint.textContent = '';
+      if (bar) bar.classList.add('hidden');
+      return;
+    }
+    if (shown < requested) {
+      hint.innerHTML =
+        '<span class="font-semibold text-white tabular-nums">' + faDigits(shown) + '</span>' +
+        '<span class="ms-1">مورد نمایش داده شد</span>' +
+        '<span class="mx-1 text-zinc-600">·</span>' +
+        '<span class="text-amber-400/90">' + faDigits(requested - shown) + ' فایل در دسترس نیست</span>';
+      if (bar) bar.classList.remove('hidden');
+    } else if (shown) {
+      hint.innerHTML =
+        '<span class="font-semibold text-white tabular-nums">' + faDigits(shown) + '</span>' +
+        '<span class="ms-1">مورد نشان‌شده</span>';
+      if (bar) bar.classList.remove('hidden');
+    } else {
+      hint.textContent = '';
+      if (bar) bar.classList.add('hidden');
+    }
+  }
+
+  function showLoadingState(loading, root, soft) {
+    if (!soft) {
+      loading.classList.remove('hidden');
+      loading.setAttribute('aria-busy', 'true');
+      root.classList.add('hidden');
+      root.innerHTML = '';
+      updateHint(0, 0);
+      return;
+    }
+    loading.classList.add('hidden');
+    loading.setAttribute('aria-busy', 'false');
+    root.classList.remove('hidden');
+  }
+
+  function finishLoad(dom, soft) {
+    dom.loading.classList.add('hidden');
+    dom.loading.setAttribute('aria-busy', 'false');
+    dom.root.classList.remove('hidden');
+    loadInflight = false;
+    activeFetch = null;
+    if (loadQueued) {
+      var nextOpts = loadQueuedOpts || {};
+      loadQueued = false;
+      loadQueuedOpts = null;
+      window.vinorLoadFavoritesCards(nextOpts);
+    }
+  }
+
+  function applyFavoritesPayload(dom, d, codes, soft) {
+    if (d && d.ok) {
+      dom.root.innerHTML = d.html || getEmptyHtml();
+      if (window.vinorSyncFavButtons) window.vinorSyncFavButtons(dom.root);
+      var shown = typeof d.count === 'number' ? d.count : 0;
+      var requested = typeof d.requested === 'number' ? d.requested : codes.length;
+      updateHint(requested, shown);
+      if (d.valid_codes && window.vinorWriteFavs && requested > shown) {
+        var curKey = codes.slice().sort().join('\0');
+        var valKey = d.valid_codes.slice().sort().join('\0');
+        if (curKey !== valKey) window.vinorWriteFavs(d.valid_codes, { silent: true });
+      }
+      return;
+    }
+    if (d && d.error === 'unauthorized') {
+      dom.root.innerHTML = '<p class="px-4 py-12 text-center text-sm text-zinc-400 sm:px-6">برای مشاهدهٔ نشان‌شده‌ها وارد شوید.</p>';
+      return;
+    }
+    dom.root.innerHTML = '<p class="px-4 py-12 text-center text-sm text-red-400 sm:px-6">خطا در بارگذاری نشان‌شده‌ها</p>';
+  }
+
+  window.vinorLoadFavoritesCards = function vinorLoadFavoritesCards(opts) {
+    opts = opts || {};
+    if (!onFavoritesPage()) return;
+
+    if (loadInflight) {
+      loadQueued = true;
+      loadQueuedOpts = opts;
+      if (activeFetch && typeof activeFetch.abort === 'function') {
+        try { activeFetch.abort(); } catch (_) {}
+      }
+      return;
+    }
+
+    var dom = getFavoritesDom();
+    if (!dom) return;
+
+    var codes = readFavCodes();
+    var soft = !!opts.soft;
+    loadInflight = true;
+    showLoadingState(dom.loading, dom.root, soft);
+
+    if (!codes.length) {
+      dom.root.innerHTML = getEmptyHtml();
+      finishLoad(dom, soft);
+      return;
+    }
+
+    var controller = typeof AbortController === 'function' ? new AbortController() : null;
+    activeFetch = controller;
 
     fetch(API_URL, {
       method: 'POST',
@@ -46,51 +160,74 @@
         'Content-Type': 'application/json'
       }),
       credentials: 'same-origin',
-      body: JSON.stringify({ codes: codes })
+      body: JSON.stringify({ codes: codes }),
+      signal: controller ? controller.signal : undefined
     })
       .then(function (r) {
+        if (r.status === 401) {
+          return r.json().catch(function () { return { error: 'unauthorized' }; });
+        }
         if (!r.ok) throw new Error('http');
         return r.json();
       })
       .then(function (d) {
         if (!onFavoritesPage()) return;
-        if (!root.isConnected) return;
-        loading.classList.add('hidden');
-        root.classList.remove('hidden');
-        if (d && d.ok) {
-          root.innerHTML = d.html || '';
-          var shown = typeof d.count === 'number' ? d.count : 0;
-          var requested = typeof d.requested === 'number' ? d.requested : codes.length;
-          updateHint(requested, shown);
-          if (d.valid_codes && window.vinorWriteFavs && requested > shown) {
-            var curKey = codes.slice().sort().join('\0');
-            var valKey = d.valid_codes.slice().sort().join('\0');
-            if (curKey !== valKey) window.vinorWriteFavs(d.valid_codes);
-          }
-        } else {
-          root.innerHTML = '<p class="text-center text-sm text-red-400">خطا در بارگذاری نشان‌شده‌ها</p>';
-        }
+        var liveDom = getFavoritesDom();
+        if (!liveDom) return;
+        applyFavoritesPayload(liveDom, d, codes, soft);
       })
-      .catch(function () {
-        if (!onFavoritesPage() || !root.isConnected) return;
-        loading.classList.add('hidden');
-        root.classList.remove('hidden');
-        root.innerHTML = '<p class="text-center text-sm text-red-400">خطا در بارگذاری — اتصال را بررسی کنید</p>';
+      .catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        if (!onFavoritesPage()) return;
+        var liveDom = getFavoritesDom();
+        if (!liveDom) return;
+        liveDom.root.innerHTML = '<p class="px-4 py-12 text-center text-sm text-red-400 sm:px-6">خطا در بارگذاری — اتصال را بررسی کنید</p>';
+      })
+      .finally(function () {
+        if (!onFavoritesPage()) {
+          loadInflight = false;
+          activeFetch = null;
+          return;
+        }
+        var liveDom = getFavoritesDom();
+        if (!liveDom) {
+          loadInflight = false;
+          activeFetch = null;
+          return;
+        }
+        finishLoad(liveDom, soft);
       });
   };
 
-  if (!window.__vinorFavoritesCardsBound) {
-    window.__vinorFavoritesCardsBound = true;
-    document.addEventListener('vinor-favs-changed', function () {
-      window.vinorLoadFavoritesCards();
-    });
-    document.addEventListener('vinor:express-page-swap', function (ev) {
-      var key = ev && ev.detail && ev.detail.navKey;
-      if (key === 'favorites') window.vinorLoadFavoritesCards();
-    });
-    document.addEventListener('DOMContentLoaded', function () {
+  window.vinorFavoritesPageLoad = window.vinorLoadFavoritesCards;
+
+  function scheduleFavoritesBoot() {
+    if (!onFavoritesPage()) return;
+    requestAnimationFrame(function () {
       if (onFavoritesPage()) window.vinorLoadFavoritesCards();
     });
+  }
+
+  if (!window.__vinorFavoritesCardsBound) {
+    window.__vinorFavoritesCardsBound = true;
+
+    document.addEventListener('vinor-favs-changed', function () {
+      if (!onFavoritesPage()) return;
+      var root = document.getElementById('favoritesCardsRoot');
+      var soft = !!(root && root.isConnected && !root.classList.contains('hidden'));
+      window.vinorLoadFavoritesCards({ soft: soft });
+    });
+
+    document.addEventListener('vinor:express-page-swap', function (ev) {
+      var key = ev && ev.detail && ev.detail.navKey;
+      if (key === 'favorites') scheduleFavoritesBoot();
+    });
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', scheduleFavoritesBoot, { once: true });
+    } else if (onFavoritesPage()) {
+      scheduleFavoritesBoot();
+    }
   }
 })();
 </script>

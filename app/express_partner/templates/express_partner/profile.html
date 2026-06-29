@@ -2,14 +2,6 @@
 {% block title %}پروفایل{% endblock %}
 
 {% block head %}
-  <style>
-    .profile-hero-glow {
-      background: radial-gradient(ellipse 95% 70% at 50% 100%, rgba(34, 197, 94, 0.22), transparent 62%);
-    }
-    #profilePage {
-      box-sizing: border-box;
-    }
-  </style>
   {% set _head_avatar = (profile.get('avatar') or '').strip() if profile else '' %}
   {% if _head_avatar %}
   <link rel="preload" as="image" href="{{ _head_avatar|avatar_display_url(profile.get('avatar_updated_at', 0)) }}">
@@ -17,206 +9,119 @@
 {% endblock %}
 
 {% block content %}
+  {% include 'express_partner/partials/profile_page_styles.html' %}
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+  {% from 'express_partner/partials/profile_macros.html' import profile_menu_row %}
 
-  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row, ep_header_spacer %}
   {{ ep_header_start(id='profileExpressHeader') }}
-  {% call ep_header_row('پروفایل', url_for('express_partner.dashboard'), inner_class='max-w-lg lg:max-w-6xl mx-auto w-full') %}
+  {% call ep_header_row('پروفایل', url_for('express_partner.dashboard'), inner_class='max-w-lg mx-auto w-full') %}
     {% include 'express_partner/partials/support_header_button.html' %}
   {% endcall %}
   {{ ep_header_end() }}
 
   <div id="profilePage"
-       class="partner-page-scroll-pad min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
+       class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16"
+       data-vinor-profile-page>
 
-    {% if not me_phone %}
-    <div class="mx-auto w-full max-w-lg space-y-3 px-4 sm:space-y-4 sm:px-6 lg:max-w-6xl">
-      <section class="relative overflow-hidden rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-600/90 via-emerald-800/95 to-[#0a1218] p-6 text-center shadow-xl shadow-emerald-950/30 sm:p-7">
-        <div class="pointer-events-none absolute -left-10 -top-12 h-32 w-32 rounded-full bg-white/10 blur-2xl" aria-hidden="true"></div>
-        <div class="relative">
-          <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/10">
-            <i class="fas fa-user text-2xl text-emerald-50/90" aria-hidden="true"></i>
-          </div>
-          <p class="text-base font-bold text-white sm:text-lg">به وینور اکسپرس خوش آمدید</p>
-          <p class="mt-2 text-sm leading-relaxed text-emerald-50/85">برای مدیریت پروفایل و ثبت درخواست همکاری وارد شوید</p>
-          <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <a href="{{ url_for('express_partner.login', next=url_for('express_partner.profile')) }}"
-               class="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-emerald-800 shadow-md transition hover:bg-emerald-50">
-              <i class="fas fa-right-to-bracket text-xs" aria-hidden="true"></i>
-              ورود
-            </a>
-            <a href="{{ url_for('express_partner.login', next=url_for('express_partner.apply')) }}"
-               class="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15">
-              <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>
-              شروع همکاری
-            </a>
-          </div>
+    <div class="mx-auto w-full max-w-lg">
+
+      {% if not me_phone %}
+      {# مهمان #}
+      <section class="border-b border-white/10 px-4 py-6 text-center sm:px-6">
+        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.06] ring-1 ring-white/10">
+          <i class="fas fa-user text-2xl text-zinc-500" aria-hidden="true"></i>
+        </div>
+        <p class="text-base font-bold text-white">به وینور اکسپرس خوش آمدید</p>
+        <p class="mt-2 text-sm leading-relaxed text-zinc-500">برای مدیریت پروفایل و ثبت درخواست همکاری وارد شوید</p>
+        <div class="mt-5 flex flex-wrap items-center justify-center gap-2.5">
+          <a href="{{ url_for('express_partner.login', next=url_for('express_partner.profile')) }}"
+             data-vinor-express-nav
+             class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500">
+            <i class="fas fa-right-to-bracket text-xs" aria-hidden="true"></i>
+            ورود
+          </a>
+          <a href="{{ url_for('express_partner.login', next=url_for('express_partner.apply')) }}"
+             data-vinor-express-nav
+             class="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-5 py-2.5 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.07]">
+            <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>
+            شروع همکاری
+          </a>
         </div>
       </section>
 
-      <a href="{{ url_for('express_partner.cooperation_terms') }}"
-         class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-emerald-500/25 hover:bg-[#161e29] sm:p-5">
-        <div class="flex items-center gap-3 sm:gap-4">
-          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-400">
-            <i class="fas fa-handshake text-lg" aria-hidden="true"></i>
-          </div>
-          <div class="min-w-0 flex-1 text-right">
-            <div class="text-sm font-semibold text-white sm:text-base">شرایط همکاری</div>
-            <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">پورسانت، مراحل ثبت‌نام و قوانین</div>
-          </div>
-          <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-        </div>
-      </a>
+      <nav class="divide-y divide-white/10" aria-label="منوی پروفایل">
+        {{ profile_menu_row(url_for('express_partner.cooperation_terms'), 'fa-handshake', 'شرایط همکاری', 'پورسانت، مراحل ثبت‌نام و قوانین') }}
+        {{ profile_menu_row(url_for('express_partner.routine'), 'fa-list-check', 'آمار فعالیت', 'پیش‌نمایش روتین همکاری') }}
+        {{ profile_menu_row(url_for('express_partner.top_sellers'), 'fa-trophy', 'فروشنده‌های برتر', 'رتبه‌بندی همکاران') }}
+      </nav>
 
-      <a href="{{ url_for('express_partner.routine') }}"
-         class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-violet-500/25 hover:bg-[#161e29] sm:p-5">
-        <div class="flex items-center gap-3 sm:gap-4">
-          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-500/30 bg-violet-500/15 text-violet-400">
-            <i class="fas fa-list-check text-lg" aria-hidden="true"></i>
-          </div>
-          <div class="min-w-0 flex-1 text-right">
-            <div class="text-sm font-semibold text-white sm:text-base">آمار فعالیت</div>
-            <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">پیش‌نمایش روتین همکاری</div>
-          </div>
-          <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-        </div>
-      </a>
-
-      <a href="{{ url_for('express_partner.top_sellers') }}"
-         class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-amber-500/25 hover:bg-[#161e29] sm:p-5">
-        <div class="flex items-center gap-3 sm:gap-4">
-          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-orange-500/30 bg-orange-500/15 text-orange-400">
-            <i class="fas fa-trophy text-lg" aria-hidden="true"></i>
-          </div>
-          <div class="min-w-0 flex-1 text-right">
-            <div class="text-sm font-semibold text-white sm:text-base">فروشنده‌های برتر</div>
-            <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">رتبه‌بندی همکاران</div>
-          </div>
-          <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-        </div>
-      </a>
-    </div>
-    {% else %}
-
-    <div class="mx-auto w-full max-w-lg space-y-3 px-4 sm:space-y-4 sm:px-6 lg:max-w-6xl lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
-      {# کارت هویت #}
+      {% else %}
+      {# هویت — ردیف بالای لیست دیوار #}
       <section data-tour="profile-section"
                id="profileClickableCard"
-               class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#141c26] to-[#0d1218] p-5 shadow-xl shadow-black/40">
-        <div class="pointer-events-none absolute inset-x-0 bottom-0 h-24 profile-hero-glow" aria-hidden="true"></div>
-        <div class="relative flex items-start gap-4">
-          <div class="relative shrink-0">
-            <form id="avatarForm" method="post" action="{{ url_for('express_partner.profile_avatar_upload') }}" enctype="multipart/form-data" class="pointer-events-auto">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input id="avatarInput" name="avatar" type="file" accept="image/*" class="hidden">
-              <button type="button" id="avatarTrigger"
-                      class="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white/15 bg-[#0a1018] ring-2 ring-emerald-500/20 transition hover:ring-emerald-400/40 sm:h-[5rem] sm:w-[5rem]"
-                      title="تغییر عکس پروفایل">
-                {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
-                {% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
-                <img id="avatarProfileImg"
-                     {% if _avatar_url %}data-avatar-url="{{ _avatar_url }}"{% endif %}
-                     alt="عکس پروفایل"
-                     class="h-full w-full object-cover {% if not _avatar %}hidden{% endif %}"
-                     decoding="async"
-                     referrerpolicy="no-referrer"
-                     onerror="this.classList.add('hidden');var f=document.getElementById('avatarProfileFallback');if(f)f.classList.remove('hidden');">
-                <span id="avatarProfileFallback"
-                      class="flex h-full w-full items-center justify-center text-lg font-bold text-zinc-400 sm:text-xl {% if _avatar %}hidden{% endif %}">
-                  {{ me_name|avatar_initials }}
-                </span>
-              </button>
-              {% if _avatar_url %}
-              <script>
-              (function () {
-                if (typeof window.vinorHydratePartnerAvatar === 'function') {
-                  window.vinorHydratePartnerAvatar('avatarProfileImg', 'avatarProfileFallback');
-                }
-              })();
-              </script>
-              {% endif %}
-            </form>
-          </div>
-
-          <div class="min-w-0 flex-1 pt-0.5 text-right">
-            <div class="truncate text-lg font-bold text-white sm:text-xl">{{ me_name or 'همکار وینور' }}</div>
-            <div class="mt-1.5 text-sm tabular-nums text-zinc-400" dir="ltr">
-              {% if me_phone and me_phone|length >= 11 %}
-                {{ me_phone[0:4] }} {{ me_phone[4:7] }} {{ me_phone[7:11] }}
-              {% else %}
-                {{ me_phone }}
-              {% endif %}
-            </div>
-            <div class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400/95">
-              {% if is_approved %}
-              <i class="fas fa-circle-check text-emerald-400" aria-hidden="true"></i>
-              <span>همکار تایید شده</span>
-              {% else %}
-              <span class="text-zinc-500">کاربر عادی</span>
-              {% endif %}
-            </div>
-          </div>
-
-          <form id="logoutProfileForm" method="post" action="{{ url_for('express_partner.logout') }}" class="pointer-events-auto shrink-0 self-start">
+               class="profile-identity flex items-center gap-3 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+        <div class="relative shrink-0 pointer-events-auto">
+          <form id="avatarForm" method="post" action="{{ url_for('express_partner.profile_avatar_upload') }}" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="button" onclick="showLogoutConfirm('logoutProfileForm')"
-                    class="grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-white/5 text-zinc-300 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
-                    aria-label="خروج">
-              <i class="fas fa-right-from-bracket text-sm" aria-hidden="true"></i>
+            <input id="avatarInput" name="avatar" type="file" accept="image/*" class="hidden">
+            <button type="button" id="avatarTrigger"
+                    class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.06] ring-2 ring-white/10 transition hover:ring-emerald-500/35 sm:h-16 sm:w-16"
+                    title="تغییر عکس پروفایل">
+              {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
+              {% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
+              <img id="avatarProfileImg"
+                   {% if _avatar_url %}data-avatar-url="{{ _avatar_url }}"{% endif %}
+                   alt="عکس پروفایل"
+                   class="h-full w-full object-cover {% if not _avatar %}hidden{% endif %}"
+                   decoding="async"
+                   referrerpolicy="no-referrer"
+                   onerror="this.classList.add('hidden');var f=document.getElementById('avatarProfileFallback');if(f)f.classList.remove('hidden');">
+              <span id="avatarProfileFallback"
+                    class="flex h-full w-full items-center justify-center text-lg font-bold text-zinc-400 {% if _avatar %}hidden{% endif %}">
+                {{ me_name|avatar_initials }}
+              </span>
             </button>
+            {% if _avatar_url %}
+            <script>
+            (function () {
+              if (typeof window.vinorHydratePartnerAvatar === 'function') {
+                window.vinorHydratePartnerAvatar('avatarProfileImg', 'avatarProfileFallback');
+              }
+            })();
+            </script>
+            {% endif %}
           </form>
         </div>
+
+        <div class="min-w-0 flex-1 text-right">
+          <div class="truncate text-[17px] font-bold leading-tight text-white sm:text-lg">{{ me_name or 'همکار وینور' }}</div>
+          <div class="mt-1 text-sm tabular-nums text-zinc-500" dir="ltr">
+            {% if me_phone and me_phone|length >= 11 %}
+              {{ me_phone[0:4] }} {{ me_phone[4:7] }} {{ me_phone[7:11] }}
+            {% else %}
+              {{ me_phone }}
+            {% endif %}
+          </div>
+          <div class="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium">
+            {% if is_approved %}
+            <i class="fas fa-circle-check text-emerald-400 text-[10px]" aria-hidden="true"></i>
+            <span class="text-emerald-400/95">همکار تأییدشده</span>
+            {% else %}
+            <span class="text-zinc-500">کاربر عادی</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <i class="fas fa-chevron-left shrink-0 text-xs text-zinc-600" aria-hidden="true"></i>
       </section>
 
-      {# منو #}
-      <div class="space-y-3 sm:space-y-3.5 lg:mt-0">
+      <nav class="divide-y divide-white/10" aria-label="منوی پروفایل">
         {% if not is_approved %}
-        <a href="{{ url_for('express_partner.apply') }}"
-           data-tour="apply-link"
-           class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-emerald-500/25 hover:bg-[#161e29] sm:p-5">
-          <div class="flex items-center gap-3 sm:gap-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-sky-500/25 bg-sky-500/15 text-sky-400">
-              <i class="fas fa-user-plus text-lg" aria-hidden="true"></i>
-            </div>
-            <div class="min-w-0 flex-1 text-right">
-              <div class="text-sm font-semibold text-white sm:text-base">درخواست همکاری</div>
-              <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">برای تبدیل به همکار اکسپرس درخواست دهید</div>
-            </div>
-            <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-          </div>
-        </a>
+        {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری', 'برای تبدیل به همکار اکسپرس درخواست دهید', tour='apply-link') }}
         {% endif %}
 
-        <a href="{{ url_for('express_partner.notes') }}"
-           data-tour="notes-link"
-           class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-emerald-500/25 hover:bg-[#161e29] sm:p-5">
-          <div class="flex items-center gap-3 sm:gap-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-400">
-              <i class="fas fa-sticky-note text-lg" aria-hidden="true"></i>
-            </div>
-            <div class="min-w-0 flex-1 text-right">
-              <div class="text-sm font-semibold text-white sm:text-base">یادداشت‌ها</div>
-              <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">یادداشت‌های شخصی</div>
-            </div>
-            <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-          </div>
-        </a>
-
-        <a href="{{ url_for('express_partner.routine') }}"
-           data-tour="routine-link"
-           class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-violet-500/25 hover:bg-[#161e29] sm:p-5">
-          <div class="flex items-center gap-3 sm:gap-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-500/30 bg-violet-500/15 text-violet-400">
-              <i class="fas fa-list-check text-lg" aria-hidden="true"></i>
-            </div>
-            <div class="min-w-0 flex-1 text-right">
-              <div class="text-sm font-semibold text-white sm:text-base">آمار فعالیت شما</div>
-              <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">
-                {% if is_approved %}روتین روزانه و تقویم پیشرفت{% else %}پیش‌نمایش روتین همکاری{% endif %}
-              </div>
-            </div>
-            <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-          </div>
-        </a>
+        {{ profile_menu_row(url_for('express_partner.notes'), 'fa-sticky-note', 'یادداشت‌ها', 'یادداشت‌های شخصی', tour='notes-link') }}
+        {{ profile_menu_row(url_for('express_partner.routine'), 'fa-list-check', 'آمار فعالیت شما', 'روتین روزانه و تقویم پیشرفت' if is_approved else 'پیش‌نمایش روتین همکاری', tour='routine-link') }}
 
         {% if is_vinor_apk %}
         <div id="appUpdateCardWrap" class="{% if not show_app_update_card %}hidden{% endif %}">
@@ -225,50 +130,52 @@
              data-tour="app-update-link"
              aria-label="بروزرسانی اپلیکیشن اندروید"
              {% if show_app_update_card and android_apk_url %}download rel="noopener"{% endif %}
-             class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-amber-500/25 hover:bg-[#161e29] sm:p-5">
-            <div class="flex items-center gap-3 sm:gap-4">
-              <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/15 text-amber-400">
-                <i class="fas fa-download text-lg" aria-hidden="true"></i>
-              </div>
-              <div class="min-w-0 flex-1 text-right">
-                <div class="text-sm font-semibold text-white sm:text-base">بروزرسانی اپلیکیشن</div>
-                <div id="appUpdateSubtitle" class="mt-0.5 text-xs text-zinc-500 sm:text-sm">
-                  {% if show_app_update_card %}نسخهٔ جدید برای دانلود آماده است{% else %}در حال بررسی بروزرسانی…{% endif %}
-                </div>
-                <div id="appUpdateMeta" class="mt-1.5 flex flex-wrap justify-end gap-1.5 text-[11px] text-zinc-500">
-                  {% if show_app_update_card and android_apk_version %}
-                  <span class="inline-flex items-center gap-1 rounded border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-amber-300/90">نسخه {{ android_apk_version }}</span>
-                  {% endif %}
-                </div>
-              </div>
-              <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
+             class="profile-menu-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors active:bg-white/[0.04] hover:bg-white/[0.02] sm:px-6 sm:py-4">
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/25 sm:h-12 sm:w-12">
+              <i class="fas fa-download text-base" aria-hidden="true"></i>
             </div>
+            <div class="min-w-0 flex-1">
+              <div class="text-[15px] font-medium text-white">بروزرسانی اپلیکیشن</div>
+              <div id="appUpdateSubtitle" class="mt-0.5 text-[12px] leading-snug text-zinc-500">
+                {% if show_app_update_card %}نسخهٔ جدید برای دانلود آماده است{% else %}در حال بررسی بروزرسانی…{% endif %}
+              </div>
+              <div id="appUpdateMeta" class="mt-1.5 flex flex-wrap justify-end gap-1.5 text-[11px]">
+                {% if show_app_update_card and android_apk_version %}
+                <span class="inline-flex items-center rounded-md bg-amber-500/10 px-2 py-0.5 text-amber-300/90 ring-1 ring-amber-500/20">نسخه {{ android_apk_version }}</span>
+                {% endif %}
+              </div>
+            </div>
+            <i class="fas fa-chevron-left shrink-0 text-[10px] text-zinc-600" aria-hidden="true"></i>
           </a>
         </div>
         {% endif %}
-        <a href="{{ url_for('express_partner.top_sellers') }}"
-           data-tour="top-sellers-link"
-           class="profile-menu-card block rounded-2xl border border-white/10 bg-[#12181f] p-4 transition hover:border-amber-500/25 hover:bg-[#161e29] sm:p-5">
-          <div class="flex items-center gap-3 sm:gap-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-orange-500/30 bg-orange-500/15 text-orange-400">
-              <i class="fas fa-trophy text-lg" aria-hidden="true"></i>
-            </div>
-            <div class="min-w-0 flex-1 text-right">
-              <div class="text-sm font-semibold text-white sm:text-base">فروشنده‌های برتر</div>
-              <div class="mt-0.5 text-xs text-zinc-500 sm:text-sm">رتبه‌بندی همکاران</div>
-            </div>
-            <i class="fas fa-chevron-left shrink-0 text-sm text-zinc-600" aria-hidden="true"></i>
-          </div>
-        </a>
+
+        {{ profile_menu_row(url_for('express_partner.top_sellers'), 'fa-trophy', 'فروشنده‌های برتر', 'رتبه‌بندی همکاران', tour='top-sellers-link') }}
+        {{ profile_menu_row(url_for('express_partner.cooperation_terms'), 'fa-handshake', 'شرایط همکاری', 'پورسانت و قوانین همکاری') }}
 
         {% if is_approved %}
         {% include 'express_partner/partials/commissions_referral.html' %}
         {% else %}
         {% include 'express_partner/partials/profile_invite_friends.html' %}
         {% endif %}
-      </div>
+
+        <form id="logoutProfileForm" method="post" action="{{ url_for('express_partner.logout') }}" class="contents">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="button"
+                  onclick="showLogoutConfirm('logoutProfileForm')"
+                  class="profile-menu-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors active:bg-rose-500/[0.08] hover:bg-rose-500/[0.05] sm:px-6 sm:py-4">
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20 sm:h-12 sm:w-12">
+              <i class="fas fa-right-from-bracket text-base" aria-hidden="true"></i>
+            </div>
+            <div class="min-w-0 flex-1 text-right">
+              <div class="text-[15px] font-medium text-rose-300">خروج از حساب</div>
+            </div>
+          </button>
+        </form>
+      </nav>
+      {% endif %}
+
     </div>
-    {% endif %}
 
     {% set bottom_nav_active = 'profile' %}
     {% include 'express_partner/partials/partner_tab_footer.html' %}
@@ -277,28 +184,31 @@
   {% if me_phone %}
   <div id="logoutConfirmModal"
        data-tg-body-modal
-       class="fixed inset-0 z-[200] hidden items-end justify-center sm:items-center"
+       class="profile-sheet-root fixed inset-0 z-[200] hidden"
        role="dialog"
        aria-modal="true"
        aria-labelledby="logoutConfirmTitle">
-    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="hideLogoutConfirm()"></div>
-    <div class="relative mx-auto w-full max-sm:rounded-t-3xl sm:max-w-md sm:rounded-2xl border border-white/10 bg-[#12181f] shadow-2xl max-sm:pb-[env(safe-area-inset-bottom,0px)]">
-      <div class="p-5 sm:p-6">
-        <div class="flex items-center gap-3">
-          <div class="grid h-12 w-12 place-items-center rounded-full border border-rose-500/30 bg-rose-500/15 text-rose-400">
-            <i class="fas fa-sign-out-alt text-lg" aria-hidden="true"></i>
+    <div class="profile-sheet__backdrop" onclick="hideLogoutConfirm()"></div>
+    <div class="profile-sheet mx-auto">
+      <div class="profile-sheet__handle-wrap" aria-hidden="true">
+        <span class="profile-sheet__handle"></span>
+      </div>
+      <div class="px-5 pb-5 pt-1 sm:px-6 sm:pb-6">
+        <div class="flex items-center gap-3 border-b border-white/10 pb-4">
+          <div class="grid h-11 w-11 place-items-center rounded-full bg-rose-500/12 text-rose-400 ring-1 ring-rose-500/25">
+            <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
           </div>
-          <div>
-            <p id="logoutConfirmTitle" class="text-lg font-bold text-white">خروج از حساب</p>
-            <p class="mt-1 text-sm text-zinc-400">آیا از خروج اطمینان دارید؟</p>
+          <div class="min-w-0 flex-1 text-right">
+            <p id="logoutConfirmTitle" class="text-base font-bold text-white">خروج از حساب</p>
+            <p class="mt-0.5 text-sm text-zinc-500">آیا از خروج اطمینان دارید؟</p>
           </div>
         </div>
-        <div class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div class="mt-4 grid grid-cols-2 gap-2.5">
           <button type="button"
-                  class="w-full rounded-xl border border-white/15 py-3 font-semibold text-zinc-200 transition hover:bg-white/5"
+                  class="rounded-xl border border-white/12 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/[0.04]"
                   onclick="hideLogoutConfirm()">انصراف</button>
           <button type="button"
-                  class="w-full rounded-xl bg-rose-600 py-3 font-semibold text-white transition hover:bg-rose-500"
+                  class="rounded-xl bg-rose-600 py-3 text-sm font-bold text-white transition hover:bg-rose-500"
                   onclick="confirmLogout()">خروج</button>
         </div>
       </div>
@@ -348,30 +258,46 @@
     if (typeof window.hoistVinorExpressBodyModals === 'function') {
       window.hoistVinorExpressBodyModals();
     }
-    function disableScroll() { document.documentElement.classList.add('overflow-hidden'); document.body.classList.add('overflow-hidden'); }
-    function enableScroll() { document.documentElement.classList.remove('overflow-hidden'); document.body.classList.remove('overflow-hidden'); }
+    function openSheet() {
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      requestAnimationFrame(function () {
+        modal.classList.add('is-open');
+      });
+    }
+    function closeSheet() {
+      if (!modal) return;
+      modal.classList.remove('is-open');
+      setTimeout(function () {
+        if (!modal.classList.contains('is-open')) {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+        }
+      }, 280);
+    }
     window.showLogoutConfirm = function(formId) {
       if (!modal) return;
       if (typeof window.hoistVinorExpressBodyModals === 'function') {
         window.hoistVinorExpressBodyModals();
       }
       modal.dataset.targetForm = formId || '';
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
       if (window.vinorExpressModalOverlay) {
         window.vinorExpressModalOverlay.open();
       } else {
-        disableScroll();
+        document.documentElement.classList.add('overflow-hidden');
+        document.body.classList.add('overflow-hidden');
       }
+      openSheet();
     };
     window.hideLogoutConfirm = function() {
       if (!modal) return;
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
+      closeSheet();
       if (window.vinorExpressModalOverlay) {
         window.vinorExpressModalOverlay.close();
       } else {
-        enableScroll();
+        document.documentElement.classList.remove('overflow-hidden');
+        document.body.classList.remove('overflow-hidden');
       }
     };
     const loginUrlFallback = "{{ url_for('express_partner.dashboard') }}";
@@ -426,7 +352,7 @@
     const previewFallback = document.getElementById('avatarProfileFallback');
     const avatarApiUrl = {{ url_for('express_partner.api_profile_avatar') | tojson }};
     if (!trigger || !input || !form) return;
-    trigger.addEventListener('click', function() { input.click(); }, profileSigOpts);
+    trigger.addEventListener('click', function(e) { e.stopPropagation(); input.click(); }, profileSigOpts);
 
     function showPreview(url) {
       if (window.vinorPartnerAvatarCache) {
@@ -552,7 +478,7 @@
     function showUpdate(v, url) {
       wrap.classList.remove('hidden');
       sub.textContent = 'نسخهٔ جدید برای دانلود آماده است';
-      if (meta) meta.innerHTML = '<span class="inline-flex items-center gap-1 rounded border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-amber-300/90">نسخه ' + v + '</span>';
+      if (meta) meta.innerHTML = '<span class="inline-flex items-center rounded-md bg-amber-500/10 px-2 py-0.5 text-amber-300/90 ring-1 ring-amber-500/20">نسخه ' + v + '</span>';
       card.href = absUrl(url);
       card.setAttribute('download', '');
       card.setAttribute('rel', 'noopener');
@@ -606,11 +532,9 @@
     var profileSigOpts = profileSig ? { signal: profileSig } : false;
     const card = document.getElementById('profileClickableCard');
     const avatarBtn = document.getElementById('avatarTrigger');
-    const logoutForm = document.getElementById('logoutProfileForm');
     if (!card) return;
     card.addEventListener('click', function(e) {
       if (avatarBtn && avatarBtn.contains(e.target)) return;
-      if (logoutForm && logoutForm.contains(e.target)) return;
       var editUrl = "{{ url_for('express_partner.profile_edit') }}";
       if (window.vinorExpressNavigate) window.vinorExpressNavigate(editUrl, { forward: true });
       else window.location.href = editUrl;

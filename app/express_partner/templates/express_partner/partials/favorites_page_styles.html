@@ -1,0 +1,60 @@
+<style id="vinor-favorites-styles">
+  .vinor-fav-skel {
+    animation: vinor-fav-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes vinor-fav-pulse {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 0.9; }
+  }
+  #favoritesCardsRoot .express-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  #favoritesCardsRoot .vinor-dash-card {
+    border-radius: 0;
+    box-shadow: none;
+    transition: background-color .15s ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    #favoritesCardsRoot .vinor-dash-card:not(.vinor-card-sold):hover {
+      background-color: rgba(255, 255, 255, 0.03);
+    }
+  }
+  #favoritesCardsRoot .vinor-card-sold {
+    position: relative;
+    isolation: isolate;
+    cursor: default;
+  }
+  #favoritesCardsRoot .vinor-card-sold::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: rgba(3, 7, 18, 0.35);
+    pointer-events: none;
+  }
+  #favoritesCardsRoot .vinor-card-sold img {
+    filter: saturate(0.4) brightness(0.72);
+  }
+  #favoritesCardsRoot .vinor-dash-card img {
+    pointer-events: none;
+  }
+  #favoritesCardsRoot .vinor-fav-remove {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    pointer-events: auto;
+    position: relative;
+    z-index: 6;
+  }
+  #favoritesCardsRoot .vinor-card-sold .vinor-sold-badge {
+    position: static;
+    z-index: auto;
+    background: transparent !important;
+    color: rgb(52 211 153) !important;
+    border: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+  }
+</style>
