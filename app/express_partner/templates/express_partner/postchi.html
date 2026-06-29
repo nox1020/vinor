@@ -1,12 +1,22 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}پستچی وینور{% endblock %}
 
+{% set postchi_cfg = {
+  'messagesUrl': url_for('express_partner.api_postchi_messages'),
+  'openUrl': url_for('express_partner.api_postchi_open'),
+  'seed': messages
+} %}
+
 {% block content %}
   {% include 'express_partner/partials/postchi_page_styles.html' %}
   {% from 'express_partner/partials/vinor_official_identity.html' import vinor_official_name, vinor_official_subtitle, vinor_official_avatar %}
   {% include 'express_partner/partials/vinor_official_identity.html' %}
 
-  <div class="postchi-page" data-vinor-postchi-page x-data="vinorPostchiPage()" x-init="init()">
+  <div class="postchi-page"
+       data-vinor-postchi-page
+       data-postchi-config='{{ postchi_cfg|tojson }}'
+       x-data="vinorPostchiPage()"
+       x-init="init()">
 
     <header class="postchi-header" role="banner">
       <div class="postchi-header__inner mx-auto max-w-2xl">
@@ -52,14 +62,6 @@
       </div>
     </div>
   </div>
-
-  <script>
-  window.__VINOR_POSTCHI_CFG__ = {
-    messagesUrl: {{ url_for('express_partner.api_postchi_messages')|tojson }},
-    openUrl: {{ url_for('express_partner.api_postchi_open')|tojson }},
-    seed: {{ messages|tojson }}
-  };
-  </script>
 {% endblock %}
 
 {% block scripts %}

@@ -64,8 +64,23 @@
     });
   }
 
+  function postchiRoot() {
+    return document.querySelector('[data-vinor-postchi-page]');
+  }
+
   function messagesEl() {
     return document.getElementById('postchiMessages');
+  }
+
+  function readPostchiCfg(root) {
+    root = root || postchiRoot();
+    if (root) {
+      try {
+        var raw = root.getAttribute('data-postchi-config');
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
+    }
+    return window.__VINOR_POSTCHI_CFG__ || {};
   }
 
   function isPinnedToLatest(el) {
@@ -126,6 +141,7 @@
     pageSwapScrollBound = true;
     window.addEventListener('vinor:express-page-swap', function () {
       if (!messagesEl()) return;
+      window.vinorPostchiBoot();
       pinToLatestSoon();
     });
   }
@@ -138,10 +154,36 @@
       return {
         messages: [],
         loading: false,
-        cfg: window.__VINOR_POSTCHI_CFG__ || {},
+        cfg: {},
+        _hydrated: false,
+        _opened: false,
+
+        loadCfg: function () {
+          this.cfg = readPostchiCfg(this.$root);
+          return this.cfg;
+        },
+
+        hydrate: function () {
+          this.loadCfg();
+          var seed = this.cfg.seed;
+          if (Array.isArray(seed) && seed.length) {
+            this.messages = decorateMessages(seed.map(stripMessage));
+            this._hydrated = true;
+            var self = this;
+            this.$nextTick(function () {
+              bindPostchiResizePin();
+              pinToLatestSoon();
+            });
+            return;
+          }
+          if (!this._hydrated && !this.loading) {
+            this.fetchMessages();
+          }
+        },
 
         setMessages: function (list) {
           this.messages = decorateMessages((list || []).map(stripMessage));
+          this._hydrated = true;
           var self = this;
           this.$nextTick(function () {
             bindPostchiResizePin();
@@ -151,23 +193,16 @@
 
         init: function () {
           bindPostchiPageSwapScroll();
-          var seed = this.cfg.seed;
-          if (Array.isArray(seed) && seed.length) {
-            this.setMessages(seed);
-          } else {
-            this.fetchMessages();
-          }
+          this.hydrate();
           this.markOpened();
-          var self = this;
-          this.$nextTick(function () {
-            bindPostchiResizePin();
-            pinToLatestSoon();
-          });
         },
 
         markOpened: function () {
+          if (this._opened) return;
+          this.loadCfg();
           var url = this.cfg.openUrl;
           if (!url) return;
+          this._opened = true;
           fetch(url, {
             method: 'POST',
             headers: window.vinorCsrfFetchHeaders
@@ -188,11 +223,14 @@
                 }
               }
             })
-            .catch(function () {});
+            .catch(function () {
+              this._opened = false;
+            }.bind(this));
         },
 
         fetchMessages: function () {
           var self = this;
+          this.loadCfg();
           var url = this.cfg.messagesUrl;
           if (!url) return;
           this.loading = true;
@@ -209,6 +247,27 @@
       };
     });
   }
+
+  window.vinorPostchiBoot = function vinorPostchiBoot() {
+    definePostchiPage();
+    var root = postchiRoot();
+    if (!root || typeof Alpine === 'undefined') return;
+
+    if (!root._x_dataStack || !root._x_dataStack.length) {
+      if (typeof Alpine.initTree === 'function') {
+        Alpine.initTree(root);
+      }
+      return;
+    }
+
+    try {
+      var state = Alpine.$data(root);
+      if (state) {
+        state._hydrated = false;
+        if (typeof state.hydrate === 'function') state.hydrate();
+      }
+    } catch (_) {}
+  };
 
   document.addEventListener('alpine:init', definePostchiPage);
   if (typeof Alpine !== 'undefined') definePostchiPage();
