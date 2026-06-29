@@ -3522,7 +3522,19 @@ def _legal_accepted(request_obj) -> bool:
 @require_partner_access(allow_pending=True, allow_guest=True)
 def cooperation_terms():
     """شرایط همکاری برای کاربران عادی و متقاضیان همکاری."""
-    return render_template('express_partner/cooperation_terms.html', hide_header=True)
+    me_phone = (session.get('user_phone') or '').strip()
+    profile = getattr(g, 'express_partner_profile', None)
+    is_approved = _is_partner_approved(profile) if me_phone else False
+    next_url = (request.args.get('next') or '').strip()
+    back_url = url_for('express_partner.dashboard')
+    if next_url.startswith('/express/partner'):
+        back_url = next_url
+    return render_template(
+        'express_partner/cooperation_terms.html',
+        hide_header=True,
+        is_approved=is_approved,
+        back_url=back_url,
+    )
 
 
 @express_partner_bp.route('/invite', methods=['GET'], endpoint='invite_colleagues')

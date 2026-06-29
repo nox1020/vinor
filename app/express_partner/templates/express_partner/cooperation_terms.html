@@ -1,168 +1,151 @@
 {% extends 'express_partner/base.html' %}
-{% from 'express_partner/partials/auth_ui.html' import auth_header_btn, auth_btn_primary, auth_footer %}
 {% block title %}شرایط همکاری | وینور اکسپرس{% endblock %}
 
-{% block head %}
-<style>
-  .coop-shell {
-    --coop-emerald: #22c55e;
-    min-height: 100dvh;
-    background: #050a0e;
-  }
-  .coop-hero-mesh {
-    background:
-      radial-gradient(ellipse 120% 80% at 100% 0%, rgba(34, 197, 94, 0.22), transparent 50%),
-      radial-gradient(ellipse 80% 60% at 0% 100%, rgba(16, 185, 129, 0.08), transparent 45%),
-      linear-gradient(165deg, #0c1812 0%, #12181f 48%, #0a1018 100%);
-  }
-  .coop-income-glow {
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.12), 0 12px 40px rgba(0, 0, 0, 0.35);
-  }
-  .coop-sticky-actions {
-    padding-bottom: calc(11rem + env(safe-area-inset-bottom, 0px));
-  }
-  .coop-action-bar {
-    bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
-  }
-</style>
-{% endblock %}
-
 {% block content %}
+  {% include 'express_partner/partials/cooperation_terms_page_styles.html' %}
 
-{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
-{{ ep_header_start() }}
-{% call ep_header_row('شرایط همکاری', url_for('express_partner.dashboard'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
-{{ ep_header_end() }}
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+  {{ ep_header_start(id='cooperationTermsHeader') }}
+  {% call ep_header_row('شرایط همکاری', back_url|default(url_for('express_partner.dashboard')), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+  {{ ep_header_end() }}
 
-<main class="coop-shell coop-sticky-actions partner-page-scroll-pad text-zinc-100">
-  <div class="mx-auto max-w-lg space-y-5 px-4 py-5 pb-4">
+  <div class="coop-page partner-page-scroll-pad min-h-[100dvh] bg-[#030712] text-zinc-100"
+       data-vinor-cooperation-page>
 
-    {# —— بنر —— #}
-    <section class="coop-hero-mesh relative overflow-hidden rounded-2xl border border-emerald-500/25 p-5 shadow-xl shadow-black/40">
-      <div class="pointer-events-none absolute -left-6 top-8 h-24 w-24 rounded-full bg-emerald-400/10 blur-2xl" aria-hidden="true"></div>
-      <div class="relative flex items-start gap-4">
-        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 text-emerald-400 shadow-lg shadow-emerald-950/30">
-          <i class="fas fa-handshake text-2xl" aria-hidden="true"></i>
-        </div>
-        <div class="min-w-0 flex-1">
-          <p class="text-[11px] font-semibold text-emerald-400/90">فرصت همکاری</p>
-          <h2 class="mt-1 text-xl font-extrabold leading-snug text-white">
-            فروش فایل، <span class="text-emerald-400">پورسانت بگیر</span>
-          </h2>
-          <p class="mt-2.5 text-sm leading-relaxed text-zinc-300">
-            وینور فایل‌های آماده با قیمت و پورسانت مشخص را در اختیارت قرار داده است. بفروش و پورسانتت را دریافت کن.
-          </p>
-        </div>
-      </div>
-    </section>
+    <div class="mx-auto w-full max-w-lg">
 
-    {# —— مراحل —— #}
-    <section aria-label="مراحل همکاری">
-      <h3 class="mb-3 px-0.5 text-xs font-bold text-zinc-400">چطور کار می‌کند؟</h3>
-      <ol class="space-y-3">
-        <li class="relative flex gap-3 rounded-2xl border border-white/[0.07] bg-[#12181f] p-4">
-          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-sm font-black text-emerald-950 shadow-md shadow-emerald-900/40">۱</div>
-          <div class="min-w-0 flex-1 pt-0.5">
-            <div class="flex items-center gap-2">
-              <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-                <i class="fas fa-list-ul text-sm" aria-hidden="true"></i>
-              </span>
-              <h4 class="text-sm font-bold text-white">انتخاب فایل</h4>
-            </div>
-            <p class="mt-2 text-xs leading-relaxed text-zinc-400">فایل مورد نظر را از لیست فایل‌های آماده انتخاب کنید.</p>
+      <section class="border-b border-white/10 px-4 py-5 sm:px-6" aria-labelledby="coopIntroTitle">
+        <div class="flex items-start gap-3">
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-emerald-400 ring-1 ring-white/10">
+            <i class="fas fa-handshake text-lg" aria-hidden="true"></i>
           </div>
-        </li>
-
-        <li class="relative flex gap-3 rounded-2xl border border-white/[0.07] bg-[#12181f] p-4">
-          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-sm font-black text-emerald-950 shadow-md shadow-emerald-900/40">۲</div>
-          <div class="min-w-0 flex-1 pt-0.5">
-            <div class="flex items-center gap-2">
-              <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-                <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
-              </span>
-              <h4 class="text-sm font-bold text-white">فروش فایل</h4>
-            </div>
-            <p class="mt-2 text-xs leading-relaxed text-zinc-400">فایل را به مشتری معرفی کنید و معامله را نهایی کنید.</p>
+          <div class="min-w-0 flex-1 text-right">
+            <p class="text-[11px] font-semibold text-emerald-400/90">فرصت همکاری</p>
+            <h2 id="coopIntroTitle" class="mt-1 text-[17px] font-bold leading-snug text-white">
+              فروش فایل، <span class="text-emerald-400">پورسانت بگیر</span>
+            </h2>
+            <p class="mt-2 text-[13px] leading-relaxed text-zinc-500">
+              وینور فایل‌های آماده با قیمت و پورسانت مشخص را در اختیارت قرار می‌دهد. بفروش و پورسانتت را دریافت کن.
+            </p>
           </div>
-        </li>
+        </div>
+      </section>
 
-        <li class="relative flex gap-3 rounded-2xl border border-white/[0.07] bg-[#12181f] p-4">
-          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-sm font-black text-emerald-950 shadow-md shadow-emerald-900/40">۳</div>
-          <div class="min-w-0 flex-1 pt-0.5">
-            <div class="flex items-center gap-2">
-              <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-                <i class="fas fa-wallet text-sm" aria-hidden="true"></i>
-              </span>
-              <h4 class="text-sm font-bold text-white">دریافت پورسانت</h4>
+      <section aria-labelledby="coopStepsTitle">
+        <h3 id="coopStepsTitle" class="border-b border-white/10 px-4 py-2.5 text-xs font-medium text-zinc-500 sm:px-6">
+          چطور کار می‌کند؟
+        </h3>
+        <ol class="divide-y divide-white/10">
+          <li class="coop-step flex items-start gap-3 px-4 py-4 sm:px-6 sm:py-4">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-bold text-emerald-400 ring-1 ring-emerald-500/25">۱</span>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <i class="fas fa-list-ul text-sm text-zinc-500" aria-hidden="true"></i>
+                <h4 class="text-[15px] font-medium text-white">انتخاب فایل</h4>
+              </div>
+              <p class="mt-1.5 text-[12px] leading-relaxed text-zinc-500">فایل مورد نظر را از لیست فایل‌های آماده انتخاب کنید.</p>
             </div>
-            <p class="mt-2 text-xs leading-relaxed text-zinc-400">بعد از تأیید فروش، پورسانت شما واریز می‌شود.</p>
+          </li>
+          <li class="coop-step flex items-start gap-3 px-4 py-4 sm:px-6 sm:py-4">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-bold text-emerald-400 ring-1 ring-emerald-500/25">۲</span>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <i class="fas fa-paper-plane text-sm text-zinc-500" aria-hidden="true"></i>
+                <h4 class="text-[15px] font-medium text-white">فروش فایل</h4>
+              </div>
+              <p class="mt-1.5 text-[12px] leading-relaxed text-zinc-500">فایل را به مشتری معرفی کنید و معامله را نهایی کنید.</p>
+            </div>
+          </li>
+          <li class="coop-step flex items-start gap-3 px-4 py-4 sm:px-6 sm:py-4">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-bold text-emerald-400 ring-1 ring-emerald-500/25">۳</span>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <i class="fas fa-wallet text-sm text-zinc-500" aria-hidden="true"></i>
+                <h4 class="text-[15px] font-medium text-white">دریافت پورسانت</h4>
+              </div>
+              <p class="mt-1.5 text-[12px] leading-relaxed text-zinc-500">بعد از تأیید فروش، پورسانت شما واریز می‌شود.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="border-y border-white/10 px-4 py-4 sm:px-6" aria-label="مثال درآمد">
+        <div class="mb-3 flex items-center gap-2">
+          <i class="fas fa-coins text-sm text-emerald-400" aria-hidden="true"></i>
+          <p class="text-sm font-medium text-white">مثال درآمد شما</p>
+        </div>
+        <div class="grid grid-cols-3 gap-px overflow-hidden rounded-xl bg-white/10 text-center">
+          <div class="bg-[#111111] px-2 py-3">
+            <p class="text-[10px] text-zinc-500">قیمت فایل</p>
+            <p class="mt-1.5 text-sm font-bold tabular-nums text-white">{{ 5000000000|toman(false) }}</p>
+            <p class="mt-0.5 text-[10px] text-zinc-600">تومان</p>
           </div>
-        </li>
-      </ol>
-    </section>
-
-    {# —— مثال درآمد —— #}
-    <section class="coop-income-glow rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-[#12181f] to-[#0d1218] p-4">
-      <div class="flex items-center gap-2">
-        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
-          <i class="fas fa-coins text-sm" aria-hidden="true"></i>
-        </span>
-        <p class="text-sm font-bold text-emerald-400">مثال درآمد شما</p>
-      </div>
-
-      <div class="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-center">
-        <div class="min-w-0 px-1">
-          <p class="text-[10px] font-medium text-zinc-500">قیمت فایل</p>
-          <p class="mt-1.5 text-sm font-bold tabular-nums leading-tight text-white">{{ 5000000000|toman(false) }}</p>
-          <p class="mt-0.5 text-[10px] text-zinc-500">تومان</p>
+          <div class="bg-[#111111] px-2 py-3">
+            <p class="text-[10px] text-zinc-500">پورسانت شما</p>
+            <p class="mt-1.5 text-sm font-bold tabular-nums text-emerald-400">{{ 100000000|toman(false) }}</p>
+            <p class="mt-0.5 text-[10px] text-zinc-600">تومان</p>
+          </div>
+          <div class="bg-[#111111] px-2 py-3">
+            <p class="text-[10px] text-zinc-500">نوع ملک</p>
+            <p class="mt-1.5 text-sm font-bold text-white">ویلا ۲۵۰ متری</p>
+            <p class="mt-0.5 text-[10px] text-zinc-600">دماوند</p>
+          </div>
         </div>
-        <div class="min-w-0 border-x border-white/[0.08] px-1">
-          <p class="text-[10px] font-medium text-zinc-500">پورسانت شما</p>
-          <p class="mt-1.5 text-sm font-bold tabular-nums leading-tight text-emerald-400">{{ 100000000|toman(false) }}</p>
-          <p class="mt-0.5 text-[10px] text-zinc-500">تومان</p>
-        </div>
-        <div class="min-w-0 px-1">
-          <p class="text-[10px] font-medium text-zinc-500">نوع ملک</p>
-          <p class="mt-1.5 text-sm font-bold leading-tight text-white">ویلا ۲۵۰ متری</p>
-          <p class="mt-0.5 text-[10px] text-zinc-400">دماوند</p>
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <p class="rounded-xl border border-amber-500/15 bg-amber-500/[0.06] px-3.5 py-3 text-center text-[11px] leading-relaxed text-amber-100/85">
-      <i class="fas fa-circle-info ml-1 text-[10px] text-amber-400/80" aria-hidden="true"></i>
-      ثبت درخواست به معنی تأیید نهایی نیست. تیم وینور پس از بررسی، نتیجه را از طریق پنل یا پیامک اطلاع می‌دهد.
-    </p>
+      <p class="px-4 py-4 text-[11px] leading-relaxed text-amber-400/85 sm:px-6">
+        <i class="fas fa-circle-info ml-1 text-[10px]" aria-hidden="true"></i>
+        ثبت درخواست به معنی تأیید نهایی نیست. تیم وینور پس از بررسی، نتیجه را از طریق پنل یا پیامک اطلاع می‌دهد.
+      </p>
 
+    </div>
   </div>
 
-  {# —— دکمه‌های ثابت پایین —— #}
-  <footer class="{{ auth_footer() }} coop-action-bar fixed left-0 right-0 z-40">
-    <div class="mx-auto max-w-lg space-y-2.5">
-      {% if session.get('user_phone') %}
+  <footer class="coop-actions" aria-label="اقدامات همکاری">
+    <div class="mx-auto flex w-full max-w-lg flex-col gap-2">
+      {% if is_approved|default(false) %}
+      <a href="{{ url_for('express_partner.dashboard') }}"
+         data-vinor-express-nav
+         class="coop-btn coop-btn--primary">
+        <i class="fas fa-th-large text-xs" aria-hidden="true"></i>
+        <span>مشاهده فایل‌های آماده</span>
+      </a>
+      <a href="{{ url_for('express_partner.commissions') }}"
+         data-vinor-express-nav
+         class="coop-btn coop-btn--secondary">
+        <i class="fas fa-wallet text-xs" aria-hidden="true"></i>
+        <span>کیف پول و پورسانت</span>
+      </a>
+      {% elif session.get('user_phone') %}
       <a href="{{ url_for('express_partner.apply') }}"
-         class="{{ auth_btn_primary() }} gap-2">
+         data-vinor-express-nav
+         class="coop-btn coop-btn--primary">
         <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>
         <span>شروع همکاری</span>
+      </a>
+      <a href="{{ url_for('express_partner.dashboard') }}"
+         data-vinor-express-nav
+         class="coop-btn coop-btn--secondary">
+        <i class="fas fa-list text-xs" aria-hidden="true"></i>
+        <span>مشاهده فایل‌های آماده</span>
       </a>
       {% else %}
       <a href="{{ url_for('express_partner.login', next=url_for('express_partner.apply')) }}"
-         class="{{ auth_btn_primary() }} gap-2">
+         data-vinor-express-nav
+         class="coop-btn coop-btn--primary">
         <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>
         <span>شروع همکاری</span>
       </a>
-      {% endif %}
       <a href="{{ url_for('express_partner.dashboard') }}"
-         data-vinor-express-nav="1"
-         class="flex w-full touch-manipulation items-center justify-center gap-2 rounded-xl border-2 border-emerald-500/40 bg-transparent py-3.5 text-sm font-bold text-emerald-400 transition hover:bg-emerald-500/10 active:scale-[0.98]">
+         data-vinor-express-nav
+         class="coop-btn coop-btn--secondary">
         <i class="fas fa-list text-xs" aria-hidden="true"></i>
-        مشاهده فایل‌های آماده
+        <span>مشاهده فایل‌های آماده</span>
       </a>
+      {% endif %}
     </div>
   </footer>
-</main>
 
-{% set bottom_nav_active = 'dashboard' %}
-{% include 'express_partner/partials/partner_tab_footer.html' %}
-
+  {% set bottom_nav_active = 'dashboard' %}
+  {% include 'express_partner/partials/partner_tab_footer.html' %}
 {% endblock %}

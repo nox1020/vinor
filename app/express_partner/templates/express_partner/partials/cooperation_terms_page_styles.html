@@ -1,0 +1,67 @@
+<style id="vinor-cooperation-styles">
+  .coop-page {
+    box-sizing: border-box;
+    padding-bottom: calc(12.75rem + env(safe-area-inset-bottom, 0px));
+  }
+  .coop-step {
+    -webkit-tap-highlight-color: transparent;
+  }
+  .coop-actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 55;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: var(--vn-solid-pill-bg, #111111);
+    padding: 0.65rem 1rem calc(0.65rem + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.45);
+    bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+  }
+  .coop-btn {
+    display: flex;
+    width: 100%;
+    touch-action: manipulation;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    padding: 0.875rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+    text-decoration: none;
+    transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .coop-btn:active {
+    transform: scale(0.98);
+  }
+  .coop-btn--primary {
+    border: none;
+    background-color: #059669;
+    color: #fff;
+  }
+  .coop-btn--primary:hover {
+    background-color: #10b981;
+  }
+  .coop-btn--secondary {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background-color: transparent;
+    color: #d4d4d8;
+  }
+  .coop-btn--secondary:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  @media (min-width: 1024px) {
+    .coop-page {
+      padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+    }
+    .coop-actions {
+      bottom: 0;
+      max-width: 32rem;
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 1rem 1rem 0 0;
+    }
+  }
+</style>

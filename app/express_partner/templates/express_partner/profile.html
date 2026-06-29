@@ -50,7 +50,7 @@
       </section>
 
       <nav class="divide-y divide-white/10" aria-label="منوی پروفایل">
-        {{ profile_menu_row(url_for('express_partner.cooperation_terms'), 'fa-handshake', 'شرایط همکاری', 'پورسانت، مراحل ثبت‌نام و قوانین') }}
+        {{ profile_menu_row(url_for('express_partner.cooperation_terms', next=url_for('express_partner.profile')), 'fa-handshake', 'شرایط همکاری', 'پورسانت، مراحل ثبت‌نام و قوانین') }}
         {{ profile_menu_row(url_for('express_partner.routine'), 'fa-list-check', 'آمار فعالیت', 'پیش‌نمایش روتین همکاری') }}
         {{ profile_menu_row(url_for('express_partner.top_sellers'), 'fa-trophy', 'فروشنده‌های برتر', 'رتبه‌بندی همکاران') }}
       </nav>
@@ -151,7 +151,7 @@
         {% endif %}
 
         {{ profile_menu_row(url_for('express_partner.top_sellers'), 'fa-trophy', 'فروشنده‌های برتر', 'رتبه‌بندی همکاران', tour='top-sellers-link') }}
-        {{ profile_menu_row(url_for('express_partner.cooperation_terms'), 'fa-handshake', 'شرایط همکاری', 'پورسانت و قوانین همکاری') }}
+        {{ profile_menu_row(url_for('express_partner.cooperation_terms', next=url_for('express_partner.profile')), 'fa-handshake', 'شرایط همکاری', 'پورسانت و قوانین همکاری') }}
 
         {% if is_approved %}
         {% include 'express_partner/partials/commissions_referral.html' %}
