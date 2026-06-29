@@ -1,5 +1,17 @@
 <style>
-  /* هدر شیشه‌ای همکار — هماهنگ با tg-tabbar-pill در bottom_nav */
+  /* پیل و هدر — پس‌زمینهٔ مشکی یکدست (بدون شیشه/blur) */
+  :root {
+    --vn-solid-pill-bg: #111111;
+    --vn-solid-pill-border: rgba(255, 255, 255, 0.1);
+    --vn-solid-pill-shadow: 0 8px 28px rgba(0, 0, 0, 0.48);
+  }
+  html:not(.dark) {
+    --vn-solid-pill-bg: #111111;
+    --vn-solid-pill-border: rgba(255, 255, 255, 0.08);
+    --vn-solid-pill-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  /* هدر همکار — هماهنگ با tg-tabbar-pill در bottom_nav */
   .ep-partner-header {
     position: fixed;
     top: 0;
@@ -103,28 +115,16 @@
     pointer-events: none;
   }
   .ep-partner-header-bar {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    background-color: rgba(3, 7, 18, 0.28);
-    -webkit-backdrop-filter: saturate(180%) blur(22px);
-    backdrop-filter: saturate(180%) blur(22px);
-    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--vn-solid-pill-border);
+    background-color: var(--vn-solid-pill-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: var(--vn-solid-pill-shadow);
   }
   html:not(.dark) .ep-partner-header-bar {
-    border-bottom-color: rgba(15, 23, 42, 0.08);
-    background-color: rgba(255, 255, 255, 0.22);
-    box-shadow:
-      inset 0 -1px 0 rgba(255, 255, 255, 0.55),
-      0 4px 24px rgba(15, 23, 42, 0.04);
-  }
-  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-    html.dark .ep-partner-header-bar {
-      background-color: rgba(10, 14, 20, 0.94);
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-    }
-    html:not(.dark) .ep-partner-header-bar {
-      background-color: rgba(255, 255, 255, 0.96);
-    }
+    border-bottom-color: var(--vn-solid-pill-border);
+    background-color: var(--vn-solid-pill-bg);
+    box-shadow: var(--vn-solid-pill-shadow);
   }
   .ep-partner-header-inner {
     position: relative;
@@ -222,28 +222,29 @@
     width: 2.5rem;
     height: 2.5rem;
     border-radius: 9999px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--vn-solid-pill-border);
+    background-color: var(--vn-solid-pill-bg);
     color: rgb(161 161 170);
     text-decoration: none;
     transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
+    box-shadow: var(--vn-solid-pill-shadow);
   }
   html:not(.dark) .ep-partner-header-btn {
-    border-color: rgba(15, 23, 42, 0.1);
-    background-color: rgba(255, 255, 255, 0.55);
-    color: rgb(75 85 99);
+    border-color: var(--vn-solid-pill-border);
+    background-color: var(--vn-solid-pill-bg);
+    color: rgb(212 212 216);
   }
   .ep-partner-header-btn:hover {
-    border-color: rgba(255, 255, 255, 0.2);
-    background-color: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.16);
+    background-color: #1a1a1a;
     color: #fff;
   }
   html:not(.dark) .ep-partner-header-btn:hover {
-    border-color: rgba(15, 23, 42, 0.14);
-    background-color: rgba(243, 244, 246, 0.95);
-    color: rgb(17 24 39);
+    border-color: rgba(255, 255, 255, 0.14);
+    background-color: #1a1a1a;
+    color: #fff;
   }
   .ep-partner-header-btn:active {
     transform: scale(0.97);
@@ -308,7 +309,7 @@
       padding-inline: 1.5rem;
     }
   }
-  /* هدر شفاف (داشبورد، پورسانت، پروفایل): شِل بدون پس‌زمینه — دکمه‌ها شیشه‌ای مثل bottom nav */
+  /* هدر شفاف (داشبورد، پورسانت، پروفایل): شِل بدون پس‌زمینه — پیل‌های مشکی مثل bottom nav */
   .ep-partner-header--shell-none {
     pointer-events: none;
   }
@@ -328,41 +329,27 @@
     pointer-events: auto;
   }
   .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text) {
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background-color: rgba(255, 255, 255, 0.22);
-    -webkit-backdrop-filter: saturate(180%) blur(22px);
-    backdrop-filter: saturate(180%) blur(22px);
-    box-shadow:
-      0 10px 36px rgba(15, 23, 42, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.55);
-    color: rgb(75 85 99);
+    border: 1px solid var(--vn-solid-pill-border);
+    background-color: var(--vn-solid-pill-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: var(--vn-solid-pill-shadow);
+    color: rgb(212 212 216);
   }
   html.dark .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text) {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background-color: rgba(3, 7, 18, 0.28);
-    box-shadow:
-      0 14px 44px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    border-color: var(--vn-solid-pill-border);
+    background-color: var(--vn-solid-pill-bg);
+    box-shadow: var(--vn-solid-pill-shadow);
     color: rgb(161 161 170);
   }
-  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-    .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text) {
-      background-color: rgba(243, 244, 246, 0.95);
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-    }
-    html.dark .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text) {
-      background-color: rgba(30, 30, 34, 0.94);
-    }
-  }
   .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text):hover {
-    border-color: rgba(255, 255, 255, 0.22);
-    background-color: rgba(255, 255, 255, 0.3);
-    color: rgb(17 24 39);
+    border-color: rgba(255, 255, 255, 0.16);
+    background-color: #1a1a1a;
+    color: #fff;
   }
   html.dark .ep-partner-header--shell-none .ep-partner-header-btn:not(.ep-partner-header-btn--primary):not(.ep-partner-header-btn--text):hover {
-    border-color: rgba(255, 255, 255, 0.2);
-    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.16);
+    background-color: #1a1a1a;
     color: #fff;
   }
   .ep-partner-header--shell-none .ep-partner-header-btn.is-active {
@@ -376,55 +363,37 @@
     color: rgb(4 120 87);
   }
   .ep-partner-header--shell-none .ep-partner-header-title {
-    text-shadow:
-      0 1px 10px rgba(0, 0, 0, 0.55),
-      0 0 18px rgba(3, 7, 18, 0.35);
+    text-shadow: none;
   }
   html:not(.dark) .ep-partner-header--shell-none .ep-partner-header-title {
-    text-shadow:
-      0 1px 8px rgba(255, 255, 255, 0.92),
-      0 0 14px rgba(255, 255, 255, 0.65);
+    text-shadow: none;
   }
   .ep-partner-header--shell-none .ep-partner-header-subtitle {
-    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+    text-shadow: none;
   }
   html:not(.dark) .ep-partner-header--shell-none .ep-partner-header-subtitle {
-    text-shadow: 0 1px 6px rgba(255, 255, 255, 0.85);
+    text-shadow: none;
   }
   .vinor-dash-glass-pill {
     border-radius: 9999px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background-color: rgba(255, 255, 255, 0.22);
-    -webkit-backdrop-filter: saturate(180%) blur(22px);
-    backdrop-filter: saturate(180%) blur(22px);
-    box-shadow:
-      0 10px 36px rgba(15, 23, 42, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    border: 1px solid var(--vn-solid-pill-border);
+    background-color: var(--vn-solid-pill-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: var(--vn-solid-pill-shadow);
   }
   html.dark .vinor-dash-glass-pill {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background-color: rgba(3, 7, 18, 0.28);
-    box-shadow:
-      0 14px 44px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  }
-  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-    .vinor-dash-glass-pill {
-      background-color: rgba(243, 244, 246, 0.95);
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-    }
-    html.dark .vinor-dash-glass-pill {
-      background-color: rgba(30, 30, 34, 0.94);
-    }
+    border-color: var(--vn-solid-pill-border);
+    background-color: var(--vn-solid-pill-bg);
+    box-shadow: var(--vn-solid-pill-shadow);
   }
   .vinor-dash-glass-pill.is-active {
     border-color: rgba(16, 185, 129, 0.45);
-    background-color: rgba(16, 185, 129, 0.14);
+    background-color: #15251f;
   }
   html.dark .vinor-dash-glass-pill.is-active {
     border-color: rgba(16, 185, 129, 0.4);
-    background-color: rgba(16, 185, 129, 0.15);
+    background-color: #15251f;
   }
   /* نوار آفلاین زیر هدر — مشابه تلگرام */
   .vinor-express-offline-bar {

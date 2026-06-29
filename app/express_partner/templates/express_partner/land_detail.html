@@ -405,11 +405,12 @@
       width: 2.5rem;
       height: 2.5rem;
       border-radius: 9999px;
-      border: none;
-      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #111111;
       color: #fff;
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
       transition: transform 0.15s ease, background 0.15s ease;
     }
     .ld-gallery__toolbar-btn:active { transform: scale(0.94); }
@@ -451,8 +452,8 @@
       font-weight: 700;
       line-height: 1.25;
       white-space: nowrap;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
     }
     .ld-gallery-badge--verified {

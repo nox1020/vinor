@@ -1,4 +1,4 @@
-{# نوار پایین — کپسول شیشه‌ای شناور (blur + نیمه‌شفاف) در همهٔ صفحات پرتال؛ شِل شفاف #}
+{# نوار پایین — کپسول مشکی شناور در همهٔ صفحات پرتال؛ شِل شفاف #}
 {% set bottom_nav_active = bottom_nav_active|default('') %}
 <style>
   #bottomNavMenu.tg-tabbar-shell {
@@ -19,32 +19,17 @@
   .tg-tabbar-pill {
     pointer-events: auto;
     position: relative;
-    /* isolation + translateZ روی موبایل/WebView گاهی لایهٔ compositor جدا می‌سازد و backdrop-filter را مات یا خالی نشان می‌دهد */
     border-radius: 9999px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background-color: rgba(255, 255, 255, 0.22);
-    box-shadow:
-      0 10px 36px rgba(15, 23, 42, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.55);
-    -webkit-backdrop-filter: saturate(180%) blur(22px);
-    backdrop-filter: saturate(180%) blur(22px);
+    border: 1px solid var(--vn-solid-pill-border, rgba(255, 255, 255, 0.1));
+    background-color: var(--vn-solid-pill-bg, #111111);
+    box-shadow: var(--vn-solid-pill-shadow, 0 8px 28px rgba(0, 0, 0, 0.48));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
   .dark .tg-tabbar-pill {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background-color: rgba(3, 7, 18, 0.28);
-    box-shadow:
-      0 14px 44px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  }
-  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-    .tg-tabbar-pill {
-      background-color: rgba(243, 244, 246, 0.95);
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-    }
-    .dark .tg-tabbar-pill {
-      background-color: rgba(30, 30, 34, 0.94);
-    }
+    border-color: var(--vn-solid-pill-border, rgba(255, 255, 255, 0.1));
+    background-color: var(--vn-solid-pill-bg, #111111);
+    box-shadow: var(--vn-solid-pill-shadow, 0 8px 28px rgba(0, 0, 0, 0.48));
   }
   .tg-tab {
     min-height: 48px;
@@ -146,13 +131,13 @@
     font-weight: 700;
     line-height: 1.05rem;
     text-align: center;
-    box-shadow: 0 0 0 2px #ffffff;
+    box-shadow: 0 0 0 2px var(--vn-solid-pill-bg, #111111);
     display: none;
     align-items: center;
     justify-content: center;
   }
   .dark .tg-tab-badge {
-    box-shadow: 0 0 0 2px rgb(17 24 39);
+    box-shadow: 0 0 0 2px var(--vn-solid-pill-bg, #111111);
   }
   .tg-tab-badge.is-visible {
     display: inline-flex;
@@ -178,11 +163,11 @@
     height: 0.45rem;
     border-radius: 9999px;
     background: #f59e0b;
-    box-shadow: 0 0 0 2px #ffffff;
+    box-shadow: 0 0 0 2px var(--vn-solid-pill-bg, #111111);
     display: none;
   }
   .dark .tg-tab-update-dot {
-    box-shadow: 0 0 0 2px rgb(17 24 39);
+    box-shadow: 0 0 0 2px var(--vn-solid-pill-bg, #111111);
   }
   .tg-tab-update-dot.is-visible {
     display: block;
@@ -193,9 +178,9 @@
     padding: 0.5rem 0.65rem;
     border-radius: 0.85rem;
     border: 1px solid rgba(245, 158, 11, 0.35);
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(16, 185, 129, 0.12));
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
+    background: #161616;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
     display: flex;
     align-items: center;
@@ -247,7 +232,7 @@
   }
   .vinor-apk-download-strip--update {
     border-color: rgba(245, 158, 11, 0.45);
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(28, 31, 42, 0.95));
+    background: #161616;
   }
   .vinor-apk-download-strip--update .vinor-apk-download-strip__icon {
     background: rgba(245, 158, 11, 0.2);
