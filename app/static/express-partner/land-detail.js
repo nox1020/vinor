@@ -327,7 +327,7 @@
     var slides = cfg.slides.map(cleanSlideMedia);
     var video = document.getElementById('landVideo');
     var img = document.getElementById('landMainImage');
-    var dots = gallery.querySelectorAll('.ld-dot');
+    var dots = document.querySelectorAll('.ld-gallery__dots--footer .ld-dot');
     var label = document.getElementById('landGallerySlideLabel');
     var index = 0;
     var loadFallbackTimer = null;

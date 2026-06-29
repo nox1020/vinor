@@ -356,6 +356,27 @@
       width: 16px;
       background: #34d399;
     }
+    .ld-gallery__footer {
+      pointer-events: none;
+      min-height: 2.75rem;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .ld-gallery__footer-start,
+    .ld-gallery__footer-end {
+      pointer-events: auto;
+    }
+    .ld-gallery__dots--footer {
+      justify-self: center;
+    }
+    .ld-gallery__dots--footer .ld-dot {
+      flex-shrink: 0;
+    }
+    #landVideoSoundWrap.hidden {
+      display: none !important;
+    }
     #landGallery #landVideo { pointer-events: none; }
     #landGallery #landVideo::-webkit-media-controls { display: none !important; }
     #landVideoSoundToggle[data-muted="false"] {
@@ -416,6 +437,40 @@
       color: var(--ld-accent-text);
       border: 1px solid var(--ld-commission-border);
     }
+    /* بج‌های وضعیت روی گالری — یک ردیف (دیوار) */
+    .ld-gallery-badges {
+      max-width: min(100%, calc(100vw - 7.5rem));
+    }
+    .ld-gallery-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 0.375rem;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      line-height: 1.25;
+      white-space: nowrap;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+    }
+    .ld-gallery-badge--verified {
+      background: rgba(16, 185, 129, 0.88);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+    }
+    .ld-gallery-badge--tx {
+      background: rgba(234, 88, 12, 0.9);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+    .ld-gallery-badge--sold {
+      background: rgba(55, 65, 81, 0.88);
+      color: #f3f4f6;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .ld-gallery-badge.hidden { display: none !important; }
     /* مودال‌ها — bottom sheet سبک دیوار */
     .ld-modal.hidden { display: none !important; }
     .ld-modal:not(.hidden) { display: flex; }

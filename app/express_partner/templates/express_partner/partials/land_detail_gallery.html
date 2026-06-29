@@ -38,41 +38,9 @@
          onload="this.classList.add('is-loaded');var _ldl=document.getElementById('landMediaLoading');if(_ldl){_ldl.classList.remove('is-visible','opacity-100');_ldl.classList.add('opacity-0');_ldl.setAttribute('aria-hidden','true');}">
     {% endif %}
 
-    {% if total_items > 1 %}
-    <div class="ld-gallery__dots absolute bottom-3 inset-x-0 z-20 flex justify-center gap-1.5 pointer-events-none">
-      {% if has_video %}
-      <span class="ld-dot is-active" data-index="0"></span>
-      {% endif %}
-      {% for img in images %}
-      <span class="ld-dot {% if not has_video and loop.first %}is-active{% endif %}" data-index="{{ (1 if has_video else 0) + loop.index0 }}"></span>
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if has_video %}
-    <div id="landVideoSoundWrap" class="absolute start-3 bottom-3 z-20 pointer-events-none">
-      <button type="button"
-              id="landVideoSoundToggle"
-              class="ld-gallery__toolbar-btn pointer-events-auto"
-              aria-pressed="true"
-              data-muted="true"
-              aria-label="بی‌صدا">
-        <i id="landVideoSoundIcon" class="fas fa-volume-xmark text-sm" aria-hidden="true"></i>
-      </button>
-    </div>
-    {% endif %}
     {% else %}
     <div class="absolute inset-0 grid place-items-center ld-gallery__empty">
       <i class="fas fa-image text-4xl opacity-40" aria-hidden="true"></i>
-    </div>
-    {% endif %}
-
-    {% if land_expert_verified(land) %}
-    <div class="pointer-events-none absolute end-3 bottom-3 z-20 {% if total_items > 1 %}bottom-10{% endif %}">
-      <span class="ld-status-badge ld-status-badge--verified shadow-sm">
-        <i class="fas fa-circle-check text-[9px] me-1" aria-hidden="true"></i>
-        تأیید کارشناسی
-      </span>
     </div>
     {% endif %}
   </div>
@@ -88,10 +56,18 @@
            aria-label="بازگشت">
           <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
         </a>
-        <div class="flex flex-wrap items-center gap-1.5 min-w-0">
-          <span id="landTxStatusBadge" class="ld-status-badge ld-status-badge--tx {% if _st != 'in_transaction' %}hidden{% endif %}">در حال معامله</span>
+        <div id="landGalleryBadges" class="ld-gallery-badges flex flex-wrap items-center gap-1.5 min-w-0">
+          {% if land_expert_verified(land) %}
+          <span id="landExpertVerifiedBadge" class="ld-gallery-badge ld-gallery-badge--verified">
+            <i class="fas fa-circle-check text-[9px]" aria-hidden="true"></i>
+            تأیید کارشناسی
+          </span>
+          {% endif %}
+          <span id="landTxStatusBadge" class="ld-gallery-badge ld-gallery-badge--tx {% if _st != 'in_transaction' %}hidden{% endif %}">در حال معامله</span>
           {% if _st == 'sold' %}
-          <span class="ld-status-badge ld-status-badge--sold">فروخته شد</span>
+          <span id="landSoldStatusBadge" class="ld-gallery-badge ld-gallery-badge--sold">فروخته شد</span>
+          {% else %}
+          <span id="landSoldStatusBadge" class="ld-gallery-badge ld-gallery-badge--sold hidden">فروخته شد</span>
           {% endif %}
         </div>
       </div>
@@ -139,11 +115,41 @@
       </div>
     </div>
 
-    {% if total_items > 1 %}
-    <div class="relative z-[2] pointer-events-none flex items-end justify-start px-3 pb-3">
-      <span id="landGallerySlideLabel" class="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-white bg-black/50 backdrop-blur-sm">
-        <span data-slide-count>۱ از {{ total_items }}</span>
-      </span>
+    {% if total_items > 1 or has_video %}
+    <div class="ld-gallery__footer relative z-[2] px-3 pb-3 pt-1">
+      <div class="ld-gallery__footer-start shrink-0 pointer-events-none min-w-0">
+        {% if total_items > 1 %}
+        <span id="landGallerySlideLabel" class="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-white bg-black/50 backdrop-blur-sm">
+          <span data-slide-count>۱ از {{ total_items }}</span>
+        </span>
+        {% endif %}
+      </div>
+
+      {% if total_items > 1 %}
+      <div class="ld-gallery__dots ld-gallery__dots--footer flex justify-center items-center gap-1.5 min-w-0 pointer-events-none">
+        {% if has_video %}
+        <span class="ld-dot is-active" data-index="0"></span>
+        {% endif %}
+        {% for img in images %}
+        <span class="ld-dot {% if not has_video and loop.first %}is-active{% endif %}" data-index="{{ (1 if has_video else 0) + loop.index0 }}"></span>
+        {% endfor %}
+      </div>
+      {% elif has_video %}
+      <div aria-hidden="true"></div>
+      {% endif %}
+
+      {% if has_video %}
+      <div id="landVideoSoundWrap" class="ld-gallery__footer-end shrink-0 pointer-events-auto">
+        <button type="button"
+                id="landVideoSoundToggle"
+                class="ld-gallery__toolbar-btn"
+                aria-pressed="true"
+                data-muted="true"
+                aria-label="بی‌صدا">
+          <i id="landVideoSoundIcon" class="fas fa-volume-xmark text-sm" aria-hidden="true"></i>
+        </button>
+      </div>
+      {% endif %}
     </div>
     {% endif %}
   </div>
