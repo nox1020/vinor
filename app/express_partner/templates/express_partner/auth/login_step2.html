@@ -118,6 +118,7 @@
   var passiveSig = sig ? { passive: true, signal: sig } : { passive: true };
 
   var OTP_LEN = 5;
+  var POST_LOGIN_PREFETCH_URL = '{% if is_likely_partner|default(false) %}{{ url_for("express_partner.commissions") }}{% else %}{{ url_for("express_partner.dashboard") }}{% endif %}';
   var otpInput = document.getElementById('otpInput');
   var clearBtn = document.getElementById('otpClearBtn');
   var form = document.getElementById('otpForm');
@@ -142,6 +143,10 @@
   }
 
   if (window.vinorApkOtpPageReady) window.vinorApkOtpPageReady();
+
+  if (POST_LOGIN_PREFETCH_URL && window.vinorExpressPrefetch) {
+    try { window.vinorExpressPrefetch(POST_LOGIN_PREFETCH_URL); } catch (_) {}
+  }
 
   var faDigits = '۰۱۲۳۴۵۶۷۸۹';
   var otpFa = '۰۱۲۳۴۵۶۷۸۹';

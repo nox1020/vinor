@@ -32,7 +32,7 @@
     '/express/partner/thanks': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/commissions/transactions': { tab: 'commissions', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/ai': { tab: '', depth: 1, bottomNav: false, prefetch: false },
-    '/express/partner/login': { tab: '', depth: 0, bottomNav: false, prefetch: false },
+    '/express/partner/login': { tab: '', depth: 0, bottomNav: false, prefetch: true },
     '/express/partner/login/otp': { tab: '', depth: 1, bottomNav: false, prefetch: true }
   };
 
@@ -183,9 +183,9 @@
       if (!fromU || !toU) return false;
       var fromAuth = isAuthSoftPath(fromU.pathname);
       var toAuth = isAuthSoftPath(toU.pathname);
-      // فقط جابه‌جایی بین شماره و OTP نرم است؛ auth و اپ shell متفاوت دارند
       if (fromAuth && toAuth) return false;
-      if (fromAuth || toAuth) return true;
+      // ورود/OTP داخل همان شِل swap — auth_base و base هر دو #vinor-express-page-swap دارند
+      if ((fromAuth || toAuth) && document.getElementById('vinor-express-page-swap')) return false;
     } catch (_) {}
     return false;
   }
@@ -196,10 +196,11 @@
     try {
       var toPath = normPath(parseUrl(toHref).pathname);
       var fromPath = normPath(parseUrl(fromHref).pathname);
-      if (isAuthSoftPath(toPath) && toPath === '/express/partner/login/otp' && fromPath === '/express/partner/login') {
-        return true;
+      if (isAuthSoftPath(toPath)) {
+        if (toPath === '/express/partner/login') return true;
+        if (toPath === '/express/partner/login/otp' && fromPath === '/express/partner/login') return true;
+        return false;
       }
-      if (isAuthSoftPath(toPath)) return false;
     } catch (_) {}
     return true;
   }
@@ -252,10 +253,22 @@
       if (LAND_DETAIL_RE.test(p)) return false;
       if (!routePrefetchAllowed(p)) return false;
       if (p === '/express/partner/login/otp') return true;
+      if (p === '/express/partner/login') return true;
       if (isAuthSoftPath(p)) return false;
       return true;
     } catch (_) {
       return true;
+    }
+  }
+
+  function hasExpressAppShellScripts() {
+    try {
+      return !!(
+        document.querySelector('script[src*="tailwindcdn"]') &&
+        document.querySelector('script[src*="dashboard-chrome"]')
+      );
+    } catch (_) {
+      return false;
     }
   }
 
@@ -274,14 +287,15 @@
     }
   }
 
-  function needsFullNavForResponse(requestedHref, resolvedUrl, doc) {
+  function needsFullNavForResponse(requestedHref, resolvedUrl, doc, opts) {
+    opts = opts || {};
     try {
       var reqPath = normPath(parseUrl(requestedHref).pathname);
       var resPath = normPath(parseUrl(resolvedUrl).pathname);
       var docAuth = authSegmentFromDoc(doc);
-      if (docAuth && docAuth !== currentAuthSegment()) return true;
-      if (isCurrentAuthShell() && !isAuthShellDoc(doc) && !isAuthSoftPath(resPath)) return true;
-      if (!isAuthSoftPath(reqPath) && isAuthShellDoc(doc)) return true;
+      if (!opts.postLogin && docAuth && docAuth !== currentAuthSegment()) return true;
+      if (!opts.postLogin && isCurrentAuthShell() && !isAuthShellDoc(doc) && !isAuthSoftPath(resPath)) return true;
+      if (!opts.postLogin && !isAuthSoftPath(reqPath) && isAuthShellDoc(doc)) return true;
       if (isHardSkipPath(resPath)) return true;
       if (resPath.indexOf(PREFIX) !== 0) return true;
     } catch (_) {
@@ -556,6 +570,16 @@
         window.setTimeout(prefetchProfileSubpages, 600);
       }
     }
+    if (navKey === 'dashboard' && currentAuthSegment() === 'guest') {
+      try {
+        prefetchHref(new URL('/express/partner/login', window.location.origin).href);
+      } catch (_) {}
+    }
+    if (navKey === 'profile' && currentAuthSegment() === 'guest') {
+      try {
+        prefetchHref(new URL('/express/partner/login', window.location.origin).href);
+      } catch (_) {}
+    }
     if (navKey === 'dashboard' && window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.setup({ resetScroll: true, expandHeader: true });
       requestAnimationFrame(function () {
@@ -759,7 +783,7 @@
         window.location.assign(finalHref);
         return false;
       }
-      if (needsFullNavForResponse(href, finalHref, doc)) {
+      if (needsFullNavForResponse(href, finalHref, doc, opts)) {
         window.location.assign(finalHref);
         return false;
       }
@@ -801,7 +825,7 @@
       return true;
     }
 
-    var cached = shouldUsePrefetchCache(href) ? prefetchCache[targetHref] : null;
+    var cached = (!opts.postLogin && shouldUsePrefetchCache(href)) ? prefetchCache[targetHref] : null;
     if (cached && isLandDetailPath(normPath(parseUrl(href).pathname)) && !landDetailHtmlLooksValid(cached)) {
       delete prefetchCache[targetHref];
       cached = null;
@@ -819,7 +843,8 @@
       headers: {
         Accept: 'text/html',
         'X-Requested-With': 'XMLHttpRequest'
-      }
+      },
+      cache: opts.postLogin ? 'no-store' : 'default'
     })
       .then(function (res) {
         if (isStaleNav(gen)) return null;
@@ -830,7 +855,7 @@
       })
       .then(function (payload) {
         if (!payload || isStaleNav(gen)) return false;
-        if (needsFullNavForResponse(href, payload.url, new DOMParser().parseFromString(payload.html, 'text/html'))) {
+        if (needsFullNavForResponse(href, payload.url, new DOMParser().parseFromString(payload.html, 'text/html'), opts)) {
           window.location.assign(payload.url || href);
           return false;
         }
@@ -846,8 +871,11 @@
       });
   }
 
-  function navigateWithAnimation(href, dir) {
-    var gen = bumpNavGeneration();
+  function navigateWithAnimation(href, dir, opts) {
+    opts = opts || {};
+    var gen = opts.navGen || bumpNavGeneration();
+    var navOpts = { navGen: gen };
+    if (opts.postLogin) navOpts.postLogin = true;
     stopAllExpressMedia();
     var toDetail = false;
     try {
@@ -855,12 +883,12 @@
       if (u) toDetail = isLandDetailPath(u.pathname);
     } catch (_) {}
     if (prefersReducedMotion() || toDetail) {
-      return softNavigate(href, dir || 0, { navGen: gen });
+      return softNavigate(href, dir || 0, navOpts);
     }
     stripNavClasses(document.documentElement);
     var shell = document.getElementById('tg-page-shell');
     if (!shell || !dir) {
-      return softNavigate(href, dir || 0, { navGen: gen });
+      return softNavigate(href, dir || 0, navOpts);
     }
     var rtl = document.documentElement.getAttribute('dir') === 'rtl';
     var leave = rtl
@@ -872,7 +900,7 @@
       if (navigated || isStaleNav(gen)) return;
       navigated = true;
       document.documentElement.classList.remove('tg-nav-transitioning');
-      softNavigate(href, dir, { navGen: gen });
+      softNavigate(href, dir, navOpts);
     }
     function onLeave(ev) {
       if (isStaleNav(gen)) {
@@ -926,9 +954,13 @@
       window.__vinorExpressLastHref = from;
     } catch (_) {}
     return flushProfileEditBeforeLeave(from, href).then(function () {
-      if (shouldForceFullNav(from, href)) {
+      if (!opts.postLogin && shouldForceFullNav(from, href)) {
         window.location.assign(href);
         return false;
+      }
+      if (opts.postLogin) {
+        stopAllExpressMedia();
+        return softNavigate(href, 1, opts);
       }
       var dir = navDirection(from, href, opts.dir);
       if (opts.back) dir = -1;
@@ -939,10 +971,10 @@
         try {
           sessionStorage.setItem(STORAGE_KEY, String(dir));
         } catch (_) {}
-        return navigateWithAnimation(href, dir);
+        return navigateWithAnimation(href, dir, opts);
       }
       stopAllExpressMedia();
-      return softNavigate(href, 0);
+      return softNavigate(href, 0, opts);
     }).catch(function (err) {
       if (err && err.message === 'profile_edit_unsaved') return false;
       throw err;
@@ -1035,7 +1067,23 @@
     if (!dest) return;
     clearAuthPrefetchCache();
     clearExpressPartnerRuntimeCaches().finally(function () {
-      window.location.replace(dest);
+      var destUrl = dest;
+      try {
+        destUrl = new URL(dest, window.location.origin).href;
+      } catch (_) {}
+      if (
+        document.getElementById('vinor-express-page-swap') &&
+        isPartnerUrl(destUrl) &&
+        hasExpressAppShellScripts()
+      ) {
+        vinorExpressNavigate(destUrl, { forward: 1, postLogin: true }).then(function (ok) {
+          if (ok === false) window.location.replace(destUrl);
+        }).catch(function () {
+          window.location.replace(destUrl);
+        });
+        return;
+      }
+      window.location.replace(destUrl);
     });
   }
   window.vinorPostLoginNavigate = vinorPostLoginNavigate;

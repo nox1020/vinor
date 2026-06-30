@@ -14,6 +14,11 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
   <link rel="stylesheet" href="{{ 'express-partner/express-partner-auth.css'|static_version }}">
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: 'class' };
+  </script>
+  <link rel="preload" as="script" href="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}">
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -21,6 +26,12 @@
     <div id="vinor-express-page-swap">{% block content %}{% endblock %}</div>
   </div>
   <div id="vinor-express-page-scripts" hidden aria-hidden="true">{% block scripts %}{% endblock %}</div>
+  <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='vendor/alpine/alpine-3.14.1.min.js') }}"></script>
+  <script src="{{ 'express-partner/partner-avatar-cache.js'|static_version }}"></script>
+  <script src="{{ 'express-partner/dashboard-chrome.js'|static_version }}" defer></script>
+  <script src="{{ 'express-partner/premium-card-media.js'|static_version }}" defer></script>
+  <script src="{{ 'express-partner/express-pull-refresh.js'|static_version }}" defer></script>
   <script src="{{ 'express-partner/express-nav.js'|static_version }}" defer></script>
   <script>
     window.hoistVinorExpressBodyModals = function () {};
@@ -28,4 +39,3 @@
   </script>
 </body>
 </html>
-
