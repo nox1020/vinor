@@ -27,37 +27,84 @@
   var OFFLINE_MSG = 'آفلاین هستید';
   var ONLINE_MSG = 'آنلاین شدید';
   var ONLINE_TOAST_MS = 2200;
+  var ONLINE_GRACE_MS = 3500;
   var lastOnline = null;
   var onlineToastActive = false;
   var onlineHideTimer = null;
+  var onlineGraceUntil = 0;
   var BAR_FALLBACK_H = 28;
   var reachabilityPending = false;
   var lastReachabilityAt = 0;
   var REACHABILITY_COOLDOWN_MS = 4000;
   var REACHABILITY_INTERVAL_MS = 20000;
   var reachabilityTimer = null;
+  var layoutScrollRaf = 0;
+  var unreachableStreak = 0;
+
+  function inOnlineGrace() {
+    return Date.now() < onlineGraceUntil;
+  }
+
+  function markOnlineGrace() {
+    onlineGraceUntil = Date.now() + ONLINE_GRACE_MS;
+  }
+
+  function isHeaderPinned(header) {
+    if (!header) return false;
+    if (header.classList.contains('ep-partner-header--sticky')) return true;
+    if (header.classList.contains('fixed')) return true;
+    try {
+      var pos = window.getComputedStyle(header).position;
+      return pos === 'fixed' || pos === 'sticky';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function findActiveHeader() {
+    try {
+      var swap = document.getElementById('vinor-express-page-swap');
+      var list = swap
+        ? swap.querySelectorAll('header.ep-partner-header')
+        : document.querySelectorAll('header.ep-partner-header');
+      if (!list || !list.length) return null;
+      for (var i = list.length - 1; i >= 0; i--) {
+        var h = list[i];
+        if (h.getBoundingClientRect().height > 0) return h;
+      }
+      return list[list.length - 1];
+    } catch (_) {
+      return null;
+    }
+  }
 
   function layoutOfflineBar() {
     var bar = document.getElementById('vinorExpressOfflineBar');
     if (!bar || bar.hidden) return;
-    var header = null;
-    try {
-      var swap = document.getElementById('vinor-express-page-swap');
-      var list = swap
-        ? swap.querySelectorAll('header.ep-partner-header:not(.ep-partner-header--sticky)')
-        : document.querySelectorAll('header.ep-partner-header:not(.ep-partner-header--sticky)');
-      if (list && list.length) header = list[list.length - 1];
-    } catch (_) {}
+    var topPx = 0;
+    var header = findActiveHeader();
     if (header) {
-      bar.style.top = Math.round(header.getBoundingClientRect().bottom) + 'px';
-    } else {
-      bar.style.top = 'env(safe-area-inset-top, 0px)';
+      try {
+        var rect = header.getBoundingClientRect();
+        if (isHeaderPinned(header) || rect.top <= 1) {
+          topPx = Math.max(0, Math.round(rect.bottom));
+        }
+      } catch (_) {}
     }
+    bar.style.top = topPx > 0 ? topPx + 'px' : 'env(safe-area-inset-top, 0px)';
     var h = Math.ceil(bar.getBoundingClientRect().height) || BAR_FALLBACK_H;
     try { document.documentElement.style.setProperty('--vn-partner-offline-bar-h', h + 'px'); } catch (_) {}
     if (typeof window.__vinorPartnerHeaderPadSync === 'function') {
       window.__vinorPartnerHeaderPadSync();
     }
+  }
+
+  function scheduleLayoutOfflineBar() {
+    if (layoutScrollRaf) return;
+    layoutScrollRaf = window.requestAnimationFrame(function () {
+      layoutScrollRaf = 0;
+      layoutOfflineBar();
+    });
   }
 
   window.__vinorExpressOfflineBarLayout = layoutOfflineBar;
@@ -86,6 +133,7 @@
     bar.classList.remove('vinor-express-offline-bar--offline');
     root.classList.remove('vinor-express-offline');
     try { root.style.removeProperty('--vn-partner-offline-bar-h'); } catch (_) {}
+    try { bar.style.removeProperty('top'); } catch (_) {}
     syncBarIcons('none');
     if (typeof window.__vinorPartnerHeaderPadSync === 'function') {
       window.__vinorPartnerHeaderPadSync();
@@ -95,6 +143,7 @@
   function showOfflineBar(message) {
     clearOnlineHideTimer();
     onlineToastActive = false;
+    onlineGraceUntil = 0;
     var bar = document.getElementById('vinorExpressOfflineBar');
     var txt = document.getElementById('vinorExpressOfflineBarText');
     var root = document.documentElement;
@@ -107,13 +156,17 @@
     syncBarIcons('offline');
     layoutOfflineBar();
     if (!reachabilityTimer) {
-      reachabilityTimer = window.setInterval(applyConnectivity, REACHABILITY_INTERVAL_MS);
+      reachabilityTimer = window.setInterval(function () {
+        applyConnectivity();
+      }, REACHABILITY_INTERVAL_MS);
     }
   }
 
   function showOnlineToast(message) {
     clearOnlineHideTimer();
     onlineToastActive = true;
+    markOnlineGrace();
+    unreachableStreak = 0;
     var bar = document.getElementById('vinorExpressOfflineBar');
     var txt = document.getElementById('vinorExpressOfflineBarText');
     var root = document.documentElement;
@@ -139,11 +192,14 @@
     opts = opts || {};
     var on = !!online;
     var prev = lastOnline;
+    var nativeSource = opts.source === 'native';
 
     if (prev === on && !opts.force && !opts.onlineToast) return;
 
     if (on) {
-      if (opts.onlineToast || prev === false) {
+      unreachableStreak = 0;
+      var showToast = !!opts.onlineToast || prev === false;
+      if (showToast) {
         lastOnline = true;
         showOnlineToast(opts.message);
         return;
@@ -159,6 +215,10 @@
         window.clearInterval(reachabilityTimer);
         reachabilityTimer = null;
       }
+      return;
+    }
+
+    if ((inOnlineGrace() || onlineToastActive) && probeNativeOnline() && !nativeSource) {
       return;
     }
 
@@ -202,33 +262,60 @@
       });
   }
 
-  function applyConnectivity() {
-    return probeReachability().then(function (on) {
-      window.vinorExpressSyncConnectivity(on, { force: true });
-      return on;
+  function applyConnectivity(opts) {
+    opts = opts || {};
+    if (!probeNativeOnline()) {
+      unreachableStreak = 0;
+      window.vinorExpressSyncConnectivity(false, { force: true });
+      return Promise.resolve(false);
+    }
+    return probeReachability().then(function (reachable) {
+      if (reachable) {
+        unreachableStreak = 0;
+        var wasOffline = lastOnline === false;
+        window.vinorExpressSyncConnectivity(true, {
+          force: true,
+          onlineToast: !!opts.onlineToast || wasOffline
+        });
+        return true;
+      }
+
+      unreachableStreak += 1;
+      if (probeNativeOnline() && (inOnlineGrace() || onlineToastActive || unreachableStreak < 2)) {
+        if (!reachabilityTimer) {
+          reachabilityTimer = window.setInterval(function () {
+            applyConnectivity();
+          }, REACHABILITY_INTERVAL_MS);
+        }
+        window.setTimeout(function () { applyConnectivity(); }, 1500);
+        return lastOnline !== false;
+      }
+
+      window.vinorExpressSyncConnectivity(false, { force: true });
+      return false;
     });
   }
   window.vinorExpressProbeConnectivity = applyConnectivity;
 
   window.addEventListener('online', function () {
-    if (lastOnline === false) {
-      window.vinorExpressSyncConnectivity(true, { force: true, onlineToast: true });
-    }
-    applyConnectivity();
+    applyConnectivity({ onlineToast: lastOnline === false });
   });
   window.addEventListener('offline', function () {
+    unreachableStreak = 0;
+    onlineGraceUntil = 0;
     window.vinorExpressSyncConnectivity(false, { force: true });
   });
-  window.addEventListener('resize', layoutOfflineBar, { passive: true });
+  window.addEventListener('resize', scheduleLayoutOfflineBar, { passive: true });
+  window.addEventListener('scroll', scheduleLayoutOfflineBar, { passive: true, capture: true });
   window.addEventListener('vinor:express-page-swap', function () {
-    window.requestAnimationFrame(layoutOfflineBar);
+    scheduleLayoutOfflineBar();
   });
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) applyConnectivity();
   });
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', applyConnectivity, { once: true });
+    document.addEventListener('DOMContentLoaded', function () { applyConnectivity(); }, { once: true });
   } else {
     applyConnectivity();
   }

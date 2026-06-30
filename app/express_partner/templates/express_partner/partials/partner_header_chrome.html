@@ -15,8 +15,8 @@
   function pageHeaders() {
     var root = swapRoot();
     var list = root
-      ? root.querySelectorAll('header.ep-partner-header:not(.ep-partner-header--sticky)')
-      : document.querySelectorAll('header.ep-partner-header:not(.ep-partner-header--sticky)');
+      ? root.querySelectorAll('header.ep-partner-header')
+      : document.querySelectorAll('header.ep-partner-header');
     return Array.prototype.slice.call(list || []);
   }
 
