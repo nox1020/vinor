@@ -4,6 +4,16 @@
 {% block head %}
 {% include 'express_partner/partials/commissions_styles.html' %}
 {% include 'express_partner/partials/commissions_txn_page_styles.html' %}
+<style>
+  #commTxnListHeader .comm-txn-filter-toggle.is-active {
+    border-color: rgba(16, 185, 129, 0.45);
+    background-color: rgba(16, 185, 129, 0.14);
+    color: rgb(110 231 183);
+  }
+  #commTxnFilterModal.comm-txn-filter-modal--open { display: flex !important; }
+  #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-backdrop { opacity: 1; }
+  #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-sheet { transform: translateY(0); }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -12,7 +22,20 @@
 
   {% set _txn_hint = (items|length|string + ' تراکنش') if items and items|length > 0 else 'بدون تراکنش' %}
   {{ ep_header_start(id='commTxnListHeader') }}
-  {% call ep_header_row('تراکنش‌ها', url_for('express_partner.commissions'), subtitle=_txn_hint, subtitle_id='commTxnCountHint', inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+  {% call ep_header_row('تراکنش‌ها', url_for('express_partner.commissions'), subtitle=_txn_hint, subtitle_id='commTxnCountHint', inner_class='max-w-lg mx-auto w-full') %}
+      <button type="button"
+              id="commTxnFilterToggle"
+              class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn comm-txn-filter-toggle relative"
+              aria-haspopup="dialog"
+              aria-controls="commTxnFilterModal"
+              aria-expanded="false"
+              aria-label="فیلتر تراکنش‌ها">
+        <i class="fas fa-filter ep-partner-header-btn-icon" aria-hidden="true"></i>
+        <span id="commTxnFilterDot"
+              class="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-2 ring-[#050a0e] hidden"
+              aria-hidden="true"></span>
+      </button>
+  {% endcall %}
   {{ ep_header_end() }}
 
   <div id="commissionsTxnPageMain"
@@ -20,30 +43,6 @@
     <div class="mx-auto max-w-lg">
 
       {% include 'express_partner/partials/commissions_txn_income_strip.html' %}
-
-      {% macro filter_chip(key, label) %}
-      <button type="button"
-              data-comm-txn-filter="{{ key }}"
-              data-comm-txn-filter-label="{{ label }}"
-              class="comm-txn-chip{% if key == 'all' %} is-active{% endif %}"
-              role="option"
-              aria-selected="{{ 'true' if key == 'all' else 'false' }}">
-        <span>{{ label }}</span>
-        <span class="comm-txn-chip__count tabular-nums">{{ _summary.get(key, 0) }}</span>
-      </button>
-      {% endmacro %}
-
-      <div id="commTxnFilters"
-           class="comm-txn-chips flex gap-2 overflow-x-auto border-b border-white/10 px-4 py-2.5 sm:px-6"
-           role="listbox"
-           aria-label="فیلتر تراکنش‌ها">
-        {{ filter_chip('all', 'همه') }}
-        {{ filter_chip('pending', 'انتظار') }}
-        {{ filter_chip('approved', 'تأیید') }}
-        {{ filter_chip('paid', 'واریز') }}
-        {{ filter_chip('withdrawal', 'برداشت') }}
-        {{ filter_chip('closed', 'رد/لغو') }}
-      </div>
 
       {% if items and items|length > 0 %}
       <div id="commTxnRows" class="divide-y divide-white/10">
@@ -79,6 +78,51 @@
       </div>
       {% endif %}
 
+    </div>
+  </div>
+
+  <div id="commTxnFilterModal"
+       class="comm-txn-filter-modal fixed inset-0 z-[210] hidden flex flex-col justify-end"
+       role="dialog"
+       aria-modal="true"
+       aria-hidden="true"
+       aria-labelledby="commTxnFilterModalTitle">
+    <button type="button"
+            id="commTxnFilterBackdrop"
+            class="comm-txn-filter-backdrop absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200"
+            aria-label="بستن"></button>
+    <div class="comm-txn-filter-sheet relative w-full max-w-lg mx-auto rounded-t-3xl bg-[#1C1F2A] border-t border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.55)] max-h-[min(80vh,520px)] flex flex-col translate-y-full transition-transform duration-300 ease-out pb-[env(safe-area-inset-bottom,0px)]">
+      <div class="shrink-0 pt-2.5 pb-1 flex justify-center">
+        <span class="block w-11 h-1 rounded-full bg-white/25" aria-hidden="true"></span>
+      </div>
+      <div class="shrink-0 px-4 pb-3 flex items-center justify-between gap-3">
+        <h2 id="commTxnFilterModalTitle" class="text-[15px] font-bold text-white">فیلتر تراکنش‌ها</h2>
+        <button type="button"
+                id="commTxnFilterClose"
+                class="ep-partner-header-btn"
+                aria-label="بستن">
+          <i class="fas fa-times ep-partner-header-btn-icon"></i>
+        </button>
+      </div>
+      <div id="commTxnFilters" class="overflow-y-auto flex-1 min-h-0 px-3 pb-4 space-y-1.5" role="listbox" aria-label="فیلتر وضعیت">
+        {% macro filter_btn(key, label) %}
+        <button type="button"
+                data-comm-txn-filter="{{ key }}"
+                data-comm-txn-filter-label="{{ label }}"
+                class="comm-txn-filter w-full flex items-center justify-between gap-3 rounded-xl border px-3.5 py-3 text-start text-sm transition{% if key == 'all' %} border-emerald-500/40 bg-emerald-500/15 font-semibold text-emerald-300{% else %} border-white/8 bg-[#12141D] font-medium text-zinc-300 hover:bg-white/[0.04]{% endif %}"
+                role="option"
+                aria-selected="{{ 'true' if key == 'all' else 'false' }}">
+          <span>{{ label }}</span>
+          <span class="text-[11px] tabular-nums opacity-70 shrink-0">{{ _summary.get(key, 0) }}</span>
+        </button>
+        {% endmacro %}
+        {{ filter_btn('all', 'همه') }}
+        {{ filter_btn('pending', 'در انتظار') }}
+        {{ filter_btn('approved', 'تأیید شده') }}
+        {{ filter_btn('paid', 'واریز شده') }}
+        {{ filter_btn('withdrawal', 'برداشت') }}
+        {{ filter_btn('closed', 'رد / لغو') }}
+      </div>
     </div>
   </div>
 
@@ -129,6 +173,12 @@
     var emptyFilter = document.getElementById('commTxnEmptyFilter');
     var countHint = document.getElementById('commTxnCountHint');
     var resetBtn = document.getElementById('commTxnResetFilter');
+    var filterToggle = document.getElementById('commTxnFilterToggle');
+    var filterModal = document.getElementById('commTxnFilterModal');
+    var filterBackdrop = document.getElementById('commTxnFilterBackdrop');
+    var filterClose = document.getElementById('commTxnFilterClose');
+    var filterDot = document.getElementById('commTxnFilterDot');
+    var overlay = window.vinorExpressModalOverlay;
 
     if (!filters) return;
 
@@ -138,21 +188,59 @@
 
     var FILTER_LABELS = {
       all: 'همه',
-      pending: 'انتظار',
-      approved: 'تأیید',
-      paid: 'واریز',
+      pending: 'در انتظار',
+      approved: 'تأیید شده',
+      paid: 'واریز شده',
       withdrawal: 'برداشت',
-      closed: 'رد/لغو'
+      closed: 'رد / لغو'
     };
+
+    function openFilterModal() {
+      if (!filterModal) return;
+      if (filterModal.parentNode !== document.body) {
+        document.body.appendChild(filterModal);
+      }
+      filterModal.classList.remove('hidden');
+      filterModal.setAttribute('aria-hidden', 'false');
+      if (filterToggle) filterToggle.setAttribute('aria-expanded', 'true');
+      try { void filterModal.offsetWidth; } catch (_) {}
+      filterModal.classList.add('comm-txn-filter-modal--open');
+      if (overlay) overlay.open();
+    }
+
+    function closeFilterModal() {
+      if (!filterModal) return;
+      var wasOpen = filterModal.classList.contains('comm-txn-filter-modal--open');
+      filterModal.classList.remove('comm-txn-filter-modal--open');
+      window.setTimeout(function () {
+        filterModal.classList.add('hidden');
+      }, 280);
+      filterModal.setAttribute('aria-hidden', 'true');
+      if (filterToggle) filterToggle.setAttribute('aria-expanded', 'false');
+      if (wasOpen && overlay) overlay.close();
+    }
 
     function setActiveChip(key, label) {
       active = key;
       activeLabelText = label || FILTER_LABELS[key] || key;
-      filters.querySelectorAll('[data-comm-txn-filter]').forEach(function (btn) {
+      filters.querySelectorAll('.comm-txn-filter').forEach(function (btn) {
         var on = btn.getAttribute('data-comm-txn-filter') === key;
         btn.setAttribute('aria-selected', on ? 'true' : 'false');
-        btn.classList.toggle('is-active', on);
+        btn.classList.toggle('border-emerald-500/40', on);
+        btn.classList.toggle('bg-emerald-500/15', on);
+        btn.classList.toggle('text-emerald-300', on);
+        btn.classList.toggle('font-semibold', on);
+        btn.classList.toggle('border-white/8', !on);
+        btn.classList.toggle('bg-[#12141D]', !on);
+        btn.classList.toggle('text-zinc-300', !on);
+        btn.classList.toggle('font-medium', !on);
       });
+      if (filterToggle) {
+        filterToggle.classList.toggle('is-active', key !== 'all');
+      }
+      if (filterDot) {
+        filterDot.classList.toggle('hidden', key === 'all');
+      }
     }
 
     function updateCountHint(shown) {
@@ -194,6 +282,7 @@
     function selectFilter(key, label) {
       setActiveChip(key, label);
       applyFilter();
+      closeFilterModal();
     }
 
     filters.addEventListener('click', function (e) {
@@ -210,6 +299,23 @@
         selectFilter('all', 'همه');
       });
     }
+
+    if (filterToggle) {
+      filterToggle.addEventListener('click', function () {
+        if (filterModal && filterModal.classList.contains('comm-txn-filter-modal--open')) {
+          closeFilterModal();
+        } else {
+          openFilterModal();
+        }
+      });
+    }
+    if (filterBackdrop) filterBackdrop.addEventListener('click', closeFilterModal);
+    if (filterClose) filterClose.addEventListener('click', closeFilterModal);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && filterModal && filterModal.classList.contains('comm-txn-filter-modal--open')) {
+        closeFilterModal();
+      }
+    });
 
     var initial = 'all';
     try {
