@@ -44,6 +44,25 @@
     return /VinorApp\//i.test(navigator.userAgent || '');
   }
 
+  function isExpressGuestUser() {
+    try {
+      var meta = document.querySelector('meta[name="vinor-express-auth"]');
+      return !meta || meta.getAttribute('content') === 'guest';
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function redirectExpressGuestToLogin() {
+    var next = window.location.pathname + window.location.search;
+    var url = '/express/partner/login?next=' + encodeURIComponent(next);
+    if (window.vinorExpressNavigate) {
+      window.vinorExpressNavigate(url, { forward: true });
+      return;
+    }
+    window.location.assign(url);
+  }
+
   function hideGalleryLoader() {
     var loader = document.getElementById('landMediaLoading');
     if (!loader) return;
@@ -954,6 +973,10 @@
       function onContact(ev) {
         ev.preventDefault();
         ev.stopPropagation();
+        if (isExpressGuestUser()) {
+          redirectExpressGuestToLogin();
+          return;
+        }
         openLandModal('landContactModal');
       }
       btn.addEventListener('click', onContact);

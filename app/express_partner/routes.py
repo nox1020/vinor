@@ -2568,7 +2568,7 @@ def notes_page():
 
 
 @express_partner_bp.get('/commissions', endpoint='commissions')
-@require_partner_access(allow_pending=True, allow_guest=True)
+@require_partner_access(allow_pending=True)
 def commissions_page():
     me_phone = (session.get("user_phone") or "").strip()
     profile = getattr(g, 'express_partner_profile', None)
@@ -2628,7 +2628,7 @@ def commissions_page():
 
 
 @express_partner_bp.get('/commissions/transactions', endpoint='commissions_transactions')
-@require_partner_access(allow_pending=True, allow_guest=True)
+@require_partner_access(allow_pending=True)
 def commissions_transactions_page():
     me_phone = (session.get("user_phone") or "").strip()
     profile = getattr(g, 'express_partner_profile', None)
@@ -2662,7 +2662,7 @@ def commissions_transactions_page():
 
 
 @express_partner_bp.get('/commissions/data', endpoint='commissions_data')
-@require_partner_access(allow_pending=True, allow_guest=True)
+@require_partner_access(allow_pending=True, json_response=True)
 def commissions_data():
     """API JSON برای اپ اندروید: خلاصه و لیست پورسانت‌های همکار جاری."""
     me_phone = (session.get("user_phone") or "").strip()
@@ -2739,7 +2739,7 @@ def _commission_financial_snapshot(
 
 
 @express_partner_bp.get('/commissions/summary', endpoint='commissions_summary')
-@require_partner_access(allow_pending=True, allow_guest=True, json_response=True)
+@require_partner_access(allow_pending=True, json_response=True)
 def commissions_summary():
     """API سبک: فقط اعداد مالی پورسانت — برای sync امن UI بدون جایگزینی DOM."""
     me_phone = (session.get("user_phone") or "").strip()

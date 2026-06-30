@@ -244,7 +244,9 @@
     return p === '/express/partner/favorites' ||
       p === '/express/partner/notifications' ||
       p === '/express/partner/notes' ||
-      p === '/express/partner/postchi';
+      p === '/express/partner/postchi' ||
+      p === '/express/partner/commissions' ||
+      p.indexOf('/express/partner/commissions/') === 0;
   }
 
   function loginUrlForPartnerDest(href) {
@@ -1406,7 +1408,7 @@
         if (a.classList.contains('tg-tab-disabled') || a.getAttribute('aria-disabled') === 'true') {
           e.preventDefault();
           e.stopPropagation();
-          if (!isLoggedInUser() && href && requiresLoginPath(href)) {
+          if (!isLoggedInUser() && href && href !== '#') {
             vinorExpressNavigate(loginUrlForPartnerDest(href), { forward: true });
           }
           return;
