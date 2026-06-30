@@ -36,6 +36,12 @@
   function offlineBarHeight() {
     var bar = document.getElementById('vinorExpressOfflineBar');
     if (!bar || bar.hidden) return 0;
+    if (bar.classList.contains('vinor-express-offline-bar--leaving')) return 0;
+    try {
+      var raw = window.getComputedStyle(document.documentElement).getPropertyValue('--vn-partner-offline-bar-h');
+      var parsed = parseFloat(String(raw || '').trim());
+      if (!isNaN(parsed)) return Math.max(0, parsed);
+    } catch (_) {}
     var h = Math.ceil(bar.getBoundingClientRect().height);
     return h > 0 ? h : 28;
   }

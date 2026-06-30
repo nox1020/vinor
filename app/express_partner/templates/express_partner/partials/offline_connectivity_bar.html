@@ -27,10 +27,13 @@
   var OFFLINE_MSG = 'آفلاین هستید';
   var ONLINE_MSG = 'آنلاین شدید';
   var ONLINE_TOAST_MS = 2200;
+  var ONLINE_FADE_MS = 280;
   var ONLINE_GRACE_MS = 3500;
   var lastOnline = null;
   var onlineToastActive = false;
   var onlineHideTimer = null;
+  var onlineDismissTimer = null;
+  var barDismissInFlight = false;
   var onlineGraceUntil = 0;
   var BAR_FALLBACK_H = 28;
   var reachabilityPending = false;
@@ -80,7 +83,7 @@
 
   function layoutOfflineBar() {
     var bar = document.getElementById('vinorExpressOfflineBar');
-    if (!bar || bar.hidden) return;
+    if (!bar || bar.hidden || barDismissInFlight) return;
     var topPx = 0;
     var header = findActiveHeader();
     if (header) {
@@ -114,6 +117,112 @@
       window.clearTimeout(onlineHideTimer);
       onlineHideTimer = null;
     }
+    if (onlineDismissTimer) {
+      window.clearTimeout(onlineDismissTimer);
+      onlineDismissTimer = null;
+    }
+  }
+
+  function setBarLayoutHeight(hPx) {
+    try {
+      document.documentElement.style.setProperty('--vn-partner-offline-bar-h', Math.max(0, hPx) + 'px');
+    } catch (_) {}
+    if (typeof window.__vinorPartnerHeaderPadSync === 'function') {
+      window.__vinorPartnerHeaderPadSync();
+    }
+  }
+
+  function markBarVisible(onRoot) {
+    try {
+      if (onRoot) document.documentElement.classList.add('vinor-express-offline-bar-visible');
+      else document.documentElement.classList.remove('vinor-express-offline-bar-visible');
+    } catch (_) {}
+  }
+
+  function prefersReducedMotion() {
+    try {
+      return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function finalizeHideBar() {
+    var bar = document.getElementById('vinorExpressOfflineBar');
+    var root = document.documentElement;
+    if (!bar) return;
+    if (onlineDismissTimer) {
+      window.clearTimeout(onlineDismissTimer);
+      onlineDismissTimer = null;
+    }
+    if (bar.__vinorDismissEnd) {
+      bar.removeEventListener('transitionend', bar.__vinorDismissEnd);
+      bar.__vinorDismissEnd = null;
+    }
+    barDismissInFlight = false;
+    onlineToastActive = false;
+    bar.hidden = true;
+    bar.classList.remove(
+      'vinor-express-offline-bar--online',
+      'vinor-express-offline-bar--offline',
+      'vinor-express-offline-bar--leaving'
+    );
+    root.classList.remove('vinor-express-offline');
+    markBarVisible(false);
+    try { root.style.removeProperty('--vn-partner-offline-bar-h'); } catch (_) {}
+    try { bar.style.removeProperty('top'); } catch (_) {}
+    syncBarIcons('none');
+    if (typeof window.__vinorPartnerHeaderPadSync === 'function') {
+      window.__vinorPartnerHeaderPadSync();
+    }
+  }
+
+  function dismissBar(opts) {
+    opts = opts || {};
+    var bar = document.getElementById('vinorExpressOfflineBar');
+    if (!bar || bar.hidden) return;
+    if (barDismissInFlight) return;
+
+    var animate = opts.animate !== false && !prefersReducedMotion();
+    if (!animate) {
+      finalizeHideBar();
+      return;
+    }
+
+    barDismissInFlight = true;
+    setBarLayoutHeight(0);
+    bar.classList.add('vinor-express-offline-bar--leaving');
+
+    var finished = false;
+    function done() {
+      if (finished) return;
+      finished = true;
+      if (bar.__vinorDismissEnd) {
+        bar.removeEventListener('transitionend', bar.__vinorDismissEnd);
+        bar.__vinorDismissEnd = null;
+      }
+      finalizeHideBar();
+    }
+
+    function onTransitionEnd(ev) {
+      if (ev.target !== bar && ev.target !== bar.querySelector('.vinor-express-offline-bar__inner')) return;
+      done();
+    }
+
+    bar.__vinorDismissEnd = onTransitionEnd;
+    bar.addEventListener('transitionend', onTransitionEnd);
+    onlineDismissTimer = window.setTimeout(done, ONLINE_FADE_MS + 80);
+  }
+
+  function hideBar(opts) {
+    clearOnlineHideTimer();
+    opts = opts || {};
+    var animate = opts.animate === true && !prefersReducedMotion();
+    if (!animate) {
+      finalizeHideBar();
+      return;
+    }
+    dismissBar({ animate: true });
   }
 
   function syncBarIcons(mode) {
@@ -123,36 +232,22 @@
     if (onIcon) onIcon.hidden = mode !== 'online';
   }
 
-  function hideBar() {
-    var bar = document.getElementById('vinorExpressOfflineBar');
-    var root = document.documentElement;
-    if (!bar) return;
-    onlineToastActive = false;
-    bar.hidden = true;
-    bar.classList.remove('vinor-express-offline-bar--online');
-    bar.classList.remove('vinor-express-offline-bar--offline');
-    root.classList.remove('vinor-express-offline');
-    try { root.style.removeProperty('--vn-partner-offline-bar-h'); } catch (_) {}
-    try { bar.style.removeProperty('top'); } catch (_) {}
-    syncBarIcons('none');
-    if (typeof window.__vinorPartnerHeaderPadSync === 'function') {
-      window.__vinorPartnerHeaderPadSync();
-    }
-  }
-
   function showOfflineBar(message) {
     clearOnlineHideTimer();
+    barDismissInFlight = false;
     onlineToastActive = false;
     onlineGraceUntil = 0;
     var bar = document.getElementById('vinorExpressOfflineBar');
     var txt = document.getElementById('vinorExpressOfflineBarText');
     var root = document.documentElement;
     if (!bar) return;
+    bar.classList.remove('vinor-express-offline-bar--leaving');
     bar.hidden = false;
     bar.classList.remove('vinor-express-offline-bar--online');
     bar.classList.add('vinor-express-offline-bar--offline');
     if (txt) txt.textContent = message || OFFLINE_MSG;
     root.classList.add('vinor-express-offline');
+    markBarVisible(true);
     syncBarIcons('offline');
     layoutOfflineBar();
     if (!reachabilityTimer) {
@@ -164,6 +259,7 @@
 
   function showOnlineToast(message) {
     clearOnlineHideTimer();
+    barDismissInFlight = false;
     onlineToastActive = true;
     markOnlineGrace();
     unreachableStreak = 0;
@@ -175,16 +271,19 @@
       window.clearInterval(reachabilityTimer);
       reachabilityTimer = null;
     }
+    bar.classList.remove('vinor-express-offline-bar--leaving');
     bar.hidden = false;
     bar.classList.remove('vinor-express-offline-bar--offline');
     bar.classList.add('vinor-express-offline-bar--online');
     if (txt) txt.textContent = message || ONLINE_MSG;
     root.classList.remove('vinor-express-offline');
+    markBarVisible(true);
     syncBarIcons('online');
     layoutOfflineBar();
     onlineHideTimer = window.setTimeout(function () {
       onlineHideTimer = null;
-      hideBar();
+      if (!onlineToastActive) return;
+      dismissBar({ animate: true });
     }, ONLINE_TOAST_MS);
   }
 
@@ -210,7 +309,7 @@
       }
       lastOnline = true;
       clearOnlineHideTimer();
-      hideBar();
+      hideBar({ animate: false });
       if (reachabilityTimer) {
         window.clearInterval(reachabilityTimer);
         reachabilityTimer = null;

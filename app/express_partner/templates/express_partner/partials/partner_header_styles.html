@@ -402,9 +402,18 @@
     right: 0;
     z-index: 49;
     pointer-events: none;
+    overflow: hidden;
+    will-change: opacity, max-height;
+    max-height: 3rem;
+    opacity: 1;
+    transition: opacity 0.28s ease, max-height 0.28s ease;
   }
   .vinor-express-offline-bar[hidden] {
     display: none !important;
+  }
+  .vinor-express-offline-bar--leaving {
+    opacity: 0;
+    max-height: 0 !important;
   }
   .vinor-express-offline-bar__inner {
     display: flex;
@@ -421,6 +430,27 @@
     background: rgba(253, 230, 138, 0.96);
     border-bottom: 1px solid rgba(120, 53, 15, 0.12);
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+    transition: opacity 0.28s ease, transform 0.28s ease;
+  }
+  .vinor-express-offline-bar--leaving .vinor-express-offline-bar__inner {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  html.vinor-express-offline-bar-visible .partner-page-scroll-pad,
+  html.vinor-express-offline-bar-visible main.partner-page-scroll-pad {
+    transition: padding-top 0.28s ease;
+  }
+  html.vinor-express-offline-bar-visible #expressDashboardMain {
+    transition: padding-top 0.28s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .vinor-express-offline-bar,
+    .vinor-express-offline-bar__inner,
+    html.vinor-express-offline-bar-visible .partner-page-scroll-pad,
+    html.vinor-express-offline-bar-visible main.partner-page-scroll-pad,
+    html.vinor-express-offline-bar-visible #expressDashboardMain {
+      transition: none !important;
+    }
   }
   html.dark .vinor-express-offline-bar__inner {
     color: #fde68a;
