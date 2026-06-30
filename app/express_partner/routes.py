@@ -694,18 +694,39 @@ def _dashboard_request_has_filters(search_query: str, selected_cities: list, fil
     return bool(search_query or selected_cities or filter_tag or filter_cat)
 
 
+OTP_TTL_SECONDS = 600  # ۱۰ دقیقه — هر کد فقط برای همان شماره و همان بازهٔ زمانی
+
+
 def _normalize_phone(phone: str) -> str:
     """Normalize phone number - استفاده از همان تابع notifications"""
     from app.services.notifications import _normalize_user_id
     return _normalize_user_id(phone)
 
 
+def _otp_canonical_phone(phone: str) -> str:
+    """یکسان‌سازی شماره برای ذخیره/تطبیق OTP."""
+    from ..services.sms import normalize_iran_mobile
+
+    raw = _normalize_phone(phone)
+    return normalize_iran_mobile(raw) or raw
+
+
 def _otp_session_phone() -> str:
-    return _normalize_phone(str(session.get('otp_phone') or ''))
+    return _otp_canonical_phone(str(session.get('otp_phone') or ''))
+
+
+def _otp_session_expired() -> bool:
+    ts = session.get('otp_created_at')
+    if ts is None:
+        return False
+    try:
+        return (time.time() - float(ts)) > OTP_TTL_SECONDS
+    except (TypeError, ValueError):
+        return True
 
 
 def _otp_code_matches_session(code: str) -> bool:
-    """تطبیق کد OTP فقط با سشن — شماره از سشن خوانده می‌شود (نه hidden field کهنه)."""
+    """تطبیق کد OTP با سشن فعلی (بدون بررسی شماره — فقط برای resend داخلی)."""
     if not code:
         return False
     from ..services.sms import normalize_otp_code
@@ -722,16 +743,35 @@ def _otp_code_matches_session(code: str) -> bool:
 
 
 def _otp_session_matches(code: str, phone: str) -> bool:
+    """کد و شماره باید هر دو با سشن OTP یکسان باشند."""
     if not code or not phone:
         return False
-    norm_phone = _normalize_phone(phone)
+    if _otp_session_expired():
+        return False
+    norm_phone = _otp_canonical_phone(phone)
     sess_phone = _otp_session_phone()
-    return _otp_code_matches_session(code) and sess_phone == norm_phone
+    if not norm_phone or not sess_phone or norm_phone != sess_phone:
+        return False
+    return _otp_code_matches_session(code)
+
+
+def _verify_otp_for_phone(code: str, phone: str) -> str | None:
+    """
+    تأیید OTP برای شمارهٔ مشخص.
+    در صورت موفقیت شمارهٔ canonical برمی‌گرداند؛ در غیر این صورت None.
+    """
+    if _otp_session_expired():
+        _clear_otp_session()
+        return None
+    if not _otp_session_matches(code, phone):
+        return None
+    return _canonical_partner_phone(_otp_session_phone())
 
 
 def _clear_otp_session() -> None:
     session.pop('otp_code', None)
     session.pop('otp_phone', None)
+    session.pop('otp_created_at', None)
 
 
 def _auth_wants_json() -> bool:
@@ -745,8 +785,13 @@ def _auth_wants_json() -> bool:
 
 def _store_otp_session(phone: str, code: str) -> None:
     _clear_otp_session()
+    canonical = _otp_canonical_phone(phone)
     session.permanent = True
-    session.update({'otp_code': code, 'otp_phone': phone})
+    session.update({
+        'otp_code': str(code),
+        'otp_phone': canonical,
+        'otp_created_at': time.time(),
+    })
     try:
         session.modified = True
     except Exception:
@@ -3231,7 +3276,7 @@ def download_file(fid: int):
 def _clear_express_partner_auth_session() -> None:
     """فقط خروج از حساب همکار؛ سشن ادمین یا پیش‌نویس apply_data حذف نمی‌شود."""
     for k in (
-        'user_id', 'user_phone', 'otp_code', 'otp_phone', 'next',
+        'user_id', 'user_phone', 'otp_code', 'otp_phone', 'otp_created_at', 'next',
         'VINOR_IS_EXPRESS_PARTNER',
         '_routine_auto_mkt_day', '_express_online_ping_ts',
     ):
@@ -3257,7 +3302,10 @@ def login():
         if request.args.get('change'):
             _clear_otp_session()
         elif session.get('otp_code') and session.get('otp_phone'):
-            return redirect(_login_otp_redirect_url())
+            if _otp_session_expired():
+                _clear_otp_session()
+            else:
+                return redirect(_login_otp_redirect_url())
         try:
             from .referrals import capture_ref_on_login
             capture_ref_on_login()
@@ -3290,7 +3338,7 @@ def login():
             return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
 
         phone_raw = request.form.get('phone', '')
-        phone = _normalize_phone(phone_raw)
+        phone = _otp_canonical_phone(phone_raw)
         from ..services.sms import is_valid_iran_mobile
 
         if not is_valid_iran_mobile(phone):
@@ -3336,10 +3384,14 @@ def login_otp():
     if session.get('user_phone'):
         return redirect(_redirect_after_login())
 
-    phone = str(session.get('otp_phone') or '').strip()
+    phone = _otp_session_phone()
     if not phone or not session.get('otp_code'):
         flash('ابتدا شماره موبایل خود را وارد کنید.', FLASH_AUTH_ERROR)
         return redirect(url_for('express_partner.login'))
+    if _otp_session_expired():
+        _clear_otp_session()
+        flash('کد تأیید منقضی شده است. لطفاً دوباره شماره موبایل را وارد کنید.', FLASH_AUTH_ERROR)
+        return redirect(url_for('express_partner.login', change=1))
 
     login_next = _login_next_preserve() or _session_next_safe()
     is_likely_partner = _is_phone_approved_partner(phone)
@@ -3365,6 +3417,7 @@ def verify():
     from ..services.sms import normalize_otp_code
 
     code = normalize_otp_code(request.form.get('otp_code') or '')
+    form_phone = _otp_canonical_phone((request.form.get('phone') or '').strip())
     sess_phone = _otp_session_phone()
     if not sess_phone or not session.get('otp_code'):
         msg = 'جلسهٔ تأیید منقضی شده. لطفاً دوباره شماره موبایل را وارد کنید.'
@@ -3372,6 +3425,25 @@ def verify():
             return jsonify({'ok': False, 'error': msg, 'redirect': url_for('express_partner.login')}), 400
         flash(msg, FLASH_AUTH_ERROR)
         return redirect(url_for('express_partner.login'))
+    if _otp_session_expired():
+        _clear_otp_session()
+        msg = 'کد تأیید منقضی شده است. لطفاً دوباره شماره موبایل را وارد کنید.'
+        if wants_json:
+            return jsonify({'ok': False, 'error': msg, 'redirect': url_for('express_partner.login')}), 400
+        flash(msg, FLASH_AUTH_ERROR)
+        return redirect(url_for('express_partner.login', change=1))
+    if not form_phone:
+        msg = 'شماره موبایل یافت نشد. لطفاً از ابتدا وارد شوید.'
+        if wants_json:
+            return jsonify({'ok': False, 'error': msg, 'redirect': url_for('express_partner.login')}), 400
+        flash(msg, FLASH_AUTH_ERROR)
+        return redirect(url_for('express_partner.login', change=1))
+    if form_phone != sess_phone:
+        msg = 'شماره موبایل با درخواست ورود همخوانی ندارد.'
+        if wants_json:
+            return jsonify({'ok': False, 'error': msg, 'redirect': url_for('express_partner.login', change=1)}), 400
+        flash(msg, FLASH_AUTH_ERROR)
+        return redirect(url_for('express_partner.login', change=1))
 
     if len(code) != 5:
         msg = 'لطفاً کد ۵ رقمی را به‌درستی وارد کنید.'
@@ -3380,7 +3452,8 @@ def verify():
         flash(msg, FLASH_AUTH_ERROR)
         return redirect(url_for('express_partner.login_otp'))
 
-    if _otp_code_matches_session(code):
+    verified_phone = _verify_otp_for_phone(code, form_phone)
+    if verified_phone:
         form_next = (request.form.get('next') or '').strip()
         if form_next and form_next.startswith('/') and not form_next.startswith('//'):
             session['next'] = form_next
@@ -3389,7 +3462,7 @@ def verify():
             capture_ref_on_login()
         except Exception:
             pass
-        dest = _finalize_partner_login(sess_phone)
+        dest = _finalize_partner_login(verified_phone)
         if wants_json:
             r = jsonify({'ok': True, 'redirect': dest})
             r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
@@ -4620,7 +4693,7 @@ def api_login_request():
     """درخواست ارسال کد OTP برای اپ اندروید (ورود نیتیو). ورودی JSON: {"phone": "09..."}."""
     data = request.get_json(silent=True) or {}
     phone_raw = (data.get('phone') or '').strip()
-    phone = _normalize_phone(phone_raw)
+    phone = _otp_canonical_phone(phone_raw)
     if not _legal_accepted(request):
         return jsonify({
             'success': False,
@@ -4640,25 +4713,33 @@ def api_login_request():
 
 @express_partner_bp.post('/api/verify')
 def api_verify():
-    """تأیید کد OTP برای اپ اندروید. ورودی JSON: {"code": "123456", "phone": "09..."}. سشن باید از مرحله login-request باشد."""
-    from ..services.sms import normalize_otp_code
+    """تأیید کد OTP برای اپ اندروید. ورودی JSON: {"code": "12345", "phone": "09..."}."""
+    from ..services.sms import normalize_otp_code, is_valid_iran_mobile
 
     data = request.get_json(silent=True) or {}
     code = normalize_otp_code(data.get('code') or '')
+    req_phone = _otp_canonical_phone((data.get('phone') or '').strip())
+    if not code:
+        return jsonify({'success': False, 'error': 'کد تأیید را وارد کنید.'}), 400
+    if not is_valid_iran_mobile(req_phone):
+        return jsonify({'success': False, 'error': 'شماره موبایل معتبر نیست.'}), 400
     sess_phone = _otp_session_phone()
-    if not code or not sess_phone:
-        return jsonify({'success': False, 'error': 'کد و شماره را وارد کنید.'}), 400
-    req_phone = _normalize_phone((data.get('phone') or '').strip())
-    if req_phone and req_phone != sess_phone:
-        return jsonify({'success': False, 'error': 'شماره با جلسهٔ تأیید همخوانی ندارد.'}), 400
-    if not _otp_code_matches_session(code):
+    if not sess_phone or not session.get('otp_code'):
+        return jsonify({'success': False, 'error': 'جلسهٔ تأیید منقضی شده. دوباره درخواست کد دهید.'}), 400
+    if _otp_session_expired():
+        _clear_otp_session()
+        return jsonify({'success': False, 'error': 'کد تأیید منقضی شده است. دوباره درخواست کد دهید.'}), 400
+    if req_phone != sess_phone:
+        return jsonify({'success': False, 'error': 'شماره با درخواست ورود همخوانی ندارد.'}), 400
+    verified_phone = _verify_otp_for_phone(code, req_phone)
+    if not verified_phone:
         return jsonify({'success': False, 'error': 'کد تأیید نادرست است.'}), 400
     try:
         from .referrals import capture_ref_on_login
         capture_ref_on_login()
     except Exception:
         pass
-    dest = _finalize_partner_login(sess_phone)
+    dest = _finalize_partner_login(verified_phone)
     return jsonify({'success': True, 'message': 'ورود با موفقیت انجام شد.', 'redirect': dest})
 
 
@@ -4669,15 +4750,23 @@ def otp_resend():
     from ..services.sms import is_valid_iran_mobile
 
     sess_phone = _otp_session_phone()
-    req_phone = _normalize_phone(
+    if not sess_phone or not session.get('otp_code'):
+        if request.is_json:
+            return jsonify({'ok': False, 'error': 'ابتدا شماره را وارد کنید.'}), 400
+        return jsonify({'ok': False, 'error': 'ابتدا شماره را وارد کنید.'}), 400
+    if _otp_session_expired():
+        _clear_otp_session()
+        if request.is_json:
+            return jsonify({'ok': False, 'error': 'کد منقضی شده. دوباره وارد شوید.'}), 400
+        return jsonify({'ok': False, 'error': 'کد منقضی شده. دوباره وارد شوید.'}), 400
+    req_phone = _otp_canonical_phone(
         (data.get('phone') or request.form.get('phone') or '').strip()
     )
-    if sess_phone:
-        phone = sess_phone
-    else:
-        phone = req_phone
-    if req_phone and sess_phone and req_phone != sess_phone:
-        phone = sess_phone
+    phone = sess_phone
+    if req_phone and req_phone != sess_phone:
+        if request.is_json:
+            return jsonify({'ok': False, 'error': 'شماره با درخواست ورود همخوانی ندارد.'}), 400
+        return jsonify({'ok': False, 'error': 'شماره با درخواست ورود همخوانی ندارد.'}), 400
     if not is_valid_iran_mobile(phone):
         if request.is_json:
             return jsonify({'ok': False, 'error': 'شماره معتبر نیست.'}), 400
