@@ -2567,7 +2567,7 @@ def commissions_transactions_page():
     txn_summary = partner_txn_feed_summary(txn_items)
     comm_stats = _partner_commission_stats(me_phone, my_comms)
 
-    return render_template(
+    resp = make_response(render_template(
         "express_partner/commissions_txn_list.html",
         items=txn_items,
         txn_summary=txn_summary,
@@ -2581,7 +2581,9 @@ def commissions_transactions_page():
         brand="وینور",
         domain="vinor.ir",
         is_approved=is_approved,
-    )
+    ))
+    _append_partner_tab_prefetch(resp)
+    return resp
 
 
 @express_partner_bp.get('/commissions/data', endpoint='commissions_data')

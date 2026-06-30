@@ -1,23 +1,9 @@
 {% extends 'express_partner/base.html' %}
-{% block title %}همه تراکنش‌ها | پورسانت{% endblock %}
+{% block title %}تراکنش‌ها | پورسانت{% endblock %}
 
 {% block head %}
 {% include 'express_partner/partials/commissions_styles.html' %}
-<style>
-  #commTxnListHeader .comm-txn-filter-toggle.is-active {
-    border-color: rgba(16, 185, 129, 0.45);
-    background-color: rgba(16, 185, 129, 0.14);
-    color: rgb(110 231 183);
-  }
-  html:not(.dark) #commTxnListHeader .comm-txn-filter-toggle.is-active {
-    border-color: rgba(5, 150, 105, 0.35);
-    background-color: rgba(16, 185, 129, 0.14);
-    color: rgb(4 120 87);
-  }
-  #commTxnFilterModal.comm-txn-filter-modal--open { display: flex !important; }
-  #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-backdrop { opacity: 1; }
-  #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-sheet { transform: translateY(0); }
-</style>
+{% include 'express_partner/partials/commissions_txn_page_styles.html' %}
 {% endblock %}
 
 {% block content %}
@@ -26,108 +12,73 @@
 
   {% set _txn_hint = (items|length|string + ' تراکنش') if items and items|length > 0 else 'بدون تراکنش' %}
   {{ ep_header_start(id='commTxnListHeader') }}
-  {% call ep_header_row('همه تراکنش‌ها', url_for('express_partner.commissions'), subtitle=_txn_hint, subtitle_id='commTxnCountHint', inner_class='max-w-lg lg:max-w-4xl mx-auto w-full') %}
-      <button type="button"
-              id="commTxnFilterToggle"
-              class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn comm-txn-filter-toggle relative"
-              aria-haspopup="dialog"
-              aria-controls="commTxnFilterModal"
-              aria-expanded="false"
-              aria-label="فیلتر تراکنش‌ها">
-        <i class="fas fa-filter ep-partner-header-btn-icon" aria-hidden="true"></i>
-        <span id="commTxnFilterDot"
-              class="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-2 ring-[#050a0e] hidden"
-              aria-hidden="true"></span>
-      </button>
-  {% endcall %}
+  {% call ep_header_row('تراکنش‌ها', url_for('express_partner.commissions'), subtitle=_txn_hint, subtitle_id='commTxnCountHint', inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
   {{ ep_header_end() }}
 
-  <div id="commTxnPage"
-       class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] text-zinc-100 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
-    <div id="commTxnScrollInner"
-         class="mx-auto max-w-lg px-4 sm:max-w-4xl sm:px-6 space-y-4">
+  <div id="commissionsTxnPageMain"
+       class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
+    <div class="mx-auto max-w-lg">
 
-      {% include 'express_partner/partials/commissions_income_details.html' %}
+      {% include 'express_partner/partials/commissions_txn_income_strip.html' %}
 
-      <section class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
-        {% if items and items|length > 0 %}
-        <div id="commTxnRows" class="divide-y divide-white/5">
-          {% for c in items %}
-            {% set tour_item = loop.first %}
-            {% include 'express_partner/partials/commission_txn_row.html' %}
-          {% endfor %}
-        </div>
-        <div id="commTxnEmptyFilter" class="hidden px-4 py-10 text-center">
-          <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-slate-800/80">
-            <i class="fas fa-filter text-xl text-slate-500" aria-hidden="true"></i>
-          </div>
-          <p class="text-sm text-slate-400">تراکنشی با این فیلتر یافت نشد.</p>
-          <button type="button"
-                  id="commTxnResetFilter"
-                  class="mt-3 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition">
-            نمایش همه
-          </button>
-        </div>
-        {% else %}
-        <div class="px-4 py-10 text-center">
-          <div class="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-slate-800/80">
-            <i class="fas fa-receipt text-2xl text-slate-500" aria-hidden="true"></i>
-          </div>
-          <p class="text-sm text-slate-400">هنوز تراکنشی ثبت نشده است.</p>
-          <a href="{{ url_for('express_partner.dashboard') }}"
-             class="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-500">
-            <i class="fas fa-th-large text-[11px]" aria-hidden="true"></i>
-            رفتن به داشبورد
-          </a>
-        </div>
-        {% endif %}
-      </section>
-    </div>
-  </div>
+      {% macro filter_chip(key, label) %}
+      <button type="button"
+              data-comm-txn-filter="{{ key }}"
+              data-comm-txn-filter-label="{{ label }}"
+              class="comm-txn-chip{% if key == 'all' %} is-active{% endif %}"
+              role="option"
+              aria-selected="{{ 'true' if key == 'all' else 'false' }}">
+        <span>{{ label }}</span>
+        <span class="comm-txn-chip__count tabular-nums">{{ _summary.get(key, 0) }}</span>
+      </button>
+      {% endmacro %}
 
-  {# مودال فیلتر — bottom sheet #}
-  <div id="commTxnFilterModal"
-       class="comm-txn-filter-modal fixed inset-0 z-[210] hidden flex flex-col justify-end"
-       role="dialog"
-       aria-modal="true"
-       aria-hidden="true"
-       aria-labelledby="commTxnFilterModalTitle">
-    <button type="button"
-            id="commTxnFilterBackdrop"
-            class="comm-txn-filter-backdrop absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200"
-            aria-label="بستن"></button>
-    <div class="comm-txn-filter-sheet relative w-full max-w-lg mx-auto rounded-t-3xl bg-[#1C1F2A] border-t border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.55)] max-h-[min(80vh,520px)] flex flex-col translate-y-full transition-transform duration-300 ease-out pb-[env(safe-area-inset-bottom,0px)]">
-      <div class="shrink-0 pt-2.5 pb-1 flex justify-center">
-        <span class="block w-11 h-1 rounded-full bg-white/25" aria-hidden="true"></span>
+      <div id="commTxnFilters"
+           class="comm-txn-chips flex gap-2 overflow-x-auto border-b border-white/10 px-4 py-2.5 sm:px-6"
+           role="listbox"
+           aria-label="فیلتر تراکنش‌ها">
+        {{ filter_chip('all', 'همه') }}
+        {{ filter_chip('pending', 'انتظار') }}
+        {{ filter_chip('approved', 'تأیید') }}
+        {{ filter_chip('paid', 'واریز') }}
+        {{ filter_chip('withdrawal', 'برداشت') }}
+        {{ filter_chip('closed', 'رد/لغو') }}
       </div>
-      <div class="shrink-0 px-4 pb-3 flex items-center justify-between gap-3">
-        <h2 id="commTxnFilterModalTitle" class="text-[15px] font-bold text-white">فیلتر تراکنش‌ها</h2>
+
+      {% if items and items|length > 0 %}
+      <div id="commTxnRows" class="divide-y divide-white/10">
+        {% for c in items %}
+          {% set tour_item = loop.first %}
+          {% include 'express_partner/partials/commission_txn_row.html' %}
+        {% endfor %}
+      </div>
+      <div id="commTxnEmptyFilter" class="hidden px-4 py-14 text-center sm:px-6">
+        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/5 text-zinc-600">
+          <i class="fas fa-filter text-lg" aria-hidden="true"></i>
+        </div>
+        <p class="text-sm text-zinc-400">تراکنشی با این فیلتر نیست.</p>
         <button type="button"
-                id="commTxnFilterClose"
-                class="ep-partner-header-btn"
-                aria-label="بستن">
-          <i class="fas fa-times ep-partner-header-btn-icon"></i>
+                id="commTxnResetFilter"
+                class="mt-3 text-xs font-semibold text-emerald-400 transition hover:text-emerald-300">
+          نمایش همه
         </button>
       </div>
-      <div id="commTxnFilters" class="overflow-y-auto flex-1 min-h-0 px-3 pb-4 space-y-1.5" role="listbox" aria-label="فیلتر وضعیت">
-        {% macro filter_btn(key, label) %}
-        <button type="button"
-                data-comm-txn-filter="{{ key }}"
-                data-comm-txn-filter-label="{{ label }}"
-                class="comm-txn-filter w-full flex items-center justify-between gap-3 rounded-xl border px-3.5 py-3 text-start text-sm transition{% if key == 'all' %} border-emerald-500/40 bg-emerald-500/15 font-semibold text-emerald-300{% else %} border-white/8 bg-[#12141D] font-medium text-zinc-300 hover:bg-white/[0.04]{% endif %}"
-                role="option"
-                aria-selected="{{ 'true' if key == 'all' else 'false' }}">
-          <span>{{ label }}</span>
-          <span class="text-[11px] tabular-nums opacity-70 shrink-0">{{ _summary.get(key, 0) }}</span>
-        </button>
-        {% endmacro %}
-        {{ filter_btn('all', 'همه') }}
-        {{ filter_btn('pending', 'در انتظار') }}
-        {{ filter_btn('approved', 'تأیید شده') }}
-        {{ filter_btn('paid', 'واریز شده') }}
-        {{ filter_btn('withdrawal', 'برداشت') }}
-        {{ filter_btn('closed', 'رد / لغو') }}
+      {% else %}
+      <div class="px-4 py-16 text-center sm:px-6">
+        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/5 text-zinc-600">
+          <i class="fas fa-receipt text-2xl" aria-hidden="true"></i>
+        </div>
+        <p class="text-sm font-medium text-zinc-400">هنوز تراکنشی ثبت نشده</p>
+        <p class="mt-1 text-xs leading-relaxed text-zinc-600">پس از فروش یا برداشت، تراکنش‌ها اینجا نمایش داده می‌شوند.</p>
+        <a href="{{ url_for('express_partner.dashboard') }}"
+           data-vinor-express-nav
+           class="mt-5 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 transition hover:text-emerald-300">
+          <span>رفتن به داشبورد</span>
+          <i class="fas fa-chevron-left text-[10px] opacity-80" aria-hidden="true"></i>
+        </a>
       </div>
+      {% endif %}
+
     </div>
   </div>
 
@@ -168,49 +119,16 @@
     }
     function applyJalali(scope) {
       (scope || document).querySelectorAll('.jalali-dt[data-dt]').forEach(function (el) {
-        var formatted = fmt(el.getAttribute('data-dt') || '');
-        el.textContent = formatted || '—';
+        el.textContent = fmt(el.getAttribute('data-dt') || '') || '—';
       });
     }
     applyJalali(document);
-
-    (function setupCommIncomeInfoTip() {
-      var btn = document.querySelector('[data-comm-income-info-btn]');
-      var tip = document.querySelector('[data-comm-income-info-tip]');
-      if (!btn || !tip) return;
-      var hideTimer = null;
-      function hideTip() {
-        tip.classList.add('hidden');
-        tip.setAttribute('aria-hidden', 'true');
-        btn.setAttribute('aria-expanded', 'false');
-        if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
-      }
-      function showTip() {
-        tip.classList.remove('hidden');
-        tip.setAttribute('aria-hidden', 'false');
-        btn.setAttribute('aria-expanded', 'true');
-        if (hideTimer) clearTimeout(hideTimer);
-        hideTimer = setTimeout(hideTip, 5200);
-      }
-      btn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (tip.classList.contains('hidden')) showTip();
-        else hideTip();
-      });
-    })();
 
     var filters = document.getElementById('commTxnFilters');
     var rowsRoot = document.getElementById('commTxnRows');
     var emptyFilter = document.getElementById('commTxnEmptyFilter');
     var countHint = document.getElementById('commTxnCountHint');
     var resetBtn = document.getElementById('commTxnResetFilter');
-    var filterToggle = document.getElementById('commTxnFilterToggle');
-    var filterModal = document.getElementById('commTxnFilterModal');
-    var filterBackdrop = document.getElementById('commTxnFilterBackdrop');
-    var filterClose = document.getElementById('commTxnFilterClose');
-    var filterDot = document.getElementById('commTxnFilterDot');
-    var overlay = window.vinorExpressModalOverlay;
 
     if (!filters) return;
 
@@ -220,75 +138,34 @@
 
     var FILTER_LABELS = {
       all: 'همه',
-      pending: 'در انتظار',
-      approved: 'تأیید شده',
-      paid: 'واریز شده',
+      pending: 'انتظار',
+      approved: 'تأیید',
+      paid: 'واریز',
       withdrawal: 'برداشت',
-      closed: 'رد / لغو'
+      closed: 'رد/لغو'
     };
-
-    function openFilterModal() {
-      if (!filterModal) return;
-      if (filterModal.parentNode !== document.body) {
-        document.body.appendChild(filterModal);
-      }
-      filterModal.classList.remove('hidden');
-      filterModal.setAttribute('aria-hidden', 'false');
-      if (filterToggle) filterToggle.setAttribute('aria-expanded', 'true');
-      try { void filterModal.offsetWidth; } catch (_) {}
-      filterModal.classList.add('comm-txn-filter-modal--open');
-      if (overlay) overlay.open();
-    }
-
-    function closeFilterModal() {
-      if (!filterModal) return;
-      var wasOpen = filterModal.classList.contains('comm-txn-filter-modal--open');
-      filterModal.classList.remove('comm-txn-filter-modal--open');
-      window.setTimeout(function () {
-        filterModal.classList.add('hidden');
-      }, 280);
-      filterModal.setAttribute('aria-hidden', 'true');
-      if (filterToggle) filterToggle.setAttribute('aria-expanded', 'false');
-      if (wasOpen && overlay) overlay.close();
-    }
 
     function setActiveChip(key, label) {
       active = key;
       activeLabelText = label || FILTER_LABELS[key] || key;
-      filters.querySelectorAll('.comm-txn-filter').forEach(function (btn) {
+      filters.querySelectorAll('[data-comm-txn-filter]').forEach(function (btn) {
         var on = btn.getAttribute('data-comm-txn-filter') === key;
         btn.setAttribute('aria-selected', on ? 'true' : 'false');
-        btn.classList.toggle('border-emerald-500/40', on);
-        btn.classList.toggle('bg-emerald-500/15', on);
-        btn.classList.toggle('text-emerald-300', on);
-        btn.classList.toggle('font-semibold', on);
-        btn.classList.toggle('border-white/8', !on);
-        btn.classList.toggle('bg-[#12141D]', !on);
-        btn.classList.toggle('text-zinc-300', !on);
-        btn.classList.toggle('font-medium', !on);
+        btn.classList.toggle('is-active', on);
       });
-      if (filterToggle) {
-        filterToggle.classList.toggle('is-active', key !== 'all');
-      }
-      if (filterDot) {
-        filterDot.classList.toggle('hidden', key === 'all');
-      }
     }
 
     function updateCountHint(shown) {
       if (!countHint) return;
       if (totalRows === 0) {
         countHint.textContent = 'بدون تراکنش';
-        countHint.classList.remove('is-filtered');
         syncTxnHeaderPad();
         return;
       }
       if (active === 'all') {
         countHint.textContent = totalRows + ' تراکنش';
-        countHint.classList.remove('is-filtered');
       } else {
         countHint.textContent = shown + ' از ' + totalRows + ' · ' + activeLabelText;
-        countHint.classList.add('is-filtered');
       }
       syncTxnHeaderPad();
     }
@@ -317,7 +194,6 @@
     function selectFilter(key, label) {
       setActiveChip(key, label);
       applyFilter();
-      closeFilterModal();
     }
 
     filters.addEventListener('click', function (e) {
@@ -335,23 +211,6 @@
       });
     }
 
-    if (filterToggle) {
-      filterToggle.addEventListener('click', function () {
-        if (filterModal && filterModal.classList.contains('comm-txn-filter-modal--open')) {
-          closeFilterModal();
-        } else {
-          openFilterModal();
-        }
-      });
-    }
-    if (filterBackdrop) filterBackdrop.addEventListener('click', closeFilterModal);
-    if (filterClose) filterClose.addEventListener('click', closeFilterModal);
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && filterModal && filterModal.classList.contains('comm-txn-filter-modal--open')) {
-        closeFilterModal();
-      }
-    });
-
     var initial = 'all';
     try {
       var q = new URLSearchParams(window.location.search).get('status');
@@ -361,6 +220,11 @@
     setActiveChip(initial, FILTER_LABELS[initial] || 'همه');
     if (rowsRoot) applyFilter();
     else updateCountHint(0);
+
+    window.__vinorPagePullRefresh = function () {
+      window.location.reload();
+      return Promise.resolve();
+    };
   })();
   </script>
   {% include 'express_partner/partials/commissions_cancel_script.html' %}

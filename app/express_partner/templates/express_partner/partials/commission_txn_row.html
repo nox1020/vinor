@@ -1,11 +1,11 @@
-{# کارت تراکنش پورسانت یا برداشت — متغیر c #}
+{# ردیف تراکنش — سبک لیست دیوار #}
 {% set _txn_type = (c.txn_type or 'commission')|trim %}
 {% set _is_wd = _txn_type in ('withdrawal', 'withdrawal_request') %}
 {% set _is_referral = (c.commission_type or '')|trim == 'referral' %}
 {% set _filter = c._txn_filter if c._txn_filter is defined else (c.status or 'pending')|trim %}
 {% set _kind = c._txn_kind if c._txn_kind is defined else ('withdrawal' if _is_wd else 'commission') %}
 {% set st = (c.status or 'pending')|trim %}
-<div class="commission-txn-row group px-4 py-3.5 hover:bg-white/[0.035] active:bg-white/[0.06] transition-colors cursor-pointer{% if tour_item %} commission-txn-row-tour{% endif %}{% if _is_referral %} commission-txn-row--referral{% endif %}{% if _is_wd %} commission-txn-row--withdrawal{% endif %}"
+<div class="commission-txn-row vn-txn-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors hover:bg-white/[0.03] active:bg-white/[0.05] sm:px-6 sm:py-4 cursor-pointer{% if tour_item %} commission-txn-row-tour{% endif %}{% if _is_referral %} commission-txn-row--referral{% endif %}{% if _is_wd %} commission-txn-row--withdrawal{% endif %}"
      role="button"
      tabindex="0"
      data-commission-status="{{ st }}"
@@ -16,102 +16,89 @@
      {% if c.withdrawal_id %}data-withdrawal-id="{{ c.withdrawal_id }}"{% endif %}
      {% if tour_item %}data-tour="commission-item"{% endif %}
      aria-label="مشاهده جزئیات تراکنش">
-  <div class="flex items-center gap-3">
-    <div class="commission-txn-row__icon shrink-0
-      {% if _txn_type == 'withdrawal' %}commission-txn-row__icon--violet
-      {% elif _txn_type == 'withdrawal_request' %}
-        {% if st in ('cancelled', 'rejected') %}commission-txn-row__icon--muted
-        {% elif st in ('approved', 'processing') %}commission-txn-row__icon--sky
-        {% else %}commission-txn-row__icon--amber{% endif %}
-      {% elif _is_referral %}commission-txn-row__icon--referral
-      {% elif st == 'paid' %}commission-txn-row__icon--violet
-      {% elif st == 'approved' %}commission-txn-row__icon--emerald
-      {% elif st == 'rejected' %}commission-txn-row__icon--red
-      {% else %}commission-txn-row__icon--amber{% endif %}"
-         aria-hidden="true">
-      {% if _txn_type == 'withdrawal' %}
-        <i class="fas fa-check"></i>
-      {% elif _txn_type == 'withdrawal_request' %}
-        <i class="fas fa-arrow-down"></i>
-      {% elif _is_referral %}
-        <i class="fas fa-gift"></i>
-      {% else %}
-        <i class="fas fa-home"></i>
-      {% endif %}
-    </div>
-
-    <div class="flex-1 min-w-0">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0 flex-1">
-          <p class="commission-txn-row__title text-[13px] font-semibold text-white leading-snug truncate">
-            {{ c._txn_label or 'پورسانت فروش' }}
-          </p>
-          <p class="commission-txn-row__meta mt-1 text-[11px] text-slate-500 leading-snug truncate">
-            {% if _txn_type == 'withdrawal' %}
-              {{ c.bank_summary or 'واریز به حساب بانکی' }}
-            {% elif _txn_type == 'withdrawal_request' %}
-              {{ c.withdrawal_status_label or 'درخواست برداشت' }}{% if c.masked_pan %} · {{ c.masked_pan }}{% elif c.bank_name %} · {{ c.bank_name }}{% endif %}
-            {% elif _is_referral %}
-              {{ c._txn_meta or c.referred_name or c.referred_phone or 'همکار دعوت‌شده' }}
-            {% else %}
-              {{ c._txn_meta or c.land_code or '—' }}
-            {% endif %}
-            {% if c.partial_paid_display %} · {{ c.partial_paid_display|toman }} واریز شده{% endif %}
-          </p>
-        </div>
-        <p class="commission-txn-row__amount shrink-0 text-sm font-bold tabular-nums whitespace-nowrap{% if _is_wd %} text-amber-300{% elif (c.commission_amount or 0)|int < 0 %} text-rose-400{% else %} text-emerald-400{% endif %}">
-          {% if _is_wd %}
-            −{{ (c.withdrawal_amount or 0)|toman }}
-          {% elif (c.commission_amount or 0)|int < 0 %}
-            −{{ ((c.commission_amount or 0)|int * -1)|toman }}
-          {% else %}
-            {% if (c.commission_amount or 0)|int > 0 %}+{% endif %}{{ (c.commission_amount or 0)|toman }}
-          {% endif %}
-        </p>
-      </div>
-
-      <div class="mt-2.5 flex items-center justify-between gap-2">
-        {% if c.created_at %}
-        <time class="commission-txn-row__date text-[10px] text-slate-500 tabular-nums jalali-dt" datetime="{{ c.created_at }}" data-dt="{{ c.created_at }}"></time>
-        {% else %}
-        <span class="text-[10px] text-slate-600">—</span>
-        {% endif %}
-        <div class="flex items-center gap-2 shrink-0">
-          {% if _txn_type == 'withdrawal' %}
-            <span class="commission-txn-row__badge commission-txn-row__badge--violet">واریز شد</span>
-          {% elif _txn_type == 'withdrawal_request' %}
-            {% if st == 'cancelled' %}
-              <span class="commission-txn-row__badge commission-txn-row__badge--muted">لغو شده</span>
-            {% elif st == 'rejected' %}
-              <span class="commission-txn-row__badge commission-txn-row__badge--red">رد شده</span>
-            {% elif st in ('approved', 'processing') %}
-              <span class="commission-txn-row__badge commission-txn-row__badge--sky">{{ c.withdrawal_status_label or 'در جریان' }}</span>
-            {% else %}
-              <span class="commission-txn-row__badge commission-txn-row__badge--amber">در انتظار بررسی</span>
-            {% endif %}
-          {% elif st == 'paid' %}
-            <span class="commission-txn-row__badge commission-txn-row__badge--violet">پرداخت‌شده</span>
-          {% elif st == 'approved' and c._txn_phase == 'approval' %}
-            <span class="commission-txn-row__badge commission-txn-row__badge--emerald">تأیید پورسانت</span>
-          {% elif st == 'approved' %}
-            <span class="commission-txn-row__badge commission-txn-row__badge--emerald">تأیید شده</span>
-          {% elif st == 'rejected' %}
-            <span class="commission-txn-row__badge commission-txn-row__badge--red">رد شده</span>
-          {% else %}
-            <span class="commission-txn-row__badge commission-txn-row__badge--amber">در انتظار تأیید</span>
-          {% endif %}
-          <i class="fas fa-chevron-left text-[9px] text-slate-600 opacity-0 -translate-x-0.5 transition group-hover:opacity-100 group-hover:translate-x-0" aria-hidden="true"></i>
-        </div>
-      </div>
-
-      {% if _txn_type == 'withdrawal_request' and c.cancellable %}
-      <button type="button"
-              data-cancel-withdrawal="{{ c.withdrawal_id }}"
-              class="mt-2.5 w-full rounded-lg border border-red-500/30 bg-red-500/10 py-2 text-[11px] font-semibold text-red-300 hover:bg-red-500/15 transition"
-              onclick="event.stopPropagation()">
-        لغو درخواست
-      </button>
-      {% endif %}
-    </div>
+  <div class="commission-txn-row__icon shrink-0
+    {% if _txn_type == 'withdrawal' %}commission-txn-row__icon--violet
+    {% elif _txn_type == 'withdrawal_request' %}
+      {% if st in ('cancelled', 'rejected') %}commission-txn-row__icon--muted
+      {% elif st in ('approved', 'processing') %}commission-txn-row__icon--sky
+      {% else %}commission-txn-row__icon--amber{% endif %}
+    {% elif _is_referral %}commission-txn-row__icon--referral
+    {% elif st == 'paid' %}commission-txn-row__icon--violet
+    {% elif st == 'approved' %}commission-txn-row__icon--emerald
+    {% elif st == 'rejected' %}commission-txn-row__icon--red
+    {% else %}commission-txn-row__icon--amber{% endif %}"
+       aria-hidden="true">
+    {% if _txn_type == 'withdrawal' %}
+      <i class="fas fa-check"></i>
+    {% elif _txn_type == 'withdrawal_request' %}
+      <i class="fas fa-arrow-down"></i>
+    {% elif _is_referral %}
+      <i class="fas fa-gift"></i>
+    {% else %}
+      <i class="fas fa-home"></i>
+    {% endif %}
   </div>
+
+  <div class="min-w-0 flex-1">
+    <div class="mb-0.5 flex items-baseline justify-between gap-2">
+      <p class="commission-txn-row__title min-w-0 truncate text-[15px] font-bold leading-tight text-white">
+        {{ c._txn_label or 'پورسانت فروش' }}
+      </p>
+      <p class="commission-txn-row__amount shrink-0 text-sm font-bold tabular-nums whitespace-nowrap{% if _is_wd %} text-amber-300{% elif (c.commission_amount or 0)|int < 0 %} text-rose-400{% else %} text-emerald-400{% endif %}">
+        {% if _is_wd %}
+          −{{ (c.withdrawal_amount or 0)|toman }}
+        {% elif (c.commission_amount or 0)|int < 0 %}
+          −{{ ((c.commission_amount or 0)|int * -1)|toman }}
+        {% else %}
+          {% if (c.commission_amount or 0)|int > 0 %}+{% endif %}{{ (c.commission_amount or 0)|toman }}
+        {% endif %}
+      </p>
+    </div>
+    <p class="commission-txn-row__meta truncate text-[13px] leading-snug text-zinc-400">
+      {% if _txn_type == 'withdrawal' %}
+        {{ c.bank_summary or 'واریز به حساب بانکی' }}
+      {% elif _txn_type == 'withdrawal_request' %}
+        {{ c.withdrawal_status_label or 'درخواست برداشت' }}{% if c.masked_pan %} · {{ c.masked_pan }}{% elif c.bank_name %} · {{ c.bank_name }}{% endif %}
+      {% elif _is_referral %}
+        {{ c._txn_meta or c.referred_name or c.referred_phone or 'همکار دعوت‌شده' }}
+      {% else %}
+        {{ c._txn_meta or c.land_code or '—' }}
+      {% endif %}
+      {% if c.partial_paid_display %} · {{ c.partial_paid_display|toman }} واریز شده{% endif %}
+    </p>
+    <div class="mt-1 flex items-center justify-between gap-2">
+      {% if c.created_at %}
+      <time class="commission-txn-row__date text-[11px] tabular-nums text-zinc-500 jalali-dt" datetime="{{ c.created_at }}" data-dt="{{ c.created_at }}"></time>
+      {% else %}
+      <span class="text-[11px] text-zinc-600">—</span>
+      {% endif %}
+      <span class="shrink-0 text-[11px] font-medium text-zinc-500">
+        {% if _txn_type == 'withdrawal' %}
+          واریز شد
+        {% elif _txn_type == 'withdrawal_request' %}
+          {{ c.withdrawal_status_label or 'درخواست برداشت' }}
+        {% elif st == 'paid' %}
+          پرداخت‌شده
+        {% elif st == 'approved' and c._txn_phase == 'approval' %}
+          تأیید پورسانت
+        {% elif st == 'approved' %}
+          تأیید شده
+        {% elif st == 'rejected' %}
+          رد شده
+        {% else %}
+          در انتظار
+        {% endif %}
+      </span>
+    </div>
+    {% if _txn_type == 'withdrawal_request' and c.cancellable %}
+    <button type="button"
+            data-cancel-withdrawal="{{ c.withdrawal_id }}"
+            class="mt-2 w-full rounded-lg border border-red-500/25 bg-red-500/10 py-2 text-[11px] font-semibold text-red-300 transition hover:bg-red-500/15"
+            onclick="event.stopPropagation()">
+      لغو درخواست
+    </button>
+    {% endif %}
+  </div>
+
+  <i class="fas fa-chevron-left shrink-0 text-[10px] text-zinc-600" aria-hidden="true"></i>
 </div>
