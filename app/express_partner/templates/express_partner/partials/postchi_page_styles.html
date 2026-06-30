@@ -4,6 +4,16 @@
     height: 100dvh;
     max-height: 100dvh;
   }
+  html:has(.postchi-page) #vinor-express-page-swap {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  html:has(.postchi-page) body {
+    overflow: hidden;
+  }
   .postchi-page {
     display: flex;
     flex-direction: column;

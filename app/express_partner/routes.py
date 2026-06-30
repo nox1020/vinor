@@ -5227,6 +5227,7 @@ def postchi_page():
         back_url=url_for('express_partner.notifications'),
         hide_header=True,
     ))
+    _append_partner_tab_prefetch(resp)
     return resp
 
 

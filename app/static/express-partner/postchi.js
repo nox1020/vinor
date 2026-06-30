@@ -73,6 +73,9 @@
   }
 
   function readPostchiCfg(root) {
+    if (window.__VINOR_POSTCHI_CFG__ && typeof window.__VINOR_POSTCHI_CFG__ === 'object') {
+      return window.__VINOR_POSTCHI_CFG__;
+    }
     root = root || postchiRoot();
     if (root) {
       try {
@@ -80,13 +83,23 @@
         if (raw) return JSON.parse(raw);
       } catch (_) {}
     }
-    return window.__VINOR_POSTCHI_CFG__ || {};
+    return {};
   }
 
   function isPinnedToLatest(el) {
     el = el || messagesEl();
     if (!el) return true;
     return el.scrollHeight - el.scrollTop - el.clientHeight < 56;
+  }
+
+  var postchiAutoPinUntil = 0;
+
+  function armPostchiAutoPin(ms) {
+    postchiAutoPinUntil = Date.now() + (ms || 1200);
+  }
+
+  function shouldForcePin() {
+    return Date.now() < postchiAutoPinUntil;
   }
 
   function pinToLatest(el) {
@@ -98,7 +111,7 @@
       var anchor = document.getElementById('postchiScrollAnchor');
       if (!anchor) return;
       try {
-        anchor.scrollIntoView({ block: 'end', behavior: 'instant' });
+        anchor.scrollIntoView({ block: 'end', behavior: 'auto' });
       } catch (_) {
         try { anchor.scrollIntoView(false); } catch (_e) {}
       }
@@ -112,13 +125,28 @@
   }
 
   function pinToLatestSoon() {
+    armPostchiAutoPin(1600);
     pinToLatest();
-    setTimeout(function () { pinToLatest(); }, 40);
-    setTimeout(function () { pinToLatest(); }, 140);
+    [40, 120, 280, 500, 900].forEach(function (ms) {
+      setTimeout(function () { pinToLatest(); }, ms);
+    });
   }
 
   var postchiResizeObserver = null;
   var postchiResizeTarget = null;
+  var postchiMutationObserver = null;
+
+  function unbindPostchiObservers() {
+    if (postchiResizeObserver) {
+      try { postchiResizeObserver.disconnect(); } catch (_) {}
+      postchiResizeObserver = null;
+      postchiResizeTarget = null;
+    }
+    if (postchiMutationObserver) {
+      try { postchiMutationObserver.disconnect(); } catch (_) {}
+      postchiMutationObserver = null;
+    }
+  }
 
   function bindPostchiResizePin(el) {
     el = el || messagesEl();
@@ -129,9 +157,28 @@
     }
     postchiResizeTarget = el;
     postchiResizeObserver = new ResizeObserver(function () {
-      if (isPinnedToLatest(el)) pinToLatest(el);
+      if (shouldForcePin() || isPinnedToLatest(el)) pinToLatest(el);
     });
     postchiResizeObserver.observe(el);
+  }
+
+  function bindPostchiMutationPin(el) {
+    el = el || messagesEl();
+    if (!el || typeof MutationObserver === 'undefined') return;
+    if (postchiMutationObserver) {
+      try { postchiMutationObserver.disconnect(); } catch (_) {}
+    }
+    postchiMutationObserver = new MutationObserver(function () {
+      if (shouldForcePin() || isPinnedToLatest(el)) pinToLatest(el);
+    });
+    postchiMutationObserver.observe(el, { childList: true, subtree: true, characterData: true });
+  }
+
+  function bindPostchiScrollHelpers(el) {
+    el = el || messagesEl();
+    if (!el) return;
+    bindPostchiResizePin(el);
+    bindPostchiMutationPin(el);
   }
 
   var pageSwapScrollBound = false;
@@ -169,9 +216,8 @@
           if (Array.isArray(seed) && seed.length) {
             this.messages = decorateMessages(seed.map(stripMessage));
             this._hydrated = true;
-            var self = this;
             this.$nextTick(function () {
-              bindPostchiResizePin();
+              bindPostchiScrollHelpers();
               pinToLatestSoon();
             });
             return;
@@ -184,9 +230,8 @@
         setMessages: function (list) {
           this.messages = decorateMessages((list || []).map(stripMessage));
           this._hydrated = true;
-          var self = this;
           this.$nextTick(function () {
-            bindPostchiResizePin();
+            bindPostchiScrollHelpers();
             pinToLatestSoon();
           });
         },
@@ -257,6 +302,7 @@
       if (typeof Alpine.initTree === 'function') {
         Alpine.initTree(root);
       }
+      pinToLatestSoon();
       return;
     }
 
@@ -267,6 +313,7 @@
         if (typeof state.hydrate === 'function') state.hydrate();
       }
     } catch (_) {}
+    pinToLatestSoon();
   };
 
   document.addEventListener('alpine:init', definePostchiPage);

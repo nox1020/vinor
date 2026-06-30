@@ -498,6 +498,8 @@
       if (cm) cm.scrollTop = 0;
       var cards = document.getElementById('dashboardMobileCardsRoot');
       if (cards) cards.scrollTop = 0;
+      var postchiMsgs = document.getElementById('postchiMessages');
+      if (postchiMsgs) postchiMsgs.scrollTop = postchiMsgs.scrollHeight;
       document.documentElement.removeAttribute('data-vinor-dash-scroll');
       document.documentElement.removeAttribute('data-vinor-comm-scroll');
     } catch (_) {}
