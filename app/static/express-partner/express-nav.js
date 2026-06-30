@@ -37,8 +37,8 @@
     '/express/partner/legal/privacy': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/legal/terms': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/cooperation-terms': { tab: 'dashboard', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/apply': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/thanks': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/apply': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/thanks': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/commissions/transactions': { tab: 'commissions', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/ai': { tab: '', depth: 1, bottomNav: false, prefetch: false },
     '/express/partner/login': { tab: '', depth: 0, bottomNav: false, prefetch: true },
@@ -61,6 +61,7 @@
   var prefetchCache = Object.create(null);
   var prefetchInflight = Object.create(null);
   var navGeneration = 0;
+  var navFetchAbort = null;
   var leaveTimerId = 0;
 
   /** از چت AI به جزئیات فایل — بارگذاری کامل (soft-swap UI را خالی می‌کند) */
@@ -135,11 +136,36 @@
     try {
       if (window.__vinorAuthPageAbort) window.__vinorAuthPageAbort.abort();
     } catch (_) {}
+    try {
+      if (window.__vinorDashAbort) window.__vinorDashAbort.abort();
+    } catch (_) {}
+    try {
+      if (window.__vinorDashPullAbort) window.__vinorDashPullAbort.abort();
+    } catch (_) {}
+    try {
+      if (window.__vinorProfilePageCtrl) window.__vinorProfilePageCtrl.abort();
+    } catch (_) {}
+    try {
+      if (window.__vinorInvitePageCtrl) window.__vinorInvitePageCtrl.abort();
+    } catch (_) {}
+    try {
+      if (window.__vinorRoutineAbort) window.__vinorRoutineAbort.abort();
+    } catch (_) {}
+    try {
+      if (window.__vinorCommTxnPageAbort) window.__vinorCommTxnPageAbort.abort();
+    } catch (_) {}
+    try {
+      if (window.__vinorCommChromeAbort) window.__vinorCommChromeAbort.abort();
+    } catch (_) {}
   }
   window.__vinorExpressTeardownPageState = teardownSoftNavPageState;
 
   function bumpNavGeneration() {
     navGeneration += 1;
+    if (navFetchAbort) {
+      try { navFetchAbort.abort(); } catch (_) {}
+      navFetchAbort = null;
+    }
     if (leaveTimerId) {
       window.clearTimeout(leaveTimerId);
       leaveTimerId = 0;
@@ -209,33 +235,23 @@
     return 0;
   }
 
-  function shouldForceFullNav(fromHref, toHref) {
-    try {
-      var fromU = parseUrl(fromHref);
-      var toU = parseUrl(toHref);
-      if (!fromU || !toU) return false;
-      var fromAuth = isAuthSoftPath(fromU.pathname);
-      var toAuth = isAuthSoftPath(toU.pathname);
-      if (fromAuth && toAuth) return false;
-      // ورود/OTP داخل همان شِل swap — auth_base و base هر دو #vinor-express-page-swap دارند
-      if ((fromAuth || toAuth) && document.getElementById('vinor-express-page-swap')) return false;
-    } catch (_) {}
-    return false;
-  }
-
   function shouldPrefetchNav(fromHref, toHref) {
     if (!isPartnerUrl(toHref)) return false;
-    if (shouldForceFullNav(fromHref, toHref)) return false;
     try {
-      var toPath = normPath(parseUrl(toHref).pathname);
-      var fromPath = normPath(parseUrl(fromHref).pathname);
+      var toU = parseUrl(toHref);
+      if (!toU) return false;
+      var toPath = normPath(toU.pathname);
+      var fromU = parseUrl(fromHref);
+      var fromPath = fromU ? normPath(fromU.pathname) : '';
       if (isAuthSoftPath(toPath)) {
         if (toPath === '/express/partner/login') return true;
         if (toPath === '/express/partner/login/otp' && fromPath === '/express/partner/login') return true;
         return false;
       }
-    } catch (_) {}
-    return true;
+      return routePrefetchAllowed(toPath);
+    } catch (_) {
+      return false;
+    }
   }
 
   function currentAuthSegment() {
@@ -287,6 +303,7 @@
       if (!routePrefetchAllowed(p)) return false;
       if (p === '/express/partner/login/otp') return true;
       if (p === '/express/partner/login') return true;
+      if (p === '/express/partner/apply' || p === '/express/partner/thanks') return false;
       if (isAuthSoftPath(p)) return false;
       return true;
     } catch (_) {
@@ -586,8 +603,6 @@
       var prefetchProfileSubpages = function () {
         try {
           [
-            '/express/partner/apply',
-            '/express/partner/thanks',
             '/express/partner/top-sellers',
             '/express/partner/help',
             '/express/partner/invite',
@@ -878,7 +893,11 @@
         Accept: 'text/html',
         'X-Requested-With': 'XMLHttpRequest'
       },
-      cache: opts.postLogin ? 'no-store' : 'default'
+      cache: opts.postLogin ? 'no-store' : 'default',
+      signal: (function () {
+        navFetchAbort = new AbortController();
+        return navFetchAbort.signal;
+      })()
     })
       .then(function (res) {
         if (isStaleNav(gen)) return null;
@@ -898,7 +917,8 @@
         }
         return applyHtml(payload.html, payload.url || href);
       })
-      .catch(function () {
+      .catch(function (err) {
+        if (err && err.name === 'AbortError') return false;
         if (isStaleNav(gen)) return false;
         window.location.href = href;
         return false;
@@ -962,7 +982,11 @@
       if (fromPath !== '/express/partner/profile/edit' || fromPath === toPath) {
         return Promise.resolve();
       }
-      teardownSoftNavPageState();
+      var dirty = typeof window.__vinorProfileEditIsDirty === 'function' &&
+        window.__vinorProfileEditIsDirty();
+      if (dirty && typeof window.__vinorProfileEditFlushSave === 'function') {
+        return Promise.resolve(window.__vinorProfileEditFlushSave()).catch(function () {});
+      }
     } catch (_) {}
     return Promise.resolve();
   }
@@ -979,10 +1003,6 @@
       window.__vinorExpressLastHref = from;
     } catch (_) {}
     return prepareLeaveFromProfileEdit(from, href).then(function () {
-      if (!opts.postLogin && shouldForceFullNav(from, href)) {
-        window.location.assign(href);
-        return false;
-      }
       if (opts.postLogin) {
         stopAllExpressMedia();
         return softNavigate(href, 1, opts);
@@ -1183,6 +1203,7 @@
     if (!document.getElementById('vinor-express-page-swap')) return;
     if (!isPartnerUrl(window.location.href)) return;
     var target = window.location.href;
+    var prevHref = window.__vinorExpressLastHref || '';
     var dir = 0;
     try {
       var prevDepth = window.__vinorExpressNavDepth;
@@ -1193,15 +1214,16 @@
         if (nextDepth > prevDepth) dir = 1;
         else if (nextDepth < prevDepth) dir = -1;
       }
-      var authDir = authNavDirection(window.__vinorExpressLastHref || '', target);
+      var authDir = authNavDirection(prevHref || '', target);
       if (authDir) dir = authDir;
       window.__vinorExpressNavDepth = nextDepth;
       window.__vinorExpressLastHref = target;
     } catch (_) {}
     if (document.getElementById('profileEditPage')) {
-      try {
-        prepareLeaveFromProfileEdit(window.__vinorExpressLastHref || window.location.href, target);
-      } catch (_) {}
+      prepareLeaveFromProfileEdit(prevHref || target, target).then(function () {
+        softNavigate(target, dir, { fromPopstate: true });
+      });
+      return;
     }
     softNavigate(target, dir, { fromPopstate: true });
   });
@@ -1252,14 +1274,6 @@
         return;
       }
       if (!href || href === '#' || href.indexOf('javascript:') === 0) return;
-
-      if (shouldForceFullNav(window.location.href, href)) {
-        if (parseUrl(href) && parseUrl(href).pathname.indexOf(PREFIX) === 0) {
-          e.preventDefault();
-          window.location.assign(href);
-        }
-        return;
-      }
 
       if (!isPartnerUrl(href)) return;
 

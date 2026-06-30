@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.51-offline-bar-fade';
+const VERSION = 'v1.0.52-soft-nav-fix';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -35,8 +35,6 @@ const PRECACHE_URLS = [
   // '/express/partner/profile',
   // '/express/partner/commissions',
   '/express/partner/notes',
-  '/express/partner/apply',
-  '/express/partner/thanks',
   '/express/partner/offline',
   // Manifest
   '/express/partner/manifest.webmanifest',
@@ -167,6 +165,18 @@ function isAuthPartnerPath(pathname) {
     p === '/express/partner/verify';
 }
 
+/** صفحات وابسته به سشن — در کش navigate ذخیره نشوند */
+function isSessionPartnerPath(pathname) {
+  const p = (pathname || '').replace(/\/+$/, '') || '/';
+  return p === '/express/partner/apply' ||
+    p === '/express/partner/thanks' ||
+    p === '/express/partner/dashboard' ||
+    p === '/express/partner/profile' ||
+    p === '/express/partner/profile/edit' ||
+    p === '/express/partner/commissions' ||
+    p.startsWith('/express/partner/commissions/');
+}
+
 function isNoStoreResponse(response) {
   if (!response) return true;
   const cc = (response.headers.get('cache-control') || '').toLowerCase();
@@ -177,7 +187,7 @@ async function cacheApkNavigation(request, response) {
   if (!isVinorApkRequest(request) || !response || !response.ok) return;
   if (isNoStoreResponse(response)) return;
   const url = new URL(request.url);
-  if (isAuthPartnerPath(url.pathname)) return;
+  if (isAuthPartnerPath(url.pathname) || isSessionPartnerPath(url.pathname)) return;
   const ct = (response.headers.get('content-type') || '').toLowerCase();
   if (!ct.includes('text/html')) return;
   try {

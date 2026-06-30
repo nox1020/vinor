@@ -135,6 +135,7 @@
   var timerIcon = '<i class="fas fa-circle-info" aria-hidden="true"></i>';
 
   function teardownOtpPage() {
+    verifyInflight = false;
     if (resendTimerId) { clearInterval(resendTimerId); resendTimerId = null; }
     if (webOtpAbort) { try { webOtpAbort.abort(); } catch (_) {} webOtpAbort = null; }
   }
@@ -200,7 +201,7 @@
   }
 
   function goAfterLogin(dest) {
-    if (!dest) return;
+    if (!dest || (sig && sig.aborted)) return;
     if (window.vinorPostLoginNavigate) {
       window.vinorPostLoginNavigate(dest);
       return;
@@ -217,7 +218,7 @@
     verifyInflight = true;
     showHint('');
     lockForSubmit();
-    fetch(form.action, {
+    var fetchOpts = {
       method: 'POST',
       body: new FormData(form),
       credentials: 'same-origin',
@@ -226,8 +227,11 @@
         'X-Requested-With': 'XMLHttpRequest',
         Accept: 'application/json'
       }
-    })
+    };
+    if (sig) fetchOpts.signal = sig;
+    fetch(form.action, fetchOpts)
       .then(function (res) {
+        if (sig && sig.aborted) return null;
         return res.json().then(function (data) {
           return { ok: res.ok, data: data };
         }).catch(function () {
@@ -235,6 +239,7 @@
         });
       })
       .then(function (payload) {
+        if (!payload || (sig && sig.aborted)) return;
         var data = payload.data || {};
         if (payload.ok && data.ok && data.redirect) {
           goAfterLogin(data.redirect);
@@ -244,10 +249,14 @@
         unlockOtpInputs();
         showHint((data && data.error) || 'خطا در تأیید کد.');
         if (data && data.redirect) {
-          setTimeout(function () { goAfterLogin(data.redirect); }, 400);
+          setTimeout(function () {
+            if (sig && sig.aborted) return;
+            goAfterLogin(data.redirect);
+          }, 400);
         }
       })
-      .catch(function () {
+      .catch(function (err) {
+        if (err && err.name === 'AbortError') return;
         verifyInflight = false;
         unlockOtpInputs();
         try { form.submit(); } catch (_) {}

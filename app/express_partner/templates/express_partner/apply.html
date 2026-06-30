@@ -172,10 +172,6 @@
     try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
   }
 
-  if (window.vinorExpressPrefetch) {
-    try { window.vinorExpressPrefetch(new URL('/express/partner/thanks', window.location.origin).href); } catch (_) {}
-  }
-
   var params = new URLSearchParams(window.location.search);
   var ref = params.get('ref');
   var form = document.getElementById('applyForm');

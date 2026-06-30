@@ -236,7 +236,11 @@
         var d = res.data || {};
         if (d.approved && d.redirect_url) {
           showHint('تأیید شد! در حال ورود به پنل…', true);
-          window.location.href = d.redirect_url;
+          if (window.vinorPostLoginNavigate) {
+            window.vinorPostLoginNavigate(d.redirect_url);
+          } else {
+            window.location.replace(d.redirect_url);
+          }
           return;
         }
         if (res.ok && d.success) {

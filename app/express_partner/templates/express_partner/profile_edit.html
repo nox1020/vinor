@@ -736,15 +736,18 @@ if (!window.__vinorProfileCityHook) {
 }
 
 initProfileEditSave();
-document.addEventListener('vinor:express-page-swap', function () {
-  if (!document.getElementById('profileEditPage')) {
-    if (typeof window.__vinorExpressTeardownPageState === 'function') {
-      try { window.__vinorExpressTeardownPageState(); } catch (_) {}
+if (!window.__vinorProfileEditSwapBound) {
+  window.__vinorProfileEditSwapBound = true;
+  document.addEventListener('vinor:express-page-swap', function () {
+    if (!document.getElementById('profileEditPage')) {
+      if (typeof window.__vinorExpressTeardownPageState === 'function') {
+        try { window.__vinorExpressTeardownPageState(); } catch (_) {}
+      }
+      return;
     }
-    return;
-  }
-  initProfileEditSave();
-});
+    initProfileEditSave();
+  });
+}
 
 function initProfileEditDeleteAccount() {
   if (!document.getElementById('profileEditPage')) return;
@@ -870,7 +873,10 @@ function scheduleProfileEditDeleteInit() {
 }
 
 scheduleProfileEditDeleteInit();
-document.addEventListener('vinor:express-page-swap', initProfileEditDeleteAccount);
+if (!window.__vinorProfileEditDeleteSwapBound) {
+  window.__vinorProfileEditDeleteSwapBound = true;
+  document.addEventListener('vinor:express-page-swap', initProfileEditDeleteAccount);
+}
 
 (function() {
   var stack = document.querySelector('[data-flash-stack]');
