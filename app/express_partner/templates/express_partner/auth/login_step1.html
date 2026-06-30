@@ -3,15 +3,18 @@
 {% block title %}تأیید شماره موبایل | وینور اکسپرس{% endblock %}
 {% block content %}
 
+{% set _login_next = request.args.get('next') %}
+{% set login_close_href = _login_next if _login_next and _login_next.startswith('/express/partner/') and not _login_next.startswith('/express/partner/login') else url_for('express_partner.dashboard') %}
+
 <div class="{{ auth_page() }}">
   <header class="vinor-auth-topbar">
-    <h1 class="vinor-auth-topbar-title">تأیید شماره موبایل</h1>
-    <a href="{{ url_for('express_partner.dashboard') }}"
+    <a href="{{ login_close_href }}"
        class="{{ auth_header_btn() }} vinor-auth-topbar-action"
-       data-vinor-express-full-nav="1"
+       data-vinor-express-nav="back"
        aria-label="بستن">
       <i class="fas fa-xmark" aria-hidden="true"></i>
     </a>
+    <h1 class="vinor-auth-topbar-title">تأیید شماره موبایل</h1>
   </header>
 
   <main class="vinor-auth-main">
@@ -82,6 +85,7 @@
   var sigOpts = sig ? { signal: sig } : false;
   var passiveSig = sig ? { passive: true, signal: sig } : { passive: true };
   var OTP_PREFETCH_URL = '{{ url_for("express_partner.login_otp") }}';
+  var LOGIN_CLOSE_URL = '{{ login_close_href }}';
 
   var form = document.getElementById('loginStep1Form');
   var btn = document.getElementById('loginSubmitBtn');
@@ -147,6 +151,12 @@
     authBusy.unlock();
     syncSubmitBtn();
   }
+
+  try {
+    if (window.vinorExpressPrefetch && LOGIN_CLOSE_URL) {
+      window.vinorExpressPrefetch(new URL(LOGIN_CLOSE_URL, window.location.origin).href);
+    }
+  } catch (_) {}
 
   if (phoneInput) {
     phoneInput.addEventListener('input', function () {

@@ -34,13 +34,13 @@
 
 <div class="{{ auth_page() }}">
   <header class="vinor-auth-topbar">
-    <h1 class="vinor-auth-topbar-title">تایید شماره موبایل</h1>
     <a href="{{ url_for('express_partner.login', change=1, next=login_next) if login_next else url_for('express_partner.login', change=1) }}"
        data-vinor-express-nav="back"
        class="{{ auth_header_btn() }} vinor-auth-topbar-back"
        aria-label="تغییر شماره موبایل">
       <i class="fas fa-arrow-right" aria-hidden="true"></i>
     </a>
+    <h1 class="vinor-auth-topbar-title">تایید شماره موبایل</h1>
   </header>
 
   <main class="vinor-auth-main">
@@ -119,6 +119,7 @@
 
   var OTP_LEN = 5;
   var POST_LOGIN_PREFETCH_URL = '{% if is_likely_partner|default(false) %}{{ url_for("express_partner.commissions") }}{% else %}{{ url_for("express_partner.dashboard") }}{% endif %}';
+  var LOGIN_BACK_URL = '{{ url_for("express_partner.login", change=1, next=login_next) if login_next else url_for("express_partner.login", change=1) }}';
   var otpInput = document.getElementById('otpInput');
   var clearBtn = document.getElementById('otpClearBtn');
   var form = document.getElementById('otpForm');
@@ -147,6 +148,9 @@
 
   if (POST_LOGIN_PREFETCH_URL && window.vinorExpressPrefetch) {
     try { window.vinorExpressPrefetch(POST_LOGIN_PREFETCH_URL); } catch (_) {}
+  }
+  if (LOGIN_BACK_URL && window.vinorExpressPrefetch) {
+    try { window.vinorExpressPrefetch(new URL(LOGIN_BACK_URL, window.location.origin).href); } catch (_) {}
   }
 
   var faDigits = '۰۱۲۳۴۵۶۷۸۹';

@@ -11,7 +11,7 @@
     window.__vinorAuthPageSignal.addEventListener('abort', fn, { once: true });
   };
 
-  if (window.vinorExpressClearAuthCache) {
+  if (document.getElementById('loginStep1Form') && window.vinorExpressClearAuthCache) {
     try { window.vinorExpressClearAuthCache(); } catch (_) {}
   }
 })();

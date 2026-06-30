@@ -337,6 +337,27 @@
     }
   }
 
+  function isAuthToAuthNav(fromHref, toHref) {
+    try {
+      var fromU = parseUrl(fromHref);
+      var toU = parseUrl(toHref);
+      if (!fromU || !toU) return false;
+      return isAuthSoftPath(fromU.pathname) && isAuthSoftPath(toU.pathname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isLeavingAuthShell(toHref) {
+    if (!isCurrentAuthShell()) return false;
+    try {
+      var toPath = normPath(parseUrl(toHref).pathname);
+      return !isAuthSoftPath(toPath) && toPath.indexOf(PREFIX) === 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function needsFullNavForResponse(requestedHref, resolvedUrl, doc, opts) {
     opts = opts || {};
     try {
@@ -1003,6 +1024,21 @@
       window.__vinorExpressLastHref = from;
     } catch (_) {}
     return prepareLeaveFromProfileEdit(from, href).then(function () {
+      if (isLeavingAuthShell(href)) {
+        stopAllExpressMedia();
+        try {
+          sessionStorage.setItem(STORAGE_KEY, '-1');
+        } catch (_) {}
+        window.location.replace(href);
+        return false;
+      }
+      if (isAuthToAuthNav(from, href)) {
+        var authDir = authNavDirection(from, href);
+        if (opts.back && !authDir) authDir = -1;
+        if (opts.forward && !authDir) authDir = 1;
+        stopAllExpressMedia();
+        return softNavigate(href, authDir || 0, { navGen: bumpNavGeneration() });
+      }
       if (opts.postLogin) {
         stopAllExpressMedia();
         return softNavigate(href, 1, opts);

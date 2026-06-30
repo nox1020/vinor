@@ -30,12 +30,13 @@ textarea, select {
     position: sticky;
     top: 0;
     z-index: 50;
-    display: flex;
+    display: grid;
+    grid-template-columns: 2.75rem 1fr 2.75rem;
     align-items: center;
-    justify-content: center;
+    gap: 0.35rem;
     padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
     padding-bottom: 0.5rem;
-    padding-inline: 1rem;
+    padding-inline: max(0.75rem, env(safe-area-inset-left, 0px)) max(0.75rem, env(safe-area-inset-right, 0px));
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     background-color: rgba(3, 7, 18, 0.28);
     -webkit-backdrop-filter: saturate(180%) blur(22px);
@@ -43,20 +44,29 @@ textarea, select {
     box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.05);
   }
 .vinor-auth-topbar-title {
+  grid-column: 2;
+  grid-row: 1;
   margin: 0;
+  min-width: 0;
   font-size: 1rem;
   font-weight: 700;
   color: #fff;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.vinor-auth-topbar-action {
-  position: absolute;
-  right: 1rem;
-  top: 1.25rem;
-}
+.vinor-auth-topbar-action,
 .vinor-auth-topbar-back {
-  position: absolute;
-  right: 1rem;
-  top: 1.25rem;
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  z-index: 2;
+  justify-self: start;
+  align-self: center;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .vinor-auth-main {
   flex: 1 1 auto;
