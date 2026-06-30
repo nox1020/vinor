@@ -439,6 +439,7 @@ function initProfileEditSave() {
   var formDirty = false;
   var saveGeneration = 0;
   var listenersBound = false;
+  var profileEditHydrated = false;
 
   function setSaveBtnIcon(iconClasses, ariaLabel) {
     var icon = saveBtnIcon || (saveBtn && saveBtn.querySelector('i'));
@@ -697,6 +698,8 @@ function initProfileEditSave() {
   }
 
   window.__vinorProfileEditIsDirty = function () {
+    if (!document.getElementById('profileEditPage')) return false;
+    if (!profileEditHydrated) return false;
     return formDirty || JSON.stringify(collectPayload()) !== lastSavedKey;
   };
   window.__vinorProfileEditMarkDirty = function () {
@@ -707,15 +710,9 @@ function initProfileEditSave() {
   window.__vinorProfileEditFlushSave = saveNow;
 
   hydrateFromServer().finally(function () {
+    profileEditHydrated = true;
     bindFieldListeners();
   });
-
-  window.addEventListener('beforeunload', function (e) {
-    if (window.__vinorProfileEditIsDirty && window.__vinorProfileEditIsDirty()) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
-  }, { signal: pageSignal });
 }
 
 if (!window.__vinorProfileBirthHook) {
@@ -741,14 +738,9 @@ if (!window.__vinorProfileCityHook) {
 initProfileEditSave();
 document.addEventListener('vinor:express-page-swap', function () {
   if (!document.getElementById('profileEditPage')) {
-    if (window.__vinorProfileEditSaveCtrl) {
-      try { window.__vinorProfileEditSaveCtrl.abort(); } catch (_) {}
-      window.__vinorProfileEditSaveCtrl = null;
+    if (typeof window.__vinorExpressTeardownPageState === 'function') {
+      try { window.__vinorExpressTeardownPageState(); } catch (_) {}
     }
-    window.__vinorProfileEditMarkDirty = null;
-    window.__vinorProfileEditSave = null;
-    window.__vinorProfileEditFlushSave = null;
-    window.__vinorProfileEditIsDirty = null;
     return;
   }
   initProfileEditSave();

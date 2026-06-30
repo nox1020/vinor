@@ -105,6 +105,30 @@
 
   window.vinorExpressStopAllMedia = stopAllExpressMedia;
 
+  /** پاک‌سازی state صفحات قبل از soft-swap — جلوگیری از beforeunload مانده در WebView/APK */
+  function teardownSoftNavPageState() {
+    try {
+      if (window.__vinorProfileEditSaveCtrl) {
+        window.__vinorProfileEditSaveCtrl.abort();
+        window.__vinorProfileEditSaveCtrl = null;
+      }
+    } catch (_) {}
+    window.__vinorProfileEditIsDirty = null;
+    window.__vinorProfileEditMarkDirty = null;
+    window.__vinorProfileEditSave = null;
+    window.__vinorProfileEditFlushSave = null;
+    try {
+      if (window.__vinorApplyPageAbort) window.__vinorApplyPageAbort.abort();
+    } catch (_) {}
+    try {
+      if (window.__vinorThanksPageAbort) window.__vinorThanksPageAbort.abort();
+    } catch (_) {}
+    try {
+      if (window.__vinorAuthPageAbort) window.__vinorAuthPageAbort.abort();
+    } catch (_) {}
+  }
+  window.__vinorExpressTeardownPageState = teardownSoftNavPageState;
+
   function bumpNavGeneration() {
     navGeneration += 1;
     if (leaveTimerId) {
@@ -787,6 +811,7 @@
         window.location.assign(finalHref);
         return false;
       }
+      teardownSoftNavPageState();
       stopAllExpressMedia();
       if (typeof window.vinorLandDetailTeardown === 'function') {
         try { window.vinorLandDetailTeardown(); } catch (_) {}
@@ -938,6 +963,7 @@
       if (!confirmLeaveProfileEdit()) {
         return Promise.reject(new Error('profile_edit_unsaved'));
       }
+      teardownSoftNavPageState();
     } catch (_) {}
     return Promise.resolve();
   }
@@ -997,9 +1023,7 @@
     if (typeof window.vinorLandDetailTeardown === 'function') {
       try { window.vinorLandDetailTeardown(); } catch (_) {}
     }
-    if (window.__vinorAuthPageAbort) {
-      try { window.__vinorAuthPageAbort.abort(); } catch (_) {}
-    }
+    teardownSoftNavPageState();
     return fetch(url, {
       credentials: 'same-origin',
       headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
