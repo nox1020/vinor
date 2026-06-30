@@ -4,7 +4,10 @@
 {% block content %}
 
 {% set _login_next = request.args.get('next') %}
-{% set login_close_href = _login_next if _login_next and _login_next.startswith('/express/partner/') and not _login_next.startswith('/express/partner/login') else url_for('express_partner.dashboard') %}
+{% set login_close_href = url_for('express_partner.dashboard') %}
+{% if session.get('user_phone') and _login_next and _login_next.startswith('/express/partner/') and not _login_next.startswith('/express/partner/login') %}
+{% set login_close_href = _login_next %}
+{% endif %}
 
 <div class="{{ auth_page() }}">
   <header class="vinor-auth-topbar">
@@ -108,12 +111,6 @@
       window.vinorExpressPrefetch(OTP_PREFETCH_URL);
       return;
     }
-    try {
-      fetch(OTP_PREFETCH_URL, {
-        credentials: 'same-origin',
-        headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' }
-      }).catch(function () {});
-    } catch (_) {}
   }
 
   function normalizePhoneValue(raw) {
@@ -154,7 +151,10 @@
 
   try {
     if (window.vinorExpressPrefetch && LOGIN_CLOSE_URL) {
-      window.vinorExpressPrefetch(new URL(LOGIN_CLOSE_URL, window.location.origin).href);
+      var closePath = new URL(LOGIN_CLOSE_URL, window.location.origin).pathname.replace(/\/$/, '') || '';
+      if (closePath === '/express/partner/dashboard' || closePath === '/express/partner/profile') {
+        window.vinorExpressPrefetch(new URL(LOGIN_CLOSE_URL, window.location.origin).href);
+      }
     }
   } catch (_) {}
 
@@ -179,8 +179,6 @@
       phoneInput.focus();
     }, sigOpts);
   }
-
-  setTimeout(prefetchOtpPage, 80);
 
   function goOtpPage(url) {
     if (window.vinorExpressInvalidatePrefetch) {

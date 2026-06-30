@@ -373,29 +373,31 @@ def get_menu():
     """API endpoint برای دریافت منوی فوتر - هماهنگ با بک‌اند"""
     try:
         # بررسی اینکه آیا کاربر لاگین است یا نه
-        is_logged_in = bool(session.get('user_id') or session.get('user_phone'))
+        is_logged_in = bool(session.get('user_phone') or session.get('user_id'))
         
-        # بررسی اینکه آیا کاربر همکار اکسپرس است یا نه
+        # بررسی اینکه آیا کاربر همکار تأییدشده اکسپرس است یا نه
         is_express_partner = False
         if session.get('user_phone'):
             try:
-                me = str(session.get("user_phone") or "").strip()
-                _partners = load_express_partners()
-                is_express_partner = any(
-                    isinstance(p, dict)
-                    and str(p.get("phone") or "").strip() == me
-                    and (str(p.get("status") or "").lower() == "approved" or p.get("status") is True)
-                    for p in (_partners or [])
-                )
+                if 'VINOR_IS_EXPRESS_PARTNER' in session:
+                    is_express_partner = bool(session.get('VINOR_IS_EXPRESS_PARTNER'))
+                else:
+                    me = str(session.get("user_phone") or "").strip()
+                    _partners = load_express_partners()
+                    is_express_partner = any(
+                        isinstance(p, dict)
+                        and str(p.get("phone") or "").strip() == me
+                        and (str(p.get("status") or "").lower() == "approved" or p.get("status") is True)
+                        for p in (_partners or [])
+                    )
             except Exception:
                 is_express_partner = False
         
-        # منوی همکار اکسپرس - نمایش در هر دو حالت (وارد شده و وارد نشده)
-        # دسترسی‌ها بعداً تنظیم می‌شوند
+        # منوی پرتال — کیف پول برای همهٔ کاربران لاگین‌شده (کاربر عادی: صفحهٔ دعوت همکاری)
         partner_menu = [
             {'key': 'dashboard', 'endpoint': 'express_partner.dashboard', 'icon': 'fa-home', 'label': 'وینور'},
             {'key': 'favorites', 'endpoint': 'express_partner.favorites', 'icon': 'fa-bookmark', 'label': 'نشان‌ها', 'disabled': not is_logged_in},
-            {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not is_express_partner},
+            {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not is_logged_in},
             {'key': 'notifications', 'endpoint': 'express_partner.notifications', 'icon': 'fa-bell', 'label': 'اعلان‌ها', 'disabled': not is_logged_in},
             {'key': 'profile', 'endpoint': 'express_partner.profile', 'icon': 'fa-user', 'label': 'من'},
         ]

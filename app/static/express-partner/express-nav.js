@@ -235,12 +235,33 @@
     return 0;
   }
 
+  function isLoggedInUser() {
+    return currentAuthSegment() !== 'guest';
+  }
+
+  function requiresLoginPath(pathname) {
+    var p = normPath(pathname || '');
+    return p === '/express/partner/favorites' ||
+      p === '/express/partner/notifications' ||
+      p === '/express/partner/notes' ||
+      p === '/express/partner/postchi';
+  }
+
+  function loginUrlForPartnerDest(href) {
+    try {
+      return '/express/partner/login?next=' + encodeURIComponent(normalizeNavHref(href));
+    } catch (_) {
+      return '/express/partner/login';
+    }
+  }
+
   function shouldPrefetchNav(fromHref, toHref) {
     if (!isPartnerUrl(toHref)) return false;
     try {
       var toU = parseUrl(toHref);
       if (!toU) return false;
       var toPath = normPath(toU.pathname);
+      if (!isLoggedInUser() && requiresLoginPath(toPath)) return false;
       var fromU = parseUrl(fromHref);
       var fromPath = fromU ? normPath(fromU.pathname) : '';
       if (isAuthSoftPath(toPath)) {
@@ -756,6 +777,11 @@
     try {
       window.dispatchEvent(new CustomEvent('vinor:express-page-swap', { detail: { navKey: navKey } }));
     } catch (_) {}
+    try {
+      if (typeof window.__vinorSyncBottomNavBadges === 'function') {
+        window.__vinorSyncBottomNavBadges();
+      }
+    } catch (_) {}
     if (onDetail && typeof window.vinorLandDetailGalleryKick === 'function') {
       requestAnimationFrame(function () {
         try { window.vinorLandDetailGalleryKick(); } catch (_) {}
@@ -816,6 +842,12 @@
     }, 220);
   }
 
+  function isNavFetchRedirect(res) {
+    if (!res) return false;
+    if (res.type === 'opaqueredirect') return true;
+    return res.status >= 300 && res.status < 400;
+  }
+
   function prefetchHref(href) {
     var key = navCacheKey(href);
     if (!key || prefetchCache[key] || prefetchInflight[key]) return;
@@ -823,9 +855,11 @@
     prefetchInflight[key] = true;
     fetch(href, {
       credentials: 'same-origin',
+      redirect: 'manual',
       headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' }
     })
       .then(function (res) {
+        if (isNavFetchRedirect(res)) throw new Error('prefetch');
         if (!res.ok) throw new Error('prefetch');
         return res.text().then(function (html) {
           return { html: html, url: res.url || href };
@@ -834,6 +868,9 @@
       .then(function (payload) {
         if (!payload || !payload.html) return;
         var resolved = payload.url || href;
+        var reqPath = normPath(parseUrl(href).pathname);
+        var resPath = normPath(parseUrl(resolved).pathname);
+        if (reqPath !== resPath && (isAuthSoftPath(resPath) || requiresLoginPath(reqPath))) return;
         var doc = new DOMParser().parseFromString(payload.html, 'text/html');
         if (needsFullNavForResponse(href, resolved, doc)) return;
         prefetchCache[navCacheKey(resolved)] = payload.html;
@@ -932,6 +969,7 @@
 
     return fetch(href, {
       credentials: 'same-origin',
+      redirect: 'manual',
       headers: {
         Accept: 'text/html',
         'X-Requested-With': 'XMLHttpRequest'
@@ -944,6 +982,14 @@
     })
       .then(function (res) {
         if (isStaleNav(gen)) return null;
+        if (isNavFetchRedirect(res)) {
+          var blockedPath = normPath(parseUrl(href).pathname);
+          if (!opts.postLogin && !isLoggedInUser() && requiresLoginPath(blockedPath)) {
+            window.location.assign(loginUrlForPartnerDest(href));
+            return null;
+          }
+          throw new Error('nav');
+        }
         if (!res.ok) throw new Error('nav');
         return res.text().then(function (html) {
           return { html: html, url: res.url || href };
@@ -1041,6 +1087,12 @@
       window.location.href = href;
       return Promise.resolve(false);
     }
+    try {
+      var destPath = normPath(parseUrl(href).pathname);
+      if (!opts.postLogin && !isLoggedInUser() && requiresLoginPath(destPath) && !isAuthSoftPath(destPath)) {
+        href = loginUrlForPartnerDest(href);
+      }
+    } catch (_) {}
     var from = window.location.href;
     try {
       window.__vinorExpressLastHref = from;
@@ -1167,6 +1219,11 @@
   function vinorPostLoginNavigate(dest) {
     if (!dest) return;
     clearAuthPrefetchCache();
+    try {
+      if (typeof window.vinorClearBottomNavMenuCache === 'function') {
+        window.vinorClearBottomNavMenuCache();
+      }
+    } catch (_) {}
     clearExpressPartnerRuntimeCaches().finally(function () {
       var destUrl = dest;
       try {
@@ -1346,6 +1403,14 @@
         || (a.classList && a.classList.contains('profile-menu-card'));
 
       if (isTab) {
+        if (a.classList.contains('tg-tab-disabled') || a.getAttribute('aria-disabled') === 'true') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!isLoggedInUser() && href && requiresLoginPath(href)) {
+            vinorExpressNavigate(loginUrlForPartnerDest(href), { forward: true });
+          }
+          return;
+        }
         e.preventDefault();
         if (prefersReducedMotion()) {
           vinorExpressNavigate(href);
@@ -1386,13 +1451,20 @@
     true
   );
 
+  function shouldPrefetchLink(a, href) {
+    if (!href) return false;
+    if (a.classList && a.classList.contains('tg-tab-disabled')) return false;
+    if (a.getAttribute('aria-disabled') === 'true') return false;
+    return shouldPrefetchNav(window.location.href, href);
+  }
+
   document.addEventListener(
     'touchstart',
     function (e) {
       var a = e.target.closest && e.target.closest('a[href]');
       if (!a) return;
       var href = a.getAttribute('href');
-      if (href && shouldPrefetchNav(window.location.href, href)) prefetchHref(href);
+      if (shouldPrefetchLink(a, href)) prefetchHref(href);
     },
     { passive: true }
   );
@@ -1403,7 +1475,7 @@
       var a = e.target.closest && e.target.closest('a[href]');
       if (!a) return;
       var href = a.getAttribute('href');
-      if (href && shouldPrefetchNav(window.location.href, href)) prefetchHref(href);
+      if (shouldPrefetchLink(a, href)) prefetchHref(href);
     },
     { passive: true }
   );
@@ -1459,12 +1531,11 @@
 
   function prefetchMainTabs() {
     try {
-      [
-        '/express/partner/favorites',
-        '/express/partner/commissions',
-        '/express/partner/notifications',
-        '/express/partner/profile'
-      ].forEach(function (path) {
+      var paths = ['/express/partner/profile', '/express/partner/commissions'];
+      if (isLoggedInUser()) {
+        paths.push('/express/partner/favorites', '/express/partner/notifications');
+      }
+      paths.forEach(function (path) {
         prefetchHref(new URL(path, window.location.origin).href);
       });
     } catch (_) {}

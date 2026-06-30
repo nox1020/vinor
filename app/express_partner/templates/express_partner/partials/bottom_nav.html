@@ -275,7 +275,7 @@
       {% set nav_items = [
         {'key': 'dashboard', 'endpoint': 'express_partner.dashboard', 'icon': 'fa-home', 'label': 'وینور'},
         {'key': 'favorites', 'endpoint': 'express_partner.favorites', 'icon': 'fa-bookmark', 'label': 'نشان‌ها', 'disabled': not session.get('user_phone')},
-        {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not VINOR_IS_EXPRESS_PARTNER},
+        {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not session.get('user_phone')},
         {'key': 'notifications', 'endpoint': 'express_partner.notifications', 'icon': 'fa-bell', 'label': 'اعلان‌ها', 'disabled': not session.get('user_phone')},
         {'key': 'profile', 'url': profile_nav_url, 'icon': 'fa-user', 'label': 'من'}
       ] %}
@@ -292,7 +292,7 @@
               <span class="tg-tab-icon flex items-center justify-center">
                 <i class="fas {{ item.icon }}"></i>
               </span>
-              {% if item.key == 'notifications' %}
+              {% if item.key == 'notifications' or item.key == 'favorites' %}
               <span class="tg-tab-badge" data-role="nav-badge" aria-hidden="true"></span>
               {% elif item.key == 'profile' %}
               <span class="tg-tab-update-dot{% if show_app_update_nav|default(false) %} is-visible{% endif %}" data-role="nav-update-dot" aria-hidden="true"></span>
@@ -340,8 +340,13 @@
       if (!userLoggedIn) {
         const key = link.getAttribute('data-nav-key') || '';
         const dest = (link.getAttribute('href') || '').trim();
-        if ((key === 'favorites' || key === 'notifications') && dest && dest !== '#') {
-          window.location.href = '/express/partner/login?next=' + encodeURIComponent(dest);
+        if ((key === 'favorites' || key === 'notifications' || key === 'commissions') && dest && dest !== '#') {
+          const loginUrl = '/express/partner/login?next=' + encodeURIComponent(dest);
+          if (window.vinorExpressNavigate) {
+            window.vinorExpressNavigate(loginUrl, { forward: true });
+          } else {
+            window.location.href = loginUrl;
+          }
         }
       }
     }
@@ -377,6 +382,36 @@
 
   function setProfileBadge(count) {
     setNavBadge('notifications', count);
+  }
+
+  function readFavoritesCount() {
+    if (!userLoggedIn) return 0;
+    try {
+      if (typeof window.vinorReadFavs === 'function') {
+        return window.vinorReadFavs().length;
+      }
+      var raw = localStorage.getItem('vinor_dashboard_favs');
+      var arr = JSON.parse(raw || '[]');
+      return Array.isArray(arr) ? arr.length : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function syncFavoritesBadge() {
+    setNavBadge('favorites', readFavoritesCount());
+  }
+
+  function syncAllNavBadges() {
+    syncFavoritesBadge();
+    try {
+      if (window.VinorNotifyCenter && typeof window.VinorNotifyCenter.getState === 'function') {
+        var st = window.VinorNotifyCenter.getState();
+        if (st && typeof st.unread !== 'undefined') {
+          setNavBadge('notifications', st.unread);
+        }
+      }
+    } catch (_) {}
   }
 
   function persistUpdateNav(state) {
@@ -578,12 +613,20 @@
     } catch (_) {}
   });
 
+  window.addEventListener('vinor-favs-changed', function () {
+    syncFavoritesBadge();
+  });
+
+  document.addEventListener('vinor-favs-changed', function () {
+    syncFavoritesBadge();
+  });
+
   function tgTabClass(isActive, isDisabled) {
     const base = 'tg-tab flex flex-col items-center justify-center px-0.5 py-0.5 ';
     return base + (isActive ? 'tg-tab-active ' : '') + (isDisabled ? 'tg-tab-disabled' : '');
   }
 
-  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v9';
+  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v11';
   const MENU_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 
   const PROFILE_NAV_PATHS = [
@@ -618,10 +661,19 @@
   window.vinorClearBottomNavMenuCache = function () {
     try { sessionStorage.removeItem(MENU_CACHE_KEY); } catch (_) {}
   };
+  window.__vinorSyncBottomNavBadges = syncAllNavBadges;
 
   function sanitizeMenu(menuItems) {
     return (menuItems || []).filter(function (item) {
       return item && item.key !== 'routine';
+    });
+  }
+
+  function menuMatchesSession(menuItems) {
+    const loginKeys = ['favorites', 'notifications', 'commissions'];
+    return (menuItems || []).every(function (item) {
+      if (!item || loginKeys.indexOf(item.key) === -1) return true;
+      return userLoggedIn ? item.disabled !== true : item.disabled === true;
     });
   }
 
@@ -632,7 +684,9 @@
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.menu) || !parsed.ts) return null;
       if (Date.now() - parsed.ts > MENU_CACHE_MAX_AGE_MS) return null;
-      return sanitizeMenu(parsed.menu);
+      const menu = sanitizeMenu(parsed.menu);
+      if (!menuMatchesSession(menu)) return null;
+      return menu;
     } catch (_) {
       return null;
     }
@@ -696,7 +750,10 @@
       link.setAttribute('data-nav-key', item.key);
       if (isDisabled) {
         link.setAttribute('tabindex', '-1');
-        link.addEventListener('click', function (e) { e.preventDefault(); }, true);
+        link.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }, true);
       }
 
       const stack = document.createElement('span');
@@ -713,7 +770,7 @@
       iconOuter.appendChild(icon);
       iconWrap.appendChild(iconOuter);
 
-      if (item.key === 'notifications') {
+      if (item.key === 'notifications' || item.key === 'favorites') {
         const badge = document.createElement('span');
         badge.className = 'tg-tab-badge';
         badge.setAttribute('data-role', 'nav-badge');
@@ -740,6 +797,7 @@
       navContainer.appendChild(link);
     });
     syncUpdateNavFromStored();
+    syncAllNavBadges();
   }
 
   if (serverShowAppUpdate) {
@@ -768,10 +826,12 @@
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
+      syncAllNavBadges();
       loadMenuFromAPI();
       if (isVinorApkClient()) refreshUpdateNavFromServer();
     });
   } else {
+    syncAllNavBadges();
     loadMenuFromAPI();
     if (isVinorApkClient()) refreshUpdateNavFromServer();
   }
