@@ -446,7 +446,6 @@
     var p = normPath(pathname || window.location.pathname || '');
     if (!/\/express\/partner\/favorites\/?$/.test(p)) {
       try { delete window.__vinorPagePullRefresh; } catch (_) {}
-      try { delete window.vinorFavoritesPageLoad; } catch (_) {}
     }
   }
 
@@ -571,6 +570,9 @@
       }
       if (typeof window.vinorPostchiBoot === 'function') {
         window.vinorPostchiBoot();
+      }
+      if (typeof window.vinorFavoritesBoot === 'function') {
+        window.vinorFavoritesBoot();
       }
     } catch (_) {}
     try {

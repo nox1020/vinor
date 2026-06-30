@@ -35,21 +35,6 @@
 
   <div class="mx-auto max-w-lg">
 
-    <!-- نوار وضعیت — شبیه هدر لیست چت دیوار -->
-    <div class="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-2.5 text-xs sm:px-6">
-      <span class="text-zinc-500" x-show="unreadCount > 0" x-cloak>
-        <span class="font-semibold text-white tabular-nums" x-text="unreadCount > 99 ? '۹۹+' : unreadCount"></span>
-        <span class="ms-1">خوانده‌نشده</span>
-      </span>
-      <span class="text-zinc-600" x-show="unreadCount === 0" x-cloak>همه را خوانده‌اید</span>
-      <button type="button"
-              class="shrink-0 font-medium text-sky-400 transition hover:text-sky-300 disabled:pointer-events-none disabled:opacity-35"
-              :disabled="loading || unreadCount === 0"
-              @click="markAll()">
-        خواندن همه
-      </button>
-    </div>
-
     <!-- بنر push — فشرده -->
     <div x-data="pushPromptComponent()" x-init="deferCheck()" class="px-4 sm:px-6">
       <div x-show="showPrompt"

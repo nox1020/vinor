@@ -201,11 +201,45 @@
 
   window.vinorFavoritesPageLoad = window.vinorLoadFavoritesCards;
 
-  function scheduleFavoritesBoot() {
+  function vinorFavoritesBoot() {
     if (!onFavoritesPage()) return;
-    requestAnimationFrame(function () {
-      if (onFavoritesPage()) window.vinorLoadFavoritesCards();
+
+    function attempt(soft) {
+      if (!onFavoritesPage()) return;
+      var dom = getFavoritesDom();
+      if (!dom) return false;
+      var rootHasContent = !!(dom.root.innerHTML && dom.root.innerHTML.trim());
+      var loadingVisible = !dom.loading.classList.contains('hidden');
+      var rootHidden = dom.root.classList.contains('hidden');
+      if (loadInflight) {
+        loadQueued = true;
+        loadQueuedOpts = { soft: !!soft };
+        return true;
+      }
+      if (loadingVisible && rootHidden && !rootHasContent) {
+        window.vinorLoadFavoritesCards({ soft: false });
+        return true;
+      }
+      if (!rootHidden && rootHasContent) return true;
+      window.vinorLoadFavoritesCards({ soft: !!soft });
+      return true;
+    }
+
+    if (attempt(false)) return;
+
+    var delays = [0, 16, 48, 120, 280];
+    delays.forEach(function (ms, idx) {
+      setTimeout(function () {
+        if (!onFavoritesPage()) return;
+        attempt(idx > 0);
+      }, ms);
     });
+  }
+
+  window.vinorFavoritesBoot = vinorFavoritesBoot;
+
+  function scheduleFavoritesBoot() {
+    vinorFavoritesBoot();
   }
 
   if (!window.__vinorFavoritesCardsBound) {
@@ -218,9 +252,8 @@
       window.vinorLoadFavoritesCards({ soft: soft });
     });
 
-    document.addEventListener('vinor:express-page-swap', function (ev) {
-      var key = ev && ev.detail && ev.detail.navKey;
-      if (key === 'favorites') scheduleFavoritesBoot();
+    document.addEventListener('vinor:express-page-swap', function () {
+      if (onFavoritesPage()) scheduleFavoritesBoot();
     });
 
     if (document.readyState === 'loading') {
