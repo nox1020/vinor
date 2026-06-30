@@ -73,8 +73,12 @@
   }
 
   function readPostchiCfg(root) {
-    if (window.__VINOR_POSTCHI_CFG__ && typeof window.__VINOR_POSTCHI_CFG__ === 'object') {
-      return window.__VINOR_POSTCHI_CFG__;
+    var jsonEl = document.getElementById('vinor-postchi-config');
+    if (jsonEl && jsonEl.textContent) {
+      try {
+        var parsed = JSON.parse(jsonEl.textContent);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch (_) {}
     }
     root = root || postchiRoot();
     if (root) {
@@ -82,6 +86,9 @@
         var raw = root.getAttribute('data-postchi-config');
         if (raw) return JSON.parse(raw);
       } catch (_) {}
+    }
+    if (window.__VINOR_POSTCHI_CFG__ && typeof window.__VINOR_POSTCHI_CFG__ === 'object') {
+      return window.__VINOR_POSTCHI_CFG__;
     }
     return {};
   }
@@ -298,6 +305,8 @@
     var root = postchiRoot();
     if (!root || typeof Alpine === 'undefined') return;
 
+    root.removeAttribute('x-ignore');
+
     if (!root._x_dataStack || !root._x_dataStack.length) {
       if (typeof Alpine.initTree === 'function') {
         Alpine.initTree(root);
@@ -316,6 +325,18 @@
     pinToLatestSoon();
   };
 
+  function bootPostchiIfPresent() {
+    if (!postchiRoot()) return;
+    if (typeof Alpine === 'undefined') return;
+    window.vinorPostchiBoot();
+  }
+
   document.addEventListener('alpine:init', definePostchiPage);
+  document.addEventListener('alpine:init', bootPostchiIfPresent);
   if (typeof Alpine !== 'undefined') definePostchiPage();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootPostchiIfPresent);
+  } else {
+    bootPostchiIfPresent();
+  }
 })();

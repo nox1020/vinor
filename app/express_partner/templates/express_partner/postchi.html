@@ -12,11 +12,12 @@
   {% from 'express_partner/partials/vinor_official_identity.html' import vinor_official_name, vinor_official_subtitle, vinor_official_avatar %}
   {% include 'express_partner/partials/vinor_official_identity.html' %}
 
-  <script>window.__VINOR_POSTCHI_CFG__ = {{ postchi_cfg|tojson }};</script>
+  <script type="application/json" id="vinor-postchi-config">{{ postchi_cfg|tojson }}</script>
 
   <div class="postchi-page"
        data-vinor-postchi-page
        data-vinor-ptr="off"
+       x-ignore
        x-data="vinorPostchiPage()"
        x-init="init()">
 
@@ -68,5 +69,4 @@
 
 {% block scripts %}
   {{ super() }}
-  <script src="{{ 'express-partner/postchi.js'|static_version }}"></script>
 {% endblock %}
