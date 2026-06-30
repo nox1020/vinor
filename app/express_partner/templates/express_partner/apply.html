@@ -61,13 +61,6 @@
         </div>
 
         <div>
-          <label class="mb-2 block text-right text-xs font-semibold text-zinc-300">شماره موبایل</label>
-          <input type="text" readonly tabindex="-1" dir="ltr"
-                 value="{{ me_phone }}"
-                 class="w-full cursor-not-allowed rounded-xl border border-white/5 bg-[#0d1218] px-3 py-3 text-sm tabular-nums text-zinc-400">
-        </div>
-
-        <div>
           <label for="applyName" class="mb-2 block text-right text-xs font-semibold text-zinc-300">
             نام و نام خانوادگی <span class="text-rose-400">*</span>
           </label>
@@ -153,7 +146,9 @@
 
       <p class="text-center text-[11px] leading-relaxed text-zinc-500">
         پس از ثبت، پیامک تأیید می‌گیرید و ظرف ۲۴ ساعت بررسی می‌شود.
-        <a href="{{ url_for('express_partner.cooperation_terms', next=url_for('express_partner.apply')) }}" class="text-emerald-400/90 hover:underline">شرایط همکاری</a>
+        <a href="{{ url_for('express_partner.cooperation_terms', next=url_for('express_partner.apply')) }}"
+           data-vinor-express-nav
+           class="text-emerald-400/90 hover:underline">شرایط همکاری</a>
       </p>
     </form>
   </main>
@@ -166,13 +161,17 @@
 {% block scripts %}
 <script>
 (function () {
+  if (window.__vinorApplyPageAbort) {
+    try { window.__vinorApplyPageAbort.abort(); } catch (_) {}
+  }
+  window.__vinorApplyPageAbort = new AbortController();
+  var sig = window.__vinorApplyPageAbort.signal;
+  var opt = { signal: sig };
+
   if (window.__vinorPartnerHeaderChromeSetup) {
     try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
   }
-})();
-</script>
-<script>
-(function () {
+
   var params = new URLSearchParams(window.location.search);
   var ref = params.get('ref');
   var form = document.getElementById('applyForm');
@@ -202,13 +201,9 @@
       if (input && input.value) {
         try { localStorage.setItem('vinor_ref', input.value); } catch (_) {}
       }
-    });
+    }, opt);
   }
-})();
-</script>
-<script>
-(function () {
-  var form = document.getElementById('applyForm');
+
   var btn = document.getElementById('applySubmitBtn');
   var label = document.getElementById('applySubmitLabel');
   var details = document.getElementById('applyOptionalDetails');
@@ -230,8 +225,8 @@
     function render() {
       counterEl.textContent = (input.value || '').length + '/' + max;
     }
-    input.addEventListener('compositionend', render);
-    input.addEventListener('blur', render);
+    input.addEventListener('compositionend', render, opt);
+    input.addEventListener('blur', render, opt);
     render();
   }
 
@@ -248,7 +243,7 @@
       v = v.replace(/[۰-۹٠-٩]/g, function (ch) { return map[ch] || ch; });
       if (v.length > 10) v = v.slice(0, 10);
       if (nationalIdInput.value !== v) nationalIdInput.value = v;
-    });
+    }, opt);
   }
 
   function showAvatarPreview(url) {
@@ -256,33 +251,36 @@
     avatarImg.src = url;
     avatarImg.classList.remove('hidden');
     avatarFallback.classList.add('hidden');
-    avatarTrigger.classList.remove('border-dashed');
-    avatarTrigger.classList.add('border-emerald-500/30');
+    if (avatarTrigger) {
+      avatarTrigger.classList.remove('border-dashed');
+      avatarTrigger.classList.add('border-emerald-500/30');
+    }
   }
 
   if (avatarTrigger && avatarInput) {
-    avatarTrigger.addEventListener('click', function () { avatarInput.click(); });
+    avatarTrigger.addEventListener('click', function () { avatarInput.click(); }, opt);
     avatarInput.addEventListener('change', function () {
       if (!avatarInput.files || !avatarInput.files.length) return;
       avatarSelected = true;
       if (avatarError) avatarError.classList.add('hidden');
       if (avatarHint) avatarHint.textContent = 'تصویر انتخاب شد';
       try { showAvatarPreview(URL.createObjectURL(avatarInput.files[0])); } catch (_) {}
-    });
+    }, opt);
   }
 
-  if (!form || !btn) return;
-  form.addEventListener('submit', function (e) {
-    var hasFile = avatarInput && avatarInput.files && avatarInput.files.length > 0;
-    if (!avatarSelected && !hasFile && !hasAvatarInitially) {
-      e.preventDefault();
-      if (avatarError) avatarError.classList.remove('hidden');
-      if (avatarTrigger) avatarTrigger.focus();
-      return;
-    }
-    btn.disabled = true;
-    if (label) label.textContent = 'در حال ثبت…';
-  });
+  if (form && btn) {
+    form.addEventListener('submit', function (e) {
+      var hasFile = avatarInput && avatarInput.files && avatarInput.files.length > 0;
+      if (!avatarSelected && !hasFile && !hasAvatarInitially) {
+        e.preventDefault();
+        if (avatarError) avatarError.classList.remove('hidden');
+        if (avatarTrigger) avatarTrigger.focus();
+        return;
+      }
+      btn.disabled = true;
+      if (label) label.textContent = 'در حال ثبت…';
+    }, opt);
+  }
 })();
 </script>
 {% endblock %}

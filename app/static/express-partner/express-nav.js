@@ -28,7 +28,7 @@
     '/express/partner/legal/privacy': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/legal/terms': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/cooperation-terms': { tab: 'dashboard', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/apply': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/apply': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/thanks': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/commissions/transactions': { tab: 'commissions', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/ai': { tab: '', depth: 1, bottomNav: false, prefetch: false },
@@ -38,7 +38,6 @@
 
   var SKIP_PATH_PREFIXES = [
     '/express/partner/verify',
-    '/express/partner/apply',
     '/express/partner/thanks',
     '/express/partner/download-app',
     '/express/partner/offline',
@@ -536,6 +535,26 @@
     } catch (_) {}
     if (navKey === 'profile' && window.vinorPartnerAvatarCache) {
       try { window.vinorPartnerAvatarCache.apply(document); } catch (_) {}
+    }
+    if (navKey === 'profile') {
+      var prefetchProfileSubpages = function () {
+        try {
+          [
+            '/express/partner/apply',
+            '/express/partner/top-sellers',
+            '/express/partner/help',
+            '/express/partner/invite',
+            '/express/partner/routine'
+          ].forEach(function (path) {
+            prefetchHref(new URL(path, window.location.origin).href);
+          });
+        } catch (_) {}
+      };
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(prefetchProfileSubpages, { timeout: 2200 });
+      } else {
+        window.setTimeout(prefetchProfileSubpages, 600);
+      }
     }
     if (navKey === 'dashboard' && window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.setup({ resetScroll: true, expandHeader: true });
