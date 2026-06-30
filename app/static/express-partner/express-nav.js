@@ -358,6 +358,23 @@
     }
   }
 
+  function isEnteringAuthShell(fromHref, toHref) {
+    try {
+      var fromU = parseUrl(fromHref);
+      var toU = parseUrl(toHref);
+      if (!fromU || !toU) return false;
+      return !isAuthSoftPath(fromU.pathname) && isAuthSoftPath(toU.pathname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function canCrossShellSoftSwap(doc) {
+    if (!document.getElementById('vinor-express-page-swap')) return false;
+    if (!doc || !doc.getElementById('vinor-express-page-swap')) return false;
+    return hasExpressAppShellScripts();
+  }
+
   function needsFullNavForResponse(requestedHref, resolvedUrl, doc, opts) {
     opts = opts || {};
     try {
@@ -365,8 +382,13 @@
       var resPath = normPath(parseUrl(resolvedUrl).pathname);
       var docAuth = authSegmentFromDoc(doc);
       if (!opts.postLogin && docAuth && docAuth !== currentAuthSegment()) return true;
-      if (!opts.postLogin && isCurrentAuthShell() && !isAuthShellDoc(doc) && !isAuthSoftPath(resPath)) return true;
-      if (!opts.postLogin && !isAuthSoftPath(reqPath) && isAuthShellDoc(doc)) return true;
+      var crossShell = canCrossShellSoftSwap(doc);
+      if (!opts.postLogin && isCurrentAuthShell() && !isAuthShellDoc(doc) && !isAuthSoftPath(resPath)) {
+        if (!crossShell) return true;
+      }
+      if (!opts.postLogin && !isAuthSoftPath(reqPath) && isAuthShellDoc(doc)) {
+        if (!crossShell) return true;
+      }
       if (isHardSkipPath(resPath)) return true;
       if (resPath.indexOf(PREFIX) !== 0) return true;
     } catch (_) {
@@ -1024,20 +1046,23 @@
       window.__vinorExpressLastHref = from;
     } catch (_) {}
     return prepareLeaveFromProfileEdit(from, href).then(function () {
-      if (isLeavingAuthShell(href)) {
-        stopAllExpressMedia();
-        try {
-          sessionStorage.setItem(STORAGE_KEY, '-1');
-        } catch (_) {}
-        window.location.replace(href);
-        return false;
-      }
       if (isAuthToAuthNav(from, href)) {
         var authDir = authNavDirection(from, href);
         if (opts.back && !authDir) authDir = -1;
         if (opts.forward && !authDir) authDir = 1;
         stopAllExpressMedia();
         return softNavigate(href, authDir || 0, { navGen: bumpNavGeneration() });
+      }
+      if (isLeavingAuthShell(href) || isEnteringAuthShell(from, href)) {
+        var crossDir = opts.back ? -1 : (opts.forward ? 1 : navDirection(from, href, opts.dir));
+        stopAllExpressMedia();
+        if (crossDir) {
+          try {
+            sessionStorage.setItem(STORAGE_KEY, String(crossDir));
+          } catch (_) {}
+          return navigateWithAnimation(href, crossDir, { navGen: bumpNavGeneration() });
+        }
+        return softNavigate(href, 0, { navGen: bumpNavGeneration() });
       }
       if (opts.postLogin) {
         stopAllExpressMedia();

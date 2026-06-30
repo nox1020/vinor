@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
   <link rel="stylesheet" href="{{ 'express-partner/express-partner-auth.css'|static_version }}">
+  {% include 'express_partner/partials/partner_header_styles.html' %}
   <script>
     window.tailwind = window.tailwind || {};
     window.tailwind.config = { darkMode: 'class' };
@@ -22,6 +23,8 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+  {% include 'express_partner/partials/partner_header_chrome.html' %}
+  <div id="vinorExpressPullHint" aria-hidden="true" aria-live="polite"></div>
   <div id="tg-page-shell">
     <div id="vinor-express-page-swap">{% block content %}{% endblock %}</div>
   </div>
@@ -34,8 +37,16 @@
   <script src="{{ 'express-partner/express-pull-refresh.js'|static_version }}" defer></script>
   <script src="{{ 'express-partner/express-nav.js'|static_version }}" defer></script>
   <script>
-    window.hoistVinorExpressBodyModals = function () {};
-    window.vinorExpressStopAllMedia = function () {};
+    window.vinorReadCsrfToken = window.vinorReadCsrfToken || function () {
+      try {
+        var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+        return m && m[1] ? decodeURIComponent(m[1].trim()) : '';
+      } catch (_) {
+        return '';
+      }
+    };
+    window.hoistVinorExpressBodyModals = window.hoistVinorExpressBodyModals || function () {};
+    window.vinorExpressStopAllMedia = window.vinorExpressStopAllMedia || function () {};
   </script>
 </body>
 </html>
