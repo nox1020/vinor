@@ -29,7 +29,7 @@
     '/express/partner/legal/terms': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/cooperation-terms': { tab: 'dashboard', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/apply': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/thanks': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/thanks': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/commissions/transactions': { tab: 'commissions', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/ai': { tab: '', depth: 1, bottomNav: false, prefetch: false },
     '/express/partner/login': { tab: '', depth: 0, bottomNav: false, prefetch: false },
@@ -38,7 +38,6 @@
 
   var SKIP_PATH_PREFIXES = [
     '/express/partner/verify',
-    '/express/partner/thanks',
     '/express/partner/download-app',
     '/express/partner/offline',
     '/express/partner/logout'
@@ -541,6 +540,7 @@
         try {
           [
             '/express/partner/apply',
+            '/express/partner/thanks',
             '/express/partner/top-sellers',
             '/express/partner/help',
             '/express/partner/invite',

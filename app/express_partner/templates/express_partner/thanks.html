@@ -193,6 +193,17 @@
 {% block scripts %}
 <script>
 (function () {
+  if (window.__vinorThanksPageAbort) {
+    try { window.__vinorThanksPageAbort.abort(); } catch (_) {}
+  }
+  window.__vinorThanksPageAbort = new AbortController();
+  var sig = window.__vinorThanksPageAbort.signal;
+  var opt = { signal: sig };
+
+  if (window.__vinorPartnerHeaderChromeSetup) {
+    try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
+  }
+
   var btn = document.getElementById('thanksCheckStatusBtn');
   var icon = document.getElementById('thanksCheckStatusIcon');
   var label = document.getElementById('thanksCheckStatusLabel');
@@ -240,11 +251,11 @@
       .finally(function () { setBusy(false); });
   }
 
-  if (btn) btn.addEventListener('click', checkStatus);
+  if (btn) btn.addEventListener('click', checkStatus, opt);
 
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') checkStatus();
-  });
+  }, opt);
 })();
 </script>
 {% endblock %}
