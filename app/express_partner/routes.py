@@ -1549,6 +1549,11 @@ def _apply_form_context(
     note: str = '',
     cities=None,
 ) -> dict:
+    profile = _partner_profile_for_phone(me_phone) or {}
+    avatar = (profile.get('avatar') or '').strip()
+    from ..utils.images import display_avatar_url
+    avatar_updated_at = int(profile.get('avatar_updated_at') or 0)
+    display_name = (name or profile.get('name') or me_phone or '').strip()
     return {
         'me_phone': me_phone,
         'name': name,
@@ -1557,8 +1562,16 @@ def _apply_form_context(
         'experience': experience,
         'note': note,
         'cities': cities if cities is not None else _active_cities_cached(),
+        'has_avatar': bool(avatar),
+        'avatar_url': display_avatar_url(avatar, avatar_updated_at) if avatar else '',
+        'avatar_initials_name': display_name,
         **_apply_limits_context(),
     }
+
+
+def _partner_has_avatar(me_phone: str) -> bool:
+    profile = _partner_profile_for_phone(me_phone) or {}
+    return bool((profile.get('avatar') or '').strip())
 
 
 def _apply_login_redirect():
@@ -1652,6 +1665,23 @@ def apply():
             ))
         if cities and city not in cities:
             flash('شهر انتخاب‌شده معتبر نیست.', 'error')
+            return _apply_render_with_ref(**_apply_form_context(
+                me_phone, name=name, city=city, national_id=national_id,
+                experience=experience, note=note, cities=cities,
+            ))
+        avatar_file = request.files.get('avatar')
+        has_avatar = _partner_has_avatar(me_phone)
+        if avatar_file and avatar_file.filename:
+            saved_avatar = _save_partner_avatar_upload(me_phone, avatar_file)
+            if not saved_avatar:
+                flash('ذخیرهٔ تصویر پروفایل ناموفق بود. دوباره تلاش کنید.', 'error')
+                return _apply_render_with_ref(**_apply_form_context(
+                    me_phone, name=name, city=city, national_id=national_id,
+                    experience=experience, note=note, cities=cities,
+                ))
+            has_avatar = True
+        if not has_avatar:
+            flash('انتخاب تصویر پروفایل الزامی است.', 'error')
             return _apply_render_with_ref(**_apply_form_context(
                 me_phone, name=name, city=city, national_id=national_id,
                 experience=experience, note=note, cities=cities,

@@ -28,6 +28,8 @@
     '/express/partner/legal/privacy': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/legal/terms': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/cooperation-terms': { tab: 'dashboard', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/apply': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/thanks': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/commissions/transactions': { tab: 'commissions', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/ai': { tab: '', depth: 1, bottomNav: false, prefetch: false },
     '/express/partner/login': { tab: '', depth: 0, bottomNav: false, prefetch: false },
@@ -416,6 +418,35 @@
     }
   }
 
+  /** منوی پایین باید روی body بماند؛ در swap فقط duplicate حذف شود، نه تنها نسخهٔ موجود */
+  function hoistBottomNavFromSwap(swapRoot) {
+    if (!swapRoot) {
+      swapRoot = document.getElementById('vinor-express-page-swap');
+    }
+    if (!swapRoot) return;
+    var bodyNav = null;
+    try {
+      bodyNav = document.querySelector('body > #bottomNavMenu');
+    } catch (_) {}
+    var swapNav = swapRoot.querySelector('#bottomNavMenu');
+    if (!swapNav) {
+      swapRoot.querySelectorAll('#bottomNavMenu').forEach(function (dup) { dup.remove(); });
+      return;
+    }
+    if (bodyNav && bodyNav !== swapNav) {
+      swapNav.remove();
+      return;
+    }
+    if (!bodyNav) {
+      try {
+        document.body.appendChild(swapNav);
+        swapNav.setAttribute('data-tg-shell-done', '1');
+      } catch (_) {}
+      return;
+    }
+    swapNav.remove();
+  }
+
   function setBottomNavActive(navKey) {
     var nav = document.getElementById('bottomNavMenu');
     if (!nav || !navKey) return;
@@ -478,6 +509,7 @@
     resetSoftNavPageHooks(path);
     syncPartnerCsrfFromPage();
     syncAuthFlowClass(path);
+    hoistBottomNavFromSwap();
     var onDetail = isLandDetailPath(path);
     var showNav = shouldShowBottomNav(path);
     setBottomNavVisible(showNav);
@@ -721,7 +753,7 @@
       }
       syncAuthSegmentFromDoc(doc);
       swapEl.innerHTML = newSwap.innerHTML;
-      swapEl.querySelectorAll('#bottomNavMenu').forEach(function (dup) { dup.remove(); });
+      hoistBottomNavFromSwap(swapEl);
       if (scriptsEl && newScripts) {
         scriptsEl.innerHTML = newScripts.innerHTML;
       }
@@ -933,7 +965,7 @@
         if (!newSwap) throw new Error('swap');
         syncAuthSegmentFromDoc(doc);
         swapEl.innerHTML = newSwap.innerHTML;
-        swapEl.querySelectorAll('#bottomNavMenu').forEach(function (dup) { dup.remove(); });
+        hoistBottomNavFromSwap(swapEl);
         if (scriptsEl && newScripts) {
           scriptsEl.innerHTML = newScripts.innerHTML;
         }
