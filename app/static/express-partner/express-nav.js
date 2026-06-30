@@ -5,6 +5,15 @@
 (function () {
   'use strict';
 
+  /* WebView/APK: دیالوگ native «تأیید پیمایش» — soft-nav جایگزین است */
+  try {
+    var partnerAddEventListener = window.addEventListener.bind(window);
+    window.addEventListener = function (type, listener, options) {
+      if (type === 'beforeunload') return;
+      return partnerAddEventListener(type, listener, options);
+    };
+  } catch (_) {}
+
   var STORAGE_KEY = 'vinor_express_tab_nav_dir';
   var PREFIX = '/express/partner/';
   var LAND_DETAIL_RE = /^\/express\/partner\/lands\/[^/]+$/;
@@ -945,23 +954,13 @@
     }, 160);
   }
 
-  function confirmLeaveProfileEdit() {
-    if (!document.getElementById('profileEditPage')) return true;
-    if (typeof window.__vinorProfileEditIsDirty !== 'function') return true;
-    if (!window.__vinorProfileEditIsDirty()) return true;
-    return window.confirm('تغییرات ذخیره نشده‌اند. بدون ذخیره خارج می‌شوید؟');
-  }
-
-  function flushProfileEditBeforeLeave(fromHref, toHref) {
+  function prepareLeaveFromProfileEdit(fromHref, toHref) {
     try {
       if (!document.getElementById('profileEditPage')) return Promise.resolve();
       var fromPath = normPath(parseUrl(fromHref).pathname);
       var toPath = normPath(parseUrl(toHref).pathname);
       if (fromPath !== '/express/partner/profile/edit' || fromPath === toPath) {
         return Promise.resolve();
-      }
-      if (!confirmLeaveProfileEdit()) {
-        return Promise.reject(new Error('profile_edit_unsaved'));
       }
       teardownSoftNavPageState();
     } catch (_) {}
@@ -979,7 +978,7 @@
     try {
       window.__vinorExpressLastHref = from;
     } catch (_) {}
-    return flushProfileEditBeforeLeave(from, href).then(function () {
+    return prepareLeaveFromProfileEdit(from, href).then(function () {
       if (!opts.postLogin && shouldForceFullNav(from, href)) {
         window.location.assign(href);
         return false;
@@ -1001,9 +1000,6 @@
       }
       stopAllExpressMedia();
       return softNavigate(href, 0, opts);
-    }).catch(function (err) {
-      if (err && err.message === 'profile_edit_unsaved') return false;
-      throw err;
     });
   }
 
@@ -1202,16 +1198,12 @@
       window.__vinorExpressNavDepth = nextDepth;
       window.__vinorExpressLastHref = target;
     } catch (_) {}
-    var flush = document.getElementById('profileEditPage')
-      ? (confirmLeaveProfileEdit() ? Promise.resolve() : Promise.reject(new Error('profile_edit_unsaved')))
-      : Promise.resolve();
-    flush.then(function () {
-      softNavigate(target, dir, { fromPopstate: true });
-    }).catch(function (err) {
-      if (err && err.message === 'profile_edit_unsaved') {
-        try { history.forward(); } catch (_) {}
-      }
-    });
+    if (document.getElementById('profileEditPage')) {
+      try {
+        prepareLeaveFromProfileEdit(window.__vinorExpressLastHref || window.location.href, target);
+      } catch (_) {}
+    }
+    softNavigate(target, dir, { fromPopstate: true });
   });
 
   document.addEventListener('DOMContentLoaded', function () {
