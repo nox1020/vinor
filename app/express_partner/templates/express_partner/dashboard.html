@@ -184,6 +184,13 @@
     html.dark #dashboardMobileCardsRoot {
       background-color: #030712;
     }
+    /* pull-to-refresh دیوار — اسپینر دایره‌ای زیر هدر جستجو */
+    @media (max-width: 1023px) {
+      #vinorExpressPullHint {
+        top: calc(env(safe-area-inset-top, 0px) + 4.75rem);
+        z-index: 60;
+      }
+    }
     /*
       موبایل عمودی: ارتفاع ناحیهٔ اسکرول کارت‌ها با JS از فاصلهٔ واقعی تا نوار تب پر می‌شود
       (با جمع‌شدن فیلترها هدر کوتاه‌تر می‌شود؛ ارتفاع ثابت 100dvh-212px باعث فاصلهٔ خالی مشکی زیر لیست می‌شد).
@@ -617,7 +624,7 @@
     document.addEventListener('vinor:express-page-swap', onDashboardPageSwap);
   }
 
-  /* کشیدن به پایین وقتی لیست در بالاست → تازه‌سازی همهٔ کارت‌ها (فقط اسکرول عمودی موبایل) */
+  /* کشیدن به پایین وقتی لیست در بالاست → تازه‌سازی کارت‌ها + اسپینر دیوار */
   window.setupVinorDashboardPullRefresh = function setupVinorDashboardPullRefresh() {
     if (window.__vinorDashPullAbort) {
       try { window.__vinorDashPullAbort.abort(); } catch (_) {}
@@ -627,18 +634,32 @@
     const pullOpts = { passive: true, signal: pullSig };
 
     const root = document.getElementById('dashboardMobileCardsRoot');
-    const track = document.getElementById('cardsTrack');
-    if (!root || !track) return;
+    const main = document.getElementById('expressDashboardMain');
+    if (!root || !main) return;
 
-    const PULL_TRIGGER_PX = 64;
-    const TOP_EPS = 8;
+    const PULL_TRIGGER_PX = 72;
+    const TOP_EPS = 10;
     let startY = null;
     let maxPull = 0;
     let busy = false;
 
-    function isVerticalCardList() {
+    function setDashPullHint(visible, refreshing) {
+      const hint = document.getElementById('vinorExpressPullHint');
+      if (!hint) return;
+      hint.classList.toggle('is-visible', !!(visible || refreshing));
+      hint.classList.toggle('is-refreshing', !!refreshing);
+      hint.setAttribute('aria-hidden', (visible || refreshing) ? 'false' : 'true');
+    }
+
+    setDashPullHint(false, false);
+
+    function pullEnabled() {
+      try { return window.matchMedia('(max-width: 1023px)').matches; } catch (_) { return true; }
+    }
+
+    function isCardsScrollMode() {
       try {
-        if (window.matchMedia('(min-width: 640px)').matches) return false;
+        if (!window.matchMedia('(max-width: 639px)').matches) return false;
         const oy = window.getComputedStyle(root).overflowY;
         return oy === 'auto' || oy === 'scroll';
       } catch (_) {
@@ -646,22 +667,43 @@
       }
     }
 
+    function pullScrollTop() {
+      if (isCardsScrollMode()) return root.scrollTop || 0;
+      try {
+        const shell = document.getElementById('tg-page-shell');
+        const a = typeof window.scrollY === 'number' ? window.scrollY : 0;
+        const b = shell ? shell.scrollTop || 0 : 0;
+        const c = document.documentElement ? document.documentElement.scrollTop || 0 : 0;
+        const d = document.body ? document.body.scrollTop || 0 : 0;
+        return Math.max(a, b, c, d);
+      } catch (_) {
+        return 0;
+      }
+    }
+
     function resetGesture() {
       startY = null;
       maxPull = 0;
+      if (!busy) setDashPullHint(false, false);
     }
 
-    root.addEventListener('touchstart', function (e) {
-      if (!isVerticalCardList() || busy) return;
-      if (root.scrollTop > TOP_EPS) return;
+    function onTouchStart(e) {
+      if (!pullEnabled() || busy) return;
       if (!e.touches || e.touches.length !== 1) return;
+      if (document.documentElement.classList.contains('vinor-express-overlay-modal-open')) return;
+      if (isCardsScrollMode()) {
+        if (!root.contains(e.target)) return;
+      } else if (!main.contains(e.target)) {
+        return;
+      }
+      if (pullScrollTop() > TOP_EPS) return;
       startY = e.touches[0].clientY;
       maxPull = 0;
-    }, pullOpts);
+    }
 
-    root.addEventListener('touchmove', function (e) {
-      if (startY == null || !e.touches || e.touches.length !== 1) return;
-      if (root.scrollTop > TOP_EPS) {
+    function onTouchMove(e) {
+      if (!pullEnabled() || startY == null || !e.touches || e.touches.length !== 1) return;
+      if (pullScrollTop() > TOP_EPS) {
         resetGesture();
         return;
       }
@@ -672,16 +714,21 @@
       }
       if (dy > 0) {
         maxPull = Math.max(maxPull, dy);
+        setDashPullHint(maxPull > 48, false);
       }
-    }, pullOpts);
+    }
 
     function endPull() {
-      if (startY == null) return;
-      const should = maxPull >= PULL_TRIGGER_PX && root.scrollTop <= TOP_EPS;
+      if (!pullEnabled() || startY == null) return;
+      const should = maxPull >= PULL_TRIGGER_PX && pullScrollTop() <= TOP_EPS;
       startY = null;
       maxPull = 0;
-      if (!should || busy) return;
+      if (!should || busy) {
+        setDashPullHint(false, false);
+        return;
+      }
       busy = true;
+      setDashPullHint(true, true);
       if (window.__vinorDashboardSyncChrome) {
         window.__vinorDashboardSyncChrome({ expandHeader: true, resetScroll: false });
       }
@@ -689,14 +736,18 @@
         .catch(function () {})
         .finally(function () {
           busy = false;
+          setDashPullHint(false, false);
           if (window.__vinorDashboardSyncChrome) {
             window.__vinorDashboardSyncChrome({ expandHeader: true, resetScroll: false });
           }
         });
     }
 
-    root.addEventListener('touchend', endPull, pullOpts);
-    root.addEventListener('touchcancel', resetGesture, pullOpts);
+    const listenTarget = isCardsScrollMode() ? root : document;
+    listenTarget.addEventListener('touchstart', onTouchStart, pullOpts);
+    listenTarget.addEventListener('touchmove', onTouchMove, pullOpts);
+    listenTarget.addEventListener('touchend', endPull, pullOpts);
+    listenTarget.addEventListener('touchcancel', resetGesture, pullOpts);
   };
 
   window.performRefresh = performRefresh;

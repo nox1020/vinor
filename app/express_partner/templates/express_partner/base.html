@@ -407,7 +407,17 @@
     };
 
     window.removeVinorCommissionModalsFromBody = function () {
-      ['vnWithdrawModal', 'vnBankPickerModal', 'vnBankAddModal'].forEach(function (id) {
+      ['vnWithdrawModal', 'vnBankPickerModal', 'vnBankAddModal', 'commTxnFilterModal', 'vnTxnDetailModal'].forEach(function (id) {
+        try {
+          document.querySelectorAll('body > #' + CSS.escape(id)).forEach(function (el) {
+            el.remove();
+          });
+        } catch (_) {}
+      });
+    };
+
+    window.removeVinorCommTxnModalsFromBody = function () {
+      ['commTxnFilterModal', 'vnTxnDetailModal'].forEach(function (id) {
         try {
           document.querySelectorAll('body > #' + CSS.escape(id)).forEach(function (el) {
             el.remove();

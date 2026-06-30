@@ -525,6 +525,15 @@
     } else if (window.__vinorCommissionsChrome) {
       window.__vinorCommissionsChrome.teardown();
     }
+    try {
+      var onCommTxnList = normPath(path) === '/express/partner/commissions/transactions';
+      if (!onCommTxnList && window.__vinorCommTxnPageChrome && window.__vinorCommTxnPageChrome.teardown) {
+        window.__vinorCommTxnPageChrome.teardown();
+      }
+      if (!onCommTxnList && typeof window.removeVinorCommTxnModalsFromBody === 'function') {
+        window.removeVinorCommTxnModalsFromBody();
+      }
+    } catch (_) {}
     if (navKey !== 'commissions') {
       try {
         if (window.__vinorCommPullAbort) window.__vinorCommPullAbort.abort();

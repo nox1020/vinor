@@ -5,11 +5,6 @@
 {% include 'express_partner/partials/commissions_styles.html' %}
 {% include 'express_partner/partials/commissions_txn_page_styles.html' %}
 <style>
-  #commTxnListHeader .comm-txn-filter-toggle.is-active {
-    border-color: rgba(16, 185, 129, 0.45);
-    background-color: rgba(16, 185, 129, 0.14);
-    color: rgb(110 231 183);
-  }
   #commTxnFilterModal.comm-txn-filter-modal--open { display: flex !important; }
   #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-backdrop { opacity: 1; }
   #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-sheet { transform: translateY(0); }
@@ -25,14 +20,14 @@
   {% call ep_header_row('تراکنش‌ها', url_for('express_partner.commissions'), subtitle=_txn_hint, subtitle_id='commTxnCountHint', inner_class='max-w-lg mx-auto w-full') %}
       <button type="button"
               id="commTxnFilterToggle"
-              class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn comm-txn-filter-toggle relative"
+              class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn relative"
               aria-haspopup="dialog"
               aria-controls="commTxnFilterModal"
               aria-expanded="false"
               aria-label="فیلتر تراکنش‌ها">
-        <i class="fas fa-filter ep-partner-header-btn-icon" aria-hidden="true"></i>
+        <i class="fa-solid fa-sliders ep-partner-header-btn-icon text-[13px] opacity-90" aria-hidden="true"></i>
         <span id="commTxnFilterDot"
-              class="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-2 ring-[#050a0e] hidden"
+              class="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-2 ring-[#111111] hidden"
               aria-hidden="true"></span>
       </button>
   {% endcall %}
@@ -86,7 +81,8 @@
        role="dialog"
        aria-modal="true"
        aria-hidden="true"
-       aria-labelledby="commTxnFilterModalTitle">
+       aria-labelledby="commTxnFilterModalTitle"
+       data-tg-body-modal>
     <button type="button"
             id="commTxnFilterBackdrop"
             class="comm-txn-filter-backdrop absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200"
@@ -136,12 +132,24 @@
   {{ super() }}
   <script>
   (function () {
+    if (window.__vinorCommTxnPageChrome && window.__vinorCommTxnPageChrome.teardown) {
+      try { window.__vinorCommTxnPageChrome.teardown(); } catch (_) {}
+    }
     if (window.__vinorCommissionsChrome && window.__vinorCommissionsChrome.teardown) {
       try { window.__vinorCommissionsChrome.teardown(); } catch (_) {}
     }
     if (window.__vinorPartnerHeaderChromeSetup) {
       try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
     }
+    if (typeof window.hoistVinorExpressBodyModals === 'function') {
+      try { window.hoistVinorExpressBodyModals(); } catch (_) {}
+    }
+
+    if (window.__vinorCommTxnPageAbort) {
+      try { window.__vinorCommTxnPageAbort.abort(); } catch (_) {}
+    }
+    window.__vinorCommTxnPageAbort = new AbortController();
+    var pageSignal = window.__vinorCommTxnPageAbort.signal;
 
     function syncTxnHeaderPad() {
       try {
@@ -178,13 +186,13 @@
     var filterBackdrop = document.getElementById('commTxnFilterBackdrop');
     var filterClose = document.getElementById('commTxnFilterClose');
     var filterDot = document.getElementById('commTxnFilterDot');
-    var overlay = window.vinorExpressModalOverlay;
 
-    if (!filters) return;
+    if (!filters || !filterModal) return;
 
     var active = 'all';
     var activeLabelText = 'همه';
     var totalRows = rowsRoot ? rowsRoot.querySelectorAll('.commission-txn-row').length : 0;
+    var closeTimer = null;
 
     var FILTER_LABELS = {
       all: 'همه',
@@ -195,29 +203,54 @@
       closed: 'رد / لغو'
     };
 
+    function overlayApi() {
+      return window.vinorExpressModalOverlay || null;
+    }
+
+    function syncOverlay(open) {
+      var ov = overlayApi();
+      if (ov) {
+        if (open) ov.open();
+        else ov.close();
+        return;
+      }
+      document.documentElement.classList.toggle('vinor-express-overlay-modal-open', open);
+      try {
+        document.body.style.overflow = open ? 'hidden' : '';
+      } catch (_) {}
+    }
+
+    function isFilterOpen() {
+      return filterModal.classList.contains('comm-txn-filter-modal--open');
+    }
+
     function openFilterModal() {
-      if (!filterModal) return;
-      if (filterModal.parentNode !== document.body) {
-        document.body.appendChild(filterModal);
+      if (typeof window.hoistVinorExpressBodyModals === 'function') {
+        try { window.hoistVinorExpressBodyModals(); } catch (_) {}
+      }
+      if (closeTimer) {
+        window.clearTimeout(closeTimer);
+        closeTimer = null;
       }
       filterModal.classList.remove('hidden');
       filterModal.setAttribute('aria-hidden', 'false');
       if (filterToggle) filterToggle.setAttribute('aria-expanded', 'true');
       try { void filterModal.offsetWidth; } catch (_) {}
       filterModal.classList.add('comm-txn-filter-modal--open');
-      if (overlay) overlay.open();
+      syncOverlay(true);
     }
 
     function closeFilterModal() {
-      if (!filterModal) return;
-      var wasOpen = filterModal.classList.contains('comm-txn-filter-modal--open');
+      if (!isFilterOpen()) return;
       filterModal.classList.remove('comm-txn-filter-modal--open');
-      window.setTimeout(function () {
-        filterModal.classList.add('hidden');
-      }, 280);
       filterModal.setAttribute('aria-hidden', 'true');
       if (filterToggle) filterToggle.setAttribute('aria-expanded', 'false');
-      if (wasOpen && overlay) overlay.close();
+      syncOverlay(false);
+      if (closeTimer) window.clearTimeout(closeTimer);
+      closeTimer = window.setTimeout(function () {
+        closeTimer = null;
+        filterModal.classList.add('hidden');
+      }, 280);
     }
 
     function setActiveChip(key, label) {
@@ -235,11 +268,15 @@
         btn.classList.toggle('text-zinc-300', !on);
         btn.classList.toggle('font-medium', !on);
       });
+      var filtered = key !== 'all';
       if (filterToggle) {
-        filterToggle.classList.toggle('is-active', key !== 'all');
+        filterToggle.classList.toggle('is-active', filtered);
       }
       if (filterDot) {
-        filterDot.classList.toggle('hidden', key === 'all');
+        filterDot.classList.toggle('hidden', !filtered);
+      }
+      if (countHint) {
+        countHint.classList.toggle('is-filtered', filtered);
       }
     }
 
@@ -279,10 +316,10 @@
       updateCountHint(shown);
     }
 
-    function selectFilter(key, label) {
+    function selectFilter(key, label, keepModalOpen) {
       setActiveChip(key, label);
       applyFilter();
-      closeFilterModal();
+      if (!keepModalOpen) closeFilterModal();
     }
 
     filters.addEventListener('click', function (e) {
@@ -292,30 +329,29 @@
         btn.getAttribute('data-comm-txn-filter') || 'all',
         btn.getAttribute('data-comm-txn-filter-label') || ''
       );
-    });
+    }, { signal: pageSignal });
 
     if (resetBtn) {
       resetBtn.addEventListener('click', function () {
         selectFilter('all', 'همه');
-      });
+      }, { signal: pageSignal });
     }
 
     if (filterToggle) {
       filterToggle.addEventListener('click', function () {
-        if (filterModal && filterModal.classList.contains('comm-txn-filter-modal--open')) {
-          closeFilterModal();
-        } else {
-          openFilterModal();
-        }
-      });
+        if (isFilterOpen()) closeFilterModal();
+        else openFilterModal();
+      }, { signal: pageSignal });
     }
-    if (filterBackdrop) filterBackdrop.addEventListener('click', closeFilterModal);
-    if (filterClose) filterClose.addEventListener('click', closeFilterModal);
+    if (filterBackdrop) {
+      filterBackdrop.addEventListener('click', closeFilterModal, { signal: pageSignal });
+    }
+    if (filterClose) {
+      filterClose.addEventListener('click', closeFilterModal, { signal: pageSignal });
+    }
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && filterModal && filterModal.classList.contains('comm-txn-filter-modal--open')) {
-        closeFilterModal();
-      }
-    });
+      if (e.key === 'Escape' && isFilterOpen()) closeFilterModal();
+    }, { signal: pageSignal });
 
     var initial = 'all';
     try {
@@ -326,6 +362,19 @@
     setActiveChip(initial, FILTER_LABELS[initial] || 'همه');
     if (rowsRoot) applyFilter();
     else updateCountHint(0);
+
+    function teardownTxnPage() {
+      if (closeTimer) {
+        window.clearTimeout(closeTimer);
+        closeTimer = null;
+      }
+      if (isFilterOpen()) closeFilterModal();
+      try { window.__vinorCommTxnPageAbort.abort(); } catch (_) {}
+    }
+
+    window.__vinorCommTxnPageChrome = {
+      teardown: teardownTxnPage
+    };
 
     window.__vinorPagePullRefresh = function () {
       window.location.reload();
