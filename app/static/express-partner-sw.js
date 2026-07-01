@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.58-guest-wallet-contact-login';
+const VERSION = 'v1.0.59-apk-cache-tier';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -183,17 +183,36 @@ function isNoStoreResponse(response) {
   return cc.includes('no-store') || cc.includes('private');
 }
 
+/** APIهای وابسته به سشن — فقط برای fallback آفلاین APK (پس از logout پاک می‌شوند) */
+function isSessionPartnerApiPath(pathname) {
+  const p = (pathname || '').replace(/\/+$/, '') || '/';
+  return p.startsWith('/express/partner/api/') ||
+    p === '/express/partner/dashboard/data' ||
+    p.startsWith('/express/partner/notifications');
+}
+
+function shouldCachePartnerApi(request, response) {
+  if (!response || !response.ok) return false;
+  const url = new URL(request.url);
+  if (request.method !== 'GET') return false;
+  if (isSessionPartnerApiPath(url.pathname)) {
+    return isVinorApkRequest(request);
+  }
+  if (isNoStoreResponse(response)) return false;
+  return true;
+}
+
 async function cacheApkNavigation(request, response) {
   if (!isVinorApkRequest(request) || !response || !response.ok) return;
-  if (isNoStoreResponse(response)) return;
   const url = new URL(request.url);
-  if (isAuthPartnerPath(url.pathname) || isSessionPartnerPath(url.pathname)) return;
+  if (isAuthPartnerPath(url.pathname)) return;
   const ct = (response.headers.get('content-type') || '').toLowerCase();
   if (!ct.includes('text/html')) return;
+  /* APK: HTML پنل no-store است — runtime برای آفلاین؛ logout همه را پاک می‌کند */
   try {
     const cache = await caches.open(RUNTIME);
     await cache.put(request, response.clone());
-    await trimCache(RUNTIME, 20);
+    await trimCache(RUNTIME, 32);
   } catch (_) {}
 }
 
@@ -322,8 +341,8 @@ self.addEventListener('fetch', (event) => {
       const cache = await caches.open(API_CACHE);
       try {
         const resp = await fetch(request);
-        if (resp.ok && !isNoStoreResponse(resp)) {
-          await trimCache(API_CACHE, 50);
+        if (resp.ok && shouldCachePartnerApi(request, resp)) {
+          await trimCache(API_CACHE, 60);
           cache.put(request, resp.clone());
         }
         return resp;
@@ -416,9 +435,27 @@ self.addEventListener('message', (event) => {
         // Warmup کردن routes
         if (event.data.urls && Array.isArray(event.data.urls)) {
           event.data.urls.forEach((url) => {
-            fetch(url, { cache: 'no-cache' }).catch(() => {});
+            fetch(url, { cache: 'no-cache', credentials: 'same-origin' }).catch(() => {});
           });
         }
+        break;
+      case 'VINOR_WARMUP_APK':
+        (async () => {
+          const urls = (event.data && event.data.urls) || [
+            '/express/partner/login',
+            '/express/partner/offline',
+            '/static/express-partner/skeleton-shell.html',
+            '/static/express-partner/express-nav.js',
+          ];
+          const precache = await caches.open(PRECACHE);
+          await Promise.all(urls.map(async (path) => {
+            try {
+              const req = new Request(path, { credentials: 'same-origin' });
+              const resp = await fetch(req, { cache: 'no-cache' });
+              if (resp.ok) await precache.put(req, resp.clone());
+            } catch (_) {}
+          }));
+        })();
         break;
       case 'SKIP_WAITING':
         self.skipWaiting();
@@ -428,6 +465,19 @@ self.addEventListener('message', (event) => {
           try {
             await caches.delete(RUNTIME);
             await caches.delete(API_CACHE);
+          } catch (_) {}
+        })());
+        break;
+      case 'CLEAR_PARTNER_ALL':
+        event.waitUntil((async () => {
+          try {
+            const keys = await caches.keys();
+            const includePrecache = !!(event.data && event.data.includePrecache);
+            await Promise.all(keys.filter((k) => {
+              if (!k.startsWith('express-partner-')) return false;
+              if (!includePrecache && k.startsWith('express-partner-precache-')) return false;
+              return true;
+            }).map((k) => caches.delete(k)));
           } catch (_) {}
         })());
         break;

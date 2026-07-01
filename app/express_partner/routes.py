@@ -1540,7 +1540,9 @@ def serve_service_worker():
     sw_path = os.path.join(static_dir, sw_file)
     
     if os.path.exists(sw_path):
-        return send_from_directory(static_dir, sw_file, mimetype="application/javascript")
+        response = send_from_directory(static_dir, sw_file, mimetype="application/javascript")
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
     
     # Fallback: return empty service worker if file not found
     current_app.logger.warning(f"Service worker file not found: {sw_path}")
@@ -2441,7 +2443,10 @@ def dashboard_data():
         payload['public_lands'] = _public_lands_payload(limit=50)
     except Exception:
         payload['public_lands'] = []
-    return jsonify(payload)
+    resp = jsonify(payload)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    resp.headers['Vary'] = 'Cookie'
+    return resp
 
 
 @express_partner_bp.get('/api/public-lands')
