@@ -151,7 +151,7 @@ def notify_partner_land_tx_sms(
 
     settings = load_settings(current_app) or {}
     sms_line_number = (
-        settings.get("sms_line_number") or get_sms_line_number() or "300089930616"
+        settings.get("sms_line_number") or get_sms_line_number() or "09981801922"
     ).strip()
     mobile = normalize_iran_mobile(partner_phone)
 

@@ -660,6 +660,12 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning("Celebration SMS scheduler not started: %s", e)
 
+    try:
+        from admin.sms_scheduled import schedule_admin_sms_jobs
+        schedule_admin_sms_jobs(app)
+    except Exception as e:
+        app.logger.warning("Admin SMS scheduler not started: %s", e)
+
     @app.before_request
     def landing_gate():
         debug = app.debug or _flask_debug()

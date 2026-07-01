@@ -139,7 +139,7 @@ def notify_all_partners_new_express_land(land: Dict[str, Any]) -> Dict[str, Any]
 
     settings = load_settings(current_app) or {}
     line_number = (
-        settings.get("sms_line_number") or get_sms_line_number() or "300089930616"
+        settings.get("sms_line_number") or get_sms_line_number() or "09981801922"
     ).strip()
 
     partners = list_approved_express_partners()

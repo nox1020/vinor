@@ -207,7 +207,7 @@ def send_sms_direct(
     api_key: str | None = None,
 ) -> dict:
     """ارسال پیامک مستقیم بدون قالب (bulk API در sms.ir)."""
-    final_line_number = line_number or get_sms_line_number()
+    final_line_number = get_sms_line_number()
     url = "https://api.sms.ir/v1/send/bulk"
     headers = {
         "Content-Type": "application/json",

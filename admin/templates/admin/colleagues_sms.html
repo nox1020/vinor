@@ -69,20 +69,80 @@
         </p>
       </div>
 
-      <details class="text-sm">
-        <summary class="cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
-          تنظیمات خط (اختیاری)
-        </summary>
-        <div class="mt-2">
+      <p class="text-xs text-gray-500 dark:text-gray-400">
+        ارسال از خط <span dir="ltr" class="font-mono text-gray-700 dark:text-gray-300">{{ sms_line_number }}</span>
+      </p>
+
+      <div class="rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-3">
+        <p class="text-sm font-medium text-gray-900 dark:text-white">زمان ارسال</p>
+        <div class="space-y-2 text-sm">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="send_timing" value="instant" class="text-blue-600"
+                   {% if form_send_timing != 'scheduled' and form_send_timing != 'recurring' %}checked{% endif %}>
+            <span class="text-gray-800 dark:text-gray-200">ارسال آنی</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="send_timing" value="scheduled" class="text-blue-600"
+                   {% if form_send_timing == 'scheduled' %}checked{% endif %}>
+            <span class="text-gray-800 dark:text-gray-200">ارسال زمان‌دار (یک‌بار در آینده)</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="send_timing" value="recurring" class="text-blue-600"
+                   {% if form_send_timing == 'recurring' %}checked{% endif %}>
+            <span class="text-gray-800 dark:text-gray-200">ارسال تکرارشونده</span>
+          </label>
+        </div>
+
+        <div id="scheduledFields" class="space-y-2 {% if form_send_timing != 'scheduled' %}hidden{% endif %}">
+          <label for="scheduled_at" class="block text-xs text-gray-600 dark:text-gray-400">تاریخ و ساعت (به وقت تهران)</label>
           <input
-            type="text"
-            name="line_number"
-            value="{{ sms_line_number }}"
+            type="datetime-local"
+            id="scheduled_at"
+            name="scheduled_at"
+            value="{{ form_scheduled_at }}"
             dir="ltr"
             class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-mono text-gray-900 dark:text-white"
           >
         </div>
-      </details>
+
+        <div id="recurringFields" class="space-y-2 {% if form_send_timing != 'recurring' %}hidden{% endif %}">
+          <div>
+            <label for="recurrence_freq" class="block text-xs text-gray-600 dark:text-gray-400 mb-1">تکرار</label>
+            <select id="recurrence_freq" name="recurrence_freq"
+                    class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white">
+              <option value="daily" {% if form_recurrence_freq == 'daily' %}selected{% endif %}>هر روز</option>
+              <option value="weekly" {% if form_recurrence_freq == 'weekly' %}selected{% endif %}>هر هفته</option>
+              <option value="monthly" {% if form_recurrence_freq == 'monthly' %}selected{% endif %}>هر ماه</option>
+            </select>
+          </div>
+          <div id="recurrenceWeekdayWrap" class="{% if form_recurrence_freq != 'weekly' %}hidden{% endif %}">
+            <label for="recurrence_weekday" class="block text-xs text-gray-600 dark:text-gray-400 mb-1">روز هفته</label>
+            <select id="recurrence_weekday" name="recurrence_weekday"
+                    class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white">
+              <option value="5" {% if form_recurrence_weekday == 5 %}selected{% endif %}>شنبه</option>
+              <option value="6" {% if form_recurrence_weekday == 6 %}selected{% endif %}>یکشنبه</option>
+              <option value="0" {% if form_recurrence_weekday == 0 %}selected{% endif %}>دوشنبه</option>
+              <option value="1" {% if form_recurrence_weekday == 1 %}selected{% endif %}>سه‌شنبه</option>
+              <option value="2" {% if form_recurrence_weekday == 2 %}selected{% endif %}>چهارشنبه</option>
+              <option value="3" {% if form_recurrence_weekday == 3 %}selected{% endif %}>پنجشنبه</option>
+              <option value="4" {% if form_recurrence_weekday == 4 %}selected{% endif %}>جمعه</option>
+            </select>
+          </div>
+          <div id="recurrenceDayWrap" class="{% if form_recurrence_freq != 'monthly' %}hidden{% endif %}">
+            <label for="recurrence_day" class="block text-xs text-gray-600 dark:text-gray-400 mb-1">روز ماه (۱ تا ۳۱)</label>
+            <input type="number" id="recurrence_day" name="recurrence_day" min="1" max="31"
+                   value="{{ form_recurrence_day or 1 }}"
+                   class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white">
+          </div>
+          <div>
+            <label for="recurrence_time" class="block text-xs text-gray-600 dark:text-gray-400 mb-1">ساعت (به وقت تهران)</label>
+            <input type="time" id="recurrence_time" name="recurrence_time"
+                   value="{{ form_recurrence_time or '09:00' }}"
+                   dir="ltr"
+                   class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-mono text-gray-900 dark:text-white">
+          </div>
+        </div>
+      </div>
 
       <button
         type="submit"
@@ -91,10 +151,48 @@
         class="w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition"
         data-recipient-count="{{ partners_count or 0 }}"
       >
-        ارسال به <span id="directSendCount">{{ partners_count or 0 }}</span> نفر
+        <span id="directSendBtnLabel">ارسال به <span id="directSendCount">{{ partners_count or 0 }}</span> نفر</span>
       </button>
     </form>
   </div>
+
+  {% if scheduled_jobs and scheduled_jobs|length %}
+  <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
+    <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">زمان‌بندی‌های در انتظار</h2>
+    <ul class="space-y-3">
+      {% for job in scheduled_jobs %}
+      <li class="rounded-lg border border-amber-100 dark:border-amber-900/40 bg-white dark:bg-gray-900 p-3 text-sm">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <p class="text-gray-900 dark:text-white truncate">{{ job.message[:80] }}{% if job.message|length > 80 %}…{% endif %}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {{ recipient_group_labels.get(job.recipient_group, job.recipient_group) }}
+              · {{ job.recipient_count }} نفر
+              ·
+              {% if job.send_timing == 'recurring' %}
+                تکرارشونده
+              {% else %}
+                یک‌بار
+              {% endif %}
+            </p>
+            <p class="text-xs font-mono text-amber-700 dark:text-amber-300 mt-0.5" dir="ltr">
+              {% if job.next_run_at %}{{ job.next_run_at[:16]|replace('T', ' ') }}{% else %}—{% endif %}
+            </p>
+          </div>
+          <form method="post" class="shrink-0" onsubmit="return confirm('این زمان‌بندی لغو شود؟');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="cancel_scheduled">
+            <input type="hidden" name="job_id" value="{{ job.id }}">
+            <button type="submit" class="text-xs px-2 py-1 rounded border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20">
+              لغو
+            </button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 
   <!-- حالت پیشرفته: قالب sms.ir -->
   <details class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden" {% if send_mode == 'template' %}open{% endif %}>
@@ -248,10 +346,42 @@ function syncRecipientGroupUi() {
     templateBtn.disabled = count <= 0;
     templateBtn.dataset.recipientCount = String(count);
   }
+  syncSendTimingUi();
   var hintEl = document.getElementById('recipientGroupHint');
   var sel = document.getElementById('recipientGroupSelect');
   if (hintEl && sel && sel.selectedOptions && sel.selectedOptions[0]) {
     hintEl.textContent = sel.selectedOptions[0].getAttribute('data-hint') || '';
+  }
+}
+
+function getSelectedSendTiming() {
+  var checked = document.querySelector('#directSmsForm input[name="send_timing"]:checked');
+  return (checked && checked.value) ? checked.value : 'instant';
+}
+
+function syncSendTimingUi() {
+  var timing = getSelectedSendTiming();
+  var scheduled = document.getElementById('scheduledFields');
+  var recurring = document.getElementById('recurringFields');
+  var btnLabel = document.getElementById('directSendBtnLabel');
+  var count = getSelectedRecipientCount();
+  if (scheduled) scheduled.classList.toggle('hidden', timing !== 'scheduled');
+  if (recurring) recurring.classList.toggle('hidden', timing !== 'recurring');
+  if (btnLabel) {
+    if (timing === 'scheduled') {
+      btnLabel.innerHTML = 'ثبت ارسال زمان‌دار برای ' + count + ' نفر';
+    } else if (timing === 'recurring') {
+      btnLabel.innerHTML = 'ثبت ارسال تکرارشونده برای ' + count + ' نفر';
+    } else {
+      btnLabel.innerHTML = 'ارسال به <span id="directSendCount">' + count + '</span> نفر';
+    }
+  }
+  var freq = document.getElementById('recurrence_freq');
+  var weekdayWrap = document.getElementById('recurrenceWeekdayWrap');
+  var dayWrap = document.getElementById('recurrenceDayWrap');
+  if (freq && weekdayWrap && dayWrap) {
+    weekdayWrap.classList.toggle('hidden', freq.value !== 'weekly');
+    dayWrap.classList.toggle('hidden', freq.value !== 'monthly');
   }
 }
 
@@ -261,6 +391,18 @@ function confirmSend() {
   if (!count) {
     alert('در گروه «' + label + '» گیرنده‌ای با شماره معتبر وجود ندارد.');
     return false;
+  }
+  var timing = getSelectedSendTiming();
+  if (timing === 'scheduled') {
+    var dt = document.getElementById('scheduled_at');
+    if (!dt || !dt.value) {
+      alert('تاریخ و ساعت ارسال را مشخص کنید.');
+      return false;
+    }
+    return confirm('ارسال زمان‌دار برای ' + count + ' نفر از گروه «' + label + '» ثبت شود؟');
+  }
+  if (timing === 'recurring') {
+    return confirm('ارسال تکرارشونده برای ' + count + ' نفر از گروه «' + label + '» ثبت شود؟');
   }
   return confirm('پیامک به ' + count + ' نفر از گروه «' + label + '» ارسال شود؟');
 }
@@ -279,6 +421,11 @@ function confirmSend() {
     ta.addEventListener('input', updateCount);
     updateCount();
   }
+
+  document.querySelectorAll('#directSmsForm input[name="send_timing"]').forEach(function (el) {
+    el.addEventListener('change', syncSendTimingUi);
+  });
+  document.getElementById('recurrence_freq')?.addEventListener('change', syncSendTimingUi);
 
   document.getElementById('addParamBtn')?.addEventListener('click', function () {
     var container = document.getElementById('paramsContainer');

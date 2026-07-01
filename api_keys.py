@@ -26,7 +26,7 @@ DEEPSEEK_MODEL = "deepseek-chat"
 # با «کد تایید:» قبل از <#> — auto-fill در APK via User Consent (یک‌بار «اجازه دادن»).
 SMS_API_KEY = "AcEcwFoGsqya9QdAii8QWhU51eie84sEbB9I4mJ0gknvm7lg"
 SMS_TEMPLATE_ID = 878451
-SMS_LINE_NUMBER = "300089930616"
+SMS_LINE_NUMBER = "09981801922"
 SMS_RETRIEVER_HASH = "4R707/AKLt0"
 
 # --- سایر (در صورت نیاز) ---

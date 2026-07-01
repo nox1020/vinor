@@ -52,7 +52,7 @@ def get_sms_template_id() -> int:
 
 
 def get_sms_line_number() -> str:
-    return (SMS_LINE_NUMBER or "300089930616").strip()
+    return (SMS_LINE_NUMBER or "09981801922").strip()
 
 
 def get_sms_retriever_hash() -> str:

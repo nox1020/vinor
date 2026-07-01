@@ -371,7 +371,7 @@ def run_daily_celebration_sms(*, dry_run: bool = False, state: Optional[Dict[str
     _, jm_now, jd_now = _jalali_today()
     settings = load_settings(current_app) or {}
     line_number = (
-        settings.get("sms_line_number") or get_sms_line_number() or "300089930616"
+        settings.get("sms_line_number") or get_sms_line_number() or "09981801922"
     ).strip()
 
     run_state = state if isinstance(state, dict) else _load_state()

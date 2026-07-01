@@ -1890,7 +1890,7 @@ def _send_partner_application_sms(me_phone: str, recipient_name: str) -> dict:
     sms_message = (settings.get('partner_application_sms_message') or '').strip()
     if not sms_message:
         sms_message = 'درخواست همکاری شما ثبت شد و در حال بررسی است. وینور'
-    sms_line_number = (settings.get('sms_line_number') or get_sms_line_number() or '300089930616').strip()
+    sms_line_number = (settings.get('sms_line_number') or get_sms_line_number() or '09981801922').strip()
 
     sms_result = send_sms_direct(mobile=mobile, message=sms_message, line_number=sms_line_number)
     ok = bool(sms_result.get('ok'))

@@ -117,7 +117,7 @@ def notify_admin_pending_action(action: str, **kwargs: Any) -> dict:
     admin_phone = normalize_iran_mobile(
         str(settings.get('partner_application_admin_phone') or '09121471301')
     )
-    line = (settings.get('sms_line_number') or get_sms_line_number() or '300089930616').strip()
+    line = (settings.get('sms_line_number') or get_sms_line_number() or '09981801922').strip()
 
     if not is_valid_iran_mobile(admin_phone):
         try:
