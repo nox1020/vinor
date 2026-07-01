@@ -217,7 +217,7 @@ def create_app() -> Flask:
         os.path.join(os.path.dirname(__file__), "..", "data", "push_subs.json")
     )
 
-    trust_proxy = os.environ.get("TRUST_PROXY", "0").strip().lower() in ("1", "true", "yes")
+    trust_proxy = os.environ.get("TRUST_PROXY", "1").strip().lower() in ("1", "true", "yes")
     cookie_secure_env = os.environ.get("SESSION_COOKIE_SECURE", "auto").strip().lower()
     if cookie_secure_env in ("1", "true", "yes"):
         cookie_secure = True
@@ -286,7 +286,7 @@ def create_app() -> Flask:
     def _redirect_admin_to_https():
         """ورود ادمین روی HTTP باعث از دست رفتن کوکی Secure می‌شود."""
         path = request.path or ""
-        if not path.startswith("/admin/login"):
+        if not path.startswith("/admin"):
             return None
         if request.is_secure:
             return None
@@ -626,10 +626,11 @@ def create_app() -> Flask:
                         FLASH_AUTH_WARNING,
                     )
                     if path == "/admin/login":
+                        flash('لطفاً از آدرس https://vinor.ir/admin/login وارد شوید.', 'warning')
                         try:
                             return redirect(url_for("admin.login"))
                         except Exception:
-                            return redirect("/admin/login")
+                            return redirect("https://vinor.ir/admin/login")
                     try:
                         return redirect(url_for("express_partner.login"))
                     except Exception:

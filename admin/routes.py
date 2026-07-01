@@ -79,6 +79,7 @@ from admin.sms_recipients import (
     update_sms_recipient_group_meta,
     update_sms_recipient_member,
 )
+from admin.admin_otp_store import clear_admin_otp, load_admin_otp, save_admin_otp
 from admin.sms_scheduled import (
     SEND_TIMING_INSTANT,
     SEND_TIMING_RECURRING,
@@ -915,15 +916,24 @@ def login_required(view):
 # -----------------------------------------------------------------------------
 
 def _store_admin_otp_session(code: str) -> None:
-    session.permanent = True
-    session['admin_otp_pending'] = True
-    session['admin_otp_code'] = code
-    session['admin_otp_expires_at'] = (datetime.utcnow() + timedelta(hours=1)).timestamp()
-    session['admin_otp_last_sent_at'] = datetime.utcnow().timestamp()
-    try:
-        session.modified = True
-    except Exception:
-        pass
+    save_admin_otp(code)
+
+
+@admin_bp.before_request
+def admin_force_https():
+    """کوکی Secure روی HTTP ذخیره نمی‌شود — کل پنل ادمین فقط HTTPS."""
+    if request.is_secure:
+        return None
+    host = (request.host or "").split(":")[0].lower()
+    if host not in ("vinor.ir", "www.vinor.ir"):
+        return None
+    path = request.path or ""
+    if not path.startswith("/admin"):
+        return None
+    url = request.url or ""
+    if url.startswith("http://"):
+        return redirect(url.replace("http://", "https://", 1), code=301)
+    return None
 
 
 @admin_bp.before_request
@@ -951,7 +961,8 @@ def login():
         return redirect(url_for('admin.dashboard'))
 
     now_ts = datetime.utcnow().timestamp()
-    last_sent_at = float(session.get('admin_otp_last_sent_at') or 0)
+    otp_state = load_admin_otp()
+    last_sent_at = float((otp_state or {}).get('last_sent_at') or session.get('admin_otp_last_sent_at') or 0)
     cooldown_seconds = max(0, ADMIN_OTP_COOLDOWN_SECONDS - int(now_ts - last_sent_at)) if last_sent_at else 0
 
     def _render_login():
@@ -1000,22 +1011,21 @@ def login():
 
         # مرحله ۲: تایید کد پیامکی
         if otp_code:
-            expected_code = str(session.get('admin_otp_code') or '')
-            expires_at = session.get('admin_otp_expires_at')
+            otp_state = load_admin_otp() or {}
+            expected_code = str(otp_state.get('code') or session.get('admin_otp_code') or '')
+            expires_at = otp_state.get('expires_at') or session.get('admin_otp_expires_at')
             now_ts = datetime.utcnow().timestamp()
 
             if (not expires_at) or (now_ts > float(expires_at)):
-                for k in ('admin_otp_pending', 'admin_otp_code', 'admin_otp_expires_at'):
-                    session.pop(k, None)
+                clear_admin_otp()
                 flash('کد ورود منقضی شده است. دوباره وارد شوید.', 'warning')
                 return _render_login()
 
             if otp_code == expected_code:
                 session['logged_in'] = True
                 session['username'] = ADMIN_USERNAME
-                session.permanent = True  # ماندگاری session برای PWA
-                for k in ('admin_otp_pending', 'admin_otp_code', 'admin_otp_expires_at'):
-                    session.pop(k, None)
+                session.permanent = True
+                clear_admin_otp()
                 flash('خوش آمدید؛ ورود موفق.', 'success')
                 return redirect(url_for('admin.dashboard'))
 
@@ -1030,12 +1040,9 @@ def logout():
     for k in (
         'logged_in',
         'username',
-        'admin_otp_pending',
-        'admin_otp_code',
-        'admin_otp_expires_at',
-        'admin_otp_last_sent_at',
     ):
         session.pop(k, None)
+    clear_admin_otp()
     if not session.get('user_phone'):
         session.permanent = False
     flash('خروج انجام شد.', 'info')
