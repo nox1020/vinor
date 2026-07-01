@@ -40,7 +40,8 @@
       {% endfor %}
     </select>
     <p id="recipientGroupHint" class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-      {{ recipient_group_hints.get(recipient_group, '') }}
+      <span id="recipientGroupHintText">{{ recipient_group_hints.get(recipient_group, '') }}</span>
+      <span id="recipientGroupSaved" class="hidden text-emerald-600 dark:text-emerald-400 mr-2">· ذخیره شد</span>
     </p>
   </div>
 
@@ -290,10 +291,10 @@
       <span class="text-gray-500">صفحه {{ history_page }} از {{ history_total_pages }}</span>
       <div class="flex gap-2">
         {% if history_page > 1 %}
-        <a href="?history_page={{ history_page - 1 }}" class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">قبلی</a>
+        <a href="?recipient_group={{ recipient_group }}&history_page={{ history_page - 1 }}" class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">قبلی</a>
         {% endif %}
         {% if history_page < history_total_pages %}
-        <a href="?history_page={{ history_page + 1 }}" class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">بعدی</a>
+        <a href="?recipient_group={{ recipient_group }}&history_page={{ history_page + 1 }}" class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">بعدی</a>
         {% endif %}
       </div>
     </div>
@@ -347,11 +348,54 @@ function syncRecipientGroupUi() {
     templateBtn.dataset.recipientCount = String(count);
   }
   syncSendTimingUi();
-  var hintEl = document.getElementById('recipientGroupHint');
+  var hintEl = document.getElementById('recipientGroupHintText');
   var sel = document.getElementById('recipientGroupSelect');
   if (hintEl && sel && sel.selectedOptions && sel.selectedOptions[0]) {
     hintEl.textContent = sel.selectedOptions[0].getAttribute('data-hint') || '';
   }
+}
+
+var _recipientGroupSaveTimer = null;
+
+function showRecipientGroupSaved() {
+  var el = document.getElementById('recipientGroupSaved');
+  if (!el) return;
+  el.classList.remove('hidden');
+  if (_recipientGroupSaveTimer) window.clearTimeout(_recipientGroupSaveTimer);
+  _recipientGroupSaveTimer = window.setTimeout(function () {
+    el.classList.add('hidden');
+    _recipientGroupSaveTimer = null;
+  }, 2000);
+}
+
+function saveRecipientGroupPreference(key) {
+  var csrfInput = document.querySelector('#directSmsForm input[name="csrf_token"]');
+  var body = new FormData();
+  body.append('csrf_token', csrfInput ? csrfInput.value : '');
+  body.append('action', 'save_recipient_group');
+  body.append('recipient_group', key);
+  return fetch(window.location.pathname, {
+    method: 'POST',
+    body: body,
+    credentials: 'same-origin',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  });
+}
+
+function onRecipientGroupChange() {
+  syncRecipientGroupUi();
+  var key = getSelectedRecipientGroup();
+  saveRecipientGroupPreference(key)
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data && data.ok) showRecipientGroupSaved();
+    })
+    .catch(function () {});
+  try {
+    var url = new URL(window.location.href);
+    url.searchParams.set('recipient_group', key);
+    window.history.replaceState({}, '', url.toString());
+  } catch (_) {}
 }
 
 function getSelectedSendTiming() {
@@ -409,7 +453,7 @@ function confirmSend() {
 
 (function () {
   var sel = document.getElementById('recipientGroupSelect');
-  if (sel) sel.addEventListener('change', syncRecipientGroupUi);
+  if (sel) sel.addEventListener('change', onRecipientGroupChange);
   syncRecipientGroupUi();
 
   var ta = document.getElementById('direct_message');

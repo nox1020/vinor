@@ -79,6 +79,8 @@ from admin.sms_recipients import (
     sync_sms_recipient_group,
     update_sms_recipient_group_meta,
     update_sms_recipient_member,
+    get_saved_recipient_group,
+    save_recipient_group_preference,
 )
 from admin.admin_otp_store import clear_admin_otp, load_admin_otp, save_admin_otp
 from admin.sms_scheduled import (
@@ -1826,7 +1828,10 @@ def sms_colleagues():
     form_template_id = ''
     form_message_text = ''
     recipient_group = normalize_recipient_group(
-        request.form.get('recipient_group') or request.args.get('recipient_group') or ''
+        request.form.get('recipient_group')
+        or request.args.get('recipient_group')
+        or get_saved_recipient_group()
+        or ''
     )
     ensure_sms_recipient_groups_initialized()
     recipient_counts = recipient_group_counts()
@@ -1845,6 +1850,13 @@ def sms_colleagues():
 
     if request.method == 'POST':
         action = (request.form.get('action') or '').strip()
+        if action == 'save_recipient_group':
+            group = save_recipient_group_preference(request.form.get('recipient_group') or '')
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
+                request.accept_mimetypes.best_match(['application/json', 'text/html']) == 'application/json'
+            ):
+                return jsonify({'ok': True, 'recipient_group': group})
+            return redirect(url_for('admin.sms_colleagues', recipient_group=group))
         if action == 'cancel_scheduled':
             job_id = (request.form.get('job_id') or '').strip()
             if cancel_scheduled_job(job_id):
@@ -1854,6 +1866,7 @@ def sms_colleagues():
         else:
             send_mode = request.form.get('send_mode', 'direct')
             recipient_group = normalize_recipient_group(request.form.get('recipient_group') or recipient_group)
+            save_recipient_group_preference(recipient_group)
             groups_summary = list_sms_recipient_groups_summary()
             dynamic_labels = {g["key"]: g["label"] for g in groups_summary}
             dynamic_hints = {g["key"]: g["hint"] for g in groups_summary}

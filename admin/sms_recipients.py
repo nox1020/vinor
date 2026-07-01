@@ -305,3 +305,28 @@ def export_sms_recipient_phones_txt(group: str) -> str:
     if not lines:
         return ""
     return "\n".join(lines) + "\n"
+
+
+def get_saved_recipient_group() -> str:
+    """آخرین گروه انتخاب‌شده در صفحه پیامک همکاران."""
+    ensure_sms_recipient_groups_initialized()
+    data = _load_store()
+    prefs = data.get("preferences")
+    if not isinstance(prefs, dict):
+        return RECIPIENT_GROUP_APPROVED
+    return normalize_recipient_group(str(prefs.get("last_recipient_group") or ""))
+
+
+def save_recipient_group_preference(group: str) -> str:
+    """ذخیرهٔ گروه گیرنده برای بازدید بعدی."""
+    key = normalize_recipient_group(group)
+    ensure_sms_recipient_groups_initialized()
+    data = _load_store()
+    prefs = data.get("preferences")
+    if not isinstance(prefs, dict):
+        prefs = {}
+        data["preferences"] = prefs
+    prefs["last_recipient_group"] = key
+    prefs["updated_at"] = _now_iso()
+    _save_store(data)
+    return key
