@@ -217,7 +217,14 @@ def create_app() -> Flask:
         os.path.join(os.path.dirname(__file__), "..", "data", "push_subs.json")
     )
 
-    cookie_secure = os.environ.get("SESSION_COOKIE_SECURE", "0") == "1"
+    trust_proxy = os.environ.get("TRUST_PROXY", "0").strip().lower() in ("1", "true", "yes")
+    cookie_secure_env = os.environ.get("SESSION_COOKIE_SECURE", "auto").strip().lower()
+    if cookie_secure_env in ("1", "true", "yes"):
+        cookie_secure = True
+    elif cookie_secure_env in ("0", "false", "no"):
+        cookie_secure = False
+    else:
+        cookie_secure = trust_proxy
     
     # کلیدهای VAPID: اول از environment variables، سپس از config
     from config import Config
@@ -267,6 +274,29 @@ def create_app() -> Flask:
     _setup_logging(app)
     _register_jinja_filters(app)
     _register_land_spec_globals(app)
+
+    if trust_proxy:
+        try:
+            from werkzeug.middleware.proxy_fix import ProxyFix
+            app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+        except Exception as e:
+            app.logger.warning("ProxyFix not applied: %s", e)
+
+    @app.before_request
+    def _redirect_admin_to_https():
+        """ورود ادمین روی HTTP باعث از دست رفتن کوکی Secure می‌شود."""
+        path = request.path or ""
+        if not path.startswith("/admin/login"):
+            return None
+        if request.is_secure:
+            return None
+        host = (request.host or "").split(":")[0].lower()
+        if host not in ("vinor.ir", "www.vinor.ir"):
+            return None
+        url = request.url
+        if url.startswith("http://"):
+            return redirect(url.replace("http://", "https://", 1), code=301)
+        return None
 
     try:
         from .utils.storage import migrate_legacy
@@ -515,6 +545,8 @@ def create_app() -> Flask:
             "express_partner.create_visit_request",
             "express_partner.mark_in_transaction",
             "ai.chat",
+            "admin.login",
+            "admin.logout",
         ):
             try:
                 f = app.view_functions.get(endpoint)
@@ -566,12 +598,18 @@ def create_app() -> Flask:
                     "/express/partner/verify",
                     "/express/partner/otp/resend",
                     "/express/partner/api/login-request",
+                    "/admin/login",
                 }
                 if path in auth_paths or path.startswith("/express/partner/login"):
                     flash(
                         "جلسه منقضی شده است. صفحه را تازه کنید و دوباره شماره موبایل را وارد کنید.",
                         FLASH_AUTH_WARNING,
                     )
+                    if path == "/admin/login":
+                        try:
+                            return redirect(url_for("admin.login"))
+                        except Exception:
+                            return redirect("/admin/login")
                     try:
                         return redirect(url_for("express_partner.login"))
                     except Exception:

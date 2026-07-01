@@ -18,11 +18,6 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 
-# اگر CSRFProtect در app factory فعال است، فقط روی روت لاگین موقتاً معاف می‌کنیم
-try:
-    from flask_wtf.csrf import csrf  # LocalProxy
-except Exception:
-    csrf = None
 
 # -----------------------------------------------------------------------------
 # اعلان‌ها (Vinor Notifications)
@@ -919,7 +914,18 @@ def login_required(view):
 # احراز هویت
 # -----------------------------------------------------------------------------
 
-# به‌روزرسانی خودکار timestamp کاربران آنلاین در تمام route‌های admin
+def _store_admin_otp_session(code: str) -> None:
+    session.permanent = True
+    session['admin_otp_pending'] = True
+    session['admin_otp_code'] = code
+    session['admin_otp_expires_at'] = (datetime.utcnow() + timedelta(hours=1)).timestamp()
+    session['admin_otp_last_sent_at'] = datetime.utcnow().timestamp()
+    try:
+        session.modified = True
+    except Exception:
+        pass
+
+
 @admin_bp.before_request
 def track_online_user():
     """به‌روزرسانی timestamp آخرین فعالیت کاربر در تمام route‌های admin"""
@@ -937,9 +943,8 @@ def track_online_user():
 def login():
     """
     نکته امنیتی:
-    - در تمپلیت admin/login.html حتماً CSRF token بگذارید:
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    - تا قبل از اضافه شدن توکن در فرم، می‌توانید موقتاً این روت را CSRF-exempt کنید.
+    - در تمپلیت admin/login.html CSRF token قرار دارد.
+    - معافیت CSRF در app/__init__.py (پس از CSRFProtect.init_app) اعمال می‌شود.
     """
     # سشن هنوز معتبر است (همان مرورگر/دستگاه، کوکی در مدت PERMANENT_SESSION_LIFETIME)
     if session.get('logged_in'):
@@ -962,10 +967,7 @@ def login():
             code = f"{random.randint(10000, 99999)}"
             sms_result = send_sms_code(ADMIN_LOGIN_OTP_PHONE, code)
             if sms_result.get('ok'):
-                session['admin_otp_pending'] = True
-                session['admin_otp_code'] = code
-                session['admin_otp_expires_at'] = (datetime.utcnow() + timedelta(hours=1)).timestamp()
-                session['admin_otp_last_sent_at'] = datetime.utcnow().timestamp()
+                _store_admin_otp_session(code)
                 cooldown_seconds = ADMIN_OTP_COOLDOWN_SECONDS
                 flash('با اشتیاق منتظرتیم', 'info')
             else:
@@ -991,10 +993,7 @@ def login():
             if not sms_result.get('ok'):
                 flash('ارسال مجدد کد ناموفق بود.', 'danger')
                 return _render_login()
-            session['admin_otp_pending'] = True
-            session['admin_otp_code'] = code
-            session['admin_otp_expires_at'] = (datetime.utcnow() + timedelta(hours=1)).timestamp()
-            session['admin_otp_last_sent_at'] = datetime.utcnow().timestamp()
+            _store_admin_otp_session(code)
             cooldown_seconds = ADMIN_OTP_COOLDOWN_SECONDS
             flash('با اشتیاق منتظرتیم', 'info')
             return _render_login()
@@ -1024,10 +1023,6 @@ def login():
             return _render_login()
         flash('کد ورود را وارد کنید.', 'warning')
     return _render_login()
-
-# معافیت موقت CSRF فقط برای لاگین (پس از افزودن توکن، این را حذف کنید)
-if csrf is not None:
-    admin_bp.view_functions['login'] = csrf.exempt(admin_bp.view_functions['login'])
 
 @admin_bp.route('/logout', methods=['POST', 'GET'])
 def logout():

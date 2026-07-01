@@ -7,6 +7,7 @@ sms.ir — ارسال OTP و پیامک قالب‌دار/مستقیم.
 import re
 import requests
 from flask import current_app
+from requests.exceptions import RequestException, Timeout
 
 from app.services.sms_config import (
     get_sms_api_key,
@@ -90,6 +91,28 @@ def _sms_ir_response_ok(status_code: int, body: object) -> bool:
     return True
 
 
+def _sms_request_post(url: str, *, headers: dict, json_payload: dict, timeout: int = 25) -> requests.Response:
+    """POST به sms.ir با یک بار retry در صورت timeout."""
+    last_err = None
+    for attempt in range(2):
+        try:
+            return requests.post(url, headers=headers, json=json_payload, timeout=timeout)
+        except Timeout as e:
+            last_err = e
+            if attempt == 0:
+                try:
+                    current_app.logger.warning("SMS API timeout (retrying): %s", url)
+                except Exception:
+                    pass
+                continue
+            raise
+        except RequestException:
+            raise
+    if last_err:
+        raise last_err
+    raise RuntimeError("SMS request failed")
+
+
 def send_sms_code(phone: str, code: str) -> dict:
     """
     ارسال OTP با قالب sms.ir.
@@ -131,7 +154,7 @@ def send_sms_code(phone: str, code: str) -> dict:
         except Exception:
             pass
     try:
-        resp = requests.post(url, headers=headers, json=data, timeout=10)
+        resp = _sms_request_post(url, headers=headers, json_payload=data, timeout=25)
         content_type = resp.headers.get("content-type", "")
         body = (
             resp.json()
@@ -183,7 +206,7 @@ def send_sms_template(
         "parameters": params_list,
     }
     try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=20)
+        resp = _sms_request_post(url, headers=headers, json_payload=payload, timeout=25)
         content_type = resp.headers.get("content-type", "")
         body = (
             resp.json()
@@ -221,7 +244,7 @@ def send_sms_direct(
         "sendDateTime": None,
     }
     try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=20)
+        resp = _sms_request_post(url, headers=headers, json_payload=payload, timeout=25)
         content_type = resp.headers.get("content-type", "")
         body = (
             resp.json()
