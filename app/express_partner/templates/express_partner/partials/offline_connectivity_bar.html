@@ -14,7 +14,7 @@
       <path d="M8.8 15.8a5.5 5.5 0 0 1 6.4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       <path d="M12 19h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
     </svg>
-    <span id="vinorExpressOfflineBarText">آفلاین هستید</span>
+    <span id="vinorExpressOfflineBarText">اتصال اینترنت قطع است</span>
   </div>
 </div>
 
@@ -24,11 +24,14 @@
   if (window.__vinorExpressConnectivityInit) return;
   window.__vinorExpressConnectivityInit = true;
 
-  var OFFLINE_MSG = 'آفلاین هستید';
+  var OFFLINE_NETWORK_MSG = 'اتصال اینترنت قطع است';
+  var OFFLINE_SERVER_MSG = 'ارتباط با سرور برقرار نیست';
   var ONLINE_MSG = 'آنلاین شدید';
   var ONLINE_TOAST_MS = 2200;
   var ONLINE_FADE_MS = 280;
   var ONLINE_GRACE_MS = 3500;
+  var STARTUP_GRACE_MS = 5000;
+  var pageLoadAt = Date.now();
   var lastOnline = null;
   var onlineToastActive = false;
   var onlineHideTimer = null;
@@ -38,11 +41,17 @@
   var BAR_FALLBACK_H = 28;
   var reachabilityPending = false;
   var lastReachabilityAt = 0;
-  var REACHABILITY_COOLDOWN_MS = 4000;
+  var REACHABILITY_COOLDOWN_MS = 3000;
   var REACHABILITY_INTERVAL_MS = 20000;
+  var HEALTHZ_TIMEOUT_MS = 8000;
+  var UNREACHABLE_THRESHOLD = 3;
   var reachabilityTimer = null;
   var layoutScrollRaf = 0;
   var unreachableStreak = 0;
+
+  function inStartupGrace() {
+    return Date.now() - pageLoadAt < STARTUP_GRACE_MS;
+  }
 
   function inOnlineGrace() {
     return Date.now() < onlineGraceUntil;
@@ -245,7 +254,7 @@
     bar.hidden = false;
     bar.classList.remove('vinor-express-offline-bar--online');
     bar.classList.add('vinor-express-offline-bar--offline');
-    if (txt) txt.textContent = message || OFFLINE_MSG;
+    if (txt) txt.textContent = message || OFFLINE_NETWORK_MSG;
     root.classList.add('vinor-express-offline');
     markBarVisible(true);
     syncBarIcons('offline');
@@ -297,7 +306,7 @@
 
     if (on) {
       unreachableStreak = 0;
-      var showToast = !!opts.onlineToast || prev === false;
+      var showToast = !!opts.onlineToast || (prev === false && !opts.silent);
       if (showToast) {
         lastOnline = true;
         showOnlineToast(opts.message);
@@ -321,8 +330,12 @@
       return;
     }
 
+    if (inStartupGrace() && !nativeSource && probeNativeOnline()) {
+      return;
+    }
+
     lastOnline = false;
-    showOfflineBar(opts.message);
+    showOfflineBar(opts.message || (nativeSource ? OFFLINE_NETWORK_MSG : OFFLINE_SERVER_MSG));
   };
 
   function probeNativeOnline() {
@@ -346,8 +359,9 @@
     reachabilityPending = true;
     var ctrl = null;
     try { ctrl = new AbortController(); } catch (_) {}
-    var timer = ctrl ? window.setTimeout(function () { try { ctrl.abort(); } catch (_) {} }, 6000) : null;
+    var timer = ctrl ? window.setTimeout(function () { try { ctrl.abort(); } catch (_) {} }, HEALTHZ_TIMEOUT_MS) : null;
     return fetch('/healthz', {
+      method: 'HEAD',
       cache: 'no-store',
       credentials: 'same-origin',
       signal: ctrl ? ctrl.signal : undefined
@@ -365,7 +379,11 @@
     opts = opts || {};
     if (!probeNativeOnline()) {
       unreachableStreak = 0;
-      window.vinorExpressSyncConnectivity(false, { force: true });
+      window.vinorExpressSyncConnectivity(false, {
+        force: true,
+        source: 'native',
+        message: OFFLINE_NETWORK_MSG
+      });
       return Promise.resolve(false);
     }
     return probeReachability().then(function (reachable) {
@@ -373,24 +391,31 @@
         unreachableStreak = 0;
         var wasOffline = lastOnline === false;
         window.vinorExpressSyncConnectivity(true, {
-          force: true,
-          onlineToast: !!opts.onlineToast || wasOffline
+          force: opts.force !== false,
+          onlineToast: !!opts.onlineToast || wasOffline,
+          silent: !!opts.silent
         });
         return true;
       }
 
       unreachableStreak += 1;
-      if (probeNativeOnline() && (inOnlineGrace() || onlineToastActive || unreachableStreak < 2)) {
+      if (
+        probeNativeOnline() &&
+        (inOnlineGrace() || onlineToastActive || inStartupGrace() || unreachableStreak < UNREACHABLE_THRESHOLD)
+      ) {
         if (!reachabilityTimer) {
           reachabilityTimer = window.setInterval(function () {
             applyConnectivity();
           }, REACHABILITY_INTERVAL_MS);
         }
-        window.setTimeout(function () { applyConnectivity(); }, 1500);
+        window.setTimeout(function () { applyConnectivity(); }, 1800);
         return lastOnline !== false;
       }
 
-      window.vinorExpressSyncConnectivity(false, { force: true });
+      window.vinorExpressSyncConnectivity(false, {
+        force: true,
+        message: OFFLINE_SERVER_MSG
+      });
       return false;
     });
   }
@@ -402,7 +427,11 @@
   window.addEventListener('offline', function () {
     unreachableStreak = 0;
     onlineGraceUntil = 0;
-    window.vinorExpressSyncConnectivity(false, { force: true });
+    window.vinorExpressSyncConnectivity(false, {
+      force: true,
+      source: 'native',
+      message: OFFLINE_NETWORK_MSG
+    });
   });
   window.addEventListener('resize', scheduleLayoutOfflineBar, { passive: true });
   window.addEventListener('scroll', scheduleLayoutOfflineBar, { passive: true, capture: true });
@@ -414,9 +443,11 @@
   });
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { applyConnectivity(); }, { once: true });
+    document.addEventListener('DOMContentLoaded', function () {
+      applyConnectivity({ silent: true });
+    }, { once: true });
   } else {
-    applyConnectivity();
+    applyConnectivity({ silent: true });
   }
 })();
 </script>

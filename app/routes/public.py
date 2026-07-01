@@ -326,7 +326,7 @@ def enamad_seal():
         abort(502)
 
 
-@main_bp.route("/healthz", endpoint="healthz")
+@main_bp.route("/healthz", methods=("GET", "HEAD"), endpoint="healthz")
 def healthz():
     """پین سلامت برای تشخیص آنلاین/آفلاین در کلاینت."""
     resp = make_response("", 204)

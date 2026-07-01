@@ -138,7 +138,7 @@
         <img src="/static/icons/icon-48.png" alt="" width="36" height="36" style="border-radius:8px;object-fit:cover" decoding="async">
         <span>وینور اکسپرس</span>
       </div>
-      <div class="status" id="netStatus"><span>آفلاین</span></div>
+      <div class="status" id="netStatus"><span>در حال بررسی…</span></div>
     </header>
 
     <main>
@@ -199,7 +199,7 @@
       async function ping() {
         pingEl.textContent = 'در حال بررسی اتصال...';
         try {
-          const res = await fetch('/healthz', { cache: 'no-store' });
+          const res = await fetch('/healthz', { method: 'HEAD', cache: 'no-store' });
           if (res.ok) {
             setStatus('آنلاین', { bg: '#dcfce7', fg: '#166534' });
             pingEl.textContent = 'اتصال برقرار شد؛ در حال تازه‌سازی...';
@@ -207,8 +207,9 @@
             return;
           }
           pingEl.textContent = 'پاسخ نامعتبر از سرور';
+          setStatus('قطع', { bg: '#fee2e2', fg: '#b91c1c' });
         } catch (e) {
-          pingEl.textContent = 'آفلاین هستید';
+          pingEl.textContent = navigator.onLine ? 'ارتباط با سرور برقرار نیست' : 'اتصال اینترنت قطع است';
           setStatus('آفلاین', { bg: '#fee2e2', fg: '#b91c1c' });
         }
       }
@@ -218,7 +219,7 @@
 
       if (!navigator.onLine) {
         setStatus('آفلاین', { bg: '#fee2e2', fg: '#b91c1c' });
-        pingEl.textContent = 'آفلاین هستید';
+        pingEl.textContent = 'اتصال اینترنت قطع است';
       } else {
         ping();
       }
@@ -230,7 +231,7 @@
       });
       window.addEventListener('offline', () => {
         setStatus('آفلاین', { bg: '#fee2e2', fg: '#b91c1c' });
-        pingEl.textContent = 'آفلاین هستید';
+        pingEl.textContent = 'اتصال اینترنت قطع است';
       });
     })();
   </script>
