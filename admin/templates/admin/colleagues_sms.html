@@ -16,20 +16,40 @@
   </div>
   {% endif %}
 
-  <!-- خلاصه -->
-  <div class="flex items-center justify-between gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-    <div>
-      <p class="text-sm font-medium text-gray-900 dark:text-white">گیرندگان</p>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">فقط همکاران تأییدشده با شماره معتبر</p>
+  <!-- گیرندگان -->
+  <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+    <div class="flex items-start justify-between gap-3 mb-3">
+      <div>
+        <p class="text-sm font-medium text-gray-900 dark:text-white">گیرندگان</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">گروه را انتخاب کنید یا لیست را ویرایش کنید.</p>
+      </div>
+      <a href="{{ url_for('admin.sms_recipients') }}"
+         class="shrink-0 text-xs text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap">
+        مدیریت گیرندگان
+      </a>
     </div>
-    <span class="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{{ partners_count or 0 }}</span>
+    <label for="recipientGroupSelect" class="sr-only">گروه گیرندگان</label>
+    <select id="recipientGroupSelect"
+            class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2.5 text-sm text-gray-900 dark:text-white">
+      {% for key, label in recipient_group_labels.items() %}
+      <option value="{{ key }}" {% if recipient_group == key %}selected{% endif %}
+              data-count="{{ recipient_counts.get(key, 0) }}"
+              data-hint="{{ recipient_group_hints.get(key, '') }}">
+        {{ label }} ({{ recipient_counts.get(key, 0) }})
+      </option>
+      {% endfor %}
+    </select>
+    <p id="recipientGroupHint" class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+      {{ recipient_group_hints.get(recipient_group, '') }}
+    </p>
   </div>
 
   <!-- فرم اصلی: ارسال مستقیم -->
   <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-    <form method="post" class="space-y-4" onsubmit="return confirmSend({{ partners_count or 0 }});">
+    <form method="post" id="directSmsForm" class="space-y-4" onsubmit="return confirmSend();">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="send_mode" value="direct">
+      <input type="hidden" name="recipient_group" id="recipientGroupDirect" value="{{ recipient_group or 'approved' }}">
 
       <div>
         <label for="direct_message" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
@@ -42,7 +62,7 @@
           required
           maxlength="500"
           class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="متن پیامک برای همه همکاران..."
+          placeholder="متن پیامک برای گیرندگان انتخاب‌شده..."
         >{{ form_direct_message or '' }}</textarea>
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
           <span id="charCount">0</span> / 500 کاراکتر
@@ -66,10 +86,12 @@
 
       <button
         type="submit"
+        id="directSendBtn"
         {% if not partners_count %}disabled{% endif %}
         class="w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition"
+        data-recipient-count="{{ partners_count or 0 }}"
       >
-        ارسال به {{ partners_count or 0 }} همکار
+        ارسال به <span id="directSendCount">{{ partners_count or 0 }}</span> نفر
       </button>
     </form>
   </div>
@@ -80,9 +102,10 @@
       ارسال با قالب sms.ir (پیشرفته)
     </summary>
     <div class="px-4 pb-4 border-t border-gray-100 dark:border-gray-800 pt-4">
-      <form method="post" class="space-y-3" onsubmit="return confirmSend({{ partners_count or 0 }});">
+      <form method="post" id="templateSmsForm" class="space-y-3" onsubmit="return confirmSend();">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="send_mode" value="template">
+        <input type="hidden" name="recipient_group" id="recipientGroupTemplate" value="{{ recipient_group or 'approved' }}">
 
         <div>
           <label class="block text-sm font-medium text-gray-900 dark:text-white mb-1">شناسه قالب</label>
@@ -112,10 +135,12 @@
 
         <button
           type="submit"
+          id="templateSendBtn"
           {% if not partners_count %}disabled{% endif %}
           class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+          data-recipient-count="{{ partners_count or 0 }}"
         >
-          ارسال با قالب
+          ارسال با قالب به <span id="templateSendCount">{{ partners_count or 0 }}</span> نفر
         </button>
       </form>
     </div>
@@ -183,15 +208,68 @@
 </div>
 
 <script>
-function confirmSend(count) {
+var RECIPIENT_GROUP_LABELS = {{ recipient_group_labels|tojson }};
+var RECIPIENT_COUNTS = {{ recipient_counts|tojson }};
+
+function getSelectedRecipientGroup() {
+  var sel = document.getElementById('recipientGroupSelect');
+  return (sel && sel.value) ? sel.value : 'approved';
+}
+
+function getSelectedRecipientCount() {
+  var key = getSelectedRecipientGroup();
+  return Number(RECIPIENT_COUNTS[key] || 0);
+}
+
+function getSelectedRecipientLabel() {
+  var key = getSelectedRecipientGroup();
+  return RECIPIENT_GROUP_LABELS[key] || key;
+}
+
+function syncRecipientGroupUi() {
+  var key = getSelectedRecipientGroup();
+  var count = getSelectedRecipientCount();
+  var direct = document.getElementById('recipientGroupDirect');
+  var template = document.getElementById('recipientGroupTemplate');
+  if (direct) direct.value = key;
+  if (template) template.value = key;
+
+  var directCount = document.getElementById('directSendCount');
+  var templateCount = document.getElementById('templateSendCount');
+  var directBtn = document.getElementById('directSendBtn');
+  var templateBtn = document.getElementById('templateSendBtn');
+  if (directCount) directCount.textContent = String(count);
+  if (templateCount) templateCount.textContent = String(count);
+  if (directBtn) {
+    directBtn.disabled = count <= 0;
+    directBtn.dataset.recipientCount = String(count);
+  }
+  if (templateBtn) {
+    templateBtn.disabled = count <= 0;
+    templateBtn.dataset.recipientCount = String(count);
+  }
+  var hintEl = document.getElementById('recipientGroupHint');
+  var sel = document.getElementById('recipientGroupSelect');
+  if (hintEl && sel && sel.selectedOptions && sel.selectedOptions[0]) {
+    hintEl.textContent = sel.selectedOptions[0].getAttribute('data-hint') || '';
+  }
+}
+
+function confirmSend() {
+  var count = getSelectedRecipientCount();
+  var label = getSelectedRecipientLabel();
   if (!count) {
-    alert('همکار تأییدشده‌ای برای ارسال وجود ندارد.');
+    alert('در گروه «' + label + '» گیرنده‌ای با شماره معتبر وجود ندارد.');
     return false;
   }
-  return confirm('پیامک به ' + count + ' همکار ارسال شود؟');
+  return confirm('پیامک به ' + count + ' نفر از گروه «' + label + '» ارسال شود؟');
 }
 
 (function () {
+  var sel = document.getElementById('recipientGroupSelect');
+  if (sel) sel.addEventListener('change', syncRecipientGroupUi);
+  syncRecipientGroupUi();
+
   var ta = document.getElementById('direct_message');
   var counter = document.getElementById('charCount');
   function updateCount() {

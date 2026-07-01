@@ -67,6 +67,23 @@ from admin.people_directory import (
     group_people_for_admin_list,
     resolve_admin_person_name,
 )
+from admin.sms_recipients import (
+    RECIPIENT_GROUP_LABELS,
+    RECIPIENT_GROUP_HINTS,
+    add_sms_recipient_member,
+    ensure_sms_recipient_groups_initialized,
+    export_sms_recipient_phones_txt,
+    get_sms_recipient_group_detail,
+    list_sms_recipient_groups_summary,
+    load_sms_recipients,
+    normalize_recipient_group,
+    recipient_group_counts,
+    recipient_group_label,
+    remove_sms_recipient_member,
+    sync_sms_recipient_group,
+    update_sms_recipient_group_meta,
+    update_sms_recipient_member,
+)
 from app.utils.storage import (
     load_express_partner_apps,
     save_express_partner_apps,
@@ -1693,10 +1710,93 @@ def _normalize_for_sms_ir(mobile: str) -> str:
         return s
     return s
 
+@admin_bp.route('/sms/recipients', methods=['GET'])
+@login_required
+def sms_recipients():
+    """فهرست گروه‌های گیرنده پیامک."""
+    ensure_sms_recipient_groups_initialized()
+    return render_template(
+        'admin/sms_recipients_index.html',
+        groups=list_sms_recipient_groups_summary(),
+    )
+
+
+@admin_bp.route('/sms/recipients/<group_key>/phones.txt', methods=['GET'])
+@login_required
+def sms_recipients_phones_txt(group_key):
+    """دانلود شماره‌های گروه — یک شماره در هر خط."""
+    from flask import Response
+
+    key = normalize_recipient_group(group_key)
+    body = export_sms_recipient_phones_txt(key)
+    filename = f"sms-recipients-{key}.txt"
+    return Response(
+        body,
+        mimetype="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@admin_bp.route('/sms/recipients/<group_key>', methods=['GET', 'POST'])
+@login_required
+def sms_recipients_edit(group_key):
+    """ویرایش اعضای یک گروه گیرنده."""
+    key = normalize_recipient_group(group_key)
+    message = None
+    error = None
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or '').strip()
+        if action == 'sync':
+            count = sync_sms_recipient_group(key)
+            message = f'گروه از سیستم همگام شد — {count} عضو.'
+        elif action == 'meta':
+            update_sms_recipient_group_meta(
+                key,
+                label=(request.form.get('label') or '').strip(),
+                hint=(request.form.get('hint') or '').strip(),
+            )
+            message = 'عنوان و توضیح گروه ذخیره شد.'
+        elif action == 'add':
+            err = add_sms_recipient_member(
+                key,
+                (request.form.get('phone') or '').strip(),
+                (request.form.get('name') or '').strip(),
+            )
+            if err:
+                error = err
+            else:
+                message = 'عضو جدید اضافه شد.'
+        elif action == 'update':
+            err = update_sms_recipient_member(
+                key,
+                (request.form.get('phone') or '').strip(),
+                (request.form.get('name') or '').strip(),
+            )
+            if err:
+                error = err
+            else:
+                message = 'عضو به‌روزرسانی شد.'
+        elif action == 'delete':
+            err = remove_sms_recipient_member(key, (request.form.get('phone') or '').strip())
+            if err:
+                error = err
+            else:
+                message = 'عضو حذف شد.'
+
+    detail = get_sms_recipient_group_detail(key)
+    return render_template(
+        'admin/sms_recipients_edit.html',
+        group=detail,
+        message=message,
+        error=error,
+    )
+
+
 @admin_bp.route('/sms/colleagues', methods=['GET', 'POST'])
 @login_required
 def sms_colleagues():
-    """ارسال پیامک به همکاران تأییدشده"""
+    """ارسال پیامک به گروه‌های انتخاب‌شده (همکار / همه کاربران / باشگاه مشتریان)"""
     from datetime import datetime
     from app.services.sms_config import get_sms_line_number
 
@@ -1706,15 +1806,29 @@ def sms_colleagues():
     form_direct_message = ''
     form_template_id = ''
     form_message_text = ''
-
-    approved_partners = _load_approved_express_partners()
+    recipient_group = normalize_recipient_group(
+        request.form.get('recipient_group') or request.args.get('recipient_group') or ''
+    )
+    ensure_sms_recipient_groups_initialized()
+    recipient_counts = recipient_group_counts()
+    recipients = load_sms_recipients(recipient_group)
+    groups_summary = list_sms_recipient_groups_summary()
+    dynamic_labels = {g["key"]: g["label"] for g in groups_summary}
+    dynamic_hints = {g["key"]: g["hint"] for g in groups_summary}
+    group_label = dynamic_labels.get(recipient_group) or recipient_group_label(recipient_group)
     default_line = (get_sms_line_number() or '300089930616').strip()
 
     if request.method == 'POST':
         send_mode = request.form.get('send_mode', 'direct')
+        recipient_group = normalize_recipient_group(request.form.get('recipient_group') or recipient_group)
+        groups_summary = list_sms_recipient_groups_summary()
+        dynamic_labels = {g["key"]: g["label"] for g in groups_summary}
+        dynamic_hints = {g["key"]: g["hint"] for g in groups_summary}
+        group_label = dynamic_labels.get(recipient_group) or recipient_group_label(recipient_group)
+        recipients = load_sms_recipients(recipient_group)
 
-        if not approved_partners:
-            error = 'هیچ همکار تأییدشده‌ای با شماره معتبر یافت نشد.'
+        if not recipients:
+            error = f'هیچ گیرنده‌ای در گروه «{group_label}» با شماره معتبر یافت نشد.'
         elif send_mode == 'direct':
             form_direct_message = (request.form.get('direct_message') or '').strip()
             line_number = (request.form.get('line_number') or '').strip() or default_line
@@ -1723,7 +1837,7 @@ def sms_colleagues():
                 error = 'متن پیامک الزامی است.'
             else:
                 sent, failed, failed_details = 0, 0, []
-                for partner in approved_partners:
+                for partner in recipients:
                     phone_normalized = partner['phone']
                     try:
                         result = send_sms_direct(
@@ -1771,13 +1885,13 @@ def sms_colleagues():
                         })
 
                 if failed > 0:
-                    message = f'پیامک به {sent} همکار ارسال شد ({failed} خطا).'
+                    message = f'پیامک به {sent} نفر از گروه «{group_label}» ارسال شد ({failed} خطا).'
                     if len(failed_details) <= 5:
                         error = 'خطاها: ' + '; '.join(
                             f"{d['name']} ({d['phone']}): {d['error']}" for d in failed_details
                         )
                 else:
-                    message = f'پیامک با موفقیت به {sent} همکار ارسال شد.'
+                    message = f'پیامک با موفقیت به {sent} نفر از گروه «{group_label}» ارسال شد.'
                     form_direct_message = ''
 
         else:
@@ -1809,7 +1923,7 @@ def sms_colleagues():
                         parameters['MESSAGE'] = form_message_text
 
                     sent, failed, failed_details = 0, 0, []
-                    for partner in approved_partners:
+                    for partner in recipients:
                         phone_normalized = partner['phone']
                         try:
                             result = send_sms_template(
@@ -1856,13 +1970,20 @@ def sms_colleagues():
                             })
 
                     if failed > 0:
-                        message = f'پیامک به {sent} همکار ارسال شد ({failed} خطا).'
+                        message = f'پیامک به {sent} نفر از گروه «{group_label}» ارسال شد ({failed} خطا).'
                         if len(failed_details) <= 5:
                             error = 'خطاها: ' + '; '.join(
                                 f"{d['name']} ({d['phone']}): {d['error']}" for d in failed_details
                             )
                     else:
-                        message = f'پیامک با موفقیت به {sent} همکار ارسال شد.'
+                        message = f'پیامک با موفقیت به {sent} نفر از گروه «{group_label}» ارسال شد.'
+
+    recipient_counts = recipient_group_counts()
+    recipients = load_sms_recipients(recipient_group)
+    groups_summary = list_sms_recipient_groups_summary()
+    dynamic_labels = {g["key"]: g["label"] for g in groups_summary}
+    dynamic_hints = {g["key"]: g["hint"] for g in groups_summary}
+    group_label = dynamic_labels.get(recipient_group) or recipient_group_label(recipient_group)
 
     try:
         history = load_sms_history() or []
@@ -1895,7 +2016,11 @@ def sms_colleagues():
         'admin/colleagues_sms.html',
         message=message,
         error=error,
-        partners_count=len(approved_partners),
+        partners_count=len(recipients),
+        recipient_group=recipient_group,
+        recipient_counts=recipient_counts,
+        recipient_group_labels=dynamic_labels,
+        recipient_group_hints=dynamic_hints,
         sms_line_number=default_line,
         send_mode=send_mode,
         form_direct_message=form_direct_message,

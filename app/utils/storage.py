@@ -432,6 +432,13 @@ def save_support_tickets(items, app=None):
 def load_sms_history(app=None):    return _load(ensure_file('SMS_HISTORY_FILE','sms_history.json',[],app))
 def save_sms_history(items, app=None): return _save(ensure_file('SMS_HISTORY_FILE','sms_history.json',[],app), items)
 
+# SMS recipient groups (admin broadcast)
+def load_sms_recipient_groups(app=None):
+    return _load(ensure_file('SMS_RECIPIENT_GROUPS_FILE', 'sms_recipient_groups.json', {'groups': {}}, app))
+
+def save_sms_recipient_groups(data, app=None):
+    return _save(ensure_file('SMS_RECIPIENT_GROUPS_FILE', 'sms_recipient_groups.json', {'groups': {}}, app), data)
+
 # Landing Page Views Statistics
 def load_landing_views(app=None):    return _load(ensure_file('LANDING_VIEWS_FILE','landing_views.json',[],app))
 def save_landing_views(items, app=None): return _save(ensure_file('LANDING_VIEWS_FILE','landing_views.json',[],app), items)

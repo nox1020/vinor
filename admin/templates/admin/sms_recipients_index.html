@@ -1,0 +1,54 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}گیرندگان پیامک{% endblock %}
+{% block page_title %}گیرندگان پیامک{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-4">
+
+  <div class="flex items-center justify-between gap-3">
+    <p class="text-sm text-gray-500 dark:text-gray-400">
+      هر گروه را می‌توانید ویرایش، عضو اضافه/حذف یا از سیستم همگام کنید.
+    </p>
+    <a href="{{ url_for('admin.sms_colleagues') }}"
+       class="shrink-0 text-xs text-blue-600 dark:text-blue-400 hover:underline">
+      بازگشت به ارسال پیامک
+    </a>
+  </div>
+
+  <div class="grid grid-cols-1 gap-3">
+    {% for item in groups %}
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="text-sm font-semibold text-gray-900 dark:text-white">{{ item.label }}</h2>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">{{ item.hint }}</p>
+          {% if item.updated_at %}
+          <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
+            آخرین ویرایش: {{ item.updated_at[:16]|replace('T', ' ') }}
+          </p>
+          {% endif %}
+        </div>
+        <div class="text-left shrink-0">
+          <span class="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{{ item.count }}</span>
+          <p class="text-[11px] text-gray-500 dark:text-gray-400">عضو</p>
+        </div>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <a href="{{ url_for('admin.sms_recipients_edit', group_key=item.key) }}"
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition">
+          <i class="fa-solid fa-pen text-[10px]"></i>
+          ویرایش گروه
+        </a>
+        <a href="{{ url_for('admin.sms_recipients_phones_txt', group_key=item.key) }}"
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+           {% if not item.count %}aria-disabled="true" tabindex="-1" onclick="return false;" style="opacity:0.45;pointer-events:none;"{% endif %}>
+          <i class="fa-solid fa-download text-[10px]"></i>
+          دانلود .txt
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

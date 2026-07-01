@@ -1,0 +1,131 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}ویرایش {{ group.label }}{% endblock %}
+{% block page_title %}ویرایش گیرندگان{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-4">
+
+  <div class="flex items-center justify-between gap-2 text-sm">
+    <a href="{{ url_for('admin.sms_recipients') }}" class="text-blue-600 dark:text-blue-400 hover:underline">
+      <i class="fa-solid fa-arrow-right ml-1"></i> همه گروه‌ها
+    </a>
+    <a href="{{ url_for('admin.sms_colleagues', recipient_group=group.key) }}" class="text-gray-500 dark:text-gray-400 hover:underline text-xs">
+      ارسال پیامک به این گروه
+    </a>
+  </div>
+
+  {% if message %}
+  <div class="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 text-sm">
+    {{ message }}
+  </div>
+  {% endif %}
+  {% if error %}
+  <div class="p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 text-sm">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <!-- عنوان گروه -->
+  <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+    <form method="post" class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="meta">
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">نام گروه</label>
+        <input type="text" name="label" value="{{ group.label }}" required
+               class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">توضیح</label>
+        <textarea name="hint" rows="2"
+                  class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm">{{ group.hint }}</textarea>
+      </div>
+      <button type="submit" class="px-3 py-2 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-medium">
+        ذخیره عنوان
+      </button>
+    </form>
+  </div>
+
+  <!-- همگام‌سازی -->
+  <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 p-4 flex flex-wrap items-center justify-between gap-3">
+    <div class="text-sm text-amber-900 dark:text-amber-200">
+      <p class="font-medium">همگام‌سازی از سیستم</p>
+      <p class="text-xs mt-0.5 opacity-80">لیست فعلی با داده‌های زنده جایگزین می‌شود.</p>
+      {% if group.synced_at %}
+      <p class="text-[11px] mt-1 opacity-70">آخرین همگام‌سازی: {{ group.synced_at[:16]|replace('T', ' ') }}</p>
+      {% endif %}
+    </div>
+    <form method="post" onsubmit="return confirm('لیست اعضا از سیستم بازسازی شود؟ تغییرات دستی از بین می‌رود.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="sync">
+      <button type="submit" class="px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-100 text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30">
+        همگام‌سازی
+      </button>
+    </form>
+  </div>
+
+  <!-- افزودن عضو -->
+  <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+    <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">افزودن عضو</h2>
+    <form method="post" class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="add">
+      <input type="text" name="name" placeholder="نام (اختیاری)"
+             class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm">
+      <input type="tel" name="phone" required placeholder="09xxxxxxxxx" dir="ltr"
+             class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-mono sm:col-span-1">
+      <button type="submit" class="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
+        افزودن
+      </button>
+    </form>
+  </div>
+
+  <!-- لیست اعضا -->
+  <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold text-gray-900 dark:text-white">اعضا ({{ group.members|length }})</h2>
+    </div>
+
+    {% if group.members %}
+    <ul class="divide-y divide-gray-100 dark:divide-gray-800">
+      {% for member in group.members %}
+      <li class="py-3">
+        <form method="post" class="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="phone" value="{{ member.phone }}">
+          <div class="flex-1 min-w-[8rem]">
+            <label class="block text-[11px] text-gray-500 mb-1">نام</label>
+            <input type="text" name="name" value="{{ member.name }}"
+                   class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2.5 py-1.5 text-sm">
+          </div>
+          <div class="min-w-[9rem]">
+            <label class="block text-[11px] text-gray-500 mb-1">موبایل</label>
+            <span class="block px-2.5 py-1.5 text-sm font-mono text-gray-700 dark:text-gray-300" dir="ltr">{{ member.phone }}</span>
+          </div>
+          <div class="flex gap-1.5">
+            <button type="submit" name="action" value="update"
+                    class="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-800">
+              ذخیره
+            </button>
+            <button type="submit" name="action" value="delete"
+                    onclick="return confirm('این عضو حذف شود؟');"
+                    class="px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-xs font-medium hover:bg-rose-50 dark:hover:bg-rose-950/30">
+              حذف
+            </button>
+          </div>
+          {% if member.source == 'auto' %}
+          <span class="text-[10px] text-gray-400 w-full sm:w-auto">سیستمی</span>
+          {% else %}
+          <span class="text-[10px] text-blue-500 w-full sm:w-auto">دستی</span>
+          {% endif %}
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-gray-500 dark:text-gray-400 text-center py-8">هنوز عضوی در این گروه نیست.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
