@@ -46,8 +46,41 @@
   var HEALTHZ_TIMEOUT_MS = 8000;
   var UNREACHABLE_THRESHOLD = 3;
   var reachabilityTimer = null;
+  var probeRetryTimer = null;
+  var toastHideTimer = null;
+  var dismissFinalizeTimer = null;
   var layoutScrollRaf = 0;
   var unreachableStreak = 0;
+
+  function cancelProbeRetries() {
+    if (probeRetryTimer) {
+      window.clearTimeout(probeRetryTimer);
+      probeRetryTimer = null;
+    }
+    if (reachabilityTimer) {
+      window.clearInterval(reachabilityTimer);
+      reachabilityTimer = null;
+    }
+  }
+
+  function clearToastTimers() {
+    if (toastHideTimer) {
+      window.clearTimeout(toastHideTimer);
+      toastHideTimer = null;
+    }
+    if (dismissFinalizeTimer) {
+      window.clearTimeout(dismissFinalizeTimer);
+      dismissFinalizeTimer = null;
+    }
+    if (onlineHideTimer) {
+      window.clearTimeout(onlineHideTimer);
+      onlineHideTimer = null;
+    }
+    if (onlineDismissTimer) {
+      window.clearTimeout(onlineDismissTimer);
+      onlineDismissTimer = null;
+    }
+  }
 
   function inStartupGrace() {
     return Date.now() - pageLoadAt < STARTUP_GRACE_MS;
@@ -93,6 +126,7 @@
   function layoutOfflineBar() {
     var bar = document.getElementById('vinorExpressOfflineBar');
     if (!bar || bar.hidden || barDismissInFlight) return;
+    if (bar.classList.contains('vinor-express-offline-bar--leaving')) return;
     var topPx = 0;
     var header = findActiveHeader();
     if (header) {
@@ -122,14 +156,73 @@
   window.__vinorExpressOfflineBarLayout = layoutOfflineBar;
 
   function clearOnlineHideTimer() {
-    if (onlineHideTimer) {
-      window.clearTimeout(onlineHideTimer);
-      onlineHideTimer = null;
+    clearToastTimers();
+  }
+
+  function detachDismissListener(bar) {
+    if (!bar || !bar.__vinorDismissEnd) return;
+    bar.removeEventListener('transitionend', bar.__vinorDismissEnd);
+    bar.__vinorDismissEnd = null;
+  }
+
+  function hideBarCompletely(animate) {
+    var bar = document.getElementById('vinorExpressOfflineBar');
+    if (!bar) {
+      onlineToastActive = false;
+      barDismissInFlight = false;
+      return;
     }
-    if (onlineDismissTimer) {
-      window.clearTimeout(onlineDismissTimer);
-      onlineDismissTimer = null;
+    if (bar.hidden) {
+      onlineToastActive = false;
+      barDismissInFlight = false;
+      return;
     }
+
+    clearToastTimers();
+    onlineToastActive = false;
+    barDismissInFlight = false;
+
+    function finish() {
+      if (bar.hidden) return;
+      detachDismissListener(bar);
+      finalizeHideBar();
+    }
+
+    var useAnimate = animate !== false && !prefersReducedMotion();
+    if (!useAnimate) {
+      finish();
+      return;
+    }
+
+    setBarLayoutHeight(0);
+    bar.classList.remove('vinor-express-offline-bar--offline', 'vinor-express-offline-bar--online');
+    bar.classList.add('vinor-express-offline-bar--leaving');
+
+    dismissFinalizeTimer = window.setTimeout(function () {
+      dismissFinalizeTimer = null;
+      finish();
+    }, ONLINE_FADE_MS + 100);
+
+    function onTransitionEnd(ev) {
+      if (ev.target !== bar && ev.target !== bar.querySelector('.vinor-express-offline-bar__inner')) return;
+      if (dismissFinalizeTimer) {
+        window.clearTimeout(dismissFinalizeTimer);
+        dismissFinalizeTimer = null;
+      }
+      finish();
+    }
+
+    detachDismissListener(bar);
+    bar.__vinorDismissEnd = onTransitionEnd;
+    bar.addEventListener('transitionend', onTransitionEnd);
+  }
+
+  function scheduleOnlineToastHide() {
+    clearToastTimers();
+    toastHideTimer = window.setTimeout(function () {
+      toastHideTimer = null;
+      hideBarCompletely(true);
+    }, ONLINE_TOAST_MS);
   }
 
   function setBarLayoutHeight(hPx) {
@@ -160,14 +253,7 @@
     var bar = document.getElementById('vinorExpressOfflineBar');
     var root = document.documentElement;
     if (!bar) return;
-    if (onlineDismissTimer) {
-      window.clearTimeout(onlineDismissTimer);
-      onlineDismissTimer = null;
-    }
-    if (bar.__vinorDismissEnd) {
-      bar.removeEventListener('transitionend', bar.__vinorDismissEnd);
-      bar.__vinorDismissEnd = null;
-    }
+    detachDismissListener(bar);
     barDismissInFlight = false;
     onlineToastActive = false;
     bar.hidden = true;
@@ -187,51 +273,11 @@
   }
 
   function dismissBar(opts) {
-    opts = opts || {};
-    var bar = document.getElementById('vinorExpressOfflineBar');
-    if (!bar || bar.hidden) return;
-    if (barDismissInFlight) return;
-
-    var animate = opts.animate !== false && !prefersReducedMotion();
-    if (!animate) {
-      finalizeHideBar();
-      return;
-    }
-
-    barDismissInFlight = true;
-    setBarLayoutHeight(0);
-    bar.classList.add('vinor-express-offline-bar--leaving');
-
-    var finished = false;
-    function done() {
-      if (finished) return;
-      finished = true;
-      if (bar.__vinorDismissEnd) {
-        bar.removeEventListener('transitionend', bar.__vinorDismissEnd);
-        bar.__vinorDismissEnd = null;
-      }
-      finalizeHideBar();
-    }
-
-    function onTransitionEnd(ev) {
-      if (ev.target !== bar && ev.target !== bar.querySelector('.vinor-express-offline-bar__inner')) return;
-      done();
-    }
-
-    bar.__vinorDismissEnd = onTransitionEnd;
-    bar.addEventListener('transitionend', onTransitionEnd);
-    onlineDismissTimer = window.setTimeout(done, ONLINE_FADE_MS + 80);
+    hideBarCompletely(opts && opts.animate !== false);
   }
 
   function hideBar(opts) {
-    clearOnlineHideTimer();
-    opts = opts || {};
-    var animate = opts.animate === true && !prefersReducedMotion();
-    if (!animate) {
-      finalizeHideBar();
-      return;
-    }
-    dismissBar({ animate: true });
+    hideBarCompletely(opts && opts.animate === true);
   }
 
   function syncBarIcons(mode) {
@@ -242,7 +288,8 @@
   }
 
   function showOfflineBar(message) {
-    clearOnlineHideTimer();
+    clearToastTimers();
+    cancelProbeRetries();
     barDismissInFlight = false;
     onlineToastActive = false;
     onlineGraceUntil = 0;
@@ -267,7 +314,8 @@
   }
 
   function showOnlineToast(message) {
-    clearOnlineHideTimer();
+    clearToastTimers();
+    cancelProbeRetries();
     barDismissInFlight = false;
     onlineToastActive = true;
     markOnlineGrace();
@@ -276,10 +324,6 @@
     var txt = document.getElementById('vinorExpressOfflineBarText');
     var root = document.documentElement;
     if (!bar) return;
-    if (reachabilityTimer) {
-      window.clearInterval(reachabilityTimer);
-      reachabilityTimer = null;
-    }
     bar.classList.remove('vinor-express-offline-bar--leaving');
     bar.hidden = false;
     bar.classList.remove('vinor-express-offline-bar--offline');
@@ -289,11 +333,7 @@
     markBarVisible(true);
     syncBarIcons('online');
     layoutOfflineBar();
-    onlineHideTimer = window.setTimeout(function () {
-      onlineHideTimer = null;
-      if (!onlineToastActive) return;
-      dismissBar({ animate: true });
-    }, ONLINE_TOAST_MS);
+    scheduleOnlineToastHide();
   }
 
   window.vinorExpressSyncConnectivity = function (online, opts) {
@@ -314,15 +354,12 @@
       }
       if (onlineToastActive) {
         lastOnline = true;
+        if (!toastHideTimer) scheduleOnlineToastHide();
         return;
       }
       lastOnline = true;
-      clearOnlineHideTimer();
-      hideBar({ animate: false });
-      if (reachabilityTimer) {
-        window.clearInterval(reachabilityTimer);
-        reachabilityTimer = null;
-      }
+      cancelProbeRetries();
+      hideBarCompletely(false);
       return;
     }
 
@@ -389,6 +426,7 @@
     return probeReachability().then(function (reachable) {
       if (reachable) {
         unreachableStreak = 0;
+        cancelProbeRetries();
         var wasOffline = lastOnline === false;
         window.vinorExpressSyncConnectivity(true, {
           force: opts.force !== false,
@@ -408,7 +446,11 @@
             applyConnectivity();
           }, REACHABILITY_INTERVAL_MS);
         }
-        window.setTimeout(function () { applyConnectivity(); }, 1800);
+        if (probeRetryTimer) window.clearTimeout(probeRetryTimer);
+        probeRetryTimer = window.setTimeout(function () {
+          probeRetryTimer = null;
+          applyConnectivity();
+        }, 1800);
         return lastOnline !== false;
       }
 
@@ -439,7 +481,7 @@
     scheduleLayoutOfflineBar();
   });
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) applyConnectivity();
+    if (!document.hidden && !onlineToastActive) applyConnectivity();
   });
 
   if (document.readyState === 'loading') {
