@@ -460,11 +460,18 @@ def _scheduler_loop(app: Flask) -> None:
 
 
 def schedule_admin_sms_jobs(app: Flask) -> None:
+    """زمان‌بندی درون‌پردازه — فقط با VINOR_ADMIN_SMS_SCHEDULER=1 (روی LiteSpeed/cPanel از cron استفاده کنید)."""
     global _scheduler_started
     if _scheduler_started:
         return
     if os.environ.get("VINOR_DISABLE_SMS_SCHEDULER", "").strip().lower() in ("1", "true", "yes"):
         app.logger.info("Admin SMS scheduler disabled via VINOR_DISABLE_SMS_SCHEDULER")
+        return
+    if os.environ.get("VINOR_ADMIN_SMS_SCHEDULER", "").strip().lower() not in ("1", "true", "yes"):
+        app.logger.info(
+            "Admin SMS in-process scheduler off (use scripts/run_admin_sms_scheduled_jobs.py via cron "
+            "or set VINOR_ADMIN_SMS_SCHEDULER=1)"
+        )
         return
     _scheduler_started = True
     threading.Thread(

@@ -6,6 +6,7 @@ import os
 import json
 import re
 import random
+import threading
 import uuid
 from datetime import datetime, timedelta
 from functools import wraps
@@ -919,6 +920,24 @@ def _store_admin_otp_session(code: str) -> None:
     save_admin_otp(code)
 
 
+def _send_admin_login_otp_async(code: str, phone: str) -> None:
+    """ارسال OTP در thread جدا — درخواست HTTP بلافاصله آزاد می‌شود (مهم برای LSAPI workers)."""
+    app = current_app._get_current_object()
+
+    def _worker() -> None:
+        with app.app_context():
+            sms_result = send_sms_code(phone, code)
+            if not sms_result.get("ok"):
+                current_app.logger.error(
+                    "Admin login OTP send failed | phone=%s | status=%s | body=%s",
+                    phone,
+                    sms_result.get("status"),
+                    sms_result.get("body"),
+                )
+
+    threading.Thread(target=_worker, daemon=True, name="admin-login-otp").start()
+
+
 @admin_bp.before_request
 def admin_force_https():
     """کوکی Secure روی HTTP ذخیره نمی‌شود — کل پنل ادمین فقط HTTPS."""
@@ -972,23 +991,14 @@ def login():
             otp_cooldown_seconds=max(0, int(cooldown_seconds)),
         )
 
-    # ورود به صفحه لاگین: ارسال خودکار OTP به شماره پیش‌فرض
+    # ورود به صفحه لاگین: ارسال خودکار OTP (غیرهمزمان — worker LiteSpeed بلاک نمی‌شود)
     if request.method == 'GET':
         if cooldown_seconds == 0:
             code = f"{random.randint(10000, 99999)}"
-            sms_result = send_sms_code(ADMIN_LOGIN_OTP_PHONE, code)
-            if sms_result.get('ok'):
-                _store_admin_otp_session(code)
-                cooldown_seconds = ADMIN_OTP_COOLDOWN_SECONDS
-                flash('با اشتیاق منتظرتیم', 'info')
-            else:
-                current_app.logger.error(
-                    "Admin login OTP auto-send failed | phone=%s | status=%s | body=%s",
-                    ADMIN_LOGIN_OTP_PHONE,
-                    sms_result.get('status'),
-                    sms_result.get('body'),
-                )
-                flash('ارسال کد ورود ناموفق بود. صفحه را تازه کنید.', 'danger')
+            _store_admin_otp_session(code)
+            cooldown_seconds = ADMIN_OTP_COOLDOWN_SECONDS
+            _send_admin_login_otp_async(code, ADMIN_LOGIN_OTP_PHONE)
+            flash('با اشتیاق منتظرتیم', 'info')
         return _render_login()
 
     if request.method == 'POST':
@@ -1000,12 +1010,9 @@ def login():
                 flash(f'امکان ارسال مجدد تا {cooldown_seconds} ثانیه دیگر فعال می‌شود.', 'warning')
                 return _render_login()
             code = f"{random.randint(10000, 99999)}"
-            sms_result = send_sms_code(ADMIN_LOGIN_OTP_PHONE, code)
-            if not sms_result.get('ok'):
-                flash('ارسال مجدد کد ناموفق بود.', 'danger')
-                return _render_login()
             _store_admin_otp_session(code)
             cooldown_seconds = ADMIN_OTP_COOLDOWN_SECONDS
+            _send_admin_login_otp_async(code, ADMIN_LOGIN_OTP_PHONE)
             flash('با اشتیاق منتظرتیم', 'info')
             return _render_login()
 
