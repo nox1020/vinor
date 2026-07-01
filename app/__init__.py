@@ -265,7 +265,7 @@ def create_app() -> Flask:
         FCM_PROJECT_ID=os.environ.get("FCM_PROJECT_ID", getattr(Config, "FCM_PROJECT_ID", "")),
         APP_BRAND_NAME="وینور اکسپرس | Vinor Express",
         WTF_CSRF_ENABLED=True,
-        WTF_CSRF_TIME_LIMIT=3600,  # 1 hour
+        WTF_CSRF_TIME_LIMIT=60 * 60 * 24 * 7,  # ۷ روز — هم‌راستا با کوکی XSRF و اپ موبایل
         WTF_CSRF_CHECK_DEFAULT=True,
         WTF_CSRF_METHODS=("POST", "PUT", "PATCH", "DELETE"),
     )
@@ -555,6 +555,26 @@ def create_app() -> Flask:
             except Exception:
                 pass
 
+        # APIهای JSON پرتال همکار — احراز هویت با session؛ CSRF در WebView/APK مشکل‌ساز است
+        _partner_api_csrf_skip = {
+            "/express/partner/api/login-request",
+            "/express/partner/api/verify",
+        }
+        for rule in app.url_map.iter_rules():
+            rule_path = (rule.rule or "").rstrip("/") or "/"
+            if not rule_path.startswith("/express/partner/api"):
+                continue
+            if rule_path in _partner_api_csrf_skip:
+                continue
+            if not rule.methods or not (rule.methods & {"POST", "PUT", "PATCH", "DELETE"}):
+                continue
+            try:
+                view = app.view_functions.get(rule.endpoint)
+                if view is not None:
+                    csrf.exempt(view)
+            except Exception:
+                pass
+
         # API v1 removed
 
 
@@ -623,16 +643,30 @@ def create_app() -> Flask:
                 if wants_json:
                     from flask import jsonify
 
-                    return (
-                        jsonify(
-                            {
-                                "ok": False,
-                                "error": "csrf_expired",
-                                "message": "جلسه منقضی شده؛ صفحه را تازه کنید.",
-                            }
-                        ),
-                        400,
+                    fresh_token = generate_csrf()
+                    resp = jsonify(
+                        {
+                            "ok": False,
+                            "error": "csrf_expired",
+                            "message": "جلسه منقضی شده؛ صفحه را تازه کنید.",
+                            "csrf_token": fresh_token,
+                        }
                     )
+                    resp.status_code = 400
+                    resp.headers["X-CSRF-Token"] = fresh_token
+                    try:
+                        resp.set_cookie(
+                            "XSRF-TOKEN",
+                            fresh_token,
+                            secure=app.config.get("SESSION_COOKIE_SECURE", False),
+                            samesite="Lax",
+                            httponly=False,
+                            path="/",
+                            max_age=60 * 60 * 24 * 7,
+                        )
+                    except Exception:
+                        pass
+                    return resp
                 flash("لطفاً صفحه را تازه کنید و دوباره تلاش کنید.", "warning")
                 try:
                     return redirect(request.referrer or url_for("lands.add_land"))

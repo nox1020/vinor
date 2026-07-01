@@ -124,7 +124,36 @@
     dom.root.innerHTML = '<p class="px-4 py-12 text-center text-sm text-red-400 sm:px-6">خطا در بارگذاری نشان‌شده‌ها</p>';
   }
 
-  window.vinorLoadFavoritesCards = function vinorLoadFavoritesCards(opts) {
+    function fetchFavoritesCards(codes, controller, retried) {
+      return fetch(API_URL, {
+        method: 'POST',
+        headers: window.vinorCsrfFetchHeaders({
+          'Content-Type': 'application/json'
+        }),
+        credentials: 'same-origin',
+        body: JSON.stringify({ codes: codes }),
+        signal: controller ? controller.signal : undefined
+      }).then(function (r) {
+        if (r.status === 401) {
+          return r.json().catch(function () { return { error: 'unauthorized' }; });
+        }
+        if (r.status === 400 && !retried) {
+          return r.json().catch(function () { return {}; }).then(function (body) {
+            if (body && body.error === 'csrf_expired') {
+              var fresh = body.csrf_token || r.headers.get('X-CSRF-Token') || '';
+              if (window.vinorApplyCsrfToken) window.vinorApplyCsrfToken(fresh);
+              else if (window.vinorReadCsrfToken) window.vinorReadCsrfToken();
+              return fetchFavoritesCards(codes, controller, true);
+            }
+            throw new Error('http');
+          });
+        }
+        if (!r.ok) throw new Error('http');
+        return r.json();
+      });
+    }
+
+    window.vinorLoadFavoritesCards = function vinorLoadFavoritesCards(opts) {
     opts = opts || {};
     if (!onFavoritesPage()) return;
 
@@ -154,22 +183,7 @@
     var controller = typeof AbortController === 'function' ? new AbortController() : null;
     activeFetch = controller;
 
-    fetch(API_URL, {
-      method: 'POST',
-      headers: window.vinorCsrfFetchHeaders({
-        'Content-Type': 'application/json'
-      }),
-      credentials: 'same-origin',
-      body: JSON.stringify({ codes: codes }),
-      signal: controller ? controller.signal : undefined
-    })
-      .then(function (r) {
-        if (r.status === 401) {
-          return r.json().catch(function () { return { error: 'unauthorized' }; });
-        }
-        if (!r.ok) throw new Error('http');
-        return r.json();
-      })
+    fetchFavoritesCards(codes, controller, false)
       .then(function (d) {
         if (!onFavoritesPage()) return;
         var liveDom = getFavoritesDom();

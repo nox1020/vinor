@@ -345,21 +345,30 @@
 
   <script>
     window.vinorReadCsrfToken = function vinorReadCsrfToken() {
+      var fromCookie = '';
       try {
         var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
-        if (m && m[1]) {
-          var fromCookie = decodeURIComponent(m[1].trim());
-          if (fromCookie && window.VINOR_NOTIFY_CFG) {
-            window.VINOR_NOTIFY_CFG.csrfToken = fromCookie;
-          }
-          return fromCookie;
-        }
+        if (m && m[1]) fromCookie = decodeURIComponent(m[1].trim());
       } catch (_) {}
+      if (fromCookie) {
+        try {
+          if (window.VINOR_NOTIFY_CFG) window.VINOR_NOTIFY_CFG.csrfToken = fromCookie;
+        } catch (_) {}
+        return fromCookie;
+      }
       try {
         var cfg = window.VINOR_NOTIFY_CFG;
         if (cfg && cfg.csrfToken) return cfg.csrfToken;
       } catch (_) {}
       return '';
+    };
+    window.vinorApplyCsrfToken = function vinorApplyCsrfToken(token) {
+      var t = (token || '').trim();
+      if (!t) return '';
+      try {
+        if (window.VINOR_NOTIFY_CFG) window.VINOR_NOTIFY_CFG.csrfToken = t;
+      } catch (_) {}
+      return t;
     };
     window.vinorCsrfFetchHeaders = function vinorCsrfFetchHeaders(extra) {
       var h = extra ? Object.assign({}, extra) : {};
@@ -785,6 +794,16 @@
       },
       csrfToken: "{{ csrf_token() }}"
     };
+    (function () {
+      var fresh = window.vinorReadCsrfToken && window.vinorReadCsrfToken();
+      if (fresh && window.VINOR_NOTIFY_CFG) window.VINOR_NOTIFY_CFG.csrfToken = fresh;
+    })();
+    document.addEventListener('vinor:express-page-swap', function () {
+      try {
+        var t = window.vinorReadCsrfToken && window.vinorReadCsrfToken();
+        if (t && window.VINOR_NOTIFY_CFG) window.VINOR_NOTIFY_CFG.csrfToken = t;
+      } catch (_) {}
+    });
   </script>
 
   <!-- صدای کوتاه اعلان (Web Audio) — بدون فایل خارجی؛ پس از اولین همگام‌سازی فقط برای اعلان جدید پخش می‌شود -->

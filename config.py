@@ -18,7 +18,7 @@ class Config:
 
     # --- CSRF (اگر Flask-WTF داری) ---
     WTF_CSRF_ENABLED = True
-    WTF_CSRF_TIME_LIMIT = 3600            # 1 ساعت
+    WTF_CSRF_TIME_LIMIT = 60 * 60 * 24 * 7  # ۷ روز
     # اگر از CSRFProtect بدون Flask-WTF استفاده می‌کنی، در تمپلیت <input name="csrf_token" ...> را خودت بگذار
 
     # --- دیباگ/رندر ---
