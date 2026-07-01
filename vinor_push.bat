@@ -180,6 +180,19 @@ if not exist version.txt (
 )
 
 set /p VERSION=<version.txt
+set "APK_VERSION=!VERSION!"
+
+rem ابتدا تغییرات واقعی را بررسی کن — بدون bump نسخه
+git add -A
+
+git diff --cached --quiet && git diff --quiet && (
+  echo [APK] هیچ تغییری برای پوش نیست.
+  set "APK_STATUS=NO_CHANGES"
+  set "APK_EXIT=0"
+  exit /b 0
+)
+
+rem فقط وقتی تغییر هست، نسخه را بالا ببر
 for /f "tokens=1-3 delims=." %%a in ("!VERSION!") do (
   set "MAJOR=%%a"
   set "MINOR=%%b"
@@ -192,15 +205,12 @@ set "APK_VERSION=!NEW_VERSION!"
 set "APK_MSG_OUT=Vinor Android WebView v!NEW_VERSION!"
 
 echo [APK] نسخه جدید: !NEW_VERSION!
+echo [APK] تغییرات:
+echo --------------------------
+git status --short
+echo --------------------------
 
-git add -A
-
-git diff --cached --quiet && git diff --quiet && (
-  echo [APK] هیچ تغییری برای پوش نیست.
-  set "APK_STATUS=NO_CHANGES"
-  set "APK_EXIT=0"
-  exit /b 0
-)
+git add version.txt
 
 git commit -m "!APK_MSG_OUT!"
 if errorlevel 1 (
