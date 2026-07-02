@@ -15,7 +15,7 @@ def main() -> int:
     from app import create_app
     from app.services.firebase_config import get_firebase_status
     from app.services.fcm_push import send_fcm_to_token
-    from app.services.fcm_tokens import _load_all
+    from app.services.fcm_tokens import all_registered
 
     app = create_app()
     with app.app_context():
@@ -26,13 +26,16 @@ def main() -> int:
             "project_id": st.get("project_id"),
         }, ensure_ascii=False))
 
-        data = _load_all()
+        data = all_registered()
         if not data:
-            print("no tokens in fcm_tokens.json")
+            print("no tokens in fcm_tokens.json (login in APK first)")
             return 1
 
         phone, items = next(iter(data.items()))
         token = (items[0].get("token") or "").strip()
+        if not token:
+            print("no valid token found")
+            return 1
         print(f"testing phone={phone} token={token[:16]}…")
 
         res = send_fcm_to_token(token, title="تست وینور", body="اگر این را دیدید FCM کار می‌کند")

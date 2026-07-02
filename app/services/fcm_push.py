@@ -195,12 +195,16 @@ def send_fcm_to_phones(
         return {"sent": 0, "failed": 0, "skipped": len(phones), "targets": 0}
     sent = 0
     failed = 0
+    app = current_app._get_current_object()
+
+    def _send_one(tok: str) -> Dict[str, Any]:
+        with app.app_context():
+            ensure_firebase_ready(app)
+            return send_fcm_to_token(tok, title=title, body=body, url=url)
+
     workers = min(16, max(2, len(tokens)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {
-            pool.submit(send_fcm_to_token, tok, title=title, body=body, url=url): tok
-            for tok in tokens
-        }
+        futures = {pool.submit(_send_one, tok): tok for tok in tokens}
         for fut in as_completed(futures):
             try:
                 res = fut.result()

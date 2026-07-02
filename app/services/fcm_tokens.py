@@ -122,6 +122,11 @@ def _detach_token_from_other_users_unlocked(data: Dict[str, List[Dict[str, Any]]
     return moved
 
 
+def all_registered() -> Dict[str, List[Dict[str, Any]]]:
+    """همه tokenهای ثبت‌شده — برای admin/debug."""
+    return _load_all_unlocked()
+
+
 def register_token(
     phone: str,
     token: str,
