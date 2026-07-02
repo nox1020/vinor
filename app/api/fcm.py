@@ -26,7 +26,7 @@ def fcm_mobile_config():
             "configured": False,
             "mobile_ready": bool(status.get("mobile_ready")),
             "send_ready": bool(status.get("send_ready")),
-            "hint": "فایل google-services.json را در instance/data/ قرار دهید",
+            "hint": "google-services.json را در apk/app/ قرار دهید — سرور خودکار sync می‌کند",
         }), 404
     return jsonify({
         "ok": True,

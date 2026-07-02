@@ -8,6 +8,11 @@ from typing import Any, Dict, Optional, Tuple
 
 PACKAGE_NAME = "ir.vinor.app"
 
+_APK_FIREBASE_FILES = (
+    ("google-services.json", "google-services.json"),
+    ("firebase-service-account.json", "firebase-service-account.json"),
+)
+
 
 def _data_dir(app) -> str:
     path = os.path.join(app.instance_path, "data")
@@ -24,6 +29,65 @@ def _read_json_file(path: str) -> Optional[Dict[str, Any]]:
         return raw if isinstance(raw, dict) else None
     except Exception:
         return None
+
+
+def _apk_app_dir(app=None) -> str:
+    """مسیر apk/app — monorepo کناری یا VINOR_APK_APP_DIR."""
+    override = (os.environ.get("VINOR_APK_APP_DIR") or "").strip()
+    if override:
+        return os.path.normpath(override)
+    if app is not None:
+        roots = [app.root_path]
+    else:
+        roots = [os.path.join(os.path.dirname(__file__), "..")]
+    for root in roots:
+        for rel in (os.path.join("..", "..", "apk", "app"), os.path.join("..", "apk", "app")):
+            path = os.path.normpath(os.path.join(root, rel))
+            if os.path.isdir(path):
+                return path
+    return os.path.normpath(os.path.join(roots[0], "..", "..", "apk", "app"))
+
+
+def _sync_file_if_newer(src: str, dst: str) -> bool:
+    """کپی src→dst اگر مقصد نباشد یا src جدیدتر باشد."""
+    if not src or not os.path.isfile(src):
+        return False
+    try:
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        if not os.path.isfile(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
+            import shutil
+            shutil.copy2(src, dst)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def sync_firebase_files(app) -> list[str]:
+    """همگام‌سازی فایل‌های Firebase از apk/app و env به instance/data."""
+    data_dir = _data_dir(app)
+    apk_dir = _apk_app_dir(app)
+    synced: list[str] = []
+
+    for src_name, dst_name in _APK_FIREBASE_FILES:
+        if _sync_file_if_newer(os.path.join(apk_dir, src_name), os.path.join(data_dir, dst_name)):
+            synced.append(dst_name)
+
+    gs_custom = (app.config.get("FCM_GOOGLE_SERVICES_FILE") or os.environ.get("FCM_GOOGLE_SERVICES_FILE") or "").strip()
+    if gs_custom and gs_custom != os.path.join(data_dir, "google-services.json"):
+        if _sync_file_if_newer(gs_custom, os.path.join(data_dir, "google-services.json")):
+            synced.append("google-services.json")
+
+    sa_custom = (app.config.get("FCM_SERVICE_ACCOUNT_FILE") or os.environ.get("FCM_SERVICE_ACCOUNT_FILE") or "").strip()
+    sa_dst = os.path.join(data_dir, "firebase-service-account.json")
+    if sa_custom and sa_custom != sa_dst and _sync_file_if_newer(sa_custom, sa_dst):
+        synced.append("firebase-service-account.json")
+
+    gac = (os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or "").strip()
+    if gac and gac != sa_dst and _sync_file_if_newer(gac, sa_dst):
+        synced.append("firebase-service-account.json")
+
+    return synced
 
 
 def _read_json_env(name: str) -> Optional[Dict[str, Any]]:
@@ -73,10 +137,12 @@ def _parse_google_services(raw: Dict[str, Any]) -> Optional[Dict[str, str]]:
 
 def _load_mobile_config(app) -> Optional[Dict[str, str]]:
     custom = (app.config.get("FCM_GOOGLE_SERVICES_FILE") or os.environ.get("FCM_GOOGLE_SERVICES_FILE") or "").strip()
+    apk_gs = os.path.join(_apk_app_dir(app), "google-services.json")
     candidates = [
         custom,
         os.path.join(_data_dir(app), "google-services.json"),
         os.path.join(_data_dir(app), "firebase", "google-services.json"),
+        apk_gs,
     ]
     for path in candidates:
         if not path:
@@ -116,11 +182,13 @@ def _load_mobile_config(app) -> Optional[Dict[str, str]]:
 def _load_service_account(app) -> Optional[Dict[str, Any]]:
     custom = (app.config.get("FCM_SERVICE_ACCOUNT_FILE") or os.environ.get("FCM_SERVICE_ACCOUNT_FILE") or "").strip()
     gac = (os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or "").strip()
+    apk_sa = os.path.join(_apk_app_dir(app), "firebase-service-account.json")
     candidates = [
         custom,
         gac,
         os.path.join(_data_dir(app), "firebase-service-account.json"),
         os.path.join(_data_dir(app), "firebase", "service-account.json"),
+        apk_sa,
     ]
     for path in candidates:
         if not path:
@@ -181,27 +249,12 @@ def get_service_account(app=None) -> Optional[Dict[str, Any]]:
 
 def bootstrap_firebase(app) -> Dict[str, Any]:
     """اجرای bootstrap هنگام startup — مسیرها را خودکار پیدا می‌کند."""
-    import shutil
-
-    data_dir = _data_dir(app)
-    target_gs = os.path.join(data_dir, "google-services.json")
-    if not os.path.isfile(target_gs):
-        candidates = [
-            (app.config.get("FCM_GOOGLE_SERVICES_FILE") or "").strip(),
-            os.path.normpath(os.path.join(app.root_path, "..", "..", "apk", "app", "google-services.json")),
-            os.path.normpath(os.path.join(app.root_path, "..", "apk", "app", "google-services.json")),
-        ]
-        for src in candidates:
-            if src and os.path.isfile(src):
-                try:
-                    shutil.copy2(src, target_gs)
-                    try:
-                        app.logger.info("Auto-synced google-services.json from %s", src)
-                    except Exception:
-                        pass
-                    break
-                except Exception:
-                    pass
+    synced = sync_firebase_files(app)
+    if synced:
+        try:
+            app.logger.info("Firebase auto-synced: %s", ", ".join(sorted(set(synced))))
+        except Exception:
+            pass
 
     status = get_firebase_status(app)
     mobile = status.get("mobile") or {}
@@ -226,13 +279,13 @@ def bootstrap_firebase(app) -> Dict[str, Any]:
             )
         elif status.get("mobile_ready"):
             app.logger.warning(
-                "Firebase mobile config found but service account missing — "
-                "place firebase-service-account.json in instance/data/",
+                "Firebase mobile OK — برای ارسال push، firebase-service-account.json را "
+                "در apk/app/ یا instance/data/ بگذارید (Firebase Console → Service accounts)",
             )
         else:
             app.logger.info(
-                "Firebase not configured — drop google-services.json and "
-                "firebase-service-account.json into instance/data/ (or set env JSON)",
+                "Firebase not configured — google-services.json را در apk/app/ قرار دهید "
+                "(یا firebase-service-account.json برای ارسال push)",
             )
     except Exception:
         pass
