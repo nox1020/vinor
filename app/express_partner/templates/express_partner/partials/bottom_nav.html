@@ -247,11 +247,11 @@
 </style>
 <nav id="bottomNavMenu" data-tour="bottom-nav" class="tg-tabbar-shell fixed inset-x-0 bottom-0 z-[60]" role="navigation" aria-label="منوی اصلی">
   {% if show_apk_strip and android_apk_url %}
-  <a href="{{ android_apk_url }}"
+  <a href="{% if apk_strip_mode == 'update' %}#{% else %}{{ android_apk_url }}{% endif %}"
      class="vinor-apk-download-strip{% if apk_strip_mode == 'update' %} vinor-apk-download-strip--update{% endif %}"
      data-apk-strip
      data-apk-strip-mode="{{ apk_strip_mode or 'install' }}"
-     download
+     {% if apk_strip_mode == 'update' %}data-apk-update-url="{{ android_apk_url }}"{% else %}download{% endif %}
      rel="noopener"
      aria-label="{% if apk_strip_mode == 'update' %}بروزرسانی اپلیکیشن وینور{% else %}دانلود اپلیکیشن وینور اندروید{% endif %}">
     <span class="vinor-apk-download-strip__icon" aria-hidden="true">
@@ -488,8 +488,15 @@
       strip.setAttribute('rel', 'noopener');
       nav.insertBefore(strip, nav.firstChild);
     }
-    strip.href = url;
+    strip.href = mode === 'update' && inApk ? '#' : url;
     strip.setAttribute('data-apk-strip-mode', mode);
+    if (mode === 'update' && inApk) {
+      strip.setAttribute('data-apk-update-url', url);
+      strip.removeAttribute('download');
+    } else {
+      strip.removeAttribute('data-apk-update-url');
+      strip.setAttribute('download', '');
+    }
     strip.classList.toggle('vinor-apk-download-strip--update', mode === 'update');
     strip.setAttribute('aria-label', mode === 'update' ? 'بروزرسانی اپلیکیشن وینور' : 'دانلود اپلیکیشن وینور اندروید');
 
@@ -508,12 +515,88 @@
       '<span class="vinor-apk-download-strip__cta" data-apk-strip-cta>' + cta + '</span>';
 
     setApkBannerClass(true);
+    if (mode === 'update' && inApk) syncNativeDownloadUi();
+  }
+
+  function ensureNativeApkDownload(opts) {
+    opts = opts || {};
+    const url = String(opts.url || serverApkUrl || '').trim();
+    const version = String(opts.version || serverApkVersion || '').trim();
+    if (!url || !version) return;
+    try {
+      if (window.VinorNativeAppUpdate && typeof window.VinorNativeAppUpdate.ensureDownload === 'function') {
+        window.VinorNativeAppUpdate.ensureDownload(url, version);
+      }
+    } catch (_) {}
+  }
+
+  function applyApkDownloadUi(detail) {
+    const strip = getApkStripEl();
+    if (!strip || strip.getAttribute('data-apk-strip-mode') !== 'update') return;
+    const sub = strip.querySelector('[data-apk-strip-sub]');
+    const cta = strip.querySelector('[data-apk-strip-cta]');
+    const status = String((detail && detail.status) || '').toLowerCase();
+    const version = String((detail && detail.version) || serverApkVersion || '').trim();
+    if (status === 'downloading') {
+      if (sub) sub.textContent = 'در حال دانلود بروزرسانی…';
+      if (cta) cta.textContent = 'دانلود';
+      strip.setAttribute('data-apk-download-status', 'downloading');
+      return;
+    }
+    if (status === 'ready') {
+      if (sub) sub.textContent = version ? ('نسخه جدید ' + version + ' — آماده نصب') : 'آماده نصب';
+      if (cta) cta.textContent = 'نصب';
+      strip.setAttribute('data-apk-download-status', 'ready');
+      return;
+    }
+    if (status === 'failed') {
+      if (sub) sub.textContent = 'خطا در دانلود — دوباره تلاش کنید';
+      if (cta) cta.textContent = 'بروزرسانی';
+      strip.setAttribute('data-apk-download-status', 'failed');
+      return;
+    }
+    strip.removeAttribute('data-apk-download-status');
+    if (sub && version) sub.textContent = 'نسخه جدید ' + version;
+  }
+
+  function syncNativeDownloadUi() {
+    if (!isVinorApkClient()) return;
+    try {
+      if (window.VinorNativeAppUpdate && typeof window.VinorNativeAppUpdate.getDownloadState === 'function') {
+        const raw = window.VinorNativeAppUpdate.getDownloadState();
+        const st = raw ? JSON.parse(raw) : null;
+        if (st) applyApkDownloadUi(st);
+      }
+    } catch (_) {}
+  }
+
+  function triggerApkUpdateInstall() {
+    const strip = getApkStripEl();
+    const status = strip && strip.getAttribute('data-apk-download-status');
+    if (status === 'downloading') return;
+    try {
+      if (window.VinorNativeAppUpdate && typeof window.VinorNativeAppUpdate.installUpdate === 'function') {
+        const installed = window.VinorNativeAppUpdate.installUpdate();
+        if (!installed) {
+          const stored = readUpdateNav() || {};
+          const url = (strip && strip.getAttribute('data-apk-update-url')) || stored.url || serverApkUrl;
+          const version = stored.version || serverApkVersion;
+          ensureNativeApkDownload({ url: url, version: version });
+        }
+        return;
+      }
+    } catch (_) {}
+    if (strip) {
+      const fallbackUrl = strip.getAttribute('data-apk-update-url') || strip.href;
+      if (fallbackUrl && fallbackUrl !== '#') window.location.href = fallbackUrl;
+    }
   }
 
   function applyUpdateNav(show, opts) {
     opts = opts || {};
     if (isVinorApkClient()) {
       renderApkStrip(!!show, Object.assign({ mode: 'update' }, opts));
+      if (show) ensureNativeApkDownload(opts);
     }
     const tab = navContainer.querySelector('[data-nav-key="profile"]');
     if (!tab) return;
@@ -650,6 +733,24 @@
       }
     } catch (_) {}
   });
+
+  window.addEventListener('vinor:app-update:download', function (ev) {
+    try {
+      applyApkDownloadUi((ev && ev.detail) || {});
+    } catch (_) {}
+  });
+
+  const bottomNavShell = document.getElementById('bottomNavMenu');
+  if (bottomNavShell) {
+    bottomNavShell.addEventListener('click', function (e) {
+      const strip = e.target.closest && e.target.closest('[data-apk-strip]');
+      if (!strip || strip.getAttribute('data-apk-strip-mode') !== 'update') return;
+      if (!isVinorApkClient()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      triggerApkUpdateInstall();
+    }, true);
+  }
 
   window.addEventListener('vinor:notifications:update', function (ev) {
     try {
@@ -861,6 +962,7 @@
         }
       }
     } catch (_) {}
+    syncNativeDownloadUi();
   } else {
     syncUpdateNavFromStored();
   }
