@@ -233,13 +233,35 @@ def get_firebase_status(app=None) -> Dict[str, Any]:
         or (mobile or {}).get("project_id")
         or (app.config.get("FCM_PROJECT_ID") or os.environ.get("FCM_PROJECT_ID") or "")
     ).strip()
-    return {
+    status = {
         "project_id": project_id or None,
         "mobile_ready": bool(mobile),
         "send_ready": bool(sa),
         "configured": bool(sa),
         "mobile": mobile,
     }
+    if sa:
+        app.config["FCM_SERVICE_ACCOUNT"] = sa
+        app.config["FCM_PROJECT_ID"] = sa.get("project_id") or status.get("project_id")
+    if mobile:
+        app.config["FCM_MOBILE_CONFIG"] = mobile
+    return status
+
+
+def ensure_firebase_ready(app=None) -> Dict[str, Any]:
+    """اگر worker قدیمی config ندارد، دوباره sync و بارگذاری می‌کند."""
+    from flask import current_app
+    app = app or current_app
+    status = get_firebase_status(app)
+    if status.get("send_ready") and status.get("mobile_ready"):
+        return status
+    synced = sync_firebase_files(app)
+    if synced:
+        try:
+            app.logger.info("Firebase re-synced: %s", ", ".join(sorted(set(synced))))
+        except Exception:
+            pass
+    return get_firebase_status(app)
 
 
 def get_mobile_config_public(app=None) -> Optional[Dict[str, str]]:
@@ -271,15 +293,7 @@ def bootstrap_firebase(app) -> Dict[str, Any]:
         except Exception:
             pass
 
-    status = get_firebase_status(app)
-    mobile = status.get("mobile") or {}
-    sa = get_service_account(app)
-
-    if sa:
-        app.config["FCM_SERVICE_ACCOUNT"] = sa
-        app.config["FCM_PROJECT_ID"] = sa.get("project_id") or status.get("project_id")
-    if mobile:
-        app.config["FCM_MOBILE_CONFIG"] = mobile
+    status = ensure_firebase_ready(app)
 
     try:
         if status.get("send_ready") and status.get("mobile_ready"):

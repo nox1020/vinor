@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from flask import current_app
 
-from app.services.firebase_config import get_service_account, get_firebase_status
+from app.services.firebase_config import ensure_firebase_ready, get_service_account, get_firebase_status
 from app.services.fcm_tokens import tokens_for_phones, unregister_token
 
 _FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
@@ -23,7 +23,7 @@ _token_cache: Dict[str, Any] = {"access_token": None, "expires_at": 0}
 
 def is_fcm_configured() -> bool:
     try:
-        return bool(get_firebase_status().get("send_ready"))
+        return bool(ensure_firebase_ready().get("send_ready"))
     except Exception:
         return False
 
@@ -228,6 +228,7 @@ def send_fcm_to_user_background(
     def _worker() -> None:
         with app.app_context():
             try:
+                ensure_firebase_ready(app)
                 res = send_fcm_to_phones([phone], title=title, body=body, url=target_url)
                 if res.get("sent") or res.get("failed"):
                     app.logger.info(f"FCM user push phone={phone}: {res}")
@@ -256,6 +257,7 @@ def send_fcm_batch_background(
     def _worker() -> None:
         with app.app_context():
             try:
+                ensure_firebase_ready(app)
                 res = send_fcm_to_phones(phone_list, title=title, body=body, url=target_url)
                 app.logger.info(f"FCM batch push: {res}")
             except Exception as e:

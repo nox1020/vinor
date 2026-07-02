@@ -32,6 +32,8 @@ def _load_all() -> Dict[str, List[Dict[str, Any]]]:
     if not os.path.exists(path):
         return {}
     try:
+        if os.path.getsize(path) == 0:
+            return {}
         with open(path, "r", encoding="utf-8") as f:
             raw = json.load(f)
         if isinstance(raw, dict):
@@ -45,13 +47,21 @@ def _load_all() -> Dict[str, List[Dict[str, Any]]]:
             current_app.logger.error(f"FCM tokens load failed: {e}")
         except Exception:
             pass
+        try:
+            if os.path.isfile(path):
+                corrupt = f"{path}.corrupt.{int(time.time())}"
+                os.replace(path, corrupt)
+        except Exception:
+            pass
     return {}
 
 
 def _save_all(data: Dict[str, List[Dict[str, Any]]]) -> None:
     path = _tokens_path()
-    with open(path, "w", encoding="utf-8") as f:
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp, path)
 
 
 def register_token(
