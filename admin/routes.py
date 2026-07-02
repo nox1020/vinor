@@ -1593,6 +1593,8 @@ def notifications_colleagues():
             _normalize_user_id,
         )
         test_phone = (request.form.get('test_phone') or '').strip()
+        test_title = (request.form.get('test_title') or '').strip() or 'تست اعلان'
+        test_body = (request.form.get('test_body') or '').strip() or 'این یک اعلان تستی است برای بررسی سیستم.'
         if not test_phone:
             test_error = 'شماره تلفن تست الزامی است.'
         else:
@@ -1600,8 +1602,8 @@ def notifications_colleagues():
                 normalized = _normalize_user_id(test_phone)
                 test_notif = add_notification(
                     user_id=normalized,
-                    title="تست اعلان",
-                    body="این یک اعلان تستی است برای بررسی سیستم.",
+                    title=test_title,
+                    body=test_body,
                     ntype="info",
                     source="admin_test",
                 )
@@ -2185,6 +2187,8 @@ def notifications_test():
     
     if request.method == 'POST':
         test_phone = (request.form.get('test_phone') or '').strip()
+        test_title = (request.form.get('test_title') or '').strip() or 'تست اعلان'
+        test_body = (request.form.get('test_body') or '').strip() or 'این یک اعلان تستی است برای بررسی سیستم.'
         if not test_phone:
             error = 'شماره تلفن تست الزامی است.'
         else:
@@ -2194,8 +2198,8 @@ def notifications_test():
                 # افزودن اعلان تست
                 test_notif = add_notification(
                     user_id=normalized,
-                    title="تست اعلان",
-                    body="این یک اعلان تستی است برای بررسی سیستم.",
+                    title=test_title,
+                    body=test_body,
                     ntype="info"
                 )
                 

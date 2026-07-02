@@ -98,16 +98,28 @@
   <!-- تست -->
   <div x-show="showTest" x-cloak x-transition class="mb-3 shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
     <div x-show="testFlash" x-cloak class="mb-2 p-2 rounded-lg text-xs" :class="testFlashOk ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200'" x-text="testFlash"></div>
-    <form @submit.prevent="runTest" class="flex flex-wrap gap-2 items-end">
+    <form @submit.prevent="runTest" class="space-y-2">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" x-ref="testCsrf">
-      <div class="flex-1 min-w-[10rem]">
-        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">شماره تست</label>
-        <input type="text" x-model="testPhone" class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white" placeholder="09123456789" required dir="ltr">
+      <div class="flex flex-wrap gap-2">
+        <div class="flex-1 min-w-[10rem]">
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">شماره تست</label>
+          <input type="text" x-model="testPhone" class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white" placeholder="09121471301" required dir="ltr">
+        </div>
+        <div class="flex-[2] min-w-[12rem]">
+          <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">عنوان</label>
+          <input type="text" x-model="testTitle" class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white" placeholder="تست اعلان" maxlength="120" required>
+        </div>
       </div>
-      <button type="submit" class="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white" :disabled="testLoading">
-        <span x-show="!testLoading">اجرای تست</span>
-        <span x-show="testLoading" x-cloak><i class="fa-solid fa-spinner fa-spin"></i></span>
-      </button>
+      <div>
+        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">متن</label>
+        <textarea x-model="testBody" rows="2" class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white resize-none" placeholder="متن اعلان تست..." maxlength="500" required></textarea>
+      </div>
+      <div class="flex justify-end">
+        <button type="submit" class="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white" :disabled="testLoading">
+          <span x-show="!testLoading">اجرای تست</span>
+          <span x-show="testLoading" x-cloak><i class="fa-solid fa-spinner fa-spin"></i></span>
+        </button>
+      </div>
     </form>
   </div>
 
@@ -266,7 +278,9 @@
       loading: false,
       sending: false,
       showTest: false,
-      testPhone: '',
+      testPhone: '09121471301',
+      testTitle: 'تست اعلان',
+      testBody: 'این یک اعلان تستی است برای بررسی سیستم.',
       testLoading: false,
       testFlash: '',
       testFlashOk: true,
@@ -384,7 +398,9 @@
 
       async runTest() {
         const phone = (this.testPhone || '').trim();
-        if (!phone || this.testLoading) return;
+        const title = (this.testTitle || '').trim();
+        const body = (this.testBody || '').trim();
+        if (!phone || !title || !body || this.testLoading) return;
         this.testLoading = true;
         this.testFlash = '';
         try {
@@ -392,6 +408,8 @@
           fd.append('csrf_token', this.$refs.testCsrf.value);
           fd.append('test_action', 'test');
           fd.append('test_phone', phone);
+          fd.append('test_title', title);
+          fd.append('test_body', body);
           const res = await fetch(POST_URL, {
             method: 'POST',
             body: fd,

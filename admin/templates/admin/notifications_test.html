@@ -36,9 +36,17 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div>
       <label class="block text-sm font-medium text-gray-900 dark:text-white mb-1">شماره تلفن تست</label>
-      <input type="text" name="test_phone" class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-gray-600" 
-             placeholder="09123456789" required>
+      <input type="text" name="test_phone" value="09121471301" class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-gray-600" 
+             placeholder="09121471301" required dir="ltr">
       <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">شماره تلفنی که می‌خواهید برای آن اعلان تست ارسال شود</p>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-900 dark:text-white mb-1">عنوان</label>
+      <input type="text" name="test_title" value="تست اعلان" maxlength="120" class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-gray-600" required>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-900 dark:text-white mb-1">متن</label>
+      <textarea name="test_body" rows="3" maxlength="500" class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-gray-600 resize-none" required>این یک اعلان تستی است برای بررسی سیستم.</textarea>
     </div>
     <div>
       <button type="submit" class="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm font-medium hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
