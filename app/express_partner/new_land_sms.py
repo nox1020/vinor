@@ -44,6 +44,24 @@ def _express_land_price_int(land: Dict[str, Any]) -> int:
         return 0
 
 
+def resolve_express_land_commission_pct(land: Dict[str, Any]) -> float:
+    """درصد پورسانت از تنظیمات ادمین روی آگهی."""
+    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+    pct_raw = extras.get("express_commission_pct", land.get("express_commission_pct"))
+    try:
+        return float(pct_raw) if pct_raw not in (None, "") else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def attach_express_land_commission(land: Dict[str, Any]) -> Dict[str, Any]:
+    """ست کردن _commission_pct و _commission_amount از تنظیمات ادمین (extras آگهی)."""
+    pct = resolve_express_land_commission_pct(land)
+    land["_commission_pct"] = pct
+    land["_commission_amount"] = resolve_express_land_commission_amount(land)
+    return land
+
+
 def resolve_express_land_commission_amount(land: Dict[str, Any]) -> int:
     """مبلغ پورسانت همکار — همان منطق کارت/جزئیات فایل."""
     extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}

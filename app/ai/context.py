@@ -128,18 +128,9 @@ def _assigned_lands(phone: str) -> list[dict[str, Any]]:
             continue
         item = dict(land)
         item["_assignment_status"] = _assignment_status(a)
-        item["_commission_pct"] = a.get("commission_pct")
         item["_is_expired"] = is_ad_expired(land)
-        try:
-            total_price = int(
-                str(item.get("price_total") or item.get("price") or "0").replace(",", "").strip() or 0
-            )
-            pct = float(item.get("_commission_pct") or 0)
-            item["_commission_amount"] = (
-                int(round(total_price * (pct / 100.0))) if (total_price and pct) else 0
-            )
-        except Exception:
-            item["_commission_amount"] = 0
+        from app.express_partner.new_land_sms import attach_express_land_commission
+        attach_express_land_commission(item)
         out.append(item)
     out.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
     return out[:20]

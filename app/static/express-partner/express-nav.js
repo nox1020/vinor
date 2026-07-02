@@ -42,7 +42,7 @@
     '/express/partner/commissions/transactions': { tab: 'commissions', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/ai': { tab: '', depth: 1, bottomNav: false, prefetch: false },
     '/express/partner/login': { tab: '', depth: 0, bottomNav: false, prefetch: true },
-    '/express/partner/login/otp': { tab: '', depth: 1, bottomNav: false, prefetch: true }
+    '/express/partner/login/otp': { tab: '', depth: 1, bottomNav: false, prefetch: false }
   };
 
   var SKIP_PATH_PREFIXES = [
@@ -267,8 +267,11 @@
       var fromU = parseUrl(fromHref);
       var fromPath = fromU ? normPath(fromU.pathname) : '';
       if (isAuthSoftPath(toPath)) {
-        if (toPath === '/express/partner/login') return true;
-        if (toPath === '/express/partner/login/otp' && fromPath === '/express/partner/login') return true;
+        if (toPath === '/express/partner/login') {
+          if ((toU.searchParams.get('change') || '').trim() === '1') return false;
+          return true;
+        }
+        if (toPath === '/express/partner/login/otp') return false;
         return false;
       }
       return routePrefetchAllowed(toPath);
@@ -324,7 +327,7 @@
       var p = normPath(parseUrl(href).pathname);
       if (LAND_DETAIL_RE.test(p)) return false;
       if (!routePrefetchAllowed(p)) return false;
-      if (p === '/express/partner/login/otp') return true;
+      if (p === '/express/partner/login/otp') return false;
       if (p === '/express/partner/login') return true;
       if (p === '/express/partner/apply' || p === '/express/partner/thanks') return false;
       if (isAuthSoftPath(p)) return false;
@@ -858,7 +861,11 @@
     fetch(href, {
       credentials: 'same-origin',
       redirect: 'manual',
-      headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' }
+      headers: {
+        Accept: 'text/html',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Vinor-Prefetch': '1'
+      }
     })
       .then(function (res) {
         if (isNavFetchRedirect(res)) throw new Error('prefetch');

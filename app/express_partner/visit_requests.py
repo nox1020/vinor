@@ -15,6 +15,48 @@ CANCELLED_STATUS = "cancelled"
 
 OPEN_VISIT_STATUSES = frozenset({PENDING_STATUS, APPROVED_STATUS})
 
+# روز هفته برای تنظیمات ادمین (هم‌تراز recurrence_weekday در پیامک زمان‌دار)
+VISIT_WEEKDAY_SAT = 5
+VISIT_WEEKDAY_SUN = 6
+VISIT_WEEKDAY_MON = 0
+VISIT_WEEKDAY_TUE = 1
+VISIT_WEEKDAY_WED = 2
+VISIT_WEEKDAY_THU = 3
+VISIT_WEEKDAY_FRI = 4
+
+VISIT_WEEKDAY_LABELS: Dict[int, str] = {
+    VISIT_WEEKDAY_SAT: "شنبه",
+    VISIT_WEEKDAY_SUN: "یکشنبه",
+    VISIT_WEEKDAY_MON: "دوشنبه",
+    VISIT_WEEKDAY_TUE: "سه‌شنبه",
+    VISIT_WEEKDAY_WED: "چهارشنبه",
+    VISIT_WEEKDAY_THU: "پنجشنبه",
+    VISIT_WEEKDAY_FRI: "جمعه",
+}
+
+VISIT_WEEKDAY_ORDER = (
+    VISIT_WEEKDAY_SAT,
+    VISIT_WEEKDAY_SUN,
+    VISIT_WEEKDAY_MON,
+    VISIT_WEEKDAY_TUE,
+    VISIT_WEEKDAY_WED,
+    VISIT_WEEKDAY_THU,
+    VISIT_WEEKDAY_FRI,
+)
+
+DEFAULT_VISIT_ALLOWED_WEEKDAYS = list(VISIT_WEEKDAY_ORDER)
+
+# Python weekday (دوشنبه=۰ … جمعه=۴، شنبه=۵، یکشنبه=۶) → JS Date.getDay()
+_PY_WEEKDAY_TO_JS = {
+    VISIT_WEEKDAY_SAT: 6,
+    VISIT_WEEKDAY_SUN: 0,
+    VISIT_WEEKDAY_MON: 1,
+    VISIT_WEEKDAY_TUE: 2,
+    VISIT_WEEKDAY_WED: 3,
+    VISIT_WEEKDAY_THU: 4,
+    VISIT_WEEKDAY_FRI: 5,
+}
+
 
 def _today() -> date:
     try:
@@ -27,6 +69,56 @@ def _today() -> date:
 def visit_date_min_iso() -> str:
     """حداقل تاریخ قابل انتخاب بازدید (امروز به وقت تهران)."""
     return _today().isoformat()
+
+
+def _normalize_weekday_list(raw: Any) -> List[int]:
+    if not isinstance(raw, (list, tuple, set)):
+        return list(DEFAULT_VISIT_ALLOWED_WEEKDAYS)
+    out: List[int] = []
+    for item in raw:
+        try:
+            wd = int(item)
+        except (TypeError, ValueError):
+            continue
+        if wd in VISIT_WEEKDAY_LABELS and wd not in out:
+            out.append(wd)
+    return out or list(DEFAULT_VISIT_ALLOWED_WEEKDAYS)
+
+
+def get_visit_allowed_weekdays() -> List[int]:
+    try:
+        from admin.routes import get_settings
+
+        settings = get_settings() or {}
+        return _normalize_weekday_list(settings.get("visit_allowed_weekdays"))
+    except Exception:
+        return list(DEFAULT_VISIT_ALLOWED_WEEKDAYS)
+
+
+def save_visit_allowed_weekdays(weekdays: List[int]) -> List[int]:
+    from admin.routes import get_settings, save_settings
+
+    normalized = _normalize_weekday_list(weekdays)
+    save_settings({"visit_allowed_weekdays": normalized})
+    return normalized
+
+
+def visit_allowed_weekdays_for_js() -> List[int]:
+    return [_PY_WEEKDAY_TO_JS[wd] for wd in get_visit_allowed_weekdays() if wd in _PY_WEEKDAY_TO_JS]
+
+
+def visit_weekday_label_for_date(d: date) -> str:
+    return VISIT_WEEKDAY_LABELS.get(d.weekday(), "")
+
+
+def is_visit_weekday_allowed(d: date, *, allowed: Optional[List[int]] = None) -> bool:
+    days = _normalize_weekday_list(allowed if allowed is not None else get_visit_allowed_weekdays())
+    return d.weekday() in days
+
+
+def visit_allowed_weekdays_summary() -> str:
+    days = get_visit_allowed_weekdays()
+    return "، ".join(VISIT_WEEKDAY_LABELS.get(wd, str(wd)) for wd in VISIT_WEEKDAY_ORDER if wd in days)
 
 
 def _parse_visit_date(raw: Any) -> Optional[date]:
@@ -127,6 +219,8 @@ def create_visit_request(
         return None, "past_date"
     if vd > _today() + timedelta(days=90):
         return None, "date_too_far"
+    if not is_visit_weekday_allowed(vd):
+        return None, "weekday_not_allowed"
     if partner_has_open_visit(requests, ph, code):
         return None, "already_pending"
 

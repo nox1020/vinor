@@ -47,6 +47,8 @@
     return parseDigits(v);
   }
 
+  const isEdit = form.dataset.isEdit === '1';
+
   function recalc() {
     const size = rawFrom($('input[name="size"]', form));
     const price = rawFrom($('input[name="price_total"]', form));
@@ -629,6 +631,7 @@
     const btn = e.target.closest('.remove-installment');
     if (btn) btn.closest('.installment-row')?.remove();
   });
+  $$('input[name="installment_amounts[]"]', instRows).forEach(hookIntInput);
   toggleInst();
 
   // نقشه — سبک دیوار (پین ثابت وسط، جابه‌جایی نقشه)
@@ -965,9 +968,10 @@
     syncHiddenImageFields();
 
     isSubmitting = true;
+    const busyLabel = isEdit ? 'در حال ذخیره…' : 'در حال ثبت…';
     document.querySelectorAll('#submitBtn, #submitBtnMobile').forEach((btn) => {
       btn.disabled = true;
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin ml-1"></i> در حال ثبت…';
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin ml-1"></i> ' + busyLabel;
     });
   });
 

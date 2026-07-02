@@ -1,6 +1,6 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}ثبت آگهی Express{% endblock %}
-{% block page_title %}ثبت آگهی{% endblock %}
+{% block title %}{{ 'ویرایش آگهی Express' if is_edit|default(false) else 'ثبت آگهی Express' }}{% endblock %}
+{% block page_title %}{{ 'ویرایش آگهی' if is_edit|default(false) else 'ثبت آگهی' }}{% endblock %}
 
 {% block admin_topbar %}{% endblock %}
 {% block admin_bottom_nav %}{% endblock %}
@@ -536,7 +536,11 @@
 {% endblock %}
 
 {% block content %}
-{% set f = request.form %}
+{% set is_edit = is_edit|default(false) %}
+{% set fv = form_values|default({}) %}
+{% macro fld(key, default='') -%}
+{%- if request.method == 'POST' -%}{{ request.form.get(key, default) }}{%- else -%}{{ fv.get(key, default) }}{%- endif -%}
+{%- endmacro %}
 <div class="dv-page max-w-lg mx-auto pb-32 lg:pb-8 lg:max-w-xl">
 
   <!-- نوار بالا -->
@@ -547,8 +551,12 @@
       <i class="fa-solid fa-arrow-right text-sm"></i>
     </a>
     <div class="flex-1 min-w-0">
-      <h2 class="text-sm font-bold text-gray-900 dark:text-white truncate">ثبت آگهی اکسپرس</h2>
-      <p class="text-[11px] text-gray-500 dark:text-gray-400">اطلاعات ملک را وارد و منتشر کنید</p>
+      <h2 class="text-sm font-bold text-gray-900 dark:text-white truncate">
+        {% if is_edit %}ویرایش آگهی اکسپرس{% else %}ثبت آگهی اکسپرس{% endif %}
+      </h2>
+      <p class="text-[11px] text-gray-500 dark:text-gray-400">
+        {% if is_edit %}کد {{ listing_code }} · تغییرات را ذخیره کنید{% else %}اطلاعات ملک را وارد و منتشر کنید{% endif %}
+      </p>
     </div>
     <button type="button"
             @click="darkMode = !darkMode; localStorage.setItem('theme', darkMode ? 'dark' : 'light')"
@@ -558,8 +566,10 @@
     </button>
   </div>
 
-  <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin.add_express_listing') }}"
+  <form method="POST" enctype="multipart/form-data"
+        action="{{ url_for('admin.edit_express_listing', code=listing_code) if is_edit else url_for('admin.add_express_listing') }}"
         id="expressForm" class="space-y-3 px-3 sm:px-4" novalidate
+        data-is-edit="{{ '1' if is_edit else '0' }}"
         data-upload-url="{{ url_for('admin.express_upload_image') }}"
         data-upload-video-url="{{ url_for('admin.express_upload_video') }}"
         data-upload-document-url="{{ url_for('admin.express_upload_document') }}"
@@ -567,11 +577,15 @@
         data-leaflet-js="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.min.js') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div id="uploadedImagesFields" class="hidden" aria-hidden="true">
-      {% for img in f.getlist('images') %}
-        {% if img %}
-        <input type="hidden" name="images" value="{{ img }}">
-        {% endif %}
-      {% endfor %}
+      {% if request.method == 'POST' %}
+        {% for img in request.form.getlist('images') %}
+          {% if img %}<input type="hidden" name="images" value="{{ img }}">{% endif %}
+        {% endfor %}
+      {% else %}
+        {% for img in fv.get('images', []) %}
+          {% if img %}<input type="hidden" name="images" value="{{ img }}">{% endif %}
+        {% endfor %}
+      {% endif %}
     </div>
 
     <!-- تصاویر و مدارک -->
@@ -594,9 +608,9 @@
       <div class="px-4 pb-3 space-y-2 border-t border-gray-100 dark:border-gray-800 pt-3">
         <p class="text-[10px] font-bold uppercase tracking-wide text-gray-400 px-0.5">ویدئو و مدارک <span class="font-normal normal-case">(اختیاری · بلافاصله آپلود می‌شود)</span></p>
 
-        <input type="hidden" name="video" id="uploadedVideoPath" value="{{ f.get('video', '') }}">
-        <input type="hidden" name="document_1" id="uploadedDoc1Path" value="{{ f.get('document_1', '') }}">
-        <input type="hidden" name="document_2" id="uploadedDoc2Path" value="{{ f.get('document_2', '') }}">
+        <input type="hidden" name="video" id="uploadedVideoPath" value="{{ fld('video', '') }}">
+        <input type="hidden" name="document_1" id="uploadedDoc1Path" value="{{ fld('document_1', '') }}">
+        <input type="hidden" name="document_2" id="uploadedDoc2Path" value="{{ fld('document_2', '') }}">
 
         <button type="button" id="videoPick" class="dv-media-pick w-full" aria-label="انتخاب ویدئو">
           <span class="dv-media-pick__icon dv-media-pick__icon--video"><i class="fa-solid fa-video"></i></span>
@@ -647,7 +661,7 @@
         <label class="dv-label" for="ad_title">عنوان <span class="text-red-500">*</span></label>
         <div class="dv-field">
           <input type="text" name="title" id="ad_title" required class="dv-inp"
-                 value="{{ f.get('title', '') }}"
+                 value="{{ fld('title', '') }}"
                  placeholder="مثال: زمین ۱۰۰۰ متری دشت اول">
         </div>
       </div>
@@ -658,7 +672,7 @@
           <select name="city" id="ad_city" required class="dv-inp">
             <option value="">انتخاب شهر</option>
             {% for c in cities or [] %}
-              <option value="{{ c }}" {% if (f.get('city') or '') == c %}selected{% endif %}>{{ c }}</option>
+              <option value="{{ c }}" {% if (fld('city', '') or '') == c %}selected{% endif %}>{{ c }}</option>
             {% endfor %}
           </select>
         </div>
@@ -668,7 +682,7 @@
         <label class="dv-label" for="ad_location">محله <span class="text-red-500">*</span></label>
         <div class="dv-field">
           <input type="text" name="location" id="ad_location" required class="dv-inp"
-                 value="{{ f.get('location', '') }}" placeholder="مثال: دشت اول">
+                 value="{{ fld('location', '') }}" placeholder="مثال: دشت اول">
         </div>
       </div>
 
@@ -676,7 +690,7 @@
         <label id="expressSizeLabel" class="dv-label" for="ad_size">متراژ <span class="text-red-500">*</span></label>
         <div class="dv-field">
           <input type="text" name="size" id="ad_size" required data-format-int class="dv-inp" inputmode="numeric"
-                 value="{{ f.get('size', '') }}" placeholder="۱۰۰۰" dir="ltr">
+                 value="{{ fld('size', '') }}" placeholder="۱۰۰۰" dir="ltr">
         </div>
       </div>
 
@@ -686,7 +700,7 @@
           <select name="category" id="ad_category" class="dv-inp">
             <option value="">انتخاب دسته</option>
             {% for cat in ['زمین', 'باغ', 'باغچه', 'ویلا', 'آپارتمان', 'تجاری'] %}
-            <option value="{{ cat }}" {% if f.get('category') == cat %}selected{% endif %}>{{ cat }}</option>
+            <option value="{{ cat }}" {% if fld('category', '') == cat %}selected{% endif %}>{{ cat }}</option>
             {% endfor %}
           </select>
         </div>
@@ -700,7 +714,7 @@
         <label class="dv-label" for="ad_price">قیمت کل <span class="text-red-500">*</span></label>
         <div class="dv-field">
           <input type="text" name="price_total" id="ad_price" required data-format-int class="dv-inp" inputmode="numeric"
-                 value="{{ f.get('price_total', '') }}" placeholder="تومان" dir="ltr">
+                 value="{{ fld('price_total', '') }}" placeholder="تومان" dir="ltr">
         </div>
       </div>
 
@@ -708,7 +722,7 @@
         <label class="dv-label" for="price_per_meter">قیمت هر متر</label>
         <div class="dv-field">
           <input type="text" name="price_per_meter" id="price_per_meter" data-format-int readonly class="dv-inp" dir="ltr"
-                 value="{{ f.get('price_per_meter', '') }}" placeholder="خودکار">
+                 value="{{ fld('price_per_meter', '') }}" placeholder="خودکار">
         </div>
       </div>
 
@@ -716,7 +730,7 @@
         <label class="dv-label" for="express_commission_pct">پورسانت ٪ <span class="text-red-500">*</span></label>
         <div class="dv-field">
           <input type="number" step="0.1" min="0" max="100" name="express_commission_pct" id="express_commission_pct" required class="dv-inp"
-                 value="{{ f.get('express_commission_pct', '2') }}" dir="ltr">
+                 value="{{ fld('express_commission_pct', '2') }}" dir="ltr">
         </div>
       </div>
       <input type="hidden" id="express_commission_amount" value="" tabindex="-1" aria-hidden="true">
@@ -724,7 +738,7 @@
       <div class="dv-row dv-row-stack">
         <label class="dv-label w-full max-w-none" for="ad_desc">توضیحات</label>
         <div class="dv-field w-full">
-          <textarea name="description" id="ad_desc" rows="3" class="dv-inp resize-none leading-relaxed" placeholder="جزئیات بیشتر درباره ملک (اختیاری)">{{ f.get('description', '') }}</textarea>
+          <textarea name="description" id="ad_desc" rows="3" class="dv-inp resize-none leading-relaxed" placeholder="جزئیات بیشتر درباره ملک (اختیاری)">{{ fld('description', '') }}</textarea>
         </div>
       </div>
 
@@ -732,19 +746,28 @@
         <label class="dv-toggle">
           <span class="dv-label max-w-none flex-1">تأیید کارشناسی</span>
           <input type="checkbox" name="expert_verified" value="1"
-                 {% if request.method != 'POST' or f.get('expert_verified') %}checked{% endif %}>
+                 {% if request.method == 'POST' %}
+                   {% if request.form.get('expert_verified') %}checked{% endif %}
+                 {% elif is_edit %}
+                   {% if fv.get('expert_verified') in (1, '1', true, True) %}checked{% endif %}
+                 {% else %}
+                   checked
+                 {% endif %}>
         </label>
       </div>
+      {% if not is_edit %}
       <div class="dv-row">
         <label class="dv-toggle">
           <span class="dv-label max-w-none flex-1">ارسال به همه همکاران</span>
           <input type="checkbox" name="auto_send_all_partners" value="1"
-                 {% if request.method != 'POST' or f.get('auto_send_all_partners') %}checked{% endif %}>
+                 {% if request.method != 'POST' or request.form.get('auto_send_all_partners') %}checked{% endif %}>
         </label>
       </div>
+      {% endif %}
     </section>
 
     <!-- پرداخت -->
+    {% set _pm_val = request.form.get('payment_method') if request.method == 'POST' else fld('payment_method', '') %}
     <section class="dv-card">
       <p class="dv-card-title">نحوه پرداخت</p>
       <div class="dv-row">
@@ -753,12 +776,12 @@
           <select name="payment_method" id="payment_method" required class="dv-inp">
             <option value="">انتخاب کنید</option>
             {% for pm in ['نقدی', 'اقساطی', 'معاوضه', 'توافقی'] %}
-            <option value="{{ pm }}" {% if f.get('payment_method') == pm %}selected{% endif %}>{{ pm }}</option>
+            <option value="{{ pm }}" {% if _pm_val == pm %}selected{% endif %}>{{ pm }}</option>
             {% endfor %}
           </select>
         </div>
       </div>
-      <div id="installmentsBox" class="{% if f.get('payment_method') != 'اقساطی' %}hidden{% endif %} px-4 pb-4 space-y-2">
+      <div id="installmentsBox" class="{% if _pm_val != 'اقساطی' %}hidden{% endif %} px-4 pb-4 space-y-2">
         <div class="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
           <span class="text-xs font-medium text-gray-600 dark:text-gray-400">جزئیات اقساط</span>
           <button type="button" id="addInstallmentRow"
@@ -767,7 +790,19 @@
           </button>
         </div>
         <p class="dv-hint">برای هر قسط، تعداد ماه و مبلغ را وارد کنید.</p>
-        <div id="installmentsRows" class="space-y-2"></div>
+        <div id="installmentsRows" class="space-y-2">
+          {% if request.method != 'POST' and fv.get('payment_terms') %}
+            {% for t in fv.get('payment_terms') %}
+            <div class="installment-row grid grid-cols-[1fr_1fr_auto] gap-2 items-end p-2 rounded-lg bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800">
+              <div><label class="text-[10px] text-gray-500">ماه</label>
+                <input type="number" min="1" name="installment_months[]" value="{{ t.months or '' }}" class="dv-inp ad-inp text-sm !border !border-gray-200 dark:!border-gray-700 !rounded-lg !px-2 !py-1.5 !bg-white dark:!bg-gray-900"></div>
+              <div><label class="text-[10px] text-gray-500">مبلغ</label>
+                <input type="text" inputmode="numeric" name="installment_amounts[]" value="{{ t.amount or '' }}" data-format-int class="dv-inp ad-inp text-sm !border !border-gray-200 dark:!border-gray-700 !rounded-lg !px-2 !py-1.5 !bg-white dark:!bg-gray-900"></div>
+              <button type="button" class="remove-installment w-9 h-9 rounded-lg border border-gray-200 dark:border-gray-700 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"><i class="fa-solid fa-trash text-xs"></i></button>
+            </div>
+            {% endfor %}
+          {% endif %}
+        </div>
       </div>
     </section>
 
@@ -775,8 +810,8 @@
     <section class="dv-card" id="mapSection">
       <p class="dv-card-title">موقعیت روی نقشه <span class="font-normal normal-case text-gray-400">اختیاری</span></p>
 
-      <input type="hidden" name="latitude" id="latitude" value="{{ f.get('latitude', '') }}">
-      <input type="hidden" name="longitude" id="longitude" value="{{ f.get('longitude', '') }}">
+      <input type="hidden" name="latitude" id="latitude" value="{{ fld('latitude', '') }}">
+      <input type="hidden" name="longitude" id="longitude" value="{{ fld('longitude', '') }}">
 
       <button type="button" id="mapLocationRow" class="dv-map-entry" aria-expanded="false" aria-controls="mapWrap">
         <span class="dv-map-entry__icon" aria-hidden="true"><i class="fa-solid fa-map-location-dot"></i></span>
@@ -827,7 +862,7 @@
         <label class="dv-label" for="vinor_contact">شماره پشتیبانی <span class="text-red-500">*</span></label>
         <div class="dv-field">
           <input type="tel" name="vinor_contact" id="vinor_contact" required class="dv-inp" dir="ltr"
-                 value="{{ f.get('vinor_contact', '09121471301') }}">
+                 value="{{ fld('vinor_contact', '09121471301') }}">
         </div>
       </div>
     </section>
@@ -836,7 +871,7 @@
     <div class="hidden lg:block pt-2">
       <button type="submit" id="submitBtn"
               class="w-full py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition focusable shadow-sm">
-        ثبت و انتشار آگهی
+        {% if is_edit %}ذخیره تغییرات{% else %}ثبت و انتشار آگهی{% endif %}
       </button>
     </div>
   </form>
@@ -846,9 +881,9 @@
 <div class="lg:hidden fixed bottom-0 left-0 right-0 z-30 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-white/95 dark:bg-gray-950/95 border-t border-gray-200 dark:border-gray-800 backdrop-blur">
   <button type="submit" form="expressForm" id="submitBtnMobile"
           class="w-full py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-sm">
-    ثبت و انتشار آگهی
+    {% if is_edit %}ذخیره تغییرات{% else %}ثبت و انتشار آگهی{% endif %}
   </button>
 </div>
 
-<script src="{{ url_for('static', filename='admin/add-express-listing.js') }}?v=6" defer></script>
+<script src="{{ url_for('static', filename='admin/add-express-listing.js') }}?v=7" defer></script>
 {% endblock %}

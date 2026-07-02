@@ -100,6 +100,7 @@ from .visit_requests import (
     complete_visit_for_deal,
     restore_visit_approved_after_deal_release,
     visit_date_min_iso,
+    visit_allowed_weekdays_for_js,
     resolve_partner_land_tx_state,
 )
 from .commissions_flow import commission_blocks_new_deal_record
@@ -229,20 +230,12 @@ def _build_partner_dashboard_lands(
         item = dict(land)
         item['_assignment_id'] = a.get('id')
         item['_assignment_status'] = _assignment_display_status(a)
-        item['_commission_pct'] = a.get('commission_pct')
         item['_is_expired'] = is_expired
         if not item.get('created_at'):
             item['created_at'] = land.get('created_at') or '1970-01-01'
-        try:
-            total_price_str = str(item.get('price_total') or item.get('price') or '0').replace(',', '').strip()
-            total_price = int(total_price_str) if total_price_str else 0
-        except Exception:
-            total_price = 0
-        try:
-            pct = float(item.get('_commission_pct') or 0)
-        except Exception:
-            pct = 0.0
-        item['_commission_amount'] = int(round(total_price * (pct / 100.0))) if (total_price and pct) else 0
+        from .new_land_sms import attach_express_land_commission
+        if is_approved:
+            attach_express_land_commission(item)
         item['_share_url'] = ''
         item['_share_token'] = ''
         item['_reposted_by_me'] = str(item.get('code')) in my_reposted_codes
@@ -362,8 +355,6 @@ def _build_partner_dashboard_lands(
             item['_assignment_id'] = assigned_item.get('_assignment_id')
             item['_assignment_status'] = global_status
             item['_in_transaction'] = global_status == 'in_transaction'
-            item['_commission_pct'] = assigned_item.get('_commission_pct')
-            item['_commission_amount'] = assigned_item.get('_commission_amount', 0)
             item['_is_expired'] = assigned_item.get('_is_expired', False)
             item['_share_url'] = assigned_item.get('_share_url', '')
             item['_share_token'] = assigned_item.get('_share_token', '')
@@ -374,6 +365,9 @@ def _build_partner_dashboard_lands(
             item['_assignment_status'] = global_status
             item['_in_transaction'] = global_status == 'in_transaction'
             item['_detail_url'] = url_for('express_partner.land_detail', code=code)
+        if is_approved:
+            from .new_land_sms import attach_express_land_commission
+            attach_express_land_commission(item)
         assigned_lands.append(sanitize_land_media(item))
 
     return _sort_dashboard_lands_sold_last(assigned_lands), expired_count
@@ -1008,11 +1002,15 @@ def _login_otp_redirect_url() -> str:
 
 def _is_prefetch_request() -> bool:
     """درخواست prefetch مرورگر — نباید به‌عنوان بازدید واقعی فایل شمرده شود."""
-    dest = (request.headers.get("Sec-Fetch-Dest") or "").lower()
-    if dest == "empty":
+    if (request.headers.get("X-Vinor-Prefetch") or "").strip() == "1":
         return True
     purpose = (request.headers.get("Purpose") or request.headers.get("Sec-Purpose") or "").lower()
     return "prefetch" in purpose
+
+
+def _login_change_clears_otp() -> bool:
+    """پاک‌کردن OTP فقط برای ناوبری واقعی «تغییر شماره»، نه prefetch پس‌زمینه."""
+    return not _is_prefetch_request()
 
 
 def _routine_auto_tick(phone: str, *step_ids: str) -> None:
@@ -1158,18 +1156,9 @@ def _lands_for_favorite_codes(codes: List[str], me_phone: str) -> List[Dict[str,
             item['_assignment_id'] = a.get('id')
             item['_assignment_status'] = global_status
             item['_in_transaction'] = global_status == 'in_transaction'
-            item['_commission_pct'] = a.get('commission_pct')
             item['_is_expired'] = is_ad_expired(land)
-            try:
-                total_price_str = str(item.get('price_total') or item.get('price') or '0').replace(',', '').strip()
-                total_price = int(total_price_str) if total_price_str else 0
-            except Exception:
-                total_price = 0
-            try:
-                pct = float(item.get('_commission_pct') or 0)
-            except Exception:
-                pct = 0.0
-            item['_commission_amount'] = int(round(total_price * (pct / 100.0))) if (total_price and pct) else 0
+            from .new_land_sms import attach_express_land_commission
+            attach_express_land_commission(item)
             item['_share_url'] = ''
             item['_share_token'] = ''
             item['_reposted_by_me'] = code in my_reposted_codes
@@ -1177,6 +1166,9 @@ def _lands_for_favorite_codes(codes: List[str], me_phone: str) -> List[Dict[str,
             item['_assignment_status'] = global_status
             item['_in_transaction'] = global_status == 'in_transaction'
             item['_is_expired'] = is_ad_expired(land)
+            if is_approved:
+                from .new_land_sms import attach_express_land_commission
+                attach_express_land_commission(item)
         item.setdefault('created_at', land.get('created_at') or '1970-01-01')
         item['_detail_url'] = url_for('express_partner.land_detail', code=code)
         result.append(item)
@@ -3304,7 +3296,7 @@ def login():
 
     purge_non_auth_flashes()
     if request.method == 'GET':
-        if request.args.get('change'):
+        if request.args.get('change') and _login_change_clears_otp():
             _clear_otp_session()
         elif session.get('otp_code') and session.get('otp_phone'):
             if _otp_session_expired():
@@ -3391,7 +3383,9 @@ def login_otp():
 
     phone = _otp_session_phone()
     if not phone or not session.get('otp_code'):
-        flash('ابتدا شماره موبایل خود را وارد کنید.', FLASH_AUTH_ERROR)
+        # prefetch قبل از POST شماره نباید flash بگذارد — روی صفحه OTP باقی می‌ماند
+        if not _is_prefetch_request():
+            flash('ابتدا شماره موبایل خود را وارد کنید.', FLASH_AUTH_ERROR)
         return redirect(url_for('express_partner.login'))
     if _otp_session_expired():
         _clear_otp_session()
@@ -4247,6 +4241,14 @@ def create_visit_request(code: str):
             message='تاریخ بازدید حداکثر تا ۹۰ روز آینده قابل انتخاب است.',
             category='error',
         )
+    if err == 'weekday_not_allowed':
+        from .visit_requests import visit_allowed_weekdays_summary
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='تاریخ انتخاب‌شده در روزهای مجاز بازدید نیست. روزهای مجاز: ' + visit_allowed_weekdays_summary(),
+            category='error',
+        )
     if err or not rec:
         return _mark_in_transaction_finish(
             code,
@@ -4470,13 +4472,19 @@ def mark_in_transaction(code: str):
                         
                         if my_assignment_for_commission:
                             partner_phone = me_phone
-                            commission_pct_raw = my_assignment_for_commission.get('commission_pct')
-                            
+                            from .new_land_sms import (
+                                resolve_express_land_commission_amount,
+                                resolve_express_land_commission_pct,
+                            )
+                            commission_pct = resolve_express_land_commission_pct(land)
+                            commission_amount = resolve_express_land_commission_amount(land)
                             try:
-                                commission_pct = float(commission_pct_raw) if commission_pct_raw is not None else 0.0
-                            except (ValueError, TypeError):
-                                commission_pct = 0.0
-                                current_app.logger.warning(f"Invalid commission_pct for partner {partner_phone}, land {code}: {commission_pct_raw}")
+                                price_total = int(
+                                    str(land.get('price_total') or land.get('price') or '0')
+                                    .replace(',', '').replace(' ', '').strip() or '0'
+                                )
+                            except Exception:
+                                price_total = 0
                             
                             # بررسی پورسانت فعال قبلی (ردشده مجدداً قابل ثبت است)
                             if commission_blocks_new_deal_record(commissions, partner_phone, str(code)):
@@ -4487,17 +4495,12 @@ def mark_in_transaction(code: str):
                                 )
                                 skipped_count += 1
                             elif commission_pct > 0:
-                                # محاسبه مبلغ پورسانت
-                                try:
-                                    price_total_str = str(land.get('price_total') or land.get('price') or '0')
-                                    price_total = int(price_total_str.replace(',', '').replace(' ', '').strip() or '0')
-                                except Exception as e:
-                                    price_total = 0
-                                    current_app.logger.warning(f"Error parsing price_total for land {code}: {e}")
-                                
-                                commission_amount = int(round(price_total * (commission_pct / 100.0))) if price_total > 0 else 0
-                                
-                                if commission_amount > 0:
+                                if commission_amount <= 0:
+                                    current_app.logger.warning(
+                                        "Commission amount is 0 for partner %s, land %s: price=%s, pct=%s",
+                                        partner_phone, code, price_total, commission_pct,
+                                    )
+                                elif commission_amount > 0:
                                     # ایجاد ID جدید
                                     new_id = (max([int(x.get('id', 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
                                     
@@ -4546,8 +4549,6 @@ def mark_in_transaction(code: str):
                                             code,
                                         )
                                     current_app.logger.info(f"Created commission record {new_id} for partner {partner_phone} and land {code}: amount={commission_amount}, pct={commission_pct}, price={price_total}")
-                                else:
-                                    current_app.logger.warning(f"Commission amount is 0 for partner {partner_phone}, land {code}: price={price_total}, pct={commission_pct}")
                             else:
                                 current_app.logger.warning(f"Commission percentage is 0 or missing for partner {partner_phone}, land {code}")
                         
@@ -5684,20 +5685,10 @@ def land_detail(code: str):
     
     if assignment:
         land['_assignment_id'] = assignment.get('id')
-        land['_assignment_status'] = global_assignment_status
-        land['_commission_pct'] = assignment.get('commission_pct')
-        # محاسبه مبلغ پورسانت
-        try:
-            total_price = float(land.get('price_total') or 0)
-        except Exception:
-            total_price = 0
-        try:
-            pct = float(land.get('_commission_pct') or 0)
-        except Exception:
-            pct = 0.0
-        land['_commission_amount'] = int(round(total_price * (pct / 100.0))) if (total_price and pct) else 0
-    else:
-        land['_assignment_status'] = global_assignment_status
+    land['_assignment_status'] = global_assignment_status
+    if is_approved:
+        from .new_land_sms import attach_express_land_commission
+        attach_express_land_commission(land)
 
     visit_requests_list = load_express_visit_requests() or []
     if not isinstance(visit_requests_list, list):
@@ -5764,15 +5755,11 @@ def land_detail(code: str):
             ass = my_assign_by_code.get(ck)
             if ass and is_approved and gs not in ('sold', 'closed'):
                 ritem['_assignment_id'] = ass.get('id')
-                ritem['_commission_pct'] = ass.get('commission_pct')
-                try:
-                    total_price = float(ritem.get('price_total') or 0)
-                    pct = float(ass.get('commission_pct') or 0)
-                except Exception:
-                    total_price, pct = 0.0, 0.0
-                ritem['_commission_amount'] = (
-                    int(round(total_price * (pct / 100.0))) if (total_price and pct) else 0
-                )
+                from .new_land_sms import attach_express_land_commission
+                attach_express_land_commission(ritem)
+            elif is_approved and gs not in ('sold', 'closed'):
+                from .new_land_sms import attach_express_land_commission
+                attach_express_land_commission(ritem)
             related_lands.append(sanitize_land_media(ritem))
             if len(related_lands) >= 6:
                 break
@@ -5811,6 +5798,7 @@ def land_detail(code: str):
         share_url=share_url or "",
         is_approved=is_approved,
         visit_date_min=visit_date_min_iso(),
+        visit_allowed_weekdays_js=visit_allowed_weekdays_for_js(),
         flash_messages=land_flash_messages,
         tx_status_url=url_for("express_partner.land_tx_status", code=code),
         csrf_token=csrf_val,

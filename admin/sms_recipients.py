@@ -34,6 +34,10 @@ RECIPIENT_GROUP_HINTS: Dict[str, str] = {
 
 def normalize_recipient_group(value: str) -> str:
     key = (value or RECIPIENT_GROUP_APPROVED).strip().lower()
+    if "=" in key:
+        key = key.rsplit("=", 1)[-1].strip()
+    if key.startswith("recipient_group"):
+        key = key[len("recipient_group"):].lstrip("=_")
     if key in RECIPIENT_GROUP_LABELS:
         return key
     return RECIPIENT_GROUP_APPROVED

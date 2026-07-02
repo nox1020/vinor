@@ -1153,9 +1153,18 @@
     visitCalState.viewDate = new Date(today);
   }
 
+  function isVisitWeekdayAllowed(d) {
+    var cfg = readConfig();
+    var allowed = (cfg && cfg.visitAllowedWeekdays) || null;
+    if (!allowed || !allowed.length) return true;
+    return allowed.indexOf(d.getDay()) >= 0;
+  }
+
   function isDateInVisitRange(d) {
     var iso = toLocalISODate(d);
-    return iso >= toLocalISODate(visitCalState.minDate) && iso <= toLocalISODate(visitCalState.maxDate);
+    return iso >= toLocalISODate(visitCalState.minDate)
+      && iso <= toLocalISODate(visitCalState.maxDate)
+      && isVisitWeekdayAllowed(d);
   }
 
   function syncVisitSelectedLabel(iso, jalaliText) {

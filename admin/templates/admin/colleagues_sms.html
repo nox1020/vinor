@@ -291,10 +291,10 @@
       <span class="text-gray-500">صفحه {{ history_page }} از {{ history_total_pages }}</span>
       <div class="flex gap-2">
         {% if history_page > 1 %}
-        <a href="?recipient_group={{ recipient_group }}&history_page={{ history_page - 1 }}" class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">قبلی</a>
+        <a href="{{ url_for('admin.sms_colleagues', recipient_group=recipient_group, history_page=history_page - 1) }}" class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">قبلی</a>
         {% endif %}
         {% if history_page < history_total_pages %}
-        <a href="?recipient_group={{ recipient_group }}&history_page={{ history_page + 1 }}" class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">بعدی</a>
+        <a href="{{ url_for('admin.sms_colleagues', recipient_group=recipient_group, history_page=history_page + 1) }}" class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">بعدی</a>
         {% endif %}
       </div>
     </div>
@@ -382,20 +382,32 @@ function saveRecipientGroupPreference(key) {
   });
 }
 
+function updateRecipientGroupUrl(key) {
+  try {
+    var url = new URL(window.location.origin + window.location.pathname);
+    url.searchParams.set('recipient_group', key);
+    var cur = new URL(window.location.href);
+    var hp = cur.searchParams.get('history_page');
+    if (hp) url.searchParams.set('history_page', hp);
+    window.history.replaceState({}, '', url.toString());
+  } catch (_) {}
+}
+
 function onRecipientGroupChange() {
   syncRecipientGroupUi();
   var key = getSelectedRecipientGroup();
   saveRecipientGroupPreference(key)
-    .then(function (res) { return res.json(); })
+    .then(function (res) {
+      if (!res.ok) throw new Error('save');
+      return res.json();
+    })
     .then(function (data) {
-      if (data && data.ok) showRecipientGroupSaved();
+      if (!data || !data.ok) return;
+      var saved = data.recipient_group || key;
+      updateRecipientGroupUrl(saved);
+      showRecipientGroupSaved();
     })
     .catch(function () {});
-  try {
-    var url = new URL(window.location.href);
-    url.searchParams.set('recipient_group', key);
-    window.history.replaceState({}, '', url.toString());
-  } catch (_) {}
 }
 
 function getSelectedSendTiming() {

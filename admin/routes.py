@@ -616,6 +616,8 @@ def _default_settings() -> Dict[str, Any]:
         'partner_application_admin_phone': '09121471301',
         # پیامک ارسالی به ادمین هنگام ثبت درخواست همکاری جدید
         'partner_application_admin_sms_message': 'درخواست همکاری جدید همکار در وینور ثبت شد.',
+        # روزهای مجاز ثبت بازدید توسط همکار (۵=شنبه … ۴=جمعه)
+        'visit_allowed_weekdays': [5, 6, 0, 1, 2, 3, 4],
     }
 
 def get_settings() -> Dict[str, Any]:
@@ -2961,21 +2963,8 @@ def _enrich_admin_express_land(
     land['_assignment_status'] = 'sold' if express_status == 'sold' else 'active'
 
     extras = land.get('extras') if isinstance(land.get('extras'), dict) else {}
-    pct_raw = extras.get('express_commission_pct', land.get('express_commission_pct'))
-    try:
-        pct = float(pct_raw) if pct_raw not in (None, '') else 0.0
-    except (TypeError, ValueError):
-        pct = 0.0
-    land['_commission_pct'] = pct
-
-    price_int = _express_land_price_int(land)
-    comm_amt = extras.get('express_commission_amount')
-    if comm_amt in (None, '') and price_int and pct:
-        comm_amt = int(round(price_int * (pct / 100.0)))
-    try:
-        land['_commission_amount'] = int(comm_amt or 0)
-    except (TypeError, ValueError):
-        land['_commission_amount'] = 0
+    from app.express_partner.new_land_sms import attach_express_land_commission
+    attach_express_land_commission(land)
 
     land['_public_views_count'] = public_views
     land['_partner_views_count'] = partner_views
@@ -3214,9 +3203,53 @@ def express_upload_document():
         'name': f.filename,
     })
 
-def _add_express_listing_form(cities):
-    """رندر فرم ثبت آگهی — با حفظ request.form پس از خطا."""
-    return render_template('admin/add_express_listing.html', cities=cities)
+def _express_listing_form_values(land: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """مقادیر اولیه فرم ثبت/ویرایش از روی آگهی."""
+    if not land:
+        return {}
+    extras = land.get('extras') if isinstance(land.get('extras'), dict) else {}
+    docs = land.get('express_documents') or []
+    if not isinstance(docs, list):
+        docs = []
+    return {
+        'title': land.get('title') or '',
+        'location': land.get('location') or '',
+        'city': land.get('city') or '',
+        'size': land.get('size') or '',
+        'price_total': land.get('price_total') or '',
+        'price_per_meter': land.get('price_per_meter') or '',
+        'category': land.get('category') or '',
+        'description': land.get('description') or '',
+        'payment_method': land.get('payment_method') or '',
+        'express_commission_pct': extras.get('express_commission_pct', land.get('express_commission_pct')) or '2',
+        'vinor_contact': land.get('vinor_contact') or '09121471301',
+        'latitude': land.get('latitude') or '',
+        'longitude': land.get('longitude') or '',
+        'video': land.get('video') or '',
+        'document_1': docs[0] if len(docs) > 0 else '',
+        'document_2': docs[1] if len(docs) > 1 else '',
+        'images': land.get('images') or [],
+        'payment_terms': land.get('payment_terms') or [],
+        'expert_verified': land.get('expert_verified'),
+    }
+
+
+def _render_express_listing_form(cities, land: Optional[Dict[str, Any]] = None):
+    """فرم واحد ثبت/ویرایش آگهی اکسپرس — قالب دیوار."""
+    is_edit = bool(land)
+    return render_template(
+        'admin/add_express_listing.html',
+        cities=cities,
+        is_edit=is_edit,
+        land=land or {},
+        form_values=_express_listing_form_values(land) if land else {},
+        listing_code=str((land or {}).get('code') or ''),
+    )
+
+
+def _add_express_listing_form(cities, land: Optional[Dict[str, Any]] = None):
+    """رندر فرم ثبت/ویرایش آگهی — با حفظ request.form پس از خطا."""
+    return _render_express_listing_form(cities, land=land)
 
 @admin_bp.route('/express/add', methods=['GET', 'POST'])
 @login_required
@@ -3486,20 +3519,8 @@ def edit_express_listing(code):
         flash('آگهی اکسپرس یافت نشد.', 'warning')
         return redirect(url_for('admin.express_listings'))
 
-    extras = land.get('extras') if isinstance(land.get('extras'), dict) else {}
-    commission_pct = extras.get('express_commission_pct', land.get('express_commission_pct', ''))
-
-    def _render_edit(error_category: str = 'error'):
-        p, a, r = counts_by_status(lands_list)
-        return render_template(
-            'admin/edit_express_listing.html',
-            land=land,
-            pending_count=p,
-            approved_count=a,
-            rejected_count=r,
-            cities=cities,
-            commission_pct=commission_pct,
-        )
+    def _render_edit():
+        return _render_express_listing_form(cities, land=land)
 
     if request.method == 'POST':
         form = request.form
@@ -3515,8 +3536,22 @@ def edit_express_listing(code):
             flash('لطفاً فیلدهای اجباری را پر کنید.', 'error')
             return _render_edit()
 
+        if len(title) < 10:
+            flash('عنوان باید حداقل ۱۰ کاراکتر باشد.', 'error')
+            return _render_edit()
+
         if cities and city not in cities:
             flash('شهر آگهی باید از بین شهرهای فعال انتخاب شود.', 'error')
+            return _render_edit()
+
+        payment_method = (form.get('payment_method') or '').strip()
+        if not payment_method:
+            flash('نحوه پرداخت را انتخاب کنید.', 'error')
+            return _render_edit()
+
+        vinor_contact = re.sub(r'[^\d]', '', (form.get('vinor_contact') or '').strip())
+        if not vinor_contact or len(vinor_contact) < 10:
+            flash('شماره تماس پشتیبانی معتبر نیست.', 'error')
             return _render_edit()
 
         try:
@@ -3556,11 +3591,11 @@ def edit_express_listing(code):
             land['expert_verified'] = True
         else:
             land.pop('expert_verified', None)
-        land['vinor_contact'] = form.get('vinor_contact', '09121234567').strip()
-        land['payment_method'] = (form.get('payment_method') or '').strip()
+        land['vinor_contact'] = vinor_contact
+        land['payment_method'] = payment_method
 
         try:
-            if land.get('payment_method') == 'اقساطی':
+            if payment_method == 'اقساطی':
                 payment_terms = []
                 months_list = form.getlist('installment_months[]')
                 amounts_list = form.getlist('installment_amounts[]')
@@ -3583,6 +3618,10 @@ def edit_express_listing(code):
         except Exception:
             pass
 
+        if payment_method == 'اقساطی' and not (land.get('payment_terms') or []):
+            flash('برای پرداخت اقساطی حداقل یک قسط معتبر وارد کنید.', 'error')
+            return _render_edit()
+
         try:
             lat_str = form.get('latitude', '').strip()
             lon_str = form.get('longitude', '').strip()
@@ -3597,32 +3636,40 @@ def edit_express_listing(code):
         except (ValueError, TypeError):
             pass
 
-        _apply_express_image_edits(land, form, files)
+        new_images = _normalize_images_from_form(form, files)
+        old_images = [str(x).strip() for x in (land.get('images') or []) if str(x).strip()]
+        for img in old_images:
+            if img not in new_images:
+                _unlink_stored_upload(img)
+        land['images'] = new_images
+        if new_images != old_images:
+            land.pop('images_v2', None)
 
+        documents: List[str] = []
+        for doc_key in ('document_1', 'document_2'):
+            pre = (form.get(doc_key) or '').strip()
+            if pre:
+                documents.append(pre)
         for key, file in files.items():
             if key.startswith('document_') and file.filename:
                 doc_filename = _save_express_document(file, code)
-                if doc_filename:
-                    land.setdefault('express_documents', []).append(doc_filename)
+                if doc_filename and doc_filename not in documents:
+                    documents.append(doc_filename)
+        land['express_documents'] = documents
 
-        try:
-            if (form.get('remove_video') or '').strip():
-                old_video = land.get('video')
-                if old_video and isinstance(old_video, str):
-                    _unlink_stored_upload(old_video)
-                land.pop('video', None)
-        except Exception:
-            pass
-
-        try:
-            new_video = _save_video_from_form(files)
-            if new_video:
-                old_video = land.get('video')
-                if old_video and isinstance(old_video, str) and old_video != new_video:
-                    _unlink_stored_upload(old_video)
-                land['video'] = new_video
-        except Exception:
-            pass
+        video_path = (form.get('video') or '').strip() or None
+        if not video_path:
+            try:
+                video_path = _save_video_from_form(files)
+            except Exception:
+                video_path = None
+        old_video = land.get('video')
+        if old_video and isinstance(old_video, str) and old_video != video_path:
+            _unlink_stored_upload(old_video)
+        if video_path:
+            land['video'] = video_path
+        else:
+            land.pop('video', None)
 
         apply_category_specs_from_form(land, form)
 
@@ -3630,16 +3677,7 @@ def edit_express_listing(code):
         flash('آگهی اکسپرس با موفقیت به‌روزرسانی شد.', 'success')
         return redirect(url_for('admin.express_listings'))
 
-    p, a, r = counts_by_status(lands_list)
-    return render_template(
-        'admin/edit_express_listing.html',
-        land=land,
-        pending_count=p,
-        approved_count=a,
-        rejected_count=r,
-        cities=cities,
-        commission_pct=commission_pct,
-    )
+    return _render_express_listing_form(cities, land=land)
 
 @admin_bp.post('/express/<string:code>/delete')
 @login_required
@@ -4660,7 +4698,7 @@ def financial_withdrawals():
     )
 
 
-@admin_bp.route('/express/visit-requests', endpoint='express_visit_requests')
+@admin_bp.route('/express/visit-requests', methods=['GET', 'POST'], endpoint='express_visit_requests')
 @login_required
 def express_visit_requests():
     from app.express_partner.visit_requests import (
@@ -4668,9 +4706,29 @@ def express_visit_requests():
         CANCELLED_STATUS,
         COMPLETED_STATUS,
         PENDING_STATUS,
+        VISIT_WEEKDAY_LABELS,
+        VISIT_WEEKDAY_ORDER,
         admin_row_dict as visit_admin_row,
         admin_visit_status_options,
+        get_visit_allowed_weekdays,
+        save_visit_allowed_weekdays,
+        visit_allowed_weekdays_summary,
     )
+
+    if request.method == 'POST' and (request.form.get('action') or '').strip() == 'save_visit_weekdays':
+        raw_days = request.form.getlist('visit_weekdays')
+        try:
+            parsed = [int(x) for x in raw_days]
+        except ValueError:
+            parsed = []
+        if not parsed:
+            flash('حداقل یک روز هفته را برای بازدید انتخاب کنید.', 'warning')
+            flt = (request.form.get('filter') or 'pending').strip().lower()
+            return redirect(url_for('admin.express_visit_requests', filter=flt or None))
+        save_visit_allowed_weekdays(parsed)
+        flash(f'روزهای مجاز بازدید ذخیره شد: {visit_allowed_weekdays_summary()}', 'success')
+        flt = (request.form.get('filter') or request.args.get('filter') or 'pending').strip().lower()
+        return redirect(url_for('admin.express_visit_requests', filter=flt or None))
 
     flt = (request.args.get('filter') or 'pending').strip().lower()
     items_raw = load_express_visit_requests() or []
@@ -4723,6 +4781,10 @@ def express_visit_requests():
         active_count=active_count,
         all_count=all_count,
         current_filter=flt,
+        visit_weekday_labels=VISIT_WEEKDAY_LABELS,
+        visit_weekday_order=VISIT_WEEKDAY_ORDER,
+        visit_allowed_weekdays=get_visit_allowed_weekdays(),
+        visit_allowed_weekdays_summary=visit_allowed_weekdays_summary(),
     )
 
 

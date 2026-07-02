@@ -87,7 +87,6 @@
   var sig = window.__vinorAuthPageSignal;
   var sigOpts = sig ? { signal: sig } : false;
   var passiveSig = sig ? { passive: true, signal: sig } : { passive: true };
-  var OTP_PREFETCH_URL = '{{ url_for("express_partner.login_otp") }}';
   var LOGIN_CLOSE_URL = '{{ login_close_href }}';
 
   var form = document.getElementById('loginStep1Form');
@@ -102,17 +101,6 @@
   var clearBtn = document.getElementById('loginPhoneClear');
   var faDigits = '۰۱۲۳۴۵۶۷۸۹';
   var arDigits = '٠١٢٣٤٥٦٧٨٩';
-  var otpPrefetched = false;
-
-  function prefetchOtpPage() {
-    if (otpPrefetched) return;
-    otpPrefetched = true;
-    if (window.vinorExpressPrefetch) {
-      window.vinorExpressPrefetch(OTP_PREFETCH_URL);
-      return;
-    }
-  }
-
   function normalizePhoneValue(raw) {
     var s = String(raw || '');
     s = s.replace(/[۰-۹]/g, function (c) { return String(faDigits.indexOf(c)); });
@@ -141,7 +129,6 @@
     if (btn.dataset.vinorAuthBusy) return;
     var len = normalizePhoneValue(phoneInput && phoneInput.value).length;
     btn.disabled = len !== 11;
-    if (len === 11) prefetchOtpPage();
   }
 
   function resetSubmitState() {

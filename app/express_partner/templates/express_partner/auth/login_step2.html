@@ -149,9 +149,6 @@
   if (POST_LOGIN_PREFETCH_URL && window.vinorExpressPrefetch) {
     try { window.vinorExpressPrefetch(POST_LOGIN_PREFETCH_URL); } catch (_) {}
   }
-  if (LOGIN_BACK_URL && window.vinorExpressPrefetch) {
-    try { window.vinorExpressPrefetch(new URL(LOGIN_BACK_URL, window.location.origin).href); } catch (_) {}
-  }
 
   var faDigits = '۰۱۲۳۴۵۶۷۸۹';
   var otpFa = '۰۱۲۳۴۵۶۷۸۹';
