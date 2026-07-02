@@ -1,4 +1,6 @@
 {# آرایهٔ JSON جزئیات تراکنش‌ها — برای مودال (بدون embed در attribute) #}
 {% if items and items|length > 0 %}
-<script type="application/json" id="vnTxnDetailsJson">{{ items|map(attribute='_txn_detail')|list|tojson }}</script>
+{% set _detail_limit = txn_detail_preview_limit|default(5)|int %}
+{% set _detail_rows = items[:_detail_limit] if txn_detail_preview|default(false) else items %}
+<script type="application/json" id="vnTxnDetailsJson">{{ _detail_rows|map(attribute='_txn_detail')|list|tojson }}</script>
 {% endif %}

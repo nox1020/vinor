@@ -155,6 +155,12 @@
       if (window.__vinorCommTxnPageAbort) window.__vinorCommTxnPageAbort.abort();
     } catch (_) {}
     try {
+      if (window.__vinorCommTxnDetailAbort) window.__vinorCommTxnDetailAbort.abort();
+    } catch (_) {}
+    try {
+      if (typeof window.__vinorCloseTxnDetail === 'function') window.__vinorCloseTxnDetail();
+    } catch (_) {}
+    try {
       if (window.__vinorCommChromeAbort) window.__vinorCommChromeAbort.abort();
     } catch (_) {}
   }
@@ -714,6 +720,12 @@
     }
     if (navKey === 'commissions' && window.__vinorCommissionsChrome) {
       window.__vinorCommissionsChrome.setup({ resetScroll: !onDetail });
+      if (typeof window.__vinorCloseTxnDetail === 'function') {
+        try { window.__vinorCloseTxnDetail(); } catch (_) {}
+      }
+      if (typeof window.__vinorInvalidateTxnDetailsCache === 'function') {
+        window.__vinorInvalidateTxnDetailsCache();
+      }
     } else if (window.__vinorCommissionsChrome) {
       window.__vinorCommissionsChrome.teardown();
     }
@@ -722,7 +734,7 @@
       if (!onCommTxnList && window.__vinorCommTxnPageChrome && window.__vinorCommTxnPageChrome.teardown) {
         window.__vinorCommTxnPageChrome.teardown();
       }
-      if (!onCommTxnList && typeof window.removeVinorCommTxnModalsFromBody === 'function') {
+      if (navKey !== 'commissions' && typeof window.removeVinorCommTxnModalsFromBody === 'function') {
         window.removeVinorCommTxnModalsFromBody();
       }
     } catch (_) {}

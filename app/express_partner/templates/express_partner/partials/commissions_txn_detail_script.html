@@ -1,29 +1,31 @@
 <script>
   (function () {
-    var modal = document.getElementById('vnTxnDetailModal');
-    if (!modal) return;
-
-    if (modal.parentNode !== document.body) {
-      document.body.appendChild(modal);
+    if (window.__vinorCommTxnDetailAbort) {
+      try { window.__vinorCommTxnDetailAbort.abort(); } catch (_) {}
     }
+    window.__vinorCommTxnDetailAbort = new AbortController();
+    var signal = window.__vinorCommTxnDetailAbort.signal;
 
-    var overlay = window.vinorExpressModalOverlay;
-    var elTitle = document.getElementById('vnTxnDetailModalTitle');
-    var elType = document.getElementById('vnTxnDetailType');
-    var elAmount = document.getElementById('vnTxnDetailAmount');
-    var elStatus = document.getElementById('vnTxnDetailStatus');
-    var elDesc = document.getElementById('vnTxnDetailDesc');
-    var elIconWrap = document.getElementById('vnTxnDetailIconWrap');
-    var elIcon = document.getElementById('vnTxnDetailIcon');
-    var elWallet = document.getElementById('vnTxnDetailWallet');
-    var elWalletTitle = document.getElementById('vnTxnDetailWalletTitle');
-    var elWalletBody = document.getElementById('vnTxnDetailWalletBody');
-    var elDates = document.getElementById('vnTxnDetailDates');
-    var elFields = document.getElementById('vnTxnDetailFields');
-    var elActions = document.getElementById('vnTxnDetailActions');
-    var elCancelBtn = document.getElementById('vnTxnDetailCancelBtn');
     var currentDetail = null;
     var txnDetailsCache = null;
+
+    function ensureModal() {
+      if (typeof window.hoistVinorExpressBodyModals === 'function') {
+        try { window.hoistVinorExpressBodyModals(); } catch (_) {}
+      }
+      return document.getElementById('vnTxnDetailModal');
+    }
+
+    function syncOverlay(open) {
+      var ov = window.vinorExpressModalOverlay;
+      if (ov) {
+        if (open) ov.open();
+        else ov.close();
+        return;
+      }
+      document.documentElement.classList.toggle('vinor-express-overlay-modal-open', !!open);
+      try { document.body.style.overflow = open ? 'hidden' : ''; } catch (_) {}
+    }
 
     function loadTxnDetailsCache() {
       if (txnDetailsCache) return txnDetailsCache;
@@ -134,6 +136,9 @@
     }
 
     function renderWallet(d) {
+      var elWallet = document.getElementById('vnTxnDetailWallet');
+      var elWalletBody = document.getElementById('vnTxnDetailWalletBody');
+      var elWalletTitle = document.getElementById('vnTxnDetailWalletTitle');
       if (!elWallet || !elWalletBody) return;
       var items = d.wallet_fields || [];
       if (!items.length) {
@@ -152,7 +157,21 @@
     }
 
     function openDetail(d) {
+      var modal = ensureModal();
       if (!d || !modal) return;
+
+      var elTitle = document.getElementById('vnTxnDetailModalTitle');
+      var elType = document.getElementById('vnTxnDetailType');
+      var elAmount = document.getElementById('vnTxnDetailAmount');
+      var elStatus = document.getElementById('vnTxnDetailStatus');
+      var elDesc = document.getElementById('vnTxnDetailDesc');
+      var elIconWrap = document.getElementById('vnTxnDetailIconWrap');
+      var elIcon = document.getElementById('vnTxnDetailIcon');
+      var elDates = document.getElementById('vnTxnDetailDates');
+      var elFields = document.getElementById('vnTxnDetailFields');
+      var elActions = document.getElementById('vnTxnDetailActions');
+      var elCancelBtn = document.getElementById('vnTxnDetailCancelBtn');
+
       currentDetail = d;
       if (elTitle) elTitle.textContent = d.title || 'جزئیات تراکنش';
       if (elType) elType.textContent = d.title || '';
@@ -190,34 +209,38 @@
           elCancelBtn.removeAttribute('data-cancel-withdrawal');
         }
       }
+
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
       try { void modal.offsetWidth; } catch (_) {}
       modal.classList.add('vn-txn-detail-modal--open');
-      if (overlay) overlay.open();
+      syncOverlay(true);
     }
 
     function closeDetail() {
+      var modal = ensureModal();
       if (!modal) return;
       var wasOpen = modal.classList.contains('vn-txn-detail-modal--open');
       modal.classList.remove('vn-txn-detail-modal--open');
       window.setTimeout(function () {
-        modal.classList.add('hidden');
+        if (!modal.classList.contains('vn-txn-detail-modal--open')) {
+          modal.classList.add('hidden');
+        }
       }, 280);
       modal.setAttribute('aria-hidden', 'true');
       currentDetail = null;
-      if (wasOpen && overlay) overlay.close();
+      if (wasOpen) syncOverlay(false);
     }
 
     function detailFromRow(row) {
       if (!row) return null;
       var idxRaw = row.getAttribute('data-txn-idx');
-      if (idxRaw !== null && idxRaw !== '') {
-        var idx = parseInt(idxRaw, 10);
-        var cache = loadTxnDetailsCache();
-        if (!isNaN(idx) && cache[idx]) return cache[idx];
-      }
-      return null;
+      if (idxRaw === null || idxRaw === '') return null;
+      var idx = parseInt(idxRaw, 10);
+      if (isNaN(idx)) return null;
+      var cache = loadTxnDetailsCache();
+      var d = cache[idx];
+      return d && typeof d === 'object' ? d : null;
     }
 
     window.__vinorOpenTxnDetail = openDetail;
@@ -229,9 +252,11 @@
       var row = e.target.closest && e.target.closest('.commission-txn-row[data-txn-idx]');
       if (!row) return;
       if (e.target.closest && e.target.closest('button[data-cancel-withdrawal]')) return;
+      e.preventDefault();
+      e.stopPropagation();
       var d = detailFromRow(row);
       if (d) openDetail(d);
-    });
+    }, { signal: signal });
 
     document.addEventListener('keydown', function (e) {
       var row = e.target.closest && e.target.closest('.commission-txn-row[data-txn-idx]');
@@ -240,19 +265,25 @@
       e.preventDefault();
       var d = detailFromRow(row);
       if (d) openDetail(d);
-    });
+    }, { signal: signal });
 
     document.addEventListener('click', function (e) {
       if (e.target.closest && e.target.closest('[data-close-txn-detail]')) {
         e.preventDefault();
         closeDetail();
       }
-    });
+    }, { signal: signal });
 
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && modal.classList.contains('vn-txn-detail-modal--open')) {
+      var modal = ensureModal();
+      if (e.key === 'Escape' && modal && modal.classList.contains('vn-txn-detail-modal--open')) {
         closeDetail();
       }
-    });
+    }, { signal: signal });
+
+    window.addEventListener('vinor:express-page-swap', function () {
+      txnDetailsCache = null;
+      closeDetail();
+    }, { signal: signal });
   })();
 </script>

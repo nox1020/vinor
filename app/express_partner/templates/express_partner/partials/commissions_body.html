@@ -75,7 +75,9 @@
   {% include 'express_partner/partials/commissions_withdraw_modal.html' %}
   {% include 'express_partner/partials/commissions_bank_picker_modal.html' %}
   {% include 'express_partner/partials/commissions_bank_add_modal.html' %}
-  {% include 'express_partner/partials/commissions_txn_detail_data.html' %}
+  {% set txn_detail_preview = true %}
+  {% set txn_detail_preview_limit = txn_preview_limit|default(5) %}
+  {% include 'express_partner/partials/commissions_txn_detail_data.html' with context %}
   {% include 'express_partner/partials/commissions_txn_detail_modal.html' %}
 {% endif %}
 
