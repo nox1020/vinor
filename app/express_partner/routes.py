@@ -1424,13 +1424,14 @@ def inject_role_flags():
             android_apk_version = (_apk_settings.get('android_apk_version') or '').strip()
             from ..utils.apk_version import should_show_apk_update
             from ..utils.short_urls import public_apk_download_url
+            if _raw_apk_url:
+                android_apk_url = public_apk_download_url(_apk_settings, external=False)
             show_app_update_nav = should_show_apk_update(
                 android_apk_version,
                 apk_url=_raw_apk_url,
                 req=request,
             )
             if show_app_update_nav and _raw_apk_url:
-                android_apk_url = public_apk_download_url(_apk_settings, external=False)
                 show_apk_strip = True
                 apk_strip_mode = 'update'
                 show_apk_download_banner = True

@@ -11,6 +11,8 @@ _VINOR_APP_UA = re.compile(
 
 
 def is_vinor_apk_request(req) -> bool:
+    if (req.headers.get('X-Vinor-App-Version') or '').strip():
+        return True
     ua = (req.headers.get('User-Agent') or '')
     return bool(re.search(r'VinorApp/(?:Android|WebViewOnly)', ua, re.IGNORECASE))
 

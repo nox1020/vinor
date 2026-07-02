@@ -259,8 +259,8 @@
     </span>
     <span class="vinor-apk-download-strip__text">
       {% if apk_strip_mode == 'update' %}
-      <span class="vinor-apk-download-strip__title" data-apk-strip-title>نسخه جدید اپلیکیشن آماده است</span>
-      <span class="vinor-apk-download-strip__sub" data-apk-strip-sub>{% if android_apk_version %}نسخه {{ android_apk_version }}{% endif %}</span>
+      <span class="vinor-apk-download-strip__title" data-apk-strip-title>بروزرسانی کنید</span>
+      <span class="vinor-apk-download-strip__sub" data-apk-strip-sub>{% if android_apk_version %}نسخه جدید {{ android_apk_version }}{% endif %}</span>
       {% else %}
       <span class="vinor-apk-download-strip__title" data-apk-strip-title>برای تجربه بهتر، اپلیکیشن وینور را نصب کنید</span>
       <span class="vinor-apk-download-strip__sub" data-apk-strip-sub>{% if android_apk_version %}نسخه {{ android_apk_version }}{% endif %}</span>
@@ -322,6 +322,9 @@
 
   function isVinorApkClient() {
     if (isVinorApk) return true;
+    try {
+      if (window.VINOR_NOTIFY_CFG && window.VINOR_NOTIFY_CFG.isVinorApk) return true;
+    } catch (_) {}
     try {
       return /VinorApp\//i.test(navigator.userAgent || '');
     } catch (_) {
@@ -451,6 +454,14 @@
     } catch (_) {}
   }
 
+  function removeInstallApkStrip() {
+    const strip = getApkStripEl();
+    if (strip && strip.getAttribute('data-apk-strip-mode') === 'install') {
+      strip.remove();
+      setApkBannerClass(false);
+    }
+  }
+
   function renderApkStrip(show, opts) {
     const nav = document.getElementById('bottomNavMenu');
     if (!nav) return;
@@ -461,7 +472,9 @@
       setApkBannerClass(false);
       return;
     }
-    const mode = isVinorApkClient() ? 'update' : 'install';
+    const inApk = isVinorApkClient();
+    if (inApk && opts.mode === 'install') return;
+    const mode = opts.mode || (inApk ? 'update' : 'install');
     const url = String(opts.url || serverApkUrl || '').trim();
     const version = String(opts.version || serverApkVersion || '').trim();
     if (!url) return;
@@ -481,9 +494,11 @@
     strip.setAttribute('aria-label', mode === 'update' ? 'بروزرسانی اپلیکیشن وینور' : 'دانلود اپلیکیشن وینور اندروید');
 
     const icon = mode === 'update' ? 'fa-arrow-circle-up' : 'fa-mobile-alt';
-    const title = mode === 'update' ? 'نسخه جدید اپلیکیشن آماده است' : 'برای تجربه بهتر، اپلیکیشن وینور را نصب کنید';
+    const title = mode === 'update' ? 'بروزرسانی کنید' : 'برای تجربه بهتر، اپلیکیشن وینور را نصب کنید';
     const cta = mode === 'update' ? 'بروزرسانی' : 'دانلود';
-    const sub = version ? ('نسخه ' + version) : '';
+    const sub = version
+      ? (mode === 'update' ? ('نسخه جدید ' + version) : ('نسخه ' + version))
+      : '';
 
     strip.innerHTML =
       '<span class="vinor-apk-download-strip__icon" aria-hidden="true"><i class="fas ' + icon + '"></i></span>' +
@@ -498,7 +513,7 @@
   function applyUpdateNav(show, opts) {
     opts = opts || {};
     if (isVinorApkClient()) {
-      renderApkStrip(!!show, opts);
+      renderApkStrip(!!show, Object.assign({ mode: 'update' }, opts));
     }
     const tab = navContainer.querySelector('[data-nav-key="profile"]');
     if (!tab) return;
@@ -562,6 +577,7 @@
     }
     const clientV = parseClientAppVersion();
     if (!clientV) {
+      removeInstallApkStrip();
       persistUpdateNav(null);
       applyUpdateNav(false);
       return;
@@ -586,12 +602,41 @@
           applyUpdateNav(true, state);
           return;
         }
+        removeInstallApkStrip();
         persistUpdateNav(null);
         applyUpdateNav(false);
         return;
       } catch (_) {}
     }
   }
+
+  function reconcileApkStripOnBoot() {
+    if (!isVinorApkClient()) return;
+
+    removeInstallApkStrip();
+
+    const clientV = parseClientAppVersion();
+    const serverV = String(serverApkVersion || '').trim();
+    const url = String(serverApkUrl || '').trim();
+    if (!clientV || !serverV || !url) return;
+
+    if (isServerApkNewer(serverV, clientV)) {
+      const state = { show: true, version: serverV, url: url };
+      persistUpdateNav(state);
+      applyUpdateNav(true, state);
+      return;
+    }
+
+    renderApkStrip(false);
+    persistUpdateNav(null);
+    applyUpdateNav(false);
+  }
+
+  window.__vinorSyncApkStrip = function () {
+    if (!isVinorApkClient()) return;
+    reconcileApkStripOnBoot();
+    refreshUpdateNavFromServer();
+  };
 
   window.addEventListener('vinor:app-update:nav', function (ev) {
     try {
@@ -803,7 +848,8 @@
   if (serverShowAppUpdate) {
     persistUpdateNav({ show: true, version: serverApkVersion, url: serverApkUrl });
     applyUpdateNav(true, { version: serverApkVersion, url: serverApkUrl });
-  } else {
+  } else if (isVinorApkClient()) {
+    reconcileApkStripOnBoot();
     syncUpdateNavFromStored();
     try {
       if (window.VinorNativeAppUpdate && typeof window.VinorNativeAppUpdate.getCachedState === 'function') {
@@ -815,25 +861,26 @@
         }
       }
     } catch (_) {}
-    if (isVinorApkClient()) {
-      var wrongStrip = getApkStripEl();
-      if (wrongStrip && wrongStrip.getAttribute('data-apk-strip-mode') === 'install') {
-        wrongStrip.remove();
-        setApkBannerClass(false);
-      }
-    }
+  } else {
+    syncUpdateNavFromStored();
   }
+
+  window.addEventListener('vinor:express-page-swap', function () {
+    try {
+      if (typeof window.__vinorSyncApkStrip === 'function') window.__vinorSyncApkStrip();
+    } catch (_) {}
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
       syncAllNavBadges();
       loadMenuFromAPI();
-      if (isVinorApkClient()) refreshUpdateNavFromServer();
+      if (isVinorApkClient()) window.__vinorSyncApkStrip();
     });
   } else {
     syncAllNavBadges();
     loadMenuFromAPI();
-    if (isVinorApkClient()) refreshUpdateNavFromServer();
+    if (isVinorApkClient()) window.__vinorSyncApkStrip();
   }
 
   window.addEventListener('storage', (e) => {
