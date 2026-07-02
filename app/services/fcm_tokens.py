@@ -135,3 +135,15 @@ def tokens_for_phones(phones: List[str]) -> List[str]:
 
 def tokens_for_phone(phone: str) -> List[str]:
     return tokens_for_phones([phone])
+
+
+def fcm_stats_for_phones(phones: List[str]) -> Dict[str, int]:
+    """تعداد همکاران و دستگاه‌های دارای FCM token."""
+    data = _load_all()
+    users = 0
+    for raw in phones:
+        phone_n = _normalize_phone(raw)
+        if phone_n and data.get(phone_n):
+            users += 1
+    devices = len(tokens_for_phones(phones))
+    return {"users": users, "devices": devices}

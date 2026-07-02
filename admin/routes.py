@@ -1482,10 +1482,15 @@ def _send_colleagues_notification_broadcast(
 ) -> Dict[str, Any]:
     from app.services.notifications import add_notifications_batch
     from app.services.notification_history import append_broadcast
+    from app.services.fcm_tokens import fcm_stats_for_phones
+    from app.services.fcm_push import is_fcm_configured
+    from app.services.firebase_config import ensure_firebase_ready
 
+    ensure_firebase_ready()
     bid = broadcast_id or str(uuid.uuid4())
     notify_url = '/express/partner/notifications'
     phones = [p['phone'] for p in approved_partners if p.get('phone')]
+    fcm_stats = fcm_stats_for_phones(phones)
 
     batch = add_notifications_batch(
         user_ids=phones,
@@ -1499,31 +1504,10 @@ def _send_colleagues_notification_broadcast(
     sent = int(batch.get('success_count') or 0)
     failed = int(batch.get('failed_count') or 0)
 
+    push_targets = int(fcm_stats.get('devices') or 0)
+    push_queued = push_targets > 0 and is_fcm_configured()
     push_sent = 0
     push_failed = 0
-    push_queued = False
-    push_targets = 0
-    try:
-        subs = _load_subs() or []
-    except Exception:
-        subs = []
-
-    if subs and current_app.config.get('VAPID_PRIVATE_KEY'):
-        payload = {
-            "title": title,
-            "body": body,
-            "icon": "/static/icons/icon-192.png",
-            "badge": "/static/icons/monochrome-192.png",
-            "url": notify_url,
-            "sound": "/static/sounds/notify.mp3",
-        }
-        push_targets = send_push_batch_background(
-            payload,
-            subs,
-            target_phones=phones,
-            broadcast_id=bid,
-        )
-        push_queued = push_targets > 0
 
     admin_user = session.get('admin_user') or session.get('username') or None
     record = append_broadcast(
@@ -1542,6 +1526,7 @@ def _send_colleagues_notification_broadcast(
     if push_queued:
         record['push_queued'] = True
         record['push_targets'] = push_targets
+        record['fcm_users'] = int(fcm_stats.get('users') or 0)
 
     return {
         'broadcast': record,
@@ -1550,6 +1535,8 @@ def _send_colleagues_notification_broadcast(
         'push_sent': push_sent,
         'push_failed': push_failed,
         'push_queued': push_queued,
+        'push_targets': push_targets,
+        'fcm_configured': is_fcm_configured(),
     }
 
 
@@ -1567,22 +1554,21 @@ def notifications_colleagues():
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     try:
-        subs_for_diag = _load_subs()
-    except Exception:
-        subs_for_diag = []
-    try:
-        from app.services.firebase_config import get_firebase_status
+        from app.services.firebase_config import ensure_firebase_ready, get_firebase_status
+        from app.services.fcm_tokens import fcm_stats_for_phones
+        ensure_firebase_ready()
         fcm_diag = get_firebase_status()
+        partner_phones = [p.get('phone') for p in _load_approved_express_partners() if p.get('phone')]
+        fcm_stats = fcm_stats_for_phones(partner_phones)
     except Exception:
         fcm_diag = {}
+        fcm_stats = {"users": 0, "devices": 0}
     push_diag = {
-        'has_public': bool(current_app.config.get('VAPID_PUBLIC_KEY')),
-        'has_private': bool(current_app.config.get('VAPID_PRIVATE_KEY')),
-        'subs_count': len(subs_for_diag or []),
-        'tagged_count': sum(1 for s in (subs_for_diag or []) if s.get('user_phone')),
         'fcm_send_ready': bool(fcm_diag.get('send_ready')),
         'fcm_mobile_ready': bool(fcm_diag.get('mobile_ready')),
         'fcm_project_id': fcm_diag.get('project_id'),
+        'fcm_users': int(fcm_stats.get('users') or 0),
+        'fcm_devices': int(fcm_stats.get('devices') or 0),
     }
 
     approved_partners = _load_approved_express_partners()
@@ -1592,6 +1578,9 @@ def notifications_colleagues():
             get_user_notifications,
             _normalize_user_id,
         )
+        from app.services.fcm_tokens import tokens_for_phone
+        from app.services.firebase_config import ensure_firebase_ready
+        ensure_firebase_ready()
         test_phone = (request.form.get('test_phone') or '').strip()
         test_title = (request.form.get('test_title') or '').strip() or 'تست اعلان'
         test_body = (request.form.get('test_body') or '').strip() or 'این یک اعلان تستی است برای بررسی سیستم.'
@@ -1612,8 +1601,13 @@ def notifications_colleagues():
                     "phone_normalized": normalized,
                     "notification_added": test_notif.get("id") if test_notif else None,
                     "notifications_found": len(notifications),
+                    "fcm_tokens": len(tokens_for_phone(normalized)),
                 }
-                test_message = f'تست موفق. اعلان برای {normalized} ثبت شد.'
+                fcm_n = test_result["fcm_tokens"]
+                test_message = (
+                    f'تست موفق. اعلان برای {normalized} ثبت شد'
+                    + (f' و FCM به {fcm_n} دستگاه ارسال شد.' if fcm_n else ' (FCM token ثبت نشده — در APK لاگین کنید).')
+                )
             except Exception as e:
                 test_error = f'خطا در تست: {str(e)}'
                 current_app.logger.error(f"Notification test error: {e}", exc_info=True)
@@ -1650,7 +1644,12 @@ def notifications_colleagues():
                 else:
                     message = f'اعلان برای {sent} همکار ثبت شد.'
                 if result.get('push_queued'):
-                    message += f' پوش به {result.get("broadcast", {}).get("push_targets", 0)} دستگاه در حال ارسال است.'
+                    targets = result.get('push_targets') or result.get('broadcast', {}).get('push_targets', 0)
+                    message += f' FCM به {targets} دستگاه در حال ارسال است.'
+                elif not result.get('fcm_configured'):
+                    message += ' (FCM روی سرور فعال نیست — push موبایل ارسال نمی‌شود).'
+                elif (result.get('push_targets') or 0) == 0:
+                    message += ' (هیچ FCM token ثبت‌شده‌ای نیست — همکاران باید APK را نصب و لاگین کنند).'
                 if is_ajax:
                     return jsonify({
                         'success': True,

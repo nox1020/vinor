@@ -421,6 +421,7 @@ def add_notifications_batch(
                 title=title_s,
                 body=body_s,
                 url=action_url or "/express/partner/notifications",
+                broadcast_id=broadcast_id,
             )
         except Exception:
             pass

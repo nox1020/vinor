@@ -257,22 +257,40 @@ def send_fcm_batch_background(
     title: str,
     body: str,
     url: Optional[str] = None,
+    broadcast_id: Optional[str] = None,
 ) -> None:
-    if not is_fcm_configured() or not phones:
+    if not phones:
         return
     app = current_app._get_current_object()
     target_url = url or "/express/partner/notifications"
     phone_list = list(phones)
+    bid = (broadcast_id or "").strip() or None
 
     def _worker() -> None:
         with app.app_context():
             try:
                 ensure_firebase_ready(app)
+                if not is_fcm_configured():
+                    app.logger.warning("FCM batch skipped — not configured")
+                    if bid:
+                        from app.services.notification_history import update_broadcast_push_stats
+                        update_broadcast_push_stats(bid, 0, len(phone_list))
+                    return
                 res = send_fcm_to_phones(phone_list, title=title, body=body, url=target_url)
                 app.logger.info(f"FCM batch push: {res}")
+                if bid:
+                    from app.services.notification_history import update_broadcast_push_stats
+                    update_broadcast_push_stats(
+                        bid,
+                        int(res.get("sent") or 0),
+                        int(res.get("failed") or 0),
+                    )
             except Exception as e:
                 try:
                     app.logger.error(f"FCM batch push failed: {e}", exc_info=True)
+                    if bid:
+                        from app.services.notification_history import update_broadcast_push_stats
+                        update_broadcast_push_stats(bid, 0, len(phone_list))
                 except Exception:
                     pass
 
