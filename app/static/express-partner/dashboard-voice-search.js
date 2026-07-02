@@ -111,10 +111,20 @@
     var url = buildSearchUrl(form, q);
     if (!url) return;
 
-    if (typeof window.vinorExpressNavigate === 'function') {
+    if (window.__vinorDashboardSearch && typeof window.__vinorDashboardSearch.run === 'function') {
       try {
         var path = window.location.pathname.replace(/\/+$/, '') || '/';
         if (path === '/express/partner/dashboard') {
+          window.__vinorDashboardSearch.run(url);
+          return;
+        }
+      } catch (_) {}
+    }
+
+    if (typeof window.vinorExpressNavigate === 'function') {
+      try {
+        var pathNav = window.location.pathname.replace(/\/+$/, '') || '/';
+        if (pathNav === '/express/partner/dashboard') {
           window.vinorExpressNavigate(url, { forward: false });
           return;
         }
