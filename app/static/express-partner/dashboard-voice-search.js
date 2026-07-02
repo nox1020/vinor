@@ -111,11 +111,11 @@
     var url = buildSearchUrl(form, q);
     if (!url) return;
 
-    if (window.__vinorDashboardSearch && typeof window.__vinorDashboardSearch.run === 'function') {
+    if (window.__vinorDashboardSearch && typeof window.__vinorDashboardSearch.runFromForm === 'function') {
       try {
         var path = window.location.pathname.replace(/\/+$/, '') || '/';
         if (path === '/express/partner/dashboard') {
-          window.__vinorDashboardSearch.run(url);
+          window.__vinorDashboardSearch.runFromForm(form, q);
           return;
         }
       } catch (_) {}
