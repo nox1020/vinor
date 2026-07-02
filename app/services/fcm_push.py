@@ -139,10 +139,9 @@ def send_fcm_to_token(
                 "click_action": "OPEN_NOTIFICATIONS",
             },
             "android": {
-                "priority": "HIGH",
+                "priority": "high",
                 "notification": {
                     "channel_id": "vinor_express_partner",
-                    "click_action": "OPEN_NOTIFICATIONS",
                     "notification_priority": "PRIORITY_HIGH",
                 },
             },
@@ -207,6 +206,16 @@ def send_fcm_to_phones(
                     sent += 1
                 else:
                     failed += 1
+                    try:
+                        err = str(res.get("error") or "")[:400]
+                        if err:
+                            current_app.logger.warning(
+                                "FCM send failed token=%s… error=%s",
+                                futures[fut][:12],
+                                err,
+                            )
+                    except Exception:
+                        pass
             except Exception:
                 failed += 1
     return {"sent": sent, "failed": failed, "targets": len(tokens)}
