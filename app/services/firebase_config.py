@@ -63,15 +63,28 @@ def _sync_file_if_newer(src: str, dst: str) -> bool:
     return False
 
 
+def _secrets_dir(app) -> str:
+    """مسیر آپلود دستی روی سرور production (خارج از git)."""
+    path = os.path.join(app.instance_path, "secrets")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
 def sync_firebase_files(app) -> list[str]:
-    """همگام‌سازی فایل‌های Firebase از apk/app و env به instance/data."""
+    """همگام‌سازی فایل‌های Firebase از apk/app، instance/secrets و env به instance/data."""
     data_dir = _data_dir(app)
     apk_dir = _apk_app_dir(app)
+    secrets_dir = _secrets_dir(app)
     synced: list[str] = []
 
     for src_name, dst_name in _APK_FIREBASE_FILES:
-        if _sync_file_if_newer(os.path.join(apk_dir, src_name), os.path.join(data_dir, dst_name)):
-            synced.append(dst_name)
+        dst = os.path.join(data_dir, dst_name)
+        for src in (
+            os.path.join(apk_dir, src_name),
+            os.path.join(secrets_dir, src_name),
+        ):
+            if _sync_file_if_newer(src, dst):
+                synced.append(dst_name)
 
     gs_custom = (app.config.get("FCM_GOOGLE_SERVICES_FILE") or os.environ.get("FCM_GOOGLE_SERVICES_FILE") or "").strip()
     if gs_custom and gs_custom != os.path.join(data_dir, "google-services.json"):
@@ -142,6 +155,7 @@ def _load_mobile_config(app) -> Optional[Dict[str, str]]:
         custom,
         os.path.join(_data_dir(app), "google-services.json"),
         os.path.join(_data_dir(app), "firebase", "google-services.json"),
+        os.path.join(_secrets_dir(app), "google-services.json"),
         apk_gs,
     ]
     for path in candidates:
@@ -188,6 +202,7 @@ def _load_service_account(app) -> Optional[Dict[str, Any]]:
         gac,
         os.path.join(_data_dir(app), "firebase-service-account.json"),
         os.path.join(_data_dir(app), "firebase", "service-account.json"),
+        os.path.join(_secrets_dir(app), "firebase-service-account.json"),
         apk_sa,
     ]
     for path in candidates:

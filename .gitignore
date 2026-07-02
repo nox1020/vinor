@@ -8,6 +8,7 @@
 # ----------------------------
 instance/data/
 instance/logs/
+instance/secrets/*.json
 logs/
 *.log
 000
