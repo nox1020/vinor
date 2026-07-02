@@ -21,8 +21,8 @@
   /** @type {Record<string, {tab: string, depth: number, bottomNav?: boolean, prefetch?: boolean}>} */
   var ROUTE_REGISTRY = {
     '/express/partner/dashboard': { tab: 'dashboard', depth: 0, bottomNav: true, prefetch: true },
-    '/express/partner/commissions': { tab: 'commissions', depth: 0, bottomNav: true, prefetch: false },
-    '/express/partner/profile': { tab: 'profile', depth: 0, bottomNav: true, prefetch: false },
+    '/express/partner/commissions': { tab: 'commissions', depth: 0, bottomNav: true, prefetch: true },
+    '/express/partner/profile': { tab: 'profile', depth: 0, bottomNav: true, prefetch: true },
     '/express/partner/profile/edit': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/favorites': { tab: 'favorites', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/notes': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -458,6 +458,41 @@
     }
   }
 
+  function isRootTabSwitch(href) {
+    try {
+      return navDepthForUrl(window.location.href) === 0 && navDepthForUrl(href) === 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function hasPrefetchedHtml(href) {
+    try {
+      if (!shouldUsePrefetchCache(href)) return false;
+      return !!prefetchCache[navCacheKey(href)];
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function prefetchPeerMainTabs(navKey) {
+    try {
+      if (!isLoggedInUser()) return;
+      var peers = {
+        dashboard: ['/express/partner/favorites', '/express/partner/commissions', '/express/partner/notifications', '/express/partner/profile'],
+        favorites: ['/express/partner/dashboard', '/express/partner/commissions', '/express/partner/notifications', '/express/partner/profile'],
+        commissions: ['/express/partner/dashboard', '/express/partner/favorites', '/express/partner/notifications', '/express/partner/profile'],
+        notifications: ['/express/partner/dashboard', '/express/partner/favorites', '/express/partner/commissions', '/express/partner/profile'],
+        profile: ['/express/partner/dashboard', '/express/partner/favorites', '/express/partner/commissions', '/express/partner/notifications']
+      };
+      var list = peers[navKey];
+      if (!list || !list.length) return;
+      list.forEach(function (path) {
+        prefetchHref(new URL(path, window.location.origin).href);
+      });
+    } catch (_) {}
+  }
+
   function tabIndexForKey(key) {
     var order = ['dashboard', 'favorites', 'commissions', 'notifications', 'profile'];
     var i = order.indexOf(key);
@@ -726,6 +761,11 @@
       if (typeof window.__vinorInvalidateTxnDetailsCache === 'function') {
         window.__vinorInvalidateTxnDetailsCache();
       }
+      requestAnimationFrame(function () {
+        if (window.__vinorCommFinancialSync) {
+          window.__vinorCommFinancialSync().catch(function () {});
+        }
+      });
     } else if (window.__vinorCommissionsChrome) {
       window.__vinorCommissionsChrome.teardown();
     }
@@ -794,6 +834,7 @@
     try {
       window.dispatchEvent(new CustomEvent('vinor:express-page-swap', { detail: { navKey: navKey } }));
     } catch (_) {}
+    prefetchPeerMainTabs(navKey);
     try {
       if (typeof window.__vinorSyncBottomNavBadges === 'function') {
         window.__vinorSyncBottomNavBadges();
@@ -907,12 +948,6 @@
     var gen = opts.navGen || bumpNavGeneration();
     var navKey = softTabKeyForUrl(href);
     var targetHref = navCacheKey(href);
-    try {
-      var tp = normPath(parseUrl(href).pathname);
-      if (tp === '/express/partner/commissions' || tp === '/express/partner/commissions/transactions') {
-        delete prefetchCache[targetHref];
-      }
-    } catch (_) {}
     var swapEl = document.getElementById('vinor-express-page-swap');
     var scriptsEl = document.getElementById('vinor-express-page-scripts');
     if (!swapEl) {
@@ -1047,6 +1082,9 @@
       if (u) toDetail = isLandDetailPath(u.pathname);
     } catch (_) {}
     if (prefersReducedMotion() || toDetail) {
+      return softNavigate(href, dir || 0, navOpts);
+    }
+    if (hasPrefetchedHtml(href) && isRootTabSwitch(href)) {
       return softNavigate(href, dir || 0, navOpts);
     }
     stripNavClasses(document.documentElement);
@@ -1554,7 +1592,7 @@
     try {
       var paths = ['/express/partner/profile', '/express/partner/commissions'];
       if (isLoggedInUser()) {
-        paths.push('/express/partner/favorites', '/express/partner/notifications');
+        paths.push('/express/partner/favorites', '/express/partner/notifications', '/express/partner/dashboard');
       }
       paths.forEach(function (path) {
         prefetchHref(new URL(path, window.location.origin).href);
@@ -1563,8 +1601,8 @@
   }
 
   if (typeof window.requestIdleCallback === 'function') {
-    window.requestIdleCallback(prefetchMainTabs, { timeout: 3500 });
+    window.requestIdleCallback(prefetchMainTabs, { timeout: 1200 });
   } else {
-    window.setTimeout(prefetchMainTabs, 2200);
+    window.setTimeout(prefetchMainTabs, 600);
   }
 })();
