@@ -283,11 +283,12 @@ def send_fcm_batch_background(
         with app.app_context():
             try:
                 ensure_firebase_ready(app)
+                token_targets = len(tokens_for_phones(phone_list))
                 if not is_fcm_configured():
                     app.logger.warning("FCM batch skipped — not configured")
                     if bid:
                         from app.services.notification_history import update_broadcast_push_stats
-                        update_broadcast_push_stats(bid, 0, len(phone_list))
+                        update_broadcast_push_stats(bid, 0, token_targets)
                     return
                 res = send_fcm_to_phones(phone_list, title=title, body=body, url=target_url)
                 app.logger.info(f"FCM batch push: {res}")
@@ -303,7 +304,7 @@ def send_fcm_batch_background(
                     app.logger.error(f"FCM batch push failed: {e}", exc_info=True)
                     if bid:
                         from app.services.notification_history import update_broadcast_push_stats
-                        update_broadcast_push_stats(bid, 0, len(phone_list))
+                        update_broadcast_push_stats(bid, 0, len(tokens_for_phones(phone_list)))
                 except Exception:
                     pass
 

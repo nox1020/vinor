@@ -1519,14 +1519,13 @@ def _send_colleagues_notification_broadcast(
         failed_count=failed,
         push_sent=push_sent,
         push_failed=push_failed,
+        push_queued=push_queued,
+        push_targets=push_targets,
+        fcm_users=int(fcm_stats.get('users') or 0),
         source=source,
         broadcast_id=bid,
         admin_user=admin_user,
     )
-    if push_queued:
-        record['push_queued'] = True
-        record['push_targets'] = push_targets
-        record['fcm_users'] = int(fcm_stats.get('users') or 0)
 
     return {
         'broadcast': record,
@@ -1606,7 +1605,7 @@ def notifications_colleagues():
                 fcm_n = test_result["fcm_tokens"]
                 test_message = (
                     f'تست موفق. اعلان برای {normalized} ثبت شد'
-                    + (f' و FCM به {fcm_n} دستگاه ارسال شد.' if fcm_n else ' (FCM token ثبت نشده — در APK لاگین کنید).')
+                    + (f' و FCM به {fcm_n} دستگاه در صف ارسال قرار گرفت.' if fcm_n else ' (FCM token ثبت نشده — در APK لاگین کنید).')
                 )
             except Exception as e:
                 test_error = f'خطا در تست: {str(e)}'

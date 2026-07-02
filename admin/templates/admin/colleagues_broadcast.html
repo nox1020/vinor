@@ -456,7 +456,7 @@
       },
 
       async pollPushStatus(broadcastId) {
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < 30; i++) {
           await new Promise(r => setTimeout(r, 1200));
           try {
             const res = await fetch(HISTORY_URL + '?limit=40', {
