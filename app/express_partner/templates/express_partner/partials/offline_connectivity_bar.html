@@ -27,15 +27,13 @@
   var OFFLINE_NETWORK_MSG = 'اتصال اینترنت قطع است';
   var OFFLINE_SERVER_MSG = 'ارتباط با سرور برقرار نیست';
   var ONLINE_MSG = 'آنلاین شدید';
-  var ONLINE_TOAST_MS = 500;
+  var ONLINE_TOAST_MS = 2200;
   var ONLINE_FADE_MS = 280;
   var ONLINE_GRACE_MS = 3500;
   var STARTUP_GRACE_MS = 5000;
   var pageLoadAt = Date.now();
   var lastOnline = null;
   var onlineToastActive = false;
-  var onlineHideTimer = null;
-  var onlineDismissTimer = null;
   var barDismissInFlight = false;
   var onlineGraceUntil = 0;
   var BAR_FALLBACK_H = 28;
@@ -43,9 +41,11 @@
   var lastReachabilityAt = 0;
   var REACHABILITY_COOLDOWN_MS = 3000;
   var REACHABILITY_INTERVAL_MS = 20000;
+  var ONLINE_MONITOR_MS = 60000;
   var HEALTHZ_TIMEOUT_MS = 8000;
   var UNREACHABLE_THRESHOLD = 3;
   var reachabilityTimer = null;
+  var onlineMonitorTimer = null;
   var probeRetryTimer = null;
   var toastHideTimer = null;
   var dismissFinalizeTimer = null;
@@ -63,6 +63,21 @@
     }
   }
 
+  function stopOnlineMonitor() {
+    if (onlineMonitorTimer) {
+      window.clearInterval(onlineMonitorTimer);
+      onlineMonitorTimer = null;
+    }
+  }
+
+  function startOnlineMonitor() {
+    if (onlineMonitorTimer) return;
+    onlineMonitorTimer = window.setInterval(function () {
+      if (document.hidden || lastOnline === false || onlineToastActive) return;
+      applyConnectivity({ silent: true });
+    }, ONLINE_MONITOR_MS);
+  }
+
   function clearToastTimers() {
     if (toastHideTimer) {
       window.clearTimeout(toastHideTimer);
@@ -71,14 +86,6 @@
     if (dismissFinalizeTimer) {
       window.clearTimeout(dismissFinalizeTimer);
       dismissFinalizeTimer = null;
-    }
-    if (onlineHideTimer) {
-      window.clearTimeout(onlineHideTimer);
-      onlineHideTimer = null;
-    }
-    if (onlineDismissTimer) {
-      window.clearTimeout(onlineDismissTimer);
-      onlineDismissTimer = null;
     }
   }
 
@@ -180,7 +187,7 @@
 
     clearToastTimers();
     onlineToastActive = false;
-    barDismissInFlight = false;
+    barDismissInFlight = true;
 
     function finish() {
       if (bar.hidden) return;
@@ -194,7 +201,6 @@
       return;
     }
 
-    setBarLayoutHeight(0);
     bar.classList.remove('vinor-express-offline-bar--offline', 'vinor-express-offline-bar--online');
     bar.classList.add('vinor-express-offline-bar--leaving');
 
@@ -270,6 +276,7 @@
     if (typeof window.__vinorPartnerHeaderPadSync === 'function') {
       window.__vinorPartnerHeaderPadSync();
     }
+    if (lastOnline !== false) startOnlineMonitor();
   }
 
   function dismissBar(opts) {
@@ -290,6 +297,7 @@
   function showOfflineBar(message) {
     clearToastTimers();
     cancelProbeRetries();
+    stopOnlineMonitor();
     barDismissInFlight = false;
     onlineToastActive = false;
     onlineGraceUntil = 0;
@@ -342,7 +350,10 @@
     var prev = lastOnline;
     var nativeSource = opts.source === 'native';
 
-    if (prev === on && !opts.force && !opts.onlineToast) return;
+    if (prev === on && !opts.onlineToast && !opts.message) {
+      if (!nativeSource || !opts.force) return;
+      if (on && !onlineToastActive && lastOnline !== false) return;
+    }
 
     if (on) {
       unreachableStreak = 0;
@@ -360,8 +371,11 @@
       lastOnline = true;
       cancelProbeRetries();
       hideBarCompletely(false);
+      startOnlineMonitor();
       return;
     }
+
+    stopOnlineMonitor();
 
     if ((inOnlineGrace() || onlineToastActive) && probeNativeOnline() && !nativeSource) {
       return;
@@ -433,6 +447,7 @@
           onlineToast: !!opts.onlineToast || wasOffline,
           silent: !!opts.silent
         });
+        if (lastOnline !== false) startOnlineMonitor();
         return true;
       }
 
@@ -479,9 +494,15 @@
   window.addEventListener('scroll', scheduleLayoutOfflineBar, { passive: true, capture: true });
   window.addEventListener('vinor:express-page-swap', function () {
     scheduleLayoutOfflineBar();
+    if (!onlineToastActive) applyConnectivity({ silent: true });
   });
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && !onlineToastActive) applyConnectivity();
+    if (document.hidden) {
+      stopOnlineMonitor();
+      return;
+    }
+    if (!onlineToastActive) applyConnectivity();
+    else if (lastOnline !== false) startOnlineMonitor();
   });
 
   if (document.readyState === 'loading') {

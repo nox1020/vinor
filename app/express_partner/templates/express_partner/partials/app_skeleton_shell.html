@@ -270,19 +270,12 @@
         ? 'در حال بارگذاری…'
         : 'اتصال اینترنت قطع است';
     }
-    /* نوار اتصال فقط از offline_connectivity_bar مدیریت شود — navigator.onLine به‌تنهایی کافی نیست */
-    if (!on) {
-      if (typeof window.vinorExpressSyncConnectivity === 'function') {
-        window.vinorExpressSyncConnectivity(false, {
-          force: true,
-          source: 'native',
-          message: 'اتصال اینترنت قطع است'
-        });
-      }
-      return;
-    }
-    if (typeof window.vinorExpressProbeConnectivity === 'function') {
-      window.vinorExpressProbeConnectivity({ onlineToast: false });
+    if (!on && typeof window.vinorExpressSyncConnectivity === 'function') {
+      window.vinorExpressSyncConnectivity(false, {
+        force: true,
+        source: 'native',
+        message: 'اتصال اینترنت قطع است'
+      });
     }
   }
 
