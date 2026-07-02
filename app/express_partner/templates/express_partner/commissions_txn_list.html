@@ -27,7 +27,7 @@
               aria-label="فیلتر تراکنش‌ها">
         <i class="fa-solid fa-sliders ep-partner-header-btn-icon text-[13px] opacity-90" aria-hidden="true"></i>
         <span id="commTxnFilterDot"
-              class="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-2 ring-[#111111] hidden"
+              class="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-[#e22828] ring-2 ring-[#111111] hidden"
               aria-hidden="true"></span>
       </button>
   {% endcall %}
@@ -35,38 +35,38 @@
 
   <div id="commissionsTxnPageMain"
        class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
-    <div class="mx-auto max-w-lg">
+    <div class="mx-auto max-w-lg vn-wallet-page">
 
       {% include 'express_partner/partials/commissions_txn_income_strip.html' %}
 
       {% if items and items|length > 0 %}
-      <div id="commTxnRows" class="divide-y divide-white/10">
+      <div id="commTxnRows" class="vn-wallet-section vn-wallet-list">
         {% for c in items %}
           {% set tour_item = loop.first %}
           {% include 'express_partner/partials/commission_txn_row.html' %}
         {% endfor %}
       </div>
-      <div id="commTxnEmptyFilter" class="hidden px-4 py-14 text-center sm:px-6">
-        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/5 text-zinc-600">
-          <i class="fas fa-filter text-lg" aria-hidden="true"></i>
+      <div id="commTxnEmptyFilter" class="vn-wallet-empty hidden">
+        <div class="vn-wallet-empty__icon">
+          <i class="fas fa-filter" aria-hidden="true"></i>
         </div>
-        <p class="text-sm text-zinc-400">تراکنشی با این فیلتر نیست.</p>
+        <p class="vn-wallet-empty__text">تراکنشی با این فیلتر نیست.</p>
         <button type="button"
                 id="commTxnResetFilter"
-                class="mt-3 text-xs font-semibold text-emerald-400 transition hover:text-emerald-300">
+                class="mt-3 text-xs font-semibold text-[#e22828] transition hover:opacity-90">
           نمایش همه
         </button>
       </div>
       {% else %}
-      <div class="px-4 py-16 text-center sm:px-6">
-        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/5 text-zinc-600">
-          <i class="fas fa-receipt text-2xl" aria-hidden="true"></i>
+      <div class="vn-wallet-section vn-wallet-empty">
+        <div class="vn-wallet-empty__icon">
+          <i class="fas fa-receipt" aria-hidden="true"></i>
         </div>
-        <p class="text-sm font-medium text-zinc-400">هنوز تراکنشی ثبت نشده</p>
-        <p class="mt-1 text-xs leading-relaxed text-zinc-600">پس از فروش یا برداشت، تراکنش‌ها اینجا نمایش داده می‌شوند.</p>
+        <p class="vn-wallet-empty__text">هنوز تراکنشی ثبت نشده</p>
+        <p class="mt-1 text-xs text-zinc-600">پس از فروش یا برداشت، تراکنش‌ها اینجا نمایش داده می‌شوند.</p>
         <a href="{{ url_for('express_partner.dashboard') }}"
            data-vinor-express-nav
-           class="mt-5 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 transition hover:text-emerald-300">
+           class="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[#e22828]">
           <span>رفتن به داشبورد</span>
           <i class="fas fa-chevron-left text-[10px] opacity-80" aria-hidden="true"></i>
         </a>
@@ -87,7 +87,7 @@
             id="commTxnFilterBackdrop"
             class="comm-txn-filter-backdrop absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200"
             aria-label="بستن"></button>
-    <div class="comm-txn-filter-sheet relative w-full max-w-lg mx-auto rounded-t-3xl bg-[#1C1F2A] border-t border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.55)] max-h-[min(80vh,520px)] flex flex-col translate-y-full transition-transform duration-300 ease-out pb-[env(safe-area-inset-bottom,0px)]">
+    <div class="comm-txn-filter-sheet vn-wallet-sheet relative w-full max-w-lg mx-auto rounded-t-2xl bg-[#14161c] border-t border-white/[0.07] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] max-h-[min(80vh,520px)] flex flex-col translate-y-full transition-transform duration-300 ease-out pb-[env(safe-area-inset-bottom,0px)]">
       <div class="shrink-0 pt-2.5 pb-1 flex justify-center">
         <span class="block w-11 h-1 rounded-full bg-white/25" aria-hidden="true"></span>
       </div>
@@ -105,7 +105,7 @@
         <button type="button"
                 data-comm-txn-filter="{{ key }}"
                 data-comm-txn-filter-label="{{ label }}"
-                class="comm-txn-filter w-full flex items-center justify-between gap-3 rounded-xl border px-3.5 py-3 text-start text-sm transition{% if key == 'all' %} border-emerald-500/40 bg-emerald-500/15 font-semibold text-emerald-300{% else %} border-white/8 bg-[#12141D] font-medium text-zinc-300 hover:bg-white/[0.04]{% endif %}"
+                class="comm-txn-filter w-full flex items-center justify-between gap-3 rounded-lg border px-3.5 py-3 text-start text-sm transition{% if key == 'all' %} border-[#e22828]/40 bg-[#e22828]/12 font-semibold text-[#f87171]{% else %} border-white/[0.08] bg-[#0f1117] font-medium text-zinc-300 hover:bg-white/[0.04]{% endif %}"
                 role="option"
                 aria-selected="{{ 'true' if key == 'all' else 'false' }}">
           <span>{{ label }}</span>
@@ -259,12 +259,12 @@
       filters.querySelectorAll('.comm-txn-filter').forEach(function (btn) {
         var on = btn.getAttribute('data-comm-txn-filter') === key;
         btn.setAttribute('aria-selected', on ? 'true' : 'false');
-        btn.classList.toggle('border-emerald-500/40', on);
-        btn.classList.toggle('bg-emerald-500/15', on);
-        btn.classList.toggle('text-emerald-300', on);
+        btn.classList.toggle('border-[#e22828]/40', on);
+        btn.classList.toggle('bg-[#e22828]/12', on);
+        btn.classList.toggle('text-[#f87171]', on);
         btn.classList.toggle('font-semibold', on);
-        btn.classList.toggle('border-white/8', !on);
-        btn.classList.toggle('bg-[#12141D]', !on);
+        btn.classList.toggle('border-white/[0.08]', !on);
+        btn.classList.toggle('bg-[#0f1117]', !on);
         btn.classList.toggle('text-zinc-300', !on);
         btn.classList.toggle('font-medium', !on);
       });

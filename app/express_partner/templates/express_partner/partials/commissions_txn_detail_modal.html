@@ -1,4 +1,4 @@
-{# مودال جزئیات تراکنش / برداشت — bottom sheet موبایل‌محور #}
+{# مودال جزئیات تراکنش — bottom sheet سبک دیوار #}
 <div id="vnTxnDetailModal"
      class="vn-txn-detail-modal fixed inset-0 z-[220] hidden flex flex-col justify-end"
      role="dialog"
@@ -8,53 +8,48 @@
      data-tg-body-modal>
   <div class="vn-txn-detail-backdrop absolute inset-0 bg-black/65 opacity-0 transition-opacity duration-200"
        data-close-txn-detail aria-hidden="true"></div>
-  <div class="vn-txn-detail-sheet relative w-full max-w-lg mx-auto rounded-t-3xl bg-[#1C1F2A] border-t border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.55)] max-h-[min(92vh,680px)] flex flex-col translate-y-full transition-transform duration-300 ease-out pb-[env(safe-area-inset-bottom,0px)]">
+  <div class="vn-txn-detail-sheet vn-wallet-sheet relative w-full max-w-lg mx-auto rounded-t-2xl bg-[#14161c] border-t border-white/[0.07] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] max-h-[min(92vh,680px)] flex flex-col translate-y-full transition-transform duration-300 ease-out pb-[env(safe-area-inset-bottom,0px)]">
     <div class="shrink-0 pt-2.5 pb-1 flex justify-center">
-      <span class="block w-11 h-1 rounded-full bg-white/25" aria-hidden="true"></span>
+      <span class="block w-11 h-1 rounded-full bg-white/20" aria-hidden="true"></span>
     </div>
     <div class="shrink-0 px-4 pb-2 flex items-center justify-center relative min-h-[2.75rem]">
       <button type="button"
-              class="absolute top-1/2 -translate-y-1/2 right-3 w-10 h-10 rounded-full border border-white/10 text-slate-300 hover:bg-white/5 flex items-center justify-center transition active:scale-95"
+              class="absolute top-1/2 -translate-y-1/2 right-3 w-10 h-10 rounded-full border border-white/[0.08] text-zinc-400 hover:bg-white/[0.04] flex items-center justify-center transition active:scale-95"
               data-close-txn-detail
               aria-label="بستن">
         <i class="fas fa-times text-sm"></i>
       </button>
       <h2 id="vnTxnDetailModalTitle" class="text-[15px] font-bold text-white px-10 text-center">جزئیات تراکنش</h2>
     </div>
-    <div class="px-4 pb-5 overflow-y-auto flex-1 min-h-0 space-y-3.5 overscroll-contain">
-      {# هدر مبلغ و وضعیت #}
+    <div class="px-4 pb-5 overflow-y-auto flex-1 min-h-0 space-y-3 overscroll-contain">
       <div class="text-center space-y-2 pt-0.5">
-        <div id="vnTxnDetailIconWrap" class="mx-auto w-12 h-12 rounded-2xl flex items-center justify-center border bg-emerald-500/15 border-emerald-500/25 text-emerald-300">
+        <div id="vnTxnDetailIconWrap" class="mx-auto w-12 h-12 rounded-full flex items-center justify-center bg-white/[0.05] text-zinc-400">
           <i id="vnTxnDetailIcon" class="fas fa-receipt text-lg" aria-hidden="true"></i>
         </div>
-        <p id="vnTxnDetailType" class="text-xs font-medium text-slate-400"></p>
-        <p id="vnTxnDetailAmount" class="text-[1.65rem] font-extrabold tabular-nums tracking-tight leading-none"></p>
+        <p id="vnTxnDetailType" class="text-xs font-medium text-zinc-500"></p>
+        <p id="vnTxnDetailAmount" class="text-[1.65rem] font-extrabold tabular-nums tracking-tight leading-none text-white"></p>
         <span id="vnTxnDetailStatus" class="inline-flex px-2.5 py-1 rounded-md text-[10px] font-semibold border"></span>
-        <p id="vnTxnDetailDesc" class="text-[11px] text-slate-400 leading-relaxed px-1"></p>
+        <p id="vnTxnDetailDesc" class="text-[11px] text-zinc-500 leading-relaxed px-1"></p>
       </div>
 
-      {# کارت کیف پول / حساب بانکی #}
-      <div id="vnTxnDetailWallet" class="hidden rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-500/10 to-[#12141D] overflow-hidden">
-        <div class="flex items-center gap-2 px-3.5 py-2.5 border-b border-white/5 bg-white/[0.03]">
-          <span class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-300 flex items-center justify-center shrink-0">
-            <i class="fas fa-wallet text-sm" aria-hidden="true"></i>
+      <div id="vnTxnDetailWallet" class="hidden rounded-lg border border-white/[0.07] bg-[#0f1117] overflow-hidden">
+        <div class="flex items-center gap-2 px-3.5 py-2.5 border-b border-white/[0.06]">
+          <span class="w-8 h-8 rounded-full bg-white/[0.05] text-zinc-400 flex items-center justify-center shrink-0">
+            <i class="fas fa-university text-sm" aria-hidden="true"></i>
           </span>
-          <p id="vnTxnDetailWalletTitle" class="text-xs font-bold text-sky-200">حساب بانکی</p>
+          <p id="vnTxnDetailWalletTitle" class="text-xs font-bold text-zinc-300">حساب بانکی</p>
         </div>
-        <div id="vnTxnDetailWalletBody" class="divide-y divide-white/5"></div>
+        <div id="vnTxnDetailWalletBody" class="divide-y divide-white/[0.06]"></div>
       </div>
 
-      {# جزئیات #}
-      <div id="vnTxnDetailFields" class="rounded-2xl bg-[#12141D] border border-white/8 divide-y divide-white/5 hidden"></div>
+      <div id="vnTxnDetailFields" class="rounded-lg bg-[#0f1117] border border-white/[0.07] divide-y divide-white/[0.06] hidden"></div>
 
-      {# تاریخ‌ها #}
-      <div id="vnTxnDetailDates" class="rounded-2xl bg-[#12141D] border border-white/8 divide-y divide-white/5 hidden"></div>
+      <div id="vnTxnDetailDates" class="rounded-lg bg-[#0f1117] border border-white/[0.07] divide-y divide-white/[0.06] hidden"></div>
 
-      {# لغو برداشت #}
       <div id="vnTxnDetailActions" class="hidden pt-0.5">
         <button type="button"
                 id="vnTxnDetailCancelBtn"
-                class="w-full rounded-xl border border-red-500/35 bg-red-500/10 text-red-300 text-sm font-bold py-3.5 hover:bg-red-500/15 transition active:scale-[0.99]">
+                class="w-full rounded-lg border border-[#e22828]/35 bg-[#e22828]/10 text-[#f87171] text-sm font-bold py-3.5 hover:bg-[#e22828]/15 transition active:scale-[0.99]">
           لغو درخواست برداشت
         </button>
       </div>

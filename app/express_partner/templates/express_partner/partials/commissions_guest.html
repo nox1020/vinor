@@ -1,30 +1,26 @@
-{# همکار غیرتأییدشده — قفل + دعوت همکاری (عرض/px داخل #commissionsPageMain) #}
-<div class="commissions-page-scroll-pad w-full pt-2 space-y-4">
-  <section class="rounded-2xl border border-white/10 bg-[#12161f] p-5 opacity-80">
+{# همکار غیرتأییدشده — سبک دیوار #}
+<div class="commissions-page-scroll-pad w-full pt-2 space-y-2">
+  <section class="vn-wallet-card p-4 opacity-90">
     <div class="flex items-center justify-between gap-3">
-      <div>
-        <h2 class="text-base font-bold text-white">پورسانت‌ها</h2>
-        <p class="mt-1 text-xs text-slate-400">این بخش مخصوص همکاران تأییدشده و فعال است.</p>
+      <div class="min-w-0">
+        <h2 class="text-base font-bold text-white">کیف پول</h2>
+        <p class="mt-1 text-xs text-zinc-500">این بخش مخصوص همکاران تأییدشده است.</p>
       </div>
-      <div class="w-12 h-12 rounded-2xl bg-slate-800 text-slate-500 flex items-center justify-center shrink-0 border border-white/5">
-        <i class="fas fa-lock text-lg"></i>
+      <div class="w-11 h-11 rounded-full bg-white/[0.05] text-zinc-500 flex items-center justify-center shrink-0">
+        <i class="fas fa-lock text-base" aria-hidden="true"></i>
       </div>
     </div>
   </section>
   <a href="{{ url_for('express_partner.cooperation_terms') }}"
      data-vinor-express-nav="forward"
-     class="block rounded-2xl border border-emerald-700/40 bg-gradient-to-br from-emerald-950/80 to-[#12161f] p-4 hover:border-emerald-500/50 transition">
-    <div class="flex items-center justify-between gap-3">
-      <div class="flex items-center gap-3 min-w-0">
-        <div class="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-          <i class="fas fa-handshake"></i>
-        </div>
-        <div class="min-w-0">
-          <div class="text-sm font-bold text-white truncate">تو هم می‌تونی همکار ما باشی</div>
-          <div class="mt-0.5 text-xs text-emerald-200/70 truncate">شرایط همکاری و مراحل شروع را ببین</div>
-        </div>
-      </div>
-      <i class="fas fa-chevron-left text-emerald-400 text-sm shrink-0"></i>
-    </div>
+     class="vn-wallet-promo">
+    <span class="vn-wallet-promo__icon" aria-hidden="true">
+      <i class="fas fa-handshake"></i>
+    </span>
+    <span class="min-w-0 flex-1">
+      <span class="vn-wallet-promo__title">همکاری با وینور</span>
+      <span class="vn-wallet-promo__sub block">شرایط همکاری و مراحل شروع را ببین</span>
+    </span>
+    <i class="fas fa-chevron-left shrink-0 text-xs text-zinc-500" aria-hidden="true"></i>
   </a>
 </div>

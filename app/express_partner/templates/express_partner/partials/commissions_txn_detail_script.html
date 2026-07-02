@@ -93,24 +93,24 @@
         if (st === 'approved' || st === 'processing') return 'bg-sky-500/20 text-sky-200 border-sky-500/30';
         return 'bg-amber-500/20 text-amber-200 border-amber-500/35';
       }
-      if (st === 'paid') return 'bg-violet-500/20 text-violet-200 border-violet-500/30';
-      if (st === 'approved') return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/35';
+      if (st === 'paid') return 'bg-white/[0.06] text-zinc-300 border-white/[0.1]';
+      if (st === 'approved') return 'bg-[#4ade80]/15 text-[#4ade80] border-[#4ade80]/25';
       if (st === 'rejected') return 'bg-red-500/20 text-red-300 border-red-500/30';
-      return 'bg-amber-500/20 text-amber-200 border-amber-500/35';
+      return 'bg-amber-500/15 text-amber-200 border-amber-500/30';
     }
 
     function amountClass(d) {
       var sign = d.amount_sign || '+';
-      if (sign === '-') return 'text-amber-300';
-      return 'text-emerald-400';
+      if (sign === '-') return 'text-[#f87171]';
+      return 'text-[#4ade80]';
     }
 
     function iconForDetail(d) {
       var t = d.txn_type || '';
-      if (t === 'withdrawal') return { cls: 'fa-check', wrap: 'bg-violet-500/15 border-violet-500/25 text-violet-300' };
-      if (t === 'withdrawal_request') return { cls: 'fa-arrow-down', wrap: 'bg-amber-500/15 border-amber-500/25 text-amber-300' };
-      if ((d.description || '').indexOf('دعوت') >= 0) return { cls: 'fa-user-plus', wrap: 'bg-emerald-500/15 border-emerald-500/25 text-emerald-300' };
-      return { cls: 'fa-home', wrap: 'bg-emerald-500/15 border-emerald-500/25 text-emerald-300' };
+      if (t === 'withdrawal') return { cls: 'fa-check', wrap: 'bg-white/[0.05] text-zinc-400' };
+      if (t === 'withdrawal_request') return { cls: 'fa-arrow-down', wrap: 'bg-[#e22828]/12 text-[#f87171]' };
+      if ((d.description || '').indexOf('دعوت') >= 0) return { cls: 'fa-user-plus', wrap: 'bg-[#4ade80]/12 text-[#4ade80]' };
+      return { cls: 'fa-home', wrap: 'bg-[#4ade80]/12 text-[#4ade80]' };
     }
 
     function renderRows(container, items, valueFormatter, rowClass) {
@@ -171,7 +171,7 @@
       if (elIcon && elIconWrap) {
         var ic = iconForDetail(d);
         elIcon.className = 'fas ' + ic.cls + ' text-lg';
-        elIconWrap.className = 'mx-auto w-12 h-12 rounded-2xl flex items-center justify-center border ' + ic.wrap;
+        elIconWrap.className = 'mx-auto w-12 h-12 rounded-full flex items-center justify-center ' + ic.wrap;
       }
       renderWallet(d);
       renderRows(elDates, d.dates || [], function (item) {

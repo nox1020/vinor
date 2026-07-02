@@ -1,4 +1,4 @@
-{# هدر پورسانت — pill شیشه‌ای 42px مثل داشبورد #}
+{# هدر کیف پول — مینیمال مثل دیوار #}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_back_link %}
 
 {{ ep_header_start(id='commissionsPageHeader', tour='commissions-header') }}
@@ -8,10 +8,8 @@
     <div class="vinor-dash-glass-pill comm-header-title-pill flex h-[42px] min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 sm:px-4">
       <h1 class="truncate text-sm font-bold text-gray-900 dark:text-white">کیف پول</h1>
     </div>
-    <div class="vinor-dash-glass-pill comm-header-glass-btn pointer-events-none select-none text-amber-500 dark:text-amber-400"
-         aria-hidden="true"
-         title="کیف پول">
-      <i class="fas fa-wallet text-[15px]" aria-hidden="true"></i>
+    <div class="comm-header-glass-btn pointer-events-none select-none opacity-0" aria-hidden="true">
+      <i class="fas fa-wallet text-[15px]"></i>
     </div>
   </div>
 </div>

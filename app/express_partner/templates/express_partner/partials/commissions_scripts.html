@@ -579,12 +579,12 @@
     function markBankSelected(row) {
       if (!bankModal) return;
       bankModal.querySelectorAll('.vn-bank-account').forEach(function (el) {
-        el.classList.remove('vn-bank-account--selected', 'ring-2', 'ring-emerald-500/35', 'border-emerald-500/40');
-        el.classList.add('border-white/10');
+        el.classList.remove('vn-bank-account--selected', 'ring-2', 'ring-[#e22828]/35', 'border-[#e22828]/40');
+        el.classList.add('border-white/[0.08]');
       });
       if (row) {
-        row.classList.add('vn-bank-account--selected', 'ring-2', 'ring-emerald-500/35', 'border-emerald-500/40');
-        row.classList.remove('border-white/10');
+        row.classList.add('vn-bank-account--selected', 'ring-2', 'ring-[#e22828]/35', 'border-[#e22828]/40');
+        row.classList.remove('border-white/[0.08]');
       }
     }
 
@@ -613,10 +613,10 @@
       }
       var html = accounts.map(function (a) {
         var defBadge = a.is_default
-          ? '<div class="flex justify-start mt-2"><span class="rounded-md bg-emerald-500/20 text-emerald-400 text-[9px] font-bold px-1.5 py-0.5 border border-emerald-500/30">پیش‌فرض</span></div>'
+          ? '<div class="flex justify-start mt-2"><span class="rounded-md bg-[#e22828]/15 text-[#f87171] text-[9px] font-bold px-1.5 py-0.5 border border-[#e22828]/25">پیش‌فرض</span></div>'
           : '';
         return (
-          '<div class="vn-bank-account w-full rounded-2xl border border-white/10 bg-[#252836] p-3 text-start hover:border-white/18 transition cursor-pointer" dir="rtl" tabindex="0" role="button" ' +
+          '<div class="vn-bank-account w-full rounded-xl border border-white/[0.08] bg-[#0f1117] p-3 text-start hover:border-white/[0.14] transition cursor-pointer" dir="rtl" tabindex="0" role="button" ' +
           'data-bank-id="' + escAttr(a.id || '') + '" data-bank-summary="' + escAttr(a.summary || '') + '" data-default-account="' + (a.is_default ? '1' : '0') + '">' +
           '<div class="flex items-start justify-between gap-2">' +
           '<div class="flex items-center gap-2 min-w-0">' +
@@ -762,20 +762,20 @@
         circle.className = 'vn-add-step-circle w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 ';
         label.className = 'vn-add-step-label text-[9px] leading-tight px-0.5 ';
         if (activeStep === 2) {
-          circle.className += 'border-emerald-500 bg-emerald-500 text-slate-900';
+          circle.className += 'border-[#e22828] bg-[#e22828] text-white';
           circle.innerHTML = '<i class="fas fa-check text-[11px]"></i>';
-          label.className += 'text-emerald-400 font-semibold';
+          label.className += 'text-[#f87171] font-semibold';
           label.textContent = labels[k - 1];
           return;
         }
         if (done) {
-          circle.className += 'border-emerald-500 bg-emerald-500 text-slate-900';
+          circle.className += 'border-[#e22828] bg-[#e22828] text-white';
           circle.innerHTML = '<i class="fas fa-check text-[11px]"></i>';
-          label.className += 'text-emerald-500/90 font-semibold';
+          label.className += 'text-[#f87171] font-semibold';
         } else if (cur) {
-          circle.className += 'border-emerald-500 bg-emerald-500 text-slate-900';
+          circle.className += 'border-[#e22828] bg-[#e22828] text-white';
           circle.textContent = nums[k - 1];
-          label.className += 'text-emerald-400 font-semibold';
+          label.className += 'text-[#f87171] font-semibold';
         } else {
           circle.className += 'border-slate-600 bg-slate-800 text-slate-400';
           circle.textContent = nums[k - 1];
@@ -825,9 +825,9 @@
       lastAddedAccountId = acc.id || '';
       lastAddedWasDefault = !!acc.is_default;
       if (elSuccessCard) {
-        var badge = acc.is_default ? '<div class="flex justify-start mt-2"><span class="rounded-md bg-emerald-500/20 text-emerald-400 text-[9px] font-bold px-1.5 py-0.5 border border-emerald-500/30">پیش‌فرض</span></div>' : '';
+        var badge = acc.is_default ? '<div class="flex justify-start mt-2"><span class="rounded-md bg-[#e22828]/15 text-[#f87171] text-[9px] font-bold px-1.5 py-0.5 border border-[#e22828]/25">پیش‌فرض</span></div>' : '';
         elSuccessCard.innerHTML =
-          '<div class="rounded-2xl border border-white/10 bg-[#252836] p-3" dir="rtl">' +
+          '<div class="rounded-xl border border-white/[0.08] bg-[#0f1117] p-3" dir="rtl">' +
           '<div class="flex items-start justify-between gap-2">' +
           '<div class="flex items-center gap-2 min-w-0">' +
           '<span class="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-white text-[10px] font-extrabold" style="background:' + escAttr(acc.color || '#455a64') + '">' + escAttr(acc.abbr || '') + '</span>' +

@@ -1,57 +1,57 @@
-{# کارت خلاصه درآمد — مطابق طرح UI #}
+{# کارت کیف پول — سبک دیوار #}
 {% set s = comm_stats if comm_stats is defined else {} %}
 {% set _withdrawable = withdrawable_balance if withdrawable_balance is defined else s.get('withdrawable_balance', 0) %}
 {% set _pending_amt = s.get('pending_amount', pending_commission or 0) %}
 {% set _active_wd = s.get('in_withdrawal_amount', pending_withdrawal_total or 0) %}
 {% set _active_wd_cnt = s.get('in_withdrawal_count', 0) %}
+{% set _total = s.get('total_confirmed_amount', total_commission or 0) %}
 {% set _has_active_wd = ((_active_wd or 0)|int > 0) or ((_active_wd_cnt or 0)|int > 0) %}
 {% set _min_wd = (min_withdrawal_amount or 10000000)|int %}
 {% set _can_withdraw = (_withdrawable or 0)|int >= _min_wd %}
 {% set _below_min = ((_withdrawable or 0)|int > 0) and not _can_withdraw %}
 
-<section data-tour="commissions-summary" class="rounded-2xl border border-white/10 bg-[#12161f] overflow-hidden">
-  <div class="px-4 py-4">
-    <p class="text-xs text-slate-400 mb-1">موجودی قابل برداشت</p>
-    <p class="text-3xl font-extrabold text-white tabular-nums tracking-tight leading-none" data-comm-withdrawable>{{ (_withdrawable or 0)|toman }}</p>
+<section data-tour="commissions-summary" class="vn-wallet-card">
+  <div class="vn-wallet-hero">
+    <p class="vn-wallet-hero__label">موجودی قابل برداشت</p>
+    <p class="vn-wallet-hero__balance" data-comm-withdrawable>{{ (_withdrawable or 0)|toman }}</p>
+  </div>
 
-    <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5">
-      <div class="min-w-0">
-        <div class="flex items-center gap-1.5 mb-1">
-          <span data-comm-withdraw-dot class="w-2 h-2 rounded-full bg-emerald-400 shrink-0{% if _has_active_wd %} vn-comm-wd-dot--live{% endif %}" aria-hidden="true"></span>
-          <span class="text-[10px] text-slate-400 leading-tight">در حال برداشت</span>
-        </div>
-        <p data-comm-in-withdrawal class="text-sm font-bold text-amber-300 tabular-nums">{{ (_active_wd or 0)|toman }}</p>
-      </div>
-      <div class="min-w-0 text-start">
-        <div class="flex items-center justify-start gap-1.5 mb-1">
-          <i class="fas fa-clock text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>
-          <span class="text-[10px] text-slate-400 leading-tight">در انتظار واریز</span>
-        </div>
-        <p data-comm-pending class="text-sm font-bold text-white tabular-nums">{{ (_pending_amt or 0)|toman }}</p>
-      </div>
+  <div class="vn-wallet-stats">
+    <div class="vn-wallet-stat">
+      <span class="vn-wallet-stat__label">
+        <span data-comm-withdraw-dot class="inline-block w-1.5 h-1.5 rounded-full bg-[#e22828] align-middle me-0.5{% if _has_active_wd %} vn-comm-wd-dot--live{% endif %}" aria-hidden="true"></span>
+        در حال برداشت
+      </span>
+      <span data-comm-in-withdrawal class="vn-wallet-stat__value vn-wallet-stat__value--amber">{{ (_active_wd or 0)|toman }}</span>
     </div>
+    <div class="vn-wallet-stat">
+      <span class="vn-wallet-stat__label">در انتظار تأیید</span>
+      <span data-comm-pending class="vn-wallet-stat__value">{{ (_pending_amt or 0)|toman }}</span>
+    </div>
+    <div class="vn-wallet-stat">
+      <span class="vn-wallet-stat__label">کل درآمد</span>
+      <span data-comm-total class="vn-wallet-stat__value">{{ (_total or 0)|toman }}</span>
+    </div>
+  </div>
 
-    <div class="grid grid-cols-2 gap-2 mt-4">
-      <button type="button"
-              data-open-withdraw-modal
-              data-withdrawable-int="{{ (_withdrawable or 0)|int }}"
-              {% if not _can_withdraw %}disabled aria-disabled="true"{% endif %}
-              class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-amber-400 to-amber-500 text-slate-900 text-sm font-bold py-3.5 shadow-lg shadow-amber-900/20 hover:from-amber-300 hover:to-amber-400 transition{% if not _can_withdraw %} opacity-45 cursor-not-allowed hover:from-amber-400 hover:to-amber-500{% endif %}">
-        <i class="fas fa-wallet text-sm" aria-hidden="true"></i>
-        درخواست برداشت
-      </button>
-      <a href="{{ url_for('express_partner.commissions_transactions') }}"
-         data-vinor-express-nav
-         data-tour="commission-item"
-         class="inline-flex items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.04] text-slate-200 text-sm font-semibold py-3.5 hover:bg-white/[0.08] hover:border-white/20 transition">
-        <i class="fas fa-receipt text-sm text-emerald-400" aria-hidden="true"></i>
-        همه تراکنش‌ها
-      </a>
-    </div>
+  <div class="vn-wallet-actions">
+    <button type="button"
+            data-open-withdraw-modal
+            data-withdrawable-int="{{ (_withdrawable or 0)|int }}"
+            {% if not _can_withdraw %}disabled aria-disabled="true"{% endif %}
+            class="vn-wallet-btn vn-wallet-btn--primary">
+      درخواست برداشت
+    </button>
+    <a href="{{ url_for('express_partner.commissions_transactions') }}"
+       data-vinor-express-nav
+       data-tour="commission-item"
+       class="vn-wallet-btn vn-wallet-btn--ghost">
+      همه تراکنش‌ها
+    </a>
     {% if _below_min %}
-    <p data-comm-below-min-note class="mt-2 text-[11px] text-slate-500 text-center leading-relaxed">کف برداشت {{ _min_wd|toman }} است.</p>
+    <p data-comm-below-min-note class="vn-wallet-note">کف برداشت {{ _min_wd|toman }} است.</p>
     {% else %}
-    <p data-comm-below-min-note class="hidden mt-2 text-[11px] text-slate-500 text-center leading-relaxed" aria-hidden="true"></p>
+    <p data-comm-below-min-note class="vn-wallet-note hidden" aria-hidden="true"></p>
     {% endif %}
   </div>
 </section>

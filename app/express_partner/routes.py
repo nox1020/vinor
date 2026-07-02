@@ -2961,8 +2961,9 @@ def bank_accounts_set_default():
     if acc_id not in mine_ids:
         return jsonify({'success': False, 'error': 'not_found'}), 404
 
+    from .partner_withdrawals import partner_phones_match
     for r in all_rows:
-        if not isinstance(r, dict) or str(r.get('phone') or '').strip() != me_phone:
+        if not isinstance(r, dict) or not partner_phones_match(r.get('phone'), me_phone):
             continue
         if want:
             r['is_default'] = (str(r.get('id') or '') == acc_id)

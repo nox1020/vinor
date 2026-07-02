@@ -9,7 +9,7 @@
   <div class="vn-bank-add-backdrop absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200"
        data-close-bank-add
        aria-hidden="true"></div>
-  <div class="vn-bank-add-sheet relative w-full max-w-lg mx-auto rounded-t-3xl bg-[#1C1F2A] border-t border-white/10 shadow-[0_-12px_40px_rgba(0,0,0,0.55)] max-h-[min(94vh,820px)] flex flex-col translate-y-full transition-transform duration-300 ease-out">
+  <div class="vn-bank-add-sheet vn-wallet-sheet relative w-full max-w-lg mx-auto rounded-t-2xl bg-[#14161c] border-t border-white/[0.07] shadow-[0_-12px_40px_rgba(0,0,0,0.55)] max-h-[min(94vh,820px)] flex flex-col translate-y-full transition-transform duration-300 ease-out">
     <div class="shrink-0 pt-2 pb-1 flex justify-center">
       <span class="block w-10 h-1 rounded-full bg-white/20" aria-hidden="true"></span>
     </div>
@@ -27,8 +27,8 @@
       {# استپر #}
       <div id="vnBankAddStepper" class="flex items-stretch justify-between gap-1 mb-5" dir="rtl">
         <div class="vn-add-step flex-1 flex flex-col items-center gap-1.5 text-center" data-step="1">
-          <span class="vn-add-step-circle w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 border-emerald-500 bg-emerald-500 text-slate-900">۱</span>
-          <span class="vn-add-step-label text-[9px] leading-tight text-emerald-400 font-semibold px-0.5">اطلاعات کارت</span>
+          <span class="vn-add-step-circle w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 border-[#e22828] bg-[#e22828] text-white">۱</span>
+          <span class="vn-add-step-label text-[9px] leading-tight text-[#f87171] font-semibold px-0.5">اطلاعات کارت</span>
         </div>
         <div class="w-6 shrink-0 flex items-center justify-center pt-3 opacity-40">
           <span class="block h-px w-full bg-white/20"></span>
@@ -43,7 +43,7 @@
       <div id="vnBankAddViewForm" class="space-y-4">
         <div>
           <label class="block text-xs font-semibold text-slate-400 mb-1.5 text-start">بانک</label>
-          <div class="flex items-stretch rounded-xl border border-white/12 bg-[#12141D] overflow-hidden focus-within:border-emerald-500/40">
+          <div class="flex items-stretch rounded-lg border border-white/[0.1] bg-[#0f1117] overflow-hidden focus-within:border-[#e22828]/40">
             <span class="shrink-0 px-3 flex items-center text-slate-500 border-l border-white/10"><i class="fas fa-university"></i></span>
             <select id="vnBankAddBank"
                     class="flex-1 min-w-0 bg-transparent text-white text-sm py-3 px-3 outline-none appearance-none cursor-pointer">
@@ -53,7 +53,7 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-400 mb-1.5 text-start">شماره کارت</label>
-          <div dir="ltr" class="flex items-stretch rounded-xl border border-white/12 bg-[#12141D] overflow-hidden focus-within:border-emerald-500/40">
+          <div dir="ltr" class="flex items-stretch rounded-lg border border-white/[0.1] bg-[#0f1117] overflow-hidden focus-within:border-[#e22828]/40">
             <span class="shrink-0 px-3 flex items-center text-slate-500 border-r border-white/10" title="اسکن"><i class="fas fa-qrcode"></i></span>
             <input id="vnBankAddPan" type="text" inputmode="numeric" maxlength="19" autocomplete="off"
                    class="flex-1 min-w-0 bg-transparent text-end text-white text-sm py-3 px-3 outline-none tabular-nums tracking-wide placeholder:text-slate-600"
@@ -62,7 +62,7 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-400 mb-1.5 text-start">شماره شبا <span class="text-slate-600 font-normal">(اختیاری)</span></label>
-          <div dir="ltr" class="flex items-stretch rounded-xl border border-white/12 bg-[#12141D] overflow-hidden focus-within:border-emerald-500/40">
+          <div dir="ltr" class="flex items-stretch rounded-lg border border-white/[0.1] bg-[#0f1117] overflow-hidden focus-within:border-[#e22828]/40">
             <span class="shrink-0 px-3 flex items-center text-slate-500 border-r border-white/10"><i class="fas fa-hashtag text-xs"></i></span>
             <input id="vnBankAddSheba" type="text" maxlength="32" autocomplete="off"
                    class="flex-1 min-w-0 bg-transparent text-start text-white text-sm py-3 px-3 outline-none placeholder:text-slate-600 font-mono"
@@ -71,46 +71,45 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-400 mb-1.5 text-start">نام صاحب حساب</label>
-          <div class="flex items-stretch rounded-xl border border-white/12 bg-[#12141D] overflow-hidden focus-within:border-emerald-500/40">
+          <div class="flex items-stretch rounded-lg border border-white/[0.1] bg-[#0f1117] overflow-hidden focus-within:border-[#e22828]/40">
             <span class="shrink-0 px-3 flex items-center text-slate-500 border-l border-white/10"><i class="fas fa-user"></i></span>
             <input id="vnBankAddHolder" type="text" maxlength="80" autocomplete="name"
                    class="flex-1 min-w-0 bg-transparent text-start text-white text-sm py-3 px-3 outline-none placeholder:text-slate-600"
                    placeholder="مطابق با نام روی کارت وارد شود" />
           </div>
         </div>
-        <div class="rounded-xl border border-emerald-500/35 bg-emerald-500/5 px-3 py-2.5 flex items-start gap-2" dir="rtl">
-          <i class="fas fa-shield-alt text-emerald-500 text-sm mt-0.5 shrink-0"></i>
-          <p class="text-[11px] leading-relaxed text-slate-300 text-start">اطلاعات کارت شما به صورت رمزنگاری‌شده ذخیره می‌شود و کاملاً امن است.</p>
+        <div class="rounded-lg border border-white/[0.07] bg-[#0f1117] px-3 py-2.5 flex items-start gap-2" dir="rtl">
+          <i class="fas fa-shield-alt text-zinc-500 text-sm mt-0.5 shrink-0"></i>
+          <p class="text-[11px] leading-relaxed text-zinc-400 text-start">اطلاعات کارت شما به صورت رمزنگاری‌شده ذخیره می‌شود و کاملاً امن است.</p>
         </div>
         <p id="vnBankAddFormError" class="hidden text-xs text-red-400 text-start"></p>
       </div>
 
       {# مرحله ۲: موفقیت #}
       <div id="vnBankAddViewSuccess" class="hidden flex flex-col items-center text-center pt-2 pb-2">
-        <div class="relative w-20 h-20 rounded-full bg-emerald-500 flex items-center justify-center text-white text-3xl shadow-lg shadow-emerald-900/40 mb-4">
+        <div class="relative w-16 h-16 rounded-full bg-[#e22828] flex items-center justify-center text-white text-2xl mb-4">
           <i class="fas fa-check"></i>
-          <span class="absolute -top-1 -right-1 text-amber-300 text-sm opacity-90"><i class="fas fa-star"></i></span>
         </div>
         <h3 class="text-base font-bold text-white">حساب بانکی با موفقیت اضافه شد</h3>
         <p class="text-xs text-slate-400 mt-2 px-2 leading-relaxed">اکنون می‌توانید از این حساب برای دریافت وجه استفاده کنید.</p>
         <div id="vnBankAddSuccessCard" class="w-full mt-5 text-start"></div>
-        <div class="w-full mt-5 rounded-xl border border-white/10 bg-[#12141D] px-3 py-3 flex items-center justify-between gap-3 text-start" dir="rtl">
+        <div class="w-full mt-5 rounded-lg border border-white/[0.07] bg-[#0f1117] px-3 py-3 flex items-center justify-between gap-3 text-start" dir="rtl">
           <div class="flex-1 min-w-0">
             <div class="text-sm font-semibold text-white">تنظیم به عنوان حساب پیش‌فرض</div>
             <p class="text-[10px] text-slate-500 mt-1 leading-relaxed">تمامی برداشت‌های بعدی به این حساب واریز می‌شود.</p>
           </div>
-          <input type="checkbox" id="vnBankAddDefaultToggle" checked class="h-6 w-11 shrink-0 cursor-pointer accent-emerald-500 rounded" />
+          <input type="checkbox" id="vnBankAddDefaultToggle" checked class="h-6 w-11 shrink-0 cursor-pointer accent-[#e22828] rounded" />
         </div>
       </div>
     </div>
 
-    <div id="vnBankAddFooterForm" class="shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-white/5 bg-[#1C1F2A]">
-      <button type="button" id="vnBankAddBtnSubmit" class="w-full rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold py-3.5 shadow-lg shadow-emerald-900/25 transition disabled:opacity-50 disabled:pointer-events-none">
+    <div id="vnBankAddFooterForm" class="shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-white/[0.06] bg-[#14161c]">
+      <button type="button" id="vnBankAddBtnSubmit" class="vn-wallet-btn vn-wallet-btn--primary w-full min-h-[2.75rem] rounded-lg text-sm py-3.5 disabled:opacity-50 disabled:pointer-events-none">
         ثبت حساب
       </button>
     </div>
-    <div id="vnBankAddFooterSuccess" class="hidden shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-white/5 bg-[#1C1F2A]">
-      <button type="button" id="vnBankAddBtnFinish" class="w-full rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold py-3.5 shadow-lg shadow-emerald-900/25 transition">
+    <div id="vnBankAddFooterSuccess" class="hidden shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-white/[0.06] bg-[#14161c]">
+      <button type="button" id="vnBankAddBtnFinish" class="vn-wallet-btn vn-wallet-btn--primary w-full min-h-[2.75rem] rounded-lg text-sm py-3.5">
         تأیید و بازگشت
       </button>
     </div>

@@ -61,7 +61,7 @@
           if (!x.ok || !x.j.success) {
             window.alert(cancelErrorMessage((x.j && x.j.error) || 'cancel_failed'));
             btn.disabled = false;
-            btn.textContent = 'لغو';
+            btn.textContent = 'لغو درخواست';
             return;
           }
           if (window.__vinorCommissionsRefresh) {
@@ -74,7 +74,7 @@
         .catch(function () {
           window.alert('خطا در ارتباط با سرور.');
           btn.disabled = false;
-          btn.textContent = 'لغو';
+          btn.textContent = 'لغو درخواست';
         })
         .finally(function () {
           cancelling = false;

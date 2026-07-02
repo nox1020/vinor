@@ -9,7 +9,7 @@
   <div class="vn-bank-picker-backdrop absolute inset-0 bg-black/55 opacity-0 transition-opacity duration-200"
        data-close-bank-picker
        aria-hidden="true"></div>
-  <div class="vn-bank-picker-sheet relative w-full max-w-lg mx-auto rounded-t-3xl bg-[#1C1F2A] border-t border-white/10 shadow-[0_-12px_40px_rgba(0,0,0,0.5)] max-h-[min(92vh,780px)] flex flex-col translate-y-full transition-transform duration-300 ease-out">
+  <div class="vn-bank-picker-sheet vn-wallet-sheet relative w-full max-w-lg mx-auto rounded-t-2xl bg-[#14161c] border-t border-white/[0.07] shadow-[0_-12px_40px_rgba(0,0,0,0.5)] max-h-[min(92vh,780px)] flex flex-col translate-y-full transition-transform duration-300 ease-out">
     <div class="shrink-0 pt-2 pb-1 flex justify-center">
       <span class="block w-10 h-1 rounded-full bg-white/20" aria-hidden="true"></span>
     </div>
@@ -27,13 +27,13 @@
     <div id="vnBankPickerScroll" class="px-4 pb-4 overflow-y-auto flex-1 min-h-0 space-y-4">
       <button type="button"
               data-open-bank-add
-              class="flex items-center gap-3 w-full rounded-2xl border-2 border-dashed border-white/15 bg-[#12141D]/50 px-3 py-3 hover:border-emerald-500/35 hover:bg-[#12141D] transition text-start">
+              class="flex items-center gap-3 w-full rounded-xl border border-dashed border-white/[0.12] bg-[#0f1117]/60 px-3 py-3 hover:border-[#e22828]/35 hover:bg-[#0f1117] transition text-start">
         <div class="flex-1 min-w-0">
           <div class="text-sm font-semibold text-white">افزودن حساب جدید</div>
-          <div class="text-[11px] text-slate-500 mt-0.5">کارت جدید ثبت کنید</div>
+          <div class="text-[11px] text-zinc-500 mt-0.5">کارت جدید ثبت کنید</div>
         </div>
-        <span class="shrink-0 w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-900/30">
-          <i class="fas fa-plus text-lg"></i>
+        <span class="shrink-0 w-10 h-10 rounded-full bg-[#e22828] flex items-center justify-center text-white">
+          <i class="fas fa-plus text-base"></i>
         </span>
       </button>
 
@@ -43,18 +43,18 @@
         <div class="space-y-2.5 min-h-[3rem]" id="vnBankAccountList"></div>
       </div>
 
-      <div class="rounded-xl bg-[#1a2744] border border-blue-500/25 px-3 py-2.5 flex items-start gap-2.5" dir="rtl">
-        <span class="shrink-0 w-7 h-7 rounded-full bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 text-xs mt-0.5">
+      <div class="rounded-lg border border-white/[0.07] bg-[#0f1117] px-3 py-2.5 flex items-start gap-2.5" dir="rtl">
+        <span class="shrink-0 w-7 h-7 rounded-full bg-white/[0.05] flex items-center justify-center text-zinc-400 text-xs mt-0.5">
           <i class="fas fa-info"></i>
         </span>
-        <p class="text-[11px] leading-relaxed text-slate-300 text-start flex-1">وجه برداشت‌شده فقط به حساب بانکی به نام خودتان واریز می‌شود.</p>
+        <p class="text-[11px] leading-relaxed text-zinc-400 text-start flex-1">وجه برداشت‌شده فقط به حساب بانکی به نام خودتان واریز می‌شود.</p>
       </div>
     </div>
 
-    <div class="shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-white/5 bg-[#1C1F2A]">
+    <div class="shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-white/[0.06] bg-[#14161c]">
       <button type="button"
               id="vnBankPickerConfirmBtn"
-              class="w-full rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-900 text-sm font-bold py-3.5 shadow-lg shadow-amber-900/20 transition disabled:opacity-40 disabled:pointer-events-none">
+              class="vn-wallet-btn vn-wallet-btn--primary w-full min-h-[2.75rem] rounded-lg text-sm py-3.5 disabled:opacity-40 disabled:pointer-events-none">
         تأیید و ادامه
       </button>
     </div>

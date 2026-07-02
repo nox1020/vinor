@@ -10,7 +10,7 @@
      data-support-url="{{ url_for('express_partner.support') }}">
   <div class="vn-withdraw-backdrop absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200"
        data-close-withdraw-modal aria-hidden="true"></div>
-  <div class="vn-withdraw-sheet relative w-full max-w-lg mx-auto rounded-t-3xl bg-[#1C1F2A] border-t border-white/10 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] max-h-[min(92vh,720px)] flex flex-col translate-y-full transition-transform duration-300 ease-out">
+  <div class="vn-withdraw-sheet vn-wallet-sheet relative w-full max-w-lg mx-auto rounded-t-2xl bg-[#14161c] border-t border-white/[0.07] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] max-h-[min(92vh,720px)] flex flex-col translate-y-full transition-transform duration-300 ease-out">
     <div class="shrink-0 pt-2 pb-1 flex justify-center">
       <span class="block w-10 h-1 rounded-full bg-white/20" aria-hidden="true"></span>
     </div>
@@ -25,30 +25,29 @@
     </div>
     <div class="px-4 pb-5 overflow-y-auto flex-1 min-h-0 space-y-5">
       {# موجودی #}
-      <div class="rounded-2xl bg-[#12141D] border border-white/8 px-3 py-3 flex items-stretch gap-3">
-        <div class="shrink-0 flex items-center justify-center w-14">
-          <div class="relative text-amber-400 text-3xl leading-none">
+      <div class="rounded-xl bg-[#0f1117] border border-white/[0.07] px-3 py-3 flex items-stretch gap-3">
+        <div class="shrink-0 flex items-center justify-center w-12">
+          <div class="w-10 h-10 rounded-full bg-white/[0.05] flex items-center justify-center text-zinc-400 text-lg">
             <i class="fas fa-wallet"></i>
-            <span class="absolute -bottom-1 -start-1 text-amber-300 text-xs opacity-90"><i class="fas fa-coins"></i></span>
           </div>
         </div>
         <div class="flex-1 min-w-0 flex flex-col justify-center text-start">
-          <p class="text-xs font-medium text-slate-400">موجودی قابل برداشت</p>
-          <p id="vnWithdrawModalBalance" class="mt-1 text-xl font-extrabold text-emerald-400 tabular-nums tracking-tight">{{ (withdrawable_balance or 0)|toman }}</p>
+          <p class="text-xs font-medium text-zinc-500">موجودی قابل برداشت</p>
+          <p id="vnWithdrawModalBalance" class="mt-0.5 text-xl font-extrabold text-white tabular-nums tracking-tight">{{ (withdrawable_balance or 0)|toman }}</p>
         </div>
       </div>
 
       {# مبلغ برداشت #}
       <div class="space-y-2">
-        <label for="vnWithdrawAmountInput" class="block text-xs font-semibold text-slate-400 text-start">مبلغ برداشت</label>
+        <label for="vnWithdrawAmountInput" class="block text-xs font-semibold text-zinc-500 text-start">مبلغ برداشت</label>
         <div dir="ltr" class="flex items-stretch gap-2 w-full">
           <button type="button"
                   id="vnWithdrawFillAllBtn"
-                  class="shrink-0 rounded-xl border-2 border-emerald-500/70 text-emerald-400 text-xs font-bold px-3 py-2 hover:bg-emerald-500/10 transition whitespace-nowrap">
+                  class="shrink-0 rounded-lg border border-[#e22828]/50 text-[#f87171] text-xs font-bold px-3 py-2 hover:bg-[#e22828]/10 transition whitespace-nowrap">
             کل مبلغ
           </button>
-          <div class="flex-1 min-w-0 flex flex-row rounded-xl border border-white/12 bg-[#12141D] overflow-hidden focus-within:border-amber-500/40">
-            <span class="shrink-0 px-3 flex items-center text-xs text-slate-500 border-r border-white/10">تومان</span>
+          <div class="flex-1 min-w-0 flex flex-row rounded-lg border border-white/[0.1] bg-[#0f1117] overflow-hidden focus-within:border-[#e22828]/40">
+            <span class="shrink-0 px-3 flex items-center text-xs text-zinc-600 border-r border-white/[0.07]">تومان</span>
             <input id="vnWithdrawAmountInput"
                    type="text"
                    inputmode="numeric"
@@ -58,40 +57,40 @@
           </div>
         </div>
         <div class="flex flex-wrap gap-2 justify-start" dir="rtl">
-          <button type="button" class="vn-withdraw-chip rounded-lg bg-[#2a2d3a] text-white text-xs font-semibold px-3 py-2 border border-white/5 hover:bg-white/10 transition" data-chip="1000000">+۱٬۰۰۰٬۰۰۰</button>
-          <button type="button" class="vn-withdraw-chip rounded-lg bg-[#2a2d3a] text-white text-xs font-semibold px-3 py-2 border border-white/5 hover:bg-white/10 transition" data-chip="2000000">+۲٬۰۰۰٬۰۰۰</button>
-          <button type="button" class="vn-withdraw-chip rounded-lg bg-[#2a2d3a] text-white text-xs font-semibold px-3 py-2 border border-white/5 hover:bg-white/10 transition" data-chip="5000000">+۵٬۰۰۰٬۰۰۰</button>
-          <button type="button" class="vn-withdraw-chip rounded-lg bg-[#2a2d3a] text-white text-xs font-semibold px-3 py-2 border border-white/5 hover:bg-white/10 transition" data-chip="10000000">+۱۰٬۰۰۰٬۰۰۰</button>
+          <button type="button" class="vn-withdraw-chip rounded-lg bg-white/[0.04] text-zinc-200 text-xs font-semibold px-3 py-2 border border-white/[0.06] hover:bg-white/[0.08] transition" data-chip="1000000">+۱٬۰۰۰٬۰۰۰</button>
+          <button type="button" class="vn-withdraw-chip rounded-lg bg-white/[0.04] text-zinc-200 text-xs font-semibold px-3 py-2 border border-white/[0.06] hover:bg-white/[0.08] transition" data-chip="2000000">+۲٬۰۰۰٬۰۰۰</button>
+          <button type="button" class="vn-withdraw-chip rounded-lg bg-white/[0.04] text-zinc-200 text-xs font-semibold px-3 py-2 border border-white/[0.06] hover:bg-white/[0.08] transition" data-chip="5000000">+۵٬۰۰۰٬۰۰۰</button>
+          <button type="button" class="vn-withdraw-chip rounded-lg bg-white/[0.04] text-zinc-200 text-xs font-semibold px-3 py-2 border border-white/[0.06] hover:bg-white/[0.08] transition" data-chip="10000000">+۱۰٬۰۰۰٬۰۰۰</button>
         </div>
-        <p class="text-[11px] text-slate-500 text-start">کف برداشت: {{ (min_withdrawal_amount or 10000000)|toman }}</p>
+        <p class="text-[11px] text-zinc-600 text-start">کف برداشت: {{ (min_withdrawal_amount or 10000000)|toman }}</p>
       </div>
 
       {# حساب مقصد #}
       <div class="space-y-2">
-        <span class="block text-xs font-semibold text-slate-400 text-start">حساب مقصد</span>
+        <span class="block text-xs font-semibold text-zinc-500 text-start">حساب مقصد</span>
         <button type="button"
                 data-open-bank-picker
-                class="flex items-center gap-3 w-full rounded-xl border border-white/12 bg-[#12141D] px-3 py-3.5 text-start hover:border-white/20 transition">
-          <span class="shrink-0 w-10 h-10 rounded-xl bg-slate-800/80 border border-white/10 flex items-center justify-center text-slate-300">
+                class="flex items-center gap-3 w-full rounded-lg border border-white/[0.1] bg-[#0f1117] px-3 py-3.5 text-start hover:border-white/[0.15] transition">
+          <span class="shrink-0 w-10 h-10 rounded-full bg-white/[0.05] flex items-center justify-center text-zinc-400">
             <i class="fas fa-university"></i>
           </span>
-          <span id="vnWithdrawBankSummary" class="flex-1 min-w-0 text-sm text-slate-300 truncate">انتخاب حساب بانکی</span>
-          <i class="fas fa-chevron-left text-slate-500 text-xs shrink-0"></i>
+          <span id="vnWithdrawBankSummary" class="flex-1 min-w-0 text-sm text-zinc-300 truncate">انتخاب حساب بانکی</span>
+          <i class="fas fa-chevron-left text-zinc-600 text-xs shrink-0"></i>
         </button>
       </div>
 
       <div class="flex items-start gap-2 text-start pt-1">
-        <i class="fas fa-shield-alt text-emerald-500 text-sm mt-0.5 shrink-0"></i>
-        <p class="text-[11px] leading-relaxed text-slate-400">برداشت‌ها طی ۱ تا ۳ ساعت کاری انجام می‌شود.</p>
+        <i class="fas fa-shield-alt text-zinc-500 text-sm mt-0.5 shrink-0"></i>
+        <p class="text-[11px] leading-relaxed text-zinc-500">برداشت‌ها طی ۱ تا ۳ ساعت کاری انجام می‌شود.</p>
       </div>
       <p id="vnWithdrawFormError" class="hidden text-xs text-red-400 text-start"></p>
-      <p id="vnWithdrawFormSuccess" class="hidden text-xs text-emerald-400 text-start"></p>
+      <p id="vnWithdrawFormSuccess" class="hidden text-xs text-[#4ade80] text-start"></p>
     </div>
-    <div class="shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-white/5 bg-[#1C1F2A]">
+    <div class="shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-white/[0.06] bg-[#14161c]">
       <button type="button"
               id="vnWithdrawSubmitBtn"
               disabled
-              class="flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-900 text-sm font-bold py-3.5 shadow-lg shadow-amber-900/20 transition disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed">
+              class="vn-wallet-btn vn-wallet-btn--primary w-full min-h-[2.75rem] rounded-lg text-sm py-3.5">
         <i class="fas fa-wallet text-base"></i>
         درخواست برداشت
       </button>

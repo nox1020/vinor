@@ -5,15 +5,15 @@
 {% set _wd_paid_amt = s.get('paid_withdrawal_amount', s.get('received_amount', paid_commission or 0)) %}
 {% set _wd_paid_cnt = s.get('paid_withdrawal_count', s.get('received_count', paid_count or 0)) %}
 
-<div class="comm-txn-income-strip grid grid-cols-2 divide-x divide-white/10 divide-x-reverse bg-white/[0.02]">
-  <div class="px-4 py-3 sm:px-6">
+<div class="comm-txn-income-strip">
+  <div>
     <p class="text-[11px] text-zinc-500">کل درآمد</p>
     <p data-comm-total class="mt-0.5 text-base font-bold tabular-nums text-white">{{ (_total or 0)|toman }}</p>
     <p data-comm-total-count class="mt-0.5 text-[10px] text-zinc-600">{{ (_total_cnt or 0)|fa_digits }} پورسانت</p>
   </div>
-  <div class="px-4 py-3 sm:px-6">
+  <div>
     <p class="text-[11px] text-zinc-500">برداشت شده</p>
-    <p data-comm-wd-paid class="mt-0.5 text-base font-bold tabular-nums text-emerald-400">{{ (_wd_paid_amt or 0)|toman }}</p>
+    <p data-comm-wd-paid class="mt-0.5 text-base font-bold tabular-nums text-white">{{ (_wd_paid_amt or 0)|toman }}</p>
     <p data-comm-wd-paid-count class="mt-0.5 text-[10px] text-zinc-600">
       {% if (_wd_paid_cnt or 0)|int > 0 %}
         {{ _wd_paid_cnt|fa_digits }} واریز
