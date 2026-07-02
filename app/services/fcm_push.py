@@ -19,6 +19,7 @@ from app.services.fcm_tokens import tokens_for_phones, unregister_token
 
 _FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 _token_cache: Dict[str, Any] = {"access_token": None, "expires_at": 0}
+_token_lock = threading.Lock()
 
 
 def is_fcm_configured() -> bool:
@@ -62,35 +63,43 @@ def _service_account_jwt(sa: Dict[str, Any]) -> str:
 
 def _access_token() -> Optional[str]:
     now = time.time()
-    if _token_cache.get("access_token") and (_token_cache.get("expires_at") or 0) > now + 60:
-        return _token_cache["access_token"]
+    with _token_lock:
+        if _token_cache.get("access_token") and (_token_cache.get("expires_at") or 0) > now + 60:
+            return _token_cache["access_token"]
 
-    sa = _load_service_account()
-    if not sa or not sa.get("private_key") or not sa.get("client_email"):
-        return None
-    try:
-        jwt = _service_account_jwt(sa)
-        resp = requests.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-                "assertion": jwt,
-            },
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            raise RuntimeError(f"OAuth token HTTP {resp.status_code}: {resp.text[:200]}")
-        data = resp.json()
-        token = data.get("access_token")
-        if not token:
-            raise RuntimeError("OAuth response missing access_token")
-        expires_in = int(data.get("expires_in") or 3600)
-        _token_cache["access_token"] = token
-        _token_cache["expires_at"] = now + max(expires_in - 60, 300)
-        return token
-    except Exception as e:
+        sa = _load_service_account()
+        if not sa or not sa.get("private_key") or not sa.get("client_email"):
+            return None
+
+        last_err: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                jwt = _service_account_jwt(sa)
+                resp = requests.post(
+                    "https://oauth2.googleapis.com/token",
+                    data={
+                        "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                        "assertion": jwt,
+                    },
+                    timeout=15,
+                )
+                if resp.status_code != 200:
+                    raise RuntimeError(f"OAuth token HTTP {resp.status_code}: {resp.text[:200]}")
+                data = resp.json()
+                token = data.get("access_token")
+                if not token:
+                    raise RuntimeError("OAuth response missing access_token")
+                expires_in = int(data.get("expires_in") or 3600)
+                _token_cache["access_token"] = token
+                _token_cache["expires_at"] = now + max(expires_in - 60, 300)
+                return token
+            except Exception as e:
+                last_err = e
+                if attempt < 2:
+                    time.sleep(0.4 * (attempt + 1))
+
         try:
-            current_app.logger.error(f"FCM OAuth token failed: {e}")
+            current_app.logger.error(f"FCM OAuth token failed: {last_err}")
         except Exception:
             pass
         return None
