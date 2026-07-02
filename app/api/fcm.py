@@ -4,7 +4,13 @@ from __future__ import annotations
 from flask import Blueprint, current_app, jsonify, request, session
 
 from app.services.firebase_config import get_firebase_status, get_mobile_config_public
-from app.services.fcm_tokens import register_token, unregister_token
+from app.services.fcm_tokens import (
+    register_token,
+    token_owned_by_phone,
+    unregister_all_for_phone,
+    unregister_token,
+    unregister_token_for_phone,
+)
 from app.utils.apk_version import is_vinor_apk_request
 
 api_fcm_bp = Blueprint("api_fcm", __name__, url_prefix="/api/fcm")
@@ -56,16 +62,38 @@ def fcm_register():
     app_version = (data.get("app_version") or request.headers.get("X-Vinor-App-Version") or "").strip()
 
     ok = register_token(phone, token, platform=platform, app_version=app_version)
-    return jsonify({"ok": ok, "phone": phone})
+    from app.services.fcm_tokens import tokens_for_phone
+    return jsonify({
+        "ok": ok,
+        "phone": phone,
+        "device_tokens": len(tokens_for_phone(phone)),
+    })
 
 
 @api_fcm_bp.post("/unregister")
 def fcm_unregister():
+    """حذف FCM token — فقط برای سشن جاری یا APK."""
+    if not is_vinor_apk_request(request):
+        ua = (request.headers.get("User-Agent") or "")
+        if "VinorApp/" not in ua:
+            return jsonify({"ok": False, "error": "APK_ONLY"}), 403
+
+    phone = _session_phone()
     data = request.get_json(silent=True) or {}
     token = (data.get("token") or "").strip()
     if not token:
         return jsonify({"ok": False, "error": "MISSING_TOKEN"}), 400
-    unregister_token(token)
+
+    if data.get("all") and phone:
+        removed = unregister_all_for_phone(phone)
+        return jsonify({"ok": True, "removed": removed, "phone": phone})
+
+    if phone:
+        if not token_owned_by_phone(phone, token):
+            return jsonify({"ok": False, "error": "TOKEN_NOT_OWNED"}), 403
+        unregister_token_for_phone(phone, token)
+    else:
+        unregister_token(token)
     return jsonify({"ok": True})
 
 

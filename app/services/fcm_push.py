@@ -170,7 +170,7 @@ def send_fcm_to_token(
             details = (((err_json.get("error") or {}).get("details")) or [])
             for d in details:
                 code = (d.get("errorCode") or "").upper()
-                if code in ("UNREGISTERED", "INVALID_ARGUMENT"):
+                if code == "UNREGISTERED":
                     remove = True
         except Exception:
             pass
