@@ -128,7 +128,11 @@ def send_fcm_to_token(
     payload = {
         "message": {
             "token": token,
-            # فقط data — onMessageReceived همیشه صدا زده می‌شود (حتی وقتی اپ بسته است)
+            # notification → سینی سیستم وقتی اپ بسته است (Android خودکار نشان می‌دهد)
+            "notification": {
+                "title": str(title or "وینور").strip()[:120],
+                "body": str(body or "").strip()[:500],
+            },
             "data": {
                 "title": str(title or "وینور").strip()[:120],
                 "body": str(body or "").strip()[:500],
@@ -136,6 +140,12 @@ def send_fcm_to_token(
             },
             "android": {
                 "priority": "high",
+                "notification": {
+                    "channel_id": "vinor_express_partner",
+                    "notification_priority": "PRIORITY_HIGH",
+                    "default_sound": True,
+                    "default_vibrate_timings": True,
+                },
             },
         }
     }
