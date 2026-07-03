@@ -1,14 +1,27 @@
 # app/utils/dates.py
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 def parse_datetime_safe(value):
     if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
         return value
     if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return datetime(1970, 1, 1)
+        iso_candidate = s[:-1] + "+00:00" if s.endswith("Z") else s
+        try:
+            dt = datetime.fromisoformat(iso_candidate)
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return dt
+        except Exception:
+            pass
         for fmt in ("%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d"):
             try:
-                return datetime.strptime(value, fmt)
+                return datetime.strptime(s, fmt)
             except Exception:
                 pass
     return datetime(1970, 1, 1)

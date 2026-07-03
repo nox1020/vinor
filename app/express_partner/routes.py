@@ -172,15 +172,11 @@ def _is_land_sold(land: Dict[str, Any]) -> bool:
 def _truncate_dashboard_lands(
     items: List[Dict[str, Any]], limit: int
 ) -> tuple[List[Dict[str, Any]], bool]:
-    """نمایش اولیه: تا سقف limit اول فایل‌های غیرفروخته؛ فروخته‌شده فقط اگر جا مانده."""
-    sorted_items = _sort_dashboard_lands_sold_last(items)
+    """نمایش اولیه: جدیدترین فایل‌ها تا سقف limit."""
+    sorted_items = _sort_by_created_at_desc(items)
     if len(sorted_items) <= limit:
         return sorted_items, False
-    active = [x for x in sorted_items if not _is_land_sold(x)]
-    sold = [x for x in sorted_items if _is_land_sold(x)]
-    if len(active) >= limit:
-        return active[:limit], True
-    return active + sold[: max(0, limit - len(active))], True
+    return sorted_items[:limit], True
 
 
 def _build_partner_dashboard_lands(
@@ -374,7 +370,7 @@ def _build_partner_dashboard_lands(
             attach_express_land_commission(item)
         assigned_lands.append(sanitize_land_media(item))
 
-    return _sort_dashboard_lands_sold_last(assigned_lands), expired_count
+    return _sort_by_created_at_desc(assigned_lands), expired_count
 
 
 def _express_partners_cached() -> List[Dict[str, Any]]:
@@ -2383,6 +2379,7 @@ def _public_lands_payload(limit=50):
         express_lands = load_express_lands_cached() or []
     except Exception:
         express_lands = []
+    express_lands = _sort_by_created_at_desc(express_lands)
     lands_json = []
     for land in express_lands[:limit]:
         code = (land.get('code') or '').strip()
