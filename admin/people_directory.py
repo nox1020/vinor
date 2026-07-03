@@ -16,12 +16,44 @@ from app.express_partner.partner_withdrawals import (
 
     ACTIVE_WITHDRAWAL_STATUSES,
 
+    build_partner_txn_feed,
+
     partner_commission_dashboard,
 
 )
 
 
 
+
+
+def _admin_wallet_txn_rows(
+    commissions: List[Dict[str, Any]],
+    withdrawals: List[Dict[str, Any]],
+    phone: str,
+    *,
+    limit: int = 40,
+) -> List[Dict[str, Any]]:
+    """تراکنش‌های یکپارچه کیف پول برای نمایش ادمین."""
+    feed = build_partner_txn_feed(commissions, withdrawals, phone)
+    cap = max(1, int(limit or 40))
+    rows: List[Dict[str, Any]] = []
+    for r in feed[:cap]:
+        if not isinstance(r, dict):
+            continue
+        d = r.get("_txn_detail") if isinstance(r.get("_txn_detail"), dict) else {}
+        rows.append({
+            "title": str(d.get("title") or "تراکنش").strip(),
+            "description": str(d.get("description") or "").strip(),
+            "status_label": str(d.get("status_label") or "").strip(),
+            "amount": _amount_int(d.get("amount")),
+            "amount_sign": str(d.get("amount_sign") or "+").strip(),
+            "primary_date": str(d.get("primary_date") or r.get("created_at") or "").strip(),
+            "kind": str(r.get("_txn_kind") or "commission").strip(),
+            "fields": d.get("fields") if isinstance(d.get("fields"), list) else [],
+            "wallet_fields": d.get("wallet_fields") if isinstance(d.get("wallet_fields"), list) else [],
+            "dates": d.get("dates") if isinstance(d.get("dates"), list) else [],
+        })
+    return rows
 
 
 def _build_online_partner_lookup(
@@ -537,6 +569,8 @@ def build_admin_people_directory(
 
                 'withdrawals_recent': [],
 
+                'wallet_transactions': [],
+
                 'files_recent': [],
 
                 'visits_recent': [],
@@ -1021,6 +1055,13 @@ def build_admin_people_directory(
 
             row['withdrawals_recent'] = _recent(wd_by_phone.get(phone, []), lim, 'created_at')
 
+            row['wallet_transactions'] = _admin_wallet_txn_rows(
+                commissions if isinstance(commissions, list) else [],
+                withdrawals if isinstance(withdrawals, list) else [],
+                phone,
+                limit=min(lim, 40),
+            )
+
             row['files_recent'] = _recent(file_by_phone.get(phone, []), lim, 'stored_at', 'created_at')
 
             row['visits_recent'] = _recent(visits_by_phone.get(phone, []), lim, 'visit_date', 'created_at')
@@ -1038,6 +1079,8 @@ def build_admin_people_directory(
             row['commissions_recent'] = []
 
             row['withdrawals_recent'] = []
+
+            row['wallet_transactions'] = []
 
             row['files_recent'] = []
 

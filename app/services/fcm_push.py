@@ -134,17 +134,32 @@ def send_fcm_to_token(
     if not access or not project:
         return {"ok": False, "error": "FCM_AUTH_FAILED"}
 
+    title_s = str(title or "وینور").strip()[:120]
+    body_s = str(body or "").strip()[:500]
+    url_s = url or "/express/partner/notifications"
     payload = {
         "message": {
             "token": token,
-            # data-only → onMessageReceived همیشه صدا زده می‌شود (foreground/background/killed)
+            # notification → سینی سیستم وقتی اپ بسته/پس‌زمینه است
+            # data → onMessageReceived در foreground + url برای کلیک
+            "notification": {
+                "title": title_s,
+                "body": body_s,
+            },
             "data": {
-                "title": str(title or "وینور").strip()[:120],
-                "body": str(body or "").strip()[:500],
-                "url": url or "/express/partner/notifications",
+                "title": title_s,
+                "body": body_s,
+                "url": url_s,
             },
             "android": {
                 "priority": "high",
+                "notification": {
+                    "channel_id": "vinor_express_partner",
+                    "click_action": "OPEN_NOTIFICATIONS",
+                    "sound": "default",
+                    "default_vibrate_timings": True,
+                    "notification_priority": "PRIORITY_HIGH",
+                },
             },
         }
     }

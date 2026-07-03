@@ -3926,7 +3926,7 @@ def express_partner_send_message(phone: str):
         flash('شماره همراه معتبر نیست.', 'warning')
         return redirect(url_for('admin.express_partners', q=back_q, filter=back_filter))
 
-    channel = (request.form.get('channel') or 'notify').strip().lower()
+    channel = (request.form.get('channel') or 'both').strip().lower()
     if channel not in ('notify', 'sms', 'both'):
         channel = 'notify'
 

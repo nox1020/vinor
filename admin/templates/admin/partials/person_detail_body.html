@@ -176,8 +176,18 @@
       </section>
 
       {# فعالیت — آکاردئون #}
-      <div class="adm-pd-card overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
-        <p class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-gray-400 bg-gray-50/80 dark:bg-gray-950/50">فعالیت و سوابق</p>
+      <details class="adm-person-collapse adm-pd-card overflow-hidden">
+        <summary class="flex items-center justify-between gap-2 px-4 py-3 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-gray-950/50 transition bg-gray-50/80 dark:bg-gray-950/50">
+          <span class="flex items-center gap-2 text-xs font-bold text-gray-700 dark:text-gray-200">
+            <i class="fa-solid fa-chevron-down text-[10px] text-gray-400 adm-collapse-chevron"></i>
+            <i class="fa-solid fa-clock-rotate-left text-gray-400 text-[11px]"></i>
+            فعالیت و سوابق
+          </span>
+          <span class="text-[10px] font-normal text-gray-400 tabular-nums">
+            {{ cnt.assignments_total or 0 }} انتساب · {{ cnt.commissions_total or 0 }} پورسانت · {{ cnt.visits_total or 0 }} بازدید
+          </span>
+        </summary>
+        <div class="divide-y divide-gray-100 dark:divide-gray-800 border-t border-gray-100 dark:border-gray-800">
 
         <details class="adm-person-collapse group">
           <summary class="flex items-center justify-between gap-2 px-4 py-3 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-gray-950/50 transition">
@@ -316,7 +326,8 @@
             </div>
           </div>
         </details>
-      </div>
+        </div>
+      </details>
     </div>
 
     {# ستون راست: مالی #}
@@ -334,6 +345,72 @@
             {% if fin.pending_withdrawal_amount %}{% if fin.withdrawable_reserve_amount %} · {% endif %}انتظار: {{ fin.pending_withdrawal_amount|int|toman }}{% endif %}
           </p>
         {% endif %}
+
+        <details class="adm-person-collapse mt-4 rounded-xl border border-emerald-700/15 dark:border-emerald-500/20 bg-white/50 dark:bg-gray-900/40 overflow-hidden">
+          <summary class="px-3 py-2 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 cursor-pointer select-none flex items-center justify-between gap-2 hover:bg-white/60 dark:hover:bg-gray-900/60 transition">
+            <span class="flex items-center gap-2">
+              <i class="fa-solid fa-chevron-down text-[10px] adm-collapse-chevron opacity-70"></i>
+              <i class="fa-solid fa-list-ul text-[10px]"></i>
+              تراکنش‌های کیف پول
+            </span>
+            <span class="text-[10px] font-normal tabular-nums opacity-80">{{ person.wallet_transactions|length if person.wallet_transactions else 0 }}</span>
+          </summary>
+          <div class="px-3 pb-3 pt-1 border-t border-emerald-800/10 dark:border-emerald-500/15 max-h-72 overflow-y-auto">
+            {% if person.wallet_transactions and person.wallet_transactions|length > 0 %}
+              <ul class="space-y-1.5">
+                {% for t in person.wallet_transactions %}
+                <li class="rounded-lg border border-gray-100 dark:border-gray-800 bg-white/70 dark:bg-gray-950/50 overflow-hidden">
+                  <details class="adm-person-collapse group">
+                    <summary class="flex items-start justify-between gap-2 px-2.5 py-2 cursor-pointer select-none hover:bg-gray-50/80 dark:hover:bg-gray-900/40 transition text-xs">
+                      <span class="flex items-start gap-1.5 min-w-0 flex-1">
+                        <i class="fa-solid fa-chevron-down text-[8px] text-gray-400 adm-collapse-chevron mt-1 shrink-0"></i>
+                        <span class="min-w-0">
+                          <span class="font-semibold text-gray-800 dark:text-gray-100 block truncate">{{ t.title }}</span>
+                          <span class="text-[10px] text-gray-400 block">{{ t.status_label }}{% if t.primary_date %} · <span class="jalali-dt" data-dt="{{ t.primary_date }}"></span>{% endif %}</span>
+                        </span>
+                      </span>
+                      <span class="shrink-0 font-bold tabular-nums {% if t.kind == 'withdrawal' %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                        {{ t.amount_sign }}{{ (t.amount or 0)|int|toman }}
+                      </span>
+                    </summary>
+                    <div class="px-2.5 pb-2.5 pt-0 border-t border-gray-100 dark:border-gray-800 text-[10px] text-gray-600 dark:text-gray-400 space-y-1.5">
+                      {% if t.description %}
+                        <p class="pt-1.5 leading-relaxed">{{ t.description }}</p>
+                      {% endif %}
+                      {% if t.dates %}
+                        {% for d in t.dates %}
+                          <div class="flex justify-between gap-2"><span class="text-gray-400">{{ d.label }}</span><span class="jalali-dt ltr" dir="ltr" data-dt="{{ d.value }}"></span></div>
+                        {% endfor %}
+                      {% endif %}
+                      {% if t.fields %}
+                        {% for f in t.fields %}
+                          <div class="flex justify-between gap-2">
+                            <span class="text-gray-400 shrink-0">{{ f.label }}</span>
+                            <span class="text-left min-w-0 break-words">
+                              {% if f.format == 'toman' %}{{ (f.value or 0)|int|toman }}{% else %}{{ f.value }}{% endif %}
+                            </span>
+                          </div>
+                        {% endfor %}
+                      {% endif %}
+                      {% if t.wallet_fields %}
+                        <p class="text-[9px] font-semibold text-gray-400 pt-1">حساب / برداشت</p>
+                        {% for f in t.wallet_fields %}
+                          <div class="flex justify-between gap-2">
+                            <span class="text-gray-400 shrink-0">{{ f.label }}</span>
+                            <span class="text-left min-w-0 break-words ltr" dir="ltr">{{ f.value }}</span>
+                          </div>
+                        {% endfor %}
+                      {% endif %}
+                    </div>
+                  </details>
+                </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="text-[11px] text-gray-400 py-3 text-center">تراکنشی ثبت نشده</p>
+            {% endif %}
+          </div>
+        </details>
 
         <details class="adm-person-collapse mt-4 rounded-xl border border-emerald-700/15 dark:border-emerald-500/20 bg-white/50 dark:bg-gray-900/40 overflow-hidden">
           <summary class="px-3 py-2 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 cursor-pointer select-none flex items-center gap-2 hover:bg-white/60 dark:hover:bg-gray-900/60 transition">
@@ -397,11 +474,18 @@
           <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">
           <input type="hidden" name="recipient_name" value="{{ person.name or '' }}">
 
-          <fieldset class="space-y-2">
-            <legend class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">روش ارسال</legend>
+          <details class="adm-person-collapse rounded-lg border border-gray-100 dark:border-gray-800 overflow-hidden">
+            <summary class="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-gray-950/50 transition text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+              <span class="flex items-center gap-2">
+                <i class="fa-solid fa-chevron-down text-[9px] text-gray-400 adm-collapse-chevron"></i>
+                روش ارسال
+              </span>
+              <span class="font-normal text-violet-600 dark:text-violet-400">هر دو</span>
+            </summary>
+            <div class="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-800 space-y-2">
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <label class="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-950 transition has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50/50 dark:has-[:checked]:bg-blue-950/30">
-                <input type="radio" name="channel" value="notify" checked class="text-blue-600">
+                <input type="radio" name="channel" value="notify" class="text-blue-600">
                 <span class="text-xs font-medium text-gray-800 dark:text-gray-200">
                   <i class="fa-solid fa-bell text-blue-500 ml-1"></i>نوتیف
                 </span>
@@ -413,7 +497,7 @@
                 </span>
               </label>
               <label class="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-950 transition has-[:checked]:border-violet-500 has-[:checked]:bg-violet-50/50 dark:has-[:checked]:bg-violet-950/30">
-                <input type="radio" name="channel" value="both" class="text-violet-600">
+                <input type="radio" name="channel" value="both" checked class="text-violet-600">
                 <span class="text-xs font-medium text-gray-800 dark:text-gray-200">
                   <i class="fa-solid fa-layer-group text-violet-500 ml-1"></i>هر دو
                 </span>
@@ -423,7 +507,8 @@
               نوتیف: پنل همکار + FCM{% if fcm_token_count|default(0) > 0 %} ({{ fcm_token_count }} دستگاه){% else %} (بدون token — فقط درون‌برنامه){% endif %}
               · پیامک: مستقیم به {{ person.phone }}
             </p>
-          </fieldset>
+            </div>
+          </details>
 
           <div>
             <label class="block text-[10px] text-gray-500 mb-1">عنوان (نوتیف)</label>
