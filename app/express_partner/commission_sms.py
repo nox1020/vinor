@@ -39,6 +39,10 @@ def _txn_title(*, commission_type: str = "", land_code: str = "") -> str:
     code = (land_code or "").strip()
     if ct == "referral" or code == "referral":
         return "پورسانت دعوت"
+    if "visit" in ct:
+        if code:
+            return f"پورسانت بازدید (کد ملک: {code})"
+        return "پورسانت بازدید"
     if code:
         return f"پورسانت فروش (کد ملک: {code})"
     return "پورسانت"

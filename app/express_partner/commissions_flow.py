@@ -9,6 +9,10 @@ PENDING_STATUS = "pending"
 APPROVED_STATUS = "approved"
 PAID_STATUS = "paid"
 REJECTED_STATUS = "rejected"
+COMMISSION_TYPE_DEAL = "deal"
+COMMISSION_TYPE_VISIT = "visit"
+COMMISSION_TYPE_REFERRAL = "referral"
+COMMISSION_TYPE_MANUAL_ADJUSTMENT = "manual_adjustment"
 
 ACTIVE_COMMISSION_STATUSES = frozenset({PENDING_STATUS, APPROVED_STATUS, PAID_STATUS})
 LOCKED_WITHDRAWAL_STATUSES = frozenset({"pending", "approved", "processing"})
@@ -30,6 +34,23 @@ def _amount_int(v: Any) -> int:
 
 def _commission_status(c: Dict[str, Any]) -> str:
     return (str(c.get("status") or PENDING_STATUS)).strip().lower()
+
+
+def commission_type(row: Dict[str, Any]) -> str:
+    return str(row.get("commission_type") or "").strip().lower()
+
+
+def commission_is_referral(row: Dict[str, Any]) -> bool:
+    return commission_type(row) == COMMISSION_TYPE_REFERRAL or str(row.get("land_code") or "").strip() == "referral"
+
+
+def commission_is_visit(row: Dict[str, Any]) -> bool:
+    return "visit" in commission_type(row)
+
+
+def commission_is_deal(row: Dict[str, Any]) -> bool:
+    ct = commission_type(row)
+    return not commission_is_referral(row) and not commission_is_visit(row) and ct != COMMISSION_TYPE_MANUAL_ADJUSTMENT
 
 
 def commission_status_label(status: str) -> str:
@@ -60,6 +81,18 @@ def commission_status_hint(status: str, *, is_referral: bool = False) -> str:
             REJECTED_STATUS: "معامله لغو شده — فایل و بازدید در صورت نیاز بازگردانده می‌شود.",
         }
     return hints.get(st, "")
+
+
+def commission_type_label(row: Dict[str, Any]) -> str:
+    if commission_is_referral(row):
+        return "دعوت همکار"
+    if commission_is_visit(row):
+        return "پورسانت بازدید"
+    if commission_is_deal(row):
+        return "پورسانت معامله"
+    if commission_type(row) == COMMISSION_TYPE_MANUAL_ADJUSTMENT:
+        return "تعدیل دستی"
+    return "پورسانت"
 
 
 def commission_filter_bucket(status: str) -> str:
@@ -119,7 +152,9 @@ def commission_reject_blocked_reason(
 
 def admin_commission_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     st = _commission_status(row)
-    is_referral = str(row.get("commission_type") or "").strip() == "referral"
+    is_referral = commission_is_referral(row)
+    is_visit = commission_is_visit(row)
+    is_deal = commission_is_deal(row)
     amt = _amount_int(row.get("commission_amount"))
     sale = _amount_int(row.get("sale_amount"))
     pct = row.get("commission_pct")
@@ -137,7 +172,10 @@ def admin_commission_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "commission_pct": pct_f,
         "commission_amount": amt,
         "commission_type": str(row.get("commission_type") or "").strip(),
+        "commission_type_label": commission_type_label(row),
         "is_referral": is_referral,
+        "is_visit": is_visit,
+        "is_deal": is_deal,
         "referred_name": str(row.get("referred_name") or "").strip(),
         "referred_phone": str(row.get("referred_phone") or "").strip(),
         "status": st,
@@ -170,6 +208,8 @@ def commission_blocks_new_deal_record(
         if str(c.get("partner_phone") or "").strip() != ph:
             continue
         if str(c.get("land_code") or "").strip() != code:
+            continue
+        if not commission_is_deal(c):
             continue
         if (str(c.get("status") or "pending")).strip() in ACTIVE_COMMISSION_STATUSES:
             return True

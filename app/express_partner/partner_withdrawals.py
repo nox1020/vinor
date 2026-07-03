@@ -696,6 +696,8 @@ def _txn_type_title(row: Dict[str, Any]) -> str:
         return "تعدیل موجودی"
     if (str(row.get("commission_type") or "")).strip() == "referral":
         return "پورسانت دعوت"
+    if "visit" in (str(row.get("commission_type") or "")).strip().lower():
+        return "پورسانت بازدید"
     return "پورسانت فروش"
 
 
@@ -772,6 +774,10 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
             adj_note = str(row.get("admin_note") or "").strip()
             if adj_note:
                 fields.append({"label": "یادداشت ادمین", "value": adj_note})
+        elif "visit" in comm_type.lower():
+            fields.append({"label": "نوع", "value": "پورسانت بازدید"})
+            if land and land != "referral":
+                fields.append({"label": "کد ملک", "value": land})
         elif land and land != "referral":
             fields.append({"label": "کد ملک", "value": land})
 

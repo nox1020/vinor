@@ -58,7 +58,15 @@
     </summary>
     <form method="post" action="{{ url_for('admin.express_commission_new') }}" class="px-3 pb-3 sm:px-4 sm:pb-4 pt-1 space-y-3 border-t border-gray-100 dark:border-gray-800">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <p class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">معمولاً پورسانت خودکار پس از «درخواست معامله» ثبت می‌شود.</p>
+      <p class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">پورسانت معامله معمولاً خودکار ثبت می‌شود؛ پورسانت بازدید را در صورت نیاز دستی ثبت کنید.</p>
+      <div>
+        <label class="block text-[10px] text-gray-500 mb-1">نوع پورسانت</label>
+        <select name="commission_type"
+                class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+          <option value="deal">پورسانت معامله</option>
+          <option value="visit">پورسانت بازدید</option>
+        </select>
+      </div>
       <div>
         <label class="block text-[10px] text-gray-500 mb-1">شماره همکار</label>
         <input type="tel" name="partner_phone" dir="ltr"
@@ -76,7 +84,7 @@
           <label class="block text-[10px] text-gray-500 mb-1">مبلغ فروش (تومان)</label>
           <input type="text" name="sale_amount" inputmode="numeric"
                  class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                 placeholder="مبلغ" required>
+                 placeholder="مبلغ">
         </div>
         <div>
           <label class="block text-[10px] text-gray-500 mb-1">درصد پورسانت</label>
@@ -84,6 +92,19 @@
                  class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                  placeholder="٪">
         </div>
+      </div>
+      <div>
+        <label class="block text-[10px] text-gray-500 mb-1">مبلغ مستقیم پورسانت (اختیاری)</label>
+        <input type="text" name="commission_amount" inputmode="numeric"
+               class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+               placeholder="{% if visit_commission_amount_toman|default(0)|int > 0 %}پیش‌فرض بازدید: {{ visit_commission_amount_toman|int }} تومان{% else %}برای پورسانت بازدید یا مبلغ ثابت{% endif %}">
+        <p class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+          {% if visit_commission_amount_toman|default(0)|int > 0 %}
+          اگر نوع «پورسانت بازدید» باشد و این فیلد خالی بماند، {{ visit_commission_amount_toman|int|toman }} ثبت می‌شود.
+          {% else %}
+          مبلغ پیش‌فرض پورسانت بازدید از تنظیمات کلی قابل تعیین است.
+          {% endif %}
+        </p>
       </div>
       <button type="submit" class="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium">
         ثبت پورسانت
@@ -143,6 +164,10 @@
         </div>
         {% endif %}
         {% else %}
+        <div class="flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">نوع</span>
+          <span class="text-gray-900 dark:text-white font-medium text-start">{{ c.commission_type_label or 'پورسانت' }}</span>
+        </div>
         <div class="flex justify-between gap-2">
           <span class="text-gray-500 shrink-0">فایل</span>
           <span class="text-gray-900 dark:text-white font-medium text-start truncate max-w-[60%]">{{ c.land_title or '—' }}</span>

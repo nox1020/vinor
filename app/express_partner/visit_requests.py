@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils.dates import format_iso_date_jalali
+from .commissions_flow import commission_is_deal, commission_is_visit
 
 PENDING_STATUS = "pending"
 APPROVED_STATUS = "approved"
@@ -14,6 +15,16 @@ COMPLETED_STATUS = "completed"
 CANCELLED_STATUS = "cancelled"
 
 OPEN_VISIT_STATUSES = frozenset({PENDING_STATUS, APPROVED_STATUS})
+
+VISIT_PROGRESS_STEP_KEYS = (
+    ("visit_requested", "درخواست بازدید"),
+    ("visit_approved", "تأیید درخواست"),
+    ("visit_done", "بازدید انجام شد"),
+    ("visit_commission_paid", "واریز پورسانت بازدید"),
+    ("deal_requested", "درخواست معامله"),
+    ("deal_approved", "تأیید درخواست معامله"),
+    ("deal_commission_paid", "واریز پورسانت معامله"),
+)
 
 # روز هفته برای تنظیمات ادمین (هم‌تراز recurrence_weekday در پیامک زمان‌دار)
 VISIT_WEEKDAY_SAT = 5
@@ -138,6 +149,87 @@ def _match_partner_land(r: Dict[str, Any], phone: str, land_code: str) -> bool:
         str(r.get("partner_phone") or "").strip() == phone
         and str(r.get("land_code") or "").strip() == land_code
     )
+
+
+def visit_progress_steps(
+    row: Dict[str, Any],
+    commissions: List[Dict[str, Any]] | None = None,
+    *,
+    partner_phone: str | None = None,
+) -> List[Dict[str, Any]]:
+    """مراحل یکسان روند بازدید/معامله برای پنل همکار و ادمین."""
+    if not isinstance(row, dict):
+        row = {}
+    status = str(row.get("status") or PENDING_STATUS).strip() or PENDING_STATUS
+    ph = str(partner_phone if partner_phone is not None else row.get("partner_phone") or "").strip()
+    code = str(row.get("land_code") or "").strip()
+    related = [
+        c for c in (commissions or [])
+        if isinstance(c, dict)
+        and (not ph or str(c.get("partner_phone") or "").strip() == ph)
+        and (not code or str(c.get("land_code") or "").strip() == code)
+    ]
+    visit_commissions = [c for c in related if commission_is_visit(c)]
+    deal_commissions = [c for c in related if commission_is_deal(c)]
+    visit_commission_paid = any(
+        str(c.get("status") or "").strip().lower() == "paid"
+        for c in visit_commissions
+    )
+    deal_requested = bool(deal_commissions)
+    deal_approved = any(
+        str(c.get("status") or "").strip().lower() in ("approved", "paid")
+        for c in deal_commissions
+    )
+    deal_paid = any(
+        str(c.get("status") or "").strip().lower() == "paid"
+        for c in deal_commissions
+    )
+
+    done = [
+        True,
+        status in (APPROVED_STATUS, COMPLETED_STATUS),
+        status == COMPLETED_STATUS,
+        visit_commission_paid,
+        deal_requested,
+        deal_approved,
+        deal_paid,
+    ]
+    highest_done_idx = max((idx for idx, is_done in enumerate(done) if is_done), default=-1)
+    current_idx = next(
+        (idx for idx, is_done in enumerate(done) if idx > highest_done_idx and not is_done),
+        None,
+    )
+    if current_idx is None:
+        current_idx = next((idx for idx, is_done in enumerate(done) if not is_done), None)
+    steps: List[Dict[str, Any]] = []
+    for idx, (key, label) in enumerate(VISIT_PROGRESS_STEP_KEYS):
+        state = "done" if done[idx] else "todo"
+        if idx == current_idx and state == "todo" and status != CANCELLED_STATUS:
+            state = "current"
+        steps.append({"key": key, "label": label, "state": state})
+    if status == CANCELLED_STATUS:
+        for step in steps:
+            if step["state"] != "done":
+                step["state"] = "blocked"
+    return steps
+
+
+def visit_progress_summary(steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+    done_count = 0
+    current_label = ""
+    for step in steps or []:
+        if step.get("state") == "done":
+            done_count += 1
+        elif not current_label and step.get("state") in ("current", "blocked"):
+            current_label = str(step.get("label") or "")
+    total = len(steps or [])
+    if not current_label and total and done_count >= total:
+        current_label = "تکمیل شد"
+    return {
+        "done_count": done_count,
+        "total": total,
+        "current_label": current_label or "در جریان",
+    }
 
 
 def partner_open_visit(
@@ -480,7 +572,10 @@ def tx_button_mode(
     )
 
 
-def admin_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+def admin_row_dict(
+    row: Dict[str, Any],
+    commissions: List[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
     st = (str(row.get("status") or PENDING_STATUS)).strip()
     labels = {
         PENDING_STATUS: "در انتظار تأیید",
@@ -494,6 +589,8 @@ def admin_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         COMPLETED_STATUS: "همکار معامله را شروع کرده — پورسانت در بخش پورسانت‌ها.",
         CANCELLED_STATUS: "این درخواست بسته شده است.",
     }
+    progress_steps = visit_progress_steps(row, commissions)
+    progress_summary = visit_progress_summary(progress_steps)
     return {
         "id": row.get("id"),
         "partner_phone": row.get("partner_phone") or "",
@@ -508,7 +605,10 @@ def admin_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "created_at": row.get("created_at") or "",
         "updated_at": row.get("updated_at") or "",
         "approved_at": row.get("approved_at") or "",
+        "completed_at": row.get("completed_at") or "",
         "admin_note": row.get("admin_note") or "",
+        "progress_steps": progress_steps,
+        "progress_summary": progress_summary,
         "filter_bucket": visit_filter_bucket(st),
         "is_editable": st in (PENDING_STATUS, APPROVED_STATUS),
         "needs_action": st == PENDING_STATUS,

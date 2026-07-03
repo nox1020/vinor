@@ -193,12 +193,27 @@
       </div>
 
       <div class="space-y-2">
+        <label for="visit_commission_amount_toman" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+          مبلغ پورسانت هر بازدید (تومان)
+        </label>
+        <input id="visit_commission_amount_toman"
+               name="visit_commission_amount_toman"
+               type="number"
+               min="0"
+               step="10000"
+               value="{{ settings.visit_commission_amount_toman|default(0) }}"
+               class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent">
+        <p class="text-xs text-gray-500 dark:text-gray-400">وقتی در بخش پورسانت‌ها نوع «پورسانت بازدید» انتخاب شود، اگر مبلغ مستقیم خالی باشد این مقدار ثبت می‌شود. صفر یعنی مبلغ پیش‌فرض ندارد.</p>
+      </div>
+
+      <div class="space-y-2">
         <label for="partner_application_admin_sms_message" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
           پیامک درخواست همکاری (برای ادمین)
         </label>
         <textarea id="partner_application_admin_sms_message" name="partner_application_admin_sms_message" rows="2"
                   class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent">{{ settings.partner_application_admin_sms_message or 'درخواست همکاری جدید همکار در وینور ثبت شد.' }}</textarea>
         <p class="text-xs text-gray-500 dark:text-gray-400">اختیاری: <code dir="ltr">{name}</code> و <code dir="ltr">{phone}</code></p>
+      </div>
     </section>
 
     <div class="flex items-center justify-end pt-2">

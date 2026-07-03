@@ -99,6 +99,7 @@ from .visit_requests import (
     partner_visit_approved_for_deal,
     complete_visit_for_deal,
     restore_visit_approved_after_deal_release,
+    visit_progress_steps,
     visit_date_min_iso,
     visit_allowed_weekdays_for_js,
     resolve_partner_land_tx_state,
@@ -2594,69 +2595,6 @@ def requests_page():
         },
     }
 
-    def _request_progress_steps(row: Dict[str, Any], status: str) -> List[Dict[str, Any]]:
-        code = str(row.get('land_code') or '').strip()
-        related = [
-            c for c in commissions
-            if isinstance(c, dict)
-            and str(c.get('partner_phone') or '').strip() == me_phone
-            and str(c.get('land_code') or '').strip() == code
-        ]
-        visit_commissions = [
-            c for c in related
-            if 'visit' in str(c.get('commission_type') or '').strip().lower()
-        ]
-        deal_commissions = [
-            c for c in related
-            if 'visit' not in str(c.get('commission_type') or '').strip().lower()
-            and str(c.get('commission_type') or '').strip() != 'referral'
-        ]
-        visit_commission_paid = any(
-            str(c.get('status') or '').strip().lower() == 'paid'
-            for c in visit_commissions
-        )
-        deal_requested = bool(deal_commissions)
-        deal_approved = any(
-            str(c.get('status') or '').strip().lower() in ('approved', 'paid')
-            for c in deal_commissions
-        )
-        deal_paid = any(
-            str(c.get('status') or '').strip().lower() == 'paid'
-            for c in deal_commissions
-        )
-
-        done = {
-            'visit_requested': True,
-            'visit_approved': status in (APPROVED_STATUS, COMPLETED_STATUS),
-            'visit_done': status == COMPLETED_STATUS,
-            'visit_commission_paid': visit_commission_paid,
-            'deal_requested': deal_requested,
-            'deal_approved': deal_approved,
-            'deal_commission_paid': deal_paid,
-        }
-        keys = (
-            ('visit_requested', 'درخواست بازدید'),
-            ('visit_approved', 'تأیید درخواست'),
-            ('visit_done', 'بازدید انجام شد'),
-            ('visit_commission_paid', 'واریز پورسانت بازدید'),
-            ('deal_requested', 'درخواست معامله'),
-            ('deal_approved', 'تأیید درخواست معامله'),
-            ('deal_commission_paid', 'واریز پورسانت معامله'),
-        )
-        first_pending_seen = False
-        steps: List[Dict[str, Any]] = []
-        for key, label in keys:
-            state = 'done' if done.get(key) else 'todo'
-            if state == 'todo' and not first_pending_seen and status != CANCELLED_STATUS:
-                state = 'current'
-                first_pending_seen = True
-            steps.append({'key': key, 'label': label, 'state': state})
-        if status == CANCELLED_STATUS:
-            for step in steps:
-                if step['state'] != 'done':
-                    step['state'] = 'blocked'
-        return steps
-
     items: List[Dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -2666,7 +2604,7 @@ def requests_page():
         st = str(row.get('status') or PENDING_STATUS).strip() or PENDING_STATUS
         meta = status_meta.get(st, {'label': st, 'hint': '', 'bucket': 'other'})
         visit_date = str(row.get('visit_date') or '').strip()
-        progress_steps = _request_progress_steps(row, st)
+        progress_steps = visit_progress_steps(row, commissions, partner_phone=me_phone)
         items.append({
             'id': row.get('id') or '',
             'land_code': row.get('land_code') or '',
@@ -4657,6 +4595,7 @@ def mark_in_transaction(code: str):
                                     # ایجاد رکورد پورسانت
                                     new_commission = {
                                         'id': new_id,
+                                        'commission_type': 'deal',
                                         'partner_phone': partner_phone,
                                         'land_code': str(code),
                                         'sale_amount': price_total,

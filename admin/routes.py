@@ -618,6 +618,8 @@ def _default_settings() -> Dict[str, Any]:
         'partner_application_admin_sms_message': 'درخواست همکاری جدید همکار در وینور ثبت شد.',
         # روزهای مجاز ثبت بازدید توسط همکار (۵=شنبه … ۴=جمعه)
         'visit_allowed_weekdays': [5, 6, 0, 1, 2, 3, 4],
+        # مبلغ ثابت پورسانت هر بازدید (تومان)
+        'visit_commission_amount_toman': 0,
     }
 
 def get_settings() -> Dict[str, Any]:
@@ -2267,6 +2269,17 @@ def settings():
         if post_price_toman < 0:
             post_price_toman = 0
 
+        try:
+            visit_commission_amount_toman = int(
+                str(request.form.get('visit_commission_amount_toman') or '0')
+                .replace(',', '')
+                .replace('،', '')
+                .strip() or '0'
+            )
+        except Exception:
+            visit_commission_amount_toman = 0
+        visit_commission_amount_toman = max(0, visit_commission_amount_toman)
+
         # تنظیمات SMS — خط ارسال ثابت است
         from app.services.sms_config import get_sms_line_number
         sms_line_number = get_sms_line_number()
@@ -2355,6 +2368,7 @@ def settings():
             'ad_expiry_days': ad_expiry_days,
             'show_submit_button': (request.form.get('show_submit_button') == 'on'),
             'ad_post_price_toman': post_price_toman,
+            'visit_commission_amount_toman': visit_commission_amount_toman,
             'sms_line_number': sms_line_number,
             'partner_application_sms_message': partner_application_sms_message,
             'partner_approval_sms_message': partner_approval_sms_message,
@@ -4334,6 +4348,7 @@ def express_commissions():
             items_raw = []
     except Exception:
         items_raw = []
+    settings_data = get_settings()
 
     name_map = _partner_name_lookup()
     title_map = _land_title_lookup()
@@ -4391,6 +4406,7 @@ def express_commissions():
         active_count=active_count,
         all_count=len(items),
         current_filter=flt,
+        visit_commission_amount_toman=int(settings_data.get('visit_commission_amount_toman') or 0),
     )
 
 @admin_bp.post('/express/commissions/new')
@@ -4398,8 +4414,12 @@ def express_commissions():
 def express_commission_new():
     partner_phone = (request.form.get('partner_phone') or '').strip()
     land_code = (request.form.get('land_code') or '').strip()
+    commission_type = (request.form.get('commission_type') or 'deal').strip().lower()
+    if commission_type not in ('deal', 'visit'):
+        commission_type = 'deal'
     sale_amount = (request.form.get('sale_amount') or '').strip()
     commission_pct = (request.form.get('commission_pct') or '').strip()
+    direct_amount = (request.form.get('commission_amount') or '').strip()
     try:
         sale = int(str(sale_amount).replace(',','').strip() or '0')
     except Exception:
@@ -4408,11 +4428,24 @@ def express_commission_new():
         pct = float(commission_pct or '0')
     except Exception:
         pct = 0.0
-    commission_amount = int(round(sale * (pct/100.0))) if sale and pct else 0
+    try:
+        commission_amount = int(str(direct_amount).replace(',', '').replace('،', '').strip() or '0')
+    except Exception:
+        commission_amount = 0
+    commission_amount = max(0, commission_amount)
+    if commission_type == 'visit' and commission_amount <= 0:
+        try:
+            commission_amount = int(get_settings().get('visit_commission_amount_toman') or 0)
+        except Exception:
+            commission_amount = 0
+        commission_amount = max(0, commission_amount)
+    if commission_amount <= 0:
+        commission_amount = int(round(sale * (pct/100.0))) if sale and pct else 0
     items = load_express_commissions() or []
     new_id = (max([int(x.get('id',0) or 0) for x in items if isinstance(x, dict)], default=0) or 0) + 1
     items.append({
         'id': new_id,
+        'commission_type': commission_type,
         'partner_phone': partner_phone,
         'land_code': land_code,
         'sale_amount': sale,
@@ -4429,6 +4462,7 @@ def express_commission_new():
             event='commission_pending',
             amount=commission_amount,
             land_code=land_code,
+            commission_type=commission_type,
             reference_id=str(new_id),
         )
     except Exception:
@@ -4439,6 +4473,8 @@ def express_commission_new():
 @admin_bp.post('/express/commissions/<int:cid>/approve')
 @login_required
 def express_commission_approve(cid: int):
+    from app.express_partner.commissions_flow import commission_is_deal, commission_is_referral, commission_is_visit
+
     filter_hint = (request.form.get('filter') or 'pending').strip()
     items = load_express_commissions() or []
     changed = False
@@ -4457,7 +4493,9 @@ def express_commission_approve(cid: int):
             continue
     if changed and commission_record:
         save_express_commissions(items)
-        is_referral = str(commission_record.get('commission_type') or '').strip() == 'referral'
+        is_referral = commission_is_referral(commission_record)
+        is_visit = commission_is_visit(commission_record)
+        is_deal = commission_is_deal(commission_record)
 
         if is_referral:
             try:
@@ -4467,7 +4505,7 @@ def express_commission_approve(cid: int):
                 current_app.logger.error('Referral sync on commission approve: %s', e)
 
         # تغییر وضعیت فایل به "فروخته شده" در انتساب‌ها (فقط پورسانت فروش ملک)
-        if not is_referral:
+        if is_deal:
             try:
                 land_code = str(commission_record.get('land_code', ''))
                 if land_code and land_code != 'referral':
@@ -4494,7 +4532,7 @@ def express_commission_approve(cid: int):
                     if str(p.get('phone')) == partner_phone:
                         current_income = int(p.get('total_income', 0) or 0)
                         p['total_income'] = current_income + commission_amount
-                        if not is_referral:
+                        if is_deal:
                             current_sales = int(p.get('approved_sales_count', 0) or 0)
                             p['approved_sales_count'] = current_sales + 1
                             current_total_sales = int(p.get('total_approved_sales', 0) or 0)
@@ -4520,6 +4558,8 @@ def express_commission_approve(cid: int):
             current_app.logger.exception('commission_approved SMS failed cid=%s', cid)
         if is_referral:
             flash('پورسانت دعوت همکار تأیید شد و به موجودی قابل برداشت اضافه شد.', 'success')
+        elif is_visit:
+            flash('پورسانت بازدید تأیید شد و به موجودی قابل برداشت همکار اضافه شد.', 'success')
         else:
             flash('پورسانت تأیید شد، مبلغ به موجودی همکار اضافه شد و فایل فروخته‌شده علامت خورد.', 'success')
     elif not changed:
@@ -4539,7 +4579,12 @@ def express_commission_pay(cid: int):
 @admin_bp.post('/express/commissions/<int:cid>/reject')
 @login_required
 def express_commission_reject(cid: int):
-    from app.express_partner.commissions_flow import commission_reject_blocked_reason
+    from app.express_partner.commissions_flow import (
+        commission_is_deal,
+        commission_is_referral,
+        commission_is_visit,
+        commission_reject_blocked_reason,
+    )
     from app.express_partner.visit_requests import restore_visit_approved_after_deal_release
 
     filter_hint = (request.form.get('filter') or 'pending').strip()
@@ -4579,9 +4624,11 @@ def express_commission_reject(cid: int):
 
         partner_phone = str(commission_record.get('partner_phone', '')).strip()
         land_code = str(commission_record.get('land_code', '')).strip()
-        is_referral = str(commission_record.get('commission_type') or '').strip() == 'referral'
+        is_referral = commission_is_referral(commission_record)
+        is_visit = commission_is_visit(commission_record)
+        is_deal = commission_is_deal(commission_record)
 
-        if not is_referral and land_code and land_code != 'referral':
+        if is_deal and land_code and land_code != 'referral':
             try:
                 from app.express_partner.commissions_flow import revert_land_assignments_after_deal_cancel
                 assignments = load_express_assignments() or []
@@ -4620,7 +4667,7 @@ def express_commission_reject(cid: int):
                         if str(p.get('phone')) == partner_phone:
                             current_income = int(p.get('total_income', 0) or 0)
                             p['total_income'] = max(0, current_income - commission_amount)
-                            if not is_referral:
+                            if is_deal:
                                 current_sales = int(p.get('approved_sales_count', 0) or 0)
                                 p['approved_sales_count'] = max(0, current_sales - 1)
                                 current_total_sales = int(p.get('total_approved_sales', 0) or 0)
@@ -4651,7 +4698,10 @@ def express_commission_reject(cid: int):
             except Exception as e:
                 current_app.logger.error('Referral sync on commission reject: %s', e)
 
-        flash('پورسانت رد شد.', 'info')
+        if is_visit:
+            flash('پورسانت بازدید رد شد.', 'info')
+        else:
+            flash('پورسانت رد شد.', 'info')
     else:
         flash('فقط پورسانت‌های در انتظار یا تأییدشده قابل رد هستند.', 'warning')
     return redirect(_express_commissions_redirect(filter_hint))
@@ -4666,6 +4716,8 @@ def clear_all_commissions():
 @admin_bp.route('/express/commissions/<int:cid>/edit', methods=['GET', 'POST'])
 @login_required
 def express_commission_edit(cid: int):
+    from app.express_partner.commissions_flow import commission_is_deal
+
     items = load_express_commissions() or []
     commission = None
     for c in items:
@@ -4701,6 +4753,7 @@ def express_commission_edit(cid: int):
         old_sale = int(commission.get('sale_amount') or 0)
         old_commission = int(commission.get('commission_amount') or 0)
         is_approved = commission.get('status') == 'approved'
+        is_deal = commission_is_deal(commission)
         
         # به‌روزرسانی رکورد
         commission['sale_amount'] = sale
@@ -4723,10 +4776,11 @@ def express_commission_edit(cid: int):
                             diff_commission = commission_amount - old_commission
                             p['total_income'] = max(0, current_income + diff_commission)
                             
-                            # به‌روزرسانی کل فروش‌های تایید شده (تفاوت مبلغ جدید و قدیم)
-                            current_total_sales = int(p.get('total_approved_sales', 0) or 0)
-                            diff_sale = sale - old_sale
-                            p['total_approved_sales'] = max(0, current_total_sales + diff_sale)
+                            if is_deal:
+                                # فقط پورسانت معامله روی آمار فروش اثر دارد.
+                                current_total_sales = int(p.get('total_approved_sales', 0) or 0)
+                                diff_sale = sale - old_sale
+                                p['total_approved_sales'] = max(0, current_total_sales + diff_sale)
                             
                             p['last_updated'] = iso_z(utcnow())
                             break
@@ -4848,6 +4902,9 @@ def express_visit_requests():
     items_raw = load_express_visit_requests() or []
     if not isinstance(items_raw, list):
         items_raw = []
+    commissions = load_express_commissions() or []
+    if not isinstance(commissions, list):
+        commissions = []
     name_map = _partner_name_lookup()
     items = []
     for row in items_raw:
@@ -4857,7 +4914,7 @@ def express_visit_requests():
         ph = str(r.get('partner_phone') or '').strip()
         if not (r.get('partner_name') or '').strip() and ph in name_map:
             r['partner_name'] = name_map[ph]
-        item = visit_admin_row(r)
+        item = visit_admin_row(r, commissions)
         item['status_options'] = admin_visit_status_options(item.get('status'))
         items.append(item)
 
