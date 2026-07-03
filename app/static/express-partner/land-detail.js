@@ -1029,6 +1029,12 @@
       btnClass: 'ld-btn-tx',
       specLabel: 'بازدید تأییدشده',
     },
+    visit_done_pending: {
+      label: 'در انتظار تأیید بازدید',
+      icon: 'fa-clock',
+      btnClass: 'ld-btn-tx ld-btn-tx--pending cursor-default',
+      specLabel: 'منتظر تأیید انجام بازدید',
+    },
     visit_commission_pending: {
       label: 'در انتظار پورسانت بازدید',
       icon: 'fa-clock',
@@ -1380,7 +1386,7 @@
 
   function syncTxButtonDisabled(btn, mode) {
     if (!btn || btn.tagName !== 'BUTTON') return;
-    var pending = mode === 'visit_pending' || mode === 'visit_commission_pending';
+    var pending = mode === 'visit_pending' || mode === 'visit_done_pending' || mode === 'visit_commission_pending';
     btn.disabled = false;
     btn.setAttribute('aria-disabled', pending ? 'true' : 'false');
   }
@@ -1413,7 +1419,7 @@
 
   function initVisitStatusPoll(initialMode) {
     stopVisitStatusPoll();
-    if (initialMode !== 'visit_pending' && initialMode !== 'visit_commission_pending') return;
+    if (initialMode !== 'visit_pending' && initialMode !== 'visit_done_pending' && initialMode !== 'visit_commission_pending') return;
 
     var root = document.querySelector(ROOT_SEL);
     var prevMode = initialMode;
@@ -1428,12 +1434,13 @@
         if (mode === 'visit_done') {
           showTxToast('بازدید تأیید شد — پس از انجام بازدید، آن را ثبت کنید.', false);
           stopVisitStatusPoll();
+        } else if (mode === 'visit_done_pending') {
+          showTxToast('بازدید انجام شد ثبت شده و منتظر تأیید ادمین است.', false);
         } else if (mode === 'deal') {
           showTxToast('پورسانت بازدید تأیید شد — اکنون می‌توانید درخواست معامله ثبت کنید.', false);
           stopVisitStatusPoll();
         } else if (mode === 'visit_commission_pending') {
-          showTxToast('بازدید انجام شد ثبت شده و منتظر تأیید پورسانت بازدید است.', false);
-          stopVisitStatusPoll();
+          showTxToast('بازدید توسط ادمین تأیید شد و پورسانت بازدید منتظر تأیید است.', false);
         } else if (mode === 'visit') {
           showTxToast('درخواست بازدید رد شد. می‌توانید تاریخ جدید انتخاب کنید.', false);
           stopVisitStatusPoll();
@@ -1479,6 +1486,8 @@
       updateVisitDateHint(visitDate, visitDateJalali);
     } else if (mode === 'visit_done' && (visitDate || visitDateJalali)) {
       updateVisitDateHint(visitDate, visitDateJalali);
+    } else if (mode === 'visit_done_pending' && (visitDate || visitDateJalali)) {
+      updateVisitDateHint(visitDate, visitDateJalali);
     } else if (mode === 'visit_pending' && (visitDate || visitDateJalali)) {
       updateVisitDateHint(visitDate, visitDateJalali);
     } else if (mode === 'visit_commission_pending' && (visitDate || visitDateJalali)) {
@@ -1486,7 +1495,7 @@
     } else if (mode === 'visit' || mode === 'release') {
       updateVisitDateHint('');
     }
-    if (mode !== 'visit_pending' && mode !== 'visit_commission_pending') {
+    if (mode !== 'visit_pending' && mode !== 'visit_done_pending' && mode !== 'visit_commission_pending') {
       stopVisitStatusPoll();
     }
     if (mode === 'visit') {
@@ -1535,7 +1544,7 @@
     if (!btn.getAttribute('data-visit-request-url')) return false;
     var cfg = readConfig();
     var mode = (btn.getAttribute('data-land-tx-mode') || (cfg && cfg.txMode) || '').trim();
-    return mode === 'visit' || mode === 'visit_pending' || mode === 'visit_done' || mode === 'visit_commission_pending' || mode === 'deal' || mode === 'release';
+    return mode === 'visit' || mode === 'visit_pending' || mode === 'visit_done' || mode === 'visit_done_pending' || mode === 'visit_commission_pending' || mode === 'deal' || mode === 'release';
   }
 
   function ensureVisitModalEl() {
@@ -1803,7 +1812,7 @@
     var initialVisit = (cfg && cfg.visitDate) || btn.getAttribute('data-visit-date') || '';
     var initialVisitJalali = (cfg && cfg.visitDateJalali) || '';
     applyTxMode(initialMode, initialVisit, initialVisitJalali);
-    if (initialMode === 'visit_pending' || initialMode === 'visit_commission_pending') {
+    if (initialMode === 'visit_pending' || initialMode === 'visit_done_pending' || initialMode === 'visit_commission_pending') {
       initVisitStatusPoll(initialMode);
     }
     addCleanup(stopVisitStatusPoll);
@@ -1818,15 +1827,15 @@
       }
       btn.dataset.busy = '1';
       btn.disabled = true;
-      applyTxMode('visit_commission_pending', prevVisit, formatIsoToJalaliShort(prevVisit));
+      applyTxMode('visit_done_pending', prevVisit, formatIsoToJalaliShort(prevVisit));
       postLandAction(url, null, function (data) {
-        var nextMode = data.tx_mode || 'visit_commission_pending';
+        var nextMode = data.tx_mode || 'visit_done_pending';
         applyTxMode(
           nextMode,
           data.visit_date || prevVisit,
           data.visit_date_jalali || formatIsoToJalaliShort(prevVisit)
         );
-        if (nextMode === 'visit_commission_pending') initVisitStatusPoll(nextMode);
+        if (nextMode === 'visit_done_pending' || nextMode === 'visit_commission_pending') initVisitStatusPoll(nextMode);
         showTxToast(data.message, false);
       }).catch(function (err) {
         applyTxMode(prevMode, prevVisit, formatIsoToJalaliShort(prevVisit));
@@ -1918,6 +1927,11 @@
 
       if (mode === 'visit_commission_pending') {
         showTxToast('پورسانت بازدید در انتظار تأیید ادمین است. پس از تأیید، درخواست معامله فعال می‌شود.', false);
+        return;
+      }
+
+      if (mode === 'visit_done_pending') {
+        showTxToast('بازدید انجام شد ثبت شده و منتظر تأیید ادمین است.', false);
         return;
       }
 

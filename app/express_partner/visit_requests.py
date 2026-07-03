@@ -11,10 +11,11 @@ from .commissions_flow import commission_is_deal, commission_is_visit
 
 PENDING_STATUS = "pending"
 APPROVED_STATUS = "approved"
+DONE_PENDING_STATUS = "done_pending"
 COMPLETED_STATUS = "completed"
 CANCELLED_STATUS = "cancelled"
 
-OPEN_VISIT_STATUSES = frozenset({PENDING_STATUS, APPROVED_STATUS})
+OPEN_VISIT_STATUSES = frozenset({PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS})
 
 VISIT_PROGRESS_STEP_KEYS = (
     ("visit_requested", "درخواست بازدید"),
@@ -171,6 +172,12 @@ def visit_progress_steps(
     ]
     visit_commissions = [c for c in related if commission_is_visit(c)]
     deal_commissions = [c for c in related if commission_is_deal(c)]
+    visit_commission_required_raw = row.get("visit_commission_required")
+    visit_commission_required = (
+        bool(visit_commission_required_raw)
+        if visit_commission_required_raw is not None
+        else bool(visit_commissions)
+    )
     visit_commission_paid = any(
         str(c.get("status") or "").strip().lower() in ("approved", "paid")
         for c in visit_commissions
@@ -187,22 +194,19 @@ def visit_progress_steps(
 
     visit_requested = row.get("visit_requested")
     visit_requested_done = False if visit_requested is False else True
+    visit_approved_done = status in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS)
+    visit_done = status == COMPLETED_STATUS
+    visit_commission_done = visit_done and (not visit_commission_required or visit_commission_paid)
     done = [
         visit_requested_done,
-        status in (APPROVED_STATUS, COMPLETED_STATUS),
-        status == COMPLETED_STATUS,
-        visit_commission_paid,
-        deal_requested,
-        deal_approved,
-        deal_paid,
+        visit_approved_done,
+        visit_done,
+        visit_commission_done,
+        visit_done and deal_requested,
+        visit_done and deal_approved,
+        visit_done and deal_paid,
     ]
-    highest_done_idx = max((idx for idx, is_done in enumerate(done) if is_done), default=-1)
-    current_idx = next(
-        (idx for idx, is_done in enumerate(done) if idx > highest_done_idx and not is_done),
-        None,
-    )
-    if current_idx is None:
-        current_idx = next((idx for idx, is_done in enumerate(done) if not is_done), None)
+    current_idx = next((idx for idx, is_done in enumerate(done) if not is_done), None)
     steps: List[Dict[str, Any]] = []
     for idx, (key, label) in enumerate(VISIT_PROGRESS_STEP_KEYS):
         state = "done" if done[idx] else "todo"
@@ -242,7 +246,7 @@ def partner_open_visit(
     code = (land_code or "").strip()
     if not ph or not code:
         return None
-    for r in requests:
+    for r in reversed(requests or []):
         if not _match_partner_land(r, ph, code):
             continue
         if (str(r.get("status") or "")).strip() in OPEN_VISIT_STATUSES:
@@ -266,10 +270,25 @@ def partner_visit_approved_for_deal(
     code = (land_code or "").strip()
     if not ph or not code:
         return None
-    for r in requests:
+    for r in reversed(requests or []):
         if not _match_partner_land(r, ph, code):
             continue
         if (str(r.get("status") or "")).strip() == APPROVED_STATUS:
+            return r
+    return None
+
+
+def partner_visit_done_pending(
+    requests: List[Dict[str, Any]], phone: str, land_code: str
+) -> Optional[Dict[str, Any]]:
+    ph = (phone or "").strip()
+    code = (land_code or "").strip()
+    if not ph or not code:
+        return None
+    for r in reversed(requests or []):
+        if not _match_partner_land(r, ph, code):
+            continue
+        if (str(r.get("status") or "")).strip() == DONE_PENDING_STATUS:
             return r
     return None
 
@@ -345,7 +364,7 @@ def create_visit_request(
         return None, "date_too_far"
     if not is_visit_weekday_allowed(vd):
         return None, "weekday_not_allowed"
-    if partner_has_open_visit(requests, ph, code):
+    if partner_latest_visit(requests, ph, code):
         return None, "already_pending"
 
     now_iso = datetime.utcnow().isoformat() + "Z"
@@ -391,6 +410,7 @@ def approve_visit_request(
 ADMIN_VISIT_STATUSES = frozenset({
     PENDING_STATUS,
     APPROVED_STATUS,
+    DONE_PENDING_STATUS,
     COMPLETED_STATUS,
     CANCELLED_STATUS,
 })
@@ -446,16 +466,24 @@ def admin_update_visit_request_status(
             rec.pop("admin_note", None)
     if target == APPROVED_STATUS:
         rec["approved_at"] = now_iso
+        rec.pop("visit_done_requested_at", None)
         rec.pop("completed_at", None)
+    elif target == DONE_PENDING_STATUS:
+        rec["visit_done_requested_at"] = now_iso
+        rec.pop("completed_at", None)
+        if not rec.get("approved_at"):
+            rec["approved_at"] = now_iso
     elif target == COMPLETED_STATUS:
         rec["completed_at"] = now_iso
         if not rec.get("approved_at"):
             rec["approved_at"] = now_iso
     elif target == PENDING_STATUS:
         rec.pop("approved_at", None)
+        rec.pop("visit_done_requested_at", None)
         rec.pop("completed_at", None)
     elif target == CANCELLED_STATUS:
         rec.pop("approved_at", None)
+        rec.pop("visit_done_requested_at", None)
         rec.pop("completed_at", None)
     return rec, None
 
@@ -483,17 +511,23 @@ def reject_visit_request(
     return None, "not_found"
 
 
-def complete_visit_for_deal(
+def request_visit_done_confirmation(
     requests: List[Dict[str, Any]], phone: str, land_code: str
-) -> bool:
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    completed = partner_visit_completed(requests, phone, land_code)
+    if completed:
+        return completed, "already_completed"
+    pending = partner_visit_done_pending(requests, phone, land_code)
+    if pending:
+        return pending, "already_pending"
     rec = partner_visit_approved_for_deal(requests, phone, land_code)
     if not rec:
-        return False
+        return None, "not_approved"
     now_iso = datetime.utcnow().isoformat() + "Z"
-    rec["status"] = COMPLETED_STATUS
+    rec["status"] = DONE_PENDING_STATUS
     rec["updated_at"] = now_iso
-    rec["completed_at"] = now_iso
-    return True
+    rec["visit_done_requested_at"] = now_iso
+    return rec, None
 
 
 def visit_commission_ready_for_deal(
@@ -529,6 +563,7 @@ def visit_tx_mode(
     *,
     has_visit_awaiting_admin: bool,
     has_approved_visit: bool,
+    has_visit_done_pending: bool = False,
     has_completed_visit: bool = False,
     visit_commission_ready: bool = False,
     visit_commission_required: bool = False,
@@ -544,6 +579,8 @@ def visit_tx_mode(
         if visit_commission_required and not visit_commission_ready:
             return "visit_commission_pending"
         return "deal"
+    if has_visit_done_pending:
+        return "visit_done_pending"
     if has_approved_visit:
         return "visit_done"
     if has_visit_awaiting_admin:
@@ -575,6 +612,7 @@ def resolve_partner_land_tx_state(
     open_visit = partner_open_visit(visit_requests, ph, code) if ph else None
     awaiting = partner_visit_awaiting_admin(visit_requests, ph, code) if ph else None
     approved = partner_visit_approved_for_deal(visit_requests, ph, code) if ph else None
+    done_pending = partner_visit_done_pending(visit_requests, ph, code) if ph else None
     completed = partner_visit_completed(visit_requests, ph, code) if ph else None
     latest_visit = partner_latest_visit(visit_requests, ph, code) if ph else None
     visit_ready = visit_commission_ready_for_deal(commissions, ph, code) if ph else False
@@ -593,6 +631,7 @@ def resolve_partner_land_tx_state(
             gs,
             has_visit_awaiting_admin=bool(awaiting),
             has_approved_visit=bool(approved),
+            has_visit_done_pending=bool(done_pending),
             has_completed_visit=bool(completed),
             visit_commission_ready=bool(visit_ready),
             visit_commission_required=bool(visit_commission_required),
@@ -634,12 +673,14 @@ def admin_row_dict(
     labels = {
         PENDING_STATUS: "در انتظار تأیید",
         APPROVED_STATUS: "تأیید شده — در انتظار انجام بازدید",
+        DONE_PENDING_STATUS: "در انتظار تأیید انجام بازدید",
         COMPLETED_STATUS: "بازدید انجام شد",
         CANCELLED_STATUS: "رد شده",
     }
     hints = {
-        PENDING_STATUS: "تأیید کنید تا همکار بتواند «درخواست معامله» بزند.",
+        PENDING_STATUS: "تأیید کنید تا همکار پس از انجام بازدید، آن را روی فایل ثبت کند.",
         APPROVED_STATUS: "همکار باید پس از انجام بازدید، آن را از روی فایل ثبت کند.",
+        DONE_PENDING_STATUS: "همکار انجام بازدید را ثبت کرده؛ پس از تأیید شما، پورسانت بازدید در صف تأیید قرار می‌گیرد.",
         COMPLETED_STATUS: "بازدید انجام شده؛ پس از تأیید پورسانت بازدید، درخواست معامله فعال می‌شود.",
         CANCELLED_STATUS: "این درخواست بسته شده است.",
     }
@@ -659,19 +700,21 @@ def admin_row_dict(
         "created_at": row.get("created_at") or "",
         "updated_at": row.get("updated_at") or "",
         "approved_at": row.get("approved_at") or "",
+        "visit_done_requested_at": row.get("visit_done_requested_at") or "",
         "completed_at": row.get("completed_at") or "",
         "admin_note": row.get("admin_note") or "",
         "progress_steps": progress_steps,
         "progress_summary": progress_summary,
         "filter_bucket": visit_filter_bucket(st),
-        "is_editable": st in (PENDING_STATUS, APPROVED_STATUS),
-        "needs_action": st == PENDING_STATUS,
+        "is_editable": st in (PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS),
+        "needs_action": st in (PENDING_STATUS, DONE_PENDING_STATUS),
     }
 
 
 ADMIN_VISIT_TRANSITIONS: Dict[str, frozenset] = {
     PENDING_STATUS: frozenset({PENDING_STATUS, APPROVED_STATUS, CANCELLED_STATUS}),
     APPROVED_STATUS: frozenset({APPROVED_STATUS, CANCELLED_STATUS}),
+    DONE_PENDING_STATUS: frozenset({DONE_PENDING_STATUS, COMPLETED_STATUS, CANCELLED_STATUS}),
     COMPLETED_STATUS: frozenset({COMPLETED_STATUS}),
     CANCELLED_STATUS: frozenset({CANCELLED_STATUS}),
 }
@@ -683,6 +726,8 @@ def visit_filter_bucket(status: str) -> str:
         return "pending"
     if st == APPROVED_STATUS:
         return "approved"
+    if st == DONE_PENDING_STATUS:
+        return "done_pending"
     if st == COMPLETED_STATUS:
         return "done"
     if st == CANCELLED_STATUS:
@@ -695,7 +740,7 @@ def admin_can_transition_visit(old_status: str, new_status: str) -> bool:
     new = (new_status or "").strip()
     if old == new:
         return True
-    if new == COMPLETED_STATUS:
+    if new == COMPLETED_STATUS and old != DONE_PENDING_STATUS:
         return False
     allowed = ADMIN_VISIT_TRANSITIONS.get(old, frozenset({old}))
     return new in allowed
@@ -704,10 +749,12 @@ def admin_can_transition_visit(old_status: str, new_status: str) -> bool:
 def admin_visit_status_options(old_status: str) -> List[Dict[str, str]]:
     old = (old_status or PENDING_STATUS).strip()
     keys = ADMIN_VISIT_TRANSITIONS.get(old, frozenset({old}))
-    order = (PENDING_STATUS, APPROVED_STATUS, CANCELLED_STATUS)
+    order = (PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS, CANCELLED_STATUS)
     labels = {
         PENDING_STATUS: "در انتظار تأیید",
         APPROVED_STATUS: "تأیید بازدید",
+        DONE_PENDING_STATUS: "در انتظار تأیید انجام بازدید",
+        COMPLETED_STATUS: "تأیید انجام بازدید",
         CANCELLED_STATUS: "رد درخواست",
     }
     out: List[Dict[str, str]] = []

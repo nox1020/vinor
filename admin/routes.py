@@ -4873,6 +4873,7 @@ def express_visit_requests():
         APPROVED_STATUS,
         CANCELLED_STATUS,
         COMPLETED_STATUS,
+        DONE_PENDING_STATUS,
         PENDING_STATUS,
         VISIT_WEEKDAY_LABELS,
         VISIT_WEEKDAY_ORDER,
@@ -4905,6 +4906,32 @@ def express_visit_requests():
     commissions = load_express_commissions() or []
     if not isinstance(commissions, list):
         commissions = []
+    try:
+        from app.express_partner.commissions_flow import commission_is_visit
+        settings_data = get_settings()
+        visit_commission_amount = int(settings_data.get('visit_commission_amount_toman') or 0)
+    except Exception:
+        commission_is_visit = None
+        visit_commission_amount = 0
+
+    def _visit_commission_required_for_admin(phone: str, code: str) -> bool:
+        if visit_commission_amount > 0:
+            return True
+        if not commission_is_visit:
+            return False
+        ph = (phone or '').strip()
+        ck = str(code or '').strip()
+        for c in commissions:
+            if not isinstance(c, dict):
+                continue
+            if str(c.get('partner_phone') or '').strip() != ph:
+                continue
+            if str(c.get('land_code') or '').strip() != ck:
+                continue
+            if commission_is_visit(c):
+                return True
+        return False
+
     name_map = _partner_name_lookup()
     items = []
     for row in items_raw:
@@ -4914,24 +4941,31 @@ def express_visit_requests():
         ph = str(r.get('partner_phone') or '').strip()
         if not (r.get('partner_name') or '').strip() and ph in name_map:
             r['partner_name'] = name_map[ph]
+        r['visit_commission_required'] = _visit_commission_required_for_admin(
+            ph,
+            str(r.get('land_code') or '').strip(),
+        )
         item = visit_admin_row(r, commissions)
         item['status_options'] = admin_visit_status_options(item.get('status'))
         items.append(item)
 
     pending_count = sum(1 for x in items if x.get('status') == PENDING_STATUS)
     approved_count = sum(1 for x in items if x.get('status') == APPROVED_STATUS)
+    done_pending_count = sum(1 for x in items if x.get('status') == DONE_PENDING_STATUS)
     done_count = sum(1 for x in items if x.get('status') == COMPLETED_STATUS)
     closed_count = sum(1 for x in items if x.get('status') == CANCELLED_STATUS)
-    active_count = pending_count + approved_count
+    active_count = pending_count + approved_count + done_pending_count
 
     if flt == 'approved':
         visible = [x for x in items if x.get('status') == APPROVED_STATUS]
+    elif flt == 'done_pending':
+        visible = [x for x in items if x.get('status') == DONE_PENDING_STATUS]
     elif flt == 'done':
         visible = [x for x in items if x.get('status') == COMPLETED_STATUS]
     elif flt == 'closed':
         visible = [x for x in items if x.get('status') == CANCELLED_STATUS]
     elif flt == 'active':
-        visible = [x for x in items if x.get('status') in (PENDING_STATUS, APPROVED_STATUS)]
+        visible = [x for x in items if x.get('status') in (PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS)]
     elif flt == 'all':
         visible = items
     else:
@@ -4939,7 +4973,7 @@ def express_visit_requests():
         visible = [x for x in items if x.get('status') == PENDING_STATUS]
 
     visible.sort(key=lambda x: x.get('created_at') or '', reverse=True)
-    visible.sort(key=lambda x: {PENDING_STATUS: 0, APPROVED_STATUS: 1, COMPLETED_STATUS: 2, CANCELLED_STATUS: 3}.get(x.get('status') or '', 9))
+    visible.sort(key=lambda x: {PENDING_STATUS: 0, DONE_PENDING_STATUS: 1, APPROVED_STATUS: 2, COMPLETED_STATUS: 3, CANCELLED_STATUS: 4}.get(x.get('status') or '', 9))
     all_count = len(items)
 
     return render_template(
@@ -4947,6 +4981,7 @@ def express_visit_requests():
         items=visible,
         pending_count=pending_count,
         approved_count=approved_count,
+        done_pending_count=done_pending_count,
         done_count=done_count,
         closed_count=closed_count,
         active_count=active_count,
@@ -4964,6 +4999,7 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
         APPROVED_STATUS,
         CANCELLED_STATUS,
         COMPLETED_STATUS,
+        DONE_PENDING_STATUS,
         PENDING_STATUS,
     )
 
@@ -4971,6 +5007,7 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
     labels = {
         PENDING_STATUS: 'در انتظار تأیید',
         APPROVED_STATUS: 'تأیید شده',
+        DONE_PENDING_STATUS: 'در انتظار تأیید انجام بازدید',
         COMPLETED_STATUS: 'بازدید انجام شد',
         CANCELLED_STATUS: 'رد شده',
     }
@@ -4980,8 +5017,86 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
             f'وضعیت درخواست بازدید {name} به «{label}» تغییر کرد. همکار باید پس از انجام بازدید، آن را روی فایل ثبت کند.',
             'success',
         )
+    elif new_status == DONE_PENDING_STATUS:
+        flash(
+            f'انجام بازدید برای {name} ثبت شد و منتظر تأیید ادمین است.',
+            'info',
+        )
+    elif new_status == COMPLETED_STATUS:
+        flash(
+            f'انجام بازدید {name} تأیید شد. اکنون پورسانت بازدید در صف تأیید قرار می‌گیرد.',
+            'success',
+        )
     else:
         flash(f'وضعیت درخواست بازدید {name} به «{label}» تغییر کرد.', 'success')
+
+
+def _ensure_visit_commission_after_visit_confirm(rec: dict) -> bool:
+    """بعد از تأیید انجام بازدید توسط ادمین، پورسانت بازدید pending بساز."""
+    if not isinstance(rec, dict):
+        return False
+    partner_phone = str(rec.get('partner_phone') or '').strip()
+    land_code = str(rec.get('land_code') or '').strip()
+    if not partner_phone or not land_code:
+        return False
+    try:
+        amount = max(0, int(get_settings().get('visit_commission_amount_toman') or 0))
+    except Exception:
+        amount = 0
+    if amount <= 0:
+        return False
+
+    from app.express_partner.commissions_flow import commission_is_visit
+
+    commissions = load_express_commissions() or []
+    if not isinstance(commissions, list):
+        commissions = []
+    for c in commissions:
+        if not isinstance(c, dict):
+            continue
+        if str(c.get('partner_phone') or '').strip() != partner_phone:
+            continue
+        if str(c.get('land_code') or '').strip() != land_code:
+            continue
+        if commission_is_visit(c) and str(c.get('status') or '').strip().lower() in ('pending', 'approved', 'paid'):
+            return False
+
+    title = str(rec.get('land_title') or '').strip()
+    if not title:
+        try:
+            land = next((l for l in load_ads_cached() or [] if str(l.get('code')) == land_code), None)
+            title = str((land or {}).get('title') or '').strip()
+        except Exception:
+            title = ''
+    name_map = _partner_name_lookup()
+    new_id = (max([int(x.get('id', 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
+    commissions.append({
+        'id': new_id,
+        'commission_type': 'visit',
+        'partner_phone': partner_phone,
+        'partner_name': str(rec.get('partner_name') or '').strip() or name_map.get(partner_phone, partner_phone),
+        'land_code': land_code,
+        'land_title': title or land_code,
+        'sale_amount': 0,
+        'commission_pct': 0,
+        'commission_amount': amount,
+        'status': 'pending',
+        'created_at': iso_z(utcnow()),
+    })
+    save_express_commissions(commissions)
+    try:
+        from app.express_partner.commission_sms import notify_partner_commission_txn
+        notify_partner_commission_txn(
+            partner_phone=partner_phone,
+            event='commission_pending',
+            amount=amount,
+            land_code=land_code,
+            commission_type='visit',
+            reference_id=str(new_id),
+        )
+    except Exception:
+        current_app.logger.exception('visit commission pending SMS failed after visit confirm cid=%s', new_id)
+    return True
 
 
 @admin_bp.post('/express/visit-requests/<vid>/status')
@@ -4989,6 +5104,7 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
 def express_visit_request_status(vid: str):
     from app.express_partner.visit_requests import (
         APPROVED_STATUS,
+        COMPLETED_STATUS,
         admin_can_transition_visit,
         admin_update_visit_request_status,
     )
@@ -5010,7 +5126,7 @@ def express_visit_request_status(vid: str):
             break
 
     if prev_status and new_status and not admin_can_transition_visit(prev_status, new_status):
-        flash('این تغییر وضعیت مجاز نیست. «بازدید انجام شد» باید توسط همکار از روی صفحه فایل ثبت شود.', 'error')
+        flash('این تغییر وضعیت مجاز نیست. ابتدا همکار باید «بازدید انجام شد» را از روی صفحه فایل ثبت کند.', 'error')
         return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
 
     rec, err = admin_update_visit_request_status(
@@ -5031,6 +5147,9 @@ def express_visit_request_status(vid: str):
             flash('یادداشت درخواست بازدید ذخیره شد.', 'success')
         else:
             _flash_visit_request_status_change(rec or {}, new_status)
+            if rec and new_status == COMPLETED_STATUS:
+                if _ensure_visit_commission_after_visit_confirm(rec):
+                    flash('پورسانت بازدید در صف تأیید پورسانت‌ها ثبت شد.', 'success')
             if rec:
                 sms_event = visit_status_change_event(new_status, prev_status)
                 if sms_event:

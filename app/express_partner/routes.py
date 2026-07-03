@@ -98,7 +98,7 @@ from .visit_requests import (
     partner_open_visit,
     partner_visit_approved_for_deal,
     partner_visit_completed,
-    complete_visit_for_deal,
+    request_visit_done_confirmation,
     restore_visit_approved_after_deal_release,
     visit_commission_ready_for_deal,
     visit_progress_steps,
@@ -108,6 +108,7 @@ from .visit_requests import (
     resolve_partner_land_tx_state,
     PENDING_STATUS,
     APPROVED_STATUS,
+    DONE_PENDING_STATUS,
     COMPLETED_STATUS,
     CANCELLED_STATUS,
 )
@@ -2566,7 +2567,7 @@ def requests_page():
     """صفحهٔ وضعیت همهٔ درخواست‌های بازدید همکار جاری."""
     me_phone = (session.get('user_phone') or '').strip()
     current_filter = (request.args.get('filter') or 'all').strip().lower()
-    if current_filter not in ('all', PENDING_STATUS, APPROVED_STATUS, COMPLETED_STATUS, CANCELLED_STATUS):
+    if current_filter not in ('all', PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS, CANCELLED_STATUS):
         current_filter = 'all'
     rows = load_express_visit_requests() or []
     if not isinstance(rows, list):
@@ -2585,6 +2586,11 @@ def requests_page():
             'label': 'تأیید شده',
             'hint': 'بازدید تأیید شده؛ پس از انجام بازدید، آن را روی فایل ثبت کنید.',
             'bucket': 'approved',
+        },
+        DONE_PENDING_STATUS: {
+            'label': 'در انتظار تأیید انجام بازدید',
+            'hint': 'انجام بازدید ثبت شده و منتظر تأیید ادمین است. پس از تأیید، پورسانت بازدید در صف تأیید قرار می‌گیرد.',
+            'bucket': 'done_pending',
         },
         COMPLETED_STATUS: {
             'label': 'بازدید انجام شد',
@@ -2607,7 +2613,13 @@ def requests_page():
         st = str(row.get('status') or PENDING_STATUS).strip() or PENDING_STATUS
         meta = status_meta.get(st, {'label': st, 'hint': '', 'bucket': 'other'})
         visit_date = str(row.get('visit_date') or '').strip()
-        progress_steps = visit_progress_steps(row, commissions, partner_phone=me_phone)
+        progress_row = dict(row)
+        progress_row['visit_commission_required'] = _visit_commission_required_for(
+            commissions,
+            me_phone,
+            str(row.get('land_code') or ''),
+        )
+        progress_steps = visit_progress_steps(progress_row, commissions, partner_phone=me_phone)
         items.append({
             'id': row.get('id') or '',
             'land_code': row.get('land_code') or '',
@@ -2631,6 +2643,7 @@ def requests_page():
         'all': len(items),
         'pending': sum(1 for i in items if i.get('status') == PENDING_STATUS),
         'approved': sum(1 for i in items if i.get('status') == APPROVED_STATUS),
+        'done_pending': sum(1 for i in items if i.get('status') == DONE_PENDING_STATUS),
         'completed': sum(1 for i in items if i.get('status') == COMPLETED_STATUS),
         'cancelled': sum(1 for i in items if i.get('status') == CANCELLED_STATUS),
     }
@@ -2638,6 +2651,7 @@ def requests_page():
         {'key': 'all', 'label': 'همه', 'count': counts['all']},
         {'key': PENDING_STATUS, 'label': 'در انتظار', 'count': counts['pending']},
         {'key': APPROVED_STATUS, 'label': 'تأیید شده', 'count': counts['approved']},
+        {'key': DONE_PENDING_STATUS, 'label': 'انتظار تأیید بازدید', 'count': counts['done_pending']},
         {'key': COMPLETED_STATUS, 'label': 'انجام شده', 'count': counts['completed']},
         {'key': CANCELLED_STATUS, 'label': 'تأیید نشده', 'count': counts['cancelled']},
     ]
@@ -4434,7 +4448,7 @@ def create_visit_request(code: str):
 @express_partner_bp.route('/visit-requests/<code>/complete', methods=['POST'], endpoint='complete_visit_request')
 @require_partner_access()
 def complete_visit_request(code: str):
-    """ثبت «بازدید انجام شد» توسط همکار؛ بعد از آن پورسانت بازدید در صف تأیید ادمین می‌رود."""
+    """ثبت اعلام «بازدید انجام شد» توسط همکار؛ تأیید نهایی با ادمین است."""
     me_phone = (session.get('user_phone') or '').strip()
     partners = load_express_partners() or []
     partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
@@ -4459,65 +4473,22 @@ def complete_visit_request(code: str):
     visit_requests = load_express_visit_requests() or []
     if not isinstance(visit_requests, list):
         visit_requests = []
-    already_completed = partner_visit_completed(visit_requests, me_phone, str(code))
-    if not already_completed and not complete_visit_for_deal(visit_requests, me_phone, str(code)):
+    rec, err = request_visit_done_confirmation(visit_requests, me_phone, str(code))
+    if err == 'not_approved':
         return _mark_in_transaction_finish(
             code,
             success=False,
             message='ابتدا درخواست بازدید شما باید توسط ادمین تأیید شود.',
             category='error',
         )
+    if not rec:
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='در ثبت انجام بازدید خطایی رخ داد.',
+            category='error',
+        )
     save_express_visit_requests(visit_requests)
-
-    lands_all = load_ads_cached() or []
-    land = next((l for l in lands_all if str(l.get('code')) == str(code)), None)
-    land_title = (land.get('title') if land else None) or str(code)
-    created_visit_commission = False
-    visit_commission_amount = _visit_commission_amount_toman()
-    if visit_commission_amount > 0:
-        commissions = load_express_commissions() or []
-        if not isinstance(commissions, list):
-            commissions = []
-        if not _has_visit_commission_record(commissions, me_phone, str(code)):
-            new_id = (max([int(x.get('id', 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
-            commissions.append({
-                'id': new_id,
-                'commission_type': 'visit',
-                'partner_phone': me_phone,
-                'partner_name': (partner_profile or {}).get('name') or me_phone,
-                'land_code': str(code),
-                'land_title': str(land_title),
-                'sale_amount': 0,
-                'commission_pct': 0,
-                'commission_amount': visit_commission_amount,
-                'status': 'pending',
-                'created_at': datetime.utcnow().isoformat() + "Z",
-            })
-            save_express_commissions(commissions)
-            created_visit_commission = True
-            try:
-                from .admin_action_sms import notify_admin_pending_action
-                notify_admin_pending_action(
-                    'commission',
-                    partner_phone=me_phone,
-                    partner_name=_partner_display_name(me_phone),
-                    land_code=str(code),
-                    amount=visit_commission_amount,
-                )
-            except Exception:
-                current_app.logger.exception('visit commission pending admin SMS failed partner=%s land=%s', me_phone, code)
-            try:
-                from .commission_sms import notify_partner_commission_txn
-                notify_partner_commission_txn(
-                    partner_phone=me_phone,
-                    event='commission_pending',
-                    amount=visit_commission_amount,
-                    land_code=str(code),
-                    commission_type='visit',
-                    reference_id=str(new_id),
-                )
-            except Exception:
-                current_app.logger.exception('visit commission pending SMS failed partner=%s land=%s', me_phone, code)
 
     tx_state = _partner_land_tx_payload(
         code,
@@ -4525,18 +4496,18 @@ def complete_visit_request(code: str):
         is_partner_approved=True,
         global_assignment_status=ctx.get('global_status') or 'active',
     )
-    msg = 'بازدید انجام شد ثبت شد.'
-    if created_visit_commission:
-        msg = 'بازدید انجام شد ثبت شد. پورسانت بازدید برای تأیید ادمین ارسال شد.'
-    elif tx_state.get('tx_mode') == 'deal':
-        msg = 'بازدید انجام شد ثبت شد. اکنون می‌توانید درخواست معامله ثبت کنید.'
+    msg = 'بازدید انجام شد ثبت شد و منتظر تأیید ادمین است.'
+    if err == 'already_pending':
+        msg = 'بازدید انجام شد قبلاً ثبت شده و منتظر تأیید ادمین است.'
+    elif err == 'already_completed':
+        msg = 'بازدید قبلاً توسط ادمین تأیید شده است.'
     return _mark_in_transaction_finish(
         code,
         success=True,
         message=msg,
         category='success',
         new_status=ctx.get('global_status') or 'active',
-        tx_mode=tx_state.get('tx_mode') or 'visit_commission_pending',
+        tx_mode=tx_state.get('tx_mode') or 'visit_done_pending',
         visit_date=tx_state.get('visit_date') or None,
     )
 
@@ -5951,6 +5922,7 @@ def land_detail(code: str):
     )
     land['_visit_date'] = tx_state.get('visit_date') or ''
     land['_visit_date_jalali'] = tx_state.get('visit_date_jalali') or ''
+    land['_visit_status'] = tx_state.get('visit_status') or ''
     land['_tx_button_mode'] = tx_state.get('tx_mode') or 'visit'
     land['_visit_progress_steps'] = []
     land['_visit_progress_summary'] = {}
@@ -5972,6 +5944,12 @@ def land_detail(code: str):
                 'status': PENDING_STATUS,
                 'visit_requested': False,
             }
+        progress_row = dict(progress_row)
+        progress_row['visit_commission_required'] = _visit_commission_required_for(
+            commissions_for_tx,
+            me_phone,
+            str(code),
+        )
         progress_steps = visit_progress_steps(
             progress_row,
             commissions_for_tx,

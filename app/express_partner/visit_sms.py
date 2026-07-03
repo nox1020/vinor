@@ -16,6 +16,7 @@ from .visit_requests import (
     APPROVED_STATUS,
     CANCELLED_STATUS,
     COMPLETED_STATUS,
+    DONE_PENDING_STATUS,
     PENDING_STATUS,
 )
 
@@ -23,6 +24,7 @@ PARTNER_LAND_TX_EVENTS = frozenset({
     "visit_submitted",
     "visit_pending",
     "visit_approved",
+    "visit_done_pending",
     "visit_rejected",
     "visit_completed",
     "deal_started",
@@ -32,6 +34,7 @@ PARTNER_LAND_TX_EVENTS = frozenset({
 _STATUS_TO_EVENT = {
     PENDING_STATUS: "visit_pending",
     APPROVED_STATUS: "visit_approved",
+    DONE_PENDING_STATUS: "visit_done_pending",
     CANCELLED_STATUS: "visit_rejected",
     COMPLETED_STATUS: "visit_completed",
 }
@@ -98,7 +101,7 @@ def _build_message(event: str, ctx: Dict[str, Any]) -> str:
             f"درخواست بازدید تأیید شد.\n"
             f"ملک: {land}\n"
             f"تاریخ بازدید: {vdate}\n"
-            f"اکنون می‌توانید درخواست معامله ثبت کنید."
+            f"پس از انجام بازدید، آن را روی صفحه فایل ثبت کنید."
         )
     if event == "visit_rejected":
         lines = [
@@ -109,12 +112,19 @@ def _build_message(event: str, ctx: Dict[str, Any]) -> str:
         if note:
             lines.append(f"یادداشت: {note}")
         return "\n".join(lines)
+    if event == "visit_done_pending":
+        return (
+            f"وینور اکسپرس\n"
+            f"انجام بازدید شما ثبت شد.\n"
+            f"ملک: {land}\n"
+            f"وضعیت: در انتظار تأیید ادمین"
+        )
     if event == "visit_completed":
         return (
             f"وینور اکسپرس\n"
-            f"بازدید و معامله ثبت شد.\n"
+            f"انجام بازدید توسط ادمین تأیید شد.\n"
             f"ملک: {land}\n"
-            f"وضعیت: تکمیل‌شده"
+            f"وضعیت: در انتظار تأیید پورسانت بازدید"
         )
     if event == "deal_started":
         return (
