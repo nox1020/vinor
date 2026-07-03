@@ -3894,6 +3894,14 @@ def express_partner_detail(phone: str):
                 show_referral_retry = not _active_referral_commission_exists(ref_by, phone)
     except Exception:
         show_referral_retry = False
+
+    fcm_token_count = 0
+    try:
+        from app.services.fcm_tokens import tokens_for_phone
+        fcm_token_count = len(tokens_for_phone(phone))
+    except Exception:
+        pass
+
     return render_template(
         'admin/express_partner_detail.html',
         person=person,
@@ -3901,7 +3909,111 @@ def express_partner_detail(phone: str):
         back_filter=back_filter,
         page_title=f'پروفایل {display_name}',
         show_referral_retry=show_referral_retry,
+        fcm_token_count=fcm_token_count,
     )
+
+
+@admin_bp.post('/express/partners/<path:phone>/send-message')
+@login_required
+def express_partner_send_message(phone: str):
+    """ارسال پیام به یک همکار/کاربر — نوتیف، پیامک، یا هر دو."""
+    phone = _normalize_phone((phone or '').strip())
+    back_q = (request.form.get('q') or request.args.get('q') or '').strip()
+    back_filter = (request.form.get('filter') or request.args.get('filter') or 'all').strip()
+    redirect_kw = {'phone': phone, 'q': back_q, 'filter': back_filter}
+
+    if not phone or len(phone) != 11:
+        flash('شماره همراه معتبر نیست.', 'warning')
+        return redirect(url_for('admin.express_partners', q=back_q, filter=back_filter))
+
+    channel = (request.form.get('channel') or 'notify').strip().lower()
+    if channel not in ('notify', 'sms', 'both'):
+        channel = 'notify'
+
+    title = (request.form.get('title') or '').strip() or 'پیام وینور'
+    body = (request.form.get('body') or '').strip()
+    if not body:
+        flash('متن پیام الزامی است.', 'warning')
+        return redirect(url_for('admin.express_partner_detail', **redirect_kw))
+
+    send_notify = channel in ('notify', 'both')
+    send_sms = channel in ('sms', 'both')
+    parts: list[str] = []
+    errors: list[str] = []
+
+    if send_notify:
+        try:
+            add_notification(
+                user_id=phone,
+                title=title,
+                body=body,
+                ntype='info',
+                action_url='/express/partner/notifications',
+                source='admin_partner_message',
+            )
+            parts.append('نوتیف (درون‌برنامه + FCM)')
+        except Exception as e:
+            current_app.logger.error('Partner message notification failed: %s', e, exc_info=True)
+            errors.append('نوتیف')
+
+    if send_sms:
+        if not phone.startswith('09'):
+            errors.append('پیامک (شماره نامعتبر)')
+        else:
+            try:
+                settings = get_settings()
+                sms_line_number = (settings.get('sms_line_number') or '').strip() or None
+                sms_text = body if len(body) <= 500 else body[:497] + '...'
+                sms_result = send_sms_direct(
+                    mobile=phone,
+                    message=sms_text,
+                    line_number=sms_line_number,
+                )
+                try:
+                    history = load_sms_history() or []
+                    record = {
+                        'id': len(history) + 1,
+                        'mobile': phone,
+                        'recipient_name': (request.form.get('recipient_name') or '').strip() or None,
+                        'template_id': None,
+                        'message': sms_text,
+                        'parameters': {},
+                        'success': sms_result.get('ok', False),
+                        'status_code': sms_result.get('status', 0),
+                        'response': sms_result.get('body', {}),
+                        'source': 'admin_partner_message',
+                        'created_at': datetime.now().isoformat(),
+                        'error': None if sms_result.get('ok') else str(
+                            (sms_result.get('body') or {}).get('message', 'خطای ارسال')
+                        ),
+                    }
+                    history.insert(0, record)
+                    save_sms_history(history)
+                except Exception:
+                    pass
+                if sms_result.get('ok'):
+                    parts.append('پیامک')
+                else:
+                    errors.append('پیامک')
+                    current_app.logger.warning(
+                        'Partner SMS failed phone=%s status=%s',
+                        phone,
+                        sms_result.get('status'),
+                    )
+            except Exception as e:
+                current_app.logger.error('Partner SMS error: %s', e, exc_info=True)
+                errors.append('پیامک')
+
+    if parts and not errors:
+        flash(f'ارسال شد: {", ".join(parts)}', 'success')
+    elif parts and errors:
+        flash(f'بخشی ارسال شد ({", ".join(parts)}) — خطا: {", ".join(errors)}', 'warning')
+    elif errors:
+        flash(f'ارسال ناموفق: {", ".join(errors)}', 'danger')
+    else:
+        flash('کانال ارسال انتخاب نشده است.', 'warning')
+
+    return redirect(url_for('admin.express_partner_detail', **redirect_kw))
 
 
 @admin_bp.post('/express/partners/<path:phone>/adjust-balance')

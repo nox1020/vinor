@@ -378,6 +378,72 @@
         </div>
       </section>
 
+      <details class="adm-person-collapse adm-pd-card overflow-hidden">
+        <summary class="flex items-center justify-between gap-2 px-4 py-3 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-gray-950/50 transition">
+          <span class="flex items-center gap-2 text-xs font-bold text-gray-700 dark:text-gray-200">
+            <i class="fa-solid fa-chevron-down text-[10px] text-gray-400 adm-collapse-chevron"></i>
+            <i class="fa-solid fa-paper-plane text-blue-500 text-[11px]"></i>
+            ارسال پیام به کاربر
+          </span>
+          <span class="text-[10px] font-normal text-gray-400 ltr" dir="ltr">{{ person.phone }}</span>
+        </summary>
+        <div class="px-4 pb-4 pt-1 border-t border-gray-100 dark:border-gray-800">
+        <form method="post"
+              action="{{ url_for('admin.express_partner_send_message', phone=person.phone) }}"
+              class="space-y-3"
+              onsubmit="return confirm('پیام به {{ person.phone }} ارسال شود؟');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="q" value="{{ back_q or '' }}">
+          <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">
+          <input type="hidden" name="recipient_name" value="{{ person.name or '' }}">
+
+          <fieldset class="space-y-2">
+            <legend class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">روش ارسال</legend>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label class="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-950 transition has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50/50 dark:has-[:checked]:bg-blue-950/30">
+                <input type="radio" name="channel" value="notify" checked class="text-blue-600">
+                <span class="text-xs font-medium text-gray-800 dark:text-gray-200">
+                  <i class="fa-solid fa-bell text-blue-500 ml-1"></i>نوتیف
+                </span>
+              </label>
+              <label class="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-950 transition has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50/50 dark:has-[:checked]:bg-emerald-950/30">
+                <input type="radio" name="channel" value="sms" class="text-emerald-600">
+                <span class="text-xs font-medium text-gray-800 dark:text-gray-200">
+                  <i class="fa-solid fa-comment-sms text-emerald-500 ml-1"></i>پیامک
+                </span>
+              </label>
+              <label class="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-950 transition has-[:checked]:border-violet-500 has-[:checked]:bg-violet-50/50 dark:has-[:checked]:bg-violet-950/30">
+                <input type="radio" name="channel" value="both" class="text-violet-600">
+                <span class="text-xs font-medium text-gray-800 dark:text-gray-200">
+                  <i class="fa-solid fa-layer-group text-violet-500 ml-1"></i>هر دو
+                </span>
+              </label>
+            </div>
+            <p class="text-[10px] text-gray-400 leading-relaxed">
+              نوتیف: پنل همکار + FCM{% if fcm_token_count|default(0) > 0 %} ({{ fcm_token_count }} دستگاه){% else %} (بدون token — فقط درون‌برنامه){% endif %}
+              · پیامک: مستقیم به {{ person.phone }}
+            </p>
+          </fieldset>
+
+          <div>
+            <label class="block text-[10px] text-gray-500 mb-1">عنوان (نوتیف)</label>
+            <input type="text" name="title" maxlength="120" placeholder="پیام وینور"
+                   class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900">
+          </div>
+          <div>
+            <label class="block text-[10px] text-gray-500 mb-1">متن پیام <span class="text-rose-500">*</span></label>
+            <textarea name="body" rows="4" required maxlength="500" placeholder="متن اعلان یا پیامک..."
+                      class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 resize-y min-h-[5rem]"></textarea>
+          </div>
+          <button type="submit"
+                  class="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-paper-plane"></i>
+            ارسال
+          </button>
+        </form>
+        </div>
+      </details>
+
       <section class="adm-pd-card p-4">
         <h2 class="adm-pd-section-title text-gray-700 dark:text-gray-200 mb-3 flex items-center justify-between gap-2">
           <span><i class="fa-solid fa-building-columns text-gray-400 ml-1"></i> حساب‌های بانکی</span>
