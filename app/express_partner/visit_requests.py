@@ -185,8 +185,10 @@ def visit_progress_steps(
         for c in deal_commissions
     )
 
+    visit_requested = row.get("visit_requested")
+    visit_requested_done = False if visit_requested is False else True
     done = [
-        True,
+        visit_requested_done,
         status in (APPROVED_STATUS, COMPLETED_STATUS),
         status == COMPLETED_STATUS,
         visit_commission_paid,

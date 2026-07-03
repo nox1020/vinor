@@ -100,6 +100,7 @@ from .visit_requests import (
     complete_visit_for_deal,
     restore_visit_approved_after_deal_release,
     visit_progress_steps,
+    visit_progress_summary,
     visit_date_min_iso,
     visit_allowed_weekdays_for_js,
     resolve_partner_land_tx_state,
@@ -5793,6 +5794,36 @@ def land_detail(code: str):
     land['_visit_date'] = tx_state.get('visit_date') or ''
     land['_visit_date_jalali'] = tx_state.get('visit_date_jalali') or ''
     land['_tx_button_mode'] = tx_state.get('tx_mode') or 'visit'
+    land['_visit_progress_steps'] = []
+    land['_visit_progress_summary'] = {}
+    if is_approved and me_phone:
+        progress_row = next(
+            (
+                r for r in visit_requests_list
+                if isinstance(r, dict)
+                and str(r.get('partner_phone') or '').strip() == me_phone
+                and str(r.get('land_code') or '').strip() == str(code)
+                and str(r.get('status') or '').strip() != CANCELLED_STATUS
+            ),
+            None,
+        )
+        if progress_row is None:
+            progress_row = {
+                'partner_phone': me_phone,
+                'land_code': str(code),
+                'status': PENDING_STATUS,
+                'visit_requested': False,
+            }
+        commissions_for_progress = load_express_commissions() or []
+        if not isinstance(commissions_for_progress, list):
+            commissions_for_progress = []
+        progress_steps = visit_progress_steps(
+            progress_row,
+            commissions_for_progress,
+            partner_phone=me_phone,
+        )
+        land['_visit_progress_steps'] = progress_steps
+        land['_visit_progress_summary'] = visit_progress_summary(progress_steps)
 
     share_token = ''
     share_url = ''

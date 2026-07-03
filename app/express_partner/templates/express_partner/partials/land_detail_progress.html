@@ -1,0 +1,56 @@
+{% set steps = land._visit_progress_steps|default([]) %}
+{% set summary = land._visit_progress_summary|default({}) %}
+{% if is_approved and steps %}
+<section class="ld-section ld-section--progress" aria-label="روند ۷ مرحله‌ای این فایل">
+  <div class="mb-2 flex items-center justify-between gap-3">
+    <h2 class="ld-section__title !mb-0">روند این فایل</h2>
+    <a href="{{ url_for('express_partner.requests') }}"
+       data-vinor-express-nav
+       class="shrink-0 text-[10px] font-semibold text-emerald-500 dark:text-emerald-300">
+      همه درخواست‌ها
+    </a>
+  </div>
+  <div class="rounded-xl border border-[var(--ld-border)] bg-[var(--ld-surface-2)] p-3">
+    <div class="flex items-center gap-1.5">
+      {% for step in steps %}
+      {% set state = step.state %}
+      <span class="h-1.5 flex-1 rounded-full
+                   {% if state == 'done' %}bg-emerald-500
+                   {% elif state == 'current' %}bg-[#a62626]
+                   {% elif state == 'blocked' %}bg-red-900/70
+                   {% else %}bg-black/10 dark:bg-white/10{% endif %}"
+            title="{{ step.label }}"
+            aria-label="{{ step.label }}"></span>
+      {% endfor %}
+    </div>
+    <p class="mt-2 truncate text-[11px] leading-5 text-[var(--ld-text-muted)]">
+      مرحله:
+      <span class="font-bold text-[var(--ld-text)]">{{ summary.current_label or 'در جریان' }}</span>
+      <span class="mx-1 opacity-50">·</span>
+      {{ summary.done_count|default(0) }} از {{ summary.total|default(steps|length) }}
+    </p>
+    <p class="mt-1 text-[10px] leading-5 text-[var(--ld-text-faint)]">
+      {% set current_label = summary.current_label or '' %}
+      {% if current_label == 'درخواست بازدید' %}
+        برای شروع مسیر، از دکمه پایین صفحه درخواست بازدید ثبت کنید.
+      {% elif current_label == 'تأیید درخواست' %}
+        درخواست بازدید ثبت شده و منتظر تأیید تیم وینور است.
+      {% elif current_label == 'بازدید انجام شد' %}
+        پس از انجام بازدید و هماهنگی با مشتری، از همین فایل درخواست معامله را ثبت کنید.
+      {% elif current_label == 'واریز پورسانت بازدید' %}
+        در صورت تعریف پورسانت بازدید، وضعیت واریز از بخش درخواست‌ها/پورسانت‌ها پیگیری می‌شود.
+      {% elif current_label == 'درخواست معامله' %}
+        برای ادامه مسیر، از دکمه پایین صفحه درخواست معامله را ثبت کنید.
+      {% elif current_label == 'تأیید درخواست معامله' %}
+        درخواست معامله ثبت شده و منتظر تأیید پورسانت توسط ادمین است.
+      {% elif current_label == 'واریز پورسانت معامله' %}
+        پس از تأیید پورسانت، درخواست برداشت را از بخش مالی ثبت کنید.
+      {% elif current_label == 'تکمیل شد' %}
+        مسیر این فایل کامل شده است.
+      {% else %}
+        ادامه مسیر را طبق مرحله نمایش‌داده‌شده پیگیری کنید.
+      {% endif %}
+    </p>
+  </div>
+</section>
+{% endif %}

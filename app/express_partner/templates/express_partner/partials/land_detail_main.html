@@ -73,6 +73,8 @@
     {% endif %}
   </section>
 
+  {% include 'express_partner/partials/land_detail_progress.html' %}
+
   {# ── قیمت + پورسانت + امکانات و ویژگی‌ها ── #}
   {% set has_extra_specs = (cat_rows[3:]|length > 0) %}
   {% set has_specs = _st or deal_label or has_extra_specs or land.delivery or land.delivery_days or land.handover or (land.payment_method and land.payment_method != deal_label) or land.docs_status %}
