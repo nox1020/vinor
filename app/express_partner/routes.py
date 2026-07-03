@@ -97,8 +97,10 @@ from .visit_requests import (
     create_visit_request as record_visit_request,
     partner_open_visit,
     partner_visit_approved_for_deal,
+    partner_visit_completed,
     complete_visit_for_deal,
     restore_visit_approved_after_deal_release,
+    visit_commission_ready_for_deal,
     visit_progress_steps,
     visit_progress_summary,
     visit_date_min_iso,
@@ -109,7 +111,7 @@ from .visit_requests import (
     COMPLETED_STATUS,
     CANCELLED_STATUS,
 )
-from .commissions_flow import commission_blocks_new_deal_record
+from .commissions_flow import commission_blocks_new_deal_record, commission_is_deal, commission_is_visit
 from .support_tickets import (
     MESSAGE_MAX_LEN,
     MESSAGE_MIN_LEN,
@@ -2581,12 +2583,12 @@ def requests_page():
         },
         APPROVED_STATUS: {
             'label': 'تأیید شده',
-            'hint': 'بازدید تأیید شده؛ پس از هماهنگی می‌توانید مسیر معامله را ادامه دهید.',
+            'hint': 'بازدید تأیید شده؛ پس از انجام بازدید، آن را روی فایل ثبت کنید.',
             'bucket': 'approved',
         },
         COMPLETED_STATUS: {
-            'label': 'انجام شده',
-            'hint': 'این بازدید به مرحله معامله رسیده است.',
+            'label': 'بازدید انجام شد',
+            'hint': 'بازدید ثبت شده؛ پس از تأیید پورسانت بازدید، درخواست معامله فعال می‌شود.',
             'bucket': 'completed',
         },
         CANCELLED_STATUS: {
@@ -4183,6 +4185,10 @@ def _partner_land_tx_payload(
     visit_requests = load_express_visit_requests() or []
     if not isinstance(visit_requests, list):
         visit_requests = []
+    commissions = load_express_commissions() or []
+    if not isinstance(commissions, list):
+        commissions = []
+    visit_commission_required = _visit_commission_required_for(commissions, me_phone, code)
     gs = global_assignment_status
     if gs is None:
         gs = 'active'
@@ -4202,8 +4208,39 @@ def _partner_land_tx_payload(
         visit_requests=visit_requests,
         is_partner_approved=is_partner_approved,
         global_assignment_status=str(gs or 'active'),
+        commissions=commissions,
+        visit_commission_required=visit_commission_required,
     )
     return state
+
+
+def _visit_commission_amount_toman() -> int:
+    try:
+        settings = load_settings(current_app) or {}
+        return max(0, int(settings.get('visit_commission_amount_toman') or 0))
+    except Exception:
+        return 0
+
+
+def _has_visit_commission_record(commissions: List[Dict[str, Any]], phone: str, code: str) -> bool:
+    ph = (phone or '').strip()
+    ck = str(code or '').strip()
+    if not ph or not ck:
+        return False
+    for c in commissions or []:
+        if not isinstance(c, dict):
+            continue
+        if str(c.get('partner_phone') or '').strip() != ph:
+            continue
+        if str(c.get('land_code') or '').strip() != ck:
+            continue
+        if commission_is_visit(c) and str(c.get('status') or '').strip().lower() in ('pending', 'approved', 'paid'):
+            return True
+    return False
+
+
+def _visit_commission_required_for(commissions: List[Dict[str, Any]], phone: str, code: str) -> bool:
+    return _visit_commission_amount_toman() > 0 or _has_visit_commission_record(commissions, phone, code)
 
 
 @express_partner_bp.route('/visit-requests/<code>', methods=['POST'], endpoint='create_visit_request')
@@ -4394,6 +4431,116 @@ def create_visit_request(code: str):
     )
 
 
+@express_partner_bp.route('/visit-requests/<code>/complete', methods=['POST'], endpoint='complete_visit_request')
+@require_partner_access()
+def complete_visit_request(code: str):
+    """ثبت «بازدید انجام شد» توسط همکار؛ بعد از آن پورسانت بازدید در صف تأیید ادمین می‌رود."""
+    me_phone = (session.get('user_phone') or '').strip()
+    partners = load_express_partners() or []
+    partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
+    is_pa = _is_partner_approved(partner_profile)
+    if not is_pa:
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='برای ثبت انجام بازدید باید حساب همکاری شما تأیید شده باشد.',
+            category='error',
+        )
+
+    ctx = _express_land_partner_ctx(code, me_phone)
+    if ctx is None:
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='فایل موردنظر پیدا نشد یا در لیست اکسپرس موجود نیست.',
+            category='error',
+        )
+
+    visit_requests = load_express_visit_requests() or []
+    if not isinstance(visit_requests, list):
+        visit_requests = []
+    already_completed = partner_visit_completed(visit_requests, me_phone, str(code))
+    if not already_completed and not complete_visit_for_deal(visit_requests, me_phone, str(code)):
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='ابتدا درخواست بازدید شما باید توسط ادمین تأیید شود.',
+            category='error',
+        )
+    save_express_visit_requests(visit_requests)
+
+    lands_all = load_ads_cached() or []
+    land = next((l for l in lands_all if str(l.get('code')) == str(code)), None)
+    land_title = (land.get('title') if land else None) or str(code)
+    created_visit_commission = False
+    visit_commission_amount = _visit_commission_amount_toman()
+    if visit_commission_amount > 0:
+        commissions = load_express_commissions() or []
+        if not isinstance(commissions, list):
+            commissions = []
+        if not _has_visit_commission_record(commissions, me_phone, str(code)):
+            new_id = (max([int(x.get('id', 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
+            commissions.append({
+                'id': new_id,
+                'commission_type': 'visit',
+                'partner_phone': me_phone,
+                'partner_name': (partner_profile or {}).get('name') or me_phone,
+                'land_code': str(code),
+                'land_title': str(land_title),
+                'sale_amount': 0,
+                'commission_pct': 0,
+                'commission_amount': visit_commission_amount,
+                'status': 'pending',
+                'created_at': datetime.utcnow().isoformat() + "Z",
+            })
+            save_express_commissions(commissions)
+            created_visit_commission = True
+            try:
+                from .admin_action_sms import notify_admin_pending_action
+                notify_admin_pending_action(
+                    'commission',
+                    partner_phone=me_phone,
+                    partner_name=_partner_display_name(me_phone),
+                    land_code=str(code),
+                    amount=visit_commission_amount,
+                )
+            except Exception:
+                current_app.logger.exception('visit commission pending admin SMS failed partner=%s land=%s', me_phone, code)
+            try:
+                from .commission_sms import notify_partner_commission_txn
+                notify_partner_commission_txn(
+                    partner_phone=me_phone,
+                    event='commission_pending',
+                    amount=visit_commission_amount,
+                    land_code=str(code),
+                    commission_type='visit',
+                    reference_id=str(new_id),
+                )
+            except Exception:
+                current_app.logger.exception('visit commission pending SMS failed partner=%s land=%s', me_phone, code)
+
+    tx_state = _partner_land_tx_payload(
+        code,
+        me_phone,
+        is_partner_approved=True,
+        global_assignment_status=ctx.get('global_status') or 'active',
+    )
+    msg = 'بازدید انجام شد ثبت شد.'
+    if created_visit_commission:
+        msg = 'بازدید انجام شد ثبت شد. پورسانت بازدید برای تأیید ادمین ارسال شد.'
+    elif tx_state.get('tx_mode') == 'deal':
+        msg = 'بازدید انجام شد ثبت شد. اکنون می‌توانید درخواست معامله ثبت کنید.'
+    return _mark_in_transaction_finish(
+        code,
+        success=True,
+        message=msg,
+        category='success',
+        new_status=ctx.get('global_status') or 'active',
+        tx_mode=tx_state.get('tx_mode') or 'visit_commission_pending',
+        visit_date=tx_state.get('visit_date') or None,
+    )
+
+
 @express_partner_bp.get('/lands/<string:code>/tx-status', endpoint='land_tx_status')
 @require_partner_access()
 def land_tx_status(code: str):
@@ -4498,11 +4645,23 @@ def mark_in_transaction(code: str):
             visit_requests = load_express_visit_requests() or []
             if not isinstance(visit_requests, list):
                 visit_requests = []
-            if not partner_visit_approved_for_deal(visit_requests, me_phone, code):
+            completed_visit = partner_visit_completed(visit_requests, me_phone, code)
+            commissions_for_visit = load_express_commissions() or []
+            if not isinstance(commissions_for_visit, list):
+                commissions_for_visit = []
+            visit_commission_required = _visit_commission_required_for(commissions_for_visit, me_phone, code)
+            if not completed_visit:
                 return _mark_in_transaction_finish(
                     code,
                     success=False,
-                    message='برای ثبت درخواست معامله، ابتدا درخواست بازدید شما باید توسط ادمین تأیید شود.',
+                    message='برای ثبت درخواست معامله، ابتدا بازدید را انجام‌شده ثبت کنید.',
+                    category='error',
+                )
+            if visit_commission_required and not visit_commission_ready_for_deal(commissions_for_visit, me_phone, code):
+                return _mark_in_transaction_finish(
+                    code,
+                    success=False,
+                    message='برای ثبت درخواست معامله، ابتدا پورسانت بازدید باید توسط ادمین تأیید و به کیف پول شما اضافه شود.',
                     category='error',
                 )
             # هیچ‌کس معامله نکرده، این همکار می‌تواند معامله کند
@@ -4528,13 +4687,6 @@ def mark_in_transaction(code: str):
         if updated:
             save_express_assignments(assignments)
 
-            if new_status == 'in_transaction':
-                visit_requests = load_express_visit_requests() or []
-                if not isinstance(visit_requests, list):
-                    visit_requests = []
-                if complete_visit_for_deal(visit_requests, me_phone, code):
-                    save_express_visit_requests(visit_requests)
-            
             # اگر وضعیت به "در حال معامله" تغییر کرد، رکورد پورسانت ایجاد کن
             if new_status == 'in_transaction':
                 try:
@@ -4675,6 +4827,7 @@ def mark_in_transaction(code: str):
                             str(c.get('land_code')) == str(code)
                             and str(c.get('partner_phone') or '').strip() == me_phone
                             and c.get('status') == 'pending'
+                            and commission_is_deal(c)
                         ):
                             # این پورسانت را حذف می‌کنیم
                             removed_count += 1
@@ -5783,6 +5936,9 @@ def land_detail(code: str):
     visit_requests_list = load_express_visit_requests() or []
     if not isinstance(visit_requests_list, list):
         visit_requests_list = []
+    commissions_for_tx = load_express_commissions() or []
+    if not isinstance(commissions_for_tx, list):
+        commissions_for_tx = []
     tx_state = resolve_partner_land_tx_state(
         me_phone=me_phone,
         land_code=str(code),
@@ -5790,6 +5946,8 @@ def land_detail(code: str):
         visit_requests=visit_requests_list,
         is_partner_approved=is_approved,
         global_assignment_status=global_assignment_status,
+        commissions=commissions_for_tx,
+        visit_commission_required=_visit_commission_required_for(commissions_for_tx, me_phone, code),
     )
     land['_visit_date'] = tx_state.get('visit_date') or ''
     land['_visit_date_jalali'] = tx_state.get('visit_date_jalali') or ''
@@ -5814,12 +5972,9 @@ def land_detail(code: str):
                 'status': PENDING_STATUS,
                 'visit_requested': False,
             }
-        commissions_for_progress = load_express_commissions() or []
-        if not isinstance(commissions_for_progress, list):
-            commissions_for_progress = []
         progress_steps = visit_progress_steps(
             progress_row,
-            commissions_for_progress,
+            commissions_for_tx,
             partner_phone=me_phone,
         )
         land['_visit_progress_steps'] = progress_steps

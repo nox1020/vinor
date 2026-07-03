@@ -172,7 +172,7 @@ def visit_progress_steps(
     visit_commissions = [c for c in related if commission_is_visit(c)]
     deal_commissions = [c for c in related if commission_is_deal(c)]
     visit_commission_paid = any(
-        str(c.get("status") or "").strip().lower() == "paid"
+        str(c.get("status") or "").strip().lower() in ("approved", "paid")
         for c in visit_commissions
     )
     deal_requested = bool(deal_commissions)
@@ -181,7 +181,7 @@ def visit_progress_steps(
         for c in deal_commissions
     )
     deal_paid = any(
-        str(c.get("status") or "").strip().lower() == "paid"
+        str(c.get("status") or "").strip().lower() in ("approved", "paid")
         for c in deal_commissions
     )
 
@@ -270,6 +270,36 @@ def partner_visit_approved_for_deal(
         if not _match_partner_land(r, ph, code):
             continue
         if (str(r.get("status") or "")).strip() == APPROVED_STATUS:
+            return r
+    return None
+
+
+def partner_latest_visit(
+    requests: List[Dict[str, Any]], phone: str, land_code: str
+) -> Optional[Dict[str, Any]]:
+    ph = (phone or "").strip()
+    code = (land_code or "").strip()
+    if not ph or not code:
+        return None
+    for r in reversed(requests or []):
+        if not _match_partner_land(r, ph, code):
+            continue
+        if (str(r.get("status") or "")).strip() != CANCELLED_STATUS:
+            return r
+    return None
+
+
+def partner_visit_completed(
+    requests: List[Dict[str, Any]], phone: str, land_code: str
+) -> Optional[Dict[str, Any]]:
+    ph = (phone or "").strip()
+    code = (land_code or "").strip()
+    if not ph or not code:
+        return None
+    for r in reversed(requests or []):
+        if not _match_partner_land(r, ph, code):
+            continue
+        if (str(r.get("status") or "")).strip() == COMPLETED_STATUS:
             return r
     return None
 
@@ -466,24 +496,31 @@ def complete_visit_for_deal(
     return True
 
 
-def restore_visit_approved_after_deal_release(
-    requests: List[Dict[str, Any]], phone: str, land_code: str
+def visit_commission_ready_for_deal(
+    commissions: List[Dict[str, Any]] | None, phone: str, land_code: str
 ) -> bool:
-    """پس از رفع معامله، بازدید تأییدشده را برمی‌گرداند تا معامله دوباره ممکن شود."""
     ph = (phone or "").strip()
     code = (land_code or "").strip()
     if not ph or not code:
         return False
-    for r in requests:
-        if not _match_partner_land(r, ph, code):
+    for c in commissions or []:
+        if not isinstance(c, dict):
             continue
-        if (str(r.get("status") or "")).strip() != COMPLETED_STATUS:
+        if str(c.get("partner_phone") or "").strip() != ph:
             continue
-        now_iso = datetime.utcnow().isoformat() + "Z"
-        r["status"] = APPROVED_STATUS
-        r["updated_at"] = now_iso
-        r.pop("completed_at", None)
-        return True
+        if str(c.get("land_code") or "").strip() != code:
+            continue
+        if not commission_is_visit(c):
+            continue
+        if str(c.get("status") or "").strip().lower() in ("approved", "paid"):
+            return True
+    return False
+
+
+def restore_visit_approved_after_deal_release(
+    requests: List[Dict[str, Any]], phone: str, land_code: str
+) -> bool:
+    """در جریان جدید، انجام بازدید حفظ می‌شود و با رفع معامله به تأییدشده برنمی‌گردد."""
     return False
 
 
@@ -492,6 +529,9 @@ def visit_tx_mode(
     *,
     has_visit_awaiting_admin: bool,
     has_approved_visit: bool,
+    has_completed_visit: bool = False,
+    visit_commission_ready: bool = False,
+    visit_commission_required: bool = False,
     is_approved: bool,
     is_sold: bool,
 ) -> str:
@@ -500,8 +540,12 @@ def visit_tx_mode(
         return "hidden"
     if st == "in_transaction":
         return "release"
-    if has_approved_visit:
+    if has_completed_visit:
+        if visit_commission_required and not visit_commission_ready:
+            return "visit_commission_pending"
         return "deal"
+    if has_approved_visit:
+        return "visit_done"
     if has_visit_awaiting_admin:
         return "visit_pending"
     return "visit"
@@ -515,6 +559,8 @@ def resolve_partner_land_tx_state(
     visit_requests: List[Dict[str, Any]],
     is_partner_approved: bool,
     global_assignment_status: str,
+    commissions: List[Dict[str, Any]] | None = None,
+    visit_commission_required: bool = False,
 ) -> Dict[str, Any]:
     """وضعیت دکمه معامله/بازدید برای همکار روی یک فایل."""
     code = (land_code or "").strip()
@@ -529,7 +575,10 @@ def resolve_partner_land_tx_state(
     open_visit = partner_open_visit(visit_requests, ph, code) if ph else None
     awaiting = partner_visit_awaiting_admin(visit_requests, ph, code) if ph else None
     approved = partner_visit_approved_for_deal(visit_requests, ph, code) if ph else None
-    visit_date = (open_visit or {}).get("visit_date") or ""
+    completed = partner_visit_completed(visit_requests, ph, code) if ph else None
+    latest_visit = partner_latest_visit(visit_requests, ph, code) if ph else None
+    visit_ready = visit_commission_ready_for_deal(commissions, ph, code) if ph else False
+    visit_date = (open_visit or completed or latest_visit or {}).get("visit_date") or ""
     visit_date_jalali = format_iso_date_jalali(str(visit_date))
 
     if gs == "in_transaction":
@@ -544,6 +593,9 @@ def resolve_partner_land_tx_state(
             gs,
             has_visit_awaiting_admin=bool(awaiting),
             has_approved_visit=bool(approved),
+            has_completed_visit=bool(completed),
+            visit_commission_ready=bool(visit_ready),
+            visit_commission_required=bool(visit_commission_required),
             is_approved=is_partner_approved,
             is_sold=gs == "sold",
         )
@@ -553,7 +605,7 @@ def resolve_partner_land_tx_state(
         "assignment_status": gs,
         "visit_date": visit_date,
         "visit_date_jalali": visit_date_jalali,
-        "visit_status": (str((open_visit or {}).get("status") or "")).strip(),
+        "visit_status": (str((open_visit or completed or latest_visit or {}).get("status") or "")).strip(),
     }
 
 
@@ -581,14 +633,14 @@ def admin_row_dict(
     st = (str(row.get("status") or PENDING_STATUS)).strip()
     labels = {
         PENDING_STATUS: "در انتظار تأیید",
-        APPROVED_STATUS: "تأیید شده — آماده معامله",
-        COMPLETED_STATUS: "معامله ثبت شد",
+        APPROVED_STATUS: "تأیید شده — در انتظار انجام بازدید",
+        COMPLETED_STATUS: "بازدید انجام شد",
         CANCELLED_STATUS: "رد شده",
     }
     hints = {
         PENDING_STATUS: "تأیید کنید تا همکار بتواند «درخواست معامله» بزند.",
-        APPROVED_STATUS: "همکار می‌تواند درخواست معامله ثبت کند.",
-        COMPLETED_STATUS: "همکار معامله را شروع کرده — پورسانت در بخش پورسانت‌ها.",
+        APPROVED_STATUS: "همکار باید پس از انجام بازدید، آن را از روی فایل ثبت کند.",
+        COMPLETED_STATUS: "بازدید انجام شده؛ پس از تأیید پورسانت بازدید، درخواست معامله فعال می‌شود.",
         CANCELLED_STATUS: "این درخواست بسته شده است.",
     }
     progress_steps = visit_progress_steps(row, commissions)

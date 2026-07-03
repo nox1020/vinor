@@ -24,7 +24,7 @@
     {% endif %}
     {% if done_count %}
     <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-emerald-700 dark:text-emerald-300">
-      <span class="font-semibold tabular-nums">{{ done_count }}</span> معامله‌شده
+      <span class="font-semibold tabular-nums">{{ done_count }}</span> بازدید انجام‌شده
     </span>
     {% endif %}
     <a href="{{ url_for('admin.express_commissions') }}"
@@ -43,11 +43,11 @@
     <div class="px-4 pb-4 text-xs text-gray-600 dark:text-gray-400 leading-relaxed border-t border-gray-100 dark:border-gray-800 pt-3 space-y-1.5">
       <p>۱) همکار درخواست بازدید ثبت می‌کند.</p>
       <p>۲) ادمین درخواست بازدید را تأیید می‌کند.</p>
-      <p>۳) پس از انجام بازدید، همکار از صفحه فایل «درخواست معامله» می‌زند.</p>
-      <p>۴) در صورت وجود پورسانت بازدید، از بخش <a href="{{ url_for('admin.express_commissions') }}" class="text-blue-600 dark:text-blue-400 hover:underline">پورسانت‌ها</a> ثبت/تأیید و از مسیر برداشت واریز می‌شود.</p>
-      <p>۵) درخواست معامله همکار به‌صورت پورسانت pending ثبت می‌شود.</p>
-      <p>۶) ادمین پورسانت معامله را تأیید می‌کند.</p>
-      <p>۷) همکار برداشت می‌زند و واریز پورسانت معامله از مالی/برداشت انجام می‌شود.</p>
+      <p>۳) همکار روی خود فایل «بازدید انجام شد» را ثبت می‌کند.</p>
+      <p>۴) ادمین پورسانت بازدید را از بخش <a href="{{ url_for('admin.express_commissions') }}" class="text-blue-600 dark:text-blue-400 hover:underline">پورسانت‌ها</a> تأیید می‌کند تا به کیف پول همکار اضافه شود.</p>
+      <p>۵) بعد از تأیید پورسانت بازدید، همکار از صفحه فایل «درخواست معامله» می‌زند.</p>
+      <p>۶) درخواست معامله همکار به‌صورت پورسانت pending ثبت می‌شود و ادمین آن را تأیید می‌کند.</p>
+      <p>۷) پورسانت معامله به کیف پول همکار اضافه می‌شود و از مسیر برداشت قابل واریز است.</p>
     </div>
   </details>
 
@@ -100,7 +100,7 @@
       {{ filter_tab('active', 'فعال', active_count) }}
       {{ filter_tab('pending', 'انتظار', pending_count) }}
       {{ filter_tab('approved', 'تأییدشده', approved_count) }}
-      {{ filter_tab('done', 'معامله‌شده', done_count) }}
+      {{ filter_tab('done', 'بازدید انجام‌شده', done_count) }}
       {{ filter_tab('closed', 'رد شده', closed_count) }}
       {{ filter_tab('all', 'همه', all_count) }}
     </div>

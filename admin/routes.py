@@ -4971,13 +4971,13 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
     labels = {
         PENDING_STATUS: 'در انتظار تأیید',
         APPROVED_STATUS: 'تأیید شده',
-        COMPLETED_STATUS: 'معامله ثبت شد',
+        COMPLETED_STATUS: 'بازدید انجام شد',
         CANCELLED_STATUS: 'رد شده',
     }
     label = labels.get(new_status, new_status)
     if new_status == APPROVED_STATUS:
         flash(
-            f'وضعیت درخواست بازدید {name} به «{label}» تغییر کرد. درخواست معامله برای همکار فعال شد.',
+            f'وضعیت درخواست بازدید {name} به «{label}» تغییر کرد. همکار باید پس از انجام بازدید، آن را روی فایل ثبت کند.',
             'success',
         )
     else:
@@ -5010,7 +5010,7 @@ def express_visit_request_status(vid: str):
             break
 
     if prev_status and new_status and not admin_can_transition_visit(prev_status, new_status):
-        flash('این تغییر وضعیت مجاز نیست. «معامله ثبت شد» فقط پس از درخواست معامله همکار ثبت می‌شود.', 'error')
+        flash('این تغییر وضعیت مجاز نیست. «بازدید انجام شد» باید توسط همکار از روی صفحه فایل ثبت شود.', 'error')
         return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
 
     rec, err = admin_update_visit_request_status(
