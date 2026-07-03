@@ -27,7 +27,7 @@
   var OFFLINE_NETWORK_MSG = 'اتصال اینترنت قطع است';
   var OFFLINE_SERVER_MSG = 'ارتباط با سرور برقرار نیست';
   var ONLINE_MSG = 'آنلاین شدید';
-  var ONLINE_TOAST_MS = 2200;
+  var ONLINE_TOAST_MS = 0;
   var ONLINE_FADE_MS = 280;
   var ONLINE_GRACE_MS = 3500;
   var STARTUP_GRACE_MS = 5000;
@@ -357,15 +357,9 @@
 
     if (on) {
       unreachableStreak = 0;
-      var showToast = !!opts.onlineToast || (prev === false && !opts.silent);
-      if (showToast) {
-        lastOnline = true;
-        showOnlineToast(opts.message);
-        return;
-      }
       if (onlineToastActive) {
         lastOnline = true;
-        if (!toastHideTimer) scheduleOnlineToastHide();
+        hideBarCompletely(false);
         return;
       }
       lastOnline = true;
@@ -441,10 +435,9 @@
       if (reachable) {
         unreachableStreak = 0;
         cancelProbeRetries();
-        var wasOffline = lastOnline === false;
         window.vinorExpressSyncConnectivity(true, {
           force: opts.force !== false,
-          onlineToast: !!opts.onlineToast || wasOffline,
+          onlineToast: false,
           silent: !!opts.silent
         });
         if (lastOnline !== false) startOnlineMonitor();
@@ -479,7 +472,8 @@
   window.vinorExpressProbeConnectivity = applyConnectivity;
 
   window.addEventListener('online', function () {
-    applyConnectivity({ onlineToast: lastOnline === false });
+    window.vinorExpressSyncConnectivity(true, { force: true, silent: true });
+    applyConnectivity({ silent: true });
   });
   window.addEventListener('offline', function () {
     unreachableStreak = 0;
