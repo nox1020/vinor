@@ -119,8 +119,6 @@ class OnboardingTour {
         this.tourData = this.getLandDetailTour();
       } else if (path.includes('/commissions')) {
         this.tourData = this.getCommissionsTour();
-      } else if (path.includes('/notes')) {
-        this.tourData = this.getNotesTour();
       } else if (path.includes('/profile')) {
         this.tourData = this.getProfileTour();
       } else if (path.includes('/help')) {
@@ -161,7 +159,7 @@ class OnboardingTour {
       {
         element: '[data-tour="bottom-nav"]',
         title: 'منوی پایین',
-        description: 'از این منو می‌توانید به بخش‌های مختلف پنل دسترسی داشته باشید: داشبورد، پورسانت‌ها، یادداشت‌ها و پروفایل.',
+        description: 'از این منو می‌توانید به بخش‌های مختلف پنل دسترسی داشته باشید: داشبورد، پورسانت‌ها، اعلان‌ها و پروفایل.',
         position: 'top'
       }
     ];
@@ -219,38 +217,6 @@ class OnboardingTour {
     ];
   }
 
-  getNotesTour() {
-    return [
-      {
-        element: '[data-tour="notes-header"]',
-        title: 'یادداشت‌های خصوصی 📝',
-        description: 'در این صفحه می‌توانید یادداشت‌های شخصی خود را ثبت و مدیریت کنید. این یادداشت‌ها فقط برای شما قابل مشاهده است.',
-        position: 'bottom'
-      },
-      {
-        element: '[data-tour="notes-add-button"]',
-        title: 'افزودن یادداشت',
-        description: 'برای افزودن یادداشت جدید، روی دکمه + در هدر کلیک کنید. سپس می‌توانید یادداشت خود را بنویسید و ذخیره کنید.',
-        position: 'bottom',
-        action: 'click',
-        actionMessage: 'لطفاً روی دکمه + کلیک کنید تا فرم افزودن یادداشت نمایش داده شود.'
-      },
-      {
-        element: '[data-tour="notes-input"]',
-        title: 'ثبت یادداشت',
-        description: 'یادداشت خود را در این فیلد بنویسید. می‌توانید هر چیزی که می‌خواهید به خاطر بسپارید را اینجا ثبت کنید.',
-        position: 'bottom',
-        waitForElement: true
-      },
-      {
-        element: '[data-tour="notes-grid"]',
-        title: 'یادداشت‌های شما',
-        description: 'تمام یادداشت‌های شما در اینجا نمایش داده می‌شود. می‌توانید هر یادداشت را با hover کردن و کلیک روی آیکون سطل زباله حذف کنید.',
-        position: 'top'
-      }
-    ];
-  }
-
   getProfileTour() {
     return [
       {
@@ -258,12 +224,6 @@ class OnboardingTour {
         title: 'پروفایل شما 👤',
         description: 'در این بخش اطلاعات حساب کاربری شما شامل نام، شماره تماس و نقش نمایش داده می‌شود. همچنین می‌توانید از اینجا از حساب خود خارج شوید.',
         position: 'bottom'
-      },
-      {
-        element: '[data-tour="notes-link"]',
-        title: 'یادداشت‌های خصوصی 📝',
-        description: 'یادداشت‌های شخصی خود را اینجا ثبت و مدیریت کنید. این یادداشت‌ها فقط برای شما قابل مشاهده است و می‌توانید از آن‌ها برای یادآوری اطلاعات مهم استفاده کنید.',
-        position: 'top'
       },
       {
         element: '[data-tour="routine-link"]',
@@ -428,61 +388,15 @@ class OnboardingTour {
         position: 'top',
         page: 'commissions',
         action: 'navigate',
-        actionMessage: 'حالا به منوی پایین بروید و روی "یادداشت‌ها" کلیک کنید. بعد از رفتن به صفحه یادداشت‌ها، تور ادامه می‌یابد.',
-        nextUrl: '/express/partner/notes'
-      },
-      // مرحله 11: یادداشت‌ها - هدر
-      {
-        element: '[data-tour="notes-header"]',
-        title: 'یادداشت‌های خصوصی 📝',
-        description: 'در این صفحه می‌توانید یادداشت‌های شخصی خود را ثبت و مدیریت کنید. این یادداشت‌ها فقط برای شما قابل مشاهده است.',
-        position: 'bottom',
-        page: 'notes'
-      },
-      // مرحله 12: دکمه افزودن یادداشت
-      {
-        element: '[data-tour="notes-add-button"]',
-        title: 'افزودن یادداشت',
-        description: 'برای افزودن یادداشت جدید، روی دکمه + در هدر کلیک کنید. سپس می‌توانید یادداشت خود را بنویسید و ذخیره کنید.',
-        position: 'bottom',
-        page: 'notes',
-        action: 'auto-navigate',
-        actionMessage: 'در حال نمایش فرم افزودن یادداشت...'
-      },
-      // مرحله 13: فیلد ثبت یادداشت
-      {
-        element: '[data-tour="notes-input"]',
-        title: 'ثبت یادداشت',
-        description: 'یادداشت خود را در این فیلد بنویسید. می‌توانید هر چیزی که می‌خواهید به خاطر بسپارید را اینجا ثبت کنید.',
-        position: 'bottom',
-        page: 'notes',
-        waitForElement: true
-      },
-      // مرحله 14: یادداشت‌های شما
-      {
-        element: '[data-tour="notes-grid"]',
-        title: 'یادداشت‌های شما',
-        description: 'تمام یادداشت‌های شما در اینجا نمایش داده می‌شود. می‌توانید هر یادداشت را با hover کردن و کلیک روی آیکون سطل زباله حذف کنید.',
-        position: 'top',
-        page: 'notes',
-        action: 'navigate',
         actionMessage: 'حالا به منوی پایین بروید و روی "من" کلیک کنید. بعد از رفتن به صفحه پروفایل، تور ادامه می‌یابد.',
         nextUrl: '/express/partner/profile'
       },
-      // مرحله 13: پروفایل
+      // مرحله 11: پروفایل
       {
         element: '[data-tour="profile-section"]',
         title: 'پروفایل شما 👤',
         description: 'در این بخش اطلاعات حساب کاربری شما شامل نام، شماره تماس و نقش نمایش داده می‌شود. همچنین می‌توانید از اینجا از حساب خود خارج شوید.',
         position: 'bottom',
-        page: 'profile'
-      },
-      // مرحله 14: لینک یادداشت‌ها در پروفایل
-      {
-        element: '[data-tour="notes-link"]',
-        title: 'یادداشت‌های خصوصی 📝',
-        description: 'یادداشت‌های شخصی خود را اینجا ثبت و مدیریت کنید. این یادداشت‌ها فقط برای شما قابل مشاهده است و می‌توانید از آن‌ها برای یادآوری اطلاعات مهم استفاده کنید.',
-        position: 'top',
         page: 'profile'
       },
       {
@@ -906,7 +820,6 @@ class OnboardingTour {
     const paths = {
       'dashboard': '/express/partner/dashboard',
       'commissions': '/express/partner/commissions',
-      'notes': '/express/partner/notes',
       'profile': '/express/partner/profile',
       'support': '/express/partner/support',
       'help': '/express/partner/help'

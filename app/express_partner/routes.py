@@ -102,6 +102,10 @@ from .visit_requests import (
     visit_date_min_iso,
     visit_allowed_weekdays_for_js,
     resolve_partner_land_tx_state,
+    PENDING_STATUS,
+    APPROVED_STATUS,
+    COMPLETED_STATUS,
+    CANCELLED_STATUS,
 )
 from .commissions_flow import commission_blocks_new_deal_record
 from .support_tickets import (
@@ -2555,14 +2559,167 @@ def api_favorites_cards():
     })
 
 
-@express_partner_bp.get('/notes', endpoint='notes')
-@require_partner_access(allow_pending=True, allow_guest=True)
-def notes_page():
-    me_phone = (session.get("user_phone") or "").strip()
-    items = [n for n in (load_partner_notes() or []) if str(n.get('phone')) == me_phone]
-    # مرتب‌سازی بر اساس تاریخ (جدیدترین اول)
-    items = _sort_by_created_at_desc(items)
-    return render_template("express_partner/notes.html", notes=items, hide_header=True, SHOW_SUBMIT_BUTTON=False, brand="وینور", domain="vinor.ir")
+@express_partner_bp.get('/requests', endpoint='requests')
+@require_partner_access(allow_pending=True)
+def requests_page():
+    """صفحهٔ وضعیت همهٔ درخواست‌های بازدید همکار جاری."""
+    me_phone = (session.get('user_phone') or '').strip()
+    current_filter = (request.args.get('filter') or 'all').strip().lower()
+    if current_filter not in ('all', PENDING_STATUS, APPROVED_STATUS, COMPLETED_STATUS, CANCELLED_STATUS):
+        current_filter = 'all'
+    rows = load_express_visit_requests() or []
+    if not isinstance(rows, list):
+        rows = []
+    commissions = load_express_commissions() or []
+    if not isinstance(commissions, list):
+        commissions = []
+
+    status_meta = {
+        PENDING_STATUS: {
+            'label': 'در انتظار تأیید',
+            'hint': 'درخواست شما ثبت شده و منتظر بررسی تیم وینور است.',
+            'bucket': 'pending',
+        },
+        APPROVED_STATUS: {
+            'label': 'تأیید شده',
+            'hint': 'بازدید تأیید شده؛ پس از هماهنگی می‌توانید مسیر معامله را ادامه دهید.',
+            'bucket': 'approved',
+        },
+        COMPLETED_STATUS: {
+            'label': 'انجام شده',
+            'hint': 'این بازدید به مرحله معامله رسیده است.',
+            'bucket': 'completed',
+        },
+        CANCELLED_STATUS: {
+            'label': 'تأیید نشده',
+            'hint': 'این درخواست توسط تیم وینور تأیید نشده یا بسته شده است.',
+            'bucket': 'cancelled',
+        },
+    }
+
+    def _request_progress_steps(row: Dict[str, Any], status: str) -> List[Dict[str, Any]]:
+        code = str(row.get('land_code') or '').strip()
+        related = [
+            c for c in commissions
+            if isinstance(c, dict)
+            and str(c.get('partner_phone') or '').strip() == me_phone
+            and str(c.get('land_code') or '').strip() == code
+        ]
+        visit_commissions = [
+            c for c in related
+            if 'visit' in str(c.get('commission_type') or '').strip().lower()
+        ]
+        deal_commissions = [
+            c for c in related
+            if 'visit' not in str(c.get('commission_type') or '').strip().lower()
+            and str(c.get('commission_type') or '').strip() != 'referral'
+        ]
+        visit_commission_paid = any(
+            str(c.get('status') or '').strip().lower() == 'paid'
+            for c in visit_commissions
+        )
+        deal_requested = bool(deal_commissions)
+        deal_approved = any(
+            str(c.get('status') or '').strip().lower() in ('approved', 'paid')
+            for c in deal_commissions
+        )
+        deal_paid = any(
+            str(c.get('status') or '').strip().lower() == 'paid'
+            for c in deal_commissions
+        )
+
+        done = {
+            'visit_requested': True,
+            'visit_approved': status in (APPROVED_STATUS, COMPLETED_STATUS),
+            'visit_done': status == COMPLETED_STATUS,
+            'visit_commission_paid': visit_commission_paid,
+            'deal_requested': deal_requested,
+            'deal_approved': deal_approved,
+            'deal_commission_paid': deal_paid,
+        }
+        keys = (
+            ('visit_requested', 'درخواست بازدید'),
+            ('visit_approved', 'تأیید درخواست'),
+            ('visit_done', 'بازدید انجام شد'),
+            ('visit_commission_paid', 'واریز پورسانت بازدید'),
+            ('deal_requested', 'درخواست معامله'),
+            ('deal_approved', 'تأیید درخواست معامله'),
+            ('deal_commission_paid', 'واریز پورسانت معامله'),
+        )
+        first_pending_seen = False
+        steps: List[Dict[str, Any]] = []
+        for key, label in keys:
+            state = 'done' if done.get(key) else 'todo'
+            if state == 'todo' and not first_pending_seen and status != CANCELLED_STATUS:
+                state = 'current'
+                first_pending_seen = True
+            steps.append({'key': key, 'label': label, 'state': state})
+        if status == CANCELLED_STATUS:
+            for step in steps:
+                if step['state'] != 'done':
+                    step['state'] = 'blocked'
+        return steps
+
+    items: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get('partner_phone') or '').strip() != me_phone:
+            continue
+        st = str(row.get('status') or PENDING_STATUS).strip() or PENDING_STATUS
+        meta = status_meta.get(st, {'label': st, 'hint': '', 'bucket': 'other'})
+        visit_date = str(row.get('visit_date') or '').strip()
+        progress_steps = _request_progress_steps(row, st)
+        items.append({
+            'id': row.get('id') or '',
+            'land_code': row.get('land_code') or '',
+            'land_title': row.get('land_title') or row.get('land_code') or 'فایل اکسپرس',
+            'visit_date': visit_date,
+            'visit_date_jalali': format_iso_date_jalali(visit_date) if visit_date else '',
+            'status': st,
+            'status_label': meta['label'],
+            'status_hint': meta['hint'],
+            'bucket': meta['bucket'],
+            'created_at': row.get('created_at') or '',
+            'updated_at': row.get('updated_at') or '',
+            'approved_at': row.get('approved_at') or '',
+            'completed_at': row.get('completed_at') or '',
+            'admin_note': row.get('admin_note') or '',
+            'progress_steps': progress_steps,
+        })
+
+    items.sort(key=lambda item: str(item.get('updated_at') or item.get('created_at') or ''), reverse=True)
+    counts = {
+        'all': len(items),
+        'pending': sum(1 for i in items if i.get('status') == PENDING_STATUS),
+        'approved': sum(1 for i in items if i.get('status') == APPROVED_STATUS),
+        'completed': sum(1 for i in items if i.get('status') == COMPLETED_STATUS),
+        'cancelled': sum(1 for i in items if i.get('status') == CANCELLED_STATUS),
+    }
+    filter_options = [
+        {'key': 'all', 'label': 'همه', 'count': counts['all']},
+        {'key': PENDING_STATUS, 'label': 'در انتظار', 'count': counts['pending']},
+        {'key': APPROVED_STATUS, 'label': 'تأیید شده', 'count': counts['approved']},
+        {'key': COMPLETED_STATUS, 'label': 'انجام شده', 'count': counts['completed']},
+        {'key': CANCELLED_STATUS, 'label': 'تأیید نشده', 'count': counts['cancelled']},
+    ]
+    if current_filter != 'all':
+        items = [item for item in items if item.get('status') == current_filter]
+    current_filter_label = next(
+        (opt['label'] for opt in filter_options if opt['key'] == current_filter),
+        'همه',
+    )
+    current_filter_count = len(items)
+    return render_template(
+        'express_partner/requests.html',
+        items=items,
+        counts=counts,
+        filter_options=filter_options,
+        current_filter=current_filter,
+        current_filter_label=current_filter_label,
+        current_filter_count=current_filter_count,
+        hide_header=True,
+    )
 
 
 @express_partner_bp.get('/commissions', endpoint='commissions')
@@ -3103,48 +3260,6 @@ def withdrawals_cancel(wid: str):
     })
 
 
-@express_partner_bp.post('/notes/add')
-@require_partner_access(allow_pending=True)
-def add_note():
-    me_phone = (session.get("user_phone") or "").strip()
-    content = (request.form.get("content") or "").strip()
-    if not content:
-        return redirect(url_for("express_partner.dashboard"))
-    items = load_partner_notes() or []
-    new_id = (max([int(x.get('id',0) or 0) for x in items if isinstance(x, dict)], default=0) or 0) + 1
-    items.append({"id": new_id, "phone": me_phone, "content": content, "created_at": datetime.utcnow().isoformat()+"Z"})
-    save_partner_notes(items)
-    try:
-        ref = request.referrer or ""
-    except Exception:
-        ref = ""
-    if "/express/partner/notes" in ref:
-        return redirect(url_for("express_partner.notes"))
-    nxt = (request.form.get("next") or request.args.get("next") or "").strip()
-    if nxt.startswith("/express/partner/notes"):
-        return redirect(nxt)
-    return redirect(url_for("express_partner.dashboard"))
-
-
-@express_partner_bp.post('/notes/<int:nid>/delete')
-@require_partner_access(allow_pending=True)
-def delete_note(nid: int):
-    me_phone = (session.get("user_phone") or "").strip()
-    items = load_partner_notes() or []
-    items = [n for n in items if not (int(n.get('id',0) or 0) == int(nid) and str(n.get('phone')) == me_phone)]
-    save_partner_notes(items)
-    try:
-        ref = request.referrer or ""
-    except Exception:
-        ref = ""
-    if "/express/partner/notes" in ref:
-        return redirect(url_for("express_partner.notes"))
-    nxt = (request.form.get("next") or request.args.get("next") or "").strip()
-    if nxt.startswith("/express/partner/notes"):
-        return redirect(nxt)
-    return redirect(url_for("express_partner.dashboard"))
-
-
 @express_partner_bp.get('/api/notes')
 @require_partner_access(json_response=True, allow_pending=True)
 def api_notes_list():
@@ -3551,6 +3666,31 @@ def support():
         'block_reason': '',
     }
     tab = (request.args.get('tab') or '').strip().lower()
+    quick = (request.args.get('quick') or '').strip().lower()
+    support_prefill: Dict[str, str] = {'category': '', 'subject': '', 'message': ''}
+    support_submit_label = 'ارسال تیکت'
+    support_message_label = 'متن'
+    support_message_placeholder = 'مشکل یا سوال را با جزئیات بنویسید…'
+    if quick == 'visit_without_details':
+        tab = 'new'
+        support_prefill = {
+            'category': 'cooperation',
+            'subject': 'درخواست بازدید بدون مشخصات',
+            'message': 'درخواست بازدید',
+        }
+        support_submit_label = 'درخواست بازدید'
+        support_message_label = 'متن'
+        support_message_placeholder = 'متن درخواست بازدید را بنویسید…'
+    elif quick == 'deal_without_details':
+        tab = 'new'
+        support_prefill = {
+            'category': 'cooperation',
+            'subject': 'درخواست معامله بدون مشخصات',
+            'message': 'درخواست معامله',
+        }
+        support_submit_label = 'درخواست معامله'
+        support_message_label = 'متن'
+        support_message_placeholder = 'متن درخواست معامله را بنویسید…'
     if me_phone:
         all_tickets = load_support_tickets() or []
         if isinstance(all_tickets, list):
@@ -3568,6 +3708,10 @@ def support():
         ticket_stats=ticket_stats,
         ticket_tab=tab,
         ticket_categories=TICKET_CATEGORIES,
+        support_prefill=support_prefill,
+        support_submit_label=support_submit_label,
+        support_message_label=support_message_label,
+        support_message_placeholder=support_message_placeholder,
         message_min_len=MESSAGE_MIN_LEN,
         message_max_len=MESSAGE_MAX_LEN,
     )
@@ -4006,6 +4150,7 @@ def _mark_in_transaction_finish(
     new_status: str | None = None,
     tx_mode: str | None = None,
     visit_date: str | None = None,
+    redirect_url: str | None = None,
 ):
     """پاسخ HTML (redirect) یا JSON برای درخواست AJAX جزئیات فایل."""
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -4022,10 +4167,14 @@ def _mark_in_transaction_finish(
             jalali = format_iso_date_jalali(visit_date)
             if jalali:
                 payload['visit_date_jalali'] = jalali
+        if success and redirect_url:
+            payload['redirect_url'] = redirect_url
         return jsonify(payload), (200 if success else 400)
     if message:
         flash(message, 'land')
     if success:
+        if redirect_url:
+            return redirect(redirect_url)
         return redirect(url_for('express_partner.land_detail', code=code))
     return redirect(url_for('express_partner.dashboard'))
 
@@ -4223,11 +4372,12 @@ def create_visit_request(code: str):
         return _mark_in_transaction_finish(
             code,
             success=True,
-            message='درخواست بازدید شما قبلاً ثبت شده است.',
+            message='درخواست بازدید شما قبلاً ثبت شده است. از صفحه درخواست‌ها وضعیت را پیگیری کنید.',
             category='success',
             new_status='active',
             tx_mode=tx_state.get('tx_mode') or 'visit_pending',
             visit_date=vdate,
+            redirect_url=url_for('express_partner.requests', submitted=1),
         )
     if err == 'past_date':
         return _mark_in_transaction_finish(
@@ -4281,9 +4431,9 @@ def create_visit_request(code: str):
         current_app.logger.exception(
             'visit_submitted partner SMS failed phone=%s code=%s', me_phone, code
         )
-    msg = 'درخواست بازدید ارسال شد'
+    msg = 'درخواست بازدید ارسال شد. از صفحه درخواست‌ها وضعیت را پیگیری کنید.'
     if not sms_result.get('ok') and not sms_result.get('skipped'):
-        msg = 'درخواست بازدید ارسال شد. (ارسال پیامک به ادمین ناموفق بود.)'
+        msg = 'درخواست بازدید ارسال شد. از صفحه درخواست‌ها وضعیت را پیگیری کنید. (ارسال پیامک به ادمین ناموفق بود.)'
 
     try:
         is_pa = _is_partner_approved(partner_profile)
@@ -4304,6 +4454,7 @@ def create_visit_request(code: str):
         new_status='active',
         tx_mode=tx_state.get('tx_mode') or 'visit_pending',
         visit_date=tx_state.get('visit_date') or rec.get('visit_date') or visit_date,
+        redirect_url=url_for('express_partner.requests', submitted=1),
     )
 
 

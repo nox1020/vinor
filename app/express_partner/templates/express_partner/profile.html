@@ -120,7 +120,7 @@
         {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری', 'برای تبدیل به همکار اکسپرس درخواست دهید', tour='apply-link') }}
         {% endif %}
 
-        {{ profile_menu_row(url_for('express_partner.notes'), 'fa-sticky-note', 'یادداشت‌ها', 'یادداشت‌های شخصی', tour='notes-link') }}
+        {{ profile_menu_row(url_for('express_partner.requests'), 'fa-clipboard-list', 'درخواست‌ها', 'وضعیت درخواست‌های بازدید', tour='requests-link') }}
         {{ profile_menu_row(url_for('express_partner.routine'), 'fa-list-check', 'آمار فعالیت شما', 'روتین روزانه و تقویم پیشرفت' if is_approved else 'پیش‌نمایش روتین همکاری', tour='routine-link') }}
 
         {% if is_vinor_apk %}

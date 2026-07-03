@@ -1732,6 +1732,14 @@
           ? data.message
           : VISIT_SENT_MSG;
         showTxToast(toastMsg, false);
+        if (data.redirect_url) {
+          if (window.vinorExpressNavigate) {
+            window.vinorExpressNavigate(data.redirect_url, { forward: true });
+          } else {
+            window.location.href = data.redirect_url;
+          }
+          return;
+        }
         focusDetailActionsAfterVisit();
         fetchLandTxStatus().then(function (st) {
           if (!st || !st.success) return;

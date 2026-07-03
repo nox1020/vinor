@@ -34,7 +34,6 @@ const PRECACHE_URLS = [
   // profile و commissions هم session-based هستند
   // '/express/partner/profile',
   // '/express/partner/commissions',
-  '/express/partner/notes',
   '/express/partner/offline',
   // Manifest
   '/express/partner/manifest.webmanifest',

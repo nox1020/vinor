@@ -187,10 +187,17 @@
     gap: 0.5rem;
     text-decoration: none;
     color: inherit;
-    transition: border-color 0.2s ease, transform 0.15s ease;
+    touch-action: pan-y;
+    will-change: transform, opacity;
+    transition: border-color 0.2s ease, transform 0.15s ease, opacity 0.15s ease;
   }
   .vinor-apk-download-strip:active {
     transform: scale(0.99);
+  }
+  .vinor-apk-download-strip.is-swipe-dismissing {
+    pointer-events: none;
+    opacity: 0;
+    transition: transform 0.18s ease, opacity 0.18s ease;
   }
   .vinor-apk-download-strip__icon {
     flex-shrink: 0;
@@ -447,11 +454,133 @@
     return document.querySelector('[data-apk-strip]');
   }
 
+  function apkStripDismissedThisEntry() {
+    return !!window.__vinorApkStripDismissedThisEntry;
+  }
+
   function setApkBannerClass(on) {
     try {
       if (on) document.documentElement.classList.add('vinor-has-apk-banner');
       else document.documentElement.classList.remove('vinor-has-apk-banner');
     } catch (_) {}
+  }
+
+  function dismissApkStripBySwipe(strip, dx) {
+    if (!strip) return;
+    window.__vinorApkStripDismissedThisEntry = true;
+    const dir = dx < 0 ? -1 : 1;
+    strip.classList.add('is-swipe-dismissing');
+    strip.style.transform = 'translateX(' + (dir * 110) + '%)';
+    strip.style.opacity = '0';
+    setApkBannerClass(false);
+    window.setTimeout(function () {
+      if (strip && strip.parentNode) strip.parentNode.removeChild(strip);
+    }, 190);
+  }
+
+  function resetApkStripDrag(strip) {
+    if (!strip) return;
+    strip.style.transform = '';
+    strip.style.opacity = '';
+  }
+
+  function bindApkStripSwipe(strip) {
+    if (!strip || strip.getAttribute('data-apk-strip-swipe-bound') === '1') return;
+    strip.setAttribute('data-apk-strip-swipe-bound', '1');
+
+    let startX = 0;
+    let startY = 0;
+    let lastX = 0;
+    let lastY = 0;
+    let dragging = false;
+    let swiped = false;
+    const threshold = 76;
+
+    function begin(x, y) {
+      startX = lastX = x;
+      startY = lastY = y;
+      dragging = true;
+      swiped = false;
+    }
+
+    function move(x, y, ev) {
+      if (!dragging) return;
+      lastX = x;
+      lastY = y;
+      const dx = x - startX;
+      const dy = y - startY;
+      const absX = Math.abs(dx);
+      const absY = Math.abs(dy);
+      if (absX < 8 && absY < 8) return;
+      if (absX <= absY * 1.15) return;
+      swiped = true;
+      if (ev && ev.cancelable) ev.preventDefault();
+      strip.style.transform = 'translateX(' + dx + 'px) rotate(' + (dx / 58) + 'deg)';
+      strip.style.opacity = String(Math.max(0.35, 1 - absX / 190));
+    }
+
+    function end() {
+      if (!dragging) return;
+      dragging = false;
+      const dx = lastX - startX;
+      const dy = lastY - startY;
+      if (swiped && Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        dismissApkStripBySwipe(strip, dx);
+        return;
+      }
+      resetApkStripDrag(strip);
+    }
+
+    if (window.PointerEvent) {
+      strip.addEventListener('pointerdown', function (ev) {
+        if (ev.button !== 0) return;
+        begin(ev.clientX, ev.clientY);
+      });
+      strip.addEventListener('pointermove', function (ev) {
+        move(ev.clientX, ev.clientY, ev);
+      });
+      strip.addEventListener('pointerup', end);
+      strip.addEventListener('pointercancel', function () {
+        dragging = false;
+        resetApkStripDrag(strip);
+      });
+    } else {
+      strip.addEventListener('touchstart', function (ev) {
+        const t = ev.touches && ev.touches[0];
+        if (t) begin(t.clientX, t.clientY);
+      }, { passive: true });
+      strip.addEventListener('touchmove', function (ev) {
+        const t = ev.touches && ev.touches[0];
+        if (t) move(t.clientX, t.clientY, ev);
+      }, { passive: false });
+      strip.addEventListener('touchend', end);
+      strip.addEventListener('touchcancel', function () {
+        dragging = false;
+        resetApkStripDrag(strip);
+      });
+    }
+
+    strip.addEventListener('click', function (ev) {
+      if (!swiped) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      swiped = false;
+    }, true);
+  }
+
+  function bindExistingApkStripSwipe() {
+    const strip = getApkStripEl();
+    if (!strip) {
+      setApkBannerClass(false);
+      return;
+    }
+    if (apkStripDismissedThisEntry()) {
+      strip.remove();
+      setApkBannerClass(false);
+      return;
+    }
+    bindApkStripSwipe(strip);
+    setApkBannerClass(true);
   }
 
   function removeInstallApkStrip() {
@@ -467,6 +596,12 @@
     if (!nav) return;
     opts = opts || {};
     if (!show) {
+      const existing = getApkStripEl();
+      if (existing) existing.remove();
+      setApkBannerClass(false);
+      return;
+    }
+    if (apkStripDismissedThisEntry()) {
       const existing = getApkStripEl();
       if (existing) existing.remove();
       setApkBannerClass(false);
@@ -514,6 +649,7 @@
       '<span class="vinor-apk-download-strip__sub" data-apk-strip-sub>' + sub + '</span></span>' +
       '<span class="vinor-apk-download-strip__cta" data-apk-strip-cta>' + cta + '</span>';
 
+    bindApkStripSwipe(strip);
     setApkBannerClass(true);
     if (mode === 'update' && inApk) syncNativeDownloadUi();
   }
@@ -777,7 +913,7 @@
 
   const PROFILE_NAV_PATHS = [
     '/express/partner/profile',
-    '/express/partner/notes',
+    '/express/partner/requests',
     '/express/partner/help',
     '/express/partner/support',
     '/express/partner/top-sellers',
@@ -970,16 +1106,21 @@
   window.addEventListener('vinor:express-page-swap', function () {
     try {
       if (typeof window.__vinorSyncApkStrip === 'function') window.__vinorSyncApkStrip();
+      bindExistingApkStripSwipe();
     } catch (_) {}
   });
 
+  bindExistingApkStripSwipe();
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
+      bindExistingApkStripSwipe();
       syncAllNavBadges();
       loadMenuFromAPI();
       if (isVinorApkClient()) window.__vinorSyncApkStrip();
     });
   } else {
+    bindExistingApkStripSwipe();
     syncAllNavBadges();
     loadMenuFromAPI();
     if (isVinorApkClient()) window.__vinorSyncApkStrip();

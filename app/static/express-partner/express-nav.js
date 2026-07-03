@@ -25,7 +25,7 @@
     '/express/partner/profile': { tab: 'profile', depth: 0, bottomNav: true, prefetch: true },
     '/express/partner/profile/edit': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/favorites': { tab: 'favorites', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/notes': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/requests': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/notifications': { tab: 'notifications', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/postchi': { tab: 'notifications', depth: 2, bottomNav: false, prefetch: false },
     '/express/partner/help': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -249,7 +249,7 @@
     var p = normPath(pathname || '');
     return p === '/express/partner/favorites' ||
       p === '/express/partner/notifications' ||
-      p === '/express/partner/notes' ||
+      p === '/express/partner/requests' ||
       p === '/express/partner/postchi' ||
       p === '/express/partner/commissions' ||
       p.indexOf('/express/partner/commissions/') === 0;

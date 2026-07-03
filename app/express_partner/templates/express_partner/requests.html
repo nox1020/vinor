@@ -1,0 +1,235 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}درخواست‌ها | وینور اکسپرس{% endblock %}
+
+{% block content %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{{ ep_header_start(id='partnerRequestsHeader') }}
+{% call ep_header_row('درخواست‌ها', url_for('express_partner.profile'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{{ ep_header_end() }}
+
+<div id="partnerRequestsPage"
+     class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
+  <main class="mx-auto w-full max-w-lg">
+
+    <section class="border-b border-white/10 px-4 pb-3 pt-3 sm:px-6" aria-label="خلاصه درخواست‌ها">
+      <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <h1 class="text-[17px] font-extrabold leading-tight text-white">درخواست‌های بازدید</h1>
+          <p class="mt-1 text-[12px] leading-relaxed text-zinc-500">پیگیری وضعیت تأیید، رد یا تکمیل بازدیدها</p>
+        </div>
+        <details class="relative shrink-0">
+          <summary class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-bold text-zinc-200 ring-1 ring-white/10 [&::-webkit-details-marker]:hidden">
+            <i class="fas fa-filter text-[10px] text-zinc-500" aria-hidden="true"></i>
+            {{ current_filter_label|default('همه') }}
+            <span class="tabular-nums text-white">{{ current_filter_count|default(counts.all|default(0)) }}</span>
+            <i class="fas fa-chevron-down text-[8px] text-zinc-500" aria-hidden="true"></i>
+          </summary>
+          <div class="absolute left-0 top-full z-[70] mt-2 w-40 overflow-hidden rounded-xl border border-white/10 bg-[#171923] py-1 text-right shadow-2xl shadow-black/35">
+            {% for option in filter_options %}
+            <a href="{{ url_for('express_partner.requests', filter=option.key if option.key != 'all' else None) }}"
+               data-vinor-express-nav
+               class="flex items-center justify-between gap-3 px-3 py-2 text-[12px] transition hover:bg-white/[0.05] {% if option.key == current_filter %}text-white{% else %}text-zinc-400{% endif %}">
+              <span class="font-semibold">{{ option.label }}</span>
+              <span class="tabular-nums {% if option.key == current_filter %}text-[#f87171]{% else %}text-zinc-600{% endif %}">{{ option.count }}</span>
+            </a>
+            {% endfor %}
+          </div>
+        </details>
+      </div>
+    </section>
+
+    {% if request.args.get('submitted') %}
+    <section class="border-b border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-[12px] font-medium leading-relaxed text-emerald-100 sm:px-6">
+      <i class="fas fa-circle-check ml-1.5 text-emerald-300" aria-hidden="true"></i>
+      درخواست بازدید ثبت شد. از همین صفحه می‌توانید وضعیت تأیید، بازدید و مراحل بعدی را پیگیری کنید.
+    </section>
+    {% endif %}
+
+    {% if items and items|length > 0 %}
+    <section class="divide-y divide-white/10 border-b border-white/10" aria-label="فهرست درخواست‌ها">
+      {% for item in items %}
+      {% set st = item.status or 'pending' %}
+      <a href="{% if item.land_code %}{{ url_for('express_partner.land_detail', code=item.land_code) }}{% else %}#{% endif %}"
+         {% if item.land_code %}data-vinor-express-nav{% else %}aria-disabled="true"{% endif %}
+         class="group flex min-h-[104px] w-full items-start gap-3 px-4 py-3.5 text-right transition active:bg-white/[0.04] hover:bg-white/[0.02] sm:px-6">
+        <div class="min-w-0 flex-1">
+          <div class="flex justify-start">
+            <span class="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold leading-4
+                         {% if st == 'pending' %}bg-amber-500/12 text-amber-300
+                         {% elif st == 'approved' %}bg-emerald-500/12 text-emerald-300
+                         {% elif st == 'completed' %}bg-sky-500/12 text-sky-300
+                         {% elif st == 'cancelled' %}bg-[#a62626]/18 text-red-200
+                         {% else %}bg-white/[0.06] text-zinc-300{% endif %}">
+              {{ item.status_label }}
+            </span>
+          </div>
+
+          {% if item.status_hint %}
+          <p class="mt-1 line-clamp-1 text-[12px] leading-5
+                    {% if st == 'pending' %}text-amber-300/85
+                    {% elif st == 'approved' %}text-emerald-300/85
+                    {% elif st == 'completed' %}text-sky-300/85
+                    {% elif st == 'cancelled' %}text-red-200/85
+                    {% else %}text-zinc-500{% endif %}">
+            {{ item.status_hint }}
+          </p>
+          {% endif %}
+
+          {% if item.admin_note %}
+          <p class="mt-1 line-clamp-1 text-[11px] leading-5 text-zinc-400">
+            یادداشت پشتیبانی: {{ item.admin_note }}
+          </p>
+          {% endif %}
+
+          {% if item.progress_steps %}
+          <div class="mt-2.5" aria-label="مراحل پیشرفت درخواست">
+            {% set ns = namespace(done_count=0, current_label='') %}
+            {% for step in item.progress_steps %}
+              {% if step.state == 'done' %}
+                {% set ns.done_count = ns.done_count + 1 %}
+              {% elif not ns.current_label and step.state in ('current', 'blocked') %}
+                {% set ns.current_label = step.label %}
+              {% endif %}
+            {% endfor %}
+            {% if not ns.current_label and ns.done_count >= item.progress_steps|length %}
+              {% set ns.current_label = 'تکمیل شد' %}
+            {% endif %}
+            <div class="flex items-center gap-1.5">
+              {% for step in item.progress_steps %}
+              {% set state = step.state %}
+              <span class="h-1.5 flex-1 rounded-full
+                           {% if state == 'done' %}bg-emerald-500
+                           {% elif state == 'current' %}bg-[#a62626]
+                           {% elif state == 'blocked' %}bg-red-900/60
+                           {% else %}bg-white/10{% endif %}"
+                    title="{{ step.label }}"
+                    aria-label="{{ step.label }}"></span>
+              {% endfor %}
+            </div>
+            <p class="mt-1.5 truncate text-[10px] leading-4 text-zinc-500">
+              مرحله: <span class="text-zinc-300">{{ ns.current_label or 'در جریان' }}</span>
+              <span class="mx-1 text-zinc-700">·</span>
+              {{ ns.done_count }} از {{ item.progress_steps|length }}
+            </p>
+          </div>
+          {% endif %}
+
+        </div>
+
+        <div class="relative grid h-[76px] w-[76px] shrink-0 place-items-center overflow-hidden rounded-xl bg-white/[0.045] text-zinc-500 ring-1 ring-white/10">
+          <i class="fas fa-calendar-check text-xl" aria-hidden="true"></i>
+          <span class="absolute inset-x-0 bottom-0 h-1
+                       {% if st == 'pending' %}bg-amber-400
+                       {% elif st == 'approved' %}bg-emerald-400
+                       {% elif st == 'completed' %}bg-sky-400
+                       {% elif st == 'cancelled' %}bg-[#a62626]
+                       {% else %}bg-zinc-500{% endif %}"
+                aria-hidden="true"></span>
+        </div>
+      </a>
+      {% endfor %}
+    </section>
+    {% else %}
+    <section class="px-4 py-12 text-center sm:px-6">
+      <div class="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-white/[0.045] text-zinc-500 ring-1 ring-white/10">
+        <i class="fas fa-clipboard-list text-2xl" aria-hidden="true"></i>
+      </div>
+      <h2 class="mt-4 text-[16px] font-bold text-white">
+        {% if counts.all|default(0) > 0 %}موردی در این فیلتر نیست{% else %}هنوز درخواستی ثبت نشده{% endif %}
+      </h2>
+      <p class="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-zinc-500">
+        {% if counts.all|default(0) > 0 %}
+        فیلتر دیگری را انتخاب کنید تا درخواست‌های دیگر را ببینید.
+        {% else %}
+        وقتی برای فایل‌های اکسپرس درخواست بازدید ثبت کنید، نتیجهٔ بررسی اینجا نمایش داده می‌شود.
+        {% endif %}
+      </p>
+      <a href="{{ url_for('express_partner.dashboard') }}"
+         data-vinor-express-nav
+         class="mt-6 inline-flex items-center justify-center rounded-xl bg-[#a62626] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#b83232]">
+        مشاهده فایل‌ها
+      </a>
+    </section>
+    {% endif %}
+  </main>
+
+  {% set bottom_nav_active = 'profile' %}
+  {% include 'express_partner/partials/partner_tab_footer.html' %}
+
+  <div id="requestFabRoot"
+       class="fixed bottom-[calc(6.35rem+env(safe-area-inset-bottom,0px))] end-4 z-[90] flex flex-col items-end sm:end-[calc(50%-15rem)]"
+       dir="rtl">
+    <div id="requestFabMenu"
+         class="pointer-events-none mb-3 flex translate-y-3 flex-col items-end gap-3 opacity-0 transition duration-200 ease-out"
+         aria-hidden="true">
+      <a href="{{ url_for('express_partner.support', tab='new', quick='visit_without_details') }}"
+         data-vinor-express-nav
+         class="request-fab-option flex items-center gap-2">
+        <span class="rounded-full border border-white/10 bg-[#171923]/95 px-3 py-2 text-[11px] font-bold text-zinc-100 shadow-lg shadow-black/30 backdrop-blur">
+          درخواست بازدید بدون مشخصات
+        </span>
+        <span class="grid h-12 w-12 place-items-center rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-950/35 ring-1 ring-white/10">
+          <i class="fas fa-calendar-check text-base" aria-hidden="true"></i>
+        </span>
+      </a>
+
+      <a href="{{ url_for('express_partner.support', tab='new', quick='deal_without_details') }}"
+         data-vinor-express-nav
+         class="request-fab-option flex items-center gap-2">
+        <span class="rounded-full border border-white/10 bg-[#171923]/95 px-3 py-2 text-[11px] font-bold text-zinc-100 shadow-lg shadow-black/30 backdrop-blur">
+          درخواست معامله بدون مشخصات
+        </span>
+        <span class="grid h-12 w-12 place-items-center rounded-full bg-[#a62626] text-white shadow-lg shadow-red-950/35 ring-1 ring-white/10">
+          <i class="fas fa-handshake text-base" aria-hidden="true"></i>
+        </span>
+      </a>
+    </div>
+
+    <button type="button"
+            id="requestFabButton"
+            class="grid h-14 w-14 place-items-center rounded-full bg-[#a62626] text-white shadow-xl shadow-red-950/40 ring-1 ring-white/10 transition active:scale-95"
+            aria-controls="requestFabMenu"
+            aria-expanded="false"
+            aria-label="ثبت درخواست جدید">
+      <i class="fas fa-plus text-xl transition-transform duration-200" aria-hidden="true"></i>
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+  (function () {
+    var root = document.getElementById('requestFabRoot');
+    var btn = document.getElementById('requestFabButton');
+    var menu = document.getElementById('requestFabMenu');
+    if (!root || !btn || !menu) return;
+
+    function setOpen(open) {
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      menu.setAttribute('aria-hidden', open ? 'false' : 'true');
+      menu.classList.toggle('pointer-events-none', !open);
+      menu.classList.toggle('translate-y-3', !open);
+      menu.classList.toggle('opacity-0', !open);
+      menu.classList.toggle('translate-y-0', open);
+      menu.classList.toggle('opacity-100', open);
+      var icon = btn.querySelector('i');
+      if (icon) icon.classList.toggle('rotate-45', open);
+    }
+
+    btn.addEventListener('click', function (event) {
+      event.stopPropagation();
+      setOpen(btn.getAttribute('aria-expanded') !== 'true');
+    });
+
+    document.addEventListener('click', function (event) {
+      if (!root.contains(event.target)) setOpen(false);
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') setOpen(false);
+    });
+  })();
+  </script>
+{% endblock %}
