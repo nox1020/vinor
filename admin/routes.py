@@ -4301,6 +4301,14 @@ def express_assignments_clear_all():
 # Express Commissions (list/approve/pay)
 # -----------------------------------------------------------------------------
 def _express_commissions_redirect(filter_hint: str = '') -> str:
+    return_to = (request.form.get('return_to') or request.args.get('return_to') or '').strip()
+    if return_to == 'visit_requests':
+        visit_filter = (request.form.get('visit_filter') or request.args.get('visit_filter') or 'workflow').strip()
+        visit_vid = (request.form.get('visit_vid') or request.args.get('visit_vid') or '').strip()
+        url = url_for('admin.express_visit_requests', filter=visit_filter or None)
+        if visit_vid:
+            url = f'{url}#visit-{visit_vid}'
+        return url
     flt = (filter_hint or request.form.get('filter') or request.args.get('filter') or 'pending').strip()
     if flt:
         return url_for('admin.express_commissions', filter=flt)
@@ -4878,7 +4886,10 @@ def express_visit_requests():
         VISIT_WEEKDAY_LABELS,
         VISIT_WEEKDAY_ORDER,
         admin_row_dict as visit_admin_row,
+        admin_visit_in_workflow,
         admin_visit_status_options,
+        admin_visit_workflow_needs_action,
+        admin_visit_workflow_steps,
         get_visit_allowed_weekdays,
         save_visit_allowed_weekdays,
         visit_allowed_weekdays_summary,
@@ -4892,27 +4903,66 @@ def express_visit_requests():
             parsed = []
         if not parsed:
             flash('حداقل یک روز هفته را برای بازدید انتخاب کنید.', 'warning')
-            flt = (request.form.get('filter') or 'pending').strip().lower()
+            flt = (request.form.get('filter') or 'workflow').strip().lower()
             return redirect(url_for('admin.express_visit_requests', filter=flt or None))
         save_visit_allowed_weekdays(parsed)
         flash(f'روزهای مجاز بازدید ذخیره شد: {visit_allowed_weekdays_summary()}', 'success')
-        flt = (request.form.get('filter') or request.args.get('filter') or 'pending').strip().lower()
+        flt = (request.form.get('filter') or request.args.get('filter') or 'workflow').strip().lower()
         return redirect(url_for('admin.express_visit_requests', filter=flt or None))
 
-    flt = (request.args.get('filter') or 'pending').strip().lower()
+    flt = (request.args.get('filter') or 'workflow').strip().lower()
     items_raw = load_express_visit_requests() or []
     if not isinstance(items_raw, list):
         items_raw = []
     commissions = load_express_commissions() or []
     if not isinstance(commissions, list):
         commissions = []
+    withdrawals = load_partner_withdrawals() or []
+    if not isinstance(withdrawals, list):
+        withdrawals = []
     try:
-        from app.express_partner.commissions_flow import commission_is_visit
+        from app.express_partner.commissions_flow import (
+            admin_commission_row_dict as commission_admin_row,
+            commission_is_deal,
+            commission_is_visit,
+            commission_linked_to_active_withdrawal,
+        )
         settings_data = get_settings()
         visit_commission_amount = int(settings_data.get('visit_commission_amount_toman') or 0)
     except Exception:
+        commission_admin_row = None
+        commission_is_deal = None
         commission_is_visit = None
+        commission_linked_to_active_withdrawal = None
         visit_commission_amount = 0
+
+    def _commission_for_visit_row(phone: str, code: str, kind: str) -> dict | None:
+        if not commission_admin_row:
+            return None
+        ph = (phone or '').strip()
+        ck = str(code or '').strip()
+        if not ph or not ck:
+            return None
+        predicate = commission_is_visit if kind == 'visit' else commission_is_deal
+        if not predicate:
+            return None
+        for c in reversed(commissions):
+            if not isinstance(c, dict):
+                continue
+            if str(c.get('partner_phone') or '').strip() != ph:
+                continue
+            if str(c.get('land_code') or '').strip() != ck:
+                continue
+            if not predicate(c):
+                continue
+            row = commission_admin_row(c)
+            row['withdrawal_locked'] = (
+                commission_linked_to_active_withdrawal(c, withdrawals)
+                if commission_linked_to_active_withdrawal
+                else False
+            )
+            return row
+        return None
 
     def _visit_commission_required_for_admin(phone: str, code: str) -> bool:
         if visit_commission_amount > 0:
@@ -4947,6 +4997,17 @@ def express_visit_requests():
         )
         item = visit_admin_row(r, commissions)
         item['status_options'] = admin_visit_status_options(item.get('status'))
+        item['visit_commission_required'] = bool(r.get('visit_commission_required'))
+        item['visit_commission'] = _commission_for_visit_row(ph, str(r.get('land_code') or '').strip(), 'visit')
+        item['deal_commission'] = _commission_for_visit_row(ph, str(r.get('land_code') or '').strip(), 'deal')
+        item['admin_workflow_steps'] = admin_visit_workflow_steps(
+            item,
+            visit_commission=item.get('visit_commission'),
+            deal_commission=item.get('deal_commission'),
+            visit_commission_required=item.get('visit_commission_required'),
+        )
+        item['workflow_needs_action'] = admin_visit_workflow_needs_action(item['admin_workflow_steps'])
+        item['in_workflow'] = admin_visit_in_workflow(item, item['admin_workflow_steps'])
         items.append(item)
 
     pending_count = sum(1 for x in items if x.get('status') == PENDING_STATUS)
@@ -4955,8 +5016,17 @@ def express_visit_requests():
     done_count = sum(1 for x in items if x.get('status') == COMPLETED_STATUS)
     closed_count = sum(1 for x in items if x.get('status') == CANCELLED_STATUS)
     active_count = pending_count + approved_count + done_pending_count
+    workflow_count = sum(1 for x in items if x.get('in_workflow'))
+    action_count = sum(1 for x in items if x.get('workflow_needs_action'))
 
-    if flt == 'approved':
+    if flt == 'actions':
+        visible = [x for x in items if x.get('workflow_needs_action')]
+        visible.sort(key=lambda x: x.get('updated_at') or x.get('created_at') or '', reverse=True)
+    elif flt == 'workflow':
+        visible = [x for x in items if x.get('in_workflow')]
+        visible.sort(key=lambda x: x.get('updated_at') or x.get('created_at') or '', reverse=True)
+        visible.sort(key=lambda x: 0 if x.get('workflow_needs_action') else 1)
+    elif flt == 'approved':
         visible = [x for x in items if x.get('status') == APPROVED_STATUS]
     elif flt == 'done_pending':
         visible = [x for x in items if x.get('status') == DONE_PENDING_STATUS]
@@ -4972,8 +5042,9 @@ def express_visit_requests():
         flt = 'pending'
         visible = [x for x in items if x.get('status') == PENDING_STATUS]
 
-    visible.sort(key=lambda x: x.get('created_at') or '', reverse=True)
-    visible.sort(key=lambda x: {PENDING_STATUS: 0, DONE_PENDING_STATUS: 1, APPROVED_STATUS: 2, COMPLETED_STATUS: 3, CANCELLED_STATUS: 4}.get(x.get('status') or '', 9))
+    if flt not in ('workflow', 'actions'):
+        visible.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+        visible.sort(key=lambda x: {PENDING_STATUS: 0, DONE_PENDING_STATUS: 1, APPROVED_STATUS: 2, COMPLETED_STATUS: 3, CANCELLED_STATUS: 4}.get(x.get('status') or '', 9))
     all_count = len(items)
 
     return render_template(
@@ -4985,6 +5056,8 @@ def express_visit_requests():
         done_count=done_count,
         closed_count=closed_count,
         active_count=active_count,
+        workflow_count=workflow_count,
+        action_count=action_count,
         all_count=all_count,
         current_filter=flt,
         visit_weekday_labels=VISIT_WEEKDAY_LABELS,
@@ -5115,7 +5188,7 @@ def express_visit_request_status(vid: str):
 
     new_status = (request.form.get('status') or '').strip()
     admin_note = (request.form.get('admin_note') or '').strip()
-    filter_hint = (request.form.get('filter') or 'pending').strip()
+    filter_hint = (request.form.get('filter') or 'workflow').strip()
     items = load_express_visit_requests() or []
     if not isinstance(items, list):
         items = []
@@ -5178,7 +5251,8 @@ def express_visit_request_status(vid: str):
                         )
     except Exception:
         flash('خطا در ذخیره وضعیت.', 'error')
-    return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
+    url = url_for('admin.express_visit_requests', filter=filter_hint or None)
+    return redirect(f'{url}#visit-{vid}')
 
 
 @admin_bp.route('/support/tickets', endpoint='support_tickets')

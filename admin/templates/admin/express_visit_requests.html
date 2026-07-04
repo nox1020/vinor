@@ -1,347 +1,159 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}درخواست‌های بازدید{% endblock %}
-{% block page_title %}بازدیدها{% endblock %}
+{% block title %}روند بازدید{% endblock %}
+{% block page_title %}روند بازدید{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-4">
+<div class="max-w-2xl mx-auto space-y-5">
 
-  <!-- خلاصه آمار -->
-  <div class="flex flex-wrap gap-2 text-xs">
-    {% if active_count %}
-    <span class="inline-flex items-center gap-1.5 rounded-full border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/20 px-3 py-1.5 text-teal-700 dark:text-teal-300">
-      <span class="font-semibold tabular-nums">{{ active_count }}</span> فعال
-    </span>
-    {% endif %}
-    {% if pending_count %}
-    <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 text-amber-700 dark:text-amber-300">
-      <span class="font-semibold tabular-nums">{{ pending_count }}</span> انتظار تأیید
-    </span>
-    {% endif %}
-    {% if approved_count %}
-    <span class="inline-flex items-center gap-1.5 rounded-full border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 text-blue-700 dark:text-blue-300">
-      <span class="font-semibold tabular-nums">{{ approved_count }}</span> تأییدشده
-    </span>
-    {% endif %}
-    {% if done_count %}
-    <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-emerald-700 dark:text-emerald-300">
-      <span class="font-semibold tabular-nums">{{ done_count }}</span> بازدید انجام‌شده
-    </span>
-    {% endif %}
-    <a href="{{ url_for('admin.express_commissions') }}"
-       class="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 transition">
-      <i class="fa-solid fa-coins text-[10px]"></i>
-      پورسانت‌ها
-    </a>
-  </div>
-
-  <!-- جریان کامل درخواست -->
-  <details class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm adm-collapse">
-    <summary class="px-4 py-3 cursor-pointer text-gray-700 dark:text-gray-300 font-medium select-none flex items-center justify-between gap-2">
-      <span><i class="fa-solid fa-route ml-1.5 text-gray-400"></i>روند ۷ مرحله‌ای بازدید تا پورسانت</span>
-      <i class="fa-solid fa-chevron-down text-[10px] text-gray-400 adm-collapse-chevron"></i>
-    </summary>
-    <div class="px-4 pb-4 text-xs text-gray-600 dark:text-gray-400 leading-relaxed border-t border-gray-100 dark:border-gray-800 pt-3 space-y-1.5">
-      <p>۱) همکار درخواست بازدید ثبت می‌کند.</p>
-      <p>۲) ادمین درخواست بازدید را تأیید می‌کند.</p>
-      <p>۳) همکار روی خود فایل «بازدید انجام شد» را ثبت می‌کند و ادمین انجام بازدید را تأیید می‌کند.</p>
-      <p>۴) بعد از تأیید انجام بازدید، ادمین پورسانت بازدید را از بخش <a href="{{ url_for('admin.express_commissions') }}" class="text-blue-600 dark:text-blue-400 hover:underline">پورسانت‌ها</a> تأیید می‌کند تا به کیف پول همکار اضافه شود.</p>
-      <p>۵) بعد از تأیید پورسانت بازدید، همکار از صفحه فایل «درخواست معامله» می‌زند.</p>
-      <p>۶) درخواست معامله همکار به‌صورت پورسانت pending ثبت می‌شود و ادمین آن را تأیید می‌کند.</p>
-      <p>۷) پورسانت معامله به کیف پول همکار اضافه می‌شود و از مسیر برداشت قابل واریز است.</p>
-    </div>
-  </details>
-
-  <!-- روزهای مجاز بازدید -->
-  <details class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm adm-collapse">
-    <summary class="px-4 py-3 cursor-pointer text-gray-700 dark:text-gray-300 font-medium select-none flex items-center justify-between gap-2">
-      <span>
-        <i class="fa-solid fa-calendar-week ml-1.5 text-gray-400"></i>
-        روزهای مجاز بازدید
-        {% if visit_allowed_weekdays_summary %}
-        <span class="text-[11px] font-normal text-teal-600 dark:text-teal-400 mr-1">· {{ visit_allowed_weekdays_summary }}</span>
+  {# ── هدر ── #}
+  <div class="flex items-start justify-between gap-3">
+    <div>
+      <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+        {% if action_count %}
+        <span class="font-semibold text-amber-600 dark:text-amber-400">{{ action_count }} پرونده</span> منتظر تأیید شماست.
+        {% elif workflow_count %}
+        {{ workflow_count }} پرونده در روند — فعلاً اقدامی لازم نیست.
+        {% else %}
+        پرونده فعالی وجود ندارد.
         {% endif %}
-      </span>
-      <i class="fa-solid fa-chevron-down text-[10px] text-gray-400 adm-collapse-chevron"></i>
-    </summary>
-    <form method="post" class="px-4 pb-4 border-t border-gray-100 dark:border-gray-800 pt-3 space-y-3">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="action" value="save_visit_weekdays">
-      <input type="hidden" name="filter" value="{{ current_filter }}">
-      <p class="text-[11px] text-gray-500 dark:text-gray-400">همکار فقط در روزهای انتخاب‌شده می‌تواند تاریخ بازدید ثبت کند.</p>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {% for wd in visit_weekday_order %}
-        <label class="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm cursor-pointer transition
-                      {% if wd in visit_allowed_weekdays %}border-blue-400 bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-600{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600{% endif %}">
-          <input type="checkbox" name="visit_weekdays" value="{{ wd }}"
-                 class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                 {% if wd in visit_allowed_weekdays %}checked{% endif %}>
-          <span class="text-xs font-medium">{{ visit_weekday_labels.get(wd, wd) }}</span>
-        </label>
-        {% endfor %}
-      </div>
-      <button type="submit"
-              class="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium focusable">
-        ذخیره روزهای مجاز
-      </button>
-    </form>
-  </details>
-
-  <!-- فیلترها -->
-  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-    <div class="adm-tabs-scroll flex gap-1.5 pb-0.5">
-      {% macro filter_tab(key, label, count) %}
-      <a href="{{ url_for('admin.express_visit_requests', filter=key) }}"
-         class="shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-medium transition
-                {% if current_filter == key %}bg-blue-600 text-white{% else %}text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
-        {{ label }}
-        {% if count is not none %}<span class="tabular-nums opacity-80">{{ count }}</span>{% endif %}
-      </a>
-      {% endmacro %}
-      {{ filter_tab('active', 'فعال', active_count) }}
-      {{ filter_tab('pending', 'انتظار', pending_count) }}
-      {{ filter_tab('done_pending', 'انتظار تأیید بازدید', done_pending_count) }}
-      {{ filter_tab('approved', 'تأییدشده', approved_count) }}
-      {{ filter_tab('done', 'بازدید انجام‌شده', done_count) }}
-      {{ filter_tab('closed', 'رد شده', closed_count) }}
-      {{ filter_tab('all', 'همه', all_count) }}
+      </p>
     </div>
-    <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-2 px-0.5">
-      {% if items and items|length > 0 %}
-      {{ items|length }} مورد در این فیلتر
-      {% elif current_filter == 'pending' %}
-      درخواستی در انتظار تأیید نیست
-      {% elif current_filter == 'all' %}
-      هنوز درخواست بازدیدی ثبت نشده
-      {% else %}
-      موردی در این فیلتر یافت نشد
-      {% endif %}
-    </p>
+    <details class="shrink-0">
+      <summary class="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200">
+        <i class="fa-solid fa-gear ml-1"></i>تنظیمات
+      </summary>
+      <form method="post" class="mt-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 space-y-3 w-72">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="save_visit_weekdays">
+        <input type="hidden" name="filter" value="{{ current_filter }}">
+        <p class="text-xs font-medium text-gray-800 dark:text-gray-200">روزهای مجاز بازدید</p>
+        {% if visit_allowed_weekdays_summary %}
+        <p class="text-[11px] text-teal-600 dark:text-teal-400">{{ visit_allowed_weekdays_summary }}</p>
+        {% endif %}
+        <div class="grid grid-cols-2 gap-1.5">
+          {% for wd in visit_weekday_order %}
+          <label class="flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs cursor-pointer
+                        {% if wd in visit_allowed_weekdays %}border-blue-400 bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-600{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300{% endif %}">
+            <input type="checkbox" name="visit_weekdays" value="{{ wd }}" class="rounded text-blue-600"
+                   {% if wd in visit_allowed_weekdays %}checked{% endif %}>
+            {{ visit_weekday_labels.get(wd, wd) }}
+          </label>
+          {% endfor %}
+        </div>
+        <button type="submit" class="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium">
+          ذخیره
+        </button>
+      </form>
+    </details>
   </div>
 
-  <!-- لیست درخواست‌ها -->
+  {# ── فیلترها ── #}
+  <div class="flex flex-wrap gap-2">
+    {% macro filter_pill(key, label, count, accent) %}
+    <a href="{{ url_for('admin.express_visit_requests', filter=key) }}"
+       class="px-3 py-1.5 rounded-full text-xs font-medium border transition
+              {% if current_filter == key %}
+                {% if accent == 'amber' %}border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-600
+                {% else %}border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-600{% endif %}
+              {% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600{% endif %}">
+      {{ label }}{% if count %} <span class="tabular-nums opacity-75">({{ count }})</span>{% endif %}
+    </a>
+    {% endmacro %}
+    {{ filter_pill('actions', 'نیاز به اقدام', action_count, 'amber') }}
+    {{ filter_pill('workflow', 'در روند', workflow_count, 'blue') }}
+    {{ filter_pill('all', 'همه', all_count, 'blue') }}
+    {{ filter_pill('closed', 'بسته', closed_count, 'blue') }}
+  </div>
+
+  {# ── لیست ── #}
   {% if items and items|length > 0 %}
-  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800 overflow-hidden">
+  <div class="space-y-3">
     {% for v in items %}
     {% set st = v.status or 'pending' %}
-    <article class="px-4 py-3.5 {% if v.needs_action %}bg-amber-50/40 dark:bg-amber-950/10{% endif %}">
-      <div class="flex items-start gap-3">
-        <!-- آواتار / آیکون -->
-        <div class="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold
-                    {% if st == 'pending' %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300
-                    {% elif st == 'approved' %}bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300
-                    {% elif st == 'done_pending' %}bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300
-                    {% elif st == 'completed' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300
-                    {% elif st == 'cancelled' %}bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400
-                    {% else %}bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300{% endif %}">
-          {% if st == 'pending' %}
-          <i class="fa-regular fa-clock text-xs"></i>
-          {% elif st == 'approved' %}
-          <i class="fa-solid fa-check text-xs"></i>
-          {% elif st == 'done_pending' %}
-          <i class="fa-solid fa-hourglass-half text-xs"></i>
-          {% elif st == 'completed' %}
-          <i class="fa-solid fa-handshake text-xs"></i>
-          {% else %}
-          {{ (v.partner_name or '?')[:1] }}
-          {% endif %}
-        </div>
+    <article id="visit-{{ v.id }}"
+             class="scroll-mt-20 rounded-xl border bg-white dark:bg-gray-900 overflow-hidden
+                    {% if v.workflow_needs_action %}border-amber-300 dark:border-amber-700 shadow-sm shadow-amber-100/50 dark:shadow-none
+                    {% else %}border-gray-200 dark:border-gray-700{% endif %}">
 
-        <!-- محتوا -->
-        <div class="flex-1 min-w-0">
-          <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                {% if v.partner_phone %}
-                <a href="{{ url_for('admin.express_partner_detail', phone=v.partner_phone) }}"
-                   class="font-medium text-sm text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition truncate">
-                  {{ v.partner_name or 'همکار' }}
-                </a>
-                {% else %}
-                <span class="font-medium text-sm text-gray-900 dark:text-white">{{ v.partner_name or 'همکار' }}</span>
-                {% endif %}
-                <span class="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded
-                  {% if st == 'pending' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
-                  {% elif st == 'approved' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
-                  {% elif st == 'done_pending' %}bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300
-                  {% elif st == 'completed' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
-                  {% elif st == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
-                  {% else %}bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400{% endif %}">
-                  {{ v.status_label }}
-                </span>
-              </div>
+      {# سرِ کارت #}
+      <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
               {% if v.partner_phone %}
-              <p class="text-[11px] text-gray-400 mt-0.5" dir="ltr">{{ v.partner_phone }}</p>
+              <a href="{{ url_for('admin.express_partner_detail', phone=v.partner_phone) }}"
+                 class="font-semibold text-sm text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 truncate">
+                {{ v.partner_name or 'همکار' }}
+              </a>
+              {% else %}
+              <span class="font-semibold text-sm text-gray-900 dark:text-white">{{ v.partner_name or 'همکار' }}</span>
+              {% endif %}
+              {% if v.workflow_needs_action %}
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                اقدام لازم
+              </span>
               {% endif %}
             </div>
-            <div class="text-start shrink-0">
-              <p class="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{{ v.visit_date_jalali or v.visit_date|default('—') }}</p>
-              <p class="text-[10px] text-gray-400">تاریخ بازدید</p>
-            </div>
+            <p class="mt-1 text-sm text-gray-700 dark:text-gray-300 truncate">{{ v.land_title or '—' }}</p>
+            <p class="mt-0.5 text-[11px] text-gray-400 font-mono" dir="ltr">{{ v.land_code or '—' }}</p>
           </div>
-
-          <!-- جزئیات فایل -->
-          <div class="mt-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 px-3 py-2 space-y-1">
-            <div class="flex items-center justify-between gap-2 text-xs">
-              <span class="text-gray-500 shrink-0">فایل</span>
-              <span class="text-gray-900 dark:text-white font-medium truncate text-start">{{ v.land_title or '—' }}</span>
-            </div>
-            <div class="flex items-center justify-between gap-2 text-xs">
-              <span class="text-gray-500 shrink-0">کد</span>
-              <span class="text-gray-700 dark:text-gray-300 font-mono text-[11px]" dir="ltr">{{ v.land_code or '—' }}</span>
-            </div>
+          <div class="shrink-0 text-left">
+            <p class="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{{ v.visit_date_jalali or v.visit_date|default('—') }}</p>
+            <p class="text-[10px] text-gray-400 mt-0.5">{{ v.status_label }}</p>
           </div>
-
-          <p class="text-[10px] text-gray-400 mt-2">
-            ثبت {{ v.created_at|default('—') }}
-            {% if v.approved_at %}<span class="mx-1 opacity-40">·</span>تأیید {{ v.approved_at }}{% endif %}
-          </p>
-
-          {% if v.status_hint %}
-          <p class="text-[11px] mt-1.5 leading-relaxed
-            {% if st == 'pending' %}text-amber-700 dark:text-amber-300
-            {% elif st == 'approved' %}text-blue-600 dark:text-blue-400
-            {% elif st == 'done_pending' %}text-purple-600 dark:text-purple-400
-            {% elif st == 'completed' %}text-emerald-600 dark:text-emerald-400
-            {% else %}text-gray-500 dark:text-gray-400{% endif %}">
-            {{ v.status_hint }}
-          </p>
-          {% endif %}
-
-          {% if v.progress_steps %}
-          <div class="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-800/40" aria-label="مراحل پیشرفت درخواست">
-            <div class="flex items-center gap-1.5">
-              {% for step in v.progress_steps %}
-              {% set state = step.state %}
-              <span class="h-1.5 flex-1 rounded-full
-                           {% if state == 'done' %}bg-emerald-500
-                           {% elif state == 'current' %}bg-blue-600
-                           {% elif state == 'blocked' %}bg-red-700/70
-                           {% else %}bg-gray-200 dark:bg-gray-700{% endif %}"
-                    title="{{ step.label }}"
-                    aria-label="{{ step.label }}"></span>
-              {% endfor %}
-            </div>
-            <p class="mt-1.5 truncate text-[10px] leading-4 text-gray-500 dark:text-gray-400">
-              مرحله: <span class="font-medium text-gray-700 dark:text-gray-200">{{ v.progress_summary.current_label or 'در جریان' }}</span>
-              <span class="mx-1 text-gray-300 dark:text-gray-600">·</span>
-              {{ v.progress_summary.done_count }} از {{ v.progress_summary.total }}
-            </p>
-          </div>
-          {% endif %}
-
-          {% if v.admin_note %}
-          <p class="text-[11px] text-gray-600 dark:text-gray-300 mt-1.5 px-2 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40">
-            {{ v.admin_note }}
-          </p>
-          {% endif %}
-
-          <!-- اکشن‌ها -->
-          {% if v.needs_action and st == 'pending' %}
-          <div class="mt-3 space-y-2 adm-action-row">
-            <form method="post" action="{{ url_for('admin.express_visit_request_status', vid=v.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="filter" value="{{ current_filter }}">
-              <input type="hidden" name="status" value="approved">
-              <button type="submit"
-                      class="w-full px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold focusable">
-                <i class="fa-solid fa-check ml-1"></i>
-                تأیید بازدید
-              </button>
-            </form>
-            <form method="post" action="{{ url_for('admin.express_visit_request_status', vid=v.id) }}"
-                  class="flex flex-col sm:flex-row gap-2">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="filter" value="{{ current_filter }}">
-              <input type="hidden" name="status" value="cancelled">
-              <input type="text" name="admin_note"
-                     class="flex-1 text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-950 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                     placeholder="دلیل رد (اختیاری)" />
-              <button type="submit"
-                      class="shrink-0 px-4 py-2 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-sm font-medium focusable">
-                رد درخواست
-              </button>
-            </form>
-          </div>
-
-          {% elif v.needs_action and st == 'done_pending' %}
-          <div class="mt-3 space-y-2 adm-action-row">
-            <form method="post" action="{{ url_for('admin.express_visit_request_status', vid=v.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="filter" value="{{ current_filter }}">
-              <input type="hidden" name="status" value="completed">
-              <button type="submit"
-                      class="w-full px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold focusable">
-                <i class="fa-solid fa-check-double ml-1"></i>
-                تأیید انجام بازدید
-              </button>
-            </form>
-            <form method="post" action="{{ url_for('admin.express_visit_request_status', vid=v.id) }}"
-                  class="flex flex-col sm:flex-row gap-2">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="filter" value="{{ current_filter }}">
-              <input type="hidden" name="status" value="cancelled">
-              <input type="text" name="admin_note"
-                     class="flex-1 text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-950 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                     placeholder="دلیل رد انجام بازدید (اختیاری)" />
-              <button type="submit"
-                      class="shrink-0 px-4 py-2 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-sm font-medium focusable">
-                رد انجام بازدید
-              </button>
-            </form>
-          </div>
-
-          {% elif v.is_editable %}
-          <form method="post" action="{{ url_for('admin.express_visit_request_status', vid=v.id) }}"
-                class="adm-form-row mt-3 flex flex-wrap items-end gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="filter" value="{{ current_filter }}">
-            <div class="flex-1 min-w-[8rem]">
-              <label class="block text-[10px] text-gray-500 mb-1">تغییر وضعیت</label>
-              <select name="status"
-                      class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-950 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {% for opt in v.status_options %}
-                <option value="{{ opt.value }}" {% if opt.value == st %}selected{% endif %}>{{ opt.label }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="flex-[2] min-w-[10rem]">
-              <label class="block text-[10px] text-gray-500 mb-1">یادداشت (اختیاری)</label>
-              <input type="text" name="admin_note" value="{{ v.admin_note or '' }}"
-                     class="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-950 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                     placeholder="یادداشت داخلی" />
-            </div>
-            <button type="submit"
-                    class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium focusable">
-              ذخیره
-            </button>
-          </form>
-
-          {% elif st == 'completed' %}
-          <a href="{{ url_for('admin.express_commissions') }}"
-             class="inline-flex items-center gap-1 mt-2 text-xs text-emerald-600 dark:text-emerald-400 hover:underline">
-            مشاهده پورسانت‌های مرتبط
-            <i class="fa-solid fa-arrow-left text-[9px]"></i>
-          </a>
-          {% endif %}
         </div>
+        {% if v.admin_note %}
+        <p class="mt-2 text-[11px] text-gray-600 dark:text-gray-400 px-2.5 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-800/60">
+          {{ v.admin_note }}
+        </p>
+        {% endif %}
       </div>
+
+      {# روند تأیید #}
+      {% if v.in_workflow and v.admin_workflow_steps %}
+      {% include 'admin/partials/visit_admin_workflow_panel.html' %}
+      {% elif not v.in_workflow %}
+      <div class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+        {% if st == 'cancelled' %}این پرونده بسته شده است.{% else %}روند این پرونده به پایان رسیده است.{% endif %}
+      </div>
+      {% endif %}
+
+      {% if v.is_editable and not v.workflow_needs_action and current_filter == 'all' %}
+      <details class="border-t border-gray-100 dark:border-gray-800">
+        <summary class="px-4 py-2 text-[11px] text-gray-400 cursor-pointer select-none hover:text-gray-600 dark:hover:text-gray-300">
+          تغییر دستی وضعیت
+        </summary>
+        <form method="post" action="{{ url_for('admin.express_visit_request_status', vid=v.id) }}"
+              class="px-4 pb-3 flex flex-wrap items-end gap-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <select name="status"
+                  class="flex-1 min-w-[8rem] text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-950 text-gray-900 dark:text-white">
+            {% for opt in v.status_options %}
+            <option value="{{ opt.value }}" {% if opt.value == st %}selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+          <input type="text" name="admin_note" value="{{ v.admin_note or '' }}"
+                 class="flex-[2] min-w-[10rem] text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-950 text-gray-900 dark:text-white"
+                 placeholder="یادداشت" />
+          <button type="submit" class="px-4 py-2 rounded-lg bg-gray-800 dark:bg-gray-700 text-white text-xs font-medium">
+            ذخیره
+          </button>
+        </form>
+      </details>
+      {% endif %}
     </article>
     {% endfor %}
   </div>
 
   {% else %}
-  <div class="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 py-14 text-center">
-    <div class="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-3">
-      <i class="fa-regular fa-calendar-check text-xl text-gray-400 dark:text-gray-600"></i>
-    </div>
-    <p class="text-sm text-gray-600 dark:text-gray-400">
-      {% if current_filter == 'pending' %}
-      درخواستی در انتظار تأیید نیست.
-      {% elif current_filter == 'all' %}
-      هنوز درخواست بازدیدی ثبت نشده است.
-      {% else %}
-      موردی در این فیلتر یافت نشد.
-      {% endif %}
+  <div class="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 py-16 text-center">
+    <i class="fa-regular fa-folder-open text-3xl text-gray-300 dark:text-gray-600 mb-3"></i>
+    <p class="text-sm text-gray-500 dark:text-gray-400">
+      {% if current_filter == 'actions' %}پرونده‌ای منتظر اقدام شما نیست.
+      {% elif current_filter == 'workflow' %}پرونده‌ای در روند نیست.
+      {% elif current_filter == 'all' %}هنوز درخواستی ثبت نشده.
+      {% else %}موردی یافت نشد.{% endif %}
     </p>
   </div>
   {% endif %}

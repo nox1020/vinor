@@ -746,6 +746,152 @@ def admin_can_transition_visit(old_status: str, new_status: str) -> bool:
     return new in allowed
 
 
+def admin_visit_workflow_steps(
+    item: Dict[str, Any],
+    *,
+    visit_commission: Dict[str, Any] | None = None,
+    deal_commission: Dict[str, Any] | None = None,
+    visit_commission_required: bool = False,
+) -> List[Dict[str, Any]]:
+    """مراحل اقدام ادمین برای یک پرونده — همه در یک صفحه."""
+    st = (str(item.get("status") or PENDING_STATUS)).strip()
+    vc = visit_commission if isinstance(visit_commission, dict) else {}
+    dc = deal_commission if isinstance(deal_commission, dict) else {}
+    vc_st = (str(vc.get("status") or "")).strip().lower()
+    dc_st = (str(dc.get("status") or "")).strip().lower()
+
+    def _paid(status: str) -> bool:
+        return status in ("approved", "paid")
+
+    steps: List[Dict[str, Any]] = []
+
+    if st == CANCELLED_STATUS:
+        s1, hint, action = "blocked", "این درخواست بسته شده است.", False
+    elif st == PENDING_STATUS:
+        s1, hint, action = "current", "درخواست بازدید منتظر تأیید یا رد شماست.", True
+    else:
+        s1, hint, action = "done", "", False
+    steps.append({
+        "key": "visit_request",
+        "label": "تأیید درخواست بازدید",
+        "state": s1,
+        "hint": hint,
+        "needs_action": action,
+        "action_kind": "visit_status",
+        "approve_status": APPROVED_STATUS,
+        "reject_status": CANCELLED_STATUS,
+    })
+
+    if st == CANCELLED_STATUS:
+        s2, hint, action = "blocked", "", False
+    elif st == DONE_PENDING_STATUS:
+        s2, hint, action = "current", "همکار «بازدید انجام شد» را ثبت کرده؛ تأیید یا رد کنید.", True
+    elif st == COMPLETED_STATUS or _paid(vc_st) or vc_st == "pending" or dc:
+        s2, hint, action = "done", "", False
+    elif st == APPROVED_STATUS:
+        s2, hint, action = "waiting", "منتظر ثبت «بازدید انجام شد» توسط همکار روی فایل.", False
+    else:
+        s2, hint, action = "waiting", "پس از تأیید درخواست بازدید.", False
+    steps.append({
+        "key": "visit_done",
+        "label": "تأیید انجام بازدید",
+        "state": s2,
+        "hint": hint,
+        "needs_action": action,
+        "action_kind": "visit_status",
+        "approve_status": COMPLETED_STATUS,
+        "reject_status": CANCELLED_STATUS,
+    })
+
+    if not visit_commission_required and not vc:
+        steps.append({
+            "key": "visit_commission",
+            "label": "پورسانت بازدید",
+            "state": "skipped",
+            "hint": "",
+            "needs_action": False,
+            "action_kind": "",
+        })
+    else:
+        if st == CANCELLED_STATUS:
+            s3, hint, action = "blocked", "", False
+        elif st != COMPLETED_STATUS:
+            s3, hint, action = "waiting", "بعد از تأیید انجام بازدید.", False
+        elif vc_st == "pending":
+            s3, hint, action = "current", "پورسانت بازدید منتظر تأیید یا رد شماست.", True
+        elif _paid(vc_st):
+            s3, hint, action = "done", "به کیف پول همکار اضافه شد.", False
+        elif vc_st == "rejected":
+            s3, hint, action = "blocked", "پورسانت بازدید رد شده است.", False
+        else:
+            s3, hint, action = "waiting", "بعد از تأیید انجام بازدید ساخته می‌شود.", False
+        steps.append({
+            "key": "visit_commission",
+            "label": "تأیید پورسانت بازدید",
+            "state": s3,
+            "hint": hint,
+            "needs_action": action,
+            "action_kind": "commission" if action else "",
+            "commission_id": vc.get("id"),
+            "commission_amount": vc.get("commission_amount"),
+        })
+
+    visit_gate = (not visit_commission_required and not vc) or _paid(vc_st)
+    if visit_commission_required:
+        visit_gate = _paid(vc_st)
+
+    if st == CANCELLED_STATUS:
+        s4, hint, action = "blocked", "", False
+    elif not visit_gate:
+        s4, hint, action = "waiting", "بعد از تأیید پورسانت بازدید، همکار درخواست معامله می‌زند.", False
+    elif dc_st == "pending":
+        s4, hint, action = "current", "درخواست معامله منتظر تأیید یا رد شماست.", True
+    elif _paid(dc_st):
+        s4, hint, action = "done", "معامله تأیید شد و فایل فروخته‌شده علامت خورد.", False
+    elif dc_st == "rejected":
+        s4, hint, action = "blocked", "درخواست معامله رد شده است.", False
+    elif st == COMPLETED_STATUS:
+        s4, hint, action = "waiting", "منتظر درخواست معامله از سمت همکار.", False
+    else:
+        s4, hint, action = "waiting", "", False
+    steps.append({
+        "key": "deal_commission",
+        "label": "تأیید معامله",
+        "state": s4,
+        "hint": hint,
+        "needs_action": action,
+        "action_kind": "commission" if action else "",
+        "commission_id": dc.get("id"),
+        "commission_amount": dc.get("commission_amount"),
+    })
+
+    return steps
+
+
+def admin_visit_workflow_needs_action(steps: List[Dict[str, Any]]) -> bool:
+    return any(
+        s.get("needs_action")
+        for s in (steps or [])
+        if s.get("state") != "skipped"
+    )
+
+
+def admin_visit_in_workflow(
+    item: Dict[str, Any],
+    steps: List[Dict[str, Any]] | None = None,
+) -> bool:
+    st = (str(item.get("status") or "")).strip()
+    if st == CANCELLED_STATUS:
+        return False
+    wf_steps = steps or []
+    if admin_visit_workflow_needs_action(wf_steps):
+        return True
+    deal_step = next((s for s in wf_steps if s.get("key") == "deal_commission"), None)
+    if deal_step and deal_step.get("state") == "done":
+        return False
+    return st in (PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS)
+
+
 def admin_visit_status_options(old_status: str) -> List[Dict[str, str]]:
     old = (old_status or PENDING_STATUS).strip()
     keys = ADMIN_VISIT_TRANSITIONS.get(old, frozenset({old}))
