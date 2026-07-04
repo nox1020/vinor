@@ -65,6 +65,7 @@ def build_land_detail_config(
         "shareUrl": share_url or "",
         "code": code,
         "txMode": str(land.get("_tx_button_mode") or "visit"),
+        "canRevisit": bool(land.get("_can_revisit")),
         "visitDateMin": visit_date_min or "",
         "visitAllowedWeekdays": list(visit_allowed_weekdays_js or []),
         "visitDate": str(land.get("_visit_date") or ""),

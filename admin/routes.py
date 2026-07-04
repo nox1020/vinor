@@ -4953,7 +4953,14 @@ def express_visit_requests():
         commission_linked_to_active_withdrawal = None
         visit_commission_amount = 0
 
-    def _commission_for_visit_row(phone: str, code: str, kind: str) -> dict | None:
+    from app.express_partner.visit_requests import commission_for_visit_request
+
+    def _commission_for_visit_row(
+        phone: str,
+        code: str,
+        kind: str,
+        visit_request_id: str | None = None,
+    ) -> dict | None:
         if not commission_admin_row:
             return None
         ph = (phone or '').strip()
@@ -4963,6 +4970,20 @@ def express_visit_requests():
         predicate = commission_is_visit if kind == 'visit' else commission_is_deal
         if not predicate:
             return None
+        vid = str(visit_request_id or '').strip()
+        if kind == 'visit' and vid:
+            matched = commission_for_visit_request(
+                commissions, ph, ck, vid, kind='visit', visit_requests=items_raw,
+            )
+            if not matched:
+                return None
+            row = commission_admin_row(matched)
+            row['withdrawal_locked'] = (
+                commission_linked_to_active_withdrawal(matched, withdrawals)
+                if commission_linked_to_active_withdrawal
+                else False
+            )
+            return row
         for c in reversed(commissions):
             if not isinstance(c, dict):
                 continue
@@ -5015,7 +5036,13 @@ def express_visit_requests():
         item = visit_admin_row(r, commissions)
         item['status_options'] = admin_visit_status_options(item.get('status'))
         item['visit_commission_required'] = bool(r.get('visit_commission_required'))
-        item['visit_commission'] = _commission_for_visit_row(ph, str(r.get('land_code') or '').strip(), 'visit')
+        visit_row_id = str(r.get('id') or '').strip()
+        item['visit_commission'] = _commission_for_visit_row(
+            ph,
+            str(r.get('land_code') or '').strip(),
+            'visit',
+            visit_request_id=visit_row_id,
+        )
         item['deal_commission'] = _commission_for_visit_row(ph, str(r.get('land_code') or '').strip(), 'deal')
         item['admin_workflow_steps'] = admin_visit_workflow_steps(
             item,
@@ -5140,6 +5167,7 @@ def _ensure_visit_commission_after_visit_confirm(rec: dict) -> bool:
     commissions = load_express_commissions() or []
     if not isinstance(commissions, list):
         commissions = []
+    visit_request_id = str(rec.get('id') or '').strip()
     for c in commissions:
         if not isinstance(c, dict):
             continue
@@ -5147,7 +5175,12 @@ def _ensure_visit_commission_after_visit_confirm(rec: dict) -> bool:
             continue
         if str(c.get('land_code') or '').strip() != land_code:
             continue
-        if commission_is_visit(c) and str(c.get('status') or '').strip().lower() in ('pending', 'approved', 'paid'):
+        if not commission_is_visit(c):
+            continue
+        if visit_request_id and str(c.get('visit_request_id') or '').strip() == visit_request_id:
+            if str(c.get('status') or '').strip().lower() in ('pending', 'approved', 'paid'):
+                return False
+        elif not visit_request_id and str(c.get('status') or '').strip().lower() in ('pending', 'approved', 'paid'):
             return False
 
     title = str(rec.get('land_title') or '').strip()
@@ -5159,7 +5192,7 @@ def _ensure_visit_commission_after_visit_confirm(rec: dict) -> bool:
             title = ''
     name_map = _partner_name_lookup()
     new_id = (max([int(x.get('id', 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
-    commissions.append({
+    commission_rec = {
         'id': new_id,
         'commission_type': 'visit',
         'partner_phone': partner_phone,
@@ -5171,7 +5204,10 @@ def _ensure_visit_commission_after_visit_confirm(rec: dict) -> bool:
         'commission_amount': amount,
         'status': 'pending',
         'created_at': iso_z(utcnow()),
-    })
+    }
+    if visit_request_id:
+        commission_rec['visit_request_id'] = visit_request_id
+    commissions.append(commission_rec)
     save_express_commissions(commissions)
     try:
         from app.express_partner.commission_sms import notify_partner_commission_txn

@@ -97,6 +97,7 @@ from .visit_requests import (
     create_visit_request as record_visit_request,
     partner_open_visit,
     partner_active_visit_record,
+    partner_can_request_new_visit,
     partner_visit_approved_for_deal,
     partner_visit_completed,
     request_visit_done_confirmation,
@@ -4104,6 +4105,7 @@ def _mark_in_transaction_finish(
     tx_mode: str | None = None,
     visit_date: str | None = None,
     redirect_url: str | None = None,
+    can_revisit: bool | None = None,
 ):
     """پاسخ HTML (redirect) یا JSON برای درخواست AJAX جزئیات فایل."""
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -4120,6 +4122,8 @@ def _mark_in_transaction_finish(
             jalali = format_iso_date_jalali(visit_date)
             if jalali:
                 payload['visit_date_jalali'] = jalali
+        if can_revisit is not None:
+            payload['can_revisit'] = bool(can_revisit)
         if success and redirect_url:
             payload['redirect_url'] = redirect_url
         return jsonify(payload), (200 if success else 400)
@@ -4336,6 +4340,14 @@ def create_visit_request(code: str):
     if not isinstance(visit_requests, list):
         visit_requests = []
 
+    if not partner_can_request_new_visit(current_status, visit_requests, me_phone, str(code)):
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='در حال حاضر امکان ثبت بازدید جدید برای این فایل وجود ندارد.',
+            category='error',
+        )
+
     rec, err = record_visit_request(
         visit_requests,
         partner_phone=me_phone,
@@ -4442,6 +4454,7 @@ def create_visit_request(code: str):
         new_status='active',
         tx_mode=tx_state.get('tx_mode') or 'visit_pending',
         visit_date=tx_state.get('visit_date') or rec.get('visit_date') or visit_date,
+        can_revisit=tx_state.get('can_revisit'),
         redirect_url=url_for('express_partner.requests', submitted=1),
     )
 
@@ -4529,8 +4542,6 @@ def complete_visit_request(code: str):
     msg = 'بازدید انجام شد ثبت شد و منتظر تأیید ادمین است.'
     if err == 'already_pending':
         msg = 'بازدید انجام شد قبلاً ثبت شده و منتظر تأیید ادمین است.'
-    elif err == 'already_completed':
-        msg = 'بازدید قبلاً توسط ادمین تأیید شده است.'
     return _mark_in_transaction_finish(
         code,
         success=True,
@@ -5983,6 +5994,7 @@ def land_detail(code: str):
             progress_row,
             commissions_for_tx,
             partner_phone=me_phone,
+            visit_requests=visit_requests_list,
         )
         land['_visit_progress_steps'] = progress_steps
         land['_visit_progress_summary'] = visit_progress_summary(progress_steps)

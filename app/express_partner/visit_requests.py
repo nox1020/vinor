@@ -157,6 +157,7 @@ def visit_progress_steps(
     commissions: List[Dict[str, Any]] | None = None,
     *,
     partner_phone: str | None = None,
+    visit_requests: List[Dict[str, Any]] | None = None,
 ) -> List[Dict[str, Any]]:
     """مراحل یکسان روند بازدید/معامله برای پنل همکار و ادمین."""
     if not isinstance(row, dict):
@@ -170,7 +171,14 @@ def visit_progress_steps(
         and (not ph or str(c.get("partner_phone") or "").strip() == ph)
         and (not code or str(c.get("land_code") or "").strip() == code)
     ]
-    visit_commissions = [c for c in related if commission_is_visit(c)]
+    visit_id = str(row.get("id") or "").strip()
+    if visit_id:
+        matched_vc = commission_for_visit_request(
+            related, ph, code, visit_id, kind="visit", visit_requests=visit_requests,
+        )
+        visit_commissions = [matched_vc] if matched_vc else []
+    else:
+        visit_commissions = [c for c in related if commission_is_visit(c)]
     deal_commissions = [c for c in related if commission_is_deal(c)]
     visit_commission_required_raw = row.get("visit_commission_required")
     visit_commission_required = (
@@ -576,12 +584,87 @@ def reject_visit_request(
     return None, "not_found"
 
 
+def _first_completed_visit_without_commission(
+    visit_requests: List[Dict[str, Any]] | None,
+    commissions: List[Dict[str, Any]] | None,
+    phone: str,
+    land_code: str,
+) -> Optional[str]:
+    """قدیمی‌ترین بازدید تکمیل‌شده بدون پورسانت مرتبط با visit_request_id."""
+    ph = (phone or "").strip()
+    code = (land_code or "").strip()
+    if not ph or not code:
+        return None
+    linked = {
+        str(c.get("visit_request_id") or "").strip()
+        for c in (commissions or [])
+        if isinstance(c, dict)
+        and str(c.get("partner_phone") or "").strip() == ph
+        and str(c.get("land_code") or "").strip() == code
+        and commission_is_visit(c)
+        and str(c.get("visit_request_id") or "").strip()
+    }
+    completed = [
+        r for r in (visit_requests or [])
+        if isinstance(r, dict)
+        and _match_partner_land(r, ph, code)
+        and (str(r.get("status") or "")).strip() == COMPLETED_STATUS
+    ]
+    completed.sort(
+        key=lambda r: str(r.get("completed_at") or r.get("updated_at") or r.get("created_at") or "")
+    )
+    for r in completed:
+        rid = str(r.get("id") or "").strip()
+        if rid and rid not in linked:
+            return rid
+    return None
+
+
+def commission_for_visit_request(
+    commissions: List[Dict[str, Any]] | None,
+    phone: str,
+    land_code: str,
+    visit_request_id: str,
+    *,
+    kind: str = "visit",
+    visit_requests: List[Dict[str, Any]] | None = None,
+) -> Optional[Dict[str, Any]]:
+    """پورسانت مرتبط با یک درخواست بازدید مشخص (یا قدیمی بدون visit_request_id)."""
+    ph = (phone or "").strip()
+    code = (land_code or "").strip()
+    vid = (visit_request_id or "").strip()
+    if not ph or not code:
+        return None
+    predicate = commission_is_visit if kind == "visit" else commission_is_deal
+    legacy: Optional[Dict[str, Any]] = None
+    for c in reversed(commissions or []):
+        if not isinstance(c, dict):
+            continue
+        if str(c.get("partner_phone") or "").strip() != ph:
+            continue
+        if str(c.get("land_code") or "").strip() != code:
+            continue
+        if not predicate(c):
+            continue
+        cid = str(c.get("visit_request_id") or "").strip()
+        if vid and cid == vid:
+            return c
+        if not cid and legacy is None:
+            legacy = c
+    if vid:
+        if legacy and visit_requests is not None:
+            owner = _first_completed_visit_without_commission(
+                visit_requests, commissions, ph, code
+            )
+            if owner == vid:
+                return legacy
+        return None
+    return legacy
+
+
 def request_visit_done_confirmation(
     requests: List[Dict[str, Any]], phone: str, land_code: str
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    completed = partner_visit_completed(requests, phone, land_code)
-    if completed:
-        return completed, "already_completed"
     pending = partner_visit_done_pending(requests, phone, land_code)
     if pending:
         return pending, "already_pending"
@@ -720,8 +803,7 @@ def resolve_partner_land_tx_state(
         and completed
         and not open_visit
         and not pending_deal
-        and (not visit_commission_required or visit_ready)
-        and mode == "deal"
+        and gs not in ("sold", "in_transaction")
     )
 
     return {

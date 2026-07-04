@@ -73,8 +73,9 @@
 
 {% set _ld_st = (land._assignment_status|default('active')|string)|lower|trim %}
 {% set _tx_mode = land._tx_button_mode|default('visit') %}
-{% set show_tx = is_approved and _ld_st != 'sold' and _tx_mode in ('visit', 'deal', 'release', 'visit_pending') %}
-{% if show_tx %}
+{% set _can_revisit = land._can_revisit|default(false) %}
+{% set show_land_tx_modals = is_approved and _ld_st != 'sold' %}
+{% if show_land_tx_modals %}
 <div id="landVisitModal"
      class="ld-modal ld-sheet-root hidden fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center sm:items-center sm:p-4"
      data-tg-body-modal

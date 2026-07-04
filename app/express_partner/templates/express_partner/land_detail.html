@@ -11,7 +11,7 @@
   <style id="vinor-land-detail-styles">
     /* ── جزئیات فایل: چیدمان دیوار + پالت وینور (emerald / تم تیره موبایل) ── */
     html:has(.land-detail-page) {
-      --ld-footer-h: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+      --ld-footer-h: calc(6.75rem + env(safe-area-inset-bottom, 0px));
       /* روشن (دسکتاپ) */
       --ld-bg: #f3f4f6;
       --ld-surface: #ffffff;
@@ -750,50 +750,149 @@
       mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
     }
     .ld-download-wrap[data-busy="1"] button { opacity: 0.88; pointer-events: none; }
-    /* نوار پایین — دیوار + وینور */
+    /* نوار پایین — دیوار (تماس پررنگ + ثانویه outline) + وینور */
     .ld-actions {
       background: var(--ld-surface);
       border-top: 1px solid var(--ld-border);
       box-shadow: var(--ld-shadow-footer);
     }
-    .ld-actions__inner { background: var(--ld-surface); }
-    .ld-visit-hint { color: var(--ld-text-muted); background: var(--ld-surface); }
+    .ld-actions__panel {
+      padding: 0.625rem 1rem 0.875rem;
+    }
+    .ld-actions__meta {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.375rem;
+      margin-bottom: 0.5rem;
+    }
+    .ld-actions__meta:empty,
+    .ld-actions__meta:not(:has(.ld-visit-hint:not(.hidden))):not(:has(.ld-actions__toast:not(.hidden))) {
+      display: none;
+      margin-bottom: 0;
+    }
+    .ld-actions__toast {
+      border-radius: 0.5rem;
+      border: 1px solid transparent;
+      padding: 0.5rem 0.75rem;
+      text-align: center;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      line-height: 1.45;
+    }
+    .ld-visit-hint {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.375rem;
+      align-self: center;
+      margin: 0;
+      padding: 0.3125rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      line-height: 1.35;
+      color: var(--ld-accent-text);
+      background: var(--ld-accent-soft);
+      border: 1px solid var(--ld-commission-border);
+    }
+    .ld-visit-hint i { font-size: 0.625rem; opacity: 0.9; }
+    .ld-actions__row {
+      display: flex;
+      align-items: stretch;
+      gap: 0.625rem;
+    }
+    .ld-actions__row--single .ld-actions__btn { flex: 1 1 100%; }
+    .ld-actions__row--duo .ld-actions__btn { flex: 1 1 0; min-width: 0; }
+    .ld-actions__row:not(.ld-actions__row--single):not(.ld-actions__row--duo) .ld-btn-call {
+      flex: 1.15 1 0;
+      min-width: 0;
+    }
+    .ld-actions__row:not(.ld-actions__row--single):not(.ld-actions__row--duo) .ld-btn-tx:not(.ld-actions__btn--outline) {
+      flex: 1.1 1 0;
+      min-width: 0;
+    }
+    .ld-actions__row:not(.ld-actions__row--single):not(.ld-actions__row--duo) .ld-actions__btn--outline {
+      flex: 0.95 1 0;
+      min-width: 0;
+    }
+    .ld-actions__btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4375rem;
+      min-height: 3rem;
+      min-width: 0;
+      padding: 0.6875rem 0.75rem;
+      border-radius: 0.5rem;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      line-height: 1.25;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.12s ease;
+    }
+    .ld-actions__btn:active:not(:disabled):not(.ld-actions__status) { transform: scale(0.98); }
+    .ld-actions__btn i { font-size: 0.875rem; flex-shrink: 0; }
+    .ld-actions__btn span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .ld-actions__status { cursor: default; pointer-events: none; }
     .ld-btn-call {
       background: var(--ld-call);
       color: #fff;
-      font-weight: 700;
-      border-radius: 0.75rem;
-      border: none;
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.28);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.22);
     }
     .ld-btn-call:hover { background: var(--ld-call-hover); }
     .ld-btn-tx {
       background: var(--ld-teal);
       color: #fff;
-      font-weight: 700;
-      border-radius: 0.75rem;
-      border: none;
-      box-shadow: 0 4px 14px rgba(13, 148, 136, 0.25);
+      box-shadow: 0 2px 8px rgba(13, 148, 136, 0.2);
     }
     .ld-btn-tx:hover { background: var(--ld-teal-hover); }
+    .ld-actions__btn--outline {
+      background: var(--ld-surface);
+      color: var(--ld-teal);
+      border: 1.5px solid var(--ld-teal);
+      box-shadow: none;
+    }
+    .ld-actions__btn--outline:hover {
+      background: rgba(13, 148, 136, 0.06);
+    }
+    html.dark .ld-actions__btn--outline:hover {
+      background: rgba(20, 184, 166, 0.1);
+    }
     .ld-btn-tx--release {
-      background: var(--ld-surface-2);
+      background: var(--ld-surface);
       color: var(--ld-text);
-      border: 1px solid var(--ld-border);
+      border: 1.5px solid var(--ld-border);
       box-shadow: none;
     }
     .ld-btn-tx--release:hover { background: var(--ld-hover); }
     .ld-btn-tx--pending {
       background: var(--ld-surface-2);
       color: var(--ld-text-muted);
-      border: 1px solid var(--ld-border);
+      border: 1.5px solid var(--ld-border);
       box-shadow: none;
+      opacity: 0.92;
     }
     .ld-btn-blocked {
       background: var(--ld-surface-2);
       color: var(--ld-text-muted);
-      border: 1px solid var(--ld-border);
-      border-radius: 0.75rem;
+      border: 1.5px solid var(--ld-border);
+      box-shadow: none;
+    }
+    @media (max-width: 380px) {
+      .ld-actions__panel { padding-inline: 0.75rem; }
+      .ld-actions__row { gap: 0.5rem; }
+      .ld-actions__btn {
+        min-height: 2.875rem;
+        padding-inline: 0.5rem;
+        font-size: 0.75rem;
+      }
+      .ld-actions__btn i { font-size: 0.8125rem; }
     }
     .ld-desc-toggle {
       color: var(--ld-accent);
@@ -937,7 +1036,7 @@
   {% set total_items = (1 if has_video else 0) + images|length %}
   {% set desc = (land.description or land.desc or '')|trim %}
 
-  <div id="landDetailPage" class="land-detail-page" data-vinor-ptr="off" data-land-code="{{ land.code or '' }}" data-tx-status="{{ (land._assignment_status|default('active')|string)|lower|trim }}" data-tx-mode="{{ land._tx_button_mode|default('visit') }}">
+  <div id="landDetailPage" class="land-detail-page" data-vinor-ptr="off" data-land-code="{{ land.code or '' }}" data-tx-status="{{ (land._assignment_status|default('active')|string)|lower|trim }}" data-tx-mode="{{ land._tx_button_mode|default('visit') }}" data-can-revisit="{{ '1' if land._can_revisit else '0' }}">
     {% include 'express_partner/partials/land_detail_gallery.html' %}
     {% include 'express_partner/partials/land_detail_main.html' %}
     <div class="ld-footer-spacer" aria-hidden="true"></div>
