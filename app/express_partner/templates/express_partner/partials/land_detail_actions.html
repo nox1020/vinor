@@ -1,4 +1,4 @@
-{# نوار پایین — چیدمان دیوار (تماس پررنگ + عمل ثانویه) + پالت وینور #}
+{# FAB + منوی بالایی سبک تلگرام #}
 {% set contact_phone = land.owner_phone or land.vinor_contact %}
 {% set _st = (land._assignment_status|default('active')|string)|lower|trim %}
 {% set tx_mode = land._tx_button_mode|default('visit') %}
@@ -9,82 +9,126 @@
 {% set show_sold = is_approved and _st == 'sold' %}
 {% set action_count = (1 if show_call else 0) + (1 if show_tx else 0) + (1 if show_revisit_btn else 0) + (1 if show_blocked else 0) + (1 if show_sold else 0) %}
 
-<footer class="ld-actions fixed inset-x-0 bottom-0 z-[70] pb-[env(safe-area-inset-bottom,0px)]" data-land-detail-footer>
-  <div class="ld-actions__panel max-w-2xl mx-auto">
-    <div class="ld-actions__meta">
-      <div id="landTxToast" class="ld-actions__toast hidden" role="status" aria-live="polite"></div>
+<footer class="ld-actions ld-fab-dock fixed inset-x-0 bottom-0 z-[70] pb-[env(safe-area-inset-bottom,0px)]" data-land-detail-footer data-fab-actions="{{ action_count }}">
+  <div class="ld-fab-dock__backdrop" data-land-fab-backdrop aria-hidden="true"></div>
+  <div class="ld-fab-dock__inner">
+    <div id="landTxToast" class="ld-fab-dock__toast hidden" role="status" aria-live="polite"></div>
+
+    <div id="landFabMenu" class="ld-fab-menu" role="menu" aria-hidden="true">
       {% if land._visit_date_jalali and tx_mode in ('deal', 'visit_pending', 'visit_done', 'visit_done_pending', 'visit_commission_pending') %}
-      <p id="landVisitDateHint" class="ld-visit-hint">
+      <p id="landVisitDateHint" class="ld-fab-menu__hint">
         <i class="fas fa-calendar-check" aria-hidden="true"></i>
         <span>بازدید: {{ land._visit_date_jalali }}</span>
       </p>
       {% else %}
-      <p id="landVisitDateHint" class="ld-visit-hint hidden"></p>
+      <p id="landVisitDateHint" class="ld-fab-menu__hint hidden"></p>
       {% endif %}
-    </div>
 
-    <div class="ld-actions__row{% if action_count == 1 %} ld-actions__row--single{% elif action_count == 2 %} ld-actions__row--duo{% endif %}">
-      {% if show_call %}
-      <button type="button"
-              data-land-open-contact
-              data-tour="contact-btn"
-              class="ld-actions__btn ld-btn-call">
-        <i class="fas fa-phone" aria-hidden="true"></i>
-        <span>تماس</span>
-      </button>
+      <div class="ld-fab-menu__items">
+      {% if show_revisit_btn %}
+      <div class="ld-fab-menu__item" role="none">
+        <span class="ld-fab-menu__label">بازدید مجدد</span>
+        <button type="button"
+                id="landRevisitBtn"
+                role="menuitem"
+                data-land-revisit-trigger
+                data-visit-request-url="{{ url_for('express_partner.create_visit_request', code=land.code) }}"
+                data-csrf="{{ csrf_token() }}"
+                class="ld-fab-menu__action ld-fab-menu__action--teal">
+          <i class="fas fa-calendar-plus" aria-hidden="true"></i>
+        </button>
+      </div>
+      {% else %}
+      <div class="ld-fab-menu__item hidden" id="landRevisitItem" role="none">
+        <span class="ld-fab-menu__label">بازدید مجدد</span>
+        <button type="button"
+                id="landRevisitBtn"
+                role="menuitem"
+                data-land-revisit-trigger
+                data-visit-request-url="{{ url_for('express_partner.create_visit_request', code=land.code) }}"
+                data-csrf="{{ csrf_token() }}"
+                class="ld-fab-menu__action ld-fab-menu__action--teal">
+          <i class="fas fa-calendar-plus" aria-hidden="true"></i>
+        </button>
+      </div>
       {% endif %}
 
       {% if show_tx %}
-      <button type="button"
-              id="landTxToggleBtn"
-              data-land-tx-toggle
-              data-tour="transaction-btn"
-              data-land-tx-mode="{{ tx_mode }}"
-              data-land-tx-url="{{ url_for('express_partner.mark_in_transaction', code=land.code) }}"
-              data-visit-request-url="{{ url_for('express_partner.create_visit_request', code=land.code) }}"
-              data-visit-complete-url="{{ url_for('express_partner.complete_visit_request', code=land.code) }}"
-              data-tx-status-url="{{ url_for('express_partner.land_tx_status', code=land.code) }}"
-              data-land-tx-status="{{ _st }}"
-              {% if land._visit_date %}data-visit-date="{{ land._visit_date }}"{% endif %}
-              data-csrf="{{ csrf_token() }}"
-              {% if tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %}aria-disabled="true"{% endif %}
-              class="ld-actions__btn ld-btn-tx{% if tx_mode == 'release' %} ld-btn-tx--release{% elif tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %} ld-btn-tx--pending{% endif %}">
-        <i class="fas {% if tx_mode == 'release' %}fa-check-circle{% elif tx_mode == 'deal' %}fa-handshake{% elif tx_mode == 'revisit' %}fa-calendar-plus{% elif tx_mode == 'visit_done' %}fa-check-double{% elif tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %}fa-clock{% else %}fa-calendar-check{% endif %} land-tx-icon" aria-hidden="true"></i>
-        <span class="land-tx-label">{% if tx_mode == 'release' %}رفع معامله{% elif tx_mode == 'deal' %}درخواست معامله{% elif tx_mode == 'revisit' %}بازدید مجدد{% elif tx_mode == 'visit_done' %}بازدید انجام شد{% elif tx_mode == 'visit_done_pending' %}در انتظار تأیید بازدید{% elif tx_mode == 'visit_commission_pending' %}در انتظار پورسانت{% elif tx_mode == 'visit_pending' %}در انتظار بازدید{% else %}درخواست بازدید{% endif %}</span>
-      </button>
+      <div class="ld-fab-menu__item" role="none">
+        <span class="ld-fab-menu__label land-tx-label">{% if tx_mode == 'release' %}رفع معامله{% elif tx_mode == 'deal' %}درخواست معامله{% elif tx_mode == 'revisit' %}بازدید مجدد{% elif tx_mode == 'visit_done' %}بازدید انجام شد{% elif tx_mode == 'visit_done_pending' %}در انتظار تأیید بازدید{% elif tx_mode == 'visit_commission_pending' %}در انتظار پورسانت{% elif tx_mode == 'visit_pending' %}در انتظار بازدید{% else %}درخواست بازدید{% endif %}</span>
+        <button type="button"
+                id="landTxToggleBtn"
+                role="menuitem"
+                data-land-tx-toggle
+                data-tour="transaction-btn"
+                data-land-tx-mode="{{ tx_mode }}"
+                data-land-tx-url="{{ url_for('express_partner.mark_in_transaction', code=land.code) }}"
+                data-visit-request-url="{{ url_for('express_partner.create_visit_request', code=land.code) }}"
+                data-visit-complete-url="{{ url_for('express_partner.complete_visit_request', code=land.code) }}"
+                data-tx-status-url="{{ url_for('express_partner.land_tx_status', code=land.code) }}"
+                data-land-tx-status="{{ _st }}"
+                {% if land._visit_date %}data-visit-date="{{ land._visit_date }}"{% endif %}
+                data-csrf="{{ csrf_token() }}"
+                {% if tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %}aria-disabled="true"{% endif %}
+                class="ld-fab-menu__action ld-btn-tx{% if tx_mode == 'release' %} ld-btn-tx--release ld-fab-menu__action--muted{% elif tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %} ld-btn-tx--pending ld-fab-menu__action--pending{% else %} ld-fab-menu__action--teal{% endif %}">
+          <i class="fas {% if tx_mode == 'release' %}fa-check-circle{% elif tx_mode == 'deal' %}fa-handshake{% elif tx_mode == 'revisit' %}fa-calendar-plus{% elif tx_mode == 'visit_done' %}fa-check-double{% elif tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %}fa-clock{% else %}fa-calendar-check{% endif %} land-tx-icon" aria-hidden="true"></i>
+        </button>
+      </div>
       {% elif show_blocked %}
-      <div class="ld-actions__btn ld-actions__status ld-btn-blocked">
-        <i class="fas fa-lock" aria-hidden="true"></i>
-        <span>در حال معامله</span>
+      <div class="ld-fab-menu__item ld-fab-menu__item--status" role="none">
+        <span class="ld-fab-menu__label">در حال معامله</span>
+        <div class="ld-fab-menu__action ld-fab-menu__action--muted ld-btn-blocked">
+          <i class="fas fa-lock" aria-hidden="true"></i>
+        </div>
       </div>
       {% elif show_sold %}
-      <div class="ld-actions__btn ld-actions__status ld-btn-blocked">
-        <i class="fas fa-check-double" aria-hidden="true"></i>
-        <span>فروخته شد</span>
+      <div class="ld-fab-menu__item ld-fab-menu__item--status" role="none">
+        <span class="ld-fab-menu__label">فروخته شد</span>
+        <div class="ld-fab-menu__action ld-fab-menu__action--muted ld-btn-blocked">
+          <i class="fas fa-check-double" aria-hidden="true"></i>
+        </div>
       </div>
       {% endif %}
 
-      {% if show_revisit_btn %}
-      <button type="button"
-              id="landRevisitBtn"
-              data-land-revisit-trigger
-              data-visit-request-url="{{ url_for('express_partner.create_visit_request', code=land.code) }}"
-              data-csrf="{{ csrf_token() }}"
-              class="ld-actions__btn ld-btn-tx ld-actions__btn--outline">
-        <i class="fas fa-calendar-plus" aria-hidden="true"></i>
-        <span>بازدید مجدد</span>
-      </button>
-      {% else %}
-      <button type="button"
-              id="landRevisitBtn"
-              data-land-revisit-trigger
-              data-visit-request-url="{{ url_for('express_partner.create_visit_request', code=land.code) }}"
-              data-csrf="{{ csrf_token() }}"
-              class="hidden ld-actions__btn ld-btn-tx ld-actions__btn--outline">
-        <i class="fas fa-calendar-plus" aria-hidden="true"></i>
-        <span>بازدید مجدد</span>
-      </button>
+      {% if show_call %}
+      <div class="ld-fab-menu__item" role="none">
+        <span class="ld-fab-menu__label">تماس</span>
+        <button type="button"
+                role="menuitem"
+                data-land-open-contact
+                data-tour="contact-btn"
+                class="ld-fab-menu__action ld-fab-menu__action--call ld-btn-call">
+          <i class="fas fa-phone" aria-hidden="true"></i>
+        </button>
+      </div>
       {% endif %}
+      </div>
     </div>
+
+    <button type="button"
+            id="landFabTrigger"
+            class="ld-fab-trigger"
+            aria-expanded="false"
+            aria-controls="landFabMenu"
+            aria-label="عملیات فایل">
+      {% set fab_icon = 'fa-handshake' %}
+      {% if action_count <= 1 %}
+        {% if show_call %}{% set fab_icon = 'fa-phone' %}
+        {% elif show_tx %}
+          {% if tx_mode == 'deal' %}{% set fab_icon = 'fa-handshake' %}
+          {% elif tx_mode == 'release' %}{% set fab_icon = 'fa-check-circle' %}
+          {% elif tx_mode == 'revisit' %}{% set fab_icon = 'fa-calendar-plus' %}
+          {% elif tx_mode == 'visit_done' %}{% set fab_icon = 'fa-check-double' %}
+          {% elif tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %}{% set fab_icon = 'fa-clock' %}
+          {% else %}{% set fab_icon = 'fa-calendar-check' %}
+          {% endif %}
+        {% elif show_blocked %}{% set fab_icon = 'fa-lock' %}
+        {% elif show_sold %}{% set fab_icon = 'fa-check-double' %}
+        {% endif %}
+      {% elif show_call %}{% set fab_icon = 'fa-phone' %}
+      {% endif %}
+      <i class="fas {{ fab_icon }} ld-fab-trigger__icon ld-fab-trigger__icon--idle" id="landFabTriggerIcon" aria-hidden="true"></i>
+      <i class="fas fa-times ld-fab-trigger__icon ld-fab-trigger__icon--active" aria-hidden="true"></i>
+    </button>
   </div>
 </footer>

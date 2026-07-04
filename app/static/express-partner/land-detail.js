@@ -1474,20 +1474,163 @@
     var revisitBtn = document.getElementById('landRevisitBtn');
     if (!revisitBtn) return;
     var show = !!canRevisit && (txMode === 'deal' || txMode === 'visit_commission_pending');
-    revisitBtn.classList.toggle('hidden', !show);
-    revisitBtn.classList.toggle('flex', show);
-    var grid = revisitBtn.closest('.grid');
-    if (grid) {
-      var visibleSlots = 0;
-      if (grid.querySelector('.ld-btn-call')) visibleSlots += 1;
-      if (grid.querySelector('#landTxToggleBtn') && !grid.querySelector('#landTxToggleBtn').closest('.hidden')) visibleSlots += 1;
-      if (show) visibleSlots += 1;
-      if (grid.querySelector('.ld-btn-blocked')) visibleSlots += 1;
-      grid.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3');
-      if (visibleSlots >= 3) grid.classList.add('grid-cols-3');
-      else if (visibleSlots >= 2) grid.classList.add('grid-cols-2');
-      else grid.classList.add('grid-cols-1');
+    var item = document.getElementById('landRevisitItem') || revisitBtn.closest('.ld-fab-menu__item');
+    if (item) item.classList.toggle('hidden', !show);
+    syncFabDirectMode();
+  }
+
+  function countFabInteractiveItems() {
+    var items = document.querySelectorAll('.ld-fab-menu__items .ld-fab-menu__item:not(.hidden):not(.ld-fab-menu__item--status)');
+    var count = 0;
+    items.forEach(function (item) {
+      var btn = item.querySelector('button.ld-fab-menu__action');
+      if (btn && !btn.classList.contains('hidden')) count += 1;
+    });
+    return count;
+  }
+
+  function fabIconForMode(mode) {
+    var icons = {
+      visit: 'fa-calendar-check',
+      deal: 'fa-handshake',
+      release: 'fa-check-circle',
+      revisit: 'fa-calendar-plus',
+      visit_done: 'fa-check-double',
+      visit_pending: 'fa-clock',
+      visit_done_pending: 'fa-clock',
+      visit_commission_pending: 'fa-clock',
+    };
+    return icons[mode] || 'fa-handshake';
+  }
+
+  function syncFabTriggerIcon() {
+    var iconEl = document.getElementById('landFabTriggerIcon');
+    if (!iconEl) return;
+    var count = countFabInteractiveItems();
+    var icon = 'fa-handshake';
+    var callBtn = document.querySelector('.ld-fab-menu__items [data-land-open-contact]');
+    var txBtn = document.getElementById('landTxToggleBtn');
+    var callVisible = callBtn && callBtn.closest('.ld-fab-menu__item:not(.hidden)');
+    var txVisible = txBtn && txBtn.closest('.ld-fab-menu__item:not(.hidden)');
+    if (count <= 1) {
+      if (callVisible) icon = 'fa-phone';
+      else if (txVisible) icon = fabIconForMode(txBtn.getAttribute('data-land-tx-mode') || 'visit');
+      else if (document.querySelector('.ld-fab-menu__item--status .fa-lock')) icon = 'fa-lock';
+      else if (document.querySelector('.ld-fab-menu__item--status .fa-check-double')) icon = 'fa-check-double';
+    } else if (callVisible) {
+      icon = 'fa-phone';
     }
+    iconEl.className = 'fas ' + icon + ' ld-fab-trigger__icon ld-fab-trigger__icon--idle';
+  }
+
+  function syncFabDirectMode() {
+    var dock = document.querySelector('.ld-fab-dock');
+    var trigger = document.getElementById('landFabTrigger');
+    if (!dock || !trigger) return;
+    var count = countFabInteractiveItems();
+    var direct = count <= 1;
+    var callBtn = document.querySelector('.ld-fab-menu__items [data-land-open-contact]');
+    var txBtn = document.getElementById('landTxToggleBtn');
+    var callVisible = callBtn && callBtn.closest('.ld-fab-menu__item:not(.hidden)');
+    dock.dataset.fabDirect = direct ? '1' : '0';
+    if (direct && count === 1) {
+      if (callVisible) {
+        trigger.setAttribute('aria-label', 'تماس');
+      } else if (txBtn && txBtn.closest('.ld-fab-menu__item:not(.hidden)')) {
+        var label = txBtn.closest('.ld-fab-menu__item').querySelector('.ld-fab-menu__label');
+        trigger.setAttribute('aria-label', label ? label.textContent.trim() : 'عملیات فایل');
+      } else {
+        trigger.setAttribute('aria-label', 'عملیات فایل');
+      }
+    } else {
+      trigger.setAttribute('aria-label', callVisible ? 'تماس و عملیات فایل' : 'عملیات فایل');
+    }
+    syncFabTriggerIcon();
+  }
+
+  function closeFabMenu() {
+    var dock = document.querySelector('.ld-fab-dock');
+    if (!dock || !dock.classList.contains('is-open')) return;
+    dock.classList.remove('is-open');
+    var trigger = document.getElementById('landFabTrigger');
+    var menu = document.getElementById('landFabMenu');
+    var backdrop = dock.querySelector('[data-land-fab-backdrop]');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    if (menu) menu.setAttribute('aria-hidden', 'true');
+    if (backdrop) backdrop.setAttribute('aria-hidden', 'true');
+    syncFooterSpacer();
+  }
+
+  function openFabMenu() {
+    var dock = document.querySelector('.ld-fab-dock');
+    if (!dock) return;
+    dock.classList.add('is-open');
+    var trigger = document.getElementById('landFabTrigger');
+    var menu = document.getElementById('landFabMenu');
+    var backdrop = dock.querySelector('[data-land-fab-backdrop]');
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    if (menu) menu.setAttribute('aria-hidden', 'false');
+    if (backdrop) backdrop.setAttribute('aria-hidden', 'false');
+    syncFooterSpacer();
+  }
+
+  function initFabMenu() {
+    var dock = document.querySelector('.ld-fab-dock');
+    var trigger = document.getElementById('landFabTrigger');
+    if (!dock || !trigger || trigger.dataset.ldFabBound === '1') return;
+    trigger.dataset.ldFabBound = '1';
+    syncFabDirectMode();
+
+    function onTriggerClick(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (dock.dataset.fabDirect === '1') {
+        var item = dock.querySelector('.ld-fab-menu__items .ld-fab-menu__item:not(.hidden):not(.ld-fab-menu__item--status) button.ld-fab-menu__action');
+        if (item) item.click();
+        else openFabMenu();
+        return;
+      }
+      if (dock.classList.contains('is-open')) closeFabMenu();
+      else openFabMenu();
+    }
+
+    function onBackdropClick(ev) {
+      ev.preventDefault();
+      closeFabMenu();
+    }
+
+    function onFabActionClick() {
+      requestAnimationFrame(closeFabMenu);
+    }
+
+    function onFabEscape(ev) {
+      if (ev.key !== 'Escape' || !dock.classList.contains('is-open')) return;
+      ev.preventDefault();
+      closeFabMenu();
+    }
+
+    trigger.addEventListener('click', onTriggerClick);
+    var backdrop = dock.querySelector('[data-land-fab-backdrop]');
+    if (backdrop) backdrop.addEventListener('click', onBackdropClick);
+    dock.querySelectorAll(
+      '[data-land-open-contact], [data-land-tx-toggle], [data-land-revisit-trigger]'
+    ).forEach(function (btn) {
+      btn.addEventListener('click', onFabActionClick);
+    });
+    document.addEventListener('keydown', onFabEscape);
+
+    addCleanup(function () {
+      trigger.removeEventListener('click', onTriggerClick);
+      if (backdrop) backdrop.removeEventListener('click', onBackdropClick);
+      dock.querySelectorAll(
+        '[data-land-open-contact], [data-land-tx-toggle], [data-land-revisit-trigger]'
+      ).forEach(function (btn) {
+        btn.removeEventListener('click', onFabActionClick);
+      });
+      document.removeEventListener('keydown', onFabEscape);
+      closeFabMenu();
+      delete trigger.dataset.ldFabBound;
+    });
   }
 
   function applyTxMode(mode, visitDate, visitDateJalali, canRevisit) {
@@ -1514,10 +1657,21 @@
       btn.setAttribute('data-land-tx-mode', mode);
       btn.setAttribute('data-land-tx-status', status);
       var icon = btn.querySelector('.land-tx-icon');
-      var label = btn.querySelector('.land-tx-label');
-      if (icon) icon.className = 'fas ' + cfg.icon + ' land-tx-icon text-xs';
+      var item = btn.closest('.ld-fab-menu__item');
+      var label = (item && item.querySelector('.land-tx-label')) || document.querySelector('.land-tx-label');
+      if (icon) icon.className = 'fas ' + cfg.icon + ' land-tx-icon';
       if (label) label.textContent = cfg.label;
-      btn.className = 'w-full flex items-center justify-center gap-2 py-3 text-sm active:scale-[0.98] transition-transform disabled:opacity-70 disabled:pointer-events-none ' + cfg.btnClass;
+      btn.classList.remove(
+        'ld-btn-tx', 'ld-btn-tx--release', 'ld-btn-tx--pending',
+        'ld-fab-menu__action--teal', 'ld-fab-menu__action--muted', 'ld-fab-menu__action--pending'
+      );
+      if (mode === 'release') {
+        btn.classList.add('ld-btn-tx--release', 'ld-fab-menu__action--muted');
+      } else if (mode === 'visit_pending' || mode === 'visit_done_pending' || mode === 'visit_commission_pending') {
+        btn.classList.add('ld-btn-tx--pending', 'ld-fab-menu__action--pending');
+      } else {
+        btn.classList.add('ld-btn-tx', 'ld-fab-menu__action--teal');
+      }
       if (visitDate) {
         btn.setAttribute('data-visit-date', visitDate);
       }
@@ -2437,6 +2591,7 @@
     initVisitRequest();
     initRevisitTriggers();
     initTransactionToggle();
+    initFabMenu();
     initLandFlashes(cfg);
     initPartnerMarketing(cfg);
     initDescToggle();
@@ -2482,6 +2637,8 @@
     syncFooterSpacer();
     bindContactModalTel();
     bindVisitSubmitHandler();
+    initFabMenu();
+    syncFabDirectMode();
   };
 
   if (!window.__vinorLandDetailBound) {

@@ -11,7 +11,7 @@
   <style id="vinor-land-detail-styles">
     /* ── جزئیات فایل: چیدمان دیوار + پالت وینور (emerald / تم تیره موبایل) ── */
     html:has(.land-detail-page) {
-      --ld-footer-h: calc(6.75rem + env(safe-area-inset-bottom, 0px));
+      --ld-footer-h: calc(5.25rem + env(safe-area-inset-bottom, 0px));
       /* روشن (دسکتاپ) */
       --ld-bg: #f3f4f6;
       --ld-surface: #ffffff;
@@ -750,149 +750,246 @@
       mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
     }
     .ld-download-wrap[data-busy="1"] button { opacity: 0.88; pointer-events: none; }
-    /* نوار پایین — دیوار (تماس پررنگ + ثانویه outline) + وینور */
-    .ld-actions {
-      background: var(--ld-surface);
-      border-top: 1px solid var(--ld-border);
-      box-shadow: var(--ld-shadow-footer);
+    /* FAB + منوی تلگرامی */
+    .ld-fab-dock {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      pointer-events: none;
     }
-    .ld-actions__panel {
-      padding: 0.625rem 1rem 0.875rem;
+    .ld-fab-dock__backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 69;
+      background: rgba(15, 23, 42, 0.42);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.24s ease, visibility 0.24s ease;
     }
-    .ld-actions__meta {
+    html.dark .ld-fab-dock__backdrop { background: rgba(0, 0, 0, 0.55); }
+    .ld-fab-dock.is-open .ld-fab-dock__backdrop {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+    .ld-fab-dock__inner {
+      position: relative;
+      z-index: 71;
+      pointer-events: auto;
       display: flex;
       flex-direction: column;
-      align-items: stretch;
-      gap: 0.375rem;
-      margin-bottom: 0.5rem;
+      align-items: flex-end;
+      gap: 0.75rem;
+      padding: 0 1rem 0.875rem;
     }
-    .ld-actions__meta:empty,
-    .ld-actions__meta:not(:has(.ld-visit-hint:not(.hidden))):not(:has(.ld-actions__toast:not(.hidden))) {
-      display: none;
-      margin-bottom: 0;
-    }
-    .ld-actions__toast {
-      border-radius: 0.5rem;
+    .ld-fab-dock__toast {
+      position: absolute;
+      right: 0;
+      bottom: calc(100% + 0.5rem);
+      left: auto;
+      width: min(18rem, calc(100vw - 2rem));
+      border-radius: 0.625rem;
       border: 1px solid transparent;
       padding: 0.5rem 0.75rem;
       text-align: center;
       font-size: 0.6875rem;
       font-weight: 600;
       line-height: 1.45;
+      box-shadow: 0 4px 20px rgba(15, 23, 42, 0.14);
     }
-    .ld-visit-hint {
+    .ld-fab-menu {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.625rem;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(0.625rem);
+      transition: opacity 0.22s ease, visibility 0.22s ease, transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .ld-fab-dock.is-open .ld-fab-menu {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+    .ld-fab-menu__items {
+      display: flex;
+      flex-direction: column-reverse;
+      align-items: flex-end;
+      gap: 0.75rem;
+    }
+    .ld-fab-menu__hint {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 0.375rem;
-      align-self: center;
       margin: 0;
-      padding: 0.3125rem 0.75rem;
+      padding: 0.4375rem 0.875rem;
       border-radius: 9999px;
-      font-size: 0.6875rem;
+      font-size: 0.75rem;
       font-weight: 600;
       line-height: 1.35;
       color: var(--ld-accent-text);
-      background: var(--ld-accent-soft);
+      background: var(--ld-surface);
       border: 1px solid var(--ld-commission-border);
+      box-shadow: 0 2px 14px rgba(15, 23, 42, 0.1);
     }
-    .ld-visit-hint i { font-size: 0.625rem; opacity: 0.9; }
-    .ld-actions__row {
+    .ld-fab-menu__hint i { font-size: 0.6875rem; opacity: 0.9; }
+    .ld-fab-menu__item {
       display: flex;
-      align-items: stretch;
-      gap: 0.625rem;
+      flex-direction: row-reverse;
+      align-items: center;
+      gap: 0.75rem;
     }
-    .ld-actions__row--single .ld-actions__btn { flex: 1 1 100%; }
-    .ld-actions__row--duo .ld-actions__btn { flex: 1 1 0; min-width: 0; }
-    .ld-actions__row:not(.ld-actions__row--single):not(.ld-actions__row--duo) .ld-btn-call {
-      flex: 1.15 1 0;
-      min-width: 0;
+    .ld-fab-menu__label {
+      display: inline-block;
+      max-width: min(14rem, calc(100vw - 6.5rem));
+      padding: 0.5625rem 0.9375rem;
+      border-radius: 9999px;
+      background: var(--ld-surface);
+      color: var(--ld-text);
+      font-size: 0.875rem;
+      font-weight: 700;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: 0 2px 16px rgba(15, 23, 42, 0.12);
+      border: 1px solid var(--ld-border);
     }
-    .ld-actions__row:not(.ld-actions__row--single):not(.ld-actions__row--duo) .ld-btn-tx:not(.ld-actions__btn--outline) {
-      flex: 1.1 1 0;
-      min-width: 0;
+    html.dark .ld-fab-menu__label {
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
     }
-    .ld-actions__row:not(.ld-actions__row--single):not(.ld-actions__row--duo) .ld-actions__btn--outline {
-      flex: 0.95 1 0;
-      min-width: 0;
+    .ld-fab-menu__action {
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      width: 3.125rem;
+      height: 3.125rem;
+      border-radius: 9999px;
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+      transition: transform 0.12s ease, background 0.15s ease, opacity 0.12s ease;
     }
-    .ld-actions__btn {
+    .ld-fab-menu__action i { font-size: 1.0625rem; }
+    .ld-fab-menu__action:active:not(:disabled) { transform: scale(0.94); }
+    .ld-fab-menu__action--call,
+    .ld-btn-call.ld-fab-menu__action {
+      background: var(--ld-call);
+      box-shadow: 0 4px 18px rgba(16, 185, 129, 0.35);
+    }
+    .ld-fab-menu__action--teal,
+    .ld-btn-tx.ld-fab-menu__action {
+      background: var(--ld-teal);
+      box-shadow: 0 4px 18px rgba(13, 148, 136, 0.32);
+    }
+    .ld-fab-menu__action--muted,
+    .ld-btn-tx--release.ld-fab-menu__action {
+      background: var(--ld-surface-2);
+      color: var(--ld-text);
+      border: 1.5px solid var(--ld-border);
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+    }
+    .ld-fab-menu__action--pending,
+    .ld-btn-tx--pending.ld-fab-menu__action {
+      background: var(--ld-surface-2);
+      color: var(--ld-text-muted);
+      border: 1.5px solid var(--ld-border);
+      box-shadow: none;
+      opacity: 0.95;
+    }
+    .ld-btn-blocked.ld-fab-menu__action {
+      background: var(--ld-surface-2);
+      color: var(--ld-text-muted);
+      border: 1.5px solid var(--ld-border);
+      box-shadow: none;
+      cursor: default;
+      pointer-events: none;
+    }
+    .ld-fab-trigger {
+      position: relative;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 0.4375rem;
-      min-height: 3rem;
-      min-width: 0;
-      padding: 0.6875rem 0.75rem;
-      border-radius: 0.5rem;
-      font-size: 0.8125rem;
-      font-weight: 700;
-      line-height: 1.25;
+      flex-shrink: 0;
+      width: 3.625rem;
+      height: 3.625rem;
+      border-radius: 9999px;
       border: none;
+      background: linear-gradient(145deg, var(--ld-accent), var(--ld-teal));
+      color: #fff;
       cursor: pointer;
-      text-decoration: none;
-      white-space: nowrap;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
-      transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.12s ease;
+      box-shadow: 0 6px 24px rgba(16, 185, 129, 0.42);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     }
-    .ld-actions__btn:active:not(:disabled):not(.ld-actions__status) { transform: scale(0.98); }
-    .ld-actions__btn i { font-size: 0.875rem; flex-shrink: 0; }
-    .ld-actions__btn span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-    .ld-actions__status { cursor: default; pointer-events: none; }
-    .ld-btn-call {
-      background: var(--ld-call);
-      color: #fff;
-      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.22);
-    }
-    .ld-btn-call:hover { background: var(--ld-call-hover); }
-    .ld-btn-tx {
-      background: var(--ld-teal);
-      color: #fff;
-      box-shadow: 0 2px 8px rgba(13, 148, 136, 0.2);
-    }
-    .ld-btn-tx:hover { background: var(--ld-teal-hover); }
-    .ld-actions__btn--outline {
-      background: var(--ld-surface);
-      color: var(--ld-teal);
-      border: 1.5px solid var(--ld-teal);
-      box-shadow: none;
-    }
-    .ld-actions__btn--outline:hover {
-      background: rgba(13, 148, 136, 0.06);
-    }
-    html.dark .ld-actions__btn--outline:hover {
-      background: rgba(20, 184, 166, 0.1);
-    }
-    .ld-btn-tx--release {
-      background: var(--ld-surface);
-      color: var(--ld-text);
-      border: 1.5px solid var(--ld-border);
-      box-shadow: none;
-    }
-    .ld-btn-tx--release:hover { background: var(--ld-hover); }
-    .ld-btn-tx--pending {
+    .ld-fab-trigger:active { transform: scale(0.94); }
+    .ld-fab-dock.is-open .ld-fab-trigger {
+      transform: rotate(0deg);
+      box-shadow: 0 4px 18px rgba(15, 23, 42, 0.2);
       background: var(--ld-surface-2);
       color: var(--ld-text-muted);
       border: 1.5px solid var(--ld-border);
-      box-shadow: none;
-      opacity: 0.92;
     }
-    .ld-btn-blocked {
-      background: var(--ld-surface-2);
-      color: var(--ld-text-muted);
-      border: 1.5px solid var(--ld-border);
-      box-shadow: none;
+    .ld-fab-trigger__icon {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      font-size: 1.375rem;
+      line-height: 1;
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.22s ease;
+     }
+    .ld-fab-trigger__icon--active {
+      opacity: 0;
+      transform: rotate(-90deg) scale(0.72);
+      font-size: 1.25rem;
     }
-    @media (max-width: 380px) {
-      .ld-actions__panel { padding-inline: 0.75rem; }
-      .ld-actions__row { gap: 0.5rem; }
-      .ld-actions__btn {
-        min-height: 2.875rem;
-        padding-inline: 0.5rem;
-        font-size: 0.75rem;
+    .ld-fab-dock.is-open .ld-fab-trigger__icon--idle {
+      opacity: 0;
+      transform: rotate(90deg) scale(0.72);
+    }
+    .ld-fab-dock.is-open .ld-fab-trigger__icon--active {
+      opacity: 1;
+      transform: rotate(0deg) scale(1);
+    }
+    .ld-fab-dock.is-open .ld-fab-menu__item {
+      animation: ldFabItemIn 0.24s cubic-bezier(0.32, 0.72, 0, 1) backwards;
+    }
+    .ld-fab-dock.is-open .ld-fab-menu__items .ld-fab-menu__item:nth-last-child(1) { animation-delay: 0.02s; }
+    .ld-fab-dock.is-open .ld-fab-menu__items .ld-fab-menu__item:nth-last-child(2) { animation-delay: 0.05s; }
+    .ld-fab-dock.is-open .ld-fab-menu__items .ld-fab-menu__item:nth-last-child(3) { animation-delay: 0.08s; }
+    @keyframes ldFabItemIn {
+      from { opacity: 0; transform: translateY(0.625rem) scale(0.92); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @media (min-width: 1024px) {
+      .ld-fab-dock__inner {
+        max-width: 42rem;
+        margin-inline: auto;
+        padding-inline: 1rem;
       }
-      .ld-actions__btn i { font-size: 0.8125rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ld-fab-menu,
+      .ld-fab-dock__backdrop,
+      .ld-fab-trigger__icon,
+      .ld-fab-menu__item {
+        transition: none !important;
+        animation: none !important;
+      }
     }
     .ld-desc-toggle {
       color: var(--ld-accent);
