@@ -25,6 +25,7 @@ PARTNER_LAND_TX_EVENTS = frozenset({
     "visit_pending",
     "visit_approved",
     "visit_done_pending",
+    "visit_done_rejected",
     "visit_rejected",
     "visit_completed",
     "deal_started",
@@ -72,6 +73,8 @@ def visit_status_change_event(new_status: str, prev_status: str) -> Optional[str
     prev_st = (prev_status or "").strip()
     if not new_st or new_st == prev_st:
         return None
+    if new_st == APPROVED_STATUS and prev_st == DONE_PENDING_STATUS:
+        return "visit_done_rejected"
     return _STATUS_TO_EVENT.get(new_st)
 
 
@@ -119,12 +122,29 @@ def _build_message(event: str, ctx: Dict[str, Any]) -> str:
             f"ملک: {land}\n"
             f"وضعیت: در انتظار تأیید ادمین"
         )
+    if event == "visit_done_rejected":
+        lines = [
+            "وینور اکسپرس",
+            "تأیید انجام بازدید رد شد.",
+            f"ملک: {land}",
+            "لطفاً پس از بازدید مجدد، دوباره «بازدید انجام شد» را ثبت کنید.",
+        ]
+        if note:
+            lines.append(f"یادداشت: {note}")
+        return "\n".join(lines)
     if event == "visit_completed":
+        if ctx.get("visit_commission_pending"):
+            return (
+                f"وینور اکسپرس\n"
+                f"انجام بازدید توسط ادمین تأیید شد.\n"
+                f"ملک: {land}\n"
+                f"وضعیت: در انتظار تأیید پورسانت بازدید"
+            )
         return (
             f"وینور اکسپرس\n"
             f"انجام بازدید توسط ادمین تأیید شد.\n"
             f"ملک: {land}\n"
-            f"وضعیت: در انتظار تأیید پورسانت بازدید"
+            f"اکنون می‌توانید درخواست معامله ثبت کنید."
         )
     if event == "deal_started":
         return (
@@ -153,6 +173,7 @@ def notify_partner_land_tx_sms(
     visit_date: str = "",
     admin_note: str = "",
     reference_id: str = "",
+    visit_commission_pending: bool = False,
 ) -> Dict[str, Any]:
     """ارسال پیامک تغییر بازدید/معامله به همکار."""
     ev = (event or "").strip()
@@ -190,6 +211,7 @@ def notify_partner_land_tx_sms(
             "land_title": land_title,
             "visit_date": visit_date,
             "admin_note": admin_note,
+            "visit_commission_pending": visit_commission_pending,
         })
 
     if not msg:

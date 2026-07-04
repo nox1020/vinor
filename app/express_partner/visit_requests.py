@@ -188,7 +188,7 @@ def visit_progress_steps(
         for c in deal_commissions
     )
     deal_paid = any(
-        str(c.get("status") or "").strip().lower() in ("approved", "paid")
+        str(c.get("status") or "").strip().lower() == "paid"
         for c in deal_commissions
     )
 
@@ -323,6 +323,71 @@ def partner_visit_completed(
     return None
 
 
+def partner_active_visit_record(
+    requests: List[Dict[str, Any]], phone: str, land_code: str
+) -> Optional[Dict[str, Any]]:
+    """بازدید باز یا آخرین پرونده غیرلغوشده."""
+    open_rec = partner_open_visit(requests, phone, land_code)
+    if open_rec:
+        return open_rec
+    return partner_latest_visit(requests, phone, land_code)
+
+
+def partner_has_pending_deal_commission(
+    commissions: List[Dict[str, Any]] | None, phone: str, land_code: str
+) -> bool:
+    ph = (phone or "").strip()
+    code = (land_code or "").strip()
+    if not ph or not code:
+        return False
+    for c in commissions or []:
+        if not isinstance(c, dict):
+            continue
+        if str(c.get("partner_phone") or "").strip() != ph:
+            continue
+        if str(c.get("land_code") or "").strip() != code:
+            continue
+        if not commission_is_deal(c):
+            continue
+        if str(c.get("status") or "").strip().lower() == "pending":
+            return True
+    return False
+
+
+def partner_deal_commission_rejected(
+    commissions: List[Dict[str, Any]] | None, phone: str, land_code: str
+) -> bool:
+    ph = (phone or "").strip()
+    code = (land_code or "").strip()
+    if not ph or not code:
+        return False
+    for c in reversed(commissions or []):
+        if not isinstance(c, dict):
+            continue
+        if str(c.get("partner_phone") or "").strip() != ph:
+            continue
+        if str(c.get("land_code") or "").strip() != code:
+            continue
+        if not commission_is_deal(c):
+            continue
+        return str(c.get("status") or "").strip().lower() == "rejected"
+    return False
+
+
+def partner_can_request_new_visit(
+    assignment_status: str,
+    visit_requests: List[Dict[str, Any]] | None,
+    phone: str,
+    land_code: str,
+) -> bool:
+    if partner_open_visit(visit_requests or [], phone, land_code):
+        return False
+    gs = (assignment_status or "active").strip().lower()
+    if gs in ("sold", "in_transaction"):
+        return False
+    return True
+
+
 def partner_has_open_visit(
     requests: List[Dict[str, Any]], phone: str, land_code: str
 ) -> bool:
@@ -364,7 +429,7 @@ def create_visit_request(
         return None, "date_too_far"
     if not is_visit_weekday_allowed(vd):
         return None, "weekday_not_allowed"
-    if partner_latest_visit(requests, ph, code):
+    if partner_open_visit(requests, ph, code):
         return None, "already_pending"
 
     now_iso = datetime.utcnow().isoformat() + "Z"
@@ -567,6 +632,8 @@ def visit_tx_mode(
     has_completed_visit: bool = False,
     visit_commission_ready: bool = False,
     visit_commission_required: bool = False,
+    has_pending_deal_commission: bool = False,
+    deal_commission_rejected: bool = False,
     is_approved: bool,
     is_sold: bool,
 ) -> str:
@@ -575,16 +642,20 @@ def visit_tx_mode(
         return "hidden"
     if st == "in_transaction":
         return "release"
-    if has_completed_visit:
-        if visit_commission_required and not visit_commission_ready:
-            return "visit_commission_pending"
-        return "deal"
+    if has_visit_awaiting_admin:
+        return "visit_pending"
     if has_visit_done_pending:
         return "visit_done_pending"
     if has_approved_visit:
         return "visit_done"
-    if has_visit_awaiting_admin:
-        return "visit_pending"
+    if has_completed_visit:
+        if visit_commission_required and not visit_commission_ready:
+            return "visit_commission_pending"
+        if has_pending_deal_commission:
+            return "deal"
+        if deal_commission_rejected:
+            return "revisit"
+        return "deal"
     return "visit"
 
 
@@ -614,9 +685,12 @@ def resolve_partner_land_tx_state(
     approved = partner_visit_approved_for_deal(visit_requests, ph, code) if ph else None
     done_pending = partner_visit_done_pending(visit_requests, ph, code) if ph else None
     completed = partner_visit_completed(visit_requests, ph, code) if ph else None
-    latest_visit = partner_latest_visit(visit_requests, ph, code) if ph else None
+    active_visit = partner_active_visit_record(visit_requests, ph, code) if ph else None
     visit_ready = visit_commission_ready_for_deal(commissions, ph, code) if ph else False
-    visit_date = (open_visit or completed or latest_visit or {}).get("visit_date") or ""
+    pending_deal = partner_has_pending_deal_commission(commissions, ph, code) if ph else False
+    deal_rejected = partner_deal_commission_rejected(commissions, ph, code) if ph else False
+    can_revisit = partner_can_request_new_visit(gs, visit_requests, ph, code) if ph else False
+    visit_date = (active_visit or {}).get("visit_date") or ""
     visit_date_jalali = format_iso_date_jalali(str(visit_date))
 
     if gs == "in_transaction":
@@ -635,16 +709,28 @@ def resolve_partner_land_tx_state(
             has_completed_visit=bool(completed),
             visit_commission_ready=bool(visit_ready),
             visit_commission_required=bool(visit_commission_required),
+            has_pending_deal_commission=bool(pending_deal),
+            deal_commission_rejected=bool(deal_rejected),
             is_approved=is_partner_approved,
             is_sold=gs == "sold",
         )
+
+    show_revisit = bool(
+        can_revisit
+        and completed
+        and not open_visit
+        and not pending_deal
+        and (not visit_commission_required or visit_ready)
+        and mode == "deal"
+    )
 
     return {
         "tx_mode": mode,
         "assignment_status": gs,
         "visit_date": visit_date,
         "visit_date_jalali": visit_date_jalali,
-        "visit_status": (str((open_visit or completed or latest_visit or {}).get("status") or "")).strip(),
+        "visit_status": (str((active_visit or {}).get("status") or "")).strip(),
+        "can_revisit": show_revisit,
     }
 
 
@@ -714,7 +800,7 @@ def admin_row_dict(
 ADMIN_VISIT_TRANSITIONS: Dict[str, frozenset] = {
     PENDING_STATUS: frozenset({PENDING_STATUS, APPROVED_STATUS, CANCELLED_STATUS}),
     APPROVED_STATUS: frozenset({APPROVED_STATUS, CANCELLED_STATUS}),
-    DONE_PENDING_STATUS: frozenset({DONE_PENDING_STATUS, COMPLETED_STATUS, CANCELLED_STATUS}),
+    DONE_PENDING_STATUS: frozenset({DONE_PENDING_STATUS, COMPLETED_STATUS, CANCELLED_STATUS, APPROVED_STATUS}),
     COMPLETED_STATUS: frozenset({COMPLETED_STATUS}),
     CANCELLED_STATUS: frozenset({CANCELLED_STATUS}),
 }
@@ -786,7 +872,7 @@ def admin_visit_workflow_steps(
         s2, hint, action = "blocked", "", False
     elif st == DONE_PENDING_STATUS:
         s2, hint, action = "current", "همکار «بازدید انجام شد» را ثبت کرده؛ تأیید یا رد کنید.", True
-    elif st == COMPLETED_STATUS or _paid(vc_st) or vc_st == "pending" or dc:
+    elif st == COMPLETED_STATUS:
         s2, hint, action = "done", "", False
     elif st == APPROVED_STATUS:
         s2, hint, action = "waiting", "منتظر ثبت «بازدید انجام شد» توسط همکار روی فایل.", False
@@ -800,10 +886,14 @@ def admin_visit_workflow_steps(
         "needs_action": action,
         "action_kind": "visit_status",
         "approve_status": COMPLETED_STATUS,
-        "reject_status": CANCELLED_STATUS,
+        "reject_status": APPROVED_STATUS,
     })
 
-    if not visit_commission_required and not vc:
+    skip_visit_commission = (
+        not visit_commission_required
+        and (not vc or vc_st == "rejected")
+    )
+    if skip_visit_commission:
         steps.append({
             "key": "visit_commission",
             "label": "پورسانت بازدید",
@@ -822,7 +912,7 @@ def admin_visit_workflow_steps(
         elif _paid(vc_st):
             s3, hint, action = "done", "به کیف پول همکار اضافه شد.", False
         elif vc_st == "rejected":
-            s3, hint, action = "blocked", "پورسانت بازدید رد شده است.", False
+            s3, hint, action = "current", "پورسانت بازدید رد شده؛ برای ادامه، مجدداً ثبت کنید.", True
         else:
             s3, hint, action = "waiting", "بعد از تأیید انجام بازدید ساخته می‌شود.", False
         steps.append({
@@ -831,13 +921,15 @@ def admin_visit_workflow_steps(
             "state": s3,
             "hint": hint,
             "needs_action": action,
-            "action_kind": "commission" if action else "",
+            "action_kind": "recreate_commission" if (action and vc_st == "rejected") else ("commission" if action else ""),
             "commission_id": vc.get("id"),
             "commission_amount": vc.get("commission_amount"),
+            "withdrawal_locked": bool(vc.get("withdrawal_locked")),
         })
 
-    visit_gate = (not visit_commission_required and not vc) or _paid(vc_st)
-    if visit_commission_required:
+    if not visit_commission_required:
+        visit_gate = True
+    else:
         visit_gate = _paid(vc_st)
 
     if st == CANCELLED_STATUS:

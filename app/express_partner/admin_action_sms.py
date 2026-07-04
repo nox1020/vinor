@@ -78,6 +78,17 @@ def _build_message(action: str, settings: dict, **kw: Any) -> str:
             f'تاریخ: {vdate}'
         )
 
+    if action == 'visit_done':
+        title = (kw.get('land_title') or '').strip() or str(kw.get('land_code') or '—')
+        code = str(kw.get('land_code') or '—')
+        return (
+            f'وینور — تأیید انجام بازدید (اقدام)\n'
+            f'همکار: {name}\n'
+            f'موبایل: {phone}\n'
+            f'فایل: {title} ({code})\n'
+            f'همکار «بازدید انجام شد» را ثبت کرده است.'
+        )
+
     if action == 'commission':
         code = str(kw.get('land_code') or '—')
         amt = _format_toman(int(kw.get('amount') or 0))

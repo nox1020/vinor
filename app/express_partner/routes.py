@@ -96,6 +96,7 @@ from .routine_auto import (
 from .visit_requests import (
     create_visit_request as record_visit_request,
     partner_open_visit,
+    partner_active_visit_record,
     partner_visit_approved_for_deal,
     partner_visit_completed,
     request_visit_done_confirmation,
@@ -4490,6 +4491,35 @@ def complete_visit_request(code: str):
         )
     save_express_visit_requests(visit_requests)
 
+    if err is None:
+        lands_all = load_ads_cached() or []
+        land = next((l for l in lands_all if str(l.get('code')) == str(code)), None)
+        land_title = (land.get('title') if land else None) or str(code)
+        partner_name = (partner_profile.get('name') if partner_profile else None) or me_phone
+        try:
+            from .admin_action_sms import notify_admin_pending_action
+            notify_admin_pending_action(
+                'visit_done',
+                partner_phone=me_phone,
+                partner_name=partner_name,
+                land_code=str(code),
+                land_title=str(land_title),
+            )
+        except Exception:
+            current_app.logger.exception('visit_done admin SMS failed phone=%s code=%s', me_phone, code)
+        try:
+            from .visit_sms import notify_partner_land_tx_sms
+            notify_partner_land_tx_sms(
+                partner_phone=me_phone,
+                event='visit_done_pending',
+                land_code=str(code),
+                land_title=str(land_title),
+                visit_date=str(rec.get('visit_date') or ''),
+                reference_id=str(rec.get('id') or ''),
+            )
+        except Exception:
+            current_app.logger.exception('visit_done_pending partner SMS failed phone=%s code=%s', me_phone, code)
+
     tx_state = _partner_land_tx_payload(
         code,
         me_phone,
@@ -4616,6 +4646,13 @@ def mark_in_transaction(code: str):
             visit_requests = load_express_visit_requests() or []
             if not isinstance(visit_requests, list):
                 visit_requests = []
+            if partner_open_visit(visit_requests, me_phone, code):
+                return _mark_in_transaction_finish(
+                    code,
+                    success=False,
+                    message='ابتدا روند بازدید جاری را تکمیل کنید یا بازدید مجدد ثبت کنید.',
+                    category='error',
+                )
             completed_visit = partner_visit_completed(visit_requests, me_phone, code)
             commissions_for_visit = load_express_commissions() or []
             if not isinstance(commissions_for_visit, list):
@@ -5924,19 +5961,11 @@ def land_detail(code: str):
     land['_visit_date_jalali'] = tx_state.get('visit_date_jalali') or ''
     land['_visit_status'] = tx_state.get('visit_status') or ''
     land['_tx_button_mode'] = tx_state.get('tx_mode') or 'visit'
+    land['_can_revisit'] = bool(tx_state.get('can_revisit'))
     land['_visit_progress_steps'] = []
     land['_visit_progress_summary'] = {}
     if is_approved and me_phone:
-        progress_row = next(
-            (
-                r for r in visit_requests_list
-                if isinstance(r, dict)
-                and str(r.get('partner_phone') or '').strip() == me_phone
-                and str(r.get('land_code') or '').strip() == str(code)
-                and str(r.get('status') or '').strip() != CANCELLED_STATUS
-            ),
-            None,
-        )
+        progress_row = partner_active_visit_record(visit_requests_list, me_phone, str(code))
         if progress_row is None:
             progress_row = {
                 'partner_phone': me_phone,

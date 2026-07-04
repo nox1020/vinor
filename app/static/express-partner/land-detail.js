@@ -1017,6 +1017,12 @@
       btnClass: 'ld-btn-tx',
       specLabel: 'فعال',
     },
+    revisit: {
+      label: 'بازدید مجدد',
+      icon: 'fa-calendar-plus',
+      btnClass: 'ld-btn-tx',
+      specLabel: 'ثبت بازدید جدید',
+    },
     visit_pending: {
       label: 'در انتظار بازدید',
       icon: 'fa-clock',
@@ -1492,13 +1498,13 @@
       updateVisitDateHint(visitDate, visitDateJalali);
     } else if (mode === 'visit_commission_pending' && (visitDate || visitDateJalali)) {
       updateVisitDateHint(visitDate, visitDateJalali);
-    } else if (mode === 'visit' || mode === 'release') {
+    } else if (mode === 'visit' || mode === 'revisit' || mode === 'release') {
       updateVisitDateHint('');
     }
     if (mode !== 'visit_pending' && mode !== 'visit_done_pending' && mode !== 'visit_commission_pending') {
       stopVisitStatusPoll();
     }
-    if (mode === 'visit') {
+    if (mode === 'visit' || mode === 'revisit') {
       scheduleVisitModalRecovery();
     }
     if (mode === 'deal') {
@@ -1544,7 +1550,7 @@
     if (!btn.getAttribute('data-visit-request-url')) return false;
     var cfg = readConfig();
     var mode = (btn.getAttribute('data-land-tx-mode') || (cfg && cfg.txMode) || '').trim();
-    return mode === 'visit' || mode === 'visit_pending' || mode === 'visit_done' || mode === 'visit_done_pending' || mode === 'visit_commission_pending' || mode === 'deal' || mode === 'release';
+    return mode === 'visit' || mode === 'revisit' || mode === 'visit_pending' || mode === 'visit_done' || mode === 'visit_done_pending' || mode === 'visit_commission_pending' || mode === 'deal' || mode === 'release';
   }
 
   function ensureVisitModalEl() {
@@ -1935,7 +1941,7 @@
         return;
       }
 
-      if (mode === 'visit') {
+      if (mode === 'visit' || mode === 'revisit') {
         openVisitModal();
         return;
       }
@@ -1959,6 +1965,18 @@
     btn.addEventListener('click', onClick);
     addCleanup(function () {
       btn.removeEventListener('click', onClick);
+    });
+
+    document.querySelectorAll('[data-land-revisit-trigger]').forEach(function (revisitBtn) {
+      function onRevisitClick(ev) {
+        ev.preventDefault();
+        if (btn.disabled || btn.dataset.busy === '1') return;
+        openVisitModal();
+      }
+      revisitBtn.addEventListener('click', onRevisitClick);
+      addCleanup(function () {
+        revisitBtn.removeEventListener('click', onRevisitClick);
+      });
     });
   }
 

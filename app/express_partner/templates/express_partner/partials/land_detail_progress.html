@@ -46,6 +46,11 @@
         پورسانت بازدید منتظر تأیید ادمین است؛ پس از تأیید، درخواست معامله فعال می‌شود.
       {% elif current_label == 'درخواست معامله' %}
         برای ادامه مسیر، از دکمه پایین صفحه درخواست معامله را ثبت کنید.
+        {% if land._can_revisit %}
+        <button type="button" data-land-revisit-trigger class="mt-1 block w-full text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 underline underline-offset-2">
+          یا بازدید مجدد با تاریخ جدید ثبت کنید
+        </button>
+        {% endif %}
       {% elif current_label == 'تأیید درخواست معامله' %}
         درخواست معامله ثبت شده و منتظر تأیید پورسانت توسط ادمین است.
       {% elif current_label == 'واریز پورسانت معامله' %}

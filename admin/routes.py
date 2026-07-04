@@ -1182,7 +1182,8 @@ def _admin_dashboard_context() -> Dict[str, Any]:
     ]
     pending_visits = [
         v for v in visits
-        if isinstance(v, dict) and str(v.get('status') or '').lower() == 'pending'
+        if isinstance(v, dict)
+        and str(v.get('status') or '').strip() in ('pending', 'done_pending')
     ]
     open_tickets = [
         t for t in tickets_raw
@@ -1274,13 +1275,18 @@ def _admin_dashboard_context() -> Dict[str, Any]:
 
     for v in pending_visits[:20]:
         ph = str(v.get('partner_phone') or '').strip()
+        vid = str(v.get('id') or '').strip()
+        st = str(v.get('status') or '').strip()
+        meta = (v.get('land_title') or v.get('land_code') or 'بازدید').strip()
+        if st == 'done_pending':
+            meta = f'تأیید انجام بازدید · {meta}'
         action_queue.append({
             'kind': 'visit',
             'icon': 'fa-calendar-check',
             'tone': 'indigo',
             'title': (v.get('partner_name') or name_map.get(ph) or ph or 'همکار').strip(),
-            'meta': (v.get('land_title') or v.get('land_code') or 'بازدید').strip(),
-            'url': url_for('admin.express_visit_requests'),
+            'meta': meta,
+            'url': _express_visit_requests_redirect('actions', vid) if vid else url_for('admin.express_visit_requests', filter='actions'),
             'ts': _ts(v, 'visit_date', 'created_at'),
         })
 
@@ -4298,6 +4304,20 @@ def express_assignments_clear_all():
     return redirect(url_for('admin.express_assignments'))
 
 # -----------------------------------------------------------------------------
+# Express visit requests redirect helper
+# -----------------------------------------------------------------------------
+def _express_visit_requests_redirect(filter_hint: str = '', vid: str = '') -> str:
+    flt = (filter_hint or 'workflow').strip()
+    if flt == 'actions':
+        flt = 'workflow'
+    url = url_for('admin.express_visit_requests', filter=flt or None)
+    vid = (vid or '').strip()
+    if vid:
+        url = f'{url}#visit-{vid}'
+    return url
+
+
+# -----------------------------------------------------------------------------
 # Express Commissions (list/approve/pay)
 # -----------------------------------------------------------------------------
 def _express_commissions_redirect(filter_hint: str = '') -> str:
@@ -4305,10 +4325,7 @@ def _express_commissions_redirect(filter_hint: str = '') -> str:
     if return_to == 'visit_requests':
         visit_filter = (request.form.get('visit_filter') or request.args.get('visit_filter') or 'workflow').strip()
         visit_vid = (request.form.get('visit_vid') or request.args.get('visit_vid') or '').strip()
-        url = url_for('admin.express_visit_requests', filter=visit_filter or None)
-        if visit_vid:
-            url = f'{url}#visit-{visit_vid}'
-        return url
+        return _express_visit_requests_redirect(visit_filter, visit_vid)
     flt = (filter_hint or request.form.get('filter') or request.args.get('filter') or 'pending').strip()
     if flt:
         return url_for('admin.express_commissions', filter=flt)
@@ -5039,8 +5056,10 @@ def express_visit_requests():
     elif flt == 'all':
         visible = items
     else:
-        flt = 'pending'
-        visible = [x for x in items if x.get('status') == PENDING_STATUS]
+        flt = 'workflow'
+        visible = [x for x in items if x.get('in_workflow')]
+        visible.sort(key=lambda x: x.get('updated_at') or x.get('created_at') or '', reverse=True)
+        visible.sort(key=lambda x: 0 if x.get('workflow_needs_action') else 1)
 
     if flt not in ('workflow', 'actions'):
         visible.sort(key=lambda x: x.get('created_at') or '', reverse=True)
@@ -5096,10 +5115,7 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
             'info',
         )
     elif new_status == COMPLETED_STATUS:
-        flash(
-            f'انجام بازدید {name} تأیید شد. اکنون پورسانت بازدید در صف تأیید قرار می‌گیرد.',
-            'success',
-        )
+        flash(f'انجام بازدید {name} تأیید شد.', 'success')
     else:
         flash(f'وضعیت درخواست بازدید {name} به «{label}» تغییر کرد.', 'success')
 
@@ -5172,6 +5188,30 @@ def _ensure_visit_commission_after_visit_confirm(rec: dict) -> bool:
     return True
 
 
+@admin_bp.post('/express/visit-requests/<vid>/recreate-visit-commission')
+@login_required
+def express_visit_request_recreate_commission(vid: str):
+    from app.express_partner.visit_requests import COMPLETED_STATUS
+
+    filter_hint = (request.form.get('filter') or 'workflow').strip()
+    items = load_express_visit_requests() or []
+    rec = next(
+        (x for x in items if isinstance(x, dict) and str(x.get('id') or '') == str(vid).strip()),
+        None,
+    )
+    if not rec:
+        flash('درخواست بازدید یافت نشد.', 'error')
+        return redirect(_express_visit_requests_redirect(filter_hint, vid))
+    if str(rec.get('status') or '').strip() != COMPLETED_STATUS:
+        flash('پورسانت بازدید فقط پس از تأیید انجام بازدید قابل ثبت مجدد است.', 'error')
+        return redirect(_express_visit_requests_redirect(filter_hint, vid))
+    if _ensure_visit_commission_after_visit_confirm(rec):
+        flash('پورسانت بازدید مجدداً در صف تأیید ثبت شد.', 'success')
+    else:
+        flash('ثبت مجدد پورسانت بازدید ممکن نیست (مبلغ صفر یا رکورد فعال موجود است).', 'warning')
+    return redirect(_express_visit_requests_redirect(filter_hint, vid))
+
+
 @admin_bp.post('/express/visit-requests/<vid>/status')
 @login_required
 def express_visit_request_status(vid: str):
@@ -5200,20 +5240,21 @@ def express_visit_request_status(vid: str):
 
     if prev_status and new_status and not admin_can_transition_visit(prev_status, new_status):
         flash('این تغییر وضعیت مجاز نیست. ابتدا همکار باید «بازدید انجام شد» را از روی صفحه فایل ثبت کند.', 'error')
-        return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
+        return redirect(_express_visit_requests_redirect(filter_hint, vid))
 
     rec, err = admin_update_visit_request_status(
         items, vid, new_status, admin_note=admin_note
     )
     if err == 'not_found':
         flash('درخواست بازدید یافت نشد.', 'error')
-        return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
+        return redirect(_express_visit_requests_redirect(filter_hint, vid))
     if err == 'invalid_status':
         flash('وضعیت انتخاب‌شده نامعتبر است.', 'error')
-        return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
+        return redirect(_express_visit_requests_redirect(filter_hint, vid))
     if err == 'unchanged':
         flash('تغییری ذخیره نشد. وضعیت یا یادداشت را ویرایش کنید.', 'info')
-        return redirect(url_for('admin.express_visit_requests', filter=filter_hint or None))
+        return redirect(_express_visit_requests_redirect(filter_hint, vid))
+    visit_commission_pending = False
     try:
         save_express_visit_requests(items)
         if err == 'note_updated':
@@ -5221,8 +5262,18 @@ def express_visit_request_status(vid: str):
         else:
             _flash_visit_request_status_change(rec or {}, new_status)
             if rec and new_status == COMPLETED_STATUS:
+                try:
+                    visit_commission_pending = max(
+                        0, int(get_settings().get('visit_commission_amount_toman') or 0)
+                    ) > 0
+                except Exception:
+                    visit_commission_pending = False
                 if _ensure_visit_commission_after_visit_confirm(rec):
-                    flash('پورسانت بازدید در صف تأیید پورسانت‌ها ثبت شد.', 'success')
+                    flash('پورسانت بازدید در صف تأیید ثبت شد.', 'success')
+                elif visit_commission_pending:
+                    flash('پورسانت بازدید از قبل در صف است.', 'info')
+                else:
+                    flash('همکار اکنون می‌تواند درخواست معامله ثبت کند.', 'info')
             if rec:
                 sms_event = visit_status_change_event(new_status, prev_status)
                 if sms_event:
@@ -5235,6 +5286,11 @@ def express_visit_request_status(vid: str):
                             visit_date=str(rec.get('visit_date') or ''),
                             admin_note=admin_note,
                             reference_id=str(rec.get('id') or vid),
+                            visit_commission_pending=(
+                                visit_commission_pending
+                                if sms_event == 'visit_completed'
+                                else False
+                            ),
                         )
                         if sms_result.get('ok'):
                             flash('پیامک وضعیت بازدید برای همکار ارسال شد.', 'success')
@@ -5251,8 +5307,7 @@ def express_visit_request_status(vid: str):
                         )
     except Exception:
         flash('خطا در ذخیره وضعیت.', 'error')
-    url = url_for('admin.express_visit_requests', filter=filter_hint or None)
-    return redirect(f'{url}#visit-{vid}')
+    return redirect(_express_visit_requests_redirect(filter_hint, vid))
 
 
 @admin_bp.route('/support/tickets', endpoint='support_tickets')
