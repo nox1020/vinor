@@ -246,6 +246,107 @@ def visit_progress_summary(steps: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+REQUEST_MGMT_BUCKETS = (
+    "needs_action",
+    "in_progress",
+    "cancelled",
+    "completed",
+)
+
+REQUEST_MGMT_BUCKET_LABELS = {
+    "needs_action": "نیاز به اقدام",
+    "in_progress": "در حال انجام",
+    "completed": "تکمیل شده",
+    "cancelled": "لغو شده",
+}
+
+
+def partner_request_mgmt_meta(
+    row: Dict[str, Any],
+    progress_steps: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """دسته‌بندی مدیریتی درخواست برای صفحه پیگیری همکار."""
+    status = str(row.get("status") or PENDING_STATUS).strip() or PENDING_STATUS
+    summary = visit_progress_summary(progress_steps)
+    done_count = int(summary.get("done_count") or 0)
+    total = int(summary.get("total") or 0)
+    pct = int(round(100 * done_count / total)) if total else 0
+
+    current_key = ""
+    current_label = str(summary.get("current_label") or "")
+    for step in progress_steps or []:
+        if step.get("state") in ("current", "blocked"):
+            current_key = str(step.get("key") or "")
+            if step.get("label"):
+                current_label = str(step.get("label") or "")
+            break
+
+    if status == CANCELLED_STATUS:
+        bucket = "cancelled"
+        next_action = "درخواست لغو یا رد شد"
+        sort_group = 2
+    elif total > 0 and done_count >= total:
+        bucket = "completed"
+        next_action = "مسیر تکمیل شد"
+        sort_group = 3
+    elif status == APPROVED_STATUS:
+        bucket = "needs_action"
+        next_action = "تماس با مشتری و ثبت بازدید"
+        sort_group = 0
+    elif status == COMPLETED_STATUS and current_key == "deal_requested":
+        bucket = "needs_action"
+        next_action = "ثبت درخواست معامله"
+        sort_group = 0
+    elif status in (PENDING_STATUS, DONE_PENDING_STATUS):
+        bucket = "in_progress"
+        next_action = (
+            "انتظار تأیید ادمین"
+            if status == PENDING_STATUS
+            else "انتظار تأیید انجام بازدید"
+        )
+        sort_group = 1
+    else:
+        next_action_map = {
+            "visit_requested": "انتظار تأیید ادمین",
+            "visit_approved": "تماس با مشتری و ثبت بازدید",
+            "visit_done": "انتظار تأیید انجام بازدید",
+            "visit_commission_paid": "انتظار تأیید پورسانت بازدید",
+            "deal_requested": "ثبت درخواست معامله",
+            "deal_approved": "انتظار تأیید معامله",
+            "deal_commission_paid": "انتظار واریز پورسانت",
+        }
+        next_action = next_action_map.get(current_key, current_label or "پیگیری در جریان")
+        if current_key == "visit_approved" and status == APPROVED_STATUS:
+            bucket = "needs_action"
+            sort_group = 0
+        else:
+            bucket = "in_progress"
+            sort_group = 1
+
+    if bucket == "completed":
+        stage_num = total
+    elif bucket == "cancelled":
+        stage_num = done_count
+    else:
+        stage_num = min(done_count + 1, total) if total else 0
+
+    progress_line = f"مرحله {stage_num} از {total}" if total else ""
+    progress_pct_label = f"{pct}٪ پیشرفت" if total else ""
+
+    return {
+        "bucket": bucket,
+        "bucket_label": REQUEST_MGMT_BUCKET_LABELS.get(bucket, bucket),
+        "next_action": next_action,
+        "sort_group": sort_group,
+        "progress_done": done_count,
+        "progress_total": total,
+        "progress_pct": pct,
+        "progress_line": progress_line,
+        "progress_pct_label": progress_pct_label,
+        "current_step_label": current_label,
+    }
+
+
 def partner_open_visit(
     requests: List[Dict[str, Any]], phone: str, land_code: str
 ) -> Optional[Dict[str, Any]]:

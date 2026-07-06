@@ -5,7 +5,7 @@
   "description": "پنل مدیریت همکاران وینور - دسترسی به آگهی‌های تخصیص یافته، کمیسیون‌ها و ابزارهای مدیریت",
   "dir": "rtl",
   "lang": "fa",
-  "start_url": "/express/partner/?source=pwa",
+  "start_url": "/express/partner/home?source=pwa",
   "scope": "/express/partner/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],

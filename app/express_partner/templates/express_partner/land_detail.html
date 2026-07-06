@@ -711,21 +711,77 @@
       -webkit-tap-highlight-color: transparent;
       cursor: pointer;
     }
-    #landTxToast.is-success {
-      display: block;
+    #landTxToast.is-success,
+    #landTxToast.is-warning {
+      display: flex;
       border-color: var(--ld-commission-border);
       background: var(--ld-commission-bg);
       color: var(--ld-commission-amount);
     }
+    #landTxToast.is-warning {
+      border-color: rgba(245, 158, 11, 0.45);
+      background: linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.92));
+      color: #92400e;
+    }
+    html.dark:has(.land-detail-page) #landTxToast.is-warning {
+      border-color: rgba(251, 191, 36, 0.35);
+      background: linear-gradient(135deg, rgba(69, 45, 10, 0.92), rgba(120, 53, 15, 0.78));
+      color: #fde68a;
+    }
     #landTxToast.is-error {
-      display: block;
+      display: flex;
       border-color: rgba(248, 113, 113, 0.45);
-      background: rgba(127, 29, 29, 0.12);
-      color: #f87171;
+      background: linear-gradient(135deg, rgba(254, 242, 242, 0.98), rgba(254, 226, 226, 0.9));
+      color: #b91c1c;
     }
     html.dark:has(.land-detail-page) #landTxToast.is-error {
-      background: rgba(127, 29, 29, 0.35);
+      background: linear-gradient(135deg, rgba(69, 10, 10, 0.92), rgba(127, 29, 29, 0.78));
       color: #fecaca;
+    }
+    #landTxToast.is-visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+    .ld-tx-toast__icon {
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      width: 2.125rem;
+      height: 2.125rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.72);
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+    }
+    html.dark:has(.land-detail-page) .ld-tx-toast__icon {
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+    #landTxToast.is-success .ld-tx-toast__icon { color: var(--ld-accent); }
+    #landTxToast.is-warning .ld-tx-toast__icon { color: #d97706; }
+    #landTxToast.is-error .ld-tx-toast__icon { color: #dc2626; }
+    .ld-tx-toast__icon i { font-size: 1rem; line-height: 1; }
+    .ld-tx-toast__body {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.1875rem;
+      min-width: 0;
+      flex: 1;
+      text-align: right;
+    }
+    .ld-tx-toast__title {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+    .ld-tx-toast__detail {
+      display: block;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      line-height: 1.5;
+      opacity: 0.88;
     }
     .ld-partner-copy { -webkit-tap-highlight-color: transparent; }
     .ld-partner-copy:active { opacity: 0.85; }
@@ -784,19 +840,32 @@
       padding: 0 1rem 0.875rem;
     }
     .ld-fab-dock__toast {
-      position: absolute;
-      right: 0;
-      bottom: calc(100% + 0.5rem);
-      left: auto;
-      width: min(18rem, calc(100vw - 2rem));
-      border-radius: 0.625rem;
+      position: fixed;
+      left: 50%;
+      right: auto;
+      bottom: calc(var(--ld-footer-h, 5.25rem) + 0.625rem);
+      transform: translateX(-50%) translateY(0.5rem);
+      width: min(22rem, calc(100vw - 2rem));
+      border-radius: 1rem;
       border: 1px solid transparent;
-      padding: 0.5rem 0.75rem;
-      text-align: center;
-      font-size: 0.6875rem;
-      font-weight: 600;
+      padding: 0.75rem 0.875rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.625rem;
+      text-align: right;
+      font-size: 0.8125rem;
+      font-weight: 700;
       line-height: 1.45;
-      box-shadow: 0 4px 20px rgba(15, 23, 42, 0.14);
+      box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 72;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.24s ease, transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    html.dark .ld-fab-dock__toast {
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.42);
     }
     .ld-fab-menu {
       display: flex;
@@ -847,6 +916,14 @@
       width: auto;
       max-width: 100%;
       align-self: flex-end;
+    }
+    .ld-fab-menu__item--revisit-blocked .ld-fab-menu__label {
+      color: var(--ld-text-muted);
+      border-style: dashed;
+    }
+    .ld-fab-menu__item--revisit-blocked .ld-fab-menu__action {
+      cursor: pointer;
+      opacity: 0.92;
     }
     .ld-fab-menu__label {
       display: inline-block;
@@ -994,6 +1071,7 @@
     @media (prefers-reduced-motion: reduce) {
       .ld-fab-menu,
       .ld-fab-dock__backdrop,
+      .ld-fab-dock__toast,
       .ld-fab-trigger__icon,
       .ld-fab-menu__item {
         transition: none !important;

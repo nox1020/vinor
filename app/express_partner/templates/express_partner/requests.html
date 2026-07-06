@@ -7,146 +7,130 @@
 {% call ep_header_row('درخواست‌ها', url_for('express_partner.profile'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
 {{ ep_header_end() }}
 
+{% include 'express_partner/partials/requests_page_styles.html' %}
+
 <div id="partnerRequestsPage"
      class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
   <main class="mx-auto w-full max-w-lg">
 
-    <section class="border-b border-white/10 px-4 pb-3 pt-3 sm:px-6" aria-label="خلاصه درخواست‌ها">
-      <div class="flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <h1 class="text-[17px] font-extrabold leading-tight text-white">درخواست‌های بازدید</h1>
-          <p class="mt-1 text-[12px] leading-relaxed text-zinc-500">پیگیری مسیر ۷ مرحله‌ای بازدید، معامله و واریز پورسانت</p>
-        </div>
-        <details class="relative shrink-0">
-          <summary class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-bold text-zinc-200 ring-1 ring-white/10 [&::-webkit-details-marker]:hidden">
-            <i class="fas fa-filter text-[10px] text-zinc-500" aria-hidden="true"></i>
-            {{ current_filter_label|default('همه') }}
-            <span class="tabular-nums text-white">{{ current_filter_count|default(counts.all|default(0)) }}</span>
-            <i class="fas fa-chevron-down text-[8px] text-zinc-500" aria-hidden="true"></i>
-          </summary>
-          <div class="absolute left-0 top-full z-[70] mt-2 w-40 overflow-hidden rounded-xl border border-white/10 bg-[#171923] py-1 text-right shadow-2xl shadow-black/35">
-            {% for option in filter_options %}
-            <a href="{{ url_for('express_partner.requests', filter=option.key if option.key != 'all' else None) }}"
-               data-vinor-express-nav
-               class="flex items-center justify-between gap-3 px-3 py-2 text-[12px] transition hover:bg-white/[0.05] {% if option.key == current_filter %}text-white{% else %}text-zinc-400{% endif %}">
-              <span class="font-semibold">{{ option.label }}</span>
-              <span class="tabular-nums {% if option.key == current_filter %}text-[#f87171]{% else %}text-zinc-600{% endif %}">{{ option.count }}</span>
-            </a>
-            {% endfor %}
-          </div>
-        </details>
-      </div>
+    <header class="req-intro">
+      <h1 class="req-intro__title">مدیریت درخواست‌ها</h1>
+      <p class="req-intro__sub">ببینید کدام درخواست نیاز به اقدام دارد و قدم بعدی چیست.</p>
+    </header>
+
+    <section class="req-summary" aria-label="خلاصه وضعیت">
+      <a href="{{ url_for('express_partner.requests', filter='needs_action') }}"
+         data-vinor-express-nav
+         class="req-summary-card req-summary-card--action {% if current_filter == 'needs_action' %}is-active{% endif %}">
+        <span class="req-summary-card__count">{{ counts.needs_action|default(0) }}</span>
+        <span class="req-summary-card__label">نیاز به اقدام</span>
+      </a>
+      <a href="{{ url_for('express_partner.requests', filter='in_progress') }}"
+         data-vinor-express-nav
+         class="req-summary-card req-summary-card--progress {% if current_filter == 'in_progress' %}is-active{% endif %}">
+        <span class="req-summary-card__count">{{ counts.in_progress|default(0) }}</span>
+        <span class="req-summary-card__label">در حال انجام</span>
+      </a>
+      <a href="{{ url_for('express_partner.requests', filter='cancelled') }}"
+         data-vinor-express-nav
+         class="req-summary-card req-summary-card--cancel {% if current_filter == 'cancelled' %}is-active{% endif %}">
+        <span class="req-summary-card__count">{{ counts.cancelled|default(0) }}</span>
+        <span class="req-summary-card__label">لغو شده</span>
+      </a>
+      <a href="{{ url_for('express_partner.requests', filter='completed') }}"
+         data-vinor-express-nav
+         class="req-summary-card req-summary-card--done {% if current_filter == 'completed' %}is-active{% endif %}">
+        <span class="req-summary-card__count">{{ counts.completed|default(0) }}</span>
+        <span class="req-summary-card__label">تکمیل شده</span>
+      </a>
     </section>
 
+    <nav class="req-tabs-wrap" aria-label="فیلتر درخواست‌ها">
+      <div class="req-tabs" role="tablist">
+        {% for option in filter_options %}
+        <a href="{{ url_for('express_partner.requests', filter=option.key if option.key != 'all' else None) }}"
+           data-vinor-express-nav
+           role="tab"
+           aria-selected="{{ 'true' if option.key == current_filter else 'false' }}"
+           class="req-tab {% if option.key == current_filter %}is-active{% endif %}">
+          {{ option.label }}
+          <span>{{ option.count }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </nav>
+
     {% if request.args.get('submitted') %}
-    <section class="border-b border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-[12px] font-medium leading-relaxed text-emerald-100 sm:px-6">
-      <i class="fas fa-circle-check ml-1.5 text-emerald-300" aria-hidden="true"></i>
-      درخواست بازدید ثبت شد. ادامه مسیر را طبق مرحله‌ای که روی کارت نمایش داده می‌شود پیگیری کنید.
-    </section>
+    <div class="req-flash" role="status">
+      <i class="fas fa-circle-check ml-1" aria-hidden="true"></i>
+      درخواست بازدید ثبت شد. وضعیت آن در لیست زیر قابل پیگیری است.
+    </div>
     {% endif %}
 
     {% if items and items|length > 0 %}
-    <section class="divide-y divide-white/10 border-b border-white/10" aria-label="فهرست درخواست‌ها">
+    <section class="req-list" aria-label="فهرست درخواست‌ها">
       {% for item in items %}
-      {% set st = item.status or 'pending' %}
-      <a href="{% if item.land_code %}{{ url_for('express_partner.land_detail', code=item.land_code) }}{% else %}#{% endif %}"
-         {% if item.land_code %}data-vinor-express-nav{% else %}aria-disabled="true"{% endif %}
-         class="group flex min-h-[104px] w-full items-start gap-3 px-4 py-3.5 text-right transition active:bg-white/[0.04] hover:bg-white/[0.02] sm:px-6">
-        <div class="min-w-0 flex-1">
-          <div class="flex justify-start">
-            <span class="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold leading-4
-                         {% if st == 'pending' %}bg-amber-500/12 text-amber-300
-                         {% elif st == 'approved' %}bg-emerald-500/12 text-emerald-300
-                         {% elif st == 'completed' %}bg-sky-500/12 text-sky-300
-                         {% elif st == 'cancelled' %}bg-[#a62626]/18 text-red-200
-                         {% else %}bg-white/[0.06] text-zinc-300{% endif %}">
-              {{ item.status_label }}
-            </span>
+      <article class="req-card req-card--{{ item.mgmt_bucket }}{% if item.needs_attention %} req-card--urgent{% endif %}">
+        <div class="req-card__head">
+          <h2 class="req-card__title">{{ item.land_title }}</h2>
+          <span class="req-card__status req-card__status--{{ item.mgmt_bucket }}">{{ item.mgmt_bucket_label }}</span>
+        </div>
+
+        <div class="req-card__next">
+          <span class="req-card__next-label">اقدام بعدی</span>
+          {{ item.next_action }}
+        </div>
+
+        {% if item.progress_total %}
+        <div class="req-card__progress" aria-label="پیشرفت درخواست">
+          <div class="req-card__bar">
+            <span style="width: {{ item.progress_pct }}%;"></span>
           </div>
+          <div class="req-card__progress-meta">
+            <span>{{ item.progress_line }}</span>
+            <span>{{ item.progress_pct_label }}</span>
+          </div>
+        </div>
+        {% endif %}
 
-          {% if item.status_hint %}
-          <p class="mt-1 line-clamp-1 text-[12px] leading-5
-                    {% if st == 'pending' %}text-amber-300/85
-                    {% elif st == 'approved' %}text-emerald-300/85
-                    {% elif st == 'completed' %}text-sky-300/85
-                    {% elif st == 'cancelled' %}text-red-200/85
-                    {% else %}text-zinc-500{% endif %}">
-            {{ item.status_hint }}
-          </p>
-          {% endif %}
-
-          {% if item.admin_note %}
-          <p class="mt-1 line-clamp-1 text-[11px] leading-5 text-zinc-400">
-            یادداشت پشتیبانی: {{ item.admin_note }}
-          </p>
-          {% endif %}
-
-          {% if item.progress_steps %}
-          <div class="mt-2.5" aria-label="مراحل پیشرفت درخواست">
-            {% set ns = namespace(done_count=0, current_label='') %}
-            {% for step in item.progress_steps %}
-              {% if step.state == 'done' %}
-                {% set ns.done_count = ns.done_count + 1 %}
-              {% elif not ns.current_label and step.state in ('current', 'blocked') %}
-                {% set ns.current_label = step.label %}
-              {% endif %}
-            {% endfor %}
-            {% if not ns.current_label and ns.done_count >= item.progress_steps|length %}
-              {% set ns.current_label = 'تکمیل شد' %}
+        <div class="req-card__foot">
+          <span class="req-card__date">
+            {% if item.visit_date_jalali %}
+            بازدید: {{ item.visit_date_jalali }}
+            {% elif item.updated_at %}
+            بروزرسانی: {{ item.updated_at[:10] }}
             {% endif %}
-            <div class="flex items-center gap-1.5">
-              {% for step in item.progress_steps %}
-              {% set state = step.state %}
-              <span class="h-1.5 flex-1 rounded-full
-                           {% if state == 'done' %}bg-emerald-500
-                           {% elif state == 'current' %}bg-[#a62626]
-                           {% elif state == 'blocked' %}bg-red-900/60
-                           {% else %}bg-white/10{% endif %}"
-                    title="{{ step.label }}"
-                    aria-label="{{ step.label }}"></span>
-              {% endfor %}
-            </div>
-            <p class="mt-1.5 truncate text-[10px] leading-4 text-zinc-500">
-              مرحله: <span class="text-zinc-300">{{ ns.current_label or 'در جریان' }}</span>
-              <span class="mx-1 text-zinc-700">·</span>
-              {{ ns.done_count }} از {{ item.progress_steps|length }}
-            </p>
-          </div>
+          </span>
+          {% if item.detail_url %}
+          <a href="{{ item.detail_url }}"
+             data-vinor-express-nav
+             class="req-card__cta">
+            مشاهده جزئیات
+            <i class="fas fa-chevron-left text-[9px]" aria-hidden="true"></i>
+          </a>
           {% endif %}
-
         </div>
-
-        <div class="relative grid h-[76px] w-[76px] shrink-0 place-items-center overflow-hidden rounded-xl bg-white/[0.045] text-zinc-500 ring-1 ring-white/10">
-          <i class="fas fa-calendar-check text-xl" aria-hidden="true"></i>
-          <span class="absolute inset-x-0 bottom-0 h-1
-                       {% if st == 'pending' %}bg-amber-400
-                       {% elif st == 'approved' %}bg-emerald-400
-                       {% elif st == 'completed' %}bg-sky-400
-                       {% elif st == 'cancelled' %}bg-[#a62626]
-                       {% else %}bg-zinc-500{% endif %}"
-                aria-hidden="true"></span>
-        </div>
-      </a>
+      </article>
       {% endfor %}
     </section>
     {% else %}
-    <section class="px-4 py-12 text-center sm:px-6">
-      <div class="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-white/[0.045] text-zinc-500 ring-1 ring-white/10">
-        <i class="fas fa-clipboard-list text-2xl" aria-hidden="true"></i>
+    <section class="req-empty">
+      <div class="req-empty__icon" aria-hidden="true">
+        <i class="fas fa-clipboard-list"></i>
       </div>
-      <h2 class="mt-4 text-[16px] font-bold text-white">
+      <h2 class="req-empty__title">
         {% if counts.all|default(0) > 0 %}موردی در این فیلتر نیست{% else %}هنوز درخواستی ثبت نشده{% endif %}
       </h2>
-      <p class="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-zinc-500">
+      <p class="req-empty__text">
         {% if counts.all|default(0) > 0 %}
-        فیلتر دیگری را انتخاب کنید تا درخواست‌های دیگر را ببینید.
+        فیلتر دیگری را انتخاب کنید یا از کارت‌های بالا وضعیت موردنظر را ببینید.
         {% else %}
-        وقتی برای فایل‌های اکسپرس درخواست بازدید ثبت کنید، نتیجهٔ بررسی اینجا نمایش داده می‌شود.
+        وقتی برای فایل‌های اکسپرس درخواست بازدید ثبت کنید، اینجا مدیریت و پیگیری می‌شود.
         {% endif %}
       </p>
       <a href="{{ url_for('express_partner.files') }}"
          data-vinor-express-nav
-         class="mt-6 inline-flex items-center justify-center rounded-xl bg-[#a62626] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#b83232]">
+         class="req-empty__btn">
         مشاهده فایل‌ها
       </a>
     </section>

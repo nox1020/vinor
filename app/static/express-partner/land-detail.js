@@ -1376,19 +1376,105 @@
     });
   }
 
+  function escapeToastText(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function parseTxToastMessage(message) {
+    var raw = String(message || '').trim();
+    if (!raw) return { title: '', detail: '', tone: 'success' };
+
+    var pipe = raw.split('|');
+    if (pipe.length > 1) {
+      return {
+        title: pipe[0].replace(/\.\s*$/, '').trim(),
+        detail: pipe.slice(1).join('|').trim(),
+        tone: 'warning',
+      };
+    }
+
+    var paren = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+    if (paren) {
+      return {
+        title: paren[1].replace(/\.\s*$/, '').trim(),
+        detail: paren[2].trim(),
+        tone: 'warning',
+      };
+    }
+
+    var dash = raw.split(/\s*[—–]\s+/);
+    if (dash.length > 1 && dash[0].length <= 72) {
+      return {
+        title: dash[0].replace(/\.\s*$/, '').trim(),
+        detail: dash.slice(1).join(' — ').trim(),
+        tone: 'success',
+      };
+    }
+
+    return { title: raw.replace(/\.\s*$/, '').trim(), detail: '', tone: 'success' };
+  }
+
+  function txToastIconClass(parsed, isError) {
+    if (isError) return 'fa-circle-exclamation';
+    if (parsed.tone === 'warning') return 'fa-info-circle';
+    if (parsed.title.indexOf('معامله') !== -1) return 'fa-handshake';
+    if (parsed.title.indexOf('بازدید') !== -1) return 'fa-calendar-check';
+    if (parsed.title.indexOf('پورسانت') !== -1) return 'fa-coins';
+    if (parsed.title.indexOf('کپی') !== -1) return 'fa-copy';
+    if (parsed.title.indexOf('دانلود') !== -1) return 'fa-download';
+    return 'fa-check-circle';
+  }
+
+  function renderTxToast(toast, parsed, isError) {
+    var icon = txToastIconClass(parsed, isError);
+    var detailHtml = parsed.detail
+      ? '<span class="ld-tx-toast__detail">' + escapeToastText(parsed.detail) + '</span>'
+      : '';
+    toast.innerHTML =
+      '<span class="ld-tx-toast__icon" aria-hidden="true"><i class="fas ' + icon + '"></i></span>' +
+      '<span class="ld-tx-toast__body">' +
+        '<span class="ld-tx-toast__title">' + escapeToastText(parsed.title) + '</span>' +
+        detailHtml +
+      '</span>';
+  }
+
   function showTxToast(message, isError) {
     var toast = document.getElementById('landTxToast');
     if (!toast || !message) return;
-    toast.textContent = message;
-    toast.classList.remove('hidden', 'is-success', 'is-error');
-    toast.classList.add(isError ? 'is-error' : 'is-success');
+    var parsed = parseTxToastMessage(message);
+    if (!parsed.title && parsed.detail) {
+      parsed.title = parsed.detail;
+      parsed.detail = '';
+    }
+    renderTxToast(toast, parsed, isError);
+    toast.classList.remove('hidden', 'is-success', 'is-error', 'is-warning', 'is-visible');
+    if (isError) {
+      toast.classList.add('is-error');
+    } else if (parsed.tone === 'warning') {
+      toast.classList.add('is-warning');
+    } else {
+      toast.classList.add('is-success');
+    }
+    requestAnimationFrame(function () {
+      toast.classList.add('is-visible');
+    });
     syncFooterSpacer();
     clearTimeout(showTxToast._t);
+    var duration = parsed.detail ? 4600 : 3000;
     showTxToast._t = setTimeout(function () {
-      toast.classList.add('hidden');
-      toast.classList.remove('is-success', 'is-error');
-      syncFooterSpacer();
-    }, 2800);
+      toast.classList.remove('is-visible');
+      clearTimeout(showTxToast._hideT);
+      showTxToast._hideT = setTimeout(function () {
+        toast.classList.add('hidden');
+        toast.classList.remove('is-success', 'is-error', 'is-warning');
+        toast.textContent = '';
+        syncFooterSpacer();
+      }, 260);
+    }, duration);
   }
 
   function getLandCsrf() {
@@ -1482,12 +1568,45 @@
     visitStatusPollTimer = setInterval(pollOnce, 8000);
   }
 
+  function isLandInTransaction(txMode, txStatus) {
+    return txMode === 'release' || txStatus === 'in_transaction';
+  }
+
   function syncRevisitButton(canRevisit, txMode) {
     var revisitBtn = document.getElementById('landRevisitBtn');
     if (!revisitBtn) return;
-    var show = !!canRevisit && (txMode === 'deal' || txMode === 'visit_commission_pending');
+    var root = document.querySelector(ROOT_SEL);
+    var txStatus = (root && root.dataset.txStatus) || '';
+    var inTransaction = isLandInTransaction(txMode, txStatus);
+    var showActive = !!canRevisit && !inTransaction && (txMode === 'deal' || txMode === 'visit_commission_pending');
+    var showBlocked = inTransaction && txMode === 'release';
+    var show = showActive || showBlocked;
     var item = document.getElementById('landRevisitItem') || revisitBtn.closest('.ld-fab-menu__item');
-    if (item) item.classList.toggle('hidden', !show);
+    var label = item && item.querySelector('.ld-fab-menu__label');
+    var icon = revisitBtn.querySelector('i');
+    if (item) {
+      item.classList.toggle('hidden', !show);
+      item.classList.toggle('ld-fab-menu__item--revisit-blocked', showBlocked);
+    }
+    revisitBtn.classList.remove('ld-fab-menu__action--teal', 'ld-fab-menu__action--muted');
+    if (showBlocked) {
+      revisitBtn.classList.add('ld-fab-menu__action--muted');
+      revisitBtn.dataset.revisitBlocked = '1';
+      revisitBtn.setAttribute('aria-disabled', 'true');
+      if (icon) icon.className = 'fas fa-lock';
+      if (label) label.textContent = 'بازدید مجدد';
+    } else {
+      delete revisitBtn.dataset.revisitBlocked;
+      if (showActive) {
+        revisitBtn.classList.add('ld-fab-menu__action--teal');
+        revisitBtn.setAttribute('aria-disabled', 'false');
+        if (icon) icon.className = 'fas fa-calendar-plus';
+      } else {
+        revisitBtn.setAttribute('aria-disabled', 'true');
+      }
+      if (label) label.textContent = 'بازدید مجدد';
+    }
+    revisitBtn.disabled = false;
     syncFabDirectMode();
   }
 
@@ -1660,6 +1779,10 @@
     if (root && canRevisit !== undefined && canRevisit !== null) {
       root.dataset.canRevisit = canRevisit ? '1' : '0';
     }
+    if (mode === 'deal_pending' || mode === 'blocked') {
+      canRevisit = false;
+      if (root) root.dataset.canRevisit = '0';
+    }
     var cfg = TX_UI[mode] || TX_UI.visit;
     var status = statusFromMode(mode);
     if (root) {
@@ -1694,6 +1817,8 @@
     }
     var badge = document.getElementById('landTxStatusBadge');
     if (badge) badge.classList.toggle('hidden', mode !== 'release');
+    var expertBadge = document.getElementById('landExpertVerifiedBadge');
+    if (expertBadge) expertBadge.classList.toggle('hidden', mode === 'release');
     var spec = document.querySelector('[data-land-tx-spec-value]');
     if (spec) spec.textContent = cfg.specLabel;
     if (mode === 'deal' && (visitDate || visitDateJalali)) {
@@ -2061,7 +2186,27 @@
       function onRevisitClick(ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        if (revisitBtn.disabled || revisitBtn.dataset.busy === '1') return;
+        if (revisitBtn.dataset.busy === '1') return;
+        if (revisitBtn.dataset.revisitBlocked === '1') {
+          closeFabMenu();
+          showTxToast(
+            'ابتدا رفع معامله را انجام دهید|برای ثبت بازدید مجدد، از گزینه «رفع معامله» استفاده کنید.',
+            false
+          );
+          return;
+        }
+        if (revisitBtn.disabled) return;
+        var root = document.querySelector(ROOT_SEL);
+        var txMode = (root && root.dataset.txMode) || '';
+        var txStatus = (root && root.dataset.txStatus) || '';
+        if (isLandInTransaction(txMode, txStatus)) {
+          closeFabMenu();
+          showTxToast(
+            'ابتدا رفع معامله را انجام دهید|برای ثبت بازدید مجدد، از گزینه «رفع معامله» استفاده کنید.',
+            false
+          );
+          return;
+        }
         openVisitModal(true);
       }
       revisitBtn.addEventListener('click', onRevisitClick);

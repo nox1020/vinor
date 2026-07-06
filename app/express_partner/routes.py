@@ -105,6 +105,9 @@ from .visit_requests import (
     visit_commission_ready_for_deal,
     visit_progress_steps,
     visit_progress_summary,
+    partner_request_mgmt_meta,
+    REQUEST_MGMT_BUCKETS,
+    REQUEST_MGMT_BUCKET_LABELS,
     visit_date_min_iso,
     visit_allowed_weekdays_for_js,
     resolve_partner_land_tx_state,
@@ -890,51 +893,6 @@ def _is_generic_post_login_next(url: str) -> bool:
     return False
 
 
-def _is_express_soft_nav_request() -> bool:
-    return (request.headers.get('X-Requested-With') or '').strip() == 'XMLHttpRequest'
-
-
-def _is_dashboard_refresh_from_self() -> bool:
-    try:
-        ref = (request.referrer or '').strip()
-        if not ref:
-            return False
-        from urllib.parse import urlparse
-        ref_path = _post_login_path_only(urlparse(ref).path or '/')
-        files_path = _post_login_path_only(url_for('express_partner.files'))
-        return ref_path == files_path
-    except Exception:
-        return False
-
-
-def _is_express_partner_in_app_referrer() -> bool:
-    """کلیک تب پایین یا لینک داخلی — داشبورد نباید به پورسانت ریدایرکت شود."""
-    try:
-        ref = (request.referrer or '').strip()
-        if not ref:
-            return False
-        from urllib.parse import urlparse
-        ref_path = _post_login_path_only(urlparse(ref).path or '/')
-        if not ref_path.startswith('/express/partner'):
-            return False
-        if ref_path.startswith('/express/partner/login'):
-            return False
-        return True
-    except Exception:
-        return False
-
-
-def _should_redirect_partner_default_to_commissions() -> bool:
-    """ورود مستقیم/باز کردن اپ → پورسانت؛ ناوبری داخلی یا رفرش داشبورد → بدون ریدایرکت."""
-    if _is_express_soft_nav_request():
-        return False
-    if _is_dashboard_refresh_from_self():
-        return False
-    if _is_express_partner_in_app_referrer():
-        return False
-    return True
-
-
 def _is_phone_approved_partner(phone: str) -> bool:
     """همکار تأییدشده — از کش درون‌پردازشی partners (بدون I/O تکراری)."""
     phone = (phone or '').strip()
@@ -960,16 +918,14 @@ def _cache_session_partner_role(is_partner: bool) -> None:
 
 
 def _default_post_login_url(phone: str) -> str:
-    """پیش‌فرض بعد از ورود: همکار → پورسانت، کاربر عادی → داشبورد."""
+    """پیش‌فرض بعد از ورود: داشبورد."""
     is_partner = _is_phone_approved_partner(phone)
     _cache_session_partner_role(is_partner)
-    if is_partner:
-        return url_for('express_partner.commissions')
     return url_for('express_partner.home')
 
 
 def _redirect_after_login(phone: str | None = None) -> str:
-    """deep link صریح اولویت دارد؛ مسیرهای عمومی برای همکار → پورسانت."""
+    """deep link صریح اولویت دارد؛ مسیرهای عمومی → داشبورد."""
     nxt = _login_next_preserve() or _session_next_safe()
     ph = _canonical_partner_phone(phone or session.get('user_phone') or '')
     is_partner = _is_phone_approved_partner(ph)
@@ -1490,7 +1446,7 @@ def inject_role_flags():
 # -------------------------
 @express_partner_bp.route('/', methods=['GET'], endpoint='partner_root')
 def partner_root():
-    """Legacy /express/partner → داشبورد یا پورسانت بر اساس نقش."""
+    """Legacy /express/partner → داشبورد."""
     if session.get('user_phone'):
         return redirect(_redirect_after_login(), code=302)
     return redirect(url_for('express_partner.home'), code=302)
@@ -1516,7 +1472,7 @@ def serve_manifest():
       "description": "پنل مدیریت همکاران وینور - دسترسی به آگهی‌های تخصیص یافته، کمیسیون‌ها و ابزارهای مدیریت",
       "dir": "rtl",
       "lang": "fa",
-      "start_url": "/express/partner/?source=pwa",
+      "start_url": "/express/partner/home?source=pwa",
       "scope": "/express/partner/",
       "display": "standalone",
       "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
@@ -2574,15 +2530,6 @@ def files_page():
     filter_cat = (request.args.get('cat') or '').strip()
     has_filters = _dashboard_request_has_filters(search_query, selected_cities, filter_tag, filter_cat)
 
-    if (
-        me_phone
-        and _is_partner_approved(profile)
-        and not has_filters
-        and request.args.get('all') != '1'
-        and _should_redirect_partner_default_to_commissions()
-    ):
-        return redirect(url_for('express_partner.commissions'))
-
     apps = load_express_partner_apps() or []
     my_apps = [a for a in apps if str(a.get("phone")) == me_phone]
     # آیا کاربر درخواست همکاری ثبت کرده و در وضعیت بررسی است؟
@@ -2915,10 +2862,11 @@ def api_favorites_cards():
 @express_partner_bp.get('/requests', endpoint='requests')
 @require_partner_access(allow_pending=True)
 def requests_page():
-    """صفحهٔ وضعیت همهٔ درخواست‌های بازدید همکار جاری."""
+    """مرکز مدیریت و پیگیری درخواست‌های بازدید همکار."""
     me_phone = (session.get('user_phone') or '').strip()
     current_filter = (request.args.get('filter') or 'all').strip().lower()
-    if current_filter not in ('all', PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS, CANCELLED_STATUS):
+    allowed_filters = ('all',) + REQUEST_MGMT_BUCKETS
+    if current_filter not in allowed_filters:
         current_filter = 'all'
     rows = load_express_visit_requests() or []
     if not isinstance(rows, list):
@@ -2931,27 +2879,22 @@ def requests_page():
         PENDING_STATUS: {
             'label': 'در انتظار تأیید',
             'hint': 'درخواست شما ثبت شده و منتظر بررسی تیم وینور است.',
-            'bucket': 'pending',
         },
         APPROVED_STATUS: {
             'label': 'تأیید شده',
             'hint': 'بازدید تأیید شده؛ پس از انجام بازدید، آن را روی فایل ثبت کنید.',
-            'bucket': 'approved',
         },
         DONE_PENDING_STATUS: {
             'label': 'در انتظار تأیید انجام بازدید',
-            'hint': 'انجام بازدید ثبت شده و منتظر تأیید ادمین است. پس از تأیید، پورسانت بازدید در صف تأیید قرار می‌گیرد.',
-            'bucket': 'done_pending',
+            'hint': 'انجام بازدید ثبت شده و منتظر تأیید ادمین است.',
         },
         COMPLETED_STATUS: {
             'label': 'بازدید انجام شد',
-            'hint': 'بازدید ثبت شده؛ پس از تأیید پورسانت بازدید، درخواست معامله فعال می‌شود.',
-            'bucket': 'completed',
+            'hint': 'بازدید ثبت شده؛ مراحل بعدی در جریان است.',
         },
         CANCELLED_STATUS: {
-            'label': 'تأیید نشده',
-            'hint': 'این درخواست توسط تیم وینور تأیید نشده یا بسته شده است.',
-            'bucket': 'cancelled',
+            'label': 'لغو شده',
+            'hint': 'این درخواست تأیید نشده یا بسته شده است.',
         },
     }
 
@@ -2962,7 +2905,7 @@ def requests_page():
         if str(row.get('partner_phone') or '').strip() != me_phone:
             continue
         st = str(row.get('status') or PENDING_STATUS).strip() or PENDING_STATUS
-        meta = status_meta.get(st, {'label': st, 'hint': '', 'bucket': 'other'})
+        meta = status_meta.get(st, {'label': st, 'hint': ''})
         visit_date = str(row.get('visit_date') or '').strip()
         progress_row = dict(row)
         progress_row['visit_commission_required'] = _visit_commission_required_for(
@@ -2971,48 +2914,66 @@ def requests_page():
             str(row.get('land_code') or ''),
         )
         progress_steps = visit_progress_steps(progress_row, commissions, partner_phone=me_phone)
+        mgmt = partner_request_mgmt_meta(progress_row, progress_steps)
+        land_code = str(row.get('land_code') or '').strip()
         items.append({
             'id': row.get('id') or '',
-            'land_code': row.get('land_code') or '',
-            'land_title': row.get('land_title') or row.get('land_code') or 'فایل اکسپرس',
+            'land_code': land_code,
+            'land_title': row.get('land_title') or land_code or 'فایل اکسپرس',
             'visit_date': visit_date,
             'visit_date_jalali': format_iso_date_jalali(visit_date) if visit_date else '',
             'status': st,
             'status_label': meta['label'],
             'status_hint': meta['hint'],
-            'bucket': meta['bucket'],
             'created_at': row.get('created_at') or '',
             'updated_at': row.get('updated_at') or '',
             'approved_at': row.get('approved_at') or '',
             'completed_at': row.get('completed_at') or '',
             'admin_note': row.get('admin_note') or '',
             'progress_steps': progress_steps,
+            'mgmt_bucket': mgmt['bucket'],
+            'mgmt_bucket_label': mgmt['bucket_label'],
+            'next_action': mgmt['next_action'],
+            'sort_group': mgmt['sort_group'],
+            'progress_done': mgmt['progress_done'],
+            'progress_total': mgmt['progress_total'],
+            'progress_pct': mgmt['progress_pct'],
+            'progress_line': mgmt['progress_line'],
+            'progress_pct_label': mgmt['progress_pct_label'],
+            'current_step_label': mgmt['current_step_label'],
+            'detail_url': url_for('express_partner.land_detail', code=land_code) if land_code else '',
+            'needs_attention': mgmt['bucket'] == 'needs_action',
         })
 
-    items.sort(key=lambda item: str(item.get('updated_at') or item.get('created_at') or ''), reverse=True)
-    counts = {
-        'all': len(items),
-        'pending': sum(1 for i in items if i.get('status') == PENDING_STATUS),
-        'approved': sum(1 for i in items if i.get('status') == APPROVED_STATUS),
-        'done_pending': sum(1 for i in items if i.get('status') == DONE_PENDING_STATUS),
-        'completed': sum(1 for i in items if i.get('status') == COMPLETED_STATUS),
-        'cancelled': sum(1 for i in items if i.get('status') == CANCELLED_STATUS),
-    }
-    filter_options = [
-        {'key': 'all', 'label': 'همه', 'count': counts['all']},
-        {'key': PENDING_STATUS, 'label': 'در انتظار', 'count': counts['pending']},
-        {'key': APPROVED_STATUS, 'label': 'تأیید شده', 'count': counts['approved']},
-        {'key': DONE_PENDING_STATUS, 'label': 'انتظار تأیید بازدید', 'count': counts['done_pending']},
-        {'key': COMPLETED_STATUS, 'label': 'انجام شده', 'count': counts['completed']},
-        {'key': CANCELLED_STATUS, 'label': 'تأیید نشده', 'count': counts['cancelled']},
-    ]
+    def _request_sort_key(item: Dict[str, Any]) -> tuple:
+        ts = parse_datetime_safe(item.get('updated_at') or item.get('created_at') or '1970-01-01')
+        group = int(item.get('sort_group') or 9)
+        epoch = ts.timestamp()
+        if item.get('mgmt_bucket') in ('completed', 'cancelled'):
+            return (group, epoch)
+        return (group, -epoch)
+
+    items.sort(key=_request_sort_key)
+
+    counts = {'all': len(items)}
+    for bucket in REQUEST_MGMT_BUCKETS:
+        counts[bucket] = sum(1 for i in items if i.get('mgmt_bucket') == bucket)
+
+    filter_options = [{'key': 'all', 'label': 'همه', 'count': counts['all']}]
+    for bucket in REQUEST_MGMT_BUCKETS:
+        filter_options.append({
+            'key': bucket,
+            'label': REQUEST_MGMT_BUCKET_LABELS[bucket],
+            'count': counts[bucket],
+        })
+
     if current_filter != 'all':
-        items = [item for item in items if item.get('status') == current_filter]
+        items = [item for item in items if item.get('mgmt_bucket') == current_filter]
+
     current_filter_label = next(
         (opt['label'] for opt in filter_options if opt['key'] == current_filter),
         'همه',
     )
-    current_filter_count = len(items)
     return render_template(
         'express_partner/requests.html',
         items=items,
@@ -3020,7 +2981,8 @@ def requests_page():
         filter_options=filter_options,
         current_filter=current_filter,
         current_filter_label=current_filter_label,
-        current_filter_count=current_filter_count,
+        current_filter_count=len(items),
+        mgmt_bucket_labels=REQUEST_MGMT_BUCKET_LABELS,
         hide_header=True,
     )
 
@@ -5168,7 +5130,7 @@ def mark_in_transaction(code: str):
                             success_message = 'درخواست معامله ثبت شد. پس از تأیید ادمین، مبلغ به موجودی پورسانت شما اضافه می‌شود.'
                         else:
                             if skipped_count > 0:
-                                success_message = 'درخواست معامله ثبت شد. (پورسانت فعال قبلی برای این فایل وجود دارد.)'
+                                success_message = 'درخواست معامله ثبت شد|پورسانت فعال قبلی برای این فایل وجود دارد و رکورد جدیدی ایجاد نشد.'
                             else:
                                 success_message = 'درخواست معامله ثبت شد. پس از تأیید ادمین، مبلغ به موجودی پورسانت شما اضافه می‌شود.'
                         if not success_message:
