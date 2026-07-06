@@ -4,7 +4,7 @@
 {% set tx_mode = land._tx_button_mode|default('visit') %}
 {% set show_call = contact_phone %}
 {% set show_revisit_btn = land._can_revisit|default(false) and tx_mode in ('deal', 'visit_commission_pending') %}
-{% set show_tx = is_approved and _st != 'sold' and tx_mode in ('visit', 'visit_pending', 'visit_done', 'visit_done_pending', 'visit_commission_pending', 'deal', 'release', 'revisit') %}
+{% set show_tx = is_approved and _st != 'sold' and tx_mode in ('visit', 'visit_pending', 'visit_done', 'visit_done_pending', 'visit_commission_pending', 'deal', 'deal_pending', 'release', 'revisit') %}
 {% set show_blocked = is_approved and _st == 'in_transaction' and tx_mode == 'blocked' %}
 {% set show_sold = is_approved and _st == 'sold' %}
 {% set action_count = (1 if show_call else 0) + (1 if show_tx else 0) + (1 if show_revisit_btn else 0) + (1 if show_blocked else 0) + (1 if show_sold else 0) %}
@@ -15,7 +15,7 @@
     <div id="landTxToast" class="ld-fab-dock__toast hidden" role="status" aria-live="polite"></div>
 
     <div id="landFabMenu" class="ld-fab-menu" role="menu" aria-hidden="true">
-      {% if land._visit_date_jalali and tx_mode in ('deal', 'visit_pending', 'visit_done', 'visit_done_pending', 'visit_commission_pending') %}
+      {% if land._visit_date_jalali and tx_mode in ('deal', 'deal_pending', 'release', 'visit_pending', 'visit_done', 'visit_done_pending', 'visit_commission_pending') %}
       <p id="landVisitDateHint" class="ld-fab-menu__hint">
         <i class="fas fa-calendar-check" aria-hidden="true"></i>
         <span>بازدید: {{ land._visit_date_jalali }}</span>
@@ -55,7 +55,7 @@
 
       {% if show_tx %}
       <div class="ld-fab-menu__item" role="none">
-        <span class="ld-fab-menu__label land-tx-label">{% if tx_mode == 'release' %}رفع معامله{% elif tx_mode == 'deal' %}درخواست معامله{% elif tx_mode == 'revisit' %}بازدید مجدد{% elif tx_mode == 'visit_done' %}بازدید انجام شد{% elif tx_mode == 'visit_done_pending' %}در انتظار تأیید بازدید{% elif tx_mode == 'visit_commission_pending' %}در انتظار پورسانت{% elif tx_mode == 'visit_pending' %}در انتظار بازدید{% else %}درخواست بازدید{% endif %}</span>
+        <span class="ld-fab-menu__label land-tx-label">{% if tx_mode == 'release' %}رفع معامله{% elif tx_mode == 'deal' %}درخواست معامله{% elif tx_mode == 'deal_pending' %}معامله ثبت شد{% elif tx_mode == 'revisit' %}بازدید مجدد{% elif tx_mode == 'visit_done' %}بازدید انجام شد{% elif tx_mode == 'visit_done_pending' %}در انتظار تأیید بازدید{% elif tx_mode == 'visit_commission_pending' %}در انتظار پورسانت{% elif tx_mode == 'visit_pending' %}در انتظار بازدید{% else %}درخواست بازدید{% endif %}</span>
         <button type="button"
                 id="landTxToggleBtn"
                 role="menuitem"
@@ -69,9 +69,9 @@
                 data-land-tx-status="{{ _st }}"
                 {% if land._visit_date %}data-visit-date="{{ land._visit_date }}"{% endif %}
                 data-csrf="{{ csrf_token() }}"
-                {% if tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %}aria-disabled="true"{% endif %}
-                class="ld-fab-menu__action ld-btn-tx{% if tx_mode == 'release' %} ld-btn-tx--release ld-fab-menu__action--muted{% elif tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %} ld-btn-tx--pending ld-fab-menu__action--pending{% else %} ld-fab-menu__action--teal{% endif %}">
-          <i class="fas {% if tx_mode == 'release' %}fa-check-circle{% elif tx_mode == 'deal' %}fa-handshake{% elif tx_mode == 'revisit' %}fa-calendar-plus{% elif tx_mode == 'visit_done' %}fa-check-double{% elif tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %}fa-clock{% else %}fa-calendar-check{% endif %} land-tx-icon" aria-hidden="true"></i>
+                {% if tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending', 'deal_pending') %}aria-disabled="true"{% endif %}
+                class="ld-fab-menu__action ld-btn-tx{% if tx_mode == 'release' %} ld-btn-tx--release ld-fab-menu__action--muted{% elif tx_mode == 'deal' %} ld-fab-menu__action--deal{% elif tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending', 'deal_pending') %} ld-btn-tx--pending ld-fab-menu__action--pending{% else %} ld-fab-menu__action--teal{% endif %}">
+          <i class="fas {% if tx_mode == 'release' %}fa-check-circle{% elif tx_mode == 'deal' %}fa-handshake{% elif tx_mode == 'revisit' %}fa-calendar-plus{% elif tx_mode == 'visit_done' %}fa-check-double{% elif tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending', 'deal_pending') %}fa-clock{% else %}fa-calendar-check{% endif %} land-tx-icon" aria-hidden="true"></i>
         </button>
       </div>
       {% elif show_blocked %}
@@ -119,7 +119,7 @@
           {% elif tx_mode == 'release' %}{% set fab_icon = 'fa-check-circle' %}
           {% elif tx_mode == 'revisit' %}{% set fab_icon = 'fa-calendar-plus' %}
           {% elif tx_mode == 'visit_done' %}{% set fab_icon = 'fa-check-double' %}
-          {% elif tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %}{% set fab_icon = 'fa-clock' %}
+          {% elif tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending', 'deal_pending') %}{% set fab_icon = 'fa-clock' %}
           {% else %}{% set fab_icon = 'fa-calendar-check' %}
           {% endif %}
         {% elif show_blocked %}{% set fab_icon = 'fa-lock' %}

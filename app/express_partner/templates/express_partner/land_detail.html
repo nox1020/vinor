@@ -839,10 +839,14 @@
     }
     .ld-fab-menu__hint i { font-size: 0.6875rem; opacity: 0.9; }
     .ld-fab-menu__item {
-      display: flex;
-      flex-direction: row-reverse;
+      display: inline-flex;
+      flex-direction: row;
       align-items: center;
+      justify-content: flex-end;
       gap: 0.75rem;
+      width: auto;
+      max-width: 100%;
+      align-self: flex-end;
     }
     .ld-fab-menu__label {
       display: inline-block;
@@ -889,6 +893,11 @@
     .ld-btn-tx.ld-fab-menu__action {
       background: var(--ld-teal);
       box-shadow: 0 4px 18px rgba(13, 148, 136, 0.32);
+    }
+    .ld-fab-menu__action--deal,
+    .ld-btn-tx.ld-fab-menu__action--deal {
+      background: #e22828;
+      box-shadow: 0 4px 18px rgba(226, 40, 40, 0.35);
     }
     .ld-fab-menu__action--muted,
     .ld-btn-tx--release.ld-fab-menu__action {

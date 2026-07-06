@@ -4899,6 +4899,7 @@ def complete_visit_request(code: str):
         new_status=ctx.get('global_status') or 'active',
         tx_mode=tx_state.get('tx_mode') or 'visit_done_pending',
         visit_date=tx_state.get('visit_date') or None,
+        can_revisit=tx_state.get('can_revisit'),
     )
 
 
@@ -5263,6 +5264,7 @@ def mark_in_transaction(code: str):
                 new_status=new_status,
                 tx_mode=tx_state.get('tx_mode'),
                 visit_date=tx_state.get('visit_date') or None,
+                can_revisit=tx_state.get('can_revisit'),
             )
         return _mark_in_transaction_finish(
             code,

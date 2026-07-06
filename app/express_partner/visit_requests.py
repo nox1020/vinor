@@ -735,7 +735,7 @@ def visit_tx_mode(
         if visit_commission_required and not visit_commission_ready:
             return "visit_commission_pending"
         if has_pending_deal_commission:
-            return "deal"
+            return "deal_pending"
         if deal_commission_rejected:
             return "revisit"
         return "deal"
