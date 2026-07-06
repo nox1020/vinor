@@ -3,12 +3,13 @@
 {% set _st = (land._assignment_status|default('active')|string)|lower|trim %}
 {% set tx_mode = land._tx_button_mode|default('visit') %}
 {% set show_call = contact_phone %}
-{% set show_revisit_btn = land._can_revisit|default(false) and _st != 'in_transaction' and tx_mode in ('deal', 'visit_commission_pending') %}
+{% set show_revisit_btn = land._can_revisit|default(false) and _st != 'in_transaction' and tx_mode == 'deal' %}
+{% set show_revisit_pending_blocked = land._can_revisit|default(false) and tx_mode in ('visit_pending', 'visit_done_pending', 'visit_commission_pending') %}
 {% set show_revisit_blocked = is_approved and _st == 'in_transaction' and tx_mode == 'release' %}
 {% set show_tx = is_approved and _st != 'sold' and tx_mode in ('visit', 'visit_pending', 'visit_done', 'visit_done_pending', 'visit_commission_pending', 'deal', 'deal_pending', 'release', 'revisit') %}
 {% set show_blocked = is_approved and _st == 'in_transaction' and tx_mode == 'blocked' %}
 {% set show_sold = is_approved and _st == 'sold' %}
-{% set action_count = (1 if show_call else 0) + (1 if show_tx else 0) + (1 if show_revisit_btn else 0) + (1 if show_revisit_blocked else 0) + (1 if show_blocked else 0) + (1 if show_sold else 0) %}
+{% set action_count = (1 if show_call else 0) + (1 if show_tx else 0) + (1 if show_revisit_btn else 0) + (1 if show_revisit_blocked else 0) + (1 if show_revisit_pending_blocked else 0) + (1 if show_blocked else 0) + (1 if show_sold else 0) %}
 
 <footer class="ld-actions ld-fab-dock fixed inset-x-0 bottom-0 z-[70] pb-[env(safe-area-inset-bottom,0px)]" data-land-detail-footer data-fab-actions="{{ action_count }}">
   <div class="ld-fab-dock__backdrop" data-land-fab-backdrop aria-hidden="true"></div>
@@ -47,6 +48,22 @@
                 role="menuitem"
                 data-land-revisit-trigger
                 data-revisit-blocked="1"
+                data-visit-request-url="{{ url_for('express_partner.create_visit_request', code=land.code) }}"
+                data-csrf="{{ csrf_token() }}"
+                aria-disabled="true"
+                class="ld-fab-menu__action ld-fab-menu__action--muted">
+          <i class="fas fa-lock" aria-hidden="true"></i>
+        </button>
+      </div>
+      {% elif show_revisit_pending_blocked %}
+      <div class="ld-fab-menu__item ld-fab-menu__item--revisit-blocked" id="landRevisitItem" role="none">
+        <span class="ld-fab-menu__label">بازدید مجدد</span>
+        <button type="button"
+                id="landRevisitBtn"
+                role="menuitem"
+                data-land-revisit-trigger
+                data-revisit-blocked="1"
+                data-revisit-pending-blocked="1"
                 data-visit-request-url="{{ url_for('express_partner.create_visit_request', code=land.code) }}"
                 data-csrf="{{ csrf_token() }}"
                 aria-disabled="true"

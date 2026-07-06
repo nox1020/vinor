@@ -103,12 +103,12 @@
     </div>
   </div>
 
-  {% elif step_state == 'blocked' %}
+  {% elif step_state == 'blocked' or step_state == 'rejected' %}
   <div class="flex items-center gap-2.5 py-1.5">
     <span class="shrink-0 w-5 h-5 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
       <i class="fa-solid fa-xmark text-[9px] text-red-600 dark:text-red-400"></i>
     </span>
-    <span class="text-xs text-red-600 dark:text-red-400">{{ step.label }}{% if step.hint %} — {{ step.hint }}{% endif %}</span>
+    <span class="text-xs text-red-600 dark:text-red-400 font-medium">{{ step.label }}{% if step.hint %} — {{ step.hint }}{% endif %}</span>
   </div>
 
   {% else %}

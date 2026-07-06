@@ -99,7 +99,7 @@
           </div>
           <div class="shrink-0 text-left">
             <p class="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{{ v.visit_date_jalali or v.visit_date|default('—') }}</p>
-            <p class="text-[10px] text-gray-400 mt-0.5">{{ v.status_label }}</p>
+            <p class="text-[10px] mt-0.5 {% if st == 'cancelled' %}text-red-500 dark:text-red-400 font-semibold{% else %}text-gray-400{% endif %}">{{ v.status_label }}</p>
           </div>
         </div>
         {% if v.admin_note %}
@@ -110,7 +110,7 @@
       </div>
 
       {# روند تأیید #}
-      {% if v.in_workflow and v.admin_workflow_steps %}
+      {% if v.admin_workflow_steps and (v.in_workflow or st == 'cancelled') %}
       {% include 'admin/partials/visit_admin_workflow_panel.html' %}
       {% elif not v.in_workflow %}
       <div class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">

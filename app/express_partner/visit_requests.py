@@ -202,7 +202,11 @@ def visit_progress_steps(
 
     visit_requested = row.get("visit_requested")
     visit_requested_done = False if visit_requested is False else True
-    visit_approved_done = status in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS)
+    was_approved = bool(row.get("approved_at"))
+    visit_approved_done = (
+        status in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS)
+        or (status == CANCELLED_STATUS and was_approved)
+    )
     visit_done = status == COMPLETED_STATUS
     visit_commission_done = visit_done and (not visit_commission_required or visit_commission_paid)
     done = [
@@ -222,8 +226,11 @@ def visit_progress_steps(
             state = "current"
         steps.append({"key": key, "label": label, "state": state})
     if status == CANCELLED_STATUS:
+        reject_key = _visit_cancelled_reject_step_key(row)
         for step in steps:
-            if step["state"] != "done":
+            if step.get("key") == reject_key and step["state"] != "done":
+                step["state"] = "rejected"
+            elif step["state"] != "done":
                 step["state"] = "blocked"
     return steps
 
@@ -234,8 +241,11 @@ def visit_progress_summary(steps: List[Dict[str, Any]]) -> Dict[str, Any]:
     for step in steps or []:
         if step.get("state") == "done":
             done_count += 1
-        elif not current_label and step.get("state") in ("current", "blocked"):
-            current_label = str(step.get("label") or "")
+        elif not current_label and step.get("state") in ("current", "blocked", "rejected"):
+            if step.get("state") == "rejected":
+                current_label = "رد شده"
+            else:
+                current_label = str(step.get("label") or "")
     total = len(steps or [])
     if not current_label and total and done_count >= total:
         current_label = "تکمیل شد"
@@ -275,9 +285,11 @@ def partner_request_mgmt_meta(
     current_key = ""
     current_label = str(summary.get("current_label") or "")
     for step in progress_steps or []:
-        if step.get("state") in ("current", "blocked"):
+        if step.get("state") in ("current", "blocked", "rejected"):
             current_key = str(step.get("key") or "")
-            if step.get("label"):
+            if step.get("state") == "rejected":
+                current_label = "رد شده"
+            elif step.get("label"):
                 current_label = str(step.get("label") or "")
             break
 
@@ -285,6 +297,9 @@ def partner_request_mgmt_meta(
         bucket = "cancelled"
         next_action = "درخواست لغو یا رد شد"
         sort_group = 2
+        pct = 0
+        progress_line = "رد شده"
+        progress_pct_label = ""
     elif total > 0 and done_count >= total:
         bucket = "completed"
         next_action = "مسیر تکمیل شد"
@@ -326,12 +341,13 @@ def partner_request_mgmt_meta(
     if bucket == "completed":
         stage_num = total
     elif bucket == "cancelled":
-        stage_num = done_count
+        stage_num = 0
     else:
         stage_num = min(done_count + 1, total) if total else 0
 
-    progress_line = f"مرحله {stage_num} از {total}" if total else ""
-    progress_pct_label = f"{pct}٪ پیشرفت" if total else ""
+    if bucket != "cancelled":
+        progress_line = f"مرحله {stage_num} از {total}" if total else ""
+        progress_pct_label = f"{pct}٪ پیشرفت" if total else ""
 
     return {
         "bucket": bucket,
@@ -347,19 +363,36 @@ def partner_request_mgmt_meta(
     }
 
 
-def partner_open_visit(
+def partner_most_recent_visit(
     requests: List[Dict[str, Any]], phone: str, land_code: str
 ) -> Optional[Dict[str, Any]]:
-    """درخواست بازدید فعال (در انتظار تأیید یا تأییدشده)."""
+    """آخرین پرونده بازدید همکار برای یک فایل (هر وضعیتی)."""
     ph = (phone or "").strip()
     code = (land_code or "").strip()
     if not ph or not code:
         return None
     for r in reversed(requests or []):
-        if not _match_partner_land(r, ph, code):
-            continue
-        if (str(r.get("status") or "")).strip() in OPEN_VISIT_STATUSES:
+        if _match_partner_land(r, ph, code):
             return r
+    return None
+
+
+def _visit_cancelled_reject_step_key(row: Dict[str, Any]) -> str:
+    """مرحله‌ای که درخواست در آن رد شده است."""
+    if row.get("visit_done_requested_at"):
+        return "visit_done"
+    if row.get("approved_at"):
+        return "visit_done"
+    return "visit_approved"
+
+
+def partner_open_visit(
+    requests: List[Dict[str, Any]], phone: str, land_code: str
+) -> Optional[Dict[str, Any]]:
+    """درخواست بازدید فعال (در انتظار تأیید یا تأییدشده)."""
+    rec = partner_most_recent_visit(requests, phone, land_code)
+    if rec and (str(rec.get("status") or "")).strip() in OPEN_VISIT_STATUSES:
+        return rec
     return None
 
 
@@ -375,30 +408,18 @@ def partner_visit_awaiting_admin(
 def partner_visit_approved_for_deal(
     requests: List[Dict[str, Any]], phone: str, land_code: str
 ) -> Optional[Dict[str, Any]]:
-    ph = (phone or "").strip()
-    code = (land_code or "").strip()
-    if not ph or not code:
-        return None
-    for r in reversed(requests or []):
-        if not _match_partner_land(r, ph, code):
-            continue
-        if (str(r.get("status") or "")).strip() == APPROVED_STATUS:
-            return r
+    rec = partner_most_recent_visit(requests, phone, land_code)
+    if rec and (str(rec.get("status") or "")).strip() == APPROVED_STATUS:
+        return rec
     return None
 
 
 def partner_visit_done_pending(
     requests: List[Dict[str, Any]], phone: str, land_code: str
 ) -> Optional[Dict[str, Any]]:
-    ph = (phone or "").strip()
-    code = (land_code or "").strip()
-    if not ph or not code:
-        return None
-    for r in reversed(requests or []):
-        if not _match_partner_land(r, ph, code):
-            continue
-        if (str(r.get("status") or "")).strip() == DONE_PENDING_STATUS:
-            return r
+    rec = partner_most_recent_visit(requests, phone, land_code)
+    if rec and (str(rec.get("status") or "")).strip() == DONE_PENDING_STATUS:
+        return rec
     return None
 
 
@@ -435,10 +456,13 @@ def partner_visit_completed(
 def partner_active_visit_record(
     requests: List[Dict[str, Any]], phone: str, land_code: str
 ) -> Optional[Dict[str, Any]]:
-    """بازدید باز یا آخرین پرونده غیرلغوشده."""
+    """بازدید باز یا آخرین پرونده (از جمله ردشده)."""
     open_rec = partner_open_visit(requests, phone, land_code)
     if open_rec:
         return open_rec
+    recent = partner_most_recent_visit(requests, phone, land_code)
+    if recent:
+        return recent
     return partner_latest_visit(requests, phone, land_code)
 
 
@@ -903,6 +927,13 @@ def resolve_partner_land_tx_state(
         can_revisit
         and completed
         and not open_visit
+        and not awaiting
+        and not done_pending
+        and not (
+            completed
+            and visit_commission_required
+            and not visit_ready
+        )
         and not pending_deal
         and gs not in ("sold", "in_transaction")
     )
@@ -1035,7 +1066,10 @@ def admin_visit_workflow_steps(
     steps: List[Dict[str, Any]] = []
 
     if st == CANCELLED_STATUS:
-        s1, hint, action = "blocked", "این درخواست بسته شده است.", False
+        if item.get("approved_at"):
+            s1, hint, action = "done", "", False
+        else:
+            s1, hint, action = "rejected", "درخواست بازدید رد شد.", False
     elif st == PENDING_STATUS:
         s1, hint, action = "current", "درخواست بازدید منتظر تأیید یا رد شماست.", True
     else:
@@ -1052,7 +1086,12 @@ def admin_visit_workflow_steps(
     })
 
     if st == CANCELLED_STATUS:
-        s2, hint, action = "blocked", "", False
+        if item.get("visit_done_requested_at"):
+            s2, hint, action = "rejected", "تأیید انجام بازدید رد شد.", False
+        elif item.get("approved_at"):
+            s2, hint, action = "rejected", "انجام بازدید لغو شد.", False
+        else:
+            s2, hint, action = "blocked", "", False
     elif st == DONE_PENDING_STATUS:
         s2, hint, action = "current", "همکار «بازدید انجام شد» را ثبت کرده؛ تأیید یا رد کنید.", True
     elif st == COMPLETED_STATUS:

@@ -1568,6 +1568,10 @@
     visitStatusPollTimer = setInterval(pollOnce, 8000);
   }
 
+  function isVisitApprovalPending(txMode) {
+    return txMode === 'visit_pending' || txMode === 'visit_done_pending' || txMode === 'visit_commission_pending';
+  }
+
   function isLandInTransaction(txMode, txStatus) {
     return txMode === 'release' || txStatus === 'in_transaction';
   }
@@ -1578,8 +1582,9 @@
     var root = document.querySelector(ROOT_SEL);
     var txStatus = (root && root.dataset.txStatus) || '';
     var inTransaction = isLandInTransaction(txMode, txStatus);
-    var showActive = !!canRevisit && !inTransaction && (txMode === 'deal' || txMode === 'visit_commission_pending');
-    var showBlocked = inTransaction && txMode === 'release';
+    var showActive = !!canRevisit && !inTransaction && txMode === 'deal';
+    var showPendingBlocked = !!canRevisit && isVisitApprovalPending(txMode);
+    var showBlocked = (inTransaction && txMode === 'release') || showPendingBlocked;
     var show = showActive || showBlocked;
     var item = document.getElementById('landRevisitItem') || revisitBtn.closest('.ld-fab-menu__item');
     var label = item && item.querySelector('.ld-fab-menu__label');
@@ -1592,11 +1597,17 @@
     if (showBlocked) {
       revisitBtn.classList.add('ld-fab-menu__action--muted');
       revisitBtn.dataset.revisitBlocked = '1';
+      if (showPendingBlocked) {
+        revisitBtn.dataset.revisitPendingBlocked = '1';
+      } else {
+        delete revisitBtn.dataset.revisitPendingBlocked;
+      }
       revisitBtn.setAttribute('aria-disabled', 'true');
       if (icon) icon.className = 'fas fa-lock';
       if (label) label.textContent = 'بازدید مجدد';
     } else {
       delete revisitBtn.dataset.revisitBlocked;
+      delete revisitBtn.dataset.revisitPendingBlocked;
       if (showActive) {
         revisitBtn.classList.add('ld-fab-menu__action--teal');
         revisitBtn.setAttribute('aria-disabled', 'false');
@@ -1996,7 +2007,7 @@
   function canOpenVisitModal(mode, canRevisit) {
     if (!mode) return true;
     if (mode === 'visit' || mode === 'revisit') return true;
-    if (canRevisit && (mode === 'deal' || mode === 'visit_commission_pending')) return true;
+    if (canRevisit && mode === 'deal') return true;
     return false;
   }
 
@@ -2189,16 +2200,31 @@
         if (revisitBtn.dataset.busy === '1') return;
         if (revisitBtn.dataset.revisitBlocked === '1') {
           closeFabMenu();
-          showTxToast(
-            'ابتدا رفع معامله را انجام دهید|برای ثبت بازدید مجدد، از گزینه «رفع معامله» استفاده کنید.',
-            false
-          );
+          if (revisitBtn.dataset.revisitPendingBlocked === '1') {
+            showTxToast(
+              'بازدید در انتظار تأیید است|تا زمان تأیید ادمین، امکان ثبت بازدید مجدد وجود ندارد.',
+              false
+            );
+          } else {
+            showTxToast(
+              'ابتدا رفع معامله را انجام دهید|برای ثبت بازدید مجدد، از گزینه «رفع معامله» استفاده کنید.',
+              false
+            );
+          }
           return;
         }
         if (revisitBtn.disabled) return;
         var root = document.querySelector(ROOT_SEL);
         var txMode = (root && root.dataset.txMode) || '';
         var txStatus = (root && root.dataset.txStatus) || '';
+        if (isVisitApprovalPending(txMode)) {
+          closeFabMenu();
+          showTxToast(
+            'بازدید در انتظار تأیید است|تا زمان تأیید ادمین، امکان ثبت بازدید مجدد وجود ندارد.',
+            false
+          );
+          return;
+        }
         if (isLandInTransaction(txMode, txStatus)) {
           closeFabMenu();
           showTxToast(
@@ -2342,7 +2368,7 @@
       }
 
       if (mode === 'visit_commission_pending') {
-        showTxToast('پورسانت بازدید در انتظار تأیید ادمین است. می‌توانید بازدید مجدد ثبت کنید یا پس از تأیید، درخواست معامله بزنید.', false);
+        showTxToast('پورسانت بازدید در انتظار تأیید ادمین است. پس از تأیید می‌توانید درخواست معامله ثبت کنید.', false);
         return;
       }
 

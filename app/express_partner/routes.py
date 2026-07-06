@@ -2171,54 +2171,6 @@ def _dashboard_selected_cities():
 
 
 HOME_SUGGESTED_FILES_LIMIT = 5
-HOME_FOLLOW_UP_REQUESTS_LIMIT = 4
-
-
-def _home_commission_income_stats(commissions: List[Dict[str, Any]]) -> Dict[str, int]:
-    """درآمد امروز/ماه و تعداد فروش ماه جاری."""
-    today = date.today()
-    month_start = today.replace(day=1)
-    today_income = 0
-    month_income = 0
-    month_sales = 0
-    for c in commissions or []:
-        if not isinstance(c, dict):
-            continue
-        st = (c.get('status') or '').strip().lower()
-        if st not in ('approved', 'paid'):
-            continue
-        amt = int(c.get('commission_amount') or 0)
-        dt = parse_datetime_safe(c.get('approved_at') or c.get('created_at') or '')
-        d = dt.date()
-        if d == today:
-            today_income += amt
-        if d >= month_start:
-            month_income += amt
-        if commission_is_deal(c) and d >= month_start:
-            month_sales += 1
-    return {
-        'today_income': today_income,
-        'month_income': month_income,
-        'month_sales': month_sales,
-    }
-
-
-def _home_today_visit_count(visit_rows: List[Dict[str, Any]], phone: str) -> int:
-    ph = (phone or '').strip()
-    if not ph:
-        return 0
-    today_iso = date.today().isoformat()
-    count = 0
-    for row in visit_rows or []:
-        if not isinstance(row, dict):
-            continue
-        if str(row.get('partner_phone') or '').strip() != ph:
-            continue
-        vd = str(row.get('visit_date') or '').strip()
-        st = str(row.get('status') or PENDING_STATUS).strip()
-        if vd == today_iso and st in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS):
-            count += 1
-    return count
 
 
 def _home_urgent_actions(
@@ -2352,47 +2304,6 @@ def _home_suggested_files(
     return out
 
 
-def _home_follow_up_requests(
-    phone: str,
-    visit_rows: List[Dict[str, Any]],
-    commissions: List[Dict[str, Any]],
-    *,
-    limit: int = HOME_FOLLOW_UP_REQUESTS_LIMIT,
-) -> List[Dict[str, Any]]:
-    ph = (phone or '').strip()
-    if not ph:
-        return []
-    follow_statuses = frozenset({APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS})
-    status_labels = {
-        APPROVED_STATUS: 'بازدید تأیید شده — انجام دهید',
-        DONE_PENDING_STATUS: 'در انتظار تأیید انجام بازدید',
-        COMPLETED_STATUS: 'بازدید انجام شد — پیگیری معامله',
-    }
-    items: List[Dict[str, Any]] = []
-    for row in visit_rows or []:
-        if not isinstance(row, dict):
-            continue
-        if str(row.get('partner_phone') or '').strip() != ph:
-            continue
-        st = str(row.get('status') or PENDING_STATUS).strip()
-        if st not in follow_statuses:
-            continue
-        code = str(row.get('land_code') or '').strip()
-        visit_date = str(row.get('visit_date') or '').strip()
-        items.append({
-            'id': row.get('id') or '',
-            'land_code': code,
-            'land_title': (row.get('land_title') or code or 'فایل اکسپرس').strip(),
-            'status': st,
-            'status_label': status_labels.get(st, st),
-            'visit_date_jalali': format_iso_date_jalali(visit_date) if visit_date else '',
-            'detail_url': url_for('express_partner.land_detail', code=code) if code else url_for('express_partner.requests'),
-            'updated_at': row.get('updated_at') or row.get('created_at') or '',
-        })
-    items.sort(key=lambda i: str(i.get('updated_at') or ''), reverse=True)
-    return items[:limit]
-
-
 def _home_follow_up_count(phone: str, visit_rows: List[Dict[str, Any]]) -> int:
     ph = (phone or '').strip()
     if not ph:
@@ -2414,9 +2325,6 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         visit_rows = []
 
     my_comms = _commissions_for_phone(ph) if ph else []
-    income_stats = _home_commission_income_stats(my_comms) if ph else {
-        'today_income': 0, 'month_income': 0, 'month_sales': 0,
-    }
     comm_stats = _partner_commission_stats(ph, my_comms) if ph else {}
     withdrawable = int(comm_stats.get('withdrawable_balance') or 0) if ph else 0
     follow_up_count = _home_follow_up_count(ph, visit_rows) if ph else 0
@@ -2434,36 +2342,20 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     ) if ph else []
 
     suggested_files = _home_suggested_files(ph, is_approved) if ph else []
-    follow_up_requests = (
-        _home_follow_up_requests(ph, visit_rows, my_comms)
-        if ph else []
-    )
 
     return {
         'success': True,
         'is_logged_in': bool(ph),
         'is_approved': is_approved,
         'urgent_actions': urgent_actions,
-        'stats': {
-            'today_income': income_stats['today_income'],
-            'month_income': income_stats['month_income'],
-            'today_visits': _home_today_visit_count(visit_rows, ph) if ph else 0,
-            'month_sales': income_stats['month_sales'],
-        },
         'suggested_files': suggested_files,
-        'follow_up_requests': follow_up_requests,
-        'balance': {
-            'withdrawable_balance': withdrawable,
-            'min_withdrawal_amount': MIN_WITHDRAWAL_AMOUNT,
-            'can_withdraw': withdrawable >= int(MIN_WITHDRAWAL_AMOUNT),
-        },
     }
 
 
 @express_partner_bp.route('/home', methods=['GET'], endpoint='home')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def home_page():
-    """داشبورد روزانه — مرکز اقدامات و خلاصه عملکرد."""
+    """داشبورد روزانه — مرکز اقدامات فوری و فایل‌های پیشنهادی."""
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None)
     payload = _build_home_dashboard_payload(me_phone, profile)
@@ -2475,16 +2367,13 @@ def home_page():
         partner_name=partner_name,
         is_approved=payload.get('is_approved'),
         urgent_actions=payload.get('urgent_actions') or [],
-        stats=payload.get('stats') or {},
         suggested_files=payload.get('suggested_files') or [],
-        follow_up_requests=payload.get('follow_up_requests') or [],
-        balance=payload.get('balance') or {},
         hide_header=True,
         bottom_nav_active='home',
         brand='وینور',
         domain='vinor.ir',
         seo_title='داشبورد | وینور اکسپرس',
-        seo_description='مرکز مدیریت روزانه همکار — اقدامات فوری، خلاصه عملکرد و فایل‌های پیشنهادی.',
+        seo_description='مرکز مدیریت روزانه همکار — اقدامات فوری و فایل‌های پیشنهادی.',
     ))
     if not me_phone:
         resp.headers['Cache-Control'] = 'public, max-age=60, stale-while-revalidate=120'
@@ -4658,6 +4547,21 @@ def create_visit_request(code: str):
             message='در حال حاضر امکان ثبت بازدید جدید برای این فایل وجود ندارد.',
             category='error',
         )
+
+    if partner_visit_completed(visit_requests, me_phone, str(code)):
+        tx_revisit = _partner_land_tx_payload(
+            code,
+            me_phone,
+            is_partner_approved=is_pa,
+            global_assignment_status=current_status,
+        )
+        if not tx_revisit.get('can_revisit'):
+            return _mark_in_transaction_finish(
+                code,
+                success=False,
+                message='تا زمان تأیید ادمین، امکان ثبت بازدید مجدد وجود ندارد.',
+                category='error',
+            )
 
     rec, err = record_visit_request(
         visit_requests,

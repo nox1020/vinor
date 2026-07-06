@@ -17,7 +17,7 @@
       <span class="h-1.5 flex-1 rounded-full
                    {% if state == 'done' %}bg-emerald-500
                    {% elif state == 'current' %}bg-[#a62626]
-                   {% elif state == 'blocked' %}bg-red-900/70
+                   {% elif state == 'blocked' or state == 'rejected' %}bg-red-900/70
                    {% else %}bg-black/10 dark:bg-white/10{% endif %}"
             title="{{ step.label }}"
             aria-label="{{ step.label }}"></span>
@@ -43,10 +43,10 @@
           پس از انجام بازدید و هماهنگی با مشتری، از دکمه پایین صفحه «بازدید انجام شد» را ثبت کنید.
         {% endif %}
       {% elif current_label == 'واریز پورسانت بازدید' %}
-        پورسانت بازدید منتظر تأیید ادمین است؛ می‌توانید بازدید مجدد ثبت کنید یا پس از تأیید، درخواست معامله بزنید.
+        پورسانت بازدید منتظر تأیید ادمین است؛ پس از تأیید می‌توانید درخواست معامله ثبت کنید.
       {% elif current_label == 'درخواست معامله' %}
         برای ادامه مسیر، از دکمه پایین صفحه درخواست معامله را ثبت کنید.
-        {% if land._can_revisit %}
+        {% if land._can_revisit and land._tx_button_mode|default('') == 'deal' %}
         <span class="mt-1 block text-[10px] text-emerald-600 dark:text-emerald-400">
           یا با «بازدید مجدد» تاریخ بازدید بعدی را ثبت کنید.
         </span>
@@ -57,6 +57,8 @@
         پس از تأیید ادمین، پورسانت معامله به کیف پول شما اضافه می‌شود و از بخش مالی قابل برداشت است.
       {% elif current_label == 'تکمیل شد' %}
         مسیر این فایل کامل شده است.
+      {% elif current_label == 'رد شده' or visit_status == 'cancelled' %}
+        آخرین درخواست بازدید رد یا لغو شده است. می‌توانید درخواست جدید ثبت کنید.
       {% else %}
         ادامه مسیر را طبق مرحله نمایش‌داده‌شده پیگیری کنید.
       {% endif %}

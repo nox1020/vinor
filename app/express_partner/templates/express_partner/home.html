@@ -28,7 +28,7 @@
     {% if not me_phone %}
     <section class="vn-home-guest" aria-label="ورود">
       <p class="vn-home-guest__title">داشبورد همکاری وینور</p>
-      <p class="vn-home-guest__sub">اقدامات فوری، آمار روزانه و فایل‌های پیشنهادی را بعد از ورود ببینید</p>
+      <p class="vn-home-guest__sub">اقدامات فوری و فایل‌های پیشنهادی را بعد از ورود ببینید</p>
       <div class="vn-home-guest__actions">
         <a href="{{ url_for('express_partner.login', next=url_for('express_partner.home')) }}"
            data-vinor-express-nav
@@ -79,30 +79,6 @@
       </section>
       {% endif %}
 
-      <section aria-label="خلاصه عملکرد">
-        <div class="vn-home-section-head">
-          <h2 class="vn-home-section-head__title">خلاصه عملکرد</h2>
-        </div>
-        <div class="vn-home-stats-bar">
-          <div class="vn-home-stats-bar__cell">
-            <span class="vn-home-stats-bar__label">درآمد امروز</span>
-            <span class="vn-home-stats-bar__value">{{ (stats.today_income or 0)|toman }}</span>
-          </div>
-          <div class="vn-home-stats-bar__cell">
-            <span class="vn-home-stats-bar__label">درآمد ماه</span>
-            <span class="vn-home-stats-bar__value">{{ (stats.month_income or 0)|toman }}</span>
-          </div>
-          <div class="vn-home-stats-bar__cell">
-            <span class="vn-home-stats-bar__label">بازدید امروز</span>
-            <span class="vn-home-stats-bar__value">{{ (stats.today_visits or 0)|fa_digits }}</span>
-          </div>
-          <div class="vn-home-stats-bar__cell">
-            <span class="vn-home-stats-bar__label">فروش ماه</span>
-            <span class="vn-home-stats-bar__value">{{ (stats.month_sales or 0)|fa_digits }}</span>
-          </div>
-        </div>
-      </section>
-
       {% if suggested_files %}
       <section aria-label="فایل‌های پیشنهادی امروز">
         <div class="vn-home-section-head">
@@ -139,45 +115,6 @@
         {% endfor %}
       </section>
       {% endif %}
-
-      {% if follow_up_requests %}
-      <section aria-label="درخواست‌های من">
-        <div class="vn-home-section-head">
-          <h2 class="vn-home-section-head__title">درخواست‌های من</h2>
-          <a href="{{ url_for('express_partner.requests') }}"
-             data-vinor-express-nav
-             class="vn-home-section-head__link">مشاهده همه</a>
-        </div>
-        {% for req in follow_up_requests %}
-        <a href="{{ req.detail_url }}"
-           data-vinor-express-nav
-           class="vn-home-request-row">
-          <span class="vn-home-request-row__badge">{{ req.status_label }}</span>
-          <div class="vn-home-request-row__title">{{ req.land_title }}</div>
-          {% if req.visit_date_jalali %}
-          <div class="vn-home-request-row__meta">تاریخ بازدید: {{ req.visit_date_jalali }}</div>
-          {% endif %}
-        </a>
-        {% endfor %}
-      </section>
-      {% endif %}
-
-      <section aria-label="موجودی">
-        <div class="vn-home-section-head">
-          <h2 class="vn-home-section-head__title">موجودی</h2>
-        </div>
-        <div class="vn-home-balance-block">
-          <p class="vn-home-balance-block__label">موجودی قابل برداشت</p>
-          <p class="vn-home-balance-block__amount">{{ (balance.withdrawable_balance or 0)|toman }}</p>
-          <div class="vn-home-balance-block__actions">
-            <a href="{{ url_for('express_partner.commissions') }}"
-               data-vinor-express-nav
-               class="vn-home-balance-btn">
-              درخواست برداشت
-            </a>
-          </div>
-        </div>
-      </section>
 
     </div>
     {% endif %}
