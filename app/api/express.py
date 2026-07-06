@@ -395,11 +395,10 @@ def get_menu():
         
         # منوی پرتال — کیف پول برای همهٔ کاربران لاگین‌شده (کاربر عادی: صفحهٔ دعوت همکاری)
         partner_menu = [
-            {'key': 'dashboard', 'endpoint': 'express_partner.dashboard', 'icon': 'fa-home', 'label': 'وینور'},
-            {'key': 'favorites', 'endpoint': 'express_partner.favorites', 'icon': 'fa-bookmark', 'label': 'نشان‌ها', 'disabled': not is_logged_in},
+            {'key': 'home', 'endpoint': 'express_partner.home', 'icon': 'fa-gauge-high', 'label': 'داشبورد'},
+            {'key': 'files', 'endpoint': 'express_partner.files', 'icon': 'fa-folder-open', 'label': 'فایل‌ها'},
             {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not is_logged_in},
-            {'key': 'notifications', 'endpoint': 'express_partner.notifications', 'icon': 'fa-bell', 'label': 'اعلان‌ها', 'disabled': not is_logged_in},
-            {'key': 'profile', 'endpoint': 'express_partner.profile', 'icon': 'fa-user', 'label': 'من'},
+            {'key': 'profile', 'endpoint': 'express_partner.profile', 'icon': 'fa-user', 'label': 'پروفایل'},
         ]
         
         # همیشه منوی همکار را نمایش بده (در هر دو حالت وارد شده و وارد نشده)
@@ -436,11 +435,10 @@ def get_menu():
         return jsonify({
             'success': True,
             'menu': [
-                {'key': 'dashboard', 'url': '/express/partner/dashboard', 'icon': 'fa-home', 'label': 'وینور'},
-                {'key': 'favorites', 'url': '/express/partner/favorites', 'icon': 'fa-bookmark', 'label': 'نشان‌ها', 'disabled': True},
+                {'key': 'home', 'url': '/express/partner/home', 'icon': 'fa-gauge-high', 'label': 'داشبورد'},
+                {'key': 'files', 'url': '/express/partner/files', 'icon': 'fa-folder-open', 'label': 'فایل‌ها'},
                 {'key': 'commissions', 'url': '/express/partner/commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': True},
-                {'key': 'notifications', 'url': '/express/partner/notifications', 'icon': 'fa-bell', 'label': 'اعلان‌ها', 'disabled': True},
-                {'key': 'profile', 'url': '/express/partner/profile', 'icon': 'fa-user', 'label': 'من'},
+                {'key': 'profile', 'url': '/express/partner/profile', 'icon': 'fa-user', 'label': 'پروفایل'},
             ],
             'is_logged_in': False,
             'is_express_partner': False

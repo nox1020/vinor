@@ -5,6 +5,28 @@
     text-decoration: none;
     color: inherit;
   }
+  .profile-menu-badge {
+    position: absolute;
+    top: -0.15rem;
+    inset-inline-end: -0.2rem;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.3rem;
+    border-radius: 9999px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1.1rem;
+    text-align: center;
+    box-shadow: 0 0 0 2px #030712;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .profile-menu-badge.is-visible {
+    display: inline-flex;
+  }
   .profile-identity {
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;

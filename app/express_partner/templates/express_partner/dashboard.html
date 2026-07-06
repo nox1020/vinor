@@ -22,7 +22,7 @@
       {# جستجو + شهر — دو پیل جدا مطابق UI مرجع #}
       <div id="dashboardSearchStrip" class="dashboard-search-strip flex-shrink-0">
       <div class="flex items-center gap-2">
-      <form method="GET" action="{{ url_for('express_partner.dashboard') }}" class="flex-1 min-w-0" id="searchForm">
+      <form method="GET" action="{{ url_for('express_partner.files') }}" class="flex-1 min-w-0" id="searchForm">
         <input type="hidden" name="city" id="cityInputHidden" value="{{ selected_city }}">
         {% if ftag %}<input type="hidden" name="tag" value="{{ request.args.get('tag', '') }}">{% endif %}
         {% if fcat %}<input type="hidden" name="cat" value="{{ fcat }}">{% endif %}
@@ -44,7 +44,7 @@
                    autocomplete="off"
                      class="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm text-gray-900 outline-none dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500">
               {% if request.args.get('q') %}
-              <a href="{{ url_for('express_partner.dashboard', city=city_url, tag=request.args.get('tag') or none, cat=request.args.get('cat') or none) }}"
+              <a href="{{ url_for('express_partner.files', city=city_url, tag=request.args.get('tag') or none, cat=request.args.get('cat') or none) }}"
                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-100"
                  aria-label="پاک کردن جستجو">
                 <i class="fa-solid fa-xmark text-xs" aria-hidden="true"></i>
@@ -325,7 +325,7 @@
       {% include 'express_partner/partials/dashboard_cards_desktop.html' %}
       {% if dashboard_lands_truncated %}
       <div class="mt-4 text-center">
-        <a href="{{ url_for('express_partner.dashboard', all=1, q=request.args.get('q') or none, city=city_url, tag=request.args.get('tag') or none, cat=request.args.get('cat') or none) }}"
+        <a href="{{ url_for('express_partner.files', all=1, q=request.args.get('q') or none, city=city_url, tag=request.args.get('tag') or none, cat=request.args.get('cat') or none) }}"
            class="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-gray-50 dark:border-white/15 dark:bg-white/5 dark:text-emerald-300 dark:hover:bg-white/10">
           نمایش همه فایل‌ها ({{ lands_total_count|default(assigned_lands|length) }})
         </a>
@@ -535,7 +535,7 @@
   function isDashboardPath() {
     try {
       var p = (window.location.pathname || '').replace(/\/+$/, '') || '/';
-      return p === '/express/partner/dashboard';
+      return p === '/express/partner/files';
     } catch (_) {
       return false;
     }

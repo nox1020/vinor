@@ -27,7 +27,7 @@
   function isDashboardPage() {
     try {
       var p = (window.location.pathname || '').replace(/\/+$/, '') || '/';
-      return p === '/express/partner/dashboard';
+      return p === '/express/partner/files';
     } catch (_) {
       return false;
     }

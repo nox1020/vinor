@@ -6,7 +6,7 @@
 
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(sticky=true) }}
-  {% call ep_header_row('وضعیت درخواست', url_for('express_partner.dashboard'), back_nav=false, inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+  {% call ep_header_row('وضعیت درخواست', url_for('express_partner.home'), back_nav=false, inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
   {{ ep_header_end() }}
 
   <main id="thanksPageMain" class="partner-page-scroll-pad mx-auto max-w-lg px-4 py-6">
@@ -171,7 +171,7 @@
       </button>
       <p id="thanksStatusHint" class="hidden text-center text-xs text-zinc-500"></p>
 
-      <a href="{{ url_for('express_partner.dashboard') }}"
+      <a href="{{ url_for('express_partner.home') }}"
          data-vinor-express-nav="back"
          class="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#12181f] py-3.5 text-sm font-semibold text-zinc-300 transition hover:bg-white/5">
         <i class="fas fa-home text-sm text-zinc-500" aria-hidden="true"></i>

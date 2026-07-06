@@ -8,7 +8,7 @@
   {% if is_likely_partner|default(false) %}
   <link rel="prefetch" href="{{ url_for('express_partner.commissions') }}" as="document">
   {% else %}
-  <link rel="prefetch" href="{{ url_for('express_partner.dashboard') }}" as="document">
+  <link rel="prefetch" href="{{ url_for('express_partner.home') }}" as="document">
   <link rel="prefetch" href="{{ 'express-partner/dashboard-chrome.js'|static_version }}" as="script">
   <link rel="prefetch" href="{{ 'express-partner/premium-card-media.js'|static_version }}" as="script">
   <link rel="prefetch" href="{{ 'express-partner/dashboard-voice-search.js'|static_version }}" as="script">
@@ -118,7 +118,7 @@
   var passiveSig = sig ? { passive: true, signal: sig } : { passive: true };
 
   var OTP_LEN = 5;
-  var POST_LOGIN_PREFETCH_URL = '{% if is_likely_partner|default(false) %}{{ url_for("express_partner.commissions") }}{% else %}{{ url_for("express_partner.dashboard") }}{% endif %}';
+  var POST_LOGIN_PREFETCH_URL = '{% if is_likely_partner|default(false) %}{{ url_for("express_partner.commissions") }}{% else %}{{ url_for("express_partner.home") }}{% endif %}';
   var LOGIN_BACK_URL = '{{ url_for("express_partner.login", change=1, next=login_next) if login_next else url_for("express_partner.login", change=1) }}';
   var otpInput = document.getElementById('otpInput');
   var clearBtn = document.getElementById('otpClearBtn');

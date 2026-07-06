@@ -22,7 +22,7 @@
             </li>
             <li class="text-gray-400 flex-shrink-0">/</li>
             <li class="flex-shrink-0">
-              <a href="{{ url_for('express_partner.dashboard') }}" class="hover:text-gray-900 dark:hover:text-gray-100 whitespace-nowrap">فایل‌ها</a>
+              <a href="{{ url_for('express_partner.files') }}" class="hover:text-gray-900 dark:hover:text-gray-100 whitespace-nowrap">فایل‌ها</a>
             </li>
             <li class="text-gray-400 flex-shrink-0">/</li>
             <li class="text-gray-900 dark:text-gray-100 min-w-0 flex-1">
@@ -791,7 +791,7 @@
 
     function goToExplore() {
       sessionStorage.removeItem('express_detail_referer');
-      window.location.href = '{{ url_for("express_partner.dashboard") }}';
+      window.location.href = '{{ url_for("express_partner.files") }}';
     }
 
     function openContactModal() {

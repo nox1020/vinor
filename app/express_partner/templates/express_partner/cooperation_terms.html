@@ -6,7 +6,7 @@
 
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(id='cooperationTermsHeader') }}
-  {% call ep_header_row('شرایط همکاری', back_url|default(url_for('express_partner.dashboard')), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+  {% call ep_header_row('شرایط همکاری', back_url|default(url_for('express_partner.home')), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
   {{ ep_header_end() }}
 
   <div class="coop-page partner-page-scroll-pad min-h-[100dvh] bg-[#030712] text-zinc-100"
@@ -104,7 +104,7 @@
   <footer class="coop-actions" aria-label="اقدامات همکاری">
     <div class="mx-auto flex w-full max-w-lg flex-col gap-2">
       {% if is_approved|default(false) %}
-      <a href="{{ url_for('express_partner.dashboard') }}"
+      <a href="{{ url_for('express_partner.home') }}"
          data-vinor-express-nav
          class="coop-btn coop-btn--primary">
         <i class="fas fa-th-large text-xs" aria-hidden="true"></i>
@@ -123,7 +123,7 @@
         <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>
         <span>شروع همکاری</span>
       </a>
-      <a href="{{ url_for('express_partner.dashboard') }}"
+      <a href="{{ url_for('express_partner.home') }}"
          data-vinor-express-nav
          class="coop-btn coop-btn--secondary">
         <i class="fas fa-list text-xs" aria-hidden="true"></i>
@@ -136,7 +136,7 @@
         <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>
         <span>شروع همکاری</span>
       </a>
-      <a href="{{ url_for('express_partner.dashboard') }}"
+      <a href="{{ url_for('express_partner.home') }}"
          data-vinor-express-nav
          class="coop-btn coop-btn--secondary">
         <i class="fas fa-list text-xs" aria-hidden="true"></i>

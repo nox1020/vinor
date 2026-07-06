@@ -20,14 +20,16 @@
 
   /** @type {Record<string, {tab: string, depth: number, bottomNav?: boolean, prefetch?: boolean}>} */
   var ROUTE_REGISTRY = {
-    '/express/partner/dashboard': { tab: 'dashboard', depth: 0, bottomNav: true, prefetch: true },
+    '/express/partner/home': { tab: 'home', depth: 0, bottomNav: true, prefetch: true },
+    '/express/partner/files': { tab: 'files', depth: 0, bottomNav: true, prefetch: true },
+    '/express/partner/dashboard': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
     '/express/partner/commissions': { tab: 'commissions', depth: 0, bottomNav: true, prefetch: true },
     '/express/partner/profile': { tab: 'profile', depth: 0, bottomNav: true, prefetch: true },
     '/express/partner/profile/edit': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
-    '/express/partner/favorites': { tab: 'favorites', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/favorites': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/requests': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/notifications': { tab: 'notifications', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/postchi': { tab: 'notifications', depth: 2, bottomNav: false, prefetch: false },
+    '/express/partner/notifications': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/postchi': { tab: 'profile', depth: 2, bottomNav: false, prefetch: false },
     '/express/partner/help': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/support': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/top-sellers': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -36,7 +38,7 @@
     '/express/partner/routine': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/legal/privacy': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/legal/terms': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/cooperation-terms': { tab: 'dashboard', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/cooperation-terms': { tab: 'files', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/apply': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/thanks': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/commissions/transactions': { tab: 'commissions', depth: 1, bottomNav: true, prefetch: false },
@@ -479,11 +481,10 @@
     try {
       if (!isLoggedInUser()) return;
       var peers = {
-        dashboard: ['/express/partner/favorites', '/express/partner/commissions', '/express/partner/notifications', '/express/partner/profile'],
-        favorites: ['/express/partner/dashboard', '/express/partner/commissions', '/express/partner/notifications', '/express/partner/profile'],
-        commissions: ['/express/partner/dashboard', '/express/partner/favorites', '/express/partner/notifications', '/express/partner/profile'],
-        notifications: ['/express/partner/dashboard', '/express/partner/favorites', '/express/partner/commissions', '/express/partner/profile'],
-        profile: ['/express/partner/dashboard', '/express/partner/favorites', '/express/partner/commissions', '/express/partner/notifications']
+        home: ['/express/partner/files', '/express/partner/commissions', '/express/partner/profile'],
+        files: ['/express/partner/home', '/express/partner/commissions', '/express/partner/profile'],
+        commissions: ['/express/partner/home', '/express/partner/files', '/express/partner/profile'],
+        profile: ['/express/partner/home', '/express/partner/files', '/express/partner/commissions', '/express/partner/favorites', '/express/partner/notifications']
       };
       var list = peers[navKey];
       if (!list || !list.length) return;
@@ -494,7 +495,7 @@
   }
 
   function tabIndexForKey(key) {
-    var order = ['dashboard', 'favorites', 'commissions', 'notifications', 'profile'];
+    var order = ['home', 'files', 'commissions', 'profile'];
     var i = order.indexOf(key);
     return i === -1 ? -1 : i;
   }
@@ -728,7 +729,12 @@
         window.setTimeout(prefetchProfileSubpages, 600);
       }
     }
-    if (navKey === 'dashboard' && currentAuthSegment() === 'guest') {
+    if (navKey === 'home' && currentAuthSegment() === 'guest') {
+      try {
+        prefetchHref(new URL('/express/partner/login', window.location.origin).href);
+      } catch (_) {}
+    }
+    if (navKey === 'files' && currentAuthSegment() === 'guest') {
       try {
         prefetchHref(new URL('/express/partner/login', window.location.origin).href);
       } catch (_) {}
@@ -738,7 +744,7 @@
         prefetchHref(new URL('/express/partner/login', window.location.origin).href);
       } catch (_) {}
     }
-    if (navKey === 'dashboard' && window.__vinorDashboardChrome) {
+    if (navKey === 'files' && window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.setup({ resetScroll: true, expandHeader: true });
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
@@ -784,7 +790,7 @@
         if (window.__vinorCommModalAbort) window.__vinorCommModalAbort.abort();
       } catch (_) {}
     }
-    if (navKey === 'dashboard' && window.__vinorDashboardVoiceSearch) {
+    if (navKey === 'files' && window.__vinorDashboardVoiceSearch) {
       window.__vinorDashboardVoiceSearch.setup();
     } else if (window.__vinorDashboardVoiceSearch && window.__vinorDashboardVoiceSearch.teardown) {
       window.__vinorDashboardVoiceSearch.teardown();
@@ -1590,9 +1596,9 @@
 
   function prefetchMainTabs() {
     try {
-      var paths = ['/express/partner/profile', '/express/partner/commissions'];
+      var paths = ['/express/partner/home', '/express/partner/files', '/express/partner/profile', '/express/partner/commissions'];
       if (isLoggedInUser()) {
-        paths.push('/express/partner/favorites', '/express/partner/notifications', '/express/partner/dashboard');
+        paths.push('/express/partner/favorites', '/express/partner/notifications');
       }
       paths.forEach(function (path) {
         prefetchHref(new URL(path, window.location.origin).href);

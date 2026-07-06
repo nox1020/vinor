@@ -5881,7 +5881,7 @@ def _approve_express_partner(
                 title='تأیید همکاری وینور اکسپرس',
                 body='درخواست شما تأیید شد. اکنون می‌توانید از پنل همکاری استفاده کنید.',
                 ntype='success',
-                action_url=url_for('express_partner.dashboard', _external=True),
+                action_url=url_for('express_partner.home', _external=True),
             )
         except Exception as e:
             current_app.logger.error('Error sending approval notification: %s', e, exc_info=True)

@@ -86,7 +86,7 @@ def inject_vinor_globals():
 
     return {
         "VINOR_IS_LOGGED_IN": bool(session.get("user_id")),
-        "VINOR_HOME_URL": url_for("express_partner.dashboard"),
+        "VINOR_HOME_URL": url_for("express_partner.home"),
         "VINOR_BRAND": "وینور اکسپرس",
         "VINOR_DOMAIN": "vinor.ir",
         "enamad_trust_url": ENAMAD_TRUST_URL,
@@ -116,7 +116,7 @@ def index():
     else:
         q = (request.args.get('q') or '').strip() or None
         city = (request.args.get('city') or '').strip() or None
-        resp = redirect(url_for('express_partner.dashboard', q=q, city=city))
+        resp = redirect(url_for('express_partner.files', q=q, city=city))
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
     resp.headers['Pragma'] = 'no-cache'
     resp.headers['Expires'] = '0'
@@ -146,7 +146,7 @@ def partners():
         if session.get("user_phone"):
             from ..express_partner.routes import _redirect_after_login
             return redirect(_redirect_after_login())
-        return redirect(url_for("express_partner.dashboard"))
+        return redirect(url_for("express_partner.files"))
     
     # ثبت بازدید لندینگ (فقط برای کاربران غیرلاگین و غیرادمین و درخواست‌های مستقیم)
     # اگر referer از admin یا express/partner باشد، tracking نمی‌کنیم
@@ -225,7 +225,7 @@ def start():
     CTA لندینگ → ست‌کردن کوکی «اولین بازدید انجام شد»
     سپس به داشبورد همکار می‌رویم.
     """
-    target = url_for("express_partner.dashboard")
+    target = url_for("express_partner.files")
     resp = make_response(redirect(target))
     resp.set_cookie(FIRST_VISIT_COOKIE, "1", max_age=60 * 60 * 24 * 365, samesite="Lax")
     session.permanent = True
@@ -239,7 +239,7 @@ def express_public_list():
     """
     q = (request.args.get('q', '') or '').strip()
     city = (request.args.get('city', '') or '').strip()
-    target = url_for('express_partner.dashboard', q=q or None, city=city or None)
+    target = url_for('express_partner.files', q=q or None, city=city or None)
     return redirect(target, code=301)
 
 @main_bp.route("/express/<code>", endpoint="express_detail")
@@ -569,15 +569,15 @@ def _legacy_redirect(endpoint: str, **kwargs):
 @main_bp.route("/app")
 @main_bp.route("/app/")
 def legacy_app_shell():
-    return _legacy_redirect("express_partner.dashboard")
+    return _legacy_redirect("express_partner.files")
 
 
 @main_bp.route("/my-lands")
 @main_bp.route("/my-lands/")
 def legacy_my_lands():
     if session.get("user_phone"):
-        return _legacy_redirect("express_partner.dashboard")
-    return _legacy_redirect("express_partner.login", next=url_for("express_partner.dashboard"))
+        return _legacy_redirect("express_partner.files")
+    return _legacy_redirect("express_partner.login", next=url_for("express_partner.files"))
 
 
 @main_bp.route("/settings")
@@ -598,14 +598,14 @@ def legacy_careers_apply():
 @main_bp.route("/consultant/dashboard/")
 def legacy_consultant_dashboard():
     if session.get("user_phone"):
-        return _legacy_redirect("express_partner.dashboard")
-    return _legacy_redirect("express_partner.login", next=url_for("express_partner.dashboard"))
+        return _legacy_redirect("express_partner.files")
+    return _legacy_redirect("express_partner.login", next=url_for("express_partner.files"))
 
 
 @main_bp.route("/express/partner/my-properties")
 @main_bp.route("/express/partner/my-properties/")
 def legacy_partner_my_properties():
     if session.get("user_phone"):
-        return _legacy_redirect("express_partner.dashboard")
-    return _legacy_redirect("express_partner.login", next=url_for("express_partner.dashboard"))
+        return _legacy_redirect("express_partner.files")
+    return _legacy_redirect("express_partner.login", next=url_for("express_partner.files"))
 

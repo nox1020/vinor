@@ -55,7 +55,7 @@
     <div class="space-y-2">
       {% set __logged_in = session.get('user_phone') %}
       {% if VINOR_IS_EXPRESS_PARTNER %}
-        <a href="{{ url_for('express_partner.dashboard') }}"
+        <a href="{{ url_for('express_partner.home') }}"
            class="group flex items-center gap-3 p-3 rounded-xl transition hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-[0.98] require-login"
            data-require-login="1">
           <i class="fas fa-rocket text-lg text-violet-600 dark:text-violet-400"></i>

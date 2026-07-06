@@ -277,14 +277,13 @@
   </a>
   {% endif %}
   <div class="tg-tabbar-pill mx-auto w-full max-w-full px-3 py-1">
-    <div id="bottomNavItems" class="grid grid-cols-5 gap-0 min-h-[52px] w-full items-center">
+    <div id="bottomNavItems" class="grid grid-cols-4 gap-0 min-h-[52px] w-full items-center">
       {% set profile_nav_url = url_for('express_partner.profile') %}
       {% set nav_items = [
-        {'key': 'dashboard', 'endpoint': 'express_partner.dashboard', 'icon': 'fa-home', 'label': 'وینور'},
-        {'key': 'favorites', 'endpoint': 'express_partner.favorites', 'icon': 'fa-bookmark', 'label': 'نشان‌ها', 'disabled': not session.get('user_phone')},
+        {'key': 'home', 'endpoint': 'express_partner.home', 'icon': 'fa-gauge-high', 'label': 'داشبورد'},
+        {'key': 'files', 'endpoint': 'express_partner.files', 'icon': 'fa-folder-open', 'label': 'فایل‌ها'},
         {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not session.get('user_phone')},
-        {'key': 'notifications', 'endpoint': 'express_partner.notifications', 'icon': 'fa-bell', 'label': 'اعلان‌ها', 'disabled': not session.get('user_phone')},
-        {'key': 'profile', 'url': profile_nav_url, 'icon': 'fa-user', 'label': 'من'}
+        {'key': 'profile', 'url': profile_nav_url, 'icon': 'fa-user', 'label': 'پروفایل'}
       ] %}
       {% for item in nav_items %}
         {% set is_active = (bottom_nav_active == item.key) %}
@@ -299,9 +298,7 @@
               <span class="tg-tab-icon flex items-center justify-center">
                 <i class="fas {{ item.icon }}"></i>
               </span>
-              {% if item.key == 'notifications' or item.key == 'favorites' %}
-              <span class="tg-tab-badge" data-role="nav-badge" aria-hidden="true"></span>
-              {% elif item.key == 'profile' %}
+              {% if item.key == 'profile' %}
               <span class="tg-tab-update-dot{% if show_app_update_nav|default(false) %} is-visible{% endif %}" data-role="nav-update-dot" aria-hidden="true"></span>
               {% endif %}
             </span>
@@ -350,7 +347,7 @@
       if (!userLoggedIn) {
         const key = link.getAttribute('data-nav-key') || '';
         const dest = (link.getAttribute('href') || '').trim();
-        if ((key === 'favorites' || key === 'notifications' || key === 'commissions') && dest && dest !== '#') {
+        if (key === 'commissions' && dest && dest !== '#') {
           const loginUrl = '/express/partner/login?next=' + encodeURIComponent(dest);
           if (window.vinorExpressNavigate) {
             window.vinorExpressNavigate(loginUrl, { forward: true });
@@ -374,20 +371,34 @@
   }
 
   function setNavBadge(navKey, count) {
-    const tab = navContainer.querySelector('[data-nav-key="' + navKey + '"]');
-    if (!tab) return;
-    const el = tab.querySelector('[data-role="nav-badge"]');
-    if (!el) return;
     const n = Math.max(0, Number(count) || 0);
-    if (n <= 0) {
-      el.textContent = '';
-      el.classList.remove('is-visible');
-      el.setAttribute('aria-hidden', 'true');
-    } else {
-      el.textContent = formatBadgeCount(n);
-      el.classList.add('is-visible');
-      el.setAttribute('aria-hidden', 'false');
+    const text = n <= 0 ? '' : formatBadgeCount(n);
+    const tab = navContainer.querySelector('[data-nav-key="' + navKey + '"]');
+    if (tab) {
+      const el = tab.querySelector('[data-role="nav-badge"]');
+      if (el) {
+        if (n <= 0) {
+          el.textContent = '';
+          el.classList.remove('is-visible');
+          el.setAttribute('aria-hidden', 'true');
+        } else {
+          el.textContent = text;
+          el.classList.add('is-visible');
+          el.setAttribute('aria-hidden', 'false');
+        }
+      }
     }
+    document.querySelectorAll('[data-profile-badge="' + navKey + '"]').forEach(function (el) {
+      if (n <= 0) {
+        el.textContent = '';
+        el.classList.remove('is-visible');
+        el.setAttribute('aria-hidden', 'true');
+      } else {
+        el.textContent = text;
+        el.classList.add('is-visible');
+        el.setAttribute('aria-hidden', 'false');
+      }
+    });
   }
 
   function setProfileBadge(count) {
@@ -747,7 +758,7 @@
       tab.classList.add('tg-tab-has-update');
       tab.setAttribute('aria-label', 'بروزرسانی اپلیکیشن');
     } else {
-      label.textContent = 'من';
+      label.textContent = 'پروفایل';
       label.classList.remove('tg-tab-label--update');
       if (dot) dot.classList.remove('is-visible');
       tab.removeAttribute('data-update-url');
@@ -908,11 +919,14 @@
     return base + (isActive ? 'tg-tab-active ' : '') + (isDisabled ? 'tg-tab-disabled' : '');
   }
 
-  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v11';
+  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v14';
   const MENU_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 
   const PROFILE_NAV_PATHS = [
     '/express/partner/profile',
+    '/express/partner/favorites',
+    '/express/partner/notifications',
+    '/express/partner/postchi',
     '/express/partner/requests',
     '/express/partner/help',
     '/express/partner/support',
@@ -929,10 +943,9 @@
     try {
       path = (window.location.pathname || '').replace(/\/$/, '') || '';
     } catch (_) {}
-    if (path === '/express/partner/favorites') return 'favorites';
-    if (path === '/express/partner/notifications') return 'notifications';
     if (path.indexOf('/express/partner/commissions') === 0) return 'commissions';
-    if (path === '/express/partner/dashboard' || path === '/express/partner/cooperation-terms') return 'dashboard';
+    if (path === '/express/partner/home' || path === '/express/partner/dashboard') return 'home';
+    if (path === '/express/partner/files' || path === '/express/partner/cooperation-terms') return 'files';
     for (let i = 0; i < PROFILE_NAV_PATHS.length; i++) {
       const base = PROFILE_NAV_PATHS[i];
       if (path === base || path.indexOf(base + '/') === 0) return 'profile';
@@ -947,12 +960,12 @@
 
   function sanitizeMenu(menuItems) {
     return (menuItems || []).filter(function (item) {
-      return item && item.key !== 'routine';
+      return item && item.key !== 'routine' && item.key !== 'favorites' && item.key !== 'notifications';
     });
   }
 
   function menuMatchesSession(menuItems) {
-    const loginKeys = ['favorites', 'notifications', 'commissions'];
+    const loginKeys = ['commissions'];
     return (menuItems || []).every(function (item) {
       if (!item || loginKeys.indexOf(item.key) === -1) return true;
       return userLoggedIn ? item.disabled !== true : item.disabled === true;
@@ -1051,14 +1064,6 @@
       icon.className = `fas ${item.icon || 'fa-circle'}`;
       iconOuter.appendChild(icon);
       iconWrap.appendChild(iconOuter);
-
-      if (item.key === 'notifications' || item.key === 'favorites') {
-        const badge = document.createElement('span');
-        badge.className = 'tg-tab-badge';
-        badge.setAttribute('data-role', 'nav-badge');
-        badge.setAttribute('aria-hidden', 'true');
-        iconWrap.appendChild(badge);
-      }
 
       if (item.key === 'profile') {
         const updateDot = document.createElement('span');

@@ -1,13 +1,16 @@
 {# ردیف منوی پروفایل — الگوی دیوار #}
-{% macro profile_menu_row(href, icon, title, subtitle='', tour='', row_id='', nav=true, download=false, extra_class='') %}
+{% macro profile_menu_row(href, icon, title, subtitle='', tour='', row_id='', nav=true, download=false, extra_class='', badge_key='') %}
 <a href="{{ href }}"
    {% if row_id %}id="{{ row_id }}"{% endif %}
    {% if tour %}data-tour="{{ tour }}"{% endif %}
    {% if nav %}data-vinor-express-nav{% endif %}
    {% if download %}download rel="noopener"{% endif %}
    class="profile-menu-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors active:bg-white/[0.04] hover:bg-white/[0.02] sm:px-6 sm:py-4 {{ extra_class }}">
-  <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 sm:h-12 sm:w-12">
+  <div class="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 sm:h-12 sm:w-12">
     <i class="fas {{ icon }} text-base" aria-hidden="true"></i>
+    {% if badge_key %}
+    <span class="profile-menu-badge" data-profile-badge="{{ badge_key }}" aria-hidden="true"></span>
+    {% endif %}
   </div>
   <div class="min-w-0 flex-1">
     <div class="text-[15px] font-medium leading-tight text-white">{{ title }}</div>

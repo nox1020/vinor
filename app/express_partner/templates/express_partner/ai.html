@@ -4,7 +4,7 @@
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
 
 {{ ep_header_start() }}
-{% call ep_header_row('Vinor AI', url_for('express_partner.dashboard'), back_nav=false) %}
+{% call ep_header_row('Vinor AI', url_for('express_partner.home'), back_nav=false) %}
   <button type="button" id="aiMenuBtn"
           class="ep-partner-header-btn"
           aria-label="منو"

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import json
 import threading
-from datetime import datetime
+from datetime import datetime, date
 from typing import Any, Dict, List
 
 from flask import (
@@ -125,7 +125,7 @@ from .support_tickets import (
     tickets_for_phone,
 )
 from .admin_action_sms import notify_admin_pending_action
-from ..utils.dates import format_iso_date_jalali
+from ..utils.dates import format_iso_date_jalali, parse_datetime_safe
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
 from ..services.sms import (
     send_sms_direct,
@@ -879,7 +879,11 @@ def _is_generic_post_login_next(url: str) -> bool:
     path = _post_login_path_only(url)
     if path in ('/', '/express/partner'):
         return True
-    if path == _post_login_path_only(url_for('express_partner.dashboard')):
+    if path in (
+        _post_login_path_only(url_for('express_partner.home')),
+        _post_login_path_only(url_for('express_partner.files')),
+        _post_login_path_only(url_for('express_partner.home')),
+    ):
         return True
     if path.startswith('/express/partner/login'):
         return True
@@ -897,8 +901,8 @@ def _is_dashboard_refresh_from_self() -> bool:
             return False
         from urllib.parse import urlparse
         ref_path = _post_login_path_only(urlparse(ref).path or '/')
-        dash_path = _post_login_path_only(url_for('express_partner.dashboard'))
-        return ref_path == dash_path
+        files_path = _post_login_path_only(url_for('express_partner.files'))
+        return ref_path == files_path
     except Exception:
         return False
 
@@ -961,7 +965,7 @@ def _default_post_login_url(phone: str) -> str:
     _cache_session_partner_role(is_partner)
     if is_partner:
         return url_for('express_partner.commissions')
-    return url_for('express_partner.dashboard')
+    return url_for('express_partner.home')
 
 
 def _redirect_after_login(phone: str | None = None) -> str:
@@ -1489,7 +1493,7 @@ def partner_root():
     """Legacy /express/partner → داشبورد یا پورسانت بر اساس نقش."""
     if session.get('user_phone'):
         return redirect(_redirect_after_login(), code=302)
-    return redirect(url_for('express_partner.dashboard'), code=302)
+    return redirect(url_for('express_partner.home'), code=302)
 
 
 @express_partner_bp.route('/manifest.webmanifest', methods=['GET'], endpoint='manifest')
@@ -1815,7 +1819,7 @@ def _apply_page_guard(me_phone: str):
     """همکار تأییدشده → داشبورد؛ درخواست فعال → تشکر/دانلود؛ در غیر این صورت فرم."""
     profile = _partner_profile_for_phone(me_phone)
     if _is_partner_approved(profile):
-        return redirect(url_for('express_partner.dashboard'))
+        return redirect(url_for('express_partner.home'))
     if _has_active_application(me_phone):
         return redirect(_post_apply_landing_url(me_phone))
     return None
@@ -2058,7 +2062,7 @@ def apply_thanks():
         )
 
     if _is_partner_approved(_partner_profile_for_phone(me_phone)):
-        return redirect(url_for('express_partner.dashboard'))
+        return redirect(url_for('express_partner.home'))
 
     if _has_active_application(me_phone):
         last_app = _get_my_last_application(me_phone) or {}
@@ -2127,7 +2131,7 @@ def _submit_partner_application(me_phone: str, data: dict):
 
     if _is_partner_approved(_partner_profile_for_phone(me_phone)):
         session.pop('apply_data', None)
-        return redirect(url_for("express_partner.dashboard"))
+        return redirect(url_for("express_partner.home"))
 
     apps = load_express_partner_apps() or []
     new_id = (max([int(x.get("id", 0) or 0) for x in apps if isinstance(x, dict)], default=0) or 0) + 1
@@ -2210,9 +2214,353 @@ def _dashboard_selected_cities():
     return [p.strip() for p in raw.split(',') if p.strip()]
 
 
+HOME_SUGGESTED_FILES_LIMIT = 5
+HOME_FOLLOW_UP_REQUESTS_LIMIT = 4
+
+
+def _home_commission_income_stats(commissions: List[Dict[str, Any]]) -> Dict[str, int]:
+    """درآمد امروز/ماه و تعداد فروش ماه جاری."""
+    today = date.today()
+    month_start = today.replace(day=1)
+    today_income = 0
+    month_income = 0
+    month_sales = 0
+    for c in commissions or []:
+        if not isinstance(c, dict):
+            continue
+        st = (c.get('status') or '').strip().lower()
+        if st not in ('approved', 'paid'):
+            continue
+        amt = int(c.get('commission_amount') or 0)
+        dt = parse_datetime_safe(c.get('approved_at') or c.get('created_at') or '')
+        d = dt.date()
+        if d == today:
+            today_income += amt
+        if d >= month_start:
+            month_income += amt
+        if commission_is_deal(c) and d >= month_start:
+            month_sales += 1
+    return {
+        'today_income': today_income,
+        'month_income': month_income,
+        'month_sales': month_sales,
+    }
+
+
+def _home_today_visit_count(visit_rows: List[Dict[str, Any]], phone: str) -> int:
+    ph = (phone or '').strip()
+    if not ph:
+        return 0
+    today_iso = date.today().isoformat()
+    count = 0
+    for row in visit_rows or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get('partner_phone') or '').strip() != ph:
+            continue
+        vd = str(row.get('visit_date') or '').strip()
+        st = str(row.get('status') or PENDING_STATUS).strip()
+        if vd == today_iso and st in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS):
+            count += 1
+    return count
+
+
+def _home_urgent_actions(
+    phone: str,
+    *,
+    assigned_lands: List[Dict[str, Any]],
+    visit_rows: List[Dict[str, Any]],
+    withdrawable_balance: int,
+    follow_up_count: int,
+) -> List[Dict[str, Any]]:
+    ph = (phone or '').strip()
+    if not ph:
+        return []
+    today_iso = date.today().isoformat()
+    actions: List[Dict[str, Any]] = []
+
+    for land in assigned_lands or []:
+        if str(land.get('_assignment_status') or '').strip().lower() == 'in_transaction':
+            code = str(land.get('code') or '').strip()
+            if not code:
+                continue
+            actions.append({
+                'key': 'contact_customer',
+                'icon': 'fa-phone',
+                'title': 'تماس با مشتری',
+                'subtitle': (land.get('title') or code).strip(),
+                'url': url_for('express_partner.land_detail', code=code),
+                'priority': 100,
+            })
+            break
+
+    for row in visit_rows or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get('partner_phone') or '').strip() != ph:
+            continue
+        st = str(row.get('status') or '').strip()
+        vd = str(row.get('visit_date') or '').strip()
+        code = str(row.get('land_code') or '').strip()
+        if st == APPROVED_STATUS and vd == today_iso and code:
+            actions.append({
+                'key': 'visit_today',
+                'icon': 'fa-calendar-check',
+                'title': 'بازدید امروز',
+                'subtitle': (row.get('land_title') or code).strip(),
+                'url': url_for('express_partner.land_detail', code=code),
+                'priority': 90,
+            })
+            break
+
+    if follow_up_count > 0:
+        actions.append({
+            'key': 'follow_up',
+            'icon': 'fa-bell',
+            'title': 'درخواست نیازمند پیگیری',
+            'subtitle': f'{follow_up_count} درخواست باز',
+            'url': url_for('express_partner.requests'),
+            'priority': 80,
+        })
+
+    if int(withdrawable_balance or 0) >= int(MIN_WITHDRAWAL_AMOUNT):
+        actions.append({
+            'key': 'withdraw',
+            'icon': 'fa-wallet',
+            'title': 'موجودی قابل برداشت',
+            'subtitle': 'درخواست برداشت ثبت کنید',
+            'url': url_for('express_partner.commissions'),
+            'priority': 70,
+        })
+
+    actions.sort(key=lambda a: int(a.get('priority') or 0), reverse=True)
+    return actions[:4]
+
+
+def _home_score_suggested_land(land: Dict[str, Any], *, now: datetime | None = None) -> float:
+    now = now or datetime.utcnow()
+    score = 0.0
+    comm = int(land.get('_commission_amount') or 0)
+    if comm > 0:
+        score += min(comm / 500_000.0, 60.0)
+    st = str(land.get('_assignment_status') or '').strip().lower()
+    if st == 'in_transaction':
+        score += 45.0
+    created = parse_datetime_safe(land.get('created_at') or '')
+    try:
+        age_days = max(0, (now - created).days)
+    except Exception:
+        age_days = 999
+    if age_days <= 14:
+        score += max(0.0, 35.0 - age_days * 2.0)
+    if st in ('active', 'approved', 'pending') and not land.get('_is_expired'):
+        score += 8.0
+    return score
+
+
+def _home_suggested_files(
+    phone: str,
+    is_approved: bool,
+    *,
+    limit: int = HOME_SUGGESTED_FILES_LIMIT,
+) -> List[Dict[str, Any]]:
+    from ..utils.images import partner_card_image_url
+
+    assigned_lands, _ = _build_partner_dashboard_lands(phone, is_approved)
+    candidates: List[Dict[str, Any]] = []
+    now = datetime.utcnow()
+    for land in assigned_lands or []:
+        if not isinstance(land, dict):
+            continue
+        st = str(land.get('_assignment_status') or '').strip().lower()
+        if st == 'sold' or land.get('_is_expired'):
+            continue
+        code = str(land.get('code') or '').strip()
+        if not code:
+            continue
+        candidates.append({
+            'code': code,
+            'title': (land.get('title') or '—').strip(),
+            'commission_amount': int(land.get('_commission_amount') or 0),
+            'commission_pct': land.get('_commission_pct'),
+            'image_url': partner_card_image_url(land) or None,
+            'detail_url': url_for('express_partner.land_detail', code=code),
+            '_score': _home_score_suggested_land(land, now=now),
+        })
+    candidates.sort(key=lambda x: float(x.get('_score') or 0), reverse=True)
+    out = []
+    for item in candidates[:limit]:
+        row = dict(item)
+        row.pop('_score', None)
+        out.append(row)
+    return out
+
+
+def _home_follow_up_requests(
+    phone: str,
+    visit_rows: List[Dict[str, Any]],
+    commissions: List[Dict[str, Any]],
+    *,
+    limit: int = HOME_FOLLOW_UP_REQUESTS_LIMIT,
+) -> List[Dict[str, Any]]:
+    ph = (phone or '').strip()
+    if not ph:
+        return []
+    follow_statuses = frozenset({APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS})
+    status_labels = {
+        APPROVED_STATUS: 'بازدید تأیید شده — انجام دهید',
+        DONE_PENDING_STATUS: 'در انتظار تأیید انجام بازدید',
+        COMPLETED_STATUS: 'بازدید انجام شد — پیگیری معامله',
+    }
+    items: List[Dict[str, Any]] = []
+    for row in visit_rows or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get('partner_phone') or '').strip() != ph:
+            continue
+        st = str(row.get('status') or PENDING_STATUS).strip()
+        if st not in follow_statuses:
+            continue
+        code = str(row.get('land_code') or '').strip()
+        visit_date = str(row.get('visit_date') or '').strip()
+        items.append({
+            'id': row.get('id') or '',
+            'land_code': code,
+            'land_title': (row.get('land_title') or code or 'فایل اکسپرس').strip(),
+            'status': st,
+            'status_label': status_labels.get(st, st),
+            'visit_date_jalali': format_iso_date_jalali(visit_date) if visit_date else '',
+            'detail_url': url_for('express_partner.land_detail', code=code) if code else url_for('express_partner.requests'),
+            'updated_at': row.get('updated_at') or row.get('created_at') or '',
+        })
+    items.sort(key=lambda i: str(i.get('updated_at') or ''), reverse=True)
+    return items[:limit]
+
+
+def _home_follow_up_count(phone: str, visit_rows: List[Dict[str, Any]]) -> int:
+    ph = (phone or '').strip()
+    if not ph:
+        return 0
+    follow_statuses = frozenset({APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS})
+    return sum(
+        1 for row in (visit_rows or [])
+        if isinstance(row, dict)
+        and str(row.get('partner_phone') or '').strip() == ph
+        and str(row.get('status') or '').strip() in follow_statuses
+    )
+
+
+def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
+    ph = (me_phone or '').strip()
+    is_approved = _is_partner_approved(profile)
+    visit_rows = load_express_visit_requests() or []
+    if not isinstance(visit_rows, list):
+        visit_rows = []
+
+    my_comms = _commissions_for_phone(ph) if ph else []
+    income_stats = _home_commission_income_stats(my_comms) if ph else {
+        'today_income': 0, 'month_income': 0, 'month_sales': 0,
+    }
+    comm_stats = _partner_commission_stats(ph, my_comms) if ph else {}
+    withdrawable = int(comm_stats.get('withdrawable_balance') or 0) if ph else 0
+    follow_up_count = _home_follow_up_count(ph, visit_rows) if ph else 0
+
+    assigned_lands: List[Dict[str, Any]] = []
+    if ph:
+        assigned_lands, _ = _build_partner_dashboard_lands(ph, is_approved)
+
+    urgent_actions = _home_urgent_actions(
+        ph,
+        assigned_lands=assigned_lands,
+        visit_rows=visit_rows,
+        withdrawable_balance=withdrawable,
+        follow_up_count=follow_up_count,
+    ) if ph else []
+
+    suggested_files = _home_suggested_files(ph, is_approved) if ph else []
+    follow_up_requests = (
+        _home_follow_up_requests(ph, visit_rows, my_comms)
+        if ph else []
+    )
+
+    return {
+        'success': True,
+        'is_logged_in': bool(ph),
+        'is_approved': is_approved,
+        'urgent_actions': urgent_actions,
+        'stats': {
+            'today_income': income_stats['today_income'],
+            'month_income': income_stats['month_income'],
+            'today_visits': _home_today_visit_count(visit_rows, ph) if ph else 0,
+            'month_sales': income_stats['month_sales'],
+        },
+        'suggested_files': suggested_files,
+        'follow_up_requests': follow_up_requests,
+        'balance': {
+            'withdrawable_balance': withdrawable,
+            'min_withdrawal_amount': MIN_WITHDRAWAL_AMOUNT,
+            'can_withdraw': withdrawable >= int(MIN_WITHDRAWAL_AMOUNT),
+        },
+    }
+
+
+@express_partner_bp.route('/home', methods=['GET'], endpoint='home')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def home_page():
+    """داشبورد روزانه — مرکز اقدامات و خلاصه عملکرد."""
+    me_phone = (session.get('user_phone') or '').strip()
+    profile = getattr(g, 'express_partner_profile', None)
+    payload = _build_home_dashboard_payload(me_phone, profile)
+    partner_name = _partner_display_name(me_phone) if me_phone else ''
+    resp = make_response(render_template(
+        'express_partner/home.html',
+        profile=profile,
+        me_phone=me_phone,
+        partner_name=partner_name,
+        is_approved=payload.get('is_approved'),
+        urgent_actions=payload.get('urgent_actions') or [],
+        stats=payload.get('stats') or {},
+        suggested_files=payload.get('suggested_files') or [],
+        follow_up_requests=payload.get('follow_up_requests') or [],
+        balance=payload.get('balance') or {},
+        hide_header=True,
+        bottom_nav_active='home',
+        brand='وینور',
+        domain='vinor.ir',
+        seo_title='داشبورد | وینور اکسپرس',
+        seo_description='مرکز مدیریت روزانه همکار — اقدامات فوری، خلاصه عملکرد و فایل‌های پیشنهادی.',
+    ))
+    if not me_phone:
+        resp.headers['Cache-Control'] = 'public, max-age=60, stale-while-revalidate=120'
+    else:
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+    _append_partner_tab_prefetch(resp)
+    return resp
+
+
+@express_partner_bp.get('/home/data', endpoint='home_data')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def home_data():
+    """API JSON داشبورد روزانه."""
+    me_phone = (session.get('user_phone') or '').strip()
+    profile = getattr(g, 'express_partner_profile', None)
+    payload = _build_home_dashboard_payload(me_phone, profile)
+    resp = jsonify(payload)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    resp.headers['Vary'] = 'Cookie'
+    return resp
+
+
 @express_partner_bp.route('/dashboard', methods=['GET'], endpoint='dashboard')
 @require_partner_access(allow_pending=True, allow_guest=True)
-def dashboard():
+def dashboard_redirect():
+    """سازگاری با URL قدیمی — داشبورد جدید در /home"""
+    return redirect(url_for('express_partner.home'), code=302)
+
+
+@express_partner_bp.route('/files', methods=['GET'], endpoint='files')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def files_page():
     me_phone = (session.get("user_phone") or "").strip()
     profile = getattr(g, 'express_partner_profile', None)
 
@@ -2282,9 +2630,9 @@ def dashboard():
     seo_title = "فایل‌های اکسپرس وینور | خرید و فروش ملک و زمین"
     seo_description = f"لیست فایل‌های اکسپرس وینور. {count} فایل معتبر برای خرید و فروش ملک، زمین، ویلا و آپارتمان. مشاهده قیمت و جزئیات."
     try:
-        canonical_url = url_for('express_partner.dashboard', _external=True)
+        canonical_url = url_for('express_partner.files', _external=True)
         if request.args.get('q') or request.args.get('city'):
-            canonical_url = url_for('express_partner.dashboard', q=request.args.get('q') or None, city=request.args.get('city') or None, _external=True)
+            canonical_url = url_for('express_partner.files', q=request.args.get('q') or None, city=request.args.get('city') or None, _external=True)
     except Exception:
         canonical_url = ''
     from flask import make_response
@@ -2314,6 +2662,7 @@ def dashboard():
         seo_title=seo_title,
         seo_description=seo_description,
         canonical_url=canonical_url,
+        bottom_nav_active='files',
     ))
     # برای کاربران مهمان: کش عمومی کوتاه برای سئو و سرعت
     if not me_phone and not profile:
@@ -3284,7 +3633,7 @@ def add_sale():
     amount = (request.form.get("amount") or "").strip()
     note = (request.form.get("note") or "").strip()
     if not title:
-        return redirect(url_for("express_partner.dashboard"))
+        return redirect(url_for("express_partner.home"))
     items = load_partner_sales() or []
     new_id = (max([int(x.get('id',0) or 0) for x in items if isinstance(x, dict)], default=0) or 0) + 1
     try:
@@ -3300,7 +3649,7 @@ def add_sale():
         "created_at": datetime.utcnow().isoformat()+"Z"
     })
     save_partner_sales(items)
-    return redirect(url_for("express_partner.dashboard"))
+    return redirect(url_for("express_partner.home"))
 
 
 @express_partner_bp.post('/files/upload')
@@ -3309,7 +3658,7 @@ def upload_file():
     me_phone = (session.get("user_phone") or "").strip()
     f = request.files.get('file')
     if not f or not f.filename:
-        return redirect(url_for("express_partner.dashboard"))
+        return redirect(url_for("express_partner.home"))
     base = os.path.join(current_app.instance_path, 'data', 'uploads', 'partner', me_phone)
     os.makedirs(base, exist_ok=True)
     tsname = datetime.utcnow().strftime('%Y%m%d%H%M%S%f') + "__" + f.filename
@@ -3320,7 +3669,7 @@ def upload_file():
     new_id = (max([int(x.get('id',0) or 0) for x in metas if isinstance(x, dict)], default=0) or 0) + 1
     metas.append({"id": new_id, "phone": me_phone, "filename": safe_name, "stored_at": datetime.utcnow().isoformat()+"Z"})
     save_partner_files_meta(metas)
-    return redirect(url_for("express_partner.dashboard"))
+    return redirect(url_for("express_partner.home"))
 
 
 @express_partner_bp.get('/files/<int:fid>/download')
@@ -3705,7 +4054,7 @@ def legal_terms():
     return render_template('express_partner/legal/terms.html', hide_header=True)
 
 
-def _redirect_login_next(fallback_endpoint: str = 'express_partner.dashboard'):
+def _redirect_login_next(fallback_endpoint: str = 'express_partner.home'):
     """هدایت امن بعد از ورود؛ فقط مسیر نسبی داخلی."""
     nxt = session.pop('next', None)
     if isinstance(nxt, str):
@@ -3734,7 +4083,7 @@ def cooperation_terms():
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile) if me_phone else False
     next_url = (request.args.get('next') or '').strip()
-    back_url = url_for('express_partner.dashboard')
+    back_url = url_for('express_partner.home')
     if next_url.startswith('/express/partner'):
         back_url = next_url
     return render_template(
@@ -4133,7 +4482,7 @@ def _mark_in_transaction_finish(
         if redirect_url:
             return redirect(redirect_url)
         return redirect(url_for('express_partner.land_detail', code=code))
-    return redirect(url_for('express_partner.dashboard'))
+    return redirect(url_for('express_partner.home'))
 
 
 def _express_land_in_catalog(code: str) -> bool:
@@ -5543,7 +5892,7 @@ def delete_file(fid: int):
                 os.remove(fp)
         except Exception:
             pass
-    return redirect(url_for("express_partner.dashboard"))
+    return redirect(url_for("express_partner.home"))
 
 
 @express_partner_bp.post('/sales/<int:sid>/update')
@@ -5566,7 +5915,7 @@ def update_sale(sid: int):
         except Exception:
             continue
     save_partner_sales(items)
-    return redirect(url_for("express_partner.dashboard"))
+    return redirect(url_for("express_partner.home"))
 
 
 @express_partner_bp.post('/sales/<int:sid>/delete')
@@ -5576,7 +5925,7 @@ def delete_sale(sid: int):
     items = load_partner_sales() or []
     items = [s for s in items if not (int(s.get('id',0) or 0) == int(sid) and str(s.get('phone')) == me_phone)]
     save_partner_sales(items)
-    return redirect(url_for("express_partner.dashboard"))
+    return redirect(url_for("express_partner.home"))
 
 
 @express_partner_bp.get('/notifications', endpoint='notifications')
@@ -5868,7 +6217,7 @@ def land_detail(code: str):
 
     if not land:
         flash('این آگهی اکسپرس پیدا نشد یا دیگر در دسترس نیست.', 'warning')
-        return redirect(url_for('express_partner.dashboard'))
+        return redirect(url_for('express_partner.home'))
 
     # ثبت بازدید فایل اکسپرس از سمت همکار (هر IP در هر روز فقط یک بازدید)
     try:

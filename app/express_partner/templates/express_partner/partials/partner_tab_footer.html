@@ -3,14 +3,14 @@
    برای حالت‌های خاص (ورود، آموزش، …) قبل از include همان متغیر را ست کنید. #}
 {% if bottom_nav_active is not defined %}
   {% set ep = request.endpoint or '' %}
-  {% if ep in ('express_partner.dashboard', 'express_partner.dashboard_data', 'express_partner.cooperation_terms') %}
-    {% set bottom_nav_active = 'dashboard' %}
+  {% if ep in ('express_partner.home', 'express_partner.home_data') %}
+    {% set bottom_nav_active = 'home' %}
+  {% elif ep in ('express_partner.files', 'express_partner.dashboard', 'express_partner.dashboard_data', 'express_partner.cooperation_terms') %}
+    {% set bottom_nav_active = 'files' %}
   {% elif ep in ('express_partner.commissions', 'express_partner.commissions_data', 'express_partner.commissions_transactions', 'express_partner.commissions_summary') %}
     {% set bottom_nav_active = 'commissions' %}
-  {% elif ep in ('express_partner.favorites', 'express_partner.api_favorites_cards') %}
-    {% set bottom_nav_active = 'favorites' %}
-  {% elif ep in ('express_partner.notifications', 'express_partner.get_notifications', 'express_partner.get_unread_count', 'express_partner.mark_notification_read', 'express_partner.mark_all_notifications_read', 'express_partner.notifications_debug') %}
-    {% set bottom_nav_active = 'notifications' %}
+  {% elif ep in ('express_partner.favorites', 'express_partner.api_favorites_cards', 'express_partner.notifications', 'express_partner.get_notifications', 'express_partner.get_unread_count', 'express_partner.mark_notification_read', 'express_partner.mark_all_notifications_read', 'express_partner.notifications_debug', 'express_partner.postchi') %}
+    {% set bottom_nav_active = 'profile' %}
   {% elif ep and (
     ep.startswith('express_partner.profile')
     or ep.startswith('express_partner.routine')

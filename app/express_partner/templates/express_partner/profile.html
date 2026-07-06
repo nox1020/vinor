@@ -14,7 +14,7 @@
   {% from 'express_partner/partials/profile_macros.html' import profile_menu_row %}
 
   {{ ep_header_start(id='profileExpressHeader') }}
-  {% call ep_header_row('پروفایل', url_for('express_partner.dashboard'), inner_class='max-w-lg mx-auto w-full') %}
+  {% call ep_header_row('پروفایل', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}
     {% include 'express_partner/partials/support_header_button.html' %}
   {% endcall %}
   {{ ep_header_end() }}
@@ -120,6 +120,8 @@
         {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری', 'برای تبدیل به همکار اکسپرس درخواست دهید', tour='apply-link') }}
         {% endif %}
 
+        {{ profile_menu_row(url_for('express_partner.favorites'), 'fa-bookmark', 'نشان‌ها', 'زمین‌های ذخیره‌شده', tour='favorites-link', badge_key='favorites') }}
+        {{ profile_menu_row(url_for('express_partner.notifications'), 'fa-bell', 'اعلان‌ها', 'پیام‌ها و وضعیت همکاری', tour='notifications-link', badge_key='notifications') }}
         {{ profile_menu_row(url_for('express_partner.requests'), 'fa-clipboard-list', 'درخواست‌ها', 'وضعیت درخواست‌های بازدید', tour='requests-link') }}
         {{ profile_menu_row(url_for('express_partner.routine'), 'fa-list-check', 'آمار فعالیت شما', 'روتین روزانه و تقویم پیشرفت' if is_approved else 'پیش‌نمایش روتین همکاری', tour='routine-link') }}
 

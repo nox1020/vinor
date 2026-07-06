@@ -34,7 +34,7 @@
 
   <div class="mt-4 grid gap-3">
     {% if partner_status == 'approved' %}
-      <a href="{{ url_for('express_partner.dashboard') }}" class="block text-center px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">
+      <a href="{{ url_for('express_partner.home') }}" class="block text-center px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">
         ورود به پنل همکاران
       </a>
     {% elif partner_status == 'pending' %}
