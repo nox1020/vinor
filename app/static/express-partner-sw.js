@@ -4,14 +4,15 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.59-apk-cache-tier';
+const VERSION = 'v1.0.60-image-offline';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
 const ICONS_CACHE = `express-partner-icons-${VERSION}`;
+const IMAGE_CACHE = `express-partner-images-${VERSION}`;
 
 /** کش کردن پاسخ navigate برای HTML باعث می‌شود پس از خروج، PWA همان صفحهٔ لاگین‌شدهٔ قبلی را نشان دهد. */
-const KEEP_CACHE_NAMES = new Set([PRECACHE, RUNTIME, API_CACHE, ICONS_CACHE]);
+const KEEP_CACHE_NAMES = new Set([PRECACHE, RUNTIME, API_CACHE, ICONS_CACHE, IMAGE_CACHE]);
 
 // تابع برای محدود کردن اندازه cache
 async function trimCache(name, maxEntries) {
@@ -131,6 +132,22 @@ function isStaticAsset(request) {
   return url.pathname.startsWith('/static/');
 }
 
+function isUploadAsset(request) {
+  const url = new URL(request.url);
+  if (!isSameOrigin(url.href)) return false;
+  return url.pathname.startsWith('/uploads/');
+}
+
+function isLikelyImageRequest(request) {
+  const url = new URL(request.url);
+  if (!isSameOrigin(url.href)) return false;
+  if (url.pathname.startsWith('/uploads/')) return true;
+  if (url.pathname.startsWith('/static/')) {
+    return /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(url.pathname);
+  }
+  return /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(url.pathname);
+}
+
 /** JS پنل همکار — network-first تا پس از deploy نسخهٔ کهنه cache-first برنگردد */
 function isExpressPartnerScript(pathname) {
   return pathname.startsWith('/static/express-partner/') && pathname.endsWith('.js');
@@ -244,7 +261,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // فقط Express Partner routes را handle کن
-  if (!isExpressPartnerRoute(url) && !isExpressPartnerAPI(request) && !isStaticAsset(request)) {
+  if (!isExpressPartnerRoute(url) && !isExpressPartnerAPI(request) && !isStaticAsset(request) && !isUploadAsset(request) && !isLikelyImageRequest(request)) {
     return; // بگذار browser آن را handle کند
   }
 
@@ -340,6 +357,36 @@ self.addEventListener('fetch', (event) => {
         return resp;
       } catch (_) {
         return new Response('Offline', { status: 503 });
+      }
+    })());
+    return;
+  }
+
+  // Uploaded/property images: cache-first with no-query fallback for offline stability
+  if (isLikelyImageRequest(request)) {
+    event.respondWith((async () => {
+      const cache = await caches.open(IMAGE_CACHE);
+      const cached = await cache.match(request);
+      if (cached) {
+        fetch(request).then(async (resp) => {
+          if (resp && resp.ok) {
+            await cache.put(request, resp.clone());
+            await trimCache(IMAGE_CACHE, 220);
+          }
+        }).catch(() => {});
+        return cached;
+      }
+      try {
+        const resp = await fetch(request);
+        if (resp && resp.ok) {
+          await cache.put(request, resp.clone());
+          await trimCache(IMAGE_CACHE, 220);
+        }
+        return resp;
+      } catch (_) {
+        const noQuery = await cache.match(request, { ignoreSearch: true });
+        if (noQuery) return noQuery;
+        return new Response('', { status: 503 });
       }
     })());
     return;
@@ -475,6 +522,7 @@ self.addEventListener('message', (event) => {
           try {
             await caches.delete(RUNTIME);
             await caches.delete(API_CACHE);
+            await caches.delete(IMAGE_CACHE);
           } catch (_) {}
         })());
         break;
