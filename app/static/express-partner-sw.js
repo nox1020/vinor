@@ -71,10 +71,17 @@ const LOCAL_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(PRECACHE);
-    try {
-      await cache.addAll(PRECACHE_URLS.concat(LOCAL_ASSETS).map((u) => new Request(u, { credentials: 'same-origin' })));
-    } catch (err) {
-      console.error('Express Partner SW: Cache install error', err);
+    const urls = PRECACHE_URLS.concat(LOCAL_ASSETS);
+    for (const u of urls) {
+      try {
+        const req = new Request(u, { credentials: 'same-origin' });
+        const resp = await fetch(req);
+        if (resp && resp.ok) {
+          await cache.put(req, resp.clone());
+        }
+      } catch (err) {
+        console.warn('Express Partner SW: install cache miss', u, err);
+      }
     }
     await self.skipWaiting();
   })());
@@ -201,13 +208,17 @@ function shouldCachePartnerApi(request, response) {
   return true;
 }
 
-async function cacheApkNavigation(request, response) {
-  if (!isVinorApkRequest(request) || !response || !response.ok) return;
+async function cachePartnerNavigation(request, response) {
+  if (!response || !response.ok) return;
   const url = new URL(request.url);
   if (isAuthPartnerPath(url.pathname)) return;
+  if (!isExpressPartnerRoute(url)) return;
   const ct = (response.headers.get('content-type') || '').toLowerCase();
   if (!ct.includes('text/html')) return;
-  /* APK: HTML پنل no-store است — runtime برای آفلاین؛ logout همه را پاک می‌کند */
+  /*
+    HTML پنل no-store است، اما برای آفلاینِ «صفحاتی که قبلاً دیده شده‌اند»
+    نسخهٔ runtime را نگه می‌داریم. در logout کش‌های partner پاک می‌شوند.
+  */
   try {
     const cache = await caches.open(RUNTIME);
     await cache.put(request, response.clone());
@@ -285,7 +296,7 @@ self.addEventListener('fetch', (event) => {
       try {
         const resp = await fetch(request);
         if (!isAjaxRequest) {
-          await cacheApkNavigation(request, resp);
+          await cachePartnerNavigation(request, resp);
         }
         return resp;
       } catch (_) {

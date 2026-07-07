@@ -205,7 +205,7 @@
     async function checkForUpdate(){
       if (!('serviceWorker' in navigator)) return;
       try {
-        const reg = await navigator.serviceWorker.getRegistration('/');
+        const reg = await navigator.serviceWorker.getRegistration('/express/partner/');
         if (!reg) return;
         await reg.update();
         // If a waiting worker exists, show badge
@@ -242,7 +242,7 @@
         const span = updateAppBtn.querySelector('span');
         if (span) span.textContent = 'در حال بررسی بروزرسانی...';
 
-        const reg = await navigator.serviceWorker.getRegistration('/');
+        const reg = await navigator.serviceWorker.getRegistration('/express/partner/');
         if (!reg) throw new Error('no-registration');
         await reg.update();
 

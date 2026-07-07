@@ -22,18 +22,11 @@ async function trimCache(name, maxEntries) {
 // URLs to precache at install
 const OFFLINE_URL = '/static/offline.html';
 const PRECACHE_URLS = [
-  '/admin/',
   '/admin/login',
   '/admin/select',
-  '/admin/express/partners',
-  '/admin/express/applications',
-  '/admin/express/assignments',
-  '/admin/express/commissions',
-  '/admin/express/listings',
-  '/admin/express/add',
-  '/admin/users',
-  '/admin/lands',
-  '/admin/settings',
+  '/admin/sw.js',
+  '/admin/manifest.webmanifest',
+  OFFLINE_URL,
 ];
 
 const EXTERNAL_WARM = [
@@ -45,9 +38,13 @@ const EXTERNAL_WARM = [
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(PRECACHE);
-    try { 
-      await cache.addAll(PRECACHE_URLS.map((u) => new Request(u, { credentials: 'same-origin' }))); 
-    } catch(_) {}
+    for (const u of PRECACHE_URLS) {
+      try {
+        const req = new Request(u, { credentials: 'same-origin' });
+        const resp = await fetch(req);
+        if (resp && resp.ok) await cache.put(req, resp.clone());
+      } catch(_) {}
+    }
     // Best-effort: prewarm external CSS/fonts
     try {
       await Promise.all(EXTERNAL_WARM.map(async (url) => {
@@ -91,6 +88,20 @@ function isAdminPath(request) {
   }
 }
 
+function shouldCacheAdminHtml(request, response) {
+  if (!response || !response.ok) return false;
+  const url = new URL(request.url);
+  const path = url.pathname || '';
+  const cc = (response.headers.get('cache-control') || '').toLowerCase();
+  const vary = (response.headers.get('vary') || '').toLowerCase();
+  const ct = (response.headers.get('content-type') || '').toLowerCase();
+  if (!ct.includes('text/html')) return false;
+  if (cc.includes('no-store') || cc.includes('private')) return false;
+  if (vary.includes('cookie')) return false;
+  if (path === '/admin/login' || path === '/admin/logout') return false;
+  return true;
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -106,7 +117,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
       try {
         const networkResponse = await fetch(request);
-        if (networkResponse && networkResponse.ok) {
+        if (shouldCacheAdminHtml(request, networkResponse)) {
           const cache = await caches.open(RUNTIME);
           cache.put(request, networkResponse.clone());
         }

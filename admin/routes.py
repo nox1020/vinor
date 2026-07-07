@@ -1074,7 +1074,11 @@ def admin_manifest():
     manifest_path = os.path.join(static_dir, 'admin-manifest.webmanifest')
     
     if os.path.exists(manifest_path):
-        return send_from_directory(static_dir, 'admin-manifest.webmanifest', mimetype='application/manifest+json')
+        resp = send_from_directory(static_dir, 'admin-manifest.webmanifest', mimetype='application/manifest+json')
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        return resp
     
     # Fallback
     fallback = {
@@ -1094,7 +1098,11 @@ def admin_manifest():
             { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
         ]
     }
-    return Response(json.dumps(fallback, ensure_ascii=False), mimetype='application/manifest+json')
+    resp = Response(json.dumps(fallback, ensure_ascii=False), mimetype='application/manifest+json')
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
 
 @admin_bp.route('/sw.js')
 def admin_service_worker():
@@ -1106,7 +1114,11 @@ def admin_service_worker():
     sw_path = os.path.join(static_dir, 'admin-sw.js')
     
     if os.path.exists(sw_path):
-        return send_from_directory(static_dir, 'admin-sw.js', mimetype='application/javascript')
+        resp = send_from_directory(static_dir, 'admin-sw.js', mimetype='application/javascript')
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        return resp
     
     return ('// Admin Service Worker not found', 404)
 
