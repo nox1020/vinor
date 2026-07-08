@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""پیامک اطلاع‌رسانی تراکنش‌های پورسانت/برداشت به همکار."""
+"""پیامک تراکنش کیف‌پول — فقط + (ورود پول) و − (خروج پول)."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,16 +11,10 @@ from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran
 from ..utils.storage import load_settings, load_sms_history, save_sms_history
 from app.services.sms_config import get_sms_line_number
 
+# فقط تغییر واقعی موجودی کیف‌پول
 PARTNER_TXN_EVENTS = frozenset({
-    "commission_pending",
-    "commission_approved",
-    "commission_paid",
-    "commission_rejected",
-    "withdrawal_requested",
-    "withdrawal_cancelled",
-    "withdrawal_approved",
-    "withdrawal_rejected",
-    "withdrawal_paid",
+    "commission_approved",  # +
+    "withdrawal_paid",      # −
 })
 
 
@@ -40,12 +34,8 @@ def _txn_title(*, commission_type: str = "", land_code: str = "") -> str:
     if ct == "referral" or code == "referral":
         return "پورسانت دعوت"
     if "visit" in ct:
-        if code:
-            return f"پورسانت بازدید (کد ملک: {code})"
         return "پورسانت بازدید"
-    if code:
-        return f"پورسانت فروش (کد ملک: {code})"
-    return "پورسانت"
+    return "پورسانت فروش"
 
 
 def _append_sms_history(entry: dict) -> None:
@@ -62,83 +52,24 @@ def _append_sms_history(entry: dict) -> None:
 
 
 def _build_message(event: str, ctx: Dict[str, Any]) -> str:
+    """الگوی یکسان: وینور + یک خط خبر + مبلغ."""
     amt = _format_toman(ctx.get("amount"))
     title = (ctx.get("title") or "").strip() or _txn_title(
         commission_type=str(ctx.get("commission_type") or ""),
         land_code=str(ctx.get("land_code") or ""),
     )
+    code = str(ctx.get("land_code") or "").strip()
+    if code and code != "referral" and code not in title:
+        title = f"{title} · {code}"
     bank = (ctx.get("bank_summary") or "").strip()
 
-    if event == "commission_pending":
-        return (
-            f"وینور اکسپرس\n{title}\n"
-            f"مبلغ: {amt} تومان\n"
-            f"وضعیت: در انتظار تأیید"
-        )
     if event == "commission_approved":
-        ct = (ctx.get("commission_type") or "").strip()
-        code = (ctx.get("land_code") or "").strip()
-        if ct == "referral" or code == "referral":
-            return (
-                f"وینور اکسپرس\n"
-                f"افزایش پورسانت\n"
-                f"مبلغ: {amt} تومان"
-            )
-        return (
-            f"وینور اکسپرس\n{title}\n"
-            f"مبلغ: {amt} تومان\n"
-            f"وضعیت: تأیید شد — در موجودی قابل برداشت"
-        )
-    if event == "commission_paid":
-        return (
-            f"وینور اکسپرس\n{title}\n"
-            f"مبلغ: {amt} تومان\n"
-            f"وضعیت: پرداخت‌شده"
-        )
-    if event == "commission_rejected":
-        return (
-            f"وینور اکسپرس\n{title}\n"
-            f"مبلغ: {amt} تومان\n"
-            f"وضعیت: رد شد"
-        )
-    if event == "withdrawal_requested":
-        lines = [
-            "وینور اکسپرس",
-            "درخواست برداشت ثبت شد.",
-            f"مبلغ: {amt} تومان",
-            "وضعیت: در انتظار بررسی",
-        ]
-        if bank:
-            lines.append(f"حساب: {bank}")
-        return "\n".join(lines)
-    if event == "withdrawal_cancelled":
-        return (
-            f"وینور اکسپرس\n"
-            f"درخواست برداشت لغو شد.\n"
-            f"مبلغ: {amt} تومان"
-        )
-    if event == "withdrawal_approved":
-        return (
-            f"وینور اکسپرس\n"
-            f"درخواست برداشت تأیید شد.\n"
-            f"مبلغ: {amt} تومان\n"
-            f"در حال واریز به حساب شما"
-        )
-    if event == "withdrawal_rejected":
-        return (
-            f"وینور اکسپرس\n"
-            f"درخواست برداشت رد شد.\n"
-            f"مبلغ: {amt} تومان"
-        )
+        return f"وینور\n+{amt} تومن\n{title}"
     if event == "withdrawal_paid":
-        lines = [
-            "وینور اکسپرس",
-            "واریز برداشت به حساب شما انجام شد.",
-            f"مبلغ: {amt} تومان",
-        ]
+        msg = f"وینور\n−{amt} تومن\nواریز به حسابت"
         if bank:
-            lines.append(f"حساب: {bank}")
-        return "\n".join(lines)
+            msg += f"\n{bank}"
+        return msg
     return ""
 
 
@@ -152,10 +83,10 @@ def notify_partner_commission_txn(
     bank_summary: str = "",
     reference_id: str = "",
 ) -> Dict[str, Any]:
-    """ارسال پیامک تراکنش پورسانت/برداشت به همکار."""
+    """ارسال پیامک فقط برای ورود (+) یا خروج (−) کیف‌پول."""
     ev = (event or "").strip()
     if ev not in PARTNER_TXN_EVENTS:
-        return {"ok": False, "skipped": True, "error": "invalid_event"}
+        return {"ok": False, "skipped": True, "error": "not_wallet_balance_event"}
 
     settings = load_settings(current_app) or {}
     sms_line_number = (

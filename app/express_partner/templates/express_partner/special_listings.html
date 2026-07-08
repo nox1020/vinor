@@ -1,0 +1,70 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}آگهی‌های من | وینور اکسپرس{% endblock %}
+
+{% block content %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{{ ep_header_start(id='specialListingsHeader') }}
+{% call ep_header_row('آگهی‌های من', url_for('express_partner.profile'), inner_class='max-w-lg mx-auto w-full') %}
+  <a href="{{ url_for('express_partner.special_listing_new') }}"
+     data-vinor-express-nav
+     class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
+     aria-label="آگهی جدید">
+    <i class="fas fa-plus ep-partner-header-btn-icon" aria-hidden="true"></i>
+  </a>
+{% endcall %}
+{{ ep_header_end() }}
+
+<style>
+  .sp-list { border-top: 1px solid rgba(255,255,255,.08); }
+  .sp-row {
+    display: flex; gap: .75rem; align-items: center;
+    padding: .85rem 1rem; border-bottom: 1px solid rgba(255,255,255,.08);
+    text-decoration: none; color: inherit;
+  }
+  .sp-row__thumb {
+    width: 4.5rem; height: 4.5rem; border-radius: .5rem; overflow: hidden;
+    background: #1a2332; flex-shrink: 0;
+  }
+  .sp-row__thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .sp-row__title { font-size: .875rem; font-weight: 700; color: #f3f4f6; margin: 0; }
+  .sp-row__meta { margin: .2rem 0 0; font-size: .75rem; color: #8b919a; }
+  .sp-empty { padding: 2.5rem 1.5rem; text-align: center; color: #8b919a; }
+  .sp-empty a {
+    display: inline-flex; margin-top: 1rem; min-height: 2.5rem; padding: 0 1rem;
+    align-items: center; border-radius: .5rem; background: #e22828; color: #fff;
+    font-weight: 700; font-size: .8125rem; text-decoration: none;
+  }
+</style>
+
+<div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
+  <main class="mx-auto w-full max-w-lg">
+    {% if items %}
+    <section class="sp-list" aria-label="آگهی‌های من">
+      {% for item in items %}
+      <a href="{{ item.detail_url }}" data-vinor-express-nav class="sp-row">
+        <div class="sp-row__thumb" aria-hidden="true">
+          {% if item.image_url %}<img src="{{ item.image_url }}" alt="" loading="lazy">{% endif %}
+        </div>
+        <div class="min-w-0 flex-1">
+          <h2 class="sp-row__title truncate">{{ item.title }}</h2>
+          <p class="sp-row__meta">
+            {% if item.city %}{{ item.city }} · {% endif %}
+            {{ item.price_total|toman(false) }} تومان
+          </p>
+        </div>
+        <i class="fas fa-chevron-left text-[10px] text-zinc-600" aria-hidden="true"></i>
+      </a>
+      {% endfor %}
+    </section>
+    {% else %}
+    <section class="sp-empty">
+      <p class="font-bold text-zinc-200">هنوز آگهی ندارید</p>
+      <p class="mt-1 text-xs">آگهی ثبت کنید تا همکاران بازدید درخواست کنند.</p>
+      <a href="{{ url_for('express_partner.special_listing_new') }}" data-vinor-express-nav>ثبت آگهی</a>
+    </section>
+    {% endif %}
+  </main>
+  {% set bottom_nav_active = 'profile' %}
+  {% include 'express_partner/partials/partner_tab_footer.html' %}
+</div>
+{% endblock %}

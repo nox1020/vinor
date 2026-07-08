@@ -1,6 +1,7 @@
 {% set _profile_dark_nav = profile_notifications_dark|default(false) %}
 <div class="relative z-10" x-data="vinorNotifyBadge()" data-tour="notifications-link">
   <a href="{{ url_for('express_partner.notifications') }}"
+     data-vinor-express-nav
      class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn relative"
      aria-label="اعلان‌ها">
     <i class="fas fa-bell ep-partner-header-btn-icon {% if not _profile_dark_nav %}text-gray-700 dark:text-gray-300{% endif %}" aria-hidden="true"></i>

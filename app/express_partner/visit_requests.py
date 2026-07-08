@@ -548,12 +548,20 @@ def create_visit_request(
     land_code: str,
     land_title: str,
     visit_date: str,
+    customer_first_name: str = "",
+    customer_last_name: str = "",
+    customer_phone: str = "",
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     ph = (partner_phone or "").strip()
     code = (land_code or "").strip()
+    first = (customer_first_name or "").strip()
+    last = (customer_last_name or "").strip()
+    cust_phone = (customer_phone or "").strip()
     vd = _parse_visit_date(visit_date)
     if not ph or not code:
         return None, "invalid"
+    if not first or not last or not cust_phone:
+        return None, "customer_required"
     if vd is None:
         return None, "invalid_date"
     if vd < _today():
@@ -566,6 +574,7 @@ def create_visit_request(
         return None, "already_pending"
 
     now_iso = datetime.utcnow().isoformat() + "Z"
+    full_name = f"{first} {last}".strip()
     rec: Dict[str, Any] = {
         "id": uuid.uuid4().hex[:16],
         "partner_phone": ph,
@@ -573,6 +582,10 @@ def create_visit_request(
         "land_code": code,
         "land_title": (land_title or "").strip() or code,
         "visit_date": vd.isoformat(),
+        "customer_first_name": first,
+        "customer_last_name": last,
+        "customer_name": full_name,
+        "customer_phone": cust_phone,
         "status": PENDING_STATUS,
         "created_at": now_iso,
         "updated_at": now_iso,
@@ -986,6 +999,9 @@ def admin_row_dict(
     }
     progress_steps = visit_progress_steps(row, commissions)
     progress_summary = visit_progress_summary(progress_steps)
+    first = str(row.get("customer_first_name") or "").strip()
+    last = str(row.get("customer_last_name") or "").strip()
+    cust_name = str(row.get("customer_name") or "").strip() or f"{first} {last}".strip()
     return {
         "id": row.get("id"),
         "partner_phone": row.get("partner_phone") or "",
@@ -994,6 +1010,10 @@ def admin_row_dict(
         "land_title": row.get("land_title") or "",
         "visit_date": row.get("visit_date") or "",
         "visit_date_jalali": format_iso_date_jalali(str(row.get("visit_date") or "")),
+        "customer_first_name": first,
+        "customer_last_name": last,
+        "customer_name": cust_name,
+        "customer_phone": str(row.get("customer_phone") or "").strip(),
         "status": st,
         "status_label": labels.get(st, st),
         "status_hint": hints.get(st, ""),

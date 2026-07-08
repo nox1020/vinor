@@ -96,6 +96,15 @@
             </div>
             <p class="mt-1 text-sm text-gray-700 dark:text-gray-300 truncate">{{ v.land_title or '—' }}</p>
             <p class="mt-0.5 text-[11px] text-gray-400 font-mono" dir="ltr">{{ v.land_code or '—' }}</p>
+            {% if v.customer_name or v.customer_phone %}
+            <p class="mt-1.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+              مشتری:
+              {% if v.customer_name %}{{ v.customer_name }}{% endif %}
+              {% if v.customer_phone %}
+              <span class="font-mono tabular-nums" dir="ltr">{% if v.customer_name %} · {% endif %}{{ v.customer_phone }}</span>
+              {% endif %}
+            </p>
+            {% endif %}
           </div>
           <div class="shrink-0 text-left">
             <p class="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{{ v.visit_date_jalali or v.visit_date|default('—') }}</p>

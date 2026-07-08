@@ -199,7 +199,9 @@
                   <span class="font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
                     {{ person.name or 'بدون نام' }}
                   </span>
-                  {% if acc.partner_approved %}
+                  {% if acc.partner_special %}
+                    <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">ویژه</span>
+                  {% elif acc.partner_approved %}
                     <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">همکار</span>
                   {% elif acc.partner_pending %}
                     <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">انتظار</span>

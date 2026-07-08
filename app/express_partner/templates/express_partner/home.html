@@ -7,15 +7,8 @@
 
 {{ ep_header_start(id='homeExpressHeader') }}
 {% call ep_header_row('داشبورد', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full', back_nav=false) %}
-  {% if me_phone %}
-  <a href="{{ url_for('express_partner.files') }}"
-     data-vinor-express-nav
-     class="vinor-dash-glass-pill inline-flex h-[42px] items-center gap-1.5 px-3 text-[12px] font-semibold text-zinc-300"
-     aria-label="فایل‌ها">
-    <span>همه فایل‌ها</span>
-    <i class="fas fa-chevron-left text-[9px] text-zinc-500" aria-hidden="true"></i>
-  </a>
-  {% endif %}
+  {% set profile_notifications_dark = true %}
+  {% include 'express_partner/partials/notifications_button.html' %}
 {% endcall %}
 {{ ep_header_end() }}
 
@@ -25,26 +18,15 @@
 
   <div class="mx-auto w-full max-w-lg">
 
-    {% if not me_phone %}
-    <section class="vn-home-guest" aria-label="ورود">
-      <p class="vn-home-guest__title">داشبورد همکاری وینور</p>
-      <p class="vn-home-guest__sub">اقدامات فوری و فایل‌های پیشنهادی را بعد از ورود ببینید</p>
-      <div class="vn-home-guest__actions">
-        <a href="{{ url_for('express_partner.login', next=url_for('express_partner.home')) }}"
-           data-vinor-express-nav
-           class="vn-home-guest__btn vn-home-guest__btn--primary">
-          ورود به حساب
-        </a>
-        <a href="{{ url_for('express_partner.files') }}"
-           data-vinor-express-nav
-           class="vn-home-guest__btn vn-home-guest__btn--secondary">
-          مشاهده فایل‌ها
-        </a>
-      </div>
-    </section>
-    {% else %}
+    {% if not is_approved|default(false) %}
+    <div class="px-3 pt-3 pb-2 sm:px-6">
+      {% include 'express_partner/partials/dashboard_guest_coop_cta.html' %}
+    </div>
+    {% endif %}
 
-    {% if partner_name %}
+    {% if me_phone %}
+
+    {% if partner_name and is_approved|default(false) %}
     <header class="vn-home-greet">
       <p class="vn-home-greet__sub">سلام {{ partner_name }}</p>
       <h1 class="vn-home-greet__title">کار بعدی شما</h1>
@@ -54,25 +36,27 @@
     <div class="vn-home-feed">
 
       {% if urgent_actions %}
-      <section aria-label="اقدامات فوری">
+      <section class="vn-home-urgent" aria-label="کارهای لازم">
         <div class="vn-home-section-head">
-          <h2 class="vn-home-section-head__title">اقدامات فوری</h2>
+          <h2 class="vn-home-section-head__title">
+            کار بعدی
+            <span class="vn-home-urgent-count">{{ urgent_actions|length }}</span>
+          </h2>
+          <span class="vn-home-urgent-hint">فقط این‌ها را انجام بده</span>
         </div>
         <div class="vn-home-urgent-list">
           {% for action in urgent_actions %}
           <a href="{{ action.url }}"
              data-vinor-express-nav
-             class="vn-home-urgent-row">
-            <span class="vn-home-urgent-row__icon" aria-hidden="true">
-              <i class="fas {{ action.icon }}"></i>
-            </span>
+             class="vn-home-urgent-row vn-home-urgent-row--{{ action.tone|default('red') }}{% if loop.first %} vn-home-urgent-row--focus{% endif %}">
+            <span class="vn-home-urgent-row__step" aria-hidden="true">{{ loop.index }}</span>
             <span class="vn-home-urgent-row__body">
               <span class="vn-home-urgent-row__title">{{ action.title }}</span>
               {% if action.subtitle %}
               <span class="vn-home-urgent-row__sub">{{ action.subtitle }}</span>
               {% endif %}
             </span>
-            <i class="fas fa-chevron-left vn-home-urgent-row__chev" aria-hidden="true"></i>
+            <span class="vn-home-urgent-row__cta">{{ action.cta|default('برو') }}</span>
           </a>
           {% endfor %}
         </div>

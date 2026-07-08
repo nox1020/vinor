@@ -213,54 +213,13 @@ def _release_run_lock(fd: Optional[int]) -> None:
 
 def build_birthday_sms_message(*, name: str, jm: int, jd: int) -> str:
     first = _first_name(name)
-    month_name = _JALALI_MONTHS[jm] if 1 <= jm <= 12 else ""
-    day_fa = _fa_num(jd)
-    date_hint = f"{day_fa} {month_name}" if month_name else f"{day_fa}ام"
-
-    templates = [
-        (
-            f"وینور 🎂\n"
-            f"{first} عزیز، تولدت مبارک!\n"
-            f"امیدواریم {date_hint} و کل سال جدیدت پر از شادی، سلامتی و فروش‌های درخشان باشه."
-        ),
-        (
-            f"وینور 🎉\n"
-            f"{first} جان، تولدت فرخنده!\n"
-            f"یک سال تازه پر از انرژی، موفقیت و معاملات بزرگ برات آرزومندیم."
-        ),
-        (
-            f"وینور ✨\n"
-            f"تولد {first} عزیز مبارک!\n"
-            f"امروز روز توئه — امیدواریم همیشه برنده باشی و وینور کنارته."
-        ),
-    ]
-    idx = abs(hash(name)) % len(templates)
-    return templates[idx]
+    return f"وینور\n{first} عزیز، تولدت مبارک 🎂"
 
 
 def build_membership_anniversary_sms_message(*, name: str, years: int) -> str:
     first = _first_name(name)
     yr = _year_phrase(years)
-
-    if years == 1:
-        body = (
-            f"وینور 💚\n"
-            f"{first} عزیز، یک سال از عضویتت در وینور گذشت!\n"
-            f"ممنون که بخشی از خانواده ما هستی — سالی پر از رشد و درآمد بیشتر برات آرزومندیم."
-        )
-    elif years <= 3:
-        body = (
-            f"وینور 💚\n"
-            f"{first} عزیز، {yr}ه که با وینور همراهی!\n"
-            f"قدردان همراهی تو هستیم — امیدواریم سال جدیدت پر از موفقیت‌های بزرگ‌تر باشه."
-        )
-    else:
-        body = (
-            f"وینور 🌟\n"
-            f"{first} عزیز، {yr} از عضویتت در وینور می‌گذره!\n"
-            f"همکاری و اعتمادت برای ما ارزشمنده — سالی پر از رشد، سلامت و درآمد بیشتر برات آرزومندیم."
-        )
-    return body
+    return f"وینور\n{first} عزیز، {yr} با وینور 💚"
 
 
 def _collect_recipients() -> List[Dict[str, Any]]:

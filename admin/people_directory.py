@@ -77,18 +77,13 @@ def _build_online_partner_lookup(
 
 
 def partner_is_approved(profile: Optional[Dict[str, Any]]) -> bool:
+    from app.express_partner.partner_roles import partner_is_approved as _ok
+    return _ok(profile)
 
-    if not profile or not isinstance(profile, dict):
 
-        return False
-
-    status = str(profile.get('status') or '').strip().lower()
-
-    return profile.get('status') is True or status in (
-
-        'approved', 'active', 'enabled', 'ok', 'true', '1',
-
-    )
+def partner_is_special(profile: Optional[Dict[str, Any]]) -> bool:
+    from app.express_partner.partner_roles import partner_is_special as _sp
+    return _sp(profile)
 
 
 
@@ -1101,6 +1096,7 @@ def build_admin_people_directory(
 
 
         approved = partner_is_approved(row.get('partner'))
+        special = bool(approved and partner_is_special(row.get('partner')))
 
         app = row.get('application') or {}
 
@@ -1145,6 +1141,8 @@ def build_admin_people_directory(
             'portal_login': bool(row.get('user')) or approved or pending_app,
 
             'partner_approved': approved,
+
+            'partner_special': special,
 
             'partner_pending': pending_app,
 

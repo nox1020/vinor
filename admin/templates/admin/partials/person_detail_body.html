@@ -30,7 +30,9 @@
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
             <h1 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate">{{ person.name or 'بدون نام' }}</h1>
-            {% if acc.partner_approved %}
+            {% if acc.partner_special %}
+              <span class="px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-[10px] font-bold">ویژه</span>
+            {% elif acc.partner_approved %}
               <span class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">همکار</span>
             {% elif acc.partner_pending %}
               <span class="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-bold">در انتظار</span>
@@ -154,6 +156,7 @@
           {% set access_items = [
             ('ورود', acc.portal_login),
             ('همکار', acc.partner_approved),
+            ('ویژه', acc.partner_special),
             ('کاربر', acc.site_user),
             ('داشبورد', acc.dashboard_files),
             ('پورسانت', acc.commissions),
@@ -594,6 +597,18 @@
         {% endif %}
 
         {% if acc.partner_approved and person.phone %}
+          <form method="post" action="{{ url_for('admin.express_partner_set_special', phone=person.phone) }}" class="contents">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="q" value="{{ back_q or '' }}">
+            <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">
+            <input type="hidden" name="special" value="{{ '0' if acc.partner_special else '1' }}">
+            <button type="submit"
+                    onclick="return confirm('{% if acc.partner_special %}برداشتن سطح ویژه؟{% else %}ارتقاء به همکار ویژه؟{% endif %}')"
+                    class="adm-pd-action {% if acc.partner_special %}border-violet-300 text-violet-700 dark:border-violet-700 dark:text-violet-300{% else %}bg-violet-600 border-violet-600 text-white hover:bg-violet-700{% endif %}">
+              <i class="fa-solid fa-star"></i>
+              {% if acc.partner_special %}حذف ویژه{% else %}همکار ویژه{% endif %}
+            </button>
+          </form>
           <div class="flex flex-wrap gap-1.5 lg:hidden w-full justify-center">
             <a href="{{ url_for('admin.express_assignments') }}" class="adm-pd-action"><i class="fa-solid fa-link"></i></a>
             <a href="{{ url_for('admin.express_commissions') }}" class="adm-pd-action"><i class="fa-solid fa-wallet"></i></a>

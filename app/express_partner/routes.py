@@ -1244,10 +1244,39 @@ APPROVED_PARTNER_STATUSES = {"approved", "active", "enabled", "ok", "true", "1"}
 
 
 def _is_partner_approved(profile: Dict[str, Any] | None) -> bool:
-    if not profile:
-        return False
-    status = str(profile.get("status") or "").strip().lower()
-    return profile.get("status") is True or status in APPROVED_PARTNER_STATUSES
+    from .partner_roles import partner_is_approved
+    return partner_is_approved(profile)
+
+
+def _is_partner_special(profile: Dict[str, Any] | None) -> bool:
+    from .partner_roles import partner_is_special
+    return partner_is_special(profile)
+
+
+def _partner_tier_label(profile: Dict[str, Any] | None, *, is_approved: bool | None = None) -> str:
+    approved = _is_partner_approved(profile) if is_approved is None else bool(is_approved)
+    if not approved:
+        return "کاربر عادی"
+    if _is_partner_special(profile):
+        return "همکار ویژه"
+    return "همکار تأییدشده"
+
+
+def require_special_partner(json_response: bool = False):
+    """فقط همکار ویژه — باید اول همکار تأییدشده باشد."""
+    def decorator(fn):
+        @wraps(fn)
+        @require_partner_access(json_response=json_response)
+        def wrapper(*args, **kwargs):
+            profile = getattr(g, 'express_partner_profile', None)
+            if not _is_partner_special(profile):
+                if json_response:
+                    return jsonify({"success": False, "error": "not_special"}), 403
+                flash("این بخش فقط برای همکاران ویژه فعال است.", "warning")
+                return redirect(url_for("express_partner.profile"))
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 def require_partner_access(json_response: bool = False, allow_pending: bool = False, allow_guest: bool = False):
@@ -1851,7 +1880,7 @@ def _send_partner_application_sms(me_phone: str, recipient_name: str) -> dict:
     settings = load_settings(current_app) or {}
     sms_message = (settings.get('partner_application_sms_message') or '').strip()
     if not sms_message:
-        sms_message = 'درخواست همکاری شما ثبت شد و در حال بررسی است. وینور'
+        sms_message = 'وینور\nدرخواست همکاری‌ت ثبت شد؛ منتظر بررسی.'
     sms_line_number = (settings.get('sms_line_number') or get_sms_line_number() or '09981801922').strip()
 
     sms_result = send_sms_direct(mobile=mobile, message=sms_message, line_number=sms_line_number)
@@ -2192,11 +2221,14 @@ def _home_urgent_actions(
             code = str(land.get('code') or '').strip()
             if not code:
                 continue
+            land_label = (land.get('title') or code).strip()
             actions.append({
                 'key': 'contact_customer',
                 'icon': 'fa-phone',
-                'title': 'تماس با مشتری',
-                'subtitle': (land.get('title') or code).strip(),
+                'tone': 'red',
+                'title': 'الان با مشتری تماس بگیر',
+                'subtitle': land_label,
+                'cta': 'تماس',
                 'url': url_for('express_partner.land_detail', code=code),
                 'priority': 100,
             })
@@ -2211,22 +2243,28 @@ def _home_urgent_actions(
         vd = str(row.get('visit_date') or '').strip()
         code = str(row.get('land_code') or '').strip()
         if st == APPROVED_STATUS and vd == today_iso and code:
+            land_label = (row.get('land_title') or code).strip()
             actions.append({
                 'key': 'visit_today',
-                'icon': 'fa-calendar-check',
-                'title': 'بازدید امروز',
-                'subtitle': (row.get('land_title') or code).strip(),
+                'icon': 'fa-map-marker-alt',
+                'tone': 'amber',
+                'title': 'امروز بازدید داری',
+                'subtitle': land_label,
+                'cta': 'شروع بازدید',
                 'url': url_for('express_partner.land_detail', code=code),
                 'priority': 90,
             })
             break
 
     if follow_up_count > 0:
+        n = int(follow_up_count)
         actions.append({
             'key': 'follow_up',
-            'icon': 'fa-bell',
-            'title': 'درخواست نیازمند پیگیری',
-            'subtitle': f'{follow_up_count} درخواست باز',
+            'icon': 'fa-clipboard-list',
+            'tone': 'blue',
+            'title': f'{n} درخواست منتظر توست' if n > 1 else 'یک درخواست منتظر توست',
+            'subtitle': 'وضعیت را چک کن و پیگیری کن',
+            'cta': 'پیگیری',
             'url': url_for('express_partner.requests'),
             'priority': 80,
         })
@@ -2235,8 +2273,10 @@ def _home_urgent_actions(
         actions.append({
             'key': 'withdraw',
             'icon': 'fa-wallet',
-            'title': 'موجودی قابل برداشت',
-            'subtitle': 'درخواست برداشت ثبت کنید',
+            'tone': 'green',
+            'title': 'پولت آماده برداشت است',
+            'subtitle': 'همین الان درخواست برداشت بزن',
+            'cta': 'برداشت',
             'url': url_for('express_partner.commissions'),
             'priority': 70,
         })
@@ -2317,9 +2357,26 @@ def _home_follow_up_count(phone: str, visit_rows: List[Dict[str, Any]]) -> int:
     )
 
 
+def _partner_has_pending_app(me_phone: str) -> bool:
+    ph = (me_phone or '').strip()
+    if not ph:
+        return False
+    apps = load_express_partner_apps() or []
+    pending = frozenset({'pending', 'under_review', 'waiting', 'review'})
+    for a in apps:
+        if not isinstance(a, dict):
+            continue
+        if str(a.get('phone') or '').strip() != ph:
+            continue
+        if str(a.get('status') or '').strip().lower() in pending:
+            return True
+    return False
+
+
 def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     ph = (me_phone or '').strip()
     is_approved = _is_partner_approved(profile)
+    has_pending_app = _partner_has_pending_app(ph) if ph and not is_approved else False
     visit_rows = load_express_visit_requests() or []
     if not isinstance(visit_rows, list):
         visit_rows = []
@@ -2347,6 +2404,7 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'success': True,
         'is_logged_in': bool(ph),
         'is_approved': is_approved,
+        'has_pending_app': has_pending_app,
         'urgent_actions': urgent_actions,
         'suggested_files': suggested_files,
     }
@@ -2366,6 +2424,7 @@ def home_page():
         me_phone=me_phone,
         partner_name=partner_name,
         is_approved=payload.get('is_approved'),
+        has_pending_app=payload.get('has_pending_app'),
         urgent_actions=payload.get('urgent_actions') or [],
         suggested_files=payload.get('suggested_files') or [],
         hide_header=True,
@@ -2753,10 +2812,14 @@ def api_favorites_cards():
 def requests_page():
     """مرکز مدیریت و پیگیری درخواست‌های بازدید همکار."""
     me_phone = (session.get('user_phone') or '').strip()
-    current_filter = (request.args.get('filter') or 'all').strip().lower()
+    current_filter = (request.args.get('filter') or '').strip().lower()
     allowed_filters = ('all',) + REQUEST_MGMT_BUCKETS
     if current_filter not in allowed_filters:
-        current_filter = 'all'
+        # بعد از ثبت درخواست، لیست «در حال انجام» را نشان بده؛ در غیر این صورت «نیاز به اقدام»
+        if request.args.get('submitted'):
+            current_filter = 'in_progress'
+        else:
+            current_filter = 'needs_action'
     rows = load_express_visit_requests() or []
     if not isinstance(rows, list):
         rows = []
@@ -2811,6 +2874,11 @@ def requests_page():
             'land_title': row.get('land_title') or land_code or 'فایل اکسپرس',
             'visit_date': visit_date,
             'visit_date_jalali': format_iso_date_jalali(visit_date) if visit_date else '',
+            'customer_name': (
+                str(row.get('customer_name') or '').strip()
+                or f"{str(row.get('customer_first_name') or '').strip()} {str(row.get('customer_last_name') or '').strip()}".strip()
+            ),
+            'customer_phone': str(row.get('customer_phone') or '').strip(),
             'status': st,
             'status_label': meta['label'],
             'status_hint': meta['hint'],
@@ -2848,30 +2916,31 @@ def requests_page():
     for bucket in REQUEST_MGMT_BUCKETS:
         counts[bucket] = sum(1 for i in items if i.get('mgmt_bucket') == bucket)
 
-    filter_options = [{'key': 'all', 'label': 'همه', 'count': counts['all']}]
-    for bucket in REQUEST_MGMT_BUCKETS:
-        filter_options.append({
-            'key': bucket,
-            'label': REQUEST_MGMT_BUCKET_LABELS[bucket],
-            'count': counts[bucket],
-        })
-
     if current_filter != 'all':
         items = [item for item in items if item.get('mgmt_bucket') == current_filter]
 
-    current_filter_label = next(
-        (opt['label'] for opt in filter_options if opt['key'] == current_filter),
-        'همه',
+    current_filter_label = (
+        REQUEST_MGMT_BUCKET_LABELS.get(current_filter, 'همه')
+        if current_filter != 'all'
+        else 'همه'
     )
+    # برچسب‌های کوتاه‌تر برای UI خلوت
+    short_labels = {
+        'needs_action': 'کار لازم',
+        'in_progress': 'در انتظار',
+        'completed': 'تمام‌شده',
+        'cancelled': 'لغو',
+        'all': 'همه',
+    }
+    current_filter_label = short_labels.get(current_filter, current_filter_label)
+
     return render_template(
         'express_partner/requests.html',
         items=items,
         counts=counts,
-        filter_options=filter_options,
         current_filter=current_filter,
         current_filter_label=current_filter_label,
         current_filter_count=len(items),
-        mgmt_bucket_labels=REQUEST_MGMT_BUCKET_LABELS,
         hide_header=True,
     )
 
@@ -4462,17 +4531,81 @@ def _visit_commission_required_for(commissions: List[Dict[str, Any]], phone: str
     return _visit_commission_amount_toman() > 0 or _has_visit_commission_record(commissions, phone, code)
 
 
+def _request_visit_field(name: str, payload: Dict[str, Any] | None = None) -> str:
+    val = (request.form.get(name) or '').strip()
+    if val:
+        return val
+    if payload is None and request.is_json:
+        try:
+            payload = request.get_json(silent=True) or {}
+        except Exception:
+            payload = {}
+    if isinstance(payload, dict):
+        return str(payload.get(name) or '').strip()
+    return ''
+
+
+def _sync_visit_customer_to_club(
+    *,
+    customer_phone: str,
+    customer_first_name: str,
+    customer_last_name: str,
+) -> None:
+    """ثبت/به‌روزرسانی مشتری بازدید در باشگاه مشتریان ادمین."""
+    try:
+        from admin.sms_recipients import (
+            RECIPIENT_GROUP_CUSTOMER_CLUB,
+            add_sms_recipient_member,
+        )
+        full_name = f"{(customer_first_name or '').strip()} {(customer_last_name or '').strip()}".strip()
+        err = add_sms_recipient_member(
+            RECIPIENT_GROUP_CUSTOMER_CLUB,
+            customer_phone,
+            full_name or customer_phone,
+        )
+        if err:
+            current_app.logger.warning(
+                'visit customer club sync skipped phone=%s err=%s',
+                customer_phone,
+                err,
+            )
+    except Exception:
+        current_app.logger.exception(
+            'visit customer club sync failed phone=%s', customer_phone
+        )
+
+
 @express_partner_bp.route('/visit-requests/<code>', methods=['POST'], endpoint='create_visit_request')
 @require_partner_access()
 def create_visit_request(code: str):
-    """ثبت درخواست بازدید با تاریخ انتخاب‌شده."""
+    """ثبت درخواست بازدید با تاریخ و مشخصات مشتری."""
     me_phone = (session.get('user_phone') or '').strip()
-    visit_date = (request.form.get('visit_date') or '').strip()
-    if not visit_date and request.is_json:
+    json_payload = None
+    if request.is_json:
         try:
-            visit_date = ((request.get_json(silent=True) or {}).get('visit_date') or '').strip()
+            json_payload = request.get_json(silent=True) or {}
         except Exception:
-            visit_date = ''
+            json_payload = {}
+    visit_date = _request_visit_field('visit_date', json_payload)
+    customer_first_name = _request_visit_field('customer_first_name', json_payload)
+    customer_last_name = _request_visit_field('customer_last_name', json_payload)
+    customer_phone_raw = _request_visit_field('customer_phone', json_payload)
+    customer_phone = normalize_iran_mobile(customer_phone_raw) or customer_phone_raw
+
+    if not customer_first_name or not customer_last_name or not customer_phone_raw:
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='نام، نام خانوادگی و شماره تماس مشتری الزامی است.',
+            category='error',
+        )
+    if not is_valid_iran_mobile(customer_phone):
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='شماره تماس مشتری معتبر نیست.',
+            category='error',
+        )
 
     partners = load_express_partners() or []
     partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
@@ -4570,6 +4703,9 @@ def create_visit_request(code: str):
         land_code=str(code),
         land_title=str(land_title),
         visit_date=visit_date,
+        customer_first_name=customer_first_name,
+        customer_last_name=customer_last_name,
+        customer_phone=customer_phone,
     )
     if err == 'already_pending':
         open_rec = partner_open_visit(visit_requests, me_phone, str(code))
@@ -4593,6 +4729,13 @@ def create_visit_request(code: str):
             tx_mode=tx_state.get('tx_mode') or 'visit_pending',
             visit_date=vdate,
             redirect_url=url_for('express_partner.requests', submitted=1),
+        )
+    if err == 'customer_required':
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='نام، نام خانوادگی و شماره تماس مشتری الزامی است.',
+            category='error',
         )
     if err == 'past_date':
         return _mark_in_transaction_finish(
@@ -4625,6 +4768,11 @@ def create_visit_request(code: str):
         )
 
     save_express_visit_requests(visit_requests)
+    _sync_visit_customer_to_club(
+        customer_phone=customer_phone,
+        customer_first_name=customer_first_name,
+        customer_last_name=customer_last_name,
+    )
     sms_result = _send_visit_admin_sms(
         partner_phone=me_phone,
         partner_name=partner_name,
@@ -5276,7 +5424,7 @@ def profile_page():
     profile = getattr(g, 'express_partner_profile', None) or {}
     # تعیین وضعیت تایید همکاری
     try:
-        is_approved = bool(profile and ((str(profile.get('status') or '').lower() == 'approved') or (profile.get('status') is True)))
+        is_approved = _is_partner_approved(profile)
     except Exception:
         is_approved = False
     me_name = (profile.get('name') or '').strip()
@@ -5296,12 +5444,15 @@ def profile_page():
         req=request,
     )
     from .referrals import REFERRAL_BONUS_AMOUNT
+    is_special = _is_partner_special(profile) if is_approved else False
     resp = make_response(render_template(
         'express_partner/profile.html',
         me_phone=me_phone,
         me_name=me_name,
         profile=profile,
         is_approved=is_approved,
+        is_special=is_special,
+        partner_tier_label=_partner_tier_label(profile, is_approved=is_approved),
         referral_bonus_per_invite=REFERRAL_BONUS_AMOUNT,
         android_apk_url=android_apk_url,
         android_apk_version=android_apk_version,
@@ -5314,6 +5465,187 @@ def profile_page():
     return resp
 
 
+@express_partner_bp.route('/listings', methods=['GET'], endpoint='special_listings')
+@require_special_partner()
+def special_listings_page():
+    """آگهی‌های من — همکار ویژه."""
+    me_phone = (session.get('user_phone') or '').strip()
+    from .special_listings import listings_owned_by
+    from ..utils.images import partner_card_image_url
+
+    items = []
+    for land in listings_owned_by(me_phone):
+        items.append({
+            'code': land.get('code') or '',
+            'title': land.get('title') or '—',
+            'city': land.get('city') or '',
+            'price_total': int(land.get('price_total') or 0),
+            'image_url': partner_card_image_url(land) or None,
+            'detail_url': url_for('express_partner.land_detail', code=land.get('code')),
+        })
+    return render_template(
+        'express_partner/special_listings.html',
+        items=items,
+        hide_header=True,
+        bottom_nav_active='profile',
+    )
+
+
+@express_partner_bp.route('/listings/new', methods=['GET', 'POST'], endpoint='special_listing_new')
+@require_special_partner()
+def special_listing_new():
+    """ثبت آگهی مینیمال — سبک دیوار."""
+    me_phone = (session.get('user_phone') or '').strip()
+    cities = load_active_cities() or []
+    form_err = ''
+    if request.method == 'POST':
+        title = (request.form.get('title') or '').strip()
+        city = (request.form.get('city') or '').strip()
+        location = (request.form.get('location') or '').strip() or city
+        size_raw = re.sub(r'[^\d]', '', (request.form.get('size') or ''))
+        price_raw = re.sub(r'[^\d]', '', (request.form.get('price_total') or ''))
+        desc = (request.form.get('description') or '').strip()
+        pct_raw = (request.form.get('commission_pct') or '').strip() or '0'
+        try:
+            size = int(size_raw or '0')
+            price_total = int(price_raw or '0')
+            commission_pct = float(pct_raw)
+        except (TypeError, ValueError):
+            size, price_total, commission_pct = 0, 0, 0.0
+
+        from .special_listings import create_special_listing
+        image_file = request.files.get('image')
+        rec, err = create_special_listing(
+            owner_phone=me_phone,
+            title=title,
+            city=city,
+            location=location,
+            size=size,
+            price_total=price_total,
+            description=desc,
+            commission_pct=commission_pct,
+            image_file=image_file,
+            contact_phone=me_phone,
+        )
+        if err == 'title_short':
+            form_err = 'عنوان حداقل ۸ کاراکتر باشد.'
+        elif err == 'city_required':
+            form_err = 'شهر را انتخاب کنید.'
+        elif err == 'invalid_price':
+            form_err = 'متراژ و قیمت باید معتبر باشند.'
+        elif err == 'invalid_commission':
+            form_err = 'درصد پورسانت نامعتبر است.'
+        elif err or not rec:
+            form_err = 'ثبت آگهی ناموفق بود.'
+        else:
+            try:
+                from .new_land_sms import notify_all_partners_new_express_land_background
+                notify_all_partners_new_express_land_background(rec)
+            except Exception:
+                current_app.logger.exception(
+                    'special listing SMS queue failed code=%s', rec.get('code')
+                )
+            flash('آگهی ثبت شد.', 'success')
+            return redirect(url_for('express_partner.special_listings'))
+
+    return render_template(
+        'express_partner/special_listing_new.html',
+        cities=cities,
+        form_err=form_err,
+        hide_header=True,
+        bottom_nav_active='profile',
+        form=request.form if request.method == 'POST' else {},
+    )
+
+
+@express_partner_bp.route('/inbox-visits', methods=['GET'], endpoint='special_visit_inbox')
+@require_special_partner()
+def special_visit_inbox_page():
+    """صندوق بازدیدهای دریافتی روی آگهی‌های ویژه."""
+    me_phone = (session.get('user_phone') or '').strip()
+    from .special_visit_inbox import visits_for_special_owner
+
+    items = visits_for_special_owner(me_phone)
+    needs = sum(1 for i in items if i.get('needs_action'))
+    return render_template(
+        'express_partner/special_visit_inbox.html',
+        items=items,
+        needs_count=needs,
+        hide_header=True,
+        bottom_nav_active='profile',
+    )
+
+
+@express_partner_bp.post('/inbox-visits/<vid>/<action>', endpoint='special_visit_action')
+@require_special_partner()
+def special_visit_action(vid: str, action: str):
+    """تأیید / رد / تأیید انجام بازدید توسط همکار ویژه."""
+    me_phone = (session.get('user_phone') or '').strip()
+    from .special_visit_inbox import apply_special_visit_action
+    from .visit_sms import notify_partner_land_tx_sms, visit_status_change_event
+
+    visit_requests = load_express_visit_requests() or []
+    if not isinstance(visit_requests, list):
+        visit_requests = []
+
+    prev = next(
+        (r for r in visit_requests if isinstance(r, dict) and str(r.get('id') or '') == str(vid)),
+        None,
+    )
+    prev_status = str((prev or {}).get('status') or '') if prev else ''
+
+    rec, err = apply_special_visit_action(
+        visit_requests,
+        owner_phone=me_phone,
+        visit_id=str(vid),
+        action=str(action or ''),
+    )
+    if err == 'not_found':
+        flash('درخواست پیدا نشد.', 'warning')
+        return redirect(url_for('express_partner.special_visit_inbox'))
+    if err == 'forbidden':
+        flash('اجازه مدیریت این درخواست را ندارید.', 'warning')
+        return redirect(url_for('express_partner.special_visit_inbox'))
+    if err and err not in ('unchanged', 'note_updated'):
+        flash('تغییر وضعیت ناموفق بود.', 'warning')
+        return redirect(url_for('express_partner.special_visit_inbox'))
+
+    try:
+        save_express_visit_requests(visit_requests)
+    except Exception:
+        current_app.logger.exception('special visit action save failed id=%s', vid)
+        flash('ذخیره وضعیت ناموفق بود.', 'danger')
+        return redirect(url_for('express_partner.special_visit_inbox'))
+
+    if rec and err not in ('unchanged',):
+        new_status = str(rec.get('status') or '')
+        sms_event = visit_status_change_event(new_status, prev_status)
+        if sms_event:
+            try:
+                notify_partner_land_tx_sms(
+                    partner_phone=str(rec.get('partner_phone') or ''),
+                    event=sms_event,
+                    land_code=str(rec.get('land_code') or ''),
+                    land_title=str(rec.get('land_title') or ''),
+                    visit_date=str(rec.get('visit_date') or ''),
+                    reference_id=str(rec.get('id') or ''),
+                )
+            except Exception:
+                current_app.logger.exception(
+                    'special visit partner SMS failed id=%s event=%s', vid, sms_event
+                )
+
+    if str(action or '').strip().lower() == 'approve':
+        flash('بازدید تأیید شد.', 'success')
+    elif str(action or '').strip().lower() == 'reject':
+        flash('بازدید رد شد.', 'info')
+    elif str(action or '').strip().lower() == 'complete':
+        flash('انجام بازدید تأیید شد.', 'success')
+    else:
+        flash('وضعیت بروزرسانی شد.', 'success')
+    return redirect(url_for('express_partner.special_visit_inbox'))
+
+
 @express_partner_bp.get('/profile/data', endpoint='profile_data')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def profile_data():
@@ -5321,7 +5653,7 @@ def profile_data():
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None) or {}
     try:
-        is_approved = bool(profile and ((str(profile.get('status') or '').lower() == 'approved') or (profile.get('status') is True)))
+        is_approved = _is_partner_approved(profile)
     except Exception:
         is_approved = False
     me_name = (profile.get('name') or '').strip()
@@ -5344,12 +5676,15 @@ def profile_data():
         csrf_token = generate_csrf()
     except Exception:
         csrf_token = ''
+    is_special = _is_partner_special(profile) if is_approved else False
     return jsonify({
         'success': True,
         'me_phone': me_phone,
         'me_name': me_name or 'همکار وینور',
         'avatar_url': avatar_url,
         'is_approved': is_approved,
+        'is_special': is_special,
+        'partner_tier': _partner_tier_label(profile, is_approved=is_approved),
         'android_apk_url': android_apk_url if show_app_update else '',
         'android_apk_version': android_apk_version if show_app_update else '',
         'show_app_update': show_app_update,

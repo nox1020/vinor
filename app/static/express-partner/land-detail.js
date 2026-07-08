@@ -1289,12 +1289,76 @@
     syncVisitSubmitEnabled();
   }
 
+  function normalizeIranMobileInput(raw) {
+    var s = String(raw || '').trim().replace(/[\s\-]/g, '');
+    s = s.replace(/[۰-۹]/g, function (d) {
+      return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+    }).replace(/[٠-٩]/g, function (d) {
+      return String('٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+    });
+    if (s.indexOf('+98') === 0) s = '0' + s.slice(3);
+    if (s.indexOf('0098') === 0) s = '0' + s.slice(4);
+    if (s.indexOf('98') === 0 && s.length === 12) s = '0' + s.slice(2);
+    return s;
+  }
+
+  function isValidIranMobileInput(raw) {
+    var s = normalizeIranMobileInput(raw);
+    return /^09\d{9}$/.test(s);
+  }
+
+  function readVisitCustomerFields() {
+    var firstEl = document.getElementById('landVisitCustomerFirst');
+    var lastEl = document.getElementById('landVisitCustomerLast');
+    var phoneEl = document.getElementById('landVisitCustomerPhone');
+    return {
+      first: firstEl ? (firstEl.value || '').trim() : '',
+      last: lastEl ? (lastEl.value || '').trim() : '',
+      phone: phoneEl ? normalizeIranMobileInput(phoneEl.value || '') : '',
+    };
+  }
+
+  function validateVisitCustomerFields() {
+    var fields = readVisitCustomerFields();
+    if (!fields.first) return 'نام مشتری را وارد کنید.';
+    if (!fields.last) return 'نام خانوادگی مشتری را وارد کنید.';
+    if (!fields.phone) return 'شماره تماس مشتری را وارد کنید.';
+    if (!isValidIranMobileInput(fields.phone)) return 'شماره تماس مشتری معتبر نیست.';
+    return '';
+  }
+
+  function resetVisitCustomerFields() {
+    ['landVisitCustomerFirst', 'landVisitCustomerLast', 'landVisitCustomerPhone'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  }
+
   function syncVisitSubmitEnabled() {
     var submitBtn = document.getElementById('landVisitSubmitBtn');
     var dateInput = document.getElementById('landVisitDateInput');
     if (!submitBtn) return;
     var hasDate = !!(dateInput && (dateInput.value || '').trim());
-    submitBtn.disabled = !hasDate || submitBtn.dataset.busy === '1';
+    var customerOk = !validateVisitCustomerFields();
+    submitBtn.disabled = !hasDate || !customerOk || submitBtn.dataset.busy === '1';
+  }
+
+  function bindVisitCustomerFieldInputs() {
+    ['landVisitCustomerFirst', 'landVisitCustomerLast', 'landVisitCustomerPhone'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el || el.dataset.visitCustomerBound === '1') return;
+      el.dataset.visitCustomerBound = '1';
+      function onChange() {
+        syncVisitSubmitEnabled();
+      }
+      el.addEventListener('input', onChange);
+      el.addEventListener('change', onChange);
+      addCleanup(function () {
+        el.removeEventListener('input', onChange);
+        el.removeEventListener('change', onChange);
+        delete el.dataset.visitCustomerBound;
+      });
+    });
   }
 
   function clampVisitCalViewDate() {
@@ -2025,6 +2089,8 @@
     initVisitCalendarControls();
     initVisitCalBounds();
     resetVisitCalendarSelection();
+    resetVisitCustomerFields();
+    bindVisitCustomerFieldInputs();
     renderVisitCalendar();
     syncVisitSubmitEnabled();
   }
@@ -2123,6 +2189,12 @@
         showTxToast('لطفاً تاریخ بازدید را انتخاب کنید.', true);
         return;
       }
+      var customerErr = validateVisitCustomerFields();
+      if (customerErr) {
+        showTxToast(customerErr, true);
+        return;
+      }
+      var customer = readVisitCustomerFields();
       var url = visitUrl;
       if (!url) return;
 
@@ -2137,7 +2209,12 @@
       initVisitStatusPoll('visit_pending');
       focusDetailActionsAfterVisit();
 
-      postLandAction(url, { visit_date: visitDate }, function (data) {
+      postLandAction(url, {
+        visit_date: visitDate,
+        customer_first_name: customer.first,
+        customer_last_name: customer.last,
+        customer_phone: customer.phone,
+      }, function (data) {
         var mode = data.tx_mode || 'visit_pending';
         applyTxMode(
           mode,

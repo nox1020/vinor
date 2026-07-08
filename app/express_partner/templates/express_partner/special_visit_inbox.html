@@ -1,0 +1,95 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}بازدیدهای دریافتی | وینور اکسپرس{% endblock %}
+
+{% block content %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{{ ep_header_start(id='specialVisitInboxHeader') }}
+{% call ep_header_row('بازدیدهای دریافتی', url_for('express_partner.profile'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{{ ep_header_end() }}
+
+<style>
+  .sv-summary {
+    padding: .75rem 1rem; border-bottom: 1px solid rgba(255,255,255,.08);
+    font-size: .75rem; color: #8b919a; font-weight: 600;
+  }
+  .sv-summary strong { color: #fca5a5; font-weight: 800; }
+  .sv-card {
+    padding: .85rem 1rem; border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .sv-card--need {
+    background: linear-gradient(90deg, rgba(226,40,40,.08), transparent 70%);
+  }
+  .sv-card__title { margin: 0; font-size: .875rem; font-weight: 700; color: #f3f4f6; }
+  .sv-card__status {
+    display: inline-flex; margin-top: .25rem; padding: .1rem .4rem; border-radius: .3rem;
+    font-size: .625rem; font-weight: 700; background: rgba(251,191,36,.12); color: #fcd34d;
+  }
+  .sv-card--need .sv-card__status { background: rgba(248,113,113,.14); color: #fca5a5; }
+  .sv-card__meta { margin: .35rem 0 0; font-size: .75rem; color: #8b919a; line-height: 1.45; }
+  .sv-actions { display: flex; gap: .4rem; margin-top: .65rem; flex-wrap: wrap; }
+  .sv-btn {
+    display: inline-flex; align-items: center; justify-content: center; min-height: 2rem;
+    padding: 0 .7rem; border-radius: .4rem; font-size: .75rem; font-weight: 700; border: 0;
+    text-decoration: none;
+  }
+  .sv-btn--ok { background: #059669; color: #fff; }
+  .sv-btn--no { background: transparent; color: #fca5a5; border: 1px solid rgba(248,113,113,.35); }
+  .sv-empty { padding: 2.5rem 1.5rem; text-align: center; color: #8b919a; }
+</style>
+
+<div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
+  <main class="mx-auto w-full max-w-lg">
+    <p class="sv-summary">
+      {% if needs_count %}<strong>{{ needs_count }}</strong> مورد نیاز به اقدام{% else %}فعلاً کار لازمی نیست{% endif %}
+      · {{ items|length }} بازدید
+    </p>
+
+    {% if items %}
+    <section aria-label="بازدیدهای دریافتی">
+      {% for item in items %}
+      <article class="sv-card{% if item.needs_action %} sv-card--need{% endif %}">
+        <h2 class="sv-card__title">{{ item.land_title }}</h2>
+        <span class="sv-card__status">{{ item.status_label }}</span>
+        <p class="sv-card__meta">
+          {% if item.customer_name %}مشتری: {{ item.customer_name }}{% if item.customer_phone %} · <span dir="ltr">{{ item.customer_phone }}</span>{% endif %}<br>{% endif %}
+          همکار: {{ item.partner_name or item.partner_phone or '—' }}
+          {% if item.visit_date_jalali %}<br>تاریخ: {{ item.visit_date_jalali }}{% endif %}
+        </p>
+        {% if item.can_approve or item.can_reject or item.can_complete %}
+        <div class="sv-actions">
+          {% if item.can_approve %}
+          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='approve') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="sv-btn sv-btn--ok">تأیید</button>
+          </form>
+          {% endif %}
+          {% if item.can_complete %}
+          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='complete') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="sv-btn sv-btn--ok">تأیید انجام</button>
+          </form>
+          {% endif %}
+          {% if item.can_reject %}
+          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('این بازدید رد شود؟')">رد</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </section>
+    {% else %}
+    <section class="sv-empty">
+      <p class="font-bold text-zinc-200">هنوز بازدیدی نیامده</p>
+      <p class="mt-1 text-xs">وقتی روی آگهی‌های شما درخواست بازدید ثبت شود، اینجا می‌آید.</p>
+      <a href="{{ url_for('express_partner.special_listings') }}" data-vinor-express-nav
+         class="inline-flex mt-4 min-h-10 px-4 items-center rounded-lg bg-[#e22828] text-white text-sm font-bold">آگهی‌های من</a>
+    </section>
+    {% endif %}
+  </main>
+  {% set bottom_nav_active = 'profile' %}
+  {% include 'express_partner/partials/partner_tab_footer.html' %}
+</div>
+{% endblock %}

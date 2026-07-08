@@ -46,12 +46,12 @@ def _format_visit_date_sms(iso_date: str) -> str:
     return jalali or (iso_date or "")[:10] or "—"
 
 
-def _land_label(land_title: str, land_code: str) -> str:
-    title = (land_title or "").strip()
+def _land_short(land_title: str, land_code: str) -> str:
     code = (land_code or "").strip()
-    if title and code:
-        return f"{title} ({code})"
-    return title or code or "—"
+    title = (land_title or "").strip()
+    if code:
+        return code
+    return title or "ملک"
 
 
 def _append_sms_history(entry: dict) -> None:
@@ -79,88 +79,37 @@ def visit_status_change_event(new_status: str, prev_status: str) -> Optional[str
 
 
 def _build_message(event: str, ctx: Dict[str, Any]) -> str:
-    land = _land_label(str(ctx.get("land_title") or ""), str(ctx.get("land_code") or ""))
+    """الگوی یکسان: وینور + خبر کوتاه (+ جزئیات لازم)."""
+    land = _land_short(str(ctx.get("land_title") or ""), str(ctx.get("land_code") or ""))
     vdate = _format_visit_date_sms(str(ctx.get("visit_date") or ""))
     note = (ctx.get("admin_note") or "").strip()
+    if len(note) > 60:
+        note = note[:60] + "…"
 
-    if event == "visit_submitted":
-        return (
-            f"وینور اکسپرس\n"
-            f"درخواست بازدید ثبت شد.\n"
-            f"ملک: {land}\n"
-            f"تاریخ بازدید: {vdate}\n"
-            f"وضعیت: در انتظار تأیید ادمین"
-        )
-    if event == "visit_pending":
-        return (
-            f"وینور اکسپرس\n"
-            f"درخواست بازدید شما\n"
-            f"ملک: {land}\n"
-            f"وضعیت: در انتظار تأیید"
-        )
+    if event in ("visit_submitted", "visit_pending"):
+        return f"وینور\nبازدید ثبت شد · {land}\nمنتظر تأیید"
     if event == "visit_approved":
-        return (
-            f"وینور اکسپرس\n"
-            f"درخواست بازدید تأیید شد.\n"
-            f"ملک: {land}\n"
-            f"تاریخ بازدید: {vdate}\n"
-            f"پس از انجام بازدید، آن را روی صفحه فایل ثبت کنید."
-        )
+        return f"وینور\nبازدیدت تأیید شد · {land}\n{vdate}"
     if event == "visit_rejected":
-        lines = [
-            "وینور اکسپرس",
-            "درخواست بازدید رد شد.",
-            f"ملک: {land}",
-        ]
+        msg = f"وینور\nبازدید رد شد · {land}"
         if note:
-            lines.append(f"یادداشت: {note}")
-        return "\n".join(lines)
+            msg += f"\n{note}"
+        return msg
     if event == "visit_done_pending":
-        return (
-            f"وینور اکسپرس\n"
-            f"انجام بازدید شما ثبت شد.\n"
-            f"ملک: {land}\n"
-            f"وضعیت: در انتظار تأیید ادمین"
-        )
+        return f"وینور\nانجام بازدید ثبت شد · {land}\nمنتظر تأیید"
     if event == "visit_done_rejected":
-        lines = [
-            "وینور اکسپرس",
-            "تأیید انجام بازدید رد شد.",
-            f"ملک: {land}",
-            "لطفاً پس از بازدید مجدد، دوباره «بازدید انجام شد» را ثبت کنید.",
-        ]
+        msg = f"وینور\nتأیید انجام بازدید رد شد · {land}"
         if note:
-            lines.append(f"یادداشت: {note}")
-        return "\n".join(lines)
+            msg += f"\n{note}"
+        return msg
     if event == "visit_completed":
         if ctx.get("visit_commission_pending"):
-            return (
-                f"وینور اکسپرس\n"
-                f"انجام بازدید توسط ادمین تأیید شد.\n"
-                f"ملک: {land}\n"
-                f"وضعیت: در انتظار تأیید پورسانت بازدید"
-            )
-        return (
-            f"وینور اکسپرس\n"
-            f"انجام بازدید توسط ادمین تأیید شد.\n"
-            f"ملک: {land}\n"
-            f"اکنون می‌توانید درخواست معامله ثبت کنید."
-        )
+            return f"وینور\nبازدید تأیید شد · {land}\nپورسانت منتظر تأییده"
+        return f"وینور\nبازدید تأیید شد · {land}\nمی‌تونی معامله بزنی"
     if event == "deal_started":
-        return (
-            f"وینور اکسپرس\n"
-            f"درخواست معامله ثبت شد.\n"
-            f"ملک: {land}\n"
-            f"وضعیت فایل: در حال معامله\n"
-            f"پورسانت شما در صف تأیید قرار گرفت."
-        )
+        return f"وینور\nمعامله شروع شد · {land}"
     if event == "deal_released":
-        return (
-            f"وینور اکسپرس\n"
-            f"معامله رفع شد.\n"
-            f"ملک: {land}\n"
-            f"وضعیت فایل: فعال"
-        )
+        return f"وینور\nمعامله رفع شد · {land}"
     return ""
 
 

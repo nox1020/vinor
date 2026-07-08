@@ -1,0 +1,80 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}آگهی جدید | وینور اکسپرس{% endblock %}
+
+{% block content %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{{ ep_header_start(id='specialListingNewHeader') }}
+{% call ep_header_row('آگهی جدید', url_for('express_partner.special_listings'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{{ ep_header_end() }}
+
+<style>
+  .sp-form { padding: 1rem; }
+  .sp-field { margin-bottom: .75rem; }
+  .sp-field label { display: block; font-size: .6875rem; font-weight: 700; color: #8b919a; margin-bottom: .3rem; }
+  .sp-field input, .sp-field select, .sp-field textarea {
+    width: 100%; min-height: 2.6rem; padding: .55rem .75rem; border-radius: .625rem;
+    border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); color: #f3f4f6;
+    font-size: .875rem; font-weight: 600;
+  }
+  .sp-field textarea { min-height: 5rem; resize: vertical; }
+  .sp-err {
+    margin-bottom: .75rem; padding: .6rem .75rem; border-radius: .5rem;
+    background: rgba(226,40,40,.12); color: #fecaca; font-size: .75rem; font-weight: 600;
+  }
+  .sp-submit {
+    display: flex; width: 100%; min-height: 2.75rem; align-items: center; justify-content: center;
+    border-radius: .5rem; background: #e22828; color: #fff; font-weight: 800; font-size: .9375rem;
+    border: 0; margin-top: .5rem;
+  }
+</style>
+
+<div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
+  <main class="mx-auto w-full max-w-lg">
+    <form method="post" enctype="multipart/form-data" class="sp-form" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if form_err %}<div class="sp-err" role="alert">{{ form_err }}</div>{% endif %}
+
+      <div class="sp-field">
+        <label for="spTitle">عنوان</label>
+        <input id="spTitle" name="title" required maxlength="120" value="{{ form.get('title','') }}" placeholder="مثلاً زمین ۵۰۰ متری شمال">
+      </div>
+      <div class="sp-field">
+        <label for="spCity">شهر</label>
+        <select id="spCity" name="city" required>
+          <option value="">انتخاب شهر</option>
+          {% for c in cities %}
+          <option value="{{ c }}" {% if form.get('city') == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="sp-field">
+        <label for="spLoc">موقعیت / محله</label>
+        <input id="spLoc" name="location" value="{{ form.get('location','') }}" placeholder="اختیاری">
+      </div>
+      <div class="sp-field">
+        <label for="spSize">متراژ (متر)</label>
+        <input id="spSize" name="size" inputmode="numeric" required value="{{ form.get('size','') }}">
+      </div>
+      <div class="sp-field">
+        <label for="spPrice">قیمت کل (تومان)</label>
+        <input id="spPrice" name="price_total" inputmode="numeric" required value="{{ form.get('price_total','') }}">
+      </div>
+      <div class="sp-field">
+        <label for="spPct">پورسانت همکار (%)</label>
+        <input id="spPct" name="commission_pct" inputmode="decimal" value="{{ form.get('commission_pct','3') }}">
+      </div>
+      <div class="sp-field">
+        <label for="spDesc">توضیحات</label>
+        <textarea id="spDesc" name="description" maxlength="2000">{{ form.get('description','') }}</textarea>
+      </div>
+      <div class="sp-field">
+        <label for="spImage">تصویر</label>
+        <input id="spImage" name="image" type="file" accept="image/*">
+      </div>
+      <button type="submit" class="sp-submit">ثبت آگهی</button>
+    </form>
+  </main>
+  {% set bottom_nav_active = 'profile' %}
+  {% include 'express_partner/partials/partner_tab_footer.html' %}
+</div>
+{% endblock %}

@@ -28,6 +28,9 @@
     '/express/partner/profile/edit': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/favorites': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/requests': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/listings': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/listings/new': { tab: 'profile', depth: 2, bottomNav: true, prefetch: false },
+    '/express/partner/inbox-visits': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/notifications': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/postchi': { tab: 'profile', depth: 2, bottomNav: false, prefetch: false },
     '/express/partner/help': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -252,6 +255,10 @@
     return p === '/express/partner/favorites' ||
       p === '/express/partner/notifications' ||
       p === '/express/partner/requests' ||
+      p === '/express/partner/listings' ||
+      p.indexOf('/express/partner/listings/') === 0 ||
+      p === '/express/partner/inbox-visits' ||
+      p.indexOf('/express/partner/inbox-visits/') === 0 ||
       p === '/express/partner/postchi' ||
       p === '/express/partner/commissions' ||
       p.indexOf('/express/partner/commissions/') === 0;

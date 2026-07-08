@@ -53,70 +53,140 @@ def _build_message(action: str, settings: dict, **kw: Any) -> str:
                 .replace('{partner_name}', name)
                 .replace('{partner_phone}', phone)
             )
-        return f'وینور — درخواست همکاری جدید\n{name}\n{phone}'
+        return f'وینور\nهمکاری جدید\n{name}\n{phone}'
 
     if action == 'withdrawal':
-        bank = (kw.get('bank_summary') or '').strip() or '—'
+        bank = (kw.get('bank_summary') or '').strip()
         amt = _format_toman(int(kw.get('amount') or 0))
-        return (
-            f'وینور — درخواست برداشت (اقدام)\n'
-            f'همکار: {name}\n'
-            f'موبایل: {phone}\n'
-            f'مبلغ: {amt} تومان\n'
-            f'حساب: {bank}'
-        )
+        msg = f'وینور\nبرداشت {amt} تومن\n{name} · {phone}'
+        if bank:
+            msg += f'\n{bank}'
+        return msg
 
     if action == 'visit':
-        title = (kw.get('land_title') or '').strip() or str(kw.get('land_code') or '—')
         code = str(kw.get('land_code') or '—')
-        vdate = (kw.get('visit_date') or '').strip() or '—'
-        return (
-            f'وینور — درخواست بازدید (اقدام)\n'
-            f'همکار: {name}\n'
-            f'موبایل: {phone}\n'
-            f'فایل: {title} ({code})\n'
-            f'تاریخ: {vdate}'
-        )
+        vdate = (kw.get('visit_date') or '').strip()
+        msg = f'وینور\nبازدید جدید · {code}\n{name} · {phone}'
+        if vdate and vdate != '—':
+            msg += f'\n{vdate}'
+        return msg
 
     if action == 'visit_done':
-        title = (kw.get('land_title') or '').strip() or str(kw.get('land_code') or '—')
         code = str(kw.get('land_code') or '—')
-        return (
-            f'وینور — تأیید انجام بازدید (اقدام)\n'
-            f'همکار: {name}\n'
-            f'موبایل: {phone}\n'
-            f'فایل: {title} ({code})\n'
-            f'همکار «بازدید انجام شد» را ثبت کرده است.'
-        )
+        return f'وینور\nانجام بازدید · {code}\n{name} · {phone}'
 
     if action == 'commission':
         code = str(kw.get('land_code') or '—')
         amt = _format_toman(int(kw.get('amount') or 0))
-        return (
-            f'وینور — پورسانت در انتظار تأیید\n'
-            f'همکار: {name}\n'
-            f'موبایل: {phone}\n'
-            f'فایل: {code}\n'
-            f'مبلغ: {amt} تومان'
-        )
+        return f'وینور\nپورسانت {amt} تومن · {code}\n{name} · {phone}'
 
     if action == 'ticket':
-        subj = (kw.get('subject') or '').strip() or 'تیکت پشتیبانی'
-        preview = (kw.get('detail') or kw.get('message') or '').strip()
-        if len(preview) > 80:
-            preview = preview[:80] + '…'
-        lines = [
-            'وینور — تیکت پشتیبانی جدید',
-            f'همکار: {name}',
-            f'موبایل: {phone}',
-            f'موضوع: {subj}',
-        ]
-        if preview:
-            lines.append(f'متن: {preview}')
-        return '\n'.join(lines)
+        subj = (kw.get('subject') or '').strip() or 'تیکت'
+        return f'وینور\nتیکت: {subj}\n{name} · {phone}'
 
     detail = (kw.get('detail') or '').strip()
-    return f'وینور — مورد جدید در صف اقدام ادمین\n{detail or name}'
+    return f'وینور\nاقدام لازم\n{detail or name}'
+
+
+def _send_sms_to(mobile: str, msg: str, *, line: str, action: str, recipient_name: str, **kwargs: Any) -> dict:
+    sms_result = send_sms_direct(mobile=mobile, message=msg, line_number=line)
+    ok = bool(sms_result.get('ok'))
+    err = None
+    body = sms_result.get('body') or {}
+
+    if not ok:
+        err = str(body.get('message') or body.get('error') or 'sms_send_failed')
+        if sms_is_infrastructure_error(err):
+            time.sleep(0.6)
+            sms_result = send_sms_direct(mobile=mobile, message=msg, line_number=line)
+            ok = bool(sms_result.get('ok'))
+            body = sms_result.get('body') or {}
+            if ok:
+                err = None
+            else:
+                err = str(body.get('message') or body.get('error') or err)
+
+    if not ok:
+        try:
+            current_app.logger.error(
+                'Admin action SMS failed action=%s mobile=%s status=%s body=%s',
+                action,
+                mobile,
+                sms_result.get('status'),
+                body,
+            )
+        except Exception:
+            pass
+
+    _append_history({
+        'mobile': mobile,
+        'recipient_name': recipient_name,
+        'message': msg,
+        'parameters': {'action': action, **{k: v for k, v in kwargs.items() if v is not None}},
+        'success': ok,
+        'status_code': sms_result.get('status', 0),
+        'response': body,
+        'source': f'admin_pending_action_{action}',
+        'created_at': datetime.utcnow().isoformat() + 'Z',
+        'error': None if ok else err,
+    })
+    return {'ok': ok, 'skipped': False, 'error': err}
+
+
+def _notify_special_land_owner(action: str, msg: str, line: str, **kwargs: Any) -> None:
+    """برای بازدید روی آگهی ویژه، علاوه بر ادمین به مالک ویژه هم پیامک بزن."""
+    if action not in ('visit', 'visit_done'):
+        return
+    land_code = str(kwargs.get('land_code') or '').strip()
+    if not land_code:
+        return
+    try:
+        from app.express_partner.partner_roles import partner_is_special
+        from app.utils.storage import load_ads_cached, load_express_partners
+        lands = load_ads_cached() or []
+        land = next((l for l in lands if isinstance(l, dict) and str(l.get('code')) == land_code), None)
+        if not land:
+            return
+        owner = normalize_iran_mobile(str(land.get('owner') or '').strip())
+        if not is_valid_iran_mobile(owner):
+            return
+        partners = load_express_partners() or []
+        profile = next(
+            (
+                p for p in partners
+                if isinstance(p, dict)
+                and normalize_iran_mobile(str(p.get('phone') or '')) == owner
+            ),
+            None,
+        )
+        if not partner_is_special(profile):
+            return
+        owner_msg = msg
+        if action == 'visit':
+            owner_msg = (
+                f"وینور\nبازدید جدید روی آگهی‌ت · {land_code}\n"
+                f"از صندوق بازدید تأیید کن"
+            )
+        elif action == 'visit_done':
+            owner_msg = (
+                f"وینور\nانجام بازدید روی آگهی‌ت · {land_code}\n"
+                f"از صندوق بازدید تأیید کن"
+            )
+        _send_sms_to(
+            owner,
+            owner_msg,
+            line=line,
+            action=action,
+            recipient_name='special_owner',
+            **kwargs,
+        )
+    except Exception:
+        try:
+            current_app.logger.exception(
+                'special owner visit SMS failed action=%s land=%s', action, land_code
+            )
+        except Exception:
+            pass
 
 
 def notify_admin_pending_action(action: str, **kwargs: Any) -> dict:
@@ -139,49 +209,25 @@ def notify_admin_pending_action(action: str, **kwargs: Any) -> dict:
             )
         except Exception:
             pass
+        # هنوز به ویژه اطلاع بده اگر لازم باشد
+        try:
+            msg = _build_message(action, settings, **kwargs)
+            _notify_special_land_owner(action, msg, line, **kwargs)
+        except Exception:
+            pass
         return {'ok': False, 'skipped': True, 'error': 'invalid_admin_phone'}
 
     msg = _build_message(action, settings, **kwargs)
-    sms_result = send_sms_direct(mobile=admin_phone, message=msg, line_number=line)
-    ok = bool(sms_result.get('ok'))
-    err = None
-    body = sms_result.get('body') or {}
-
-    if not ok:
-        err = str(body.get('message') or body.get('error') or 'sms_send_failed')
-        if sms_is_infrastructure_error(err):
-            time.sleep(0.6)
-            sms_result = send_sms_direct(mobile=admin_phone, message=msg, line_number=line)
-            ok = bool(sms_result.get('ok'))
-            body = sms_result.get('body') or {}
-            if ok:
-                err = None
-            else:
-                err = str(body.get('message') or body.get('error') or err)
-
-    if not ok:
-        try:
-            current_app.logger.error(
-                'Admin action SMS failed action=%s admin=%s status=%s body=%s',
-                action,
-                admin_phone,
-                sms_result.get('status'),
-                body,
-            )
-        except Exception:
-            pass
-
-    _append_history({
-        'mobile': admin_phone,
-        'recipient_name': 'admin',
-        'message': msg,
-        'parameters': {'action': action, **{k: v for k, v in kwargs.items() if v is not None}},
-        'success': ok,
-        'status_code': sms_result.get('status', 0),
-        'response': body,
-        'source': f'admin_pending_action_{action}',
-        'created_at': datetime.utcnow().isoformat() + 'Z',
-        'error': None if ok else err,
-    })
-
-    return {'ok': ok, 'skipped': False, 'error': err}
+    result = _send_sms_to(
+        admin_phone,
+        msg,
+        line=line,
+        action=action,
+        recipient_name='admin',
+        **kwargs,
+    )
+    try:
+        _notify_special_land_owner(action, msg, line, **kwargs)
+    except Exception:
+        pass
+    return result

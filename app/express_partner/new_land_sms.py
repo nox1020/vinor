@@ -96,14 +96,10 @@ def _express_land_detail_url(land_code: str) -> str:
 
 def build_new_land_partner_sms_message(*, commission_amount: int, detail_url: str = "") -> str:
     amt = _format_toman(commission_amount)
-    lines = [
-        "⚡ فایل جدید در وینور ثبت شد",
-        "",
-        f"این معامله می‌تواند {amt} تومان برای شما درآمد داشته باشد.",
-    ]
+    lines = [f"وینور\nفایل جدید اومد\nپورسانت تا {amt} تومن"]
     link = (detail_url or "").strip()
     if link:
-        lines.extend(["", link])
+        lines.append(link)
     return "\n".join(lines)
 
 

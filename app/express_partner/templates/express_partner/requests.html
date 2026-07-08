@@ -13,126 +13,86 @@
      class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
   <main class="mx-auto w-full max-w-lg">
 
-    <header class="req-intro">
-      <h1 class="req-intro__title">مدیریت درخواست‌ها</h1>
-      <p class="req-intro__sub">ببینید کدام درخواست نیاز به اقدام دارد و قدم بعدی چیست.</p>
-    </header>
-
-    <section class="req-summary" aria-label="خلاصه وضعیت">
+    <section class="req-summary" aria-label="وضعیت درخواست‌ها">
       <a href="{{ url_for('express_partner.requests', filter='needs_action') }}"
          data-vinor-express-nav
          class="req-summary-card req-summary-card--action {% if current_filter == 'needs_action' %}is-active{% endif %}">
         <span class="req-summary-card__count">{{ counts.needs_action|default(0) }}</span>
-        <span class="req-summary-card__label">نیاز به اقدام</span>
+        <span class="req-summary-card__label">کار لازم</span>
       </a>
       <a href="{{ url_for('express_partner.requests', filter='in_progress') }}"
          data-vinor-express-nav
          class="req-summary-card req-summary-card--progress {% if current_filter == 'in_progress' %}is-active{% endif %}">
         <span class="req-summary-card__count">{{ counts.in_progress|default(0) }}</span>
-        <span class="req-summary-card__label">در حال انجام</span>
-      </a>
-      <a href="{{ url_for('express_partner.requests', filter='cancelled') }}"
-         data-vinor-express-nav
-         class="req-summary-card req-summary-card--cancel {% if current_filter == 'cancelled' %}is-active{% endif %}">
-        <span class="req-summary-card__count">{{ counts.cancelled|default(0) }}</span>
-        <span class="req-summary-card__label">لغو شده</span>
+        <span class="req-summary-card__label">در انتظار</span>
       </a>
       <a href="{{ url_for('express_partner.requests', filter='completed') }}"
          data-vinor-express-nav
          class="req-summary-card req-summary-card--done {% if current_filter == 'completed' %}is-active{% endif %}">
         <span class="req-summary-card__count">{{ counts.completed|default(0) }}</span>
-        <span class="req-summary-card__label">تکمیل شده</span>
+        <span class="req-summary-card__label">تمام‌شده</span>
+      </a>
+      <a href="{{ url_for('express_partner.requests', filter='cancelled') }}"
+         data-vinor-express-nav
+         class="req-summary-card req-summary-card--cancel {% if current_filter == 'cancelled' %}is-active{% endif %}">
+        <span class="req-summary-card__count">{{ counts.cancelled|default(0) }}</span>
+        <span class="req-summary-card__label">لغو</span>
       </a>
     </section>
 
-    <nav class="req-tabs-wrap" aria-label="فیلتر درخواست‌ها">
-      <div class="req-tabs" role="tablist">
-        {% for option in filter_options %}
-        <a href="{{ url_for('express_partner.requests', filter=option.key if option.key != 'all' else None) }}"
-           data-vinor-express-nav
-           role="tab"
-           aria-selected="{{ 'true' if option.key == current_filter else 'false' }}"
-           class="req-tab {% if option.key == current_filter %}is-active{% endif %}">
-          {{ option.label }}
-          <span>{{ option.count }}</span>
-        </a>
-        {% endfor %}
-      </div>
-    </nav>
-
     {% if request.args.get('submitted') %}
     <div class="req-flash" role="status">
-      <i class="fas fa-circle-check ml-1" aria-hidden="true"></i>
-      درخواست بازدید ثبت شد. وضعیت آن در لیست زیر قابل پیگیری است.
+      درخواست ثبت شد — وضعیت را در «در انتظار» ببینید.
     </div>
     {% endif %}
 
     {% if items and items|length > 0 %}
+    <p class="req-list-label">{{ current_filter_label }} · {{ current_filter_count }} مورد</p>
     <section class="req-list" aria-label="فهرست درخواست‌ها">
       {% for item in items %}
-      <article class="req-card req-card--{{ item.mgmt_bucket }}{% if item.needs_attention %} req-card--urgent{% endif %}">
-        <div class="req-card__head">
+      <a href="{{ item.detail_url or '#' }}"
+         {% if item.detail_url %}data-vinor-express-nav{% endif %}
+         class="req-card req-card--{{ item.mgmt_bucket }}{% if item.needs_attention %} req-card--urgent{% endif %}">
+        <div class="req-card__main">
           <h2 class="req-card__title">{{ item.land_title }}</h2>
-          <span class="req-card__status req-card__status--{{ item.mgmt_bucket }}">{{ item.mgmt_bucket_label }}</span>
-        </div>
-
-        <div class="req-card__next">
-          <span class="req-card__next-label">اقدام بعدی</span>
-          {{ item.next_action }}
-        </div>
-
-        {% if item.progress_total %}
-        <div class="req-card__progress" aria-label="پیشرفت درخواست">
-          <div class="req-card__bar">
-            <span style="width: {{ item.progress_pct }}%;"></span>
-          </div>
-          <div class="req-card__progress-meta">
-            <span>{{ item.progress_line }}</span>
-            <span>{{ item.progress_pct_label }}</span>
-          </div>
-        </div>
-        {% endif %}
-
-        <div class="req-card__foot">
-          <span class="req-card__date">
-            {% if item.visit_date_jalali %}
-            بازدید: {{ item.visit_date_jalali }}
-            {% elif item.updated_at %}
-            بروزرسانی: {{ item.updated_at[:10] }}
-            {% endif %}
-          </span>
-          {% if item.detail_url %}
-          <a href="{{ item.detail_url }}"
-             data-vinor-express-nav
-             class="req-card__cta">
-            مشاهده جزئیات
-            <i class="fas fa-chevron-left text-[9px]" aria-hidden="true"></i>
-          </a>
+          <p class="req-card__next">{{ item.next_action }}</p>
+          {% if item.customer_name or item.visit_date_jalali %}
+          <p class="req-card__meta">
+            {% if item.customer_name %}{{ item.customer_name }}{% endif %}
+            {% if item.customer_name and item.visit_date_jalali %} · {% endif %}
+            {% if item.visit_date_jalali %}{{ item.visit_date_jalali }}{% endif %}
+          </p>
           {% endif %}
         </div>
-      </article>
+        <i class="fas fa-chevron-left req-card__chev" aria-hidden="true"></i>
+      </a>
       {% endfor %}
     </section>
     {% else %}
     <section class="req-empty">
-      <div class="req-empty__icon" aria-hidden="true">
-        <i class="fas fa-clipboard-list"></i>
-      </div>
       <h2 class="req-empty__title">
-        {% if counts.all|default(0) > 0 %}موردی در این فیلتر نیست{% else %}هنوز درخواستی ثبت نشده{% endif %}
+        {% if counts.all|default(0) == 0 %}
+        هنوز درخواستی نیست
+        {% elif current_filter == 'needs_action' %}
+        فعلاً کار لازمی ندارید
+        {% else %}
+        موردی اینجا نیست
+        {% endif %}
       </h2>
       <p class="req-empty__text">
-        {% if counts.all|default(0) > 0 %}
-        فیلتر دیگری را انتخاب کنید یا از کارت‌های بالا وضعیت موردنظر را ببینید.
+        {% if counts.all|default(0) == 0 %}
+        بعد از ثبت بازدید، درخواست اینجا می‌آید.
+        {% elif current_filter == 'needs_action' and (counts.in_progress|default(0) > 0) %}
+        موارد منتظر تأیید ادمین در «در انتظار» هستند.
         {% else %}
-        وقتی برای فایل‌های اکسپرس درخواست بازدید ثبت کنید، اینجا مدیریت و پیگیری می‌شود.
+        از کارت‌های بالا وضعیت دیگری را ببینید.
         {% endif %}
       </p>
-      <a href="{{ url_for('express_partner.files') }}"
-         data-vinor-express-nav
-         class="req-empty__btn">
-        مشاهده فایل‌ها
-      </a>
+      {% if counts.all|default(0) == 0 %}
+      <a href="{{ url_for('express_partner.files') }}" data-vinor-express-nav class="req-empty__btn">فایل‌ها</a>
+      {% elif current_filter == 'needs_action' and (counts.in_progress|default(0) > 0) %}
+      <a href="{{ url_for('express_partner.requests', filter='in_progress') }}" data-vinor-express-nav class="req-empty__btn">در انتظار</a>
+      {% endif %}
     </section>
     {% endif %}
   </main>

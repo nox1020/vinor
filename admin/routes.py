@@ -609,13 +609,13 @@ def _default_settings() -> Dict[str, Any]:
         # تنظیمات SMS
         'sms_line_number': '09981801922',  # شماره خط اختصاصی SMS
         # پیام درخواست همکاری (برای همکار)
-        'partner_application_sms_message': 'درخواست همکاری شما ثبت شد و در حال بررسی است. وینور',
+        'partner_application_sms_message': 'وینور\nدرخواست همکاری‌ت ثبت شد؛ منتظر بررسی.',
         # پیام تایید همکاری (برای همکار)
-        'partner_approval_sms_message': 'پنل همکاری وینور برای شما فعال شد. وینور',
+        'partner_approval_sms_message': 'وینور\nپنل همکاری‌ت فعاله. بزن بریم!',
         # شماره ادمین برای دریافت پیامک درخواست همکاری جدید
         'partner_application_admin_phone': '09121471301',
         # پیامک ارسالی به ادمین هنگام ثبت درخواست همکاری جدید
-        'partner_application_admin_sms_message': 'درخواست همکاری جدید همکار در وینور ثبت شد.',
+        'partner_application_admin_sms_message': 'وینور\nهمکاری جدید',
         # روزهای مجاز ثبت بازدید توسط همکار (۵=شنبه … ۴=جمعه)
         'visit_allowed_weekdays': [5, 6, 0, 1, 2, 3, 4],
         # مبلغ ثابت پورسانت هر بازدید (تومان)
@@ -4048,6 +4048,47 @@ def express_partner_send_message(phone: str):
     return redirect(url_for('admin.express_partner_detail', **redirect_kw))
 
 
+@admin_bp.post('/express/partners/<path:phone>/set-special')
+@login_required
+def express_partner_set_special(phone: str):
+    """اعطای/حذف سطح همکار ویژه."""
+    from app.express_partner.partner_roles import partner_is_approved, set_partner_tier
+    from app.utils.storage import load_express_partners, save_express_partners
+
+    phone = _normalize_phone((phone or '').strip())
+    back_q = (request.form.get('q') or request.args.get('q') or '').strip()
+    back_filter = (request.form.get('filter') or request.args.get('filter') or 'all').strip()
+    redirect_kw = {'phone': phone, 'q': back_q, 'filter': back_filter}
+    want_special = str(request.form.get('special') or '').strip() in ('1', 'true', 'on', 'yes')
+
+    if not phone:
+        flash('شماره معتبر نیست.', 'warning')
+        return redirect(url_for('admin.express_partners', q=back_q, filter=back_filter))
+
+    partners = load_express_partners() or []
+    if not isinstance(partners, list):
+        partners = []
+    found = None
+    for p in partners:
+        if isinstance(p, dict) and _normalize_phone(str(p.get('phone') or '')) == phone:
+            found = p
+            break
+    if not found or not partner_is_approved(found):
+        flash('فقط همکار تأییدشده را می‌توان ویژه کرد.', 'warning')
+        return redirect(url_for('admin.express_partner_detail', **redirect_kw))
+
+    set_partner_tier(found, want_special)
+    try:
+        save_express_partners(partners)
+    except Exception:
+        current_app.logger.exception('set_special save failed phone=%s', phone)
+        flash('ذخیره سطح ویژه ناموفق بود.', 'danger')
+        return redirect(url_for('admin.express_partner_detail', **redirect_kw))
+
+    flash('همکار ویژه فعال شد.' if want_special else 'سطح ویژه برداشته شد.', 'success')
+    return redirect(url_for('admin.express_partner_detail', **redirect_kw))
+
+
 @admin_bp.post('/express/partners/<path:phone>/adjust-balance')
 @login_required
 def express_partner_adjust_balance(phone: str):
@@ -5901,10 +5942,10 @@ def _approve_express_partner(
     if send_sms and phone.startswith('09'):
         try:
             settings = get_settings()
-            sms_message = settings.get('partner_approval_sms_message', 'پنل همکاری وینور برای شما فعال شد. وینور')
+            sms_message = settings.get('partner_approval_sms_message', 'وینور\nپنل همکاری‌ت فعاله. بزن بریم!')
             sms_line_number = settings.get('sms_line_number', '09981801922')
             if not sms_message or not sms_message.strip():
-                sms_message = 'پنل همکاری وینور برای شما فعال شد. وینور'
+                sms_message = 'وینور\nپنل همکاری‌ت فعاله. بزن بریم!'
             current_app.logger.info('Sending approval SMS to partner: %s (%s)', name, phone)
             sms_result = send_sms_direct(mobile=phone, message=sms_message, line_number=sms_line_number)
             try:
