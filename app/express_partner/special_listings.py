@@ -189,7 +189,7 @@ def create_special_listing_from_express_form(
     if not payment_method:
         return None, "payment_required"
 
-    vinor_contact = _norm_phone((form.get("vinor_contact") or "").strip()) or owner
+    vinor_contact = _norm_phone(owner)
     if len(vinor_contact) < 10:
         return None, "invalid_contact"
 

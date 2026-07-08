@@ -2852,6 +2852,8 @@ def api_favorites_cards():
 def requests_page():
     """مرکز مدیریت و پیگیری درخواست‌های بازدید همکار."""
     me_phone = (session.get('user_phone') or '').strip()
+    profile = getattr(g, 'express_partner_profile', None)
+    is_special = _is_partner_special(profile)
     current_filter = (request.args.get('filter') or '').strip().lower()
     allowed_filters = ('all',) + REQUEST_MGMT_BUCKETS
     if current_filter not in allowed_filters:
@@ -2974,6 +2976,17 @@ def requests_page():
     }
     current_filter_label = short_labels.get(current_filter, current_filter_label)
 
+    special_inbox_needs_count = 0
+    if is_special:
+        try:
+            from .special_visit_inbox import visits_for_special_owner
+            special_inbox_items = visits_for_special_owner(me_phone)
+            special_inbox_needs_count = sum(
+                1 for i in special_inbox_items if i.get('needs_action')
+            )
+        except Exception:
+            special_inbox_needs_count = 0
+
     return render_template(
         'express_partner/requests.html',
         items=items,
@@ -2981,6 +2994,8 @@ def requests_page():
         current_filter=current_filter,
         current_filter_label=current_filter_label,
         current_filter_count=len(items),
+        is_special=is_special,
+        special_inbox_needs_count=special_inbox_needs_count,
         hide_header=True,
     )
 
@@ -5598,14 +5613,15 @@ def special_listing_upload_document():
     })
 
 
-def _render_special_listing_form():
+def _render_special_listing_form(me_phone: str = ''):
     cities = load_active_cities() or []
+    phone = (me_phone or '').strip()
     return render_template(
-        'admin/add_express_listing.html',
+        'express_partner/special_listing_new.html',
         cities=cities,
         is_edit=False,
         land={},
-        form_values={},
+        form_values={'vinor_contact': phone} if phone else {},
         listing_code='',
         listing_form_action=url_for('express_partner.special_listing_new'),
         listing_back_url=url_for('express_partner.special_listings'),
@@ -5614,6 +5630,9 @@ def _render_special_listing_form():
         listing_upload_document_url=url_for('express_partner.special_listing_upload_document'),
         listing_page_title='ثبت آگهی همکار ویژه',
         listing_page_subtitle='اطلاعات ملک را وارد و منتشر کنید',
+        listing_vinor_contact_locked=True,
+        listing_vinor_contact_default=phone,
+        listing_hide_contact_section=True,
     )
 
 
@@ -5639,7 +5658,7 @@ def special_listing_new():
         )
         if err:
             flash(SPECIAL_LISTING_ERRORS.get(err, 'ثبت آگهی ناموفق بود.'), 'error')
-            return _render_special_listing_form()
+            return _render_special_listing_form(me_phone)
 
         try:
             from .new_land_sms import notify_all_partners_new_express_land_background
@@ -5657,7 +5676,7 @@ def special_listing_new():
         flash(f'آگهی با کد {rec.get("code")} ثبت شد.', 'success')
         return redirect(url_for('express_partner.special_listings'))
 
-    return _render_special_listing_form()
+    return _render_special_listing_form(me_phone)
 
 
 @express_partner_bp.route('/inbox-visits', methods=['GET'], endpoint='special_visit_inbox')

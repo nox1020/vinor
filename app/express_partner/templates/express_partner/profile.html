@@ -51,7 +51,6 @@
 
       <nav class="divide-y divide-white/10" aria-label="منوی پروفایل">
         {{ profile_menu_row(url_for('express_partner.cooperation_terms', next=url_for('express_partner.profile')), 'fa-handshake', 'شرایط همکاری', 'پورسانت، مراحل ثبت‌نام و قوانین') }}
-        {{ profile_menu_row(url_for('express_partner.routine'), 'fa-list-check', 'آمار فعالیت', 'پیش‌نمایش روتین همکاری') }}
         {{ profile_menu_row(url_for('express_partner.top_sellers'), 'fa-trophy', 'فروشنده‌های برتر', 'رتبه‌بندی همکاران') }}
       </nav>
 
@@ -119,18 +118,17 @@
       </section>
 
       <nav class="divide-y divide-white/10" aria-label="منوی پروفایل">
+        {% set visits_subtitle = 'درخواست‌های من و دریافتی آگهی‌ها' if is_special|default(false) else 'وضعیت درخواست‌های بازدید من' %}
         {% if not is_approved %}
         {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری', 'برای تبدیل به همکار اکسپرس درخواست دهید', tour='apply-link') }}
         {% endif %}
 
         {% if is_special|default(false) %}
         {{ profile_menu_row(url_for('express_partner.special_listings'), 'fa-building', 'آگهی‌های من', 'ثبت و مدیریت فایل‌های شما', tour='special-listings-link') }}
-        {{ profile_menu_row(url_for('express_partner.special_visit_inbox'), 'fa-inbox', 'بازدیدهای دریافتی', 'تأیید بازدید روی آگهی‌های شما', tour='special-inbox-link') }}
         {% endif %}
 
+        {{ profile_menu_row(url_for('express_partner.requests'), 'fa-clipboard-list', 'بازدیدها', visits_subtitle, tour='requests-link') }}
         {{ profile_menu_row(url_for('express_partner.favorites'), 'fa-bookmark', 'نشان‌ها', 'زمین‌های ذخیره‌شده', tour='favorites-link', badge_key='favorites') }}
-        {{ profile_menu_row(url_for('express_partner.requests'), 'fa-clipboard-list', 'درخواست‌ها', 'وضعیت درخواست‌های بازدید', tour='requests-link') }}
-        {{ profile_menu_row(url_for('express_partner.routine'), 'fa-list-check', 'آمار فعالیت شما', 'روتین روزانه و تقویم پیشرفت' if is_approved else 'پیش‌نمایش روتین همکاری', tour='routine-link') }}
 
         {% if is_vinor_apk %}
         <div id="appUpdateCardWrap" class="{% if not show_app_update_card %}hidden{% endif %}">

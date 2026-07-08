@@ -40,6 +40,24 @@
       </a>
     </section>
 
+    {% if is_special %}
+    <a href="{{ url_for('express_partner.special_visit_inbox') }}"
+       data-vinor-express-nav
+       class="req-card req-card--needs_action mb-3">
+      <div class="req-card__main">
+        <h2 class="req-card__title">بازدیدهای دریافتی آگهی‌های من</h2>
+        <p class="req-card__next">
+          {% if special_inbox_needs_count > 0 %}
+          {{ special_inbox_needs_count }} مورد نیاز به اقدام
+          {% else %}
+          مشاهده و مدیریت درخواست‌های دریافتی
+          {% endif %}
+        </p>
+      </div>
+      <i class="fas fa-chevron-left req-card__chev" aria-hidden="true"></i>
+    </a>
+    {% endif %}
+
     {% if request.args.get('submitted') %}
     <div class="req-flash" role="status">
       درخواست ثبت شد — وضعیت را در «در انتظار» ببینید.

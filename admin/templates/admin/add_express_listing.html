@@ -564,12 +564,6 @@
         {% if listing_page_subtitle %}{{ listing_page_subtitle }}{% elif is_edit %}کد {{ listing_code }} · تغییرات را ذخیره کنید{% else %}اطلاعات ملک را وارد و منتشر کنید{% endif %}
       </p>
     </div>
-    <button type="button"
-            @click="darkMode = !darkMode; localStorage.setItem('theme', darkMode ? 'dark' : 'light')"
-            class="w-9 h-9 shrink-0 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
-            aria-label="تغییر تم">
-      <i class="fa-solid" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
-    </button>
   </div>
 
   <form method="POST" enctype="multipart/form-data"
@@ -862,16 +856,27 @@
     </section>
 
     <!-- تماس -->
+    {% if not listing_hide_contact_section|default(false) %}
     <section class="dv-card">
       <p class="dv-card-title">تماس</p>
+      {% set contact_locked = listing_vinor_contact_locked|default(false) %}
+      {% set contact_default = listing_vinor_contact_default|default('09121471301') %}
       <div class="dv-row">
-        <label class="dv-label" for="vinor_contact">شماره پشتیبانی <span class="text-red-500">*</span></label>
+        <label class="dv-label" for="vinor_contact">
+          {% if contact_locked %}شماره تماس شما{% else %}شماره پشتیبانی{% endif %}
+          <span class="text-red-500">*</span>
+        </label>
         <div class="dv-field">
           <input type="tel" name="vinor_contact" id="vinor_contact" required class="dv-inp" dir="ltr"
-                 value="{{ fld('vinor_contact', '09121471301') }}">
+                 value="{{ fld('vinor_contact', contact_default) }}"
+                 {% if contact_locked %}readonly aria-readonly="true"{% endif %}>
+          {% if contact_locked %}
+          <p class="dv-hint">شماره حساب شما — غیرقابل تغییر</p>
+          {% endif %}
         </div>
       </div>
     </section>
+    {% endif %}
 
     <!-- دسکتاپ -->
     <div class="hidden lg:block pt-2">

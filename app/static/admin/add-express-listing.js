@@ -48,6 +48,9 @@
   }
 
   const isEdit = form.dataset.isEdit === '1';
+  const DRAFT_KEY = 'vinor_express_form_draft::' + window.location.pathname;
+  const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  let restoringDraft = false;
 
   function recalc() {
     const size = rawFrom($('input[name="size"]', form));
@@ -633,6 +636,164 @@
   });
   $$('input[name="installment_amounts[]"]', instRows).forEach(hookIntInput);
   toggleInst();
+
+  function collectDraftValues() {
+    /** @type {Record<string, string[]>} */
+    const values = {};
+    const fd = new FormData(form);
+    fd.forEach((value, key) => {
+      if (key === 'csrf_token') return;
+      if (!values[key]) values[key] = [];
+      values[key].push(String(value == null ? '' : value));
+    });
+
+    // Checkboxهایی که انتخاب نشده‌اند در FormData نیستند؛ برای بازیابی دقیق ثبت‌شان می‌کنیم.
+    $$('input[type="checkbox"][name]', form).forEach((el) => {
+      const name = el.name;
+      if (!name) return;
+      if (!values[name]) values[name] = [];
+      if (el.checked) {
+        const val = String(el.value || 'on');
+        if (!values[name].includes(val)) values[name].push(val);
+      }
+    });
+    return values;
+  }
+
+  function saveDraft() {
+    if (isSubmitting || restoringDraft || isEdit) return;
+    try {
+      const payload = {
+        ts: Date.now(),
+        values: collectDraftValues(),
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+    } catch (_) {}
+  }
+
+  function restoreDraft() {
+    if (isEdit) return;
+    let raw = null;
+    try {
+      raw = localStorage.getItem(DRAFT_KEY);
+    } catch (_) {
+      raw = null;
+    }
+    if (!raw) return;
+
+    let payload = null;
+    try {
+      payload = JSON.parse(raw);
+    } catch (_) {
+      return;
+    }
+    if (!payload || !payload.values || typeof payload.values !== 'object') return;
+    if (!payload.ts || Date.now() - Number(payload.ts) > DRAFT_TTL_MS) {
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch (_) {}
+      return;
+    }
+
+    // اگر کاربر چیزی در فرم وارد کرده، بازیابی خودکار نکن.
+    const hasUserInput = $$('input[name], select[name], textarea[name]', form).some((el) => {
+      if (!el.name || el.name === 'csrf_token') return false;
+      if (el.type === 'file') return false;
+      if (el.type === 'checkbox' || el.type === 'radio') return el.checked;
+      return String(el.value || '').trim() !== '';
+    });
+    if (hasUserInput) return;
+
+    const values = payload.values;
+    restoringDraft = true;
+
+    // ساده‌ها
+    $$('input[name], select[name], textarea[name]', form).forEach((el) => {
+      const name = el.name;
+      if (!name || name === 'csrf_token') return;
+      if (el.type === 'file') return;
+      const arr = Array.isArray(values[name]) ? values[name] : [];
+
+      if (el.type === 'checkbox') {
+        const val = String(el.value || 'on');
+        el.checked = arr.includes(val);
+        return;
+      }
+      if (el.type === 'radio') {
+        el.checked = arr.includes(String(el.value || ''));
+        return;
+      }
+      if (el.tagName === 'SELECT' && el.multiple) {
+        Array.from(el.options).forEach((opt) => {
+          opt.selected = arr.includes(opt.value);
+        });
+        return;
+      }
+      const first = arr.length ? arr[0] : '';
+      el.value = first;
+    });
+
+    // اقساط (ردیف‌های پویا)
+    const months = Array.isArray(values['installment_months[]']) ? values['installment_months[]'] : [];
+    const amounts = Array.isArray(values['installment_amounts[]']) ? values['installment_amounts[]'] : [];
+    if (instRows) {
+      instRows.innerHTML = '';
+      const rowsCount = Math.max(months.length, amounts.length);
+      for (let i = 0; i < rowsCount; i++) {
+        instRows.insertAdjacentHTML('beforeend', instRowHtml(months[i] || '', amounts[i] || ''));
+      }
+      $$('input[name="installment_amounts[]"]', instRows).forEach(hookIntInput);
+    }
+    toggleInst();
+
+    // تصاویر hidden
+    if (hiddenFields) {
+      hiddenFields.innerHTML = '';
+      const imgs = Array.isArray(values.images) ? values.images : [];
+      imgs.forEach((img) => {
+        if (!img) return;
+        const inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'images';
+        inp.value = img;
+        hiddenFields.appendChild(inp);
+      });
+      imageItems = [];
+      restoreImagesFromForm();
+    }
+
+    restoreVideoFromForm();
+    $$('.doc-pick', form).forEach((pickBtn) => {
+      const inputId = pickBtn.getAttribute('data-input');
+      const hiddenId = pickBtn.getAttribute('data-hidden');
+      const hiddenEl = hiddenId ? document.getElementById(hiddenId) : null;
+      const key = hiddenId || inputId;
+      if (!hiddenEl || !key) return;
+      const state = getMediaState(key);
+      const path = (hiddenEl.value || '').trim();
+      if (!path) return;
+      state.status = 'done';
+      state.path = path;
+      state.name = path.replace(/^draft_\d+_/, '') || path.split('/').pop() || path;
+      setPickerUi(pickBtn, state, state.name);
+    });
+
+    initIntFieldsFromDom();
+    recalc();
+    syncMapStatus();
+    restoringDraft = false;
+  }
+
+  restoreDraft();
+  const debouncedSaveDraft = (() => {
+    let t = 0;
+    return () => {
+      clearTimeout(t);
+      t = window.setTimeout(saveDraft, 350);
+    };
+  })();
+  form.addEventListener('input', debouncedSaveDraft);
+  form.addEventListener('change', debouncedSaveDraft);
 
   // نقشه — سبک دیوار (پین ثابت وسط، جابه‌جایی نقشه)
   const mapLocationRow = $('#mapLocationRow', form);
