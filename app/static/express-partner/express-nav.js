@@ -86,7 +86,7 @@
     var p = normPath(pathname || '');
     if (ROUTE_REGISTRY[p]) return ROUTE_REGISTRY[p];
     if (LAND_DETAIL_RE.test(p)) {
-      return { tab: '', depth: 2, bottomNav: false, prefetch: false };
+      return { tab: '', depth: 2, bottomNav: false, prefetch: true };
     }
     if (p.indexOf(PREFIX) === 0) {
       return { tab: '', depth: 1, bottomNav: true, prefetch: true };
@@ -337,10 +337,35 @@
     clearAllPrefetchCache();
   }
 
+  var LAND_PREFETCH_MAX = 12;
+
+  function isLandDetailHref(href) {
+    try {
+      return LAND_DETAIL_RE.test(normPath(parseUrl(href).pathname));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function storePrefetchHtml(href, html) {
+    var key = navCacheKey(href);
+    if (!key || !html) return;
+    prefetchCache[key] = html;
+    if (!isLandDetailHref(href)) return;
+    try {
+      var landKeys = Object.keys(prefetchCache).filter(function (k) {
+        var raw = (k.split('::')[1] || k);
+        return isLandDetailHref(raw);
+      });
+      while (landKeys.length > LAND_PREFETCH_MAX) {
+        delete prefetchCache[landKeys.shift()];
+      }
+    } catch (_) {}
+  }
+
   function shouldUsePrefetchCache(href) {
     try {
       var p = normPath(parseUrl(href).pathname);
-      if (LAND_DETAIL_RE.test(p)) return false;
       if (!routePrefetchAllowed(p)) return false;
       if (p === '/express/partner/login/otp') return false;
       if (p === '/express/partner/login') return true;
@@ -746,6 +771,28 @@
         prefetchHref(new URL('/express/partner/login', window.location.origin).href);
       } catch (_) {}
     }
+    if ((navKey === 'home' || navKey === 'files') && currentAuthSegment() !== 'guest') {
+      var prefetchLandCards = function () {
+        try {
+          var seen = Object.create(null);
+          var max = 6;
+          var count = 0;
+          document.querySelectorAll('a.vn-home-file-row[href], .express-card[data-href]').forEach(function (el) {
+            if (count >= max) return;
+            var href = el.getAttribute(el.matches('.express-card[data-href]') ? 'data-href' : 'href');
+            if (!href || seen[href] || !isLandDetailHref(href)) return;
+            seen[href] = true;
+            count += 1;
+            prefetchHref(href);
+          });
+        } catch (_) {}
+      };
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(prefetchLandCards, { timeout: 1800 });
+      } else {
+        window.setTimeout(prefetchLandCards, 400);
+      }
+    }
     if (navKey === 'profile' && currentAuthSegment() === 'guest') {
       try {
         prefetchHref(new URL('/express/partner/login', window.location.origin).href);
@@ -948,7 +995,7 @@
         if (reqPath !== resPath && (isAuthSoftPath(resPath) || requiresLoginPath(reqPath))) return;
         var doc = new DOMParser().parseFromString(payload.html, 'text/html');
         if (needsFullNavForResponse(href, resolved, doc)) return;
-        prefetchCache[navCacheKey(resolved)] = payload.html;
+        storePrefetchHtml(resolved, payload.html);
       })
       .catch(function () {})
       .finally(function () {
@@ -1071,7 +1118,7 @@
           return false;
         }
         if (shouldUsePrefetchCache(payload.url || href)) {
-          prefetchCache[navCacheKey(payload.url || href)] = payload.html;
+          storePrefetchHtml(payload.url || href, payload.html);
         }
         return applyHtml(payload.html, payload.url || href);
       })
@@ -1530,13 +1577,24 @@
     return shouldPrefetchNav(window.location.href, href);
   }
 
+  function prefetchFromPointerTarget(target) {
+    if (!target || !target.closest) return;
+    var card = target.closest('.express-card[data-href]');
+    if (card) {
+      var cardHref = card.getAttribute('data-href');
+      if (cardHref && shouldPrefetchNav(window.location.href, cardHref)) prefetchHref(cardHref);
+      return;
+    }
+    var a = target.closest('a[href]');
+    if (!a) return;
+    var href = a.getAttribute('href');
+    if (shouldPrefetchLink(a, href)) prefetchHref(href);
+  }
+
   document.addEventListener(
     'touchstart',
     function (e) {
-      var a = e.target.closest && e.target.closest('a[href]');
-      if (!a) return;
-      var href = a.getAttribute('href');
-      if (shouldPrefetchLink(a, href)) prefetchHref(href);
+      prefetchFromPointerTarget(e.target);
     },
     { passive: true }
   );
@@ -1544,10 +1602,7 @@
   document.addEventListener(
     'mouseover',
     function (e) {
-      var a = e.target.closest && e.target.closest('a[href]');
-      if (!a) return;
-      var href = a.getAttribute('href');
-      if (shouldPrefetchLink(a, href)) prefetchHref(href);
+      prefetchFromPointerTarget(e.target);
     },
     { passive: true }
   );

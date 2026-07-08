@@ -1157,6 +1157,41 @@ def _assignment_display_status(assignment: Dict[str, Any] | None) -> str:
     return st or 'active'
 
 
+_ASSIGNMENT_STATUS_PRIORITY = {
+    'sold': 5,
+    'in_transaction': 4,
+    'closed': 3,
+    'pending': 2,
+    'approved': 1,
+    'active': 0,
+    '': 0,
+}
+
+
+def _express_assignment_indexes(
+    assignments: List[Dict[str, Any]],
+    me_phone: str,
+) -> tuple[Dict[str, str], Dict[str, Dict[str, Any]]]:
+    """یک پاس روی assignments: وضعیت هر فایل + تخصیص‌های من بر اساس کد."""
+    me = (me_phone or '').strip()
+    by_land_status: Dict[str, str] = {}
+    my_by_code: Dict[str, Dict[str, Any]] = {}
+    priority = _ASSIGNMENT_STATUS_PRIORITY
+    for a in assignments:
+        if not isinstance(a, dict):
+            continue
+        lc = str(a.get('land_code') or '').strip()
+        if not lc:
+            continue
+        st = _assignment_display_status(a)
+        cur = by_land_status.get(lc, 'active')
+        if priority.get(st, 0) > priority.get(cur, 0):
+            by_land_status[lc] = st
+        if me and str(a.get('partner_phone') or '').strip() == me:
+            my_by_code[lc] = a
+    return by_land_status, my_by_code
+
+
 def _auto_release_expired_transactions(assignments: List[Dict[str, Any]]) -> None:
     """رفع خودکار معاملات بعد از ۵ روز بدون تأیید پشتیبان"""
     from datetime import datetime, timedelta
@@ -4438,32 +4473,20 @@ def _express_land_partner_ctx(code: str, me_phone: str) -> Dict[str, Any] | None
     if not key or not ph or not _express_land_in_catalog(key):
         return None
     assignments = load_express_assignments() or []
-    global_status = 'active'
-    status_priority = {
-        'sold': 5, 'in_transaction': 4, 'closed': 3, 'pending': 2, 'approved': 1, 'active': 0, '': 0,
-    }
+    by_land_status, my_by_code = _express_assignment_indexes(assignments, ph)
+    global_status = by_land_status.get(key, 'active')
     holder_phone = None
     for a in assignments:
         if str(a.get('land_code') or '').strip() != key:
             continue
-        status = _assignment_display_status(a)
-        if status_priority.get(status, 0) > status_priority.get(global_status, 0):
-            global_status = status
         th = str(a.get('transaction_holder') or '').strip()
         if th:
             holder_phone = th
-    my_assignment = next(
-        (
-            a for a in assignments
-            if str(a.get('land_code') or '').strip() == key
-            and str(a.get('partner_phone') or '').strip() == ph
-        ),
-        None,
-    )
+            break
     return {
         'global_status': global_status,
         'holder_phone': holder_phone,
-        'my_assignment': my_assignment,
+        'my_assignment': my_by_code.get(key),
     }
 
 
@@ -4478,7 +4501,7 @@ def _partner_land_tx_payload(
     visit_requests = load_express_visit_requests() or []
     if not isinstance(visit_requests, list):
         visit_requests = []
-    commissions = load_express_commissions() or []
+    commissions = load_express_commissions_cached() or []
     if not isinstance(commissions, list):
         commissions = []
     visit_commission_required = _visit_commission_required_for(commissions, me_phone, code)
@@ -6552,32 +6575,18 @@ def land_detail(code: str):
         # روتین را خارج از مسیر رندر جزئیات اجرا کن تا صفحه سریع باز شود
         _defer_routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
 
-    # محاسبه پورسانت از assignments
+    # محاسبه پورسانت و وضعیت از assignments — یک پاس روی لیست
     assignments = load_express_assignments() or []
-    assignment = next((a for a in assignments if a.get('land_code') == code and a.get('partner_phone') == me_phone), None)
-    global_assignment_status = 'active'
-    status_priority = {
-        'sold': 5,
-        'in_transaction': 4,
-        'closed': 3,
-        'pending': 2,
-        'approved': 1,
-        'active': 0,
-        '': 0,
-    }
-    for a in assignments:
-        if str(a.get('land_code')) != str(code):
-            continue
-        status = _assignment_display_status(a)
-        if status_priority.get(status, 0) > status_priority.get(global_assignment_status, 0):
-            global_assignment_status = status
+    by_land_status, my_assign_by_code = _express_assignment_indexes(assignments, me_phone)
+    assignment = my_assign_by_code.get(str(code))
+    global_assignment_status = by_land_status.get(str(code), 'active')
     if _express_land_marked_sold(land):
         global_assignment_status = 'sold'
     try:
         is_approved = _is_partner_approved(partner_profile)
     except Exception:
         is_approved = False
-    
+
     if assignment:
         land['_assignment_id'] = assignment.get('id')
     land['_assignment_status'] = global_assignment_status
@@ -6588,7 +6597,7 @@ def land_detail(code: str):
     visit_requests_list = load_express_visit_requests() or []
     if not isinstance(visit_requests_list, list):
         visit_requests_list = []
-    commissions_for_tx = load_express_commissions() or []
+    commissions_for_tx = load_express_commissions_cached() or []
     if not isinstance(commissions_for_tx, list):
         commissions_for_tx = []
     tx_state = resolve_partner_land_tx_state(
@@ -6649,42 +6658,21 @@ def land_detail(code: str):
     from ..utils.seo import build_land_seo, similar_lands
     express_lands = load_express_lands_cached() or []
     seo = build_land_seo(land, canonical_url=canonical_url)
-    related_raw = similar_lands(land, express_lands, limit=15)
+    related_raw = similar_lands(land, express_lands, limit=6)
     related_lands: List[Dict[str, Any]] = []
     if related_raw:
-        rel_code_status: Dict[str, str] = {}
-        for a in assignments:
-            ck = str(a.get('land_code') or '')
-            if not ck:
-                continue
-            st = _assignment_display_status(a)
-            cur = rel_code_status.get(ck, 'active')
-            if status_priority.get(st, 0) > status_priority.get(cur, 0):
-                rel_code_status[ck] = st
-        my_assign_by_code: Dict[str, Dict[str, Any]] = {}
-        if me_phone:
-            for a in assignments:
-                if str(a.get('partner_phone')) == me_phone:
-                    ck = str(a.get('land_code') or '')
-                    if ck:
-                        my_assign_by_code[ck] = a
         for item in related_raw:
             if not isinstance(item, dict):
                 continue
             ck = str(item.get('code') or '')
-            gs = rel_code_status.get(ck, 'active')
+            gs = by_land_status.get(ck, 'active')
             if gs == 'sold' or str(item.get('express_status') or '').strip().lower() == 'sold':
                 continue
             ritem = dict(item)
             ritem['_assignment_status'] = gs
             ritem['_in_transaction'] = gs == 'in_transaction'
             ritem['_detail_url'] = url_for('express_partner.land_detail', code=ck)
-            ass = my_assign_by_code.get(ck)
-            if ass and is_approved and gs not in ('sold', 'closed'):
-                ritem['_assignment_id'] = ass.get('id')
-                from .new_land_sms import attach_express_land_commission
-                attach_express_land_commission(ritem)
-            elif is_approved and gs not in ('sold', 'closed'):
+            if is_approved and gs not in ('sold', 'closed'):
                 from .new_land_sms import attach_express_land_commission
                 attach_express_land_commission(ritem)
             related_lands.append(sanitize_land_media(ritem))

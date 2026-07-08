@@ -431,12 +431,24 @@ def save_partner_withdrawals(items, app=None):
     return _save(ensure_file('EXPRESS_PARTNER_WITHDRAWALS_FILE', 'express_partner_withdrawals.json', [], app), items)
 
 # درخواست بازدید فایل اکسپرس
+_VISIT_REQUESTS_CACHE = {"path": None, "mtime": None, "size": None, "data": None}
+
+
 def load_express_visit_requests(app=None):
-    return _load(ensure_file('EXPRESS_VISIT_REQUESTS_FILE', 'express_visit_requests.json', [], app))
+    """درخواست‌های بازدید با کش mtime — مسیر جزئیات فایل این فایل را زیاد می‌خواند."""
+    app = _resolve_app(app)
+    path = ensure_file('EXPRESS_VISIT_REQUESTS_FILE', 'express_visit_requests.json', [], app)
+    return _file_cache_load(_VISIT_REQUESTS_CACHE, path, _load)
+
+
+def load_express_visit_requests_cached(app=None):
+    return load_express_visit_requests(app)
 
 
 def save_express_visit_requests(items, app=None):
-    return _save(ensure_file('EXPRESS_VISIT_REQUESTS_FILE', 'express_visit_requests.json', [], app), items)
+    data = _save(ensure_file('EXPRESS_VISIT_REQUESTS_FILE', 'express_visit_requests.json', [], app), items)
+    _VISIT_REQUESTS_CACHE.update({"path": None, "mtime": None, "size": None, "data": None})
+    return data
 
 # تیکت‌های پشتیبانی همکار
 def load_support_tickets(app=None):
