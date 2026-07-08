@@ -2310,11 +2310,13 @@ def _home_suggested_files(
     phone: str,
     is_approved: bool,
     *,
+    assigned_lands: List[Dict[str, Any]] | None = None,
     limit: int = HOME_SUGGESTED_FILES_LIMIT,
 ) -> List[Dict[str, Any]]:
     from ..utils.images import partner_card_image_url
 
-    assigned_lands, _ = _build_partner_dashboard_lands(phone, is_approved)
+    if assigned_lands is None:
+        assigned_lands, _ = _build_partner_dashboard_lands(phone, is_approved)
     candidates: List[Dict[str, Any]] = []
     now = datetime.utcnow()
     for land in assigned_lands or []:
@@ -2398,7 +2400,10 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         follow_up_count=follow_up_count,
     ) if ph else []
 
-    suggested_files = _home_suggested_files(ph, is_approved) if ph else []
+    # همان لیست ساخت‌شده را دوباره استفاده کن (نه دومین بار scan کامل)
+    suggested_files = _home_suggested_files(
+        ph, is_approved, assigned_lands=assigned_lands
+    ) if ph else []
 
     return {
         'success': True,
@@ -4926,8 +4931,7 @@ def land_tx_status(code: str):
     if ctx is None:
         return jsonify(success=False, message='فایل یافت نشد.'), 404
 
-    partners = load_express_partners() or []
-    partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
+    partner_profile = _partner_profile_for_phone(me_phone) if me_phone else None
     try:
         is_partner_approved = _is_partner_approved(partner_profile)
     except Exception:
@@ -4939,8 +4943,9 @@ def land_tx_status(code: str):
         is_partner_approved=is_partner_approved,
         global_assignment_status=ctx['global_status'],
     )
+    # پولینگ tx-status هر چند ثانیه یک‌بار است؛ روتین را مسدود نکن
     if is_partner_approved:
-        _routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
+        _defer_routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
     resp = jsonify(success=True, **state)
     resp.headers['Cache-Control'] = 'no-store'
     return resp
@@ -6422,54 +6427,56 @@ def land_detail(code: str):
         flash('این آگهی اکسپرس پیدا نشد یا دیگر در دسترس نیست.', 'warning')
         return redirect(url_for('express_partner.home'))
 
-    # ثبت بازدید فایل اکسپرس از سمت همکار (هر IP در هر روز فقط یک بازدید)
-    try:
-        views = load_express_partner_views() or []
-        if not isinstance(views, list):
-            views = []
-        
-        visitor_ip = request.remote_addr or ''
-        now = datetime.utcnow()
-        today_str = now.strftime('%Y-%m-%d')
-        
-        # بررسی اینکه آیا این IP در امروز برای این فایل قبلاً بازدید داشته یا نه
-        already_viewed_today = False
-        for v in views:
-            try:
-                v_ip = v.get('ip', '')
-                v_code = v.get('code', '')
-                v_ts_str = v.get('timestamp', '')
-                if v_ip == visitor_ip and v_code == code and v_ts_str:
-                    v_dt = datetime.fromisoformat(v_ts_str.replace('Z', '+00:00'))
-                    if v_dt.tzinfo:
-                        v_dt = v_dt.replace(tzinfo=None)
-                    v_date_str = v_dt.strftime('%Y-%m-%d')
-                    if v_date_str == today_str:
-                        already_viewed_today = True
-                        break
-            except Exception:
-                continue
-        
-        # اگر این IP امروز برای این فایل بازدید نداشته، ثبت کن
-        if not already_viewed_today and visitor_ip and code:
-            views.append({
-                'timestamp': now.isoformat(),
-                'code': code,
-                'ip': visitor_ip,
-                'user_agent': request.headers.get('User-Agent', '')[:200]
-            })
-            # نگه داشتن فقط 50000 بازدید اخیر
-            if len(views) > 50000:
-                views = views[-50000:]
-            save_express_partner_views(views)
-    except Exception as e:
-        current_app.logger.error(f"Error tracking express partner listing view: {e}", exc_info=True)
+    # ثبت بازدید را در پس‌زمینه انجام بده تا رندر جزئیات منتظر دیسک نماند
+    if not _is_prefetch_request() and code:
+        try:
+            app_obj = current_app._get_current_object()
+            visitor_ip = request.remote_addr or ''
+            user_agent = (request.headers.get('User-Agent', '') or '')[:200]
+            land_code = str(code)
 
-    partners = load_express_partners() or []
+            def _track_view_worker() -> None:
+                with app_obj.app_context():
+                    try:
+                        views = load_express_partner_views() or []
+                        if not isinstance(views, list):
+                            views = []
+                        now = datetime.utcnow()
+                        today_str = now.strftime('%Y-%m-%d')
+                        already_viewed_today = False
+                        for v in reversed(views):
+                            try:
+                                if (v.get('ip') or '') != visitor_ip or (v.get('code') or '') != land_code:
+                                    continue
+                                if (v.get('timestamp') or '')[:10] == today_str:
+                                    already_viewed_today = True
+                                    break
+                            except Exception:
+                                continue
+                        if not already_viewed_today and visitor_ip and land_code:
+                            views.append({
+                                'timestamp': now.isoformat(),
+                                'code': land_code,
+                                'ip': visitor_ip,
+                                'user_agent': user_agent,
+                            })
+                            if len(views) > 50000:
+                                views = views[-50000:]
+                            save_express_partner_views(views)
+                    except Exception:
+                        app_obj.logger.exception(
+                            'Error tracking express partner listing view code=%s', land_code
+                        )
+
+            threading.Thread(target=_track_view_worker, daemon=True).start()
+        except Exception as e:
+            current_app.logger.error(f"Error scheduling express partner listing view: {e}", exc_info=True)
+
     me_phone = (session.get("user_phone") or "").strip()
-    partner_profile = next((p for p in partners if str(p.get("phone")) == me_phone), None)
+    partner_profile = _partner_profile_for_phone(me_phone) if me_phone else None
     if me_phone and _is_partner_approved(partner_profile) and not _is_prefetch_request():
-        _routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
+        # روتین را خارج از مسیر رندر جزئیات اجرا کن تا صفحه سریع باز شود
+        _defer_routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
 
     # محاسبه پورسانت از assignments
     assignments = load_express_assignments() or []

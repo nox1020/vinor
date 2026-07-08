@@ -361,8 +361,26 @@ def load_partner_files_meta(app=None):     return _load(ensure_file('EXPRESS_PAR
 def save_partner_files_meta(items, app=None): return _save(ensure_file('EXPRESS_PARTNER_FILES_META_FILE','express_partner_files.json',[],app), items)
 
 # Express Assignments & Commissions
-def load_express_assignments(app=None):    return _load(ensure_file('EXPRESS_ASSIGNMENTS_FILE','express_assignments.json',[],app))
-def save_express_assignments(items, app=None): return _save(ensure_file('EXPRESS_ASSIGNMENTS_FILE','express_assignments.json',[],app), items)
+_ASSIGNMENTS_CACHE = {"path": None, "mtime": None, "size": None, "data": None}
+
+
+def load_express_assignments(app=None):
+    """تخصیص‌ها با کش mtime — مسیرهای داشبورد/جزئیات این فایل را زیاد می‌خوانند."""
+    app = _resolve_app(app)
+    path = ensure_file('EXPRESS_ASSIGNMENTS_FILE', 'express_assignments.json', [], app)
+    return _file_cache_load(_ASSIGNMENTS_CACHE, path, _load)
+
+
+def load_express_assignments_cached(app=None):
+    return load_express_assignments(app)
+
+
+def save_express_assignments(items, app=None):
+    data = _save(ensure_file('EXPRESS_ASSIGNMENTS_FILE', 'express_assignments.json', [], app), items)
+    _ASSIGNMENTS_CACHE.update({"path": None, "mtime": None, "size": None, "data": None})
+    return data
+
+
 _COMMISSIONS_CACHE = {"path": None, "mtime": None, "size": None, "data": None}
 
 def load_express_commissions(app=None):    return _load(ensure_file('EXPRESS_COMMISSIONS_FILE','express_commissions.json',[],app))

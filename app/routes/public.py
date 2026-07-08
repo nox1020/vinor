@@ -147,7 +147,16 @@ def partners():
             from ..express_partner.routes import _redirect_after_login
             return redirect(_redirect_after_login())
         return redirect(url_for("express_partner.files"))
-    
+
+    # اول کش مهمان — ثبت بازدید نباید مسیر پاسخ کش‌شده را کند کند
+    guest = not (session.get("user_phone") or session.get("user_id") or is_admin)
+    if guest:
+        cached = _mc_get("page:partners")
+        if cached:
+            resp = make_response(cached)
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
     # ثبت بازدید لندینگ (فقط برای کاربران غیرلاگین و غیرادمین و درخواست‌های مستقیم)
     # اگر referer از admin یا express/partner باشد، tracking نمی‌کنیم
     if '/admin' not in referer and '/express/partner' not in referer:
@@ -155,66 +164,50 @@ def partners():
             views = load_landing_views() or []
             if not isinstance(views, list):
                 views = []
-            
-            # بررسی اینکه آیا این IP در امروز قبلاً بازدید داشته یا نه
+
             visitor_ip = request.remote_addr or ''
             now = datetime.utcnow()
             today_str = now.strftime('%Y-%m-%d')
-            
-            # بررسی بازدیدهای امروز برای این IP
+
             already_viewed_today = False
-            for v in views:
+            # پیمایش از آخر + مقایسه سریع timestamp[:10] (بدون fromisoformat)
+            for v in reversed(views):
                 try:
-                    v_ip = v.get('ip', '')
-                    v_ts_str = v.get('timestamp', '')
-                    if v_ip == visitor_ip and v_ts_str:
-                        v_dt = datetime.fromisoformat(v_ts_str.replace('Z', '+00:00'))
-                        if v_dt.tzinfo:
-                            v_dt = v_dt.replace(tzinfo=None)
-                        v_date_str = v_dt.strftime('%Y-%m-%d')
-                        if v_date_str == today_str:
-                            already_viewed_today = True
-                            break
+                    if (v.get('ip') or '') != visitor_ip:
+                        continue
+                    if (v.get('timestamp') or '')[:10] == today_str:
+                        already_viewed_today = True
+                        break
                 except Exception:
                     continue
-            
-            # اگر این IP امروز بازدید نداشته، ثبت کن
+
             if not already_viewed_today and visitor_ip:
                 views.append({
                     'timestamp': now.isoformat(),
                     'ip': visitor_ip,
                     'user_agent': request.headers.get('User-Agent', '')[:200]
                 })
-                # نگه داشتن فقط 10000 بازدید اخیر
                 if len(views) > 10000:
                     views = views[-10000:]
                 save_landing_views(views)
         except Exception as e:
             current_app.logger.error(f"Error tracking landing view: {e}", exc_info=True)
-    
+
     try:
         from ..utils.storage import load_settings
         _settings = load_settings()
     except Exception:
         _settings = {}
-    # Microcache only for guests
-    if not (session.get("user_phone") or session.get("user_id") or is_admin):
-        k = f"page:partners"
-        cached = _mc_get(k)
-        if cached:
-            resp = make_response(cached)
-            resp.headers["Cache-Control"] = "no-cache"
-            return resp
     html = render_template("home/partners.html",
                            brand="وینور",
                            domain="vinor.ir",
                            android_apk_url=public_apk_download_url(_settings),
                            android_apk_version=_settings.get('android_apk_version') or '')
-    try:
-        if not (session.get("user_phone") or session.get("user_id") or is_admin):
+    if guest:
+        try:
             _mc_set("page:partners", html, ttl=15)
-    except Exception:
-        pass
+        except Exception:
+            pass
     resp = make_response(html)
     resp.headers["Cache-Control"] = "no-cache"
     return resp
