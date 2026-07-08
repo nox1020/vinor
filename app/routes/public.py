@@ -14,6 +14,7 @@ from ..utils.storage import load_express_partners_cached, load_landing_views, sa
 from ..utils.short_urls import public_apk_download_url
 from datetime import datetime
 from time import time as _now
+import re
 
 # --- very small in-memory microcache (5-20s) for public pages ---
 _MICROCACHE: dict = {}  # key -> (expires_at, payload)
@@ -264,6 +265,87 @@ def short_referral(ref: str):
     resp = make_response(redirect(url_for("express_partner.apply")))
     set_ref_cookie_on_response(resp, token)
     return resp
+
+
+_PUBLIC_USERNAME_RE = re.compile(r"^[a-z0-9_]{3,30}$")
+_PUBLIC_RESERVED_ROUTES = frozenset({
+    "admin", "api", "app", "partners", "public", "profile", "help", "privacy",
+    "healthz", "connection", "uploads", "express", "d", "r", "robots.txt", "sitemap.xml",
+})
+
+
+def _track_partner_profile_view(partner_phone: str) -> None:
+    from ..utils.storage import load_express_partner_views, save_express_partner_views
+    from ..express_partner.routes import _canonical_partner_phone
+    target_phone = _canonical_partner_phone(partner_phone)
+    if not target_phone:
+        return
+    try:
+        views = load_express_partner_views() or []
+        if not isinstance(views, list):
+            views = []
+        now = datetime.utcnow()
+        views.append({
+            "timestamp": now.isoformat(),
+            "entity": "profile",
+            "partner_phone": target_phone,
+            "ip": request.remote_addr or "",
+            "user_agent": (request.headers.get("User-Agent", "") or "")[:200],
+        })
+        if len(views) > 50000:
+            views = views[-50000:]
+        save_express_partner_views(views)
+    except Exception:
+        current_app.logger.exception("partner profile view tracking failed")
+
+
+@main_bp.route("/@<string:username>", methods=["GET"], endpoint="partner_profile_at")
+def partner_profile_at(username: str):
+    from ..express_partner.routes import _partner_find_by_username, build_partner_brand_context, _canonical_partner_phone
+    uname = (username or "").strip().lower()
+    if not _PUBLIC_USERNAME_RE.fullmatch(uname):
+        abort(404)
+    partners = load_express_partners_cached(current_app._get_current_object()) or []
+    target = _partner_find_by_username(uname, partners)
+    if not target:
+        abort(404)
+
+    me_phone = _canonical_partner_phone(session.get("user_phone") or "")
+    deal_filter = (request.args.get("deal") or "").strip().lower()
+    kind_filter = (request.args.get("kind") or "").strip().lower()
+    ctx = build_partner_brand_context(
+        target,
+        viewer_phone=me_phone,
+        deal_filter=deal_filter,
+        kind_filter=kind_filter,
+    )
+    _track_partner_profile_view(ctx.get("partner_phone") or "")
+
+    canonical_url = url_for("main.partner_profile_at", username=ctx.get("username") or "", _external=True)
+    resp = make_response(render_template(
+        "express_partner/profile.html",
+        me_phone=me_phone,
+        is_public_page=True,
+        vinor_robots_meta="index,follow",
+        profile_public_url=canonical_url,
+        profile_public_url_with_ref=f"{canonical_url}{'&' if '?' in canonical_url else '?'}ref={ctx.get('ref_token')}",
+        seo_title=f"{ctx.get('partner_name') or 'همکار وینور'} | وینور اکسپرس",
+        seo_description=f"صفحه برند شخصی {ctx.get('partner_name') or 'همکار وینور'} در وینور اکسپرس",
+        canonical_url=canonical_url,
+        **ctx,
+    ))
+    resp.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=120"
+    return resp
+
+
+@main_bp.route("/<string:username>", methods=["GET"], endpoint="partner_profile_short")
+def partner_profile_short(username: str):
+    uname = (username or "").strip().lower()
+    if uname in _PUBLIC_RESERVED_ROUTES:
+        abort(404)
+    if not _PUBLIC_USERNAME_RE.fullmatch(uname):
+        abort(404)
+    return redirect(url_for("main.partner_profile_at", username=uname, **request.args.to_dict()), code=302)
 
 
 @main_bp.route("/d", endpoint="short_apk_download")

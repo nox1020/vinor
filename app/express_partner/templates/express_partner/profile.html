@@ -1,552 +1,250 @@
 {% extends 'express_partner/base.html' %}
-{% block title %}پروفایل{% endblock %}
-
+{% block title %}{{ seo_title | default((partner_name or 'پروفایل همکار') ~ ' | وینور') }}{% endblock %}
 {% block head %}
-  {% set _head_avatar = (profile.get('avatar') or '').strip() if profile else '' %}
-  {% if _head_avatar %}
-  <link rel="preload" as="image" href="{{ _head_avatar|avatar_display_url(profile.get('avatar_updated_at', 0)) }}">
-  {% endif %}
+  {{ super() }}
+  <meta name="description" content="{{ seo_description | default('پروفایل برند شخصی و فروش همکار وینور') }}">
+  {% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}
 {% endblock %}
-
 {% block content %}
-  {% include 'express_partner/partials/profile_page_styles.html' %}
-  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
-  {% from 'express_partner/partials/profile_macros.html' import profile_menu_row %}
+{% set s = stats or {} %}
+{% set ref_apply_url = url_for('express_partner.apply', ref=ref_token) if ref_token else url_for('express_partner.apply') %}
+<div class="min-h-[100dvh] bg-[#030712] text-zinc-100 pb-20">
+  <style>
+    .tg-shell { --tg-gap: 0.75rem; }
+    .tg-topbar {
+      backdrop-filter: blur(14px);
+      background: linear-gradient(180deg, rgba(10,16,26,.92), rgba(10,16,26,.76));
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .tg-drawer-backdrop { background: rgba(0,0,0,.56); }
+    .tg-drawer {
+      transform: translateX(-100%);
+      transition: transform .2s ease;
+      background: #0a101a;
+      border-right: 1px solid rgba(255,255,255,.08);
+    }
+    .tg-drawer[data-open="1"] { transform: translateX(0); }
+    .tg-list-item { border-bottom: 1px solid rgba(255,255,255,.06); }
+    .tg-list-item:last-child { border-bottom: none; }
+  </style>
 
-  {{ ep_header_start(id='profileExpressHeader') }}
-  {% call ep_header_row('پروفایل', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}
-    {% include 'express_partner/partials/support_header_button.html' %}
-  {% endcall %}
-  {{ ep_header_end() }}
+  {% if not is_public_page %}
+  <header class="tg-topbar fixed inset-x-0 top-0 z-[140]">
+    <div class="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4 sm:px-6">
+      <button type="button" data-open-left-menu class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-zinc-200">
+        <i class="fas fa-bars text-sm" aria-hidden="true"></i>
+      </button>
+      <div class="text-sm font-semibold text-zinc-100">پروفایل</div>
+      <a href="{{ url_for('express_partner.files') }}" data-vinor-express-nav class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-zinc-200">
+        <i class="fas fa-house text-xs" aria-hidden="true"></i>
+      </a>
+    </div>
+  </header>
 
-  <div id="profilePage"
-       class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16"
-       data-vinor-profile-page>
-
-    <div class="mx-auto w-full max-w-lg">
-
-      {% if not me_phone %}
-      {# مهمان #}
-      <section class="border-b border-white/10 px-4 py-6 text-center sm:px-6">
-        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.06] ring-1 ring-white/10">
-          <i class="fas fa-user text-2xl text-zinc-500" aria-hidden="true"></i>
+  <div data-left-menu-wrap class="pointer-events-none fixed inset-0 z-[160] hidden">
+    <div data-left-menu-backdrop class="tg-drawer-backdrop absolute inset-0 opacity-0 transition-opacity duration-200"></div>
+    <aside data-left-menu-panel class="tg-drawer absolute left-0 top-0 h-full w-[82%] max-w-[340px]" data-open="0">
+      <div class="flex items-center justify-between border-b border-white/10 px-4 py-4">
+        <div class="min-w-0">
+          <div class="truncate text-sm font-bold text-white">{{ partner_name }}</div>
+          <div class="mt-1 text-xs text-zinc-500">@{{ username }}</div>
         </div>
-        <p class="text-base font-bold text-white">به وینور اکسپرس خوش آمدید</p>
-        <p class="mt-2 text-sm leading-relaxed text-zinc-500">برای مدیریت پروفایل و ثبت درخواست همکاری وارد شوید</p>
-        <div class="mt-5 flex flex-wrap items-center justify-center gap-2.5">
-          <a href="{{ url_for('express_partner.login', next=url_for('express_partner.profile')) }}"
-             data-vinor-express-nav
-             class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500">
-            <i class="fas fa-right-to-bracket text-xs" aria-hidden="true"></i>
-            ورود
-          </a>
-          <a href="{{ url_for('express_partner.login', next=url_for('express_partner.apply')) }}"
-             data-vinor-express-nav
-             class="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-5 py-2.5 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.07]">
-            <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>
-            شروع همکاری
-          </a>
-        </div>
-      </section>
-
-      <nav class="divide-y divide-white/10" aria-label="منوی پروفایل">
-        {{ profile_menu_row(url_for('express_partner.cooperation_terms', next=url_for('express_partner.profile')), 'fa-handshake', 'شرایط همکاری', 'پورسانت، مراحل ثبت‌نام و قوانین') }}
-        {{ profile_menu_row(url_for('express_partner.top_sellers'), 'fa-trophy', 'فروشنده‌های برتر', 'رتبه‌بندی همکاران') }}
-      </nav>
-
-      {% else %}
-      {# هویت — ردیف بالای لیست دیوار #}
-      <section data-tour="profile-section"
-               id="profileClickableCard"
-               class="profile-identity flex items-center gap-3 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
-        <div class="relative shrink-0 pointer-events-auto">
-          <form id="avatarForm" method="post" action="{{ url_for('express_partner.profile_avatar_upload') }}" enctype="multipart/form-data">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input id="avatarInput" name="avatar" type="file" accept="image/*" class="hidden">
-            <button type="button" id="avatarTrigger"
-                    class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.06] ring-2 ring-white/10 transition hover:ring-emerald-500/35 sm:h-16 sm:w-16"
-                    title="تغییر عکس پروفایل">
-              {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
-              {% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
-              <img id="avatarProfileImg"
-                   {% if _avatar_url %}data-avatar-url="{{ _avatar_url }}"{% endif %}
-                   alt="عکس پروفایل"
-                   class="h-full w-full object-cover {% if not _avatar %}hidden{% endif %}"
-                   decoding="async"
-                   referrerpolicy="no-referrer"
-                   onerror="this.classList.add('hidden');var f=document.getElementById('avatarProfileFallback');if(f)f.classList.remove('hidden');">
-              <span id="avatarProfileFallback"
-                    class="flex h-full w-full items-center justify-center text-lg font-bold text-zinc-400 {% if _avatar %}hidden{% endif %}">
-                {{ me_name|avatar_initials }}
-              </span>
-            </button>
-            {% if _avatar_url %}
-            <script>
-            (function () {
-              if (typeof window.vinorHydratePartnerAvatar === 'function') {
-                window.vinorHydratePartnerAvatar('avatarProfileImg', 'avatarProfileFallback');
-              }
-            })();
-            </script>
-            {% endif %}
-          </form>
-        </div>
-
-        <div class="min-w-0 flex-1 text-right">
-          <div class="truncate text-[17px] font-bold leading-tight text-white sm:text-lg">{{ me_name or 'همکار وینور' }}</div>
-          <div class="mt-1 text-sm tabular-nums text-zinc-500" dir="ltr">
-            {% if me_phone and me_phone|length >= 11 %}
-              {{ me_phone[0:4] }} {{ me_phone[4:7] }} {{ me_phone[7:11] }}
-            {% else %}
-              {{ me_phone }}
-            {% endif %}
-          </div>
-          <div class="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium">
-            {% if is_special|default(false) %}
-            <i class="fas fa-star text-violet-400 text-[10px]" aria-hidden="true"></i>
-            <span class="text-violet-300">همکار ویژه</span>
-            {% elif is_approved %}
-            <i class="fas fa-circle-check text-emerald-400 text-[10px]" aria-hidden="true"></i>
-            <span class="text-emerald-400/95">همکار تأییدشده</span>
-            {% else %}
-            <span class="text-zinc-500">کاربر عادی</span>
-            {% endif %}
-          </div>
-        </div>
-
-        <i class="fas fa-chevron-left shrink-0 text-xs text-zinc-600" aria-hidden="true"></i>
-      </section>
-
-      <nav class="divide-y divide-white/10" aria-label="منوی پروفایل">
-        {% set visits_subtitle = 'درخواست‌های من و دریافتی آگهی‌ها' if is_special|default(false) else 'وضعیت درخواست‌های بازدید من' %}
-        {% if not is_approved %}
-        {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری', 'برای تبدیل به همکار اکسپرس درخواست دهید', tour='apply-link') }}
-        {% endif %}
-
-        {% if is_special|default(false) %}
-        {{ profile_menu_row(url_for('express_partner.special_listings'), 'fa-building', 'آگهی‌های من', 'ثبت و مدیریت فایل‌های شما', tour='special-listings-link') }}
-        {% endif %}
-
-        {{ profile_menu_row(url_for('express_partner.requests'), 'fa-clipboard-list', 'بازدیدها', visits_subtitle, tour='requests-link') }}
-        {{ profile_menu_row(url_for('express_partner.favorites'), 'fa-bookmark', 'نشان‌ها', 'زمین‌های ذخیره‌شده', tour='favorites-link', badge_key='favorites') }}
-
-        {% if is_vinor_apk %}
-        <div id="appUpdateCardWrap" class="{% if not show_app_update_card %}hidden{% endif %}">
-          <a href="{{ android_apk_url if show_app_update_card else '#' }}"
-             id="appUpdateCard"
-             data-tour="app-update-link"
-             aria-label="بروزرسانی اپلیکیشن اندروید"
-             {% if show_app_update_card and android_apk_url %}download rel="noopener"{% endif %}
-             class="profile-menu-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors active:bg-white/[0.04] hover:bg-white/[0.02] sm:px-6 sm:py-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/25 sm:h-12 sm:w-12">
-              <i class="fas fa-download text-base" aria-hidden="true"></i>
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="text-[15px] font-medium text-white">بروزرسانی اپلیکیشن</div>
-              <div id="appUpdateSubtitle" class="mt-0.5 text-[12px] leading-snug text-zinc-500">
-                {% if show_app_update_card %}نسخهٔ جدید برای دانلود آماده است{% else %}در حال بررسی بروزرسانی…{% endif %}
-              </div>
-              <div id="appUpdateMeta" class="mt-1.5 flex flex-wrap justify-end gap-1.5 text-[11px]">
-                {% if show_app_update_card and android_apk_version %}
-                <span class="inline-flex items-center rounded-md bg-amber-500/10 px-2 py-0.5 text-amber-300/90 ring-1 ring-amber-500/20">نسخه {{ android_apk_version }}</span>
-                {% endif %}
-              </div>
-            </div>
-            <i class="fas fa-chevron-left shrink-0 text-[10px] text-zinc-600" aria-hidden="true"></i>
-          </a>
-        </div>
-        {% endif %}
-
-        {{ profile_menu_row(url_for('express_partner.top_sellers'), 'fa-trophy', 'فروشنده‌های برتر', 'رتبه‌بندی همکاران', tour='top-sellers-link') }}
-        {{ profile_menu_row(url_for('express_partner.cooperation_terms', next=url_for('express_partner.profile')), 'fa-handshake', 'شرایط همکاری', 'پورسانت و قوانین همکاری') }}
-
-        {% if is_approved %}
-        {% include 'express_partner/partials/commissions_referral.html' %}
-        {% else %}
-        {% include 'express_partner/partials/profile_invite_friends.html' %}
-        {% endif %}
-
-        <form id="logoutProfileForm" method="post" action="{{ url_for('express_partner.logout') }}" class="contents">
+        <button type="button" data-close-left-menu class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300">
+          <i class="fas fa-xmark text-sm" aria-hidden="true"></i>
+        </button>
+      </div>
+      <nav class="py-2 text-sm">
+        <a href="{{ url_for('express_partner.profile_edit') }}" data-vinor-express-nav class="tg-list-item flex items-center justify-between px-4 py-3 text-zinc-200"><span>ویرایش پروفایل</span><i class="fas fa-chevron-left text-[10px] text-zinc-500"></i></a>
+        <a href="{{ url_for('express_partner.requests') }}" data-vinor-express-nav class="tg-list-item flex items-center justify-between px-4 py-3 text-zinc-200"><span>بازدیدها</span><i class="fas fa-chevron-left text-[10px] text-zinc-500"></i></a>
+        <a href="{{ url_for('express_partner.favorites') }}" data-vinor-express-nav class="tg-list-item flex items-center justify-between px-4 py-3 text-zinc-200"><span>نشان‌ها</span><i class="fas fa-chevron-left text-[10px] text-zinc-500"></i></a>
+        <a href="{{ url_for('express_partner.top_sellers') }}" data-vinor-express-nav class="tg-list-item flex items-center justify-between px-4 py-3 text-zinc-200"><span>فروشنده‌های برتر</span><i class="fas fa-chevron-left text-[10px] text-zinc-500"></i></a>
+        <a href="{{ url_for('express_partner.invite_colleagues') }}" data-vinor-express-nav class="tg-list-item flex items-center justify-between px-4 py-3 text-zinc-200"><span>دعوت همکار</span><i class="fas fa-chevron-left text-[10px] text-zinc-500"></i></a>
+        <a href="{{ url_for('express_partner.support') }}" data-vinor-express-nav class="tg-list-item flex items-center justify-between px-4 py-3 text-zinc-200"><span>پشتیبانی</span><i class="fas fa-chevron-left text-[10px] text-zinc-500"></i></a>
+        <form method="post" action="{{ url_for('express_partner.logout') }}" class="tg-list-item">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="button"
-                  onclick="showLogoutConfirm('logoutProfileForm')"
-                  class="profile-menu-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors active:bg-rose-500/[0.08] hover:bg-rose-500/[0.05] sm:px-6 sm:py-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20 sm:h-12 sm:w-12">
-              <i class="fas fa-right-from-bracket text-base" aria-hidden="true"></i>
-            </div>
-            <div class="min-w-0 flex-1 text-right">
-              <div class="text-[15px] font-medium text-rose-300">خروج از حساب</div>
-            </div>
-          </button>
+          <button type="submit" class="flex w-full items-center justify-between px-4 py-3 text-rose-300"><span>خروج از حساب</span><i class="fas fa-right-from-bracket text-[11px]"></i></button>
         </form>
       </nav>
-      {% endif %}
-
-    </div>
-
-    {% set bottom_nav_active = 'profile' %}
-    {% include 'express_partner/partials/partner_tab_footer.html' %}
-  </div>
-
-  {% if me_phone %}
-  <div id="logoutConfirmModal"
-       data-tg-body-modal
-       class="profile-sheet-root fixed inset-0 z-[200] hidden"
-       role="dialog"
-       aria-modal="true"
-       aria-labelledby="logoutConfirmTitle">
-    <div class="profile-sheet__backdrop" onclick="hideLogoutConfirm()"></div>
-    <div class="profile-sheet mx-auto">
-      <div class="profile-sheet__handle-wrap" aria-hidden="true">
-        <span class="profile-sheet__handle"></span>
-      </div>
-      <div class="px-5 pb-5 pt-1 sm:px-6 sm:pb-6">
-        <div class="flex items-center gap-3 border-b border-white/10 pb-4">
-          <div class="grid h-11 w-11 place-items-center rounded-full bg-rose-500/12 text-rose-400 ring-1 ring-rose-500/25">
-            <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
-          </div>
-          <div class="min-w-0 flex-1 text-right">
-            <p id="logoutConfirmTitle" class="text-base font-bold text-white">خروج از حساب</p>
-            <p class="mt-0.5 text-sm text-zinc-500">آیا از خروج اطمینان دارید؟</p>
-          </div>
-        </div>
-        <div class="mt-4 grid grid-cols-2 gap-2.5">
-          <button type="button"
-                  class="rounded-xl border border-white/12 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/[0.04]"
-                  onclick="hideLogoutConfirm()">انصراف</button>
-          <button type="button"
-                  class="rounded-xl bg-rose-600 py-3 text-sm font-bold text-white transition hover:bg-rose-500"
-                  onclick="confirmLogout()">خروج</button>
-        </div>
-      </div>
-    </div>
+    </aside>
   </div>
   {% endif %}
 
-{% endblock %}
+  <section class="mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 {% if not is_public_page %}pt-20{% endif %}">
+    <div class="rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.05] to-white/[0.02] p-5 sm:p-6">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div class="flex items-start gap-4">
+          <div class="h-16 w-16 overflow-hidden rounded-2xl bg-white/[0.06] ring-1 ring-white/10 sm:h-20 sm:w-20">
+            {% if avatar_url %}
+            <img src="{{ avatar_url }}" alt="{{ partner_name }}" class="h-full w-full object-cover" loading="eager">
+            {% else %}
+            <div class="flex h-full w-full items-center justify-center text-lg font-bold text-zinc-400">{{ partner_name|avatar_initials }}</div>
+            {% endif %}
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <h1 class="truncate text-lg font-bold text-white sm:text-xl">{{ partner_name }}</h1>
+              {% if is_verified %}<span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-300">احراز شده</span>{% endif %}
+              {% if is_special %}<span class="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-300">همکار ویژه</span>{% endif %}
+            </div>
+            <p class="mt-1 text-sm text-zinc-400 dir-ltr text-left">@{{ username }}</p>
+            {% if bio %}<p class="mt-2 text-sm leading-relaxed text-zinc-300">{{ bio }}</p>{% endif %}
+            {% if city %}<p class="mt-2 text-xs text-zinc-500">شهر فعالیت: {{ city }}</p>{% endif %}
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 sm:w-[280px]">
+          <button type="button" data-share-profile class="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-white/[0.08]">اشتراک‌گذاری پروفایل</button>
+          <button type="button" data-copy-profile class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20">کپی لینک</button>
+          <a href="{{ url_for('express_partner.files', q='') }}" data-vinor-express-nav class="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-center text-xs font-semibold text-zinc-100 hover:bg-white/[0.08]">همه فایل‌ها</a>
+          {% if can_follow %}
+          <button type="button" data-follow-btn data-username="{{ username }}" data-following="{{ '1' if viewer_following else '0' }}" class="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 hover:bg-sky-500/20">
+            {{ 'دنبال می‌کنم' if viewer_following else 'دنبال کردن' }}
+          </button>
+          {% else %}
+          <a href="{{ url_for('express_partner.profile_edit') if not is_public_page else profile_public_url }}" data-vinor-express-nav class="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-center text-xs font-semibold text-zinc-100 hover:bg-white/[0.08]">
+            {{ 'ویرایش پروفایل' if not is_public_page else 'نمایه شما' }}
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
 
-{% block scripts %}
-  {{ super() }}
-  <script>
-  (function () {
-    if (window.__vinorCommissionsChrome && window.__vinorCommissionsChrome.teardown) {
-      try { window.__vinorCommissionsChrome.teardown(); } catch (_) {}
-    }
-    if (window.__vinorDashboardChrome && window.__vinorDashboardChrome.teardown) {
-      try { window.__vinorDashboardChrome.teardown(); } catch (_) {}
-    }
-    if (typeof window.hoistVinorExpressBodyModals === 'function') {
-      try { window.hoistVinorExpressBodyModals(); } catch (_) {}
-    }
-    function syncProfileHeaderPad() {
+  <section class="mx-auto mt-4 w-full max-w-5xl px-4 sm:px-6">
+    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><p class="text-[11px] text-zinc-500">فایل فعال</p><p class="mt-1 text-lg font-bold">{{ s.active_files or 0 }}</p></div>
+      <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><p class="text-[11px] text-zinc-500">فروش موفق</p><p class="mt-1 text-lg font-bold">{{ s.sales_success or 0 }}</p></div>
+      <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><p class="text-[11px] text-zinc-500">بازدید پروفایل</p><p class="mt-1 text-lg font-bold">{{ s.profile_views or 0 }}</p></div>
+      <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><p class="text-[11px] text-zinc-500">بازدید فایل‌ها</p><p class="mt-1 text-lg font-bold">{{ s.listing_views or 0 }}</p></div>
+      <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><p class="text-[11px] text-zinc-500">درخواست‌ها</p><p class="mt-1 text-lg font-bold">{{ s.requests_received or 0 }}</p></div>
+      <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><p class="text-[11px] text-zinc-500">امتیاز / رتبه</p><p class="mt-1 text-lg font-bold">{{ s.rating or 0 }} / {{ s.rank or '-' }}</p></div>
+    </div>
+  </section>
+
+  <section class="mx-auto mt-4 w-full max-w-5xl px-4 sm:px-6">
+    <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <a href="tel:{{ partner_phone }}" class="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-sm">تماس</a>
+      <a href="sms:{{ partner_phone }}" class="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-sm">چت</a>
+      <a href="https://wa.me/{{ partner_phone }}" target="_blank" rel="noopener" class="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-sm">واتساپ</a>
+      <a href="{{ ref_apply_url }}" data-vinor-express-nav class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-center text-sm text-emerald-300">درخواست همکاری</a>
+      <a href="{{ profile_public_url_with_ref }}" class="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-sm">اشتراک کل صفحه</a>
+    </div>
+  </section>
+
+  <section class="mx-auto mt-4 w-full max-w-5xl px-4 sm:px-6">
+    <div class="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-xs text-zinc-400">
+      <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <div>احراز هویت: <span class="text-zinc-200">{{ 'تایید شده' if is_verified else 'در حال بررسی' }}</span></div>
+        <div>آخرین فعالیت: <span class="text-zinc-200">{{ s.last_active or '-' }}</span></div>
+        <div>درصد پاسخگویی: <span class="text-zinc-200">{{ s.response_rate or 0 }}%</span></div>
+        <div>مدت عضویت: <span class="text-zinc-200">{{ s.joined or '-' }}</span></div>
+        <div>دنبال‌کننده: <span class="text-zinc-200" data-follower-count>{{ s.follower_count or 0 }}</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto mt-6 w-full max-w-5xl px-4 sm:px-6">
+    <div class="flex flex-wrap items-center gap-2">
+      {% set f = filters or {} %}
+      {% set deal = f.deal or '' %}
+      {% set kind = f.kind or '' %}
+      <a href="?{% if kind %}kind={{ kind }}&{% endif %}" class="rounded-full border px-3 py-1 text-xs {{ 'border-emerald-400/60 text-emerald-300' if deal == '' else 'border-white/15 text-zinc-300' }}">همه</a>
+      <a href="?deal=sale{% if kind %}&kind={{ kind }}{% endif %}" class="rounded-full border px-3 py-1 text-xs {{ 'border-emerald-400/60 text-emerald-300' if deal == 'sale' else 'border-white/15 text-zinc-300' }}">فروش</a>
+      <a href="?deal=rent{% if kind %}&kind={{ kind }}{% endif %}" class="rounded-full border px-3 py-1 text-xs {{ 'border-emerald-400/60 text-emerald-300' if deal == 'rent' else 'border-white/15 text-zinc-300' }}">اجاره</a>
+      <a href="?deal=presale{% if kind %}&kind={{ kind }}{% endif %}" class="rounded-full border px-3 py-1 text-xs {{ 'border-emerald-400/60 text-emerald-300' if deal == 'presale' else 'border-white/15 text-zinc-300' }}">پیش‌فروش</a>
+      <a href="?{% if deal %}deal={{ deal }}&{% endif %}kind=apartment" class="rounded-full border px-3 py-1 text-xs {{ 'border-sky-400/60 text-sky-300' if kind == 'apartment' else 'border-white/15 text-zinc-300' }}">آپارتمان</a>
+      <a href="?{% if deal %}deal={{ deal }}&{% endif %}kind=villa" class="rounded-full border px-3 py-1 text-xs {{ 'border-sky-400/60 text-sky-300' if kind == 'villa' else 'border-white/15 text-zinc-300' }}">ویلا</a>
+      <a href="?{% if deal %}deal={{ deal }}&{% endif %}kind=land" class="rounded-full border px-3 py-1 text-xs {{ 'border-sky-400/60 text-sky-300' if kind == 'land' else 'border-white/15 text-zinc-300' }}">زمین</a>
+    </div>
+  </section>
+
+  <section class="mx-auto mt-4 grid w-full max-w-5xl grid-cols-1 gap-3 px-4 sm:px-6 lg:grid-cols-2">
+    {% for card in cards %}
+    <article class="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+      <a href="{{ card.detail_url }}" data-vinor-express-nav class="block">
+        <div class="aspect-[16/10] bg-black/20">
+          {% if card.image_url %}<img src="{{ card.image_url }}" alt="{{ card.title }}" loading="lazy" class="h-full w-full object-cover">{% endif %}
+        </div>
+        <div class="p-3">
+          <div class="flex items-start justify-between gap-2">
+            <h3 class="line-clamp-1 text-sm font-semibold text-white">{{ card.title }}</h3>
+            <span class="rounded-lg bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-300">{{ card.category or 'ملک' }}</span>
+          </div>
+          <p class="mt-1 line-clamp-1 text-xs text-zinc-500">{{ card.city }} {{ ('- ' ~ card.location) if card.location else '' }}</p>
+          <p class="mt-2 text-sm font-bold text-emerald-300">{{ card.price_total|toman }}</p>
+        </div>
+      </a>
+      <div class="flex gap-2 border-t border-white/10 p-2">
+        <a href="{{ card.share_url }}" class="flex-1 rounded-lg border border-white/15 bg-white/[0.02] px-2 py-1.5 text-center text-xs text-zinc-200">اشتراک فایل</a>
+        <button type="button" data-copy-card="{{ card.share_url }}" class="rounded-lg border border-white/15 bg-white/[0.02] px-2 py-1.5 text-xs text-zinc-200">کپی لینک</button>
+      </div>
+    </article>
+    {% else %}
+    <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-400">فایلی برای این فیلتر پیدا نشد.</div>
+    {% endfor %}
+  </section>
+</div>
+
+{% if not is_public_page %}
+{% set bottom_nav_active = 'profile' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endif %}
+
+<script>
+(() => {
+  function copyText(v){ if (!v) return; navigator.clipboard && navigator.clipboard.writeText(v).catch(()=>{}); }
+  const profileShareUrl = "{{ profile_public_url_with_ref }}";
+  const shareBtn = document.querySelector('[data-share-profile]');
+  if (shareBtn) shareBtn.addEventListener('click', async () => {
+    if (navigator.share) { try { await navigator.share({ url: profileShareUrl, title: document.title }); return; } catch(_) {} }
+    copyText(profileShareUrl);
+  });
+  const copyBtn = document.querySelector('[data-copy-profile]');
+  if (copyBtn) copyBtn.addEventListener('click', () => copyText(profileShareUrl));
+  document.querySelectorAll('[data-copy-card]').forEach((el) => {
+    el.addEventListener('click', () => copyText(el.getAttribute('data-copy-card')));
+  });
+  const followBtn = document.querySelector('[data-follow-btn]');
+  if (followBtn) {
+    followBtn.addEventListener('click', async () => {
+      const username = followBtn.getAttribute('data-username');
+      if (!username) return;
       try {
-        if (window.__vinorPartnerHeaderChromeSetup) window.__vinorPartnerHeaderChromeSetup();
-        else if (window.__vinorPartnerHeaderPadSync) window.__vinorPartnerHeaderPadSync();
+        const res = await fetch(`/express/partner/api/profile/follow/${encodeURIComponent(username)}`, { method: 'POST', credentials: 'same-origin' });
+        const body = await res.json();
+        if (!res.ok || !body.success) return;
+        followBtn.textContent = body.following ? 'دنبال می‌کنم' : 'دنبال کردن';
+        const c = document.querySelector('[data-follower-count]');
+        if (c) c.textContent = body.follower_count || 0;
       } catch (_) {}
-    }
-    syncProfileHeaderPad();
-    window.requestAnimationFrame(function () {
-      window.requestAnimationFrame(syncProfileHeaderPad);
     });
-  })();
-  </script>
+  }
 
-  {% if me_phone %}
-  <script>
-  (function() {
-    if (window.__vinorProfilePageCtrl) {
-      try { window.__vinorProfilePageCtrl.abort(); } catch (_) {}
-    }
-    window.__vinorProfilePageCtrl = new AbortController();
-    var profileSig = window.__vinorProfilePageCtrl.signal;
-    var profileSigOpts = { signal: profileSig };
-
-    const modal = document.getElementById('logoutConfirmModal');
-    if (typeof window.hoistVinorExpressBodyModals === 'function') {
-      window.hoistVinorExpressBodyModals();
-    }
-    function openSheet() {
-      if (!modal) return;
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-      requestAnimationFrame(function () {
-        modal.classList.add('is-open');
-      });
-    }
-    function closeSheet() {
-      if (!modal) return;
-      modal.classList.remove('is-open');
-      setTimeout(function () {
-        if (!modal.classList.contains('is-open')) {
-          modal.classList.add('hidden');
-          modal.classList.remove('flex');
-        }
-      }, 280);
-    }
-    window.showLogoutConfirm = function(formId) {
-      if (!modal) return;
-      if (typeof window.hoistVinorExpressBodyModals === 'function') {
-        window.hoistVinorExpressBodyModals();
-      }
-      modal.dataset.targetForm = formId || '';
-      if (window.vinorExpressModalOverlay) {
-        window.vinorExpressModalOverlay.open();
-      } else {
-        document.documentElement.classList.add('overflow-hidden');
-        document.body.classList.add('overflow-hidden');
-      }
-      openSheet();
-    };
-    window.hideLogoutConfirm = function() {
-      if (!modal) return;
-      closeSheet();
-      if (window.vinorExpressModalOverlay) {
-        window.vinorExpressModalOverlay.close();
-      } else {
-        document.documentElement.classList.remove('overflow-hidden');
-        document.body.classList.remove('overflow-hidden');
-      }
-    };
-    const loginUrlFallback = "{{ url_for('express_partner.login', change=1) }}";
-    const logoutApiUrl = "{{ url_for('express_partner.api_logout') }}";
-    let logoutBusy = false;
-    window.confirmLogout = async function() {
-      if (!modal || logoutBusy) return;
-      hideLogoutConfirm();
-      logoutBusy = true;
-      if (window.vinorExpressLogout) {
-        window.vinorExpressLogout(loginUrlFallback);
-        return;
-      }
-      const formId = modal.dataset.targetForm;
-      const form = formId ? document.getElementById(formId) : null;
-      try {
-        if (window.caches && window.caches.keys) {
-          var keys = await window.caches.keys();
-          await Promise.all(keys.filter(function (k) {
-            return k.indexOf('express-partner-') === 0 || k === 'vinor-partner-avatar-v1';
-          }).map(function (k) { return window.caches.delete(k); }));
-        }
-      } catch (_) {}
-      try {
-        if (window.vinorPartnerAvatarCache) window.vinorPartnerAvatarCache.clear();
-      } catch (_) {}
-      try {
-        await fetch(logoutApiUrl, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-        });
-      } catch (_) {}
-      try {
-        if (form) form.submit();
-        else window.location.replace(loginUrlFallback + '?_=' + Date.now());
-      } catch (_) {
-        window.location.replace(loginUrlFallback + '?_=' + Date.now());
-      }
-    };
-  })();
-  </script>
-
-  <script>
-  (function() {
-    var profileSig = window.__vinorProfilePageCtrl && window.__vinorProfilePageCtrl.signal;
-    var profileSigOpts = profileSig ? { signal: profileSig } : false;
-    const trigger = document.getElementById('avatarTrigger');
-    const input = document.getElementById('avatarInput');
-    const form = document.getElementById('avatarForm');
-    const previewImg = document.getElementById('avatarProfileImg');
-    const previewFallback = document.getElementById('avatarProfileFallback');
-    const avatarApiUrl = {{ url_for('express_partner.api_profile_avatar') | tojson }};
-    if (!trigger || !input || !form) return;
-    trigger.addEventListener('click', function(e) { e.stopPropagation(); input.click(); }, profileSigOpts);
-
-    function showPreview(url) {
-      if (window.vinorPartnerAvatarCache) {
-        window.vinorPartnerAvatarCache.setFromUrl(url).catch(function () {
-          if (previewImg) {
-            previewImg.src = url;
-            previewImg.classList.remove('hidden');
-          }
-          if (previewFallback) previewFallback.classList.add('hidden');
-        });
-        return;
-      }
-      if (previewImg) {
-        previewImg.src = url;
-        previewImg.classList.remove('hidden');
-      }
-      if (previewFallback) previewFallback.classList.add('hidden');
-    }
-
-    function compressImage(file) {
-      return new Promise(function (resolve) {
-        try {
-          var img = new Image();
-          img.onload = function () {
-            var w = img.naturalWidth, h = img.naturalHeight;
-            if (!w || !h) return resolve(file);
-            var scale = Math.min(1, 1200 / Math.max(w, h));
-            var canvas = document.createElement('canvas');
-            canvas.width = Math.round(w * scale);
-            canvas.height = Math.round(h * scale);
-            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-            canvas.toBlob(function (blob) {
-              resolve(blob ? new File([blob], 'avatar.jpg', { type: 'image/jpeg' }) : file);
-            }, 'image/jpeg', 0.82);
-          };
-          img.onerror = function () { resolve(file); };
-          var fr = new FileReader();
-          fr.onload = function (e) { img.src = e.target.result; };
-          fr.onerror = function () { resolve(file); };
-          fr.readAsDataURL(file);
-        } catch (_) { resolve(file); }
-      });
-    }
-
-    input.addEventListener('change', function() {
-      if (!input.files || !input.files.length) return;
-      var file = input.files[0];
-      input.value = '';
-      try { showPreview(URL.createObjectURL(file)); } catch (_) {}
-      compressImage(file).then(function (compressed) {
-        if (window.vinorPartnerAvatarCache) {
-          window.vinorPartnerAvatarCache.setFromBlob(compressed, Date.now()).catch(function () {});
-        }
-        var fd = new FormData();
-        fd.append('avatar', compressed);
-        return fetch(avatarApiUrl, { method: 'POST', body: fd, credentials: 'same-origin' });
-      }).then(function (res) {
-        return res.json().catch(function () { return null; }).then(function (data) {
-          if (res.ok && data && data.success && data.avatar_url) {
-            var v = data.avatar_updated_at || Date.now();
-            showPreview(data.avatar_url + '?v=' + v);
-          } else {
-            form.submit();
-          }
-        });
-      }).catch(function () { form.submit(); });
-    }, profileSigOpts);
-
-    if (window.vinorPartnerAvatarCache) {
-      window.vinorPartnerAvatarCache.apply(document);
-    }
-  })();
-  </script>
-
-  {% if is_vinor_apk %}
-  <script>
-  (function() {
-    {% if show_app_update_card|default(false) %}
-    try {
-      window.dispatchEvent(new CustomEvent('vinor:app-update:nav', {
-        detail: { show: true, version: {{ (android_apk_version or '')|tojson }}, url: {{ (android_apk_url or '')|tojson }} }
-      }));
-    } catch (_) {}
-    {% endif %}
-    var wrap = document.getElementById('appUpdateCardWrap');
-    if (!wrap) return;
-    var card = document.getElementById('appUpdateCard');
-    var sub = document.getElementById('appUpdateSubtitle');
-    var meta = document.getElementById('appUpdateMeta');
-    if (!card || !sub) return;
-
-    function parseClientVersion() {
-      var ua = navigator.userAgent || '';
-      var m = ua.match(/VinorApp\/(?:Android|WebViewOnly)\/([0-9]+(?:\.[0-9]+)*)/i);
-      return m ? m[1] : '';
-    }
-    function versionParts(v) {
-      return String(v || '').split('.').map(function (p) {
-        var d = (p || '').replace(/\D/g, '');
-        return d ? parseInt(d, 10) : 0;
-      }).filter(function (_, i, arr) { return i < arr.length; });
-    }
-    function isServerNewer(serverV, clientV) {
-      if (!serverV || !clientV) return false;
-      var a = versionParts(clientV);
-      var b = versionParts(serverV);
-      var n = Math.max(a.length, b.length);
-      for (var i = 0; i < n; i++) {
-        var x = a[i] || 0;
-        var y = b[i] || 0;
-        if (x < y) return true;
-        if (x > y) return false;
-      }
-      return false;
-    }
-    function absUrl(path) {
-      try {
-        if (!path) return '';
-        if (path.indexOf('http') === 0) return path;
-        return new URL(path, window.location.origin).toString();
-      } catch (_) { return path || ''; }
-    }
-    function showUpdate(v, url) {
-      wrap.classList.remove('hidden');
-      sub.textContent = 'نسخهٔ جدید برای دانلود آماده است';
-      if (meta) meta.innerHTML = '<span class="inline-flex items-center rounded-md bg-amber-500/10 px-2 py-0.5 text-amber-300/90 ring-1 ring-amber-500/20">نسخه ' + v + '</span>';
-      card.href = absUrl(url);
-      card.setAttribute('download', '');
-      card.setAttribute('rel', 'noopener');
-      try {
-        window.dispatchEvent(new CustomEvent('vinor:app-update:nav', { detail: { show: true, version: v, url: url } }));
-      } catch (_) {}
-    }
-    function hideUpdate() {
-      wrap.classList.add('hidden');
-      try {
-        window.dispatchEvent(new CustomEvent('vinor:app-update:nav', { detail: { show: false } }));
-      } catch (_) {}
-    }
-
-    if (!wrap.classList.contains('hidden')) return;
-
-    var clientV = parseClientVersion();
-    if (!clientV) {
-      hideUpdate();
+  const menuWrap = document.querySelector('[data-left-menu-wrap]');
+  const menuPanel = document.querySelector('[data-left-menu-panel]');
+  const menuBackdrop = document.querySelector('[data-left-menu-backdrop]');
+  const menuOpenBtn = document.querySelector('[data-open-left-menu]');
+  const menuCloseBtn = document.querySelector('[data-close-left-menu]');
+  function setMenu(open) {
+    if (!menuWrap || !menuPanel || !menuBackdrop) return;
+    if (open) {
+      menuWrap.classList.remove('hidden');
+      menuWrap.classList.remove('pointer-events-none');
+      menuPanel.setAttribute('data-open', '1');
+      requestAnimationFrame(() => menuBackdrop.classList.remove('opacity-0'));
+      document.body.style.overflow = 'hidden';
       return;
     }
-
-    var headers = { 'Accept': 'application/json', 'Cache-Control': 'no-cache', 'X-Requested-With': 'XMLHttpRequest' };
-    var urls = ['/api/express/app-version', '/api/app/version'];
-    (async function () {
-      for (var i = 0; i < urls.length; i++) {
-        try {
-          var res = await fetch(urls[i], { headers: headers, credentials: 'same-origin', cache: 'no-store' });
-          if (!res || !res.ok) continue;
-          var d = await res.json();
-          if (!d || d.success !== true) continue;
-          var v = String(d.android_apk_version || '').trim();
-          var url = String(d.android_apk_url || '').trim();
-          if (v && url && isServerNewer(v, clientV)) {
-            showUpdate(v, url);
-          } else {
-            hideUpdate();
-          }
-          return;
-        } catch (_) {}
-      }
-      hideUpdate();
-    })();
-  })();
-  </script>
-  {% endif %}
-
-  <script>
-  (function() {
-    var profileSig = window.__vinorProfilePageCtrl && window.__vinorProfilePageCtrl.signal;
-    var profileSigOpts = profileSig ? { signal: profileSig } : false;
-    const card = document.getElementById('profileClickableCard');
-    const avatarBtn = document.getElementById('avatarTrigger');
-    if (!card) return;
-    card.addEventListener('click', function(e) {
-      if (avatarBtn && avatarBtn.contains(e.target)) return;
-      var editUrl = "{{ url_for('express_partner.profile_edit') }}";
-      if (window.vinorExpressNavigate) window.vinorExpressNavigate(editUrl, { forward: true });
-      else window.location.href = editUrl;
-    }, profileSigOpts);
-  })();
-  </script>
-  {% endif %}
+    menuPanel.setAttribute('data-open', '0');
+    menuBackdrop.classList.add('opacity-0');
+    window.setTimeout(() => {
+      menuWrap.classList.add('hidden');
+      menuWrap.classList.add('pointer-events-none');
+    }, 200);
+    document.body.style.overflow = '';
+  }
+  if (menuOpenBtn) menuOpenBtn.addEventListener('click', () => setMenu(true));
+  if (menuCloseBtn) menuCloseBtn.addEventListener('click', () => setMenu(false));
+  if (menuBackdrop) menuBackdrop.addEventListener('click', () => setMenu(false));
+})();
+</script>
 {% endblock %}

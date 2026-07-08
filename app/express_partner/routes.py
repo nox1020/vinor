@@ -5460,52 +5460,331 @@ def otp_resend():
         return jsonify({'ok': False, 'error': 'خطا در ارسال مجدد کد.'}), 502
 
 
+_USERNAME_RE = re.compile(r"^[a-z0-9_]{3,30}$")
+
+
+def partner_public_username(profile: Dict[str, Any] | None) -> str:
+    p = profile if isinstance(profile, dict) else {}
+    raw = str(p.get('username') or '').strip().lower()
+    if _USERNAME_RE.fullmatch(raw):
+        return raw
+    phone = _canonical_partner_phone(str(p.get('phone') or ''))
+    tail = (phone[-8:] if phone else 'vinor')
+    return f"vinor_{tail}"
+
+
+def _partner_find_by_username(username: str, partners: List[Dict[str, Any]]) -> Dict[str, Any] | None:
+    uname = (username or '').strip().lower()
+    if not uname:
+        return None
+    for p in partners if isinstance(partners, list) else []:
+        if not isinstance(p, dict):
+            continue
+        if partner_public_username(p) == uname:
+            return p
+    return None
+
+
+def _partner_deal_bucket(land: Dict[str, Any]) -> str:
+    deal = str(land.get('deal_type') or '').strip().lower()
+    pay = str(land.get('payment_method') or '').strip().lower()
+    raw = f"{deal} {pay}"
+    if ('rent' in raw) or ('اجاره' in raw) or ('رهن' in raw):
+        return 'rent'
+    if ('presale' in raw) or ('pre' in raw) or ('پیش' in raw):
+        return 'presale'
+    return 'sale'
+
+
+def _partner_kind_bucket(land: Dict[str, Any]) -> str:
+    cat = str(land.get('category') or '').strip().lower()
+    if 'ویلا' in cat or 'villa' in cat:
+        return 'villa'
+    if 'آپارتمان' in cat or 'apartment' in cat:
+        return 'apartment'
+    if 'زمین' in cat or 'land' in cat or 'باغ' in cat:
+        return 'land'
+    return 'other'
+
+
+def build_partner_brand_context(
+    target_profile: Dict[str, Any] | None,
+    *,
+    viewer_phone: str = '',
+    deal_filter: str = '',
+    kind_filter: str = '',
+) -> Dict[str, Any]:
+    profile = target_profile if isinstance(target_profile, dict) else {}
+    partner_phone = _canonical_partner_phone(str(profile.get('phone') or ''))
+    username = partner_public_username(profile)
+    is_approved = _is_partner_approved(profile)
+    is_special = _is_partner_special(profile) if is_approved else False
+
+    lands_all = load_express_lands_cached() or []
+    my_lands: List[Dict[str, Any]] = []
+    my_codes: set[str] = set()
+    if is_special:
+        from .special_listings import listings_owned_by
+        for land in listings_owned_by(partner_phone):
+            if not isinstance(land, dict):
+                continue
+            code = str(land.get('code') or '').strip()
+            if not code:
+                continue
+            copy_land = dict(land)
+            copy_land['_assignment_status'] = 'active'
+            my_lands.append(copy_land)
+            my_codes.add(code)
+    else:
+        assigns = load_express_assignments() or []
+        code_status: Dict[str, str] = {}
+        for a in assigns if isinstance(assigns, list) else []:
+            if not isinstance(a, dict):
+                continue
+            if _canonical_partner_phone(str(a.get('partner_phone') or '')) != partner_phone:
+                continue
+            code = str(a.get('land_code') or '').strip()
+            if not code:
+                continue
+            code_status[code] = str(a.get('status') or 'active').strip().lower() or 'active'
+        for land in lands_all if isinstance(lands_all, list) else []:
+            if not isinstance(land, dict):
+                continue
+            code = str(land.get('code') or '').strip()
+            if code not in code_status:
+                continue
+            copy_land = dict(land)
+            copy_land['_assignment_status'] = code_status.get(code, 'active')
+            my_lands.append(copy_land)
+            my_codes.add(code)
+
+    from ..utils.images import partner_card_image_url
+    from ..utils.share_tokens import encode_partner_ref
+    from ..utils.short_urls import public_referral_url
+
+    ref_token = encode_partner_ref(partner_phone) if partner_phone else ''
+    base_ref_url = public_referral_url(ref_token) if ref_token else ''
+
+    cards: List[Dict[str, Any]] = []
+    for land in my_lands:
+        deal = _partner_deal_bucket(land)
+        kind = _partner_kind_bucket(land)
+        if deal_filter and deal_filter != deal:
+            continue
+        if kind_filter and kind_filter != kind:
+            continue
+        code = str(land.get('code') or '').strip()
+        if not code:
+            continue
+        detail_url = url_for('express_partner.land_detail', code=code)
+        share_url = f"{detail_url}{'&' if '?' in detail_url else '?'}ref={ref_token}" if ref_token else detail_url
+        cards.append({
+            'code': code,
+            'title': str(land.get('title') or '—').strip(),
+            'city': str(land.get('city') or '').strip(),
+            'location': str(land.get('location') or '').strip(),
+            'category': str(land.get('category') or '').strip(),
+            'deal': deal,
+            'kind': kind,
+            'price_total': int(land.get('price_total') or land.get('price') or 0),
+            'image_url': partner_card_image_url(land) or None,
+            'status': str(land.get('_assignment_status') or 'active'),
+            'detail_url': detail_url,
+            'share_url': share_url,
+        })
+
+    comms = load_express_commissions_cached() or []
+    my_comms = [
+        c for c in (comms if isinstance(comms, list) else [])
+        if _canonical_partner_phone(str(c.get('partner_phone') or '')) == partner_phone
+    ]
+    sold_success = sum(1 for c in my_comms if str(c.get('status') or '').strip().lower() in ('approved', 'paid'))
+
+    views = load_express_partner_views() or []
+    if not isinstance(views, list):
+        views = []
+    profile_views = 0
+    listing_views = 0
+    for v in views:
+        if not isinstance(v, dict):
+            continue
+        if _canonical_partner_phone(str(v.get('partner_phone') or '')) == partner_phone:
+            if str(v.get('entity') or '') == 'profile':
+                profile_views += 1
+        code = str(v.get('code') or '').strip()
+        if code and code in my_codes:
+            listing_views += 1
+
+    reqs = load_express_visit_requests() or []
+    req_rows = [
+        r for r in (reqs if isinstance(reqs, list) else [])
+        if str(r.get('land_code') or '').strip() in my_codes
+    ]
+    requests_received = len(req_rows)
+    answered = sum(
+        1 for r in req_rows
+        if str(r.get('status') or '').strip().lower() in ('approved', 'completed', 'done_pending', 'rejected', 'cancelled')
+    )
+    response_rate = int((answered * 100 / requests_received) if requests_received else 0)
+
+    followers = load_partner_notes() or []
+    viewer_phone_canonical = _canonical_partner_phone(viewer_phone)
+    follower_rows = [
+        f for f in (followers if isinstance(followers, list) else [])
+        if isinstance(f, dict)
+        and f.get('type') == 'partner_follow'
+        and _canonical_partner_phone(str(f.get('partner_phone') or '')) == partner_phone
+    ]
+    follower_count = len(follower_rows)
+    viewer_following = bool(viewer_phone_canonical and any(
+        _canonical_partner_phone(str(f.get('follower_phone') or '')) == viewer_phone_canonical
+        for f in follower_rows
+    ))
+    can_follow = bool(viewer_phone_canonical and partner_phone and viewer_phone_canonical != partner_phone)
+
+    partners = load_express_partners_cached() or []
+    approved_phones = [
+        _canonical_partner_phone(str(p.get('phone') or ''))
+        for p in partners
+        if _is_partner_approved(p)
+    ]
+    sales_by_phone: Dict[str, int] = {}
+    for c in comms if isinstance(comms, list) else []:
+        if str(c.get('status') or '').strip().lower() not in ('approved', 'paid'):
+            continue
+        ph = _canonical_partner_phone(str(c.get('partner_phone') or ''))
+        if not ph:
+            continue
+        sales_by_phone[ph] = sales_by_phone.get(ph, 0) + 1
+    ranked = sorted(approved_phones, key=lambda ph: sales_by_phone.get(ph, 0), reverse=True)
+    rank = (ranked.index(partner_phone) + 1) if partner_phone in ranked else None
+
+    from ..utils.images import display_avatar_url
+    avatar = str(profile.get('avatar') or '').strip()
+    avatar_url = display_avatar_url(avatar, profile.get('avatar_updated_at')) if avatar else ''
+    is_verified = bool(is_approved)
+    partner_name = (profile.get('name') or '').strip() or phone_last4(partner_phone)
+    bio = (profile.get('bio') or '').strip()
+    city = (profile.get('city') or '').strip()
+    joined = str(profile.get('created_at') or profile.get('approved_at') or '').strip()
+    last_active = str(profile.get('last_active_at') or '').strip()
+    rating = round(min(5.0, 3.0 + (sold_success / 20.0) + (response_rate / 200.0)), 1)
+
+    return {
+        'profile': profile,
+        'username': username,
+        'partner_phone': partner_phone,
+        'partner_name': partner_name,
+        'bio': bio,
+        'city': city,
+        'is_verified': is_verified,
+        'is_special': is_special,
+        'avatar_url': avatar_url,
+        'share_ref_url': base_ref_url,
+        'ref_token': ref_token,
+        'stats': {
+            'active_files': sum(1 for land in my_lands if str(land.get('_assignment_status') or '') not in ('sold', 'closed')),
+            'sales_success': sold_success,
+            'profile_views': profile_views,
+            'listing_views': listing_views,
+            'requests_received': requests_received,
+            'rank': rank or 0,
+            'rating': rating,
+            'follower_count': follower_count,
+            'response_rate': response_rate,
+            'joined': joined,
+            'last_active': last_active,
+        },
+        'viewer_following': viewer_following,
+        'can_follow': can_follow,
+        'cards': cards,
+        'filters': {
+            'deal': deal_filter,
+            'kind': kind_filter,
+        },
+    }
+
+
 @express_partner_bp.route('/profile', methods=['GET'], endpoint='profile')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def profile_page():
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None) or {}
-    # تعیین وضعیت تایید همکاری
-    try:
-        is_approved = _is_partner_approved(profile)
-    except Exception:
-        is_approved = False
-    me_name = (profile.get('name') or '').strip()
-    # Inject latest APK info from settings for direct rendering
-    _settings = _express_settings_cached()
-    _raw_apk_url = (_settings.get('android_apk_url') or '').strip()
-    android_apk_version = (_settings.get('android_apk_version') or '').strip()
-    from ..utils.short_urls import public_apk_download_url
-    android_apk_url = public_apk_download_url(_settings, external=False) if _raw_apk_url else ''
-    android_apk_updated_at = _settings.get('android_apk_updated_at') or ''
-    android_apk_size_bytes = _settings.get('android_apk_size_bytes') or ''
-    from ..utils.apk_version import is_vinor_apk_request, should_show_apk_update
-    is_vinor_apk = is_vinor_apk_request(request)
-    show_app_update_card = should_show_apk_update(
-        android_apk_version,
-        apk_url=_raw_apk_url,
-        req=request,
+    if not me_phone or not profile:
+        return redirect(url_for('express_partner.login', next=url_for('express_partner.profile')))
+
+    deal_filter = (request.args.get('deal') or '').strip().lower()
+    kind_filter = (request.args.get('kind') or '').strip().lower()
+    ctx = build_partner_brand_context(
+        profile,
+        viewer_phone=me_phone,
+        deal_filter=deal_filter,
+        kind_filter=kind_filter,
     )
-    from .referrals import REFERRAL_BONUS_AMOUNT
-    is_special = _is_partner_special(profile) if is_approved else False
+    profile_url = url_for('main.partner_profile_at', username=ctx.get('username') or '')
     resp = make_response(render_template(
         'express_partner/profile.html',
         me_phone=me_phone,
-        me_name=me_name,
-        profile=profile,
-        is_approved=is_approved,
-        is_special=is_special,
-        partner_tier_label=_partner_tier_label(profile, is_approved=is_approved),
-        referral_bonus_per_invite=REFERRAL_BONUS_AMOUNT,
-        android_apk_url=android_apk_url,
-        android_apk_version=android_apk_version,
-        android_apk_updated_at=android_apk_updated_at,
-        android_apk_size_bytes=android_apk_size_bytes,
-        is_vinor_apk=is_vinor_apk,
-        show_app_update_card=show_app_update_card,
+        is_public_page=False,
+        profile_public_url=profile_url,
+        profile_public_url_with_ref=f"{profile_url}{'&' if '?' in profile_url else '?'}ref={ctx.get('ref_token')}",
+        **ctx,
     ))
     _append_partner_tab_prefetch(resp)
     return resp
+
+
+@express_partner_bp.post('/api/profile/follow/<string:username>', endpoint='profile_follow_toggle')
+def profile_follow_toggle(username: str):
+    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
+    if not me_phone:
+        return jsonify({'success': False, 'error': 'login_required'}), 401
+
+    partners = load_express_partners_cached() or []
+    target = _partner_find_by_username(username, partners)
+    if not target:
+        return jsonify({'success': False, 'error': 'not_found'}), 404
+    target_phone = _canonical_partner_phone(str(target.get('phone') or ''))
+    if not target_phone or target_phone == me_phone:
+        return jsonify({'success': False, 'error': 'invalid_target'}), 400
+
+    notes = load_partner_notes() or []
+    if not isinstance(notes, list):
+        notes = []
+    match_idx = -1
+    for idx, row in enumerate(notes):
+        if not isinstance(row, dict):
+            continue
+        if row.get('type') != 'partner_follow':
+            continue
+        if _canonical_partner_phone(str(row.get('partner_phone') or '')) != target_phone:
+            continue
+        if _canonical_partner_phone(str(row.get('follower_phone') or '')) != me_phone:
+            continue
+        match_idx = idx
+        break
+    is_following = False
+    if match_idx >= 0:
+        notes.pop(match_idx)
+        is_following = False
+    else:
+        notes.append({
+            'id': int(time.time() * 1000),
+            'type': 'partner_follow',
+            'partner_phone': target_phone,
+            'follower_phone': me_phone,
+            'created_at': datetime.utcnow().isoformat(),
+        })
+        is_following = True
+    save_partner_notes(notes)
+
+    count = sum(
+        1 for row in notes
+        if isinstance(row, dict)
+        and row.get('type') == 'partner_follow'
+        and _canonical_partner_phone(str(row.get('partner_phone') or '')) == target_phone
+    )
+    return jsonify({'success': True, 'following': is_following, 'follower_count': count})
 
 
 @express_partner_bp.route('/listings', methods=['GET'], endpoint='special_listings')
