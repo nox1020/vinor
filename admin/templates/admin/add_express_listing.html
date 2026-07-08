@@ -538,6 +538,12 @@
 {% block content %}
 {% set is_edit = is_edit|default(false) %}
 {% set fv = form_values|default({}) %}
+{% set listing_back = listing_back_url|default(url_for('admin.express_listings')) %}
+{% set listing_action = listing_form_action|default(url_for('admin.edit_express_listing', code=listing_code) if is_edit else url_for('admin.add_express_listing')) %}
+{% set upload_img_url = listing_upload_image_url|default(url_for('admin.express_upload_image')) %}
+{% set upload_vid_url = listing_upload_video_url|default(url_for('admin.express_upload_video')) %}
+{% set upload_doc_url = listing_upload_document_url|default(url_for('admin.express_upload_document')) %}
+{% set submit_label = listing_submit_label|default('ذخیره تغییرات' if is_edit else 'ثبت و انتشار آگهی') %}
 {% macro fld(key, default='') -%}
 {%- if request.method == 'POST' -%}{{ request.form.get(key, default) }}{%- else -%}{{ fv.get(key, default) }}{%- endif -%}
 {%- endmacro %}
@@ -545,17 +551,17 @@
 
   <!-- نوار بالا -->
   <div class="sticky top-0 z-30 -mx-3 sm:-mx-4 px-3 sm:px-4 py-2.5 mb-2 bg-white/95 dark:bg-gray-950/95 backdrop-blur border-b border-gray-100 dark:border-gray-800 pt-[env(safe-area-inset-top,0px)] flex items-center gap-3">
-    <a href="{{ url_for('admin.express_listings') }}"
+    <a href="{{ listing_back }}"
        class="w-9 h-9 shrink-0 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
        aria-label="بازگشت">
       <i class="fa-solid fa-arrow-right text-sm"></i>
     </a>
     <div class="flex-1 min-w-0">
       <h2 class="text-sm font-bold text-gray-900 dark:text-white truncate">
-        {% if is_edit %}ویرایش آگهی اکسپرس{% else %}ثبت آگهی اکسپرس{% endif %}
+        {% if listing_page_title %}{{ listing_page_title }}{% elif is_edit %}ویرایش آگهی اکسپرس{% else %}ثبت آگهی اکسپرس{% endif %}
       </h2>
       <p class="text-[11px] text-gray-500 dark:text-gray-400">
-        {% if is_edit %}کد {{ listing_code }} · تغییرات را ذخیره کنید{% else %}اطلاعات ملک را وارد و منتشر کنید{% endif %}
+        {% if listing_page_subtitle %}{{ listing_page_subtitle }}{% elif is_edit %}کد {{ listing_code }} · تغییرات را ذخیره کنید{% else %}اطلاعات ملک را وارد و منتشر کنید{% endif %}
       </p>
     </div>
     <button type="button"
@@ -567,12 +573,12 @@
   </div>
 
   <form method="POST" enctype="multipart/form-data"
-        action="{{ url_for('admin.edit_express_listing', code=listing_code) if is_edit else url_for('admin.add_express_listing') }}"
+        action="{{ listing_action }}"
         id="expressForm" class="space-y-3 px-3 sm:px-4" novalidate
         data-is-edit="{{ '1' if is_edit else '0' }}"
-        data-upload-url="{{ url_for('admin.express_upload_image') }}"
-        data-upload-video-url="{{ url_for('admin.express_upload_video') }}"
-        data-upload-document-url="{{ url_for('admin.express_upload_document') }}"
+        data-upload-url="{{ upload_img_url }}"
+        data-upload-video-url="{{ upload_vid_url }}"
+        data-upload-document-url="{{ upload_doc_url }}"
         data-leaflet-css="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.css') }}"
         data-leaflet-js="{{ url_for('static', filename='vendor/leaflet/leaflet-1.9.4.min.js') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -871,7 +877,7 @@
     <div class="hidden lg:block pt-2">
       <button type="submit" id="submitBtn"
               class="w-full py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition focusable shadow-sm">
-        {% if is_edit %}ذخیره تغییرات{% else %}ثبت و انتشار آگهی{% endif %}
+        {{ submit_label }}
       </button>
     </div>
   </form>
@@ -881,7 +887,7 @@
 <div class="lg:hidden fixed bottom-0 left-0 right-0 z-30 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-white/95 dark:bg-gray-950/95 border-t border-gray-200 dark:border-gray-800 backdrop-blur">
   <button type="submit" form="expressForm" id="submitBtnMobile"
           class="w-full py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-sm">
-    {% if is_edit %}ذخیره تغییرات{% else %}ثبت و انتشار آگهی{% endif %}
+    {{ submit_label }}
   </button>
 </div>
 

@@ -7,9 +7,10 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from flask import current_app
+from flask import current_app, url_for
 from werkzeug.utils import secure_filename
 
+from app.land_category_specs import apply_category_specs_from_form
 from app.utils.images import save_upload_image
 from app.utils.storage import load_ads, load_ads_cached, save_ads
 
@@ -20,10 +21,69 @@ def _norm_phone(phone: str) -> str:
 
 def _uploads_folder() -> str:
     folder = current_app.config.get("UPLOAD_FOLDER") or os.path.join(
-        current_app.root_path, "static", "uploads"
+        current_app.static_folder or current_app.root_path, "static", "uploads"
     )
     os.makedirs(folder, exist_ok=True)
     return folder
+
+
+def _get_express_docs_dir() -> str:
+    docs_dir = os.path.join(current_app.instance_path, "data", "express_docs")
+    os.makedirs(docs_dir, exist_ok=True)
+    return docs_dir
+
+
+def _save_express_document(file, land_code: str) -> Optional[str]:
+    if not file or not getattr(file, "filename", None):
+        return None
+    docs_dir = _get_express_docs_dir()
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+    filename = secure_filename(f"{land_code}_{timestamp}_{file.filename}")
+    file_path = os.path.join(docs_dir, filename)
+    file.save(file_path)
+    return filename
+
+
+def _normalize_images_from_form(form, files) -> List[str]:
+    image_urls: List[str] = []
+    for t in form.getlist("images") or []:
+        t = (t or "").strip()
+        if t:
+            image_urls.append(t)
+
+    upload_folder = _uploads_folder()
+    for f in files.getlist("images") or []:
+        if f and getattr(f, "filename", None):
+            stored = save_upload_image(f, upload_folder)
+            if stored:
+                image_urls.append(stored)
+            else:
+                filename = secure_filename(
+                    f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}__{f.filename}"
+                )
+                try:
+                    f.stream.seek(0)
+                except Exception:
+                    pass
+                f.save(os.path.join(upload_folder, filename))
+                image_urls.append(f"uploads/{filename}")
+    return image_urls
+
+
+def _save_video_from_form(files) -> Optional[str]:
+    video_file = files.get("video")
+    if not video_file or not getattr(video_file, "filename", None):
+        return None
+    allowed_extensions = {".mp4", ".webm", ".mov", ".avi", ".mkv"}
+    file_ext = os.path.splitext(video_file.filename)[1].lower()
+    if file_ext not in allowed_extensions:
+        return None
+    upload_folder = _uploads_folder()
+    filename = secure_filename(
+        f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}__{video_file.filename}"
+    )
+    video_file.save(os.path.join(upload_folder, filename))
+    return f"uploads/{filename}"
 
 
 def _next_numeric_code(lands: List[Dict[str, Any]]) -> str:
@@ -70,87 +130,269 @@ def find_owned_land(phone: str, code: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def create_special_listing(
+SPECIAL_LISTING_ERRORS: Dict[str, str] = {
+    "invalid_owner": "شناسه همکار نامعتبر است.",
+    "required_fields": "لطفاً فیلدهای اجباری را پر کنید.",
+    "invalid_city": "شهر آگهی باید از بین شهرهای فعال انتخاب شود.",
+    "title_short": "عنوان باید حداقل ۱۰ کاراکتر باشد.",
+    "invalid_numbers": "متراژ و قیمت باید عدد معتبر باشند.",
+    "invalid_price": "متراژ و قیمت باید بیشتر از صفر باشند.",
+    "payment_required": "نحوه پرداخت را انتخاب کنید.",
+    "invalid_contact": "شماره تماس پشتیبانی معتبر نیست.",
+    "commission_required": "درصد پورسانت الزامی است.",
+    "invalid_commission": "درصد پورسانت باید بین ۰ و ۱۰۰ باشد.",
+    "installments_required": "برای پرداخت اقساطی حداقل یک قسط معتبر وارد کنید.",
+    "save_failed": "ثبت آگهی ناموفق بود.",
+}
+
+
+def create_special_listing_from_express_form(
     *,
     owner_phone: str,
-    title: str,
-    city: str,
-    location: str,
-    size: int,
-    price_total: int,
-    description: str = "",
-    commission_pct: float = 0.0,
-    image_file=None,
-    contact_phone: str = "",
+    form,
+    files,
+    cities: Optional[List[str]] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    title = (title or "").strip()
-    city = (city or "").strip()
-    location = (location or "").strip() or city
-    desc = (description or "").strip()
+    """ثبت آگهی اکسپرس همکار ویژه — همان فیلدهای فرم ادمین."""
     owner = _norm_phone(owner_phone)
-    contact = _norm_phone(contact_phone) or owner
-
     if not owner:
         return None, "invalid_owner"
-    if len(title) < 8:
+
+    title = (form.get("title") or "").strip()
+    location = (form.get("location") or "").strip()
+    city = (form.get("city") or "").strip()
+    size_raw = (form.get("size") or "").strip()
+    price_total_raw = (form.get("price_total") or "").strip()
+
+    size_clean = re.sub(r"[^\d]", "", size_raw) if size_raw else ""
+    price_total_clean = re.sub(r"[^\d]", "", price_total_raw) if price_total_raw else ""
+
+    if not all([title, location, city, size_clean, price_total_clean]):
+        return None, "required_fields"
+
+    if cities and city not in cities:
+        return None, "invalid_city"
+
+    if len(title) < 10:
         return None, "title_short"
-    if not city:
-        return None, "city_required"
+
+    try:
+        size = int(size_clean)
+        price_total = int(price_total_clean)
+    except (ValueError, TypeError):
+        return None, "invalid_numbers"
+
     if size <= 0 or price_total <= 0:
         return None, "invalid_price"
-    if commission_pct < 0 or commission_pct > 100:
-        return None, "invalid_commission"
+
+    payment_method = (form.get("payment_method") or "").strip()
+    if not payment_method:
+        return None, "payment_required"
+
+    vinor_contact = _norm_phone((form.get("vinor_contact") or "").strip()) or owner
+    if len(vinor_contact) < 10:
+        return None, "invalid_contact"
 
     lands = load_ads() or []
     if not isinstance(lands, list):
         lands = []
-    new_code = _next_numeric_code(lands)
-    images: List[str] = []
-    if image_file is not None and getattr(image_file, "filename", None):
-        stored = save_upload_image(image_file, _uploads_folder())
-        if stored:
-            images.append(stored)
-        else:
-            fname = secure_filename(
-                f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}__{image_file.filename}"
-            )
-            abs_path = os.path.join(_uploads_folder(), fname)
-            image_file.save(abs_path)
-            images.append(f"uploads/{fname}")
+    new_code = (form.get("code") or "").strip() or _next_numeric_code(lands)
 
-    price_per_meter = int(round(price_total / size)) if size > 0 else 0
-    commission_amount = (
-        int(round(price_total * (commission_pct / 100.0))) if commission_pct else 0
+    documents: List[str] = []
+    for doc_key in ("document_1", "document_2"):
+        pre = (form.get(doc_key) or "").strip()
+        if pre:
+            documents.append(pre)
+    for key, file in files.items():
+        if key.startswith("document_") and getattr(file, "filename", None):
+            doc_filename = _save_express_document(file, new_code)
+            if doc_filename and doc_filename not in documents:
+                documents.append(doc_filename)
+
+    images = _normalize_images_from_form(form, files)
+
+    pct_raw = (form.get("express_commission_pct") or "").strip()
+    if not pct_raw:
+        return None, "commission_required"
+    try:
+        express_commission_pct = float(pct_raw)
+        if express_commission_pct <= 0 or express_commission_pct > 100:
+            return None, "invalid_commission"
+    except (ValueError, TypeError):
+        return None, "invalid_commission"
+
+    price_per_meter_raw = (form.get("price_per_meter") or "").strip()
+    price_per_meter_clean = (
+        re.sub(r"[^\d]", "", price_per_meter_raw) if price_per_meter_raw else ""
     )
+    try:
+        price_per_meter = int(price_per_meter_clean) if price_per_meter_clean else 0
+        if price_per_meter == 0 and size > 0:
+            price_per_meter = int(round(price_total / size))
+    except (ValueError, TypeError):
+        price_per_meter = int(round(price_total / size)) if size > 0 else 0
+
+    express_commission_amount = (
+        int(round(price_total * (express_commission_pct / 100.0)))
+        if price_total and express_commission_pct is not None
+        else None
+    )
+
+    latitude = None
+    longitude = None
+    try:
+        lat_str = (form.get("latitude") or "").strip()
+        lon_str = (form.get("longitude") or "").strip()
+        if lat_str:
+            latitude = float(lat_str)
+        if lon_str:
+            longitude = float(lon_str)
+    except (ValueError, TypeError):
+        pass
+
+    video_path = (form.get("video") or "").strip() or None
+    if not video_path:
+        try:
+            video_path = _save_video_from_form(files)
+        except Exception:
+            video_path = None
+
+    payment_terms: List[Dict[str, int]] = []
+    if payment_method == "اقساطی":
+        months_list = form.getlist("installment_months[]")
+        amounts_list = form.getlist("installment_amounts[]")
+        for i in range(max(len(months_list), len(amounts_list))):
+            m_raw = (months_list[i] if i < len(months_list) else "") or ""
+            a_raw = (amounts_list[i] if i < len(amounts_list) else "") or ""
+            try:
+                m = int(re.sub(r"[^\d]", "", str(m_raw))) if m_raw else 0
+            except Exception:
+                m = 0
+            try:
+                a = int(re.sub(r"[^\d]", "", str(a_raw))) if a_raw else 0
+            except Exception:
+                a = 0
+            if m > 0 and a > 0:
+                payment_terms.append({"months": m, "amount": a})
+        if not payment_terms:
+            return None, "installments_required"
 
     rec: Dict[str, Any] = {
         "code": new_code,
         "title": title,
         "location": location,
         "city": city,
-        "size": int(size),
-        "price_total": int(price_total),
+        "size": size,
+        "price_total": price_total,
         "price_per_meter": price_per_meter,
-        "description": desc,
+        "description": (form.get("description") or "").strip(),
         "images": images,
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "owner": owner,
         "status": "approved",
         "ad_type": "express",
-        "category": "زمین",
-        "payment_method": "نقدی",
-        "payment_terms": [],
+        "category": (form.get("category") or "").strip(),
+        "payment_method": payment_method,
+        "payment_terms": payment_terms,
         "is_express": True,
         "express_status": "approved",
-        "expert_verified": False,
-        "express_documents": [],
-        "vinor_contact": contact,
+        "expert_verified": bool((form.get("expert_verified") or "").strip()),
+        "express_documents": documents,
+        "vinor_contact": vinor_contact,
         "extras": {
-            "express_commission_pct": float(commission_pct),
-            "express_commission_amount": commission_amount,
+            "express_commission_pct": express_commission_pct,
+            "express_commission_amount": express_commission_amount,
             "listed_by_special": True,
         },
     }
+    if video_path:
+        rec["video"] = video_path
+    if latitude is not None:
+        rec["latitude"] = latitude
+    if longitude is not None:
+        rec["longitude"] = longitude
+
+    apply_category_specs_from_form(rec, form)
+
     lands.append(rec)
-    save_ads(lands)
+    try:
+        save_ads(lands)
+    except Exception:
+        current_app.logger.exception("special listing save failed code=%s", new_code)
+        return None, "save_failed"
     return rec, None
+
+
+def assign_land_to_all_partners(land: Dict[str, Any], commission_pct: float) -> None:
+    """ساخت انتساب برای همه همکاران — معادل تیک «ارسال به همه همکاران» ادمین."""
+    try:
+        from app.services.notifications import add_notification
+        from app.utils.storage import (
+            load_express_assignments,
+            load_express_partners,
+            save_express_assignments,
+        )
+
+        new_code = str(land.get("code") or "")
+        title = str(land.get("title") or "")
+        partners = load_express_partners() or []
+        items = load_express_assignments() or []
+        existing = {
+            (str(a.get("partner_phone")), str(a.get("land_code")))
+            for a in items
+            if isinstance(a, dict)
+        }
+        max_id = max(
+            [int(x.get("id", 0) or 0) for x in items if isinstance(x, dict)],
+            default=0,
+        )
+        for p in partners:
+            phone = str((p or {}).get("phone") or "").strip()
+            if not phone:
+                continue
+            key = (phone, new_code)
+            if key in existing:
+                continue
+            max_id += 1
+            items.append(
+                {
+                    "id": max_id,
+                    "partner_phone": phone,
+                    "land_code": new_code,
+                    "commission_pct": commission_pct or 0,
+                    "status": "active",
+                    "created_at": datetime.utcnow().replace(microsecond=0).isoformat()
+                    + "Z",
+                }
+            )
+            existing.add(key)
+            try:
+                phone_normalized = _norm_phone(phone)
+                if phone_normalized and len(phone_normalized) == 11:
+                    add_notification(
+                        user_id=phone_normalized,
+                        title="فایل جدید اکسپرس",
+                        body=f"کد فایل: {new_code} - {title}",
+                        ntype="info",
+                        ad_id=new_code,
+                        action_url=url_for(
+                            "express_partner.land_detail",
+                            code=new_code,
+                            _external=True,
+                        ),
+                    )
+            except Exception:
+                current_app.logger.exception(
+                    "special listing assign notify failed phone=%s code=%s",
+                    phone,
+                    new_code,
+                )
+        save_express_assignments(items)
+    except Exception:
+        current_app.logger.exception(
+            "assign_land_to_all_partners failed code=%s", land.get("code")
+        )
+
+
+def save_special_listing_upload_document(file) -> Optional[str]:
+    return _save_express_document(file, "draft")

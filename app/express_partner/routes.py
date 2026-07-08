@@ -5496,71 +5496,145 @@ def special_listings_page():
     )
 
 
+@express_partner_bp.route('/listings/upload-image', methods=['POST'], endpoint='special_listing_upload_image')
+@require_special_partner(json_response=True)
+def special_listing_upload_image():
+    """آپلود فوری تصویر — همان رفتار فرم ادمین اکسپرس."""
+    from werkzeug.utils import secure_filename
+    from ..utils.images import normalize_upload_url, save_upload_image
+
+    f = request.files.get('file') or request.files.get('image')
+    if not f or not f.filename:
+        return jsonify({'ok': False, 'error': 'فایلی ارسال نشده است.'}), 400
+
+    upload_folder = os.path.join(current_app.static_folder, 'uploads')
+    os.makedirs(upload_folder, exist_ok=True)
+    stored = save_upload_image(f, upload_folder)
+    if not stored:
+        return jsonify({'ok': False, 'error': 'ذخیره تصویر ناموفق بود.'}), 400
+
+    return jsonify({
+        'ok': True,
+        'path': stored,
+        'url': normalize_upload_url(stored),
+    })
+
+
+@express_partner_bp.route('/listings/upload-video', methods=['POST'], endpoint='special_listing_upload_video')
+@require_special_partner(json_response=True)
+def special_listing_upload_video():
+    """آپلود فوری ویدئو — همان رفتار فرم ادمین اکسپرس."""
+    from werkzeug.utils import secure_filename
+    from ..utils.images import normalize_upload_url
+
+    f = request.files.get('file') or request.files.get('video')
+    if not f or not f.filename:
+        return jsonify({'ok': False, 'error': 'فایلی ارسال نشده است.'}), 400
+
+    allowed_extensions = {'.mp4', '.webm', '.mov', '.avi', '.mkv'}
+    file_ext = os.path.splitext(f.filename)[1].lower()
+    if file_ext not in allowed_extensions:
+        return jsonify({'ok': False, 'error': 'فرمت ویدئو مجاز نیست.'}), 400
+
+    upload_folder = os.path.join(current_app.static_folder, 'uploads')
+    os.makedirs(upload_folder, exist_ok=True)
+    filename = secure_filename(f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}__{f.filename}")
+    f.save(os.path.join(upload_folder, filename))
+    stored = f'uploads/{filename}'
+    return jsonify({
+        'ok': True,
+        'path': stored,
+        'url': normalize_upload_url(stored),
+        'name': f.filename,
+    })
+
+
+@express_partner_bp.route('/listings/upload-document', methods=['POST'], endpoint='special_listing_upload_document')
+@require_special_partner(json_response=True)
+def special_listing_upload_document():
+    """آپلود فوری مدرک — همان رفتار فرم ادمین اکسپرس."""
+    from .special_listings import save_special_listing_upload_document
+
+    f = request.files.get('file') or request.files.get('document')
+    if not f or not f.filename:
+        return jsonify({'ok': False, 'error': 'فایلی ارسال نشده است.'}), 400
+
+    allowed_extensions = {'.pdf', '.jpg', '.jpeg', '.png'}
+    file_ext = os.path.splitext(f.filename)[1].lower()
+    if file_ext not in allowed_extensions:
+        return jsonify({'ok': False, 'error': 'فرمت مدرک مجاز نیست (PDF · JPG · PNG).'}), 400
+
+    stored = save_special_listing_upload_document(f)
+    if not stored:
+        return jsonify({'ok': False, 'error': 'ذخیره مدرک ناموفق بود.'}), 400
+
+    return jsonify({
+        'ok': True,
+        'path': stored,
+        'name': f.filename,
+    })
+
+
+def _render_special_listing_form():
+    cities = load_active_cities() or []
+    return render_template(
+        'admin/add_express_listing.html',
+        cities=cities,
+        is_edit=False,
+        land={},
+        form_values={},
+        listing_code='',
+        listing_form_action=url_for('express_partner.special_listing_new'),
+        listing_back_url=url_for('express_partner.special_listings'),
+        listing_upload_image_url=url_for('express_partner.special_listing_upload_image'),
+        listing_upload_video_url=url_for('express_partner.special_listing_upload_video'),
+        listing_upload_document_url=url_for('express_partner.special_listing_upload_document'),
+        listing_page_title='ثبت آگهی همکار ویژه',
+        listing_page_subtitle='اطلاعات ملک را وارد و منتشر کنید',
+    )
+
+
 @express_partner_bp.route('/listings/new', methods=['GET', 'POST'], endpoint='special_listing_new')
 @require_special_partner()
 def special_listing_new():
-    """ثبت آگهی مینیمال — سبک دیوار."""
+    """ثبت آگهی همکار ویژه — همان قالب و فیلدهای ثبت آگهی اکسپرس ادمین."""
     me_phone = (session.get('user_phone') or '').strip()
     cities = load_active_cities() or []
-    form_err = ''
+
     if request.method == 'POST':
-        title = (request.form.get('title') or '').strip()
-        city = (request.form.get('city') or '').strip()
-        location = (request.form.get('location') or '').strip() or city
-        size_raw = re.sub(r'[^\d]', '', (request.form.get('size') or ''))
-        price_raw = re.sub(r'[^\d]', '', (request.form.get('price_total') or ''))
-        desc = (request.form.get('description') or '').strip()
-        pct_raw = (request.form.get('commission_pct') or '').strip() or '0'
-        try:
-            size = int(size_raw or '0')
-            price_total = int(price_raw or '0')
-            commission_pct = float(pct_raw)
-        except (TypeError, ValueError):
-            size, price_total, commission_pct = 0, 0, 0.0
-
-        from .special_listings import create_special_listing
-        image_file = request.files.get('image')
-        rec, err = create_special_listing(
-            owner_phone=me_phone,
-            title=title,
-            city=city,
-            location=location,
-            size=size,
-            price_total=price_total,
-            description=desc,
-            commission_pct=commission_pct,
-            image_file=image_file,
-            contact_phone=me_phone,
+        from .special_listings import (
+            SPECIAL_LISTING_ERRORS,
+            assign_land_to_all_partners,
+            create_special_listing_from_express_form,
         )
-        if err == 'title_short':
-            form_err = 'عنوان حداقل ۸ کاراکتر باشد.'
-        elif err == 'city_required':
-            form_err = 'شهر را انتخاب کنید.'
-        elif err == 'invalid_price':
-            form_err = 'متراژ و قیمت باید معتبر باشند.'
-        elif err == 'invalid_commission':
-            form_err = 'درصد پورسانت نامعتبر است.'
-        elif err or not rec:
-            form_err = 'ثبت آگهی ناموفق بود.'
-        else:
-            try:
-                from .new_land_sms import notify_all_partners_new_express_land_background
-                notify_all_partners_new_express_land_background(rec)
-            except Exception:
-                current_app.logger.exception(
-                    'special listing SMS queue failed code=%s', rec.get('code')
-                )
-            flash('آگهی ثبت شد.', 'success')
-            return redirect(url_for('express_partner.special_listings'))
 
-    return render_template(
-        'express_partner/special_listing_new.html',
-        cities=cities,
-        form_err=form_err,
-        hide_header=True,
-        bottom_nav_active='profile',
-        form=request.form if request.method == 'POST' else {},
-    )
+        rec, err = create_special_listing_from_express_form(
+            owner_phone=me_phone,
+            form=request.form,
+            files=request.files,
+            cities=cities,
+        )
+        if err:
+            flash(SPECIAL_LISTING_ERRORS.get(err, 'ثبت آگهی ناموفق بود.'), 'error')
+            return _render_special_listing_form()
+
+        try:
+            from .new_land_sms import notify_all_partners_new_express_land_background
+            notify_all_partners_new_express_land_background(rec)
+        except Exception:
+            current_app.logger.exception(
+                'special listing SMS queue failed code=%s', rec.get('code')
+            )
+
+        if (request.form.get('auto_send_all_partners') or '').strip():
+            extras = rec.get('extras') if isinstance(rec.get('extras'), dict) else {}
+            pct = float(extras.get('express_commission_pct') or 0)
+            assign_land_to_all_partners(rec, pct)
+
+        flash(f'آگهی با کد {rec.get("code")} ثبت شد.', 'success')
+        return redirect(url_for('express_partner.special_listings'))
+
+    return _render_special_listing_form()
 
 
 @express_partner_bp.route('/inbox-visits', methods=['GET'], endpoint='special_visit_inbox')
