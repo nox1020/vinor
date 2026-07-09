@@ -10,11 +10,47 @@
 {% set ref_apply_url = url_for('express_partner.apply', ref=ref_token) if ref_token else url_for('express_partner.apply') %}
 {% include 'express_partner/partials/home_page_styles.html' %}
 
-<div class="min-h-[100dvh] bg-[#030712] pb-10 text-zinc-100">
+{% set is_profile_owner = me_phone and partner_phone and me_phone == partner_phone %}
+{% set show_add_listing_fab = is_profile_owner and is_special %}
+
+<style>
+  .ep-public-fab {
+    position: fixed;
+    z-index: 60;
+    bottom: calc(1.35rem + env(safe-area-inset-bottom, 0px));
+    left: calc(1.25rem + env(safe-area-inset-left, 0px));
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #3390ec;
+    color: #fff;
+    font-size: 1.35rem;
+    line-height: 1;
+    box-shadow:
+      0 4px 16px rgba(51, 144, 236, 0.42),
+      0 2px 8px rgba(0, 0, 0, 0.28);
+    text-decoration: none;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .ep-public-fab:hover { background: #2b7fd4; }
+  .ep-public-fab:active {
+    transform: scale(0.94);
+    box-shadow:
+      0 2px 10px rgba(51, 144, 236, 0.35),
+      0 1px 4px rgba(0, 0, 0, 0.22);
+  }
+</style>
+
+<div class="min-h-[100dvh] bg-[#030712] {% if show_add_listing_fab %}pb-24{% else %}pb-10{% endif %} text-zinc-100">
   <header class="border-b border-white/10 px-4 py-5 sm:px-6">
     <div class="mx-auto mb-3 flex max-w-lg items-center justify-between">
       <button type="button"
-              onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href='{{ url_for('express_partner.files') }}'; }"
+              onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href='{{ url_for('express_partner.files') if me_phone else url_for('main.partners') }}'; }"
               class="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs text-zinc-300 transition hover:bg-white/[0.06]">
         <i class="fas fa-chevron-right text-[10px]" aria-hidden="true"></i>
         برگشت
@@ -79,6 +115,16 @@
     </a>
   </div>
 </div>
+
+{% if show_add_listing_fab %}
+<a href="{{ url_for('express_partner.special_listing_new') }}"
+   data-vinor-express-nav
+   class="ep-public-fab"
+   aria-label="افزودن آگهی"
+   title="افزودن آگهی">
+  <i class="fas fa-plus" aria-hidden="true"></i>
+</a>
+{% endif %}
 
 <script>
 (() => {

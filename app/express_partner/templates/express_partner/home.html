@@ -3,23 +3,22 @@
 
 {% block content %}
 {% include 'express_partner/partials/home_page_styles.html' %}
-{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
-
-{{ ep_header_start(id='homeExpressHeader') }}
-{% call ep_header_row('داشبورد', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full', back_nav=false) %}
-  {% set profile_notifications_dark = true %}
-  {% include 'express_partner/partials/notifications_button.html' %}
-{% endcall %}
-{{ ep_header_end() }}
 
 <div id="homeDashboardPage"
-     class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16"
+     class="home-dashboard-page min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16"
      data-vinor-home-page>
+
+  {% if not (me_phone and partner_name and is_approved|default(false)) %}
+  <div class="vn-home-notify-slot">
+    {% set profile_notifications_dark = true %}
+    {% include 'express_partner/partials/notifications_button.html' %}
+  </div>
+  {% endif %}
 
   <div class="mx-auto w-full max-w-lg">
 
     {% if not is_approved|default(false) %}
-    <div class="px-3 pt-3 pb-2 sm:px-6">
+    <div class="vn-home-guest-strip px-3 pb-2 sm:px-6">
       {% include 'express_partner/partials/dashboard_guest_coop_cta.html' %}
     </div>
     {% endif %}
@@ -28,8 +27,14 @@
 
     {% if partner_name and is_approved|default(false) %}
     <header class="vn-home-greet">
-      <p class="vn-home-greet__sub">سلام {{ partner_name }}</p>
-      <h1 class="vn-home-greet__title">کار بعدی شما</h1>
+      <div class="vn-home-greet__body">
+        <p class="vn-home-greet__sub">سلام {{ partner_name }}</p>
+        <h1 class="vn-home-greet__title">کار بعدی شما</h1>
+      </div>
+      <div class="vn-home-greet__actions">
+        {% set profile_notifications_dark = true %}
+        {% include 'express_partner/partials/notifications_button.html' %}
+      </div>
     </header>
     {% endif %}
 

@@ -55,76 +55,93 @@
       </nav>
 
       {% else %}
-      {# هویت — ردیف بالای لیست دیوار #}
+      {# هویت + دسترسی سریع به ویرایش و صفحه عمومی #}
       <section data-tour="profile-section"
                id="profileClickableCard"
-               class="profile-identity flex items-center gap-3 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
-        <div class="relative shrink-0 pointer-events-auto">
-          <form id="avatarForm" method="post" action="{{ url_for('express_partner.profile_avatar_upload') }}" enctype="multipart/form-data">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input id="avatarInput" name="avatar" type="file" accept="image/*" class="hidden">
-            <button type="button" id="avatarTrigger"
-                    class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.06] ring-2 ring-white/10 transition hover:ring-emerald-500/35 sm:h-16 sm:w-16"
-                    title="تغییر عکس پروفایل">
-              {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
-              {% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
-              <img id="avatarProfileImg"
-                   {% if _avatar_url %}data-avatar-url="{{ _avatar_url }}"{% endif %}
-                   alt="عکس پروفایل"
-                   class="h-full w-full object-cover {% if not _avatar %}hidden{% endif %}"
-                   decoding="async"
-                   referrerpolicy="no-referrer"
-                   onerror="this.classList.add('hidden');var f=document.getElementById('avatarProfileFallback');if(f)f.classList.remove('hidden');">
-              <span id="avatarProfileFallback"
-                    class="flex h-full w-full items-center justify-center text-lg font-bold text-zinc-400 {% if _avatar %}hidden{% endif %}">
-                {{ me_name|avatar_initials }}
-              </span>
-            </button>
-            {% if _avatar_url %}
-            <script>
-            (function () {
-              if (typeof window.vinorHydratePartnerAvatar === 'function') {
-                window.vinorHydratePartnerAvatar('avatarProfileImg', 'avatarProfileFallback');
-              }
-            })();
-            </script>
+               class="profile-identity border-b border-white/10">
+        <div class="flex items-center gap-3 px-4 py-4 sm:px-6 sm:py-5">
+          <div class="relative shrink-0 pointer-events-auto">
+            <form id="avatarForm" method="post" action="{{ url_for('express_partner.profile_avatar_upload') }}" enctype="multipart/form-data">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input id="avatarInput" name="avatar" type="file" accept="image/*" class="hidden">
+              <button type="button" id="avatarTrigger"
+                      class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.06] ring-2 ring-white/10 transition hover:ring-emerald-500/35 sm:h-16 sm:w-16"
+                      title="تغییر عکس پروفایل">
+                {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
+                {% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
+                <img id="avatarProfileImg"
+                     {% if _avatar_url %}data-avatar-url="{{ _avatar_url }}"{% endif %}
+                     alt="عکس پروفایل"
+                     class="h-full w-full object-cover {% if not _avatar %}hidden{% endif %}"
+                     decoding="async"
+                     referrerpolicy="no-referrer"
+                     onerror="this.classList.add('hidden');var f=document.getElementById('avatarProfileFallback');if(f)f.classList.remove('hidden');">
+                <span id="avatarProfileFallback"
+                      class="flex h-full w-full items-center justify-center text-lg font-bold text-zinc-400 {% if _avatar %}hidden{% endif %}">
+                  {{ me_name|avatar_initials }}
+                </span>
+              </button>
+              {% if _avatar_url %}
+              <script>
+              (function () {
+                if (typeof window.vinorHydratePartnerAvatar === 'function') {
+                  window.vinorHydratePartnerAvatar('avatarProfileImg', 'avatarProfileFallback');
+                }
+              })();
+              </script>
+              {% endif %}
+            </form>
+          </div>
+
+          <div class="min-w-0 flex-1 text-right">
+            <div class="truncate text-[17px] font-bold leading-tight text-white sm:text-lg">{{ me_name or 'همکار وینور' }}</div>
+            {% if public_username %}
+            <div class="mt-0.5 text-sm text-zinc-400 dir-ltr text-left">@{{ public_username }}</div>
             {% endif %}
-          </form>
+            <div class="mt-1 text-sm tabular-nums text-zinc-500" dir="ltr">
+              {% if me_phone and me_phone|length >= 11 %}
+                {{ me_phone[0:4] }} {{ me_phone[4:7] }} {{ me_phone[7:11] }}
+              {% else %}
+                {{ me_phone }}
+              {% endif %}
+            </div>
+            <div class="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium">
+              {% if is_special|default(false) %}
+              <i class="fas fa-star text-violet-400 text-[10px]" aria-hidden="true"></i>
+              <span class="text-violet-300">همکار ویژه</span>
+              {% elif is_approved %}
+              <i class="fas fa-circle-check text-emerald-400 text-[10px]" aria-hidden="true"></i>
+              <span class="text-emerald-400/95">همکار تأییدشده</span>
+              {% else %}
+              <span class="text-zinc-500">کاربر عادی</span>
+              {% endif %}
+            </div>
+          </div>
         </div>
 
-        <div class="min-w-0 flex-1 text-right">
-          <div class="truncate text-[17px] font-bold leading-tight text-white sm:text-lg">{{ me_name or 'همکار وینور' }}</div>
-          <div class="mt-1 text-sm tabular-nums text-zinc-500" dir="ltr">
-            {% if me_phone and me_phone|length >= 11 %}
-              {{ me_phone[0:4] }} {{ me_phone[4:7] }} {{ me_phone[7:11] }}
-            {% else %}
-              {{ me_phone }}
-            {% endif %}
-          </div>
-          <div class="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium">
-            {% if is_special|default(false) %}
-            <i class="fas fa-star text-violet-400 text-[10px]" aria-hidden="true"></i>
-            <span class="text-violet-300">همکار ویژه</span>
-            {% elif is_approved %}
-            <i class="fas fa-circle-check text-emerald-400 text-[10px]" aria-hidden="true"></i>
-            <span class="text-emerald-400/95">همکار تأییدشده</span>
-            {% else %}
-            <span class="text-zinc-500">کاربر عادی</span>
-            {% endif %}
-          </div>
+        <div class="grid grid-cols-2 border-t border-white/10">
+          <a href="{{ url_for('express_partner.profile_edit') }}"
+             data-vinor-express-nav
+             class="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium text-zinc-300 transition active:bg-white/[0.04] hover:bg-white/[0.02]">
+            <i class="fas fa-pen text-[10px] text-zinc-500" aria-hidden="true"></i>
+            ویرایش پروفایل
+          </a>
+          {% if public_profile_url %}
+          <a href="{{ public_profile_url }}"
+             class="flex items-center justify-center gap-1.5 border-r border-white/10 px-3 py-2.5 text-xs font-medium text-emerald-300 transition active:bg-emerald-500/[0.06] hover:bg-emerald-500/[0.04]">
+            <i class="fas fa-globe text-[10px] text-emerald-400/80" aria-hidden="true"></i>
+            صفحه عمومی من
+          </a>
+          {% else %}
+          <span class="flex items-center justify-center border-r border-white/10 px-3 py-2.5 text-xs text-zinc-600">—</span>
+          {% endif %}
         </div>
-
-        <i class="fas fa-chevron-left shrink-0 text-xs text-zinc-600" aria-hidden="true"></i>
       </section>
 
       <nav class="divide-y divide-white/10" aria-label="منوی پروفایل">
         {% set visits_subtitle = 'درخواست‌های من و دریافتی آگهی‌ها' if is_special|default(false) else 'وضعیت درخواست‌های بازدید من' %}
         {% if not is_approved %}
         {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری', 'برای تبدیل به همکار اکسپرس درخواست دهید', tour='apply-link') }}
-        {% endif %}
-
-        {% if is_special|default(false) %}
-        {{ profile_menu_row(url_for('express_partner.special_listings'), 'fa-building', 'آگهی‌های من', 'ثبت و مدیریت فایل‌های شما', tour='special-listings-link') }}
         {% endif %}
 
         {{ profile_menu_row(url_for('express_partner.requests'), 'fa-clipboard-list', 'بازدیدها', visits_subtitle, tour='requests-link') }}
@@ -162,9 +179,6 @@
         {{ profile_menu_row(url_for('express_partner.invite_colleagues'), 'fa-user-plus', 'دعوت همکار', 'هر همکار تأییدشده، ' ~ (referral_bonus_per_invite|toman) ~ ' به موجودی شما اضافه می‌شود', tour='invite-colleagues-link') }}
         {% else %}
         {{ profile_menu_row(url_for('express_partner.invite_colleagues'), 'fa-user-plus', 'دعوت همکار', 'لینک اختصاصی خود را به اشتراک بگذارید', tour='invite-colleagues-link') }}
-        {% endif %}
-        {% if public_profile_url %}
-        {{ profile_menu_row(public_profile_url, 'fa-globe', 'صفحه عمومی من', '@' ~ (public_username or ''), nav=false) }}
         {% endif %}
         {{ profile_menu_row(url_for('express_partner.support'), 'fa-headset', 'پشتیبانی', 'تماس با تیم وینور', tour='support-link') }}
 
@@ -534,21 +548,5 @@
   })();
   </script>
   {% endif %}
-
-  <script>
-  (function() {
-    var profileSig = window.__vinorProfilePageCtrl && window.__vinorProfilePageCtrl.signal;
-    var profileSigOpts = profileSig ? { signal: profileSig } : false;
-    const card = document.getElementById('profileClickableCard');
-    const avatarBtn = document.getElementById('avatarTrigger');
-    if (!card) return;
-    card.addEventListener('click', function(e) {
-      if (avatarBtn && avatarBtn.contains(e.target)) return;
-      var editUrl = "{{ url_for('express_partner.profile_edit') }}";
-      if (window.vinorExpressNavigate) window.vinorExpressNavigate(editUrl, { forward: true });
-      else window.location.href = editUrl;
-    }, profileSigOpts);
-  })();
-  </script>
   {% endif %}
 {% endblock %}

@@ -11,6 +11,7 @@ Vinor Express (vinor.ir) – Flask App Factory
 import os
 import logging
 import mimetypes
+import re
 from datetime import timedelta, datetime
 from flask import (
     Flask, request, redirect, url_for, session, current_app, send_from_directory
@@ -30,6 +31,27 @@ except Exception:
 FIRST_VISIT_COOKIE = "vinor_first_visit_done"
 SESSION_COOKIE_NAME = "vinor_session"
 _STATIC_VERSION_CACHE: dict[str, tuple[int, str]] = {}
+_PARTNER_PUBLIC_USERNAME_RE = re.compile(r"^[a-z0-9_]{3,30}$")
+_PARTNER_PUBLIC_USERNAME_RESERVED = frozenset({
+    "admin", "api", "app", "partners", "public", "profile", "help", "privacy",
+    "healthz", "connection", "uploads", "express", "d", "r", "robots.txt", "sitemap.xml",
+})
+
+
+def _is_public_partner_profile_path(path: str) -> bool:
+    """Public /@username and /username partner profile pages (no login required)."""
+    p = (path or "").strip()
+    if not p:
+        return False
+    if p.startswith("/@"):
+        slug = p[2:].split("/", 1)[0].lower()
+        return bool(slug and _PARTNER_PUBLIC_USERNAME_RE.fullmatch(slug))
+    if p.count("/") == 1 and len(p) > 1:
+        slug = p[1:].split("/", 1)[0].lower()
+        if slug in _PARTNER_PUBLIC_USERNAME_RESERVED:
+            return False
+        return bool(_PARTNER_PUBLIC_USERNAME_RE.fullmatch(slug))
+    return False
 
 
 def _flask_debug() -> bool:
@@ -355,12 +377,20 @@ def create_app() -> Flask:
             settings = load_settings(app)
         except Exception:
             settings = {}
+        ep = (request.endpoint or "") if request else ""
+        show_ai_fab = ep in (
+            "express_partner.home",
+            "express_partner.files",
+            "express_partner.commissions",
+            "express_partner.profile",
+        )
         return {
             "VAPID_PUBLIC_KEY": app.config.get("VAPID_PUBLIC_KEY", ""),
             "VINOR_IS_LOGGED_IN": is_logged,
             "APP_BRAND_NAME": app.config.get("APP_BRAND_NAME", "Vinor Express"),
             "csrf_token": generate_csrf,
             "SHOW_SUBMIT_BUTTON": bool(settings.get("show_submit_button", True)),
+            "show_ai_fab": show_ai_fab,
         }
 
     # ---------- رجیستر بلوپرینت‌ها ----------
@@ -784,6 +814,11 @@ def create_app() -> Flask:
         if request.path in safe_paths:
             if debug:
                 current_app.logger.debug("PASS (path): %s", request.path)
+            return
+
+        if _is_public_partner_profile_path(request.path):
+            if debug:
+                current_app.logger.debug("PASS (partner-profile): %s", request.path)
             return
 
         user_logged_in = bool(session.get("user_id") or session.get("user_phone"))

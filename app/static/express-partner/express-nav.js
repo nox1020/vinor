@@ -623,6 +623,33 @@
     }
   }
 
+  var AI_MAIN_TAB_PATHS = {
+    '/express/partner/home': true,
+    '/express/partner/files': true,
+    '/express/partner/commissions': true,
+    '/express/partner/profile': true
+  };
+
+  function syncAiFabForPath(pathname) {
+    if (typeof window.vinorSyncAiFab === 'function') {
+      window.vinorSyncAiFab();
+      return;
+    }
+    var fab = document.getElementById('epAiFab');
+    if (!fab) return;
+    var path = normPath(pathname || '');
+    var show = shouldShowBottomNav(path) && !!AI_MAIN_TAB_PATHS[path];
+    if (show) {
+      fab.removeAttribute('hidden');
+      fab.style.removeProperty('display');
+      fab.setAttribute('aria-hidden', 'false');
+    } else {
+      fab.setAttribute('hidden', 'hidden');
+      fab.style.display = 'none';
+      fab.setAttribute('aria-hidden', 'true');
+    }
+  }
+
   /** منوی پایین باید روی body بماند؛ در swap فقط duplicate حذف شود، نه تنها نسخهٔ موجود */
   function hoistBottomNavFromSwap(swapRoot) {
     if (!swapRoot) {
@@ -718,6 +745,7 @@
     var onDetail = isLandDetailPath(path);
     var showNav = shouldShowBottomNav(path);
     setBottomNavVisible(showNav);
+    syncAiFabForPath(path);
     if (showNav) {
       var tabKey = navKey || bottomNavKeyForLocation(window.location.href);
       setBottomNavActive(tabKey);
@@ -1628,6 +1656,7 @@
     syncAuthFlowClass(path);
     var showNav = shouldShowBottomNav(path);
     setBottomNavVisible(showNav);
+    syncAiFabForPath(path);
     if (showNav) {
       setBottomNavActive(bottomNavKeyForLocation(window.location.href));
     }

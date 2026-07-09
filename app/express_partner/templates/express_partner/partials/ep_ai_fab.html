@@ -1,0 +1,91 @@
+{# دکمه شناور Vinor AI — روی body، نمایش سرور + همگام‌سازی SPA #}
+<style>
+  #epAiFab.ep-ai-fab {
+    position: fixed;
+    z-index: 70;
+    bottom: calc(5.85rem + env(safe-area-inset-bottom, 0px));
+    left: calc(1.15rem + env(safe-area-inset-left, 0px));
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, #7c3aed 0%, #6d28d9 100%);
+    color: #fff;
+    font-size: 1.2rem;
+    line-height: 1;
+    box-shadow:
+      0 4px 16px rgba(124, 58, 237, 0.42),
+      0 2px 8px rgba(0, 0, 0, 0.28);
+    text-decoration: none;
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  }
+  #epAiFab.ep-ai-fab:hover { filter: brightness(1.06); }
+  #epAiFab.ep-ai-fab:active {
+    transform: scale(0.94);
+    box-shadow:
+      0 2px 10px rgba(124, 58, 237, 0.35),
+      0 1px 4px rgba(0, 0, 0, 0.22);
+  }
+  #epAiFab.ep-ai-fab[hidden] {
+    display: none !important;
+    pointer-events: none;
+  }
+  html.vinor-has-apk-banner #epAiFab.ep-ai-fab {
+    bottom: calc(7.35rem + env(safe-area-inset-bottom, 0px));
+  }
+</style>
+<a href="{{ url_for('express_partner.ai') }}"
+   id="epAiFab"
+   data-vinor-express-nav
+   class="ep-ai-fab"
+   aria-label="Vinor AI"
+   title="Vinor AI"
+   {% if not show_ai_fab|default(false) %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
+  <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>
+</a>
+<script>
+(function () {
+  var MAIN = {
+    '/express/partner/home': true,
+    '/express/partner/files': true,
+    '/express/partner/commissions': true,
+    '/express/partner/profile': true
+  };
+  function normPath(path) {
+    return (path || '').replace(/\/+$/, '') || '/';
+  }
+  function syncAiFab() {
+    var fab = document.getElementById('epAiFab');
+    if (!fab) return;
+    var show = !!MAIN[normPath(window.location.pathname)];
+    if (show) {
+      fab.removeAttribute('hidden');
+      fab.style.display = 'flex';
+      fab.setAttribute('aria-hidden', 'false');
+    } else {
+      fab.setAttribute('hidden', 'hidden');
+      fab.style.display = 'none';
+      fab.setAttribute('aria-hidden', 'true');
+    }
+  }
+  function mountFabOnBody() {
+    var fab = document.getElementById('epAiFab');
+    var nav = document.getElementById('bottomNavMenu');
+    if (!fab || !nav || fab.parentElement === document.body) return;
+    try { document.body.insertBefore(fab, nav); } catch (_) {}
+  }
+  window.vinorSyncAiFab = syncAiFab;
+  mountFabOnBody();
+  syncAiFab();
+  document.addEventListener('DOMContentLoaded', function () {
+    mountFabOnBody();
+    syncAiFab();
+  });
+  window.addEventListener('popstate', function () { syncAiFab(); });
+})();
+</script>
