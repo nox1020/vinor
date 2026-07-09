@@ -323,14 +323,13 @@ def partner_profile_at(username: str):
 
     canonical_url = url_for("main.partner_profile_at", username=ctx.get("username") or "", _external=True)
     resp = make_response(render_template(
-        "express_partner/profile.html",
+        "express_partner/partner_public_profile.html",
         me_phone=me_phone,
-        is_public_page=True,
         vinor_robots_meta="index,follow",
         profile_public_url=canonical_url,
         profile_public_url_with_ref=f"{canonical_url}{'&' if '?' in canonical_url else '?'}ref={ctx.get('ref_token')}",
         seo_title=f"{ctx.get('partner_name') or 'همکار وینور'} | وینور اکسپرس",
-        seo_description=f"صفحه برند شخصی {ctx.get('partner_name') or 'همکار وینور'} در وینور اکسپرس",
+        seo_description=f"صفحه عمومی {ctx.get('partner_name') or 'همکار وینور'} در وینور اکسپرس",
         canonical_url=canonical_url,
         **ctx,
     ))

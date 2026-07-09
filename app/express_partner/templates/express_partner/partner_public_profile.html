@@ -1,0 +1,101 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}{{ seo_title | default((partner_name or 'همکار وینور') ~ ' | وینور') }}{% endblock %}
+{% block head %}
+  {{ super() }}
+  <meta name="description" content="{{ seo_description | default('صفحه عمومی همکار وینور اکسپرس') }}">
+  {% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}
+{% endblock %}
+{% block content %}
+{% set s = stats or {} %}
+{% set ref_apply_url = url_for('express_partner.apply', ref=ref_token) if ref_token else url_for('express_partner.apply') %}
+{% include 'express_partner/partials/home_page_styles.html' %}
+
+<div class="min-h-[100dvh] bg-[#030712] pb-10 text-zinc-100">
+  <header class="border-b border-white/10 px-4 py-5 sm:px-6">
+    <div class="mx-auto mb-3 flex max-w-lg items-center justify-between">
+      <button type="button"
+              onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href='{{ url_for('express_partner.files') }}'; }"
+              class="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs text-zinc-300 transition hover:bg-white/[0.06]">
+        <i class="fas fa-chevron-right text-[10px]" aria-hidden="true"></i>
+        برگشت
+      </button>
+      <span class="text-xs text-zinc-500">صفحه عمومی همکار</span>
+    </div>
+    <div class="mx-auto flex max-w-lg items-start gap-3">
+      <div class="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-white/10">
+        {% if avatar_url %}
+        <img src="{{ avatar_url }}" alt="{{ partner_name }}" class="h-full w-full object-cover" loading="eager">
+        {% else %}
+        <div class="flex h-full w-full items-center justify-center text-sm font-bold text-zinc-400">{{ partner_name|avatar_initials }}</div>
+        {% endif %}
+      </div>
+      <div class="min-w-0 flex-1">
+        <h1 class="truncate text-base font-bold text-white">{{ partner_name }}</h1>
+        <p class="mt-0.5 text-xs text-zinc-500 dir-ltr text-left">@{{ username }}</p>
+        {% if city %}<p class="mt-1 text-xs text-zinc-500">{{ city }}</p>{% endif %}
+        {% if bio %}<p class="mt-2 text-sm leading-relaxed text-zinc-400">{{ bio }}</p>{% endif %}
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          {% if is_verified %}<span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300">احراز شده</span>{% endif %}
+          {% if is_special %}<span class="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] text-violet-300">همکار ویژه</span>{% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="mx-auto mt-4 grid max-w-lg grid-cols-3 gap-2">
+      <button type="button" data-share-profile class="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2 text-xs text-zinc-200">اشتراک</button>
+      <button type="button" data-copy-profile class="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2 text-xs text-zinc-200">کپی لینک</button>
+      <a href="tel:{{ partner_phone }}" class="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2 text-center text-xs text-zinc-200">تماس</a>
+    </div>
+  </header>
+
+  <div class="mx-auto max-w-lg divide-y divide-white/10">
+    {% for card in cards %}
+    <a href="{{ card.detail_url }}" data-vinor-express-nav class="vn-home-file-row">
+      <div class="vn-home-file-row__text">
+        <div>
+          <h3 class="vn-home-file-row__title">{{ card.title }}</h3>
+          <p class="vn-home-file-row__meta">{{ card.city }}{% if card.location %} · {{ card.location }}{% endif %}</p>
+          <p class="vn-home-file-row__meta vn-home-file-row__comm">{{ card.price_total|toman }}</p>
+        </div>
+        <span class="vn-home-file-row__cta">مشاهده</span>
+      </div>
+      <div class="vn-home-file-row__thumb" aria-hidden="true">
+        <div class="vn-home-file-row__thumb-inner">
+          {% if card.image_url %}
+          <img src="{{ card.image_url }}" alt="" loading="lazy" decoding="async">
+          {% else %}
+          <div class="grid h-full place-items-center text-[11px] font-semibold text-zinc-600">- V -</div>
+          {% endif %}
+        </div>
+      </div>
+    </a>
+    {% else %}
+    <div class="px-4 py-12 text-center text-sm text-zinc-500 sm:px-6">فعلاً فایلی برای نمایش وجود ندارد.</div>
+    {% endfor %}
+  </div>
+
+  <div class="mx-auto mt-6 max-w-lg px-4 sm:px-6">
+    <a href="{{ ref_apply_url }}" data-vinor-express-nav class="flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-500">
+      درخواست همکاری با وینور
+    </a>
+  </div>
+</div>
+
+<script>
+(() => {
+  const profileShareUrl = "{{ profile_public_url_with_ref }}";
+  async function copyText(v) {
+    if (!v) return;
+    try { await navigator.clipboard.writeText(v); } catch (_) {}
+  }
+  const shareBtn = document.querySelector('[data-share-profile]');
+  if (shareBtn) shareBtn.addEventListener('click', async () => {
+    if (navigator.share) {
+      try { await navigator.share({ url: profileShareUrl, title: document.title }); return; } catch (_) {}
+    }
+    copyText(profileShareUrl);
+  });
+  const copyBtn = document.querySelector('[data-copy-profile]');
+  if (copyBtn) copyBtn.addEventListener('click', () => copyText(profileShareUrl));
+})();
+</script>
+{% endblock %}

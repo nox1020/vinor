@@ -5710,25 +5710,56 @@ def build_partner_brand_context(
 def profile_page():
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None) or {}
-    if not me_phone or not profile:
+    if not me_phone:
         return redirect(url_for('express_partner.login', next=url_for('express_partner.profile')))
 
-    deal_filter = (request.args.get('deal') or '').strip().lower()
-    kind_filter = (request.args.get('kind') or '').strip().lower()
-    ctx = build_partner_brand_context(
-        profile,
-        viewer_phone=me_phone,
-        deal_filter=deal_filter,
-        kind_filter=kind_filter,
+    try:
+        is_approved = _is_partner_approved(profile)
+    except Exception:
+        is_approved = False
+    me_name = (profile.get('name') or '').strip()
+    is_special = _is_partner_special(profile) if is_approved else False
+
+    _settings = _express_settings_cached()
+    _raw_apk_url = (_settings.get('android_apk_url') or '').strip()
+    android_apk_version = (_settings.get('android_apk_version') or '').strip()
+    from ..utils.short_urls import public_apk_download_url
+    android_apk_url = public_apk_download_url(_settings, external=False) if _raw_apk_url else ''
+    android_apk_updated_at = _settings.get('android_apk_updated_at') or ''
+    android_apk_size_bytes = _settings.get('android_apk_size_bytes') or ''
+    from ..utils.apk_version import is_vinor_apk_request, should_show_apk_update
+    is_vinor_apk = is_vinor_apk_request(request)
+    show_app_update_card = should_show_apk_update(
+        android_apk_version,
+        apk_url=_raw_apk_url,
+        req=request,
     )
-    profile_url = url_for('main.partner_profile_at', username=ctx.get('username') or '')
+    from .referrals import REFERRAL_BONUS_AMOUNT
+
+    if profile and not (profile.get('phone') or '').strip():
+        profile = dict(profile)
+        profile['phone'] = me_phone
+
+    public_username = partner_public_username(profile) if profile else ''
+    public_profile_url = url_for('main.partner_profile_at', username=public_username) if public_username else ''
+
     resp = make_response(render_template(
         'express_partner/profile.html',
         me_phone=me_phone,
-        is_public_page=False,
-        profile_public_url=profile_url,
-        profile_public_url_with_ref=f"{profile_url}{'&' if '?' in profile_url else '?'}ref={ctx.get('ref_token')}",
-        **ctx,
+        me_name=me_name,
+        profile=profile,
+        is_approved=is_approved,
+        is_special=is_special,
+        partner_tier_label=_partner_tier_label(profile, is_approved=is_approved),
+        referral_bonus_per_invite=REFERRAL_BONUS_AMOUNT,
+        public_username=public_username,
+        public_profile_url=public_profile_url,
+        android_apk_url=android_apk_url,
+        android_apk_version=android_apk_version,
+        android_apk_updated_at=android_apk_updated_at,
+        android_apk_size_bytes=android_apk_size_bytes,
+        is_vinor_apk=is_vinor_apk,
+        show_app_update_card=show_app_update_card,
     ))
     _append_partner_tab_prefetch(resp)
     return resp
