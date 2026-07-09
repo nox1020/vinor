@@ -56,7 +56,6 @@ _INDEX_PREFIXES = (
     "/express/partner/files",
     "/express/partner/lands/",
     "/express/partner/cooperation-terms",
-    "/express/partner/help",
     "/express/partner/legal/",
     "/express/partner/top-sellers",
 )

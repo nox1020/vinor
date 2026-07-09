@@ -3873,8 +3873,8 @@ def verify():
 @express_partner_bp.route('/help', methods=['GET'], endpoint='help')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def help():
-    """صفحه راهنمای داخلی برای Express Partner"""
-    return render_template('express_partner/help.html')
+    """صفحه راهنما حذف شد — هدایت به دستیار AI."""
+    return redirect(url_for('express_partner.ai'))
 
 
 @express_partner_bp.route('/training', methods=['GET'], endpoint='training')

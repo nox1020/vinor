@@ -121,8 +121,6 @@ class OnboardingTour {
         this.tourData = this.getCommissionsTour();
       } else if (path.includes('/profile')) {
         this.tourData = this.getProfileTour();
-      } else if (path.includes('/help')) {
-        this.tourData = this.getHelpTour();
       } else {
         this.tourData = this.getDashboardTour();
       }
@@ -236,32 +234,9 @@ class OnboardingTour {
         position: 'top'
       },
       {
-        element: '[data-tour="help-link"]',
-        title: 'راهنمای همکار 📚',
-        description: 'اصول همکاری با وینور، مسیر کار در پنل و پاسخ سوالات پرتکرار همکاران اینجاست.',
-        position: 'top'
-      },
-      {
         element: '[data-tour="bottom-nav"]',
         title: 'منوی پایین 📱',
         description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید: فایل‌ها، پورسانت‌ها و پروفایل.',
-        position: 'top'
-      }
-    ];
-  }
-
-  getHelpTour() {
-    return [
-      {
-        element: '[data-tour="restart-tour"]',
-        title: 'اجرای تور راهنما 🔄',
-        description: 'برای مشاهدهٔ آموزش‌های پلتفرم از ابتدا، روی این دکمه بزنید.',
-        position: 'top'
-      },
-      {
-        element: '[data-tour="bottom-nav"]',
-        title: 'منوی پایین 📱',
-        description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید.',
         position: 'top'
       }
     ];
@@ -383,34 +358,13 @@ class OnboardingTour {
         position: 'top',
         page: 'profile'
       },
-      // مرحله 17: راهنما (پروفایل)
-      {
-        element: '[data-tour="help-link"]',
-        title: 'راهنمای همکار 📚',
-        description: 'اصول وینور، مسیر فایل تا پورسانت و سوالات پرتکرار همکاران را از اینجا بخوانید.',
-        position: 'top',
-        page: 'profile',
-        action: 'navigate',
-        actionMessage: 'روی «راهنما» بزنید. تور در صفحه راهنما ادامه می‌یابد.',
-        nextUrl: '/express/partner/help',
-        waitForElement: true
-      },
-      // مرحله 19: اجرای مجدد تور (صفحه راهنما)
-      {
-        element: '[data-tour="restart-tour"]',
-        title: 'اجرای مجدد تور راهنما 🔄',
-        description: 'برای مشاهدهٔ دوبارهٔ آموزش‌ها از ابتدا، روی این دکمه بزنید.',
-        position: 'top',
-        page: 'help',
-        waitForElement: true
-      },
-      // مرحله 20: منوی پایین
+      // مرحله 16: منوی پایین
       {
         element: '[data-tour="bottom-nav"]',
         title: 'منوی پایین 📱',
-        description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید: فایل‌ها، پورسانت‌ها، اعلان‌ها و پروفایل.',
+        description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید: فایل‌ها، پورسانت‌ها و پروفایل.',
         position: 'top',
-        page: 'help'
+        page: 'profile'
       }
     ];
   }
@@ -770,8 +724,7 @@ class OnboardingTour {
     const paths = {
       'dashboard': '/express/partner/dashboard',
       'commissions': '/express/partner/commissions',
-      'profile': '/express/partner/profile',
-      'help': '/express/partner/help'
+      'profile': '/express/partner/profile'
     };
     return paths[page] || '/express/partner/dashboard';
   }
@@ -787,8 +740,6 @@ class OnboardingTour {
       return /\/notes\/?$/.test(currentPath);
     } else if (expectedPage === 'profile') {
       return currentPath.includes('/profile') && !currentPath.includes('/profile/');
-    } else if (expectedPage === 'help') {
-      return /\/help\/?$/.test(currentPath);
     }
     return true;
   }
