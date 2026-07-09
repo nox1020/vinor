@@ -4,30 +4,45 @@
     position: fixed;
     z-index: 70;
     bottom: calc(0.65rem + env(safe-area-inset-bottom, 0px));
-    left: calc(1.15rem + env(safe-area-inset-left, 0px));
+    left: 50%;
+    transform: translateX(-50%);
     width: min(20.5rem, calc(100vw - 2.3rem));
     min-height: 3.4rem;
     border-radius: 1rem;
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
     gap: 0.45rem;
     padding: 0.42rem;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: #111111;
-    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(124, 58, 237, 0.35);
+    background: linear-gradient(180deg, #161022 0%, #111111 100%);
+    box-shadow:
+      0 10px 30px rgba(0, 0, 0, 0.5),
+      0 0 0 1px rgba(255, 255, 255, 0.04) inset;
     pointer-events: auto;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     transition: transform 0.18s ease, box-shadow 0.18s ease;
   }
   #epAiFab.ep-ai-chatbox:active {
-    transform: scale(0.99);
+    transform: translateX(-50%) scale(0.99);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   }
   #epAiFab.ep-ai-chatbox[hidden] {
     display: none !important;
     pointer-events: none;
+  }
+  #epAiFab .ep-ai-chatbox__brand {
+    width: 2.15rem;
+    height: 2.15rem;
+    border-radius: 0.7rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(124, 58, 237, 0.22);
+    color: #c4b5fd;
+    font-size: 0.82rem;
+    flex-shrink: 0;
   }
   #epAiFab .ep-ai-chatbox__input {
     width: 100%;
@@ -69,6 +84,9 @@
    aria-label="Vinor AI Chat"
    title="Vinor AI Chat"
    {% if not show_ai_fab|default(false) %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
+  <span class="ep-ai-chatbox__brand" aria-hidden="true">
+    <i class="fas fa-wand-magic-sparkles"></i>
+  </span>
   <input type="text"
          id="epAiFabInput"
          class="ep-ai-chatbox__input"
@@ -121,6 +139,7 @@
     } else {
       window.location.href = href;
     }
+    input.value = '';
   }
   function mountFabOnBody() {
     var fab = document.getElementById('epAiFab');
