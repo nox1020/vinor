@@ -2933,6 +2933,8 @@ def requests_page():
             'progress_line': mgmt['progress_line'],
             'progress_pct_label': mgmt['progress_pct_label'],
             'current_step_label': mgmt['current_step_label'],
+            'current_step_key': mgmt.get('current_step_key') or '',
+            'stage_hint': mgmt.get('stage_hint') or mgmt['next_action'],
             'detail_url': url_for('express_partner.land_detail', code=land_code) if land_code else '',
             'needs_attention': mgmt['bucket'] == 'needs_action',
         })

@@ -27,6 +27,16 @@ VISIT_PROGRESS_STEP_KEYS = (
     ("deal_commission_paid", "واریز پورسانت معامله"),
 )
 
+REQUEST_STAGE_HINTS = {
+    "visit_requested": "درخواست بازدید ثبت شده؛ تیم وینور در حال بررسی است.",
+    "visit_approved": "بازدید تأیید شد — با مشتری هماهنگ کنید و پس از بازدید «انجام شد» را ثبت کنید.",
+    "visit_done": "بازدید انجام شد ثبت شده؛ منتظر تأیید ادمین بمانید.",
+    "visit_commission_paid": "پورسانت بازدید در حال بررسی است؛ سپس می‌توانید معامله ثبت کنید.",
+    "deal_requested": "زمان ثبت درخواست معامله است — از صفحه فایل اقدام کنید.",
+    "deal_approved": "معامله ثبت شده؛ منتظر تأیید و واریز پورسانت باشید.",
+    "deal_commission_paid": "پورسانت معامله در حال واریز است؛ به‌زودی در کیف پول می‌بینید.",
+}
+
 # روز هفته برای تنظیمات ادمین (هم‌تراز recurrence_weekday در پیامک زمان‌دار)
 VISIT_WEEKDAY_SAT = 5
 VISIT_WEEKDAY_SUN = 6
@@ -349,6 +359,13 @@ def partner_request_mgmt_meta(
         progress_line = f"مرحله {stage_num} از {total}" if total else ""
         progress_pct_label = f"{pct}٪ پیشرفت" if total else ""
 
+    if bucket == "cancelled":
+        stage_hint = "این درخواست لغو یا رد شده؛ می‌توانید درخواست جدید ثبت کنید."
+    elif bucket == "completed":
+        stage_hint = "مسیر این فایل کامل شده — پورسانت‌ها در بخش مالی قابل مشاهده است."
+    else:
+        stage_hint = REQUEST_STAGE_HINTS.get(current_key, next_action)
+
     return {
         "bucket": bucket,
         "bucket_label": REQUEST_MGMT_BUCKET_LABELS.get(bucket, bucket),
@@ -360,6 +377,8 @@ def partner_request_mgmt_meta(
         "progress_line": progress_line,
         "progress_pct_label": progress_pct_label,
         "current_step_label": current_label,
+        "current_step_key": current_key,
+        "stage_hint": stage_hint,
     }
 
 
