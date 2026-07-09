@@ -122,5 +122,37 @@
 {% block scripts %}
 {{ super() }}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
+<script>
+(function () {
+  try {
+    var draft = sessionStorage.getItem('vinor_ai_home_prompt') || '';
+    if (!draft) return;
+    var input = document.getElementById('aiInput');
+    if (!input) return;
+    input.value = draft;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+    sessionStorage.removeItem('vinor_ai_home_prompt');
+  } catch (_) {}
+})();
+</script>
 <script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=13"></script>
+<script>
+(function () {
+  try {
+    var autosend = sessionStorage.getItem('vinor_ai_home_autosend') === '1';
+    if (!autosend) return;
+    var form = document.getElementById('aiChatForm');
+    var input = document.getElementById('aiInput');
+    if (!form || !input) return;
+    if (!(input.value || '').trim()) return;
+    setTimeout(function () {
+      try {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      } catch (_) {}
+      try { sessionStorage.removeItem('vinor_ai_home_autosend'); } catch (_) {}
+    }, 120);
+  } catch (_) {}
+})();
+</script>
 {% endblock %}

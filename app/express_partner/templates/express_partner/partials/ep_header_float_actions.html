@@ -1,0 +1,31 @@
+{# حباب شناور هدر: اعلان + منو (ثابت روی اسکرول) #}
+{% set _menu_href = menu_href|default(url_for('express_partner.profile')) %}
+<style>
+  .ep-header-float-actions {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+    left: calc(env(safe-area-inset-left, 0px) + 0.75rem);
+    z-index: 72;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #111111;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.48);
+    padding: 0.3rem;
+  }
+  .ep-header-float-actions .ep-partner-header-btn {
+    margin: 0;
+  }
+</style>
+<div class="ep-header-float-actions" aria-label="دسترسی سریع">
+  {% set profile_notifications_dark = true %}
+  {% include 'express_partner/partials/notifications_button.html' %}
+  <a href="{{ _menu_href }}"
+     data-vinor-express-nav
+     class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
+     aria-label="منو">
+    <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
+  </a>
+</div>

@@ -7,13 +7,8 @@
 <div id="homeDashboardPage"
      class="home-dashboard-page min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16"
      data-vinor-home-page>
-
-  {% if not (me_phone and partner_name and is_approved|default(false)) %}
-  <div class="vn-home-notify-slot">
-    {% set profile_notifications_dark = true %}
-    {% include 'express_partner/partials/notifications_button.html' %}
-  </div>
-  {% endif %}
+  {% set menu_href = url_for('express_partner.profile') %}
+  {% include 'express_partner/partials/ep_header_float_actions.html' %}
 
   <div class="mx-auto w-full max-w-lg">
 
@@ -30,16 +25,6 @@
       <div class="vn-home-greet__body">
         <p class="vn-home-greet__sub">سلام {{ partner_name }}</p>
         <h1 class="vn-home-greet__title">کار بعدی شما</h1>
-      </div>
-      <div class="vn-home-greet__actions">
-        {% set profile_notifications_dark = true %}
-        {% include 'express_partner/partials/notifications_button.html' %}
-        <a href="{{ url_for('express_partner.profile') }}"
-           data-vinor-express-nav
-           class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
-           aria-label="پروفایل">
-          <i class="fas fa-user ep-partner-header-btn-icon" aria-hidden="true"></i>
-        </a>
       </div>
     </header>
     {% endif %}
