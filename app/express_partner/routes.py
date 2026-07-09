@@ -62,7 +62,6 @@ from ..utils.storage import (
     load_partner_bank_accounts, save_partner_bank_accounts,
     load_partner_withdrawals, save_partner_withdrawals,
     load_express_visit_requests, save_express_visit_requests,
-    load_support_tickets, save_support_tickets,
 )
 from .partner_bank_accounts import (
     validate_new_account,
@@ -118,15 +117,6 @@ from .visit_requests import (
     CANCELLED_STATUS,
 )
 from .commissions_flow import commission_blocks_new_deal_record, commission_is_deal, commission_is_visit
-from .support_tickets import (
-    MESSAGE_MAX_LEN,
-    MESSAGE_MIN_LEN,
-    TICKET_CATEGORIES,
-    create_support_ticket,
-    partner_ticket_error_message,
-    partner_ticket_stats,
-    tickets_for_phone,
-)
 from .admin_action_sms import notify_admin_pending_action
 from ..utils.dates import format_iso_date_jalali, parse_datetime_safe
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
@@ -2297,9 +2287,9 @@ def _home_urgent_actions(
             'key': 'follow_up',
             'icon': 'fa-clipboard-list',
             'tone': 'blue',
-            'title': f'{n} درخواست منتظر توست' if n > 1 else 'یک درخواست منتظر توست',
-            'subtitle': 'وضعیت را چک کن و پیگیری کن',
-            'cta': 'پیگیری',
+            'title': f'{n} اقدام رو همین الان باید انجام بدی' if n > 1 else 'یک اقدام رو همین الان باید انجام بدی',
+            'subtitle': 'وضعیت درخواست‌ها را چک کن',
+            'cta': 'انجام بده',
             'url': url_for('express_partner.requests'),
             'priority': 80,
         })
@@ -2439,6 +2429,9 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     suggested_files = _home_suggested_files(
         ph, is_approved, assigned_lands=assigned_lands
     ) if ph else []
+    # «پیشنهاد امروز» فقط یک فایل رندوم نمایش داده شود.
+    if suggested_files:
+        suggested_files = [random.choice(suggested_files)]
 
     return {
         'success': True,
@@ -3877,124 +3870,6 @@ def verify():
     return redirect(url_for('express_partner.login'))
 
 
-@express_partner_bp.route('/support', methods=['GET', 'POST'], endpoint='support')
-@require_partner_access(allow_pending=True, allow_guest=True)
-def support():
-    """صفحه پشتیبانی — ارسال و پیگیری تیکت."""
-    me_phone = (session.get('user_phone') or '').strip()
-    profile = getattr(g, 'express_partner_profile', None) or {}
-    me_name = (profile.get('name') or '').strip() if profile else ''
-
-    if request.method == 'POST':
-        if not me_phone:
-            flash('برای ارسال تیکت ابتدا وارد حساب خود شوید.', 'warning')
-            return redirect(url_for('express_partner.login', next=url_for('express_partner.support')))
-
-        category = (request.form.get('category') or 'other').strip()
-        subject = (request.form.get('subject') or '').strip()
-        message = (request.form.get('message') or '').strip()
-
-        tickets = load_support_tickets() or []
-        if not isinstance(tickets, list):
-            tickets = []
-        rec, err = create_support_ticket(
-            tickets,
-            user_phone=me_phone,
-            user_name=me_name or me_phone,
-            category=category,
-            subject=subject,
-            message=message,
-        )
-        if err:
-            flash(partner_ticket_error_message(err, tickets, me_phone), 'profile')
-            return redirect(url_for('express_partner.support', tab='new'))
-        if not rec:
-            flash('ارسال تیکت ناموفق بود. دوباره تلاش کنید.', 'profile')
-            return redirect(url_for('express_partner.support', tab='new'))
-
-        try:
-            save_support_tickets(tickets)
-        except Exception:
-            current_app.logger.error('Failed to save support ticket', exc_info=True)
-            flash('خطا در ثبت تیکت.', 'profile')
-            return redirect(url_for('express_partner.support', tab='new'))
-
-        try:
-            notify_admin_pending_action(
-                'ticket',
-                partner_phone=me_phone,
-                partner_name=me_name or me_phone,
-                subject=rec.get('subject') or '',
-                detail=(rec.get('message') or '')[:120],
-            )
-        except Exception:
-            current_app.logger.exception('support ticket admin SMS failed')
-
-        flash('تیکت شما ثبت شد. پاسخ از طریق همین صفحه نمایش داده می‌شود.', 'profile')
-        return redirect(url_for('express_partner.support', tab='list'))
-
-    user_tickets: List[Dict[str, Any]] = []
-    ticket_stats: Dict[str, Any] = {
-        'open_count': 0,
-        'total_count': 0,
-        'daily_remaining': 0,
-        'open_remaining': 0,
-        'cooldown_seconds': 0,
-        'can_submit': False,
-        'block_reason': '',
-    }
-    tab = (request.args.get('tab') or '').strip().lower()
-    quick = (request.args.get('quick') or '').strip().lower()
-    support_prefill: Dict[str, str] = {'category': '', 'subject': '', 'message': ''}
-    support_submit_label = 'ارسال تیکت'
-    support_message_label = 'متن'
-    support_message_placeholder = 'مشکل یا سوال را با جزئیات بنویسید…'
-    if quick == 'visit_without_details':
-        tab = 'new'
-        support_prefill = {
-            'category': 'cooperation',
-            'subject': 'درخواست بازدید بدون مشخصات',
-            'message': 'درخواست بازدید',
-        }
-        support_submit_label = 'درخواست بازدید'
-        support_message_label = 'متن'
-        support_message_placeholder = 'متن درخواست بازدید را بنویسید…'
-    elif quick == 'deal_without_details':
-        tab = 'new'
-        support_prefill = {
-            'category': 'cooperation',
-            'subject': 'درخواست معامله بدون مشخصات',
-            'message': 'درخواست معامله',
-        }
-        support_submit_label = 'درخواست معامله'
-        support_message_label = 'متن'
-        support_message_placeholder = 'متن درخواست معامله را بنویسید…'
-    if me_phone:
-        all_tickets = load_support_tickets() or []
-        if isinstance(all_tickets, list):
-            user_tickets = tickets_for_phone(all_tickets, me_phone, limit=50)
-            ticket_stats = partner_ticket_stats(all_tickets, me_phone)
-    if tab not in ('new', 'list'):
-        tab = 'list' if user_tickets else 'new'
-
-    return render_template(
-        'express_partner/support.html',
-        hide_header=True,
-        me_phone=me_phone,
-        me_name=me_name,
-        tickets=user_tickets,
-        ticket_stats=ticket_stats,
-        ticket_tab=tab,
-        ticket_categories=TICKET_CATEGORIES,
-        support_prefill=support_prefill,
-        support_submit_label=support_submit_label,
-        support_message_label=support_message_label,
-        support_message_placeholder=support_message_placeholder,
-        message_min_len=MESSAGE_MIN_LEN,
-        message_max_len=MESSAGE_MAX_LEN,
-    )
-
-
 @express_partner_bp.route('/help', methods=['GET'], endpoint='help')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def help():
@@ -4196,26 +4071,51 @@ def ai_page():
     from app.ai.chat_store import (
         ensure_active_thread,
         messages_for_ui,
-        threads_for_ui,
     )
+    from app.services.postchi import (
+        POSTCHI_THREAD_ID,
+        is_postchi_thread,
+        open_postchi,
+        postchi_messages_for_ui,
+        threads_with_postchi,
+    )
+
     phone = (session.get('user_phone') or '').strip()
-    ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
-    threads = threads_for_ui(phone, audience=AUDIENCE_PARTNER)
-    active_thread_id = next((t['id'] for t in threads if t.get('is_active')), '')
+    open_tid = (request.args.get('thread') or '').strip()
+    if is_postchi_thread(open_tid):
+        active_thread_id = POSTCHI_THREAD_ID
+        chat_messages = postchi_messages_for_ui(phone)
+        open_postchi(phone)
+    else:
+        ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
+        threads = threads_with_postchi(phone, audience=AUDIENCE_PARTNER)
+        active_thread_id = next((t['id'] for t in threads if t.get('is_active')), '')
+        if not active_thread_id:
+            active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
+        chat_messages = messages_for_ui(phone, audience=AUDIENCE_PARTNER)
+    threads = threads_with_postchi(
+        phone,
+        audience=AUDIENCE_PARTNER,
+        active_thread_id=active_thread_id,
+    )
     resp = make_response(
         render_template(
             'express_partner/ai.html',
             hide_header=True,
-            chat_messages=messages_for_ui(phone, audience=AUDIENCE_PARTNER),
+            chat_messages=chat_messages,
             chat_threads=threads,
             active_thread_id=active_thread_id,
             ai_audience='partner',
+            postchi_thread_id=POSTCHI_THREAD_ID,
             chat_api_url=url_for('express_partner.ai_chat'),
             clear_api_url=url_for('express_partner.ai_clear'),
             history_api_url=url_for('express_partner.ai_history'),
             switch_thread_url=url_for('express_partner.ai_switch_thread'),
             delete_thread_url=url_for('express_partner.ai_delete_thread'),
             sync_api_url=url_for('express_partner.ai_sync'),
+            postchi_messages_url=url_for('express_partner.api_postchi_messages'),
+            postchi_send_url=url_for('express_partner.api_postchi_send'),
+            postchi_open_url=url_for('express_partner.api_postchi_open'),
         )
     )
     _append_partner_tab_prefetch(resp)
@@ -4257,18 +4157,36 @@ def ai_sync():
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_history():
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import messages_for_ui, threads_for_ui
+    from app.ai.chat_store import messages_for_ui
+    from app.services.postchi import (
+        is_postchi_thread,
+        postchi_messages_for_ui,
+        threads_with_postchi,
+    )
 
     phone = (session.get('user_phone') or '').strip()
     thread_id = (request.args.get('thread_id') or '').strip() or None
     threads_only = request.args.get('threads_only', '').lower() in ('1', 'true', 'yes')
+    active = thread_id if is_postchi_thread(thread_id) else None
+    if not active:
+        from app.ai.chat_store import load_user_record
+
+        record = load_user_record(phone, audience=AUDIENCE_PARTNER)
+        active = record.get('active_id')
     payload = {
         'ok': True,
-        'threads': threads_for_ui(phone, audience=AUDIENCE_PARTNER),
+        'threads': threads_with_postchi(
+            phone,
+            audience=AUDIENCE_PARTNER,
+            active_thread_id=thread_id or active,
+        ),
         'thread_id': thread_id,
     }
     if not threads_only:
-        payload['messages'] = messages_for_ui(phone, thread_id, audience=AUDIENCE_PARTNER)
+        if is_postchi_thread(thread_id):
+            payload['messages'] = postchi_messages_for_ui(phone)
+        else:
+            payload['messages'] = messages_for_ui(phone, thread_id, audience=AUDIENCE_PARTNER)
     return jsonify(payload)
 
 
@@ -4280,10 +4198,10 @@ def ai_chat():
         append_exchange,
         ensure_active_thread,
         history_for_api,
-        threads_for_ui,
     )
     from app.ai.http_errors import ai_chat_http_status
     from app.ai.services import generate_reply
+    from app.services.postchi import is_postchi_thread, threads_with_postchi
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
@@ -4291,6 +4209,8 @@ def ai_chat():
     thread_id = (data.get('thread_id') or '').strip() or None
     if not message:
         return jsonify({'ok': False, 'error': 'پیام خالی است.'}), 400
+    if is_postchi_thread(thread_id):
+        return jsonify({'ok': False, 'error': 'برای پیام به وینور، گفتگوی پستچی را انتخاب کنید.'}), 400
 
     if not thread_id:
         thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
@@ -4318,7 +4238,11 @@ def ai_chat():
     result['messages'] = msgs
     result['audience'] = AUDIENCE_PARTNER
     result['thread_id'] = tid
-    result['threads'] = threads_for_ui(phone, audience=AUDIENCE_PARTNER)
+    result['threads'] = threads_with_postchi(
+        phone,
+        audience=AUDIENCE_PARTNER,
+        active_thread_id=tid,
+    )
     return jsonify(result)
 
 
@@ -4337,18 +4261,44 @@ def ai_clear():
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_switch_thread():
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import messages_for_ui, set_active_thread, threads_for_ui
+    from app.ai.chat_store import messages_for_ui, set_active_thread
+    from app.services.postchi import (
+        POSTCHI_THREAD_ID,
+        is_postchi_thread,
+        open_postchi,
+        postchi_messages_for_ui,
+        threads_with_postchi,
+    )
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
     thread_id = (data.get('thread_id') or '').strip()
-    if not thread_id or not set_active_thread(phone, thread_id, audience=AUDIENCE_PARTNER):
+    if not thread_id:
+        return jsonify({'ok': False, 'error': 'گفتگو یافت نشد.'}), 404
+    if is_postchi_thread(thread_id):
+        open_postchi(phone)
+        return jsonify({
+            'ok': True,
+            'thread_id': POSTCHI_THREAD_ID,
+            'mode': 'postchi',
+            'messages': postchi_messages_for_ui(phone),
+            'threads': threads_with_postchi(
+                phone,
+                audience=AUDIENCE_PARTNER,
+                active_thread_id=POSTCHI_THREAD_ID,
+            ),
+        })
+    if not set_active_thread(phone, thread_id, audience=AUDIENCE_PARTNER):
         return jsonify({'ok': False, 'error': 'گفتگو یافت نشد.'}), 404
     return jsonify({
         'ok': True,
         'thread_id': thread_id,
         'messages': messages_for_ui(phone, thread_id, audience=AUDIENCE_PARTNER),
-        'threads': threads_for_ui(phone, audience=AUDIENCE_PARTNER),
+        'threads': threads_with_postchi(
+            phone,
+            audience=AUDIENCE_PARTNER,
+            active_thread_id=thread_id,
+        ),
     })
 
 
@@ -4356,11 +4306,14 @@ def ai_switch_thread():
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_delete_thread():
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import delete_thread, load_user_record, messages_for_ui, threads_for_ui
+    from app.ai.chat_store import delete_thread, load_user_record, messages_for_ui
+    from app.services.postchi import is_postchi_thread, threads_with_postchi
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
     thread_id = (data.get('thread_id') or '').strip()
+    if is_postchi_thread(thread_id):
+        return jsonify({'ok': False, 'error': 'این گفتگو قابل حذف نیست.'}), 400
     if not thread_id or not delete_thread(phone, thread_id, audience=AUDIENCE_PARTNER):
         return jsonify({'ok': False, 'error': 'حذف ممکن نیست.'}), 400
     record = load_user_record(phone, audience=AUDIENCE_PARTNER)
@@ -4369,7 +4322,11 @@ def ai_delete_thread():
         'ok': True,
         'thread_id': active,
         'messages': messages_for_ui(phone, active, audience=AUDIENCE_PARTNER),
-        'threads': threads_for_ui(phone, audience=AUDIENCE_PARTNER),
+        'threads': threads_with_postchi(
+            phone,
+            audience=AUDIENCE_PARTNER,
+            active_thread_id=active,
+        ),
     })
 
 
@@ -6565,42 +6522,17 @@ def delete_sale(sid: int):
 @express_partner_bp.get('/notifications', endpoint='notifications')
 @require_partner_access(allow_pending=True)
 def notifications_page():
-    from app.services.postchi import postchi_preview
+    from app.services.postchi import POSTCHI_THREAD_ID
 
-    me_phone = _normalize_phone((session.get('user_phone') or '').strip())
-    notifications = get_user_notifications(me_phone, limit=50) if me_phone else []
-    unread = unread_count(me_phone) if me_phone else 0
-    postchi = postchi_preview(me_phone) if me_phone else {
-        'preview': 'پیام‌های رسمی وینور',
-        'unread': 0,
-        'subtitle': 'پستچی وینور',
-    }
-    resp = make_response(render_template(
-        'express_partner/notifications.html',
-        notifications=notifications,
-        unread_count=unread,
-        postchi=postchi,
-        postchi_url=url_for('express_partner.postchi'),
-    ))
-    _append_partner_tab_prefetch(resp)
-    return resp
+    return redirect(url_for('express_partner.ai', thread=POSTCHI_THREAD_ID))
 
 
 @express_partner_bp.get('/postchi', endpoint='postchi')
 @require_partner_access(allow_pending=True)
 def postchi_page():
-    from app.services.postchi import build_thread
+    from app.services.postchi import POSTCHI_THREAD_ID
 
-    me_phone = _normalize_phone((session.get('user_phone') or '').strip())
-    messages = build_thread(me_phone) if me_phone else []
-    resp = make_response(render_template(
-        'express_partner/postchi.html',
-        messages=messages,
-        back_url=url_for('express_partner.notifications'),
-        hide_header=True,
-    ))
-    _append_partner_tab_prefetch(resp)
-    return resp
+    return redirect(url_for('express_partner.ai', thread=POSTCHI_THREAD_ID))
 
 
 @express_partner_bp.route('/api/postchi/messages', methods=['GET'], endpoint='api_postchi_messages')

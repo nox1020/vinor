@@ -22,6 +22,8 @@ WELCOME_BODY = (
     'اینجا پیام‌های رسمی وینور، وضعیت همکاری و اعلان‌های مهم را می‌بینید.'
 )
 
+POSTCHI_THREAD_ID = '__postchi__'
+
 
 def _data_path() -> str:
     try:
@@ -187,3 +189,92 @@ def open_postchi(user_id: str) -> int:
         return 0
     mark_all_read(uid)
     return unread_count(uid)
+
+
+def is_postchi_thread(thread_id: str | None) -> bool:
+    return str(thread_id or '').strip() == POSTCHI_THREAD_ID
+
+
+def _ts_to_iso(ts: Any) -> str:
+    try:
+        v = int(ts or 0)
+        if v > 10_000_000_000:
+            v = v // 1000
+        if not v:
+            return ''
+        from datetime import datetime
+
+        return datetime.utcfromtimestamp(v).isoformat() + 'Z'
+    except Exception:
+        return ''
+
+
+def postchi_messages_for_ui(user_id: str, *, limit: int = 120) -> list[dict[str, Any]]:
+    uid = _normalize_user_id(user_id)
+    if not uid:
+        return []
+    out: list[dict[str, Any]] = []
+    for m in build_thread(uid, limit=limit):
+        role = 'user' if str(m.get('role') or '') == 'out' else 'assistant'
+        out.append(
+            {
+                'role': role,
+                'content': (m.get('body') or '').strip(),
+                'created_at': _ts_to_iso(m.get('created_at')),
+                'source': 'postchi',
+                'action_url': (m.get('action_url') or '').strip() or None,
+            }
+        )
+    return [x for x in out if x.get('content')]
+
+
+def postchi_thread_for_ui(user_id: str) -> dict[str, Any]:
+    uid = _normalize_user_id(user_id)
+    if not uid:
+        return {
+            'id': POSTCHI_THREAD_ID,
+            'title': 'پستچی وینور',
+            'preview': 'پیام‌های رسمی وینور',
+            'updated_at': '',
+            'created_at': '',
+            'message_count': 0,
+            'is_active': False,
+            'kind': 'postchi',
+            'unread': 0,
+        }
+    preview = postchi_preview(uid)
+    thread = build_thread(uid, limit=120)
+    last_ts = int((thread[-1] or {}).get('created_at') or 0) if thread else 0
+    first_ts = int((thread[0] or {}).get('created_at') or 0) if thread else 0
+    return {
+        'id': POSTCHI_THREAD_ID,
+        'title': 'پستچی وینور',
+        'preview': preview.get('preview') or 'پیام‌های رسمی وینور',
+        'updated_at': _ts_to_iso(last_ts),
+        'created_at': _ts_to_iso(first_ts),
+        'message_count': len(thread),
+        'is_active': False,
+        'kind': 'postchi',
+        'unread': int(preview.get('unread') or 0),
+    }
+
+
+def threads_with_postchi(
+    user_key: str,
+    *,
+    audience: str | None = None,
+    active_thread_id: str | None = None,
+) -> list[dict[str, Any]]:
+    from app.ai.chat_store import threads_for_ui
+
+    uid = _normalize_user_id(user_key)
+    postchi_th = postchi_thread_for_ui(uid) if uid else None
+    threads = threads_for_ui(user_key, audience)
+    active = str(active_thread_id or '').strip()
+    if postchi_th:
+        postchi_th = dict(postchi_th)
+        postchi_th['is_active'] = is_postchi_thread(active)
+        if is_postchi_thread(active):
+            threads = [dict(th, is_active=False) for th in threads]
+        return [postchi_th] + threads
+    return threads

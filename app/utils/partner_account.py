@@ -94,8 +94,6 @@ def purge_partner_account(phone: str) -> dict[str, Any]:
         save_partner_routines,
         load_partner_sales,
         save_partner_sales,
-        load_support_tickets,
-        save_support_tickets,
         load_express_visit_requests,
         save_express_visit_requests,
         load_partner_withdrawals,
@@ -194,13 +192,6 @@ def purge_partner_account(phone: str) -> dict[str, Any]:
     except Exception:
         current_app.logger.error('purge: referrals failed', exc_info=True)
         errors.append('referrals')
-
-    try:
-        tickets = load_support_tickets() or []
-        save_support_tickets(_filter_not_phone(tickets, ph, 'user_phone'))
-    except Exception:
-        current_app.logger.error('purge: support tickets failed', exc_info=True)
-        errors.append('support_tickets')
 
     try:
         visits = load_express_visit_requests() or []

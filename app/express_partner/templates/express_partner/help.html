@@ -4,7 +4,7 @@
 
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(id='profileHelpHeader') }}
-  {% call ep_header_row('راهنمای همکار', url_for('express_partner.support'), inner_class='max-w-6xl mx-auto w-full') %}{% endcall %}
+  {% call ep_header_row('راهنمای همکار', url_for('express_partner.profile'), inner_class='max-w-6xl mx-auto w-full') %}{% endcall %}
   {{ ep_header_end() }}
 
 <div id="profileHelpPage"
@@ -136,12 +136,12 @@
       </details>
       <details class="group px-4 py-3">
         <summary class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white cursor-pointer list-none flex items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
-          چطور با پشتیبانی در ارتباط باشم؟
+          چطور سوال بپرسم یا با پشتیبانی در ارتباط باشم؟
           <i class="fas fa-chevron-down text-[10px] text-gray-400 transition-transform group-open:rotate-180"></i>
         </summary>
         <p class="mt-2 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-          از بخش پشتیبانی تیکت بفرستید. پاسخ در تب «سوابق» نمایش داده می‌شود.
-          برای مسائل فوری حساب، مالی یا فنی، دسته مناسب را انتخاب کنید تا سریع‌تر بررسی شود.
+          از دستیار AI در پنل سوال بپرسید. اگر پاسخ خودکار کافی نبود، تیم وینور در همان گفتگو پاسخ می‌دهد.
+          برای مسائل فوری حساب، مالی یا فنی، سوال را با جزئیات بنویسید.
         </p>
       </details>
     </div>

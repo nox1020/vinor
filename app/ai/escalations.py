@@ -189,16 +189,64 @@ def create_escalation(
     return {"ok": True, "id": rec["id"], "record": rec, "sms_ok": sms_ok}
 
 
-def _notify_admin_sms(rec: dict[str, Any]) -> bool:
+def _admin_sms_target() -> tuple[str, str | None]:
     settings = load_settings() or {}
     raw_admin = str(settings.get("partner_application_admin_phone") or "09121471301")
     admin_phone = normalize_iran_mobile(raw_admin) or _norm_phone(raw_admin)
     line = str(settings.get("sms_line_number") or "").strip() or None
+    return admin_phone, line
+
+
+def send_admin_balance_depleted_sms() -> bool:
+    """پیامک اتمام موجودی DeepSeek به ادمین."""
+    admin_phone, line = _admin_sms_target()
     if not admin_phone or len(admin_phone) != 11 or not admin_phone.startswith("09"):
         try:
             current_app.logger.warning(
-                "AI escalation SMS skipped — invalid admin phone | raw=%s | norm=%s",
-                raw_admin,
+                "AI balance SMS skipped — invalid admin phone | norm=%s",
+                admin_phone,
+            )
+        except Exception:
+            pass
+        return False
+    msg = (
+        "وینور AI\n"
+        "موجودی حساب DeepSeek تمام شده است.\n"
+        "لطفاً حساب را شارژ کنید.\n"
+        "پنل ادمین: سوالات AI"
+    )
+    try:
+        result = send_sms_direct(mobile=admin_phone, message=msg, line_number=line)
+        ok = bool(result.get("ok"))
+        if not ok:
+            try:
+                current_app.logger.error(
+                    "AI balance SMS failed | admin=%s | status=%s | body=%s",
+                    admin_phone,
+                    result.get("status"),
+                    result.get("body"),
+                )
+            except Exception:
+                pass
+        return ok
+    except Exception:
+        try:
+            current_app.logger.exception("AI balance SMS exception | admin=%s", admin_phone)
+        except Exception:
+            pass
+        return False
+
+
+def _notify_admin_sms(rec: dict[str, Any]) -> bool:
+    from app.ai.runtime_settings import get_ai_settings
+
+    if not get_ai_settings().get("escalation_sms_enabled", True):
+        return False
+    admin_phone, line = _admin_sms_target()
+    if not admin_phone or len(admin_phone) != 11 or not admin_phone.startswith("09"):
+        try:
+            current_app.logger.warning(
+                "AI escalation SMS skipped — invalid admin phone | norm=%s",
                 admin_phone,
             )
         except Exception:
@@ -364,14 +412,24 @@ def answer_escalation(
 
     delivered = 0
     ts = _now_iso()
+    injected_chat_keys: set[tuple[str, str]] = set()
     for rec in targets:
         rec["status"] = "answered"
         rec["admin_answer"] = ans[:4000]
         rec["answered_at"] = ts
         if str(rec.get("id")) != eid:
             rec["matched_from"] = eid
+        chat_key = (
+            _norm_key(str(rec.get("user_key") or rec.get("partner_phone") or "")),
+            str(rec.get("thread_id") or "").strip(),
+        )
+        if chat_key[0] and chat_key in injected_chat_keys:
+            rec["delivered_at"] = _now_iso()
+            continue
         if _deliver_answer_to_chat(rec, ans):
             delivered += 1
+            if chat_key[0]:
+                injected_chat_keys.add(chat_key)
 
     _save_all(items)
     return {

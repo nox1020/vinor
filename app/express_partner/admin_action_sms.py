@@ -80,10 +80,6 @@ def _build_message(action: str, settings: dict, **kw: Any) -> str:
         amt = _format_toman(int(kw.get('amount') or 0))
         return f'وینور\nپورسانت {amt} تومن · {code}\n{name} · {phone}'
 
-    if action == 'ticket':
-        subj = (kw.get('subject') or '').strip() or 'تیکت'
-        return f'وینور\nتیکت: {subj}\n{name} · {phone}'
-
     detail = (kw.get('detail') or '').strip()
     return f'وینور\nاقدام لازم\n{detail or name}'
 
@@ -192,7 +188,7 @@ def _notify_special_land_owner(action: str, msg: str, line: str, **kwargs: Any) 
 def notify_admin_pending_action(action: str, **kwargs: Any) -> dict:
     """
     بلافاصله پس از ایجاد هر مورد در صف اقدام داشبورد ادمین، پیامک به شمارهٔ تنظیمات.
-    action: application | withdrawal | visit | commission | ticket
+    action: application | withdrawal | visit | commission
     """
     settings = load_settings(current_app) or {}
     admin_phone = normalize_iran_mobile(

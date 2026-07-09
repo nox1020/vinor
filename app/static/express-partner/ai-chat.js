@@ -4,6 +4,12 @@
 (function () {
   'use strict';
 
+  if (typeof window.__vinorAiChatTeardown === 'function') {
+    try {
+      window.__vinorAiChatTeardown();
+    } catch (_) {}
+  }
+
   var form = document.getElementById('aiChatForm');
   var input = document.getElementById('aiInput');
   var list = document.getElementById('aiMessages');
@@ -15,6 +21,7 @@
   var sideBackdrop = document.getElementById('aiSideBackdrop');
   var sideClose = document.getElementById('aiSideClose');
   var historyList = document.getElementById('aiHistoryList');
+  var composer = document.getElementById('aiChatForm');
 
   if (!form || !input || !list || !btn) return;
 
@@ -22,12 +29,21 @@
   var historyUrl = form.getAttribute('data-history-url') || '';
   var clearUrl = form.getAttribute('data-clear-url') || '';
   var switchUrl = form.getAttribute('data-switch-url') || '';
+  var deleteUrl = form.getAttribute('data-delete-url') || '';
   var syncUrl = form.getAttribute('data-sync-url') || '';
+  var postchiThreadId = form.getAttribute('data-postchi-thread-id') || '__postchi__';
+  var postchiMessagesUrl = form.getAttribute('data-postchi-messages-url') || '';
+  var postchiSendUrl = form.getAttribute('data-postchi-send-url') || '';
+  var postchiOpenUrl = form.getAttribute('data-postchi-open-url') || '';
+  var menuUnreadDot = document.getElementById('aiMenuUnreadDot');
   var welcome = list.getAttribute('data-welcome') || 'سلام! من Vinor AI هستم.';
   var historyAbort = null;
   var switchAbort = null;
   var syncAbort = null;
+  var chatAbort = null;
+  var deleteAbort = null;
   var historyTimer = null;
+  var pollTimer = null;
   var lastThreadsKey = '';
   var lastSyncAt = '';
   var seenEscalationIds = {};
@@ -38,13 +54,56 @@
   var POLL_MS = 15000;
   var MIN_SUBMIT_GAP_MS = 4000;
   var MIN_MSG_LEN = 2;
+  var EMPTY_POLL_PAUSE = 60;
+  var pollInFlight = false;
+  var postchiOpened = false;
+  var onVisChange = null;
+  var onKeydown = null;
+  var onViewportResize = null;
+  var onViewportScroll = null;
 
   function activeThreadId() {
     return (threadInput && threadInput.value) || '';
   }
 
+  function isPostchiMode() {
+    return activeThreadId() === postchiThreadId;
+  }
+
   function setActiveThreadId(id) {
     if (threadInput) threadInput.value = id || '';
+    setComposerMode(isPostchiMode());
+    if (isPostchiMode()) {
+      pollPaused = true;
+    } else {
+      resumePoll();
+    }
+  }
+
+  function setComposerMode(postchi) {
+    if (!input) return;
+    input.placeholder = postchi ? 'پیام به تیم وینور…' : 'پیام خود را بنویسید…';
+  }
+
+  function syncMenuUnreadBadge(unread) {
+    if (!menuUnreadDot) return;
+    var n = Number(unread || 0);
+    if (n > 0) {
+      menuUnreadDot.classList.remove('hidden');
+    } else {
+      menuUnreadDot.classList.add('hidden');
+    }
+  }
+
+  function updatePostchiUnreadFromThreads(threads) {
+    if (!threads || !threads.length) return;
+    for (var i = 0; i < threads.length; i++) {
+      var th = threads[i];
+      if (th && (th.kind === 'postchi' || th.id === postchiThreadId)) {
+        syncMenuUnreadBadge(th.unread || 0);
+        return;
+      }
+    }
   }
 
   function csrfToken() {
@@ -71,6 +130,15 @@
     var d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;
+  }
+
+  function messageHasContent(msg) {
+    if (!msg) return false;
+    return !!(
+      (msg.content && String(msg.content).trim()) ||
+      msg.cards_html ||
+      (msg.land_cards && msg.land_cards.length)
+    );
   }
 
   function buildCardsHtml(msg) {
@@ -101,11 +169,23 @@
     var eid = msg.escalation_id || '';
     if (eid) {
       if (seenEscalationIds[eid]) return true;
+      if (list.querySelector('.ai-msg-wrap[data-escalation-id="' + eid + '"]')) {
+        seenEscalationIds[eid] = 1;
+        return true;
+      }
       seenEscalationIds[eid] = 1;
     }
     var ts = msg.created_at || '';
-    if (ts && list.querySelector('.ai-msg-wrap[data-created-at="' + ts + '"]')) {
+    var role = msg.role || 'assistant';
+    if (ts && list.querySelector('.ai-msg-wrap[data-created-at="' + ts + '"][data-role="' + role + '"]')) {
       return true;
+    }
+    var text = (msg.content || '').trim();
+    if (text && text.indexOf('پاسخ تیم وینور') === 0) {
+      var wraps = list.querySelectorAll('.ai-msg-wrap[data-admin-reply="1"] .ai-msg-bubble');
+      for (var i = 0; i < wraps.length; i++) {
+        if ((wraps[i].textContent || '').trim() === text) return true;
+      }
     }
     return false;
   }
@@ -117,6 +197,7 @@
   function scanLastSyncFromDom() {
     var maxTs = '';
     list.querySelectorAll('.ai-msg-wrap[data-created-at]').forEach(function (w) {
+      if (w.getAttribute('data-welcome') === '1' || w.getAttribute('data-ephemeral') === '1') return;
       var t = w.getAttribute('data-created-at') || '';
       if (t > maxTs) maxTs = t;
     });
@@ -124,7 +205,9 @@
   }
 
   function storedMessageCount() {
-    return list.querySelectorAll('.ai-msg-wrap[data-created-at]').length;
+    return list.querySelectorAll(
+      '.ai-msg-wrap[data-created-at]:not([data-welcome="1"]):not([data-ephemeral="1"])'
+    ).length;
   }
 
   function knownEscalationIds() {
@@ -136,31 +219,49 @@
     return ids;
   }
 
-  function appendMessage(msg) {
-    if (messageSeen(msg)) return;
+  function removeWelcome() {
+    list.querySelectorAll('.ai-msg-wrap[data-welcome="1"]').forEach(function (w) {
+      w.remove();
+    });
+  }
+
+  function removePendingUser() {
+    list.querySelectorAll('.ai-msg-wrap[data-pending-user="1"]').forEach(function (w) {
+      w.remove();
+    });
+  }
+
+  function appendMessage(msg, opts) {
+    opts = opts || {};
+    if (messageSeen(msg)) return null;
     var role = msg.role || 'assistant';
     var text = (msg.content || '').trim();
     var cardsHtml = buildCardsHtml(msg);
-    var isAdmin = msg.source === 'admin_escalation' || (text && text.indexOf('پاسخ تیم وینور') === 0);
+    var isAdmin =
+      msg.source === 'admin_escalation' ||
+      msg.source === 'postchi' ||
+      (text && text.indexOf('پاسخ تیم وینور') === 0);
+
+    if (!text && !cardsHtml) return null;
+
+    if (!opts.welcome) removeWelcome();
 
     var wrap = document.createElement('div');
-    wrap.className =
-      'ai-msg-wrap flex max-w-[92%] flex-col gap-0 ' +
-      (role === 'user' ? 'mr-auto items-end' : 'ml-auto items-start');
+    wrap.className = 'ai-msg-wrap';
     wrap.setAttribute('data-role', role);
     if (msg.created_at) wrap.setAttribute('data-created-at', msg.created_at);
     if (msg.escalation_id) wrap.setAttribute('data-escalation-id', msg.escalation_id);
-    if (isAdmin) wrap.setAttribute('data-admin-reply', '1');
+    if (msg.source === 'postchi' && role === 'assistant') {
+      wrap.setAttribute('data-postchi', '1');
+    }
+    if (isAdmin && msg.source !== 'postchi') wrap.setAttribute('data-admin-reply', '1');
+    if (opts.pendingUser) wrap.setAttribute('data-pending-user', '1');
+    if (opts.welcome) wrap.setAttribute('data-welcome', '1');
+    if (opts.ephemeral) wrap.setAttribute('data-ephemeral', '1');
 
     if (text) {
       var bubble = document.createElement('div');
-      bubble.className =
-        'rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words ' +
-        (role === 'user'
-          ? 'border border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
-          : isAdmin
-            ? 'border border-amber-500/35 bg-amber-500/15 text-amber-50'
-            : 'border border-violet-500/20 bg-violet-500/10 text-violet-100');
+      bubble.className = 'ai-msg-bubble';
       bubble.textContent = text;
       wrap.appendChild(bubble);
     }
@@ -174,12 +275,51 @@
     }
 
     list.appendChild(wrap);
-    bumpLastSyncAt(msg.created_at || '');
+    if (msg.created_at) bumpLastSyncAt(msg.created_at);
     list.scrollTop = list.scrollHeight;
+    return wrap;
   }
 
-  function appendBubble(text, role) {
-    appendMessage({ role: role, content: text });
+  function appendBubble(text, role, opts) {
+    return appendMessage({ role: role, content: text }, opts || {});
+  }
+
+  function showEphemeralHint(text) {
+    var wrap = appendBubble(text, 'assistant', { ephemeral: true });
+    if (!wrap) return;
+    setTimeout(function () {
+      try {
+        wrap.remove();
+      } catch (_) {}
+    }, 4200);
+  }
+
+  function reconcileExchange(serverMessages) {
+    var msgs = serverMessages || [];
+    var lastUser = null;
+    var lastAsst = null;
+    for (var i = msgs.length - 1; i >= 0; i--) {
+      var m = msgs[i];
+      if (!m || !m.role) continue;
+      if (!lastAsst && m.role === 'assistant' && messageHasContent(m)) lastAsst = m;
+      if (!lastUser && m.role === 'user' && messageHasContent(m)) lastUser = m;
+      if (lastUser && lastAsst) break;
+    }
+
+    var pending = list.querySelector('.ai-msg-wrap[data-pending-user="1"]');
+    if (pending) {
+      if (lastUser && lastUser.created_at) {
+        pending.removeAttribute('data-pending-user');
+        pending.setAttribute('data-created-at', lastUser.created_at);
+        bumpLastSyncAt(lastUser.created_at);
+      } else {
+        pending.remove();
+      }
+    }
+
+    if (lastAsst) appendMessage(lastAsst);
+    scanLastSyncFromDom();
+    list.scrollTop = list.scrollHeight;
   }
 
   function renderMessages(messages) {
@@ -187,7 +327,7 @@
     seenEscalationIds = {};
     lastSyncAt = '';
     (messages || []).forEach(function (m) {
-      if (m && m.role && (m.content || m.cards_html || (m.land_cards && m.land_cards.length))) {
+      if (m && m.role && messageHasContent(m)) {
         appendMessage(m);
       }
     });
@@ -197,8 +337,72 @@
   }
 
   function showWelcomeIfEmpty() {
-    if (list.querySelector('[data-role]')) return;
-    appendBubble(welcome, 'assistant');
+    if (isPostchiMode()) return;
+    if (list.querySelector('.ai-msg-wrap[data-role]')) return;
+    appendMessage({ role: 'assistant', content: welcome }, { welcome: true });
+  }
+
+  async function markPostchiOpened() {
+    if (!postchiOpenUrl || postchiOpened) return;
+    postchiOpened = true;
+    try {
+      var resp = await fetch(postchiOpenUrl, {
+        method: 'POST',
+        headers: apiHeaders(false),
+        credentials: 'same-origin',
+      });
+      var data = await resp.json();
+      if (data && data.success) {
+        syncMenuUnreadBadge(data.unread_count || 0);
+        try {
+          window.dispatchEvent(
+            new CustomEvent('vinor:notifications:update', {
+              detail: { unread: Number(data.unread_count || 0), notifications: null },
+            })
+          );
+        } catch (_) {}
+      }
+    } catch (_) {
+      postchiOpened = false;
+    }
+  }
+
+  async function loadPostchiMessages() {
+    if (!postchiMessagesUrl) return;
+    setBusy(true);
+    try {
+      var resp = await fetch(postchiMessagesUrl, {
+        credentials: 'same-origin',
+        headers: apiHeaders(false),
+      });
+      var data = await resp.json();
+      if (data && data.success && Array.isArray(data.messages)) {
+        var mapped = data.messages.map(function (m) {
+          return {
+            role: m.role === 'out' ? 'user' : 'assistant',
+            content: m.body || '',
+            created_at: postchiTsToIso(m.created_at),
+            source: 'postchi',
+          };
+        });
+        renderMessages(mapped);
+      }
+    } catch (_) {
+      /* ignore */
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function postchiTsToIso(ts) {
+    var v = Number(ts) || 0;
+    if (!v) return '';
+    if (v < 1e12) v *= 1000;
+    try {
+      return new Date(v).toISOString();
+    } catch (_) {
+      return '';
+    }
   }
 
   function setBusy(on) {
@@ -229,10 +433,27 @@
           ':' +
           (t.message_count || 0) +
           ':' +
-          (t.is_active ? '1' : '0')
+          (t.is_active ? '1' : '0') +
+          ':' +
+          (t.unread || 0) +
+          ':' +
+          (t.kind || '')
         );
       })
       .join('|');
+  }
+
+  function threadItemClasses(th) {
+    var isPostchi = th.kind === 'postchi' || th.id === postchiThreadId;
+    var active = !!th.is_active;
+    if (isPostchi) {
+      return active
+        ? 'border-emerald-500/40 bg-emerald-500/15'
+        : 'border-emerald-500/20 bg-emerald-500/[0.06] hover:bg-emerald-500/10';
+    }
+    return active
+      ? 'border-violet-500/40 bg-violet-500/15'
+      : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]';
   }
 
   function renderThreadList(threads) {
@@ -240,6 +461,7 @@
     var key = threadsCacheKey(threads);
     if (key && key === lastThreadsKey) return;
     lastThreadsKey = key;
+    updatePostchiUnreadFromThreads(threads);
     historyList.innerHTML = '';
     if (!threads || !threads.length) {
       historyList.innerHTML =
@@ -247,38 +469,56 @@
       return;
     }
     threads.forEach(function (th) {
+      var isPostchi = th.kind === 'postchi' || th.id === postchiThreadId;
       var btnEl = document.createElement('button');
       btnEl.type = 'button';
       btnEl.className =
         'ai-thread-item w-full rounded-xl border px-3 py-2.5 text-right transition ' +
-        (th.is_active
-          ? 'border-violet-500/40 bg-violet-500/15'
-          : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]');
+        threadItemClasses(th);
       btnEl.setAttribute('data-thread-id', th.id);
+      if (isPostchi) btnEl.setAttribute('data-thread-kind', 'postchi');
+      var unreadBadge =
+        th.unread > 0
+          ? '<span class="rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white tabular-nums">' +
+            (th.unread > 99 ? '99+' : String(th.unread)) +
+            '</span>'
+          : th.is_active
+            ? '<span class="rounded-full px-1.5 py-0.5 text-[9px] ' +
+              (isPostchi ? 'bg-emerald-500/30 text-emerald-200' : 'bg-violet-500/30 text-violet-200') +
+              '">فعال</span>'
+            : '';
+      var deleteBtn = isPostchi
+        ? ''
+        : '<span class="ai-thread-delete grid h-7 w-7 place-items-center rounded-lg text-zinc-500 hover:bg-red-500/15 hover:text-red-300" data-thread-id="' +
+          escapeHtml(th.id || '') +
+          '" role="button" aria-label="حذف گفتگو" tabindex="-1">' +
+          '<i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i></span>';
       btnEl.innerHTML =
         '<div class="flex items-start justify-between gap-2">' +
-        '<span class="text-xs font-semibold text-white line-clamp-2 leading-snug">' +
+        '<span class="text-xs font-semibold text-white line-clamp-2 leading-snug flex items-center gap-1.5">' +
+        (isPostchi
+          ? '<i class="fas fa-envelope text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>'
+          : '') +
         escapeHtml(th.title || 'گفتگو') +
         '</span>' +
-        (th.is_active
-          ? '<span class="shrink-0 rounded-full bg-violet-500/30 px-1.5 py-0.5 text-[9px] text-violet-200">فعال</span>'
-          : '') +
-        '</div>' +
+        '<span class="flex shrink-0 items-center gap-1">' +
+        unreadBadge +
+        deleteBtn +
+        '</span></div>' +
         (th.preview
           ? '<p class="mt-1 text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">' +
             escapeHtml(th.preview) +
             '</p>'
           : '') +
-        '<p class="mt-1.5 text-[9px] text-zinc-600 flex items-center justify-between gap-2">' +
-        '<span>' +
-        (th.message_count || 0) +
-        ' پیام</span>' +
-        '<time class="tabular-nums">' +
-        formatDate(th.updated_at) +
-        '</time></p>';
-      btnEl.addEventListener('click', function () {
-        switchThread(th.id);
-      });
+        (isPostchi
+          ? ''
+          : '<p class="mt-1.5 text-[9px] text-zinc-600 flex items-center justify-between gap-2">' +
+            '<span>' +
+            (th.message_count || 0) +
+            ' پیام</span>' +
+            '<time class="tabular-nums">' +
+            formatDate(th.updated_at) +
+            '</time></p>');
       historyList.appendChild(btnEl);
     });
   }
@@ -354,13 +594,48 @@
       setActiveThreadId(data.thread_id);
       renderMessages(data.messages);
       if (data.threads) applyThreads(data.threads);
-      pollSync();
+      if (data.mode === 'postchi' || data.thread_id === postchiThreadId) {
+        postchiOpened = true;
+        pollPaused = true;
+      } else {
+        postchiOpened = false;
+        resumePoll();
+      }
       closeSideMenu();
     } catch (err) {
       if (err && err.name !== 'AbortError') alert(err.message || 'خطا');
     } finally {
       setBusy(false);
       input.focus();
+    }
+  }
+
+  async function deleteThread(threadId) {
+    if (!deleteUrl || !threadId || threadId === postchiThreadId) return;
+    if (!window.confirm('این گفتگو حذف شود؟')) return;
+    if (deleteAbort) deleteAbort.abort();
+    deleteAbort = new AbortController();
+    setBusy(true);
+    try {
+      var resp = await fetch(deleteUrl, {
+        method: 'POST',
+        headers: apiHeaders(true),
+        credentials: 'same-origin',
+        body: JSON.stringify({ thread_id: threadId }),
+        signal: deleteAbort.signal,
+      });
+      var data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error((data && data.error) || 'حذف ممکن نیست');
+      if (data.thread_id) setActiveThreadId(data.thread_id);
+      renderMessages(data.messages);
+      lastThreadsKey = '';
+      if (data.threads) applyThreads(data.threads);
+      else await refreshHistory(true);
+      resumePoll();
+    } catch (err) {
+      if (err && err.name !== 'AbortError') alert(err.message || 'خطا');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -389,11 +664,12 @@
   }
 
   async function pollSync() {
-    if (!syncUrl || document.hidden || pollPaused) return;
+    if (!syncUrl || document.hidden || pollPaused || pollInFlight || isPostchiMode()) return;
     var tid = activeThreadId();
     if (!tid) return;
     if (syncAbort) syncAbort.abort();
     syncAbort = new AbortController();
+    pollInFlight = true;
     try {
       var url =
         syncUrl +
@@ -401,9 +677,11 @@
         'thread_id=' +
         encodeURIComponent(tid) +
         '&count=' +
-        encodeURIComponent(String(storedMessageCount())) +
-        '&exclude_esc=' +
-        encodeURIComponent(knownEscalationIds().join(','));
+        encodeURIComponent(String(storedMessageCount()));
+      if (lastSyncAt) {
+        url += '&after=' + encodeURIComponent(lastSyncAt);
+      }
+      url += '&exclude_esc=' + encodeURIComponent(knownEscalationIds().join(','));
 
       var resp = await fetch(url, {
         credentials: 'same-origin',
@@ -413,16 +691,15 @@
       var data = await resp.json();
       if (!data || !data.ok || !data.messages || !data.messages.length) {
         emptyPollStreak += 1;
-        if (emptyPollStreak >= 15) pollPaused = true;
+        if (emptyPollStreak >= EMPTY_POLL_PAUSE) pollPaused = true;
         return;
       }
       emptyPollStreak = 0;
       pollPaused = false;
       var added = false;
       data.messages.forEach(function (m) {
-        if (m && m.role && (m.content || m.cards_html)) {
-          appendMessage(m);
-          added = true;
+        if (m && m.role && messageHasContent(m)) {
+          if (appendMessage(m)) added = true;
         }
       });
       if (added) {
@@ -433,6 +710,8 @@
       if (err && err.name !== 'AbortError') {
         /* ignore */
       }
+    } finally {
+      pollInFlight = false;
     }
   }
 
@@ -442,7 +721,72 @@
     pollSync();
   }
 
+  function syncComposerInset() {
+    if (!composer || !window.visualViewport) return;
+    var vv = window.visualViewport;
+    var inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    composer.style.setProperty(
+      '--ai-keyboard-inset',
+      inset > 0 ? inset + 'px' : '0px'
+    );
+  }
+
+  function teardownAiChat() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    if (historyTimer) {
+      clearTimeout(historyTimer);
+      historyTimer = null;
+    }
+    try {
+      if (historyAbort) historyAbort.abort();
+    } catch (_) {}
+    try {
+      if (switchAbort) switchAbort.abort();
+    } catch (_) {}
+    try {
+      if (syncAbort) syncAbort.abort();
+    } catch (_) {}
+    try {
+      if (chatAbort) chatAbort.abort();
+    } catch (_) {}
+    try {
+      if (deleteAbort) deleteAbort.abort();
+    } catch (_) {}
+    historyAbort = null;
+    switchAbort = null;
+    syncAbort = null;
+    chatAbort = null;
+    deleteAbort = null;
+    closeSideMenu();
+    if (onVisChange) {
+      document.removeEventListener('visibilitychange', onVisChange);
+      onVisChange = null;
+    }
+    if (onKeydown) {
+      document.removeEventListener('keydown', onKeydown);
+      onKeydown = null;
+    }
+    if (window.visualViewport) {
+      if (onViewportResize) window.visualViewport.removeEventListener('resize', onViewportResize);
+      if (onViewportScroll) window.visualViewport.removeEventListener('scroll', onViewportScroll);
+      onViewportResize = null;
+      onViewportScroll = null;
+    }
+    if (composer) composer.style.removeProperty('--ai-keyboard-inset');
+    window.__vinorAiChatTeardown = null;
+  }
+
+  window.__vinorAiChatTeardown = teardownAiChat;
+
   showWelcomeIfEmpty();
+  setComposerMode(isPostchiMode());
+  if (isPostchiMode()) {
+    pollPaused = true;
+    markPostchiOpened();
+  }
   list.querySelectorAll('.ai-msg-wrap').forEach(function (w) {
     initCardsIn(w);
     var eid = w.getAttribute('data-escalation-id');
@@ -451,10 +795,22 @@
   scanLastSyncFromDom();
   list.scrollTop = list.scrollHeight;
 
-  setInterval(pollSync, POLL_MS);
-  document.addEventListener('visibilitychange', function () {
+  pollTimer = setInterval(pollSync, POLL_MS);
+  refreshHistory(false);
+  onVisChange = function () {
     if (document.hidden) return;
     resumePoll();
+  };
+  document.addEventListener('visibilitychange', onVisChange);
+
+  window.addEventListener('vinor:notifications:update', function (ev) {
+    var detail = ev && ev.detail;
+    if (!detail || detail.unread === undefined || detail.unread === null) return;
+    syncMenuUnreadBadge(detail.unread);
+    if (historyUrl && isPostchiMode()) {
+      lastThreadsKey = '';
+      refreshHistory(true);
+    }
   });
 
   if (menuBtn) menuBtn.addEventListener('click', openSideMenu);
@@ -462,11 +818,37 @@
   if (sideBackdrop) sideBackdrop.addEventListener('click', closeSideMenu);
   if (newChatBtn) newChatBtn.addEventListener('click', startNewChat);
 
-  document.addEventListener('keydown', function (e) {
+  if (historyList) {
+    historyList.addEventListener('click', function (e) {
+      var delBtn = e.target.closest('.ai-thread-delete');
+      if (delBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        var delId = delBtn.getAttribute('data-thread-id');
+        if (delId) deleteThread(delId);
+        return;
+      }
+      var item = e.target.closest('.ai-thread-item');
+      if (!item) return;
+      var tid = item.getAttribute('data-thread-id');
+      if (tid) switchThread(tid);
+    });
+  }
+
+  onKeydown = function (e) {
     if (e.key === 'Escape' && sidePanel && sidePanel.classList.contains('is-open')) {
       closeSideMenu();
     }
-  });
+  };
+  document.addEventListener('keydown', onKeydown);
+
+  if (window.visualViewport) {
+    onViewportResize = syncComposerInset;
+    onViewportScroll = syncComposerInset;
+    window.visualViewport.addEventListener('resize', onViewportResize);
+    window.visualViewport.addEventListener('scroll', onViewportScroll);
+    syncComposerInset();
+  }
 
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
@@ -475,16 +857,54 @@
     if (!msg || msg.length < MIN_MSG_LEN) return;
     var now = Date.now();
     if (lastSubmitAt && now - lastSubmitAt < MIN_SUBMIT_GAP_MS) {
-      appendBubble('لطفاً چند ثانیه صبر کنید و دوباره بفرستید.', 'assistant');
+      showEphemeralHint('لطفاً چند ثانیه صبر کنید و دوباره بفرستید.');
       return;
     }
 
     submitting = true;
     lastSubmitAt = now;
-    appendBubble(msg, 'user');
+    removeWelcome();
+    appendMessage({ role: 'user', content: msg }, { pendingUser: true });
     input.value = '';
-    resumePoll();
     setBusy(true);
+
+    if (isPostchiMode()) {
+      if (!postchiSendUrl) {
+        submitting = false;
+        setBusy(false);
+        return;
+      }
+      try {
+        var pResp = await fetch(postchiSendUrl, {
+          method: 'POST',
+          headers: apiHeaders(true),
+          credentials: 'same-origin',
+          body: JSON.stringify({ message: msg }),
+        });
+        var pData = await pResp.json();
+        if (!pResp.ok || !pData || !pData.success) {
+          removePendingUser();
+          throw new Error((pData && pData.error) || 'ارسال ناموفق بود');
+        }
+        removePendingUser();
+        await loadPostchiMessages();
+        lastThreadsKey = '';
+        await refreshHistory(true);
+      } catch (err) {
+        removePendingUser();
+        showEphemeralHint(err.message || 'خطا در ارسال پیام');
+      } finally {
+        submitting = false;
+        setBusy(false);
+        input.focus();
+      }
+      return;
+    }
+
+    resumePoll();
+
+    if (chatAbort) chatAbort.abort();
+    chatAbort = new AbortController();
 
     try {
       var resp = await fetch(chatUrl, {
@@ -492,6 +912,7 @@
         headers: apiHeaders(true),
         credentials: 'same-origin',
         body: JSON.stringify({ message: msg, thread_id: activeThreadId() }),
+        signal: chatAbort.signal,
       });
       var data = null;
       try {
@@ -502,27 +923,29 @@
         var errText = (data && data.error) || 'خطا در دریافت پاسخ';
         if (data && data.escalated && data.reply) {
           if (data.thread_id) setActiveThreadId(data.thread_id);
-          appendMessage({
-            role: 'assistant',
-            content: data.reply,
-            cards_html: data.cards_html,
-            land_cards: data.land_cards,
-            escalation_id: data.escalation_id,
-          });
+          if (data.messages && data.messages.length) {
+            reconcileExchange(data.messages);
+          } else {
+            removePendingUser();
+            appendMessage({
+              role: 'assistant',
+              content: data.reply,
+              cards_html: data.cards_html,
+              land_cards: data.land_cards,
+              escalation_id: data.escalation_id,
+              created_at: data.created_at,
+            });
+          }
           if (data.threads) applyThreads(data.threads);
           else await refreshHistory();
           pollSync();
           return;
         }
+        removePendingUser();
         throw new Error(errText);
       }
       if (data.thread_id) setActiveThreadId(data.thread_id);
-      appendMessage({
-        role: 'assistant',
-        content: data.reply || '',
-        cards_html: data.cards_html,
-        land_cards: data.land_cards,
-      });
+      reconcileExchange(data.messages);
       if (data.threads) {
         lastThreadsKey = '';
         applyThreads(data.threads);
@@ -531,8 +954,10 @@
       }
       pollSync();
     } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      removePendingUser();
       var errMsg = String(err.message || 'خطای ناشناخته');
-      appendBubble(errMsg, 'assistant');
+      showEphemeralHint(errMsg);
       if (/اعتبار API|InsufficientBalance|402/i.test(errMsg)) {
         pollPaused = true;
       }

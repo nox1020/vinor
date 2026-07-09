@@ -449,15 +449,6 @@ def save_express_visit_requests(items, app=None):
     data = _save(ensure_file('EXPRESS_VISIT_REQUESTS_FILE', 'express_visit_requests.json', [], app), items)
     _VISIT_REQUESTS_CACHE.update({"path": None, "mtime": None, "size": None, "data": None})
     return data
-
-# تیکت‌های پشتیبانی همکار
-def load_support_tickets(app=None):
-    return _load(ensure_file('SUPPORT_TICKETS_FILE', 'support_tickets.json', [], app))
-
-
-def save_support_tickets(items, app=None):
-    return _save(ensure_file('SUPPORT_TICKETS_FILE', 'support_tickets.json', [], app), items)
-
 # SMS History
 def load_sms_history(app=None):    return _load(ensure_file('SMS_HISTORY_FILE','sms_history.json',[],app))
 def save_sms_history(items, app=None): return _save(ensure_file('SMS_HISTORY_FILE','sms_history.json',[],app), items)

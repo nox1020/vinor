@@ -10,21 +10,24 @@ from typing import Any
 
 from flask import current_app
 
+from .runtime_settings import get_ai_settings
+
 from app.utils.storage import data_dir
 
 # --- تنظیمات (قابل تغییر با متغیر محیطی) ---
 def budget_config() -> dict[str, Any]:
+    cfg = get_ai_settings()
     return {
-        "min_interval_sec": float(os.environ.get("VINOR_AI_MIN_INTERVAL_SEC", "4")),
-        "dedup_ttl_sec": int(os.environ.get("VINOR_AI_DEDUP_TTL_SEC", "180")),
-        "max_history": int(os.environ.get("VINOR_AI_MAX_HISTORY", "12")),
-        "max_msg_chars": int(os.environ.get("VINOR_AI_MAX_MSG_CHARS", "2500")),
-        "max_context_chars": int(os.environ.get("VINOR_AI_MAX_CONTEXT_CHARS", "9000")),
-        "max_tokens": int(os.environ.get("VINOR_AI_MAX_TOKENS", "1024")),
-        "temperature": float(os.environ.get("VINOR_AI_TEMPERATURE", "0.5")),
-        "public_ctx_ttl_sec": int(os.environ.get("VINOR_AI_PUBLIC_CTX_TTL", "300")),
-        "partner_ctx_ttl_sec": int(os.environ.get("VINOR_AI_PARTNER_CTX_TTL", "120")),
-        "min_message_chars": int(os.environ.get("VINOR_AI_MIN_MESSAGE_CHARS", "2")),
+        "min_interval_sec": float(cfg["min_interval_sec"]),
+        "dedup_ttl_sec": int(cfg["dedup_ttl_sec"]),
+        "max_history": int(cfg["max_history"]),
+        "max_msg_chars": int(cfg["max_msg_chars"]),
+        "max_context_chars": int(cfg["max_context_chars"]),
+        "max_tokens": int(cfg["max_tokens"]),
+        "temperature": float(cfg["temperature"]),
+        "public_ctx_ttl_sec": int(cfg["public_ctx_ttl_sec"]),
+        "partner_ctx_ttl_sec": int(cfg["partner_ctx_ttl_sec"]),
+        "min_message_chars": int(cfg["min_message_chars"]),
     }
 
 
@@ -51,12 +54,38 @@ def _load_cache() -> dict[str, Any]:
     return {"rate": {}, "replies": {}, "flags": {}}
 
 
+BALANCE_SMS_COOLDOWN_SEC = 21600  # حداکثر یک پیامک هر ۶ ساعت
+
+
 def mark_api_balance_depleted() -> None:
     """پس از خطای 402 — جلوگیری از درخواست‌های بی‌فایده تا شارژ مجدد."""
     data = _load_cache()
     data.setdefault("flags", {})
     data["flags"]["api_balance_depleted"] = time.time()
     _save_cache(data)
+    try:
+        notify_admin_balance_sms_if_needed()
+    except Exception:
+        pass
+
+
+def notify_admin_balance_sms_if_needed() -> bool:
+    """پیامک اتمام موجودی DeepSeek به ادمین (با فاصلهٔ زمانی)."""
+    data = _load_cache()
+    flags = data.setdefault("flags", {})
+    last = float(flags.get("balance_sms_sent_at") or 0)
+    if last and (time.time() - last) < BALANCE_SMS_COOLDOWN_SEC:
+        return False
+    try:
+        from app.ai.escalations import send_admin_balance_depleted_sms
+
+        if not send_admin_balance_depleted_sms():
+            return False
+    except Exception:
+        return False
+    flags["balance_sms_sent_at"] = time.time()
+    _save_cache(data)
+    return True
 
 
 def is_api_balance_depleted(max_age_sec: int = 86400) -> bool:

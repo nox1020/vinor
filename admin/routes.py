@@ -116,7 +116,6 @@ from app.utils.storage import (
     load_partner_withdrawals, save_partner_withdrawals,
     load_partner_bank_accounts,
     load_express_visit_requests, save_express_visit_requests,
-    load_support_tickets, save_support_tickets,
 )
 
 def _ad_owner_id(ad: Dict[str, Any]) -> Optional[str]:
@@ -620,6 +619,8 @@ def _default_settings() -> Dict[str, Any]:
         'visit_allowed_weekdays': [5, 6, 0, 1, 2, 3, 4],
         # مبلغ ثابت پورسانت هر بازدید (تومان)
         'visit_commission_amount_toman': 0,
+        # Vinor AI — مقادیر پیش‌فرض (ویرایش از پنل سوالات AI)
+        'ai': {},
     }
 
 def get_settings() -> Dict[str, Any]:
@@ -1159,8 +1160,6 @@ def _admin_dashboard_context() -> Dict[str, Any]:
     commissions = load_express_commissions() or []
     withdrawals = load_partner_withdrawals() or []
     visits = load_express_visit_requests() or []
-    tickets_raw = load_support_tickets() or []
-
     if not isinstance(partners, list):
         partners = []
     if not isinstance(applications, list):
@@ -1173,8 +1172,6 @@ def _admin_dashboard_context() -> Dict[str, Any]:
         withdrawals = []
     if not isinstance(visits, list):
         visits = []
-    if not isinstance(tickets_raw, list):
-        tickets_raw = []
 
     pending_apps = [
         a for a in applications
@@ -1196,10 +1193,6 @@ def _admin_dashboard_context() -> Dict[str, Any]:
         v for v in visits
         if isinstance(v, dict)
         and str(v.get('status') or '').strip() in ('pending', 'done_pending')
-    ]
-    open_tickets = [
-        t for t in tickets_raw
-        if isinstance(t, dict) and str(t.get('status') or '').lower() in ('open', 'in_progress')
     ]
     active_assignments = [
         a for a in assignments
@@ -1302,26 +1295,12 @@ def _admin_dashboard_context() -> Dict[str, Any]:
             'ts': _ts(v, 'visit_date', 'created_at'),
         })
 
-    for t in open_tickets[:20]:
-        ph = str(t.get('user_phone') or '').strip()
-        subj = (str(t.get('subject') or '')).strip() or 'تیکت پشتیبانی'
-        action_queue.append({
-            'kind': 'ticket',
-            'icon': 'fa-ticket',
-            'tone': 'rose',
-            'title': (t.get('user_name') or name_map.get(ph) or ph or 'همکار').strip(),
-            'meta': subj,
-            'url': url_for('admin.support_tickets', filter='open'),
-            'ts': _ts(t, 'created_at', 'updated_at'),
-        })
-
     action_queue.sort(key=lambda x: x.get('ts') or '', reverse=True)
     action_queue = action_queue[:12]
 
     pending_actions_total = (
         len(pending_apps) + len(pending_commissions)
         + len(pending_withdrawals) + len(pending_visits)
-        + len(open_tickets)
     )
 
     online_preview = []
@@ -1351,7 +1330,6 @@ def _admin_dashboard_context() -> Dict[str, Any]:
         'pending_withdrawals_count': len(pending_withdrawals),
         'open_withdrawals_count': len(open_withdrawals),
         'pending_visits_count': len(pending_visits),
-        'open_tickets_count': len(open_tickets),
         'pending_commissions_amount': sum(_amount(c.get('commission_amount')) for c in pending_commissions),
         'pending_withdrawals_amount': sum(_amount(w.get('amount')) for w in pending_withdrawals),
         'partners_count': people_stats.get('partners') or len(partners),
@@ -1508,7 +1486,7 @@ def _send_colleagues_notification_broadcast(
 
     ensure_firebase_ready()
     bid = broadcast_id or str(uuid.uuid4())
-    notify_url = '/express/partner/notifications'
+    notify_url = url_for('express_partner.ai', thread='__postchi__')
     phones = [p['phone'] for p in approved_partners if p.get('phone')]
     fcm_stats = fcm_stats_for_phones(phones)
 
@@ -2418,8 +2396,36 @@ def settings():
 @login_required
 def ai_questions():
     from app.ai.escalations import answer_escalation, list_pending_for_admin, list_recent_answered
+    from app.ai.runtime_settings import get_ai_settings, get_stored_ai_api_key, mask_api_key, save_ai_settings
+    from app.ai.services import ai_config
+    from app.keys import get_deepseek_api_key
 
     if request.method == 'POST':
+        action = (request.form.get('action') or 'answer').strip()
+        if action == 'save_config':
+            try:
+                patch = {
+                    'enabled': request.form.get('ai_enabled') == '1',
+                    'escalation_sms_enabled': request.form.get('ai_escalation_sms_enabled') == '1',
+                    'min_interval_sec': float(request.form.get('ai_min_interval_sec') or 4),
+                    'dedup_ttl_sec': int(request.form.get('ai_dedup_ttl_sec') or 180),
+                    'max_history': int(request.form.get('ai_max_history') or 12),
+                    'max_msg_chars': int(request.form.get('ai_max_msg_chars') or 2500),
+                    'max_context_chars': int(request.form.get('ai_max_context_chars') or 9000),
+                    'max_tokens': int(request.form.get('ai_max_tokens') or 1024),
+                    'temperature': float(request.form.get('ai_temperature') or 0.5),
+                    'public_ctx_ttl_sec': int(request.form.get('ai_public_ctx_ttl_sec') or 300),
+                    'partner_ctx_ttl_sec': int(request.form.get('ai_partner_ctx_ttl_sec') or 120),
+                    'min_message_chars': int(request.form.get('ai_min_message_chars') or 2),
+                    'api_key': (request.form.get('ai_api_key') or '').strip(),
+                    'clear_api_key': request.form.get('ai_clear_api_key') == '1',
+                }
+                save_ai_settings(patch)
+                flash('تنظیمات پیکربندی AI ذخیره شد.', 'success')
+            except (TypeError, ValueError):
+                flash('مقدار نامعتبر در فرم تنظیمات.', 'error')
+            return redirect(url_for('admin.ai_questions'))
+
         eid = (request.form.get('escalation_id') or '').strip()
         ans = (request.form.get('admin_answer') or '').strip()
         result = answer_escalation(eid, ans)
@@ -2436,6 +2442,11 @@ def ai_questions():
 
     pending = list_pending_for_admin()
     answered = list_recent_answered()
+    ai_settings = get_ai_settings()
+    ai_status = ai_config()
+    site_settings = get_settings()
+    stored_api_key = get_stored_ai_api_key()
+    active_api_key = get_deepseek_api_key()
     try:
         lands = load_json(_lands_path())
         p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
@@ -2448,6 +2459,12 @@ def ai_questions():
         pending_count=p,
         approved_count=a,
         rejected_count=r,
+        ai_settings=ai_settings,
+        ai_status=ai_status,
+        site_settings=site_settings,
+        api_key_masked=mask_api_key(active_api_key),
+        api_key_source='settings' if stored_api_key else ('file' if active_api_key else 'none'),
+        has_stored_api_key=bool(stored_api_key),
     )
 
 
@@ -3980,7 +3997,7 @@ def express_partner_send_message(phone: str):
                 title=title,
                 body=body,
                 ntype='info',
-                action_url='/express/partner/notifications',
+                action_url=url_for('express_partner.ai', thread='__postchi__'),
                 source='admin_partner_message',
             )
             parts.append('نوتیف (درون‌برنامه + FCM)')
@@ -5397,113 +5414,6 @@ def express_visit_request_status(vid: str):
     except Exception:
         flash('خطا در ذخیره وضعیت.', 'error')
     return redirect(_express_visit_requests_redirect(filter_hint, vid))
-
-
-@admin_bp.route('/support/tickets', endpoint='support_tickets')
-@login_required
-def support_tickets():
-    from app.express_partner.support_tickets import (
-        OPEN_STATUSES,
-        STATUS_LABELS,
-        admin_row_dict as ticket_admin_row,
-    )
-
-    flt = (request.args.get('filter') or 'open').strip().lower()
-    items_raw = load_support_tickets() or []
-    if not isinstance(items_raw, list):
-        items_raw = []
-    name_map = _partner_name_lookup()
-    items = []
-    for row in items_raw:
-        if not isinstance(row, dict):
-            continue
-        r = dict(row)
-        ph = str(r.get('user_phone') or '').strip()
-        if not (r.get('user_name') or '').strip() and ph in name_map:
-            r['user_name'] = name_map[ph]
-        items.append(ticket_admin_row(r))
-    items.sort(key=lambda x: (x.get('created_at') or ''), reverse=True)
-
-    if flt == 'open':
-        visible = [x for x in items if (x.get('status') or '') in OPEN_STATUSES]
-    elif flt == 'closed':
-        visible = [x for x in items if (x.get('status') or '') == 'closed']
-    elif flt == 'answered':
-        visible = [x for x in items if (x.get('status') or '') == 'answered']
-    else:
-        flt = 'all'
-        visible = items
-
-    open_count = sum(1 for x in items if (x.get('status') or '') in OPEN_STATUSES)
-    return render_template(
-        'admin/support_tickets.html',
-        items=visible,
-        open_count=open_count,
-        current_filter=flt,
-        status_labels=STATUS_LABELS,
-    )
-
-
-@admin_bp.post('/support/tickets/<tid>/reply')
-@login_required
-def support_ticket_reply(tid: str):
-    from app.express_partner.support_tickets import (
-        STATUS_LABELS,
-        admin_update_support_ticket,
-    )
-
-    new_status = (request.form.get('status') or '').strip()
-    admin_reply = request.form.get('admin_reply')
-    filter_hint = (request.form.get('filter') or request.args.get('filter') or 'open').strip()
-
-    items = load_support_tickets() or []
-    if not isinstance(items, list):
-        items = []
-    prev_reply = ''
-    for row in items:
-        if isinstance(row, dict) and str(row.get('id') or '') == str(tid).strip():
-            prev_reply = (str(row.get('admin_reply') or '')).strip()
-            break
-
-    rec, err = admin_update_support_ticket(
-        items,
-        tid,
-        new_status=new_status,
-        admin_reply=admin_reply,
-    )
-    if err == 'not_found':
-        flash('تیکت یافت نشد.', 'error')
-        return redirect(url_for('admin.support_tickets', filter=filter_hint))
-    if err == 'invalid_status':
-        flash('وضعیت انتخاب‌شده نامعتبر است.', 'error')
-        return redirect(url_for('admin.support_tickets', filter=filter_hint))
-    if err == 'unchanged':
-        flash('تغییری ذخیره نشد. وضعیت یا پاسخ را ویرایش کنید.', 'info')
-        return redirect(url_for('admin.support_tickets', filter=filter_hint))
-
-    try:
-        save_support_tickets(items)
-        st = (str((rec or {}).get('status') or '')).strip()
-        label = STATUS_LABELS.get(st, st)
-        flash(f'تیکت به‌روزرسانی شد — وضعیت: {label}.', 'success')
-
-        reply_text = (str((rec or {}).get('admin_reply') or '')).strip()
-        partner_phone = str((rec or {}).get('user_phone') or '').strip()
-        if reply_text and reply_text != prev_reply and partner_phone:
-            try:
-                add_notification(
-                    user_id=partner_phone,
-                    title='پاسخ پشتیبانی',
-                    body=(reply_text[:200] + '…') if len(reply_text) > 200 else reply_text,
-                    ntype='info',
-                    action_url=url_for('express_partner.support'),
-                    source='support_ticket',
-                )
-            except Exception:
-                current_app.logger.exception('support ticket partner notification failed tid=%s', tid)
-    except Exception:
-        flash('خطا در ذخیره تیکت.', 'error')
-    return redirect(url_for('admin.support_tickets', filter=filter_hint))
 
 
 def _financial_withdrawals_redirect(filter_hint: str = '') -> str:

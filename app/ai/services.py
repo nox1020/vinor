@@ -28,6 +28,7 @@ from .credits import (
     record_api_call,
     store_cached_reply,
 )
+from .runtime_settings import get_ai_settings
 from .escalations import consume_pending_answers, create_escalation
 from .land_cards import collect_land_codes, land_cards_payload
 from .provider_router import call_ai
@@ -35,8 +36,9 @@ from .provider_router import call_ai
 
 def ai_config() -> dict[str, Any]:
     api_key = get_deepseek_api_key()
+    cfg = get_ai_settings()
     return {
-        "enabled": os.environ.get("VINOR_AI_ENABLED", "1").lower() not in ("0", "false", "no"),
+        "enabled": bool(cfg.get("enabled")),
         "provider": "deepseek",
         "model": DEEPSEEK_MODEL,
         "api_key_set": bool(api_key),
@@ -201,7 +203,7 @@ def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
             "error": err_msg,
             "error_code": "deepseek_api",
         }
-        if resp.status_code == 402:
+        if resp.status_code == 402 or "insufficientbalance" in blob:
             mark_api_balance_depleted()
             out["balance_depleted"] = True
         return out
@@ -247,10 +249,23 @@ def _escalation_fallback_reply(
         thread_id=thread_id,
     )
     if reason == "balance":
-        intro = (
-            "اعتبار سرویس هوش مصنوعی (DeepSeek) در حال حاضر کافی نیست. "
-        )
-    elif reason == "no_key":
+        reply = "به زودی به شما پاسخ خواهم داد."
+        if esc.get("ok"):
+            return {
+                "ok": True,
+                "reply": reply,
+                "escalated": True,
+                "escalation_id": str(esc.get("id") or ""),
+                "meta": {"provider": "escalation", "reason": reason},
+            }
+        return {
+            "ok": True,
+            "reply": reply,
+            "escalated": False,
+            "meta": {"provider": "escalation", "reason": reason},
+        }
+
+    if reason == "no_key":
         intro = "سرویس هوش مصنوعی هنوز پیکربندی نشده است. "
     else:
         intro = "پاسخ خودکار AI موقتاً در دسترس نیست. "

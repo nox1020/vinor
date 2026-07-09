@@ -1,4 +1,4 @@
-{# حباب شناور هدر: اعلان + منو (ثابت روی اسکرول) #}
+{# حباب شناور هدر: منو (ثابت روی اسکرول) #}
 {% set _menu_href = menu_href|default(url_for('express_partner.profile')) %}
 <style>
   .ep-header-float-actions {
@@ -20,8 +20,6 @@
   }
 </style>
 <div class="ep-header-float-actions" aria-label="دسترسی سریع">
-  {% set profile_notifications_dark = true %}
-  {% include 'express_partner/partials/notifications_button.html' %}
   <a href="{{ _menu_href }}"
      data-vinor-express-nav
      class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"

@@ -1194,7 +1194,7 @@
           unreadCount: 0,
           loading: false,
           postchi: opts.postchi || { preview: 'پیام‌های رسمی وینور', subtitle: 'پستچی وینور' },
-          postchiUrl: opts.postchiUrl || '/express/partner/postchi',
+          postchiUrl: opts.postchiUrl || '/express/partner/ai?thread=__postchi__',
           postchiTime: null,
           init() {
             this._onUpdate = (evt) => this.sync(evt.detail);
@@ -1290,7 +1290,7 @@
             window.location.href = url;
           },
           openPostchi() {
-            const url = (this.postchiUrl || '/express/partner/postchi').trim();
+            const url = (this.postchiUrl || '/express/partner/ai?thread=__postchi__').trim();
             try {
               if (typeof window.vinorExpressNavigate === 'function') {
                 window.vinorExpressNavigate(url, { forward: true });

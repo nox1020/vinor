@@ -6,8 +6,7 @@
      aria-hidden="true"
      aria-labelledby="vnWithdrawModalTitle"
      data-min-withdraw-int="{{ (min_withdrawal_amount or 10000000)|int }}"
-     data-tg-body-modal
-     data-support-url="{{ url_for('express_partner.support') }}">
+     data-tg-body-modal>
   <div class="vn-withdraw-backdrop absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200"
        data-close-withdraw-modal aria-hidden="true"></div>
   <div class="vn-withdraw-sheet vn-wallet-sheet relative w-full max-w-lg mx-auto rounded-t-2xl bg-[#14161c] border-t border-white/[0.07] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] max-h-[min(92vh,720px)] flex flex-col translate-y-full transition-transform duration-300 ease-out">

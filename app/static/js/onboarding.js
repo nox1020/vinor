@@ -123,8 +123,6 @@ class OnboardingTour {
         this.tourData = this.getProfileTour();
       } else if (path.includes('/help')) {
         this.tourData = this.getHelpTour();
-      } else if (path.includes('/support')) {
-        this.tourData = this.getSupportTour();
       } else {
         this.tourData = this.getDashboardTour();
       }
@@ -238,38 +236,15 @@ class OnboardingTour {
         position: 'top'
       },
       {
-        element: '[data-tour="support-link"]',
-        title: 'پشتیبانی 💬',
-        description: 'از این بخش تیکت ارسال کنید، پاسخ‌ها را ببینید و به راهنمای پلتفرم دسترسی داشته باشید.',
+        element: '[data-tour="help-link"]',
+        title: 'راهنمای همکار 📚',
+        description: 'اصول همکاری با وینور، مسیر کار در پنل و پاسخ سوالات پرتکرار همکاران اینجاست.',
         position: 'top'
       },
       {
         element: '[data-tour="bottom-nav"]',
         title: 'منوی پایین 📱',
         description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید: فایل‌ها، پورسانت‌ها و پروفایل.',
-        position: 'top'
-      }
-    ];
-  }
-
-  getSupportTour() {
-    return [
-      {
-        element: '[data-tour="ticket-form"]',
-        title: 'ارسال تیکت 🎫',
-        description: 'دسته را انتخاب کنید، متن را بنویسید و تیکت را ارسال کنید. پاسخ در تب «سوابق» نمایش داده می‌شود.',
-        position: 'top'
-      },
-      {
-        element: '[data-tour="help-link"]',
-        title: 'راهنمای همکار 📚',
-        description: 'اصول همکاری با وینور، مسیر کار در پنل و پاسخ سوالات پرتکرار همکاران اینجاست.',
-        position: 'bottom'
-      },
-      {
-        element: '[data-tour="bottom-nav"]',
-        title: 'منوی پایین 📱',
-        description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید.',
         position: 'top'
       }
     ];
@@ -408,24 +383,13 @@ class OnboardingTour {
         position: 'top',
         page: 'profile'
       },
-      // مرحله 17: پشتیبانی (پروفایل)
-      {
-        element: '[data-tour="support-link"]',
-        title: 'پشتیبانی 💬',
-        description: 'برای ارسال تیکت، مشاهده پاسخ‌ها و مطالعهٔ راهنما، روی این گزینه بزنید.',
-        position: 'top',
-        page: 'profile',
-        action: 'navigate',
-        actionMessage: 'روی «پشتیبانی» بزنید. تور در همان صفحه ادامه می‌یابد.',
-        nextUrl: '/express/partner/support'
-      },
-      // مرحله 18: راهنما (صفحه پشتیبانی)
+      // مرحله 17: راهنما (پروفایل)
       {
         element: '[data-tour="help-link"]',
         title: 'راهنمای همکار 📚',
         description: 'اصول وینور، مسیر فایل تا پورسانت و سوالات پرتکرار همکاران را از اینجا بخوانید.',
         position: 'top',
-        page: 'support',
+        page: 'profile',
         action: 'navigate',
         actionMessage: 'روی «راهنما» بزنید. تور در صفحه راهنما ادامه می‌یابد.',
         nextUrl: '/express/partner/help',
@@ -807,7 +771,6 @@ class OnboardingTour {
       'dashboard': '/express/partner/dashboard',
       'commissions': '/express/partner/commissions',
       'profile': '/express/partner/profile',
-      'support': '/express/partner/support',
       'help': '/express/partner/help'
     };
     return paths[page] || '/express/partner/dashboard';
@@ -824,8 +787,6 @@ class OnboardingTour {
       return /\/notes\/?$/.test(currentPath);
     } else if (expectedPage === 'profile') {
       return currentPath.includes('/profile') && !currentPath.includes('/profile/');
-    } else if (expectedPage === 'support') {
-      return currentPath.includes('/support');
     } else if (expectedPage === 'help') {
       return /\/help\/?$/.test(currentPath);
     }

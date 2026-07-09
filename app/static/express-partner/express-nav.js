@@ -31,10 +31,7 @@
     '/express/partner/listings': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/listings/new': { tab: 'profile', depth: 2, bottomNav: true, prefetch: false },
     '/express/partner/inbox-visits': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/notifications': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/postchi': { tab: 'profile', depth: 2, bottomNav: false, prefetch: false },
     '/express/partner/help': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/support': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/top-sellers': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/invite': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/training': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -168,6 +165,9 @@
     try {
       if (window.__vinorCommChromeAbort) window.__vinorCommChromeAbort.abort();
     } catch (_) {}
+    try {
+      if (typeof window.__vinorAiChatTeardown === 'function') window.__vinorAiChatTeardown();
+    } catch (_) {}
   }
   window.__vinorExpressTeardownPageState = teardownSoftNavPageState;
 
@@ -253,13 +253,12 @@
   function requiresLoginPath(pathname) {
     var p = normPath(pathname || '');
     return p === '/express/partner/favorites' ||
-      p === '/express/partner/notifications' ||
+      p === '/express/partner/ai' ||
       p === '/express/partner/requests' ||
       p === '/express/partner/listings' ||
       p.indexOf('/express/partner/listings/') === 0 ||
       p === '/express/partner/inbox-visits' ||
       p.indexOf('/express/partner/inbox-visits/') === 0 ||
-      p === '/express/partner/postchi' ||
       p === '/express/partner/commissions' ||
       p.indexOf('/express/partner/commissions/') === 0;
   }
@@ -514,7 +513,7 @@
       if (!isLoggedInUser()) return;
       var peers = {
         home: ['/express/partner/profile'],
-        profile: ['/express/partner/home', '/express/partner/favorites', '/express/partner/notifications']
+        profile: ['/express/partner/home', '/express/partner/favorites']
       };
       var list = peers[navKey];
       if (!list || !list.length) return;
@@ -1684,7 +1683,7 @@
     try {
       var paths = ['/express/partner/home', '/express/partner/profile'];
       if (isLoggedInUser()) {
-        paths.push('/express/partner/favorites', '/express/partner/notifications');
+        paths.push('/express/partner/favorites');
       }
       paths.forEach(function (path) {
         prefetchHref(new URL(path, window.location.origin).href);

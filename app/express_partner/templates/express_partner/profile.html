@@ -14,9 +14,7 @@
   {% from 'express_partner/partials/profile_macros.html' import profile_menu_row %}
 
   {{ ep_header_start(id='profileExpressHeader') }}
-  {% call ep_header_row('پروفایل', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}
-    {% include 'express_partner/partials/support_header_button.html' %}
-  {% endcall %}
+  {% call ep_header_row('پروفایل', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
   {{ ep_header_end() }}
 
   <div id="profilePage"
@@ -181,7 +179,7 @@
         {% else %}
         {{ profile_menu_row(url_for('express_partner.invite_colleagues'), 'fa-user-plus', 'دعوت همکار', 'لینک اختصاصی خود را به اشتراک بگذارید', tour='invite-colleagues-link') }}
         {% endif %}
-        {{ profile_menu_row(url_for('express_partner.support'), 'fa-headset', 'پشتیبانی', 'تماس با تیم وینور', tour='support-link') }}
+        {{ profile_menu_row(url_for('express_partner.help'), 'fa-circle-question', 'راهنما', 'اصول همکاری و سوالات پرتکرار', tour='help-link') }}
 
         <form id="logoutProfileForm" method="post" action="{{ url_for('express_partner.logout') }}" class="contents">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -37,6 +37,22 @@ __all__ = [
 
 
 def get_deepseek_api_key() -> str:
+    """اولویت: settings.json → متغیر محیطی → api_keys.py"""
+    import os
+
+    try:
+        from app.utils.storage import load_settings
+
+        stored = (load_settings() or {}).get("ai")
+        if isinstance(stored, dict):
+            key = str(stored.get("api_key") or "").strip()
+            if key:
+                return key
+    except Exception:
+        pass
+    env_key = (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
+    if env_key:
+        return env_key
     return (DEEPSEEK_API_KEY or "").strip()
 
 

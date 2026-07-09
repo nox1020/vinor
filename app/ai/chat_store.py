@@ -443,6 +443,15 @@ def inject_admin_reply(
         intro += f" (در پاسخ به: {q[:120]}{'…' if len(q) > 120 else ''})"
     body = f"{intro}:\n\n{text}"
 
+    for item in th.get("messages") or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("source") or "") != "admin_escalation":
+            continue
+        existing = str(item.get("content") or "").strip()
+        if existing == body.strip():
+            return True
+
     ts = _now_iso()
     entry: dict[str, Any] = {
         "role": "assistant",
@@ -479,14 +488,18 @@ def messages_since(
     exclude = {str(x).strip() for x in (exclude_escalation_ids or []) if str(x).strip()}
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
+    included_esc: set[str] = set()
 
     def _push(item: dict[str, Any]) -> None:
         eid = str(item.get("escalation_id") or "").strip()
         ts = str(item.get("created_at") or "").strip()
-        key = eid or ts or str(item.get("content") or "")[:80]
+        role = str(item.get("role") or "").strip()
+        key = eid or (f"{role}:{ts}" if role and ts else ts) or str(item.get("content") or "")[:80]
         if key in seen:
             return
         seen.add(key)
+        if eid:
+            included_esc.add(eid)
         out.append(item)
 
     # برش بر اساس تعداد پیام‌های ذخیره‌شده در کلاینت (قابل‌اعتمادتر از timestamp)
@@ -502,12 +515,14 @@ def messages_since(
                 if ts > after:
                     _push(item)
 
-    # پاسخ ادمین ممکن است timestamp قدیمی‌تر از آخرین پیام کاربر داشته باشد — همیشه چک کن
+    # پاسخ ادمین ممکن است timestamp قدیمی‌تر از آخرین پیام کاربر داشته باشد — فقط موارد جدید
     for item in all_msgs:
         if str(item.get("source") or "") != "admin_escalation":
             continue
         eid = str(item.get("escalation_id") or "").strip()
         if eid and eid in exclude:
+            continue
+        if eid and eid in included_esc:
             continue
         _push(item)
 
