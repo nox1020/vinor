@@ -22,6 +22,7 @@ def budget_config() -> dict[str, Any]:
         "dedup_ttl_sec": int(cfg["dedup_ttl_sec"]),
         "max_history": int(cfg["max_history"]),
         "max_msg_chars": int(cfg["max_msg_chars"]),
+        "max_assistant_history_chars": int(cfg.get("max_assistant_history_chars") or 420),
         "max_context_chars": int(cfg["max_context_chars"]),
         "max_tokens": int(cfg["max_tokens"]),
         "temperature": float(cfg["temperature"]),

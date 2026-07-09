@@ -127,6 +127,12 @@
                  class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm px-3 py-2 ltr text-left">
         </div>
         <div>
+          <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">حداکثر طول پاسخ در تاریخچه</label>
+          <input type="number" name="ai_max_assistant_history_chars" min="100" max="4000" step="50"
+                 value="{{ ai_settings.max_assistant_history_chars }}"
+                 class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm px-3 py-2 ltr text-left">
+        </div>
+        <div>
           <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">حداکثر زمینه (کاراکتر)</label>
           <input type="number" name="ai_max_context_chars" min="1000" max="32000" step="500"
                  value="{{ ai_settings.max_context_chars }}"

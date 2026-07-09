@@ -2404,19 +2404,24 @@ def ai_questions():
         action = (request.form.get('action') or 'answer').strip()
         if action == 'save_config':
             try:
+                from app.ai.runtime_settings import default_ai_settings
+                ai_def = default_ai_settings()
                 patch = {
                     'enabled': request.form.get('ai_enabled') == '1',
                     'escalation_sms_enabled': request.form.get('ai_escalation_sms_enabled') == '1',
-                    'min_interval_sec': float(request.form.get('ai_min_interval_sec') or 4),
-                    'dedup_ttl_sec': int(request.form.get('ai_dedup_ttl_sec') or 180),
-                    'max_history': int(request.form.get('ai_max_history') or 12),
-                    'max_msg_chars': int(request.form.get('ai_max_msg_chars') or 2500),
-                    'max_context_chars': int(request.form.get('ai_max_context_chars') or 9000),
-                    'max_tokens': int(request.form.get('ai_max_tokens') or 1024),
-                    'temperature': float(request.form.get('ai_temperature') or 0.5),
-                    'public_ctx_ttl_sec': int(request.form.get('ai_public_ctx_ttl_sec') or 300),
-                    'partner_ctx_ttl_sec': int(request.form.get('ai_partner_ctx_ttl_sec') or 120),
-                    'min_message_chars': int(request.form.get('ai_min_message_chars') or 2),
+                    'min_interval_sec': float(request.form.get('ai_min_interval_sec') or ai_def['min_interval_sec']),
+                    'dedup_ttl_sec': int(request.form.get('ai_dedup_ttl_sec') or ai_def['dedup_ttl_sec']),
+                    'max_history': int(request.form.get('ai_max_history') or ai_def['max_history']),
+                    'max_msg_chars': int(request.form.get('ai_max_msg_chars') or ai_def['max_msg_chars']),
+                    'max_assistant_history_chars': int(
+                        request.form.get('ai_max_assistant_history_chars') or ai_def['max_assistant_history_chars']
+                    ),
+                    'max_context_chars': int(request.form.get('ai_max_context_chars') or ai_def['max_context_chars']),
+                    'max_tokens': int(request.form.get('ai_max_tokens') or ai_def['max_tokens']),
+                    'temperature': float(request.form.get('ai_temperature') or ai_def['temperature']),
+                    'public_ctx_ttl_sec': int(request.form.get('ai_public_ctx_ttl_sec') or ai_def['public_ctx_ttl_sec']),
+                    'partner_ctx_ttl_sec': int(request.form.get('ai_partner_ctx_ttl_sec') or ai_def['partner_ctx_ttl_sec']),
+                    'min_message_chars': int(request.form.get('ai_min_message_chars') or ai_def['min_message_chars']),
                     'api_key': (request.form.get('ai_api_key') or '').strip(),
                     'clear_api_key': request.form.get('ai_clear_api_key') == '1',
                 }

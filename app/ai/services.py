@@ -17,8 +17,14 @@ from .config import (
     VINOR_AI_PUBLIC_PROMPT,
     get_deepseek_api_key,
 )
-from .context import append_admin_answers_block, build_partner_context, build_public_context
-from .context_cache import get_partner_context, get_public_context
+from .context import (
+    append_admin_answers_block,
+    build_partner_context_base,
+    build_partner_land_context,
+    build_public_context_base,
+    build_public_land_context,
+)
+from .context_cache import get_partner_context_base, get_public_context_base
 from .credits import (
     apply_credit_guard,
     budget_config,
@@ -32,6 +38,8 @@ from .runtime_settings import get_ai_settings
 from .escalations import consume_pending_answers, create_escalation
 from .land_cards import collect_land_codes, land_cards_payload
 from .provider_router import call_ai
+
+LAND_MARKER_RE = re.compile(r"\[\[LAND:[^\]]+\]\]\s*", re.IGNORECASE)
 
 
 def ai_config() -> dict[str, Any]:
@@ -71,6 +79,15 @@ def _friendly_deepseek_error(status: int, body: Any) -> str:
     return "خطا در دریافت پاسخ از سرویس هوش مصنوعی. لطفاً دوباره تلاش کنید."
 
 
+def _api_error_blob(body: Any) -> str:
+    if not isinstance(body, dict):
+        return str(body).lower()
+    err = body.get("error")
+    if isinstance(err, dict):
+        return f"{err.get('message') or ''} {err.get('code') or ''}".lower()
+    return str(body).lower()
+
+
 def _strip_escalate_marker(text: str) -> tuple[str, str | None]:
     if not text:
         return "", None
@@ -86,29 +103,49 @@ def _strip_escalate_marker(text: str) -> tuple[str, str | None]:
 def _build_system_prompt(
     user_key: str | None,
     audience: str | None = None,
+    *,
+    user_message: str = "",
 ) -> str:
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
-    base = VINOR_AI_PARTNER_PROMPT if aud == AUDIENCE_PARTNER else VINOR_AI_PUBLIC_PROMPT
     if not user_key:
-        return base
+        return ""
     max_ctx = budget_config()["max_context_chars"]
     try:
         if aud == AUDIENCE_PARTNER:
-            ctx = get_partner_context(
+            base = get_partner_context_base(
                 user_key,
-                lambda: build_partner_context(user_key),
-            )[:max_ctx]
+                lambda: build_partner_context_base(user_key),
+            )
+            land_ctx = build_partner_land_context(user_key, user_message)
+            ctx = base
+            if land_ctx:
+                ctx = f"{base}\n{land_ctx}"
         else:
-            ctx = get_public_context(build_public_context)[:max_ctx]
+            base = get_public_context_base(build_public_context_base)
+            land_ctx = build_public_land_context(user_message)
+            ctx = base
+            if land_ctx:
+                ctx = f"{base}\n{land_ctx}"
         notes = consume_pending_answers(user_key, audience=aud)
         ctx = append_admin_answers_block(ctx, notes)
-        return f"{base}\n\n{ctx}"
+        return ctx[:max_ctx]
     except Exception as exc:
         try:
             current_app.logger.warning("AI context build failed: %s", exc)
         except Exception:
             pass
-        return base
+        return ""
+
+
+def _trim_history_content(role: str, content: str, cfg: dict[str, Any]) -> str:
+    text = (content or "").strip()
+    if role == "assistant":
+        text = LAND_MARKER_RE.sub("", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        limit = int(cfg.get("max_assistant_history_chars") or cfg["max_msg_chars"])
+    else:
+        limit = int(cfg["max_msg_chars"])
+    return text[:limit]
 
 
 def _build_messages(
@@ -118,16 +155,20 @@ def _build_messages(
     user_key: str | None = None,
     audience: str | None = None,
 ) -> list[dict[str, str]]:
+    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
     cfg = budget_config()
-    messages: list[dict[str, str]] = [
-        {"role": "system", "content": _build_system_prompt(user_key, audience)},
-    ]
+    base_prompt = VINOR_AI_PARTNER_PROMPT if aud == AUDIENCE_PARTNER else VINOR_AI_PUBLIC_PROMPT
+    messages: list[dict[str, str]] = [{"role": "system", "content": base_prompt}]
+    if user_key:
+        ctx = _build_system_prompt(user_key, audience, user_message=text)
+        if ctx:
+            messages.append({"role": "system", "content": ctx})
     if history:
         for item in history[-cfg["max_history"] :]:
             if not isinstance(item, dict):
                 continue
             role = str(item.get("role") or "").strip()
-            content = str(item.get("content") or "").strip()[: cfg["max_msg_chars"]]
+            content = _trim_history_content(role, str(item.get("content") or ""), cfg)
             if role in ("user", "assistant") and content:
                 messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": text[: cfg["max_msg_chars"]]})
@@ -203,6 +244,7 @@ def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
             "error": err_msg,
             "error_code": "deepseek_api",
         }
+        blob = _api_error_blob(body)
         if resp.status_code == 402 or "insufficientbalance" in blob:
             mark_api_balance_depleted()
             out["balance_depleted"] = True
@@ -221,6 +263,21 @@ def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
         return {"ok": False, "error": "پاسخی از مدل دریافت نشد."}
 
     usage = body.get("usage") if isinstance(body, dict) else None
+    if isinstance(usage, dict):
+        try:
+            hit = int(usage.get("prompt_cache_hit_tokens") or 0)
+            miss = int(usage.get("prompt_cache_miss_tokens") or 0)
+            prompt_tok = usage.get("prompt_tokens")
+            if hit or miss or prompt_tok:
+                current_app.logger.info(
+                    "DeepSeek tokens | prompt=%s cache_hit=%s cache_miss=%s completion=%s",
+                    prompt_tok,
+                    hit,
+                    miss,
+                    usage.get("completion_tokens"),
+                )
+        except Exception:
+            pass
     return {
         "ok": True,
         "reply": reply,

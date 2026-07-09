@@ -1,6 +1,7 @@
 """ساخت زمینهٔ داخلی وینور برای چت AI همکار."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.utils.storage import (
@@ -12,6 +13,57 @@ from app.utils.storage import (
     load_settings,
 )
 from app.utils.dates import is_ad_expired
+
+_LAND_QUERY_RE = re.compile(r"[a-z]{2,}[-_]?\d+", re.I)
+_LAND_KEYWORDS = (
+    "فایل",
+    "ملک",
+    "زمین",
+    "ویلا",
+    "باغ",
+    "کد",
+    "قیمت",
+    "متر",
+    "محله",
+    "آگهی",
+    "اختصاصی",
+    "عمومی",
+)
+
+
+def _needs_land_context(query: str) -> bool:
+    q = (query or "").strip().lower()
+    if not q:
+        return False
+    if _LAND_QUERY_RE.search(q):
+        return True
+    return any(k in q for k in _LAND_KEYWORDS)
+
+
+def _land_matches_query(land: dict[str, Any], query: str) -> bool:
+    q = (query or "").strip().lower()
+    if not q:
+        return False
+    code = str(land.get("code") or "").strip().lower()
+    if code and code in q:
+        return True
+    if code and _LAND_QUERY_RE.search(q):
+        for m in _LAND_QUERY_RE.findall(q):
+            if m.lower() in code or code in m.lower():
+                return True
+    title = str(land.get("title") or "").strip().lower()
+    if title and len(title) >= 3 and title in q:
+        return True
+    city = str(land.get("city") or "").strip().lower()
+    if city and len(city) >= 2 and city in q:
+        return True
+    loc = str(land.get("location") or "").strip().lower()
+    if loc and len(loc) >= 3 and loc in q:
+        return True
+    for word in re.findall(r"[\w\u0600-\u06ff]{3,}", q):
+        if word in title or word in city or word in loc:
+            return True
+    return False
 
 
 def _norm_phone(phone: str) -> str:
@@ -57,7 +109,13 @@ def _fmt_price(val: Any) -> str:
         return str(val or "—")
 
 
-def _land_summary(land: dict[str, Any], *, assigned: bool, show_commission: bool = True) -> str:
+def _land_summary(
+    land: dict[str, Any],
+    *,
+    assigned: bool,
+    show_commission: bool = True,
+    compact: bool = True,
+) -> str:
     code = str(land.get("code") or "").strip()
     title = str(land.get("title") or "—").strip()
     city = str(land.get("city") or "").strip()
@@ -70,20 +128,26 @@ def _land_summary(land: dict[str, Any], *, assigned: bool, show_commission: bool
         str(land.get("_assignment_status") or "active").lower(),
         str(land.get("_assignment_status") or "فعال"),
     )
-    expired = "منقضی" if land.get("_is_expired") else "معتبر"
+    prefix = "اختصاصی" if assigned else "عمومی"
     pct = land.get("_commission_pct")
     comm = land.get("_commission_amount")
-    comm_line = ""
+    comm_bit = ""
     if show_commission and (pct or comm):
-        comm_line = f" | پورسانت: {pct or '—'}٪ → {_fmt_price(comm)} تومان"
+        comm_bit = f" | پورسانت {_fmt_price(comm)}ت"
+    if compact:
+        area = built or land_area or "—"
+        return (
+            f"[{prefix}] {code} | {title} | {city or '—'}/{loc or '—'} | "
+            f"{cat or '—'} | {price}ت | {area}م | {st}{comm_bit}"
+        )
+    expired = "منقضی" if land.get("_is_expired") else "معتبر"
     desc = str(land.get("description") or land.get("desc") or "").strip()
-    if len(desc) > 280:
-        desc = desc[:277] + "…"
-    prefix = "اختصاصی" if assigned else "عمومی"
+    if len(desc) > 120:
+        desc = desc[:117] + "…"
     lines = [
         f"[{prefix}] کد:{code} | {title}",
         f"  شهر:{city or '—'} | محله:{loc or '—'} | نوع:{cat or '—'}",
-        f"  قیمت:{price} تومان | بنا:{built or '—'}م | زمین:{land_area or '—'}م | وضعیت:{st} | {expired}{comm_line}",
+        f"  قیمت:{price} ت | بنا:{built or '—'}م | زمین:{land_area or '—'}م | {st} | {expired}{comm_bit}",
     ]
     if desc:
         lines.append(f"  توضیح: {desc}")
@@ -133,10 +197,10 @@ def _assigned_lands(phone: str) -> list[dict[str, Any]]:
         attach_express_land_commission(item)
         out.append(item)
     out.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
-    return out[:20]
+    return out[:12]
 
 
-def _public_lands_sample(limit: int = 12) -> list[dict[str, Any]]:
+def _public_lands_sample(limit: int = 8) -> list[dict[str, Any]]:
     try:
         lands = load_express_lands_cached() or []
     except Exception:
@@ -144,76 +208,114 @@ def _public_lands_sample(limit: int = 12) -> list[dict[str, Any]]:
     return list(lands[:limit])
 
 
-def build_partner_context(phone: str) -> str:
-    """متن زمینه برای تزریق به system prompt."""
+def build_partner_context_base(phone: str) -> str:
+    """بخش ثابت زمینه — قابل کش برای هر همکار."""
     settings = load_settings() or {}
     admin_phone = str(settings.get("partner_application_admin_phone") or "09121471301").strip()
     cities = load_active_cities() or []
     assigned = _assigned_lands(phone)
+    return "\n".join(
+        [
+            "=== اطلاعات داخلی وینور ===",
+            _partner_profile_block(phone),
+            f"تعداد فایل اختصاصی: {len(assigned)}",
+            f"شهرهای فعال: {', '.join(str(c) for c in cities[:12])}",
+            f"پشتیبانی: {admin_phone}",
+            "راهنما: همکار فایل‌های وینور را بازاریابی می‌کند؛ اختصاصی=فقط این همکار؛ عمومی=همه همکاران.",
+        ]
+    )
+
+
+def _select_lands_for_query(
+    lands: list[dict[str, Any]],
+    query: str,
+    *,
+    default_limit: int,
+    match_limit: int,
+) -> list[dict[str, Any]]:
+    if not lands:
+        return []
+    q = (query or "").strip()
+    if q:
+        matched = [l for l in lands if _land_matches_query(l, q)]
+        if matched:
+            return matched[:match_limit]
+    return lands[:default_limit]
+
+
+def build_partner_land_context(phone: str, user_message: str = "") -> str:
+    """فقط وقتی سوال به فایل/ملک مربوط است — خلاصهٔ فشرده."""
+    if not _needs_land_context(user_message):
+        return ""
+    assigned = _assigned_lands(phone)
     public = _public_lands_sample()
-    parts = [
-        "=== اطلاعات داخلی وینور (فقط از همین بخش پاسخ بده) ===",
-        _partner_profile_block(phone),
-        f"شهرهای فعال همکاری: {', '.join(str(c) for c in cities[:20])}",
-        f"پشتیبانی تماس: {admin_phone}",
-        "",
-        "راهنمای کوتاه همکاری اکسپرس:",
-        "- همکار فایل‌های تأییدشده وینور را بازاریابی می‌کند و در صورت فروش پورسانت می‌گیرد.",
-        "- فایل‌های «اختصاصی» فقط به این همکار انتساب شده‌اند؛ «عمومی» برای همه همکاران قابل مشاهده است.",
-        "- وضعیت معامله: فعال، در حال معامله، فروخته شد و غیره در هر فایل آمده است.",
-        "- برای پشتیبانی انسانی: تماس با شماره بالا یا سوال در همین چت (در صورت نبود پاسخ، تیم وینور پاسخ می‌دهد).",
-        "",
-    ]
-    parts.append(f"--- فایل‌های اختصاصی همکار ({len(assigned)} مورد) ---")
-    if assigned:
-        for land in assigned:
-            parts.append(_land_summary(land, assigned=True))
-    else:
-        parts.append("(فعلاً فایل اختصاصی ندارد)")
-    parts.append("")
-    parts.append(f"--- نمونه فایل‌های عمومی اکسپرس ({len(public)} مورد) ---")
-    if public:
-        for land in public:
+    picked_assigned = _select_lands_for_query(
+        assigned, user_message, default_limit=4, match_limit=6
+    )
+    picked_public = _select_lands_for_query(
+        public, user_message, default_limit=3, match_limit=4
+    )
+    parts: list[str] = []
+    if picked_assigned:
+        parts.append(f"--- فایل‌های اختصاصی ({len(picked_assigned)}/{len(assigned)}) ---")
+        for land in picked_assigned:
+            parts.append(_land_summary(land, assigned=True, compact=True))
+    if picked_public:
+        parts.append(f"--- فایل‌های عمومی ({len(picked_public)}) ---")
+        for land in picked_public:
             item = dict(land)
             item["_assignment_status"] = "public"
             item["_is_expired"] = is_ad_expired(land)
-            parts.append(_land_summary(item, assigned=False))
-    else:
-        parts.append("(فایلی در لیست عمومی نیست)")
+            parts.append(_land_summary(item, assigned=False, compact=True))
     return "\n".join(parts)
 
 
-def build_public_context() -> str:
-    """زمینه برای کاربر عادی — فقط آگهی‌های عمومی و راهنمای خریدار."""
+def build_partner_context(phone: str, user_message: str = "") -> str:
+    """متن زمینه برای تزریق به system prompt."""
+    parts = [build_partner_context_base(phone)]
+    land_ctx = build_partner_land_context(phone, user_message)
+    if land_ctx:
+        parts.append(land_ctx)
+    return "\n".join(parts)
+
+
+def build_public_context_base() -> str:
     settings = load_settings() or {}
     admin_phone = str(settings.get("partner_application_admin_phone") or "09121471301").strip()
     cities = load_active_cities() or []
-    public = _public_lands_sample(25)
-    parts = [
-        "=== اطلاعات داخلی وینور برای کاربر عادی (فقط از همین بخش پاسخ بده) ===",
-        "نقش مخاطب: کاربر عادی / خریدار / علاقه‌مند — نه همکار.",
-        f"شهرهای فعال: {', '.join(str(c) for c in cities[:20])}",
-        f"پشتیبانی تماس: {admin_phone}",
-        "",
-        "درباره وینور:",
-        "- پلتفرم موبایل‌محور خرید و فروش زمین، باغ و ویلا با پرونده‌های تأییدشده.",
-        "- آگهی‌های نمایش‌داده‌شده در اکسپرس توسط تیم وینور بررسی شده‌اند.",
-        "",
-        "راهنمای کوتاه خرید امن:",
-        "- مدارک ملک (سند، کد رهگیری و …) را بررسی کنید.",
-        "- بازدید حضوری و مشاوره با تیم وینور پیش از پرداخت.",
-        "- برای همکاری در فروش و پورسانت: ثبت‌نام در بخش همکاری وینور (نه در این چت).",
-        "",
-        f"--- آگهی‌های عمومی اکسپرس ({len(public)} مورد) ---",
-    ]
-    if public:
-        for land in public:
-            item = dict(land)
-            item["_assignment_status"] = "public"
-            item["_is_expired"] = is_ad_expired(land)
-            parts.append(_land_summary(item, assigned=False, show_commission=False))
-    else:
-        parts.append("(فعلاً آگهی فعالی در لیست نیست)")
+    return "\n".join(
+        [
+            "=== اطلاعات وینور (کاربر عادی) ===",
+            f"شهرهای فعال: {', '.join(str(c) for c in cities[:12])}",
+            f"پشتیبانی: {admin_phone}",
+            "وینور: خرید/فروش زمین، باغ و ویلا با پرونده تأییدشده.",
+            "خرید امن: بررسی سند، بازدید حضوری، پرداخت مرحله‌ای.",
+        ]
+    )
+
+
+def build_public_land_context(user_message: str = "") -> str:
+    if not _needs_land_context(user_message):
+        return ""
+    public = _public_lands_sample(10)
+    picked = _select_lands_for_query(public, user_message, default_limit=4, match_limit=6)
+    if not picked:
+        return ""
+    parts = [f"--- آگهی‌های عمومی ({len(picked)}) ---"]
+    for land in picked:
+        item = dict(land)
+        item["_assignment_status"] = "public"
+        item["_is_expired"] = is_ad_expired(land)
+        parts.append(_land_summary(item, assigned=False, show_commission=False, compact=True))
+    return "\n".join(parts)
+
+
+def build_public_context(user_message: str = "") -> str:
+    """زمینه برای کاربر عادی — فقط آگهی‌های مرتبط با سوال."""
+    parts = [build_public_context_base()]
+    land_ctx = build_public_land_context(user_message)
+    if land_ctx:
+        parts.append(land_ctx)
     return "\n".join(parts)
 
 
