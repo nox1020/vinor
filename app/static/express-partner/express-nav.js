@@ -21,9 +21,9 @@
   /** @type {Record<string, {tab: string, depth: number, bottomNav?: boolean, prefetch?: boolean}>} */
   var ROUTE_REGISTRY = {
     '/express/partner/home': { tab: 'home', depth: 0, bottomNav: true, prefetch: true },
-    '/express/partner/files': { tab: 'files', depth: 0, bottomNav: true, prefetch: true },
+    '/express/partner/files': { tab: 'home', depth: 0, bottomNav: true, prefetch: true },
     '/express/partner/dashboard': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
-    '/express/partner/commissions': { tab: 'commissions', depth: 0, bottomNav: true, prefetch: true },
+    '/express/partner/commissions': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/profile': { tab: 'profile', depth: 0, bottomNav: true, prefetch: true },
     '/express/partner/profile/edit': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/favorites': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -41,10 +41,10 @@
     '/express/partner/routine': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/legal/privacy': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/legal/terms': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/cooperation-terms': { tab: 'files', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/cooperation-terms': { tab: 'home', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/apply': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/thanks': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
-    '/express/partner/commissions/transactions': { tab: 'commissions', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/commissions/transactions': { tab: 'profile', depth: 2, bottomNav: true, prefetch: false },
     '/express/partner/ai': { tab: '', depth: 1, bottomNav: false, prefetch: false },
     '/express/partner/login': { tab: '', depth: 0, bottomNav: false, prefetch: true },
     '/express/partner/login/otp': { tab: '', depth: 1, bottomNav: false, prefetch: false }
@@ -513,10 +513,8 @@
     try {
       if (!isLoggedInUser()) return;
       var peers = {
-        home: ['/express/partner/files', '/express/partner/commissions', '/express/partner/profile'],
-        files: ['/express/partner/home', '/express/partner/commissions', '/express/partner/profile'],
-        commissions: ['/express/partner/home', '/express/partner/files', '/express/partner/profile'],
-        profile: ['/express/partner/home', '/express/partner/files', '/express/partner/commissions', '/express/partner/favorites', '/express/partner/notifications']
+        home: ['/express/partner/profile'],
+        profile: ['/express/partner/home', '/express/partner/favorites', '/express/partner/notifications']
       };
       var list = peers[navKey];
       if (!list || !list.length) return;
@@ -527,7 +525,7 @@
   }
 
   function tabIndexForKey(key) {
-    var order = ['home', 'files', 'commissions', 'profile'];
+    var order = ['home', 'profile'];
     var i = order.indexOf(key);
     return i === -1 ? -1 : i;
   }
@@ -624,10 +622,7 @@
   }
 
   var AI_MAIN_TAB_PATHS = {
-    '/express/partner/home': true,
-    '/express/partner/files': true,
-    '/express/partner/commissions': true,
-    '/express/partner/profile': true
+    '/express/partner/home': true
   };
 
   function syncAiFabForPath(pathname) {
@@ -1687,7 +1682,7 @@
 
   function prefetchMainTabs() {
     try {
-      var paths = ['/express/partner/home', '/express/partner/files', '/express/partner/profile', '/express/partner/commissions'];
+      var paths = ['/express/partner/home', '/express/partner/profile'];
       if (isLoggedInUser()) {
         paths.push('/express/partner/favorites', '/express/partner/notifications');
       }

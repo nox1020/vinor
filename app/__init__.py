@@ -380,9 +380,6 @@ def create_app() -> Flask:
         ep = (request.endpoint or "") if request else ""
         show_ai_fab = ep in (
             "express_partner.home",
-            "express_partner.files",
-            "express_partner.commissions",
-            "express_partner.profile",
         )
         return {
             "VAPID_PUBLIC_KEY": app.config.get("VAPID_PUBLIC_KEY", ""),

@@ -277,12 +277,10 @@
   </a>
   {% endif %}
   <div class="tg-tabbar-pill mx-auto w-full max-w-full px-3 py-1">
-    <div id="bottomNavItems" class="grid grid-cols-4 gap-0 min-h-[52px] w-full items-center">
+    <div id="bottomNavItems" class="grid grid-cols-2 gap-0 min-h-[52px] w-full items-center">
       {% set profile_nav_url = url_for('express_partner.profile') %}
       {% set nav_items = [
         {'key': 'home', 'endpoint': 'express_partner.home', 'icon': 'fa-home', 'label': 'داشبورد'},
-        {'key': 'files', 'endpoint': 'express_partner.files', 'icon': 'fa-folder-open', 'label': 'فایل‌ها'},
-        {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not session.get('user_phone')},
         {'key': 'profile', 'url': profile_nav_url, 'icon': 'fa-user', 'label': 'پروفایل'}
       ] %}
       {% for item in nav_items %}
@@ -943,9 +941,9 @@
     try {
       path = (window.location.pathname || '').replace(/\/$/, '') || '';
     } catch (_) {}
-    if (path.indexOf('/express/partner/commissions') === 0) return 'commissions';
+    if (path.indexOf('/express/partner/commissions') === 0) return 'profile';
     if (path === '/express/partner/home' || path === '/express/partner/dashboard') return 'home';
-    if (path === '/express/partner/files' || path === '/express/partner/cooperation-terms') return 'files';
+    if (path === '/express/partner/files' || path === '/express/partner/cooperation-terms') return 'home';
     for (let i = 0; i < PROFILE_NAV_PATHS.length; i++) {
       const base = PROFILE_NAV_PATHS[i];
       if (path === base || path.indexOf(base + '/') === 0) return 'profile';
@@ -960,12 +958,17 @@
 
   function sanitizeMenu(menuItems) {
     return (menuItems || []).filter(function (item) {
-      return item && item.key !== 'routine' && item.key !== 'favorites' && item.key !== 'notifications';
+      return item &&
+        item.key !== 'routine' &&
+        item.key !== 'favorites' &&
+        item.key !== 'notifications' &&
+        item.key !== 'files' &&
+        item.key !== 'commissions';
     });
   }
 
   function menuMatchesSession(menuItems) {
-    const loginKeys = ['commissions'];
+    const loginKeys = [];
     return (menuItems || []).every(function (item) {
       if (!item || loginKeys.indexOf(item.key) === -1) return true;
       return userLoggedIn ? item.disabled !== true : item.disabled === true;

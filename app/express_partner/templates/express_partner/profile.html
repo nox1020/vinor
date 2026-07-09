@@ -144,6 +144,7 @@
         {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری', 'برای تبدیل به همکار اکسپرس درخواست دهید', tour='apply-link') }}
         {% endif %}
 
+        {{ profile_menu_row(url_for('express_partner.commissions'), 'fa-wallet', 'کیف پول', 'موجودی و تراکنش‌های شما', tour='commissions-link') }}
         {{ profile_menu_row(url_for('express_partner.requests'), 'fa-clipboard-list', 'بازدیدها', visits_subtitle, tour='requests-link') }}
         {{ profile_menu_row(url_for('express_partner.favorites'), 'fa-bookmark', 'نشان‌ها', 'زمین‌های ذخیره‌شده', tour='favorites-link', badge_key='favorites') }}
 
