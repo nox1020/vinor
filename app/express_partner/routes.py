@@ -2456,6 +2456,24 @@ def _home_suggested_files(
             sold=False,
             commission_amount=int(land.get("_commission_amount") or 0),
         )
+        # CTA مستقیم: شیت بازدید یا معامله را با ?action باز می‌کند
+        cta_action = "visit"
+        cta_label = "درخواست بازدید"
+        cta_icon = "fa-calendar-days"
+        if st == "in_transaction":
+            cta_action = "release"
+            cta_label = "رفع معامله"
+            cta_icon = "fa-check-circle"
+        elif str(stage_label) in ("بازدید انجام شد", "در حال معامله"):
+            cta_action = "deal"
+            cta_label = "درخواست معامله"
+            cta_icon = "fa-handshake"
+        elif str(stage_label) in ("بازدید تأییدشد",):
+            # هنوز باید بازدید انجام شود — جزئیات فایل با اکشن پیش‌فرض
+            cta_action = "visit"
+            cta_label = "شروع بازدید"
+            cta_icon = "fa-map-marker-alt"
+
         candidates.append({
             'code': code,
             'title': (land.get('title') or '—').strip(),
@@ -2469,9 +2487,10 @@ def _home_suggested_files(
             'more_url': url_for('express_partner.files'),
             'stage_label': stage_label,
             'funnel_steps': funnel.get('funnel_steps') or [],
-            'cta_label': 'درخواست بازدید',
-            'cta_url': url_for('express_partner.land_detail', code=code),
-            'cta_icon': 'fa-calendar-days',
+            'cta_label': cta_label,
+            'cta_url': url_for('express_partner.land_detail', code=code, action=cta_action),
+            'cta_icon': cta_icon,
+            'cta_action': cta_action,
             'show_fav': True,
             'coach_tip': tip,
             'coach_prompt': build_coach_chat_prompt(
@@ -2497,6 +2516,11 @@ def _home_suggested_files(
                 row['cta_icon'] = act.get('icon') or row.get('cta_icon') or 'fa-phone'
                 if act.get('key') == 'contact_customer':
                     row['stage_label'] = 'تماس فوری'
+                elif act.get('key') == 'visit_today':
+                    # مستقیم برو به فایل و شیت مرتبط با بازدید
+                    row['cta_url'] = url_for(
+                        'express_partner.land_detail', code=code, action='visit'
+                    )
                 break
         out.append(row)
     return out

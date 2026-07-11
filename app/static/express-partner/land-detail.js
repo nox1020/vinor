@@ -1769,12 +1769,21 @@
     var trigger = document.getElementById('landFabTrigger');
     if (!dock || !trigger) return;
     var count = countFabInteractiveItems();
-    var direct = count <= 1;
     var callBtn = document.querySelector('.ld-fab-menu__items [data-land-open-contact]');
     var txBtn = document.getElementById('landTxToggleBtn');
     var callVisible = callBtn && callBtn.closest('.ld-fab-menu__item:not(.hidden)');
+    var primary = getPrimaryTxActionButton();
+    // بازدید/معامله همیشه مستقیم — حتی اگر تماس هم در منو باشد
+    var direct = count <= 1 || !!primary;
     dock.dataset.fabDirect = direct ? '1' : '0';
-    if (direct && count === 1) {
+    if (primary) {
+      var labelEl = primary.closest('.ld-fab-menu__item') &&
+        primary.closest('.ld-fab-menu__item').querySelector('.ld-fab-menu__label');
+      trigger.setAttribute(
+        'aria-label',
+        labelEl ? String(labelEl.textContent || '').trim() || 'عملیات فایل' : 'عملیات فایل'
+      );
+    } else if (direct && count === 1) {
       if (callVisible) {
         trigger.setAttribute('aria-label', 'تماس');
       } else if (txBtn && txBtn.closest('.ld-fab-menu__item:not(.hidden)')) {
@@ -1787,6 +1796,25 @@
       trigger.setAttribute('aria-label', callVisible ? 'تماس و عملیات فایل' : 'عملیات فایل');
     }
     syncFabTriggerIcon();
+  }
+
+  function getPrimaryTxActionButton() {
+    var txBtn = document.getElementById('landTxToggleBtn');
+    if (!txBtn) return null;
+    if (!txBtn.closest('.ld-fab-menu__item:not(.hidden)')) return null;
+    if (txBtn.getAttribute('aria-disabled') === 'true' || txBtn.disabled) return null;
+    var mode = String(txBtn.getAttribute('data-land-tx-mode') || '').trim();
+    // اکشن‌های اصلی که باید مستقیم شیت/ثبت را باز کنند
+    if (
+      mode === 'visit' ||
+      mode === 'revisit' ||
+      mode === 'deal' ||
+      mode === 'visit_done' ||
+      mode === 'release'
+    ) {
+      return txBtn;
+    }
+    return null;
   }
 
   function closeFabMenu() {
@@ -1825,6 +1853,11 @@
     function onTriggerClick(ev) {
       ev.preventDefault();
       ev.stopPropagation();
+      var primary = getPrimaryTxActionButton();
+      if (primary) {
+        primary.click();
+        return;
+      }
       if (dock.dataset.fabDirect === '1') {
         var item = dock.querySelector('.ld-fab-menu__items .ld-fab-menu__item:not(.hidden):not(.ld-fab-menu__item--status) button.ld-fab-menu__action');
         if (item) item.click();
@@ -2538,6 +2571,49 @@
     showTxToast(text, isError);
   }
 
+  function consumeDeepLinkAction() {
+    var action = '';
+    var params = null;
+    try {
+      params = new URLSearchParams(window.location.search || '');
+      action = String(params.get('action') || params.get('tx') || '').trim().toLowerCase();
+    } catch (_) {
+      action = '';
+    }
+    if (!action) return;
+
+    try {
+      if (!params) params = new URLSearchParams(window.location.search || '');
+      params.delete('action');
+      params.delete('tx');
+      var q = params.toString();
+      var next = window.location.pathname + (q ? '?' + q : '') + (window.location.hash || '');
+      window.history.replaceState(window.history.state || {}, '', next);
+    } catch (_) {}
+
+    setTimeout(function () {
+      if (action === 'visit' || action === 'revisit') {
+        openVisitModal(true);
+        return;
+      }
+      if (action === 'deal') {
+        var btn = document.getElementById('landTxToggleBtn');
+        var mode = (btn && btn.getAttribute('data-land-tx-mode')) || '';
+        if (mode === 'deal') {
+          openLandModal('landDealModal');
+        } else if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') {
+          btn.click();
+        } else {
+          openLandModal('landDealModal');
+        }
+        return;
+      }
+      if (action === 'release') {
+        openLandModal('landReleaseModal');
+      }
+    }, 60);
+  }
+
   function initLandDetailDownload(cfg) {
     var downloadBtn = document.getElementById('landDetailDownloadBtn');
     var downloadWrap = downloadBtn && downloadBtn.closest('.ld-download-wrap');
@@ -2909,6 +2985,7 @@
     initLandFlashes(cfg);
     initPartnerMarketing(cfg);
     initDescToggle();
+    consumeDeepLinkAction();
 
     if (typeof window.vinorSyncFavButtons === 'function') {
       try { window.vinorSyncFavButtons(root); } catch (e) { /* ignore */ }

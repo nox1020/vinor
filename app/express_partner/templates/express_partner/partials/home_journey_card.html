@@ -351,7 +351,12 @@
     {% endif %}
     <a href="{{ card.cta_url or card.detail_url }}"
        {% set _cta = (card.cta_url or card.detail_url or '')|string %}
-       {% if _cta.startswith('tel:') %}{% else %}data-vinor-express-nav{% endif %}
+       {% if _cta.startswith('tel:') or _cta.startswith('mailto:') or _cta.startswith('sms:') %}
+       data-vinor-direct-action="1"
+       {% elif 'action=' in _cta %}
+       data-vinor-express-nav
+       data-vinor-direct-action="tx"
+       {% else %}data-vinor-express-nav{% endif %}
        class="vn-journey-card__cta">
       <i class="fas {{ card.cta_icon|default('fa-calendar-days') }}" aria-hidden="true"></i>
       {{ card.cta_label|default('درخواست بازدید') }}

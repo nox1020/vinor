@@ -1524,6 +1524,25 @@
       if (typeof e.button === 'number' && e.button !== 0) return;
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
 
+      // VinorApp: tel/mailto را با location اجبار کن تا WebView Intent بگیرد
+      var external = e.target.closest && e.target.closest(
+        'a[href^="tel:"], a[href^="mailto:"], a[href^="sms:"], a[href^="smsto:"]'
+      );
+      if (external) {
+        var extHref = external.getAttribute('href') || '';
+        if (extHref && /VinorApp\//i.test(navigator.userAgent || '')) {
+          e.preventDefault();
+          e.stopPropagation();
+          try {
+            window.location.href = extHref;
+          } catch (_) {
+            try { window.open(extHref, '_self'); } catch (__) {}
+          }
+          return;
+        }
+        return;
+      }
+
       var card = e.target.closest && e.target.closest('.express-card[data-href]');
       if (card && !e.target.closest('[data-fav-code]')) {
         var cardHref = card.getAttribute('data-href');
@@ -1550,6 +1569,8 @@
         return;
       }
       if (!href || href === '#' || href.indexOf('javascript:') === 0) return;
+      // تماس/ایمیل/پیامک — هرگز soft-nav نشود؛ مستقیم به سیستم
+      if (/^(tel|mailto|sms|smsto):/i.test(href)) return;
 
       if (!isPartnerUrl(href)) return;
 
