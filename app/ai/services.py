@@ -390,10 +390,12 @@ def _run_agent_loop(
             ui = tool_out.get("ui_action")
             if isinstance(ui, dict):
                 agent_actions.append(ui)
-            for code in tool_out.get("land_codes") or []:
-                c = str(code).strip()
-                if c and c not in tool_land_codes:
-                    tool_land_codes.append(c)
+            # کارت فایل فقط از جستجو — نه از اکشن‌های فروش/آگهی
+            if name == "search_lands":
+                for code in tool_out.get("land_codes") or []:
+                    c = str(code).strip()
+                    if c and c not in tool_land_codes:
+                        tool_land_codes.append(c)
             model_payload = tool_out.get("model_result")
             if model_payload is None:
                 model_payload = {
@@ -559,6 +561,14 @@ def generate_reply(
     agent_actions = [
         a for a in (result.get("agent_actions") or []) if isinstance(a, dict)
     ]
+    # اگر کارت تأیید اکشن هست، کارت فایل همان کد را دوباره نشان نده
+    action_codes = {
+        str(a.get("land_code") or "").strip()
+        for a in agent_actions
+        if str(a.get("type") or "").startswith("confirm_")
+    }
+    if action_codes:
+        land_codes = [c for c in land_codes if c not in action_codes]
     escalated = False
     escalation_id = ""
 

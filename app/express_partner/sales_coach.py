@@ -201,7 +201,6 @@ def deliver_voided_encouragement(
                 "",
                 chat_body,
                 thread_id=tid,
-                assistant_land_codes=[land_code] if land_code else None,
                 audience=AUDIENCE_PARTNER,
             )
             out["chat"] = True

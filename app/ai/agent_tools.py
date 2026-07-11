@@ -43,7 +43,7 @@ def agent_system_hint(voice: str | None) -> str:
         )
     return (
         "ابزارها (اجباری وقتی لازم است): "
-        "1) search_lands — جستجوی فایل؛ در پاسخ [[LAND:کد]]. "
+        "1) search_lands — جستجوی فایل؛ فقط برای نتیجه جستجو [[LAND:کد]]. "
         "2) suggest_next_action — کار بعدی داشبورد. "
         "3) draft_listing_copy — متن دیوار/اینستا. "
         "4) propose_visit_request — پیشنهاد بازدید (تأیید در کارت). "
@@ -51,6 +51,7 @@ def agent_system_hint(voice: str | None) -> str:
         "6) propose_deal — پیشنهاد معامله/فروش نهایی (تأیید در کارت). "
         "7) propose_release_deal — پیشنهاد بستن/انصراف معامله در انتظار (تأیید در کارت). "
         "همهٔ اکشن‌های فروش را از همین چت پیش ببر؛ کاربر را به صفحه فایل نفرست مگر برای دیدن عکس/جزئیات. "
+        "[[LAND:کد]] فقط وقتی کاربر فایل می‌خواهد ببیند یا نتیجه جستجو را پیشنهاد می‌کنی — نه در هر پیام مأموریت. "
         "وقتی کاربر آگهی می‌خواهد draft_listing_copy را صدا بزن. "
         "هرگز ادعا نکن ثبت شد مگر بعد از تأیید کارت. "
         "اگر اطلاعات مشتری/تاریخ ناقص است اول بپرس."
@@ -506,13 +507,13 @@ def _tool_draft_listing(
         "instruction": (
             "متن‌های copies را عیناً در پاسخ برای کپی کاربر بیاور. "
             "بگو دیوار و اینستا را امروز انجام دهد و هر تماس را به بازدید تبدیل کند. "
-            "در پایان [[LAND:کد]] بگذار."
+            "کارت فایل نشان نده مگر کاربر صریحاً بخواهد فایل را ببیند."
         ),
     }
     return {
         "ok": True,
         "model_result": model,
-        "land_codes": [str(land.get("code") or code)],
+        "land_codes": [],
     }
 
 
@@ -687,7 +688,7 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
         "ok": True,
         "model_result": model,
         "ui_action": ui,
-        "land_codes": [str(payload.get("land_code") or "")],
+        "land_codes": [],
     }
 
 
@@ -847,7 +848,7 @@ def _tool_propose_simple_tx(
         "ok": True,
         "model_result": model,
         "ui_action": ui,
-        "land_codes": [code],
+        "land_codes": [],
     }
 
 

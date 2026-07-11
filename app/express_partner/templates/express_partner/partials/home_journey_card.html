@@ -1,5 +1,5 @@
-{# کارت سفر فایل — بالای خانه؛ CTA اکشن فروش از چت مأموریت #}
-{# Expects: card with code, title, detail_url, cta_chat_prompt (preferred), cta_label, coach_prompt, ... #}
+{# کارت سفر فایل — بالای خانه؛ CTA از چت؛ قابل جمع‌شدن #}
+{# Expects: card with code, title, detail_url, cta_chat_prompt, cta_label, coach_prompt, ... #}
 {% if card %}
 {% set loc = ([card.city, card.location]|select|join(' ')) if (card.city or card.location) else '' %}
 {% set steps = card.funnel_steps|default([]) %}
@@ -115,9 +115,7 @@
     color: #94a3b8;
     line-height: 1.25;
   }
-  .vn-journey-card__price-label {
-    display: none;
-  }
+  .vn-journey-card__price-label { display: none; }
   .vn-journey-card__price {
     margin: 0.05rem 0 0;
     font-size: 0.75rem;
@@ -126,7 +124,20 @@
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
   }
-
+  .vn-journey-card__comm {
+    margin: 0;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #a7f3d0;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  .vn-journey-card__compact-price {
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #4ade80;
+    font-variant-numeric: tabular-nums;
+  }
   .vn-journey-card__track {
     display: flex;
     align-items: flex-start;
@@ -196,7 +207,6 @@
   .vn-journey-card__step.is-current .vn-journey-card__step-label {
     color: #cbd5e1;
   }
-
   .vn-journey-card__actions {
     display: flex;
     align-items: center;
@@ -213,23 +223,28 @@
     color: #ddd6fe;
     display: grid;
     place-items: center;
-    text-decoration: none;
     font-size: 0.75rem;
   }
   .vn-journey-card__coach:active { filter: brightness(1.08); }
-  .vn-journey-card__more {
-    width: 2.2rem;
-    height: 2.2rem;
+  .vn-journey-card__collapse {
     flex-shrink: 0;
+    height: 2.2rem;
+    padding: 0 0.65rem;
     border-radius: 0.65rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     background: #121826;
     color: #cbd5e1;
-    display: grid;
-    place-items: center;
-    text-decoration: none;
-    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
   }
+  .vn-journey-card__collapse:active { filter: brightness(1.08); }
+  .vn-journey-card__collapse i { font-size: 0.65rem; opacity: 0.85; }
   .vn-journey-card__cta {
     flex: 1;
     min-height: 2.2rem;
@@ -247,9 +262,99 @@
   }
   .vn-journey-card__cta:active { filter: brightness(0.95); }
   .vn-journey-card__cta i { font-size: 0.7rem; }
+
+  .vn-journey-card__compact {
+    display: none;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    padding: 0.45rem 0.55rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: right;
+    cursor: pointer;
+  }
+  .vn-journey-card__compact-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 9999px;
+    background: var(--vj-purple);
+    flex-shrink: 0;
+    box-shadow: 0 0 0 3px var(--vj-purple-soft);
+  }
+  .vn-journey-card__compact-text {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+  .vn-journey-card__compact-kicker {
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: #a78bfa;
+  }
+  .vn-journey-card__compact-title {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .vn-journey-card__compact-open {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.28rem 0.55rem;
+    border-radius: 0.5rem;
+    background: rgba(124, 58, 237, 0.22);
+    color: #ddd6fe;
+    font-size: 0.65rem;
+    font-weight: 700;
+  }
+  .vn-journey-card.is-collapsed {
+    margin-bottom: 0.25rem;
+  }
+  .vn-journey-card.is-collapsed .vn-journey-card__head,
+  .vn-journey-card.is-collapsed .vn-journey-card__track,
+  .vn-journey-card.is-collapsed .vn-journey-card__actions {
+    display: none;
+  }
+  .vn-journey-card.is-collapsed .vn-journey-card__compact {
+    display: flex;
+  }
 </style>
 
-<article class="vn-journey-card" aria-label="کار بعدی روی فایل" data-tour="home-journey">
+<article class="vn-journey-card"
+         aria-label="کار بعدی روی فایل"
+         data-tour="home-journey"
+         data-vn-journey-card
+         data-vn-journey-code="{{ card.code }}">
+  <button type="button"
+          class="vn-journey-card__compact"
+          data-vn-journey-expand
+          aria-expanded="false"
+          aria-label="باز کردن کارت مأموریت">
+    <span class="vn-journey-card__compact-dot" aria-hidden="true"></span>
+    <span class="vn-journey-card__compact-text">
+      <span class="vn-journey-card__compact-kicker">
+        {% if card.is_mission|default(false) %}ماموریت فعال{% else %}فایل مأموریت{% endif %}
+        {% if card.stage_label %} · {{ card.stage_label }}{% endif %}
+      </span>
+      <span class="vn-journey-card__compact-title">{{ card.title }}</span>
+      {% if card.price_total %}
+      <span class="vn-journey-card__compact-price">{{ card.price_total|toman }}</span>
+      {% endif %}
+    </span>
+    <span class="vn-journey-card__compact-open">
+      باز کن
+      <i class="fas fa-chevron-down" aria-hidden="true"></i>
+    </span>
+  </button>
+
   <a href="{{ card.detail_url }}"
      data-vinor-express-nav
      class="vn-journey-card__head"
@@ -262,7 +367,6 @@
         <div class="grid h-full place-items-center text-zinc-600 text-xs font-semibold">V</div>
         {% endif %}
       </div>
-
       <div class="vn-journey-card__body">
         <div class="vn-journey-card__meta-row">
           {% if card.is_mission|default(false) %}
@@ -289,10 +393,11 @@
           <span class="truncate">{{ loc }}</span>
         </p>
         {% endif %}
-        {% if card.commission_amount and is_approved|default(false) %}
-        <p class="vn-journey-card__price">پورسانت {{ card.commission_amount|toman }}</p>
-        {% elif card.price_total %}
+        {% if card.price_total %}
         <p class="vn-journey-card__price">{{ card.price_total|toman }}</p>
+        {% endif %}
+        {% if card.commission_amount and is_approved|default(false) %}
+        <p class="vn-journey-card__comm">پورسانت {{ card.commission_amount|toman }}</p>
         {% endif %}
       </div>
     </div>
@@ -312,12 +417,14 @@
   {% endif %}
 
   <div class="vn-journey-card__actions">
-    <a href="{{ card.more_url or url_for('express_partner.home') }}"
-       data-vinor-express-nav
-       class="vn-journey-card__more"
-       aria-label="بیشتر">
-      <i class="fas fa-ellipsis" aria-hidden="true"></i>
-    </a>
+    <button type="button"
+            class="vn-journey-card__collapse"
+            data-vn-journey-collapse
+            aria-expanded="true"
+            aria-label="جمع کردن کارت مأموریت">
+      <i class="fas fa-chevron-up" aria-hidden="true"></i>
+      جمع شو
+    </button>
     {% if card.coach_prompt %}
     <button type="button"
             class="vn-journey-card__coach"
@@ -346,9 +453,10 @@
     {% endif %}
   </div>
 </article>
-{% if card.coach_prompt or card.cta_chat_prompt %}
 <script>
 (function () {
+  var STORAGE_KEY = 'vinor_journey_collapsed';
+
   function sendChatPrompt(prompt) {
     prompt = (prompt || '').trim();
     if (!prompt) return;
@@ -374,6 +482,48 @@
       } catch (_) {}
     }, 80);
   }
+
+  function setCollapsed(card, collapsed) {
+    if (!card) return;
+    card.classList.toggle('is-collapsed', !!collapsed);
+    var collapseBtn = card.querySelector('[data-vn-journey-collapse]');
+    var expandBtn = card.querySelector('[data-vn-journey-expand]');
+    if (collapseBtn) collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    if (expandBtn) expandBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    try {
+      localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0');
+    } catch (_) {}
+  }
+
+  function wireJourneyCard() {
+    var card = document.querySelector('[data-vn-journey-card]');
+    if (!card || card.getAttribute('data-collapse-wired') === '1') return;
+    card.setAttribute('data-collapse-wired', '1');
+
+    var collapseBtn = card.querySelector('[data-vn-journey-collapse]');
+    var expandBtn = card.querySelector('[data-vn-journey-expand]');
+    if (collapseBtn) {
+      collapseBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setCollapsed(card, true);
+      });
+    }
+    if (expandBtn) {
+      expandBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setCollapsed(card, false);
+      });
+    }
+
+    var preferCollapsed = false;
+    try {
+      preferCollapsed = localStorage.getItem(STORAGE_KEY) === '1';
+    } catch (_) {}
+    if (preferCollapsed) setCollapsed(card, true);
+  }
+
   function wireChatPrompts() {
     document.querySelectorAll('[data-vn-chat-prompt]').forEach(function (btn) {
       if (btn.getAttribute('data-wired') === '1') return;
@@ -385,12 +535,19 @@
       });
     });
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', wireChatPrompts);
-  } else {
+
+  function boot() {
+    wireJourneyCard();
     wireChatPrompts();
   }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+  document.addEventListener('vinor:express-page-swap', function () {
+    setTimeout(boot, 0);
+  });
 })();
 </script>
-{% endif %}
 {% endif %}

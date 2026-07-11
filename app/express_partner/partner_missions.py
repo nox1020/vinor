@@ -315,7 +315,6 @@ def _seed_mission_chat(phone: str, land: Dict[str, Any]) -> str:
         user_msg,
         assistant_msg,
         thread_id=tid,
-        assistant_land_codes=[code] if code else None,
         audience=AUDIENCE_PARTNER,
     )
     set_active_thread(ph, tid, audience=AUDIENCE_PARTNER)
@@ -426,7 +425,6 @@ def append_mission_chat_followup(
             "",
             text,
             thread_id=tid,
-            assistant_land_codes=[land_code] if land_code else None,
             audience=AUDIENCE_PARTNER,
         )
         mark_mission_followup(phone, land_code)

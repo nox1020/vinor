@@ -109,18 +109,19 @@ def collect_land_codes(
     phone: str = "",
     audience: str | None = None,
 ) -> tuple[str, list[str]]:
-    """متن تمیز + لیست یکتا کدهای فایل برای کارت."""
+    """متن تمیز + کدهای فایل فقط از مارکر صریح [[LAND:کد]].
+
+    کارت فایل فقط وقتی مدل عمداً پیشنهاد می‌کند نشان داده می‌شود؛
+    ذکر معمولی کد در متن کاربر/پاسخ کارت نمی‌سازد.
+    """
+    del user_text  # عمداً برای استنباط خودکار استفاده نمی‌شود
     cleaned, from_markers = strip_land_markers(reply_text)
+    if not from_markers:
+        return cleaned, []
     lands_map = accessible_lands_map(phone, audience) if phone else accessible_lands_map("", audience)
     merged: list[str] = []
     for c in from_markers:
         if c in lands_map and c not in merged:
-            merged.append(c)
-    for c in infer_codes_from_text(cleaned, lands_map):
-        if c not in merged:
-            merged.append(c)
-    for c in infer_codes_from_text(user_text or "", lands_map):
-        if c not in merged:
             merged.append(c)
     return cleaned, merged[:5]
 
