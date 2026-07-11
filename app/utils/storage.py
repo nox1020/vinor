@@ -381,6 +381,22 @@ def save_express_assignments(items, app=None):
     return data
 
 
+# مأموریت‌های رندوم همکار (یک مأموریت فعال تا فروش)
+_MISSIONS_CACHE = {"path": None, "mtime": None, "size": None, "data": None}
+
+
+def load_partner_missions(app=None):
+    app = _resolve_app(app)
+    path = ensure_file('PARTNER_MISSIONS_FILE', 'partner_missions.json', [], app)
+    return _file_cache_load(_MISSIONS_CACHE, path, _load)
+
+
+def save_partner_missions(items, app=None):
+    data = _save(ensure_file('PARTNER_MISSIONS_FILE', 'partner_missions.json', [], app), items)
+    _MISSIONS_CACHE.update({"path": None, "mtime": None, "size": None, "data": None})
+    return data
+
+
 _COMMISSIONS_CACHE = {"path": None, "mtime": None, "size": None, "data": None}
 
 def load_express_commissions(app=None):    return _load(ensure_file('EXPRESS_COMMISSIONS_FILE','express_commissions.json',[],app))

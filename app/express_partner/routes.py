@@ -2340,14 +2340,12 @@ def _home_score_suggested_land(land: Dict[str, Any], *, now: datetime | None = N
     return score
 
 
-# قیف فروش روی کارت خانه (۶ مرحله — هم‌تراز UI تصویر)
+# قیف فروش روی کارت خانه (۴ مرحله مأموریت)
 _HOME_FUNNEL_STEPS = (
-    ('file_listed', 'ثبت فایل', 'fa-file-circle-plus'),
-    ('intro', 'معرفی', 'fa-check'),
-    ('visit_request', 'درخواست بازدید', 'fa-users'),
-    ('revisit', 'بازدید مجدد', 'fa-calendar-days'),
-    ('deal_request', 'درخواست معامله', 'fa-magnifying-glass'),
-    ('contract', 'قرارداد', 'fa-handshake'),
+    ('assigned', 'اختصاص فایل', 'fa-bullseye'),
+    ('marketing', 'بازاریابی', 'fa-bullhorn'),
+    ('visit_request', 'درخواست بازدید', 'fa-calendar-days'),
+    ('deal_or_revisit', 'معامله / بازدید مجدد', 'fa-handshake'),
 )
 
 
@@ -2356,7 +2354,7 @@ def _home_funnel_for_land(
     land: Dict[str, Any],
     visit_rows: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
-    """مرحله و مسیر ۶تایی برای کارت سفر خانه."""
+    """مرحله و مسیر ۴تایی مأموریت برای کارت سفر خانه."""
     ph = (phone or '').strip()
     code = str(land.get('code') or '').strip()
     assign_st = str(land.get('_assignment_status') or '').strip().lower()
@@ -2377,22 +2375,28 @@ def _home_funnel_for_land(
     visit_pending = status == PENDING_STATUS
     visit_approved = status in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS)
     visit_done = status == COMPLETED_STATUS
+    visit_cancelled = status == CANCELLED_STATUS
     in_tx = assign_st == 'in_transaction' or bool(land.get('_in_transaction'))
     sold = assign_st == 'sold'
 
-    # شاخص current: اولین مرحله ناتمام
+    # ۱ اختصاص فایل — همیشه انجام‌شده اگر روی کارت است
+    # ۲ بازاریابی — تا قبل از ثبت بازدید؛ با ثبت بازدید انجام‌شده فرض می‌شود
+    # ۳ درخواست بازدید — با تأیید/انجام بازدید یا معامله
+    # ۴ معامله یا بازدید مجدد و تکرار — با معامله/فروش؛ وگرنه بعد از بازدید current می‌ماند
+    assigned_done = True
+    marketing_done = (has_visit and not visit_cancelled) or in_tx or sold
+    visit_step_done = visit_approved or visit_done or in_tx or sold
+    # مرحله ۴ فقط با فروش قطعی می‌شود؛ تا آن‌وقت (بعد از بازدید یا حین معامله) current است
+    deal_done = sold
+
     done_flags = [
-        True,  # ثبت فایل
-        True,  # معرفی (فایل در دسترس همکار است)
-        visit_approved or visit_done or in_tx or sold,  # درخواست بازدید
-        visit_done or in_tx or sold,  # بازدید مجدد / انجام‌شده
-        in_tx or sold,  # درخواست معامله
-        sold,  # قرارداد
+        assigned_done,
+        marketing_done,
+        visit_step_done,
+        deal_done,
     ]
-    # اگر درخواست ثبت شده ولی هنوز تأیید نشده، مرحله بازدید current بماند
-    if has_visit and not (visit_approved or visit_done or in_tx or sold):
-        done_flags[2] = False
     current_idx = next((i for i, d in enumerate(done_flags) if not d), None)
+
     steps = []
     for i, (key, label, icon) in enumerate(_HOME_FUNNEL_STEPS):
         state = 'done' if done_flags[i] else 'todo'
@@ -2404,16 +2408,16 @@ def _home_funnel_for_land(
         stage_label = 'تکمیل شد'
     elif in_tx:
         stage_label = 'در حال معامله'
+    elif visit_cancelled:
+        stage_label = 'بازاریابی مجدد'
     elif visit_done:
-        stage_label = 'بازدید انجام شد'
+        stage_label = 'معامله یا بازدید مجدد'
     elif visit_approved:
         stage_label = 'بازدید تأییدشد'
-    elif visit_pending:
-        stage_label = 'در انتظار بازدید'
-    elif has_visit:
-        stage_label = 'پیگیری بازدید'
+    elif visit_pending or (has_visit and not visit_cancelled):
+        stage_label = 'درخواست بازدید'
     else:
-        stage_label = 'علاقه‌مند'
+        stage_label = 'بازاریابی'
 
     return {'stage_label': stage_label, 'funnel_steps': steps}
 
@@ -2464,16 +2468,22 @@ def _home_suggested_files(
             cta_action = "release"
             cta_label = "رفع معامله"
             cta_icon = "fa-check-circle"
-        elif str(stage_label) in ("بازدید انجام شد", "در حال معامله"):
+        elif str(stage_label) in ("معامله یا بازدید مجدد", "بازدید انجام شد", "در حال معامله"):
             cta_action = "deal"
-            cta_label = "درخواست معامله"
+            cta_label = "بازدید مجدد / معامله"
             cta_icon = "fa-handshake"
         elif str(stage_label) in ("بازدید تأییدشد",):
-            # هنوز باید بازدید انجام شود — جزئیات فایل با اکشن پیش‌فرض
             cta_action = "visit"
             cta_label = "شروع بازدید"
             cta_icon = "fa-map-marker-alt"
+        elif str(stage_label) in ("بازاریابی", "بازاریابی مجدد"):
+            cta_action = ""
+            cta_label = "بازاریابی کن"
+            cta_icon = "fa-bullhorn"
 
+        detail_kwargs = {'code': code}
+        if cta_action:
+            detail_kwargs['action'] = cta_action
         candidates.append({
             'code': code,
             'title': (land.get('title') or '—').strip(),
@@ -2488,7 +2498,7 @@ def _home_suggested_files(
             'stage_label': stage_label,
             'funnel_steps': funnel.get('funnel_steps') or [],
             'cta_label': cta_label,
-            'cta_url': url_for('express_partner.land_detail', code=code, action=cta_action),
+            'cta_url': url_for('express_partner.land_detail', **detail_kwargs),
             'cta_icon': cta_icon,
             'cta_action': cta_action,
             'show_fav': True,
@@ -2568,8 +2578,19 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     withdrawable = int(comm_stats.get('withdrawable_balance') or 0) if ph else 0
     follow_up_count = _home_follow_up_count(ph, visit_rows) if ph else 0
 
+    mission = None
+    if ph and is_approved:
+        try:
+            from app.express_partner.partner_missions import ensure_random_mission
+
+            mission = ensure_random_mission(ph)
+        except Exception:
+            current_app.logger.exception('ensure_random_mission failed phone=%s', ph)
+            mission = None
+
     assigned_lands: List[Dict[str, Any]] = []
     if ph:
+        # بعد از تخصیص مأموریت دوباره بساز تا assignment جدید دیده شود
         assigned_lands, _ = _build_partner_dashboard_lands(ph, is_approved)
 
     urgent_actions = _home_urgent_actions(
@@ -2580,8 +2601,6 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         follow_up_count=follow_up_count,
     ) if ph else []
 
-    # همان لیست ساخت‌شده را دوباره استفاده کن (نه دومین بار scan کامل)
-    # «پیشنهاد امروز» = فقط بالاترین امتیاز (بدون رندوم)
     suggested_files = _home_suggested_files(
         ph,
         is_approved,
@@ -2591,6 +2610,28 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         limit=1,
     ) if ph else []
 
+    journey_card = None
+    mission_code = str((mission or {}).get('land_code') or '').strip() if mission else ''
+    if mission_code and ph:
+        mission_cards = _home_suggested_files(
+            ph,
+            is_approved,
+            assigned_lands=[
+                L for L in (assigned_lands or [])
+                if isinstance(L, dict) and str(L.get('code') or '').strip() == mission_code
+            ],
+            visit_rows=visit_rows,
+            urgent_actions=urgent_actions,
+            limit=1,
+        )
+        if mission_cards:
+            journey_card = dict(mission_cards[0])
+            journey_card['is_mission'] = True
+            journey_card['mission_thread_id'] = str((mission or {}).get('thread_id') or '')
+            journey_card['show_fav'] = False
+    if journey_card is None:
+        journey_card = suggested_files[0] if suggested_files else None
+
     return {
         'success': True,
         'is_logged_in': bool(ph),
@@ -2598,7 +2639,8 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'has_pending_app': has_pending_app,
         'urgent_actions': urgent_actions,
         'suggested_files': suggested_files,
-        'journey_card': (suggested_files[0] if suggested_files else None),
+        'journey_card': journey_card,
+        'mission': mission,
     }
 
 
@@ -2648,6 +2690,17 @@ def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
         open_tid = (request.args.get('thread') or '').strip()
         want_ai = str(request.args.get('ai') or '').strip() in ('1', 'true', 'yes')
         postchi_thread_id = POSTCHI_THREAD_ID
+
+        mission_tid = ''
+        try:
+            from app.express_partner.partner_missions import get_active_mission, refresh_mission_if_land_closed
+
+            m = refresh_mission_if_land_closed(me_phone) or get_active_mission(me_phone)
+            if m:
+                mission_tid = str(m.get('thread_id') or '').strip()
+        except Exception:
+            mission_tid = ''
+
         if is_postchi_thread(open_tid):
             active_thread_id = POSTCHI_THREAD_ID
             chat_messages = postchi_messages_for_ui(me_phone) or []
@@ -2655,7 +2708,14 @@ def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
             home_ai_open = True
             home_ai_open_thread = POSTCHI_THREAD_ID
         else:
+            from app.ai.chat_store import set_active_thread
+
             ensure_active_thread(me_phone, audience=AUDIENCE_PARTNER)
+            if mission_tid and not open_tid:
+                try:
+                    set_active_thread(me_phone, mission_tid, audience=AUDIENCE_PARTNER)
+                except Exception:
+                    pass
             threads_preview = threads_with_postchi(me_phone, audience=AUDIENCE_PARTNER)
             active_thread_id = next(
                 (t['id'] for t in threads_preview if t.get('is_active')),
@@ -2667,7 +2727,14 @@ def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
                 home_ai_open = True
                 home_ai_open_thread = open_tid
                 active_thread_id = open_tid
-            chat_messages = messages_for_ui(me_phone, audience=AUDIENCE_PARTNER) or []
+            elif mission_tid and mission_tid == active_thread_id:
+                # چت خانه همان مأموریت
+                pass
+            chat_messages = messages_for_ui(
+                me_phone,
+                thread_id=active_thread_id or None,
+                audience=AUDIENCE_PARTNER,
+            ) or []
             if want_ai or open_tid:
                 home_ai_open = True
                 if open_tid:
@@ -2756,6 +2823,23 @@ def home_page():
     except Exception:
         pass
 
+    ai_quick_prompts = []
+    try:
+        from app.express_partner.sales_coach import build_ai_quick_prompts
+
+        _card = payload.get('journey_card') or {}
+        if isinstance(_card, dict):
+            ai_quick_prompts = build_ai_quick_prompts(
+                code=str(_card.get('code') or ''),
+                title=str(_card.get('title') or ''),
+                stage_label=str(_card.get('stage_label') or ''),
+                is_mission=bool(_card.get('is_mission')),
+            )
+        elif me_phone:
+            ai_quick_prompts = build_ai_quick_prompts()
+    except Exception:
+        ai_quick_prompts = []
+
     resp = make_response(render_template(
         'express_partner/home.html',
         profile=drawer_profile or profile,
@@ -2776,6 +2860,7 @@ def home_page():
         urgent_actions=payload.get('urgent_actions') or [],
         suggested_files=payload.get('suggested_files') or [],
         journey_card=payload.get('journey_card'),
+        ai_quick_prompts=ai_quick_prompts,
         hide_header=True,
         bottom_nav_active='home',
         brand='وینور',

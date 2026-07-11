@@ -127,6 +127,26 @@
       </div>
       {% endif %}
 
+      {% if v.can_close %}
+      <div class="px-4 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-950/40">
+        <form method="post" action="{{ url_for('admin.express_visit_request_status', vid=v.id) }}"
+              class="flex flex-col sm:flex-row gap-2 sm:items-center"
+              onsubmit="return confirm('این پرونده بسته شود؟ همکار می‌تواند دوباره درخواست بازدید بدهد.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <input type="hidden" name="visit_vid" value="{{ v.id }}">
+          <input type="hidden" name="status" value="cancelled">
+          <input type="text" name="admin_note" value="{{ v.admin_note or '' }}"
+                 class="flex-1 min-w-0 text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-950 text-gray-900 dark:text-white"
+                 placeholder="دلیل بستن (اختیاری)" />
+          <button type="submit"
+                  class="shrink-0 px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-100 dark:hover:bg-gray-800">
+            بستن
+          </button>
+        </form>
+      </div>
+      {% endif %}
+
       {% if v.is_editable and not v.workflow_needs_action and current_filter == 'all' %}
       <details class="border-t border-gray-100 dark:border-gray-800">
         <summary class="px-4 py-2 text-[11px] text-gray-400 cursor-pointer select-none hover:text-gray-600 dark:hover:text-gray-300">

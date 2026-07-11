@@ -302,6 +302,17 @@ def build_partner_status_context(phone: str) -> str:
         )
 
         lines = ["=== وضعیت فعلی ==="]
+        try:
+            from app.express_partner.partner_missions import get_active_mission, refresh_mission_if_land_closed
+
+            mission = refresh_mission_if_land_closed(ph) or get_active_mission(ph)
+            if mission:
+                mcode = str(mission.get("land_code") or "").strip()
+                lines.append(
+                    f"ماموریت فعال: فایل {mcode} — پاسخ‌ها کوتاه و ماموریت‌محور؛ مفصل فقط اگر کاربر توضیح بیشتر بخواهد."
+                )
+        except Exception:
+            pass
         if actions:
             a = actions[0]
             title = str(a.get("title") or "").strip()

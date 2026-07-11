@@ -68,6 +68,44 @@
   .ai-composer--gpt .ai-composer__send:disabled { opacity: 1; cursor: default; }
   .ai-composer--gpt .ai-composer__send-icon { display: block; }
   .ai-composer--gpt.ai-composer--readonly .ai-composer__shell { opacity: 0.55; }
+  .ai-composer--gpt .ai-composer__suggestions {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 0 0.55rem;
+    padding: 0 0.1rem 0.15rem;
+    max-width: 100%;
+  }
+  .ai-composer--gpt .ai-composer__suggestions::-webkit-scrollbar {
+    display: none;
+    height: 0;
+  }
+  .ai-composer--gpt .ai-composer__chip {
+    flex: 0 0 auto;
+    max-width: 14rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #e4e4e7;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.2;
+    padding: 0.42rem 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ai-composer--gpt .ai-composer__chip:active {
+    transform: scale(0.97);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
+  }
 </style>
 <form id="aiChatForm" class="ai-composer ai-composer--gpt" autocomplete="off"
       data-mode="{{ chat_mode }}"
@@ -86,6 +124,17 @@
   {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
   <input type="hidden" id="aiActiveThreadId" value="{{ active_thread_id or '' }}">
   <div class="ai-composer__inner">
+    {% if chat_mode == 'home-inline' and ai_quick_prompts %}
+    <div class="ai-composer__suggestions" role="list" aria-label="سوال‌های آماده">
+      {% for item in ai_quick_prompts %}
+      <button type="button"
+              class="ai-composer__chip"
+              role="listitem"
+              data-ai-quick-prompt="{{ item.prompt|e }}"
+              title="{{ item.label|e }}">{{ item.label }}</button>
+      {% endfor %}
+    </div>
+    {% endif %}
     <div class="ai-composer__shell">
       <label for="aiInput" class="sr-only">پیام</label>
       <textarea id="aiInput" name="message" rows="1" required
@@ -100,3 +149,27 @@
     </div>
   </div>
 </form>
+{% if chat_mode == 'home-inline' and ai_quick_prompts %}
+<script>
+(function () {
+  var form = document.getElementById('aiChatForm');
+  if (!form || form.getAttribute('data-quick-bound') === '1') return;
+  form.setAttribute('data-quick-bound', '1');
+  form.addEventListener('click', function (ev) {
+    var chip = ev.target && ev.target.closest ? ev.target.closest('[data-ai-quick-prompt]') : null;
+    if (!chip || !form.contains(chip)) return;
+    ev.preventDefault();
+    var prompt = chip.getAttribute('data-ai-quick-prompt') || '';
+    if (!prompt) return;
+    var input = document.getElementById('aiInput');
+    if (!input || input.disabled) return;
+    input.value = prompt;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    try {
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    } catch (_) {}
+  });
+})();
+</script>
+{% endif %}

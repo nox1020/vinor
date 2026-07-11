@@ -100,6 +100,116 @@ def coach_tip_for_stage(
     )
 
 
+def build_voided_encouragement(
+    *,
+    land_code: str = "",
+    land_title: str = "",
+    reason: str = "",
+) -> Tuple[str, str, str]:
+    """تشکر گرم بعد از منتفی شدن + راهنمای بازاریابی مجدد.
+
+    Returns: (notif_title, chat_body, notif_body)
+    """
+    code = (land_code or "").strip()
+    title = (land_title or "").strip()
+    file_bit = f"فایل {code}" if code else "این فایل"
+    if title:
+        file_bit = f"{file_bit} ({title})"
+    reason_s = (reason or "").strip()
+    head = "معامله/پیگیری منتفی شد"
+    if reason_s:
+        head = reason_s
+
+    notif_title = "ممنون از تلاشت 🌿"
+    chat_body = (
+        f"{notif_title}\n"
+        f"{head} — برای {file_bit}.\n"
+        "تو تلاشت رو کردی و کارت ارزشمند بود؛ گاهی مشتری منصرف می‌شود و این بخشی از مسیر فروشه.\n\n"
+        "الان روی بازاریابی مجدد تمرکز کن:\n"
+        "۱) دوباره در دیوار ثبت یا آپدیت کن\n"
+        "۲) آگهی را نردبان کن تا بیشتر دیده شود\n"
+        "۳) پست و استوری اینستا بگذار\n"
+        "۴) به هر کسی که ممکن است مشتری باشد معرفی کن\n\n"
+        "اگر متن دیوار یا کپشن اینستا می‌خواهی، همین‌جا بگو تا آماده کنم."
+    )
+    notif_body = (
+        f"{head}. ممنون که تلاش کردی. "
+        "حالا بازاریابی مجدد: دیوار + نردبان + اینستا + معرفی به اطرافیان. "
+        "از چت متن آماده بخواه."
+    )
+    return notif_title, chat_body, notif_body
+
+
+def deliver_voided_encouragement(
+    *,
+    partner_phone: str,
+    land_code: str = "",
+    land_title: str = "",
+    reason: str = "",
+) -> Dict[str, Any]:
+    """اعلان داخل اپ + پیام در چت مأموریت (در صورت وجود)."""
+    ph = normalize_iran_mobile(str(partner_phone or "").strip())
+    if not is_valid_iran_mobile(ph):
+        return {"ok": False, "error": "bad_phone"}
+    title, chat_body, notif_body = build_voided_encouragement(
+        land_code=land_code,
+        land_title=land_title,
+        reason=reason,
+    )
+    out: Dict[str, Any] = {"ok": True, "notif": False, "chat": False}
+    try:
+        from app.services.notifications import add_notification
+
+        action_url = _detail_url(land_code) if land_code else _home_url()
+        add_notification(
+            ph,
+            title,
+            notif_body,
+            ntype="sales_coach",
+            ad_id=(land_code or None),
+            action_url=action_url,
+            source="voided_encouragement",
+        )
+        out["notif"] = True
+    except Exception as exc:
+        current_app.logger.warning("voided encouragement notif failed: %s", exc)
+
+    try:
+        from .partner_missions import append_mission_chat_followup, get_active_mission
+
+        mission = get_active_mission(ph)
+        tid = ""
+        if mission and str(mission.get("land_code") or "").strip() == str(land_code or "").strip():
+            tid = str(mission.get("thread_id") or "").strip()
+        if tid:
+            out["chat"] = bool(
+                append_mission_chat_followup(
+                    ph,
+                    land_code=str(land_code or ""),
+                    thread_id=tid,
+                    body=chat_body,
+                )
+            )
+        else:
+            # بدون مأموریت فعال: باز هم در ترد فعال بگذار
+            from app.ai.audience import AUDIENCE_PARTNER
+            from app.ai.chat_store import append_exchange, ensure_active_thread
+
+            tid = ensure_active_thread(ph, audience=AUDIENCE_PARTNER)
+            append_exchange(
+                ph,
+                "",
+                chat_body,
+                thread_id=tid,
+                assistant_land_codes=[land_code] if land_code else None,
+                audience=AUDIENCE_PARTNER,
+            )
+            out["chat"] = True
+    except Exception as exc:
+        current_app.logger.warning("voided encouragement chat failed: %s", exc)
+    return out
+
+
 def build_coach_chat_prompt(*, code: str, title: str = "", stage_label: str = "") -> str:
     code_s = (code or "").strip()
     title_s = (title or "").strip()
@@ -117,6 +227,57 @@ def build_coach_chat_prompt(*, code: str, title: str = "", stage_label: str = ""
         f"{head} رو بهم اختصاص دادی. "
         "متن آگهی دیوار و کپشن اینستا آماده کن و بگو چطور معرفی کنم تا بفروشم و پورسانت بگیرم."
     )
+
+
+def build_ai_quick_prompts(
+    *,
+    code: str = "",
+    title: str = "",
+    stage_label: str = "",
+    is_mission: bool = False,
+) -> List[Dict[str, str]]:
+    """سوال/دستور آماده بالای باکس چت — مرتبط با فایل/مرحله مأموریت."""
+    code_s = (code or "").strip()
+    title_s = (title or "").strip()
+    stage = (stage_label or "").strip()
+    head = f"فایل {code_s}" if code_s else "فایل مأموریت"
+    if title_s:
+        head = f"{head} ({title_s})"
+
+    out: List[Dict[str, str]] = []
+
+    def add(label: str, prompt: str) -> None:
+        label = (label or "").strip()
+        prompt = (prompt or "").strip()
+        if label and prompt:
+            out.append({"label": label, "prompt": prompt})
+
+    if code_s:
+        if stage in ("در حال معامله", "تماس فوری") or "معامله" in stage:
+            add("بستن معامله", f"{head}: فقط ۲–۳ کار بعدی برای بستن معامله امروز را کوتاه بگو.")
+            add("متن پیگیری", f"برای {head} یک پیام کوتاه پیگیری مشتری بنویس (حداکثر ۴ خط).")
+            add("مخالف‌ها", f"برای {head} ۳ ایراد رایج + جواب یک‌خطی هر کدام.")
+        elif stage in ("بازدید انجام شد", "بازدید تأییدشد", "در انتظار بازدید", "پیگیری بازدید"):
+            add("بعد از بازدید", f"{head} در «{stage}»: فقط قدم بعدی فروش را خیلی کوتاه بگو.")
+            add("پیام مشتری", f"برای {head} یک پیام کوتاه واتساپ بعد بازدید بنویس.")
+            add("درخواست معامله", f"برای {head} کی درخواست معامله بزنم؟ جواب در ۲ جمله.")
+        else:
+            add("متن دیوار", f"برای {head} فقط متن آگهی دیوار را کامل بفرست.")
+            add("کپشن اینستا", f"برای {head} فقط کپشن اینستا را کامل بفرست.")
+            add("چطور بفروشم؟", f"برای {head} فقط ۳ قدم بعدی فروش را خیلی کوتاه بگو.")
+        if is_mission:
+            add("قدم بعدی", f"ماموریت {head}: فقط یک کار بعدی همین الان را بگو.")
+        add(
+            "منتفی شد",
+            f"برای {head} پیگیری منتفی شد. خیلی گرم تشکر کن که تلاش کردم، بگو تلاشم ارزشمند بود، "
+            "بعد کوتاه راهنمایی کن برای بازاریابی مجدد: دیوار، نردبان، اینستا و معرفی به اطرافیان.",
+        )
+    else:
+        add("شروع فروش", "فقط یک کار بعدی فروش را خیلی کوتاه بگو.")
+        add("متن آگهی", "متن کامل دیوار فایل فعلی‌ام را بفرست.")
+        add("پورسانت", "چطور سریع‌تر به معامله برسم؟ ۳ نکته کوتاه.")
+
+    return out[:5]
 
 
 def draft_listing_copy(land: Dict[str, Any], *, channel: str = "both") -> Dict[str, str]:
@@ -219,12 +380,77 @@ def resolve_stuck_nudge_for_partner(
     visit_rows: List[Dict[str, Any]],
 ) -> Optional[Dict[str, Any]]:
     """
-    بهترین فایل باز برای پیگیری — تا وقتی sold نشده باید یادآوری شود.
+    بهترین فایل باز برای پیگیری — اولویت با مأموریت فعال؛ تا sold ادامه دارد.
     """
     ph = (phone or "").strip()
     if not ph:
         return None
     from .routes import _home_funnel_for_land, _home_score_suggested_land
+
+    mission = None
+    mission_code = ""
+    mission_tid = ""
+    try:
+        from .partner_missions import refresh_mission_if_land_closed
+
+        mission = refresh_mission_if_land_closed(ph)
+        if mission:
+            mission_code = str(mission.get("land_code") or "").strip()
+            mission_tid = str(mission.get("thread_id") or "").strip()
+    except Exception:
+        mission = None
+
+    def _nudge_from_land(land: Dict[str, Any], *, is_mission: bool = False) -> Optional[Dict[str, Any]]:
+        st = str(land.get("_assignment_status") or "").strip().lower()
+        if st == "sold" or land.get("_is_expired"):
+            return None
+        code = str(land.get("code") or "").strip()
+        if not code:
+            return None
+        funnel = _home_funnel_for_land(ph, land, visit_rows=visit_rows)
+        stage = str(funnel.get("stage_label") or "")
+        in_tx = st == "in_transaction" or bool(land.get("_in_transaction"))
+        has_row = any(
+            isinstance(r, dict)
+            and str(r.get("partner_phone") or "").strip() == ph
+            and str(r.get("land_code") or "").strip() == code
+            for r in (visit_rows or [])
+        )
+        tip = coach_tip_for_stage(
+            stage_label=stage,
+            has_visit=has_row,
+            in_transaction=in_tx,
+            sold=False,
+            commission_amount=int(land.get("_commission_amount") or 0),
+        )
+        return {
+            "code": code,
+            "title": str(land.get("title") or code).strip(),
+            "stage_label": stage,
+            "commission_amount": int(land.get("_commission_amount") or 0),
+            "tip": tip,
+            "in_transaction": in_tx,
+            "has_visit": has_row,
+            "is_mission": is_mission,
+            "mission_thread_id": mission_tid if is_mission else "",
+        }
+
+    if mission_code:
+        for land in assigned_lands or []:
+            if not isinstance(land, dict):
+                continue
+            if str(land.get("code") or "").strip() != mission_code:
+                continue
+            picked = _nudge_from_land(land, is_mission=True)
+            if picked:
+                return picked
+        # فایل در assigned نبود ولی mission هنوز باز است — از کاتالوگ نساز؛ کامل کن
+        try:
+            from .partner_missions import complete_mission
+
+            complete_mission(ph, land_code=mission_code)
+        except Exception:
+            pass
 
     best: Optional[Dict[str, Any]] = None
     best_score = -1.0
@@ -247,7 +473,6 @@ def resolve_stuck_nudge_for_partner(
             and str(r.get("land_code") or "").strip() == code
             for r in (visit_rows or [])
         )
-        # هر فایل باز (غیر فروخته) هدف پیگیری است
         score = float(_home_score_suggested_land(land, now=now))
         if in_tx:
             score += 40
@@ -256,7 +481,7 @@ def resolve_stuck_nudge_for_partner(
         elif stage in ("بازدید تأییدشد", "در انتظار بازدید", "پیگیری بازدید"):
             score += 20
         elif not has_row:
-            score += 25  # هنوز حتی بازدید ثبت نشده — اولویت آگهی
+            score += 25
         if score > best_score:
             best_score = score
             tip = coach_tip_for_stage(
@@ -274,6 +499,8 @@ def resolve_stuck_nudge_for_partner(
                 "tip": tip,
                 "in_transaction": in_tx,
                 "has_visit": has_row,
+                "is_mission": False,
+                "mission_thread_id": "",
             }
     return best
 
@@ -402,6 +629,10 @@ def build_nudge_messages(
     title = titles.get(phase) or titles["follow"]
     body = bodies.get(phase) or bodies["follow"]
     sms = sms_map.get(phase) or sms_map["follow"]
+    if bool(nudge.get("is_mission")):
+        title = f"ماموریت {code}" if code else "ماموریت فروش"
+        body = f"ماموریت فایل {code} — تا معامله رها نکن. {body}"
+        sms = f"ماموریت وینور فایل {code}: {sms}"
     return title, body, sms
 
 
@@ -641,6 +872,28 @@ def run_sales_coach_nudge_slot(
                 sent_sms += 1
         else:
             item["sms"] = {"ok": False, "skipped": "sms_disabled"}
+
+        # پیگیری داخل چت مأموریت (حداکثر یک‌بار در هر اسلات)
+        mission_tid = str(nudge.get("mission_thread_id") or "").strip()
+        if bool(nudge.get("is_mission")) and mission_tid and not dry_run:
+            tip = str(nudge.get("tip") or "").strip()
+            chat_body = (
+                f"یادآوری ماموریت ({_SLOT_LABELS.get(int(slot_hour), 'امروز')}): "
+                f"فایل {code} هنوز باز است. {tip or 'قدم بعدی را همین امروز بردار.'}"
+            )
+            try:
+                from .partner_missions import append_mission_chat_followup
+
+                ok_chat = append_mission_chat_followup(
+                    phone,
+                    land_code=code,
+                    thread_id=mission_tid,
+                    body=chat_body,
+                )
+                item["mission_chat"] = bool(ok_chat)
+            except Exception as exc:
+                item["mission_chat"] = False
+                item["mission_chat_error"] = str(exc)
 
         if not dry_run:
             track["nudge_count"] = count_before + 1

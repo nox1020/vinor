@@ -736,9 +736,8 @@ def admin_update_visit_request_status(
         rec.pop("visit_done_requested_at", None)
         rec.pop("completed_at", None)
     elif target == CANCELLED_STATUS:
-        rec.pop("approved_at", None)
-        rec.pop("visit_done_requested_at", None)
-        rec.pop("completed_at", None)
+        # تاریخچهٔ تأیید/انجام را نگه می‌داریم تا روند بسته‌شده قابل‌خواندن بماند
+        rec["cancelled_at"] = now_iso
     return rec, None
 
 
@@ -1039,7 +1038,7 @@ def admin_row_dict(
         APPROVED_STATUS: "تأیید شده — در انتظار انجام بازدید",
         DONE_PENDING_STATUS: "در انتظار تأیید انجام بازدید",
         COMPLETED_STATUS: "بازدید انجام شد",
-        CANCELLED_STATUS: "رد شده",
+        CANCELLED_STATUS: "بسته شده",
     }
     hints = {
         PENDING_STATUS: "تأیید کنید تا همکار پس از انجام بازدید، آن را روی فایل ثبت کند.",
@@ -1086,7 +1085,7 @@ ADMIN_VISIT_TRANSITIONS: Dict[str, frozenset] = {
     PENDING_STATUS: frozenset({PENDING_STATUS, APPROVED_STATUS, CANCELLED_STATUS}),
     APPROVED_STATUS: frozenset({APPROVED_STATUS, CANCELLED_STATUS}),
     DONE_PENDING_STATUS: frozenset({DONE_PENDING_STATUS, COMPLETED_STATUS, CANCELLED_STATUS, APPROVED_STATUS}),
-    COMPLETED_STATUS: frozenset({COMPLETED_STATUS}),
+    COMPLETED_STATUS: frozenset({COMPLETED_STATUS, CANCELLED_STATUS}),
     CANCELLED_STATUS: frozenset({CANCELLED_STATUS}),
 }
 
@@ -1286,7 +1285,7 @@ def admin_visit_status_options(old_status: str) -> List[Dict[str, str]]:
         APPROVED_STATUS: "تأیید بازدید",
         DONE_PENDING_STATUS: "در انتظار تأیید انجام بازدید",
         COMPLETED_STATUS: "تأیید انجام بازدید",
-        CANCELLED_STATUS: "رد درخواست",
+        CANCELLED_STATUS: "بستن پرونده",
     }
     out: List[Dict[str, str]] = []
     for key in order:

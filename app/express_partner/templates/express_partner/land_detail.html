@@ -863,6 +863,107 @@
       mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
     }
     .ld-download-wrap[data-busy="1"] button { opacity: 0.88; pointer-events: none; }
+    /* دو دکمه هم‌زمان: بازدید مجدد / معامله */
+    .ld-fab-dock--fork {
+      pointer-events: none;
+      background: linear-gradient(180deg, transparent 0%, rgba(15, 23, 42, 0.04) 28%, rgba(15, 23, 42, 0.08) 100%);
+    }
+    html.dark .ld-fab-dock--fork {
+      background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.2) 40%, rgba(0, 0, 0, 0.45) 100%);
+    }
+    .ld-fab-dock__inner--fork {
+      align-items: stretch;
+      width: 100%;
+      padding: 0 0.875rem 0.75rem;
+      max-width: 36rem;
+      margin-inline: auto;
+    }
+    .ld-deal-fork {
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      width: 100%;
+    }
+    .ld-deal-fork__hint {
+      margin: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      align-self: center;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: var(--ld-text-muted);
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    html.dark .ld-deal-fork__hint {
+      background: rgba(24, 24, 27, 0.78);
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #a1a1aa;
+    }
+    .ld-deal-fork__row {
+      display: flex;
+      align-items: stretch;
+      gap: 0.5rem;
+      width: 100%;
+    }
+    .ld-deal-fork__btn {
+      flex: 1 1 0;
+      min-height: 3.15rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      border-radius: 1rem;
+      border: none;
+      padding: 0.7rem 0.75rem;
+      font-size: 0.875rem;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      color: #fff;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
+    }
+    .ld-deal-fork__btn:active { transform: scale(0.98); }
+    .ld-deal-fork__btn i { font-size: 0.95rem; opacity: 0.95; }
+    .ld-deal-fork__btn--revisit {
+      background: linear-gradient(145deg, #0d9488 0%, #0f766e 100%);
+      box-shadow: 0 8px 22px rgba(13, 148, 136, 0.28);
+    }
+    .ld-deal-fork__btn--deal {
+      background: linear-gradient(145deg, #a62626 0%, #8b1e1e 100%);
+      box-shadow: 0 8px 22px rgba(166, 38, 38, 0.3);
+    }
+    .ld-deal-fork__call {
+      flex: 0 0 3.15rem;
+      width: 3.15rem;
+      min-height: 3.15rem;
+      border-radius: 1rem;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #16a34a;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      box-shadow: 0 8px 22px rgba(22, 163, 74, 0.28);
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .ld-deal-fork__call:active { transform: scale(0.96); }
+    .ld-fab-menu--fork-hidden,
+    .ld-fab-trigger--fork-hidden {
+      display: none !important;
+    }
     /* FAB + منوی تلگرامی */
     .ld-fab-dock {
       background: transparent;

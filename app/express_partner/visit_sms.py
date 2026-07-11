@@ -91,14 +91,20 @@ def _build_message(event: str, ctx: Dict[str, Any]) -> str:
     if event == "visit_approved":
         return f"وینور\nبازدیدت تأیید شد · {land}\n{vdate}"
     if event == "visit_rejected":
-        msg = f"وینور\nبازدید رد شد · {land}"
+        msg = (
+            f"وینور\nبازدید منتفی شد · {land}\n"
+            "ممنون از تلاشت. حالا بازاریابی مجدد: دیوار+نردبان+اینستا"
+        )
         if note:
             msg += f"\n{note}"
         return msg
     if event == "visit_done_pending":
         return f"وینور\nانجام بازدید ثبت شد · {land}\nمنتظر تأیید"
     if event == "visit_done_rejected":
-        msg = f"وینور\nتأیید انجام بازدید رد شد · {land}"
+        msg = (
+            f"وینور\nتأیید بازدید منتفی شد · {land}\n"
+            "تو تلاشت رو کردی. دوباره دیوار/اینستا و معرفی کن"
+        )
         if note:
             msg += f"\n{note}"
         return msg
@@ -109,7 +115,10 @@ def _build_message(event: str, ctx: Dict[str, Any]) -> str:
     if event == "deal_started":
         return f"وینور\nمعامله شروع شد · {land}"
     if event == "deal_released":
-        return f"وینور\nمعامله رفع شد · {land}"
+        return (
+            f"وینور\nمعامله منتفی شد · {land}\n"
+            "ممنون از تلاشت 🌿 دوباره دیوار+نردبان+اینستا"
+        )
     return ""
 
 
@@ -194,6 +203,28 @@ def notify_partner_land_tx_sms(
         "response": sms_result.get("body", {}),
         "created_at": datetime.utcnow().isoformat() + "Z",
     })
+
+    # منتفی/رد: تشکر گرم + راهنمای بازاریابی مجدد در چت و اعلان
+    if ev in ("visit_rejected", "visit_done_rejected", "deal_released"):
+        try:
+            from .sales_coach import deliver_voided_encouragement
+
+            reason_map = {
+                "visit_rejected": "بازدید منتفی شد",
+                "visit_done_rejected": "تأیید بازدید منتفی شد",
+                "deal_released": "معامله منتفی شد",
+            }
+            deliver_voided_encouragement(
+                partner_phone=mobile,
+                land_code=str(land_code or ""),
+                land_title=str(land_title or ""),
+                reason=reason_map.get(ev, "پیگیری منتفی شد"),
+            )
+        except Exception:
+            current_app.logger.exception(
+                "voided encouragement failed event=%s phone=%s", ev, mobile
+            )
+
     return {"ok": ok, "skipped": False, "error": err}
 
 

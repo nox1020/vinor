@@ -4978,6 +4978,7 @@ def express_visit_requests():
         VISIT_WEEKDAY_LABELS,
         VISIT_WEEKDAY_ORDER,
         admin_row_dict as visit_admin_row,
+        admin_can_transition_visit,
         admin_visit_in_workflow,
         admin_visit_status_options,
         admin_visit_workflow_needs_action,
@@ -5127,6 +5128,11 @@ def express_visit_requests():
         )
         item['workflow_needs_action'] = admin_visit_workflow_needs_action(item['admin_workflow_steps'])
         item['in_workflow'] = admin_visit_in_workflow(item, item['admin_workflow_steps'])
+        _st = (str(item.get('status') or '')).strip()
+        item['can_close'] = (
+            _st != CANCELLED_STATUS
+            and admin_can_transition_visit(_st, CANCELLED_STATUS)
+        )
         items.append(item)
 
     pending_count = sum(1 for x in items if x.get('status') == PENDING_STATUS)
@@ -5203,7 +5209,7 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
         APPROVED_STATUS: 'تأیید شده',
         DONE_PENDING_STATUS: 'در انتظار تأیید انجام بازدید',
         COMPLETED_STATUS: 'بازدید انجام شد',
-        CANCELLED_STATUS: 'رد شده',
+        CANCELLED_STATUS: 'بسته شد',
     }
     label = labels.get(new_status, new_status)
     if new_status == APPROVED_STATUS:
@@ -5218,6 +5224,8 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
         )
     elif new_status == COMPLETED_STATUS:
         flash(f'انجام بازدید {name} تأیید شد.', 'success')
+    elif new_status == CANCELLED_STATUS:
+        flash(f'پرونده بازدید {name} بسته شد.', 'success')
     else:
         flash(f'وضعیت درخواست بازدید {name} به «{label}» تغییر کرد.', 'success')
 
