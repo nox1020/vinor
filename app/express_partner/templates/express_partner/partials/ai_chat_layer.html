@@ -72,57 +72,18 @@
   }
   #aiHomeLayer #aiChatForm.ai-composer {
     flex-shrink: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 0.65rem 0.9rem calc(0.65rem + env(safe-area-inset-bottom, 0px) + var(--ai-keyboard-inset, 0px));
-    background: rgba(3, 7, 18, 0.97);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    border-top: none;
+    padding: 0.35rem 0.85rem calc(0.45rem + env(safe-area-inset-bottom, 0px) + var(--ai-keyboard-inset, 0px));
+    background: linear-gradient(180deg, rgba(3, 7, 18, 0) 0%, rgba(3, 7, 18, 0.92) 28%, #030712 100%);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
   #aiHomeLayer .ai-composer__inner {
-    display: flex;
-    align-items: flex-end;
-    gap: 0.55rem;
+    display: block;
     width: 100%;
   }
-  #aiHomeLayer .ai-composer__input {
-    flex: 1;
-    min-width: 0;
-    min-height: 3rem;
-    max-height: 8rem;
-    resize: none;
-    border-radius: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: #070b12;
-    color: #fff;
-    font-size: 0.875rem;
-    line-height: 1.45;
-    padding: 0.72rem 0.9rem;
-    outline: none;
-  }
-  #aiHomeLayer .ai-composer__input::placeholder { color: #71717a; }
-  #aiHomeLayer .ai-composer__input:focus {
-    border-color: rgba(139, 92, 246, 0.45);
-    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.16);
-  }
-  #aiHomeLayer .ai-composer__send {
-    width: 3rem;
-    height: 3rem;
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 0;
-    border-radius: 1rem;
-    background: linear-gradient(145deg, #7c3aed 0%, #6d28d9 100%);
-    color: #fff;
-  }
-  #aiHomeLayer .ai-composer__send:disabled { opacity: 0.5; }
-  #aiHomeLayer .ai-composer--readonly .ai-composer__input {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
   #aiHomeLayer .ai-composer--readonly .ai-composer__send {
-    opacity: 0.4;
+    opacity: 0.45;
     cursor: not-allowed;
   }
 

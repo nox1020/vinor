@@ -1,6 +1,75 @@
 {# کامپوزر Vinor AI — IDهای ثابت برای ai-chat.js #}
 {% set chat_mode = chat_mode|default('home-layer') %}
-<form id="aiChatForm" class="ai-composer" autocomplete="off"
+<style id="vinor-ai-composer-gpt">
+  .ai-composer--gpt .ai-composer__inner {
+    display: block;
+    width: 100%;
+    max-width: 42rem;
+    margin-inline: auto;
+  }
+  .ai-composer--gpt .ai-composer__shell {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.45rem;
+    width: 100%;
+    min-height: 3.25rem;
+    padding: 0.45rem 0.45rem 0.45rem 1rem;
+    border-radius: 1.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #212121;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.25),
+      0 10px 28px rgba(0, 0, 0, 0.28);
+    transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.18s ease;
+  }
+  .ai-composer--gpt .ai-composer__shell:focus-within {
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 12px 32px rgba(0, 0, 0, 0.38);
+    transform: translateY(-1px);
+  }
+  .ai-composer--gpt .ai-composer__input {
+    flex: 1;
+    min-width: 0;
+    min-height: 1.55rem;
+    max-height: 9.5rem;
+    resize: none;
+    border: 0 !important;
+    border-radius: 0;
+    background: transparent !important;
+    color: #ececec;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    padding: 0.55rem 0.15rem;
+    outline: none;
+    box-shadow: none !important;
+  }
+  .ai-composer--gpt .ai-composer__input::placeholder { color: #8e8e8e; }
+  .ai-composer--gpt .ai-composer__send {
+    width: 2.2rem;
+    height: 2.2rem;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 9999px;
+    background: #676767;
+    color: #2f2f2f;
+    transition: background-color 0.18s ease, color 0.18s ease, transform 0.15s ease;
+  }
+  .ai-composer--gpt.ai-composer--ready .ai-composer__send,
+  .ai-composer--gpt .ai-composer__send:not(:disabled) {
+    background: #f4f4f4;
+    color: #0d0d0d;
+  }
+  .ai-composer--gpt .ai-composer__send:not(:disabled):active { transform: scale(0.94); }
+  .ai-composer--gpt .ai-composer__send:disabled { opacity: 1; cursor: default; }
+  .ai-composer--gpt .ai-composer__send-icon { display: block; }
+  .ai-composer--gpt.ai-composer--readonly .ai-composer__shell { opacity: 0.55; }
+</style>
+<form id="aiChatForm" class="ai-composer ai-composer--gpt" autocomplete="off"
       data-mode="{{ chat_mode }}"
       data-chat-url="{{ chat_api_url }}"
       data-history-url="{{ history_api_url }}"
@@ -17,12 +86,17 @@
   {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
   <input type="hidden" id="aiActiveThreadId" value="{{ active_thread_id or '' }}">
   <div class="ai-composer__inner">
-    <label for="aiInput" class="sr-only">پیام</label>
-    <textarea id="aiInput" name="message" rows="1" required
-              placeholder="پیام خود را بنویسید…"
-              class="ai-composer__input"></textarea>
-    <button type="submit" id="aiSendBtn" class="ai-composer__send" aria-label="ارسال">
-      <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
-    </button>
+    <div class="ai-composer__shell">
+      <label for="aiInput" class="sr-only">پیام</label>
+      <textarea id="aiInput" name="message" rows="1" required
+                placeholder="از وینور AI بپرسید…"
+                class="ai-composer__input"
+                enterkeyhint="send"></textarea>
+      <button type="submit" id="aiSendBtn" class="ai-composer__send" aria-label="ارسال" disabled>
+        <svg class="ai-composer__send-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M11 20V7.83l-5.3 5.3-1.4-1.42L12 4l7.7 7.71-1.4 1.42L13 7.83V20h-2z"/>
+        </svg>
+      </button>
+    </div>
   </div>
 </form>

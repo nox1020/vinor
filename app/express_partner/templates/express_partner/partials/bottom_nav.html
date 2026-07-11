@@ -1,5 +1,4 @@
-{# نوار پایین — کپسول مشکی شناور در همهٔ صفحات پرتال؛ شِل شفاف #}
-{% set bottom_nav_active = bottom_nav_active|default('') %}
+{# بنر دانلود/بروزرسانی اپ — بدون منوی تب پایین #}
 <style>
   #bottomNavMenu.tg-tabbar-shell {
     pointer-events: none;
@@ -7,170 +6,8 @@
     background: transparent;
     padding-left: max(1rem, env(safe-area-inset-left, 0px));
     padding-right: max(1rem, env(safe-area-inset-right, 0px));
-    padding-top: 0.65rem;
-    /* فقط safe-area زیر کپسول؛ بدون نوار تخت — پس‌زمینهٔ صفحه از شِل شفاف دیده می‌شود */
+    padding-top: 0.35rem;
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
-  }
-  #bottomNavMenu .tg-tabbar-pill {
-    position: relative;
-    z-index: 1;
-    padding-bottom: 0.5rem;
-  }
-  .tg-tabbar-pill {
-    pointer-events: auto;
-    position: relative;
-    border-radius: 9999px;
-    border: 1px solid var(--vn-solid-pill-border, rgba(255, 255, 255, 0.1));
-    background-color: var(--vn-solid-pill-bg, #111111);
-    box-shadow: var(--vn-solid-pill-shadow, 0 8px 28px rgba(0, 0, 0, 0.48));
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-  .dark .tg-tabbar-pill {
-    border-color: var(--vn-solid-pill-border, rgba(255, 255, 255, 0.1));
-    background-color: var(--vn-solid-pill-bg, #111111);
-    box-shadow: var(--vn-solid-pill-shadow, 0 8px 28px rgba(0, 0, 0, 0.48));
-  }
-  .tg-tab {
-    min-height: 48px;
-    touch-action: manipulation;
-    outline: none;
-    -webkit-tap-highlight-color: transparent;
-    transition:
-      color 0.22s ease,
-      opacity 0.18s ease,
-      transform 0.18s ease;
-    text-decoration: none;
-  }
-  .tg-tab:active:not(.tg-tab-disabled) {
-    opacity: 0.92;
-    transform: scale(0.97);
-  }
-  .tg-tab-stack {
-    border-radius: 9999px;
-    transition: background-color 0.26s cubic-bezier(0.33, 1, 0.68, 1);
-    width: 100%;
-    max-width: 5.5rem;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .tg-tab-active .tg-tab-stack {
-    background-color: rgba(37, 99, 235, 0.14);
-    box-shadow: none;
-  }
-  .dark .tg-tab-active .tg-tab-stack {
-    background-color: rgba(59, 130, 246, 0.22);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  }
-  .tg-tab-icon-wrap {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 1.55rem;
-  }
-  .tg-tab-icon {
-    font-size: 1.28rem;
-    line-height: 1;
-    transition: color 0.22s ease;
-  }
-  .tg-tab-label {
-    transition: color 0.22s ease;
-    letter-spacing: -0.01em;
-  }
-  .tg-tab-active .tg-tab-icon {
-    color: #2563eb; /* blue-600 */
-  }
-  .tg-tab-active .tg-tab-label {
-    color: #2563eb;
-    font-weight: 600;
-  }
-  .dark .tg-tab-active .tg-tab-icon {
-    color: #60a5fa; /* blue-400 مثل آمار sold_count در داشبورد */
-  }
-  .dark .tg-tab-active .tg-tab-label {
-    color: #60a5fa;
-  }
-  .tg-tab:not(.tg-tab-active):not(.tg-tab-disabled) .tg-tab-icon {
-    color: #6b7280;
-  }
-  .tg-tab:not(.tg-tab-active):not(.tg-tab-disabled) .tg-tab-label {
-    color: #4b5563;
-  }
-  .dark .tg-tab:not(.tg-tab-active):not(.tg-tab-disabled) .tg-tab-icon {
-    color: rgba(255, 255, 255, 0.82);
-  }
-  .dark .tg-tab:not(.tg-tab-active):not(.tg-tab-disabled) .tg-tab-label {
-    color: rgba(255, 255, 255, 0.86);
-  }
-  .tg-tab-disabled .tg-tab-stack {
-    opacity: 0.45;
-    filter: grayscale(0.35);
-  }
-  .tg-tab-disabled:active {
-    transform: none;
-    opacity: 0.45;
-  }
-  .tg-tab:focus-visible .tg-tab-stack {
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.45);
-  }
-  .dark .tg-tab:focus-visible .tg-tab-stack {
-    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.5);
-  }
-  .tg-tab-badge {
-    position: absolute;
-    top: -0.2rem;
-    inset-inline-end: -0.35rem;
-    min-width: 1.05rem;
-    height: 1.05rem;
-    padding: 0 0.28rem;
-    border-radius: 9999px;
-    background: #2563eb;
-    color: #fff;
-    font-size: 0.62rem;
-    font-weight: 700;
-    line-height: 1.05rem;
-    text-align: center;
-    box-shadow: 0 0 0 2px var(--vn-solid-pill-bg, #111111);
-    display: none;
-    align-items: center;
-    justify-content: center;
-  }
-  .dark .tg-tab-badge {
-    box-shadow: 0 0 0 2px var(--vn-solid-pill-bg, #111111);
-  }
-  .tg-tab-badge.is-visible {
-    display: inline-flex;
-  }
-  .tg-tab-label--update {
-    color: #d97706 !important;
-    font-weight: 700;
-  }
-  .dark .tg-tab-label--update {
-    color: #fbbf24 !important;
-  }
-  .tg-tab-active .tg-tab-label--update {
-    color: #b45309 !important;
-  }
-  .dark .tg-tab-active .tg-tab-label--update {
-    color: #fcd34d !important;
-  }
-  .tg-tab-update-dot {
-    position: absolute;
-    top: -0.05rem;
-    inset-inline-end: -0.15rem;
-    width: 0.45rem;
-    height: 0.45rem;
-    border-radius: 9999px;
-    background: #f59e0b;
-    box-shadow: 0 0 0 2px var(--vn-solid-pill-bg, #111111);
-    display: none;
-  }
-  .dark .tg-tab-update-dot {
-    box-shadow: 0 0 0 2px var(--vn-solid-pill-bg, #111111);
-  }
-  .tg-tab-update-dot.is-visible {
-    display: block;
   }
   .vinor-apk-download-strip {
     pointer-events: auto;
@@ -248,65 +85,12 @@
   .vinor-apk-download-strip--update .vinor-apk-download-strip__cta {
     background: #fbbf24;
   }
-  html.vinor-has-apk-banner #bottomNavMenu.tg-tabbar-shell {
-    padding-top: 0.35rem;
-  }
 </style>
-<nav id="bottomNavMenu" data-tour="bottom-nav" class="tg-tabbar-shell fixed inset-x-0 bottom-0 z-[60]" role="navigation" aria-label="منوی اصلی">
-  {% if show_apk_strip and android_apk_url %}
-  <a href="{% if apk_strip_mode == 'update' %}#{% else %}{{ android_apk_url }}{% endif %}"
-     class="vinor-apk-download-strip{% if apk_strip_mode == 'update' %} vinor-apk-download-strip--update{% endif %}"
-     data-apk-strip
-     data-apk-strip-mode="{{ apk_strip_mode or 'install' }}"
-     {% if apk_strip_mode == 'update' %}data-apk-update-url="{{ android_apk_url }}"{% else %}download{% endif %}
-     rel="noopener"
-     aria-label="{% if apk_strip_mode == 'update' %}بروزرسانی اپلیکیشن وینور{% else %}دانلود اپلیکیشن وینور اندروید{% endif %}">
-    <span class="vinor-apk-download-strip__icon" aria-hidden="true">
-      <i class="fas {% if apk_strip_mode == 'update' %}fa-arrow-circle-up{% else %}fa-mobile-alt{% endif %}"></i>
-    </span>
-    <span class="vinor-apk-download-strip__text">
-      {% if apk_strip_mode == 'update' %}
-      <span class="vinor-apk-download-strip__title" data-apk-strip-title>بروزرسانی کنید</span>
-      <span class="vinor-apk-download-strip__sub" data-apk-strip-sub>{% if android_apk_version %}نسخه جدید {{ android_apk_version }}{% endif %}</span>
-      {% else %}
-      <span class="vinor-apk-download-strip__title" data-apk-strip-title>برای تجربه بهتر، اپلیکیشن وینور را نصب کنید</span>
-      <span class="vinor-apk-download-strip__sub" data-apk-strip-sub>{% if android_apk_version %}نسخه {{ android_apk_version }}{% endif %}</span>
-      {% endif %}
-    </span>
-    <span class="vinor-apk-download-strip__cta" data-apk-strip-cta>{% if apk_strip_mode == 'update' %}بروزرسانی{% else %}دانلود{% endif %}</span>
-  </a>
+<nav id="bottomNavMenu" data-tour="bottom-nav" class="tg-tabbar-shell fixed inset-x-0 bottom-0 z-[60]" aria-label="بنر اپلیکیشن">
+  {# روی خانهٔ AI بنر بالای کامپوزر است؛ اینجا فقط صفحات بدون کامپوزر #}
+  {% if not home_ai_enabled|default(false) %}
+  {% include 'express_partner/partials/apk_download_strip.html' %}
   {% endif %}
-  <div class="tg-tabbar-pill mx-auto w-full max-w-full px-3 py-1">
-    <div id="bottomNavItems" class="grid grid-cols-2 gap-0 min-h-[52px] w-full items-center">
-      {% set profile_nav_url = url_for('express_partner.home', menu=1) %}
-      {% set nav_items = [
-        {'key': 'home', 'endpoint': 'express_partner.home', 'icon': 'fa-home', 'label': 'داشبورد'},
-        {'key': 'profile', 'url': profile_nav_url, 'icon': 'fa-user', 'label': 'منو', 'drawer': true}
-      ] %}
-      {% for item in nav_items %}
-        {% set is_active = (bottom_nav_active == item.key) %}
-        <a href="{% if item.url %}{{ item.url }}{% else %}{{ url_for(item.endpoint) }}{% endif %}"
-           class="tg-tab flex flex-col items-center justify-center px-0.5 py-0.5 {{ 'tg-tab-active' if is_active else '' }} {{ 'tg-tab-disabled' if item.disabled else '' }}"
-           aria-current="{{ 'page' if is_active else 'false' }}"
-           aria-disabled="{{ 'true' if item.disabled else 'false' }}"
-           {% if item.disabled %}tabindex="-1"{% endif %}
-           data-nav-key="{{ item.key }}"
-           {% if item.drawer %}data-nav-profile-drawer="1"{% endif %}>
-          <span class="tg-tab-stack flex flex-col items-center justify-center gap-0.5 px-2 py-1">
-            <span class="tg-tab-icon-wrap" aria-hidden="true">
-              <span class="tg-tab-icon flex items-center justify-center">
-                <i class="fas {{ item.icon }}"></i>
-              </span>
-              {% if item.key == 'profile' %}
-              <span class="tg-tab-update-dot{% if show_app_update_nav|default(false) %} is-visible{% endif %}" data-role="nav-update-dot" aria-hidden="true"></span>
-              {% endif %}
-            </span>
-            <span class="tg-tab-label text-[10px] leading-none max-w-full truncate text-center px-0.5{% if item.key == 'profile' and show_app_update_nav|default(false) %} tg-tab-label--update{% endif %}">{{ 'بروزرسانی' if item.key == 'profile' and show_app_update_nav|default(false) else item.label }}</span>
-          </span>
-        </a>
-      {% endfor %}
-    </div>
-  </div>
 </nav>
 
 <script>
@@ -314,14 +98,19 @@
   {% if show_apk_strip and android_apk_url %}
   try { document.documentElement.classList.add('vinor-has-apk-banner'); } catch (_) {}
   {% endif %}
-  const activeKey = '{{ bottom_nav_active }}';
   const userLoggedIn = {{ 'true' if session.get('user_phone') else 'false' }};
   const isVinorApk = {{ 'true' if is_vinor_apk|default(false) else 'false' }};
   const serverShowAppUpdate = {{ 'true' if show_app_update_nav|default(false) else 'false' }};
+  const serverShowApkStrip = {{ 'true' if show_apk_strip|default(false) else 'false' }};
+  const serverApkStripMode = {{ (apk_strip_mode or 'install')|tojson }};
   const serverApkVersion = {{ (android_apk_version or '')|tojson }};
   const serverApkUrl = {{ (android_apk_url or '')|tojson }};
-  const navContainer = document.getElementById('bottomNavItems');
-  if (!navContainer) return;
+  const bottomNavShell = document.getElementById('bottomNavMenu');
+  if (!bottomNavShell && !document.querySelector('[data-apk-strip-host]')) return;
+
+  function getApkStripMount() {
+    return document.querySelector('[data-apk-strip-host]') || document.getElementById('bottomNavMenu');
+  }
 
   function isVinorApkClient() {
     if (isVinorApk) return true;
@@ -338,26 +127,6 @@
   const UPDATE_NAV_KEY = 'vinor_express_app_update_nav_v1';
   const APP_VERSION_URLS = ['/api/express/app-version', '/api/app/version'];
 
-  navContainer.addEventListener('click', function (e) {
-    const link = e.target.closest && e.target.closest('a.tg-tab-disabled');
-    if (link) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!userLoggedIn) {
-        const key = link.getAttribute('data-nav-key') || '';
-        const dest = (link.getAttribute('href') || '').trim();
-        if (key === 'commissions' && dest && dest !== '#') {
-          const loginUrl = '/express/partner/login?next=' + encodeURIComponent(dest);
-          if (window.vinorExpressNavigate) {
-            window.vinorExpressNavigate(loginUrl, { forward: true });
-          } else {
-            window.location.href = loginUrl;
-          }
-        }
-      }
-    }
-  }, true);
-
   function formatBadgeCount(n) {
     const x = Math.max(0, Number(n) || 0);
     if (x <= 0) return '';
@@ -372,21 +141,6 @@
   function setNavBadge(navKey, count) {
     const n = Math.max(0, Number(count) || 0);
     const text = n <= 0 ? '' : formatBadgeCount(n);
-    const tab = navContainer.querySelector('[data-nav-key="' + navKey + '"]');
-    if (tab) {
-      const el = tab.querySelector('[data-role="nav-badge"]');
-      if (el) {
-        if (n <= 0) {
-          el.textContent = '';
-          el.classList.remove('is-visible');
-          el.setAttribute('aria-hidden', 'true');
-        } else {
-          el.textContent = text;
-          el.classList.add('is-visible');
-          el.setAttribute('aria-hidden', 'false');
-        }
-      }
-    }
     document.querySelectorAll('[data-profile-badge="' + navKey + '"]').forEach(function (el) {
       if (n <= 0) {
         el.textContent = '';
@@ -398,10 +152,6 @@
         el.setAttribute('aria-hidden', 'false');
       }
     });
-  }
-
-  function setProfileBadge(count) {
-    setNavBadge('notifications', count);
   }
 
   function readFavoritesCount() {
@@ -602,8 +352,8 @@
   }
 
   function renderApkStrip(show, opts) {
-    const nav = document.getElementById('bottomNavMenu');
-    if (!nav) return;
+    const mount = getApkStripMount();
+    if (!mount) return;
     opts = opts || {};
     if (!show) {
       const existing = getApkStripEl();
@@ -631,7 +381,9 @@
       strip.setAttribute('data-apk-strip', '');
       strip.setAttribute('download', '');
       strip.setAttribute('rel', 'noopener');
-      nav.insertBefore(strip, nav.firstChild);
+      mount.appendChild(strip);
+    } else if (strip.parentNode !== mount) {
+      mount.appendChild(strip);
     }
     strip.href = mode === 'update' && inApk ? '#' : url;
     strip.setAttribute('data-apk-strip-mode', mode);
@@ -740,30 +492,12 @@
 
   function applyUpdateNav(show, opts) {
     opts = opts || {};
-    if (isVinorApkClient()) {
-      renderApkStrip(!!show, Object.assign({ mode: 'update' }, opts));
-      if (show) ensureNativeApkDownload(opts);
+    if (!isVinorApkClient()) {
+      /* مرورگر: نوار install سرور را دست نزن؛ فقط حالت update مربوط به APK است */
+      return;
     }
-    const tab = navContainer.querySelector('[data-nav-key="profile"]');
-    if (!tab) return;
-    const label = tab.querySelector('.tg-tab-label');
-    const dot = tab.querySelector('[data-role="nav-update-dot"]');
-    if (!label) return;
-    if (show) {
-      label.textContent = 'بروزرسانی';
-      label.classList.add('tg-tab-label--update');
-      if (dot) dot.classList.add('is-visible');
-      if (opts.url) tab.setAttribute('data-update-url', opts.url);
-      tab.classList.add('tg-tab-has-update');
-      tab.setAttribute('aria-label', 'بروزرسانی اپلیکیشن');
-    } else {
-      label.textContent = 'پروفایل';
-      label.classList.remove('tg-tab-label--update');
-      if (dot) dot.classList.remove('is-visible');
-      tab.removeAttribute('data-update-url');
-      tab.classList.remove('tg-tab-has-update');
-      tab.setAttribute('aria-label', 'من');
-    }
+    renderApkStrip(!!show, Object.assign({ mode: 'update' }, opts));
+    if (show) ensureNativeApkDownload(opts);
   }
 
   function syncUpdateNavFromStored() {
@@ -867,6 +601,9 @@
     refreshUpdateNavFromServer();
   };
 
+  window.__vinorSyncBottomNavBadges = syncAllNavBadges;
+  window.vinorClearBottomNavMenuCache = function () {};
+
   window.addEventListener('vinor:app-update:nav', function (ev) {
     try {
       const d = (ev && ev.detail) || {};
@@ -886,17 +623,14 @@
     } catch (_) {}
   });
 
-  const bottomNavShell = document.getElementById('bottomNavMenu');
-  if (bottomNavShell) {
-    bottomNavShell.addEventListener('click', function (e) {
-      const strip = e.target.closest && e.target.closest('[data-apk-strip]');
-      if (!strip || strip.getAttribute('data-apk-strip-mode') !== 'update') return;
-      if (!isVinorApkClient()) return;
-      e.preventDefault();
-      e.stopPropagation();
-      triggerApkUpdateInstall();
-    }, true);
-  }
+  document.addEventListener('click', function (e) {
+    const strip = e.target.closest && e.target.closest('[data-apk-strip]');
+    if (!strip || strip.getAttribute('data-apk-strip-mode') !== 'update') return;
+    if (!isVinorApkClient()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    triggerApkUpdateInstall();
+  }, true);
 
   window.addEventListener('vinor:notifications:update', function (ev) {
     try {
@@ -912,180 +646,6 @@
   document.addEventListener('vinor-favs-changed', function () {
     syncFavoritesBadge();
   });
-
-  function tgTabClass(isActive, isDisabled) {
-    const base = 'tg-tab flex flex-col items-center justify-center px-0.5 py-0.5 ';
-    return base + (isActive ? 'tg-tab-active ' : '') + (isDisabled ? 'tg-tab-disabled' : '');
-  }
-
-  const MENU_CACHE_KEY = 'vinor_express_bottom_nav_menu_v15';
-  const MENU_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
-
-  const PROFILE_NAV_PATHS = [
-    '/express/partner/favorites',
-    '/express/partner/requests',
-    '/express/partner/top-sellers',
-    '/express/partner/invite',
-    '/express/partner/training',
-    '/express/partner/routine',
-    '/express/partner/legal/privacy',
-    '/express/partner/legal/terms',
-    '/express/partner/profile/edit'
-  ];
-
-  function resolveActiveNavKey() {
-    let path = '';
-    try {
-      path = (window.location.pathname || '').replace(/\/$/, '') || '';
-    } catch (_) {}
-    if (path.indexOf('/express/partner/commissions') === 0) return 'profile';
-    if (path === '/express/partner/home' || path === '/express/partner/dashboard') return 'home';
-    if (path === '/express/partner/home' || path === '/express/partner/cooperation-terms') return 'home';
-    for (let i = 0; i < PROFILE_NAV_PATHS.length; i++) {
-      const base = PROFILE_NAV_PATHS[i];
-      if (path === base || path.indexOf(base + '/') === 0) return 'profile';
-    }
-    return activeKey || '';
-  }
-
-  window.vinorClearBottomNavMenuCache = function () {
-    try { sessionStorage.removeItem(MENU_CACHE_KEY); } catch (_) {}
-  };
-  window.__vinorSyncBottomNavBadges = syncAllNavBadges;
-
-  function sanitizeMenu(menuItems) {
-    return (menuItems || []).filter(function (item) {
-      return item &&
-        item.key !== 'routine' &&
-        item.key !== 'favorites' &&
-        item.key !== 'notifications' &&
-        item.key !== 'files' &&
-        item.key !== 'commissions';
-    });
-  }
-
-  function menuMatchesSession(menuItems) {
-    const loginKeys = [];
-    return (menuItems || []).every(function (item) {
-      if (!item || loginKeys.indexOf(item.key) === -1) return true;
-      return userLoggedIn ? item.disabled !== true : item.disabled === true;
-    });
-  }
-
-  function readMenuCache() {
-    try {
-      const raw = sessionStorage.getItem(MENU_CACHE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !Array.isArray(parsed.menu) || !parsed.ts) return null;
-      if (Date.now() - parsed.ts > MENU_CACHE_MAX_AGE_MS) return null;
-      const menu = sanitizeMenu(parsed.menu);
-      if (!menuMatchesSession(menu)) return null;
-      return menu;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function writeMenuCache(menu) {
-    try {
-      sessionStorage.setItem(MENU_CACHE_KEY, JSON.stringify({ menu: menu, ts: Date.now() }));
-    } catch (_) {}
-  }
-
-  async function loadMenuFromAPI() {
-    const cachedMenu = readMenuCache();
-    if (cachedMenu) {
-      renderMenu(cachedMenu);
-    }
-
-    try {
-      const response = await fetch('/api/menu', {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        credentials: 'same-origin',
-        cache: 'no-store'
-      });
-
-      if (!response.ok) {
-        if (!cachedMenu) console.warn('Failed to load menu from API');
-        return;
-      }
-
-      const data = await response.json();
-      if (data.success && data.menu && Array.isArray(data.menu)) {
-        var menu = sanitizeMenu(data.menu);
-        writeMenuCache(menu);
-        renderMenu(menu);
-      }
-    } catch (error) {
-      if (!cachedMenu) console.warn('Error loading menu from API:', error);
-    }
-  }
-
-  function renderMenu(menuItems) {
-    menuItems = sanitizeMenu(menuItems);
-    if (!navContainer || !Array.isArray(menuItems) || menuItems.length === 0) return;
-
-    const currentActiveKey = resolveActiveNavKey();
-
-    navContainer.innerHTML = '';
-    var n = menuItems.length;
-    navContainer.className = 'grid gap-0 min-h-[52px] w-full items-center';
-    navContainer.style.gridTemplateColumns = 'repeat(' + n + ', minmax(0, 1fr))';
-
-    menuItems.forEach(item => {
-      const isActive = currentActiveKey === item.key;
-      const isDisabled = item.disabled === true;
-      const link = document.createElement('a');
-      link.href = item.url || '#';
-      link.className = tgTabClass(isActive, isDisabled);
-      link.setAttribute('aria-current', isActive ? 'page' : 'false');
-      link.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
-      link.setAttribute('data-nav-key', item.key);
-      if (isDisabled) {
-        link.setAttribute('tabindex', '-1');
-        link.addEventListener('click', function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-        }, true);
-      }
-
-      const stack = document.createElement('span');
-      stack.className = 'tg-tab-stack flex flex-col items-center justify-center gap-0.5 px-2 py-1';
-
-      const iconWrap = document.createElement('span');
-      iconWrap.className = 'tg-tab-icon-wrap';
-      iconWrap.setAttribute('aria-hidden', 'true');
-
-      const iconOuter = document.createElement('span');
-      iconOuter.className = 'tg-tab-icon flex items-center justify-center';
-      const icon = document.createElement('i');
-      icon.className = `fas ${item.icon || 'fa-circle'}`;
-      iconOuter.appendChild(icon);
-      iconWrap.appendChild(iconOuter);
-
-      if (item.key === 'profile') {
-        const updateDot = document.createElement('span');
-        updateDot.className = 'tg-tab-update-dot';
-        updateDot.setAttribute('data-role', 'nav-update-dot');
-        updateDot.setAttribute('aria-hidden', 'true');
-        iconWrap.appendChild(updateDot);
-      }
-
-      stack.appendChild(iconWrap);
-
-      const label = document.createElement('span');
-      label.className = 'tg-tab-label text-[10px] leading-none max-w-full truncate text-center px-0.5';
-      label.textContent = item.label || '';
-      stack.appendChild(label);
-
-      link.appendChild(stack);
-      navContainer.appendChild(link);
-    });
-    syncUpdateNavFromStored();
-    syncAllNavBadges();
-  }
 
   if (serverShowAppUpdate) {
     persistUpdateNav({ show: true, version: serverApkVersion, url: serverApkUrl });
@@ -1104,53 +664,53 @@
       }
     } catch (_) {}
     syncNativeDownloadUi();
-  } else {
-    syncUpdateNavFromStored();
   }
+
+  /* اگر سرور بنر گذاشته، در mount درست (بالای کامپوزر یا پایین صفحه) نگه/بازیابی کن */
+  (function ensureInstallStripInMount() {
+    if (isVinorApkClient()) return;
+    if (apkStripDismissedThisEntry()) return;
+    if (!serverShowApkStrip || !serverApkUrl) return;
+    var mount = getApkStripMount();
+    if (!mount) return;
+    var strip = getApkStripEl();
+    if (!strip) {
+      renderApkStrip(true, {
+        mode: serverApkStripMode || 'install',
+        url: serverApkUrl,
+        version: serverApkVersion
+      });
+      return;
+    }
+    if (strip.parentNode !== mount) mount.appendChild(strip);
+    setApkBannerClass(true);
+  })();
 
   window.addEventListener('vinor:express-page-swap', function () {
     try {
       if (typeof window.__vinorSyncApkStrip === 'function') window.__vinorSyncApkStrip();
       bindExistingApkStripSwipe();
+      if (!isVinorApkClient()) {
+        var mount = getApkStripMount();
+        var strip = getApkStripEl();
+        if (mount && strip && strip.parentNode !== mount) mount.appendChild(strip);
+      }
     } catch (_) {}
   });
 
   bindExistingApkStripSwipe();
 
-  // تب «منو» روی خانه → باز کردن کشوی پروفایل بدون ترک صفحه
-  document.addEventListener('click', function (e) {
-    var tab = e.target && e.target.closest ? e.target.closest('[data-nav-profile-drawer]') : null;
-    if (!tab) return;
-    var path = '';
-    try { path = (window.location.pathname || '').replace(/\/+$/, '') || ''; } catch (_) {}
-    if (path !== '/express/partner/home') return;
-    if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
-      e.preventDefault();
-      e.stopPropagation();
-      window.vinorProfileDrawer.open();
-    }
-  }, true);
-
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
       bindExistingApkStripSwipe();
       syncAllNavBadges();
-      loadMenuFromAPI();
       if (isVinorApkClient()) window.__vinorSyncApkStrip();
     });
   } else {
     bindExistingApkStripSwipe();
     syncAllNavBadges();
-    loadMenuFromAPI();
     if (isVinorApkClient()) window.__vinorSyncApkStrip();
   }
-
-  window.addEventListener('storage', (e) => {
-    if (e.key === 'vinor_session' || e.key === 'vinor_user') {
-      try { sessionStorage.removeItem(MENU_CACHE_KEY); } catch (_) {}
-      loadMenuFromAPI();
-    }
-  });
 
 })();
 </script>

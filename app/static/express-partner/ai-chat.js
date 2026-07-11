@@ -124,6 +124,29 @@
     }
   }
 
+  function syncComposerReady() {
+    if (!form || !input || !btn) return;
+    if (
+      submitting ||
+      form.classList.contains('ai-composer--readonly') ||
+      input.disabled
+    ) {
+      form.classList.remove('ai-composer--ready');
+      btn.disabled = true;
+      return;
+    }
+    var ready = (input.value || '').trim().length >= MIN_MSG_LEN;
+    form.classList.toggle('ai-composer--ready', ready);
+    btn.disabled = !ready;
+  }
+
+  function autoGrowInput() {
+    if (!input) return;
+    input.style.height = 'auto';
+    var next = Math.min(input.scrollHeight, 152);
+    input.style.height = Math.max(24, next) + 'px';
+  }
+
   function setComposerMode(postchi) {
     if (!input) return;
     if (postchi) {
@@ -136,15 +159,16 @@
         btn.setAttribute('aria-disabled', 'true');
       }
       form.classList.add('ai-composer--readonly');
+      form.classList.remove('ai-composer--ready');
+      autoGrowInput();
     } else {
-      input.placeholder = 'پیام خود را بنویسید…';
+      input.placeholder = 'از وینور AI بپرسید…';
       input.disabled = false;
       input.removeAttribute('aria-disabled');
-      if (btn) {
-        btn.disabled = false;
-        btn.removeAttribute('aria-disabled');
-      }
+      if (btn) btn.removeAttribute('aria-disabled');
       form.classList.remove('ai-composer--readonly');
+      syncComposerReady();
+      autoGrowInput();
     }
   }
 
@@ -155,8 +179,14 @@
       if (newChatBtn) newChatBtn.disabled = !!on;
       return;
     }
-    btn.disabled = !!on;
-    input.disabled = !!on;
+    if (on) {
+      btn.disabled = true;
+      input.disabled = true;
+      form.classList.remove('ai-composer--ready');
+    } else {
+      input.disabled = false;
+      syncComposerReady();
+    }
     if (newChatBtn) newChatBtn.disabled = !!on;
   }
 
@@ -1107,6 +1137,7 @@
     removeWelcome();
     appendMessage({ role: 'user', content: msg }, { pendingUser: true });
     input.value = '';
+    autoGrowInput();
     setBusy(true);
 
     if (isPostchiMode()) {
@@ -1215,4 +1246,12 @@
       form.requestSubmit();
     }
   });
+
+  input.addEventListener('input', function () {
+    autoGrowInput();
+    syncComposerReady();
+  });
+
+  autoGrowInput();
+  syncComposerReady();
 })();

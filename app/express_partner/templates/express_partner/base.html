@@ -247,10 +247,13 @@
     body > .ld-actions[data-land-detail-footer] {
       z-index: 70;
     }
-    /* فضای اضافه زیر محتوا وقتی نوار «دانلود اپ» بالای منوی پایین نمایش داده می‌شود (فقط مرورگر) */
+    /* بدون تب‌بار پایین — فقط safe-area؛ با بنر اپ فضای بیشتر */
     @media (max-width: 1023px) {
+      [class*="pb-[calc(5.75rem"] {
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+      }
       html.vinor-has-apk-banner [class*="pb-[calc(5.75rem"] {
-        padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px)) !important;
       }
     }
     body > [data-tg-body-modal] {

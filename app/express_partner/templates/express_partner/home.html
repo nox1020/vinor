@@ -5,7 +5,7 @@
 {% include 'express_partner/partials/home_page_styles.html' %}
 
 <div id="homeDashboardPage"
-     class="home-dashboard-page{% if home_ai_enabled|default(false) %} home-dashboard-page--ai{% endif %} min-h-[100dvh] bg-[#030712]{% if not home_ai_enabled|default(false) %} pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16{% endif %} text-zinc-100"
+     class="home-dashboard-page{% if home_ai_enabled|default(false) %} home-dashboard-page--ai{% endif %} min-h-[100dvh] bg-[#030712]{% if not home_ai_enabled|default(false) %} pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-8{% endif %} text-zinc-100"
      data-vinor-home-page>
   {% set menu_href = url_for('express_partner.home') %}
   {% set profile_drawer = true %}
@@ -44,6 +44,9 @@
     </div>
 
     {% if home_ai_enabled|default(false) %}
+    <div id="vinorApkStripHost" class="vinor-apk-strip-host" data-apk-strip-host>
+      {% include 'express_partner/partials/apk_download_strip.html' %}
+    </div>
     {% set chat_mode = 'home-inline' %}
     {% include 'express_partner/partials/ai_chat_composer.html' %}
     {% endif %}
@@ -58,7 +61,7 @@
 {{ super() }}
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=27"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=28"></script>
 <script>
 (function () {
   try {

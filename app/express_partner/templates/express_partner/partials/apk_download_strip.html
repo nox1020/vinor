@@ -1,0 +1,24 @@
+{# بنر دانلود/بروزرسانی APK — یک نمونه در صفحه #}
+{% if show_apk_strip and android_apk_url %}
+<a href="{% if apk_strip_mode == 'update' %}#{% else %}{{ android_apk_url }}{% endif %}"
+   class="vinor-apk-download-strip{% if apk_strip_mode == 'update' %} vinor-apk-download-strip--update{% endif %}"
+   data-apk-strip
+   data-apk-strip-mode="{{ apk_strip_mode or 'install' }}"
+   {% if apk_strip_mode == 'update' %}data-apk-update-url="{{ android_apk_url }}"{% else %}download{% endif %}
+   rel="noopener"
+   aria-label="{% if apk_strip_mode == 'update' %}بروزرسانی اپلیکیشن وینور{% else %}دانلود اپلیکیشن وینور اندروید{% endif %}">
+  <span class="vinor-apk-download-strip__icon" aria-hidden="true">
+    <i class="fas {% if apk_strip_mode == 'update' %}fa-arrow-circle-up{% else %}fa-mobile-alt{% endif %}"></i>
+  </span>
+  <span class="vinor-apk-download-strip__text">
+    {% if apk_strip_mode == 'update' %}
+    <span class="vinor-apk-download-strip__title" data-apk-strip-title>بروزرسانی کنید</span>
+    <span class="vinor-apk-download-strip__sub" data-apk-strip-sub>{% if android_apk_version %}نسخه جدید {{ android_apk_version }}{% endif %}</span>
+    {% else %}
+    <span class="vinor-apk-download-strip__title" data-apk-strip-title>برای تجربه بهتر، اپلیکیشن وینور را نصب کنید</span>
+    <span class="vinor-apk-download-strip__sub" data-apk-strip-sub>{% if android_apk_version %}نسخه {{ android_apk_version }}{% endif %}</span>
+    {% endif %}
+  </span>
+  <span class="vinor-apk-download-strip__cta" data-apk-strip-cta>{% if apk_strip_mode == 'update' %}بروزرسانی{% else %}دانلود{% endif %}</span>
+</a>
+{% endif %}
