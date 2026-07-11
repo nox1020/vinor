@@ -165,36 +165,68 @@ def send_fcm_to_token(
     }
 
     endpoint = f"https://fcm.googleapis.com/v1/projects/{project}/messages:send"
-    try:
-        resp = requests.post(
-            endpoint,
-            headers={
-                "Authorization": f"Bearer {access}",
-                "Content-Type": "application/json; charset=UTF-8",
-            },
-            json=payload,
-            timeout=8,
-        )
-        if resp.status_code == 200:
-            return {"ok": True}
-        err_body = resp.text[:500]
-        remove = False
+    last_err: Optional[str] = None
+    for attempt in range(2):
         try:
-            err_json = resp.json()
-            details = (((err_json.get("error") or {}).get("details")) or [])
-            for d in details:
-                code = (d.get("errorCode") or "").upper()
-                if code == "UNREGISTERED":
-                    remove = True
-        except Exception:
-            pass
-        if resp.status_code in (404, 410):
-            remove = True
-        if remove:
-            unregister_token(token)
-        return {"ok": False, "error": err_body, "remove": remove}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+            resp = requests.post(
+                endpoint,
+                headers={
+                    "Authorization": f"Bearer {access}",
+                    "Content-Type": "application/json; charset=UTF-8",
+                },
+                json=payload,
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                return {"ok": True}
+            err_body = resp.text[:500]
+            remove = _fcm_error_means_dead_token(resp.status_code, err_body)
+            if remove:
+                try:
+                    unregister_token(token)
+                except Exception:
+                    pass
+                return {"ok": False, "error": "UNREGISTERED", "remove": True}
+            return {"ok": False, "error": err_body, "remove": False}
+        except requests.exceptions.SSLError as e:
+            last_err = str(e)
+            if attempt == 0:
+                time.sleep(0.35)
+                continue
+            return {"ok": False, "error": f"SSL:{last_err[:180]}"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+    return {"ok": False, "error": last_err or "FCM_SEND_FAILED"}
+
+
+def _fcm_error_means_dead_token(status_code: int, err_body: str) -> bool:
+    if status_code in (404, 410):
+        return True
+    blob = (err_body or "").upper()
+    if "UNREGISTERED" in blob or "NOTFOUND" in blob:
+        return True
+    if "INVALIDARGUMENT" in blob and "TOKEN" in blob:
+        return True
+    try:
+        err_json = json.loads(err_body)
+    except Exception:
+        return False
+    if not isinstance(err_json, dict):
+        return False
+    err = err_json.get("error") if isinstance(err_json.get("error"), dict) else {}
+    status = str(err.get("status") or "").upper()
+    if status in ("NOT_FOUND", "UNREGISTERED"):
+        return True
+    for d in err.get("details") or []:
+        if not isinstance(d, dict):
+            continue
+        code = str(d.get("errorCode") or "").upper()
+        if code == "UNREGISTERED":
+            return True
+        # فقط وقتی پیام دربارهٔ خود توکن است
+        if code == "INVALID_ARGUMENT" and "TOKEN" in blob:
+            return True
+    return False
 
 
 def send_fcm_to_phones(
@@ -206,9 +238,10 @@ def send_fcm_to_phones(
 ) -> Dict[str, int]:
     tokens = tokens_for_phones(phones)
     if not tokens:
-        return {"sent": 0, "failed": 0, "skipped": len(phones), "targets": 0}
+        return {"sent": 0, "failed": 0, "skipped": len(phones), "targets": 0, "removed": 0}
     sent = 0
     failed = 0
+    removed = 0
     app = current_app._get_current_object()
 
     def _send_one(tok: str) -> Dict[str, Any]:
@@ -216,7 +249,7 @@ def send_fcm_to_phones(
             ensure_firebase_ready(app)
             return send_fcm_to_token(tok, title=title, body=body, url=url)
 
-    workers = min(16, max(2, len(tokens)))
+    workers = min(8, max(2, len(tokens)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(_send_one, tok): tok for tok in tokens}
         for fut in as_completed(futures):
@@ -226,9 +259,18 @@ def send_fcm_to_phones(
                     sent += 1
                 else:
                     failed += 1
+                    if res.get("remove"):
+                        removed += 1
+                        continue
                     try:
-                        err = str(res.get("error") or "")[:400]
-                        if err:
+                        err = str(res.get("error") or "")[:220]
+                        # UNREGISTERED قبلاً پاک شده؛ SSL را فقط یک‌بار کوتاه لاگ کن
+                        if err.startswith("SSL:"):
+                            current_app.logger.info(
+                                "FCM SSL soft-fail token=%s…",
+                                futures[fut][:12],
+                            )
+                        elif err and "UNREGISTERED" not in err.upper():
                             current_app.logger.warning(
                                 "FCM send failed token=%s… error=%s",
                                 futures[fut][:12],
@@ -238,7 +280,12 @@ def send_fcm_to_phones(
                         pass
             except Exception:
                 failed += 1
-    return {"sent": sent, "failed": failed, "targets": len(tokens)}
+    return {
+        "sent": sent,
+        "failed": failed,
+        "targets": len(tokens),
+        "removed": removed,
+    }
 
 
 def send_fcm_to_user_background(

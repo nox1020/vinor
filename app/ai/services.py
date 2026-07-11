@@ -266,12 +266,19 @@ def _call_deepseek(
 
     if not (200 <= resp.status_code < 300):
         err_msg = _friendly_deepseek_error(resp.status_code, body)
+        blob = _api_error_blob(body)
+        depleted = resp.status_code == 402 or "insufficientbalance" in blob
         try:
-            current_app.logger.error(
-                "DeepSeek API error | status=%s | body=%s",
-                resp.status_code,
-                body,
-            )
+            if depleted:
+                current_app.logger.warning(
+                    "DeepSeek balance depleted (402) — API calls paused until recharge"
+                )
+            else:
+                current_app.logger.error(
+                    "DeepSeek API error | status=%s | body=%s",
+                    resp.status_code,
+                    body,
+                )
         except Exception:
             pass
         out: dict[str, Any] = {
@@ -279,8 +286,7 @@ def _call_deepseek(
             "error": err_msg,
             "error_code": "deepseek_api",
         }
-        blob = _api_error_blob(body)
-        if resp.status_code == 402 or "insufficientbalance" in blob:
+        if depleted:
             mark_api_balance_depleted()
             out["balance_depleted"] = True
         return out

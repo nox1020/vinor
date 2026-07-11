@@ -767,7 +767,7 @@ def _scheduler_loop(app: Flask) -> None:
 
 
 def schedule_sales_coach_nudge(app: Flask) -> None:
-    """زمان‌بندی پیگیری فروش: ۱۰، ۱۴، ۲۰ تهران — اعلان + پیامک تا فروش نهایی."""
+    """زمان‌بندی پیگیری فروش — روی LiteSpeed فقط با cron؛ اینجا opt-in."""
     if os.environ.get("VINOR_DISABLE_SALES_COACH_NUDGE", "").strip().lower() in (
         "1",
         "true",
@@ -775,11 +775,11 @@ def schedule_sales_coach_nudge(app: Flask) -> None:
     ):
         app.logger.info("Sales coach nudge disabled via VINOR_DISABLE_SALES_COACH_NUDGE")
         return
-    flag = os.environ.get("VINOR_SALES_COACH_SCHEDULER", "1").strip().lower()
-    if flag in ("0", "false", "no", "off"):
+    flag = os.environ.get("VINOR_SALES_COACH_SCHEDULER", "").strip().lower()
+    if flag not in ("1", "true", "yes"):
         app.logger.info(
             "Sales coach in-process scheduler off "
-            "(cron: scripts/run_sales_coach_nudge.py or VINOR_SALES_COACH_SCHEDULER=1)"
+            "(cron: scripts/run_sales_coach_nudge.py every 10min, or VINOR_SALES_COACH_SCHEDULER=1)"
         )
         return
     threading.Thread(

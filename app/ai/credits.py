@@ -89,7 +89,8 @@ def notify_admin_balance_sms_if_needed() -> bool:
     return True
 
 
-def is_api_balance_depleted(max_age_sec: int = 86400) -> bool:
+def is_api_balance_depleted(max_age_sec: int = 604800) -> bool:
+    """پیش‌فرض ۷ روز قفل — جلوگیری از اسپم 402 روی سرور تا شارژ مجدد."""
     data = _load_cache()
     ts = float((data.get("flags") or {}).get("api_balance_depleted") or 0)
     if not ts:

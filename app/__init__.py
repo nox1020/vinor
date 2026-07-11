@@ -66,7 +66,16 @@ def _ensure_instance_folder(app: Flask) -> None:
 
 
 def _setup_logging(app: Flask) -> None:
-    handler = logging.StreamHandler()
+    class _SafeStreamHandler(logging.StreamHandler):
+        """جلوگیری از OSError/BrokenPipe روی stderr بسته‌شدهٔ LSAPI."""
+
+        def emit(self, record: logging.LogRecord) -> None:
+            try:
+                super().emit(record)
+            except (OSError, ValueError, BrokenPipeError):
+                pass
+
+    handler = _SafeStreamHandler()
     handler.setLevel(logging.INFO)
     fmt = logging.Formatter("[%(asctime)s] %(levelname)s in %(module)s: %(message)s")
     handler.setFormatter(fmt)
