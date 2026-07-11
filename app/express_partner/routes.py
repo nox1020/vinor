@@ -99,6 +99,7 @@ from .visit_requests import (
     partner_can_request_new_visit,
     partner_visit_approved_for_deal,
     partner_visit_completed,
+    partner_visit_customer_phone,
     request_visit_done_confirmation,
     restore_visit_approved_after_deal_release,
     visit_commission_ready_for_deal,
@@ -1298,7 +1299,7 @@ def require_special_partner(json_response: bool = False):
                 if json_response:
                     return jsonify({"success": False, "error": "not_special"}), 403
                 flash("این بخش فقط برای همکاران ویژه فعال است.", "warning")
-                return redirect(url_for("express_partner.profile"))
+                return redirect(url_for("express_partner.home", menu=1))
             return fn(*args, **kwargs)
         return wrapper
     return decorator
@@ -2224,7 +2225,7 @@ def _dashboard_selected_cities():
     return [p.strip() for p in raw.split(',') if p.strip()]
 
 
-HOME_SUGGESTED_FILES_LIMIT = 5
+HOME_SUGGESTED_FILES_LIMIT = 1
 
 
 def _home_urgent_actions(
@@ -2247,6 +2248,12 @@ def _home_urgent_actions(
             if not code:
                 continue
             land_label = (land.get('title') or code).strip()
+            cust_phone = ''
+            try:
+                cust_phone = partner_visit_customer_phone(visit_rows, ph, code)
+            except Exception:
+                cust_phone = ''
+            call_url = f'tel:{cust_phone}' if cust_phone else url_for('express_partner.land_detail', code=code)
             actions.append({
                 'key': 'contact_customer',
                 'icon': 'fa-phone',
@@ -2254,7 +2261,7 @@ def _home_urgent_actions(
                 'title': 'الان با مشتری تماس بگیر',
                 'subtitle': land_label,
                 'cta': 'تماس',
-                'url': url_for('express_partner.land_detail', code=code),
+                'url': call_url,
                 'priority': 100,
             })
             break
@@ -2307,7 +2314,7 @@ def _home_urgent_actions(
         })
 
     actions.sort(key=lambda a: int(a.get('priority') or 0), reverse=True)
-    return actions[:4]
+    return actions[:1]
 
 
 def _home_score_suggested_land(land: Dict[str, Any], *, now: datetime | None = None) -> float:
@@ -2426,12 +2433,10 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     ) if ph else []
 
     # همان لیست ساخت‌شده را دوباره استفاده کن (نه دومین بار scan کامل)
+    # «پیشنهاد امروز» = فقط بالاترین امتیاز (بدون رندوم)
     suggested_files = _home_suggested_files(
-        ph, is_approved, assigned_lands=assigned_lands
+        ph, is_approved, assigned_lands=assigned_lands, limit=1
     ) if ph else []
-    # «پیشنهاد امروز» فقط یک فایل رندوم نمایش داده شود.
-    if suggested_files:
-        suggested_files = [random.choice(suggested_files)]
 
     return {
         'success': True,
@@ -2443,6 +2448,111 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     }
 
 
+def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
+    """زمینهٔ لایه تمام‌صفحه Vinor AI — مشترک خانه و فایل‌ها."""
+    enabled = bool((me_phone or '').strip())
+    ctx: Dict[str, Any] = {
+        'home_ai_enabled': enabled,
+        'chat_messages': [],
+        'chat_threads': [],
+        'active_thread_id': '',
+        'postchi_thread_id': '__postchi__',
+        'home_ai_open': False,
+        'home_ai_open_thread': '',
+        'chat_api_url': '',
+        'clear_api_url': '',
+        'history_api_url': '',
+        'switch_thread_url': '',
+        'delete_thread_url': '',
+        'sync_api_url': '',
+        'agent_confirm_url': '',
+        'agent_cancel_url': '',
+        'postchi_messages_url': '',
+        'postchi_send_url': '',
+        'postchi_open_url': '',
+    }
+    if not enabled:
+        return ctx
+
+    chat_messages: List[Dict[str, Any]] = []
+    chat_threads: List[Dict[str, Any]] = []
+    active_thread_id = ''
+    postchi_thread_id = '__postchi__'
+    home_ai_open = False
+    home_ai_open_thread = ''
+    try:
+        from app.ai.audience import AUDIENCE_PARTNER
+        from app.ai.chat_store import ensure_active_thread, messages_for_ui
+        from app.services.postchi import (
+            POSTCHI_THREAD_ID,
+            is_postchi_thread,
+            open_postchi,
+            postchi_messages_for_ui,
+            threads_with_postchi,
+        )
+
+        open_tid = (request.args.get('thread') or '').strip()
+        want_ai = str(request.args.get('ai') or '').strip() in ('1', 'true', 'yes')
+        postchi_thread_id = POSTCHI_THREAD_ID
+        if is_postchi_thread(open_tid):
+            active_thread_id = POSTCHI_THREAD_ID
+            chat_messages = postchi_messages_for_ui(me_phone) or []
+            open_postchi(me_phone)
+            home_ai_open = True
+            home_ai_open_thread = POSTCHI_THREAD_ID
+        else:
+            ensure_active_thread(me_phone, audience=AUDIENCE_PARTNER)
+            threads_preview = threads_with_postchi(me_phone, audience=AUDIENCE_PARTNER)
+            active_thread_id = next(
+                (t['id'] for t in threads_preview if t.get('is_active')),
+                '',
+            )
+            if not active_thread_id:
+                active_thread_id = ensure_active_thread(me_phone, audience=AUDIENCE_PARTNER)
+            if open_tid and open_tid != active_thread_id:
+                home_ai_open = True
+                home_ai_open_thread = open_tid
+                active_thread_id = open_tid
+            chat_messages = messages_for_ui(me_phone, audience=AUDIENCE_PARTNER) or []
+            if want_ai or open_tid:
+                home_ai_open = True
+                if open_tid:
+                    home_ai_open_thread = open_tid
+        chat_threads = threads_with_postchi(
+            me_phone,
+            audience=AUDIENCE_PARTNER,
+            active_thread_id=active_thread_id,
+        )
+    except Exception:
+        chat_messages = []
+        chat_threads = []
+        active_thread_id = ''
+        home_ai_open = False
+        home_ai_open_thread = ''
+
+    ctx.update({
+        'home_ai_enabled': enabled,
+        'chat_messages': chat_messages,
+        'chat_threads': chat_threads,
+        'active_thread_id': active_thread_id,
+        'postchi_thread_id': postchi_thread_id,
+        'home_ai_open': home_ai_open,
+        'home_ai_open_thread': home_ai_open_thread,
+        'chat_api_url': url_for('express_partner.ai_chat'),
+        'clear_api_url': url_for('express_partner.ai_clear'),
+        'history_api_url': url_for('express_partner.ai_history'),
+        'switch_thread_url': url_for('express_partner.ai_switch_thread'),
+        'delete_thread_url': url_for('express_partner.ai_delete_thread'),
+        'sync_api_url': url_for('express_partner.ai_sync'),
+        'agent_confirm_url': url_for('express_partner.ai_agent_confirm'),
+        'agent_cancel_url': url_for('express_partner.ai_agent_cancel'),
+        'postchi_messages_url': url_for('express_partner.api_postchi_messages'),
+        'postchi_send_url': url_for('express_partner.api_postchi_send'),
+        'postchi_open_url': url_for('express_partner.api_postchi_open'),
+    })
+    return ctx
+
+
 @express_partner_bp.route('/home', methods=['GET'], endpoint='home')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def home_page():
@@ -2451,12 +2561,59 @@ def home_page():
     profile = getattr(g, 'express_partner_profile', None)
     payload = _build_home_dashboard_payload(me_phone, profile)
     partner_name = _partner_display_name(me_phone) if me_phone else ''
+    ai_ctx = _partner_ai_layer_context(me_phone)
+
+    # دادهٔ کشوی پروفایل (منوی GPT روی داشبورد)
+    drawer_profile = profile if isinstance(profile, dict) else {}
+    me_name = ''
+    is_special = False
+    public_username = ''
+    public_profile_url = ''
+    referral_bonus_per_invite = 0
+    is_vinor_apk = False
+    show_app_update_card = False
+    android_apk_url = ''
+    android_apk_version = ''
+    try:
+        me_name = (drawer_profile.get('name') or partner_name or '').strip()
+        is_approved_flag = bool(payload.get('is_approved'))
+        is_special = _is_partner_special(drawer_profile) if is_approved_flag else False
+        public_username = partner_public_username(drawer_profile) if drawer_profile else ''
+        public_profile_url = (
+            url_for('main.partner_profile_at', username=public_username) if public_username else ''
+        )
+        from .referrals import REFERRAL_BONUS_AMOUNT
+        referral_bonus_per_invite = REFERRAL_BONUS_AMOUNT
+        _settings = _express_settings_cached()
+        _raw_apk_url = (_settings.get('android_apk_url') or '').strip()
+        android_apk_version = (_settings.get('android_apk_version') or '').strip()
+        from ..utils.short_urls import public_apk_download_url
+        android_apk_url = public_apk_download_url(_settings, external=False) if _raw_apk_url else ''
+        from ..utils.apk_version import is_vinor_apk_request, should_show_apk_update
+        is_vinor_apk = is_vinor_apk_request(request)
+        show_app_update_card = should_show_apk_update(
+            android_apk_version,
+            apk_url=_raw_apk_url,
+            req=request,
+        )
+    except Exception:
+        pass
+
     resp = make_response(render_template(
         'express_partner/home.html',
-        profile=profile,
+        profile=drawer_profile or profile,
         me_phone=me_phone,
+        me_name=me_name,
         partner_name=partner_name,
         is_approved=payload.get('is_approved'),
+        is_special=is_special,
+        public_username=public_username,
+        public_profile_url=public_profile_url,
+        referral_bonus_per_invite=referral_bonus_per_invite,
+        is_vinor_apk=is_vinor_apk,
+        show_app_update_card=show_app_update_card,
+        android_apk_url=android_apk_url,
+        android_apk_version=android_apk_version,
         has_pending_app=payload.get('has_pending_app'),
         urgent_actions=payload.get('urgent_actions') or [],
         suggested_files=payload.get('suggested_files') or [],
@@ -2466,6 +2623,7 @@ def home_page():
         domain='vinor.ir',
         seo_title='داشبورد | وینور اکسپرس',
         seo_description='مرکز مدیریت روزانه همکار — اقدامات فوری و فایل‌های پیشنهادی.',
+        **ai_ctx,
     ))
     if not me_phone:
         resp.headers['Cache-Control'] = 'public, max-age=60, stale-while-revalidate=120'
@@ -2500,6 +2658,7 @@ def dashboard_redirect():
 def files_page():
     me_phone = (session.get("user_phone") or "").strip()
     profile = getattr(g, 'express_partner_profile', None)
+    ai_ctx = _partner_ai_layer_context(me_phone)
 
     # فیلتر جستجو و شهر برای نمایش نتایج در همان داشبورد
     search_query = (request.args.get('q', '') or '').strip().lower()
@@ -2591,6 +2750,7 @@ def files_page():
         seo_description=seo_description,
         canonical_url=canonical_url,
         bottom_nav_active='files',
+        **ai_ctx,
     ))
     # برای کاربران مهمان: کش عمومی کوتاه برای سئو و سرعت
     if not me_phone and not profile:
@@ -3875,8 +4035,8 @@ def verify():
 @express_partner_bp.route('/help', methods=['GET'], endpoint='help')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def help():
-    """صفحه راهنما حذف شد — هدایت به دستیار AI."""
-    return redirect(url_for('express_partner.ai'))
+    """صفحه راهنما حذف شد — هدایت به دستیار AI روی داشبورد."""
+    return redirect(url_for('express_partner.home', ai=1))
 
 
 @express_partner_bp.route('/training', methods=['GET'], endpoint='training')
@@ -4069,59 +4229,11 @@ def routine_complete():
 @express_partner_bp.get('/ai', endpoint='ai')
 @require_partner_access(allow_pending=True)
 def ai_page():
-    from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import (
-        ensure_active_thread,
-        messages_for_ui,
-    )
-    from app.services.postchi import (
-        POSTCHI_THREAD_ID,
-        is_postchi_thread,
-        open_postchi,
-        postchi_messages_for_ui,
-        threads_with_postchi,
-    )
-
-    phone = (session.get('user_phone') or '').strip()
-    open_tid = (request.args.get('thread') or '').strip()
-    if is_postchi_thread(open_tid):
-        active_thread_id = POSTCHI_THREAD_ID
-        chat_messages = postchi_messages_for_ui(phone)
-        open_postchi(phone)
-    else:
-        ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
-        threads = threads_with_postchi(phone, audience=AUDIENCE_PARTNER)
-        active_thread_id = next((t['id'] for t in threads if t.get('is_active')), '')
-        if not active_thread_id:
-            active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
-        chat_messages = messages_for_ui(phone, audience=AUDIENCE_PARTNER)
-    threads = threads_with_postchi(
-        phone,
-        audience=AUDIENCE_PARTNER,
-        active_thread_id=active_thread_id,
-    )
-    resp = make_response(
-        render_template(
-            'express_partner/ai.html',
-            hide_header=True,
-            chat_messages=chat_messages,
-            chat_threads=threads,
-            active_thread_id=active_thread_id,
-            ai_audience='partner',
-            postchi_thread_id=POSTCHI_THREAD_ID,
-            chat_api_url=url_for('express_partner.ai_chat'),
-            clear_api_url=url_for('express_partner.ai_clear'),
-            history_api_url=url_for('express_partner.ai_history'),
-            switch_thread_url=url_for('express_partner.ai_switch_thread'),
-            delete_thread_url=url_for('express_partner.ai_delete_thread'),
-            sync_api_url=url_for('express_partner.ai_sync'),
-            postchi_messages_url=url_for('express_partner.api_postchi_messages'),
-            postchi_send_url=url_for('express_partner.api_postchi_send'),
-            postchi_open_url=url_for('express_partner.api_postchi_open'),
-        )
-    )
-    _append_partner_tab_prefetch(resp)
-    return resp
+    """صفحه جداگانه AI حذف شد — چت کامل روی /home."""
+    thread = (request.args.get('thread') or '').strip()
+    if thread:
+        return redirect(url_for('express_partner.home', ai=1, thread=thread), code=302)
+    return redirect(url_for('express_partner.home', ai=1), code=302)
 
 
 @express_partner_bp.get('/ai/sync', endpoint='ai_sync')
@@ -4229,12 +4341,14 @@ def ai_chat():
         return jsonify(result), ai_chat_http_status(result)
 
     land_codes = result.get('land_codes') or []
+    agent_actions = result.get('agent_actions') or []
     msgs, tid = append_exchange(
         phone,
         message,
         result.get('reply') or '',
         thread_id=thread_id,
         assistant_land_codes=land_codes,
+        assistant_agent_actions=agent_actions,
         audience=AUDIENCE_PARTNER,
     )
     result['messages'] = msgs
@@ -4246,6 +4360,64 @@ def ai_chat():
         active_thread_id=tid,
     )
     return jsonify(result)
+
+
+@express_partner_bp.post('/ai/agent/confirm', endpoint='ai_agent_confirm')
+@require_partner_access(allow_pending=True, json_response=True)
+def ai_agent_confirm():
+    """تأیید کاربر برای اقدام پیشنهادی AI (فعلاً ثبت بازدید)."""
+    from app.ai.agent_tools import confirm_visit_from_token
+    from app.ai.audience import AUDIENCE_PARTNER
+    from app.ai.chat_store import append_exchange, ensure_active_thread
+
+    phone = (session.get('user_phone') or '').strip()
+    data = request.get_json(silent=True) or {}
+    token = (data.get('token') or '').strip()
+    thread_id = (data.get('thread_id') or '').strip() or None
+    if not token:
+        return jsonify({'ok': False, 'error': 'توکن اقدام نامعتبر است.'}), 400
+
+    if not thread_id:
+        thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
+
+    out = confirm_visit_from_token(phone=phone, token=token)
+    if not out.get('ok'):
+        return jsonify(out), 400
+
+    note = str(out.get('message') or 'اقدام با موفقیت انجام شد.')
+    if out.get('requests_url'):
+        note = note + '\nبرای پیگیری: درخواست‌های بازدید.'
+    msgs, tid = append_exchange(
+        phone,
+        '',
+        note,
+        thread_id=thread_id,
+        audience=AUDIENCE_PARTNER,
+    )
+    # append_exchange با user_text خالی فقط assistant می‌گذارد — اما شرط if user_text رد می‌شود.
+    # اگر فقط assistant نیاز است و user خالی است، تابع فعلی فقط وقتی assistant_text باشد append می‌کند.
+    return jsonify({
+        'ok': True,
+        'message': out.get('message'),
+        'already': bool(out.get('already')),
+        'requests_url': out.get('requests_url') or '',
+        'thread_id': tid,
+        'messages': msgs,
+        'visit_id': out.get('visit_id') or '',
+    })
+
+
+@express_partner_bp.post('/ai/agent/cancel', endpoint='ai_agent_cancel')
+@require_partner_access(allow_pending=True, json_response=True)
+def ai_agent_cancel():
+    from app.ai.agent_tools import cancel_pending_action
+
+    phone = (session.get('user_phone') or '').strip()
+    data = request.get_json(silent=True) or {}
+    token = (data.get('token') or '').strip()
+    if not token:
+        return jsonify({'ok': False, 'error': 'توکن نامعتبر است.'}), 400
+    return jsonify(cancel_pending_action(phone=phone, token=token))
 
 
 @express_partner_bp.post('/ai/clear', endpoint='ai_clear')
@@ -4389,6 +4561,8 @@ def _mark_in_transaction_finish(
     visit_date: str | None = None,
     redirect_url: str | None = None,
     can_revisit: bool | None = None,
+    customer_phone: str | None = None,
+    customer_name: str | None = None,
 ):
     """پاسخ HTML (redirect) یا JSON برای درخواست AJAX جزئیات فایل."""
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -4407,6 +4581,10 @@ def _mark_in_transaction_finish(
                 payload['visit_date_jalali'] = jalali
         if can_revisit is not None:
             payload['can_revisit'] = bool(can_revisit)
+        if customer_phone:
+            payload['customer_phone'] = str(customer_phone).strip()
+        if customer_name:
+            payload['customer_name'] = str(customer_name).strip()
         if success and redirect_url:
             payload['redirect_url'] = redirect_url
         return jsonify(payload), (200 if success else 400)
@@ -4730,6 +4908,12 @@ def create_visit_request(code: str):
             new_status='active',
             tx_mode=tx_state.get('tx_mode') or 'visit_pending',
             visit_date=vdate,
+            customer_phone=tx_state.get('customer_phone')
+            or (open_rec or {}).get('customer_phone')
+            or '',
+            customer_name=tx_state.get('customer_name')
+            or (open_rec or {}).get('customer_name')
+            or '',
             redirect_url=url_for('express_partner.requests', submitted=1),
         )
     if err == 'customer_required':
@@ -4820,6 +5004,9 @@ def create_visit_request(code: str):
         tx_mode=tx_state.get('tx_mode') or 'visit_pending',
         visit_date=tx_state.get('visit_date') or rec.get('visit_date') or visit_date,
         can_revisit=tx_state.get('can_revisit'),
+        customer_phone=tx_state.get('customer_phone') or customer_phone,
+        customer_name=tx_state.get('customer_name')
+        or f'{customer_first_name} {customer_last_name}'.strip(),
         redirect_url=url_for('express_partner.requests', submitted=1),
     )
 
@@ -5667,61 +5854,11 @@ def build_partner_brand_context(
 @express_partner_bp.route('/profile', methods=['GET'], endpoint='profile')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def profile_page():
+    """صفحه پروفایل حذف شد — گزینه‌ها در منوی راست داشبورد هستند."""
     me_phone = (session.get('user_phone') or '').strip()
-    profile = getattr(g, 'express_partner_profile', None) or {}
     if not me_phone:
-        return redirect(url_for('express_partner.login', next=url_for('express_partner.profile')))
-
-    try:
-        is_approved = _is_partner_approved(profile)
-    except Exception:
-        is_approved = False
-    me_name = (profile.get('name') or '').strip()
-    is_special = _is_partner_special(profile) if is_approved else False
-
-    _settings = _express_settings_cached()
-    _raw_apk_url = (_settings.get('android_apk_url') or '').strip()
-    android_apk_version = (_settings.get('android_apk_version') or '').strip()
-    from ..utils.short_urls import public_apk_download_url
-    android_apk_url = public_apk_download_url(_settings, external=False) if _raw_apk_url else ''
-    android_apk_updated_at = _settings.get('android_apk_updated_at') or ''
-    android_apk_size_bytes = _settings.get('android_apk_size_bytes') or ''
-    from ..utils.apk_version import is_vinor_apk_request, should_show_apk_update
-    is_vinor_apk = is_vinor_apk_request(request)
-    show_app_update_card = should_show_apk_update(
-        android_apk_version,
-        apk_url=_raw_apk_url,
-        req=request,
-    )
-    from .referrals import REFERRAL_BONUS_AMOUNT
-
-    if profile and not (profile.get('phone') or '').strip():
-        profile = dict(profile)
-        profile['phone'] = me_phone
-
-    public_username = partner_public_username(profile) if profile else ''
-    public_profile_url = url_for('main.partner_profile_at', username=public_username) if public_username else ''
-
-    resp = make_response(render_template(
-        'express_partner/profile.html',
-        me_phone=me_phone,
-        me_name=me_name,
-        profile=profile,
-        is_approved=is_approved,
-        is_special=is_special,
-        partner_tier_label=_partner_tier_label(profile, is_approved=is_approved),
-        referral_bonus_per_invite=REFERRAL_BONUS_AMOUNT,
-        public_username=public_username,
-        public_profile_url=public_profile_url,
-        android_apk_url=android_apk_url,
-        android_apk_version=android_apk_version,
-        android_apk_updated_at=android_apk_updated_at,
-        android_apk_size_bytes=android_apk_size_bytes,
-        is_vinor_apk=is_vinor_apk,
-        show_app_update_card=show_app_update_card,
-    ))
-    _append_partner_tab_prefetch(resp)
-    return resp
+        return redirect(url_for('express_partner.login', next=url_for('express_partner.home', menu=1)))
+    return redirect(url_for('express_partner.home', menu=1), code=302)
 
 
 @express_partner_bp.post('/api/profile/follow/<string:username>', endpoint='profile_follow_toggle')
@@ -6396,13 +6533,13 @@ def profile_avatar_upload():
     next_url = (request.form.get('next') or request.args.get('next') or '').strip()
     f = request.files.get('avatar')
     if not f or not f.filename:
-        return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile'))
+        return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.home', menu=1))
     rel_path = _save_partner_avatar_upload(me_phone, f)
     if not rel_path:
         flash('خطا در ذخیره تصویر پروفایل.', 'profile')
-        return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile'))
+        return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile_edit'))
     flash('عکس پروفایل به‌روز شد.', 'profile')
-    return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile'))
+    return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile_edit'))
 
 
 @express_partner_bp.route('/top-sellers', methods=['GET'], endpoint='top_sellers')
@@ -6526,7 +6663,7 @@ def delete_sale(sid: int):
 def notifications_page():
     from app.services.postchi import POSTCHI_THREAD_ID
 
-    return redirect(url_for('express_partner.ai', thread=POSTCHI_THREAD_ID))
+    return redirect(url_for('express_partner.home', ai=1, thread=POSTCHI_THREAD_ID))
 
 
 @express_partner_bp.get('/postchi', endpoint='postchi')
@@ -6534,7 +6671,7 @@ def notifications_page():
 def postchi_page():
     from app.services.postchi import POSTCHI_THREAD_ID
 
-    return redirect(url_for('express_partner.ai', thread=POSTCHI_THREAD_ID))
+    return redirect(url_for('express_partner.home', ai=1, thread=POSTCHI_THREAD_ID))
 
 
 @express_partner_bp.route('/api/postchi/messages', methods=['GET'], endpoint='api_postchi_messages')
@@ -6876,6 +7013,8 @@ def land_detail(code: str):
     land['_visit_date'] = tx_state.get('visit_date') or ''
     land['_visit_date_jalali'] = tx_state.get('visit_date_jalali') or ''
     land['_visit_status'] = tx_state.get('visit_status') or ''
+    land['_visit_customer_phone'] = tx_state.get('customer_phone') or ''
+    land['_visit_customer_name'] = tx_state.get('customer_name') or ''
     land['_tx_button_mode'] = tx_state.get('tx_mode') or 'visit'
     land['_can_revisit'] = bool(tx_state.get('can_revisit'))
     land['_visit_progress_steps'] = []

@@ -161,11 +161,24 @@ def _partner_profile_block(phone: str) -> str:
     partners = load_express_partners() or []
     prof = next((p for p in partners if _norm_phone(str(p.get("phone") or "")) == me), None)
     if not prof:
-        return "پروفایل همکار: هنوز تأیید نشده یا ثبت نشده."
+        return "پروفایل همکار: هنوز تأیید نشده یا ثبت نشده.\nنقش مخاطب: مشتری/خریدار تا تأیید همکاری."
     name = str(prof.get("name") or prof.get("full_name") or "—").strip()
     city = str(prof.get("city") or "—").strip()
     status = str(prof.get("status") or "—").strip()
-    return f"پروفایل همکار: نام={name} | شهر={city} | وضعیت={status}"
+    role_fa = "همکار اکسپرس (واسط فروش)"
+    try:
+        from app.express_partner.partner_roles import partner_is_approved, partner_is_special
+
+        if partner_is_special(prof):
+            role_fa = "همکار ویژه (مالک/فروشنده — بالاترین دسترسی)"
+        elif not partner_is_approved(prof):
+            role_fa = "متقاضی همکاری (در انتظار تأیید)"
+    except Exception:
+        pass
+    return (
+        f"پروفایل همکار: نام={name} | شهر={city} | وضعیت={status}\n"
+        f"نقش مخاطب: {role_fa}"
+    )
 
 
 def _assigned_lands(phone: str) -> list[dict[str, Any]]:
@@ -214,6 +227,20 @@ def build_partner_context_base(phone: str) -> str:
     admin_phone = str(settings.get("partner_application_admin_phone") or "09121471301").strip()
     cities = load_active_cities() or []
     assigned = _assigned_lands(phone)
+    guide = "راهنما: خانه=کار بعدی و پیشنهاد؛ فایل‌ها=جستجو؛ بازدیدها=مسیر ۷ مرحله‌ای؛ AI=راهنما و پستچی."
+    try:
+        from app.express_partner.partner_roles import partner_is_special
+
+        partners = load_express_partners() or []
+        me = _norm_phone(phone)
+        prof = next((p for p in partners if _norm_phone(str(p.get("phone") or "")) == me), None)
+        if partner_is_special(prof):
+            guide = (
+                "راهنما ویژه: خانه و AI؛ آگهی‌های من؛ بازدیدهای دریافتی؛ "
+                "مدیریت فایل‌های خودتان و هماهنگی با همکاران تخصیص‌یافته."
+            )
+    except Exception:
+        pass
     return "\n".join(
         [
             "=== اطلاعات داخلی وینور ===",
@@ -221,9 +248,89 @@ def build_partner_context_base(phone: str) -> str:
             f"تعداد فایل اختصاصی: {len(assigned)}",
             f"شهرهای فعال: {', '.join(str(c) for c in cities[:12])}",
             f"پشتیبانی: {admin_phone}",
-            "راهنما: همکار فایل‌های وینور را بازاریابی می‌کند؛ اختصاصی=فقط این همکار؛ عمومی=همه همکاران.",
+            guide,
         ]
     )
+
+
+def build_partner_status_context(phone: str) -> str:
+    """وضعیت زنده فشرده — هم‌راستا با «کار بعدی» داشبورد؛ خارج از کش base."""
+    ph = _norm_phone(phone)
+    if not ph:
+        return ""
+    try:
+        from flask import g, has_request_context
+
+        from app.express_partner.routes import (
+            _build_partner_dashboard_lands,
+            _commissions_for_phone,
+            _home_follow_up_count,
+            _home_urgent_actions,
+            _is_partner_approved,
+            _partner_commission_stats,
+        )
+        from app.express_partner.visit_requests import (
+            APPROVED_STATUS,
+            DONE_PENDING_STATUS,
+            PENDING_STATUS,
+        )
+        from app.utils.storage import load_express_visit_requests
+
+        profile = None
+        if has_request_context():
+            profile = getattr(g, "express_partner_profile", None)
+        is_approved = _is_partner_approved(profile)
+        visit_rows = load_express_visit_requests() or []
+        if not isinstance(visit_rows, list):
+            visit_rows = []
+        assigned, _ = _build_partner_dashboard_lands(ph, is_approved)
+        my_comms = _commissions_for_phone(ph)
+        stats = _partner_commission_stats(ph, my_comms)
+        withdrawable = int(stats.get("withdrawable_balance") or 0)
+        follow_up = _home_follow_up_count(ph, visit_rows)
+        actions = _home_urgent_actions(
+            ph,
+            assigned_lands=assigned,
+            visit_rows=visit_rows,
+            withdrawable_balance=withdrawable,
+            follow_up_count=follow_up,
+        )
+
+        lines = ["=== وضعیت فعلی ==="]
+        if actions:
+            a = actions[0]
+            title = str(a.get("title") or "").strip()
+            sub = str(a.get("subtitle") or "").strip()
+            line = f"کار بعدی (اولویت): {title}"
+            if sub:
+                line += f" | {sub}"
+            lines.append(line)
+        else:
+            lines.append("کار بعدی: فعلاً کار فوری نیست")
+
+        mine = [
+            r
+            for r in visit_rows
+            if isinstance(r, dict) and _norm_phone(str(r.get("partner_phone") or "")) == ph
+        ]
+        n_pending = sum(1 for r in mine if str(r.get("status") or "") == PENDING_STATUS)
+        n_approved = sum(1 for r in mine if str(r.get("status") or "") == APPROVED_STATUS)
+        n_done_p = sum(1 for r in mine if str(r.get("status") or "") == DONE_PENDING_STATUS)
+        bits: list[str] = []
+        if n_pending:
+            bits.append(f"منتظر تأیید:{n_pending}")
+        if n_approved:
+            bits.append(f"تأییدشده:{n_approved}")
+        if n_done_p:
+            bits.append(f"منتظر تأیید انجام:{n_done_p}")
+        if bits:
+            lines.append("بازدیدها: " + "، ".join(bits))
+        if withdrawable > 0:
+            lines.append(f"قابل برداشت: {withdrawable:,} تومان")
+
+        return "\n".join(lines)[:420]
+    except Exception:
+        return ""
 
 
 def _select_lands_for_query(
@@ -286,6 +393,7 @@ def build_public_context_base() -> str:
     return "\n".join(
         [
             "=== اطلاعات وینور (کاربر عادی) ===",
+            "نقش مخاطب: مشتری / خریدار",
             f"شهرهای فعال: {', '.join(str(c) for c in cities[:12])}",
             f"پشتیبانی: {admin_phone}",
             "وینور: خرید/فروش زمین، باغ و ویلا با پرونده تأییدشده.",

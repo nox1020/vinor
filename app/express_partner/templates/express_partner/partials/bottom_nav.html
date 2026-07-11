@@ -278,10 +278,10 @@
   {% endif %}
   <div class="tg-tabbar-pill mx-auto w-full max-w-full px-3 py-1">
     <div id="bottomNavItems" class="grid grid-cols-2 gap-0 min-h-[52px] w-full items-center">
-      {% set profile_nav_url = url_for('express_partner.profile') %}
+      {% set profile_nav_url = url_for('express_partner.home', menu=1) %}
       {% set nav_items = [
         {'key': 'home', 'endpoint': 'express_partner.home', 'icon': 'fa-home', 'label': 'داشبورد'},
-        {'key': 'profile', 'url': profile_nav_url, 'icon': 'fa-user', 'label': 'پروفایل'}
+        {'key': 'profile', 'url': profile_nav_url, 'icon': 'fa-user', 'label': 'منو', 'drawer': true}
       ] %}
       {% for item in nav_items %}
         {% set is_active = (bottom_nav_active == item.key) %}
@@ -290,7 +290,8 @@
            aria-current="{{ 'page' if is_active else 'false' }}"
            aria-disabled="{{ 'true' if item.disabled else 'false' }}"
            {% if item.disabled %}tabindex="-1"{% endif %}
-           data-nav-key="{{ item.key }}">
+           data-nav-key="{{ item.key }}"
+           {% if item.drawer %}data-nav-profile-drawer="1"{% endif %}>
           <span class="tg-tab-stack flex flex-col items-center justify-center gap-0.5 px-2 py-1">
             <span class="tg-tab-icon-wrap" aria-hidden="true">
               <span class="tg-tab-icon flex items-center justify-center">
@@ -921,7 +922,6 @@
   const MENU_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 
   const PROFILE_NAV_PATHS = [
-    '/express/partner/profile',
     '/express/partner/favorites',
     '/express/partner/requests',
     '/express/partner/top-sellers',
@@ -929,7 +929,8 @@
     '/express/partner/training',
     '/express/partner/routine',
     '/express/partner/legal/privacy',
-    '/express/partner/legal/terms'
+    '/express/partner/legal/terms',
+    '/express/partner/profile/edit'
   ];
 
   function resolveActiveNavKey() {
@@ -1115,6 +1116,20 @@
   });
 
   bindExistingApkStripSwipe();
+
+  // تب «منو» روی خانه → باز کردن کشوی پروفایل بدون ترک صفحه
+  document.addEventListener('click', function (e) {
+    var tab = e.target && e.target.closest ? e.target.closest('[data-nav-profile-drawer]') : null;
+    if (!tab) return;
+    var path = '';
+    try { path = (window.location.pathname || '').replace(/\/+$/, '') || ''; } catch (_) {}
+    if (path !== '/express/partner/home') return;
+    if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
+      e.preventDefault();
+      e.stopPropagation();
+      window.vinorProfileDrawer.open();
+    }
+  }, true);
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {

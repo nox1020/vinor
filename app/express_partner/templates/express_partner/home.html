@@ -7,7 +7,8 @@
 <div id="homeDashboardPage"
      class="home-dashboard-page min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16"
      data-vinor-home-page>
-  {% set menu_href = url_for('express_partner.profile') %}
+  {% set menu_href = url_for('express_partner.home') %}
+  {% set profile_drawer = true %}
   {% include 'express_partner/partials/ep_header_float_actions.html' %}
 
   <div class="mx-auto w-full max-w-lg">
@@ -24,7 +25,7 @@
     <header class="vn-home-greet">
       <div class="vn-home-greet__body">
         <p class="vn-home-greet__sub">سلام {{ partner_name }}</p>
-        <h1 class="vn-home-greet__title">کار بعدی شما</h1>
+        <h1 class="vn-home-greet__title">{% if urgent_actions %}کار بعدی شما{% else %}امروز آرام است{% endif %}</h1>
       </div>
     </header>
     {% endif %}
@@ -32,20 +33,17 @@
     <div class="vn-home-feed">
 
       {% if urgent_actions %}
-      <section class="vn-home-urgent" aria-label="کارهای لازم">
+      <section class="vn-home-urgent" aria-label="کار بعدی" data-tour="home-urgent">
         <div class="vn-home-section-head">
-          <h2 class="vn-home-section-head__title">
-            کار بعدی
-            <span class="vn-home-urgent-count">{{ urgent_actions|length }}</span>
-          </h2>
-          <span class="vn-home-urgent-hint">فقط این‌ها را انجام بده</span>
+          <h2 class="vn-home-section-head__title">کار بعدی</h2>
+          <span class="vn-home-urgent-hint">اولویت اول شما</span>
         </div>
         <div class="vn-home-urgent-list">
-          {% for action in urgent_actions %}
+          {% set action = urgent_actions[0] %}
           <a href="{{ action.url }}"
-             data-vinor-express-nav
-             class="vn-home-urgent-row vn-home-urgent-row--{{ action.tone|default('red') }}{% if loop.first %} vn-home-urgent-row--focus{% endif %}">
-            <span class="vn-home-urgent-row__step" aria-hidden="true">{{ loop.index }}</span>
+             {% if action.url.startswith('tel:') %}{% else %}data-vinor-express-nav{% endif %}
+             class="vn-home-urgent-row vn-home-urgent-row--{{ action.tone|default('red') }} vn-home-urgent-row--focus">
+            <span class="vn-home-urgent-row__step" aria-hidden="true">۱</span>
             <span class="vn-home-urgent-row__body">
               <span class="vn-home-urgent-row__title">{{ action.title }}</span>
               {% if action.subtitle %}
@@ -54,20 +52,31 @@
             </span>
             <span class="vn-home-urgent-row__cta">{{ action.cta|default('برو') }}</span>
           </a>
-          {% endfor %}
         </div>
+      </section>
+      {% elif is_approved|default(false) %}
+      <section class="vn-home-empty" aria-label="بدون کار فوری" data-tour="home-urgent">
+        <div class="vn-home-empty__body">
+          <p class="vn-home-empty__title">کار فوری نداری</p>
+          <p class="vn-home-empty__sub">{% if suggested_files %}از پیشنهاد امروز شروع کن{% else %}می‌تونی فایل‌ها را مرور کنی یا از Vinor AI بپرسی{% endif %}</p>
+        </div>
+        {% if not suggested_files %}
+        <a href="{{ url_for('express_partner.files') }}"
+           data-vinor-express-nav
+           class="vn-home-empty__cta">مشاهده فایل‌ها</a>
+        {% endif %}
       </section>
       {% endif %}
 
       {% if suggested_files %}
-      <section aria-label="فایل‌های پیشنهادی امروز">
+      <section aria-label="فایل‌های پیشنهادی امروز" data-tour="home-suggest">
         <div class="vn-home-section-head">
           <h2 class="vn-home-section-head__title">پیشنهاد امروز</h2>
           <a href="{{ url_for('express_partner.files') }}"
              data-vinor-express-nav
              class="vn-home-section-head__link">همه فایل‌ها</a>
         </div>
-        {% for file in suggested_files %}
+        {% set file = suggested_files[0] %}
         <a href="{{ file.detail_url }}"
            data-vinor-express-nav
            class="vn-home-file-row">
@@ -92,7 +101,6 @@
             </div>
           </div>
         </a>
-        {% endfor %}
       </section>
       {% endif %}
 
@@ -102,4 +110,14 @@
 </div>
 
 {% include 'express_partner/partials/partner_tab_footer.html' %}
+{% include 'express_partner/partials/profile_drawer.html' %}
+{% include 'express_partner/partials/ai_chat_layer.html' %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+{% if home_ai_enabled|default(false) %}
+{% include 'express_partner/partials/vinor_favorites_script.html' %}
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=20"></script>
+{% endif %}
 {% endblock %}

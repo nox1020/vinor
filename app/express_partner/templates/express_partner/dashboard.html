@@ -341,6 +341,7 @@
 </div>
 
 {% include 'express_partner/partials/partner_tab_footer.html' %}
+{% include 'express_partner/partials/ai_chat_layer.html' %}
 
 <!-- Small script for accessibility enhancements -->
 <script>
@@ -756,6 +757,9 @@
   /* chrome: dashboard-chrome.js via vinor:express-page-swap */
 </script>
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
+{% if home_ai_enabled|default(false) %}
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=20"></script>
+{% endif %}
 {% endblock %}
 
 

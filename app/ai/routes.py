@@ -13,7 +13,7 @@ from .user_key import ai_user_key
 def _redirect_approved_partner() -> str | None:
     phone = (session.get("user_phone") or "").strip()
     if phone and partner_is_approved(phone):
-        return url_for("express_partner.ai")
+        return url_for("express_partner.home", ai=1)
     return None
 
 
@@ -135,12 +135,14 @@ def chat():
         return jsonify(result), ai_chat_http_status(result)
 
     land_codes = result.get("land_codes") or []
+    agent_actions = result.get("agent_actions") or []
     msgs, tid = append_exchange(
         key,
         message,
         result.get("reply") or "",
         thread_id=thread_id,
         assistant_land_codes=land_codes,
+        assistant_agent_actions=agent_actions,
         audience=AUDIENCE_PUBLIC,
     )
     result["messages"] = msgs

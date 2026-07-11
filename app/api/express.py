@@ -398,7 +398,7 @@ def get_menu():
             {'key': 'home', 'endpoint': 'express_partner.home', 'icon': 'fa-home', 'label': 'داشبورد'},
             {'key': 'files', 'endpoint': 'express_partner.files', 'icon': 'fa-folder-open', 'label': 'فایل‌ها'},
             {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not is_logged_in},
-            {'key': 'profile', 'endpoint': 'express_partner.profile', 'icon': 'fa-user', 'label': 'پروفایل'},
+            {'key': 'profile', 'endpoint': 'express_partner.home', 'icon': 'fa-user', 'label': 'منو'},
         ]
         
         # همیشه منوی همکار را نمایش بده (در هر دو حالت وارد شده و وارد نشده)
@@ -407,11 +407,18 @@ def get_menu():
         for item in partner_menu:
             menu_item = dict(item)
             try:
-                menu_item['url'] = url_for(item['endpoint'])
+                if item.get('key') == 'profile':
+                    menu_item['url'] = url_for('express_partner.home', menu=1)
+                else:
+                    menu_item['url'] = url_for(item['endpoint'])
             except Exception as url_error:
                 # در صورت خطا، از endpoint به عنوان URL استفاده کن
                 current_app.logger.debug(f"Error generating URL for {item['endpoint']}: {url_error}")
-                menu_item['url'] = f"/express/partner/{item['key']}"
+                menu_item['url'] = (
+                    '/express/partner/home?menu=1'
+                    if item.get('key') == 'profile'
+                    else f"/express/partner/{item['key']}"
+                )
             # حذف endpoint از دیکشنری نهایی (فقط url را نگه دار)
             if 'endpoint' in menu_item:
                 del menu_item['endpoint']
@@ -438,7 +445,7 @@ def get_menu():
                 {'key': 'home', 'url': '/express/partner/home', 'icon': 'fa-home', 'label': 'داشبورد'},
                 {'key': 'files', 'url': '/express/partner/files', 'icon': 'fa-folder-open', 'label': 'فایل‌ها'},
                 {'key': 'commissions', 'url': '/express/partner/commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': True},
-                {'key': 'profile', 'url': '/express/partner/profile', 'icon': 'fa-user', 'label': 'پروفایل'},
+                {'key': 'profile', 'url': '/express/partner/home?menu=1', 'icon': 'fa-user', 'label': 'منو'},
             ],
             'is_logged_in': False,
             'is_express_partner': False

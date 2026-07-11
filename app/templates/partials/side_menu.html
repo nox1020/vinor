@@ -28,7 +28,7 @@
                  border-b border-gray-200 dark:border-gray-700">
     <div class="flex items-center justify-between">
       <!-- فقط آیکن پروفایل (لینک‌دار) -->
-      <a href="{{ url_for('express_partner.profile') if session.get('user_phone') else url_for('express_partner.login') }}"
+      <a href="{{ url_for('express_partner.home', menu=1) if session.get('user_phone') else url_for('express_partner.login') }}"
          class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
          title="{{ 'پروفایل من' if session.get('user_phone') else 'ورود همکار اکسپرس' }}"
          aria-label="{{ 'پروفایل من' if session.get('user_phone') else 'ورود همکار اکسپرس' }}">
@@ -74,7 +74,7 @@
     <div class="space-y-2">
       {% if VINOR_IS_EXPRESS_PARTNER %}
         {{ MenuItem(url_for('express_partner.commissions'),  'fa-wallet',  'پورسانت‌ها', True) }}
-        {{ MenuItem(url_for('express_partner.ai'),  'fa-robot',  'دستیار AI', True) }}
+        {{ MenuItem(url_for('express_partner.home', ai=1),  'fa-robot',  'دستیار AI', True) }}
       {% endif %}
       <button id="updateAppBtn" 
               class="group flex items-center gap-3 p-3 rounded-xl transition

@@ -1,5 +1,9 @@
 {# مودال‌ها — bottom sheet سبک دیوار + پالت وینور #}
-{% set contact_phone = land.owner_phone or land.vinor_contact %}
+{% set visit_customer_phone = (land._visit_customer_phone|default('')|string)|trim %}
+{% set owner_contact_phone = (land.owner_phone or land.vinor_contact or '')|string|trim %}
+{% set contact_phone = visit_customer_phone or owner_contact_phone %}
+{% set contact_is_customer = true if visit_customer_phone else false %}
+{% set contact_customer_name = (land._visit_customer_name|default('')|string)|trim %}
 
 {% if contact_phone %}
 <div id="landContactModal"
@@ -12,7 +16,7 @@
   <div class="ld-sheet relative w-full sm:max-w-md" data-land-modal-panel>
     <div class="ld-sheet__handle-wrap" aria-hidden="true"><span class="ld-sheet__handle"></span></div>
     <header class="ld-sheet__head">
-      <h2 id="landContactTitle" class="ld-sheet__title">تماس با مالک</h2>
+      <h2 id="landContactTitle" class="ld-sheet__title">{% if contact_is_customer %}تماس با مشتری{% else %}تماس با مالک{% endif %}</h2>
       <button type="button" class="ld-sheet__close" data-land-modal-close aria-label="بستن">
         <i class="fas fa-times" aria-hidden="true"></i>
       </button>
@@ -21,7 +25,11 @@
       <div class="ld-sheet__icon ld-sheet__icon--call" aria-hidden="true">
         <i class="fas fa-phone"></i>
       </div>
+      {% if contact_is_customer %}
+      <p class="ld-sheet__lead">شماره ثبت‌شده هنگام درخواست بازدید{% if contact_customer_name %} — {{ contact_customer_name }}{% endif %}</p>
+      {% else %}
       <p class="ld-sheet__lead">برای هماهنگی بازدید با مالک تماس بگیرید</p>
+      {% endif %}
       <p class="ld-sheet__phone tabular-nums" dir="ltr">{{ contact_phone }}</p>
     </div>
     <footer class="ld-sheet__foot">

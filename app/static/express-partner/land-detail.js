@@ -236,6 +236,37 @@
     });
   }
 
+  function syncVisitCustomerContact(phone, name) {
+    phone = String(phone || '').trim();
+    if (!phone) return;
+    name = String(name || '').trim();
+    var modal = document.getElementById('landContactModal');
+    if (!modal) return;
+    var title = modal.querySelector('#landContactTitle');
+    if (title) title.textContent = 'تماس با مشتری';
+    var lead = modal.querySelector('.ld-sheet__lead');
+    if (lead) {
+      lead.textContent = name
+        ? ('شماره ثبت‌شده هنگام درخواست بازدید — ' + name)
+        : 'شماره ثبت‌شده هنگام درخواست بازدید';
+    }
+    var phoneEl = modal.querySelector('.ld-sheet__phone');
+    if (phoneEl) phoneEl.textContent = phone;
+    var link = modal.querySelector('a[href^="tel:"]');
+    if (link) link.setAttribute('href', 'tel:' + phone);
+    var label = document.querySelector('.ld-fab-menu__item [data-land-open-contact]');
+    if (label) {
+      var item = label.closest('.ld-fab-menu__item');
+      var lab = item && item.querySelector('.ld-fab-menu__label');
+      if (lab) lab.textContent = 'تماس با مشتری';
+    }
+    var root = document.querySelector(ROOT_SEL);
+    if (root) {
+      root.dataset.visitCustomerPhone = phone;
+      if (name) root.dataset.visitCustomerName = name;
+    }
+  }
+
   function landModalOverlayOpen() {
     if (window.vinorExpressModalOverlay && window.vinorExpressModalOverlay.open) {
       window.vinorExpressModalOverlay.open();
@@ -1601,6 +1632,9 @@
         if (mode === prevMode) return;
         prevMode = mode;
         applyTxMode(mode, data.visit_date || '', data.visit_date_jalali || '', data.can_revisit);
+        if (data.customer_phone) {
+          syncVisitCustomerContact(data.customer_phone, data.customer_name || '');
+        }
         if (mode === 'visit_done') {
           showTxToast('بازدید تأیید شد — پس از انجام بازدید، آن را ثبت کنید.', false);
           stopVisitStatusPoll();
@@ -2222,6 +2256,10 @@
           data.visit_date_jalali || jalaliPreview,
           data.can_revisit
         );
+        syncVisitCustomerContact(
+          data.customer_phone || customer.phone,
+          data.customer_name || ((customer.first || '') + ' ' + (customer.last || '')).trim()
+        );
         if (mode === 'visit_pending') initVisitStatusPoll('visit_pending');
         var toastMsg = (data.message && String(data.message).indexOf('قبلاً') !== -1)
           ? data.message
@@ -2244,6 +2282,9 @@
             st.visit_date_jalali || jalaliPreview,
             st.can_revisit
           );
+          if (st.customer_phone) {
+            syncVisitCustomerContact(st.customer_phone, st.customer_name || '');
+          }
         });
       }).catch(function (err) {
         stopVisitStatusPoll();

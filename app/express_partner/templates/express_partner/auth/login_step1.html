@@ -139,7 +139,7 @@
   try {
     if (window.vinorExpressPrefetch && LOGIN_CLOSE_URL) {
       var closePath = new URL(LOGIN_CLOSE_URL, window.location.origin).pathname.replace(/\/$/, '') || '';
-      if (closePath === '/express/partner/home' || closePath === '/express/partner/files' || closePath === '/express/partner/profile') {
+      if (closePath === '/express/partner/home' || closePath === '/express/partner/files') {
         window.vinorExpressPrefetch(new URL(LOGIN_CLOSE_URL, window.location.origin).href);
       }
     }

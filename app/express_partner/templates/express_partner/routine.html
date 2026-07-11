@@ -4,7 +4,7 @@
 
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(id='profileRoutineHeader') }}
-  {% call ep_header_row('روتین و آمار فعالیت', url_for('express_partner.profile')) %}{% endcall %}
+  {% call ep_header_row('روتین و آمار فعالیت', url_for('express_partner.home')) %}{% endcall %}
   {{ ep_header_end() }}
 
 {% if not is_approved %}

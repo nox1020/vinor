@@ -25,12 +25,22 @@
 
   if (!form || !input || !list || !btn) return;
 
+  var mode = form.getAttribute('data-mode') || '';
+  var embedded = mode === 'embedded';
+  var homeLayer = mode === 'home-layer';
+  var layerGated = embedded || homeLayer;
+  var sheetOpen =
+    !layerGated ||
+    document.documentElement.classList.contains('vinor-ai-open') ||
+    document.documentElement.classList.contains('vinor-ai-sheet-open');
   var chatUrl = form.getAttribute('data-chat-url') || '';
   var historyUrl = form.getAttribute('data-history-url') || '';
   var clearUrl = form.getAttribute('data-clear-url') || '';
   var switchUrl = form.getAttribute('data-switch-url') || '';
   var deleteUrl = form.getAttribute('data-delete-url') || '';
   var syncUrl = form.getAttribute('data-sync-url') || '';
+  var agentConfirmUrl = form.getAttribute('data-agent-confirm-url') || '';
+  var agentCancelUrl = form.getAttribute('data-agent-cancel-url') || '';
   var postchiThreadId = form.getAttribute('data-postchi-thread-id') || '__postchi__';
   var postchiMessagesUrl = form.getAttribute('data-postchi-messages-url') || '';
   var postchiSendUrl = form.getAttribute('data-postchi-send-url') || '';
@@ -48,7 +58,7 @@
   var lastSyncAt = '';
   var seenEscalationIds = {};
   var emptyPollStreak = 0;
-  var pollPaused = false;
+  var pollPaused = layerGated && !sheetOpen;
   var submitting = false;
   var lastSubmitAt = 0;
   var POLL_MS = 15000;
@@ -61,6 +71,19 @@
   var onKeydown = null;
   var onViewportResize = null;
   var onViewportScroll = null;
+
+  window.__vinorAiChatSetSheetOpen = function (open) {
+    sheetOpen = !!open;
+    if (!layerGated) return;
+    if (sheetOpen) {
+      resumePoll();
+      try {
+        list.scrollTop = list.scrollHeight;
+      } catch (_) {}
+    } else {
+      pollPaused = true;
+    }
+  };
 
   function activeThreadId() {
     return (threadInput && threadInput.value) || '';
@@ -137,7 +160,8 @@
     return !!(
       (msg.content && String(msg.content).trim()) ||
       msg.cards_html ||
-      (msg.land_cards && msg.land_cards.length)
+      (msg.land_cards && msg.land_cards.length) ||
+      (msg.agent_actions && msg.agent_actions.length)
     );
   }
 
@@ -145,17 +169,21 @@
     if (msg.cards_html) {
       return '<div class="ai-msg-cards w-full min-w-0 max-w-full">' + msg.cards_html + '</div>';
     }
-    if (!msg.land_cards || !msg.land_cards.length) return '';
-    var inner = msg.land_cards.map(function (c) {
-      return c.html || '';
-    }).join('');
-    if (!inner) return '';
-    return (
-      '<div class="ai-msg-cards w-full min-w-0 max-w-full">' +
-      '<div class="ai-land-cards mt-2.5 flex w-full max-w-full flex-col gap-2.5">' +
-      inner +
-      '</div></div>'
-    );
+    var chunks = [];
+    if (msg.land_cards && msg.land_cards.length) {
+      var inner = msg.land_cards.map(function (c) {
+        return c.html || '';
+      }).join('');
+      if (inner) {
+        chunks.push(
+          '<div class="ai-land-cards mt-2.5 flex w-full max-w-full flex-col gap-2.5">' +
+            inner +
+            '</div>'
+        );
+      }
+    }
+    if (!chunks.length) return '';
+    return '<div class="ai-msg-cards w-full min-w-0 max-w-full">' + chunks.join('') + '</div>';
   }
 
   function initCardsIn(wrap) {
@@ -163,6 +191,102 @@
     if (typeof window.vinorInitPremiumCards === 'function') {
       window.vinorInitPremiumCards(wrap, list);
     }
+    bindAgentActions(wrap);
+  }
+
+  function setAgentCardState(card, status, noteText) {
+    if (!card) return;
+    card.setAttribute('data-agent-status', status || '');
+    var actions = card.querySelector('.ai-agent-card__actions');
+    if (actions) actions.remove();
+    card.classList.add('ai-agent-card--done');
+    var note = card.querySelector('[data-agent-note]') || card.querySelector('.ai-agent-card__note');
+    if (!note) {
+      note = document.createElement('div');
+      note.className = 'ai-agent-card__note';
+      card.appendChild(note);
+    }
+    note.classList.remove('hidden');
+    note.textContent = noteText || '';
+  }
+
+  async function confirmAgentAction(card) {
+    if (!card || !agentConfirmUrl) return;
+    var token = card.getAttribute('data-token') || '';
+    if (!token) return;
+    var btns = card.querySelectorAll('button');
+    btns.forEach(function (b) {
+      b.disabled = true;
+    });
+    try {
+      var resp = await fetch(agentConfirmUrl, {
+        method: 'POST',
+        headers: apiHeaders(true),
+        credentials: 'same-origin',
+        body: JSON.stringify({ token: token, thread_id: activeThreadId() }),
+      });
+      var data = null;
+      try {
+        data = await resp.json();
+      } catch (_) {}
+      if (!resp.ok || !data || !data.ok) {
+        throw new Error((data && data.error) || 'ثبت اقدام ممکن نشد.');
+      }
+      setAgentCardState(card, 'confirmed', data.message || 'ثبت شد.');
+      if (data.thread_id) setActiveThreadId(data.thread_id);
+      if (data.messages && data.messages.length) {
+        reconcileExchange(data.messages);
+      } else if (data.message) {
+        appendMessage({
+          role: 'assistant',
+          content: data.message,
+          created_at: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      btns.forEach(function (b) {
+        b.disabled = false;
+      });
+      showEphemeralHint(String((err && err.message) || 'خطا در تأیید'));
+    }
+  }
+
+  async function cancelAgentAction(card) {
+    if (!card) return;
+    var token = card.getAttribute('data-token') || '';
+    if (token && agentCancelUrl) {
+      try {
+        await fetch(agentCancelUrl, {
+          method: 'POST',
+          headers: apiHeaders(true),
+          credentials: 'same-origin',
+          body: JSON.stringify({ token: token }),
+        });
+      } catch (_) {}
+    }
+    setAgentCardState(card, 'cancelled', 'انصراف داده شد.');
+  }
+
+  function bindAgentActions(root) {
+    if (!root) return;
+    root.querySelectorAll('.ai-agent-card[data-agent-type="confirm_visit"]').forEach(function (card) {
+      if (card.getAttribute('data-bound') === '1') return;
+      card.setAttribute('data-bound', '1');
+      var confirmBtn = card.querySelector('[data-agent-confirm]');
+      var cancelBtn = card.querySelector('[data-agent-cancel]');
+      if (confirmBtn) {
+        confirmBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          confirmAgentAction(card);
+        });
+      }
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          cancelAgentAction(card);
+        });
+      }
+    });
   }
 
   function messageSeen(msg) {
@@ -549,7 +673,7 @@
   }
 
   async function refreshHistory(immediate) {
-    if (!historyUrl) return;
+    if (!historyUrl || embedded || !historyList) return;
     if (historyTimer) {
       clearTimeout(historyTimer);
       historyTimer = null;
@@ -665,6 +789,7 @@
 
   async function pollSync() {
     if (!syncUrl || document.hidden || pollPaused || pollInFlight || isPostchiMode()) return;
+    if (layerGated && !sheetOpen) return;
     var tid = activeThreadId();
     if (!tid) return;
     if (syncAbort) syncAbort.abort();
@@ -716,6 +841,10 @@
   }
 
   function resumePoll() {
+    if (layerGated && !sheetOpen) {
+      pollPaused = true;
+      return;
+    }
     pollPaused = false;
     emptyPollStreak = 0;
     pollSync();
@@ -777,9 +906,12 @@
     }
     if (composer) composer.style.removeProperty('--ai-keyboard-inset');
     window.__vinorAiChatTeardown = null;
+    window.__vinorAiChatSetSheetOpen = null;
+    window.__vinorAiChatSwitchThread = null;
   }
 
   window.__vinorAiChatTeardown = teardownAiChat;
+  window.__vinorAiChatSwitchThread = switchThread;
 
   showWelcomeIfEmpty();
   setComposerMode(isPostchiMode());
@@ -796,14 +928,18 @@
   list.scrollTop = list.scrollHeight;
 
   pollTimer = setInterval(pollSync, POLL_MS);
-  refreshHistory(false);
+  if (!embedded) {
+    refreshHistory(false);
+  }
   onVisChange = function () {
     if (document.hidden) return;
+    if (layerGated && !sheetOpen) return;
     resumePoll();
   };
   document.addEventListener('visibilitychange', onVisChange);
 
   window.addEventListener('vinor:notifications:update', function (ev) {
+    if (embedded) return;
     var detail = ev && ev.detail;
     if (!detail || detail.unread === undefined || detail.unread === null) return;
     syncMenuUnreadBadge(detail.unread);

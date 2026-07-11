@@ -1,25 +1,35 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}Vinor AI | همکار اکسپرس{% endblock %}
 {% block content %}
-{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end %}
 
 {{ ep_header_start() }}
-{% call ep_header_row('Vinor AI', url_for('express_partner.home'), back_nav=true, show_title=false) %}
-  <button type="button" id="aiMenuBtn"
-          class="ep-partner-header-btn relative"
-          aria-label="منو"
-          aria-expanded="false"
-          aria-controls="aiSidePanel">
-    <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
-    <span id="aiMenuUnreadDot" class="hidden absolute top-0.5 end-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#030712]" aria-hidden="true"></span>
-  </button>
-{% endcall %}
+<div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 max-w-6xl mx-auto w-full ep-partner-header-inner--auto">
+  <div class="flex items-center gap-2">
+    {# در RTL اولین آیتم سمت راست است — منو مثل GPT از راست #}
+    <button type="button" id="aiMenuBtn"
+            class="ep-partner-header-btn relative"
+            aria-label="منو"
+            aria-expanded="false"
+            aria-controls="aiSidePanel">
+      <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
+      <span id="aiMenuUnreadDot" class="hidden absolute top-0.5 end-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#030712]" aria-hidden="true"></span>
+    </button>
+    <div class="min-w-0 flex-1" aria-hidden="true"></div>
+    <a href="{{ url_for('express_partner.home') }}"
+       data-vinor-express-nav="back"
+       class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
+       aria-label="بازگشت">
+      <i class="fas fa-arrow-right ep-partner-header-btn-icon" aria-hidden="true"></i>
+    </a>
+  </div>
+</div>
 {{ ep_header_end() }}
 
-<!-- منوی کشویی سمت راست -->
+<!-- منوی کشویی از راست (سبک GPT) -->
 <div id="aiSideBackdrop" class="fixed inset-0 z-[55] bg-black/50 opacity-0 pointer-events-none transition-opacity" aria-hidden="true"></div>
 <aside id="aiSidePanel"
-       class="fixed top-0 bottom-0 right-0 z-[56] w-[min(100%,20rem)] translate-x-full border-l border-white/10 bg-[#0a1018] shadow-2xl transition-transform duration-300 ease-out flex flex-col pt-[max(3.5rem,env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom,0px)]"
+       class="ai-side-panel"
        aria-hidden="true" aria-label="منوی گفتگو">
   <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
     <h2 class="text-sm font-bold text-white">گفتگوها</h2>
@@ -282,7 +292,30 @@
   }
 
   .ai-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.12) transparent; }
-  #aiSidePanel.is-open { transform: translateX(0); }
+  #aiSidePanel.ai-side-panel,
+  aside.ai-side-panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: auto;
+    z-index: 56;
+    width: min(100%, 20rem);
+    display: flex;
+    flex-direction: column;
+    padding-top: max(3.5rem, env(safe-area-inset-top));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    background: #0a1018;
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.45);
+    transform: translate3d(105%, 0, 0);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+  #aiSidePanel.is-open,
+  aside.ai-side-panel.is-open {
+    transform: translate3d(0, 0, 0);
+  }
   #aiSideBackdrop.is-open { opacity: 1; pointer-events: auto; }
   #aiMessages .ai-msg-cards .ai-land-cards { width: 100%; max-width: 100%; }
   #aiMessages .ai-msg-cards .vinor-premium-card { cursor: pointer; }
@@ -313,7 +346,7 @@
   } catch (_) {}
 })();
 </script>
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=17"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=18"></script>
 <script>
 (function () {
   try {

@@ -1,29 +1,65 @@
-{# حباب شناور هدر: منو (ثابت روی اسکرول) #}
-{% set _menu_href = menu_href|default(url_for('express_partner.profile')) %}
+{# حباب شناور هدر: منو کشویی پروفایل (سمت راست مثل GPT) #}
+{% set _menu_href = menu_href|default(url_for('express_partner.home', menu=1)) %}
+{% set _use_drawer = profile_drawer|default(false) %}
 <style>
   .ep-header-float-actions {
     position: fixed;
     top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
-    left: calc(env(safe-area-inset-left, 0px) + 0.75rem);
+    right: calc(env(safe-area-inset-right, 0px) + 0.75rem);
+    left: auto;
     z-index: 72;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    border-radius: 9999px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: #111111;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.48);
-    padding: 0.3rem;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
   }
   .ep-header-float-actions .ep-partner-header-btn {
     margin: 0;
   }
 </style>
-<div class="ep-header-float-actions" aria-label="دسترسی سریع">
+<div class="ep-header-float-actions" aria-label="دسترسی سریع" data-tour="home-menu">
+  {% if _use_drawer %}
+  <button type="button"
+          id="epProfileMenuBtn"
+          class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
+          aria-label="منو"
+          aria-expanded="false"
+          aria-controls="epProfileDrawer">
+    <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
+  </button>
+  {% else %}
   <a href="{{ _menu_href }}"
      data-vinor-express-nav
      class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
      aria-label="منو">
     <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
   </a>
+  {% endif %}
 </div>
+{% if _use_drawer %}
+<script>
+(function () {
+  function bindMenuBtn() {
+    var btn = document.getElementById('epProfileMenuBtn');
+    if (!btn || btn.__vinorDrawerBound) return;
+    btn.__vinorDrawerBound = true;
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.toggle === 'function') {
+        window.vinorProfileDrawer.toggle();
+      } else if (window.vinorExpressNavigate) {
+        window.vinorExpressNavigate("{{ _menu_href }}", { forward: true });
+      } else {
+        window.location.href = "{{ _menu_href }}";
+      }
+    });
+  }
+  bindMenuBtn();
+  window.addEventListener('vinor:express-page-swap', bindMenuBtn);
+})();
+</script>
+{% endif %}

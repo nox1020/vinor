@@ -526,6 +526,30 @@ def partner_deal_commission_rejected(
     return False
 
 
+def partner_visit_customer_phone(
+    requests: List[Dict[str, Any]] | None, phone: str, land_code: str
+) -> str:
+    """شماره مشتری ثبت‌شده در بازدید فعال/مرتبط این همکار برای فایل."""
+    rec = partner_active_visit_record(requests or [], phone, land_code)
+    if not rec:
+        return ""
+    return str(rec.get("customer_phone") or "").strip()
+
+
+def partner_visit_customer_name(
+    requests: List[Dict[str, Any]] | None, phone: str, land_code: str
+) -> str:
+    rec = partner_active_visit_record(requests or [], phone, land_code)
+    if not rec:
+        return ""
+    name = str(rec.get("customer_name") or "").strip()
+    if name:
+        return name
+    first = str(rec.get("customer_first_name") or "").strip()
+    last = str(rec.get("customer_last_name") or "").strip()
+    return f"{first} {last}".strip()
+
+
 def partner_can_request_new_visit(
     assignment_status: str,
     visit_requests: List[Dict[str, Any]] | None,
@@ -932,6 +956,12 @@ def resolve_partner_land_tx_state(
     can_revisit = partner_can_request_new_visit(gs, visit_requests, ph, code) if ph else False
     visit_date = (active_visit or {}).get("visit_date") or ""
     visit_date_jalali = format_iso_date_jalali(str(visit_date))
+    customer_phone = str((active_visit or {}).get("customer_phone") or "").strip()
+    customer_name = str((active_visit or {}).get("customer_name") or "").strip()
+    if not customer_name and active_visit:
+        first = str(active_visit.get("customer_first_name") or "").strip()
+        last = str(active_visit.get("customer_last_name") or "").strip()
+        customer_name = f"{first} {last}".strip()
 
     if gs == "in_transaction":
         if ph and holder_phone == ph:
@@ -976,6 +1006,8 @@ def resolve_partner_land_tx_state(
         "visit_date": visit_date,
         "visit_date_jalali": visit_date_jalali,
         "visit_status": (str((active_visit or {}).get("status") or "")).strip(),
+        "customer_phone": customer_phone,
+        "customer_name": customer_name,
         "can_revisit": show_revisit,
     }
 

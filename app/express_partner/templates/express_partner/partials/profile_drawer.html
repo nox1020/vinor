@@ -1,0 +1,366 @@
+{# کشوی پروفایل به سبک GPT — از راست باز می‌شود #}
+{% from 'express_partner/partials/profile_macros.html' import profile_menu_row %}
+<style>
+  #epProfileDrawer .profile-menu-row {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    text-decoration: none;
+    color: inherit;
+  }
+  #epProfileDrawer .profile-menu-badge {
+    position: absolute;
+    top: -0.15rem;
+    inset-inline-end: -0.2rem;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.3rem;
+    border-radius: 9999px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1.1rem;
+    text-align: center;
+    box-shadow: 0 0 0 2px #0a1018;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  #epProfileDrawer .profile-menu-badge.is-visible {
+    display: inline-flex;
+  }
+  #epProfileDrawerBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+  }
+  #epProfileDrawerBackdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  #epProfileDrawer {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: auto;
+    z-index: 81;
+    width: min(100%, 20rem);
+    display: flex;
+    flex-direction: column;
+    background: #0a1018;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: -16px 0 48px rgba(0, 0, 0, 0.5);
+    transform: translate3d(105%, 0, 0);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    will-change: transform;
+  }
+  #epProfileDrawer.is-open {
+    transform: translate3d(0, 0, 0);
+  }
+  html.vinor-profile-drawer-open {
+    overflow: hidden;
+  }
+  .ep-profile-drawer__head {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .ep-profile-drawer__title {
+    font-size: 0.875rem;
+    font-weight: 800;
+    color: #f4f4f5;
+  }
+  .ep-profile-drawer__close {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 9999px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: rgba(255, 255, 255, 0.06);
+    color: #a1a1aa;
+  }
+  .ep-profile-drawer__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ep-profile-drawer__user {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    text-decoration: none;
+    color: inherit;
+  }
+  .ep-profile-drawer__avatar {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 9999px;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+    color: #a1a1aa;
+    font-weight: 800;
+  }
+  .ep-profile-drawer__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .ep-profile-drawer__name {
+    font-size: 0.9375rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.3;
+  }
+  .ep-profile-drawer__meta {
+    margin-top: 0.2rem;
+    font-size: 0.6875rem;
+    color: #71717a;
+  }
+  .ep-profile-drawer__nav .profile-menu-row {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  .ep-profile-drawer__nav .profile-menu-row > div:first-child {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  .ep-profile-drawer__foot {
+    flex-shrink: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.65rem 0.75rem;
+  }
+</style>
+
+<div id="epProfileDrawerBackdrop" aria-hidden="true"></div>
+<aside id="epProfileDrawer"
+       role="dialog"
+       aria-modal="true"
+       aria-label="منوی پروفایل"
+       aria-hidden="true">
+  <div class="ep-profile-drawer__head">
+    <span class="ep-profile-drawer__title">منو</span>
+    <button type="button" class="ep-profile-drawer__close" id="epProfileDrawerClose" aria-label="بستن">
+      <i class="fas fa-times" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <div class="ep-profile-drawer__body">
+    {% if not me_phone %}
+    <div class="px-4 py-5 text-center">
+      <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.06] ring-1 ring-white/10">
+        <i class="fas fa-user text-xl text-zinc-500" aria-hidden="true"></i>
+      </div>
+      <p class="text-sm font-bold text-white">به وینور اکسپرس خوش آمدید</p>
+      <p class="mt-1.5 text-xs leading-relaxed text-zinc-500">برای مدیریت حساب وارد شوید</p>
+      <div class="mt-4 flex flex-col gap-2">
+        <a href="{{ url_for('express_partner.login', next=url_for('express_partner.home')) }}"
+           data-vinor-express-nav
+           class="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white">
+          ورود
+        </a>
+        <a href="{{ url_for('express_partner.login', next=url_for('express_partner.apply')) }}"
+           data-vinor-express-nav
+           class="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-zinc-200">
+          شروع همکاری
+        </a>
+      </div>
+    </div>
+    <nav class="ep-profile-drawer__nav divide-y divide-white/10 border-t border-white/10" aria-label="منوی مهمان">
+      {{ profile_menu_row(url_for('express_partner.cooperation_terms', next=url_for('express_partner.home')), 'fa-handshake', 'شرایط همکاری', 'پورسانت و قوانین') }}
+      {{ profile_menu_row(url_for('express_partner.top_sellers'), 'fa-trophy', 'فروشنده‌های برتر', 'رتبه‌بندی همکاران') }}
+    </nav>
+    {% else %}
+    {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
+    {% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
+    <a href="{{ url_for('express_partner.profile_edit') }}"
+       data-vinor-express-nav
+       class="ep-profile-drawer__user"
+       data-tour="profile-section">
+      <div class="ep-profile-drawer__avatar" aria-hidden="true">
+        {% if _avatar_url %}
+        <img src="{{ _avatar_url }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span class="hidden h-full w-full items-center justify-center">{{ (me_name or partner_name or 'و')|avatar_initials }}</span>
+        {% else %}
+        <span>{{ (me_name or partner_name or 'و')|avatar_initials }}</span>
+        {% endif %}
+      </div>
+      <div class="min-w-0 flex-1 text-right">
+        <div class="ep-profile-drawer__name truncate">{{ me_name or partner_name or 'همکار وینور' }}</div>
+        {% if public_username %}
+        <div class="ep-profile-drawer__meta dir-ltr text-left">@{{ public_username }}</div>
+        {% endif %}
+        <div class="ep-profile-drawer__meta mt-1">
+          {% if is_special|default(false) %}همکار ویژه
+          {% elif is_approved %}همکار تأییدشده
+          {% else %}کاربر عادی{% endif %}
+          · ویرایش
+        </div>
+      </div>
+    </a>
+
+    <nav class="ep-profile-drawer__nav divide-y divide-white/10" aria-label="منوی پروفایل">
+      {% set visits_subtitle = 'درخواست‌های من و دریافتی' if is_special|default(false) else 'وضعیت بازدیدها' %}
+      {% if not is_approved %}
+      {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری', 'تبدیل به همکار اکسپرس', tour='apply-link') }}
+      {% endif %}
+      {{ profile_menu_row(url_for('express_partner.commissions'), 'fa-wallet', 'کیف پول', 'موجودی و تراکنش‌ها', tour='commissions-link') }}
+      {{ profile_menu_row(url_for('express_partner.requests'), 'fa-clipboard-list', 'بازدیدها', visits_subtitle, tour='requests-link') }}
+      {{ profile_menu_row(url_for('express_partner.favorites'), 'fa-bookmark', 'نشان‌ها', 'زمین‌های ذخیره‌شده', tour='favorites-link', badge_key='favorites') }}
+      {% if is_vinor_apk|default(false) and show_app_update_card|default(false) and android_apk_url %}
+      {{ profile_menu_row(android_apk_url, 'fa-download', 'بروزرسانی اپ', 'نسخه ' ~ (android_apk_version or 'جدید'), nav=false, download=true, extra_class='text-amber-200') }}
+      {% endif %}
+      {{ profile_menu_row(url_for('express_partner.top_sellers'), 'fa-trophy', 'فروشنده‌های برتر', 'رتبه‌بندی همکاران', tour='top-sellers-link') }}
+      {% if is_approved %}
+      {{ profile_menu_row(url_for('express_partner.invite_colleagues'), 'fa-user-plus', 'دعوت همکار', 'هر تأیید، ' ~ (referral_bonus_per_invite|toman) ~ ' تومان', tour='invite-colleagues-link') }}
+      {% else %}
+      {{ profile_menu_row(url_for('express_partner.invite_colleagues'), 'fa-user-plus', 'دعوت همکار', 'لینک اختصاصی شما', tour='invite-colleagues-link') }}
+      {% endif %}
+      {% if public_profile_url %}
+      {{ profile_menu_row(public_profile_url, 'fa-globe', 'صفحه عمومی من', '@' ~ (public_username or ''), nav=false) }}
+      {% endif %}
+    </nav>
+    {% endif %}
+  </div>
+
+  {% if me_phone %}
+  <div class="ep-profile-drawer__foot">
+    <form id="logoutDrawerForm" method="post" action="{{ url_for('express_partner.logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit"
+              class="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-2.5 text-sm font-bold text-rose-300 transition hover:bg-rose-500/15">
+        <i class="fas fa-right-from-bracket text-xs" aria-hidden="true"></i>
+        خروج از حساب
+      </button>
+    </form>
+  </div>
+  {% endif %}
+</aside>
+
+<script>
+(function () {
+  var drawer = document.getElementById('epProfileDrawer');
+  var backdrop = document.getElementById('epProfileDrawerBackdrop');
+  var closeBtn = document.getElementById('epProfileDrawerClose');
+  if (!drawer || !backdrop) return;
+
+  try {
+    document.querySelectorAll('#epProfileDrawer').forEach(function (el) {
+      if (el !== drawer) el.remove();
+    });
+    document.querySelectorAll('#epProfileDrawerBackdrop').forEach(function (el) {
+      if (el !== backdrop) el.remove();
+    });
+  } catch (_) {}
+
+  function hoist() {
+    try {
+      if (backdrop.parentElement !== document.body) document.body.appendChild(backdrop);
+      if (drawer.parentElement !== document.body) document.body.appendChild(drawer);
+    } catch (_) {}
+  }
+
+  function isOpen() {
+    return drawer.classList.contains('is-open');
+  }
+
+  function openDrawer() {
+    hoist();
+    drawer.classList.add('is-open');
+    backdrop.classList.add('is-open');
+    drawer.setAttribute('aria-hidden', 'false');
+    backdrop.setAttribute('aria-hidden', 'false');
+    document.documentElement.classList.add('vinor-profile-drawer-open');
+    var menuBtn = document.getElementById('epProfileMenuBtn');
+    if (menuBtn) menuBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeDrawer() {
+    drawer.classList.remove('is-open');
+    backdrop.classList.remove('is-open');
+    drawer.setAttribute('aria-hidden', 'true');
+    backdrop.setAttribute('aria-hidden', 'true');
+    document.documentElement.classList.remove('vinor-profile-drawer-open');
+    var menuBtn = document.getElementById('epProfileMenuBtn');
+    if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  function destroyDrawer() {
+    closeDrawer();
+    try {
+      if (backdrop.parentElement) backdrop.remove();
+      if (drawer.parentElement) drawer.remove();
+    } catch (_) {}
+    if (window.vinorProfileDrawer && window.vinorProfileDrawer._el === drawer) {
+      window.vinorProfileDrawer = null;
+    }
+  }
+
+  window.vinorProfileDrawer = {
+    open: openDrawer,
+    close: closeDrawer,
+    toggle: function () { if (isOpen()) closeDrawer(); else openDrawer(); },
+    isOpen: isOpen,
+    destroy: destroyDrawer,
+    _el: drawer
+  };
+
+  hoist();
+  if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
+  backdrop.addEventListener('click', closeDrawer);
+
+  drawer.addEventListener('click', function (e) {
+    var link = e.target.closest('a[href]');
+    if (link) closeDrawer();
+  });
+
+  document.addEventListener('keydown', function onEsc(e) {
+    if (e.key === 'Escape' && isOpen()) closeDrawer();
+  });
+
+  window.addEventListener('vinor:express-page-swap', function onSwap() {
+    var onHome = /\/express\/partner\/home\/?$/.test(window.location.pathname || '');
+    if (!onHome) {
+      destroyDrawer();
+      window.removeEventListener('vinor:express-page-swap', onSwap);
+    }
+  });
+
+  // باز شدن از deep-link: /home?menu=1
+  try {
+    var params = new URLSearchParams(window.location.search || '');
+    if (params.get('menu') === '1' || params.get('drawer') === '1') {
+      setTimeout(function () {
+        openDrawer();
+        try {
+          params.delete('menu');
+          params.delete('drawer');
+          var q = params.toString();
+          var next = window.location.pathname + (q ? '?' + q : '') + (window.location.hash || '');
+          window.history.replaceState(window.history.state, '', next);
+        } catch (_) {}
+      }, 60);
+    }
+  } catch (_) {}
+})();
+</script>

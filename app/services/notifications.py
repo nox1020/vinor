@@ -342,7 +342,7 @@ def add_notification(user_id: str, title: str, body: str, ntype: str = "info",
             normalized_user_id,
             title=str(title).strip(),
             body=str(body).strip(),
-            url=action_url or "/express/partner/notifications",
+            url=action_url or "/express/partner/home?thread=__postchi__",
         )
     except Exception:
         pass
@@ -420,7 +420,7 @@ def add_notifications_batch(
                 list(seen_phones),
                 title=title_s,
                 body=body_s,
-                url=action_url or "/express/partner/notifications",
+                url=action_url or "/express/partner/home?thread=__postchi__",
                 broadcast_id=broadcast_id,
             )
         except Exception:

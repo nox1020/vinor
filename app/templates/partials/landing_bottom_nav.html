@@ -7,7 +7,7 @@
         {'key': 'dashboard', 'url': '/express/partner/dashboard', 'icon': 'fa-home', 'label': 'وینور'},
         {'key': 'commissions', 'url': '/express/partner/commissions', 'icon': 'fa-wallet', 'label': 'کیف پول'},
         {'key': 'ai', 'url': '/ai', 'icon': 'fa-wand-magic-sparkles', 'label': 'AI'},
-        {'key': 'profile', 'url': '/express/partner/profile', 'icon': 'fa-user', 'label': 'من'}
+        {'key': 'profile', 'url': '/express/partner/home?menu=1', 'icon': 'fa-user', 'label': 'منو'}
       ] %}
       {% for item in nav_items %}
         {% set is_active = (bottom_nav_active == item.key) %}

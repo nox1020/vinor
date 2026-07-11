@@ -6,7 +6,7 @@
 
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(id='profileFavoritesHeader') }}
-  {% call ep_header_row('نشان‌شده‌ها', url_for('express_partner.profile')) %}{% endcall %}
+  {% call ep_header_row('نشان‌شده‌ها', url_for('express_partner.home')) %}{% endcall %}
   {{ ep_header_end() }}
 
   <div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16" data-vinor-favorites-page>

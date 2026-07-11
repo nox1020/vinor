@@ -1,4 +1,4 @@
-{# باکس شناور Vinor AI — روی داشبورد #}
+{# باکس شناور Vinor AI — روی داشبورد؛ باز کردن لایه چت تمام‌صفحه #}
 <style>
   #epAiFab.ep-ai-chatbox {
     position: fixed;
@@ -22,7 +22,7 @@
     pointer-events: auto;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
   }
   #epAiFab.ep-ai-chatbox:active {
     transform: translateX(-50%) scale(0.99);
@@ -33,6 +33,7 @@
     pointer-events: none;
   }
   #epAiFab .ep-ai-chatbox__brand {
+    position: relative;
     width: 2.15rem;
     height: 2.15rem;
     border-radius: 0.7rem;
@@ -43,6 +44,27 @@
     color: #c4b5fd;
     font-size: 0.82rem;
     flex-shrink: 0;
+    cursor: pointer;
+  }
+  #epAiFab .ep-ai-chatbox__unread {
+    position: absolute;
+    top: -0.28rem;
+    inset-inline-end: -0.28rem;
+    min-width: 1rem;
+    height: 1rem;
+    padding: 0 0.22rem;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 0.5625rem;
+    font-weight: 800;
+    line-height: 1rem;
+    text-align: center;
+    box-shadow: 0 0 0 2px #111111;
+    pointer-events: none;
+  }
+  #epAiFab .ep-ai-chatbox__unread[hidden] {
+    display: none !important;
   }
   #epAiFab .ep-ai-chatbox__input {
     width: 100%;
@@ -77,15 +99,23 @@
   html.vinor-has-apk-banner #epAiFab.ep-ai-chatbox {
     bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
   }
+  html.vinor-ai-open #epAiFab.ep-ai-chatbox {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(12px);
+  }
 </style>
 <form id="epAiFab"
-   action="{{ url_for('express_partner.ai') }}"
+   action="{{ url_for('express_partner.home', ai=1) }}"
    class="ep-ai-chatbox"
+   data-tour="ai-fab"
+   data-postchi-thread="{{ postchi_thread_id|default('__postchi__') }}"
    aria-label="Vinor AI Chat"
    title="Vinor AI Chat"
    {% if not show_ai_fab|default(false) %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
-  <span class="ep-ai-chatbox__brand" aria-hidden="true">
-    <i class="fas fa-wand-magic-sparkles"></i>
+  <span class="ep-ai-chatbox__brand" id="epAiFabBrand" role="button" tabindex="0" title="Vinor AI" aria-label="Vinor AI">
+    <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>
+    <span class="ep-ai-chatbox__unread" id="epAiFabUnread" hidden aria-hidden="true">0</span>
   </span>
   <input type="text"
          id="epAiFabInput"
@@ -102,17 +132,68 @@
   if (window.__vinorEpAiFabInit) return;
   window.__vinorEpAiFabInit = true;
 
-  var MAIN = { '/express/partner/home': true };
+  var MAIN = {
+    '/express/partner/home': true,
+    '/express/partner/files': true,
+  };
   var MIN_MSG_LEN = 2;
+  var fabUnread = 0;
 
   function normPath(path) {
     return (path || '').replace(/\/+$/, '') || '/';
   }
 
+  function postchiThreadId() {
+    var box = document.getElementById('epAiFab');
+    return (box && box.getAttribute('data-postchi-thread')) || '__postchi__';
+  }
+
+  function hasHomeAi() {
+    return !!(window.vinorAiHome && typeof window.vinorAiHome.open === 'function');
+  }
+
+  function openHomeAi(opts) {
+    opts = opts || {};
+    if (hasHomeAi()) {
+      window.vinorAiHome.open(opts);
+      return true;
+    }
+    var path = normPath(window.location.pathname);
+    var base = MAIN[path] ? path : '/express/partner/home';
+    var q = 'ai=1';
+    if (opts.thread) q += '&thread=' + encodeURIComponent(opts.thread);
+    var href = base + '?' + q;
+    if (window.vinorExpressNavigate) {
+      window.vinorExpressNavigate(href, { forward: true });
+    } else {
+      window.location.href = href;
+    }
+    return false;
+  }
+
+  function setFabUnread(n) {
+    fabUnread = Math.max(0, Number(n) || 0);
+    var el = document.getElementById('epAiFabUnread');
+    if (!el) return;
+    if (fabUnread > 0) {
+      el.textContent = fabUnread > 99 ? '99+' : String(fabUnread);
+      el.removeAttribute('hidden');
+      el.setAttribute('aria-hidden', 'false');
+    } else {
+      el.textContent = '0';
+      el.setAttribute('hidden', 'hidden');
+      el.setAttribute('aria-hidden', 'true');
+    }
+  }
+
   function syncAiFab() {
     var fab = document.getElementById('epAiFab');
     if (!fab) return;
-    var show = !!MAIN[normPath(window.location.pathname)];
+    var path = normPath(window.location.pathname);
+    var show = !!MAIN[path] && !!document.getElementById('aiHomeLayer');
+    if (show && document.documentElement.classList.contains('vinor-ai-open')) {
+      show = false;
+    }
     if (show) {
       fab.removeAttribute('hidden');
       fab.style.display = 'grid';
@@ -121,49 +202,45 @@
       fab.setAttribute('hidden', 'hidden');
       fab.style.display = 'none';
       fab.setAttribute('aria-hidden', 'true');
+      try {
+        if (!MAIN[path] && window.vinorAiHome && window.vinorAiHome.close) {
+          window.vinorAiHome.close();
+        }
+      } catch (_) {}
     }
+  }
+
+  function openChat(msg, autosend, thread) {
+    openHomeAi({
+      message: msg || '',
+      autosend: !!autosend,
+      thread: thread || ''
+    });
   }
 
   function submitFromHomeBox(ev) {
-    var box = document.getElementById('epAiFab');
     var input = document.getElementById('epAiFabInput');
-    if (!box || !input) return;
     if (ev) ev.preventDefault();
-    var msg = (input.value || '').trim();
-    try {
-      if (msg.length >= MIN_MSG_LEN) {
-        sessionStorage.setItem('vinor_ai_home_prompt', msg);
-        sessionStorage.setItem('vinor_ai_home_autosend', '1');
-      } else {
-        sessionStorage.removeItem('vinor_ai_home_prompt');
-        sessionStorage.removeItem('vinor_ai_home_autosend');
-      }
-    } catch (_) {}
-    var href = box.getAttribute('action') || "{{ url_for('express_partner.ai') }}";
-    if (window.vinorExpressNavigate) {
-      window.vinorExpressNavigate(href, { forward: true });
+    var msg = (input && input.value || '').trim();
+    if (input) input.value = '';
+    if (msg.length >= MIN_MSG_LEN) {
+      openChat(msg, true, '');
     } else {
-      window.location.href = href;
+      openChat('', false, '');
     }
-    input.value = '';
   }
 
   function quickOpenAi(ev) {
-    var box = document.getElementById('epAiFab');
-    if (!box) return;
     if (ev && ev.target) {
       var t = ev.target;
       if (t.closest && (t.closest('#epAiFabInput') || t.closest('.ep-ai-chatbox__send'))) return;
+      if (t.closest && t.closest('#epAiFabBrand') && fabUnread > 0) {
+        if (ev.preventDefault) ev.preventDefault();
+        openChat('', false, postchiThreadId());
+        return;
+      }
     }
-    var href = box.getAttribute('action') || "{{ url_for('express_partner.ai') }}";
-    try {
-      if (window.vinorExpressPrefetch) window.vinorExpressPrefetch(href);
-    } catch (_) {}
-    if (window.vinorExpressNavigate) {
-      window.vinorExpressNavigate(href, { forward: true });
-    } else {
-      window.location.href = href;
-    }
+    openChat('', false, '');
   }
 
   function mountFabOnBody() {
@@ -184,13 +261,20 @@
   if (form) {
     form.addEventListener('submit', submitFromHomeBox);
     form.addEventListener('click', quickOpenAi);
-    form.addEventListener('touchstart', function () {
-      var href = form.getAttribute('action') || "{{ url_for('express_partner.ai') }}";
-      try {
-        if (window.vinorExpressPrefetch) window.vinorExpressPrefetch(href);
-      } catch (_) {}
-    }, { passive: true });
   }
+
+  window.addEventListener('vinor:notifications:update', function (ev) {
+    var detail = ev && ev.detail;
+    if (!detail || detail.unread === undefined || detail.unread === null) return;
+    setFabUnread(detail.unread);
+  });
+
+  try {
+    if (window.VinorNotifyCenter && typeof window.VinorNotifyCenter.getState === 'function') {
+      var st = window.VinorNotifyCenter.getState();
+      if (st && typeof st.unread !== 'undefined') setFabUnread(st.unread);
+    }
+  } catch (_) {}
 
   window.addEventListener('popstate', function () { syncAiFab(); });
   window.addEventListener('vinor:express-page-swap', function () {

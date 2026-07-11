@@ -7,7 +7,7 @@
 
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(id='profileEditHeader') }}
-  {% call ep_header_row('ویرایش پروفایل', url_for('express_partner.profile'), inner_class='max-w-lg mx-auto w-full lg:max-w-2xl') %}
+  {% call ep_header_row('ویرایش پروفایل', url_for('express_partner.home', menu=1), inner_class='max-w-lg mx-auto w-full lg:max-w-2xl') %}
     <button type="button"
             id="profileEditSaveBtn"
             disabled
@@ -422,7 +422,7 @@ function initProfileEditSave() {
 
   var apiUrl = {{ url_for('express_partner.api_profile_update') | tojson }};
   var dataUrl = {{ url_for('express_partner.profile_edit_data') | tojson }};
-  var profilePageUrl = {{ url_for('express_partner.profile') | tojson }};
+  var profilePageUrl = {{ url_for('express_partner.home', menu=1) | tojson }};
   var profileEditPageUrl = {{ url_for('express_partner.profile_edit') | tojson }};
   var initialData = {
     success: true,

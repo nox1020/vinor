@@ -4,12 +4,6 @@
 {% block body %}
 <header class="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050a0e]/95 backdrop-blur-md w-full">
   <div class="relative mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16 sm:px-6">
-    <a href="{{ url_for('main.index') }}"
-       class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
-       aria-label="بازگشت">
-      <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
-    </a>
-    <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">Vinor AI</h1>
     <button type="button" id="aiMenuBtn"
             class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 hover:text-white"
             aria-label="منو"
@@ -17,12 +11,18 @@
             aria-controls="aiSidePanel">
       <i class="fas fa-bars text-sm" aria-hidden="true"></i>
     </button>
+    <h1 class="pointer-events-none absolute inset-x-0 text-center text-sm font-bold text-white sm:text-base">Vinor AI</h1>
+    <a href="{{ url_for('main.index') }}"
+       class="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+       aria-label="بازگشت">
+      <i class="fas fa-arrow-right text-sm sm:text-base" aria-hidden="true"></i>
+    </a>
   </div>
 </header>
 
 <div id="aiSideBackdrop" class="fixed inset-0 z-[55] bg-black/50 opacity-0 pointer-events-none transition-opacity" aria-hidden="true"></div>
 <aside id="aiSidePanel"
-       class="fixed top-0 bottom-0 right-0 z-[56] w-[min(100%,20rem)] translate-x-full border-l border-white/10 bg-[#0a1018] shadow-2xl transition-transform duration-300 ease-out flex flex-col pt-[max(3.5rem,env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom,0px)]"
+       class="ai-side-panel"
        aria-hidden="true" aria-label="منوی گفتگو">
   <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
     <h2 class="text-sm font-bold text-white">گفتگوها</h2>
@@ -109,7 +109,30 @@
 </main>
 
 <style>
-  #aiSidePanel.is-open { transform: translateX(0); }
+  #aiSidePanel.ai-side-panel,
+  aside.ai-side-panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: auto;
+    z-index: 56;
+    width: min(100%, 20rem);
+    display: flex;
+    flex-direction: column;
+    padding-top: max(3.5rem, env(safe-area-inset-top));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    background: #0a1018;
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.45);
+    transform: translate3d(105%, 0, 0);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+  #aiSidePanel.is-open,
+  aside.ai-side-panel.is-open {
+    transform: translate3d(0, 0, 0);
+  }
   #aiSideBackdrop.is-open { opacity: 1; pointer-events: auto; }
   #aiMessages .ai-msg-cards .ai-land-cards { width: 100%; max-width: min(100%, 22rem); }
   #aiMessages .ai-msg-cards .vinor-premium-card { cursor: pointer; }

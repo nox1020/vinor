@@ -127,6 +127,11 @@ def _clean_messages(raw: list) -> list[dict[str, Any]]:
             codes = item.get("land_codes")
             if isinstance(codes, list) and codes:
                 row["land_codes"] = [str(c).strip() for c in codes if str(c).strip()][:5]
+            actions = item.get("agent_actions")
+            if isinstance(actions, list) and actions:
+                cleaned_actions = [a for a in actions if isinstance(a, dict)][:5]
+                if cleaned_actions:
+                    row["agent_actions"] = cleaned_actions
             cleaned.append(row)
     return cleaned[-_MAX_MESSAGES:]
 
@@ -323,6 +328,7 @@ def _enrich_messages_for_ui(
     messages: list[dict[str, Any]],
     audience: str | None = None,
 ) -> list[dict[str, Any]]:
+    from app.ai.agent_tools import render_agent_actions_html
     from app.ai.land_cards import render_land_cards_html
 
     out: list[dict[str, Any]] = []
@@ -331,9 +337,16 @@ def _enrich_messages_for_ui(
             continue
         row = dict(item)
         codes = row.get("land_codes") or []
-        if row.get("role") == "assistant" and codes:
+        actions = row.get("agent_actions") or []
+        if row.get("role") == "assistant" and (codes or actions):
             try:
-                row["cards_html"] = render_land_cards_html(user_key, codes, audience=audience)
+                land_html = ""
+                if codes:
+                    land_html = render_land_cards_html(user_key, codes, audience=audience) or ""
+                actions_html = ""
+                if isinstance(actions, list) and actions:
+                    actions_html = render_agent_actions_html(actions) or ""
+                row["cards_html"] = (land_html or "") + (actions_html or "")
             except Exception:
                 row["cards_html"] = ""
         out.append(row)
@@ -355,6 +368,7 @@ def append_exchange(
     *,
     thread_id: str | None = None,
     assistant_land_codes: list[str] | None = None,
+    assistant_agent_actions: list[dict[str, Any]] | None = None,
     audience: str | None = None,
 ) -> tuple[list[dict[str, Any]], str]:
     record = load_user_record(user_key, audience)
@@ -375,15 +389,18 @@ def append_exchange(
         msgs.append({"role": "user", "content": user_text, "created_at": ts})
         if th.get("title") in (None, "", "گفتگوی جدید") and len(msgs) == 1:
             th["title"] = _title_from_text(user_text)
-    if assistant_text:
+    if assistant_text or assistant_agent_actions:
         entry: dict[str, Any] = {
             "role": "assistant",
-            "content": assistant_text,
+            "content": assistant_text or "جزئیات را در کارت زیر بررسی کنید.",
             "created_at": ts,
         }
         codes = [str(c).strip() for c in (assistant_land_codes or []) if str(c).strip()]
         if codes:
             entry["land_codes"] = codes[:5]
+        actions = [a for a in (assistant_agent_actions or []) if isinstance(a, dict)][:5]
+        if actions:
+            entry["agent_actions"] = actions
         msgs.append(entry)
     th["messages"] = msgs[-_MAX_MESSAGES:]
     th["updated_at"] = ts

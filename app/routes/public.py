@@ -658,8 +658,8 @@ def legacy_my_lands():
 @main_bp.route("/settings/")
 def legacy_settings():
     if session.get("user_phone"):
-        return _legacy_redirect("express_partner.profile")
-    return _legacy_redirect("express_partner.login", next=url_for("express_partner.profile"))
+        return _legacy_redirect("express_partner.home", menu=1)
+    return _legacy_redirect("express_partner.login", next=url_for("express_partner.home", menu=1))
 
 
 @main_bp.route("/careers/consultant/apply")

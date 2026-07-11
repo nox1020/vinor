@@ -1,26 +1,38 @@
 """منطق هوش مصنوعی وینور — DeepSeek API."""
 from __future__ import annotations
 
-import os
+import json
 import re
 from typing import Any
 
 import requests
 from flask import current_app
 
-from .audience import AUDIENCE_PARTNER, AUDIENCE_PUBLIC
+from .agent_tools import (
+    agent_system_hint,
+    parse_tool_arguments,
+    render_agent_actions_html,
+    run_tool,
+    tools_schema_for_voice,
+)
+from .audience import (
+    AUDIENCE_PARTNER,
+    AUDIENCE_PUBLIC,
+    resolve_ai_voice,
+    voice_label_fa,
+)
 from .config import (
     DEEPSEEK_BASE_URL,
     DEEPSEEK_MODEL,
     ESCALATE_MARKER_RE,
-    VINOR_AI_PARTNER_PROMPT,
-    VINOR_AI_PUBLIC_PROMPT,
     get_deepseek_api_key,
+    prompt_for_voice,
 )
 from .context import (
     append_admin_answers_block,
     build_partner_context_base,
     build_partner_land_context,
+    build_partner_status_context,
     build_public_context_base,
     build_public_land_context,
 )
@@ -38,6 +50,8 @@ from .runtime_settings import get_ai_settings
 from .escalations import consume_pending_answers, create_escalation
 from .land_cards import collect_land_codes, land_cards_payload
 from .provider_router import call_ai
+
+_MAX_TOOL_ROUNDS = 2
 
 LAND_MARKER_RE = re.compile(r"\[\[LAND:[^\]]+\]\]\s*", re.IGNORECASE)
 
@@ -116,10 +130,14 @@ def _build_system_prompt(
                 user_key,
                 lambda: build_partner_context_base(user_key),
             )
+            status_ctx = build_partner_status_context(user_key)
             land_ctx = build_partner_land_context(user_key, user_message)
-            ctx = base
+            parts = [base]
+            if status_ctx:
+                parts.append(status_ctx)
             if land_ctx:
-                ctx = f"{base}\n{land_ctx}"
+                parts.append(land_ctx)
+            ctx = "\n".join(parts)
         else:
             base = get_public_context_base(build_public_context_base)
             land_ctx = build_public_land_context(user_message)
@@ -154,11 +172,21 @@ def _build_messages(
     *,
     user_key: str | None = None,
     audience: str | None = None,
-) -> list[dict[str, str]]:
+    voice: str | None = None,
+    with_tools: bool = False,
+) -> list[dict[str, Any]]:
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
     cfg = budget_config()
-    base_prompt = VINOR_AI_PARTNER_PROMPT if aud == AUDIENCE_PARTNER else VINOR_AI_PUBLIC_PROMPT
-    messages: list[dict[str, str]] = [{"role": "system", "content": base_prompt}]
+    resolved_voice = voice or resolve_ai_voice(phone=user_key or "", audience=aud)
+    base_prompt = prompt_for_voice(resolved_voice)
+    messages: list[dict[str, Any]] = [{"role": "system", "content": base_prompt}]
+    # یادآوری کوتاه نقش در هر درخواست (کم‌حجم، خارج از کش زمینه)
+    messages.append({
+        "role": "system",
+        "content": f"نقش فعلی مخاطب: {voice_label_fa(resolved_voice)}. لحن و سطح راهنمایی را دقیقاً با این نقش هماهنگ کن.",
+    })
+    if with_tools:
+        messages.append({"role": "system", "content": agent_system_hint(resolved_voice)})
     if user_key:
         ctx = _build_system_prompt(user_key, audience, user_message=text)
         if ctx:
@@ -175,7 +203,11 @@ def _build_messages(
     return messages
 
 
-def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
+def _call_deepseek(
+    messages: list[dict[str, Any]],
+    *,
+    tools: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     api_key = get_deepseek_api_key()
     if not api_key:
         return {
@@ -194,13 +226,16 @@ def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
     model = DEEPSEEK_MODEL
     url = f"{DEEPSEEK_BASE_URL.rstrip('/')}/chat/completions"
     bcfg = budget_config()
-    payload = {
+    payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "stream": False,
         "max_tokens": bcfg["max_tokens"],
         "temperature": bcfg["temperature"],
     }
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -252,15 +287,18 @@ def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
 
     clear_api_balance_depleted()
     reply = ""
+    tool_calls: list[dict[str, Any]] = []
     if isinstance(body, dict):
         choices = body.get("choices") or []
         if choices and isinstance(choices[0], dict):
             msg = choices[0].get("message") or {}
             if isinstance(msg, dict):
                 reply = str(msg.get("content") or "").strip()
-
-    if not reply:
-        return {"ok": False, "error": "پاسخی از مدل دریافت نشد."}
+                raw_calls = msg.get("tool_calls") or []
+                if isinstance(raw_calls, list):
+                    for tc in raw_calls:
+                        if isinstance(tc, dict) and tc.get("id"):
+                            tool_calls.append(tc)
 
     usage = body.get("usage") if isinstance(body, dict) else None
     if isinstance(usage, dict):
@@ -270,23 +308,109 @@ def _call_deepseek(messages: list[dict[str, str]]) -> dict[str, Any]:
             prompt_tok = usage.get("prompt_tokens")
             if hit or miss or prompt_tok:
                 current_app.logger.info(
-                    "DeepSeek tokens | prompt=%s cache_hit=%s cache_miss=%s completion=%s",
+                    "DeepSeek tokens | prompt=%s cache_hit=%s cache_miss=%s completion=%s tools=%s",
                     prompt_tok,
                     hit,
                     miss,
                     usage.get("completion_tokens"),
+                    len(tool_calls),
                 )
         except Exception:
             pass
+
+    if not reply and not tool_calls:
+        return {"ok": False, "error": "پاسخی از مدل دریافت نشد."}
+
     return {
         "ok": True,
         "reply": reply,
+        "tool_calls": tool_calls,
         "meta": {
             "provider": "deepseek",
             "model": model,
             "usage": usage,
         },
     }
+
+
+def _run_agent_loop(
+    messages: list[dict[str, Any]],
+    *,
+    tools: list[dict[str, Any]] | None,
+    phone: str,
+    audience: str,
+    voice: str,
+) -> dict[str, Any]:
+    """حلقه کوتاه tool-calling؛ حداکثر ۲ دور ابزار سپس پاسخ نهایی."""
+    agent_actions: list[dict[str, Any]] = []
+    tool_land_codes: list[str] = []
+    result: dict[str, Any] = {"ok": False, "error": "پاسخی دریافت نشد."}
+    api_rounds = 0
+
+    for round_i in range(_MAX_TOOL_ROUNDS + 1):
+        allow_tools = bool(tools) and round_i < _MAX_TOOL_ROUNDS
+        result = call_ai(messages, tools=tools if allow_tools else None)
+        api_rounds += 1
+        if not result.get("ok"):
+            break
+
+        tool_calls = result.get("tool_calls") if allow_tools else None
+        if not isinstance(tool_calls, list):
+            tool_calls = []
+        if not tool_calls:
+            break
+
+        asst_msg: dict[str, Any] = {
+            "role": "assistant",
+            "content": result.get("reply") or None,
+            "tool_calls": tool_calls,
+        }
+        messages.append(asst_msg)
+
+        for tc in tool_calls:
+            if not isinstance(tc, dict):
+                continue
+            tc_id = str(tc.get("id") or "")
+            fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
+            name = str(fn.get("name") or "").strip()
+            args = parse_tool_arguments(fn.get("arguments"))
+            tool_out = run_tool(
+                name,
+                args,
+                phone=phone,
+                audience=audience,
+                voice=voice,
+            )
+            ui = tool_out.get("ui_action")
+            if isinstance(ui, dict):
+                agent_actions.append(ui)
+            for code in tool_out.get("land_codes") or []:
+                c = str(code).strip()
+                if c and c not in tool_land_codes:
+                    tool_land_codes.append(c)
+            model_payload = tool_out.get("model_result")
+            if model_payload is None:
+                model_payload = {
+                    "ok": bool(tool_out.get("ok")),
+                    "error": tool_out.get("error"),
+                }
+            try:
+                content = json.dumps(model_payload, ensure_ascii=False)[:4000]
+            except Exception:
+                content = str(model_payload)[:4000]
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc_id,
+                    "content": content,
+                }
+            )
+
+    if result.get("ok"):
+        result["agent_actions"] = agent_actions
+        result["tool_land_codes"] = tool_land_codes
+        result["api_rounds"] = api_rounds
+    return result
 
 
 def _escalation_fallback_reply(
@@ -359,6 +483,7 @@ def generate_reply(
 ) -> dict[str, Any]:
     key = (user_key or phone or "").strip()
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    voice = resolve_ai_voice(phone=key, audience=aud)
 
     text = (message or "").strip()
     if not text:
@@ -376,8 +501,22 @@ def generate_reply(
             )
         return guard
 
-    messages = _build_messages(text, history, user_key=key, audience=aud)
-    result = call_ai(messages)
+    tools = tools_schema_for_voice(voice) if key else []
+    messages = _build_messages(
+        text,
+        history,
+        user_key=key,
+        audience=aud,
+        voice=voice,
+        with_tools=bool(tools),
+    )
+    result = _run_agent_loop(
+        messages,
+        tools=tools or None,
+        phone=key,
+        audience=aud,
+        voice=voice,
+    )
     if not result.get("ok"):
         reason = None
         if result.get("balance_depleted") or is_api_balance_depleted():
@@ -405,6 +544,15 @@ def generate_reply(
     reply, land_codes = collect_land_codes(
         reply, user_text=text, phone=key, audience=aud
     )
+    for code in result.get("tool_land_codes") or []:
+        c = str(code).strip()
+        if c and c not in land_codes:
+            land_codes.append(c)
+    land_codes = land_codes[:5]
+
+    agent_actions = [
+        a for a in (result.get("agent_actions") or []) if isinstance(a, dict)
+    ]
     escalated = False
     escalation_id = ""
 
@@ -439,14 +587,35 @@ def generate_reply(
                 + "\n\nسوال شما برای تیم وینور ثبت شد؛ به‌زودی در همین چت پاسخ می‌گیرید."
             )
 
+    if not reply and agent_actions:
+        reply = "جزئیات را در کارت زیر بررسی کنید."
+
     result["reply"] = reply
     result["audience"] = aud
+    result["voice"] = voice
     result["escalated"] = escalated
     if escalation_id:
         result["escalation_id"] = escalation_id
     if land_codes:
         result["land_codes"] = land_codes
         result["land_cards"] = land_cards_payload(key, land_codes, audience=aud)
+    if agent_actions:
+        result["agent_actions"] = agent_actions
+        try:
+            actions_html = render_agent_actions_html(agent_actions)
+            land_html = ""
+            if land_codes:
+                from app.ai.land_cards import render_land_cards_html
+
+                land_html = render_land_cards_html(key, land_codes, audience=aud) or ""
+            if land_html and actions_html:
+                result["cards_html"] = land_html + actions_html
+            elif actions_html:
+                result["cards_html"] = actions_html
+            elif land_html:
+                result["cards_html"] = land_html
+        except Exception:
+            pass
 
     store_cached_reply(key, aud, text, result)
     return result

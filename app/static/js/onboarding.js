@@ -1,6 +1,9 @@
 /**
  * Onboarding Tour System - Divar Style
  * سیستم تور راهنمای کاربران به سبک دیوار
+ *
+ * نسخه ۳: هم‌تراز با IA فعلی (خانه / فایل‌ها / AI / پروفایل)
+ * تورهای قدیمی با سلکتورهای مرده (help / routine / dashboard→home) پاک می‌شوند.
  */
 
 class OnboardingTour {
@@ -11,7 +14,18 @@ class OnboardingTour {
     this.tooltip = null;
     this.isActive = false;
     this.tourData = [];
+    this.tourVersion = OnboardingTour.TOUR_VERSION;
   }
+
+  static TOUR_VERSION = '2026-07-ia-v3';
+  static FILES_PATH = '/express/partner/files';
+  static HOME_PATH = '/express/partner/home';
+  static DEAD_SELECTORS = [
+    'routine-link',
+    'help-link',
+    'support-link',
+    'notifications-link',
+  ];
 
   // Avoid showing the tour on authentication pages (login/OTP)
   isAuthPage() {
@@ -23,12 +37,33 @@ class OnboardingTour {
     );
   }
 
+  isHomePath(path = window.location.pathname) {
+    const p = (path || '').replace(/\/+$/, '') || '/';
+    return p === '/express/partner/home' || p === '/express/partner' || p === '/express/partner/';
+  }
+
+  /** صفحه لیست فایل‌ها (قالب dashboard.html روی /files) */
+  isFilesPath(path = window.location.pathname) {
+    const p = (path || '').replace(/\/+$/, '') || '/';
+    return p === '/express/partner/files' || p.endsWith('/files');
+  }
+
+  /** سازگاری با نام قدیمی */
   isDashboardPath(path = window.location.pathname) {
-    return path.includes('/dashboard') || path === '/express/partner/' || path === '/express/partner';
+    return this.isFilesPath(path);
   }
 
   isLandDetailPath(path = window.location.pathname) {
     return path.includes('/lands/') || path.includes('/land_detail');
+  }
+
+  tourDataLooksStale(tourData) {
+    if (!Array.isArray(tourData) || !tourData.length) return true;
+    const blob = JSON.stringify(tourData);
+    if (blob.includes('/express/partner/dashboard') && !blob.includes('/express/partner/files')) {
+      return true;
+    }
+    return OnboardingTour.DEAD_SELECTORS.some((key) => blob.includes(`data-tour="${key}"`) || blob.includes(`"${key}"`));
   }
 
   findTourElement(selector) {
@@ -41,6 +76,7 @@ class OnboardingTour {
   }
 
   persistTourNavigation(nextStepIndex, targetUrl) {
+    sessionStorage.setItem('vinor_tour_version', this.tourVersion);
     sessionStorage.setItem('vinor_tour_step', nextStepIndex.toString());
     sessionStorage.setItem('vinor_tour_data', JSON.stringify(this.tourData));
     if (targetUrl && this.isLandDetailPath(targetUrl)) {
@@ -53,23 +89,40 @@ class OnboardingTour {
     sessionStorage.removeItem('vinor_tour_step');
     sessionStorage.removeItem('vinor_tour_data');
     sessionStorage.removeItem('vinor_start_full_tour');
+    sessionStorage.removeItem('vinor_tour_version');
   }
 
   init() {
     if (this.isAuthPage()) return;
 
-    // بررسی اینکه آیا تور از sessionStorage باید ادامه یابد
+    const storedVersion = sessionStorage.getItem('vinor_tour_version');
     const tourStep = sessionStorage.getItem('vinor_tour_step');
-    const tourData = sessionStorage.getItem('vinor_tour_data');
-    
-    if (tourStep !== null && tourData) {
+    const tourDataRaw = sessionStorage.getItem('vinor_tour_data');
+
+    // تورهای قدیمی / گیرکرده را بی‌صدا پاک کن
+    if (tourStep !== null || tourDataRaw || sessionStorage.getItem('vinor_start_full_tour')) {
+      if (storedVersion !== this.tourVersion) {
+        this.clearTourSession();
+        sessionStorage.removeItem('vinor_tour_land_url');
+        return;
+      }
+    }
+
+    if (tourStep !== null && tourDataRaw) {
+      let parsed;
       try {
-        this.tourData = JSON.parse(tourData);
+        parsed = JSON.parse(tourDataRaw);
       } catch (e) {
         console.warn('Invalid tour session data, clearing.', e);
         this.clearTourSession();
         return;
       }
+      if (this.tourDataLooksStale(parsed)) {
+        this.clearTourSession();
+        sessionStorage.removeItem('vinor_tour_land_url');
+        return;
+      }
+      this.tourData = parsed;
       this.currentStep = parseInt(tourStep, 10);
       if (Number.isNaN(this.currentStep)) {
         this.clearTourSession();
@@ -106,59 +159,106 @@ class OnboardingTour {
 
     if (force) {
       this.tourData = this.getFullTour();
-      if (!this.isDashboardPath()) {
+      if (!this.isHomePath()) {
+        sessionStorage.setItem('vinor_tour_version', this.tourVersion);
         sessionStorage.setItem('vinor_start_full_tour', 'true');
-        window.location.href = '/express/partner/dashboard';
+        window.location.href = OnboardingTour.HOME_PATH;
         return;
       }
     } else {
       const path = window.location.pathname;
-      if (this.isDashboardPath(path)) {
-        this.tourData = this.getDashboardTour();
+      if (this.isHomePath(path)) {
+        this.tourData = this.getHomeTour();
+      } else if (this.isFilesPath(path)) {
+        this.tourData = this.getFilesTour();
       } else if (this.isLandDetailPath(path)) {
         this.tourData = this.getLandDetailTour();
       } else if (path.includes('/commissions')) {
         this.tourData = this.getCommissionsTour();
-      } else if (path.includes('/profile')) {
-        this.tourData = this.getProfileTour();
+      } else if (path.includes('/profile/edit') || path.includes('/home')) {
+        this.tourData = path.includes('/profile/edit') ? this.getProfileTour() : this.getHomeTour();
       } else {
-        this.tourData = this.getDashboardTour();
+        this.tourData = this.getHomeTour();
       }
     }
 
-    if (this.tourData.length === 0) return;
+    if (this.tourData.length === 0) {
+      this.isActive = false;
+      return;
+    }
 
+    sessionStorage.setItem('vinor_tour_version', this.tourVersion);
     this.createOverlay();
     this.showStep(0);
   }
 
-  getDashboardTour() {
+  getHomeTour() {
     return [
       {
-        element: '[data-tour="dashboard-header"]',
-        title: 'خوش آمدید! 👋',
-        description: 'این پنل همکاران وینور اکسپرس است. در اینجا می‌توانید فایل‌های اختصاص داده شده را مشاهده کنید.',
+        element: '[data-tour="home-menu"]',
+        title: 'منوی پروفایل',
+        description: 'از اینجا کیف پول، بازدیدها، نشان‌ها و تنظیمات حساب را باز کنید.',
         position: 'bottom'
       },
       {
-        element: '[data-tour="dashboard-filters"]',
-        title: 'فیلترهای سریع',
-        description: 'با این چیپ‌ها و دسته‌های زیرین می‌توانید آگهی‌ها را محدود کنید؛ مثلاً استخر، جنگلی، زمین و باغ یا فوری.',
+        element: '[data-tour="home-urgent"]',
+        title: 'کار بعدی',
+        description: 'مهم‌ترین اقدام امروز شما اینجاست — یک اولویت، بدون شلوغی.',
         position: 'bottom'
       },
       {
-        element: '[data-tour="land-card"]',
-        title: 'کارت فایل',
-        description: 'هر کارت یک فایل اختصاص داده شده به شماست. روی کارت کلیک کنید تا جزئیات را ببینید.',
+        element: '[data-tour="home-suggest"]',
+        title: 'پیشنهاد امروز',
+        description: 'فایل‌های پیشنهادی برای شروع فروش. برای همه فایل‌ها به بخش فایل‌ها بروید.',
+        position: 'top'
+      },
+      {
+        element: '[data-tour="ai-fab"]',
+        title: 'Vinor AI',
+        description: 'سوال بپرسید یا پیام‌های رسمی وینور (پستچی) را از اینجا دنبال کنید.',
         position: 'top'
       },
       {
         element: '[data-tour="bottom-nav"]',
         title: 'منوی پایین',
-        description: 'از این منو می‌توانید به بخش‌های مختلف پنل دسترسی داشته باشید: داشبورد، پورسانت‌ها، اعلان‌ها و پروفایل.',
+        description: 'جابه‌جایی سریع بین داشبورد خانه و پروفایل.',
         position: 'top'
       }
     ];
+  }
+
+  getFilesTour() {
+    return [
+      {
+        element: '[data-tour="dashboard-header"]',
+        title: 'فایل‌های شما',
+        description: 'لیست فایل‌های اختصاص‌داده‌شده. جستجو و فیلتر برای پیدا کردن سریع‌تر.',
+        position: 'bottom'
+      },
+      {
+        element: '[data-tour="dashboard-filters"]',
+        title: 'فیلترهای سریع',
+        description: 'با چیپ‌ها و دسته‌ها آگهی‌ها را محدود کنید؛ مثلاً استخر، جنگلی، زمین و باغ یا فوری.',
+        position: 'bottom'
+      },
+      {
+        element: '[data-tour="land-card"]',
+        title: 'کارت فایل',
+        description: 'هر کارت یک فایل است. روی کارت بزنید تا جزئیات، تماس و معامله را ببینید.',
+        position: 'top'
+      },
+      {
+        element: '[data-tour="bottom-nav"]',
+        title: 'منوی پایین',
+        description: 'بازگشت به داشبورد خانه یا رفتن به پروفایل.',
+        position: 'top'
+      }
+    ];
+  }
+
+  /** سازگاری با کد قدیمی */
+  getDashboardTour() {
+    return this.getFilesTour();
   }
 
   getLandDetailTour() {
@@ -178,13 +278,13 @@ class OnboardingTour {
       {
         element: '[data-tour="transaction-btn"]',
         title: 'دکمه معامله',
-        description: 'اگر مشتری پیدا کردید، روی این دکمه کلیک کنید تا وضعیت فایل را به "در حال معامله" تغییر دهید.',
+        description: 'اگر مشتری پیدا کردید، روی این دکمه کلیک کنید تا وضعیت فایل را به «در حال معامله» تغییر دهید.',
         position: 'top'
       },
       {
         element: '[data-tour="share-btn"]',
         title: 'اشتراک‌گذاری',
-        description: 'می‌توانید لینک فایل را با مشتریان به اشتراک بگذارید. با کلیک روی این دکمه، لینک کپی می‌شود.',
+        description: 'می‌توانید لینک فایل را با مشتریان به اشتراک بگذارید.',
         position: 'top'
       },
       {
@@ -207,7 +307,7 @@ class OnboardingTour {
       {
         element: '[data-tour="commission-item"]',
         title: 'لیست پورسانت‌ها',
-        description: 'تمام پورسانت‌های شما در اینجا نمایش داده می‌شود. وضعیت هر پورسانت (در انتظار، تأیید شده، پرداخت شده) مشخص است.',
+        description: 'تمام پورسانت‌های شما در اینجا نمایش داده می‌شود. وضعیت هر پورسانت مشخص است.',
         position: 'top'
       }
     ];
@@ -217,152 +317,155 @@ class OnboardingTour {
     return [
       {
         element: '[data-tour="profile-section"]',
-        title: 'پروفایل شما 👤',
-        description: 'در این بخش اطلاعات حساب کاربری شما شامل نام، شماره تماس و نقش نمایش داده می‌شود. همچنین می‌توانید از اینجا از حساب خود خارج شوید.',
+        title: 'پروفایل شما',
+        description: 'اطلاعات حساب، نام و شماره تماس. از اینجا می‌توانید از حساب خارج شوید.',
         position: 'bottom'
       },
       {
-        element: '[data-tour="routine-link"]',
-        title: 'آمار فعالیت شما 📊',
-        description: 'روتین روزانه و تقویم پیشرفت همکاری را اینجا ببینید. بازاریابی، بازدید و معامله به‌صورت خودکار ثبت می‌شود.',
+        element: '[data-tour="commissions-link"]',
+        title: 'کیف پول',
+        description: 'موجودی قابل برداشت و تراکنش‌های پورسانت را اینجا ببینید.',
         position: 'top'
       },
       {
         element: '[data-tour="top-sellers-link"]',
-        title: 'فروشنده‌های برتر 🏆',
-        description: 'رتبه‌بندی همکاران برتر را مشاهده کنید و ببینید چه کسانی بیشترین فروش را داشته‌اند. این می‌تواند انگیزه‌بخش باشد!',
+        title: 'فروشنده‌های برتر',
+        description: 'رتبه‌بندی همکاران برتر را مشاهده کنید.',
         position: 'top'
       },
       {
         element: '[data-tour="bottom-nav"]',
-        title: 'منوی پایین 📱',
-        description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید: فایل‌ها، پورسانت‌ها و پروفایل.',
+        title: 'منوی پایین',
+        description: 'بازگشت سریع به داشبورد خانه.',
         position: 'top'
       }
     ];
   }
 
   getFullTour() {
-    // تور کامل که از dashboard شروع می‌شود و تمام صفحات را پوشش می‌دهد
     return [
-      // مرحله 1: Dashboard - معرفی
       {
-        element: '[data-tour="dashboard-header"]',
-        title: 'خوش آمدید! 👋',
-        description: 'این پنل همکاران وینور اکسپرس است. در اینجا می‌توانید فایل‌های اختصاص داده شده را مشاهده کنید.',
+        element: '[data-tour="home-menu"]',
+        title: 'خوش آمدید',
+        description: 'داشبورد خانه نقطه شروع شماست. منوی بالا کیف پول، بازدیدها و تنظیمات را باز می‌کند.',
         position: 'bottom',
-        page: 'dashboard'
+        page: 'home'
       },
-      // مرحله 2: فیلترها
+      {
+        element: '[data-tour="home-urgent"]',
+        title: 'کار بعدی',
+        description: 'هر روز یک اولویت اصلی اینجا نشان داده می‌شود.',
+        position: 'bottom',
+        page: 'home'
+      },
+      {
+        element: '[data-tour="ai-fab"]',
+        title: 'Vinor AI و پستچی',
+        description: 'از دستیار بپرسید؛ پیام‌های رسمی وینور هم در گفتگوی پستچی داخل AI هستند.',
+        position: 'top',
+        page: 'home',
+        action: 'navigate',
+        actionMessage: 'حالا به لیست فایل‌ها می‌رویم.',
+        nextUrl: OnboardingTour.FILES_PATH
+      },
       {
         element: '[data-tour="dashboard-filters"]',
         title: 'فیلترهای سریع',
-        description: 'با این چیپ‌ها و دسته‌های زیرین می‌توانید آگهی‌ها را محدود کنید؛ مثلاً استخر، جنگلی، زمین و باغ یا فوری.',
+        description: 'با چیپ‌ها و دسته‌ها آگهی‌ها را محدود کنید.',
         position: 'bottom',
-        page: 'dashboard'
+        page: 'files'
       },
-      // مرحله 3: کارت فایل
       {
         element: '[data-tour="land-card"]',
         title: 'کارت فایل',
-        description: 'هر کارت یک فایل اختصاص داده شده به شماست. می‌توانید روی کارت کلیک کنید تا جزئیات را ببینید.',
+        description: 'روی کارت بزنید تا جزئیات فایل را ببینید.',
         position: 'top',
-        page: 'dashboard',
+        page: 'files',
         action: 'auto-navigate',
         actionMessage: 'در حال انتقال به صفحه جزئیات فایل...',
-        nextUrl: null // به صورت خودکار از کارت اول گرفته می‌شود
+        nextUrl: null
       },
-      // مرحله 4: جزئیات فایل - تصویر
       {
         element: '[data-tour="land-image"]',
         title: 'تصویر فایل',
-        description: 'تصویر اصلی فایل را اینجا می‌بینید. می‌توانید گالری تصاویر را هم مشاهده کنید.',
+        description: 'تصویر اصلی و گالری فایل.',
         position: 'bottom',
         page: 'land_detail',
-        waitForElement: true // منتظر بمان تا المنت پیدا شود
+        waitForElement: true
       },
-      // مرحله 5: اطلاعات فایل
       {
         element: '[data-tour="land-info"]',
         title: 'اطلاعات فایل',
-        description: 'تمام اطلاعات مهم فایل مانند قیمت، اندازه، موقعیت و کمیسیون در این بخش نمایش داده می‌شود.',
+        description: 'قیمت، موقعیت، کمیسیون و جزئیات مهم.',
         position: 'top',
         page: 'land_detail'
       },
-      // مرحله 6: دکمه معامله
       {
         element: '[data-tour="transaction-btn"]',
         title: 'دکمه معامله',
-        description: 'اگر مشتری پیدا کردید، روی این دکمه کلیک کنید تا وضعیت فایل را به "در حال معامله" تغییر دهید.',
+        description: 'وقتی مشتری پیدا کردید، وضعیت را به «در حال معامله» تغییر دهید.',
         position: 'top',
         page: 'land_detail'
       },
-      // مرحله 7: دکمه اشتراک
       {
         element: '[data-tour="share-btn"]',
         title: 'اشتراک‌گذاری',
-        description: 'می‌توانید لینک فایل را با مشتریان به اشتراک بگذارید. با کلیک روی این دکمه، لینک کپی می‌شود.',
+        description: 'لینک فایل را برای مشتری بفرستید.',
         position: 'top',
         page: 'land_detail'
       },
-      // مرحله 8: دکمه تماس
       {
         element: '[data-tour="contact-btn"]',
         title: 'تماس',
-        description: 'برای تماس با مالک فایل، روی این دکمه کلیک کنید.',
+        description: 'تماس با مالک فایل.',
         position: 'top',
         page: 'land_detail',
         action: 'navigate',
-        actionMessage: 'حالا به منوی پایین بروید و روی "پورسانت" کلیک کنید. بعد از رفتن به صفحه پورسانت، تور ادامه می‌یابد.',
+        actionMessage: 'حالا کیف پول (پورسانت) را می‌بینیم.',
         nextUrl: '/express/partner/commissions'
       },
-      // مرحله 9: پورسانت‌ها - آمار
       {
         element: '[data-tour="commissions-stats"]',
         title: 'آمار پورسانت‌ها',
-        description: 'در این بخش می‌توانید کل درآمد، درآمد در انتظار و تعداد فروش‌های موفق را مشاهده کنید.',
+        description: 'درآمد کل، در انتظار و فروش‌های موفق.',
         position: 'bottom',
         page: 'commissions'
       },
-      // مرحله 10: لیست پورسانت‌ها
       {
         element: '[data-tour="commission-item"]',
         title: 'لیست پورسانت‌ها',
-        description: 'تمام پورسانت‌های شما در اینجا نمایش داده می‌شود. وضعیت هر پورسانت (در انتظار، تأیید شده، پرداخت شده) مشخص است.',
+        description: 'وضعیت هر پورسانت اینجا مشخص است.',
         position: 'top',
         page: 'commissions',
         action: 'navigate',
-        actionMessage: 'حالا به منوی پایین بروید و روی "من" کلیک کنید. بعد از رفتن به صفحه پروفایل، تور ادامه می‌یابد.',
-        nextUrl: '/express/partner/profile'
+        actionMessage: 'در پایان به پروفایل می‌رویم.',
+        nextUrl: '/express/partner/home?menu=1'
       },
-      // مرحله 11: پروفایل
       {
         element: '[data-tour="profile-section"]',
-        title: 'پروفایل شما 👤',
-        description: 'در این بخش اطلاعات حساب کاربری شما شامل نام، شماره تماس و نقش نمایش داده می‌شود. همچنین می‌توانید از اینجا از حساب خود خارج شوید.',
+        title: 'پروفایل شما',
+        description: 'اطلاعات حساب و خروج از اینجا.',
         position: 'bottom',
         page: 'profile'
       },
       {
-        element: '[data-tour="routine-link"]',
-        title: 'آمار فعالیت شما 📊',
-        description: 'روتین روزانه و تقویم پیشرفت همکاری را اینجا ببینید. بازاریابی، بازدید و معامله به‌صورت خودکار ثبت می‌شود.',
+        element: '[data-tour="commissions-link"]',
+        title: 'کیف پول',
+        description: 'دسترسی سریع به موجودی و تراکنش‌ها از منوی پروفایل.',
         position: 'top',
         page: 'profile'
       },
-      // مرحله 15: فروشنده‌های برتر
       {
         element: '[data-tour="top-sellers-link"]',
-        title: 'فروشنده‌های برتر 🏆',
-        description: 'رتبه‌بندی همکاران برتر را مشاهده کنید و ببینید چه کسانی بیشترین فروش را داشته‌اند. این می‌تواند انگیزه‌بخش باشد!',
+        title: 'فروشنده‌های برتر',
+        description: 'رتبه‌بندی همکاران.',
         position: 'top',
         page: 'profile'
       },
-      // مرحله 16: منوی پایین
       {
         element: '[data-tour="bottom-nav"]',
-        title: 'منوی پایین 📱',
-        description: 'از این منو می‌توانید به بخش‌های اصلی پنل دسترسی سریع داشته باشید: فایل‌ها، پورسانت‌ها و پروفایل.',
+        title: 'منوی پایین',
+        description: 'داشبورد خانه و پروفایل — همیشه در دسترس.',
         position: 'top',
         page: 'profile'
       }
@@ -522,6 +625,7 @@ class OnboardingTour {
           setTimeout(() => this.showStep(index + 1), 300);
           return;
         }
+        sessionStorage.setItem('vinor_tour_version', this.tourVersion);
         sessionStorage.setItem('vinor_tour_step', index.toString());
         sessionStorage.setItem('vinor_tour_data', JSON.stringify(this.tourData));
         window.location.href = expectedPath;
@@ -722,16 +826,20 @@ class OnboardingTour {
     }
 
     const paths = {
-      'dashboard': '/express/partner/dashboard',
-      'commissions': '/express/partner/commissions',
-      'profile': '/express/partner/profile'
+      home: OnboardingTour.HOME_PATH,
+      files: OnboardingTour.FILES_PATH,
+      dashboard: OnboardingTour.FILES_PATH,
+      commissions: '/express/partner/commissions',
+      profile: '/express/partner/home?menu=1'
     };
-    return paths[page] || '/express/partner/dashboard';
+    return paths[page] || OnboardingTour.HOME_PATH;
   }
 
   isOnCorrectPage(currentPath, expectedPage) {
-    if (expectedPage === 'dashboard') {
-      return this.isDashboardPath(currentPath);
+    if (expectedPage === 'home') {
+      return this.isHomePath(currentPath);
+    } else if (expectedPage === 'files' || expectedPage === 'dashboard') {
+      return this.isFilesPath(currentPath);
     } else if (expectedPage === 'land_detail') {
       return this.isLandDetailPath(currentPath);
     } else if (expectedPage === 'commissions') {
@@ -739,7 +847,8 @@ class OnboardingTour {
     } else if (expectedPage === 'notes') {
       return /\/notes\/?$/.test(currentPath);
     } else if (expectedPage === 'profile') {
-      return currentPath.includes('/profile') && !currentPath.includes('/profile/');
+      // منوی پروفایل روی خانه (کشوی راست)
+      return this.isHomePath(currentPath) || currentPath.includes('/profile/edit');
     }
     return true;
   }
@@ -1022,10 +1131,12 @@ class OnboardingTour {
     }
 
     sessionStorage.removeItem('vinor_tour_land_url');
+    this.clearTourSession();
 
-    if (!this.isDashboardPath()) {
+    if (!this.isHomePath()) {
+      sessionStorage.setItem('vinor_tour_version', this.tourVersion);
       sessionStorage.setItem('vinor_start_full_tour', 'true');
-      window.location.href = '/express/partner/dashboard';
+      window.location.href = OnboardingTour.HOME_PATH;
     } else {
       setTimeout(() => this.startTour(true), 200);
     }
@@ -1035,7 +1146,7 @@ class OnboardingTour {
 // ایجاد instance جهانی
 window.onboardingTour = new OnboardingTour();
 
-// بارگذاری اسکریپت — تور فقط با درخواست کاربر (صفحه پشتیبانی) شروع می‌شود
+// بارگذاری اسکریپت — تور فقط با درخواست صریح (restartTour / startTour) یا ادامهٔ سشن معتبر
 if (document.readyState === 'complete') {
   window.onboardingTour.init();
 } else {

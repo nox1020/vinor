@@ -42,7 +42,9 @@ def _norm_key(user_key: str) -> str:
 
 
 def _audience_label(audience: str | None) -> str:
-    return "همکار" if audience == AUDIENCE_PARTNER else "کاربر عادی"
+    if audience == AUDIENCE_PARTNER:
+        return "همکار"
+    return "کاربر عادی"
 
 
 def _normalize_question(text: str) -> str:

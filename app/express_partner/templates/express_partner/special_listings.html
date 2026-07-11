@@ -4,7 +4,7 @@
 {% block content %}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
 {{ ep_header_start(id='specialListingsHeader') }}
-{% call ep_header_row('آگهی‌های من', url_for('express_partner.profile'), inner_class='max-w-lg mx-auto w-full') %}
+{% call ep_header_row('آگهی‌های من', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}
   <a href="{{ url_for('express_partner.special_listing_new') }}"
      data-vinor-express-nav
      class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"

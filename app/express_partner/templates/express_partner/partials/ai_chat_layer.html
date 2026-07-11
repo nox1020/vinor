@@ -1,0 +1,565 @@
+{# لایه تمام‌صفحه Vinor AI روی داشبورد خانه #}
+{% if home_ai_enabled|default(false) %}
+<style>
+  #aiHomeLayer {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    flex-direction: column;
+    background: #030712;
+    color: #f1f5f9;
+    transform: translateY(110%);
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+    visibility: hidden;
+  }
+  #aiHomeLayer.is-open {
+    transform: translateY(0);
+    pointer-events: auto;
+    visibility: visible;
+  }
+  html.vinor-ai-open {
+    overflow: hidden;
+  }
+  html.vinor-ai-open #epAiFab.ep-ai-chatbox,
+  html.vinor-ai-open #bottomNavMenu,
+  html.vinor-ai-open .ep-header-float-actions,
+  html.vinor-ai-open #epProfileDrawer,
+  html.vinor-ai-open #epProfileDrawerBackdrop {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+  }
+  html.vinor-ai-open #bottomNavMenu {
+    display: none !important;
+  }
+
+  #aiHomeLayer .ai-layer-header {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: calc(0.55rem + env(safe-area-inset-top, 0px)) 0.85rem 0.55rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: #030712;
+  }
+  #aiHomeLayer .ai-layer-header .ep-partner-header-btn {
+    margin: 0;
+  }
+
+  #aiHomeLayer #aiPageMain.ai-page-shell {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    top: auto;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #aiHomeLayer #aiChat.ai-chat-shell {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #aiHomeLayer #aiMessages.ai-messages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.85rem 0.9rem 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  #aiHomeLayer #aiChatForm.ai-composer {
+    flex-shrink: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.65rem 0.9rem calc(0.65rem + env(safe-area-inset-bottom, 0px) + var(--ai-keyboard-inset, 0px));
+    background: rgba(3, 7, 18, 0.97);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.28);
+  }
+
+  .ai-agent-card {
+    width: 100%;
+    max-width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.85rem;
+    background: rgba(15, 23, 42, 0.92);
+    padding: 0.85rem 0.9rem;
+  }
+  .ai-agent-card--done {
+    opacity: 0.78;
+  }
+  .ai-agent-card__title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 0.45rem;
+  }
+  .ai-agent-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-bottom: 0.65rem;
+  }
+  .ai-agent-line {
+    font-size: 0.82rem;
+    color: #cbd5e1;
+    line-height: 1.45;
+  }
+  .ai-agent-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+  .ai-agent-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.1rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 0.65rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .ai-agent-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .ai-agent-btn--confirm {
+    background: #0ea5e9;
+    color: #0f172a;
+  }
+  .ai-agent-btn--cancel {
+    background: transparent;
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+  .ai-agent-card__note {
+    margin-top: 0.55rem;
+    font-size: 0.78rem;
+    color: #94a3b8;
+  }
+  .ai-agent-card__note.hidden {
+    display: none;
+  }
+
+  #aiHomeLayer .ai-composer__inner {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.55rem;
+    width: 100%;
+  }
+  #aiHomeLayer .ai-composer__input {
+    flex: 1;
+    min-width: 0;
+    min-height: 3rem;
+    max-height: 8rem;
+    resize: none;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #070b12;
+    color: #fff;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    padding: 0.72rem 0.9rem;
+    outline: none;
+  }
+  #aiHomeLayer .ai-composer__input::placeholder { color: #71717a; }
+  #aiHomeLayer .ai-composer__input:focus {
+    border-color: rgba(139, 92, 246, 0.45);
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.16);
+  }
+  #aiHomeLayer .ai-composer__send {
+    width: 3rem;
+    height: 3rem;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 1rem;
+    background: linear-gradient(145deg, #7c3aed 0%, #6d28d9 100%);
+    color: #fff;
+  }
+  #aiHomeLayer .ai-composer__send:disabled { opacity: 0.5; }
+
+  #aiHomeLayer .ai-msg-wrap {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  #aiHomeLayer .ai-msg-wrap[data-role="user"] { align-items: flex-start; }
+  #aiHomeLayer .ai-msg-wrap[data-role="assistant"],
+  #aiHomeLayer .ai-msg-wrap[data-role="system"] { align-items: flex-end; }
+  #aiHomeLayer .ai-msg-bubble {
+    max-width: min(88%, 24rem);
+    border-radius: 1.1rem;
+    padding: 0.72rem 0.95rem;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #aiHomeLayer .ai-msg-wrap[data-role="user"] .ai-msg-bubble {
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    background: rgba(16, 185, 129, 0.1);
+    color: #d1fae5;
+  }
+  #aiHomeLayer .ai-msg-wrap[data-role="assistant"] .ai-msg-bubble,
+  #aiHomeLayer .ai-msg-wrap[data-role="system"] .ai-msg-bubble {
+    border: 1px solid rgba(139, 92, 246, 0.22);
+    background: rgba(139, 92, 246, 0.1);
+    color: #ede9fe;
+  }
+  #aiHomeLayer .ai-msg-wrap[data-admin-reply="1"] .ai-msg-bubble {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.15);
+    color: #fffbeb;
+  }
+  #aiHomeLayer .ai-msg-wrap[data-postchi="1"] .ai-msg-bubble {
+    border-color: rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.12);
+    color: #d1fae5;
+  }
+  #aiHomeLayer .ai-msg-cards {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    align-self: stretch;
+  }
+  #aiHomeLayer .ai-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.12) transparent;
+  }
+  #aiHomeLayer #aiMessages .ai-msg-cards .vinor-premium-card-mobile { display: flex !important; }
+  #aiHomeLayer #aiMessages .ai-msg-cards .vinor-premium-card > .hidden.sm\:block { display: none !important; }
+
+  #aiHomeLayer #aiSideBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 85;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  #aiHomeLayer #aiSideBackdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  #aiHomeLayer #aiSidePanel.ai-side-panel,
+  #aiHomeLayer aside.ai-side-panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: auto;
+    z-index: 86;
+    width: min(100%, 20rem);
+    display: flex;
+    flex-direction: column;
+    padding-top: max(3.5rem, env(safe-area-inset-top));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    background: #0a1018;
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.45);
+    transform: translate3d(105%, 0, 0);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+  #aiHomeLayer #aiSidePanel.is-open,
+  #aiHomeLayer aside.ai-side-panel.is-open {
+    transform: translate3d(0, 0, 0);
+  }
+</style>
+
+<div id="aiHomeLayer"
+     role="dialog"
+     aria-modal="true"
+     aria-label="Vinor AI"
+     aria-hidden="true"
+     data-open-on-load="{{ '1' if home_ai_open|default(false) else '0' }}"
+     data-open-thread="{{ home_ai_open_thread|default('') }}">
+  <div class="ai-layer-header">
+    <button type="button" id="aiMenuBtn"
+            class="ep-partner-header-btn relative vinor-dash-glass-pill comm-header-glass-btn"
+            aria-label="گفتگوها"
+            aria-expanded="false"
+            aria-controls="aiSidePanel">
+      <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
+      <span id="aiMenuUnreadDot" class="hidden absolute top-0.5 end-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#030712]" aria-hidden="true"></span>
+    </button>
+    <div class="min-w-0 flex-1 text-center">
+      <div class="text-sm font-extrabold text-white">Vinor AI</div>
+      <div class="text-[10px] font-semibold text-zinc-500">دستیار و پستچی وینور</div>
+    </div>
+    <button type="button" id="aiHomeLayerClose"
+            class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
+            aria-label="بستن چت">
+      <i class="fas fa-times ep-partner-header-btn-icon" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <div id="aiSideBackdrop" aria-hidden="true"></div>
+  <aside id="aiSidePanel" class="ai-side-panel" aria-hidden="true" aria-label="منوی گفتگو">
+    <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
+      <h2 class="text-sm font-bold text-white">گفتگوها</h2>
+      <button type="button" id="aiSideClose" class="grid h-9 w-9 place-items-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-white" aria-label="بستن">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="shrink-0 border-b border-white/10 p-3">
+      <button type="button" id="aiNewChatBtn"
+              class="flex w-full items-center justify-center gap-2 rounded-xl border border-violet-500/35 bg-violet-600/90 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500">
+        <i class="fas fa-plus text-xs" aria-hidden="true"></i>
+        گفتگوی جدید
+      </button>
+    </div>
+    <p class="shrink-0 px-4 pt-3 pb-1 text-[10px] font-semibold text-zinc-500">گفتگوها</p>
+    <div id="aiHistoryList" class="flex-1 overflow-y-auto overscroll-contain px-3 pb-3 space-y-2 ai-scroll">
+      {% if chat_threads %}
+        {% for th in chat_threads %}
+        <button type="button"
+                class="ai-thread-item w-full rounded-xl border px-3 py-2.5 text-right transition {% if th.kind == 'postchi' %}{% if th.is_active %}border-emerald-500/40 bg-emerald-500/15{% else %}border-emerald-500/20 bg-emerald-500/[0.06] hover:bg-emerald-500/10{% endif %}{% else %}{% if th.is_active %}border-violet-500/40 bg-violet-500/15{% else %}border-white/10 bg-white/[0.03] hover:bg-white/[0.06]{% endif %}{% endif %}"
+                data-thread-id="{{ th.id }}"
+                {% if th.kind == 'postchi' %}data-thread-kind="postchi"{% endif %}>
+          <div class="flex items-start justify-between gap-2">
+            <span class="text-xs font-semibold text-white line-clamp-2 leading-snug flex items-center gap-1.5">
+              {% if th.kind == 'postchi' %}<i class="fas fa-envelope text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>{% endif %}
+              {{ th.title }}
+            </span>
+            <span class="flex shrink-0 items-center gap-1">
+              {% if th.unread and th.unread > 0 %}
+              <span class="rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white tabular-nums">{{ th.unread if th.unread < 100 else '99+' }}</span>
+              {% elif th.is_active %}
+              <span class="rounded-full px-1.5 py-0.5 text-[9px] {% if th.kind == 'postchi' %}bg-emerald-500/30 text-emerald-200{% else %}bg-violet-500/30 text-violet-200{% endif %}">فعال</span>
+              {% endif %}
+              {% if th.kind != 'postchi' %}
+              <span class="ai-thread-delete grid h-7 w-7 place-items-center rounded-lg text-zinc-500 hover:bg-red-500/15 hover:text-red-300" data-thread-id="{{ th.id }}" role="button" aria-label="حذف گفتگو" tabindex="-1">
+                <i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
+              </span>
+              {% endif %}
+            </span>
+          </div>
+          {% if th.preview %}
+          <p class="mt-1 text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">{{ th.preview }}</p>
+          {% endif %}
+          {% if th.kind != 'postchi' %}
+          <p class="mt-1.5 text-[9px] text-zinc-600 flex items-center justify-between gap-2">
+            <span>{{ th.message_count }} پیام</span>
+            <time class="tabular-nums" datetime="{{ th.updated_at or '' }}">{{ th.updated_at[:10] if th.updated_at else '' }}</time>
+          </p>
+          {% endif %}
+        </button>
+        {% endfor %}
+      {% else %}
+        <p class="rounded-xl border border-dashed border-white/10 px-3 py-6 text-center text-xs text-zinc-500">
+          هنوز گفتگویی ذخیره نشده است.<br>اولین پیام خود را بفرستید.
+        </p>
+      {% endif %}
+    </div>
+  </aside>
+
+  <main id="aiPageMain" class="ai-page-shell" data-vinor-ptr="off">
+    <section id="aiChat" class="ai-chat-shell">
+      <div id="aiMessages"
+           class="ai-messages ai-scroll"
+           aria-live="polite"
+           aria-label="گفتگو"
+           data-welcome="سلام! من Vinor AI هستم. سوال خود را درباره همکاری، فایل‌ها و فعالیت در وینور بپرسید.">
+        {% for msg in chat_messages|default([]) %}
+          {% include 'express_partner/partials/ai_chat_message.html' %}
+        {% endfor %}
+      </div>
+
+      <form id="aiChatForm" class="ai-composer" autocomplete="off"
+            data-mode="home-layer"
+            data-chat-url="{{ chat_api_url }}"
+            data-history-url="{{ history_api_url }}"
+            data-clear-url="{{ clear_api_url }}"
+            data-switch-url="{{ switch_thread_url }}"
+            data-delete-url="{{ delete_thread_url }}"
+            data-sync-url="{{ sync_api_url }}"
+            data-agent-confirm-url="{{ agent_confirm_url|default('') }}"
+            data-agent-cancel-url="{{ agent_cancel_url|default('') }}"
+            data-postchi-thread-id="{{ postchi_thread_id|default('__postchi__') }}"
+            data-postchi-messages-url="{{ postchi_messages_url|default('') }}"
+            data-postchi-send-url="{{ postchi_send_url|default('') }}"
+            data-postchi-open-url="{{ postchi_open_url|default('') }}">
+        {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <input type="hidden" id="aiActiveThreadId" value="{{ active_thread_id or '' }}">
+        <div class="ai-composer__inner">
+          <label for="aiInput" class="sr-only">پیام</label>
+          <textarea id="aiInput" name="message" rows="1" required
+                    placeholder="پیام خود را بنویسید…"
+                    class="ai-composer__input"></textarea>
+          <button type="submit" id="aiSendBtn" class="ai-composer__send" aria-label="ارسال">
+            <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
+          </button>
+        </div>
+      </form>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  var layer = document.getElementById('aiHomeLayer');
+  var closeBtn = document.getElementById('aiHomeLayerClose');
+  if (!layer) return;
+
+  try {
+    document.querySelectorAll('#aiHomeLayer').forEach(function (el) {
+      if (el !== layer) el.remove();
+    });
+  } catch (_) {}
+
+  function hoist() {
+    try {
+      if (layer.parentElement !== document.body) document.body.appendChild(layer);
+    } catch (_) {}
+  }
+
+  function isOpen() {
+    return layer.classList.contains('is-open');
+  }
+
+  function setOpen(open) {
+    if (open) {
+      hoist();
+      layer.classList.add('is-open');
+      layer.setAttribute('aria-hidden', 'false');
+      document.documentElement.classList.add('vinor-ai-open');
+    } else {
+      layer.classList.remove('is-open');
+      layer.setAttribute('aria-hidden', 'true');
+      document.documentElement.classList.remove('vinor-ai-open');
+      try {
+        var backdrop = document.getElementById('aiSideBackdrop');
+        var panel = document.getElementById('aiSidePanel');
+        if (backdrop) backdrop.classList.remove('is-open');
+        if (panel) {
+          panel.classList.remove('is-open');
+          panel.setAttribute('aria-hidden', 'true');
+        }
+        var menuBtn = document.getElementById('aiMenuBtn');
+        if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+      } catch (_) {}
+    }
+    try {
+      if (typeof window.__vinorAiChatSetSheetOpen === 'function') {
+        window.__vinorAiChatSetSheetOpen(!!open);
+      }
+    } catch (_) {}
+  }
+
+  function openLayer(opts) {
+    opts = opts || {};
+    setOpen(true);
+    var input = document.getElementById('aiInput');
+    var form = document.getElementById('aiChatForm');
+    var draft = (opts.message || '').trim();
+    var thread = (opts.thread || '').trim();
+
+    function afterReady() {
+      if (input && draft) {
+        input.value = draft;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      setTimeout(function () {
+        try {
+          if (input) input.focus();
+          var list = document.getElementById('aiMessages');
+          if (list) list.scrollTop = list.scrollHeight;
+        } catch (_) {}
+        if (opts.autosend && form && draft.length >= 2) {
+          try {
+            if (typeof form.requestSubmit === 'function') form.requestSubmit();
+            else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          } catch (_) {}
+        }
+      }, 160);
+    }
+
+    if (thread && typeof window.__vinorAiChatSwitchThread === 'function') {
+      Promise.resolve(window.__vinorAiChatSwitchThread(thread)).then(afterReady).catch(afterReady);
+    } else {
+      afterReady();
+    }
+  }
+
+  function closeLayer() {
+    setOpen(false);
+  }
+
+  function destroyLayer() {
+    closeLayer();
+    try {
+      if (layer.parentElement) layer.remove();
+    } catch (_) {}
+    if (window.vinorAiHome && window.vinorAiHome._layer === layer) {
+      window.vinorAiHome = null;
+    }
+  }
+
+  window.vinorAiHome = {
+    open: openLayer,
+    close: closeLayer,
+    isOpen: isOpen,
+    hoist: hoist,
+    destroy: destroyLayer,
+    _layer: layer
+  };
+  // سازگاری با FAB قدیمی
+  window.vinorAiHomeSheet = window.vinorAiHome;
+
+  hoist();
+  if (closeBtn) closeBtn.addEventListener('click', closeLayer);
+
+  document.addEventListener('keydown', function onEsc(e) {
+    if (e.key === 'Escape' && isOpen()) closeLayer();
+  });
+
+  window.addEventListener('vinor:express-page-swap', function onSwap() {
+    var onHome = /\/express\/partner\/home\/?$/.test(window.location.pathname || '');
+    if (!onHome) {
+      destroyLayer();
+      window.removeEventListener('vinor:express-page-swap', onSwap);
+    }
+  });
+
+  var shouldOpen = layer.getAttribute('data-open-on-load') === '1';
+  var openThread = (layer.getAttribute('data-open-thread') || '').trim();
+  if (shouldOpen || openThread) {
+    var tries = 0;
+    function tryOpen() {
+      tries += 1;
+      var ready = !openThread || typeof window.__vinorAiChatSwitchThread === 'function';
+      if (ready || tries >= 25) {
+        openLayer({ thread: openThread });
+        return;
+      }
+      setTimeout(tryOpen, 40);
+    }
+    setTimeout(tryOpen, 40);
+  }
+})();
+</script>
+{% endif %}

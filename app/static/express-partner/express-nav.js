@@ -24,8 +24,8 @@
     '/express/partner/files': { tab: 'home', depth: 0, bottomNav: true, prefetch: true },
     '/express/partner/dashboard': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
     '/express/partner/commissions': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/profile': { tab: 'profile', depth: 0, bottomNav: true, prefetch: true },
-    '/express/partner/profile/edit': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/profile': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
+    '/express/partner/profile/edit': { tab: 'home', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/favorites': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/requests': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/listings': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -41,7 +41,7 @@
     '/express/partner/apply': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/thanks': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/commissions/transactions': { tab: 'profile', depth: 2, bottomNav: true, prefetch: false },
-    '/express/partner/ai': { tab: '', depth: 1, bottomNav: false, prefetch: false },
+    '/express/partner/ai': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
     '/express/partner/login': { tab: '', depth: 0, bottomNav: false, prefetch: true },
     '/express/partner/login/otp': { tab: '', depth: 1, bottomNav: false, prefetch: false }
   };
@@ -511,7 +511,7 @@
     try {
       if (!isLoggedInUser()) return;
       var peers = {
-        home: ['/express/partner/profile'],
+        home: [],
         profile: ['/express/partner/home', '/express/partner/favorites']
       };
       var list = peers[navKey];
@@ -589,6 +589,9 @@
   }
 
   function isAiPagePath(pathname) {
+    try {
+      if (document.documentElement.classList.contains('vinor-ai-open')) return true;
+    } catch (_) {}
     return normPath(pathname || '') === '/express/partner/ai';
   }
 
@@ -626,20 +629,36 @@
   function syncAiFabForPath(pathname) {
     if (typeof window.vinorSyncAiFab === 'function') {
       window.vinorSyncAiFab();
-      return;
-    }
-    var fab = document.getElementById('epAiFab');
-    if (!fab) return;
-    var path = normPath(pathname || '');
-    var show = shouldShowBottomNav(path) && !!AI_MAIN_TAB_PATHS[path];
-    if (show) {
-      fab.removeAttribute('hidden');
-      fab.style.removeProperty('display');
-      fab.setAttribute('aria-hidden', 'false');
     } else {
-      fab.setAttribute('hidden', 'hidden');
-      fab.style.display = 'none';
-      fab.setAttribute('aria-hidden', 'true');
+      var fab = document.getElementById('epAiFab');
+      if (fab) {
+        var path = normPath(pathname || '');
+        var show = shouldShowBottomNav(path) && !!AI_MAIN_TAB_PATHS[path];
+        if (show) {
+          fab.removeAttribute('hidden');
+          fab.style.removeProperty('display');
+          fab.setAttribute('aria-hidden', 'false');
+        } else {
+          fab.setAttribute('hidden', 'hidden');
+          fab.style.display = 'none';
+          fab.setAttribute('aria-hidden', 'true');
+        }
+      }
+    }
+    var pathNow = normPath(pathname || window.location.pathname || '');
+    if (!AI_MAIN_TAB_PATHS[pathNow]) {
+      try {
+        if (window.vinorAiHomeSheet && window.vinorAiHomeSheet.close) {
+          window.vinorAiHomeSheet.close();
+        }
+      } catch (_) {}
+      try {
+        if (window.vinorProfileDrawer && window.vinorProfileDrawer.close) {
+          window.vinorProfileDrawer.close();
+        }
+      } catch (_) {}
+      document.documentElement.classList.remove('vinor-ai-sheet-open');
+      document.documentElement.classList.remove('vinor-profile-drawer-open');
     }
   }
 
@@ -1679,7 +1698,7 @@
 
   function prefetchMainTabs() {
     try {
-      var paths = ['/express/partner/home', '/express/partner/profile'];
+      var paths = ['/express/partner/home'];
       if (isLoggedInUser()) {
         paths.push('/express/partner/favorites');
       }

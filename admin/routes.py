@@ -1486,7 +1486,7 @@ def _send_colleagues_notification_broadcast(
 
     ensure_firebase_ready()
     bid = broadcast_id or str(uuid.uuid4())
-    notify_url = url_for('express_partner.ai', thread='__postchi__')
+    notify_url = url_for('express_partner.home', ai=1, thread='__postchi__')
     phones = [p['phone'] for p in approved_partners if p.get('phone')]
     fcm_stats = fcm_stats_for_phones(phones)
 
@@ -4002,7 +4002,7 @@ def express_partner_send_message(phone: str):
                 title=title,
                 body=body,
                 ntype='info',
-                action_url=url_for('express_partner.ai', thread='__postchi__'),
+                action_url=url_for('express_partner.home', ai=1, thread='__postchi__'),
                 source='admin_partner_message',
             )
             parts.append('نوتیف (درون‌برنامه + FCM)')
