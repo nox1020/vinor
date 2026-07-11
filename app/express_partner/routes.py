@@ -2750,6 +2750,9 @@ def home_page():
             apk_url=_raw_apk_url,
             req=request,
         )
+        # اگر آپدیت لازم نیست، URL را برای کارت منو خالی بگذار (بنر نصب از context می‌آید)
+        if is_vinor_apk and not show_app_update_card:
+            android_apk_url = ''
     except Exception:
         pass
 
@@ -2766,7 +2769,8 @@ def home_page():
         referral_bonus_per_invite=referral_bonus_per_invite,
         is_vinor_apk=is_vinor_apk,
         show_app_update_card=show_app_update_card,
-        android_apk_url=android_apk_url,
+        show_app_update_nav=show_app_update_card,
+        android_apk_url=android_apk_url if (show_app_update_card or not is_vinor_apk) else '',
         android_apk_version=android_apk_version,
         has_pending_app=payload.get('has_pending_app'),
         urgent_actions=payload.get('urgent_actions') or [],

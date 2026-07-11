@@ -1,4 +1,4 @@
-{# حباب شناور هدر: منو کشویی پروفایل (سمت راست مثل GPT) #}
+{# حباب شناور هدر: منو راست + برند وسط #}
 {% set _menu_href = menu_href|default(url_for('express_partner.home', menu=1)) %}
 {% set _use_drawer = profile_drawer|default(false) %}
 <style>
@@ -19,7 +19,32 @@
   .ep-header-float-actions .ep-partner-header-btn {
     margin: 0;
   }
+  .ep-header-float-brand {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 71;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.625rem;
+    padding: 0 1rem;
+  }
+  .ep-header-float-brand__text {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: #f8fafc;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+  }
 </style>
+<div class="ep-header-float-brand" aria-label="وینور">
+  <p class="ep-header-float-brand__text">وینور</p>
+</div>
 <div class="ep-header-float-actions" aria-label="دسترسی سریع" data-tour="home-menu">
   {% if _use_drawer %}
   <button type="button"
