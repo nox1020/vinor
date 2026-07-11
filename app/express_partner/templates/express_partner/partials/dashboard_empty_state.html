@@ -9,7 +9,7 @@
       {% if has_filters %}
       <p class="text-sm font-medium text-gray-900 dark:text-white mb-1">فایلی با این فیلترها پیدا نشد</p>
       <p class="text-xs text-gray-500 dark:text-gray-400">فیلترها را تغییر دهید یا جستجو را پاک کنید.</p>
-      <a href="{{ url_for('express_partner.files', city=city_url) }}"
+      <a href="{{ url_for('express_partner.home', city=city_url) }}"
          class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
         <i class="fas fa-filter-circle-xmark text-xs" aria-hidden="true"></i>
         پاک کردن فیلترها
@@ -19,7 +19,7 @@
       <p class="text-xs text-gray-500 dark:text-gray-400">به‌زودی فایل‌های جدید در اینجا نمایش داده می‌شوند.</p>
       <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
         {% if not profile %}
-        <a href="{{ url_for('express_partner.login', next=url_for('express_partner.files')) }}"
+        <a href="{{ url_for('express_partner.login', next=url_for('express_partner.home')) }}"
            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 transition">
           <i class="fas fa-right-to-bracket text-xs" aria-hidden="true"></i>
           ورود

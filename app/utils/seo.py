@@ -53,7 +53,6 @@ _NOINDEX_EXACT = frozenset({
 # Public express-partner pages (indexable).
 _INDEX_PREFIXES = (
     "/express/partner/home",
-    "/express/partner/files",
     "/express/partner/lands/",
     "/express/partner/cooperation-terms",
     "/express/partner/legal/",
@@ -92,7 +91,7 @@ def should_noindex_path(path: str, *, logged_in: bool = False) -> bool:
     for prefix in _NOINDEX_PREFIXES:
         if p == prefix or p.startswith(prefix + "/") or p == prefix:
             return True
-    if p.startswith("/express/partner/files") and logged_in:
+    if p.startswith("/express/partner/home") and logged_in:
         return True
     if p.startswith("/express/partner/") and not is_public_indexable_path(p):
         return True
@@ -430,7 +429,6 @@ def build_sitemap_entries(app) -> List[Dict[str, str]]:
         ("main.help", {}),
         ("main.privacy", {}),
         ("express_partner.home", {}),
-        ("express_partner.files", {}),
         ("express_partner.cooperation_terms", {}),
     ]
     with app.app_context():

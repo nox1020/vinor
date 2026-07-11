@@ -940,7 +940,7 @@
     } catch (_) {}
     if (path.indexOf('/express/partner/commissions') === 0) return 'profile';
     if (path === '/express/partner/home' || path === '/express/partner/dashboard') return 'home';
-    if (path === '/express/partner/files' || path === '/express/partner/cooperation-terms') return 'home';
+    if (path === '/express/partner/home' || path === '/express/partner/cooperation-terms') return 'home';
     for (let i = 0; i < PROFILE_NAV_PATHS.length; i++) {
       const base = PROFILE_NAV_PATHS[i];
       if (path === base || path.indexOf(base + '/') === 0) return 'profile';

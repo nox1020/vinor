@@ -403,11 +403,9 @@
   });
 
   window.addEventListener('vinor:express-page-swap', function onSwap() {
-    var onFiles = /\/express\/partner\/files\/?$/.test(window.location.pathname || '');
-    if (!onFiles) {
-      destroyLayer();
-      window.removeEventListener('vinor:express-page-swap', onSwap);
-    }
+    // لایه تمام‌صفحه مخصوص صفحه فایل‌ها بود — با حذف /files همیشه جمع می‌شود
+    destroyLayer();
+    window.removeEventListener('vinor:express-page-swap', onSwap);
   });
 
   var shouldOpen = layer.getAttribute('data-open-on-load') === '1';

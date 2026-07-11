@@ -16,7 +16,7 @@
   function isDashboardPage() {
     try {
       var p = (window.location.pathname || '').replace(/\/+$/, '') || '/';
-      return p === '/express/partner/files';
+      return p === '/express/partner/home';
     } catch (_) {
       return false;
     }
@@ -89,7 +89,7 @@
       if (trimmed) params.set('q', trimmed);
       else params.delete('q');
     }
-    var action = form.getAttribute('action') || '/express/partner/files';
+    var action = form.getAttribute('action') || '/express/partner/home';
     try {
       var u = new URL(action, window.location.origin);
       u.search = params.toString();
@@ -385,7 +385,7 @@
   function runDashboardSearch(targetUrl, opts) {
     opts = opts || {};
     if (!targetUrl || !isDashboardPage()) {
-      window.location.href = targetUrl || '/express/partner/files';
+      window.location.href = targetUrl || '/express/partner/home';
       return Promise.resolve(false);
     }
 

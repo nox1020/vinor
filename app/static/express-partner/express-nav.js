@@ -21,7 +21,6 @@
   /** @type {Record<string, {tab: string, depth: number, bottomNav?: boolean, prefetch?: boolean}>} */
   var ROUTE_REGISTRY = {
     '/express/partner/home': { tab: 'home', depth: 0, bottomNav: true, prefetch: true },
-    '/express/partner/files': { tab: 'home', depth: 0, bottomNav: true, prefetch: true },
     '/express/partner/dashboard': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
     '/express/partner/commissions': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/profile': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
@@ -805,12 +804,7 @@
         prefetchHref(new URL('/express/partner/login', window.location.origin).href);
       } catch (_) {}
     }
-    if (navKey === 'files' && currentAuthSegment() === 'guest') {
-      try {
-        prefetchHref(new URL('/express/partner/login', window.location.origin).href);
-      } catch (_) {}
-    }
-    if ((navKey === 'home' || navKey === 'files') && currentAuthSegment() !== 'guest') {
+    if (navKey === 'home' && currentAuthSegment() !== 'guest') {
       var prefetchLandCards = function () {
         try {
           var seen = Object.create(null);
@@ -837,19 +831,7 @@
         prefetchHref(new URL('/express/partner/login', window.location.origin).href);
       } catch (_) {}
     }
-    if (navKey === 'files' && window.__vinorDashboardChrome) {
-      window.__vinorDashboardChrome.setup({ resetScroll: true, expandHeader: true });
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          if (typeof window.reinitializeCards === 'function') {
-            try { window.reinitializeCards(); } catch (_) {}
-          }
-          if (typeof window.setupVinorDashboardPullRefresh === 'function') {
-            try { window.setupVinorDashboardPullRefresh(); } catch (_) {}
-          }
-        });
-      });
-    } else if (window.__vinorDashboardChrome) {
+    if (window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.teardown();
     }
     if (navKey === 'commissions' && window.__vinorCommissionsChrome) {
@@ -883,9 +865,7 @@
         if (window.__vinorCommModalAbort) window.__vinorCommModalAbort.abort();
       } catch (_) {}
     }
-    if (navKey === 'files' && window.__vinorDashboardVoiceSearch) {
-      window.__vinorDashboardVoiceSearch.setup();
-    } else if (window.__vinorDashboardVoiceSearch && window.__vinorDashboardVoiceSearch.teardown) {
+    if (window.__vinorDashboardVoiceSearch && window.__vinorDashboardVoiceSearch.teardown) {
       window.__vinorDashboardVoiceSearch.teardown();
     }
     try {
@@ -1238,9 +1218,22 @@
     return Promise.resolve();
   }
 
+  function rewriteRetiredPartnerPaths(href) {
+    try {
+      var u = parseUrl(href);
+      if (!u) return href;
+      var p = normPath(u.pathname);
+      if (p === '/express/partner/files') {
+        return u.origin + '/express/partner/home' + (u.search || '') + (u.hash || '');
+      }
+    } catch (_) {}
+    return href;
+  }
+
   function vinorExpressNavigate(href, opts) {
     opts = opts || {};
     if (!href) return Promise.resolve(false);
+    href = rewriteRetiredPartnerPaths(href);
     if (!isPartnerUrl(href)) {
       window.location.href = href;
       return Promise.resolve(false);
@@ -1565,13 +1558,14 @@
       var href = a.getAttribute('href');
       if (a.getAttribute('data-vinor-express-full-nav') === '1') {
         e.preventDefault();
-        if (href) window.location.assign(href);
+        if (href) window.location.assign(rewriteRetiredPartnerPaths(href));
         return;
       }
       if (!href || href === '#' || href.indexOf('javascript:') === 0) return;
       // تماس/ایمیل/پیامک — هرگز soft-nav نشود؛ مستقیم به سیستم
       if (/^(tel|mailto|sms|smsto):/i.test(href)) return;
 
+      href = rewriteRetiredPartnerPaths(href);
       if (!isPartnerUrl(href)) return;
 
       var nav = document.getElementById('bottomNavMenu');

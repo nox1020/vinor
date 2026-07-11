@@ -21,7 +21,7 @@
     {% endfor %}
     {% if dashboard_lands_truncated %}
     <div class="vinor-dash-card-slot shrink-0 w-full px-3 pb-2 pt-1 max-sm:px-3 sm:px-4">
-      <a href="{{ url_for('express_partner.files', all=1, q=request.args.get('q') or none, city=city_url, tag=request.args.get('tag') or none, cat=request.args.get('cat') or none) }}"
+      <a href="{{ url_for('express_partner.home', all=1, q=request.args.get('q') or none, city=city_url, tag=request.args.get('tag') or none, cat=request.args.get('cat') or none) }}"
          class="flex w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-emerald-300 transition hover:bg-white/10 dark:border-white/10 dark:bg-[#12181f]">
         نمایش همه فایل‌ها ({{ lands_total_count|default(assigned_lands|length) }})
       </a>

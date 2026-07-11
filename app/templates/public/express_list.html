@@ -126,7 +126,7 @@
       <div class="w-full px-4 py-2.5 flex items-center gap-2">
         <!-- دکمه برگشت -->
         {% if show_back_button or session.get('user_phone') %}
-        <a href="{{ url_for('express_partner.files') }}" 
+        <a href="{{ url_for('express_partner.home') }}" 
            class="w-9 h-9 flex-shrink-0 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 transition-colors"
            aria-label="بازگشت">
           <i class="fas fa-arrow-right text-sm"></i>
@@ -139,7 +139,7 @@
         </a>
         {% endif %}
         <!-- باکس جستجو + انتخاب شهر (اکنون در داشبورد یکپارچه شده است) -->
-        <form method="GET" action="{{ url_for('express_partner.files') }}" class="flex-1 min-w-0" id="searchForm">
+        <form method="GET" action="{{ url_for('express_partner.home') }}" class="flex-1 min-w-0" id="searchForm">
           <div class="relative w-full space-y-2">
             <div class="flex items-center bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 focus-within:border-blue-500 dark:focus-within:border-blue-400 focus-within:shadow-sm transition-all">
               <input type="text"
@@ -151,7 +151,7 @@
                      class="flex-1 bg-transparent border-0 outline-none text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 py-2.5 px-4 min-w-0">
               <div class="flex items-center gap-1 pr-2">
                 {% if search_query %}
-                <a href="{{ url_for('express_partner.files') }}"
+                <a href="{{ url_for('express_partner.home') }}"
                    class="flex-shrink-0 w-8 h-8 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                    aria-label="پاک کردن جستجو">
                   <i class="fas fa-times text-xs"></i>
@@ -678,7 +678,7 @@
           if (query.length >= 2) {
             performSearch(query);
           } else if (query.length === 0) {
-            window.location.href = '{{ url_for("express_partner.files") }}';
+            window.location.href = '{{ url_for("express_partner.home") }}';
           }
         }, 300));
 

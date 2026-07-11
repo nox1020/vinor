@@ -2,8 +2,8 @@
  * Onboarding Tour System - Divar Style
  * سیستم تور راهنمای کاربران به سبک دیوار
  *
- * نسخه ۳: هم‌تراز با IA فعلی (خانه / فایل‌ها / AI / پروفایل)
- * تورهای قدیمی با سلکتورهای مرده (help / routine / dashboard→home) پاک می‌شوند.
+ * نسخه ۳: هم‌تراز با IA فعلی (خانه / AI / پروفایل)
+ * تورهای قدیمی با سلکتورهای مرده (help / routine / files) پاک می‌شوند.
  */
 
 class OnboardingTour {
@@ -17,8 +17,8 @@ class OnboardingTour {
     this.tourVersion = OnboardingTour.TOUR_VERSION;
   }
 
-  static TOUR_VERSION = '2026-07-ia-v3';
-  static FILES_PATH = '/express/partner/files';
+  static TOUR_VERSION = '2026-07-ia-v4';
+  static FILES_PATH = '/express/partner/home';
   static HOME_PATH = '/express/partner/home';
   static DEAD_SELECTORS = [
     'routine-link',
@@ -44,13 +44,12 @@ class OnboardingTour {
 
   /** صفحه لیست فایل‌ها (قالب dashboard.html روی /files) */
   isFilesPath(path = window.location.pathname) {
-    const p = (path || '').replace(/\/+$/, '') || '/';
-    return p === '/express/partner/files' || p.endsWith('/files');
+    return false;
   }
 
   /** سازگاری با نام قدیمی */
   isDashboardPath(path = window.location.pathname) {
-    return this.isFilesPath(path);
+    return this.isHomePath(path);
   }
 
   isLandDetailPath(path = window.location.pathname) {
@@ -60,7 +59,7 @@ class OnboardingTour {
   tourDataLooksStale(tourData) {
     if (!Array.isArray(tourData) || !tourData.length) return true;
     const blob = JSON.stringify(tourData);
-    if (blob.includes('/express/partner/dashboard') && !blob.includes('/express/partner/files')) {
+    if (blob.includes('/express/partner/dashboard') && !blob.includes('/express/partner/home')) {
       return true;
     }
     return OnboardingTour.DEAD_SELECTORS.some((key) => blob.includes(`data-tour="${key}"`) || blob.includes(`"${key}"`));
@@ -363,27 +362,14 @@ class OnboardingTour {
         title: 'Vinor AI و پستچی',
         description: 'از دستیار بپرسید؛ پیام‌های رسمی وینور هم در گفتگوی پستچی داخل AI هستند.',
         position: 'top',
-        page: 'home',
-        action: 'navigate',
-        actionMessage: 'حالا به لیست فایل‌ها می‌رویم.',
-        nextUrl: OnboardingTour.FILES_PATH
+        page: 'home'
       },
       {
-        element: '[data-tour="dashboard-filters"]',
-        title: 'فیلترهای سریع',
-        description: 'با چیپ‌ها و دسته‌ها آگهی‌ها را محدود کنید.',
+        element: '[data-tour="home-journey"]',
+        title: 'کارت سفر فروش',
+        description: 'فایل پیشنهادی و مرحله فروش را اینجا می‌بینید؛ با دکمه پایین مستقیم اقدام کنید.',
         position: 'bottom',
-        page: 'files'
-      },
-      {
-        element: '[data-tour="land-card"]',
-        title: 'کارت فایل',
-        description: 'روی کارت بزنید تا جزئیات فایل را ببینید.',
-        position: 'top',
-        page: 'files',
-        action: 'auto-navigate',
-        actionMessage: 'در حال انتقال به صفحه جزئیات فایل...',
-        nextUrl: null
+        page: 'home'
       },
       {
         element: '[data-tour="land-image"]',

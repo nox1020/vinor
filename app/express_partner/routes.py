@@ -875,7 +875,7 @@ def _is_generic_post_login_next(url: str) -> bool:
         return True
     if path in (
         _post_login_path_only(url_for('express_partner.home')),
-        _post_login_path_only(url_for('express_partner.files')),
+        _post_login_path_only(url_for('express_partner.home')),
         _post_login_path_only(url_for('express_partner.home')),
     ):
         return True
@@ -2484,7 +2484,7 @@ def _home_suggested_files(
             'commission_pct': land.get('_commission_pct'),
             'image_url': partner_card_image_url(land) or None,
             'detail_url': url_for('express_partner.land_detail', code=code),
-            'more_url': url_for('express_partner.files'),
+            'more_url': url_for('express_partner.home'),
             'stage_label': stage_label,
             'funnel_steps': funnel.get('funnel_steps') or [],
             'cta_label': cta_label,
@@ -2811,113 +2811,8 @@ def dashboard_redirect():
 @express_partner_bp.route('/files', methods=['GET'], endpoint='files')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def files_page():
-    me_phone = (session.get("user_phone") or "").strip()
-    profile = getattr(g, 'express_partner_profile', None)
-    ai_ctx = _partner_ai_layer_context(me_phone)
-
-    # فیلتر جستجو و شهر برای نمایش نتایج در همان داشبورد
-    search_query = (request.args.get('q', '') or '').strip().lower()
-    selected_cities = _dashboard_selected_cities()
-    selected_city = ','.join(selected_cities)
-    # برای لینک‌ها: حالت «همه شهرها» باید city= خالی در URL بماند، نه حذف پارامتر
-    city_url = selected_city if ('city' in request.args or selected_cities) else None
-    filter_tag = (request.args.get('tag') or '').strip().lower()
-    filter_cat = (request.args.get('cat') or '').strip()
-    has_filters = _dashboard_request_has_filters(search_query, selected_cities, filter_tag, filter_cat)
-
-    apps = load_express_partner_apps() or []
-    my_apps = [a for a in apps if str(a.get("phone")) == me_phone]
-    # آیا کاربر درخواست همکاری ثبت کرده و در وضعیت بررسی است؟
-    def _norm_status(v):
-        try:
-            s = str(v or '').strip().lower()
-        except Exception:
-            s = ''
-        return s
-    has_pending_app = any(_norm_status(a.get('status')) in ('pending','under_review','waiting','review') for a in my_apps)
-
-    is_approved = _is_partner_approved(profile)
-    assigned_lands, expired_count = _build_partner_dashboard_lands(
-        me_phone,
-        is_approved,
-        search_query=search_query,
-        selected_cities=selected_cities,
-        filter_tag=filter_tag,
-        filter_cat=filter_cat,
-    )
-
-    my_comms = _commissions_for_phone(me_phone)
-    # کل درآمد: فقط پورسانت‌های تایید شده و پرداخت شده (نه pending و rejected)
-    total_commission = sum(int(c.get('commission_amount') or 0) for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
-    
-    # در انتظار: فقط پورسانت‌هایی که status='pending' یا None/خالی است (default به pending)
-    pending_commission = sum(int(c.get('commission_amount') or 0) for c in my_comms if (c.get('status') or 'pending').strip() == 'pending')
-    
-    # فروش‌های تایید شده: تعداد پورسانت‌هایی که status='approved' یا 'paid' دارند
-    sold_count = sum(1 for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
-
-    # URL ویدئو آموزش - می‌تواند از تنظیمات یا متغیر محیطی گرفته شود
-    training_video_url = os.environ.get("TRAINING_VIDEO_URL", "")  # مثال: "https://www.youtube.com/watch?v=VIDEO_ID"
-    # شهرهای فعال برای فیلتر جستجو (قابل مدیریت در پنل ادمین)
-    cities = _active_cities_cached()
-    # سئو: عنوان و توضیح برای موتورهای جستجو (صفحه فایل‌ها برای همه در دسترس است)
-    count = len(assigned_lands)
-    dashboard_mobile_only = _is_mobile_partner_client()
-    show_all_cards = request.args.get("all") == "1" or has_filters
-    dashboard_lands_truncated = False
-    if not show_all_cards and count > DASHBOARD_INITIAL_CARD_LIMIT:
-        assigned_lands, dashboard_lands_truncated = _truncate_dashboard_lands(
-            assigned_lands, DASHBOARD_INITIAL_CARD_LIMIT
-        )
-    seo_title = "فایل‌های اکسپرس وینور | خرید و فروش ملک و زمین"
-    seo_description = f"لیست فایل‌های اکسپرس وینور. {count} فایل معتبر برای خرید و فروش ملک، زمین، ویلا و آپارتمان. مشاهده قیمت و جزئیات."
-    try:
-        canonical_url = url_for('express_partner.files', _external=True)
-        if request.args.get('q') or request.args.get('city'):
-            canonical_url = url_for('express_partner.files', q=request.args.get('q') or None, city=request.args.get('city') or None, _external=True)
-    except Exception:
-        canonical_url = ''
-    from flask import make_response
-    resp = make_response(render_template(
-        "express_partner/dashboard.html",
-        profile=profile,
-        selected_city=selected_city,
-        selected_cities=selected_cities,
-        city_url=city_url,
-        is_approved=is_approved,
-        has_pending_app=has_pending_app,
-        my_apps=my_apps,
-        training_video_url=training_video_url,
-        cities=cities,
-        assigned_lands=assigned_lands,
-        lands_total_count=count,
-        dashboard_lands_truncated=dashboard_lands_truncated,
-        dashboard_mobile_only=dashboard_mobile_only,
-        total_commission=total_commission,
-        pending_commission=pending_commission,
-        sold_count=sold_count,
-        expired_count=expired_count,
-        hide_header=True,
-        SHOW_SUBMIT_BUTTON=False,
-        brand="وینور",
-        domain="vinor.ir",
-        seo_title=seo_title,
-        seo_description=seo_description,
-        canonical_url=canonical_url,
-        bottom_nav_active='files',
-        **ai_ctx,
-    ))
-    # برای کاربران مهمان: کش عمومی کوتاه برای سئو و سرعت
-    if not me_phone and not profile:
-        resp.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=120"
-        resp.headers["Vary"] = "Accept-Encoding"
-    else:
-        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, private"
-        resp.headers["Pragma"] = "no-cache"
-        resp.headers["Expires"] = "0"
-        resp.headers["Vary"] = "Cookie"
-        _append_partner_tab_prefetch(resp)
-    return resp
+    """صفحه «فایل‌ها» حذف شد — ریدایرکت دائمی به خانه."""
+    return redirect(url_for('express_partner.home'), code=301)
 
 
 def _dashboard_data_payload(me_phone, profile, has_pending_app, assigned_lands, total_commission, pending_commission, sold_count, expired_count, is_approved):

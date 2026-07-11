@@ -396,7 +396,6 @@ def get_menu():
         # منوی پرتال — کیف پول برای همهٔ کاربران لاگین‌شده (کاربر عادی: صفحهٔ دعوت همکاری)
         partner_menu = [
             {'key': 'home', 'endpoint': 'express_partner.home', 'icon': 'fa-home', 'label': 'داشبورد'},
-            {'key': 'files', 'endpoint': 'express_partner.files', 'icon': 'fa-folder-open', 'label': 'فایل‌ها'},
             {'key': 'commissions', 'endpoint': 'express_partner.commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': not is_logged_in},
             {'key': 'profile', 'endpoint': 'express_partner.home', 'icon': 'fa-user', 'label': 'منو'},
         ]
@@ -443,7 +442,6 @@ def get_menu():
             'success': True,
             'menu': [
                 {'key': 'home', 'url': '/express/partner/home', 'icon': 'fa-home', 'label': 'داشبورد'},
-                {'key': 'files', 'url': '/express/partner/files', 'icon': 'fa-folder-open', 'label': 'فایل‌ها'},
                 {'key': 'commissions', 'url': '/express/partner/commissions', 'icon': 'fa-wallet', 'label': 'کیف پول', 'disabled': True},
                 {'key': 'profile', 'url': '/express/partner/home?menu=1', 'icon': 'fa-user', 'label': 'منو'},
             ],

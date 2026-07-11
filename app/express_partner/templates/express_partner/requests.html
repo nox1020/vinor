@@ -167,7 +167,7 @@
         {% endif %}
       </p>
       {% if counts.all|default(0) == 0 %}
-      <a href="{{ url_for('express_partner.files') }}" data-vinor-express-nav class="req-empty__btn">مشاهده فایل‌ها</a>
+      <a href="{{ url_for('express_partner.home') }}" data-vinor-express-nav class="req-empty__btn">مشاهده فایل‌ها</a>
       {% elif current_filter == 'needs_action' and (counts.in_progress|default(0) > 0) %}
       <a href="{{ url_for('express_partner.requests', filter='in_progress') }}" data-vinor-express-nav class="req-empty__btn">در انتظار</a>
       {% endif %}

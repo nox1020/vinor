@@ -89,7 +89,7 @@
       });
     } catch (_) {}
     params.set('q', q);
-    var action = form.getAttribute('action') || '/express/partner/files';
+    var action = form.getAttribute('action') || '/express/partner/home';
     try {
       var u = new URL(action, window.location.origin);
       u.search = params.toString();
@@ -114,7 +114,7 @@
     if (window.__vinorDashboardSearch && typeof window.__vinorDashboardSearch.runFromForm === 'function') {
       try {
         var path = window.location.pathname.replace(/\/+$/, '') || '/';
-        if (path === '/express/partner/files') {
+        if (path === '/express/partner/home') {
           window.__vinorDashboardSearch.runFromForm(form, q);
           return;
         }
@@ -124,7 +124,7 @@
     if (typeof window.vinorExpressNavigate === 'function') {
       try {
         var pathNav = window.location.pathname.replace(/\/+$/, '') || '/';
-        if (pathNav === '/express/partner/files') {
+        if (pathNav === '/express/partner/home') {
           window.vinorExpressNavigate(url, { forward: false });
           return;
         }
@@ -413,11 +413,7 @@
     setup();
   }
 
-  window.addEventListener('vinor:express-page-swap', function (ev) {
-    if (!ev.detail || ev.detail.navKey === 'files') {
-      window.setTimeout(setup, 0);
-      return;
-    }
+  window.addEventListener('vinor:express-page-swap', function () {
     teardown();
   });
 
