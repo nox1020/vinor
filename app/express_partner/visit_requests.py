@@ -916,8 +916,7 @@ def visit_tx_mode(
             return "visit_commission_pending"
         if has_pending_deal_commission:
             return "deal_pending"
-        if deal_commission_rejected:
-            return "revisit"
+        # رد معامله → دوباره مسیر معامله (نه فقط بازدید مجدد)
         return "deal"
     return "visit"
 
@@ -964,7 +963,11 @@ def resolve_partner_land_tx_state(
 
     if gs == "in_transaction":
         if ph and holder_phone == ph:
-            mode = "release"
+            # فروش نهایی ثبت شده و منتظر تأیید ادمین است
+            if pending_deal:
+                mode = "deal_pending"
+            else:
+                mode = "release"
         elif holder_phone:
             mode = "blocked"
         else:
@@ -1085,7 +1088,8 @@ ADMIN_VISIT_TRANSITIONS: Dict[str, frozenset] = {
     PENDING_STATUS: frozenset({PENDING_STATUS, APPROVED_STATUS, CANCELLED_STATUS}),
     APPROVED_STATUS: frozenset({APPROVED_STATUS, CANCELLED_STATUS}),
     DONE_PENDING_STATUS: frozenset({DONE_PENDING_STATUS, COMPLETED_STATUS, CANCELLED_STATUS, APPROVED_STATUS}),
-    COMPLETED_STATUS: frozenset({COMPLETED_STATUS, CANCELLED_STATUS}),
+    # بازدید تکمیل‌شده را نمی‌بندیم — مسیر معامله را خراب می‌کند
+    COMPLETED_STATUS: frozenset({COMPLETED_STATUS}),
     CANCELLED_STATUS: frozenset({CANCELLED_STATUS}),
 }
 
@@ -1229,18 +1233,18 @@ def admin_visit_workflow_steps(
     elif not visit_gate:
         s4, hint, action = "waiting", "بعد از تأیید پورسانت بازدید، همکار درخواست معامله می‌زند.", False
     elif dc_st == "pending":
-        s4, hint, action = "current", "درخواست معامله منتظر تأیید یا رد شماست.", True
+        s4, hint, action = "current", "همکار فروش نهایی را ثبت کرده؛ با تأیید، فایل بسته و پورسانت به کیف پول اضافه می‌شود.", True
     elif _paid(dc_st):
-        s4, hint, action = "done", "معامله تأیید شد و فایل فروخته‌شده علامت خورد.", False
+        s4, hint, action = "done", "فروش تأیید شد — فایل بسته و پورسانت در کیف پول همکار است.", False
     elif dc_st == "rejected":
-        s4, hint, action = "blocked", "درخواست معامله رد شده است.", False
+        s4, hint, action = "waiting", "معامله رد شد؛ همکار می‌تواند دوباره درخواست معامله بزند.", False
     elif st == COMPLETED_STATUS:
-        s4, hint, action = "waiting", "منتظر درخواست معامله از سمت همکار.", False
+        s4, hint, action = "waiting", "منتظر فروش نهایی از سمت همکار.", False
     else:
         s4, hint, action = "waiting", "", False
     steps.append({
         "key": "deal_commission",
-        "label": "تأیید معامله",
+        "label": "تأیید فروش نهایی",
         "state": s4,
         "hint": hint,
         "needs_action": action,

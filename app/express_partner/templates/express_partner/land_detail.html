@@ -863,29 +863,29 @@
       mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
     }
     .ld-download-wrap[data-busy="1"] button { opacity: 0.88; pointer-events: none; }
-    /* دو دکمه هم‌زمان: بازدید مجدد / معامله */
-    .ld-fab-dock--fork {
+    /* نوار اکشن پایین — دکمه‌های برچسب‌دار */
+    .ld-fab-dock--bar {
       pointer-events: none;
-      background: linear-gradient(180deg, transparent 0%, rgba(15, 23, 42, 0.04) 28%, rgba(15, 23, 42, 0.08) 100%);
+      background: linear-gradient(180deg, transparent 0%, rgba(15, 23, 42, 0.04) 28%, rgba(15, 23, 42, 0.1) 100%);
     }
-    html.dark .ld-fab-dock--fork {
-      background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.2) 40%, rgba(0, 0, 0, 0.45) 100%);
+    html.dark .ld-fab-dock--bar {
+      background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.22) 40%, rgba(0, 0, 0, 0.5) 100%);
     }
-    .ld-fab-dock__inner--fork {
+    .ld-fab-dock__inner--bar {
       align-items: stretch;
       width: 100%;
       padding: 0 0.875rem 0.75rem;
       max-width: 36rem;
       margin-inline: auto;
     }
-    .ld-deal-fork {
+    .ld-action-bar {
       pointer-events: auto;
       display: flex;
       flex-direction: column;
       gap: 0.5rem;
       width: 100%;
     }
-    .ld-deal-fork__hint {
+    .ld-action-bar__hint {
       margin: 0;
       display: inline-flex;
       align-items: center;
@@ -902,18 +902,19 @@
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
     }
-    html.dark .ld-deal-fork__hint {
+    html.dark .ld-action-bar__hint {
       background: rgba(24, 24, 27, 0.78);
       border-color: rgba(255, 255, 255, 0.1);
       color: #a1a1aa;
     }
-    .ld-deal-fork__row {
+    .ld-action-bar__hint.hidden { display: none; }
+    .ld-action-bar__row {
       display: flex;
       align-items: stretch;
       gap: 0.5rem;
       width: 100%;
     }
-    .ld-deal-fork__btn {
+    .ld-action-bar__btn {
       flex: 1 1 0;
       min-height: 3.15rem;
       display: inline-flex;
@@ -931,18 +932,60 @@
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
       box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
+      text-align: center;
     }
-    .ld-deal-fork__btn:active { transform: scale(0.98); }
-    .ld-deal-fork__btn i { font-size: 0.95rem; opacity: 0.95; }
-    .ld-deal-fork__btn--revisit {
+    .ld-action-bar__btn:active:not([aria-disabled="true"]):not(.ld-action-bar__btn--muted):not(.ld-action-bar__btn--sold):not(.ld-action-bar__btn--pending) {
+      transform: scale(0.98);
+    }
+    .ld-action-bar__btn i { font-size: 0.95rem; opacity: 0.95; }
+    .ld-action-bar__btn.hidden { display: none !important; }
+    .ld-action-bar__btn--teal {
       background: linear-gradient(145deg, #0d9488 0%, #0f766e 100%);
       box-shadow: 0 8px 22px rgba(13, 148, 136, 0.28);
     }
-    .ld-deal-fork__btn--deal {
+    .ld-action-bar__btn--revisit {
+      background: linear-gradient(145deg, #0d9488 0%, #0f766e 100%);
+      box-shadow: 0 8px 22px rgba(13, 148, 136, 0.28);
+    }
+    .ld-action-bar__btn--deal {
       background: linear-gradient(145deg, #a62626 0%, #8b1e1e 100%);
       box-shadow: 0 8px 22px rgba(166, 38, 38, 0.3);
     }
-    .ld-deal-fork__call {
+    .ld-action-bar__btn--release {
+      background: linear-gradient(145deg, #64748b 0%, #475569 100%);
+      box-shadow: 0 8px 22px rgba(71, 85, 105, 0.28);
+    }
+    .ld-action-bar__btn--pending,
+    .ld-action-bar__btn.ld-btn-tx--pending {
+      background: linear-gradient(145deg, #f59e0b 0%, #d97706 100%);
+      box-shadow: 0 8px 22px rgba(217, 119, 6, 0.28);
+      cursor: default;
+      opacity: 0.95;
+    }
+    .ld-action-bar__btn--muted,
+    .ld-action-bar__btn--sold {
+      background: rgba(255, 255, 255, 0.88);
+      color: #334155;
+      border: 1px solid rgba(15, 23, 42, 0.1);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+      cursor: default;
+    }
+    .ld-action-bar__btn--sold {
+      color: #047857;
+      border-color: rgba(16, 185, 129, 0.35);
+      background: rgba(236, 253, 245, 0.95);
+    }
+    html.dark .ld-action-bar__btn--muted {
+      background: rgba(39, 39, 42, 0.92);
+      color: #d4d4d8;
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+    html.dark .ld-action-bar__btn--sold {
+      background: rgba(6, 78, 59, 0.45);
+      color: #6ee7b7;
+      border-color: rgba(16, 185, 129, 0.35);
+    }
+    .ld-action-bar__call {
       flex: 0 0 3.15rem;
       width: 3.15rem;
       min-height: 3.15rem;
@@ -959,12 +1002,14 @@
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
-    .ld-deal-fork__call:active { transform: scale(0.96); }
+    .ld-action-bar__call:active { transform: scale(0.96); }
+    .ld-fab-menu--bar-hidden,
+    .ld-fab-trigger--bar-hidden,
     .ld-fab-menu--fork-hidden,
     .ld-fab-trigger--fork-hidden {
       display: none !important;
     }
-    /* FAB + منوی تلگرامی */
+    /* FAB + منوی تلگرامی (legacy — مخفی در حالت bar) */
     .ld-fab-dock {
       background: transparent;
       border: none;

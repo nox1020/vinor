@@ -4604,19 +4604,42 @@ def express_commission_approve(cid: int):
             except Exception as e:
                 current_app.logger.error('Referral sync on commission approve: %s', e)
 
-        # تغییر وضعیت فایل به "فروخته شده" در انتساب‌ها (فقط پورسانت فروش ملک)
+        # تغییر وضعیت فایل به "فروخته شده" + کیف پول + بستن مأموریت
         if is_deal:
             try:
+                from app.express_partner.commissions_flow import mark_assignments_sold_for_land
                 land_code = str(commission_record.get('land_code', ''))
+                partner_phone_deal = str(commission_record.get('partner_phone') or '').strip()
                 if land_code and land_code != 'referral':
                     assignments = load_express_assignments() or []
-                    for a in assignments:
-                        if str(a.get('land_code')) == land_code:
-                            a['status'] = 'sold'
-                            a['sold_at'] = iso_z(utcnow())
-                            a.pop('transaction_holder', None)
-                            a.pop('transaction_started_at', None)
-                    save_express_assignments(assignments)
+                    if mark_assignments_sold_for_land(
+                        assignments,
+                        land_code,
+                        sold_at=iso_z(utcnow()),
+                    ):
+                        save_express_assignments(assignments)
+                    # همگام‌سازی وضعیت آگهی اکسپرس — فایل کاملاً بسته می‌شود
+                    try:
+                        from app.utils.storage import load_ads_cached, save_ads
+                        lands = load_ads_cached() or []
+                        for land in lands:
+                            if not isinstance(land, dict):
+                                continue
+                            if str(land.get('code') or '').strip() != land_code:
+                                continue
+                            if str(land.get('express_status') or '').strip().lower() != 'sold':
+                                land['express_status'] = 'sold'
+                                save_ads(lands)
+                            break
+                    except Exception as e:
+                        current_app.logger.error('Error marking express land sold: %s', e)
+                    # مأموریت همکار روی این فایل تمام شود
+                    if partner_phone_deal:
+                        try:
+                            from app.express_partner.partner_missions import complete_mission
+                            complete_mission(partner_phone_deal, land_code=land_code)
+                        except Exception as e:
+                            current_app.logger.error('complete mission after deal approve: %s', e)
             except Exception as e:
                 current_app.logger.error(f"Error updating assignment status to sold: {e}")
 
@@ -4660,8 +4683,13 @@ def express_commission_approve(cid: int):
             flash('پورسانت دعوت همکار تأیید شد و به موجودی قابل برداشت اضافه شد.', 'success')
         elif is_visit:
             flash('پورسانت بازدید تأیید شد و به موجودی قابل برداشت همکار اضافه شد.', 'success')
+        elif is_deal:
+            flash(
+                'فروش نهایی تأیید شد: فایل بسته شد و پورسانت به کیف پول همکار اضافه شد.',
+                'success',
+            )
         else:
-            flash('پورسانت تأیید شد، مبلغ به موجودی همکار اضافه شد و فایل فروخته‌شده علامت خورد.', 'success')
+            flash('پورسانت تأیید شد و به موجودی همکار اضافه شد.', 'success')
     elif not changed:
         flash('پورسانت قبلاً تایید شده است.', 'warning')
     return redirect(_express_commissions_redirect(filter_hint))
@@ -5130,7 +5158,7 @@ def express_visit_requests():
         item['in_workflow'] = admin_visit_in_workflow(item, item['admin_workflow_steps'])
         _st = (str(item.get('status') or '')).strip()
         item['can_close'] = (
-            _st != CANCELLED_STATUS
+            _st in (PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS)
             and admin_can_transition_visit(_st, CANCELLED_STATUS)
         )
         items.append(item)

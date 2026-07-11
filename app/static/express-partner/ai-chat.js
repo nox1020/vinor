@@ -351,7 +351,9 @@
 
   function bindAgentActions(root) {
     if (!root) return;
-    root.querySelectorAll('.ai-agent-card[data-agent-type="confirm_visit"]').forEach(function (card) {
+    root.querySelectorAll('.ai-agent-card[data-agent-type]').forEach(function (card) {
+      var atype = card.getAttribute('data-agent-type') || '';
+      if (atype.indexOf('confirm_') !== 0) return;
       if (card.getAttribute('data-bound') === '1') return;
       card.setAttribute('data-bound', '1');
       var confirmBtn = card.querySelector('[data-agent-confirm]');

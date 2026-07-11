@@ -447,7 +447,7 @@
     };
 
     window.removeVinorLandDetailModalsFromBody = function () {
-      ['landContactModal', 'landLocationModal', 'landVisitModal', 'landDealModal', 'landReleaseModal'].forEach(function (id) {
+      ['landContactModal', 'landLocationModal'].forEach(function (id) {
         try {
           document.querySelectorAll('body > #' + CSS.escape(id)).forEach(function (el) {
             el.remove();

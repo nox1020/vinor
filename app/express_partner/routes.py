@@ -54,7 +54,7 @@ from ..utils.storage import (
     load_partner_files_meta, save_partner_files_meta,
     load_express_assignments, save_express_assignments, load_express_commissions, load_express_commissions_cached, save_express_commissions,
     load_express_reposts, save_express_reposts,
-    load_ads_cached, load_active_cities, load_express_lands_cached,
+    load_ads_cached, load_active_cities, load_express_lands_cached, save_ads,
     load_sms_history, save_sms_history,
     load_settings,
     load_express_partner_views, save_express_partner_views,
@@ -117,7 +117,13 @@ from .visit_requests import (
     COMPLETED_STATUS,
     CANCELLED_STATUS,
 )
-from .commissions_flow import commission_blocks_new_deal_record, commission_is_deal, commission_is_visit
+from .commissions_flow import (
+    commission_blocks_new_deal_record,
+    commission_is_deal,
+    commission_is_visit,
+    has_finalized_deal_commission,
+    sync_sold_if_deal_already_approved,
+)
 from .admin_action_sms import notify_admin_pending_action
 from ..utils.dates import format_iso_date_jalali, parse_datetime_safe
 from ..services.notifications import get_user_notifications, unread_count, mark_read, mark_all_read
@@ -135,6 +141,29 @@ def _express_land_marked_sold(land: Dict[str, Any] | None) -> bool:
     if not land or not isinstance(land, dict):
         return False
     return str(land.get('express_status') or '').strip().lower() == 'sold'
+
+
+def _mark_express_land_sold(code: str) -> bool:
+    """express_status فایل را sold می‌کند تا لیست/SEO با انتساب هم‌خوان باشد."""
+    ck = str(code or '').strip()
+    if not ck:
+        return False
+    lands = load_ads_cached() or []
+    if not isinstance(lands, list):
+        return False
+    changed = False
+    for land in lands:
+        if not isinstance(land, dict):
+            continue
+        if str(land.get('code') or '').strip() != ck:
+            continue
+        if str(land.get('express_status') or '').strip().lower() != 'sold':
+            land['express_status'] = 'sold'
+            changed = True
+        break
+    if changed:
+        save_ads(lands)
+    return changed
 
 
 def _effective_land_status(global_status: str, land: Dict[str, Any]) -> str:
@@ -2283,8 +2312,8 @@ def _home_urgent_actions(
                 'tone': 'amber',
                 'title': 'امروز بازدید داری',
                 'subtitle': land_label,
-                'cta': 'شروع بازدید',
-                'url': url_for('express_partner.land_detail', code=code),
+                'cta': 'ثبت در چت',
+                'url': url_for('express_partner.home'),
                 'land_code': code,
                 'priority': 90,
             })
@@ -2432,11 +2461,20 @@ def _home_suggested_files(
     limit: int = HOME_SUGGESTED_FILES_LIMIT,
 ) -> List[Dict[str, Any]]:
     from ..utils.images import partner_card_image_url
+    from app.express_partner.sales_coach import (
+        build_coach_chat_prompt,
+        build_journey_chat_cta,
+        coach_tip_for_stage,
+    )
+    from app.express_partner.visit_requests import resolve_partner_land_tx_state
 
     if assigned_lands is None:
         assigned_lands, _ = _build_partner_dashboard_lands(phone, is_approved)
     candidates: List[Dict[str, Any]] = []
     now = datetime.utcnow()
+    assignments = load_express_assignments() or []
+    commissions = load_express_commissions_cached() or []
+    visits = visit_rows if isinstance(visit_rows, list) else (load_express_visit_requests() or [])
     for land in assigned_lands or []:
         if not isinstance(land, dict):
             continue
@@ -2450,9 +2488,7 @@ def _home_suggested_files(
             price_total = int(land.get('price_total') or land.get('price') or 0)
         except Exception:
             price_total = 0
-        funnel = _home_funnel_for_land(phone, land, visit_rows=visit_rows)
-        from app.express_partner.sales_coach import build_coach_chat_prompt, coach_tip_for_stage
-
+        funnel = _home_funnel_for_land(phone, land, visit_rows=visits)
         stage_label = funnel.get("stage_label") or "علاقه‌مند"
         tip = coach_tip_for_stage(
             stage_label=str(stage_label),
@@ -2460,30 +2496,28 @@ def _home_suggested_files(
             sold=False,
             commission_amount=int(land.get("_commission_amount") or 0),
         )
-        # CTA مستقیم: شیت بازدید یا معامله را با ?action باز می‌کند
-        cta_action = "visit"
-        cta_label = "درخواست بازدید"
-        cta_icon = "fa-calendar-days"
-        if st == "in_transaction":
-            cta_action = "release"
-            cta_label = "رفع معامله"
-            cta_icon = "fa-check-circle"
-        elif str(stage_label) in ("معامله یا بازدید مجدد", "بازدید انجام شد", "در حال معامله"):
-            cta_action = "deal"
-            cta_label = "بازدید مجدد / معامله"
-            cta_icon = "fa-handshake"
-        elif str(stage_label) in ("بازدید تأییدشد",):
-            cta_action = "visit"
-            cta_label = "شروع بازدید"
-            cta_icon = "fa-map-marker-alt"
-        elif str(stage_label) in ("بازاریابی", "بازاریابی مجدد"):
-            cta_action = ""
-            cta_label = "بازاریابی کن"
-            cta_icon = "fa-bullhorn"
-
-        detail_kwargs = {'code': code}
-        if cta_action:
-            detail_kwargs['action'] = cta_action
+        try:
+            tx_state = resolve_partner_land_tx_state(
+                me_phone=phone,
+                land_code=code,
+                assignments=assignments,
+                visit_requests=visits,
+                is_partner_approved=bool(is_approved),
+                global_assignment_status=st or "active",
+                commissions=commissions if isinstance(commissions, list) else [],
+                visit_commission_required=_visit_commission_required_for(
+                    commissions if isinstance(commissions, list) else [], phone, code
+                ),
+            )
+            tx_mode = str(tx_state.get("tx_mode") or "")
+        except Exception:
+            tx_mode = ""
+        cta = build_journey_chat_cta(
+            code=code,
+            title=(land.get("title") or "").strip(),
+            tx_mode=tx_mode,
+            stage_label=str(stage_label),
+        )
         candidates.append({
             'code': code,
             'title': (land.get('title') or '—').strip(),
@@ -2497,10 +2531,11 @@ def _home_suggested_files(
             'more_url': url_for('express_partner.home'),
             'stage_label': stage_label,
             'funnel_steps': funnel.get('funnel_steps') or [],
-            'cta_label': cta_label,
-            'cta_url': url_for('express_partner.land_detail', **detail_kwargs),
-            'cta_icon': cta_icon,
-            'cta_action': cta_action,
+            'cta_label': cta.get('label') or 'ادامه در چت',
+            'cta_url': '',
+            'cta_icon': cta.get('icon') or 'fa-comments',
+            'cta_action': cta.get('action') or '',
+            'cta_chat_prompt': cta.get('prompt') or '',
             'show_fav': True,
             'coach_tip': tip,
             'coach_prompt': build_coach_chat_prompt(
@@ -2522,15 +2557,22 @@ def _home_suggested_files(
             act_code = str(act.get('land_code') or '').strip()
             if act_code and act_code == code:
                 row['cta_label'] = act.get('cta') or row.get('cta_label')
-                row['cta_url'] = act.get('url') or row.get('cta_url')
                 row['cta_icon'] = act.get('icon') or row.get('cta_icon') or 'fa-phone'
                 if act.get('key') == 'contact_customer':
                     row['stage_label'] = 'تماس فوری'
+                    # تماس مستقیم همچنان لینک tel می‌ماند
+                    if act.get('url'):
+                        row['cta_url'] = act.get('url')
+                        row['cta_chat_prompt'] = ''
                 elif act.get('key') == 'visit_today':
-                    # مستقیم برو به فایل و شیت مرتبط با بازدید
-                    row['cta_url'] = url_for(
-                        'express_partner.land_detail', code=code, action='visit'
-                    )
+                    row['cta_url'] = ''
+                    if not row.get('cta_chat_prompt'):
+                        row['cta_chat_prompt'] = build_journey_chat_cta(
+                            code=code,
+                            title=str(row.get('title') or ''),
+                            tx_mode='visit',
+                            stage_label=str(row.get('stage_label') or ''),
+                        ).get('prompt') or ''
                 break
         out.append(row)
     return out
@@ -4504,8 +4546,8 @@ def ai_chat():
 @express_partner_bp.post('/ai/agent/confirm', endpoint='ai_agent_confirm')
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_agent_confirm():
-    """تأیید کاربر برای اقدام پیشنهادی AI (فعلاً ثبت بازدید)."""
-    from app.ai.agent_tools import confirm_visit_from_token
+    """تأیید کاربر برای اقدام پیشنهادی AI در چت مأموریت."""
+    from app.ai.agent_tools import confirm_action_from_token
     from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import append_exchange, ensure_active_thread
 
@@ -4519,7 +4561,7 @@ def ai_agent_confirm():
     if not thread_id:
         thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
 
-    out = confirm_visit_from_token(phone=phone, token=token)
+    out = confirm_action_from_token(phone=phone, token=token)
     if not out.get('ok'):
         return jsonify(out), 400
 
@@ -4533,8 +4575,6 @@ def ai_agent_confirm():
         thread_id=thread_id,
         audience=AUDIENCE_PARTNER,
     )
-    # append_exchange با user_text خالی فقط assistant می‌گذارد — اما شرط if user_text رد می‌شود.
-    # اگر فقط assistant نیاز است و user خالی است، تابع فعلی فقط وقتی assistant_text باشد append می‌کند.
     return jsonify({
         'ok': True,
         'message': out.get('message'),
@@ -4543,6 +4583,8 @@ def ai_agent_confirm():
         'thread_id': tid,
         'messages': msgs,
         'visit_id': out.get('visit_id') or '',
+        'land_code': out.get('land_code') or '',
+        'tx_mode': out.get('tx_mode') or '',
     })
 
 
@@ -5382,7 +5424,7 @@ def mark_in_transaction(code: str):
         for a in assignments:
             if str(a.get('land_code')) == str(code):
                 current_a_status = a.get('status', 'active')
-                if current_a_status in ('active', 'pending', 'in_transaction'):
+                if current_a_status in ('active', 'pending', 'approved', 'closed', 'in_transaction'):
                     a['status'] = new_status
                     a['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     # ذخیره همکار صاحب معامله و زمان شروع
@@ -5424,6 +5466,27 @@ def mark_in_transaction(code: str):
                         
                         if my_assignment_for_commission:
                             partner_phone = me_phone
+                            # معامله قبلاً تأیید شده ولی sold نشده → نهایی‌سازی
+                            if has_finalized_deal_commission(commissions, partner_phone, str(code)):
+                                if sync_sold_if_deal_already_approved(
+                                    assignments, commissions, partner_phone, str(code)
+                                ):
+                                    save_express_assignments(assignments)
+                                try:
+                                    _mark_express_land_sold(str(code))
+                                except Exception:
+                                    current_app.logger.exception(
+                                        'mark express land sold failed code=%s', code
+                                    )
+                                return _mark_in_transaction_finish(
+                                    code,
+                                    success=True,
+                                    message='معامله قبلاً تأیید شده بود؛ فایل به‌عنوان فروخته‌شده نهایی شد.',
+                                    category='success',
+                                    new_status='sold',
+                                    tx_mode='hidden',
+                                    can_revisit=False,
+                                )
                             from .new_land_sms import (
                                 resolve_express_land_commission_amount,
                                 resolve_express_land_commission_pct,
@@ -5438,10 +5501,10 @@ def mark_in_transaction(code: str):
                             except Exception:
                                 price_total = 0
                             
-                            # بررسی پورسانت فعال قبلی (ردشده مجدداً قابل ثبت است)
+                            # بررسی پورسانت pending قبلی (ردشده مجدداً قابل ثبت است)
                             if commission_blocks_new_deal_record(commissions, partner_phone, str(code)):
                                 current_app.logger.info(
-                                    "Active commission already exists for partner %s land %s",
+                                    "Pending deal commission already exists for partner %s land %s",
                                     partner_phone,
                                     code,
                                 )
@@ -5507,12 +5570,21 @@ def mark_in_transaction(code: str):
                         
                         if created_count > 0:
                             save_express_commissions(commissions)
-                            success_message = 'درخواست معامله ثبت شد. پس از تأیید ادمین، مبلغ به موجودی پورسانت شما اضافه می‌شود.'
+                            success_message = (
+                                'فروش نهایی ثبت شد. پس از تأیید ادمین، فایل بسته می‌شود '
+                                'و پورسانت به کیف پول شما اضافه می‌شود.'
+                            )
                         else:
                             if skipped_count > 0:
-                                success_message = 'درخواست معامله ثبت شد|پورسانت فعال قبلی برای این فایل وجود دارد و رکورد جدیدی ایجاد نشد.'
+                                success_message = (
+                                    'فروش نهایی ثبت شد|پورسانت در صف تأیید ادمین است. '
+                                    'پس از تأیید، فایل بسته و مبلغ به کیف پول اضافه می‌شود.'
+                                )
                             else:
-                                success_message = 'درخواست معامله ثبت شد. پس از تأیید ادمین، مبلغ به موجودی پورسانت شما اضافه می‌شود.'
+                                success_message = (
+                                    'فروش نهایی ثبت شد. پس از تأیید ادمین، فایل بسته می‌شود '
+                                    'و پورسانت به کیف پول شما اضافه می‌شود.'
+                                )
                         if not success_message:
                             success_message = 'ملک به عنوان «در حال معامله» علامت‌گذاری شد.'
                 except Exception as e:
@@ -7156,6 +7228,21 @@ def land_detail(code: str):
     land['_visit_customer_name'] = tx_state.get('customer_name') or ''
     land['_tx_button_mode'] = tx_state.get('tx_mode') or 'visit'
     land['_can_revisit'] = bool(tx_state.get('can_revisit'))
+    try:
+        from app.express_partner.sales_coach import build_journey_chat_cta
+        land['_chat_cta'] = build_journey_chat_cta(
+            code=str(code),
+            title=str(land.get('title') or '').strip(),
+            tx_mode=str(land.get('_tx_button_mode') or ''),
+            stage_label='',
+        )
+    except Exception:
+        land['_chat_cta'] = {
+            'label': 'چت مأموریت',
+            'icon': 'fa-comments',
+            'action': '',
+            'prompt': f"فایل {code}: قدم بعدی فروش را از چت پیش ببر و اگر ثبت لازم است ابزار مربوطه را با کارت تأیید پیشنهاد بده.",
+        }
     land['_visit_progress_steps'] = []
     land['_visit_progress_summary'] = {}
     if is_approved and me_phone:

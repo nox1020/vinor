@@ -197,7 +197,11 @@ def admin_commission_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
 def commission_blocks_new_deal_record(
     commissions: List[Dict[str, Any]], partner_phone: str, land_code: str
 ) -> bool:
-    """آیا رکورد پورسانت فعال برای این همکار+فایل وجود دارد؟"""
+    """مانع ثبت پورسانت معاملهٔ جدید فقط وقتی رکورد pending وجود دارد.
+
+    رد شده (rejected) مانع نیست تا همکار بتواند دوباره درخواست بدهد.
+    تأیید/پرداخت‌شده با sync_sold_if_deal_already_approved نهایی می‌شود.
+    """
     ph = (partner_phone or "").strip()
     code = str(land_code or "").strip()
     if not ph or not code:
@@ -211,9 +215,97 @@ def commission_blocks_new_deal_record(
             continue
         if not commission_is_deal(c):
             continue
-        if (str(c.get("status") or "pending")).strip() in ACTIVE_COMMISSION_STATUSES:
+        if (str(c.get("status") or "pending")).strip().lower() == PENDING_STATUS:
             return True
     return False
+
+
+def has_finalized_deal_commission(
+    commissions: List[Dict[str, Any]] | None,
+    partner_phone: str,
+    land_code: str,
+) -> bool:
+    deal = latest_deal_commission_for_partner(commissions, partner_phone, land_code)
+    if not deal:
+        return False
+    return (str(deal.get("status") or "")).strip().lower() in (APPROVED_STATUS, PAID_STATUS)
+
+
+def latest_deal_commission_for_partner(
+    commissions: List[Dict[str, Any]] | None,
+    partner_phone: str,
+    land_code: str,
+) -> Optional[Dict[str, Any]]:
+    ph = (partner_phone or "").strip()
+    code = str(land_code or "").strip()
+    if not ph or not code:
+        return None
+    latest: Optional[Dict[str, Any]] = None
+    for c in reversed(commissions or []):
+        if not isinstance(c, dict):
+            continue
+        if str(c.get("partner_phone") or "").strip() != ph:
+            continue
+        if str(c.get("land_code") or "").strip() != code:
+            continue
+        if not commission_is_deal(c):
+            continue
+        return c
+    return latest
+
+
+def mark_assignments_sold_for_land(
+    assignments: List[Dict[str, Any]],
+    land_code: str,
+    *,
+    sold_at: Optional[str] = None,
+) -> bool:
+    """همه انتساب‌های یک فایل را sold می‌کند (نهایی‌سازی معامله)."""
+    code = str(land_code or "").strip()
+    if not code:
+        return False
+    stamp = sold_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    changed = False
+    for a in assignments:
+        if not isinstance(a, dict):
+            continue
+        if str(a.get("land_code") or "").strip() != code:
+            continue
+        cur = (str(a.get("status") or "active")).strip().lower()
+        if cur == "sold":
+            a.pop("transaction_holder", None)
+            a.pop("transaction_started_at", None)
+            if not a.get("sold_at"):
+                a["sold_at"] = stamp
+                changed = True
+            continue
+        a["status"] = "sold"
+        a["sold_at"] = stamp
+        a["updated_at"] = stamp
+        a.pop("transaction_holder", None)
+        a.pop("transaction_started_at", None)
+        changed = True
+    return changed
+
+
+def sync_sold_if_deal_already_approved(
+    assignments: List[Dict[str, Any]],
+    commissions: List[Dict[str, Any]] | None,
+    partner_phone: str,
+    land_code: str,
+) -> bool:
+    """اگر پورسانت معامله تأیید/پرداخت شده ولی انتساب sold نیست، نهایی‌سازی کن."""
+    deal = latest_deal_commission_for_partner(commissions, partner_phone, land_code)
+    if not deal:
+        return False
+    st = (str(deal.get("status") or "")).strip().lower()
+    if st not in (APPROVED_STATUS, PAID_STATUS):
+        return False
+    return mark_assignments_sold_for_land(
+        assignments,
+        land_code,
+        sold_at=str(deal.get("approved_at") or deal.get("paid_at") or "") or None,
+    )
 
 
 def revert_land_assignments_after_deal_cancel(

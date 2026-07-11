@@ -1043,7 +1043,7 @@
 
   var TX_UI = {
     visit: {
-      label: 'درخواست بازدید',
+      label: 'بازدید',
       icon: 'fa-calendar-check',
       btnClass: 'ld-btn-tx',
       specLabel: 'فعال',
@@ -1055,7 +1055,7 @@
       specLabel: 'ثبت بازدید جدید',
     },
     visit_pending: {
-      label: 'در انتظار بازدید',
+      label: 'منتظر تأیید بازدید',
       icon: 'fa-clock',
       btnClass: 'ld-btn-tx ld-btn-tx--pending cursor-default',
       specLabel: 'منتظر تأیید ادمین',
@@ -1067,32 +1067,32 @@
       specLabel: 'بازدید تأییدشده',
     },
     visit_done_pending: {
-      label: 'در انتظار تأیید بازدید',
+      label: 'منتظر تأیید بازدید',
       icon: 'fa-clock',
       btnClass: 'ld-btn-tx ld-btn-tx--pending cursor-default',
       specLabel: 'منتظر تأیید انجام بازدید',
     },
     visit_commission_pending: {
-      label: 'در انتظار پورسانت بازدید',
+      label: 'منتظر پورسانت بازدید',
       icon: 'fa-clock',
       btnClass: 'ld-btn-tx ld-btn-tx--pending cursor-default',
       specLabel: 'منتظر تأیید پورسانت بازدید',
     },
     deal: {
-      label: 'درخواست معامله',
+      label: 'معامله',
       icon: 'fa-handshake',
       btnClass: 'ld-btn-tx',
       specLabel: 'بازدید ثبت‌شده',
     },
     deal_pending: {
-      label: 'معامله ثبت شد',
+      label: 'منتظر تأیید ادمین',
       icon: 'fa-clock',
       btnClass: 'ld-btn-tx ld-btn-tx--pending cursor-default',
-      specLabel: 'در انتظار تأیید ادمین',
+      specLabel: 'در انتظار تأیید فروش',
     },
     release: {
-      label: 'رفع معامله',
-      icon: 'fa-check-circle',
+      label: 'بستن',
+      icon: 'fa-rotate-left',
       btnClass: 'ld-btn-tx ld-btn-tx--release',
       specLabel: 'در حال معامله',
     },
@@ -1674,9 +1674,27 @@
     return txMode === 'release' || txStatus === 'in_transaction';
   }
 
-  function isDealForkDock() {
+  function isActionBarDock() {
     var dock = document.querySelector('.ld-fab-dock');
-    return !!(dock && dock.getAttribute('data-deal-fork') === '1');
+    return !!(dock && (dock.getAttribute('data-action-bar') === '1' || dock.getAttribute('data-deal-fork') === '1'));
+  }
+
+  function isDealForkDock() {
+    return isActionBarDock();
+  }
+
+  function actionBarToneForMode(mode) {
+    if (mode === 'deal') return 'deal';
+    if (mode === 'release') return 'release';
+    if (
+      mode === 'visit_pending' ||
+      mode === 'visit_done_pending' ||
+      mode === 'visit_commission_pending' ||
+      mode === 'deal_pending'
+    ) {
+      return 'pending';
+    }
+    return 'teal';
   }
 
   function syncRevisitButton(canRevisit, txMode) {
@@ -1689,12 +1707,23 @@
     var showPendingBlocked = !!canRevisit && isVisitApprovalPending(txMode);
     var showBlocked = (inTransaction && txMode === 'release') || showPendingBlocked;
     var show = showActive || showBlocked;
-    if (isDealForkDock()) {
+    if (isActionBarDock()) {
+      // در نوار اکشن فقط بازدید مجدد فعال (مرحله فروش نهایی) دیده می‌شود
       revisitBtn.classList.toggle('hidden', !showActive);
-      revisitBtn.disabled = false;
       if (showActive) {
+        revisitBtn.removeAttribute('hidden');
+        revisitBtn.setAttribute('aria-hidden', 'false');
         delete revisitBtn.dataset.revisitBlocked;
         revisitBtn.setAttribute('aria-disabled', 'false');
+      } else {
+        revisitBtn.setAttribute('hidden', '');
+        revisitBtn.setAttribute('aria-hidden', 'true');
+      }
+      revisitBtn.disabled = false;
+      var dock = document.querySelector('.ld-fab-dock');
+      if (dock) {
+        if (txMode === 'deal') dock.setAttribute('data-deal-fork', '1');
+        else dock.removeAttribute('data-deal-fork');
       }
       syncFabDirectMode();
       return;
@@ -1782,11 +1811,12 @@
   function syncFabDirectMode() {
     var dock = document.querySelector('.ld-fab-dock');
     var trigger = document.getElementById('landFabTrigger');
-    if (!dock || !trigger) return;
-    if (isDealForkDock()) {
+    if (!dock) return;
+    if (isActionBarDock()) {
       dock.dataset.fabDirect = '0';
       return;
     }
+    if (!trigger) return;
     var count = countFabInteractiveItems();
     var callBtn = document.querySelector('.ld-fab-menu__items [data-land-open-contact]');
     var txBtn = document.getElementById('landTxToggleBtn');
@@ -1818,7 +1848,7 @@
   }
 
   function getPrimaryTxActionButton() {
-    if (isDealForkDock()) return null;
+    if (isActionBarDock()) return null;
     var txBtn = document.getElementById('landTxToggleBtn');
     if (!txBtn) return null;
     if (!txBtn.closest('.ld-fab-menu__item:not(.hidden)')) return null;
@@ -1877,7 +1907,7 @@
     var trigger = document.getElementById('landFabTrigger');
     if (!dock || !trigger || trigger.dataset.ldFabBound === '1') return;
     trigger.dataset.ldFabBound = '1';
-    if (isDealForkDock()) {
+    if (isActionBarDock()) {
       syncFabDirectMode();
       return;
     }
@@ -1969,18 +1999,24 @@
       btn.setAttribute('data-land-tx-status', status);
       var icon = btn.querySelector('.land-tx-icon');
       var item = btn.closest('.ld-fab-menu__item');
-      var label = (item && item.querySelector('.land-tx-label')) || document.querySelector('.land-tx-label');
+      var label = (item && item.querySelector('.land-tx-label')) ||
+        btn.querySelector('.land-tx-label') ||
+        document.querySelector('.land-tx-label');
       if (icon) icon.className = 'fas ' + cfg.icon + ' land-tx-icon';
-      if (label) {
-        label.textContent = (isDealForkDock() && mode === 'deal') ? 'معامله' : cfg.label;
-      }
+      if (label) label.textContent = cfg.label;
       btn.classList.remove(
         'ld-btn-tx', 'ld-btn-tx--release', 'ld-btn-tx--pending',
-        'ld-fab-menu__action--teal', 'ld-fab-menu__action--muted', 'ld-fab-menu__action--pending', 'ld-fab-menu__action--deal'
+        'ld-fab-menu__action--teal', 'ld-fab-menu__action--muted', 'ld-fab-menu__action--pending', 'ld-fab-menu__action--deal',
+        'ld-action-bar__btn--teal', 'ld-action-bar__btn--deal', 'ld-action-bar__btn--release', 'ld-action-bar__btn--pending'
       );
-      if (mode === 'release') {
+      var tone = actionBarToneForMode(mode);
+      if (isActionBarDock()) {
+        btn.classList.add('ld-action-bar__btn', 'ld-action-bar__btn--' + tone, 'ld-btn-tx');
+        if (mode === 'release') btn.classList.add('ld-btn-tx--release');
+        if (tone === 'pending') btn.classList.add('ld-btn-tx--pending');
+      } else if (mode === 'release') {
         btn.classList.add('ld-btn-tx--release', 'ld-fab-menu__action--muted');
-      } else if (mode === 'visit_pending' || mode === 'visit_done_pending' || mode === 'visit_commission_pending' || mode === 'deal_pending') {
+      } else if (tone === 'pending') {
         btn.classList.add('ld-btn-tx--pending', 'ld-fab-menu__action--pending');
       } else if (mode === 'deal') {
         btn.classList.add('ld-btn-tx', 'ld-fab-menu__action--deal');
@@ -2155,10 +2191,35 @@
   }
 
   function scheduleVisitModalRecovery() {
-    if (!shouldOfferVisitModal() && !readCanRevisitFlag()) return;
-    if (document.getElementById('landVisitModal')) return;
-    recoverVisitModal().then(function (modal) {
-      if (modal) rebindVisitModalHandlers();
+    /* no-op: فرم بازدید حذف شده؛ ثبت از چت مأموریت */
+  }
+
+  function initLandDetailChatCta() {
+    document.querySelectorAll('[data-ld-chat-cta]').forEach(function (btn) {
+      if (btn.getAttribute('data-ld-chat-bound') === '1') return;
+      btn.setAttribute('data-ld-chat-bound', '1');
+      function onChat(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var prompt = (btn.getAttribute('data-ld-chat-prompt') || '').trim();
+        var home = btn.getAttribute('data-ld-home-url') || '/express/partner/';
+        if (prompt) {
+          try {
+            sessionStorage.setItem('vinor_ai_home_prompt', prompt);
+            sessionStorage.setItem('vinor_ai_home_autosend', '1');
+          } catch (_) {}
+        }
+        if (typeof window.vinorExpressNavigate === 'function') {
+          window.vinorExpressNavigate(home);
+          return;
+        }
+        window.location.href = home;
+      }
+      btn.addEventListener('click', onChat);
+      addCleanup(function () {
+        btn.removeEventListener('click', onChat);
+        btn.removeAttribute('data-ld-chat-bound');
+      });
     });
   }
 
@@ -2480,7 +2541,7 @@
       var prevMode = mode;
       var prevStatus = root.dataset.txStatus || btn.getAttribute('data-land-tx-status') || 'active';
       var prevVisit = btn.getAttribute('data-visit-date') || '';
-      var optimisticMode = prevMode === 'release' ? 'deal' : (prevMode === 'deal' ? 'release' : 'visit');
+      var optimisticMode = prevMode === 'release' ? 'deal' : (prevMode === 'deal' ? 'deal_pending' : 'visit');
       var url = btn.getAttribute('data-land-tx-url');
       var confirmBtn = prevMode === 'deal'
         ? document.getElementById('landDealConfirmBtn')
@@ -2497,12 +2558,18 @@
 
       postLandAction(url, null, function (data) {
         var st = data.new_status || statusFromMode(optimisticMode);
-        var nextMode = data.tx_mode || (st === 'in_transaction' ? 'release' : (prevVisit ? 'deal' : 'visit'));
+        var nextMode = data.tx_mode || (st === 'in_transaction' ? 'deal_pending' : (st === 'sold' ? 'hidden' : (prevVisit ? 'deal' : 'visit')));
         var keepVisit = data.visit_date || prevVisit;
         var keepVisitJalali = data.visit_date_jalali || formatIsoToJalaliShort(keepVisit);
         applyTxMode(nextMode, keepVisit, keepVisitJalali, data.can_revisit);
         if (nextMode === 'deal_pending') initVisitStatusPoll(nextMode);
         showTxToast(data.message, false);
+        // نوار پایین (منتظر تأیید / بستن) از سرور رندر می‌شود
+        if (st === 'sold' || nextMode === 'hidden' || nextMode === 'deal_pending' || prevMode === 'release') {
+          setTimeout(function () {
+            try { window.location.reload(); } catch (_) {}
+          }, 500);
+        }
       }).catch(function (err) {
         applyTxMode(prevMode, prevVisit, formatIsoToJalaliShort(prevVisit), root.dataset.canRevisit === '1');
         root.dataset.txStatus = prevStatus;
@@ -2535,6 +2602,20 @@
 
     bindTxConfirm('landDealConfirmBtn', 'deal');
     bindTxConfirm('landReleaseConfirmBtn', 'release');
+
+    var cancelBtn = document.getElementById('landDealCancelBtn');
+    if (cancelBtn && cancelBtn.dataset.ldDealCancelBound !== '1') {
+      cancelBtn.dataset.ldDealCancelBound = '1';
+      function onDealCancel() {
+        if (cancelBtn.disabled || cancelBtn.dataset.busy === '1') return;
+        openLandModal('landReleaseModal');
+      }
+      cancelBtn.addEventListener('click', onDealCancel);
+      addCleanup(function () {
+        cancelBtn.removeEventListener('click', onDealCancel);
+        delete cancelBtn.dataset.ldDealCancelBound;
+      });
+    }
 
     function onClick() {
       if (btn.disabled || btn.dataset.busy === '1') return;
@@ -2632,27 +2713,26 @@
         return;
       }
       if (action === 'deal') {
-        // مرحله دوراهی: هر دو دکمه پایین صفحه هست — شیت معامله را خودکار باز نکن
-        if (isDealForkDock()) {
+        var btn = document.getElementById('landTxToggleBtn');
+        var mode = (btn && btn.getAttribute('data-land-tx-mode')) || '';
+        // نوار اکشن: شیت فروش نهایی را باز کن تا مسیر واضح باشد
+        if (mode === 'deal') {
+          openLandModal('landDealModal');
           focusDetailActionsAfterVisit();
           return;
         }
-        var btn = document.getElementById('landTxToggleBtn');
-        var mode = (btn && btn.getAttribute('data-land-tx-mode')) || '';
         var revisitBtn = document.getElementById('landRevisitBtn');
-        var revisitItem = revisitBtn && revisitBtn.closest('.ld-fab-menu__item:not(.hidden)');
+        var revisitVisible = revisitBtn && !revisitBtn.classList.contains('hidden') && !revisitBtn.hasAttribute('hidden');
         var canChooseRevisit = !!(
-          revisitItem &&
+          revisitVisible &&
           revisitBtn.dataset.revisitBlocked !== '1' &&
           revisitBtn.getAttribute('aria-disabled') !== 'true'
         );
-        if (canChooseRevisit && mode === 'deal') {
+        if (canChooseRevisit && !isActionBarDock()) {
           openFabMenu();
           return;
         }
-        if (mode === 'deal') {
-          openLandModal('landDealModal');
-        } else if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') {
+        if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') {
           btn.click();
         } else {
           openLandModal('landDealModal');
@@ -3022,21 +3102,17 @@
 
     hoistLandModalsSafe();
     hoistLandDetailFooter();
-    scheduleVisitModalRecovery();
+    // فرم‌های بازدید/معامله حذف شده‌اند — ثبت فقط از چت مأموریت
 
     initGallery(cfg);
     initVideoSound();
     initMoreMenu();
     initShare(cfg);
     initModals();
-    initVisitRequest();
-    initRevisitTriggers();
-    initTransactionToggle();
-    initFabMenu();
     initLandFlashes(cfg);
     initPartnerMarketing(cfg);
     initDescToggle();
-    consumeDeepLinkAction();
+    initLandDetailChatCta();
 
     if (typeof window.vinorSyncFavButtons === 'function') {
       try { window.vinorSyncFavButtons(root); } catch (e) { /* ignore */ }
@@ -3078,9 +3154,7 @@
     hoistLandDetailFooter();
     syncFooterSpacer();
     bindContactModalTel();
-    bindVisitSubmitHandler();
-    initFabMenu();
-    syncFabDirectMode();
+    initLandDetailChatCta();
   };
 
   if (!window.__vinorLandDetailBound) {

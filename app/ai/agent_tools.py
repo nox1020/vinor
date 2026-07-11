@@ -27,6 +27,9 @@ _MAX_SEARCH = 5
 TOOL_SEARCH = "search_lands"
 TOOL_NEXT = "suggest_next_action"
 TOOL_VISIT = "propose_visit_request"
+TOOL_COMPLETE_VISIT = "propose_complete_visit"
+TOOL_DEAL = "propose_deal"
+TOOL_RELEASE = "propose_release_deal"
 TOOL_LISTING = "draft_listing_copy"
 
 
@@ -40,14 +43,17 @@ def agent_system_hint(voice: str | None) -> str:
         )
     return (
         "ابزارها (اجباری وقتی لازم است): "
-        "1) search_lands — جستجوی فایل/ملک؛ در پاسخ نهایی [[LAND:کد]] بگذار. "
-        "2) suggest_next_action — کار بعدی واقعی داشبورد + نکته مربی فروش. "
-        "3) draft_listing_copy — متن آماده آگهی دیوار و کپشن اینستا برای یک فایل. "
-        "4) propose_visit_request — فقط پیشنهاد ثبت بازدید؛ ثبت نهایی فقط با تأیید کاربر در کارت. "
-        "وقتی کاربر آگهی/دیوار/اینستا/متن پست می‌خواهد حتماً draft_listing_copy را صدا بزن. "
-        "هرگز ادعا نکن بازدید ثبت شد مگر ابزار تأیید کاربر را بگوید. "
-        "اگر اطلاعات مشتری یا تاریخ ناقص است، اول بپرس؛ ابزار را با حدس پر نکن. "
-        "همکار را هل بده تا بفروشد: یک کار مشخص + پورسانت."
+        "1) search_lands — جستجوی فایل؛ در پاسخ [[LAND:کد]]. "
+        "2) suggest_next_action — کار بعدی داشبورد. "
+        "3) draft_listing_copy — متن دیوار/اینستا. "
+        "4) propose_visit_request — پیشنهاد بازدید (تأیید در کارت). "
+        "5) propose_complete_visit — پیشنهاد «بازدید انجام شد» (تأیید در کارت). "
+        "6) propose_deal — پیشنهاد معامله/فروش نهایی (تأیید در کارت). "
+        "7) propose_release_deal — پیشنهاد بستن/انصراف معامله در انتظار (تأیید در کارت). "
+        "همهٔ اکشن‌های فروش را از همین چت پیش ببر؛ کاربر را به صفحه فایل نفرست مگر برای دیدن عکس/جزئیات. "
+        "وقتی کاربر آگهی می‌خواهد draft_listing_copy را صدا بزن. "
+        "هرگز ادعا نکن ثبت شد مگر بعد از تأیید کارت. "
+        "اگر اطلاعات مشتری/تاریخ ناقص است اول بپرس."
     )
 
 
@@ -58,6 +64,9 @@ def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
         schemas.append(_schema_next())
         schemas.append(_schema_listing())
         schemas.append(_schema_visit())
+        schemas.append(_schema_complete_visit())
+        schemas.append(_schema_deal())
+        schemas.append(_schema_release())
     return schemas
 
 
@@ -131,8 +140,8 @@ def _schema_visit() -> dict[str, Any]:
         "function": {
             "name": TOOL_VISIT,
             "description": (
-                "آماده‌سازی پیشنهاد ثبت بازدید برای فایل اختصاصی همکار. "
-                "ثبت نهایی فقط پس از تأیید کاربر انجام می‌شود."
+                "آماده‌سازی پیشنهاد ثبت بازدید یا بازدید مجدد برای فایل مأموریت. "
+                "ثبت نهایی فقط پس از تأیید کاربر در کارت چت."
             ),
             "parameters": {
                 "type": "object",
@@ -156,6 +165,65 @@ def _schema_visit() -> dict[str, Any]:
                     "customer_last_name",
                     "customer_phone",
                 ],
+            },
+        },
+    }
+
+
+def _schema_complete_visit() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_COMPLETE_VISIT,
+            "description": (
+                "پیشنهاد ثبت «بازدید انجام شد» وقتی بازدید تأیید شده و همکار رفته. "
+                "ثبت نهایی با تأیید کارت در چت."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "land_code": {"type": "string", "description": "کد فایل"},
+                },
+                "required": ["land_code"],
+            },
+        },
+    }
+
+
+def _schema_deal() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_DEAL,
+            "description": (
+                "پیشنهاد ثبت معامله/فروش نهایی روی فایل مأموریت "
+                "(بازدید تکمیل‌شده لازم است). تأیید ادمین بعداً فایل را می‌بندد و پورسانت می‌دهد."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "land_code": {"type": "string", "description": "کد فایل"},
+                },
+                "required": ["land_code"],
+            },
+        },
+    }
+
+
+def _schema_release() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_RELEASE,
+            "description": (
+                "پیشنهاد بستن/انصراف از معامله در حال انتظار تأیید ادمین."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "land_code": {"type": "string", "description": "کد فایل"},
+                },
+                "required": ["land_code"],
             },
         },
     }
@@ -186,6 +254,18 @@ def run_tool(
             if (voice or "").strip().lower() == VOICE_PUBLIC:
                 return _denied("ثبت بازدید فقط برای همکار اکسپرس است.")
             return _tool_propose_visit(args, phone=phone)
+        if n == TOOL_COMPLETE_VISIT:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت انجام بازدید فقط برای همکار است.")
+            return _tool_propose_simple_tx(args, phone=phone, action_type="confirm_complete_visit")
+        if n == TOOL_DEAL:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت معامله فقط برای همکار است.")
+            return _tool_propose_simple_tx(args, phone=phone, action_type="confirm_deal")
+        if n == TOOL_RELEASE:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("بستن معامله فقط برای همکار است.")
+            return _tool_propose_simple_tx(args, phone=phone, action_type="confirm_release")
         return _denied(f"ابزار ناشناخته: {n}")
     except Exception as exc:
         try:
@@ -360,8 +440,9 @@ def _tool_suggest_next_action(*, phone: str) -> dict[str, Any]:
             "coach_land_code": coach_land_code,
             "stats": stats_bit,
             "instruction": (
-                "همین کار بعدی را اولویت بده. "
+                "همین کار بعدی را اولویت بده و از چت مأموریت جلو ببر. "
                 "اگر coach_tip هست یک جمله تشویقی اضافه کن. "
+                "برای ثبت بازدید/انجام بازدید/معامله از ابزارهای propose_* استفاده کن. "
                 "برای آگهی دیوار/اینستا از draft_listing_copy استفاده کن."
             ),
         }
@@ -610,6 +691,166 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     }
 
 
+_SIMPLE_TX_META = {
+    "confirm_complete_visit": {
+        "title": "تأیید: بازدید انجام شد",
+        "need_mode": ("visit_done",),
+        "tool_ok_modes": ("visit_done",),
+        "instruction": "کارت تأیید نمایش داده می‌شود. هنوز «بازدید انجام شد» ثبت نشده.",
+    },
+    "confirm_deal": {
+        "title": "تأیید معامله",
+        "need_mode": ("deal",),
+        "tool_ok_modes": ("deal",),
+        "instruction": "کارت تأیید معامله نمایش داده می‌شود. هنوز ثبت نشده؛ بعد از تأیید ادمین فایل بسته و پورسانت واریز می‌شود.",
+    },
+    "confirm_release": {
+        "title": "تأیید بستن معامله",
+        "need_mode": ("deal_pending", "release"),
+        "tool_ok_modes": ("deal_pending", "release"),
+        "instruction": "کارت بستن معامله نمایش داده می‌شود. هنوز لغو نشده.",
+    },
+}
+
+
+def _partner_tx_snapshot(phone: str, code: str) -> dict[str, Any]:
+    from app.express_partner.routes import _is_partner_approved
+    from app.express_partner.visit_requests import resolve_partner_land_tx_state
+    from app.utils.storage import (
+        load_express_assignments,
+        load_express_commissions,
+        load_express_partners,
+        load_express_visit_requests,
+        load_ads_cached,
+    )
+
+    me = (phone or "").strip()
+    code_s = str(code or "").strip()
+    if not me or not code_s:
+        return {"ok": False, "error": "کد فایل یا کاربر نامعتبر است."}
+
+    partners = load_express_partners() or []
+    profile = next((p for p in partners if str(p.get("phone")) == me), None)
+    if not _is_partner_approved(profile):
+        return {"ok": False, "error": "حساب همکاری هنوز تأیید نشده است."}
+
+    ctx = None
+    try:
+        from app.express_partner import routes as ep_routes
+        ctx = ep_routes._express_land_partner_ctx(code_s, me)
+    except Exception:
+        ctx = None
+    assignments = load_express_assignments() or []
+    if ctx is None:
+        mine = [
+            a for a in assignments
+            if isinstance(a, dict)
+            and str(a.get("partner_phone") or "").strip() == me
+            and str(a.get("land_code") or "").strip() == code_s
+        ]
+        if not mine:
+            return {"ok": False, "error": "این فایل در مأموریت/اختصاص شما نیست."}
+        gs = str(mine[0].get("status") or "active").strip().lower()
+    else:
+        gs = str(ctx.get("global_status") or "active").strip().lower()
+
+    visits = load_express_visit_requests() or []
+    commissions = load_express_commissions() or []
+    visit_commission_required = False
+    try:
+        from app.express_partner.routes import _visit_commission_required_for
+        visit_commission_required = bool(
+            _visit_commission_required_for(commissions, me, code_s)
+        )
+    except Exception:
+        pass
+
+    tx = resolve_partner_land_tx_state(
+        me_phone=me,
+        land_code=code_s,
+        assignments=assignments,
+        visit_requests=visits if isinstance(visits, list) else [],
+        is_partner_approved=True,
+        global_assignment_status=gs,
+        commissions=commissions if isinstance(commissions, list) else [],
+        visit_commission_required=visit_commission_required,
+    )
+    lands = load_ads_cached() or []
+    land = next((l for l in lands if str(l.get("code")) == code_s), None)
+    title = (land.get("title") if land else None) or code_s
+    return {
+        "ok": True,
+        "tx_mode": str(tx.get("tx_mode") or ""),
+        "land_title": str(title),
+        "land_code": code_s,
+        "visit_date": str(tx.get("visit_date") or ""),
+        "global_status": gs,
+    }
+
+
+def _tool_propose_simple_tx(
+    args: dict[str, Any], *, phone: str, action_type: str
+) -> dict[str, Any]:
+    meta = _SIMPLE_TX_META.get(action_type)
+    if not meta:
+        return _denied("نوع اقدام نامعتبر است.")
+    code = str(args.get("land_code") or "").strip()
+    snap = _partner_tx_snapshot(phone, code)
+    if not snap.get("ok"):
+        return {"ok": False, "model_result": {"ok": False, "error": snap.get("error")}}
+
+    mode = str(snap.get("tx_mode") or "")
+    ok_modes = meta.get("tool_ok_modes") or ()
+    if mode not in ok_modes:
+        hints = {
+            "confirm_complete_visit": "الان نمی‌شود «بازدید انجام شد» زد؛ باید بازدید تأییدشده در جریان باشد.",
+            "confirm_deal": "الان معامله فعال نیست؛ اول بازدید را کامل کن یا منتظر تأیید باش.",
+            "confirm_release": "معاملهٔ بازی برای بستن نیست.",
+        }
+        return {
+            "ok": False,
+            "model_result": {
+                "ok": False,
+                "error": hints.get(action_type, "این اقدام الان ممکن نیست."),
+                "tx_mode": mode,
+            },
+        }
+
+    me = (phone or "").strip()
+    payload = {
+        "land_code": code,
+        "land_title": snap.get("land_title"),
+        "visit_date": snap.get("visit_date"),
+    }
+    token = _store_pending_action(user_key=me, action_type=action_type, payload=payload)
+    lines = [
+        f"فایل: {payload.get('land_title')} ({code})",
+    ]
+    if payload.get("visit_date"):
+        lines.append(f"بازدید: {payload.get('visit_date')}")
+    ui = {
+        "type": action_type,
+        "token": token,
+        "title": meta["title"],
+        "lines": lines,
+        "status": "pending",
+        "land_code": code,
+    }
+    model = {
+        "ok": True,
+        "status": "needs_user_confirmation",
+        "land_code": code,
+        "tx_mode": mode,
+        "instruction": meta["instruction"],
+    }
+    return {
+        "ok": True,
+        "model_result": model,
+        "ui_action": ui,
+        "land_codes": [code],
+    }
+
+
 def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
     """اجرای قطعی ثبت بازدید پس از تأیید کاربر."""
     from app.express_partner.routes import _sync_visit_customer_to_club
@@ -627,8 +868,9 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         return {"ok": False, "error": "این پیشنهاد منقضی یا نامعتبر است."}
     if str(pending.get("user_key") or "") != me:
         return {"ok": False, "error": "دسترسی به این پیشنهاد ندارید."}
-    if str(pending.get("action_type") or "") != "confirm_visit":
-        return {"ok": False, "error": "نوع اقدام نامعتبر است."}
+    action_type = str(pending.get("action_type") or "")
+    if action_type != "confirm_visit":
+        return confirm_action_from_token(phone=phone, token=token)
 
     payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
     code = str(payload.get("land_code") or "").strip()
@@ -703,6 +945,141 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
     }
 
 
+def confirm_action_from_token(*, phone: str, token: str) -> dict[str, Any]:
+    """تأیید عمومی اکشن‌های چت (بازدید انجام شد / معامله / بستن)."""
+    me = (phone or "").strip()
+    pending = _load_pending_action(token)
+    if not pending:
+        return {"ok": False, "error": "این پیشنهاد منقضی یا نامعتبر است."}
+    if str(pending.get("user_key") or "") != me:
+        return {"ok": False, "error": "دسترسی به این پیشنهاد ندارید."}
+    action_type = str(pending.get("action_type") or "")
+    if action_type == "confirm_visit":
+        return confirm_visit_from_token(phone=phone, token=token)
+    if action_type not in _SIMPLE_TX_META:
+        return {"ok": False, "error": "نوع اقدام نامعتبر است."}
+
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    code = str(payload.get("land_code") or "").strip()
+    snap = _partner_tx_snapshot(me, code)
+    if not snap.get("ok"):
+        return {"ok": False, "error": str(snap.get("error") or "امکان اجرا نیست.")}
+    mode = str(snap.get("tx_mode") or "")
+    ok_modes = _SIMPLE_TX_META[action_type].get("tool_ok_modes") or ()
+    if mode not in ok_modes:
+        return {"ok": False, "error": "وضعیت فایل عوض شده؛ این اقدام دیگر ممکن نیست."}
+
+    if action_type == "confirm_complete_visit":
+        out = _execute_complete_visit(me, code)
+    elif action_type == "confirm_deal":
+        out = _execute_start_deal(me, code)
+    else:
+        out = _execute_release_deal(me, code)
+
+    if out.get("ok"):
+        _consume_pending_action(token)
+    return out
+
+
+def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
+    from app.express_partner.visit_requests import request_visit_done_confirmation
+    from app.utils.storage import load_express_visit_requests, save_express_visit_requests
+
+    visits = load_express_visit_requests() or []
+    if not isinstance(visits, list):
+        visits = []
+    rec, err = request_visit_done_confirmation(visits, phone, code)
+    if err == "not_approved":
+        return {"ok": False, "error": "اول بازدید باید توسط ادمین تأیید شود."}
+    if not rec:
+        return {"ok": False, "error": "ثبت انجام بازدید ممکن نشد."}
+    save_express_visit_requests(visits)
+    msg = "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است."
+    if err == "already_pending":
+        msg = "قبلاً ثبت شده و منتظر تأیید ادمین است."
+    return {"ok": True, "message": msg, "land_code": code}
+
+
+def _execute_start_deal(phone: str, code: str) -> dict[str, Any]:
+    """شروع معامله از چت — همان منطق mark_in_transaction با درخواست AJAX."""
+    from flask import session
+
+    from app.express_partner.routes import mark_in_transaction
+
+    me = (phone or "").strip()
+    code_s = str(code or "").strip()
+    with current_app.test_request_context(
+        f"/express/partner/mark-in-transaction/{code_s}",
+        method="POST",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    ):
+        session["user_phone"] = me
+        try:
+            resp = mark_in_transaction(code_s)
+        except Exception as exc:
+            current_app.logger.exception("chat deal execute failed: %s", exc)
+            return {"ok": False, "error": "ثبت معامله ممکن نشد."}
+    data = {}
+    try:
+        data = resp.get_json(silent=True) or {}
+    except Exception:
+        try:
+            status = getattr(resp, "status_code", 500)
+            if status and int(status) >= 400:
+                return {"ok": False, "error": "ثبت معامله ممکن نشد."}
+        except Exception:
+            pass
+        return {
+            "ok": True,
+            "message": "معامله ثبت شد. پس از تأیید ادمین فایل بسته و پورسانت به کیف پول می‌رود.",
+            "land_code": code_s,
+        }
+    if not data.get("success"):
+        return {"ok": False, "error": str(data.get("message") or "ثبت معامله ممکن نشد.")}
+    return {
+        "ok": True,
+        "message": str(
+            data.get("message")
+            or "معامله ثبت شد. پس از تأیید ادمین، فایل بسته و پورسانت به کیف پول اضافه می‌شود."
+        ),
+        "land_code": code_s,
+        "tx_mode": data.get("tx_mode"),
+    }
+
+
+def _execute_release_deal(phone: str, code: str) -> dict[str, Any]:
+    from flask import session
+
+    from app.express_partner.routes import mark_in_transaction
+
+    me = (phone or "").strip()
+    code_s = str(code or "").strip()
+    with current_app.test_request_context(
+        f"/express/partner/mark-in-transaction/{code_s}",
+        method="POST",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    ):
+        session["user_phone"] = me
+        try:
+            resp = mark_in_transaction(code_s)
+        except Exception as exc:
+            current_app.logger.exception("chat release execute failed: %s", exc)
+            return {"ok": False, "error": "بستن معامله ممکن نشد."}
+    data = {}
+    try:
+        data = resp.get_json(silent=True) or {}
+    except Exception:
+        return {"ok": True, "message": "معامله بسته شد.", "land_code": code_s}
+    if not data.get("success"):
+        return {"ok": False, "error": str(data.get("message") or "بستن معامله ممکن نشد.")}
+    return {
+        "ok": True,
+        "message": str(data.get("message") or "معامله بسته شد."),
+        "land_code": code_s,
+        "tx_mode": data.get("tx_mode"),
+    }
+
+
 def cancel_pending_action(*, phone: str, token: str) -> dict[str, Any]:
     pending = _load_pending_action(token)
     if not pending:
@@ -721,8 +1098,13 @@ def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
         if not isinstance(action, dict):
             continue
         atype = str(action.get("type") or "")
-        if atype == "confirm_visit":
-            parts.append(_render_confirm_visit_card(action))
+        if atype in (
+            "confirm_visit",
+            "confirm_complete_visit",
+            "confirm_deal",
+            "confirm_release",
+        ):
+            parts.append(_render_confirm_action_card(action))
         elif atype == "next_action":
             parts.append(_render_next_action_card(action))
     if not parts:
@@ -734,9 +1116,16 @@ def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
     )
 
 
-def _render_confirm_visit_card(action: dict[str, Any]) -> str:
+def _render_confirm_action_card(action: dict[str, Any]) -> str:
+    atype = str(action.get("type") or "confirm_visit")
     token = str(action.get("token") or "").strip()
-    title = escape(str(action.get("title") or "تأیید ثبت بازدید"))
+    defaults = {
+        "confirm_visit": "تأیید ثبت بازدید",
+        "confirm_complete_visit": "تأیید: بازدید انجام شد",
+        "confirm_deal": "تأیید معامله",
+        "confirm_release": "تأیید بستن معامله",
+    }
+    title = escape(str(action.get("title") or defaults.get(atype) or "تأیید اقدام"))
     status = str(action.get("status") or "pending")
     if status == "pending" and token and _load_pending_action(token) is None:
         status = "expired"
@@ -746,7 +1135,7 @@ def _render_confirm_visit_card(action: dict[str, Any]) -> str:
     )
     if status != "pending" or not token:
         if status == "confirmed":
-            note = "بازدید ثبت شد."
+            note = "انجام شد."
         elif status == "cancelled":
             note = "انصراف داده شد."
         else:
@@ -759,7 +1148,7 @@ def _render_confirm_visit_card(action: dict[str, Any]) -> str:
             f"</div>"
         )
     return (
-        f'<div class="ai-agent-card" data-agent-type="confirm_visit" data-token="{escape(token)}">'
+        f'<div class="ai-agent-card" data-agent-type="{escape(atype)}" data-token="{escape(token)}">'
         f'<div class="ai-agent-card__title">{title}</div>'
         f'<div class="ai-agent-card__body">{body}</div>'
         f'<div class="ai-agent-card__actions">'
@@ -769,6 +1158,10 @@ def _render_confirm_visit_card(action: dict[str, Any]) -> str:
         f'<div class="ai-agent-card__note hidden" data-agent-note></div>'
         f"</div>"
     )
+
+
+def _render_confirm_visit_card(action: dict[str, Any]) -> str:
+    return _render_confirm_action_card(action)
 
 
 def _render_next_action_card(action: dict[str, Any]) -> str:

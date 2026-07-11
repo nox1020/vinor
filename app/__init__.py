@@ -577,6 +577,8 @@ def create_app() -> Flask:
             "express_partner.ai_clear",
             "express_partner.ai_switch_thread",
             "express_partner.ai_delete_thread",
+            "express_partner.ai_agent_confirm",
+            "express_partner.ai_agent_cancel",
             "express_partner.api_favorites_cards",
             "express_partner.create_visit_request",
             "express_partner.mark_in_transaction",

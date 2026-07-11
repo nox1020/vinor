@@ -82,11 +82,11 @@
             <input type="hidden" name="visit_vid" value="{{ v.id }}">
             <button type="submit"
                     class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">
-              تأیید
+              تأیید فروش و بستن فایل
             </button>
           </form>
           <form method="post" action="{{ url_for('admin.express_commission_reject', cid=step.commission_id) }}"
-                onsubmit="return confirm('رد شود؟');">
+                onsubmit="return confirm('فروش رد شود؟');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="filter" value="pending">
             <input type="hidden" name="return_to" value="visit_requests">

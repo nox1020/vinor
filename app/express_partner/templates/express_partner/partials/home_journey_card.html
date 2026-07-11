@@ -1,7 +1,5 @@
-{# کارت سفر فایل — بالای خانه (ثابت)؛ چت زیر آن اسکرول می‌شود #}
-{# Expects: card (dict) with code, title, image_url, detail_url, city, location, price_total,
-   commission_amount, stage_label, funnel_steps[{key,label,icon,state}], cta_label, cta_url, cta_icon,
-   more_url #}
+{# کارت سفر فایل — بالای خانه؛ CTA اکشن فروش از چت مأموریت #}
+{# Expects: card with code, title, detail_url, cta_chat_prompt (preferred), cta_label, coach_prompt, ... #}
 {% if card %}
 {% set loc = ([card.city, card.location]|select|join(' ')) if (card.city or card.location) else '' %}
 {% set steps = card.funnel_steps|default([]) %}
@@ -323,64 +321,74 @@
     {% if card.coach_prompt %}
     <button type="button"
             class="vn-journey-card__coach"
-            data-vn-coach-prompt="{{ card.coach_prompt|e }}"
+            data-vn-chat-prompt="{{ card.coach_prompt|e }}"
             aria-label="راهنمای فروش از AI">
       <i class="fas fa-robot" aria-hidden="true"></i>
     </button>
     {% endif %}
+    {% if card.cta_chat_prompt %}
+    <button type="button"
+            class="vn-journey-card__cta"
+            data-vn-chat-prompt="{{ card.cta_chat_prompt|e }}">
+      <i class="fas {{ card.cta_icon|default('fa-comments') }}" aria-hidden="true"></i>
+      {{ card.cta_label|default('ادامه در چت') }}
+    </button>
+    {% else %}
     <a href="{{ card.cta_url or card.detail_url }}"
        {% set _cta = (card.cta_url or card.detail_url or '')|string %}
        {% if _cta.startswith('tel:') or _cta.startswith('mailto:') or _cta.startswith('sms:') %}
        data-vinor-direct-action="1"
-       {% elif 'action=' in _cta %}
-       data-vinor-express-nav
-       data-vinor-direct-action="tx"
        {% else %}data-vinor-express-nav{% endif %}
        class="vn-journey-card__cta">
       <i class="fas {{ card.cta_icon|default('fa-calendar-days') }}" aria-hidden="true"></i>
       {{ card.cta_label|default('درخواست بازدید') }}
     </a>
+    {% endif %}
   </div>
 </article>
-{% if card.coach_prompt %}
+{% if card.coach_prompt or card.cta_chat_prompt %}
 <script>
 (function () {
-  function wireCoach() {
-    var btn = document.querySelector('[data-vn-coach-prompt]');
-    if (!btn || btn.getAttribute('data-wired') === '1') return;
-    btn.setAttribute('data-wired', '1');
-    btn.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      var prompt = btn.getAttribute('data-vn-coach-prompt') || '';
-      if (!prompt) return;
-      var input = document.getElementById('aiInput');
-      var form = document.getElementById('aiChatForm');
-      if (!input || !form) {
-        try {
-          sessionStorage.setItem('vinor_ai_home_prompt', prompt);
-          sessionStorage.setItem('vinor_ai_home_autosend', '1');
-        } catch (_) {}
-        return;
-      }
-      input.value = prompt;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
+  function sendChatPrompt(prompt) {
+    prompt = (prompt || '').trim();
+    if (!prompt) return;
+    var input = document.getElementById('aiInput');
+    var form = document.getElementById('aiChatForm');
+    if (!input || !form) {
       try {
-        var scroll = document.getElementById('vnHomeScroll');
-        if (scroll) scroll.scrollTop = scroll.scrollHeight;
+        sessionStorage.setItem('vinor_ai_home_prompt', prompt);
+        sessionStorage.setItem('vinor_ai_home_autosend', '1');
       } catch (_) {}
-      setTimeout(function () {
-        try {
-          if (typeof form.requestSubmit === 'function') form.requestSubmit();
-          else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        } catch (_) {}
-      }, 80);
+      return;
+    }
+    input.value = prompt;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    try {
+      var scroll = document.getElementById('vnHomeScroll');
+      if (scroll) scroll.scrollTop = scroll.scrollHeight;
+    } catch (_) {}
+    setTimeout(function () {
+      try {
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      } catch (_) {}
+    }, 80);
+  }
+  function wireChatPrompts() {
+    document.querySelectorAll('[data-vn-chat-prompt]').forEach(function (btn) {
+      if (btn.getAttribute('data-wired') === '1') return;
+      btn.setAttribute('data-wired', '1');
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        sendChatPrompt(btn.getAttribute('data-vn-chat-prompt') || '');
+      });
     });
   }
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', wireCoach);
+    document.addEventListener('DOMContentLoaded', wireChatPrompts);
   } else {
-    wireCoach();
+    wireChatPrompts();
   }
 })();
 </script>
