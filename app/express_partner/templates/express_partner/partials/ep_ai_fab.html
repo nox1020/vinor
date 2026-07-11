@@ -190,7 +190,10 @@
     var fab = document.getElementById('epAiFab');
     if (!fab) return;
     var path = normPath(window.location.pathname);
-    var show = !!MAIN[path] && !!document.getElementById('aiHomeLayer');
+    var hasLayer = !!document.getElementById('aiHomeLayer');
+    var hasInline = !!document.getElementById('aiHomeInline');
+    /* اینلاین خانه = چت همیشه روی صفحه؛ FAB فقط برای لایه تمام‌صفحه */
+    var show = !!MAIN[path] && hasLayer && !hasInline;
     if (show && document.documentElement.classList.contains('vinor-ai-open')) {
       show = false;
     }

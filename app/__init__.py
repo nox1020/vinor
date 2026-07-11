@@ -761,6 +761,12 @@ def create_app() -> Flask:
         app.logger.warning("Celebration SMS scheduler not started: %s", e)
 
     try:
+        from app.express_partner.sales_coach import schedule_sales_coach_nudge
+        schedule_sales_coach_nudge(app)
+    except Exception as e:
+        app.logger.warning("Sales coach nudge scheduler not started: %s", e)
+
+    try:
         from admin.sms_scheduled import schedule_admin_sms_jobs
         schedule_admin_sms_jobs(app)
     except Exception as e:

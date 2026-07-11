@@ -5,119 +5,84 @@
 {% include 'express_partner/partials/home_page_styles.html' %}
 
 <div id="homeDashboardPage"
-     class="home-dashboard-page min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16"
+     class="home-dashboard-page{% if home_ai_enabled|default(false) %} home-dashboard-page--ai{% endif %} min-h-[100dvh] bg-[#030712]{% if not home_ai_enabled|default(false) %} pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16{% endif %} text-zinc-100"
      data-vinor-home-page>
   {% set menu_href = url_for('express_partner.home') %}
   {% set profile_drawer = true %}
   {% include 'express_partner/partials/ep_header_float_actions.html' %}
 
-  <div class="mx-auto w-full max-w-lg">
+  <div class="vn-home-shell mx-auto flex w-full max-w-lg flex-col">
+    <div class="vn-home-top">
 
-    {% if not is_approved|default(false) %}
-    <div class="vn-home-guest-strip px-3 pb-2 sm:px-6">
-      {% include 'express_partner/partials/dashboard_guest_coop_cta.html' %}
-    </div>
-    {% endif %}
-
-    {% if me_phone %}
-
-    {% if partner_name and is_approved|default(false) %}
-    <header class="vn-home-greet">
-      <div class="vn-home-greet__body">
-        <p class="vn-home-greet__sub">سلام {{ partner_name }}</p>
-        <h1 class="vn-home-greet__title">{% if urgent_actions %}کار بعدی شما{% else %}امروز آرام است{% endif %}</h1>
+      {% if not is_approved|default(false) %}
+      <div class="vn-home-guest-strip px-3 pb-2 sm:px-6">
+        {% include 'express_partner/partials/dashboard_guest_coop_cta.html' %}
       </div>
-    </header>
-    {% endif %}
-
-    <div class="vn-home-feed">
-
-      {% if urgent_actions %}
-      <section class="vn-home-urgent" aria-label="کار بعدی" data-tour="home-urgent">
-        <div class="vn-home-section-head">
-          <h2 class="vn-home-section-head__title">کار بعدی</h2>
-          <span class="vn-home-urgent-hint">اولویت اول شما</span>
-        </div>
-        <div class="vn-home-urgent-list">
-          {% set action = urgent_actions[0] %}
-          <a href="{{ action.url }}"
-             {% if action.url.startswith('tel:') %}{% else %}data-vinor-express-nav{% endif %}
-             class="vn-home-urgent-row vn-home-urgent-row--{{ action.tone|default('red') }} vn-home-urgent-row--focus">
-            <span class="vn-home-urgent-row__step" aria-hidden="true">۱</span>
-            <span class="vn-home-urgent-row__body">
-              <span class="vn-home-urgent-row__title">{{ action.title }}</span>
-              {% if action.subtitle %}
-              <span class="vn-home-urgent-row__sub">{{ action.subtitle }}</span>
-              {% endif %}
-            </span>
-            <span class="vn-home-urgent-row__cta">{{ action.cta|default('برو') }}</span>
-          </a>
-        </div>
-      </section>
-      {% elif is_approved|default(false) %}
-      <section class="vn-home-empty" aria-label="بدون کار فوری" data-tour="home-urgent">
-        <div class="vn-home-empty__body">
-          <p class="vn-home-empty__title">کار فوری نداری</p>
-          <p class="vn-home-empty__sub">{% if suggested_files %}از پیشنهاد امروز شروع کن{% else %}می‌تونی فایل‌ها را مرور کنی یا از Vinor AI بپرسی{% endif %}</p>
-        </div>
-        {% if not suggested_files %}
-        <a href="{{ url_for('express_partner.files') }}"
-           data-vinor-express-nav
-           class="vn-home-empty__cta">مشاهده فایل‌ها</a>
-        {% endif %}
-      </section>
       {% endif %}
 
-      {% if suggested_files %}
-      <section aria-label="فایل‌های پیشنهادی امروز" data-tour="home-suggest">
-        <div class="vn-home-section-head">
-          <h2 class="vn-home-section-head__title">پیشنهاد امروز</h2>
+      {% if me_phone %}
+      {% set card = journey_card or (suggested_files[0] if suggested_files else none) %}
+      {% if card %}
+        {% include 'express_partner/partials/home_journey_card.html' %}
+      {% elif is_approved|default(false) %}
+      <div class="vn-home-feed">
+        <section class="vn-home-empty" aria-label="بدون فایل پیشنهادی" data-tour="home-urgent">
+          <div class="vn-home-empty__body">
+            <p class="vn-home-empty__title">فایل آماده‌ای نیست</p>
+            <p class="vn-home-empty__sub">از فایل‌ها شروع کن یا از Vinor AI بپرس</p>
+          </div>
           <a href="{{ url_for('express_partner.files') }}"
              data-vinor-express-nav
-             class="vn-home-section-head__link">همه فایل‌ها</a>
-        </div>
-        {% set file = suggested_files[0] %}
-        <a href="{{ file.detail_url }}"
-           data-vinor-express-nav
-           class="vn-home-file-row">
-          <div class="vn-home-file-row__text">
-            <div>
-              <h3 class="vn-home-file-row__title">{{ file.title }}</h3>
-              {% if file.commission_amount and is_approved %}
-              <p class="vn-home-file-row__meta vn-home-file-row__comm">
-                پورسانت {{ file.commission_amount|toman(false) }} تومان
-              </p>
-              {% endif %}
-            </div>
-            <span class="vn-home-file-row__cta">شروع فروش</span>
-          </div>
-          <div class="vn-home-file-row__thumb" aria-hidden="true">
-            <div class="vn-home-file-row__thumb-inner">
-              {% if file.image_url %}
-              <img src="{{ file.image_url }}" alt="" loading="lazy" decoding="async">
-              {% else %}
-              <div class="grid h-full place-items-center text-[11px] font-semibold text-zinc-600">- V -</div>
-              {% endif %}
-            </div>
-          </div>
-        </a>
-      </section>
+             class="vn-home-empty__cta">مشاهده فایل‌ها</a>
+        </section>
+      </div>
       {% endif %}
-
+      {% endif %}
     </div>
+
+    <div id="vnHomeScroll" class="vn-home-scroll">
+      {% include 'express_partner/partials/ai_chat_inline.html' %}
+    </div>
+
+    {% if home_ai_enabled|default(false) %}
+    {% set chat_mode = 'home-inline' %}
+    {% include 'express_partner/partials/ai_chat_composer.html' %}
     {% endif %}
   </div>
 </div>
 
 {% include 'express_partner/partials/partner_tab_footer.html' %}
 {% include 'express_partner/partials/profile_drawer.html' %}
-{% include 'express_partner/partials/ai_chat_layer.html' %}
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=20"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=27"></script>
+<script>
+(function () {
+  try {
+    var draft = sessionStorage.getItem('vinor_ai_home_prompt') || '';
+    if (!draft) return;
+    var input = document.getElementById('aiInput');
+    if (!input) return;
+    input.value = draft;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    sessionStorage.removeItem('vinor_ai_home_prompt');
+    var autosend = sessionStorage.getItem('vinor_ai_home_autosend') === '1';
+    if (!autosend) return;
+    sessionStorage.removeItem('vinor_ai_home_autosend');
+    var form = document.getElementById('aiChatForm');
+    if (!form) return;
+    setTimeout(function () {
+      try {
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      } catch (_) {}
+    }, 200);
+  } catch (_) {}
+})();
+</script>
 {% endif %}
 {% endblock %}

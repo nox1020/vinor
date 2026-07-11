@@ -6,8 +6,185 @@
 {% block content %}
 
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+  <style>
+    #profileEditPage {
+      --pe-bg: #171717;
+      --pe-surface: #212121;
+      --pe-hover: rgba(255, 255, 255, 0.06);
+      --pe-border: rgba(255, 255, 255, 0.08);
+      --pe-text: #ececec;
+      --pe-muted: #a0a0a0;
+      background: var(--pe-bg);
+      color: var(--pe-text);
+    }
+    #profileEditPage .pe-shell {
+      max-width: 28rem;
+      margin-inline: auto;
+      padding: 0.75rem 0.85rem 1.5rem;
+    }
+    #profileEditPage .pe-avatar-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.5rem 0 1.25rem;
+    }
+    #profileEditPage #avatarEditTrigger {
+      width: 5.5rem;
+      height: 5.5rem;
+      border-radius: 9999px;
+      border: 1px solid var(--pe-border);
+      background: var(--pe-surface);
+      box-shadow: none;
+      overflow: hidden;
+      position: relative;
+      flex-shrink: 0;
+    }
+    #profileEditPage #avatarEditTrigger:active {
+      transform: scale(0.98);
+    }
+    #profileEditPage .pe-avatar-hint {
+      margin-top: 0.65rem;
+      font-size: 0.75rem;
+      color: var(--pe-muted);
+      text-align: center;
+    }
+    #profileEditPage .pe-group {
+      border-radius: 0.85rem;
+      background: var(--pe-surface);
+      border: 1px solid var(--pe-border);
+      overflow: hidden;
+    }
+    #profileEditPage .pe-group + .pe-group {
+      margin-top: 0.75rem;
+    }
+    #profileEditPage .pe-row {
+      padding: 0.85rem 0.95rem;
+      border-bottom: 1px solid var(--pe-border);
+    }
+    #profileEditPage .pe-row:last-child {
+      border-bottom: 0;
+    }
+    #profileEditPage .pe-label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--pe-muted);
+      text-align: right;
+    }
+    #profileEditPage .pe-input,
+    #profileEditPage .pe-trigger,
+    #profileEditPage #bioInput {
+      width: 100%;
+      border-radius: 0.65rem;
+      border: 1px solid transparent;
+      background: rgba(0, 0, 0, 0.28);
+      color: var(--pe-text);
+      font-size: 0.875rem;
+      padding: 0.75rem 0.85rem;
+      outline: none;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    #profileEditPage .pe-input::placeholder,
+    #profileEditPage #bioInput::placeholder {
+      color: #717171;
+    }
+    #profileEditPage .pe-input:focus,
+    #profileEditPage .pe-trigger:focus,
+    #profileEditPage #bioInput:focus {
+      border-color: rgba(255, 255, 255, 0.18);
+      background: rgba(0, 0, 0, 0.38);
+      box-shadow: none;
+    }
+    #profileEditPage .pe-input[readonly] {
+      color: var(--pe-muted);
+      cursor: not-allowed;
+      opacity: 0.9;
+    }
+    #profileEditPage .pe-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      text-align: right;
+    }
+    #profileEditPage .pe-trigger:hover {
+      background: rgba(0, 0, 0, 0.36);
+    }
+    #profileEditPage .pe-hint {
+      margin-top: 0.4rem;
+      font-size: 0.6875rem;
+      color: #737373;
+      text-align: right;
+    }
+    #profileEditPage .pe-bio-wrap {
+      position: relative;
+    }
+    #profileEditPage #bioInput {
+      resize: none;
+      min-height: 7rem;
+      padding-bottom: 1.75rem;
+    }
+    #profileEditPage #bioCounter {
+      position: absolute;
+      bottom: 0.55rem;
+      left: 0.75rem;
+      font-size: 0.6875rem;
+      color: var(--pe-muted);
+      pointer-events: none;
+    }
+    #profileEditPage .pe-danger {
+      margin-top: 1rem;
+      border-radius: 0.85rem;
+      border: 1px solid rgba(244, 63, 94, 0.22);
+      background: rgba(244, 63, 94, 0.06);
+      overflow: hidden;
+    }
+    #profileEditPage .pe-danger summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.95rem 1rem;
+      text-align: right;
+    }
+    #profileEditPage .pe-danger summary::-webkit-details-marker { display: none; }
+    #profileEditPage .pe-danger__title {
+      font-size: 0.875rem;
+      font-weight: 650;
+      color: #fda4af;
+    }
+    #profileEditPage .pe-danger__sub {
+      margin-top: 0.2rem;
+      font-size: 0.6875rem;
+      color: rgba(253, 164, 175, 0.65);
+    }
+    #profileEditPage .pe-danger__body {
+      border-top: 1px solid rgba(244, 63, 94, 0.18);
+      padding: 0.75rem 1rem 1rem;
+    }
+    #profileEditPage #deleteAccountOpen {
+      width: 100%;
+      border-radius: 0.7rem;
+      border: 1px solid rgba(244, 63, 94, 0.35);
+      background: rgba(244, 63, 94, 0.12);
+      color: #fecdd3;
+      font-size: 0.8125rem;
+      font-weight: 650;
+      padding: 0.75rem 1rem;
+    }
+    #profileEditPage #deleteAccountOpen:hover {
+      background: rgba(244, 63, 94, 0.18);
+    }
+    #profileEditHeader .ep-partner-header-btn--primary:disabled {
+      opacity: 0.35;
+    }
+  </style>
+
   {{ ep_header_start(id='profileEditHeader') }}
-  {% call ep_header_row('ویرایش پروفایل', url_for('express_partner.home', menu=1), inner_class='max-w-lg mx-auto w-full lg:max-w-2xl') %}
+  {% call ep_header_row('ویرایش پروفایل', url_for('express_partner.home', menu=1), inner_class='max-w-lg mx-auto w-full') %}
     <button type="button"
             id="profileEditSaveBtn"
             disabled
@@ -18,24 +195,21 @@
   {% endcall %}
   {{ ep_header_end() }}
 
-  <main id="profileEditPage" class="partner-page-scroll-pad min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
-    <div class="mx-auto max-w-lg px-4 pb-6 lg:max-w-2xl">
+  <main id="profileEditPage" class="partner-page-scroll-pad min-h-[100dvh] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
+    <div class="pe-shell">
 
       {% with messages = get_flashed_messages(with_categories=true, category_filter=['profile']) %}
       {% include 'express_partner/partials/flash_alerts.html' %}
       {% endwith %}
 
-      {# آواتار — آپلود جدا؛ ضربه روی تصویر = انتخاب فایل #}
-      <form id="avatarEditForm" method="post" action="{{ url_for('express_partner.profile_avatar_upload') }}" enctype="multipart/form-data" class="mb-5">
+      <form id="avatarEditForm" method="post" action="{{ url_for('express_partner.profile_avatar_upload') }}" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="next" value="{{ url_for('express_partner.profile_edit') }}">
         <input id="avatarInputCamera" name="avatar" type="file" accept="image/*" capture="environment" class="hidden">
         <input id="avatarInputLibrary" name="avatar" type="file" accept="image/*" class="hidden">
 
-        <div class="flex flex-col items-center">
-          <button type="button" id="avatarEditTrigger"
-                  class="relative h-28 w-28 shrink-0 overflow-hidden rounded-full border-2 border-white/10 bg-[#0a1018] shadow-lg ring-1 ring-white/5 transition active:scale-[0.98] sm:h-32 sm:w-32"
-                  title="تغییر عکس پروفایل">
+        <div class="pe-avatar-wrap">
+          <button type="button" id="avatarEditTrigger" title="تغییر عکس پروفایل" aria-label="تغییر عکس پروفایل">
             {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
             {% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
             <img id="avatarPreviewImg"
@@ -46,11 +220,11 @@
                  referrerpolicy="no-referrer"
                  onerror="this.classList.add('hidden');var f=document.getElementById('avatarPreviewFallback');if(f)f.classList.remove('hidden');">
             <span id="avatarPreviewFallback"
-                  class="flex h-full w-full items-center justify-center text-2xl font-black text-zinc-500 sm:text-3xl {% if _avatar %}hidden{% endif %}">
+                  class="flex h-full w-full items-center justify-center text-xl font-bold text-zinc-500 {% if _avatar %}hidden{% endif %}">
               {{ me_name|avatar_initials }}
             </span>
             <span id="avatarUploading" class="absolute inset-0 hidden items-center justify-center bg-black/50">
-              <span class="h-8 w-8 rounded-full border-2 border-white/40 border-t-white animate-spin"></span>
+              <span class="h-7 w-7 rounded-full border-2 border-white/40 border-t-white animate-spin"></span>
             </span>
           </button>
           {% if _avatar_url %}
@@ -62,103 +236,72 @@
           })();
           </script>
           {% endif %}
-          <p class="mt-3 max-w-xs text-center text-[11px] leading-relaxed text-zinc-500">
-            برای تغییر عکس پروفایل، روی تصویر ضربه بزنید
-          </p>
+          <p class="pe-avatar-hint">برای تغییر عکس، روی تصویر بزنید</p>
         </div>
       </form>
 
-      <div id="profileEditForm" class="space-y-4">
+      <div id="profileEditForm">
+        <section class="pe-group" aria-label="اطلاعات اصلی">
+          <div class="pe-row">
+            <label for="profileName" class="pe-label">نام و نام خانوادگی</label>
+            <input id="profileName" type="text" name="name" value="{{ me_name }}" maxlength="60" autocomplete="name"
+                   class="pe-input" placeholder="نام و نام خانوادگی">
+          </div>
 
-        <section class="rounded-2xl border border-white/10 bg-[#12181f] p-4 shadow-xl shadow-black/20 sm:p-5">
-          <div class="space-y-5">
+          <div class="pe-row">
+            <label class="pe-label">شماره موبایل</label>
+            <input type="text" readonly tabindex="-1" dir="ltr" class="pe-input" value="{{ me_phone }}">
+            <p class="pe-hint">شماره موبایل قابل تغییر نیست</p>
+          </div>
 
-            <div>
-              <label for="profileName" class="mb-2 flex items-center justify-end gap-2 text-xs font-semibold text-zinc-300 sm:text-sm">
-                <span>نام و نام خانوادگی</span>
-                <i class="fas fa-user text-zinc-500" aria-hidden="true"></i>
-              </label>
-              <div class="relative">
-                <input id="profileName" type="text" name="name" value="{{ me_name }}" maxlength="60" autocomplete="name"
-                       class="w-full rounded-xl border border-white/10 bg-[#0a1018] py-3 pl-3 pr-3 text-sm text-white placeholder-zinc-600 outline-none transition focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 sm:text-base"
-                       placeholder="نام و نام خانوادگی">
-              </div>
-            </div>
+          <div class="pe-row">
+            <span class="pe-label">شهر فعالیت</span>
+            <input type="hidden" name="city" id="profileCityValue" value="{{ me_city }}">
+            <button type="button" id="cityPickerTrigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="cityPickerPanel"
+                    class="pe-trigger">
+              <span id="cityPickerTriggerText" class="min-w-0 flex-1 truncate {% if not me_city %}text-zinc-500{% endif %}">{{ me_city or 'انتخاب شهر' }}</span>
+              <i class="fas fa-chevron-down pointer-events-none shrink-0 text-[10px] text-zinc-500" aria-hidden="true"></i>
+            </button>
+          </div>
 
-            <div>
-              <label class="mb-2 flex items-center justify-end gap-2 text-xs font-semibold text-zinc-300 sm:text-sm">
-                <span>شماره موبایل</span>
-                <i class="fas fa-mobile-screen text-zinc-500" aria-hidden="true"></i>
-              </label>
-              <input type="text" readonly tabindex="-1" dir="ltr"
-                     class="w-full cursor-not-allowed rounded-xl border border-white/5 bg-[#0d1218] py-3 pl-3 pr-3 text-sm tabular-nums text-zinc-400 sm:text-base"
-                     value="{{ me_phone }}">
-              <p class="mt-1.5 text-[11px] text-zinc-500">شماره موبایل قابل تغییر نیست.</p>
-            </div>
-
-            <div>
-              <span class="mb-2 flex items-center justify-end gap-2 text-xs font-semibold text-zinc-300 sm:text-sm">
-                <span>شهر فعالیت</span>
-                <i class="fas fa-location-dot text-zinc-500" aria-hidden="true"></i>
-              </span>
-              <input type="hidden" name="city" id="profileCityValue" value="{{ me_city }}">
-              <button type="button" id="cityPickerTrigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="cityPickerPanel"
-                      class="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-[#0a1018] py-3 pl-3 pr-3 text-right text-sm text-white outline-none transition hover:border-white/15 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 sm:text-base">
-                <span id="cityPickerTriggerText" class="min-w-0 flex-1 truncate {% if not me_city %}text-zinc-500{% endif %}">{{ me_city or 'انتخاب شهر' }}</span>
-                <i class="fas fa-chevron-down pointer-events-none shrink-0 text-xs text-zinc-500" aria-hidden="true"></i>
-              </button>
-            </div>
-
-            <div>
-              <span class="mb-2 flex items-center justify-end gap-2 text-xs font-semibold text-zinc-300 sm:text-sm">
-                <span>تاریخ تولد <span class="font-normal text-zinc-500">(اختیاری)</span></span>
-                <i class="fas fa-calendar-days text-zinc-500" aria-hidden="true"></i>
-              </span>
-              <input type="hidden" id="profileBirth" name="birth_date" value="{{ me_birth_date }}">
-              <button type="button"
-                      id="profileBirthTrigger"
-                      aria-haspopup="dialog"
-                      aria-expanded="false"
-                      aria-controls="birthDatePickerPanel"
-                      class="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-[#0a1018] py-3 pl-3 pr-3 text-right text-sm text-white outline-none transition hover:border-white/15 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 sm:text-base">
-                <span id="profileBirthTriggerText" class="min-w-0 flex-1 truncate text-zinc-500">انتخاب کنید</span>
-                <i class="fas fa-chevron-down pointer-events-none shrink-0 text-xs text-zinc-500" aria-hidden="true"></i>
-              </button>
-            </div>
-
+          <div class="pe-row">
+            <span class="pe-label">تاریخ تولد <span class="font-normal opacity-70">(اختیاری)</span></span>
+            <input type="hidden" id="profileBirth" name="birth_date" value="{{ me_birth_date }}">
+            <button type="button"
+                    id="profileBirthTrigger"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="birthDatePickerPanel"
+                    class="pe-trigger">
+              <span id="profileBirthTriggerText" class="min-w-0 flex-1 truncate text-zinc-500">انتخاب کنید</span>
+              <i class="fas fa-chevron-down pointer-events-none shrink-0 text-[10px] text-zinc-500" aria-hidden="true"></i>
+            </button>
           </div>
         </section>
 
-        <section class="rounded-2xl border border-white/10 bg-[#12181f] p-4 shadow-xl shadow-black/20 sm:p-5">
-          <label for="bioInput" class="mb-2 flex items-center justify-end gap-2 text-xs font-semibold text-zinc-300 sm:text-sm">
-            <span>درباره من <span class="font-normal text-zinc-500">(اختیاری)</span></span>
-            <i class="fas fa-pen text-zinc-500" aria-hidden="true"></i>
-          </label>
-          <div class="relative">
-            <textarea id="bioInput" name="bio" rows="5" maxlength="200" data-bio-counter
-                      class="w-full resize-none rounded-xl border border-white/10 bg-[#0a1018] px-3 pb-7 pt-3 text-sm text-white placeholder-zinc-600 outline-none transition focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 sm:text-base"
-                      placeholder="درباره خودتان بنویسید...">{{ me_bio }}</textarea>
-            <span id="bioCounter" class="pointer-events-none absolute bottom-2 left-3 text-[11px] tabular-nums text-zinc-500">0/200</span>
+        <section class="pe-group" aria-label="درباره من">
+          <div class="pe-row">
+            <label for="bioInput" class="pe-label">درباره من <span class="font-normal opacity-70">(اختیاری)</span></label>
+            <div class="pe-bio-wrap">
+              <textarea id="bioInput" name="bio" rows="5" maxlength="200" data-bio-counter
+                        placeholder="چند خط درباره خودتان…">{{ me_bio }}</textarea>
+              <span id="bioCounter">0/200</span>
+            </div>
           </div>
         </section>
       </div>
 
-      <details class="mt-4 rounded-2xl border border-rose-500/25 bg-rose-950/15 open:border-rose-500/35 open:bg-rose-950/20">
-        <summary class="flex cursor-pointer list-none items-center justify-end gap-3 p-4 text-right transition hover:opacity-90 sm:p-5 [&::-webkit-details-marker]:hidden">
+      <details class="pe-danger">
+        <summary>
           <div class="min-w-0 flex-1">
-            <div class="text-sm font-bold text-rose-400">منطقه خطر — حذف حساب</div>
-            <p class="mt-1 text-[11px] leading-relaxed text-rose-200/60">غیرقابل بازگشت؛ نیاز به تأیید شماره موبایل</p>
+            <div class="pe-danger__title">حذف حساب</div>
+            <p class="pe-danger__sub">غیرقابل بازگشت · نیاز به تأیید موبایل</p>
           </div>
-          <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-rose-500/35 bg-rose-500/10 text-rose-400" aria-hidden="true">
-            <i class="fas fa-trash-alt"></i>
-          </span>
+          <i class="fas fa-trash-alt text-sm text-rose-400/80" aria-hidden="true"></i>
         </summary>
-        <div class="border-t border-rose-500/20 px-4 pb-4 pt-2 sm:px-5 sm:pb-5">
-          <p class="mb-3 text-[11px] leading-relaxed text-zinc-500">پس از حذف، پروفایل، پورسانت‌ها، حساب‌های بانکی و سایر داده‌های شخصی شما از سیستم پاک می‌شود.</p>
-          <button type="button" id="deleteAccountOpen"
-                  class="w-full rounded-xl border border-rose-500/40 bg-rose-600/20 py-3 text-sm font-bold text-rose-200 transition hover:bg-rose-600/30">
-            شروع فرایند حذف حساب
-          </button>
+        <div class="pe-danger__body">
+          <p class="pe-hint mb-3 !mt-0">پس از حذف، پروفایل، پورسانت‌ها و داده‌های شخصی پاک می‌شود.</p>
+          <button type="button" id="deleteAccountOpen">شروع فرایند حذف حساب</button>
         </div>
       </details>
 
@@ -173,7 +316,6 @@
 
   {% include 'express_partner/partials/birth_date_picker_sheet.html' %}
 
-  {# فرم واقعی حذف؛ دکمهٔ تأیید داخل مودال با form="" به این فرم وصل است #}
   <form id="profileDeleteForm" method="post" action="{{ url_for('express_partner.profile_delete_account') }}" class="hidden" aria-hidden="true">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="confirm_delete" id="deleteAccountConfirmHidden" value="">
@@ -187,18 +329,18 @@
     <div class="absolute inset-0 bg-black/75 backdrop-blur-[2px]" data-delete-modal-backdrop></div>
     <div class="relative flex min-h-full flex-col justify-end pointer-events-none sm:justify-center sm:p-4">
       <div id="deleteAccountModalPanel" role="dialog" aria-modal="true" aria-labelledby="deleteAccountModalTitle"
-           class="pointer-events-auto relative mx-auto w-full max-w-md rounded-t-2xl border border-white/10 bg-[#1a222c] shadow-2xl sm:rounded-2xl">
-        <button type="button" id="deleteAccountModalClose" class="absolute left-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full text-zinc-400 transition hover:bg-white/10 hover:text-white"
+           class="pointer-events-auto relative mx-auto w-full max-w-md rounded-t-2xl border border-white/10 bg-[#212121] shadow-2xl sm:rounded-2xl">
+        <button type="button" id="deleteAccountModalClose" class="absolute left-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-white"
                 aria-label="بستن">
           <i class="fas fa-times text-lg" aria-hidden="true"></i>
         </button>
 
         <div class="max-h-[85dvh] overflow-y-auto overscroll-contain px-5 pb-6 pt-12 sm:px-6 sm:pb-6 sm:pt-14">
           <div class="mb-5 flex flex-col items-center">
-            <span class="relative mb-3 grid h-16 w-16 place-items-center rounded-full bg-rose-500/15 text-rose-500 ring-4 ring-rose-500/20">
-              <i class="fas fa-trash-alt text-2xl" aria-hidden="true"></i>
+            <span class="relative mb-3 grid h-14 w-14 place-items-center rounded-full bg-rose-500/15 text-rose-400">
+              <i class="fas fa-trash-alt text-xl" aria-hidden="true"></i>
             </span>
-            <h2 id="deleteAccountModalTitle" class="text-center text-base font-bold text-white sm:text-lg">حذف حساب کاربری</h2>
+            <h2 id="deleteAccountModalTitle" class="text-center text-base font-bold text-white">حذف حساب کاربری</h2>
           </div>
 
           <div class="space-y-3 text-sm leading-relaxed text-zinc-300">
@@ -210,7 +352,7 @@
             </p>
           </div>
 
-          <div class="mt-5 rounded-xl border border-white/10 bg-[#121820] p-4">
+          <div class="mt-5 rounded-xl border border-white/10 bg-[#171717] p-4">
             <div class="mb-3 flex items-start justify-end gap-2">
               <span class="min-w-0 flex-1 text-right text-xs font-semibold text-zinc-200">مواردی که حذف خواهند شد:</span>
               <i class="fas fa-circle-info mt-0.5 shrink-0 text-sky-400" aria-hidden="true"></i>
@@ -233,25 +375,25 @@
                    autocomplete="off"
                    maxlength="4"
                    dir="ltr"
-                   class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-3 text-center text-sm tracking-[0.35em] text-white outline-none transition focus:border-rose-500/50 focus:ring-1 focus:ring-rose-500/30"
+                   class="w-full rounded-xl border border-white/10 bg-[#171717] px-3 py-3 text-center text-sm tracking-[0.35em] text-white outline-none transition focus:border-rose-500/50"
                    placeholder="••••"
                    aria-describedby="deleteAccountPhoneHint">
             <p id="deleteAccountPhoneHint" class="mt-1.5 text-right text-[10px] text-zinc-500">برای جلوگیری از حذف تصادفی، تأیید شماره الزامی است.</p>
           </div>
 
-          <label class="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-[#0f1419] p-3 transition hover:border-white/15">
+          <label class="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-[#171717] p-3 transition hover:border-white/15">
             <input type="checkbox" id="deleteAccountConfirmCheck" class="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-500 bg-[#0a1018] text-rose-600 focus:ring-rose-500/40">
             <span class="text-right text-xs leading-relaxed text-zinc-300">می‌دانم این عمل غیرقابل بازگشت است و تأیید می‌کنم.</span>
           </label>
 
           <div class="mt-6 space-y-3">
             <button type="submit" form="profileDeleteForm" id="deleteAccountConfirmSubmit" disabled
-                    class="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-rose-600">
+                    class="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 text-sm font-bold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-rose-600">
               <i class="fas fa-trash-alt text-sm" aria-hidden="true"></i>
               <span>بله، حساب کاربری را حذف کن</span>
             </button>
             <button type="button" id="deleteAccountModalCancel"
-                    class="w-full rounded-xl border border-white/20 bg-transparent py-3.5 text-sm font-semibold text-white transition hover:bg-white/5">
+                    class="w-full rounded-xl border border-white/15 bg-transparent py-3.5 text-sm font-semibold text-white transition hover:bg-white/5">
               انصراف
             </button>
           </div>

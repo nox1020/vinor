@@ -24,17 +24,20 @@
   {% if _use_drawer %}
   <button type="button"
           id="epProfileMenuBtn"
-          class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
+          class="ep-partner-header-btn relative vinor-dash-glass-pill comm-header-glass-btn"
           aria-label="منو"
+          title="منو"
           aria-expanded="false"
           aria-controls="epProfileDrawer">
     <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
+    <span id="aiMenuUnreadDot" class="hidden absolute top-0.5 end-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#030712]" aria-hidden="true"></span>
   </button>
   {% else %}
   <a href="{{ _menu_href }}"
      data-vinor-express-nav
      class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
-     aria-label="منو">
+     aria-label="منو"
+     title="منو">
     <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
   </a>
   {% endif %}

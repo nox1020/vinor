@@ -26,6 +26,11 @@ _LAND_KEYWORDS = (
     "متر",
     "محله",
     "آگهی",
+    "دیوار",
+    "اینستا",
+    "اینستاگرام",
+    "فروش",
+    "پورسانت",
     "اختصاصی",
     "عمومی",
 )
@@ -328,7 +333,39 @@ def build_partner_status_context(phone: str) -> str:
         if withdrawable > 0:
             lines.append(f"قابل برداشت: {withdrawable:,} تومان")
 
-        return "\n".join(lines)[:420]
+        try:
+            from app.express_partner.sales_coach import (
+                coach_tip_for_stage,
+                resolve_stuck_nudge_for_partner,
+            )
+
+            stuck = resolve_stuck_nudge_for_partner(
+                ph, assigned_lands=assigned or [], visit_rows=visit_rows
+            )
+            if stuck:
+                tip = str(stuck.get("tip") or "").strip()
+                code = str(stuck.get("code") or "").strip()
+                if tip:
+                    lines.append(f"نکته مربی ({code}): {tip}")
+            elif assigned:
+                land0 = assigned[0]
+                from app.express_partner.routes import _home_funnel_for_land
+
+                funnel = _home_funnel_for_land(ph, land0, visit_rows=visit_rows)
+                st0 = str(land0.get("_assignment_status") or "").strip().lower()
+                tip = coach_tip_for_stage(
+                    stage_label=str(funnel.get("stage_label") or ""),
+                    in_transaction=st0 == "in_transaction",
+                    sold=st0 == "sold",
+                    commission_amount=int(land0.get("_commission_amount") or 0),
+                )
+                code = str(land0.get("code") or "").strip()
+                if tip:
+                    lines.append(f"نکته مربی ({code}): {tip}")
+        except Exception:
+            pass
+
+        return "\n".join(lines)[:720]
     except Exception:
         return ""
 

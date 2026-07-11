@@ -2262,6 +2262,7 @@ def _home_urgent_actions(
                 'subtitle': land_label,
                 'cta': 'تماس',
                 'url': call_url,
+                'land_code': code,
                 'priority': 100,
             })
             break
@@ -2284,6 +2285,7 @@ def _home_urgent_actions(
                 'subtitle': land_label,
                 'cta': 'شروع بازدید',
                 'url': url_for('express_partner.land_detail', code=code),
+                'land_code': code,
                 'priority': 90,
             })
             break
@@ -2338,11 +2340,91 @@ def _home_score_suggested_land(land: Dict[str, Any], *, now: datetime | None = N
     return score
 
 
+# قیف فروش روی کارت خانه (۶ مرحله — هم‌تراز UI تصویر)
+_HOME_FUNNEL_STEPS = (
+    ('file_listed', 'ثبت فایل', 'fa-file-circle-plus'),
+    ('intro', 'معرفی', 'fa-check'),
+    ('visit_request', 'درخواست بازدید', 'fa-users'),
+    ('revisit', 'بازدید مجدد', 'fa-calendar-days'),
+    ('deal_request', 'درخواست معامله', 'fa-magnifying-glass'),
+    ('contract', 'قرارداد', 'fa-handshake'),
+)
+
+
+def _home_funnel_for_land(
+    phone: str,
+    land: Dict[str, Any],
+    visit_rows: List[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    """مرحله و مسیر ۶تایی برای کارت سفر خانه."""
+    ph = (phone or '').strip()
+    code = str(land.get('code') or '').strip()
+    assign_st = str(land.get('_assignment_status') or '').strip().lower()
+    rows = [
+        r for r in (visit_rows or [])
+        if isinstance(r, dict)
+        and str(r.get('partner_phone') or '').strip() == ph
+        and str(r.get('land_code') or '').strip() == code
+    ]
+    latest = rows[0] if rows else None
+    if rows:
+        def _row_ts(r: Dict[str, Any]) -> str:
+            return str(r.get('updated_at') or r.get('created_at') or '')
+        latest = sorted(rows, key=_row_ts, reverse=True)[0]
+    status = str((latest or {}).get('status') or '').strip()
+
+    has_visit = bool(latest)
+    visit_pending = status == PENDING_STATUS
+    visit_approved = status in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS)
+    visit_done = status == COMPLETED_STATUS
+    in_tx = assign_st == 'in_transaction' or bool(land.get('_in_transaction'))
+    sold = assign_st == 'sold'
+
+    # شاخص current: اولین مرحله ناتمام
+    done_flags = [
+        True,  # ثبت فایل
+        True,  # معرفی (فایل در دسترس همکار است)
+        visit_approved or visit_done or in_tx or sold,  # درخواست بازدید
+        visit_done or in_tx or sold,  # بازدید مجدد / انجام‌شده
+        in_tx or sold,  # درخواست معامله
+        sold,  # قرارداد
+    ]
+    # اگر درخواست ثبت شده ولی هنوز تأیید نشده، مرحله بازدید current بماند
+    if has_visit and not (visit_approved or visit_done or in_tx or sold):
+        done_flags[2] = False
+    current_idx = next((i for i, d in enumerate(done_flags) if not d), None)
+    steps = []
+    for i, (key, label, icon) in enumerate(_HOME_FUNNEL_STEPS):
+        state = 'done' if done_flags[i] else 'todo'
+        if current_idx is not None and i == current_idx:
+            state = 'current'
+        steps.append({'key': key, 'label': label, 'icon': icon, 'state': state})
+
+    if sold:
+        stage_label = 'تکمیل شد'
+    elif in_tx:
+        stage_label = 'در حال معامله'
+    elif visit_done:
+        stage_label = 'بازدید انجام شد'
+    elif visit_approved:
+        stage_label = 'بازدید تأییدشد'
+    elif visit_pending:
+        stage_label = 'در انتظار بازدید'
+    elif has_visit:
+        stage_label = 'پیگیری بازدید'
+    else:
+        stage_label = 'علاقه‌مند'
+
+    return {'stage_label': stage_label, 'funnel_steps': steps}
+
+
 def _home_suggested_files(
     phone: str,
     is_approved: bool,
     *,
     assigned_lands: List[Dict[str, Any]] | None = None,
+    visit_rows: List[Dict[str, Any]] | None = None,
+    urgent_actions: List[Dict[str, Any]] | None = None,
     limit: int = HOME_SUGGESTED_FILES_LIMIT,
 ) -> List[Dict[str, Any]]:
     from ..utils.images import partner_card_image_url
@@ -2360,13 +2442,43 @@ def _home_suggested_files(
         code = str(land.get('code') or '').strip()
         if not code:
             continue
+        try:
+            price_total = int(land.get('price_total') or land.get('price') or 0)
+        except Exception:
+            price_total = 0
+        funnel = _home_funnel_for_land(phone, land, visit_rows=visit_rows)
+        from app.express_partner.sales_coach import build_coach_chat_prompt, coach_tip_for_stage
+
+        stage_label = funnel.get("stage_label") or "علاقه‌مند"
+        tip = coach_tip_for_stage(
+            stage_label=str(stage_label),
+            in_transaction=st == "in_transaction",
+            sold=False,
+            commission_amount=int(land.get("_commission_amount") or 0),
+        )
         candidates.append({
             'code': code,
             'title': (land.get('title') or '—').strip(),
+            'city': (land.get('city') or '').strip(),
+            'location': (land.get('location') or '').strip(),
+            'price_total': price_total,
             'commission_amount': int(land.get('_commission_amount') or 0),
             'commission_pct': land.get('_commission_pct'),
             'image_url': partner_card_image_url(land) or None,
             'detail_url': url_for('express_partner.land_detail', code=code),
+            'more_url': url_for('express_partner.files'),
+            'stage_label': stage_label,
+            'funnel_steps': funnel.get('funnel_steps') or [],
+            'cta_label': 'درخواست بازدید',
+            'cta_url': url_for('express_partner.land_detail', code=code),
+            'cta_icon': 'fa-calendar-days',
+            'show_fav': True,
+            'coach_tip': tip,
+            'coach_prompt': build_coach_chat_prompt(
+                code=code,
+                title=(land.get('title') or '').strip(),
+                stage_label=str(stage_label),
+            ),
             '_score': _home_score_suggested_land(land, now=now),
         })
     candidates.sort(key=lambda x: float(x.get('_score') or 0), reverse=True)
@@ -2374,6 +2486,18 @@ def _home_suggested_files(
     for item in candidates[:limit]:
         row = dict(item)
         row.pop('_score', None)
+        code = str(row.get('code') or '')
+        for act in (urgent_actions or []):
+            if not isinstance(act, dict):
+                continue
+            act_code = str(act.get('land_code') or '').strip()
+            if act_code and act_code == code:
+                row['cta_label'] = act.get('cta') or row.get('cta_label')
+                row['cta_url'] = act.get('url') or row.get('cta_url')
+                row['cta_icon'] = act.get('icon') or row.get('cta_icon') or 'fa-phone'
+                if act.get('key') == 'contact_customer':
+                    row['stage_label'] = 'تماس فوری'
+                break
         out.append(row)
     return out
 
@@ -2435,7 +2559,12 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     # همان لیست ساخت‌شده را دوباره استفاده کن (نه دومین بار scan کامل)
     # «پیشنهاد امروز» = فقط بالاترین امتیاز (بدون رندوم)
     suggested_files = _home_suggested_files(
-        ph, is_approved, assigned_lands=assigned_lands, limit=1
+        ph,
+        is_approved,
+        assigned_lands=assigned_lands,
+        visit_rows=visit_rows,
+        urgent_actions=urgent_actions,
+        limit=1,
     ) if ph else []
 
     return {
@@ -2445,6 +2574,7 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'has_pending_app': has_pending_app,
         'urgent_actions': urgent_actions,
         'suggested_files': suggested_files,
+        'journey_card': (suggested_files[0] if suggested_files else None),
     }
 
 
@@ -2617,6 +2747,7 @@ def home_page():
         has_pending_app=payload.get('has_pending_app'),
         urgent_actions=payload.get('urgent_actions') or [],
         suggested_files=payload.get('suggested_files') or [],
+        journey_card=payload.get('journey_card'),
         hide_header=True,
         bottom_nav_active='home',
         brand='وینور',

@@ -28,11 +28,16 @@
   var mode = form.getAttribute('data-mode') || '';
   var embedded = mode === 'embedded';
   var homeLayer = mode === 'home-layer';
-  var layerGated = embedded || homeLayer;
+  var homeInline = mode === 'home-inline';
+  var layerGated = embedded || homeLayer || homeInline;
   var sheetOpen =
     !layerGated ||
     document.documentElement.classList.contains('vinor-ai-open') ||
     document.documentElement.classList.contains('vinor-ai-sheet-open');
+  /* خانه: چت همیشه بخشی از داشبورد است — poll همیشه فعال */
+  if (homeInline) {
+    sheetOpen = true;
+  }
   var chatUrl = form.getAttribute('data-chat-url') || '';
   var historyUrl = form.getAttribute('data-history-url') || '';
   var clearUrl = form.getAttribute('data-clear-url') || '';
@@ -72,13 +77,29 @@
   var onViewportResize = null;
   var onViewportScroll = null;
 
+  function scrollChatToEnd() {
+    if (homeInline) {
+      var homeScroll = document.getElementById('vnHomeScroll');
+      if (homeScroll) {
+        homeScroll.scrollTop = homeScroll.scrollHeight;
+        return;
+      }
+    }
+    if (list) list.scrollTop = list.scrollHeight;
+  }
+
   window.__vinorAiChatSetSheetOpen = function (open) {
+    if (homeInline) {
+      sheetOpen = true;
+      resumePoll();
+      return;
+    }
     sheetOpen = !!open;
     if (!layerGated) return;
     if (sheetOpen) {
       resumePoll();
       try {
-        list.scrollTop = list.scrollHeight;
+        scrollChatToEnd();
       } catch (_) {}
     } else {
       pollPaused = true;
@@ -105,7 +126,38 @@
 
   function setComposerMode(postchi) {
     if (!input) return;
-    input.placeholder = postchi ? 'پیام به تیم وینور…' : 'پیام خود را بنویسید…';
+    if (postchi) {
+      input.value = '';
+      input.placeholder = 'ارسال در پستچی غیرفعال است';
+      input.disabled = true;
+      input.setAttribute('aria-disabled', 'true');
+      if (btn) {
+        btn.disabled = true;
+        btn.setAttribute('aria-disabled', 'true');
+      }
+      form.classList.add('ai-composer--readonly');
+    } else {
+      input.placeholder = 'پیام خود را بنویسید…';
+      input.disabled = false;
+      input.removeAttribute('aria-disabled');
+      if (btn) {
+        btn.disabled = false;
+        btn.removeAttribute('aria-disabled');
+      }
+      form.classList.remove('ai-composer--readonly');
+    }
+  }
+
+  function setBusy(on) {
+    if (isPostchiMode()) {
+      if (btn) btn.disabled = true;
+      if (input) input.disabled = true;
+      if (newChatBtn) newChatBtn.disabled = !!on;
+      return;
+    }
+    btn.disabled = !!on;
+    input.disabled = !!on;
+    if (newChatBtn) newChatBtn.disabled = !!on;
   }
 
   function syncMenuUnreadBadge(unread) {
@@ -400,7 +452,7 @@
 
     list.appendChild(wrap);
     if (msg.created_at) bumpLastSyncAt(msg.created_at);
-    list.scrollTop = list.scrollHeight;
+    scrollChatToEnd();
     return wrap;
   }
 
@@ -443,7 +495,7 @@
 
     if (lastAsst) appendMessage(lastAsst);
     scanLastSyncFromDom();
-    list.scrollTop = list.scrollHeight;
+    scrollChatToEnd();
   }
 
   function renderMessages(messages) {
@@ -457,7 +509,7 @@
     });
     showWelcomeIfEmpty();
     scanLastSyncFromDom();
-    list.scrollTop = list.scrollHeight;
+    scrollChatToEnd();
   }
 
   function showWelcomeIfEmpty() {
@@ -529,12 +581,6 @@
     }
   }
 
-  function setBusy(on) {
-    btn.disabled = !!on;
-    input.disabled = !!on;
-    if (newChatBtn) newChatBtn.disabled = !!on;
-  }
-
   function formatDate(iso) {
     if (!iso) return '';
     try {
@@ -568,8 +614,12 @@
   }
 
   function threadItemClasses(th) {
+    var inDrawer = !!(historyList && historyList.closest('#epProfileDrawer'));
     var isPostchi = th.kind === 'postchi' || th.id === postchiThreadId;
     var active = !!th.is_active;
+    if (inDrawer) {
+      return active ? 'is-active' : '';
+    }
     if (isPostchi) {
       return active
         ? 'border-emerald-500/40 bg-emerald-500/15'
@@ -587,9 +637,10 @@
     lastThreadsKey = key;
     updatePostchiUnreadFromThreads(threads);
     historyList.innerHTML = '';
+    var inDrawer = !!(historyList.closest && historyList.closest('#epProfileDrawer'));
     if (!threads || !threads.length) {
       historyList.innerHTML =
-        '<p class="rounded-xl border border-dashed border-white/10 px-3 py-6 text-center text-xs text-zinc-500">هنوز گفتگویی ذخیره نشده است.</p>';
+        '<p class="px-2 py-4 text-center text-xs text-zinc-500">هنوز گفتگویی نیست</p>';
       return;
     }
     threads.forEach(function (th) {
@@ -597,57 +648,72 @@
       var btnEl = document.createElement('button');
       btnEl.type = 'button';
       btnEl.className =
-        'ai-thread-item w-full rounded-xl border px-3 py-2.5 text-right transition ' +
+        'ai-thread-item ' +
+        (inDrawer
+          ? ''
+          : 'w-full rounded-xl border px-3 py-2.5 text-right transition ') +
         threadItemClasses(th);
       btnEl.setAttribute('data-thread-id', th.id);
+      btnEl.setAttribute('data-active', th.is_active ? '1' : '0');
       if (isPostchi) btnEl.setAttribute('data-thread-kind', 'postchi');
       var unreadBadge =
         th.unread > 0
-          ? '<span class="rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white tabular-nums">' +
+          ? '<span class="ai-thread-unread">' +
             (th.unread > 99 ? '99+' : String(th.unread)) +
             '</span>'
-          : th.is_active
-            ? '<span class="rounded-full px-1.5 py-0.5 text-[9px] ' +
-              (isPostchi ? 'bg-emerald-500/30 text-emerald-200' : 'bg-violet-500/30 text-violet-200') +
-              '">فعال</span>'
-            : '';
+          : '';
       var deleteBtn = isPostchi
         ? ''
-        : '<span class="ai-thread-delete grid h-7 w-7 place-items-center rounded-lg text-zinc-500 hover:bg-red-500/15 hover:text-red-300" data-thread-id="' +
+        : '<span class="ai-thread-delete" data-thread-id="' +
           escapeHtml(th.id || '') +
           '" role="button" aria-label="حذف گفتگو" tabindex="-1">' +
           '<i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i></span>';
-      btnEl.innerHTML =
-        '<div class="flex items-start justify-between gap-2">' +
-        '<span class="text-xs font-semibold text-white line-clamp-2 leading-snug flex items-center gap-1.5">' +
-        (isPostchi
-          ? '<i class="fas fa-envelope text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>'
-          : '') +
-        escapeHtml(th.title || 'گفتگو') +
-        '</span>' +
-        '<span class="flex shrink-0 items-center gap-1">' +
-        unreadBadge +
-        deleteBtn +
-        '</span></div>' +
-        (th.preview
-          ? '<p class="mt-1 text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">' +
+      var extras = '';
+      if (!inDrawer) {
+        if (th.preview) {
+          extras +=
+            '<p class="ai-thread-item__preview mt-1 text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">' +
             escapeHtml(th.preview) +
-            '</p>'
-          : '') +
-        (isPostchi
-          ? ''
-          : '<p class="mt-1.5 text-[9px] text-zinc-600 flex items-center justify-between gap-2">' +
+            '</p>';
+        }
+        if (!isPostchi) {
+          extras +=
+            '<p class="ai-thread-item__meta mt-1.5 text-[9px] text-zinc-600 flex items-center justify-between gap-2">' +
             '<span>' +
             (th.message_count || 0) +
             ' پیام</span>' +
             '<time class="tabular-nums">' +
             formatDate(th.updated_at) +
-            '</time></p>');
+            '</time></p>';
+        }
+      }
+      btnEl.innerHTML =
+        '<div class="flex items-center justify-between gap-2">' +
+        '<span class="ai-thread-item__title">' +
+        (isPostchi
+          ? '<i class="fas fa-envelope text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>'
+          : '') +
+        '<span>' +
+        escapeHtml(th.title || 'گفتگو') +
+        '</span></span>' +
+        '<span class="flex shrink-0 items-center gap-1">' +
+        unreadBadge +
+        deleteBtn +
+        '</span></div>' +
+        extras;
       historyList.appendChild(btnEl);
     });
   }
 
   function openSideMenu() {
+    if (window.vinorProfileDrawer && document.querySelector('#epProfileDrawer .ep-profile-drawer__ai')) {
+      window.vinorProfileDrawer.open();
+      var settingsBtn = document.getElementById('epProfileMenuBtn');
+      if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'true');
+      if (menuBtn) menuBtn.setAttribute('aria-expanded', 'true');
+      refreshHistory(true);
+      return;
+    }
     if (!sidePanel || !sideBackdrop) return;
     sidePanel.classList.add('is-open');
     sidePanel.setAttribute('aria-hidden', 'false');
@@ -659,13 +725,30 @@
   }
 
   function closeSideMenu() {
-    if (!sidePanel || !sideBackdrop) return;
+    if (window.vinorProfileDrawer && window.vinorProfileDrawer.isOpen && window.vinorProfileDrawer.isOpen()) {
+      window.vinorProfileDrawer.close();
+    }
+    var settingsBtn = document.getElementById('epProfileMenuBtn');
+    if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'false');
+    if (!sidePanel || !sideBackdrop) {
+      if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+      return;
+    }
     sidePanel.classList.remove('is-open');
     sidePanel.setAttribute('aria-hidden', 'true');
     sideBackdrop.classList.remove('is-open');
     sideBackdrop.setAttribute('aria-hidden', 'true');
     if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
     document.body.style.overflow = '';
+  }
+
+  function ensureChatVisible() {
+    if (!homeInline) return;
+    if (window.vinorAiHome && typeof window.vinorAiHome.open === 'function') {
+      if (!window.vinorAiHome.isOpen || !window.vinorAiHome.isOpen()) {
+        window.vinorAiHome.open({});
+      }
+    }
   }
 
   function applyThreads(threads) {
@@ -726,6 +809,7 @@
         resumePoll();
       }
       closeSideMenu();
+      ensureChatVisible();
     } catch (err) {
       if (err && err.name !== 'AbortError') alert(err.message || 'خطا');
     } finally {
@@ -779,6 +863,7 @@
       lastThreadsKey = '';
       await refreshHistory(true);
       closeSideMenu();
+      ensureChatVisible();
       input.focus();
     } catch (err) {
       alert(err.message || 'خطا');
@@ -829,7 +914,7 @@
       });
       if (added) {
         scanLastSyncFromDom();
-        list.scrollTop = list.scrollHeight;
+        scrollChatToEnd();
       }
     } catch (err) {
       if (err && err.name !== 'AbortError') {
@@ -912,6 +997,7 @@
 
   window.__vinorAiChatTeardown = teardownAiChat;
   window.__vinorAiChatSwitchThread = switchThread;
+  window.__vinorAiChatOpenSideMenu = openSideMenu;
 
   showWelcomeIfEmpty();
   setComposerMode(isPostchiMode());
@@ -925,7 +1011,7 @@
     if (eid) seenEscalationIds[eid] = 1;
   });
   scanLastSyncFromDom();
-  list.scrollTop = list.scrollHeight;
+  scrollChatToEnd();
 
   pollTimer = setInterval(pollSync, POLL_MS);
   if (!embedded) {
@@ -954,6 +1040,19 @@
   if (sideBackdrop) sideBackdrop.addEventListener('click', closeSideMenu);
   if (newChatBtn) newChatBtn.addEventListener('click', startNewChat);
 
+  var profileMenuBtn = document.getElementById('epProfileMenuBtn');
+  if (profileMenuBtn && homeInline) {
+    profileMenuBtn.addEventListener('click', function () {
+      setTimeout(function () {
+        try {
+          if (window.vinorProfileDrawer && window.vinorProfileDrawer.isOpen && window.vinorProfileDrawer.isOpen()) {
+            refreshHistory(true);
+          }
+        } catch (_) {}
+      }, 80);
+    });
+  }
+
   if (historyList) {
     historyList.addEventListener('click', function (e) {
       var delBtn = e.target.closest('.ai-thread-delete');
@@ -972,7 +1071,12 @@
   }
 
   onKeydown = function (e) {
-    if (e.key === 'Escape' && sidePanel && sidePanel.classList.contains('is-open')) {
+    if (e.key !== 'Escape') return;
+    if (sidePanel && sidePanel.classList.contains('is-open')) {
+      closeSideMenu();
+      return;
+    }
+    if (homeInline && window.vinorProfileDrawer && window.vinorProfileDrawer.isOpen && window.vinorProfileDrawer.isOpen()) {
       closeSideMenu();
     }
   };
@@ -988,6 +1092,7 @@
 
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
+    if (isPostchiMode()) return;
     if (submitting || btn.disabled) return;
     var msg = (input.value || '').trim();
     if (!msg || msg.length < MIN_MSG_LEN) return;

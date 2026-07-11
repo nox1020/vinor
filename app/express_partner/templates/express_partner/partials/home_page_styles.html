@@ -10,25 +10,35 @@
     padding-top: env(safe-area-inset-top, 0px);
   }
 
-  #homeDashboardPage .mx-auto {
+  #homeDashboardPage .vn-home-top {
     width: 100%;
+    /* فضای دکمه منوی شناور (بالا-راست) تا روی کارت نیفتد */
+    padding-top: 2.85rem;
+  }
+
+  #homeDashboardPage .vn-journey-card {
+    margin-top: 0;
+  }
+
+  #homeDashboardPage .vn-journey-card__code {
+    max-width: 9rem;
   }
 
   #homeDashboardPage .vn-home-guest-strip,
   #homeDashboardPage .vn-home-feed > section:first-child .vn-home-section-head,
   #homeDashboardPage .vn-home-feed > section.vn-home-empty:first-child {
     padding-top: 0.15rem;
-    padding-inline-start: 3.35rem;
+    padding-inline-start: 0;
   }
   #homeDashboardPage .vn-home-greet {
-    padding-inline-start: 3.35rem;
+    padding-inline-start: 0;
   }
   @media (min-width: 640px) {
     #homeDashboardPage .vn-home-guest-strip,
     #homeDashboardPage .vn-home-feed > section:first-child .vn-home-section-head,
     #homeDashboardPage .vn-home-feed > section.vn-home-empty:first-child,
     #homeDashboardPage .vn-home-greet {
-      padding-inline-start: 3.6rem;
+      padding-inline-start: 0;
     }
   }
 

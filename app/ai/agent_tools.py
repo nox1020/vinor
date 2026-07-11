@@ -27,6 +27,7 @@ _MAX_SEARCH = 5
 TOOL_SEARCH = "search_lands"
 TOOL_NEXT = "suggest_next_action"
 TOOL_VISIT = "propose_visit_request"
+TOOL_LISTING = "draft_listing_copy"
 
 
 def agent_system_hint(voice: str | None) -> str:
@@ -40,10 +41,13 @@ def agent_system_hint(voice: str | None) -> str:
     return (
         "ابزارها (اجباری وقتی لازم است): "
         "1) search_lands — جستجوی فایل/ملک؛ در پاسخ نهایی [[LAND:کد]] بگذار. "
-        "2) suggest_next_action — کار بعدی واقعی داشبورد. "
-        "3) propose_visit_request — فقط پیشنهاد ثبت بازدید؛ ثبت نهایی فقط با تأیید کاربر در کارت. "
+        "2) suggest_next_action — کار بعدی واقعی داشبورد + نکته مربی فروش. "
+        "3) draft_listing_copy — متن آماده آگهی دیوار و کپشن اینستا برای یک فایل. "
+        "4) propose_visit_request — فقط پیشنهاد ثبت بازدید؛ ثبت نهایی فقط با تأیید کاربر در کارت. "
+        "وقتی کاربر آگهی/دیوار/اینستا/متن پست می‌خواهد حتماً draft_listing_copy را صدا بزن. "
         "هرگز ادعا نکن بازدید ثبت شد مگر ابزار تأیید کاربر را بگوید. "
-        "اگر اطلاعات مشتری یا تاریخ ناقص است، اول بپرس؛ ابزار را با حدس پر نکن."
+        "اگر اطلاعات مشتری یا تاریخ ناقص است، اول بپرس؛ ابزار را با حدس پر نکن. "
+        "همکار را هل بده تا بفروشد: یک کار مشخص + پورسانت."
     )
 
 
@@ -52,6 +56,7 @@ def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
     schemas: list[dict[str, Any]] = [_schema_search()]
     if v in (VOICE_PARTNER, VOICE_SPECIAL):
         schemas.append(_schema_next())
+        schemas.append(_schema_listing())
         schemas.append(_schema_visit())
     return schemas
 
@@ -89,6 +94,33 @@ def _schema_next() -> dict[str, Any]:
             "name": TOOL_NEXT,
             "description": "پیشنهاد دقیق کار بعدی همکار بر اساس وضعیت زنده داشبورد (بازدید امروز، معامله، برداشت، پیگیری).",
             "parameters": {"type": "object", "properties": {}},
+        },
+    }
+
+
+def _schema_listing() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_LISTING,
+            "description": (
+                "ساخت متن آماده آگهی دیوار و/یا کپشن اینستا برای یک فایل قابل‌دسترس همکار. "
+                "برای درخواست آگهی، پست، استوری، دیوار یا اینستاگرام استفاده کن."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "land_code": {
+                        "type": "string",
+                        "description": "کد فایل",
+                    },
+                    "channel": {
+                        "type": "string",
+                        "description": "divar | instagram | both",
+                    },
+                },
+                "required": ["land_code"],
+            },
         },
     }
 
@@ -146,6 +178,10 @@ def run_tool(
             if (voice or "").strip().lower() == VOICE_PUBLIC:
                 return _denied("این ابزار برای مشتری عادی فعال نیست.")
             return _tool_suggest_next_action(phone=phone)
+        if n == TOOL_LISTING:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("متن آگهی فروش برای مشتری عادی فعال نیست.")
+            return _tool_draft_listing(args, phone=phone, audience=audience)
         if n == TOOL_VISIT:
             if (voice or "").strip().lower() == VOICE_PUBLIC:
                 return _denied("ثبت بازدید فقط برای همکار اکسپرس است.")
@@ -278,6 +314,36 @@ def _tool_suggest_next_action(*, phone: str) -> dict[str, Any]:
         "assigned_files": len(assigned or []),
     }
 
+    coach_tip = ""
+    coach_land_code = ""
+    try:
+        from app.express_partner.sales_coach import (
+            coach_tip_for_stage,
+            resolve_stuck_nudge_for_partner,
+        )
+
+        stuck = resolve_stuck_nudge_for_partner(
+            ph, assigned_lands=assigned or [], visit_rows=visit_rows
+        )
+        if stuck:
+            coach_tip = str(stuck.get("tip") or "")
+            coach_land_code = str(stuck.get("code") or "")
+        elif assigned:
+            land0 = assigned[0]
+            from app.express_partner.routes import _home_funnel_for_land
+
+            funnel = _home_funnel_for_land(ph, land0, visit_rows=visit_rows)
+            st0 = str(land0.get("_assignment_status") or "").strip().lower()
+            coach_tip = coach_tip_for_stage(
+                stage_label=str(funnel.get("stage_label") or ""),
+                in_transaction=st0 == "in_transaction",
+                sold=st0 == "sold",
+                commission_amount=int(land0.get("_commission_amount") or 0),
+            )
+            coach_land_code = str(land0.get("code") or "")
+    except Exception:
+        pass
+
     if actions:
         a = actions[0]
         model = {
@@ -290,8 +356,14 @@ def _tool_suggest_next_action(*, phone: str) -> dict[str, Any]:
                 "cta": a.get("cta"),
                 "url": a.get("url"),
             },
+            "coach_tip": coach_tip,
+            "coach_land_code": coach_land_code,
             "stats": stats_bit,
-            "instruction": "همین کار بعدی را اولویت بده؛ لینک را اگر لازم است کوتاه بگو.",
+            "instruction": (
+                "همین کار بعدی را اولویت بده. "
+                "اگر coach_tip هست یک جمله تشویقی اضافه کن. "
+                "برای آگهی دیوار/اینستا از draft_listing_copy استفاده کن."
+            ),
         }
         ui = {
             "type": "next_action",
@@ -307,10 +379,60 @@ def _tool_suggest_next_action(*, phone: str) -> dict[str, Any]:
         "ok": True,
         "has_urgent": False,
         "action": None,
+        "coach_tip": coach_tip
+        or "فایل اختصاصی را در دیوار و اینستا آگهی کن؛ بعد تماس‌ها را به بازدید تبدیل کن.",
+        "coach_land_code": coach_land_code,
         "stats": stats_bit,
-        "instruction": "کار فوری نیست؛ پیشنهاد کن فایل مناسب جستجو یا معرفی کند.",
+        "instruction": (
+            "کار فوری سیستمی نیست؛ مربی فروش باش: "
+            "اگر فایل اختصاصی دارد بگو دیوار/اینستا آگهی کند و در صورت نیاز draft_listing_copy بزن. "
+            "اگر فایل ندارد جستجو پیشنهاد بده."
+        ),
     }
     return {"ok": True, "model_result": model}
+
+
+def _tool_draft_listing(
+    args: dict[str, Any],
+    *,
+    phone: str,
+    audience: str | None,
+) -> dict[str, Any]:
+    code = str(args.get("land_code") or "").strip()
+    channel = str(args.get("channel") or "both").strip().lower() or "both"
+    if not code:
+        return _denied("کد فایل لازم است.")
+
+    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    lands_map = accessible_lands_map(phone, aud)
+    land = lands_map.get(code)
+    if not land:
+        for k, v in lands_map.items():
+            if str(k).strip().lower() == code.lower():
+                land = v
+                break
+    if not land:
+        return _denied("این فایل در دسترس شما نیست یا پیدا نشد.")
+
+    from app.express_partner.sales_coach import draft_listing_copy
+
+    copies = draft_listing_copy(land, channel=channel)
+    model = {
+        "ok": True,
+        "land_code": str(land.get("code") or code),
+        "title": str(land.get("title") or "").strip(),
+        "copies": copies,
+        "instruction": (
+            "متن‌های copies را عیناً در پاسخ برای کپی کاربر بیاور. "
+            "بگو دیوار و اینستا را امروز انجام دهد و هر تماس را به بازدید تبدیل کند. "
+            "در پایان [[LAND:کد]] بگذار."
+        ),
+    }
+    return {
+        "ok": True,
+        "model_result": model,
+        "land_codes": [str(land.get("code") or code)],
+    }
 
 
 def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, Any]:

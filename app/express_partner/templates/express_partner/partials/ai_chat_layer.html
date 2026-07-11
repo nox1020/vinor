@@ -1,4 +1,4 @@
-{# لایه تمام‌صفحه Vinor AI روی داشبورد خانه #}
+{# لایه تمام‌صفحه Vinor AI — صفحه فایل‌ها و سطوح غیرخانه #}
 {% if home_ai_enabled|default(false) %}
 <style>
   #aiHomeLayer {
@@ -24,9 +24,7 @@
   }
   html.vinor-ai-open #epAiFab.ep-ai-chatbox,
   html.vinor-ai-open #bottomNavMenu,
-  html.vinor-ai-open .ep-header-float-actions,
-  html.vinor-ai-open #epProfileDrawer,
-  html.vinor-ai-open #epProfileDrawerBackdrop {
+  html.vinor-ai-open .ep-header-float-actions {
     opacity: 0 !important;
     pointer-events: none !important;
     visibility: hidden !important;
@@ -44,23 +42,16 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     background: #030712;
   }
-  #aiHomeLayer .ai-layer-header .ep-partner-header-btn {
-    margin: 0;
-  }
+  #aiHomeLayer .ai-layer-header .ep-partner-header-btn { margin: 0; }
 
   #aiHomeLayer #aiPageMain.ai-page-shell {
     position: relative;
     flex: 1;
     min-height: 0;
-    top: auto;
-    left: auto;
-    right: auto;
-    bottom: auto;
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
-
   #aiHomeLayer #aiChat.ai-chat-shell {
     flex: 1;
     min-height: 0;
@@ -68,7 +59,6 @@
     flex-direction: column;
     overflow: hidden;
   }
-
   #aiHomeLayer #aiMessages.ai-messages {
     flex: 1;
     min-height: 0;
@@ -80,7 +70,6 @@
     flex-direction: column;
     gap: 0.7rem;
   }
-
   #aiHomeLayer #aiChatForm.ai-composer {
     flex-shrink: 0;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -88,77 +77,7 @@
     background: rgba(3, 7, 18, 0.97);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.28);
   }
-
-  .ai-agent-card {
-    width: 100%;
-    max-width: 100%;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 0.85rem;
-    background: rgba(15, 23, 42, 0.92);
-    padding: 0.85rem 0.9rem;
-  }
-  .ai-agent-card--done {
-    opacity: 0.78;
-  }
-  .ai-agent-card__title {
-    font-size: 0.92rem;
-    font-weight: 700;
-    color: #f8fafc;
-    margin-bottom: 0.45rem;
-  }
-  .ai-agent-card__body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    margin-bottom: 0.65rem;
-  }
-  .ai-agent-line {
-    font-size: 0.82rem;
-    color: #cbd5e1;
-    line-height: 1.45;
-  }
-  .ai-agent-card__actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-  }
-  .ai-agent-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 2.1rem;
-    padding: 0.35rem 0.85rem;
-    border-radius: 0.65rem;
-    font-size: 0.82rem;
-    font-weight: 600;
-    border: 1px solid transparent;
-    cursor: pointer;
-    text-decoration: none;
-  }
-  .ai-agent-btn:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-  .ai-agent-btn--confirm {
-    background: #0ea5e9;
-    color: #0f172a;
-  }
-  .ai-agent-btn--cancel {
-    background: transparent;
-    color: #e2e8f0;
-    border-color: rgba(255, 255, 255, 0.18);
-  }
-  .ai-agent-card__note {
-    margin-top: 0.55rem;
-    font-size: 0.78rem;
-    color: #94a3b8;
-  }
-  .ai-agent-card__note.hidden {
-    display: none;
-  }
-
   #aiHomeLayer .ai-composer__inner {
     display: flex;
     align-items: flex-end;
@@ -198,6 +117,14 @@
     color: #fff;
   }
   #aiHomeLayer .ai-composer__send:disabled { opacity: 0.5; }
+  #aiHomeLayer .ai-composer--readonly .ai-composer__input {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  #aiHomeLayer .ai-composer--readonly .ai-composer__send {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
 
   #aiHomeLayer .ai-msg-wrap {
     display: flex;
@@ -251,6 +178,30 @@
   #aiHomeLayer #aiMessages .ai-msg-cards .vinor-premium-card-mobile { display: flex !important; }
   #aiHomeLayer #aiMessages .ai-msg-cards .vinor-premium-card > .hidden.sm\:block { display: none !important; }
 
+  .ai-agent-card {
+    width: 100%;
+    max-width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.85rem;
+    background: rgba(15, 23, 42, 0.92);
+    padding: 0.85rem 0.9rem;
+  }
+  .ai-agent-card--done { opacity: 0.78; }
+  .ai-agent-card__title { font-size: 0.92rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.45rem; }
+  .ai-agent-card__body { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.65rem; }
+  .ai-agent-line { font-size: 0.82rem; color: #cbd5e1; line-height: 1.45; }
+  .ai-agent-card__actions { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+  .ai-agent-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 2.1rem; padding: 0.35rem 0.85rem; border-radius: 0.65rem;
+    font-size: 0.82rem; font-weight: 600; border: 1px solid transparent; cursor: pointer; text-decoration: none;
+  }
+  .ai-agent-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  .ai-agent-btn--confirm { background: #0ea5e9; color: #0f172a; }
+  .ai-agent-btn--cancel { background: transparent; color: #e2e8f0; border-color: rgba(255, 255, 255, 0.18); }
+  .ai-agent-card__note { margin-top: 0.55rem; font-size: 0.78rem; color: #94a3b8; }
+  .ai-agent-card__note.hidden { display: none; }
+
   #aiHomeLayer #aiSideBackdrop {
     position: fixed;
     inset: 0;
@@ -264,8 +215,7 @@
     opacity: 1;
     pointer-events: auto;
   }
-  #aiHomeLayer #aiSidePanel.ai-side-panel,
-  #aiHomeLayer aside.ai-side-panel {
+  #aiHomeLayer #aiSidePanel.ai-side-panel {
     position: fixed;
     top: 0;
     bottom: 0;
@@ -284,9 +234,12 @@
     transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
     will-change: transform;
   }
-  #aiHomeLayer #aiSidePanel.is-open,
-  #aiHomeLayer aside.ai-side-panel.is-open {
+  #aiHomeLayer #aiSidePanel.is-open {
     transform: translate3d(0, 0, 0);
+  }
+  #aiHomeLayer #aiSidePanel #aiHistoryList {
+    max-height: none;
+    flex: 1;
   }
 </style>
 
@@ -325,98 +278,11 @@
         <i class="fas fa-times" aria-hidden="true"></i>
       </button>
     </div>
-    <div class="shrink-0 border-b border-white/10 p-3">
-      <button type="button" id="aiNewChatBtn"
-              class="flex w-full items-center justify-center gap-2 rounded-xl border border-violet-500/35 bg-violet-600/90 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500">
-        <i class="fas fa-plus text-xs" aria-hidden="true"></i>
-        گفتگوی جدید
-      </button>
-    </div>
-    <p class="shrink-0 px-4 pt-3 pb-1 text-[10px] font-semibold text-zinc-500">گفتگوها</p>
-    <div id="aiHistoryList" class="flex-1 overflow-y-auto overscroll-contain px-3 pb-3 space-y-2 ai-scroll">
-      {% if chat_threads %}
-        {% for th in chat_threads %}
-        <button type="button"
-                class="ai-thread-item w-full rounded-xl border px-3 py-2.5 text-right transition {% if th.kind == 'postchi' %}{% if th.is_active %}border-emerald-500/40 bg-emerald-500/15{% else %}border-emerald-500/20 bg-emerald-500/[0.06] hover:bg-emerald-500/10{% endif %}{% else %}{% if th.is_active %}border-violet-500/40 bg-violet-500/15{% else %}border-white/10 bg-white/[0.03] hover:bg-white/[0.06]{% endif %}{% endif %}"
-                data-thread-id="{{ th.id }}"
-                {% if th.kind == 'postchi' %}data-thread-kind="postchi"{% endif %}>
-          <div class="flex items-start justify-between gap-2">
-            <span class="text-xs font-semibold text-white line-clamp-2 leading-snug flex items-center gap-1.5">
-              {% if th.kind == 'postchi' %}<i class="fas fa-envelope text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>{% endif %}
-              {{ th.title }}
-            </span>
-            <span class="flex shrink-0 items-center gap-1">
-              {% if th.unread and th.unread > 0 %}
-              <span class="rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white tabular-nums">{{ th.unread if th.unread < 100 else '99+' }}</span>
-              {% elif th.is_active %}
-              <span class="rounded-full px-1.5 py-0.5 text-[9px] {% if th.kind == 'postchi' %}bg-emerald-500/30 text-emerald-200{% else %}bg-violet-500/30 text-violet-200{% endif %}">فعال</span>
-              {% endif %}
-              {% if th.kind != 'postchi' %}
-              <span class="ai-thread-delete grid h-7 w-7 place-items-center rounded-lg text-zinc-500 hover:bg-red-500/15 hover:text-red-300" data-thread-id="{{ th.id }}" role="button" aria-label="حذف گفتگو" tabindex="-1">
-                <i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
-              </span>
-              {% endif %}
-            </span>
-          </div>
-          {% if th.preview %}
-          <p class="mt-1 text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">{{ th.preview }}</p>
-          {% endif %}
-          {% if th.kind != 'postchi' %}
-          <p class="mt-1.5 text-[9px] text-zinc-600 flex items-center justify-between gap-2">
-            <span>{{ th.message_count }} پیام</span>
-            <time class="tabular-nums" datetime="{{ th.updated_at or '' }}">{{ th.updated_at[:10] if th.updated_at else '' }}</time>
-          </p>
-          {% endif %}
-        </button>
-        {% endfor %}
-      {% else %}
-        <p class="rounded-xl border border-dashed border-white/10 px-3 py-6 text-center text-xs text-zinc-500">
-          هنوز گفتگویی ذخیره نشده است.<br>اولین پیام خود را بفرستید.
-        </p>
-      {% endif %}
-    </div>
+    {% include 'express_partner/partials/ai_chat_threads.html' %}
   </aside>
 
-  <main id="aiPageMain" class="ai-page-shell" data-vinor-ptr="off">
-    <section id="aiChat" class="ai-chat-shell">
-      <div id="aiMessages"
-           class="ai-messages ai-scroll"
-           aria-live="polite"
-           aria-label="گفتگو"
-           data-welcome="سلام! من Vinor AI هستم. سوال خود را درباره همکاری، فایل‌ها و فعالیت در وینور بپرسید.">
-        {% for msg in chat_messages|default([]) %}
-          {% include 'express_partner/partials/ai_chat_message.html' %}
-        {% endfor %}
-      </div>
-
-      <form id="aiChatForm" class="ai-composer" autocomplete="off"
-            data-mode="home-layer"
-            data-chat-url="{{ chat_api_url }}"
-            data-history-url="{{ history_api_url }}"
-            data-clear-url="{{ clear_api_url }}"
-            data-switch-url="{{ switch_thread_url }}"
-            data-delete-url="{{ delete_thread_url }}"
-            data-sync-url="{{ sync_api_url }}"
-            data-agent-confirm-url="{{ agent_confirm_url|default('') }}"
-            data-agent-cancel-url="{{ agent_cancel_url|default('') }}"
-            data-postchi-thread-id="{{ postchi_thread_id|default('__postchi__') }}"
-            data-postchi-messages-url="{{ postchi_messages_url|default('') }}"
-            data-postchi-send-url="{{ postchi_send_url|default('') }}"
-            data-postchi-open-url="{{ postchi_open_url|default('') }}">
-        {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
-        <input type="hidden" id="aiActiveThreadId" value="{{ active_thread_id or '' }}">
-        <div class="ai-composer__inner">
-          <label for="aiInput" class="sr-only">پیام</label>
-          <textarea id="aiInput" name="message" rows="1" required
-                    placeholder="پیام خود را بنویسید…"
-                    class="ai-composer__input"></textarea>
-          <button type="submit" id="aiSendBtn" class="ai-composer__send" aria-label="ارسال">
-            <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
-          </button>
-        </div>
-      </form>
-    </section>
-  </main>
+  {% set chat_mode = 'home-layer' %}
+  {% include 'express_partner/partials/ai_chat_panel.html' %}
 </div>
 
 <script>
@@ -527,7 +393,6 @@
     destroy: destroyLayer,
     _layer: layer
   };
-  // سازگاری با FAB قدیمی
   window.vinorAiHomeSheet = window.vinorAiHome;
 
   hoist();
@@ -538,8 +403,8 @@
   });
 
   window.addEventListener('vinor:express-page-swap', function onSwap() {
-    var onHome = /\/express\/partner\/home\/?$/.test(window.location.pathname || '');
-    if (!onHome) {
+    var onFiles = /\/express\/partner\/files\/?$/.test(window.location.pathname || '');
+    if (!onFiles) {
       destroyLayer();
       window.removeEventListener('vinor:express-page-swap', onSwap);
     }

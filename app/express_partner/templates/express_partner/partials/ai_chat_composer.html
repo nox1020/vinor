@@ -1,0 +1,28 @@
+{# کامپوزر Vinor AI — IDهای ثابت برای ai-chat.js #}
+{% set chat_mode = chat_mode|default('home-layer') %}
+<form id="aiChatForm" class="ai-composer" autocomplete="off"
+      data-mode="{{ chat_mode }}"
+      data-chat-url="{{ chat_api_url }}"
+      data-history-url="{{ history_api_url }}"
+      data-clear-url="{{ clear_api_url }}"
+      data-switch-url="{{ switch_thread_url }}"
+      data-delete-url="{{ delete_thread_url }}"
+      data-sync-url="{{ sync_api_url }}"
+      data-agent-confirm-url="{{ agent_confirm_url|default('') }}"
+      data-agent-cancel-url="{{ agent_cancel_url|default('') }}"
+      data-postchi-thread-id="{{ postchi_thread_id|default('__postchi__') }}"
+      data-postchi-messages-url="{{ postchi_messages_url|default('') }}"
+      data-postchi-send-url="{{ postchi_send_url|default('') }}"
+      data-postchi-open-url="{{ postchi_open_url|default('') }}">
+  {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+  <input type="hidden" id="aiActiveThreadId" value="{{ active_thread_id or '' }}">
+  <div class="ai-composer__inner">
+    <label for="aiInput" class="sr-only">پیام</label>
+    <textarea id="aiInput" name="message" rows="1" required
+              placeholder="پیام خود را بنویسید…"
+              class="ai-composer__input"></textarea>
+    <button type="submit" id="aiSendBtn" class="ai-composer__send" aria-label="ارسال">
+      <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
+    </button>
+  </div>
+</form>

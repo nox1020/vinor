@@ -1,0 +1,404 @@
+{# کارت سفر فایل — بالای خانه (ثابت)؛ چت زیر آن اسکرول می‌شود #}
+{# Expects: card (dict) with code, title, image_url, detail_url, city, location, price_total,
+   commission_amount, stage_label, funnel_steps[{key,label,icon,state}], cta_label, cta_url, cta_icon,
+   more_url, show_fav #}
+{% if card %}
+{% set loc = ([card.city, card.location]|select|join(' ')) if (card.city or card.location) else '' %}
+{% set steps = card.funnel_steps|default([]) %}
+<style>
+  .vn-journey-card {
+    --vj-purple: #7c3aed;
+    --vj-purple-soft: rgba(124, 58, 237, 0.2);
+    --vj-bg: #0b1220;
+    --vj-line: rgba(255, 255, 255, 0.08);
+    position: relative;
+    margin: 0.35rem 0.55rem 0.4rem;
+    border-radius: 0.9rem;
+    border: 1px solid var(--vj-line);
+    background: var(--vj-bg);
+    overflow: hidden;
+  }
+  .vn-journey-card__head {
+    position: relative;
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .vn-journey-card__head-inner {
+    display: flex;
+    gap: 0.55rem;
+    padding: 0.55rem 0.55rem 0.4rem;
+  }
+  .vn-journey-card__head:active .vn-journey-card__head-inner {
+    opacity: 0.92;
+  }
+  .vn-journey-card__code {
+    position: static;
+    transform: none;
+    left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    max-width: 100%;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(8, 12, 20, 0.75);
+    color: #d4d4d8;
+    font-size: 0.6rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+  .vn-journey-card__media {
+    position: relative;
+    width: 4.5rem;
+    height: 4.5rem;
+    flex-shrink: 0;
+    border-radius: 0.7rem;
+    overflow: hidden;
+    background: #151b28;
+    align-self: flex-start;
+  }
+  .vn-journey-card__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .vn-journey-card__fav {
+    position: absolute;
+    top: 0.7rem;
+    inset-inline-start: 0.7rem;
+    z-index: 3;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 9999px;
+    background: rgba(0, 0, 0, 0.4);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    backdrop-filter: blur(6px);
+  }
+  .vn-journey-card__fav i {
+    font-size: 0.6rem;
+  }
+  .vn-journey-card__body {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding-top: 0;
+    text-align: right;
+  }
+  .vn-journey-card__meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.3rem;
+  }
+  .vn-journey-card__stage {
+    align-self: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 9999px;
+    background: var(--vj-purple);
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .vn-journey-card__title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 800;
+    line-height: 1.3;
+    color: #f8fafc;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .vn-journey-card__loc {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin: 0;
+    font-size: 0.65rem;
+    color: #94a3b8;
+    line-height: 1.25;
+  }
+  .vn-journey-card__price-label {
+    display: none;
+  }
+  .vn-journey-card__price {
+    margin: 0.05rem 0 0;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #4ade80;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+
+  .vn-journey-card__track {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0;
+    padding: 0.15rem 0.4rem 0.45rem;
+    direction: rtl;
+  }
+  .vn-journey-card__step {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    text-align: center;
+  }
+  .vn-journey-card__step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 0.7rem;
+    left: calc(-50% + 0.7rem);
+    right: calc(50% + 0.7rem);
+    height: 1.5px;
+    background: rgba(255, 255, 255, 0.12);
+    z-index: 0;
+  }
+  .vn-journey-card__step.is-done:not(:last-child)::after {
+    background: var(--vj-purple);
+  }
+  .vn-journey-card__dot {
+    position: relative;
+    z-index: 1;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 9999px;
+    display: grid;
+    place-items: center;
+    background: #1a2233;
+    color: #64748b;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.55rem;
+  }
+  .vn-journey-card__step.is-done .vn-journey-card__dot,
+  .vn-journey-card__step.is-current .vn-journey-card__dot {
+    background: var(--vj-purple);
+    color: #fff;
+    border-color: transparent;
+  }
+  .vn-journey-card__step.is-current .vn-journey-card__dot {
+    box-shadow: 0 0 0 3px var(--vj-purple-soft);
+    transform: scale(1.06);
+  }
+  .vn-journey-card__step-label {
+    font-size: 0.5rem;
+    font-weight: 600;
+    line-height: 1.15;
+    color: #64748b;
+    max-width: 100%;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .vn-journey-card__step.is-done .vn-journey-card__step-label,
+  .vn-journey-card__step.is-current .vn-journey-card__step-label {
+    color: #cbd5e1;
+  }
+
+  .vn-journey-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0 0.55rem 0.55rem;
+  }
+  .vn-journey-card__coach {
+    width: 2.2rem;
+    height: 2.2rem;
+    flex-shrink: 0;
+    border-radius: 0.65rem;
+    border: 1px solid rgba(124, 58, 237, 0.45);
+    background: rgba(124, 58, 237, 0.18);
+    color: #ddd6fe;
+    display: grid;
+    place-items: center;
+    text-decoration: none;
+    font-size: 0.75rem;
+  }
+  .vn-journey-card__coach:active { filter: brightness(1.08); }
+  .vn-journey-card__more {
+    width: 2.2rem;
+    height: 2.2rem;
+    flex-shrink: 0;
+    border-radius: 0.65rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #121826;
+    color: #cbd5e1;
+    display: grid;
+    place-items: center;
+    text-decoration: none;
+    font-size: 0.75rem;
+  }
+  .vn-journey-card__cta {
+    flex: 1;
+    min-height: 2.2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    border-radius: 0.65rem;
+    border: 0;
+    background: var(--vj-purple);
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .vn-journey-card__cta:active { filter: brightness(0.95); }
+  .vn-journey-card__cta i { font-size: 0.7rem; }
+</style>
+
+<article class="vn-journey-card" aria-label="کار بعدی روی فایل" data-tour="home-journey">
+  <a href="{{ card.detail_url }}"
+     data-vinor-express-nav
+     class="vn-journey-card__head"
+     aria-label="مشاهده جزئیات {{ card.title }}">
+    <div class="vn-journey-card__head-inner">
+      <div class="vn-journey-card__media" aria-hidden="true">
+        {% if card.image_url %}
+        <img src="{{ card.image_url }}" alt="" loading="eager" decoding="async">
+        {% else %}
+        <div class="grid h-full place-items-center text-zinc-600 text-xs font-semibold">V</div>
+        {% endif %}
+      </div>
+
+      <div class="vn-journey-card__body">
+        <div class="vn-journey-card__meta-row">
+          {% if card.stage_label %}
+          <span class="vn-journey-card__stage">
+            <i class="fas fa-users text-[8px]" aria-hidden="true"></i>
+            {{ card.stage_label }}
+          </span>
+          {% endif %}
+          <span class="vn-journey-card__code">
+            <i class="fas fa-file-lines" aria-hidden="true"></i>
+            {{ card.code|fa_digits }}
+          </span>
+        </div>
+        <h2 class="vn-journey-card__title">{{ card.title }}</h2>
+        {% if loc %}
+        <p class="vn-journey-card__loc">
+          <i class="fas fa-location-dot text-[9px]" aria-hidden="true"></i>
+          <span class="truncate">{{ loc }}</span>
+        </p>
+        {% endif %}
+        {% if card.commission_amount and is_approved|default(false) %}
+        <p class="vn-journey-card__price">پورسانت {{ card.commission_amount|toman }}</p>
+        {% elif card.price_total %}
+        <p class="vn-journey-card__price">{{ card.price_total|toman }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </a>
+  {% if card.show_fav|default(true) and card.code %}
+  <button type="button"
+          class="vn-journey-card__fav"
+          data-fav-code="{{ card.code }}"
+          aria-label="نشان‌شده"
+          onclick="event.preventDefault(); event.stopPropagation();">
+    <i class="far fa-star text-xs vinor-fav-icon" aria-hidden="true"></i>
+  </button>
+  {% endif %}
+
+  {% if steps %}
+  <div class="vn-journey-card__track" aria-label="مراحل فروش">
+    {% for step in steps %}
+    <div class="vn-journey-card__step is-{{ step.state|default('todo') }}">
+      <span class="vn-journey-card__dot" aria-hidden="true">
+        <i class="fas {{ step.icon|default('fa-circle') }}"></i>
+      </span>
+      <span class="vn-journey-card__step-label">{{ step.label }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="vn-journey-card__actions">
+    <a href="{{ card.more_url or url_for('express_partner.files') }}"
+       data-vinor-express-nav
+       class="vn-journey-card__more"
+       aria-label="بیشتر">
+      <i class="fas fa-ellipsis" aria-hidden="true"></i>
+    </a>
+    {% if card.coach_prompt %}
+    <button type="button"
+            class="vn-journey-card__coach"
+            data-vn-coach-prompt="{{ card.coach_prompt|e }}"
+            aria-label="راهنمای فروش از AI">
+      <i class="fas fa-robot" aria-hidden="true"></i>
+    </button>
+    {% endif %}
+    <a href="{{ card.cta_url or card.detail_url }}"
+       {% set _cta = (card.cta_url or card.detail_url or '')|string %}
+       {% if _cta.startswith('tel:') %}{% else %}data-vinor-express-nav{% endif %}
+       class="vn-journey-card__cta">
+      <i class="fas {{ card.cta_icon|default('fa-calendar-days') }}" aria-hidden="true"></i>
+      {{ card.cta_label|default('درخواست بازدید') }}
+    </a>
+  </div>
+</article>
+{% if card.coach_prompt %}
+<script>
+(function () {
+  function wireCoach() {
+    var btn = document.querySelector('[data-vn-coach-prompt]');
+    if (!btn || btn.getAttribute('data-wired') === '1') return;
+    btn.setAttribute('data-wired', '1');
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var prompt = btn.getAttribute('data-vn-coach-prompt') || '';
+      if (!prompt) return;
+      var input = document.getElementById('aiInput');
+      var form = document.getElementById('aiChatForm');
+      if (!input || !form) {
+        try {
+          sessionStorage.setItem('vinor_ai_home_prompt', prompt);
+          sessionStorage.setItem('vinor_ai_home_autosend', '1');
+        } catch (_) {}
+        return;
+      }
+      input.value = prompt;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      try {
+        var scroll = document.getElementById('vnHomeScroll');
+        if (scroll) scroll.scrollTop = scroll.scrollHeight;
+      } catch (_) {}
+      setTimeout(function () {
+        try {
+          if (typeof form.requestSubmit === 'function') form.requestSubmit();
+          else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        } catch (_) {}
+      }, 80);
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wireCoach);
+  } else {
+    wireCoach();
+  }
+})();
+</script>
+{% endif %}
+{% endif %}
