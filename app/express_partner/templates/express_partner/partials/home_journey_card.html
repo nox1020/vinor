@@ -1,7 +1,7 @@
 {# کارت سفر فایل — بالای خانه (ثابت)؛ چت زیر آن اسکرول می‌شود #}
 {# Expects: card (dict) with code, title, image_url, detail_url, city, location, price_total,
    commission_amount, stage_label, funnel_steps[{key,label,icon,state}], cta_label, cta_url, cta_icon,
-   more_url, show_fav #}
+   more_url #}
 {% if card %}
 {% set loc = ([card.city, card.location]|select|join(' ')) if (card.city or card.location) else '' %}
 {% set steps = card.funnel_steps|default([]) %}
@@ -67,24 +67,6 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-  }
-  .vn-journey-card__fav {
-    position: absolute;
-    top: 0.7rem;
-    inset-inline-start: 0.7rem;
-    z-index: 3;
-    width: 1.5rem;
-    height: 1.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 9999px;
-    background: rgba(0, 0, 0, 0.4);
-    color: #fff;
-    display: grid;
-    place-items: center;
-    backdrop-filter: blur(6px);
-  }
-  .vn-journey-card__fav i {
-    font-size: 0.6rem;
   }
   .vn-journey-card__body {
     min-width: 0;
@@ -311,15 +293,6 @@
       </div>
     </div>
   </a>
-  {% if card.show_fav|default(true) and card.code %}
-  <button type="button"
-          class="vn-journey-card__fav"
-          data-fav-code="{{ card.code }}"
-          aria-label="نشان‌شده"
-          onclick="event.preventDefault(); event.stopPropagation();">
-    <i class="far fa-star text-xs vinor-fav-icon" aria-hidden="true"></i>
-  </button>
-  {% endif %}
 
   {% if steps %}
   <div class="vn-journey-card__track" aria-label="مراحل فروش">
