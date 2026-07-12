@@ -323,6 +323,68 @@ def build_journey_chat_cta(
     }
 
 
+def build_limited_ai_quick_prompts(
+    *,
+    me_phone: str = "",
+    has_pending_app: bool = False,
+) -> List[Dict[str, str]]:
+    """چیپ‌های آماده برای مهمان / کاربر عادی / متقاضی — سطوح و درخواست همکاری."""
+    out: List[Dict[str, str]] = []
+
+    def add(label: str, *, prompt: str = "", href: str = "") -> None:
+        label = (label or "").strip()
+        prompt = (prompt or "").strip()
+        href = (href or "").strip()
+        if not label:
+            return
+        if href:
+            out.append({"label": label, "href": href, "prompt": prompt})
+        elif prompt:
+            out.append({"label": label, "prompt": prompt})
+
+    levels_prompt = (
+        "سطوح همکاری وینور اکسپرس را خیلی کوتاه و شفاف بگو: "
+        "کاربر عادی، همکار، همکار ویژه — هر سطح چه دسترسی و درآمدی دارد، "
+        "و چطور از همین‌جا می‌توانم درخواست همکاری بدهم."
+    )
+    terms_prompt = (
+        "شرایط همکاری و پورسانت وینور اکسپرس را کوتاه توضیح بده: "
+        "فایل آماده، فروش، دریافت پورسانت، و لینک ثبت درخواست."
+    )
+
+    add("سطوح همکاری", prompt=levels_prompt)
+    add("شرایط و پورسانت", prompt=terms_prompt)
+
+    try:
+        if has_pending_app:
+            add("وضعیت درخواست", href=url_for("express_partner.thanks"))
+        elif (me_phone or "").strip():
+            add("ثبت درخواست", href=url_for("express_partner.apply"))
+        else:
+            add(
+                "شروع همکاری",
+                href=url_for(
+                    "express_partner.login",
+                    next=url_for("express_partner.apply"),
+                ),
+            )
+    except Exception:
+        if has_pending_app:
+            add("وضعیت درخواست", href="/express/partner/thanks")
+        elif (me_phone or "").strip():
+            add("ثبت درخواست", href="/express/partner/apply")
+        else:
+            add("شروع همکاری", href="/express/partner/login?next=/express/partner/apply")
+
+    add(
+        "چطور کار می‌کند؟",
+        prompt=(
+            "مسیر همکاری در وینور را در ۳ قدم کوتاه بگو و بگو برای شروع چه کار کنم."
+        ),
+    )
+    return out[:5]
+
+
 def build_ai_quick_prompts(
     *,
     code: str = "",
@@ -330,65 +392,21 @@ def build_ai_quick_prompts(
     stage_label: str = "",
     is_mission: bool = False,
 ) -> List[Dict[str, str]]:
-    """سوال/دستور آماده بالای باکس چت — مرتبط با فایل/مرحله مأموریت."""
+    """سوال آماده بالای باکس چت — فقط قدم بعدی."""
     code_s = (code or "").strip()
     title_s = (title or "").strip()
-    stage = (stage_label or "").strip()
     head = f"فایل {code_s}" if code_s else "فایل مأموریت"
     if title_s:
         head = f"{head} ({title_s})"
 
-    out: List[Dict[str, str]] = []
-
-    def add(label: str, prompt: str) -> None:
-        label = (label or "").strip()
-        prompt = (prompt or "").strip()
-        if label and prompt:
-            out.append({"label": label, "prompt": prompt})
-
-    if code_s:
-        if stage in ("در حال معامله", "تماس فوری") or "معامله" in stage:
-            add(
-                "بستن معامله",
-                f"{head}: با propose_release_deal کارت بستن معامله بده.",
-            )
-            add("متن پیگیری", f"برای {head} یک پیام کوتاه پیگیری مشتری بنویس (حداکثر ۴ خط).")
-            add("مخالف‌ها", f"برای {head} ۳ ایراد رایج + جواب یک‌خطی هر کدام.")
-        elif stage in ("بازدید انجام شد", "معامله یا بازدید مجدد"):
-            add(
-                "ثبت معامله",
-                f"{head}: با propose_deal کارت تأیید معامله بده.",
-            )
-            add("پیام مشتری", f"برای {head} یک پیام کوتاه واتساپ بعد بازدید بنویس.")
-            add("بازدید مجدد", f"برای {head} اگر بازدید مجدد لازم است اول بپرس بعد propose_visit_request.")
-        elif stage in ("بازدید تأییدشد", "در انتظار بازدید", "پیگیری بازدید"):
-            add(
-                "بازدید انجام شد",
-                f"{head}: با propose_complete_visit کارت «بازدید انجام شد» بده.",
-            )
-            add("پیام مشتری", f"برای {head} یک پیام کوتاه واتساپ قبل/بعد بازدید بنویس.")
-            add("قدم بعدی", f"{head}: فقط قدم بعدی فروش را خیلی کوتاه بگو.")
-        else:
-            add("متن دیوار", f"برای {head} فقط متن آگهی دیوار را کامل بفرست.")
-            add("کپشن اینستا", f"برای {head} فقط کپشن اینستا را کامل بفرست.")
-            add(
-                "ثبت بازدید",
-                f"{head}: برای ثبت بازدید از propose_visit_request استفاده کن؛ "
-                "اگر نام/شماره/تاریخ مشتری را ندارم اول بپرس.",
-            )
-        if is_mission:
-            add("قدم بعدی", f"ماموریت {head}: فقط یک کار بعدی همین الان را بگو و اگر ثبت لازم است ابزارش را بزن.")
-        add(
-            "منتفی شد",
-            f"برای {head} پیگیری منتفی شد. خیلی گرم تشکر کن که تلاش کردم، بگو تلاشم ارزشمند بود، "
-            "بعد کوتاه راهنمایی کن برای بازاریابی مجدد: دیوار، نردبان، اینستا و معرفی به اطرافیان.",
-        )
+    if code_s and is_mission:
+        prompt = f"ماموریت {head}: فقط یک کار بعدی همین الان را بگو و اگر ثبت لازم است ابزارش را بزن."
+    elif code_s:
+        prompt = f"{head}: فقط قدم بعدی فروش را خیلی کوتاه بگو."
     else:
-        add("شروع فروش", "فقط یک کار بعدی فروش را خیلی کوتاه بگو.")
-        add("متن آگهی", "متن کامل دیوار فایل فعلی‌ام را بفرست.")
-        add("پورسانت", "چطور سریع‌تر به معامله برسم؟ ۳ نکته کوتاه.")
+        prompt = "فقط یک کار بعدی فروش را خیلی کوتاه بگو."
 
-    return out[:5]
+    return [{"label": "قدم بعدی", "prompt": prompt}]
 
 
 def draft_listing_copy(land: Dict[str, Any], *, channel: str = "both") -> Dict[str, str]:

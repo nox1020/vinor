@@ -87,7 +87,10 @@ def _build_message(event: str, ctx: Dict[str, Any]) -> str:
         note = note[:60] + "…"
 
     if event in ("visit_submitted", "visit_pending"):
-        return f"وینور\nبازدید ثبت شد · {land}\nمنتظر تأیید"
+        msg = f"وینور\nبازدید نهایی شد · {land}"
+        if vdate and vdate != "—":
+            msg += f"\n{vdate}"
+        return msg
     if event == "visit_approved":
         return f"وینور\nبازدیدت تأیید شد · {land}\n{vdate}"
     if event == "visit_rejected":

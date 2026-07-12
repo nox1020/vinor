@@ -52,8 +52,8 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
         can_reject = st == PENDING_STATUS
         can_complete = st == DONE_PENDING_STATUS
         labels = {
-            PENDING_STATUS: "منتظر تأیید شما",
-            APPROVED_STATUS: "تأیید شده",
+            PENDING_STATUS: "منتظر تأیید (قدیمی)",
+            APPROVED_STATUS: "نهایی شده",
             DONE_PENDING_STATUS: "منتظر تأیید انجام",
             COMPLETED_STATUS: "انجام شد",
             CANCELLED_STATUS: "رد شده",

@@ -30,7 +30,6 @@
     '/express/partner/listings': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/listings/new': { tab: 'profile', depth: 2, bottomNav: true, prefetch: false },
     '/express/partner/inbox-visits': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/top-sellers': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/invite': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/training': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/routine': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -785,7 +784,6 @@
       var prefetchProfileSubpages = function () {
         try {
           [
-            '/express/partner/top-sellers',
             '/express/partner/invite',
             '/express/partner/routine'
           ].forEach(function (path) {

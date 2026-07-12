@@ -1,6 +1,7 @@
 {% set _endpoint = request.endpoint or '' %}
 {% set _people_active = _endpoint in [
-  'admin.express_partners', 'admin.express_partner_detail', 'admin.users', 'admin.partners_activity'
+  'admin.express_partners', 'admin.express_partner_detail', 'admin.users', 'admin.partners_activity',
+  'admin.top_sellers'
 ] %}
 {% set _ops_active = _endpoint in [
   'admin.express_assignments', 'admin.express_commissions', 'admin.express_commission_edit',
@@ -57,6 +58,12 @@
               {% if _endpoint == 'admin.partners_activity' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
       <i class="fa-solid fa-list-check w-4 text-center text-[13px]"></i>
       <span>آمار فعالیت همکاران</span>
+    </a>
+    <a href="{{ url_for('admin.top_sellers') }}"
+       class="flex items-center gap-3 px-3 py-2 rounded-lg transition focusable text-sm font-medium
+              {% if _endpoint == 'admin.top_sellers' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
+      <i class="fa-solid fa-trophy w-4 text-center text-[13px]"></i>
+      <span>فروشنده‌های برتر</span>
     </a>
 
     <div class="pt-3 pb-1 px-3"><p class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">عملیات</p></div>

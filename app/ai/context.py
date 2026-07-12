@@ -309,7 +309,10 @@ def build_partner_status_context(phone: str) -> str:
             if mission:
                 mcode = str(mission.get("land_code") or "").strip()
                 lines.append(
-                    f"ماموریت فعال: فایل {mcode} — پاسخ‌ها کوتاه و ماموریت‌محور؛ مفصل فقط اگر کاربر توضیح بیشتر بخواهد."
+                    f"ماموریت فعال: فایل {mcode} — همین فایل موضوع گفتگوست؛ "
+                    "کد فایل را از کاربر نپرس؛ برای propose_* و draft_listing_copy همین کد را استفاده کن "
+                    "یا land_code را خالی بگذار تا سیستم خودش بگیرد. "
+                    "پاسخ‌ها کوتاه و ماموریت‌محور؛ مفصل فقط اگر کاربر توضیح بیشتر بخواهد."
                 )
         except Exception:
             pass
@@ -334,9 +337,9 @@ def build_partner_status_context(phone: str) -> str:
         n_done_p = sum(1 for r in mine if str(r.get("status") or "") == DONE_PENDING_STATUS)
         bits: list[str] = []
         if n_pending:
-            bits.append(f"منتظر تأیید:{n_pending}")
+            bits.append(f"قدیمی در صف:{n_pending}")
         if n_approved:
-            bits.append(f"تأییدشده:{n_approved}")
+            bits.append(f"نهایی‌شده:{n_approved}")
         if n_done_p:
             bits.append(f"منتظر تأیید انجام:{n_done_p}")
         if bits:
@@ -440,12 +443,19 @@ def build_public_context_base() -> str:
     cities = load_active_cities() or []
     return "\n".join(
         [
-            "=== اطلاعات وینور (کاربر عادی) ===",
-            "نقش مخاطب: مشتری / خریدار",
+            "=== اطلاعات وینور (کاربر عادی / مهمان) ===",
+            "نقش مخاطب: مشتری/خریدار یا متقاضی همکاری (هنوز همکار تأییدشده نیست)",
             f"شهرهای فعال: {', '.join(str(c) for c in cities[:12])}",
             f"پشتیبانی: {admin_phone}",
             "وینور: خرید/فروش زمین، باغ و ویلا با پرونده تأییدشده.",
             "خرید امن: بررسی سند، بازدید حضوری، پرداخت مرحله‌ای.",
+            "سطوح: کاربر عادی → همکار (تأییدشده) → همکار ویژه.",
+            "همکار: فایل آماده می‌گیرد، می‌فروشد، پورسانت می‌گیرد.",
+            "همکار ویژه: مالک/فروشنده با آگهی و بازدیدهای خودش.",
+            "ثبت درخواست همکاری: /express/partner/apply",
+            "ورود برای شروع همکاری: /express/partner/login?next=/express/partner/apply",
+            "شرایط همکاری: /express/partner/cooperation-terms",
+            "وضعیت درخواست پس از ثبت: /express/partner/thanks",
         ]
     )
 

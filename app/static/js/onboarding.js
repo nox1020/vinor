@@ -327,12 +327,6 @@ class OnboardingTour {
         position: 'top'
       },
       {
-        element: '[data-tour="top-sellers-link"]',
-        title: 'فروشنده‌های برتر',
-        description: 'رتبه‌بندی همکاران برتر را مشاهده کنید.',
-        position: 'top'
-      },
-      {
         element: '[data-tour="bottom-nav"]',
         title: 'منوی پایین',
         description: 'بازگشت سریع به داشبورد خانه.',
@@ -438,13 +432,6 @@ class OnboardingTour {
         element: '[data-tour="commissions-link"]',
         title: 'کیف پول',
         description: 'دسترسی سریع به موجودی و تراکنش‌ها از منوی پروفایل.',
-        position: 'top',
-        page: 'profile'
-      },
-      {
-        element: '[data-tour="top-sellers-link"]',
-        title: 'فروشنده‌های برتر',
-        description: 'رتبه‌بندی همکاران.',
         position: 'top',
         page: 'profile'
       },

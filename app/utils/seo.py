@@ -56,7 +56,6 @@ _INDEX_PREFIXES = (
     "/express/partner/lands/",
     "/express/partner/cooperation-terms",
     "/express/partner/legal/",
-    "/express/partner/top-sellers",
 )
 
 _PUBLIC_STATIC_PATHS = frozenset({

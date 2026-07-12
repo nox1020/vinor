@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.61-ai-fab';
+const VERSION = 'v1.0.62-logout-redirect';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -284,14 +284,13 @@ self.addEventListener('fetch', (event) => {
           })());
           return;
         }
-        /* فرم‌های وب (شامل خروج): برای logout redirect را follow کن تا WebView/APK درست دنبال کند */
+        /* فرم‌های وب: redirect را به مرورگر بسپار تا URL درست عوض شود.
+           follow روی logout باعث می‌شد آدرس روی /logout بماند و GET بعدی 405 بدهد. */
         if (isExpressPartnerRoute(url)) {
           event.respondWith((async () => {
             try {
-              var pathNorm = url.pathname.replace(/\/+$/, '') || '/';
-              var isLogout = pathNorm === '/express/partner/logout';
               return await fetch(request, {
-                redirect: isLogout ? 'follow' : 'manual',
+                redirect: 'manual',
                 credentials: 'include'
               });
             } catch (_) {

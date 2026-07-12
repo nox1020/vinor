@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
+from uuid import uuid4
 
 import requests
 from flask import current_app
@@ -220,6 +221,93 @@ def _build_messages(
     return messages
 
 
+# DeepSeek V3.2/V4 گاهی tool call را به‌صورت DSML داخل content می‌فرستد
+# (نه در فیلد structured tool_calls). هر دو شکل ｜ و | و تکرار دوبل پشتیبانی می‌شود.
+_DSML_PIPE = r"(?:｜{1,2}|\|{1,2})"
+_DSML_TAG_OPEN = rf"<{_DSML_PIPE}DSML{_DSML_PIPE}"
+_DSML_TAG_CLOSE = rf"</{_DSML_PIPE}DSML{_DSML_PIPE}"
+_DSML_BLOCK_RE = re.compile(
+    rf"{_DSML_TAG_OPEN}(?:tool_calls|function_calls)\s*>(.*?)"
+    rf"{_DSML_TAG_CLOSE}(?:tool_calls|function_calls)\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+_DSML_INVOKE_RE = re.compile(
+    rf"{_DSML_TAG_OPEN}invoke\s+name=\"([^\"]+)\"\s*>(.*?)"
+    rf"{_DSML_TAG_CLOSE}invoke\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+_DSML_PARAM_RE = re.compile(
+    rf"{_DSML_TAG_OPEN}parameter\s+name=\"([^\"]+)\"\s+string=\"(true|false)\"\s*>(.*?)"
+    rf"{_DSML_TAG_CLOSE}parameter\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+_DSML_ANY_TAG_RE = re.compile(
+    rf"</?{_DSML_PIPE}DSML{_DSML_PIPE}[^>]*>",
+    re.IGNORECASE,
+)
+
+
+def _parse_dsml_invokes(blob: str, *, id_prefix: str) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
+    for idx, inv in enumerate(_DSML_INVOKE_RE.finditer(blob or "")):
+        name = (inv.group(1) or "").strip()
+        if not name:
+            continue
+        args: dict[str, Any] = {}
+        for pm in _DSML_PARAM_RE.finditer(inv.group(2) or ""):
+            pname = (pm.group(1) or "").strip()
+            if not pname:
+                continue
+            is_string = (pm.group(2) or "").lower() == "true"
+            raw_val = pm.group(3) if pm.group(3) is not None else ""
+            if is_string:
+                args[pname] = raw_val
+            else:
+                try:
+                    args[pname] = json.loads(raw_val)
+                except Exception:
+                    args[pname] = raw_val
+        calls.append(
+            {
+                "id": f"{id_prefix}_{idx}_{uuid4().hex[:8]}",
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": json.dumps(args, ensure_ascii=False),
+                },
+            }
+        )
+    return calls
+
+
+def _extract_dsml_tool_calls(content: str) -> tuple[str, list[dict[str, Any]]]:
+    """استخراج tool_calls از مارکاپ DSML و پاک‌کردن آن از متن قابل‌نمایش."""
+    text = content or ""
+    if "DSML" not in text:
+        return text, []
+
+    tool_calls: list[dict[str, Any]] = []
+    cleaned = text
+    for bi, block in enumerate(_DSML_BLOCK_RE.finditer(text)):
+        tool_calls.extend(_parse_dsml_invokes(block.group(1), id_prefix=f"call_dsml_{bi}"))
+        cleaned = cleaned.replace(block.group(0), "", 1)
+
+    if not tool_calls:
+        tool_calls = _parse_dsml_invokes(cleaned, id_prefix="call_dsml_loose")
+        if tool_calls:
+            cleaned = _DSML_INVOKE_RE.sub("", cleaned)
+
+    # بلوک ناقص/بریده‌شده: از اولین تگ DSML تا انتها حذف شود
+    if "DSML" in cleaned:
+        cut = re.search(_DSML_TAG_OPEN, cleaned)
+        if cut:
+            cleaned = cleaned[: cut.start()]
+        cleaned = _DSML_ANY_TAG_RE.sub("", cleaned)
+
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned, tool_calls
+
+
 def _call_deepseek(
     messages: list[dict[str, Any]],
     *,
@@ -322,6 +410,20 @@ def _call_deepseek(
                     for tc in raw_calls:
                         if isinstance(tc, dict) and tc.get("id"):
                             tool_calls.append(tc)
+
+    # بعضی مدل‌ها/اندپوینت‌ها DSML را فقط داخل content می‌فرستند، نه در tool_calls
+    if reply and "DSML" in reply:
+        cleaned, dsml_calls = _extract_dsml_tool_calls(reply)
+        reply = cleaned
+        if not tool_calls and dsml_calls:
+            tool_calls = dsml_calls
+            try:
+                current_app.logger.info(
+                    "DeepSeek DSML fallback | parsed_tools=%s",
+                    len(dsml_calls),
+                )
+            except Exception:
+                pass
 
     usage = body.get("usage") if isinstance(body, dict) else None
     if isinstance(usage, dict):

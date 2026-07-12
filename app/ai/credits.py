@@ -10,6 +10,7 @@ from typing import Any
 
 from flask import current_app
 
+from .audience import AUDIENCE_PARTNER
 from .runtime_settings import get_ai_settings
 
 from app.utils.storage import data_dir
@@ -177,6 +178,10 @@ def record_api_call(user_key: str, audience: str) -> None:
 
 def lookup_cached_reply(user_key: str, audience: str, message: str) -> dict[str, Any] | None:
     """پاسخ تکراری همان سوال — بدون فراخوانی API."""
+    # پارتنر: کش فقط روی متن پیام است و ابزار/تاریخچه را نادیده می‌گیرد
+    # (مثلاً «اولی» یا تکرار پیام بازدید → جواب غلط بدون کارت تأیید)
+    if audience == AUDIENCE_PARTNER:
+        return None
     key = _reply_cache_key(user_key, audience, message)
     if not key:
         return None
@@ -195,6 +200,11 @@ def store_cached_reply(
     message: str,
     result: dict[str, Any],
 ) -> None:
+    if audience == AUDIENCE_PARTNER:
+        return
+    # پاسخ‌های وابسته به ابزار/کارت تأیید را کش نکن
+    if result.get("agent_actions") or result.get("tool_land_codes"):
+        return
     key = _reply_cache_key(user_key, audience, message)
     if not key or not result.get("reply"):
         return

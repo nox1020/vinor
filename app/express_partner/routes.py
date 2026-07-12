@@ -4,7 +4,7 @@ import os
 import json
 import threading
 from datetime import datetime, date
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from flask import (
     render_template, request, redirect, url_for, session,
@@ -2442,9 +2442,9 @@ def _home_funnel_for_land(
     elif visit_done:
         stage_label = 'معامله یا بازدید مجدد'
     elif visit_approved:
-        stage_label = 'بازدید تأییدشد'
+        stage_label = 'در انتظار بازدید'
     elif visit_pending or (has_visit and not visit_cancelled):
-        stage_label = 'درخواست بازدید'
+        stage_label = 'در انتظار بازدید'
     else:
         stage_label = 'بازاریابی'
 
@@ -2686,11 +2686,47 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     }
 
 
-def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
-    """زمینهٔ لایه تمام‌صفحه Vinor AI — مشترک خانه و فایل‌ها."""
-    enabled = bool((me_phone or '').strip())
+def _partner_ai_welcome(*, is_approved: bool, has_pending_app: bool, me_phone: str) -> str:
+    """پیام خوش‌آمد چت خانه — بر اساس سطح دسترسی."""
+    if is_approved:
+        return 'سلام — منم کنارتم برای فایل و فروشت. بگو کجا گیر کردی یا چی لازم داری.'
+    if has_pending_app:
+        return (
+            'سلام — درخواست همکاری‌ت ثبت شده و در حال بررسی است. '
+            'از همین‌جا بپرس سطوح همکاری چیست یا وضعیت درخواستت را ببین.'
+        )
+    if me_phone:
+        return (
+            'سلام — می‌تونی از همین چت دربارهٔ سطوح همکاری، پورسانت و ثبت درخواست بپرسی. '
+            'بعد از تأیید همکار، فروش فایل از همین‌جا فعال می‌شود.'
+        )
+    return (
+        'سلام — بدون ورود هم می‌تونی بپرسی همکاری وینور چطور کار می‌کند و سطوحش چیست. '
+        'برای ثبت درخواست همکاری اول وارد شو.'
+    )
+
+
+def _partner_ai_layer_context(
+    me_phone: str,
+    *,
+    profile: Optional[Dict[str, Any]] = None,
+    has_pending_app: bool = False,
+) -> Dict[str, Any]:
+    """زمینهٔ چت خانه — همکار تأییدشده: کامل؛ مهمان/کاربر عادی: محدود (سطوح + همکاری)."""
+    phone = (me_phone or '').strip()
+    is_approved = _is_partner_approved(profile) if phone else False
+    limited = not is_approved
+    open_tid = (request.args.get('thread') or '').strip()
+    want_ai = str(request.args.get('ai') or '').strip() in ('1', 'true', 'yes')
+
     ctx: Dict[str, Any] = {
-        'home_ai_enabled': enabled,
+        'home_ai_enabled': True,
+        'home_ai_limited': limited,
+        'ai_chat_welcome': _partner_ai_welcome(
+            is_approved=is_approved,
+            has_pending_app=bool(has_pending_app),
+            me_phone=phone,
+        ),
         'chat_messages': [],
         'chat_threads': [],
         'active_thread_id': '',
@@ -2709,8 +2745,6 @@ def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
         'postchi_send_url': '',
         'postchi_open_url': '',
     }
-    if not enabled:
-        return ctx
 
     chat_messages: List[Dict[str, Any]] = []
     chat_threads: List[Dict[str, Any]] = []
@@ -2718,6 +2752,65 @@ def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
     postchi_thread_id = '__postchi__'
     home_ai_open = False
     home_ai_open_thread = ''
+
+    if limited:
+        # مهمان / کاربر عادی / متقاضی: چت عمومی محدود — بدون پستچی و ابزار فروش
+        try:
+            from app.ai.audience import AUDIENCE_PUBLIC
+            from app.ai.chat_store import ensure_active_thread, messages_for_ui, threads_for_ui
+            from app.ai.user_key import ai_user_key
+
+            user_key = ai_user_key()
+            ensure_active_thread(user_key, audience=AUDIENCE_PUBLIC)
+            threads_preview = threads_for_ui(user_key, audience=AUDIENCE_PUBLIC)
+            active_thread_id = next(
+                (t['id'] for t in threads_preview if t.get('is_active')),
+                '',
+            )
+            if not active_thread_id:
+                active_thread_id = ensure_active_thread(user_key, audience=AUDIENCE_PUBLIC)
+            if open_tid and open_tid != active_thread_id:
+                home_ai_open = True
+                home_ai_open_thread = open_tid
+                active_thread_id = open_tid
+            chat_messages = messages_for_ui(
+                user_key,
+                thread_id=active_thread_id or None,
+                audience=AUDIENCE_PUBLIC,
+            ) or []
+            chat_threads = threads_for_ui(user_key, audience=AUDIENCE_PUBLIC)
+            if want_ai or open_tid:
+                home_ai_open = True
+                if open_tid:
+                    home_ai_open_thread = open_tid
+        except Exception:
+            chat_messages = []
+            chat_threads = []
+            active_thread_id = ''
+            home_ai_open = False
+            home_ai_open_thread = ''
+
+        ctx.update({
+            'chat_messages': chat_messages,
+            'chat_threads': chat_threads,
+            'active_thread_id': active_thread_id,
+            'postchi_thread_id': '',
+            'home_ai_open': home_ai_open,
+            'home_ai_open_thread': home_ai_open_thread,
+            'chat_api_url': url_for('ai.chat'),
+            'clear_api_url': url_for('ai.clear'),
+            'history_api_url': url_for('ai.history'),
+            'switch_thread_url': url_for('ai.switch_thread'),
+            'delete_thread_url': url_for('ai.delete_thread'),
+            'sync_api_url': url_for('ai.sync'),
+            'agent_confirm_url': '',
+            'agent_cancel_url': '',
+            'postchi_messages_url': '',
+            'postchi_send_url': '',
+            'postchi_open_url': '',
+        })
+        return ctx
+
     try:
         from app.ai.audience import AUDIENCE_PARTNER
         from app.ai.chat_store import ensure_active_thread, messages_for_ui
@@ -2729,15 +2822,13 @@ def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
             threads_with_postchi,
         )
 
-        open_tid = (request.args.get('thread') or '').strip()
-        want_ai = str(request.args.get('ai') or '').strip() in ('1', 'true', 'yes')
         postchi_thread_id = POSTCHI_THREAD_ID
 
         mission_tid = ''
         try:
             from app.express_partner.partner_missions import get_active_mission, refresh_mission_if_land_closed
 
-            m = refresh_mission_if_land_closed(me_phone) or get_active_mission(me_phone)
+            m = refresh_mission_if_land_closed(phone) or get_active_mission(phone)
             if m:
                 mission_tid = str(m.get('thread_id') or '').strip()
         except Exception:
@@ -2745,26 +2836,26 @@ def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
 
         if is_postchi_thread(open_tid):
             active_thread_id = POSTCHI_THREAD_ID
-            chat_messages = postchi_messages_for_ui(me_phone) or []
-            open_postchi(me_phone)
+            chat_messages = postchi_messages_for_ui(phone) or []
+            open_postchi(phone)
             home_ai_open = True
             home_ai_open_thread = POSTCHI_THREAD_ID
         else:
             from app.ai.chat_store import set_active_thread
 
-            ensure_active_thread(me_phone, audience=AUDIENCE_PARTNER)
+            ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
             if mission_tid and not open_tid:
                 try:
-                    set_active_thread(me_phone, mission_tid, audience=AUDIENCE_PARTNER)
+                    set_active_thread(phone, mission_tid, audience=AUDIENCE_PARTNER)
                 except Exception:
                     pass
-            threads_preview = threads_with_postchi(me_phone, audience=AUDIENCE_PARTNER)
+            threads_preview = threads_with_postchi(phone, audience=AUDIENCE_PARTNER)
             active_thread_id = next(
                 (t['id'] for t in threads_preview if t.get('is_active')),
                 '',
             )
             if not active_thread_id:
-                active_thread_id = ensure_active_thread(me_phone, audience=AUDIENCE_PARTNER)
+                active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
             if open_tid and open_tid != active_thread_id:
                 home_ai_open = True
                 home_ai_open_thread = open_tid
@@ -2773,7 +2864,7 @@ def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
                 # چت خانه همان مأموریت
                 pass
             chat_messages = messages_for_ui(
-                me_phone,
+                phone,
                 thread_id=active_thread_id or None,
                 audience=AUDIENCE_PARTNER,
             ) or []
@@ -2782,7 +2873,7 @@ def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
                 if open_tid:
                     home_ai_open_thread = open_tid
         chat_threads = threads_with_postchi(
-            me_phone,
+            phone,
             audience=AUDIENCE_PARTNER,
             active_thread_id=active_thread_id,
         )
@@ -2794,7 +2885,6 @@ def _partner_ai_layer_context(me_phone: str) -> Dict[str, Any]:
         home_ai_open_thread = ''
 
     ctx.update({
-        'home_ai_enabled': enabled,
         'chat_messages': chat_messages,
         'chat_threads': chat_threads,
         'active_thread_id': active_thread_id,
@@ -2824,14 +2914,16 @@ def home_page():
     profile = getattr(g, 'express_partner_profile', None)
     payload = _build_home_dashboard_payload(me_phone, profile)
     partner_name = _partner_display_name(me_phone) if me_phone else ''
-    ai_ctx = _partner_ai_layer_context(me_phone)
+    ai_ctx = _partner_ai_layer_context(
+        me_phone,
+        profile=profile if isinstance(profile, dict) else None,
+        has_pending_app=bool(payload.get('has_pending_app')),
+    )
 
     # دادهٔ کشوی پروفایل (منوی GPT روی داشبورد)
     drawer_profile = profile if isinstance(profile, dict) else {}
     me_name = ''
     is_special = False
-    public_username = ''
-    public_profile_url = ''
     referral_bonus_per_invite = 0
     is_vinor_apk = False
     show_app_update_card = False
@@ -2841,10 +2933,6 @@ def home_page():
         me_name = (drawer_profile.get('name') or partner_name or '').strip()
         is_approved_flag = bool(payload.get('is_approved'))
         is_special = _is_partner_special(drawer_profile) if is_approved_flag else False
-        public_username = partner_public_username(drawer_profile) if drawer_profile else ''
-        public_profile_url = (
-            url_for('main.partner_profile_at', username=public_username) if public_username else ''
-        )
         from .referrals import REFERRAL_BONUS_AMOUNT
         referral_bonus_per_invite = REFERRAL_BONUS_AMOUNT
         _settings = _express_settings_cached()
@@ -2867,18 +2955,27 @@ def home_page():
 
     ai_quick_prompts = []
     try:
-        from app.express_partner.sales_coach import build_ai_quick_prompts
+        from app.express_partner.sales_coach import (
+            build_ai_quick_prompts,
+            build_limited_ai_quick_prompts,
+        )
 
-        _card = payload.get('journey_card') or {}
-        if isinstance(_card, dict):
-            ai_quick_prompts = build_ai_quick_prompts(
-                code=str(_card.get('code') or ''),
-                title=str(_card.get('title') or ''),
-                stage_label=str(_card.get('stage_label') or ''),
-                is_mission=bool(_card.get('is_mission')),
+        if ai_ctx.get('home_ai_limited'):
+            ai_quick_prompts = build_limited_ai_quick_prompts(
+                me_phone=me_phone,
+                has_pending_app=bool(payload.get('has_pending_app')),
             )
-        elif me_phone:
-            ai_quick_prompts = build_ai_quick_prompts()
+        else:
+            _card = payload.get('journey_card') or {}
+            if isinstance(_card, dict) and _card.get('code'):
+                ai_quick_prompts = build_ai_quick_prompts(
+                    code=str(_card.get('code') or ''),
+                    title=str(_card.get('title') or ''),
+                    stage_label=str(_card.get('stage_label') or ''),
+                    is_mission=bool(_card.get('is_mission')),
+                )
+            else:
+                ai_quick_prompts = build_ai_quick_prompts()
     except Exception:
         ai_quick_prompts = []
 
@@ -2890,8 +2987,6 @@ def home_page():
         partner_name=partner_name,
         is_approved=payload.get('is_approved'),
         is_special=is_special,
-        public_username=public_username,
-        public_profile_url=public_profile_url,
         referral_bonus_per_invite=referral_bonus_per_invite,
         is_vinor_apk=is_vinor_apk,
         show_app_update_card=show_app_update_card,
@@ -2912,7 +3007,9 @@ def home_page():
         **ai_ctx,
     ))
     if not me_phone:
-        resp.headers['Cache-Control'] = 'public, max-age=60, stale-while-revalidate=120'
+        # مهمان هم چت محدود دارد — کش عمومی ممنوع
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+        resp.headers['Vary'] = 'Cookie'
     else:
         resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
     _append_partner_tab_prefetch(resp)
@@ -5087,15 +5184,15 @@ def create_visit_request(code: str):
             message='درخواست بازدید شما قبلاً ثبت شده است. از صفحه درخواست‌ها وضعیت را پیگیری کنید.',
             category='success',
             new_status='active',
-            tx_mode=tx_state.get('tx_mode') or 'visit_pending',
-            visit_date=vdate,
-            customer_phone=tx_state.get('customer_phone')
-            or (open_rec or {}).get('customer_phone')
-            or '',
-            customer_name=tx_state.get('customer_name')
-            or (open_rec or {}).get('customer_name')
-            or '',
-            redirect_url=url_for('express_partner.requests', submitted=1),
+        tx_mode=tx_state.get('tx_mode') or 'visit_done',
+        visit_date=vdate,
+        customer_phone=tx_state.get('customer_phone')
+        or (open_rec or {}).get('customer_phone')
+        or '',
+        customer_name=tx_state.get('customer_name')
+        or (open_rec or {}).get('customer_name')
+        or '',
+        redirect_url=url_for('express_partner.requests', submitted=1),
         )
     if err == 'customer_required':
         return _mark_in_transaction_finish(
@@ -5161,9 +5258,9 @@ def create_visit_request(code: str):
         current_app.logger.exception(
             'visit_submitted partner SMS failed phone=%s code=%s', me_phone, code
         )
-    msg = 'درخواست بازدید ارسال شد. از صفحه درخواست‌ها وضعیت را پیگیری کنید.'
+    msg = 'درخواست بازدید نهایی شد. با مشتری هماهنگ کنید و پس از بازدید، «بازدید انجام شد» را ثبت کنید.'
     if not sms_result.get('ok') and not sms_result.get('skipped'):
-        msg = 'درخواست بازدید ارسال شد. از صفحه درخواست‌ها وضعیت را پیگیری کنید. (ارسال پیامک به ادمین ناموفق بود.)'
+        msg = 'درخواست بازدید نهایی شد. با مشتری هماهنگ کنید. (ارسال پیامک به ادمین ناموفق بود.)'
 
     try:
         is_pa = _is_partner_approved(partner_profile)
@@ -5182,7 +5279,7 @@ def create_visit_request(code: str):
         message=msg,
         category='success',
         new_status='active',
-        tx_mode=tx_state.get('tx_mode') or 'visit_pending',
+        tx_mode=tx_state.get('tx_mode') or 'visit_done',
         visit_date=tx_state.get('visit_date') or rec.get('visit_date') or visit_date,
         can_revisit=tx_state.get('can_revisit'),
         customer_phone=tx_state.get('customer_phone') or customer_phone,
@@ -5225,7 +5322,7 @@ def complete_visit_request(code: str):
         return _mark_in_transaction_finish(
             code,
             success=False,
-            message='ابتدا درخواست بازدید شما باید توسط ادمین تأیید شود.',
+            message='ابتدا باید درخواست بازدید ثبت شده باشد.',
             category='error',
         )
     if not rec:
@@ -5696,14 +5793,22 @@ def mark_in_transaction(code: str):
         )
 
 
-@express_partner_bp.route('/logout', methods=['POST'], endpoint='logout')
+@express_partner_bp.route('/logout', methods=['GET', 'POST'], endpoint='logout')
 def logout():
-    """خروج با POST؛ اعتبار از کوکی سشن (در اپ CSRF معاف است تا توکن کهنه خروج را نشکند)."""
+    """خروج با POST؛ GET فقط برای جلوگیری از 405 اگر URL روی /logout مانده باشد."""
     from ..utils.flash_messages import FLASH_AUTH_INFO
+
+    dest = _logout_dest_url()
+    if request.method == 'GET':
+        if session.get('user_phone'):
+            _clear_express_partner_auth_session()
+        r = redirect(dest)
+        r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+        r.headers['Pragma'] = 'no-cache'
+        return r
 
     _clear_express_partner_auth_session()
     flash('از حساب خارج شدید.', FLASH_AUTH_INFO)
-    dest = _logout_dest_url()
     r = redirect(dest)
     r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     r.headers['Pragma'] = 'no-cache'
@@ -5817,251 +5922,6 @@ def otp_resend():
         return jsonify({'ok': False, 'error': 'خطا در ارسال مجدد کد.'}), 502
 
 
-_USERNAME_RE = re.compile(r"^[a-z0-9_]{3,30}$")
-
-
-def partner_public_username(profile: Dict[str, Any] | None) -> str:
-    p = profile if isinstance(profile, dict) else {}
-    raw = str(p.get('username') or '').strip().lower()
-    if _USERNAME_RE.fullmatch(raw):
-        return raw
-    phone = _canonical_partner_phone(str(p.get('phone') or ''))
-    tail = (phone[-8:] if phone else 'vinor')
-    return f"vinor_{tail}"
-
-
-def _partner_find_by_username(username: str, partners: List[Dict[str, Any]]) -> Dict[str, Any] | None:
-    uname = (username or '').strip().lower()
-    if not uname:
-        return None
-    for p in partners if isinstance(partners, list) else []:
-        if not isinstance(p, dict):
-            continue
-        if partner_public_username(p) == uname:
-            return p
-    return None
-
-
-def _partner_deal_bucket(land: Dict[str, Any]) -> str:
-    deal = str(land.get('deal_type') or '').strip().lower()
-    pay = str(land.get('payment_method') or '').strip().lower()
-    raw = f"{deal} {pay}"
-    if ('rent' in raw) or ('اجاره' in raw) or ('رهن' in raw):
-        return 'rent'
-    if ('presale' in raw) or ('pre' in raw) or ('پیش' in raw):
-        return 'presale'
-    return 'sale'
-
-
-def _partner_kind_bucket(land: Dict[str, Any]) -> str:
-    cat = str(land.get('category') or '').strip().lower()
-    if 'ویلا' in cat or 'villa' in cat:
-        return 'villa'
-    if 'آپارتمان' in cat or 'apartment' in cat:
-        return 'apartment'
-    if 'زمین' in cat or 'land' in cat or 'باغ' in cat:
-        return 'land'
-    return 'other'
-
-
-def build_partner_brand_context(
-    target_profile: Dict[str, Any] | None,
-    *,
-    viewer_phone: str = '',
-    deal_filter: str = '',
-    kind_filter: str = '',
-) -> Dict[str, Any]:
-    profile = target_profile if isinstance(target_profile, dict) else {}
-    partner_phone = _canonical_partner_phone(str(profile.get('phone') or ''))
-    username = partner_public_username(profile)
-    is_approved = _is_partner_approved(profile)
-    is_special = _is_partner_special(profile) if is_approved else False
-
-    lands_all = load_express_lands_cached() or []
-    my_lands: List[Dict[str, Any]] = []
-    my_codes: set[str] = set()
-    if is_special:
-        from .special_listings import listings_owned_by
-        for land in listings_owned_by(partner_phone):
-            if not isinstance(land, dict):
-                continue
-            code = str(land.get('code') or '').strip()
-            if not code:
-                continue
-            copy_land = dict(land)
-            copy_land['_assignment_status'] = 'active'
-            my_lands.append(copy_land)
-            my_codes.add(code)
-    else:
-        assigns = load_express_assignments() or []
-        code_status: Dict[str, str] = {}
-        for a in assigns if isinstance(assigns, list) else []:
-            if not isinstance(a, dict):
-                continue
-            if _canonical_partner_phone(str(a.get('partner_phone') or '')) != partner_phone:
-                continue
-            code = str(a.get('land_code') or '').strip()
-            if not code:
-                continue
-            code_status[code] = str(a.get('status') or 'active').strip().lower() or 'active'
-        for land in lands_all if isinstance(lands_all, list) else []:
-            if not isinstance(land, dict):
-                continue
-            code = str(land.get('code') or '').strip()
-            if code not in code_status:
-                continue
-            copy_land = dict(land)
-            copy_land['_assignment_status'] = code_status.get(code, 'active')
-            my_lands.append(copy_land)
-            my_codes.add(code)
-
-    from ..utils.images import partner_card_image_url
-    from ..utils.share_tokens import encode_partner_ref
-    from ..utils.short_urls import public_referral_url
-
-    ref_token = encode_partner_ref(partner_phone) if partner_phone else ''
-    base_ref_url = public_referral_url(ref_token) if ref_token else ''
-
-    cards: List[Dict[str, Any]] = []
-    for land in my_lands:
-        deal = _partner_deal_bucket(land)
-        kind = _partner_kind_bucket(land)
-        if deal_filter and deal_filter != deal:
-            continue
-        if kind_filter and kind_filter != kind:
-            continue
-        code = str(land.get('code') or '').strip()
-        if not code:
-            continue
-        detail_url = url_for('express_partner.land_detail', code=code)
-        share_url = f"{detail_url}{'&' if '?' in detail_url else '?'}ref={ref_token}" if ref_token else detail_url
-        cards.append({
-            'code': code,
-            'title': str(land.get('title') or '—').strip(),
-            'city': str(land.get('city') or '').strip(),
-            'location': str(land.get('location') or '').strip(),
-            'category': str(land.get('category') or '').strip(),
-            'deal': deal,
-            'kind': kind,
-            'price_total': int(land.get('price_total') or land.get('price') or 0),
-            'image_url': partner_card_image_url(land) or None,
-            'status': str(land.get('_assignment_status') or 'active'),
-            'detail_url': detail_url,
-            'share_url': share_url,
-        })
-
-    comms = load_express_commissions_cached() or []
-    my_comms = [
-        c for c in (comms if isinstance(comms, list) else [])
-        if _canonical_partner_phone(str(c.get('partner_phone') or '')) == partner_phone
-    ]
-    sold_success = sum(1 for c in my_comms if str(c.get('status') or '').strip().lower() in ('approved', 'paid'))
-
-    views = load_express_partner_views() or []
-    if not isinstance(views, list):
-        views = []
-    profile_views = 0
-    listing_views = 0
-    for v in views:
-        if not isinstance(v, dict):
-            continue
-        if _canonical_partner_phone(str(v.get('partner_phone') or '')) == partner_phone:
-            if str(v.get('entity') or '') == 'profile':
-                profile_views += 1
-        code = str(v.get('code') or '').strip()
-        if code and code in my_codes:
-            listing_views += 1
-
-    reqs = load_express_visit_requests() or []
-    req_rows = [
-        r for r in (reqs if isinstance(reqs, list) else [])
-        if str(r.get('land_code') or '').strip() in my_codes
-    ]
-    requests_received = len(req_rows)
-    answered = sum(
-        1 for r in req_rows
-        if str(r.get('status') or '').strip().lower() in ('approved', 'completed', 'done_pending', 'rejected', 'cancelled')
-    )
-    response_rate = int((answered * 100 / requests_received) if requests_received else 0)
-
-    followers = load_partner_notes() or []
-    viewer_phone_canonical = _canonical_partner_phone(viewer_phone)
-    follower_rows = [
-        f for f in (followers if isinstance(followers, list) else [])
-        if isinstance(f, dict)
-        and f.get('type') == 'partner_follow'
-        and _canonical_partner_phone(str(f.get('partner_phone') or '')) == partner_phone
-    ]
-    follower_count = len(follower_rows)
-    viewer_following = bool(viewer_phone_canonical and any(
-        _canonical_partner_phone(str(f.get('follower_phone') or '')) == viewer_phone_canonical
-        for f in follower_rows
-    ))
-    can_follow = bool(viewer_phone_canonical and partner_phone and viewer_phone_canonical != partner_phone)
-
-    partners = load_express_partners_cached() or []
-    approved_phones = [
-        _canonical_partner_phone(str(p.get('phone') or ''))
-        for p in partners
-        if _is_partner_approved(p)
-    ]
-    sales_by_phone: Dict[str, int] = {}
-    for c in comms if isinstance(comms, list) else []:
-        if str(c.get('status') or '').strip().lower() not in ('approved', 'paid'):
-            continue
-        ph = _canonical_partner_phone(str(c.get('partner_phone') or ''))
-        if not ph:
-            continue
-        sales_by_phone[ph] = sales_by_phone.get(ph, 0) + 1
-    ranked = sorted(approved_phones, key=lambda ph: sales_by_phone.get(ph, 0), reverse=True)
-    rank = (ranked.index(partner_phone) + 1) if partner_phone in ranked else None
-
-    from ..utils.images import display_avatar_url
-    avatar = str(profile.get('avatar') or '').strip()
-    avatar_url = display_avatar_url(avatar, profile.get('avatar_updated_at')) if avatar else ''
-    is_verified = bool(is_approved)
-    partner_name = (profile.get('name') or '').strip() or phone_last4(partner_phone)
-    bio = (profile.get('bio') or '').strip()
-    city = (profile.get('city') or '').strip()
-    joined = str(profile.get('created_at') or profile.get('approved_at') or '').strip()
-    last_active = str(profile.get('last_active_at') or '').strip()
-    rating = round(min(5.0, 3.0 + (sold_success / 20.0) + (response_rate / 200.0)), 1)
-
-    return {
-        'profile': profile,
-        'username': username,
-        'partner_phone': partner_phone,
-        'partner_name': partner_name,
-        'bio': bio,
-        'city': city,
-        'is_verified': is_verified,
-        'is_special': is_special,
-        'avatar_url': avatar_url,
-        'share_ref_url': base_ref_url,
-        'ref_token': ref_token,
-        'stats': {
-            'active_files': sum(1 for land in my_lands if str(land.get('_assignment_status') or '') not in ('sold', 'closed')),
-            'sales_success': sold_success,
-            'profile_views': profile_views,
-            'listing_views': listing_views,
-            'requests_received': requests_received,
-            'rank': rank or 0,
-            'rating': rating,
-            'follower_count': follower_count,
-            'response_rate': response_rate,
-            'joined': joined,
-            'last_active': last_active,
-        },
-        'viewer_following': viewer_following,
-        'can_follow': can_follow,
-        'cards': cards,
-        'filters': {
-            'deal': deal_filter,
-            'kind': kind_filter,
-        },
-    }
-
-
 @express_partner_bp.route('/profile', methods=['GET'], endpoint='profile')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def profile_page():
@@ -6070,59 +5930,6 @@ def profile_page():
     if not me_phone:
         return redirect(url_for('express_partner.login', next=url_for('express_partner.home', menu=1)))
     return redirect(url_for('express_partner.home', menu=1), code=302)
-
-
-@express_partner_bp.post('/api/profile/follow/<string:username>', endpoint='profile_follow_toggle')
-def profile_follow_toggle(username: str):
-    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
-    if not me_phone:
-        return jsonify({'success': False, 'error': 'login_required'}), 401
-
-    partners = load_express_partners_cached() or []
-    target = _partner_find_by_username(username, partners)
-    if not target:
-        return jsonify({'success': False, 'error': 'not_found'}), 404
-    target_phone = _canonical_partner_phone(str(target.get('phone') or ''))
-    if not target_phone or target_phone == me_phone:
-        return jsonify({'success': False, 'error': 'invalid_target'}), 400
-
-    notes = load_partner_notes() or []
-    if not isinstance(notes, list):
-        notes = []
-    match_idx = -1
-    for idx, row in enumerate(notes):
-        if not isinstance(row, dict):
-            continue
-        if row.get('type') != 'partner_follow':
-            continue
-        if _canonical_partner_phone(str(row.get('partner_phone') or '')) != target_phone:
-            continue
-        if _canonical_partner_phone(str(row.get('follower_phone') or '')) != me_phone:
-            continue
-        match_idx = idx
-        break
-    is_following = False
-    if match_idx >= 0:
-        notes.pop(match_idx)
-        is_following = False
-    else:
-        notes.append({
-            'id': int(time.time() * 1000),
-            'type': 'partner_follow',
-            'partner_phone': target_phone,
-            'follower_phone': me_phone,
-            'created_at': datetime.utcnow().isoformat(),
-        })
-        is_following = True
-    save_partner_notes(notes)
-
-    count = sum(
-        1 for row in notes
-        if isinstance(row, dict)
-        and row.get('type') == 'partner_follow'
-        and _canonical_partner_phone(str(row.get('partner_phone') or '')) == target_phone
-    )
-    return jsonify({'success': True, 'following': is_following, 'follower_count': count})
 
 
 @express_partner_bp.route('/listings', methods=['GET'], endpoint='special_listings')
@@ -6751,62 +6558,6 @@ def profile_avatar_upload():
         return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile_edit'))
     flash('عکس پروفایل به‌روز شد.', 'profile')
     return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile_edit'))
-
-
-@express_partner_bp.route('/top-sellers', methods=['GET'], endpoint='top_sellers')
-@require_partner_access(allow_pending=True, allow_guest=True)
-def top_sellers_page():
-    """صفحه فروشنده‌های برتر"""
-    try:
-        partners = load_express_partners() or []
-        
-        # محاسبه آمار برای هر همکار
-        def _i(v):
-            try:
-                return int(str(v).replace(',', '').strip() or '0')
-            except Exception:
-                return 0
-        
-        # محاسبه مجموع پورسانت‌های تایید شده برای هر همکار
-        comms = load_express_commissions() or []
-        partner_stats = {}
-        
-        for partner in partners:
-            partner_phone = str(partner.get('phone', '')).strip()
-            if not partner_phone:
-                continue
-            
-            # پورسانت‌های تایید شده و پرداخت شده
-            my_comms = [c for c in comms if str(c.get('partner_phone', '')).strip() == partner_phone]
-            total_commission = sum(_i(c.get('commission_amount')) for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
-            sales_count = sum(1 for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
-            
-            partner_stats[partner_phone] = {
-                'partner': partner,
-                'total_commission': total_commission,
-                'sales_count': sales_count,
-                'total_income': _i(partner.get('total_income', 0)),
-                'approved_sales_count': _i(partner.get('approved_sales_count', 0))
-            }
-        
-        # مرتب‌سازی بر اساس مجموع درآمد (total_income یا total_commission)
-        top_sellers = sorted(
-            partner_stats.values(),
-            key=lambda x: max(x['total_income'], x['total_commission']),
-            reverse=True
-        )
-        
-        # فقط همکارانی که حداقل یک فروش داشته‌اند
-        top_sellers = [s for s in top_sellers if s['sales_count'] > 0 or s['approved_sales_count'] > 0]
-        
-    except Exception as e:
-        current_app.logger.error(f"Error loading top sellers: {e}", exc_info=True)
-        top_sellers = []
-    
-    return render_template(
-        'express_partner/top_sellers.html',
-        top_sellers=top_sellers
-    )
 
 
 @express_partner_bp.post('/files/<int:fid>/delete')

@@ -19,7 +19,7 @@ OPEN_VISIT_STATUSES = frozenset({PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_S
 
 VISIT_PROGRESS_STEP_KEYS = (
     ("visit_requested", "درخواست بازدید"),
-    ("visit_approved", "تأیید درخواست"),
+    ("visit_approved", "نهایی شدن بازدید"),
     ("visit_done", "بازدید انجام شد"),
     ("visit_commission_paid", "واریز پورسانت بازدید"),
     ("deal_requested", "درخواست معامله"),
@@ -28,8 +28,8 @@ VISIT_PROGRESS_STEP_KEYS = (
 )
 
 REQUEST_STAGE_HINTS = {
-    "visit_requested": "درخواست بازدید ثبت شده؛ تیم وینور در حال بررسی است.",
-    "visit_approved": "بازدید تأیید شد — با مشتری هماهنگ کنید و پس از بازدید «انجام شد» را ثبت کنید.",
+    "visit_requested": "درخواست بازدید ثبت و نهایی شد — با مشتری هماهنگ کنید.",
+    "visit_approved": "بازدید نهایی شد — با مشتری هماهنگ کنید و پس از بازدید «انجام شد» را ثبت کنید.",
     "visit_done": "بازدید انجام شد ثبت شده؛ منتظر تأیید ادمین بمانید.",
     "visit_commission_paid": "پورسانت بازدید در حال بررسی است؛ سپس می‌توانید معامله ثبت کنید.",
     "deal_requested": "زمان ثبت درخواست معامله است — از صفحه فایل اقدام کنید.",
@@ -143,15 +143,143 @@ def visit_allowed_weekdays_summary() -> str:
     return "، ".join(VISIT_WEEKDAY_LABELS.get(wd, str(wd)) for wd in VISIT_WEEKDAY_ORDER if wd in days)
 
 
-def _parse_visit_date(raw: Any) -> Optional[date]:
-    s = (str(raw or "")).strip()[:10]
+def list_upcoming_visit_dates(*, limit: int = 7, days_ahead: int = 90) -> List[Dict[str, Any]]:
+    """تاریخ‌های مجاز بعدی برای انتخاب در چت — شماره‌دار."""
+    today = _today()
+    end = today + timedelta(days=max(1, int(days_ahead) or 90))
+    out: List[Dict[str, Any]] = []
+    d = today
+    n = 1
+    lim = max(1, min(int(limit) or 7, 15))
+    while d <= end and len(out) < lim:
+        if is_visit_weekday_allowed(d):
+            iso = d.isoformat()
+            jalali = format_iso_date_jalali(iso) or iso
+            weekday = visit_weekday_label_for_date(d)
+            out.append(
+                {
+                    "n": n,
+                    "iso": iso,
+                    "jalali": jalali,
+                    "weekday": weekday,
+                    "label": f"{n}) {weekday} {jalali}",
+                }
+            )
+            n += 1
+        d += timedelta(days=1)
+    return out
+
+
+_VISIT_DATE_ORDINALS: Dict[str, int] = {
+    "1": 1, "۱": 1, "اول": 1, "اولی": 1, "یک": 1, "یکه": 1, "نخست": 1, "نخستین": 1,
+    "2": 2, "۲": 2, "دوم": 2, "دومی": 2, "دو": 2,
+    "3": 3, "۳": 3, "سوم": 3, "سومی": 3, "سه": 3,
+    "4": 4, "۴": 4, "چهارم": 4, "چهارمی": 4, "چهار": 4,
+    "5": 5, "۵": 5, "پنجم": 5, "پنجمی": 5, "پنج": 5,
+    "6": 6, "۶": 6, "ششم": 6, "ششمی": 6, "شش": 6,
+    "7": 7, "۷": 7, "هفتم": 7, "هفتمی": 7, "هفت": 7,
+    "8": 8, "۸": 8, "هشتم": 8, "هشتمی": 8, "هشت": 8,
+    "9": 9, "۹": 9, "نهم": 9, "نهمی": 9, "نه": 9,
+    "10": 10, "۱۰": 10, "دهم": 10, "دهمی": 10, "ده": 10,
+}
+
+
+def resolve_visit_date_choice(
+    raw: Any,
+    *,
+    options: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[date]:
+    """YYYY-MM-DD، شماره/اولی/دومی، یا تاریخ جلالی هم‌خوان با لیست مجاز."""
+    s = (str(raw or "")).strip()
     if not s:
         return None
+
+    direct = _parse_visit_date(s)
+    if direct is not None:
+        return direct
+
+    # شماره در ابتدای پاسخ («۱»، «1)»، «گزینه ۲»)
+    head = s
+    for junk in ("گزینه", "تاریخ", "روز", "شماره"):
+        if head.startswith(junk):
+            head = head[len(junk):].strip()
+    head_token = head.split()[0] if head.split() else head
+    head_token = head_token.strip(").]:،-")
+    trans = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
+    head_norm = head_token.translate(trans)
+
+    idx: Optional[int] = _VISIT_DATE_ORDINALS.get(head_token) or _VISIT_DATE_ORDINALS.get(head_norm)
+    if idx is None and head_norm.isdigit() and len(head_norm) <= 2:
+        try:
+            idx = int(head_norm)
+        except Exception:
+            idx = None
+
+    # کل عبارت بدون زوائد (اولی / دومی)
+    if idx is None:
+        key = (
+            s.replace("گزینه", " ")
+            .replace("تاریخ", " ")
+            .replace("روز", " ")
+            .replace("‌", " ")
+            .strip()
+        )
+        key = " ".join(key.split())
+        idx = _VISIT_DATE_ORDINALS.get(key)
+        if idx is None:
+            key2 = key[:-1] if key.endswith("م") else key
+            idx = _VISIT_DATE_ORDINALS.get(key2)
+
+    opts = options if options is not None else list_upcoming_visit_dates(limit=max(idx or 7, 7))
+
+    if idx and 1 <= idx <= len(opts):
+        return _parse_visit_date(opts[idx - 1].get("iso"))
+
+    # تطبیق با جلالی داخل لیست (مثلاً 1405/04/21)
+    compact = (
+        s.replace(" ", "")
+        .replace("-", "/")
+        .replace(".", "/")
+        .translate(trans)
+    )
+    for opt in opts:
+        jalali = str(opt.get("jalali") or "").strip()
+        if not jalali:
+            continue
+        j_compact = jalali.replace(" ", "").replace("-", "/")
+        if j_compact and (j_compact in compact or compact in j_compact):
+            return _parse_visit_date(opt.get("iso"))
+        # فقط ارقام جلالی
+        j_digits = "".join(ch for ch in j_compact if ch.isdigit())
+        s_digits = "".join(ch for ch in compact if ch.isdigit())
+        if j_digits and s_digits == j_digits:
+            return _parse_visit_date(opt.get("iso"))
+
+    return None
+
+
+def split_customer_full_name(full_name: str) -> Tuple[str, str]:
+    """یک فیلد نام کامل → نام + نام خانوادگی برای ذخیره‌سازی."""
+    parts = [p for p in (full_name or "").strip().split() if p]
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], parts[0]
+    return parts[0], " ".join(parts[1:])
+
+
+def _parse_visit_date(raw: Any) -> Optional[date]:
+    s = (str(raw or "")).strip()
+    if not s:
+        return None
+    # ISO کامل یا فقط تاریخ
+    if "T" in s:
+        s = s.split("T", 1)[0]
+    s = s[:10]
     try:
         return datetime.strptime(s, "%Y-%m-%d").date()
     except Exception:
         return None
-
 
 def _match_partner_land(r: Dict[str, Any], phone: str, land_code: str) -> bool:
     if not isinstance(r, dict):
@@ -332,7 +460,7 @@ def partner_request_mgmt_meta(
         sort_group = 1
     else:
         next_action_map = {
-            "visit_requested": "انتظار تأیید ادمین",
+            "visit_requested": "تماس با مشتری و ثبت بازدید",
             "visit_approved": "تماس با مشتری و ثبت بازدید",
             "visit_done": "انتظار تأیید انجام بازدید",
             "visit_commission_paid": "انتظار تأیید پورسانت بازدید",
@@ -618,6 +746,7 @@ def create_visit_request(
 
     now_iso = datetime.utcnow().isoformat() + "Z"
     full_name = f"{first} {last}".strip()
+    # درخواست بازدید بدون صف تأیید ادمین نهایی می‌شود؛ فقط پیامک اطلاع‌رسانی می‌رود.
     rec: Dict[str, Any] = {
         "id": uuid.uuid4().hex[:16],
         "partner_phone": ph,
@@ -629,9 +758,11 @@ def create_visit_request(
         "customer_last_name": last,
         "customer_name": full_name,
         "customer_phone": cust_phone,
-        "status": PENDING_STATUS,
+        "status": APPROVED_STATUS,
         "created_at": now_iso,
         "updated_at": now_iso,
+        "approved_at": now_iso,
+        "auto_approved": True,
     }
     requests.append(rec)
     return rec, None
@@ -1145,12 +1276,13 @@ def admin_visit_workflow_steps(
         else:
             s1, hint, action = "rejected", "درخواست بازدید رد شد.", False
     elif st == PENDING_STATUS:
-        s1, hint, action = "current", "درخواست بازدید منتظر تأیید یا رد شماست.", True
+        # سازگاری با درخواست‌های قدیمی که هنوز در صف تأیید بودند
+        s1, hint, action = "current", "درخواست بازدید قدیمی — تأیید یا رد کنید (ثبت‌های جدید خودکار نهایی می‌شوند).", True
     else:
-        s1, hint, action = "done", "", False
+        s1, hint, action = "done", "درخواست بازدید نهایی شده است.", False
     steps.append({
         "key": "visit_request",
-        "label": "تأیید درخواست بازدید",
+        "label": "ثبت درخواست بازدید",
         "state": s1,
         "hint": hint,
         "needs_action": action,

@@ -1,6 +1,7 @@
 {# هسته چت Vinor AI — پیام‌ها + کامپوزر (IDهای ثابت برای ai-chat.js) #}
 {% set chat_mode = chat_mode|default('home-layer') %}
 {% set omit_composer = omit_composer|default(false) %}
+{% set _ai_welcome = ai_chat_welcome|default('سلام — منم کنارتم برای فایل و فروشت. بگو کجا گیر کردی یا چی لازم داری.') %}
 {% include 'express_partner/partials/ai_chat_messages_style.html' %}
 <main id="aiPageMain" class="ai-page-shell" data-vinor-ptr="off">
   <section id="aiChat" class="ai-chat-shell">
@@ -8,7 +9,7 @@
          class="ai-messages ai-scroll"
          aria-live="polite"
          aria-label="گفتگو"
-         data-welcome="سلام — منم کنارتم برای فایل و فروشت. بگو کجا گیر کردی یا چی لازم داری.">
+         data-welcome="{{ _ai_welcome|e }}">
       {% for msg in chat_messages|default([]) %}
         {% include 'express_partner/partials/ai_chat_message.html' %}
       {% endfor %}

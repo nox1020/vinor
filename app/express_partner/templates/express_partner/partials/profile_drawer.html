@@ -314,6 +314,40 @@
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     padding: 0.45rem 0.5rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
   }
+  .ep-profile-drawer__upgrade {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    width: 100%;
+    margin: 0 0 0.35rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+    color: #f4f4f5;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ep-profile-drawer__upgrade:hover,
+  .ep-profile-drawer__upgrade:active {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.05) 100%);
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+  .ep-profile-drawer__upgrade:active {
+    transform: scale(0.98);
+  }
+  .ep-profile-drawer__upgrade-icon {
+    display: inline-flex;
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    color: #fafafa;
+  }
   .ep-profile-drawer__user {
     display: flex;
     align-items: center;
@@ -437,7 +471,7 @@
     {% if not me_phone %}
     <div class="ep-profile-drawer__guest">
       <p class="text-sm font-semibold text-white">به وینور خوش آمدید</p>
-      <p class="mt-1.5 text-xs leading-relaxed text-zinc-500">برای مدیریت حساب وارد شوید</p>
+      <p class="mt-1.5 text-xs leading-relaxed text-zinc-500">برای مدیریت حساب وارد شوید — یا از چت خانه دربارهٔ همکاری بپرسید</p>
       <div class="ep-profile-drawer__guest-actions">
         <a href="{{ url_for('express_partner.login', next=url_for('express_partner.home')) }}"
            data-vinor-express-nav
@@ -447,11 +481,21 @@
            class="ep-profile-drawer__guest-btn ep-profile-drawer__guest-btn--ghost">شروع همکاری</a>
       </div>
     </div>
-    <p class="ep-profile-drawer__label">بیشتر</p>
-    <nav class="ep-profile-drawer__nav" aria-label="منوی مهمان">
-      {{ profile_menu_row(url_for('express_partner.cooperation_terms', next=url_for('express_partner.home')), 'fa-handshake', 'شرایط همکاری', '') }}
-      {{ profile_menu_row(url_for('express_partner.top_sellers'), 'fa-trophy', 'فروشنده‌های برتر', '') }}
-    </nav>
+    {% if home_ai_enabled|default(false) %}
+    <div class="ep-profile-drawer__ai" aria-label="گفتگوهای Vinor AI">
+      <div class="ep-profile-drawer__top-row" style="margin-bottom:0.5rem">
+        <p class="ep-profile-drawer__label" style="margin:0">گفتگوها</p>
+        <button type="button" id="aiNewChatBtn" aria-label="گفتگوی جدید"
+                class="ep-profile-drawer__guest-btn ep-profile-drawer__guest-btn--ghost"
+                style="min-height:2rem;padding:0.25rem 0.65rem;font-size:0.7rem">
+          <i class="fas fa-pen-to-square" aria-hidden="true"></i>
+          جدید
+        </button>
+      </div>
+      {% set ai_threads_in_drawer = true %}
+      {% include 'express_partner/partials/ai_chat_threads.html' %}
+    </div>
+    {% endif %}
     {% else %}
 
     {% if home_ai_enabled|default(false) %}
@@ -475,11 +519,7 @@
         {% if is_vinor_apk|default(false) and show_app_update_card|default(false) and android_apk_url %}
         {{ profile_menu_row(android_apk_url, 'fa-download', 'بروزرسانی اپ', '', nav=false, download=true, extra_class='text-amber-200') }}
         {% endif %}
-        {{ profile_menu_row(url_for('express_partner.top_sellers'), 'fa-trophy', 'فروشنده‌های برتر', '', tour='top-sellers-link') }}
         {{ profile_menu_row(url_for('express_partner.invite_colleagues'), 'fa-user-plus', 'دعوت همکار', '', tour='invite-colleagues-link') }}
-        {% if public_profile_url %}
-        {{ profile_menu_row(public_profile_url, 'fa-globe', 'صفحه عمومی من', '', nav=false) }}
-        {% endif %}
       </nav>
     </div>
     {% endif %}
@@ -489,6 +529,30 @@
   {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
   {% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
   <div class="ep-profile-drawer__foot">
+    {% if not is_special|default(false) %}
+    {% if not is_approved|default(false) %}
+    <a href="{{ url_for('express_partner.apply') }}"
+       data-vinor-express-nav
+       class="ep-profile-drawer__upgrade"
+       aria-label="ارتقا به همکار">
+      <svg class="ep-profile-drawer__upgrade-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M12 2.5l1.7 4.8h5.1l-4.1 3 1.6 4.9L12 12.9 7.7 15.2l1.6-4.9-4.1-3h5.1L12 2.5z"/>
+      </svg>
+      <span>ارتقا</span>
+    </a>
+    {% else %}
+    <a href="{{ url_for('express_partner.home', ai=1) }}"
+       data-vinor-express-nav
+       class="ep-profile-drawer__upgrade"
+       data-vinor-upgrade-chat
+       aria-label="ارتقا به همکار ویژه">
+      <svg class="ep-profile-drawer__upgrade-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M12 2.5l1.7 4.8h5.1l-4.1 3 1.6 4.9L12 12.9 7.7 15.2l1.6-4.9-4.1-3h5.1L12 2.5z"/>
+      </svg>
+      <span>ارتقا</span>
+    </a>
+    {% endif %}
+    {% endif %}
     <a href="{{ url_for('express_partner.profile_edit') }}"
        data-vinor-express-nav
        class="ep-profile-drawer__user"
@@ -513,7 +577,7 @@
     </a>
     <form id="logoutDrawerForm" method="post" action="{{ url_for('express_partner.logout') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="ep-profile-drawer__logout">
+      <button type="submit" class="ep-profile-drawer__logout" data-vinor-logout>
         <i class="fas fa-right-from-bracket text-xs" aria-hidden="true"></i>
         خروج
       </button>
@@ -595,6 +659,29 @@
   backdrop.addEventListener('click', closeDrawer);
 
   drawer.addEventListener('click', function (e) {
+    var logoutBtn = e.target.closest && e.target.closest('[data-vinor-logout]');
+    if (logoutBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDrawer();
+      if (typeof window.vinorExpressLogout === 'function') {
+        window.vinorExpressLogout();
+      } else {
+        var form = document.getElementById('logoutDrawerForm');
+        if (form) form.submit();
+      }
+      return;
+    }
+    var upgrade = e.target.closest && e.target.closest('[data-vinor-upgrade-chat]');
+    if (upgrade) {
+      try {
+        sessionStorage.setItem(
+          'vinor_ai_home_prompt',
+          'چطور می‌تونم همکار ویژه بشم؟ شرایط و مسیر ارتقا رو خیلی کوتاه بگو.'
+        );
+        sessionStorage.setItem('vinor_ai_home_autosend', '1');
+      } catch (_) {}
+    }
     var link = e.target.closest('a[href]');
     if (link) closeDrawer();
   });

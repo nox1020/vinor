@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import jsonify, redirect, render_template, request, session, url_for
+from flask import jsonify, redirect, request, session, url_for
 
 from . import ai_bp
 from .audience import AUDIENCE_PUBLIC
@@ -19,34 +19,14 @@ def _redirect_approved_partner() -> str | None:
 
 @ai_bp.get("/", endpoint="index")
 def index():
-    """چت AI برای کاربر عادی؛ همکار تأییدشده به پرتال همکار هدایت می‌شود."""
+    """چت AI عمومی — همکاران تأییدشده و کاربران پرتال به خانه هدایت می‌شوند."""
     partner_url = _redirect_approved_partner()
     if partner_url:
         return redirect(partner_url)
 
-    from app.ai.chat_store import (
-        ensure_active_thread,
-        messages_for_ui,
-        threads_for_ui,
-    )
-
-    key = ai_user_key()
-    ensure_active_thread(key, audience=AUDIENCE_PUBLIC)
-    threads = threads_for_ui(key, audience=AUDIENCE_PUBLIC)
-    active_thread_id = next((t["id"] for t in threads if t.get("is_active")), "")
-    return render_template(
-        "ai/public_chat.html",
-        chat_messages=messages_for_ui(key, audience=AUDIENCE_PUBLIC),
-        chat_threads=threads,
-        active_thread_id=active_thread_id,
-        ai_audience="public",
-        chat_api_url=url_for("ai.chat"),
-        clear_api_url=url_for("ai.clear"),
-        history_api_url=url_for("ai.history"),
-        switch_thread_url=url_for("ai.switch_thread"),
-        delete_thread_url=url_for("ai.delete_thread"),
-        sync_api_url=url_for("ai.sync"),
-    )
+    # یکپارچه‌سازی با چت خانه (سطوح + همکاری برای مهمان/کاربر عادی)
+    nxt = url_for("express_partner.home", ai=1)
+    return redirect(nxt)
 
 
 @ai_bp.get("/health", endpoint="health")

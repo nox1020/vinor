@@ -161,7 +161,7 @@ def _notify_special_land_owner(action: str, msg: str, line: str, **kwargs: Any) 
         if action == 'visit':
             owner_msg = (
                 f"وینور\nبازدید جدید روی آگهی‌ت · {land_code}\n"
-                f"از صندوق بازدید تأیید کن"
+                f"نهایی شد — از صندوق بازدید ببین"
             )
         elif action == 'visit_done':
             owner_msg = (

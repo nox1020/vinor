@@ -228,23 +228,19 @@
   .vn-journey-card__coach:active { filter: brightness(1.08); }
   .vn-journey-card__collapse {
     flex-shrink: 0;
+    width: 2.2rem;
     height: 2.2rem;
-    padding: 0 0.65rem;
+    padding: 0;
     border-radius: 0.65rem;
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: #121826;
     color: #cbd5e1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.3rem;
-    font-size: 0.68rem;
-    font-weight: 700;
-    white-space: nowrap;
+    display: inline-grid;
+    place-items: center;
     cursor: pointer;
   }
   .vn-journey-card__collapse:active { filter: brightness(1.08); }
-  .vn-journey-card__collapse i { font-size: 0.65rem; opacity: 0.85; }
+  .vn-journey-card__collapse i { font-size: 0.7rem; opacity: 0.85; }
   .vn-journey-card__cta {
     flex: 1;
     min-height: 2.2rem;
@@ -305,16 +301,16 @@
   }
   .vn-journey-card__compact-open {
     flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.28rem 0.55rem;
+    width: 1.85rem;
+    height: 1.85rem;
+    display: inline-grid;
+    place-items: center;
     border-radius: 0.5rem;
     background: rgba(124, 58, 237, 0.22);
     color: #ddd6fe;
-    font-size: 0.65rem;
-    font-weight: 700;
+    font-size: 0.7rem;
   }
+  .vn-journey-card__compact-open i { opacity: 0.9; }
   .vn-journey-card.is-collapsed {
     margin-bottom: 0.25rem;
   }
@@ -364,9 +360,8 @@
       <span class="vn-journey-card__compact-price">{{ card.price_total|toman }}</span>
       {% endif %}
     </span>
-    <span class="vn-journey-card__compact-open">
-      باز کن
-      <i class="fas fa-chevron-down" aria-hidden="true"></i>
+    <span class="vn-journey-card__compact-open" aria-hidden="true">
+      <i class="fas fa-chevron-down"></i>
     </span>
   </button>
 
@@ -438,7 +433,6 @@
             aria-expanded="true"
             aria-label="جمع کردن کارت مأموریت">
       <i class="fas fa-chevron-up" aria-hidden="true"></i>
-      جمع شو
     </button>
     {% if card.coach_prompt %}
     <button type="button"

@@ -33,6 +33,35 @@ TOOL_RELEASE = "propose_release_deal"
 TOOL_LISTING = "draft_listing_copy"
 
 
+def _active_mission_land_code(phone: str) -> str:
+    """کد فایل مأموریت فعال همکار — اگر نباشد خالی."""
+    ph = (phone or "").strip()
+    if not ph:
+        return ""
+    try:
+        from app.express_partner.partner_missions import (
+            get_active_mission,
+            refresh_mission_if_land_closed,
+        )
+
+        mission = refresh_mission_if_land_closed(ph) or get_active_mission(ph)
+        if not mission:
+            return ""
+        return str(mission.get("land_code") or "").strip()
+    except Exception:
+        return ""
+
+
+def _resolve_tool_land_code(phone: str, args: dict[str, Any] | None = None) -> str:
+    """کد فایل از آرگومان ابزار، وگرنه از مأموریت فعال."""
+    raw = ""
+    if isinstance(args, dict):
+        raw = str(args.get("land_code") or "").strip()
+    if raw:
+        return raw
+    return _active_mission_land_code(phone)
+
+
 def agent_system_hint(voice: str | None) -> str:
     v = (voice or "").strip().lower()
     if v == VOICE_PUBLIC:
@@ -49,7 +78,11 @@ def agent_system_hint(voice: str | None) -> str:
         "propose_visit_request / propose_complete_visit / propose_deal / propose_release_deal → "
         "پیشنهاد با کارت تأیید؛ تا تأیید نزده نگوی ثبت شد. "
         "ثبت فروش را از همین چت جلو ببر. "
-        "اگر نام/شماره/تاریخ مشتری کم است اول خودمونی بپرس."
+        "اگر مأموریت فعال در داده هست، همان فایل را بگیر؛ کد فایل را از کاربر نپرس و land_code را خالی بگذار یا همان کد مأموریت را بزن. "
+        "ثبت بازدید: ۱) نام و نام‌خانوادگی مشتری یکجا بپرس ۲) شماره موبایل "
+        "۳) propose_visit_request را بدون تاریخ بزن تا لیست شماره‌دار تاریخ‌های مجاز بیاید "
+        "۴) همان لیست را به کاربر نشان بده ۵) وقتی گفت ۱ / اولی / دومی، فقط visit_date را بفرست "
+        "(نام و شماره از مرحله قبل ذخیره شده؛ دوباره نپرس)."
     )
 
 
@@ -110,6 +143,7 @@ def _schema_listing() -> dict[str, Any]:
             "name": TOOL_LISTING,
             "description": (
                 "ساخت متن آماده آگهی دیوار و/یا کپشن اینستا برای یک فایل قابل‌دسترس همکار. "
+                "اگر مأموریت فعال است land_code لازم نیست. "
                 "برای درخواست آگهی، پست، استوری، دیوار یا اینستاگرام استفاده کن."
             ),
             "parameters": {
@@ -117,14 +151,14 @@ def _schema_listing() -> dict[str, Any]:
                 "properties": {
                     "land_code": {
                         "type": "string",
-                        "description": "کد فایل",
+                        "description": "کد فایل — اختیاری اگر مأموریت فعال باشد",
                     },
                     "channel": {
                         "type": "string",
                         "description": "divar | instagram | both",
                     },
                 },
-                "required": ["land_code"],
+                "required": [],
             },
         },
     }
@@ -137,28 +171,36 @@ def _schema_visit() -> dict[str, Any]:
             "name": TOOL_VISIT,
             "description": (
                 "آماده‌سازی پیشنهاد ثبت بازدید یا بازدید مجدد برای فایل مأموریت. "
+                "اگر مأموریت فعال است land_code لازم نیست (سیستم خودش می‌گیرد). "
+                "نام مشتری را یکجا بده. اگر تاریخ نداری خالی بگذار تا لیست تاریخ‌های مجاز "
+                "با شماره برگردد؛ کاربر با ۱/اولی/دومی انتخاب می‌کند. "
                 "ثبت نهایی فقط پس از تأیید کاربر در کارت چت."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "land_code": {"type": "string", "description": "کد فایل"},
-                    "visit_date": {
+                    "land_code": {
                         "type": "string",
-                        "description": "تاریخ بازدید YYYY-MM-DD",
+                        "description": "کد فایل — اختیاری اگر مأموریت فعال باشد",
                     },
-                    "customer_first_name": {"type": "string"},
-                    "customer_last_name": {"type": "string"},
+                    "customer_name": {
+                        "type": "string",
+                        "description": "نام و نام خانوادگی مشتری در یک فیلد",
+                    },
                     "customer_phone": {
                         "type": "string",
                         "description": "موبایل مشتری ایران",
                     },
+                    "visit_date": {
+                        "type": "string",
+                        "description": (
+                            "اختیاری: YYYY-MM-DD یا شماره گزینه (۱، ۲، اولی، دومی). "
+                            "اگر خالی باشد لیست تاریخ‌های مجاز برمی‌گردد."
+                        ),
+                    },
                 },
                 "required": [
-                    "land_code",
-                    "visit_date",
-                    "customer_first_name",
-                    "customer_last_name",
+                    "customer_name",
                     "customer_phone",
                 ],
             },
@@ -173,14 +215,17 @@ def _schema_complete_visit() -> dict[str, Any]:
             "name": TOOL_COMPLETE_VISIT,
             "description": (
                 "پیشنهاد ثبت «بازدید انجام شد» وقتی بازدید تأیید شده و همکار رفته. "
-                "ثبت نهایی با تأیید کارت در چت."
+                "اگر مأموریت فعال است land_code لازم نیست. ثبت نهایی با تأیید کارت در چت."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "land_code": {"type": "string", "description": "کد فایل"},
+                    "land_code": {
+                        "type": "string",
+                        "description": "کد فایل — اختیاری اگر مأموریت فعال باشد",
+                    },
                 },
-                "required": ["land_code"],
+                "required": [],
             },
         },
     }
@@ -193,14 +238,18 @@ def _schema_deal() -> dict[str, Any]:
             "name": TOOL_DEAL,
             "description": (
                 "پیشنهاد ثبت معامله/فروش نهایی روی فایل مأموریت "
-                "(بازدید تکمیل‌شده لازم است). تأیید ادمین بعداً فایل را می‌بندد و پورسانت می‌دهد."
+                "(بازدید تکمیل‌شده لازم است). اگر مأموریت فعال است land_code لازم نیست. "
+                "تأیید ادمین بعداً فایل را می‌بندد و پورسانت می‌دهد."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "land_code": {"type": "string", "description": "کد فایل"},
+                    "land_code": {
+                        "type": "string",
+                        "description": "کد فایل — اختیاری اگر مأموریت فعال باشد",
+                    },
                 },
-                "required": ["land_code"],
+                "required": [],
             },
         },
     }
@@ -212,14 +261,18 @@ def _schema_release() -> dict[str, Any]:
         "function": {
             "name": TOOL_RELEASE,
             "description": (
-                "پیشنهاد بستن/انصراف از معامله در حال انتظار تأیید ادمین."
+                "پیشنهاد بستن/انصراف از معامله در حال انتظار تأیید ادمین. "
+                "اگر مأموریت فعال است land_code لازم نیست."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "land_code": {"type": "string", "description": "کد فایل"},
+                    "land_code": {
+                        "type": "string",
+                        "description": "کد فایل — اختیاری اگر مأموریت فعال باشد",
+                    },
                 },
-                "required": ["land_code"],
+                "required": [],
             },
         },
     }
@@ -475,10 +528,12 @@ def _tool_draft_listing(
     phone: str,
     audience: str | None,
 ) -> dict[str, Any]:
-    code = str(args.get("land_code") or "").strip()
+    code = _resolve_tool_land_code(phone, args)
     channel = str(args.get("channel") or "both").strip().lower() or "both"
     if not code:
-        return _denied("کد فایل لازم است.")
+        return _denied(
+            "کد فایل مشخص نیست. اگر مأموریت فعال نیست، کد فایل را بپرس یا جستجو کن."
+        )
 
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
     lands_map = accessible_lands_map(phone, aud)
@@ -528,6 +583,67 @@ def _tool_draft_listing(
     return out
 
 
+def _visit_draft_key(user_key: str) -> str:
+    return f"visit_draft:{(user_key or '').strip()}"
+
+
+def _save_visit_draft(user_key: str, draft: dict[str, Any]) -> None:
+    """پیش‌نویس نام/شماره/فایل بین مرحلهٔ انتخاب تاریخ."""
+    uk = (user_key or "").strip()
+    if not uk or not isinstance(draft, dict):
+        return
+    store = _read_pending_store()
+    _prune_pending(store)
+    now = datetime.now(timezone.utc)
+    store[_visit_draft_key(uk)] = {
+        "user_key": uk,
+        "action_type": "visit_draft",
+        "payload": {
+            "land_code": str(draft.get("land_code") or "").strip(),
+            "customer_name": str(draft.get("customer_name") or "").strip(),
+            "customer_first_name": str(draft.get("customer_first_name") or "").strip(),
+            "customer_last_name": str(draft.get("customer_last_name") or "").strip(),
+            "customer_phone": str(draft.get("customer_phone") or "").strip(),
+        },
+        "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "expires_at": (now + timedelta(minutes=_PENDING_TTL_MIN)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        ),
+    }
+    _write_pending_store(store)
+
+
+def _load_visit_draft(user_key: str) -> dict[str, Any]:
+    uk = (user_key or "").strip()
+    if not uk:
+        return {}
+    store = _read_pending_store()
+    _prune_pending(store)
+    item = store.get(_visit_draft_key(uk))
+    if not isinstance(item, dict):
+        return {}
+    exp = str(item.get("expires_at") or "")
+    try:
+        exp_dt = datetime.strptime(exp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        if exp_dt < datetime.now(timezone.utc):
+            store.pop(_visit_draft_key(uk), None)
+            _write_pending_store(store)
+            return {}
+    except Exception:
+        pass
+    payload = item.get("payload")
+    return payload if isinstance(payload, dict) else {}
+
+
+def _clear_visit_draft(user_key: str) -> None:
+    uk = (user_key or "").strip()
+    if not uk:
+        return
+    store = _read_pending_store()
+    if store.pop(_visit_draft_key(uk), None) is not None:
+        _write_pending_store(store)
+
+
 def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     """اعتبارسنجی پیشنهاد بازدید — بدون ذخیره توکن."""
     from app.express_partner.routes import (
@@ -535,13 +651,18 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
         _partner_land_tx_payload,
     )
     from app.express_partner.visit_requests import (
+        list_upcoming_visit_dates,
         partner_can_request_new_visit,
+        partner_open_visit,
         partner_visit_completed,
-        _parse_visit_date,
+        resolve_visit_date_choice,
+        split_customer_full_name,
         is_visit_weekday_allowed,
         visit_allowed_weekdays_summary,
+        _today,
     )
     from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
+    from app.utils.dates import format_iso_date_jalali
     from app.utils.storage import (
         load_ads_cached,
         load_express_partners,
@@ -554,30 +675,59 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     if not partner_is_approved(me):
         return {"ok": False, "error": "برای ثبت بازدید باید حساب همکاری تأیید شده باشد."}
 
-    code = str(args.get("land_code") or "").strip()
-    visit_date = str(args.get("visit_date") or "").strip()
-    first = str(args.get("customer_first_name") or "").strip()
-    last = str(args.get("customer_last_name") or "").strip()
-    phone_raw = str(args.get("customer_phone") or "").strip()
+    draft = _load_visit_draft(me)
+    merged = dict(args or {})
+    # فیلدهای خالی را از پیش‌نویس مرحلهٔ قبل پر کن (نام/شماره بین انتخاب تاریخ)
+    for key in (
+        "land_code",
+        "customer_name",
+        "customer_first_name",
+        "customer_last_name",
+        "customer_phone",
+    ):
+        if not str(merged.get(key) or "").strip() and draft.get(key):
+            merged[key] = draft.get(key)
+
+    code = _resolve_tool_land_code(phone, merged)
+    visit_date_raw = str(merged.get("visit_date") or "").strip()
+    full_name = str(merged.get("customer_name") or "").strip()
+    first = str(merged.get("customer_first_name") or "").strip()
+    last = str(merged.get("customer_last_name") or "").strip()
+    if full_name:
+        first, last = split_customer_full_name(full_name)
+    elif first or last:
+        full_name = f"{first} {last}".strip()
+    phone_raw = str(merged.get("customer_phone") or "").strip()
     cust_phone = normalize_iran_mobile(phone_raw) or phone_raw
+
+    available = list_upcoming_visit_dates(limit=7)
+    available_labels = [str(x.get("label") or "") for x in available]
 
     missing = []
     if not code:
         missing.append("کد فایل")
-    if not visit_date:
-        missing.append("تاریخ بازدید")
-    if not first:
-        missing.append("نام مشتری")
-    if not last:
-        missing.append("نام خانوادگی مشتری")
+    if not full_name and (not first or not last):
+        missing.append("نام و نام خانوادگی مشتری")
     if not phone_raw:
         missing.append("شماره مشتری")
     if missing:
+        ask_bits = []
+        if "نام و نام خانوادگی مشتری" in missing:
+            ask_bits.append("نام و نام خانوادگی را یکجا بپرس")
+        if "شماره مشتری" in missing:
+            ask_bits.append("شماره موبایل بپرس")
+        if "کد فایل" in missing:
+            ask_bits.append("اگر مأموریت فعال نیست کد فایل را بپرس یا جستجو کن")
         return {
             "ok": False,
             "error": "اطلاعات ناقص",
             "missing": missing,
-            "instruction": "از کاربر همین فیلدها را بپرس؛ دوباره ابزار را صدا بزن.",
+            "mission_land_code": _active_mission_land_code(me),
+            "instruction": (
+                "؛ ".join(ask_bits) + ". "
+                "تاریخ را از کاربر نپرس؛ بعد از نام و شماره دوباره ابزار را بدون visit_date صدا بزن. "
+                "کد فایل را وقتی مأموریت فعال است نپرس."
+            ),
         }
 
     if not is_valid_iran_mobile(cust_phone):
@@ -587,14 +737,71 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "instruction": "شماره صحیح ۱۱ رقمی ایران بخواه.",
         }
 
-    vd = _parse_visit_date(visit_date)
+    # پیش‌نویس را همین‌جا نگه دار تا انتخاب تاریخ فقط با «۱/اولی» کافی باشد
+    _save_visit_draft(
+        me,
+        {
+            "land_code": code,
+            "customer_name": full_name or f"{first} {last}".strip(),
+            "customer_first_name": first,
+            "customer_last_name": last,
+            "customer_phone": cust_phone,
+        },
+    )
+
+    if not visit_date_raw:
+        if not available:
+            return {
+                "ok": False,
+                "error": "الان روز مجازی برای بازدید تعریف نشده است.",
+                "allowed_weekdays": visit_allowed_weekdays_summary(),
+                "instruction": "به کاربر بگو با پشتیبانی هماهنگ کند.",
+            }
+        return {
+            "ok": True,
+            "status": "needs_date_choice",
+            "land_code": code,
+            "customer_name": full_name or f"{first} {last}".strip(),
+            "available_dates": available,
+            "available_date_labels": available_labels,
+            "allowed_weekdays": visit_allowed_weekdays_summary(),
+            "instruction": (
+                f"فایل مأموریت: {code}. "
+                "همین لیست شماره‌دار را عیناً به کاربر نشان بده و بگو "
+                "عدد بزند (۱، ۲، …) یا بگوید اولی / دومی / سومی. "
+                "در فراخوانی بعدی فقط visit_date کافی است (نام و شماره ذخیره شده). "
+                "کد فایل را دوباره نپرس."
+            ),
+        }
+
+    vd = resolve_visit_date_choice(visit_date_raw, options=available)
     if vd is None:
-        return {"ok": False, "error": "تاریخ نامعتبر است. قالب YYYY-MM-DD."}
+        return {
+            "ok": True,
+            "status": "needs_date_choice",
+            "error": "انتخاب تاریخ نامعتبر است.",
+            "land_code": code,
+            "available_dates": available,
+            "available_date_labels": available_labels,
+            "instruction": (
+                "انتخاب را نفهمیدم. لیست را دوباره نشان بده و بخواه عدد یا اولی/دومی بگوید. "
+                "فقط visit_date را در فراخوانی بعدی بفرست."
+            ),
+        }
+    if vd < _today():
+        return {"ok": False, "error": "تاریخ بازدید نمی‌تواند در گذشته باشد."}
+    if vd > _today() + timedelta(days=90):
+        return {"ok": False, "error": "تاریخ بازدید حداکثر تا ۹۰ روز آینده قابل انتخاب است."}
     if not is_visit_weekday_allowed(vd):
         return {
-            "ok": False,
+            "ok": True,
+            "status": "needs_date_choice",
             "error": "روز انتخاب‌شده مجاز نیست.",
             "allowed": visit_allowed_weekdays_summary(),
+            "available_dates": available,
+            "available_date_labels": available_labels,
+            "land_code": code,
+            "instruction": "از لیست تاریخ‌های مجاز یک گزینه بخواه.",
         }
 
     ctx = _express_land_partner_ctx(code, me)
@@ -608,6 +815,18 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
 
     current_status = ctx["global_status"]
     holder_phone = ctx.get("holder_phone")
+    visit_requests = load_express_visit_requests() or []
+    if not isinstance(visit_requests, list):
+        visit_requests = []
+
+    open_rec = partner_open_visit(visit_requests, me, str(code))
+    if open_rec:
+        return {
+            "ok": False,
+            "error": "برای این فایل درخواست بازدید باز دارید؛ از صفحه درخواست‌ها پیگیری کنید.",
+            "existing_visit_id": str(open_rec.get("id") or ""),
+        }
+
     if current_status == "sold":
         return {"ok": False, "error": "فایل فروخته شده است."}
     if holder_phone and holder_phone != me:
@@ -618,9 +837,6 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "error": "فایل در حال معامله است؛ ابتدا معامله را رفع کنید.",
         }
 
-    visit_requests = load_express_visit_requests() or []
-    if not isinstance(visit_requests, list):
-        visit_requests = []
     if not partner_can_request_new_visit(current_status, visit_requests, me, str(code)):
         return {"ok": False, "error": "الان امکان ثبت بازدید جدید برای این فایل نیست."}
     if partner_visit_completed(visit_requests, me, str(code)):
@@ -638,17 +854,31 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     land_title = (land.get("title") if land else None) or code
 
     partners = load_express_partners() or []
-    partner_profile = next((p for p in partners if str(p.get("phone")) == me), None)
+    me_norm = normalize_iran_mobile(me) or me
+    partner_profile = next(
+        (
+            p
+            for p in partners
+            if (normalize_iran_mobile(str(p.get("phone") or "")) or str(p.get("phone") or "").strip())
+            == me_norm
+        ),
+        None,
+    )
     partner_name = (partner_profile.get("name") if partner_profile else None) or me
+
+    visit_iso = vd.isoformat()
+    visit_jalali = format_iso_date_jalali(visit_iso) or visit_iso
 
     return {
         "ok": True,
         "payload": {
             "land_code": str(code),
             "land_title": str(land_title),
-            "visit_date": vd.isoformat(),
+            "visit_date": visit_iso,
+            "visit_date_jalali": visit_jalali,
             "customer_first_name": first,
             "customer_last_name": last,
+            "customer_name": full_name or f"{first} {last}".strip(),
             "customer_phone": cust_phone,
             "partner_name": partner_name,
         },
@@ -657,6 +887,11 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
 
 def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     checked = _validate_visit_proposal(args, phone=phone)
+    # مرحلهٔ انتخاب تاریخ — موفقیت‌آمیز برای مدل، بدون کارت تأیید
+    if checked.get("status") == "needs_date_choice":
+        model = {k: v for k, v in checked.items() if k != "payload"}
+        return {"ok": True, "model_result": model}
+
     if not checked.get("ok"):
         model = {k: v for k, v in checked.items() if k != "payload"}
         return {"ok": False, "model_result": model}
@@ -668,12 +903,21 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
         action_type="confirm_visit",
         payload=payload,
     )
+    _clear_visit_draft(me)
     cust_phone = str(payload.get("customer_phone") or "")
     masked = cust_phone[:4] + "***" + cust_phone[-3:] if len(cust_phone) >= 7 else "***"
+    date_show = (
+        str(payload.get("visit_date_jalali") or "").strip()
+        or str(payload.get("visit_date") or "").strip()
+    )
+    cust_show = (
+        str(payload.get("customer_name") or "").strip()
+        or f"{payload.get('customer_first_name') or ''} {payload.get('customer_last_name') or ''}".strip()
+    )
     lines = [
         f"فایل: {payload.get('land_title')} ({payload.get('land_code')})",
-        f"تاریخ: {payload.get('visit_date')}",
-        f"مشتری: {payload.get('customer_first_name')} {payload.get('customer_last_name')}",
+        f"تاریخ: {date_show}",
+        f"مشتری: {cust_show}",
         f"تماس: {masked}",
     ]
     ui = {
@@ -689,6 +933,7 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
         "status": "needs_user_confirmation",
         "land_code": payload.get("land_code"),
         "visit_date": payload.get("visit_date"),
+        "visit_date_jalali": payload.get("visit_date_jalali"),
         "instruction": (
             "کارت تأیید برای کاربر نمایش داده می‌شود. "
             "بگو جزئیات را چک کند و فقط اگر موافق است «تأیید و ثبت» را بزند. "
@@ -806,7 +1051,16 @@ def _tool_propose_simple_tx(
     meta = _SIMPLE_TX_META.get(action_type)
     if not meta:
         return _denied("نوع اقدام نامعتبر است.")
-    code = str(args.get("land_code") or "").strip()
+    code = _resolve_tool_land_code(phone, args)
+    if not code:
+        return {
+            "ok": False,
+            "model_result": {
+                "ok": False,
+                "error": "کد فایل مشخص نیست.",
+                "instruction": "اگر مأموریت فعال نیست کد فایل را بپرس؛ وگرنه دوباره بدون land_code صدا بزن.",
+            },
+        }
     snap = _partner_tx_snapshot(phone, code)
     if not snap.get("ok"):
         return {"ok": False, "model_result": {"ok": False, "error": snap.get("error")}}
@@ -864,8 +1118,11 @@ def _tool_propose_simple_tx(
 
 
 def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
-    """اجرای قطعی ثبت بازدید پس از تأیید کاربر."""
-    from app.express_partner.routes import _sync_visit_customer_to_club
+    """اجرای قطعی ثبت بازدید پس از تأیید کاربر — بلافاصله نهایی می‌شود."""
+    from app.express_partner.routes import (
+        _send_visit_admin_sms,
+        _sync_visit_customer_to_club,
+    )
     from app.express_partner.visit_requests import (
         create_visit_request as record_visit_request,
     )
@@ -907,13 +1164,17 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
     if not isinstance(visit_requests, list):
         visit_requests = []
 
+    partner_name = str(fresh.get("partner_name") or me)
+    land_title = str(fresh.get("land_title") or code)
+    visit_date = str(fresh.get("visit_date") or "")
+
     rec, err = record_visit_request(
         visit_requests,
         partner_phone=me,
-        partner_name=str(fresh.get("partner_name") or me),
+        partner_name=partner_name,
         land_code=code,
-        land_title=str(fresh.get("land_title") or code),
-        visit_date=str(fresh.get("visit_date") or ""),
+        land_title=land_title,
+        visit_date=visit_date,
         customer_first_name=str(fresh.get("customer_first_name") or ""),
         customer_last_name=str(fresh.get("customer_last_name") or ""),
         customer_phone=str(fresh.get("customer_phone") or ""),
@@ -947,10 +1208,37 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
     except Exception:
         pass
 
+    try:
+        _send_visit_admin_sms(
+            partner_phone=me,
+            partner_name=partner_name,
+            land_code=code,
+            land_title=land_title,
+            visit_date=str(rec.get("visit_date") or visit_date),
+        )
+    except Exception:
+        pass
+    try:
+        from app.express_partner.visit_sms import notify_partner_land_tx_sms
+
+        notify_partner_land_tx_sms(
+            partner_phone=me,
+            event="visit_submitted",
+            land_code=code,
+            land_title=land_title,
+            visit_date=str(rec.get("visit_date") or visit_date),
+            reference_id=str(rec.get("id") or ""),
+        )
+    except Exception:
+        pass
+
     _consume_pending_action(token)
     return {
         "ok": True,
-        "message": "درخواست بازدید ثبت شد و منتظر تأیید تیم وینور است.",
+        "message": (
+            "بازدید نهایی شد. با مشتری هماهنگ کنید و پس از بازدید، "
+            "«بازدید انجام شد» را ثبت کنید."
+        ),
         "visit_id": str(rec.get("id") or ""),
         "land_code": code,
         "requests_url": url_for("express_partner.requests", submitted=1),
@@ -1002,7 +1290,7 @@ def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
         visits = []
     rec, err = request_visit_done_confirmation(visits, phone, code)
     if err == "not_approved":
-        return {"ok": False, "error": "اول بازدید باید توسط ادمین تأیید شود."}
+        return {"ok": False, "error": "اول باید درخواست بازدید ثبت شده باشد."}
     if not rec:
         return {"ok": False, "error": "ثبت انجام بازدید ممکن نشد."}
     save_express_visit_requests(visits)

@@ -1375,6 +1375,63 @@ def partners_activity():
     """فعالیت همکاران → فیلتر آنلاین در لیست یکپارچه."""
     return redirect(url_for('admin.express_partners', filter='online'))
 
+
+@admin_bp.route('/top-sellers', methods=['GET'], endpoint='top_sellers')
+@login_required
+def top_sellers_page():
+    """رتبه‌بندی فروشنده‌های برتر (فقط ادمین)."""
+    try:
+        partners = load_express_partners() or []
+        commissions = load_express_commissions() or []
+
+        def _i(v):
+            try:
+                return int(str(v).replace(',', '').strip() or '0')
+            except Exception:
+                return 0
+
+        partner_stats: dict[str, dict] = {}
+        for partner in partners:
+            partner_phone = str(partner.get('phone', '')).strip()
+            if not partner_phone:
+                continue
+            my_comms = [
+                c for c in commissions
+                if str(c.get('partner_phone', '')).strip() == partner_phone
+            ]
+            total_commission = sum(
+                _i(c.get('commission_amount'))
+                for c in my_comms
+                if (c.get('status') or '').strip() in ('approved', 'paid')
+            )
+            sales_count = sum(
+                1 for c in my_comms
+                if (c.get('status') or '').strip() in ('approved', 'paid')
+            )
+            partner_stats[partner_phone] = {
+                'partner': partner,
+                'total_commission': total_commission,
+                'sales_count': sales_count,
+                'total_income': _i(partner.get('total_income', 0)),
+                'approved_sales_count': _i(partner.get('approved_sales_count', 0)),
+            }
+
+        top_sellers = sorted(
+            partner_stats.values(),
+            key=lambda x: max(x['total_income'], x['total_commission']),
+            reverse=True,
+        )
+        top_sellers = [
+            s for s in top_sellers
+            if s['sales_count'] > 0 or s['approved_sales_count'] > 0
+        ]
+    except Exception as e:
+        current_app.logger.error(f"Error loading top sellers: {e}", exc_info=True)
+        top_sellers = []
+
+    return render_template('admin/top_sellers.html', top_sellers=top_sellers)
+
+
 @admin_bp.route('/users')
 @login_required
 def users_page():

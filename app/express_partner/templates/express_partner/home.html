@@ -9,17 +9,11 @@
      data-vinor-home-page>
   {% set menu_href = url_for('express_partner.home') %}
   {% set profile_drawer = true %}
-  {% set show_ai_plus = home_ai_enabled|default(false) %}
+  {% set show_ai_plus = false %}
   {% include 'express_partner/partials/ep_header_float_actions.html' %}
 
   <div class="vn-home-shell mx-auto flex w-full max-w-lg flex-col">
     <div class="vn-home-top">
-
-      {% if not is_approved|default(false) %}
-      <div class="vn-home-guest-strip px-3 pb-2 sm:px-6">
-        {% include 'express_partner/partials/dashboard_guest_coop_cta.html' %}
-      </div>
-      {% endif %}
 
       {% if me_phone %}
       {% set card = journey_card or (suggested_files[0] if suggested_files else none) %}
@@ -138,7 +132,7 @@
 </script>
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=34"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=35"></script>
 <script>
 (function () {
   function syncHomeDockPad() {

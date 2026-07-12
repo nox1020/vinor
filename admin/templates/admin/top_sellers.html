@@ -1,17 +1,25 @@
-{% extends 'express_partner/base.html' %}
-{% block title %}فروشنده‌های برتر{% endblock %}
+{% extends 'admin/base_admin.html' %}
+
+{% block page_title %}فروشنده‌های برتر{% endblock %}
+
 {% block content %}
+<div class="space-y-4">
 
-  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
-  {{ ep_header_start(id='profileTopSellersHeader') }}
-  {% call ep_header_row('فروشنده‌های برتر', url_for('express_partner.home')) %}{% endcall %}
-  {{ ep_header_end() }}
-
-<div class="partner-page-scroll-pad max-w-6xl mx-auto px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
+  <div class="flex items-center gap-3 mb-4">
+    <a href="{{ url_for('admin.dashboard') }}"
+       class="w-9 h-9 grid place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition focusable">
+      <i class="fa-solid fa-arrow-right text-gray-600 dark:text-gray-400"></i>
+    </a>
+    <div class="flex-1">
+      <h2 class="text-lg font-bold text-gray-900 dark:text-white">فروشنده‌های برتر</h2>
+      <p class="text-sm text-gray-500 dark:text-gray-400">
+        {% if top_sellers %}{{ top_sellers|length }} همکار با فروش ثبت‌شده{% else %}رتبه‌بندی بر اساس پورسانت و درآمد{% endif %}
+      </p>
+    </div>
+  </div>
 
   {% if top_sellers and top_sellers|length > 0 %}
-    <!-- لیست فروشنده‌های برتر - سبک دیوار -->
-    <div class="mt-4 space-y-3">
+    <div class="space-y-2">
       {% for seller in top_sellers %}
         {% set partner = seller.partner %}
         {% set rank = loop.index %}
@@ -19,11 +27,10 @@
         {% set sales_count = seller.sales_count or seller.approved_sales_count or 0 %}
         {% set partner_name = partner.get('name') or 'همکار وینور' %}
         {% set partner_phone = partner.get('phone') or '' %}
-        {% set phone_display = partner_phone[-4:] if partner_phone else '****' %}
-        
-        <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
+
+        <a href="{% if partner_phone %}{{ url_for('admin.express_partner_detail', phone=partner_phone) }}{% else %}#{% endif %}"
+           class="block bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition focusable">
           <div class="flex items-center gap-3">
-            <!-- رتبه -->
             <div class="flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center font-bold text-base
               {% if rank == 1 %}bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400
               {% elif rank == 2 %}bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400
@@ -39,25 +46,29 @@
                 {{ rank }}
               {% endif %}
             </div>
-            
-            <!-- اطلاعات همکار -->
+
             <div class="flex-1 min-w-0">
               <div class="text-base font-semibold text-gray-900 dark:text-white truncate">
                 {{ partner_name }}
               </div>
-              <div class="mt-1 flex items-center gap-4 text-xs text-gray-600 dark:text-gray-400">
-                <span class="flex items-center gap-1">
+              <div class="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
+                {% if partner_phone %}
+                <span class="flex items-center gap-1 font-mono">
                   <i class="fas fa-phone text-[10px]"></i>
-                  {{ phone_display }}
+                  {{ partner_phone }}
                 </span>
+                {% endif %}
                 <span class="flex items-center gap-1">
                   <i class="fas fa-chart-line text-[10px]"></i>
                   {{ sales_count }} فروش
                 </span>
+                <span class="flex items-center gap-1">
+                  <i class="fas fa-wallet text-[10px]"></i>
+                  پورسانت: {{ "{:,}".format(seller.total_commission or 0) }}
+                </span>
               </div>
             </div>
-            
-            <!-- درآمد کل -->
+
             <div class="flex-shrink-0 text-left">
               <div class="text-sm font-bold text-gray-900 dark:text-white">
                 {{ "{:,}".format(total_income) }} تومان
@@ -65,22 +76,18 @@
               <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">کل درآمد</div>
             </div>
           </div>
-        </div>
+        </a>
       {% endfor %}
     </div>
-
   {% else %}
-    <!-- حالت خالی -->
-    <div class="mt-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
+    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
       <div class="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center mx-auto mb-4">
         <i class="fas fa-trophy text-2xl text-gray-400 dark:text-gray-600"></i>
       </div>
       <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-2">هنوز فروشنده برتری ثبت نشده</h3>
-      <p class="text-sm text-gray-600 dark:text-gray-400">با انجام معاملات موفق، در این لیست قرار بگیرید</p>
+      <p class="text-sm text-gray-600 dark:text-gray-400">با تأیید پورسانت همکاران، رتبه‌بندی اینجا نمایش داده می‌شود</p>
     </div>
   {% endif %}
-
-  {% include 'express_partner/partials/partner_tab_footer.html' %}
 
 </div>
 {% endblock %}

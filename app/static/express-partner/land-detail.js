@@ -1055,16 +1055,16 @@
       specLabel: 'ثبت بازدید جدید',
     },
     visit_pending: {
-      label: 'منتظر تأیید بازدید',
+      label: 'بازدید ثبت‌شده (قدیمی)',
       icon: 'fa-clock',
       btnClass: 'ld-btn-tx ld-btn-tx--pending cursor-default',
-      specLabel: 'منتظر تأیید ادمین',
+      specLabel: 'درخواست قدیمی',
     },
     visit_done: {
       label: 'بازدید انجام شد',
       icon: 'fa-check-double',
       btnClass: 'ld-btn-tx',
-      specLabel: 'بازدید تأییدشده',
+      specLabel: 'بازدید نهایی‌شده',
     },
     visit_done_pending: {
       label: 'منتظر تأیید بازدید',
@@ -2628,7 +2628,7 @@
           pendingHint = ' ' + (hintEl.textContent || '').trim();
         }
         showTxToast(
-          'درخواست بازدید در انتظار تأیید ادمین است.' + pendingHint,
+          'درخواست بازدید نهایی شده است.' + pendingHint,
           false
         );
         return;
