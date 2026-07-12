@@ -91,12 +91,13 @@
 
 <main id="aiPageMain" class="ai-page-shell text-slate-100 bg-[#030712]" data-vinor-ptr="off">
 
+  {% include 'express_partner/partials/ai_chat_messages_style.html' %}
   <section id="aiChat" class="ai-chat-shell">
     <div id="aiMessages"
          class="ai-messages ai-scroll"
          aria-live="polite"
          aria-label="گفتگو"
-         data-welcome="{{ 'سلام! من Vinor AI هستم. سوال خود را درباره همکاری، فایل‌ها و فعالیت در وینور بپرسید.' if (ai_audience|default('partner')) == 'partner' else 'سلام! من Vinor AI هستم. دربارهٔ آگهی‌های اکسپرس، خرید امن زمین و ویلا، یا فرآیند وینور بپرسید.' }}">
+         data-welcome="{{ 'سلام — منم کنارتم برای فایل و فروشت. بگو کجا گیر کردی یا چی لازم داری.' if (ai_audience|default('partner')) == 'partner' else 'سلام — منم کنارتم برای خرید امن زمین و ویلا و آگهی‌های اکسپرس. بگو دنبال چی هستی.' }}">
       {% for msg in chat_messages %}
         {% include 'express_partner/partials/ai_chat_message.html' %}
       {% endfor %}
@@ -163,10 +164,6 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
-    padding: 0.85rem 0.9rem 0.35rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
   }
 
   #aiChatForm.ai-composer {
@@ -233,65 +230,11 @@
     opacity: 0.5;
   }
 
-  .ai-msg-wrap {
-    display: flex;
-    width: 100%;
-    flex-direction: column;
-    gap: 0.35rem;
-  }
-
-  .ai-msg-wrap[data-role="user"] {
-    align-items: flex-start;
-  }
-
-  .ai-msg-wrap[data-role="assistant"],
-  .ai-msg-wrap[data-role="system"] {
-    align-items: flex-end;
-  }
-
-  .ai-msg-bubble {
-    max-width: min(88%, 24rem);
-    border-radius: 1.1rem;
-    padding: 0.72rem 0.95rem;
-    font-size: 0.875rem;
-    line-height: 1.55;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  .ai-msg-wrap[data-role="user"] .ai-msg-bubble {
-    border: 1px solid rgba(16, 185, 129, 0.25);
-    background: rgba(16, 185, 129, 0.1);
-    color: #d1fae5;
-  }
-
-  .ai-msg-wrap[data-role="assistant"] .ai-msg-bubble,
-  .ai-msg-wrap[data-role="system"] .ai-msg-bubble {
-    border: 1px solid rgba(139, 92, 246, 0.22);
-    background: rgba(139, 92, 246, 0.1);
-    color: #ede9fe;
-  }
-
-  .ai-msg-wrap[data-admin-reply="1"] .ai-msg-bubble {
-    border-color: rgba(245, 158, 11, 0.35);
-    background: rgba(245, 158, 11, 0.15);
-    color: #fffbeb;
-  }
-
-  .ai-msg-wrap[data-postchi="1"] .ai-msg-bubble {
-    border-color: rgba(16, 185, 129, 0.35);
-    background: rgba(16, 185, 129, 0.12);
-    color: #d1fae5;
-  }
-
-  .ai-msg-cards {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    align-self: stretch;
-  }
-
   .ai-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.12) transparent; }
+  #aiMessages .ai-msg-cards .ai-land-cards { width: 100%; max-width: 100%; }
+  #aiMessages .ai-msg-cards .vinor-premium-card { cursor: pointer; }
+  #aiMessages .ai-msg-cards .vinor-premium-card-mobile { display: flex !important; }
+  #aiMessages .ai-msg-cards .vinor-premium-card > .hidden.sm\:block { display: none !important; }
   #aiSidePanel.ai-side-panel,
   aside.ai-side-panel {
     position: fixed;
@@ -317,10 +260,6 @@
     transform: translate3d(0, 0, 0);
   }
   #aiSideBackdrop.is-open { opacity: 1; pointer-events: auto; }
-  #aiMessages .ai-msg-cards .ai-land-cards { width: 100%; max-width: 100%; }
-  #aiMessages .ai-msg-cards .vinor-premium-card { cursor: pointer; }
-  #aiMessages .ai-msg-cards .vinor-premium-card-mobile { display: flex !important; }
-  #aiMessages .ai-msg-cards .vinor-premium-card > .hidden.sm\:block { display: none !important; }
   html:has(#aiPageMain) #bottomNavMenu {
     display: none !important;
     visibility: hidden !important;
@@ -346,7 +285,7 @@
   } catch (_) {}
 })();
 </script>
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=18"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=34"></script>
 <script>
 (function () {
   try {

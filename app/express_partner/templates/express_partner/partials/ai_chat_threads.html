@@ -20,12 +20,12 @@
             data-thread-id="{{ th.id }}"
             data-active="{{ '1' if th.is_active else '0' }}"
             {% if th.kind == 'postchi' %}data-thread-kind="postchi"{% endif %}>
-      <div class="flex items-center justify-between gap-2">
+      <div class="ai-thread-item__row{% if not _in_drawer %} flex items-center justify-between gap-2{% endif %}">
         <span class="ai-thread-item__title {% if not _in_drawer %}text-xs font-semibold text-white line-clamp-2 leading-snug flex items-center gap-1.5{% endif %}">
           {% if th.kind == 'postchi' %}<i class="fas fa-envelope text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>{% endif %}
           <span>{{ th.title }}</span>
         </span>
-        <span class="flex shrink-0 items-center gap-1">
+        <span class="ai-thread-item__actions{% if not _in_drawer %} flex shrink-0 items-center gap-1{% endif %}">
           {% if th.unread and th.unread > 0 %}
           <span class="ai-thread-unread {% if not _in_drawer %}rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white tabular-nums{% endif %}">{{ th.unread if th.unread < 100 else '99+' }}</span>
           {% endif %}

@@ -329,10 +329,25 @@
 </style>
 
 <article class="vn-journey-card"
+         id="vnJourneyCard"
          aria-label="کار بعدی روی فایل"
          data-tour="home-journey"
          data-vn-journey-card
          data-vn-journey-code="{{ card.code }}">
+<script>
+(function () {
+  try {
+    var el = document.getElementById('vnJourneyCard');
+    if (!el) return;
+    var collapsed = false;
+    try { collapsed = localStorage.getItem('vinor_journey_collapsed') === '1'; } catch (_) {}
+    if (!collapsed) {
+      try { collapsed = /(?:^|; )vinor_journey_collapsed=1(?:;|$)/.test(document.cookie); } catch (_) {}
+    }
+    if (collapsed) el.classList.add('is-collapsed');
+  } catch (_) {}
+})();
+</script>
   <button type="button"
           class="vn-journey-card__compact"
           data-vn-journey-expand
@@ -455,8 +470,6 @@
 </article>
 <script>
 (function () {
-  var STORAGE_KEY = 'vinor_journey_collapsed';
-
   function sendChatPrompt(prompt) {
     prompt = (prompt || '').trim();
     if (!prompt) return;
@@ -483,47 +496,6 @@
     }, 80);
   }
 
-  function setCollapsed(card, collapsed) {
-    if (!card) return;
-    card.classList.toggle('is-collapsed', !!collapsed);
-    var collapseBtn = card.querySelector('[data-vn-journey-collapse]');
-    var expandBtn = card.querySelector('[data-vn-journey-expand]');
-    if (collapseBtn) collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    if (expandBtn) expandBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    try {
-      localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0');
-    } catch (_) {}
-  }
-
-  function wireJourneyCard() {
-    var card = document.querySelector('[data-vn-journey-card]');
-    if (!card || card.getAttribute('data-collapse-wired') === '1') return;
-    card.setAttribute('data-collapse-wired', '1');
-
-    var collapseBtn = card.querySelector('[data-vn-journey-collapse]');
-    var expandBtn = card.querySelector('[data-vn-journey-expand]');
-    if (collapseBtn) {
-      collapseBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        setCollapsed(card, true);
-      });
-    }
-    if (expandBtn) {
-      expandBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        setCollapsed(card, false);
-      });
-    }
-
-    var preferCollapsed = false;
-    try {
-      preferCollapsed = localStorage.getItem(STORAGE_KEY) === '1';
-    } catch (_) {}
-    if (preferCollapsed) setCollapsed(card, true);
-  }
-
   function wireChatPrompts() {
     document.querySelectorAll('[data-vn-chat-prompt]').forEach(function (btn) {
       if (btn.getAttribute('data-wired') === '1') return;
@@ -537,8 +509,10 @@
   }
 
   function boot() {
-    wireJourneyCard();
     wireChatPrompts();
+    if (typeof window.__vinorJourneyCollapseApply === 'function') {
+      try { window.__vinorJourneyCollapseApply(); } catch (_) {}
+    }
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

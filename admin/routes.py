@@ -4349,7 +4349,39 @@ def express_assignment_new():
         })
         save_express_assignments(items)
         flash('فایل به همکار اختصاص یافت.', 'success')
-    
+
+    # اگر فایل sold بود، با انتساب ادمین دوباره فعال شود تا در خانه/مأموریت دیده شود
+    if land_code:
+        try:
+            from app.utils.storage import load_ads_cached, save_ads
+            lands = load_ads_cached() or []
+            for land in lands:
+                if not isinstance(land, dict):
+                    continue
+                if str(land.get('code') or '').strip() != land_code:
+                    continue
+                if str(land.get('express_status') or '').strip().lower() == 'sold':
+                    land['express_status'] = 'active'
+                    land.pop('sold_at', None)
+                    save_ads(lands)
+                break
+        except Exception as e:
+            current_app.logger.error('reactivate land on assignment: %s', e)
+
+    # مأموریت چت برای همکار(ان) همگام شود
+    try:
+        from app.express_partner.partner_missions import ensure_random_mission
+        if partner_phone == '__ALL__':
+            partners = load_express_partners() or []
+            for p in partners:
+                phone = str(p.get('phone') or '').strip()
+                if phone:
+                    ensure_random_mission(phone)
+        elif partner_phone:
+            ensure_random_mission(partner_phone)
+    except Exception as e:
+        current_app.logger.error('ensure mission after assignment: %s', e)
+
     return redirect(url_for('admin.express_assignments'))
 
 @admin_bp.post('/express/assignments/<int:aid>/close')

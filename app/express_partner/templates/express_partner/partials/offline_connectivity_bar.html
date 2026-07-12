@@ -1,20 +1,7 @@
-{# نوار آفلاین زیر هدر — مشابه تلگرام #}
-<div id="vinorExpressOfflineBar" class="vinor-express-offline-bar" hidden role="status" aria-live="polite">
+{# وضعیت اتصال فقط در عنوان هدر — نوار آنلاین/آفلاین نمایش داده نمی‌شود #}
+<div id="vinorExpressOfflineBar" class="vinor-express-offline-bar" hidden aria-hidden="true" style="display:none !important">
   <div class="vinor-express-offline-bar__inner">
-    <svg id="vinorExpressOfflineBarIconOffline" class="vinor-express-offline-bar__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M2.5 8.5a15.5 15.5 0 0 1 19 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      <path d="M5.5 12.2a10.5 10.5 0 0 1 13 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      <path d="M8.8 15.8a5.5 5.5 0 0 1 6.4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      <path d="M12 19h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-      <path d="M4 4l16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-    </svg>
-    <svg id="vinorExpressOfflineBarIconOnline" class="vinor-express-offline-bar__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" hidden>
-      <path d="M2.5 8.5a15.5 15.5 0 0 1 19 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      <path d="M5.5 12.2a10.5 10.5 0 0 1 13 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      <path d="M8.8 15.8a5.5 5.5 0 0 1 6.4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      <path d="M12 19h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-    </svg>
-    <span id="vinorExpressOfflineBarText">اتصال اینترنت قطع است</span>
+    <span id="vinorExpressOfflineBarText" hidden>اتصال اینترنت قطع است</span>
   </div>
 </div>
 
@@ -27,6 +14,8 @@
   var OFFLINE_NETWORK_MSG = 'اتصال اینترنت قطع است';
   var OFFLINE_SERVER_MSG = 'ارتباط با سرور برقرار نیست';
   var ONLINE_MSG = 'آنلاین شدید';
+  var BRAND_ONLINE = 'وینور';
+  var BRAND_CONNECTING = 'در حال اتصال...';
   var ONLINE_TOAST_MS = 120;
   var ONLINE_FADE_MS = 280;
   var ONLINE_GRACE_MS = 3500;
@@ -172,55 +161,17 @@
     bar.__vinorDismissEnd = null;
   }
 
+  function prefersReducedMotion() {
+    try {
+      return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function hideBarCompletely(animate) {
-    var bar = document.getElementById('vinorExpressOfflineBar');
-    if (!bar) {
-      onlineToastActive = false;
-      barDismissInFlight = false;
-      return;
-    }
-    if (bar.hidden) {
-      onlineToastActive = false;
-      barDismissInFlight = false;
-      return;
-    }
-
-    clearToastTimers();
-    onlineToastActive = false;
-    barDismissInFlight = true;
-
-    function finish() {
-      if (bar.hidden) return;
-      detachDismissListener(bar);
-      finalizeHideBar();
-    }
-
-    var useAnimate = animate !== false && !prefersReducedMotion();
-    if (!useAnimate) {
-      finish();
-      return;
-    }
-
-    bar.classList.remove('vinor-express-offline-bar--offline', 'vinor-express-offline-bar--online');
-    bar.classList.add('vinor-express-offline-bar--leaving');
-
-    dismissFinalizeTimer = window.setTimeout(function () {
-      dismissFinalizeTimer = null;
-      finish();
-    }, ONLINE_FADE_MS + 100);
-
-    function onTransitionEnd(ev) {
-      if (ev.target !== bar && ev.target !== bar.querySelector('.vinor-express-offline-bar__inner')) return;
-      if (dismissFinalizeTimer) {
-        window.clearTimeout(dismissFinalizeTimer);
-        dismissFinalizeTimer = null;
-      }
-      finish();
-    }
-
-    detachDismissListener(bar);
-    bar.__vinorDismissEnd = onTransitionEnd;
-    bar.addEventListener('transitionend', onTransitionEnd);
+    /* نوار UI حذف شده؛ فقط برند هدر به‌روز می‌شود */
+    finalizeHideBar();
   }
 
   function scheduleOnlineToastHide() {
@@ -247,12 +198,28 @@
     } catch (_) {}
   }
 
-  function prefersReducedMotion() {
-    try {
-      return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    } catch (_) {
-      return false;
-    }
+  function syncHeaderBrand(online) {
+    var on = !!online;
+    var el = document.getElementById('epHeaderBrandText');
+    var wrap = document.getElementById('epHeaderBrand');
+    var label = on ? BRAND_ONLINE : BRAND_CONNECTING;
+    if (el && el.textContent !== label) el.textContent = label;
+    if (wrap) wrap.setAttribute('aria-label', label);
+  }
+
+  function keepBarHidden() {
+    var bar = document.getElementById('vinorExpressOfflineBar');
+    if (!bar) return;
+    bar.hidden = true;
+    bar.classList.remove(
+      'vinor-express-offline-bar--online',
+      'vinor-express-offline-bar--offline',
+      'vinor-express-offline-bar--leaving'
+    );
+    markBarVisible(false);
+    try { document.documentElement.style.removeProperty('--vn-partner-offline-bar-h'); } catch (_) {}
+    try { bar.style.removeProperty('top'); } catch (_) {}
+    syncBarIcons('none');
   }
 
   function finalizeHideBar() {
@@ -262,17 +229,9 @@
     detachDismissListener(bar);
     barDismissInFlight = false;
     onlineToastActive = false;
-    bar.hidden = true;
-    bar.classList.remove(
-      'vinor-express-offline-bar--online',
-      'vinor-express-offline-bar--offline',
-      'vinor-express-offline-bar--leaving'
-    );
+    keepBarHidden();
     root.classList.remove('vinor-express-offline');
-    markBarVisible(false);
-    try { root.style.removeProperty('--vn-partner-offline-bar-h'); } catch (_) {}
-    try { bar.style.removeProperty('top'); } catch (_) {}
-    syncBarIcons('none');
+    syncHeaderBrand(true);
     if (typeof window.__vinorPartnerHeaderPadSync === 'function') {
       window.__vinorPartnerHeaderPadSync();
     }
@@ -301,19 +260,13 @@
     barDismissInFlight = false;
     onlineToastActive = false;
     onlineGraceUntil = 0;
-    var bar = document.getElementById('vinorExpressOfflineBar');
-    var txt = document.getElementById('vinorExpressOfflineBarText');
     var root = document.documentElement;
-    if (!bar) return;
-    bar.classList.remove('vinor-express-offline-bar--leaving');
-    bar.hidden = false;
-    bar.classList.remove('vinor-express-offline-bar--online');
-    bar.classList.add('vinor-express-offline-bar--offline');
-    if (txt) txt.textContent = message || OFFLINE_NETWORK_MSG;
+    keepBarHidden();
     root.classList.add('vinor-express-offline');
-    markBarVisible(true);
-    syncBarIcons('offline');
-    layoutOfflineBar();
+    syncHeaderBrand(false);
+    if (typeof window.__vinorPartnerHeaderPadSync === 'function') {
+      window.__vinorPartnerHeaderPadSync();
+    }
     if (!reachabilityTimer) {
       reachabilityTimer = window.setInterval(function () {
         applyConnectivity();
@@ -325,23 +278,17 @@
     clearToastTimers();
     cancelProbeRetries();
     barDismissInFlight = false;
-    onlineToastActive = true;
+    onlineToastActive = false;
     markOnlineGrace();
     unreachableStreak = 0;
-    var bar = document.getElementById('vinorExpressOfflineBar');
-    var txt = document.getElementById('vinorExpressOfflineBarText');
     var root = document.documentElement;
-    if (!bar) return;
-    bar.classList.remove('vinor-express-offline-bar--leaving');
-    bar.hidden = false;
-    bar.classList.remove('vinor-express-offline-bar--offline');
-    bar.classList.add('vinor-express-offline-bar--online');
-    if (txt) txt.textContent = message || ONLINE_MSG;
+    keepBarHidden();
     root.classList.remove('vinor-express-offline');
-    markBarVisible(true);
-    syncBarIcons('online');
-    layoutOfflineBar();
-    scheduleOnlineToastHide();
+    syncHeaderBrand(true);
+    if (typeof window.__vinorPartnerHeaderPadSync === 'function') {
+      window.__vinorPartnerHeaderPadSync();
+    }
+    startOnlineMonitor();
   }
 
   window.vinorExpressSyncConnectivity = function (online, opts) {
@@ -494,6 +441,7 @@
   window.addEventListener('scroll', scheduleLayoutOfflineBar, { passive: true, capture: true });
   window.addEventListener('vinor:express-page-swap', function () {
     scheduleLayoutOfflineBar();
+    syncHeaderBrand(lastOnline !== false);
     if (!onlineToastActive) applyConnectivity({ silent: true });
   });
   document.addEventListener('visibilitychange', function () {
@@ -507,9 +455,11 @@
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
+      syncHeaderBrand(probeNativeOnline());
       applyConnectivity({ silent: true });
     }, { once: true });
   } else {
+    syncHeaderBrand(probeNativeOnline());
     applyConnectivity({ silent: true });
   }
 })();

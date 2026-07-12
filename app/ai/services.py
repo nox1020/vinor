@@ -114,6 +114,23 @@ def _strip_escalate_marker(text: str) -> tuple[str, str | None]:
     return cleaned, summary
 
 
+def _strip_listing_dump_when_copy_cards(text: str) -> str:
+    """وقتی کارت کپی هست، بلاک کد و تکرار متن آگهی را از پیام حذف کن."""
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    cleaned = re.sub(r"```[\s\S]*?```", "", raw).strip()
+    cleaned = re.sub(
+        r"(?im)^(?:\*\*)?(?:متن دیوار|کپشن اینستا|متن آگهی(?: دیوار)?|آگهی دیوار)(?:\*\*)?\s*:?\s*$",
+        "",
+        cleaned,
+    )
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    if len(cleaned) < 8:
+        return "آماده‌ست — از کارت‌های زیر کپی کن و منتشر کن."
+    return cleaned
+
+
 def _build_system_prompt(
     user_key: str | None,
     audience: str | None = None,
@@ -561,6 +578,8 @@ def generate_reply(
     agent_actions = [
         a for a in (result.get("agent_actions") or []) if isinstance(a, dict)
     ]
+    if any(str(a.get("type") or "") == "copy_blocks" for a in agent_actions):
+        reply = _strip_listing_dump_when_copy_cards(reply)
     # اگر کارت تأیید اکشن هست، کارت فایل همان کد را دوباره نشان نده
     action_codes = {
         str(a.get("land_code") or "").strip()

@@ -51,7 +51,7 @@
   var postchiSendUrl = form.getAttribute('data-postchi-send-url') || '';
   var postchiOpenUrl = form.getAttribute('data-postchi-open-url') || '';
   var menuUnreadDot = document.getElementById('aiMenuUnreadDot');
-  var welcome = list.getAttribute('data-welcome') || 'سلام! من Vinor AI هستم.';
+  var welcome = list.getAttribute('data-welcome') || 'سلام — منم کنارتم. بگو چی لازم داری.';
   var historyAbort = null;
   var switchAbort = null;
   var syncAbort = null;
@@ -237,6 +237,164 @@
     return d.innerHTML;
   }
 
+  function copyBlockLabel(info, beforeText) {
+    var s = String(info || '').trim();
+    var low = s.toLowerCase();
+    var before = String(beforeText || '');
+    if (/دیوار|divar/.test(low) || /متن\s*دیوار|آگهی\s*دیوار/.test(before)) return 'متن دیوار';
+    if (/اینستا|insta|instagram/.test(low) || /کپشن|اینستا/.test(before)) return 'کپشن اینستا';
+    if (/دیوار/.test(before)) return 'متن دیوار';
+    if (s) return s.replace(/^\*+|\*+$/g, '').trim().slice(0, 40) || 'متن';
+    return 'متن';
+  }
+
+  function copyBtnIconsHtml() {
+    return (
+      '<svg class="ai-copy-block__icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<rect x="9" y="9" width="13" height="13" rx="2"></rect>' +
+      '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>' +
+      '</svg>' +
+      '<svg class="ai-copy-block__icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M20 6L9 17l-5-5"></path>' +
+      '</svg>'
+    );
+  }
+
+  function buildCopyBlockHtml(label, text) {
+    return (
+      '<div class="ai-copy-block" data-ai-copy-block>' +
+      '<div class="ai-copy-block__bar">' +
+      '<span class="ai-copy-block__label">' +
+      escapeHtml(label || 'متن') +
+      '</span>' +
+      '<button type="button" class="ai-copy-block__btn" data-ai-copy aria-label="کپی متن">' +
+      copyBtnIconsHtml() +
+      '</button></div>' +
+      '<pre class="ai-copy-block__pre" data-ai-copy-text>' +
+      escapeHtml(text || '') +
+      '</pre></div>'
+    );
+  }
+
+  function formatAssistantHtml(text) {
+    var raw = String(text || '');
+    if (!raw) return '';
+    var fenceRe = /```([^\n`]*)\n([\s\S]*?)```/g;
+    var html = '';
+    var last = 0;
+    var m;
+    var hasFence = false;
+    while ((m = fenceRe.exec(raw)) !== null) {
+      hasFence = true;
+      var before = raw.slice(last, m.index);
+      var beforeTrim = before.trim();
+      // عنوان درست قبل از بلاک را از prose جدا کن
+      var labelHint = beforeTrim;
+      var proseKeep = beforeTrim;
+      var titleMatch = beforeTrim.match(/(?:^|\n)(?:\*\*)?(متن دیوار|کپشن اینستا|متن آگهی دیوار|آگهی دیوار)(?:\*\*)?\s*:?\s*$/i);
+      if (titleMatch) {
+        labelHint = titleMatch[1];
+        proseKeep = beforeTrim.slice(0, titleMatch.index).trim();
+      }
+      if (proseKeep) {
+        html += '<div class="ai-msg-prose">' + escapeHtml(proseKeep) + '</div>';
+      }
+      html +=
+        '<div class="ai-copy-blocks">' +
+        buildCopyBlockHtml(
+          copyBlockLabel(m[1], labelHint),
+          String(m[2] || '').replace(/\s+$/, '')
+        ) +
+        '</div>';
+      last = m.index + m[0].length;
+    }
+    var after = raw.slice(last).trim();
+    if (after) {
+      html += '<div class="ai-msg-prose">' + escapeHtml(after) + '</div>';
+    }
+    if (!hasFence) {
+      return '<div class="ai-msg-prose">' + escapeHtml(raw) + '</div>';
+    }
+    return html;
+  }
+
+  function copyTextToClipboard(text) {
+    text = String(text || '');
+    if (!text) return Promise.resolve(false);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(
+        function () {
+          return true;
+        },
+        function () {
+          return false;
+        }
+      );
+    }
+    return new Promise(function (resolve) {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        resolve(!!ok);
+      } catch (_) {
+        resolve(false);
+      }
+    });
+  }
+
+  function wireCopyBlocks(root) {
+    var scope = root || list;
+    if (!scope) return;
+    scope.querySelectorAll('[data-ai-copy]').forEach(function (btn) {
+      if (btn.getAttribute('data-wired') === '1') return;
+      btn.setAttribute('data-wired', '1');
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var block = btn.closest('[data-ai-copy-block]');
+        var pre = block && block.querySelector('[data-ai-copy-text]');
+        var text = pre ? pre.textContent || '' : '';
+        copyTextToClipboard(text).then(function (ok) {
+          if (!ok) return;
+          btn.classList.add('is-copied');
+          btn.setAttribute('aria-label', 'کپی شد');
+          setTimeout(function () {
+            btn.classList.remove('is-copied');
+            btn.setAttribute('aria-label', 'کپی متن');
+          }, 1600);
+        });
+      });
+    });
+  }
+
+  function enhanceAssistantBubbles(root) {
+    var scope = root || list;
+    if (!scope) return;
+    scope.querySelectorAll('.ai-msg-wrap--assistant .ai-msg-bubble, .ai-msg-wrap[data-role="assistant"] .ai-msg-bubble').forEach(function (bubble) {
+      if (bubble.getAttribute('data-formatted') === '1') return;
+      if (bubble.classList.contains('ai-msg-thinking')) return;
+      if (bubble.querySelector('[data-ai-copy-block], .ai-copy-blocks, .ai-agent-card')) {
+        bubble.setAttribute('data-formatted', '1');
+        return;
+      }
+      var raw = bubble.textContent || '';
+      if (raw.indexOf('```') === -1) {
+        bubble.setAttribute('data-formatted', '1');
+        return;
+      }
+      bubble.innerHTML = formatAssistantHtml(raw);
+      bubble.setAttribute('data-formatted', '1');
+    });
+    wireCopyBlocks(scope);
+  }
+
   function messageHasContent(msg) {
     if (!msg) return false;
     return !!(
@@ -274,6 +432,7 @@
       window.vinorInitPremiumCards(wrap, list);
     }
     bindAgentActions(wrap);
+    wireCopyBlocks(wrap);
   }
 
   function setAgentCardState(card, status, noteText) {
@@ -450,12 +609,14 @@
       msg.source === 'postchi' ||
       (text && text.indexOf('پاسخ تیم وینور') === 0);
 
-    if (!text && !cardsHtml) return null;
+    if (!text && !cardsHtml && !opts.thinking) return null;
 
     if (!opts.welcome) removeWelcome();
 
+    var isUser = role === 'user';
     var wrap = document.createElement('div');
-    wrap.className = 'ai-msg-wrap';
+    wrap.className =
+      'ai-msg-wrap ' + (isUser ? 'ai-msg-wrap--user' : 'ai-msg-wrap--assistant');
     wrap.setAttribute('data-role', role);
     if (msg.created_at) wrap.setAttribute('data-created-at', msg.created_at);
     if (msg.escalation_id) wrap.setAttribute('data-escalation-id', msg.escalation_id);
@@ -466,26 +627,82 @@
     if (opts.pendingUser) wrap.setAttribute('data-pending-user', '1');
     if (opts.welcome) wrap.setAttribute('data-welcome', '1');
     if (opts.ephemeral) wrap.setAttribute('data-ephemeral', '1');
+    if (opts.thinking) wrap.setAttribute('data-thinking', '1');
 
-    if (text) {
+    var row = document.createElement('div');
+    row.className = 'ai-msg-row';
+
+    if (!isUser) {
+      var avatar = document.createElement('div');
+      avatar.className = 'ai-msg-avatar';
+      avatar.setAttribute('aria-hidden', 'true');
+      avatar.innerHTML =
+        '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>' +
+        '<path d="M18.5 15.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z" opacity=".85"/>' +
+        '</svg>';
+      row.appendChild(avatar);
+    }
+
+    var body = document.createElement('div');
+    body.className = 'ai-msg-body';
+
+    if (opts.thinking) {
+      var thinking = document.createElement('div');
+      thinking.className = 'ai-msg-bubble ai-msg-thinking';
+      thinking.setAttribute('aria-label', 'در حال نوشتن');
+      thinking.innerHTML =
+        '<span class="ai-msg-dot"></span><span class="ai-msg-dot"></span><span class="ai-msg-dot"></span>';
+      body.appendChild(thinking);
+    } else if (text) {
       var bubble = document.createElement('div');
       bubble.className = 'ai-msg-bubble';
-      bubble.textContent = text;
-      wrap.appendChild(bubble);
+      if (isUser) {
+        bubble.textContent = text;
+      } else {
+        bubble.innerHTML = formatAssistantHtml(text);
+        bubble.setAttribute('data-formatted', '1');
+      }
+      body.appendChild(bubble);
     }
 
     if (cardsHtml) {
       var cardsWrap = document.createElement('div');
       cardsWrap.innerHTML = cardsHtml;
       var cardsEl = cardsWrap.firstElementChild;
-      if (cardsEl) wrap.appendChild(cardsEl);
-      initCardsIn(wrap);
+      if (cardsEl) {
+        if (!cardsEl.classList.contains('ai-msg-cards')) {
+          var cardsHost = document.createElement('div');
+          cardsHost.className = 'ai-msg-cards';
+          cardsHost.appendChild(cardsEl);
+          body.appendChild(cardsHost);
+        } else {
+          body.appendChild(cardsEl);
+        }
+        initCardsIn(body);
+      }
     }
 
+    row.appendChild(body);
+    wrap.appendChild(row);
     list.appendChild(wrap);
+    if (!isUser) wireCopyBlocks(wrap);
     if (msg.created_at) bumpLastSyncAt(msg.created_at);
     scrollChatToEnd();
     return wrap;
+  }
+
+  function showThinking() {
+    removeThinking();
+    return appendMessage({ role: 'assistant', content: '' }, { thinking: true, ephemeral: true });
+  }
+
+  function removeThinking() {
+    list.querySelectorAll('.ai-msg-wrap[data-thinking="1"]').forEach(function (w) {
+      try {
+        w.remove();
+      } catch (_) {}
+    });
   }
 
   function appendBubble(text, role, opts) {
@@ -720,7 +937,9 @@
         }
       }
       btnEl.innerHTML =
-        '<div class="flex items-center justify-between gap-2">' +
+        '<div class="ai-thread-item__row' +
+        (inDrawer ? '' : ' flex items-center justify-between gap-2') +
+        '">' +
         '<span class="ai-thread-item__title">' +
         (isPostchi
           ? '<i class="fas fa-envelope text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>'
@@ -728,7 +947,9 @@
         '<span>' +
         escapeHtml(th.title || 'گفتگو') +
         '</span></span>' +
-        '<span class="flex shrink-0 items-center gap-1">' +
+        '<span class="ai-thread-item__actions' +
+        (inDrawer ? '' : ' flex shrink-0 items-center gap-1') +
+        '">' +
         unreadBadge +
         deleteBtn +
         '</span></div>' +
@@ -1042,6 +1263,7 @@
     var eid = w.getAttribute('data-escalation-id');
     if (eid) seenEscalationIds[eid] = 1;
   });
+  enhanceAssistantBubbles(list);
   scanLastSyncFromDom();
   scrollChatToEnd();
 
@@ -1138,6 +1360,7 @@
     lastSubmitAt = now;
     removeWelcome();
     appendMessage({ role: 'user', content: msg }, { pendingUser: true });
+    showThinking();
     input.value = '';
     autoGrowInput();
     setBusy(true);
@@ -1168,6 +1391,7 @@
         removePendingUser();
         showEphemeralHint(err.message || 'خطا در ارسال پیام');
       } finally {
+        removeThinking();
         submitting = false;
         setBusy(false);
         input.focus();
@@ -1236,6 +1460,7 @@
         pollPaused = true;
       }
     } finally {
+      removeThinking();
       submitting = false;
       setBusy(false);
       input.focus();

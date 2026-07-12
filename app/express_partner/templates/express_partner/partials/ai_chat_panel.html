@@ -1,13 +1,14 @@
 {# هسته چت Vinor AI — پیام‌ها + کامپوزر (IDهای ثابت برای ai-chat.js) #}
 {% set chat_mode = chat_mode|default('home-layer') %}
 {% set omit_composer = omit_composer|default(false) %}
+{% include 'express_partner/partials/ai_chat_messages_style.html' %}
 <main id="aiPageMain" class="ai-page-shell" data-vinor-ptr="off">
   <section id="aiChat" class="ai-chat-shell">
     <div id="aiMessages"
          class="ai-messages ai-scroll"
          aria-live="polite"
          aria-label="گفتگو"
-         data-welcome="سلام! من Vinor AI هستم. سوال خود را درباره همکاری، فایل‌ها و فعالیت در وینور بپرسید.">
+         data-welcome="سلام — منم کنارتم برای فایل و فروشت. بگو کجا گیر کردی یا چی لازم داری.">
       {% for msg in chat_messages|default([]) %}
         {% include 'express_partner/partials/ai_chat_message.html' %}
       {% endfor %}

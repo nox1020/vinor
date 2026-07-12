@@ -9,6 +9,7 @@
      data-vinor-home-page>
   {% set menu_href = url_for('express_partner.home') %}
   {% set profile_drawer = true %}
+  {% set show_ai_plus = home_ai_enabled|default(false) %}
   {% include 'express_partner/partials/ep_header_float_actions.html' %}
 
   <div class="vn-home-shell mx-auto flex w-full max-w-lg flex-col">
@@ -29,10 +30,8 @@
         <section class="vn-home-empty" aria-label="بدون فایل پیشنهادی" data-tour="home-urgent">
           <div class="vn-home-empty__body">
             <p class="vn-home-empty__title">فایل آماده‌ای نیست</p>
-            <p class="vn-home-empty__sub">از Vinor AI بپرس یا منتظر تخصیص فایل بمان</p>
+            <p class="vn-home-empty__sub">همه فایل‌ها فروخته یا بسته شده‌اند. از ادمین بخواه فایل جدید باز کند یا از دکمه + گفتگو را شروع کن</p>
           </div>
-          <a href="#aiInput"
-             class="vn-home-empty__cta">شروع گفتگو با AI</a>
         </section>
       </div>
       {% endif %}
@@ -44,11 +43,13 @@
     </div>
 
     {% if home_ai_enabled|default(false) %}
-    <div id="vinorApkStripHost" class="vinor-apk-strip-host" data-apk-strip-host>
-      {% include 'express_partner/partials/apk_download_strip.html' %}
+    <div id="vnHomeComposerDock" class="vn-home-composer-dock" data-vn-home-dock>
+      <div id="vinorApkStripHost" class="vinor-apk-strip-host" data-apk-strip-host>
+        {% include 'express_partner/partials/apk_download_strip.html' %}
+      </div>
+      {% set chat_mode = 'home-inline' %}
+      {% include 'express_partner/partials/ai_chat_composer.html' %}
     </div>
-    {% set chat_mode = 'home-inline' %}
-    {% include 'express_partner/partials/ai_chat_composer.html' %}
     {% endif %}
   </div>
 </div>
@@ -59,11 +60,114 @@
 
 {% block scripts %}
 {{ super() }}
-{% if home_ai_enabled|default(false) %}
-{% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=28"></script>
 <script>
 (function () {
+  /* یک‌بار در عمر سند: جمع/باز کارت سفر — پایدار بین رفرش و soft-nav */
+  if (window.__vinorJourneyCollapseBound) {
+    if (typeof window.__vinorJourneyCollapseApply === 'function') {
+      try { window.__vinorJourneyCollapseApply(); } catch (_) {}
+    }
+    return;
+  }
+  window.__vinorJourneyCollapseBound = true;
+
+  var STORAGE_KEY = 'vinor_journey_collapsed';
+  var COOKIE_KEY = 'vinor_journey_collapsed';
+
+  function readCollapsed() {
+    try {
+      if (localStorage.getItem(STORAGE_KEY) === '1') return true;
+    } catch (_) {}
+    try {
+      if (new RegExp('(?:^|; )' + COOKIE_KEY + '=1(?:;|$)').test(document.cookie)) return true;
+    } catch (_) {}
+    return false;
+  }
+
+  function writeCollapsed(collapsed) {
+    var v = collapsed ? '1' : '0';
+    try { localStorage.setItem(STORAGE_KEY, v); } catch (_) {}
+    try {
+      document.cookie = COOKIE_KEY + '=' + v + ';path=/;max-age=31536000;SameSite=Lax';
+    } catch (_) {}
+  }
+
+  function applyCollapsed() {
+    var card = document.querySelector('[data-vn-journey-card]');
+    if (!card) return;
+    var collapsed = readCollapsed();
+    card.classList.toggle('is-collapsed', collapsed);
+    var collapseBtn = card.querySelector('[data-vn-journey-collapse]');
+    var expandBtn = card.querySelector('[data-vn-journey-expand]');
+    if (collapseBtn) collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    if (expandBtn) expandBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
+
+  window.__vinorJourneyCollapseApply = applyCollapsed;
+
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var collapseBtn = t.closest('[data-vn-journey-collapse]');
+    if (collapseBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      writeCollapsed(true);
+      applyCollapsed();
+      return;
+    }
+    var expandBtn = t.closest('[data-vn-journey-expand]');
+    if (expandBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      writeCollapsed(false);
+      applyCollapsed();
+    }
+  }, true);
+
+  document.addEventListener('vinor:express-page-swap', function () {
+    setTimeout(applyCollapsed, 0);
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyCollapsed, { once: true });
+  } else {
+    applyCollapsed();
+  }
+})();
+</script>
+{% if home_ai_enabled|default(false) %}
+{% include 'express_partner/partials/vinor_favorites_script.html' %}
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=34"></script>
+<script>
+(function () {
+  function syncHomeDockPad() {
+    var page = document.getElementById('homeDashboardPage');
+    var dock = document.getElementById('vnHomeComposerDock');
+    if (!page || !dock) return;
+    var h = Math.ceil(dock.getBoundingClientRect().height || 0);
+    if (h < 72) h = 120;
+    page.style.setProperty('--vn-home-dock-h', h + 'px');
+  }
+  var dock = document.getElementById('vnHomeComposerDock');
+  if (dock && typeof ResizeObserver !== 'undefined') {
+    try {
+      var ro = new ResizeObserver(function () { syncHomeDockPad(); });
+      ro.observe(dock);
+    } catch (_) {}
+  }
+  window.addEventListener('resize', syncHomeDockPad, { passive: true });
+  window.addEventListener('vinor:express-page-swap', function () {
+    setTimeout(syncHomeDockPad, 0);
+  });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', syncHomeDockPad, { once: true });
+  } else {
+    syncHomeDockPad();
+  }
+  setTimeout(syncHomeDockPad, 120);
+  setTimeout(syncHomeDockPad, 480);
+
   try {
     var draft = sessionStorage.getItem('vinor_ai_home_prompt') || '';
     if (!draft) return;

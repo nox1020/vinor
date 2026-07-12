@@ -1,6 +1,7 @@
-{# حباب شناور هدر: منو راست + برند وسط #}
+{# حباب شناور هدر: + چپ | برند وسط | منو راست #}
 {% set _menu_href = menu_href|default(url_for('express_partner.home', menu=1)) %}
 {% set _use_drawer = profile_drawer|default(false) %}
+{% set _show_ai_plus = show_ai_plus|default(false) %}
 <style>
   .ep-header-float-actions {
     position: fixed;
@@ -15,6 +16,10 @@
     border: 0;
     box-shadow: none;
     padding: 0;
+  }
+  .ep-header-float-actions--start {
+    right: auto;
+    left: calc(env(safe-area-inset-left, 0px) + 0.75rem);
   }
   .ep-header-float-actions .ep-partner-header-btn {
     margin: 0;
@@ -34,17 +39,34 @@
   }
   .ep-header-float-brand__text {
     margin: 0;
+    font-family: 'Vazirmatn', sans-serif;
     font-size: 1.05rem;
     font-weight: 800;
     letter-spacing: -0.02em;
     line-height: 1;
     color: #f8fafc;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+    white-space: nowrap;
+    transition: opacity 0.18s ease;
+  }
+  html.vinor-express-offline .ep-header-float-brand__text {
+    opacity: 0.92;
   }
 </style>
-<div class="ep-header-float-brand" aria-label="وینور">
-  <p class="ep-header-float-brand__text">وینور</p>
+<div class="ep-header-float-brand" id="epHeaderBrand" aria-label="وینور">
+  <p class="ep-header-float-brand__text" id="epHeaderBrandText">وینور</p>
 </div>
+{% if _show_ai_plus %}
+<div class="ep-header-float-actions ep-header-float-actions--start" aria-label="گفتگوی جدید">
+  <button type="button"
+          id="aiNewChatBtn"
+          class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
+          aria-label="شروع گفتگو با AI"
+          title="گفتگوی جدید">
+    <i class="fas fa-plus ep-partner-header-btn-icon" aria-hidden="true"></i>
+  </button>
+</div>
+{% endif %}
 <div class="ep-header-float-actions" aria-label="دسترسی سریع" data-tour="home-menu">
   {% if _use_drawer %}
   <button type="button"
@@ -88,6 +110,34 @@
   }
   bindMenuBtn();
   window.addEventListener('vinor:express-page-swap', bindMenuBtn);
+})();
+</script>
+{% endif %}
+{% if _show_ai_plus %}
+<script>
+(function () {
+  function focusAiComposer() {
+    var input = document.getElementById('aiInput');
+    var scroll = document.getElementById('vnHomeScroll');
+    try {
+      if (scroll) scroll.scrollTop = scroll.scrollHeight;
+      if (input) {
+        input.focus();
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    } catch (_) {}
+  }
+  function bindPlusFallback() {
+    var btn = document.getElementById('aiNewChatBtn');
+    if (!btn || btn.__vinorPlusFallback) return;
+    btn.__vinorPlusFallback = true;
+    /* اگر ai-chat.js هنوز bind نکرده، حداقل فوکوس روی ورودی */
+    btn.addEventListener('click', function () {
+      setTimeout(focusAiComposer, 80);
+    });
+  }
+  bindPlusFallback();
+  window.addEventListener('vinor:express-page-swap', bindPlusFallback);
 })();
 </script>
 {% endif %}

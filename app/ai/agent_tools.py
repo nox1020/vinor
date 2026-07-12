@@ -37,24 +37,19 @@ def agent_system_hint(voice: str | None) -> str:
     v = (voice or "").strip().lower()
     if v == VOICE_PUBLIC:
         return (
-            "ابزار: فقط search_lands برای یافتن ملک از داده سیستم. "
-            "در پاسخ نهایی از [[LAND:کد]] برای پیشنهاد استفاده کن. "
-            "ثبت بازدید همکار در دسترس این مخاطب نیست."
+            "ابزار: فقط search_lands. "
+            "اگر ملک پیشنهاد می‌کنی [[LAND:کد]] بگذار. "
+            "ثبت بازدید همکار برای این مخاطب نیست."
         )
     return (
-        "ابزارها (اجباری وقتی لازم است): "
-        "1) search_lands — جستجوی فایل؛ فقط برای نتیجه جستجو [[LAND:کد]]. "
-        "2) suggest_next_action — کار بعدی داشبورد. "
-        "3) draft_listing_copy — متن دیوار/اینستا. "
-        "4) propose_visit_request — پیشنهاد بازدید (تأیید در کارت). "
-        "5) propose_complete_visit — پیشنهاد «بازدید انجام شد» (تأیید در کارت). "
-        "6) propose_deal — پیشنهاد معامله/فروش نهایی (تأیید در کارت). "
-        "7) propose_release_deal — پیشنهاد بستن/انصراف معامله در انتظار (تأیید در کارت). "
-        "همهٔ اکشن‌های فروش را از همین چت پیش ببر؛ کاربر را به صفحه فایل نفرست مگر برای دیدن عکس/جزئیات. "
-        "[[LAND:کد]] فقط وقتی کاربر فایل می‌خواهد ببیند یا نتیجه جستجو را پیشنهاد می‌کنی — نه در هر پیام مأموریت. "
-        "وقتی کاربر آگهی می‌خواهد draft_listing_copy را صدا بزن. "
-        "هرگز ادعا نکن ثبت شد مگر بعد از تأیید کارت. "
-        "اگر اطلاعات مشتری/تاریخ ناقص است اول بپرس."
+        "مثل همکار کنار کاربر باش؛ ابزار را وقتی لازم است صدا بزن، نه برای نمایش. "
+        "search_lands → فقط برای جستجو و آن‌وقت [[LAND:کد]]. "
+        "suggest_next_action → کار بعدی واقعی از داشبورد. "
+        "draft_listing_copy → متن دیوار/اینستا. "
+        "propose_visit_request / propose_complete_visit / propose_deal / propose_release_deal → "
+        "پیشنهاد با کارت تأیید؛ تا تأیید نزده نگوی ثبت شد. "
+        "ثبت فروش را از همین چت جلو ببر. "
+        "اگر نام/شماره/تاریخ مشتری کم است اول خودمونی بپرس."
     )
 
 
@@ -499,22 +494,38 @@ def _tool_draft_listing(
     from app.express_partner.sales_coach import draft_listing_copy
 
     copies = draft_listing_copy(land, channel=channel)
+    blocks: list[dict[str, str]] = []
+    divar = str(copies.get("divar") or "").strip()
+    insta = str(copies.get("instagram") or "").strip()
+    if divar:
+        blocks.append({"id": "divar", "label": "متن دیوار", "text": divar})
+    if insta:
+        blocks.append({"id": "instagram", "label": "کپشن اینستا", "text": insta})
+
     model = {
         "ok": True,
         "land_code": str(land.get("code") or code),
         "title": str(land.get("title") or "").strip(),
         "copies": copies,
+        "copy_blocks_count": len(blocks),
         "instruction": (
-            "متن‌های copies را عیناً در پاسخ برای کپی کاربر بیاور. "
-            "بگو دیوار و اینستا را امروز انجام دهد و هر تماس را به بازدید تبدیل کند. "
-            "کارت فایل نشان نده مگر کاربر صریحاً بخواهد فایل را ببیند."
+            "متن آگهی در کارت‌های جداگانهٔ قابل‌کپی به کاربر نشان داده می‌شود. "
+            "در پیام فقط ۱–۲ جمله کوتاه بگو (مثلاً آماده‌ست؛ از کارت‌ها کپی کن). "
+            "متن کامل دیوار/اینستا را در پیام تکرار نکن و بلاک کد ننویس."
         ),
     }
-    return {
+    out: dict[str, Any] = {
         "ok": True,
         "model_result": model,
         "land_codes": [],
     }
+    if blocks:
+        out["ui_action"] = {
+            "type": "copy_blocks",
+            "title": "متن‌های آماده",
+            "blocks": blocks,
+        }
+    return out
 
 
 def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
@@ -1108,6 +1119,8 @@ def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
             parts.append(_render_confirm_action_card(action))
         elif atype == "next_action":
             parts.append(_render_next_action_card(action))
+        elif atype == "copy_blocks":
+            parts.append(_render_copy_blocks_card(action))
     if not parts:
         return ""
     return (
@@ -1115,6 +1128,49 @@ def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
         + "".join(parts)
         + "</div>"
     )
+
+
+def _render_copy_blocks_card(action: dict[str, Any]) -> str:
+    """کارت‌های کپی GPT-style — هر متن (دیوار / اینستا) جدا."""
+    blocks = action.get("blocks") if isinstance(action.get("blocks"), list) else []
+    icon_copy = (
+        '<svg class="ai-copy-block__icon-copy" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="1.85" stroke-linecap="round" '
+        'stroke-linejoin="round" aria-hidden="true">'
+        '<rect x="9" y="9" width="13" height="13" rx="2"></rect>'
+        '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>'
+        "</svg>"
+    )
+    icon_check = (
+        '<svg class="ai-copy-block__icon-check" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2.1" stroke-linecap="round" '
+        'stroke-linejoin="round" aria-hidden="true">'
+        '<path d="M20 6L9 17l-5-5"></path>'
+        "</svg>"
+    )
+    chunks: list[str] = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        text = str(block.get("text") or "").strip()
+        if not text:
+            continue
+        label = escape(str(block.get("label") or "متن").strip() or "متن")
+        chunks.append(
+            '<div class="ai-copy-block" data-ai-copy-block>'
+            '<div class="ai-copy-block__bar">'
+            f'<span class="ai-copy-block__label">{label}</span>'
+            '<button type="button" class="ai-copy-block__btn" data-ai-copy '
+            'aria-label="کپی متن">'
+            f"{icon_copy}{icon_check}"
+            "</button>"
+            "</div>"
+            f'<pre class="ai-copy-block__pre" data-ai-copy-text>{escape(text)}</pre>'
+            "</div>"
+        )
+    if not chunks:
+        return ""
+    return '<div class="ai-copy-blocks">' + "".join(chunks) + "</div>"
 
 
 def _render_confirm_action_card(action: dict[str, Any]) -> str:

@@ -85,12 +85,75 @@ def get_active_mission(phone: str) -> Optional[Dict[str, Any]]:
     if not ph:
         return None
     for row in _missions_list():
-        if str(row.get("partner_phone") or "").strip() != ph:
+        if _norm_phone(str(row.get("partner_phone") or "")) != ph:
             continue
         if str(row.get("status") or "").strip().lower() != _STATUS_ACTIVE:
             continue
         return dict(row)
     return None
+
+
+def _latest_mission_for_land(phone: str, land_code: str) -> Optional[Dict[str, Any]]:
+    """آخرین مأموریت همین همکار روی همین فایل (هر وضعیتی)."""
+    ph = _norm_phone(phone)
+    code = str(land_code or "").strip()
+    if not ph or not code:
+        return None
+    matches: List[Dict[str, Any]] = []
+    for row in _missions_list():
+        if _norm_phone(str(row.get("partner_phone") or "")) != ph:
+            continue
+        if str(row.get("land_code") or "").strip() != code:
+            continue
+        matches.append(row)
+    if not matches:
+        return None
+
+    def _sort_key(r: Dict[str, Any]):
+        return str(r.get("assigned_at") or r.get("completed_at") or "")
+
+    matches.sort(key=_sort_key)
+    return dict(matches[-1])
+
+
+def _find_existing_mission_thread(
+    phone: str,
+    land_code: str,
+    *,
+    preferred_tid: str = "",
+) -> str:
+    """ترد قبلی مأموریت همین فایل را پیدا کن — بدون ساختن ترد جدید."""
+    from app.ai.audience import AUDIENCE_PARTNER
+    from app.ai.chat_store import load_user_record, _find_thread
+
+    ph = _norm_phone(phone)
+    code = str(land_code or "").strip()
+    prefer = str(preferred_tid or "").strip()
+    try:
+        record = load_user_record(ph, AUDIENCE_PARTNER)
+    except Exception:
+        return ""
+    if not isinstance(record, dict):
+        return ""
+    if prefer and _find_thread(record, prefer):
+        return prefer
+    want_title = f"ماموریت {code}" if code else ""
+    if not want_title:
+        return ""
+    threads = record.get("threads") or []
+    if not isinstance(threads, list):
+        return ""
+    # جدیدترین هم‌عنوان
+    found = ""
+    for th in threads:
+        if not isinstance(th, dict):
+            continue
+        if str(th.get("title") or "").strip() != want_title:
+            continue
+        tid = str(th.get("id") or "").strip()
+        if tid:
+            found = tid
+    return found
 
 
 def _land_by_code(code: str) -> Optional[Dict[str, Any]]:
@@ -132,7 +195,7 @@ def complete_mission(
     changed = False
     done_row: Optional[Dict[str, Any]] = None
     for row in rows:
-        if str(row.get("partner_phone") or "").strip() != ph:
+        if _norm_phone(str(row.get("partner_phone") or "")) != ph:
             continue
         if str(row.get("status") or "").strip().lower() != _STATUS_ACTIVE:
             continue
@@ -164,7 +227,7 @@ def refresh_mission_if_land_closed(phone: str) -> Optional[Dict[str, Any]]:
     for a in load_express_assignments() or []:
         if not isinstance(a, dict):
             continue
-        if str(a.get("partner_phone") or "").strip() != ph:
+        if _norm_phone(str(a.get("partner_phone") or "")) != ph:
             continue
         if str(a.get("land_code") or "").strip() != code:
             continue
@@ -190,8 +253,44 @@ def _assignment_counts() -> Dict[str, int]:
     return counts
 
 
+def _pick_from_personal_assignments(phone: str) -> Optional[Dict[str, Any]]:
+    """اگر همکار انتساب فعال روی فایل باز دارد، همان را برای مأموریت بردار."""
+    ph = _norm_phone(phone)
+    if not ph:
+        return None
+    open_by_code: Dict[str, Dict[str, Any]] = {}
+    for land in load_express_lands_cached() or []:
+        if not isinstance(land, dict) or not _land_is_open(land):
+            continue
+        code = str(land.get("code") or "").strip()
+        if code:
+            open_by_code[code] = land
+    if not open_by_code:
+        return None
+    candidates: List[Dict[str, Any]] = []
+    for a in load_express_assignments() or []:
+        if not isinstance(a, dict):
+            continue
+        if _norm_phone(str(a.get("partner_phone") or "")) != ph:
+            continue
+        st = str(a.get("status") or "active").strip().lower()
+        if st in ("sold", "closed", "cancelled", "canceled"):
+            continue
+        code = str(a.get("land_code") or "").strip()
+        land = open_by_code.get(code)
+        if land:
+            candidates.append(land)
+    if not candidates:
+        return None
+    return random.choice(candidates)
+
+
 def _pick_random_open_land(phone: str) -> Optional[Dict[str, Any]]:
-    """فایل باز اکسپرس؛ ترجیح کم‌تخصیص‌یافته؛ ترجیحاً فایلی که قبلاً مأموریت همین همکار نبوده."""
+    """فایل باز اکسپرس؛ اول انتساب شخصی، بعد کم‌تخصیص‌یافته."""
+    personal = _pick_from_personal_assignments(phone)
+    if personal:
+        return personal
+
     ph = _norm_phone(phone)
     past_codes = {
         str(r.get("land_code") or "").strip()
@@ -267,8 +366,13 @@ def _ensure_personal_assignment(phone: str, land: Dict[str, Any]) -> None:
     save_express_assignments(items)
 
 
-def _seed_mission_chat(phone: str, land: Dict[str, Any]) -> str:
-    """ترد جدید + پیام کاربر مأموریت + پاسخ آماده (متن آگهی)."""
+def _seed_mission_chat(
+    phone: str,
+    land: Dict[str, Any],
+    *,
+    reuse_thread_id: str = "",
+) -> str:
+    """ترد مأموریت را بگیر یا بساز؛ برای یک فایل فقط یک ترد."""
     from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import (
         append_exchange,
@@ -283,6 +387,17 @@ def _seed_mission_chat(phone: str, land: Dict[str, Any]) -> str:
     ph = _norm_phone(phone)
     code = str(land.get("code") or "").strip()
     title = str(land.get("title") or "").strip()
+
+    existing_tid = _find_existing_mission_thread(
+        ph, code, preferred_tid=reuse_thread_id
+    )
+    if existing_tid:
+        try:
+            set_active_thread(ph, existing_tid, audience=AUDIENCE_PARTNER)
+        except Exception:
+            pass
+        return existing_tid
+
     tid = create_thread(ph, activate=True, audience=AUDIENCE_PARTNER)
 
     # عنوان صریح مأموریت
@@ -298,18 +413,16 @@ def _seed_mission_chat(phone: str, land: Dict[str, Any]) -> str:
     user_msg = build_coach_chat_prompt(code=code, title=title, stage_label="علاقه‌مند")
     copies = draft_listing_copy(land, channel="both")
     divar = str(copies.get("divar") or "").strip()
-    # بذر کوتاه و ماموریت‌محور؛ متن کامل فقط با درخواست بعدی
     title_bit = f" — {title}" if title else ""
     assistant_msg = (
-        f"ماموریت فعال: فایل {code}{title_bit}.\n"
-        f"کار بعدی: همین امروز آگهی دیوار بگذار و استوری اینستا بزن.\n"
-        f"متن آماده است — بنویس «متن دیوار» یا «کپشن اینستا» تا کامل بفرستم."
+        f"خب، فایل {code}{title_bit} رو با هم جلو می‌بریم.\n"
+        f"امروز دیوار بذار و یه استوری اینستا بزن — متنش آماده‌ست؛ "
+        f"بگو «متن دیوار» یا «کپشن اینستا» تا برات بفرستم."
     )
     if divar:
-        # یک خط خلاصه از عنوان دیوار
         first_line = divar.split("\n", 1)[0].strip()
         if first_line:
-            assistant_msg += f"\nخلاصه: {first_line[:90]}"
+            assistant_msg += f"\nشروع متن: {first_line[:90]}"
     append_exchange(
         ph,
         user_msg,
@@ -321,10 +434,92 @@ def _seed_mission_chat(phone: str, land: Dict[str, Any]) -> str:
     return tid
 
 
+def _reactivate_mission_row(
+    phone: str,
+    land: Dict[str, Any],
+    prev: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """مأموریت قبلی همین فایل را زنده کن و همان چت را نگه دار."""
+    ph = _norm_phone(phone)
+    code = str(land.get("code") or "").strip()
+    prev_id = str(prev.get("id") or "").strip()
+    if not ph or not code or not prev_id:
+        return None
+    thread_id = ""
+    try:
+        thread_id = _seed_mission_chat(
+            ph, land, reuse_thread_id=str(prev.get("thread_id") or "")
+        )
+    except Exception:
+        current_app.logger.exception(
+            "mission chat reuse failed phone=%s code=%s", ph, code
+        )
+        thread_id = str(prev.get("thread_id") or "")
+
+    rows = _missions_list()
+    out: Optional[Dict[str, Any]] = None
+    for row in rows:
+        if str(row.get("id") or "").strip() != prev_id:
+            # مأموریت‌های تکراری همین فایل را ببند تا لیست شلوغ نشود
+            if (
+                _norm_phone(str(row.get("partner_phone") or "")) == ph
+                and str(row.get("land_code") or "").strip() == code
+                and str(row.get("status") or "").strip().lower() == _STATUS_ACTIVE
+            ):
+                row["status"] = _STATUS_ABANDONED
+                row["completed_at"] = _now_iso()
+            continue
+        row["status"] = _STATUS_ACTIVE
+        row["thread_id"] = thread_id or str(row.get("thread_id") or "")
+        row.pop("completed_at", None)
+        row["last_followup_at"] = str(row.get("last_followup_at") or "")
+        out = dict(row)
+    if out:
+        save_partner_missions(rows)
+    return out
+
+
+def _attach_mission_thread(
+    phone: str,
+    mission: Dict[str, Any],
+) -> Dict[str, Any]:
+    """اگر thread_id مأموریت مرده/خالی است، ترد موجود همان فایل را وصل کن."""
+    ph = _norm_phone(phone)
+    mid = str(mission.get("id") or "").strip()
+    code = str(mission.get("land_code") or "").strip()
+    if not ph or not mid or not code:
+        return dict(mission)
+
+    land = _land_by_code(code) or {"code": code, "title": ""}
+    old_tid = str(mission.get("thread_id") or "").strip()
+    try:
+        new_tid = _seed_mission_chat(ph, land, reuse_thread_id=old_tid)
+    except Exception:
+        current_app.logger.exception(
+            "attach mission thread failed phone=%s code=%s", ph, code
+        )
+        return dict(mission)
+
+    if new_tid == old_tid:
+        return dict(mission)
+
+    rows = _missions_list()
+    out = dict(mission)
+    for row in rows:
+        if str(row.get("id") or "").strip() != mid:
+            continue
+        row["thread_id"] = new_tid
+        out = dict(row)
+        break
+    save_partner_missions(rows)
+    out["thread_id"] = new_tid
+    return out
+
+
 def ensure_random_mission(phone: str) -> Optional[Dict[str, Any]]:
     """
     اگر مأموریت فعال باز باشد همان را برگردان (و در صورت sold کامل کن).
-    وگرنه یک فایل رندوم اختصاص بده، assignment بنویس، چت بذر بزن.
+    وگرنه فایل را بردار؛ اگر قبلاً مأموریت/چت همین فایل بوده همان را زنده کن — چت کپی نساز.
     """
     ph = _norm_phone(phone)
     if not ph:
@@ -332,19 +527,18 @@ def ensure_random_mission(phone: str) -> Optional[Dict[str, Any]]:
 
     existing = refresh_mission_if_land_closed(ph)
     if existing:
-        return existing
+        return _attach_mission_thread(ph, existing)
 
     fd = _try_acquire_lock()
     if fd is None:
-        # همزمان؛ دوباره فقط active را بخوان
         time.sleep(0.05)
-        return get_active_mission(ph)
+        again = get_active_mission(ph)
+        return _attach_mission_thread(ph, again) if again else None
 
     try:
-        # دوباره چک زیر قفل
         existing = refresh_mission_if_land_closed(ph)
         if existing:
-            return existing
+            return _attach_mission_thread(ph, existing)
 
         land = _pick_random_open_land(ph)
         if not land:
@@ -352,6 +546,12 @@ def ensure_random_mission(phone: str) -> Optional[Dict[str, Any]]:
 
         code = str(land.get("code") or "").strip()
         _ensure_personal_assignment(ph, land)
+
+        prev = _latest_mission_for_land(ph, code)
+        if prev:
+            revived = _reactivate_mission_row(ph, land, prev)
+            if revived:
+                return revived
 
         thread_id = ""
         try:

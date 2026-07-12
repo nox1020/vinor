@@ -79,7 +79,7 @@
          class="ai-scroll flex-1 space-y-3 overflow-y-auto p-4 sm:p-5"
          aria-live="polite"
          aria-label="گفتگو"
-         data-welcome="سلام! من Vinor AI هستم. دربارهٔ آگهی‌های اکسپرس، خرید امن زمین و ویلا، یا فرآیند وینور بپرسید.">
+         data-welcome="سلام — منم کنارتم برای خرید امن زمین و ویلا و آگهی‌های اکسپرس. بگو دنبال چی هستی.">
       {% for msg in chat_messages %}
         {% include 'express_partner/partials/ai_chat_message.html' %}
       {% endfor %}
@@ -157,5 +157,5 @@
   });
 })();
 </script>
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=16"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=34"></script>
 {% endblock %}
