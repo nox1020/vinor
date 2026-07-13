@@ -2391,9 +2391,9 @@ def _home_urgent_actions(
             'icon': 'fa-clipboard-list',
             'tone': 'blue',
             'title': f'{n} اقدام رو همین الان باید انجام بدی' if n > 1 else 'یک اقدام رو همین الان باید انجام بدی',
-            'subtitle': 'وضعیت درخواست‌ها را چک کن',
-            'cta': 'انجام بده',
-            'url': url_for('express_partner.requests'),
+            'subtitle': 'از چت خانه قدم بعدی را بزن',
+            'cta': 'برو به چت',
+            'url': url_for('express_partner.home'),
             'priority': 80,
         })
 
@@ -3420,156 +3420,8 @@ def api_favorites_cards():
 @express_partner_bp.get('/requests', endpoint='requests')
 @require_partner_access(allow_pending=True)
 def requests_page():
-    """مرکز مدیریت و پیگیری درخواست‌های بازدید همکار."""
-    me_phone = (session.get('user_phone') or '').strip()
-    profile = getattr(g, 'express_partner_profile', None)
-    is_special = _is_partner_special(profile)
-    current_filter = (request.args.get('filter') or '').strip().lower()
-    allowed_filters = ('all',) + REQUEST_MGMT_BUCKETS
-    if current_filter not in allowed_filters:
-        # بعد از ثبت درخواست، لیست «در حال انجام» را نشان بده؛ در غیر این صورت «نیاز به اقدام»
-        if request.args.get('submitted'):
-            current_filter = 'in_progress'
-        else:
-            current_filter = 'needs_action'
-    rows = load_express_visit_requests() or []
-    if not isinstance(rows, list):
-        rows = []
-    commissions = load_express_commissions() or []
-    if not isinstance(commissions, list):
-        commissions = []
-
-    status_meta = {
-        PENDING_STATUS: {
-            'label': 'در انتظار تأیید',
-            'hint': 'درخواست شما ثبت شده و منتظر بررسی تیم وینور است.',
-        },
-        APPROVED_STATUS: {
-            'label': 'تأیید شده',
-            'hint': 'بازدید تأیید شده؛ پس از انجام بازدید، آن را روی فایل ثبت کنید.',
-        },
-        DONE_PENDING_STATUS: {
-            'label': 'در انتظار تأیید انجام بازدید',
-            'hint': 'انجام بازدید ثبت شده و منتظر تأیید ادمین است.',
-        },
-        COMPLETED_STATUS: {
-            'label': 'بازدید انجام شد',
-            'hint': 'بازدید ثبت شده؛ مراحل بعدی در جریان است.',
-        },
-        CANCELLED_STATUS: {
-            'label': 'لغو شده',
-            'hint': 'این درخواست تأیید نشده یا بسته شده است.',
-        },
-    }
-
-    items: List[Dict[str, Any]] = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        if str(row.get('partner_phone') or '').strip() != me_phone:
-            continue
-        st = str(row.get('status') or PENDING_STATUS).strip() or PENDING_STATUS
-        meta = status_meta.get(st, {'label': st, 'hint': ''})
-        visit_date = str(row.get('visit_date') or '').strip()
-        progress_row = dict(row)
-        progress_row['visit_commission_required'] = _visit_commission_required_for(
-            commissions,
-            me_phone,
-            str(row.get('land_code') or ''),
-        )
-        progress_steps = visit_progress_steps(progress_row, commissions, partner_phone=me_phone)
-        mgmt = partner_request_mgmt_meta(progress_row, progress_steps)
-        land_code = str(row.get('land_code') or '').strip()
-        items.append({
-            'id': row.get('id') or '',
-            'land_code': land_code,
-            'land_title': row.get('land_title') or land_code or 'فایل اکسپرس',
-            'visit_date': visit_date,
-            'visit_date_jalali': format_iso_date_jalali(visit_date) if visit_date else '',
-            'customer_name': (
-                str(row.get('customer_name') or '').strip()
-                or f"{str(row.get('customer_first_name') or '').strip()} {str(row.get('customer_last_name') or '').strip()}".strip()
-            ),
-            'customer_phone': str(row.get('customer_phone') or '').strip(),
-            'status': st,
-            'status_label': meta['label'],
-            'status_hint': meta['hint'],
-            'created_at': row.get('created_at') or '',
-            'updated_at': row.get('updated_at') or '',
-            'approved_at': row.get('approved_at') or '',
-            'completed_at': row.get('completed_at') or '',
-            'admin_note': row.get('admin_note') or '',
-            'progress_steps': progress_steps,
-            'mgmt_bucket': mgmt['bucket'],
-            'mgmt_bucket_label': mgmt['bucket_label'],
-            'next_action': mgmt['next_action'],
-            'sort_group': mgmt['sort_group'],
-            'progress_done': mgmt['progress_done'],
-            'progress_total': mgmt['progress_total'],
-            'progress_pct': mgmt['progress_pct'],
-            'progress_line': mgmt['progress_line'],
-            'progress_pct_label': mgmt['progress_pct_label'],
-            'current_step_label': mgmt['current_step_label'],
-            'current_step_key': mgmt.get('current_step_key') or '',
-            'stage_hint': mgmt.get('stage_hint') or mgmt['next_action'],
-            'detail_url': url_for('express_partner.land_detail', code=land_code) if land_code else '',
-            'needs_attention': mgmt['bucket'] == 'needs_action',
-        })
-
-    def _request_sort_key(item: Dict[str, Any]) -> tuple:
-        ts = parse_datetime_safe(item.get('updated_at') or item.get('created_at') or '1970-01-01')
-        group = int(item.get('sort_group') or 9)
-        epoch = ts.timestamp()
-        if item.get('mgmt_bucket') in ('completed', 'cancelled'):
-            return (group, epoch)
-        return (group, -epoch)
-
-    items.sort(key=_request_sort_key)
-
-    counts = {'all': len(items)}
-    for bucket in REQUEST_MGMT_BUCKETS:
-        counts[bucket] = sum(1 for i in items if i.get('mgmt_bucket') == bucket)
-
-    if current_filter != 'all':
-        items = [item for item in items if item.get('mgmt_bucket') == current_filter]
-
-    current_filter_label = (
-        REQUEST_MGMT_BUCKET_LABELS.get(current_filter, 'همه')
-        if current_filter != 'all'
-        else 'همه'
-    )
-    # برچسب‌های کوتاه‌تر برای UI خلوت
-    short_labels = {
-        'needs_action': 'کار لازم',
-        'in_progress': 'در انتظار',
-        'completed': 'تمام‌شده',
-        'cancelled': 'لغو',
-        'all': 'همه',
-    }
-    current_filter_label = short_labels.get(current_filter, current_filter_label)
-
-    special_inbox_needs_count = 0
-    if is_special:
-        try:
-            from .special_visit_inbox import visits_for_special_owner
-            special_inbox_items = visits_for_special_owner(me_phone)
-            special_inbox_needs_count = sum(
-                1 for i in special_inbox_items if i.get('needs_action')
-            )
-        except Exception:
-            special_inbox_needs_count = 0
-
-    return render_template(
-        'express_partner/requests.html',
-        items=items,
-        counts=counts,
-        current_filter=current_filter,
-        current_filter_label=current_filter_label,
-        current_filter_count=len(items),
-        is_special=is_special,
-        special_inbox_needs_count=special_inbox_needs_count,
-        hide_header=True,
-    )
+    """صفحهٔ قدیمی بازدیدها حذف شد — همهٔ پیگیری در چت خانه است."""
+    return redirect(url_for('express_partner.home'))
 
 
 @express_partner_bp.get('/commissions', endpoint='commissions')
@@ -4805,8 +4657,6 @@ def ai_agent_confirm():
         return jsonify(out), 400
 
     note = str(out.get('message') or 'اقدام با موفقیت انجام شد.')
-    if out.get('requests_url'):
-        note = note + '\nبرای پیگیری: درخواست‌های بازدید.'
     msgs, tid = append_exchange(
         phone,
         '',
@@ -4818,7 +4668,6 @@ def ai_agent_confirm():
         'ok': True,
         'message': out.get('message'),
         'already': bool(out.get('already')),
-        'requests_url': out.get('requests_url') or '',
         'thread_id': tid,
         'messages': msgs,
         'visit_id': out.get('visit_id') or '',
@@ -5326,7 +5175,10 @@ def create_visit_request(code: str):
         return _mark_in_transaction_finish(
             code,
             success=True,
-            message='درخواست بازدید شما قبلاً ثبت شده است. از صفحه درخواست‌ها وضعیت را پیگیری کنید.',
+            message=(
+                'این بازدید از قبل ثبت شده. قدم بعدی: با مشتری هماهنگ کن؛ '
+                'بعد از بازدید از چت خانه بگو «بازدید انجام شد».'
+            ),
             category='success',
             new_status='active',
         tx_mode=tx_state.get('tx_mode') or 'visit_done',
@@ -5337,7 +5189,7 @@ def create_visit_request(code: str):
         customer_name=tx_state.get('customer_name')
         or (open_rec or {}).get('customer_name')
         or '',
-        redirect_url=url_for('express_partner.requests', submitted=1),
+        redirect_url=url_for('express_partner.home'),
         )
     if err == 'customer_required':
         return _mark_in_transaction_finish(
@@ -5403,9 +5255,15 @@ def create_visit_request(code: str):
         current_app.logger.exception(
             'visit_submitted partner SMS failed phone=%s code=%s', me_phone, code
         )
-    msg = 'درخواست بازدید نهایی شد. با مشتری هماهنگ کنید و پس از بازدید، «بازدید انجام شد» را ثبت کنید.'
+    msg = (
+        'بازدید ثبت شد. قدم بعدی: با مشتری هماهنگ کن؛ '
+        'بعد از بازدید از چت خانه بگو «بازدید انجام شد» — لازم نیست به صفحه دیگری بروی.'
+    )
     if not sms_result.get('ok') and not sms_result.get('skipped'):
-        msg = 'درخواست بازدید نهایی شد. با مشتری هماهنگ کنید. (ارسال پیامک به ادمین ناموفق بود.)'
+        msg = (
+            'بازدید ثبت شد (پیامک ادمین ناموفق بود). قدم بعدی: با مشتری هماهنگ کن؛ '
+            'بعد از بازدید از چت خانه بگو «بازدید انجام شد».'
+        )
 
     try:
         is_pa = _is_partner_approved(partner_profile)
@@ -5430,7 +5288,7 @@ def create_visit_request(code: str):
         customer_phone=tx_state.get('customer_phone') or customer_phone,
         customer_name=tx_state.get('customer_name')
         or f'{customer_first_name} {customer_last_name}'.strip(),
-        redirect_url=url_for('express_partner.requests', submitted=1),
+        redirect_url=url_for('express_partner.home'),
     )
 
 

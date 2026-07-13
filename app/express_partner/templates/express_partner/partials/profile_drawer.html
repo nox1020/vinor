@@ -711,7 +711,6 @@
         {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری', '', tour='apply-link') }}
         {% endif %}
         {{ profile_menu_row(url_for('express_partner.commissions'), 'fa-wallet', 'کیف پول', '', tour='commissions-link') }}
-        {{ profile_menu_row(url_for('express_partner.requests'), 'fa-clipboard-list', 'بازدیدها', '', tour='requests-link') }}
         {% if is_vinor_apk|default(false) and show_app_update_card|default(false) and android_apk_url %}
         {{ profile_menu_row(android_apk_url, 'fa-download', 'بروزرسانی اپ', '', nav=false, download=true, extra_class='text-amber-200') }}
         {% endif %}

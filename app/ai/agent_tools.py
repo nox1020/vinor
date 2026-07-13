@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from flask import current_app, url_for
+from flask import current_app
 from markupsafe import escape
 
 from app.ai.audience import (
@@ -94,7 +94,8 @@ def agent_system_hint(voice: str | None) -> str:
         "ثبت بازدید: ۱) نام و نام‌خانوادگی یکجا ۲) شماره "
         "۳) propose_visit_request بدون تاریخ برای لیست شماره‌دار "
         "۴) همان لیست را نشان بده؛ خودت تاریخ انتخاب نکن "
-        "۵) با ۱/اولی/دومی فقط visit_date بفرست (نام/شماره ذخیره است؛ دوباره نپرس)."
+        "۵) با ۱/اولی/دومی فقط visit_date بفرست (نام/شماره ذخیره است؛ دوباره نپرس). "
+        "۶) بعد از ثبت بازدید، قدم بعدی را بگو (هماهنگی با مشتری → از همین چت «بازدید انجام شد»)؛ به صفحه جدا نفرست."
     )
 
 
@@ -1160,7 +1161,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     if open_rec:
         return {
             "ok": False,
-            "error": "برای این فایل درخواست بازدید باز دارید؛ از صفحه درخواست‌ها پیگیری کنید.",
+            "error": "برای این فایل درخواست بازدید باز دارید؛ بعد از بازدید از همین چت بگو «بازدید انجام شد».",
             "existing_visit_id": str(open_rec.get("id") or ""),
         }
 
@@ -1521,8 +1522,10 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         return {
             "ok": True,
             "already": True,
-            "message": "درخواست بازدید قبلاً ثبت شده است.",
-            "requests_url": url_for("express_partner.requests", submitted=1),
+            "message": (
+                "این بازدید از قبل ثبت شده. قدم بعدی: با مشتری هماهنگ کن؛ "
+                "بعد از بازدید از همین چت بگو «بازدید انجام شد»."
+            ),
         }
     if err or not rec:
         msg_map = {
@@ -1570,15 +1573,17 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         pass
 
     _consume_pending_action(token)
+    vdate = str(rec.get("visit_date") or visit_date or "").strip()
+    date_bit = f" برای {vdate}" if vdate else ""
     return {
         "ok": True,
         "message": (
-            "بازدید نهایی شد. با مشتری هماهنگ کنید و پس از بازدید، "
-            "«بازدید انجام شد» را ثبت کنید."
+            f"بازدید{date_bit} ثبت شد. "
+            "قدم بعدی: با مشتری هماهنگ کن؛ بعد از بازدید از همین چت بگو «بازدید انجام شد» "
+            "تا کارت تأیید بیاید — لازم نیست به صفحه دیگری بروی."
         ),
         "visit_id": str(rec.get("id") or ""),
         "land_code": code,
-        "requests_url": url_for("express_partner.requests", submitted=1),
     }
 
 
@@ -1651,9 +1656,15 @@ def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
     if not rec:
         return {"ok": False, "error": "ثبت انجام بازدید ممکن نشد."}
     save_express_visit_requests(visits)
-    msg = "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است."
+    msg = (
+        "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است. "
+        "قدم بعدی: بعد از تأیید، از همین چت بگو «ثبت معامله»."
+    )
     if err == "already_pending":
-        msg = "قبلاً ثبت شده و منتظر تأیید ادمین است."
+        msg = (
+            "قبلاً ثبت شده و منتظر تأیید ادمین است. "
+            "قدم بعدی: صبر کن تا تأیید شود؛ بعد از همین چت معامله را ثبت کن."
+        )
     return {"ok": True, "message": msg, "land_code": code}
 
 
