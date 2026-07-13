@@ -5178,6 +5178,8 @@ def express_visit_requests():
                 else False
             )
             return row
+        pending_row = None
+        latest_row = None
         for c in reversed(commissions):
             if not isinstance(c, dict):
                 continue
@@ -5193,8 +5195,12 @@ def express_visit_requests():
                 if commission_linked_to_active_withdrawal
                 else False
             )
-            return row
-        return None
+            st = str(c.get('status') or '').strip().lower()
+            if st == 'pending' and pending_row is None:
+                pending_row = row
+            if latest_row is None:
+                latest_row = row
+        return pending_row or latest_row
 
     def _visit_commission_required_for_admin(phone: str, code: str) -> bool:
         if visit_commission_amount > 0:

@@ -5601,7 +5601,7 @@ def mark_in_transaction(code: str):
                             except Exception:
                                 price_total = 0
                             
-                            # بررسی پورسانت pending قبلی (ردشده مجدداً قابل ثبت است)
+                            # همیشه پورسانت معاملهٔ pending بساز تا کارت تأیید ادمین در روند بازدید بیاید
                             if commission_blocks_new_deal_record(commissions, partner_phone, str(code)):
                                 current_app.logger.info(
                                     "Pending deal commission already exists for partner %s land %s",
@@ -5609,64 +5609,73 @@ def mark_in_transaction(code: str):
                                     code,
                                 )
                                 skipped_count += 1
-                            elif commission_pct > 0:
-                                if commission_amount <= 0:
+                            else:
+                                if commission_pct <= 0:
+                                    current_app.logger.warning(
+                                        "Commission percentage missing for partner %s land %s — creating pending deal for admin close",
+                                        partner_phone,
+                                        code,
+                                    )
+                                if commission_amount <= 0 and commission_pct > 0:
                                     current_app.logger.warning(
                                         "Commission amount is 0 for partner %s, land %s: price=%s, pct=%s",
                                         partner_phone, code, price_total, commission_pct,
                                     )
-                                elif commission_amount > 0:
-                                    # ایجاد ID جدید
-                                    new_id = (max([int(x.get('id', 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
-                                    
-                                    # ایجاد رکورد پورسانت
-                                    new_commission = {
-                                        'id': new_id,
-                                        'commission_type': 'deal',
-                                        'partner_phone': partner_phone,
-                                        'land_code': str(code),
-                                        'sale_amount': price_total,
-                                        'commission_pct': commission_pct,
-                                        'commission_amount': commission_amount,
-                                        'status': 'pending',
-                                        'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                                    }
-                                    
-                                    commissions.append(new_commission)
-                                    created_count += 1
-                                    try:
-                                        from .admin_action_sms import notify_admin_pending_action
-                                        notify_admin_pending_action(
-                                            'commission',
-                                            partner_phone=partner_phone,
-                                            partner_name=_partner_display_name(partner_phone),
-                                            land_code=str(code),
-                                            amount=commission_amount,
-                                        )
-                                    except Exception:
-                                        current_app.logger.exception(
-                                            'commission pending admin SMS failed partner=%s land=%s',
-                                            partner_phone,
-                                            code,
-                                        )
-                                    try:
-                                        from .commission_sms import notify_partner_commission_txn
-                                        notify_partner_commission_txn(
-                                            partner_phone=partner_phone,
-                                            event='commission_pending',
-                                            amount=commission_amount,
-                                            land_code=str(code),
-                                            reference_id=str(new_id),
-                                        )
-                                    except Exception:
-                                        current_app.logger.exception(
-                                            'commission_pending SMS failed partner=%s land=%s',
-                                            partner_phone,
-                                            code,
-                                        )
-                                    current_app.logger.info(f"Created commission record {new_id} for partner {partner_phone} and land {code}: amount={commission_amount}, pct={commission_pct}, price={price_total}")
-                            else:
-                                current_app.logger.warning(f"Commission percentage is 0 or missing for partner {partner_phone}, land {code}")
+                                new_id = (max([int(x.get('id', 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
+                                try:
+                                    safe_amount = max(0, int(commission_amount or 0))
+                                except Exception:
+                                    safe_amount = 0
+                                try:
+                                    safe_pct = float(commission_pct or 0)
+                                except Exception:
+                                    safe_pct = 0.0
+                                new_commission = {
+                                    'id': new_id,
+                                    'commission_type': 'deal',
+                                    'partner_phone': partner_phone,
+                                    'land_code': str(code),
+                                    'sale_amount': price_total,
+                                    'commission_pct': safe_pct,
+                                    'commission_amount': safe_amount,
+                                    'status': 'pending',
+                                    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                }
+                                commissions.append(new_commission)
+                                created_count += 1
+                                try:
+                                    from .admin_action_sms import notify_admin_pending_action
+                                    notify_admin_pending_action(
+                                        'commission',
+                                        partner_phone=partner_phone,
+                                        partner_name=_partner_display_name(partner_phone),
+                                        land_code=str(code),
+                                        amount=safe_amount,
+                                    )
+                                except Exception:
+                                    current_app.logger.exception(
+                                        'commission pending admin SMS failed partner=%s land=%s',
+                                        partner_phone,
+                                        code,
+                                    )
+                                try:
+                                    from .commission_sms import notify_partner_commission_txn
+                                    notify_partner_commission_txn(
+                                        partner_phone=partner_phone,
+                                        event='commission_pending',
+                                        amount=safe_amount,
+                                        land_code=str(code),
+                                        reference_id=str(new_id),
+                                    )
+                                except Exception:
+                                    current_app.logger.exception(
+                                        'commission_pending SMS failed partner=%s land=%s',
+                                        partner_phone,
+                                        code,
+                                    )
+                                current_app.logger.info(
+                                    f"Created commission record {new_id} for partner {partner_phone} and land {code}: amount={safe_amount}, pct={safe_pct}, price={price_total}"
+                                )
                         
                         if created_count > 0:
                             save_express_commissions(commissions)

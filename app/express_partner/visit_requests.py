@@ -1362,10 +1362,15 @@ def admin_visit_workflow_steps(
 
     if st == CANCELLED_STATUS:
         s4, hint, action = "blocked", "", False
+    elif dc_st == "pending":
+        # همکار فروش را ثبت کرده — حتی اگر پیوند پورسانت بازدید ناقص باشد، کارت تأیید نشان بده
+        s4, hint, action = (
+            "current",
+            "همکار فروش نهایی را ثبت کرده؛ با تأیید، فایل بسته و پورسانت به کیف پول اضافه می‌شود.",
+            True,
+        )
     elif not visit_gate:
         s4, hint, action = "waiting", "بعد از تأیید پورسانت بازدید، همکار درخواست معامله می‌زند.", False
-    elif dc_st == "pending":
-        s4, hint, action = "current", "همکار فروش نهایی را ثبت کرده؛ با تأیید، فایل بسته و پورسانت به کیف پول اضافه می‌شود.", True
     elif _paid(dc_st):
         s4, hint, action = "done", "فروش تأیید شد — فایل بسته و پورسانت در کیف پول همکار است.", False
     elif dc_st == "rejected":
@@ -1416,18 +1421,39 @@ def _admin_visit_activity_ts(item: Dict[str, Any]) -> str:
     return str(item.get("updated_at") or item.get("created_at") or "")
 
 
+def _admin_visit_action_stage_rank(item: Dict[str, Any]) -> int:
+    """اولویت مرحلهٔ اقدام: فروش نهایی > پورسانت بازدید > انجام بازدید > درخواست."""
+    for step in item.get("admin_workflow_steps") or []:
+        if not isinstance(step, dict):
+            continue
+        if step.get("state") == "skipped" or not step.get("needs_action"):
+            continue
+        key = str(step.get("key") or "")
+        if key == "deal_commission":
+            return 0
+        if key == "visit_commission":
+            return 1
+        if key == "visit_done":
+            return 2
+        if key == "visit_request":
+            return 3
+        return 4
+    return 9
+
+
 def _pick_primary_admin_visit(group: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """اولویت کارت ادغام‌شده: اقدام لازم → در روند → غیر بسته‌شده → جدیدتر."""
+    """اولویت کارت ادغام‌شده: مرحلهٔ مهم‌تر ادمین → اقدام لازم → در روند → جدیدتر."""
 
     def _rank(x: Dict[str, Any]) -> tuple:
         st = (str(x.get("status") or "")).strip()
         return (
+            _admin_visit_action_stage_rank(x),
             0 if x.get("workflow_needs_action") else 1,
             0 if x.get("in_workflow") else 1,
             0 if st != CANCELLED_STATUS else 1,
         )
 
-    best = min((_rank(x) for x in group), default=(9, 9, 9))
+    best = min((_rank(x) for x in group), default=(9, 9, 9, 9))
     candidates = [x for x in group if _rank(x) == best]
     return max(candidates, key=_admin_visit_activity_ts)
 

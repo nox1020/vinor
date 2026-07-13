@@ -1085,9 +1085,9 @@
       specLabel: 'بازدید ثبت‌شده',
     },
     deal_pending: {
-      label: 'منتظر تأیید ادمین',
-      icon: 'fa-clock',
-      btnClass: 'ld-btn-tx ld-btn-tx--pending cursor-default',
+      label: 'انصراف از فروش',
+      icon: 'fa-rotate-left',
+      btnClass: 'ld-btn-tx ld-btn-tx--release',
       specLabel: 'در انتظار تأیید فروش',
     },
     release: {
@@ -1099,7 +1099,7 @@
   };
 
   function statusFromMode(mode) {
-    return mode === 'release' ? 'in_transaction' : 'active';
+    return (mode === 'release' || mode === 'deal_pending') ? 'in_transaction' : 'active';
   }
 
   var visitCalState = {
@@ -2655,7 +2655,7 @@
       }
 
       if (mode === 'deal_pending') {
-        showTxToast('درخواست معامله ثبت شده و منتظر تأیید ادمین است.', false);
+        openLandModal('landReleaseModal');
         return;
       }
 

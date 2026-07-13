@@ -1408,14 +1408,35 @@ def _tool_propose_simple_tx(
     if mode not in ok_modes:
         hints = {
             "confirm_complete_visit": "الان نمی‌شود «بازدید انجام شد» زد؛ باید بازدید تأییدشده در جریان باشد.",
-            "confirm_deal": "الان معامله فعال نیست؛ اول بازدید را کامل کن یا منتظر تأیید باش.",
+            "confirm_deal": {
+                "visit_commission_pending": (
+                    "هنوز پورسانت بازدید تأیید نشده؛ بعد از تأیید ادمین می‌توانی معامله ثبت کنی. "
+                    "به کاربر وضعیت را بگو و کارت معامله نساز."
+                ),
+                "deal_pending": (
+                    "فروش قبلاً ثبت شده و منتظر تأیید ادمین است. "
+                    "به کاربر بگو صبر کند؛ اگر انصراف می‌خواهد propose_release_deal بزن."
+                ),
+                "release": (
+                    "فایل در معامله است بدون پورسانت در صف؛ اگر باید ببندد propose_release_deal، "
+                    "وگرنه وضعیت را بگو."
+                ),
+                "visit_done": "اول «بازدید انجام شد» را ثبت و تکمیل کن؛ بعد معامله.",
+                "visit_done_pending": "انجام بازدید منتظر تأیید ادمین است؛ هنوز معامله نزن.",
+                "_": "الان معامله فعال نیست؛ اول بازدید را کامل کن یا منتظر تأیید باش.",
+            },
             "confirm_release": "معاملهٔ بازی برای بستن نیست.",
         }
+        if action_type == "confirm_deal":
+            deal_hints = hints["confirm_deal"]
+            err = deal_hints.get(mode) or deal_hints["_"]
+        else:
+            err = hints.get(action_type, "این اقدام الان ممکن نیست.")
         return {
             "ok": False,
             "model_result": {
                 "ok": False,
-                "error": hints.get(action_type, "این اقدام الان ممکن نیست."),
+                "error": err,
                 "tx_mode": mode,
             },
         }

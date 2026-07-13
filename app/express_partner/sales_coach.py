@@ -467,7 +467,17 @@ def build_journey_chat_cta(
         bits.append(f"({title_s})")
     head = " ".join(bits)
 
-    if mode in ("deal_pending", "release") or stage == "در حال معامله":
+    if mode == "deal_pending" or stage == "در حال معامله":
+        return {
+            "label": "وضعیت",
+            "icon": "fa-clock",
+            "action": "status",
+            "prompt": (
+                f"{head}: فروشم ثبت شده و منتظر تأیید ادمین برای بستن فایل و پورسانت است؛ "
+                "وضعیت کوتاه بگو. اگر انصراف می‌خوام بگو کارت بستن معامله بده."
+            ),
+        }
+    if mode == "release":
         return {
             "label": "بستن",
             "icon": "fa-check-circle",
