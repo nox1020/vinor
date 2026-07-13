@@ -659,7 +659,9 @@
             <input type="hidden" name="next" id="epDrawerOtpNext" value="{{ url_for('express_partner.home') }}">
             <div class="ep-drawer-login__field">
               <input id="epDrawerOtp" class="ep-drawer-login__input ep-drawer-login__input--otp" type="text"
-                     name="otp_code" inputmode="numeric" autocomplete="one-time-code"
+                     name="otp_code" inputmode="numeric" pattern="[0-9]*"
+                     autocomplete="one-time-code" autocapitalize="off" autocorrect="off"
+                     spellcheck="false" enterkeyhint="done"
                      maxlength="5" dir="ltr" placeholder="-----" aria-label="کد تأیید ۵ رقمی">
             </div>
             <p id="epDrawerOtpHint" class="ep-drawer-login__hint" role="alert"></p>
@@ -839,6 +841,11 @@
     var menuBtn = document.getElementById('epProfileMenuBtn');
     if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
     try {
+      if (typeof window.__vinorDrawerStopWebOtp === 'function') {
+        window.__vinorDrawerStopWebOtp();
+      }
+    } catch (_) {}
+    try {
       if (typeof window.__vinorAiChatOnDrawerClose === 'function') {
         window.__vinorAiChatOnDrawerClose();
       }
@@ -956,6 +963,7 @@
     var resendTimerId = 0;
     var busy = false;
     var currentPhone = '';
+    var webOtpAbort = null;
 
     function toAsciiDigits(raw) {
       var s = String(raw || '');
@@ -991,17 +999,75 @@
       if (nextPhone) nextPhone.value = u;
       if (nextOtp) nextOtp.value = u;
     }
+    function stopWebOtpListen() {
+      if (webOtpAbort) {
+        try { webOtpAbort.abort(); } catch (_) {}
+        webOtpAbort = null;
+      }
+    }
+    function fillOtpFromString(str) {
+      if (!otpInput) return false;
+      var digits = normalizeOtp(str);
+      if (!digits.length) return false;
+      showHint(otpHint, '');
+      otpInput.value = digits;
+      syncOtpBtn();
+      if (digits.length === OTP_LEN && otpForm && !busy) {
+        try {
+          if (typeof otpForm.requestSubmit === 'function') otpForm.requestSubmit();
+          else otpForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        } catch (_) {}
+      }
+      return true;
+    }
+    function startWebOtpListen() {
+      stopWebOtpListen();
+      try {
+        if (!('OTPCredential' in window) || !navigator.credentials || !navigator.credentials.get) {
+          return;
+        }
+        webOtpAbort = new AbortController();
+        var abortRef = webOtpAbort;
+        window.setTimeout(function () {
+          try { if (abortRef) abortRef.abort(); } catch (_) {}
+        }, 90000);
+        navigator.credentials
+          .get({
+            otp: { transport: ['sms'] },
+            signal: abortRef.signal,
+          })
+          .then(function (cred) {
+            if (cred && cred.code) fillOtpFromString(cred.code);
+          })
+          .catch(function () {});
+      } catch (_) {}
+    }
     function showStep(name) {
       if (gateStep) gateStep.hidden = name !== 'gate';
       if (phoneStep) phoneStep.hidden = name !== 'phone';
       if (otpStep) otpStep.hidden = name !== 'otp';
+      if (name === 'otp') {
+        startWebOtpListen();
+        try {
+          if (typeof window.vinorApkOtpPageReady === 'function') window.vinorApkOtpPageReady();
+          else if (typeof window.vinorApkRestartOtpRetriever === 'function') window.vinorApkRestartOtpRetriever();
+        } catch (_) {}
+        if (otpInput) {
+          try { otpInput.focus({ preventScroll: true }); } catch (_) {
+            try { otpInput.focus(); } catch (_) {}
+          }
+        }
+      } else {
+        stopWebOtpListen();
+      }
       if (name === 'phone' && phoneInput) {
         try { phoneInput.focus(); } catch (_) {}
       }
-      if (name === 'otp' && otpInput) {
-        try { otpInput.focus(); } catch (_) {}
-      }
     }
+    try {
+      window.vinorFillOtpFromApp = fillOtpFromString;
+      window.__vinorDrawerStopWebOtp = stopWebOtpListen;
+    } catch (_) {}
     function openLoginForm(nextUrlOrOpts, maybeOpts) {
       var opts = {};
       var nextUrl = nextUrlOrOpts;
@@ -1133,6 +1199,14 @@
           otpForm.requestSubmit ? otpForm.requestSubmit() : otpForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
         }
       });
+      otpInput.addEventListener('paste', function (e) {
+        e.preventDefault();
+        var raw = '';
+        try {
+          raw = (e.clipboardData || window.clipboardData).getData('text') || '';
+        } catch (_) {}
+        fillOtpFromString(raw);
+      });
       syncOtpBtn();
     }
 
@@ -1186,9 +1260,6 @@
             if (otpInput) otpInput.value = '';
             showStep('otp');
             startResendCountdown();
-            if (window.vinorApkRestartOtpRetriever) {
-              try { window.vinorApkRestartOtpRetriever(); } catch (_) {}
-            }
             return;
           }
           showHint(phoneHint, data.error || 'ارسال کد ممکن نشد.');
@@ -1260,6 +1331,10 @@
           if (payload.ok && data.ok) {
             showHint(otpHint, data.message || 'کد مجدد ارسال شد.', true);
             if (otpInput) { otpInput.value = ''; syncOtpBtn(); try { otpInput.focus(); } catch (_) {} }
+            startWebOtpListen();
+            try {
+              if (typeof window.vinorApkRestartOtpRetriever === 'function') window.vinorApkRestartOtpRetriever();
+            } catch (_) {}
             startResendCountdown();
             return;
           }
@@ -1295,6 +1370,8 @@
         window.vinorProfileDrawer.openLogin = openLoginForm;
       }
     } catch (_) {}
+
+    window.addEventListener('pagehide', stopWebOtpListen);
   })();
 
   try {

@@ -50,6 +50,9 @@
 
 {% include 'express_partner/partials/partner_tab_footer.html' %}
 {% include 'express_partner/partials/profile_drawer.html' %}
+{% if not me_phone %}
+{% include 'express_partner/partials/auth_apk_otp_bridge.html' %}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
