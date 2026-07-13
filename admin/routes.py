@@ -5101,6 +5101,7 @@ def express_visit_requests():
         admin_visit_workflow_needs_action,
         admin_visit_workflow_steps,
         get_visit_allowed_weekdays,
+        merge_admin_visit_cards_by_partner_land,
         save_visit_allowed_weekdays,
         visit_allowed_weekdays_summary,
     )
@@ -5252,12 +5253,26 @@ def express_visit_requests():
         )
         items.append(item)
 
-    pending_count = sum(1 for x in items if x.get('status') == PENDING_STATUS)
-    approved_count = sum(1 for x in items if x.get('status') == APPROVED_STATUS)
-    done_pending_count = sum(1 for x in items if x.get('status') == DONE_PENDING_STATUS)
-    done_count = sum(1 for x in items if x.get('status') == COMPLETED_STATUS)
-    closed_count = sum(1 for x in items if x.get('status') == CANCELLED_STATUS)
-    active_count = pending_count + approved_count + done_pending_count
+    # یک کارت به ازای هر همکار+فایل؛ بازدیدهای بعدی داخل همان کارت
+    items = merge_admin_visit_cards_by_partner_land(items)
+
+    def _group_has_status(card: dict, *statuses: str) -> bool:
+        wanted = {str(s) for s in statuses}
+        for m in card.get('merged_visits') or []:
+            if str(m.get('status') or '').strip() in wanted:
+                return True
+        return str(card.get('status') or '').strip() in wanted
+
+    pending_count = sum(1 for x in items if _group_has_status(x, PENDING_STATUS))
+    approved_count = sum(1 for x in items if _group_has_status(x, APPROVED_STATUS))
+    done_pending_count = sum(1 for x in items if _group_has_status(x, DONE_PENDING_STATUS))
+    done_count = sum(1 for x in items if _group_has_status(x, COMPLETED_STATUS))
+    closed_count = sum(1 for x in items if x.get('group_all_cancelled'))
+    active_count = sum(
+        1
+        for x in items
+        if _group_has_status(x, PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS)
+    )
     workflow_count = sum(1 for x in items if x.get('in_workflow'))
     action_count = sum(1 for x in items if x.get('workflow_needs_action'))
 
@@ -5269,15 +5284,19 @@ def express_visit_requests():
         visible.sort(key=lambda x: x.get('updated_at') or x.get('created_at') or '', reverse=True)
         visible.sort(key=lambda x: 0 if x.get('workflow_needs_action') else 1)
     elif flt == 'approved':
-        visible = [x for x in items if x.get('status') == APPROVED_STATUS]
+        visible = [x for x in items if _group_has_status(x, APPROVED_STATUS)]
     elif flt == 'done_pending':
-        visible = [x for x in items if x.get('status') == DONE_PENDING_STATUS]
+        visible = [x for x in items if _group_has_status(x, DONE_PENDING_STATUS)]
     elif flt == 'done':
-        visible = [x for x in items if x.get('status') == COMPLETED_STATUS]
+        visible = [x for x in items if _group_has_status(x, COMPLETED_STATUS)]
     elif flt == 'closed':
-        visible = [x for x in items if x.get('status') == CANCELLED_STATUS]
+        visible = [x for x in items if x.get('group_all_cancelled')]
     elif flt == 'active':
-        visible = [x for x in items if x.get('status') in (PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS)]
+        visible = [
+            x
+            for x in items
+            if _group_has_status(x, PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS)
+        ]
     elif flt == 'all':
         visible = items
     else:

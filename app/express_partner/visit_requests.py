@@ -1412,6 +1412,76 @@ def admin_visit_in_workflow(
     return st in (PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS)
 
 
+def _admin_visit_activity_ts(item: Dict[str, Any]) -> str:
+    return str(item.get("updated_at") or item.get("created_at") or "")
+
+
+def _pick_primary_admin_visit(group: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """اولویت کارت ادغام‌شده: اقدام لازم → در روند → غیر بسته‌شده → جدیدتر."""
+
+    def _rank(x: Dict[str, Any]) -> tuple:
+        st = (str(x.get("status") or "")).strip()
+        return (
+            0 if x.get("workflow_needs_action") else 1,
+            0 if x.get("in_workflow") else 1,
+            0 if st != CANCELLED_STATUS else 1,
+        )
+
+    best = min((_rank(x) for x in group), default=(9, 9, 9))
+    candidates = [x for x in group if _rank(x) == best]
+    return max(candidates, key=_admin_visit_activity_ts)
+
+
+def merge_admin_visit_cards_by_partner_land(
+    items: List[Dict[str, Any]] | None,
+) -> List[Dict[str, Any]]:
+    """ادغام چند بازدید همان همکار روی همان فایل در یک کارت ادمین."""
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    order: List[str] = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        ph = str(item.get("partner_phone") or "").strip()
+        code = str(item.get("land_code") or "").strip()
+        key = f"{ph}|{code}" if ph and code else f"solo:{item.get('id')}"
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(item)
+
+    merged: List[Dict[str, Any]] = []
+    for key in order:
+        group = groups[key]
+        history = sorted(group, key=_admin_visit_activity_ts, reverse=True)
+        primary = _pick_primary_admin_visit(group)
+        card = dict(primary)
+        primary_id = str(primary.get("id") or "").strip()
+        card["merged_visit_count"] = len(history)
+        card["merged_visits"] = [
+            {
+                "id": h.get("id"),
+                "visit_date": h.get("visit_date") or "",
+                "visit_date_jalali": h.get("visit_date_jalali") or h.get("visit_date") or "",
+                "customer_name": h.get("customer_name") or "",
+                "customer_phone": h.get("customer_phone") or "",
+                "status": h.get("status") or "",
+                "status_label": h.get("status_label") or "",
+                "admin_note": h.get("admin_note") or "",
+                "workflow_needs_action": bool(h.get("workflow_needs_action")),
+                "in_workflow": bool(h.get("in_workflow")),
+                "is_primary": str(h.get("id") or "").strip() == primary_id,
+            }
+            for h in history
+        ]
+        card["workflow_needs_action"] = any(bool(h.get("workflow_needs_action")) for h in history)
+        card["in_workflow"] = any(bool(h.get("in_workflow")) for h in history)
+        card["group_all_cancelled"] = all(
+            (str(h.get("status") or "")).strip() == CANCELLED_STATUS for h in history
+        )
+        merged.append(card)
+    return merged
+
+
 def admin_visit_status_options(old_status: str) -> List[Dict[str, str]]:
     old = (old_status or PENDING_STATUS).strip()
     keys = ADMIN_VISIT_TRANSITIONS.get(old, frozenset({old}))
