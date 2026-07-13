@@ -16,7 +16,7 @@ _AI_DEFAULTS: dict[str, Any] = {
     "temperature": 0.45,
     "public_ctx_ttl_sec": 300,
     "partner_ctx_ttl_sec": 180,
-    "min_message_chars": 2,
+    "min_message_chars": 1,
     "escalation_sms_enabled": True,
 }
 

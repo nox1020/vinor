@@ -207,7 +207,7 @@
   } catch (_) {}
 })();
 </script>
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=51"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=52"></script>
 <script>
 (function () {
   try {
@@ -217,7 +217,7 @@
     var input = document.getElementById('aiInput');
     if (!form || !input) return;
     var msg = (input.value || '').trim();
-    if (!msg || msg.length < 2) {
+    if (!msg || msg.length < 1) {
       sessionStorage.removeItem('vinor_ai_home_autosend');
       return;
     }

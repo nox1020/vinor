@@ -220,7 +220,7 @@
   }
   var POLL_MS = 15000;
   var MIN_SUBMIT_GAP_MS = 4000;
-  var MIN_MSG_LEN = 2;
+  var MIN_MSG_LEN = 1;
   var EMPTY_POLL_PAUSE = 60;
   var pollInFlight = false;
   var postchiOpened = false;
@@ -289,7 +289,7 @@
       return;
     }
     var len = (input.value || '').trim().length;
-    /* به‌محض نوشتن: پیل ارسال ظاهر شود؛ ارسال واقعی از MIN_MSG_LEN */
+    /* به‌محض نوشتن (حتی ۱ کاراکتر): پیل ارسال + قابل ارسال */
     var showSend = len >= 1;
     var canSend = len >= MIN_MSG_LEN;
     form.classList.toggle('ai-composer--ready', showSend);
