@@ -262,9 +262,13 @@
 
   function loginUrlForPartnerDest(href) {
     try {
-      return '/express/partner/login?next=' + encodeURIComponent(normalizeNavHref(href));
+      var next = normalizeNavHref(href);
+      if (!next || next.indexOf('/express/partner/home') === 0) {
+        return '/express/partner/home?menu=1';
+      }
+      return '/express/partner/home?menu=1&login_next=' + encodeURIComponent(next);
     } catch (_) {
-      return '/express/partner/login';
+      return '/express/partner/home?menu=1';
     }
   }
 
@@ -798,9 +802,7 @@
       }
     }
     if (navKey === 'home' && currentAuthSegment() === 'guest') {
-      try {
-        prefetchHref(new URL('/express/partner/login', window.location.origin).href);
-      } catch (_) {}
+      /* ورود داخل منو است — prefetch صفحه کامل /login لازم نیست */
     }
     if (navKey === 'home' && currentAuthSegment() !== 'guest') {
       var prefetchLandCards = function () {
@@ -825,9 +827,7 @@
       }
     }
     if (navKey === 'profile' && currentAuthSegment() === 'guest') {
-      try {
-        prefetchHref(new URL('/express/partner/login', window.location.origin).href);
-      } catch (_) {}
+      /* ورود داخل منوی خانه است */
     }
     if (window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.teardown();
@@ -1439,7 +1439,7 @@
     if (window.__vinorAuthPageAbort) {
       try { window.__vinorAuthPageAbort.abort(); } catch (_) {}
     }
-    var dest = destUrl || '/express/partner/login?change=1';
+    var dest = destUrl || '/express/partner/home?menu=1';
     var apiUrl = '/express/partner/api/logout';
     return fetch(apiUrl, {
       method: 'POST',

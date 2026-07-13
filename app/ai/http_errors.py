@@ -7,6 +7,8 @@ from typing import Any
 def ai_chat_http_status(result: dict[str, Any]) -> int:
     if not result or result.get("ok"):
         return 200
+    if result.get("need_login"):
+        return 401
     if result.get("rate_limited"):
         return 429
     if result.get("error_code") == "api_unavailable":

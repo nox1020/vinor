@@ -42,7 +42,7 @@ def _cache_file() -> str:
 def _load_cache() -> dict[str, Any]:
     path = _cache_file()
     if not os.path.isfile(path):
-        return {"rate": {}, "replies": {}, "flags": {}}
+        return {"rate": {}, "replies": {}, "flags": {}, "guest_replies": {}}
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
@@ -50,13 +50,19 @@ def _load_cache() -> dict[str, Any]:
             data.setdefault("rate", {})
             data.setdefault("replies", {})
             data.setdefault("flags", {})
+            data.setdefault("guest_replies", {})
             return data
     except Exception:
         pass
-    return {"rate": {}, "replies": {}, "flags": {}}
+    return {"rate": {}, "replies": {}, "flags": {}, "guest_replies": {}}
 
 
 BALANCE_SMS_COOLDOWN_SEC = 21600  # حداکثر یک پیامک هر ۶ ساعت
+
+# مهمان بدون لاگین: تا این تعداد پاسخ؛ بعد الزام ورود
+GUEST_FREE_ASSISTANT_REPLIES = 20
+GUEST_LOGIN_URL = "/express/partner/home?menu=1"
+GUEST_LOGIN_ERROR = "به سقف ۲۰ پاسخ رسیدید. برای ادامه وارد شوید."
 
 
 def mark_api_balance_depleted() -> None:
@@ -227,6 +233,105 @@ def validate_message_length(message: str) -> str | None:
     if len(_norm_text(text)) < cfg["min_message_chars"]:
         return "پیام خیلی کوتاه است."
     return None
+
+
+def is_guest_user_key(user_key: str) -> bool:
+    return str(user_key or "").startswith("guest_")
+
+
+def _guest_usage_map(data: dict[str, Any]) -> dict[str, Any]:
+    usage = data.setdefault("guest_replies", {})
+    if not isinstance(usage, dict):
+        usage = {}
+        data["guest_replies"] = usage
+    return usage
+
+
+def guest_assistant_reply_count(user_key: str) -> int:
+    """سقف مصرف مهمان — max(کش پایدار، تاریخچهٔ چت قابل‌شمارش).
+
+    کش مانع دور زدن سقف با پاک‌کردن گفتگو است؛ تاریخچه منبع به‌روز پاسخ‌هاست.
+    """
+    if not is_guest_user_key(user_key):
+        return 0
+    data = _load_cache()
+    stored = int((_guest_usage_map(data).get(user_key) or 0))
+    chat_count = 0
+    try:
+        from app.ai.audience import AUDIENCE_PUBLIC
+        from app.ai.chat_store import count_assistant_replies
+
+        chat_count = int(count_assistant_replies(user_key, audience=AUDIENCE_PUBLIC) or 0)
+    except Exception:
+        chat_count = 0
+    used = max(stored, chat_count)
+    # همگام‌سازی کش با واقعیت (بدون +۱ اضافه)
+    if used != stored:
+        _guest_usage_map(data)[user_key] = used
+        _save_cache(data)
+    return used
+
+
+def guest_replies_remaining(user_key: str) -> int | None:
+    if not is_guest_user_key(user_key):
+        return None
+    return max(0, GUEST_FREE_ASSISTANT_REPLIES - guest_assistant_reply_count(user_key))
+
+
+def check_guest_login_required(user_key: str) -> dict[str, Any] | None:
+    """اگر مهمان سقف پاسخ را تمام کرده → نیاز به ورود."""
+    if not is_guest_user_key(user_key):
+        return None
+    used = guest_assistant_reply_count(user_key)
+    if used < GUEST_FREE_ASSISTANT_REPLIES:
+        return None
+    return {
+        "ok": False,
+        "error": GUEST_LOGIN_ERROR,
+        "need_login": True,
+        "login_url": GUEST_LOGIN_URL,
+        "guest_replies_used": used,
+        "guest_replies_limit": GUEST_FREE_ASSISTANT_REPLIES,
+        "guest_replies_remaining": 0,
+    }
+
+
+def record_guest_assistant_reply(user_key: str) -> int:
+    """بعد از هر پاسخ موفق مهمان: شمارنده را حتماً یکی زیاد کن.
+
+    منبع حقیقت = max(کش+۱، تعداد پاسخ در تاریخچه).
+    +۱ تضمین می‌کند اگر شمارش تاریخچه خطا بدهد سقف قفل نشود/نامحدود نماند.
+    """
+    if not is_guest_user_key(user_key):
+        return 0
+    chat_count = 0
+    try:
+        from app.ai.audience import AUDIENCE_PUBLIC
+        from app.ai.chat_store import count_assistant_replies
+
+        chat_count = int(count_assistant_replies(user_key, audience=AUDIENCE_PUBLIC) or 0)
+    except Exception:
+        chat_count = 0
+    data = _load_cache()
+    usage = _guest_usage_map(data)
+    stored = int(usage.get(user_key) or 0)
+    n = max(stored + 1, chat_count)
+    # سقف سخت — بیشتر از limit+buffer لازم نیست ولی برای anti-abuse نگه می‌داریم
+    usage[user_key] = n
+    _save_cache(data)
+    try:
+        from flask import current_app
+
+        current_app.logger.info(
+            "guest quota | user=%s used=%s chat=%s limit=%s",
+            user_key,
+            n,
+            chat_count,
+            GUEST_FREE_ASSISTANT_REPLIES,
+        )
+    except Exception:
+        pass
+    return n
 
 
 def apply_credit_guard(

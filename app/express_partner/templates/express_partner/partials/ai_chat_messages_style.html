@@ -228,4 +228,93 @@
     word-break: break-word;
     overflow-wrap: anywhere;
   }
+
+  /* نوار اکشن زیر جواب — شبیه GPT */
+  #aiMessages .ai-msg-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.15rem;
+    margin-top: 0.15rem;
+    direction: ltr;
+    justify-content: flex-start;
+  }
+  #aiMessages .ai-msg-wrap--user .ai-msg-actions {
+    display: none;
+  }
+  #aiMessages .ai-msg-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.85rem;
+    height: 1.85rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.45rem;
+    background: transparent;
+    color: #b4b4b4;
+    cursor: pointer;
+    position: relative;
+  }
+  #aiMessages .ai-msg-action:hover,
+  #aiMessages .ai-msg-action:focus-visible {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ececec;
+    outline: none;
+  }
+  #aiMessages .ai-msg-action:active {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  #aiMessages .ai-msg-action svg {
+    width: 1.05rem;
+    height: 1.05rem;
+    display: block;
+  }
+  #aiMessages .ai-msg-action.is-active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  #aiMessages .ai-msg-action.is-ok {
+    color: #86efac;
+  }
+  #aiMessages .ai-msg-action-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+  #aiMessages .ai-msg-action-menu {
+    position: absolute;
+    bottom: calc(100% + 0.35rem);
+    left: 0;
+    min-width: 9.5rem;
+    padding: 0.3rem;
+    border-radius: 0.65rem;
+    background: #2f2f2f;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    z-index: 20;
+    display: none;
+    direction: rtl;
+    text-align: right;
+  }
+  #aiMessages .ai-msg-action-menu.is-open {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+  #aiMessages .ai-msg-action-menu button {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: #ececec;
+    font-size: 0.78rem;
+    font-weight: 500;
+    text-align: right;
+    padding: 0.45rem 0.55rem;
+    border-radius: 0.45rem;
+    cursor: pointer;
+  }
+  #aiMessages .ai-msg-action-menu button:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
 </style>

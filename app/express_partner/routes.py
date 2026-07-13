@@ -2163,18 +2163,44 @@ def download_app():
     return redirect(url_for('express_partner.thanks'))
 
 
-def _submit_partner_application(me_phone: str, data: dict):
-    """ثبت نهایی درخواست همکاری."""
-    if _has_active_application(me_phone):
-        session.pop('apply_data', None)
-        return redirect(_post_apply_landing_url(me_phone))
+def create_partner_application_core(
+    me_phone: str,
+    data: dict,
+    *,
+    form_ref: str = '',
+    query_ref: str = '',
+) -> dict:
+    """ثبت درخواست همکاری بدون redirect — برای فرم وب و اجنت چت."""
+    phone = (me_phone or '').strip()
+    if not phone:
+        return {'ok': False, 'error': 'برای ثبت درخواست باید وارد شوید.'}
+    if _is_partner_approved(_partner_profile_for_phone(phone)):
+        return {'ok': False, 'error': 'حساب شما هم‌اکنون همکار تأییدشده است.', 'already_partner': True}
+    if _has_active_application(phone):
+        return {'ok': False, 'error': 'درخواست فعال دارید؛ منتظر بررسی بمانید.', 'already_pending': True}
 
-    if _is_partner_approved(_partner_profile_for_phone(me_phone)):
-        session.pop('apply_data', None)
-        return redirect(url_for("express_partner.home"))
+    name, city, experience, note = _clip_apply_fields(
+        data.get('name') or '',
+        data.get('city') or '',
+        data.get('experience') or '',
+        data.get('note') or '',
+    )
+    national_id = _parse_apply_national_id(data.get('national_id') or '')
+    if not name or not city or not national_id:
+        return {'ok': False, 'error': 'نام، کد ملی و شهر فعالیت الزامی است.'}
+    from ..utils.iran_ids import is_valid_iran_national_id
+    if not is_valid_iran_national_id(national_id):
+        return {'ok': False, 'error': 'کد ملی واردشده معتبر نیست.'}
+    cities = _active_cities_cached() or []
+    if cities and city not in cities:
+        return {
+            'ok': False,
+            'error': 'شهر انتخاب‌شده معتبر نیست.',
+            'allowed_cities': list(cities)[:20],
+        }
 
     apps = load_express_partner_apps() or []
-    new_id = (max([int(x.get("id", 0) or 0) for x in apps if isinstance(x, dict)], default=0) or 0) + 1
+    new_id = (max([int(x.get('id', 0) or 0) for x in apps if isinstance(x, dict)], default=0) or 0) + 1
     referrer_phone = ''
     try:
         from .referrals import (
@@ -2183,33 +2209,41 @@ def _submit_partner_application(me_phone: str, data: dict):
             resolve_referrer_for_apply,
         )
         referrer_phone = resolve_referrer_for_apply(
-            me_phone,
-            form_ref=request.form.get('ref') or '',
-            query_ref=request.args.get('ref') or '',
+            phone,
+            form_ref=form_ref or '',
+            query_ref=query_ref or '',
         )
     except Exception:
         referrer_phone = ''
+    payload = {
+        'name': name,
+        'city': city,
+        'national_id': national_id,
+        'experience': experience,
+        'note': note,
+    }
     record = {
-        "id": new_id,
-        "name": data.get('name', ''),
-        "phone": _canonical_partner_phone(me_phone),
-        "national_id": data.get('national_id', ''),
-        "city": data.get('city', ''),
-        "experience": data.get('experience', ''),
-        "note": data.get('note', ''),
-        "status": "new",
-        "created_at": datetime.utcnow().isoformat() + "Z",
+        'id': new_id,
+        'name': name,
+        'phone': _canonical_partner_phone(phone),
+        'national_id': national_id,
+        'city': city,
+        'experience': experience,
+        'note': note,
+        'status': 'new',
+        'created_at': datetime.utcnow().isoformat() + 'Z',
+        'source': (data.get('source') or 'web').strip() or 'web',
     }
     if referrer_phone:
-        record["referred_by_phone"] = referrer_phone
+        record['referred_by_phone'] = referrer_phone
     apps.append(record)
     save_express_partner_apps(apps)
-    _sync_unapproved_partner_profile(me_phone, data)
+    _sync_unapproved_partner_profile(phone, payload)
     if referrer_phone:
         try:
             register_referral_on_application(
                 inviter_phone=referrer_phone,
-                invitee_phone=record.get('phone', me_phone),
+                invitee_phone=record.get('phone', phone),
                 invitee_name=record.get('name', ''),
                 application_id=new_id,
             )
@@ -2219,7 +2253,7 @@ def _submit_partner_application(me_phone: str, data: dict):
 
     sms_out = {'ok': False, 'skipped': True, 'error': 'sms_error'}
     try:
-        sms_out = _send_partner_application_sms(me_phone, data.get('name', ''))
+        sms_out = _send_partner_application_sms(phone, name)
     except Exception as e:
         current_app.logger.error('Application SMS flow error: %s', e, exc_info=True)
         err_msg = str(e)
@@ -2230,14 +2264,45 @@ def _submit_partner_application(me_phone: str, data: dict):
             'infra_error': sms_is_infrastructure_error(err_msg),
         }
 
-    session.pop('apply_data', None)
+    try:
+        session.pop('apply_data', None)
+    except Exception:
+        pass
+    return {
+        'ok': True,
+        'application_id': new_id,
+        'name': name,
+        'city': city,
+        'sms_sent': bool(sms_out.get('ok')),
+        'sms_skipped': bool(sms_out.get('skipped')),
+        'sms_error': sms_out.get('error'),
+        'sms_infra_error': bool(sms_out.get('infra_error')),
+        'message': 'درخواست همکاری ثبت شد و در صف بررسی است.',
+    }
+
+
+def _submit_partner_application(me_phone: str, data: dict):
+    """ثبت نهایی درخواست همکاری (فرم وب → redirect)."""
+    out = create_partner_application_core(
+        me_phone,
+        data,
+        form_ref=request.form.get('ref') or '',
+        query_ref=request.args.get('ref') or '',
+    )
+    if not out.get('ok'):
+        if out.get('already_partner'):
+            return redirect(url_for('express_partner.home'))
+        if out.get('already_pending'):
+            return redirect(_post_apply_landing_url(me_phone))
+        flash(str(out.get('error') or 'ثبت درخواست ناموفق بود.'), 'error')
+        return redirect(url_for('express_partner.apply'))
     return _redirect_apply_thanks(
-        record.get('name', ''),
+        out.get('name', ''),
         fresh_submit=True,
-        sms_sent=bool(sms_out.get('ok')),
-        sms_skipped=bool(sms_out.get('skipped')),
-        sms_error=sms_out.get('error'),
-        sms_infra_error=bool(sms_out.get('infra_error')),
+        sms_sent=bool(out.get('sms_sent')),
+        sms_skipped=bool(out.get('sms_skipped')),
+        sms_error=out.get('sms_error'),
+        sms_infra_error=bool(out.get('sms_infra_error')),
     )
 
 
@@ -2697,12 +2762,12 @@ def _partner_ai_welcome(*, is_approved: bool, has_pending_app: bool, me_phone: s
         )
     if me_phone:
         return (
-            'سلام — می‌تونی از همین چت دربارهٔ سطوح همکاری، پورسانت و ثبت درخواست بپرسی. '
-            'بعد از تأیید همکار، فروش فایل از همین‌جا فعال می‌شود.'
+            'سلام — از همین چت می‌تونی سطوح، پورسانت و ثبت درخواست همکاری را جلو ببری. '
+            'بعد از تأیید همکار، فروش فایل هم از همین‌جا فعال می‌شود.'
         )
     return (
-        'سلام — بدون ورود هم می‌تونی بپرسی همکاری وینور چطور کار می‌کند و سطوحش چیست. '
-        'برای ثبت درخواست همکاری اول وارد شو.'
+        'سلام — بدون ورود هم می‌تونی بپرسی همکاری وینور چطور کار می‌کند و سطوحش چیست '
+        '(تا ۲۰ پاسخ). برای ثبت درخواست از همین چت بگو «می‌خواهم همکار شوم».'
     )
 
 
@@ -2744,6 +2809,8 @@ def _partner_ai_layer_context(
         'postchi_messages_url': '',
         'postchi_send_url': '',
         'postchi_open_url': '',
+        'guest_replies_remaining': None,
+        'guest_replies_limit': None,
     }
 
     chat_messages: List[Dict[str, Any]] = []
@@ -2790,6 +2857,24 @@ def _partner_ai_layer_context(
             home_ai_open = False
             home_ai_open_thread = ''
 
+        guest_remaining = None
+        guest_limit = None
+        try:
+            from app.ai.credits import (
+                GUEST_FREE_ASSISTANT_REPLIES,
+                guest_replies_remaining,
+                is_guest_user_key,
+            )
+            from app.ai.user_key import ai_user_key
+
+            uk = ai_user_key()
+            if is_guest_user_key(uk):
+                guest_remaining = guest_replies_remaining(uk)
+                guest_limit = GUEST_FREE_ASSISTANT_REPLIES
+        except Exception:
+            guest_remaining = None
+            guest_limit = None
+
         ctx.update({
             'chat_messages': chat_messages,
             'chat_threads': chat_threads,
@@ -2803,11 +2888,13 @@ def _partner_ai_layer_context(
             'switch_thread_url': url_for('ai.switch_thread'),
             'delete_thread_url': url_for('ai.delete_thread'),
             'sync_api_url': url_for('ai.sync'),
-            'agent_confirm_url': '',
-            'agent_cancel_url': '',
+            'agent_confirm_url': url_for('ai.agent_confirm'),
+            'agent_cancel_url': url_for('ai.agent_cancel'),
             'postchi_messages_url': '',
             'postchi_send_url': '',
             'postchi_open_url': '',
+            'guest_replies_remaining': guest_remaining,
+            'guest_replies_limit': guest_limit,
         })
         return ctx
 
@@ -2973,6 +3060,11 @@ def home_page():
                     title=str(_card.get('title') or ''),
                     stage_label=str(_card.get('stage_label') or ''),
                     is_mission=bool(_card.get('is_mission')),
+                    tx_mode=str(
+                        _card.get('tx_mode')
+                        or _card.get('cta_action')
+                        or ''
+                    ),
                 )
             else:
                 ai_quick_prompts = build_ai_quick_prompts()
@@ -4115,7 +4207,8 @@ def _clear_express_partner_auth_session() -> None:
 
 
 def _logout_dest_url() -> str:
-    return url_for('express_partner.login', change=1)
+    """بعد از خروج → خانه با منوی باز (ورود فشرده داخل drawer)."""
+    return url_for('express_partner.home', menu=1)
 
 
 @express_partner_bp.route('/login', methods=['GET', 'POST'], endpoint='login')
@@ -4599,6 +4692,7 @@ def ai_chat():
     data = request.get_json(silent=True) or {}
     message = (data.get('message') or request.form.get('message') or '').strip()
     thread_id = (data.get('thread_id') or '').strip() or None
+    chip_intent = (data.get('intent') or data.get('chip_intent') or '').strip()
     if not message:
         return jsonify({'ok': False, 'error': 'پیام خالی است.'}), 400
     if is_postchi_thread(thread_id):
@@ -4614,6 +4708,7 @@ def ai_chat():
         user_key=phone,
         audience=AUDIENCE_PARTNER,
         thread_id=thread_id,
+        chip_intent=chip_intent,
     )
     if not result.get('ok'):
         return jsonify(result), ai_chat_http_status(result)
@@ -4703,10 +4798,13 @@ def ai_agent_cancel():
 def ai_clear():
     from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import clear_chat
+    from app.ai.http_errors import ai_chat_http_status
 
     phone = (session.get('user_phone') or '').strip()
-    tid = clear_chat(phone, audience=AUDIENCE_PARTNER)
-    return jsonify({'ok': True, 'thread_id': tid})
+    out = clear_chat(phone, audience=AUDIENCE_PARTNER)
+    if not out.get('ok'):
+        return jsonify(out), ai_chat_http_status(out)
+    return jsonify({'ok': True, 'thread_id': out.get('thread_id')})
 
 
 @express_partner_bp.post('/ai/thread/switch', endpoint='ai_switch_thread')
@@ -5928,7 +6026,7 @@ def profile_page():
     """صفحه پروفایل حذف شد — گزینه‌ها در منوی راست داشبورد هستند."""
     me_phone = (session.get('user_phone') or '').strip()
     if not me_phone:
-        return redirect(url_for('express_partner.login', next=url_for('express_partner.home', menu=1)))
+        return redirect(url_for('express_partner.home', menu=1))
     return redirect(url_for('express_partner.home', menu=1), code=302)
 
 

@@ -37,7 +37,7 @@
           ثبت درخواست
         </a>
         {% else %}
-        <a href="{{ url_for('express_partner.login', next=url_for('express_partner.apply')) }}"
+        <a href="{{ url_for('express_partner.home', menu=1, login_next='apply') }}"
            class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-bold text-emerald-800 shadow-md transition hover:bg-emerald-50 active:scale-[0.98] sm:flex-none sm:px-4 sm:py-2.5 sm:text-sm">
           <i class="fas fa-user-plus text-[10px] sm:text-xs" aria-hidden="true"></i>
           شروع همکاری

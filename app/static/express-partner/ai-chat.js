@@ -64,8 +64,160 @@
   var seenEscalationIds = {};
   var emptyPollStreak = 0;
   var pollPaused = layerGated && !sheetOpen;
+  var pendingChipIntent = '';
   var submitting = false;
   var lastSubmitAt = 0;
+  var guestRepliesRemaining = null;
+  try {
+    var remRaw = form.getAttribute('data-guest-replies-remaining');
+    if (remRaw !== null && remRaw !== '') {
+      guestRepliesRemaining = Math.max(0, parseInt(remRaw, 10) || 0);
+    }
+  } catch (_) {}
+
+  function takePendingChipIntent() {
+    var fromForm = '';
+    try {
+      fromForm = (form.getAttribute('data-pending-intent') || '').trim();
+      form.removeAttribute('data-pending-intent');
+    } catch (_) {}
+    var intent = fromForm || pendingChipIntent || '';
+    pendingChipIntent = '';
+    return intent;
+  }
+
+  function hideChipBar() {
+    var bar = form.querySelector('[data-ai-chip-bar]');
+    if (bar) bar.setAttribute('hidden', 'hidden');
+  }
+
+  function showChipBar() {
+    var bar = form.querySelector('[data-ai-chip-bar]');
+    if (bar) bar.removeAttribute('hidden');
+  }
+
+  function syncChipBarVisibility() {
+    try {
+      if (list && list.querySelector('.ai-msg-wrap[data-role="user"]')) {
+        hideChipBar();
+      } else {
+        showChipBar();
+      }
+    } catch (_) {}
+  }
+
+  function isGuestAuth() {
+    try {
+      var m = document.querySelector('meta[name="vinor-express-auth"]');
+      return ((m && m.getAttribute('content')) || '') === 'guest';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isGuestQuotaUser() {
+    if (isGuestAuth()) return true;
+    if (guestRepliesRemaining !== null) return true;
+    try {
+      return form.hasAttribute('data-guest-replies-limit');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function noteGuestRepliesFromPayload(data) {
+    if (!data || typeof data.guest_replies_remaining !== 'number') return;
+    guestRepliesRemaining = Math.max(0, data.guest_replies_remaining);
+    try {
+      form.setAttribute('data-guest-replies-remaining', String(guestRepliesRemaining));
+    } catch (_) {}
+    if (guestRepliesRemaining <= 0 && isGuestQuotaUser() && input) {
+      input.placeholder = 'به سقف رسیدید — برای ادامه وارد شوید…';
+    }
+  }
+
+  var loginPromptActive = false;
+  var loginPromptTimer = 0;
+
+  function buildNeedLoginCardHtml(subtitle) {
+    var sub = String(subtitle || '').trim();
+    var subHtml = sub
+      ? '<div class="ai-agent-card__body"><div class="ai-agent-line">' + escapeHtml(sub) + '</div></div>'
+      : '';
+    return (
+      '<div class="ai-agent-card" data-agent-type="need_login">' +
+      '<div class="ai-agent-card__title">ورود لازم است</div>' +
+      subHtml +
+      '<div class="ai-agent-card__actions">' +
+      '<button type="button" class="ai-agent-btn ai-agent-btn--confirm" data-agent-login>ورود</button>' +
+      '</div></div>'
+    );
+  }
+
+  function openGuestLoginDrawer(hint) {
+    loginPromptActive = true;
+    var hintText = hint || 'به سقف ۲۰ پاسخ رسیدید. برای ادامه وارد شوید.';
+    try {
+      if (typeof window.vinorDrawerOpenLogin === 'function') {
+        window.vinorDrawerOpenLogin({ hint: hintText });
+        return true;
+      }
+      if (
+        window.vinorProfileDrawer &&
+        typeof window.vinorProfileDrawer.openLogin === 'function'
+      ) {
+        window.vinorProfileDrawer.openLogin({ hint: hintText });
+        return true;
+      }
+      if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
+        window.vinorProfileDrawer.open();
+        return true;
+      }
+    } catch (_) {}
+    try {
+      window.location.assign('/express/partner/home?menu=1');
+    } catch (_) {}
+    return false;
+  }
+
+  function promptGuestLoginLimit(message) {
+    var msg =
+      message ||
+      'به سقف ۲۰ پاسخ رسیدید. برای ادامه وارد شوید.';
+    guestRepliesRemaining = 0;
+    try {
+      form.setAttribute('data-guest-replies-remaining', '0');
+    } catch (_) {}
+
+    /* کامپوزر را باز بگذار تا دکمه ارسال برای بازکردن مجدد ورود فعال بماند */
+    unlockComposer({
+      placeholder: 'به سقف رسیدید — برای ادامه وارد شوید…',
+    });
+
+    try {
+      list.querySelectorAll('.ai-msg-wrap[data-guest-limit-hint="1"]').forEach(function (w) {
+        try { w.remove(); } catch (_) {}
+      });
+    } catch (_) {}
+
+    var wrap = appendMessage({
+      role: 'assistant',
+      content: msg,
+      cards_html: buildNeedLoginCardHtml(msg),
+    });
+    if (wrap) {
+      try { wrap.setAttribute('data-guest-limit-hint', '1'); } catch (_) {}
+    }
+
+    if (loginPromptTimer) {
+      try { window.clearTimeout(loginPromptTimer); } catch (_) {}
+      loginPromptTimer = 0;
+    }
+    openGuestLoginDrawer(msg);
+    loginPromptTimer = window.setTimeout(function () {
+      openGuestLoginDrawer(msg);
+    }, 160);
+  }
   var POLL_MS = 15000;
   var MIN_SUBMIT_GAP_MS = 4000;
   var MIN_MSG_LEN = 2;
@@ -133,11 +285,29 @@
     ) {
       form.classList.remove('ai-composer--ready');
       btn.disabled = true;
+      btn.setAttribute('aria-disabled', 'true');
       return;
     }
     var ready = (input.value || '').trim().length >= MIN_MSG_LEN;
     form.classList.toggle('ai-composer--ready', ready);
-    btn.disabled = !ready;
+    /* disabled واقعی فقط در busy/readonly — وگرنه کلیک گرفته نمی‌شود */
+    btn.disabled = false;
+    btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
+  }
+
+  function unlockComposer(opts) {
+    opts = opts || {};
+    submitting = false;
+    try {
+      form.classList.remove('ai-composer--readonly');
+    } catch (_) {}
+    if (input) {
+      input.disabled = false;
+      input.removeAttribute('aria-disabled');
+      if (opts.placeholder) input.placeholder = opts.placeholder;
+    }
+    if (btn) btn.removeAttribute('aria-disabled');
+    syncComposerReady();
   }
 
   function autoGrowInput() {
@@ -162,7 +332,15 @@
       form.classList.remove('ai-composer--ready');
       autoGrowInput();
     } else {
-      input.placeholder = 'از وینور AI بپرسید…';
+      if (
+        isGuestQuotaUser() &&
+        guestRepliesRemaining !== null &&
+        guestRepliesRemaining <= 0
+      ) {
+        input.placeholder = 'به سقف رسیدید — برای ادامه وارد شوید…';
+      } else {
+        input.placeholder = 'از وینور AI بپرسید…';
+      }
       input.disabled = false;
       input.removeAttribute('aria-disabled');
       if (btn) btn.removeAttribute('aria-disabled');
@@ -184,8 +362,7 @@
       input.disabled = true;
       form.classList.remove('ai-composer--ready');
     } else {
-      input.disabled = false;
-      syncComposerReady();
+      unlockComposer();
     }
     if (newChatBtn) newChatBtn.disabled = !!on;
   }
@@ -374,6 +551,216 @@
     });
   }
 
+  var speakingBtn = null;
+  var speakUtterance = null;
+
+  function assistantPlainText(wrap) {
+    if (!wrap) return '';
+    var bubble = wrap.querySelector('.ai-msg-bubble:not(.ai-msg-thinking)');
+    if (!bubble) return '';
+    var clone = bubble.cloneNode(true);
+    clone.querySelectorAll('.ai-copy-blocks, .ai-agent-actions, .ai-agent-card, pre, script, style').forEach(function (el) {
+      try { el.remove(); } catch (_) {}
+    });
+    return String(clone.textContent || '').replace(/\s+\n/g, '\n').trim();
+  }
+
+  function closeAllMsgMenus(except) {
+    list.querySelectorAll('[data-ai-msg-menu].is-open').forEach(function (menu) {
+      if (except && menu === except) return;
+      menu.classList.remove('is-open');
+      var host = menu.closest('.ai-msg-action-wrap');
+      var btn = host && host.querySelector('[data-ai-msg-more]');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function flashActionOk(btn) {
+    if (!btn) return;
+    btn.classList.add('is-ok');
+    setTimeout(function () { btn.classList.remove('is-ok'); }, 1200);
+  }
+
+  function stopSpeaking() {
+    try {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+    } catch (_) {}
+    if (speakingBtn) {
+      speakingBtn.classList.remove('is-active');
+      speakingBtn.setAttribute('aria-label', 'خواندن با صدا');
+      speakingBtn = null;
+    }
+    speakUtterance = null;
+  }
+
+  function speakAssistantText(btn, text) {
+    if (!text) {
+      showEphemeralHint('متنی برای خواندن نیست.');
+      return;
+    }
+    if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance !== 'function') {
+      showEphemeralHint('خواندن با صدا در این مرورگر پشتیبانی نمی‌شود.');
+      return;
+    }
+    if (speakingBtn === btn) {
+      stopSpeaking();
+      return;
+    }
+    stopSpeaking();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'fa-IR';
+    u.rate = 1;
+    speakUtterance = u;
+    speakingBtn = btn;
+    btn.classList.add('is-active');
+    btn.setAttribute('aria-label', 'توقف خواندن');
+    u.onend = function () {
+      if (speakingBtn === btn) {
+        btn.classList.remove('is-active');
+        btn.setAttribute('aria-label', 'خواندن با صدا');
+        speakingBtn = null;
+      }
+    };
+    u.onerror = function () {
+      stopSpeaking();
+    };
+    try {
+      window.speechSynthesis.speak(u);
+    } catch (_) {
+      stopSpeaking();
+      showEphemeralHint('خواندن با صدا ممکن نشد.');
+    }
+  }
+
+  function shareAssistantText(text) {
+    if (!text) {
+      showEphemeralHint('متنی برای اشتراک نیست.');
+      return Promise.resolve(false);
+    }
+    if (navigator.share) {
+      return navigator
+        .share({ text: text, title: 'وینور' })
+        .then(function () { return true; })
+        .catch(function () { return false; });
+    }
+    return copyTextToClipboard(text).then(function (ok) {
+      if (ok) showEphemeralHint('متن کپی شد — می‌توانید اشتراک بگذارید.');
+      return ok;
+    });
+  }
+
+  function buildMsgActionsHtml() {
+    return (
+      '<div class="ai-msg-actions" data-ai-msg-actions>' +
+      '<div class="ai-msg-action-wrap">' +
+      '<button type="button" class="ai-msg-action" data-ai-msg-more aria-label="بیشتر" aria-haspopup="true" aria-expanded="false">' +
+      '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>' +
+      '</button>' +
+      '<div class="ai-msg-action-menu" data-ai-msg-menu role="menu">' +
+      '<button type="button" data-ai-msg-menu-copy role="menuitem">کپی متن</button>' +
+      '<button type="button" data-ai-msg-menu-share role="menuitem">اشتراک‌گذاری</button>' +
+      '</div>' +
+      '</div>' +
+      '<button type="button" class="ai-msg-action" data-ai-msg-share aria-label="اشتراک‌گذاری">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="19" r="2.4"/><path d="M8.3 10.8l7.4-4.1M8.3 13.2l7.4 4.1"/></svg>' +
+      '</button>' +
+      '<button type="button" class="ai-msg-action" data-ai-msg-speak aria-label="خواندن با صدا">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10v4a2 2 0 0 0 2 2h2l4 3V5L7 8H5a2 2 0 0 0-2 2z"/><path d="M15.5 8.5a4.5 4.5 0 0 1 0 7"/><path d="M17.8 6a7.5 7.5 0 0 1 0 12"/></svg>' +
+      '</button>' +
+      '<button type="button" class="ai-msg-action" data-ai-msg-copy aria-label="کپی">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+      '</button>' +
+      '</div>'
+    );
+  }
+
+  function ensureMsgActions(wrap) {
+    if (!wrap || wrap.getAttribute('data-role') !== 'assistant') return;
+    if (wrap.getAttribute('data-thinking') === '1') return;
+    if (wrap.getAttribute('data-ephemeral') === '1') return;
+    var body = wrap.querySelector('.ai-msg-body');
+    if (!body) return;
+    if (body.querySelector('[data-ai-msg-actions]')) return;
+    var bubble = body.querySelector('.ai-msg-bubble:not(.ai-msg-thinking)');
+    if (!bubble) return;
+    var host = document.createElement('div');
+    host.innerHTML = buildMsgActionsHtml();
+    var actions = host.firstElementChild;
+    if (actions) body.appendChild(actions);
+  }
+
+  function wireMsgActions(root) {
+    var scope = root || list;
+    if (!scope) return;
+    scope.querySelectorAll('.ai-msg-wrap--assistant, .ai-msg-wrap[data-role="assistant"]').forEach(function (wrap) {
+      ensureMsgActions(wrap);
+    });
+  }
+
+  function onMsgActionsClick(e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var wrap = t.closest('.ai-msg-wrap--assistant, .ai-msg-wrap[data-role="assistant"]');
+    if (!wrap || !list.contains(wrap)) return;
+
+    var moreBtn = t.closest('[data-ai-msg-more]');
+    if (moreBtn && wrap.contains(moreBtn)) {
+      e.preventDefault();
+      var wrapMore = moreBtn.closest('.ai-msg-action-wrap');
+      var menu = wrapMore && wrapMore.querySelector('[data-ai-msg-menu]');
+      var open = menu && menu.classList.contains('is-open');
+      closeAllMsgMenus();
+      if (menu && !open) {
+        menu.classList.add('is-open');
+        moreBtn.setAttribute('aria-expanded', 'true');
+      }
+      return;
+    }
+
+    var menuCopy = t.closest('[data-ai-msg-menu-copy]');
+    if (menuCopy) {
+      e.preventDefault();
+      closeAllMsgMenus();
+      var textM = assistantPlainText(wrap);
+      copyTextToClipboard(textM).then(function (ok) {
+        if (ok) showEphemeralHint('کپی شد');
+      });
+      return;
+    }
+    var menuShare = t.closest('[data-ai-msg-menu-share]');
+    if (menuShare) {
+      e.preventDefault();
+      closeAllMsgMenus();
+      shareAssistantText(assistantPlainText(wrap));
+      return;
+    }
+
+    var copyBtn = t.closest('[data-ai-msg-copy]');
+    if (copyBtn && wrap.contains(copyBtn)) {
+      e.preventDefault();
+      closeAllMsgMenus();
+      copyTextToClipboard(assistantPlainText(wrap)).then(function (ok) {
+        if (ok) flashActionOk(copyBtn);
+      });
+      return;
+    }
+    var shareBtn = t.closest('[data-ai-msg-share]');
+    if (shareBtn && wrap.contains(shareBtn)) {
+      e.preventDefault();
+      closeAllMsgMenus();
+      shareAssistantText(assistantPlainText(wrap)).then(function (ok) {
+        if (ok) flashActionOk(shareBtn);
+      });
+      return;
+    }
+    var speakBtn = t.closest('[data-ai-msg-speak]');
+    if (speakBtn && wrap.contains(speakBtn)) {
+      e.preventDefault();
+      closeAllMsgMenus();
+      speakAssistantText(speakBtn, assistantPlainText(wrap));
+    }
+  }
+
   function enhanceAssistantBubbles(root) {
     var scope = root || list;
     if (!scope) return;
@@ -393,6 +780,7 @@
       bubble.setAttribute('data-formatted', '1');
     });
     wireCopyBlocks(scope);
+    wireMsgActions(scope);
   }
 
   function messageHasContent(msg) {
@@ -471,6 +859,13 @@
         data = await resp.json();
       } catch (_) {}
       if (!resp.ok || !data || !data.ok) {
+        if (data && data.need_login) {
+          try {
+            if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
+              window.vinorProfileDrawer.open();
+            }
+          } catch (_) {}
+        }
         throw new Error((data && data.error) || 'ثبت اقدام ممکن نشد.');
       }
       setAgentCardState(card, 'confirmed', data.message || 'ثبت شد.');
@@ -512,8 +907,19 @@
     if (!root) return;
     root.querySelectorAll('.ai-agent-card[data-agent-type]').forEach(function (card) {
       var atype = card.getAttribute('data-agent-type') || '';
-      if (atype.indexOf('confirm_') !== 0) return;
       if (card.getAttribute('data-bound') === '1') return;
+      if (atype === 'need_login') {
+        card.setAttribute('data-bound', '1');
+        var loginBtn = card.querySelector('[data-agent-login]');
+        if (loginBtn) {
+          loginBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            openGuestLoginDrawer('برای ادامه وارد شوید.');
+          });
+        }
+        return;
+      }
+      if (atype.indexOf('confirm_') !== 0) return;
       card.setAttribute('data-bound', '1');
       var confirmBtn = card.querySelector('[data-agent-confirm]');
       var cancelBtn = card.querySelector('[data-agent-cancel]');
@@ -686,7 +1092,10 @@
     row.appendChild(body);
     wrap.appendChild(row);
     list.appendChild(wrap);
-    if (!isUser) wireCopyBlocks(wrap);
+    if (!isUser) {
+      wireCopyBlocks(wrap);
+      ensureMsgActions(wrap);
+    }
     if (msg.created_at) bumpLastSyncAt(msg.created_at);
     scrollChatToEnd();
     return wrap;
@@ -758,6 +1167,7 @@
     });
     showWelcomeIfEmpty();
     scanLastSyncFromDom();
+    syncChipBarVisibility();
     scrollChatToEnd();
   }
 
@@ -1004,8 +1414,26 @@
     }
   }
 
+  function syncNewChatAvailability(threads) {
+    if (!newChatBtn) return;
+    if (!isGuestAuth()) {
+      newChatBtn.disabled = false;
+      newChatBtn.removeAttribute('title');
+      return;
+    }
+    var n = Array.isArray(threads) ? threads.length : 0;
+    var atLimit = n >= 2;
+    newChatBtn.disabled = atLimit;
+    if (atLimit) {
+      newChatBtn.setAttribute('title', 'بدون ورود حداکثر ۲ گفتگو — برای بیشتر وارد شوید');
+    } else {
+      newChatBtn.removeAttribute('title');
+    }
+  }
+
   function applyThreads(threads) {
     if (threads && threads.length) renderThreadList(threads);
+    syncNewChatAvailability(threads || []);
   }
 
   async function refreshHistory(immediate) {
@@ -1110,13 +1538,28 @@
         credentials: 'same-origin',
       });
       var data = await resp.json();
-      if (!resp.ok || !data.ok) throw new Error((data && data.error) || 'خطا');
+      if (!resp.ok || !data || !data.ok) {
+        if (data && data.need_login) {
+          showEphemeralHint(data.error || 'برای گفتگوی بیشتر وارد شوید.');
+          try {
+            if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
+              window.vinorProfileDrawer.open();
+            }
+            if (typeof window.vinorDrawerOpenLogin === 'function') {
+              window.vinorDrawerOpenLogin();
+            }
+          } catch (_) {}
+          return;
+        }
+        throw new Error((data && data.error) || 'خطا');
+      }
       if (data.thread_id) setActiveThreadId(data.thread_id);
       renderMessages([]);
       lastThreadsKey = '';
       await refreshHistory(true);
       closeSideMenu();
       ensureChatVisible();
+      showChipBar();
       input.focus();
     } catch (err) {
       alert(err.message || 'خطا');
@@ -1267,6 +1710,13 @@
   scanLastSyncFromDom();
   scrollChatToEnd();
 
+  list.addEventListener('click', onMsgActionsClick);
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t && t.closest && t.closest('[data-ai-msg-more], [data-ai-msg-menu]')) return;
+    closeAllMsgMenus();
+  });
+
   pollTimer = setInterval(pollSync, POLL_MS);
   if (!embedded) {
     refreshHistory(false);
@@ -1347,9 +1797,23 @@
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
     if (isPostchiMode()) return;
-    if (submitting || btn.disabled) return;
+    if (submitting) return;
     var msg = (input.value || '').trim();
-    if (!msg || msg.length < MIN_MSG_LEN) return;
+    if (!msg || msg.length < MIN_MSG_LEN) {
+      syncComposerReady();
+      return;
+    }
+
+    /* سقف مهمان: دکمه فعال می‌ماند؛ با ارسال → پیام + منوی ورود */
+    if (isGuestQuotaUser() && guestRepliesRemaining !== null && guestRepliesRemaining <= 0) {
+      try {
+        input.value = msg;
+        autoGrowInput();
+      } catch (_) {}
+      promptGuestLoginLimit('به سقف ۲۰ پاسخ رسیدید. برای ادامه وارد شوید.');
+      return;
+    }
+
     var now = Date.now();
     if (lastSubmitAt && now - lastSubmitAt < MIN_SUBMIT_GAP_MS) {
       showEphemeralHint('لطفاً چند ثانیه صبر کنید و دوباره بفرستید.');
@@ -1358,6 +1822,7 @@
 
     submitting = true;
     lastSubmitAt = now;
+    hideChipBar();
     removeWelcome();
     appendMessage({ role: 'user', content: msg }, { pendingUser: true });
     showThinking();
@@ -1405,13 +1870,17 @@
     chatAbort = new AbortController();
 
     try {
+      var intent = takePendingChipIntent();
+      var body = { message: msg, thread_id: activeThreadId() };
+      if (intent) body.intent = intent;
       var resp = await fetch(chatUrl, {
         method: 'POST',
         headers: apiHeaders(true),
         credentials: 'same-origin',
-        body: JSON.stringify({ message: msg, thread_id: activeThreadId() }),
+        body: JSON.stringify(body),
         signal: chatAbort.signal,
       });
+      hideChipBar();
       var data = null;
       try {
         data = await resp.json();
@@ -1419,6 +1888,18 @@
 
       if (!resp.ok || !data || !data.ok) {
         var errText = (data && data.error) || 'خطا در دریافت پاسخ';
+        if (data && data.need_login) {
+          removePendingUser();
+          removeThinking();
+          try {
+            input.value = msg;
+            autoGrowInput();
+          } catch (_) {}
+          guestRepliesRemaining = 0;
+          noteGuestRepliesFromPayload({ guest_replies_remaining: 0 });
+          promptGuestLoginLimit(errText || 'به سقف ۲۰ پاسخ رسیدید. برای ادامه وارد شوید.');
+          return;
+        }
         if (data && data.escalated && data.reply) {
           if (data.thread_id) setActiveThreadId(data.thread_id);
           if (data.messages && data.messages.length) {
@@ -1443,7 +1924,12 @@
         throw new Error(errText);
       }
       if (data.thread_id) setActiveThreadId(data.thread_id);
+      noteGuestRepliesFromPayload(data);
       reconcileExchange(data.messages);
+      if (data.guest_limit_reached || (typeof data.guest_replies_remaining === 'number' && data.guest_replies_remaining <= 0 && isGuestQuotaUser())) {
+        guestRepliesRemaining = 0;
+        /* سقف پر شد — دفعه بعد منوی ورود؛ همین پاسخ را نشان بده */
+      }
       if (data.threads) {
         lastThreadsKey = '';
         applyThreads(data.threads);
@@ -1461,16 +1947,35 @@
       }
     } finally {
       removeThinking();
-      submitting = false;
-      setBusy(false);
-      input.focus();
+      if (!loginPromptActive) {
+        submitting = false;
+        setBusy(false);
+        try {
+          input.focus();
+        } catch (_) {}
+      } else {
+        /* سقف ورود: کامپوزر را قفل نکن — unlock داخل promptGuestLoginLimit انجام شده */
+        submitting = false;
+        unlockComposer({
+          placeholder: 'به سقف رسیدید — برای ادامه وارد شوید…',
+        });
+      }
     }
   });
 
   input.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      form.requestSubmit();
+      if (submitting) return;
+      var msg = (input.value || '').trim();
+      if (!msg || msg.length < MIN_MSG_LEN) return;
+      /* حتی اگر دکمه disabled مانده باشد، Enter ارسال را راه بیندازد */
+      try {
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      } catch (_) {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
     }
   });
 
@@ -1479,6 +1984,39 @@
     syncComposerReady();
   });
 
+  if (btn) {
+    btn.addEventListener('click', function (e) {
+      if (submitting) {
+        e.preventDefault();
+        return;
+      }
+      var msg = (input.value || '').trim();
+      if (!msg || msg.length < MIN_MSG_LEN) {
+        e.preventDefault();
+        syncComposerReady();
+        return;
+      }
+      /* اگر به‌هر دلیل disabled مانده، باز کن و submit را دستی بزن */
+      if (btn.disabled) {
+        e.preventDefault();
+        unlockComposer();
+        try {
+          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        } catch (_) {}
+      }
+    });
+  }
+
+  window.__vinorAiChatOnDrawerClose = function () {
+    loginPromptActive = false;
+    unlockComposer(
+      isGuestQuotaUser() && guestRepliesRemaining !== null && guestRepliesRemaining <= 0
+        ? { placeholder: 'به سقف رسیدید — برای ادامه وارد شوید…' }
+        : {}
+    );
+  };
+
   autoGrowInput();
   syncComposerReady();
+  syncChipBarVisibility();
 })();

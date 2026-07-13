@@ -192,6 +192,7 @@ def _build_messages(
     audience: str | None = None,
     voice: str | None = None,
     with_tools: bool = False,
+    chip_intent: str | None = None,
 ) -> list[dict[str, Any]]:
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
     cfg = budget_config()
@@ -205,6 +206,12 @@ def _build_messages(
     })
     if with_tools:
         messages.append({"role": "system", "content": agent_system_hint(resolved_voice)})
+    if chip_intent:
+        from .intents import hint_for_chip_intent
+
+        hint = hint_for_chip_intent(chip_intent)
+        if hint:
+            messages.append({"role": "system", "content": hint})
     if user_key:
         ctx = _build_system_prompt(user_key, audience, user_message=text)
         if ctx:
@@ -607,6 +614,7 @@ def generate_reply(
     phone: str | None = None,
     audience: str | None = None,
     thread_id: str | None = None,
+    chip_intent: str | None = None,
 ) -> dict[str, Any]:
     key = (user_key or phone or "").strip()
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
@@ -628,6 +636,9 @@ def generate_reply(
             )
         return guard
 
+    from .intents import normalize_chip_intent
+
+    intent = normalize_chip_intent(chip_intent)
     tools = tools_schema_for_voice(voice) if key else []
     messages = _build_messages(
         text,
@@ -636,6 +647,7 @@ def generate_reply(
         audience=aud,
         voice=voice,
         with_tools=bool(tools),
+        chip_intent=intent or None,
     )
     result = _run_agent_loop(
         messages,

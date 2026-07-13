@@ -15,9 +15,18 @@ from app.ai.paths import ai_data_file
 
 _MAX_MESSAGES = 80
 _MAX_THREADS = 30
+_GUEST_MAX_THREADS = 2
 _MAX_CONTENT = 4000
 _TITLE_LEN = 48
 _MAX_PREVIEW = 80
+
+
+def _is_guest_key(user_key: str) -> bool:
+    return str(user_key or "").startswith("guest_")
+
+
+def _thread_limit(user_key: str) -> int:
+    return _GUEST_MAX_THREADS if _is_guest_key(user_key) else _MAX_THREADS
 
 
 def _chats_dir() -> str:
@@ -84,14 +93,19 @@ def _sort_threads(threads: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(threads, key=_thread_sort_key, reverse=True)
 
 
-def _prune_threads(record: dict[str, Any]) -> tuple[dict[str, Any], int]:
-    """حداکثر _MAX_THREADS گفتگو — قدیمی‌ترین حذف می‌شود."""
+def _prune_threads(
+    record: dict[str, Any],
+    *,
+    max_threads: int = _MAX_THREADS,
+) -> tuple[dict[str, Any], int]:
+    """حداکثر max_threads گفتگو — قدیمی‌ترین حذف می‌شود."""
+    cap = max(1, int(max_threads or _MAX_THREADS))
     threads = list(record.get("threads") or [])
-    if len(threads) <= _MAX_THREADS:
+    if len(threads) <= cap:
         return record, 0
 
     ordered = _sort_threads(threads)
-    kept = ordered[:_MAX_THREADS]
+    kept = ordered[:cap]
     removed = len(ordered) - len(kept)
     active_id = record.get("active_id")
     if active_id and not any(t.get("id") == active_id for t in kept):
@@ -100,11 +114,15 @@ def _prune_threads(record: dict[str, Any]) -> tuple[dict[str, Any], int]:
     return record, removed
 
 
-def _finalize_record(record: dict[str, Any]) -> tuple[dict[str, Any], int]:
+def _finalize_record(
+    record: dict[str, Any],
+    *,
+    user_key: str = "",
+) -> tuple[dict[str, Any], int]:
     """مرتب‌سازی + محدودیت تعداد گفتگو."""
     threads = _sort_threads(list(record.get("threads") or []))
     record["threads"] = threads
-    return _prune_threads(record)
+    return _prune_threads(record, max_threads=_thread_limit(user_key))
 
 
 def _clean_messages(raw: list) -> list[dict[str, Any]]:
@@ -186,7 +204,7 @@ def load_user_record(user_key: str, audience: str | None = None) -> dict[str, An
                 }
             )
         out = {"user_key": key, "active_id": record.get("active_id"), "threads": threads}
-        out, removed = _finalize_record(out)
+        out, removed = _finalize_record(out, user_key=user_key)
         active_id = out.get("active_id")
         if active_id and not any(t["id"] == active_id for t in out["threads"]):
             out["active_id"] = out["threads"][0]["id"] if out["threads"] else None
@@ -205,7 +223,7 @@ def _save_record(record: dict[str, Any], user_key: str, audience: str | None = N
     path = _chat_path(user_key, audience)
     if not path:
         return
-    record, _ = _finalize_record(record)
+    record, _ = _finalize_record(record, user_key=user_key)
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(record, f, ensure_ascii=False, indent=2)
@@ -232,6 +250,16 @@ def _active_thread(record: dict[str, Any]) -> dict[str, Any] | None:
 
 def create_thread(user_key: str, *, activate: bool = True, audience: str | None = None) -> str:
     record = load_user_record(user_key, audience)
+    limit = _thread_limit(user_key)
+    threads = list(record.get("threads") or [])
+    if len(threads) >= limit:
+        # سقف پر است — گفتگوی جدید نساز (مهمان: ۲)
+        th = _active_thread(record) or (threads[0] if threads else None)
+        if th:
+            if activate:
+                record["active_id"] = th["id"]
+                _save_record(record, user_key, audience)
+            return str(th["id"])
     tid = str(uuid.uuid4())
     ts = _now_iso()
     thread = {
@@ -241,11 +269,51 @@ def create_thread(user_key: str, *, activate: bool = True, audience: str | None 
         "updated_at": ts,
         "messages": [],
     }
-    record["threads"] = [thread] + list(record.get("threads") or [])
+    record["threads"] = [thread] + threads
     if activate:
         record["active_id"] = tid
     _save_record(record, user_key, audience)
     return tid
+
+
+def guest_new_thread_blocked(user_key: str, audience: str | None = None) -> dict[str, Any] | None:
+    """اگر مهمان به سقف ۲ گفتگو رسیده و گفتگوی خالی برای بازنشانی ندارد."""
+    if not _is_guest_key(user_key):
+        return None
+    record = load_user_record(user_key, audience)
+    threads = list(record.get("threads") or [])
+    if len(threads) < _GUEST_MAX_THREADS:
+        return None
+    th = _active_thread(record)
+    if th and not (th.get("messages") or []):
+        return None
+    return {
+        "ok": False,
+        "error": "بدون ورود حداکثر ۲ گفتگو مجاز است. برای گفتگوی بیشتر وارد شوید.",
+        "need_login": True,
+        "login_url": "/express/partner/home?menu=1",
+        "thread_limit": _GUEST_MAX_THREADS,
+    }
+
+
+def clear_chat(user_key: str, audience: str | None = None) -> dict[str, Any]:
+    """گفتگوی جدید — اگر گفتگوی فعال خالی است همان را بازنشانی می‌کند."""
+    record = load_user_record(user_key, audience)
+    th = _active_thread(record)
+    if th and not (th.get("messages") or []):
+        ts = _now_iso()
+        th["title"] = "گفتگوی جدید"
+        th["updated_at"] = ts
+        record["active_id"] = th["id"]
+        _save_record(record, user_key, audience)
+        return {"ok": True, "thread_id": str(th["id"])}
+
+    blocked = guest_new_thread_blocked(user_key, audience)
+    if blocked:
+        return blocked
+
+    tid = create_thread(user_key, activate=True, audience=audience)
+    return {"ok": True, "thread_id": tid}
 
 
 def set_active_thread(user_key: str, thread_id: str, audience: str | None = None) -> bool:
@@ -263,6 +331,35 @@ def ensure_active_thread(user_key: str, audience: str | None = None) -> str:
     if th:
         return str(th["id"])
     return create_thread(user_key, activate=True, audience=audience)
+
+
+def count_assistant_replies(user_key: str, audience: str | None = None) -> int:
+    """تعداد پاسخ‌های قابل‌شمارش assistant برای سقف رایگان مهمان."""
+    record = load_user_record(user_key, audience)
+    total = 0
+    for th in record.get("threads") or []:
+        for m in th.get("messages") or []:
+            if _counts_toward_guest_quota(m):
+                total += 1
+    return total
+
+
+def _counts_toward_guest_quota(m: Any) -> bool:
+    """فقط پاسخ‌های چت AI — نه پستچی/ادمین و نه پیام خالی."""
+    if not isinstance(m, dict):
+        return False
+    if str(m.get("role") or "") != "assistant":
+        return False
+    if m.get("quota") is False:
+        return False
+    source = str(m.get("source") or "").strip().lower()
+    if source in ("admin_escalation", "postchi"):
+        return False
+    content = str(m.get("content") or "").strip()
+    actions = m.get("agent_actions") or m.get("land_codes") or []
+    if not content and not actions:
+        return False
+    return True
 
 
 def threads_for_ui(user_key: str, audience: str | None = None) -> list[dict[str, Any]]:
@@ -394,6 +491,7 @@ def append_exchange(
             "role": "assistant",
             "content": assistant_text or "جزئیات را در کارت زیر بررسی کنید.",
             "created_at": ts,
+            "quota": True,
         }
         codes = [str(c).strip() for c in (assistant_land_codes or []) if str(c).strip()]
         if codes:
@@ -545,20 +643,6 @@ def messages_since(
 
     out.sort(key=lambda x: str(x.get("created_at") or ""))
     return out
-
-
-def clear_chat(user_key: str, audience: str | None = None) -> str:
-    """گفتگوی جدید — اگر گفتگوی فعال خالی است همان را بازنشانی می‌کند."""
-    record = load_user_record(user_key, audience)
-    th = _active_thread(record)
-    if th and not (th.get("messages") or []):
-        ts = _now_iso()
-        th["title"] = "گفتگوی جدید"
-        th["updated_at"] = ts
-        record["active_id"] = th["id"]
-        _save_record(record, user_key, audience)
-        return str(th["id"])
-    return create_thread(user_key, activate=True, audience=audience)
 
 
 def delete_thread(user_key: str, thread_id: str, audience: str | None = None) -> bool:

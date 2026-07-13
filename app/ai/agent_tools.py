@@ -31,6 +31,9 @@ TOOL_COMPLETE_VISIT = "propose_complete_visit"
 TOOL_DEAL = "propose_deal"
 TOOL_RELEASE = "propose_release_deal"
 TOOL_LISTING = "draft_listing_copy"
+TOOL_COOP_INFO = "get_cooperation_info"
+TOOL_APP_STATUS = "get_application_status"
+TOOL_PROPOSE_APPLY = "propose_partner_application"
 
 
 def _active_mission_land_code(phone: str) -> str:
@@ -66,9 +69,14 @@ def agent_system_hint(voice: str | None) -> str:
     v = (voice or "").strip().lower()
     if v == VOICE_PUBLIC:
         return (
-            "ابزار: فقط search_lands. "
-            "اگر ملک پیشنهاد می‌کنی [[LAND:کد]] بگذار. "
-            "ثبت بازدید همکار برای این مخاطب نیست."
+            "ابزارها: search_lands | get_cooperation_info | get_application_status | propose_partner_application. "
+            "هرگز URL یا مسیر صفحه نده؛ همه کارها از همین چت. "
+            "سطوح/شرایط/مسیر همکاری → get_cooperation_info. "
+            "وضعیت درخواست → get_application_status. "
+            "ثبت همکاری: نام کامل، کد ملی، شهر را یکی‌یکی بپرس؛ بعد propose_partner_application و کارت تأیید. "
+            "اگر need_login بود بگو از منوی راست وارد شود؛ لینک نده. "
+            "ملک: search_lands و در صورت پیشنهاد [[LAND:کد]]. "
+            "ابزار فروش همکار برای این مخاطب نیست."
         )
     return (
         "مثل همکار کنار کاربر باش؛ ابزار را وقتی لازم است صدا بزن، نه برای نمایش. "
@@ -77,7 +85,7 @@ def agent_system_hint(voice: str | None) -> str:
         "draft_listing_copy → متن دیوار/اینستا. "
         "propose_visit_request / propose_complete_visit / propose_deal / propose_release_deal → "
         "پیشنهاد با کارت تأیید؛ تا تأیید نزده نگوی ثبت شد. "
-        "ثبت فروش را از همین چت جلو ببر. "
+        "ثبت فروش را از همین چت جلو ببر؛ برای کار ثبت به صفحه نفرست مگر عکس/جزئیات بخواهد. "
         "اگر مأموریت فعال در داده هست، همان فایل را بگیر؛ کد فایل را از کاربر نپرس و land_code را خالی بگذار یا همان کد مأموریت را بزن. "
         "ثبت بازدید: ۱) نام و نام‌خانوادگی مشتری یکجا بپرس ۲) شماره موبایل "
         "۳) propose_visit_request را بدون تاریخ بزن تا لیست شماره‌دار تاریخ‌های مجاز بیاید "
@@ -89,6 +97,11 @@ def agent_system_hint(voice: str | None) -> str:
 def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
     v = (voice or "").strip().lower()
     schemas: list[dict[str, Any]] = [_schema_search()]
+    if v == VOICE_PUBLIC:
+        schemas.append(_schema_coop_info())
+        schemas.append(_schema_app_status())
+        schemas.append(_schema_propose_apply())
+        return schemas
     if v in (VOICE_PARTNER, VOICE_SPECIAL):
         schemas.append(_schema_next())
         schemas.append(_schema_listing())
@@ -120,6 +133,65 @@ def _schema_search() -> dict[str, Any]:
                     },
                 },
                 "required": ["query"],
+            },
+        },
+    }
+
+
+def _schema_coop_info() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_COOP_INFO,
+            "description": (
+                "اطلاعات کوتاه سطوح همکاری، شرایط/پورسانت، یا مسیر شروع — بدون لینک. "
+                "قبل از توضیح همکاری این ابزار را بزن."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "levels | terms | how | all",
+                    },
+                },
+                "required": [],
+            },
+        },
+    }
+
+
+def _schema_app_status() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_APP_STATUS,
+            "description": "وضعیت درخواست همکاری کاربر جاری (لاگین‌شده).",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    }
+
+
+def _schema_propose_apply() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_PROPOSE_APPLY,
+            "description": (
+                "آماده‌سازی کارت تأیید ثبت درخواست همکاری. "
+                "فقط وقتی نام کامل، کد ملی ۱۰ رقمی و شهر را داری صدا بزن. "
+                "اگر کاربر مهمان است، ابزار need_login برمی‌گرداند."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "نام و نام‌خانوادگی"},
+                    "national_id": {"type": "string", "description": "کد ملی ۱۰ رقمی"},
+                    "city": {"type": "string", "description": "شهر فعالیت از لیست شهرهای فعال"},
+                    "experience": {"type": "string", "description": "سابقه فروش ملک (اختیاری)"},
+                    "note": {"type": "string", "description": "توضیح کوتاه (اختیاری)"},
+                },
+                "required": ["name", "national_id", "city"],
             },
         },
     }
@@ -291,6 +363,12 @@ def run_tool(
     try:
         if n == TOOL_SEARCH:
             return _tool_search_lands(args, phone=phone, audience=audience)
+        if n == TOOL_COOP_INFO:
+            return _tool_coop_info(args)
+        if n == TOOL_APP_STATUS:
+            return _tool_application_status(phone=phone)
+        if n == TOOL_PROPOSE_APPLY:
+            return _tool_propose_partner_application(args, phone=phone)
         if n == TOOL_NEXT:
             if (voice or "").strip().lower() == VOICE_PUBLIC:
                 return _denied("این ابزار برای مشتری عادی فعال نیست.")
@@ -330,6 +408,261 @@ def run_tool(
 
 def _denied(msg: str) -> dict[str, Any]:
     return {"ok": False, "error": msg, "model_result": {"ok": False, "error": msg}}
+
+
+def _session_phone() -> str:
+    try:
+        from flask import session
+
+        return str(session.get("user_phone") or "").strip()
+    except Exception:
+        return ""
+
+
+def _tool_coop_info(args: dict[str, Any]) -> dict[str, Any]:
+    topic = str(args.get("topic") or "all").strip().lower() or "all"
+    cities: list[str] = []
+    try:
+        from app.utils.storage import load_active_cities
+
+        cities = [str(c) for c in (load_active_cities() or []) if str(c).strip()][:12]
+    except Exception:
+        cities = []
+    city_bit = f"شهرهای فعال: {', '.join(cities)}." if cities else ""
+
+    blocks: dict[str, str] = {
+        "levels": (
+            "سطوح: ۱) کاربر عادی — چت و درخواست همکاری. "
+            "۲) همکار — بعد از تأیید، فایل آماده می‌گیرد، می‌فروشد، پورسانت می‌گیرد؛ کار اصلی از چت. "
+            "۳) همکار ویژه — مالک/فروشنده با آگهی و بازدیدهای خودش."
+        ),
+        "terms": (
+            "شرایط: فایل‌های تأییدشده با قیمت و پورسانت مشخص؛ فروش؛ بعد از تأیید معامله پورسانت به کیف پول. "
+            "وینور پرونده را بررسی می‌کند. " + city_bit
+        ),
+        "how": (
+            "شروع از همین چت: بگو می‌خواهم همکار شوم → اگر وارد نیستی منوی راست ورود → "
+            "نام، کد ملی، شهر → کارت تأیید → بررسی تیم. لینک صفحه نده."
+        ),
+    }
+    if topic in blocks:
+        chosen = {topic: blocks[topic]}
+    else:
+        chosen = blocks
+    model = {
+        "ok": True,
+        "topic": topic if topic in blocks else "all",
+        "facts": chosen,
+        "instruction": (
+            "همین facts را کوتاه و خودمونی بگو. URL/مسیر صفحه نده. "
+            "اگر خواست ثبت کند، فیلدها را یکی‌یکی بپرس و propose_partner_application بزن."
+        ),
+    }
+    return {"ok": True, "model_result": model}
+
+
+def _tool_application_status(*, phone: str) -> dict[str, Any]:
+    me = _session_phone() or (
+        phone if phone and not str(phone).startswith("guest_") else ""
+    )
+    if not me:
+        return {
+            "ok": True,
+            "model_result": {
+                "ok": False,
+                "need_login": True,
+                "instruction": "وارد نشده؛ از منوی راست بخواهد وارد شود. لینک نده.",
+            },
+            "ui_action": {
+                "type": "need_login",
+                "title": "ورود برای دیدن وضعیت",
+                "subtitle": "با شماره موبایل وارد شو تا وضعیت درخواست را بگویم.",
+                "cta": "ورود",
+            },
+        }
+    try:
+        from app.express_partner.routes import (
+            _get_my_last_application,
+            _is_partner_approved,
+            _partner_profile_for_phone,
+        )
+
+        if _is_partner_approved(_partner_profile_for_phone(me)):
+            model = {
+                "ok": True,
+                "status": "approved",
+                "label": "همکار تأییدشده",
+                "instruction": "کوتاه بگو الان همکار است و از چت خانه کار فروش را جلو ببرد.",
+            }
+            return {"ok": True, "model_result": model}
+
+        last = _get_my_last_application(me)
+        if not last:
+            model = {
+                "ok": True,
+                "status": "none",
+                "label": "بدون درخواست",
+                "instruction": "بگو هنوز درخواست نداده؛ اگر خواست از همین چت ثبت کنیم.",
+            }
+            return {"ok": True, "model_result": model}
+
+        st = str(last.get("status") or "").strip().lower() or "new"
+        label_map = {
+            "new": "ثبت‌شده؛ در صف بررسی",
+            "pending": "در انتظار بررسی",
+            "under_review": "در حال بررسی",
+            "approved": "تأیید شده",
+            "rejected": "رد شده",
+            "cancelled": "لغو شده",
+        }
+        model = {
+            "ok": True,
+            "status": st,
+            "label": label_map.get(st, st),
+            "name": str(last.get("name") or "").strip(),
+            "city": str(last.get("city") or "").strip(),
+            "instruction": "وضعیت را کوتاه بگو؛ لینک صفحه تشکر/درخواست نده.",
+        }
+        return {"ok": True, "model_result": model}
+    except Exception as exc:
+        return _denied(f"خواندن وضعیت ممکن نشد: {exc}")
+
+
+def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    me = _session_phone() or (
+        phone if phone and not str(phone).startswith("guest_") else ""
+    )
+    if not me:
+        return {
+            "ok": True,
+            "model_result": {
+                "ok": False,
+                "need_login": True,
+                "missing": ["login"],
+                "instruction": (
+                    "کاربر مهمان است. بگو از منوی راست وارد شود تا درخواست را از همین چت ثبت کنیم. "
+                    "URL نده. بعد از ورود دوباره همین ابزار را با همان فیلدها بزن."
+                ),
+            },
+            "ui_action": {
+                "type": "need_login",
+                "title": "ورود برای ثبت همکاری",
+                "subtitle": "با موبایل وارد شو؛ بعد از ورود درخواست را از همین چت تمام می‌کنیم.",
+                "cta": "ورود",
+            },
+        }
+
+    name = str(args.get("name") or "").strip()
+    national_id = str(args.get("national_id") or "").strip()
+    city = str(args.get("city") or "").strip()
+    experience = str(args.get("experience") or "").strip()
+    note = str(args.get("note") or "").strip()
+    missing = [k for k, v in (("name", name), ("national_id", national_id), ("city", city)) if not v]
+    if missing:
+        return {
+            "ok": True,
+            "model_result": {
+                "ok": False,
+                "missing": missing,
+                "instruction": "فقط فیلدهای missing را یکی‌یکی بپرس؛ لینک نده.",
+            },
+        }
+
+    try:
+        from app.express_partner.routes import (
+            _active_cities_cached,
+            _clip_apply_fields,
+            _get_my_last_application,
+            _has_active_application,
+            _is_partner_approved,
+            _parse_apply_national_id,
+            _partner_profile_for_phone,
+        )
+        from app.utils.iran_ids import is_valid_iran_national_id
+
+        if _is_partner_approved(_partner_profile_for_phone(me)):
+            return {
+                "ok": True,
+                "model_result": {
+                    "ok": False,
+                    "already_partner": True,
+                    "instruction": "هم‌اکنون همکار تأییدشده است؛ درخواست جدید لازم نیست.",
+                },
+            }
+        if _has_active_application(me):
+            last = _get_my_last_application(me) or {}
+            return {
+                "ok": True,
+                "model_result": {
+                    "ok": False,
+                    "already_pending": True,
+                    "status": str(last.get("status") or "pending"),
+                    "instruction": "درخواست فعال دارد؛ بگو منتظر بررسی بماند.",
+                },
+            }
+
+        name, city, experience, note = _clip_apply_fields(name, city, experience, note)
+        national_id = _parse_apply_national_id(national_id)
+        if not is_valid_iran_national_id(national_id):
+            return {
+                "ok": True,
+                "model_result": {
+                    "ok": False,
+                    "invalid": "national_id",
+                    "instruction": "کد ملی نامعتبر است؛ دوباره بپرس.",
+                },
+            }
+        cities = _active_cities_cached() or []
+        if cities and city not in cities:
+            return {
+                "ok": True,
+                "model_result": {
+                    "ok": False,
+                    "invalid": "city",
+                    "allowed_cities": list(cities)[:20],
+                    "instruction": "شهر باید از allowed_cities باشد؛ دوباره بپرس.",
+                },
+            }
+    except Exception as exc:
+        return _denied(str(exc))
+
+    payload = {
+        "name": name,
+        "national_id": national_id,
+        "city": city,
+        "experience": experience,
+        "note": note,
+        "source": "ai_chat",
+    }
+    token = _store_pending_action(
+        user_key=me,
+        action_type="confirm_partner_application",
+        payload=payload,
+    )
+    lines = [f"نام: {name}", f"کد ملی: {national_id}", f"شهر: {city}"]
+    if experience:
+        lines.append(f"سابقه: {experience}")
+    if note:
+        lines.append(f"توضیح: {note}")
+    ui = {
+        "type": "confirm_partner_application",
+        "token": token,
+        "title": "تأیید ثبت درخواست همکاری",
+        "lines": lines,
+        "status": "pending",
+        "confirm_label": "ثبت درخواست",
+        "cancel_label": "انصراف",
+    }
+    model = {
+        "ok": True,
+        "pending_confirm": True,
+        "fields": {"name": name, "city": city, "national_id": national_id},
+        "instruction": (
+            "کارت تأیید نشان داده می‌شود. بگو روی تأیید بزند. "
+            "تا تأیید نزده نگو ثبت شد. لینک صفحه نده."
+        ),
+    }
+    return {"ok": True, "model_result": model, "ui_action": ui}
 
 
 def _tool_search_lands(
@@ -1246,7 +1579,7 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
 
 
 def confirm_action_from_token(*, phone: str, token: str) -> dict[str, Any]:
-    """تأیید عمومی اکشن‌های چت (بازدید انجام شد / معامله / بستن)."""
+    """تأیید عمومی اکشن‌های چت (بازدید انجام شد / معامله / بستن / درخواست همکاری)."""
     me = (phone or "").strip()
     pending = _load_pending_action(token)
     if not pending:
@@ -1256,6 +1589,8 @@ def confirm_action_from_token(*, phone: str, token: str) -> dict[str, Any]:
     action_type = str(pending.get("action_type") or "")
     if action_type == "confirm_visit":
         return confirm_visit_from_token(phone=phone, token=token)
+    if action_type == "confirm_partner_application":
+        return _confirm_partner_application(phone=me, token=token, pending=pending)
     if action_type not in _SIMPLE_TX_META:
         return {"ok": False, "error": "نوع اقدام نامعتبر است."}
 
@@ -1279,6 +1614,24 @@ def confirm_action_from_token(*, phone: str, token: str) -> dict[str, Any]:
     if out.get("ok"):
         _consume_pending_action(token)
     return out
+
+
+def _confirm_partner_application(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    try:
+        from app.express_partner.routes import create_partner_application_core
+
+        out = create_partner_application_core(phone, dict(payload))
+    except Exception as exc:
+        return {"ok": False, "error": f"ثبت درخواست ممکن نشد: {exc}"}
+    if out.get("ok"):
+        _consume_pending_action(token)
+        return {
+            "ok": True,
+            "message": str(out.get("message") or "درخواست همکاری ثبت شد."),
+            "application_id": out.get("application_id"),
+        }
+    return {"ok": False, "error": str(out.get("error") or "ثبت درخواست ناموفق بود.")}
 
 
 def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
@@ -1403,8 +1756,11 @@ def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
             "confirm_complete_visit",
             "confirm_deal",
             "confirm_release",
+            "confirm_partner_application",
         ):
             parts.append(_render_confirm_action_card(action))
+        elif atype == "need_login":
+            parts.append(_render_need_login_card(action))
         elif atype == "next_action":
             parts.append(_render_next_action_card(action))
         elif atype == "copy_blocks":
@@ -1415,6 +1771,22 @@ def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
         '<div class="ai-agent-actions mt-2.5 flex w-full max-w-full flex-col gap-2.5">'
         + "".join(parts)
         + "</div>"
+    )
+
+
+def _render_need_login_card(action: dict[str, Any]) -> str:
+    title = escape(str(action.get("title") or "ورود لازم است").strip() or "ورود لازم است")
+    subtitle = escape(str(action.get("subtitle") or "").strip())
+    cta = escape(str(action.get("cta") or "ورود").strip() or "ورود")
+    sub_html = f'<div class="ai-agent-card__body"><div class="ai-agent-line">{subtitle}</div></div>' if subtitle else ""
+    return (
+        f'<div class="ai-agent-card" data-agent-type="need_login">'
+        f'<div class="ai-agent-card__title">{title}</div>'
+        f"{sub_html}"
+        f'<div class="ai-agent-card__actions">'
+        f'<button type="button" class="ai-agent-btn ai-agent-btn--confirm" data-agent-login>{cta}</button>'
+        f"</div>"
+        f"</div>"
     )
 
 
@@ -1469,8 +1841,11 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
         "confirm_complete_visit": "تأیید: بازدید انجام شد",
         "confirm_deal": "تأیید معامله",
         "confirm_release": "تأیید بستن معامله",
+        "confirm_partner_application": "تأیید ثبت درخواست همکاری",
     }
     title = escape(str(action.get("title") or defaults.get(atype) or "تأیید اقدام"))
+    confirm_label = escape(str(action.get("confirm_label") or "تأیید و ثبت").strip() or "تأیید و ثبت")
+    cancel_label = escape(str(action.get("cancel_label") or "انصراف").strip() or "انصراف")
     status = str(action.get("status") or "pending")
     if status == "pending" and token and _load_pending_action(token) is None:
         status = "expired"
@@ -1497,8 +1872,8 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
         f'<div class="ai-agent-card__title">{title}</div>'
         f'<div class="ai-agent-card__body">{body}</div>'
         f'<div class="ai-agent-card__actions">'
-        f'<button type="button" class="ai-agent-btn ai-agent-btn--confirm" data-agent-confirm>تأیید و ثبت</button>'
-        f'<button type="button" class="ai-agent-btn ai-agent-btn--cancel" data-agent-cancel>انصراف</button>'
+        f'<button type="button" class="ai-agent-btn ai-agent-btn--confirm" data-agent-confirm>{confirm_label}</button>'
+        f'<button type="button" class="ai-agent-btn ai-agent-btn--cancel" data-agent-cancel>{cancel_label}</button>'
         f"</div>"
         f'<div class="ai-agent-card__note hidden" data-agent-note></div>'
         f"</div>"

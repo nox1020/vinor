@@ -328,61 +328,29 @@ def build_limited_ai_quick_prompts(
     me_phone: str = "",
     has_pending_app: bool = False,
 ) -> List[Dict[str, str]]:
-    """چیپ‌های آماده برای مهمان / کاربر عادی / متقاضی — سطوح و درخواست همکاری."""
+    """چیپ‌های نیت‌محور برای مهمان / کاربر عادی — پیام کوتاه + intent ابزار."""
     out: List[Dict[str, str]] = []
 
-    def add(label: str, *, prompt: str = "", href: str = "") -> None:
+    def add(label: str, *, prompt: str, intent: str) -> None:
         label = (label or "").strip()
         prompt = (prompt or "").strip()
-        href = (href or "").strip()
-        if not label:
+        intent = (intent or "").strip()
+        if not label or not prompt or not intent:
             return
-        if href:
-            out.append({"label": label, "href": href, "prompt": prompt})
-        elif prompt:
-            out.append({"label": label, "prompt": prompt})
+        out.append({"label": label, "prompt": prompt, "intent": intent})
 
-    levels_prompt = (
-        "سطوح همکاری وینور اکسپرس را خیلی کوتاه و شفاف بگو: "
-        "کاربر عادی، همکار، همکار ویژه — هر سطح چه دسترسی و درآمدی دارد، "
-        "و چطور از همین‌جا می‌توانم درخواست همکاری بدهم."
-    )
-    terms_prompt = (
-        "شرایط همکاری و پورسانت وینور اکسپرس را کوتاه توضیح بده: "
-        "فایل آماده، فروش، دریافت پورسانت، و لینک ثبت درخواست."
-    )
+    add("سطوح همکاری", prompt="سطوح همکاری چیه؟", intent="coop_levels")
+    add("پورسانت", prompt="پورسانت چطوره؟", intent="coop_terms")
 
-    add("سطوح همکاری", prompt=levels_prompt)
-    add("شرایط و پورسانت", prompt=terms_prompt)
+    if has_pending_app:
+        add("وضعیت درخواست", prompt="وضعیت درخواست همکاری‌ام چیه؟", intent="coop_status")
+    elif (me_phone or "").strip():
+        add("ثبت درخواست", prompt="می‌خوام همکار شم", intent="coop_apply")
+    else:
+        add("شروع همکاری", prompt="می‌خوام همکار شم", intent="coop_apply")
 
-    try:
-        if has_pending_app:
-            add("وضعیت درخواست", href=url_for("express_partner.thanks"))
-        elif (me_phone or "").strip():
-            add("ثبت درخواست", href=url_for("express_partner.apply"))
-        else:
-            add(
-                "شروع همکاری",
-                href=url_for(
-                    "express_partner.login",
-                    next=url_for("express_partner.apply"),
-                ),
-            )
-    except Exception:
-        if has_pending_app:
-            add("وضعیت درخواست", href="/express/partner/thanks")
-        elif (me_phone or "").strip():
-            add("ثبت درخواست", href="/express/partner/apply")
-        else:
-            add("شروع همکاری", href="/express/partner/login?next=/express/partner/apply")
-
-    add(
-        "چطور کار می‌کند؟",
-        prompt=(
-            "مسیر همکاری در وینور را در ۳ قدم کوتاه بگو و بگو برای شروع چه کار کنم."
-        ),
-    )
-    return out[:5]
+    add("پیدا کردن ملک", prompt="یه فایل مناسب می‌خوام", intent="find_land")
+    return out[:4]
 
 
 def build_ai_quick_prompts(
@@ -391,22 +359,56 @@ def build_ai_quick_prompts(
     title: str = "",
     stage_label: str = "",
     is_mission: bool = False,
+    tx_mode: str = "",
 ) -> List[Dict[str, str]]:
-    """سوال آماده بالای باکس چت — فقط قدم بعدی."""
+    """چیپ‌های نیت‌محور همکار — وابسته به مرحله مأموریت/فروش."""
     code_s = (code or "").strip()
     title_s = (title or "").strip()
+    stage = (stage_label or "").strip()
+    mode = (tx_mode or "").strip()
     head = f"فایل {code_s}" if code_s else "فایل مأموریت"
     if title_s:
         head = f"{head} ({title_s})"
 
-    if code_s and is_mission:
-        prompt = f"ماموریت {head}: فقط یک کار بعدی همین الان را بگو و اگر ثبت لازم است ابزارش را بزن."
-    elif code_s:
-        prompt = f"{head}: فقط قدم بعدی فروش را خیلی کوتاه بگو."
-    else:
-        prompt = "فقط یک کار بعدی فروش را خیلی کوتاه بگو."
+    out: List[Dict[str, str]] = []
 
-    return [{"label": "قدم بعدی", "prompt": prompt}]
+    def add(label: str, *, prompt: str, intent: str) -> None:
+        label = (label or "").strip()
+        prompt = (prompt or "").strip()
+        intent = (intent or "").strip()
+        if label and prompt and intent:
+            out.append({"label": label, "prompt": prompt, "intent": intent})
+
+    add("قدم بعدی", prompt="قدم بعدی‌م چیه؟", intent="next_action")
+
+    if mode in ("deal_pending", "release") or stage == "در حال معامله":
+        add("بستن معامله", prompt=f"{head}: معامله رو ببند", intent="release")
+    elif mode in ("visit_pending", "visit_done_pending", "visit_commission_pending", "status"):
+        add("وضعیت", prompt=f"{head}: وضعیتش چیه؟", intent="next_action")
+    elif mode == "deal" or stage in ("معامله یا بازدید مجدد", "بازدید انجام شد"):
+        add("ثبت معامله", prompt=f"{head}: معامله ثبت کن", intent="deal")
+        add("بازدید مجدد", prompt=f"{head}: بازدید مجدد می‌خوام", intent="visit")
+    elif mode == "complete_visit" or mode == "visit_done" or stage == "بازدید تأییدشد":
+        add("بازدید انجام شد", prompt=f"{head}: بازدید انجام شد", intent="complete_visit")
+    elif mode == "visit":
+        add("ثبت بازدید", prompt=f"{head}: بازدید ثبت کن", intent="visit")
+        add("آگهی", prompt=f"{head}: متن دیوار و اینستا بده", intent="marketing")
+    elif mode == "marketing" or stage in ("بازاریابی", "بازاریابی مجدد") or is_mission:
+        add("آگهی دیوار", prompt=f"{head}: متن آگهی بده", intent="marketing")
+        add("ثبت بازدید", prompt=f"{head}: بازدید ثبت کن", intent="visit")
+    else:
+        add("ثبت بازدید", prompt=f"{head}: بازدید ثبت کن", intent="visit")
+
+    # بدون تکرار intent یکسان پشت‌سرهم
+    seen: set[str] = set()
+    deduped: List[Dict[str, str]] = []
+    for item in out:
+        key = f"{item.get('intent')}|{item.get('label')}"
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped[:4]
 
 
 def draft_listing_copy(land: Dict[str, Any], *, channel: str = "both") -> Dict[str, str]:

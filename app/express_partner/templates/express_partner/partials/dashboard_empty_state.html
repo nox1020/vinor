@@ -19,12 +19,12 @@
       <p class="text-xs text-gray-500 dark:text-gray-400">به‌زودی فایل‌های جدید در اینجا نمایش داده می‌شوند.</p>
       <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
         {% if not profile %}
-        <a href="{{ url_for('express_partner.login', next=url_for('express_partner.home')) }}"
+        <a href="{{ url_for('express_partner.home', menu=1) }}"
            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 transition">
           <i class="fas fa-right-to-bracket text-xs" aria-hidden="true"></i>
           ورود
         </a>
-        <a href="{{ url_for('express_partner.apply') }}"
+        <a href="{{ url_for('express_partner.home', menu=1, login_next='apply') }}"
            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition">
           <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>
           درخواست همکاری

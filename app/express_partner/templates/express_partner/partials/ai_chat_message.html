@@ -26,6 +26,28 @@
         {{ msg.cards_html|safe }}
       </div>
       {% endif %}
+      {% if not is_user and msg.content %}
+      <div class="ai-msg-actions" data-ai-msg-actions>
+        <div class="ai-msg-action-wrap">
+          <button type="button" class="ai-msg-action" data-ai-msg-more aria-label="بیشتر" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+          </button>
+          <div class="ai-msg-action-menu" data-ai-msg-menu role="menu">
+            <button type="button" data-ai-msg-menu-copy role="menuitem">کپی متن</button>
+            <button type="button" data-ai-msg-menu-share role="menuitem">اشتراک‌گذاری</button>
+          </div>
+        </div>
+        <button type="button" class="ai-msg-action" data-ai-msg-share aria-label="اشتراک‌گذاری">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="19" r="2.4"/><path d="M8.3 10.8l7.4-4.1M8.3 13.2l7.4 4.1"/></svg>
+        </button>
+        <button type="button" class="ai-msg-action" data-ai-msg-speak aria-label="خواندن با صدا">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10v4a2 2 0 0 0 2 2h2l4 3V5L7 8H5a2 2 0 0 0-2 2z"/><path d="M15.5 8.5a4.5 4.5 0 0 1 0 7"/><path d="M17.8 6a7.5 7.5 0 0 1 0 12"/></svg>
+        </button>
+        <button type="button" class="ai-msg-action" data-ai-msg-copy aria-label="کپی">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>
