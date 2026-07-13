@@ -1,3 +1,6 @@
 {
-  "approval_method": "auto"
+  "approval_method": "auto",
+  "ai": {
+    "min_message_chars": 1
+  }
 }

@@ -228,10 +228,9 @@ def store_cached_reply(
 
 
 def validate_message_length(message: str) -> str | None:
-    cfg = budget_config()
-    text = (message or "").strip()
-    if len(text) < cfg["min_message_chars"]:
-        return "پیام خیلی کوتاه است."
+    """هر پیام غیرخالی مجاز است (حتی ۱ کاراکتر مثل «۱»)."""
+    if not (message or "").strip():
+        return "پیام خالی است."
     return None
 
 
