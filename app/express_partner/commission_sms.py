@@ -142,4 +142,21 @@ def notify_partner_commission_txn(
         "response": sms_result.get("body", {}),
         "created_at": datetime.utcnow().isoformat() + "Z",
     })
+
+    # پیامک فرستاده شد؛ همزمان در چت هم خبر + قدم بعدی
+    try:
+        from .sales_coach import deliver_partner_progress_update
+
+        deliver_partner_progress_update(
+            partner_phone=mobile,
+            event=ev,
+            land_code=str(land_code or ""),
+            amount=amount,
+            commission_type=str(commission_type or ""),
+        )
+    except Exception:
+        current_app.logger.exception(
+            "commission progress chat failed event=%s phone=%s", ev, mobile
+        )
+
     return {"ok": ok, "skipped": False, "error": err}

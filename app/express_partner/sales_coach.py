@@ -205,6 +205,211 @@ def deliver_voided_encouragement(
     return out
 
 
+def _inject_partner_system_chat(
+    partner_phone: str,
+    *,
+    land_code: str = "",
+    body: str,
+) -> bool:
+    """پیام سیستمی در چت همکار (ترد مأموریت اگر باشد، وگرنه ترد فعال)."""
+    ph = normalize_iran_mobile(str(partner_phone or "").strip())
+    text = (body or "").strip()
+    if not is_valid_iran_mobile(ph) or not text:
+        return False
+    try:
+        from .partner_missions import append_mission_chat_followup, get_active_mission
+
+        mission = get_active_mission(ph)
+        tid = ""
+        code = str(land_code or "").strip()
+        if mission and str(mission.get("land_code") or "").strip() == code and code:
+            tid = str(mission.get("thread_id") or "").strip()
+        if tid:
+            return bool(
+                append_mission_chat_followup(
+                    ph,
+                    land_code=code,
+                    thread_id=tid,
+                    body=text,
+                )
+            )
+        from app.ai.audience import AUDIENCE_PARTNER
+        from app.ai.chat_store import append_exchange, ensure_active_thread
+
+        tid = ensure_active_thread(ph, audience=AUDIENCE_PARTNER)
+        append_exchange(
+            ph,
+            "",
+            text,
+            thread_id=tid,
+            audience=AUDIENCE_PARTNER,
+        )
+        return True
+    except Exception as exc:
+        current_app.logger.warning("partner system chat inject failed: %s", exc)
+        return False
+
+
+def build_progress_update(
+    *,
+    event: str,
+    land_code: str = "",
+    land_title: str = "",
+    visit_date: str = "",
+    amount: Any = 0,
+    commission_type: str = "",
+    visit_commission_pending: bool = False,
+) -> Tuple[str, str, str]:
+    """پیام پیشرفت فروش برای نوتیف و چت.
+
+    Returns: (notif_title, chat_body, notif_body)
+    """
+    code = (land_code or "").strip()
+    title = (land_title or "").strip()
+    file_bit = f"فایل {code}" if code else "فایل"
+    if title:
+        file_bit = f"{file_bit} ({title})"
+    vdate = (visit_date or "").strip()
+    ev = (event or "").strip()
+
+    def _amt() -> str:
+        try:
+            v = max(0, int(str(amount).replace(",", "").strip() or "0"))
+        except Exception:
+            v = 0
+        return f"{v:,}".replace(",", "،") if v else "۰"
+
+    if ev == "visit_approved":
+        notif_title = "بازدید تأیید شد"
+        chat_body = (
+            f"{notif_title} — {file_bit}"
+            + (f" · {vdate}" if vdate else "")
+            + ".\n"
+            "قدم بعدی: با مشتری هماهنگ کن؛ بعد از بازدید از همین چت بگو «بازدید انجام شد» "
+            "تا کارت تأیید بیاید."
+        )
+        notif_body = f"{file_bit} تأیید شد. بعد از بازدید از چت بگو بازدید انجام شد."
+        return notif_title, chat_body, notif_body
+
+    if ev == "visit_done_pending":
+        notif_title = "انجام بازدید ثبت شد"
+        chat_body = (
+            f"{notif_title} — {file_bit}.\n"
+            "قدم بعدی: صبر کن تا ادمین تأیید کند؛ وضعیت را از همین چت پیگیری کن."
+        )
+        notif_body = f"{file_bit}: انجام بازدید ثبت شد؛ منتظر تأیید ادمین باش."
+        return notif_title, chat_body, notif_body
+
+    if ev == "visit_completed":
+        notif_title = "بازدید توسط ادمین تأیید شد"
+        if visit_commission_pending:
+            chat_body = (
+                f"{notif_title} — {file_bit}.\n"
+                "پورسانت بازدید در انتظار تأیید است.\n"
+                "قدم بعدی: بعد از واریز پورسانت، از همین چت می‌تونی «ثبت معامله» را بزنی."
+            )
+            notif_body = f"{file_bit} تأیید شد؛ پورسانت در انتظار تأیید."
+        else:
+            chat_body = (
+                f"{notif_title} — {file_bit}.\n"
+                "قدم بعدی: از همین چت بگو «ثبت معامله» تا کارت تأیید بیاید."
+            )
+            notif_body = f"{file_bit} تأیید شد؛ از چت معامله را ثبت کن."
+        return notif_title, chat_body, notif_body
+
+    if ev == "deal_started":
+        notif_title = "معامله شروع شد"
+        chat_body = (
+            f"{notif_title} — {file_bit}.\n"
+            "قدم بعدی: منتظر تأیید ادمین باش؛ بعد از تأیید، پورسانت فروش به کیف پول می‌آید."
+        )
+        notif_body = f"{file_bit}: معامله شروع شد؛ منتظر تأیید ادمین."
+        return notif_title, chat_body, notif_body
+
+    if ev == "commission_approved":
+        ct = (commission_type or "").strip()
+        if ct == "referral" or code == "referral":
+            kind = "پورسانت دعوت"
+        elif "visit" in ct:
+            kind = "پورسانت بازدید"
+        else:
+            kind = "پورسانت فروش"
+        amt = _amt()
+        notif_title = "پورسانت واریز شد"
+        file_line = f" · {file_bit}" if code and code != "referral" else ""
+        chat_body = (
+            f"{notif_title}: +{amt} تومان ({kind}){file_line}.\n"
+            "قدم بعدی: از کیف پول می‌تونی برداشت بزنی؛ ادامه فروش را از همین چت جلو ببر."
+        )
+        notif_body = f"+{amt} تومن {kind} وارد کیف پول شد."
+        return notif_title, chat_body, notif_body
+
+    if ev == "withdrawal_paid":
+        amt = _amt()
+        notif_title = "برداشت پرداخت شد"
+        chat_body = (
+            f"{notif_title}: −{amt} تومان به حسابت واریز شد.\n"
+            "اگر ادامه فروش داری، از همین چت قدم بعدی را بپرس."
+        )
+        notif_body = f"−{amt} تومن به حسابت واریز شد."
+        return notif_title, chat_body, notif_body
+
+    return "", "", ""
+
+
+def deliver_partner_progress_update(
+    *,
+    partner_phone: str,
+    event: str,
+    land_code: str = "",
+    land_title: str = "",
+    visit_date: str = "",
+    amount: Any = 0,
+    commission_type: str = "",
+    visit_commission_pending: bool = False,
+) -> Dict[str, Any]:
+    """اعلان داخل اپ + پیام در چت — مکمل پیامک (جایگزین آن نیست)."""
+    ph = normalize_iran_mobile(str(partner_phone or "").strip())
+    if not is_valid_iran_mobile(ph):
+        return {"ok": False, "error": "bad_phone"}
+    title, chat_body, notif_body = build_progress_update(
+        event=event,
+        land_code=land_code,
+        land_title=land_title,
+        visit_date=visit_date,
+        amount=amount,
+        commission_type=commission_type,
+        visit_commission_pending=visit_commission_pending,
+    )
+    if not chat_body:
+        return {"ok": False, "skipped": True, "error": "unsupported_event"}
+
+    out: Dict[str, Any] = {"ok": True, "notif": False, "chat": False}
+    try:
+        from app.services.notifications import add_notification
+
+        action_url = _home_url()
+        add_notification(
+            ph,
+            title,
+            notif_body,
+            ntype="sales_progress",
+            ad_id=(land_code or None) if land_code and land_code != "referral" else None,
+            action_url=action_url,
+            source=f"progress_{event}",
+        )
+        out["notif"] = True
+    except Exception as exc:
+        current_app.logger.warning("progress update notif failed: %s", exc)
+
+    out["chat"] = _inject_partner_system_chat(
+        ph,
+        land_code=str(land_code or ""),
+        body=chat_body,
+    )
+    return out
+
+
 def build_coach_chat_prompt(*, code: str, title: str = "", stage_label: str = "") -> str:
     code_s = (code or "").strip()
     title_s = (title or "").strip()

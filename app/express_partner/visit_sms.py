@@ -227,6 +227,28 @@ def notify_partner_land_tx_sms(
             current_app.logger.exception(
                 "voided encouragement failed event=%s phone=%s", ev, mobile
             )
+    # تأییدها و پیشرفت: هم پیامک (بالا) هم اطلاع در چت + قدم بعدی
+    elif ev in (
+        "visit_approved",
+        "visit_done_pending",
+        "visit_completed",
+        "deal_started",
+    ):
+        try:
+            from .sales_coach import deliver_partner_progress_update
+
+            deliver_partner_progress_update(
+                partner_phone=mobile,
+                event=ev,
+                land_code=str(land_code or ""),
+                land_title=str(land_title or ""),
+                visit_date=str(visit_date or ""),
+                visit_commission_pending=bool(visit_commission_pending),
+            )
+        except Exception:
+            current_app.logger.exception(
+                "progress chat update failed event=%s phone=%s", ev, mobile
+            )
 
     return {"ok": ok, "skipped": False, "error": err}
 
