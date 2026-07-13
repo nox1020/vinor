@@ -196,7 +196,7 @@ class OnboardingTour {
       {
         element: '[data-tour="home-menu"]',
         title: 'منوی پروفایل',
-        description: 'از اینجا کیف پول، بازدیدها، نشان‌ها و تنظیمات حساب را باز کنید.',
+        description: 'از اینجا کیف پول، بازدیدها و تنظیمات حساب را باز کنید.',
         position: 'bottom'
       },
       {

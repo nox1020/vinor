@@ -458,6 +458,42 @@ def history_for_api(
     return messages_for_api(user_key, thread_id, audience)
 
 
+def recent_thread_land_codes(
+    user_key: str,
+    thread_id: str | None = None,
+    audience: str | None = None,
+    *,
+    limit: int = 5,
+) -> list[str]:
+    """کد فایل‌هایی که اخیراً به‌صورت کارت روی همین گفتگو آمده‌اند (جدیدترین اول)."""
+    record = load_user_record(user_key, audience)
+    th = _find_thread(record, thread_id) if thread_id else _active_thread(record)
+    if not th:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in reversed(list(th.get("messages") or [])):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("role") or "") != "assistant":
+            continue
+        codes = list(item.get("land_codes") or [])
+        for action in item.get("agent_actions") or []:
+            if isinstance(action, dict):
+                ac = str(action.get("land_code") or "").strip()
+                if ac:
+                    codes.append(ac)
+        for raw in codes:
+            code = str(raw or "").strip()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            out.append(code)
+            if len(out) >= max(1, int(limit or 5)):
+                return out
+    return out
+
+
 def append_exchange(
     user_key: str,
     user_text: str,

@@ -1,25 +1,25 @@
-{% extends 'express_partner/base.html' %}
-{% block title %}{{ seo_title | default('پنل همکاری وینور اکسپرس') }}{% endblock %}
+﻿{% extends 'express_partner/base.html' %}
+{% block title %}{{ seo_title | default('ظ¾ظ†ظ„ ظ‡ظ…ع©ط§ط±غŒ ظˆغŒظ†ظˆط± ط§ع©ط³ظ¾ط±ط³') }}{% endblock %}
 {% block head %}
   {{ super() }}
-  <meta name="description" content="{{ seo_description | default('فایل‌های اکسپرس وینور | خرید و فروش ملک و زمین') }}">
+  <meta name="description" content="{{ seo_description | default('ظپط§غŒظ„â€Œظ‡ط§غŒ ط§ع©ط³ظ¾ط±ط³ ظˆغŒظ†ظˆط± | ط®ط±غŒط¯ ظˆ ظپط±ظˆط´ ظ…ظ„ع© ظˆ ط²ظ…غŒظ†') }}">
   {% if canonical_url %}
   <link rel="canonical" href="{{ canonical_url }}">
   {% endif %}
   <meta property="og:type" content="website">
-  <meta property="og:title" content="{{ seo_title | default('فایل‌های اکسپرس وینور') }}">
-  <meta property="og:description" content="{{ seo_description | default('لیست فایل‌های اکسپرس وینور برای خرید و فروش ملک') }}">
+  <meta property="og:title" content="{{ seo_title | default('ظپط§غŒظ„â€Œظ‡ط§غŒ ط§ع©ط³ظ¾ط±ط³ ظˆغŒظ†ظˆط±') }}">
+  <meta property="og:description" content="{{ seo_description | default('ظ„غŒط³طھ ظپط§غŒظ„â€Œظ‡ط§غŒ ط§ع©ط³ظ¾ط±ط³ ظˆغŒظ†ظˆط± ط¨ط±ط§غŒ ط®ط±غŒط¯ ظˆ ظپط±ظˆط´ ظ…ظ„ع©') }}">
 {% endblock %}
 {% block content %}
   {% set fq = request.args.get('q', '') %}
   {% set ftag = (request.args.get('tag', '') or '')|lower %}
   {% set fcat = request.args.get('cat', '') %}
 
-  <!-- هدر: نوار جستجو — شیشه‌ای مثل منوی پایین -->
+  <!-- ظ‡ط¯ط±: ظ†ظˆط§ط± ط¬ط³طھط¬ظˆ â€” ط´غŒط´ظ‡â€Œط§غŒ ظ…ط«ظ„ ظ…ظ†ظˆغŒ ظ¾ط§غŒغŒظ† -->
   <header id="expressDashboardHeader" data-tour="dashboard-header" class="ep-partner-header ep-partner-header--shell-none fixed top-0 left-0 right-0 z-50 w-full transition-shadow duration-300">
     <div class="ep-partner-header-bar">
     <div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 flex flex-col gap-2 transition-[gap,padding-bottom] duration-300 ease-out max-w-6xl mx-auto">
-      {# جستجو + شهر — دو پیل جدا مطابق UI مرجع #}
+      {# ط¬ط³طھط¬ظˆ + ط´ظ‡ط± â€” ط¯ظˆ ظ¾غŒظ„ ط¬ط¯ط§ ظ…ط·ط§ط¨ظ‚ UI ظ…ط±ط¬ط¹ #}
       <div id="dashboardSearchStrip" class="dashboard-search-strip flex-shrink-0">
       <div class="flex items-center gap-2">
       <form method="GET" action="{{ url_for('express_partner.home') }}" class="flex-1 min-w-0" id="searchForm">
@@ -30,8 +30,8 @@
               <button type="button"
                       id="dashboardVoiceSearchBtn"
                       class="flex h-full w-10 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                      aria-label="جستجوی صوتی"
-                      title="جستجوی صوتی">
+                      aria-label="ط¬ط³طھط¬ظˆغŒ طµظˆطھغŒ"
+                      title="ط¬ط³طھط¬ظˆغŒ طµظˆطھغŒ">
                 <svg class="h-[15px] w-[15px] shrink-0" viewBox="0 0 384 512" fill="currentColor" aria-hidden="true" focusable="false">
                   <path d="M192 0C139 0 96 43 96 96V256c0 53 43 96 96 96s96-43 96-96V96c0-53-43-96-96-96zM64 216c0-13.3-10.7-24-24-24s-24 10.7-24 24v40c0 89.1 66.2 162.7 152 174.4V464H120c-13.3 0-24 10.7-24 24s10.7 24 24 24h72 72c13.3 0 24-10.7 24-24s-10.7-24-24-24H216V430.4c85.8-11.7 152-85.3 152-174.4V216c0-13.3-10.7-24-24-24s-24 10.7-24 24v40c0 70.7-57.3 128-128 128S64 326.7 64 256V216z"/>
                 </svg>
@@ -40,19 +40,19 @@
                    name="q"
                    id="searchInput"
                    value="{{ request.args.get('q', '') }}"
-                     placeholder="جستجو در همهٔ آگهی‌ها"
+                     placeholder="ط¬ط³طھط¬ظˆ ط¯ط± ظ‡ظ…ظ‡ظ” ط¢ع¯ظ‡غŒâ€Œظ‡ط§"
                    autocomplete="off"
                      class="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm text-gray-900 outline-none dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500">
               {% if request.args.get('q') %}
               <a href="{{ url_for('express_partner.home', city=city_url, tag=request.args.get('tag') or none, cat=request.args.get('cat') or none) }}"
                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-100"
-                 aria-label="پاک کردن جستجو">
+                 aria-label="ظ¾ط§ع© ع©ط±ط¯ظ† ط¬ط³طھط¬ظˆ">
                 <i class="fa-solid fa-xmark text-xs" aria-hidden="true"></i>
               </a>
               {% else %}
               <button type="submit"
                       class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200 sm:hidden"
-                      aria-label="جستجو">
+                      aria-label="ط¬ط³طھط¬ظˆ">
                 <i class="fas fa-magnifying-glass text-sm" aria-hidden="true"></i>
               </button>
               {% endif %}
@@ -75,15 +75,15 @@
 
   <style>
     /*
-      موبایل عمودی: انیمیشن padding-top روی main با جمع‌شدن هدر باعث می‌شد
-      getBoundingClientRect قبل از پایان transition خوانده شود و ارتفاع #dashboardMobileCardsRoot
-      کمتر از فاصلهٔ واقعی تا فوتر شود → نوار مشکی زیر کارت‌ها و خراب شدن شفافیت منوی پایین.
+      ظ…ظˆط¨ط§غŒظ„ ط¹ظ…ظˆط¯غŒ: ط§ظ†غŒظ…غŒط´ظ† padding-top ط±ظˆغŒ main ط¨ط§ ط¬ظ…ط¹â€Œط´ط¯ظ† ظ‡ط¯ط± ط¨ط§ط¹ط« ظ…غŒâ€Œط´ط¯
+      getBoundingClientRect ظ‚ط¨ظ„ ط§ط² ظ¾ط§غŒط§ظ† transition ط®ظˆط§ظ†ط¯ظ‡ ط´ظˆط¯ ظˆ ط§ط±طھظپط§ط¹ #dashboardMobileCardsRoot
+      ع©ظ…طھط± ط§ط² ظپط§طµظ„ظ‡ظ” ظˆط§ظ‚ط¹غŒ طھط§ ظپظˆطھط± ط´ظˆط¯ â†’ ظ†ظˆط§ط± ظ…ط´ع©غŒ ط²غŒط± ع©ط§ط±طھâ€Œظ‡ط§ ظˆ ط®ط±ط§ط¨ ط´ط¯ظ† ط´ظپط§ظپغŒطھ ظ…ظ†ظˆغŒ ظ¾ط§غŒغŒظ†.
     */
     @media (max-width: 639px) {
       #expressDashboardMain {
         transition-property: none !important;
       }
-      /* انیمیشن جمع‌شدن فیلترها باعث می‌شود ارتفاع هدر وسط transition غلط خوانده شود */
+      /* ط§ظ†غŒظ…غŒط´ظ† ط¬ظ…ط¹â€Œط´ط¯ظ† ظپغŒظ„طھط±ظ‡ط§ ط¨ط§ط¹ط« ظ…غŒâ€Œط´ظˆط¯ ط§ط±طھظپط§ط¹ ظ‡ط¯ط± ظˆط³ط· transition ط؛ظ„ط· ط®ظˆط§ظ†ط¯ظ‡ ط´ظˆط¯ */
       #dashboardFiltersStrip,
       #expressDashboardHeader .express-dash-header-inner {
         transition: none !important;
@@ -160,11 +160,11 @@
       padding-bottom:0.375rem;
     }
     /*
-      اسکرول داخلی لیست کارت‌ها در موبایل (قابل اعتمادترین روش):
-      - #dashboardMobileCardsRoot ارتفاع ثابت دارد و خودش اسکرول می‌شود.
-      - تمام عناصر داخل آن (تصویر، ویدیو، کارت) لمس را به این کانتینر می‌دهند.
-      - هدر و نوار پایین ثابت می‌مانند.
-      - این روش با ویدیو و تصویر هم کاملاً سازگار است.
+      ط§ط³ع©ط±ظˆظ„ ط¯ط§ط®ظ„غŒ ظ„غŒط³طھ ع©ط§ط±طھâ€Œظ‡ط§ ط¯ط± ظ…ظˆط¨ط§غŒظ„ (ظ‚ط§ط¨ظ„ ط§ط¹طھظ…ط§ط¯طھط±غŒظ† ط±ظˆط´):
+      - #dashboardMobileCardsRoot ط§ط±طھظپط§ط¹ ط«ط§ط¨طھ ط¯ط§ط±ط¯ ظˆ ط®ظˆط¯ط´ ط§ط³ع©ط±ظˆظ„ ظ…غŒâ€Œط´ظˆط¯.
+      - طھظ…ط§ظ… ط¹ظ†ط§طµط± ط¯ط§ط®ظ„ ط¢ظ† (طھطµظˆغŒط±طŒ ظˆغŒط¯غŒظˆطŒ ع©ط§ط±طھ) ظ„ظ…ط³ ط±ط§ ط¨ظ‡ ط§غŒظ† ع©ط§ظ†طھغŒظ†ط± ظ…غŒâ€Œط¯ظ‡ظ†ط¯.
+      - ظ‡ط¯ط± ظˆ ظ†ظˆط§ط± ظ¾ط§غŒغŒظ† ط«ط§ط¨طھ ظ…غŒâ€Œظ…ط§ظ†ظ†ط¯.
+      - ط§غŒظ† ط±ظˆط´ ط¨ط§ ظˆغŒط¯غŒظˆ ظˆ طھطµظˆغŒط± ظ‡ظ… ع©ط§ظ…ظ„ط§ظ‹ ط³ط§ط²ع¯ط§ط± ط§ط³طھ.
     */
     #dashboardMobileCardsRoot {
       overflow-y: auto;
@@ -173,7 +173,7 @@
       overflow-anchor: none;
       scrollbar-width: none;
       -ms-overflow-style: none;
-      /* بدون پس‌زمینه، padding انتهایی ترک شفاف است و لبهٔ تیره/زیرپیکسل بین کارت و فوتر دیده می‌شود */
+      /* ط¨ط¯ظˆظ† ظ¾ط³â€Œط²ظ…غŒظ†ظ‡طŒ padding ط§ظ†طھظ‡ط§غŒغŒ طھط±ع© ط´ظپط§ظپ ط§ط³طھ ظˆ ظ„ط¨ظ‡ظ” طھغŒط±ظ‡/ط²غŒط±ظ¾غŒع©ط³ظ„ ط¨غŒظ† ع©ط§ط±طھ ظˆ ظپظˆطھط± ط¯غŒط¯ظ‡ ظ…غŒâ€Œط´ظˆط¯ */
       background-color: #f9fafb;
     }
     #dashboardMobileCardsRoot::-webkit-scrollbar {
@@ -184,7 +184,7 @@
     html.dark #dashboardMobileCardsRoot {
       background-color: #030712;
     }
-    /* pull-to-refresh دیوار — اسپینر دایره‌ای زیر هدر جستجو */
+    /* pull-to-refresh ط¯غŒظˆط§ط± â€” ط§ط³ظ¾غŒظ†ط± ط¯ط§غŒط±ظ‡â€Œط§غŒ ط²غŒط± ظ‡ط¯ط± ط¬ط³طھط¬ظˆ */
     @media (max-width: 1023px) {
       #vinorExpressPullHint {
         top: calc(env(safe-area-inset-top, 0px) + 4.75rem);
@@ -192,9 +192,9 @@
       }
     }
     /*
-      موبایل عمودی: ارتفاع ناحیهٔ اسکرول کارت‌ها با JS از فاصلهٔ واقعی تا نوار تب پر می‌شود
-      (با جمع‌شدن فیلترها هدر کوتاه‌تر می‌شود؛ ارتفاع ثابت 100dvh-212px باعث فاصلهٔ خالی مشکی زیر لیست می‌شد).
-      قبل از اجرای اسکریپت، تخمین قبلی به‌عنوان fallback می‌ماند.
+      ظ…ظˆط¨ط§غŒظ„ ط¹ظ…ظˆط¯غŒ: ط§ط±طھظپط§ط¹ ظ†ط§ط­غŒظ‡ظ” ط§ط³ع©ط±ظˆظ„ ع©ط§ط±طھâ€Œظ‡ط§ ط¨ط§ JS ط§ط² ظپط§طµظ„ظ‡ظ” ظˆط§ظ‚ط¹غŒ طھط§ ظ†ظˆط§ط± طھط¨ ظ¾ط± ظ…غŒâ€Œط´ظˆط¯
+      (ط¨ط§ ط¬ظ…ط¹â€Œط´ط¯ظ† ظپغŒظ„طھط±ظ‡ط§ ظ‡ط¯ط± ع©ظˆطھط§ظ‡â€Œطھط± ظ…غŒâ€Œط´ظˆط¯ط› ط§ط±طھظپط§ط¹ ط«ط§ط¨طھ 100dvh-212px ط¨ط§ط¹ط« ظپط§طµظ„ظ‡ظ” ط®ط§ظ„غŒ ظ…ط´ع©غŒ ط²غŒط± ظ„غŒط³طھ ظ…غŒâ€Œط´ط¯).
+      ظ‚ط¨ظ„ ط§ط² ط§ط¬ط±ط§غŒ ط§ط³ع©ط±غŒظ¾طھطŒ طھط®ظ…غŒظ† ظ‚ط¨ظ„غŒ ط¨ظ‡â€Œط¹ظ†ظˆط§ظ† fallback ظ…غŒâ€Œظ…ط§ظ†ط¯.
     */
     @media (max-width: 639px) {
       #expressDashboardMain {
@@ -262,7 +262,7 @@
     html.dark #dashboardMobileCardsRoot #cardsTrack {
       background-color: #030712;
     }
-    /* تبلت: لیست عمودی کارت افقی — اسکرول با صفحه */
+    /* طھط¨ظ„طھ: ظ„غŒط³طھ ط¹ظ…ظˆط¯غŒ ع©ط§ط±طھ ط§ظپظ‚غŒ â€” ط§ط³ع©ط±ظˆظ„ ط¨ط§ طµظپط­ظ‡ */
     @media (min-width: 640px) and (max-width: 1023px) {
       #dashboardMobileCardsRoot {
         min-height: 0;
@@ -294,8 +294,8 @@
           <i class="fas fa-clock text-xs text-amber-700 dark:text-amber-300"></i>
         </div>
         <div class="flex-1">
-          <p class="text-sm font-medium text-amber-900 dark:text-amber-100 mb-1">در حال بررسی درخواست</p>
-          <p class="text-xs text-amber-700 dark:text-amber-300">درخواست همکاری شما در حال بررسی است. پس از تأیید، دسترسی کامل به پنل فعال می‌شود.</p>
+          <p class="text-sm font-medium text-amber-900 dark:text-amber-100 mb-1">ط¯ط± ط­ط§ظ„ ط¨ط±ط±ط³غŒ ط¯ط±ط®ظˆط§ط³طھ</p>
+          <p class="text-xs text-amber-700 dark:text-amber-300">ط¯ط±ط®ظˆط§ط³طھ ظ‡ظ…ع©ط§ط±غŒ ط´ظ…ط§ ط¯ط± ط­ط§ظ„ ط¨ط±ط±ط³غŒ ط§ط³طھ. ظ¾ط³ ط§ط² طھط£غŒغŒط¯طŒ ط¯ط³طھط±ط³غŒ ع©ط§ظ…ظ„ ط¨ظ‡ ظ¾ظ†ظ„ ظپط¹ط§ظ„ ظ…غŒâ€Œط´ظˆط¯.</p>
         </div>
       </div>
     </div>
@@ -308,8 +308,8 @@
           <i class="fas fa-exclamation-circle text-xs text-red-700 dark:text-red-300"></i>
         </div>
         <div class="flex-1">
-          <p class="text-sm font-medium text-red-900 dark:text-red-100 mb-1">اعتبار {{ expired_count }} فایل به پایان رسیده</p>
-          <p class="text-xs text-red-700 dark:text-red-300">برخی از فایل‌های ارسالی منقضی شده‌اند. لطفاً با پشتیبانی تماس بگیرید.</p>
+          <p class="text-sm font-medium text-red-900 dark:text-red-100 mb-1">ط§ط¹طھط¨ط§ط± {{ expired_count }} ظپط§غŒظ„ ط¨ظ‡ ظ¾ط§غŒط§ظ† ط±ط³غŒط¯ظ‡</p>
+          <p class="text-xs text-red-700 dark:text-red-300">ط¨ط±ط®غŒ ط§ط² ظپط§غŒظ„â€Œظ‡ط§غŒ ط§ط±ط³ط§ظ„غŒ ظ…ظ†ظ‚ط¶غŒ ط´ط¯ظ‡â€Œط§ظ†ط¯. ظ„ط·ظپط§ظ‹ ط¨ط§ ظ¾ط´طھغŒط¨ط§ظ†غŒ طھظ…ط§ط³ ط¨ع¯غŒط±غŒط¯.</p>
         </div>
       </div>
     </div>
@@ -318,7 +318,7 @@
   <div id="dashboardCompactSentinelDesktop" class="hidden lg:block h-px w-full pointer-events-none opacity-0" aria-hidden="true"></div>
 
   {% if not dashboard_mobile_only %}
-  <!-- دسکتاپ: سایدبار فیلتر (راست) + گرید دو ستونه کارت -->
+  <!-- ط¯ط³ع©طھط§ظ¾: ط³ط§غŒط¯ط¨ط§ط± ظپغŒظ„طھط± (ط±ط§ط³طھ) + ع¯ط±غŒط¯ ط¯ظˆ ط³طھظˆظ†ظ‡ ع©ط§ط±طھ -->
   <div class="hidden lg:grid lg:grid-cols-12 gap-5 mt-2">
     {% include 'express_partner/partials/dashboard_desktop_sidebar.html' %}
     <div class="lg:col-span-9 min-w-0">
@@ -327,7 +327,7 @@
       <div class="mt-4 text-center">
         <a href="{{ url_for('express_partner.home', all=1, q=request.args.get('q') or none, city=city_url, tag=request.args.get('tag') or none, cat=request.args.get('cat') or none) }}"
            class="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-gray-50 dark:border-white/15 dark:bg-white/5 dark:text-emerald-300 dark:hover:bg-white/10">
-          نمایش همه فایل‌ها ({{ lands_total_count|default(assigned_lands|length) }})
+          ظ†ظ…ط§غŒط´ ظ‡ظ…ظ‡ ظپط§غŒظ„â€Œظ‡ط§ ({{ lands_total_count|default(assigned_lands|length) }})
         </a>
       </div>
       {% endif %}
@@ -335,7 +335,7 @@
   </div>
   {% endif %}
 
-  {# لیست کارت‌ها در موبایل (اسکرول افقی) - فایل مجزا #}
+  {# ظ„غŒط³طھ ع©ط§ط±طھâ€Œظ‡ط§ ط¯ط± ظ…ظˆط¨ط§غŒظ„ (ط§ط³ع©ط±ظˆظ„ ط§ظپظ‚غŒ) - ظپط§غŒظ„ ظ…ط¬ط²ط§ #}
   {% include 'express_partner/partials/dashboard_cards_mobile.html' %}
 
 </div>
@@ -379,13 +379,13 @@
     if (e.key === 'Tab') document.documentElement.classList.add('user-is-tabbing');
   }, __vinorDashSig ? { signal: __vinorDashSig } : false);
 
-  /* جمع‌شدن فیلترها: express-partner/dashboard-chrome.js (پایدار در base.html) */
+  /* ط¬ظ…ط¹â€Œط´ط¯ظ† ظپغŒظ„طھط±ظ‡ط§: express-partner/dashboard-chrome.js (ظ¾ط§غŒط¯ط§ط± ط¯ط± base.html) */
 
   function isSoldDashboardCard(card) {
     return !!(card && (card.classList.contains('vinor-card-sold') || card.getAttribute('data-assignment-status') === 'sold'));
   }
 
-  // موبایل: ضربهٔ کوتاه روی کارت → باز کردن جزئیات (اسکرول عمودی به‌صورت native با touch-action کار می‌کند)
+  // ظ…ظˆط¨ط§غŒظ„: ط¶ط±ط¨ظ‡ظ” ع©ظˆطھط§ظ‡ ط±ظˆغŒ ع©ط§ط±طھ â†’ ط¨ط§ط² ع©ط±ط¯ظ† ط¬ط²ط¦غŒط§طھ (ط§ط³ع©ط±ظˆظ„ ط¹ظ…ظˆط¯غŒ ط¨ظ‡â€Œطµظˆط±طھ native ط¨ط§ touch-action ع©ط§ط± ظ…غŒâ€Œع©ظ†ط¯)
   (function () {
     const mobileRoot = document.getElementById('dashboardMobileCardsRoot');
     if (!mobileRoot) return;
@@ -472,7 +472,7 @@
   function applyJalaliDates(scope) {
     (scope || document).querySelectorAll('.jalali-dt[data-dt]').forEach(function (el) {
       const raw = el.getAttribute('data-dt') || '';
-      el.textContent = formatJalaliDate(raw) || '—';
+      el.textContent = formatJalaliDate(raw) || 'â€”';
     });
   }
 
@@ -531,7 +531,7 @@
     next.addEventListener('click', function () { scrollByAmount('next'); }, hOpts);
   })();
 
-  /** رفرش لیست کارت‌ها (ترک موبایل + گرید دسکتاپ) بدون reload کامل صفحه */
+  /** ط±ظپط±ط´ ظ„غŒط³طھ ع©ط§ط±طھâ€Œظ‡ط§ (طھط±ع© ظ…ظˆط¨ط§غŒظ„ + ع¯ط±غŒط¯ ط¯ط³ع©طھط§ظ¾) ط¨ط¯ظˆظ† reload ع©ط§ظ…ظ„ طµظپط­ظ‡ */
   let dashboardRefreshPromise = null;
   function isDashboardPath() {
     try {
@@ -625,7 +625,7 @@
     document.addEventListener('vinor:express-page-swap', onDashboardPageSwap);
   }
 
-  /* کشیدن به پایین وقتی لیست در بالاست → تازه‌سازی کارت‌ها + اسپینر دیوار */
+  /* ع©ط´غŒط¯ظ† ط¨ظ‡ ظ¾ط§غŒغŒظ† ظˆظ‚طھغŒ ظ„غŒط³طھ ط¯ط± ط¨ط§ظ„ط§ط³طھ â†’ طھط§ط²ظ‡â€Œط³ط§ط²غŒ ع©ط§ط±طھâ€Œظ‡ط§ + ط§ط³ظ¾غŒظ†ط± ط¯غŒظˆط§ط± */
   window.setupVinorDashboardPullRefresh = function setupVinorDashboardPullRefresh() {
     if (window.__vinorDashPullAbort) {
       try { window.__vinorDashPullAbort.abort(); } catch (_) {}
@@ -758,7 +758,7 @@
 </script>
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
 {% if home_ai_enabled|default(false) %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=50"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=51"></script>
 {% endif %}
 {% endblock %}
 

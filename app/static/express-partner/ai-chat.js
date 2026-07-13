@@ -288,11 +288,14 @@
       btn.setAttribute('aria-disabled', 'true');
       return;
     }
-    var ready = (input.value || '').trim().length >= MIN_MSG_LEN;
-    form.classList.toggle('ai-composer--ready', ready);
+    var len = (input.value || '').trim().length;
+    /* به‌محض نوشتن: پیل ارسال ظاهر شود؛ ارسال واقعی از MIN_MSG_LEN */
+    var showSend = len >= 1;
+    var canSend = len >= MIN_MSG_LEN;
+    form.classList.toggle('ai-composer--ready', showSend);
     /* disabled واقعی فقط در busy/readonly — وگرنه کلیک گرفته نمی‌شود */
     btn.disabled = false;
-    btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
+    btn.setAttribute('aria-disabled', canSend ? 'false' : 'true');
   }
 
   function unlockComposer(opts) {

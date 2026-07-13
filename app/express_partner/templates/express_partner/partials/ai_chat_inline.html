@@ -23,6 +23,18 @@
     background: #030712;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     z-index: 5;
+    pointer-events: auto;
+  }
+  /* نوار ملک عمومی: فشرده، جدا از داک چت */
+  #homeDashboardPage.home-dashboard-page--ai .vn-home-lands {
+    position: relative;
+    z-index: 6;
+    max-height: 12.5rem;
+    overflow: hidden;
+    pointer-events: auto;
+  }
+  #homeDashboardPage.home-dashboard-page--ai .vn-home-lands__track {
+    max-height: 10.25rem;
   }
   #homeDashboardPage.home-dashboard-page--ai .vn-home-scroll {
     flex: 1 1 auto;
@@ -136,6 +148,10 @@
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__chip,
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__shell,
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__send,
+  #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__plus,
+  #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__mic,
+  #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__wave,
+  #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__tools,
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__input {
     pointer-events: auto;
   }

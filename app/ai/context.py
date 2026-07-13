@@ -36,13 +36,176 @@ _LAND_KEYWORDS = (
 )
 
 
+_DEICTIC_LAND_RE = re.compile(
+    r"(این\s*فایل|همین\s*فایل|این\s*ملک|همین\s*ملک|این\s*آگهی|همین\s*آگهی|"
+    r"این\s*یکی|همین\s*یکی|درباره‌?(?:\s*این|‌?ش|اش)|"
+    r"خصوصیات(?:ش|‌ش| این)|ویژگی(?:‌ها)?(?:ی?\s*این|ش|‌ش)|"
+    r"مشخصات(?:ش|‌ش| این)|جزئیات(?:ش|‌ش| این)|"
+    r"قیمت(?:ش|‌ش| این)|متراژ(?:ش|‌ش| این)|مساحت(?:ش|‌ش| این)|"
+    r"موقعیت(?:ش|‌ش| این)|آدرس(?:ش|‌ش| این)|عکس(?:‌ها)?(?:ی?\s*این|ش)|"
+    r"چطوره|چیه\b|چی داره)",
+    re.I,
+)
+
+
 def _needs_land_context(query: str) -> bool:
     q = (query or "").strip().lower()
     if not q:
         return False
     if _LAND_QUERY_RE.search(q):
         return True
+    if _DEICTIC_LAND_RE.search(q):
+        return True
     return any(k in q for k in _LAND_KEYWORDS)
+
+
+def _is_deictic_land_query(query: str) -> bool:
+    """ارجاع به «همین فایل روی چت» بدون نام‌بردن کد دیگر."""
+    q = (query or "").strip()
+    if not q:
+        return False
+    return bool(_DEICTIC_LAND_RE.search(q))
+
+
+def _query_targets_other_land(
+    query: str,
+    focus_codes: list[str],
+    lands: list[dict[str, Any]],
+) -> bool:
+    """آیا سوال صریحاً فایل/موضوع دیگری غیر از فایل‌های روی چت را هدف گرفته؟"""
+    q = (query or "").strip()
+    if not q or not focus_codes:
+        return False
+    focus_set = {str(c).strip().lower() for c in focus_codes if str(c).strip()}
+    mentioned = [m.lower() for m in _LAND_QUERY_RE.findall(q)]
+    for m in mentioned:
+        if any(m in f or f in m for f in focus_set):
+            continue
+        return True
+    focus_lands = [
+        l for l in lands if str(l.get("code") or "").strip().lower() in focus_set
+    ]
+    other_lands = [
+        l for l in lands if str(l.get("code") or "").strip().lower() not in focus_set
+    ]
+    matched_focus = [l for l in focus_lands if _land_matches_query(l, q)]
+    matched_other = [l for l in other_lands if _land_matches_query(l, q)]
+    if matched_other and not matched_focus and not _is_deictic_land_query(q):
+        return True
+    return False
+
+
+def _should_prefer_chat_focus(
+    query: str,
+    focus_codes: list[str],
+    lands: list[dict[str, Any]],
+) -> bool:
+    if not focus_codes:
+        return False
+    if _query_targets_other_land(query, focus_codes, lands):
+        return False
+    if _is_deictic_land_query(query):
+        return True
+    if not _needs_land_context(query):
+        return False
+    focus_set = {str(c).strip().lower() for c in focus_codes if str(c).strip()}
+    focus_lands = [
+        l for l in lands if str(l.get("code") or "").strip().lower() in focus_set
+    ]
+    if any(_land_matches_query(l, query) for l in focus_lands):
+        return True
+    # پیگیری کوتاه بعد از کارت (قیمت/متراژ/…) بدون نام‌بردن فایل دیگر
+    q = (query or "").strip()
+    if len(q) <= 48 and not _LAND_QUERY_RE.search(q):
+        broad = (
+            "جستجو",
+            "پیدا",
+            "پیشنهاد",
+            "لیست",
+            "همه",
+            "چند فایل",
+            "می‌خوام",
+            "ميخوام",
+            "میخوام",
+            "دنبال",
+            "بودجه",
+        )
+        ql = q.lower()
+        if any(b in q or b in ql for b in broad):
+            return False
+        return True
+    return False
+
+
+def _lands_by_codes(
+    lands: list[dict[str, Any]],
+    codes: list[str],
+) -> list[dict[str, Any]]:
+    by_code = {str(l.get("code") or "").strip(): l for l in lands if l.get("code")}
+    out: list[dict[str, Any]] = []
+    for code in codes:
+        c = str(code or "").strip()
+        land = by_code.get(c)
+        if land:
+            out.append(land)
+    return out
+
+
+def _lookup_public_lands_by_codes(codes: list[str]) -> list[dict[str, Any]]:
+    """پیدا کردن فایل عمومی با کد — از کل کش، نه فقط نمونهٔ کوتاه."""
+    want = [str(c).strip() for c in (codes or []) if str(c).strip()]
+    if not want:
+        return []
+    try:
+        lands = load_express_lands_cached() or []
+    except Exception:
+        lands = []
+    by_code = {
+        str(l.get("code") or "").strip(): l
+        for l in lands
+        if isinstance(l, dict) and l.get("code")
+    }
+    out: list[dict[str, Any]] = []
+    for code in want:
+        land = by_code.get(code)
+        if not land:
+            continue
+        item = dict(land)
+        item["_assignment_status"] = "public"
+        item["_is_public"] = True
+        item["_is_expired"] = is_ad_expired(land)
+        out.append(item)
+    return out
+
+
+def _focus_lands_block(
+    lands: list[dict[str, Any]],
+    *,
+    show_commission: bool = True,
+) -> str:
+    if not lands:
+        return ""
+    codes = [str(l.get("code") or "").strip() for l in lands if l.get("code")]
+    parts = [
+        "=== فایل‌های روی این گفتگو (موضوع پیش‌فرض) ===",
+        "کاربر به این فایل‌ها اشاره می‌کند («این فایل»، خصوصیات، قیمت، …). "
+        "جواب را دربارهٔ همین فایل‌ها بده مگر صریحاً فایل یا موضوع دیگری بپرسد. "
+        f"کدها: {', '.join(codes)}",
+    ]
+    for land in lands:
+        assigned = (
+            not land.get("_is_public")
+            and str(land.get("_assignment_status") or "").strip().lower() != "public"
+        )
+        parts.append(
+            _land_summary(
+                land,
+                assigned=assigned,
+                show_commission=show_commission and assigned,
+                compact=False,
+            )
+        )
+    return "\n".join(parts)
 
 
 def _land_matches_query(land: dict[str, Any], query: str) -> bool:
@@ -401,19 +564,56 @@ def _select_lands_for_query(
     return lands[:default_limit]
 
 
-def build_partner_land_context(phone: str, user_message: str = "") -> str:
-    """فقط وقتی سوال به فایل/ملک مربوط است — خلاصهٔ فشرده."""
-    if not _needs_land_context(user_message):
-        return ""
+def build_partner_land_context(
+    phone: str,
+    user_message: str = "",
+    *,
+    focus_codes: list[str] | None = None,
+) -> str:
+    """فقط وقتی سوال به فایل/ملک مربوط است — خلاصهٔ فشرده؛ اولویت با فایل‌های روی چت."""
     assigned = _assigned_lands(phone)
     public = _public_lands_sample()
+    all_lands = list(assigned) + [
+        {**dict(l), "_assignment_status": "public", "_is_public": True} for l in public
+    ]
+    focus = [str(c).strip() for c in (focus_codes or []) if str(c).strip()]
+    if focus:
+        for land in _lookup_public_lands_by_codes(focus):
+            code = str(land.get("code") or "").strip()
+            if code and not any(str(x.get("code")) == code for x in all_lands):
+                all_lands.append(land)
+    if focus and _should_prefer_chat_focus(user_message, focus, all_lands):
+        focus_assigned = _lands_by_codes(assigned, focus)
+        missing = [
+            c
+            for c in focus
+            if c not in {str(l.get("code") or "").strip() for l in focus_assigned}
+        ]
+        focus_public = _lookup_public_lands_by_codes(missing)
+        # اگر هنوز از نمونهٔ عمومی چیزی مانده بود
+        for land in _lands_by_codes(public, missing):
+            code = str(land.get("code") or "").strip()
+            if any(str(p.get("code")) == code for p in focus_public):
+                continue
+            item = dict(land)
+            item["_assignment_status"] = "public"
+            item["_is_public"] = True
+            item["_is_expired"] = is_ad_expired(land)
+            focus_public.append(item)
+        parts: list[str] = []
+        if focus_assigned or focus_public:
+            merged = focus_assigned + focus_public
+            parts.append(_focus_lands_block(merged, show_commission=True))
+            return "\n".join(parts)
+    if not _needs_land_context(user_message):
+        return ""
     picked_assigned = _select_lands_for_query(
         assigned, user_message, default_limit=4, match_limit=6
     )
     picked_public = _select_lands_for_query(
         public, user_message, default_limit=3, match_limit=4
     )
-    parts: list[str] = []
+    parts = []
     if picked_assigned:
         parts.append(f"--- فایل‌های اختصاصی ({len(picked_assigned)}/{len(assigned)}) ---")
         for land in picked_assigned:
@@ -428,10 +628,17 @@ def build_partner_land_context(phone: str, user_message: str = "") -> str:
     return "\n".join(parts)
 
 
-def build_partner_context(phone: str, user_message: str = "") -> str:
+def build_partner_context(
+    phone: str,
+    user_message: str = "",
+    *,
+    focus_codes: list[str] | None = None,
+) -> str:
     """متن زمینه برای تزریق به system prompt."""
     parts = [build_partner_context_base(phone)]
-    land_ctx = build_partner_land_context(phone, user_message)
+    land_ctx = build_partner_land_context(
+        phone, user_message, focus_codes=focus_codes
+    )
     if land_ctx:
         parts.append(land_ctx)
     return "\n".join(parts)
@@ -453,10 +660,32 @@ def build_public_context_base() -> str:
     )
 
 
-def build_public_land_context(user_message: str = "") -> str:
+def build_public_land_context(
+    user_message: str = "",
+    *,
+    focus_codes: list[str] | None = None,
+) -> str:
+    public = _public_lands_sample(10)
+    focus = [str(c).strip() for c in (focus_codes or []) if str(c).strip()]
+    prepared = []
+    for land in public:
+        item = dict(land)
+        item["_assignment_status"] = "public"
+        item["_is_public"] = True
+        item["_is_expired"] = is_ad_expired(land)
+        prepared.append(item)
+    # برای تشخیص «موضوع دیگر» همهٔ فوکوس‌ها را هم اضافه کن
+    focused_lookup = _lookup_public_lands_by_codes(focus) if focus else []
+    for land in focused_lookup:
+        code = str(land.get("code") or "").strip()
+        if code and not any(str(p.get("code")) == code for p in prepared):
+            prepared.append(land)
+    if focus and _should_prefer_chat_focus(user_message, focus, prepared):
+        focused = focused_lookup or _lands_by_codes(prepared, focus)
+        if focused:
+            return _focus_lands_block(focused, show_commission=False)
     if not _needs_land_context(user_message):
         return ""
-    public = _public_lands_sample(10)
     picked = _select_lands_for_query(public, user_message, default_limit=4, match_limit=6)
     if not picked:
         return ""
@@ -469,10 +698,14 @@ def build_public_land_context(user_message: str = "") -> str:
     return "\n".join(parts)
 
 
-def build_public_context(user_message: str = "") -> str:
+def build_public_context(
+    user_message: str = "",
+    *,
+    focus_codes: list[str] | None = None,
+) -> str:
     """زمینه برای کاربر عادی — فقط آگهی‌های مرتبط با سوال."""
     parts = [build_public_context_base()]
-    land_ctx = build_public_land_context(user_message)
+    land_ctx = build_public_land_context(user_message, focus_codes=focus_codes)
     if land_ctx:
         parts.append(land_ctx)
     return "\n".join(parts)

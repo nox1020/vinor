@@ -1,0 +1,120 @@
+{# نوار افقی فایل‌های عمومی — مهمان / کاربر عادی بالای چت خانه #}
+{% if public_home_lands %}
+<style id="vinor-home-public-carousel">
+  #homePublicLandsCarousel.vn-home-lands {
+    flex-shrink: 0;
+    padding: 0.55rem 0 0.35rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: #030712;
+  }
+  #homePublicLandsCarousel .vn-home-lands__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0 0.85rem 0.4rem;
+  }
+  #homePublicLandsCarousel .vn-home-lands__title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #f4f4f5;
+  }
+  #homePublicLandsCarousel .vn-home-lands__meta {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: #71717a;
+  }
+  #homePublicLandsCarousel .vn-home-lands__track {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.65rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 0 0.85rem 0.45rem;
+    max-width: 100%;
+    pointer-events: auto;
+  }
+  #homePublicLandsCarousel .vn-home-lands__track::-webkit-scrollbar {
+    display: none;
+    height: 0;
+  }
+  #homePublicLandsCarousel .vn-home-lands__slot {
+    flex: 0 0 auto;
+    width: min(18.5rem, 82vw);
+    max-width: 20rem;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    pointer-events: auto;
+  }
+  #homePublicLandsCarousel .vn-home-lands__slot .vinor-premium-card {
+    width: 100%;
+    max-width: 100%;
+  }
+  #homePublicLandsCarousel .vn-home-lands__slot .vinor-premium-card-mobile {
+    min-height: 8.75rem;
+  }
+  /* فقط چیدمان افقی — نسخه دسکتاپ کارت را مخفی نکن */
+  #homePublicLandsCarousel .vinor-premium-card > .hidden.sm\:block {
+    display: none !important;
+  }
+  #homePublicLandsCarousel .vinor-premium-card-mobile {
+    display: flex !important;
+  }
+</style>
+<section id="homePublicLandsCarousel"
+         class="vn-home-lands"
+         aria-label="فایل‌های ملک"
+         data-vn-home-lands>
+  <div class="vn-home-lands__head">
+    <h2 class="vn-home-lands__title">فایل‌های ملک</h2>
+    <span class="vn-home-lands__meta">{{ public_home_lands|length|fa_digits }} فایل — بکشید</span>
+  </div>
+  <div class="vn-home-lands__track no-scrollbar"
+       id="homePublicLandsTrack"
+       tabindex="0"
+       role="list"
+       aria-label="اسکرول افقی فایل‌های ملک">
+    {% for item in public_home_lands %}
+    <div class="vn-home-lands__slot" role="listitem">
+      {% set land = item %}
+      {% set card_img_eager = loop.index <= 2 %}
+      {% set card_layout = 'horizontal' %}
+      {% set for_similar = true %}
+      {% set for_ai_chat = false %}
+      {% set tour_land_card = false %}
+      {% set hide_card_fav = true %}
+      {% set is_approved = false %}
+      {% include 'express_partner/partials/land_premium_card.html' %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+<script>
+(function () {
+  var root = document.getElementById('homePublicLandsCarousel');
+  if (!root || root.getAttribute('data-media-bound') === '1') return;
+  root.setAttribute('data-media-bound', '1');
+  function boot() {
+    try {
+      if (typeof window.vinorInitPremiumCards === 'function') {
+        window.vinorInitPremiumCards(root, document.getElementById('vnHomeScroll') || root);
+      }
+    } catch (_) {}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
+  }
+  window.addEventListener('vinor:express-page-swap', function () {
+    window.setTimeout(boot, 40);
+  });
+})();
+</script>
+{% endif %}

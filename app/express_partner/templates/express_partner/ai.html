@@ -1,15 +1,15 @@
-{% extends 'express_partner/base.html' %}
-{% block title %}Vinor AI | همکار اکسپرس{% endblock %}
+﻿{% extends 'express_partner/base.html' %}
+{% block title %}Vinor AI | ظ‡ظ…ع©ط§ط± ط§ع©ط³ظ¾ط±ط³{% endblock %}
 {% block content %}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end %}
 
 {{ ep_header_start() }}
 <div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 max-w-6xl mx-auto w-full ep-partner-header-inner--auto">
   <div class="flex items-center gap-2">
-    {# در RTL اولین آیتم سمت راست است — منو مثل GPT از راست #}
+    {# ط¯ط± RTL ط§ظˆظ„غŒظ† ط¢غŒطھظ… ط³ظ…طھ ط±ط§ط³طھ ط§ط³طھ â€” ظ…ظ†ظˆ ظ…ط«ظ„ GPT ط§ط² ط±ط§ط³طھ #}
     <button type="button" id="aiMenuBtn"
             class="ep-partner-header-btn relative"
-            aria-label="منو"
+            aria-label="ظ…ظ†ظˆ"
             aria-expanded="false"
             aria-controls="aiSidePanel">
       <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
@@ -19,21 +19,21 @@
     <a href="{{ url_for('express_partner.home') }}"
        data-vinor-express-nav="back"
        class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
-       aria-label="بازگشت">
+       aria-label="ط¨ط§ط²ع¯ط´طھ">
       <i class="fas fa-arrow-right ep-partner-header-btn-icon" aria-hidden="true"></i>
     </a>
   </div>
 </div>
 {{ ep_header_end() }}
 
-<!-- منوی کشویی از راست (سبک GPT) -->
+<!-- ظ…ظ†ظˆغŒ ع©ط´ظˆغŒغŒ ط§ط² ط±ط§ط³طھ (ط³ط¨ع© GPT) -->
 <div id="aiSideBackdrop" class="fixed inset-0 z-[55] bg-black/50 opacity-0 pointer-events-none transition-opacity" aria-hidden="true"></div>
 <aside id="aiSidePanel"
        class="ai-side-panel"
-       aria-hidden="true" aria-label="منوی گفتگو">
+       aria-hidden="true" aria-label="ظ…ظ†ظˆغŒ ع¯ظپطھع¯ظˆ">
   <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
-    <h2 class="text-sm font-bold text-white">گفتگوها</h2>
-    <button type="button" id="aiSideClose" class="grid h-9 w-9 place-items-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-white" aria-label="بستن">
+    <h2 class="text-sm font-bold text-white">ع¯ظپطھع¯ظˆظ‡ط§</h2>
+    <button type="button" id="aiSideClose" class="grid h-9 w-9 place-items-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-white" aria-label="ط¨ط³طھظ†">
       <i class="fas fa-times" aria-hidden="true"></i>
     </button>
   </div>
@@ -41,10 +41,10 @@
     <button type="button" id="aiNewChatBtn"
             class="flex w-full items-center justify-center gap-2 rounded-xl border border-violet-500/35 bg-violet-600/90 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500">
       <i class="fas fa-plus text-xs" aria-hidden="true"></i>
-      گفتگوی جدید
+      ع¯ظپطھع¯ظˆغŒ ط¬ط¯غŒط¯
     </button>
   </div>
-  <p class="shrink-0 px-4 pt-3 pb-1 text-[10px] font-semibold text-zinc-500">گفتگوها</p>
+  <p class="shrink-0 px-4 pt-3 pb-1 text-[10px] font-semibold text-zinc-500">ع¯ظپطھع¯ظˆظ‡ط§</p>
   <div id="aiHistoryList" class="flex-1 overflow-y-auto overscroll-contain px-3 pb-3 space-y-2 ai-scroll">
     {% if chat_threads %}
       {% for th in chat_threads %}
@@ -61,10 +61,10 @@
             {% if th.unread and th.unread > 0 %}
             <span class="rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white tabular-nums">{{ th.unread if th.unread < 100 else '99+' }}</span>
             {% elif th.is_active %}
-            <span class="rounded-full px-1.5 py-0.5 text-[9px] {% if th.kind == 'postchi' %}bg-emerald-500/30 text-emerald-200{% else %}bg-violet-500/30 text-violet-200{% endif %}">فعال</span>
+            <span class="rounded-full px-1.5 py-0.5 text-[9px] {% if th.kind == 'postchi' %}bg-emerald-500/30 text-emerald-200{% else %}bg-violet-500/30 text-violet-200{% endif %}">ظپط¹ط§ظ„</span>
             {% endif %}
             {% if th.kind != 'postchi' %}
-            <span class="ai-thread-delete grid h-7 w-7 place-items-center rounded-lg text-zinc-500 hover:bg-red-500/15 hover:text-red-300" data-thread-id="{{ th.id }}" role="button" aria-label="حذف گفتگو" tabindex="-1">
+            <span class="ai-thread-delete grid h-7 w-7 place-items-center rounded-lg text-zinc-500 hover:bg-red-500/15 hover:text-red-300" data-thread-id="{{ th.id }}" role="button" aria-label="ط­ط°ظپ ع¯ظپطھع¯ظˆ" tabindex="-1">
               <i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
             </span>
             {% endif %}
@@ -75,7 +75,7 @@
         {% endif %}
         {% if th.kind != 'postchi' %}
         <p class="mt-1.5 text-[9px] text-zinc-600 flex items-center justify-between gap-2">
-          <span>{{ th.message_count }} پیام</span>
+          <span>{{ th.message_count }} ظ¾غŒط§ظ…</span>
           <time class="tabular-nums" datetime="{{ th.updated_at or '' }}">{{ th.updated_at[:10] if th.updated_at else '' }}</time>
         </p>
         {% endif %}
@@ -83,7 +83,7 @@
       {% endfor %}
     {% else %}
       <p class="rounded-xl border border-dashed border-white/10 px-3 py-6 text-center text-xs text-zinc-500">
-        هنوز گفتگویی ذخیره نشده است.<br>اولین پیام خود را بفرستید.
+        ظ‡ظ†ظˆط² ع¯ظپطھع¯ظˆغŒغŒ ط°ط®غŒط±ظ‡ ظ†ط´ط¯ظ‡ ط§ط³طھ.<br>ط§ظˆظ„غŒظ† ظ¾غŒط§ظ… ط®ظˆط¯ ط±ط§ ط¨ظپط±ط³طھغŒط¯.
       </p>
     {% endif %}
   </div>
@@ -96,36 +96,15 @@
     <div id="aiMessages"
          class="ai-messages ai-scroll"
          aria-live="polite"
-         aria-label="گفتگو"
-         data-welcome="{{ 'سلام — منم کنارتم برای فایل و فروشت. بگو کجا گیر کردی یا چی لازم داری.' if (ai_audience|default('partner')) == 'partner' else 'سلام — منم کنارتم برای خرید امن زمین و ویلا و آگهی‌های اکسپرس. بگو دنبال چی هستی.' }}">
+         aria-label="ع¯ظپطھع¯ظˆ"
+         data-welcome="{{ 'ط³ظ„ط§ظ… â€” ظ…ظ†ظ… ع©ظ†ط§ط±طھظ… ط¨ط±ط§غŒ ظپط§غŒظ„ ظˆ ظپط±ظˆط´طھ. ط¨ع¯ظˆ ع©ط¬ط§ ع¯غŒط± ع©ط±ط¯غŒ غŒط§ ع†غŒ ظ„ط§ط²ظ… ط¯ط§ط±غŒ.' if (ai_audience|default('partner')) == 'partner' else 'ط³ظ„ط§ظ… â€” ظ…ظ†ظ… ع©ظ†ط§ط±طھظ… ط¨ط±ط§غŒ ط®ط±غŒط¯ ط§ظ…ظ† ط²ظ…غŒظ† ظˆ ظˆغŒظ„ط§ ظˆ ط¢ع¯ظ‡غŒâ€Œظ‡ط§غŒ ط§ع©ط³ظ¾ط±ط³. ط¨ع¯ظˆ ط¯ظ†ط¨ط§ظ„ ع†غŒ ظ‡ط³طھغŒ.' }}">
       {% for msg in chat_messages %}
         {% include 'express_partner/partials/ai_chat_message.html' %}
       {% endfor %}
     </div>
 
-    <form id="aiChatForm" class="ai-composer" autocomplete="off"
-          data-chat-url="{{ chat_api_url }}"
-          data-history-url="{{ history_api_url }}"
-          data-clear-url="{{ clear_api_url }}"
-          data-switch-url="{{ switch_thread_url }}"
-          data-delete-url="{{ delete_thread_url }}"
-          data-sync-url="{{ sync_api_url }}"
-          data-postchi-thread-id="{{ postchi_thread_id }}"
-          data-postchi-messages-url="{{ postchi_messages_url }}"
-          data-postchi-send-url="{{ postchi_send_url }}"
-          data-postchi-open-url="{{ postchi_open_url }}">
-      {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
-      <input type="hidden" id="aiActiveThreadId" value="{{ active_thread_id or '' }}">
-      <div class="ai-composer__inner">
-        <label for="aiInput" class="sr-only">پیام</label>
-        <textarea id="aiInput" name="message" rows="1" required
-                  placeholder="پیام خود را بنویسید…"
-                  class="ai-composer__input"></textarea>
-        <button type="submit" id="aiSendBtn" class="ai-composer__send" aria-label="ارسال">
-          <i class="fas fa-paper-plane text-sm" aria-hidden="true"></i>
-        </button>
-      </div>
-    </form>
+    {% set chat_mode = 'page' %}
+    {% include 'express_partner/partials/ai_chat_composer.html' %}
   </section>
 </main>
 
@@ -168,66 +147,9 @@
 
   #aiChatForm.ai-composer {
     flex-shrink: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 0;
     padding: 0.65rem 0.9rem calc(0.65rem + env(safe-area-inset-bottom, 0px) + var(--ai-keyboard-inset, 0px));
-    background: rgba(3, 7, 18, 0.97);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.28);
-  }
-
-  .ai-composer__inner {
-    display: flex;
-    align-items: flex-end;
-    gap: 0.55rem;
-    width: 100%;
-  }
-
-  .ai-composer__input {
-    flex: 1;
-    min-width: 0;
-    min-height: 3rem;
-    max-height: 8rem;
-    resize: none;
-    border-radius: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: #070b12;
-    color: #fff;
-    font-size: 0.875rem;
-    line-height: 1.45;
-    padding: 0.72rem 0.9rem;
-    outline: none;
-  }
-
-  .ai-composer__input::placeholder {
-    color: #71717a;
-  }
-
-  .ai-composer__input:focus {
-    border-color: rgba(139, 92, 246, 0.45);
-    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.16);
-  }
-
-  .ai-composer__send {
-    width: 3rem;
-    height: 3rem;
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 0;
-    border-radius: 1rem;
-    background: linear-gradient(145deg, #7c3aed 0%, #6d28d9 100%);
-    color: #fff;
-    transition: transform 0.15s ease, opacity 0.15s ease;
-  }
-
-  .ai-composer__send:active {
-    transform: scale(0.96);
-  }
-
-  .ai-composer__send:disabled {
-    opacity: 0.5;
+    background: #000;
   }
 
   .ai-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.12) transparent; }
@@ -285,7 +207,7 @@
   } catch (_) {}
 })();
 </script>
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=50"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=51"></script>
 <script>
 (function () {
   try {

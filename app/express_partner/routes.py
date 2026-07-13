@@ -3071,6 +3071,13 @@ def home_page():
     except Exception:
         ai_quick_prompts = []
 
+    public_home_lands: List[Dict[str, Any]] = []
+    if ai_ctx.get('home_ai_limited'):
+        try:
+            public_home_lands = _home_public_carousel_lands(limit=50)
+        except Exception:
+            public_home_lands = []
+
     resp = make_response(render_template(
         'express_partner/home.html',
         profile=drawer_profile or profile,
@@ -3090,6 +3097,7 @@ def home_page():
         suggested_files=payload.get('suggested_files') or [],
         journey_card=payload.get('journey_card'),
         ai_quick_prompts=ai_quick_prompts,
+        public_home_lands=public_home_lands,
         hide_header=True,
         bottom_nav_active='home',
         brand='وینور',
@@ -3220,6 +3228,45 @@ def _public_lands_payload(limit=50):
             'detail_url': detail_url,
         })
     return lands_json
+
+
+def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
+    """فایل‌های عمومی کامل برای نوار کشویی خانه (مهمان / کاربر عادی)."""
+    from ..utils.images import sanitize_land_media
+
+    try:
+        express_lands = load_express_lands_cached() or []
+    except Exception:
+        express_lands = []
+    express_lands = _sort_by_created_at_desc(express_lands)
+    out: List[Dict[str, Any]] = []
+    for land in express_lands:
+        if not isinstance(land, dict):
+            continue
+        code = str(land.get('code') or '').strip()
+        if not code:
+            continue
+        if _express_land_marked_sold(land):
+            continue
+        if str(land.get('express_status') or '').strip().lower() in ('closed', 'archived', 'hidden'):
+            continue
+        item = dict(land)
+        item['_assignment_status'] = 'public'
+        item['_in_transaction'] = False
+        item['_commission_pct'] = 0
+        item['_commission_amount'] = 0
+        item['_is_public'] = True
+        try:
+            item['_detail_url'] = url_for('express_partner.land_detail', code=code)
+        except Exception:
+            item['_detail_url'] = f'/express/partner/lands/{code}'
+        try:
+            out.append(sanitize_land_media(item))
+        except Exception:
+            out.append(item)
+        if len(out) >= max(1, int(limit or 50)):
+            break
+    return out
 
 
 @express_partner_bp.get('/dashboard/data', endpoint='dashboard_data')

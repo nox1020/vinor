@@ -101,10 +101,10 @@ def resolve_ai_voice(
 def voice_label_fa(voice: str | None) -> str:
     v = (voice or "").strip().lower()
     if v == VOICE_SPECIAL:
-        return "همکار ویژه (مالک/فروشنده)"
+        return "اپراتور ویژه (مالک/فروشنده)"
     if v == VOICE_PARTNER:
-        return "همکار اکسپرس (واسط فروش)"
-    return "مشتری / خریدار"
+        return "هم‌پیمان فروش (همکار اکسپرس)"
+    return "همراه خرید وینور (مهمان/خریدار)"
 
 
 def resolve_audience_from_request(force: str | None = None) -> str:

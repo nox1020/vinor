@@ -331,13 +331,26 @@ def build_limited_ai_quick_prompts(
     """چیپ‌های نیت‌محور برای مهمان / کاربر عادی — پیام کوتاه + intent ابزار."""
     out: List[Dict[str, str]] = []
 
+    _ICONS = {
+        "coop_levels": "fa-layer-group",
+        "coop_terms": "fa-percent",
+        "coop_status": "fa-clock",
+        "coop_apply": "fa-user-plus",
+        "find_land": "fa-magnifying-glass",
+    }
+
     def add(label: str, *, prompt: str, intent: str) -> None:
         label = (label or "").strip()
         prompt = (prompt or "").strip()
         intent = (intent or "").strip()
         if not label or not prompt or not intent:
             return
-        out.append({"label": label, "prompt": prompt, "intent": intent})
+        out.append({
+            "label": label,
+            "prompt": prompt,
+            "intent": intent,
+            "icon": _ICONS.get(intent, "fa-sparkles"),
+        })
 
     add("سطوح همکاری", prompt="سطوح همکاری چیه؟", intent="coop_levels")
     add("پورسانت", prompt="پورسانت چطوره؟", intent="coop_terms")
@@ -372,12 +385,26 @@ def build_ai_quick_prompts(
 
     out: List[Dict[str, str]] = []
 
+    _ICONS = {
+        "next_action": "fa-compass",
+        "release": "fa-check-circle",
+        "deal": "fa-handshake",
+        "visit": "fa-calendar-days",
+        "complete_visit": "fa-map-marker-alt",
+        "marketing": "fa-bullhorn",
+    }
+
     def add(label: str, *, prompt: str, intent: str) -> None:
         label = (label or "").strip()
         prompt = (prompt or "").strip()
         intent = (intent or "").strip()
         if label and prompt and intent:
-            out.append({"label": label, "prompt": prompt, "intent": intent})
+            out.append({
+                "label": label,
+                "prompt": prompt,
+                "intent": intent,
+                "icon": _ICONS.get(intent, "fa-sparkles"),
+            })
 
     add("قدم بعدی", prompt="قدم بعدی‌م چیه؟", intent="next_action")
 

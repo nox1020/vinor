@@ -137,11 +137,21 @@ def _build_system_prompt(
     audience: str | None = None,
     *,
     user_message: str = "",
+    thread_id: str | None = None,
 ) -> str:
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
     if not user_key:
         return ""
     max_ctx = budget_config()["max_context_chars"]
+    focus_codes: list[str] = []
+    try:
+        from .chat_store import recent_thread_land_codes
+
+        focus_codes = recent_thread_land_codes(
+            user_key, thread_id, audience=aud, limit=5
+        )
+    except Exception:
+        focus_codes = []
     try:
         if aud == AUDIENCE_PARTNER:
             base = get_partner_context_base(
@@ -149,7 +159,9 @@ def _build_system_prompt(
                 lambda: build_partner_context_base(user_key),
             )
             status_ctx = build_partner_status_context(user_key)
-            land_ctx = build_partner_land_context(user_key, user_message)
+            land_ctx = build_partner_land_context(
+                user_key, user_message, focus_codes=focus_codes
+            )
             parts = [base]
             if status_ctx:
                 parts.append(status_ctx)
@@ -158,7 +170,9 @@ def _build_system_prompt(
             ctx = "\n".join(parts)
         else:
             base = get_public_context_base(build_public_context_base)
-            land_ctx = build_public_land_context(user_message)
+            land_ctx = build_public_land_context(
+                user_message, focus_codes=focus_codes
+            )
             ctx = base
             if land_ctx:
                 ctx = f"{base}\n{land_ctx}"
@@ -193,6 +207,7 @@ def _build_messages(
     voice: str | None = None,
     with_tools: bool = False,
     chip_intent: str | None = None,
+    thread_id: str | None = None,
 ) -> list[dict[str, Any]]:
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
     cfg = budget_config()
@@ -202,7 +217,13 @@ def _build_messages(
     # یادآوری کوتاه نقش در هر درخواست (کم‌حجم، خارج از کش زمینه)
     messages.append({
         "role": "system",
-        "content": f"نقش فعلی مخاطب: {voice_label_fa(resolved_voice)}. لحن و سطح راهنمایی را دقیقاً با این نقش هماهنگ کن.",
+        "content": (
+            f"نقش فعلی: {voice_label_fa(resolved_voice)}. "
+            "لحن را با همین نقش هماهنگ کن. "
+            "واقعیت فقط از داده/ابزار؛ ویژگی از خودت نساز. "
+            "وسط فرم یا کارت تأیید، فقط همان مرحله را جلو ببر. "
+            "لیست شماره‌دار ابزار را دست‌کاری نکن."
+        ),
     })
     if with_tools:
         messages.append({"role": "system", "content": agent_system_hint(resolved_voice)})
@@ -213,7 +234,9 @@ def _build_messages(
         if hint:
             messages.append({"role": "system", "content": hint})
     if user_key:
-        ctx = _build_system_prompt(user_key, audience, user_message=text)
+        ctx = _build_system_prompt(
+            user_key, audience, user_message=text, thread_id=thread_id
+        )
         if ctx:
             messages.append({"role": "system", "content": ctx})
     if history:
@@ -648,6 +671,7 @@ def generate_reply(
         voice=voice,
         with_tools=bool(tools),
         chip_intent=intent or None,
+        thread_id=thread_id,
     )
     result = _run_agent_loop(
         messages,
