@@ -775,6 +775,123 @@
     _el: drawer
   };
 
+  /* ژست کشیدن روی خانه: چپ → باز کردن منوی راست | راست → بستن */
+  (function bindHomeDrawerSwipe() {
+    var EDGE_PX = 36;
+    var MIN_DX = 56;
+    var LOCK_RATIO = 1.25;
+    var startX = 0;
+    var startY = 0;
+    var tracking = false;
+    var axis = '';
+    var fromEdge = false;
+    var touchId = null;
+
+    function onHome() {
+      return !!document.getElementById('homeDashboardPage') ||
+        /\/express\/partner\/home\/?$/.test(window.location.pathname || '');
+    }
+
+    function ignoreTarget(t) {
+      if (!t || !t.closest) return true;
+      if (t.closest('input, textarea, select, [contenteditable="true"]')) return true;
+      if (t.closest('.vn-home-lands__track, .vn-home-lands, [data-vn-home-lands]')) return true;
+      if (t.closest('.ld-gallery__swipe, [data-no-drawer-swipe]')) return true;
+      return false;
+    }
+
+    function drawerApi() {
+      return window.vinorProfileDrawer;
+    }
+
+    function onStart(e) {
+      if (!onHome()) return;
+      var touch = e.changedTouches && e.changedTouches[0];
+      if (!touch) return;
+      if (ignoreTarget(e.target)) return;
+      var w = window.innerWidth || 0;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      tracking = true;
+      axis = '';
+      touchId = touch.identifier;
+      fromEdge = !isOpen() && startX >= (w - EDGE_PX);
+    }
+
+    function onMove(e) {
+      if (!tracking) return;
+      var touch = null;
+      var list = e.changedTouches || e.touches;
+      if (!list || !list.length) return;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].identifier === touchId) { touch = list[i]; break; }
+      }
+      if (!touch) touch = list[0];
+      var dx = touch.clientX - startX;
+      var dy = touch.clientY - startY;
+      if (!axis) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        axis = Math.abs(dx) >= Math.abs(dy) * LOCK_RATIO ? 'x' : 'y';
+      }
+      if (axis === 'x' && (fromEdge || isOpen()) && Math.abs(dx) > 12) {
+        try { e.preventDefault(); } catch (_) {}
+      }
+    }
+
+    function onEnd(e) {
+      if (!tracking) return;
+      tracking = false;
+      var touch = null;
+      var list = e.changedTouches || [];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].identifier === touchId) { touch = list[i]; break; }
+      }
+      if (!touch && list[0]) touch = list[0];
+      var endX = touch ? touch.clientX : startX;
+      var endY = touch ? touch.clientY : startY;
+      var dx = endX - startX;
+      var dy = endY - startY;
+      touchId = null;
+      if (axis === 'y') return;
+      var needDx = (fromEdge || isOpen()) ? MIN_DX : 88;
+      if (Math.abs(dx) < needDx || Math.abs(dx) < Math.abs(dy) * LOCK_RATIO) return;
+
+      var api = drawerApi();
+      if (!api) return;
+      var open = typeof api.isOpen === 'function' ? api.isOpen() : false;
+
+      /* کشیدن به چپ → باز | کشیدن به راست → بسته */
+      if (dx < 0) {
+        if (!open && typeof api.open === 'function') api.open();
+      } else if (dx > 0) {
+        if (open && typeof api.close === 'function') api.close();
+      }
+    }
+
+    function onCancel() {
+      tracking = false;
+      axis = '';
+      touchId = null;
+    }
+
+    document.addEventListener('touchstart', onStart, { passive: true, capture: true });
+    document.addEventListener('touchmove', onMove, { passive: false, capture: true });
+    document.addEventListener('touchend', onEnd, { passive: true, capture: true });
+    document.addEventListener('touchcancel', onCancel, { passive: true, capture: true });
+
+    var prevDestroy = destroyDrawer;
+    destroyDrawer = function () {
+      try {
+        document.removeEventListener('touchstart', onStart, true);
+        document.removeEventListener('touchmove', onMove, true);
+        document.removeEventListener('touchend', onEnd, true);
+        document.removeEventListener('touchcancel', onCancel, true);
+      } catch (_) {}
+      prevDestroy();
+    };
+    window.vinorProfileDrawer.destroy = destroyDrawer;
+  })();
+
   hoist();
   if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
   backdrop.addEventListener('click', closeDrawer);

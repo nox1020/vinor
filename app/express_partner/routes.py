@@ -2555,7 +2555,6 @@ def _home_suggested_files(
 ) -> List[Dict[str, Any]]:
     from ..utils.images import partner_card_image_url
     from app.express_partner.sales_coach import (
-        build_coach_chat_prompt,
         build_journey_chat_cta,
         coach_tip_for_stage,
     )
@@ -2642,11 +2641,6 @@ def _home_suggested_files(
             'cta_secondary_prompt': cta.get('secondary_prompt') or '',
             'show_fav': True,
             'coach_tip': tip,
-            'coach_prompt': build_coach_chat_prompt(
-                code=code,
-                title=(land.get('title') or '').strip(),
-                stage_label=str(stage_label),
-            ),
             '_score': _home_score_suggested_land(land, now=now),
         })
     candidates.sort(key=lambda x: float(x.get('_score') or 0), reverse=True)

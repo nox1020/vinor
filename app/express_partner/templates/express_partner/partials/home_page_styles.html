@@ -19,42 +19,49 @@
 
   #homeDashboardPage .vn-home-top {
     width: 100%;
-    /* فضای دکمه منوی شناور (بالا-راست) تا روی کارت نیفتد */
-    padding-top: 2.85rem;
+    padding-top: 0;
     background: var(--vn-home-bg);
+    position: relative;
+    z-index: 1;
   }
 
   #homeDashboardPage .vn-journey-card {
-    margin-top: 0;
+    margin-top: 0.35rem;
+    /* فضای دکمه منو روی گوشهٔ شروع (راست در RTL) تا روی محتوا نیفتد */
+    --vn-home-menu-clear: 3.15rem;
+  }
+
+  #homeDashboardPage .vn-journey-card .vn-journey-card__head-inner,
+  #homeDashboardPage .vn-journey-card .vn-journey-card__compact {
+    padding-inline-start: max(0.7rem, var(--vn-home-menu-clear));
   }
 
   #homeDashboardPage .vn-journey-card__code {
     max-width: 9rem;
   }
 
-  /* هدر شناور خانه — دکمه‌های دایره‌ای GPT */
+  /* منوی شناور خانه — بالاتر از کارت، کلیک‌پذیر */
+  html:has(#homeDashboardPage) .ep-header-float-actions {
+    z-index: 90;
+    pointer-events: none;
+  }
   html:has(#homeDashboardPage) .ep-header-float-actions .ep-partner-header-btn,
   html:has(#homeDashboardPage) .ep-header-float-actions .vinor-dash-glass-pill,
   html:has(#homeDashboardPage) .ep-header-float-actions .comm-header-glass-btn {
-    width: 2.625rem;
-    height: 2.625rem;
+    width: 2.5rem;
+    height: 2.5rem;
     border-radius: 9999px !important;
     border: 0 !important;
     background: #2f2f2f !important;
-    box-shadow: none !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     color: #fff !important;
+    pointer-events: auto;
   }
   html:has(#homeDashboardPage) .ep-header-float-actions .ep-partner-header-btn:active,
   html:has(#homeDashboardPage) .ep-header-float-actions .vinor-dash-glass-pill:active {
     background: #3a3a3a !important;
-  }
-  html:has(#homeDashboardPage) .ep-header-float-brand__text {
-    color: #fff;
-    text-shadow: none;
-    font-weight: 700;
-    letter-spacing: -0.03em;
   }
   html:has(#homeDashboardPage) #aiMenuUnreadDot {
     box-shadow: 0 0 0 2px #000;

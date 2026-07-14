@@ -1,5 +1,5 @@
 {# کارت سفر فایل — بالای خانه؛ CTA از چت؛ قابل جمع‌شدن — سبک GPT مشکی #}
-{# Expects: card with code, title, detail_url, cta_chat_prompt, cta_label, coach_prompt, ... #}
+{# Expects: card with code, title, detail_url, cta_chat_prompt, cta_label, ... #}
 {% if card %}
 {% set loc = ([card.city, card.location]|select|join(' ')) if (card.city or card.location) else '' %}
 {% set steps = card.funnel_steps|default([]) %}
@@ -12,6 +12,7 @@
     --vj-muted: #8e8e93;
     --vj-text: #ececec;
     position: relative;
+    z-index: 0;
     margin: 0.35rem 0.75rem 0.55rem;
     border-radius: 1.15rem;
     border: 1px solid var(--vj-line);
@@ -226,19 +227,6 @@
     align-items: center;
     gap: 0.35rem;
   }
-  .vn-journey-card__coach {
-    width: 2.35rem;
-    height: 2.35rem;
-    flex-shrink: 0;
-    border-radius: 9999px;
-    border: 0;
-    background: #2f2f2f;
-    color: #ececec;
-    display: grid;
-    place-items: center;
-    font-size: 0.75rem;
-  }
-  .vn-journey-card__coach:active { filter: brightness(1.08); }
   .vn-journey-card__collapse {
     flex-shrink: 0;
     width: 2.35rem;
@@ -456,14 +444,6 @@
             aria-label="جمع کردن کارت مأموریت">
       <i class="fas fa-chevron-up" aria-hidden="true"></i>
     </button>
-    {% if card.coach_prompt %}
-    <button type="button"
-            class="vn-journey-card__coach"
-            data-vn-chat-prompt="{{ card.coach_prompt|e }}"
-            aria-label="راهنمای فروش از AI">
-      <i class="fas fa-robot" aria-hidden="true"></i>
-    </button>
-    {% endif %}
     <div class="vn-journey-card__cta-wrap">
       {% if card.cta_chat_prompt %}
       <button type="button"
