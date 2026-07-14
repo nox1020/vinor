@@ -207,7 +207,7 @@
   } catch (_) {}
 })();
 </script>
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=53"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=54"></script>
 <script>
 (function () {
   try {
@@ -221,6 +221,11 @@
       sessionStorage.removeItem('vinor_ai_home_autosend');
       return;
     }
+    try {
+      var intent = sessionStorage.getItem('vinor_ai_home_intent') || '';
+      sessionStorage.removeItem('vinor_ai_home_intent');
+      if (intent) form.setAttribute('data-pending-intent', intent);
+    } catch (_) {}
     setTimeout(function () {
       try {
         if (typeof form.requestSubmit === 'function') {

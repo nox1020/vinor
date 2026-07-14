@@ -139,6 +139,24 @@
     align-items: center;
     gap: 0.2rem;
     text-align: center;
+    margin: 0;
+    padding: 0.15rem 0.1rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    appearance: none;
+    -webkit-appearance: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .vn-journey-card__step.is-actionable {
+    cursor: pointer;
+  }
+  .vn-journey-card__step.is-actionable:active {
+    opacity: 0.85;
+  }
+  .vn-journey-card__step.is-actionable .vn-journey-card__dot {
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
   }
   .vn-journey-card__step:not(:last-child)::after {
     content: '';
@@ -354,10 +372,7 @@
     </span>
   </button>
 
-  <a href="{{ card.detail_url }}"
-     data-vinor-express-nav
-     class="vn-journey-card__head"
-     aria-label="مشاهده جزئیات {{ card.title }}">
+  <div class="vn-journey-card__head" role="group" aria-label="{{ card.title }}">
     <div class="vn-journey-card__head-inner">
       <div class="vn-journey-card__media" aria-hidden="true">
         {% if card.image_url %}
@@ -388,19 +403,42 @@
         {% if card.commission_amount and is_approved|default(false) %}
         <p class="vn-journey-card__comm">پورسانت {{ card.commission_amount|toman }}</p>
         {% endif %}
+        {% if card.detail_url %}
+        <a href="{{ card.detail_url }}" data-vinor-express-nav
+           class="vn-journey-card__detail-link text-[11px] text-emerald-400/90 underline underline-offset-2 mt-1 inline-block">
+          جزئیات فایل
+        </a>
+        {% endif %}
       </div>
     </div>
-  </a>
+  </div>
 
   {% if steps %}
-  <div class="vn-journey-card__track" aria-label="مراحل ماموریت">
+  <div class="vn-journey-card__track" aria-label="مراحل ماموریت — برای جابه‌جایی لمس کنید">
     {% for step in steps %}
-    <div class="vn-journey-card__step is-{{ step.state|default('todo') }}">
+    {% set step_prompt = step.chat_prompt|default('') %}
+    {% set step_ok = step.actionable|default(false) and step_prompt %}
+    {% if step_ok %}
+    <button type="button"
+            class="vn-journey-card__step is-{{ step.state|default('todo') }} is-actionable"
+            data-vn-chat-prompt="{{ step_prompt|e }}"
+            data-vn-chat-intent="{{ step.chat_intent|default('') }}"
+            data-vn-funnel-step="{{ step.key|default('') }}"
+            aria-label="مرحله {{ step.label }}">
+      <span class="vn-journey-card__dot" aria-hidden="true">
+        <i class="fas {{ step.icon|default('fa-circle') }}"></i>
+      </span>
+      <span class="vn-journey-card__step-label">{{ step.label }}</span>
+    </button>
+    {% else %}
+    <div class="vn-journey-card__step is-{{ step.state|default('todo') }}"
+         aria-current="{{ 'step' if step.state == 'current' else 'false' }}">
       <span class="vn-journey-card__dot" aria-hidden="true">
         <i class="fas {{ step.icon|default('fa-circle') }}"></i>
       </span>
       <span class="vn-journey-card__step-label">{{ step.label }}</span>
     </div>
+    {% endif %}
     {% endfor %}
   </div>
   {% endif %}
@@ -418,6 +456,7 @@
       <button type="button"
               class="vn-journey-card__cta"
               data-vn-chat-prompt="{{ card.cta_chat_prompt|e }}"
+              data-vn-chat-intent="{{ card.cta_action|default('') }}"
               data-vn-funnel-key="{{ card.funnel_key|default('') }}">
         <i class="fas {{ card.cta_icon|default('fa-comments') }}" aria-hidden="true"></i>
         {{ card.cta_label|default('ادامه در چت') }}
@@ -425,7 +464,8 @@
       {% if card.cta_secondary_prompt %}
       <button type="button"
               class="vn-journey-card__cta vn-journey-card__cta--secondary"
-              data-vn-chat-prompt="{{ card.cta_secondary_prompt|e }}">
+              data-vn-chat-prompt="{{ card.cta_secondary_prompt|e }}"
+              data-vn-chat-intent="{{ card.cta_secondary_action|default('') }}">
         <i class="fas {{ card.cta_secondary_icon|default('fa-calendar-plus') }}" aria-hidden="true"></i>
         {{ card.cta_secondary_label|default('بازدید مجدد') }}
       </button>
@@ -446,15 +486,21 @@
 </article>
 <script>
 (function () {
-  function sendChatPrompt(prompt) {
+  function sendChatPrompt(prompt, intent) {
     prompt = (prompt || '').trim();
     if (!prompt) return;
     var input = document.getElementById('aiInput');
     var form = document.getElementById('aiChatForm');
+    intent = (intent || '').trim();
+    if (form && intent) {
+      try { form.setAttribute('data-pending-intent', intent); } catch (_) {}
+    }
     if (!input || !form) {
       try {
         sessionStorage.setItem('vinor_ai_home_prompt', prompt);
         sessionStorage.setItem('vinor_ai_home_autosend', '1');
+        if (intent) sessionStorage.setItem('vinor_ai_home_intent', intent);
+        else sessionStorage.removeItem('vinor_ai_home_intent');
       } catch (_) {}
       return;
     }
@@ -479,7 +525,10 @@
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        sendChatPrompt(btn.getAttribute('data-vn-chat-prompt') || '');
+        sendChatPrompt(
+          btn.getAttribute('data-vn-chat-prompt') || '',
+          btn.getAttribute('data-vn-chat-intent') || ''
+        );
       });
     });
   }

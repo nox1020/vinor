@@ -97,6 +97,11 @@ def coach_tip_for_stage(
         return f"حله؛ از همین چت درخواست معامله بده{por}."
     if label in ("بازدید تأییدشد", "در انتظار بازدید", "پیگیری بازدید") or has_visit:
         return "بازدید مهمه؛ وقتی رفتی، از چت «بازدید انجام شد» رو ثبت کن."
+    if label in ("بازاریابی", "بازاریابی مجدد"):
+        return (
+            "آگهی بده یا وقتی مشتری آماده شد از همین کارت «ثبت بازدید» بزن "
+            f"{por}."
+        )
     return (
         f"دیوار بذار و تو اینستا استوری/پست بزن"
         f"{por}. متنش رو از همین چت بخواه؛ بازدید هم از اینجا ثبت می‌شه."
@@ -160,7 +165,7 @@ def deliver_voided_encouragement(
     try:
         from app.services.notifications import add_notification
 
-        action_url = _detail_url(land_code) if land_code else _home_url()
+        action_url = _home_url()
         add_notification(
             ph,
             title,
@@ -382,9 +387,17 @@ def build_progress_update(
         else:
             chat_body = (
                 f"{notif_title}: +{amt} تومان ({kind}){file_line}.\n"
-                "قدم بعدی: از کیف پول می‌تونی برداشت بزنی؛ ادامه فروش را از همین چت جلو ببر."
+                + (
+                    "قدم بعدی: از همین چت بگو «ثبت معامله» تا کارت تأیید بیاید."
+                    if "visit" in ct
+                    else "قدم بعدی: از کیف پول می‌تونی برداشت بزنی؛ ادامه فروش را از همین چت جلو ببر."
+                )
             )
-            notif_body = f"+{amt} تومن {kind} وارد کیف پول شد."
+            notif_body = (
+                f"+{amt} تومن {kind}. از چت معامله را ثبت کن."
+                if "visit" in ct
+                else f"+{amt} تومن {kind} وارد کیف پول شد."
+            )
         return notif_title, chat_body, notif_body
 
     if ev == "withdrawal_paid":
@@ -395,6 +408,16 @@ def build_progress_update(
             "اگر ادامه فروش داری، از همین چت قدم بعدی را بپرس."
         )
         notif_body = f"−{amt} تومن به حسابت واریز شد."
+        return notif_title, chat_body, notif_body
+
+    if ev == "deal_auto_released":
+        notif_title = "مهلت معامله تمام شد"
+        chat_body = (
+            f"{notif_title} — {file_bit}.\n"
+            "معاملهٔ در انتظار تأیید بعد از ۵ روز آزاد شد و می‌تونی دوباره از همین چت "
+            "«ثبت معامله» بزنی. اول مطمئن شو مشتری هنوز آماده‌ست."
+        )
+        notif_body = f"{file_bit}: مهلت معامله تمام شد؛ از چت دوباره ثبت کن."
         return notif_title, chat_body, notif_body
 
     return "", "", ""
@@ -531,6 +554,19 @@ def build_journey_chat_cta(
         bits.append(f"({title_s})")
     head = " ".join(bits)
 
+    visit_step_line = (
+        "همان اول propose_visit_request را با land_code خالی بزن (کد را از کاربر نپرس؛ بدون نام/شماره/تاریخ)؛ "
+        "بعد فقط همان فیلدی که ابزار گفته را بپرس و جواب را دوباره به ابزار بفرست: "
+        "نام کوچک → نام خانوادگی → موبایل → لیست تاریخ ۱ تا ۵ → فقط شمارهٔ تاریخ. "
+        "چند سؤال را یکجا نپرس."
+    )
+    visit_prompt = f"{head}: ثبت بازدید را یکی‌یکی شروع کن. {visit_step_line}"
+    revisit_prompt = f"{head}: بازدید مجدد را یکی‌یکی شروع کن. {visit_step_line}"
+    marketing_prompt = (
+        f"{head}: متن دیوار و کپشن اینستا رو آماده کن و بگو چطور معرفی کنم. "
+        "وقتی مشتری آماده شد از همین چت بازدید ثبت می‌کنیم."
+    )
+
     # اولویت ۱: وضعیت‌های درحال‌انتظار / بستن معامله
     if mode == "deal_pending" or stage == "در حال معامله":
         return {
@@ -572,10 +608,12 @@ def build_journey_chat_cta(
             "label": "بازاریابی کن",
             "icon": "fa-bullhorn",
             "action": "marketing",
-            "prompt": (
-                f"{head}: متن دیوار و کپشن اینستا رو آماده کن و بگو چطور معرفی کنم؛ "
-                "بازدید هم بعداً از همین چت ثبت می‌کنیم."
-            ),
+            "prompt": marketing_prompt,
+            # مسیر روشن به مرحله بازدید — بدون گیر کردن روی بازاریابی
+            "secondary_label": "ثبت بازدید",
+            "secondary_icon": "fa-calendar-days",
+            "secondary_action": "visit",
+            "secondary_prompt": visit_prompt,
         }
     if key == "visit_request":
         if mode == "visit" or not mode:
@@ -583,10 +621,11 @@ def build_journey_chat_cta(
                 "label": "ثبت بازدید",
                 "icon": "fa-calendar-days",
                 "action": "visit",
-                "prompt": (
-                    f"{head}: می‌خوام بازدید ثبت کنم. "
-                    "اگر نام/شماره/تاریخ مشتری رو نداری اول بپرس، بعد کارت تأیید بده."
-                ),
+                "prompt": visit_prompt,
+                "secondary_label": "آگهی / معرفی",
+                "secondary_icon": "fa-bullhorn",
+                "secondary_action": "marketing",
+                "secondary_prompt": marketing_prompt,
             }
         return {
             "label": "وضعیت بازدید",
@@ -606,8 +645,7 @@ def build_journey_chat_cta(
             "secondary_icon": "fa-calendar-plus" if can_revisit else "",
             "secondary_action": "visit" if can_revisit else "",
             "secondary_prompt": (
-                f"{head}: بازدید مجدد می‌خوام. "
-                "اگر نام/شماره/تاریخ مشتری رو نداری اول بپرس، بعد کارت تأیید بده."
+                revisit_prompt
             ) if can_revisit else "",
         }
     if mode == "visit":
@@ -615,30 +653,155 @@ def build_journey_chat_cta(
             "label": "ثبت بازدید",
             "icon": "fa-calendar-days",
             "action": "visit",
-            "prompt": (
-                f"{head}: می‌خوام بازدید ثبت کنم. "
-                "اگر نام/شماره/تاریخ مشتری رو نداری اول بپرس، بعد کارت تأیید بده."
-            ),
+            "prompt": visit_prompt,
+            "secondary_label": "آگهی / معرفی",
+            "secondary_icon": "fa-bullhorn",
+            "secondary_action": "marketing",
+            "secondary_prompt": marketing_prompt,
         }
     if stage in ("بازاریابی", "بازاریابی مجدد") or mode in ("", "hidden"):
         return {
             "label": "بازاریابی کن",
             "icon": "fa-bullhorn",
             "action": "marketing",
-            "prompt": (
-                f"{head}: متن دیوار و کپشن اینستا رو آماده کن و بگو چطور معرفی کنم؛ "
-                "بازدید هم بعداً از همین چت ثبت می‌کنیم."
-            ),
+            "prompt": marketing_prompt,
+            "secondary_label": "ثبت بازدید",
+            "secondary_icon": "fa-calendar-days",
+            "secondary_action": "visit",
+            "secondary_prompt": visit_prompt,
         }
     return {
         "label": "ثبت بازدید",
         "icon": "fa-calendar-days",
         "action": "visit",
-        "prompt": (
-            f"{head}: می‌خوام بازدید ثبت کنم. "
-            "اگر نام/شماره/تاریخ مشتری رو نداری اول بپرس، بعد کارت تأیید بده."
-        ),
+        "prompt": visit_prompt,
     }
+
+
+def enrich_funnel_steps_for_nav(
+    steps: List[Dict[str, Any]] | None,
+    *,
+    code: str,
+    title: str = "",
+    tx_mode: str = "",
+    can_revisit: bool = False,
+) -> List[Dict[str, Any]]:
+    """هر مرحله قیف را قابل‌جابه‌جایی در چت می‌کند (کلیک → پرامپت مرحله)."""
+    code_s = (code or "").strip()
+    title_s = (title or "").strip()
+    mode = (tx_mode or "").strip()
+    bits = [f"فایل {code_s}"] if code_s else ["فایل مأموریت"]
+    if title_s:
+        bits.append(f"({title_s})")
+    head = " ".join(bits)
+
+    visit_step_line = (
+        "همان اول propose_visit_request را با land_code خالی بزن (کد را از کاربر نپرس؛ بدون نام/شماره/تاریخ)؛ "
+        "بعد فقط همان فیلدی که ابزار گفته را بپرس و جواب را دوباره به ابزار بفرست: "
+        "نام کوچک → نام خانوادگی → موبایل → لیست تاریخ ۱ تا ۵ → فقط شمارهٔ تاریخ. "
+        "چند سؤال را یکجا نپرس."
+    )
+    visit_prompt = f"{head}: ثبت بازدید را یکی‌یکی شروع کن. {visit_step_line}"
+    marketing_prompt = (
+        f"{head}: متن دیوار و کپشن اینستا رو آماده کن و بگو چطور معرفی کنم. "
+        "وقتی مشتری آماده شد از همین چت بازدید ثبت می‌کنیم."
+    )
+    complete_prompt = f"{head}: بازدید انجام شد — کارت تأییدش رو بده."
+    deal_prompt = f"{head}: می‌خوام معامله ثبت کنم — کارت تأیید بده."
+    status_prompt = f"{head}: وضعیت مأموریت و قدم بعدی رو کوتاه بگو."
+
+    out: List[Dict[str, Any]] = []
+    for raw in steps or []:
+        if not isinstance(raw, dict):
+            continue
+        step = dict(raw)
+        key = str(step.get("key") or "").strip()
+        state = str(step.get("state") or "todo").strip()
+        prompt = ""
+        actionable = False
+
+        if key == "assigned":
+            prompt = (
+                f"{head}: اختصاص شده. قدم بعدی بازاریابی یا ثبت بازدید برای مشتری — "
+                "کوتاه بگو از کجا شروع کنم."
+            )
+            actionable = True
+        elif key == "marketing":
+            prompt = marketing_prompt
+            actionable = True
+        elif key == "visit_request":
+            if mode == "visit_done":
+                prompt = complete_prompt
+            elif mode in ("visit_pending", "visit_done_pending", "visit_commission_pending"):
+                prompt = status_prompt
+            else:
+                prompt = visit_prompt
+            # در معامله باز قفل می‌شود؛ بقیه مراحل به مسیر بازدید برمی‌گردند
+            actionable = mode not in ("deal_pending", "release", "blocked")
+        elif key == "deal_or_revisit":
+            if mode == "deal":
+                prompt = deal_prompt
+                actionable = True
+            elif mode == "deal_pending":
+                prompt = (
+                    f"{head}: فروشم ثبت شده و منتظر تأیید ادمین است؛ "
+                    "وضعیت کوتاه بگو. اگر انصراف می‌خوام بگو کارت بستن معامله بده."
+                )
+                actionable = True
+            elif mode == "release":
+                prompt = f"{head}: می‌خوام معامله رو ببندم — کارت تأیید بده."
+                actionable = True
+            elif mode == "visit_commission_pending":
+                prompt = (
+                    f"{head}: منتظر تأیید پورسانت بازدید هستم؛ وضعیت و قدم بعدی رو بگو."
+                )
+                actionable = True
+            elif can_revisit and mode not in ("deal_pending", "release", "blocked", "hidden"):
+                prompt = (
+                    f"{head}: هنوز برای معامله آماده‌ام نیستم؛ "
+                    "اگر بازدید مجدد لازم است یکی‌یکی شروع کن، وگرنه بگو قدم تا معامله چیه."
+                )
+                actionable = True
+            elif state == "current":
+                prompt = (
+                    f"{head}: هنوز معامله فعال نیست. "
+                    "بگو برای رسیدن به معامله چه قدمی لازم است (از همین چت)."
+                )
+                actionable = True
+            else:
+                # مرحلهٔ هنوز نرسیده — قابل‌کلیک برای پرسیدن مسیر، بدون propose_deal
+                prompt = (
+                    f"{head}: هنوز به معامله نرسیده‌ام؛ "
+                    "کوتاه بگو الان کدام قدم (بازدید/انجام/پورسانت) مانده."
+                )
+                actionable = True
+        else:
+            prompt = status_prompt
+            actionable = state in ("current", "done")
+
+        step["chat_prompt"] = prompt if actionable else ""
+        step["chat_intent"] = ""
+        if actionable:
+            if key == "marketing":
+                step["chat_intent"] = "marketing"
+            elif key == "visit_request":
+                if mode == "visit_done":
+                    step["chat_intent"] = "complete_visit"
+                elif mode not in (
+                    "visit_pending",
+                    "visit_done_pending",
+                    "visit_commission_pending",
+                ):
+                    step["chat_intent"] = "visit"
+            elif key == "deal_or_revisit":
+                if mode == "deal":
+                    step["chat_intent"] = "deal"
+                elif mode == "release":
+                    step["chat_intent"] = "release"
+                # deal_pending / visit_commission_pending / راهنما → بدون intent ابزار
+        step["actionable"] = bool(actionable and prompt)
+        out.append(step)
+    return out
 
 
 def build_limited_ai_quick_prompts(
@@ -734,17 +897,21 @@ def build_ai_quick_prompts(
     elif mode == "deal" or stage in ("معامله یا بازدید مجدد", "بازدید انجام شد"):
         add("ثبت معامله", prompt=f"{head}: معامله ثبت کن", intent="deal")
         if can_revisit:
-            add("بازدید مجدد", prompt=f"{head}: بازدید مجدد می‌خوام", intent="visit")
+            add(
+                "بازدید مجدد",
+                prompt=f"{head}: بازدید مجدد را یکی‌یکی شروع کن",
+                intent="visit",
+            )
     elif mode == "complete_visit" or mode == "visit_done" or stage == "بازدید تأییدشد":
         add("بازدید انجام شد", prompt=f"{head}: بازدید انجام شد", intent="complete_visit")
     elif mode == "visit":
-        add("ثبت بازدید", prompt=f"{head}: بازدید ثبت کن", intent="visit")
+        add("ثبت بازدید", prompt=f"{head}: بازدید را یکی‌یکی ثبت کن", intent="visit")
         add("آگهی", prompt=f"{head}: متن دیوار و اینستا بده", intent="marketing")
     elif mode == "marketing" or stage in ("بازاریابی", "بازاریابی مجدد") or is_mission:
         add("آگهی دیوار", prompt=f"{head}: متن آگهی بده", intent="marketing")
-        add("ثبت بازدید", prompt=f"{head}: بازدید ثبت کن", intent="visit")
+        add("ثبت بازدید", prompt=f"{head}: بازدید را یکی‌یکی ثبت کن", intent="visit")
     else:
-        add("ثبت بازدید", prompt=f"{head}: بازدید ثبت کن", intent="visit")
+        add("ثبت بازدید", prompt=f"{head}: بازدید را یکی‌یکی ثبت کن", intent="visit")
 
     # بدون تکرار intent یکسان پشت‌سرهم
     seen: set[str] = set()
@@ -922,11 +1089,33 @@ def resolve_stuck_nudge_for_partner(
             picked = _nudge_from_land(land, is_mission=True)
             if picked:
                 return picked
-        # فایل در assigned نبود ولی mission هنوز باز است — از کاتالوگ نساز؛ کامل کن
+        # فایل موقتاً در لیست خانه نیست — مأموریت را نکش؛ از کاتالوگ راهنما بساز
         try:
-            from .partner_missions import complete_mission
+            from app.utils.storage import load_ads_cached
 
-            complete_mission(ph, land_code=mission_code)
+            land_row = next(
+                (
+                    l
+                    for l in (load_ads_cached() or [])
+                    if isinstance(l, dict)
+                    and str(l.get("code") or "").strip() == mission_code
+                ),
+                None,
+            )
+            if land_row:
+                proxy = dict(land_row)
+                proxy.setdefault("_assignment_status", "active")
+                proxy.setdefault("_commission_amount", 0)
+                picked = _nudge_from_land(proxy, is_mission=True)
+                if picked:
+                    return picked
+        except Exception:
+            pass
+        try:
+            current_app.logger.info(
+                "sales_coach nudge: mission land %s missing from assigned; keep mission",
+                mission_code,
+            )
         except Exception:
             pass
 
@@ -1394,14 +1583,7 @@ def run_sales_coach_nudge_slot(
     }
 
 
-# سازگاری با نام قبلی
-def run_evening_sales_coach_nudge(*, dry_run: bool = False) -> Dict[str, Any]:
-    hour = _active_slot_hour() or 20
-    out = run_sales_coach_nudge_slot(slot_hour=hour, dry_run=dry_run)
-    out.pop("state", None)
-    return out
-
-
+# سازگاری با نام قبلی — اسلات شب به‌جای ساعت ثابت
 def maybe_run_evening_sales_coach_nudge(
     *,
     force: bool = False,

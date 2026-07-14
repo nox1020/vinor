@@ -5372,17 +5372,11 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
         flash(f'وضعیت درخواست بازدید {name} به «{label}» تغییر کرد.', 'success')
 
 
-def _ensure_visit_commission_after_visit_confirm(rec: dict) -> bool:
-    """بعد از تأیید انجام بازدید توسط ادمین، پورسانت بازدید pending بساز."""
-    from app.express_partner.commissions_flow import ensure_visit_commission_after_visit_confirm
-
-    return ensure_visit_commission_after_visit_confirm(rec)
-
-
 @admin_bp.post('/express/visit-requests/<vid>/recreate-visit-commission')
 @login_required
 def express_visit_request_recreate_commission(vid: str):
     from app.express_partner.visit_requests import COMPLETED_STATUS
+    from app.express_partner.commissions_flow import ensure_visit_commission_after_visit_confirm
 
     filter_hint = (request.form.get('filter') or 'workflow').strip()
     items = load_express_visit_requests() or []
@@ -5396,7 +5390,7 @@ def express_visit_request_recreate_commission(vid: str):
     if str(rec.get('status') or '').strip() != COMPLETED_STATUS:
         flash('پورسانت بازدید فقط پس از تأیید انجام بازدید قابل ثبت مجدد است.', 'error')
         return redirect(_express_visit_requests_redirect(filter_hint, vid))
-    if _ensure_visit_commission_after_visit_confirm(rec):
+    if ensure_visit_commission_after_visit_confirm(rec):
         flash('پورسانت بازدید مجدداً در صف تأیید ثبت شد.', 'success')
     else:
         flash('ثبت مجدد پورسانت بازدید ممکن نیست (مبلغ صفر یا رکورد فعال موجود است).', 'warning')
@@ -5453,13 +5447,15 @@ def express_visit_request_status(vid: str):
         else:
             _flash_visit_request_status_change(rec or {}, new_status)
             if rec and new_status == COMPLETED_STATUS:
+                from app.express_partner.commissions_flow import ensure_visit_commission_after_visit_confirm
+
                 try:
                     visit_commission_pending = max(
                         0, int(get_settings().get('visit_commission_amount_toman') or 0)
                     ) > 0
                 except Exception:
                     visit_commission_pending = False
-                if _ensure_visit_commission_after_visit_confirm(rec):
+                if ensure_visit_commission_after_visit_confirm(rec):
                     flash('پورسانت بازدید در صف تأیید ثبت شد.', 'success')
                 elif visit_commission_pending:
                     flash('پورسانت بازدید از قبل در صف است.', 'info')

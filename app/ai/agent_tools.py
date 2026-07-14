@@ -55,14 +55,115 @@ def _active_mission_land_code(phone: str) -> str:
         return ""
 
 
+def _active_assignment_land_codes(phone: str) -> list[str]:
+    """کد فایل‌های اختصاص شخصی (active / in_transaction) — معاملهٔ باز اول."""
+    ph = (phone or "").strip()
+    if not ph:
+        return []
+    try:
+        from app.utils.storage import load_express_assignments
+
+        rows = [
+            a
+            for a in (load_express_assignments() or [])
+            if isinstance(a, dict)
+            and str(a.get("partner_phone") or "").strip() == ph
+            and str(a.get("status") or "active").strip().lower()
+            in ("", "active", "in_transaction")
+            and str(a.get("land_code") or "").strip()
+        ]
+        rows.sort(key=lambda a: str(a.get("created_at") or ""), reverse=True)
+        in_tx: list[str] = []
+        active: list[str] = []
+        seen: set[str] = set()
+        for a in rows:
+            code = str(a.get("land_code") or "").strip()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            st = str(a.get("status") or "active").strip().lower()
+            if st == "in_transaction":
+                in_tx.append(code)
+            else:
+                active.append(code)
+        return in_tx + active
+    except Exception:
+        return []
+
+
+def _thread_focus_land_code(phone: str) -> str:
+    """آخرین کد فایلی که روی همین گفتگو (کارت/اکشن) آمده."""
+    ph = (phone or "").strip()
+    if not ph:
+        return ""
+    try:
+        from flask import g
+
+        thread_id = getattr(g, "ai_tool_thread_id", None)
+        audience = getattr(g, "ai_tool_audience", None)
+    except Exception:
+        thread_id = None
+        audience = None
+    try:
+        from app.ai.chat_store import recent_thread_land_codes
+
+        aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+        codes = recent_thread_land_codes(ph, thread_id, audience=aud, limit=3)
+        if codes:
+            return str(codes[0] or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _land_code_from_user_message() -> str:
+    """اگر در آخرین پیام کاربر «فایل ۱۲۳…» آمده، همان کد."""
+    try:
+        from flask import g
+        import re
+
+        text = str(getattr(g, "ai_last_user_message", "") or "")
+        if not text:
+            return ""
+        m = re.search(r"(?:فایل|کد\s*فایل|کد\s*ملک)\s*[#:：]?\s*(\d{10,20})", text)
+        if m:
+            return str(m.group(1) or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
 def _resolve_tool_land_code(phone: str, args: dict[str, Any] | None = None) -> str:
-    """کد فایل از آرگومان ابزار، وگرنه از مأموریت فعال."""
+    """کد فایل: آرگومان → مأموریت → پیام کاربر → پیش‌نویس → اختصاص/گفتگو."""
     raw = ""
     if isinstance(args, dict):
         raw = str(args.get("land_code") or "").strip()
     if raw:
         return raw
-    return _active_mission_land_code(phone)
+    mission = _active_mission_land_code(phone)
+    if mission:
+        return mission
+    msg_code = _land_code_from_user_message()
+    if msg_code:
+        return msg_code
+    try:
+        draft_code = str(_load_visit_draft(phone).get("land_code") or "").strip()
+        if draft_code:
+            return draft_code
+    except Exception:
+        pass
+    assigned = _active_assignment_land_codes(phone)
+    thread_code = _thread_focus_land_code(phone)
+    # کارت گفتگو فقط اگر همان فایل اختصاصی باشد؛ وگرنه اختصاص تکی اولویت دارد
+    if thread_code and thread_code in assigned:
+        return thread_code
+    if len(assigned) == 1:
+        return assigned[0]
+    if thread_code:
+        return thread_code
+    if assigned:
+        return assigned[0]
+    return ""
 
 
 def agent_system_hint(voice: str | None) -> str:
@@ -76,7 +177,8 @@ def agent_system_hint(voice: str | None) -> str:
     return (
         "ابزار وقتی لازم: search→[[LAND]] | next→کار بعدی | listing→کارت کپی "
         "| propose_visit/complete/deal/release→کارت تأیید. "
-        "بازدید: نام→نام‌خانوادگی→شماره→propose بدون تاریخ→لیست ۱…۵→فقط visit_date. مأموریت: land_code خالی."
+        "بازدید/بازدید مجدد یکی‌یکی: فوری propose با land_code خالی (کد نپرس) → نام → "
+        "نام‌خانوادگی → شماره → propose بدون تاریخ → لیست ۱…۵ → فقط visit_date. چند فیلد یکجا نه."
     )
 
 
@@ -200,10 +302,11 @@ def _schema_visit() -> dict[str, Any]:
         "function": {
             "name": TOOL_VISIT,
             "description": (
-                "کارت ثبت بازدید. فیلدها را یکی‌یکی جمع کن: "
+                "کارت ثبت بازدید یا بازدید مجدد. فیلدها یکی‌یکی؛ چندتایی نفرست. "
+                "فوری با land_code خالی بزن (کد را از کاربر نپرس؛ سیستم از مأموریت/گفتگو/اختصاص می‌گیرد) سپس: "
                 "customer_first_name → customer_last_name → customer_phone → "
                 "بدون visit_date صدا بزن تا لیست ۱…۵ تاریخ بیاید → فقط شمارهٔ تاریخ را در visit_date بفرست. "
-                "مأموریت فعال→land_code اختیاری. ثبت فقط بعد از تأیید کارت."
+                "ثبت فقط بعد از تأیید کارت."
             ),
             "parameters": {
                 "type": "object",
@@ -240,7 +343,7 @@ def _schema_complete_visit() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_COMPLETE_VISIT,
-            "description": "کارت «بازدید انجام شد»؛ مأموریت فعال→land_code اختیاری.",
+            "description": "کارت «بازدید انجام شد»؛ land_code را خالی بگذار مگر چند فایل بدون زمینه.",
             "parameters": {
                 "type": "object",
                 "properties": {"land_code": {"type": "string"}},
@@ -255,7 +358,7 @@ def _schema_deal() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_DEAL,
-            "description": "کارت ثبت معامله/فروش نهایی (بازدید تکمیل‌شده). land_code اختیاری اگر مأموریت فعال.",
+            "description": "کارت ثبت معامله/فروش نهایی (بازدید تکمیل‌شده). معمولاً land_code خالی.",
             "parameters": {
                 "type": "object",
                 "properties": {"land_code": {"type": "string"}},
@@ -270,7 +373,7 @@ def _schema_release() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_RELEASE,
-            "description": "کارت انصراف از معاملهٔ در انتظار تأیید. land_code اختیاری اگر مأموریت فعال.",
+            "description": "کارت انصراف از معاملهٔ در انتظار تأیید. معمولاً land_code خالی.",
             "parameters": {
                 "type": "object",
                 "properties": {"land_code": {"type": "string"}},
@@ -287,9 +390,17 @@ def run_tool(
     phone: str,
     audience: str | None,
     voice: str | None,
+    thread_id: str | None = None,
 ) -> dict[str, Any]:
     args = arguments if isinstance(arguments, dict) else {}
     n = (name or "").strip()
+    try:
+        from flask import g
+
+        g.ai_tool_thread_id = (thread_id or "").strip() or None
+        g.ai_tool_audience = audience
+    except Exception:
+        pass
     try:
         if n == TOOL_SEARCH:
             return _tool_search_lands(args, phone=phone, audience=audience)
@@ -738,6 +849,7 @@ def _tool_suggest_next_action(*, phone: str) -> dict[str, Any]:
 
     if actions:
         a = actions[0]
+        chat_prompt = str(a.get("chat_prompt") or "").strip()
         model = {
             "ok": True,
             "has_urgent": True,
@@ -747,6 +859,8 @@ def _tool_suggest_next_action(*, phone: str) -> dict[str, Any]:
                 "subtitle": a.get("subtitle"),
                 "cta": a.get("cta"),
                 "url": a.get("url"),
+                "chat_prompt": chat_prompt,
+                "chat_intent": a.get("chat_intent") or "",
             },
             "coach_tip": coach_tip,
             "coach_land_code": coach_land_code,
@@ -754,7 +868,7 @@ def _tool_suggest_next_action(*, phone: str) -> dict[str, Any]:
             "instruction": (
                 "همین کار بعدی را اولویت بده و از چت مأموریت جلو ببر. "
                 "اگر coach_tip هست یک جمله تشویقی اضافه کن. "
-                "برای ثبت بازدید/انجام بازدید/معامله از ابزارهای propose_* استفاده کن. "
+                "اگر action.chat_prompt هست همان مسیر را با ابزار propose_* ادامه بده؛ لینک صفحه نده. "
                 "برای آگهی دیوار/اینستا از draft_listing_copy استفاده کن."
             ),
         }
@@ -762,8 +876,10 @@ def _tool_suggest_next_action(*, phone: str) -> dict[str, Any]:
             "type": "next_action",
             "title": str(a.get("title") or "کار بعدی"),
             "subtitle": str(a.get("subtitle") or ""),
-            "cta": str(a.get("cta") or "مشاهده"),
-            "url": str(a.get("url") or ""),
+            "cta": str(a.get("cta") or "ادامه در چت"),
+            "url": "" if chat_prompt else str(a.get("url") or ""),
+            "chat_prompt": chat_prompt,
+            "chat_intent": str(a.get("chat_intent") or ""),
             "status": "ready",
         }
         return {"ok": True, "model_result": model, "ui_action": ui}
@@ -795,7 +911,8 @@ def _tool_draft_listing(
     channel = str(args.get("channel") or "both").strip().lower() or "both"
     if not code:
         return _denied(
-            "کد فایل مشخص نیست. اگر مأموریت فعال نیست، کد فایل را بپرس یا جستجو کن."
+            "کد فایل مشخص نیست. land_code را خالی بگذار و دوباره بزن؛ "
+            "از کاربر کد نپرس مگر چند فایل بدون زمینه باشد — وگرنه search_lands."
         )
 
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
@@ -903,6 +1020,11 @@ def _clear_visit_draft(user_key: str) -> None:
         _write_pending_store(store)
 
 
+def clear_visit_draft(user_key: str) -> None:
+    """شروع مجدد فرم بازدید / بازدید مجدد — پیش‌نویس مراحل قبلی پاک می‌شود."""
+    _clear_visit_draft(user_key)
+
+
 def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     """اعتبارسنجی پیشنهاد بازدید — بدون ذخیره توکن."""
     from app.express_partner.routes import (
@@ -934,7 +1056,14 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     if not partner_is_approved(me):
         return {"ok": False, "error": "برای ثبت بازدید باید حساب همکاری تأیید شده باشد."}
 
+    # اگر پیام کاربر فایل دیگری را مشخص کرده، پیش‌نویس قبلی قاطی نشود
+    hint_code = _land_code_from_user_message()
     draft = _load_visit_draft(me)
+    draft_code = str(draft.get("land_code") or "").strip()
+    if hint_code and draft_code and hint_code != draft_code:
+        clear_visit_draft(me)
+        draft = {}
+
     merged = dict(args or {})
     # فیلدهای خالی را از پیش‌نویس مرحلهٔ قبل پر کن (نام/شماره بین انتخاب تاریخ)
     for key in (
@@ -946,6 +1075,8 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     ):
         if not str(merged.get(key) or "").strip() and draft.get(key):
             merged[key] = draft.get(key)
+    if hint_code and not str(merged.get("land_code") or "").strip():
+        merged["land_code"] = hint_code
 
     code = _resolve_tool_land_code(phone, merged)
     visit_date_raw = str(merged.get("visit_date") or "").strip()
@@ -986,8 +1117,10 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "error": "اطلاعات ناقص",
             "missing": ["land_code"],
             "mission_land_code": _active_mission_land_code(me),
+            "assigned_land_codes": _active_assignment_land_codes(me),
             "instruction": (
-                "کد فایل را بپرس یا جستجو کن. اگر مأموریت فعال است land_code خالی بگذار و دوباره بزن. "
+                "کد فایل را از کاربر نپرس. دوباره propose_visit_request را با land_code خالی بزن "
+                "تا سیستم از مأموریت/گفتگو/اختصاص بگیرد. فقط اگر چند فایل و هیچ زمینه‌ای نیست کوتاه بپرس کدام. "
                 "هنوز نام/شماره/تاریخ نپرس."
             ),
         }
@@ -1354,7 +1487,10 @@ def _tool_propose_simple_tx(
             "model_result": {
                 "ok": False,
                 "error": "کد فایل مشخص نیست.",
-                "instruction": "اگر مأموریت فعال نیست کد فایل را بپرس؛ وگرنه دوباره بدون land_code صدا بزن.",
+                "instruction": (
+                    "کد را از کاربر نپرس؛ دوباره با land_code خالی صدا بزن "
+                    "(مأموریت/گفتگو/اختصاص). فقط اگر چند فایل بدون زمینه است کوتاه بپرس کدام."
+                ),
             },
         }
     snap = _partner_tx_snapshot(phone, code)
@@ -1935,17 +2071,22 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
     )
 
 
-def _render_confirm_visit_card(action: dict[str, Any]) -> str:
-    return _render_confirm_action_card(action)
-
 
 def _render_next_action_card(action: dict[str, Any]) -> str:
     title = escape(str(action.get("title") or "کار بعدی"))
     subtitle = escape(str(action.get("subtitle") or ""))
-    cta = escape(str(action.get("cta") or "مشاهده"))
+    cta = escape(str(action.get("cta") or "ادامه در چت"))
     url = str(action.get("url") or "").strip()
+    chat_prompt = str(action.get("chat_prompt") or "").strip()
+    chat_intent = str(action.get("chat_intent") or "").strip()
     link = ""
-    if url:
+    if chat_prompt:
+        link = (
+            f'<button type="button" class="ai-agent-btn ai-agent-btn--confirm" '
+            f'data-agent-chat-prompt="{escape(chat_prompt)}" '
+            f'data-agent-chat-intent="{escape(chat_intent)}">{cta}</button>'
+        )
+    elif url:
         link = (
             f'<a class="ai-agent-btn ai-agent-btn--confirm" href="{escape(url)}" '
             f'data-vinor-express-nav>{cta}</a>'

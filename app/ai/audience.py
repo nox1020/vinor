@@ -98,26 +98,3 @@ def resolve_ai_voice(
     return VOICE_PUBLIC
 
 
-def voice_label_fa(voice: str | None) -> str:
-    v = (voice or "").strip().lower()
-    if v == VOICE_SPECIAL:
-        return "اپراتور ویژه (مالک/فروشنده)"
-    if v == VOICE_PARTNER:
-        return "هم‌پیمان فروش (همکار اکسپرس)"
-    return "همراه خرید وینور (مهمان/خریدار)"
-
-
-def resolve_audience_from_request(force: str | None = None) -> str:
-    from flask import g, session
-
-    phone = (session.get("user_phone") or "").strip()
-    profile = getattr(g, "express_partner_profile", None)
-    return resolve_audience_for_session(phone=phone, partner_profile=profile, force=force)
-
-
-def resolve_voice_from_request(audience: str | None = None) -> str:
-    from flask import g, session
-
-    phone = (session.get("user_phone") or "").strip()
-    profile = getattr(g, "express_partner_profile", None)
-    return resolve_ai_voice(phone=phone, partner_profile=profile, audience=audience)

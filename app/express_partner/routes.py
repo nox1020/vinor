@@ -74,10 +74,8 @@ from .partner_withdrawals import (
     withdrawable_balance,
     available_for_new_withdrawal,
     validate_new_request,
-    admin_row_dict,
-    withdrawals_for_phone,
-    reserved_withdrawal_total,
     active_withdrawals_for_phone,
+    reserved_withdrawal_total,
     build_partner_txn_feed,
     partner_txn_feed_summary,
     partner_commission_dashboard,
@@ -97,7 +95,6 @@ from .visit_requests import (
     partner_open_visit,
     partner_active_visit_record,
     partner_can_request_new_visit,
-    partner_visit_approved_for_deal,
     partner_visit_completed,
     partner_visit_customer_phone,
     request_visit_done_confirmation,
@@ -105,9 +102,6 @@ from .visit_requests import (
     visit_commission_ready_for_deal,
     visit_progress_steps,
     visit_progress_summary,
-    partner_request_mgmt_meta,
-    REQUEST_MGMT_BUCKETS,
-    REQUEST_MGMT_BUCKET_LABELS,
     visit_date_min_iso,
     visit_allowed_weekdays_for_js,
     resolve_partner_land_tx_state,
@@ -1271,6 +1265,26 @@ def _auto_release_expired_transactions(assignments: List[Dict[str, Any]]) -> Non
                 current_app.logger.exception(
                     'auto-release pending deal commission cleanup failed'
                 )
+            # پیام در چت — همکار بداند می‌تواند دوباره معامله ثبت کند
+            try:
+                from .sales_coach import deliver_partner_progress_update
+                from app.utils.storage import load_ads_cached
+
+                lands = load_ads_cached() or []
+                title_by_code = {
+                    str(l.get('code') or '').strip(): str(l.get('title') or '').strip()
+                    for l in lands
+                    if isinstance(l, dict)
+                }
+                for code, holder in released:
+                    deliver_partner_progress_update(
+                        partner_phone=holder,
+                        event='deal_auto_released',
+                        land_code=code,
+                        land_title=title_by_code.get(code, ''),
+                    )
+            except Exception:
+                current_app.logger.exception('auto-release chat progress failed')
 
 
 _AUTO_RELEASE_LAST_MONO = 0.0
@@ -2372,20 +2386,21 @@ def _home_urgent_actions(
             if not code:
                 continue
             land_label = (land.get('title') or code).strip()
-            cust_phone = ''
-            try:
-                cust_phone = partner_visit_customer_phone(visit_rows, ph, code)
-            except Exception:
-                cust_phone = ''
-            call_url = f'tel:{cust_phone}' if cust_phone else url_for('express_partner.land_detail', code=code)
             actions.append({
-                'key': 'contact_customer',
-                'icon': 'fa-phone',
+                'key': 'deal_pending_chat',
+                'icon': 'fa-handshake',
                 'tone': 'red',
-                'title': 'الان با مشتری تماس بگیر',
+                'title': 'معامله منتظر تأیید است',
                 'subtitle': land_label,
-                'cta': 'تماس',
-                'url': call_url,
+                'cta': 'وضعیت در چت',
+                'url': url_for('express_partner.home'),
+                'chat_prompt': (
+                    f'فایل {code}'
+                    + (f' ({land_label})' if land_label and land_label != code else '')
+                    + ': فروشم ثبت شده و منتظر تأیید ادمین است؛ وضعیت کوتاه بگو. '
+                    'اگر انصراف می‌خوام بگو کارت بستن معامله بده.'
+                ),
+                'chat_intent': 'status',
                 'land_code': code,
                 'priority': 100,
             })
@@ -2409,6 +2424,12 @@ def _home_urgent_actions(
                 'subtitle': land_label,
                 'cta': 'ثبت در چت',
                 'url': url_for('express_partner.home'),
+                'chat_prompt': (
+                    f'فایل {code}'
+                    + (f' ({land_label})' if land_label and land_label != code else '')
+                    + ': بازدید انجام شد — کارت تأییدش رو بده.'
+                ),
+                'chat_intent': 'complete_visit',
                 'land_code': code,
                 'priority': 90,
             })
@@ -2433,7 +2454,7 @@ def _home_urgent_actions(
             'icon': 'fa-wallet',
             'tone': 'green',
             'title': 'پولت آماده برداشت است',
-            'subtitle': 'همین الان درخواست برداشت بزن',
+            'subtitle': 'از کیف پول درخواست برداشت بزن؛ قدم بعدی فروش را از چت بپرس',
             'cta': 'برداشت',
             'url': url_for('express_partner.commissions'),
             'priority': 70,
@@ -2512,11 +2533,11 @@ def _home_funnel_for_land(
         visit_done and visit_commission_required and not visit_ready and not in_tx and not sold
     )
 
-    # ۱ اختصاص — همیشه انجام‌شده اگر روی کارت است
-    # ۲ بازاریابی — با ثبت بازدید (غیرمنتفی) یا معامله/فروش
-    # ۳ درخواست بازدید — فقط بعد از انجام بازدید (completed) یا معامله/فروش
-    #   تأیید ادمین / منتظر انجام هنوز current روی همین مرحله می‌ماند
-    # ۴ معامله/بازدید مجدد — تا فروش قطعی current است
+    # مسیر رسمی مأموریت:
+    # ۱) اختصاص — با بودن روی کارت همیشه done
+    # ۲) بازاریابی — تا قبل از ثبت بازدید (کلیک/CTA می‌تواند مستقیم به بازدید بپرد)
+    # ۳) درخواست بازدید — از ثبت بازدید تا completed (با ساب‌لیبل وضعیت)
+    # ۴) معامله/بازدید مجدد — بعد از completed تا sold
     assigned_done = True
     marketing_done = (has_visit and not visit_cancelled) or in_tx or sold
     visit_step_done = visit_done or in_tx or sold
@@ -2597,6 +2618,7 @@ def _home_suggested_files(
     from app.express_partner.sales_coach import (
         build_journey_chat_cta,
         coach_tip_for_stage,
+        enrich_funnel_steps_for_nav,
     )
     from app.express_partner.visit_requests import resolve_partner_land_tx_state
 
@@ -2665,6 +2687,13 @@ def _home_suggested_files(
             funnel_key=funnel_key,
             can_revisit=can_revisit,
         )
+        funnel_steps = enrich_funnel_steps_for_nav(
+            funnel.get('funnel_steps') or [],
+            code=code,
+            title=(land.get("title") or "").strip(),
+            tx_mode=tx_mode,
+            can_revisit=can_revisit,
+        )
         candidates.append({
             'code': code,
             'title': (land.get('title') or '—').strip(),
@@ -2677,7 +2706,7 @@ def _home_suggested_files(
             'detail_url': url_for('express_partner.land_detail', code=code),
             'more_url': url_for('express_partner.home'),
             'stage_label': stage_label,
-            'funnel_steps': funnel.get('funnel_steps') or [],
+            'funnel_steps': funnel_steps,
             'funnel_key': funnel_key,
             'tx_mode': tx_mode,
             'can_revisit': can_revisit,
@@ -2688,6 +2717,7 @@ def _home_suggested_files(
             'cta_chat_prompt': cta.get('prompt') or '',
             'cta_secondary_label': cta.get('secondary_label') or '',
             'cta_secondary_icon': cta.get('secondary_icon') or '',
+            'cta_secondary_action': cta.get('secondary_action') or '',
             'cta_secondary_prompt': cta.get('secondary_prompt') or '',
             'show_fav': True,
             'coach_tip': tip,
@@ -2705,23 +2735,17 @@ def _home_suggested_files(
             act_code = str(act.get('land_code') or '').strip()
             if act_code and act_code == code:
                 row['cta_label'] = act.get('cta') or row.get('cta_label')
-                row['cta_icon'] = act.get('icon') or row.get('cta_icon') or 'fa-phone'
-                if act.get('key') == 'contact_customer':
-                    row['stage_label'] = 'تماس فوری'
-                    # تماس مستقیم همچنان لینک tel می‌ماند
-                    if act.get('url'):
-                        row['cta_url'] = act.get('url')
-                        row['cta_chat_prompt'] = ''
-                elif act.get('key') == 'visit_today':
+                row['cta_icon'] = act.get('icon') or row.get('cta_icon') or 'fa-comments'
+                chat_p = str(act.get('chat_prompt') or '').strip()
+                if act.get('key') in ('deal_pending_chat', 'visit_today') or chat_p:
                     row['cta_url'] = ''
-                    if not row.get('cta_chat_prompt'):
-                        row['cta_chat_prompt'] = build_journey_chat_cta(
-                            code=code,
-                            title=str(row.get('title') or ''),
-                            tx_mode=str(row.get('tx_mode') or ''),
-                            stage_label=str(row.get('stage_label') or ''),
-                            can_revisit=bool(row.get('can_revisit')),
-                        ).get('prompt') or ''
+                    if chat_p:
+                        row['cta_chat_prompt'] = chat_p
+                    row['cta_action'] = str(act.get('chat_intent') or row.get('cta_action') or '')
+                    if act.get('key') == 'deal_pending_chat':
+                        row['stage_label'] = 'منتظر تأیید معامله'
+                    elif act.get('key') == 'visit_today':
+                        row['stage_label'] = 'بازدید امروز'
                 break
         out.append(row)
     return out

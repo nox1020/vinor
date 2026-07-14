@@ -88,20 +88,6 @@ def strip_land_markers(text: str) -> tuple[str, list[str]]:
     return cleaned, codes
 
 
-def infer_codes_from_text(text: str, lands_map: dict[str, dict[str, Any]]) -> list[str]:
-    """اگر کد فایل در متن آمده (بدون مارکر)، همان را پیدا کن."""
-    if not text or not lands_map:
-        return []
-    found: list[str] = []
-    for code in lands_map:
-        if not code:
-            continue
-        if re.search(r"(?<!\w)" + re.escape(code) + r"(?!\w)", text):
-            if code not in found:
-                found.append(code)
-    return found
-
-
 def collect_land_codes(
     reply_text: str,
     *,

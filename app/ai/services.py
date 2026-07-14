@@ -511,6 +511,7 @@ def _run_agent_loop(
     phone: str,
     audience: str,
     voice: str,
+    thread_id: str | None = None,
 ) -> dict[str, Any]:
     """حلقه کوتاه tool-calling؛ حداکثر ۲ دور ابزار سپس پاسخ نهایی."""
     agent_actions: list[dict[str, Any]] = []
@@ -551,6 +552,7 @@ def _run_agent_loop(
                 phone=phone,
                 audience=audience,
                 voice=voice,
+                thread_id=thread_id,
             )
             ui = tool_out.get("ui_action")
             if isinstance(ui, dict):
@@ -679,6 +681,14 @@ def generate_reply(
     from .intents import normalize_chip_intent
 
     intent = normalize_chip_intent(chip_intent)
+    # شروع تازهٔ ثبت بازدید / بازدید مجدد — پیش‌نویس قبلی فیلدها را قاطی نکند
+    if intent == "visit" and key:
+        try:
+            from .agent_tools import clear_visit_draft
+
+            clear_visit_draft(key)
+        except Exception:
+            pass
     tools = tools_schema_for_voice(voice) if key else []
     messages = _build_messages(
         text,
@@ -690,12 +700,19 @@ def generate_reply(
         chip_intent=intent or None,
         thread_id=thread_id,
     )
+    try:
+        from flask import g
+
+        g.ai_last_user_message = (text or "").strip()
+    except Exception:
+        pass
     result = _run_agent_loop(
         messages,
         tools=tools or None,
         phone=key,
         audience=aud,
         voice=voice,
+        thread_id=thread_id,
     )
     if not result.get("ok"):
         reason = None

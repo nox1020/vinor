@@ -477,6 +477,25 @@ def build_partner_status_context(phone: str) -> str:
                     "یا land_code را خالی بگذار تا سیستم خودش بگیرد. "
                     "پاسخ‌ها کوتاه و ماموریت‌محور؛ مفصل فقط اگر کاربر توضیح بیشتر بخواهد."
                 )
+            else:
+                personal_codes: list[str] = []
+                for a in assigned or []:
+                    if not isinstance(a, dict) or not a.get("_assignment_id"):
+                        continue
+                    c = str(a.get("code") or a.get("land_code") or "").strip()
+                    if c and c not in personal_codes:
+                        personal_codes.append(c)
+                if len(personal_codes) == 1:
+                    lines.append(
+                        f"فایل شخصی فعال: {personal_codes[0]} — کد را از کاربر نپرس؛ "
+                        "propose_* را با land_code خالی بزن."
+                    )
+                elif personal_codes:
+                    lines.append(
+                        "فایل‌های اختصاصی: "
+                        + "، ".join(personal_codes[:5])
+                        + " — اگر گفتگو روی یک فایل است کد نپرس؛ land_code خالی بگذار."
+                    )
         except Exception:
             pass
         if actions:
@@ -486,6 +505,9 @@ def build_partner_status_context(phone: str) -> str:
             line = f"کار بعدی (اولویت): {title}"
             if sub:
                 line += f" | {sub}"
+            chat_p = str(a.get("chat_prompt") or "").strip()
+            if chat_p:
+                line += " — از همین چت با ابزار propose_* جلو ببر؛ لینک صفحه نده."
             lines.append(line)
         else:
             lines.append("کار بعدی: فعلاً کار فوری نیست")
@@ -628,22 +650,6 @@ def build_partner_land_context(
     return "\n".join(parts)
 
 
-def build_partner_context(
-    phone: str,
-    user_message: str = "",
-    *,
-    focus_codes: list[str] | None = None,
-) -> str:
-    """متن زمینه برای تزریق به system prompt."""
-    parts = [build_partner_context_base(phone)]
-    land_ctx = build_partner_land_context(
-        phone, user_message, focus_codes=focus_codes
-    )
-    if land_ctx:
-        parts.append(land_ctx)
-    return "\n".join(parts)
-
-
 def build_public_context_base() -> str:
     settings = load_settings() or {}
     admin_phone = str(settings.get("partner_application_admin_phone") or "09121471301").strip()
@@ -695,19 +701,6 @@ def build_public_land_context(
         item["_assignment_status"] = "public"
         item["_is_expired"] = is_ad_expired(land)
         parts.append(_land_summary(item, assigned=False, show_commission=False, compact=True))
-    return "\n".join(parts)
-
-
-def build_public_context(
-    user_message: str = "",
-    *,
-    focus_codes: list[str] | None = None,
-) -> str:
-    """زمینه برای کاربر عادی — فقط آگهی‌های مرتبط با سوال."""
-    parts = [build_public_context_base()]
-    land_ctx = build_public_land_context(user_message, focus_codes=focus_codes)
-    if land_ctx:
-        parts.append(land_ctx)
     return "\n".join(parts)
 
 

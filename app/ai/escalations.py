@@ -294,30 +294,6 @@ def _notify_admin_sms(rec: dict[str, Any]) -> bool:
         return False
 
 
-def has_pending_answers(
-    user_key: str,
-    audience: str | None = None,
-) -> bool:
-    """آیا پاسخ ادمین آماده است (بدون مصرف — برای مسیریابی API)."""
-    key = _norm_key(user_key)
-    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else None
-    if not key:
-        return False
-    for it in _load_all():
-        it_key = _norm_key(str(it.get("user_key") or it.get("partner_phone") or ""))
-        if it_key != key:
-            continue
-        if aud and (it.get("audience") or AUDIENCE_PARTNER) != aud:
-            continue
-        if (it.get("status") or "") != "answered":
-            continue
-        if it.get("delivered_at"):
-            continue
-        if str(it.get("admin_answer") or "").strip():
-            return True
-    return False
-
-
 def consume_pending_answers(
     user_key: str,
     audience: str | None = None,

@@ -1084,6 +1084,30 @@
         }
         return;
       }
+      if (atype === 'next_action') {
+        card.setAttribute('data-bound', '1');
+        var chatBtn = card.querySelector('[data-agent-chat-prompt]');
+        if (chatBtn) {
+          chatBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            var prompt = chatBtn.getAttribute('data-agent-chat-prompt') || '';
+            var intent = chatBtn.getAttribute('data-agent-chat-intent') || '';
+            if (!prompt || !input) return;
+            try {
+              if (intent) form.setAttribute('data-pending-intent', intent);
+            } catch (_) {}
+            input.value = prompt;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            setTimeout(function () {
+              try {
+                if (typeof form.requestSubmit === 'function') form.requestSubmit();
+                else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+              } catch (_) {}
+            }, 40);
+          });
+        }
+        return;
+      }
       if (atype.indexOf('confirm_') !== 0) return;
       card.setAttribute('data-bound', '1');
       var confirmBtn = card.querySelector('[data-agent-confirm]');

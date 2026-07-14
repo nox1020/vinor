@@ -39,12 +39,3 @@ def get_partner_context_base(phone: str, build_fn) -> str:
 
 def invalidate_partner(phone: str) -> None:
     _PARTNER_BASE.pop(phone, None)
-
-
-# سازگاری با importهای قدیمی
-def get_public_context(build_fn) -> str:
-    return get_public_context_base(build_fn)
-
-
-def get_partner_context(phone: str, build_fn) -> str:
-    return get_partner_context_base(phone, build_fn)

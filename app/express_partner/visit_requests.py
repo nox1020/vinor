@@ -38,16 +38,6 @@ VISIT_PROGRESS_STEP_KEYS = (
     ("deal_commission_paid", "واریز پورسانت معامله"),
 )
 
-REQUEST_STAGE_HINTS = {
-    "visit_requested": "درخواست بازدید ثبت و نهایی شد — با مشتری هماهنگ کنید.",
-    "visit_approved": "بازدید نهایی شد — با مشتری هماهنگ کنید و پس از بازدید «انجام شد» را ثبت کنید.",
-    "visit_done": "بازدید انجام شد ثبت شده؛ منتظر تأیید ادمین بمانید.",
-    "visit_commission_paid": "پورسانت بازدید در حال بررسی است؛ سپس می‌توانید معامله ثبت کنید.",
-    "deal_requested": "زمان ثبت درخواست معامله است — از صفحه فایل اقدام کنید.",
-    "deal_approved": "معامله ثبت شده؛ منتظر تأیید و واریز پورسانت باشید.",
-    "deal_commission_paid": "پورسانت معامله در حال واریز است؛ به‌زودی در کیف پول می‌بینید.",
-}
-
 # روز هفته برای تنظیمات ادمین (هم‌تراز recurrence_weekday در پیامک زمان‌دار)
 VISIT_WEEKDAY_SAT = 5
 VISIT_WEEKDAY_SUN = 6
@@ -417,122 +407,6 @@ def visit_progress_summary(steps: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-REQUEST_MGMT_BUCKETS = (
-    "needs_action",
-    "in_progress",
-    "cancelled",
-    "completed",
-)
-
-REQUEST_MGMT_BUCKET_LABELS = {
-    "needs_action": "نیاز به اقدام",
-    "in_progress": "در حال انجام",
-    "completed": "تکمیل شده",
-    "cancelled": "لغو شده",
-}
-
-
-def partner_request_mgmt_meta(
-    row: Dict[str, Any],
-    progress_steps: List[Dict[str, Any]],
-) -> Dict[str, Any]:
-    """دسته‌بندی مدیریتی درخواست برای صفحه پیگیری همکار."""
-    status = str(row.get("status") or PENDING_STATUS).strip() or PENDING_STATUS
-    summary = visit_progress_summary(progress_steps)
-    done_count = int(summary.get("done_count") or 0)
-    total = int(summary.get("total") or 0)
-    pct = int(round(100 * done_count / total)) if total else 0
-
-    current_key = ""
-    current_label = str(summary.get("current_label") or "")
-    for step in progress_steps or []:
-        if step.get("state") in ("current", "blocked", "rejected"):
-            current_key = str(step.get("key") or "")
-            if step.get("state") == "rejected":
-                current_label = "رد شده"
-            elif step.get("label"):
-                current_label = str(step.get("label") or "")
-            break
-
-    if status == CANCELLED_STATUS:
-        bucket = "cancelled"
-        next_action = "درخواست لغو یا رد شد"
-        sort_group = 2
-        pct = 0
-        progress_line = "رد شده"
-        progress_pct_label = ""
-    elif total > 0 and done_count >= total:
-        bucket = "completed"
-        next_action = "مسیر تکمیل شد"
-        sort_group = 3
-    elif status == APPROVED_STATUS:
-        bucket = "needs_action"
-        next_action = "تماس با مشتری و ثبت بازدید"
-        sort_group = 0
-    elif status == COMPLETED_STATUS and current_key == "deal_requested":
-        bucket = "needs_action"
-        next_action = "ثبت درخواست معامله"
-        sort_group = 0
-    elif status in (PENDING_STATUS, DONE_PENDING_STATUS):
-        bucket = "in_progress"
-        next_action = (
-            "انتظار تأیید ادمین"
-            if status == PENDING_STATUS
-            else "انتظار تأیید انجام بازدید"
-        )
-        sort_group = 1
-    else:
-        next_action_map = {
-            "visit_requested": "تماس با مشتری و ثبت بازدید",
-            "visit_approved": "تماس با مشتری و ثبت بازدید",
-            "visit_done": "انتظار تأیید انجام بازدید",
-            "visit_commission_paid": "انتظار تأیید پورسانت بازدید",
-            "deal_requested": "ثبت درخواست معامله",
-            "deal_approved": "انتظار تأیید معامله",
-            "deal_commission_paid": "انتظار واریز پورسانت",
-        }
-        next_action = next_action_map.get(current_key, current_label or "پیگیری در جریان")
-        if current_key == "visit_approved" and status == APPROVED_STATUS:
-            bucket = "needs_action"
-            sort_group = 0
-        else:
-            bucket = "in_progress"
-            sort_group = 1
-
-    if bucket == "completed":
-        stage_num = total
-    elif bucket == "cancelled":
-        stage_num = 0
-    else:
-        stage_num = min(done_count + 1, total) if total else 0
-
-    if bucket != "cancelled":
-        progress_line = f"مرحله {stage_num} از {total}" if total else ""
-        progress_pct_label = f"{pct}٪ پیشرفت" if total else ""
-
-    if bucket == "cancelled":
-        stage_hint = "این درخواست لغو یا رد شده؛ می‌توانید درخواست جدید ثبت کنید."
-    elif bucket == "completed":
-        stage_hint = "مسیر این فایل کامل شده — پورسانت‌ها در بخش مالی قابل مشاهده است."
-    else:
-        stage_hint = REQUEST_STAGE_HINTS.get(current_key, next_action)
-
-    return {
-        "bucket": bucket,
-        "bucket_label": REQUEST_MGMT_BUCKET_LABELS.get(bucket, bucket),
-        "next_action": next_action,
-        "sort_group": sort_group,
-        "progress_done": done_count,
-        "progress_total": total,
-        "progress_pct": pct,
-        "progress_line": progress_line,
-        "progress_pct_label": progress_pct_label,
-        "current_step_label": current_label,
-        "current_step_key": current_key,
-        "stage_hint": stage_hint,
-    }
-
-
 def partner_most_recent_visit(
     requests: List[Dict[str, Any]], phone: str, land_code: str
 ) -> Optional[Dict[str, Any]]:
@@ -696,20 +570,6 @@ def partner_visit_customer_phone(
     return str(rec.get("customer_phone") or "").strip()
 
 
-def partner_visit_customer_name(
-    requests: List[Dict[str, Any]] | None, phone: str, land_code: str
-) -> str:
-    rec = partner_active_visit_record(requests or [], phone, land_code)
-    if not rec:
-        return ""
-    name = str(rec.get("customer_name") or "").strip()
-    if name:
-        return name
-    first = str(rec.get("customer_first_name") or "").strip()
-    last = str(rec.get("customer_last_name") or "").strip()
-    return f"{first} {last}".strip()
-
-
 def partner_can_request_new_visit(
     assignment_status: str,
     visit_requests: List[Dict[str, Any]] | None,
@@ -722,25 +582,6 @@ def partner_can_request_new_visit(
     if gs in ("sold", "in_transaction"):
         return False
     return True
-
-
-def partner_has_open_visit(
-    requests: List[Dict[str, Any]], phone: str, land_code: str
-) -> bool:
-    return partner_open_visit(requests, phone, land_code) is not None
-
-
-# سازگاری با کد قبلی
-def partner_pending_visit(
-    requests: List[Dict[str, Any]], phone: str, land_code: str
-) -> Optional[Dict[str, Any]]:
-    return partner_open_visit(requests, phone, land_code)
-
-
-def partner_has_pending_visit(
-    requests: List[Dict[str, Any]], phone: str, land_code: str
-) -> bool:
-    return partner_visit_approved_for_deal(requests, phone, land_code) is not None
 
 
 def create_visit_request(
@@ -798,30 +639,6 @@ def create_visit_request(
     }
     requests.append(rec)
     return rec, None
-
-
-def approve_visit_request(
-    requests: List[Dict[str, Any]], request_id: str
-) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    rid = (request_id or "").strip()
-    if not rid:
-        return None, "not_found"
-    for r in requests:
-        if not isinstance(r, dict):
-            continue
-        if str(r.get("id") or "") != rid:
-            continue
-        st = (str(r.get("status") or "")).strip()
-        if st == APPROVED_STATUS:
-            return r, "already_approved"
-        if st != PENDING_STATUS:
-            return None, "invalid_status"
-        now_iso = datetime.utcnow().isoformat() + "Z"
-        r["status"] = APPROVED_STATUS
-        r["updated_at"] = now_iso
-        r["approved_at"] = now_iso
-        return r, None
-    return None, "not_found"
 
 
 ADMIN_VISIT_STATUSES = frozenset({
@@ -902,29 +719,6 @@ def admin_update_visit_request_status(
         # تاریخچهٔ تأیید/انجام را نگه می‌داریم تا روند بسته‌شده قابل‌خواندن بماند
         rec["cancelled_at"] = now_iso
     return rec, None
-
-
-def reject_visit_request(
-    requests: List[Dict[str, Any]], request_id: str, *, admin_note: str = ""
-) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    rid = (request_id or "").strip()
-    if not rid:
-        return None, "not_found"
-    for r in requests:
-        if not isinstance(r, dict):
-            continue
-        if str(r.get("id") or "") != rid:
-            continue
-        st = (str(r.get("status") or "")).strip()
-        if st != PENDING_STATUS:
-            return None, "invalid_status"
-        now_iso = datetime.utcnow().isoformat() + "Z"
-        r["status"] = CANCELLED_STATUS
-        r["updated_at"] = now_iso
-        if admin_note:
-            r["admin_note"] = admin_note.strip()
-        return r, None
-    return None, "not_found"
 
 
 def _first_completed_visit_without_commission(
@@ -1079,7 +873,8 @@ def visit_tx_mode(
             return "visit_commission_pending"
         if has_pending_deal_commission:
             return "deal_pending"
-        # رد معامله → دوباره مسیر معامله (نه فقط بازدید مجدد)
+        # رد معامله یا بعد از تکمیل بازدید → مسیر معامله (نه فقط بازدید مجدد)
+        _ = deal_commission_rejected  # نگه‌داشت API؛ وضعیت active بعد از رد است
         return "deal"
     return "visit"
 
@@ -1194,23 +989,6 @@ def resolve_partner_land_tx_state(
         "has_assignment": has_my_assignment,
         "deal_finalized": deal_finalized,
     }
-
-
-def tx_button_mode(
-    assignment_status: str,
-    *,
-    has_pending_visit: bool,
-    is_approved: bool,
-    is_sold: bool,
-    has_visit_awaiting_admin: bool = False,
-) -> str:
-    return visit_tx_mode(
-        assignment_status,
-        has_visit_awaiting_admin=has_visit_awaiting_admin,
-        has_approved_visit=has_pending_visit,
-        is_approved=is_approved,
-        is_sold=is_sold,
-    )
 
 
 def admin_row_dict(
