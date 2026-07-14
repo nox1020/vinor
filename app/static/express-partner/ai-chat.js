@@ -240,6 +240,168 @@
     if (list) list.scrollTop = list.scrollHeight;
   }
 
+  var streamToken = 0;
+  var streamRaf = 0;
+
+  function cancelTypewriter() {
+    streamToken += 1;
+    if (streamRaf) {
+      try {
+        window.cancelAnimationFrame(streamRaf);
+      } catch (_) {}
+      streamRaf = 0;
+    }
+    try {
+      list.querySelectorAll('.ai-msg-wrap[data-streaming="1"]').forEach(function (w) {
+        w.removeAttribute('data-streaming');
+      });
+    } catch (_) {}
+  }
+
+  function streamChunkSize(total, index) {
+    /* شروع آرام کاراکتری، بعد کمی سریع‌تر مثل GPT */
+    if (total <= 80) return 1;
+    if (index < 24) return 1;
+    if (index < 120) return 2;
+    if (total > 900) return 5;
+    return 3;
+  }
+
+  function typewriteAssistantMessage(msg) {
+    if (!msg || (msg.role || 'assistant') === 'user') {
+      return Promise.resolve(appendMessage(msg));
+    }
+    if (messageSeen(msg)) return Promise.resolve(null);
+
+    var text = (msg.content || '').trim();
+    var cardsHtml = buildCardsHtml(msg);
+    if (!text && !cardsHtml) return Promise.resolve(null);
+
+    cancelTypewriter();
+    removeThinking();
+    removeWelcome();
+
+    /* اسکلت پیام را بساز؛ متن را تدریجی پر کن */
+    var wrap = appendMessage(
+      {
+        role: 'assistant',
+        content: '',
+        created_at: msg.created_at,
+        escalation_id: msg.escalation_id,
+        source: msg.source,
+      },
+      { streamShell: true }
+    );
+    if (!wrap) {
+      return Promise.resolve(appendMessage(msg));
+    }
+
+    wrap.setAttribute('data-streaming', '1');
+    var bubble = wrap.querySelector('.ai-msg-bubble');
+    if (!bubble) {
+      wrap.removeAttribute('data-streaming');
+      return Promise.resolve(wrap);
+    }
+    bubble.textContent = '';
+    bubble.removeAttribute('data-formatted');
+
+    var myToken = streamToken;
+    var i = 0;
+
+    return new Promise(function (resolve) {
+      function finish() {
+        if (myToken !== streamToken) {
+          resolve(wrap);
+          return;
+        }
+        wrap.removeAttribute('data-streaming');
+        if (text) {
+          bubble.innerHTML = formatAssistantHtml(text);
+          bubble.setAttribute('data-formatted', '1');
+        }
+        if (cardsHtml) {
+          var body = wrap.querySelector('.ai-msg-body');
+          if (body && !body.querySelector('.ai-msg-cards')) {
+            var cardsWrap = document.createElement('div');
+            cardsWrap.innerHTML = cardsHtml;
+            var cardsEl = cardsWrap.firstElementChild;
+            if (cardsEl) {
+              if (!cardsEl.classList.contains('ai-msg-cards')) {
+                var cardsHost = document.createElement('div');
+                cardsHost.className = 'ai-msg-cards';
+                cardsHost.appendChild(cardsEl);
+                body.appendChild(cardsHost);
+              } else {
+                body.appendChild(cardsEl);
+              }
+              initCardsIn(body);
+            }
+          }
+        }
+        wireCopyBlocks(wrap);
+        ensureMsgActions(wrap);
+        scrollChatToEnd();
+        resolve(wrap);
+      }
+
+      function step() {
+        if (myToken !== streamToken) {
+          resolve(wrap);
+          return;
+        }
+        if (!text) {
+          finish();
+          return;
+        }
+        var n = streamChunkSize(text.length, i);
+        i = Math.min(text.length, i + n);
+        bubble.textContent = text.slice(0, i);
+        scrollChatToEnd();
+        if (i >= text.length) {
+          streamRaf = 0;
+          finish();
+          return;
+        }
+        streamRaf = window.requestAnimationFrame(step);
+      }
+
+      streamRaf = window.requestAnimationFrame(step);
+    });
+  }
+
+  function reconcileExchange(serverMessages, opts) {
+    opts = opts || {};
+    var msgs = serverMessages || [];
+    var lastUser = null;
+    var lastAsst = null;
+    for (var i = msgs.length - 1; i >= 0; i--) {
+      var m = msgs[i];
+      if (!m || !m.role) continue;
+      if (!lastAsst && m.role === 'assistant' && messageHasContent(m)) lastAsst = m;
+      if (!lastUser && m.role === 'user' && messageHasContent(m)) lastUser = m;
+      if (lastUser && lastAsst) break;
+    }
+
+    var pending = list.querySelector('.ai-msg-wrap[data-pending-user="1"]');
+    if (pending) {
+      if (lastUser && lastUser.created_at) {
+        pending.removeAttribute('data-pending-user');
+        pending.setAttribute('data-created-at', lastUser.created_at);
+        bumpLastSyncAt(lastUser.created_at);
+      } else {
+        pending.remove();
+      }
+    }
+
+    if (lastAsst) {
+      if (opts.stream) return typewriteAssistantMessage(lastAsst);
+      appendMessage(lastAsst);
+    }
+    scanLastSyncFromDom();
+    scrollChatToEnd();
+    return Promise.resolve(null);
+  }
+
   window.__vinorAiChatSetSheetOpen = function (open) {
     if (homeInline) {
       sheetOpen = true;
@@ -1018,7 +1180,7 @@
       msg.source === 'postchi' ||
       (text && text.indexOf('پاسخ تیم وینور') === 0);
 
-    if (!text && !cardsHtml && !opts.thinking) return null;
+    if (!text && !cardsHtml && !opts.thinking && !opts.streamShell) return null;
 
     if (!opts.welcome) removeWelcome();
 
@@ -1063,6 +1225,11 @@
       thinking.innerHTML =
         '<span class="ai-msg-dot"></span><span class="ai-msg-dot"></span><span class="ai-msg-dot"></span>';
       body.appendChild(thinking);
+    } else if (opts.streamShell) {
+      var streamBubble = document.createElement('div');
+      streamBubble.className = 'ai-msg-bubble';
+      streamBubble.setAttribute('aria-live', 'off');
+      body.appendChild(streamBubble);
     } else if (text) {
       var bubble = document.createElement('div');
       bubble.className = 'ai-msg-bubble';
@@ -1095,7 +1262,7 @@
     row.appendChild(body);
     wrap.appendChild(row);
     list.appendChild(wrap);
-    if (!isUser) {
+    if (!isUser && !opts.thinking && !opts.streamShell) {
       wireCopyBlocks(wrap);
       ensureMsgActions(wrap);
     }
@@ -1131,35 +1298,8 @@
     }, 4200);
   }
 
-  function reconcileExchange(serverMessages) {
-    var msgs = serverMessages || [];
-    var lastUser = null;
-    var lastAsst = null;
-    for (var i = msgs.length - 1; i >= 0; i--) {
-      var m = msgs[i];
-      if (!m || !m.role) continue;
-      if (!lastAsst && m.role === 'assistant' && messageHasContent(m)) lastAsst = m;
-      if (!lastUser && m.role === 'user' && messageHasContent(m)) lastUser = m;
-      if (lastUser && lastAsst) break;
-    }
-
-    var pending = list.querySelector('.ai-msg-wrap[data-pending-user="1"]');
-    if (pending) {
-      if (lastUser && lastUser.created_at) {
-        pending.removeAttribute('data-pending-user');
-        pending.setAttribute('data-created-at', lastUser.created_at);
-        bumpLastSyncAt(lastUser.created_at);
-      } else {
-        pending.remove();
-      }
-    }
-
-    if (lastAsst) appendMessage(lastAsst);
-    scanLastSyncFromDom();
-    scrollChatToEnd();
-  }
-
   function renderMessages(messages) {
+    cancelTypewriter();
     list.innerHTML = '';
     seenEscalationIds = {};
     lastSyncAt = '';
@@ -1689,6 +1829,7 @@
       onViewportScroll = null;
     }
     if (composer) composer.style.removeProperty('--ai-keyboard-inset');
+    cancelTypewriter();
     window.__vinorAiChatTeardown = null;
     window.__vinorAiChatSetSheetOpen = null;
     window.__vinorAiChatSwitchThread = null;
@@ -1906,10 +2047,10 @@
         if (data && data.escalated && data.reply) {
           if (data.thread_id) setActiveThreadId(data.thread_id);
           if (data.messages && data.messages.length) {
-            reconcileExchange(data.messages);
+            await reconcileExchange(data.messages, { stream: true });
           } else {
             removePendingUser();
-            appendMessage({
+            await typewriteAssistantMessage({
               role: 'assistant',
               content: data.reply,
               cards_html: data.cards_html,
@@ -1928,7 +2069,7 @@
       }
       if (data.thread_id) setActiveThreadId(data.thread_id);
       noteGuestRepliesFromPayload(data);
-      reconcileExchange(data.messages);
+      await reconcileExchange(data.messages, { stream: true });
       if (data.guest_limit_reached || (typeof data.guest_replies_remaining === 'number' && data.guest_replies_remaining <= 0 && isGuestQuotaUser())) {
         guestRepliesRemaining = 0;
         /* سقف پر شد — دفعه بعد منوی ورود؛ همین پاسخ را نشان بده */
