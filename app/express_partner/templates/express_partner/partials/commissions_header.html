@@ -1,16 +1,38 @@
-{# هدر کیف پول — مینیمال #}
-{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_back_link %}
+{# هدر کیف پول — فقط دکمهٔ برگشت شناور؛ بدون عنوان وسط؛ کارت از بالای صفحه #}
+{% from 'express_partner/partials/partner_header.html' import ep_back_link %}
 
-{{ ep_header_start(id='commissionsPageHeader', tour='commissions-header') }}
-<div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 max-w-lg lg:max-w-4xl mx-auto">
-  <div class="flex items-center gap-2">
+<header id="commissionsPageHeader"
+        data-tour="commissions-header"
+        class="ep-partner-header ep-partner-header--shell-none"
+        aria-label="بازگشت">
+  <div class="comm-float-back">
     {{ ep_back_link(url_for('express_partner.home'), class='vinor-dash-glass-pill comm-header-glass-btn') }}
-    <div class="vinor-dash-glass-pill comm-header-title-pill flex h-[42px] min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 sm:px-4">
-      <h1 class="truncate text-sm font-bold text-gray-900 dark:text-white">کیف پول</h1>
-    </div>
-    <div class="comm-header-glass-btn pointer-events-none select-none opacity-0" aria-hidden="true">
-      <i class="fas fa-wallet text-[15px]"></i>
-    </div>
   </div>
-</div>
-{{ ep_header_end() }}
+</header>
+<style>
+  #commissionsPageHeader.ep-partner-header {
+    height: 0;
+    padding: 0;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 90;
+  }
+  #commissionsPageHeader .comm-float-back {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 0.45rem);
+    right: calc(env(safe-area-inset-right, 0px) + 0.7rem);
+    left: auto;
+    z-index: 90;
+    pointer-events: none;
+  }
+  #commissionsPageHeader .comm-float-back a,
+  #commissionsPageHeader .comm-float-back .ep-partner-header-btn {
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  /* فضای دکمهٔ برگشت روی گوشهٔ کارت اول */
+  #commissionsRefreshMount .vn-wallet-stack > .vn-wallet-card:first-of-type .vn-wallet-hero {
+    padding-inline-end: 3.15rem;
+  }
+</style>

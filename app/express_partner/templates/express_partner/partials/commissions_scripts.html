@@ -286,6 +286,65 @@
       if (overlay && overlay.closeAll) overlay.closeAll();
       else if (overlay) overlay.close();
     }
+
+    /* جلوگیری از بستن فوری با کلیک ghost بعد از pointerup روی دکمهٔ باز کردن */
+    var dismissGuardUntil = 0;
+    var armingTimer = 0;
+    function armDismissGuard(ms) {
+      dismissGuardUntil = Date.now() + (ms || 550);
+      if (modal) {
+        modal.classList.add('vn-withdraw-modal--arming');
+        if (armingTimer) window.clearTimeout(armingTimer);
+        armingTimer = window.setTimeout(function () {
+          armingTimer = 0;
+          if (modal) modal.classList.remove('vn-withdraw-modal--arming');
+        }, ms || 550);
+      }
+    }
+    function dismissGuarded() {
+      return Date.now() < dismissGuardUntil;
+    }
+
+    function isCoarsePointer() {
+      try {
+        if (window.matchMedia('(pointer: coarse)').matches) return true;
+      } catch (_) {}
+      return window.innerWidth <= 1023;
+    }
+
+    function syncWithdrawModalViewport() {
+      if (!modal || !modal.classList.contains('vn-withdraw-modal--open')) {
+        if (modal) {
+          modal.style.removeProperty('--vn-vv-top');
+          modal.style.removeProperty('--vn-vv-left');
+          modal.style.removeProperty('--vn-vv-width');
+          modal.style.removeProperty('--vn-vv-height');
+        }
+        return;
+      }
+      try {
+        var vv = window.visualViewport;
+        if (!vv) {
+          modal.style.setProperty('--vn-vv-top', '0px');
+          modal.style.setProperty('--vn-vv-left', '0px');
+          modal.style.setProperty('--vn-vv-width', '100%');
+          modal.style.setProperty('--vn-vv-height', '100%');
+          return;
+        }
+        modal.style.setProperty('--vn-vv-top', Math.max(0, vv.offsetTop) + 'px');
+        modal.style.setProperty('--vn-vv-left', Math.max(0, vv.offsetLeft) + 'px');
+        modal.style.setProperty('--vn-vv-width', Math.max(1, Math.round(vv.width)) + 'px');
+        modal.style.setProperty('--vn-vv-height', Math.max(1, Math.round(vv.height)) + 'px');
+      } catch (_) {}
+    }
+
+    try {
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', syncWithdrawModalViewport, { passive: true, signal: modalSignal });
+        window.visualViewport.addEventListener('scroll', syncWithdrawModalViewport, { passive: true, signal: modalSignal });
+      }
+      window.addEventListener('resize', syncWithdrawModalViewport, { passive: true, signal: modalSignal });
+    } catch (_) {}
     var bankSummaryEl = document.getElementById('vnWithdrawBankSummary');
     var bankConfirm = document.getElementById('vnBankPickerConfirmBtn');
     var bankListEl = document.getElementById('vnBankAccountList');
@@ -493,6 +552,7 @@
       if (!bankModal) return;
       hoistCommissionModals();
       closeAllBankAccountMenus();
+      armDismissGuard(500);
       bankModal.classList.remove('hidden');
       bankModal.setAttribute('aria-hidden', 'false');
       try { void bankModal.offsetWidth; } catch (_) {}
@@ -844,6 +904,7 @@
     function openBankAdd() {
       if (!bankAddModal) return;
       hoistCommissionModals();
+      armDismissGuard(500);
       if (!bankCatalogCache) {
         fetch(API + '/data', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
           .then(function (r) { return r.json(); })
@@ -881,26 +942,38 @@
       }
       syncSubmitState();
       hoistCommissionModals();
+      armDismissGuard(600);
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
       try { void modal.offsetWidth; } catch (_) {}
       modal.classList.add('vn-withdraw-modal--open');
+      syncWithdrawModalViewport();
       overlayOpen();
       prefetchWithdrawBankData();
-      requestAnimationFrame(function () {
-        try { if (input && maxWithdraw >= minWithdraw) input.focus(); } catch (_) {}
-      });
+      /* موبایل: فوکوس فوری → کیبورد + کلیک ghost روی backdrop مودال را می‌بندد */
+      if (!isCoarsePointer() && maxWithdraw >= minWithdraw && input) {
+        requestAnimationFrame(function () {
+          try { input.focus({ preventScroll: true }); } catch (_) {
+            try { input.focus(); } catch (__) {}
+          }
+        });
+      }
     }
 
-    function closeModal() {
+    function closeModal(opts) {
+      opts = opts || {};
+      if (!opts.force && dismissGuarded()) return;
       forceCloseBankAdd();
       forceCloseBankPicker();
       modal.classList.remove('vn-withdraw-modal--open');
+      modal.classList.remove('vn-withdraw-modal--arming');
       window.setTimeout(function () {
         modal.classList.add('hidden');
       }, 280);
       modal.setAttribute('aria-hidden', 'true');
+      syncWithdrawModalViewport();
       overlayCloseAll();
+      try { if (input) input.blur(); } catch (_) {}
     }
 
     var openGuardUntil = 0;
@@ -938,22 +1011,26 @@
         return;
       }
       if (t.closest('[data-close-bank-add]')) {
+        if (dismissGuarded()) { e.preventDefault(); return; }
         e.preventDefault();
         closeBankAdd();
         return;
       }
       if (t.closest('[data-close-bank-picker]')) {
+        if (dismissGuarded()) { e.preventDefault(); return; }
         e.preventDefault();
         closeBankPicker();
         return;
       }
       if (t.closest('[data-close-withdraw-modal]')) {
+        if (dismissGuarded()) { e.preventDefault(); return; }
         e.preventDefault();
         closeModal();
       }
     }, { signal: modalSignal });
 
-    /* بعضی WebViewها روی دکمهٔ کم‌رنگ click را می‌خورند؛ pointerup هم گوش بده */
+    /* بعضی WebViewها روی دکمهٔ کم‌رنگ click را می‌خورند؛ pointerup هم گوش بده.
+       توجه: کلیکِ ghost بعدی ممکن است روی backdrop بخورد — armDismissGuard جلوی بستن فوری را می‌گیرد. */
     document.addEventListener('pointerup', function (e) {
       if (!e || e.pointerType === 'mouse') return;
       tryOpenWithdrawFromEvent(e);
@@ -1139,7 +1216,7 @@
             if (window.__vinorCommissionsRefresh) {
               window.__vinorCommissionsRefresh().catch(function () {});
             }
-            window.setTimeout(function () { closeModal(); }, 1800);
+            window.setTimeout(function () { closeModal({ force: true }); }, 1800);
           })
           .catch(function () {
             if (elWithdrawErr) {

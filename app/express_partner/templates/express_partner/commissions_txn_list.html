@@ -1,5 +1,5 @@
 {% extends 'express_partner/base.html' %}
-{% block title %}تراکنش‌ها | پورسانت{% endblock %}
+{% block title %}تراکنش‌ها | کیف پول{% endblock %}
 
 {% block head %}
 {% include 'express_partner/partials/commissions_styles.html' %}
@@ -13,11 +13,17 @@
 
 {% block content %}
   {% set _summary = txn_summary|default({}) %}
-  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+  {% from 'express_partner/partials/partner_header.html' import ep_back_link %}
 
   {% set _txn_hint = (items|length|string + ' تراکنش') if items and items|length > 0 else 'بدون تراکنش' %}
-  {{ ep_header_start(id='commTxnListHeader') }}
-  {% call ep_header_row('تراکنش‌ها', url_for('express_partner.commissions'), subtitle=_txn_hint, subtitle_id='commTxnCountHint', inner_class='max-w-lg mx-auto w-full') %}
+
+  <header id="commTxnListHeader"
+          class="ep-partner-header ep-partner-header--shell-none"
+          aria-label="تراکنش‌ها">
+    <div class="comm-txn-float comm-txn-float--back">
+      {{ ep_back_link(url_for('express_partner.commissions'), class='vinor-dash-glass-pill comm-header-glass-btn') }}
+    </div>
+    <div class="comm-txn-float comm-txn-float--filter">
       <button type="button"
               id="commTxnFilterToggle"
               class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn relative"
@@ -30,43 +36,49 @@
               class="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-[#10a37f] ring-2 ring-[#111111] hidden"
               aria-hidden="true"></span>
       </button>
-  {% endcall %}
-  {{ ep_header_end() }}
+    </div>
+  </header>
 
   <div id="commissionsTxnPageMain"
-       class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
-    <div class="mx-auto max-w-lg vn-wallet-page vn-wallet-stack px-4 pt-2">
+       class="partner-page-scroll-pad min-h-[100dvh] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
+    <div class="vn-txn-page">
+
+      <div class="vn-txn-hero">
+        <h1 class="vn-txn-hero__title">تراکنش‌ها</h1>
+        <p id="commTxnCountHint" class="vn-txn-hero__sub">{{ _txn_hint }}</p>
+      </div>
 
       {% include 'express_partner/partials/commissions_txn_income_strip.html' %}
 
       {% if items and items|length > 0 %}
-      <div id="commTxnRows" class="vn-wallet-section vn-wallet-list">
+      <div id="commTxnRows" class="vn-txn-list">
         {% for c in items %}
           {% set tour_item = loop.first %}
           {% include 'express_partner/partials/commission_txn_row.html' %}
         {% endfor %}
       </div>
-      <div id="commTxnEmptyFilter" class="vn-wallet-empty hidden">
-        <div class="vn-wallet-empty__icon">
+      <div id="commTxnEmptyFilter" class="vn-txn-empty hidden">
+        <div class="vn-txn-empty__icon">
           <i class="fas fa-filter" aria-hidden="true"></i>
         </div>
-        <p class="vn-wallet-empty__text">تراکنشی با این فیلتر نیست.</p>
+        <p class="vn-txn-empty__title">نتیجه‌ای نیست</p>
+        <p class="vn-txn-empty__text">تراکنشی با این فیلتر پیدا نشد.</p>
         <button type="button"
                 id="commTxnResetFilter"
-                class="mt-3 text-xs font-semibold text-[#10a37f] transition hover:opacity-90">
+                class="vn-txn-empty__reset">
           نمایش همه
         </button>
       </div>
       {% else %}
-      <div class="vn-wallet-section vn-wallet-empty">
-        <div class="vn-wallet-empty__icon">
+      <div class="vn-txn-empty">
+        <div class="vn-txn-empty__icon">
           <i class="fas fa-receipt" aria-hidden="true"></i>
         </div>
-        <p class="vn-wallet-empty__text">هنوز تراکنشی ثبت نشده</p>
-        <p class="mt-1 text-xs text-zinc-600">پس از فروش یا برداشت، تراکنش‌ها اینجا نمایش داده می‌شوند.</p>
+        <p class="vn-txn-empty__title">هنوز تراکنشی نیست</p>
+        <p class="vn-txn-empty__text">پس از فروش یا برداشت، اینجا نمایش داده می‌شوند.</p>
         <a href="{{ url_for('express_partner.home') }}"
            data-vinor-express-nav
-           class="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[#10a37f]">
+           class="vn-txn-empty__link">
           <span>رفتن به داشبورد</span>
           <i class="fas fa-chevron-left text-[10px] opacity-80" aria-hidden="true"></i>
         </a>
@@ -87,17 +99,17 @@
             id="commTxnFilterBackdrop"
             class="comm-txn-filter-backdrop absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200"
             aria-label="بستن"></button>
-    <div class="comm-txn-filter-sheet vn-wallet-sheet relative w-full max-w-lg mx-auto rounded-t-2xl bg-[#14161c] border-t border-white/[0.07] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] max-h-[min(80vh,520px)] flex flex-col translate-y-full transition-transform duration-300 ease-out pb-[env(safe-area-inset-bottom,0px)]">
+    <div class="comm-txn-filter-sheet vn-wallet-sheet relative w-full max-w-lg mx-auto rounded-t-[1.35rem] border-t shadow-[0_-16px_48px_rgba(0,0,0,0.55)] max-h-[min(80dvh,520px)] flex flex-col translate-y-full transition-transform duration-300 ease-out pb-[env(safe-area-inset-bottom,0px)]">
       <div class="shrink-0 pt-2.5 pb-1 flex justify-center">
-        <span class="block w-11 h-1 rounded-full bg-white/25" aria-hidden="true"></span>
+        <span class="block w-10 h-1 rounded-full bg-white/20" aria-hidden="true"></span>
       </div>
-      <div class="shrink-0 px-4 pb-3 flex items-center justify-between gap-3">
-        <h2 id="commTxnFilterModalTitle" class="text-[15px] font-bold text-white">فیلتر تراکنش‌ها</h2>
+      <div class="shrink-0 px-4 pb-3 flex items-center justify-center relative min-h-[2.5rem]">
+        <h2 id="commTxnFilterModalTitle" class="text-[15px] font-bold text-white">فیلتر</h2>
         <button type="button"
                 id="commTxnFilterClose"
-                class="ep-partner-header-btn"
+                class="absolute top-1/2 -translate-y-1/2 left-3 w-9 h-9 rounded-full border border-white/10 text-zinc-300 hover:bg-white/5 flex items-center justify-center"
                 aria-label="بستن">
-          <i class="fas fa-times ep-partner-header-btn-icon"></i>
+          <i class="fas fa-times text-sm"></i>
         </button>
       </div>
       <div id="commTxnFilters" class="overflow-y-auto flex-1 min-h-0 px-3 pb-4 space-y-1.5" role="listbox" aria-label="فیلتر وضعیت">
@@ -105,7 +117,7 @@
         <button type="button"
                 data-comm-txn-filter="{{ key }}"
                 data-comm-txn-filter-label="{{ label }}"
-                class="comm-txn-filter w-full flex items-center justify-between gap-3 rounded-lg border px-3.5 py-3 text-start text-sm transition{% if key == 'all' %} border-[#e22828]/40 bg-[#e22828]/12 font-semibold text-[#f87171]{% else %} border-white/[0.08] bg-[#0f1117] font-medium text-zinc-300 hover:bg-white/[0.04]{% endif %}"
+                class="comm-txn-filter w-full flex items-center justify-between gap-3 px-3.5 py-3.5 text-start text-sm transition"
                 role="option"
                 aria-selected="{{ 'true' if key == 'all' else 'false' }}">
           <span>{{ label }}</span>
@@ -138,9 +150,6 @@
     if (window.__vinorCommissionsChrome && window.__vinorCommissionsChrome.teardown) {
       try { window.__vinorCommissionsChrome.teardown(); } catch (_) {}
     }
-    if (window.__vinorPartnerHeaderChromeSetup) {
-      try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
-    }
     if (typeof window.hoistVinorExpressBodyModals === 'function') {
       try { window.hoistVinorExpressBodyModals(); } catch (_) {}
     }
@@ -150,12 +159,6 @@
     }
     window.__vinorCommTxnPageAbort = new AbortController();
     var pageSignal = window.__vinorCommTxnPageAbort.signal;
-
-    function syncTxnHeaderPad() {
-      try {
-        if (window.__vinorPartnerHeaderPadSync) window.__vinorPartnerHeaderPadSync();
-      } catch (_) {}
-    }
 
     function fmt(dt) {
       try {
@@ -259,32 +262,17 @@
       filters.querySelectorAll('.comm-txn-filter').forEach(function (btn) {
         var on = btn.getAttribute('data-comm-txn-filter') === key;
         btn.setAttribute('aria-selected', on ? 'true' : 'false');
-        btn.classList.toggle('border-[#e22828]/40', on);
-        btn.classList.toggle('bg-[#e22828]/12', on);
-        btn.classList.toggle('text-[#f87171]', on);
-        btn.classList.toggle('font-semibold', on);
-        btn.classList.toggle('border-white/[0.08]', !on);
-        btn.classList.toggle('bg-[#0f1117]', !on);
-        btn.classList.toggle('text-zinc-300', !on);
-        btn.classList.toggle('font-medium', !on);
       });
       var filtered = key !== 'all';
-      if (filterToggle) {
-        filterToggle.classList.toggle('is-active', filtered);
-      }
-      if (filterDot) {
-        filterDot.classList.toggle('hidden', !filtered);
-      }
-      if (countHint) {
-        countHint.classList.toggle('is-filtered', filtered);
-      }
+      if (filterToggle) filterToggle.classList.toggle('is-active', filtered);
+      if (filterDot) filterDot.classList.toggle('hidden', !filtered);
+      if (countHint) countHint.classList.toggle('is-filtered', filtered);
     }
 
     function updateCountHint(shown) {
       if (!countHint) return;
       if (totalRows === 0) {
         countHint.textContent = 'بدون تراکنش';
-        syncTxnHeaderPad();
         return;
       }
       if (active === 'all') {
@@ -292,7 +280,6 @@
       } else {
         countHint.textContent = shown + ' از ' + totalRows + ' · ' + activeLabelText;
       }
-      syncTxnHeaderPad();
     }
 
     function rowMatches(row) {

@@ -1,20 +1,20 @@
-{# خلاصه درآمد — نوار فشرده سبک دیوار #}
+{# خلاصه درآمد — دو کارت فشرده سبک GPT #}
 {% set s = comm_stats if comm_stats is defined else {} %}
 {% set _total = s.get('total_confirmed_amount', total_commission or 0) %}
 {% set _total_cnt = s.get('total_confirmed_count', sold_count or 0) %}
 {% set _wd_paid_amt = s.get('paid_withdrawal_amount', s.get('received_amount', paid_commission or 0)) %}
 {% set _wd_paid_cnt = s.get('paid_withdrawal_count', s.get('received_count', paid_count or 0)) %}
 
-<div class="comm-txn-income-strip">
-  <div>
-    <p class="text-[11px] text-zinc-500">کل درآمد</p>
-    <p data-comm-total class="mt-0.5 text-base font-bold tabular-nums text-white">{{ (_total or 0)|toman }}</p>
-    <p data-comm-total-count class="mt-0.5 text-[10px] text-zinc-600">{{ (_total_cnt or 0)|fa_digits }} پورسانت</p>
+<div class="vn-txn-summary" role="group" aria-label="خلاصه تراکنش‌ها">
+  <div class="vn-txn-summary__card">
+    <p class="vn-txn-summary__label">کل درآمد</p>
+    <p data-comm-total class="vn-txn-summary__value">{{ (_total or 0)|toman }}</p>
+    <p data-comm-total-count class="vn-txn-summary__hint">{{ (_total_cnt or 0)|fa_digits }} پورسانت</p>
   </div>
-  <div>
-    <p class="text-[11px] text-zinc-500">برداشت شده</p>
-    <p data-comm-wd-paid class="mt-0.5 text-base font-bold tabular-nums text-white">{{ (_wd_paid_amt or 0)|toman }}</p>
-    <p data-comm-wd-paid-count class="mt-0.5 text-[10px] text-zinc-600">
+  <div class="vn-txn-summary__card">
+    <p class="vn-txn-summary__label">برداشت شده</p>
+    <p data-comm-wd-paid class="vn-txn-summary__value">{{ (_wd_paid_amt or 0)|toman }}</p>
+    <p data-comm-wd-paid-count class="vn-txn-summary__hint">
       {% if (_wd_paid_cnt or 0)|int > 0 %}
         {{ _wd_paid_cnt|fa_digits }} واریز
       {% else %}

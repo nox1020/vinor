@@ -9,7 +9,7 @@
      data-tg-body-modal>
   <div class="vn-withdraw-backdrop absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200"
        data-close-withdraw-modal aria-hidden="true"></div>
-  <div class="vn-withdraw-sheet vn-wallet-sheet relative w-full max-w-lg mx-auto rounded-t-[1.35rem] bg-[#1f1f23] border-t border-white/[0.08] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] max-h-[min(92vh,720px)] flex flex-col translate-y-full transition-transform duration-300 ease-out">
+  <div class="vn-withdraw-sheet vn-wallet-sheet relative w-full max-w-lg mx-auto rounded-t-[1.35rem] bg-[#1f1f23] border-t border-white/[0.08] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] max-h-[min(92dvh,720px)] flex flex-col translate-y-full transition-transform duration-300 ease-out">
     <div class="shrink-0 pt-2 pb-1 flex justify-center">
       <span class="block w-10 h-1 rounded-full bg-white/20" aria-hidden="true"></span>
     </div>
@@ -103,11 +103,23 @@
     display: flex !important;
     visibility: visible !important;
     pointer-events: auto !important;
+    /* کیبورد موبایل: به visualViewport بچسب، نه layout viewport */
+    top: var(--vn-vv-top, 0px);
+    left: var(--vn-vv-left, 0px);
+    width: var(--vn-vv-width, 100%);
+    height: var(--vn-vv-height, 100%);
+    right: auto;
+    bottom: auto;
   }
   #vnWithdrawModal.vn-withdraw-modal--open .vn-withdraw-backdrop {
     opacity: 1;
   }
+  /* بعد از باز شدن با touch، کلیک ghost روی backdrop را نخور */
+  #vnWithdrawModal.vn-withdraw-modal--arming .vn-withdraw-backdrop {
+    pointer-events: none;
+  }
   #vnWithdrawModal.vn-withdraw-modal--open .vn-withdraw-sheet {
     transform: translateY(0);
+    max-height: min(92%, 720px);
   }
 </style>

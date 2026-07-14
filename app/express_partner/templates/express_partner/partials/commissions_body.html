@@ -1,11 +1,11 @@
 {# بادی پورسانت: روی موبایل اسکرول داخل #commissionsPageMain (مثل dashboardMobileCardsRoot) تا WebView قفل نکند #}
 <main id="commissionsPageMain"
       class="max-w-lg lg:max-w-4xl mx-auto w-full px-4 text-slate-100 bg-[#030712] lg:pb-16 transition-[padding-top] duration-300 ease-out"
-      style="--vn-partner-header-pad: 5.75rem">
+      style="--vn-partner-header-pad: 0.35rem">
 
   <style>
     #commissionsPageMain {
-      padding-top: var(--vn-partner-header-pad, 5.75rem);
+      padding-top: max(0.35rem, env(safe-area-inset-top, 0px));
     }
     /*
       موبایل: ارتفاع با JS تا لبهٔ منو + پس‌زمینهٔ یکدست (#030712) تا نوار مشکی WebView زیر لیست دیده نشود.
@@ -28,7 +28,8 @@
         -ms-overflow-style: none;
       }
       .commissions-page-scroll-pad {
-        padding-top: var(--vn-partner-header-pad, 5.75rem);
+        /* کارت از ابتدای صفحه (زیر safe-area)؛ دکمهٔ برگشت شناور روی گوشه است */
+        padding-top: max(0.35rem, env(safe-area-inset-top, 0px));
       }
       #commissionsPageMain::-webkit-scrollbar {
         display: none;
@@ -124,8 +125,14 @@
     }
 
     function syncCommissionsChromeNow() {
-      var hh = Math.ceil(header.getBoundingClientRect().height + 8);
-      main.style.setProperty('--vn-partner-header-pad', hh + 'px');
+      /* هنگام مودال/کیبورد، ارتفاع main را قفل نکن — وگرنه شیت برداشت می‌پرد یا بسته به‌نظر می‌رسد */
+      try {
+        if (document.documentElement.classList.contains('vinor-express-overlay-modal-open')) {
+          return;
+        }
+      } catch (_) {}
+      /* پد هدر کوچک — کارت کیف پول از بالای صفحه شروع می‌شود */
+      main.style.setProperty('--vn-partner-header-pad', '0.35rem');
       var nav = document.getElementById('bottomNavMenu');
       var nh = 92;
       try {
