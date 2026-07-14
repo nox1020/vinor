@@ -1,4 +1,4 @@
-{# ردیف تراکنش — سبک لیست دیوار #}
+{# ردیف تراکنش — سبک GPT #}
 {% set _txn_type = (c.txn_type or 'commission')|trim %}
 {% set _is_wd = _txn_type in ('withdrawal', 'withdrawal_request') %}
 {% set _is_referral = (c.commission_type or '')|trim == 'referral' %}
@@ -93,7 +93,7 @@
     {% if _txn_type == 'withdrawal_request' and c.cancellable %}
     <button type="button"
             data-cancel-withdrawal="{{ c.withdrawal_id }}"
-            class="mt-2 w-full rounded-md border border-[#e22828]/25 bg-[#e22828]/10 py-2 text-[11px] font-semibold text-[#f87171] transition active:bg-[#e22828]/15"
+            class="commission-txn-row__cancel"
             onclick="event.stopPropagation()">
       لغو درخواست
     </button>

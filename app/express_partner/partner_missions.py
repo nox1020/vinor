@@ -610,11 +610,13 @@ def append_mission_chat_followup(
     land_code: str,
     thread_id: str,
     body: str,
+    agent_actions: list | None = None,
 ) -> bool:
     """پیام کوتاه مربی داخل ترد مأموریت (بدون پیام کاربر)."""
     text = (body or "").strip()
     tid = (thread_id or "").strip()
-    if not text or not tid:
+    actions = [a for a in (agent_actions or []) if isinstance(a, dict)][:3]
+    if (not text and not actions) or not tid:
         return False
     try:
         from app.ai.audience import AUDIENCE_PARTNER
@@ -626,6 +628,7 @@ def append_mission_chat_followup(
             text,
             thread_id=tid,
             audience=AUDIENCE_PARTNER,
+            assistant_agent_actions=actions or None,
         )
         mark_mission_followup(phone, land_code)
         return True

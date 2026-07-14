@@ -1,74 +1,84 @@
-{# کیف پول — سبک دیوار: تخت، لیست تمیز، CTA قرمز #}
+{# کیف پول — ظاهر ChatGPT‌مانند روی پوستهٔ تاریک همکار #}
 <style>
   :root {
-    --vn-wallet-red: #e22828;
-    --vn-wallet-red-hover: #c91f1f;
-    --vn-wallet-surface: #14161c;
-    --vn-wallet-border: rgba(255, 255, 255, 0.07);
-    --vn-wallet-muted: #8b919a;
-    --vn-wallet-text: #f3f4f6;
+    --vn-wallet-green: #10a37f;
+    --vn-wallet-green-hover: #0d8f6e;
+    --vn-wallet-surface: #1f1f23;
+    --vn-wallet-surface-soft: #26262b;
+    --vn-wallet-border: rgba(255, 255, 255, 0.08);
+    --vn-wallet-muted: #9b9ba3;
+    --vn-wallet-text: #ececf1;
+    --vn-wallet-radius: 1.25rem;
+  }
+
+  .vn-wallet-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding-bottom: 0.25rem;
   }
 
   .vn-wallet-card {
     background: var(--vn-wallet-surface);
     border: 1px solid var(--vn-wallet-border);
-    border-radius: 0;
+    border-radius: var(--vn-wallet-radius);
     overflow: hidden;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
   }
 
   .vn-wallet-hero {
-    padding: 1.25rem 1rem 1rem;
+    padding: 1.35rem 1.15rem 1.1rem;
     text-align: center;
-    border-bottom: 1px solid var(--vn-wallet-border);
   }
   .vn-wallet-hero__label {
     font-size: 0.8125rem;
+    font-weight: 500;
     color: var(--vn-wallet-muted);
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.4rem;
   }
   .vn-wallet-hero__balance {
-    font-size: 2rem;
-    font-weight: 800;
+    font-size: 2.05rem;
+    font-weight: 700;
     line-height: 1.15;
     color: var(--vn-wallet-text);
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
   }
 
   .vn-wallet-stats {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    border-bottom: 1px solid var(--vn-wallet-border);
+    gap: 0.45rem;
+    padding: 0 0.9rem 0.9rem;
   }
   .vn-wallet-stat {
-    padding: 0.75rem 0.5rem;
+    padding: 0.65rem 0.4rem;
     text-align: center;
-    border-inline-start: 1px solid var(--vn-wallet-border);
-  }
-  .vn-wallet-stat:first-child {
-    border-inline-start: none;
+    border-radius: 0.85rem;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid transparent;
   }
   .vn-wallet-stat__label {
     display: block;
     font-size: 0.6875rem;
     color: var(--vn-wallet-muted);
     line-height: 1.3;
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.25rem;
   }
   .vn-wallet-stat__value {
     display: block;
-    font-size: 0.8125rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: var(--vn-wallet-text);
     font-variant-numeric: tabular-nums;
     line-height: 1.25;
   }
   .vn-wallet-stat__value--amber {
-    color: #fbbf24;
+    color: #f0bf4c;
   }
 
   .vn-wallet-actions {
-    padding: 0.85rem 1rem 1rem;
+    padding: 0 0.9rem 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -79,27 +89,30 @@
     justify-content: center;
     gap: 0.45rem;
     width: 100%;
-    min-height: 2.75rem;
-    border-radius: 0.5rem;
+    min-height: 2.85rem;
+    border-radius: 9999px;
     font-size: 0.875rem;
-    font-weight: 700;
+    font-weight: 650;
     text-decoration: none;
-    transition: background-color 0.15s ease, opacity 0.15s ease;
+    transition: background-color 0.15s ease, opacity 0.15s ease, transform 0.12s ease;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
   .vn-wallet-btn--primary {
-    background: var(--vn-wallet-red);
+    background: var(--vn-wallet-green);
     color: #fff;
     border: none;
     cursor: pointer;
   }
-  .vn-wallet-btn--primary:hover:not(:disabled) {
-    background: var(--vn-wallet-red-hover);
+  .vn-wallet-btn--primary:hover:not(:disabled):not([aria-disabled="true"]) {
+    background: var(--vn-wallet-green-hover);
+  }
+  .vn-wallet-btn--primary:active:not(:disabled):not([aria-disabled="true"]) {
+    transform: scale(0.985);
   }
   .vn-wallet-btn--primary:disabled,
   .vn-wallet-btn--primary[aria-disabled="true"] {
-    opacity: 0.45;
+    opacity: 0.42;
     cursor: not-allowed;
   }
   .vn-wallet-btn--ghost {
@@ -108,12 +121,12 @@
     border: 1px solid var(--vn-wallet-border);
   }
   .vn-wallet-btn--ghost:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.04);
     color: var(--vn-wallet-text);
   }
 
   .vn-wallet-note {
-    margin-top: 0.25rem;
+    margin-top: 0.15rem;
     font-size: 0.6875rem;
     color: var(--vn-wallet-muted);
     text-align: center;
@@ -123,51 +136,48 @@
   .vn-wallet-section {
     background: var(--vn-wallet-surface);
     border: 1px solid var(--vn-wallet-border);
-    margin-top: 0.5rem;
+    border-radius: var(--vn-wallet-radius);
+    overflow: hidden;
   }
   .vn-wallet-section__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--vn-wallet-border);
+    padding: 0.85rem 1rem 0.65rem;
   }
   .vn-wallet-section__title {
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     font-weight: 700;
     color: var(--vn-wallet-text);
   }
   .vn-wallet-section__link {
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--vn-wallet-red);
+    color: var(--vn-wallet-green);
     text-decoration: none;
   }
   .vn-wallet-section__link:hover {
     opacity: 0.9;
   }
 
-  .vn-wallet-list {
-    divide-color: var(--vn-wallet-border);
-  }
   .vn-wallet-list > .commission-txn-row + .commission-txn-row {
     border-top: 1px solid var(--vn-wallet-border);
   }
 
   .vn-wallet-empty {
-    padding: 2.5rem 1rem;
+    padding: 2.75rem 1.1rem;
     text-align: center;
   }
   .vn-wallet-empty__icon {
-    width: 3rem;
-    height: 3rem;
-    margin: 0 auto 0.75rem;
+    width: 3.25rem;
+    height: 3.25rem;
+    margin: 0 auto 0.8rem;
     border-radius: 9999px;
     background: rgba(255, 255, 255, 0.04);
     display: grid;
     place-items: center;
-    color: #6b7280;
+    color: #7a7a85;
     font-size: 1.125rem;
   }
   .vn-wallet-empty__text {
@@ -178,25 +188,26 @@
   .vn-wallet-promo {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
-    padding: 0.85rem 1rem;
+    gap: 0.8rem;
+    padding: 0.95rem 1rem;
     background: var(--vn-wallet-surface);
     border: 1px solid var(--vn-wallet-border);
+    border-radius: var(--vn-wallet-radius);
     text-decoration: none;
     color: inherit;
-    transition: background-color 0.15s ease;
+    transition: background-color 0.15s ease, transform 0.12s ease;
   }
   .vn-wallet-promo:active {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--vn-wallet-surface-soft);
+    transform: scale(0.99);
   }
   .vn-wallet-promo__icon {
     flex-shrink: 0;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 0.5rem;
-    background: rgba(226, 40, 40, 0.12);
-    color: var(--vn-wallet-red);
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 0.9rem;
+    background: rgba(16, 163, 127, 0.14);
+    color: var(--vn-wallet-green);
     display: grid;
     place-items: center;
     font-size: 1rem;
@@ -209,12 +220,12 @@
   .vn-wallet-promo__sub {
     font-size: 0.75rem;
     color: var(--vn-wallet-muted);
-    margin-top: 0.1rem;
+    margin-top: 0.12rem;
   }
 
   @keyframes vn-comm-wd-pulse {
-    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(226, 40, 40, 0.45); }
-    50% { opacity: 0.4; box-shadow: 0 0 0 4px rgba(226, 40, 40, 0); }
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(240, 191, 76, 0.4); }
+    50% { opacity: 0.45; box-shadow: 0 0 0 4px rgba(240, 191, 76, 0); }
   }
   .vn-comm-wd-dot--live {
     animation: vn-comm-wd-pulse 1.35s ease-in-out infinite;
@@ -226,12 +237,15 @@
   .commission-txn-row {
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
-    background: var(--vn-wallet-surface);
+    background: transparent;
+  }
+  .commission-txn-row:hover {
+    background: rgba(255, 255, 255, 0.025);
   }
   .commission-txn-row__icon {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 9999px;
+    width: 2.55rem;
+    height: 2.55rem;
+    border-radius: 0.9rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -243,15 +257,15 @@
   }
   .commission-txn-row__icon--credit {
     color: #4ade80;
-    background: rgba(74, 222, 128, 0.1);
+    background: rgba(74, 222, 128, 0.12);
   }
   .commission-txn-row__icon--debit {
     color: #f87171;
-    background: rgba(248, 113, 113, 0.1);
+    background: rgba(248, 113, 113, 0.12);
   }
   .commission-txn-row__icon--pending {
-    color: #fbbf24;
-    background: rgba(251, 191, 36, 0.1);
+    color: #f0bf4c;
+    background: rgba(240, 191, 76, 0.12);
   }
   .commission-txn-row__title {
     color: var(--vn-wallet-text) !important;
@@ -267,11 +281,30 @@
     font-size: 0.75rem !important;
   }
   .commission-txn-row__date {
-    color: #6b7280 !important;
+    color: #7a7a85 !important;
   }
   .commission-txn-row__status {
     font-size: 0.6875rem;
+    font-weight: 600;
     color: var(--vn-wallet-muted);
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .commission-txn-row__cancel {
+    margin-top: 0.55rem;
+    width: 100%;
+    border-radius: 9999px;
+    border: 1px solid rgba(248, 113, 113, 0.28);
+    background: rgba(248, 113, 113, 0.1);
+    padding: 0.55rem 0.75rem;
+    font-size: 0.72rem;
+    font-weight: 650;
+    color: #fca5a5;
+    transition: background-color 0.15s ease;
+  }
+  .commission-txn-row__cancel:active {
+    background: rgba(248, 113, 113, 0.18);
   }
 
   .comm-txn-income-strip {
@@ -294,5 +327,10 @@
 
   .vn-wallet-sheet {
     background: var(--vn-wallet-surface);
+  }
+
+  /* لیست کامل تراکنش‌ها */
+  .vn-wallet-txn-page .vn-wallet-section {
+    margin-top: 0.75rem;
   }
 </style>

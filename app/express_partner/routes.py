@@ -2448,7 +2448,10 @@ def _home_funnel_for_land(
     land: Dict[str, Any],
     visit_rows: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
-    """مرحله و مسیر ۴تایی مأموریت برای کارت سفر خانه."""
+    """مرحله و مسیر ۴تایی مأموریت برای کارت سفر خانه.
+
+    منبع حقیقت برای CTA: current_key (با tx_mode ریزتنظیم می‌شود).
+    """
     ph = (phone or '').strip()
     code = str(land.get('code') or '').strip()
     assign_st = str(land.get('_assignment_status') or '').strip().lower()
@@ -2467,20 +2470,21 @@ def _home_funnel_for_land(
 
     has_visit = bool(latest)
     visit_pending = status == PENDING_STATUS
-    visit_approved = status in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS)
+    visit_approved_only = status == APPROVED_STATUS
+    visit_done_pending = status == DONE_PENDING_STATUS
     visit_done = status == COMPLETED_STATUS
     visit_cancelled = status == CANCELLED_STATUS
     in_tx = assign_st == 'in_transaction' or bool(land.get('_in_transaction'))
     sold = assign_st == 'sold'
 
-    # ۱ اختصاص فایل — همیشه انجام‌شده اگر روی کارت است
-    # ۲ بازاریابی — تا قبل از ثبت بازدید؛ با ثبت بازدید انجام‌شده فرض می‌شود
-    # ۳ درخواست بازدید — با تأیید/انجام بازدید یا معامله
-    # ۴ معامله یا بازدید مجدد و تکرار — با معامله/فروش؛ وگرنه بعد از بازدید current می‌ماند
+    # ۱ اختصاص — همیشه انجام‌شده اگر روی کارت است
+    # ۲ بازاریابی — با ثبت بازدید (غیرمنتفی) یا معامله/فروش
+    # ۳ درخواست بازدید — فقط بعد از انجام بازدید (completed) یا معامله/فروش
+    #   تأیید ادمین / منتظر انجام هنوز current روی همین مرحله می‌ماند
+    # ۴ معامله/بازدید مجدد — تا فروش قطعی current است
     assigned_done = True
     marketing_done = (has_visit and not visit_cancelled) or in_tx or sold
-    visit_step_done = visit_approved or visit_done or in_tx or sold
-    # مرحله ۴ فقط با فروش قطعی می‌شود؛ تا آن‌وقت (بعد از بازدید یا حین معامله) current است
+    visit_step_done = visit_done or in_tx or sold
     deal_done = sold
 
     done_flags = [
@@ -2496,24 +2500,48 @@ def _home_funnel_for_land(
         state = 'done' if done_flags[i] else 'todo'
         if current_idx is not None and i == current_idx:
             state = 'current'
-        steps.append({'key': key, 'label': label, 'icon': icon, 'state': state})
+        # برچسب مرحله ۳ را با وضعیت بازدید زنده نگه دار
+        step_label = label
+        if key == 'visit_request' and state == 'current':
+            if visit_pending:
+                step_label = 'منتظر تأیید بازدید'
+            elif visit_approved_only:
+                step_label = 'بازدید را انجام بده'
+            elif visit_done_pending:
+                step_label = 'تأیید انجام بازدید'
+        if key == 'deal_or_revisit' and state == 'current' and in_tx:
+            step_label = 'در حال معامله'
+        steps.append({'key': key, 'label': step_label, 'icon': icon, 'state': state})
+
+    current_key = ''
+    if current_idx is not None and 0 <= current_idx < len(_HOME_FUNNEL_STEPS):
+        current_key = _HOME_FUNNEL_STEPS[current_idx][0]
+    elif sold:
+        current_key = 'done'
 
     if sold:
         stage_label = 'تکمیل شد'
     elif in_tx:
         stage_label = 'در حال معامله'
-    elif visit_cancelled:
+    elif visit_cancelled and not visit_done:
         stage_label = 'بازاریابی مجدد'
     elif visit_done:
         stage_label = 'معامله یا بازدید مجدد'
-    elif visit_approved:
-        stage_label = 'در انتظار بازدید'
+    elif visit_done_pending:
+        stage_label = 'در انتظار تأیید انجام'
+    elif visit_approved_only:
+        stage_label = 'بازدید تأییدشد'
     elif visit_pending or (has_visit and not visit_cancelled):
         stage_label = 'در انتظار بازدید'
     else:
         stage_label = 'بازاریابی'
 
-    return {'stage_label': stage_label, 'funnel_steps': steps}
+    return {
+        'stage_label': stage_label,
+        'funnel_steps': steps,
+        'current_key': current_key,
+        'current_idx': current_idx,
+    }
 
 
 def _home_suggested_files(
@@ -2575,13 +2603,18 @@ def _home_suggested_files(
                 ),
             )
             tx_mode = str(tx_state.get("tx_mode") or "")
+            can_revisit = bool(tx_state.get("can_revisit"))
         except Exception:
             tx_mode = ""
+            can_revisit = False
+        funnel_key = str(funnel.get("current_key") or "")
         cta = build_journey_chat_cta(
             code=code,
             title=(land.get("title") or "").strip(),
             tx_mode=tx_mode,
             stage_label=str(stage_label),
+            funnel_key=funnel_key,
+            can_revisit=can_revisit,
         )
         candidates.append({
             'code': code,
@@ -2596,11 +2629,17 @@ def _home_suggested_files(
             'more_url': url_for('express_partner.home'),
             'stage_label': stage_label,
             'funnel_steps': funnel.get('funnel_steps') or [],
+            'funnel_key': funnel_key,
+            'tx_mode': tx_mode,
+            'can_revisit': can_revisit,
             'cta_label': cta.get('label') or 'ادامه در چت',
             'cta_url': '',
             'cta_icon': cta.get('icon') or 'fa-comments',
             'cta_action': cta.get('action') or '',
             'cta_chat_prompt': cta.get('prompt') or '',
+            'cta_secondary_label': cta.get('secondary_label') or '',
+            'cta_secondary_icon': cta.get('secondary_icon') or '',
+            'cta_secondary_prompt': cta.get('secondary_prompt') or '',
             'show_fav': True,
             'coach_tip': tip,
             'coach_prompt': build_coach_chat_prompt(
@@ -6335,6 +6374,30 @@ def _profile_edit_json(profile: Dict[str, Any], me_phone: str) -> Dict[str, Any]
         'avatar_url': display_avatar_url(avatar, profile.get('avatar_updated_at')) if avatar else None,
         'avatar_updated_at': int(profile.get('avatar_updated_at') or 0) if avatar else 0,
     }
+
+
+@express_partner_bp.route('/settings', methods=['GET'], endpoint='settings')
+@require_partner_access(allow_pending=True)
+def settings_page():
+    """صفحه تنظیمات حساب — استایل شبیه ChatGPT."""
+    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
+    partners = load_express_partners() or []
+    profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
+    me_name = (profile.get('name') or '').strip()
+    partner_name = me_name or _partner_display_name(me_phone)
+    is_approved = _is_partner_approved(profile)
+    is_special = _is_partner_special(profile) if is_approved else False
+    return render_template(
+        'express_partner/settings.html',
+        me_phone=me_phone,
+        me_name=me_name,
+        partner_name=partner_name,
+        profile=profile,
+        is_approved=is_approved,
+        is_special=is_special,
+        hide_header=True,
+        bottom_nav_active='profile',
+    )
 
 
 @express_partner_bp.route('/profile/edit', methods=['GET', 'POST'], endpoint='profile_edit')

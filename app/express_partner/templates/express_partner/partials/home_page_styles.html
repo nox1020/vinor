@@ -1,19 +1,27 @@
-{# داشبورد — سبک دیوار: تخت، divide-y، CTA قرمز #}
+{# داشبورد — سبک GPT مشکی #}
 <style>
   #homeDashboardPage {
     --vn-home-red: #e22828;
     --vn-home-red-hover: #c91f1f;
-    --vn-home-muted: #8b919a;
-    --vn-home-text: #f3f4f6;
+    --vn-home-accent: #2563eb;
+    --vn-home-accent-hover: #1d4ed8;
+    --vn-home-muted: #8e8e93;
+    --vn-home-text: #ececec;
     --vn-home-border: rgba(255, 255, 255, 0.08);
+    --vn-home-raised: #1c1c1e;
+    --vn-home-raised-2: #2f2f2f;
+    --vn-home-bg: #000000;
     position: relative;
     padding-top: env(safe-area-inset-top, 0px);
+    background: var(--vn-home-bg) !important;
+    color: var(--vn-home-text);
   }
 
   #homeDashboardPage .vn-home-top {
     width: 100%;
     /* فضای دکمه منوی شناور (بالا-راست) تا روی کارت نیفتد */
     padding-top: 2.85rem;
+    background: var(--vn-home-bg);
   }
 
   #homeDashboardPage .vn-journey-card {
@@ -22,6 +30,34 @@
 
   #homeDashboardPage .vn-journey-card__code {
     max-width: 9rem;
+  }
+
+  /* هدر شناور خانه — دکمه‌های دایره‌ای GPT */
+  html:has(#homeDashboardPage) .ep-header-float-actions .ep-partner-header-btn,
+  html:has(#homeDashboardPage) .ep-header-float-actions .vinor-dash-glass-pill,
+  html:has(#homeDashboardPage) .ep-header-float-actions .comm-header-glass-btn {
+    width: 2.625rem;
+    height: 2.625rem;
+    border-radius: 9999px !important;
+    border: 0 !important;
+    background: #2f2f2f !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    color: #fff !important;
+  }
+  html:has(#homeDashboardPage) .ep-header-float-actions .ep-partner-header-btn:active,
+  html:has(#homeDashboardPage) .ep-header-float-actions .vinor-dash-glass-pill:active {
+    background: #3a3a3a !important;
+  }
+  html:has(#homeDashboardPage) .ep-header-float-brand__text {
+    color: #fff;
+    text-shadow: none;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+  html:has(#homeDashboardPage) #aiMenuUnreadDot {
+    box-shadow: 0 0 0 2px #000;
   }
 
   #homeDashboardPage .vn-home-guest-strip,
@@ -217,15 +253,15 @@
     justify-content: center;
     min-height: 2rem;
     padding: 0 0.7rem;
-    border-radius: 0.375rem;
-    background: var(--vn-home-red);
+    border-radius: 9999px;
+    background: var(--vn-home-accent);
     color: #fff;
     font-size: 0.75rem;
     font-weight: 700;
     white-space: nowrap;
     pointer-events: none;
   }
-  .vn-home-urgent-row:active .vn-home-urgent-row__cta { background: var(--vn-home-red-hover); }
+  .vn-home-urgent-row:active .vn-home-urgent-row__cta { background: var(--vn-home-accent-hover); }
   .vn-home-urgent-row--amber .vn-home-urgent-row__cta { background: #d97706; }
   .vn-home-urgent-row--amber:active .vn-home-urgent-row__cta { background: #b45309; }
   .vn-home-urgent-row--blue .vn-home-urgent-row__cta { background: #2563eb; }
@@ -268,9 +304,9 @@
     justify-content: center;
     min-height: 2rem;
     padding: 0 0.75rem;
-    border-radius: 0.375rem;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 9999px;
+    background: var(--vn-home-raised-2);
+    border: 0;
     color: #e4e4e7;
     font-size: 0.75rem;
     font-weight: 700;
@@ -278,7 +314,7 @@
     white-space: nowrap;
     -webkit-tap-highlight-color: transparent;
   }
-  .vn-home-empty__cta:active { background: rgba(255, 255, 255, 0.1); }
+  .vn-home-empty__cta:active { background: #3a3a3a; }
 
   .vn-home-file-row {
     display: flex;
@@ -332,15 +368,15 @@
     align-self: flex-start;
     min-height: 2rem;
     padding: 0 0.75rem;
-    border-radius: 0.375rem;
-    background: var(--vn-home-red);
+    border-radius: 9999px;
+    background: var(--vn-home-accent);
     color: #fff;
     font-size: 0.75rem;
     font-weight: 700;
     white-space: nowrap;
     pointer-events: none;
   }
-  .vn-home-file-row:active .vn-home-file-row__cta { background: var(--vn-home-red-hover); }
+  .vn-home-file-row:active .vn-home-file-row__cta { background: var(--vn-home-accent-hover); }
   .vn-home-file-row__thumb {
     position: relative;
     flex-shrink: 0;
@@ -350,9 +386,9 @@
   .vn-home-file-row__thumb-inner {
     width: 100%;
     height: 100%;
-    border-radius: 0.5rem;
+    border-radius: 0.85rem;
     overflow: hidden;
-    background: #1a2332;
+    background: #1c1c1e;
   }
   .vn-home-file-row__thumb img {
     width: 100%;
@@ -387,13 +423,13 @@
     align-items: center;
     justify-content: center;
     min-height: 2.75rem;
-    border-radius: 0.375rem;
+    border-radius: 9999px;
     font-size: 0.9375rem;
     font-weight: 700;
     text-decoration: none;
   }
   .vn-home-guest__btn--primary {
-    background: var(--vn-home-red);
+    background: var(--vn-home-accent);
     color: #fff;
   }
   .vn-home-guest__btn--secondary {

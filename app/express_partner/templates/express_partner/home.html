@@ -5,7 +5,7 @@
 {% include 'express_partner/partials/home_page_styles.html' %}
 
 <div id="homeDashboardPage"
-     class="home-dashboard-page{% if home_ai_enabled|default(false) %} home-dashboard-page--ai{% endif %} min-h-[100dvh] bg-[#030712]{% if not home_ai_enabled|default(false) %} pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-8{% endif %} text-zinc-100"
+     class="home-dashboard-page{% if home_ai_enabled|default(false) %} home-dashboard-page--ai{% endif %} min-h-[100dvh] bg-black{% if not home_ai_enabled|default(false) %} pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-8{% endif %} text-zinc-100"
      data-vinor-home-page>
   {% set menu_href = url_for('express_partner.home') %}
   {% set profile_drawer = true %}

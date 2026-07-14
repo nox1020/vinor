@@ -210,11 +210,13 @@ def _inject_partner_system_chat(
     *,
     land_code: str = "",
     body: str,
+    agent_actions: list | None = None,
 ) -> bool:
     """پیام سیستمی در چت همکار (ترد مأموریت اگر باشد، وگرنه ترد فعال)."""
     ph = normalize_iran_mobile(str(partner_phone or "").strip())
     text = (body or "").strip()
-    if not is_valid_iran_mobile(ph) or not text:
+    actions = [a for a in (agent_actions or []) if isinstance(a, dict)][:3]
+    if not is_valid_iran_mobile(ph) or (not text and not actions):
         return False
     try:
         from .partner_missions import append_mission_chat_followup, get_active_mission
@@ -231,6 +233,7 @@ def _inject_partner_system_chat(
                     land_code=code,
                     thread_id=tid,
                     body=text,
+                    agent_actions=actions,
                 )
             )
         from app.ai.audience import AUDIENCE_PARTNER
@@ -243,11 +246,36 @@ def _inject_partner_system_chat(
             text,
             thread_id=tid,
             audience=AUDIENCE_PARTNER,
+            assistant_agent_actions=actions or None,
         )
         return True
     except Exception as exc:
         current_app.logger.warning("partner system chat inject failed: %s", exc)
         return False
+
+
+def _referral_invite_action() -> Dict[str, Any]:
+    """کارت CTA دعوت همکار بعد از فروش."""
+    try:
+        from flask import url_for
+        from .referrals import REFERRAL_BONUS_AMOUNT
+
+        bonus = int(REFERRAL_BONUS_AMOUNT or 0)
+        bonus_fa = f"{bonus:,}".replace(",", "،") if bonus else "۰"
+        url = url_for("express_partner.invite_colleagues")
+    except Exception:
+        bonus_fa = "۵۰۰٬۰۰۰"
+        url = "/express/partner/invite"
+    return {
+        "type": "next_action",
+        "title": "دعوت همکار",
+        "subtitle": (
+            f"همکار جدید دعوت کن؛ با تأیید هر نفر، {bonus_fa} تومان "
+            "پورسانت دعوت به موجودی‌ات اضافه می‌شود."
+        ),
+        "cta": "دعوت کن و پورسانت بگیر",
+        "url": url,
+    }
 
 
 def build_progress_update(
@@ -327,21 +355,32 @@ def build_progress_update(
         return notif_title, chat_body, notif_body
 
     if ev == "commission_approved":
-        ct = (commission_type or "").strip()
+        ct = (commission_type or "").strip().lower()
         if ct == "referral" or code == "referral":
             kind = "پورسانت دعوت"
+            is_deal_sale = False
         elif "visit" in ct:
             kind = "پورسانت بازدید"
+            is_deal_sale = False
         else:
             kind = "پورسانت فروش"
+            is_deal_sale = True
         amt = _amt()
         notif_title = "پورسانت واریز شد"
         file_line = f" · {file_bit}" if code and code != "referral" else ""
-        chat_body = (
-            f"{notif_title}: +{amt} تومان ({kind}){file_line}.\n"
-            "قدم بعدی: از کیف پول می‌تونی برداشت بزنی؛ ادامه فروش را از همین چت جلو ببر."
-        )
-        notif_body = f"+{amt} تومن {kind} وارد کیف پول شد."
+        if is_deal_sale:
+            chat_body = (
+                f"{notif_title}: +{amt} تومان ({kind}){file_line}.\n"
+                "فروش این فایل نهایی شد.\n"
+                "پیشنهاد بعدی: همکار جدید دعوت کن و با تأیید هر نفر، پورسانت دعوت بگیر."
+            )
+            notif_body = f"+{amt} تومن {kind}. همکار دعوت کن و پورسانت بگیر."
+        else:
+            chat_body = (
+                f"{notif_title}: +{amt} تومان ({kind}){file_line}.\n"
+                "قدم بعدی: از کیف پول می‌تونی برداشت بزنی؛ ادامه فروش را از همین چت جلو ببر."
+            )
+            notif_body = f"+{amt} تومن {kind} وارد کیف پول شد."
         return notif_title, chat_body, notif_body
 
     if ev == "withdrawal_paid":
@@ -384,11 +423,27 @@ def deliver_partner_progress_update(
     if not chat_body:
         return {"ok": False, "skipped": True, "error": "unsupported_event"}
 
+    ct = (commission_type or "").strip().lower()
+    code = str(land_code or "").strip()
+    invite_after_deal = (
+        (event or "").strip() == "commission_approved"
+        and ct not in ("referral",)
+        and "visit" not in ct
+        and code != "referral"
+    )
+
     out: Dict[str, Any] = {"ok": True, "notif": False, "chat": False}
     try:
         from app.services.notifications import add_notification
 
         action_url = _home_url()
+        if invite_after_deal:
+            try:
+                from flask import url_for
+
+                action_url = url_for("express_partner.invite_colleagues")
+            except Exception:
+                action_url = "/express/partner/invite"
         add_notification(
             ph,
             title,
@@ -402,10 +457,12 @@ def deliver_partner_progress_update(
     except Exception as exc:
         current_app.logger.warning("progress update notif failed: %s", exc)
 
+    actions = [_referral_invite_action()] if invite_after_deal else None
     out["chat"] = _inject_partner_system_chat(
         ph,
         land_code=str(land_code or ""),
         body=chat_body,
+        agent_actions=actions,
     )
     return out
 
@@ -456,20 +513,24 @@ def build_journey_chat_cta(
     title: str = "",
     tx_mode: str = "",
     stage_label: str = "",
+    funnel_key: str = "",
+    can_revisit: bool = False,
 ) -> Dict[str, str]:
-    """CTA کارت سفر خانه → پرامپت چت (نه لینک صفحه فایل)."""
+    """CTA کارت سفر خانه → پرامپت چت؛ هم‌تراز با مرحله قیف (funnel_key) و tx_mode."""
     code_s = (code or "").strip()
     title_s = (title or "").strip()
     mode = (tx_mode or "").strip()
     stage = (stage_label or "").strip()
+    key = (funnel_key or "").strip()
     bits = [f"فایل {code_s}"]
     if title_s:
         bits.append(f"({title_s})")
     head = " ".join(bits)
 
+    # اولویت ۱: وضعیت‌های درحال‌انتظار / بستن معامله
     if mode == "deal_pending" or stage == "در حال معامله":
         return {
-            "label": "وضعیت",
+            "label": "وضعیت معامله",
             "icon": "fa-clock",
             "action": "status",
             "prompt": (
@@ -479,26 +540,19 @@ def build_journey_chat_cta(
         }
     if mode == "release":
         return {
-            "label": "بستن",
+            "label": "بستن معامله",
             "icon": "fa-check-circle",
             "action": "release",
             "prompt": f"{head}: می‌خوام معامله رو ببندم — کارت تأیید بده.",
         }
     if mode in ("visit_pending", "visit_done_pending", "visit_commission_pending"):
         return {
-            "label": "وضعیت",
+            "label": "وضعیت بازدید",
             "icon": "fa-clock",
             "action": "status",
             "prompt": (
                 f"{head} هنوز تو تأییده؛ وضعیت رو کوتاه بگو و بگو قدم بعدی چیه."
             ),
-        }
-    if mode == "deal" or stage in ("معامله یا بازدید مجدد", "بازدید انجام شد"):
-        return {
-            "label": "معامله",
-            "icon": "fa-handshake",
-            "action": "deal",
-            "prompt": f"{head}: می‌خوام معامله ثبت کنم — کارت تأیید بده.",
         }
     if mode == "visit_done" or stage == "بازدید تأییدشد":
         return {
@@ -507,9 +561,54 @@ def build_journey_chat_cta(
             "action": "complete_visit",
             "prompt": f"{head}: بازدید انجام شد — کارت تأییدش رو بده.",
         }
+
+    # اولویت ۲: مرحله قیف جاری
+    if key in ("assigned", "marketing") or stage in ("بازاریابی", "بازاریابی مجدد"):
+        return {
+            "label": "بازاریابی کن",
+            "icon": "fa-bullhorn",
+            "action": "marketing",
+            "prompt": (
+                f"{head}: متن دیوار و کپشن اینستا رو آماده کن و بگو چطور معرفی کنم؛ "
+                "بازدید هم بعداً از همین چت ثبت می‌کنیم."
+            ),
+        }
+    if key == "visit_request":
+        if mode == "visit" or not mode:
+            return {
+                "label": "ثبت بازدید",
+                "icon": "fa-calendar-days",
+                "action": "visit",
+                "prompt": (
+                    f"{head}: می‌خوام بازدید ثبت کنم. "
+                    "اگر نام/شماره/تاریخ مشتری رو نداری اول بپرس، بعد کارت تأیید بده."
+                ),
+            }
+        return {
+            "label": "وضعیت بازدید",
+            "icon": "fa-clock",
+            "action": "status",
+            "prompt": (
+                f"{head} هنوز تو مسیر بازدیده؛ وضعیت رو کوتاه بگو و بگو قدم بعدی چیه."
+            ),
+        }
+    if key == "deal_or_revisit" or mode == "deal" or stage in ("معامله یا بازدید مجدد", "بازدید انجام شد"):
+        return {
+            "label": "ثبت معامله",
+            "icon": "fa-handshake",
+            "action": "deal",
+            "prompt": f"{head}: می‌خوام معامله ثبت کنم — کارت تأیید بده.",
+            "secondary_label": "بازدید مجدد" if can_revisit else "",
+            "secondary_icon": "fa-calendar-plus" if can_revisit else "",
+            "secondary_action": "visit" if can_revisit else "",
+            "secondary_prompt": (
+                f"{head}: بازدید مجدد می‌خوام. "
+                "اگر نام/شماره/تاریخ مشتری رو نداری اول بپرس، بعد کارت تأیید بده."
+            ) if can_revisit else "",
+        }
     if mode == "visit":
         return {
-            "label": "بازدید",
+            "label": "ثبت بازدید",
             "icon": "fa-calendar-days",
             "action": "visit",
             "prompt": (
@@ -528,7 +627,7 @@ def build_journey_chat_cta(
             ),
         }
     return {
-        "label": "بازدید",
+        "label": "ثبت بازدید",
         "icon": "fa-calendar-days",
         "action": "visit",
         "prompt": (

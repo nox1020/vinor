@@ -873,6 +873,12 @@
       if (bankSummaryEl) bankSummaryEl.textContent = 'در حال بارگذاری…';
       if (elWithdrawErr) { elWithdrawErr.classList.add('hidden'); elWithdrawErr.textContent = ''; }
       if (elWithdrawSuccess) { elWithdrawSuccess.classList.add('hidden'); elWithdrawSuccess.textContent = ''; }
+      if (maxWithdraw < minWithdraw) {
+        if (elWithdrawErr) {
+          elWithdrawErr.textContent = 'موجودی قابل برداشت کمتر از کف برداشت (' + formatToman(minWithdraw) + ') است.';
+          elWithdrawErr.classList.remove('hidden');
+        }
+      }
       syncSubmitState();
       hoistCommissionModals();
       modal.classList.remove('hidden');
@@ -882,7 +888,7 @@
       overlayOpen();
       prefetchWithdrawBankData();
       requestAnimationFrame(function () {
-        try { if (input) input.focus(); } catch (_) {}
+        try { if (input && maxWithdraw >= minWithdraw) input.focus(); } catch (_) {}
       });
     }
 
@@ -897,19 +903,30 @@
       overlayCloseAll();
     }
 
+    var openGuardUntil = 0;
+    function tryOpenWithdrawFromEvent(e) {
+      var t = e.target;
+      if (!t || !t.closest) return false;
+      var wdBtn = t.closest('[data-open-withdraw-modal]');
+      if (!wdBtn) return false;
+      var now = Date.now();
+      if (now < openGuardUntil) {
+        e.preventDefault();
+        return true;
+      }
+      openGuardUntil = now + 450;
+      e.preventDefault();
+      openModal(wdBtn);
+      return true;
+    }
+
     document.addEventListener('click', function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
       if (!t.closest('.vn-bank-account-menu') && !t.closest('.vn-bank-account-menu-btn')) {
         closeAllBankAccountMenus();
       }
-      if (t.closest('[data-open-withdraw-modal]')) {
-        e.preventDefault();
-        var wdBtn = t.closest('[data-open-withdraw-modal]');
-        if (wdBtn && (wdBtn.disabled || wdBtn.getAttribute('aria-disabled') === 'true')) return;
-        openModal(wdBtn);
-        return;
-      }
+      if (tryOpenWithdrawFromEvent(e)) return;
       if (t.closest('[data-open-bank-picker]')) {
         e.preventDefault();
         openBankPicker();
@@ -935,6 +952,12 @@
         closeModal();
       }
     }, { signal: modalSignal });
+
+    /* بعضی WebViewها روی دکمهٔ کم‌رنگ click را می‌خورند؛ pointerup هم گوش بده */
+    document.addEventListener('pointerup', function (e) {
+      if (!e || e.pointerType === 'mouse') return;
+      tryOpenWithdrawFromEvent(e);
+    }, { signal: modalSignal, passive: false });
 
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;

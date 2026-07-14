@@ -24,7 +24,8 @@
     '/express/partner/dashboard': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
     '/express/partner/commissions': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/profile': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
-    '/express/partner/profile/edit': { tab: 'home', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/settings': { tab: 'home', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/profile/edit': { tab: 'home', depth: 2, bottomNav: true, prefetch: false },
     '/express/partner/favorites': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/requests': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/listings': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -247,6 +248,12 @@
     return currentAuthSegment() !== 'guest';
   }
 
+  function isCommissionsPath(pathname) {
+    var p = normPath(pathname || '');
+    return p === '/express/partner/commissions' ||
+      p.indexOf('/express/partner/commissions/') === 0;
+  }
+
   function requiresLoginPath(pathname) {
     var p = normPath(pathname || '');
     return p === '/express/partner/favorites' ||
@@ -256,8 +263,7 @@
       p.indexOf('/express/partner/listings/') === 0 ||
       p === '/express/partner/inbox-visits' ||
       p.indexOf('/express/partner/inbox-visits/') === 0 ||
-      p === '/express/partner/commissions' ||
-      p.indexOf('/express/partner/commissions/') === 0;
+      isCommissionsPath(p);
   }
 
   function loginUrlForPartnerDest(href) {
@@ -832,7 +838,8 @@
     if (window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.teardown();
     }
-    if (navKey === 'commissions' && window.__vinorCommissionsChrome) {
+    var onCommissions = isCommissionsPath(path);
+    if (onCommissions && window.__vinorCommissionsChrome) {
       window.__vinorCommissionsChrome.setup({ resetScroll: !onDetail });
       if (typeof window.__vinorCloseTxnDetail === 'function') {
         try { window.__vinorCloseTxnDetail(); } catch (_) {}
@@ -853,11 +860,11 @@
       if (!onCommTxnList && window.__vinorCommTxnPageChrome && window.__vinorCommTxnPageChrome.teardown) {
         window.__vinorCommTxnPageChrome.teardown();
       }
-      if (navKey !== 'commissions' && typeof window.removeVinorCommTxnModalsFromBody === 'function') {
+      if (!onCommissions && typeof window.removeVinorCommTxnModalsFromBody === 'function') {
         window.removeVinorCommTxnModalsFromBody();
       }
     } catch (_) {}
-    if (navKey !== 'commissions') {
+    if (!onCommissions) {
       try {
         if (window.__vinorCommPullAbort) window.__vinorCommPullAbort.abort();
         if (window.__vinorCommModalAbort) window.__vinorCommModalAbort.abort();
@@ -876,7 +883,7 @@
       if (onDetail && typeof window.vinorScheduleVisitModalRecovery === 'function') {
         try { window.vinorScheduleVisitModalRecovery(); } catch (_) {}
       }
-      if (navKey !== 'commissions') {
+      if (!onCommissions) {
         if (window.vinorExpressModalOverlay && window.vinorExpressModalOverlay.closeAll) {
           window.vinorExpressModalOverlay.closeAll();
         }

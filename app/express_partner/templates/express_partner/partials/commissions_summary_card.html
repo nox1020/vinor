@@ -1,4 +1,4 @@
-{# کارت کیف پول — سبک دیوار #}
+{# کارت کیف پول — سبک GPT #}
 {% set s = comm_stats if comm_stats is defined else {} %}
 {% set _withdrawable = withdrawable_balance if withdrawable_balance is defined else s.get('withdrawable_balance', 0) %}
 {% set _pending_amt = s.get('pending_amount', pending_commission or 0) %}
@@ -16,10 +16,10 @@
     <p class="vn-wallet-hero__balance" data-comm-withdrawable>{{ (_withdrawable or 0)|toman }}</p>
   </div>
 
-  <div class="vn-wallet-stats">
+  <div class="vn-wallet-stats" role="group" aria-label="خلاصه مالی">
     <div class="vn-wallet-stat">
       <span class="vn-wallet-stat__label">
-        <span data-comm-withdraw-dot class="inline-block w-1.5 h-1.5 rounded-full bg-[#e22828] align-middle me-0.5{% if _has_active_wd %} vn-comm-wd-dot--live{% endif %}" aria-hidden="true"></span>
+        <span data-comm-withdraw-dot class="inline-block w-1.5 h-1.5 rounded-full bg-[#f0bf4c] align-middle me-0.5{% if _has_active_wd %} vn-comm-wd-dot--live{% endif %}" aria-hidden="true"></span>
         در حال برداشت
       </span>
       <span data-comm-in-withdrawal class="vn-wallet-stat__value vn-wallet-stat__value--amber">{{ (_active_wd or 0)|toman }}</span>
@@ -38,7 +38,7 @@
     <button type="button"
             data-open-withdraw-modal
             data-withdrawable-int="{{ (_withdrawable or 0)|int }}"
-            {% if not _can_withdraw %}disabled aria-disabled="true"{% endif %}
+            {% if not _can_withdraw %}aria-disabled="true"{% endif %}
             class="vn-wallet-btn vn-wallet-btn--primary">
       درخواست برداشت
     </button>

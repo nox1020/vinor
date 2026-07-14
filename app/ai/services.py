@@ -20,7 +20,6 @@ from .audience import (
     AUDIENCE_PARTNER,
     AUDIENCE_PUBLIC,
     resolve_ai_voice,
-    voice_label_fa,
 )
 from .config import (
     DEEPSEEK_BASE_URL,
@@ -53,6 +52,34 @@ from .land_cards import collect_land_codes, land_cards_payload
 from .provider_router import call_ai
 
 _MAX_TOOL_ROUNDS = 2
+_MAX_TOOL_RESULT_CHARS = 1800
+
+# کلیدهای سنگین/تکراری که برای مدل لازم نیستند
+_TOOL_RESULT_DROP_KEYS = frozenset(
+    {
+        "available_dates",  # labels کافی است
+        "copies",  # متن کامل در کارت UI است
+        "copy_blocks_count",
+        "payload",
+    }
+)
+
+
+def _compact_tool_model_payload(payload: Any) -> Any:
+    """کاهش حجم JSON برگشتی ابزار برای مدل بدون حذف وضعیت/instruction."""
+    if not isinstance(payload, dict):
+        return payload
+    out: dict[str, Any] = {}
+    for k, v in payload.items():
+        if k in _TOOL_RESULT_DROP_KEYS:
+            continue
+        if k == "lands" and isinstance(v, list) and len(v) > 5:
+            out[k] = v[:5]
+        elif k == "instruction" and isinstance(v, str) and len(v) > 420:
+            out[k] = v[:417] + "…"
+        else:
+            out[k] = v
+    return out
 
 LAND_MARKER_RE = re.compile(r"\[\[LAND:[^\]]+\]\]\s*", re.IGNORECASE)
 
@@ -148,7 +175,7 @@ def _build_system_prompt(
         from .chat_store import recent_thread_land_codes
 
         focus_codes = recent_thread_land_codes(
-            user_key, thread_id, audience=aud, limit=5
+            user_key, thread_id, audience=aud, limit=3
         )
     except Exception:
         focus_codes = []
@@ -214,17 +241,6 @@ def _build_messages(
     resolved_voice = voice or resolve_ai_voice(phone=user_key or "", audience=aud)
     base_prompt = prompt_for_voice(resolved_voice)
     messages: list[dict[str, Any]] = [{"role": "system", "content": base_prompt}]
-    # یادآوری کوتاه نقش در هر درخواست (کم‌حجم، خارج از کش زمینه)
-    messages.append({
-        "role": "system",
-        "content": (
-            f"نقش فعلی: {voice_label_fa(resolved_voice)}. "
-            "لحن را با همین نقش هماهنگ کن. "
-            "واقعیت فقط از داده/ابزار؛ ویژگی از خودت نساز. "
-            "وسط فرم یا کارت تأیید، فقط همان مرحله را جلو ببر. "
-            "لیست شماره‌دار ابزار را دست‌کاری نکن."
-        ),
-    })
     if with_tools:
         messages.append({"role": "system", "content": agent_system_hint(resolved_voice)})
     if chip_intent:
@@ -551,10 +567,11 @@ def _run_agent_loop(
                     "ok": bool(tool_out.get("ok")),
                     "error": tool_out.get("error"),
                 }
+            model_payload = _compact_tool_model_payload(model_payload)
             try:
-                content = json.dumps(model_payload, ensure_ascii=False)[:4000]
+                content = json.dumps(model_payload, ensure_ascii=False)[:_MAX_TOOL_RESULT_CHARS]
             except Exception:
-                content = str(model_payload)[:4000]
+                content = str(model_payload)[:_MAX_TOOL_RESULT_CHARS]
             messages.append(
                 {
                     "role": "tool",

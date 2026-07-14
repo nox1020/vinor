@@ -21,7 +21,7 @@
     font-weight: 700;
     line-height: 1rem;
     text-align: center;
-    box-shadow: 0 0 0 2px #171717;
+    box-shadow: 0 0 0 2px #000;
     display: none;
     align-items: center;
     justify-content: center;
@@ -33,7 +33,7 @@
     position: fixed;
     inset: 0;
     z-index: 80;
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(0, 0, 0, 0.55);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
@@ -43,11 +43,13 @@
     pointer-events: auto;
   }
   #epProfileDrawer {
-    --ep-drawer-bg: #171717;
-    --ep-drawer-hover: rgba(255, 255, 255, 0.06);
-    --ep-drawer-active: rgba(255, 255, 255, 0.1);
+    --ep-drawer-bg: #000000;
+    --ep-drawer-hover: rgba(255, 255, 255, 0.07);
+    --ep-drawer-active: rgba(255, 255, 255, 0.11);
     --ep-drawer-text: #ececec;
-    --ep-drawer-muted: #a0a0a0;
+    --ep-drawer-muted: #8e8e93;
+    --ep-drawer-sep: rgba(255, 255, 255, 0.08);
+    --ep-drawer-raised: #1c1c1e;
     position: fixed;
     top: 0;
     bottom: 0;
@@ -58,8 +60,8 @@
     display: flex;
     flex-direction: column;
     background: var(--ep-drawer-bg);
-    border-left: 1px solid rgba(255, 255, 255, 0.06);
-    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.45);
+    border-left: 1px solid var(--ep-drawer-sep);
+    box-shadow: -16px 0 48px rgba(0, 0, 0, 0.55);
     transform: translate3d(105%, 0, 0);
     transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
     padding-top: env(safe-area-inset-top, 0px);
@@ -79,25 +81,25 @@
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    padding: 0.65rem 0.55rem 0.45rem;
+    padding: 0.75rem 0.65rem 0.35rem;
   }
   .ep-profile-drawer__top-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.35rem;
-    padding-inline: 0.2rem;
+    padding-inline: 0.25rem;
   }
   .ep-profile-drawer__brand {
-    font-size: 0.8125rem;
+    font-size: 0.9375rem;
     font-weight: 700;
-    color: var(--ep-drawer-text);
-    letter-spacing: -0.01em;
+    color: #fff;
+    letter-spacing: -0.02em;
   }
   .ep-profile-drawer__close {
     width: 2rem;
     height: 2rem;
-    border-radius: 0.55rem;
+    border-radius: 9999px;
     display: grid;
     place-items: center;
     border: 0;
@@ -110,14 +112,14 @@
     background: var(--ep-drawer-hover);
     color: #fff;
   }
-  #epProfileDrawer #aiNewChatBtn {
+  #epProfileDrawer .ep-profile-drawer__ai #aiNewChatBtn {
     display: flex;
     width: 100%;
     align-items: center;
     justify-content: flex-start;
     gap: 0.65rem;
     border: 0;
-    border-radius: 0.7rem;
+    border-radius: 0.85rem;
     background: transparent;
     color: var(--ep-drawer-text);
     padding: 0.65rem 0.7rem;
@@ -125,11 +127,11 @@
     font-weight: 560;
     transition: background 0.15s ease;
   }
-  #epProfileDrawer #aiNewChatBtn:hover,
-  #epProfileDrawer #aiNewChatBtn:active {
+  #epProfileDrawer .ep-profile-drawer__ai #aiNewChatBtn:hover,
+  #epProfileDrawer .ep-profile-drawer__ai #aiNewChatBtn:active {
     background: var(--ep-drawer-hover);
   }
-  #epProfileDrawer #aiNewChatBtn i {
+  #epProfileDrawer .ep-profile-drawer__ai #aiNewChatBtn i {
     width: 1.1rem;
     text-align: center;
     font-size: 0.8rem;
@@ -144,7 +146,7 @@
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    padding: 0.15rem 0.4rem 0.75rem;
+    padding: 0.15rem 0.5rem 0.85rem;
   }
   .ep-profile-drawer__body::-webkit-scrollbar {
     display: none;
@@ -153,9 +155,9 @@
   }
 
   .ep-profile-drawer__label {
-    padding: 0.55rem 0.7rem 0.25rem;
-    font-size: 0.6875rem;
-    font-weight: 600;
+    padding: 0.65rem 0.75rem 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 560;
     color: var(--ep-drawer-muted);
   }
 
@@ -167,22 +169,22 @@
   #epProfileDrawer #aiHistoryList {
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
+    gap: 0.15rem;
     max-height: none;
     min-height: 0;
     overflow: visible;
-    padding: 0 0.15rem;
+    padding: 0 0.1rem;
   }
   #epProfileDrawer .ai-thread-item {
     display: flex;
     align-items: center;
     width: 100%;
-    min-height: 2.5rem;
+    min-height: 2.55rem;
     border: 0;
-    border-radius: 0.65rem;
+    border-radius: 0.85rem;
     background: transparent;
     color: var(--ep-drawer-text);
-    padding: 0.45rem 0.55rem;
+    padding: 0.5rem 0.65rem;
     text-align: right;
     transition: background 0.14s ease;
     box-sizing: border-box;
@@ -209,7 +211,7 @@
     gap: 0.4rem;
     flex: 1 1 auto;
     min-width: 0;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 500;
     line-height: 1.3;
     color: var(--ep-drawer-text);
@@ -234,11 +236,11 @@
     display: none;
   }
   #epProfileDrawer .ai-thread-delete {
-    opacity: 0.4;
+    opacity: 0.35;
     width: 1.65rem;
     height: 1.65rem;
     flex-shrink: 0;
-    border-radius: 0.4rem;
+    border-radius: 0.5rem;
     display: grid;
     place-items: center;
     color: var(--ep-drawer-muted);
@@ -267,7 +269,7 @@
   .ep-profile-drawer__section {
     margin-top: 0.55rem;
     padding-top: 0.35rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid var(--ep-drawer-sep);
   }
 
   /* لینک‌های حساب — جمع‌وجور مثل GPT */
@@ -280,7 +282,7 @@
     gap: 0.7rem;
     margin: 0;
     padding: 0.55rem 0.65rem;
-    border-radius: 0.65rem;
+    border-radius: 0.85rem;
   }
   #epProfileDrawer .ep-profile-drawer__nav .profile-menu-row:hover,
   #epProfileDrawer .ep-profile-drawer__nav .profile-menu-row:active {
@@ -311,107 +313,60 @@
 
   .ep-profile-drawer__foot {
     flex-shrink: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding: 0.45rem 0.5rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
-  }
-  .ep-profile-drawer__upgrade {
+    border-top: 1px solid var(--ep-drawer-sep);
+    padding: 0.7rem 0.75rem calc(0.8rem + env(safe-area-inset-bottom, 0px));
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    position: relative;
+    direction: ltr;
+    background: #000;
+  }
+  .ep-profile-drawer__foot-btn {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.45rem;
-    width: 100%;
-    margin: 0 0 0.35rem;
-    padding: 0.55rem 0.85rem;
-    border-radius: 9999px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
-    color: #f4f4f5;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    letter-spacing: 0;
-    text-decoration: none;
-    transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .ep-profile-drawer__upgrade:hover,
-  .ep-profile-drawer__upgrade:active {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.05) 100%);
-    border-color: rgba(255, 255, 255, 0.22);
-  }
-  .ep-profile-drawer__upgrade:active {
-    transform: scale(0.98);
-  }
-  .ep-profile-drawer__upgrade-icon {
-    display: inline-flex;
-    width: 1rem;
-    height: 1rem;
-    flex-shrink: 0;
-    color: #fafafa;
-  }
-  .ep-profile-drawer__user {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    width: 100%;
-    padding: 0.55rem 0.55rem;
-    border-radius: 0.7rem;
-    text-decoration: none;
-    color: inherit;
-    transition: background 0.15s ease;
-  }
-  .ep-profile-drawer__user:hover,
-  .ep-profile-drawer__user:active {
-    background: var(--ep-drawer-hover);
-  }
-  .ep-profile-drawer__avatar {
-    width: 1.85rem;
-    height: 1.85rem;
-    border-radius: 9999px;
-    overflow: hidden;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-    background: rgba(255, 255, 255, 0.08);
-    color: #d4d4d8;
-    font-size: 0.7rem;
-    font-weight: 700;
-  }
-  .ep-profile-drawer__avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .ep-profile-drawer__name {
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: var(--ep-drawer-text);
-    line-height: 1.25;
-  }
-  .ep-profile-drawer__meta {
-    margin-top: 0.1rem;
-    font-size: 0.6875rem;
-    color: var(--ep-drawer-muted);
-  }
-  .ep-profile-drawer__logout {
-    display: flex;
-    width: 100%;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 0.65rem;
-    margin-top: 0.15rem;
     border: 0;
-    border-radius: 0.65rem;
-    background: transparent;
-    color: var(--ep-drawer-muted);
-    padding: 0.55rem 0.65rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    transition: background 0.15s ease, color 0.15s ease;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: background 0.15s ease, transform 0.12s ease;
   }
-  .ep-profile-drawer__logout:hover,
-  .ep-profile-drawer__logout:active {
-    background: rgba(239, 68, 68, 0.1);
-    color: #fda4af;
+  .ep-profile-drawer__foot-btn:active {
+    transform: scale(0.97);
+  }
+  .ep-profile-drawer__settings-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 9999px;
+    background: #2f2f2f;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .ep-profile-drawer__settings-btn:hover {
+    background: #3a3a3a;
+  }
+  .ep-profile-drawer__settings-btn i {
+    font-size: 1rem;
+  }
+  .ep-profile-drawer__chat-btn {
+    min-height: 2.75rem;
+    padding: 0 1.15rem;
+    border-radius: 9999px;
+    background: #2563eb;
+    color: #fff;
+    gap: 0.55rem;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    font-family: inherit;
+    direction: rtl;
+  }
+  .ep-profile-drawer__chat-btn:hover {
+    background: #1d4ed8;
+  }
+  .ep-profile-drawer__chat-btn i {
+    font-size: 0.95rem;
   }
 
   .ep-profile-drawer__guest {
@@ -437,7 +392,7 @@
     justify-content: center;
     gap: 0.4rem;
     min-height: 2.4rem;
-    border-radius: 0.7rem;
+    border-radius: 0.85rem;
     font-size: 0.8125rem;
     font-weight: 650;
     text-decoration: none;
@@ -454,7 +409,7 @@
     cursor: not-allowed;
   }
   .ep-profile-drawer__guest-btn--ghost {
-    background: var(--ep-drawer-hover);
+    background: var(--ep-drawer-raised);
     color: var(--ep-drawer-text);
   }
   .ep-drawer-login {
@@ -471,9 +426,9 @@
     width: 100%;
     box-sizing: border-box;
     min-height: 2.55rem;
-    border-radius: 0.7rem;
+    border-radius: 0.85rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--ep-drawer-raised);
     color: #fff;
     padding: 0.55rem 0.75rem;
     font-size: 0.875rem;
@@ -487,7 +442,7 @@
   }
   .ep-drawer-login__input:focus {
     border-color: rgba(255, 255, 255, 0.28);
-    background: rgba(255, 255, 255, 0.07);
+    background: #2c2c2e;
   }
   .ep-drawer-login__input--otp {
     letter-spacing: 0.28em;
@@ -586,12 +541,6 @@
         <i class="fas fa-times" aria-hidden="true"></i>
       </button>
     </div>
-    {% if me_phone and home_ai_enabled|default(false) %}
-    <button type="button" id="aiNewChatBtn" aria-label="گفتگوی جدید">
-      <i class="fas fa-pen-to-square" aria-hidden="true"></i>
-      گفتگوی جدید
-    </button>
-    {% endif %}
   </div>
 
   <div class="ep-profile-drawer__body">
@@ -702,81 +651,36 @@
       {% include 'express_partner/partials/ai_chat_threads.html' %}
     </div>
     {% endif %}
-
-    <div class="ep-profile-drawer__section">
-      <p class="ep-profile-drawer__label">حساب</p>
-      <nav class="ep-profile-drawer__nav" aria-label="منوی پروفایل">
-        {% set visits_subtitle = '' %}
-        {% if not is_approved %}
-        {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری', '', tour='apply-link') }}
-        {% endif %}
-        {{ profile_menu_row(url_for('express_partner.commissions'), 'fa-wallet', 'کیف پول', '', tour='commissions-link') }}
-        {% if is_vinor_apk|default(false) and show_app_update_card|default(false) and android_apk_url %}
-        {{ profile_menu_row(android_apk_url, 'fa-download', 'بروزرسانی اپ', '', nav=false, download=true, extra_class='text-amber-200') }}
-        {% endif %}
-        {{ profile_menu_row(url_for('express_partner.invite_colleagues'), 'fa-user-plus', 'دعوت همکار', '', tour='invite-colleagues-link') }}
-      </nav>
-    </div>
     {% endif %}
   </div>
 
   {% if me_phone %}
-  {% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
-  {% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
   <div class="ep-profile-drawer__foot">
-    {% if not is_special|default(false) %}
-    {% if not is_approved|default(false) %}
-    <a href="{{ url_for('express_partner.apply') }}"
+    <a href="{{ url_for('express_partner.settings') }}"
        data-vinor-express-nav
-       class="ep-profile-drawer__upgrade"
-       aria-label="ارتقا به همکار">
-      <svg class="ep-profile-drawer__upgrade-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
-        <path fill="currentColor" d="M12 2.5l1.7 4.8h5.1l-4.1 3 1.6 4.9L12 12.9 7.7 15.2l1.6-4.9-4.1-3h5.1L12 2.5z"/>
-      </svg>
-      <span>ارتقا</span>
+       class="ep-profile-drawer__foot-btn ep-profile-drawer__settings-btn"
+       id="epDrawerSettingsBtn"
+       aria-label="تنظیمات"
+       data-tour="profile-section">
+      <i class="fas fa-gear" aria-hidden="true"></i>
     </a>
+    {% if home_ai_enabled|default(false) %}
+    <button type="button"
+            id="aiNewChatBtn"
+            class="ep-profile-drawer__foot-btn ep-profile-drawer__chat-btn"
+            aria-label="گفتگوی جدید">
+      <span>گفتگو</span>
+      <i class="fas fa-pen-to-square" aria-hidden="true"></i>
+    </button>
     {% else %}
     <a href="{{ url_for('express_partner.home', ai=1) }}"
        data-vinor-express-nav
-       class="ep-profile-drawer__upgrade"
-       data-vinor-upgrade-chat
-       aria-label="ارتقا به همکار ویژه">
-      <svg class="ep-profile-drawer__upgrade-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
-        <path fill="currentColor" d="M12 2.5l1.7 4.8h5.1l-4.1 3 1.6 4.9L12 12.9 7.7 15.2l1.6-4.9-4.1-3h5.1L12 2.5z"/>
-      </svg>
-      <span>ارتقا</span>
+       class="ep-profile-drawer__foot-btn ep-profile-drawer__chat-btn"
+       aria-label="گفتگو">
+      <span>گفتگو</span>
+      <i class="fas fa-pen-to-square" aria-hidden="true"></i>
     </a>
     {% endif %}
-    {% endif %}
-    <a href="{{ url_for('express_partner.profile_edit') }}"
-       data-vinor-express-nav
-       class="ep-profile-drawer__user"
-       data-tour="profile-section">
-      <div class="ep-profile-drawer__avatar" aria-hidden="true">
-        {% if _avatar_url %}
-        <img src="{{ _avatar_url }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-        <span class="hidden h-full w-full items-center justify-center">{{ (me_name or partner_name or 'و')|avatar_initials }}</span>
-        {% else %}
-        <span>{{ (me_name or partner_name or 'و')|avatar_initials }}</span>
-        {% endif %}
-      </div>
-      <div class="min-w-0 flex-1 text-right">
-        <div class="ep-profile-drawer__name truncate">{{ me_name or partner_name or 'همکار وینور' }}</div>
-        <div class="ep-profile-drawer__meta">
-          {% if is_special|default(false) %}همکار ویژه
-          {% elif is_approved %}همکار تأییدشده
-          {% else %}کاربر عادی{% endif %}
-        </div>
-      </div>
-    </a>
-    <form id="logoutDrawerForm" method="post" action="{{ url_for('express_partner.logout') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="ep-profile-drawer__logout" data-vinor-logout>
-        <i class="fas fa-right-from-bracket text-xs" aria-hidden="true"></i>
-        خروج
-      </button>
-    </form>
   </div>
   {% endif %}
 </aside>
@@ -876,17 +780,9 @@
   backdrop.addEventListener('click', closeDrawer);
 
   drawer.addEventListener('click', function (e) {
-    var logoutBtn = e.target.closest && e.target.closest('[data-vinor-logout]');
-    if (logoutBtn) {
-      e.preventDefault();
-      e.stopPropagation();
+    var chatBtn = e.target.closest && e.target.closest('#aiNewChatBtn.ep-profile-drawer__chat-btn');
+    if (chatBtn) {
       closeDrawer();
-      if (typeof window.vinorExpressLogout === 'function') {
-        window.vinorExpressLogout();
-      } else {
-        var form = document.getElementById('logoutDrawerForm');
-        if (form) form.submit();
-      }
       return;
     }
     var upgrade = e.target.closest && e.target.closest('[data-vinor-upgrade-chat]');

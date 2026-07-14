@@ -1,4 +1,4 @@
-{# پیش‌نمایش تراکنش‌های اخیر — سبک دیوار #}
+{# پیش‌نمایش تراکنش‌های اخیر — سبک GPT #}
 {% set _preview_limit = txn_preview_limit|default(5) %}
 {% set _preview = txn_preview|default(true) %}
 {% set _rows = items[:_preview_limit] if _preview and items else (items or []) %}
@@ -27,7 +27,7 @@
     {% endfor %}
   </div>
   {% if _preview and items and items|length > _preview_limit %}
-  <div class="border-t border-white/[0.07] py-2.5 text-center">
+  <div class="border-t border-white/[0.07] py-3 text-center">
     <a href="{{ url_for('express_partner.commissions_transactions') }}"
        data-vinor-express-nav
        class="vn-wallet-section__link text-[0.8125rem]">

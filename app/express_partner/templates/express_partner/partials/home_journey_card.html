@@ -1,17 +1,19 @@
-{# کارت سفر فایل — بالای خانه؛ CTA از چت؛ قابل جمع‌شدن #}
+{# کارت سفر فایل — بالای خانه؛ CTA از چت؛ قابل جمع‌شدن — سبک GPT مشکی #}
 {# Expects: card with code, title, detail_url, cta_chat_prompt, cta_label, coach_prompt, ... #}
 {% if card %}
 {% set loc = ([card.city, card.location]|select|join(' ')) if (card.city or card.location) else '' %}
 {% set steps = card.funnel_steps|default([]) %}
 <style>
   .vn-journey-card {
-    --vj-purple: #7c3aed;
-    --vj-purple-soft: rgba(124, 58, 237, 0.2);
-    --vj-bg: #0b1220;
+    --vj-accent: #2563eb;
+    --vj-accent-soft: rgba(37, 99, 235, 0.22);
+    --vj-bg: #1c1c1e;
     --vj-line: rgba(255, 255, 255, 0.08);
+    --vj-muted: #8e8e93;
+    --vj-text: #ececec;
     position: relative;
-    margin: 0.35rem 0.55rem 0.4rem;
-    border-radius: 0.9rem;
+    margin: 0.35rem 0.75rem 0.55rem;
+    border-radius: 1.15rem;
     border: 1px solid var(--vj-line);
     background: var(--vj-bg);
     overflow: hidden;
@@ -25,8 +27,8 @@
   }
   .vn-journey-card__head-inner {
     display: flex;
-    gap: 0.55rem;
-    padding: 0.55rem 0.55rem 0.4rem;
+    gap: 0.65rem;
+    padding: 0.7rem 0.7rem 0.45rem;
   }
   .vn-journey-card__head:active .vn-journey-card__head-inner {
     opacity: 0.92;
@@ -39,11 +41,11 @@
     align-items: center;
     gap: 0.25rem;
     max-width: 100%;
-    padding: 0.15rem 0.4rem;
-    border-radius: 0.4rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(8, 12, 20, 0.75);
-    color: #d4d4d8;
+    padding: 0.15rem 0.45rem;
+    border-radius: 9999px;
+    border: 0;
+    background: rgba(255, 255, 255, 0.06);
+    color: #c7c7cc;
     font-size: 0.6rem;
     font-weight: 700;
     white-space: nowrap;
@@ -56,9 +58,9 @@
     width: 4.5rem;
     height: 4.5rem;
     flex-shrink: 0;
-    border-radius: 0.7rem;
+    border-radius: 0.85rem;
     overflow: hidden;
-    background: #151b28;
+    background: #2f2f2f;
     align-self: flex-start;
   }
   .vn-journey-card__media img {
@@ -87,9 +89,9 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.15rem 0.45rem;
+    padding: 0.15rem 0.5rem;
     border-radius: 9999px;
-    background: var(--vj-purple);
+    background: #2f2f2f;
     color: #fff;
     font-size: 0.6rem;
     font-weight: 700;
@@ -97,10 +99,11 @@
   }
   .vn-journey-card__title {
     margin: 0;
-    font-size: 0.8125rem;
-    font-weight: 800;
-    line-height: 1.3;
-    color: #f8fafc;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--vj-text);
+    letter-spacing: -0.015em;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -112,7 +115,7 @@
     gap: 0.25rem;
     margin: 0;
     font-size: 0.65rem;
-    color: #94a3b8;
+    color: var(--vj-muted);
     line-height: 1.25;
   }
   .vn-journey-card__price-label { display: none; }
@@ -120,7 +123,7 @@
     margin: 0.05rem 0 0;
     font-size: 0.75rem;
     font-weight: 800;
-    color: #4ade80;
+    color: #fff;
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
   }
@@ -128,14 +131,14 @@
     margin: 0;
     font-size: 0.65rem;
     font-weight: 700;
-    color: #a7f3d0;
+    color: #34d399;
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
   }
   .vn-journey-card__compact-price {
     font-size: 0.62rem;
     font-weight: 700;
-    color: #4ade80;
+    color: #34d399;
     font-variant-numeric: tabular-nums;
   }
   .vn-journey-card__track {
@@ -167,7 +170,7 @@
     z-index: 0;
   }
   .vn-journey-card__step.is-done:not(:last-child)::after {
-    background: var(--vj-purple);
+    background: var(--vj-accent);
   }
   .vn-journey-card__dot {
     position: relative;
@@ -177,50 +180,60 @@
     border-radius: 9999px;
     display: grid;
     place-items: center;
-    background: #1a2233;
-    color: #64748b;
+    background: #2f2f2f;
+    color: #8e8e93;
     border: 1px solid rgba(255, 255, 255, 0.08);
     font-size: 0.55rem;
   }
   .vn-journey-card__step.is-done .vn-journey-card__dot,
   .vn-journey-card__step.is-current .vn-journey-card__dot {
-    background: var(--vj-purple);
+    background: var(--vj-accent);
     color: #fff;
     border-color: transparent;
   }
   .vn-journey-card__step.is-current .vn-journey-card__dot {
-    box-shadow: 0 0 0 3px var(--vj-purple-soft);
+    box-shadow: 0 0 0 3px var(--vj-accent-soft);
     transform: scale(1.06);
   }
   .vn-journey-card__step-label {
     font-size: 0.52rem;
     font-weight: 600;
     line-height: 1.15;
-    color: #64748b;
+    color: var(--vj-muted);
     max-width: 100%;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  .vn-journey-card__step.is-done .vn-journey-card__step-label,
+  .vn-journey-card__step.is-done .vn-journey-card__step-label {
+    color: #c7c7cc;
+  }
   .vn-journey-card__step.is-current .vn-journey-card__step-label {
-    color: #cbd5e1;
+    color: #fff;
+    font-weight: 700;
   }
   .vn-journey-card__actions {
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0 0.55rem 0.55rem;
+    padding: 0 0.7rem 0.7rem;
+  }
+  .vn-journey-card__cta-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
   }
   .vn-journey-card__coach {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2.35rem;
+    height: 2.35rem;
     flex-shrink: 0;
-    border-radius: 0.65rem;
-    border: 1px solid rgba(124, 58, 237, 0.45);
-    background: rgba(124, 58, 237, 0.18);
-    color: #ddd6fe;
+    border-radius: 9999px;
+    border: 0;
+    background: #2f2f2f;
+    color: #ececec;
     display: grid;
     place-items: center;
     font-size: 0.75rem;
@@ -228,13 +241,13 @@
   .vn-journey-card__coach:active { filter: brightness(1.08); }
   .vn-journey-card__collapse {
     flex-shrink: 0;
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2.35rem;
+    height: 2.35rem;
     padding: 0;
-    border-radius: 0.65rem;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: #121826;
-    color: #cbd5e1;
+    border-radius: 9999px;
+    border: 0;
+    background: #2f2f2f;
+    color: #c7c7cc;
     display: inline-grid;
     place-items: center;
     cursor: pointer;
@@ -243,21 +256,30 @@
   .vn-journey-card__collapse i { font-size: 0.7rem; opacity: 0.85; }
   .vn-journey-card__cta {
     flex: 1;
-    min-height: 2.2rem;
+    min-width: 0;
+    min-height: 2.35rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.35rem;
-    border-radius: 0.65rem;
+    border-radius: 9999px;
     border: 0;
-    background: var(--vj-purple);
+    background: var(--vj-accent);
     color: #fff;
-    font-size: 0.78rem;
+    font-size: 0.8125rem;
     font-weight: 700;
     text-decoration: none;
   }
   .vn-journey-card__cta:active { filter: brightness(0.95); }
   .vn-journey-card__cta i { font-size: 0.7rem; }
+  .vn-journey-card__cta--secondary {
+    flex: 0 0 auto;
+    padding: 0 0.85rem;
+    background: #2f2f2f;
+    color: #ececec;
+    font-size: 0.75rem;
+  }
+  .vn-journey-card__cta--secondary:active { filter: brightness(1.08); }
 
   .vn-journey-card__compact {
     display: none;
@@ -275,9 +297,9 @@
     width: 0.45rem;
     height: 0.45rem;
     border-radius: 9999px;
-    background: var(--vj-purple);
+    background: var(--vj-accent);
     flex-shrink: 0;
-    box-shadow: 0 0 0 3px var(--vj-purple-soft);
+    box-shadow: 0 0 0 3px var(--vj-accent-soft);
   }
   .vn-journey-card__compact-text {
     min-width: 0;
@@ -289,12 +311,12 @@
   .vn-journey-card__compact-kicker {
     font-size: 0.58rem;
     font-weight: 700;
-    color: #a78bfa;
+    color: var(--vj-muted);
   }
   .vn-journey-card__compact-title {
     font-size: 0.75rem;
-    font-weight: 800;
-    color: #f8fafc;
+    font-weight: 700;
+    color: var(--vj-text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -305,9 +327,9 @@
     height: 1.85rem;
     display: inline-grid;
     place-items: center;
-    border-radius: 0.5rem;
-    background: rgba(124, 58, 237, 0.22);
-    color: #ddd6fe;
+    border-radius: 9999px;
+    background: #2f2f2f;
+    color: #ececec;
     font-size: 0.7rem;
   }
   .vn-journey-card__compact-open i { opacity: 0.9; }
@@ -442,24 +464,35 @@
       <i class="fas fa-robot" aria-hidden="true"></i>
     </button>
     {% endif %}
-    {% if card.cta_chat_prompt %}
-    <button type="button"
-            class="vn-journey-card__cta"
-            data-vn-chat-prompt="{{ card.cta_chat_prompt|e }}">
-      <i class="fas {{ card.cta_icon|default('fa-comments') }}" aria-hidden="true"></i>
-      {{ card.cta_label|default('ادامه در چت') }}
-    </button>
-    {% else %}
-    <a href="{{ card.cta_url or card.detail_url }}"
-       {% set _cta = (card.cta_url or card.detail_url or '')|string %}
-       {% if _cta.startswith('tel:') or _cta.startswith('mailto:') or _cta.startswith('sms:') %}
-       data-vinor-direct-action="1"
-       {% else %}data-vinor-express-nav{% endif %}
-       class="vn-journey-card__cta">
-      <i class="fas {{ card.cta_icon|default('fa-calendar-days') }}" aria-hidden="true"></i>
-      {{ card.cta_label|default('درخواست بازدید') }}
-    </a>
-    {% endif %}
+    <div class="vn-journey-card__cta-wrap">
+      {% if card.cta_chat_prompt %}
+      <button type="button"
+              class="vn-journey-card__cta"
+              data-vn-chat-prompt="{{ card.cta_chat_prompt|e }}"
+              data-vn-funnel-key="{{ card.funnel_key|default('') }}">
+        <i class="fas {{ card.cta_icon|default('fa-comments') }}" aria-hidden="true"></i>
+        {{ card.cta_label|default('ادامه در چت') }}
+      </button>
+      {% if card.cta_secondary_prompt %}
+      <button type="button"
+              class="vn-journey-card__cta vn-journey-card__cta--secondary"
+              data-vn-chat-prompt="{{ card.cta_secondary_prompt|e }}">
+        <i class="fas {{ card.cta_secondary_icon|default('fa-calendar-plus') }}" aria-hidden="true"></i>
+        {{ card.cta_secondary_label|default('بازدید مجدد') }}
+      </button>
+      {% endif %}
+      {% else %}
+      <a href="{{ card.cta_url or card.detail_url }}"
+         {% set _cta = (card.cta_url or card.detail_url or '')|string %}
+         {% if _cta.startswith('tel:') or _cta.startswith('mailto:') or _cta.startswith('sms:') %}
+         data-vinor-direct-action="1"
+         {% else %}data-vinor-express-nav{% endif %}
+         class="vn-journey-card__cta">
+        <i class="fas {{ card.cta_icon|default('fa-calendar-days') }}" aria-hidden="true"></i>
+        {{ card.cta_label|default('درخواست بازدید') }}
+      </a>
+      {% endif %}
+    </div>
   </div>
 </article>
 <script>

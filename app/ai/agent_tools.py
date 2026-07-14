@@ -66,36 +66,17 @@ def _resolve_tool_land_code(phone: str, args: dict[str, Any] | None = None) -> s
 
 
 def agent_system_hint(voice: str | None) -> str:
+    """یادآوری کوتاه مسیریابی ابزار — جزئیات در system prompt است."""
     v = (voice or "").strip().lower()
     if v == VOICE_PUBLIC:
         return (
-            "ابزارها: search_lands | get_cooperation_info | get_application_status | propose_partner_application. "
-            "واقعیت فقط از داده/خروجی ابزار؛ ویژگی ملک از خودت نساز. "
-            "هرگز URL یا مسیر صفحه نده؛ همه کارها از همین چت. "
-            "سطوح/شرایط/مسیر همکاری → get_cooperation_info. "
-            "وضعیت درخواست → get_application_status. "
-            "ثبت همکاری: نام کامل، کد ملی، شهر را یکی‌یکی بپرس؛ فقط فیلدهای missing؛ بعد propose_partner_application و کارت تأیید. "
-            "اگر need_login بود بگو از منوی راست وارد شود؛ لینک نده. "
-            "ملک: search_lands و در صورت پیشنهاد [[LAND:کد]]؛ چند نتیجه → در متن یکی را با دلیل کوتاه برجسته کن. "
-            "اگر فایل روی گفتگو هست و گفت این فایل/خصوصیات/قیمتش، همان را جواب بده مگر موضوع دیگری بپرسد. "
-            "ابزار فروش همکار برای این مخاطب نیست."
+            "ابزار: search→ملک | coop_info→همکاری | app_status→وضعیت | propose_apply→کارت ثبت "
+            "(نام/کدملی/شهر یکی‌یکی؛ need_login=منوی راست). فروش همکار نزن."
         )
     return (
-        "مثل همکار باتجربه کنار کاربر باش؛ ابزار را وقتی لازم است صدا بزن. "
-        "واقعیت فقط از داده/ابزار. وسط فرم یا کارت تأیید فقط همان مرحله را جلو ببر. "
-        "search_lands → فقط جستجو و آن‌وقت [[LAND:کد]]. "
-        "suggest_next_action → کار بعدی واقعی از داشبورد. "
-        "draft_listing_copy → متن دیوار/اینستا؛ در پیام تکرار نکن. "
-        "propose_visit_request / propose_complete_visit / propose_deal / propose_release_deal → "
-        "کارت تأیید؛ تا تأیید نزده نگو ثبت شد. "
-        "از چت جلو ببر؛ برای ثبت به صفحه نفرست مگر عکس/جزئیات بخواهد. "
-        "مأموریت فعال: land_code را خالی بگذار یا همان کد مأموریت؛ از کاربر نپرس. "
-        "فایل روی گفتگو + این فایل/خصوصیاتش → همان را مبنا بگیر مگر سوال دیگر. "
-        "ثبت بازدید: ۱) نام و نام‌خانوادگی یکجا ۲) شماره "
-        "۳) propose_visit_request بدون تاریخ برای لیست شماره‌دار "
-        "۴) همان لیست را نشان بده؛ خودت تاریخ انتخاب نکن "
-        "۵) با ۱/اولی/دومی فقط visit_date بفرست (نام/شماره ذخیره است؛ دوباره نپرس). "
-        "۶) بعد از ثبت بازدید، قدم بعدی را بگو (هماهنگی با مشتری → از همین چت «بازدید انجام شد»)؛ به صفحه جدا نفرست."
+        "ابزار وقتی لازم: search→[[LAND]] | next→کار بعدی | listing→کارت کپی "
+        "| propose_visit/complete/deal/release→کارت تأیید. "
+        "بازدید: نام→شماره→propose بدون تاریخ→لیست→فقط visit_date. مأموریت: land_code خالی."
     )
 
 
@@ -122,20 +103,12 @@ def _schema_search() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_SEARCH,
-            "description": (
-                "جستجوی فایل/ملک در لیست قابل‌دسترس کاربر بر اساس شهر، محله، کد، نوع یا کلمه کلیدی."
-            ),
+            "description": "جستجوی ملک در لیست قابل‌دسترس (شهر/کد/نوع/کلیدواژه).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "عبارت جستجو مثل شهر، کد فایل، ویلا، باغ",
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "حداکثر تعداد نتیجه (۱ تا ۵)",
-                    },
+                    "query": {"type": "string", "description": "عبارت جستجو"},
+                    "limit": {"type": "integer", "description": "۱ تا ۵"},
                 },
                 "required": ["query"],
             },
@@ -148,17 +121,11 @@ def _schema_coop_info() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_COOP_INFO,
-            "description": (
-                "اطلاعات کوتاه سطوح همکاری، شرایط/پورسانت، یا مسیر شروع — بدون لینک. "
-                "قبل از توضیح همکاری این ابزار را بزن."
-            ),
+            "description": "سطوح/شرایط/مسیر همکاری (بدون لینک). قبل از توضیح همکاری بزن.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "topic": {
-                        "type": "string",
-                        "description": "levels | terms | how | all",
-                    },
+                    "topic": {"type": "string", "description": "levels|terms|how|all"},
                 },
                 "required": [],
             },
@@ -171,7 +138,7 @@ def _schema_app_status() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_APP_STATUS,
-            "description": "وضعیت درخواست همکاری کاربر جاری (لاگین‌شده).",
+            "description": "وضعیت درخواست همکاری کاربر لاگین‌شده.",
             "parameters": {"type": "object", "properties": {}},
         },
     }
@@ -182,19 +149,15 @@ def _schema_propose_apply() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_PROPOSE_APPLY,
-            "description": (
-                "آماده‌سازی کارت تأیید ثبت درخواست همکاری. "
-                "فقط وقتی نام کامل، کد ملی ۱۰ رقمی و شهر را داری صدا بزن. "
-                "اگر کاربر مهمان است، ابزار need_login برمی‌گرداند."
-            ),
+            "description": "کارت تأیید ثبت همکاری؛ فقط با نام+کدملی+شهر. مهمان→need_login.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "نام و نام‌خانوادگی"},
-                    "national_id": {"type": "string", "description": "کد ملی ۱۰ رقمی"},
-                    "city": {"type": "string", "description": "شهر فعالیت از لیست شهرهای فعال"},
-                    "experience": {"type": "string", "description": "سابقه فروش ملک (اختیاری)"},
-                    "note": {"type": "string", "description": "توضیح کوتاه (اختیاری)"},
+                    "name": {"type": "string"},
+                    "national_id": {"type": "string"},
+                    "city": {"type": "string"},
+                    "experience": {"type": "string"},
+                    "note": {"type": "string"},
                 },
                 "required": ["name", "national_id", "city"],
             },
@@ -207,7 +170,7 @@ def _schema_next() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_NEXT,
-            "description": "پیشنهاد دقیق کار بعدی همکار بر اساس وضعیت زنده داشبورد (بازدید امروز، معامله، برداشت، پیگیری).",
+            "description": "کار بعدی واقعی همکار از داشبورد.",
             "parameters": {"type": "object", "properties": {}},
         },
     }
@@ -218,22 +181,12 @@ def _schema_listing() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_LISTING,
-            "description": (
-                "ساخت متن آماده آگهی دیوار و/یا کپشن اینستا برای یک فایل قابل‌دسترس همکار. "
-                "اگر مأموریت فعال است land_code لازم نیست. "
-                "برای درخواست آگهی، پست، استوری، دیوار یا اینستاگرام استفاده کن."
-            ),
+            "description": "متن دیوار/اینستا برای فایل (مأموریت فعال→land_code لازم نیست).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "land_code": {
-                        "type": "string",
-                        "description": "کد فایل — اختیاری اگر مأموریت فعال باشد",
-                    },
-                    "channel": {
-                        "type": "string",
-                        "description": "divar | instagram | both",
-                    },
+                    "land_code": {"type": "string"},
+                    "channel": {"type": "string", "description": "divar|instagram|both"},
                 },
                 "required": [],
             },
@@ -247,39 +200,21 @@ def _schema_visit() -> dict[str, Any]:
         "function": {
             "name": TOOL_VISIT,
             "description": (
-                "آماده‌سازی پیشنهاد ثبت بازدید یا بازدید مجدد برای فایل مأموریت. "
-                "اگر مأموریت فعال است land_code لازم نیست (سیستم خودش می‌گیرد). "
-                "نام مشتری را یکجا بده. اگر تاریخ نداری خالی بگذار تا لیست تاریخ‌های مجاز "
-                "با شماره برگردد؛ کاربر با ۱/اولی/دومی انتخاب می‌کند. "
-                "ثبت نهایی فقط پس از تأیید کاربر در کارت چت."
+                "کارت ثبت بازدید. نام یکجا+موبایل لازم. بدون تاریخ→لیست شماره‌دار. "
+                "مأموریت فعال→land_code اختیاری. ثبت فقط بعد از تأیید کارت."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "land_code": {
-                        "type": "string",
-                        "description": "کد فایل — اختیاری اگر مأموریت فعال باشد",
-                    },
-                    "customer_name": {
-                        "type": "string",
-                        "description": "نام و نام خانوادگی مشتری در یک فیلد",
-                    },
-                    "customer_phone": {
-                        "type": "string",
-                        "description": "موبایل مشتری ایران",
-                    },
+                    "land_code": {"type": "string"},
+                    "customer_name": {"type": "string", "description": "نام و نام‌خانوادگی"},
+                    "customer_phone": {"type": "string"},
                     "visit_date": {
                         "type": "string",
-                        "description": (
-                            "اختیاری: YYYY-MM-DD یا شماره گزینه (۱، ۲، اولی، دومی). "
-                            "اگر خالی باشد لیست تاریخ‌های مجاز برمی‌گردد."
-                        ),
+                        "description": "YYYY-MM-DD یا ۱/اولی؛ خالی=لیست تاریخ",
                     },
                 },
-                "required": [
-                    "customer_name",
-                    "customer_phone",
-                ],
+                "required": ["customer_name", "customer_phone"],
             },
         },
     }
@@ -290,18 +225,10 @@ def _schema_complete_visit() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_COMPLETE_VISIT,
-            "description": (
-                "پیشنهاد ثبت «بازدید انجام شد» وقتی بازدید تأیید شده و همکار رفته. "
-                "اگر مأموریت فعال است land_code لازم نیست. ثبت نهایی با تأیید کارت در چت."
-            ),
+            "description": "کارت «بازدید انجام شد»؛ مأموریت فعال→land_code اختیاری.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "land_code": {
-                        "type": "string",
-                        "description": "کد فایل — اختیاری اگر مأموریت فعال باشد",
-                    },
-                },
+                "properties": {"land_code": {"type": "string"}},
                 "required": [],
             },
         },
@@ -313,19 +240,10 @@ def _schema_deal() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_DEAL,
-            "description": (
-                "پیشنهاد ثبت معامله/فروش نهایی روی فایل مأموریت "
-                "(بازدید تکمیل‌شده لازم است). اگر مأموریت فعال است land_code لازم نیست. "
-                "تأیید ادمین بعداً فایل را می‌بندد و پورسانت می‌دهد."
-            ),
+            "description": "کارت ثبت معامله/فروش نهایی (بازدید تکمیل‌شده). land_code اختیاری اگر مأموریت فعال.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "land_code": {
-                        "type": "string",
-                        "description": "کد فایل — اختیاری اگر مأموریت فعال باشد",
-                    },
-                },
+                "properties": {"land_code": {"type": "string"}},
                 "required": [],
             },
         },
@@ -337,18 +255,10 @@ def _schema_release() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_RELEASE,
-            "description": (
-                "پیشنهاد بستن/انصراف از معامله در حال انتظار تأیید ادمین. "
-                "اگر مأموریت فعال است land_code لازم نیست."
-            ),
+            "description": "کارت انصراف از معاملهٔ در انتظار تأیید. land_code اختیاری اگر مأموریت فعال.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "land_code": {
-                        "type": "string",
-                        "description": "کد فایل — اختیاری اگر مأموریت فعال باشد",
-                    },
-                },
+                "properties": {"land_code": {"type": "string"}},
                 "required": [],
             },
         },
@@ -899,13 +809,9 @@ def _tool_draft_listing(
         "ok": True,
         "land_code": str(land.get("code") or code),
         "title": str(land.get("title") or "").strip(),
-        "copies": copies,
+        "copies": {"divar": bool(divar), "instagram": bool(insta)},
         "copy_blocks_count": len(blocks),
-        "instruction": (
-            "متن آگهی در کارت‌های جداگانهٔ قابل‌کپی به کاربر نشان داده می‌شود. "
-            "در پیام فقط ۱–۲ جمله کوتاه بگو (مثلاً آماده‌ست؛ از کارت‌ها کپی کن). "
-            "متن کامل دیوار/اینستا را در پیام تکرار نکن و بلاک کد ننویس."
-        ),
+        "instruction": "کارت کپی نشان داده شد؛ ۱–۲ جمله بگو و متن کامل را در پیام تکرار نکن.",
     }
     out: dict[str, Any] = {
         "ok": True,
@@ -1100,15 +1006,11 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "status": "needs_date_choice",
             "land_code": code,
             "customer_name": full_name or f"{first} {last}".strip(),
-            "available_dates": available,
             "available_date_labels": available_labels,
             "allowed_weekdays": visit_allowed_weekdays_summary(),
             "instruction": (
-                f"فایل مأموریت: {code}. "
-                "همین لیست شماره‌دار را عیناً به کاربر نشان بده و بگو "
-                "عدد بزند (۱، ۲، …) یا بگوید اولی / دومی / سومی. "
-                "در فراخوانی بعدی فقط visit_date کافی است (نام و شماره ذخیره شده). "
-                "کد فایل را دوباره نپرس."
+                f"فایل {code}: لیست تاریخ را عیناً نشان بده؛ عدد/اولی بزند. "
+                "بعد فقط visit_date بفرست (نام/شماره ذخیره است)."
             ),
         }
 
@@ -1119,12 +1021,8 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "status": "needs_date_choice",
             "error": "انتخاب تاریخ نامعتبر است.",
             "land_code": code,
-            "available_dates": available,
             "available_date_labels": available_labels,
-            "instruction": (
-                "انتخاب را نفهمیدم. لیست را دوباره نشان بده و بخواه عدد یا اولی/دومی بگوید. "
-                "فقط visit_date را در فراخوانی بعدی بفرست."
-            ),
+            "instruction": "لیست را دوباره نشان بده؛ عدد یا اولی/دومی بخواهد. فقط visit_date بفرست.",
         }
     if vd < _today():
         return {"ok": False, "error": "تاریخ بازدید نمی‌تواند در گذشته باشد."}
@@ -1136,7 +1034,6 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "status": "needs_date_choice",
             "error": "روز انتخاب‌شده مجاز نیست.",
             "allowed": visit_allowed_weekdays_summary(),
-            "available_dates": available,
             "available_date_labels": available_labels,
             "land_code": code,
             "instruction": "از لیست تاریخ‌های مجاز یک گزینه بخواه.",
@@ -1272,11 +1169,7 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
         "land_code": payload.get("land_code"),
         "visit_date": payload.get("visit_date"),
         "visit_date_jalali": payload.get("visit_date_jalali"),
-        "instruction": (
-            "کارت تأیید برای کاربر نمایش داده می‌شود. "
-            "بگو جزئیات را چک کند و فقط اگر موافق است «تأیید و ثبت» را بزند. "
-            "هنوز بازدید ثبت نشده است."
-        ),
+        "instruction": "کارت تأیید نشان داده شد؛ بگو چک کند و تأیید بزند. هنوز ثبت نشده.",
     }
     return {
         "ok": True,
@@ -1291,19 +1184,19 @@ _SIMPLE_TX_META = {
         "title": "تأیید: بازدید انجام شد",
         "need_mode": ("visit_done",),
         "tool_ok_modes": ("visit_done",),
-        "instruction": "کارت تأیید نمایش داده می‌شود. هنوز «بازدید انجام شد» ثبت نشده.",
+        "instruction": "کارت تأیید؛ هنوز ثبت نشده.",
     },
     "confirm_deal": {
         "title": "تأیید معامله",
         "need_mode": ("deal",),
         "tool_ok_modes": ("deal",),
-        "instruction": "کارت تأیید معامله نمایش داده می‌شود. هنوز ثبت نشده؛ بعد از تأیید ادمین فایل بسته و پورسانت واریز می‌شود.",
+        "instruction": "کارت معامله؛ هنوز ثبت نشده — بعد از تأیید ادمین فایل بسته می‌شود.",
     },
     "confirm_release": {
         "title": "تأیید بستن معامله",
         "need_mode": ("deal_pending", "release"),
         "tool_ok_modes": ("deal_pending", "release"),
-        "instruction": "کارت بستن معامله نمایش داده می‌شود. هنوز لغو نشده.",
+        "instruction": "کارت بستن معامله؛ هنوز لغو نشده.",
     },
 }
 
@@ -1928,7 +1821,8 @@ def _render_next_action_card(action: dict[str, Any]) -> str:
     link = ""
     if url:
         link = (
-            f'<a class="ai-agent-btn ai-agent-btn--confirm" href="{escape(url)}">{cta}</a>'
+            f'<a class="ai-agent-btn ai-agent-btn--confirm" href="{escape(url)}" '
+            f'data-vinor-express-nav>{cta}</a>'
         )
     sub_html = f'<div class="ai-agent-line">{subtitle}</div>' if subtitle else ""
     return (

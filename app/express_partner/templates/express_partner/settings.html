@@ -1,0 +1,329 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}تنظیمات{% endblock %}
+
+{% block content %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+
+{% set _name = (me_name or partner_name or 'همکار وینور')|trim %}
+{% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
+{% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
+{% if is_special|default(false) %}
+  {% set _role = 'همکار ویژه' %}
+{% elif is_approved|default(false) %}
+  {% set _role = 'همکار تأییدشده' %}
+{% else %}
+  {% set _role = 'کاربر عادی' %}
+{% endif %}
+
+<style>
+  #partnerSettingsPage {
+    --ps-bg: #000;
+    --ps-group: #1c1c1e;
+    --ps-hover: rgba(255, 255, 255, 0.06);
+    --ps-sep: rgba(255, 255, 255, 0.08);
+    --ps-text: #f5f5f7;
+    --ps-muted: #8e8e93;
+    background: var(--ps-bg);
+    color: var(--ps-text);
+  }
+  #partnerSettingsPage .ps-shell {
+    max-width: 28rem;
+    margin-inline: auto;
+    padding: 0.25rem 1rem 1.75rem;
+  }
+  #partnerSettingsPage .ps-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 0.75rem 0 1.35rem;
+  }
+  #partnerSettingsPage .ps-avatar-wrap {
+    position: relative;
+    width: 5.75rem;
+    height: 5.75rem;
+  }
+  #partnerSettingsPage .ps-avatar {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 9999px;
+    overflow: hidden;
+    background: linear-gradient(145deg, #6d5efc 0%, #4f46e5 55%, #3730a3 100%);
+    color: #fff;
+    font-size: 1.65rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-decoration: none;
+  }
+  #partnerSettingsPage .ps-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  #partnerSettingsPage .ps-avatar-edit {
+    position: absolute;
+    left: -0.1rem;
+    bottom: -0.05rem;
+    width: 1.85rem;
+    height: 1.85rem;
+    border-radius: 9999px;
+    border: 2px solid #000;
+    background: #2c2c2e;
+    color: #fff;
+    display: grid;
+    place-items: center;
+    text-decoration: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+  #partnerSettingsPage .ps-avatar-edit i {
+    font-size: 0.72rem;
+  }
+  #partnerSettingsPage .ps-name {
+    margin: 0.85rem 0 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ps-text);
+  }
+  #partnerSettingsPage .ps-role {
+    margin: 0.3rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--ps-muted);
+  }
+  #partnerSettingsPage .ps-section {
+    margin-top: 1.15rem;
+  }
+  #partnerSettingsPage .ps-section-label {
+    margin: 0 0.85rem 0.45rem;
+    font-size: 0.8125rem;
+    font-weight: 560;
+    color: var(--ps-muted);
+    text-align: right;
+  }
+  #partnerSettingsPage .ps-group {
+    border-radius: 1.1rem;
+    background: var(--ps-group);
+    overflow: hidden;
+  }
+  #partnerSettingsPage .ps-row {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border: 0;
+    background: transparent;
+    color: var(--ps-text);
+    text-decoration: none;
+    text-align: right;
+    font-size: 0.95rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease;
+  }
+  #partnerSettingsPage .ps-row:active,
+  #partnerSettingsPage .ps-row:hover {
+    background: var(--ps-hover);
+  }
+  #partnerSettingsPage .ps-row + .ps-row {
+    border-top: 1px solid var(--ps-sep);
+    margin-top: 0;
+  }
+  #partnerSettingsPage .ps-row-icon {
+    flex-shrink: 0;
+    width: 1.35rem;
+    text-align: center;
+    font-size: 0.95rem;
+    color: #ececec;
+    opacity: 0.95;
+  }
+  #partnerSettingsPage .ps-row-body {
+    min-width: 0;
+    flex: 1;
+  }
+  #partnerSettingsPage .ps-row-title {
+    display: block;
+    line-height: 1.3;
+  }
+  #partnerSettingsPage .ps-row-sub {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.75rem;
+    color: var(--ps-muted);
+    line-height: 1.3;
+  }
+  #partnerSettingsPage .ps-row--danger {
+    color: #ff6b7a;
+  }
+  #partnerSettingsPage .ps-row--danger .ps-row-icon {
+    color: #ff6b7a;
+  }
+  #partnerSettingsPage .ps-footer {
+    margin-top: 1.35rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    color: var(--ps-muted);
+    font-size: 0.8125rem;
+    direction: ltr;
+  }
+  #partnerSettingsPage .ps-footer i {
+    font-size: 0.85rem;
+    opacity: 0.9;
+  }
+</style>
+
+{{ ep_header_start(id='partnerSettingsHeader') }}
+{% call ep_header_row('تنظیمات', url_for('express_partner.home'), show_title=false, inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{{ ep_header_end() }}
+
+<main id="partnerSettingsPage" class="partner-page-scroll-pad min-h-[100dvh] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
+  <div class="ps-shell">
+
+    <header class="ps-hero">
+      <div class="ps-avatar-wrap">
+        <a href="{{ url_for('express_partner.profile_edit') }}"
+           data-vinor-express-nav
+           class="ps-avatar"
+           aria-label="ویرایش پروفایل"
+           data-tour="profile-section">
+          {% if _avatar_url %}
+          <img src="{{ _avatar_url }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='grid';">
+          <span style="display:none;place-items:center;width:100%;height:100%">{{ _name|avatar_initials }}</span>
+          {% else %}
+          <span>{{ _name|avatar_initials }}</span>
+          {% endif %}
+        </a>
+        <a href="{{ url_for('express_partner.profile_edit') }}"
+           data-vinor-express-nav
+           class="ps-avatar-edit"
+           aria-label="ویرایش عکس">
+          <i class="fas fa-pen" aria-hidden="true"></i>
+        </a>
+      </div>
+      <h1 class="ps-name">{{ _name }}</h1>
+      <p class="ps-role">{{ _role }}</p>
+    </header>
+
+    <section class="ps-section" aria-labelledby="psAccountLabel">
+      <h2 id="psAccountLabel" class="ps-section-label">حساب</h2>
+      <div class="ps-group">
+        <a href="{{ url_for('express_partner.profile_edit') }}"
+           data-vinor-express-nav
+           class="ps-row">
+          <i class="fas fa-user ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">پروفایل</span>
+            <span class="ps-row-sub">نام، شهر و عکس</span>
+          </span>
+        </a>
+        <a href="{{ url_for('express_partner.commissions') }}"
+           data-vinor-express-nav
+           class="ps-row"
+           data-tour="commissions-link">
+          <i class="fas fa-wallet ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">کیف پول</span>
+            <span class="ps-row-sub">موجودی و تراکنش‌ها</span>
+          </span>
+        </a>
+        {% if not is_special|default(false) %}
+        {% if not is_approved|default(false) %}
+        <a href="{{ url_for('express_partner.apply') }}"
+           data-vinor-express-nav
+           class="ps-row">
+          <i class="fas fa-sparkles ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">ارتقا به همکار</span>
+          </span>
+        </a>
+        {% else %}
+        <a href="{{ url_for('express_partner.home', ai=1) }}"
+           data-vinor-express-nav
+           class="ps-row"
+           data-vinor-upgrade-chat>
+          <i class="fas fa-sparkles ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">ارتقا به همکار ویژه</span>
+          </span>
+        </a>
+        {% endif %}
+        {% endif %}
+        {% if is_vinor_apk|default(false) and show_app_update_nav|default(false) and android_apk_url %}
+        <a href="{{ android_apk_url }}"
+           class="ps-row"
+           download>
+          <i class="fas fa-download ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">بروزرسانی اپ</span>
+          </span>
+        </a>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="ps-section" aria-label="خروج">
+      <div class="ps-group">
+        <form id="settingsLogoutForm" method="post" action="{{ url_for('express_partner.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="ps-row ps-row--danger" data-vinor-logout>
+            <i class="fas fa-right-from-bracket ps-row-icon" aria-hidden="true"></i>
+            <span class="ps-row-body">
+              <span class="ps-row-title">خروج</span>
+            </span>
+          </button>
+        </form>
+      </div>
+    </section>
+
+    {% if me_phone %}
+    <div class="ps-footer">
+      <i class="fas fa-mobile-screen" aria-hidden="true"></i>
+      <span>{{ me_phone }}</span>
+    </div>
+    {% endif %}
+  </div>
+</main>
+
+{% set bottom_nav_active = 'profile' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var page = document.getElementById('partnerSettingsPage');
+  if (!page) return;
+
+  page.addEventListener('click', function (e) {
+    var upgrade = e.target.closest && e.target.closest('[data-vinor-upgrade-chat]');
+    if (upgrade) {
+      try {
+        sessionStorage.setItem(
+          'vinor_ai_home_prompt',
+          'چطور می‌تونم همکار ویژه بشم؟ شرایط و مسیر ارتقا رو خیلی کوتاه بگو.'
+        );
+        sessionStorage.setItem('vinor_ai_home_autosend', '1');
+      } catch (_) {}
+    }
+
+    var logoutBtn = e.target.closest && e.target.closest('[data-vinor-logout]');
+    if (!logoutBtn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof window.vinorExpressLogout === 'function') {
+      window.vinorExpressLogout();
+    } else {
+      var form = document.getElementById('settingsLogoutForm');
+      if (form) form.submit();
+    }
+  });
+})();
+</script>
+{% endblock %}

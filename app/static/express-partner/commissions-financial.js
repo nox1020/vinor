@@ -122,14 +122,14 @@
     var wdBtn = scope.querySelector('[data-open-withdraw-modal]');
     if (wdBtn) {
       wdBtn.setAttribute('data-withdrawable-int', String(s.withdrawable_balance));
-      var can = s.can_withdraw;
-      wdBtn.disabled = !can;
+      var can = !!s.can_withdraw;
+      /* HTML disabled کلیک را قطع می‌کند — فقط aria-disabled برای ظاهر و منطق */
+      wdBtn.disabled = false;
+      wdBtn.removeAttribute('disabled');
       if (can) {
         wdBtn.removeAttribute('aria-disabled');
-        wdBtn.classList.remove('opacity-45', 'cursor-not-allowed');
       } else {
         wdBtn.setAttribute('aria-disabled', 'true');
-        wdBtn.classList.add('opacity-45', 'cursor-not-allowed');
       }
     }
 
