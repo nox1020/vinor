@@ -8,14 +8,22 @@
     --vn-txn-muted: #8e8e93;
     --vn-txn-green: #10a37f;
     --vn-txn-green-soft: rgba(16, 163, 127, 0.14);
+    --vn-txn-float-clear: 3.15rem;
     background: var(--vn-txn-bg) !important;
     color: var(--vn-txn-text);
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
-    /* هدر شناور — کارت از بالای صفحه */
-    padding-top: max(0.35rem, env(safe-area-inset-top, 0px)) !important;
+    /* فضای دکمهٔ شناور + safe-area — نه پد اجباری هدر ثابت */
+    padding-top: calc(env(safe-area-inset-top, 0px) + 3.35rem) !important;
+    /* base.css روی موبایل pb 5.75 را به ۱rem می‌کاهد؛ این‌جا خودمان فاصلهٔ منو را نگه می‌داریم */
+    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  @media (min-width: 1024px) {
+    #commissionsTxnPageMain {
+      padding-bottom: 4rem !important;
+    }
   }
 
   #commissionsTxnPageMain .vn-txn-page {
@@ -24,12 +32,12 @@
     gap: 0.85rem;
     max-width: 28rem;
     margin-inline: auto;
-    padding: 0.35rem 1rem 1.25rem;
+    padding: 0.15rem 1rem 0.5rem;
   }
 
   #commissionsTxnPageMain .vn-txn-hero {
-    padding: 0.15rem 3.15rem 0.15rem 0;
-    text-align: start;
+    padding-inline: var(--vn-txn-float-clear);
+    text-align: center;
   }
   #commissionsTxnPageMain .vn-txn-hero__title {
     margin: 0;
@@ -186,6 +194,11 @@
     color: #fff;
     background: var(--vn-txn-green, #10a37f);
     border-color: transparent;
+  }
+
+  /* شیت فیلتر — جلوگیری از کلیک ghost روی backdrop */
+  #commTxnFilterModal.comm-txn-filter-modal--arming .comm-txn-filter-backdrop {
+    pointer-events: none;
   }
 
   /* شیت فیلتر */

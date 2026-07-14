@@ -76,7 +76,7 @@ def agent_system_hint(voice: str | None) -> str:
     return (
         "ابزار وقتی لازم: search→[[LAND]] | next→کار بعدی | listing→کارت کپی "
         "| propose_visit/complete/deal/release→کارت تأیید. "
-        "بازدید: نام→شماره→propose بدون تاریخ→لیست→فقط visit_date. مأموریت: land_code خالی."
+        "بازدید: نام→نام‌خانوادگی→شماره→propose بدون تاریخ→لیست ۱…۵→فقط visit_date. مأموریت: land_code خالی."
     )
 
 
@@ -200,21 +200,36 @@ def _schema_visit() -> dict[str, Any]:
         "function": {
             "name": TOOL_VISIT,
             "description": (
-                "کارت ثبت بازدید. نام یکجا+موبایل لازم. بدون تاریخ→لیست شماره‌دار. "
+                "کارت ثبت بازدید. فیلدها را یکی‌یکی جمع کن: "
+                "customer_first_name → customer_last_name → customer_phone → "
+                "بدون visit_date صدا بزن تا لیست ۱…۵ تاریخ بیاید → فقط شمارهٔ تاریخ را در visit_date بفرست. "
                 "مأموریت فعال→land_code اختیاری. ثبت فقط بعد از تأیید کارت."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "land_code": {"type": "string"},
-                    "customer_name": {"type": "string", "description": "نام و نام‌خانوادگی"},
-                    "customer_phone": {"type": "string"},
+                    "customer_first_name": {
+                        "type": "string",
+                        "description": "فقط نام کوچک مشتری",
+                    },
+                    "customer_last_name": {
+                        "type": "string",
+                        "description": "فقط نام خانوادگی مشتری",
+                    },
+                    "customer_name": {
+                        "type": "string",
+                        "description": "اختیاری/قدیمی؛ ترجیح first+last جدا",
+                    },
+                    "customer_phone": {
+                        "type": "string",
+                        "description": "موبایل ۱۱ رقمی ایران",
+                    },
                     "visit_date": {
                         "type": "string",
-                        "description": "YYYY-MM-DD یا ۱/اولی؛ خالی=لیست تاریخ",
+                        "description": "شماره ۱ تا ۵ از لیست، یا YYYY-MM-DD؛ خالی=لیست تاریخ",
                     },
                 },
-                "required": ["customer_name", "customer_phone"],
             },
         },
     }
@@ -906,7 +921,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
         _today,
     )
     from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
-    from app.utils.dates import format_iso_date_jalali
+    from app.utils.dates import format_display_jalali_date, format_iso_date_jalali
     from app.utils.storage import (
         load_ads_cached,
         load_express_partners,
@@ -937,51 +952,82 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     full_name = str(merged.get("customer_name") or "").strip()
     first = str(merged.get("customer_first_name") or "").strip()
     last = str(merged.get("customer_last_name") or "").strip()
-    if full_name:
-        first, last = split_customer_full_name(full_name)
-    elif first or last:
+    if full_name and (not first or not last):
+        parts = [p for p in full_name.split() if p]
+        if len(parts) >= 2:
+            first, last = split_customer_full_name(full_name)
+        elif parts and not first:
+            first = parts[0]
+    if first and last:
         full_name = f"{first} {last}".strip()
     phone_raw = str(merged.get("customer_phone") or "").strip()
     cust_phone = normalize_iran_mobile(phone_raw) or phone_raw
 
-    available = list_upcoming_visit_dates(limit=7)
+    available = list_upcoming_visit_dates(limit=5)
     available_labels = [str(x.get("label") or "") for x in available]
 
-    missing = []
+    # پیش‌نویس جزئی را نگه دار تا مراحل یکی‌یکی ادامه پیدا کند
+    if code or first or last or phone_raw:
+        _save_visit_draft(
+            me,
+            {
+                "land_code": code,
+                "customer_name": full_name or f"{first} {last}".strip(),
+                "customer_first_name": first,
+                "customer_last_name": last,
+                "customer_phone": cust_phone if is_valid_iran_mobile(cust_phone) else phone_raw,
+            },
+        )
+
+    # فقط همان قدم بعدی را برگردان تا مدل یکی‌یکی بپرسد
     if not code:
-        missing.append("کد فایل")
-    if not full_name and (not first or not last):
-        missing.append("نام و نام خانوادگی مشتری")
-    if not phone_raw:
-        missing.append("شماره مشتری")
-    if missing:
-        ask_bits = []
-        if "نام و نام خانوادگی مشتری" in missing:
-            ask_bits.append("نام و نام خانوادگی را یکجا بپرس")
-        if "شماره مشتری" in missing:
-            ask_bits.append("شماره موبایل بپرس")
-        if "کد فایل" in missing:
-            ask_bits.append("اگر مأموریت فعال نیست کد فایل را بپرس یا جستجو کن")
         return {
             "ok": False,
             "error": "اطلاعات ناقص",
-            "missing": missing,
+            "missing": ["land_code"],
             "mission_land_code": _active_mission_land_code(me),
             "instruction": (
-                "؛ ".join(ask_bits) + ". "
-                "تاریخ را از کاربر نپرس؛ بعد از نام و شماره دوباره ابزار را بدون visit_date صدا بزن. "
-                "کد فایل را وقتی مأموریت فعال است نپرس."
+                "کد فایل را بپرس یا جستجو کن. اگر مأموریت فعال است land_code خالی بگذار و دوباره بزن. "
+                "هنوز نام/شماره/تاریخ نپرس."
             ),
+        }
+    if not first:
+        return {
+            "ok": False,
+            "error": "اطلاعات ناقص",
+            "missing": ["customer_first_name"],
+            "land_code": code,
+            "instruction": "فقط نام کوچک مشتری را بپرس (نه نام خانوادگی، نه شماره، نه تاریخ).",
+        }
+    if not last:
+        return {
+            "ok": False,
+            "error": "اطلاعات ناقص",
+            "missing": ["customer_last_name"],
+            "land_code": code,
+            "customer_first_name": first,
+            "instruction": "فقط نام خانوادگی مشتری را بپرس (نه شماره، نه تاریخ).",
+        }
+    if not phone_raw:
+        return {
+            "ok": False,
+            "error": "اطلاعات ناقص",
+            "missing": ["customer_phone"],
+            "land_code": code,
+            "customer_first_name": first,
+            "customer_last_name": last,
+            "instruction": "فقط شماره موبایل مشتری را بپرس (نه تاریخ).",
         }
 
     if not is_valid_iran_mobile(cust_phone):
         return {
             "ok": False,
             "error": "شماره تماس مشتری معتبر نیست.",
+            "missing": ["customer_phone"],
             "instruction": "شماره صحیح ۱۱ رقمی ایران بخواه.",
         }
 
-    # پیش‌نویس را همین‌جا نگه دار تا انتخاب تاریخ فقط با «۱/اولی» کافی باشد
+    # پیش‌نویس کامل نام/شماره برای مرحلهٔ تاریخ
     _save_visit_draft(
         me,
         {
@@ -1009,8 +1055,10 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "available_date_labels": available_labels,
             "allowed_weekdays": visit_allowed_weekdays_summary(),
             "instruction": (
-                f"فایل {code}: لیست تاریخ را عیناً نشان بده؛ عدد/اولی بزند. "
-                "بعد فقط visit_date بفرست (نام/شماره ذخیره است)."
+                f"فایل {code}: لیست تاریخ را عیناً با شماره ۱ تا ۵ نشان بده "
+                "(همه شمسی هستند؛ میلادی نگو و تاریخ خودت نساز). "
+                "بگو فقط همان عدد را بفرستد (مثلاً ۲). "
+                "بعد فقط visit_date=همان عدد را بفرست (نام/شماره ذخیره است)."
             ),
         }
 
@@ -1022,7 +1070,9 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "error": "انتخاب تاریخ نامعتبر است.",
             "land_code": code,
             "available_date_labels": available_labels,
-            "instruction": "لیست را دوباره نشان بده؛ عدد یا اولی/دومی بخواهد. فقط visit_date بفرست.",
+            "instruction": (
+                "لیست را دوباره عیناً نشان بده؛ فقط عدد ۱ تا ۵ بخواهد. سپس فقط visit_date بفرست."
+            ),
         }
     if vd < _today():
         return {"ok": False, "error": "تاریخ بازدید نمی‌تواند در گذشته باشد."}
@@ -1036,7 +1086,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "allowed": visit_allowed_weekdays_summary(),
             "available_date_labels": available_labels,
             "land_code": code,
-            "instruction": "از لیست تاریخ‌های مجاز یک گزینه بخواه.",
+            "instruction": "از لیست تاریخ‌های مجاز فقط یک شماره بخواهد.",
         }
 
     ctx = _express_land_partner_ctx(code, me)
@@ -1102,15 +1152,17 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     partner_name = (partner_profile.get("name") if partner_profile else None) or me
 
     visit_iso = vd.isoformat()
-    visit_jalali = format_iso_date_jalali(visit_iso) or visit_iso
+    visit_jalali = format_display_jalali_date(visit_iso) or format_iso_date_jalali(visit_iso)
+    visit_jalali_wd = format_display_jalali_date(visit_iso, with_weekday=True) or visit_jalali
 
     return {
         "ok": True,
         "payload": {
             "land_code": str(code),
             "land_title": str(land_title),
-            "visit_date": visit_iso,
+            "visit_date": visit_iso,  # ذخیره داخلی میلادی
             "visit_date_jalali": visit_jalali,
+            "visit_date_display": visit_jalali_wd,
             "customer_first_name": first,
             "customer_last_name": last,
             "customer_name": full_name or f"{first} {last}".strip(),
@@ -1121,6 +1173,8 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
 
 
 def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    from app.utils.dates import format_display_jalali_date
+
     checked = _validate_visit_proposal(args, phone=phone)
     # مرحلهٔ انتخاب تاریخ — موفقیت‌آمیز برای مدل، بدون کارت تأیید
     if checked.get("status") == "needs_date_choice":
@@ -1142,8 +1196,9 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     cust_phone = str(payload.get("customer_phone") or "")
     masked = cust_phone[:4] + "***" + cust_phone[-3:] if len(cust_phone) >= 7 else "***"
     date_show = (
-        str(payload.get("visit_date_jalali") or "").strip()
-        or str(payload.get("visit_date") or "").strip()
+        str(payload.get("visit_date_display") or "").strip()
+        or str(payload.get("visit_date_jalali") or "").strip()
+        or format_display_jalali_date(str(payload.get("visit_date") or ""))
     )
     cust_show = (
         str(payload.get("customer_name") or "").strip()
@@ -1151,7 +1206,7 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     )
     lines = [
         f"فایل: {payload.get('land_title')} ({payload.get('land_code')})",
-        f"تاریخ: {date_show}",
+        f"تاریخ شمسی: {date_show}",
         f"مشتری: {cust_show}",
         f"تماس: {masked}",
     ]
@@ -1167,9 +1222,10 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
         "ok": True,
         "status": "needs_user_confirmation",
         "land_code": payload.get("land_code"),
-        "visit_date": payload.get("visit_date"),
-        "visit_date_jalali": payload.get("visit_date_jalali"),
-        "instruction": "کارت تأیید نشان داده شد؛ بگو چک کند و تأیید بزند. هنوز ثبت نشده.",
+        "visit_date_jalali": date_show,
+        "instruction": (
+            "کارت تأیید نشان داده شد؛ تاریخ را فقط شمسی بگو. بگو چک کند و تأیید بزند. هنوز ثبت نشده."
+        ),
     }
     return {
         "ok": True,
@@ -1266,19 +1322,28 @@ def _partner_tx_snapshot(phone: str, code: str) -> dict[str, Any]:
     lands = load_ads_cached() or []
     land = next((l for l in lands if str(l.get("code")) == code_s), None)
     title = (land.get("title") if land else None) or code_s
+    from app.utils.dates import format_display_jalali_date
+
+    v_iso = str(tx.get("visit_date") or "")
     return {
         "ok": True,
         "tx_mode": str(tx.get("tx_mode") or ""),
         "land_title": str(title),
         "land_code": code_s,
-        "visit_date": str(tx.get("visit_date") or ""),
+        "visit_date": v_iso,
+        "visit_date_jalali": str(tx.get("visit_date_jalali") or "")
+        or format_display_jalali_date(v_iso),
         "global_status": gs,
+        "has_assignment": bool(tx.get("has_assignment")),
+        "deal_finalized": bool(tx.get("deal_finalized")),
     }
 
 
 def _tool_propose_simple_tx(
     args: dict[str, Any], *, phone: str, action_type: str
 ) -> dict[str, Any]:
+    from app.utils.dates import format_display_jalali_date
+
     meta = _SIMPLE_TX_META.get(action_type)
     if not meta:
         return _denied("نوع اقدام نامعتبر است.")
@@ -1298,6 +1363,19 @@ def _tool_propose_simple_tx(
 
     mode = str(snap.get("tx_mode") or "")
     ok_modes = meta.get("tool_ok_modes") or ()
+    if action_type == "confirm_deal" and not snap.get("has_assignment"):
+        return {
+            "ok": False,
+            "model_result": {
+                "ok": False,
+                "error": (
+                    "این فایل در اختصاص شما نیست؛ ثبت معامله فقط روی فایل اختصاص‌یافته ممکن است. "
+                    "فایل مأموریت/اختصاص فعال را بگو یا از خانه ادامه بده."
+                ),
+                "tx_mode": mode,
+                "land_code": code,
+            },
+        }
     if mode not in ok_modes:
         hints = {
             "confirm_complete_visit": "الان نمی‌شود «بازدید انجام شد» زد؛ باید بازدید تأییدشده در جریان باشد.",
@@ -1316,6 +1394,11 @@ def _tool_propose_simple_tx(
                 ),
                 "visit_done": "اول «بازدید انجام شد» را ثبت و تکمیل کن؛ بعد معامله.",
                 "visit_done_pending": "انجام بازدید منتظر تأیید ادمین است؛ هنوز معامله نزن.",
+                "visit_pending": "اول درخواست بازدید باید نهایی شود؛ هنوز معامله نزن.",
+                "hidden": (
+                    "الان ثبت معامله برای این فایل ممکن نیست "
+                    "(اختصاص نیست یا قبلاً پورسانت معامله تأیید شده). وضعیت را کوتاه بگو."
+                ),
                 "_": "الان معامله فعال نیست؛ اول بازدید را کامل کن یا منتظر تأیید باش.",
             },
             "confirm_release": "معاملهٔ بازی برای بستن نیست.",
@@ -1339,13 +1422,19 @@ def _tool_propose_simple_tx(
         "land_code": code,
         "land_title": snap.get("land_title"),
         "visit_date": snap.get("visit_date"),
+        "visit_date_jalali": snap.get("visit_date_jalali")
+        or format_display_jalali_date(str(snap.get("visit_date") or "")),
     }
     token = _store_pending_action(user_key=me, action_type=action_type, payload=payload)
     lines = [
         f"فایل: {payload.get('land_title')} ({code})",
     ]
-    if payload.get("visit_date"):
-        lines.append(f"بازدید: {payload.get('visit_date')}")
+    vdisp = (
+        str(payload.get("visit_date_jalali") or "").strip()
+        or format_display_jalali_date(str(payload.get("visit_date") or ""))
+    )
+    if vdisp:
+        lines.append(f"بازدید (شمسی): {vdisp}")
     ui = {
         "type": action_type,
         "token": token,
@@ -1487,8 +1576,14 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         pass
 
     _consume_pending_action(token)
-    vdate = str(rec.get("visit_date") or visit_date or "").strip()
-    date_bit = f" برای {vdate}" if vdate else ""
+    from app.utils.dates import format_display_jalali_date
+
+    vdate_iso = str(rec.get("visit_date") or visit_date or "").strip()
+    vdate_j = format_display_jalali_date(
+        str(fresh.get("visit_date_jalali") or "") or vdate_iso,
+        with_weekday=True,
+    ) or format_display_jalali_date(vdate_iso)
+    date_bit = f" برای {vdate_j}" if vdate_j else ""
     return {
         "ok": True,
         "message": (
@@ -1498,6 +1593,7 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         ),
         "visit_id": str(rec.get("id") or ""),
         "land_code": code,
+        "visit_date_jalali": vdate_j,
     }
 
 
@@ -1524,6 +1620,13 @@ def confirm_action_from_token(*, phone: str, token: str) -> dict[str, Any]:
         return {"ok": False, "error": str(snap.get("error") or "امکان اجرا نیست.")}
     mode = str(snap.get("tx_mode") or "")
     ok_modes = _SIMPLE_TX_META[action_type].get("tool_ok_modes") or ()
+    if action_type == "confirm_deal" and not snap.get("has_assignment"):
+        return {
+            "ok": False,
+            "error": (
+                "این فایل در اختصاص شما نیست؛ ثبت معامله فقط روی فایل اختصاص‌یافته ممکن است."
+            ),
+        }
     if mode not in ok_modes:
         return {"ok": False, "error": "وضعیت فایل عوض شده؛ این اقدام دیگر ممکن نیست."}
 
@@ -1570,15 +1673,38 @@ def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
     if not rec:
         return {"ok": False, "error": "ثبت انجام بازدید ممکن نشد."}
     save_express_visit_requests(visits)
-    msg = (
-        "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است. "
-        "قدم بعدی: بعد از تأیید، از همین چت بگو «ثبت معامله»."
-    )
-    if err == "already_pending":
+    need_visit_commission = False
+    try:
+        from flask import current_app
+        from app.utils.storage import load_settings
+
+        need_visit_commission = max(
+            0,
+            int((load_settings(current_app) or {}).get("visit_commission_amount_toman") or 0),
+        ) > 0
+    except Exception:
+        need_visit_commission = False
+    if need_visit_commission:
         msg = (
-            "قبلاً ثبت شده و منتظر تأیید ادمین است. "
-            "قدم بعدی: صبر کن تا تأیید شود؛ بعد از همین چت معامله را ثبت کن."
+            "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است. "
+            "قدم بعدی: بعد از تأیید انجام بازدید، پورسانت بازدید باید تأیید شود؛ "
+            "سپس می‌توانی معامله را ثبت کنی."
         )
+        if err == "already_pending":
+            msg = (
+                "قبلاً ثبت شده و منتظر تأیید ادمین است. "
+                "بعد از تأیید انجام و تأیید پورسانت بازدید، معامله را ثبت کن."
+            )
+    else:
+        msg = (
+            "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است. "
+            "قدم بعدی: بعد از تأیید، از همین چت بگو «ثبت معامله»."
+        )
+        if err == "already_pending":
+            msg = (
+                "قبلاً ثبت شده و منتظر تأیید ادمین است. "
+                "قدم بعدی: صبر کن تا تأیید شود؛ بعد از همین چت معامله را ثبت کن."
+            )
     return {"ok": True, "message": msg, "land_code": code}
 
 

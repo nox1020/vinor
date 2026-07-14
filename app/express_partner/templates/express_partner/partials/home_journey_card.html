@@ -34,26 +34,6 @@
   .vn-journey-card__head:active .vn-journey-card__head-inner {
     opacity: 0.92;
   }
-  .vn-journey-card__code {
-    position: static;
-    transform: none;
-    left: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    max-width: 100%;
-    padding: 0.15rem 0.45rem;
-    border-radius: 9999px;
-    border: 0;
-    background: rgba(255, 255, 255, 0.06);
-    color: #c7c7cc;
-    font-size: 0.6rem;
-    font-weight: 700;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    pointer-events: none;
-  }
   .vn-journey-card__media {
     position: relative;
     width: 4.5rem;
@@ -363,7 +343,6 @@
     <span class="vn-journey-card__compact-text">
       <span class="vn-journey-card__compact-kicker">
         {% if card.is_mission|default(false) %}ماموریت فعال{% else %}فایل مأموریت{% endif %}
-        {% if card.stage_label %} · {{ card.stage_label }}{% endif %}
       </span>
       <span class="vn-journey-card__compact-title">{{ card.title }}</span>
       {% if card.price_total %}
@@ -388,24 +367,14 @@
         {% endif %}
       </div>
       <div class="vn-journey-card__body">
+        {% if card.is_mission|default(false) %}
         <div class="vn-journey-card__meta-row">
-          {% if card.is_mission|default(false) %}
           <span class="vn-journey-card__stage" style="background:#059669">
             <i class="fas fa-bullseye text-[8px]" aria-hidden="true"></i>
             ماموریت فعال
           </span>
-          {% endif %}
-          {% if card.stage_label %}
-          <span class="vn-journey-card__stage">
-            <i class="fas fa-users text-[8px]" aria-hidden="true"></i>
-            {{ card.stage_label }}
-          </span>
-          {% endif %}
-          <span class="vn-journey-card__code">
-            <i class="fas fa-file-lines" aria-hidden="true"></i>
-            {{ card.code|fa_digits }}
-          </span>
         </div>
+        {% endif %}
         <h2 class="vn-journey-card__title">{{ card.title }}</h2>
         {% if loc %}
         <p class="vn-journey-card__loc">

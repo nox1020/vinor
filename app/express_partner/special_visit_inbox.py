@@ -15,6 +15,7 @@ from .visit_requests import (
     COMPLETED_STATUS,
     DONE_PENDING_STATUS,
     PENDING_STATUS,
+    admin_can_transition_visit,
     admin_update_visit_request_status,
 )
 
@@ -113,10 +114,19 @@ def apply_special_visit_action(
     if not special_can_manage_visit(owner_phone, rec):
         return None, "forbidden"
 
+    current = (str(rec.get("status") or PENDING_STATUS)).strip()
+
     if act == "approve":
+        if not admin_can_transition_visit(current, APPROVED_STATUS):
+            return None, "invalid_transition"
         return admin_update_visit_request_status(requests, rid, APPROVED_STATUS)
     if act == "reject":
+        if not admin_can_transition_visit(current, CANCELLED_STATUS):
+            return None, "invalid_transition"
         return admin_update_visit_request_status(requests, rid, CANCELLED_STATUS)
     if act == "complete":
+        # فقط از done_pending — مثل ادمین؛ وگرنه فایل روی visit_commission_pending گیر می‌کند
+        if not admin_can_transition_visit(current, COMPLETED_STATUS):
+            return None, "invalid_transition"
         return admin_update_visit_request_status(requests, rid, COMPLETED_STATUS)
     return None, "invalid_action"

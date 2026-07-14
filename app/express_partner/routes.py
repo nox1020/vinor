@@ -1215,20 +1215,26 @@ def _express_assignment_indexes(
 def _auto_release_expired_transactions(assignments: List[Dict[str, Any]]) -> None:
     """رفع خودکار معاملات بعد از ۵ روز بدون تأیید پشتیبان"""
     from datetime import datetime, timedelta
+
+    from .commissions_flow import remove_pending_deal_commissions_for
+
     now = datetime.now()
     updated = False
-    
+    released: List[tuple[str, str]] = []
+
     for a in assignments:
         if _assignment_display_status(a) != 'in_transaction':
             continue
-        
+
         started_at_str = a.get('transaction_started_at')
         if not started_at_str:
             continue
-        
+
         try:
             started_at = datetime.strptime(started_at_str, '%Y-%m-%d %H:%M:%S')
             if now - started_at > timedelta(days=5):
+                code = str(a.get('land_code') or '').strip()
+                holder = str(a.get('transaction_holder') or '').strip()
                 a['status'] = 'active'
                 a['updated_at'] = now.strftime('%Y-%m-%d %H:%M:%S')
                 a['auto_released'] = True
@@ -1236,11 +1242,35 @@ def _auto_release_expired_transactions(assignments: List[Dict[str, Any]]) -> Non
                 a.pop('transaction_holder', None)
                 a.pop('transaction_started_at', None)
                 updated = True
+                if code and holder:
+                    released.append((code, holder))
         except Exception:
             continue
-    
+
     if updated:
         save_express_assignments(assignments)
+        if released:
+            try:
+                commissions = load_express_commissions() or []
+                if not isinstance(commissions, list):
+                    commissions = []
+                total_removed = 0
+                for code, holder in released:
+                    commissions, removed = remove_pending_deal_commissions_for(
+                        commissions, partner_phone=holder, land_code=code
+                    )
+                    total_removed += removed
+                if total_removed > 0:
+                    save_express_commissions(commissions)
+                    current_app.logger.info(
+                        'auto-release removed %s pending deal commission(s) for %s land(s)',
+                        total_removed,
+                        len(released),
+                    )
+            except Exception:
+                current_app.logger.exception(
+                    'auto-release pending deal commission cleanup failed'
+                )
 
 
 _AUTO_RELEASE_LAST_MONO = 0.0
@@ -2447,25 +2477,23 @@ def _home_funnel_for_land(
     phone: str,
     land: Dict[str, Any],
     visit_rows: List[Dict[str, Any]] | None = None,
+    *,
+    commissions: List[Dict[str, Any]] | None = None,
+    visit_commission_required: bool = False,
 ) -> Dict[str, Any]:
     """مرحله و مسیر ۴تایی مأموریت برای کارت سفر خانه.
 
     منبع حقیقت برای CTA: current_key (با tx_mode ریزتنظیم می‌شود).
     """
+    from app.express_partner.visit_requests import (
+        partner_active_visit_record,
+        visit_commission_ready_for_deal,
+    )
+
     ph = (phone or '').strip()
     code = str(land.get('code') or '').strip()
     assign_st = str(land.get('_assignment_status') or '').strip().lower()
-    rows = [
-        r for r in (visit_rows or [])
-        if isinstance(r, dict)
-        and str(r.get('partner_phone') or '').strip() == ph
-        and str(r.get('land_code') or '').strip() == code
-    ]
-    latest = rows[0] if rows else None
-    if rows:
-        def _row_ts(r: Dict[str, Any]) -> str:
-            return str(r.get('updated_at') or r.get('created_at') or '')
-        latest = sorted(rows, key=_row_ts, reverse=True)[0]
+    latest = partner_active_visit_record(visit_rows or [], ph, code) if ph and code else None
     status = str((latest or {}).get('status') or '').strip()
 
     has_visit = bool(latest)
@@ -2476,6 +2504,13 @@ def _home_funnel_for_land(
     visit_cancelled = status == CANCELLED_STATUS
     in_tx = assign_st == 'in_transaction' or bool(land.get('_in_transaction'))
     sold = assign_st == 'sold'
+    visit_ready = bool(
+        visit_done
+        and visit_commission_ready_for_deal(commissions, ph, code)
+    )
+    wait_visit_commission = bool(
+        visit_done and visit_commission_required and not visit_ready and not in_tx and not sold
+    )
 
     # ۱ اختصاص — همیشه انجام‌شده اگر روی کارت است
     # ۲ بازاریابی — با ثبت بازدید (غیرمنتفی) یا معامله/فروش
@@ -2509,8 +2544,11 @@ def _home_funnel_for_land(
                 step_label = 'بازدید را انجام بده'
             elif visit_done_pending:
                 step_label = 'تأیید انجام بازدید'
-        if key == 'deal_or_revisit' and state == 'current' and in_tx:
-            step_label = 'در حال معامله'
+        if key == 'deal_or_revisit' and state == 'current':
+            if in_tx:
+                step_label = 'در حال معامله'
+            elif wait_visit_commission:
+                step_label = 'تأیید پورسانت بازدید'
         steps.append({'key': key, 'label': step_label, 'icon': icon, 'state': state})
 
     current_key = ''
@@ -2525,6 +2563,8 @@ def _home_funnel_for_land(
         stage_label = 'در حال معامله'
     elif visit_cancelled and not visit_done:
         stage_label = 'بازاریابی مجدد'
+    elif wait_visit_commission:
+        stage_label = 'در انتظار تأیید پورسانت بازدید'
     elif visit_done:
         stage_label = 'معامله یا بازدید مجدد'
     elif visit_done_pending:
@@ -2570,6 +2610,9 @@ def _home_suggested_files(
     for land in assigned_lands or []:
         if not isinstance(land, dict):
             continue
+        # کارت مأموریت/پیشنهاد خانه فقط فایلِ اختصاص‌یافته به همکار
+        if not land.get('_assignment_id'):
+            continue
         st = str(land.get('_assignment_status') or '').strip().lower()
         if st == 'sold' or land.get('_is_expired'):
             continue
@@ -2580,7 +2623,16 @@ def _home_suggested_files(
             price_total = int(land.get('price_total') or land.get('price') or 0)
         except Exception:
             price_total = 0
-        funnel = _home_funnel_for_land(phone, land, visit_rows=visits)
+        visit_req = _visit_commission_required_for(
+            commissions if isinstance(commissions, list) else [], phone, code
+        )
+        funnel = _home_funnel_for_land(
+            phone,
+            land,
+            visit_rows=visits,
+            commissions=commissions if isinstance(commissions, list) else [],
+            visit_commission_required=visit_req,
+        )
         stage_label = funnel.get("stage_label") or "علاقه‌مند"
         tip = coach_tip_for_stage(
             stage_label=str(stage_label),
@@ -2597,9 +2649,7 @@ def _home_suggested_files(
                 is_partner_approved=bool(is_approved),
                 global_assignment_status=st or "active",
                 commissions=commissions if isinstance(commissions, list) else [],
-                visit_commission_required=_visit_commission_required_for(
-                    commissions if isinstance(commissions, list) else [], phone, code
-                ),
+                visit_commission_required=visit_req,
             )
             tx_mode = str(tx_state.get("tx_mode") or "")
             can_revisit = bool(tx_state.get("can_revisit"))
@@ -2668,8 +2718,9 @@ def _home_suggested_files(
                         row['cta_chat_prompt'] = build_journey_chat_cta(
                             code=code,
                             title=str(row.get('title') or ''),
-                            tx_mode='visit',
+                            tx_mode=str(row.get('tx_mode') or ''),
                             stage_label=str(row.get('stage_label') or ''),
+                            can_revisit=bool(row.get('can_revisit')),
                         ).get('prompt') or ''
                 break
         out.append(row)
@@ -2733,9 +2784,15 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         # بعد از تخصیص مأموریت دوباره بساز تا assignment جدید دیده شود
         assigned_lands, _ = _build_partner_dashboard_lands(ph, is_approved)
 
+    # فقط فایل‌های اختصاص شخصی برای کارت مأموریت خانه (نه کل کاتالوگ)
+    personal_lands = [
+        L for L in (assigned_lands or [])
+        if isinstance(L, dict) and L.get('_assignment_id')
+    ]
+
     urgent_actions = _home_urgent_actions(
         ph,
-        assigned_lands=assigned_lands,
+        assigned_lands=personal_lands,
         visit_rows=visit_rows,
         withdrawable_balance=withdrawable,
         follow_up_count=follow_up_count,
@@ -2744,7 +2801,7 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     suggested_files = _home_suggested_files(
         ph,
         is_approved,
-        assigned_lands=assigned_lands,
+        assigned_lands=personal_lands,
         visit_rows=visit_rows,
         urgent_actions=urgent_actions,
         limit=1,
@@ -2753,12 +2810,39 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     journey_card = None
     mission_code = str((mission or {}).get('land_code') or '').strip() if mission else ''
     if mission_code and ph:
+        # اگر مأموریت روی فایلی است که اختصاص نیست، دوباره انتساب بساز
+        has_mission_assign = any(
+            str(L.get('code') or '').strip() == mission_code for L in personal_lands
+        )
+        if not has_mission_assign:
+            try:
+                from app.express_partner.partner_missions import _ensure_personal_assignment
+                from app.utils.storage import load_express_lands_cached
+
+                land_row = next(
+                    (
+                        L for L in (load_express_lands_cached() or [])
+                        if isinstance(L, dict) and str(L.get('code') or '').strip() == mission_code
+                    ),
+                    None,
+                )
+                if land_row:
+                    _ensure_personal_assignment(ph, land_row)
+                    assigned_lands, _ = _build_partner_dashboard_lands(ph, is_approved)
+                    personal_lands = [
+                        L for L in (assigned_lands or [])
+                        if isinstance(L, dict) and L.get('_assignment_id')
+                    ]
+            except Exception:
+                current_app.logger.exception(
+                    're-ensure mission assignment failed phone=%s code=%s', ph, mission_code
+                )
         mission_cards = _home_suggested_files(
             ph,
             is_approved,
             assigned_lands=[
-                L for L in (assigned_lands or [])
-                if isinstance(L, dict) and str(L.get('code') or '').strip() == mission_code
+                L for L in personal_lands
+                if str(L.get('code') or '').strip() == mission_code
             ],
             visit_rows=visit_rows,
             urgent_actions=urgent_actions,
@@ -3098,6 +3182,7 @@ def home_page():
                         or _card.get('cta_action')
                         or ''
                     ),
+                    can_revisit=bool(_card.get('can_revisit')),
                 )
             else:
                 ai_quick_prompts = build_ai_quick_prompts()
@@ -6196,6 +6281,12 @@ def special_visit_action(vid: str, action: str):
     if err == 'forbidden':
         flash('اجازه مدیریت این درخواست را ندارید.', 'warning')
         return redirect(url_for('express_partner.special_visit_inbox'))
+    if err == 'invalid_transition':
+        flash(
+            'این تغییر مجاز نیست. تأیید انجام فقط وقتی ممکن است که همکار «بازدید انجام شد» را ثبت کرده باشد.',
+            'warning',
+        )
+        return redirect(url_for('express_partner.special_visit_inbox'))
     if err and err not in ('unchanged', 'note_updated'):
         flash('تغییر وضعیت ناموفق بود.', 'warning')
         return redirect(url_for('express_partner.special_visit_inbox'))
@@ -6206,6 +6297,23 @@ def special_visit_action(vid: str, action: str):
         current_app.logger.exception('special visit action save failed id=%s', vid)
         flash('ذخیره وضعیت ناموفق بود.', 'danger')
         return redirect(url_for('express_partner.special_visit_inbox'))
+
+    act_l = str(action or '').strip().lower()
+    visit_commission_pending = False
+    if rec and act_l == 'complete' and err not in ('unchanged', 'note_updated'):
+        try:
+            from .commissions_flow import ensure_visit_commission_after_visit_confirm
+
+            if ensure_visit_commission_after_visit_confirm(rec):
+                flash('پورسانت بازدید در صف تأیید ثبت شد.', 'success')
+            try:
+                visit_commission_pending = _visit_commission_amount_toman() > 0
+            except Exception:
+                visit_commission_pending = False
+        except Exception:
+            current_app.logger.exception(
+                'special visit commission create failed id=%s', vid
+            )
 
     if rec and err not in ('unchanged',):
         new_status = str(rec.get('status') or '')
@@ -6219,17 +6327,22 @@ def special_visit_action(vid: str, action: str):
                     land_title=str(rec.get('land_title') or ''),
                     visit_date=str(rec.get('visit_date') or ''),
                     reference_id=str(rec.get('id') or ''),
+                    visit_commission_pending=(
+                        visit_commission_pending
+                        if sms_event == 'visit_completed'
+                        else False
+                    ),
                 )
             except Exception:
                 current_app.logger.exception(
                     'special visit partner SMS failed id=%s event=%s', vid, sms_event
                 )
 
-    if str(action or '').strip().lower() == 'approve':
+    if act_l == 'approve':
         flash('بازدید تأیید شد.', 'success')
-    elif str(action or '').strip().lower() == 'reject':
+    elif act_l == 'reject':
         flash('بازدید رد شد.', 'info')
-    elif str(action or '').strip().lower() == 'complete':
+    elif act_l == 'complete':
         flash('انجام بازدید تأیید شد.', 'success')
     else:
         flash('وضعیت بروزرسانی شد.', 'success')
@@ -7055,6 +7168,7 @@ def land_detail(code: str):
             title=str(land.get('title') or '').strip(),
             tx_mode=str(land.get('_tx_button_mode') or ''),
             stage_label='',
+            can_revisit=bool(land.get('_can_revisit')),
         )
     except Exception:
         land['_chat_cta'] = {

@@ -89,7 +89,11 @@ def coach_tip_for_stage(
     if in_transaction:
         return f"معامله رو از همین چت ببند یا پیگیری کن{por}."
     label = (stage_label or "").strip()
-    if label in ("بازدید انجام شد",) or "انجام" in label:
+    if "پورسانت بازدید" in label:
+        return "صبر کن تا پورسانت بازدید تأیید بشه؛ بعد معامله رو از چت ثبت کن."
+    if label in ("در انتظار تأیید انجام",) or "تأیید انجام" in label:
+        return "منتظر تأیید انجام بازدید باش؛ بعد قدم بعدی رو از چت می‌گی."
+    if label in ("معامله یا بازدید مجدد", "بازدید انجام شد"):
         return f"حله؛ از همین چت درخواست معامله بده{por}."
     if label in ("بازدید تأییدشد", "در انتظار بازدید", "پیگیری بازدید") or has_visit:
         return "بازدید مهمه؛ وقتی رفتی، از چت «بازدید انجام شد» رو ثبت کن."
@@ -687,6 +691,7 @@ def build_ai_quick_prompts(
     stage_label: str = "",
     is_mission: bool = False,
     tx_mode: str = "",
+    can_revisit: bool = False,
 ) -> List[Dict[str, str]]:
     """چیپ‌های نیت‌محور همکار — وابسته به مرحله مأموریت/فروش."""
     code_s = (code or "").strip()
@@ -728,7 +733,8 @@ def build_ai_quick_prompts(
         add("وضعیت", prompt=f"{head}: وضعیتش چیه؟", intent="next_action")
     elif mode == "deal" or stage in ("معامله یا بازدید مجدد", "بازدید انجام شد"):
         add("ثبت معامله", prompt=f"{head}: معامله ثبت کن", intent="deal")
-        add("بازدید مجدد", prompt=f"{head}: بازدید مجدد می‌خوام", intent="visit")
+        if can_revisit:
+            add("بازدید مجدد", prompt=f"{head}: بازدید مجدد می‌خوام", intent="visit")
     elif mode == "complete_visit" or mode == "visit_done" or stage == "بازدید تأییدشد":
         add("بازدید انجام شد", prompt=f"{head}: بازدید انجام شد", intent="complete_visit")
     elif mode == "visit":

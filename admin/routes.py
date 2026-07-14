@@ -5374,79 +5374,9 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
 
 def _ensure_visit_commission_after_visit_confirm(rec: dict) -> bool:
     """بعد از تأیید انجام بازدید توسط ادمین، پورسانت بازدید pending بساز."""
-    if not isinstance(rec, dict):
-        return False
-    partner_phone = str(rec.get('partner_phone') or '').strip()
-    land_code = str(rec.get('land_code') or '').strip()
-    if not partner_phone or not land_code:
-        return False
-    try:
-        amount = max(0, int(get_settings().get('visit_commission_amount_toman') or 0))
-    except Exception:
-        amount = 0
-    if amount <= 0:
-        return False
+    from app.express_partner.commissions_flow import ensure_visit_commission_after_visit_confirm
 
-    from app.express_partner.commissions_flow import commission_is_visit
-
-    commissions = load_express_commissions() or []
-    if not isinstance(commissions, list):
-        commissions = []
-    visit_request_id = str(rec.get('id') or '').strip()
-    for c in commissions:
-        if not isinstance(c, dict):
-            continue
-        if str(c.get('partner_phone') or '').strip() != partner_phone:
-            continue
-        if str(c.get('land_code') or '').strip() != land_code:
-            continue
-        if not commission_is_visit(c):
-            continue
-        if visit_request_id and str(c.get('visit_request_id') or '').strip() == visit_request_id:
-            if str(c.get('status') or '').strip().lower() in ('pending', 'approved', 'paid'):
-                return False
-        elif not visit_request_id and str(c.get('status') or '').strip().lower() in ('pending', 'approved', 'paid'):
-            return False
-
-    title = str(rec.get('land_title') or '').strip()
-    if not title:
-        try:
-            land = next((l for l in load_ads_cached() or [] if str(l.get('code')) == land_code), None)
-            title = str((land or {}).get('title') or '').strip()
-        except Exception:
-            title = ''
-    name_map = _partner_name_lookup()
-    new_id = (max([int(x.get('id', 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
-    commission_rec = {
-        'id': new_id,
-        'commission_type': 'visit',
-        'partner_phone': partner_phone,
-        'partner_name': str(rec.get('partner_name') or '').strip() or name_map.get(partner_phone, partner_phone),
-        'land_code': land_code,
-        'land_title': title or land_code,
-        'sale_amount': 0,
-        'commission_pct': 0,
-        'commission_amount': amount,
-        'status': 'pending',
-        'created_at': iso_z(utcnow()),
-    }
-    if visit_request_id:
-        commission_rec['visit_request_id'] = visit_request_id
-    commissions.append(commission_rec)
-    save_express_commissions(commissions)
-    try:
-        from app.express_partner.commission_sms import notify_partner_commission_txn
-        notify_partner_commission_txn(
-            partner_phone=partner_phone,
-            event='commission_pending',
-            amount=amount,
-            land_code=land_code,
-            commission_type='visit',
-            reference_id=str(new_id),
-        )
-    except Exception:
-        current_app.logger.exception('visit commission pending SMS failed after visit confirm cid=%s', new_id)
-    return True
+    return ensure_visit_commission_after_visit_confirm(rec)
 
 
 @admin_bp.post('/express/visit-requests/<vid>/recreate-visit-commission')

@@ -57,12 +57,6 @@
           <i class="fas fa-arrow-right text-sm" aria-hidden="true"></i>
         </a>
         <div id="landGalleryBadges" class="ld-gallery-badges flex flex-wrap items-center gap-1.5 min-w-0">
-          {% if land_expert_verified(land) %}
-          <span id="landExpertVerifiedBadge" class="ld-gallery-badge ld-gallery-badge--verified {% if _st == 'in_transaction' %}hidden{% endif %}">
-            <i class="fas fa-circle-check text-[9px]" aria-hidden="true"></i>
-            تأیید کارشناسی
-          </span>
-          {% endif %}
           <span id="landTxStatusBadge" class="ld-gallery-badge ld-gallery-badge--tx {% if _st != 'in_transaction' %}hidden{% endif %}">در حال معامله</span>
           {% if _st == 'sold' %}
           <span id="landSoldStatusBadge" class="ld-gallery-badge ld-gallery-badge--sold">فروخته شد</span>

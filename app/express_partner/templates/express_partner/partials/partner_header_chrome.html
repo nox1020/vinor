@@ -58,6 +58,14 @@
       window.__vinorExpressOfflineBarLayout();
     }
     var offlineH = offlineBarHeight();
+    /* هدرهای فقط-شناور (ارتفاع ۰) فضای اسکرول نمی‌خواهند */
+    if (header.getAttribute('data-vn-float-only') === '1') {
+      document.documentElement.style.setProperty(
+        '--vn-partner-header-pad',
+        'max(0.35rem, env(safe-area-inset-top, 0px))'
+      );
+      return;
+    }
     var h = Math.ceil(header.getBoundingClientRect().height + 8 + offlineH);
     if (h < 48) h = 56 + offlineH;
     document.documentElement.style.setProperty('--vn-partner-header-pad', h + 'px');

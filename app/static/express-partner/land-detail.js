@@ -2030,8 +2030,6 @@
     }
     var badge = document.getElementById('landTxStatusBadge');
     if (badge) badge.classList.toggle('hidden', mode !== 'release');
-    var expertBadge = document.getElementById('landExpertVerifiedBadge');
-    if (expertBadge) expertBadge.classList.toggle('hidden', mode === 'release');
     var spec = document.querySelector('[data-land-tx-spec-value]');
     if (spec) spec.textContent = cfg.specLabel;
     if (mode === 'deal' && (visitDate || visitDateJalali)) {

@@ -6,8 +6,19 @@ import uuid
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..utils.dates import format_iso_date_jalali
-from .commissions_flow import commission_is_deal, commission_is_visit
+from ..utils.dates import (
+    format_display_jalali_date,
+    format_iso_date_jalali,
+    parse_gregorian_iso_date,
+    parse_jalali_date,
+    to_en_digits,
+    to_fa_digits,
+)
+from .commissions_flow import (
+    commission_is_deal,
+    commission_is_visit,
+    has_finalized_deal_commission,
+)
 
 PENDING_STATUS = "pending"
 APPROVED_STATUS = "approved"
@@ -82,10 +93,14 @@ _PY_WEEKDAY_TO_JS = {
 
 def _today() -> date:
     try:
-        from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo("Asia/Tehran")).date()
+        from ..utils.dates import tehran_today
+        return tehran_today()
     except Exception:
-        return datetime.utcnow().date()
+        try:
+            from zoneinfo import ZoneInfo
+            return datetime.now(ZoneInfo("Asia/Tehran")).date()
+        except Exception:
+            return datetime.utcnow().date()
 
 
 def visit_date_min_iso() -> str:
@@ -144,7 +159,7 @@ def visit_allowed_weekdays_summary() -> str:
 
 
 def list_upcoming_visit_dates(*, limit: int = 7, days_ahead: int = 90) -> List[Dict[str, Any]]:
-    """تاریخ‌های مجاز بعدی برای انتخاب در چت — شماره‌دار."""
+    """تاریخ‌های مجاز بعدی برای انتخاب در چت — شماره‌دار، فقط برچسب شمسی."""
     today = _today()
     end = today + timedelta(days=max(1, int(days_ahead) or 90))
     out: List[Dict[str, Any]] = []
@@ -154,15 +169,18 @@ def list_upcoming_visit_dates(*, limit: int = 7, days_ahead: int = 90) -> List[D
     while d <= end and len(out) < lim:
         if is_visit_weekday_allowed(d):
             iso = d.isoformat()
-            jalali = format_iso_date_jalali(iso) or iso
+            jalali = format_iso_date_jalali(iso) or ""
+            jalali_fa = format_display_jalali_date(iso)
             weekday = visit_weekday_label_for_date(d)
+            n_fa = to_fa_digits(n)
             out.append(
                 {
                     "n": n,
-                    "iso": iso,
+                    "iso": iso,  # داخلی — به کاربر نشان داده نشود
                     "jalali": jalali,
+                    "jalali_fa": jalali_fa,
                     "weekday": weekday,
-                    "label": f"{n}) {weekday} {jalali}",
+                    "label": f"{n_fa}) {weekday} {jalali_fa}",
                 }
             )
             n += 1
@@ -184,38 +202,23 @@ _VISIT_DATE_ORDINALS: Dict[str, int] = {
 }
 
 
-def resolve_visit_date_choice(
-    raw: Any,
-    *,
-    options: Optional[List[Dict[str, Any]]] = None,
-) -> Optional[date]:
-    """YYYY-MM-DD، شماره/اولی/دومی، یا تاریخ جلالی هم‌خوان با لیست مجاز."""
-    s = (str(raw or "")).strip()
+def _extract_choice_index(raw: str) -> Optional[int]:
+    """شماره گزینه ۱…۱۰ از پاسخ کاربر/مدل."""
+    s = to_en_digits(raw or "").strip()
     if not s:
         return None
-
-    direct = _parse_visit_date(s)
-    if direct is not None:
-        return direct
-
-    # شماره در ابتدای پاسخ («۱»، «1)»، «گزینه ۲»)
     head = s
     for junk in ("گزینه", "تاریخ", "روز", "شماره"):
         if head.startswith(junk):
             head = head[len(junk):].strip()
     head_token = head.split()[0] if head.split() else head
-    head_token = head_token.strip(").]:،-")
-    trans = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
-    head_norm = head_token.translate(trans)
-
-    idx: Optional[int] = _VISIT_DATE_ORDINALS.get(head_token) or _VISIT_DATE_ORDINALS.get(head_norm)
-    if idx is None and head_norm.isdigit() and len(head_norm) <= 2:
+    head_token = head_token.strip(").]:،-/")
+    idx = _VISIT_DATE_ORDINALS.get(head_token) or _VISIT_DATE_ORDINALS.get(to_en_digits(head_token))
+    if idx is None and head_token.isdigit() and len(head_token) <= 2:
         try:
-            idx = int(head_norm)
+            idx = int(head_token)
         except Exception:
             idx = None
-
-    # کل عبارت بدون زوائد (اولی / دومی)
     if idx is None:
         key = (
             s.replace("گزینه", " ")
@@ -225,35 +228,61 @@ def resolve_visit_date_choice(
             .strip()
         )
         key = " ".join(key.split())
-        idx = _VISIT_DATE_ORDINALS.get(key)
-        if idx is None:
-            key2 = key[:-1] if key.endswith("م") else key
-            idx = _VISIT_DATE_ORDINALS.get(key2)
+        idx = _VISIT_DATE_ORDINALS.get(key) or _VISIT_DATE_ORDINALS.get(to_en_digits(key))
+        if idx is None and key.endswith("م"):
+            idx = _VISIT_DATE_ORDINALS.get(key[:-1])
+    return idx if idx and idx >= 1 else None
 
+
+def resolve_visit_date_choice(
+    raw: Any,
+    *,
+    options: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[date]:
+    """شماره گزینه / شمسی / میلادی واقعی — سال شمسی را هرگز میلادی نمی‌خواند."""
+    s = (str(raw or "")).strip()
+    if not s:
+        return None
+
+    # اولویت ۱: شمارهٔ لیست (۱…۵) تا با تاریخ قاطی نشود
+    idx = _extract_choice_index(s)
     opts = options if options is not None else list_upcoming_visit_dates(limit=max(idx or 7, 7))
-
     if idx and 1 <= idx <= len(opts):
         return _parse_visit_date(opts[idx - 1].get("iso"))
 
-    # تطبیق با جلالی داخل لیست (مثلاً 1405/04/21)
+    # اولویت ۲: شمسی (مثلاً ۱۴۰۵/۰۴/۲۴)
+    j = parse_jalali_date(s)
+    if j is not None:
+        return j
+
+    # اولویت ۳: میلادی واقعی فقط اگر سال ۱۹۰۰–۲۲۰۰ باشد
+    g = parse_gregorian_iso_date(s)
+    if g is not None:
+        for opt in opts:
+            if str(opt.get("iso") or "") == g.isoformat():
+                return g
+        return g
+
+    # تطبیق با جلالی داخل لیست
     compact = (
-        s.replace(" ", "")
+        to_en_digits(s)
+        .replace(" ", "")
         .replace("-", "/")
         .replace(".", "/")
-        .translate(trans)
     )
     for opt in opts:
         jalali = str(opt.get("jalali") or "").strip()
-        if not jalali:
-            continue
-        j_compact = jalali.replace(" ", "").replace("-", "/")
-        if j_compact and (j_compact in compact or compact in j_compact):
-            return _parse_visit_date(opt.get("iso"))
-        # فقط ارقام جلالی
-        j_digits = "".join(ch for ch in j_compact if ch.isdigit())
-        s_digits = "".join(ch for ch in compact if ch.isdigit())
-        if j_digits and s_digits == j_digits:
-            return _parse_visit_date(opt.get("iso"))
+        jalali_fa = str(opt.get("jalali_fa") or "").strip()
+        for cand in (jalali, jalali_fa, to_en_digits(jalali_fa)):
+            if not cand:
+                continue
+            j_compact = to_en_digits(cand).replace(" ", "").replace("-", "/")
+            if j_compact and (j_compact in compact or compact in j_compact):
+                return _parse_visit_date(opt.get("iso"))
+            j_digits = "".join(ch for ch in j_compact if ch.isdigit())
+            s_digits = "".join(ch for ch in compact if ch.isdigit())
+            if j_digits and s_digits == j_digits:
+                return _parse_visit_date(opt.get("iso"))
 
     return None
 
@@ -269,17 +298,11 @@ def split_customer_full_name(full_name: str) -> Tuple[str, str]:
 
 
 def _parse_visit_date(raw: Any) -> Optional[date]:
+    """ISO میلادی یا شمسی — سال ۱۳xx/۱۴xx میلادی فرض نمی‌شود."""
     s = (str(raw or "")).strip()
     if not s:
         return None
-    # ISO کامل یا فقط تاریخ
-    if "T" in s:
-        s = s.split("T", 1)[0]
-    s = s[:10]
-    try:
-        return datetime.strptime(s, "%Y-%m-%d").date()
-    except Exception:
-        return None
+    return parse_gregorian_iso_date(s) or parse_jalali_date(s)
 
 def _match_partner_land(r: Dict[str, Any], phone: str, land_code: str) -> bool:
     if not isinstance(r, dict):
@@ -603,14 +626,23 @@ def partner_visit_completed(
 def partner_active_visit_record(
     requests: List[Dict[str, Any]], phone: str, land_code: str
 ) -> Optional[Dict[str, Any]]:
-    """بازدید باز یا آخرین پرونده (از جمله ردشده)."""
+    """بازدید باز، یا آخرین پروندهٔ معنادار.
+
+    اگر جدیدترین رد شده باشد ولی پروندهٔ تکمیل‌شدهٔ قبلی باشد، تکمیل‌شده را برمی‌گرداند
+    تا متادیتا/قیف با «بازاریابی مجدد» اشتباه نشود.
+    """
     open_rec = partner_open_visit(requests, phone, land_code)
     if open_rec:
         return open_rec
     recent = partner_most_recent_visit(requests, phone, land_code)
-    if recent:
-        return recent
-    return partner_latest_visit(requests, phone, land_code)
+    if not recent:
+        return None
+    st = (str(recent.get("status") or "")).strip()
+    if st == CANCELLED_STATUS:
+        non_cancelled = partner_latest_visit(requests, phone, land_code)
+        if non_cancelled:
+            return non_cancelled
+    return recent
 
 
 def partner_has_pending_deal_commission(
@@ -1083,6 +1115,20 @@ def resolve_partner_land_tx_state(
     pending_deal = partner_has_pending_deal_commission(commissions, ph, code) if ph else False
     deal_rejected = partner_deal_commission_rejected(commissions, ph, code) if ph else False
     can_revisit = partner_can_request_new_visit(gs, visit_requests, ph, code) if ph else False
+    has_my_assignment = False
+    if ph and code:
+        for a in assignments or []:
+            if not isinstance(a, dict):
+                continue
+            if str(a.get("partner_phone") or "").strip() != ph:
+                continue
+            if str(a.get("land_code") or "").strip() != code:
+                continue
+            has_my_assignment = True
+            break
+    deal_finalized = (
+        bool(has_finalized_deal_commission(commissions, ph, code)) if ph and code else False
+    )
     visit_date = (active_visit or {}).get("visit_date") or ""
     visit_date_jalali = format_iso_date_jalali(str(visit_date))
     customer_phone = str((active_visit or {}).get("customer_phone") or "").strip()
@@ -1117,6 +1163,9 @@ def resolve_partner_land_tx_state(
             is_approved=is_partner_approved,
             is_sold=gs == "sold",
         )
+        # ثبت معامله فقط روی فایلِ اختصاص‌یافته؛ کاتالوگ عمومی کافی نیست
+        if mode == "deal" and not has_my_assignment:
+            mode = "hidden"
 
     show_revisit = bool(
         can_revisit
@@ -1142,6 +1191,8 @@ def resolve_partner_land_tx_state(
         "customer_phone": customer_phone,
         "customer_name": customer_name,
         "can_revisit": show_revisit,
+        "has_assignment": has_my_assignment,
+        "deal_finalized": deal_finalized,
     }
 
 

@@ -19,6 +19,7 @@
 
   <header id="commTxnListHeader"
           class="ep-partner-header ep-partner-header--shell-none"
+          data-vn-float-only="1"
           aria-label="تراکنش‌ها">
     <div class="comm-txn-float comm-txn-float--back">
       {{ ep_back_link(url_for('express_partner.commissions'), class='vinor-dash-glass-pill comm-header-glass-btn') }}
@@ -40,7 +41,7 @@
   </header>
 
   <div id="commissionsTxnPageMain"
-       class="partner-page-scroll-pad min-h-[100dvh] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16">
+       class="partner-page-scroll-pad min-h-[100dvh] vn-txn-page-main lg:pb-16">
     <div class="vn-txn-page">
 
       <div class="vn-txn-hero">
@@ -153,6 +154,9 @@
     if (typeof window.hoistVinorExpressBodyModals === 'function') {
       try { window.hoistVinorExpressBodyModals(); } catch (_) {}
     }
+    if (window.__vinorPartnerHeaderChromeSetup) {
+      try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
+    }
 
     if (window.__vinorCommTxnPageAbort) {
       try { window.__vinorCommTxnPageAbort.abort(); } catch (_) {}
@@ -196,6 +200,22 @@
     var activeLabelText = 'همه';
     var totalRows = rowsRoot ? rowsRoot.querySelectorAll('.commission-txn-row').length : 0;
     var closeTimer = null;
+    var dismissGuardUntil = 0;
+    var armingTimer = 0;
+
+    function armDismissGuard(ms) {
+      dismissGuardUntil = Date.now() + (ms || 550);
+      filterModal.classList.add('comm-txn-filter-modal--arming');
+      if (armingTimer) window.clearTimeout(armingTimer);
+      armingTimer = window.setTimeout(function () {
+        armingTimer = 0;
+        filterModal.classList.remove('comm-txn-filter-modal--arming');
+      }, ms || 550);
+    }
+
+    function dismissGuarded() {
+      return Date.now() < dismissGuardUntil;
+    }
 
     var FILTER_LABELS = {
       all: 'همه',
@@ -235,6 +255,7 @@
         window.clearTimeout(closeTimer);
         closeTimer = null;
       }
+      armDismissGuard(550);
       filterModal.classList.remove('hidden');
       filterModal.setAttribute('aria-hidden', 'false');
       if (filterToggle) filterToggle.setAttribute('aria-expanded', 'true');
@@ -243,9 +264,12 @@
       syncOverlay(true);
     }
 
-    function closeFilterModal() {
+    function closeFilterModal(opts) {
+      opts = opts || {};
+      if (!opts.force && dismissGuarded()) return;
       if (!isFilterOpen()) return;
       filterModal.classList.remove('comm-txn-filter-modal--open');
+      filterModal.classList.remove('comm-txn-filter-modal--arming');
       filterModal.setAttribute('aria-hidden', 'true');
       if (filterToggle) filterToggle.setAttribute('aria-expanded', 'false');
       syncOverlay(false);
@@ -299,6 +323,7 @@
         row.classList.toggle('hidden', !visible);
         if (visible) shown += 1;
       });
+      rowsRoot.classList.toggle('hidden', shown === 0);
       if (emptyFilter) emptyFilter.classList.toggle('hidden', shown > 0);
       updateCountHint(shown);
     }
@@ -306,7 +331,7 @@
     function selectFilter(key, label, keepModalOpen) {
       setActiveChip(key, label);
       applyFilter();
-      if (!keepModalOpen) closeFilterModal();
+      if (!keepModalOpen) closeFilterModal({ force: true });
     }
 
     filters.addEventListener('click', function (e) {
@@ -355,7 +380,11 @@
         window.clearTimeout(closeTimer);
         closeTimer = null;
       }
-      if (isFilterOpen()) closeFilterModal();
+      if (armingTimer) {
+        window.clearTimeout(armingTimer);
+        armingTimer = 0;
+      }
+      if (isFilterOpen()) closeFilterModal({ force: true });
       try { window.__vinorCommTxnPageAbort.abort(); } catch (_) {}
     }
 
