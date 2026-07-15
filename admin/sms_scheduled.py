@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""زمان‌بندی ارسال پیامک مستقیم ادمین (آنی / یک‌بار / تکرارشونده)."""
+"""زمان‌بندی ارسال پیامک مستقیم ادمین (آنی / یک‌بار / تکرارشونده) — وقت تهران."""
 from __future__ import annotations
 
 import os
@@ -10,14 +10,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Flask, current_app
-import pytz
 
 from admin.sms_recipients import load_sms_recipients, recipient_group_label
 from app.services.sms import send_sms_direct
 from app.services.sms_config import get_sms_line_number
+from app.utils.dates import format_display_jalali_datetime, tehran_now, to_en_digits
 from app.utils.storage import load_sms_history, save_sms_history
 
-TEHRAN = pytz.timezone("Asia/Tehran")
 TEHRAN_FALLBACK = timezone(timedelta(hours=3, minutes=30))
 
 RECURRENCE_DAILY = "daily"
@@ -49,23 +48,34 @@ _run_lock = threading.Lock()
 
 def _tehran_tz():
     try:
-        return TEHRAN
+        from zoneinfo import ZoneInfo
+        return ZoneInfo("Asia/Tehran")
     except Exception:
         return TEHRAN_FALLBACK
 
 
 def _to_tehran(dt: datetime) -> datetime:
+    """aware → تهران؛ naive را زمان دیوار تهران فرض می‌کند (نه UTC)."""
     tz = _tehran_tz()
     if dt.tzinfo is None:
-        if hasattr(tz, "localize"):
-            return tz.localize(dt)
         return dt.replace(tzinfo=tz)
     return dt.astimezone(tz)
 
 
-def tehran_now() -> datetime:
-    tz = _tehran_tz()
-    return datetime.now(tz)
+def format_tehran_iso_display(iso_or_dt: Any) -> str:
+    """نمایش شمسی + ساعت تهران (هم‌سبک هدر ادمین)."""
+    if iso_or_dt is None:
+        return "—"
+    if isinstance(iso_or_dt, datetime):
+        return format_display_jalali_datetime(_to_tehran(iso_or_dt).isoformat())
+    s = str(iso_or_dt or "").strip()
+    if not s:
+        return "—"
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return format_display_jalali_datetime(_to_tehran(dt).isoformat())
+    except ValueError:
+        return format_display_jalali_datetime(s) or s
 
 
 def _jobs_path(app=None) -> str:
@@ -98,20 +108,23 @@ def save_scheduled_jobs(jobs: List[Dict[str, Any]], app=None) -> None:
 
 
 def parse_tehran_datetime(value: str) -> Optional[datetime]:
-    raw = (value or "").strip()
+    """مقدار datetime-local یا ISO — ارقام فارسی OK؛ بدون offset = وقت تهران."""
+    raw = to_en_digits(value or "").strip()
     if not raw:
         return None
+    if " " in raw and "T" not in raw:
+        raw = raw.replace(" ", "T", 1)
     try:
-        if len(raw) == 16:
+        if len(raw) == 16 and "T" in raw:
             raw = raw + ":00"
-        dt = datetime.fromisoformat(raw)
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
         return _to_tehran(dt)
     except ValueError:
         return None
 
 
 def parse_time_hm(value: str) -> Optional[Tuple[int, int]]:
-    raw = (value or "").strip()
+    raw = to_en_digits(value or "").strip()
     if not raw:
         return None
     parts = raw.split(":")
@@ -129,11 +142,7 @@ def parse_time_hm(value: str) -> Optional[Tuple[int, int]]:
 
 def _combine_tehran_date_time(day: datetime, hour: int, minute: int) -> datetime:
     local = _to_tehran(day)
-    naive = local.replace(hour=hour, minute=minute, second=0, microsecond=0, tzinfo=None)
-    tz = _tehran_tz()
-    if hasattr(tz, "localize"):
-        return tz.localize(naive)
-    return naive.replace(tzinfo=tz)
+    return local.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
 def compute_next_recurring_run(
@@ -145,12 +154,12 @@ def compute_next_recurring_run(
     month_day: Optional[int] = None,
     after: Optional[datetime] = None,
 ) -> datetime:
-    now = after or tehran_now()
+    now = _to_tehran(after) if after is not None else tehran_now()
     candidate = _combine_tehran_date_time(now, hour, minute)
 
     if freq == RECURRENCE_DAILY:
         if candidate <= now:
-            candidate += timedelta(days=1)
+            candidate = candidate + timedelta(days=1)
         return candidate
 
     if freq == RECURRENCE_WEEKLY:
@@ -158,21 +167,16 @@ def compute_next_recurring_run(
         days_ahead = (wd - now.weekday()) % 7
         target = _combine_tehran_date_time(now + timedelta(days=days_ahead), hour, minute)
         if target <= now:
-            target += timedelta(days=7)
+            target = target + timedelta(days=7)
         return target
 
     if freq == RECURRENCE_MONTHLY:
         dom = month_day if month_day is not None else now.day
-        dom = max(1, min(31, dom))
+        dom = max(1, min(31, int(dom)))
         year, month = now.year, now.month
         for _ in range(24):
             try:
-                naive = datetime(year, month, dom, hour, minute)
-                tz = _tehran_tz()
-                if hasattr(tz, "localize"):
-                    target = tz.localize(naive)
-                else:
-                    target = naive.replace(tzinfo=tz)
+                target = datetime(year, month, dom, hour, minute, tzinfo=_tehran_tz())
             except ValueError:
                 if month == 12:
                     year, month = year + 1, 1
@@ -188,6 +192,53 @@ def compute_next_recurring_run(
         return now + timedelta(days=30)
 
     return candidate if candidate > now else candidate + timedelta(days=1)
+
+
+def select_recipients_for_job(
+    recipients: List[Dict[str, Any]],
+    job: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """گیرندگان یک اجرا — با send_limit؛ تکرارشونده به‌صورت چرخشی از offset."""
+    if not recipients:
+        return []
+    raw_limit = job.get("send_limit")
+    try:
+        limit = int(raw_limit) if raw_limit is not None and str(raw_limit).strip() != "" else 0
+    except (TypeError, ValueError):
+        limit = 0
+    if limit < 1 or limit >= len(recipients):
+        return recipients
+    if job.get("send_timing") == SEND_TIMING_SCHEDULED:
+        return recipients[:limit]
+    offset = int(job.get("send_offset") or 0) % len(recipients)
+    return [recipients[(offset + i) % len(recipients)] for i in range(limit)]
+
+
+def parse_send_limit(value: Any, group_size: int) -> Tuple[Optional[int], Optional[str]]:
+    """None = کل گروه؛ عدد مثبت = حداکثر در هر اجرا."""
+    if value is None or str(value).strip() == "":
+        return None, None
+    try:
+        n = int(to_en_digits(str(value)).strip())
+    except (TypeError, ValueError):
+        return None, "تعداد ارسال در هر مرحله باید عدد باشد."
+    if n < 1:
+        return None, "حداقل یک گیرنده در هر مرحله لازم است."
+    if group_size < 1:
+        return None, "گروه گیرنده خالی است."
+    if n > group_size:
+        return None, f"تعداد ارسال نمی‌تواند بیشتر از {group_size} نفر گروه باشد."
+    return n, None
+
+
+def send_batch_summary(job: Dict[str, Any]) -> str:
+    limit = job.get("send_limit")
+    total = int(job.get("recipient_count") or 0)
+    if limit:
+        if job.get("send_timing") == SEND_TIMING_RECURRING:
+            return f"{limit} نفر در هر اجرا (چرخشی از {total} نفر)"
+        return f"{limit} نفر از {total} نفر گروه"
+    return f"کل گروه ({total} نفر)"
 
 
 def recurrence_summary(job: Dict[str, Any]) -> str:
@@ -235,7 +286,7 @@ def send_direct_to_recipients(
                     "status_code": result.get("status", 0),
                     "response": result.get("body", {}),
                     "source": source,
-                    "created_at": datetime.now().isoformat(),
+                    "created_at": tehran_now().isoformat(),
                     "error": None if result.get("ok") else str(result.get("body", {}).get("message", "Unknown error")),
                 })
                 if len(history) > 10000:
@@ -274,6 +325,7 @@ def create_scheduled_job(
     recurrence_time: Optional[str] = None,
     recurrence_weekday: Optional[int] = None,
     recurrence_day: Optional[int] = None,
+    send_limit: Optional[Any] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     message = (message or "").strip()
     line_number = get_sms_line_number()
@@ -285,13 +337,19 @@ def create_scheduled_job(
         label = recipient_group_label(recipient_group)
         return None, f"هیچ گیرنده‌ای در گروه «{label}» با شماره معتبر یافت نشد."
 
-    now = tehran_now()
+    parsed_limit, limit_error = parse_send_limit(send_limit, len(recipients))
+    if limit_error:
+        return None, limit_error
+
+    now = _to_tehran(tehran_now())
     job: Dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "status": _STATUS_PENDING,
         "send_timing": send_timing,
         "recipient_group": recipient_group,
         "recipient_count": len(recipients),
+        "send_limit": parsed_limit,
+        "send_offset": 0,
         "message": message,
         "line_number": line_number,
         "created_at": now.isoformat(),
@@ -304,9 +362,12 @@ def create_scheduled_job(
     if send_timing == SEND_TIMING_SCHEDULED:
         run_at = parse_tehran_datetime(scheduled_at or "")
         if not run_at:
-            return None, "تاریخ و ساعت ارسال نامعتبر است."
-        if run_at <= now:
-            return None, "زمان ارسال باید در آینده باشد."
+            return None, "تاریخ و ساعت ارسال نامعتبر است (وقت تهران)."
+        if run_at <= now + timedelta(seconds=5):
+            return None, (
+                f"زمان ارسال باید بعد از ساعت تهران باشد "
+                f"(الان: {format_tehran_iso_display(now)})."
+            )
         job["scheduled_at"] = run_at.isoformat()
         job["next_run_at"] = run_at.isoformat()
     elif send_timing == SEND_TIMING_RECURRING:
@@ -315,20 +376,24 @@ def create_scheduled_job(
             return None, "نوع تکرار نامعتبر است."
         parsed_time = parse_time_hm(recurrence_time or "")
         if not parsed_time:
-            return None, "ساعت تکرار نامعتبر است."
+            return None, "ساعت تکرار نامعتبر است (وقت تهران)."
         hour, minute = parsed_time
         wd = recurrence_weekday
         dom = recurrence_day
         if freq == RECURRENCE_WEEKLY and wd is None:
             wd = 5
         if freq == RECURRENCE_MONTHLY:
-            dom = max(1, min(31, int(dom or 1)))
+            try:
+                dom = max(1, min(31, int(dom or 1)))
+            except (TypeError, ValueError):
+                dom = 1
         next_run = compute_next_recurring_run(
             freq=freq,
             hour=hour,
             minute=minute,
             weekday=wd,
             month_day=dom,
+            after=now,
         )
         job["recurrence_freq"] = freq
         job["recurrence_time"] = f"{hour:02d}:{minute:02d}"
@@ -362,7 +427,16 @@ def list_active_scheduled_jobs(limit: int = 20) -> List[Dict[str, Any]]:
     jobs = load_scheduled_jobs()
     active = [j for j in jobs if j.get("status") == _STATUS_PENDING]
     active.sort(key=lambda x: x.get("next_run_at") or "")
-    return active[:limit]
+    out: List[Dict[str, Any]] = []
+    for job in active[:limit]:
+        row = dict(job)
+        row["next_run_display"] = format_tehran_iso_display(job.get("next_run_at"))
+        row["recurrence_label"] = (
+            recurrence_summary(job) if job.get("send_timing") == SEND_TIMING_RECURRING else ""
+        )
+        row["send_batch_label"] = send_batch_summary(job)
+        out.append(row)
+    return out
 
 
 def _execute_job(app: Flask, job: Dict[str, Any]) -> None:
@@ -371,19 +445,32 @@ def _execute_job(app: Flask, job: Dict[str, Any]) -> None:
         job["last_result"] = {"sent": 0, "failed": 0, "error": "no_recipients"}
         return
 
+    batch = select_recipients_for_job(recipients, job)
+    if not batch:
+        job["last_result"] = {"sent": 0, "failed": 0, "error": "no_recipients"}
+        return
+
     source = "admin_colleagues_scheduled"
     if job.get("send_timing") == SEND_TIMING_RECURRING:
         source = "admin_colleagues_recurring"
 
     sent, failed, _ = send_direct_to_recipients(
-        recipients,
+        batch,
         job.get("message") or "",
         get_sms_line_number(),
         source=source,
     )
-    job["last_result"] = {"sent": sent, "failed": failed}
+    job["last_result"] = {"sent": sent, "failed": failed, "batch_size": len(batch)}
     job["last_run_at"] = tehran_now().isoformat()
     job["runs_completed"] = int(job.get("runs_completed") or 0) + 1
+
+    raw_limit = job.get("send_limit")
+    try:
+        limit = int(raw_limit) if raw_limit is not None else 0
+    except (TypeError, ValueError):
+        limit = 0
+    if job.get("send_timing") == SEND_TIMING_RECURRING and limit > 0 and len(recipients) > limit:
+        job["send_offset"] = (int(job.get("send_offset") or 0) + limit) % len(recipients)
 
 
 def process_due_scheduled_jobs(app: Flask) -> int:
@@ -404,8 +491,9 @@ def process_due_scheduled_jobs(app: Flask) -> int:
                 if not next_raw:
                     continue
                 try:
-                    next_run = datetime.fromisoformat(next_raw)
-                    next_run = _to_tehran(next_run)
+                    next_run = _to_tehran(
+                        datetime.fromisoformat(str(next_raw).replace("Z", "+00:00"))
+                    )
                 except ValueError:
                     continue
                 if next_run > now:
@@ -429,7 +517,7 @@ def process_due_scheduled_jobs(app: Flask) -> int:
                             minute=minute,
                             weekday=job.get("recurrence_weekday"),
                             month_day=job.get("recurrence_day"),
-                            after=now,
+                            after=tehran_now(),
                         ).isoformat()
                     job["status"] = _STATUS_PENDING
                 else:
@@ -447,7 +535,7 @@ def process_due_scheduled_jobs(app: Flask) -> int:
 
 
 def _scheduler_loop(app: Flask) -> None:
-    time.sleep(15)
+    time.sleep(8)
     while True:
         try:
             process_due_scheduled_jobs(app)
@@ -456,23 +544,29 @@ def _scheduler_loop(app: Flask) -> None:
                 app.logger.exception("SMS scheduled jobs tick failed")
             except Exception:
                 pass
-        time.sleep(60)
+        time.sleep(20)
 
 
 def schedule_admin_sms_jobs(app: Flask) -> None:
-    """زمان‌بندی درون‌پردازه — فقط با VINOR_ADMIN_SMS_SCHEDULER=1 (روی LiteSpeed/cPanel از cron استفاده کنید)."""
+    """زمان‌بندی درون‌پردازه بر اساس وقت تهران.
+
+    پیش‌فرض: روشن (مناسب debug/run.py).
+    خاموش‌کردن: VINOR_ADMIN_SMS_SCHEDULER=0 یا VINOR_DISABLE_SMS_SCHEDULER=1
+    (در passenger_wsgi برای پروداکشن به‌صورت پیش‌فرض ۰ است؛ از cron استفاده کنید).
+    """
     global _scheduler_started
     if _scheduler_started:
         return
     if os.environ.get("VINOR_DISABLE_SMS_SCHEDULER", "").strip().lower() in ("1", "true", "yes"):
         app.logger.info("Admin SMS scheduler disabled via VINOR_DISABLE_SMS_SCHEDULER")
         return
-    if os.environ.get("VINOR_ADMIN_SMS_SCHEDULER", "").strip().lower() not in ("1", "true", "yes"):
+    env_raw = os.environ.get("VINOR_ADMIN_SMS_SCHEDULER", "").strip().lower()
+    if env_raw in ("0", "false", "no", "off"):
         app.logger.info(
-            "Admin SMS in-process scheduler off (use scripts/run_admin_sms_scheduled_jobs.py via cron "
-            "or set VINOR_ADMIN_SMS_SCHEDULER=1)"
+            "Admin SMS in-process scheduler off (use scripts/run_admin_sms_scheduled_jobs.py via cron)"
         )
         return
+    # env خالی / 1 / debug همگی روشن
     _scheduler_started = True
     threading.Thread(
         target=_scheduler_loop,
@@ -480,4 +574,13 @@ def schedule_admin_sms_jobs(app: Flask) -> None:
         daemon=True,
         name="vinor-admin-sms-scheduler",
     ).start()
-    app.logger.info("Admin SMS scheduled jobs runner started")
+    debug_on = bool(getattr(app, "debug", False)) or os.environ.get("FLASK_DEBUG", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    app.logger.info(
+        "Admin SMS scheduled jobs runner started (interval=20s, tz=Asia/Tehran, debug=%s, env=%s)",
+        debug_on,
+        env_raw or "(default-on)",
+    )

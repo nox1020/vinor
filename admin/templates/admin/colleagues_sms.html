@@ -95,7 +95,10 @@
         </div>
 
         <div id="scheduledFields" class="space-y-2 {% if form_send_timing != 'scheduled' %}hidden{% endif %}">
-          <label for="scheduled_at" class="block text-xs text-gray-600 dark:text-gray-400">تاریخ و ساعت (به وقت تهران)</label>
+          <label for="scheduled_at" class="block text-xs text-gray-600 dark:text-gray-400">
+            تاریخ و ساعت به وقت تهران
+            <span class="text-gray-400 font-normal">(همان ساعت هدر)</span>
+          </label>
           <input
             type="datetime-local"
             id="scheduled_at"
@@ -104,6 +107,28 @@
             dir="ltr"
             class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-mono text-gray-900 dark:text-white"
           >
+          <p id="scheduledAtHint" class="text-[11px] text-gray-500 dark:text-gray-400" dir="ltr"></p>
+        </div>
+
+        <div id="sendLimitFields" class="space-y-2 {% if form_send_timing == 'instant' %}hidden{% endif %}">
+          <label for="send_limit" class="block text-xs text-gray-600 dark:text-gray-400">
+            تعداد ارسال در هر مرحله
+          </label>
+          <input
+            type="number"
+            id="send_limit"
+            name="send_limit"
+            min="1"
+            value="{{ form_send_limit }}"
+            placeholder="همه گروه"
+            class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+          >
+          <p id="sendLimitHint" class="text-[11px] text-gray-500 dark:text-gray-400">
+            <span id="sendLimitHintText">خالی = ارسال به همه گروه.</span>
+            <span id="sendLimitRecurringHint" class="{% if form_send_timing != 'recurring' %}hidden{% endif %}">
+              در تکرارشونده، هر اجرا N نفر به‌ترتیب لیست (چرخشی) دریافت می‌کنند.
+            </span>
+          </p>
         </div>
 
         <div id="recurringFields" class="space-y-2 {% if form_send_timing != 'recurring' %}hidden{% endif %}">
@@ -168,7 +193,7 @@
             <p class="text-gray-900 dark:text-white truncate">{{ job.message[:80] }}{% if job.message|length > 80 %}…{% endif %}</p>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {{ recipient_group_labels.get(job.recipient_group, job.recipient_group) }}
-              · {{ job.recipient_count }} نفر
+              · {% if job.send_batch_label %}{{ job.send_batch_label }}{% else %}{{ job.recipient_count }} نفر{% endif %}
               ·
               {% if job.send_timing == 'recurring' %}
                 تکرارشونده
@@ -176,8 +201,14 @@
                 یک‌بار
               {% endif %}
             </p>
-            <p class="text-xs font-mono text-amber-700 dark:text-amber-300 mt-0.5" dir="ltr">
-              {% if job.next_run_at %}{{ job.next_run_at[:16]|replace('T', ' ') }}{% else %}—{% endif %}
+            <p class="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
+              {% if job.send_timing == 'recurring' and job.recurrence_label %}
+                {{ job.recurrence_label }} · بعدی:
+              {% else %}
+                اجرا:
+              {% endif %}
+              <span class="font-medium">{{ job.next_run_display or '—' }}</span>
+              <span class="text-gray-400 font-normal">تهران</span>
             </p>
           </div>
           <form method="post" class="shrink-0" onsubmit="return confirm('این زمان‌بندی لغو شود؟');">
@@ -320,6 +351,43 @@ function getSelectedRecipientCount() {
   return Number(RECIPIENT_COUNTS[key] || 0);
 }
 
+function getEffectiveSendCount() {
+  var total = getSelectedRecipientCount();
+  var timing = getSelectedSendTiming();
+  if (timing === 'instant') return total;
+  var limitEl = document.getElementById('send_limit');
+  if (!limitEl || !limitEl.value) return total;
+  var n = parseInt(String(limitEl.value).replace(/[^\d]/g, ''), 10);
+  if (!n || n < 1) return total;
+  return Math.min(n, total);
+}
+
+function syncSendLimitUi() {
+  var total = getSelectedRecipientCount();
+  var limitEl = document.getElementById('send_limit');
+  var hintText = document.getElementById('sendLimitHintText');
+  if (limitEl) {
+    limitEl.max = total > 0 ? String(total) : '';
+    if (limitEl.value && total > 0) {
+      var n = parseInt(String(limitEl.value).replace(/[^\d]/g, ''), 10);
+      if (n > total) limitEl.value = String(total);
+    }
+  }
+  if (hintText) {
+    if (total <= 0) {
+      hintText.textContent = 'خالی = ارسال به همه گروه.';
+      return;
+    }
+    var timing = getSelectedSendTiming();
+    var eff = getEffectiveSendCount();
+    var msg = 'خالی = ارسال به همه ' + total + ' نفر گروه.';
+    if (timing !== 'instant' && limitEl && limitEl.value) {
+      msg += ' در این تنظیم: ' + eff + ' نفر در هر مرحله.';
+    }
+    hintText.textContent = msg;
+  }
+}
+
 function getSelectedRecipientLabel() {
   var key = getSelectedRecipientGroup();
   return RECIPIENT_GROUP_LABELS[key] || key;
@@ -415,19 +483,42 @@ function getSelectedSendTiming() {
   return (checked && checked.value) ? checked.value : 'instant';
 }
 
+function syncScheduledAtClock() {
+  var dt = document.getElementById('scheduled_at');
+  var hint = document.getElementById('scheduledAtHint');
+  if (!window.vinorAdminTehranDateTimeLocal || !window.vinorAdminTehranParts) return;
+  var minVal = window.vinorAdminTehranDateTimeLocal(null, 1);
+  if (dt) {
+    dt.min = minVal;
+    if (!dt.value) dt.value = window.vinorAdminTehranDateTimeLocal(null, 5);
+  }
+  if (hint) {
+    var p = window.vinorAdminTehranParts();
+    hint.textContent =
+      'الان تهران: ' + p.year + '-' + p.month + '-' + p.day + ' ' + p.hour + ':' + p.minute + ':' + p.second +
+      '  ·  حداقل قابل انتخاب: ' + minVal.replace('T', ' ');
+  }
+}
+
 function syncSendTimingUi() {
   var timing = getSelectedSendTiming();
   var scheduled = document.getElementById('scheduledFields');
   var recurring = document.getElementById('recurringFields');
+  var sendLimitFields = document.getElementById('sendLimitFields');
+  var recurringHint = document.getElementById('sendLimitRecurringHint');
   var btnLabel = document.getElementById('directSendBtnLabel');
-  var count = getSelectedRecipientCount();
+  var count = getEffectiveSendCount();
   if (scheduled) scheduled.classList.toggle('hidden', timing !== 'scheduled');
   if (recurring) recurring.classList.toggle('hidden', timing !== 'recurring');
+  if (sendLimitFields) sendLimitFields.classList.toggle('hidden', timing === 'instant');
+  if (recurringHint) recurringHint.classList.toggle('hidden', timing !== 'recurring');
+  if (timing === 'scheduled') syncScheduledAtClock();
+  syncSendLimitUi();
   if (btnLabel) {
     if (timing === 'scheduled') {
       btnLabel.innerHTML = 'ثبت ارسال زمان‌دار برای ' + count + ' نفر';
     } else if (timing === 'recurring') {
-      btnLabel.innerHTML = 'ثبت ارسال تکرارشونده برای ' + count + ' نفر';
+      btnLabel.innerHTML = 'ثبت ارسال تکرارشونده برای ' + count + ' نفر در هر اجرا';
     } else {
       btnLabel.innerHTML = 'ارسال به <span id="directSendCount">' + count + '</span> نفر';
     }
@@ -452,13 +543,27 @@ function confirmSend() {
   if (timing === 'scheduled') {
     var dt = document.getElementById('scheduled_at');
     if (!dt || !dt.value) {
-      alert('تاریخ و ساعت ارسال را مشخص کنید.');
+      alert('تاریخ و ساعت ارسال را مشخص کنید (وقت تهران — همان ساعت هدر).');
       return false;
     }
-    return confirm('ارسال زمان‌دار برای ' + count + ' نفر از گروه «' + label + '» ثبت شود؟');
+    syncScheduledAtClock();
+    var chosen = window.vinorAdminParseTehranLocal
+      ? window.vinorAdminParseTehranLocal(dt.value)
+      : null;
+    if (!chosen || isNaN(chosen.getTime())) {
+      alert('تاریخ و ساعت نامعتبر است.');
+      return false;
+    }
+    if (chosen.getTime() <= Date.now() + 5000) {
+      alert('زمان ارسال باید بعد از ساعت فعلی تهران (هدر) باشد.');
+      return false;
+    }
+    var batch = getEffectiveSendCount();
+    return confirm('ارسال زمان‌دار برای ' + batch + ' نفر از گروه «' + label + '» ثبت شود؟\n(وقت تهران)');
   }
   if (timing === 'recurring') {
-    return confirm('ارسال تکرارشونده برای ' + count + ' نفر از گروه «' + label + '» ثبت شود؟');
+    var batchR = getEffectiveSendCount();
+    return confirm('ارسال تکرارشونده برای ' + batchR + ' نفر در هر اجرا از گروه «' + label + '» ثبت شود؟');
   }
   return confirm('پیامک به ' + count + ' نفر از گروه «' + label + '» ارسال شود؟');
 }
@@ -482,6 +587,11 @@ function confirmSend() {
     el.addEventListener('change', syncSendTimingUi);
   });
   document.getElementById('recurrence_freq')?.addEventListener('change', syncSendTimingUi);
+  document.getElementById('send_limit')?.addEventListener('input', syncSendTimingUi);
+  syncSendTimingUi();
+  setInterval(function () {
+    if (getSelectedSendTiming() === 'scheduled') syncScheduledAtClock();
+  }, 1000);
 
   document.getElementById('addParamBtn')?.addEventListener('click', function () {
     var container = document.getElementById('paramsContainer');

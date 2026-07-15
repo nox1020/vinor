@@ -2,12 +2,21 @@
 """گروه‌های گیرنده پیامک ادمین — ذخیره و ویرایش دستی."""
 from __future__ import annotations
 
+import json
+import os
+import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.express_partner.new_land_sms import list_approved_express_partners
 from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
-from app.utils.storage import load_express_partners, load_sms_recipient_groups, load_users, save_sms_recipient_groups
+from app.utils.storage import (
+    ensure_file,
+    load_express_partners,
+    load_sms_recipient_groups,
+    load_users,
+    save_sms_recipient_groups,
+)
 
 RECIPIENT_GROUP_APPROVED = "approved"
 RECIPIENT_GROUP_ALL_USERS = "all_users"
@@ -30,6 +39,16 @@ RECIPIENT_GROUP_HINTS: Dict[str, str] = {
     RECIPIENT_GROUP_ALL_USERS: "همهٔ شماره‌های ثبت‌شده در پرتال و کاربران سایت",
     RECIPIENT_GROUP_CUSTOMER_CLUB: "کاربران عادی (غیرهمکار تأییدشده) با شماره معتبر",
 }
+
+# محدودیت آپلود گروهی — حجم بالا مجاز
+MAX_UPLOAD_FILES = 200
+MAX_UPLOAD_BYTES = 80 * 1024 * 1024  # 80MB مجموع فایل‌ها
+MAX_SINGLE_FILE_BYTES = 40 * 1024 * 1024  # 40MB هر فایل
+_COMPACT_SAVE_THRESHOLD = 2500  # بالای این تعداد عضو → JSON فشرده (سریع‌تر)
+
+_FA_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+_PURE_ASCII_PHONE = re.compile(r"^0?9\d{9}$")
+_HAS_NON_ASCII = re.compile(r"[^\x00-\x7f]")
 
 
 def normalize_recipient_group(value: str) -> str:
@@ -72,7 +91,23 @@ def _load_store() -> Dict[str, Any]:
 
 
 def _save_store(data: Dict[str, Any]) -> None:
-    save_sms_recipient_groups(data)
+    """ذخیره اتمی — برای حجم بالا بدون indent تا سرعت و حجم فایل بهتر شود."""
+    member_total = 0
+    groups = data.get("groups") if isinstance(data.get("groups"), dict) else {}
+    for grp in groups.values():
+        if isinstance(grp, dict) and isinstance(grp.get("members"), list):
+            member_total += len(grp["members"])
+
+    if member_total < _COMPACT_SAVE_THRESHOLD:
+        save_sms_recipient_groups(data)
+        return
+
+    path = ensure_file("SMS_RECIPIENT_GROUPS_FILE", "sms_recipient_groups.json", {"groups": {}})
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp, path)
 
 
 def _default_group_block(key: str) -> Dict[str, Any]:
@@ -309,6 +344,283 @@ def export_sms_recipient_phones_txt(group: str) -> str:
     if not lines:
         return ""
     return "\n".join(lines) + "\n"
+
+
+def _fast_ascii_phone(raw: str) -> Optional[str]:
+    """مسیر سریع برای خطوط فقط‌شماره ASCII (عمده آپلودهای حجیم)."""
+    s = raw.strip().replace(" ", "").replace("-", "")
+    if not s or not s[0].isdigit():
+        return None
+    if _PURE_ASCII_PHONE.match(s):
+        return s if len(s) == 11 else ("0" + s)
+    return None
+
+
+def _parse_phone_import_line(raw: str) -> Optional[Dict[str, str]]:
+    """هر خط: شماره، یا «شماره,نام» / «نام,شماره» / جدا با تب."""
+    line = (raw or "").strip().lstrip("\ufeff")
+    if not line or line.startswith("#"):
+        return None
+
+    # مسیر سریع: فقط شماره بدون جداکننده
+    if "," not in line and "\t" not in line:
+        if not _HAS_NON_ASCII.search(line):
+            phone = _fast_ascii_phone(line)
+            if phone and is_valid_iran_mobile(phone):
+                return {"phone": phone, "name": phone, "source": "manual"}
+            return None
+        return _normalize_member(line.translate(_FA_DIGITS), "", "manual")
+
+    name = ""
+    phone_raw = line
+    if "\t" in line:
+        left, right = line.split("\t", 1)
+        left, right = left.strip(), right.strip()
+        na, nb = normalize_iran_mobile(left), normalize_iran_mobile(right)
+        if is_valid_iran_mobile(na):
+            phone_raw, name = left, right
+        elif is_valid_iran_mobile(nb):
+            phone_raw, name = right, left
+        else:
+            phone_raw = left or right
+    elif "," in line:
+        parts = [p.strip() for p in line.split(",") if p.strip()]
+        if len(parts) >= 2:
+            a, b = parts[0], parts[1]
+            na, nb = normalize_iran_mobile(a), normalize_iran_mobile(b)
+            if is_valid_iran_mobile(na):
+                phone_raw, name = a, b
+            elif is_valid_iran_mobile(nb):
+                phone_raw, name = b, a
+            else:
+                phone_raw = a
+        elif parts:
+            phone_raw = parts[0]
+    return _normalize_member(phone_raw, name, "manual")
+
+
+def parse_sms_recipient_phones_text(
+    text: str,
+    *,
+    seen: Optional[set[str]] = None,
+) -> Tuple[List[Dict[str, str]], int, int]:
+    """متن چندخطی → (اعضای معتبر جدید، نامعتبر، تکراری ردشده)."""
+    if seen is None:
+        seen = set()
+    out: List[Dict[str, str]] = []
+    invalid = 0
+    skipped = 0
+    if not text:
+        return out, invalid, skipped
+    # یک‌بار normalize خط‌شکن‌ها
+    if "\r" in text:
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+    for raw in text.split("\n"):
+        if not raw or not raw.strip():
+            continue
+        member = _parse_phone_import_line(raw)
+        if not member:
+            invalid += 1
+            continue
+        phone = member["phone"]
+        if phone in seen:
+            skipped += 1
+            continue
+        seen.add(phone)
+        out.append(member)
+    return out, invalid, skipped
+
+
+def import_sms_recipient_phones(
+    group: str,
+    text: str,
+    *,
+    replace: bool = False,
+) -> Dict[str, int]:
+    """ورود شماره از متن/فایل .txt به گروه. replace=True لیست را عوض می‌کند."""
+    key = normalize_recipient_group(group)
+    ensure_sms_recipient_groups_initialized()
+    data = _load_store()
+    grp = data["groups"].setdefault(key, _default_group_block(key))
+    members = grp.setdefault("members", [])
+    if not isinstance(members, list):
+        members = []
+        grp["members"] = members
+
+    added = 0
+    updated = 0
+    if replace:
+        parsed, invalid, skipped = parse_sms_recipient_phones_text(text)
+        grp["members"] = parsed
+        added = len(parsed)
+        grp["updated_at"] = _now_iso()
+        _save_store(data)
+        return {
+            "added": added,
+            "updated": 0,
+            "skipped": skipped,
+            "invalid": invalid,
+            "total": len(parsed),
+            "files": 0,
+        }
+
+    by_phone: Dict[str, Dict[str, Any]] = {}
+    for item in members:
+        if not isinstance(item, dict):
+            continue
+        ph = str(item.get("phone") or "").strip()
+        if len(ph) == 11 and ph.startswith("09"):
+            by_phone[ph] = item
+        else:
+            ph_n = normalize_iran_mobile(ph)
+            if is_valid_iran_mobile(ph_n):
+                by_phone[ph_n] = item
+
+    parsed, invalid, skipped = parse_sms_recipient_phones_text(text)
+
+    for member in parsed:
+        phone = member["phone"]
+        existing = by_phone.get(phone)
+        if existing is None:
+            members.append(member)
+            by_phone[phone] = member
+            added += 1
+        else:
+            new_name = member["name"]
+            if new_name and new_name != phone and new_name != str(existing.get("name") or ""):
+                existing["name"] = new_name
+                updated += 1
+            else:
+                skipped += 1
+            existing["source"] = "manual"
+
+    grp["updated_at"] = _now_iso()
+    _save_store(data)
+    return {
+        "added": added,
+        "updated": updated,
+        "skipped": skipped,
+        "invalid": invalid,
+        "total": len(by_phone),
+        "files": 0,
+    }
+
+
+def _decode_upload_bytes(raw: bytes) -> str:
+    if not raw:
+        return ""
+    if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
+        try:
+            return raw.decode("utf-16")
+        except UnicodeDecodeError:
+            pass
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            return raw.decode("cp1256", errors="ignore")
+        except Exception:
+            return raw.decode("latin1", errors="ignore")
+
+
+def read_phones_upload_text(upload: Any) -> Optional[str]:
+    """خواندن متن فایل آپلود (.txt) — UTF-8 / UTF-16 / cp1256."""
+    if not upload or not getattr(upload, "filename", None):
+        return None
+    try:
+        raw = upload.read()
+    except Exception:
+        return None
+    if isinstance(raw, bytes):
+        return _decode_upload_bytes(raw)
+    return str(raw or "")
+
+
+def _upload_content_length(upload: Any) -> int:
+    try:
+        pos = upload.tell()
+        upload.seek(0, os.SEEK_END)
+        size = int(upload.tell() or 0)
+        upload.seek(pos)
+        return size
+    except Exception:
+        try:
+            data = upload.read()
+            size = len(data) if data else 0
+            if hasattr(upload, "seek"):
+                upload.seek(0)
+            return size
+        except Exception:
+            return 0
+
+
+def read_phones_upload_files(
+    uploads: Any,
+) -> Tuple[str, List[str], List[str], Dict[str, Any]]:
+    """چند فایل .txt → (متن ترکیبی، OK، ناموفق، متا).
+
+    محدودیت‌ها: تعداد فایل، حجم هر فایل، حجم کل.
+    """
+    parts: List[str] = []
+    ok_names: List[str] = []
+    failed_names: List[str] = []
+    meta: Dict[str, Any] = {
+        "bytes_read": 0,
+        "file_count": 0,
+        "error": None,
+    }
+    items = uploads if isinstance(uploads, list) else ([uploads] if uploads else [])
+    # فقط فایل‌های دارای نام
+    named = [u for u in items if getattr(u, "filename", None)]
+    if len(named) > MAX_UPLOAD_FILES:
+        meta["error"] = f"حداکثر {MAX_UPLOAD_FILES} فایل در هر آپلود مجاز است."
+        return "", [], [], meta
+
+    total_bytes = 0
+    for upload in named:
+        name = upload.filename or "file"
+        size = _upload_content_length(upload)
+        if size > MAX_SINGLE_FILE_BYTES:
+            failed_names.append(f"{name} (حجم بیش از {MAX_SINGLE_FILE_BYTES // (1024 * 1024)}MB)")
+            continue
+        if total_bytes + size > MAX_UPLOAD_BYTES:
+            meta["error"] = (
+                f"حجم کل فایل‌ها از {MAX_UPLOAD_BYTES // (1024 * 1024)}MB بیشتر است. "
+                "فایل‌ها را چند بخش آپلود کنید."
+            )
+            break
+        text = read_phones_upload_text(upload)
+        if text is None:
+            failed_names.append(name)
+            continue
+        # حتی فایل خالی هم ممکن است whitespace داشته باشد
+        stripped = text.strip()
+        if not stripped:
+            failed_names.append(f"{name} (خالی)")
+            continue
+        parts.append(stripped)
+        ok_names.append(name)
+        total_bytes += size if size > 0 else len(text.encode("utf-8", errors="ignore"))
+
+    meta["bytes_read"] = total_bytes
+    meta["file_count"] = len(ok_names)
+    combined = "\n".join(parts)
+    return combined, ok_names, failed_names, meta
+
+
+def format_import_result_message(label: str, result: Dict[str, int], *, replace: bool) -> str:
+    if replace:
+        msg = f"«{label}»: جایگزینی با {result['added']} شماره معتبر"
+    else:
+        msg = f"«{label}»: {result['added']} افزوده"
+        if result.get("updated"):
+            msg += f"، {result['updated']} به‌روز"
+    if result.get("skipped"):
+        msg += f"، {result['skipped']} تکراری"
+    if result.get("invalid"):
+        msg += f"، {result['invalid']} نامعتبر"
+    msg += f" — جمع {result['total']} عضو"
+    return msg
 
 
 def get_saved_recipient_group() -> str:

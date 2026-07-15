@@ -3,11 +3,11 @@
 {% block page_title %}گیرندگان پیامک{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-4">
+<div class="max-w-3xl mx-auto space-y-4">
 
   <div class="flex items-center justify-between gap-3">
     <p class="text-sm text-gray-500 dark:text-gray-400">
-      هر گروه را می‌توانید ویرایش، عضو اضافه/حذف یا از سیستم همگام کنید.
+      آپلود چند فایل .txt با حجم بالا (تا {{ max_upload_mb }}MB / {{ max_upload_files }} فایل) برای هر گروه.
     </p>
     <a href="{{ url_for('admin.sms_colleagues') }}"
        class="shrink-0 text-xs text-blue-600 dark:text-blue-400 hover:underline">
@@ -15,24 +15,28 @@
     </a>
   </div>
 
+  <div id="bulkUploadToast" class="hidden rounded-lg border px-3 py-2 text-sm" role="status"></div>
+
   <div class="grid grid-cols-1 gap-3">
     {% for item in groups %}
-    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4"
+         data-group-card="{{ item.key }}">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <h2 class="text-sm font-semibold text-gray-900 dark:text-white">{{ item.label }}</h2>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">{{ item.hint }}</p>
           {% if item.updated_at %}
-          <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
+          <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-2" data-updated-at>
             آخرین ویرایش: {{ item.updated_at[:16]|replace('T', ' ') }}
           </p>
           {% endif %}
         </div>
         <div class="text-left shrink-0">
-          <span class="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{{ item.count }}</span>
+          <span class="text-2xl font-bold text-gray-900 dark:text-white tabular-nums" data-member-count>{{ item.count }}</span>
           <p class="text-[11px] text-gray-500 dark:text-gray-400">عضو</p>
         </div>
       </div>
+
       <div class="mt-3 flex flex-wrap items-center gap-2">
         <a href="{{ url_for('admin.sms_recipients_edit', group_key=item.key) }}"
            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition">
@@ -41,14 +45,265 @@
         </a>
         <a href="{{ url_for('admin.sms_recipients_phones_txt', group_key=item.key) }}"
            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+           data-download-btn
            {% if not item.count %}aria-disabled="true" tabindex="-1" onclick="return false;" style="opacity:0.45;pointer-events:none;"{% endif %}>
           <i class="fa-solid fa-download text-[10px]"></i>
           دانلود .txt
         </a>
       </div>
+
+      <form method="post"
+            action="{{ url_for('admin.sms_recipients_upload', group_key=item.key) }}"
+            enctype="multipart/form-data"
+            class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 space-y-2"
+            data-bulk-upload-form
+            data-group-key="{{ item.key }}"
+            data-group-label="{{ item.label }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="ajax" value="1">
+        <p class="text-[11px] text-gray-500 dark:text-gray-400">
+          چند فایل .txt را انتخاب یا اینجا بکشید — شماره‌ها ادغام و تکراری‌ها حذف می‌شوند.
+          هر خط یک موبایل (اختیاری: <span class="font-mono ltr" dir="ltr">0912…,نام</span>)
+        </p>
+
+        <div data-drop-zone
+             class="rounded-lg border-2 border-dashed border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20 px-3 py-4 text-center transition">
+          <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-medium hover:bg-emerald-50 dark:hover:bg-emerald-950/30 cursor-pointer transition">
+            <i class="fa-solid fa-upload text-[10px]"></i>
+            انتخاب فایل‌ها
+            <input type="file"
+                   name="phones_files"
+                   accept=".txt,.csv,text/plain"
+                   multiple
+                   class="sr-only"
+                   data-file-input>
+          </label>
+          <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-2">یا فایل‌ها را بکشید و رها کنید</p>
+          <p data-file-name class="text-[11px] text-gray-400 dark:text-gray-500 mt-1 leading-relaxed">فایلی انتخاب نشده</p>
+        </div>
+
+        <div data-progress-wrap class="hidden space-y-1">
+          <div class="flex justify-between text-[11px] text-gray-500 dark:text-gray-400">
+            <span data-progress-label>در حال آپلود…</span>
+            <span data-progress-pct>0%</span>
+          </div>
+          <div class="h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+            <div data-progress-bar class="h-full w-0 bg-emerald-500 transition-[width] duration-150"></div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="submit"
+                  data-submit-btn
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-medium transition">
+            آپلود به گروه
+          </button>
+          <label class="inline-flex items-center gap-2 text-[11px] text-gray-600 dark:text-gray-400 cursor-pointer">
+            <input type="checkbox" name="replace" value="1"
+                   class="rounded border-gray-300 text-rose-600 focus:ring-rose-500">
+            جایگزینی کامل لیست
+          </label>
+        </div>
+      </form>
     </div>
     {% endfor %}
   </div>
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var MAX_MB = {{ max_upload_mb|int }};
+  var MAX_FILES = {{ max_upload_files|int }};
+  var MAX_BYTES = MAX_MB * 1024 * 1024;
+
+  function toast(msg, ok) {
+    var el = document.getElementById('bulkUploadToast');
+    if (!el) return;
+    el.classList.remove('hidden', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-800', 'dark:bg-emerald-950/40', 'dark:text-emerald-200', 'border-rose-200', 'bg-rose-50', 'text-rose-800', 'dark:bg-rose-950/40', 'dark:text-rose-200');
+    if (ok) {
+      el.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-800', 'dark:bg-emerald-950/40', 'dark:text-emerald-200');
+    } else {
+      el.classList.add('border-rose-200', 'bg-rose-50', 'text-rose-800', 'dark:bg-rose-950/40', 'dark:text-rose-200');
+    }
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function formatBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function updateFileList(form) {
+    var input = form.querySelector('[data-file-input]');
+    var el = form.querySelector('[data-file-name]');
+    if (!input || !el) return;
+    var files = input.files;
+    if (!files || !files.length) {
+      el.textContent = 'فایلی انتخاب نشده';
+      return;
+    }
+    var total = 0;
+    var names = [];
+    for (var i = 0; i < files.length; i++) {
+      total += files[i].size || 0;
+      if (i < 6) names.push(files[i].name);
+    }
+    var more = files.length > 6 ? ' و ' + (files.length - 6) + ' فایل دیگر' : '';
+    el.textContent = files.length + ' فایل (' + formatBytes(total) + '): ' + names.join('، ') + more;
+  }
+
+  function setProgress(form, pct, label) {
+    var wrap = form.querySelector('[data-progress-wrap]');
+    var bar = form.querySelector('[data-progress-bar]');
+    var pctEl = form.querySelector('[data-progress-pct]');
+    var lab = form.querySelector('[data-progress-label]');
+    if (wrap) wrap.classList.remove('hidden');
+    if (bar) bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    if (pctEl) pctEl.textContent = Math.round(pct) + '%';
+    if (lab && label) lab.textContent = label;
+  }
+
+  function hideProgress(form) {
+    var wrap = form.querySelector('[data-progress-wrap]');
+    if (wrap) wrap.classList.add('hidden');
+  }
+
+  function validateFiles(files) {
+    if (!files || !files.length) return 'حداقل یک فایل .txt انتخاب کنید.';
+    if (files.length > MAX_FILES) return 'حداکثر ' + MAX_FILES + ' فایل مجاز است.';
+    var total = 0;
+    for (var i = 0; i < files.length; i++) {
+      total += files[i].size || 0;
+    }
+    if (total > MAX_BYTES) {
+      return 'حجم کل فایل‌ها از ' + MAX_MB + 'MB بیشتر است. فایل‌ها را چند بخش آپلود کنید.';
+    }
+    return null;
+  }
+
+  document.querySelectorAll('[data-bulk-upload-form]').forEach(function (form) {
+    var input = form.querySelector('[data-file-input]');
+    var zone = form.querySelector('[data-drop-zone]');
+    var btn = form.querySelector('[data-submit-btn]');
+
+    if (input) {
+      input.addEventListener('change', function () { updateFileList(form); });
+    }
+
+    if (zone && input) {
+      ['dragenter', 'dragover'].forEach(function (ev) {
+        zone.addEventListener(ev, function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          zone.classList.add('border-emerald-500', 'bg-emerald-100/50', 'dark:bg-emerald-900/30');
+        });
+      });
+      ['dragleave', 'drop'].forEach(function (ev) {
+        zone.addEventListener(ev, function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          zone.classList.remove('border-emerald-500', 'bg-emerald-100/50', 'dark:bg-emerald-900/30');
+        });
+      });
+      zone.addEventListener('drop', function (e) {
+        var dt = e.dataTransfer;
+        if (!dt || !dt.files || !dt.files.length) return;
+        try {
+          var transfer = new DataTransfer();
+          for (var i = 0; i < dt.files.length; i++) {
+            transfer.items.add(dt.files[i]);
+          }
+          input.files = transfer.files;
+        } catch (err) {
+          try { input.files = dt.files; } catch (err2) {}
+        }
+        updateFileList(form);
+      });
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var files = input && input.files;
+      var err = validateFiles(files);
+      if (err) {
+        toast(err, false);
+        return;
+      }
+
+      var fd = new FormData(form);
+      fd.set('ajax', '1');
+
+      if (btn) btn.disabled = true;
+      setProgress(form, 5, 'ارسال فایل‌ها…');
+
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', form.action);
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.setRequestHeader('Accept', 'application/json');
+
+      xhr.upload.onprogress = function (ev) {
+        if (!ev.lengthComputable) {
+          setProgress(form, 35, 'در حال آپلود…');
+          return;
+        }
+        var pct = Math.min(90, Math.round((ev.loaded / ev.total) * 90));
+        setProgress(form, pct, 'آپلود ' + formatBytes(ev.loaded) + ' از ' + formatBytes(ev.total));
+      };
+
+      xhr.upload.onload = function () {
+        setProgress(form, 92, 'پردازش شماره‌ها…');
+      };
+
+      xhr.onerror = function () {
+        if (btn) btn.disabled = false;
+        hideProgress(form);
+        toast('خطا در ارتباط با سرور.', false);
+      };
+
+      xhr.onload = function () {
+        if (btn) btn.disabled = false;
+        var data = null;
+        try { data = JSON.parse(xhr.responseText || '{}'); } catch (err) { data = null; }
+
+        if (xhr.status >= 200 && xhr.status < 300 && data && data.ok) {
+          setProgress(form, 100, 'تمام');
+          toast(data.message || 'آپلود موفق بود.', true);
+          var card = form.closest('[data-group-card]');
+          if (card && data.result) {
+            var countEl = card.querySelector('[data-member-count]');
+            if (countEl) countEl.textContent = String(data.result.total || 0);
+            var dl = card.querySelector('[data-download-btn]');
+            if (dl && data.result.total > 0) {
+              dl.style.opacity = '';
+              dl.style.pointerEvents = '';
+              dl.removeAttribute('aria-disabled');
+              dl.removeAttribute('tabindex');
+              dl.onclick = null;
+            }
+          }
+          if (input) input.value = '';
+          updateFileList(form);
+          setTimeout(function () { hideProgress(form); }, 900);
+          return;
+        }
+
+        hideProgress(form);
+        var msg = (data && (data.error || data.message)) || ('خطا در آپلود (کد ' + xhr.status + ')');
+        if (xhr.status === 413) {
+          msg = 'حجم درخواست بیش از حد مجاز سرور است. فایل‌ها را چند بخش آپلود کنید.';
+        }
+        toast(msg, false);
+      };
+
+      xhr.send(fd);
+    });
+  });
+})();
+</script>
 {% endblock %}

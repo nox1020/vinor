@@ -129,9 +129,14 @@
           {% block page_title %}پنل همکاران{% endblock %}
         </h1>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <time id="adminTehranClock"
+              class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap text-left max-w-[10.5rem] sm:max-w-none truncate sm:overflow-visible"
+              dir="ltr"
+              title="تاریخ و ساعت به وقت تهران"
+              aria-live="polite">—</time>
         <button @click="darkMode = !darkMode; localStorage.setItem('theme', darkMode ? 'dark' : 'light')" 
-                class="focusable p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">
+                class="focusable p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 shrink-0">
           <i class="fa-solid" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
         </button>
       </div>
@@ -429,6 +434,78 @@
       } else {
         window.vinorAdminFormatJalaliDt();
       }
+
+      /** Parts of «now» in Asia/Tehran (same clock as header). */
+      window.vinorAdminTehranParts = function (d) {
+        var now = d || new Date();
+        var parts = {};
+        try {
+          var fmt = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Tehran',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23',
+          });
+          fmt.formatToParts(now).forEach(function (p) {
+            if (p.type !== 'literal') parts[p.type] = p.value;
+          });
+        } catch (e) {
+          parts = {};
+        }
+        var hour = String(parts.hour || '00');
+        if (hour === '24') hour = '00';
+        return {
+          year: String(parts.year || '0000'),
+          month: String(parts.month || '01').padStart(2, '0'),
+          day: String(parts.day || '01').padStart(2, '0'),
+          hour: hour.padStart(2, '0'),
+          minute: String(parts.minute || '00').padStart(2, '0'),
+          second: String(parts.second || '00').padStart(2, '0'),
+        };
+      };
+      /** Value for <input type="datetime-local"> in Tehran wall time. */
+      window.vinorAdminTehranDateTimeLocal = function (d, addMinutes) {
+        var base = d ? new Date(d.getTime()) : new Date();
+        if (addMinutes) base = new Date(base.getTime() + addMinutes * 60000);
+        var p = window.vinorAdminTehranParts(base);
+        return p.year + '-' + p.month + '-' + p.day + 'T' + p.hour + ':' + p.minute;
+      };
+      /** Parse datetime-local as Tehran wall time → comparable Date (UTC ms). */
+      window.vinorAdminParseTehranLocal = function (value) {
+        var raw = String(value || '').trim().replace(' ', 'T');
+        if (!raw) return null;
+        var m = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+        if (!m) return null;
+        var y = +m[1], mo = +m[2], d = +m[3], h = +m[4], mi = +m[5], s = +(m[6] || 0);
+        var guessUtc = Date.UTC(y, mo - 1, d, h, mi, s);
+        var asIf = new Date(guessUtc);
+        var p = window.vinorAdminTehranParts(asIf);
+        var shownAsUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+        var offsetMs = shownAsUtc - guessUtc;
+        return new Date(guessUtc - offsetMs);
+      };
+
+      function updateAdminTehranClock() {
+        var el = document.getElementById('adminTehranClock');
+        if (!el) return;
+        var now = new Date();
+        var narrow = window.matchMedia && window.matchMedia('(max-width: 639px)').matches;
+        var datePart = now.toLocaleDateString('fa-IR', narrow
+          ? { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }
+          : { timeZone: 'Asia/Tehran', weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit' }
+        );
+        var timePart = now.toLocaleTimeString('fa-IR', narrow
+          ? { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hour12: false }
+          : { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }
+        );
+        el.textContent = datePart + ' · ' + timePart;
+      }
+      updateAdminTehranClock();
+      setInterval(updateAdminTehranClock, 1000);
     })();
   </script>
 

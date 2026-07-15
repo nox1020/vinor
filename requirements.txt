@@ -28,6 +28,7 @@ requests==2.32.3
 six==1.17.0
 SQLAlchemy==2.0.23
 typing_extensions==4.15.0
+tzdata>=2024.1
 urllib3==2.5.0
 werkzeug==2.3.7
 WTForms==3.0.1

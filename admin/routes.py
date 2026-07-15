@@ -66,13 +66,18 @@ from admin.people_directory import (
 from admin.sms_recipients import (
     RECIPIENT_GROUP_LABELS,
     RECIPIENT_GROUP_HINTS,
+    MAX_UPLOAD_BYTES,
+    MAX_UPLOAD_FILES,
     add_sms_recipient_member,
     ensure_sms_recipient_groups_initialized,
     export_sms_recipient_phones_txt,
+    format_import_result_message,
     get_sms_recipient_group_detail,
+    import_sms_recipient_phones,
     list_sms_recipient_groups_summary,
     load_sms_recipients,
     normalize_recipient_group,
+    read_phones_upload_files,
     recipient_group_counts,
     recipient_group_label,
     remove_sms_recipient_member,
@@ -89,8 +94,10 @@ from admin.sms_scheduled import (
     SEND_TIMING_SCHEDULED,
     cancel_scheduled_job,
     create_scheduled_job,
+    format_tehran_iso_display,
     list_active_scheduled_jobs,
     recurrence_summary,
+    send_batch_summary,
     send_direct_to_recipients,
 )
 from app.utils.storage import (
@@ -1796,7 +1803,79 @@ def sms_recipients():
     return render_template(
         'admin/sms_recipients_index.html',
         groups=list_sms_recipient_groups_summary(),
+        max_upload_mb=MAX_UPLOAD_BYTES // (1024 * 1024),
+        max_upload_files=MAX_UPLOAD_FILES,
     )
+
+
+@admin_bp.route('/sms/recipients/<group_key>/upload', methods=['POST'])
+@login_required
+def sms_recipients_upload(group_key):
+    """آپلود یک یا چند فایل .txt به یک گروه — پشتیبانی حجم بالا و پاسخ JSON."""
+    from flask import flash
+
+    key = normalize_recipient_group(group_key)
+    label = recipient_group_label(key)
+    replace = (request.form.get('replace') or '').strip() in ('1', 'on', 'true', 'yes')
+    text = (request.form.get('phones_text') or '').strip()
+    want_json = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or (request.accept_mimetypes.best and 'application/json' in str(request.accept_mimetypes))
+        or (request.form.get('ajax') or '').strip() == '1'
+    )
+
+    def _respond(payload: dict, *, status: int = 200, flash_cat: str | None = None):
+        if want_json:
+            return jsonify(payload), status
+        if flash_cat and payload.get('message'):
+            flash(payload['message'], flash_cat)
+        if payload.get('error') and flash_cat != 'error':
+            flash(payload['error'], 'error')
+        return redirect(url_for('admin.sms_recipients'))
+
+    uploads = request.files.getlist('phones_files')
+    if not any(getattr(u, 'filename', None) for u in uploads):
+        legacy = request.files.get('phones_file')
+        uploads = [legacy] if legacy and getattr(legacy, 'filename', None) else []
+
+    file_text, ok_files, bad_files, meta = read_phones_upload_files(uploads)
+    if meta.get('error'):
+        return _respond({'ok': False, 'error': meta['error'], 'message': meta['error']}, status=400, flash_cat='error')
+
+    if file_text:
+        text = ((text + '\n') if text else '') + file_text
+    elif any(getattr(u, 'filename', None) for u in uploads):
+        err = 'خواندن فایل(های) آپلود ممکن نشد.'
+        if bad_files:
+            err += ' ' + '، '.join(bad_files[:5])
+        return _respond({'ok': False, 'error': err, 'message': err}, status=400, flash_cat='error')
+
+    if not (text or '').strip():
+        err = 'حداقل یک فایل .txt یا متن شماره وارد کنید.'
+        return _respond({'ok': False, 'error': err, 'message': err}, status=400, flash_cat='error')
+
+    result = import_sms_recipient_phones(key, text, replace=replace)
+    result['files'] = len(ok_files)
+    result['bytes_read'] = int(meta.get('bytes_read') or 0)
+    msg = format_import_result_message(label, result, replace=replace)
+    if ok_files:
+        files_note = f'{len(ok_files)} فایل'
+        if len(ok_files) <= 4:
+            files_note += ': ' + '، '.join(ok_files)
+        msg = files_note + ' — ' + msg
+
+    payload = {
+        'ok': True,
+        'message': msg,
+        'label': label,
+        'group': key,
+        'result': result,
+        'ok_files': ok_files,
+        'bad_files': bad_files,
+    }
+    if bad_files and not want_json:
+        flash('خوانده نشد: ' + '، '.join(bad_files[:8]), 'error')
+    return _respond(payload, flash_cat='success')
 
 
 @admin_bp.route('/sms/recipients/<group_key>/phones.txt', methods=['GET'])
@@ -1904,6 +1983,7 @@ def sms_colleagues():
     form_recurrence_time = '09:00'
     form_recurrence_weekday = 5
     form_recurrence_day = 1
+    form_send_limit = ''
 
     if request.method == 'POST':
         action = (request.form.get('action') or '').strip()
@@ -1947,6 +2027,7 @@ def sms_colleagues():
                     form_recurrence_day = int(request.form.get('recurrence_day') or 1)
                 except ValueError:
                     form_recurrence_day = 1
+                form_send_limit = (request.form.get('send_limit') or '').strip()
 
                 if not form_direct_message:
                     error = 'متن پیامک الزامی است.'
@@ -1976,18 +2057,23 @@ def sms_colleagues():
                         recurrence_time=form_recurrence_time,
                         recurrence_weekday=form_recurrence_weekday,
                         recurrence_day=form_recurrence_day,
+                        send_limit=form_send_limit or None,
                     )
                     if job_error:
                         error = job_error
                     else:
-                        next_at = (job.get('next_run_at') or '')[:16].replace('T', ' ')
+                        next_at = format_tehran_iso_display(job.get('next_run_at'))
+                        batch_label = send_batch_summary(job)
                         if form_send_timing == SEND_TIMING_RECURRING:
                             message = (
-                                f'ارسال تکرارشونده ثبت شد ({recurrence_summary(job)}). '
+                                f'ارسال تکرارشونده ثبت شد ({recurrence_summary(job)} — {batch_label} — وقت تهران). '
                                 f'اجرای بعدی: {next_at}'
                             )
                         else:
-                            message = f'ارسال زمان‌دار ثبت شد. زمان اجرا: {next_at}'
+                            message = (
+                                f'ارسال زمان‌دار ثبت شد ({batch_label} — وقت تهران). '
+                                f'زمان اجرا: {next_at}'
+                            )
                         form_direct_message = ''
                 else:
                     error = 'نوع زمان‌بندی نامعتبر است.'
@@ -2137,6 +2223,7 @@ def sms_colleagues():
         form_recurrence_time=form_recurrence_time,
         form_recurrence_weekday=form_recurrence_weekday,
         form_recurrence_day=form_recurrence_day,
+        form_send_limit=form_send_limit,
         scheduled_jobs=scheduled_jobs,
         history=paginated_history,
         history_stats=history_stats,

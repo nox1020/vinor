@@ -64,11 +64,12 @@ def is_ad_expired(ad: dict) -> bool:
 
 
 def tehran_now() -> datetime:
+    """الان به وقت تهران — همیشه timezone-aware (+03:30 اگر zoneinfo/tzdata نباشد)."""
     try:
         from zoneinfo import ZoneInfo
         return datetime.now(ZoneInfo("Asia/Tehran"))
     except Exception:
-        return datetime.utcnow() + timedelta(hours=3, minutes=30)
+        return datetime.now(timezone(timedelta(hours=3, minutes=30)))
 
 
 def tehran_today() -> date:
@@ -255,19 +256,27 @@ def format_display_jalali_date(iso_or_any: str, *, with_weekday: bool = False) -
 
 def format_display_jalali_datetime(value: Union[str, datetime, None] = None) -> str:
     """تاریخ+ساعت شمسی به وقت تهران — برای نمایش دقیق."""
+    tehran_tz = timezone(timedelta(hours=3, minutes=30))
+    try:
+        from zoneinfo import ZoneInfo
+        tehran_tz = ZoneInfo("Asia/Tehran")
+    except Exception:
+        pass
+
+    def _as_tehran(dt: datetime) -> datetime:
+        if dt.tzinfo is None:
+            # naive را زمان دیوار تهران فرض می‌کنیم (نه UTC)
+            return dt.replace(tzinfo=tehran_tz)
+        return dt.astimezone(tehran_tz)
+
     if value is None:
         dt = tehran_now()
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=tehran_tz)
+        else:
+            dt = dt.astimezone(tehran_tz)
     elif isinstance(value, datetime):
-        dt = value
-        try:
-            from zoneinfo import ZoneInfo
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo("Asia/Tehran"))
-            else:
-                dt = dt.astimezone(ZoneInfo("Asia/Tehran"))
-        except Exception:
-            if dt.tzinfo is None:
-                dt = dt + timedelta(hours=3, minutes=30)
+        dt = _as_tehran(value)
     else:
         s = str(value).strip()
         if not s:
@@ -276,15 +285,10 @@ def format_display_jalali_datetime(value: Union[str, datetime, None] = None) -> 
         if len(s) <= 10 or ("T" not in s and " " not in s and len(to_en_digits(s)) <= 10):
             return format_display_jalali_date(s)
         try:
-            from zoneinfo import ZoneInfo
             iso_candidate = s[:-1] + "+00:00" if s.endswith("Z") else s
             if " " in s and "T" not in s:
                 iso_candidate = s.replace(" ", "T", 1)
-            dt = datetime.fromisoformat(iso_candidate)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo("Asia/Tehran"))
-            else:
-                dt = dt.astimezone(ZoneInfo("Asia/Tehran"))
+            dt = _as_tehran(datetime.fromisoformat(iso_candidate))
         except Exception:
             return format_display_jalali_date(s[:10])
     jy, jm, jd = gregorian_to_jalali(dt.year, dt.month, dt.day)
