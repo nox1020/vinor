@@ -84,6 +84,7 @@
 
   /* پیل ورودی */
   .ai-composer--gpt .ai-composer__shell {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.35rem;
@@ -100,6 +101,43 @@
     background: var(--gpt-shell-hover);
     box-shadow: none;
     border-color: transparent;
+  }
+
+  /* راهنمای تایپی — یک خط؛ با جا شدن از عرض، ابتدای متن بیرون می‌رود */
+  .ai-composer--gpt .ai-composer__type-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+    z-index: 2;
+    box-sizing: border-box;
+  }
+  .ai-composer--gpt .ai-composer__type-hint[hidden] {
+    display: none !important;
+  }
+  .ai-composer--gpt .ai-composer__type-hint-clip {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    direction: ltr;
+    text-align: left;
+  }
+  .ai-composer--gpt .ai-composer__type-hint-text {
+    display: inline-block;
+    white-space: nowrap;
+    color: var(--gpt-muted);
+    font-size: 0.95rem;
+    line-height: 1.45;
+    vertical-align: middle;
+    will-change: transform;
+    unicode-bidi: plaintext;
+  }
+  .ai-composer--gpt.ai-composer--ready .ai-composer__type-hint {
+    display: none !important;
   }
 
   .ai-composer--gpt .ai-composer__plus,
@@ -127,6 +165,8 @@
   }
 
   .ai-composer--gpt .ai-composer__input {
+    position: relative;
+    z-index: 3;
     flex: 1;
     min-width: 0;
     min-height: 1.55rem;
@@ -252,8 +292,13 @@
         </svg>
       </button>
       <label for="aiInput" class="sr-only">پیام</label>
+      <div class="ai-composer__type-hint" data-ai-type-hint hidden aria-hidden="true">
+        <div class="ai-composer__type-hint-clip">
+          <span class="ai-composer__type-hint-text" data-ai-type-hint-text></span>
+        </div>
+      </div>
       <textarea id="aiInput" name="message" rows="1" required
-                placeholder="{% if home_ai_limited|default(false) %}از وینور بپرسید{% else %}از وینور بپرسید{% endif %}"
+                placeholder=""
                 class="ai-composer__input"
                 enterkeyhint="send"></textarea>
       <div class="ai-composer__tools" aria-hidden="false">

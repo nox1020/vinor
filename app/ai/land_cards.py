@@ -145,12 +145,13 @@ def render_land_cards_html(
                 is_approved=show_commission,
                 tour_land_card=False,
                 for_ai_chat=True,
+                card_layout="horizontal",
             )
         )
     wrapper = (
-        '<div class="ai-land-cards mt-2.5 flex w-full max-w-full flex-col gap-2.5">'
+        '<div class="ai-land-cards no-scrollbar" role="list" aria-label="فایل‌های پیشنهادی">'
         + "".join(
-            '<div class="vinor-dash-card-slot w-full max-w-full shrink-0">'
+            '<div class="ai-land-cards__slot vinor-dash-card-slot" role="listitem">'
             + p
             + "</div>"
             for p in parts
@@ -181,12 +182,13 @@ def land_cards_payload(
             is_approved=show_commission,
             tour_land_card=False,
             for_ai_chat=True,
+            card_layout="horizontal",
         )
         payload.append(
             {
                 "code": code,
                 "html": (
-                    '<div class="vinor-dash-card-slot w-full max-w-full shrink-0">'
+                    '<div class="ai-land-cards__slot vinor-dash-card-slot" role="listitem">'
                     + html
                     + "</div>"
                 ),

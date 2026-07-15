@@ -109,9 +109,13 @@
   #homeDashboardPage.home-dashboard-page--ai .vinor-apk-strip-host:not(:has([data-apk-strip])) {
     display: none;
   }
+  /* وقتی پیشنهادهای خالی‌چت بازند، بنر APK جمع شود تا روی پیشنهادها نیفتد */
+  #homeDashboardPage.home-dashboard-page--ai .vn-home-composer-dock:has([data-ai-chip-bar]:not([hidden])) .vinor-apk-strip-host {
+    display: none !important;
+  }
   #homeDashboardPage.home-dashboard-page--ai .vinor-apk-strip-host .vinor-apk-download-strip {
     display: flex;
-    margin: 0 0.75rem;
+    margin: 0 0.75rem 0.15rem;
     pointer-events: auto;
   }
   #homeDashboardPage.home-dashboard-page--ai .vn-home-composer-dock > #aiChatForm.ai-composer,
@@ -140,7 +144,7 @@
     pointer-events: auto;
   }
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__suggestions {
-    margin-bottom: 0.45rem;
+    margin-bottom: 0.55rem;
   }
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__suggestions[hidden] {
     display: none !important;

@@ -51,7 +51,7 @@
   var postchiSendUrl = form.getAttribute('data-postchi-send-url') || '';
   var postchiOpenUrl = form.getAttribute('data-postchi-open-url') || '';
   var menuUnreadDot = document.getElementById('aiMenuUnreadDot');
-  var welcome = list.getAttribute('data-welcome') || 'سلام — منم کنارتم. بگو چی لازم داری.';
+  var welcome = list.getAttribute('data-welcome') || 'سلام، چطور می‌تونم کمکتون کنم؟';
   var historyAbort = null;
   var switchAbort = null;
   var syncAbort = null;
@@ -274,8 +274,12 @@
     if (messageSeen(msg)) return Promise.resolve(null);
 
     var text = (msg.content || '').trim();
-    var cardsHtml = buildCardsHtml(msg);
-    if (!text && !cardsHtml) return Promise.resolve(null);
+    /* land_cards را موقع پایان تایپ اعمال کن تا آرایش نوار با جواب هم‌زمان عوض شود */
+    var cardsHtml = buildCardsHtml(msg, { skipLands: true });
+    var hasLands =
+      (msg.land_cards && msg.land_cards.length) ||
+      (msg.cards_html && /ai-land-cards/.test(String(msg.cards_html)));
+    if (!text && !cardsHtml && !hasLands) return Promise.resolve(null);
 
     cancelTypewriter();
     removeThinking();
@@ -338,6 +342,19 @@
             }
           }
         }
+        routeLandCardsToHome(msg);
+        if (msg.cards_html) {
+          var strippedLands = stripLandCardsFromHtml(msg.cards_html);
+          if (strippedLands.landCards.length) {
+            try {
+              if (typeof window.vinorApplyHomeLandCards === 'function') {
+                window.vinorApplyHomeLandCards(strippedLands.landCards, {
+                  label: 'پیشنهاد فایل',
+                });
+              }
+            } catch (_) {}
+          }
+        }
         wireCopyBlocks(wrap);
         ensureMsgActions(wrap);
         scrollChatToEnd();
@@ -374,12 +391,19 @@
     var msgs = serverMessages || [];
     var lastUser = null;
     var lastAsst = null;
+    var routedLands = false;
     for (var i = msgs.length - 1; i >= 0; i--) {
       var m = msgs[i];
       if (!m || !m.role) continue;
+      if (!routedLands && m.role === 'assistant' && m.land_cards && m.land_cards.length) {
+        /* با استریم: آرایش نوار را بعد از اتمام تایپ جواب عوض کن */
+        if (!opts.stream) routeLandCardsToHome(m);
+        routedLands = true;
+      }
       if (!lastAsst && m.role === 'assistant' && messageHasContent(m)) lastAsst = m;
       if (!lastUser && m.role === 'user' && messageHasContent(m)) lastUser = m;
-      if (lastUser && lastAsst) break;
+      if (lastUser && lastAsst && routedLands) break;
+      if (lastUser && lastAsst && i < msgs.length - 8) break;
     }
 
     var pending = list.querySelector('.ai-msg-wrap[data-pending-user="1"]');
@@ -469,7 +493,11 @@
     if (input) {
       input.disabled = false;
       input.removeAttribute('aria-disabled');
-      if (opts.placeholder) input.placeholder = opts.placeholder;
+      if (opts.placeholder) {
+        stopTypeHintPlaceholder({ dismiss: false, placeholder: opts.placeholder });
+      } else {
+        startTypeHintPlaceholder();
+      }
     }
     if (btn) btn.removeAttribute('aria-disabled');
     syncComposerReady();
@@ -482,11 +510,196 @@
     input.style.height = Math.max(24, next) + 'px';
   }
 
+  var TYPE_HINT_PHRASES = [
+    'زمین ویلایی گرمابسرد دماوند…',
+    'دشت اول گرمابسرد، حدود ۵۰۰ متر…',
+    'بودجه‌ام برای گرمابسرد حدود…',
+  ];
+  var typeHintTimer = 0;
+  var typeHintDismissed = false;
+  var typeHintRunning = false;
+  var typeHintGen = 0;
+  var typeHintHost = form.querySelector('[data-ai-type-hint]');
+  var typeHintClip = typeHintHost
+    ? typeHintHost.querySelector('.ai-composer__type-hint-clip')
+    : null;
+  var typeHintTextEl = typeHintHost
+    ? typeHintHost.querySelector('[data-ai-type-hint-text]')
+    : null;
+
+  function clearTypeHintTimer() {
+    if (typeHintTimer) {
+      clearTimeout(typeHintTimer);
+      typeHintTimer = 0;
+    }
+  }
+
+  function staticComposerPlaceholder() {
+    if (
+      isGuestQuotaUser() &&
+      guestRepliesRemaining !== null &&
+      guestRepliesRemaining <= 0
+    ) {
+      return 'به سقف رسیدید — برای ادامه وارد شوید…';
+    }
+    return 'از وینور AI بپرسید…';
+  }
+
+  function hideTypeHintOverlay() {
+    if (typeHintHost) typeHintHost.hidden = true;
+    if (typeHintTextEl) {
+      typeHintTextEl.textContent = '';
+      typeHintTextEl.style.transform = '';
+    }
+  }
+
+  function showTypeHintOverlay() {
+    if (typeHintHost) typeHintHost.hidden = false;
+  }
+
+  /** پدینگ راهنما = دقیقاً محدودهٔ textarea (مهم برای موبایل) */
+  function syncTypeHintGeometry() {
+    if (!typeHintHost || !input) return;
+    var shell = input.closest('.ai-composer__shell');
+    if (!shell) return;
+    var sr = shell.getBoundingClientRect();
+    var ir = input.getBoundingClientRect();
+    if (!sr.width || !ir.width) return;
+    typeHintHost.style.paddingLeft = Math.max(0, ir.left - sr.left) + 'px';
+    typeHintHost.style.paddingRight = Math.max(0, sr.right - ir.right) + 'px';
+    typeHintHost.style.paddingTop = Math.max(0, ir.top - sr.top) + 'px';
+    typeHintHost.style.paddingBottom = Math.max(0, sr.bottom - ir.bottom) + 'px';
+  }
+
+  /** متن در یک خط؛ سرریز به چپ شیفت می‌شود تا انتهای تایپ دیده شود */
+  function renderTypeHintVisible(full) {
+    if (!typeHintTextEl || !typeHintClip) {
+      if (input) input.placeholder = full || '';
+      return;
+    }
+    showTypeHintOverlay();
+    if (input) input.placeholder = '';
+    var text = full || '';
+    typeHintTextEl.style.transform = 'translateX(0)';
+    typeHintTextEl.textContent = text;
+    if (!text) return;
+
+    function applyShift() {
+      if (!typeHintTextEl || !typeHintClip) return;
+      syncTypeHintGeometry();
+      var maxW = typeHintClip.clientWidth;
+      if (maxW < 12 && input) {
+        maxW = Math.max(12, Math.floor(input.getBoundingClientRect().width) - 4);
+      }
+      var need = typeHintTextEl.scrollWidth || typeHintTextEl.offsetWidth || 0;
+      var dx = Math.max(0, need - maxW);
+      typeHintTextEl.style.transform = dx > 0 ? 'translateX(' + -dx + 'px)' : 'translateX(0)';
+    }
+
+    applyShift();
+    requestAnimationFrame(function () {
+      applyShift();
+      requestAnimationFrame(applyShift);
+    });
+  }
+
+  function stopTypeHintPlaceholder(opts) {
+    opts = opts || {};
+    clearTypeHintTimer();
+    typeHintRunning = false;
+    typeHintGen += 1;
+    if (opts.dismiss) typeHintDismissed = true;
+    hideTypeHintOverlay();
+    if (!input) return;
+    if (opts.placeholder != null) {
+      input.placeholder = opts.placeholder;
+      return;
+    }
+    if (!(input.value || '').length) {
+      input.placeholder = typeHintDismissed ? staticComposerPlaceholder() : '';
+    }
+  }
+
+  function canRunTypeHint() {
+    if (!input || typeHintDismissed) return false;
+    if (isPostchiMode()) return false;
+    if (form.classList.contains('ai-composer--readonly')) return false;
+    if (input.disabled) return false;
+    if ((input.value || '').length > 0) return false;
+    if (
+      isGuestQuotaUser() &&
+      guestRepliesRemaining !== null &&
+      guestRepliesRemaining <= 0
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  function startTypeHintPlaceholder() {
+    if (!canRunTypeHint()) {
+      if (input && !(input.value || '').length && typeHintDismissed) {
+        hideTypeHintOverlay();
+        input.placeholder = staticComposerPlaceholder();
+      }
+      return;
+    }
+    if (typeHintRunning) return;
+    typeHintRunning = true;
+    var gen = ++typeHintGen;
+    var phraseIdx = 0;
+
+    function schedule(fn, ms) {
+      clearTypeHintTimer();
+      typeHintTimer = setTimeout(fn, ms);
+    }
+
+    function erase(text, i) {
+      if (gen !== typeHintGen || !canRunTypeHint()) {
+        typeHintRunning = false;
+        return;
+      }
+      if (i < 0) {
+        schedule(function () {
+          phraseIdx = (phraseIdx + 1) % TYPE_HINT_PHRASES.length;
+          typePhrase(TYPE_HINT_PHRASES[phraseIdx], 0);
+        }, 400);
+        return;
+      }
+      renderTypeHintVisible(text.slice(0, i));
+      schedule(function () {
+        erase(text, i - 1);
+      }, 20);
+    }
+
+    function typePhrase(text, i) {
+      if (gen !== typeHintGen || !canRunTypeHint()) {
+        typeHintRunning = false;
+        return;
+      }
+      if (i > text.length) {
+        schedule(function () {
+          erase(text, text.length);
+        }, 1600);
+        return;
+      }
+      renderTypeHintVisible(text.slice(0, i));
+      schedule(function () {
+        typePhrase(text, i + 1);
+      }, i === 0 ? 260 : 46);
+    }
+
+    if (input) input.placeholder = '';
+    showTypeHintOverlay();
+    renderTypeHintVisible('');
+    typePhrase(TYPE_HINT_PHRASES[phraseIdx], 0);
+  }
+
   function setComposerMode(postchi) {
     if (!input) return;
     if (postchi) {
       input.value = '';
-      input.placeholder = 'ارسال در پستچی غیرفعال است';
+      stopTypeHintPlaceholder({ dismiss: false, placeholder: 'ارسال در پستچی غیرفعال است' });
       input.disabled = true;
       input.setAttribute('aria-disabled', 'true');
       if (btn) {
@@ -497,19 +710,22 @@
       form.classList.remove('ai-composer--ready');
       autoGrowInput();
     } else {
+      input.disabled = false;
+      input.removeAttribute('aria-disabled');
+      if (btn) btn.removeAttribute('aria-disabled');
+      form.classList.remove('ai-composer--readonly');
       if (
         isGuestQuotaUser() &&
         guestRepliesRemaining !== null &&
         guestRepliesRemaining <= 0
       ) {
-        input.placeholder = 'به سقف رسیدید — برای ادامه وارد شوید…';
+        stopTypeHintPlaceholder({
+          dismiss: false,
+          placeholder: 'به سقف رسیدید — برای ادامه وارد شوید…',
+        });
       } else {
-        input.placeholder = 'از وینور AI بپرسید…';
+        startTypeHintPlaceholder();
       }
-      input.disabled = false;
-      input.removeAttribute('aria-disabled');
-      if (btn) btn.removeAttribute('aria-disabled');
-      form.classList.remove('ai-composer--readonly');
       syncComposerReady();
       autoGrowInput();
     }
@@ -959,25 +1175,73 @@
     );
   }
 
-  function buildCardsHtml(msg) {
-    if (msg.cards_html) {
-      return '<div class="ai-msg-cards w-full min-w-0 max-w-full">' + msg.cards_html + '</div>';
-    }
-    var chunks = [];
+  function routeLandCardsToHome(msg) {
+    if (!msg) return;
     if (msg.land_cards && msg.land_cards.length) {
-      var inner = msg.land_cards.map(function (c) {
-        return c.html || '';
-      }).join('');
-      if (inner) {
-        chunks.push(
-          '<div class="ai-land-cards mt-2.5 flex w-full max-w-full flex-col gap-2.5">' +
-            inner +
-            '</div>'
-        );
-      }
+      try {
+        if (typeof window.vinorApplyHomeLandCards === 'function') {
+          window.vinorApplyHomeLandCards(msg.land_cards, { label: 'پیشنهاد فایل' });
+        }
+      } catch (_) {}
     }
-    if (!chunks.length) return '';
-    return '<div class="ai-msg-cards w-full min-w-0 max-w-full">' + chunks.join('') + '</div>';
+  }
+
+  function stripLandCardsFromHtml(html) {
+    if (!html) return { clean: '', landCards: [] };
+    var box = document.createElement('div');
+    box.innerHTML = String(html);
+    var landCards = [];
+    box.querySelectorAll('.ai-land-cards').forEach(function (root) {
+      root.querySelectorAll('.vinor-premium-card, .express-card').forEach(function (card) {
+        var codeEl = card.closest('[data-land-code]') || card;
+        var code = (codeEl.getAttribute && codeEl.getAttribute('data-land-code')) || '';
+        landCards.push({ code: code, html: card.outerHTML });
+      });
+      try {
+        root.remove();
+      } catch (_) {}
+    });
+    return { clean: (box.innerHTML || '').trim(), landCards: landCards };
+  }
+
+  function buildCardsHtml(msg, opts) {
+    opts = opts || {};
+    if (!opts.skipLands) routeLandCardsToHome(msg);
+    if (!msg.cards_html) return '';
+    var stripped = stripLandCardsFromHtml(msg.cards_html);
+    if (!opts.skipLands && stripped.landCards.length) {
+      try {
+        if (typeof window.vinorApplyHomeLandCards === 'function') {
+          window.vinorApplyHomeLandCards(stripped.landCards, { label: 'پیشنهاد فایل' });
+        }
+      } catch (_) {}
+    }
+    if (!stripped.clean) return '';
+    return '<div class="ai-msg-cards w-full min-w-0 max-w-full">' + stripped.clean + '</div>';
+  }
+
+  function scrubLandCardsFromChatDom() {
+    if (!list) return;
+    list.querySelectorAll('.ai-land-cards').forEach(function (root) {
+      var landCards = [];
+      root.querySelectorAll('.vinor-premium-card, .express-card').forEach(function (card) {
+        landCards.push({ html: card.outerHTML });
+      });
+      if (landCards.length && typeof window.vinorApplyHomeLandCards === 'function') {
+        try {
+          window.vinorApplyHomeLandCards(landCards, { label: 'پیشنهاد فایل' });
+        } catch (_) {}
+      }
+      var host = root.closest('.ai-msg-cards');
+      try {
+        root.remove();
+      } catch (_) {}
+      if (host && !host.children.length) {
+        try {
+          host.remove();
+        } catch (_) {}
+      }
+    });
   }
 
   function initCardsIn(wrap) {
@@ -1339,7 +1603,9 @@
     seenEscalationIds = {};
     lastSyncAt = '';
     (messages || []).forEach(function (m) {
-      if (m && m.role && messageHasContent(m)) {
+      if (!m) return;
+      routeLandCardsToHome(m);
+      if (m.role && messageHasContent(m)) {
         appendMessage(m);
       }
     });
@@ -1782,7 +2048,9 @@
       pollPaused = false;
       var added = false;
       data.messages.forEach(function (m) {
-        if (m && m.role && messageHasContent(m)) {
+        if (!m || !m.role) return;
+        routeLandCardsToHome(m);
+        if (messageHasContent(m)) {
           if (appendMessage(m)) added = true;
         }
       });
@@ -1885,6 +2153,7 @@
     var eid = w.getAttribute('data-escalation-id');
     if (eid) seenEscalationIds[eid] = 1;
   });
+  scrubLandCardsFromChatDom();
   enhanceAssistantBubbles(list);
   scanLastSyncFromDom();
   scrollChatToEnd();
@@ -2159,6 +2428,13 @@
   });
 
   input.addEventListener('input', function () {
+    if ((input.value || '').length > 0) {
+      stopTypeHintPlaceholder({ dismiss: true, placeholder: '' });
+    } else if (!typeHintDismissed) {
+      startTypeHintPlaceholder();
+    } else {
+      input.placeholder = staticComposerPlaceholder();
+    }
     autoGrowInput();
     syncComposerReady();
   });
@@ -2304,4 +2580,5 @@
   autoGrowInput();
   syncComposerReady();
   syncChipBarVisibility();
+  startTypeHintPlaceholder();
 })();

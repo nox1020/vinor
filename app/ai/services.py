@@ -816,19 +816,11 @@ def generate_reply(
         result["agent_actions"] = agent_actions
         try:
             actions_html = render_agent_actions_html(agent_actions)
-            land_html = ""
-            if land_codes:
-                from app.ai.land_cards import render_land_cards_html
-
-                land_html = render_land_cards_html(key, land_codes, audience=aud) or ""
-            if land_html and actions_html:
-                result["cards_html"] = land_html + actions_html
-            elif actions_html:
+            if actions_html:
                 result["cards_html"] = actions_html
-            elif land_html:
-                result["cards_html"] = land_html
         except Exception:
             pass
+    # کارت فایل فقط در land_cards (نوار بالای خانه) — داخل چت cards_html نگذار
 
     store_cached_reply(key, aud, text, result)
     return result

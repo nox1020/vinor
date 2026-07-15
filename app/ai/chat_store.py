@@ -426,7 +426,7 @@ def _enrich_messages_for_ui(
     audience: str | None = None,
 ) -> list[dict[str, Any]]:
     from app.ai.agent_tools import render_agent_actions_html
-    from app.ai.land_cards import render_land_cards_html
+    from app.ai.land_cards import land_cards_payload
 
     out: list[dict[str, Any]] = []
     for item in messages or []:
@@ -437,13 +437,13 @@ def _enrich_messages_for_ui(
         actions = row.get("agent_actions") or []
         if row.get("role") == "assistant" and (codes or actions):
             try:
-                land_html = ""
                 if codes:
-                    land_html = render_land_cards_html(user_key, codes, audience=audience) or ""
+                    row["land_cards"] = land_cards_payload(user_key, codes, audience=audience)
                 actions_html = ""
                 if isinstance(actions, list) and actions:
                     actions_html = render_agent_actions_html(actions) or ""
-                row["cards_html"] = (land_html or "") + (actions_html or "")
+                # فقط کارت اکشن در چت؛ فایل‌ها فقط در land_cards → نوار بالای خانه
+                row["cards_html"] = actions_html or ""
             except Exception:
                 row["cards_html"] = ""
         out.append(row)

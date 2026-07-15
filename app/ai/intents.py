@@ -15,7 +15,7 @@ CHIP_INTENT_HINTS: dict[str, str] = {
     ),
     "coop_apply": (
         "نیت چیپ: ثبت همکاری. اگر لاگین نیست propose_partner_application را بزن تا need_login بیاید؛ "
-        "وگرنه فیلدهای نام، کد ملی، شهر را یکی‌یکی بپرس و در پایان propose_partner_application."
+        "وگرنه فیلدهای نام، کد ملی، شهر را یکی‌یکی بپرس — شهر فقط گرمابسرد — و در پایان propose_partner_application."
     ),
     "coop_status": (
         "نیت چیپ: وضعیت درخواست. get_application_status را بزن و کوتاه بگو؛ لینک نده."
@@ -44,7 +44,8 @@ CHIP_INTENT_HINTS: dict[str, str] = {
         "نیت چیپ: بستن معامله. propose_release_deal را بزن و کارت تأیید بده."
     ),
     "find_land": (
-        "نیت چیپ: پیدا کردن ملک. اگر شهر/بودجه نگفته کوتاه بپرس؛ وگرنه search_lands و [[LAND:کد]]."
+        "نیت چیپ: پیدا کردن ملک فقط در گرمابسرد (دماوند، تهران). "
+        "اگر بودجه نگفته کوتاه بپرس؛ جای دیگر پیشنهاد نده؛ search_lands و [[LAND:کد]]."
     ),
 }
 

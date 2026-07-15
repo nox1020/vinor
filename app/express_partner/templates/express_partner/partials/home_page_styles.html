@@ -11,6 +11,7 @@
     --vn-home-raised: #1c1c1e;
     --vn-home-raised-2: #2f2f2f;
     --vn-home-bg: #000000;
+    --vn-home-menu-clear: 3.4rem;
     position: relative;
     padding-top: env(safe-area-inset-top, 0px);
     background: var(--vn-home-bg) !important;
@@ -27,8 +28,6 @@
 
   #homeDashboardPage .vn-journey-card {
     margin-top: 0.35rem;
-    /* فضای دکمه منو روی گوشهٔ شروع (راست در RTL) تا روی محتوا نیفتد */
-    --vn-home-menu-clear: 3.15rem;
   }
 
   #homeDashboardPage .vn-journey-card .vn-journey-card__head-inner,
@@ -36,8 +35,18 @@
     padding-inline-start: max(0.7rem, var(--vn-home-menu-clear));
   }
 
-  /* منوی شناور خانه — بالاتر از کارت، کلیک‌پذیر */
+  /* فضای منوی شناور سمت راست؛ عنوان ادغام‌شده به چپ می‌چسبد */
+  #homeDashboardPage .vn-home-lands__head {
+    justify-content: flex-end;
+    padding-inline-start: max(0.85rem, var(--vn-home-menu-clear));
+  }
+  #homeDashboardPage .vn-home-empty__body {
+    padding-inline-start: max(0.85rem, var(--vn-home-menu-clear));
+  }
+
+  /* منوی شناور — fixed روی گوشه، بالاتر از محتوا */
   html:has(#homeDashboardPage) .ep-header-float-actions {
+    position: fixed !important;
     z-index: 90;
     pointer-events: none;
   }
@@ -67,17 +76,17 @@
   #homeDashboardPage .vn-home-feed > section:first-child .vn-home-section-head,
   #homeDashboardPage .vn-home-feed > section.vn-home-empty:first-child {
     padding-top: 0.15rem;
-    padding-inline-start: 0;
+    padding-inline-start: max(0.85rem, var(--vn-home-menu-clear));
   }
   #homeDashboardPage .vn-home-greet {
-    padding-inline-start: 0;
+    padding-inline-start: max(0.85rem, var(--vn-home-menu-clear));
   }
   @media (min-width: 640px) {
     #homeDashboardPage .vn-home-guest-strip,
     #homeDashboardPage .vn-home-feed > section:first-child .vn-home-section-head,
     #homeDashboardPage .vn-home-feed > section.vn-home-empty:first-child,
     #homeDashboardPage .vn-home-greet {
-      padding-inline-start: 0;
+      padding-inline-start: max(0.85rem, var(--vn-home-menu-clear));
     }
   }
 

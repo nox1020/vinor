@@ -383,17 +383,20 @@ def _assigned_lands(phone: str) -> list[dict[str, Any]]:
 
 def _public_lands_sample(limit: int = 8) -> list[dict[str, Any]]:
     try:
+        from app.utils.iran_cities import land_in_service_focus
+
         lands = load_express_lands_cached() or []
     except Exception:
-        lands = []
-    return list(lands[:limit])
+        return []
+    focus = [l for l in lands if isinstance(l, dict) and land_in_service_focus(l)]
+    pool = focus if focus else [l for l in lands if isinstance(l, dict)]
+    return list(pool[:limit])
 
 
 def build_partner_context_base(phone: str) -> str:
     """بخش ثابت زمینه — قابل کش برای هر همکار."""
     settings = load_settings() or {}
     admin_phone = str(settings.get("partner_application_admin_phone") or "09121471301").strip()
-    cities = load_active_cities() or []
     assigned = _assigned_lands(phone)
     guide = "راهنما: خانه=کار بعدی و پیشنهاد؛ فایل‌ها=جستجو؛ بازدیدها=مسیر ۷ مرحله‌ای؛ AI=راهنما و پستچی."
     try:
@@ -409,12 +412,17 @@ def build_partner_context_base(phone: str) -> str:
             )
     except Exception:
         pass
+    try:
+        from app.utils.iran_cities import focus_location_block
+        loc_block = focus_location_block()
+    except Exception:
+        loc_block = "محدوده: استان تهران · شهرستان دماوند · روستای گرمابسرد."
     return "\n".join(
         [
             "=== اطلاعات داخلی وینور ===",
             _partner_profile_block(phone),
             f"تعداد فایل اختصاصی: {len(assigned)}",
-            f"شهرهای فعال: {', '.join(str(c) for c in cities[:12])}",
+            loc_block,
             f"پشتیبانی: {admin_phone}",
             guide,
         ]
@@ -578,12 +586,21 @@ def _select_lands_for_query(
 ) -> list[dict[str, Any]]:
     if not lands:
         return []
+    try:
+        from app.utils.iran_cities import land_in_service_focus
+
+        focus = [l for l in lands if land_in_service_focus(l)]
+        pool = focus if focus else lands
+    except Exception:
+        pool = lands
     q = (query or "").strip()
     if q:
-        matched = [l for l in lands if _land_matches_query(l, q)]
+        matched = [l for l in pool if _land_matches_query(l, q)]
         if matched:
             return matched[:match_limit]
-    return lands[:default_limit]
+        # کوئری خارج از محدوده → باز هم فقط فایل‌های گرمابسرد
+        return pool[:match_limit]
+    return pool[:default_limit]
 
 
 def build_partner_land_context(
@@ -653,12 +670,17 @@ def build_partner_land_context(
 def build_public_context_base() -> str:
     settings = load_settings() or {}
     admin_phone = str(settings.get("partner_application_admin_phone") or "09121471301").strip()
-    cities = load_active_cities() or []
+    try:
+        from app.utils.iran_cities import focus_location_block
+
+        loc_block = focus_location_block()
+    except Exception:
+        loc_block = "محدوده: استان تهران · شهرستان دماوند · روستای گرمابسرد."
     return "\n".join(
         [
             "=== وینور (مهمان/کاربر عادی) ===",
             "خرید/فروش زمین، باغ، ویلا با پرونده تأییدشده.",
-            f"شهرها: {', '.join(str(c) for c in cities[:10])}",
+            loc_block,
             f"پشتیبانی: {admin_phone}",
             "سطوح: عادی → همکار → ویژه. جزئیات/ثبت/وضعیت فقط با ابزار چت.",
             "هرگز URL یا مسیر صفحه نده.",

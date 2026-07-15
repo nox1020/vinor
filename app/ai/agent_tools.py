@@ -462,14 +462,15 @@ def _session_phone() -> str:
 
 def _tool_coop_info(args: dict[str, Any]) -> dict[str, Any]:
     topic = str(args.get("topic") or "all").strip().lower() or "all"
-    cities: list[str] = []
     try:
-        from app.utils.storage import load_active_cities
+        from app.utils.iran_cities import FOCUS_SERVICE_CITY, focus_location_label
 
-        cities = [str(c) for c in (load_active_cities() or []) if str(c).strip()][:12]
+        city_bit = (
+            f"محدوده سرویس: {focus_location_label()}. "
+            f"شهر همکاری فقط «{FOCUS_SERVICE_CITY}»."
+        )
     except Exception:
-        cities = []
-    city_bit = f"شهرهای فعال: {', '.join(cities)}." if cities else ""
+        city_bit = "محدوده سرویس: استان تهران · شهرستان دماوند · روستای گرمابسرد."
 
     blocks: dict[str, str] = {
         "levels": (
@@ -643,6 +644,16 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
             }
 
         name, city, experience, note = _clip_apply_fields(name, city, experience, note)
+        try:
+            from app.utils.iran_cities import FOCUS_SERVICE_CITY, normalize_to_focus_city
+
+            city = normalize_to_focus_city(city) or city
+            if city and city != FOCUS_SERVICE_CITY and FOCUS_SERVICE_CITY in (normalize_to_focus_city(city) or ""):
+                city = FOCUS_SERVICE_CITY
+            if city and "گرمابسرد" in city:
+                city = FOCUS_SERVICE_CITY
+        except Exception:
+            pass
         national_id = _parse_apply_national_id(national_id)
         if not is_valid_iran_national_id(national_id):
             return {
@@ -655,15 +666,32 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
             }
         cities = _active_cities_cached() or []
         if cities and city not in cities:
-            return {
-                "ok": True,
-                "model_result": {
-                    "ok": False,
-                    "invalid": "city",
-                    "allowed_cities": list(cities)[:20],
-                    "instruction": "شهر باید از allowed_cities باشد؛ دوباره بپرس.",
-                },
-            }
+            # نام‌های معادل گرمابسرد را بپذیر
+            try:
+                from app.utils.iran_cities import FOCUS_SERVICE_CITY, normalize_to_focus_city
+
+                if normalize_to_focus_city(city) == FOCUS_SERVICE_CITY and FOCUS_SERVICE_CITY in cities:
+                    city = FOCUS_SERVICE_CITY
+                else:
+                    return {
+                        "ok": True,
+                        "model_result": {
+                            "ok": False,
+                            "invalid": "city",
+                            "allowed_cities": list(cities)[:20],
+                            "instruction": "شهر باید گرمابسرد باشد؛ دوباره بپرس.",
+                        },
+                    }
+            except Exception:
+                return {
+                    "ok": True,
+                    "model_result": {
+                        "ok": False,
+                        "invalid": "city",
+                        "allowed_cities": list(cities)[:20],
+                        "instruction": "شهر باید از allowed_cities باشد؛ دوباره بپرس.",
+                    },
+                }
     except Exception as exc:
         return _denied(str(exc))
 
@@ -722,14 +750,38 @@ def _tool_search_lands(
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
     lands_map = accessible_lands_map(phone, aud)
     lands = list(lands_map.values())
+    try:
+        from app.utils.iran_cities import (
+            SERVICE_VILLAGE,
+            focus_location_label,
+            land_in_service_focus,
+        )
+
+        focus_lands = [l for l in lands if land_in_service_focus(l)]
+        lands = focus_lands if focus_lands else []
+        loc_label = focus_location_label()
+        village = SERVICE_VILLAGE
+    except Exception:
+        loc_label = "روستای گرمابسرد"
+        village = "گرمابسرد"
+
     if not lands:
-        out = {"ok": True, "count": 0, "lands": [], "note": "فایلی در دسترس نیست."}
+        out = {
+            "ok": True,
+            "count": 0,
+            "lands": [],
+            "note": f"فعلاً فایلی در {village} در دسترس نیست.",
+            "service_area": loc_label,
+            "instruction": (
+                f"بگو فعلا سرویس فقط {loc_label} است و فایل آماده‌ای نیست؛ "
+                "جای دیگر پیشنهاد نده."
+            ),
+        }
         return {"ok": True, "model_result": out, "land_codes": []}
 
     matched = _select_lands_for_query(
         lands, query, default_limit=limit, match_limit=limit
     )
-    # اگر کوئری هست ولی match ضعیف بود، باز هم matched از default_limit می‌آید
     if query:
         tight = [l for l in lands if _land_matches_query(l, query)]
         if tight:
@@ -748,7 +800,7 @@ def _tool_search_lands(
                 "code": code,
                 "summary": _land_summary(land, assigned=assigned, compact=True),
                 "title": str(land.get("title") or "").strip(),
-                "city": str(land.get("city") or "").strip(),
+                "city": str(land.get("city") or "").strip() or village,
                 "assigned": assigned,
             }
         )
@@ -757,7 +809,11 @@ def _tool_search_lands(
         "ok": True,
         "count": len(items),
         "lands": items,
-        "instruction": "در پاسخ نهایی برای هر پیشنهاد از [[LAND:کد]] در خط جدا استفاده کن.",
+        "service_area": loc_label,
+        "instruction": (
+            f"فقط فایل‌های {village} را پیشنهاد بده؛ برای هر کدام [[LAND:کد]] در خط جدا. "
+            f"اگر کاربر جای دیگری خواست، بگو فعلا فقط {loc_label}."
+        ),
     }
     return {"ok": True, "model_result": model, "land_codes": codes}
 

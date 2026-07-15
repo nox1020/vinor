@@ -15,18 +15,20 @@
   <div class="vn-home-shell mx-auto flex w-full max-w-lg flex-col">
     <div class="vn-home-top">
 
-      {% if home_ai_limited|default(false) and public_home_lands %}
+      {% if home_ai_enabled|default(false) %}
         {% include 'express_partner/partials/home_public_lands_carousel.html' %}
-      {% elif me_phone %}
+      {% endif %}
+
+      {% if me_phone and not home_ai_limited|default(false) %}
       {% set card = journey_card or (suggested_files[0] if suggested_files else none) %}
       {% if card %}
         {% include 'express_partner/partials/home_journey_card.html' %}
       {% elif is_approved|default(false) %}
       <div class="vn-home-feed">
-        <section class="vn-home-empty" aria-label="ط¨ط¯ظˆظ† ظپط§غŒظ„ ظ¾غŒط´ظ†ظ‡ط§ط¯غŒ" data-tour="home-urgent">
+        <section class="vn-home-empty" aria-label="بدون فایل پیشنهادی" data-tour="home-urgent">
           <div class="vn-home-empty__body">
-            <p class="vn-home-empty__title">ظپط§غŒظ„ ط¢ظ…ط§ط¯ظ‡â€Œط§غŒ ظ†غŒط³طھ</p>
-            <p class="vn-home-empty__sub">ظ‡ظ…ظ‡ ظپط§غŒظ„â€Œظ‡ط§ ظپط±ظˆط®طھظ‡ غŒط§ ط¨ط³طھظ‡ ط´ط¯ظ‡â€Œط§ظ†ط¯. ط§ط² ط§ط¯ظ…غŒظ† ط¨ط®ظˆط§ظ‡ ظپط§غŒظ„ ط¬ط¯غŒط¯ ط¨ط§ط² ع©ظ†ط¯ غŒط§ ط§ط² ط¯ع©ظ…ظ‡ + ع¯ظپطھع¯ظˆ ط±ط§ ط´ط±ظˆط¹ ع©ظ†</p>
+            <p class="vn-home-empty__title">فایل آماده‌ای نیست</p>
+            <p class="vn-home-empty__sub">همه فایل‌ها فروخته یا بسته شده‌اند. از ادمین بخواه فایل جدید باز کند یا از دکمه + گفتگو را شروع کن</p>
           </div>
         </section>
       </div>
@@ -264,7 +266,7 @@
 </script>
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=55"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=67"></script>
 <script>
 (function () {
   function syncHomeDockPad() {

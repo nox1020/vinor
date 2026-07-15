@@ -6032,10 +6032,10 @@ def express_cities():
         action = request.form.get('action')
         
         if action == 'add':
-            from app.utils.iran_cities import is_tehran_city
+            from app.utils.iran_cities import is_allowed_service_city
             new_city = (request.form.get('city') or '').strip()
-            if new_city and not is_tehran_city(new_city):
-                flash('فقط شهرهای استان تهران مجاز است.', 'warning')
+            if new_city and not is_allowed_service_city(new_city):
+                flash('فقط شهرهای محدودهٔ سرویس (استان تهران / گرمابسرد دماوند) مجاز است.', 'warning')
             elif new_city and new_city not in cities:
                 cities.append(new_city)
                 cities.sort()
@@ -6043,7 +6043,7 @@ def express_cities():
                 flash(f'شهر "{new_city}" اضافه شد.', 'success')
             elif new_city in cities:
                 flash('این شهر قبلاً اضافه شده است.', 'warning')
-        
+
         elif action == 'delete':
             city_to_delete = request.form.get('city')
             if city_to_delete in cities:
@@ -6051,19 +6051,27 @@ def express_cities():
                 save_active_cities(cities)
                 flash(f'شهر "{city_to_delete}" حذف شد.', 'info')
 
+        elif action == 'set_focus':
+            from app.utils.iran_cities import FOCUS_SERVICE_CITIES
+            save_active_cities(list(FOCUS_SERVICE_CITIES))
+            flash('تمرکز سرویس: استان تهران · شهرستان دماوند · روستای گرمابسرد.', 'success')
+
         elif action == 'add_tehran':
-            from app.utils.iran_cities import TEHRAN_PROVINCE_CITIES, normalize_active_tehran_cities
+            from app.utils.iran_cities import normalize_active_tehran_cities
             before = len(cities)
             cities = normalize_active_tehran_cities(cities)
             save_active_cities(cities)
             added = len(cities) - before
             flash(f'{added} شهر استان تهران به لیست اضافه شد. (مجموع: {len(cities)})', 'success')
-        
+
         return redirect(url_for('admin.express_cities'))
-    
-    from app.utils.iran_cities import TEHRAN_PROVINCE_CITIES
+
+    from app.utils.iran_cities import FOCUS_SERVICE_CITIES, TEHRAN_PROVINCE_CITIES
+    picker_cities = list(FOCUS_SERVICE_CITIES) + [
+        c for c in TEHRAN_PROVINCE_CITIES if c not in FOCUS_SERVICE_CITIES
+    ]
     return render_template(
         'admin/express_cities.html',
         cities=cities,
-        tehran_cities=TEHRAN_PROVINCE_CITIES,
+        tehran_cities=picker_cities,
     )

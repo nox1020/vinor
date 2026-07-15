@@ -1,5 +1,4 @@
-{# نوار افقی فایل‌های عمومی — مهمان / کاربر عادی بالای چت خانه #}
-{% if public_home_lands %}
+{# نوار افقی فایل‌ها — عمومی / پیشنهاد چت (خانه) #}
 <style id="vinor-home-public-carousel">
   #homePublicLandsCarousel.vn-home-lands {
     flex-shrink: 0;
@@ -7,20 +6,25 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     background: #030712;
   }
+  #homePublicLandsCarousel.vn-home-lands:not([data-has-lands="1"]) {
+    display: none;
+  }
   #homePublicLandsCarousel .vn-home-lands__head {
     display: flex;
     align-items: baseline;
-    justify-content: space-between;
-    gap: 0.75rem;
+    justify-content: flex-end;
+    gap: 0.35rem;
     padding: 0 0.85rem 0.4rem;
+    padding-inline-start: max(0.85rem, 3.4rem);
   }
   #homePublicLandsCarousel .vn-home-lands__title {
     margin: 0;
     font-size: 0.8125rem;
     font-weight: 700;
     color: #f4f4f5;
+    text-align: left;
   }
-  #homePublicLandsCarousel .vn-home-lands__meta {
+  #homePublicLandsCarousel .vn-home-lands__title .vn-home-lands__meta {
     font-size: 0.6875rem;
     font-weight: 500;
     color: #71717a;
@@ -59,28 +63,38 @@
   #homePublicLandsCarousel .vn-home-lands__slot .vinor-premium-card-mobile {
     min-height: 8.75rem;
   }
-  /* فقط چیدمان افقی — نسخه دسکتاپ کارت را مخفی نکن */
   #homePublicLandsCarousel .vinor-premium-card > .hidden.sm\:block {
     display: none !important;
   }
   #homePublicLandsCarousel .vinor-premium-card-mobile {
     display: flex !important;
   }
+  #homePublicLandsCarousel.vn-home-lands--reordered .vn-home-lands__track {
+    animation: vn-home-lands-reorder 0.45s ease;
+  }
+  @keyframes vn-home-lands-reorder {
+    from { opacity: 0.55; transform: translateY(2px); }
+    to { opacity: 1; transform: none; }
+  }
 </style>
+{% set _home_lands = public_home_lands|default([]) %}
 <section id="homePublicLandsCarousel"
          class="vn-home-lands"
          aria-label="فایل‌های ملک"
-         data-vn-home-lands>
+         data-vn-home-lands
+         {% if _home_lands %}data-has-lands="1"{% endif %}>
   <div class="vn-home-lands__head">
-    <h2 class="vn-home-lands__title">فایل‌های ملک</h2>
-    <span class="vn-home-lands__meta">{{ public_home_lands|length|fa_digits }} فایل — بکشید</span>
+    <h2 class="vn-home-lands__title">
+      <span data-vn-home-lands-label>فایل‌های ملک</span>
+      <span class="vn-home-lands__meta" data-vn-home-lands-meta>{% if _home_lands %} · {{ _home_lands|length|fa_digits }} فایل — بکشید{% endif %}</span>
+    </h2>
   </div>
   <div class="vn-home-lands__track no-scrollbar"
        id="homePublicLandsTrack"
        tabindex="0"
        role="list"
        aria-label="اسکرول افقی فایل‌های ملک">
-    {% for item in public_home_lands %}
+    {% for item in _home_lands %}
     <div class="vn-home-lands__slot" role="listitem">
       {% set land = item %}
       {% set card_img_eager = loop.index <= 2 %}
@@ -97,24 +111,155 @@
 </section>
 <script>
 (function () {
-  var root = document.getElementById('homePublicLandsCarousel');
-  if (!root || root.getAttribute('data-media-bound') === '1') return;
-  root.setAttribute('data-media-bound', '1');
-  function boot() {
+  function faDigits(n) {
+    var s = String(n == null ? 0 : n);
+    try {
+      return s.replace(/\d/g, function (d) {
+        return '۰۱۲۳۴۵۶۷۸۹'[parseInt(d, 10)];
+      });
+    } catch (_) {
+      return s;
+    }
+  }
+
+  function slotLandCode(slot) {
+    if (!slot) return '';
+    var el = slot.querySelector('[data-land-code]');
+    return el ? String(el.getAttribute('data-land-code') || '').trim() : '';
+  }
+
+  function makeHomeLandSlot(rawHtml) {
+    var wrap = document.createElement('div');
+    wrap.innerHTML = String(rawHtml || '').trim();
+    var card =
+      wrap.querySelector('.vinor-premium-card, .express-card') ||
+      wrap.firstElementChild;
+    if (!card) return null;
+    if (card.classList && card.classList.contains('ai-land-cards__slot')) {
+      card =
+        card.querySelector('.vinor-premium-card, .express-card') ||
+        card.firstElementChild;
+    }
+    if (!card) return null;
+    var slot = document.createElement('div');
+    slot.className = 'vn-home-lands__slot';
+    slot.setAttribute('role', 'listitem');
+    slot.appendChild(card);
+    return slot;
+  }
+
+  /**
+   * کارت‌های پیشنهاد جواب → اول نوار؛ بقیهٔ فایل‌های قبلی بعدشان.
+   * ترتیب landCards = ترتیب پیشنهاد نسبت به جواب.
+   */
+  window.vinorApplyHomeLandCards = function (landCards, opts) {
+    opts = opts || {};
+    var track = document.getElementById('homePublicLandsTrack');
+    var carousel = document.getElementById('homePublicLandsCarousel');
+    if (!track || !carousel || !landCards || !landCards.length) return false;
+
+    var existingByCode = {};
+    var orphans = [];
+    Array.prototype.forEach.call(track.children, function (slot) {
+      if (!slot || !slot.classList || !slot.classList.contains('vn-home-lands__slot')) return;
+      var code = slotLandCode(slot);
+      if (code && !existingByCode[code]) existingByCode[code] = slot;
+      else orphans.push(slot);
+    });
+
+    var frag = document.createDocumentFragment();
+    var used = {};
+    var suggested = 0;
+
+    landCards.forEach(function (c) {
+      if (!c) return;
+      var code = c.code ? String(c.code).trim() : '';
+      var slot = null;
+      if (c.html) {
+        slot = makeHomeLandSlot(c.html);
+        if (slot && !code) code = slotLandCode(slot);
+      } else if (code && existingByCode[code]) {
+        slot = existingByCode[code];
+      }
+      if (!slot) return;
+      if (code) {
+        used[code] = true;
+        if (existingByCode[code]) delete existingByCode[code];
+      }
+      frag.appendChild(slot);
+      suggested += 1;
+    });
+
+    if (!suggested) return false;
+
+    Object.keys(existingByCode).forEach(function (code) {
+      if (!used[code]) frag.appendChild(existingByCode[code]);
+    });
+    orphans.forEach(function (slot) {
+      frag.appendChild(slot);
+    });
+
+    track.innerHTML = '';
+    track.appendChild(frag);
+
+    var total = track.querySelectorAll('.vn-home-lands__slot').length;
+    carousel.setAttribute('data-has-lands', '1');
+    var label = carousel.querySelector('[data-vn-home-lands-label]');
+    var meta = carousel.querySelector('[data-vn-home-lands-meta]');
+    if (label) label.textContent = opts.label || 'پیشنهاد فایل';
+    if (meta) meta.textContent = ' · ' + faDigits(total) + ' فایل — بکشید';
+
+    try {
+      carousel.classList.remove('vn-home-lands--reordered');
+      void carousel.offsetWidth;
+      carousel.classList.add('vn-home-lands--reordered');
+      window.setTimeout(function () {
+        try {
+          carousel.classList.remove('vn-home-lands--reordered');
+        } catch (_) {}
+      }, 500);
+    } catch (_) {}
+
+    try {
+      var first = track.querySelector('.vn-home-lands__slot');
+      if (first && typeof first.scrollIntoView === 'function') {
+        first.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+      } else {
+        track.scrollLeft = 0;
+      }
+    } catch (_) {
+      try {
+        track.scrollLeft = 0;
+      } catch (__) {}
+    }
+
     try {
       if (typeof window.vinorInitPremiumCards === 'function') {
-        window.vinorInitPremiumCards(root, document.getElementById('vnHomeScroll') || root);
+        window.vinorInitPremiumCards(carousel, document.getElementById('vnHomeScroll') || carousel);
       }
     } catch (_) {}
+    return true;
+  };
+
+  /* boot کارت‌ها — جدا از تعریف apply تا soft-nav تابع را از دست ندهد */
+  var root = document.getElementById('homePublicLandsCarousel');
+  if (root && root.getAttribute('data-media-bound') !== '1') {
+    root.setAttribute('data-media-bound', '1');
+    function boot() {
+      try {
+        if (typeof window.vinorInitPremiumCards === 'function') {
+          window.vinorInitPremiumCards(root, document.getElementById('vnHomeScroll') || root);
+        }
+      } catch (_) {}
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', boot, { once: true });
+    } else {
+      boot();
+    }
+    window.addEventListener('vinor:express-page-swap', function () {
+      window.setTimeout(boot, 40);
+    });
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot, { once: true });
-  } else {
-    boot();
-  }
-  window.addEventListener('vinor:express-page-swap', function () {
-    window.setTimeout(boot, 40);
-  });
 })();
 </script>
-{% endif %}

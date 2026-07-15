@@ -2893,23 +2893,8 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
 
 
 def _partner_ai_welcome(*, is_approved: bool, has_pending_app: bool, me_phone: str) -> str:
-    """پیام خوش‌آمد چت خانه — بر اساس سطح دسترسی."""
-    if is_approved:
-        return 'سلام — منم کنارتم برای فایل و فروشت. بگو کجا گیر کردی یا چی لازم داری.'
-    if has_pending_app:
-        return (
-            'سلام — درخواست همکاری‌ت ثبت شده و در حال بررسی است. '
-            'از همین‌جا بپرس سطوح همکاری چیست یا وضعیت درخواستت را ببین.'
-        )
-    if me_phone:
-        return (
-            'سلام — از همین چت می‌تونی سطوح، پورسانت و ثبت درخواست همکاری را جلو ببری. '
-            'بعد از تأیید همکار، فروش فایل هم از همین‌جا فعال می‌شود.'
-        )
-    return (
-        'سلام — بدون ورود هم می‌تونی بپرسی همکاری وینور چطور کار می‌کند و سطوحش چیست '
-        '(تا ۲۰ پاسخ). برای ثبت درخواست از همین چت بگو «می‌خواهم همکار شوم».'
-    )
+    """پیام خوش‌آمد چت خانه."""
+    return 'سلام، چطور می‌تونم کمکتون کنم؟'
 
 
 def _partner_ai_layer_context(
@@ -3392,6 +3377,13 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
             continue
         if str(land.get('express_status') or '').strip().lower() in ('closed', 'archived', 'hidden'):
             continue
+        try:
+            from app.utils.iran_cities import land_in_service_focus
+
+            if not land_in_service_focus(land):
+                continue
+        except Exception:
+            pass
         item = dict(land)
         item['_assignment_status'] = 'public'
         item['_in_transaction'] = False
