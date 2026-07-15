@@ -105,6 +105,7 @@ def chat():
     message = (data.get("message") or request.form.get("message") or "").strip()
     thread_id = (data.get("thread_id") or "").strip() or None
     chip_intent = (data.get("intent") or data.get("chip_intent") or "").strip()
+    hide_user = bool(data.get("hide_user") or data.get("silent") or data.get("hide_ui"))
     if not message:
         return jsonify({"ok": False, "error": "پیام خالی است."}), 400
 
@@ -137,6 +138,7 @@ def chat():
         assistant_land_codes=land_codes,
         assistant_agent_actions=agent_actions,
         audience=AUDIENCE_PUBLIC,
+        hide_user=hide_user,
     )
     used = record_guest_assistant_reply(key)
     remaining = guest_replies_remaining(key)

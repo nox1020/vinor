@@ -26,6 +26,7 @@
     display: block;
     text-decoration: none;
     color: inherit;
+    cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
   .vn-journey-card__head-inner {
@@ -374,7 +375,13 @@
     </span>
   </button>
 
-  <div class="vn-journey-card__head" role="group" aria-label="{{ card.title }}">
+  <div class="vn-journey-card__head"
+       role="button"
+       tabindex="0"
+       aria-label="جزئیات فایل {{ card.title }}"
+       data-vn-land-chat-open="1"
+       data-land-code="{{ card.code|e }}"
+       {% if card.detail_url %}data-href="{{ card.detail_url }}"{% endif %}>
     <div class="vn-journey-card__head-inner">
       <div class="vn-journey-card__media" aria-hidden="true">
         {% if card.image_url %}
@@ -404,15 +411,6 @@
         {% endif %}
         {% if card.commission_amount and is_approved|default(false) %}
         <p class="vn-journey-card__comm">پورسانت {{ card.commission_amount|toman }}</p>
-        {% endif %}
-        {% if card.code or card.detail_url %}
-        <button type="button"
-                class="vn-journey-card__detail-link text-[11px] text-emerald-400/90 underline underline-offset-2 mt-1 inline-block bg-transparent border-0 p-0 cursor-pointer"
-                data-land-code="{{ card.code|e }}"
-                data-vn-land-chat-open="1"
-                {% if card.detail_url %}data-href="{{ card.detail_url }}"{% endif %}>
-          جزئیات فایل
-        </button>
         {% endif %}
       </div>
     </div>
@@ -497,20 +495,26 @@
     var input = document.getElementById('aiInput');
     var form = document.getElementById('aiChatForm');
     intent = (intent || '').trim();
-    if (form && intent) {
-      try { form.setAttribute('data-pending-intent', intent); } catch (_) {}
-    }
     if (!input || !form) {
       try {
         sessionStorage.setItem('vinor_ai_home_prompt', prompt);
         sessionStorage.setItem('vinor_ai_home_autosend', '1');
+        sessionStorage.setItem('vinor_ai_home_silent', '1');
         if (intent) sessionStorage.setItem('vinor_ai_home_intent', intent);
         else sessionStorage.removeItem('vinor_ai_home_intent');
       } catch (_) {}
       return;
     }
-    input.value = prompt;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    try {
+      form.setAttribute('data-silent-user', '1');
+      form.setAttribute('data-silent-message', prompt);
+      if (intent) form.setAttribute('data-pending-intent', intent);
+      else form.removeAttribute('data-pending-intent');
+    } catch (_) {}
+    try {
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch (_) {}
     try {
       var scroll = document.getElementById('vnHomeScroll');
       if (scroll) scroll.scrollTop = scroll.scrollHeight;
@@ -524,39 +528,42 @@
   }
 
   function wireChatPrompts() {
-    document.querySelectorAll('[data-vn-chat-prompt]').forEach(function (btn) {
-      if (btn.getAttribute('data-wired') === '1') return;
-      btn.setAttribute('data-wired', '1');
-      btn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        sendChatPrompt(
-          btn.getAttribute('data-vn-chat-prompt') || '',
-          btn.getAttribute('data-vn-chat-intent') || ''
-        );
-      });
-    });
+    /* ارسال از document capture در ai-chat.js (silent) — اینجا دوباره‌کاری نکن */
+  }
+
+  function openLandInChatFromEl(el) {
+    if (!el) return;
+    var code = (el.getAttribute('data-land-code') || '').trim();
+    if (!code) {
+      var href = el.getAttribute('data-href') || '';
+      var m = href.match(/\/lands\/([^/?#]+)/);
+      if (m) code = decodeURIComponent(m[1]);
+    }
+    if (!code) {
+      var card = el.closest('[data-vn-journey-card]');
+      if (card) code = (card.getAttribute('data-vn-journey-code') || '').trim();
+    }
+    if (!code) return;
+    if (typeof window.vinorOpenLandInChat === 'function') {
+      window.vinorOpenLandInChat(code);
+    } else if (typeof window.vinorShowLandInChat === 'function') {
+      window.vinorShowLandInChat(code);
+    }
   }
 
   function wireLandDetailOpen() {
-    document.querySelectorAll('[data-vn-land-chat-open]').forEach(function (btn) {
-      if (btn.getAttribute('data-wired') === '1') return;
-      btn.setAttribute('data-wired', '1');
-      btn.addEventListener('click', function (e) {
+    document.querySelectorAll('[data-vn-land-chat-open]').forEach(function (el) {
+      if (el.getAttribute('data-wired') === '1') return;
+      el.setAttribute('data-wired', '1');
+      el.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        var code = (btn.getAttribute('data-land-code') || '').trim();
-        if (!code) {
-          var href = btn.getAttribute('data-href') || '';
-          var m = href.match(/\/lands\/([^/?#]+)/);
-          if (m) code = decodeURIComponent(m[1]);
-        }
-        if (!code) return;
-        if (typeof window.vinorOpenLandInChat === 'function') {
-          window.vinorOpenLandInChat(code);
-        } else if (typeof window.vinorShowLandInChat === 'function') {
-          window.vinorShowLandInChat(code);
-        }
+        openLandInChatFromEl(el);
+      });
+      el.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        openLandInChatFromEl(el);
       });
     });
   }

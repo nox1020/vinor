@@ -200,14 +200,19 @@
     if (!draft) return;
     var input = document.getElementById('aiInput');
     if (!input) return;
-    input.value = draft;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.focus();
+    var silent = sessionStorage.getItem('vinor_ai_home_silent') === '1';
+    if (silent) {
+      sessionStorage.setItem('vinor_ai_home_silent_msg', draft);
+    } else {
+      input.value = draft;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+    }
     sessionStorage.removeItem('vinor_ai_home_prompt');
   } catch (_) {}
 })();
 </script>
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=67"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=73"></script>
 <script>
 (function () {
   try {
@@ -216,16 +221,27 @@
     var form = document.getElementById('aiChatForm');
     var input = document.getElementById('aiInput');
     if (!form || !input) return;
-    var msg = (input.value || '').trim();
-    if (!msg || msg.length < 1) {
-      sessionStorage.removeItem('vinor_ai_home_autosend');
-      return;
-    }
+    var silent = sessionStorage.getItem('vinor_ai_home_silent') === '1';
+    sessionStorage.removeItem('vinor_ai_home_silent');
+    var silentMsg = sessionStorage.getItem('vinor_ai_home_silent_msg') || '';
+    sessionStorage.removeItem('vinor_ai_home_silent_msg');
     try {
       var intent = sessionStorage.getItem('vinor_ai_home_intent') || '';
       sessionStorage.removeItem('vinor_ai_home_intent');
       if (intent) form.setAttribute('data-pending-intent', intent);
     } catch (_) {}
+    if (silent && silentMsg) {
+      form.setAttribute('data-silent-user', '1');
+      form.setAttribute('data-silent-message', silentMsg);
+      input.value = '';
+    }
+    var msg = silent
+      ? (form.getAttribute('data-silent-message') || '').trim()
+      : (input.value || '').trim();
+    if (!msg || msg.length < 1) {
+      sessionStorage.removeItem('vinor_ai_home_autosend');
+      return;
+    }
     setTimeout(function () {
       try {
         if (typeof form.requestSubmit === 'function') {

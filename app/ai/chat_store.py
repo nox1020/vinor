@@ -150,6 +150,8 @@ def _clean_messages(raw: list) -> list[dict[str, Any]]:
                 cleaned_actions = [a for a in actions if isinstance(a, dict)][:5]
                 if cleaned_actions:
                     row["agent_actions"] = cleaned_actions
+            if item.get("hide_ui") or item.get("hide_user"):
+                row["hide_ui"] = True
             cleaned.append(row)
     return cleaned[-_MAX_MESSAGES:]
 
@@ -503,6 +505,7 @@ def append_exchange(
     assistant_land_codes: list[str] | None = None,
     assistant_agent_actions: list[dict[str, Any]] | None = None,
     audience: str | None = None,
+    hide_user: bool = False,
 ) -> tuple[list[dict[str, Any]], str]:
     record = load_user_record(user_key, audience)
     tid = thread_id or record.get("active_id") or ""
@@ -519,9 +522,19 @@ def append_exchange(
     user_text = (user_text or "").strip()[:_MAX_CONTENT]
     assistant_text = (assistant_text or "").strip()[:_MAX_CONTENT]
     if user_text:
-        msgs.append({"role": "user", "content": user_text, "created_at": ts})
+        user_entry: dict[str, Any] = {
+            "role": "user",
+            "content": user_text,
+            "created_at": ts,
+        }
+        if hide_user:
+            user_entry["hide_ui"] = True
+        msgs.append(user_entry)
         if th.get("title") in (None, "", "گفتگوی جدید") and len(msgs) == 1:
-            th["title"] = _title_from_text(user_text)
+            if not hide_user:
+                th["title"] = _title_from_text(user_text)
+            else:
+                th["title"] = "گفتگوی مأموریت"
     if assistant_text or assistant_agent_actions:
         entry: dict[str, Any] = {
             "role": "assistant",

@@ -337,4 +337,52 @@
   #aiMessages .ai-msg-action-menu button:hover {
     background: rgba(255, 255, 255, 0.08);
   }
+
+  /* دکمه رفتن به پایین گفتگو — شبیه ChatGPT */
+  .ai-scroll-bottom {
+    position: absolute;
+    left: 50%;
+    bottom: 5.75rem;
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    margin: 0;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+    background: #303030;
+    color: #ececec;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    transform: translateX(-50%);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ai-scroll-bottom[hidden] {
+    display: none !important;
+  }
+  .ai-scroll-bottom:active {
+    background: #3a3a3a;
+    transform: translateX(-50%) scale(0.96);
+  }
+  .ai-scroll-bottom svg {
+    width: 1.125rem;
+    height: 1.125rem;
+    display: block;
+  }
+  #homeDashboardPage .vn-home-shell {
+    position: relative;
+  }
+  #homeDashboardPage.home-dashboard-page--ai .ai-scroll-bottom {
+    bottom: calc(var(--vn-home-dock-h, 7.25rem) + 0.55rem);
+  }
+  #aiChat.ai-chat-shell {
+    position: relative;
+  }
+  #aiHomeLayer #aiChat.ai-chat-shell .ai-scroll-bottom,
+  #aiPageMain.ai-page-shell .ai-scroll-bottom {
+    bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
 </style>

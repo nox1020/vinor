@@ -36,6 +36,30 @@
   #homeDashboardPage.home-dashboard-page--ai .vn-home-lands__track {
     max-height: 10.25rem;
   }
+  /* کنار کارت مأموریت: نوار پیشنهاد فشرده‌تر تا صفحه شلوغ نشود */
+  #homeDashboardPage.home-dashboard-page--ai.vn-home-has-land-suggest .vn-home-lands,
+  #homeDashboardPage.home-dashboard-page--ai:has([data-vn-journey-card]):has(#homePublicLandsCarousel[data-has-lands="1"]) .vn-home-lands {
+    max-height: 7.75rem;
+    padding-top: 0.35rem;
+    padding-bottom: 0.2rem;
+  }
+  #homeDashboardPage.home-dashboard-page--ai.vn-home-has-land-suggest .vn-home-lands__head,
+  #homeDashboardPage.home-dashboard-page--ai:has([data-vn-journey-card]):has(#homePublicLandsCarousel[data-has-lands="1"]) .vn-home-lands__head {
+    padding-bottom: 0.2rem;
+  }
+  #homeDashboardPage.home-dashboard-page--ai.vn-home-has-land-suggest .vn-home-lands__track,
+  #homeDashboardPage.home-dashboard-page--ai:has([data-vn-journey-card]):has(#homePublicLandsCarousel[data-has-lands="1"]) .vn-home-lands__track {
+    max-height: 6.35rem;
+    padding-bottom: 0.25rem;
+  }
+  #homeDashboardPage.home-dashboard-page--ai.vn-home-has-land-suggest .vn-home-lands__slot,
+  #homeDashboardPage.home-dashboard-page--ai:has([data-vn-journey-card]):has(#homePublicLandsCarousel[data-has-lands="1"]) .vn-home-lands__slot {
+    width: min(14.5rem, 70vw);
+  }
+  #homeDashboardPage.home-dashboard-page--ai.vn-home-has-land-suggest .vn-home-lands__slot .vinor-premium-card-mobile,
+  #homeDashboardPage.home-dashboard-page--ai:has([data-vn-journey-card]):has(#homePublicLandsCarousel[data-has-lands="1"]) .vn-home-lands__slot .vinor-premium-card-mobile {
+    min-height: 5.75rem;
+  }
   #homeDashboardPage.home-dashboard-page--ai .vn-home-scroll {
     flex: 1 1 auto;
     min-height: 0;
@@ -153,9 +177,6 @@
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__shell,
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__send,
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__plus,
-  #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__mic,
-  #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__wave,
-  #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__tools,
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__input {
     pointer-events: auto;
   }

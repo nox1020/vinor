@@ -67,6 +67,7 @@
   var pendingChipIntent = '';
   var submitting = false;
   var lastSubmitAt = 0;
+  var seenHiddenMsgKeys = {};
   var guestRepliesRemaining = null;
   try {
     var remRaw = form.getAttribute('data-guest-replies-remaining');
@@ -84,6 +85,55 @@
     var intent = fromForm || pendingChipIntent || '';
     pendingChipIntent = '';
     return intent;
+  }
+
+  function takeSilentUserFlag() {
+    var silent = false;
+    try {
+      silent = form.getAttribute('data-silent-user') === '1';
+      form.removeAttribute('data-silent-user');
+    } catch (_) {}
+    return silent;
+  }
+
+  function takeSilentMessage() {
+    var msg = '';
+    try {
+      msg = (form.getAttribute('data-silent-message') || '').trim();
+      form.removeAttribute('data-silent-message');
+    } catch (_) {}
+    return msg;
+  }
+
+  function submitSilentPrompt(prompt, intent) {
+    prompt = (prompt || '').trim();
+    if (!prompt) return;
+    var liveForm = document.getElementById('aiChatForm');
+    var liveInput = document.getElementById('aiInput');
+    if (!liveForm) return;
+    intent = (intent || '').trim();
+    try {
+      liveForm.setAttribute('data-silent-user', '1');
+      liveForm.setAttribute('data-silent-message', prompt);
+      if (intent) liveForm.setAttribute('data-pending-intent', intent);
+      else liveForm.removeAttribute('data-pending-intent');
+    } catch (_) {}
+    try {
+      if (liveInput) {
+        liveInput.value = '';
+        liveInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    } catch (_) {}
+    try {
+      var scroll = document.getElementById('vnHomeScroll');
+      if (scroll) scroll.scrollTop = scroll.scrollHeight;
+    } catch (_) {}
+    setTimeout(function () {
+      try {
+        if (typeof liveForm.requestSubmit === 'function') liveForm.requestSubmit();
+        else liveForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      } catch (_) {}
+    }, 40);
   }
 
   function hideChipBar() {
@@ -229,19 +279,127 @@
   var onViewportResize = null;
   var onViewportScroll = null;
 
-  function scrollChatToEnd() {
-    if (homeInline) {
-      var homeScroll = document.getElementById('vnHomeScroll');
-      if (homeScroll) {
-        homeScroll.scrollTop = homeScroll.scrollHeight;
-        return;
-      }
-    }
-    if (list) list.scrollTop = list.scrollHeight;
-  }
-
   var streamToken = 0;
   var streamRaf = 0;
+  var stickChatToBottom = true;
+  var scrollBottomBtn = null;
+  var scrollBottomBound = false;
+
+  function chatScrollEl() {
+    if (homeInline) {
+      return document.getElementById('vnHomeScroll') || list;
+    }
+    return list;
+  }
+
+  function isChatNearBottom(el, threshold) {
+    if (!el) return true;
+    threshold = typeof threshold === 'number' ? threshold : 96;
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+  }
+
+  function syncScrollBottomBtn() {
+    var el = chatScrollEl();
+    var btn = scrollBottomBtn || document.getElementById('aiScrollBottomBtn');
+    if (!btn || !el) return;
+    var overflow = el.scrollHeight > el.clientHeight + 48;
+    var near = isChatNearBottom(el);
+    stickChatToBottom = near;
+    btn.hidden = !(overflow && !near);
+  }
+
+  function ensureScrollBottomBtn() {
+    var existing = document.getElementById('aiScrollBottomBtn');
+    if (existing) {
+      scrollBottomBtn = existing;
+      return existing;
+    }
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'aiScrollBottomBtn';
+    btn.className = 'ai-scroll-bottom';
+    btn.setAttribute('aria-label', 'رفتن به پایین گفتگو');
+    btn.hidden = true;
+    btn.innerHTML =
+      '<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+      '<path d="M9.335 13.335c.188.187.443.293.709.293s.521-.106.709-.293l5-5c.388-.388.388-1.025 0-1.413s-1.025-.388-1.413 0L10.044 11.218 5.748 6.922c-.388-.388-1.026-.388-1.413 0s-.388 1.025 0 1.413l5 5z"/>' +
+      '</svg>';
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      stickChatToBottom = true;
+      scrollChatToEnd({ force: true, smooth: true });
+      btn.hidden = true;
+    });
+    var host = null;
+    if (homeInline) {
+      host = document.querySelector('#homeDashboardPage .vn-home-shell') || document.getElementById('homeDashboardPage');
+    } else {
+      host = document.getElementById('aiChat') || (form && form.parentElement);
+    }
+    if (!host) return null;
+    try {
+      if (window.getComputedStyle(host).position === 'static') {
+        host.style.position = 'relative';
+      }
+    } catch (_) {}
+    host.appendChild(btn);
+    scrollBottomBtn = btn;
+    return btn;
+  }
+
+  function bindChatScrollBottom() {
+    ensureScrollBottomBtn();
+    var el = chatScrollEl();
+    if (!el || scrollBottomBound) {
+      syncScrollBottomBtn();
+      return;
+    }
+    scrollBottomBound = true;
+    el.addEventListener(
+      'scroll',
+      function () {
+        syncScrollBottomBtn();
+      },
+      { passive: true }
+    );
+    window.addEventListener(
+      'resize',
+      function () {
+        syncScrollBottomBtn();
+      },
+      { passive: true }
+    );
+    syncScrollBottomBtn();
+  }
+
+  function scrollChatToEnd(opts) {
+    opts = opts || {};
+    var force = !!opts.force;
+    var smooth = !!opts.smooth;
+    if (!force && !stickChatToBottom) {
+      syncScrollBottomBtn();
+      return;
+    }
+    var el = null;
+    if (homeInline) {
+      el = document.getElementById('vnHomeScroll');
+    }
+    if (!el) el = list;
+    if (!el) return;
+    try {
+      if (smooth && typeof el.scrollTo === 'function') {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      } else {
+        el.scrollTop = el.scrollHeight;
+      }
+    } catch (_) {
+      try {
+        el.scrollTop = el.scrollHeight;
+      } catch (__) {}
+    }
+    stickChatToBottom = true;
+    syncScrollBottomBtn();
+  }
 
   function cancelTypewriter() {
     streamToken += 1;
@@ -475,11 +633,10 @@
       return;
     }
     var len = (input.value || '').trim().length;
-    /* به‌محض نوشتن (حتی ۱ کاراکتر): پیل ارسال + قابل ارسال */
-    var showSend = len >= 1;
     var canSend = len >= MIN_MSG_LEN;
-    form.classList.toggle('ai-composer--ready', showSend);
-    /* disabled واقعی فقط در busy/readonly — وگرنه کلیک گرفته نمی‌شود */
+    /* ready فقط برای type-hint؛ دکمه ارسال همیشه دیده می‌شود و با aria-disabled غیرفعال می‌شود */
+    form.classList.toggle('ai-composer--ready', len >= 1);
+    /* disabled واقعی فقط در busy/readonly — خالی بودن با aria-disabled */
     btn.disabled = false;
     btn.setAttribute('aria-disabled', canSend ? 'false' : 'true');
   }
@@ -511,9 +668,9 @@
   }
 
   var TYPE_HINT_PHRASES = [
-    'زمین ویلایی گرمابسرد دماوند…',
-    'دشت اول گرمابسرد، حدود ۵۰۰ متر…',
-    'بودجه‌ام برای گرمابسرد حدود…',
+    'زمین ویلایی تو گرمابسرد دماوند می‌خوام',
+    'دشت اول گرمابسرد، حدود ۵۰۰ متری نشون بده',
+    'بودجه‌ام برای گرمابسرد حدود ۲ میلیارد تومانه',
   ];
   var typeHintTimer = 0;
   var typeHintDismissed = false;
@@ -1357,18 +1514,8 @@
             e.preventDefault();
             var prompt = chatBtn.getAttribute('data-agent-chat-prompt') || '';
             var intent = chatBtn.getAttribute('data-agent-chat-intent') || '';
-            if (!prompt || !input) return;
-            try {
-              if (intent) form.setAttribute('data-pending-intent', intent);
-            } catch (_) {}
-            input.value = prompt;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            setTimeout(function () {
-              try {
-                if (typeof form.requestSubmit === 'function') form.requestSubmit();
-                else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-              } catch (_) {}
-            }, 40);
+            if (!prompt) return;
+            submitSilentPrompt(prompt, intent);
           });
         }
         return;
@@ -1401,6 +1548,15 @@
         return true;
       }
       seenEscalationIds[eid] = 1;
+    }
+    var hideKey =
+      (msg.role || '') +
+      '|' +
+      (msg.created_at || '') +
+      '|' +
+      String(msg.content || '').slice(0, 96);
+    if (msg.hide_ui || msg.hide_user) {
+      if (seenHiddenMsgKeys[hideKey]) return true;
     }
     var ts = msg.created_at || '';
     var role = msg.role || 'assistant';
@@ -1463,6 +1619,14 @@
     if (messageSeen(msg)) return null;
     var role = msg.role || 'assistant';
     var text = (msg.content || '').trim();
+    /* پرامپت اکشن مأموریت — در چت نمایش نده */
+    if (role === 'user' && (msg.hide_ui || msg.hide_user || opts.silent)) {
+      var hk =
+        role + '|' + (msg.created_at || '') + '|' + String(msg.content || '').slice(0, 96);
+      seenHiddenMsgKeys[hk] = 1;
+      if (msg.created_at) bumpLastSyncAt(msg.created_at);
+      return null;
+    }
     var cardsHtml = buildCardsHtml(msg);
     var isAdmin =
       msg.source === 'admin_escalation' ||
@@ -2246,7 +2410,14 @@
     e.preventDefault();
     if (isPostchiMode()) return;
     if (submitting) return;
-    var msg = (input.value || '').trim();
+    var silentUser = false;
+    try {
+      silentUser = form.getAttribute('data-silent-user') === '1';
+    } catch (_) {}
+    var silentMsg = takeSilentMessage();
+    var msg = silentMsg || (input.value || '').trim();
+    takeSilentUserFlag(); /* clear flag after reading silentMsg */
+    if (silentMsg) silentUser = true;
     if (!msg || msg.length < MIN_MSG_LEN) {
       syncComposerReady();
       return;
@@ -2255,8 +2426,10 @@
     /* سقف مهمان: دکمه فعال می‌ماند؛ با ارسال → پیام + منوی ورود */
     if (isGuestQuotaUser() && guestRepliesRemaining !== null && guestRepliesRemaining <= 0) {
       try {
-        input.value = msg;
-        autoGrowInput();
+        if (!silentUser) {
+          input.value = msg;
+          autoGrowInput();
+        }
       } catch (_) {}
       promptGuestLoginLimit('به سقف ۲۰ پاسخ رسیدید. برای ادامه وارد شوید.');
       return;
@@ -2272,11 +2445,15 @@
     lastSubmitAt = now;
     hideChipBar();
     removeWelcome();
-    appendMessage({ role: 'user', content: msg }, { pendingUser: true });
+    if (!silentUser) {
+      appendMessage({ role: 'user', content: msg }, { pendingUser: true });
+    }
     showThinking();
     input.value = '';
     autoGrowInput();
     setBusy(true);
+    stickChatToBottom = true;
+    scrollChatToEnd({ force: true });
 
     if (isPostchiMode()) {
       if (!postchiSendUrl) {
@@ -2321,6 +2498,7 @@
       var intent = takePendingChipIntent();
       var body = { message: msg, thread_id: activeThreadId() };
       if (intent) body.intent = intent;
+      if (silentUser) body.hide_user = true;
       var resp = await fetch(chatUrl, {
         method: 'POST',
         headers: apiHeaders(true),
@@ -2473,23 +2651,7 @@
 
   var landDetailPending = null;
   function sendChatPromptFromDetail(prompt, intent) {
-    prompt = (prompt || '').trim();
-    if (!prompt) return;
-    intent = (intent || '').trim();
-    if (intent) {
-      try {
-        form.setAttribute('data-pending-intent', intent);
-      } catch (_) {}
-    }
-    input.value = prompt;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    scrollChatToEnd();
-    setTimeout(function () {
-      try {
-        if (typeof form.requestSubmit === 'function') form.requestSubmit();
-        else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      } catch (_) {}
-    }, 60);
+    submitSilentPrompt(prompt, intent);
   }
 
   if (!window.__vinorChatPromptCaptureBound) {
@@ -2503,15 +2665,33 @@
         if (!prompt.trim()) return;
         e.preventDefault();
         e.stopPropagation();
-        if (form && input && document.getElementById('aiMessages')) {
-          sendChatPromptFromDetail(prompt, btn.getAttribute('data-vn-chat-intent') || '');
+        e.stopImmediatePropagation();
+        var liveForm = document.getElementById('aiChatForm');
+        var liveInput = document.getElementById('aiInput');
+        if (liveForm && liveInput && document.getElementById('aiMessages')) {
+          var intent = btn.getAttribute('data-vn-chat-intent') || '';
+          try {
+            liveForm.setAttribute('data-silent-user', '1');
+            liveForm.setAttribute('data-silent-message', prompt.trim());
+            if (intent) liveForm.setAttribute('data-pending-intent', intent);
+            else liveForm.removeAttribute('data-pending-intent');
+            liveInput.value = '';
+            liveInput.dispatchEvent(new Event('input', { bubbles: true }));
+          } catch (_) {}
+          setTimeout(function () {
+            try {
+              if (typeof liveForm.requestSubmit === 'function') liveForm.requestSubmit();
+              else liveForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            } catch (_) {}
+          }, 40);
           return;
         }
         try {
           sessionStorage.setItem('vinor_ai_home_prompt', prompt.trim());
           sessionStorage.setItem('vinor_ai_home_autosend', '1');
-          var intent = (btn.getAttribute('data-vn-chat-intent') || '').trim();
-          if (intent) sessionStorage.setItem('vinor_ai_home_intent', intent);
+          sessionStorage.setItem('vinor_ai_home_silent', '1');
+          var intentNav = (btn.getAttribute('data-vn-chat-intent') || '').trim();
+          if (intentNav) sessionStorage.setItem('vinor_ai_home_intent', intentNav);
           else sessionStorage.removeItem('vinor_ai_home_intent');
         } catch (_) {}
         if (typeof window.vinorExpressNavigate === 'function') {
@@ -2581,4 +2761,5 @@
   syncComposerReady();
   syncChipBarVisibility();
   startTypeHintPlaceholder();
+  bindChatScrollBottom();
 })();

@@ -153,6 +153,7 @@
     if (!card) return null;
     /* CTA / لینک‌ها را رد کن؛ روی بدنه، مراحل، و دکمه جمع/باز اجازه بده */
     if (el.closest('a[href], input, textarea, select, [data-vn-chat-prompt]')) return null;
+    /* کلیک روی هدر = جزئیات فایل؛ سوایپ جمع‌کردن را روی هدر نگه دار */
     var btn = el.closest('button');
     if (btn && !btn.hasAttribute('data-vn-journey-collapse') && !btn.hasAttribute('data-vn-journey-expand')) {
       return null;
@@ -266,7 +267,7 @@
 </script>
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=67"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=73"></script>
 <script>
 (function () {
   function syncHomeDockPad() {
@@ -334,18 +335,30 @@
     if (!draft) return;
     var input = document.getElementById('aiInput');
     if (!input) return;
-    input.value = draft;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
     sessionStorage.removeItem('vinor_ai_home_prompt');
     var autosend = sessionStorage.getItem('vinor_ai_home_autosend') === '1';
-    if (!autosend) return;
+    if (!autosend) {
+      input.value = draft;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
     sessionStorage.removeItem('vinor_ai_home_autosend');
+    var silent = sessionStorage.getItem('vinor_ai_home_silent') === '1';
+    sessionStorage.removeItem('vinor_ai_home_silent');
     var form = document.getElementById('aiChatForm');
     if (!form) return;
     try {
       var intent = sessionStorage.getItem('vinor_ai_home_intent') || '';
       sessionStorage.removeItem('vinor_ai_home_intent');
       if (intent) form.setAttribute('data-pending-intent', intent);
+      if (silent) {
+        form.setAttribute('data-silent-user', '1');
+        form.setAttribute('data-silent-message', draft);
+        input.value = '';
+      } else {
+        input.value = draft;
+      }
+      input.dispatchEvent(new Event('input', { bubbles: true }));
     } catch (_) {}
     setTimeout(function () {
       try {

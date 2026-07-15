@@ -158,6 +158,12 @@
     var carousel = document.getElementById('homePublicLandsCarousel');
     if (!track || !carousel || !landCards || !landCards.length) return false;
 
+    var hasJourney = !!document.querySelector('[data-vn-journey-card]');
+    var cardsIn = landCards;
+    if (hasJourney && cardsIn.length > 3) {
+      cardsIn = cardsIn.slice(0, 3);
+    }
+
     var existingByCode = {};
     var orphans = [];
     Array.prototype.forEach.call(track.children, function (slot) {
@@ -171,7 +177,7 @@
     var used = {};
     var suggested = 0;
 
-    landCards.forEach(function (c) {
+    cardsIn.forEach(function (c) {
       if (!c) return;
       var code = c.code ? String(c.code).trim() : '';
       var slot = null;
@@ -192,22 +198,43 @@
 
     if (!suggested) return false;
 
-    Object.keys(existingByCode).forEach(function (code) {
-      if (!used[code]) frag.appendChild(existingByCode[code]);
-    });
-    orphans.forEach(function (slot) {
-      frag.appendChild(slot);
-    });
+    /* با کارت مأموریت: فقط همان پیشنهادهای جواب — کاتالوگ اضافه نشود */
+    if (!hasJourney) {
+      Object.keys(existingByCode).forEach(function (code) {
+        if (!used[code]) frag.appendChild(existingByCode[code]);
+      });
+      orphans.forEach(function (slot) {
+        frag.appendChild(slot);
+      });
+    }
 
     track.innerHTML = '';
     track.appendChild(frag);
 
     var total = track.querySelectorAll('.vn-home-lands__slot').length;
     carousel.setAttribute('data-has-lands', '1');
+    carousel.setAttribute('data-vn-suggest-mode', hasJourney ? '1' : '0');
     var label = carousel.querySelector('[data-vn-home-lands-label]');
     var meta = carousel.querySelector('[data-vn-home-lands-meta]');
     if (label) label.textContent = opts.label || 'پیشنهاد فایل';
-    if (meta) meta.textContent = ' · ' + faDigits(total) + ' فایل — بکشید';
+    if (meta) {
+      meta.textContent = hasJourney
+        ? ' · ' + faDigits(total) + ' پیشنهاد'
+        : ' · ' + faDigits(total) + ' فایل — بکشید';
+    }
+
+    /* تداخل کم شود: مأموریت جمع شود تا پیشنهادها جا پیدا کنند */
+    try {
+      if (hasJourney && typeof window.__vinorJourneyCollapseSet === 'function') {
+        window.__vinorJourneyCollapseSet(true);
+      }
+    } catch (_) {}
+
+    try {
+      document.documentElement.classList.toggle('vn-home-has-land-suggest', true);
+      var page = document.getElementById('homeDashboardPage');
+      if (page) page.classList.add('vn-home-has-land-suggest');
+    } catch (_) {}
 
     try {
       carousel.classList.remove('vn-home-lands--reordered');
