@@ -284,6 +284,7 @@
   var stickChatToBottom = true;
   var scrollBottomBtn = null;
   var scrollBottomBound = false;
+  var scrollLatestGen = 0;
 
   function chatScrollEl() {
     if (homeInline) {
@@ -399,6 +400,52 @@
     }
     stickChatToBottom = true;
     syncScrollBottomBtn();
+  }
+
+  /* بدو ورود / تعویض ترد: همیشه آخرین پیام — چند تلاش برای layout دیرگاه */
+  function scrollChatToLatest(opts) {
+    opts = opts || {};
+    var gen = ++scrollLatestGen;
+    stickChatToBottom = true;
+    function go() {
+      if (gen !== scrollLatestGen) return;
+      stickChatToBottom = true;
+      scrollChatToEnd({ force: true, smooth: !!opts.smooth });
+    }
+    go();
+    try {
+      requestAnimationFrame(function () {
+        go();
+        requestAnimationFrame(go);
+      });
+    } catch (_) {}
+    [40, 120, 280, 520].forEach(function (ms) {
+      setTimeout(go, ms);
+    });
+    if (typeof ResizeObserver === 'undefined') return;
+    var watch = chatScrollEl();
+    if (!watch) return;
+    var ro = null;
+    try {
+      ro = new ResizeObserver(function () {
+        if (gen !== scrollLatestGen) {
+          try {
+            if (ro) ro.disconnect();
+          } catch (_) {}
+          return;
+        }
+        go();
+      });
+      ro.observe(watch);
+      if (list && list !== watch) ro.observe(list);
+    } catch (_) {
+      return;
+    }
+    setTimeout(function () {
+      try {
+        if (ro) ro.disconnect();
+      } catch (_) {}
+    }, 1400);
   }
 
   function cancelTypewriter() {
@@ -595,7 +642,7 @@
     if (sheetOpen) {
       resumePoll();
       try {
-        scrollChatToEnd();
+        scrollChatToLatest();
       } catch (_) {}
     } else {
       pollPaused = true;
@@ -1776,7 +1823,7 @@
     showWelcomeIfEmpty();
     scanLastSyncFromDom();
     syncChipBarVisibility();
-    scrollChatToEnd();
+    scrollChatToLatest();
   }
 
   function showWelcomeIfEmpty() {
@@ -2297,6 +2344,7 @@
     }
     if (composer) composer.style.removeProperty('--ai-keyboard-inset');
     cancelTypewriter();
+    scrollLatestGen += 1;
     window.__vinorAiChatTeardown = null;
     window.__vinorAiChatSetSheetOpen = null;
     window.__vinorAiChatSwitchThread = null;
@@ -2320,7 +2368,7 @@
   scrubLandCardsFromChatDom();
   enhanceAssistantBubbles(list);
   scanLastSyncFromDom();
-  scrollChatToEnd();
+  scrollChatToLatest();
 
   list.addEventListener('click', onMsgActionsClick);
   document.addEventListener('click', function (e) {
@@ -2762,4 +2810,5 @@
   syncChipBarVisibility();
   startTypeHintPlaceholder();
   bindChatScrollBottom();
+  scrollChatToLatest();
 })();
