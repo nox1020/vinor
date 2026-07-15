@@ -177,8 +177,8 @@ def agent_system_hint(voice: str | None) -> str:
     return (
         "ابزار وقتی لازم: search→[[LAND]] | next→کار بعدی | listing→کارت کپی "
         "| propose_visit/complete/deal/release→کارت تأیید. "
-        "بازدید/بازدید مجدد یکی‌یکی: فوری propose با land_code خالی (کد نپرس) → نام → "
-        "نام‌خانوادگی → شماره → propose بدون تاریخ → لیست ۱…۵ → فقط visit_date. چند فیلد یکجا نه."
+        "بازدید/بازدید مجدد یکی‌یکی: فوری propose با land_code خالی (کد نپرس) → عین «نام مشتری را بگو» → "
+        "شماره → لیست تاریخ → فقط visit_date. نام کوچک/خانوادگی جدا ممنوع. چند فیلد یکجا نه."
     )
 
 
@@ -304,7 +304,7 @@ def _schema_visit() -> dict[str, Any]:
             "description": (
                 "کارت ثبت بازدید یا بازدید مجدد. فیلدها یکی‌یکی؛ چندتایی نفرست. "
                 "فوری با land_code خالی بزن (کد را از کاربر نپرس؛ سیستم از مأموریت/گفتگو/اختصاص می‌گیرد) سپس: "
-                "customer_first_name → customer_last_name → customer_phone → "
+                "customer_name → customer_phone → "
                 "بدون visit_date صدا بزن تا لیست ۱…۵ تاریخ بیاید → فقط شمارهٔ تاریخ را در visit_date بفرست. "
                 "ثبت فقط بعد از تأیید کارت."
             ),
@@ -312,17 +312,9 @@ def _schema_visit() -> dict[str, Any]:
                 "type": "object",
                 "properties": {
                     "land_code": {"type": "string"},
-                    "customer_first_name": {
-                        "type": "string",
-                        "description": "فقط نام کوچک مشتری",
-                    },
-                    "customer_last_name": {
-                        "type": "string",
-                        "description": "فقط نام خانوادگی مشتری",
-                    },
                     "customer_name": {
                         "type": "string",
-                        "description": "اختیاری/قدیمی؛ ترجیح first+last جدا",
+                        "description": "نام مشتری (یکجا؛ نام کوچک و خانوادگی جدا نپرس)",
                     },
                     "customer_phone": {
                         "type": "string",
@@ -1081,6 +1073,166 @@ def clear_visit_draft(user_key: str) -> None:
     _clear_visit_draft(user_key)
 
 
+VISIT_ASK_NAME = "نام مشتری را بگو"
+VISIT_ASK_PHONE = "شماره موبایل مشتری را بگو"
+
+
+def _visit_draft_has_name(draft: dict[str, Any]) -> bool:
+    if str(draft.get("customer_name") or "").strip():
+        return True
+    first = str(draft.get("customer_first_name") or "").strip()
+    last = str(draft.get("customer_last_name") or "").strip()
+    return bool(first or last)
+
+
+def _looks_like_customer_name(text: str) -> bool:
+    s = (text or "").strip()
+    if not s or len(s) > 60:
+        return False
+    low = s.replace("‌", " ")
+    blocked = (
+        "ثبت بازدید",
+        "بازدید مجدد",
+        "بازدید انجام",
+        "http",
+        "ماموریت",
+        "پیشنهاد",
+        "قدم بعدی",
+        "بازاریابی",
+    )
+    if any(b in low for b in blocked):
+        return False
+    from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
+
+    phone = normalize_iran_mobile(s) or s
+    if is_valid_iran_mobile(phone):
+        return False
+    digits = "".join(ch for ch in s if ch.isdigit())
+    if len(digits) >= 8:
+        return False
+    if s.isdigit() and 1 <= int(s) <= 5:
+        return False
+    if not any(("\u0600" <= ch <= "\u06FF") or ch.isalpha() for ch in s):
+        return False
+    return True
+
+
+def _format_visit_date_ask(labels: list[str]) -> str:
+    lines = ["کدام تاریخ؟ فقط شماره را بفرست:"]
+    for i, lab in enumerate(labels[:5], start=1):
+        lines.append(f"{i}) {lab}")
+    return "\n".join(lines)
+
+
+def _visit_tool_to_chat_result(tool_out: dict[str, Any]) -> dict[str, Any] | None:
+    """پاسخ مستقیم کاربر از نتیجهٔ ابزار بازدید (بدون متن آزاد مدل)."""
+    if not isinstance(tool_out, dict):
+        return None
+    model = tool_out.get("model_result")
+    if not isinstance(model, dict):
+        model = {}
+    speak = str(model.get("speak_exactly") or "").strip()
+    ui = tool_out.get("ui_action") if isinstance(tool_out.get("ui_action"), dict) else None
+    actions = [ui] if ui else []
+    if speak:
+        return {
+            "ok": True,
+            "reply": speak,
+            "agent_actions": actions,
+            "meta": {"provider": "visit_step", "forced": True},
+        }
+    if ui and str(ui.get("type") or "").startswith("confirm_"):
+        return {
+            "ok": True,
+            "reply": "اگر درست است تأیید کن.",
+            "agent_actions": actions,
+            "meta": {"provider": "visit_step", "forced": True},
+        }
+    if model.get("status") == "needs_date_choice":
+        labels = [str(x) for x in (model.get("available_date_labels") or []) if str(x).strip()]
+        return {
+            "ok": True,
+            "reply": _format_visit_date_ask(labels),
+            "agent_actions": actions,
+            "meta": {"provider": "visit_step", "forced": True},
+        }
+    return None
+
+
+def try_continue_visit_from_user_message(
+    phone: str,
+    text: str,
+    *,
+    audience: str = "",
+    voice: str = "",
+    thread_id: str | None = None,
+) -> dict[str, Any] | None:
+    """اگر پیش‌نویس بازدید منتظر نام/موبایل/تاریخ است، جواب کاربر را مستقیم به ابزار بده."""
+    me = (phone or "").strip()
+    msg = (text or "").strip()
+    if not me or not msg:
+        return None
+    draft = _load_visit_draft(me)
+    code = str(draft.get("land_code") or "").strip()
+    if not code:
+        return None
+
+    from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
+    from app.express_partner.visit_requests import resolve_visit_date_choice, list_upcoming_visit_dates
+
+    args: dict[str, Any] = {"land_code": code}
+    if _visit_draft_has_name(draft):
+        args["customer_name"] = (
+            str(draft.get("customer_name") or "").strip()
+            or f"{draft.get('customer_first_name') or ''} {draft.get('customer_last_name') or ''}".strip()
+        )
+    if str(draft.get("customer_phone") or "").strip():
+        args["customer_phone"] = str(draft.get("customer_phone") or "").strip()
+
+    if not _visit_draft_has_name(draft):
+        if not _looks_like_customer_name(msg):
+            return {
+                "ok": True,
+                "reply": VISIT_ASK_NAME,
+                "agent_actions": [],
+                "meta": {"provider": "visit_step", "forced": True},
+            }
+        args["customer_name"] = msg
+    elif not is_valid_iran_mobile(normalize_iran_mobile(str(draft.get("customer_phone") or "")) or ""):
+        phone_try = normalize_iran_mobile(msg) or msg
+        if not is_valid_iran_mobile(phone_try):
+            return {
+                "ok": True,
+                "reply": VISIT_ASK_PHONE,
+                "agent_actions": [],
+                "meta": {"provider": "visit_step", "forced": True},
+            }
+        args["customer_phone"] = phone_try
+    else:
+        available = list_upcoming_visit_dates(limit=5)
+        vd = resolve_visit_date_choice(msg, options=available)
+        if vd is None:
+            labels = [str(x.get("label") or "") for x in available if str(x.get("label") or "").strip()]
+            return {
+                "ok": True,
+                "reply": _format_visit_date_ask(labels),
+                "agent_actions": [],
+                "meta": {"provider": "visit_step", "forced": True},
+            }
+        args["customer_phone"] = str(draft.get("customer_phone") or "").strip()
+        args["visit_date"] = msg.strip()
+
+    tool_out = run_tool(
+        TOOL_VISIT,
+        args,
+        phone=me,
+        audience=audience,
+        voice=voice,
+        thread_id=thread_id,
+    )
+    return _visit_tool_to_chat_result(tool_out)
+
+
 def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     """اعتبارسنجی پیشنهاد بازدید — بدون ذخیره توکن."""
     from app.express_partner.routes import (
@@ -1139,14 +1291,21 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     full_name = str(merged.get("customer_name") or "").strip()
     first = str(merged.get("customer_first_name") or "").strip()
     last = str(merged.get("customer_last_name") or "").strip()
-    if full_name and (not first or not last):
-        parts = [p for p in full_name.split() if p]
-        if len(parts) >= 2:
-            first, last = split_customer_full_name(full_name)
-        elif parts and not first:
-            first = parts[0]
-    if first and last:
+    # پیش‌نویس قدیمی first/last را به یک نام کامل تبدیل کن
+    if not full_name and (first or last):
         full_name = f"{first} {last}".strip()
+    # اگر ابزار نام را خالی گذاشت ولی کاربر همین الان نام را فرستاده
+    if not full_name and code and draft_code == code:
+        try:
+            from flask import g
+
+            guessed = str(getattr(g, "ai_last_user_message", "") or "").strip()
+        except Exception:
+            guessed = ""
+        if _looks_like_customer_name(guessed):
+            full_name = guessed
+    if full_name:
+        first, last = split_customer_full_name(full_name)
     phone_raw = str(merged.get("customer_phone") or "").strip()
     cust_phone = normalize_iran_mobile(phone_raw) or phone_raw
 
@@ -1154,12 +1313,12 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     available_labels = [str(x.get("label") or "") for x in available]
 
     # پیش‌نویس جزئی را نگه دار تا مراحل یکی‌یکی ادامه پیدا کند
-    if code or first or last or phone_raw:
+    if code or full_name or phone_raw:
         _save_visit_draft(
             me,
             {
                 "land_code": code,
-                "customer_name": full_name or f"{first} {last}".strip(),
+                "customer_name": full_name,
                 "customer_first_name": first,
                 "customer_last_name": last,
                 "customer_phone": cust_phone if is_valid_iran_mobile(cust_phone) else phone_raw,
@@ -1180,22 +1339,18 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
                 "هنوز نام/شماره/تاریخ نپرس."
             ),
         }
-    if not first:
+    if not full_name:
         return {
             "ok": False,
             "error": "اطلاعات ناقص",
-            "missing": ["customer_first_name"],
+            "missing": ["customer_name"],
             "land_code": code,
-            "instruction": "فقط نام کوچک مشتری را بپرس (نه نام خانوادگی، نه شماره، نه تاریخ).",
-        }
-    if not last:
-        return {
-            "ok": False,
-            "error": "اطلاعات ناقص",
-            "missing": ["customer_last_name"],
-            "land_code": code,
-            "customer_first_name": first,
-            "instruction": "فقط نام خانوادگی مشتری را بپرس (نه شماره، نه تاریخ).",
+            "speak_exactly": VISIT_ASK_NAME,
+            "instruction": (
+                f"عین این جمله را بپرس و هیچ کلمه‌ای اضافه نکن: «{VISIT_ASK_NAME}». "
+                "هرگز نگو نام کوچک، نام خانوادگی، یا نام و نام‌خانوادگی. "
+                "نه شماره، نه تاریخ."
+            ),
         }
     if not phone_raw:
         return {
@@ -1203,9 +1358,12 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "error": "اطلاعات ناقص",
             "missing": ["customer_phone"],
             "land_code": code,
-            "customer_first_name": first,
-            "customer_last_name": last,
-            "instruction": "فقط شماره موبایل مشتری را بپرس (نه تاریخ).",
+            "customer_name": full_name,
+            "speak_exactly": VISIT_ASK_PHONE,
+            "instruction": (
+                f"عین این جمله را بپرس و هیچ کلمه‌ای اضافه نکن: «{VISIT_ASK_PHONE}». "
+                "نه تاریخ."
+            ),
         }
 
     if not is_valid_iran_mobile(cust_phone):
@@ -1221,7 +1379,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
         me,
         {
             "land_code": code,
-            "customer_name": full_name or f"{first} {last}".strip(),
+            "customer_name": full_name,
             "customer_first_name": first,
             "customer_last_name": last,
             "customer_phone": cust_phone,
@@ -1240,14 +1398,13 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "ok": True,
             "status": "needs_date_choice",
             "land_code": code,
-            "customer_name": full_name or f"{first} {last}".strip(),
+            "customer_name": full_name,
             "available_date_labels": available_labels,
             "allowed_weekdays": visit_allowed_weekdays_summary(),
+            "speak_exactly": _format_visit_date_ask(available_labels),
             "instruction": (
-                f"فایل {code}: لیست تاریخ را عیناً با شماره ۱ تا ۵ نشان بده "
-                "(همه شمسی هستند؛ میلادی نگو و تاریخ خودت نساز). "
-                "بگو فقط همان عدد را بفرستد (مثلاً ۲). "
-                "بعد فقط visit_date=همان عدد را بفرست (نام/شماره ذخیره است)."
+                f"عین speak_exactly را بفرست؛ تاریخ خودت نساز. "
+                "بعد فقط visit_date=شماره را بفرست."
             ),
         }
 
@@ -1259,9 +1416,8 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "error": "انتخاب تاریخ نامعتبر است.",
             "land_code": code,
             "available_date_labels": available_labels,
-            "instruction": (
-                "لیست را دوباره عیناً نشان بده؛ فقط عدد ۱ تا ۵ بخواهد. سپس فقط visit_date بفرست."
-            ),
+            "speak_exactly": _format_visit_date_ask(available_labels),
+            "instruction": "عین speak_exactly را بفرست؛ سپس فقط visit_date بفرست.",
         }
     if vd < _today():
         return {"ok": False, "error": "تاریخ بازدید نمی‌تواند در گذشته باشد."}

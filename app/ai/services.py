@@ -15,6 +15,7 @@ from .agent_tools import (
     render_agent_actions_html,
     run_tool,
     tools_schema_for_voice,
+    try_continue_visit_from_user_message,
 )
 from .audience import (
     AUDIENCE_PARTNER,
@@ -587,6 +588,20 @@ def _run_agent_loop(
                     "content": content,
                 }
             )
+            # مرحلهٔ اجباری بازدید: متن را خود سیستم بگوید (مدل «نام‌خانوادگی» اختراع نکند)
+            speak = ""
+            if isinstance(model_payload, dict):
+                speak = str(model_payload.get("speak_exactly") or "").strip()
+            if speak:
+                forced_actions = list(agent_actions)
+                return {
+                    "ok": True,
+                    "reply": speak,
+                    "agent_actions": forced_actions,
+                    "tool_land_codes": tool_land_codes,
+                    "api_rounds": api_rounds,
+                    "meta": result.get("meta") if isinstance(result.get("meta"), dict) else {"provider": "deepseek"},
+                }
 
     if result.get("ok"):
         result["agent_actions"] = agent_actions
@@ -695,6 +710,36 @@ def generate_reply(
             clear_visit_draft(key)
         except Exception:
             pass
+    # ادامهٔ مرحله‌ای بازدید (نام/موبایل/تاریخ) بدون اینکه مدل دوباره نام‌خانوادگی بپرسد
+    if intent != "visit" and key:
+        try:
+            from flask import g
+
+            g.ai_last_user_message = (text or "").strip()
+        except Exception:
+            pass
+        short = try_continue_visit_from_user_message(
+            key,
+            text,
+            audience=aud,
+            voice=voice,
+            thread_id=thread_id,
+        )
+        if short and short.get("ok"):
+            reply = str(short.get("reply") or "").strip()
+            agent_actions = [
+                a for a in (short.get("agent_actions") or []) if isinstance(a, dict)
+            ]
+            actions_html = render_agent_actions_html(agent_actions) if agent_actions else ""
+            return {
+                "ok": True,
+                "reply": reply,
+                "land_codes": [],
+                "land_cards": [],
+                "agent_actions": agent_actions,
+                "agent_actions_html": actions_html,
+                "meta": short.get("meta") or {"provider": "visit_step"},
+            }
     tools = tools_schema_for_voice(voice) if key else []
     messages = _build_messages(
         text,
