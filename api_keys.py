@@ -7,7 +7,8 @@
 # --- DeepSeek (Vinor AI) ---
 DEEPSEEK_API_KEY = ""
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEEPSEEK_MODEL = "deepseek-chat"
+# پیش‌فرض سازگار با DeepSeek V4 (deepseek-chat از ۱۴۰۵/۰۵/۰۲ منسوخ می‌شود)
+DEEPSEEK_MODEL = "deepseek-v4-flash"
 
 # --- sms.ir (OTP و پیامک) ---
 #

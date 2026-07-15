@@ -23,7 +23,6 @@ from .audience import (
 )
 from .config import (
     DEEPSEEK_BASE_URL,
-    DEEPSEEK_MODEL,
     ESCALATE_MARKER_RE,
     get_deepseek_api_key,
     prompt_for_voice,
@@ -46,7 +45,11 @@ from .credits import (
     record_api_call,
     store_cached_reply,
 )
-from .runtime_settings import get_ai_settings
+from .runtime_settings import (
+    get_ai_settings,
+    model_choice_label,
+    resolve_deepseek_model,
+)
 from .escalations import consume_pending_answers, create_escalation
 from .land_cards import collect_land_codes, land_cards_payload
 from .provider_router import call_ai
@@ -87,10 +90,13 @@ LAND_MARKER_RE = re.compile(r"\[\[LAND:[^\]]+\]\]\s*", re.IGNORECASE)
 def ai_config() -> dict[str, Any]:
     api_key = get_deepseek_api_key()
     cfg = get_ai_settings()
+    choice = str(cfg.get("model_choice") or "auto")
     return {
         "enabled": bool(cfg.get("enabled")),
         "provider": "deepseek",
-        "model": DEEPSEEK_MODEL,
+        "model_choice": choice,
+        "model_choice_label": model_choice_label(choice),
+        "model": resolve_deepseek_model(has_tools=False),
         "api_key_set": bool(api_key),
         "api_balance_ok": not is_api_balance_depleted(),
     }
@@ -374,7 +380,7 @@ def _call_deepseek(
             "balance_depleted": True,
         }
 
-    model = DEEPSEEK_MODEL
+    model = resolve_deepseek_model(has_tools=bool(tools))
     url = f"{DEEPSEEK_BASE_URL.rstrip('/')}/chat/completions"
     bcfg = budget_config()
     payload: dict[str, Any] = {

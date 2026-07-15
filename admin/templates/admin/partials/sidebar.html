@@ -8,9 +8,6 @@
   'admin.financial_withdrawals', 'admin.express_visit_requests',
   'admin.express_partner_files', 'admin.express_partner_file_download'
 ] %}
-{% set _ads_active = _endpoint in [
-  'admin.express_listings', 'admin.add_express_listing', 'admin.edit_express_listing', 'admin.express'
-] %}
 {% set _comm_active = _endpoint in [
   'admin.notifications_colleagues', 'admin.sms_colleagues', 'admin.sms_history',
   'admin.sms_recipients', 'admin.sms_recipients_edit',
@@ -22,7 +19,6 @@
 
 <div class="h-full flex flex-col p-4" x-data="{
   opsOpen: {{ 'true' if _ops_active else 'false' }},
-  adsOpen: {{ 'true' if _ads_active else 'false' }},
   commOpen: {{ 'true' if _comm_active else 'false' }},
   sysOpen: {{ 'true' if _sys_active else 'false' }}
 }">
@@ -37,7 +33,7 @@
     </button>
   </div>
 
-  <nav class="flex-1 space-y-1 overflow-y-auto pb-4">
+  <nav class="admin-sidebar-scroll flex-1 space-y-1 pb-4">
 
     <a href="{{ url_for('admin.dashboard') }}"
        class="flex items-center gap-3 px-3 py-2 rounded-lg transition focusable text-sm font-medium
@@ -81,18 +77,6 @@
       <a href="{{ url_for('admin.express_partner_files') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.express_partner_files', 'admin.express_partner_file_download'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-folder w-4 text-[13px]"></i>فایل‌ها</a>
     </div>
 
-    <div class="pt-3 pb-1 px-3"><p class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">آگهی</p></div>
-    <button type="button" @click="adsOpen = !adsOpen"
-            class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition focusable text-sm font-semibold
-                   {% if _ads_active %}text-blue-600 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-900/10{% else %}text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
-      <span class="flex items-center gap-2"><i class="fa-solid fa-layer-group w-4 text-[13px]"></i>آگهی‌های Express</span>
-      <i class="fa-solid fa-chevron-down text-[10px] transition-transform" :class="adsOpen ? 'rotate-180' : ''"></i>
-    </button>
-    <div x-show="adsOpen" class="space-y-0.5 mt-0.5 mr-2">
-      <a href="{{ url_for('admin.express_listings') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.express_listings', 'admin.express', 'admin.edit_express_listing'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-list w-4 text-[13px]"></i>لیست آگهی‌ها</a>
-      <a href="{{ url_for('admin.add_express_listing') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint == 'admin.add_express_listing' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-plus w-4 text-[13px]"></i>ثبت آگهی</a>
-    </div>
-
     <div class="pt-3 pb-1 px-3"><p class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">ارتباط</p></div>
     <button type="button" @click="commOpen = !commOpen"
             class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition focusable text-sm font-semibold
@@ -102,8 +86,7 @@
     </button>
     <div x-show="commOpen" class="space-y-0.5 mt-0.5 mr-2">
       <a href="{{ url_for('admin.notifications_colleagues') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.notifications_colleagues', 'admin.notifications_broadcast'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-bell w-4 text-[13px]"></i>نوتیفیکیشن</a>
-      <a href="{{ url_for('admin.sms_colleagues') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.sms_colleagues', 'admin.sms_history'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-sms w-4 text-[13px]"></i>پیامک</a>
-      <a href="{{ url_for('admin.sms_recipients') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.sms_recipients', 'admin.sms_recipients_edit'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-users w-4 text-[13px]"></i>گیرندگان پیامک</a>
+      <a href="{{ url_for('admin.sms_colleagues') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.sms_colleagues', 'admin.sms_history', 'admin.sms_recipients', 'admin.sms_recipients_edit'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-sms w-4 text-[13px]"></i>پیامک</a>
     </div>
 
     <div class="pt-3 pb-1 px-3"><p class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">سیستم</p></div>
@@ -114,9 +97,8 @@
       <i class="fa-solid fa-chevron-down text-[10px] transition-transform" :class="sysOpen ? 'rotate-180' : ''"></i>
     </button>
     <div x-show="sysOpen" class="space-y-0.5 mt-0.5 mr-2">
-      <a href="{{ url_for('admin.express_cities') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint == 'admin.express_cities' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-city w-4 text-[13px]"></i>شهرهای فعال</a>
-      <a href="{{ url_for('admin.ai_questions') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint == 'admin.ai_questions' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-robot w-4 text-[13px]"></i>سوالات AI</a>
-      <a href="{{ url_for('admin.settings') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint == 'admin.settings' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-gear w-4 text-[13px]"></i>تنظیمات کلی</a>
+      <a href="{{ url_for('admin.ai_questions') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint == 'admin.ai_questions' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-robot w-4 text-[13px]"></i>AI</a>
+      <a href="{{ url_for('admin.settings') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.settings', 'admin.express_cities'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-gear w-4 text-[13px]"></i>تنظیمات کلی</a>
     </div>
 
     <div class="pt-4 mt-2 border-t border-gray-200 dark:border-gray-800">

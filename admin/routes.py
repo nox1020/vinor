@@ -2466,6 +2466,7 @@ def ai_questions():
                 patch = {
                     'enabled': request.form.get('ai_enabled') == '1',
                     'escalation_sms_enabled': request.form.get('ai_escalation_sms_enabled') == '1',
+                    'model_choice': (request.form.get('ai_model_choice') or 'auto').strip(),
                     'min_interval_sec': float(request.form.get('ai_min_interval_sec') or ai_def['min_interval_sec']),
                     'dedup_ttl_sec': int(request.form.get('ai_dedup_ttl_sec') or ai_def['dedup_ttl_sec']),
                     'max_history': int(request.form.get('ai_max_history') or ai_def['max_history']),
@@ -2509,6 +2510,7 @@ def ai_questions():
     site_settings = get_settings()
     stored_api_key = get_stored_ai_api_key()
     active_api_key = get_deepseek_api_key()
+    from app.ai.runtime_settings import model_choice_options
     try:
         lands = load_json(_lands_path())
         p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
@@ -2523,6 +2525,7 @@ def ai_questions():
         rejected_count=r,
         ai_settings=ai_settings,
         ai_status=ai_status,
+        ai_model_options=model_choice_options(),
         site_settings=site_settings,
         api_key_masked=mask_api_key(active_api_key),
         api_key_source='settings' if stored_api_key else ('file' if active_api_key else 'none'),

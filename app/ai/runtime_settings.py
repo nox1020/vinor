@@ -4,8 +4,15 @@ from __future__ import annotations
 import os
 from typing import Any
 
+# DeepSeek V4 — نام‌های پایدار API (مستندات ۱۴۰۵)
+MODEL_ID_FLASH = "deepseek-v4-flash"
+MODEL_ID_PRO = "deepseek-v4-pro"
+MODEL_CHOICES = ("auto", "flash", "pro")
+
 _AI_DEFAULTS: dict[str, Any] = {
     "enabled": True,
+    # auto | flash | pro — انتخاب پنل؛ auto بر اساس ابزار/پیچیدگی
+    "model_choice": "auto",
     "min_interval_sec": 4.0,
     "dedup_ttl_sec": 180,
     "max_history": 5,
@@ -25,6 +32,70 @@ def default_ai_settings() -> dict[str, Any]:
     return dict(_AI_DEFAULTS)
 
 
+def model_choice_options() -> list[dict[str, str]]:
+    """سه گزینهٔ قابل انتخاب در پنل ادمین."""
+    return [
+        {
+            "value": "auto",
+            "label": "خودکار",
+            "hint": "ساده → Flash؛ وقتی ابزار/اکشن لازم است → Pro",
+            "api_id": f"{MODEL_ID_FLASH} / {MODEL_ID_PRO}",
+        },
+        {
+            "value": "flash",
+            "label": "Flash",
+            "hint": "سریع و کم‌هزینه — چت روزمره",
+            "api_id": MODEL_ID_FLASH,
+        },
+        {
+            "value": "pro",
+            "label": "Pro",
+            "hint": "دقیق‌تر برای ابزار و مسیر فروش",
+            "api_id": MODEL_ID_PRO,
+        },
+    ]
+
+
+def _normalize_model_choice(raw: Any) -> str:
+    v = str(raw or "").strip().lower()
+    # سازگاری با شناسه‌های قدیمی/کامل
+    if v in ("deepseek-v4-flash", "flash", "chat", "deepseek-chat"):
+        return "flash"
+    if v in ("deepseek-v4-pro", "pro", "reasoner", "deepseek-reasoner"):
+        return "pro"
+    if v in MODEL_CHOICES:
+        return v
+    return "auto"
+
+
+def resolve_deepseek_model(*, has_tools: bool = False) -> str:
+    """شناسهٔ مدل برای درخواست API بر اساس انتخاب پنل + حالت خودکار."""
+    choice = _normalize_model_choice(get_ai_settings().get("model_choice"))
+    env_choice = os.environ.get("VINOR_AI_MODEL_CHOICE") or os.environ.get("DEEPSEEK_MODEL")
+    if env_choice and str(env_choice).strip():
+        ev = str(env_choice).strip()
+        if ev in (MODEL_ID_FLASH, MODEL_ID_PRO):
+            return ev
+        choice = _normalize_model_choice(ev)
+
+    if choice == "pro":
+        return MODEL_ID_PRO
+    if choice == "flash":
+        return MODEL_ID_FLASH
+    # auto: ابزار/ایجنت → Pro، چت ساده → Flash
+    return MODEL_ID_PRO if has_tools else MODEL_ID_FLASH
+
+
+def model_choice_label(choice: str | None = None) -> str:
+    c = _normalize_model_choice(
+        choice if choice is not None else get_ai_settings().get("model_choice")
+    )
+    for opt in model_choice_options():
+        if opt["value"] == c:
+            return opt["label"]
+    return "خودکار"
+
+
 def _coerce_ai_settings(raw: dict[str, Any] | None) -> dict[str, Any]:
     out = default_ai_settings()
     if not isinstance(raw, dict):
@@ -38,6 +109,8 @@ def _coerce_ai_settings(raw: dict[str, Any] | None) -> dict[str, Any]:
                 out[key] = val
             else:
                 out[key] = str(val).strip().lower() in ("1", "true", "yes", "on")
+        elif key == "model_choice":
+            out[key] = _normalize_model_choice(val)
         elif key in ("min_interval_sec", "temperature"):
             try:
                 out[key] = float(val)
@@ -111,6 +184,10 @@ def get_ai_settings() -> dict[str, Any]:
                 out[key] = int(raw)
         except (TypeError, ValueError):
             pass
+
+    env_model = os.environ.get("VINOR_AI_MODEL_CHOICE")
+    if env_model and str(env_model).strip():
+        out["model_choice"] = _normalize_model_choice(env_model)
     return out
 
 
@@ -124,7 +201,7 @@ def save_ai_settings(patch: dict[str, Any]) -> dict[str, Any]:
     raw_ai = current.get("ai") if isinstance(current.get("ai"), dict) else {}
     ai = _coerce_ai_settings(raw_ai)
     tunable = {k: v for k, v in (patch or {}).items() if k not in ("api_key", "clear_api_key")}
-    ai.update(_coerce_ai_settings(tunable))
+    ai.update(_coerce_ai_settings({**ai, **tunable}))
 
     if patch.get("clear_api_key"):
         ai.pop("api_key", None)

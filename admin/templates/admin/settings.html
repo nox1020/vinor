@@ -165,6 +165,18 @@
         درخواست همکاری
       </h3>
 
+      <a href="{{ url_for('admin.express_cities') }}"
+         class="flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950/60 px-4 py-3 hover:border-vinor-400 dark:hover:border-vinor-500 transition">
+        <span class="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-100">
+          <i class="fa-solid fa-city text-vinor-600"></i>
+          شهرهای فعال همکاری
+        </span>
+        <span class="text-xs text-vinor-600 dark:text-vinor-400 whitespace-nowrap">
+          مدیریت
+          <i class="fa-solid fa-chevron-left text-[10px] mr-0.5"></i>
+        </span>
+      </a>
+
       <div class="space-y-2">
         <label for="partner_application_sms_message" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
           پیامک ثبت درخواست (برای همکار)
