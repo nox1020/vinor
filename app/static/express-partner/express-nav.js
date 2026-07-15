@@ -71,17 +71,83 @@
   }
 
   function navigateFromAiChatCard(href) {
+    var code = extractLandCodeFromHref(href);
+    if (code && openLandInChat(code)) return;
     try {
       sessionStorage.setItem('vinor_land_from', 'ai');
     } catch (_) {}
     window.location.assign(href);
   }
 
+  function extractLandCodeFromPath(pathname) {
+    var m = normPath(pathname || '').match(/^\/express\/partner\/lands\/([^/]+)\/?$/);
+    if (!m) return '';
+    try {
+      return decodeURIComponent(m[1] || '').trim();
+    } catch (_) {
+      return String(m[1] || '').trim();
+    }
+  }
+
+  function extractLandCodeFromHref(href) {
+    try {
+      return extractLandCodeFromPath(parseUrl(href).pathname);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function homeUrlWithLand(code) {
+    return '/express/partner/home?land=' + encodeURIComponent(code);
+  }
+
+  function openLandInChat(code) {
+    code = String(code || '').trim();
+    if (!code) return false;
+    var onHome = !!document.getElementById('homeDashboardPage');
+    var hasMessages = !!document.getElementById('aiMessages');
+    if (onHome && hasMessages) {
+      if (typeof window.vinorShowLandInChat === 'function') {
+        try {
+          window.vinorShowLandInChat(code);
+        } catch (_) {}
+        return true;
+      }
+      try {
+        sessionStorage.setItem('vinor_land_chat_code', code);
+      } catch (_) {}
+      setTimeout(function () {
+        if (typeof window.vinorShowLandInChat === 'function') {
+          try {
+            sessionStorage.removeItem('vinor_land_chat_code');
+          } catch (_) {}
+          try {
+            window.vinorShowLandInChat(code);
+          } catch (_) {}
+        }
+      }, 450);
+      return true;
+    }
+    try {
+      sessionStorage.setItem('vinor_land_chat_code', code);
+    } catch (_) {}
+    var dest = homeUrlWithLand(code);
+    if (typeof vinorExpressNavigate === 'function' && document.getElementById('vinor-express-page-swap')) {
+      vinorExpressNavigate(dest, { forward: true });
+    } else {
+      window.location.assign(dest);
+    }
+    return true;
+  }
+
+  window.vinorOpenLandInChat = openLandInChat;
+
   function lookupRoute(pathname) {
     var p = normPath(pathname || '');
     if (ROUTE_REGISTRY[p]) return ROUTE_REGISTRY[p];
     if (LAND_DETAIL_RE.test(p)) {
-      return { tab: '', depth: 2, bottomNav: false, prefetch: true };
+      /* صفحه جزئیات حذف شد — به خانه هدایت می‌شود */
+      return { tab: 'home', depth: 1, bottomNav: true, prefetch: false };
     }
     if (p.indexOf(PREFIX) === 0) {
       return { tab: '', depth: 1, bottomNav: true, prefetch: true };
@@ -1244,6 +1310,13 @@
       return Promise.resolve(false);
     }
     try {
+      var landCodeNav = extractLandCodeFromHref(href);
+      if (landCodeNav) {
+        openLandInChat(landCodeNav);
+        return Promise.resolve(true);
+      }
+    } catch (_) {}
+    try {
       var destPath = normPath(parseUrl(href).pathname);
       if (!opts.postLogin && !isLoggedInUser() && requiresLoginPath(destPath) && !isAuthSoftPath(destPath)) {
         href = loginUrlForPartnerDest(href);
@@ -1547,6 +1620,13 @@
         if (cardHref && isPartnerUrl(cardHref)) {
           e.preventDefault();
           e.stopPropagation();
+          var landCode =
+            (card.getAttribute('data-land-code') || '').trim() ||
+            extractLandCodeFromHref(cardHref);
+          if (landCode) {
+            openLandInChat(landCode);
+            return;
+          }
           if (isAiChatLandCard(card)) {
             navigateFromAiChatCard(cardHref);
           } else {
@@ -1641,12 +1721,14 @@
     var card = target.closest('.express-card[data-href]');
     if (card) {
       var cardHref = card.getAttribute('data-href');
+      if (cardHref && extractLandCodeFromHref(cardHref)) return;
       if (cardHref && shouldPrefetchNav(window.location.href, cardHref)) prefetchHref(cardHref);
       return;
     }
     var a = target.closest('a[href]');
     if (!a) return;
     var href = a.getAttribute('href');
+    if (href && extractLandCodeFromHref(href)) return;
     if (shouldPrefetchLink(a, href)) prefetchHref(href);
   }
 

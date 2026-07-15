@@ -61,7 +61,7 @@
 {{ super() }}
 <script>
 (function () {
-  /* غŒع©â€Œط¨ط§ط± ط¯ط± ط¹ظ…ط± ط³ظ†ط¯: ط¬ظ…ط¹/ط¨ط§ط² ع©ط§ط±طھ ط³ظپط± â€” ظ¾ط§غŒط¯ط§ط± ط¨غŒظ† ط±ظپط±ط´ ظˆ soft-nav */
+  /* یک‌بار در عمر سند: جمع/باز کارت سفر — پایدار بین رفرش و soft-nav */
   if (window.__vinorJourneyCollapseBound) {
     if (typeof window.__vinorJourneyCollapseApply === 'function') {
       try { window.__vinorJourneyCollapseApply(); } catch (_) {}
@@ -72,6 +72,8 @@
 
   var STORAGE_KEY = 'vinor_journey_collapsed';
   var COOKIE_KEY = 'vinor_journey_collapsed';
+  var SWIPE_MIN_DY = 52;
+  var SWIPE_RATIO = 1.25;
 
   function readCollapsed() {
     try {
@@ -103,6 +105,10 @@
   }
 
   window.__vinorJourneyCollapseApply = applyCollapsed;
+  window.__vinorJourneyCollapseSet = function (collapsed) {
+    writeCollapsed(!!collapsed);
+    applyCollapsed();
+  };
 
   document.addEventListener('click', function (e) {
     var t = e.target;
@@ -124,8 +130,129 @@
     }
   }, true);
 
+  /* کشیدن به بالا روی کارت یا اسکرول چت به بالا → جمع شدن (فقط بالا؛ پایین چت باز نمی‌کند) */
+  var swipe = null;
+  var chatScrollLastY = 0;
+
+  function journeyCardEl() {
+    return document.querySelector('[data-vn-journey-card]');
+  }
+
+  function collapseJourney() {
+    var card = journeyCardEl();
+    if (!card || card.classList.contains('is-collapsed')) return;
+    writeCollapsed(true);
+    applyCollapsed();
+  }
+
+  function swipeTargetOk(el) {
+    if (!el || !el.closest) return null;
+    var card = el.closest('[data-vn-journey-card]');
+    if (!card) return null;
+    /* CTA / لینک‌ها را رد کن؛ روی بدنه، مراحل، و دکمه جمع/باز اجازه بده */
+    if (el.closest('a[href], input, textarea, select, [data-vn-chat-prompt]')) return null;
+    var btn = el.closest('button');
+    if (btn && !btn.hasAttribute('data-vn-journey-collapse') && !btn.hasAttribute('data-vn-journey-expand')) {
+      return null;
+    }
+    return card;
+  }
+
+  function chatScrollSwipeOk(el) {
+    if (!el || !el.closest) return false;
+    if (!el.closest('#vnHomeScroll')) return false;
+    if (el.closest('a[href], input, textarea, select, [data-vn-chat-prompt], .ai-composer')) return false;
+    return true;
+  }
+
+  document.addEventListener('touchstart', function (e) {
+    if (!e.touches || e.touches.length !== 1) {
+      swipe = null;
+      return;
+    }
+    var card = swipeTargetOk(e.target);
+    var fromChat = !card && chatScrollSwipeOk(e.target);
+    if (!card && !fromChat) {
+      swipe = null;
+      return;
+    }
+    swipe = {
+      card: card || journeyCardEl(),
+      fromChat: fromChat,
+      x0: e.touches[0].clientX,
+      y0: e.touches[0].clientY,
+      active: true
+    };
+  }, { passive: true, capture: true });
+
+  document.addEventListener('touchmove', function (e) {
+    if (!swipe || !swipe.active || !e.touches || e.touches.length !== 1) return;
+    var dx = Math.abs(e.touches[0].clientX - swipe.x0);
+    var dy = swipe.y0 - e.touches[0].clientY;
+    if (dx > 28 && dx > Math.abs(dy)) {
+      swipe.active = false;
+    }
+  }, { passive: true, capture: true });
+
+  document.addEventListener('touchend', function (e) {
+    if (!swipe || !swipe.active || !e.changedTouches || !e.changedTouches.length) {
+      swipe = null;
+      return;
+    }
+    var t = e.changedTouches[0];
+    var dx = Math.abs(t.clientX - swipe.x0);
+    var dy = swipe.y0 - t.clientY;
+    var card = swipe.card;
+    var fromChat = swipe.fromChat;
+    swipe = null;
+    if (!card) return;
+
+    if (dx * SWIPE_RATIO >= Math.abs(dy)) return;
+    var wasCollapsed = card.classList.contains('is-collapsed');
+    if (!wasCollapsed && dy >= SWIPE_MIN_DY) {
+      writeCollapsed(true);
+      applyCollapsed();
+      return;
+    }
+    /* باز کردن فقط با کشیدن پایین روی خود کارت — نه از چت */
+    if (!fromChat && wasCollapsed && -dy >= SWIPE_MIN_DY) {
+      writeCollapsed(false);
+      applyCollapsed();
+    }
+  }, { passive: true, capture: true });
+
+  document.addEventListener('touchcancel', function () {
+    swipe = null;
+  }, { passive: true, capture: true });
+
+  function bindChatScrollCollapse() {
+    var sc = document.getElementById('vnHomeScroll');
+    if (!sc || sc.__vinorJourneyScrollCollapse) return;
+    sc.__vinorJourneyScrollCollapse = true;
+    chatScrollLastY = sc.scrollTop || 0;
+
+    sc.addEventListener('scroll', function () {
+      var y = sc.scrollTop || 0;
+      var dy = y - chatScrollLastY;
+      chatScrollLastY = y;
+      /* اسکرول محتوا به بالا (scrollTop↑) → جمع؛ پرش برنامه‌ای scrollToEnd را نادیده بگیر */
+      if (dy >= 10 && dy < 180) collapseJourney();
+    }, { passive: true });
+
+    sc.addEventListener('wheel', function (e) {
+      if (e.deltaY > 8) collapseJourney();
+    }, { passive: true });
+  }
+
+  bindChatScrollCollapse();
+
   document.addEventListener('vinor:express-page-swap', function () {
-    setTimeout(applyCollapsed, 0);
+    setTimeout(function () {
+      applyCollapsed();
+      var sc = document.getElementById('vnHomeScroll');
+      if (sc) sc.__vinorJourneyScrollCollapse = false;
+      bindChatScrollCollapse();
+    }, 0);
   });
 
   if (document.readyState === 'loading') {
@@ -137,7 +264,7 @@
 </script>
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=54"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=55"></script>
 <script>
 (function () {
   function syncHomeDockPad() {
@@ -166,6 +293,39 @@
   }
   setTimeout(syncHomeDockPad, 120);
   setTimeout(syncHomeDockPad, 480);
+
+  try {
+    var landCode =
+      sessionStorage.getItem('vinor_land_chat_code') ||
+      (function () {
+        try {
+          return new URLSearchParams(window.location.search).get('land') || '';
+        } catch (_) {
+          return '';
+        }
+      })();
+    if (landCode) {
+      try {
+        sessionStorage.removeItem('vinor_land_chat_code');
+      } catch (_) {}
+      try {
+        var u = new URL(window.location.href);
+        if (u.searchParams.has('land')) {
+          u.searchParams.delete('land');
+          history.replaceState(history.state || {}, '', u.pathname + (u.search || '') + (u.hash || ''));
+        }
+      } catch (_) {}
+      var tries = 0;
+      (function waitShow() {
+        tries += 1;
+        if (typeof window.vinorShowLandInChat === 'function') {
+          window.vinorShowLandInChat(landCode);
+          return;
+        }
+        if (tries < 40) setTimeout(waitShow, 100);
+      })();
+    }
+  } catch (_) {}
 
   try {
     var draft = sessionStorage.getItem('vinor_ai_home_prompt') || '';

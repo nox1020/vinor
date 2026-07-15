@@ -55,10 +55,8 @@
 
       {% if acc.partner_approved and person.phone %}
       <div class="hidden lg:flex flex-wrap gap-1.5 shrink-0 justify-end max-w-md">
-        <a href="{{ url_for('admin.express_assignments') }}" class="adm-pd-action"><i class="fa-solid fa-link"></i>انتساب</a>
         <a href="{{ url_for('admin.express_commissions') }}" class="adm-pd-action"><i class="fa-solid fa-wallet"></i>پورسانت</a>
         <a href="{{ url_for('admin.financial_withdrawals') }}" class="adm-pd-action"><i class="fa-solid fa-money-bill-transfer"></i>برداشت</a>
-        <a href="{{ url_for('admin.express_partner_files', partner=person.phone) }}" class="adm-pd-action"><i class="fa-solid fa-folder"></i>فایل</a>
         <a href="{{ url_for('admin.express_visit_requests') }}" class="adm-pd-action"><i class="fa-solid fa-calendar-check"></i>بازدید</a>
       </div>
       {% endif %}
@@ -199,7 +197,6 @@
               <i class="fa-solid fa-link text-indigo-500 text-[11px]"></i>
               انتساب‌ها ({{ cnt.assignments_total or 0 }})
             </span>
-            <a href="{{ url_for('admin.express_assignments') }}" onclick="event.stopPropagation()" class="text-[10px] text-blue-600 dark:text-blue-400 font-medium hover:underline">مدیریت</a>
           </summary>
           <div class="px-4 pb-4 pt-1">
             {% if person.assignments_recent and person.assignments_recent|length > 0 %}
@@ -610,10 +607,8 @@
             </button>
           </form>
           <div class="flex flex-wrap gap-1.5 lg:hidden w-full justify-center">
-            <a href="{{ url_for('admin.express_assignments') }}" class="adm-pd-action"><i class="fa-solid fa-link"></i></a>
             <a href="{{ url_for('admin.express_commissions') }}" class="adm-pd-action"><i class="fa-solid fa-wallet"></i></a>
             <a href="{{ url_for('admin.financial_withdrawals') }}" class="adm-pd-action"><i class="fa-solid fa-money-bill-transfer"></i></a>
-            <a href="{{ url_for('admin.express_partner_files', partner=person.phone) }}" class="adm-pd-action"><i class="fa-solid fa-folder"></i></a>
           </div>
           <form method="post" action="{{ url_for('admin.express_partner_delete', phone=person.phone) }}" class="contents">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

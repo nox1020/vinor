@@ -137,7 +137,6 @@
         ('کل اشخاص', people_total or 0, url_for('admin.express_partners'), ''),
         ('همکار تأیید', partners_count or 0, url_for('admin.express_partners', filter='partners'), ''),
         ('همکاران آنلاین', online_partners_count or 0, url_for('admin.express_partners', filter='online'), 'الان فعال'),
-        ('انتساب فعال', assignments_active_count or 0, url_for('admin.express_assignments'), 'از ' ~ (assignments_total_count or 0)),
         ('آگهی Express', express_listings_count or 0, url_for('admin.express_listings'), ''),
         ('روتین این ماه', routines_count_month or 0, url_for('admin.express_partners'), 'روز ثبت‌شده'),
       ] %}

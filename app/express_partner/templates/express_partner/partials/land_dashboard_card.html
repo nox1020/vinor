@@ -18,7 +18,7 @@
 
 <article {% if tour_land_card %}data-tour="land-card"{% endif %}
          class="express-card vinor-dash-card w-full border-b border-white/10 bg-transparent{% if _is_sold %} vinor-card-sold{% else %} cursor-pointer active:bg-white/[0.03]{% endif %}"
-         {% if not _is_sold %}data-href="{{ land._detail_url or url_for('express_partner.land_detail', code=land.code) }}" role="link" tabindex="0"{% else %}data-assignment-status="sold" aria-disabled="true"{% endif %}>
+         {% if not _is_sold %}data-href="{{ land._detail_url or url_for('express_partner.land_detail', code=land.code) }}" data-land-code="{{ land.code }}" role="link" tabindex="0"{% else %}data-assignment-status="sold" aria-disabled="true"{% endif %}>
 
   <div class="flex min-h-[8rem] flex-row items-stretch gap-3.5 px-3.5 py-3.5 sm:min-h-[8.5rem] sm:gap-4 sm:px-4 sm:py-4">
     <div class="flex min-w-0 flex-1 flex-col justify-between gap-2.5 text-right">

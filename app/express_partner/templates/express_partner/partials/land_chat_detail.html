@@ -1,0 +1,366 @@
+{# جزئیات کامل فایل داخل حباب چت — بدون صفحه جدا / بدون landGallerySwipe #}
+{% set _st = (land._assignment_status|default('active')|string)|lower|trim %}
+{% set loc_line = ([land.city, land.location]|select|join('، ')) if (land.city or land.location) else '' %}
+{% set price_total = land.price_total or land.price or 0 %}
+{% set _basis = price_basis_area(land) %}
+{% set ppm = land.price_per_meter or ((_basis and price_total / _basis)|round(0)|int or 0) %}
+{% set desc = (land.description or land.desc or '')|trim %}
+{% set deal_label = {'sale': 'فروش', 'presale': 'پیش‌فروش', 'rent': 'اجاره'}.get((land.deal_type or '')|string|lower, land.deal_type or land.payment_method or '') %}
+{% set tx_label = {'in_transaction': 'در حال معامله', 'sold': 'فروخته شد', 'active': 'فعال', 'pending': 'در انتظار', 'approved': 'تأیید شده', 'closed': 'بسته'}.get(_st, _st) %}
+{% set cat_rows = land_category_detail_rows(land) %}
+{% set images = land.images or [] %}
+{% set video = land.video %}
+{% set has_video = video and (video|string|trim) %}
+{% set chat_cta = land._chat_cta|default({}) %}
+{% set steps = land._visit_progress_steps|default([]) %}
+{% set summary = land._visit_progress_summary|default({}) %}
+{% set visit_customer_phone = (land._visit_customer_phone|default('')|string)|trim %}
+{% set owner_contact_phone = (land.owner_phone or land.vinor_contact or '')|string|trim %}
+{% set contact_phone = visit_customer_phone or owner_contact_phone %}
+
+<style>
+  .vn-lcd {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    border-radius: 1rem;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: #141414;
+    overflow: hidden;
+    color: #ececec;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+  .vn-lcd__gallery {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    padding: 0.55rem;
+    background: #0a0a0a;
+    scrollbar-width: none;
+  }
+  .vn-lcd__gallery::-webkit-scrollbar { display: none; }
+  .vn-lcd__media {
+    flex: 0 0 78%;
+    max-width: 16rem;
+    aspect-ratio: 4/3;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background: #1f1f1f;
+    scroll-snap-align: start;
+  }
+  .vn-lcd__media img,
+  .vn-lcd__media video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .vn-lcd__empty {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    aspect-ratio: 16/9;
+    color: #6b7280;
+    background: #0a0a0a;
+  }
+  .vn-lcd__body { padding: 0.7rem 0.85rem 0.85rem; }
+  .vn-lcd__title {
+    margin: 0 0 0.35rem;
+    font-size: 0.95rem;
+    font-weight: 800;
+    line-height: 1.35;
+    color: #fff;
+  }
+  .vn-lcd__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.55rem;
+    align-items: center;
+    color: #9ca3af;
+    font-size: 0.7rem;
+    margin-bottom: 0.55rem;
+  }
+  .vn-lcd__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.12rem 0.45rem;
+    border-radius: 9999px;
+    background: #262626;
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+  }
+  .vn-lcd__badge--tx { background: #854d0e; }
+  .vn-lcd__badge--sold { background: #166534; }
+  .vn-lcd__price {
+    margin: 0.35rem 0 0.55rem;
+    padding: 0.55rem 0.65rem;
+    border-radius: 0.75rem;
+    background: #1c1c1e;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .vn-lcd__price-main {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+  .vn-lcd__price-sub {
+    margin: 0.15rem 0 0;
+    font-size: 0.68rem;
+    color: #9ca3af;
+  }
+  .vn-lcd__comm {
+    margin-top: 0.35rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #34d399;
+  }
+  .vn-lcd__specs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+    margin: 0.45rem 0 0.55rem;
+  }
+  .vn-lcd__spec {
+    padding: 0.4rem 0.45rem;
+    border-radius: 0.55rem;
+    background: #1c1c1e;
+  }
+  .vn-lcd__spec-k {
+    display: block;
+    font-size: 0.6rem;
+    color: #9ca3af;
+    margin-bottom: 0.1rem;
+  }
+  .vn-lcd__spec-v {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #f3f4f6;
+  }
+  .vn-lcd__rows { margin: 0.4rem 0; }
+  .vn-lcd__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.72rem;
+  }
+  .vn-lcd__row:last-child { border-bottom: 0; }
+  .vn-lcd__row-k { color: #9ca3af; }
+  .vn-lcd__row-v { color: #f3f4f6; font-weight: 600; text-align: left; }
+  .vn-lcd__desc {
+    margin: 0.5rem 0 0;
+    white-space: pre-line;
+    color: #d1d5db;
+    font-size: 0.75rem;
+    line-height: 1.55;
+  }
+  .vn-lcd__progress {
+    margin: 0.55rem 0;
+    padding: 0.55rem 0.6rem;
+    border-radius: 0.75rem;
+    background: #1c1c1e;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .vn-lcd__bars {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 0.4rem;
+  }
+  .vn-lcd__bar {
+    flex: 1;
+    height: 0.28rem;
+    border-radius: 9999px;
+    background: rgba(255,255,255,0.12);
+  }
+  .vn-lcd__bar.is-done { background: #10b981; }
+  .vn-lcd__bar.is-current { background: #ef4444; }
+  .vn-lcd__bar.is-blocked { background: #7f1d1d; }
+  .vn-lcd__progress-txt {
+    margin: 0;
+    font-size: 0.68rem;
+    color: #9ca3af;
+  }
+  .vn-lcd__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.7rem;
+  }
+  .vn-lcd__btn {
+    flex: 1 1 auto;
+    min-height: 2.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.7rem;
+    border-radius: 0.75rem;
+    border: 0;
+    background: #0d9488;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .vn-lcd__btn--secondary {
+    background: #27272a;
+    color: #e4e4e7;
+  }
+  .vn-lcd__btn--call {
+    flex: 0 0 auto;
+    width: 2.35rem;
+    padding: 0;
+    background: #2563eb;
+  }
+  .vn-lcd__hint {
+    margin: 0.35rem 0 0;
+    font-size: 0.65rem;
+    color: #9ca3af;
+  }
+</style>
+
+<article class="vn-lcd" data-vn-land-chat-detail="{{ land.code|e }}" data-land-code="{{ land.code|e }}">
+  {% if has_video or images %}
+  <div class="vn-lcd__gallery" dir="ltr" aria-label="گالری فایل">
+    {% if has_video %}
+    {% set video_src = video if '://' in (video|string) else (video if (video|string).startswith('/') else ('/uploads/' ~ (video|string))) %}
+    <div class="vn-lcd__media">
+      <video muted playsinline preload="metadata" src="{{ video_src }}" controls></video>
+    </div>
+    {% endif %}
+    {% for img in images[:8] %}
+    <div class="vn-lcd__media">
+      <img src="{{ img|image_thumb_url }}" alt="{{ land.title or '' }}" loading="{{ 'eager' if loop.first else 'lazy' }}" decoding="async">
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="vn-lcd__empty" aria-hidden="true"><i class="fas fa-image text-2xl"></i></div>
+  {% endif %}
+
+  <div class="vn-lcd__body">
+    <h3 class="vn-lcd__title">{{ land.title or 'فایل' }}</h3>
+    <div class="vn-lcd__meta">
+      {% if _st == 'in_transaction' %}
+      <span class="vn-lcd__badge vn-lcd__badge--tx">در حال معامله</span>
+      {% elif _st == 'sold' %}
+      <span class="vn-lcd__badge vn-lcd__badge--sold">فروخته شد</span>
+      {% endif %}
+      {% if loc_line %}<span><i class="fas fa-location-dot text-[9px] opacity-70" aria-hidden="true"></i> {{ loc_line }}</span>{% endif %}
+      {% if land.code %}<span dir="ltr">کد {{ land.code }}</span>{% endif %}
+    </div>
+
+    {% if price_total or (is_approved and land._commission_amount) %}
+    <div class="vn-lcd__price">
+      {% if price_total %}
+      <div class="vn-lcd__price-main">{{ price_total|toman(False) }} تومان</div>
+      {% if ppm %}<p class="vn-lcd__price-sub">هر متر {{ ppm|toman }}</p>{% endif %}
+      {% endif %}
+      {% if is_approved and land._commission_amount %}
+      <div class="vn-lcd__comm">
+        <span>پورسانت شما{% if land._commission_pct %} ({{ land._commission_pct }}٪){% endif %}</span>
+        <span>{{ land._commission_amount|toman }}</span>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if cat_rows or land.category %}
+    <div class="vn-lcd__specs">
+      {% if land.category %}
+      <div class="vn-lcd__spec">
+        <span class="vn-lcd__spec-k">نوع</span>
+        <span class="vn-lcd__spec-v">{{ land.category }}</span>
+      </div>
+      {% endif %}
+      {% for row in cat_rows[:5] %}
+      <div class="vn-lcd__spec">
+        <span class="vn-lcd__spec-k">{{ row.label }}</span>
+        <span class="vn-lcd__spec-v">{{ row.value }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="vn-lcd__rows">
+      {% if _st %}
+      <div class="vn-lcd__row"><span class="vn-lcd__row-k">وضعیت معامله</span><span class="vn-lcd__row-v">{{ tx_label }}</span></div>
+      {% endif %}
+      {% if deal_label %}
+      <div class="vn-lcd__row"><span class="vn-lcd__row-k">نوع معامله</span><span class="vn-lcd__row-v">{{ deal_label }}</span></div>
+      {% endif %}
+      {% if land.delivery or land.delivery_days or land.handover %}
+      <div class="vn-lcd__row"><span class="vn-lcd__row-k">تحویل</span><span class="vn-lcd__row-v">{{ land.delivery or land.handover or (land.delivery_days|string ~ ' روز کاری') }}</span></div>
+      {% endif %}
+      {% if land.docs_status %}
+      <div class="vn-lcd__row"><span class="vn-lcd__row-k">وضعیت سند</span><span class="vn-lcd__row-v">{{ land.docs_status }}</span></div>
+      {% endif %}
+      {% if land.payment_method and land.payment_method != deal_label %}
+      <div class="vn-lcd__row"><span class="vn-lcd__row-k">نحوه پرداخت</span><span class="vn-lcd__row-v">{{ land.payment_method }}</span></div>
+      {% endif %}
+      {% for row in cat_rows[5:] %}
+      <div class="vn-lcd__row"><span class="vn-lcd__row-k">{{ row.label }}</span><span class="vn-lcd__row-v">{{ row.value }}</span></div>
+      {% endfor %}
+    </div>
+
+    {% if is_approved and steps %}
+    <div class="vn-lcd__progress" aria-label="روند فایل">
+      <div class="vn-lcd__bars">
+        {% for step in steps %}
+        <span class="vn-lcd__bar {% if step.state == 'done' %}is-done{% elif step.state == 'current' %}is-current{% elif step.state == 'blocked' or step.state == 'rejected' %}is-blocked{% endif %}"
+              title="{{ step.label }}"></span>
+        {% endfor %}
+      </div>
+      <p class="vn-lcd__progress-txt">
+        مرحله: <strong style="color:#fff">{{ summary.current_label or 'در جریان' }}</strong>
+        · {{ summary.done_count|default(0) }} از {{ summary.total|default(steps|length) }}
+      </p>
+      {% if land._visit_date_jalali %}
+      <p class="vn-lcd__hint">بازدید: {{ land._visit_date_jalali }}{% if land._visit_customer_name %} — {{ land._visit_customer_name }}{% endif %}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if desc %}
+    <p class="vn-lcd__desc">{{ desc }}</p>
+    {% endif %}
+
+    {% if is_approved and _st != 'sold' and chat_cta.prompt %}
+    <div class="vn-lcd__actions">
+      <button type="button"
+              class="vn-lcd__btn"
+              data-vn-chat-prompt="{{ (chat_cta.prompt|default(''))|e }}"
+              data-vn-chat-intent="{{ chat_cta.action|default('') }}">
+        <i class="fas {{ chat_cta.icon|default('fa-comments') }}" aria-hidden="true"></i>
+        {{ chat_cta.label|default('ادامه در چت') }}
+      </button>
+      {% if chat_cta.secondary_prompt %}
+      <button type="button"
+              class="vn-lcd__btn vn-lcd__btn--secondary"
+              data-vn-chat-prompt="{{ (chat_cta.secondary_prompt|default(''))|e }}"
+              data-vn-chat-intent="{{ chat_cta.secondary_action|default('') }}">
+        <i class="fas {{ chat_cta.secondary_icon|default('fa-calendar-plus') }}" aria-hidden="true"></i>
+        {{ chat_cta.secondary_label|default('بازدید مجدد') }}
+      </button>
+      {% endif %}
+      {% if contact_phone %}
+      <a class="vn-lcd__btn vn-lcd__btn--call" href="tel:{{ contact_phone }}" data-vinor-direct-action="1" aria-label="تماس">
+        <i class="fas fa-phone" aria-hidden="true"></i>
+      </a>
+      {% endif %}
+    </div>
+    {% elif not is_approved %}
+    <p class="vn-lcd__hint">پس از تأیید همکاری، اقدام‌های بازدید و معامله از همین چت فعال می‌شود.</p>
+    {% endif %}
+  </div>
+</article>

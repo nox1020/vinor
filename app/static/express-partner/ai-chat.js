@@ -953,6 +953,7 @@
     return !!(
       (msg.content && String(msg.content).trim()) ||
       msg.cards_html ||
+      msg.land_detail_html ||
       (msg.land_cards && msg.land_cards.length) ||
       (msg.agent_actions && msg.agent_actions.length)
     );
@@ -1204,7 +1205,7 @@
       msg.source === 'postchi' ||
       (text && text.indexOf('پاسخ تیم وینور') === 0);
 
-    if (!text && !cardsHtml && !opts.thinking && !opts.streamShell) return null;
+    if (!text && !cardsHtml && !msg.land_detail_html && !opts.thinking && !opts.streamShell) return null;
 
     if (!opts.welcome) removeWelcome();
 
@@ -1281,6 +1282,16 @@
         }
         initCardsIn(body);
       }
+    }
+
+    if (msg.land_detail_html) {
+      var detailHost = document.createElement('div');
+      detailHost.className = 'ai-msg-cards ai-msg-cards--land-detail w-full min-w-0 max-w-full mt-1';
+      detailHost.innerHTML = msg.land_detail_html;
+      body.appendChild(detailHost);
+      if (msg.land_code) wrap.setAttribute('data-land-chat-code', String(msg.land_code));
+      wrap.setAttribute('data-ephemeral', '1');
+      initCardsIn(detailHost);
     }
 
     row.appendChild(body);
@@ -2182,6 +2193,112 @@
         ? { placeholder: 'به سقف رسیدید — برای ادامه وارد شوید…' }
         : {}
     );
+  };
+
+  var landDetailPending = null;
+  function sendChatPromptFromDetail(prompt, intent) {
+    prompt = (prompt || '').trim();
+    if (!prompt) return;
+    intent = (intent || '').trim();
+    if (intent) {
+      try {
+        form.setAttribute('data-pending-intent', intent);
+      } catch (_) {}
+    }
+    input.value = prompt;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    scrollChatToEnd();
+    setTimeout(function () {
+      try {
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      } catch (_) {}
+    }, 60);
+  }
+
+  if (!window.__vinorChatPromptCaptureBound) {
+    window.__vinorChatPromptCaptureBound = true;
+    document.addEventListener(
+      'click',
+      function (e) {
+        var btn = e.target && e.target.closest && e.target.closest('[data-vn-chat-prompt]');
+        if (!btn) return;
+        var prompt = btn.getAttribute('data-vn-chat-prompt') || '';
+        if (!prompt.trim()) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (form && input && document.getElementById('aiMessages')) {
+          sendChatPromptFromDetail(prompt, btn.getAttribute('data-vn-chat-intent') || '');
+          return;
+        }
+        try {
+          sessionStorage.setItem('vinor_ai_home_prompt', prompt.trim());
+          sessionStorage.setItem('vinor_ai_home_autosend', '1');
+          var intent = (btn.getAttribute('data-vn-chat-intent') || '').trim();
+          if (intent) sessionStorage.setItem('vinor_ai_home_intent', intent);
+          else sessionStorage.removeItem('vinor_ai_home_intent');
+        } catch (_) {}
+        if (typeof window.vinorExpressNavigate === 'function') {
+          window.vinorExpressNavigate('/express/partner/home', { forward: true });
+        } else {
+          window.location.assign('/express/partner/home');
+        }
+      },
+      true
+    );
+  }
+
+  window.vinorShowLandInChat = function (code) {
+    code = String(code || '').trim();
+    if (!code) return Promise.resolve(false);
+    if (landDetailPending === code) return Promise.resolve(false);
+    landDetailPending = code;
+
+    var existing = list.querySelector('.ai-msg-wrap[data-land-chat-code="' + code + '"]');
+    if (existing) {
+      try {
+        existing.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } catch (_) {
+        scrollChatToEnd();
+      }
+      landDetailPending = null;
+      return Promise.resolve(true);
+    }
+
+    var thinking = showThinking();
+    var url = '/express/partner/lands/' + encodeURIComponent(code) + '/chat-detail';
+    return fetch(url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (payload) {
+        removeThinking();
+        landDetailPending = null;
+        if (!payload.ok || !payload.data || !payload.data.ok || !payload.data.html) {
+          showEphemeralHint(
+            (payload.data && payload.data.message) || 'جزئیات این فایل در دسترس نیست.'
+          );
+          return false;
+        }
+        appendMessage({
+          role: 'assistant',
+          content: '',
+          land_detail_html: payload.data.html,
+          land_code: payload.data.code || code,
+        });
+        return true;
+      })
+      .catch(function () {
+        removeThinking();
+        landDetailPending = null;
+        showEphemeralHint('خطا در دریافت جزئیات فایل.');
+        return false;
+      });
   };
 
   autoGrowInput();

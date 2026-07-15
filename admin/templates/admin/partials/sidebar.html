@@ -4,9 +4,8 @@
   'admin.top_sellers'
 ] %}
 {% set _ops_active = _endpoint in [
-  'admin.express_assignments', 'admin.express_commissions', 'admin.express_commission_edit',
+  'admin.express_commissions', 'admin.express_commission_edit',
   'admin.financial_withdrawals', 'admin.express_visit_requests',
-  'admin.express_partner_files', 'admin.express_partner_file_download'
 ] %}
 {% set _comm_active = _endpoint in [
   'admin.notifications_colleagues', 'admin.sms_colleagues', 'admin.sms_history',
@@ -70,11 +69,9 @@
       <i class="fa-solid fa-chevron-down text-[10px] transition-transform" :class="opsOpen ? 'rotate-180' : ''"></i>
     </button>
     <div x-show="opsOpen" class="space-y-0.5 mt-0.5 mr-2">
-      <a href="{{ url_for('admin.express_assignments') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint == 'admin.express_assignments' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-link w-4 text-[13px]"></i>انتساب‌ها</a>
       <a href="{{ url_for('admin.express_commissions') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.express_commissions', 'admin.express_commission_edit'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-wallet w-4 text-[13px]"></i>پورسانت‌ها</a>
       <a href="{{ url_for('admin.financial_withdrawals') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint == 'admin.financial_withdrawals' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-money-bill-transfer w-4 text-[13px]"></i>برداشت</a>
       <a href="{{ url_for('admin.express_visit_requests') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint == 'admin.express_visit_requests' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-route w-4 text-[13px]"></i>روند بازدید</a>
-      <a href="{{ url_for('admin.express_partner_files') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.express_partner_files', 'admin.express_partner_file_download'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-folder w-4 text-[13px]"></i>فایل‌ها</a>
     </div>
 
     <div class="pt-3 pb-1 px-3"><p class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">ارتباط</p></div>

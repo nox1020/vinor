@@ -18,6 +18,8 @@
     border: 1px solid var(--vj-line);
     background: var(--vj-bg);
     overflow: hidden;
+    touch-action: pan-y;
+    transition: box-shadow 0.2s ease;
   }
   .vn-journey-card__head {
     position: relative;
@@ -363,8 +365,8 @@
         {% if card.is_mission|default(false) %}ماموریت فعال{% else %}فایل مأموریت{% endif %}
       </span>
       <span class="vn-journey-card__compact-title">{{ card.title }}</span>
-      {% if card.price_total %}
-      <span class="vn-journey-card__compact-price">{{ card.price_total|toman }}</span>
+      {% if card.commission_amount and is_approved|default(false) %}
+      <span class="vn-journey-card__compact-price">پورسانت شما : {{ card.commission_amount|toman }}</span>
       {% endif %}
     </span>
     <span class="vn-journey-card__compact-open" aria-hidden="true">
@@ -403,11 +405,14 @@
         {% if card.commission_amount and is_approved|default(false) %}
         <p class="vn-journey-card__comm">پورسانت {{ card.commission_amount|toman }}</p>
         {% endif %}
-        {% if card.detail_url %}
-        <a href="{{ card.detail_url }}" data-vinor-express-nav
-           class="vn-journey-card__detail-link text-[11px] text-emerald-400/90 underline underline-offset-2 mt-1 inline-block">
+        {% if card.code or card.detail_url %}
+        <button type="button"
+                class="vn-journey-card__detail-link text-[11px] text-emerald-400/90 underline underline-offset-2 mt-1 inline-block bg-transparent border-0 p-0 cursor-pointer"
+                data-land-code="{{ card.code|e }}"
+                data-vn-land-chat-open="1"
+                {% if card.detail_url %}data-href="{{ card.detail_url }}"{% endif %}>
           جزئیات فایل
-        </a>
+        </button>
         {% endif %}
       </div>
     </div>
@@ -533,8 +538,32 @@
     });
   }
 
+  function wireLandDetailOpen() {
+    document.querySelectorAll('[data-vn-land-chat-open]').forEach(function (btn) {
+      if (btn.getAttribute('data-wired') === '1') return;
+      btn.setAttribute('data-wired', '1');
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var code = (btn.getAttribute('data-land-code') || '').trim();
+        if (!code) {
+          var href = btn.getAttribute('data-href') || '';
+          var m = href.match(/\/lands\/([^/?#]+)/);
+          if (m) code = decodeURIComponent(m[1]);
+        }
+        if (!code) return;
+        if (typeof window.vinorOpenLandInChat === 'function') {
+          window.vinorOpenLandInChat(code);
+        } else if (typeof window.vinorShowLandInChat === 'function') {
+          window.vinorShowLandInChat(code);
+        }
+      });
+    });
+  }
+
   function boot() {
     wireChatPrompts();
+    wireLandDetailOpen();
     if (typeof window.__vinorJourneyCollapseApply === 'function') {
       try { window.__vinorJourneyCollapseApply(); } catch (_) {}
     }

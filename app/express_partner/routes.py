@@ -7078,250 +7078,65 @@ def check_status():
         }), 500
 
 
+@express_partner_bp.get('/lands/<string:code>/chat-detail', endpoint='land_chat_detail')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def land_chat_detail(code: str):
+    """جزئیات کامل فایل به‌صورت HTML برای تزریق در چت خانه."""
+    from .land_chat_detail import render_land_chat_detail_html, track_land_view_async
+
+    code_s = (code or '').strip()
+    if not code_s:
+        return jsonify({"ok": False, "error": "missing_code"}), 400
+
+    if not _is_prefetch_request():
+        track_land_view_async(code_s)
+        me_phone = (session.get("user_phone") or "").strip()
+        partner_profile = _partner_profile_for_phone(me_phone) if me_phone else None
+        if me_phone and _is_partner_approved(partner_profile):
+            _defer_routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
+
+    payload = render_land_chat_detail_html(code_s)
+    if not payload:
+        return jsonify({
+            "ok": False,
+            "error": "not_found",
+            "message": "این فایل پیدا نشد یا دیگر در دسترس نیست.",
+        }), 404
+
+    return jsonify({
+        "ok": True,
+        "code": payload["code"],
+        "title": payload.get("title") or "",
+        "html": payload["html"],
+    })
+
+
 @express_partner_bp.get('/lands/<string:code>', endpoint='land_detail')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def land_detail(code: str):
-    """Express land detail page within partner panel."""
+    """لینک‌های قدیمی جزئیات فایل → خانه + تزریق جزئیات در چت."""
     from ..utils.flash_messages import purge_stale_auth_flashes, purge_stale_land_flashes
+    from .land_chat_detail import track_land_view_async
+
     purge_stale_land_flashes()
     purge_stale_auth_flashes()
-    lands = load_ads_cached() or []
-    land = next((l for l in lands if l.get('code') == code and l.get('is_express')), None)
+    code_s = (code or '').strip()
+    if not code_s:
+        return redirect(url_for('express_partner.home'))
 
+    lands = load_ads_cached() or []
+    land = next((l for l in lands if l.get('code') == code_s and l.get('is_express')), None)
     if not land:
         flash('این آگهی اکسپرس پیدا نشد یا دیگر در دسترس نیست.', 'warning')
         return redirect(url_for('express_partner.home'))
 
-    # ثبت بازدید را در پس‌زمینه انجام بده تا رندر جزئیات منتظر دیسک نماند
-    if not _is_prefetch_request() and code:
-        try:
-            app_obj = current_app._get_current_object()
-            visitor_ip = request.remote_addr or ''
-            user_agent = (request.headers.get('User-Agent', '') or '')[:200]
-            land_code = str(code)
+    if not _is_prefetch_request():
+        track_land_view_async(code_s)
+        me_phone = (session.get("user_phone") or "").strip()
+        partner_profile = _partner_profile_for_phone(me_phone) if me_phone else None
+        if me_phone and _is_partner_approved(partner_profile):
+            _defer_routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
 
-            def _track_view_worker() -> None:
-                with app_obj.app_context():
-                    try:
-                        views = load_express_partner_views() or []
-                        if not isinstance(views, list):
-                            views = []
-                        now = datetime.utcnow()
-                        today_str = now.strftime('%Y-%m-%d')
-                        already_viewed_today = False
-                        for v in reversed(views):
-                            try:
-                                if (v.get('ip') or '') != visitor_ip or (v.get('code') or '') != land_code:
-                                    continue
-                                if (v.get('timestamp') or '')[:10] == today_str:
-                                    already_viewed_today = True
-                                    break
-                            except Exception:
-                                continue
-                        if not already_viewed_today and visitor_ip and land_code:
-                            views.append({
-                                'timestamp': now.isoformat(),
-                                'code': land_code,
-                                'ip': visitor_ip,
-                                'user_agent': user_agent,
-                            })
-                            if len(views) > 50000:
-                                views = views[-50000:]
-                            save_express_partner_views(views)
-                    except Exception:
-                        app_obj.logger.exception(
-                            'Error tracking express partner listing view code=%s', land_code
-                        )
-
-            threading.Thread(target=_track_view_worker, daemon=True).start()
-        except Exception as e:
-            current_app.logger.error(f"Error scheduling express partner listing view: {e}", exc_info=True)
-
-    me_phone = (session.get("user_phone") or "").strip()
-    partner_profile = _partner_profile_for_phone(me_phone) if me_phone else None
-    if me_phone and _is_partner_approved(partner_profile) and not _is_prefetch_request():
-        # روتین را خارج از مسیر رندر جزئیات اجرا کن تا صفحه سریع باز شود
-        _defer_routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
-
-    # محاسبه پورسانت و وضعیت از assignments — یک پاس روی لیست
-    assignments = load_express_assignments() or []
-    by_land_status, my_assign_by_code = _express_assignment_indexes(assignments, me_phone)
-    assignment = my_assign_by_code.get(str(code))
-    global_assignment_status = by_land_status.get(str(code), 'active')
-    if _express_land_marked_sold(land):
-        global_assignment_status = 'sold'
-    try:
-        is_approved = _is_partner_approved(partner_profile)
-    except Exception:
-        is_approved = False
-
-    if assignment:
-        land['_assignment_id'] = assignment.get('id')
-    land['_assignment_status'] = global_assignment_status
-    if is_approved:
-        from .new_land_sms import attach_express_land_commission
-        attach_express_land_commission(land)
-
-    visit_requests_list = load_express_visit_requests() or []
-    if not isinstance(visit_requests_list, list):
-        visit_requests_list = []
-    commissions_for_tx = load_express_commissions_cached() or []
-    if not isinstance(commissions_for_tx, list):
-        commissions_for_tx = []
-    tx_state = resolve_partner_land_tx_state(
-        me_phone=me_phone,
-        land_code=str(code),
-        assignments=assignments,
-        visit_requests=visit_requests_list,
-        is_partner_approved=is_approved,
-        global_assignment_status=global_assignment_status,
-        commissions=commissions_for_tx,
-        visit_commission_required=_visit_commission_required_for(commissions_for_tx, me_phone, code),
-    )
-    land['_visit_date'] = tx_state.get('visit_date') or ''
-    land['_visit_date_jalali'] = tx_state.get('visit_date_jalali') or ''
-    land['_visit_status'] = tx_state.get('visit_status') or ''
-    land['_visit_customer_phone'] = tx_state.get('customer_phone') or ''
-    land['_visit_customer_name'] = tx_state.get('customer_name') or ''
-    land['_tx_button_mode'] = tx_state.get('tx_mode') or 'visit'
-    land['_can_revisit'] = bool(tx_state.get('can_revisit'))
-    try:
-        from app.express_partner.sales_coach import build_journey_chat_cta
-        land['_chat_cta'] = build_journey_chat_cta(
-            code=str(code),
-            title=str(land.get('title') or '').strip(),
-            tx_mode=str(land.get('_tx_button_mode') or ''),
-            stage_label='',
-            can_revisit=bool(land.get('_can_revisit')),
-        )
-    except Exception:
-        land['_chat_cta'] = {
-            'label': 'چت مأموریت',
-            'icon': 'fa-comments',
-            'action': '',
-            'prompt': f"فایل {code}: قدم بعدی فروش را از چت پیش ببر و اگر ثبت لازم است ابزار مربوطه را با کارت تأیید پیشنهاد بده.",
-        }
-    land['_visit_progress_steps'] = []
-    land['_visit_progress_summary'] = {}
-    if is_approved and me_phone:
-        progress_row = partner_active_visit_record(visit_requests_list, me_phone, str(code))
-        if progress_row is None:
-            progress_row = {
-                'partner_phone': me_phone,
-                'land_code': str(code),
-                'status': PENDING_STATUS,
-                'visit_requested': False,
-            }
-        progress_row = dict(progress_row)
-        progress_row['visit_commission_required'] = _visit_commission_required_for(
-            commissions_for_tx,
-            me_phone,
-            str(code),
-        )
-        progress_steps = visit_progress_steps(
-            progress_row,
-            commissions_for_tx,
-            partner_phone=me_phone,
-            visit_requests=visit_requests_list,
-        )
-        land['_visit_progress_steps'] = progress_steps
-        land['_visit_progress_summary'] = visit_progress_summary(progress_steps)
-
-    share_token = ''
-    share_url = ''
-
-    # تصاویر — URL خام بدون واریانت
-    from ..utils.images import sanitize_land_media
-    land = sanitize_land_media(dict(land) if isinstance(land, dict) else land)
-
-    is_logged_in = bool(me_phone)
-
-    try:
-        canonical_url = url_for('express_partner.land_detail', code=code, _external=True)
-    except Exception:
-        canonical_url = f"https://vinor.ir/express/partner/lands/{code}"
-
-    from ..utils.seo import build_land_seo, similar_lands
-    express_lands = load_express_lands_cached() or []
-    seo = build_land_seo(land, canonical_url=canonical_url)
-    related_raw = similar_lands(land, express_lands, limit=6)
-    related_lands: List[Dict[str, Any]] = []
-    if related_raw:
-        for item in related_raw:
-            if not isinstance(item, dict):
-                continue
-            ck = str(item.get('code') or '')
-            gs = by_land_status.get(ck, 'active')
-            if gs == 'sold' or str(item.get('express_status') or '').strip().lower() == 'sold':
-                continue
-            ritem = dict(item)
-            ritem['_assignment_status'] = gs
-            ritem['_in_transaction'] = gs == 'in_transaction'
-            ritem['_detail_url'] = url_for('express_partner.land_detail', code=ck)
-            if is_approved and gs not in ('sold', 'closed'):
-                from .new_land_sms import attach_express_land_commission
-                attach_express_land_commission(ritem)
-            related_lands.append(sanitize_land_media(ritem))
-            if len(related_lands) >= 6:
-                break
-
-    sold_count = 0
-    if me_phone:
-        my_comms = _commissions_for_phone(me_phone)
-        sold_count = sum(
-            1 for c in my_comms
-            if (c.get('status') or '').strip() in ('approved', 'paid')
-        )
-
-    from flask import get_flashed_messages
-    from .land_detail_config import build_land_detail_config
-
-    try:
-        from flask_wtf.csrf import generate_csrf
-        csrf_val = generate_csrf()
-    except Exception:
-        csrf_val = ""
-
-    images_list = land.get("images") or []
-    video_val = land.get("video")
-    has_video_flag = bool(video_val and str(video_val).strip())
-    total_items_count = (1 if has_video_flag else 0) + len(images_list)
-    land_flash_messages = [
-        {"text": str(msg), "category": str(cat)}
-        for cat, msg in get_flashed_messages(with_categories=True, category_filter=["land"])
-    ]
-
-    land_detail_config = build_land_detail_config(
-        land,
-        images=images_list,
-        has_video=has_video_flag,
-        total_items=total_items_count,
-        share_url=share_url or "",
-        is_approved=is_approved,
-        visit_date_min=visit_date_min_iso(),
-        visit_allowed_weekdays_js=visit_allowed_weekdays_for_js(),
-        flash_messages=land_flash_messages,
-        tx_status_url=url_for("express_partner.land_tx_status", code=code),
-        csrf_token=csrf_val,
-    )
-
-    return render_template(
-        'express_partner/land_detail.html',
-        land=land,
-        seo=seo,
-        related_lands=related_lands,
-        sold_count=sold_count,
-        share_url=share_url,
-        share_token=share_token,
-        partner_profile=partner_profile,
-        is_approved=is_approved,
-        is_logged_in=is_logged_in,
-        is_partner_context=True,
-        ref_partner=None,
-        brand="وینور",
-        domain="vinor.ir",
-        visit_date_min=visit_date_min_iso(),
-        land_detail_config=land_detail_config,
-    )
+    return redirect(url_for('express_partner.home', land=code_s))
 
 
