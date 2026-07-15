@@ -97,7 +97,7 @@ def ai_config() -> dict[str, Any]:
         "provider": "deepseek",
         "model_choice": choice,
         "model_choice_label": model_choice_label(choice),
-        "model": resolve_deepseek_model(has_tools=False),
+        "model": resolve_deepseek_model(),
         "api_key_set": bool(api_key),
         "api_balance_ok": not is_api_balance_depleted(),
     }
@@ -400,6 +400,15 @@ def _call_deepseek(
         "Accept": "application/json",
     }
     try:
+        current_app.logger.info(
+            "DeepSeek request | model=%s tools=%s choice=%s",
+            model,
+            len(tools) if tools else 0,
+            get_ai_settings().get("model_choice"),
+        )
+    except Exception:
+        pass
+    try:
         resp = requests.post(url, headers=headers, json=payload, timeout=90)
     except requests.RequestException as exc:
         try:
@@ -486,7 +495,8 @@ def _call_deepseek(
             prompt_tok = usage.get("prompt_tokens")
             if hit or miss or prompt_tok:
                 current_app.logger.info(
-                    "DeepSeek tokens | prompt=%s cache_hit=%s cache_miss=%s completion=%s tools=%s",
+                    "DeepSeek tokens | model=%s prompt=%s cache_hit=%s cache_miss=%s completion=%s tools=%s",
+                    model,
                     prompt_tok,
                     hit,
                     miss,

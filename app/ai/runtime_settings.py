@@ -38,19 +38,19 @@ def model_choice_options() -> list[dict[str, str]]:
         {
             "value": "auto",
             "label": "خودکار",
-            "hint": "ساده → Flash؛ وقتی ابزار/اکشن لازم است → Pro",
-            "api_id": f"{MODEL_ID_FLASH} / {MODEL_ID_PRO}",
+            "hint": "همان Flash — ابزارها هم فعال؛ برای Pro گزینهٔ Pro را بزن",
+            "api_id": MODEL_ID_FLASH,
         },
         {
             "value": "flash",
             "label": "Flash",
-            "hint": "سریع و کم‌هزینه — چت روزمره",
+            "hint": "سریع و کم‌هزینه — چت و ابزار (deepseek-v4-flash)",
             "api_id": MODEL_ID_FLASH,
         },
         {
             "value": "pro",
             "label": "Pro",
-            "hint": "دقیق‌تر برای ابزار و مسیر فروش",
+            "hint": "دقیق‌تر و گران‌تر (deepseek-v4-pro)",
             "api_id": MODEL_ID_PRO,
         },
     ]
@@ -69,21 +69,27 @@ def _normalize_model_choice(raw: Any) -> str:
 
 
 def resolve_deepseek_model(*, has_tools: bool = False) -> str:
-    """شناسهٔ مدل برای درخواست API بر اساس انتخاب پنل + حالت خودکار."""
-    choice = _normalize_model_choice(get_ai_settings().get("model_choice"))
-    env_choice = os.environ.get("VINOR_AI_MODEL_CHOICE") or os.environ.get("DEEPSEEK_MODEL")
-    if env_choice and str(env_choice).strip():
-        ev = str(env_choice).strip()
-        if ev in (MODEL_ID_FLASH, MODEL_ID_PRO):
-            return ev
-        choice = _normalize_model_choice(ev)
+    """شناسهٔ مدل API از انتخاب پنل ادمین.
 
+    - flash / pro: قطعی (هیچ env نباید flash را به pro تبدیل کند)
+    - auto: پیش‌فرض Flash — هر دو مدل ابزار دارند؛ ارتقا به Pro فقط با انتخاب صریح Pro
+      (قدیماً has_tools=True برای همکار همیشه Pro می‌فرستاد و انتخاب Flash/Auto بی‌اثر می‌شد)
+    """
+    _ = has_tools  # سازگاری امضا؛ دیگر معیار ارتقا نیست
+    choice = _normalize_model_choice(get_ai_settings().get("model_choice"))
     if choice == "pro":
         return MODEL_ID_PRO
-    if choice == "flash":
-        return MODEL_ID_FLASH
-    # auto: ابزار/ایجنت → Pro، چت ساده → Flash
-    return MODEL_ID_PRO if has_tools else MODEL_ID_FLASH
+    return MODEL_ID_FLASH
+
+
+def resolve_deepseek_model_label() -> str:
+    """برچسب وضعیت برای پنل: نام انتخاب + شناسهٔ واقعی API."""
+    choice = _normalize_model_choice(get_ai_settings().get("model_choice"))
+    model_id = resolve_deepseek_model()
+    label = model_choice_label(choice)
+    if choice == "auto":
+        return f"{label} → {model_id}"
+    return f"{label} ({model_id})"
 
 
 def model_choice_label(choice: str | None = None) -> str:
