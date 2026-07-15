@@ -66,9 +66,11 @@ from admin.people_directory import (
 from admin.sms_recipients import (
     RECIPIENT_GROUP_LABELS,
     RECIPIENT_GROUP_HINTS,
+    LARGE_GROUP_REQUIRE_BATCH,
     MAX_UPLOAD_BYTES,
     MAX_UPLOAD_FILES,
     add_sms_recipient_member,
+    count_sms_recipients,
     ensure_sms_recipient_groups_initialized,
     export_sms_recipient_phones_txt,
     format_import_result_message,
@@ -1941,7 +1943,11 @@ def sms_recipients_edit(group_key):
             else:
                 message = 'عضو حذف شد.'
 
-    detail = get_sms_recipient_group_detail(key)
+    detail = get_sms_recipient_group_detail(
+        key,
+        page=request.args.get('page', 1),
+        per_page=request.args.get('per_page', 50),
+    )
     return render_template(
         'admin/sms_recipients_edit.html',
         group=detail,
@@ -1971,7 +1977,7 @@ def sms_colleagues():
     )
     ensure_sms_recipient_groups_initialized()
     recipient_counts = recipient_group_counts()
-    recipients = load_sms_recipients(recipient_group)
+    partners_count = int(recipient_counts.get(recipient_group) or 0)
     groups_summary = list_sms_recipient_groups_summary()
     dynamic_labels = {g["key"]: g["label"] for g in groups_summary}
     dynamic_hints = {g["key"]: g["hint"] for g in groups_summary}
@@ -2008,9 +2014,9 @@ def sms_colleagues():
             dynamic_labels = {g["key"]: g["label"] for g in groups_summary}
             dynamic_hints = {g["key"]: g["hint"] for g in groups_summary}
             group_label = dynamic_labels.get(recipient_group) or recipient_group_label(recipient_group)
-            recipients = load_sms_recipients(recipient_group)
+            partners_count = count_sms_recipients(recipient_group)
 
-            if not recipients:
+            if partners_count < 1:
                 error = f'هیچ گیرنده‌ای در گروه «{group_label}» با شماره معتبر یافت نشد.'
             elif send_mode == 'direct':
                 form_direct_message = (request.form.get('direct_message') or '').strip()
@@ -2032,20 +2038,36 @@ def sms_colleagues():
                 if not form_direct_message:
                     error = 'متن پیامک الزامی است.'
                 elif form_send_timing == SEND_TIMING_INSTANT:
-                    sent, failed, failed_details = send_direct_to_recipients(
-                        recipients,
-                        form_direct_message,
-                        line_number,
-                    )
-                    if failed > 0:
-                        message = f'پیامک به {sent} نفر از گروه «{group_label}» ارسال شد ({failed} خطا).'
-                        if len(failed_details) <= 5:
-                            error = 'خطاها: ' + '; '.join(
-                                f"{d['name']} ({d['phone']}): {d['error']}" for d in failed_details
-                            )
+                    from admin.sms_scheduled import parse_send_limit
+                    batch_limit, limit_err = parse_send_limit(form_send_limit or None, partners_count)
+                    if limit_err:
+                        error = limit_err
+                    elif partners_count >= LARGE_GROUP_REQUIRE_BATCH and not batch_limit:
+                        error = (
+                            f'گروه {partners_count} نفره است؛ برای جلوگیری از کندی، '
+                            '«تعداد ارسال در هر مرحله» را مشخص کنید (مثلاً ۵۰ تا ۵۰۰).'
+                        )
                     else:
-                        message = f'پیامک با موفقیت به {sent} نفر از گروه «{group_label}» ارسال شد.'
-                        form_direct_message = ''
+                        recipients = load_sms_recipients(
+                            recipient_group,
+                            limit=batch_limit,
+                            offset=0,
+                            validate=False,
+                        )
+                        sent, failed, failed_details = send_direct_to_recipients(
+                            recipients,
+                            form_direct_message,
+                            line_number,
+                        )
+                        if failed > 0:
+                            message = f'پیامک به {sent} نفر از گروه «{group_label}» ارسال شد ({failed} خطا).'
+                            if len(failed_details) <= 5:
+                                error = 'خطاها: ' + '; '.join(
+                                    f"{d['name']} ({d['phone']}): {d['error']}" for d in failed_details
+                                )
+                        else:
+                            message = f'پیامک با موفقیت به {sent} نفر از گروه «{group_label}» ارسال شد.'
+                            form_direct_message = ''
                 elif form_send_timing in (SEND_TIMING_SCHEDULED, SEND_TIMING_RECURRING):
                     job, job_error = create_scheduled_job(
                         recipient_group=recipient_group,
@@ -2092,33 +2114,38 @@ def sms_colleagues():
                         template_id = None
 
                     if template_id is not None:
-                        parameters = {}
-                        for k, v in request.form.items():
-                            if k.startswith('param_') and k not in ('param_key[]', 'param_value[]'):
-                                param_name = k.replace('param_', '')
-                                if param_name and v:
-                                    parameters[param_name] = v
-                        param_keys = request.form.getlist('param_key[]')
-                        param_values = request.form.getlist('param_value[]')
-                        for i, key in enumerate(param_keys):
-                            if key and i < len(param_values):
-                                parameters[key.strip()] = param_values[i].strip()
-                        if form_message_text and not parameters:
-                            parameters['MESSAGE'] = form_message_text
+                        if partners_count >= LARGE_GROUP_REQUIRE_BATCH:
+                            error = (
+                                f'گروه {partners_count} نفره است؛ برای قالب از ارسال مستقیم/زمان‌دار '
+                                'با «تعداد در هر مرحله» استفاده کنید.'
+                            )
+                        else:
+                            recipients = load_sms_recipients(recipient_group, validate=False)
+                            parameters = {}
+                            for k, v in request.form.items():
+                                if k.startswith('param_') and k not in ('param_key[]', 'param_value[]'):
+                                    param_name = k.replace('param_', '')
+                                    if param_name and v:
+                                        parameters[param_name] = v
+                            param_keys = request.form.getlist('param_key[]')
+                            param_values = request.form.getlist('param_value[]')
+                            for i, key in enumerate(param_keys):
+                                if key and i < len(param_values):
+                                    parameters[key.strip()] = param_values[i].strip()
+                            if form_message_text and not parameters:
+                                parameters['MESSAGE'] = form_message_text
 
-                        sent, failed, failed_details = 0, 0, []
-                        for partner in recipients:
-                            phone_normalized = partner['phone']
-                            try:
-                                result = send_sms_template(
-                                    mobile=phone_normalized,
-                                    template_id=template_id,
-                                    parameters=parameters if parameters else None,
-                                )
+                            sent, failed, failed_details = 0, 0, []
+                            history_batch = []
+                            for partner in recipients:
+                                phone_normalized = partner['phone']
                                 try:
-                                    history = load_sms_history() or []
-                                    history.append({
-                                        'id': len(history) + 1,
+                                    result = send_sms_template(
+                                        mobile=phone_normalized,
+                                        template_id=template_id,
+                                        parameters=parameters if parameters else None,
+                                    )
+                                    history_batch.append({
                                         'mobile': phone_normalized,
                                         'recipient_name': partner['name'],
                                         'template_id': template_id,
@@ -2130,40 +2157,45 @@ def sms_colleagues():
                                         'created_at': datetime.now().isoformat(),
                                         'error': None if result.get('ok') else str(result.get('body', {}).get('message', 'Unknown error')),
                                     })
-                                    if len(history) > 10000:
-                                        history = history[-10000:]
-                                    save_sms_history(history)
-                                except Exception as hist_err:
-                                    current_app.logger.error(f"Failed to save SMS history: {hist_err}")
-
-                                if result.get('ok'):
-                                    sent += 1
-                                else:
+                                    if result.get('ok'):
+                                        sent += 1
+                                    else:
+                                        failed += 1
+                                        failed_details.append({
+                                            'phone': phone_normalized,
+                                            'name': partner['name'],
+                                            'error': result.get('body', {}).get('message', 'Unknown error'),
+                                        })
+                                except Exception as e:
                                     failed += 1
                                     failed_details.append({
-                                        'phone': phone_normalized,
-                                        'name': partner['name'],
-                                        'error': result.get('body', {}).get('message', 'Unknown error'),
+                                        'phone': partner.get('phone', 'unknown'),
+                                        'name': partner.get('name', 'unknown'),
+                                        'error': str(e),
                                     })
-                            except Exception as e:
-                                failed += 1
-                                failed_details.append({
-                                    'phone': partner.get('phone', 'unknown'),
-                                    'name': partner.get('name', 'unknown'),
-                                    'error': str(e),
-                                })
+                            try:
+                                history = load_sms_history() or []
+                                base_id = len(history)
+                                for i, row in enumerate(history_batch):
+                                    row['id'] = base_id + i + 1
+                                history.extend(history_batch)
+                                if len(history) > 10000:
+                                    history = history[-10000:]
+                                save_sms_history(history)
+                            except Exception as hist_err:
+                                current_app.logger.error(f"Failed to save SMS history: {hist_err}")
 
-                        if failed > 0:
-                            message = f'پیامک به {sent} نفر از گروه «{group_label}» ارسال شد ({failed} خطا).'
-                            if len(failed_details) <= 5:
-                                error = 'خطاها: ' + '; '.join(
-                                    f"{d['name']} ({d['phone']}): {d['error']}" for d in failed_details
-                                )
-                        else:
-                            message = f'پیامک با موفقیت به {sent} نفر از گروه «{group_label}» ارسال شد.'
+                            if failed > 0:
+                                message = f'پیامک به {sent} نفر از گروه «{group_label}» ارسال شد ({failed} خطا).'
+                                if len(failed_details) <= 5:
+                                    error = 'خطاها: ' + '; '.join(
+                                        f"{d['name']} ({d['phone']}): {d['error']}" for d in failed_details
+                                    )
+                            else:
+                                message = f'پیامک با موفقیت به {sent} نفر از گروه «{group_label}» ارسال شد.'
 
     recipient_counts = recipient_group_counts()
-    recipients = load_sms_recipients(recipient_group)
+    partners_count = int(recipient_counts.get(recipient_group) or partners_count or 0)
     groups_summary = list_sms_recipient_groups_summary()
     dynamic_labels = {g["key"]: g["label"] for g in groups_summary}
     dynamic_hints = {g["key"]: g["hint"] for g in groups_summary}
@@ -2207,7 +2239,7 @@ def sms_colleagues():
         'admin/colleagues_sms.html',
         message=message,
         error=error,
-        partners_count=len(recipients),
+        partners_count=partners_count,
         recipient_group=recipient_group,
         recipient_counts=recipient_counts,
         recipient_group_labels=dynamic_labels,

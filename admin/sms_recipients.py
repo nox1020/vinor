@@ -15,7 +15,6 @@ from app.utils.storage import (
     load_express_partners,
     load_sms_recipient_groups,
     load_users,
-    save_sms_recipient_groups,
 )
 
 RECIPIENT_GROUP_APPROVED = "approved"
@@ -50,6 +49,11 @@ _FA_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567
 _PURE_ASCII_PHONE = re.compile(r"^0?9\d{9}$")
 _HAS_NON_ASCII = re.compile(r"[^\x00-\x7f]")
 
+# گروه‌های بزرگ: بدون «تعداد در هر مرحله» ارسال/زمان‌بندی کامل ممنوع
+LARGE_GROUP_REQUIRE_BATCH = 2000
+
+_STORE_CACHE: Dict[str, Any] = {"path": None, "mtime": None, "size": None, "data": None}
+
 
 def normalize_recipient_group(value: str) -> str:
     key = (value or RECIPIENT_GROUP_APPROVED).strip().lower()
@@ -80,34 +84,94 @@ def _now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _store_path() -> str:
+    return ensure_file("SMS_RECIPIENT_GROUPS_FILE", "sms_recipient_groups.json", {"groups": {}})
+
+
+def _invalidate_store_cache() -> None:
+    _STORE_CACHE.update({"path": None, "mtime": None, "size": None, "data": None})
+
+
 def _load_store() -> Dict[str, Any]:
+    """لود با کش mtime — از پارس تکراری JSON حجیم جلوگیری می‌کند."""
+    path = _store_path()
+    try:
+        st = os.stat(path)
+        mtime = getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9))
+        size = st.st_size
+    except OSError:
+        mtime = None
+        size = None
+
+    if (
+        _STORE_CACHE["data"] is not None
+        and _STORE_CACHE["path"] == path
+        and _STORE_CACHE["mtime"] == mtime
+        and _STORE_CACHE["size"] == size
+    ):
+        return _STORE_CACHE["data"]
+
     raw = load_sms_recipient_groups() or {}
     if not isinstance(raw, dict):
         raw = {}
-    groups = raw.get("groups")
-    if not isinstance(groups, dict):
+    if not isinstance(raw.get("groups"), dict):
         raw["groups"] = {}
+    _STORE_CACHE.update({"path": path, "mtime": mtime, "size": size, "data": raw})
     return raw
+
+
+def _member_len(grp: Dict[str, Any]) -> int:
+    """تعداد اعضا — O(1)؛ ترجیح cached member_count."""
+    if not isinstance(grp, dict):
+        return 0
+    cached = grp.get("member_count")
+    members = grp.get("members")
+    if isinstance(members, list):
+        n = len(members)
+        if cached != n:
+            grp["member_count"] = n
+        return n
+    try:
+        return max(0, int(cached or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _touch_member_count(grp: Dict[str, Any]) -> int:
+    n = _member_len(grp)
+    grp["member_count"] = n
+    return n
 
 
 def _save_store(data: Dict[str, Any]) -> None:
     """ذخیره اتمی — برای حجم بالا بدون indent تا سرعت و حجم فایل بهتر شود."""
-    member_total = 0
     groups = data.get("groups") if isinstance(data.get("groups"), dict) else {}
+    member_total = 0
     for grp in groups.values():
-        if isinstance(grp, dict) and isinstance(grp.get("members"), list):
-            member_total += len(grp["members"])
+        if isinstance(grp, dict):
+            member_total += _touch_member_count(grp)
 
-    if member_total < _COMPACT_SAVE_THRESHOLD:
-        save_sms_recipient_groups(data)
-        return
-
-    path = ensure_file("SMS_RECIPIENT_GROUPS_FILE", "sms_recipient_groups.json", {"groups": {}})
+    path = _store_path()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     tmp = f"{path}.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+        if member_total >= _COMPACT_SAVE_THRESHOLD:
+            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+        else:
+            json.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(tmp, path)
+    _invalidate_store_cache()
+    # فوراً کش را با دادهٔ ذخیره‌شده تازه می‌کنیم تا درخواست بعدی parse نکند
+    try:
+        st = os.stat(path)
+        _STORE_CACHE.update({
+            "path": path,
+            "mtime": getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9)),
+            "size": st.st_size,
+            "data": data,
+        })
+    except OSError:
+        pass
 
 
 def _default_group_block(key: str) -> Dict[str, Any]:
@@ -209,31 +273,101 @@ def sync_sms_recipient_group(group: str) -> int:
     return len(grp["members"])
 
 
-def load_sms_recipients(group: str) -> List[Dict[str, str]]:
+def count_sms_recipients(group: str) -> int:
+    """تعداد اعضای گروه — بدون نرمال‌سازی تک‌تک شماره‌ها."""
+    key = normalize_recipient_group(group)
+    ensure_sms_recipient_groups_initialized()
+    grp = (_load_store().get("groups") or {}).get(key) or {}
+    return _member_len(grp if isinstance(grp, dict) else {})
+
+
+def _member_dict_fast(item: Any, *, validate: bool) -> Optional[Dict[str, str]]:
+    if not isinstance(item, dict):
+        return None
+    raw_phone = str(item.get("phone") or "").strip()
+    if not raw_phone:
+        return None
+    if not validate and len(raw_phone) == 11 and raw_phone.startswith("09") and raw_phone.isdigit():
+        phone = raw_phone
+    else:
+        phone = normalize_iran_mobile(raw_phone)
+        if not is_valid_iran_mobile(phone):
+            return None
+    name = str(item.get("name") or phone).strip() or phone
+    return {
+        "phone": phone,
+        "name": name,
+        "source": str(item.get("source") or "manual"),
+    }
+
+
+def load_sms_recipients(
+    group: str,
+    *,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    validate: bool = False,
+) -> List[Dict[str, str]]:
+    """بارگذاری گیرندگان.
+
+    limit/offset برای batch ارسال (گروه‌های چند صد هزار نفری ضروری است).
+    validate=False مسیر سریع — شماره‌های ذخیره‌شدهٔ 09… را دوباره نرمال نمی‌کند.
+    """
     key = normalize_recipient_group(group)
     ensure_sms_recipient_groups_initialized()
     grp = (_load_store().get("groups") or {}).get(key) or {}
     members = grp.get("members") if isinstance(grp.get("members"), list) else []
+    n = len(members)
+    if n == 0:
+        return []
+
+    try:
+        offset = max(0, int(offset or 0))
+    except (TypeError, ValueError):
+        offset = 0
+    try:
+        lim = int(limit) if limit is not None else None
+    except (TypeError, ValueError):
+        lim = None
+    if lim is not None and lim < 1:
+        return []
+
     out: List[Dict[str, str]] = []
     seen: set[str] = set()
-    for item in members:
-        if not isinstance(item, dict):
+
+    if lim is None:
+        for item in members:
+            member = _member_dict_fast(item, validate=validate)
+            if not member or member["phone"] in seen:
+                continue
+            seen.add(member["phone"])
+            out.append(member)
+        return out
+
+    if offset >= n:
+        offset = offset % n
+
+    # فقط همان تعداد لازم را می‌خوانیم (چرخشی) — بدون ساخت لیست ایندکس ۴۰۰هزاری
+    idx = offset
+    scanned = 0
+    while scanned < n and len(out) < lim:
+        member = _member_dict_fast(members[idx], validate=validate)
+        scanned += 1
+        idx = (idx + 1) % n
+        if not member or member["phone"] in seen:
             continue
-        phone = normalize_iran_mobile(str(item.get("phone") or "").strip())
-        if not is_valid_iran_mobile(phone) or phone in seen:
-            continue
-        seen.add(phone)
-        out.append({
-            "phone": phone,
-            "name": str(item.get("name") or phone).strip() or phone,
-            "source": str(item.get("source") or "manual"),
-        })
+        seen.add(member["phone"])
+        out.append(member)
     return out
 
 
 def recipient_group_counts() -> Dict[str, int]:
     ensure_sms_recipient_groups_initialized()
-    return {key: len(load_sms_recipients(key)) for key in RECIPIENT_GROUP_ORDER}
+    data = _load_store().get("groups") or {}
+    return {
+        key: _member_len(data.get(key) if isinstance(data.get(key), dict) else {})
+        for key in RECIPIENT_GROUP_ORDER
+    }
 
 
 def list_sms_recipient_groups_summary() -> List[Dict[str, Any]]:
@@ -241,27 +375,51 @@ def list_sms_recipient_groups_summary() -> List[Dict[str, Any]]:
     data = _load_store().get("groups") or {}
     rows: List[Dict[str, Any]] = []
     for key in RECIPIENT_GROUP_ORDER:
-        grp = data.get(key) or {}
+        grp = data.get(key) if isinstance(data.get(key), dict) else {}
         rows.append({
             "key": key,
-            "label": str(grp.get("label") or RECIPIENT_GROUP_LABELS[key]),
-            "hint": str(grp.get("hint") or RECIPIENT_GROUP_HINTS[key]),
-            "count": len(load_sms_recipients(key)),
-            "synced_at": grp.get("synced_at") or "",
-            "updated_at": grp.get("updated_at") or "",
+            "label": str((grp or {}).get("label") or RECIPIENT_GROUP_LABELS[key]),
+            "hint": str((grp or {}).get("hint") or RECIPIENT_GROUP_HINTS[key]),
+            "count": _member_len(grp or {}),
+            "synced_at": (grp or {}).get("synced_at") or "",
+            "updated_at": (grp or {}).get("updated_at") or "",
         })
     return rows
 
 
-def get_sms_recipient_group_detail(group: str) -> Dict[str, Any]:
+def get_sms_recipient_group_detail(
+    group: str,
+    *,
+    page: int = 1,
+    per_page: int = 50,
+) -> Dict[str, Any]:
+    """جزئیات گروه با صفحه‌بندی اعضا — برای ۴۰۰ هزار نفر لازم است."""
     key = normalize_recipient_group(group)
     ensure_sms_recipient_groups_initialized()
     grp = (_load_store().get("groups") or {}).get(key) or _default_group_block(key)
+    total = _member_len(grp if isinstance(grp, dict) else {})
+    try:
+        page = max(1, int(page or 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        per_page = max(10, min(200, int(per_page or 50)))
+    except (TypeError, ValueError):
+        per_page = 50
+    total_pages = max(1, (total + per_page - 1) // per_page) if total else 1
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * per_page
+    members = load_sms_recipients(key, limit=per_page, offset=offset, validate=False)
     return {
         "key": key,
         "label": str(grp.get("label") or RECIPIENT_GROUP_LABELS[key]),
         "hint": str(grp.get("hint") or RECIPIENT_GROUP_HINTS[key]),
-        "members": load_sms_recipients(key),
+        "members": members,
+        "member_count": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
         "synced_at": grp.get("synced_at") or "",
         "updated_at": grp.get("updated_at") or "",
     }
@@ -339,8 +497,18 @@ def remove_sms_recipient_member(group: str, phone: str) -> Optional[str]:
 
 
 def export_sms_recipient_phones_txt(group: str) -> str:
-    """یک شماره در هر خط — برای دانلود فایل txt."""
-    lines = [item["phone"] for item in load_sms_recipients(group) if item.get("phone")]
+    """یک شماره در هر خط — سریع، بدون validate دوباره."""
+    key = normalize_recipient_group(group)
+    ensure_sms_recipient_groups_initialized()
+    grp = (_load_store().get("groups") or {}).get(key) or {}
+    members = grp.get("members") if isinstance(grp.get("members"), list) else []
+    lines: List[str] = []
+    for item in members:
+        if not isinstance(item, dict):
+            continue
+        phone = str(item.get("phone") or "").strip()
+        if phone:
+            lines.append(phone)
     if not lines:
         return ""
     return "\n".join(lines) + "\n"

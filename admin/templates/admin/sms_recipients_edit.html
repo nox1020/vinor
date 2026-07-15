@@ -82,8 +82,15 @@
 
   <!-- لیست اعضا -->
   <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="text-sm font-semibold text-gray-900 dark:text-white">اعضا ({{ group.members|length }})</h2>
+    <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+      <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
+        اعضا ({{ group.member_count|default(group.members|length) }})
+      </h2>
+      {% if group.total_pages and group.total_pages > 1 %}
+      <p class="text-[11px] text-gray-500 dark:text-gray-400">
+        صفحه {{ group.page }} از {{ group.total_pages }}
+      </p>
+      {% endif %}
     </div>
 
     {% if group.members %}
@@ -122,6 +129,19 @@
       </li>
       {% endfor %}
     </ul>
+    {% if group.total_pages and group.total_pages > 1 %}
+    <div class="mt-4 flex items-center justify-center gap-2 text-xs">
+      {% if group.page > 1 %}
+      <a href="{{ url_for('admin.sms_recipients_edit', group_key=group.key, page=group.page - 1) }}"
+         class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">قبلی</a>
+      {% endif %}
+      <span class="text-gray-500">{{ group.page }} / {{ group.total_pages }}</span>
+      {% if group.page < group.total_pages %}
+      <a href="{{ url_for('admin.sms_recipients_edit', group_key=group.key, page=group.page + 1) }}"
+         class="px-2 py-1 rounded border border-gray-200 dark:border-gray-700">بعدی</a>
+      {% endif %}
+    </div>
+    {% endif %}
     {% else %}
     <p class="text-sm text-gray-500 dark:text-gray-400 text-center py-8">هنوز عضوی در این گروه نیست.</p>
     {% endif %}

@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Flask, current_app
 
-from admin.sms_recipients import load_sms_recipients, recipient_group_label
+from admin.sms_recipients import count_sms_recipients, load_sms_recipients, recipient_group_label
 from app.services.sms import send_sms_direct
 from app.services.sms_config import get_sms_line_number
 from app.utils.dates import format_display_jalali_datetime, tehran_now, to_en_digits
@@ -265,6 +265,26 @@ def send_direct_to_recipients(
 ) -> Tuple[int, int, List[Dict[str, Any]]]:
     line_number = get_sms_line_number()
     sent, failed, failed_details = 0, 0, []
+    history_batch: List[Dict[str, Any]] = []
+    HISTORY_FLUSH_EVERY = 50
+
+    def _flush_history() -> None:
+        nonlocal history_batch
+        if not history_batch:
+            return
+        try:
+            history = load_sms_history(current_app) or []
+            base_id = len(history)
+            for i, row in enumerate(history_batch):
+                row["id"] = base_id + i + 1
+            history.extend(history_batch)
+            if len(history) > 10000:
+                history = history[-10000:]
+            save_sms_history(history, current_app)
+        except Exception as hist_err:
+            current_app.logger.error("Failed to save SMS history: %s", hist_err)
+        history_batch = []
+
     for partner in recipients:
         phone_normalized = partner["phone"]
         try:
@@ -273,27 +293,21 @@ def send_direct_to_recipients(
                 message=message,
                 line_number=line_number,
             )
-            try:
-                history = load_sms_history(current_app) or []
-                history.append({
-                    "id": len(history) + 1,
-                    "mobile": phone_normalized,
-                    "recipient_name": partner.get("name"),
-                    "template_id": None,
-                    "message": message,
-                    "parameters": {},
-                    "success": result.get("ok", False),
-                    "status_code": result.get("status", 0),
-                    "response": result.get("body", {}),
-                    "source": source,
-                    "created_at": tehran_now().isoformat(),
-                    "error": None if result.get("ok") else str(result.get("body", {}).get("message", "Unknown error")),
-                })
-                if len(history) > 10000:
-                    history = history[-10000:]
-                save_sms_history(history, current_app)
-            except Exception as hist_err:
-                current_app.logger.error("Failed to save SMS history: %s", hist_err)
+            history_batch.append({
+                "mobile": phone_normalized,
+                "recipient_name": partner.get("name"),
+                "template_id": None,
+                "message": message,
+                "parameters": {},
+                "success": result.get("ok", False),
+                "status_code": result.get("status", 0),
+                "response": result.get("body", {}),
+                "source": source,
+                "created_at": tehran_now().isoformat(),
+                "error": None if result.get("ok") else str(result.get("body", {}).get("message", "Unknown error")),
+            })
+            if len(history_batch) >= HISTORY_FLUSH_EVERY:
+                _flush_history()
 
             if result.get("ok"):
                 sent += 1
@@ -311,6 +325,7 @@ def send_direct_to_recipients(
                 "name": partner.get("name", "unknown"),
                 "error": str(e),
             })
+    _flush_history()
     return sent, failed, failed_details
 
 
@@ -332,14 +347,21 @@ def create_scheduled_job(
     if not message:
         return None, "متن پیامک الزامی است."
 
-    recipients = load_sms_recipients(recipient_group)
-    if not recipients:
+    from admin.sms_recipients import LARGE_GROUP_REQUIRE_BATCH
+
+    total = count_sms_recipients(recipient_group)
+    if total < 1:
         label = recipient_group_label(recipient_group)
         return None, f"هیچ گیرنده‌ای در گروه «{label}» با شماره معتبر یافت نشد."
 
-    parsed_limit, limit_error = parse_send_limit(send_limit, len(recipients))
+    parsed_limit, limit_error = parse_send_limit(send_limit, total)
     if limit_error:
         return None, limit_error
+    if total >= LARGE_GROUP_REQUIRE_BATCH and not parsed_limit:
+        return None, (
+            f"گروه {total} نفره است؛ برای جلوگیری از کندی، "
+            f"«تعداد ارسال در هر مرحله» را مشخص کنید (مثلاً ۵۰ تا ۵۰۰)."
+        )
 
     now = _to_tehran(tehran_now())
     job: Dict[str, Any] = {
@@ -347,7 +369,7 @@ def create_scheduled_job(
         "status": _STATUS_PENDING,
         "send_timing": send_timing,
         "recipient_group": recipient_group,
-        "recipient_count": len(recipients),
+        "recipient_count": total,
         "send_limit": parsed_limit,
         "send_offset": 0,
         "message": message,
@@ -440,12 +462,25 @@ def list_active_scheduled_jobs(limit: int = 20) -> List[Dict[str, Any]]:
 
 
 def _execute_job(app: Flask, job: Dict[str, Any]) -> None:
-    recipients = load_sms_recipients(job.get("recipient_group") or "approved")
-    if not recipients:
+    group = job.get("recipient_group") or "approved"
+    total = count_sms_recipients(group)
+    if total < 1:
         job["last_result"] = {"sent": 0, "failed": 0, "error": "no_recipients"}
         return
 
-    batch = select_recipients_for_job(recipients, job)
+    raw_limit = job.get("send_limit")
+    try:
+        limit = int(raw_limit) if raw_limit is not None and str(raw_limit).strip() != "" else 0
+    except (TypeError, ValueError):
+        limit = 0
+
+    offset = int(job.get("send_offset") or 0)
+    if limit > 0 and limit < total:
+        batch = load_sms_recipients(group, limit=limit, offset=offset, validate=False)
+    else:
+        # بدون محدودیت — فقط برای گروه‌های کوچک مجاز است
+        batch = load_sms_recipients(group, validate=False)
+
     if not batch:
         job["last_result"] = {"sent": 0, "failed": 0, "error": "no_recipients"}
         return
@@ -464,13 +499,9 @@ def _execute_job(app: Flask, job: Dict[str, Any]) -> None:
     job["last_run_at"] = tehran_now().isoformat()
     job["runs_completed"] = int(job.get("runs_completed") or 0) + 1
 
-    raw_limit = job.get("send_limit")
-    try:
-        limit = int(raw_limit) if raw_limit is not None else 0
-    except (TypeError, ValueError):
-        limit = 0
-    if job.get("send_timing") == SEND_TIMING_RECURRING and limit > 0 and len(recipients) > limit:
-        job["send_offset"] = (int(job.get("send_offset") or 0) + limit) % len(recipients)
+    if job.get("send_timing") == SEND_TIMING_RECURRING and limit > 0 and total > limit:
+        job["send_offset"] = (offset + limit) % total
+        job["recipient_count"] = total
 
 
 def process_due_scheduled_jobs(app: Flask) -> int:

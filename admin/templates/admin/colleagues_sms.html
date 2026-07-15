@@ -110,17 +110,21 @@
           <p id="scheduledAtHint" class="text-[11px] text-gray-500 dark:text-gray-400" dir="ltr"></p>
         </div>
 
-        <div id="sendLimitFields" class="space-y-2 {% if form_send_timing == 'instant' %}hidden{% endif %}">
+        <div id="sendLimitFields" class="space-y-2">
           <label for="send_limit" class="block text-xs text-gray-600 dark:text-gray-400">
             تعداد ارسال در هر مرحله
+            {% if partners_count >= 2000 %}
+            <span class="text-rose-600 dark:text-rose-400 font-medium">(برای این گروه الزامی)</span>
+            {% endif %}
           </label>
           <input
             type="number"
             id="send_limit"
             name="send_limit"
             min="1"
+            max="{{ partners_count or 1 }}"
             value="{{ form_send_limit }}"
-            placeholder="همه گروه"
+            placeholder="{% if partners_count >= 2000 %}مثال: ۱۰۰{% else %}همه گروه{% endif %}"
             class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
           >
           <p id="sendLimitHint" class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -353,8 +357,6 @@ function getSelectedRecipientCount() {
 
 function getEffectiveSendCount() {
   var total = getSelectedRecipientCount();
-  var timing = getSelectedSendTiming();
-  if (timing === 'instant') return total;
   var limitEl = document.getElementById('send_limit');
   if (!limitEl || !limitEl.value) return total;
   var n = parseInt(String(limitEl.value).replace(/[^\d]/g, ''), 10);
@@ -510,7 +512,7 @@ function syncSendTimingUi() {
   var count = getEffectiveSendCount();
   if (scheduled) scheduled.classList.toggle('hidden', timing !== 'scheduled');
   if (recurring) recurring.classList.toggle('hidden', timing !== 'recurring');
-  if (sendLimitFields) sendLimitFields.classList.toggle('hidden', timing === 'instant');
+  if (sendLimitFields) sendLimitFields.classList.remove('hidden');
   if (recurringHint) recurringHint.classList.toggle('hidden', timing !== 'recurring');
   if (timing === 'scheduled') syncScheduledAtClock();
   syncSendLimitUi();
@@ -565,7 +567,15 @@ function confirmSend() {
     var batchR = getEffectiveSendCount();
     return confirm('ارسال تکرارشونده برای ' + batchR + ' نفر در هر اجرا از گروه «' + label + '» ثبت شود؟');
   }
-  return confirm('پیامک به ' + count + ' نفر از گروه «' + label + '» ارسال شود؟');
+  if (timing === 'instant') {
+    var lim = document.getElementById('send_limit');
+    var total = getSelectedRecipientCount();
+    if (total >= 2000 && (!lim || !lim.value)) {
+      alert('گروه بزرگ است؛ «تعداد ارسال در هر مرحله» را مشخص کنید (مثلاً ۱۰۰).');
+      return false;
+    }
+  }
+  return confirm('پیامک به ' + getEffectiveSendCount() + ' نفر از گروه «' + label + '» ارسال شود؟');
 }
 
 (function () {
