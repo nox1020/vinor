@@ -595,12 +595,57 @@ def _select_lands_for_query(
         pool = lands
     q = (query or "").strip()
     if q:
+        rag_picked = _select_lands_by_rag(
+            pool,
+            q,
+            limit=match_limit,
+        )
+        if rag_picked:
+            return rag_picked[:match_limit]
         matched = [l for l in pool if _land_matches_query(l, q)]
         if matched:
             return matched[:match_limit]
         # کوئری خارج از محدوده → باز هم فقط فایل‌های گرمابسرد
         return pool[:match_limit]
     return pool[:default_limit]
+
+
+def _select_lands_by_rag(
+    pool: list[dict[str, Any]],
+    query: str,
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """RAG selection bridge: returns only property codes; text format stays unchanged."""
+    try:
+        from app.knowledge.interfaces import RetrievalRequest
+        from app.knowledge.service import get_property_retriever
+    except Exception:
+        return []
+    retriever = get_property_retriever()
+    if retriever is None:
+        return []
+    allowed: list[str] = []
+    for l in pool:
+        code = str(l.get("code") or "").strip()
+        if code:
+            allowed.append(code)
+    if not allowed:
+        return []
+    try:
+        codes = retriever.retrieve_property_codes(
+            RetrievalRequest(
+                query=(query or "").strip(),
+                top_k=max(1, min(20, int(limit or 6))),
+                allowed_codes=tuple(allowed),
+            )
+        )
+    except Exception:
+        return []
+    if not codes:
+        return []
+    lookup = {str(l.get("code") or "").strip(): l for l in pool if str(l.get("code") or "").strip()}
+    return [lookup[c] for c in codes if c in lookup]
 
 
 def build_partner_land_context(

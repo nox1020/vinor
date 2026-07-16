@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import time
 from typing import Any
 from uuid import uuid4
 
@@ -54,9 +56,17 @@ from .runtime_settings import (
 from .escalations import consume_pending_answers, create_escalation
 from .land_cards import collect_land_codes, land_cards_payload
 from .provider_router import call_ai
+from .token_analytics import (
+    estimate_messages_tokens,
+    estimate_tokens,
+    record_token_analytics,
+    usage_cost,
+)
 
 _MAX_TOOL_ROUNDS = 2
 _MAX_TOOL_RESULT_CHARS = 1800
+_PROMPT_CACHE: dict[str, tuple[float, str]] = {}
+_PROMPT_CACHE_TTL_SEC = 20.0
 
 # کلیدهای سنگین/تکراری که برای مدل لازم نیستند
 _TOOL_RESULT_DROP_KEYS = frozenset(
@@ -187,7 +197,17 @@ def _build_system_prompt(
     except Exception:
         focus_codes = []
     try:
-        if aud == AUDIENCE_PARTNER:
+        core_cache_key = _system_context_cache_key(
+            user_key=user_key,
+            audience=aud,
+            user_message=user_message,
+            thread_id=thread_id,
+            focus_codes=focus_codes,
+        )
+        cached_core = _get_prompt_cache(core_cache_key)
+        if cached_core is not None:
+            ctx = cached_core
+        elif aud == AUDIENCE_PARTNER:
             base = get_partner_context_base(
                 user_key,
                 lambda: build_partner_context_base(user_key),
@@ -202,6 +222,7 @@ def _build_system_prompt(
             if land_ctx:
                 parts.append(land_ctx)
             ctx = "\n".join(parts)
+            _set_prompt_cache(core_cache_key, ctx)
         else:
             base = get_public_context_base(build_public_context_base)
             land_ctx = build_public_land_context(
@@ -210,6 +231,7 @@ def _build_system_prompt(
             ctx = base
             if land_ctx:
                 ctx = f"{base}\n{land_ctx}"
+            _set_prompt_cache(core_cache_key, ctx)
         notes = consume_pending_answers(user_key, audience=aud)
         ctx = append_admin_answers_block(ctx, notes)
         return ctx[:max_ctx]
@@ -263,7 +285,19 @@ def _build_messages(
         if ctx:
             messages.append({"role": "system", "content": ctx})
     if history:
-        for item in history[-cfg["max_history"] :]:
+        keep_last = int(cfg["max_history"])
+        summary = _summarize_older_history(history, keep_last=keep_last)
+        if summary:
+            reduced_keep = max(2, keep_last - 2)
+            dropped = history[-keep_last:-reduced_keep] if keep_last > reduced_keep else []
+            dropped_tokens = 0
+            for item in dropped:
+                if isinstance(item, dict):
+                    dropped_tokens += estimate_tokens(str(item.get("content") or ""))
+            if estimate_tokens(summary) < dropped_tokens:
+                messages.append({"role": "system", "content": summary})
+                keep_last = reduced_keep
+        for item in history[-keep_last:]:
             if not isinstance(item, dict):
                 continue
             role = str(item.get("role") or "").strip()
@@ -272,6 +306,72 @@ def _build_messages(
                 messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": text[: cfg["max_msg_chars"]]})
     return messages
+
+
+def _summarize_older_history(
+    history: list[dict[str, str]] | None,
+    *,
+    keep_last: int,
+) -> str:
+    if (os.environ.get("VINOR_HISTORY_SUMMARY") or "0").strip().lower() not in ("1", "true", "yes", "on"):
+        return ""
+    rows = [h for h in (history or []) if isinstance(h, dict)]
+    if len(rows) <= max(0, int(keep_last)):
+        return ""
+    older = rows[: -int(keep_last)]
+    # Keep only the latest meaningful slices from old part.
+    picked = older[-6:]
+    bits: list[str] = []
+    for item in picked:
+        role = str(item.get("role") or "").strip()
+        if role not in ("user", "assistant"):
+            continue
+        content = re.sub(r"\s+", " ", str(item.get("content") or "").strip())
+        if not content:
+            continue
+        prefix = "کاربر" if role == "user" else "دستیار"
+        bits.append(f"{prefix}: {content[:80]}")
+    if not bits:
+        return ""
+    return "خلاصه گفتگوهای قبلی:\n- " + "\n- ".join(bits[:6])
+
+
+def _system_context_cache_key(
+    *,
+    user_key: str,
+    audience: str,
+    user_message: str,
+    thread_id: str | None,
+    focus_codes: list[str],
+) -> str:
+    payload = {
+        "u": user_key,
+        "a": audience,
+        "m": (user_message or "").strip()[:180].lower(),
+        "t": thread_id or "",
+        "f": focus_codes[:3],
+    }
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def _get_prompt_cache(key: str) -> str | None:
+    item = _PROMPT_CACHE.get(key)
+    if not item:
+        return None
+    ts, value = item
+    if (time.time() - ts) > _PROMPT_CACHE_TTL_SEC:
+        _PROMPT_CACHE.pop(key, None)
+        return None
+    return value
+
+
+def _set_prompt_cache(key: str, value: str) -> None:
+    _PROMPT_CACHE[key] = (time.time(), value)
+    if len(_PROMPT_CACHE) > 600:
+        # simple trim of oldest 100 entries
+        old_keys = sorted(_PROMPT_CACHE.items(), key=lambda x: x[1][0])[:100]
+        for k, _ in old_keys:
+            _PROMPT_CACHE.pop(k, None)
 
 
 # DeepSeek V3.2/V4 گاهی tool call را به‌صورت DSML داخل content می‌فرستد
@@ -689,6 +789,7 @@ def generate_reply(
     thread_id: str | None = None,
     chip_intent: str | None = None,
 ) -> dict[str, Any]:
+    started = time.perf_counter()
     key = (user_key or phone or "").strip()
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
     voice = resolve_ai_voice(phone=key, audience=aud)
@@ -761,6 +862,7 @@ def generate_reply(
         chip_intent=intent or None,
         thread_id=thread_id,
     )
+    prompt_parts = _prompt_token_parts(messages)
     try:
         from flask import g
 
@@ -791,6 +893,15 @@ def generate_reply(
             )
             if fallback.get("ok"):
                 return fallback
+        _record_request_analytics(
+            user_key=key,
+            audience=aud,
+            voice=voice,
+            messages=messages,
+            prompt_parts=prompt_parts,
+            result=result,
+            started=started,
+        )
         return result
 
     meta = result.get("meta") if isinstance(result.get("meta"), dict) else {}
@@ -878,4 +989,81 @@ def generate_reply(
     # کارت فایل فقط در land_cards (نوار بالای خانه) — داخل چت cards_html نگذار
 
     store_cached_reply(key, aud, text, result)
+    _record_request_analytics(
+        user_key=key,
+        audience=aud,
+        voice=voice,
+        messages=messages,
+        prompt_parts=prompt_parts,
+        result=result,
+        started=started,
+    )
     return result
+
+
+def _prompt_token_parts(messages: list[dict[str, Any]]) -> dict[str, int]:
+    parts = {
+        "system_prompt_tokens": 0,
+        "context_tokens": 0,
+        "history_tokens": 0,
+        "user_tokens": 0,
+    }
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        role = str(m.get("role") or "")
+        content = str(m.get("content") or "")
+        tok = estimate_tokens(content)
+        if role == "system":
+            if "=== اطلاعات داخلی وینور ===" in content or "--- آگهی" in content or "--- فایل" in content:
+                parts["context_tokens"] += tok
+            else:
+                parts["system_prompt_tokens"] += tok
+        elif role == "user":
+            if m is messages[-1]:
+                parts["user_tokens"] += tok
+            else:
+                parts["history_tokens"] += tok
+        elif role == "assistant":
+            parts["history_tokens"] += tok
+    return parts
+
+
+def _record_request_analytics(
+    *,
+    user_key: str,
+    audience: str,
+    voice: str,
+    messages: list[dict[str, Any]],
+    prompt_parts: dict[str, int],
+    result: dict[str, Any],
+    started: float,
+) -> None:
+    try:
+        meta = result.get("meta") if isinstance(result.get("meta"), dict) else {}
+        usage = meta.get("usage") if isinstance(meta.get("usage"), dict) else {}
+        input_tokens = int(usage.get("prompt_tokens") or 0) or estimate_messages_tokens(messages)
+        output_tokens = int(usage.get("completion_tokens") or 0) or estimate_tokens(result.get("reply") or "")
+        rag_tokens = int(prompt_parts.get("context_tokens") or 0)
+        row = {
+            "user": user_key,
+            "audience": audience,
+            "voice": voice,
+            "ok": bool(result.get("ok")),
+            "provider": meta.get("provider") or "",
+            "model": meta.get("model") or "",
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "system_prompt_tokens": int(prompt_parts.get("system_prompt_tokens") or 0),
+            "context_tokens": int(prompt_parts.get("context_tokens") or 0),
+            "history_tokens": int(prompt_parts.get("history_tokens") or 0),
+            "rag_tokens": rag_tokens,
+            "total_tokens": input_tokens + output_tokens,
+            "total_cost": usage_cost(usage),
+            "response_time_ms": int((time.perf_counter() - started) * 1000),
+            "api_rounds": int(result.get("api_rounds") or 0),
+            "cache_hit": bool((meta.get("provider") == "cache") if isinstance(meta, dict) else False),
+        }
+        record_token_analytics(row)
+    except Exception:
+        pass

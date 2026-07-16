@@ -1,0 +1,913 @@
+================================================================================
+                    مستند فنی معماری Vinor
+                    تاریخ: ۱۴۰۵/۰۴/۲۵
+                    Doc Version: v1.4
+================================================================================
+
+این سند وضعیت فعلی کدبیس Vinor را بدون پیشنهاد پیاده‌سازی توصیف می‌کند.
+Vinor یک Flask monolith برای بازار املاک محلی (گرمابسرد، دماوند) با پنل
+همکاران اکسپرس، چت AI مبتنی بر DeepSeek، و ذخیره‌سازی عمدتاً JSON فایل است.
+
+
+================================================================================
+1. Architecture Overview
+================================================================================
+
+1.1 ساختار کلی سیستم
+--------------------
+
++-----------------------------------------------------------------------------+
+|                              Client Layer                                    |
+|  Jinja2 HTML + Tailwind + Alpine.js + Vanilla JS + PWA (Service Worker)     |
+|  Express Partner Portal  (/express/partner/*)                                  |
+|  Public site             (/ , /express/<code>)                                 |
+|  Admin panel             (/admin/*)                                          |
++-----------------------------------+-----------------------------------------+
+                                    | HTTP (HTML + JSON API)
++-----------------------------------v-----------------------------------------+
+|                         Flask Application (run.py)                             |
+|  create_app() -> Blueprints: main, express_partner, ai, admin, webhook,      |
+|  express_api, sms_api, push_api, fcm_api, uploads                            |
++---------------+--------------------------------+-----------------------------+
+                |                                |
+                v                                v
++---------------------------+    +---------------------------------------------+
+|     Domain Services       |    |              AI Layer                        |
+|  storage.py               |    |  services.py -> DeepSeek API               |
+|  SMS, commissions         |    |  agent_tools, context, chat_store            |
+|  missions, sales_coach    |    |  escalations, credits                        |
++-------------+-------------+    +---------------------------------------------+
+              |
+              v
++-----------------------------------------------------------------------------+
+|  Persistence: instance/data/*.json (+ sqlite vinor.db — بدون مدل فعال)       |
+|  Uploads: app/data/uploads, instance/data/ai_chats/...                       |
++-----------------------------------------------------------------------------+
+
+
+1.2 اتصال Frontend، Backend، Database و AI
+------------------------------------------
+
+لایه          | نقش                              | اتصال
+--------------|----------------------------------|----------------------------------
+Frontend      | قالب Jinja2 + Tailwind/Alpine    | HTTP به Flask؛ چت AI از
+              | در express_partner و admin       | POST /express/partner/ai/chat
+              |                                  | و POST /ai/chat
+Backend       | Flask 2.3 App Factory            | Blueprintها؛ سرویس‌ها در
+              | app/__init__.py                  | app/services/, express_partner/, ai/
+Database      | JSON در instance/data/           | storage.py — منبع حقیقت داده
+              | (SQLAlchemy بدون db.Model)       | sqlite فقط initialize می‌شود
+AI            | DeepSeek Chat Completions        | services.py -> API خارجی
+              | + Function Calling               | context از JSON lands/partners
+
+نکته: سیستم SPA جدا (React/Vue) ندارد. UI با سرور رندر می‌شود و چت AI با
+fetch/XHR به JSON endpointها متصل است.
+
+
+================================================================================
+2. AI Layer
+================================================================================
+
+2.1 مدل AI
+----------
+Provider:     DeepSeek API (DEEPSEEK_BASE_URL, DEEPSEEK_API_KEY)
+مدل‌ها:       deepseek-v4-flash و deepseek-v4-pro
+انتخاب:       پنل ادمین -> settings.json -> ai.model_choice
+              مقادیر: auto | flash | pro
+پیش‌فرض:      auto و flash هر دو به Flash map می‌شوند
+فایل:         app/ai/runtime_settings.py
+
+اولویت کلید API:
+  1. settings.json -> ai.api_key
+  2. متغیر محیطی DEEPSEEK_API_KEY
+  3. api_keys.py (ریشه پروژه)
+فایل:         app/keys.py
+
+
+2.2 محل Promptها
+----------------
+نوع                    | فایل                    | محتوا
+-----------------------|-------------------------|---------------------------
+System Prompt اصلی     | app/ai/config.py        | VINOR_AI_PUBLIC_PROMPT
+                       |                         | VINOR_AI_PARTNER_PROMPT
+                       |                         | VINOR_AI_SPECIAL_PROMPT
+راهنمای Agent          | app/ai/agent_tools.py   | agent_system_hint()
+نیت چیپ‌های سریع       | app/ai/intents.py       | CHIP_INTENT_HINTS
+Escalation marker      | app/ai/config.py        | [[ESCALATE:...]]
+
+
+2.3 مدیریت System Prompt
+-------------------------
+جریان در _build_messages() — app/ai/services.py:
+
+  1. prompt_for_voice(voice) — یکی از سه پرامپت بر اساس مخاطب
+  2. اگر with_tools=True -> agent_system_hint(voice)
+  3. اگر chip_intent -> hint از intents.py
+  4. اگر user_key -> context دینامیک از _build_system_prompt()
+
+Voice/Audience — app/ai/audience.py:
+  - public   : مشتری / خریدار
+  - partner  : همکار پورسانت‌گیر (واسط فروشنده و خریدار)
+  - special  : مالک/فروشنده ویژه (بالاترین دسترسی)
+
+
+2.4 ساخت Context
+-----------------
+فایل اصلی: app/ai/context.py
+کش:        app/ai/context_cache.py
+
+مخاطب Partner:
+  - build_partner_context_base(phone)     — بخش ثابت، کش per phone
+  - build_partner_status_context(phone)   — وضعیت زنده (مأموریت، پورسانت، اقدام فوری)
+  - build_partner_land_context(...)       — بر اساس پیام کاربر و focus_codes
+
+مخاطب Public:
+  - build_public_context_base()           — کش global
+  - build_public_land_context(...)        — نمونه فایل‌ها + جستجوی heuristics
+
+Context از خواندن JSON ساخته می‌شود:
+  lands.json, express_assignments, express_partners,
+  express_visit_requests, partner_missions, settings, ...
+
+محدودیت طول: max_context_chars (پیش‌فرض 3000 کاراکتر)
+فوکوس گفتگو: recent_thread_land_codes() از chat_store — حداکثر 3 کد ملک اخیر thread
+
+خلاصه ملک (_land_summary) شامل:
+  کد، عنوان، شهر، محله، نوع، قیمت، متراژ، وضعیت تخصیص، پورسانت
+
+
+2.5 Memory (حافظه گفتگو)
+------------------------
+فایل: app/ai/chat_store.py
+مسیر: instance/data/ai_chats/{audience}/{phone}.json
+
+ساختار:
+  threads[] -> هر thread دارای messages[]
+  هر message: role, content, land_codes, agent_actions, ...
+
+محدودیت‌ها:
+  - 80 پیام per thread
+  - 30 thread per user (مهمان: 2 thread)
+  - max_history ارسالی به مدل: 5 پیام (قابل تنظیم در settings)
+
+حافظه بلندمدت معنایی (vector / long-term memory) وجود ندارد.
+فقط JSON per-user و context snapshot در هر درخواست.
+
+
+2.6 سایر مکانیزم‌های AI
+------------------------
+Credits:     app/ai/credits.py
+             - rate limit (min_interval_sec)
+             - dedup پاسخ تکراری
+             - سقف 20 پاسخ برای مهمان بدون لاگین
+             - notify ادمین در صورت اتمام balance API
+
+Escalation:  app/ai/escalations.py
+             - marker [[ESCALATE:خلاصه]] در پاسخ مدل
+             - ذخیره سوال -> پاسخ ادمین -> inject در چت بعدی
+
+Postchi:     app/services/postchi.py
+             - thread جدا __postchi__ برای پیام‌های رسمی وینور (غیر-AI)
+
+
+================================================================================
+3. Agent Logic
+================================================================================
+
+3.1 Chatbot یا Agent؟
+---------------------
+Agent محدود با Function Calling — نه chatbot ساده.
+
+ویژگی‌ها:
+  - حداکثر 2 دور tool call (_MAX_TOOL_ROUNDS در services.py)
+  - ابزارها در agent_tools.py؛ schema بر اساس voice
+  - اکشن‌های حساس با کارت تأیید + confirm_action_from_token()
+  - تا تأیید کاربر، ثبت واقعی (بازدید/معامله/همکاری) انجام نمی‌شود
+
+
+3.2 تصمیم‌گیری AI
+-----------------
+جریان generate_reply():
+
+  User message
+      |
+      +-- credit guard / guest limit
+      +-- chip_intent == "visit" -> clear_visit_draft
+      +-- try_continue_visit_from_user_message()
+      |       -> rule-based short-circuit (بدون فراخوانی API)
+      |
+      +-- _build_messages() + _run_agent_loop()
+              |
+              +-- call_ai() -> tool_calls?
+              |       +-- run_tool() -> نتیجه به messages
+              +-- پاسخ نهایی
+                      +-- [[ESCALATE]] -> escalations
+                      +-- [[LAND:کد]] -> land_cards
+                      +-- agent_actions -> UI cards
+
+
+3.3 Workflow درخواست کاربر
+--------------------------
+
+مشتری (public):
+  1. POST /ai/chat یا redirect به /express/partner/home?ai=1
+  2. generate_reply() با tools:
+     search_lands, get_cooperation_info, get_application_status,
+     propose_partner_application
+  3. پاسخ + کارت ملک / کارت ثبت همکاری
+
+همکار (partner):
+  1. POST /express/partner/ai/chat (نیاز به session)
+  2. tools:
+     search_lands, suggest_next_action, draft_listing_copy,
+     propose_visit_request, propose_complete_visit,
+     propose_deal, propose_release_deal
+  3. POST /express/partner/ai/agent/confirm برای تأیید اکشن
+
+Rule-based bypass:
+  جریان چندمرحله‌ای بازدید (try_continue_visit_from_user_message)
+  بدون فراخوانی مدل ادامه می‌یابد.
+
+
+3.4 ابزارهای Agent (Function Calling)
+--------------------------------------
+مشترک (همه voiceها):
+  search_lands
+
+Public voice:
+  get_cooperation_info
+  get_application_status
+  propose_partner_application
+
+Partner / Special voice:
+  suggest_next_action
+  draft_listing_copy
+  propose_visit_request
+  propose_complete_visit
+  propose_deal
+  propose_release_deal
+
+فایل: app/ai/agent_tools.py
+
+
+================================================================================
+4. Knowledge / RAG
+================================================================================
+
+4.1 ورود اطلاعات ملک به AI
+---------------------------
+بدون RAG و بدون Embedding.
+
+روش                    | محل
+-----------------------|------------------------------------------
+Context injection      | context.py — خلاصه متنی _land_summary()
+Tool search            | _tool_search_lands() — keyword/heuristic
+Marker در پاسخ         | [[LAND:کد]] -> land_cards.py
+
+داده منبع:
+  lands.json / load_express_lands_cached()
+  فیلتر جغرافی: land_in_service_focus() — روستای گرمابسرد
+
+
+4.2 Embedding
+-------------
+وجود ندارد.
+جستجو در کدبیس برای chromadb، faiss، pinecone، embedding نتیجه‌ای ندارد.
+
+
+4.3 Vector Search
+-----------------
+وجود ندارد.
+
+
+4.4 مبنای تولید پاسخ
+---------------------
+  1. System prompt ثابت (قواعد کسب‌وکار وینور)
+  2. Context دینامیک (JSON -> متن فشرده)
+  3. تاریخچه چت (5 پیام اخیر)
+  4. خروجی tool calls (جستجو، وضعیت، پیشنهاد اکشن)
+  5. پاسخ‌های escalation ادمین (اگر سوال مشابه باشد)
+
+
+================================================================================
+5. Database Structure
+================================================================================
+
+5.1 مدل داده
+------------
+JSON-first — رابطه‌ها implicit در فیلدهای dict هستند، نه FK در RDBMS.
+SQLAlchemy (app/extensions.py) initialize می‌شود ولی هیچ db.Model تعریف نشده.
+
+
+5.2 فایل‌های اصلی (instance/data/)
+----------------------------------
+فایل                              | موجودیت           | نقش
+----------------------------------|-------------------|---------------------------
+lands.json                        | Property/Land     | آگهی‌های اصلی
+express_partner_applications.json | Application       | درخواست همکاری
+express_partners.json             | User (Partner)    | پروفایل همکار
+users.json                        | User              | کاربران عمومی
+express_assignments.json          | Assignment        | تخصیص فایل به همکار
+express_visit_requests.json       | Visit             | درخواست بازدید
+express_commissions.json          | Transaction       | پورسانت و معامله
+partner_missions.json             | Mission           | مأموریت رندوم AI
+express_partner_sales.json        | Sale              | فروش ثبت‌شده
+ai_chats/{audience}/*.json        | Conversation      | گفتگوی AI
+ai_escalations.json               | Escalation        | سوالات ارجاع‌شده
+settings.json                     | Config            | تنظیمات شامل AI
+sms_history.json                  | SMS               | تاریخچه ارسال
+sms_recipient_groups.json         | SMS Groups        | گروه‌های مخاطب انبوه
+postchi_messages.json             | Postchi           | پیام‌های رسمی
+notifications.json                | Notification      | اعلان‌ها
+express_views.json                | Analytics         | بازدید صفحات
+
+
+5.3 ارتباط User، Property، Conversation و Transaction
+------------------------------------------------------
+
+User (phone)
+  |
+  +-- express_partners          (پروفایل همکار)
+  +-- express_assignments       (land_code -> partner_phone)
+  +-- express_visit_requests    (partner + land + customer)
+  +-- express_commissions       (tx_mode: visit | deal | deal_pending | ...)
+  +-- partner_missions          (land_code + thread seed)
+  +-- ai_chats                  (threads/messages per audience)
+
+Land (code)
+  |
+  +-- در lands.json
+  +-- assignment.status: active | in_transaction | sold | pending | ...
+  +-- visit_requests و commissions مرتبط با land_code
+
+Conversation
+  -> bind به User با phone/user_key و audience (public | partner)
+  -> thread_id برای جداسازی گفتگوها (شامل __postchi__ برای پستچی)
+
+Transaction
+  -> express_commissions + state مأموریت/assignment
+  -> tx_mode در sales_coach.py و agent_tools هم‌راستا می‌شود:
+     visit, visit_commission_pending, deal, deal_pending, release, blocked, ...
+
+
+5.4 SQLite
+----------
+مسیر: sqlite:///instance/vinor.db
+وضعیت: initialize می‌شود (db.create_all) ولی بدون schema فعال.
+منبع حقیقت: JSON files.
+
+
+================================================================================
+6. Backend
+================================================================================
+
+6.1 فریم‌ورک
+------------
+Flask 2.3.3 + Jinja2 + Flask-WTF
+Gunicorn (production) / Passenger WSGI (passenger_wsgi.py)
+SQLAlchemy 2.0 (غیرفعال از نظر domain models)
+
+
+6.2 Blueprintها
+---------------
+Blueprint              | Prefix              | نقش
+-----------------------|---------------------|----------------------------------
+main_bp                | /                   | سایت عمومی، لندینگ
+express_partner_bp     | /express/partner    | پنل همکار + AI chat API
+ai_bp                  | /ai                 | چت عمومی، health، sync
+admin_bp               | /admin              | مدیریت، AI settings، SMS
+express_api_bp         | (خود blueprint)     | API پنل
+sms_api_bp             | (خود blueprint)     | SMS.ir
+push_api_bp            | (خود blueprint)     | Web Push
+fcm_api_bp             | (خود blueprint)     | FCM برای APK
+uploads_bp             | /uploads            | فایل‌های رسانه
+webhook_bp             | (خود blueprint)     | webhook خارجی
+
+
+6.3 APIهای AI
+-------------
+Method | Path                              | کار
+-------|-----------------------------------|----------------------------------
+POST   | /express/partner/ai/chat          | چت همکار
+POST   | /express/partner/ai/agent/confirm   | تأیید اکشن agent
+GET    | /express/partner/ai/history         | تاریخچه thread
+POST   | /ai/chat                          | چت عمومی
+GET    | /ai/health                        | وضعیت سرویس AI
+GET    | /ai/sync                          | پیام‌های جدید (پاسخ ادمین)
+
+
+6.4 سرویس‌های اصلی
+------------------
+سرویس              | مسیر                                    | نقش
+-------------------|-----------------------------------------|---------------------------
+Storage            | app/utils/storage.py                    | CRUD JSON
+SMS                | app/services/sms.py                     | sms.ir
+Partner Missions   | app/express_partner/partner_missions.py | تخصیص فایل + seed چت
+Sales Coach        | app/express_partner/sales_coach.py      | nudge روزانه 10/14/20 تهران
+Commissions Flow   | app/express_partner/commissions_flow.py | قیف پورسانت
+Postchi            | app/services/postchi.py                 | inbox رسمی
+Visit Requests     | app/express_partner/visit_requests.py   | مدیریت بازدید
+Admin SMS          | admin/sms_scheduled.py                  | ارسال زمان‌دار
+Admin Recipients   | admin/sms_recipients.py                 | گروه‌های مخاطب
+
+
+================================================================================
+7. Frontend
+================================================================================
+
+7.1 تکنولوژی
+------------
+Server-rendered:  Jinja2
+CSS:              Tailwind CSS 3.4 (local vendor)
+JS:               Alpine.js 3.14 + Vanilla JS
+PWA:              manifest.webmanifest, sw.js, Service Worker
+فونت/آیکون:       Font Awesome، فونت‌های محلی
+
+بدون: React، Vue، Next.js، Webpack/Vite در مسیر اصلی.
+
+
+7.2 صفحات اصلی Express Partner (/express/partner/)
+----------------------------------------------------
+صفحه           | Endpoint              | توضیح
+---------------|-----------------------|----------------------------------
+Home           | /home                 | داشبورد + چت AI لایه‌ای
+Dashboard      | /dashboard            | فایل‌های اختصاصی
+Files          | /files                | لیست فایل‌ها
+Land detail    | /land/<code>          | جزئیات ملک
+Commissions    | /commissions          | کیف پول و برداشت
+Apply          | /apply/*              | ثبت همکاری (چند مرحله)
+Auth           | /auth/*               | OTP لاگین
+Favorites      | /favorites            | علاقه‌مندی‌ها
+Requests       | /requests             | درخواست‌ها
+Notifications  | /notifications        | اعلان‌ها
+Profile        | /profile              | پروفایل
+
+
+7.3 کامپوننت‌های AI (Partials)
+-------------------------------
+app/express_partner/templates/express_partner/partials/
+  ai_chat_layer.html          — لایه چت شناور
+  ai_chat_composer.html       — ورودی پیام
+  ai_chat_message.html        — رندر پیام
+  ai_chat_panel.html          — پنل کامل
+  ai_chat_threads.html        — لیست threadها
+  home_journey_card.html      — کارت سفر قیف فروش
+  ep_ai_fab.html              — دکمه شناور AI
+
+
+7.4 Admin (/admin/)
+-------------------
+  مدیریت lands، partners، commissions
+  SMS همکاران (colleagues_sms.html)
+  گروه‌های مخاطب SMS (sms_recipients_index.html)
+  تنظیمات AI و سوالات escalation (/admin/ai-questions)
+
+
+7.5 Public (/)
+--------------
+  /                  — لندینگ
+  /express/<code>    — جزئیات ملک عمومی
+  /partners          — صفحه همکاران
+  /start             — شروع
+
+
+================================================================================
+8. Deployment
+================================================================================
+
+8.1 اجرا
+--------
+محیط          | روش
+--------------|--------------------------------------------------
+Development   | python run.py — Flask dev server
+Production    | passenger_wsgi.py -> from run import app
+              | روی cPanel / LiteSpeed
+
+
+8.2 Schedulerها
+---------------
+در production داخل worker خاموش (VINOR_*_SCHEDULER=0 در passenger_wsgi.py).
+
+Cron scripts:
+  */10 * * * *  scripts/run_sales_coach_nudge.py
+  * * * * *     scripts/run_admin_sms_scheduled_jobs.py
+  (اختیاری)     scripts/run_daily_celebration_sms.py
+
+
+8.3 متغیرهای محیطی
+------------------
+متغیر                        | نقش
+-----------------------------|------------------------------------------
+INSTANCE_PATH                | مسیر instance/
+DATABASE_URL                 | SQLite (اختیاری)
+SECRET_KEY                   | session Flask
+DEEPSEEK_API_KEY             | کلید AI
+FLASK_DEBUG                  | حالت debug
+VINOR_SALES_COACH_SCHEDULER  | scheduler داخلی sales coach
+VINOR_ADMIN_SMS_SCHEDULER    | scheduler داخلی SMS
+VINOR_CELEBRATION_SMS_SCHEDULER | scheduler جشن فروش
+TRUST_PROXY                  | پشت reverse proxy
+SESSION_COOKIE_SECURE        | کوکی امن
+
+
+8.4 وابستگی‌ها (requirements.txt)
+----------------------------------
+Flask 2.3.3, requests, Pillow, pywebpush, aiohttp, pytz, tzdata,
+gunicorn, flask-sqlalchemy, flask-cors, flask-wtf, cryptography
+
+
+8.5 کلیدها و تنظیمات
+--------------------
+api_keys.py (ریشه پروژه) — کلیدهای پیش‌فرض
+settings.json (instance/data/) — تنظیمات runtime شامل AI
+config.py — VAPID و تنظیمات Flask
+
+
+================================================================================
+9. Current AI Capability
+================================================================================
+
+9.1 Vinor الان چه کارهایی انجام می‌دهد؟
+----------------------------------------
+
+برای مشتری (public):
+  - جستجوی ملک در گرمابسرد (search_lands)
+  - توضیح سطوح / شرایط / مسیر همکاری
+  - وضعیت درخواست همکاری
+  - پیشنهاد کارت ثبت همکاری (با تأیید کاربر)
+  - ارجاع سوال به ادمین ([[ESCALATE]])
+
+برای همکار (partner / special):
+  - پیشنهاد «کار بعدی» از وضعیت داشبورد
+  - متن آگهی دیوار / اینستا (draft_listing_copy)
+  - ثبت بازدید چندمرحله‌ای با کارت تأیید
+  - «بازدید انجام شد»، ثبت معامله، انصراف از معامله
+  - جستجوی فایل + کارت ملک
+  - آگاهی از مأموریت فعال و tx_mode
+
+غیر-AI ولی مرتبط:
+  - Sales Coach: پیامک/اعلان rule-based سه‌بار در روز (10، 14، 20 تهران)
+  - Partner Missions: تخصیص فایل رندوم + seed پیام اول چت
+  - Postchi: inbox رسمی (بدون LLM)
+
+
+9.2 بخش‌های Agent
+-----------------
+قابلیت                          | نوع
+--------------------------------|----------------------------------
+Tool calling (2 round)          | Agent
+کارت تأیید + confirm_action     | Agent + Human-in-the-loop
+Chip intents                    | Agent steering
+Visit step continuation         | Hybrid (rule + agent)
+Context injection از JSON       | Agent context (نه RAG)
+
+
+9.3 بخش‌های Rule-based
+----------------------
+حوزه                    | مکان
+------------------------|------------------------------------------
+احراز هویت OTP          | express_partner/routes.py
+تخصیص فایل / مأموریت    | partner_missions.py
+قیف tx_mode و دکمه‌ها   | sales_coach.py, land_chat_detail.py
+پورسانت و برداشت        | commissions_flow.py
+SMS زمان‌بندی           | admin/sms_scheduled.py
+فیلتر جغرافی گرمابسرد   | iran_cities.py
+Rate limit / guest cap  | credits.py
+Visit draft state       | agent_tools.py
+Celebration SMS         | scripts/run_daily_celebration_sms.py
+
+
+================================================================================
+10. Improvement Roadmap (تحلیل شکاف)
+================================================================================
+
+برای تبدیل Vinor به یک Vertical AI Real Estate Agent کامل، شکاف‌های
+معماری فعلی به شرح زیر است. این بخش تحلیل شکاف است، نه پیشنهاد توسعه.
+
+
+10.1 شکاف‌های لایه AI
+---------------------
+موجود                          | مفقود
+-------------------------------|------------------------------------------
+Function calling محدود (2 round)| Planning چندمرحله‌ای طولانی‌تر، sub-agents
+Context متنی از JSON           | RAG روی توضیحات، سند، قرارداد، نقشه
+Keyword search                 | Semantic / vector search
+Memory per-thread              | Long-term memory cross-session
+3 voice ثابت                   | Dynamic persona بر اساس مرحله قیف
+
+
+10.2 شکاف‌های Knowledge
+-----------------------
+موجود                          | مفقود
+-------------------------------|------------------------------------------
+lands.json flat                | Pipeline ingest سند (PDF، عکس OCR، سند ملک)
+خلاصه دستی _land_summary       | Embedding index per property
+محدوده ثابت گرمابسرد           | گسترش جغرافی با knowledge graph
+
+
+10.3 شکاف‌های Agent / Workflow
+--------------------------------
+موجود                          | مفقود
+-------------------------------|------------------------------------------
+Human confirm برای اکشن        | Autonomous execution با policy engine
+2 round tool                   | Orchestrator برای زنجیره طولانی
+Escalation دستی ادمین          | Self-healing + KB از پاسخ‌های ادمین
+Sales coach rule-based         | Coach یکپارچه با LLM و context معامله
+
+
+10.4 شکاف‌های Data / Platform
+-----------------------------
+موجود                          | مفقود
+-------------------------------|------------------------------------------
+JSON files                     | RDBMS / transactional DB برای consistency
+بدون audit trail مرکزی         | Event log برای تصمیمات AI
+Phone-centric identity         | CRM integration، lead scoring
+
+
+10.5 شکاف‌های Product
+---------------------
+موجود                          | مفقود
+-------------------------------|------------------------------------------
+چت متنی فارسی                  | Voice، multimodal (عکس ملک)
+پنل همکار                      | Agent برای خریدار end-to-end تا قرارداد
+یک منطقه (گرمابسرد)            | Multi-market vertical agent
+
+
+10.6 جمع‌بندی شکاف
+------------------
+Vinor امروز یک AI-assisted operations platform برای همکاران املاک محلی است:
+Agent محدود با tool calling و human-in-the-loop برای تراکنش‌های حساس،
+نه یک autonomous vertical agent با knowledge base معنایی، حافظه بلندمدت،
+و orchestration پیچیده.
+
+
+================================================================================
+فایل‌های مرجع کلیدی
+================================================================================
+
+حوزه              | مسیر
+------------------|----------------------------------------------------------
+App factory       | app/__init__.py
+AI orchestration  | app/ai/services.py
+Tools & actions   | app/ai/agent_tools.py
+Prompts           | app/ai/config.py
+Context           | app/ai/context.py
+Chat memory       | app/ai/chat_store.py
+Audience/Voice    | app/ai/audience.py
+Credits           | app/ai/credits.py
+Escalations       | app/ai/escalations.py
+Runtime settings  | app/ai/runtime_settings.py
+Partner AI routes | app/express_partner/routes.py (حدود خط 4711+)
+JSON storage      | app/utils/storage.py
+Partner missions  | app/express_partner/partner_missions.py
+Sales coach       | app/express_partner/sales_coach.py
+Commissions       | app/express_partner/commissions_flow.py
+Deploy dev        | run.py
+Deploy prod       | passenger_wsgi.py
+Dependencies      | requirements.txt
+
+
+================================================================================
+جریان چت AI همکار (خلاصه)
+================================================================================
+
+  [Partner UI]
+       |
+       | POST /express/partner/ai/chat
+       v
+  [generate_reply]
+       |
+       +---> context.py (build system context)
+       |
+       +---> DeepSeek API (messages + tools)
+       |         |
+       |         +---> tool_calls? -> agent_tools.run_tool
+       |         |
+       |         +---> final reply
+       |
+       +---> chat_store.append_exchange
+       |
+       v
+  [JSON response: reply + agent_actions + land_cards]
+       |
+       | (اگر کارت تأیید)
+       v
+  POST /express/partner/ai/agent/confirm
+       |
+       v
+  confirm_action_from_token -> persist visit/deal/...
+
+
+================================================================================
+11. RAG Layer (Phase 1 - lands.json)
+================================================================================
+
+11.1 هدف فاز فعلی
+-----------------
+- افزودن RAG فقط برای انتخاب هوشمند فایل‌های ملکی
+- منبع داده فقط lands.json
+- بدون تغییر قالب Prompt و متن Context فعلی
+- خروجی RAG فقط property_code
+- در خطا یا عدم دسترسی RAG، fallback کامل به منطق قبلی
+
+11.2 معماری اضافه‌شده
+---------------------
+- Knowledge Interface:
+  - app/knowledge/interfaces.py
+  - RetrievalRequest + PropertyRetriever
+- RAG Core:
+  - app/knowledge/rag/retriever.py (LandsRagRetriever)
+  - app/knowledge/rag/vector_store.py (TF-IDF vector store + metadata filtering)
+  - app/knowledge/rag/query_analysis.py (تحلیل query و استخراج filter)
+  - app/knowledge/rag/sources.py (تبدیل lands.json به اسناد embedding)
+  - app/knowledge/rag/cache.py (TTL cache)
+  - app/knowledge/rag/config.py (VINOR_RAG_ENABLED و تنظیمات RAG)
+- Service Bridge:
+  - app/knowledge/service.py (singleton provider)
+
+11.3 نقطه ادغام با سیستم فعلی
+-----------------------------
+- فایل: app/ai/context.py
+- تابع فعلی _select_lands_for_query حفظ شده و فقط یک مسیر RAG قبل از heuristic
+  به آن اضافه شده است.
+- تابع جدید _select_lands_by_rag:
+  - Retriever را صدا می‌زند
+  - allowed_codes را فقط از pool فعلی می‌گیرد
+  - فقط code برمی‌گرداند
+  - سپس همان آبجکت land موجود برای _land_summary و قالب قبلی Context استفاده می‌شود
+
+11.4 جریان اجرای فاز 1
+----------------------
+User
+  -> _select_lands_for_query
+    -> _select_lands_by_rag
+      -> Retriever
+        -> property_codes
+      -> همان lands فعلی
+    -> _land_summary / قالب‌های Context فعلی
+  -> LLM
+
+11.5 Production Readiness در فاز 1
+----------------------------------
+- Index persistence روی instance/data/rag/lands_index.json
+- auto rebuild بر اساس mtime فایل lands.json
+- caching با TTL برای queryهای تکراری
+- metadata filtering (city/category/status/price/area/tags)
+- hybrid lexical boost روی code/city/location/category
+- script آماده prebuild:
+  - scripts/build_property_rag_index.py
+
+11.6 Test Coverage
+------------------
+- tests/test_rag_vector_store.py
+  - صحت retrieval با metadata filter
+- tests/test_context_rag_bridge.py
+  - استفاده از RAG وقتی available است
+  - fallback به heuristic وقتی RAG خروجی ندارد
+- tests/test_rag_di_retriever.py
+  - مسیر اصلی DI-based embedding retriever
+  - fallback خودکار به TF-IDF در خطای provider
+
+11.7 DI Architecture (Production-grade RAG)
+-------------------------------------------
+- Interface اصلی Knowledge Layer اکنون شامل سه قرارداد مستقل است:
+  - PropertyRetriever
+  - EmbeddingProvider
+  - VectorStore
+- Retriever از طریق Dependency Injection ساخته می‌شود:
+  - provider factory: app/knowledge/rag/di.py -> make_embedding_provider()
+  - vector store factory: app/knowledge/rag/di.py -> make_vector_store()
+- Embedding Providerهای قابل تعویض:
+  - OpenAIEmbeddingProvider
+  - DeepSeekEmbeddingProvider
+  - BGEEmbeddingProvider
+  - JinaEmbeddingProvider
+  - TF-IDF فقط در نقش fallback retriever (نه مسیر اصلی production)
+- Vector Storeهای قابل تعویض:
+  - FaissVectorStore (adapter)
+  - QdrantVectorStore (adapter)
+  - ChromaVectorStore (adapter)
+  - InMemoryVectorStore (اجرای فعلی)
+- مسیر اصلی production:
+  - User query -> EmbeddingProvider -> VectorStore.search -> property_codes
+- مسیر fallback/dev:
+  - در هر خطای provider/store، LandsRagRetriever به TfidfFallbackRetriever سوییچ می‌کند
+- نتیجه:
+  - Agent/Prompt/context template بدون تغییر باقی مانده و فقط لایه دانش قابل تعویض شده است.
+
+12. Optimization Sprint (Production Performance)
+------------------------------------------------
+
+12.1 Token Optimization (Instrumentation + Runtime)
+- افزودن ماژول تحلیل توکن:
+  - app/ai/token_analytics.py
+- ثبت analytics برای هر درخواست AI در:
+  - instance/data/ai_token_analytics.jsonl
+- فیلدهای ثبت‌شده:
+  - input_tokens
+  - output_tokens
+  - system_prompt_tokens
+  - context_tokens
+  - history_tokens
+  - rag_tokens
+  - total_tokens
+  - total_cost (configurable by env rates)
+  - response_time_ms
+  - api_rounds
+  - provider/model/cache_hit
+
+12.2 Dynamic Context
+- مسیر قبلی حفظ شده و رفتار کاربر تغییر نکرده است.
+- Context ملک همچنان فقط در queryهای مرتبط وارد می‌شود (منطق قبلی حفظ شده).
+- Prompt core context cache با TTL کوتاه اضافه شد تا build تکراری کاهش یابد:
+  - _PROMPT_CACHE در app/ai/services.py
+
+12.3 Conversation Compression
+- قابلیت فشرده‌سازی history قدیمی اضافه شد ولی پیش‌فرض خاموش است:
+  - VINOR_HISTORY_SUMMARY=0 (default)
+  - در حالت فعال، فقط وقتی summary از پیام‌های حذف‌شده کم‌هزینه‌تر باشد استفاده می‌شود.
+- هدف: جلوگیری از افزایش token و حفظ رفتار پیش‌فرض فعلی.
+
+12.4 Smart RAG
+- Dynamic Top-K در retriever اضافه شد (کوتاه/بلند بودن query).
+- Metadata filtering قبل از retrieval اعمال می‌شود (city/category/status/price/area/tags).
+- Dedup در سطح property_code حفظ شده است.
+
+12.5 Incremental Index
+- RAG index از حالت full re-embed به incremental تغییر کرد:
+  - signature per property
+  - re-embed فقط برای اسناد تغییرکرده
+  - حذف اسناد پاک‌شده بدون rebuild embedding کامل
+- فایل: app/knowledge/rag/retriever.py
+
+12.6 Cache Layers
+- Embedding Cache: hash(text)->vector در retriever
+- Retrieval Cache: TTL cache روی query/filt/top_k/allowed
+- Prompt Cache: TTL cache برای core context build
+- Response Cache: مسیر قبلی credits.py حفظ و فعال
+
+12.7 Benchmark & Verification
+- اسکریپت benchmark اضافه شد:
+  - scripts/benchmark_ai_prompt_optimization.py
+- خروجی benchmark (local synthetic):
+  - avg tokens before/after: 1309 / 1309 (بدون تغییر در default mode)
+  - avg build ms before/after: 21.95 / 28.49
+  - نتیجه: بهینه‌سازی‌های این sprint روی runtime واقعی API/RAG/analytics متمرکز شد و
+    فشرده‌سازی history به‌صورت پیش‌فرض خاموش ماند تا رفتار و کیفیت فعلی تغییر نکند.
+- تست‌ها:
+  - 6 unit test PASS
+  - test_rag_incremental_index.py اضافه شد
+
+
+================================================================================
+Change Log
+================================================================================
+
+[2026-07-16 12:40 +03:30] Optimization Sprint (Token/Performance) بدون تغییر رفتار کاربر
+  - افزودن Token Analytics per-request در app/ai/token_analytics.py
+  - ثبت metrics: input/output/system/context/history/rag tokens + cost + response time
+  - افزودن Prompt Core Cache با TTL کوتاه برای کاهش build تکراری
+  - افزودن Conversation Compression اختیاری (VINOR_HISTORY_SUMMARY) با default خاموش
+  - ارتقای Smart RAG: dynamic top-k + metadata pre-filter + duplicate-safe selection
+  - پیاده‌سازی Incremental Index: re-embed فقط برای اسناد تغییرکرده lands.json
+  - افزودن Embedding Cache + Retrieval Cache + حفظ Response Cache قبلی
+  - افزودن benchmark script و تست incremental index
+  - نتیجه تست: 6/6 PASS
+  - به‌روزرسانی نسخه مستند به v1.4
+
+[2026-07-16 12:36 +03:30] تایید نهایی تست‌های DI RAG
+  - اجرای مجدد تست‌ها پس از DI updates با نتیجه موفق
+  - مجموع تست‌های اجراشده: 5 مورد
+  - نتیجه: همه تست‌ها PASS (OK)
+  - بدون تغییر معماری/کد؛ فقط ثبت وضعیت verification در مستند
+
+[2026-07-16 12:29 +03:30] ارتقای RAG به DI و Pluggable Provider/Store (Production Path)
+  - افزودن interfaceهای EmbeddingProvider و VectorStore در app/knowledge/interfaces.py
+  - افزودن providerهای قابل تعویض (OpenAI/DeepSeek/BGE/Jina) در embedding_providers.py
+  - افزودن vector storeهای قابل تعویض (FAISS/Qdrant/Chroma/InMemory) در vector_stores.py
+  - افزودن DI factory در rag/di.py برای سوییچ provider/store بدون تغییر Agent یا Prompt
+  - بازطراحی LandsRagRetriever: مسیر اصلی embedding-based، TF-IDF فقط fallback/dev
+  - حفظ کامل RAG contract فعلی: خروجی فقط property_code و Context Builder همان قالب قبلی
+  - افزودن 2 تست جدید DI/fallback و عبور کامل 5 تست (OK)
+  - به‌روزرسانی نسخه مستند به v1.3
+
+[2026-07-16 12:17 +03:30] پیاده‌سازی RAG فاز 1 (lands.json-only) با fallback کامل
+  - افزودن Knowledge Layer ماژولار در app/knowledge با interface مستقل
+  - افزودن LandsRagRetriever با خروجی صرفاً property_code و بدون تولید متن
+  - افزودن vector store پایدار + metadata filtering + caching + query analysis
+  - ادغام non-breaking با app/ai/context.py از طریق _select_lands_by_rag
+  - حفظ کامل قالب Prompt و Context فعلی (_land_summary و بلوک‌های فعلی)
+  - افزودن script ساخت ایندکس و 3 unit test برای RAG bridge/vector retrieval
+  - به‌روزرسانی نسخه مستند به v1.2
+
+[2026-07-16 12:12 +03:30] ارتقای ساختار مستندات به نسخه‌بندی دائمی
+  - افزودن فیلد ثابت Doc Version در ابتدای مستند (نسخه فعلی: v1.1)
+  - تعریف سیاست به‌روزرسانی: از این مرحله به بعد، هر تغییر پروژه باید در همین
+    فایل مستند شود و با تاریخ/زمان ثبت شود
+  - افزودن بخش Change Log برای نگهداری تاریخچه تغییرات به‌صورت لیست‌وار
+  - بدون تغییر در محتوای فنی معماری، فقط بهبود ساختار مدیریت مستند
+
+
+================================================================================
+                              پایان مستند
+================================================================================
