@@ -1,7 +1,7 @@
 ================================================================================
                     مستند فنی معماری Vinor
                     تاریخ: ۱۴۰۵/۰۴/۲۵
-                    Doc Version: v1.4
+                    Doc Version: v1.9
 ================================================================================
 
 این سند وضعیت فعلی کدبیس Vinor را بدون پیشنهاد پیاده‌سازی توصیف می‌کند.
@@ -852,16 +852,469 @@ User
 - خروجی benchmark (local synthetic):
   - avg tokens before/after: 1309 / 1309 (بدون تغییر در default mode)
   - avg build ms before/after: 21.95 / 28.49
-  - نتیجه: بهینه‌سازی‌های این sprint روی runtime واقعی API/RAG/analytics متمرکز شد و
+- نتیجه: بهینه‌سازی‌های این sprint روی runtime واقعی API/RAG/analytics متمرکز شد و
     فشرده‌سازی history به‌صورت پیش‌فرض خاموش ماند تا رفتار و کیفیت فعلی تغییر نکند.
 - تست‌ها:
   - 6 unit test PASS
   - test_rag_incremental_index.py اضافه شد
 
 
+13. Memory Layer (Phase 5)
+--------------------------
+
+13.1 هدف
+- تبدیل Vinor به Memory Agent بدون تغییر Prompt/RAG/Agent tools
+- Memory فقط از طریق Interface و DI قابل استفاده است
+- کنترل سخت Token با budget و retrieval پویا
+
+13.2 ساختار
+app/memory/
+  interfaces.py      MemoryProvider/Store/Retriever/Extractor/Summarizer/Manager
+  config.py          VINOR_MEMORY_* flags/budgets
+  store.py           FileMemoryStore (+ InMemory for tests)
+  extractor.py       RuleMemoryExtractor (بدون LLM)
+  summarizer.py      CompactMemorySummarizer
+  retriever.py       DynamicMemoryRetriever
+  manager.py         DefaultMemoryManager + DefaultMemoryProvider
+  di.py              factories
+  service.py         singleton facade for AI layer
+
+13.3 Memory Types
+- short_term: وضعیت مکالمه جاری / آخرین intent
+- long_term: بودجه، منطقه، نوع ملک، ترجیحات
+- semantic: facts مفید استخراج‌شده از گفتگو
+- relationship: viewed/liked/rejected land codes
+
+13.4 Integration (non-breaking)
+- Retrieve قبل از LLM در _build_system_prompt/_build_messages
+  (بلوک جدا: === حافظه مرتبط کاربر ===)
+- Ingest بعد از پاسخ موفق در generate_reply -> learn_from_exchange
+- RAG/Knowledge/Prompt templates بدون تغییر
+
+13.5 Token Controls
+- VINOR_MEMORY_BUDGET_CHARS (default 280)
+- Dynamic relevance scoring + top_k
+- Duplicate fingerprint on upsert
+- Noise filter (سلام/ممنون/…)
+- Fail-open: خطای Memory هیچ‌وقت چت را نمی‌شکند
+
+13.6 Observability
+در ai_token_analytics.jsonl:
+  memory_retrieved, memory_used, memory_tokens,
+  total_prompt_tokens, latency_ms
+
+13.7 Safety
+- delete_memory / edit_memory / version روی هر item
+- Storage جدا از conversation: instance/data/ai_memory/{phone}.json
+
+13.8 Benchmark (Phase 5)
+- scripts/benchmark_memory_layer.py
+- Before avg tokens: 1120.00
+- After avg tokens:  1174.00
+- Token delta: +4.82%
+- Avg memory tokens injected: 50.00
+- Tests: 10/10 PASS
+
+
+14. Planning Layer (Phase 6)
+----------------------------
+
+14.1 هدف
+- تبدیل Vinor به Planning Agent بدون Multi-Agent
+- بدون تغییر Prompt / Memory / RAG / Tool set فعلی
+
+14.2 ساختار
+app/planning/
+  interfaces.py   Planner, Plan, Task, Executor, Evaluator, PlanningManager
+  config.py       VINOR_PLANNING_* flags
+  planner.py      RulePlanner (zero LLM tokens)
+  executor.py     ToolExecutor (only existing run_tool tools)
+  evaluator.py    GoalEvaluator
+  manager.py      DefaultPlanningManager
+  di.py / service.py
+
+14.3 Plan Types
+- property_search
+- property_compare
+- property_recommendation
+- follow_up
+- information
+
+14.4 Integration
+- generate_reply: run_planning_once BEFORE agent loop (once)
+- Plan object never enters Prompt
+- Optional compact hint (=== یافتهٔ برنامه‌ریز ===) + seeded tool messages
+- Skip planning for multi-step form intents: visit/deal/release/coop_apply
+- Merge plan land_codes / agent_actions into final result
+
+14.5 Token Controls
+- Rule planner (planning_tokens=0)
+- Hint budget default 120 chars
+- Seed tool results to avoid duplicate LLM tool rounds
+- Token delta target < 10%
+
+14.6 Observability
+planning_time_ms, tasks_count, executed_tasks,
+planning_tokens, execution_tokens, plan_type, total_cost
+
+14.7 Benchmark
+- scripts/benchmark_planning_layer.py
+- Before: 1100 tokens | After: 1153 tokens | Delta: +4.82%
+- Avg planning time: 0.32 ms
+- Tests: 14/14 PASS
+
+
+15. Supervisor / Orchestrator Layer (Phase 7)
+---------------------------------------------
+
+15.1 هدف
+- لایه Orchestration مستقل برای مدیریت Planning + Memory + RAG + Tools + LLM
+- پایه Multi-Agent آینده (بدون پیاده‌سازی Multi-Agent واقعی در این فاز)
+- Rule-Based Routing (بدون LLM برای تصمیم داخلی)
+
+15.2 Architecture Diagram
+
+User
+  ↓
+Supervisor (Router + ExecutionPolicy + Workflow)
+  ↓
+[optional] Planning
+  ↓
+[optional] Memory
+  ↓
+[optional] Knowledge/RAG
+  ↓
+[optional] Tool Calling
+  ↓
+LLM
+  ↓
+Response
+
+15.3 Sequence Diagram
+
+generate_reply
+  -> Supervisor.orchestrate(message, intent)
+  -> set flags on request context
+  -> _build_messages
+       -> Memory retrieve IFF flags.use_memory
+       -> land context / RAG IFF flags.use_rag (via allow_component gate)
+  -> Planning.run_once IFF flags.use_planning
+  -> AgentLoop with tools IFF flags.use_tools
+  -> LLM final response
+  -> analytics(routed_workflow, executed/skipped, tokens, latency)
+
+15.4 Folder Structure
+app/supervisor/
+  interfaces.py
+  config.py
+  router.py
+  policy.py
+  workflow.py
+  manager.py
+  di.py
+  service.py
+
+15.5 فایل‌های جدید
+- app/supervisor/*
+- tests/test_supervisor_layer.py
+- scripts/benchmark_supervisor_layer.py
+
+15.6 کلاس‌های جدید
+- RuleRouter
+- RuleExecutionPolicy
+- Workflow / ComponentFlags
+- DefaultSupervisor
+- DefaultSupervisorManager
+- service gates: allow_component / orchestrate_request
+
+15.7 Routes
+- greeting -> LLM only
+- general_chat -> Memory + Tools + LLM
+- faq -> Planning + Tools + LLM
+- follow_up -> Memory + Planning + Tools + LLM
+- property_search/compare -> Planning + Memory + RAG + Tools + LLM
+- partner_ops -> Memory + Tools + LLM (skip planning/rag)
+
+15.8 اتصال به سیستم فعلی (non-breaking)
+- generate_reply: orchestrate قبل از context/planning
+- memory gate در _memory_block_for_prompt
+- rag gate در _select_lands_by_rag
+- planning/tools gated در generate_reply
+- Prompt templates / Memory / RAG / Planning internals untouched
+
+15.9 Dependency Injection
+make_supervisor_manager()
+  -> DefaultSupervisor(RuleRouter, RuleExecutionPolicy)
+  -> DefaultSupervisorManager
+
+15.10 Token Flow
+Supervisor overhead ≈ 0 LLM tokens (rule-based)
+Savings via skipping Memory/RAG/Planning on lightweight routes
+Context Budget Manager via flags.context_budget_chars
+
+15.11 Benchmark (Phase 7)
+scripts/benchmark_supervisor_layer.py
+- greeting:        token delta +0.00% | rag_skipped=True  | memory_skipped=True
+- property_search: token delta +0.00% | rag_skipped=False | memory_skipped=False
+- follow_up:       token delta +0.00% | rag_skipped=True  | memory_skipped=False
+- Supervisor routing latency ~5–7ms
+- Tests: 19/19 PASS
+- Max token increase vs previous version: ≤ 0% on measured paths (under 5% cap)
+
+
+16. Multi-Agent Framework (Phase 8)
+-----------------------------------
+
+16.1 هدف
+- چارچوب Multi-Agent روی Supervisor فعلی
+- فقط Property Search Agent فعال؛ بقیه Skeleton برای فازهای بعد
+- بدون بازنویسی RAG / Memory / Planning / Tools
+- افزایش Token ≤ 5٪
+
+16.2 Agent Architecture
+
+Supervisor (route + ComponentFlags)
+  ↓
+AgentRegistry + AgentSelector
+  ↓
+Property Search Agent (ACTIVE)
+  → Planning → Memory → RAG → Tools → LLM  (existing pipeline, no duplication)
+  ↓
+Skeletons (inactive):
+  Property Analysis | Customer Memory | Recommendation | Negotiation | Follow-up
+
+16.3 Agent Lifecycle
+1. Supervisor.orchestrate → route + flags
+2. AgentSelector.select(route) → at most one agent
+3. If selected & active → Agent.run(AgentContext) [prepare only]
+4. generate_reply continues existing Memory/Planning/RAG/Tools/LLM gates
+5. Observability: selected_agent / skipped_agents / agent_tokens / latency
+
+16.4 Registry Diagram
+
+make_agent_manager()
+  → InMemoryAgentRegistry
+       register(PropertySearchAgent)          # active=True
+       register(SkeletonAgent × 5)            # active=False
+  → RuleAgentSelector(registry)
+  → DefaultAgentManager(registry, selector)
+
+16.5 Sequence Diagram
+
+generate_reply
+  -> Supervisor.orchestrate
+  -> set_supervisor_context
+  -> prepare_agent_after_supervisor(route)
+       -> AgentSelector.select
+       -> PropertySearchAgent.run  IFF route in {property_search, property_compare}
+            (agent_tokens=0; confirms shared flags; no prompt injection)
+  -> _build_messages (Memory/RAG gated)
+  -> Planning (gated)
+  -> Tools + LLM
+  -> analytics(+ agent fields)
+
+16.6 Folder Structure
+app/agents/
+  __init__.py
+  interfaces.py      # Agent, AgentContext, AgentResult, Registry, Selector, Manager
+  config.py
+  registry.py
+  cache.py           # Lazy Agent Cache
+  selector.py
+  property_search.py # ACTIVE
+  skeletons.py
+  manager.py
+  di.py
+  service.py
+
+16.7 فایل‌های جدید
+- app/agents/*
+- tests/test_agents_layer.py
+- scripts/benchmark_agents_layer.py
+
+16.8 کلاس‌های جدید
+- PropertySearchAgent
+- SkeletonAgent
+- InMemoryAgentRegistry
+- RuleAgentSelector
+- DefaultAgentManager
+- AgentCache
+
+16.9 اتصال به Supervisor
+- Supervisor همچنان Orchestrator است (route + flags)
+- پس از orchestrate، AgentSelector فقط بر اساس route تصمیم می‌گیرد
+- property_search / property_compare → PropertySearchAgent
+- سایر routeها → هیچ Agentی (Lazy; skipped_agents = همه)
+- allow_component gates بدون تغییر باقی می‌مانند
+
+16.10 Token Optimization
+- Lazy Agent Loading (فقط در صورت نیاز)
+- Agent Cache (VINOR_AGENTS_CACHE)
+- Shared Context (AgentContext.shared + Supervisor flags)
+- جلوگیری از اجرای هم‌زمان Agentها (حداکثر یکی)
+- Context Budget مشترک از Supervisor
+- agent_tokens هدف = 0 (بدون injection به Prompt)
+
+16.11 Benchmark / Token Report (Phase 8)
+scripts/benchmark_agents_layer.py
+- greeting:        before=956  after=956  delta=+0.00% selected=- agent_tokens=0
+- property_search: before=1100 after=1100 delta=+0.00% selected=property_search agent_tokens=0
+- follow_up:       before=1135 after=1135 delta=+0.00% selected=- agent_tokens=0
+- Agent prepare latency ~10–14ms (شامل Supervisor + message build)
+- Tests: agents 7/7 + supervisor 5/5 = 12/12 PASS
+- Max token increase: 0% (under 5% cap)
+
+
+17. Adaptive Autonomous Execution (Phase 9)
+-------------------------------------------
+
+17.1 هدف
+- تبدیل Multi-Agent به Adaptive Autonomous Agent
+- مدیریت Workflow بدون دخالت کاربر
+- بدون بازنویسی Supervisor / Planning / Memory / RAG / Multi-Agent
+- افزایش Token < 3٪؛ بدون Prompt بزرگ جدید
+
+17.2 Adaptive Execution Diagram
+
+Supervisor → Agents (prepare)
+  ↓
+Adaptive Controller
+  ├─ Workflow State Machine (objects only)
+  ├─ Confidence Estimator (rule-based)
+  ├─ Retry Policy (max 1, strategy lean)
+  ├─ Quality Evaluator (rule-based)
+  └─ Recovery Policy (fail-soft, no loop)
+  ↓
+Existing pipeline (Planning/Memory/RAG/Tools/LLM) — unchanged
+  ↓
+Adaptive.after_response → DONE | FAILED
+
+17.3 Workflow State Machine
+
+INIT → SEARCHING → ANALYZING → READY → DONE
+                              ↘ FAILED
+Light routes: INIT → ANALYZING → READY → DONE
+Illegal transitions → FAILED (no crash, no infinite loop)
+
+17.4 Confidence Flow
+- prepare: از agent_status + used_components
+- response: از reply length + land_codes + ok + route
+- آستانه پایین: VINOR_ADAPTIVE_CONF_THRESHOLD (default 0.55)
+- فقط Object؛ وارد Prompt نمی‌شود
+
+17.5 Retry Policy
+- حداکثر ۱ بار (VINOR_ADAPTIVE_MAX_RETRIES=1)
+- فقط روی property_search/compare و confidence پایین در prepare
+- Strategy بعدی: lean → حذف planning hint/seed (کاهش نویز، نه افزایش Prompt)
+- بدون فراخوانی LLM اضافه
+
+17.6 Recovery Flow
+- on LLM failure → FAILED + recovery_count++
+- quality partial (search بدون land) → needs_continue + DONE (deferred)
+- recovery_cap ≤ 2 → جلوگیری از Loop
+- بدون Crash در caller
+
+17.7 Folder Structure
+app/adaptive/
+  interfaces.py
+  config.py
+  state.py
+  confidence.py
+  evaluator.py
+  retry.py
+  recovery.py
+  controller.py
+  di.py
+  service.py
+
+17.8 فایل‌های جدید
+- app/adaptive/*
+- tests/test_adaptive_layer.py
+- scripts/benchmark_adaptive_layer.py
+
+17.9 کلاس‌های جدید
+- RuleWorkflowMachine
+- RuleConfidenceEstimator
+- RuleQualityEvaluator
+- RuleRetryPolicy
+- RuleRecoveryPolicy
+- DefaultAdaptiveController
+
+17.10 اتصال
+- generate_reply: begin + after_agent_prepare بعد از Agent
+- use_lean_strategy() روی inject_hint/seed_tools
+- after_response_adaptive بعد از ساخت reply/land_codes
+- fail_adaptive روی خطای LLM
+- analytics: workflow_state, confidence_score, retry_count, recovery_count, skipped_steps
+
+17.11 Benchmark / Token Report (Phase 9)
+scripts/benchmark_adaptive_layer.py
+- greeting:        before=956  after=956  delta=+0.00% state=DONE conf=0.85 retry=0 recovery=0
+- property_search: before=1100 after=1100 delta=+0.00% state=DONE conf=1.00 retry=0 recovery=0
+- follow_up:       before=1135 after=1135 delta=+0.00% state=DONE conf=0.90 retry=0 recovery=0
+- success_rate=100% (60/60)
+- retry_events=0 | recovery_events=0 (مسیرهای سالم)
+- adaptive_extra_tokens=0
+- latency ~9–15ms
+- Tests: adaptive 9/9 + agents 7/7 = 16/16 PASS
+- Max token increase: 0% (under 3% cap)
+
+
 ================================================================================
 Change Log
 ================================================================================
+
+[2026-07-16 16:22 +03:30] Phase 9 — Adaptive Autonomous Execution
+  - افزودن app/adaptive با State Machine / Confidence / Retry / Quality / Recovery
+  - تمام State و Confidence خارج از Prompt (extra_tokens=0)
+  - Retry حداکثر ۱ بار با strategy lean (بدون LLM اضافه)
+  - Recovery بدون Crash/Loop؛ Quality Evaluator کاملاً Rule-Based
+  - Observability: workflow_state, confidence_score, retry_count, recovery_count, skipped_steps
+  - Benchmark: +0.00% token؛ success_rate 100%
+  - تست‌ها: 16/16 PASS
+  - Doc Version -> v1.9
+
+[2026-07-16 16:16 +03:30] Phase 8 — Multi-Agent Framework (Property Search active)
+  - افزودن app/agents با DI: Registry/Selector/Manager/Cache
+  - PropertySearchAgent فعال؛ ۵ Agent دیگر فقط Skeleton
+  - Supervisor-driven selection: فقط property_search/compare Agent اجرا می‌شود
+  - بدون تکرار منطق Planning/Memory/RAG/Tools؛ agent_tokens=0
+  - Observability: selected_agent, skipped_agents, agent_tokens, agent_execution_time_ms
+  - Benchmark: +0.00% token روی مسیرهای اندازه‌گیری‌شده
+  - تست‌ها: 12/12 PASS
+  - Doc Version -> v1.8
+
+[2026-07-16 16:06 +03:30] Phase 7 — Supervisor/Orchestrator (rule-based, DI)
+  - افزودن app/supervisor با Router/ExecutionPolicy/Workflow/SupervisorManager
+  - Rule-Based routing برای greeting/faq/search/follow_up/partner_ops/general
+  - Lazy gates روی Memory/Planning/RAG/Tools بدون بازنویسی لایه‌ها
+  - Context budget از Supervisor flags
+  - Observability: routed_workflow, executed/skipped components, latency, tokens
+  - Benchmark: +0.00% token روی مسیرهای اندازه‌گیری‌شده؛ skip کامل RAG+Memory در greeting
+  - تست‌ها: 19/19 PASS
+  - Doc Version -> v1.7
+
+[2026-07-16 15:33 +03:30] Phase 6 — Planning Layer (structured Plan + existing tools)
+  - افزودن app/planning با DI: Planner/Executor/Evaluator/PlanningManager
+  - RulePlanner بدون LLM؛ Plan فقط Structured Object
+  - ToolExecutor فقط از agent_tools.run_tool موجود استفاده می‌کند (بدون tool جدید)
+  - ادغام non-breaking در generate_reply: یک‌بار قبل از agent loop
+  - Compact hint + seed tool messages؛ Plan کامل وارد Prompt نمی‌شود
+  - Observability: planning_time/tasks/executed/planning_tokens/execution_tokens
+  - Benchmark: +4.82% token (<10%)؛ planning avg 0.32ms
+  - تست‌ها: 14/14 PASS
+  - Doc Version -> v1.6
+
+[2026-07-16 15:20 +03:30] Phase 5 — Memory Layer (DI, budget-controlled)
+  - افزودن app/memory با Interfaceهای MemoryProvider/Store/Retriever/Extractor/Summarizer/Manager
+  - پیاده‌سازی FileMemoryStore مستقل از conversation (قابل تعویض با Redis/Postgres)
+  - استخراج Rule-based بدون LLM + retrieval پویا با budget کاراکتر
+  - ادغام non-breaking در services.py: retrieve قبل از LLM، ingest بعد از پاسخ
+  - Observability: memory_retrieved/used/tokens + latency در analytics
+  - Safety: delete/edit/version روی memory items
+  - Benchmark: +4.82% token (avg memory inject ≈ 50 tok) — زیر آستانه افزایش محسوس
+  - تست‌ها: 10/10 PASS (شامل 4 تست memory)
+  - Doc Version -> v1.5
 
 [2026-07-16 12:40 +03:30] Optimization Sprint (Token/Performance) بدون تغییر رفتار کاربر
   - افزودن Token Analytics per-request در app/ai/token_analytics.py

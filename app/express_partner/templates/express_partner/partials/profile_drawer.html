@@ -368,6 +368,41 @@
   .ep-profile-drawer__chat-btn i {
     font-size: 0.95rem;
   }
+  .ep-profile-drawer__wallet-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    margin: 0;
+    padding: 0.85rem 1rem;
+    border: 0;
+    border-top: 1px solid var(--ep-drawer-sep);
+    background: #0a0a0a;
+    color: #fff;
+    text-decoration: none;
+    direction: rtl;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: background 0.15s ease;
+  }
+  .ep-profile-drawer__wallet-bar:hover,
+  .ep-profile-drawer__wallet-bar:active {
+    background: #141414;
+  }
+  .ep-profile-drawer__wallet-bar-amount {
+    font-size: 1rem;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  .ep-profile-drawer__wallet-bar i {
+    font-size: 0.75rem;
+    color: var(--ep-drawer-muted);
+    flex-shrink: 0;
+  }
 
   .ep-profile-drawer__guest {
     padding: 0.85rem 0.55rem 0.65rem;
@@ -655,6 +690,14 @@
   </div>
 
   {% if me_phone %}
+  <a href="{{ url_for('express_partner.commissions') }}"
+     data-vinor-express-nav
+     class="ep-profile-drawer__wallet-bar"
+     data-tour="commissions-link"
+     aria-label="موجودی قابل برداشت">
+    <span class="ep-profile-drawer__wallet-bar-amount">{{ (withdrawable_balance or 0)|toman }}</span>
+    <i class="fas fa-chevron-left" aria-hidden="true"></i>
+  </a>
   <div class="ep-profile-drawer__foot">
     <a href="{{ url_for('express_partner.settings') }}"
        data-vinor-express-nav

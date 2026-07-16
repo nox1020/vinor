@@ -67,6 +67,15 @@ _MAX_TOOL_ROUNDS = 2
 _MAX_TOOL_RESULT_CHARS = 1800
 _PROMPT_CACHE: dict[str, tuple[float, str]] = {}
 _PROMPT_CACHE_TTL_SEC = 20.0
+_PLANNING_SKIP_INTENTS = frozenset(
+    {
+        "visit",
+        "complete_visit",
+        "deal",
+        "release",
+        "coop_apply",
+    }
+)
 
 # کلیدهای سنگین/تکراری که برای مدل لازم نیستند
 _TOOL_RESULT_DROP_KEYS = frozenset(
@@ -187,6 +196,14 @@ def _build_system_prompt(
     if not user_key:
         return ""
     max_ctx = budget_config()["max_context_chars"]
+    try:
+        from app.supervisor.service import current_flags
+
+        flags = current_flags()
+        if flags is not None:
+            max_ctx = min(int(max_ctx), int(flags.context_budget_chars or max_ctx))
+    except Exception:
+        pass
     focus_codes: list[str] = []
     try:
         from .chat_store import recent_thread_land_codes
@@ -234,6 +251,17 @@ def _build_system_prompt(
             _set_prompt_cache(core_cache_key, ctx)
         notes = consume_pending_answers(user_key, audience=aud)
         ctx = append_admin_answers_block(ctx, notes)
+        # Memory is retrieved here for observability + later injection as a
+        # SEPARATE system message (keeps core prompt cache and token accounting clean).
+        mem_text, mem_meta = _memory_block_for_prompt(
+            user_key=user_key,
+            audience=aud,
+            user_message=user_message,
+            thread_id=thread_id,
+            remaining_chars=max(0, max_ctx - len(ctx)),
+        )
+        _set_memory_obs(mem_meta)
+        _set_memory_prompt_text(mem_text)
         return ctx[:max_ctx]
     except Exception as exc:
         try:
@@ -241,6 +269,136 @@ def _build_system_prompt(
         except Exception:
             pass
         return ""
+
+
+def _memory_block_for_prompt(
+    *,
+    user_key: str,
+    audience: str,
+    user_message: str,
+    thread_id: str | None,
+    remaining_chars: int,
+) -> tuple[str, dict[str, int]]:
+    empty = {
+        "memory_retrieved": 0,
+        "memory_used": 0,
+        "memory_tokens": 0,
+    }
+    if remaining_chars < 60:
+        return "", empty
+    try:
+        from app.supervisor.service import allow_component
+
+        if not allow_component("memory", default=True):
+            return "", empty
+    except Exception:
+        pass
+    try:
+        from app.memory.config import memory_budget_chars
+        from app.memory.service import retrieve_memory_for_prompt
+
+        result = retrieve_memory_for_prompt(
+            user_key=user_key,
+            query=user_message,
+            audience=audience,
+            thread_id=thread_id,
+            budget_chars=min(memory_budget_chars(), remaining_chars),
+        )
+        text = (result.text or "").strip()
+        if not text:
+            return "", {
+                "memory_retrieved": int(result.retrieved_count or 0),
+                "memory_used": 0,
+                "memory_tokens": 0,
+            }
+        # Hard budget: never exceed remaining context room.
+        if len(text) > remaining_chars:
+            text = text[: max(0, remaining_chars - 1)].rstrip() + "…"
+        return text, {
+            "memory_retrieved": int(result.retrieved_count or 0),
+            "memory_used": int(result.used_count or 0),
+            "memory_tokens": int(estimate_tokens(text)),
+        }
+    except Exception:
+        return "", empty
+
+
+def _set_memory_obs(meta: dict[str, int]) -> None:
+    try:
+        from flask import g
+
+        g.ai_memory_obs = dict(meta or {})
+    except Exception:
+        pass
+
+
+def _set_memory_prompt_text(text: str) -> None:
+    try:
+        from flask import g
+
+        g.ai_memory_prompt_text = (text or "").strip()
+    except Exception:
+        pass
+
+
+def _get_memory_prompt_text() -> str:
+    try:
+        from flask import g
+
+        return str(getattr(g, "ai_memory_prompt_text", "") or "").strip()
+    except Exception:
+        return ""
+
+
+def _get_memory_obs() -> dict[str, int]:
+    try:
+        from flask import g
+
+        raw = getattr(g, "ai_memory_obs", None)
+        if isinstance(raw, dict):
+            return {
+                "memory_retrieved": int(raw.get("memory_retrieved") or 0),
+                "memory_used": int(raw.get("memory_used") or 0),
+                "memory_tokens": int(raw.get("memory_tokens") or 0),
+            }
+    except Exception:
+        pass
+    return {"memory_retrieved": 0, "memory_used": 0, "memory_tokens": 0}
+
+
+def _set_planning_obs(outcome: Any) -> None:
+    try:
+        from flask import g
+
+        g.ai_planning_obs = {
+            "planning_time_ms": int(getattr(outcome, "planning_time_ms", 0) or 0),
+            "tasks_count": int(getattr(outcome, "tasks_count", 0) or 0),
+            "executed_tasks": int(getattr(outcome, "executed_tasks", 0) or 0),
+            "planning_tokens": int(getattr(outcome, "planning_tokens", 0) or 0),
+            "execution_tokens": int(getattr(outcome, "execution_tokens", 0) or 0),
+            "plan_type": str(getattr(getattr(outcome, "plan", None), "plan_type", "") or ""),
+        }
+    except Exception:
+        pass
+
+
+def _get_planning_obs() -> dict[str, Any]:
+    try:
+        from flask import g
+
+        raw = getattr(g, "ai_planning_obs", None)
+        if isinstance(raw, dict):
+            return dict(raw)
+    except Exception:
+        pass
+    return {
+        "planning_time_ms": 0,
+        "tasks_count": 0,
+        "executed_tasks": 0,
+        "planning_tokens": 0,
+        "execution_tokens": 0,
+        "plan_type": "",
+    }
 
 
 def _trim_history_content(role: str, content: str, cfg: dict[str, Any]) -> str:
@@ -284,6 +442,9 @@ def _build_messages(
         )
         if ctx:
             messages.append({"role": "system", "content": ctx})
+        mem_text = _get_memory_prompt_text()
+        if mem_text:
+            messages.append({"role": "system", "content": mem_text})
     if history:
         keep_last = int(cfg["max_history"])
         summary = _summarize_older_history(history, keep_last=keep_last)
@@ -560,6 +721,7 @@ def _call_deepseek(
 
     clear_api_balance_depleted()
     reply = ""
+    reasoning_content: str | None = None
     tool_calls: list[dict[str, Any]] = []
     if isinstance(body, dict):
         choices = body.get("choices") or []
@@ -567,6 +729,10 @@ def _call_deepseek(
             msg = choices[0].get("message") or {}
             if isinstance(msg, dict):
                 reply = str(msg.get("content") or "").strip()
+                # DeepSeek thinking mode: must replay reasoning_content after tool calls
+                if "reasoning_content" in msg:
+                    raw_rc = msg.get("reasoning_content")
+                    reasoning_content = "" if raw_rc is None else str(raw_rc)
                 raw_calls = msg.get("tool_calls") or []
                 if isinstance(raw_calls, list):
                     for tc in raw_calls:
@@ -609,7 +775,7 @@ def _call_deepseek(
     if not reply and not tool_calls:
         return {"ok": False, "error": "پاسخی از مدل دریافت نشد."}
 
-    return {
+    out_ok: dict[str, Any] = {
         "ok": True,
         "reply": reply,
         "tool_calls": tool_calls,
@@ -619,6 +785,9 @@ def _call_deepseek(
             "usage": usage,
         },
     }
+    if reasoning_content is not None:
+        out_ok["reasoning_content"] = reasoning_content
+    return out_ok
 
 
 def _run_agent_loop(
@@ -654,6 +823,11 @@ def _run_agent_loop(
             "content": result.get("reply") or None,
             "tool_calls": tool_calls,
         }
+        # DeepSeek thinking mode: reasoning_content MUST be passed back with tool_calls
+        if "reasoning_content" in result:
+            asst_msg["reasoning_content"] = result.get("reasoning_content") or ""
+        else:
+            asst_msg["reasoning_content"] = ""
         messages.append(asst_msg)
 
         for tc in tool_calls:
@@ -813,6 +987,82 @@ def generate_reply(
     from .intents import normalize_chip_intent
 
     intent = normalize_chip_intent(chip_intent)
+    # Supervisor / Orchestrator (rule-based): decide which components to run.
+    try:
+        from app.supervisor.service import orchestrate_request, set_supervisor_context
+
+        sup_out = orchestrate_request(
+            message=text,
+            audience=aud,
+            voice=voice,
+            chip_intent=intent or "",
+            user_key=key,
+        )
+        set_supervisor_context(sup_out)
+        # Multi-Agent (Phase 8): Supervisor route → AgentSelector (lazy, at most one).
+        try:
+            from app.agents.service import prepare_agent_after_supervisor
+
+            route = ""
+            budget = 3000
+            if sup_out is not None:
+                route = str(sup_out.workflow.route or "")
+                budget = int(sup_out.workflow.flags.context_budget_chars or 3000)
+            prepare_agent_after_supervisor(
+                message=text,
+                route=route,
+                audience=aud,
+                voice=voice,
+                chip_intent=intent or "",
+                user_key=key,
+                thread_id=thread_id,
+                context_budget_chars=budget,
+            )
+            # Adaptive Execution (Phase 9): state/confidence outside Prompt.
+            try:
+                from app.adaptive.service import (
+                    after_agent_prepare_adaptive,
+                    begin_adaptive,
+                )
+                from app.agents.service import get_agent_obs
+
+                begin_adaptive(
+                    message=text,
+                    route=route,
+                    audience=aud,
+                    voice=voice,
+                    chip_intent=intent or "",
+                    user_key=key,
+                )
+                aobs = get_agent_obs()
+                after_agent_prepare_adaptive(
+                    agent_status=str(aobs.get("agent_status") or ""),
+                    used_components=list(aobs.get("agent_used_components") or []),
+                    selected_agent=str(aobs.get("selected_agent") or ""),
+                )
+            except Exception:
+                pass
+        except Exception:
+            pass
+    except Exception:
+        try:
+            from app.supervisor.service import set_supervisor_context
+
+            set_supervisor_context(None)
+        except Exception:
+            pass
+        try:
+            from app.agents.service import set_agent_obs
+
+            set_agent_obs(None)
+        except Exception:
+            pass
+        try:
+            from app.adaptive.service import clear_adaptive
+
+            clear_adaptive()
+        except Exception:
+            pass
     # شروع تازهٔ ثبت بازدید / بازدید مجدد — پیش‌نویس قبلی فیلدها را قاطی نکند
     if intent == "visit" and key:
         try:
@@ -852,6 +1102,14 @@ def generate_reply(
                 "meta": short.get("meta") or {"provider": "visit_step"},
             }
     tools = tools_schema_for_voice(voice) if key else []
+    try:
+        from app.supervisor.service import allow_component, current_flags
+
+        if not allow_component("tools", default=True):
+            tools = []
+        flags = current_flags()
+    except Exception:
+        flags = None
     messages = _build_messages(
         text,
         history,
@@ -862,6 +1120,50 @@ def generate_reply(
         chip_intent=intent or None,
         thread_id=thread_id,
     )
+    # Planning Layer (once): gated by Supervisor; Plan never enters Prompt fully.
+    plan_out = None
+    allow_planning = True
+    inject_hint = True
+    seed_tools = True
+    try:
+        from app.supervisor.service import allow_component, current_flags
+
+        allow_planning = allow_component("planning", default=True)
+        fl = current_flags()
+        if fl is not None:
+            inject_hint = bool(fl.inject_planning_hint)
+            seed_tools = bool(fl.seed_planning_tools)
+    except Exception:
+        pass
+    # Adaptive retry strategy "lean": skip planning hint/seed (no new prompt text).
+    try:
+        from app.adaptive.service import use_lean_strategy
+
+        if use_lean_strategy():
+            inject_hint = False
+            seed_tools = False
+    except Exception:
+        pass
+    if key and intent not in _PLANNING_SKIP_INTENTS and allow_planning:
+        try:
+            from app.planning.service import run_planning_once
+
+            plan_out = run_planning_once(
+                goal=text,
+                user_key=key,
+                audience=aud,
+                voice=voice,
+                thread_id=thread_id,
+                chip_intent=intent or "",
+            )
+        except Exception:
+            plan_out = None
+    if plan_out is not None:
+        _set_planning_obs(plan_out)
+        if inject_hint and plan_out.compact_hint:
+            messages.append({"role": "system", "content": plan_out.compact_hint})
+        if seed_tools and plan_out.seed_messages:
+            messages.extend(plan_out.seed_messages)
     prompt_parts = _prompt_token_parts(messages)
     try:
         from flask import g
@@ -878,6 +1180,12 @@ def generate_reply(
         thread_id=thread_id,
     )
     if not result.get("ok"):
+        try:
+            from app.adaptive.service import fail_adaptive
+
+            fail_adaptive(error=str(result.get("error") or result.get("error_code") or "llm_failed"))
+        except Exception:
+            pass
         reason = None
         if result.get("balance_depleted") or is_api_balance_depleted():
             reason = "balance"
@@ -917,11 +1225,20 @@ def generate_reply(
         c = str(code).strip()
         if c and c not in land_codes:
             land_codes.append(c)
+    if plan_out is not None:
+        for code in plan_out.land_codes or []:
+            c = str(code).strip()
+            if c and c not in land_codes:
+                land_codes.append(c)
     land_codes = land_codes[:5]
 
     agent_actions = [
         a for a in (result.get("agent_actions") or []) if isinstance(a, dict)
     ]
+    if plan_out is not None:
+        for a in plan_out.agent_actions or []:
+            if isinstance(a, dict):
+                agent_actions.append(a)
     if any(str(a.get("type") or "") == "copy_blocks" for a in agent_actions):
         reply = _strip_listing_dump_when_copy_cards(reply)
     # اگر کارت تأیید اکشن هست، کارت فایل همان کد را دوباره نشان نده
@@ -988,7 +1305,33 @@ def generate_reply(
             pass
     # کارت فایل فقط در land_cards (نوار بالای خانه) — داخل چت cards_html نگذار
 
+    # Adaptive: evaluate quality + confidence (objects only — no prompt injection).
+    try:
+        from app.adaptive.service import after_response_adaptive
+
+        after_response_adaptive(
+            reply=reply,
+            land_codes=land_codes or [],
+            ok=True,
+        )
+    except Exception:
+        pass
+
     store_cached_reply(key, aud, text, result)
+    # Memory ingest after successful reply (non-blocking for UX).
+    try:
+        from app.memory.service import learn_from_exchange
+
+        learn_from_exchange(
+            user_key=key,
+            user_message=text,
+            assistant_reply=reply,
+            audience=aud,
+            thread_id=thread_id,
+            land_codes=land_codes or [],
+        )
+    except Exception:
+        pass
     _record_request_analytics(
         user_key=key,
         audience=aud,
@@ -1007,6 +1350,7 @@ def _prompt_token_parts(messages: list[dict[str, Any]]) -> dict[str, int]:
         "context_tokens": 0,
         "history_tokens": 0,
         "user_tokens": 0,
+        "memory_tokens": 0,
     }
     for m in messages:
         if not isinstance(m, dict):
@@ -1015,10 +1359,16 @@ def _prompt_token_parts(messages: list[dict[str, Any]]) -> dict[str, int]:
         content = str(m.get("content") or "")
         tok = estimate_tokens(content)
         if role == "system":
-            if "=== اطلاعات داخلی وینور ===" in content or "--- آگهی" in content or "--- فایل" in content:
+            if "=== حافظه مرتبط کاربر ===" in content:
+                parts["memory_tokens"] += tok
+            elif "=== یافتهٔ برنامه‌ریز ===" in content:
+                parts["planning_tokens"] = parts.get("planning_tokens", 0) + tok
+            elif "=== اطلاعات داخلی وینور ===" in content or "--- آگهی" in content or "--- فایل" in content:
                 parts["context_tokens"] += tok
             else:
                 parts["system_prompt_tokens"] += tok
+        elif role == "tool":
+            parts["execution_tokens"] = parts.get("execution_tokens", 0) + tok
         elif role == "user":
             if m is messages[-1]:
                 parts["user_tokens"] += tok
@@ -1026,6 +1376,8 @@ def _prompt_token_parts(messages: list[dict[str, Any]]) -> dict[str, int]:
                 parts["history_tokens"] += tok
         elif role == "assistant":
             parts["history_tokens"] += tok
+    parts.setdefault("planning_tokens", 0)
+    parts.setdefault("execution_tokens", 0)
     return parts
 
 
@@ -1045,6 +1397,30 @@ def _record_request_analytics(
         input_tokens = int(usage.get("prompt_tokens") or 0) or estimate_messages_tokens(messages)
         output_tokens = int(usage.get("completion_tokens") or 0) or estimate_tokens(result.get("reply") or "")
         rag_tokens = int(prompt_parts.get("context_tokens") or 0)
+        mem_obs = _get_memory_obs()
+        plan_obs = _get_planning_obs()
+        try:
+            from app.supervisor.service import get_supervisor_obs
+
+            sup_obs = get_supervisor_obs()
+        except Exception:
+            sup_obs = {}
+        try:
+            from app.agents.service import get_agent_obs
+
+            agent_obs = get_agent_obs()
+        except Exception:
+            agent_obs = {}
+        try:
+            from app.adaptive.service import get_adaptive_obs
+
+            adaptive_obs = get_adaptive_obs()
+        except Exception:
+            adaptive_obs = {}
+        memory_tokens = int(prompt_parts.get("memory_tokens") or mem_obs.get("memory_tokens") or 0)
+        planning_tokens = int(prompt_parts.get("planning_tokens") or plan_obs.get("planning_tokens") or 0)
+        execution_tokens = int(prompt_parts.get("execution_tokens") or plan_obs.get("execution_tokens") or 0)
+        agent_tokens = int(agent_obs.get("agent_tokens") or 0)
         row = {
             "user": user_key,
             "audience": audience,
@@ -1058,9 +1434,36 @@ def _record_request_analytics(
             "context_tokens": int(prompt_parts.get("context_tokens") or 0),
             "history_tokens": int(prompt_parts.get("history_tokens") or 0),
             "rag_tokens": rag_tokens,
+            "memory_retrieved": int(mem_obs.get("memory_retrieved") or 0),
+            "memory_used": int(mem_obs.get("memory_used") or 0),
+            "memory_tokens": memory_tokens,
+            "planning_time_ms": int(plan_obs.get("planning_time_ms") or 0),
+            "tasks_count": int(plan_obs.get("tasks_count") or 0),
+            "executed_tasks": int(plan_obs.get("executed_tasks") or 0),
+            "planning_tokens": planning_tokens,
+            "execution_tokens": execution_tokens,
+            "plan_type": str(plan_obs.get("plan_type") or ""),
+            "routed_workflow": str(sup_obs.get("routed_workflow") or ""),
+            "executed_components": list(sup_obs.get("executed_components") or []),
+            "skipped_components": list(sup_obs.get("skipped_components") or []),
+            "routing_time_ms": int(sup_obs.get("routing_time_ms") or 0),
+            "selected_agent": str(agent_obs.get("selected_agent") or ""),
+            "skipped_agents": list(agent_obs.get("skipped_agents") or []),
+            "agent_status": str(agent_obs.get("agent_status") or ""),
+            "agent_tokens": agent_tokens,
+            "agent_execution_time_ms": int(agent_obs.get("agent_execution_time_ms") or 0),
+            "workflow_state": str(adaptive_obs.get("workflow_state") or ""),
+            "confidence_score": float(adaptive_obs.get("confidence_score") or 0),
+            "retry_count": int(adaptive_obs.get("retry_count") or 0),
+            "recovery_count": int(adaptive_obs.get("recovery_count") or 0),
+            "skipped_steps": list(adaptive_obs.get("skipped_steps") or []),
+            "adaptive_extra_tokens": int(adaptive_obs.get("adaptive_extra_tokens") or 0),
             "total_tokens": input_tokens + output_tokens,
+            "total_prompt_tokens": input_tokens,
+            "prompt_tokens": input_tokens,
             "total_cost": usage_cost(usage),
             "response_time_ms": int((time.perf_counter() - started) * 1000),
+            "latency_ms": int((time.perf_counter() - started) * 1000),
             "api_rounds": int(result.get("api_rounds") or 0),
             "cache_hit": bool((meta.get("provider") == "cache") if isinstance(meta, dict) else False),
         }

@@ -196,7 +196,7 @@ class OnboardingTour {
       {
         element: '[data-tour="home-menu"]',
         title: 'منوی پروفایل',
-        description: 'از اینجا کیف پول و تنظیمات حساب را باز کنید.',
+        description: 'از اینجا تنظیمات حساب و کیف پول را باز کنید.',
         position: 'bottom'
       },
       {
@@ -321,15 +321,9 @@ class OnboardingTour {
         position: 'bottom'
       },
       {
-        element: '[data-tour="commissions-link"]',
-        title: 'کیف پول',
-        description: 'موجودی قابل برداشت و تراکنش‌های پورسانت را اینجا ببینید.',
-        position: 'top'
-      },
-      {
         element: '[data-tour="bottom-nav"]',
         title: 'منوی پایین',
-        description: 'بازگشت سریع به داشبورد خانه.',
+        description: 'بازگشت سریع به داشبورد خانه. کیف پول را از منوی پروفایل (کنار گفتگو) باز کنید.',
         position: 'top'
       }
     ];
@@ -340,7 +334,7 @@ class OnboardingTour {
       {
         element: '[data-tour="home-menu"]',
         title: 'خوش آمدید',
-        description: 'داشبورد خانه نقطه شروع شماست. منوی بالا کیف پول و تنظیمات را باز می‌کند.',
+        description: 'داشبورد خانه نقطه شروع شماست. منوی بالا تنظیمات و کیف پول را باز می‌کند.',
         position: 'bottom',
         page: 'home'
       },
@@ -431,7 +425,7 @@ class OnboardingTour {
       {
         element: '[data-tour="commissions-link"]',
         title: 'کیف پول',
-        description: 'دسترسی سریع به موجودی و تراکنش‌ها از منوی پروفایل.',
+        description: 'دسترسی سریع به موجودی قابل برداشت — بالای فوتر منو.',
         position: 'top',
         page: 'profile'
       },

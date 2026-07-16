@@ -618,6 +618,13 @@ def _select_lands_by_rag(
 ) -> list[dict[str, Any]]:
     """RAG selection bridge: returns only property codes; text format stays unchanged."""
     try:
+        from app.supervisor.service import allow_component
+
+        if not allow_component("rag", default=True):
+            return []
+    except Exception:
+        pass
+    try:
         from app.knowledge.interfaces import RetrievalRequest
         from app.knowledge.service import get_property_retriever
     except Exception:

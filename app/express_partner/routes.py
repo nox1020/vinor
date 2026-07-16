@@ -2889,6 +2889,7 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'suggested_files': suggested_files,
         'journey_card': journey_card,
         'mission': mission,
+        'withdrawable_balance': withdrawable,
     }
 
 
@@ -3223,6 +3224,7 @@ def home_page():
         urgent_actions=payload.get('urgent_actions') or [],
         suggested_files=payload.get('suggested_files') or [],
         journey_card=payload.get('journey_card'),
+        withdrawable_balance=int(payload.get('withdrawable_balance') or 0),
         ai_quick_prompts=ai_quick_prompts,
         public_home_lands=public_home_lands,
         hide_header=True,
