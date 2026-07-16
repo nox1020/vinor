@@ -54,6 +54,12 @@ class PropertySearchAgent(Agent):
         ctx.shared["property_search_agent"] = True
         ctx.shared["context_budget_chars"] = budget
         ctx.shared["pipeline"] = "planning|memory|rag|tools|llm"
+        ctx.shared["reused_rag"] = True
+        ctx.shared["reused_memory"] = True
+        ctx.shared["reused_planning"] = True
+        # Handoff slot for Analysis Agent (codes filled later from planning/tools).
+        ctx.shared.setdefault("property_codes", [])
+        ctx.shared["search_handoff"] = True
 
         return AgentResult(
             agent_id=self.agent_id,

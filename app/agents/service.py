@@ -35,7 +35,84 @@ def prepare_agent(
     thread_id: str | None = None,
     context_budget_chars: int = 3000,
 ) -> AgentOutcome | None:
-    """Supervisor-driven: select & prepare at most one agent (lazy)."""
+    """Supervisor-driven agent prepare — Parallel Collaboration when enabled (Phase 16)."""
+    # Parallel Multi-Agent path (fail-open to sequential single-agent).
+    try:
+        from app.agents.parallel.config import parallel_enabled
+        from app.agents.parallel.service import (
+            execution_result_to_outcome,
+            run_parallel_collaboration,
+        )
+
+        if parallel_enabled():
+            pre = run_parallel_collaboration(
+                message=message,
+                route=route,
+                audience=audience,
+                voice=voice,
+                chip_intent=chip_intent,
+                user_key=user_key,
+                thread_id=thread_id,
+                context_budget_chars=context_budget_chars,
+                parallel=True,
+            )
+            if pre is not None:
+                # Decision Engine (Phase 17): finalize after parallel — no agent re-run.
+                try:
+                    from app.agents.parallel.service import get_parallel_merge
+                    from app.decision.service import run_decision
+
+                    pm = get_parallel_merge() or dict(pre.merged or {})
+                    shared = dict((pre.metadata or {}).get("shared") or {})
+                    shared.update(pm)
+                    if pre.merged.get("recommendation"):
+                        shared.setdefault("recommended_code", pre.merged.get("recommendation"))
+                    try:
+                        from app.executive.service import get_executive_plan
+
+                        eplan = get_executive_plan()
+                        run_dec = eplan.get("run_decision", True) if eplan else True
+                        run_bi = eplan.get("run_bi", True) if eplan else True
+                        run_wm = eplan.get("run_world_model", True) if eplan else True
+                        run_lp = eplan.get("run_long_plan", True) if eplan else True
+                    except Exception:
+                        run_dec = run_bi = run_wm = run_lp = True
+                    if run_dec:
+                        run_decision(
+                            message=message,
+                            route=route,
+                            shared=shared,
+                            parallel_merge=pm,
+                        )
+                    if run_bi:
+                        try:
+                            from app.business_intelligence.service import run_business_intelligence
+
+                            run_business_intelligence(
+                                message=message, route=route, shared=shared
+                            )
+                        except Exception:
+                            pass
+                    if run_wm:
+                        try:
+                            from app.world_model.service import update_world_model
+
+                            update_world_model(shared=shared)
+                        except Exception:
+                            pass
+                    if run_lp:
+                        try:
+                            from app.long_planner.service import build_long_plan
+
+                            build_long_plan(shared=shared, route=route)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                return execution_result_to_outcome(pre)
+    except Exception:
+        pass
+
     manager = get_agent_manager()
     if manager is None:
         return None

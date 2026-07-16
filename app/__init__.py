@@ -761,6 +761,14 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning("Admin SMS scheduler not started: %s", e)
 
+    # Phase 19: Continuous Optimization — background only, default OFF
+    try:
+        from app.optimization.scheduler import start_optimization_scheduler
+
+        start_optimization_scheduler(app)
+    except Exception as e:
+        app.logger.warning("Optimization scheduler not started: %s", e)
+
     @app.before_request
     def landing_gate():
         debug = app.debug or _flask_debug()

@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+from app.agents.analysis.property_analysis import PropertyAnalysisAgent
+from app.agents.customer_memory.agent import CustomerMemoryAgent
+from app.agents.customer_success.agent import CustomerSuccessAgent
 from app.agents.interfaces import AgentManager, AgentRegistry
 from app.agents.manager import DefaultAgentManager
+from app.agents.negotiation.agent import NegotiationAgent
 from app.agents.property_search import PropertySearchAgent
+from app.agents.recommendation.agent import RecommendationAgent
 from app.agents.registry import InMemoryAgentRegistry
 from app.agents.selector import RuleAgentSelector
-from app.agents.skeletons import make_skeleton_agents
 
 
 def make_agent_registry() -> AgentRegistry:
     registry = InMemoryAgentRegistry()
     registry.register(PropertySearchAgent())
-    for agent in make_skeleton_agents():
-        registry.register(agent)
+    registry.register(PropertyAnalysisAgent())
+    registry.register(RecommendationAgent())
+    registry.register(CustomerMemoryAgent())
+    registry.register(NegotiationAgent())
+    registry.register(CustomerSuccessAgent())  # Follow-up / Customer Success (Phase 15)
     return registry
 
 

@@ -1,7 +1,7 @@
 ================================================================================
                     مستند فنی معماری Vinor
                     تاریخ: ۱۴۰۵/۰۴/۲۵
-                    Doc Version: v1.9
+                    Doc Version: v4.0
 ================================================================================
 
 این سند وضعیت فعلی کدبیس Vinor را بدون پیشنهاد پیاده‌سازی توصیف می‌کند.
@@ -33,9 +33,10 @@ Vinor یک Flask monolith برای بازار املاک محلی (گرمابس�
                 v                                v
 +---------------------------+    +---------------------------------------------+
 |     Domain Services       |    |              AI Layer                        |
-|  storage.py               |    |  services.py -> DeepSeek API               |
-|  SMS, commissions         |    |  agent_tools, context, chat_store            |
-|  missions, sales_coach    |    |  escalations, credits                        |
+|  storage.py               |    |  Conversation Engine → Workflow Engine → Supervisor → Agents |
+|  SMS, commissions         |    |  services.py -> DeepSeek API               |
+|  missions, sales_coach    |    |  agent_tools, context, chat_store            |
+|                           |    |  escalations, credits                        |
 +-------------+-------------+    +---------------------------------------------+
               |
               v
@@ -1260,9 +1261,1140 @@ scripts/benchmark_adaptive_layer.py
 - Max token increase: 0% (under 3% cap)
 
 
+18. Property Analysis Agent (Phase 10)
+--------------------------------------
+
+18.1 هدف
+- فعال‌سازی کامل Property Analysis Agent (خروج از Skeleton)
+- Rule-First؛ بدون بازنویسی Supervisor / Adaptive / Planning / Memory / RAG / Tools
+- افزایش Token < 3٪؛ بدون Prompt بزرگ جدید
+- سایر Agentها همچنان Skeleton
+
+18.2 Architecture Diagram
+
+Supervisor (route)
+  ↓
+AgentSelector
+  ├─ property_search → PropertySearchAgent
+  └─ property_compare / تحلیل‌keywords → PropertyAnalysisAgent
+        ↓
+     Search handoff (shared flags only — no re-query)
+        ↓
+     AnalysisManager + RuleAnalysisStrategy + AnalysisCache
+        ↓
+     compact hint (=== تحلیل فایل ===) ≤ ~100 chars
+        ↓
+     Existing LLM pipeline (reasoning)
+
+Categories (rule-based):
+  Price | Location | Amenities | Investment | Comparison
+
+18.3 Sequence Diagram
+
+generate_reply
+  -> Supervisor.orchestrate
+  -> prepare_agent_after_supervisor
+       -> if analysis selected: SearchAgent.run (flags) then AnalysisAgent.run
+  -> Planning (reuse land_codes)
+  -> run_property_analysis(codes from planning/shared)  # no re-RAG/search
+  -> inject compact analysis hint IFF present
+  -> Tools + LLM
+  -> analytics(analysis_*)
+
+18.4 Folder Structure
+app/agents/analysis/
+  interfaces.py
+  config.py
+  cache.py
+  strategy.py
+  manager.py
+  property_analysis.py
+  di.py
+  service.py
+
+18.5 فایل‌های جدید
+- app/agents/analysis/*
+- tests/test_property_analysis_agent.py
+- scripts/benchmark_analysis_agent.py
+
+18.6 کلاس‌های جدید
+- PropertyAnalysisAgent
+- RuleAnalysisStrategy
+- DefaultAnalysisManager
+- MemoryAnalysisCache
+- AnalysisRequest / AnalysisResult / AnalysisCategoryResult
+
+18.7 Agent Lifecycle
+1. Selector: compare/analysis keywords → property_analysis
+2. Manager: Search handoff (shared pipeline flags)
+3. AnalysisManager: cache → load lands via accessible_lands_map → rule analyze
+4. compact_hint stored (objects + optional system line)
+5. LLM موجود پاسخ نهایی را می‌سازد (بدون LLM جدا برای Analysis)
+
+18.8 Integration
+- Supervisor: بدون تغییر؛ route موجود کافی است
+- Search Agent: shared handoff flags
+- generate_reply: بعد از Planning، reuse کدها و inject hint
+- Prompt templates / RAG / Memory / Planning internals untouched
+
+18.9 Token Flow
+- Lazy: فقط compare/تحلیل
+- Hint budget: VINOR_ANALYSIS_HINT_CHARS (default 100)
+- Reuse RAG/Memory/Planning flags — بدون اجرای دوباره
+- Analysis Cache (TTL)
+
+18.10 Benchmark / Performance / Token Report
+scripts/benchmark_analysis_agent.py
+- greeting:         delta=+0.00% | selected=- | analysis_tokens=0
+- property_search:  delta=+0.00% | selected=property_search | analysis_tokens=0
+- property_compare: delta=+2.19% | selected=property_analysis | analysis_tokens≈20
+  reuse_rag=True reuse_mem=True | latency≈24ms
+- Max token increase on analysis path: +2.19% (under 3% cap)
+- Tests: 14/14 PASS (analysis 7 + agents 7)
+
+
+19. Recommendation Agent (Phase 11)
+-----------------------------------
+
+19.1 هدف
+- فعال‌سازی Recommendation Agent (خروج از Skeleton)
+- رتبه‌بندی و پیشنهاد بهترین فایل با Structured Object
+- بدون Search/RAG/Memory/Analysis جدید (فقط Reuse + Cache)
+- افزایش Token < 3٪
+- Customer Memory / Negotiation / Follow-up همچنان Skeleton
+
+19.2 Architecture Diagram
+
+Supervisor → AgentSelector
+  ├─ Search
+  ├─ Analysis
+  └─ Recommendation (keywords: پیشنهاد/بهترین/…)
+        ↓
+     Search handoff (flags)
+        ↓
+     Structured Analysis Object (cache reuse)
+        ↓
+     RuleRecommendationEngine → RecommendationItem[]
+        ↓
+     Compact hint (=== پیشنهاد فایل ===)
+        ↓
+     LLM
+
+19.3 Recommendation Pipeline / Ranking Flow
+Search Results + Analysis Categories + Message prefs (بودجه/منطقه/نوع)
+  + shared memory_prefs (بدون retrieve دوباره)
+  → score / match_reasons / weaknesses / priority / confidence
+  → selected + alternate + rejected
+  → compact hint ≤ ~90 chars
+
+19.4 Recommendation Object
+RecommendationItem:
+  property_code, score, match_reasons, weaknesses, priority, confidence
+
+19.5 Folder Structure
+app/agents/recommendation/
+  interfaces.py, config.py, cache.py, engine.py,
+  manager.py, agent.py, di.py, service.py
+
+19.6 فایل‌ها / کلاس‌ها
+- RecommendationAgent, RuleRecommendationEngine
+- DefaultRecommendationManager, MemoryRecommendationCache
+- RecommendationRequest/Result/Item
+
+19.7 Integration
+- Analysis: categories از run_property_analysis (cache) → shared
+- Search/Analysis Agent files: بدون تغییر
+- Supervisor/Adaptive/Planning/Memory/RAG/Tools: بدون بازنویسی
+- generate_reply: inject فقط compact recommendation hint
+
+19.8 Benchmark / Token / Performance
+scripts/benchmark_recommendation_agent.py
+- greeting:        delta=+0.00%
+- property_search: delta=+0.00%
+- recommendation:  delta=+2.63% | rec_tokens≈23 | reuse_search=True reuse_analysis=True
+  pick=20250101120001 | latency≈65ms
+- re_search_count=0 | re_analysis_new_queries=0
+- Tests: 20/20 PASS
+- Max token increase: +2.63% (under 3% cap)
+
+
+20. Conversation Engine (Phase 11.5)
+------------------------------------
+
+20.1 هدف
+- تبدیل UX از Form-Based به Conversation-Based بدون تغییر Agentها
+- لایه جدید قبل از Supervisor؛ Supervisor / Planning / Memory / RAG / Adaptive
+  / Multi-Agent بدون بازنویسی
+- فرم‌های HTML برای سازگاری HTTP باقی می‌مانند؛ مسیر اصلی چت است
+- هیچ Agent جدیدی فعال نمی‌شود
+- افزایش Token < 5٪ (مسیر form: early-return → +0٪ روی LLM prompt)
+
+20.2 Architecture Diagram
+
+User
+  ↓
+Conversation Engine
+  ├─ Identity Resolver   (session / phone / login / partner profile)
+  ├─ Role Resolver       (guest → user → partner → premium_partner)
+  ├─ Intent Resolver     (rule + chip; بدون Prompt)
+  ├─ Workflow Resolver   (intent → workflow | WF_NONE pass-through)
+  ├─ Conversation Forms  (step questions؛ فقط فیلدهای missing)
+  ├─ Conversation State  (START→COLLECTING→WAITING→COMPLETED|FAILED)
+  └─ Session Manager     (file store؛ خارج از Prompt)
+  ↓
+Supervisor → Agents (فقط اگر pass-through یا CE خاموش)
+
+20.3 Identity / Role / Intent
+Identity: Session + Memory signals + Login Status + Phone — بدون Prompt
+Roles: Guest | User | Partner | Premium Partner (قابل ارتقاء؛ بدون صفحه انتخاب)
+Intents:
+  Search Property | Register Property | Become Partner | Compare |
+  Recommendation | Negotiation | Visit | Deal | Support | General Chat
+
+20.4 Workflow Engine / Conversation Forms
+Intent → Workflow:
+  register_property → property_registration → PropertyRegistration
+  become_partner    → partner_onboarding    → PartnerApplication
+  visit             → visit                 → VisitRequest
+  deal              → deal                  → DealRequest
+  support           → support               → SupportTicket
+  search/compare/recommendation/negotiation/general → WF_NONE (Supervisor)
+
+هر Step فقط اگر فیلد موجود نباشد پرسیده می‌شود.
+لغو: لغو / انصراف | تأیید نهایی: بله / خیر
+
+20.5 State Machine / Session
+States: START | COLLECTING | WAITING | COMPLETED | FAILED
+Session fields (خارج از Prompt):
+  Current Workflow, Current Step, Collected Fields, Missing Fields, Role, Intent
+Store: instance/data/ai_conversation/{user}.json
+
+20.6 Folder Structure
+app/conversation/
+  interfaces.py, config.py, identity.py, roles.py, intent.py,
+  workflow.py, state.py, forms.py, session.py, manager.py,
+  service.py, di.py, __init__.py
+
+20.7 فایل‌ها / کلاس‌ها
+- RuleIdentityResolver, RuleRoleResolver, RuleIntentResolver
+- RuleWorkflowResolver, DefaultConversationManager
+- FileSessionStore, ConversationSession / ConversationOutcome
+- FORMS (WorkflowDefinition + WorkflowStep)
+- try_conversation_engine / get_conversation_obs (service)
+
+20.8 Integration
+generate_reply:
+  credit_guard → chip_intent → try_conversation_engine
+    → اگر handled و !pass_to_supervisor: early return (بدون Supervisor/LLM)
+    → وگرنه Supervisor → Agents (مانند قبل)
+Env: VINOR_CONVERSATION_ENABLED (default on),
+     VINOR_CONVERSATION_EARLY_RETURN (default on)
+Observability on g / analytics:
+  detected_role, detected_intent, conversation_workflow,
+  conversation_state, conversation_step, completed_fields,
+  missing_fields, session_duration_ms, conversation_extra_tokens
+
+20.9 Sequence Diagram (form workflow)
+
+User: «درخواست همکاری»
+  → CE: identity/role/intent → partner_onboarding → Q: نام؟
+User: «علی»
+  → CE: collect → Q: کد ملی؟
+  … (بدون Supervisor)
+User: «بله»
+  → CE: COMPLETED + PartnerApplication object + summary reply
+  → early return (extra_tokens=0)
+
+20.10 Benchmark / Token / Performance
+scripts/benchmark_conversation_engine.py
+- greeting:           delta=+0.00% | handled=False | latency≈14ms
+- search_passthrough: delta=+0.00% | handled=False | latency≈10ms
+- partner_workflow:   delta=-97.30% (early return؛ بدون build_messages کامل)
+  handled=True | workflow=partner_onboarding | state=COLLECTING
+  extra_tokens=0 | latency≈12ms
+- Max LLM token increase on pass-through: +0.00% (under 5% cap)
+- Form path: conversation_extra_tokens=0؛ State/Workflow/Role خارج از Prompt
+- Tests: 7/7 PASS (tests/test_conversation_engine.py)
+- form_html_removed=False (compat؛ chat primary)
+
+
+21. Workflow Engine (Phase 12)
+------------------------------
+
+21.1 هدف
+- ارتقای Conversation Engine از Router ساده به Workflow Engine کامل
+- مدیریت فرآیندهای اصلی Vinor با State Machine / Step / Validation
+- قبل از فعال‌سازی Customer Memory Agent
+- Supervisor / Adaptive / Planning / Memory / RAG / Multi-Agent / Agents: بدون تغییر
+- افزایش Token < 3٪؛ State/Workflow/Validation خارج از Prompt
+- هیچ Agent جدیدی فعال نمی‌شود
+
+21.2 Architecture Diagram
+
+User
+  ↓
+Conversation Engine
+  ├─ Identity / Role / Intent  (انتخاب Workflow)
+  ↓
+Workflow Engine
+  ├─ Workflow Definition
+  ├─ State Machine (INIT→COLLECTING→VALIDATING→WAITING_USER→READY→COMPLETED|FAILED|CANCELLED)
+  ├─ Step Engine (فقط missing fields)
+  ├─ Validation (rule-based، بدون LLM)
+  ├─ Workflow Context (خارج از Prompt)
+  └─ Structured Workflow Object
+  ↓
+Supervisor → Agents   (جمع‌آوری فرم توسط Agent انجام نمی‌شود)
+  ※ handoff اختیاری: VINOR_WORKFLOW_HANDOFF_SUPERVISOR=1
+
+21.3 Workflow Objects (۷ عدد)
+1. PropertyRegistrationWorkflow
+2. PropertyEditingWorkflow
+3. PartnerWorkflow
+4. VisitWorkflow
+5. DealWorkflow
+6. SupportWorkflow
+7. GeneralConversationWorkflow (pass-through → Supervisor)
+
+21.4 Lifecycle / Validation
+INIT → COLLECTING → VALIDATING → WAITING_USER → … → READY → COMPLETED
+  یا FAILED / CANCELLED
+Validators: non_empty, price, area, phone, national_id, photos, yes_no, land_code, deal_type
+
+21.5 Folder Structure
+app/workflow/
+  interfaces.py, config.py, state_machine.py, validation.py,
+  registry.py, engine.py, di.py, __init__.py
+  definitions/
+    base.py, property_registration.py, property_editing.py,
+    partner_onboarding.py, visit.py, deal.py, support.py, general.py
+
+21.6 فایل‌ها / کلاس‌ها
+- DefaultWorkflowEngine, WorkflowRegistry, WorkflowContext
+- BaseWorkflow + ۷ Workflow Object
+- validate_* (بدون LLM)
+- Conversation Manager → delegate start/continue/cancel به Engine
+
+21.7 Integration
+Conversation: Intent → resolve workflow_id → Engine.start/continue_
+Supervisor: بدون تغییر؛ form steps early-return (بدون LLM)
+  Completed object روی g.ai_conversation_object؛ Agent form-manager نیست
+Env: VINOR_WORKFLOW_ENGINE_ENABLED (default on)
+     VINOR_WORKFLOW_HANDOFF_SUPERVISOR (default off — token-safe)
+
+21.8 Sequence Diagram
+
+User: «ثبت ملک»
+  → CE Intent=register_property
+  → Engine.start → WAITING_USER → «نوع ملک؟»
+User: «ویلا»
+  → Engine.continue → VALIDATING → collect → «شهر؟»
+…
+User: «بله»
+  → READY → COMPLETED + PropertyRegistration object
+  → early return (extra_tokens=0) یا handoff Supervisor
+
+21.9 Benchmark / Token / Performance
+scripts/benchmark_workflow_engine.py
+- greeting:              delta=+0.00% | latency≈19ms
+- search_passthrough:    delta=+0.00% | latency≈22ms
+- partner_workflow:      early-return | extra_tokens=0 | latency≈37ms
+- property_registration: early-return | extra_tokens=0 | latency≈37ms
+- Max LLM token increase (pass-through): +0.00% (under 3% cap)
+- workflow_extra_tokens=0 | State/Validation خارج از Prompt
+- Tests: 16/16 PASS (workflow 9 + conversation 7)
+
+
+22. Customer Memory Agent (Phase 13)
+------------------------------------
+
+22.1 هدف
+- فعال‌سازی Customer Memory Agent (خروج از Skeleton)
+- تحلیل Memory موجود → Customer Profile (بدون Memory Store جدید)
+- Memory Layer (Phase 5) / Conversation / Workflow / Supervisor / Adaptive /
+  Planning / RAG / Agentهای فعلی: بدون بازنویسی
+- افزایش Token < 2٪
+- Negotiation / Follow-up همچنان Skeleton
+
+22.2 Architecture Diagram
+
+Memory Layer (reuse read-only)
+Conversation Session / Workflow Context
+Analysis / Recommendation shared signals
+        ↓
+Customer Memory Agent
+  ├─ PreferenceExtractor
+  ├─ RelationshipAnalyzer
+  └─ CustomerProfileBuilder
+        ↓
+Structured Customer Profile (خارج از Prompt)
+  + compact hint «=== پروفایل مشتری ===»
+        ↓
+LLM (فقط hint فشرده)
+Profile object → Recommendation / Negotiation / Follow-up (via g.ai_customer_profile)
+
+22.3 Customer Profile
+CustomerPreferences, Budget Profile, Location Preferences,
+Property Interests, Interaction Style, Last Activities,
+Relationship Score, Confidence, Next Suggested Action
+
+22.4 Folder Structure
+app/agents/customer_memory/
+  interfaces.py, config.py, cache.py, preferences.py,
+  relationship.py, builder.py, manager.py, agent.py,
+  service.py, di.py, __init__.py
+
+22.5 فایل‌ها / کلاس‌ها
+- CustomerMemoryAgent (active)
+- DefaultCustomerMemoryManager
+- RulePreferenceExtractor, RuleRelationshipAnalyzer, RuleCustomerProfileBuilder
+- MemoryCustomerProfileCache (in-process؛ نه Memory Store)
+- CustomerProfile / CustomerPreferences
+
+22.6 Integration
+- Memory: retrieve/list از لایه موجود؛ learn/write ندارد
+- Conversation/Workflow: get_conversation_obs + FileSessionStore (read)
+- Recommendation: shared memory_prefs + get_customer_profile() برای فازهای بعد
+- Selector: keywords پروفایل/ترجیح/سابقه → customer_memory
+- generate_reply: inject compact hint (بودجه ~55 chars)
+- Env: VINOR_CUSTOMER_MEMORY_ENABLED, HINT_CHARS, CACHE, INJECT_HINT
+
+22.7 Benchmark / Token / Performance
+scripts/benchmark_customer_memory_agent.py
+- greeting:         delta=+0.00% | cm_tokens=0
+- property_search:  delta=+0.00% | cm_tokens=0
+- customer_memory:  delta=+1.67% | cm_tokens≈14 | reuse_memory=True
+  latency≈8.5ms | under 2% cap
+- no_new_memory_store=True
+- Tests: 8/8 PASS
+
+
+23. Negotiation Agent (Phase 14)
+--------------------------------
+
+23.1 هدف
+- فعال‌سازی Negotiation Agent (خروج از Skeleton)
+- تولید Negotiation Strategy + Plan (بدون متن مذاکره)
+- فقط Reuse خروجی Analysis / Recommendation / Customer Profile / Workflow
+- بدون Search / RAG / Memory جدید؛ بدون Tool جدید
+- افزایش Token < 2٪
+- Follow-up همچنان Skeleton
+
+23.2 Architecture Diagram
+
+Customer Profile + Recommendation + Analysis + Workflow Context
+        ↓
+Negotiation Agent
+  ├─ NegotiationRiskAnalyzer
+  ├─ NegotiationStrategyBuilder
+  └─ NegotiationPlanner
+        ↓
+NegotiationPlan (خارج از Prompt)
+  → g.ai_negotiation_plan / shared["negotiation_plan"]
+  + compact hint «=== مذاکره ===» (≤60 chars)
+        ↓
+LLM (فقط hint)
+
+23.3 Negotiation Plan
+TargetPrice, MinimumPrice, MaximumPrice, SuggestedOffer,
+RiskScore/Level, Confidence, RecommendedStrategy, RecommendedTone,
+SuggestedActions, DealProbability, NextAction
+
+23.4 Folder Structure
+app/agents/negotiation/
+  interfaces.py, config.py, cache.py, risk.py, strategy.py,
+  planner.py, manager.py, agent.py, service.py, di.py, __init__.py
+
+23.5 کلاس‌ها
+- NegotiationAgent (active)
+- DefaultNegotiationManager, RuleNegotiationPlanner
+- RuleNegotiationRiskAnalyzer, RuleNegotiationStrategyBuilder
+- NegotiationPlan, MemoryNegotiationCache
+
+23.6 Integration
+- Selector: مذاکره/چانه/تخفیف → negotiation
+- generate_reply: inject compact hint
+- Env: VINOR_NEGOTIATION_ENABLED, HINT_CHARS(≤60), CACHE, INJECT_HINT
+
+23.7 Benchmark / Token / Performance
+scripts/benchmark_negotiation_agent.py
+- greeting:        delta=+0.00%
+- property_search: delta=+0.00%
+- negotiation:     delta=+1.68% | neg_tokens≈12 | reuse_*=True
+  latency≈8ms | under 2% cap
+- no_dialogue_text=True
+- Tests: 6/6 PASS
+
+
+24. Customer Success Agent (Phase 15)
+------------------------------------
+
+24.1 هدف
+- فعال‌سازی Follow-up / Customer Success Agent (آخرین Skeleton)
+- مدیریت چرخه ارتباط پس از تعامل: Stage / Next Action / Follow-up Plan
+- فقط Reuse Profile / Negotiation / Recommendation / Analysis / Workflow
+- بدون Search / RAG / Memory جدید؛ بدون متن Follow-up
+- افزایش Token < 2٪
+- هیچ Skeleton فعالی باقی نماند
+
+24.2 Architecture Diagram
+
+Customer Profile + Negotiation Plan + Recommendation + Analysis + Workflow
+        ↓
+Customer Success Agent (agent_id=follow_up)
+  ├─ ConversionAnalyzer
+  ├─ NextActionBuilder
+  └─ FollowUpPlanner
+        ↓
+CustomerSuccessPlan (خارج از Prompt)
+  → g.ai_customer_success / shared["customer_success"]
+  + compact hint «=== پیگیری ===» (≤60 chars)
+        ↓
+LLM (فقط hint)
+
+24.3 Customer Success Plan / Lifecycle
+Stages: aware → interested → evaluating → negotiating → ready → won|dormant
+Fields: Customer Stage, Next Action, FollowUp Type/Time, Priority,
+        Conversion Probability, Urgency, Reason, Confidence
+
+24.4 Folder Structure
+app/agents/customer_success/
+  interfaces.py, config.py, cache.py, conversion.py, actions.py,
+  planner.py, manager.py, agent.py, service.py, di.py, __init__.py
+
+24.5 کلاس‌ها
+- CustomerSuccessAgent (active, AGENT_FOLLOW_UP)
+- DefaultCustomerSuccessManager, RuleFollowUpPlanner
+- RuleConversionAnalyzer, RuleNextActionBuilder
+- CustomerSuccessPlan, MemoryCustomerSuccessCache
+
+24.6 Integration
+- Selector: پیگیری/فالوآپ/اقدام بعدی → follow_up
+- generate_reply: inject compact hint
+- Env: VINOR_CUSTOMER_SUCCESS_ENABLED, HINT_CHARS(≤60), CACHE, INJECT_HINT
+
+24.7 Benchmark / Token / Performance
+scripts/benchmark_customer_success_agent.py
+- greeting:         delta=+0.00%
+- property_search:  delta=+0.00%
+- customer_success: delta=+1.45% | cs_tokens≈10 | reuse_*=True
+  latency≈14ms | under 2% cap
+- no_followup_text=True | skeletons_remaining=0
+- Tests: 6/6 PASS (+ related agent tests updated)
+
+
+25. Parallel Multi-Agent Collaboration (Phase 16)
+-------------------------------------------------
+
+25.1 هدف
+- اجرای هم‌زمان چند Agent موجود (بدون Agent جدید)
+- Supervisor فقط Workflow/route را تعیین می‌کند
+- Execution Planner گراف DAG را می‌سازد
+- ParallelExecutor موج‌های مستقل را همزمان اجرا می‌کند
+- AgentResultMerger یک Object + یک compact hint برای LLM
+- افزایش Token < 3٪؛ بدون Search/RAG/Memory/Tool تکراری
+
+25.2 Architecture Diagram
+
+Supervisor (route)
+  ↓
+Execution Planner → Dependency Graph (DAG)
+  ↓
+Parallel Executor (waves)
+  ├─ Wave0: Search ∥ Customer Memory
+  ├─ Wave1: Analysis
+  ├─ Wave2: Recommendation
+  ├─ Wave3: Negotiation
+  └─ Wave4: Customer Success
+  ↓
+Agent Result Merger → compact hint «=== همکاری ===»
+  ↓
+Decision Engine (Phase 17) → Final Decision Object + «=== تصمیم ===»
+  ↓
+LLM (Decision hint ترجیح؛ نه خروجی تک‌تک Agentها)
+shared[] برای همه Agentها مشترک است
+
+25.3 Dependency Graph
+Search → Analysis → Recommendation → Negotiation → Customer Success
+Customer Memory مستقل (موازی با Search/Analysis در صورت انتخاب)
+
+25.4 Folder Structure
+app/agents/parallel/
+  interfaces.py, config.py, graph.py, planner.py,
+  executor.py, merger.py, manager.py, service.py, di.py, __init__.py
+
+25.5 کلاس‌ها
+- RuleExecutionPlanner, StaticDependencyGraphBuilder
+- ThreadPoolParallelExecutor, CompactAgentResultMerger
+- DefaultParallelCollaborationManager
+- ExecutionContext / ExecutionPlan / ExecutionResult / DependencyGraph
+
+25.6 Integration
+- prepare_agent → parallel path وقتی VINOR_PARALLEL_AGENTS=1
+- fallback به DefaultAgentManager (sequential single-agent)
+- generate_reply: اگر Decision selected → فقط decision hint؛ وگرنه merge hint
+- Env: VINOR_PARALLEL_AGENTS, WORKERS, MERGE_HINT_CHARS, INJECT_MERGE_HINT
+
+25.7 Benchmark (Sequential vs Parallel)
+scripts/benchmark_parallel_collaboration.py
+- greeting:        delta=+0.00% | speedup≈1.54x
+- property_search: delta=+0.82% | speedup≈1.30x | parallel_tasks=1
+- recommendation:  delta=+0.91% | waves=3 | merge_tokens≈6
+- Max token increase: +0.91% (under 3% cap)
+- Tests: 8/8 PASS (+ agents layer)
+
+
+================================================================================
+26. Decision Engine (Phase 17)
+================================================================================
+
+26.1 هدف
+- آخرین مرحله قبل از LLM: Merge / Score / Conflict Resolve / Final Decision
+- Rule-based؛ بدون LLM / Prompt / API / Agent جدید / Search / RAG / Memory جدید
+- Decision Object خارج از Prompt؛ Hint فشرده ≤70 کاراکتر؛ افزایش Token < 1٪
+
+26.2 Architecture Diagram
+
+Parallel Collaboration (merged shared)
+  ↓
+Decision Scorer (weighted agents)
+  ↓
+Conflict Resolver (rules + alternatives)
+  ↓
+Decision Builder → Decision Object
+  ↓
+g.ai_decision + shared["decision"]
+  ↓
+LLM ← فقط «=== تصمیم ===» hint (در صورت selected_property)
+
+26.3 Decision Flow
+1) جمع‌آوری خروجی Agentها از parallel_merge + shared (+ soft-pull از g)
+2) Score هر property با وزن‌های Config
+3) Resolve Conflict (close scores / rec vs neg / warnings)
+4) انتخاب winner + نگهداری alternatives
+5) ساخت Decision Object + compact hint
+6) Observability روی g.ai_decision_obs
+
+26.4 Conflict Resolution
+- close_scores اگر اختلاف top2 < conflict_margin
+- rec_vs_neg: اگر negotiation deal_probability≥0.7 → prefer negotiation
+- در غیر این صورت prefer recommendation
+- warning روی winner → alternative نگه داشته می‌شود
+- Conflictها در Decision Object ثبت می‌شوند
+
+26.5 Weighted Decision
+وزن‌ها (قابل تنظیم با Env):
+  VINOR_DECISION_W_SEARCH | ANALYSIS | RECOMMENDATION |
+  NEGOTIATION | MEMORY | SUCCESS
+پیش‌فرض نرمال‌شده: Search 0.10 / Analysis 0.20 / Recommendation 0.30 /
+  Negotiation 0.20 / Memory 0.10 / Success 0.10
+سایر: VINOR_DECISION_ENABLED, INJECT_HINT, HINT_CHARS(≤70), CONFLICT_MARGIN
+
+26.6 Decision Object
+selected_property, alternative_properties, decision_score, confidence,
+reasons, warnings, recommended_actions, next_step, conflicts
+
+26.7 Folder Structure
+app/decision/
+  interfaces.py, config.py, scorer.py, conflict.py, builder.py,
+  engine.py, manager.py, service.py, di.py, __init__.py
+
+26.8 کلاس‌ها (DI)
+- DecisionConfig / DecisionRequest / DecisionResult / ScoredCandidate
+- RuleDecisionScorer, RuleConflictResolver, RuleDecisionBuilder
+- RuleDecisionEngine, DefaultDecisionManager
+- Protocols: DecisionEngine, DecisionManager, DecisionScorer,
+  ConflictResolver, DecisionBuilder
+
+26.9 Integration
+- prepare_agent: بعد از run_parallel_collaboration → run_decision(...)
+- generate_reply: اگر decision.selected_property → فقط decision hint
+  وگرنه parallel merge hint؛ Sequential per-agent فقط وقتی parallel merge نبود
+- Analytics: decision_time_ms, decision_score, confidence, conflict_count,
+  alternative_count, decision_selected_property, decision_tokens,
+  conflict_resolve_time_ms
+
+26.10 Benchmark / Token / Performance
+scripts/benchmark_decision_engine.py
+- Decision vs Parallel-only (بدون Decision)
+- گزارش: Decision Build Time, Conflict Resolve Time, Token Δ, Latency
+- هدف: Token Δ < 1٪؛ Hint ≤70 chars؛ بدون متن تصمیم در Prompt body
+
+26.11 Performance Report / Token Report
+Live (parallel path; بدون کد ملک در env فعلی → fail-open):
+- greeting / property_search / recommendation: delta=+0.00%
+Synthetic (با candidates واقعی):
+- Decision Build Time ≈ 0.13ms
+- Conflict Resolve Time ≈ 0.00ms (زیر دقت ms)
+- score≈0.71 | confidence≈0.77 | conflicts=3 | alts=2
+- hint_len=38 (≤70) | hint_tokens≈10
+- Token Δ vs parallel merge hint: −0.10% (under 1% cap)
+- Tests: 7/7 PASS (+ parallel 8/8)
+- no_llm_decision=True | no_agent_rerun=True
+
+
+================================================================================
+27. Evaluation & Observability Platform (Phase 17.5)
+================================================================================
+
+27.1 هدف
+- مانیتورینگ و ارزیابی کل Pipeline از Conversation تا Response
+- بدون تغییر رفتار Agentها / Prompt / Search / RAG / Memory / Tools
+- افزایش Token هدف: 0٪ — هیچ داده Evaluation وارد Prompt نمی‌شود
+
+27.2 Architecture Diagram
+
+Pipeline (موجود، بدون تغییر)
+  Conversation → Workflow → Supervisor → Adaptive → Planning
+  → Memory → RAG → Parallel → Decision → LLM/Tools
+       ↓ (پس از analytics موجود)
+  Evaluation Platform
+    MetricsCollector → PerformanceCollector → CostCollector
+       ↓
+    QualityEvaluator (rule-based)
+       ↓
+    EvaluationRecord → instance/data/ai_evaluation.jsonl
+       ↓
+    AnalyticsAggregator (daily / weekly / monthly)
+
+27.3 Metrics (per request)
+Request ID, User ID, Role, Intent, Workflow, Selected Agents,
+Execution Graph, Decision Score/Confidence, Property Selected,
+Alternatives, Prompt/Completion/Total Tokens, Estimated Cost,
+Latency, RAG/Memory/Planning/Decision/LLM/Tool Time,
+Errors, Warnings, Retry Count
++ Layer snapshots: Conversation, Workflow, Supervisor, Adaptive,
+  Planning, Memory, RAG, Parallel, Decision, LLM, Tools
+
+27.4 Evaluation (Rule-based)
+Accuracy, Conflict Rate, Decision Quality, Recommendation Quality,
+Negotiation Quality, Customer Success Quality, Overall
+
+27.5 Analytics
+Daily / Weekly / Monthly:
+  Top Queries, Failed Queries, Most Used Agents,
+  Average Cost / Token / Latency / Quality / Conflict Rate
+
+27.6 Storage / Observability
+- Log جدا: instance/data/ai_evaluation.jsonl (جدا از ai_token_analytics.jsonl)
+- g.ai_evaluation / g.ai_evaluation_obs (خارج از Prompt)
+- Env: VINOR_EVALUATION_ENABLED, VINOR_EVALUATION_STORE,
+  VINOR_EVALUATION_TOP_QUERIES
+
+27.7 Folder Structure
+app/evaluation/
+  interfaces.py, config.py, metrics.py, performance.py, cost.py,
+  quality.py, analytics.py, storage.py, manager.py, service.py,
+  di.py, __init__.py
+
+27.8 کلاس‌ها (DI)
+- EvaluationConfig / EvaluationRecord / LayerMetrics / QualityScores /
+  AnalyticsSummary
+- RowMetricsCollector, RowPerformanceCollector, RowCostCollector
+- RuleQualityEvaluator, RuleAnalyticsAggregator
+- DefaultEvaluationManager
+- Protocols: EvaluationManager, MetricsCollector, PerformanceCollector,
+  CostCollector, QualityEvaluator, AnalyticsAggregator
+
+27.9 Integration
+- _record_request_analytics → record_token_analytics(row)
+  سپس record_evaluation(analytics_row=row) — fail-open
+- هیچ تغییر در messages / hints / agents
+
+27.10 Benchmark / Token / Performance
+scripts/benchmark_evaluation_platform.py
+- Token Δ = +0.00%
+- eval_ms ≈ 2–3ms (outside critical LLM path overhead only post-response)
+- Tests: 8/8 PASS
+- no_prompt_injection=True | no_agent_rerun=True
+
+
+================================================================================
+28. Business Intelligence Layer (Phase 18)
+================================================================================
+
+28.1 هدف
+- موتور تحلیل کسب‌وکار املاک روی داده‌های موجود
+- تولید Business Signals برای Decision Engine / Agentها (مصرف اختیاری)
+- بدون Agent / Prompt / Search / RAG / Memory / Tool جدید
+- افزایش Token هدف: 0٪ — Hint پیش‌فرض تولید نمی‌شود
+
+28.2 Architecture Diagram
+
+Parallel → Decision → Business Intelligence
+  Inputs (reuse only):
+    Decision / Profiles / Negotiation / Recommendation /
+    Evaluation / Property Metadata / Shared Context
+       ↓
+  MarketAnalyzer ∥ PropertyAnalyzer ∥ CustomerAnalyzer ∥ TrendAnalyzer
+       ↓
+  BusinessSignalBuilder → BusinessInsights Object
+       ↓
+  g.ai_business_intelligence + shared["business_intelligence"]
+  (خارج از Prompt؛ VINOR_BI_INJECT_HINT پیش‌فرض=0)
+
+28.3 Business Signals
+Property Score, Market Attractiveness, Region Popularity,
+Price Competitiveness, Customer Purchase Probability,
+Seller Flexibility Score, Lead Quality, Demand Trend,
+Supply Trend, Listing Freshness, Recommendation Success Rate
+
+28.4 Business Insights Object
+property_insights, customer_insights, market_insights,
+business_metrics, trend_signals, opportunity_score,
+risk_indicators, signals
+
+28.5 Market / Customer / Property / Trend
+- Market: attractiveness, region popularity, price competitiveness
+- Property: score, freshness, analysis/rec blend, alternatives
+- Customer: purchase probability, seller flexibility, lead quality
+- Trend: demand/supply, recommendation success, trend_score
+
+28.6 Folder Structure
+app/business_intelligence/
+  interfaces.py, config.py, market.py, property_analyzer.py,
+  customer.py, trend.py, signals.py, manager.py, service.py,
+  di.py, __init__.py
+
+28.7 کلاس‌ها (DI)
+- BusinessIntelligenceConfig / BusinessIntelligenceRequest /
+  BusinessInsights / BusinessSignals
+- RuleMarketAnalyzer, RulePropertyAnalyzer, RuleCustomerAnalyzer,
+  RuleTrendAnalyzer, RuleBusinessSignalBuilder
+- DefaultBusinessIntelligenceManager
+- Protocols: BusinessIntelligenceManager, MarketAnalyzer,
+  PropertyAnalyzer, CustomerAnalyzer, TrendAnalyzer,
+  BusinessSignalBuilder
+
+28.8 Integration / Observability
+- prepare_agent: بعد از run_decision → run_business_intelligence
+- Analytics: bi_market_score, bi_property_score, bi_lead_score,
+  bi_trend_score, bi_opportunity_score, bi_analysis_time_ms
+- Env: VINOR_BI_ENABLED, VINOR_BI_INJECT_HINT (default 0)
+
+28.9 Performance / Token Report
+scripts/benchmark_business_intelligence.py
+- Token Δ = +0.00%
+- Analysis Time ≈ 0.35–0.45ms
+- Memory delta ≈ 29KB (tracemalloc sample)
+- Storage object ≈ 1.5KB
+- Tests: 8/8 PASS
+- no_prompt_injection=True | no_default_hint=True
+
+
+================================================================================
+29. Continuous Optimization Engine (Phase 19)
+================================================================================
+
+29.1 هدف
+- موتور بهینه‌سازی پس‌زمینه بر اساس Evaluation / BI / Analytics
+- فقط Recommendation تولید می‌کند — هیچ تغییر خودکاری اعمال نمی‌شود
+- خارج از Request Path؛ بدون تأثیر Latency / Token پاسخ
+- بدون Agent / Prompt / Search / RAG / Memory / Tool جدید در مسیر پاسخ
+
+29.2 Architecture Diagram
+
+Historical Logs (evaluation / token analytics / BI fields)
+       ↓
+  [Background / Manual / Optional Scheduler]
+       ↓
+  DecisionOptimizer | RagOptimizer | MemoryOptimizer
+  WorkflowOptimizer | PerformanceOptimizer
+       ↓
+  OptimizationReportBuilder → OptimizationReport
+       ↓
+  instance/data/optimization_reports/*.json
+  (Admin/manual visibility only — never into Prompt)
+
+29.3 Optimization Areas
+Decision Weights, Agent Selection Rules, RAG Top-K, Memory Budget,
+Planning Thresholds, Business Signal Weights, Workflow Bottlenecks,
+Latency Trends, Cost Trends
+
+29.4 OptimizationReport
+suggestions, performance_findings, cost_findings,
+recommended_config_changes, priority, expected_impact, confidence,
+estimated_gain, cost_saving | applied=False همیشه
+
+29.5 Background Execution
+- Manual: scripts/run_optimization_engine.py
+- Scheduler: VINOR_OPTIMIZATION_SCHEDULER=1 (پیش‌فرض OFF)
+- create_app فقط start_optimization_scheduler را صدا می‌زند (noop اگر خاموش)
+- هیچ فراخوانی در prepare_agent / generate_reply
+
+29.6 Folder Structure
+app/optimization/
+  interfaces.py, config.py, decision_optimizer.py, rag_optimizer.py,
+  memory_optimizer.py, workflow_optimizer.py, performance_optimizer.py,
+  report_builder.py, storage.py, manager.py, service.py, scheduler.py,
+  di.py, __init__.py
+scripts/run_optimization_engine.py
+scripts/benchmark_optimization_engine.py
+
+29.7 کلاس‌ها (DI)
+- OptimizationConfig / OptimizationContext / OptimizationSuggestion /
+  OptimizationReport
+- RuleDecisionOptimizer, RuleRagOptimizer, RuleMemoryOptimizer,
+  RuleWorkflowOptimizer, RulePerformanceOptimizer
+- DefaultOptimizationReportBuilder, DefaultOptimizationManager
+- Protocols: OptimizationManager, DecisionOptimizer, RagOptimizer,
+  MemoryOptimizer, WorkflowOptimizer, PerformanceOptimizer,
+  OptimizationReportBuilder
+
+29.8 Observability
+optimization_duration_ms, optimization_count, recommended_changes,
+estimated_gain, cost_saving | applied=False
+
+29.9 Performance / Token Report
+scripts/benchmark_optimization_engine.py
+- Token Δ = +0.00% (outside request path)
+- Background runtime ≈ 9ms
+- Memory Δ ≈ 132KB | Storage sample ≈ 83KB (15 runs)
+- Tests: 10/10 PASS
+- no_auto_apply=True | scheduler_default_off=True
+
+
+================================================================================
+30. Autonomous Goal Engine (Phase 20)
+================================================================================
+- بعد از Conversation، قبل از Workflow/Supervisor
+- Goal Object فقط؛ بدون Prompt/Hint/اجرای تصمیم
+- g.ai_goals + shared["goals"] + session file در instance/data/ai_goals/
+- کلاس‌ها: Goal, GoalType/Priority/Status, GoalExtractor, GoalRegistry,
+  GoalPrioritizer, GoalLifecycleManager, DefaultGoalManager
+- Token: +0.00%
+
+
+================================================================================
+31. World Model (Phase 21)
+================================================================================
+- State داخلی Property/Customer/Partner/Market/Conversation
+- g.ai_world_model + shared["world_model"]
+- RuleWorldReasoner از Decision/BI/Goals/Profile (reuse)
+- بدون متن/Prompt
+
+
+================================================================================
+32. Long Horizon Planner (Phase 22)
+================================================================================
+- PlanGraph / PlanNode / PlanEdge فقط — بدون اجرای Task/Tool
+- shared["long_plan"] / g.ai_long_plan
+- RuleHorizonPlanner + ExecutionGraphBuilder (waves)
+
+
+================================================================================
+33. Self Learning Engine (Phase 23)
+================================================================================
+- PatternExtractor / SuccessDetector / FailureDetector / LearningManager
+- Rule-based؛ بدون Fine-Tune/Prompt
+- ذخیره: instance/data/self_learning/
+- Background: scripts/run_autonomy_background.py
+
+
+================================================================================
+34. Self Reflection Engine (Phase 24)
+================================================================================
+- پس از analytics/evaluation: Goal کامل؟ Agent مناسب؟ Tool زیاد؟ Cost؟ Reply؟
+- shared["reflection"] / g.ai_reflection
+- بدون تغییر Prompt
+
+
+================================================================================
+35. Self Improvement Engine (Phase 25)
+================================================================================
+- پیشنهاد از Reflection + Learning — applied همیشه False
+- instance/data/self_improvement/
+
+
+================================================================================
+36. Executive AI (Phase 26)
+================================================================================
+- Orchestrator شناختی: ExecutivePlan flags (goals/world/long_plan/supervisor/
+  agents/decision/bi/reflection)
+- هیچ Agent/Prompt/متن جدید
+- generate_reply و prepare_agent فقط در صورت flag لایه را اجرا می‌کنند
+- Fail-open: disabled → full passthrough (رفتار قبلی)
+
+
+================================================================================
+37. Autonomous Business AI (Phase 27)
+================================================================================
+- گزارش مدیریتی از Evaluation/BI logs
+- best regions, sale probability, conversion, partner performance,
+  opportunities, trends, revenue proxy, growth suggestions
+- instance/data/business_ai/ — خارج از Prompt
+
+
+================================================================================
+38. AI Organization / True Autonomy OS (Phase 28)
+================================================================================
+
+38.1 معماری نهایی (v4.0)
+
+Client
+  ↓
+Conversation Engine
+  ↓
+Executive AI (flags)
+  ├─ Goal Engine
+  ├─ Supervisor → Workflow / Adaptive / Planning
+  ├─ Memory / RAG (موجود)
+  ├─ Multi-Agent Parallel → Decision → BI → World Model → Long Plan
+  └─ LLM (Prompt موجود — بدون injection لایه‌های جدید)
+  ↓
+Evaluation → Reflection
+  ↓ (Background)
+Self Learning / Self Improvement / Continuous Optimization / Business AI
+
+38.2 قابلیت‌های Production-Ready
+Conversation, Workflow, Goal, World Model, Long Horizon Planner,
+Planning, Memory, RAG, Multi-Agent, Decision, BI, Self Learning,
+Self Reflection, Self Improvement, Continuous Optimization,
+Executive AI, Autonomous Business AI
+
+38.3 اصول ماندگار
+Non-breaking · DI · Fail-open · Thread-safe · Objects خارج Prompt ·
+Token هدف 0% (سقف 2%) · بدون Agent/Prompt جدید در مسیر پاسخ
+
+
 ================================================================================
 Change Log
 ================================================================================
+
+[2026-07-16 21:50 +03:30] Phases 20–28 — True Autonomy Stack → v4.0
+  - Phase 20: app/goals (Goal Engine)
+  - Phase 21: app/world_model
+  - Phase 22: app/long_planner
+  - Phase 23: app/self_learning
+  - Phase 24: app/self_reflection
+  - Phase 25: app/self_improvement
+  - Phase 26: app/executive (Orchestrator)
+  - Phase 27: app/business_ai
+  - Phase 28: AI Organization مستندسازی + هماهنگی Executive
+  - Integration: Conversation→Goals/Executive→Supervisor/Agents؛
+    پس از Decision: BI/World/LongPlan؛ پس از analytics: Reflection
+  - Background: scripts/run_autonomy_background.py
+  - Benchmark: Token +0.00%؛ autonomy_stack≈142ms؛ تست‌ها 10/10 PASS
+  - بدون Agent جدید / بدون تغییر Prompt/Context/Agents موجود
+  - Doc Version -> v4.0
+
+[2026-07-16 21:36 +03:30] Phase 19 — Continuous Optimization Engine
+  - افزودن app/optimization: Decision/RAG/Memory/Workflow/Performance optimizers (DI)
+  - فقط پیشنهاد؛ applied همیشه False؛ ذخیره در optimization_reports/
+  - اجرای Background/Manual؛ Scheduler پیش‌فرض خاموش
+  - بدون اتصال به Request Path / Prompt / Agent
+  - Benchmark: Token +0.00%؛ bg≈9ms؛ تست‌ها 10/10 PASS
+  - Doc Version -> v3.1
+
+[2026-07-16 21:32 +03:30] Phase 18 — Business Intelligence Layer
+  - افزودن app/business_intelligence: Market/Property/Customer/Trend/Signals (DI)
+  - BusinessInsights روی g.ai_business_intelligence + shared["business_intelligence"]
+  - فقط reuse داده‌های موجود؛ بدون Agent/Prompt/Search/RAG/Memory جدید
+  - Hint پیش‌فرض خاموش (0% token)
+  - Observability: market/property/lead/trend/opportunity + analysis_time
+  - Benchmark: Token +0.00%؛ analysis≈0.4ms؛ تست‌ها 8/8 PASS
+  - Doc Version -> v3.0
+
+[2026-07-16 21:27 +03:30] Phase 17.5 — AI Evaluation & Observability Platform
+  - افزودن app/evaluation: Metrics/Performance/Cost/Quality/Analytics (DI)
+  - ثبت EvaluationRecord بعد از token analytics؛ خارج از Prompt
+  - Rule-based quality؛ Daily/Weekly/Monthly aggregator
+  - Storage جدا: ai_evaluation.jsonl
+  - Benchmark: Token +0.00%؛ eval≈3ms؛ تست‌ها 8/8 PASS
+  - بدون Agent/Prompt/Search/RAG/Memory/Tool جدید
+  - Doc Version -> v2.9
+
+[2026-07-16 21:22 +03:30] Phase 17 — Decision Engine
+  - افزودن app/decision: Scorer / ConflictResolver / Builder / Engine / Manager (DI)
+  - بعد از Parallel Collaboration: Final Decision Object روی g.ai_decision + shared["decision"]
+  - Rule-based وزن‌دار؛ بدون LLM/Prompt/Agent جدید؛ بدون re-run Search/RAG/Memory
+  - Hint «=== تصمیم ===» ≤70 chars؛ جایگزین parallel merge hint هنگام selected
+  - Observability: decision_time/score/confidence/conflicts/alts/tokens
+  - Benchmark: live +0.00%؛ synthetic −0.10% (<1%)؛ build≈0.13ms
+  - تست‌ها: 7/7 PASS
+  - Doc Version -> v2.8
+
+[2026-07-16 21:12 +03:30] Phase 16 — Parallel Multi-Agent Collaboration
+  - افزودن app/agents/parallel: Planner / Graph / Executor / Merger (DI)
+  - DAG روی Agentهای موجود؛ Customer Memory موازی با Search
+  - Merge Layer: یک Object + یک hint برای LLM؛ بدون Prompt تکراری
+  - prepare_agent → parallel با fallback sequential
+  - Observability: parallel_tasks, execution_graph, merged/skipped agents
+  - Benchmark: +0.82%/+0.91% token (<3%)؛ latency بهتر از sequential
+  - تست‌ها: 8/8 PASS
+  - Doc Version -> v2.7
+
+[2026-07-16 21:06 +03:30] Phase 15 — Customer Success / Follow-up Agent (Production Ready)
+  - فعال‌سازی CustomerSuccessAgent روی AGENT_FOLLOW_UP؛ آخرین Skeleton حذف شد
+  - app/agents/customer_success با DI: Conversion/Actions/Planner/Manager/Cache
+  - CustomerSuccessPlan خارج از Prompt؛ hint ≤60 chars؛ بدون متن Follow-up
+  - Reuse Profile/Negotiation/Recommendation/Analysis/Workflow/Planning
+  - Observability: stage/conversion/next_action/priority/confidence/reuse_*
+  - Benchmark: customer_success +1.45% (<2%)؛ greeting/search +0.00%
+  - تست‌ها: 6/6 PASS (+ سازگاری Multi-Agent)
+  - Doc Version -> v2.6
+
+[2026-07-16 21:00 +03:30] Phase 14 — Negotiation Agent (Production Ready)
+  - فعال‌سازی NegotiationAgent؛ Skeleton حذف شد (Follow-up ماند)
+  - app/agents/negotiation با DI: Risk/Strategy/Planner/Manager/Cache
+  - NegotiationPlan خارج از Prompt؛ hint ≤60 chars؛ بدون متن مذاکره
+  - Reuse Analysis/Recommendation/Customer Profile/Workflow/Planning
+  - Observability: negotiation_time/confidence/risk/deal_probability/reuse_*
+  - Benchmark: negotiation +1.68% (<2%)؛ greeting/search +0.00%
+  - تست‌ها: 6/6 PASS
+  - Doc Version -> v2.5
+
+[2026-07-16 20:55 +03:30] Phase 13 — Customer Memory Agent (Production Ready)
+  - فعال‌سازی CustomerMemoryAgent؛ Skeleton حذف شد (Negotiation/Follow-up ماندند)
+  - app/agents/customer_memory با DI: Extractor/Analyzer/Builder/Manager/Cache
+  - Structured Customer Profile خارج از Prompt؛ compact hint بودجه‌دار
+  - فقط Reuse Memory Layer موجود؛ بدون Memory Store / RAG / Search جدید
+  - Observability: profile_build_time, relationship_score, preference_count, reuse_*
+  - Benchmark: customer_memory +1.67% (<2%)؛ greeting/search +0.00%
+  - تست‌ها: 8/8 PASS
+  - Doc Version -> v2.4
+
+[2026-07-16 20:42 +03:30] Phase 12 — Workflow Engine (Full Process Workflows)
+  - افزودن app/workflow با State Machine / Step Engine / Validation / Registry
+  - ۷ Workflow Object: Registration, Editing, Partner, Visit, Deal, Support, General
+  - Conversation Engine فقط انتخاب می‌کند؛ Engine اجرای Step را انجام می‌دهد
+  - Validation بدون LLM؛ Context خارج از Prompt؛ extra_tokens=0
+  - Supervisor/Agents بدون تغییر؛ بدون Agent جدید
+  - Observability: workflow_name/state/step/completed/missing/validation_errors
+  - Benchmark: pass-through +0.00% (<3%)؛ form early-return بدون Token اضافه
+  - تست‌ها: 16/16 PASS
+  - Doc Version -> v2.3
+
+[2026-07-16 20:35 +03:30] Phase 11.5 — Conversation Engine (Form → Chat UX)
+  - افزودن app/conversation قبل از Supervisor (Identity/Role/Intent/Workflow/State/Session)
+  - تبدیل فرم‌های ثبت ملک / همکاری / بازدید / معامله / پشتیبانی به Conversation Workflow
+  - HTTP forms برای سازگاری باقی؛ مسیر اصلی گفتگو
+  - Pass-through برای Search/Compare/Recommend/… بدون تغییر Agentها
+  - Early return در COLLECTING/COMPLETED → بدون Supervisor/LLM (extra_tokens=0)
+  - Observability: role/intent/workflow/state/step/fields/session_duration
+  - Benchmark: pass-through +0.00%؛ form early-return بدون Token اضافه (<5%)
+  - تست‌ها: 7/7 PASS
+  - Doc Version -> v2.2
+
+[2026-07-16 20:25 +03:30] Phase 11 — Recommendation Agent (Production Ready)
+  - فعال‌سازی RecommendationAgent؛ Skeleton حذف شد
+  - app/agents/recommendation با DI: Engine/Cache/Manager (Rule ranking)
+  - Structured Recommendation Object + compact hint بودجه‌دار
+  - Reuse Search/Analysis/Memory/Planning؛ بدون re-query
+  - Observability: recommendation_time/score/selected_property/cache/reuse_*
+  - Benchmark: recommendation +2.63% token (<3%)؛ search/greeting +0.00%
+  - تست‌ها: 20/20 PASS
+  - Doc Version -> v2.1
+
+[2026-07-16 20:19 +03:30] Phase 10 — Property Analysis Agent (Production Ready)
+  - فعال‌سازی PropertyAnalysisAgent؛ Skeleton حذف شد (سایر Agentها Skeleton ماندند)
+  - app/agents/analysis با DI: Strategy/Cache/Manager (Rule-First)
+  - Search→Analysis handoff بدون re-query / re-RAG / re-tool
+  - Compact hint بودجه‌دار؛ بدون Prompt بزرگ
+  - Observability: analysis_time/tokens/cache_hit/reused_*
+  - Benchmark: compare +2.19% token (<3%)؛ search/greeting +0.00%
+  - تست‌ها: 14/14 PASS
+  - Doc Version -> v2.0
 
 [2026-07-16 16:22 +03:30] Phase 9 — Adaptive Autonomous Execution
   - افزودن app/adaptive با State Machine / Confidence / Retry / Quality / Recovery

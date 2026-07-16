@@ -987,63 +987,134 @@ def generate_reply(
     from .intents import normalize_chip_intent
 
     intent = normalize_chip_intent(chip_intent)
-    # Supervisor / Orchestrator (rule-based): decide which components to run.
+    # Conversation Engine (Phase 11.5): before Supervisor — form workflows via chat.
+    conversation_handled = False
     try:
-        from app.supervisor.service import orchestrate_request, set_supervisor_context
+        from app.conversation.service import try_conversation_engine
 
-        sup_out = orchestrate_request(
+        ce = try_conversation_engine(
             message=text,
+            user_key=key,
             audience=aud,
             voice=voice,
             chip_intent=intent or "",
-            user_key=key,
+            thread_id=thread_id,
         )
-        set_supervisor_context(sup_out)
-        # Multi-Agent (Phase 8): Supervisor route → AgentSelector (lazy, at most one).
-        try:
-            from app.agents.service import prepare_agent_after_supervisor
+        if isinstance(ce, dict) and ce.get("ok") and ce.get("handled") and not ce.get("pass_to_supervisor"):
+            conversation_handled = True
+            # Executive + Goals still run (objects outside prompt); then early return.
+            try:
+                from app.executive.service import plan_execution
+                from app.goals.service import run_goals
 
-            route = ""
-            budget = 3000
-            if sup_out is not None:
-                route = str(sup_out.workflow.route or "")
-                budget = int(sup_out.workflow.flags.context_budget_chars or 3000)
-            prepare_agent_after_supervisor(
+                plan_execution(
+                    message=text,
+                    audience=aud,
+                    intent=intent or "",
+                    conversation_handled=True,
+                )
+                run_goals(
+                    message=text,
+                    user_key=key,
+                    audience=aud,
+                    intent=intent or "",
+                )
+            except Exception:
+                pass
+            return {
+                "ok": True,
+                "reply": str(ce.get("reply") or "").strip(),
+                "land_codes": [],
+                "land_cards": [],
+                "agent_actions": list(ce.get("agent_actions") or []),
+                "meta": ce.get("meta") or {"provider": "conversation_engine"},
+            }
+    except Exception:
+        pass
+
+    # Executive AI (Phase 26) + Goal Engine (Phase 20) — before Supervisor/Workflow.
+    exec_plan = None
+    try:
+        from app.executive.service import plan_execution
+        from app.goals.service import run_goals
+
+        exec_plan = plan_execution(
+            message=text,
+            audience=aud,
+            intent=intent or "",
+            conversation_handled=False,
+        )
+        if exec_plan.run_goals:
+            run_goals(
                 message=text,
-                route=route,
+                user_key=key,
+                audience=aud,
+                intent=intent or "",
+            )
+    except Exception:
+        exec_plan = None
+
+    # Supervisor / Orchestrator (rule-based): decide which components to run.
+    try:
+        run_sup = exec_plan is None or bool(exec_plan.run_supervisor)
+        if run_sup:
+            from app.supervisor.service import orchestrate_request, set_supervisor_context
+
+            sup_out = orchestrate_request(
+                message=text,
                 audience=aud,
                 voice=voice,
                 chip_intent=intent or "",
                 user_key=key,
-                thread_id=thread_id,
-                context_budget_chars=budget,
             )
-            # Adaptive Execution (Phase 9): state/confidence outside Prompt.
+            set_supervisor_context(sup_out)
+            # Multi-Agent (Phase 8): Supervisor route → AgentSelector (lazy, at most one).
             try:
-                from app.adaptive.service import (
-                    after_agent_prepare_adaptive,
-                    begin_adaptive,
-                )
-                from app.agents.service import get_agent_obs
+                run_ag = exec_plan is None or bool(exec_plan.run_agents)
+                if run_ag:
+                    from app.agents.service import prepare_agent_after_supervisor
 
-                begin_adaptive(
-                    message=text,
-                    route=route,
-                    audience=aud,
-                    voice=voice,
-                    chip_intent=intent or "",
-                    user_key=key,
-                )
-                aobs = get_agent_obs()
-                after_agent_prepare_adaptive(
-                    agent_status=str(aobs.get("agent_status") or ""),
-                    used_components=list(aobs.get("agent_used_components") or []),
-                    selected_agent=str(aobs.get("selected_agent") or ""),
-                )
+                    route = ""
+                    budget = 3000
+                    if sup_out is not None:
+                        route = str(sup_out.workflow.route or "")
+                        budget = int(sup_out.workflow.flags.context_budget_chars or 3000)
+                    prepare_agent_after_supervisor(
+                        message=text,
+                        route=route,
+                        audience=aud,
+                        voice=voice,
+                        chip_intent=intent or "",
+                        user_key=key,
+                        thread_id=thread_id,
+                        context_budget_chars=budget,
+                    )
+                    # Adaptive Execution (Phase 9): state/confidence outside Prompt.
+                    try:
+                        from app.adaptive.service import (
+                            after_agent_prepare_adaptive,
+                            begin_adaptive,
+                        )
+                        from app.agents.service import get_agent_obs
+
+                        begin_adaptive(
+                            message=text,
+                            route=route,
+                            audience=aud,
+                            voice=voice,
+                            chip_intent=intent or "",
+                            user_key=key,
+                        )
+                        aobs = get_agent_obs()
+                        after_agent_prepare_adaptive(
+                            agent_status=str(aobs.get("agent_status") or ""),
+                            used_components=list(aobs.get("agent_used_components") or []),
+                            selected_agent=str(aobs.get("selected_agent") or ""),
+                        )
+                    except Exception:
+                        pass
             except Exception:
                 pass
-        except Exception:
-            pass
     except Exception:
         try:
             from app.supervisor.service import set_supervisor_context
@@ -1164,6 +1235,179 @@ def generate_reply(
             messages.append({"role": "system", "content": plan_out.compact_hint})
         if seed_tools and plan_out.seed_messages:
             messages.extend(plan_out.seed_messages)
+    # Agents → Prompt hints. Phase 16: Parallel merge hint only (no per-agent re-run/re-hint).
+    try:
+        from app.agents.parallel.config import parallel_enabled
+        from app.agents.parallel.service import get_parallel_merge_hint, get_parallel_obs
+        from app.agents.service import get_agent_obs
+
+        aobs = get_agent_obs()
+        selected = str(aobs.get("selected_agent") or "")
+        parallel_obs = get_parallel_obs() if parallel_enabled() else {}
+        # Phase 17: prefer Decision hint (replaces parallel merge hint when present).
+        try:
+            from app.decision.config import decision_enabled
+            from app.decision.service import get_decision_hint, get_decision_obs
+
+            if decision_enabled() and get_decision_obs().get("selected_property"):
+                dhint = get_decision_hint()
+                if dhint:
+                    messages.append({"role": "system", "content": dhint})
+                elif parallel_obs.get("merged_agents"):
+                    phint = get_parallel_merge_hint()
+                    if phint:
+                        messages.append({"role": "system", "content": phint})
+            elif parallel_obs.get("merged_agents"):
+                phint = get_parallel_merge_hint()
+                if phint:
+                    messages.append({"role": "system", "content": phint})
+        except Exception:
+            if parallel_obs.get("merged_agents"):
+                phint = get_parallel_merge_hint()
+                if phint:
+                    messages.append({"role": "system", "content": phint})
+        # Sequential per-agent hints only when Parallel did not merge (Decision may still apply above).
+        if not parallel_obs.get("merged_agents"):
+            from app.agents.analysis.service import get_analysis_hint, should_run_analysis
+
+            route_now = str((aobs.get("agent_reason") or ""))
+            try:
+                from app.supervisor.service import get_supervisor_obs
+
+                route_now = str(get_supervisor_obs().get("routed_workflow") or route_now)
+            except Exception:
+                pass
+            need_analysis = selected in ("property_analysis", "recommendation") or should_run_analysis(
+                route=route_now, message=text, chip_intent=intent or ""
+            )
+            analysis_categories = []
+            codes = []
+            if plan_out is not None:
+                codes = [str(c).strip() for c in (plan_out.land_codes or []) if str(c).strip()]
+            shared = {
+                "pipeline": "planning|memory|rag|tools|llm",
+                "property_search_agent": True,
+                "search_handoff": True,
+                "reused_rag": True,
+                "reused_memory": True,
+                "reused_planning": True,
+                "planning_land_codes": codes,
+                "property_codes": codes,
+                "land_codes": codes,
+            }
+            if need_analysis:
+                from app.agents.analysis.service import run_property_analysis as _run_pa
+
+                ar = _run_pa(
+                    property_codes=codes,
+                    message=text,
+                    route=route_now,
+                    audience=aud,
+                    user_key=key,
+                    shared=shared,
+                )
+                if ar is not None:
+                    analysis_categories = list(ar.categories or [])
+                    shared["analysis_categories"] = analysis_categories
+                hint = get_analysis_hint()
+                if hint and selected != "recommendation":
+                    messages.append({"role": "system", "content": hint})
+            try:
+                from app.agents.recommendation.service import (
+                    get_recommendation_hint,
+                    run_recommendation,
+                    should_run_recommendation,
+                )
+
+                need_rec = selected == "recommendation" or should_run_recommendation(
+                    route=route_now, message=text, chip_intent=intent or ""
+                )
+                if need_rec:
+                    run_recommendation(
+                        property_codes=codes,
+                        message=text,
+                        route=route_now,
+                        audience=aud,
+                        user_key=key,
+                        shared=shared,
+                        analysis_categories=analysis_categories,
+                    )
+                    rhint = get_recommendation_hint()
+                    if rhint:
+                        messages.append({"role": "system", "content": rhint})
+            except Exception:
+                pass
+            try:
+                from app.agents.customer_memory.service import (
+                    get_customer_memory_hint,
+                    run_customer_memory,
+                    should_run_customer_memory,
+                )
+
+                need_cm = selected == "customer_memory" or should_run_customer_memory(
+                    route=route_now, message=text, chip_intent=intent or ""
+                )
+                if need_cm:
+                    run_customer_memory(
+                        message=text,
+                        route=route_now,
+                        audience=aud,
+                        user_key=key,
+                        shared=shared,
+                    )
+                    cmhint = get_customer_memory_hint()
+                    if cmhint:
+                        messages.append({"role": "system", "content": cmhint})
+            except Exception:
+                pass
+            try:
+                from app.agents.negotiation.service import (
+                    get_negotiation_hint,
+                    run_negotiation,
+                    should_run_negotiation,
+                )
+
+                need_neg = selected == "negotiation" or should_run_negotiation(
+                    route=route_now, message=text, chip_intent=intent or ""
+                )
+                if need_neg:
+                    run_negotiation(
+                        message=text,
+                        route=route_now,
+                        audience=aud,
+                        user_key=key,
+                        shared=shared,
+                    )
+                    nhint = get_negotiation_hint()
+                    if nhint:
+                        messages.append({"role": "system", "content": nhint})
+            except Exception:
+                pass
+            try:
+                from app.agents.customer_success.service import (
+                    get_customer_success_hint,
+                    run_customer_success,
+                    should_run_customer_success,
+                )
+
+                need_cs = selected == "follow_up" or should_run_customer_success(
+                    route=route_now, message=text, chip_intent=intent or ""
+                )
+                if need_cs:
+                    run_customer_success(
+                        message=text,
+                        route=route_now,
+                        audience=aud,
+                        user_key=key,
+                        shared=shared,
+                    )
+                    cshint = get_customer_success_hint()
+                    if cshint:
+                        messages.append({"role": "system", "content": cshint})
+            except Exception:
+                pass
+    except Exception:
+        pass
     prompt_parts = _prompt_token_parts(messages)
     try:
         from flask import g
@@ -1363,6 +1607,20 @@ def _prompt_token_parts(messages: list[dict[str, Any]]) -> dict[str, int]:
                 parts["memory_tokens"] += tok
             elif "=== یافتهٔ برنامه‌ریز ===" in content:
                 parts["planning_tokens"] = parts.get("planning_tokens", 0) + tok
+            elif "=== تحلیل فایل ===" in content:
+                parts["analysis_tokens"] = parts.get("analysis_tokens", 0) + tok
+            elif "=== پیشنهاد فایل ===" in content:
+                parts["recommendation_tokens"] = parts.get("recommendation_tokens", 0) + tok
+            elif "=== پروفایل مشتری ===" in content:
+                parts["customer_memory_tokens"] = parts.get("customer_memory_tokens", 0) + tok
+            elif "=== مذاکره ===" in content:
+                parts["negotiation_tokens"] = parts.get("negotiation_tokens", 0) + tok
+            elif "=== پیگیری ===" in content:
+                parts["customer_success_tokens"] = parts.get("customer_success_tokens", 0) + tok
+            elif "=== همکاری ===" in content:
+                parts["parallel_merge_tokens"] = parts.get("parallel_merge_tokens", 0) + tok
+            elif "=== تصمیم ===" in content:
+                parts["decision_tokens"] = parts.get("decision_tokens", 0) + tok
             elif "=== اطلاعات داخلی وینور ===" in content or "--- آگهی" in content or "--- فایل" in content:
                 parts["context_tokens"] += tok
             else:
@@ -1378,6 +1636,11 @@ def _prompt_token_parts(messages: list[dict[str, Any]]) -> dict[str, int]:
             parts["history_tokens"] += tok
     parts.setdefault("planning_tokens", 0)
     parts.setdefault("execution_tokens", 0)
+    parts.setdefault("customer_memory_tokens", 0)
+    parts.setdefault("negotiation_tokens", 0)
+    parts.setdefault("customer_success_tokens", 0)
+    parts.setdefault("parallel_merge_tokens", 0)
+    parts.setdefault("decision_tokens", 0)
     return parts
 
 
@@ -1417,10 +1680,95 @@ def _record_request_analytics(
             adaptive_obs = get_adaptive_obs()
         except Exception:
             adaptive_obs = {}
+        try:
+            from app.agents.analysis.service import get_analysis_obs
+
+            analysis_obs = get_analysis_obs()
+        except Exception:
+            analysis_obs = {}
+        try:
+            from app.agents.recommendation.service import get_recommendation_obs
+
+            rec_obs = get_recommendation_obs()
+        except Exception:
+            rec_obs = {}
+        try:
+            from app.agents.customer_memory.service import get_customer_memory_obs
+
+            cm_obs = get_customer_memory_obs()
+        except Exception:
+            cm_obs = {}
+        try:
+            from app.agents.negotiation.service import get_negotiation_obs
+
+            neg_obs = get_negotiation_obs()
+        except Exception:
+            neg_obs = {}
+        try:
+            from app.agents.customer_success.service import get_customer_success_obs
+
+            cs_obs = get_customer_success_obs()
+        except Exception:
+            cs_obs = {}
+        try:
+            from app.agents.parallel.service import get_parallel_obs
+
+            parallel_obs = get_parallel_obs()
+        except Exception:
+            parallel_obs = {}
+        try:
+            from app.decision.service import get_decision_obs
+
+            decision_obs = get_decision_obs()
+        except Exception:
+            decision_obs = {}
+        try:
+            from app.business_intelligence.service import get_bi_obs
+
+            bi_obs = get_bi_obs()
+        except Exception:
+            bi_obs = {}
+        try:
+            from app.conversation.service import get_conversation_obs
+
+            conv_obs = get_conversation_obs()
+        except Exception:
+            conv_obs = {}
         memory_tokens = int(prompt_parts.get("memory_tokens") or mem_obs.get("memory_tokens") or 0)
         planning_tokens = int(prompt_parts.get("planning_tokens") or plan_obs.get("planning_tokens") or 0)
         execution_tokens = int(prompt_parts.get("execution_tokens") or plan_obs.get("execution_tokens") or 0)
         agent_tokens = int(agent_obs.get("agent_tokens") or 0)
+        analysis_tokens = int(
+            prompt_parts.get("analysis_tokens") or analysis_obs.get("analysis_tokens") or 0
+        )
+        recommendation_tokens = int(
+            prompt_parts.get("recommendation_tokens")
+            or rec_obs.get("recommendation_tokens")
+            or 0
+        )
+        customer_memory_tokens = int(
+            prompt_parts.get("customer_memory_tokens")
+            or cm_obs.get("customer_memory_tokens")
+            or 0
+        )
+        negotiation_tokens = int(
+            prompt_parts.get("negotiation_tokens")
+            or neg_obs.get("negotiation_tokens")
+            or 0
+        )
+        customer_success_tokens = int(
+            prompt_parts.get("customer_success_tokens")
+            or cs_obs.get("customer_success_tokens")
+            or 0
+        )
+        parallel_merge_tokens = int(
+            prompt_parts.get("parallel_merge_tokens")
+            or parallel_obs.get("parallel_merge_tokens")
+            or 0
+        )
+        decision_tokens = int(
+            prompt_parts.get("decision_tokens") or decision_obs.get("decision_tokens") or 0
+        )
         row = {
             "user": user_key,
             "audience": audience,
@@ -1452,7 +1800,104 @@ def _record_request_analytics(
             "agent_status": str(agent_obs.get("agent_status") or ""),
             "agent_tokens": agent_tokens,
             "agent_execution_time_ms": int(agent_obs.get("agent_execution_time_ms") or 0),
-            "workflow_state": str(adaptive_obs.get("workflow_state") or ""),
+            "analysis_time_ms": int(analysis_obs.get("analysis_time_ms") or 0),
+            "analysis_tokens": analysis_tokens,
+            "analysis_cache_hit": bool(analysis_obs.get("analysis_cache_hit")),
+            "analysis_reused_context": bool(analysis_obs.get("analysis_reused_context")),
+            "analysis_reused_rag": bool(analysis_obs.get("analysis_reused_rag")),
+            "analysis_reused_memory": bool(analysis_obs.get("analysis_reused_memory")),
+            "analysis_reused_planning": bool(analysis_obs.get("analysis_reused_planning")),
+            "recommendation_time_ms": int(rec_obs.get("recommendation_time_ms") or 0),
+            "recommendation_tokens": recommendation_tokens,
+            "recommendation_score": float(rec_obs.get("recommendation_score") or 0),
+            "selected_property": str(rec_obs.get("selected_property") or ""),
+            "recommendation_cache_hit": bool(rec_obs.get("recommendation_cache_hit")),
+            "recommendation_reuse_search": bool(rec_obs.get("recommendation_reuse_search")),
+            "recommendation_reuse_analysis": bool(rec_obs.get("recommendation_reuse_analysis")),
+            "recommendation_reuse_memory": bool(rec_obs.get("recommendation_reuse_memory")),
+            "profile_build_time_ms": int(cm_obs.get("profile_build_time_ms") or 0),
+            "relationship_score": float(cm_obs.get("relationship_score") or 0),
+            "preference_count": int(cm_obs.get("preference_count") or 0),
+            "profile_confidence": float(cm_obs.get("profile_confidence") or 0),
+            "customer_memory_tokens": customer_memory_tokens,
+            "customer_memory_cache_hit": bool(cm_obs.get("customer_memory_cache_hit")),
+            "customer_memory_reuse_memory": bool(cm_obs.get("customer_memory_reuse_memory")),
+            "customer_memory_reuse_workflow": bool(cm_obs.get("customer_memory_reuse_workflow")),
+            "customer_memory_reuse_recommendation": bool(
+                cm_obs.get("customer_memory_reuse_recommendation")
+            ),
+            "negotiation_time_ms": int(neg_obs.get("negotiation_time_ms") or 0),
+            "negotiation_tokens": negotiation_tokens,
+            "negotiation_confidence": float(neg_obs.get("negotiation_confidence") or 0),
+            "negotiation_risk": float(neg_obs.get("negotiation_risk") or 0),
+            "deal_probability": float(neg_obs.get("deal_probability") or 0),
+            "negotiation_cache_hit": bool(neg_obs.get("negotiation_cache_hit")),
+            "negotiation_reuse_analysis": bool(neg_obs.get("negotiation_reuse_analysis")),
+            "negotiation_reuse_recommendation": bool(
+                neg_obs.get("negotiation_reuse_recommendation")
+            ),
+            "negotiation_reuse_customer_profile": bool(
+                neg_obs.get("negotiation_reuse_customer_profile")
+            ),
+            "customer_success_time_ms": int(cs_obs.get("customer_success_time_ms") or 0),
+            "customer_success_tokens": customer_success_tokens,
+            "customer_stage": str(cs_obs.get("customer_stage") or ""),
+            "cs_conversion_probability": float(cs_obs.get("conversion_probability") or 0),
+            "cs_next_action": str(cs_obs.get("next_action") or ""),
+            "cs_priority": str(cs_obs.get("priority") or ""),
+            "customer_success_confidence": float(cs_obs.get("customer_success_confidence") or 0),
+            "customer_success_cache_hit": bool(cs_obs.get("customer_success_cache_hit")),
+            "customer_success_reuse_analysis": bool(cs_obs.get("customer_success_reuse_analysis")),
+            "customer_success_reuse_recommendation": bool(
+                cs_obs.get("customer_success_reuse_recommendation")
+            ),
+            "customer_success_reuse_negotiation": bool(
+                cs_obs.get("customer_success_reuse_negotiation")
+            ),
+            "customer_success_reuse_customer_profile": bool(
+                cs_obs.get("customer_success_reuse_customer_profile")
+            ),
+            "parallel_tasks": int(parallel_obs.get("parallel_tasks") or 0),
+            "parallel_execution_time_ms": int(parallel_obs.get("parallel_execution_time_ms") or 0),
+            "parallel_merge_tokens": parallel_merge_tokens,
+            "merged_agents": list(parallel_obs.get("merged_agents") or []),
+            "parallel_skipped_agents": list(parallel_obs.get("skipped_agents") or []),
+            "execution_graph": list(parallel_obs.get("execution_graph") or []),
+            "decision_time_ms": int(decision_obs.get("decision_time_ms") or 0),
+            "decision_score": float(decision_obs.get("decision_score") or 0),
+            "decision_confidence": float(decision_obs.get("decision_confidence") or 0),
+            "conflict_count": int(decision_obs.get("conflict_count") or 0),
+            "alternative_count": int(decision_obs.get("alternative_count") or 0),
+            "decision_selected_property": str(decision_obs.get("selected_property") or ""),
+            "decision_tokens": decision_tokens,
+            "conflict_resolve_time_ms": int(decision_obs.get("conflict_resolve_time_ms") or 0),
+            "decision_next_step": str(decision_obs.get("next_step") or ""),
+            "bi_market_score": float(bi_obs.get("market_score") or 0),
+            "bi_property_score": float(bi_obs.get("property_score") or 0),
+            "bi_lead_score": float(bi_obs.get("lead_score") or 0),
+            "bi_trend_score": float(bi_obs.get("trend_score") or 0),
+            "bi_opportunity_score": float(bi_obs.get("opportunity_score") or 0),
+            "bi_analysis_time_ms": int(bi_obs.get("analysis_time_ms") or 0),
+            "detected_role": str(conv_obs.get("detected_role") or ""),
+            "detected_intent": str(conv_obs.get("detected_intent") or ""),
+            "conversation_workflow": str(conv_obs.get("workflow") or ""),
+            "workflow_name": str(conv_obs.get("workflow_name") or ""),
+            "conversation_state": str(
+                conv_obs.get("workflow_state") or conv_obs.get("conversation_state") or ""
+            ),
+            "conversation_step": str(conv_obs.get("current_step") or ""),
+            "completed_fields": list(conv_obs.get("completed_fields") or []),
+            "completed_steps": list(conv_obs.get("completed_steps") or []),
+            "missing_fields": list(conv_obs.get("missing_fields") or []),
+            "missing_steps": list(conv_obs.get("missing_steps") or []),
+            "validation_errors": list(conv_obs.get("validation_errors") or []),
+            "conversation_extra_tokens": int(conv_obs.get("conversation_extra_tokens") or 0),
+            "workflow_extra_tokens": int(conv_obs.get("workflow_extra_tokens") or 0),
+            "workflow_state": str(
+                conv_obs.get("workflow_state")
+                or adaptive_obs.get("workflow_state")
+                or ""
+            ),
             "confidence_score": float(adaptive_obs.get("confidence_score") or 0),
             "retry_count": int(adaptive_obs.get("retry_count") or 0),
             "recovery_count": int(adaptive_obs.get("recovery_count") or 0),
@@ -1468,5 +1913,37 @@ def _record_request_analytics(
             "cache_hit": bool((meta.get("provider") == "cache") if isinstance(meta, dict) else False),
         }
         record_token_analytics(row)
+        # Phase 17.5: Evaluation & Observability — outside prompt, 0% token impact.
+        try:
+            from uuid import uuid4
+
+            from app.evaluation.service import record_evaluation
+
+            record_evaluation(
+                analytics_row=row,
+                request_id=str(row.get("request_id") or uuid4().hex[:16]),
+            )
+        except Exception:
+            pass
+        # Phase 24: Self Reflection — post-turn, outside prompt.
+        try:
+            from app.executive.service import get_executive_plan
+            from app.self_reflection.service import run_reflection
+
+            eplan = get_executive_plan()
+            if eplan.get("run_reflection", True):
+                shared = {}
+                try:
+                    from flask import g
+
+                    shared = {
+                        "goals": getattr(g, "ai_goals", None) or {},
+                        "decision": getattr(g, "ai_decision", None) or {},
+                    }
+                except Exception:
+                    pass
+                run_reflection(analytics_row=row, shared=shared)
+        except Exception:
+            pass
     except Exception:
         pass
