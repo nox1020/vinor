@@ -772,6 +772,12 @@ def create_app() -> Flask:
     @app.before_request
     def landing_gate():
         debug = app.debug or _flask_debug()
+        # Digital Asset Links — must never redirect (Android App Links verification)
+        if request.path.startswith("/.well-known/"):
+            if debug:
+                current_app.logger.debug("PASS (well-known): %s", request.path)
+            return
+
         # مسیری که گیت‌وی اصلاً در آن دخالت نکند (پنل ادمین، خودش لایهٔ امنیتی جدا دارد)
         if request.path.startswith("/admin"):
             if debug:
@@ -797,8 +803,6 @@ def create_app() -> Flask:
             "/partners",
             "/d",
             "/enamad-seal.png",
-            # Android App Links verification (must be public, no auth redirect)
-            "/.well-known/assetlinks.json",
             # Express Partner auth paths (public)
             "/express/partner/login", "/express/partner/login/otp", "/express/partner/verify", "/express/partner/otp/resend",
             "/express/partner/api/login-request", "/express/partner/api/verify",
@@ -808,7 +812,7 @@ def create_app() -> Flask:
             "/ai",  # Vinor AI برای کاربر عادی (مهمان با session مهمان)
         }
         # Public dynamic paths (prefix-based)
-        public_prefixes = ("/express/", "/uploads/", "/ai/", "/r/", "/property/", "/.well-known/")
+        public_prefixes = ("/express/", "/uploads/", "/ai/", "/r/", "/property/")
         if request.path.startswith(public_prefixes):
             if debug:
                 current_app.logger.debug("PASS (public-prefix): %s", request.path)

@@ -268,10 +268,12 @@ def android_assetlinks():
     ]
     for path in candidates:
         if path and os.path.isfile(path):
-            with open(path, "r", encoding="utf-8") as f:
-                body = f.read()
-            resp = Response(body, mimetype="application/json; charset=utf-8")
-            resp.headers["Cache-Control"] = "public, max-age=3600"
+            with open(path, "r", encoding="utf-8-sig") as f:
+                body = f.read().strip()
+            resp = Response(body, status=200, mimetype="application/json")
+            resp.headers["Content-Type"] = "application/json"
+            resp.headers["Cache-Control"] = "public, max-age=300"
+            resp.headers["X-Content-Type-Options"] = "nosniff"
             return resp
     return Response("[]", status=404, mimetype="application/json")
 
