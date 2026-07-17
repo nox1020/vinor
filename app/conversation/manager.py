@@ -238,6 +238,14 @@ class DefaultConversationManager(ConversationManager):
                 self._sessions.clear(session.user_key)
             else:
                 self._sessions.save(session)
+        # Phase 0 Foundation: optional Activity/Timeline record (flags default OFF).
+        # Fail-open — never alters reply, session, or Supervisor handoff.
+        try:
+            from app.foundation.service import maybe_record_workflow_commit
+
+            maybe_record_workflow_commit(result)
+        except Exception:
+            pass
         return self._from_engine(result, identity, intent, t0)
 
     def _from_engine(
