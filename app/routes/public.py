@@ -244,6 +244,38 @@ def express_detail(code):
     return redirect(url_for('express_partner.land_detail', code=code), code=302)
 
 
+@main_bp.route("/property/<code>", endpoint="property_deep_link")
+def property_deep_link(code: str):
+    """
+    Deep Link عمومی فایل: https://vinor.ir/property/{id}
+    در مرورگر → جزئیات پنل؛ در اپ با App Links باز می‌شود.
+    """
+    code_s = (code or "").strip()
+    if not code_s:
+        return redirect(url_for("express_partner.home"), code=302)
+    return redirect(url_for("express_partner.land_detail", code=code_s), code=302)
+
+
+@main_bp.route("/.well-known/assetlinks.json", endpoint="android_assetlinks")
+def android_assetlinks():
+    """Digital Asset Links برای Android App Links (package ir.vinor.app)."""
+    from flask import Response, current_app
+    import os
+
+    candidates = [
+        os.path.join(current_app.root_path, "static", ".well-known", "assetlinks.json"),
+        os.path.join(current_app.static_folder or "", ".well-known", "assetlinks.json"),
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as f:
+                body = f.read()
+            resp = Response(body, mimetype="application/json; charset=utf-8")
+            resp.headers["Cache-Control"] = "public, max-age=3600"
+            return resp
+    return Response("[]", status=404, mimetype="application/json")
+
+
 @main_bp.route("/r/<ref>", endpoint="short_referral")
 def short_referral(ref: str):
     """لینک کوتاه دعوت → فرم همکاری با ref در session/cookie."""

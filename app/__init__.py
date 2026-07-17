@@ -797,6 +797,8 @@ def create_app() -> Flask:
             "/partners",
             "/d",
             "/enamad-seal.png",
+            # Android App Links verification (must be public, no auth redirect)
+            "/.well-known/assetlinks.json",
             # Express Partner auth paths (public)
             "/express/partner/login", "/express/partner/login/otp", "/express/partner/verify", "/express/partner/otp/resend",
             "/express/partner/api/login-request", "/express/partner/api/verify",
@@ -806,7 +808,7 @@ def create_app() -> Flask:
             "/ai",  # Vinor AI برای کاربر عادی (مهمان با session مهمان)
         }
         # Public dynamic paths (prefix-based)
-        public_prefixes = ("/express/", "/uploads/", "/ai/", "/r/")
+        public_prefixes = ("/express/", "/uploads/", "/ai/", "/r/", "/property/", "/.well-known/")
         if request.path.startswith(public_prefixes):
             if debug:
                 current_app.logger.debug("PASS (public-prefix): %s", request.path)
