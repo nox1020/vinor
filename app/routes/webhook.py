@@ -18,19 +18,37 @@ except Exception:
     msvcrt = None  # احتیاط
 
 # ───────── کانفیگ از Env (ایمن‌تر) ─────────
-PROJECT_PATH = os.getenv("VINOR_PROJECT_PATH", "/home/garmabs2/myapp")
+# Derive default from this file: app/routes/webhook.py → project root
+_DEFAULT_PROJECT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+# Prefer explicit env; else on-disk path (production: /home/vinorir/public_html/vinor)
+PROJECT_PATH = os.getenv("VINOR_PROJECT_PATH") or (
+    _DEFAULT_PROJECT
+    if os.path.isdir(os.path.join(_DEFAULT_PROJECT, "app"))
+    else "/home/vinorir/public_html/vinor"
+)
 ALLOWED_BRANCHES = set(os.getenv("VINOR_ALLOWED_BRANCHES", "main").split(","))
 try:
     from app.keys import VINOR_WEBHOOK_SECRET as SECRET
 except Exception:
     SECRET = os.getenv("VINOR_WEBHOOK_SECRET", "")
-ALLOWED_REPO = os.getenv("VINOR_ALLOWED_REPO", "asman-trader/garmabsard-flask")  # owner/repo
+ALLOWED_REPO = os.getenv(
+    "VINOR_ALLOWED_REPO",
+    "nox1020/vinor,asman-trader/garmabsard-flask",
+)  # owner/repo (comma-separated)
 DEPLOY_LOG = os.getenv("VINOR_DEPLOY_LOG", f"{PROJECT_PATH}/deploy.log")
 LOCK_FILE = os.getenv("VINOR_DEPLOY_LOCK", "/tmp/vinor_deploy.lock" if not IS_WINDOWS else os.path.join(os.getenv("TEMP", "."), "vinor_deploy.lock"))
 TIMEOUT = int(os.getenv("VINOR_CMD_TIMEOUT", "300"))
 
 # دستورات پسادیپلوی (Passenger/venv) — روی ویندوز برای توسعه محلی غیرفعال می‌کنیم
-VENV_ACTIVATE = "/home/garmabs2/virtualenv/myapp/3.11/bin/activate"
+_DEFAULT_VENV = os.path.join(os.path.dirname(PROJECT_PATH.rstrip("/")), "virtualenv", "vinor", "3.11", "bin", "activate")
+# common cPanel layout: /home/USER/virtualenv/APPNAME/3.11/bin/activate
+_CPANEL_VENV = "/home/vinorir/virtualenv/vinor/3.11/bin/activate"
+VENV_ACTIVATE = os.getenv(
+    "VINOR_VENV_ACTIVATE",
+    _CPANEL_VENV if os.path.isfile(_CPANEL_VENV) else (
+        _DEFAULT_VENV if os.path.isfile(_DEFAULT_VENV) else _CPANEL_VENV
+    ),
+)
 DEFAULT_POST_DEPLOY_COMMANDS: List[str] = [
     # نصب وابستگی‌ها اگر وجود داشت
     f"bash -lc 'source {shlex.quote(VENV_ACTIVATE)} && pip install --upgrade pip && "
@@ -170,8 +188,9 @@ def git_webhook():
 
     payload = request.get_json(silent=True) or {}
     repo_full = (payload.get("repository") or {}).get("full_name", "")
-    if ALLOWED_REPO and repo_full != ALLOWED_REPO:
-        log_line("repo_not_allowed", {"got": repo_full, "want": ALLOWED_REPO})
+    allowed_repos = {r.strip() for r in str(ALLOWED_REPO or "").split(",") if r.strip()}
+    if allowed_repos and repo_full not in allowed_repos:
+        log_line("repo_not_allowed", {"got": repo_full, "want": sorted(allowed_repos)})
         return jsonify(ok=True, skipped=True, reason="Repo not allowed", repo=repo_full), 200
 
     ref = payload.get("ref", "")
