@@ -3,7 +3,7 @@
 Vinor Foundation Layer (Phase 0)
 
 Additive infrastructure for Activity / Timeline / Workflow Commit Adapter.
-All feature flags default OFF — existing Partner/Visit/Deal/AI paths unchanged.
+All feature flags default ON — disable via env if needed. Existing Partner/Visit/Deal/AI paths unchanged when flags are off.
 """
 
 from app.foundation.config import (

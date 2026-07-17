@@ -555,6 +555,65 @@ def profile():
     return resp
 
 
+def _commercial_buyer_ui_or_404():
+    try:
+        from app.commercial.config import commercial_buyer_ui_enabled
+        if commercial_buyer_ui_enabled():
+            return None
+    except Exception:
+        pass
+    from flask import abort
+    abort(404)
+
+
+@main_bp.route("/my/offers", methods=["GET"], endpoint="my_offers")
+def my_offers_page():
+    """Phase 3 — پیشنهادهای خریدار (User OTP). فلگ BUYER_UI پیش‌فرض خاموش."""
+    _commercial_buyer_ui_or_404()
+    me_phone = (session.get("user_phone") or "").strip()
+    if not me_phone:
+        nxt = request.args.get("next") or url_for("main.my_offers")
+        return redirect(url_for("express_partner.login", next=nxt))
+    from app.commercial.service import list_buyer_offers
+
+    offers = list_buyer_offers(me_phone)
+    items = [
+        {
+            "id": o.id,
+            "land_code": o.land_code,
+            "amount": o.amount,
+            "status": o.status,
+            "terms": o.terms,
+        }
+        for o in offers
+    ]
+    return render_template(
+        "my_offers.html",
+        items=items,
+        flash_msg=(request.args.get("msg") or "").strip(),
+        flash_ok=(request.args.get("ok") or "1").strip() != "0",
+    )
+
+
+@main_bp.route("/my/offers/<offer_id>/respond", methods=["POST"], endpoint="my_offer_respond")
+def my_offer_respond(offer_id: str):
+    _commercial_buyer_ui_or_404()
+    me_phone = (session.get("user_phone") or "").strip()
+    if not me_phone:
+        return redirect(url_for("express_partner.login", next=url_for("main.my_offers")))
+    from app.commercial.service import get_offer, respond_offer
+    from app.services.sms import normalize_iran_mobile as _norm
+
+    offer = get_offer(offer_id)
+    if not offer or _norm(offer.buyer_phone) != (_norm(me_phone) or me_phone):
+        return redirect(url_for("main.my_offers", ok=0, msg="پیشنهاد یافت نشد."))
+    action = (request.form.get("action") or "").strip().lower()
+    out = respond_offer(offer_id, action=action, actor_key=me_phone)
+    if not out:
+        return redirect(url_for("main.my_offers", ok=0, msg="پاسخ نامعتبر بود."))
+    return redirect(url_for("main.my_offers", ok=1, msg="وضعیت به‌روز شد."))
+
+
 # -------------------------
 # SEO: robots.txt, sitemap, legacy private URLs
 # -------------------------

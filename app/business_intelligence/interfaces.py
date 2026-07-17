@@ -7,7 +7,7 @@ from typing import Any, Protocol
 @dataclass
 class BusinessIntelligenceConfig:
     enabled: bool = True
-    inject_hint: bool = False  # default OFF — 0% token
+    inject_hint: bool = True  # default ON — set VINOR_BI_INJECT_HINT=0 to disable
 
 
 @dataclass

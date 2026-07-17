@@ -1,0 +1,54 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}پیشنهادهای دریافتی{% endblock %}
+{% block content %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{{ ep_header_start(id='specialOfferInboxHeader') }}
+{% call ep_header_row('پیشنهادهای دریافتی', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{{ ep_header_end() }}
+
+<div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
+  <main class="mx-auto w-full max-w-lg px-4 space-y-3">
+    <p class="text-xs text-zinc-500 py-3">{{ items|length }} پیشنهاد نیازمند پاسخ</p>
+    {% if items %}
+      {% for item in items %}
+      <article class="rounded-2xl border border-white/10 bg-[#12181f] p-4">
+        <h2 class="text-sm font-bold text-white">فایل {{ item.land_code }}</h2>
+        <p class="mt-1 text-xs text-zinc-400">{{ '{:,}'.format(item.amount) }} تومان · {{ item.status }}</p>
+        {% if item.terms %}<p class="mt-1 text-[11px] text-zinc-500">{{ item.terms }}</p>{% endif %}
+        <p class="mt-1 font-mono text-[10px] text-zinc-500" dir="ltr">همکار: {{ item.partner_phone }}</p>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <form method="post" action="{{ url_for('express_partner.special_offer_action', oid=item.id, action='accept') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">پذیرش</button>
+          </form>
+          <form method="post" action="{{ url_for('express_partner.special_offer_action', oid=item.id, action='reject') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="rounded-lg border border-rose-500/40 px-3 py-1.5 text-xs text-rose-300">رد</button>
+          </form>
+          <form method="post" action="{{ url_for('express_partner.special_offer_action', oid=item.id, action='counter') }}" class="flex gap-1 items-center">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input name="amount" type="number" min="1" required placeholder="مبلغ متقابل" dir="ltr"
+                   class="w-28 rounded border border-white/10 bg-[#0a1018] px-2 py-1 text-[11px] text-white">
+            <button class="rounded-lg border border-sky-500/40 px-3 py-1.5 text-xs text-sky-300">متقابل</button>
+          </form>
+        </div>
+      </article>
+      {% endfor %}
+    {% else %}
+      <p class="text-center text-sm text-zinc-500 py-16">پیشنهادی نیست</p>
+    {% endif %}
+  </main>
+  {% set bottom_nav_active = 'profile' %}
+  {% include 'express_partner/partials/partner_tab_footer.html' %}
+</div>
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
+  <script>
+  (function () {
+    if (window.__vinorPartnerHeaderChromeSetup) {
+      try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
+    }
+  })();
+  </script>
+{% endblock %}

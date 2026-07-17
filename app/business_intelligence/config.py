@@ -15,8 +15,8 @@ def bi_enabled() -> bool:
 
 
 def bi_inject_hint() -> bool:
-    # Default OFF — Phase 18 token target 0%
-    return (os.environ.get("VINOR_BI_INJECT_HINT") or "0").strip().lower() in (
+    # Default ON — disable with VINOR_BI_INJECT_HINT=0 if needed
+    return (os.environ.get("VINOR_BI_INJECT_HINT") or "1").strip().lower() in (
         "1",
         "true",
         "yes",

@@ -1,0 +1,28 @@
+{% extends 'admin/base_admin.html' %}
+{% block page_title %}Super Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-xl space-y-4">
+  <div class="rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/20 p-4">
+    <h2 class="text-lg font-bold text-gray-900 dark:text-white">Super Admin</h2>
+    <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+      نقش پرتال فاز ۵ — روی OTP ادمین فعلی سوار شده؛ <code>login_required</code> عوض نشده است.
+    </p>
+  </div>
+  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 text-sm space-y-2">
+    <p><span class="text-gray-500">شماره ادمین:</span> <span dir="ltr">{{ admin_phone }}</span></p>
+    <p><span class="text-gray-500">Allowlist:</span>
+      {% if allowlist %}
+        <span dir="ltr">{{ allowlist|join(', ') }}</span>
+      {% else %}
+        <span class="text-emerald-600">خالی = هر ادمین لاگین‌شده Super Admin است</span>
+      {% endif %}
+    </p>
+    <p class="text-xs text-gray-500">تنظیم: <code>VINOR_SUPER_ADMIN_PHONES</code> (CSV)</p>
+  </div>
+  <a href="{{ url_for('admin.dashboard') }}"
+     class="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline">
+    بازگشت به داشبورد
+  </a>
+</div>
+{% endblock %}

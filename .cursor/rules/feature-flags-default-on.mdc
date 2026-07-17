@@ -1,0 +1,25 @@
+---
+description: All Vinor feature flags must default ON
+alwaysApply: true
+---
+
+# Feature flags — Enabled by Default
+
+In the Vinor project, every feature flag must be **enabled by default** (`1` / ON).
+
+## Rules
+
+1. When adding or changing a `VINOR_*` feature flag, default the env read to `"1"` (or truthy ON), never `"0"`.
+2. Keep the flag mechanism — callers may still disable with `VINOR_*=0` / `false` / `no` / `off`.
+3. Do not require manual env setup after build/deploy for a feature to work.
+4. Nested flags that require a master switch may stay gated on the master; the master itself defaults ON.
+5. Helper `_env_bool(name, default="1")` should use `"1"` as the helper default when introducing new config modules.
+
+## Example
+
+```python
+def feature_enabled() -> bool:
+    return (os.environ.get("VINOR_FEATURE_ENABLED") or "1").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+```

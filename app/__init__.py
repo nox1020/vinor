@@ -430,6 +430,14 @@ def create_app() -> Flask:
 
     # توجه: هیچ url_prefix اضافی نده؛ هر بلوپرینت خودش دارد.
     app.register_blueprint(main_bp)
+
+    # Phase 5 Roles & Portals hubs (/my, /portal/seller, /portal/owner)
+    try:
+        from .roles.routes import roles_bp
+        app.register_blueprint(roles_bp)
+    except Exception as e:
+        app.logger.warning("Roles portals blueprint not available: %s", e)
+
     if webhook_bp is not None:
         app.register_blueprint(webhook_bp)
     if express_api_bp is not None:
@@ -761,7 +769,7 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning("Admin SMS scheduler not started: %s", e)
 
-    # Phase 19: Continuous Optimization — background only, default OFF
+    # Phase 19: Continuous Optimization — background, default ON
     try:
         from app.optimization.scheduler import start_optimization_scheduler
 

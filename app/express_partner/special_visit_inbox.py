@@ -14,6 +14,7 @@ from .visit_requests import (
     CANCELLED_STATUS,
     COMPLETED_STATUS,
     DONE_PENDING_STATUS,
+    NO_SHOW_STATUS,
     PENDING_STATUS,
     admin_can_transition_visit,
     admin_update_visit_request_status,
@@ -52,12 +53,24 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
         can_approve = st == PENDING_STATUS
         can_reject = st == PENDING_STATUS
         can_complete = st == DONE_PENDING_STATUS
+        can_no_show = False
+        can_register_result = False
+        try:
+            from app.visit_result.config import visit_result_ui_enabled
+            from app.visit_result.status_bridge import is_no_show_writable
+
+            if visit_result_ui_enabled():
+                can_register_result = st in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS)
+                can_no_show = is_no_show_writable() and st in (APPROVED_STATUS, DONE_PENDING_STATUS)
+        except Exception:
+            pass
         labels = {
             PENDING_STATUS: "منتظر تأیید (قدیمی)",
             APPROVED_STATUS: "نهایی شده",
             DONE_PENDING_STATUS: "منتظر تأیید انجام",
             COMPLETED_STATUS: "انجام شد",
             CANCELLED_STATUS: "رد شده",
+            NO_SHOW_STATUS: "عدم حضور",
         }
         out.append({
             "id": str(row.get("id") or ""),
@@ -74,9 +87,11 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             "can_approve": can_approve,
             "can_reject": can_reject,
             "can_complete": can_complete,
+            "can_no_show": can_no_show,
+            "can_register_result": can_register_result,
             "created_at": str(row.get("created_at") or ""),
             "updated_at": str(row.get("updated_at") or ""),
-            "needs_action": can_approve or can_complete,
+            "needs_action": can_approve or can_complete or can_no_show,
         })
 
     def _sort_key(item: Dict[str, Any]) -> tuple:
@@ -100,8 +115,10 @@ def apply_special_visit_action(
     owner_phone: str,
     visit_id: str,
     action: str,
+    outcome: str = "",
+    notes: str = "",
 ) -> tuple:
-    """action: approve | reject | complete"""
+    """action: approve | reject | complete | no_show | result"""
     rid = (visit_id or "").strip()
     act = (action or "").strip().lower()
     rec = None
@@ -129,4 +146,51 @@ def apply_special_visit_action(
         if not admin_can_transition_visit(current, COMPLETED_STATUS):
             return None, "invalid_transition"
         return admin_update_visit_request_status(requests, rid, COMPLETED_STATUS)
+    if act == "no_show":
+        try:
+            from app.visit_result.config import visit_result_ui_enabled
+            from app.visit_result.service import register_no_show
+
+            if not visit_result_ui_enabled():
+                return None, "disabled"
+            updated, _result, err = register_no_show(
+                requests,
+                visit_request_id=rid,
+                notes=notes,
+                actor_key=owner_phone,
+                source="special",
+            )
+            if err:
+                return None, err
+            return updated, None
+        except Exception:
+            return None, "failed"
+    if act == "result":
+        try:
+            from app.visit_result.config import visit_result_ui_enabled
+            from app.visit_result.service import register_result, valid_outcome
+
+            if not visit_result_ui_enabled():
+                return None, "disabled"
+            oc = (outcome or "").strip() or "follow_up"
+            if not valid_outcome(oc) or oc == "no_show":
+                # no_show must go through act=no_show (status change)
+                if oc != "no_show" and not valid_outcome(oc):
+                    return None, "invalid_outcome"
+                if oc == "no_show":
+                    return None, "use_no_show_action"
+            result = register_result(
+                visit_request_id=rid,
+                partner_phone=str(rec.get("partner_phone") or ""),
+                land_code=str(rec.get("land_code") or ""),
+                outcome=oc,
+                notes=notes,
+                actor_key=owner_phone,
+                source="special",
+            )
+            if result is None:
+                return None, "failed"
+            return rec, None
+        except Exception:
+            return None, "failed"
     return None, "invalid_action"

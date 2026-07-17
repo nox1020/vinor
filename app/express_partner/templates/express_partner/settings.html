@@ -223,6 +223,95 @@
             <span class="ps-row-sub">نام، شهر و عکس</span>
           </span>
         </a>
+        {# Phase 7 soft-cleanup: prefer journey/deals higher when flag ON (links retained). #}
+        {% if prefer_new_partner_nav|default(false) and integration_ui_enabled|default(false) and is_approved|default(false) %}
+        <a href="{{ url_for('express_partner.journey') }}"
+           data-vinor-express-nav
+           class="ps-row">
+          <i class="fas fa-route ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">مسیر معامله</span>
+            <span class="ps-row-sub">تایم‌لاین لید تا تسویه</span>
+          </span>
+        </a>
+        {% endif %}
+        {% if prefer_new_partner_nav|default(false) and closing_ui_enabled|default(false) and is_approved|default(false) %}
+        <a href="{{ url_for('express_partner.deals') }}"
+           data-vinor-express-nav
+           class="ps-row">
+          <i class="fas fa-file-contract ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">معاملات و بستن</span>
+            <span class="ps-row-sub">قرارداد / اقساط / تسویه</span>
+          </span>
+        </a>
+        {% endif %}
+        {% if crm_ui_enabled|default(false) and is_approved|default(false) %}
+        <a href="{{ url_for('express_partner.customers') }}"
+           data-vinor-express-nav
+           class="ps-row">
+          <i class="fas fa-address-book ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">مشتریان من</span>
+            <span class="ps-row-sub">تماس و پیگیری تا بازدید</span>
+          </span>
+        </a>
+        {% endif %}
+        {% if commercial_ui_enabled|default(false) and is_approved|default(false) %}
+        <a href="{{ url_for('express_partner.negotiations') }}"
+           data-vinor-express-nav
+           class="ps-row">
+          <i class="fas fa-handshake ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">مذاکرات و پیشنهادها</span>
+            <span class="ps-row-sub">پیشنهاد / متقابل / رزرو نرم</span>
+          </span>
+        </a>
+        {% endif %}
+        {% if not prefer_new_partner_nav|default(false) and closing_ui_enabled|default(false) and is_approved|default(false) %}
+        <a href="{{ url_for('express_partner.deals') }}"
+           data-vinor-express-nav
+           class="ps-row">
+          <i class="fas fa-file-contract ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">معاملات و بستن</span>
+            <span class="ps-row-sub">قرارداد / اقساط / تسویه</span>
+          </span>
+        </a>
+        {% endif %}
+        {% if not prefer_new_partner_nav|default(false) and integration_ui_enabled|default(false) and is_approved|default(false) %}
+        <a href="{{ url_for('express_partner.journey') }}"
+           data-vinor-express-nav
+           class="ps-row">
+          <i class="fas fa-route ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">مسیر معامله</span>
+            <span class="ps-row-sub">تایم‌لاین لید تا تسویه</span>
+          </span>
+        </a>
+        {% endif %}
+        {% if seller_portal_enabled|default(false) and is_approved|default(false) %}
+        <a href="{{ url_for('roles.seller_hub') }}"
+           data-vinor-express-nav
+           class="ps-row">
+          <i class="fas fa-store ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">پنل فروشنده</span>
+            <span class="ps-row-sub">هاب نقش Seller</span>
+          </span>
+        </a>
+        {% endif %}
+        {% if owner_portal_enabled|default(false) and is_special|default(false) %}
+        <a href="{{ url_for('roles.owner_hub') }}"
+           data-vinor-express-nav
+           class="ps-row">
+          <i class="fas fa-building ps-row-icon" aria-hidden="true"></i>
+          <span class="ps-row-body">
+            <span class="ps-row-title">پنل مالک</span>
+            <span class="ps-row-sub">هاب نقش Owner</span>
+          </span>
+        </a>
+        {% endif %}
         {% if not is_special|default(false) %}
         {% if not is_approved|default(false) %}
         <a href="{{ url_for('express_partner.apply') }}"

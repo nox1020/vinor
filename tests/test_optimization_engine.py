@@ -155,9 +155,9 @@ class ManagerIntegrationTests(unittest.TestCase):
 
 
 class SchedulerConfigTests(unittest.TestCase):
-    def test_scheduler_default_off(self) -> None:
+    def test_scheduler_default_on(self) -> None:
         os.environ.pop("VINOR_OPTIMIZATION_SCHEDULER", None)
-        self.assertFalse(optimization_scheduler_enabled())
+        self.assertTrue(optimization_scheduler_enabled())
 
     def test_config_auto_apply_always_false(self) -> None:
         cfg = load_optimization_config()

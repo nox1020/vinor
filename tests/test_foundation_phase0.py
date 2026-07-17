@@ -8,8 +8,8 @@ import unittest
 from unittest import mock
 
 
-class FoundationFlagsDefaultOffTests(unittest.TestCase):
-    def test_flags_default_off(self) -> None:
+class FoundationFlagsDefaultOnTests(unittest.TestCase):
+    def test_flags_default_on(self) -> None:
         env = {
             k: v
             for k, v in os.environ.items()
@@ -21,11 +21,11 @@ class FoundationFlagsDefaultOffTests(unittest.TestCase):
         with mock.patch.dict(os.environ, env, clear=True):
             from app.foundation import config as cfg
 
-            self.assertFalse(cfg.foundation_enabled())
-            self.assertFalse(cfg.activity_store_enabled())
-            self.assertFalse(cfg.timeline_store_enabled())
-            self.assertFalse(cfg.workflow_commit_enabled())
-            self.assertFalse(cfg.workflow_commit_persist_enabled())
+            self.assertTrue(cfg.foundation_enabled())
+            self.assertTrue(cfg.activity_store_enabled())
+            self.assertTrue(cfg.timeline_store_enabled())
+            self.assertTrue(cfg.workflow_commit_enabled())
+            self.assertTrue(cfg.workflow_commit_persist_enabled())
 
 
 class ActivityTimelineStoreTests(unittest.TestCase):
@@ -357,6 +357,10 @@ class RolePathSmokeTests(unittest.TestCase):
             "deal",
             "support",
             "general_conversation",
+            "offer",  # Phase 3 — registered; resolve gated by commercial workflow flag
+            "visit_result",  # Phase 6
+            "crm_followup",
+            "closing_contract",
         ):
             self.assertIsNotNone(eng.get_spec(wid))
 

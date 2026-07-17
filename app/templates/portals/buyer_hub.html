@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>پنل خریدار | وینور</title>
+  <style>
+    body { font-family: Tahoma, sans-serif; background: #0b1220; color: #e5e7eb; margin: 0; padding: 1rem; }
+    .wrap { max-width: 28rem; margin: 0 auto; }
+    h1 { font-size: 1.15rem; margin-bottom: .25rem; }
+    .muted { color: #9ca3af; font-size: .75rem; }
+    .card { background: #12181f; border: 1px solid rgba(255,255,255,.1); border-radius: 1rem; padding: 1rem; margin: .75rem 0; }
+    a.row { display: block; color: #e5e7eb; text-decoration: none; padding: .85rem 1rem; border-radius: .85rem; border: 1px solid rgba(255,255,255,.1); background: #12181f; margin: .5rem 0; }
+    a.row:hover { border-color: rgba(16,185,129,.45); }
+    .title { font-weight: 700; font-size: .9rem; }
+    .sub { color: #9ca3af; font-size: .72rem; margin-top: .2rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>پنل خریدار</h1>
+    <p class="muted">شماره {{ me_phone }} · نقش‌ها: {{ roles|join(', ') }}</p>
+    {% if flash_msg %}<p class="muted">{{ flash_msg }}</p>{% endif %}
+    <div class="card">
+      <div class="title">خلاصه</div>
+      <p class="sub">پیشنهادها: {{ offers_count }} · معاملات مرتبط: {{ deals_count }}</p>
+    </div>
+    <a class="row" href="{{ url_for('main.my_offers') }}">
+      <div class="title">پیشنهادهای من</div>
+      <div class="sub">مشاهده و پاسخ به پیشنهادها</div>
+    </a>
+    {% if 'seller' in roles %}
+    <a class="row" href="{{ url_for('roles.seller_hub') }}">
+      <div class="title">پنل فروشنده</div>
+      <div class="sub">دسترسی همکار تأییدشده</div>
+    </a>
+    {% endif %}
+  </div>
+</body>
+</html>

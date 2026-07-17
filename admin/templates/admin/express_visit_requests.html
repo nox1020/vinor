@@ -62,6 +62,9 @@
     {{ filter_pill('actions', 'نیاز به اقدام', action_count, 'amber') }}
     {{ filter_pill('workflow', 'در روند', workflow_count, 'blue') }}
     {{ filter_pill('all', 'همه', all_count, 'blue') }}
+    {% if visit_result_ui_enabled|default(false) %}
+    {{ filter_pill('no_show', 'عدم حضور', no_show_count|default(0), 'blue') }}
+    {% endif %}
     {{ filter_pill('closed', 'بسته', closed_count, 'blue') }}
   </div>
 

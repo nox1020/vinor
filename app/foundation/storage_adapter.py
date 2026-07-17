@@ -23,6 +23,10 @@ _OBJECT_STORE_MAP = {
     "PropertyRegistration": "lands",
     "PropertyEditing": "lands",
     "SupportTicket": "support_tickets",
+    "OfferRequest": "commercial_offers",
+    "VisitResultRequest": "visit_results",
+    "FollowupRequest": "crm_followups",
+    "ContractRequest": "closing_contracts",
 }
 
 

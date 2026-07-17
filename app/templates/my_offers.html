@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>پیشنهادهای من | وینور</title>
+  <style>
+    body { font-family: Tahoma, sans-serif; background: #0b1220; color: #e5e7eb; margin: 0; padding: 1rem; }
+    .wrap { max-width: 28rem; margin: 0 auto; }
+    h1 { font-size: 1.1rem; }
+    .card { background: #12181f; border: 1px solid rgba(255,255,255,.1); border-radius: 1rem; padding: 1rem; margin: .75rem 0; }
+    .muted { color: #9ca3af; font-size: .75rem; }
+    button { border: 0; border-radius: .5rem; padding: .4rem .7rem; font-weight: 700; cursor: pointer; }
+    .ok { background: #059669; color: #fff; }
+    .no { background: transparent; color: #fca5a5; border: 1px solid rgba(248,113,113,.4); }
+    .msg { font-size: .75rem; margin: .5rem 0; }
+    .okmsg { color: #34d399; }
+    .errmsg { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>پیشنهادهای من</h1>
+    <p class="muted">پاسخ به پیشنهادهای مرتبط با شماره شما · <a href="{{ url_for('roles.buyer_hub') }}" style="color:#6ee7b7">پنل خریدار</a></p>
+    {% if flash_msg %}<p class="msg {% if flash_ok %}okmsg{% else %}errmsg{% endif %}">{{ flash_msg }}</p>{% endif %}
+    {% if not items %}
+    <p class="muted">پیشنهادی نیست.</p>
+    {% else %}
+      {% for item in items %}
+      <div class="card">
+        <div>فایل {{ item.land_code }}</div>
+        <div class="muted">{{ '{:,}'.format(item.amount) }} تومان · {{ item.status }}</div>
+        {% if item.terms %}<div class="muted">{{ item.terms }}</div>{% endif %}
+        {% if item.status in ('pending', 'countered') %}
+        <form method="post" action="{{ url_for('main.my_offer_respond', offer_id=item.id) }}" style="margin-top:.6rem;display:flex;gap:.4rem">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="ok" name="action" value="accept">پذیرش</button>
+          <button class="no" name="action" value="reject">رد</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+</body>
+</html>

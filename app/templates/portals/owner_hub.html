@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>پنل مالک | وینور</title>
+  <style>
+    body { font-family: Tahoma, sans-serif; background: #0b1220; color: #e5e7eb; margin: 0; padding: 1rem; }
+    .wrap { max-width: 28rem; margin: 0 auto; }
+    h1 { font-size: 1.15rem; }
+    .muted { color: #9ca3af; font-size: .75rem; }
+    .card { background: #12181f; border: 1px solid rgba(255,255,255,.1); border-radius: 1rem; padding: 1rem; margin: .75rem 0; }
+    a.row { display: block; color: #e5e7eb; text-decoration: none; padding: .85rem 1rem; border-radius: .85rem; border: 1px solid rgba(255,255,255,.1); background: #12181f; margin: .5rem 0; }
+    a.row:hover { border-color: rgba(251,191,36,.45); }
+    .title { font-weight: 700; font-size: .9rem; }
+    .sub { color: #9ca3af; font-size: .72rem; margin-top: .2rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>پنل مالک</h1>
+    <p class="muted">شماره {{ me_phone }} · نقش‌ها: {{ roles|join(', ') }}</p>
+    <div class="card">
+      <div class="title">آگهی‌های شما</div>
+      <p class="sub">{{ listings_count }} فایل</p>
+    </div>
+    <a class="row" href="{{ url_for('express_partner.special_listings') }}">
+      <div class="title">مدیریت آگهی‌ها</div>
+      <div class="sub">همکار ویژه / مالک</div>
+    </a>
+    <a class="row" href="{{ url_for('express_partner.special_visit_inbox') }}">
+      <div class="title">صندوق بازدید</div>
+      <div class="sub">inbox-visits</div>
+    </a>
+    <a class="row" href="{{ url_for('express_partner.special_offer_inbox') }}">
+      <div class="title">صندوق پیشنهادها</div>
+      <div class="sub">inbox-offers</div>
+    </a>
+    {% if is_seller %}
+    <a class="row" href="{{ url_for('roles.seller_hub') }}">
+      <div class="title">پنل فروشنده</div>
+      <div class="sub">خانه همکار و معاملات</div>
+    </a>
+    {% endif %}
+  </div>
+</body>
+</html>

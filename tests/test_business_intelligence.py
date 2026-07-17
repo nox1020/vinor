@@ -149,11 +149,17 @@ class ManagerIntegrationTests(unittest.TestCase):
         bis._MANAGER = None
         self.assertIsNone(run_business_intelligence(shared=_shared()))
 
-    def test_no_default_hint_flag(self) -> None:
+    def test_inject_hint_can_be_disabled(self) -> None:
         from app.business_intelligence.config import bi_inject_hint
 
         os.environ["VINOR_BI_INJECT_HINT"] = "0"
         self.assertFalse(bi_inject_hint())
+
+    def test_inject_hint_default_on(self) -> None:
+        from app.business_intelligence.config import bi_inject_hint
+
+        os.environ.pop("VINOR_BI_INJECT_HINT", None)
+        self.assertTrue(bi_inject_hint())
 
 
 if __name__ == "__main__":

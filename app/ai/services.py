@@ -474,7 +474,7 @@ def _summarize_older_history(
     *,
     keep_last: int,
 ) -> str:
-    if (os.environ.get("VINOR_HISTORY_SUMMARY") or "0").strip().lower() not in ("1", "true", "yes", "on"):
+    if (os.environ.get("VINOR_HISTORY_SUMMARY") or "1").strip().lower() not in ("1", "true", "yes", "on"):
         return ""
     rows = [h for h in (history or []) if isinstance(h, dict)]
     if len(rows) <= max(0, int(keep_last)):

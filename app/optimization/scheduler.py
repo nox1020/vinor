@@ -33,13 +33,13 @@ def _scheduler_loop(app: "Flask") -> None:
 
 
 def start_optimization_scheduler(app: "Flask") -> None:
-    """Opt-in background thread — default OFF. Never on request path."""
+    """Background thread — default ON. Never on request path. Disable with VINOR_OPTIMIZATION_SCHEDULER=0."""
     global _STARTED
     if not optimization_scheduler_enabled():
         try:
             app.logger.info(
                 "Optimization scheduler off "
-                "(use scripts/run_optimization_engine.py or set VINOR_OPTIMIZATION_SCHEDULER=1)"
+                "(set VINOR_OPTIMIZATION_SCHEDULER=1 to enable, or run scripts/run_optimization_engine.py)"
             )
         except Exception:
             pass

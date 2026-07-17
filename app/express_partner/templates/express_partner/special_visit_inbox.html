@@ -55,7 +55,7 @@
           همکار: {{ item.partner_name or item.partner_phone or '—' }}
           {% if item.visit_date_jalali %}<br>تاریخ: {{ item.visit_date_jalali }}{% endif %}
         </p>
-        {% if item.can_approve or item.can_reject or item.can_complete %}
+        {% if item.can_approve or item.can_reject or item.can_complete or item.can_no_show or item.can_register_result %}
         <div class="sv-actions">
           {% if item.can_approve %}
           <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='approve') }}">
@@ -67,6 +67,24 @@
           <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='complete') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="sv-btn sv-btn--ok">تأیید انجام</button>
+          </form>
+          {% endif %}
+          {% if item.can_no_show %}
+          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='no_show') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('عدم حضور مشتری ثبت شود؟')">عدم حضور</button>
+          </form>
+          {% endif %}
+          {% if item.can_register_result %}
+          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='result') }}" class="flex flex-wrap gap-1 items-center">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="outcome" class="rounded border border-white/15 bg-[#0a1018] px-2 py-1 text-[11px] text-zinc-200">
+              <option value="interested">علاقه‌مند</option>
+              <option value="not_interested">بی‌علاقه</option>
+              <option value="follow_up">نیاز به پیگیری</option>
+            </select>
+            <input name="notes" placeholder="یادداشت" class="rounded border border-white/15 bg-[#0a1018] px-2 py-1 text-[11px] text-white w-28">
+            <button type="submit" class="sv-btn sv-btn--ok">ثبت نتیجه</button>
           </form>
           {% endif %}
           {% if item.can_reject %}

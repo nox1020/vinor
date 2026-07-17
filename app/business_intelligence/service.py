@@ -60,6 +60,23 @@ def _store_obs(insights: BusinessInsights | None) -> None:
         pass
 
 
+def _merge_os_kpis(obs: dict[str, Any]) -> dict[str, Any]:
+    """Phase 7 — inject North Star OS KPIs as os_* keys (fail-open)."""
+    out = dict(obs or {})
+    try:
+        from app.hardening.config import hardening_os_kpis_enabled
+        from app.hardening.os_kpis import compute_os_kpis
+
+        if not hardening_os_kpis_enabled():
+            return out
+        kpis = compute_os_kpis()
+        for key, val in (kpis or {}).items():
+            out[f"os_{key}"] = val
+    except Exception:
+        pass
+    return out
+
+
 def get_bi_obs() -> dict[str, Any]:
     try:
         from flask import g, has_app_context, has_request_context
@@ -67,10 +84,10 @@ def get_bi_obs() -> dict[str, Any]:
         if has_app_context() or has_request_context():
             raw = getattr(g, "ai_business_intelligence_obs", None)
             if isinstance(raw, dict):
-                return dict(raw)
+                return _merge_os_kpis(raw)
     except Exception:
         pass
-    return dict(_FALLBACK_OBS) if _FALLBACK_OBS else {
+    base = dict(_FALLBACK_OBS) if _FALLBACK_OBS else {
         "market_score": 0.0,
         "property_score": 0.0,
         "lead_score": 0.0,
@@ -79,6 +96,7 @@ def get_bi_obs() -> dict[str, Any]:
         "analysis_time_ms": 0,
         "risk_count": 0,
     }
+    return _merge_os_kpis(base)
 
 
 def get_business_intelligence() -> dict[str, Any]:

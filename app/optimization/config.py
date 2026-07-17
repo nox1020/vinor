@@ -15,8 +15,8 @@ def optimization_enabled() -> bool:
 
 
 def optimization_scheduler_enabled() -> bool:
-    # Default OFF — background opt-in only
-    return (os.environ.get("VINOR_OPTIMIZATION_SCHEDULER") or "0").strip().lower() in (
+    # Default ON — disable with VINOR_OPTIMIZATION_SCHEDULER=0 if needed
+    return (os.environ.get("VINOR_OPTIMIZATION_SCHEDULER") or "1").strip().lower() in (
         "1",
         "true",
         "yes",

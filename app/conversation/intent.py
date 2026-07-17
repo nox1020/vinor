@@ -5,15 +5,19 @@ import re
 from app.conversation.interfaces import (
     INTENT_BECOME_PARTNER,
     INTENT_COMPARE,
+    INTENT_CONTRACT,
     INTENT_DEAL,
     INTENT_EDIT_PROPERTY,
+    INTENT_FOLLOWUP,
     INTENT_GENERAL,
     INTENT_NEGOTIATION,
+    INTENT_OFFER,
     INTENT_RECOMMENDATION,
     INTENT_REGISTER_PROPERTY,
     INTENT_SEARCH,
     INTENT_SUPPORT,
     INTENT_VISIT,
+    INTENT_VISIT_RESULT,
     IntentInfo,
     IntentResolver,
 )
@@ -27,9 +31,17 @@ _CHIP_MAP = {
     "find_land": INTENT_SEARCH,
     "marketing": INTENT_REGISTER_PROPERTY,
     "edit_property": INTENT_EDIT_PROPERTY,
+    "offer": INTENT_OFFER,
+    "visit_result": INTENT_VISIT_RESULT,
+    "followup": INTENT_FOLLOWUP,
+    "contract": INTENT_CONTRACT,
 }
 
 _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (INTENT_VISIT_RESULT, re.compile(r"(نتیجه بازدید|علاقه‌مند بود|علاقه مند|no.?show|عدم حضور)", re.I)),
+    (INTENT_FOLLOWUP, re.compile(r"(پیگیری|فالوآپ|follow.?up|یادآوری تماس)", re.I)),
+    (INTENT_CONTRACT, re.compile(r"(قرارداد|مبایعه|سند معامله|ثبت قرارداد)", re.I)),
+    (INTENT_OFFER, re.compile(r"(پیشنهاد قیمت|ثبت پیشنهاد|offer|قیمت پیشنهادی)", re.I)),
     (INTENT_VISIT, re.compile(r"(بازدید|وقت بازدید|ثبت بازدید)", re.I)),
     (INTENT_DEAL, re.compile(r"(معامله|فروش نهایی|ثبت معامله|قولنامه)", re.I)),
     (INTENT_BECOME_PARTNER, re.compile(r"(همکار شو|درخواست همکاری|شروع همکاری|ارتقا به همکار)", re.I)),

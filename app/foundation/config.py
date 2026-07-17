@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Phase 0 Foundation feature flags — all default OFF (100% backward compatible)."""
+"""Phase 0 Foundation feature flags — all default ON (disable via env if needed)."""
 from __future__ import annotations
 
 import os
 
 
-def _env_bool(name: str, default: str = "0") -> bool:
+def _env_bool(name: str, default: str = "1") -> bool:
     return (os.environ.get(name) or default).strip().lower() in (
         "1",
         "true",
@@ -16,7 +16,7 @@ def _env_bool(name: str, default: str = "0") -> bool:
 
 def foundation_enabled() -> bool:
     """Master switch for Phase 0 Foundation layer."""
-    return _env_bool("VINOR_FOUNDATION_ENABLED", "0")
+    return _env_bool("VINOR_FOUNDATION_ENABLED", "1")
 
 
 def activity_store_enabled() -> bool:
@@ -40,14 +40,14 @@ def workflow_commit_enabled() -> bool:
     """
     if not foundation_enabled():
         return False
-    return _env_bool("VINOR_WORKFLOW_COMMIT_ENABLED", "0")
+    return _env_bool("VINOR_WORKFLOW_COMMIT_ENABLED", "1")
 
 
 def workflow_commit_persist_enabled() -> bool:
     """
     When True, Commit Adapter may write to existing business JSON (visit/deal/apply).
-    Phase 0 keeps this OFF by default — persist path is shadow-only until later phases.
+    Default ON; set VINOR_WORKFLOW_COMMIT_PERSIST=0 to keep shadow-only.
     """
     if not workflow_commit_enabled():
         return False
-    return _env_bool("VINOR_WORKFLOW_COMMIT_PERSIST", "0")
+    return _env_bool("VINOR_WORKFLOW_COMMIT_PERSIST", "1")

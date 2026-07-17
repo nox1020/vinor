@@ -25,6 +25,17 @@ from werkzeug.utils import secure_filename
 # -----------------------------------------------------------------------------
 from app.services.notifications import add_notification
 
+
+def _admin_audit(action: str, **kwargs) -> None:
+    """Phase 7 — fail-open admin audit into Foundation Activity."""
+    try:
+        from app.hardening.audit import record_admin_audit
+
+        record_admin_audit(action=action, **kwargs)
+    except Exception:
+        pass
+
+
 # -----------------------------------------------------------------------------
 # Express Listings Management
 # -----------------------------------------------------------------------------
@@ -1047,8 +1058,16 @@ def login():
             if otp_code == expected_code:
                 session['logged_in'] = True
                 session['username'] = ADMIN_USERNAME
+                session['admin_phone'] = ADMIN_LOGIN_OTP_PHONE
                 session.permanent = True
                 clear_admin_otp()
+                _admin_audit(
+                    'admin_login',
+                    actor_key=ADMIN_LOGIN_OTP_PHONE,
+                    entity_type='admin_session',
+                    entity_id=ADMIN_USERNAME,
+                    summary='Admin OTP login success',
+                )
                 flash('خوش آمدید؛ ورود موفق.', 'success')
                 return redirect(url_for('admin.dashboard'))
 
@@ -1063,6 +1082,7 @@ def logout():
     for k in (
         'logged_in',
         'username',
+        'admin_phone',
     ):
         session.pop(k, None)
     clear_admin_otp()
@@ -1148,6 +1168,48 @@ def dashboard():
     """داشبورد عملیاتی پنل همکاران."""
     ctx = _admin_dashboard_context()
     return render_template('admin/dashboard.html', **ctx)
+
+
+@admin_bp.route('/super-admin', endpoint='super_admin_info')
+@login_required
+def super_admin_info():
+    """Phase 5 — صفحه اطلاعات Super Admin (روی login_required موجود)."""
+    from app.roles.service import is_super_admin
+    from app.roles.config import super_admin_phones
+
+    if not is_super_admin():
+        flash('دسترسی Super Admin لازم است.', 'error')
+        return redirect(url_for('admin.dashboard'))
+
+    return render_template(
+        'admin/super_admin_info.html',
+        allowlist=super_admin_phones(),
+        admin_phone=session.get('admin_phone') or ADMIN_LOGIN_OTP_PHONE,
+    )
+
+
+@admin_bp.route('/audit', endpoint='audit_log')
+@login_required
+def audit_log_page():
+    """Phase 7 — Audit ادمین (Foundation Activity source=admin)."""
+    try:
+        from app.hardening.config import hardening_ui_enabled
+        from app.hardening.permissions import PERM_AUDIT, has_permission
+        from app.hardening.service import list_admin_audit
+
+        if not hardening_ui_enabled():
+            abort(404)
+        if not has_permission(PERM_AUDIT):
+            flash('دسترسی Audit ندارید.', 'error')
+            return redirect(url_for('admin.dashboard'))
+        events = list_admin_audit(limit=100)
+    except Exception:
+        abort(404)
+
+    return render_template(
+        'admin/audit.html',
+        events=events,
+    )
 
 
 def _admin_dashboard_context() -> Dict[str, Any]:
@@ -1332,6 +1394,26 @@ def _admin_dashboard_context() -> Dict[str, Any]:
     except Exception:
         people_stats = {'total': 0, 'partners': len(partners), 'online': len(online_partners)}
 
+    is_super_admin = False
+    try:
+        from app.roles.service import is_super_admin as _is_sa
+        is_super_admin = bool(_is_sa())
+    except Exception:
+        is_super_admin = False
+
+    os_kpis = {}
+    hardening_ui = False
+    try:
+        from app.hardening.config import hardening_os_kpis_enabled, hardening_ui_enabled
+        from app.hardening.service import get_os_kpis
+
+        hardening_ui = bool(hardening_ui_enabled())
+        if hardening_os_kpis_enabled():
+            os_kpis = get_os_kpis() or {}
+    except Exception:
+        os_kpis = {}
+        hardening_ui = False
+
     return {
         'pending_actions_total': pending_actions_total,
         'pending_apps_count': len(pending_apps),
@@ -1351,6 +1433,9 @@ def _admin_dashboard_context() -> Dict[str, Any]:
         'routines_count_month': routines_count_month,
         'action_queue': action_queue,
         'online_preview': online_preview,
+        'is_super_admin': is_super_admin,
+        'os_kpis': os_kpis,
+        'hardening_ui_enabled': hardening_ui,
     }
 
 
@@ -4253,6 +4338,13 @@ def express_partner_send_message(phone: str):
 @login_required
 def express_partner_set_special(phone: str):
     """اعطای/حذف سطح همکار ویژه."""
+    try:
+        from app.hardening.permissions import PERM_PARTNERS, has_permission
+        if not has_permission(PERM_PARTNERS):
+            flash('دسترسی کافی برای این عملیات ندارید.', 'error')
+            return redirect(url_for('admin.dashboard'))
+    except Exception:
+        pass
     from app.express_partner.partner_roles import partner_is_approved, set_partner_tier
     from app.utils.storage import load_express_partners, save_express_partners
 
@@ -4286,6 +4378,13 @@ def express_partner_set_special(phone: str):
         flash('ذخیره سطح ویژه ناموفق بود.', 'danger')
         return redirect(url_for('admin.express_partner_detail', **redirect_kw))
 
+    _admin_audit(
+        'admin_partner_set_special',
+        entity_type='partner',
+        entity_id=phone,
+        summary=f"Partner special={'on' if want_special else 'off'}",
+        payload={'special': want_special},
+    )
     flash('همکار ویژه فعال شد.' if want_special else 'سطح ویژه برداشته شد.', 'success')
     return redirect(url_for('admin.express_partner_detail', **redirect_kw))
 
@@ -4656,6 +4755,13 @@ def express_commission_new():
 @admin_bp.post('/express/commissions/<int:cid>/approve')
 @login_required
 def express_commission_approve(cid: int):
+    try:
+        from app.hardening.permissions import PERM_FINANCE, has_permission
+        if not has_permission(PERM_FINANCE):
+            flash('دسترسی کافی برای این عملیات ندارید.', 'error')
+            return redirect(url_for('admin.dashboard'))
+    except Exception:
+        pass
     from app.express_partner.commissions_flow import commission_is_deal, commission_is_referral, commission_is_visit
 
     filter_hint = (request.form.get('filter') or 'pending').strip()
@@ -4723,6 +4829,18 @@ def express_commission_approve(cid: int):
                             complete_mission(partner_phone_deal, land_code=land_code)
                         except Exception as e:
                             current_app.logger.error('complete mission after deal approve: %s', e)
+                    # Phase 4 Closing: sync Deal → closed (fail-open).
+                    try:
+                        from app.closing.deal_bridge import maybe_sync_deal_on_commission_status
+                        maybe_sync_deal_on_commission_status(
+                            partner_phone=partner_phone_deal,
+                            land_code=land_code,
+                            commission_id=str(commission_record.get('id') or ''),
+                            commission_status='approved',
+                            sale_amount=int(commission_record.get('sale_amount') or 0),
+                        )
+                    except Exception:
+                        pass
             except Exception as e:
                 current_app.logger.error(f"Error updating assignment status to sold: {e}")
 
@@ -4773,6 +4891,14 @@ def express_commission_approve(cid: int):
             )
         else:
             flash('پورسانت تأیید شد و به موجودی همکار اضافه شد.', 'success')
+        _admin_audit(
+            'admin_commission_approve',
+            entity_type='commission',
+            entity_id=str(cid),
+            land_code=str(commission_record.get('land_code') or ''),
+            summary=f"Commission {cid} approved",
+            payload={'partner_phone': str(commission_record.get('partner_phone') or '')},
+        )
     elif not changed:
         flash('پورسانت قبلاً تایید شده است.', 'warning')
     return redirect(_express_commissions_redirect(filter_hint))
@@ -4780,6 +4906,13 @@ def express_commission_approve(cid: int):
 @admin_bp.post('/express/commissions/<int:cid>/pay')
 @login_required
 def express_commission_pay(cid: int):
+    try:
+        from app.hardening.permissions import PERM_FINANCE, has_permission
+        if not has_permission(PERM_FINANCE):
+            flash('دسترسی کافی برای این عملیات ندارید.', 'error')
+            return redirect(url_for('admin.dashboard'))
+    except Exception:
+        pass
     flash(
         'واریز پورسانت فقط از مسیر «مالی → درخواست‌های برداشت» انجام می‌شود. '
         'پس از تأیید پورسانت، همکار درخواست برداشت می‌دهد و شما وضعیت را «پرداخت‌شده» می‌کنید.',
@@ -4790,6 +4923,13 @@ def express_commission_pay(cid: int):
 @admin_bp.post('/express/commissions/<int:cid>/reject')
 @login_required
 def express_commission_reject(cid: int):
+    try:
+        from app.hardening.permissions import PERM_FINANCE, has_permission
+        if not has_permission(PERM_FINANCE):
+            flash('دسترسی کافی برای این عملیات ندارید.', 'error')
+            return redirect(url_for('admin.dashboard'))
+    except Exception:
+        pass
     from app.express_partner.commissions_flow import (
         commission_is_deal,
         commission_is_referral,
@@ -4867,6 +5007,18 @@ def express_commission_reject(cid: int):
                         save_express_assignments(assignments)
             except Exception as e:
                 current_app.logger.error('Error reverting after commission reject: %s', e)
+            # Phase 4 Closing: sync Deal → cancelled (fail-open).
+            try:
+                from app.closing.deal_bridge import maybe_sync_deal_on_commission_status
+                maybe_sync_deal_on_commission_status(
+                    partner_phone=partner_phone,
+                    land_code=land_code,
+                    commission_id=str(commission_record.get('id') or ''),
+                    commission_status='rejected',
+                    sale_amount=int(commission_record.get('sale_amount') or 0),
+                )
+            except Exception:
+                pass
 
         if old_status == 'approved':
             try:
@@ -4913,6 +5065,14 @@ def express_commission_reject(cid: int):
             flash('پورسانت بازدید رد شد.', 'info')
         else:
             flash('پورسانت رد شد.', 'info')
+        _admin_audit(
+            'admin_commission_reject',
+            entity_type='commission',
+            entity_id=str(cid),
+            land_code=str(commission_record.get('land_code') or ''),
+            summary=f"Commission {cid} rejected",
+            payload={'partner_phone': str(commission_record.get('partner_phone') or '')},
+        )
     else:
         flash('فقط پورسانت‌های در انتظار یا تأییدشده قابل رد هستند.', 'warning')
     return redirect(_express_commissions_redirect(filter_hint))
@@ -4920,7 +5080,19 @@ def express_commission_reject(cid: int):
 @admin_bp.post('/express/commissions/clear-all')
 @login_required
 def clear_all_commissions():
+    try:
+        from app.hardening.permissions import PERM_SUPER, has_permission
+        if not has_permission(PERM_SUPER):
+            flash('فقط Super Admin می‌تواند همه پورسانت‌ها را پاک کند.', 'error')
+            return redirect(url_for('admin.express_commissions'))
+    except Exception:
+        pass
     save_express_commissions([])
+    _admin_audit(
+        'admin_commission_clear_all',
+        entity_type='commission',
+        summary='All commissions cleared',
+    )
     flash('همه پورسانت‌ها حذف شدند.', 'info')
     return redirect(url_for('admin.express_commissions'))
 
@@ -5085,6 +5257,7 @@ def express_visit_requests():
         CANCELLED_STATUS,
         COMPLETED_STATUS,
         DONE_PENDING_STATUS,
+        NO_SHOW_STATUS,
         PENDING_STATUS,
         VISIT_WEEKDAY_LABELS,
         VISIT_WEEKDAY_ORDER,
@@ -5268,6 +5441,7 @@ def express_visit_requests():
     done_pending_count = sum(1 for x in items if _group_has_status(x, DONE_PENDING_STATUS))
     done_count = sum(1 for x in items if _group_has_status(x, COMPLETED_STATUS))
     closed_count = sum(1 for x in items if x.get('group_all_cancelled'))
+    no_show_count = sum(1 for x in items if _group_has_status(x, NO_SHOW_STATUS))
     active_count = sum(
         1
         for x in items
@@ -5275,6 +5449,13 @@ def express_visit_requests():
     )
     workflow_count = sum(1 for x in items if x.get('in_workflow'))
     action_count = sum(1 for x in items if x.get('workflow_needs_action'))
+
+    visit_result_ui = False
+    try:
+        from app.visit_result.config import visit_result_ui_enabled
+        visit_result_ui = bool(visit_result_ui_enabled())
+    except Exception:
+        visit_result_ui = False
 
     if flt == 'actions':
         visible = [x for x in items if x.get('workflow_needs_action')]
@@ -5289,6 +5470,8 @@ def express_visit_requests():
         visible = [x for x in items if _group_has_status(x, DONE_PENDING_STATUS)]
     elif flt == 'done':
         visible = [x for x in items if _group_has_status(x, COMPLETED_STATUS)]
+    elif flt == 'no_show' and visit_result_ui:
+        visible = [x for x in items if _group_has_status(x, NO_SHOW_STATUS)]
     elif flt == 'closed':
         visible = [x for x in items if x.get('group_all_cancelled')]
     elif flt == 'active':
@@ -5307,7 +5490,14 @@ def express_visit_requests():
 
     if flt not in ('workflow', 'actions'):
         visible.sort(key=lambda x: x.get('created_at') or '', reverse=True)
-        visible.sort(key=lambda x: {PENDING_STATUS: 0, DONE_PENDING_STATUS: 1, APPROVED_STATUS: 2, COMPLETED_STATUS: 3, CANCELLED_STATUS: 4}.get(x.get('status') or '', 9))
+        visible.sort(key=lambda x: {
+            PENDING_STATUS: 0,
+            DONE_PENDING_STATUS: 1,
+            APPROVED_STATUS: 2,
+            COMPLETED_STATUS: 3,
+            NO_SHOW_STATUS: 4,
+            CANCELLED_STATUS: 5,
+        }.get(x.get('status') or '', 9))
     all_count = len(items)
 
     return render_template(
@@ -5318,11 +5508,13 @@ def express_visit_requests():
         done_pending_count=done_pending_count,
         done_count=done_count,
         closed_count=closed_count,
+        no_show_count=no_show_count,
         active_count=active_count,
         workflow_count=workflow_count,
         action_count=action_count,
         all_count=all_count,
         current_filter=flt,
+        visit_result_ui_enabled=visit_result_ui,
         visit_weekday_labels=VISIT_WEEKDAY_LABELS,
         visit_weekday_order=VISIT_WEEKDAY_ORDER,
         visit_allowed_weekdays=get_visit_allowed_weekdays(),
@@ -5369,6 +5561,13 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
 @admin_bp.post('/express/visit-requests/<vid>/recreate-visit-commission')
 @login_required
 def express_visit_request_recreate_commission(vid: str):
+    try:
+        from app.hardening.permissions import PERM_VISITS, has_permission
+        if not has_permission(PERM_VISITS):
+            flash('دسترسی کافی برای این عملیات ندارید.', 'error')
+            return redirect(url_for('admin.dashboard'))
+    except Exception:
+        pass
     from app.express_partner.visit_requests import COMPLETED_STATUS
     from app.express_partner.commissions_flow import ensure_visit_commission_after_visit_confirm
 
@@ -5385,6 +5584,13 @@ def express_visit_request_recreate_commission(vid: str):
         flash('پورسانت بازدید فقط پس از تأیید انجام بازدید قابل ثبت مجدد است.', 'error')
         return redirect(_express_visit_requests_redirect(filter_hint, vid))
     if ensure_visit_commission_after_visit_confirm(rec):
+        _admin_audit(
+            'admin_visit_recreate_commission',
+            entity_type='visit_request',
+            entity_id=str(vid),
+            land_code=str(rec.get('land_code') or ''),
+            summary=f"Recreated visit commission for {vid}",
+        )
         flash('پورسانت بازدید مجدداً در صف تأیید ثبت شد.', 'success')
     else:
         flash('ثبت مجدد پورسانت بازدید ممکن نیست (مبلغ صفر یا رکورد فعال موجود است).', 'warning')
@@ -5394,9 +5600,17 @@ def express_visit_request_recreate_commission(vid: str):
 @admin_bp.post('/express/visit-requests/<vid>/status')
 @login_required
 def express_visit_request_status(vid: str):
+    try:
+        from app.hardening.permissions import PERM_VISITS, has_permission
+        if not has_permission(PERM_VISITS):
+            flash('دسترسی کافی برای این عملیات ندارید.', 'error')
+            return redirect(url_for('admin.dashboard'))
+    except Exception:
+        pass
     from app.express_partner.visit_requests import (
         APPROVED_STATUS,
         COMPLETED_STATUS,
+        NO_SHOW_STATUS,
         admin_can_transition_visit,
         admin_update_visit_request_status,
     )
@@ -5408,6 +5622,7 @@ def express_visit_request_status(vid: str):
     new_status = (request.form.get('status') or '').strip()
     admin_note = (request.form.get('admin_note') or '').strip()
     filter_hint = (request.form.get('filter') or 'workflow').strip()
+    outcome = (request.form.get('outcome') or '').strip()
     items = load_express_visit_requests() or []
     if not isinstance(items, list):
         items = []
@@ -5416,6 +5631,16 @@ def express_visit_request_status(vid: str):
         if isinstance(row, dict) and str(row.get('id') or '') == str(vid).strip():
             prev_status = (str(row.get('status') or '')).strip()
             break
+
+    if new_status == NO_SHOW_STATUS:
+        try:
+            from app.visit_result.status_bridge import is_no_show_writable
+            if not is_no_show_writable():
+                flash('ثبت عدم حضور فعلاً فعال نیست.', 'error')
+                return redirect(_express_visit_requests_redirect(filter_hint, vid))
+        except Exception:
+            flash('ثبت عدم حضور در دسترس نیست.', 'error')
+            return redirect(_express_visit_requests_redirect(filter_hint, vid))
 
     if prev_status and new_status and not admin_can_transition_visit(prev_status, new_status):
         flash('این تغییر وضعیت مجاز نیست. ابتدا همکار باید «بازدید انجام شد» را از روی صفحه فایل ثبت کند.', 'error')
@@ -5440,6 +5665,47 @@ def express_visit_request_status(vid: str):
             flash('یادداشت درخواست بازدید ذخیره شد.', 'success')
         else:
             _flash_visit_request_status_change(rec or {}, new_status)
+            _admin_audit(
+                'admin_visit_status',
+                entity_type='visit_request',
+                entity_id=str(vid),
+                land_code=str((rec or {}).get('land_code') or ''),
+                summary=f"Visit {vid}: {prev_status} → {new_status}",
+                payload={'prev_status': prev_status, 'new_status': new_status},
+            )
+            # Phase 2: persist VisitResult on no_show or optional outcome (never commission).
+            if rec and new_status == NO_SHOW_STATUS:
+                try:
+                    from app.visit_result.service import register_result
+
+                    register_result(
+                        visit_request_id=str(rec.get('id') or vid),
+                        partner_phone=str(rec.get('partner_phone') or ''),
+                        land_code=str(rec.get('land_code') or ''),
+                        outcome='no_show',
+                        notes=admin_note,
+                        actor_key='admin',
+                        source='admin',
+                    )
+                except Exception:
+                    current_app.logger.exception('admin visit no_show result failed vid=%s', vid)
+            elif rec and outcome:
+                try:
+                    from app.visit_result.config import visit_result_ui_enabled
+                    from app.visit_result.service import register_result, valid_outcome
+
+                    if visit_result_ui_enabled() and valid_outcome(outcome) and outcome != 'no_show':
+                        register_result(
+                            visit_request_id=str(rec.get('id') or vid),
+                            partner_phone=str(rec.get('partner_phone') or ''),
+                            land_code=str(rec.get('land_code') or ''),
+                            outcome=outcome,
+                            notes=admin_note,
+                            actor_key='admin',
+                            source='admin',
+                        )
+                except Exception:
+                    current_app.logger.exception('admin visit result failed vid=%s', vid)
             if rec and new_status == COMPLETED_STATUS:
                 from app.express_partner.commissions_flow import ensure_visit_commission_after_visit_confirm
 
@@ -5501,6 +5767,13 @@ def _financial_withdrawals_redirect(filter_hint: str = '') -> str:
 @admin_bp.post('/financial/withdrawals/<wid>/status')
 @login_required
 def financial_withdrawal_status(wid: str):
+    try:
+        from app.hardening.permissions import PERM_FINANCE, has_permission
+        if not has_permission(PERM_FINANCE):
+            flash('دسترسی کافی برای این عملیات ندارید.', 'error')
+            return redirect(url_for('admin.dashboard'))
+    except Exception:
+        pass
     new_status = (request.form.get('status') or '').strip().lower()
     admin_note = (request.form.get('admin_note') or '').strip()
     filter_hint = (request.form.get('filter') or 'active').strip()
@@ -5657,6 +5930,17 @@ def financial_withdrawal_status(wid: str):
             flash(
                 f'وضعیت درخواست به «{labels.get(new_status, new_status)}» تغییر کرد.',
                 'success',
+            )
+            _admin_audit(
+                'admin_withdrawal_status',
+                entity_type='withdrawal',
+                entity_id=wid_str,
+                summary=f"Withdrawal {wid_str}: {old_status} → {new_status}",
+                payload={
+                    'partner_phone': partner_phone,
+                    'old_status': old_status,
+                    'new_status': new_status,
+                },
             )
     except Exception:
         current_app.logger.exception('save_partner_withdrawals status failed')

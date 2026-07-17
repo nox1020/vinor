@@ -15,6 +15,30 @@
           همه چیز به‌روز است — مورد فوری در صف نیست.
         {% endif %}
       </p>
+      {% if is_super_admin|default(false) %}
+      <p class="mt-1">
+        <a href="{{ url_for('admin.super_admin_info') }}"
+           class="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 dark:text-violet-400 hover:underline">
+          <i class="fa-solid fa-shield-halved"></i>
+          Super Admin
+        </a>
+        {% if hardening_ui_enabled|default(false) %}
+        <a href="{{ url_for('admin.audit_log') }}"
+           class="ms-3 inline-flex items-center gap-1 text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline">
+          <i class="fa-solid fa-clipboard-list"></i>
+          Audit
+        </a>
+        {% endif %}
+      </p>
+      {% elif hardening_ui_enabled|default(false) %}
+      <p class="mt-1">
+        <a href="{{ url_for('admin.audit_log') }}"
+           class="inline-flex items-center gap-1 text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline">
+          <i class="fa-solid fa-clipboard-list"></i>
+          Audit
+        </a>
+      </p>
+      {% endif %}
     </div>
     <a href="{{ url_for('admin.express_partners') }}"
        class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition">
@@ -22,6 +46,35 @@
       کاربران و همکاران
     </a>
   </div>
+
+  {% if os_kpis %}
+  <section>
+    <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 px-1">شاخص‌های OS (قیف فروش)</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+        <p class="text-[10px] text-gray-500">Visit Call Rate</p>
+        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ '%.0f'|format((os_kpis.visit_call_rate or 0) * 100) }}%</p>
+      </div>
+      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+        <p class="text-[10px] text-gray-500">Visit Booking</p>
+        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ '%.0f'|format((os_kpis.visit_booking_rate or 0) * 100) }}%</p>
+      </div>
+      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+        <p class="text-[10px] text-gray-500">Visit→Deal</p>
+        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ '%.0f'|format((os_kpis.visit_to_deal_rate or 0) * 100) }}%</p>
+      </div>
+      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+        <p class="text-[10px] text-gray-500">Deal Close</p>
+        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ '%.0f'|format((os_kpis.deal_close_rate or 0) * 100) }}%</p>
+      </div>
+      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+        <p class="text-[10px] text-gray-500">Sales Volume</p>
+        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ os_kpis.sales_volume_count or 0 }}</p>
+        <p class="text-[10px] text-gray-400 tabular-nums">{{ '{:,}'.format(os_kpis.sales_volume_amount or 0) }} ت</p>
+      </div>
+    </div>
+  </section>
+  {% endif %}
 
   <!-- نیاز به اقدام -->
   <section>

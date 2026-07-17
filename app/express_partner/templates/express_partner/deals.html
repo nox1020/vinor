@@ -1,0 +1,120 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}معاملات و بستن{% endblock %}
+{% block content %}
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+  {{ ep_header_start(id='partnerDealsHeader') }}
+  {% call ep_header_row('معاملات و بستن', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+  {{ ep_header_end() }}
+
+  <div id="partnerDealsPage"
+       class="partner-page-scroll-pad min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
+    <div class="mx-auto max-w-lg space-y-4 px-4 sm:px-6">
+
+      {% if flash_msg %}
+      <p class="text-xs {% if flash_ok %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ flash_msg }}</p>
+      {% endif %}
+
+      <section class="rounded-2xl border border-sky-600/30 bg-gradient-to-br from-sky-950/80 via-[#12161f] to-[#0f1419] p-4">
+        <h2 class="text-sm font-bold text-white">بستن معامله</h2>
+        <p class="mt-1 text-xs text-sky-100/75">Deal از مسیر mark-in-transaction همگام می‌شود؛ صفحات پورسانت و برداشت دست‌نخورده‌اند.</p>
+      </section>
+
+      {% if not items %}
+      <section class="rounded-2xl border border-dashed border-white/15 bg-[#0c1218] px-4 py-10 text-center">
+        <p class="text-sm font-medium text-zinc-300">هنوز معامله‌ای ثبت نشده</p>
+        <p class="mt-1 text-xs text-zinc-500">با «در حال معامله» کردن فایل، Deal ساخته می‌شود.</p>
+      </section>
+      {% else %}
+      <ul class="space-y-3">
+        {% for item in items %}
+        <li class="rounded-2xl border border-white/10 bg-[#12181f] p-4">
+          <div class="flex justify-between gap-2">
+            <div class="text-right min-w-0">
+              <p class="text-sm font-bold text-white">فایل {{ item.land_code }}</p>
+              <p class="mt-0.5 text-[10px] text-zinc-500">{{ item.status }}{% if item.assignment_status %} · assignment: {{ item.assignment_status }}{% endif %}</p>
+              {% if item.sale_amount %}<p class="text-xs text-zinc-300">مبلغ فروش {{ '{:,}'.format(item.sale_amount) }} تومان</p>{% endif %}
+              {% if item.commission_id %}<p class="text-[10px] text-zinc-500">commission #{{ item.commission_id }}</p>{% endif %}
+            </div>
+          </div>
+
+          <div class="mt-3 space-y-2 border-t border-white/5 pt-3">
+            <p class="text-[10px] font-semibold text-zinc-400">قرارداد</p>
+            {% for c in item.contracts %}
+            <div class="rounded-xl border border-white/5 bg-[#0a1018] p-3 text-xs">
+              <p class="text-zinc-200">{{ c.title }} · {{ c.document_status }}</p>
+              <form method="post" action="{{ url_for('express_partner.contract_document_update', contract_id=c.id) }}" class="mt-2 flex flex-wrap gap-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <select name="document_status" class="rounded-lg border border-white/10 bg-[#050a0e] px-2 py-1 text-[11px] text-white">
+                  <option value="draft" {% if c.document_status=='draft' %}selected{% endif %}>draft</option>
+                  <option value="sent" {% if c.document_status=='sent' %}selected{% endif %}>sent</option>
+                  <option value="signed" {% if c.document_status=='signed' %}selected{% endif %}>signed</option>
+                  <option value="void" {% if c.document_status=='void' %}selected{% endif %}>void</option>
+                </select>
+                <button class="rounded-lg bg-sky-600/80 px-2 py-1 text-[11px] font-bold text-white">به‌روز</button>
+              </form>
+            </div>
+            {% else %}
+            <form method="post" action="{{ url_for('express_partner.deal_contract_create', deal_id=item.id) }}" class="space-y-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input name="title" placeholder="عنوان قرارداد" class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-2 text-xs text-white">
+              <input name="document_ref" placeholder="مرجع سند (اختیاری)" class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-2 text-xs text-white">
+              <button type="submit" class="rounded-lg bg-emerald-600/80 px-3 py-1.5 text-[11px] font-bold text-white">ثبت قرارداد</button>
+            </form>
+            {% endfor %}
+          </div>
+
+          <div class="mt-3 space-y-2 border-t border-white/5 pt-3">
+            <p class="text-[10px] font-semibold text-zinc-400">اقساط</p>
+            {% for p in item.payments %}
+            <div class="flex items-center justify-between gap-2 rounded-xl border border-white/5 bg-[#0a1018] px-3 py-2 text-xs">
+              <span>{{ p.milestone_label or 'قسط' }} · {{ '{:,}'.format(p.amount) }} · {{ p.status }}</span>
+              {% if p.status != 'paid' %}
+              <form method="post" action="{{ url_for('express_partner.payment_mark_paid', payment_id=p.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="text-emerald-300">پرداخت شد</button>
+              </form>
+              {% endif %}
+            </div>
+            {% endfor %}
+            <form method="post" action="{{ url_for('express_partner.deal_payment_create', deal_id=item.id) }}" class="space-y-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input name="amount" type="number" min="1" required placeholder="مبلغ قسط" dir="ltr"
+                     class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-2 text-xs text-white">
+              <input name="milestone_label" placeholder="برچسب (مثلاً بیعانه)" class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-2 text-xs text-white">
+              <button type="submit" class="rounded-lg border border-sky-500/40 px-3 py-1.5 text-[11px] text-sky-200">افزودن قسط</button>
+            </form>
+          </div>
+
+          <div class="mt-3 space-y-2 border-t border-white/5 pt-3">
+            <p class="text-[10px] font-semibold text-zinc-400">تسویه</p>
+            {% for s in item.settlements %}
+            <p class="text-xs text-zinc-300">{{ s.status }} · {{ '{:,}'.format(s.total_amount) }}{% if s.withdrawal_id %} · برداشت {{ s.withdrawal_id }}{% endif %}</p>
+            {% endfor %}
+            <form method="post" action="{{ url_for('express_partner.deal_settlement_create', deal_id=item.id) }}" class="space-y-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input name="partner_amount" type="number" min="0" placeholder="سهم همکار" dir="ltr"
+                     class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-2 text-xs text-white">
+              <input name="withdrawal_id" placeholder="شناسه برداشت (اختیاری)" dir="ltr"
+                     class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-2 text-xs text-white">
+              <button type="submit" class="rounded-lg border border-amber-500/40 px-3 py-1.5 text-[11px] text-amber-200">باز کردن تسویه</button>
+            </form>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% set bottom_nav_active = 'profile' %}
+    {% include 'express_partner/partials/partner_tab_footer.html' %}
+  </div>
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
+  <script>
+  (function () {
+    if (window.__vinorPartnerHeaderChromeSetup) {
+      try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
+    }
+  })();
+  </script>
+{% endblock %}

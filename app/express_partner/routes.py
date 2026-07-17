@@ -974,6 +974,12 @@ def _finalize_partner_login(phone: str) -> str:
         session.modified = True
     except Exception:
         pass
+    # Phase 5 Roles: cache portal roles after login (does not change OTP keys).
+    try:
+        from app.roles.service import refresh_session_portal_roles
+        refresh_session_portal_roles(session)
+    except Exception:
+        pass
     return _redirect_after_login(canonical)
 
 
@@ -3525,6 +3531,521 @@ def favorites_page():
     return resp
 
 
+def _crm_ui_or_404():
+    """Gate CRM partner UI behind feature flags (default ON)."""
+    try:
+        from app.crm.config import crm_ui_enabled
+        if crm_ui_enabled():
+            return None
+    except Exception:
+        pass
+    from flask import abort
+    abort(404)
+
+
+@express_partner_bp.get('/customers', endpoint='customers')
+@require_partner_access()
+def customers_page():
+    """Phase 1 CRM — مشتریان من (فلگ VINOR_CRM_* پیش‌فرض خاموش)."""
+    _crm_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.crm.config import VISIT_CALL_TARGET
+    from .customers import partner_customers_view
+
+    flash_msg = (request.args.get('msg') or '').strip()
+    flash_ok = (request.args.get('ok') or '1').strip() != '0'
+    return render_template(
+        'express_partner/customers.html',
+        me_phone=me_phone,
+        customers=partner_customers_view(me_phone),
+        visit_call_target=VISIT_CALL_TARGET,
+        flash_msg=flash_msg,
+        flash_ok=flash_ok,
+        hide_header=True,
+        bottom_nav_active='profile',
+    )
+
+
+@express_partner_bp.post('/customers', endpoint='customers_create')
+@require_partner_access()
+def customers_create():
+    _crm_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.crm.service import upsert_contact
+    from app.services.sms import normalize_iran_mobile
+
+    first = (request.form.get('first_name') or '').strip()
+    last = (request.form.get('last_name') or '').strip()
+    phone_raw = (request.form.get('customer_phone') or '').strip()
+    phone = normalize_iran_mobile(phone_raw) or phone_raw
+    if not first or not last or not phone:
+        return redirect(url_for('express_partner.customers', ok=0, msg='نام و شماره الزامی است.'))
+    rec = upsert_contact(
+        partner_phone=me_phone,
+        customer_phone=phone,
+        first_name=first,
+        last_name=last,
+        source='manual',
+    )
+    if not rec:
+        return redirect(url_for('express_partner.customers', ok=0, msg='ثبت مشتری ممکن نشد.'))
+    return redirect(url_for('express_partner.customers', ok=1, msg='مشتری ذخیره شد.'))
+
+
+@express_partner_bp.post('/customers/<contact_id>/calls', endpoint='customers_log_call')
+@require_partner_access()
+def customers_log_call(contact_id: str):
+    _crm_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.crm.config import VISIT_CALL_TARGET
+    from app.crm.service import get_contact, log_call
+
+    contact = get_contact(contact_id)
+    me_n = normalize_iran_mobile(me_phone) or me_phone
+    owner = normalize_iran_mobile(contact.partner_phone) if contact else ""
+    if not contact or owner != me_n:
+        return redirect(url_for('express_partner.customers', ok=0, msg='مشتری یافت نشد.'))
+    outcome = (request.form.get('outcome') or '').strip()
+    notes = (request.form.get('notes') or '').strip()
+    to_number = (request.form.get('to_number') or '').strip() or VISIT_CALL_TARGET
+    call = log_call(
+        partner_phone=me_phone,
+        contact_id=contact_id,
+        outcome=outcome,
+        notes=notes,
+        to_number=to_number,
+    )
+    if not call:
+        return redirect(url_for('express_partner.customers', ok=0, msg='ثبت تماس ممکن نشد.'))
+    return redirect(url_for('express_partner.customers', ok=1, msg='تماس ثبت شد.'))
+
+
+@express_partner_bp.post('/customers/<contact_id>/followups', endpoint='customers_followup')
+@require_partner_access()
+def customers_followup(contact_id: str):
+    _crm_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.crm.service import get_contact, schedule_followup
+
+    contact = get_contact(contact_id)
+    me_n = normalize_iran_mobile(me_phone) or me_phone
+    owner = normalize_iran_mobile(contact.partner_phone) if contact else ""
+    if not contact or owner != me_n:
+        return redirect(url_for('express_partner.customers', ok=0, msg='مشتری یافت نشد.'))
+    due_at = (request.form.get('due_at') or '').strip()
+    notes = (request.form.get('notes') or '').strip()
+    fu = schedule_followup(
+        partner_phone=me_phone,
+        contact_id=contact_id,
+        due_at=due_at,
+        notes=notes,
+    )
+    if not fu:
+        return redirect(url_for('express_partner.customers', ok=0, msg='ثبت پیگیری ممکن نشد.'))
+    return redirect(url_for('express_partner.customers', ok=1, msg='پیگیری ثبت شد.'))
+
+
+def _commercial_ui_or_404():
+    try:
+        from app.commercial.config import commercial_ui_enabled
+        if commercial_ui_enabled():
+            return None
+    except Exception:
+        pass
+    from flask import abort
+    abort(404)
+
+
+@express_partner_bp.get('/negotiations', endpoint='negotiations')
+@require_partner_access()
+def negotiations_page():
+    """Phase 3 Commercial — مذاکرات همکار (فلگ پیش‌فرض خاموش)."""
+    _commercial_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.commercial.service import (
+        list_partner_negotiations,
+        list_partner_offers,
+        list_partner_reservations,
+    )
+
+    negs = list_partner_negotiations(me_phone)
+    offers = list_partner_offers(me_phone)
+    by_neg: dict = {}
+    for o in offers:
+        by_neg.setdefault(o.negotiation_id, []).append({
+            'id': o.id,
+            'amount': o.amount,
+            'status': o.status,
+            'terms': o.terms,
+        })
+    items = []
+    for n in negs:
+        items.append({
+            'id': n.id,
+            'land_code': n.land_code,
+            'buyer_phone': n.buyer_phone,
+            'status': n.status,
+            'source': n.source,
+            'offers': by_neg.get(n.id, []),
+        })
+    reservations = [
+        {
+            'id': r.id,
+            'land_code': r.land_code,
+            'status': r.status,
+            'expires_at': r.expires_at,
+        }
+        for r in list_partner_reservations(me_phone)
+    ]
+    flash_msg = (request.args.get('msg') or '').strip()
+    flash_ok = (request.args.get('ok') or '1').strip() != '0'
+    return render_template(
+        'express_partner/negotiations.html',
+        me_phone=me_phone,
+        items=items,
+        reservations=reservations,
+        flash_msg=flash_msg,
+        flash_ok=flash_ok,
+        hide_header=True,
+        bottom_nav_active='profile',
+    )
+
+
+@express_partner_bp.post('/negotiations', endpoint='negotiations_create')
+@require_partner_access()
+def negotiations_create():
+    _commercial_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.commercial.service import propose_offer
+
+    land_code = (request.form.get('land_code') or '').strip()
+    buyer_phone = (request.form.get('buyer_phone') or '').strip()
+    terms = (request.form.get('terms') or '').strip()
+    try:
+        amount = int(request.form.get('amount') or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    offer = propose_offer(
+        land_code=land_code,
+        partner_phone=me_phone,
+        buyer_phone=buyer_phone,
+        amount=amount,
+        terms=terms,
+        proposed_by='partner',
+    )
+    if not offer:
+        return redirect(url_for('express_partner.negotiations', ok=0, msg='ثبت پیشنهاد ممکن نشد.'))
+    return redirect(url_for('express_partner.negotiations', ok=1, msg='پیشنهاد ثبت شد.'))
+
+
+@express_partner_bp.post('/offers/<offer_id>/respond', endpoint='offer_respond')
+@require_partner_access()
+def offer_respond(offer_id: str):
+    _commercial_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.commercial.service import get_offer, respond_offer
+    from app.services.sms import normalize_iran_mobile as _norm
+
+    offer = get_offer(offer_id)
+    if not offer or _norm(offer.partner_phone) != (_norm(me_phone) or me_phone):
+        return redirect(url_for('express_partner.negotiations', ok=0, msg='پیشنهاد یافت نشد.'))
+    action = (request.form.get('action') or '').strip().lower()
+    out = respond_offer(offer_id, action=action, actor_key=me_phone)
+    if not out:
+        return redirect(url_for('express_partner.negotiations', ok=0, msg='پاسخ نامعتبر بود.'))
+    return redirect(url_for('express_partner.negotiations', ok=1, msg='وضعیت پیشنهاد به‌روز شد.'))
+
+
+@express_partner_bp.post('/offers/<offer_id>/counter', endpoint='offer_counter')
+@require_partner_access()
+def offer_counter(offer_id: str):
+    _commercial_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.commercial.service import get_offer, propose_counter
+
+    offer = get_offer(offer_id)
+    if not offer:
+        return redirect(url_for('express_partner.negotiations', ok=0, msg='پیشنهاد یافت نشد.'))
+    try:
+        amount = int(request.form.get('amount') or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    terms = (request.form.get('terms') or '').strip()
+    counter = propose_counter(
+        offer_id=offer_id,
+        amount=amount,
+        terms=terms,
+        proposed_by='partner',
+        actor_key=me_phone,
+    )
+    if not counter:
+        return redirect(url_for('express_partner.negotiations', ok=0, msg='ثبت پیشنهاد متقابل ممکن نشد.'))
+    return redirect(url_for('express_partner.negotiations', ok=1, msg='پیشنهاد متقابل ثبت شد.'))
+
+
+@express_partner_bp.post('/offers/<offer_id>/reserve', endpoint='offer_reserve')
+@require_partner_access()
+def offer_reserve(offer_id: str):
+    _commercial_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.commercial.service import hold_reservation
+
+    res = hold_reservation(offer_id=offer_id, actor_key=me_phone)
+    if not res:
+        return redirect(url_for('express_partner.negotiations', ok=0, msg='رزرو نرم ممکن نشد.'))
+    return redirect(url_for('express_partner.negotiations', ok=1, msg='رزرو نرم ثبت شد (بدون قفل assignment).'))
+
+
+@express_partner_bp.post('/reservations/<reservation_id>/release', endpoint='reservation_release')
+@require_partner_access()
+def reservation_release(reservation_id: str):
+    _commercial_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.commercial.service import release_reservation
+
+    out = release_reservation(reservation_id, actor_key=me_phone)
+    if not out:
+        return redirect(url_for('express_partner.negotiations', ok=0, msg='آزادسازی ممکن نشد.'))
+    return redirect(url_for('express_partner.negotiations', ok=1, msg='رزرو آزاد شد.'))
+
+
+def _closing_ui_or_404():
+    try:
+        from app.closing.config import closing_ui_enabled
+        if closing_ui_enabled():
+            return None
+    except Exception:
+        pass
+    from flask import abort
+    abort(404)
+
+
+@express_partner_bp.get('/deals', endpoint='deals')
+@require_partner_access()
+def deals_page():
+    """Phase 4 Closing — معاملات همکار (Deal / Contract / Payment / Settlement)."""
+    _closing_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.closing.service import (
+        list_deal_contracts,
+        list_deal_payments,
+        list_deal_settlements,
+        list_partner_deals,
+    )
+
+    deals = list_partner_deals(me_phone)
+    items = []
+    for d in deals:
+        items.append({
+            'id': d.id,
+            'land_code': d.land_code,
+            'buyer_phone': d.buyer_phone,
+            'status': d.status,
+            'sale_amount': d.sale_amount,
+            'commission_id': d.commission_id,
+            'assignment_status': d.assignment_status,
+            'contracts': [
+                {
+                    'id': c.id,
+                    'title': c.title,
+                    'document_status': c.document_status,
+                    'document_ref': c.document_ref,
+                }
+                for c in list_deal_contracts(d.id)
+            ],
+            'payments': [
+                {
+                    'id': p.id,
+                    'amount': p.amount,
+                    'status': p.status,
+                    'milestone_label': p.milestone_label,
+                    'due_at': p.due_at,
+                }
+                for p in list_deal_payments(d.id)
+            ],
+            'settlements': [
+                {
+                    'id': s.id,
+                    'status': s.status,
+                    'total_amount': s.total_amount,
+                    'withdrawal_id': s.withdrawal_id,
+                }
+                for s in list_deal_settlements(d.id)
+            ],
+        })
+    flash_ok = request.args.get('ok') == '1'
+    flash_msg = (request.args.get('msg') or '').strip()
+    return render_template(
+        'express_partner/deals.html',
+        items=items,
+        flash_ok=flash_ok,
+        flash_msg=flash_msg,
+    )
+
+
+@express_partner_bp.post('/deals/<deal_id>/contracts', endpoint='deal_contract_create')
+@require_partner_access()
+def deal_contract_create(deal_id: str):
+    _closing_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.closing.service import create_contract, get_deal
+
+    deal = get_deal(deal_id)
+    if deal is None or deal.partner_phone != me_phone:
+        return redirect(url_for('express_partner.deals', ok=0, msg='معامله یافت نشد.'))
+    title = (request.form.get('title') or '').strip()
+    document_ref = (request.form.get('document_ref') or '').strip()
+    contract = create_contract(
+        deal_id=deal.id,
+        title=title,
+        document_ref=document_ref,
+        actor_key=me_phone,
+    )
+    if contract is None:
+        return redirect(url_for('express_partner.deals', ok=0, msg='ثبت قرارداد ممکن نشد.'))
+    return redirect(url_for('express_partner.deals', ok=1, msg='قرارداد ثبت شد.'))
+
+
+@express_partner_bp.post('/contracts/<contract_id>/document', endpoint='contract_document_update')
+@require_partner_access()
+def contract_document_update(contract_id: str):
+    _closing_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.closing.service import get_contract, get_deal, update_contract_document
+
+    contract = get_contract(contract_id)
+    if contract is None:
+        return redirect(url_for('express_partner.deals', ok=0, msg='قرارداد یافت نشد.'))
+    deal = get_deal(contract.deal_id)
+    if deal is None or deal.partner_phone != me_phone:
+        return redirect(url_for('express_partner.deals', ok=0, msg='دسترسی غیرمجاز.'))
+    document_status = (request.form.get('document_status') or '').strip()
+    document_ref = (request.form.get('document_ref') or '').strip()
+    updated = update_contract_document(
+        contract_id,
+        document_status=document_status,
+        document_ref=document_ref,
+        actor_key=me_phone,
+    )
+    if updated is None:
+        return redirect(url_for('express_partner.deals', ok=0, msg='به‌روزرسانی قرارداد ممکن نشد.'))
+    return redirect(url_for('express_partner.deals', ok=1, msg='وضعیت سند به‌روز شد.'))
+
+
+@express_partner_bp.post('/deals/<deal_id>/payments', endpoint='deal_payment_create')
+@require_partner_access()
+def deal_payment_create(deal_id: str):
+    _closing_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.closing.service import add_payment, get_deal
+
+    deal = get_deal(deal_id)
+    if deal is None or deal.partner_phone != me_phone:
+        return redirect(url_for('express_partner.deals', ok=0, msg='معامله یافت نشد.'))
+    try:
+        amount = int(str(request.form.get('amount') or '0').replace(',', '').strip() or '0')
+    except Exception:
+        amount = 0
+    milestone_label = (request.form.get('milestone_label') or '').strip()
+    due_at = (request.form.get('due_at') or '').strip()
+    contract_id = (request.form.get('contract_id') or '').strip()
+    pay = add_payment(
+        deal_id=deal.id,
+        amount=amount,
+        contract_id=contract_id,
+        due_at=due_at,
+        milestone_label=milestone_label,
+        actor_key=me_phone,
+    )
+    if pay is None:
+        return redirect(url_for('express_partner.deals', ok=0, msg='ثبت قسط ممکن نشد.'))
+    return redirect(url_for('express_partner.deals', ok=1, msg='قسط ثبت شد.'))
+
+
+@express_partner_bp.post('/payments/<payment_id>/mark-paid', endpoint='payment_mark_paid')
+@require_partner_access()
+def payment_mark_paid(payment_id: str):
+    _closing_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.closing.service import get_deal, get_payment, mark_payment_paid
+
+    pay = get_payment(payment_id)
+    if pay is None:
+        return redirect(url_for('express_partner.deals', ok=0, msg='قسط یافت نشد.'))
+    deal = get_deal(pay.deal_id)
+    if deal is None or deal.partner_phone != me_phone:
+        return redirect(url_for('express_partner.deals', ok=0, msg='دسترسی غیرمجاز.'))
+    updated = mark_payment_paid(payment_id, actor_key=me_phone)
+    if updated is None:
+        return redirect(url_for('express_partner.deals', ok=0, msg='ثبت پرداخت ممکن نشد.'))
+    return redirect(url_for('express_partner.deals', ok=1, msg='قسط پرداخت‌شده علامت خورد.'))
+
+
+@express_partner_bp.post('/deals/<deal_id>/settlements', endpoint='deal_settlement_create')
+@require_partner_access()
+def deal_settlement_create(deal_id: str):
+    _closing_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.closing.service import get_deal, open_settlement
+
+    deal = get_deal(deal_id)
+    if deal is None or deal.partner_phone != me_phone:
+        return redirect(url_for('express_partner.deals', ok=0, msg='معامله یافت نشد.'))
+    try:
+        partner_amount = int(str(request.form.get('partner_amount') or '0').replace(',', '').strip() or '0')
+    except Exception:
+        partner_amount = 0
+    withdrawal_id = (request.form.get('withdrawal_id') or '').strip()
+    parties = []
+    if partner_amount > 0:
+        parties.append({'role': 'partner', 'amount': partner_amount, 'phone': me_phone, 'label': 'پورسانت همکار'})
+    settlement = open_settlement(
+        deal_id=deal.id,
+        parties=parties,
+        withdrawal_id=withdrawal_id,
+        total_amount=partner_amount,
+        actor_key=me_phone,
+    )
+    if settlement is None:
+        return redirect(url_for('express_partner.deals', ok=0, msg='ثبت تسویه ممکن نشد.'))
+    return redirect(url_for('express_partner.deals', ok=1, msg='تسویه باز شد (لینک اختیاری به برداشت موجود).'))
+
+
+def _integration_ui_or_404():
+    try:
+        from app.integration.config import integration_ui_enabled
+        if integration_ui_enabled():
+            return None
+    except Exception:
+        pass
+    from flask import abort
+    abort(404)
+
+
+@express_partner_bp.get('/journey', endpoint='journey')
+@require_partner_access()
+def journey_page():
+    """Phase 6 Integration — تایم‌لاین یکپارچه Lead→Settlement."""
+    _integration_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    land_code = (request.args.get('land_code') or '').strip()
+    from app.integration.service import journey_as_dicts
+
+    events = journey_as_dicts(
+        partner_phone=me_phone,
+        land_code=land_code,
+        limit=200,
+    )
+    return render_template(
+        'express_partner/journey.html',
+        me_phone=me_phone,
+        land_code=land_code,
+        events=events,
+        hide_header=True,
+        bottom_nav_active='profile',
+    )
+
+
 @express_partner_bp.post('/api/favorites/cards')
 @require_partner_access(allow_pending=True, json_response=True)
 def api_favorites_cards():
@@ -4230,6 +4751,7 @@ def _clear_express_partner_auth_session() -> None:
     for k in (
         'user_id', 'user_phone', 'otp_code', 'otp_phone', 'otp_created_at', 'next',
         'VINOR_IS_EXPRESS_PARTNER',
+        'VINOR_PORTAL_ROLES',
         '_routine_auto_mkt_day', '_express_online_ping_ts',
     ):
         session.pop(k, None)
@@ -5372,6 +5894,12 @@ def create_visit_request(code: str):
         customer_first_name=customer_first_name,
         customer_last_name=customer_last_name,
     )
+    # Phase 1 CRM: optional Contact upsert from Visit customer_* (flags default ON).
+    try:
+        from app.crm.visit_sync import sync_contact_from_visit
+        sync_contact_from_visit(rec)
+    except Exception:
+        pass
     sms_result = _send_visit_admin_sms(
         partner_phone=me_phone,
         partner_name=partner_name,
@@ -5814,6 +6342,19 @@ def mark_in_transaction(code: str):
                                 current_app.logger.info(
                                     f"Created commission record {new_id} for partner {partner_phone} and land {code}: amount={safe_amount}, pct={safe_pct}, price={price_total}"
                                 )
+                                # Phase 4 Closing: sync Deal adapter (fail-open; does not mutate commission).
+                                try:
+                                    from app.closing.deal_bridge import maybe_sync_deal_from_commission
+                                    maybe_sync_deal_from_commission(
+                                        partner_phone=partner_phone,
+                                        land_code=str(code),
+                                        commission_id=str(new_id),
+                                        sale_amount=price_total,
+                                        assignment_status='in_transaction',
+                                        deal_status='in_transaction',
+                                    )
+                                except Exception:
+                                    pass
                         
                         if created_count > 0:
                             save_express_commissions(commissions)
@@ -5870,6 +6411,17 @@ def mark_in_transaction(code: str):
                         success_message = f'وضعیت ملک به «فعال» تغییر کرد و {removed_count} پورسانت در انتظار حذف شد.'
                     else:
                         success_message = 'وضعیت ملک به «فعال» تغییر کرد.'
+                    # Phase 4 Closing: cancel mirrored Deal(s) on release (fail-open).
+                    try:
+                        from app.closing.deal_bridge import maybe_sync_deal_from_commission
+                        maybe_sync_deal_from_commission(
+                            partner_phone=me_phone,
+                            land_code=str(code),
+                            assignment_status='active',
+                            deal_status='cancelled',
+                        )
+                    except Exception:
+                        pass
                 except Exception as e:
                     current_app.logger.error(f"Error removing commission records: {e}")
                     success_message = 'وضعیت ملک به «فعال» تغییر کرد.'
@@ -6271,6 +6823,68 @@ def special_visit_inbox_page():
     )
 
 
+@express_partner_bp.route('/inbox-offers', methods=['GET'], endpoint='special_offer_inbox')
+@require_special_partner()
+def special_offer_inbox_page():
+    """Phase 3 — صندوق پیشنهاد روی آگهی‌های ویژه (فلگ commercial UI)."""
+    try:
+        from app.commercial.config import commercial_ui_enabled
+        if not commercial_ui_enabled():
+            from flask import abort
+            abort(404)
+    except Exception:
+        from flask import abort
+        abort(404)
+    me_phone = (session.get('user_phone') or '').strip()
+    from .special_offer_inbox import offers_for_special_owner
+
+    items = offers_for_special_owner(me_phone)
+    return render_template(
+        'express_partner/special_offer_inbox.html',
+        items=items,
+        hide_header=True,
+        bottom_nav_active='profile',
+    )
+
+
+@express_partner_bp.post('/inbox-offers/<oid>/<action>', endpoint='special_offer_action')
+@require_special_partner()
+def special_offer_action(oid: str, action: str):
+    try:
+        from app.commercial.config import commercial_ui_enabled
+        if not commercial_ui_enabled():
+            from flask import abort
+            abort(404)
+    except Exception:
+        from flask import abort
+        abort(404)
+    me_phone = (session.get('user_phone') or '').strip()
+    from .special_offer_inbox import apply_special_offer_action
+
+    try:
+        amount = int(request.form.get('amount') or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    _out, err = apply_special_offer_action(
+        owner_phone=me_phone,
+        offer_id=str(oid),
+        action=str(action or ''),
+        amount=amount,
+        terms=(request.form.get('terms') or '').strip(),
+    )
+    if err == 'not_found':
+        flash('پیشنهاد یافت نشد.', 'warning')
+    elif err == 'forbidden':
+        flash('اجازه ندارید.', 'warning')
+    elif err == 'disabled':
+        flash('ماژول پیشنهاد فعلاً فعال نیست.', 'warning')
+    elif err:
+        flash('اقدام ناموفق بود.', 'warning')
+    else:
+        flash('انجام شد.', 'success')
+    return redirect(url_for('express_partner.special_offer_inbox'))
+
+
 @express_partner_bp.post('/inbox-visits/<vid>/<action>', endpoint='special_visit_action')
 @require_special_partner()
 def special_visit_action(vid: str, action: str):
@@ -6294,12 +6908,17 @@ def special_visit_action(vid: str, action: str):
         owner_phone=me_phone,
         visit_id=str(vid),
         action=str(action or ''),
+        outcome=(request.form.get('outcome') or '').strip(),
+        notes=(request.form.get('notes') or '').strip(),
     )
     if err == 'not_found':
         flash('درخواست پیدا نشد.', 'warning')
         return redirect(url_for('express_partner.special_visit_inbox'))
     if err == 'forbidden':
         flash('اجازه مدیریت این درخواست را ندارید.', 'warning')
+        return redirect(url_for('express_partner.special_visit_inbox'))
+    if err == 'disabled':
+        flash('ثبت نتیجه بازدید فعلاً فعال نیست.', 'warning')
         return redirect(url_for('express_partner.special_visit_inbox'))
     if err == 'invalid_transition':
         flash(
@@ -6514,6 +7133,50 @@ def settings_page():
     partner_name = me_name or _partner_display_name(me_phone)
     is_approved = _is_partner_approved(profile)
     is_special = _is_partner_special(profile) if is_approved else False
+    crm_ui = False
+    try:
+        from app.crm.config import crm_ui_enabled
+        crm_ui = bool(crm_ui_enabled())
+    except Exception:
+        crm_ui = False
+    commercial_ui = False
+    try:
+        from app.commercial.config import commercial_ui_enabled
+        commercial_ui = bool(commercial_ui_enabled())
+    except Exception:
+        commercial_ui = False
+    closing_ui = False
+    try:
+        from app.closing.config import closing_ui_enabled
+        closing_ui = bool(closing_ui_enabled())
+    except Exception:
+        closing_ui = False
+    integration_ui = False
+    try:
+        from app.integration.config import integration_ui_enabled
+        integration_ui = bool(integration_ui_enabled())
+    except Exception:
+        integration_ui = False
+    seller_portal = False
+    owner_portal = False
+    try:
+        from app.roles.config import (
+            roles_owner_portal_enabled,
+            roles_seller_portal_enabled,
+            roles_ui_enabled,
+        )
+        if roles_ui_enabled():
+            seller_portal = bool(roles_seller_portal_enabled())
+            owner_portal = bool(roles_owner_portal_enabled())
+    except Exception:
+        seller_portal = False
+        owner_portal = False
+    prefer_new_nav = False
+    try:
+        from app.hardening.deprecate import prefer_new_partner_nav_order
+        prefer_new_nav = bool(prefer_new_partner_nav_order())
+    except Exception:
+        prefer_new_nav = False
     return render_template(
         'express_partner/settings.html',
         me_phone=me_phone,
@@ -6522,6 +7185,13 @@ def settings_page():
         profile=profile,
         is_approved=is_approved,
         is_special=is_special,
+        crm_ui_enabled=crm_ui,
+        commercial_ui_enabled=commercial_ui,
+        closing_ui_enabled=closing_ui,
+        integration_ui_enabled=integration_ui,
+        seller_portal_enabled=seller_portal,
+        owner_portal_enabled=owner_portal,
+        prefer_new_partner_nav=prefer_new_nav,
         hide_header=True,
         bottom_nav_active='profile',
     )

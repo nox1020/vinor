@@ -460,13 +460,15 @@ def _scheduler_loop(app: Flask) -> None:
 
 
 def schedule_daily_celebration_sms(app: Flask) -> None:
-    """زمان‌بندی ساعتی — فقط با VINOR_CELEBRATION_SMS_SCHEDULER=1 فعال شود."""
+    """زمان‌بندی ساعتی — پیش‌فرض روشن؛ خاموش با VINOR_CELEBRATION_SMS_SCHEDULER=0."""
     if os.environ.get("VINOR_DISABLE_CELEBRATION_SMS", "").strip().lower() in ("1", "true", "yes"):
         app.logger.info("Celebration SMS scheduler disabled via VINOR_DISABLE_CELEBRATION_SMS")
         return
-    if os.environ.get("VINOR_CELEBRATION_SMS_SCHEDULER", "").strip().lower() not in ("1", "true", "yes"):
+    flag = (os.environ.get("VINOR_CELEBRATION_SMS_SCHEDULER") or "1").strip().lower()
+    if flag in ("0", "false", "no", "off"):
         app.logger.info(
-            "Celebration SMS in-process scheduler off (use cron script or set VINOR_CELEBRATION_SMS_SCHEDULER=1)"
+            "Celebration SMS in-process scheduler off "
+            "(use cron script or set VINOR_CELEBRATION_SMS_SCHEDULER=1)"
         )
         return
     threading.Thread(

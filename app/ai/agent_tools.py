@@ -34,6 +34,18 @@ TOOL_LISTING = "draft_listing_copy"
 TOOL_COOP_INFO = "get_cooperation_info"
 TOOL_APP_STATUS = "get_application_status"
 TOOL_PROPOSE_APPLY = "propose_partner_application"
+TOOL_LOG_CALL = "propose_log_call"
+TOOL_FOLLOWUP = "propose_followup"
+TOOL_VISIT_RESULT = "propose_visit_result"
+TOOL_NO_SHOW = "propose_no_show"
+TOOL_OFFER = "propose_offer"
+TOOL_COUNTER_OFFER = "propose_counter_offer"
+TOOL_RESERVATION = "propose_reservation"
+TOOL_CONTRACT = "propose_contract"
+TOOL_PAYMENT_MILESTONE = "propose_payment_milestone"
+TOOL_SETTLEMENT = "propose_settlement"
+TOOL_LEAD = "propose_lead"
+TOOL_TASK = "propose_task"
 
 
 def _active_mission_land_code(phone: str) -> str:
@@ -197,6 +209,48 @@ def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
         schemas.append(_schema_complete_visit())
         schemas.append(_schema_deal())
         schemas.append(_schema_release())
+        # Phase 1 CRM tools — only when VINOR_CRM_AI_TOOLS_ENABLED (default ON)
+        try:
+            from app.crm.config import crm_ai_tools_enabled
+            if crm_ai_tools_enabled():
+                schemas.append(_schema_log_call())
+                schemas.append(_schema_followup())
+        except Exception:
+            pass
+        # Phase 2 Visit Result tools — only when VINOR_VISIT_RESULT_AI_TOOLS_ENABLED
+        try:
+            from app.visit_result.config import visit_result_ai_tools_enabled
+            if visit_result_ai_tools_enabled():
+                schemas.append(_schema_visit_result())
+                schemas.append(_schema_no_show())
+        except Exception:
+            pass
+        # Phase 3 Commercial tools
+        try:
+            from app.commercial.config import commercial_ai_tools_enabled
+            if commercial_ai_tools_enabled():
+                schemas.append(_schema_offer())
+                schemas.append(_schema_counter_offer())
+                schemas.append(_schema_reservation())
+        except Exception:
+            pass
+        # Phase 4 Closing tools
+        try:
+            from app.closing.config import closing_ai_tools_enabled
+            if closing_ai_tools_enabled():
+                schemas.append(_schema_contract())
+                schemas.append(_schema_payment_milestone())
+                schemas.append(_schema_settlement())
+        except Exception:
+            pass
+        # Phase 6 Integration tools
+        try:
+            from app.integration.config import integration_ai_tools_enabled
+            if integration_ai_tools_enabled():
+                schemas.append(_schema_lead())
+                schemas.append(_schema_task())
+        except Exception:
+            pass
     return schemas
 
 
@@ -375,6 +429,262 @@ def _schema_release() -> dict[str, Any]:
     }
 
 
+def _schema_log_call() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_LOG_CALL,
+            "description": (
+                "کارت تأیید ثبت تماس CRM با مشتری. "
+                "customer_phone الزامی؛ outcome و notes اختیاری. "
+                "پیش‌فرض شماره مقصد هماهنگی بازدید 09121471301."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_phone": {"type": "string", "description": "موبایل مشتری"},
+                    "customer_name": {"type": "string", "description": "نام مشتری (اختیاری)"},
+                    "outcome": {
+                        "type": "string",
+                        "description": "answered|no_answer|busy|visit_scheduled|other",
+                    },
+                    "notes": {"type": "string"},
+                    "to_number": {
+                        "type": "string",
+                        "description": "شماره مقصد تماس؛ خالی=09121471301",
+                    },
+                },
+                "required": ["customer_phone"],
+            },
+        },
+    }
+
+
+def _schema_followup() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_FOLLOWUP,
+            "description": (
+                "کارت تأیید ثبت پیگیری CRM. customer_phone الزامی؛ due_at تاریخ YYYY-MM-DD."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_phone": {"type": "string"},
+                    "customer_name": {"type": "string"},
+                    "due_at": {"type": "string", "description": "YYYY-MM-DD"},
+                    "notes": {"type": "string"},
+                },
+                "required": ["customer_phone"],
+            },
+        },
+    }
+
+
+def _schema_visit_result() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_VISIT_RESULT,
+            "description": (
+                "کارت تأیید ثبت نتیجه بازدید. outcome: interested|not_interested|follow_up. "
+                "land_code را خالی بگذار مگر چند فایل."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "land_code": {"type": "string"},
+                    "outcome": {
+                        "type": "string",
+                        "description": "interested|not_interested|follow_up",
+                    },
+                    "notes": {"type": "string"},
+                },
+                "required": ["outcome"],
+            },
+        },
+    }
+
+
+def _schema_no_show() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_NO_SHOW,
+            "description": (
+                "کارت تأیید عدم حضور مشتری (no-show). پورسانت ساخته نمی‌شود. "
+                "land_code را خالی بگذار مگر چند فایل."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "land_code": {"type": "string"},
+                    "notes": {"type": "string"},
+                },
+                "required": [],
+            },
+        },
+    }
+
+
+def _schema_offer() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_OFFER,
+            "description": "کارت تأیید پیشنهاد قیمت. amount الزامی؛ land_code و buyer_phone اختیاری.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "land_code": {"type": "string"},
+                    "amount": {"type": "integer"},
+                    "buyer_phone": {"type": "string"},
+                    "terms": {"type": "string"},
+                },
+                "required": ["amount"],
+            },
+        },
+    }
+
+
+def _schema_counter_offer() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_COUNTER_OFFER,
+            "description": "کارت تأیید پیشنهاد متقابل. offer_id و amount الزامی.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "offer_id": {"type": "string"},
+                    "amount": {"type": "integer"},
+                    "terms": {"type": "string"},
+                },
+                "required": ["offer_id", "amount"],
+            },
+        },
+    }
+
+
+def _schema_reservation() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_RESERVATION,
+            "description": "کارت تأیید رزرو نرم از پیشنهاد پذیرفته‌شده. assignment را قفل نمی‌کند.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "offer_id": {"type": "string"},
+                    "hold_note": {"type": "string"},
+                },
+                "required": ["offer_id"],
+            },
+        },
+    }
+
+
+def _schema_contract() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_CONTRACT,
+            "description": "کارت تأیید ثبت قرارداد روی Deal. deal_id یا land_code.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "deal_id": {"type": "string"},
+                    "land_code": {"type": "string"},
+                    "title": {"type": "string"},
+                    "document_ref": {"type": "string"},
+                },
+                "required": [],
+            },
+        },
+    }
+
+
+def _schema_payment_milestone() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_PAYMENT_MILESTONE,
+            "description": "کارت تأیید قسط/milestone پرداخت روی Deal. amount الزامی.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "deal_id": {"type": "string"},
+                    "land_code": {"type": "string"},
+                    "amount": {"type": "integer"},
+                    "milestone_label": {"type": "string"},
+                    "due_at": {"type": "string"},
+                },
+                "required": ["amount"],
+            },
+        },
+    }
+
+
+def _schema_settlement() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_SETTLEMENT,
+            "description": "کارت تأیید باز کردن Settlement روی Deal. می‌تواند withdrawal_id لینک کند.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "deal_id": {"type": "string"},
+                    "land_code": {"type": "string"},
+                    "partner_amount": {"type": "integer"},
+                    "withdrawal_id": {"type": "string"},
+                },
+                "required": [],
+            },
+        },
+    }
+
+
+def _schema_lead() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_LEAD,
+            "description": "کارت تأیید ثبت Lead/Contact در CRM. customer_phone یا display_name.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_phone": {"type": "string"},
+                    "display_name": {"type": "string"},
+                    "notes": {"type": "string"},
+                },
+                "required": [],
+            },
+        },
+    }
+
+
+def _schema_task() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_TASK,
+            "description": "کارت تأیید ثبت Task در CRM. title الزامی.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "customer_phone": {"type": "string"},
+                    "due_at": {"type": "string"},
+                    "notes": {"type": "string"},
+                },
+                "required": ["title"],
+            },
+        },
+    }
+
+
 def run_tool(
     name: str,
     arguments: dict[str, Any] | None,
@@ -426,6 +736,54 @@ def run_tool(
             if (voice or "").strip().lower() == VOICE_PUBLIC:
                 return _denied("بستن معامله فقط برای همکار است.")
             return _tool_propose_simple_tx(args, phone=phone, action_type="confirm_release")
+        if n == TOOL_LOG_CALL:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت تماس فقط برای همکار است.")
+            return _tool_propose_log_call(args, phone=phone)
+        if n == TOOL_FOLLOWUP:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت پیگیری فقط برای همکار است.")
+            return _tool_propose_followup(args, phone=phone)
+        if n == TOOL_VISIT_RESULT:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت نتیجه بازدید فقط برای همکار است.")
+            return _tool_propose_visit_result(args, phone=phone)
+        if n == TOOL_NO_SHOW:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت عدم حضور فقط برای همکار است.")
+            return _tool_propose_no_show(args, phone=phone)
+        if n == TOOL_OFFER:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت پیشنهاد فقط برای همکار است.")
+            return _tool_propose_offer(args, phone=phone)
+        if n == TOOL_COUNTER_OFFER:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("پیشنهاد متقابل فقط برای همکار است.")
+            return _tool_propose_counter_offer(args, phone=phone)
+        if n == TOOL_RESERVATION:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("رزرو نرم فقط برای همکار است.")
+            return _tool_propose_reservation(args, phone=phone)
+        if n == TOOL_CONTRACT:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت قرارداد فقط برای همکار است.")
+            return _tool_propose_contract(args, phone=phone)
+        if n == TOOL_PAYMENT_MILESTONE:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت قسط فقط برای همکار است.")
+            return _tool_propose_payment_milestone(args, phone=phone)
+        if n == TOOL_SETTLEMENT:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت تسویه فقط برای همکار است.")
+            return _tool_propose_settlement(args, phone=phone)
+        if n == TOOL_LEAD:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت لید فقط برای همکار است.")
+            return _tool_propose_lead(args, phone=phone)
+        if n == TOOL_TASK:
+            if (voice or "").strip().lower() == VOICE_PUBLIC:
+                return _denied("ثبت وظیفه فقط برای همکار است.")
+            return _tool_propose_task(args, phone=phone)
         return _denied(f"ابزار ناشناخته: {n}")
     except Exception as exc:
         try:
@@ -1580,6 +1938,783 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     }
 
 
+def _crm_tools_gate(phone: str) -> dict[str, Any] | None:
+    """None if OK; otherwise denied/error dict."""
+    try:
+        from app.crm.config import crm_ai_tools_enabled
+
+        if not crm_ai_tools_enabled():
+            return _denied("ابزار CRM فعلاً غیرفعال است.")
+    except Exception:
+        return _denied("ابزار CRM در دسترس نیست.")
+    me = (phone or "").strip()
+    if not me:
+        return _denied("کاربر شناسایی نشد.")
+    if not partner_is_approved(me):
+        return _denied("برای ثبت تماس/پیگیری باید حساب همکاری تأیید شده باشد.")
+    return None
+
+
+def _resolve_crm_contact_payload(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
+    from app.crm.service import list_partner_customers
+    from app.express_partner.visit_requests import split_customer_full_name
+
+    me = (phone or "").strip()
+    phone_raw = str(args.get("customer_phone") or "").strip()
+    cust = normalize_iran_mobile(phone_raw) or phone_raw
+    if not cust or not is_valid_iran_mobile(cust):
+        return {"ok": False, "error": "شماره مشتری معتبر نیست."}
+    name = str(args.get("customer_name") or "").strip()
+    first, last = ("", "")
+    if name:
+        first, last = split_customer_full_name(name)
+    # Prefer existing contact; else prepare upsert fields
+    existing = None
+    for c in list_partner_customers(me, limit=500):
+        if c.customer_phone == cust:
+            existing = c
+            break
+    return {
+        "ok": True,
+        "partner_phone": me,
+        "customer_phone": cust,
+        "customer_name": name or (existing.display_name if existing else ""),
+        "first_name": first or (existing.first_name if existing else ""),
+        "last_name": last or (existing.last_name if existing else ""),
+        "contact_id": existing.id if existing else "",
+        "upsert_needed": existing is None,
+    }
+
+
+def _tool_propose_log_call(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _crm_tools_gate(phone)
+    if gate is not None:
+        return gate
+    from app.crm.config import VISIT_CALL_TARGET
+
+    resolved = _resolve_crm_contact_payload(args, phone=phone)
+    if not resolved.get("ok"):
+        return {
+            "ok": False,
+            "model_result": {"ok": False, "error": resolved.get("error")},
+            "error": str(resolved.get("error") or "نامعتبر"),
+        }
+    me = str(resolved["partner_phone"])
+    outcome = str(args.get("outcome") or "").strip() or "other"
+    notes = str(args.get("notes") or "").strip()
+    to_number = str(args.get("to_number") or "").strip() or VISIT_CALL_TARGET
+    payload = {
+        **{k: resolved[k] for k in (
+            "customer_phone", "customer_name", "first_name", "last_name",
+            "contact_id", "upsert_needed",
+        )},
+        "outcome": outcome,
+        "notes": notes,
+        "to_number": to_number,
+    }
+    token = _store_pending_action(
+        user_key=me,
+        action_type="confirm_log_call",
+        payload=payload,
+    )
+    masked = payload["customer_phone"][:4] + "***" + payload["customer_phone"][-3:]
+    lines = [
+        f"مشتری: {payload.get('customer_name') or masked}",
+        f"تماس: {masked}",
+        f"مقصد: {to_number}",
+        f"نتیجه: {outcome}",
+    ]
+    if notes:
+        lines.append(f"یادداشت: {notes}")
+    ui = {
+        "type": "confirm_log_call",
+        "token": token,
+        "title": "تأیید ثبت تماس",
+        "lines": lines,
+        "status": "pending",
+    }
+    model = {
+        "ok": True,
+        "status": "needs_user_confirmation",
+        "instruction": "کارت تأیید تماس نشان داده شد؛ هنوز ثبت نشده.",
+    }
+    return {"ok": True, "model_result": model, "ui_action": ui, "land_codes": []}
+
+
+def _tool_propose_followup(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _crm_tools_gate(phone)
+    if gate is not None:
+        return gate
+    resolved = _resolve_crm_contact_payload(args, phone=phone)
+    if not resolved.get("ok"):
+        return {
+            "ok": False,
+            "model_result": {"ok": False, "error": resolved.get("error")},
+            "error": str(resolved.get("error") or "نامعتبر"),
+        }
+    me = str(resolved["partner_phone"])
+    due_at = str(args.get("due_at") or "").strip()
+    notes = str(args.get("notes") or "").strip()
+    payload = {
+        **{k: resolved[k] for k in (
+            "customer_phone", "customer_name", "first_name", "last_name",
+            "contact_id", "upsert_needed",
+        )},
+        "due_at": due_at,
+        "notes": notes,
+    }
+    token = _store_pending_action(
+        user_key=me,
+        action_type="confirm_followup",
+        payload=payload,
+    )
+    masked = payload["customer_phone"][:4] + "***" + payload["customer_phone"][-3:]
+    lines = [
+        f"مشتری: {payload.get('customer_name') or masked}",
+        f"تماس: {masked}",
+        f"سررسید: {due_at or '—'}",
+    ]
+    if notes:
+        lines.append(f"یادداشت: {notes}")
+    ui = {
+        "type": "confirm_followup",
+        "token": token,
+        "title": "تأیید ثبت پیگیری",
+        "lines": lines,
+        "status": "pending",
+    }
+    model = {
+        "ok": True,
+        "status": "needs_user_confirmation",
+        "instruction": "کارت تأیید پیگیری نشان داده شد؛ هنوز ثبت نشده.",
+    }
+    return {"ok": True, "model_result": model, "ui_action": ui, "land_codes": []}
+
+
+def _visit_result_tools_gate(phone: str) -> dict[str, Any] | None:
+    try:
+        from app.visit_result.config import visit_result_ai_tools_enabled
+
+        if not visit_result_ai_tools_enabled():
+            return _denied("ابزار نتیجه بازدید فعلاً غیرفعال است.")
+    except Exception:
+        return _denied("ابزار نتیجه بازدید در دسترس نیست.")
+    me = (phone or "").strip()
+    if not me:
+        return _denied("کاربر شناسایی نشد.")
+    if not partner_is_approved(me):
+        return _denied("برای ثبت نتیجه بازدید باید حساب همکاری تأیید شده باشد.")
+    return None
+
+
+def _resolve_visit_for_result_tools(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    from app.utils.storage import load_express_visit_requests
+    from app.express_partner.visit_requests import (
+        APPROVED_STATUS,
+        DONE_PENDING_STATUS,
+        COMPLETED_STATUS,
+        partner_visit_approved_for_deal,
+        partner_visit_done_pending,
+        partner_visit_completed,
+    )
+
+    me = (phone or "").strip()
+    try:
+        code = _resolve_tool_land_code(phone, args or {})
+    except Exception:
+        code = str((args or {}).get("land_code") or "").strip()
+    if not code:
+        code = _active_mission_land_code(me) or _land_code_from_user_message()
+    if not code:
+        return {"ok": False, "error": "کد فایل مشخص نیست."}
+    visits = load_express_visit_requests() or []
+    if not isinstance(visits, list):
+        visits = []
+    rec = (
+        partner_visit_approved_for_deal(visits, me, code)
+        or partner_visit_done_pending(visits, me, code)
+        or partner_visit_completed(visits, me, code)
+    )
+    if not rec:
+        return {"ok": False, "error": "بازدید فعالی برای ثبت نتیجه یافت نشد."}
+    st = str(rec.get("status") or "").strip()
+    if st not in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS):
+        return {"ok": False, "error": "وضعیت بازدید برای ثبت نتیجه مناسب نیست."}
+    return {
+        "ok": True,
+        "land_code": code,
+        "visit_request_id": str(rec.get("id") or ""),
+        "partner_phone": me,
+        "land_title": str(rec.get("land_title") or code),
+        "status": st,
+        "customer_name": str(rec.get("customer_name") or ""),
+    }
+
+
+def _tool_propose_visit_result(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _visit_result_tools_gate(phone)
+    if gate is not None:
+        return gate
+    from app.visit_result.service import valid_outcome
+
+    resolved = _resolve_visit_for_result_tools(args, phone=phone)
+    if not resolved.get("ok"):
+        return {
+            "ok": False,
+            "error": str(resolved.get("error") or "نامعتبر"),
+            "model_result": {"ok": False, "error": resolved.get("error")},
+        }
+    outcome = str(args.get("outcome") or "").strip()
+    if not valid_outcome(outcome) or outcome == "no_show":
+        return _denied("outcome باید interested یا not_interested یا follow_up باشد.")
+    notes = str(args.get("notes") or "").strip()
+    me = str(resolved["partner_phone"])
+    payload = {
+        "land_code": resolved["land_code"],
+        "visit_request_id": resolved["visit_request_id"],
+        "outcome": outcome,
+        "notes": notes,
+        "land_title": resolved.get("land_title") or "",
+        "customer_name": resolved.get("customer_name") or "",
+    }
+    token = _store_pending_action(
+        user_key=me,
+        action_type="confirm_visit_result",
+        payload=payload,
+    )
+    lines = [
+        f"فایل: {payload['land_title']} ({payload['land_code']})",
+        f"نتیجه: {outcome}",
+    ]
+    if payload.get("customer_name"):
+        lines.insert(1, f"مشتری: {payload['customer_name']}")
+    if notes:
+        lines.append(f"یادداشت: {notes}")
+    ui = {
+        "type": "confirm_visit_result",
+        "token": token,
+        "title": "تأیید ثبت نتیجه بازدید",
+        "lines": lines,
+        "status": "pending",
+        "land_code": payload["land_code"],
+    }
+    model = {
+        "ok": True,
+        "status": "needs_user_confirmation",
+        "instruction": "کارت نتیجه بازدید نشان داده شد؛ هنوز ثبت نشده.",
+    }
+    return {"ok": True, "model_result": model, "ui_action": ui, "land_codes": []}
+
+
+def _tool_propose_no_show(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _visit_result_tools_gate(phone)
+    if gate is not None:
+        return gate
+    try:
+        from app.visit_result.status_bridge import is_no_show_writable
+
+        if not is_no_show_writable():
+            return _denied("ثبت عدم حضور فعلاً فعال نیست.")
+    except Exception:
+        return _denied("ثبت عدم حضور در دسترس نیست.")
+
+    from app.express_partner.visit_requests import APPROVED_STATUS, DONE_PENDING_STATUS
+
+    resolved = _resolve_visit_for_result_tools(args, phone=phone)
+    if not resolved.get("ok"):
+        return {
+            "ok": False,
+            "error": str(resolved.get("error") or "نامعتبر"),
+            "model_result": {"ok": False, "error": resolved.get("error")},
+        }
+    if resolved.get("status") not in (APPROVED_STATUS, DONE_PENDING_STATUS):
+        return _denied("عدم حضور فقط از وضعیت تأییدشده یا منتظر تأیید انجام ممکن است.")
+    notes = str(args.get("notes") or "").strip()
+    me = str(resolved["partner_phone"])
+    payload = {
+        "land_code": resolved["land_code"],
+        "visit_request_id": resolved["visit_request_id"],
+        "notes": notes,
+        "land_title": resolved.get("land_title") or "",
+        "customer_name": resolved.get("customer_name") or "",
+    }
+    token = _store_pending_action(
+        user_key=me,
+        action_type="confirm_no_show",
+        payload=payload,
+    )
+    lines = [
+        f"فایل: {payload['land_title']} ({payload['land_code']})",
+        "وضعیت: عدم حضور مشتری (بدون پورسانت)",
+    ]
+    if payload.get("customer_name"):
+        lines.insert(1, f"مشتری: {payload['customer_name']}")
+    if notes:
+        lines.append(f"یادداشت: {notes}")
+    ui = {
+        "type": "confirm_no_show",
+        "token": token,
+        "title": "تأیید عدم حضور",
+        "lines": lines,
+        "status": "pending",
+        "land_code": payload["land_code"],
+    }
+    model = {
+        "ok": True,
+        "status": "needs_user_confirmation",
+        "instruction": "کارت عدم حضور نشان داده شد؛ هنوز ثبت نشده.",
+    }
+    return {"ok": True, "model_result": model, "ui_action": ui, "land_codes": []}
+
+
+def _commercial_tools_gate(phone: str) -> dict[str, Any] | None:
+    try:
+        from app.commercial.config import commercial_ai_tools_enabled
+
+        if not commercial_ai_tools_enabled():
+            return _denied("ابزار پیشنهاد فعلاً غیرفعال است.")
+    except Exception:
+        return _denied("ابزار پیشنهاد در دسترس نیست.")
+    me = (phone or "").strip()
+    if not me:
+        return _denied("کاربر شناسایی نشد.")
+    if not partner_is_approved(me):
+        return _denied("برای ثبت پیشنهاد باید حساب همکاری تأیید شده باشد.")
+    return None
+
+
+def _tool_propose_offer(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _commercial_tools_gate(phone)
+    if gate is not None:
+        return gate
+    me = (phone or "").strip()
+    try:
+        amount = int(args.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    if amount <= 0:
+        return _denied("مبلغ پیشنهاد نامعتبر است.")
+    land_code = str(args.get("land_code") or "").strip()
+    if not land_code:
+        try:
+            land_code = _resolve_tool_land_code(phone, args or {})
+        except Exception:
+            land_code = ""
+    if not land_code:
+        land_code = _active_mission_land_code(me) or _land_code_from_user_message()
+    if not land_code:
+        return _denied("کد فایل مشخص نیست.")
+    # optional prefill from AI negotiation plan
+    try:
+        from flask import g
+        plan = getattr(g, "ai_negotiation_plan", None)
+        suggested = getattr(plan, "suggested_offer", None) if plan is not None else None
+        if suggested and not args.get("amount"):
+            try:
+                amount = int(suggested)
+            except (TypeError, ValueError):
+                pass
+    except Exception:
+        pass
+    buyer_phone = str(args.get("buyer_phone") or "").strip()
+    terms = str(args.get("terms") or "").strip()
+    payload = {
+        "land_code": land_code,
+        "amount": amount,
+        "buyer_phone": buyer_phone,
+        "terms": terms,
+    }
+    token = _store_pending_action(user_key=me, action_type="confirm_offer", payload=payload)
+    ui = {
+        "type": "confirm_offer",
+        "token": token,
+        "title": "تأیید ثبت پیشنهاد",
+        "lines": [
+            f"فایل: {land_code}",
+            f"مبلغ: {amount:,} تومان",
+            *( [f"خریدار: {buyer_phone}"] if buyer_phone else [] ),
+            *( [f"شرایط: {terms}"] if terms else [] ),
+        ],
+        "status": "pending",
+        "land_code": land_code,
+    }
+    return {
+        "ok": True,
+        "model_result": {
+            "ok": True,
+            "status": "needs_user_confirmation",
+            "instruction": "کارت پیشنهاد نشان داده شد؛ هنوز ثبت نشده.",
+        },
+        "ui_action": ui,
+        "land_codes": [],
+    }
+
+
+def _tool_propose_counter_offer(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _commercial_tools_gate(phone)
+    if gate is not None:
+        return gate
+    me = (phone or "").strip()
+    offer_id = str(args.get("offer_id") or "").strip()
+    try:
+        amount = int(args.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    if not offer_id or amount <= 0:
+        return _denied("offer_id و مبلغ الزامی است.")
+    terms = str(args.get("terms") or "").strip()
+    payload = {"offer_id": offer_id, "amount": amount, "terms": terms}
+    token = _store_pending_action(user_key=me, action_type="confirm_counter_offer", payload=payload)
+    ui = {
+        "type": "confirm_counter_offer",
+        "token": token,
+        "title": "تأیید پیشنهاد متقابل",
+        "lines": [f"پیشنهاد: {offer_id}", f"مبلغ متقابل: {amount:,} تومان"],
+        "status": "pending",
+    }
+    return {
+        "ok": True,
+        "model_result": {
+            "ok": True,
+            "status": "needs_user_confirmation",
+            "instruction": "کارت پیشنهاد متقابل نشان داده شد؛ هنوز ثبت نشده.",
+        },
+        "ui_action": ui,
+        "land_codes": [],
+    }
+
+
+def _tool_propose_reservation(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _commercial_tools_gate(phone)
+    if gate is not None:
+        return gate
+    me = (phone or "").strip()
+    offer_id = str(args.get("offer_id") or "").strip()
+    if not offer_id:
+        return _denied("offer_id الزامی است.")
+    hold_note = str(args.get("hold_note") or "").strip()
+    payload = {"offer_id": offer_id, "hold_note": hold_note}
+    token = _store_pending_action(user_key=me, action_type="confirm_reservation", payload=payload)
+    ui = {
+        "type": "confirm_reservation",
+        "token": token,
+        "title": "تأیید رزرو نرم",
+        "lines": [
+            f"پیشنهاد: {offer_id}",
+            "رزرو نرم — بدون قفل assignment / بدون commission deal",
+        ],
+        "status": "pending",
+    }
+    return {
+        "ok": True,
+        "model_result": {
+            "ok": True,
+            "status": "needs_user_confirmation",
+            "instruction": "کارت رزرو نرم نشان داده شد؛ هنوز ثبت نشده.",
+        },
+        "ui_action": ui,
+        "land_codes": [],
+    }
+
+
+def _closing_tools_gate(phone: str) -> dict[str, Any] | None:
+    try:
+        from app.closing.config import closing_ai_tools_enabled
+
+        if not closing_ai_tools_enabled():
+            return _denied("ابزار بستن معامله فعلاً غیرفعال است.")
+    except Exception:
+        return _denied("ابزار بستن معامله در دسترس نیست.")
+    me = (phone or "").strip()
+    if not me:
+        return _denied("کاربر شناسایی نشد.")
+    if not partner_is_approved(me):
+        return _denied("برای ثبت قرارداد/قسط باید حساب همکاری تأیید شده باشد.")
+    return None
+
+
+def _resolve_closing_deal_id(phone: str, args: dict[str, Any]) -> str:
+    deal_id = str(args.get("deal_id") or "").strip()
+    if deal_id:
+        return deal_id
+    land_code = str(args.get("land_code") or "").strip()
+    if not land_code:
+        try:
+            land_code = _resolve_tool_land_code(phone, args or {})
+        except Exception:
+            land_code = ""
+    if not land_code:
+        land_code = _active_mission_land_code(phone) or _land_code_from_user_message()
+    if not land_code:
+        return ""
+    try:
+        from app.closing.service import list_partner_deals
+
+        for d in list_partner_deals(phone, limit=20):
+            if d.land_code == land_code and d.status not in ("cancelled",):
+                return d.id
+    except Exception:
+        pass
+    return ""
+
+
+def _tool_propose_contract(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _closing_tools_gate(phone)
+    if gate is not None:
+        return gate
+    me = (phone or "").strip()
+    deal_id = _resolve_closing_deal_id(me, args or {})
+    if not deal_id:
+        return _denied("deal_id یا land_code با Deal فعال مشخص نیست.")
+    title = str(args.get("title") or "").strip() or "قرارداد"
+    document_ref = str(args.get("document_ref") or "").strip()
+    payload = {"deal_id": deal_id, "title": title, "document_ref": document_ref}
+    token = _store_pending_action(user_key=me, action_type="confirm_contract", payload=payload)
+    ui = {
+        "type": "confirm_contract",
+        "token": token,
+        "title": "تأیید ثبت قرارداد",
+        "lines": [f"Deal: {deal_id}", f"عنوان: {title}"],
+        "status": "pending",
+    }
+    return {
+        "ok": True,
+        "model_result": {
+            "ok": True,
+            "status": "needs_user_confirmation",
+            "instruction": "کارت قرارداد نشان داده شد؛ هنوز ثبت نشده.",
+        },
+        "ui_action": ui,
+        "land_codes": [],
+    }
+
+
+def _tool_propose_payment_milestone(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _closing_tools_gate(phone)
+    if gate is not None:
+        return gate
+    me = (phone or "").strip()
+    try:
+        amount = int(args.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    if amount <= 0:
+        return _denied("مبلغ قسط نامعتبر است.")
+    deal_id = _resolve_closing_deal_id(me, args or {})
+    if not deal_id:
+        return _denied("deal_id یا land_code با Deal فعال مشخص نیست.")
+    milestone_label = str(args.get("milestone_label") or "").strip()
+    due_at = str(args.get("due_at") or "").strip()
+    payload = {
+        "deal_id": deal_id,
+        "amount": amount,
+        "milestone_label": milestone_label,
+        "due_at": due_at,
+    }
+    token = _store_pending_action(
+        user_key=me, action_type="confirm_payment_milestone", payload=payload
+    )
+    ui = {
+        "type": "confirm_payment_milestone",
+        "token": token,
+        "title": "تأیید ثبت قسط",
+        "lines": [
+            f"Deal: {deal_id}",
+            f"مبلغ: {amount:,} تومان",
+            *([f"برچسب: {milestone_label}"] if milestone_label else []),
+        ],
+        "status": "pending",
+    }
+    return {
+        "ok": True,
+        "model_result": {
+            "ok": True,
+            "status": "needs_user_confirmation",
+            "instruction": "کارت قسط نشان داده شد؛ هنوز ثبت نشده.",
+        },
+        "ui_action": ui,
+        "land_codes": [],
+    }
+
+
+def _tool_propose_settlement(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _closing_tools_gate(phone)
+    if gate is not None:
+        return gate
+    me = (phone or "").strip()
+    deal_id = _resolve_closing_deal_id(me, args or {})
+    if not deal_id:
+        return _denied("deal_id یا land_code با Deal فعال مشخص نیست.")
+    try:
+        partner_amount = int(args.get("partner_amount") or 0)
+    except (TypeError, ValueError):
+        partner_amount = 0
+    withdrawal_id = str(args.get("withdrawal_id") or "").strip()
+    payload = {
+        "deal_id": deal_id,
+        "partner_amount": partner_amount,
+        "withdrawal_id": withdrawal_id,
+    }
+    token = _store_pending_action(user_key=me, action_type="confirm_settlement", payload=payload)
+    ui = {
+        "type": "confirm_settlement",
+        "token": token,
+        "title": "تأیید باز کردن تسویه",
+        "lines": [
+            f"Deal: {deal_id}",
+            *([f"سهم همکار: {partner_amount:,} تومان"] if partner_amount else []),
+            *([f"برداشت: {withdrawal_id}"] if withdrawal_id else []),
+            "Withdrawal موجود جایگزین نمی‌شود — فقط لینک می‌شود.",
+        ],
+        "status": "pending",
+    }
+    return {
+        "ok": True,
+        "model_result": {
+            "ok": True,
+            "status": "needs_user_confirmation",
+            "instruction": "کارت تسویه نشان داده شد؛ هنوز ثبت نشده.",
+        },
+        "ui_action": ui,
+        "land_codes": [],
+    }
+
+
+def _integration_ai_tools_gate(phone: str) -> dict[str, Any] | None:
+    """None if OK; otherwise denied/error dict."""
+    try:
+        from app.integration.config import integration_ai_tools_enabled
+
+        if not integration_ai_tools_enabled():
+            return _denied("ابزار یکپارچه‌سازی فعلاً غیرفعال است.")
+    except Exception:
+        return _denied("ابزار یکپارچه‌سازی در دسترس نیست.")
+    me = (phone or "").strip()
+    if not me:
+        return _denied("کاربر شناسایی نشد.")
+    if not partner_is_approved(me):
+        return _denied("برای ثبت لید/وظیفه باید حساب همکاری تأیید شده باشد.")
+    return None
+
+
+def _tool_propose_lead(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _integration_ai_tools_gate(phone)
+    if gate is not None:
+        return gate
+    from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
+    from app.express_partner.visit_requests import split_customer_full_name
+
+    me = (phone or "").strip()
+    phone_raw = str(args.get("customer_phone") or "").strip()
+    cust = normalize_iran_mobile(phone_raw) or phone_raw
+    display_name = str(args.get("display_name") or "").strip()
+    notes = str(args.get("notes") or "").strip()
+    if cust and not is_valid_iran_mobile(cust):
+        return {
+            "ok": False,
+            "model_result": {"ok": False, "error": "شماره مشتری معتبر نیست."},
+            "error": "شماره مشتری معتبر نیست.",
+        }
+    if not cust and not display_name:
+        return {
+            "ok": False,
+            "model_result": {"ok": False, "error": "شماره یا نام لید لازم است."},
+            "error": "شماره یا نام لید لازم است.",
+        }
+    first, last = ("", "")
+    if display_name:
+        first, last = split_customer_full_name(display_name)
+    payload = {
+        "customer_phone": cust,
+        "display_name": display_name,
+        "first_name": first,
+        "last_name": last,
+        "notes": notes,
+    }
+    token = _store_pending_action(user_key=me, action_type="confirm_lead", payload=payload)
+    masked = (cust[:4] + "***" + cust[-3:]) if cust and len(cust) >= 7 else (cust or "—")
+    lines = [
+        f"نام: {display_name or '—'}",
+        f"تماس: {masked}",
+    ]
+    if notes:
+        lines.append(f"یادداشت: {notes}")
+    ui = {
+        "type": "confirm_lead",
+        "token": token,
+        "title": "تأیید ثبت لید",
+        "lines": lines,
+        "status": "pending",
+    }
+    return {
+        "ok": True,
+        "model_result": {
+            "ok": True,
+            "status": "needs_user_confirmation",
+            "instruction": "کارت تأیید لید نشان داده شد؛ هنوز ثبت نشده.",
+        },
+        "ui_action": ui,
+        "land_codes": [],
+    }
+
+
+def _tool_propose_task(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    gate = _integration_ai_tools_gate(phone)
+    if gate is not None:
+        return gate
+    from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
+
+    me = (phone or "").strip()
+    title = str(args.get("title") or "").strip()
+    if not title:
+        return {
+            "ok": False,
+            "model_result": {"ok": False, "error": "عنوان وظیفه لازم است."},
+            "error": "عنوان وظیفه لازم است.",
+        }
+    phone_raw = str(args.get("customer_phone") or "").strip()
+    cust = normalize_iran_mobile(phone_raw) or phone_raw
+    if cust and not is_valid_iran_mobile(cust):
+        return {
+            "ok": False,
+            "model_result": {"ok": False, "error": "شماره مشتری معتبر نیست."},
+            "error": "شماره مشتری معتبر نیست.",
+        }
+    due_at = str(args.get("due_at") or "").strip()
+    notes = str(args.get("notes") or "").strip()
+    payload = {
+        "title": title,
+        "customer_phone": cust,
+        "due_at": due_at,
+        "notes": notes,
+    }
+    token = _store_pending_action(user_key=me, action_type="confirm_task", payload=payload)
+    lines = [f"عنوان: {title}", f"سررسید: {due_at or '—'}"]
+    if cust:
+        masked = cust[:4] + "***" + cust[-3:] if len(cust) >= 7 else cust
+        lines.append(f"مشتری: {masked}")
+    if notes:
+        lines.append(f"یادداشت: {notes}")
+    ui = {
+        "type": "confirm_task",
+        "token": token,
+        "title": "تأیید ثبت وظیفه",
+        "lines": lines,
+        "status": "pending",
+    }
+    return {
+        "ok": True,
+        "model_result": {
+            "ok": True,
+            "status": "needs_user_confirmation",
+            "instruction": "کارت تأیید وظیفه نشان داده شد؛ هنوز ثبت نشده.",
+        },
+        "ui_action": ui,
+        "land_codes": [],
+    }
+
+
 _SIMPLE_TX_META = {
     "confirm_complete_visit": {
         "title": "تأیید: بازدید انجام شد",
@@ -1898,6 +3033,12 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         )
     except Exception:
         pass
+    # Phase 1 CRM: optional Contact upsert from Visit customer_* (flags default ON).
+    try:
+        from app.crm.visit_sync import sync_contact_from_visit
+        sync_contact_from_visit(rec)
+    except Exception:
+        pass
 
     try:
         _send_visit_admin_sms(
@@ -1956,6 +3097,30 @@ def confirm_action_from_token(*, phone: str, token: str) -> dict[str, Any]:
     action_type = str(pending.get("action_type") or "")
     if action_type == "confirm_visit":
         return confirm_visit_from_token(phone=phone, token=token)
+    if action_type == "confirm_log_call":
+        return _confirm_log_call(phone=me, token=token, pending=pending)
+    if action_type == "confirm_followup":
+        return _confirm_followup(phone=me, token=token, pending=pending)
+    if action_type == "confirm_visit_result":
+        return _confirm_visit_result(phone=me, token=token, pending=pending)
+    if action_type == "confirm_no_show":
+        return _confirm_no_show(phone=me, token=token, pending=pending)
+    if action_type == "confirm_offer":
+        return _confirm_offer(phone=me, token=token, pending=pending)
+    if action_type == "confirm_counter_offer":
+        return _confirm_counter_offer(phone=me, token=token, pending=pending)
+    if action_type == "confirm_reservation":
+        return _confirm_reservation(phone=me, token=token, pending=pending)
+    if action_type == "confirm_contract":
+        return _confirm_contract(phone=me, token=token, pending=pending)
+    if action_type == "confirm_payment_milestone":
+        return _confirm_payment_milestone(phone=me, token=token, pending=pending)
+    if action_type == "confirm_settlement":
+        return _confirm_settlement(phone=me, token=token, pending=pending)
+    if action_type == "confirm_lead":
+        return _confirm_lead(phone=me, token=token, pending=pending)
+    if action_type == "confirm_task":
+        return _confirm_task(phone=me, token=token, pending=pending)
     if action_type == "confirm_partner_application":
         return _confirm_partner_application(phone=me, token=token, pending=pending)
     if action_type not in _SIMPLE_TX_META:
@@ -2006,6 +3171,407 @@ def _confirm_partner_application(*, phone: str, token: str, pending: dict[str, A
             "application_id": out.get("application_id"),
         }
     return {"ok": False, "error": str(out.get("error") or "ثبت درخواست ناموفق بود.")}
+
+
+def _ensure_crm_contact_from_payload(phone: str, payload: dict[str, Any]) -> str:
+    """Return contact_id, creating contact if needed."""
+    from app.crm.service import upsert_contact
+
+    cid = str(payload.get("contact_id") or "").strip()
+    if cid:
+        return cid
+    contact = upsert_contact(
+        partner_phone=phone,
+        customer_phone=str(payload.get("customer_phone") or ""),
+        first_name=str(payload.get("first_name") or ""),
+        last_name=str(payload.get("last_name") or ""),
+        display_name=str(payload.get("customer_name") or ""),
+        source="manual",
+    )
+    return contact.id if contact else ""
+
+
+def _confirm_log_call(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.crm.config import VISIT_CALL_TARGET, crm_ai_tools_enabled
+    from app.crm.service import log_call
+
+    if not crm_ai_tools_enabled():
+        return {"ok": False, "error": "ابزار CRM غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    contact_id = _ensure_crm_contact_from_payload(phone, payload)
+    if not contact_id:
+        return {"ok": False, "error": "ثبت مشتری برای تماس ممکن نشد."}
+    call = log_call(
+        partner_phone=phone,
+        contact_id=contact_id,
+        outcome=str(payload.get("outcome") or ""),
+        notes=str(payload.get("notes") or ""),
+        to_number=str(payload.get("to_number") or "") or VISIT_CALL_TARGET,
+    )
+    if not call:
+        return {"ok": False, "error": "ثبت تماس ممکن نشد."}
+    _consume_pending_action(token)
+    return {
+        "ok": True,
+        "message": "تماس ثبت شد.",
+        "call_id": call.id,
+        "contact_id": contact_id,
+    }
+
+
+def _confirm_followup(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.crm.config import crm_ai_tools_enabled
+    from app.crm.service import schedule_followup
+
+    if not crm_ai_tools_enabled():
+        return {"ok": False, "error": "ابزار CRM غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    contact_id = _ensure_crm_contact_from_payload(phone, payload)
+    if not contact_id:
+        return {"ok": False, "error": "ثبت مشتری برای پیگیری ممکن نشد."}
+    fu = schedule_followup(
+        partner_phone=phone,
+        contact_id=contact_id,
+        due_at=str(payload.get("due_at") or ""),
+        notes=str(payload.get("notes") or ""),
+    )
+    if not fu:
+        return {"ok": False, "error": "ثبت پیگیری ممکن نشد."}
+    _consume_pending_action(token)
+    return {
+        "ok": True,
+        "message": "پیگیری ثبت شد.",
+        "followup_id": fu.id,
+        "contact_id": contact_id,
+    }
+
+
+def _confirm_lead(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.crm.service import create_lead, upsert_contact
+    from app.integration.config import integration_ai_tools_enabled
+
+    if not integration_ai_tools_enabled():
+        return {"ok": False, "error": "ابزار یکپارچه‌سازی غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    cust = str(payload.get("customer_phone") or "").strip()
+    display_name = str(payload.get("display_name") or "").strip()
+    notes = str(payload.get("notes") or "").strip()
+    lead = create_lead(
+        partner_phone=phone,
+        customer_phone=cust,
+        first_name=str(payload.get("first_name") or ""),
+        last_name=str(payload.get("last_name") or ""),
+        display_name=display_name,
+        notes=notes,
+        metadata={"source": "ai"},
+    )
+    if not lead:
+        return {"ok": False, "error": "ثبت لید ممکن نشد."}
+    contact_id = ""
+    if cust:
+        contact = upsert_contact(
+            partner_phone=phone,
+            customer_phone=cust,
+            first_name=str(payload.get("first_name") or ""),
+            last_name=str(payload.get("last_name") or ""),
+            display_name=display_name or lead.display_name,
+            source="lead",
+            lead_id=lead.id,
+            notes=notes,
+        )
+        if contact:
+            contact_id = contact.id
+    _consume_pending_action(token)
+    return {
+        "ok": True,
+        "message": "لید ثبت شد.",
+        "lead_id": lead.id,
+        "contact_id": contact_id,
+    }
+
+
+def _confirm_task(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.crm.service import create_task, list_partner_customers, upsert_contact
+    from app.integration.config import integration_ai_tools_enabled
+
+    if not integration_ai_tools_enabled():
+        return {"ok": False, "error": "ابزار یکپارچه‌سازی غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    title = str(payload.get("title") or "").strip()
+    if not title:
+        return {"ok": False, "error": "عنوان وظیفه نامعتبر است."}
+    contact_id = ""
+    cust = str(payload.get("customer_phone") or "").strip()
+    if cust:
+        for c in list_partner_customers(phone, limit=500):
+            if c.customer_phone == cust:
+                contact_id = c.id
+                break
+        if not contact_id:
+            contact = upsert_contact(
+                partner_phone=phone,
+                customer_phone=cust,
+                source="manual",
+            )
+            if contact:
+                contact_id = contact.id
+    task = create_task(
+        partner_phone=phone,
+        title=title,
+        contact_id=contact_id,
+        due_at=str(payload.get("due_at") or ""),
+        notes=str(payload.get("notes") or ""),
+        metadata={"source": "ai"},
+    )
+    if not task:
+        return {"ok": False, "error": "ثبت وظیفه ممکن نشد."}
+    _consume_pending_action(token)
+    return {
+        "ok": True,
+        "message": "وظیفه ثبت شد.",
+        "task_id": task.id,
+        "contact_id": contact_id,
+    }
+
+
+def _confirm_visit_result(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.visit_result.config import visit_result_ai_tools_enabled
+    from app.visit_result.service import register_result, valid_outcome
+
+    if not visit_result_ai_tools_enabled():
+        return {"ok": False, "error": "ابزار نتیجه بازدید غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    outcome = str(payload.get("outcome") or "").strip()
+    if not valid_outcome(outcome) or outcome == "no_show":
+        return {"ok": False, "error": "نتیجه نامعتبر است."}
+    result = register_result(
+        visit_request_id=str(payload.get("visit_request_id") or ""),
+        partner_phone=phone,
+        land_code=str(payload.get("land_code") or ""),
+        outcome=outcome,
+        notes=str(payload.get("notes") or ""),
+        actor_key=phone,
+        source="ai",
+    )
+    if result is None:
+        return {"ok": False, "error": "ثبت نتیجه بازدید ممکن نشد."}
+    _consume_pending_action(token)
+    return {
+        "ok": True,
+        "message": "نتیجه بازدید ثبت شد.",
+        "result_id": result.id,
+        "outcome": result.outcome,
+        "land_code": result.land_code,
+    }
+
+
+def _confirm_no_show(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.visit_result.config import visit_result_ai_tools_enabled
+    from app.visit_result.service import register_no_show
+    from app.visit_result.status_bridge import is_no_show_writable
+    from app.utils.storage import load_express_visit_requests, save_express_visit_requests
+
+    if not visit_result_ai_tools_enabled() or not is_no_show_writable():
+        return {"ok": False, "error": "ثبت عدم حضور غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    visits = load_express_visit_requests() or []
+    if not isinstance(visits, list):
+        visits = []
+    rec, _result, err = register_no_show(
+        visits,
+        visit_request_id=str(payload.get("visit_request_id") or ""),
+        partner_phone=phone,
+        land_code=str(payload.get("land_code") or ""),
+        notes=str(payload.get("notes") or ""),
+        actor_key=phone,
+        source="ai",
+    )
+    if err or not rec:
+        return {"ok": False, "error": {"disabled": "غیرفعال است.", "not_found": "بازدید یافت نشد.", "invalid_status": "وضعیت مناسب نیست."}.get(str(err), "ثبت عدم حضور ممکن نشد.")}
+    try:
+        save_express_visit_requests(visits)
+    except Exception:
+        return {"ok": False, "error": "ذخیره وضعیت ممکن نشد."}
+    _consume_pending_action(token)
+    return {
+        "ok": True,
+        "message": "عدم حضور ثبت شد. می‌توانید بازدید جدید ثبت کنید.",
+        "land_code": str(rec.get("land_code") or ""),
+        "visit_status": "no_show",
+    }
+
+
+def _confirm_offer(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.commercial.config import commercial_ai_tools_enabled
+    from app.commercial.service import propose_offer
+
+    if not commercial_ai_tools_enabled():
+        return {"ok": False, "error": "ابزار پیشنهاد غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    try:
+        amount = int(payload.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    offer = propose_offer(
+        land_code=str(payload.get("land_code") or ""),
+        partner_phone=phone,
+        buyer_phone=str(payload.get("buyer_phone") or ""),
+        amount=amount,
+        terms=str(payload.get("terms") or ""),
+        proposed_by="ai",
+    )
+    if offer is None:
+        return {"ok": False, "error": "ثبت پیشنهاد ممکن نشد."}
+    _consume_pending_action(token)
+    return {
+        "ok": True,
+        "message": "پیشنهاد ثبت شد.",
+        "offer_id": offer.id,
+        "land_code": offer.land_code,
+        "amount": offer.amount,
+    }
+
+
+def _confirm_counter_offer(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.commercial.config import commercial_ai_tools_enabled
+    from app.commercial.service import propose_counter
+
+    if not commercial_ai_tools_enabled():
+        return {"ok": False, "error": "ابزار پیشنهاد غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    try:
+        amount = int(payload.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    counter = propose_counter(
+        offer_id=str(payload.get("offer_id") or ""),
+        amount=amount,
+        terms=str(payload.get("terms") or ""),
+        proposed_by="ai",
+        actor_key=phone,
+    )
+    if counter is None:
+        return {"ok": False, "error": "ثبت پیشنهاد متقابل ممکن نشد."}
+    _consume_pending_action(token)
+    return {"ok": True, "message": "پیشنهاد متقابل ثبت شد.", "counter_id": counter.id}
+
+
+def _confirm_reservation(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.commercial.config import commercial_ai_tools_enabled
+    from app.commercial.service import hold_reservation
+
+    if not commercial_ai_tools_enabled():
+        return {"ok": False, "error": "ابزار رزرو غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    res = hold_reservation(
+        offer_id=str(payload.get("offer_id") or ""),
+        hold_note=str(payload.get("hold_note") or ""),
+        actor_key=phone,
+    )
+    if res is None:
+        return {"ok": False, "error": "رزرو نرم ممکن نشد (پیشنهاد باید پذیرفته باشد)."}
+    _consume_pending_action(token)
+    return {
+        "ok": True,
+        "message": "رزرو نرم ثبت شد (بدون قفل assignment).",
+        "reservation_id": res.id,
+        "land_code": res.land_code,
+    }
+
+
+def _confirm_contract(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.closing.config import closing_ai_tools_enabled
+    from app.closing.service import create_contract, get_deal
+
+    if not closing_ai_tools_enabled():
+        return {"ok": False, "error": "ابزار قرارداد غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    deal_id = str(payload.get("deal_id") or "").strip()
+    deal = get_deal(deal_id)
+    if deal is None or deal.partner_phone != phone:
+        return {"ok": False, "error": "معامله یافت نشد."}
+    contract = create_contract(
+        deal_id=deal.id,
+        title=str(payload.get("title") or ""),
+        document_ref=str(payload.get("document_ref") or ""),
+        actor_key=phone,
+    )
+    if contract is None:
+        return {"ok": False, "error": "ثبت قرارداد ممکن نشد."}
+    _consume_pending_action(token)
+    return {
+        "ok": True,
+        "message": "قرارداد ثبت شد.",
+        "contract_id": contract.id,
+        "deal_id": deal.id,
+    }
+
+
+def _confirm_payment_milestone(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.closing.config import closing_ai_tools_enabled
+    from app.closing.service import add_payment, get_deal
+
+    if not closing_ai_tools_enabled():
+        return {"ok": False, "error": "ابزار قسط غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    deal_id = str(payload.get("deal_id") or "").strip()
+    deal = get_deal(deal_id)
+    if deal is None or deal.partner_phone != phone:
+        return {"ok": False, "error": "معامله یافت نشد."}
+    try:
+        amount = int(payload.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    pay = add_payment(
+        deal_id=deal.id,
+        amount=amount,
+        milestone_label=str(payload.get("milestone_label") or ""),
+        due_at=str(payload.get("due_at") or ""),
+        actor_key=phone,
+    )
+    if pay is None:
+        return {"ok": False, "error": "ثبت قسط ممکن نشد."}
+    _consume_pending_action(token)
+    return {"ok": True, "message": "قسط ثبت شد.", "payment_id": pay.id, "amount": pay.amount}
+
+
+def _confirm_settlement(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.closing.config import closing_ai_tools_enabled
+    from app.closing.service import get_deal, open_settlement
+
+    if not closing_ai_tools_enabled():
+        return {"ok": False, "error": "ابزار تسویه غیرفعال است."}
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    deal_id = str(payload.get("deal_id") or "").strip()
+    deal = get_deal(deal_id)
+    if deal is None or deal.partner_phone != phone:
+        return {"ok": False, "error": "معامله یافت نشد."}
+    try:
+        partner_amount = int(payload.get("partner_amount") or 0)
+    except (TypeError, ValueError):
+        partner_amount = 0
+    withdrawal_id = str(payload.get("withdrawal_id") or "").strip()
+    parties = []
+    if partner_amount > 0:
+        parties.append(
+            {"role": "partner", "amount": partner_amount, "phone": phone, "label": "پورسانت همکار"}
+        )
+    settlement = open_settlement(
+        deal_id=deal.id,
+        parties=parties,
+        withdrawal_id=withdrawal_id,
+        total_amount=partner_amount,
+        actor_key=phone,
+    )
+    if settlement is None:
+        return {"ok": False, "error": "ثبت تسویه ممکن نشد."}
+    _consume_pending_action(token)
+    return {
+        "ok": True,
+        "message": "تسویه باز شد (بدون تغییر withdrawal).",
+        "settlement_id": settlement.id,
+        "deal_id": deal.id,
+    }
 
 
 def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
@@ -2160,6 +3726,18 @@ def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
             "confirm_deal",
             "confirm_release",
             "confirm_partner_application",
+            "confirm_log_call",
+            "confirm_followup",
+            "confirm_visit_result",
+            "confirm_no_show",
+            "confirm_offer",
+            "confirm_counter_offer",
+            "confirm_reservation",
+            "confirm_contract",
+            "confirm_payment_milestone",
+            "confirm_settlement",
+            "confirm_lead",
+            "confirm_task",
         ):
             parts.append(_render_confirm_action_card(action))
         elif atype == "need_login":
@@ -2245,6 +3823,18 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
         "confirm_deal": "تأیید معامله",
         "confirm_release": "تأیید بستن معامله",
         "confirm_partner_application": "تأیید ثبت درخواست همکاری",
+        "confirm_log_call": "تأیید ثبت تماس",
+        "confirm_followup": "تأیید ثبت پیگیری",
+        "confirm_visit_result": "تأیید ثبت نتیجه بازدید",
+        "confirm_no_show": "تأیید عدم حضور",
+        "confirm_offer": "تأیید ثبت پیشنهاد",
+        "confirm_counter_offer": "تأیید پیشنهاد متقابل",
+        "confirm_reservation": "تأیید رزرو نرم",
+        "confirm_contract": "تأیید ثبت قرارداد",
+        "confirm_payment_milestone": "تأیید ثبت قسط",
+        "confirm_settlement": "تأیید باز کردن تسویه",
+        "confirm_lead": "تأیید ثبت لید",
+        "confirm_task": "تأیید ثبت وظیفه",
     }
     title = escape(str(action.get("title") or defaults.get(atype) or "تأیید اقدام"))
     confirm_label = escape(str(action.get("confirm_label") or "تأیید و ثبت").strip() or "تأیید و ثبت")

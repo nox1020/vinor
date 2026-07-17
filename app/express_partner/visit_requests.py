@@ -25,6 +25,8 @@ APPROVED_STATUS = "approved"
 DONE_PENDING_STATUS = "done_pending"
 COMPLETED_STATUS = "completed"
 CANCELLED_STATUS = "cancelled"
+# Phase 2 additive — never remove the five statuses above.
+NO_SHOW_STATUS = "no_show"
 
 OPEN_VISIT_STATUSES = frozenset({PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS})
 
@@ -355,7 +357,7 @@ def visit_progress_steps(
     visit_requested_done = False if visit_requested is False else True
     was_approved = bool(row.get("approved_at"))
     visit_approved_done = (
-        status in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS)
+        status in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS, NO_SHOW_STATUS)
         or (status == CANCELLED_STATUS and was_approved)
     )
     visit_done = status == COMPLETED_STATUS
@@ -373,7 +375,7 @@ def visit_progress_steps(
     steps: List[Dict[str, Any]] = []
     for idx, (key, label) in enumerate(VISIT_PROGRESS_STEP_KEYS):
         state = "done" if done[idx] else "todo"
-        if idx == current_idx and state == "todo" and status != CANCELLED_STATUS:
+        if idx == current_idx and state == "todo" and status not in (CANCELLED_STATUS, NO_SHOW_STATUS):
             state = "current"
         steps.append({"key": key, "label": label, "state": state})
     if status == CANCELLED_STATUS:
@@ -381,6 +383,13 @@ def visit_progress_steps(
         for step in steps:
             if step.get("key") == reject_key and step["state"] != "done":
                 step["state"] = "rejected"
+            elif step["state"] != "done":
+                step["state"] = "blocked"
+    elif status == NO_SHOW_STATUS:
+        for step in steps:
+            if step.get("key") == "visit_done" and step["state"] != "done":
+                step["state"] = "rejected"
+                step["label"] = "عدم حضور (No-Show)"
             elif step["state"] != "done":
                 step["state"] = "blocked"
     return steps
@@ -493,6 +502,30 @@ def partner_visit_completed(
         if not _match_partner_land(r, ph, code):
             continue
         if (str(r.get("status") or "")).strip() == COMPLETED_STATUS:
+            return r
+    return None
+
+
+def partner_visit_no_show(
+    requests: List[Dict[str, Any]], phone: str, land_code: str
+) -> Optional[Dict[str, Any]]:
+    """Most recent no_show visit for partner+land (Phase 2)."""
+    ph = (phone or "").strip()
+    code = (land_code or "").strip()
+    if not ph or not code:
+        return None
+    # Only surface when Phase 2 no_show writes are enabled — else treat as absent.
+    try:
+        from app.visit_result.status_bridge import is_no_show_writable
+
+        if not is_no_show_writable():
+            return None
+    except Exception:
+        return None
+    for r in reversed(requests or []):
+        if not _match_partner_land(r, ph, code):
+            continue
+        if (str(r.get("status") or "")).strip() == NO_SHOW_STATUS:
             return r
     return None
 
@@ -647,6 +680,7 @@ ADMIN_VISIT_STATUSES = frozenset({
     DONE_PENDING_STATUS,
     COMPLETED_STATUS,
     CANCELLED_STATUS,
+    NO_SHOW_STATUS,
 })
 
 
@@ -718,7 +752,52 @@ def admin_update_visit_request_status(
     elif target == CANCELLED_STATUS:
         # تاریخچهٔ تأیید/انجام را نگه می‌داریم تا روند بسته‌شده قابل‌خواندن بماند
         rec["cancelled_at"] = now_iso
+    elif target == NO_SHOW_STATUS:
+        rec["no_show_at"] = now_iso
+        rec.pop("completed_at", None)
     return rec, None
+
+
+def mark_visit_no_show(
+    requests: List[Dict[str, Any]],
+    *,
+    visit_request_id: str = "",
+    partner_phone: str = "",
+    land_code: str = "",
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Phase 2: set visit status to no_show (gated by visit_result flags).
+    Never creates commission. Soft-fails when flags OFF.
+    """
+    try:
+        from app.visit_result.status_bridge import is_no_show_writable
+    except Exception:
+        return None, "disabled"
+    if not is_no_show_writable():
+        return None, "disabled"
+
+    rid = (visit_request_id or "").strip()
+    ph = (partner_phone or "").strip()
+    code = (land_code or "").strip()
+    rec: Optional[Dict[str, Any]] = None
+    if rid:
+        rec = _find_visit_request(requests, rid)
+    elif ph and code:
+        rec = partner_visit_approved_for_deal(requests, ph, code) or partner_visit_done_pending(
+            requests, ph, code
+        )
+    if not rec:
+        return None, "not_found"
+    current = (str(rec.get("status") or "")).strip()
+    if current == NO_SHOW_STATUS:
+        return rec, None
+    if current not in (APPROVED_STATUS, DONE_PENDING_STATUS):
+        return None, "invalid_status"
+    if not admin_can_transition_visit(current, NO_SHOW_STATUS):
+        return None, "invalid_transition"
+    return admin_update_visit_request_status(
+        requests, str(rec.get("id") or ""), NO_SHOW_STATUS
+    )
 
 
 def _first_completed_visit_without_commission(
@@ -850,6 +929,7 @@ def visit_tx_mode(
     has_approved_visit: bool,
     has_visit_done_pending: bool = False,
     has_completed_visit: bool = False,
+    has_visit_no_show: bool = False,
     visit_commission_ready: bool = False,
     visit_commission_required: bool = False,
     has_pending_deal_commission: bool = False,
@@ -868,6 +948,9 @@ def visit_tx_mode(
         return "visit_done_pending"
     if has_approved_visit:
         return "visit_done"
+    # Phase 2: no_show branch (only meaningful when flag-enabled callers pass True)
+    if has_visit_no_show:
+        return "visit_no_show"
     if has_completed_visit:
         if visit_commission_required and not visit_commission_ready:
             return "visit_commission_pending"
@@ -905,6 +988,7 @@ def resolve_partner_land_tx_state(
     approved = partner_visit_approved_for_deal(visit_requests, ph, code) if ph else None
     done_pending = partner_visit_done_pending(visit_requests, ph, code) if ph else None
     completed = partner_visit_completed(visit_requests, ph, code) if ph else None
+    no_show_rec = partner_visit_no_show(visit_requests, ph, code) if ph else None
     active_visit = partner_active_visit_record(visit_requests, ph, code) if ph else None
     visit_ready = visit_commission_ready_for_deal(commissions, ph, code) if ph else False
     pending_deal = partner_has_pending_deal_commission(commissions, ph, code) if ph else False
@@ -951,6 +1035,7 @@ def resolve_partner_land_tx_state(
             has_approved_visit=bool(approved),
             has_visit_done_pending=bool(done_pending),
             has_completed_visit=bool(completed),
+            has_visit_no_show=bool(no_show_rec),
             visit_commission_ready=bool(visit_ready),
             visit_commission_required=bool(visit_commission_required),
             has_pending_deal_commission=bool(pending_deal),
@@ -964,7 +1049,7 @@ def resolve_partner_land_tx_state(
 
     show_revisit = bool(
         can_revisit
-        and completed
+        and (completed or no_show_rec)
         and not open_visit
         and not awaiting
         and not done_pending
@@ -1002,6 +1087,7 @@ def admin_row_dict(
         DONE_PENDING_STATUS: "در انتظار تأیید انجام بازدید",
         COMPLETED_STATUS: "بازدید انجام شد",
         CANCELLED_STATUS: "بسته شده",
+        NO_SHOW_STATUS: "عدم حضور (No-Show)",
     }
     hints = {
         PENDING_STATUS: "تأیید کنید تا همکار پس از انجام بازدید، آن را روی فایل ثبت کند.",
@@ -1009,6 +1095,7 @@ def admin_row_dict(
         DONE_PENDING_STATUS: "همکار انجام بازدید را ثبت کرده؛ پس از تأیید شما، پورسانت بازدید در صف تأیید قرار می‌گیرد.",
         COMPLETED_STATUS: "بازدید انجام شده؛ پس از تأیید پورسانت بازدید، درخواست معامله فعال می‌شود.",
         CANCELLED_STATUS: "این درخواست بسته شده است.",
+        NO_SHOW_STATUS: "مشتری حاضر نشد؛ پورسانت بازدید ساخته نمی‌شود. همکار می‌تواند بازدید مجدد ثبت کند.",
     }
     progress_steps = visit_progress_steps(row, commissions)
     progress_summary = visit_progress_summary(progress_steps)
@@ -1051,7 +1138,18 @@ ADMIN_VISIT_TRANSITIONS: Dict[str, frozenset] = {
     # بازدید تکمیل‌شده را نمی‌بندیم — مسیر معامله را خراب می‌کند
     COMPLETED_STATUS: frozenset({COMPLETED_STATUS}),
     CANCELLED_STATUS: frozenset({CANCELLED_STATUS}),
+    # Phase 2: no_show transitions added dynamically via status_bridge when flags ON
+    NO_SHOW_STATUS: frozenset({NO_SHOW_STATUS}),
 }
+
+
+def _admin_transitions() -> Dict[str, frozenset]:
+    try:
+        from app.visit_result.status_bridge import extend_admin_transitions
+
+        return extend_admin_transitions(ADMIN_VISIT_TRANSITIONS)
+    except Exception:
+        return ADMIN_VISIT_TRANSITIONS
 
 
 def visit_filter_bucket(status: str) -> str:
@@ -1066,6 +1164,8 @@ def visit_filter_bucket(status: str) -> str:
         return "done"
     if st == CANCELLED_STATUS:
         return "closed"
+    if st == NO_SHOW_STATUS:
+        return "no_show"
     return "other"
 
 
@@ -1076,7 +1176,15 @@ def admin_can_transition_visit(old_status: str, new_status: str) -> bool:
         return True
     if new == COMPLETED_STATUS and old != DONE_PENDING_STATUS:
         return False
-    allowed = ADMIN_VISIT_TRANSITIONS.get(old, frozenset({old}))
+    if new == NO_SHOW_STATUS:
+        try:
+            from app.visit_result.status_bridge import is_no_show_writable
+
+            if not is_no_show_writable():
+                return False
+        except Exception:
+            return False
+    allowed = _admin_transitions().get(old, frozenset({old}))
     return new in allowed
 
 
@@ -1339,14 +1447,22 @@ def merge_admin_visit_cards_by_partner_land(
 
 def admin_visit_status_options(old_status: str) -> List[Dict[str, str]]:
     old = (old_status or PENDING_STATUS).strip()
-    keys = ADMIN_VISIT_TRANSITIONS.get(old, frozenset({old}))
-    order = (PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS, CANCELLED_STATUS)
+    keys = _admin_transitions().get(old, frozenset({old}))
+    order = (
+        PENDING_STATUS,
+        APPROVED_STATUS,
+        DONE_PENDING_STATUS,
+        COMPLETED_STATUS,
+        CANCELLED_STATUS,
+        NO_SHOW_STATUS,
+    )
     labels = {
         PENDING_STATUS: "در انتظار تأیید",
         APPROVED_STATUS: "تأیید بازدید",
         DONE_PENDING_STATUS: "در انتظار تأیید انجام بازدید",
         COMPLETED_STATUS: "تأیید انجام بازدید",
         CANCELLED_STATUS: "بستن پرونده",
+        NO_SHOW_STATUS: "عدم حضور (No-Show)",
     }
     out: List[Dict[str, str]] = []
     for key in order:

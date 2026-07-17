@@ -3,15 +3,19 @@ from __future__ import annotations
 from app.conversation.interfaces import (
     INTENT_BECOME_PARTNER,
     INTENT_COMPARE,
+    INTENT_CONTRACT,
     INTENT_DEAL,
     INTENT_EDIT_PROPERTY,
+    INTENT_FOLLOWUP,
     INTENT_GENERAL,
     INTENT_NEGOTIATION,
+    INTENT_OFFER,
     INTENT_RECOMMENDATION,
     INTENT_REGISTER_PROPERTY,
     INTENT_SEARCH,
     INTENT_SUPPORT,
     INTENT_VISIT,
+    INTENT_VISIT_RESULT,
 )
 from app.workflow.definitions import ALL_WORKFLOWS
 from app.workflow.interfaces import (
@@ -27,6 +31,14 @@ _PASS_THROUGH_INTENTS = frozenset(
         INTENT_COMPARE,
         INTENT_RECOMMENDATION,
         INTENT_NEGOTIATION,
+    }
+)
+
+_INTEGRATION_INTENTS = frozenset(
+    {
+        INTENT_VISIT_RESULT,
+        INTENT_FOLLOWUP,
+        INTENT_CONTRACT,
     }
 )
 
@@ -53,6 +65,24 @@ class WorkflowRegistry:
         intent = (intent or "").strip()
         if intent in _PASS_THROUGH_INTENTS:
             return WF_NONE
+        # Phase 3 Offer workflow — only when commercial workflow flag ON
+        if intent == INTENT_OFFER:
+            try:
+                from app.commercial.config import commercial_workflow_enabled
+
+                if not commercial_workflow_enabled():
+                    return WF_NONE
+            except Exception:
+                return WF_NONE
+        # Phase 6 integration thin workflows
+        if intent in _INTEGRATION_INTENTS:
+            try:
+                from app.integration.config import integration_workflows_enabled
+
+                if not integration_workflows_enabled():
+                    return WF_NONE
+            except Exception:
+                return WF_NONE
         if intent == INTENT_GENERAL:
             return self._by_intent.get(INTENT_GENERAL, WF_NONE)
         return self._by_intent.get(intent, WF_NONE)

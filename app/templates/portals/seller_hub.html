@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>پنل فروشنده | وینور</title>
+  <style>
+    body { font-family: Tahoma, sans-serif; background: #0b1220; color: #e5e7eb; margin: 0; padding: 1rem; }
+    .wrap { max-width: 28rem; margin: 0 auto; }
+    h1 { font-size: 1.15rem; }
+    .muted { color: #9ca3af; font-size: .75rem; }
+    a.row { display: block; color: #e5e7eb; text-decoration: none; padding: .85rem 1rem; border-radius: .85rem; border: 1px solid rgba(255,255,255,.1); background: #12181f; margin: .5rem 0; }
+    a.row:hover { border-color: rgba(56,189,248,.45); }
+    .title { font-weight: 700; font-size: .9rem; }
+    .sub { color: #9ca3af; font-size: .72rem; margin-top: .2rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>پنل فروشنده</h1>
+    <p class="muted">شماره {{ me_phone }} · نقش‌ها: {{ roles|join(', ') }}</p>
+    <a class="row" href="{{ url_for('express_partner.home') }}">
+      <div class="title">خانه همکار</div>
+      <div class="sub">داشبورد اصلی</div>
+    </a>
+    <a class="row" href="{{ url_for('express_partner.negotiations') }}">
+      <div class="title">مذاکرات و پیشنهادها</div>
+      <div class="sub">Offer / Counter / Reservation</div>
+    </a>
+    <a class="row" href="{{ url_for('express_partner.deals') }}">
+      <div class="title">معاملات و بستن</div>
+      <div class="sub">Contract / Payment / Settlement</div>
+    </a>
+    <a class="row" href="{{ url_for('express_partner.commissions') }}">
+      <div class="title">پورسانت‌ها</div>
+      <div class="sub">مسیر فعلی commission (بدون deprecate)</div>
+    </a>
+    {% if is_owner %}
+    <a class="row" href="{{ url_for('roles.owner_hub') }}">
+      <div class="title">پنل مالک</div>
+      <div class="sub">آگهی‌ها و صندوق‌های ویژه</div>
+    </a>
+    {% endif %}
+    <a class="row" href="{{ url_for('roles.buyer_hub') }}">
+      <div class="title">پنل خریدار</div>
+      <div class="sub">پیشنهادهای مرتبط با شماره شما</div>
+    </a>
+  </div>
+</body>
+</html>

@@ -3,7 +3,7 @@
 Workflow Commit Adapter — records completed Workflow Engine objects into
 Activity + Timeline without changing Engine reply / Supervisor handoff.
 
-Gated by VINOR_FOUNDATION_ENABLED + VINOR_WORKFLOW_COMMIT_ENABLED (default OFF).
+Gated by VINOR_FOUNDATION_ENABLED + VINOR_WORKFLOW_COMMIT_ENABLED (default ON).
 """
 from __future__ import annotations
 
