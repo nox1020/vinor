@@ -17,6 +17,13 @@ PERM_LISTINGS = "admin.listings"
 PERM_COMMS = "admin.comms"
 PERM_AUDIT = "admin.audit"
 PERM_SUPER = "admin.super"
+PERM_AI_READ = "admin.ai.read"
+PERM_AI_DEBUG = "admin.ai.debug"
+PERM_AI_TOOLS = "admin.ai.tools"
+PERM_AI_PROMPTS = "admin.ai.prompts"
+PERM_AI_FLAGS = "admin.ai.flags"
+PERM_AI_MEMORY = "admin.ai.memory"
+PERM_AI_SETTINGS = "admin.ai.settings"
 
 ALL_PERMISSIONS: FrozenSet[str] = frozenset(
     {
@@ -28,12 +35,28 @@ ALL_PERMISSIONS: FrozenSet[str] = frozenset(
         PERM_COMMS,
         PERM_AUDIT,
         PERM_SUPER,
+        PERM_AI_READ,
+        PERM_AI_DEBUG,
+        PERM_AI_TOOLS,
+        PERM_AI_PROMPTS,
+        PERM_AI_FLAGS,
+        PERM_AI_MEMORY,
+        PERM_AI_SETTINGS,
     }
 )
 
-# Logged-in admin gets everything except super.
+# Logged-in admin gets ops + AI read/debug; mutate AI needs super (or explicit).
 _BASE_ADMIN_PERMS: FrozenSet[str] = frozenset(
-    p for p in ALL_PERMISSIONS if p != PERM_SUPER
+    p
+    for p in ALL_PERMISSIONS
+    if p
+    not in (
+        PERM_SUPER,
+        PERM_AI_PROMPTS,
+        PERM_AI_FLAGS,
+        PERM_AI_MEMORY,
+        PERM_AI_SETTINGS,
+    )
 )
 
 
@@ -64,7 +87,7 @@ def list_permissions(*, session: Any = None) -> list[str]:
         from app.roles.service import is_super_admin
 
         if is_super_admin(session=session):
-            perms.add(PERM_SUPER)
+            perms.update(ALL_PERMISSIONS)
     except Exception:
         pass
     return sorted(perms)

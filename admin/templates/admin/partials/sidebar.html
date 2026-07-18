@@ -1,110 +1,149 @@
-{% set _endpoint = request.endpoint or '' %}
-{% set _people_active = _endpoint in [
-  'admin.express_partners', 'admin.express_partner_detail', 'admin.users', 'admin.partners_activity',
-  'admin.top_sellers'
+{% set ep = request.endpoint or '' %}
+{% set ai_on = ep.startswith('admin.ai_console_') or ep == 'admin.ai_questions' %}
+{% set market_on = ep in [
+  'admin.express_listings', 'admin.edit_express_listing', 'admin.add_express_listing',
+  'admin.express_visit_requests', 'admin.express_commissions', 'admin.express_commission_edit',
+  'admin.financial_withdrawals', 'admin.lands', 'admin.pending_lands', 'admin.control_market'
 ] %}
-{% set _ops_active = _endpoint in [
-  'admin.express_commissions', 'admin.express_commission_edit',
-  'admin.financial_withdrawals', 'admin.express_visit_requests',
+{% set rel_on = ep in [
+  'admin.express_partners', 'admin.express_partner_detail', 'admin.users',
+  'admin.partners_activity', 'admin.top_sellers', 'admin.control_crm', 'admin.control_people'
 ] %}
-{% set _comm_active = _endpoint in [
-  'admin.notifications_colleagues', 'admin.sms_colleagues', 'admin.sms_history',
-  'admin.sms_recipients', 'admin.sms_recipients_edit',
-  'admin.notifications_broadcast'
+{% set signal_on = ep in ['admin.ai_console_analytics', 'admin.reports_list', 'admin.control_analytics'] %}
+{% set observe_on = ep in [
+  'admin.ai_console_timeline', 'admin.ai_console_errors', 'admin.ai_console_audit',
+  'admin.ai_console_monitor', 'admin.audit_log', 'admin.control_observe'
 ] %}
-{% set _sys_active = _endpoint in [
-  'admin.express_cities', 'admin.ai_questions', 'admin.settings'
+{% set govern_on = ep in [
+  'admin.settings', 'admin.express_cities', 'admin.ai_console_flags',
+  'admin.ai_console_settings', 'admin.super_admin_info', 'admin.notifications_colleagues',
+  'admin.sms_colleagues', 'admin.control_more'
 ] %}
 
-<div class="h-full flex flex-col p-4" x-data="{
-  opsOpen: {{ 'true' if _ops_active else 'false' }},
-  commOpen: {{ 'true' if _comm_active else 'false' }},
-  sysOpen: {{ 'true' if _sys_active else 'false' }}
+<div class="h-full flex flex-col px-3 py-4" x-data="{
+  aiOpen: {{ 'true' if ai_on else 'true' }},
+  marketOpen: {{ 'true' if market_on else 'false' }},
+  relOpen: {{ 'true' if rel_on else 'false' }},
+  signalOpen: {{ 'true' if signal_on else 'false' }},
+  observeOpen: {{ 'true' if observe_on else 'false' }},
+  governOpen: {{ 'true' if govern_on else 'false' }}
 }">
 
-  <div class="flex items-center justify-between mb-5">
-    <div class="flex items-center gap-2.5 min-w-0">
-      <img src="{{ url_for('static', filename='icons/icon-48.png') }}" alt="" width="32" height="32" class="rounded-lg object-cover flex-shrink-0" decoding="async">
-      <span class="font-semibold text-sm text-gray-900 dark:text-white truncate">وینور همکاران</span>
-    </div>
-    <button @click="menuOpen = false" class="lg:hidden focusable p-1 rounded text-gray-600 dark:text-gray-400 flex-shrink-0">
+  <div class="flex items-center justify-between mb-4 px-1">
+    <a href="{{ url_for('admin.dashboard') }}" class="flex items-center gap-2 min-w-0">
+      <img src="{{ url_for('static', filename='icons/icon-48.png') }}" alt="" width="28" height="28" class="rounded-md object-cover shrink-0" decoding="async">
+      <div class="min-w-0 leading-tight">
+        <div class="font-bold text-sm text-white truncate" data-i18n="meta.app_name"></div>
+        <div class="text-[10px] text-[#6B7380]" data-i18n="meta.app_tagline"></div>
+      </div>
+    </a>
+    <button type="button" @click="menuOpen = false" class="lg:hidden p-1 text-[#6B7380] focusable rounded" data-i18n-aria="common.close">
       <i class="fa-solid fa-xmark"></i>
     </button>
   </div>
 
-  <nav class="admin-sidebar-scroll flex-1 space-y-1 pb-4">
+  <nav class="admin-sidebar-scroll flex-1 space-y-0.5 pb-6">
 
+    <div class="vc-nav-label" data-i18n="nav.command"></div>
     <a href="{{ url_for('admin.dashboard') }}"
-       class="flex items-center gap-3 px-3 py-2 rounded-lg transition focusable text-sm font-medium
-              {% if _endpoint == 'admin.dashboard' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
-      <i class="fa-solid fa-gauge-high w-4 text-center text-[13px]"></i>
-      <span>داشبورد</span>
+       class="vc-nav-link {% if ep == 'admin.dashboard' %}is-active{% endif %}">
+      <i class="fa-solid fa-satellite-dish"></i><span data-i18n="nav.dashboard"></span>
     </a>
 
-    <div class="pt-2 pb-1 px-3"><p class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">افراد</p></div>
-    <a href="{{ url_for('admin.express_partners') }}"
-       class="flex items-center gap-3 px-3 py-2 rounded-lg transition focusable text-sm font-medium
-              {% if _people_active %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
-      <i class="fa-solid fa-users w-4 text-center text-[13px]"></i>
-      <span>کاربران و همکاران</span>
-    </a>
-    <a href="{{ url_for('admin.partners_activity') }}"
-       class="flex items-center gap-3 px-3 py-2 rounded-lg transition focusable text-sm font-medium
-              {% if _endpoint == 'admin.partners_activity' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
-      <i class="fa-solid fa-list-check w-4 text-center text-[13px]"></i>
-      <span>آمار فعالیت همکاران</span>
-    </a>
-    <a href="{{ url_for('admin.top_sellers') }}"
-       class="flex items-center gap-3 px-3 py-2 rounded-lg transition focusable text-sm font-medium
-              {% if _endpoint == 'admin.top_sellers' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
-      <i class="fa-solid fa-trophy w-4 text-center text-[13px]"></i>
-      <span>فروشنده‌های برتر</span>
-    </a>
-
-    <div class="pt-3 pb-1 px-3"><p class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">عملیات</p></div>
-    <button type="button" @click="opsOpen = !opsOpen"
-            class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition focusable text-sm font-semibold
-                   {% if _ops_active %}text-blue-600 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-900/10{% else %}text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
-      <span class="flex items-center gap-2"><i class="fa-solid fa-briefcase w-4 text-[13px]"></i>همکار و مالی</span>
-      <i class="fa-solid fa-chevron-down text-[10px] transition-transform" :class="opsOpen ? 'rotate-180' : ''"></i>
+    <div class="vc-nav-label" data-i18n="nav.intelligence"></div>
+    <button type="button" @click="aiOpen = !aiOpen" class="vc-nav-link w-full text-start">
+      <i class="fa-solid fa-brain"></i><span data-i18n="nav.ai"></span>
+      <i class="fa-solid fa-chevron-down text-[9px] ms-auto transition-transform" :class="aiOpen && 'rotate-180'"></i>
     </button>
-    <div x-show="opsOpen" class="space-y-0.5 mt-0.5 mr-2">
-      <a href="{{ url_for('admin.express_commissions') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.express_commissions', 'admin.express_commission_edit'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-wallet w-4 text-[13px]"></i>پورسانت‌ها</a>
-      <a href="{{ url_for('admin.financial_withdrawals') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint == 'admin.financial_withdrawals' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-money-bill-transfer w-4 text-[13px]"></i>برداشت</a>
-      <a href="{{ url_for('admin.express_visit_requests') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint == 'admin.express_visit_requests' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-route w-4 text-[13px]"></i>روند بازدید</a>
-    </div>
-
-    <div class="pt-3 pb-1 px-3"><p class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">ارتباط</p></div>
-    <button type="button" @click="commOpen = !commOpen"
-            class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition focusable text-sm font-semibold
-                   {% if _comm_active %}text-blue-600 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-900/10{% else %}text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
-      <span class="flex items-center gap-2"><i class="fa-solid fa-bell w-4 text-[13px]"></i>پیام و اعلان</span>
-      <i class="fa-solid fa-chevron-down text-[10px] transition-transform" :class="commOpen ? 'rotate-180' : ''"></i>
-    </button>
-    <div x-show="commOpen" class="space-y-0.5 mt-0.5 mr-2">
-      <a href="{{ url_for('admin.notifications_colleagues') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.notifications_colleagues', 'admin.notifications_broadcast'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-bell w-4 text-[13px]"></i>نوتیفیکیشن</a>
-      <a href="{{ url_for('admin.sms_colleagues') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.sms_colleagues', 'admin.sms_history', 'admin.sms_recipients', 'admin.sms_recipients_edit'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-sms w-4 text-[13px]"></i>پیامک</a>
-    </div>
-
-    <div class="pt-3 pb-1 px-3"><p class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">سیستم</p></div>
-    <button type="button" @click="sysOpen = !sysOpen"
-            class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition focusable text-sm font-semibold
-                   {% if _sys_active %}text-blue-600 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-900/10{% else %}text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
-      <span class="flex items-center gap-2"><i class="fa-solid fa-sliders w-4 text-[13px]"></i>تنظیمات</span>
-      <i class="fa-solid fa-chevron-down text-[10px] transition-transform" :class="sysOpen ? 'rotate-180' : ''"></i>
-    </button>
-    <div x-show="sysOpen" class="space-y-0.5 mt-0.5 mr-2">
-      <a href="{{ url_for('admin.ai_questions') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint == 'admin.ai_questions' %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-robot w-4 text-[13px]"></i>AI</a>
-      <a href="{{ url_for('admin.settings') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if _endpoint in ['admin.settings', 'admin.express_cities'] %}bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}"><i class="fa-solid fa-gear w-4 text-[13px]"></i>تنظیمات کلی</a>
-    </div>
-
-    <div class="pt-4 mt-2 border-t border-gray-200 dark:border-gray-800">
-      <a href="{{ url_for('admin.logout') }}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition focusable text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800">
-        <i class="fa-solid fa-sign-out-alt w-4 text-center"></i>
-        <span class="text-sm font-medium">خروج</span>
+    <div x-show="aiOpen" class="space-y-0.5 me-2">
+      <a href="{{ url_for('admin.ai_console_conversations') }}" class="vc-nav-link {% if ep == 'admin.ai_console_conversations' %}is-active{% endif %}"><i class="fa-solid fa-comments"></i><span data-i18n="nav.conversations"></span></a>
+      <a href="{{ url_for('admin.ai_console_agents') }}" class="vc-nav-link {% if ep == 'admin.ai_console_agents' %}is-active{% endif %}"><i class="fa-solid fa-robot"></i><span data-i18n="nav.agents"></span></a>
+      <a href="{{ url_for('admin.ai_console_tools') }}" class="vc-nav-link {% if ep == 'admin.ai_console_tools' %}is-active{% endif %}">
+        <i class="fa-solid fa-screwdriver-wrench"></i><span data-i18n="nav.tools"></span>
+        {% if control_badges and control_badges.pending %}<span class="vc-badge" data-i18n-number="{{ control_badges.pending }}">{{ control_badges.pending }}</span>{% endif %}
       </a>
+      <a href="{{ url_for('admin.ai_console_workflows') }}" class="vc-nav-link {% if ep == 'admin.ai_console_workflows' %}is-active{% endif %}"><i class="fa-solid fa-diagram-project"></i><span data-i18n="nav.workflows"></span></a>
+      <a href="{{ url_for('admin.ai_console_prompts') }}" class="vc-nav-link {% if ep == 'admin.ai_console_prompts' %}is-active{% endif %}"><i class="fa-solid fa-pen-nib"></i><span data-i18n="nav.prompt_studio"></span></a>
+      <a href="{{ url_for('admin.ai_console_memory') }}" class="vc-nav-link {% if ep == 'admin.ai_console_memory' %}is-active{% endif %}"><i class="fa-solid fa-database"></i><span data-i18n="nav.memory"></span></a>
+      <a href="{{ url_for('admin.control_reasoning') }}" class="vc-nav-link {% if ep == 'admin.control_reasoning' %}is-active{% endif %}"><i class="fa-solid fa-lightbulb"></i><span data-i18n="nav.reasoning"></span></a>
+      <a href="{{ url_for('admin.control_evaluations') }}" class="vc-nav-link {% if ep == 'admin.control_evaluations' %}is-active{% endif %}"><i class="fa-solid fa-flask"></i><span data-i18n="nav.evaluations"></span></a>
+      <a href="{{ url_for('admin.ai_questions') }}" class="vc-nav-link {% if ep == 'admin.ai_questions' %}is-active{% endif %}"><i class="fa-solid fa-circle-question"></i><span data-i18n="nav.escalations"></span></a>
     </div>
 
+    <div class="vc-nav-label" data-i18n="nav.market"></div>
+    <button type="button" @click="marketOpen = !marketOpen" class="vc-nav-link w-full text-start">
+      <i class="fa-solid fa-layer-group"></i><span data-i18n="nav.operations"></span>
+      {% if control_badges and control_badges.visits %}<span class="vc-badge" data-i18n-number="{{ control_badges.visits }}">{{ control_badges.visits }}</span>{% endif %}
+      <i class="fa-solid fa-chevron-down text-[9px] ms-auto transition-transform" :class="marketOpen && 'rotate-180'"></i>
+    </button>
+    <div x-show="marketOpen" class="space-y-0.5 me-2">
+      <a href="{{ url_for('admin.express_listings') }}" class="vc-nav-link {% if ep in ['admin.express_listings', 'admin.edit_express_listing'] %}is-active{% endif %}"><i class="fa-solid fa-building"></i><span data-i18n="nav.properties"></span></a>
+      <a href="{{ url_for('admin.express_visit_requests') }}" class="vc-nav-link {% if ep == 'admin.express_visit_requests' %}is-active{% endif %}"><i class="fa-solid fa-route"></i><span data-i18n="nav.visits"></span></a>
+      <a href="{{ url_for('admin.express_commissions') }}" class="vc-nav-link {% if ep in ['admin.express_commissions', 'admin.express_commission_edit'] %}is-active{% endif %}"><i class="fa-solid fa-handshake"></i><span data-i18n="nav.deals"></span></a>
+      <a href="{{ url_for('admin.control_market') }}#contracts" class="vc-nav-link"><i class="fa-solid fa-file-contract"></i><span data-i18n="nav.contracts"></span></a>
+      <a href="{{ url_for('admin.control_market') }}#payments" class="vc-nav-link"><i class="fa-solid fa-credit-card"></i><span data-i18n="nav.payments"></span></a>
+      <a href="{{ url_for('admin.control_market') }}#settlements" class="vc-nav-link"><i class="fa-solid fa-scale-balanced"></i><span data-i18n="nav.settlements"></span></a>
+      <a href="{{ url_for('admin.express_commissions') }}" class="vc-nav-link"><i class="fa-solid fa-wallet"></i><span data-i18n="nav.commissions"></span></a>
+      <a href="{{ url_for('admin.financial_withdrawals') }}" class="vc-nav-link {% if ep == 'admin.financial_withdrawals' %}is-active{% endif %}"><i class="fa-solid fa-money-bill-transfer"></i><span data-i18n="nav.withdrawals"></span></a>
+    </div>
+
+    <div class="vc-nav-label" data-i18n="nav.relationships"></div>
+    <button type="button" @click="relOpen = !relOpen" class="vc-nav-link w-full text-start">
+      <i class="fa-solid fa-users"></i><span data-i18n="nav.crm"></span>
+      <i class="fa-solid fa-chevron-down text-[9px] ms-auto transition-transform" :class="relOpen && 'rotate-180'"></i>
+    </button>
+    <div x-show="relOpen" class="space-y-0.5 me-2">
+      <a href="{{ url_for('admin.control_crm') }}" class="vc-nav-link {% if ep == 'admin.control_crm' %}is-active{% endif %}"><i class="fa-solid fa-address-book"></i><span data-i18n="nav.crm_hub"></span></a>
+      <a href="{{ url_for('admin.express_partners') }}" class="vc-nav-link {% if ep in ['admin.express_partners', 'admin.express_partner_detail'] %}is-active{% endif %}"><i class="fa-solid fa-user-group"></i><span data-i18n="nav.partners"></span></a>
+      <a href="{{ url_for('admin.control_people') }}?role=owner" class="vc-nav-link"><i class="fa-solid fa-house-user"></i><span data-i18n="nav.owners"></span></a>
+      <a href="{{ url_for('admin.control_people') }}?role=buyer" class="vc-nav-link"><i class="fa-solid fa-cart-shopping"></i><span data-i18n="nav.buyers"></span></a>
+      <a href="{{ url_for('admin.control_people') }}?role=seller" class="vc-nav-link"><i class="fa-solid fa-tag"></i><span data-i18n="nav.sellers"></span></a>
+      <a href="{{ url_for('admin.control_people') }}?role=mission" class="vc-nav-link"><i class="fa-solid fa-bullseye"></i><span data-i18n="nav.missions"></span></a>
+    </div>
+
+    <div class="vc-nav-label" data-i18n="nav.signal"></div>
+    <button type="button" @click="signalOpen = !signalOpen" class="vc-nav-link w-full text-start">
+      <i class="fa-solid fa-chart-line"></i><span data-i18n="nav.analytics"></span>
+      <i class="fa-solid fa-chevron-down text-[9px] ms-auto transition-transform" :class="signalOpen && 'rotate-180'"></i>
+    </button>
+    <div x-show="signalOpen" class="space-y-0.5 me-2">
+      <a href="{{ url_for('admin.control_analytics') }}" class="vc-nav-link {% if ep == 'admin.control_analytics' %}is-active{% endif %}"><i class="fa-solid fa-chart-pie"></i><span data-i18n="nav.overview"></span></a>
+      <a href="{{ url_for('admin.ai_console_analytics') }}" class="vc-nav-link {% if ep == 'admin.ai_console_analytics' %}is-active{% endif %}"><i class="fa-solid fa-microchip"></i><span data-i18n="nav.ai_analytics"></span></a>
+      <a href="{{ url_for('admin.reports_list') }}" class="vc-nav-link {% if ep == 'admin.reports_list' %}is-active{% endif %}"><i class="fa-solid fa-file-lines"></i><span data-i18n="nav.sales_reports"></span></a>
+    </div>
+
+    <div class="vc-nav-label" data-i18n="nav.observe"></div>
+    <button type="button" @click="observeOpen = !observeOpen" class="vc-nav-link w-full text-start">
+      <i class="fa-solid fa-wave-square"></i><span data-i18n="nav.monitoring"></span>
+      {% if control_badges and control_badges.errors %}<span class="vc-badge" data-i18n-number="{{ control_badges.errors }}">{{ control_badges.errors }}</span>{% endif %}
+      <i class="fa-solid fa-chevron-down text-[9px] ms-auto transition-transform" :class="observeOpen && 'rotate-180'"></i>
+    </button>
+    <div x-show="observeOpen" class="space-y-0.5 me-2">
+      <a href="{{ url_for('admin.ai_console_timeline') }}" class="vc-nav-link {% if ep == 'admin.ai_console_timeline' %}is-active{% endif %}"><i class="fa-solid fa-timeline"></i><span data-i18n="nav.timeline"></span></a>
+      <a href="{{ url_for('admin.ai_console_monitor') }}" class="vc-nav-link {% if ep == 'admin.ai_console_monitor' %}is-active{% endif %}"><i class="fa-solid fa-heart-pulse"></i><span data-i18n="nav.activity"></span></a>
+      <a href="{{ url_for('admin.audit_log') }}" class="vc-nav-link {% if ep in ['admin.audit_log', 'admin.ai_console_audit'] %}is-active{% endif %}"><i class="fa-solid fa-clipboard-list"></i><span data-i18n="nav.audit"></span></a>
+      <a href="{{ url_for('admin.ai_console_errors') }}" class="vc-nav-link {% if ep == 'admin.ai_console_errors' %}is-active{% endif %}"><i class="fa-solid fa-bug"></i><span data-i18n="nav.errors"></span></a>
+      <a href="{{ url_for('admin.control_observe') }}" class="vc-nav-link {% if ep == 'admin.control_observe' %}is-active{% endif %}"><i class="fa-solid fa-gauge-high"></i><span data-i18n="nav.performance"></span></a>
+      <a href="{{ url_for('admin.notifications_colleagues') }}" class="vc-nav-link {% if ep == 'admin.notifications_colleagues' %}is-active{% endif %}"><i class="fa-solid fa-bell"></i><span data-i18n="common.notifications"></span></a>
+    </div>
+
+    <div class="vc-nav-label" data-i18n="nav.govern"></div>
+    <button type="button" @click="governOpen = !governOpen" class="vc-nav-link w-full text-start">
+      <i class="fa-solid fa-shield-halved"></i><span data-i18n="nav.administration"></span>
+      <i class="fa-solid fa-chevron-down text-[9px] ms-auto transition-transform" :class="governOpen && 'rotate-180'"></i>
+    </button>
+    <div x-show="governOpen" class="space-y-0.5 me-2">
+      <a href="{{ url_for('admin.express_partners') }}?filter=users" class="vc-nav-link"><i class="fa-solid fa-user-shield"></i><span data-i18n="nav.users"></span></a>
+      <a href="{{ url_for('admin.super_admin_info') }}" class="vc-nav-link {% if ep == 'admin.super_admin_info' %}is-active{% endif %}"><i class="fa-solid fa-key"></i><span data-i18n="nav.roles"></span></a>
+      <a href="{{ url_for('admin.ai_console_flags') }}" class="vc-nav-link {% if ep == 'admin.ai_console_flags' %}is-active{% endif %}"><i class="fa-solid fa-flag"></i><span data-i18n="nav.feature_flags"></span></a>
+      <a href="{{ url_for('admin.settings') }}" class="vc-nav-link {% if ep == 'admin.settings' %}is-active{% endif %}"><i class="fa-solid fa-gear"></i><span data-i18n="common.settings"></span></a>
+      <a href="{{ url_for('admin.sms_colleagues') }}" class="vc-nav-link"><i class="fa-solid fa-sms"></i><span data-i18n="nav.sms"></span></a>
+    </div>
   </nav>
+
+  <div class="border-t border-line pt-3 px-1">
+    <a href="{{ url_for('admin.logout') }}" class="vc-nav-link text-[#F87171]">
+      <i class="fa-solid fa-right-from-bracket"></i><span data-i18n="common.logout"></span>
+    </a>
+  </div>
 </div>

@@ -1,0 +1,47 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}Reasoning | Vinor Control{% endblock %}
+{% block page_title_key %}reasoning.title{% endblock %}
+{% block i18n_page_title %}reasoning.title{% endblock %}
+{% block page_title_i18n %}nav.reasoning{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <div class="vc-page-h">
+    <h1 data-i18n="reasoning.title"></h1>
+    <p data-i18n="reasoning.subtitle"></p>
+  </div>
+
+  <section class="vc-widget">
+    <div class="vc-widget-b">
+      {% for r in rows %}
+      <div class="vc-row items-start">
+        <span class="vc-chip {% if r.ok %}vc-chip-ok{% else %}vc-chip-danger{% endif %}" data-i18n="{% if r.ok %}reasoning.ok{% else %}reasoning.fail{% endif %}"></span>
+        <div class="min-w-0 flex-1 space-y-1">
+          <p class="text-sm font-medium">{{ r.intent }}</p>
+          <p class="text-[11px] text-[#6B7380]">
+            <span class="vc-mono"{% if r.ts %} data-i18n-date="{{ r.ts }}"{% endif %}>{{ r.ts or '—' }}</span>
+            {% if r.audience %} · {{ r.audience }}{% endif %}
+          </p>
+          {% if r.agents %}
+          <div class="flex flex-wrap gap-1">
+            {% for a in r.agents %}
+            <span class="vc-chip vc-chip-signal">{{ a }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if r.tools %}
+          <div class="flex flex-wrap gap-1">
+            {% for tool in r.tools %}
+            <span class="vc-chip vc-chip-orbit">{{ tool }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="vc-empty" data-i18n="reasoning.empty"></div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

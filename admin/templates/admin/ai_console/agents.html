@@ -1,0 +1,24 @@
+{% extends 'admin/base_admin.html' %}
+{% block page_title %}AI Agents{% endblock %}
+{% block content %}
+<div class="space-y-4 adm-page">
+  <h2 class="text-lg font-bold text-gray-900 dark:text-white">Agent Manager</h2>
+  {% include 'admin/ai_console/_nav.html' %}
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    {% for a in agents %}
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+      <div class="flex justify-between items-center">
+        <span class="font-mono text-sm font-bold text-gray-900 dark:text-white">{{ a.id }}</span>
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded {% if a.enabled %}bg-emerald-100 text-emerald-700{% else %}bg-zinc-100 text-zinc-500{% endif %}">
+          {% if a.enabled %}ON{% else %}OFF{% endif %}
+        </span>
+      </div>
+      <p class="text-[11px] text-gray-500 mt-2">Supervisor: {% if a.supervisor_enabled %}ON{% else %}OFF{% endif %}</p>
+      <p class="text-[10px] text-gray-400 mt-1 font-mono">{{ a.flag_hint }}</p>
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-500">Agentی نیست</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

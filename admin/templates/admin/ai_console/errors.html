@@ -1,0 +1,24 @@
+{% extends 'admin/base_admin.html' %}
+{% block page_title %}AI Errors{% endblock %}
+{% block content %}
+<div class="space-y-4 adm-page">
+  <h2 class="text-lg font-bold text-gray-900 dark:text-white">Error Center</h2>
+  {% include 'admin/ai_console/_nav.html' %}
+  {% if not errors %}
+  <p class="text-sm text-gray-500 py-10 text-center">خطای باز در نمونه لاگ نیست</p>
+  {% else %}
+  <ul class="space-y-2">
+    {% for e in errors %}
+    <li class="rounded-xl border border-rose-200/50 dark:border-rose-900/40 bg-white dark:bg-gray-900 p-3 text-xs">
+      <div class="flex justify-between gap-2">
+        <span class="font-bold text-rose-600">{{ e.type }} · {{ e.source }}</span>
+        <span class="text-gray-400" dir="ltr">{{ e.ts or '—' }}</span>
+      </div>
+      <p class="mt-1 text-gray-800 dark:text-gray-200">{{ e.message }}</p>
+      {% if e.request_id %}<p class="text-[10px] text-gray-400 font-mono mt-1" dir="ltr">{{ e.request_id }}</p>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}Analytics | Vinor Control{% endblock %}
+{% block page_title_key %}analytics.title{% endblock %}
+{% block i18n_page_title %}analytics.title{% endblock %}
+{% block page_title_i18n %}nav.analytics{% endblock %}
+
+{% block content %}
+{% set k = (ai_snap.kpis if ai_snap else {}) or {} %}
+{% set ok = os_kpis or {} %}
+<div class="space-y-5">
+  <div class="vc-page-h">
+    <h1 data-i18n="analytics.title"></h1>
+    <p data-i18n="analytics.subtitle"></p>
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="analytics.visit_call"></div><div class="vc-stat-value" data-i18n-percent="{{ (ok.visit_call_rate or 0)*100 }}" data-i18n-percent-mode="100"></div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="analytics.visit_deal"></div><div class="vc-stat-value is-signal" data-i18n-percent="{{ (ok.visit_to_deal_rate or 0)*100 }}" data-i18n-percent-mode="100"></div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="analytics.deal_close"></div><div class="vc-stat-value" data-i18n-percent="{{ (ok.deal_close_rate or 0)*100 }}" data-i18n-percent-mode="100"></div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="analytics.ai_requests"></div><div class="vc-stat-value" data-i18n-number="{{ k.requests_sample or 0 }}"></div></div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <section class="vc-widget">
+      <div class="vc-widget-h"><h2 class="vc-widget-title" data-i18n="analytics.conversion_funnel"></h2></div>
+      <div class="vc-widget-b vc-funnel">
+        {% for label_key, pct in [
+          ('analytics.funnel_call', (ok.visit_call_rate or 0)*100),
+          ('analytics.funnel_booking', (ok.visit_booking_rate or 0)*100),
+          ('analytics.funnel_deal', (ok.visit_to_deal_rate or 0)*100),
+          ('analytics.funnel_close', (ok.deal_close_rate or 0)*100),
+        ] %}
+        <div class="vc-funnel-row">
+          <span class="text-[#A7B0BE]" data-i18n="{{ label_key }}"></span>
+          <div class="vc-funnel-bar"><div class="vc-funnel-fill" style="width: {{ [pct, 100]|min }}%"></div></div>
+          <span class="vc-mono" data-i18n-percent="{{ pct }}" data-i18n-percent-mode="100"></span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    <section class="vc-widget">
+      <div class="vc-widget-h"><h2 class="vc-widget-title" data-i18n="analytics.ai_economics"></h2></div>
+      <div class="vc-widget-b space-y-3 text-sm">
+        <div class="flex justify-between"><span class="text-[#A7B0BE]" data-i18n="analytics.latency_p50"></span><span class="vc-mono"><span data-i18n-number="{{ k.latency_p50_ms or 0 }}" data-i18n-digits="1"></span> ms</span></div>
+        <div class="flex justify-between"><span class="text-[#A7B0BE]" data-i18n="analytics.latency_p95"></span><span class="vc-mono"><span data-i18n-number="{{ k.latency_p95_ms or 0 }}" data-i18n-digits="1"></span> ms</span></div>
+        <div class="flex justify-between"><span class="text-[#A7B0BE]" data-i18n="analytics.cost_sample"></span><span class="vc-mono text-[#C4B5FD]" data-i18n-currency="{{ k.token_cost_sample or 0 }}" data-i18n-currency-unit="usd" data-i18n-digits="4"></span></div>
+        <div class="flex justify-between"><span class="text-[#A7B0BE]" data-i18n="analytics.errors"></span><span data-i18n-number="{{ k.errors_sample or 0 }}"></span></div>
+        <a href="{{ url_for('admin.ai_console_analytics') }}" class="vc-btn vc-btn-ghost w-full" data-i18n="analytics.ai_analytics_detail"></a>
+        <a href="{{ url_for('admin.reports_list') }}" class="vc-btn vc-btn-primary w-full" data-i18n="analytics.sales_reports"></a>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

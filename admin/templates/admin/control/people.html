@@ -1,0 +1,38 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}Vinor Control{% endblock %}
+{% block page_title_key %}{{ page_title_key or role_title_key }}{% endblock %}
+{% block i18n_page_title %}{{ page_title_key or role_title_key }}{% endblock %}
+{% block page_title_i18n %}{{ role_title_key }}{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <div class="vc-page-h flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+    <div>
+      <h1 data-i18n="{{ role_title_key }}"></h1>
+      <p data-i18n="people.subtitle"></p>
+    </div>
+    <a href="{{ url_for('admin.express_partners') }}" class="vc-btn vc-btn-primary">
+      <i class="fa-solid fa-users"></i> <span data-i18n="people.open_partners"></span>
+    </a>
+  </div>
+
+  <div class="flex flex-wrap gap-2">
+    {% for key, label_key in [('partners','people.partners'),('owner','people.owners'),('buyer','people.buyers'),('seller','people.sellers'),('mission','people.missions')] %}
+    <a href="{{ url_for('admin.control_people', role=key) }}"
+       class="vc-chip {% if role == key %}vc-chip-signal{% endif %}" data-i18n="{{ label_key }}"></a>
+    {% endfor %}
+  </div>
+
+  <section class="vc-widget">
+    <div class="vc-widget-b space-y-3 text-sm text-[#A7B0BE]">
+      <p data-i18n="people.role_blurb" data-i18n-params='{"role":"{{ role }}"}'></p>
+      <div class="flex flex-wrap gap-2">
+        <a href="{{ url_for('admin.express_partners') }}" class="vc-btn vc-btn-ghost" data-i18n="people.partners_directory"></a>
+        <a href="{{ url_for('admin.top_sellers') }}" class="vc-btn vc-btn-ghost" data-i18n="people.top_sellers"></a>
+        <a href="{{ url_for('admin.partners_activity') }}" class="vc-btn vc-btn-ghost" data-i18n="people.activity"></a>
+        <a href="{{ url_for('admin.control_crm') }}" class="vc-btn vc-btn-ghost" data-i18n="people.crm_hub"></a>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

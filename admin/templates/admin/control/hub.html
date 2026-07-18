@@ -1,0 +1,35 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}Vinor Control{% endblock %}
+{% block page_title_key %}{{ page_title_key or hub_title_key }}{% endblock %}
+{% block i18n_page_title %}{{ page_title_key or hub_title_key }}{% endblock %}
+{% block page_title_i18n %}{{ hub_title_key }}{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <div class="vc-page-h">
+    <h1 data-i18n="{{ hub_title_key }}"></h1>
+    <p data-i18n="{{ hub_subtitle_key }}"></p>
+  </div>
+
+  {% for section in hub_sections %}
+  <section class="vc-widget" id="{{ section.id }}">
+    <div class="vc-widget-h">
+      <h2 class="vc-widget-title" data-i18n="{{ section.title_key }}"></h2>
+    </div>
+    <div class="vc-widget-b grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {% for item in section['items'] %}
+      <a href="{{ url_for(item.href) }}" class="vc-stat block !p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <i class="fa-solid {{ item.icon }} text-signal text-sm"></i>
+          <span class="text-sm font-bold" data-i18n="{{ item.label_key }}"></span>
+        </div>
+        {% if item.get('note_key') %}
+        <p class="text-[11px] text-[#6B7380]" data-i18n="{{ item.note_key }}"></p>
+        {% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends 'admin/base_admin.html' %}
+{% block page_title %}AI Live Monitor{% endblock %}
+{% block content %}
+<div class="space-y-4 adm-page">
+  <h2 class="text-lg font-bold text-gray-900 dark:text-white">Live Monitor <span class="text-xs text-teal-600">(poll)</span></h2>
+  {% include 'admin/ai_console/_nav.html' %}
+  <p class="text-xs text-gray-500">بر اساس آخرین ردیف‌های token/evaluation — WebSocket در فاز بعد.</p>
+  {% if not events %}
+  <div class="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 px-4 py-10 text-center text-sm text-gray-500">هنوز ترافیکی در لاگ نیست</div>
+  {% else %}
+  <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+    <table class="min-w-full text-xs text-right">
+      <thead class="bg-gray-50 dark:bg-gray-800 text-gray-500">
+        <tr>
+          <th class="px-3 py-2">زمان</th>
+          <th class="px-3 py-2">منبع</th>
+          <th class="px-3 py-2">Audience</th>
+          <th class="px-3 py-2">ms</th>
+          <th class="px-3 py-2">وضعیت</th>
+          <th class="px-3 py-2">خلاصه</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+        {% for e in events %}
+        <tr class="{% if e.status == 'error' %}bg-rose-50/50 dark:bg-rose-950/20{% endif %}">
+          <td class="px-3 py-2 font-mono text-gray-500" dir="ltr">{{ e.ts or '—' }}</td>
+          <td class="px-3 py-2">{{ e.source }}</td>
+          <td class="px-3 py-2">{{ e.audience or '—' }}</td>
+          <td class="px-3 py-2 tabular-nums">{{ e.latency_ms or '—' }}</td>
+          <td class="px-3 py-2 {% if e.status == 'error' %}text-rose-600 font-semibold{% else %}text-emerald-600{% endif %}">{{ e.status }}</td>
+          <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{{ e.summary }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

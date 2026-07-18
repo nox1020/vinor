@@ -1,0 +1,74 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}Intelligence | Vinor Control{% endblock %}
+{% block page_title_key %}intelligence.title{% endblock %}
+{% block i18n_page_title %}intelligence.title{% endblock %}
+{% block page_title_i18n %}nav.intelligence{% endblock %}
+{% block content %}
+{% set k = snap.kpis %}
+<div class="space-y-4">
+  <div class="vc-page-h flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+    <div>
+      <h1 data-i18n="intelligence.title"></h1>
+      <p data-i18n="intelligence.subtitle"></p>
+    </div>
+    <span class="vc-live"><span class="vc-live-dot"></span><span data-i18n="intelligence.console_on"></span></span>
+  </div>
+  {% include 'admin/ai_console/_nav.html' %}
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="intelligence.requests"></div><div class="vc-stat-value" data-i18n-number="{{ k.requests_sample }}"></div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="intelligence.latency_p95"></div><div class="vc-stat-value"><span data-i18n-number="{{ k.latency_p95_ms }}" data-i18n-digits="1"></span> ms</div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="intelligence.cost"></div><div class="vc-stat-value is-cost" data-i18n-currency="{{ k.token_cost_sample }}" data-i18n-currency-unit="usd" data-i18n-digits="4"></div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="intelligence.pending"></div><div class="vc-stat-value is-orbit" data-i18n-number="{{ k.pending_confirms }}"></div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="intelligence.escalations"></div><div class="vc-stat-value is-orbit" data-i18n-number="{{ k.escalations_open }}"></div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="intelligence.errors"></div><div class="vc-stat-value is-danger" data-i18n-number="{{ k.errors_sample }}"></div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="intelligence.workflows"></div><div class="vc-stat-value is-signal" data-i18n-number="{{ k.active_workflows }}"></div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="intelligence.conversations"></div><div class="vc-stat-value" data-i18n-number="{{ k.conversations_indexed }}"></div></div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <section class="vc-widget">
+      <div class="vc-widget-h"><h2 class="vc-widget-title" data-i18n="intelligence.agents"></h2>
+        <a href="{{ url_for('admin.ai_console_agents') }}" class="text-[11px] text-signal font-semibold" data-i18n="common.all"></a>
+      </div>
+      <div class="vc-widget-b flex flex-wrap gap-2">
+        {% for a in snap.agents %}
+        <span class="vc-chip {% if a.enabled %}vc-chip-ok{% else %}vc-chip-danger{% endif %}">{{ a.id }}</span>
+        {% else %}
+        <div class="vc-empty" data-i18n="intelligence.no_agents"></div>
+        {% endfor %}
+      </div>
+    </section>
+    <section class="vc-widget">
+      <div class="vc-widget-h"><h2 class="vc-widget-title" data-i18n="intelligence.pending_confirm"></h2>
+        <a href="{{ url_for('admin.ai_console_tools') }}" class="text-[11px] text-signal font-semibold" data-i18n="nav.tools"></a>
+      </div>
+      <div class="vc-widget-b">
+        {% for p in snap.pending_preview[:8] %}
+        <div class="vc-row">
+          <span class="vc-chip vc-chip-orbit" data-i18n="dashboard.chip_confirm"></span>
+          <p class="text-sm truncate">{{ p.tool or p.name or 'tool' }}</p>
+        </div>
+        {% else %}
+        <div class="vc-empty" data-i18n="intelligence.queue_empty"></div>
+        {% endfor %}
+      </div>
+    </section>
+    <section class="vc-widget">
+      <div class="vc-widget-h"><h2 class="vc-widget-title" data-i18n="intelligence.errors"></h2>
+        <a href="{{ url_for('admin.ai_console_errors') }}" class="text-[11px] text-signal font-semibold" data-i18n="common.all"></a>
+      </div>
+      <div class="vc-widget-b">
+        {% for e in snap.errors_preview[:8] %}
+        <div class="vc-row">
+          <span class="vc-chip vc-chip-danger" data-i18n="dashboard.chip_error"></span>
+          <p class="text-sm truncate">{{ e.summary or e.message or e }}</p>
+        </div>
+        {% else %}
+        <div class="vc-empty" data-i18n="intelligence.no_errors"></div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

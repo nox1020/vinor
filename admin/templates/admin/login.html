@@ -1,86 +1,72 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl" class="dark">
+<html lang="en" dir="ltr" class="dark" data-i18n-page-title="login.browser_title">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>ورود ادمین | وینور</title>
-  <meta name="description" content="ورود به پنل مدیریت وینور" />
+  <title>Vinor Control</title>
+  <meta name="description" content="" data-i18n="meta.description" />
+  <meta name="vinor-page-title-key" content="login.browser_title" />
   <script>
     (function () {
       var h = location.hostname || '';
       if (location.protocol === 'http:' && (h === 'vinor.ir' || h === 'www.vinor.ir')) {
         location.replace(location.href.replace(/^http:/i, 'https:'));
       }
+      try {
+        var k = 'vinor.control.lang';
+        var v = localStorage.getItem(k);
+        if (v !== 'fa' && v !== 'en') {
+          var nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
+          v = String(nav).toLowerCase().indexOf('fa') === 0 ? 'fa' : 'en';
+        }
+        document.documentElement.lang = v;
+        document.documentElement.dir = v === 'fa' ? 'rtl' : 'ltr';
+        document.documentElement.classList.add(v === 'fa' ? 'lang-fa' : 'lang-en');
+      } catch (e) {}
     })();
   </script>
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
   <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}">
-
-  <!-- Tailwind (local) -->
   <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
-  <script>
-    tailwind.config = { darkMode: 'class' };
-  </script>
-
-  <!-- Font Awesome -->
+  <script>tailwind.config = { darkMode: 'class' };</script>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-  
-  <!-- Fonts (local) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
-
-  <style>
-    html, body {
-      font-family: 'Vazirmatn', sans-serif;
-    }
-    .focusable:focus {
-      outline: 2px solid #0ea5e9;
-      outline-offset: 2px;
-    }
-    @keyframes fade-in {
-      from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .animate-fade-in {
-      animation: fade-in 0.3s ease-out;
-    }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin/vinor-control.css') }}">
+  <script src="{{ url_for('static', filename='admin/vinor-i18n.js') }}"></script>
 </head>
-<body class="bg-gray-50 dark:bg-gray-950 min-h-screen flex items-center justify-center p-4 pb-[env(safe-area-inset-bottom,0px)]">
+<body class="min-h-screen flex items-center justify-center p-4 pb-[env(safe-area-inset-bottom,0px)] vc-body" style="background:var(--vc-void)">
 
   <div class="w-full max-w-md">
-    <!-- Login Form - Divar Style -->
-    <form method="POST" action="{{ url_for('admin.login') }}" 
-          class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-6 space-y-4">
+    <div class="flex justify-end mb-3">
+      <div class="vc-lang-switch" id="loginLangSwitch">
+        <button type="button" data-lang="fa" data-i18n="common.fa">FA</button>
+        <button type="button" data-lang="en" data-i18n="common.en">EN</button>
+      </div>
+    </div>
 
-      <!-- Header - Divar Style -->
+    <form method="POST" action="{{ url_for('admin.login') }}"
+          class="rounded-[12px] border p-6 space-y-4" style="background:var(--vc-panel);border-color:var(--vc-line)">
+
       <div class="text-center space-y-3">
-        <img src="{{ url_for('static', filename='icons/icon-96.png') }}" alt="وینور" width="72" height="72" class="mx-auto rounded-xl object-cover" decoding="async">
-        <h1 class="text-xl font-semibold text-gray-900 dark:text-white">VINOR</h1>
+        <img src="{{ url_for('static', filename='icons/icon-96.png') }}" alt="" width="72" height="72" class="mx-auto rounded-xl object-cover" decoding="async">
+        <div>
+          <h1 class="text-xl font-bold tracking-tight text-white" data-i18n="login.title"></h1>
+          <p class="text-xs mt-1 text-[#6B7380]" data-i18n="login.tagline"></p>
+        </div>
       </div>
 
-      <!-- Messages - Divar Style -->
       {% with messages = get_flashed_messages(with_categories=True) %}
         {% if messages %}
           <div class="space-y-2">
             {% for category, msg in messages %}
-              {% if 'کد ورود به شماره' not in (msg|string) %}
-              <div class="rounded-lg px-4 py-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-start gap-2
-                          {% if category in ['success', 'ok'] %}
-                            text-green-700 dark:text-green-400
-                          {% elif category in ['warning'] %}
-                            text-amber-700 dark:text-amber-400
-                          {% elif category in ['info'] %}
-                            text-blue-700 dark:text-blue-400
-                          {% else %}
-                            text-red-700 dark:text-red-400
-                          {% endif %}">
-                <i class="fa-solid mt-0.5 flex-shrink-0
-                          {% if category in ['success', 'ok'] %}fa-check-circle
-                          {% elif category in ['warning'] %}fa-exclamation-triangle
-                          {% elif category in ['info'] %}fa-info-circle
-                          {% else %}fa-times-circle{% endif %}"></i>
-                <span class="flex-1 text-sm">{{ msg }}</span>
+              {% if 'کد ورود به شماره' not in (msg|string) and 'code sent' not in (msg|string|lower) %}
+              <div class="rounded-lg px-4 py-3 border flex items-start gap-2 text-sm"
+                   style="border-color:var(--vc-line);background:var(--vc-ink);color:{% if category in ['success','ok'] %}var(--vc-ok){% elif category == 'warning' %}var(--vc-warn){% else %}var(--vc-danger){% endif %}">
+                <span class="flex-1">{{ msg }}</span>
               </div>
               {% endif %}
             {% endfor %}
@@ -89,91 +75,77 @@
       {% endwith %}
 
       <div>
-        <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">کد ورود پیامکی</label>
+        <label class="block text-sm font-medium mb-2 text-[#A7B0BE]" data-i18n="login.otp_label"></label>
         <input name="otp_code" type="text" inputmode="numeric" dir="ltr"
-               placeholder="مثلا 12345"
-               class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 
-                      bg-white dark:bg-gray-800 text-gray-900 dark:text-white
-                      placeholder:text-gray-400 dark:placeholder:text-gray-400
-                      focus:ring-2 focus:ring-blue-500 focus:border-transparent focusable">
+               data-i18n-placeholder="login.otp_placeholder"
+               class="w-full px-4 py-3 rounded-lg border focusable"
+               style="background:var(--vc-panel-2);border-color:var(--vc-line);color:var(--vc-text)">
       </div>
       <div>
         <button type="submit" name="action" value="verify"
-                class="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors focusable">
-          تایید کد و ورود
-        </button>
+                class="w-full px-4 py-3 font-semibold rounded-lg transition-colors focusable"
+                style="background:var(--vc-signal);color:#042f2e"
+                data-i18n="login.verify"></button>
       </div>
-      <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 px-3 py-2 text-xs text-gray-600 dark:text-gray-300 text-center">
-        <span id="otpCooldownText" class="font-semibold text-blue-600 dark:text-blue-400"></span>
+      <div class="rounded-lg border px-3 py-2 text-xs text-center" style="border-color:var(--vc-line);color:var(--vc-text-2)">
+        <span id="otpCooldownText" class="font-semibold" style="color:var(--vc-signal)"></span>
       </div>
       <div id="resendWrap" class="hidden">
         <button type="submit" name="action" value="send"
-                class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors focusable">
-          ارسال مجدد کد
-        </button>
-      </div>
-
-      <!-- Dark Mode Toggle -->
-      <div class="text-center pt-4 border-t border-gray-200 dark:border-gray-800">
-        <button type="button" id="darkToggle" 
-                class="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors focusable"
-                aria-label="تغییر تم">
-          <i class="fa-solid fa-moon"></i>
-        </button>
+                class="w-full px-4 py-3 font-semibold rounded-lg focusable"
+                style="background:var(--vc-panel-2);border:1px solid var(--vc-line);color:var(--vc-text)"
+                data-i18n="login.resend"></button>
       </div>
     </form>
   </div>
 
   <script>
-    // Dark Mode
-    const root = document.documentElement;
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'light') root.classList.remove('dark');
+    (function () {
+      var base = '{{ url_for("static", filename="admin/locales") }}'.replace(/\/$/, '');
+      var remaining = Number({{ otp_cooldown_seconds|default(0) }}) || 0;
+      var cooldownText = document.getElementById('otpCooldownText');
+      var resendWrap = document.getElementById('resendWrap');
 
-    document.getElementById('darkToggle')?.addEventListener('click', () => {
-      root.classList.toggle('dark');
-      localStorage.setItem('theme', root.classList.contains('dark') ? 'dark' : 'light');
-      
-      const icon = document.querySelector('#darkToggle i');
-      if (icon) {
-        icon.className = root.classList.contains('dark') ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+      function paintLangButtons() {
+        var lang = VinorI18n.getLanguage();
+        document.querySelectorAll('#loginLangSwitch button').forEach(function (btn) {
+          btn.classList.toggle('is-active', btn.getAttribute('data-lang') === lang);
+        });
       }
-    });
 
-    // Update icon on load
-    if (savedTheme === 'light') {
-      const icon = document.querySelector('#darkToggle i');
-      if (icon) icon.className = 'fa-solid fa-sun';
-    }
-
-    const cooldownText = document.getElementById('otpCooldownText');
-    const resendWrap = document.getElementById('resendWrap');
-    const form = document.querySelector('form[action="{{ url_for("admin.login") }}"]');
-    const otpInput = document.querySelector('input[name="otp_code"]');
-    let remaining = Number({{ otp_cooldown_seconds|default(0) }}) || 0;
-
-    function renderTimer() {
-      if (remaining > 0) {
-        if (cooldownText) cooldownText.textContent = `ارسال مجدد تا ${remaining} ثانیه دیگر`;
-        resendWrap?.classList.add('hidden');
-        remaining -= 1;
-      } else {
-        if (cooldownText) cooldownText.textContent = 'ارسال مجدد فعال شد';
-        resendWrap?.classList.remove('hidden');
+      function renderTimer() {
+        if (!cooldownText || !window.t) return;
+        if (remaining > 0) {
+          cooldownText.textContent = t('login.resend_in', { seconds: formatNumber ? formatNumber(remaining, { maximumFractionDigits: 0 }) : remaining });
+          resendWrap && resendWrap.classList.add('hidden');
+          remaining -= 1;
+        } else {
+          cooldownText.textContent = t('login.resend_ready');
+          resendWrap && resendWrap.classList.remove('hidden');
+        }
       }
-    }
 
-    renderTimer();
-    setInterval(renderTimer, 1000);
+      VinorI18n.init({ baseUrl: base }).then(function () {
+        paintLangButtons();
+        renderTimer();
+      });
 
-    form?.addEventListener('submit', function(e) {
-      const action = (e.submitter?.value || '').toLowerCase();
-      if (action === 'send') {
-        otpInput?.removeAttribute('required');
-      } else {
-        otpInput?.setAttribute('required', 'required');
-      }
-    });
+      document.querySelectorAll('#loginLangSwitch button').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          VinorI18n.setLanguage(btn.getAttribute('data-lang')).then(paintLangButtons);
+        });
+      });
+
+      setInterval(renderTimer, 1000);
+
+      var form = document.querySelector('form');
+      var otpInput = document.querySelector('input[name="otp_code"]');
+      form && form.addEventListener('submit', function (e) {
+        var action = (e.submitter && e.submitter.value || '').toLowerCase();
+        if (action === 'send') otpInput && otpInput.removeAttribute('required');
+        else otpInput && otpInput.setAttribute('required', 'required');
+      });
+    })();
   </script>
 </body>
 </html>

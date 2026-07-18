@@ -1,21 +1,39 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl" class="dark" x-data="{ darkMode: localStorage.getItem('theme') === 'dark', menuOpen: false }" :class="{ 'dark': darkMode }">
+<html lang="en" dir="ltr" class="dark vc-root"
+      data-i18n-page-title="{% block i18n_page_title %}meta.app_name{% endblock %}"
+      x-data="vinorControlShell()" x-init="init()">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>{% block title %}پنل مدیریت | وینور{% endblock %}</title>
-  <meta name="theme-color" content="#2563EB" />
+  <title>{% block title %}Vinor Control{% endblock %}</title>
+  <meta name="description" content="" data-i18n="meta.description" />
+  <meta name="theme-color" content="#07080A" />
+  <meta name="vinor-page-title-key" content="{% block page_title_key %}meta.app_name{% endblock %}" />
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
   <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}">
-  
-  <!-- PWA Manifest -->
   <link rel="manifest" href="{{ url_for('admin.admin_manifest') }}" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="وینور ادمین" />
+  <meta name="apple-mobile-web-app-title" content="Vinor Control" />
 
-  <!-- Tailwind (local) -->
+  <!-- Prevent FOUC: set dir/lang before paint -->
+  <script>
+    (function () {
+      try {
+        var k = 'vinor.control.lang';
+        var v = localStorage.getItem(k);
+        if (v !== 'fa' && v !== 'en') {
+          var nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
+          v = String(nav).toLowerCase().indexOf('fa') === 0 ? 'fa' : 'en';
+        }
+        document.documentElement.lang = v;
+        document.documentElement.dir = v === 'fa' ? 'rtl' : 'ltr';
+        document.documentElement.classList.add(v === 'fa' ? 'lang-fa' : 'lang-en');
+      } catch (e) {}
+    })();
+  </script>
+
   <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
   <script>
     tailwind.config = {
@@ -23,179 +41,119 @@
       theme: {
         extend: {
           colors: {
-            vinor: {
-              50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
-              400: '#60a5fa', 500: '#3b82f6', 600: '#0ea5e9', 700: '#0284c7',
-              800: '#1e40af', 900: '#1e3a8a',
-            },
+            void: '#07080A', ink: '#0E1014', panel: '#14171C',
+            line: '#2A3140', signal: '#2DD4BF', orbit: '#F5A524',
+          },
+          fontFamily: {
+            sans: ['var(--vc-font)'],
           },
         },
       },
     };
   </script>
-
-  <!-- Font Awesome -->
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-  
-  <!-- Fonts (local) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
-
-  <style>
-    html, body { font-family: 'Vazirmatn', sans-serif; }
-    .focusable:focus { outline: 2px solid #2563EB; outline-offset: 2px; }
-    [x-cloak] { display: none !important; }
-
-    /* سایدبار: اسکرول بدون نوار اسکرول */
-    .admin-sidebar-scroll {
-      overflow-y: auto;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-    }
-    .admin-sidebar-scroll::-webkit-scrollbar {
-      display: none;
-      width: 0;
-      height: 0;
-    }
-
-    /* ── Mobile-first admin ── */
-    main { overflow-x: hidden; min-width: 0; }
-    .adm-page { width: 100%; min-width: 0; }
-    .adm-page input[type="text"],
-    .adm-page input[type="tel"],
-    .adm-page input[type="number"],
-    .adm-page input[type="email"],
-    .adm-page input[type="search"],
-    .adm-page input[type="password"],
-    .adm-page input[type="file"],
-    .adm-page select,
-    .adm-page textarea {
-      font-size: 16px;
-    }
-    @media (min-width: 640px) {
-      .adm-page input[type="text"],
-      .adm-page input[type="tel"],
-      .adm-page input[type="number"],
-      .adm-page input[type="email"],
-      .adm-page input[type="search"],
-      .adm-page input[type="password"],
-      .adm-page select,
-      .adm-page textarea {
-        font-size: inherit;
-      }
-    }
-    .adm-filter-row { display: flex; flex-wrap: wrap; gap: 0.375rem; }
-    .adm-table-wrap {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    .adm-table-wrap table { min-width: 36rem; }
-    @media (max-width: 639px) {
-      .adm-action-row { flex-direction: column !important; align-items: stretch !important; }
-      .adm-action-row > form,
-      .adm-action-row > a,
-      .adm-action-row > button { width: 100%; }
-      .adm-action-row .adm-action-side { width: 100%; }
-      .adm-form-row { flex-direction: column !important; align-items: stretch !important; }
-      .adm-form-row > * { width: 100% !important; min-width: 0 !important; flex: none !important; }
-      .adm-form-row button[type="submit"] { width: 100%; }
-      .adm-ops-grid { display: grid !important; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-      .adm-ops-grid form,
-      .adm-ops-grid a,
-      .adm-ops-grid button { width: 100%; justify-content: center; }
-    }
-    details.adm-collapse > summary { list-style: none; }
-    details.adm-collapse > summary::-webkit-details-marker { display: none; }
-    details.adm-collapse[open] .adm-collapse-chevron { transform: rotate(180deg); }
-    .adm-collapse-chevron { transition: transform 0.15s ease; }
-    .adm-tabs-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-    .adm-tabs-scroll::-webkit-scrollbar { display: none; }
-  </style>
-
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin/vinor-control.css') }}">
+  <script src="{{ url_for('static', filename='admin/vinor-i18n.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
-<body class="bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+<body class="vc-body vc-shell min-h-screen flex flex-col">
 
   {% block admin_topbar %}
-  <!-- Header - Divar Style -->
-  <header class="sticky top-0 z-40 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 pt-[env(safe-area-inset-top,0px)]">
-    <div class="px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <button @click="menuOpen = !menuOpen" 
-                class="lg:hidden focusable p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-                aria-label="باز کردن منو">
-          <i class="fa-solid fa-bars text-lg text-gray-600 dark:text-gray-400"></i>
-        </button>
-        <h1 class="text-base font-semibold text-gray-900 dark:text-white">
-          {% block page_title %}پنل همکاران{% endblock %}
-        </h1>
-      </div>
-      <div class="flex items-center gap-2 min-w-0">
+  <header class="vc-topbar">
+    <div class="px-3 sm:px-4 py-2.5 flex items-center gap-2 sm:gap-3">
+      <button type="button" @click="menuOpen = !menuOpen"
+              class="lg:hidden focusable p-2 rounded-md hover:bg-panel"
+              data-i18n-aria="common.menu_open">
+        <i class="fa-solid fa-bars text-sm"></i>
+      </button>
+
+      <a href="{{ url_for('admin.dashboard') }}" class="hidden sm:flex items-center gap-2 shrink-0">
+        <span class="font-bold text-sm tracking-tight text-white">Vinor</span>
+        <span class="text-[10px] font-semibold text-signal uppercase tracking-wider">Control</span>
+      </a>
+
+      <h1 class="sm:hidden text-sm font-semibold truncate min-w-0" data-i18n="{% block page_title_i18n %}nav.command{% endblock %}">
+        {% block page_title %}{% endblock %}
+      </h1>
+
+      <button type="button" @click="openCmd()"
+              class="vc-search ms-auto sm:ms-0 cursor-pointer text-start">
+        <i class="fa-solid fa-magnifying-glass text-[11px] text-[#6B7380]"></i>
+        <span class="text-[13px] text-[#6B7380] truncate flex-1" data-i18n="common.search_or_command"></span>
+        <span class="vc-kbd hidden sm:inline">⌘K</span>
+      </button>
+
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div class="vc-lang-switch" role="group" data-i18n-aria="common.language">
+          <button type="button" data-lang="fa" @click="setLang('fa')" :class="lang === 'fa' && 'is-active'" data-i18n="common.fa">FA</button>
+          <button type="button" data-lang="en" @click="setLang('en')" :class="lang === 'en' && 'is-active'" data-i18n="common.en">EN</button>
+        </div>
+        <span class="vc-live hidden md:inline-flex" data-i18n-title="common.live">
+          <span class="vc-live-dot"></span>
+          <span data-i18n="common.live">LIVE</span>
+        </span>
         <time id="adminTehranClock"
-              class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap text-left max-w-[10.5rem] sm:max-w-none truncate sm:overflow-visible"
+              class="hidden lg:inline text-[11px] text-[#6B7380] tabular-nums"
               dir="ltr"
-              title="تاریخ و ساعت به وقت تهران"
+              data-i18n-title="common.tehran_time"
               aria-live="polite">—</time>
-        <button @click="darkMode = !darkMode; localStorage.setItem('theme', darkMode ? 'dark' : 'light')" 
-                class="focusable p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 shrink-0">
-          <i class="fa-solid" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
+        <button type="button" @click="notifOpen = !notifOpen"
+                class="focusable relative p-2 rounded-md hover:bg-panel text-[#A7B0BE]"
+                data-i18n-aria="common.notifications">
+          <i class="fa-solid fa-bell text-sm"></i>
+          {% if control_badges and control_badges.alerts %}
+          <span class="absolute top-1 start-1 w-1.5 h-1.5 rounded-full bg-orbit"></span>
+          {% endif %}
         </button>
+        <a href="{{ url_for('admin.settings') }}"
+           class="focusable p-2 rounded-md hover:bg-panel text-[#A7B0BE]"
+           data-i18n-title="common.settings">
+          <i class="fa-solid fa-user-gear text-sm"></i>
+        </a>
       </div>
     </div>
   </header>
 
-  <!-- Mobile Menu Overlay -->
-  <div x-show="menuOpen" 
-       @click="menuOpen = false" 
-       x-transition:enter="transition-opacity duration-200"
-       x-transition:enter-start="opacity-0"
-       x-transition:enter-end="opacity-100"
-       x-transition:leave="transition-opacity duration-150"
-       x-transition:leave-start="opacity-100"
-       x-transition:leave-end="opacity-0"
-       class="fixed inset-0 z-40 bg-black/40 lg:hidden" 
-       x-cloak></div>
+  <div x-show="menuOpen" @click="menuOpen = false"
+       x-transition.opacity
+       class="fixed inset-0 z-40 bg-black/50 lg:hidden" x-cloak></div>
 
-  <!-- Sidebar - Mobile Drawer -->
   <aside x-show="menuOpen"
          @click.away="menuOpen = false"
          x-transition:enter="transition-transform duration-200"
-         x-transition:enter-start="translate-x-full"
+         x-transition:enter-start="vc-drawer-enter"
          x-transition:enter-end="translate-x-0"
          x-transition:leave="transition-transform duration-150"
          x-transition:leave-start="translate-x-0"
-         x-transition:leave-end="translate-x-full"
-         class="admin-sidebar-scroll fixed top-0 right-0 h-full w-72 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 z-50 lg:hidden"
+         x-transition:leave-end="vc-drawer-enter"
+         class="admin-sidebar-scroll vc-sidebar vc-sidebar-fixed fixed top-0 h-full w-72 z-50 lg:hidden"
          x-cloak>
     {% include 'admin/partials/sidebar.html' %}
   </aside>
   {% endblock admin_topbar %}
 
   {% block admin_sidebar %}
-  <!-- Desktop Sidebar -->
-  <aside class="admin-sidebar-scroll hidden lg:block fixed top-0 right-0 h-full w-64 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 z-30">
+  <aside class="admin-sidebar-scroll vc-sidebar vc-sidebar-fixed hidden lg:block fixed top-0 h-full w-64 z-30 pt-0">
     {% include 'admin/partials/sidebar.html' %}
   </aside>
   {% endblock admin_sidebar %}
 
-  <!-- Main Content -->
-  <main class="flex-1 {% block admin_main_class %}lg:pr-64{% endblock %} min-w-0 overflow-x-hidden">
-    <div class="px-3 py-4 sm:px-4 sm:py-6 max-w-7xl mx-auto adm-page {% block admin_main_pad_class %}pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-6{% endblock %}">
-      
-      <!-- Flash Messages - Divar Style -->
+  <main class="flex-1 {% block admin_main_class %}vc-main-offset{% endblock %} min-w-0 overflow-x-hidden">
+    <div class="px-3 py-4 sm:px-5 sm:py-6 max-w-[1440px] mx-auto adm-page {% block admin_main_pad_class %}pb-[calc(5rem+env(safe-area-inset-bottom,0px))] lg:pb-8{% endblock %}">
+
       {% with messages = get_flashed_messages(with_categories=True) %}
         {% if messages %}
-          <div class="mb-6 space-y-2">
+          <div class="mb-4 space-y-2">
             {% for category, msg in messages %}
-              <div class="text-sm rounded-lg px-4 py-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-start gap-2
-                          {% if category in ['success', 'ok'] %}
-                            text-green-700 dark:text-green-400
-                          {% elif category in ['warning'] %}
-                            text-amber-700 dark:text-amber-400
-                          {% elif category in ['info'] %}
-                            text-blue-700 dark:text-blue-400
-                          {% else %}
-                            text-red-700 dark:text-red-400
-                          {% endif %}">
+              <div class="text-sm rounded-[10px] px-4 py-3 border border-line bg-panel flex items-start gap-2
+                          {% if category in ['success', 'ok'] %}text-[#34D399]
+                          {% elif category in ['warning'] %}text-[#FBBF24]
+                          {% elif category in ['info'] %}text-[#38BDF8]
+                          {% else %}text-[#F87171]{% endif %}">
                 <i class="fa-solid mt-0.5 flex-shrink-0
                           {% if category in ['success', 'ok'] %}fa-check-circle
                           {% elif category in ['warning'] %}fa-exclamation-triangle
@@ -213,188 +171,234 @@
   </main>
 
   {% block admin_bottom_nav %}
-  <!-- Bottom Navigation - All Sizes (Divar Style) -->
-  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 pb-[env(safe-area-inset-bottom,0px)]">
-    <div class="grid grid-cols-4 gap-0 px-1 sm:px-2 py-1.5 sm:py-2">
-      <a href="{{ url_for('admin.dashboard') }}" 
-         class="flex flex-col items-center gap-1 p-2 rounded-lg focusable
-                {% if request.endpoint == 'admin.dashboard' %}text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20{% else %}text-gray-600 dark:text-gray-400{% endif %}">
-        <i class="fa-solid fa-gauge-high text-lg"></i>
-        <span class="text-xs">داشبورد</span>
+  <nav class="vc-bottom lg:hidden">
+    <div class="grid grid-cols-5 gap-0 px-1 py-1">
+      {% set ep = request.endpoint or '' %}
+      <a href="{{ url_for('admin.dashboard') }}" class="{% if ep == 'admin.dashboard' %}is-active{% endif %}">
+        <i class="fa-solid fa-satellite-dish text-base"></i>
+        <span data-i18n="bottom.command"></span>
       </a>
-      <a href="{{ url_for('admin.express_partners') }}" 
-         class="flex flex-col items-center gap-1 p-2 rounded-lg focusable
-                {% if request.endpoint in ['admin.express_partners', 'admin.express_partner_detail', 'admin.users'] %}text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20{% else %}text-gray-600 dark:text-gray-400{% endif %}">
-        <i class="fa-solid fa-users text-lg"></i>
-        <span class="text-xs">کاربران</span>
+      <a href="{{ url_for('admin.ai_console_dashboard') }}"
+         class="{% if ep and ep.startswith('admin.ai_console_') %}is-active{% endif %}">
+        <i class="fa-solid fa-brain text-base"></i>
+        <span data-i18n="bottom.ai"></span>
       </a>
-      <a href="{{ url_for('admin.add_express_listing') }}" 
-         class="flex flex-col items-center gap-1 p-2 rounded-lg focusable
-                {% if request.endpoint == 'admin.add_express_listing' %}text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20{% else %}text-gray-600 dark:text-gray-400{% endif %}">
-        <i class="fa-solid fa-plus text-lg"></i>
-        <span class="text-xs">ثبت آگهی</span>
+      <a href="{{ url_for('admin.control_market') }}"
+         class="{% if ep and (ep.startswith('admin.control_market') or ep in ['admin.express_listings', 'admin.express_visit_requests', 'admin.express_commissions', 'admin.financial_withdrawals']) %}is-active{% endif %}">
+        <i class="fa-solid fa-layer-group text-base"></i>
+        <span data-i18n="bottom.market"></span>
       </a>
-      <a href="{{ url_for('admin.express_listings') }}" 
-         class="flex flex-col items-center gap-1 p-2 rounded-lg focusable
-                {% if request.endpoint in ['admin.express_listings', 'admin.edit_express_listing'] %}text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20{% else %}text-gray-600 dark:text-gray-400{% endif %}">
-        <i class="fa-solid fa-layer-group text-lg"></i>
-        <span class="text-xs">آگهی‌ها</span>
+      <a href="{{ url_for('admin.ai_console_errors') }}"
+         class="{% if ep in ['admin.ai_console_errors', 'admin.ai_console_timeline', 'admin.ai_console_audit', 'admin.audit_log'] %}is-active{% endif %}">
+        <i class="fa-solid fa-wave-square text-base"></i>
+        <span data-i18n="bottom.observe"></span>
+      </a>
+      <a href="{{ url_for('admin.control_more') }}" class="{% if ep == 'admin.control_more' %}is-active{% endif %}">
+        <i class="fa-solid fa-ellipsis text-base"></i>
+        <span data-i18n="bottom.more"></span>
       </a>
     </div>
   </nav>
-
-  <!-- Spacer for bottom nav -->
-  <div class="h-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:h-0"></div>
+  <div class="h-[calc(4.25rem+env(safe-area-inset-bottom,0px))] lg:h-0"></div>
   {% endblock admin_bottom_nav %}
+
+  {% block control_fab %}
+  <div class="vc-fab" x-data="{ fabOpen: false }">
+    <button type="button" class="vc-fab-main focusable" @click="fabOpen = !fabOpen" data-i18n-aria="common.quick_actions">
+      <i class="fa-solid" :class="fabOpen ? 'fa-xmark' : 'fa-bolt'"></i>
+    </button>
+    <template x-if="fabOpen">
+      <div class="flex flex-col-reverse gap-2">
+        <a href="{{ url_for('admin.ai_console_tools') }}" class="vc-fab-sec" data-i18n-title="fab.confirms"><i class="fa-solid fa-check-double text-sm"></i></a>
+        <a href="{{ url_for('admin.express_visit_requests') }}" class="vc-fab-sec" data-i18n-title="fab.visits"><i class="fa-solid fa-route text-sm"></i></a>
+        <button type="button" @click="openCmd(); fabOpen=false" class="vc-fab-sec" data-i18n-title="fab.command"><i class="fa-solid fa-terminal text-sm"></i></button>
+      </div>
+    </template>
+  </div>
+  {% endblock control_fab %}
+
+  <div x-show="notifOpen" @click="notifOpen = false" class="fixed inset-0 z-50 bg-black/40" x-cloak></div>
+  <aside x-show="notifOpen"
+         x-transition:enter="transition-transform duration-200"
+         x-transition:enter-start="vc-notif-enter"
+         x-transition:enter-end="translate-x-0"
+         class="vc-notif-panel" x-cloak @click.away="notifOpen = false">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-line">
+      <h2 class="text-sm font-bold" data-i18n="common.notifications"></h2>
+      <button type="button" @click="notifOpen = false" class="p-1 text-[#6B7380]" data-i18n-aria="common.close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-3 space-y-2">
+      {% if control_notifs %}
+        {% for n in control_notifs %}
+        <a href="{{ n.url }}" class="block vc-widget p-3 hover:bg-panel-2">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="vc-chip vc-chip-{{ n.tone|default('warn') }}" data-i18n="notif.{{ n.kind }}"></span>
+            <span class="text-[10px] text-[#6B7380] ms-auto"{% if n.ts %} data-i18n-date="{{ n.ts }}"{% endif %}>{{ n.ts or '—' }}</span>
+          </div>
+          <p class="text-sm font-medium">{{ n.title }}</p>
+          <p class="text-xs text-[#A7B0BE] mt-0.5">{{ n.meta }}</p>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="vc-empty" data-i18n="common.no_notifications"></div>
+      {% endif %}
+      <a href="{{ url_for('admin.notifications_colleagues') }}" class="vc-btn vc-btn-ghost w-full mt-2" data-i18n="common.colleagues_notifications"></a>
+    </div>
+  </aside>
+
+  <div x-show="cmdOpen" class="vc-cmd-overlay" @click="cmdOpen = false" x-cloak></div>
+  <div x-show="cmdOpen" class="vc-cmd" x-cloak @keydown.escape.window="cmdOpen = false">
+    <input type="search" x-model="cmdQ" x-ref="cmdInput" data-i18n-placeholder="common.search_or_command" autocomplete="off" />
+    <div class="vc-cmd-list">
+      <template x-for="group in filteredCmdGroups()" :key="group.nameKey">
+        <div>
+          <div class="vc-cmd-group" x-text="group.name"></div>
+          <template x-for="item in group.items" :key="item.href">
+            <a :href="item.href" class="vc-cmd-item" @click="cmdOpen = false">
+              <i class="fa-solid text-[12px] w-4 text-center" :class="item.icon"></i>
+              <span x-text="item.label"></span>
+            </a>
+          </template>
+        </div>
+      </template>
+      <div x-show="!filteredCmdGroups().length" class="vc-empty" data-i18n="common.no_results"></div>
+    </div>
+  </div>
 
   {% block bottom_footer %}{% endblock %}
 
-  <!-- Alpine.js (local) -->
   <script src="{{ url_for('static', filename='vendor/alpine/alpine-3.14.1.min.js') }}" defer></script>
-  
-  <!-- Fallback برای منو در موبایل (در صورت عدم لود شدن Alpine.js) -->
   <script>
-    (function() {
-      let menuOpen = false;
-      let fallbackInitialized = false;
-      let alpineReady = false;
-      
-      // بررسی لود شدن Alpine.js
-      function checkAlpine() {
-        if (typeof Alpine !== 'undefined') {
-          // صبر کن تا Alpine.js initialize شود
-          if (Alpine && typeof Alpine.start === 'function') {
-            alpineReady = true;
-            return true;
+    function vinorControlShell() {
+      const hrefs = {
+        dashboard: '{{ url_for("admin.dashboard") }}',
+        tools: '{{ url_for("admin.ai_console_tools") }}',
+        visits: '{{ url_for("admin.express_visit_requests") }}',
+        conversations: '{{ url_for("admin.ai_console_conversations") }}',
+        agents: '{{ url_for("admin.ai_console_agents") }}',
+        workflows: '{{ url_for("admin.ai_console_workflows") }}',
+        prompts: '{{ url_for("admin.ai_console_prompts") }}',
+        memory: '{{ url_for("admin.ai_console_memory") }}',
+        escalations: '{{ url_for("admin.ai_questions") }}',
+        listings: '{{ url_for("admin.express_listings") }}',
+        commissions: '{{ url_for("admin.express_commissions") }}',
+        withdrawals: '{{ url_for("admin.financial_withdrawals") }}',
+        partners: '{{ url_for("admin.express_partners") }}',
+        crm: '{{ url_for("admin.control_crm") }}',
+        timeline: '{{ url_for("admin.ai_console_timeline") }}',
+        errors: '{{ url_for("admin.ai_console_errors") }}',
+        audit: '{{ url_for("admin.audit_log") }}',
+        analytics: '{{ url_for("admin.ai_console_analytics") }}',
+        flags: '{{ url_for("admin.ai_console_flags") }}',
+        settings: '{{ url_for("admin.settings") }}',
+      };
+      return {
+        menuOpen: false,
+        notifOpen: false,
+        cmdOpen: false,
+        cmdQ: '',
+        lang: (window.VinorI18n && VinorI18n.getLanguage()) || 'en',
+        cmdSpec: [
+          { nameKey: 'cmd.group_command', items: [
+            { labelKey: 'cmd.mission_control', aliasKey: 'search_aliases.dashboard', href: hrefs.dashboard, icon: 'fa-satellite-dish' },
+            { labelKey: 'cmd.pending_confirms', aliasKey: 'search_aliases.tools', href: hrefs.tools, icon: 'fa-check-double' },
+            { labelKey: 'cmd.visits', aliasKey: 'search_aliases.visit', href: hrefs.visits, icon: 'fa-route' },
+          ]},
+          { nameKey: 'cmd.group_intelligence', items: [
+            { labelKey: 'cmd.conversations', aliasKey: 'search_aliases.conversation', href: hrefs.conversations, icon: 'fa-comments' },
+            { labelKey: 'cmd.agents', aliasKey: 'search_aliases.ai', href: hrefs.agents, icon: 'fa-robot' },
+            { labelKey: 'cmd.workflows', aliasKey: 'search_aliases.workflow', href: hrefs.workflows, icon: 'fa-diagram-project' },
+            { labelKey: 'cmd.prompts', href: hrefs.prompts, icon: 'fa-pen-nib' },
+            { labelKey: 'cmd.memory', aliasKey: 'search_aliases.memory', href: hrefs.memory, icon: 'fa-database' },
+            { labelKey: 'cmd.escalations', href: hrefs.escalations, icon: 'fa-circle-question' },
+          ]},
+          { nameKey: 'cmd.group_market', items: [
+            { labelKey: 'cmd.properties', href: hrefs.listings, icon: 'fa-building' },
+            { labelKey: 'cmd.deals', aliasKey: 'search_aliases.deal', href: hrefs.commissions, icon: 'fa-handshake' },
+            { labelKey: 'cmd.withdrawals', href: hrefs.withdrawals, icon: 'fa-money-bill-transfer' },
+          ]},
+          { nameKey: 'cmd.group_relationships', items: [
+            { labelKey: 'cmd.partners', aliasKey: 'search_aliases.partner', href: hrefs.partners, icon: 'fa-users' },
+            { labelKey: 'cmd.crm', href: hrefs.crm, icon: 'fa-address-book' },
+          ]},
+          { nameKey: 'cmd.group_observe', items: [
+            { labelKey: 'cmd.timeline', href: hrefs.timeline, icon: 'fa-timeline' },
+            { labelKey: 'cmd.errors', aliasKey: 'search_aliases.error', href: hrefs.errors, icon: 'fa-bug' },
+            { labelKey: 'cmd.audit', href: hrefs.audit, icon: 'fa-clipboard-list' },
+            { labelKey: 'cmd.analytics', aliasKey: 'search_aliases.analytics', href: hrefs.analytics, icon: 'fa-chart-line' },
+          ]},
+          { nameKey: 'cmd.group_govern', items: [
+            { labelKey: 'cmd.flags', href: hrefs.flags, icon: 'fa-flag' },
+            { labelKey: 'cmd.settings', href: hrefs.settings, icon: 'fa-gear' },
+            { labelKey: 'cmd.users', href: hrefs.partners, icon: 'fa-user-shield' },
+          ]},
+        ],
+        buildCmdGroups() {
+          const t = (window.t || ((k) => k));
+          return this.cmdSpec.map((g) => ({
+            nameKey: g.nameKey,
+            name: t(g.nameKey),
+            items: g.items.map((i) => ({
+              ...i,
+              label: t(i.labelKey),
+            })),
+          }));
+        },
+        get cmdGroups() { return this.buildCmdGroups(); },
+        openCmd() {
+          this.cmdOpen = true;
+          this.cmdQ = '';
+          this.$nextTick(() => { try { this.$refs.cmdInput.focus(); } catch (e) {} });
+        },
+        filteredCmdGroups() {
+          const match = window.VinorI18n && VinorI18n.searchMatch
+            ? (q, item) => VinorI18n.searchMatch(q, item)
+            : (q, item) => !q || (item.label || '').toLowerCase().includes(q);
+          const q = (this.cmdQ || '').trim();
+          return this.buildCmdGroups().map((g) => ({
+            nameKey: g.nameKey,
+            name: g.name,
+            items: g.items.filter((i) => match(q, i)),
+          })).filter((g) => g.items.length);
+        },
+        setLang(lang) {
+          if (!window.VinorI18n) return;
+          VinorI18n.setLanguage(lang).then((l) => { this.lang = l; });
+        },
+        init() {
+          const self = this;
+          const base = '{{ url_for("static", filename="admin/locales") }}'.replace(/\/$/, '');
+          if (window.VinorI18n) {
+            VinorI18n.init({ baseUrl: base }).then((l) => {
+              self.lang = l;
+              const meta = document.querySelector('meta[name="vinor-page-title-key"]');
+              if (meta) document.documentElement.setAttribute('data-i18n-page-title', meta.getAttribute('content') || '');
+              VinorI18n.applyDom(document);
+            });
+            VinorI18n.onChange((l) => { self.lang = l; });
           }
-        }
-        return false;
-      }
-      
-      function initMenuFallback() {
-        if (fallbackInitialized) return;
-        
-        // بررسی Alpine.js
-        if (checkAlpine()) {
-          // Alpine.js کار می‌کند، fallback لازم نیست
-          console.log('Alpine.js is working, menu should work');
-          return;
-        }
-        
-        // Alpine.js کار نمی‌کند، fallback را فعال کن
-        setTimeout(function() {
-          if (!checkAlpine() && !fallbackInitialized) {
-            setupFallback();
-          }
-        }, 2000); // صبر 2 ثانیه برای Alpine.js
-      }
-      
-      function setupFallback() {
-        if (fallbackInitialized) return;
-        fallbackInitialized = true;
-        console.warn('Alpine.js not working, using fallback menu');
-        
-        const menuOverlay = document.querySelector('[x-show="menuOpen"][class*="bg-black"]');
-        const menuSidebar = document.querySelector('aside[x-show="menuOpen"]');
-        
-        function toggleMenu() {
-          menuOpen = !menuOpen;
-          if (menuOverlay) {
-            menuOverlay.style.display = menuOpen ? 'block' : 'none';
-            menuOverlay.style.opacity = menuOpen ? '0.4' : '0';
-            menuOverlay.style.transition = 'opacity 0.2s';
-          }
-          if (menuSidebar) {
-            menuSidebar.style.display = menuOpen ? 'block' : 'none';
-            menuSidebar.style.transform = menuOpen ? 'translateX(0)' : 'translateX(100%)';
-            menuSidebar.style.transition = 'transform 0.2s';
-          }
-          document.body.style.overflow = menuOpen ? 'hidden' : '';
-        }
-        
-        // اضافه کردن event listener به دکمه‌ها (فقط اگر Alpine.js کار نمی‌کند)
-        document.querySelectorAll('button[aria-label*="منو"]').forEach(btn => {
-          if (!btn.hasAttribute('data-fallback-added')) {
-            btn.setAttribute('data-fallback-added', 'true');
-            btn.addEventListener('click', function(e) {
-              // فقط اگر Alpine.js کار نمی‌کند
-              if (!alpineReady) {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleMenu();
-              }
-            }, false);
-          }
-        });
-        
-        // بستن منو با کلیک روی overlay
-        if (menuOverlay && !menuOverlay.hasAttribute('data-fallback-added')) {
-          menuOverlay.setAttribute('data-fallback-added', 'true');
-          menuOverlay.addEventListener('click', function(e) {
-            if (!alpineReady) {
+          window.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
               e.preventDefault();
-              e.stopPropagation();
-              toggleMenu();
+              self.openCmd();
             }
-          }, false);
-        }
-        
-        // بستن منو با کلیک روی دکمه بستن
-        const closeBtn = document.querySelector('button[onclick*="menuOpen = false"]');
-        if (closeBtn && !closeBtn.hasAttribute('data-fallback-added')) {
-          closeBtn.setAttribute('data-fallback-added', 'true');
-          closeBtn.addEventListener('click', function(e) {
-            if (!alpineReady) {
+            if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target || {}).tagName)) {
               e.preventDefault();
-              e.stopPropagation();
-              toggleMenu();
+              self.openCmd();
             }
-          }, false);
+          });
+          document.addEventListener('vinor:langchange', () => {
+            if (window.VinorI18n) VinorI18n.applyDom(document);
+          });
         }
-      }
-      
-      // اجرا بعد از لود DOM
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() {
-          setTimeout(initMenuFallback, 1000);
-        });
-      } else {
-        setTimeout(initMenuFallback, 1000);
-      }
-      
-      // اجرا بعد از لود کامل صفحه
-      window.addEventListener('load', function() {
-        setTimeout(initMenuFallback, 2000);
-      });
-    })();
+      };
+    }
   </script>
 
-  <!-- PWA Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('{{ url_for("admin.admin_service_worker") }}', {
-          scope: '/admin/'
-        }).then((reg) => {
-          console.log('Admin Service Worker registered:', reg.scope);
-          
-          // Check for updates
-          reg.addEventListener('updatefound', () => {
-            const newWorker = reg.installing;
-            if (newWorker) {
-              newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  // New service worker available, prompt user to refresh
-                  if (confirm('نسخه جدید پنل ادمین آماده است. آیا می‌خواهید صفحه را تازه کنید؟')) {
-                    window.location.reload();
-                  }
-                }
-              });
-            }
-          });
-        }).catch((err) => {
-          console.error('Admin Service Worker registration failed:', err);
-        });
+        navigator.serviceWorker.register('{{ url_for("admin.admin_service_worker") }}', { scope: '/admin/' }).catch(() => {});
       });
     }
   </script>
@@ -405,57 +409,33 @@
         raw = String(raw || '').trim();
         if (!raw) return null;
         var s = raw.replace(' ', 'T');
-        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && !/[zZ]|[+-]\d{2}(:?\d{2})?$/.test(s)) {
-          s += 'Z';
-        }
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && !/[zZ]|[+-]\d{2}(:?\d{2})?$/.test(s)) s += 'Z';
         var d = new Date(s);
         return isNaN(d.getTime()) ? null : d;
-      }
-      function fmtJalaliTehran(d) {
-        return d.toLocaleString('fa-IR', {
-          timeZone: 'Asia/Tehran',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
       }
       window.vinorAdminFormatJalaliDt = function (root) {
         (root || document).querySelectorAll('.jalali-dt[data-dt]').forEach(function (el) {
           var d = parseAdminDt(el.getAttribute('data-dt'));
-          el.textContent = d ? fmtJalaliTehran(d) : '—';
+          el.textContent = d && window.formatDate ? formatDate(d) : (d ? d.toISOString() : '—');
         });
       };
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () {
-          window.vinorAdminFormatJalaliDt();
-        });
+        document.addEventListener('DOMContentLoaded', function () { window.vinorAdminFormatJalaliDt(); });
       } else {
         window.vinorAdminFormatJalaliDt();
       }
-
-      /** Parts of «now» in Asia/Tehran (same clock as header). */
+      document.addEventListener('vinor:langchange', function () {
+        window.vinorAdminFormatJalaliDt();
+      });
       window.vinorAdminTehranParts = function (d) {
         var now = d || new Date();
         var parts = {};
         try {
-          var fmt = new Intl.DateTimeFormat('en-US', {
-            timeZone: 'Asia/Tehran',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hourCycle: 'h23',
-          });
-          fmt.formatToParts(now).forEach(function (p) {
-            if (p.type !== 'literal') parts[p.type] = p.value;
-          });
-        } catch (e) {
-          parts = {};
-        }
+          new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+          }).formatToParts(now).forEach(function (p) { if (p.type !== 'literal') parts[p.type] = p.value; });
+        } catch (e) { parts = {}; }
         var hour = String(parts.hour || '00');
         if (hour === '24') hour = '00';
         return {
@@ -467,14 +447,12 @@
           second: String(parts.second || '00').padStart(2, '0'),
         };
       };
-      /** Value for <input type="datetime-local"> in Tehran wall time. */
       window.vinorAdminTehranDateTimeLocal = function (d, addMinutes) {
         var base = d ? new Date(d.getTime()) : new Date();
         if (addMinutes) base = new Date(base.getTime() + addMinutes * 60000);
         var p = window.vinorAdminTehranParts(base);
         return p.year + '-' + p.month + '-' + p.day + 'T' + p.hour + ':' + p.minute;
       };
-      /** Parse datetime-local as Tehran wall time → comparable Date (UTC ms). */
       window.vinorAdminParseTehranLocal = function (value) {
         var raw = String(value || '').trim().replace(' ', 'T');
         if (!raw) return null;
@@ -482,30 +460,23 @@
         if (!m) return null;
         var y = +m[1], mo = +m[2], d = +m[3], h = +m[4], mi = +m[5], s = +(m[6] || 0);
         var guessUtc = Date.UTC(y, mo - 1, d, h, mi, s);
-        var asIf = new Date(guessUtc);
-        var p = window.vinorAdminTehranParts(asIf);
+        var p = window.vinorAdminTehranParts(new Date(guessUtc));
         var shownAsUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
-        var offsetMs = shownAsUtc - guessUtc;
-        return new Date(guessUtc - offsetMs);
+        return new Date(guessUtc - (shownAsUtc - guessUtc));
       };
-
       function updateAdminTehranClock() {
         var el = document.getElementById('adminTehranClock');
         if (!el) return;
         var now = new Date();
-        var narrow = window.matchMedia && window.matchMedia('(max-width: 639px)').matches;
-        var datePart = now.toLocaleDateString('fa-IR', narrow
-          ? { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }
-          : { timeZone: 'Asia/Tehran', weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit' }
-        );
-        var timePart = now.toLocaleTimeString('fa-IR', narrow
-          ? { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hour12: false }
-          : { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }
-        );
-        el.textContent = datePart + ' · ' + timePart;
+        if (window.formatDate) {
+          el.textContent = formatDate(now, { timeZone: 'Asia/Tehran' });
+        } else {
+          el.textContent = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        }
       }
       updateAdminTehranClock();
       setInterval(updateAdminTehranClock, 1000);
+      document.addEventListener('vinor:langchange', updateAdminTehranClock);
     })();
   </script>
 

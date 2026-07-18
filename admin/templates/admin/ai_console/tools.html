@@ -1,0 +1,54 @@
+{% extends 'admin/base_admin.html' %}
+{% block page_title %}AI Tools{% endblock %}
+{% block content %}
+<div class="space-y-4 adm-page">
+  <h2 class="text-lg font-bold text-gray-900 dark:text-white">Tool Manager</h2>
+  {% include 'admin/ai_console/_nav.html' %}
+  <div class="flex gap-2 text-xs font-semibold">
+    <a href="{{ url_for('admin.ai_console_tools', tab='catalog') }}" class="px-3 py-1.5 rounded-lg {% if tab!='pending' %}bg-teal-600 text-white{% else %}bg-gray-100 dark:bg-gray-800{% endif %}">Catalog</a>
+    <a href="{{ url_for('admin.ai_console_tools', tab='pending') }}" class="px-3 py-1.5 rounded-lg {% if tab=='pending' %}bg-amber-500 text-white{% else %}bg-gray-100 dark:bg-gray-800{% endif %}">Pending ({{ pending|length }})</a>
+  </div>
+  {% if tab == 'pending' %}
+    {% if not pending %}
+    <p class="text-sm text-gray-500 py-8 text-center">صف تأیید خالی است — خوب است</p>
+    {% else %}
+    <ul class="space-y-2">
+      {% for p in pending %}
+      <li class="rounded-xl border border-amber-200/50 dark:border-amber-900/40 bg-white dark:bg-gray-900 p-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="text-xs">
+          <span class="font-mono font-bold text-amber-700 dark:text-amber-300">{{ p.action_type }}</span>
+          <span class="text-gray-500"> · {{ p.user_masked }} · {{ p.status }}</span>
+          {% if p.land_code %}<span class="text-gray-400"> · {{ p.land_code }}</span>{% endif %}
+          <p class="text-[10px] text-gray-400 mt-0.5" dir="ltr">{{ p.created_at }}</p>
+        </div>
+        {% if can_mutate %}
+        <form method="post" onsubmit="return confirm('Expire this pending?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="token" value="{{ p.token_full }}">
+          <button class="rounded-lg border border-rose-300 text-rose-600 px-3 py-1 text-[11px] font-bold">Expire</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  {% else %}
+    <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+      <table class="min-w-full text-xs text-right">
+        <thead class="bg-gray-50 dark:bg-gray-800 text-gray-500"><tr><th class="px-3 py-2">Tool</th><th class="px-3 py-2">Confirm</th><th class="px-3 py-2">Phase</th></tr></thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+          {% for t in tools %}
+          <tr>
+            <td class="px-3 py-2 font-mono text-teal-700 dark:text-teal-300">{{ t.name }}</td>
+            <td class="px-3 py-2">{% if t.confirm %}yes{% else %}no{% endif %}</td>
+            <td class="px-3 py-2 text-gray-500">{{ t.phase_hint }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="px-3 py-6 text-center text-gray-500">ابزاری نیست</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

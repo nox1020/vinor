@@ -1,0 +1,55 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}Performance | Vinor Control{% endblock %}
+{% block page_title_key %}observe.title{% endblock %}
+{% block i18n_page_title %}observe.title{% endblock %}
+{% block page_title_i18n %}nav.performance{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <div class="vc-page-h flex flex-col sm:flex-row sm:justify-between gap-3">
+    <div>
+      <h1 data-i18n="observe.title"></h1>
+      <p data-i18n="observe.subtitle"></p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{{ url_for('admin.ai_console_monitor') }}" class="vc-btn vc-btn-ghost" data-i18n="observe.live_monitor"></a>
+      <a href="{{ url_for('admin.ai_console_errors') }}" class="vc-btn vc-btn-orbit" data-i18n="observe.errors"></a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <section class="vc-widget">
+      <div class="vc-widget-h"><h2 class="vc-widget-title" data-i18n="observe.token_events"></h2></div>
+      <div class="vc-widget-b">
+        {% for tok in tokens[:12] %}
+        <div class="vc-row">
+          <span class="vc-chip {% if tok.error or tok.ok is sameas false %}vc-chip-danger{% else %}vc-chip-ok{% endif %}">token</span>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm truncate">{{ tok.model or tok.route or 'request' }}</p>
+            <p class="text-[11px] text-[#6B7380] vc-mono">
+              <span data-i18n-number="{{ tok.latency_ms or tok.duration_ms or 0 }}">{{ tok.latency_ms or tok.duration_ms or '—' }}</span> ms
+              {% if tok.ts or tok.created_at %} · <span data-i18n-date="{{ tok.ts or tok.created_at }}"></span>{% endif %}
+            </p>
+          </div>
+        </div>
+        {% else %}
+        <div class="vc-empty" data-i18n="observe.no_tokens"></div>
+        {% endfor %}
+      </div>
+    </section>
+    <section class="vc-widget">
+      <div class="vc-widget-h"><h2 class="vc-widget-title" data-i18n="observe.errors_sample"></h2></div>
+      <div class="vc-widget-b">
+        {% for e in errors[:12] %}
+        <div class="vc-row">
+          <span class="vc-chip vc-chip-danger" data-i18n="dashboard.chip_error"></span>
+          <p class="text-sm truncate flex-1">{{ e.summary or e.message or e }}</p>
+        </div>
+        {% else %}
+        <div class="vc-empty" data-i18n="observe.no_errors"></div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

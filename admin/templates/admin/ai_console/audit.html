@@ -1,0 +1,28 @@
+{% extends 'admin/base_admin.html' %}
+{% block page_title %}AI Audit{% endblock %}
+{% block content %}
+<div class="space-y-4 adm-page">
+  <h2 class="text-lg font-bold text-gray-900 dark:text-white">AI Audit Log</h2>
+  {% include 'admin/ai_console/_nav.html' %}
+  <p class="text-xs text-gray-500">فیلتر action با پیشوند <code class="font-mono">ai_</code> از Foundation admin audit.</p>
+  {% if not events %}
+  <p class="text-sm text-gray-500 py-8 text-center">رویداد AI audit نیست</p>
+  {% else %}
+  <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+    <table class="min-w-full text-xs text-right">
+      <thead class="bg-gray-50 dark:bg-gray-800 text-gray-500"><tr><th class="px-3 py-2">زمان</th><th class="px-3 py-2">اقدام</th><th class="px-3 py-2">بازیگر</th><th class="px-3 py-2">خلاصه</th></tr></thead>
+      <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+        {% for ev in events %}
+        <tr>
+          <td class="px-3 py-2 font-mono text-gray-500" dir="ltr">{{ ev.created_at or '—' }}</td>
+          <td class="px-3 py-2 font-mono text-teal-700 dark:text-teal-300">{{ ev.action }}</td>
+          <td class="px-3 py-2" dir="ltr">{{ ev.actor_key or '—' }}</td>
+          <td class="px-3 py-2">{{ ev.summary or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

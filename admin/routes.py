@@ -1165,8 +1165,19 @@ def select_portal():
 @admin_bp.route('/', endpoint='dashboard', strict_slashes=False)
 @login_required
 def dashboard():
-    """داشبورد عملیاتی پنل همکاران."""
+    """Vinor Control — Mission Control (AI + ops snapshot)."""
     ctx = _admin_dashboard_context()
+    ai_snap = {}
+    try:
+        from app.ai_console.service import dashboard_snapshot
+
+        ai_snap = dashboard_snapshot() or {}
+    except Exception:
+        ai_snap = {}
+    ctx['ai_snap'] = ai_snap
+    # aliases used by Mission Control widgets
+    ctx.setdefault('visits_today', ctx.get('pending_visits_count') or 0)
+    ctx.setdefault('deals_today', ctx.get('pending_commissions_count') or 0)
     return render_template('admin/dashboard.html', **ctx)
 
 
@@ -2988,7 +2999,7 @@ def add_land():
         deal_type = (form.get('deal_type') or '').strip()
         if not deal_type:
             flash('نوع معامله را انتخاب کنید.', 'warning')
-            return render_template('admin/add_land.html',
+            return render_template('admin/add-land.html',
                                    pending_count=0, approved_count=0, rejected_count=0)
 
         new_land = {
@@ -3028,7 +3039,7 @@ def add_land():
     # GET
     cleanup_expired_ads()
     p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
-    return render_template('admin/add_land.html',
+    return render_template('admin/add-land.html',
                            pending_count=p, approved_count=a, rejected_count=r)
 
 
@@ -3174,7 +3185,7 @@ def edit_land(land_id: Optional[int] = None):
         return redirect(url_for('admin.lands'))
 
     p, a, r = counts_by_status(lands)
-    return render_template('admin/edit_land.html', land=land, land_id=land_index,
+    return render_template('admin/edit-land.html', land=land, land_id=land_index,
                            pending_count=p, approved_count=a, rejected_count=r)
 
 # حذف – سازگاری با هر دو الگو: querystring/route

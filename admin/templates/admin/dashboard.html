@@ -1,251 +1,257 @@
 {% extends 'admin/base_admin.html' %}
-{% block page_title %}داشبورد{% endblock %}
+{% block title %}Mission Control | Vinor Control{% endblock %}
+{% block page_title_key %}dashboard.browser_title{% endblock %}
+{% block i18n_page_title %}dashboard.browser_title{% endblock %}
+{% block page_title_i18n %}dashboard.page_title{% endblock %}
 
 {% block content %}
+{% set k = (ai_snap.kpis if ai_snap else {}) or {} %}
+{% set agents = (ai_snap.agents if ai_snap else []) or [] %}
+{% set agents_on = agents|selectattr('enabled')|list|length if agents else 0 %}
+
 <div class="space-y-5">
 
-  <!-- خوش‌آمد + خلاصه -->
-  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+  <div class="vc-page-h flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
     <div>
-      <h2 class="text-lg font-bold text-gray-900 dark:text-white">خلاصه امروز</h2>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-        {% if pending_actions_total and pending_actions_total > 0 %}
-          <span class="text-amber-600 dark:text-amber-400 font-medium">{{ pending_actions_total }} مورد</span> منتظر اقدام شماست.
-        {% else %}
-          همه چیز به‌روز است — مورد فوری در صف نیست.
-        {% endif %}
-      </p>
-      {% if is_super_admin|default(false) %}
-      <p class="mt-1">
-        <a href="{{ url_for('admin.super_admin_info') }}"
-           class="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 dark:text-violet-400 hover:underline">
-          <i class="fa-solid fa-shield-halved"></i>
-          Super Admin
-        </a>
-        {% if hardening_ui_enabled|default(false) %}
-        <a href="{{ url_for('admin.audit_log') }}"
-           class="ms-3 inline-flex items-center gap-1 text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline">
-          <i class="fa-solid fa-clipboard-list"></i>
-          Audit
-        </a>
-        {% endif %}
-      </p>
-      {% elif hardening_ui_enabled|default(false) %}
-      <p class="mt-1">
-        <a href="{{ url_for('admin.audit_log') }}"
-           class="inline-flex items-center gap-1 text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline">
-          <i class="fa-solid fa-clipboard-list"></i>
-          Audit
-        </a>
-      </p>
-      {% endif %}
+      <div class="flex items-center gap-2 mb-1">
+        <span class="vc-live"><span class="vc-live-dot"></span><span data-i18n="common.live"></span></span>
+        <span class="text-[11px] text-[#6B7380]" data-i18n="meta.app_name"></span>
+      </div>
+      <h1 class="text-xl sm:text-2xl font-bold tracking-tight" data-i18n="dashboard.title"></h1>
+      <p class="text-sm text-[#A7B0BE] mt-1" data-i18n="dashboard.subtitle"></p>
     </div>
-    <a href="{{ url_for('admin.express_partners') }}"
-       class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition">
-      <i class="fa-solid fa-users"></i>
-      کاربران و همکاران
+    <div class="flex flex-wrap gap-2">
+      <a href="{{ url_for('admin.ai_console_tools') }}" class="vc-btn vc-btn-orbit">
+        <i class="fa-solid fa-check-double"></i>
+        <span data-i18n="dashboard.confirms"></span>
+        {% if k.pending_confirms %}<span>(<span data-i18n-number="{{ k.pending_confirms }}">{{ k.pending_confirms }}</span>)</span>{% endif %}
+      </a>
+      <a href="{{ url_for('admin.ai_console_monitor') }}" class="vc-btn vc-btn-ghost">
+        <i class="fa-solid fa-heart-pulse"></i> <span data-i18n="dashboard.monitor"></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <a href="{{ url_for('admin.ai_console_dashboard') }}" class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.ai_health"></div>
+      <div class="vc-stat-value {% if (k.errors_sample or 0) > 5 %}is-danger{% else %}is-ok{% endif %}"
+           data-i18n="{% if (k.errors_sample or 0) > 5 %}dashboard.degraded{% else %}dashboard.healthy{% endif %}"></div>
+    </a>
+    <a href="{{ url_for('admin.control_observe') }}" class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.system"></div>
+      <div class="vc-stat-value is-signal" data-i18n="dashboard.online"></div>
+    </a>
+    <a href="{{ url_for('admin.ai_console_conversations') }}" class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.conversations"></div>
+      <div class="vc-stat-value" data-i18n-number="{{ k.conversations_indexed or 0 }}">{{ k.conversations_indexed or 0 }}</div>
+    </a>
+    <a href="{{ url_for('admin.ai_console_workflows') }}" class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.workflows"></div>
+      <div class="vc-stat-value is-signal" data-i18n-number="{{ k.active_workflows or 0 }}">{{ k.active_workflows or 0 }}</div>
+    </a>
+    <a href="{{ url_for('admin.ai_console_tools') }}" class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.pending_confirm"></div>
+      <div class="vc-stat-value is-orbit" data-i18n-number="{{ k.pending_confirms or 0 }}">{{ k.pending_confirms or 0 }}</div>
+    </a>
+    <a href="{{ url_for('admin.ai_console_agents') }}" class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.agents"></div>
+      <div class="vc-stat-value">{{ agents_on }}/{{ agents|length }}</div>
     </a>
   </div>
 
-  {% if os_kpis %}
-  <section>
-    <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 px-1">شاخص‌های OS (قیف فروش)</h3>
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-        <p class="text-[10px] text-gray-500">Visit Call Rate</p>
-        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ '%.0f'|format((os_kpis.visit_call_rate or 0) * 100) }}%</p>
-      </div>
-      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-        <p class="text-[10px] text-gray-500">Visit Booking</p>
-        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ '%.0f'|format((os_kpis.visit_booking_rate or 0) * 100) }}%</p>
-      </div>
-      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-        <p class="text-[10px] text-gray-500">Visit→Deal</p>
-        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ '%.0f'|format((os_kpis.visit_to_deal_rate or 0) * 100) }}%</p>
-      </div>
-      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-        <p class="text-[10px] text-gray-500">Deal Close</p>
-        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ '%.0f'|format((os_kpis.deal_close_rate or 0) * 100) }}%</p>
-      </div>
-      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-        <p class="text-[10px] text-gray-500">Sales Volume</p>
-        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ os_kpis.sales_volume_count or 0 }}</p>
-        <p class="text-[10px] text-gray-400 tabular-nums">{{ '{:,}'.format(os_kpis.sales_volume_amount or 0) }} ت</p>
-      </div>
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <a href="{{ url_for('admin.express_partners', filter='online') }}" class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.live_users"></div>
+      <div class="vc-stat-value" data-i18n-number="{{ online_partners_count|default(0) }}">{{ online_partners_count|default(0) }}</div>
+    </a>
+    <a href="{{ url_for('admin.express_visit_requests') }}" class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.todays_visits"></div>
+      <div class="vc-stat-value is-signal" data-i18n-number="{{ visits_today|default(pending_visits_count|default(0)) }}">{{ visits_today|default(pending_visits_count|default(0)) }}</div>
+    </a>
+    <a href="{{ url_for('admin.express_commissions') }}" class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.todays_deals"></div>
+      <div class="vc-stat-value" data-i18n-number="{{ deals_today|default(pending_commissions_count|default(0)) }}">{{ deals_today|default(pending_commissions_count|default(0)) }}</div>
+    </a>
+    <div class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.latency_p95"></div>
+      <div class="vc-stat-value vc-mono text-lg"><span data-i18n-number="{{ k.latency_p95_ms or 0 }}" data-i18n-digits="1">{{ k.latency_p95_ms or 0 }}</span><span class="text-xs text-[#6B7380] font-medium">ms</span></div>
     </div>
-  </section>
-  {% endif %}
-
-  <!-- نیاز به اقدام -->
-  <section>
-    <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 px-1">نیاز به اقدام</h3>
-    <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-
-      <a href="{{ url_for('admin.express_partners', filter='pending') }}"
-         class="relative rounded-xl border p-4 transition hover:shadow-md focusable
-                {% if pending_apps_count %}border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10{% else %}border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900{% endif %}">
-        {% if pending_apps_count %}<span class="absolute top-3 left-3 w-2 h-2 rounded-full bg-amber-500"></span>{% endif %}
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg grid place-items-center {% if pending_apps_count %}bg-amber-100 dark:bg-amber-900/40 text-amber-600{% else %}bg-gray-100 dark:bg-gray-800 text-gray-400{% endif %}">
-            <i class="fa-solid fa-user-clock"></i>
-          </div>
-          <div>
-            <p class="text-[11px] text-gray-500 dark:text-gray-400">درخواست همکاری</p>
-            <p class="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ pending_apps_count or 0 }}</p>
-          </div>
-        </div>
-      </a>
-
-      <a href="{{ url_for('admin.express_commissions') }}"
-         class="relative rounded-xl border p-4 transition hover:shadow-md focusable
-                {% if pending_commissions_count %}border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10{% else %}border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900{% endif %}">
-        {% if pending_commissions_count %}<span class="absolute top-3 left-3 w-2 h-2 rounded-full bg-blue-500"></span>{% endif %}
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg grid place-items-center {% if pending_commissions_count %}bg-blue-100 dark:bg-blue-900/40 text-blue-600{% else %}bg-gray-100 dark:bg-gray-800 text-gray-400{% endif %}">
-            <i class="fa-solid fa-wallet"></i>
-          </div>
-          <div>
-            <p class="text-[11px] text-gray-500 dark:text-gray-400">پورسانت</p>
-            <p class="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ pending_commissions_count or 0 }}</p>
-          </div>
-        </div>
-      </a>
-
-      <a href="{{ url_for('admin.financial_withdrawals', filter='pending') }}"
-         class="relative rounded-xl border p-4 transition hover:shadow-md focusable
-                {% if pending_withdrawals_count %}border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10{% else %}border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900{% endif %}">
-        {% if pending_withdrawals_count %}<span class="absolute top-3 left-3 w-2 h-2 rounded-full bg-emerald-500"></span>{% endif %}
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg grid place-items-center {% if pending_withdrawals_count %}bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600{% else %}bg-gray-100 dark:bg-gray-800 text-gray-400{% endif %}">
-            <i class="fa-solid fa-money-bill-transfer"></i>
-          </div>
-          <div>
-            <p class="text-[11px] text-gray-500 dark:text-gray-400">برداشت</p>
-            <p class="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ pending_withdrawals_count or 0 }}</p>
-          </div>
-        </div>
-      </a>
-
-      <a href="{{ url_for('admin.express_visit_requests') }}"
-         class="relative rounded-xl border p-4 transition hover:shadow-md focusable
-                {% if pending_visits_count %}border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/10{% else %}border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900{% endif %}">
-        {% if pending_visits_count %}<span class="absolute top-3 left-3 w-2 h-2 rounded-full bg-indigo-500"></span>{% endif %}
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg grid place-items-center {% if pending_visits_count %}bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600{% else %}bg-gray-100 dark:bg-gray-800 text-gray-400{% endif %}">
-            <i class="fa-solid fa-calendar-check"></i>
-          </div>
-          <div>
-            <p class="text-[11px] text-gray-500 dark:text-gray-400">بازدید</p>
-            <p class="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ pending_visits_count or 0 }}</p>
-          </div>
-        </div>
-      </a>
-
+    <div class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.ai_cost"></div>
+      <div class="vc-stat-value is-cost vc-mono text-lg" data-i18n-currency="{{ k.token_cost_sample or 0 }}" data-i18n-currency-unit="usd" data-i18n-digits="4">${{ '%.4f'|format(k.token_cost_sample or 0) }}</div>
     </div>
-  </section>
+    <a href="{{ url_for('admin.ai_console_errors') }}" class="vc-stat">
+      <div class="vc-stat-label" data-i18n="dashboard.errors"></div>
+      <div class="vc-stat-value {% if (k.errors_sample or 0) %}is-danger{% endif %}" data-i18n-number="{{ k.errors_sample or 0 }}">{{ k.errors_sample or 0 }}</div>
+    </a>
+  </div>
 
-  <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
-      <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-        <h3 class="text-sm font-bold text-gray-900 dark:text-white">صف کار اخیر</h3>
-        <span class="text-[11px] text-gray-400">{{ action_queue|length if action_queue else 0 }} مورد</span>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <section class="vc-widget lg:col-span-1">
+      <div class="vc-widget-h">
+        <h2 class="vc-widget-title" data-i18n="dashboard.pending_human"></h2>
+        <a href="{{ url_for('admin.ai_console_tools') }}" class="text-[11px] text-signal font-semibold" data-i18n="common.all"></a>
       </div>
-      {% if action_queue and action_queue|length > 0 %}
-        <ul class="divide-y divide-gray-100 dark:divide-gray-800">
-          {% for item in action_queue %}
-            <li>
-              <a href="{{ item.url }}" class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-950/50 transition">
-                <div class="w-9 h-9 rounded-lg grid place-items-center shrink-0
-                            {% if item.tone == 'amber' %}bg-amber-100 dark:bg-amber-900/30 text-amber-600
-                            {% elif item.tone == 'blue' %}bg-blue-100 dark:bg-blue-900/30 text-blue-600
-                            {% elif item.tone == 'emerald' %}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600
-                            {% elif item.tone == 'rose' %}bg-rose-100 dark:bg-rose-900/30 text-rose-600
-                            {% else %}bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600{% endif %}">
-                  <i class="fa-solid {{ item.icon }} text-sm"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-semibold text-gray-900 dark:text-white truncate">{{ item.title }}</p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ item.meta }}</p>
-                </div>
-                {% if item.ts %}
-                  <span class="text-[10px] text-gray-400 shrink-0 jalali-dt" data-dt="{{ item.ts }}"></span>
-                {% endif %}
-                <i class="fa-solid fa-chevron-left text-[10px] text-gray-300 dark:text-gray-600 shrink-0"></i>
-              </a>
-            </li>
+      <div class="vc-widget-b">
+        {% set pending = (ai_snap.pending_preview if ai_snap else []) or [] %}
+        {% if pending %}
+          {% for p in pending[:6] %}
+          <div class="vc-row">
+            <span class="vc-chip vc-chip-orbit" data-i18n="dashboard.chip_confirm"></span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium truncate">{{ p.tool or p.name or 'tool' }}</p>
+              <p class="text-[11px] text-[#6B7380] truncate vc-mono">{{ p.token or p.id or '' }}</p>
+            </div>
+          </div>
           {% endfor %}
-        </ul>
-      {% else %}
-        <div class="px-4 py-10 text-center">
-          <i class="fa-solid fa-circle-check text-3xl text-emerald-400 mb-2"></i>
-          <p class="text-sm text-gray-500 dark:text-gray-400">مورد معلقی برای بررسی نیست.</p>
+        {% else %}
+          <div class="vc-empty" data-i18n="dashboard.queue_empty"></div>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="vc-widget lg:col-span-1">
+      <div class="vc-widget-h">
+        <h2 class="vc-widget-title" data-i18n="dashboard.pending_actions"></h2>
+        <span class="vc-chip vc-chip-warn" data-i18n-number="{{ pending_actions_total|default(0) }}">{{ pending_actions_total|default(0) }}</span>
+      </div>
+      <div class="vc-widget-b">
+        {% if action_queue %}
+          {% for a in action_queue[:6] %}
+          <a href="{{ a.url }}" class="vc-row hover:opacity-90">
+            <i class="fa-solid {{ a.icon }} text-[#A7B0BE] mt-0.5"></i>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium truncate">{{ a.title }}</p>
+              <p class="text-[11px] text-[#6B7380] truncate">{{ a.meta }}</p>
+            </div>
+          </a>
+          {% endfor %}
+        {% else %}
+          <div class="vc-empty" data-i18n="dashboard.ops_empty"></div>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="vc-widget lg:col-span-1">
+      <div class="vc-widget-h">
+        <h2 class="vc-widget-title" data-i18n="dashboard.agent_status"></h2>
+        <a href="{{ url_for('admin.ai_console_agents') }}" class="text-[11px] text-signal font-semibold" data-i18n="dashboard.orbit"></a>
+      </div>
+      <div class="vc-widget-b flex flex-wrap gap-2">
+        {% for ag in agents[:12] %}
+        <span class="vc-chip {% if ag.enabled %}vc-chip-ok{% else %}vc-chip-danger{% endif %}">{{ ag.id }}</span>
+        {% else %}
+        <div class="vc-empty w-full" data-i18n="dashboard.agents_empty"></div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <section class="vc-widget">
+      <div class="vc-widget-h"><h2 class="vc-widget-title" data-i18n="dashboard.sales_funnel"></h2></div>
+      <div class="vc-widget-b vc-funnel">
+        {% set ok = os_kpis or {} %}
+        {% set steps = [
+          ('dashboard.funnel_visit_call', (ok.visit_call_rate or 0) * 100),
+          ('dashboard.funnel_booking', (ok.visit_booking_rate or 0) * 100),
+          ('dashboard.funnel_visit_deal', (ok.visit_to_deal_rate or 0) * 100),
+          ('dashboard.funnel_close', (ok.deal_close_rate or 0) * 100),
+        ] %}
+        {% for label_key, pct in steps %}
+        <div class="vc-funnel-row">
+          <span class="text-[#A7B0BE]" data-i18n="{{ label_key }}"></span>
+          <div class="vc-funnel-bar"><div class="vc-funnel-fill" style="width: {{ [pct, 100]|min }}%"></div></div>
+          <span class="vc-mono text-[#F3F5F7]" data-i18n-percent="{{ pct }}" data-i18n-percent-mode="100">{{ '%.0f'|format(pct) }}%</span>
         </div>
-      {% endif %}
-  </section>
+        {% endfor %}
+      </div>
+    </section>
 
-  <!-- نمای کلی -->
-  <section>
-    <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 px-1">نمای کلی</h3>
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-      {% set overview = [
-        ('کل اشخاص', people_total or 0, url_for('admin.express_partners'), ''),
-        ('همکار تأیید', partners_count or 0, url_for('admin.express_partners', filter='partners'), ''),
-        ('همکاران آنلاین', online_partners_count or 0, url_for('admin.express_partners', filter='online'), 'الان فعال'),
-        ('آگهی Express', express_listings_count or 0, url_for('admin.express_listings'), ''),
-        ('روتین این ماه', routines_count_month or 0, url_for('admin.express_partners'), 'روز ثبت‌شده'),
-      ] %}
-      {% for label, value, href, sub in overview %}
-        <a href="{{ href }}" class="rounded-xl border p-3 transition hover:shadow-md focusable
-                  {% if label == 'همکاران آنلاین' and (online_partners_count or 0) > 0 %}
-                    border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-900/10 hover:border-teal-300 dark:hover:border-teal-700
-                  {% else %}
-                    border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-600
-                  {% endif %}">
-          <p class="text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
-            {% if label == 'همکاران آنلاین' and (online_partners_count or 0) > 0 %}
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-            {% endif %}
-            {{ label }}
-          </p>
-          <p class="text-xl font-bold tabular-nums mt-0.5
-                    {% if label == 'همکاران آنلاین' and (online_partners_count or 0) > 0 %}
-                      text-teal-700 dark:text-teal-300
-                    {% else %}
-                      text-gray-900 dark:text-white
-                    {% endif %}">{{ value }}</p>
-          {% if sub %}<p class="text-[10px] text-gray-400 mt-0.5">{{ sub }}</p>{% endif %}
+    <section class="vc-widget">
+      <div class="vc-widget-h"><h2 class="vc-widget-title" data-i18n="dashboard.visit_funnel"></h2></div>
+      <div class="vc-widget-b space-y-2 text-sm">
+        <div class="flex justify-between"><span class="text-[#A7B0BE]" data-i18n="dashboard.pending_visits"></span><span class="font-bold" data-i18n-number="{{ pending_visits_count|default(0) }}">{{ pending_visits_count|default(0) }}</span></div>
+        <div class="flex justify-between"><span class="text-[#A7B0BE]" data-i18n="dashboard.active_assignments"></span><span class="font-bold" data-i18n-number="{{ assignments_active_count|default(0) }}">{{ assignments_active_count|default(0) }}</span></div>
+        <div class="flex justify-between"><span class="text-[#A7B0BE]" data-i18n="dashboard.listings"></span><span class="font-bold" data-i18n-number="{{ express_listings_count|default(0) }}">{{ express_listings_count|default(0) }}</span></div>
+        <a href="{{ url_for('admin.express_visit_requests') }}" class="vc-btn vc-btn-ghost w-full mt-2" data-i18n="dashboard.open_visits"></a>
+      </div>
+    </section>
+
+    <section class="vc-widget">
+      <div class="vc-widget-h"><h2 class="vc-widget-title" data-i18n="dashboard.revenue_finance"></h2></div>
+      <div class="vc-widget-b space-y-2 text-sm">
+        <div class="flex justify-between"><span class="text-[#A7B0BE]" data-i18n="dashboard.pending_commissions"></span><span class="font-bold is-orbit" data-i18n-number="{{ pending_commissions_count|default(0) }}">{{ pending_commissions_count|default(0) }}</span></div>
+        <div class="flex justify-between"><span class="text-[#A7B0BE]" data-i18n="dashboard.pending_withdrawals"></span><span class="font-bold" data-i18n-number="{{ pending_withdrawals_count|default(0) }}">{{ pending_withdrawals_count|default(0) }}</span></div>
+        <div class="flex justify-between"><span class="text-[#A7B0BE]" data-i18n="dashboard.partners"></span><span class="font-bold" data-i18n-number="{{ partners_count|default(0) }}">{{ partners_count|default(0) }}</span></div>
+        <a href="{{ url_for('admin.express_commissions') }}" class="vc-btn vc-btn-primary w-full mt-2" data-i18n="dashboard.manage_finance"></a>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <section class="vc-widget">
+      <div class="vc-widget-h">
+        <h2 class="vc-widget-title" data-i18n="dashboard.timeline_live"></h2>
+        <a href="{{ url_for('admin.ai_console_timeline') }}" class="text-[11px] text-signal font-semibold" data-i18n="common.all"></a>
+      </div>
+      <div class="vc-widget-b">
+        {% set errs = (ai_snap.errors_preview if ai_snap else []) or [] %}
+        {% set esc = (ai_snap.escalations_preview if ai_snap else []) or [] %}
+        {% if errs or esc or action_queue %}
+          {% for e in errs[:4] %}
+          <div class="vc-row">
+            <span class="vc-chip vc-chip-danger" data-i18n="dashboard.chip_error"></span>
+            <p class="text-sm truncate flex-1">{{ e.summary or e.message or e }}</p>
+          </div>
+          {% endfor %}
+          {% for e in esc[:3] %}
+          <div class="vc-row">
+            <span class="vc-chip vc-chip-warn" data-i18n="dashboard.chip_escalation"></span>
+            <p class="text-sm truncate flex-1">{{ e.question or e.summary or e.id or 'escalation' }}</p>
+          </div>
+          {% endfor %}
+          {% for a in action_queue[:3] %}
+          <a href="{{ a.url }}" class="vc-row">
+            <span class="vc-chip" data-i18n="dashboard.chip_ops"></span>
+            <p class="text-sm truncate flex-1">{{ a.title }} — {{ a.meta }}</p>
+          </a>
+          {% endfor %}
+        {% else %}
+          <div class="vc-empty" data-i18n="dashboard.no_events"></div>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="vc-widget">
+      <div class="vc-widget-h">
+        <h2 class="vc-widget-title" data-i18n="dashboard.alerts_partners"></h2>
+        <a href="{{ url_for('admin.express_partners', filter='online') }}" class="text-[11px] text-signal font-semibold" data-i18n="dashboard.online"></a>
+      </div>
+      <div class="vc-widget-b">
+        {% if online_preview %}
+          {% for o in online_preview %}
+          <a href="{{ o.url }}" class="vc-row">
+            <span class="vc-live-dot mt-1.5"></span>
+            <div class="min-w-0">
+              <p class="text-sm font-medium truncate">{{ o.name }}</p>
+              <p class="text-[11px] text-[#6B7380] vc-mono" data-i18n-phone="{{ o.phone }}">{{ o.phone }}</p>
+            </div>
+          </a>
+          {% endfor %}
+        {% else %}
+          <div class="vc-empty" data-i18n="dashboard.no_online_partners"></div>
+        {% endif %}
+        {% if ai_snap and ai_snap.escalations_preview %}
+        <a href="{{ url_for('admin.ai_questions') }}" class="vc-btn vc-btn-ghost w-full mt-3">
+          <span data-i18n="dashboard.open_escalations"></span>:
+          <span data-i18n-number="{{ k.escalations_open or 0 }}">{{ k.escalations_open or 0 }}</span>
         </a>
-      {% endfor %}
-    </div>
-  </section>
-
-  {% if pending_commissions_amount or pending_withdrawals_amount %}
-  <section class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950/50 px-4 py-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
-    {% if pending_commissions_amount %}
-      <span><i class="fa-solid fa-wallet ml-1 text-blue-500"></i>پورسانت در انتظار: <strong class="tabular-nums text-gray-900 dark:text-white">{{ "{:,}".format(pending_commissions_amount) }}</strong> ت</span>
-    {% endif %}
-    {% if pending_withdrawals_amount %}
-      <span><i class="fa-solid fa-money-bill-transfer ml-1 text-emerald-500"></i>برداشت در انتظار: <strong class="tabular-nums text-gray-900 dark:text-white">{{ "{:,}".format(pending_withdrawals_amount) }}</strong> ت</span>
-    {% endif %}
-    {% if open_withdrawals_count and open_withdrawals_count > pending_withdrawals_count %}
-      <span><i class="fa-solid fa-hourglass-half ml-1 text-amber-500"></i>{{ open_withdrawals_count }} برداشت در کل فرایند</span>
-    {% endif %}
-  </section>
-  {% endif %}
+        {% endif %}
+      </div>
+    </section>
+  </div>
 
 </div>
-
-<script>
-(function(){
-  function fmt(dt){
-    try{
-      const d = new Date(String(dt||'').replace(' ','T'));
-      if (isNaN(d)) return '';
-      return d.toLocaleString('fa-IR', { timeZone: 'Asia/Tehran', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
-    }catch(_){ return ''; }
-  }
-  document.querySelectorAll('.jalali-dt[data-dt]').forEach(el=>{
-    el.textContent = fmt(el.getAttribute('data-dt')||'') || '';
-  });
-})();
-</script>
 {% endblock %}

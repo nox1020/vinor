@@ -1,0 +1,27 @@
+{% extends 'admin/base_admin.html' %}
+{% block page_title %}AI Flags{% endblock %}
+{% block content %}
+<div class="space-y-4 adm-page">
+  <h2 class="text-lg font-bold text-gray-900 dark:text-white">Feature Flag Manager <span class="text-xs font-normal text-gray-500">(read-only live values)</span></h2>
+  {% include 'admin/ai_console/_nav.html' %}
+  <p class="text-xs text-gray-500">تغییر فلگ از env سرور است؛ Toggle در UI برای فاز بعد (Super + Audit).</p>
+  {% for group, rows in groups.items() %}
+  <section class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+    <h3 class="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">{{ group }}</h3>
+    <ul class="space-y-1.5">
+      {% for f in rows %}
+      <li class="flex flex-wrap items-center justify-between gap-2 text-xs py-1 border-b border-gray-50 dark:border-gray-800">
+        <span class="font-mono text-gray-800 dark:text-gray-200">{{ f.name }}</span>
+        <span class="flex items-center gap-2">
+          <span class="text-[10px] text-gray-400">{{ f.source }}</span>
+          <span class="font-bold {% if f.value %}text-emerald-600{% elif f.value is sameas false %}text-zinc-400{% else %}text-amber-600{% endif %}">
+            {% if f.value %}ON{% elif f.value is sameas false %}OFF{% else %}?{% endif %}
+          </span>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

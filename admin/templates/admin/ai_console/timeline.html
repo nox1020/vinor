@@ -1,0 +1,34 @@
+{% extends 'admin/base_admin.html' %}
+{% block page_title %}AI Timeline{% endblock %}
+{% block content %}
+<div class="space-y-4 adm-page">
+  <h2 class="text-lg font-bold text-gray-900 dark:text-white">Activity & Timeline</h2>
+  {% include 'admin/ai_console/_nav.html' %}
+  <form method="get" class="flex flex-wrap gap-2">
+    <input name="phone" value="{{ phone or '' }}" placeholder="partner phone" dir="ltr" class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
+    <input name="land_code" value="{{ land_code or '' }}" placeholder="land_code" dir="ltr" class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
+    <button class="rounded-lg bg-teal-600 text-white px-4 py-2 text-sm font-bold">بارگذاری Journey</button>
+  </form>
+  {% if not phone and not land_code %}
+  <p class="text-sm text-gray-500">phone یا land_code وارد کنید</p>
+  {% elif not events %}
+  <p class="text-sm text-gray-500 py-8 text-center">رویدادی نیست</p>
+  {% else %}
+  <ol class="relative border-s border-teal-200 dark:border-teal-900 ms-3 space-y-3">
+    {% for ev in events %}
+    <li class="ms-4">
+      <span class="absolute -start-1.5 mt-1.5 h-2.5 w-2.5 rounded-full bg-teal-500"></span>
+      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 text-xs">
+        <div class="flex justify-between gap-2">
+          <span class="font-semibold text-teal-700 dark:text-teal-300">{{ ev.stage }}</span>
+          <span class="text-gray-400" dir="ltr">{{ ev.ts or '—' }}</span>
+        </div>
+        <p class="mt-1 text-gray-800 dark:text-gray-100">{{ ev.summary or ev.action }}</p>
+        <p class="text-[10px] text-gray-500 mt-0.5">{{ ev.source }}{% if ev.land_code %} · {{ ev.land_code }}{% endif %}</p>
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</div>
+{% endblock %}

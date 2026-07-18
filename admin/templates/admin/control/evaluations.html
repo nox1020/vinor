@@ -1,0 +1,41 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}Evaluations | Vinor Control{% endblock %}
+{% block page_title_key %}evaluations.title{% endblock %}
+{% block i18n_page_title %}evaluations.title{% endblock %}
+{% block page_title_i18n %}nav.evaluations{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <div class="vc-page-h">
+    <h1 data-i18n="evaluations.title"></h1>
+    <p data-i18n="evaluations.subtitle"></p>
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="evaluations.eval_rows"></div><div class="vc-stat-value" data-i18n-number="{{ evals|length }}"></div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="evaluations.token_rows"></div><div class="vc-stat-value" data-i18n-number="{{ tokens|length }}"></div></div>
+    <div class="vc-stat"><div class="vc-stat-label" data-i18n="evaluations.eval_sample"></div><div class="vc-stat-value is-signal" data-i18n-number="{{ evals|length }}"></div></div>
+    <a href="{{ url_for('admin.ai_console_analytics') }}" class="vc-stat">
+      <div class="vc-stat-label" data-i18n="common.deep_dive"></div>
+      <div class="vc-stat-value is-signal text-base" data-i18n="nav.ai_analytics"></div>
+    </a>
+  </div>
+
+  <section class="vc-widget">
+    <div class="vc-widget-h"><h2 class="vc-widget-title" data-i18n="evaluations.recent"></h2></div>
+    <div class="vc-widget-b">
+      {% for e in evals[:40] %}
+      <div class="vc-row">
+        <span class="vc-chip {% if e.ok is sameas false or e.error %}vc-chip-danger{% else %}vc-chip-ok{% endif %}" data-i18n="evaluations.chip_eval"></span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm truncate">{{ e.summary or e.intent or e.route or 'evaluation' }}</p>
+          <p class="text-[11px] text-[#6B7380] vc-mono"{% if e.ts or e.created_at %} data-i18n-date="{{ e.ts or e.created_at }}"{% endif %}></p>
+        </div>
+      </div>
+      {% else %}
+      <div class="vc-empty" data-i18n="evaluations.empty"></div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

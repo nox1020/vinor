@@ -21,6 +21,14 @@ try:
     from . import push_pages  # push test page
 except Exception:
     pass
+try:
+    from . import ai_console_routes  # AI Mission Control
+except Exception:
+    pass
+try:
+    from . import control_routes  # Vinor Control presentation hubs
+except Exception:
+    pass
 
 __all__ = ["admin_bp"]
 

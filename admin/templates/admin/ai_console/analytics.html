@@ -1,0 +1,25 @@
+{% extends 'admin/base_admin.html' %}
+{% block page_title %}AI Analytics{% endblock %}
+{% block content %}
+<div class="space-y-4 adm-page">
+  <h2 class="text-lg font-bold text-gray-900 dark:text-white">Analytics Dashboard</h2>
+  {% include 'admin/ai_console/_nav.html' %}
+  {% set k = snap.kpis %}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-900"><p class="text-[10px] text-gray-500">p50</p><p class="text-lg font-bold tabular-nums">{{ k.latency_p50_ms }} ms</p></div>
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-900"><p class="text-[10px] text-gray-500">p95</p><p class="text-lg font-bold tabular-nums">{{ k.latency_p95_ms }} ms</p></div>
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-900"><p class="text-[10px] text-gray-500">Cost sample</p><p class="text-lg font-bold tabular-nums">{{ k.token_cost_sample }}</p></div>
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-900"><p class="text-[10px] text-gray-500">Pending</p><p class="text-lg font-bold tabular-nums">{{ k.pending_confirms }}</p></div>
+  </div>
+  <div class="grid lg:grid-cols-2 gap-4">
+    <section class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+      <h3 class="text-xs font-bold text-gray-500 mb-2">Token rows (tail)</h3>
+      <pre class="text-[10px] max-h-64 overflow-auto text-gray-600 dark:text-gray-300">{{ tokens[:15]|tojson(indent=2) }}</pre>
+    </section>
+    <section class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+      <h3 class="text-xs font-bold text-gray-500 mb-2">Evaluation rows (tail)</h3>
+      <pre class="text-[10px] max-h-64 overflow-auto text-gray-600 dark:text-gray-300">{{ evals[:15]|tojson(indent=2) }}</pre>
+    </section>
+  </div>
+</div>
+{% endblock %}
