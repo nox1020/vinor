@@ -611,9 +611,15 @@
     }
 
     if (lastAsst) {
-      if (opts.stream) return typewriteAssistantMessage(lastAsst);
+      if (opts.stream) {
+        return typewriteAssistantMessage(lastAsst).then(function (wrap) {
+          injectHomeJourneyCardIntoChat();
+          return wrap;
+        });
+      }
       appendMessage(lastAsst);
     }
+    injectHomeJourneyCardIntoChat();
     scanLastSyncFromDom();
     scrollChatToEnd();
     return Promise.resolve(null);
@@ -1368,15 +1374,133 @@
   }
 
   function routeLandCardsToHome(msg) {
-    /* آینهٔ اختیاری روی نوار خانه — منبع اصلی نمایش داخل خود گفتگوست */
-    if (!msg) return;
-    if (msg.land_cards && msg.land_cards.length) {
+    /* کارت فایل داخل گفتگو می‌ماند؛ نوار بالای خانه دیگر آینه نمی‌شود */
+  }
+
+  function scrubDashboardCardsOutsideChat() {
+    if (!homeInline) return;
+    document.querySelectorAll('.vn-home-top [data-vn-journey-card], .vn-home-shell > [data-vn-journey-card]').forEach(function (el) {
       try {
-        if (typeof window.vinorApplyHomeLandCards === 'function') {
-          window.vinorApplyHomeLandCards(msg.land_cards, { label: 'پیشنهاد فایل' });
-        }
+        el.remove();
+      } catch (_) {}
+    });
+    var top = document.querySelector('#homeDashboardPage .vn-home-top');
+    if (top) {
+      try {
+        top.setAttribute('hidden', '');
+        top.style.display = 'none';
       } catch (_) {}
     }
+  }
+
+  function injectHomeLandsCarouselIntoChat() {
+    if (!homeInline || !list) return;
+    if (list.querySelector('.ai-msg-wrap[data-vn-lands-inject="1"]')) return;
+    var source = document.getElementById('vnHomeLandsChatSource');
+    var carousel = source && source.querySelector('#homePublicLandsCarousel');
+    if (!carousel || carousel.getAttribute('data-has-lands') !== '1') return;
+
+    removeWelcome();
+    var node = carousel.cloneNode(true);
+    try {
+      node.id = 'homePublicLandsCarouselChat';
+    } catch (_) {}
+
+    var wrap = document.createElement('div');
+    wrap.className = 'ai-msg-wrap ai-msg-wrap--assistant';
+    wrap.setAttribute('data-role', 'assistant');
+    wrap.setAttribute('data-vn-lands-inject', '1');
+    wrap.setAttribute('data-ephemeral', '1');
+    var row = document.createElement('div');
+    row.className = 'ai-msg-row';
+    var body = document.createElement('div');
+    body.className = 'ai-msg-body';
+    var host = document.createElement('div');
+    host.className = 'ai-msg-cards ai-msg-cards--home-lands w-full min-w-0 max-w-full';
+    host.appendChild(node);
+    body.appendChild(host);
+    row.appendChild(body);
+    wrap.appendChild(row);
+    list.insertBefore(wrap, list.firstChild);
+  }
+
+  function injectHomeJourneyCardIntoChat() {
+    if (!homeInline || !list) return;
+    scrubDashboardCardsOutsideChat();
+
+    var existing = list.querySelector('.ai-msg-wrap[data-vn-journey-inject="1"]');
+    if (existing) {
+      try {
+        list.appendChild(existing);
+      } catch (_) {}
+      injectHomeLandsCarouselIntoChat();
+      return;
+    }
+
+    var cardsHost = document.createElement('div');
+    cardsHost.className = 'ai-msg-cards ai-msg-cards--journey w-full min-w-0 max-w-full';
+
+    var tpl = document.getElementById('vnJourneyChatTpl');
+    var mounted = false;
+    if (tpl && tpl.content) {
+      var frag = tpl.content.cloneNode(true);
+      while (frag.firstChild) {
+        cardsHost.appendChild(frag.firstChild);
+      }
+      mounted = !!cardsHost.querySelector('[data-vn-journey-card]');
+    }
+    if (!mounted) {
+      var legacy = document.getElementById('vnJourneyChatSource');
+      var srcCard = legacy && legacy.querySelector('[data-vn-journey-card]');
+      if (srcCard) {
+        cardsHost.appendChild(srcCard.cloneNode(true));
+        mounted = true;
+      }
+    }
+    if (!mounted) {
+      var strays = document.querySelectorAll('#homeDashboardPage [data-vn-journey-card]');
+      for (var si = 0; si < strays.length; si++) {
+        if (list.contains(strays[si])) continue;
+        cardsHost.appendChild(strays[si]);
+        mounted = true;
+        break;
+      }
+    }
+    if (!mounted) {
+      injectHomeLandsCarouselIntoChat();
+      return;
+    }
+
+    removeWelcome();
+    var liveCard = cardsHost.querySelector('[data-vn-journey-card]');
+    if (liveCard) {
+      try {
+        liveCard.id = 'vnJourneyCard';
+      } catch (_) {}
+    }
+
+    var wrap = document.createElement('div');
+    wrap.className = 'ai-msg-wrap ai-msg-wrap--assistant';
+    wrap.setAttribute('data-role', 'assistant');
+    wrap.setAttribute('data-vn-journey-inject', '1');
+    wrap.setAttribute('data-ephemeral', '1');
+
+    var row = document.createElement('div');
+    row.className = 'ai-msg-row';
+    var body = document.createElement('div');
+    body.className = 'ai-msg-body';
+    body.appendChild(cardsHost);
+    row.appendChild(body);
+    wrap.appendChild(row);
+    list.appendChild(wrap);
+
+    try {
+      if (typeof window.__vinorJourneyCollapseApply === 'function') {
+        window.__vinorJourneyCollapseApply();
+      }
+    } catch (_) {}
+    scrubDashboardCardsOutsideChat();
+    injectHomeLandsCarouselIntoChat();
   }
 
   function stripLandCardsFromHtml(html) {
@@ -1422,24 +1546,13 @@
 
     if (hasPayloadLands) {
       parts.push(landCardsPayloadToHtml(msg.land_cards));
-      if (!opts.deferHomeMirror) routeLandCardsToHome(msg);
       if (actionHtml) {
         /* جلوگیری از دوباره‌کاری اگر سرور land را هم داخل cards_html گذاشته */
         actionHtml = stripLandCardsFromHtml(actionHtml).clean;
       }
     } else if (actionHtml && /ai-land-cards/.test(actionHtml)) {
-      if (!opts.deferHomeMirror) {
-        var extracted = stripLandCardsFromHtml(actionHtml);
-        if (extracted.landCards.length) {
-          try {
-            if (typeof window.vinorApplyHomeLandCards === 'function') {
-              window.vinorApplyHomeLandCards(extracted.landCards, { label: 'پیشنهاد فایل' });
-            }
-          } catch (_) {}
-        }
-        /* کارت‌ها باید در چت بمانند — HTML اصلی را نگه دار */
-        actionHtml = String(msg.cards_html);
-      }
+      /* کارت‌ها باید در چت بمانند — HTML اصلی را نگه دار */
+      actionHtml = String(msg.cards_html);
     }
 
     if (actionHtml && String(actionHtml).trim()) parts.push(String(actionHtml).trim());
@@ -1818,12 +1931,12 @@
     lastSyncAt = '';
     (messages || []).forEach(function (m) {
       if (!m) return;
-      routeLandCardsToHome(m);
       if (m.role && messageHasContent(m)) {
         appendMessage(m);
       }
     });
     showWelcomeIfEmpty();
+    injectHomeJourneyCardIntoChat();
     scanLastSyncFromDom();
     syncChipBarVisibility();
     scrollChatToLatest();
@@ -2263,12 +2376,12 @@
       var added = false;
       data.messages.forEach(function (m) {
         if (!m || !m.role) return;
-        routeLandCardsToHome(m);
         if (messageHasContent(m)) {
           if (appendMessage(m)) added = true;
         }
       });
       if (added) {
+        injectHomeJourneyCardIntoChat();
         scanLastSyncFromDom();
         scrollChatToEnd();
       }
@@ -2813,5 +2926,6 @@
   syncChipBarVisibility();
   startTypeHintPlaceholder();
   bindChatScrollBottom();
+  injectHomeJourneyCardIntoChat();
   scrollChatToLatest();
 })();

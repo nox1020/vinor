@@ -819,16 +819,8 @@ def build_limited_ai_quick_prompts(
     me_phone: str = "",
     has_pending_app: bool = False,
 ) -> List[Dict[str, str]]:
-    """چیپ‌های نیت‌محور برای مهمان / کاربر عادی — پیام کوتاه + intent ابزار."""
+    """کیبورد جواب تلگرام برای مهمان / کاربر عادی — حداکثر ۲×۲."""
     out: List[Dict[str, str]] = []
-
-    _ICONS = {
-        "coop_levels": "fa-layer-group",
-        "coop_terms": "fa-percent",
-        "coop_status": "fa-clock",
-        "coop_apply": "fa-user-plus",
-        "find_land": "fa-magnifying-glass",
-    }
 
     def add(label: str, *, prompt: str, intent: str) -> None:
         label = (label or "").strip()
@@ -840,21 +832,17 @@ def build_limited_ai_quick_prompts(
             "label": label,
             "prompt": prompt,
             "intent": intent,
-            "icon": _ICONS.get(intent, "fa-sparkles"),
         })
 
-    add("سطوح همکاری", prompt="سطوح همکاری چیه؟", intent="coop_levels")
-    add("پورسانت", prompt="پورسانت چطوره؟", intent="coop_terms")
-
+    add("همکاری", prompt="سطوح همکاری و پورسانت چطوره؟", intent="coop_levels")
     if has_pending_app:
         add("وضعیت درخواست", prompt="وضعیت درخواست همکاری‌ام چیه؟", intent="coop_status")
     elif (me_phone or "").strip():
         add("ثبت درخواست", prompt="می‌خوام همکار شم", intent="coop_apply")
     else:
         add("شروع همکاری", prompt="می‌خوام همکار شم", intent="coop_apply")
-
     add("پیدا کردن ملک", prompt="یه فایل مناسب می‌خوام", intent="find_land")
-    return out[:4]
+    return out[:3]
 
 
 def build_ai_quick_prompts(
@@ -866,7 +854,7 @@ def build_ai_quick_prompts(
     tx_mode: str = "",
     can_revisit: bool = False,
 ) -> List[Dict[str, str]]:
-    """چیپ‌های نیت‌محور همکار — وابسته به مرحله مأموریت/فروش."""
+    """کیبورد جواب تلگرام همکار — گزینه‌های مرحله ادغام‌شده (حداکثر ۳)."""
     code_s = (code or "").strip()
     title_s = (title or "").strip()
     stage = (stage_label or "").strip()
@@ -877,15 +865,6 @@ def build_ai_quick_prompts(
 
     out: List[Dict[str, str]] = []
 
-    _ICONS = {
-        "next_action": "fa-compass",
-        "release": "fa-check-circle",
-        "deal": "fa-handshake",
-        "visit": "fa-calendar-days",
-        "complete_visit": "fa-map-marker-alt",
-        "marketing": "fa-bullhorn",
-    }
-
     def add(label: str, *, prompt: str, intent: str) -> None:
         label = (label or "").strip()
         prompt = (prompt or "").strip()
@@ -895,15 +874,13 @@ def build_ai_quick_prompts(
                 "label": label,
                 "prompt": prompt,
                 "intent": intent,
-                "icon": _ICONS.get(intent, "fa-sparkles"),
             })
-
-    add("قدم بعدی", prompt="قدم بعدی‌م چیه؟", intent="next_action")
 
     if mode in ("deal_pending", "release") or stage == "در حال معامله":
         add("بستن معامله", prompt=f"{head}: معامله رو ببند", intent="release")
+        add("قدم بعدی", prompt="قدم بعدی‌م چیه؟", intent="next_action")
     elif mode in ("visit_pending", "visit_done_pending", "visit_commission_pending", "status"):
-        add("وضعیت", prompt=f"{head}: وضعیتش چیه؟", intent="next_action")
+        add("وضعیت فایل", prompt=f"{head}: وضعیتش چیه؟", intent="next_action")
     elif mode == "deal" or stage in ("معامله یا بازدید مجدد", "بازدید انجام شد"):
         add("ثبت معامله", prompt=f"{head}: معامله ثبت کن", intent="deal")
         if can_revisit:
@@ -912,18 +889,21 @@ def build_ai_quick_prompts(
                 prompt=f"{head}: بازدید مجدد را یکی‌یکی شروع کن",
                 intent="visit",
             )
+        else:
+            add("قدم بعدی", prompt="قدم بعدی‌م چیه؟", intent="next_action")
     elif mode == "complete_visit" or mode == "visit_done" or stage == "بازدید تأییدشد":
         add("بازدید انجام شد", prompt=f"{head}: بازدید انجام شد", intent="complete_visit")
+        add("قدم بعدی", prompt="قدم بعدی‌م چیه؟", intent="next_action")
     elif mode == "visit":
         add("ثبت بازدید", prompt=f"{head}: بازدید را یکی‌یکی ثبت کن", intent="visit")
-        add("آگهی", prompt=f"{head}: متن دیوار و اینستا بده", intent="marketing")
+        add("متن آگهی", prompt=f"{head}: متن دیوار و اینستا بده", intent="marketing")
     elif mode == "marketing" or stage in ("بازاریابی", "بازاریابی مجدد") or is_mission:
-        add("آگهی دیوار", prompt=f"{head}: متن آگهی بده", intent="marketing")
+        add("متن آگهی", prompt=f"{head}: متن آگهی بده", intent="marketing")
         add("ثبت بازدید", prompt=f"{head}: بازدید را یکی‌یکی ثبت کن", intent="visit")
     else:
         add("ثبت بازدید", prompt=f"{head}: بازدید را یکی‌یکی ثبت کن", intent="visit")
+        add("قدم بعدی", prompt="قدم بعدی‌م چیه؟", intent="next_action")
 
-    # بدون تکرار intent یکسان پشت‌سرهم
     seen: set[str] = set()
     deduped: List[Dict[str, str]] = []
     for item in out:
@@ -932,7 +912,7 @@ def build_ai_quick_prompts(
             continue
         seen.add(key)
         deduped.append(item)
-    return deduped[:4]
+    return deduped[:3]
 
 
 def draft_listing_copy(land: Dict[str, Any], *, channel: str = "both") -> Dict[str, str]:

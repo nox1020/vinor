@@ -1,14 +1,14 @@
 ﻿{% extends 'express_partner/base.html' %}
-{% block title %}{{ seo_title | default('ظ¾ظ†ظ„ ظ‡ظ…ع©ط§ط±غŒ ظˆغŒظ†ظˆط± ط§ع©ط³ظ¾ط±ط³') }}{% endblock %}
+{% block title %}{{ seo_title | default('پنل همکاری وینور اکسپرس') }}{% endblock %}
 {% block head %}
   {{ super() }}
-  <meta name="description" content="{{ seo_description | default('ظپط§غŒظ„â€Œظ‡ط§غŒ ط§ع©ط³ظ¾ط±ط³ ظˆغŒظ†ظˆط± | ط®ط±غŒط¯ ظˆ ظپط±ظˆط´ ظ…ظ„ع© ظˆ ط²ظ…غŒظ†') }}">
+  <meta name="description" content="{{ seo_description | default('فایل‌های اکسپرس وینور | خرید و فروش ملک و زمین') }}">
   {% if canonical_url %}
   <link rel="canonical" href="{{ canonical_url }}">
   {% endif %}
   <meta property="og:type" content="website">
-  <meta property="og:title" content="{{ seo_title | default('ظپط§غŒظ„â€Œظ‡ط§غŒ ط§ع©ط³ظ¾ط±ط³ ظˆغŒظ†ظˆط±') }}">
-  <meta property="og:description" content="{{ seo_description | default('ظ„غŒط³طھ ظپط§غŒظ„â€Œظ‡ط§غŒ ط§ع©ط³ظ¾ط±ط³ ظˆغŒظ†ظˆط± ط¨ط±ط§غŒ ط®ط±غŒط¯ ظˆ ظپط±ظˆط´ ظ…ظ„ع©') }}">
+  <meta property="og:title" content="{{ seo_title | default('فایل‌های اکسپرس وینور') }}">
+  <meta property="og:description" content="{{ seo_description | default('لیست فایل‌های اکسپرس وینور برای خرید و فروش ملک') }}">
 {% endblock %}
 {% block content %}
   {% set fq = request.args.get('q', '') %}

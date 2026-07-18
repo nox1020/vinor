@@ -3546,24 +3546,8 @@ def _crm_ui_or_404():
 @express_partner_bp.get('/customers', endpoint='customers')
 @require_partner_access()
 def customers_page():
-    """Phase 1 CRM — مشتریان من (فلگ VINOR_CRM_* پیش‌فرض خاموش)."""
-    _crm_ui_or_404()
-    me_phone = (session.get('user_phone') or '').strip()
-    from app.crm.config import VISIT_CALL_TARGET
-    from .customers import partner_customers_view
-
-    flash_msg = (request.args.get('msg') or '').strip()
-    flash_ok = (request.args.get('ok') or '1').strip() != '0'
-    return render_template(
-        'express_partner/customers.html',
-        me_phone=me_phone,
-        customers=partner_customers_view(me_phone),
-        visit_call_target=VISIT_CALL_TARGET,
-        flash_msg=flash_msg,
-        flash_ok=flash_ok,
-        hide_header=True,
-        bottom_nav_active='profile',
-    )
+    """صفحهٔ قدیمی مشتریان — گزارش زنده جایگزین شده."""
+    return redirect(url_for('express_partner.settings'))
 
 
 @express_partner_bp.post('/customers', endpoint='customers_create')
@@ -3659,56 +3643,8 @@ def _commercial_ui_or_404():
 @express_partner_bp.get('/negotiations', endpoint='negotiations')
 @require_partner_access()
 def negotiations_page():
-    """Phase 3 Commercial — مذاکرات همکار (فلگ پیش‌فرض خاموش)."""
-    _commercial_ui_or_404()
-    me_phone = (session.get('user_phone') or '').strip()
-    from app.commercial.service import (
-        list_partner_negotiations,
-        list_partner_offers,
-        list_partner_reservations,
-    )
-
-    negs = list_partner_negotiations(me_phone)
-    offers = list_partner_offers(me_phone)
-    by_neg: dict = {}
-    for o in offers:
-        by_neg.setdefault(o.negotiation_id, []).append({
-            'id': o.id,
-            'amount': o.amount,
-            'status': o.status,
-            'terms': o.terms,
-        })
-    items = []
-    for n in negs:
-        items.append({
-            'id': n.id,
-            'land_code': n.land_code,
-            'buyer_phone': n.buyer_phone,
-            'status': n.status,
-            'source': n.source,
-            'offers': by_neg.get(n.id, []),
-        })
-    reservations = [
-        {
-            'id': r.id,
-            'land_code': r.land_code,
-            'status': r.status,
-            'expires_at': r.expires_at,
-        }
-        for r in list_partner_reservations(me_phone)
-    ]
-    flash_msg = (request.args.get('msg') or '').strip()
-    flash_ok = (request.args.get('ok') or '1').strip() != '0'
-    return render_template(
-        'express_partner/negotiations.html',
-        me_phone=me_phone,
-        items=items,
-        reservations=reservations,
-        flash_msg=flash_msg,
-        flash_ok=flash_ok,
-        hide_header=True,
-        bottom_nav_active='profile',
-    )
+    """صفحهٔ قدیمی مذاکرات — گزارش زنده جایگزین شده."""
+    return redirect(url_for('express_partner.settings'))
 
 
 @express_partner_bp.post('/negotiations', endpoint='negotiations_create')
@@ -3823,64 +3759,8 @@ def _closing_ui_or_404():
 @express_partner_bp.get('/deals', endpoint='deals')
 @require_partner_access()
 def deals_page():
-    """Phase 4 Closing — معاملات همکار (Deal / Contract / Payment / Settlement)."""
-    _closing_ui_or_404()
-    me_phone = (session.get('user_phone') or '').strip()
-    from app.closing.service import (
-        list_deal_contracts,
-        list_deal_payments,
-        list_deal_settlements,
-        list_partner_deals,
-    )
-
-    deals = list_partner_deals(me_phone)
-    items = []
-    for d in deals:
-        items.append({
-            'id': d.id,
-            'land_code': d.land_code,
-            'buyer_phone': d.buyer_phone,
-            'status': d.status,
-            'sale_amount': d.sale_amount,
-            'commission_id': d.commission_id,
-            'assignment_status': d.assignment_status,
-            'contracts': [
-                {
-                    'id': c.id,
-                    'title': c.title,
-                    'document_status': c.document_status,
-                    'document_ref': c.document_ref,
-                }
-                for c in list_deal_contracts(d.id)
-            ],
-            'payments': [
-                {
-                    'id': p.id,
-                    'amount': p.amount,
-                    'status': p.status,
-                    'milestone_label': p.milestone_label,
-                    'due_at': p.due_at,
-                }
-                for p in list_deal_payments(d.id)
-            ],
-            'settlements': [
-                {
-                    'id': s.id,
-                    'status': s.status,
-                    'total_amount': s.total_amount,
-                    'withdrawal_id': s.withdrawal_id,
-                }
-                for s in list_deal_settlements(d.id)
-            ],
-        })
-    flash_ok = request.args.get('ok') == '1'
-    flash_msg = (request.args.get('msg') or '').strip()
-    return render_template(
-        'express_partner/deals.html',
-        items=items,
-        flash_ok=flash_ok,
-        flash_msg=flash_msg,
-    )
+    """صفحهٔ قدیمی معاملات — گزارش زنده جایگزین شده."""
+    return redirect(url_for('express_partner.settings'))
 
 
 @express_partner_bp.post('/deals/<deal_id>/contracts', endpoint='deal_contract_create')
@@ -4025,25 +3905,8 @@ def _integration_ui_or_404():
 @express_partner_bp.get('/journey', endpoint='journey')
 @require_partner_access()
 def journey_page():
-    """Phase 6 Integration — تایم‌لاین یکپارچه Lead→Settlement."""
-    _integration_ui_or_404()
-    me_phone = (session.get('user_phone') or '').strip()
-    land_code = (request.args.get('land_code') or '').strip()
-    from app.integration.service import journey_as_dicts
-
-    events = journey_as_dicts(
-        partner_phone=me_phone,
-        land_code=land_code,
-        limit=200,
-    )
-    return render_template(
-        'express_partner/journey.html',
-        me_phone=me_phone,
-        land_code=land_code,
-        events=events,
-        hide_header=True,
-        bottom_nav_active='profile',
-    )
+    """صفحهٔ قدیمی مسیر معامله — گزارش زنده جایگزین شده."""
+    return redirect(url_for('express_partner.settings'))
 
 
 @express_partner_bp.post('/api/favorites/cards')
@@ -7122,79 +6985,160 @@ def _profile_edit_json(profile: Dict[str, Any], me_phone: str) -> Dict[str, Any]
     }
 
 
+def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
+    """خلاصه زنده عملکرد همکار برای صفحه گزارش."""
+    ph = _canonical_partner_phone(me_phone or '')
+    is_approved = _is_partner_approved(profile)
+    is_special = _is_partner_special(profile) if is_approved else False
+    me_name = (str((profile or {}).get('name') or '')).strip() if isinstance(profile, dict) else ''
+    partner_name = me_name or (_partner_display_name(ph) if ph else '')
+
+    my_comms = _commissions_for_phone(ph) if ph else []
+    comm_stats = _partner_commission_stats(ph, my_comms) if ph else {}
+    visit_rows = load_express_visit_requests() or []
+    if not isinstance(visit_rows, list):
+        visit_rows = []
+
+    visits_open = 0
+    if ph:
+        open_visit_statuses = frozenset({PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS})
+        visits_open = sum(
+            1
+            for row in visit_rows
+            if isinstance(row, dict)
+            and str(row.get('partner_phone') or '').strip() == ph
+            and str(row.get('status') or '').strip() in open_visit_statuses
+        )
+
+    open_files = 0
+    if ph:
+        try:
+            assigned_lands, _ = _build_partner_dashboard_lands(ph, is_approved)
+            open_files = sum(
+                1
+                for L in (assigned_lands or [])
+                if isinstance(L, dict) and L.get('_assignment_id')
+            )
+        except Exception:
+            open_files = 0
+
+    deals_open = 0
+    if ph and my_comms:
+        for c in my_comms:
+            if not isinstance(c, dict):
+                continue
+            st = str(c.get('status') or '').strip().lower()
+            if st != 'pending':
+                continue
+            try:
+                if commission_is_deal(c):
+                    deals_open += 1
+            except Exception:
+                deals_open += 1
+
+    mission_out: Dict[str, Any] = {
+        'active': False,
+        'code': '',
+        'title': '',
+        'stage_label': '',
+        'thread_id': '',
+    }
+    if ph and is_approved:
+        try:
+            from app.express_partner.partner_missions import get_active_mission
+
+            mission = get_active_mission(ph)
+        except Exception:
+            mission = None
+        if mission:
+            code = str(mission.get('land_code') or '').strip()
+            title = ''
+            stage_label = str(mission.get('stage_label') or '').strip()
+            if code:
+                try:
+                    for L in (load_express_lands_cached() or []):
+                        if isinstance(L, dict) and str(L.get('code') or '').strip() == code:
+                            title = str(L.get('title') or '').strip()
+                            break
+                except Exception:
+                    title = ''
+                if not stage_label:
+                    try:
+                        funnel = _home_funnel_for_land(
+                            ph,
+                            {'code': code},
+                            visit_rows=visit_rows,
+                            commissions=my_comms if isinstance(my_comms, list) else [],
+                        )
+                        stage_label = str((funnel or {}).get('stage_label') or '').strip()
+                    except Exception:
+                        stage_label = ''
+            mission_out = {
+                'active': True,
+                'code': code,
+                'title': title,
+                'stage_label': stage_label or 'فعال',
+                'thread_id': str(mission.get('thread_id') or '').strip(),
+            }
+
+    updated_at = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    return {
+        'ok': True,
+        'updated_at': updated_at,
+        'me_phone': ph,
+        'me_name': me_name,
+        'partner_name': partner_name,
+        'is_approved': is_approved,
+        'is_special': is_special,
+        'role_label': (
+            'همکار ویژه' if is_special else ('همکار تأییدشده' if is_approved else 'کاربر عادی')
+        ),
+        'kpis': {
+            'open_files': int(open_files),
+            'visits_open': int(visits_open),
+            'deals_open': int(deals_open),
+            'withdrawable_balance': int(comm_stats.get('withdrawable_balance') or 0),
+            'pending_commission': int(comm_stats.get('pending_amount') or 0),
+            'approved_commission': int(comm_stats.get('approved_amount') or 0),
+        },
+        'mission': mission_out,
+    }
+
+
 @express_partner_bp.route('/settings', methods=['GET'], endpoint='settings')
 @require_partner_access(allow_pending=True)
 def settings_page():
-    """صفحه تنظیمات حساب — استایل شبیه ChatGPT."""
+    """گزارش زنده همکار — جایگزین منوی صفحات جداگانه."""
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     partners = load_express_partners() or []
     profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
-    me_name = (profile.get('name') or '').strip()
-    partner_name = me_name or _partner_display_name(me_phone)
-    is_approved = _is_partner_approved(profile)
-    is_special = _is_partner_special(profile) if is_approved else False
-    crm_ui = False
-    try:
-        from app.crm.config import crm_ui_enabled
-        crm_ui = bool(crm_ui_enabled())
-    except Exception:
-        crm_ui = False
-    commercial_ui = False
-    try:
-        from app.commercial.config import commercial_ui_enabled
-        commercial_ui = bool(commercial_ui_enabled())
-    except Exception:
-        commercial_ui = False
-    closing_ui = False
-    try:
-        from app.closing.config import closing_ui_enabled
-        closing_ui = bool(closing_ui_enabled())
-    except Exception:
-        closing_ui = False
-    integration_ui = False
-    try:
-        from app.integration.config import integration_ui_enabled
-        integration_ui = bool(integration_ui_enabled())
-    except Exception:
-        integration_ui = False
-    seller_portal = False
-    owner_portal = False
-    try:
-        from app.roles.config import (
-            roles_owner_portal_enabled,
-            roles_seller_portal_enabled,
-            roles_ui_enabled,
-        )
-        if roles_ui_enabled():
-            seller_portal = bool(roles_seller_portal_enabled())
-            owner_portal = bool(roles_owner_portal_enabled())
-    except Exception:
-        seller_portal = False
-        owner_portal = False
-    prefer_new_nav = False
-    try:
-        from app.hardening.deprecate import prefer_new_partner_nav_order
-        prefer_new_nav = bool(prefer_new_partner_nav_order())
-    except Exception:
-        prefer_new_nav = False
+    report = _build_partner_report_snapshot(me_phone, profile)
     return render_template(
         'express_partner/settings.html',
         me_phone=me_phone,
-        me_name=me_name,
-        partner_name=partner_name,
+        me_name=report.get('me_name') or '',
+        partner_name=report.get('partner_name') or '',
         profile=profile,
-        is_approved=is_approved,
-        is_special=is_special,
-        crm_ui_enabled=crm_ui,
-        commercial_ui_enabled=commercial_ui,
-        closing_ui_enabled=closing_ui,
-        integration_ui_enabled=integration_ui,
-        seller_portal_enabled=seller_portal,
-        owner_portal_enabled=owner_portal,
-        prefer_new_partner_nav=prefer_new_nav,
+        is_approved=bool(report.get('is_approved')),
+        is_special=bool(report.get('is_special')),
+        report=report,
         hide_header=True,
         bottom_nav_active='profile',
+        seo_title='گزارش | وینور اکسپرس',
     )
+
+
+@express_partner_bp.get('/settings/data', endpoint='settings_data')
+@require_partner_access(allow_pending=True, json_response=True)
+def settings_data():
+    """JSON گزارش زنده برای polling صفحه گزارش."""
+    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
+    profile = getattr(g, 'express_partner_profile', None)
+    if not isinstance(profile, dict):
+        partners = load_express_partners() or []
+        profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
+    report = _build_partner_report_snapshot(me_phone, profile)
+    return jsonify(report)
 
 
 @express_partner_bp.route('/profile/edit', methods=['GET', 'POST'], endpoint='profile_edit')

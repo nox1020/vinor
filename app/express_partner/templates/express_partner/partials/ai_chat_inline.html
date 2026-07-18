@@ -15,50 +15,37 @@
     min-height: 0;
     height: 100%;
   }
-  /* کارت‌های داشبورد ثابت بالا؛ فقط چت اسکرول می‌شود */
-  #homeDashboardPage.home-dashboard-page--ai .vn-home-top {
-    flex-shrink: 0;
+  /* خانهٔ AI = فقط چت؛ نوار بالای داشبورد خاموش */
+  #homeDashboardPage.home-dashboard-page--ai .vn-home-top,
+  #homeDashboardPage.home-dashboard-page--ai #vnHomeLandsChatSource {
+    display: none !important;
+  }
+  #aiHomeInline #aiMessages .ai-msg-cards--journey {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+  }
+  #aiHomeInline #aiMessages .vn-journey-card {
+    margin: 0.1rem 0 0.35rem;
+  }
+  #aiHomeInline #aiMessages .ai-msg-wrap[data-vn-journey-inject="1"] .ai-msg-avatar,
+  #aiHomeInline #aiMessages .ai-msg-wrap[data-vn-lands-inject="1"] .ai-msg-avatar {
+    display: none;
+  }
+  #aiHomeInline #aiMessages .ai-msg-wrap[data-vn-journey-inject="1"] .ai-msg-body,
+  #aiHomeInline #aiMessages .ai-msg-wrap[data-vn-lands-inject="1"] .ai-msg-body {
+    width: 100%;
+    max-width: 100%;
+  }
+  #aiHomeInline #aiMessages .vn-home-lands {
+    border-bottom: 0;
+    background: transparent;
     max-height: none;
-    overflow: visible;
-    background: #000;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    z-index: 1;
-    pointer-events: auto;
-  }
-  /* نوار ملک عمومی: فشرده، جدا از داک چت */
-  #homeDashboardPage.home-dashboard-page--ai .vn-home-lands {
-    position: relative;
-    z-index: 6;
-    max-height: 12.5rem;
-    overflow: hidden;
-    pointer-events: auto;
-  }
-  #homeDashboardPage.home-dashboard-page--ai .vn-home-lands__track {
-    max-height: 10.25rem;
-  }
-  /* کنار کارت مأموریت: نوار پیشنهاد فشرده‌تر تا صفحه شلوغ نشود */
-  #homeDashboardPage.home-dashboard-page--ai.vn-home-has-land-suggest .vn-home-lands,
-  #homeDashboardPage.home-dashboard-page--ai:has([data-vn-journey-card]):has(#homePublicLandsCarousel[data-has-lands="1"]) .vn-home-lands {
-    max-height: 7.75rem;
-    padding-top: 0.35rem;
-    padding-bottom: 0.2rem;
-  }
-  #homeDashboardPage.home-dashboard-page--ai.vn-home-has-land-suggest .vn-home-lands__head,
-  #homeDashboardPage.home-dashboard-page--ai:has([data-vn-journey-card]):has(#homePublicLandsCarousel[data-has-lands="1"]) .vn-home-lands__head {
-    padding-bottom: 0.2rem;
-  }
-  #homeDashboardPage.home-dashboard-page--ai.vn-home-has-land-suggest .vn-home-lands__track,
-  #homeDashboardPage.home-dashboard-page--ai:has([data-vn-journey-card]):has(#homePublicLandsCarousel[data-has-lands="1"]) .vn-home-lands__track {
-    max-height: 6.35rem;
+    padding-top: 0.15rem;
     padding-bottom: 0.25rem;
   }
-  #homeDashboardPage.home-dashboard-page--ai.vn-home-has-land-suggest .vn-home-lands__slot,
-  #homeDashboardPage.home-dashboard-page--ai:has([data-vn-journey-card]):has(#homePublicLandsCarousel[data-has-lands="1"]) .vn-home-lands__slot {
-    width: min(14.5rem, 70vw);
-  }
-  #homeDashboardPage.home-dashboard-page--ai.vn-home-has-land-suggest .vn-home-lands__slot .vinor-premium-card-mobile,
-  #homeDashboardPage.home-dashboard-page--ai:has([data-vn-journey-card]):has(#homePublicLandsCarousel[data-has-lands="1"]) .vn-home-lands__slot .vinor-premium-card-mobile {
-    min-height: 5.75rem;
+  #aiHomeInline #aiMessages .vn-home-lands__track {
+    max-height: 11rem;
   }
   #homeDashboardPage.home-dashboard-page--ai .vn-home-scroll {
     flex: 1 1 auto;
@@ -168,7 +155,8 @@
     pointer-events: auto;
   }
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__suggestions {
-    margin-bottom: 0.55rem;
+    margin-bottom: 0.45rem;
+    padding-inline: 0.05rem;
   }
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__suggestions[hidden] {
     display: none !important;

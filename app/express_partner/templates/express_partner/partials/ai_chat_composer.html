@@ -17,14 +17,14 @@
     margin-inline: auto;
   }
 
-  /* پیشنهادها — ردیف عمودی با آیکن (مثل ChatGPT) */
+  /* پیشنهادها — کیبورد جواب تلگرام (ردیف ادغام‌شده) */
   .ai-composer--gpt .ai-composer__suggestions {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     align-items: stretch;
-    gap: 0.35rem;
-    margin: 0 0 1rem;
-    padding: 0 0.5rem;
+    gap: 0.4rem;
+    margin: 0 0 0.55rem;
+    padding: 0;
     max-width: 100%;
     background: transparent;
   }
@@ -32,53 +32,56 @@
     display: none !important;
   }
   .ai-composer--gpt .ai-composer__chip {
-    display: flex;
+    display: inline-flex;
+    flex: 1 1 calc(50% - 0.2rem);
     flex-direction: row;
     align-items: center;
-    justify-content: flex-start;
-    gap: 0.85rem;
-    width: 100%;
-    max-width: none;
+    justify-content: center;
+    gap: 0;
+    min-width: calc(50% - 0.2rem);
+    max-width: 100%;
     margin: 0;
-    padding: 0.7rem 0.35rem;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    color: #f5f5f5;
-    font-size: 0.9375rem;
-    font-weight: 400;
-    line-height: 1.35;
+    padding: 0.62rem 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.7rem;
+    background: #1e2c3a;
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25;
     letter-spacing: 0;
-    white-space: normal;
-    text-align: start;
+    white-space: nowrap;
+    text-align: center;
     text-decoration: none;
     box-shadow: none;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    transition: opacity 0.12s ease;
+    transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.1s ease;
   }
-  a.ai-composer__chip { color: #f5f5f5; }
-  .ai-composer--gpt .ai-composer__chip:hover,
+  /* تک‌دکمه یا فرد آخر → تمام‌عرض مثل تلگرام */
+  .ai-composer--gpt .ai-composer__suggestions[data-chip-count="1"] .ai-composer__chip,
+  .ai-composer--gpt .ai-composer__chip:last-child:nth-child(odd) {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+  a.ai-composer__chip { color: #fff; }
+  .ai-composer--gpt .ai-composer__chip:hover {
+    background: #253648;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
   .ai-composer--gpt .ai-composer__chip:active {
-    background: transparent;
-    border-color: transparent;
-    transform: none;
-    opacity: 0.82;
+    background: #2b4054;
+    transform: scale(0.985);
   }
   .ai-composer--gpt .ai-composer__chip-icon {
-    flex-shrink: 0;
-    width: 1.35rem;
-    height: 1.35rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 1rem;
+    display: none !important;
   }
   .ai-composer--gpt .ai-composer__chip-label {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
-    text-align: start;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
   }
 
   /* پیل ورودی */
@@ -229,16 +232,19 @@
   <div class="ai-composer__inner">
     {% if chat_mode == 'home-inline' and ai_quick_prompts %}
     {% set _user_msgs = chat_messages|default([])|selectattr('role', 'equalto', 'user')|list %}
-    <div class="ai-composer__suggestions" role="list" aria-label="پیشنهادهای هوشمند" data-ai-chip-bar{% if _user_msgs %} hidden{% endif %}>
+    <div class="ai-composer__suggestions"
+         role="list"
+         aria-label="پیشنهادهای سریع"
+         data-ai-chip-bar
+         data-chip-count="{{ ai_quick_prompts|length }}"
+         {% if _user_msgs %} hidden{% endif %}>
       {% for item in ai_quick_prompts %}
-      {% set _icon = item.icon|default('fa-sparkles') %}
       {% if item.href %}
       <a href="{{ item.href }}"
          class="ai-composer__chip"
          role="listitem"
          data-vinor-express-nav
          title="{{ item.label|e }}">
-        <span class="ai-composer__chip-icon" aria-hidden="true"><i class="fas {{ _icon }}"></i></span>
         <span class="ai-composer__chip-label">{{ item.label }}</span>
       </a>
       {% else %}
@@ -248,7 +254,6 @@
               data-ai-quick-prompt="{{ item.prompt|e }}"
               {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
               title="{{ item.label|e }}">
-        <span class="ai-composer__chip-icon" aria-hidden="true"><i class="fas {{ _icon }}"></i></span>
         <span class="ai-composer__chip-label">{{ item.label }}</span>
       </button>
       {% endif %}

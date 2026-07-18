@@ -1,5 +1,9 @@
 ﻿{% extends 'express_partner/base.html' %}
-{% block title %}ط¯ط§ط´ط¨ظˆط±ط¯ | ظˆغŒظ†ظˆط± ط§ع©ط³ظ¾ط±ط³{% endblock %}
+{% block title %}{{ seo_title|default('داشبورد | وینور اکسپرس') }}{% endblock %}
+{% block head %}
+  {{ super() }}
+  <meta name="description" content="{{ seo_description|default('مرکز مدیریت روزانه همکار — اقدامات فوری و فایل‌های پیشنهادی.') }}">
+{% endblock %}
 
 {% block content %}
 {% include 'express_partner/partials/home_page_styles.html' %}
@@ -13,12 +17,8 @@
   {% include 'express_partner/partials/ep_header_float_actions.html' %}
 
   <div class="vn-home-shell mx-auto flex w-full max-w-lg flex-col">
-    <div class="vn-home-top">
-
-      {% if home_ai_enabled|default(false) %}
-        {% include 'express_partner/partials/home_public_lands_carousel.html' %}
-      {% endif %}
-
+    {% if not home_ai_enabled|default(false) %}
+    <div class="vn-home-top" data-vn-home-top>
       {% if me_phone and not home_ai_limited|default(false) %}
       {% set card = journey_card or (suggested_files[0] if suggested_files else none) %}
       {% if card %}
@@ -35,6 +35,20 @@
       {% endif %}
       {% endif %}
     </div>
+    {% else %}
+    {# حالت AI: هیچ کارتی بیرون از چت نیست — قالب فقط برای تزریق داخل #aiMessages #}
+    {% set card = journey_card or (suggested_files[0] if suggested_files else none) %}
+    {% if me_phone and not home_ai_limited|default(false) and card %}
+    <template id="vnJourneyChatTpl">
+      {% include 'express_partner/partials/home_journey_card.html' %}
+    </template>
+    {% endif %}
+    {% if home_ai_limited|default(false) %}
+    <div id="vnHomeLandsChatSource" hidden aria-hidden="true">
+      {% include 'express_partner/partials/home_public_lands_carousel.html' %}
+    </div>
+    {% endif %}
+    {% endif %}
 
     <div id="vnHomeScroll" class="vn-home-scroll">
       {% include 'express_partner/partials/ai_chat_inline.html' %}
@@ -267,7 +281,7 @@
 </script>
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=74"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=78"></script>
 <script>
 (function () {
   function syncHomeDockPad() {
