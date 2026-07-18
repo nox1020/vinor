@@ -89,8 +89,6 @@ def coach_tip_for_stage(
     if in_transaction:
         return f"معامله رو از همین چت ببند یا پیگیری کن{por}."
     label = (stage_label or "").strip()
-    if "پورسانت بازدید" in label:
-        return "صبر کن تا پورسانت بازدید تأیید بشه؛ بعد معامله رو از چت ثبت کن."
     if label in ("در انتظار تأیید انجام",) or "تأیید انجام" in label:
         return "منتظر تأیید انجام بازدید باش؛ بعد قدم بعدی رو از چت می‌گی."
     if label in ("معامله یا بازدید مجدد", "بازدید انجام شد"):
@@ -339,19 +337,12 @@ def build_progress_update(
 
     if ev == "visit_completed":
         notif_title = "بازدید توسط ادمین تأیید شد"
-        if visit_commission_pending:
-            chat_body = (
-                f"{notif_title} — {file_bit}.\n"
-                "پورسانت بازدید در انتظار تأیید است.\n"
-                "قدم بعدی: بعد از واریز پورسانت، از همین چت می‌تونی «ثبت معامله» را بزنی."
-            )
-            notif_body = f"{file_bit} تأیید شد؛ پورسانت در انتظار تأیید."
-        else:
-            chat_body = (
-                f"{notif_title} — {file_bit}.\n"
-                "قدم بعدی: از همین چت بگو «ثبت معامله» تا کارت تأیید بیاید."
-            )
-            notif_body = f"{file_bit} تأیید شد؛ از چت معامله را ثبت کن."
+        _ = visit_commission_pending
+        chat_body = (
+            f"{notif_title} — {file_bit}.\n"
+            "قدم بعدی: از همین چت بگو «ثبت معامله» تا کارت تأیید بیاید."
+        )
+        notif_body = f"{file_bit} تأیید شد؛ از چت معامله را ثبت کن."
         return notif_title, chat_body, notif_body
 
     if ev == "deal_started":
@@ -369,7 +360,7 @@ def build_progress_update(
             kind = "پورسانت دعوت"
             is_deal_sale = False
         elif "visit" in ct:
-            kind = "پورسانت بازدید"
+            kind = "پورسانت فروش"
             is_deal_sale = False
         else:
             kind = "پورسانت فروش"
@@ -762,9 +753,8 @@ def enrich_funnel_steps_for_nav(
                 prompt = f"{head}: می‌خوام معامله رو ببندم — کارت تأیید بده."
                 actionable = True
             elif mode == "visit_commission_pending":
-                prompt = (
-                    f"{head}: منتظر تأیید پورسانت بازدید هستم؛ وضعیت و قدم بعدی رو بگو."
-                )
+                # حالت قدیمی — پورسانت بازدید حذف شده؛ مثل deal رفتار کن
+                prompt = deal_prompt
                 actionable = True
             elif can_revisit and mode not in ("deal_pending", "release", "blocked", "hidden"):
                 prompt = (
@@ -782,7 +772,7 @@ def enrich_funnel_steps_for_nav(
                 # مرحلهٔ هنوز نرسیده — قابل‌کلیک برای پرسیدن مسیر، بدون propose_deal
                 prompt = (
                     f"{head}: هنوز به معامله نرسیده‌ام؛ "
-                    "کوتاه بگو الان کدام قدم (بازدید/انجام/پورسانت) مانده."
+                    "کوتاه بگو الان کدام قدم (بازدید/انجام/فروش) مانده."
                 )
                 actionable = True
         else:

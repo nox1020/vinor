@@ -60,20 +60,7 @@
           </form>
         </div>
 
-        {% elif step.needs_action and step.action_kind == 'recreate_commission' %}
-        <div class="mt-3">
-          <form method="post" action="{{ url_for('admin.express_visit_request_recreate_commission', vid=v.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="filter" value="{{ current_filter }}">
-            <button type="submit"
-                    class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">
-              ثبت مجدد پورسانت بازدید
-            </button>
-          </form>
-        </div>
-
-        {% elif step.needs_action and step.action_kind == 'commission' and step.commission_id %}
-        {% set is_deal_comm = (step.key == 'deal_commission') %}
+        {% elif step.needs_action and step.action_kind == 'commission' and step.commission_id and step.key == 'deal_commission' %}
         <div class="mt-3 grid grid-cols-2 gap-2">
           <form method="post" action="{{ url_for('admin.express_commission_approve', cid=step.commission_id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -83,11 +70,11 @@
             <input type="hidden" name="visit_vid" value="{{ v.id }}">
             <button type="submit"
                     class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">
-              {% if is_deal_comm %}تأیید فروش و بستن فایل{% else %}تأیید پورسانت بازدید{% endif %}
+              تأیید فروش و بستن فایل
             </button>
           </form>
           <form method="post" action="{{ url_for('admin.express_commission_reject', cid=step.commission_id) }}"
-                onsubmit="return confirm('{% if is_deal_comm %}فروش رد شود؟{% else %}پورسانت بازدید رد شود؟{% endif %}');">
+                onsubmit="return confirm('فروش رد شود؟');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="filter" value="pending">
             <input type="hidden" name="return_to" value="visit_requests">

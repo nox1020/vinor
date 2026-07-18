@@ -2531,13 +2531,9 @@ def _home_funnel_for_land(
     visit_cancelled = status == CANCELLED_STATUS
     in_tx = assign_st == 'in_transaction' or bool(land.get('_in_transaction'))
     sold = assign_st == 'sold'
-    visit_ready = bool(
-        visit_done
-        and visit_commission_ready_for_deal(commissions, ph, code)
-    )
-    wait_visit_commission = bool(
-        visit_done and visit_commission_required and not visit_ready and not in_tx and not sold
-    )
+    visit_ready = bool(visit_done)
+    wait_visit_commission = False
+    _ = (visit_commission_required, commissions)
 
     # مسیر رسمی مأموریت:
     # ۱) اختصاص — با بودن روی کارت همیشه done
@@ -2574,8 +2570,6 @@ def _home_funnel_for_land(
         if key == 'deal_or_revisit' and state == 'current':
             if in_tx:
                 step_label = 'در حال معامله'
-            elif wait_visit_commission:
-                step_label = 'تأیید پورسانت بازدید'
         steps.append({'key': key, 'label': step_label, 'icon': icon, 'state': state})
 
     current_key = ''
@@ -2590,8 +2584,6 @@ def _home_funnel_for_land(
         stage_label = 'در حال معامله'
     elif visit_cancelled and not visit_done:
         stage_label = 'بازاریابی مجدد'
-    elif wait_visit_commission:
-        stage_label = 'در انتظار تأیید پورسانت بازدید'
     elif visit_done:
         stage_label = 'معامله یا بازدید مجدد'
     elif visit_done_pending:
@@ -5478,32 +5470,17 @@ def _partner_land_tx_payload(
 
 
 def _visit_commission_amount_toman() -> int:
-    try:
-        settings = load_settings(current_app) or {}
-        return max(0, int(settings.get('visit_commission_amount_toman') or 0))
-    except Exception:
-        return 0
+    """پورسانت بازدید حذف شده — همیشه صفر."""
+    return 0
 
 
 def _has_visit_commission_record(commissions: List[Dict[str, Any]], phone: str, code: str) -> bool:
-    ph = (phone or '').strip()
-    ck = str(code or '').strip()
-    if not ph or not ck:
-        return False
-    for c in commissions or []:
-        if not isinstance(c, dict):
-            continue
-        if str(c.get('partner_phone') or '').strip() != ph:
-            continue
-        if str(c.get('land_code') or '').strip() != ck:
-            continue
-        if commission_is_visit(c) and str(c.get('status') or '').strip().lower() in ('pending', 'approved', 'paid'):
-            return True
     return False
 
 
 def _visit_commission_required_for(commissions: List[Dict[str, Any]], phone: str, code: str) -> bool:
-    return _visit_commission_amount_toman() > 0 or _has_visit_commission_record(commissions, phone, code)
+    """پورسانت بازدید دیگر پیش‌نیاز معامله نیست."""
+    return False
 
 
 def _request_visit_field(name: str, payload: Dict[str, Any] | None = None) -> str:
@@ -6031,19 +6008,11 @@ def mark_in_transaction(code: str):
             commissions_for_visit = load_express_commissions() or []
             if not isinstance(commissions_for_visit, list):
                 commissions_for_visit = []
-            visit_commission_required = _visit_commission_required_for(commissions_for_visit, me_phone, code)
             if not completed_visit:
                 return _mark_in_transaction_finish(
                     code,
                     success=False,
                     message='برای ثبت درخواست معامله، ابتدا بازدید را انجام‌شده ثبت کنید.',
-                    category='error',
-                )
-            if visit_commission_required and not visit_commission_ready_for_deal(commissions_for_visit, me_phone, code):
-                return _mark_in_transaction_finish(
-                    code,
-                    success=False,
-                    message='برای ثبت درخواست معامله، ابتدا پورسانت بازدید باید توسط ادمین تأیید و به کیف پول شما اضافه شود.',
                     category='error',
                 )
             # هیچ‌کس معامله نکرده، این همکار می‌تواند معامله کند
@@ -6801,21 +6770,6 @@ def special_visit_action(vid: str, action: str):
         return redirect(url_for('express_partner.special_visit_inbox'))
 
     act_l = str(action or '').strip().lower()
-    visit_commission_pending = False
-    if rec and act_l == 'complete' and err not in ('unchanged', 'note_updated'):
-        try:
-            from .commissions_flow import ensure_visit_commission_after_visit_confirm
-
-            if ensure_visit_commission_after_visit_confirm(rec):
-                flash('پورسانت بازدید در صف تأیید ثبت شد.', 'success')
-            try:
-                visit_commission_pending = _visit_commission_amount_toman() > 0
-            except Exception:
-                visit_commission_pending = False
-        except Exception:
-            current_app.logger.exception(
-                'special visit commission create failed id=%s', vid
-            )
 
     if rec and err not in ('unchanged',):
         new_status = str(rec.get('status') or '')
@@ -6829,11 +6783,7 @@ def special_visit_action(vid: str, action: str):
                     land_title=str(rec.get('land_title') or ''),
                     visit_date=str(rec.get('visit_date') or ''),
                     reference_id=str(rec.get('id') or ''),
-                    visit_commission_pending=(
-                        visit_commission_pending
-                        if sms_event == 'visit_completed'
-                        else False
-                    ),
+                    visit_commission_pending=False,
                 )
             except Exception:
                 current_app.logger.exception(
@@ -7081,6 +7031,104 @@ def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
                 'thread_id': str(mission.get('thread_id') or '').strip(),
             }
 
+    role_label = (
+        'همکار ویژه' if is_special else ('همکار تأییدشده' if is_approved else 'کاربر عادی')
+    )
+    city = (str((profile or {}).get('city') or '')).strip() if isinstance(profile, dict) else ''
+    bio = (str((profile or {}).get('bio') or '')).strip() if isinstance(profile, dict) else ''
+    birth_date = (
+        str((profile or {}).get('birth_date') or '').strip() if isinstance(profile, dict) else ''
+    )
+    withdrawable = int(comm_stats.get('withdrawable_balance') or 0)
+    pending_comm = int(comm_stats.get('pending_amount') or 0)
+    approved_comm = int(comm_stats.get('approved_amount') or 0)
+
+    # خلاصهٔ متنی مثل Memory Summary در ChatGPT
+    summary_bits: List[str] = []
+    display = partner_name or 'همکار'
+    summary_bits.append(f'{display}، {role_label}.')
+    if city:
+        summary_bits.append(f'فعال در {city}.')
+    if mission_out.get('active') and mission_out.get('code'):
+        stage = mission_out.get('stage_label') or 'فعال'
+        summary_bits.append(
+            f'مأموریت جاری روی فایل {mission_out["code"]} ({stage}).'
+        )
+    else:
+        summary_bits.append('الان مأموریت فعالی ندارد.')
+    summary_bits.append(
+        f'{open_files} فایل باز، {visits_open} بازدید جاری، {deals_open} معامله جاری.'
+    )
+    if withdrawable or pending_comm or approved_comm:
+        summary_bits.append(
+            f'موجودی قابل برداشت {withdrawable:,} تومان؛ '
+            f'در انتظار {pending_comm:,}؛ تأییدشده {approved_comm:,}.'
+            .replace(',', '٬')
+        )
+    if bio:
+        summary_bits.append(bio[:160] + ('…' if len(bio) > 160 else ''))
+
+    def _mem(
+        mid: str,
+        category: str,
+        text: str,
+        *,
+        href: str = '',
+        live_key: str = '',
+    ) -> Dict[str, str]:
+        return {
+            'id': mid,
+            'category': category,
+            'text': text,
+            'href': href,
+            'live_key': live_key,
+        }
+
+    memory_items: List[Dict[str, str]] = []
+    if partner_name:
+        memory_items.append(_mem('name', 'پروفایل', f'نام: {partner_name}', href='/express/partner/profile/edit'))
+    if ph:
+        memory_items.append(_mem('phone', 'پروفایل', f'موبایل: {ph}'))
+    memory_items.append(_mem('role', 'پروفایل', f'نقش: {role_label}', live_key='role_label'))
+    if city:
+        memory_items.append(_mem('city', 'پروفایل', f'شهر: {city}', href='/express/partner/profile/edit'))
+    if birth_date:
+        memory_items.append(_mem('birth', 'پروفایل', f'تاریخ تولد: {birth_date}', href='/express/partner/profile/edit'))
+    if bio:
+        memory_items.append(_mem('bio', 'پروفایل', f'درباره: {bio}', href='/express/partner/profile/edit'))
+
+    if mission_out.get('active'):
+        mtxt = f"مأموریت فعال: فایل {mission_out.get('code') or '—'}"
+        if mission_out.get('stage_label'):
+            mtxt += f" — {mission_out['stage_label']}"
+        if mission_out.get('title'):
+            mtxt += f" ({mission_out['title']})"
+        memory_items.append(_mem('mission', 'کار جاری', mtxt, href='/express/partner/home', live_key='mission'))
+    else:
+        memory_items.append(
+            _mem('mission', 'کار جاری', 'مأموریت فعالی نیست — از چت خانه ادامه بده', href='/express/partner/home', live_key='mission')
+        )
+
+    memory_items.append(
+        _mem('open_files', 'عملکرد', f'فایل‌های باز: {open_files}', live_key='open_files')
+    )
+    memory_items.append(
+        _mem('visits_open', 'عملکرد', f'بازدیدهای جاری: {visits_open}', live_key='visits_open')
+    )
+    memory_items.append(
+        _mem('deals_open', 'عملکرد', f'معاملات جاری: {deals_open}', live_key='deals_open')
+    )
+    memory_items.append(
+        _mem(
+            'wallet',
+            'کیف پول',
+            f'قابل برداشت {withdrawable:,} تومان · در انتظار {pending_comm:,} · تأییدشده {approved_comm:,}'
+            .replace(',', '٬'),
+            href='/express/partner/commissions',
+            live_key='wallet',
+        )
+    )
+
     updated_at = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     return {
         'ok': True,
@@ -7090,16 +7138,21 @@ def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
         'partner_name': partner_name,
         'is_approved': is_approved,
         'is_special': is_special,
-        'role_label': (
-            'همکار ویژه' if is_special else ('همکار تأییدشده' if is_approved else 'کاربر عادی')
-        ),
+        'role_label': role_label,
+        'profile': {
+            'city': city,
+            'bio': bio,
+            'birth_date': birth_date,
+        },
+        'summary': ' '.join(summary_bits).strip(),
+        'memory_items': memory_items,
         'kpis': {
             'open_files': int(open_files),
             'visits_open': int(visits_open),
             'deals_open': int(deals_open),
-            'withdrawable_balance': int(comm_stats.get('withdrawable_balance') or 0),
-            'pending_commission': int(comm_stats.get('pending_amount') or 0),
-            'approved_commission': int(comm_stats.get('approved_amount') or 0),
+            'withdrawable_balance': withdrawable,
+            'pending_commission': pending_comm,
+            'approved_commission': approved_comm,
         },
         'mission': mission_out,
     }
@@ -7108,7 +7161,7 @@ def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
 @express_partner_bp.route('/settings', methods=['GET'], endpoint='settings')
 @require_partner_access(allow_pending=True)
 def settings_page():
-    """گزارش زنده همکار — جایگزین منوی صفحات جداگانه."""
+    """حافظهٔ همکار — یک صفحه مثل Memory در ChatGPT؛ همه‌چیز کاربر اینجاست."""
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     partners = load_express_partners() or []
     profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
@@ -7124,14 +7177,14 @@ def settings_page():
         report=report,
         hide_header=True,
         bottom_nav_active='profile',
-        seo_title='گزارش | وینور اکسپرس',
+        seo_title='حافظه | وینور اکسپرس',
     )
 
 
 @express_partner_bp.get('/settings/data', endpoint='settings_data')
 @require_partner_access(allow_pending=True, json_response=True)
 def settings_data():
-    """JSON گزارش زنده برای polling صفحه گزارش."""
+    """JSON حافظهٔ زنده برای polling صفحه."""
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     profile = getattr(g, 'express_partner_profile', None)
     if not isinstance(profile, dict):

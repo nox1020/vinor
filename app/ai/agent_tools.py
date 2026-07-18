@@ -2864,8 +2864,7 @@ def _tool_propose_simple_tx(
             "confirm_complete_visit": "الان نمی‌شود «بازدید انجام شد» زد؛ باید بازدید تأییدشده در جریان باشد.",
             "confirm_deal": {
                 "visit_commission_pending": (
-                    "هنوز پورسانت بازدید تأیید نشده؛ بعد از تأیید ادمین می‌توانی معامله ثبت کنی. "
-                    "به کاربر وضعیت را بگو و کارت معامله نساز."
+                    "بازدید انجام شده؛ مستقیم معامله را ثبت کن (پورسانت بازدید نداریم)."
                 ),
                 "deal_pending": (
                     "فروش قبلاً ثبت شده و منتظر تأیید ادمین است. "
@@ -3587,38 +3586,15 @@ def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
     if not rec:
         return {"ok": False, "error": "ثبت انجام بازدید ممکن نشد."}
     save_express_visit_requests(visits)
-    need_visit_commission = False
-    try:
-        from flask import current_app
-        from app.utils.storage import load_settings
-
-        need_visit_commission = max(
-            0,
-            int((load_settings(current_app) or {}).get("visit_commission_amount_toman") or 0),
-        ) > 0
-    except Exception:
-        need_visit_commission = False
-    if need_visit_commission:
+    msg = (
+        "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است. "
+        "قدم بعدی: بعد از تأیید، از همین چت بگو «ثبت معامله»."
+    )
+    if err == "already_pending":
         msg = (
-            "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است. "
-            "قدم بعدی: بعد از تأیید انجام بازدید، پورسانت بازدید باید تأیید شود؛ "
-            "سپس می‌توانی معامله را ثبت کنی."
+            "قبلاً ثبت شده و منتظر تأیید ادمین است. "
+            "قدم بعدی: صبر کن تا تأیید شود؛ بعد از همین چت معامله را ثبت کن."
         )
-        if err == "already_pending":
-            msg = (
-                "قبلاً ثبت شده و منتظر تأیید ادمین است. "
-                "بعد از تأیید انجام و تأیید پورسانت بازدید، معامله را ثبت کن."
-            )
-    else:
-        msg = (
-            "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است. "
-            "قدم بعدی: بعد از تأیید، از همین چت بگو «ثبت معامله»."
-        )
-        if err == "already_pending":
-            msg = (
-                "قبلاً ثبت شده و منتظر تأیید ادمین است. "
-                "قدم بعدی: صبر کن تا تأیید شود؛ بعد از همین چت معامله را ثبت کن."
-            )
     return {"ok": True, "message": msg, "land_code": code}
 
 

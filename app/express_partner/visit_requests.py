@@ -34,10 +34,9 @@ VISIT_PROGRESS_STEP_KEYS = (
     ("visit_requested", "درخواست بازدید"),
     ("visit_approved", "نهایی شدن بازدید"),
     ("visit_done", "بازدید انجام شد"),
-    ("visit_commission_paid", "واریز پورسانت بازدید"),
     ("deal_requested", "درخواست معامله"),
     ("deal_approved", "تأیید درخواست معامله"),
-    ("deal_commission_paid", "واریز پورسانت معامله"),
+    ("deal_commission_paid", "واریز پورسانت فروش"),
 )
 
 # روز هفته برای تنظیمات ادمین (هم‌تراز recurrence_weekday در پیامک زمان‌دار)
@@ -333,16 +332,6 @@ def visit_progress_steps(
     else:
         visit_commissions = [c for c in related if commission_is_visit(c)]
     deal_commissions = [c for c in related if commission_is_deal(c)]
-    visit_commission_required_raw = row.get("visit_commission_required")
-    visit_commission_required = (
-        bool(visit_commission_required_raw)
-        if visit_commission_required_raw is not None
-        else bool(visit_commissions)
-    )
-    visit_commission_paid = any(
-        str(c.get("status") or "").strip().lower() in ("approved", "paid")
-        for c in visit_commissions
-    )
     deal_requested = bool(deal_commissions)
     deal_approved = any(
         str(c.get("status") or "").strip().lower() in ("approved", "paid")
@@ -361,12 +350,12 @@ def visit_progress_steps(
         or (status == CANCELLED_STATUS and was_approved)
     )
     visit_done = status == COMPLETED_STATUS
-    visit_commission_done = visit_done and (not visit_commission_required or visit_commission_paid)
+    # پورسانت بازدید حذف شده — بعد از انجام بازدید مستقیم مسیر معامله
+    _ = visit_commissions
     done = [
         visit_requested_done,
         visit_approved_done,
         visit_done,
-        visit_commission_done,
         visit_done and deal_requested,
         visit_done and deal_approved,
         visit_done and deal_paid,
@@ -897,22 +886,8 @@ def request_visit_done_confirmation(
 def visit_commission_ready_for_deal(
     commissions: List[Dict[str, Any]] | None, phone: str, land_code: str
 ) -> bool:
-    ph = (phone or "").strip()
-    code = (land_code or "").strip()
-    if not ph or not code:
-        return False
-    for c in commissions or []:
-        if not isinstance(c, dict):
-            continue
-        if str(c.get("partner_phone") or "").strip() != ph:
-            continue
-        if str(c.get("land_code") or "").strip() != code:
-            continue
-        if not commission_is_visit(c):
-            continue
-        if str(c.get("status") or "").strip().lower() in ("approved", "paid"):
-            return True
-    return False
+    """پورسانت بازدید حذف شده — همیشه آمادهٔ معامله بعد از بازدید."""
+    return True
 
 
 def restore_visit_approved_after_deal_release(
@@ -952,8 +927,8 @@ def visit_tx_mode(
     if has_visit_no_show:
         return "visit_no_show"
     if has_completed_visit:
-        if visit_commission_required and not visit_commission_ready:
-            return "visit_commission_pending"
+        # پورسانت بازدید حذف شده — بعد از بازدید مستقیم مسیر معامله
+        _ = (visit_commission_required, visit_commission_ready)
         if has_pending_deal_commission:
             return "deal_pending"
         # رد معامله یا بعد از تکمیل بازدید → مسیر معامله (نه فقط بازدید مجدد)
@@ -1092,10 +1067,10 @@ def admin_row_dict(
     hints = {
         PENDING_STATUS: "تأیید کنید تا همکار پس از انجام بازدید، آن را روی فایل ثبت کند.",
         APPROVED_STATUS: "همکار باید پس از انجام بازدید، آن را از روی فایل ثبت کند.",
-        DONE_PENDING_STATUS: "همکار انجام بازدید را ثبت کرده؛ پس از تأیید شما، پورسانت بازدید در صف تأیید قرار می‌گیرد.",
-        COMPLETED_STATUS: "بازدید انجام شده؛ پس از تأیید پورسانت بازدید، درخواست معامله فعال می‌شود.",
+        DONE_PENDING_STATUS: "همکار انجام بازدید را ثبت کرده؛ پس از تأیید شما، همکار می‌تواند معامله ثبت کند.",
+        COMPLETED_STATUS: "بازدید انجام شده؛ همکار می‌تواند درخواست معامله (فروش) ثبت کند.",
         CANCELLED_STATUS: "این درخواست بسته شده است.",
-        NO_SHOW_STATUS: "مشتری حاضر نشد؛ پورسانت بازدید ساخته نمی‌شود. همکار می‌تواند بازدید مجدد ثبت کند.",
+        NO_SHOW_STATUS: "مشتری حاضر نشد. همکار می‌تواند بازدید مجدد ثبت کند.",
     }
     progress_steps = visit_progress_steps(row, commissions)
     progress_summary = visit_progress_summary(progress_steps)
@@ -1254,62 +1229,19 @@ def admin_visit_workflow_steps(
         "reject_status": APPROVED_STATUS,
     })
 
-    skip_visit_commission = (
-        not visit_commission_required
-        and (not vc or vc_st == "rejected")
-    )
-    if skip_visit_commission:
-        steps.append({
-            "key": "visit_commission",
-            "label": "پورسانت بازدید",
-            "state": "skipped",
-            "hint": "",
-            "needs_action": False,
-            "action_kind": "",
-        })
-    else:
-        if st == CANCELLED_STATUS:
-            s3, hint, action = "blocked", "", False
-        elif st != COMPLETED_STATUS:
-            s3, hint, action = "waiting", "بعد از تأیید انجام بازدید.", False
-        elif vc_st == "pending":
-            s3, hint, action = "current", "پورسانت بازدید منتظر تأیید یا رد شماست.", True
-        elif _paid(vc_st):
-            s3, hint, action = "done", "به کیف پول همکار اضافه شد.", False
-        elif vc_st == "rejected":
-            s3, hint, action = "current", "پورسانت بازدید رد شده؛ برای ادامه، مجدداً ثبت کنید.", True
-        else:
-            s3, hint, action = "waiting", "بعد از تأیید انجام بازدید ساخته می‌شود.", False
-        steps.append({
-            "key": "visit_commission",
-            "label": "تأیید پورسانت بازدید",
-            "state": s3,
-            "hint": hint,
-            "needs_action": action,
-            "action_kind": "recreate_commission" if (action and vc_st == "rejected") else ("commission" if action else ""),
-            "commission_id": vc.get("id"),
-            "commission_amount": vc.get("commission_amount"),
-            "withdrawal_locked": bool(vc.get("withdrawal_locked")),
-        })
-
-    if not visit_commission_required:
-        visit_gate = True
-    else:
-        visit_gate = _paid(vc_st)
+    # پورسانت بازدید حذف شده — مرحلهٔ تأیید فروش نهایی بلافاصله بعد از بازدید
+    _ = (visit_commission_required, vc, vc_st)
 
     if st == CANCELLED_STATUS:
         s4, hint, action = "blocked", "", False
     elif dc_st == "pending":
-        # همکار فروش را ثبت کرده — حتی اگر پیوند پورسانت بازدید ناقص باشد، کارت تأیید نشان بده
         s4, hint, action = (
             "current",
-            "همکار فروش نهایی را ثبت کرده؛ با تأیید، فایل بسته و پورسانت به کیف پول اضافه می‌شود.",
+            "همکار فروش نهایی را ثبت کرده؛ با تأیید، فایل بسته و پورسانت فروش به کیف پول اضافه می‌شود.",
             True,
         )
-    elif not visit_gate:
-        s4, hint, action = "waiting", "بعد از تأیید پورسانت بازدید، همکار درخواست معامله می‌زند.", False
     elif _paid(dc_st):
-        s4, hint, action = "done", "فروش تأیید شد — فایل بسته و پورسانت در کیف پول همکار است.", False
+        s4, hint, action = "done", "فروش تأیید شد — فایل بسته و پورسانت فروش در کیف پول همکار است.", False
     elif dc_st == "rejected":
         s4, hint, action = "waiting", "معامله رد شد؛ همکار می‌تواند دوباره درخواست معامله بزند.", False
     elif st == COMPLETED_STATUS:
@@ -1359,7 +1291,7 @@ def _admin_visit_activity_ts(item: Dict[str, Any]) -> str:
 
 
 def _admin_visit_action_stage_rank(item: Dict[str, Any]) -> int:
-    """اولویت مرحلهٔ اقدام: فروش نهایی > پورسانت بازدید > انجام بازدید > درخواست."""
+    """اولویت مرحلهٔ اقدام: فروش نهایی > انجام بازدید > درخواست."""
     for step in item.get("admin_workflow_steps") or []:
         if not isinstance(step, dict):
             continue

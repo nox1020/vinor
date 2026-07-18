@@ -2537,16 +2537,8 @@ def settings():
         if post_price_toman < 0:
             post_price_toman = 0
 
-        try:
-            visit_commission_amount_toman = int(
-                str(request.form.get('visit_commission_amount_toman') or '0')
-                .replace(',', '')
-                .replace('،', '')
-                .strip() or '0'
-            )
-        except Exception:
-            visit_commission_amount_toman = 0
-        visit_commission_amount_toman = max(0, visit_commission_amount_toman)
+        # پورسانت بازدید حذف شده — همیشه صفر
+        visit_commission_amount_toman = 0
 
         # تنظیمات SMS — خط ارسال ثابت است
         from app.services.sms_config import get_sms_line_number
@@ -4708,7 +4700,8 @@ def express_commission_new():
     partner_phone = (request.form.get('partner_phone') or '').strip()
     land_code = (request.form.get('land_code') or '').strip()
     commission_type = (request.form.get('commission_type') or 'deal').strip().lower()
-    if commission_type not in ('deal', 'visit'):
+    # پورسانت بازدید حذف شده — فقط فروش
+    if commission_type != 'deal':
         commission_type = 'deal'
     sale_amount = (request.form.get('sale_amount') or '').strip()
     commission_pct = (request.form.get('commission_pct') or '').strip()
@@ -4726,12 +4719,6 @@ def express_commission_new():
     except Exception:
         commission_amount = 0
     commission_amount = max(0, commission_amount)
-    if commission_type == 'visit' and commission_amount <= 0:
-        try:
-            commission_amount = int(get_settings().get('visit_commission_amount_toman') or 0)
-        except Exception:
-            commission_amount = 0
-        commission_amount = max(0, commission_amount)
     if commission_amount <= 0:
         commission_amount = int(round(sale * (pct/100.0))) if sale and pct else 0
     items = load_express_commissions() or []
@@ -4894,10 +4881,10 @@ def express_commission_approve(cid: int):
         if is_referral:
             flash('پورسانت دعوت همکار تأیید شد و به موجودی قابل برداشت اضافه شد.', 'success')
         elif is_visit:
-            flash('پورسانت بازدید تأیید شد و به موجودی قابل برداشت همکار اضافه شد.', 'success')
+            flash('پورسانت بایگانی‌شده تأیید و به موجودی همکار اضافه شد.', 'success')
         elif is_deal:
             flash(
-                'فروش نهایی تأیید شد: فایل بسته شد و پورسانت به کیف پول همکار اضافه شد.',
+                'فروش نهایی تأیید شد: فایل بسته شد و پورسانت فروش به کیف پول همکار اضافه شد.',
                 'success',
             )
         else:
@@ -5073,9 +5060,9 @@ def express_commission_reject(cid: int):
                 current_app.logger.error('Referral sync on commission reject: %s', e)
 
         if is_visit:
-            flash('پورسانت بازدید رد شد.', 'info')
+            flash('پورسانت بایگانی‌شده رد شد.', 'info')
         else:
-            flash('پورسانت رد شد.', 'info')
+            flash('پورسانت فروش رد شد.', 'info')
         _admin_audit(
             'admin_commission_reject',
             entity_type='commission',
@@ -5381,21 +5368,7 @@ def express_visit_requests():
         return pending_row or latest_row
 
     def _visit_commission_required_for_admin(phone: str, code: str) -> bool:
-        if visit_commission_amount > 0:
-            return True
-        if not commission_is_visit:
-            return False
-        ph = (phone or '').strip()
-        ck = str(code or '').strip()
-        for c in commissions:
-            if not isinstance(c, dict):
-                continue
-            if str(c.get('partner_phone') or '').strip() != ph:
-                continue
-            if str(c.get('land_code') or '').strip() != ck:
-                continue
-            if commission_is_visit(c):
-                return True
+        """پورسانت بازدید حذف شده — دیگر پیش‌نیاز معامله نیست."""
         return False
 
     name_map = _partner_name_lookup()
@@ -5572,39 +5545,9 @@ def _flash_visit_request_status_change(rec: dict, new_status: str) -> None:
 @admin_bp.post('/express/visit-requests/<vid>/recreate-visit-commission')
 @login_required
 def express_visit_request_recreate_commission(vid: str):
-    try:
-        from app.hardening.permissions import PERM_VISITS, has_permission
-        if not has_permission(PERM_VISITS):
-            flash('دسترسی کافی برای این عملیات ندارید.', 'error')
-            return redirect(url_for('admin.dashboard'))
-    except Exception:
-        pass
-    from app.express_partner.visit_requests import COMPLETED_STATUS
-    from app.express_partner.commissions_flow import ensure_visit_commission_after_visit_confirm
-
+    """پورسانت بازدید حذف شده — فقط پورسانت فروش باقی است."""
     filter_hint = (request.form.get('filter') or 'workflow').strip()
-    items = load_express_visit_requests() or []
-    rec = next(
-        (x for x in items if isinstance(x, dict) and str(x.get('id') or '') == str(vid).strip()),
-        None,
-    )
-    if not rec:
-        flash('درخواست بازدید یافت نشد.', 'error')
-        return redirect(_express_visit_requests_redirect(filter_hint, vid))
-    if str(rec.get('status') or '').strip() != COMPLETED_STATUS:
-        flash('پورسانت بازدید فقط پس از تأیید انجام بازدید قابل ثبت مجدد است.', 'error')
-        return redirect(_express_visit_requests_redirect(filter_hint, vid))
-    if ensure_visit_commission_after_visit_confirm(rec):
-        _admin_audit(
-            'admin_visit_recreate_commission',
-            entity_type='visit_request',
-            entity_id=str(vid),
-            land_code=str(rec.get('land_code') or ''),
-            summary=f"Recreated visit commission for {vid}",
-        )
-        flash('پورسانت بازدید مجدداً در صف تأیید ثبت شد.', 'success')
-    else:
-        flash('ثبت مجدد پورسانت بازدید ممکن نیست (مبلغ صفر یا رکورد فعال موجود است).', 'warning')
+    flash('پورسانت بازدید حذف شده است؛ فقط پورسانت فروش از مسیر معامله ثبت می‌شود.', 'info')
     return redirect(_express_visit_requests_redirect(filter_hint, vid))
 
 
@@ -5718,20 +5661,7 @@ def express_visit_request_status(vid: str):
                 except Exception:
                     current_app.logger.exception('admin visit result failed vid=%s', vid)
             if rec and new_status == COMPLETED_STATUS:
-                from app.express_partner.commissions_flow import ensure_visit_commission_after_visit_confirm
-
-                try:
-                    visit_commission_pending = max(
-                        0, int(get_settings().get('visit_commission_amount_toman') or 0)
-                    ) > 0
-                except Exception:
-                    visit_commission_pending = False
-                if ensure_visit_commission_after_visit_confirm(rec):
-                    flash('پورسانت بازدید در صف تأیید ثبت شد.', 'success')
-                elif visit_commission_pending:
-                    flash('پورسانت بازدید از قبل در صف است.', 'info')
-                else:
-                    flash('همکار اکنون می‌تواند درخواست معامله ثبت کند.', 'info')
+                flash('همکار اکنون می‌تواند درخواست معامله ثبت کند.', 'info')
             if rec:
                 sms_event = visit_status_change_event(new_status, prev_status)
                 if sms_event:
@@ -5744,11 +5674,7 @@ def express_visit_request_status(vid: str):
                             visit_date=str(rec.get('visit_date') or ''),
                             admin_note=admin_note,
                             reference_id=str(rec.get('id') or vid),
-                            visit_commission_pending=(
-                                visit_commission_pending
-                                if sms_event == 'visit_completed'
-                                else False
-                            ),
+                            visit_commission_pending=False,
                         )
                         if sms_result.get('ok'):
                             flash('پیامک وضعیت بازدید برای همکار ارسال شد.', 'success')

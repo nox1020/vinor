@@ -1073,10 +1073,11 @@
       specLabel: 'منتظر تأیید انجام بازدید',
     },
     visit_commission_pending: {
-      label: 'منتظر پورسانت بازدید',
-      icon: 'fa-clock',
-      btnClass: 'ld-btn-tx ld-btn-tx--pending cursor-default',
-      specLabel: 'منتظر تأیید پورسانت بازدید',
+      /* حالت قدیمی — مثل معامله (پورسانت بازدید حذف شده) */
+      label: 'معامله',
+      icon: 'fa-handshake',
+      btnClass: 'ld-btn-tx',
+      specLabel: 'بازدید ثبت‌شده',
     },
     deal: {
       label: 'معامله',
@@ -1641,7 +1642,7 @@
         } else if (mode === 'visit_done_pending') {
           showTxToast('بازدید انجام شد ثبت شده و منتظر تأیید ادمین است.', false);
         } else if (mode === 'deal') {
-          showTxToast('پورسانت بازدید تأیید شد — اکنون می‌توانید درخواست معامله ثبت کنید.', false);
+          showTxToast('اکنون می‌توانید درخواست معامله ثبت کنید.', false);
           stopVisitStatusPoll();
         } else if (mode === 'deal_pending') {
           showTxToast('درخواست معامله ثبت شد و منتظر تأیید ادمین است.', false);
@@ -1650,7 +1651,7 @@
           showTxToast('درخواست معامله تأیید شد — فایل در حال معامله است.', false);
           stopVisitStatusPoll();
         } else if (mode === 'visit_commission_pending') {
-          showTxToast('بازدید توسط ادمین تأیید شد و پورسانت بازدید منتظر تأیید است.', false);
+          showTxToast('بازدید توسط ادمین تأیید شد — می‌توانید معامله ثبت کنید.', false);
         } else if (mode === 'visit') {
           showTxToast('درخواست بازدید رد شد. می‌توانید تاریخ جدید انتخاب کنید.', false);
           stopVisitStatusPoll();
@@ -1782,7 +1783,7 @@
       visit_done: 'fa-check-double',
       visit_pending: 'fa-clock',
       visit_done_pending: 'fa-clock',
-      visit_commission_pending: 'fa-clock',
+      visit_commission_pending: 'fa-handshake',
       deal_pending: 'fa-clock',
     };
     return icons[mode] || 'fa-handshake';
@@ -2633,7 +2634,7 @@
       }
 
       if (mode === 'visit_commission_pending') {
-        showTxToast('پورسانت بازدید در انتظار تأیید ادمین است. پس از تأیید می‌توانید درخواست معامله ثبت کنید.', false);
+        showTxToast('بازدید تأیید شده — می‌توانید درخواست معامله ثبت کنید.', false);
         return;
       }
 

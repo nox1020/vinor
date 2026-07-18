@@ -112,8 +112,6 @@ def _build_message(event: str, ctx: Dict[str, Any]) -> str:
             msg += f"\n{note}"
         return msg
     if event == "visit_completed":
-        if ctx.get("visit_commission_pending"):
-            return f"وینور\nبازدید تأیید شد · {land}\nپورسانت منتظر تأییده"
         return f"وینور\nبازدید تأیید شد · {land}\nمی‌تونی معامله بزنی"
     if event == "deal_started":
         return f"وینور\nمعامله شروع شد · {land}"
