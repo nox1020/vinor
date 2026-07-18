@@ -979,9 +979,17 @@ def generate_reply(
     guard = apply_credit_guard(key, aud, text)
     if guard is not None:
         if guard.get("ok") and guard.get("land_codes"):
-            guard["land_cards"] = land_cards_payload(
-                key, guard["land_codes"], audience=aud
-            )
+            codes = guard.get("land_codes") or []
+            guard["land_cards"] = land_cards_payload(key, codes, audience=aud)
+            try:
+                from .land_cards import render_land_cards_html
+
+                land_html = render_land_cards_html(key, codes, audience=aud) or ""
+                if land_html:
+                    prev = str(guard.get("cards_html") or "")
+                    guard["cards_html"] = land_html + prev
+            except Exception:
+                pass
         return guard
 
     from .intents import normalize_chip_intent
@@ -1536,18 +1544,28 @@ def generate_reply(
     result["escalated"] = escalated
     if escalation_id:
         result["escalation_id"] = escalation_id
+    card_parts: list[str] = []
     if land_codes:
         result["land_codes"] = land_codes
         result["land_cards"] = land_cards_payload(key, land_codes, audience=aud)
+        try:
+            from .land_cards import render_land_cards_html
+
+            land_html = render_land_cards_html(key, land_codes, audience=aud) or ""
+            if land_html:
+                card_parts.append(land_html)
+        except Exception:
+            pass
     if agent_actions:
         result["agent_actions"] = agent_actions
         try:
             actions_html = render_agent_actions_html(agent_actions)
             if actions_html:
-                result["cards_html"] = actions_html
+                card_parts.append(actions_html)
         except Exception:
             pass
-    # کارت فایل فقط در land_cards (نوار بالای خانه) — داخل چت cards_html نگذار
+    if card_parts:
+        result["cards_html"] = "".join(card_parts)
 
     # Adaptive: evaluate quality + confidence (objects only — no prompt injection).
     try:

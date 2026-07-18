@@ -439,13 +439,20 @@ def _enrich_messages_for_ui(
         actions = row.get("agent_actions") or []
         if row.get("role") == "assistant" and (codes or actions):
             try:
+                from app.ai.land_cards import render_land_cards_html
+
+                parts: list[str] = []
                 if codes:
                     row["land_cards"] = land_cards_payload(user_key, codes, audience=audience)
-                actions_html = ""
+                    land_html = render_land_cards_html(user_key, codes, audience=audience) or ""
+                    if land_html:
+                        parts.append(land_html)
                 if isinstance(actions, list) and actions:
                     actions_html = render_agent_actions_html(actions) or ""
-                # فقط کارت اکشن در چت؛ فایل‌ها فقط در land_cards → نوار بالای خانه
-                row["cards_html"] = actions_html or ""
+                    if actions_html:
+                        parts.append(actions_html)
+                # فایل + تأیید + کپی + ماموریت — همه داخل نخ گفتگو
+                row["cards_html"] = "".join(parts)
             except Exception:
                 row["cards_html"] = ""
         out.append(row)

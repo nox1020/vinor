@@ -113,9 +113,28 @@
     max-width: 100%;
     min-width: 0;
   }
-  /* کارت فایل هرگز داخل چت دیده نشود — فقط نوار بالای خانه */
+  /* کارت فایل داخل گفتگو (افقی / اسکرول) */
   #aiMessages .ai-land-cards {
-    display: none !important;
+    display: flex;
+    flex-direction: row;
+    gap: 0.65rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.15rem 0 0.35rem;
+    margin-top: 0.35rem;
+    scrollbar-width: none;
+  }
+  #aiMessages .ai-land-cards::-webkit-scrollbar { display: none; }
+  #aiMessages .ai-land-cards__slot {
+    flex: 0 0 min(18.5rem, 86vw);
+    max-width: min(18.5rem, 86vw);
+    min-width: 0;
+  }
+  #aiMessages .ai-msg-cards .ai-land-cards {
+    margin-top: 0;
   }
   #aiMessages .ai-msg-thinking {
     display: inline-flex;

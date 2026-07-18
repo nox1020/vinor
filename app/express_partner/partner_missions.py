@@ -413,22 +413,37 @@ def _seed_mission_chat(
     user_msg = build_coach_chat_prompt(code=code, title=title, stage_label="علاقه‌مند")
     copies = draft_listing_copy(land, channel="both")
     divar = str(copies.get("divar") or "").strip()
+    insta = str(copies.get("instagram") or copies.get("insta") or "").strip()
     title_bit = f" — {title}" if title else ""
     assistant_msg = (
         f"خب، فایل {code}{title_bit} رو با هم جلو می‌بریم.\n"
-        f"امروز دیوار بذار و یه استوری اینستا بزن — متنش آماده‌ست؛ "
-        f"بگو «متن دیوار» یا «کپشن اینستا» تا برات بفرستم."
+        f"کارت فایل و متن آگهی همین پایین چته — "
+        f"امروز دیوار بذار و یه استوری اینستا بزن."
     )
+    agent_actions: list = []
+    blocks = []
     if divar:
-        first_line = divar.split("\n", 1)[0].strip()
-        if first_line:
-            assistant_msg += f"\nشروع متن: {first_line[:90]}"
+        blocks.append({"channel": "divar", "label": "متن دیوار", "text": divar})
+    if insta:
+        blocks.append({"channel": "instagram", "label": "کپشن اینستا", "text": insta})
+    if blocks:
+        agent_actions.append(
+            {
+                "type": "copy_blocks",
+                "title": "متن آمادهٔ بازاریابی",
+                "blocks": blocks,
+                "land_code": code,
+            }
+        )
     append_exchange(
         ph,
         user_msg,
         assistant_msg,
         thread_id=tid,
         audience=AUDIENCE_PARTNER,
+        assistant_land_codes=[code] if code else None,
+        assistant_agent_actions=agent_actions or None,
+        hide_user=True,
     )
     set_active_thread(ph, tid, audience=AUDIENCE_PARTNER)
     return tid

@@ -25,6 +25,14 @@
       <div class="ai-msg-cards">
         {{ msg.cards_html|safe }}
       </div>
+      {% elif msg.land_cards %}
+      <div class="ai-msg-cards">
+        <div class="ai-land-cards no-scrollbar" role="list" aria-label="فایل‌های پیشنهادی">
+          {% for lc in msg.land_cards %}
+          {{ lc.html|safe }}
+          {% endfor %}
+        </div>
+      </div>
       {% endif %}
       {% if not is_user and msg.content %}
       <div class="ai-msg-actions" data-ai-msg-actions>
