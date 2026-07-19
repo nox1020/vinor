@@ -14,7 +14,7 @@ class VisitResultWorkflow(BaseWorkflow):
         intent=INTENT_VISIT_RESULT,
         object_type="VisitResultRequest",
         steps=[
-            StepDefinition("land_code", "land_code", "کد فایل بازدید چیست؟", validator="land_code"),
+            StepDefinition("land_code", "land_code", "", validator="land_code"),
             StepDefinition(
                 "outcome",
                 "outcome",

@@ -115,13 +115,15 @@ class WorkflowEngineFlowTests(unittest.TestCase):
         self.assertEqual(out.extra_tokens, 0)
 
     def test_edit_property_intent(self) -> None:
+        # Chat-First: land_code is not asked in-form — hand off to Supervisor/tools.
         out = self.mgr.handle(
             message="ویرایش فایل ملک",
             user_key="09123334455",
             audience="partner",
         )
-        self.assertTrue(out.handled)
-        self.assertIn("کد فایل", out.reply)
+        self.assertFalse(out.handled)
+        self.assertTrue(out.pass_to_supervisor)
+        self.assertNotIn("کد فایل", out.reply or "")
 
     def test_search_pass_through(self) -> None:
         out = self.mgr.handle(
@@ -134,10 +136,29 @@ class WorkflowEngineFlowTests(unittest.TestCase):
 
     def test_cancel(self) -> None:
         uk = "09123334455"
-        self.mgr.handle(message="ثبت بازدید", user_key=uk, audience="partner", chip_intent="visit")
-        out = self.mgr.handle(message="لغو کن", user_key=uk, audience="partner")
+        # Partner visit uses tools/cards (no form session) — cancel a real form instead.
+        self.mgr.handle(
+            message="می‌خواهم همکار شوم درخواست همکاری",
+            user_key=uk,
+            audience="public",
+        )
+        out = self.mgr.handle(message="لغو کن", user_key=uk, audience="public")
         self.assertTrue(out.handled)
         self.assertIn("لغو", out.reply)
+
+    def test_partner_visit_uses_tools_cards(self) -> None:
+        out = self.mgr.handle(
+            message="ثبت بازدید",
+            user_key="09123334455",
+            audience="partner",
+            chip_intent="visit",
+        )
+        self.assertFalse(out.handled)
+        self.assertTrue(out.pass_to_supervisor)
+        self.assertEqual(
+            (out.observability or {}).get("skip_reason"),
+            "partner_ops_tools_cards",
+        )
 
 
 class ConversationCompatTests(unittest.TestCase):

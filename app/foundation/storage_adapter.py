@@ -72,7 +72,8 @@ def execute_storage_commit(plan: CommitPlan) -> CommitResult:
     if plan.action == "noop" or not plan.object_type:
         return CommitResult(ok=True, shadowed=True, plan=plan, reason="noop")
 
-    # Persist flag reserved for later phases — Phase 0 always shadows.
+    # Persist flag is reserved: even when ON, business JSON is never mutated here.
+    # Live writes go through HTTP / AI confirm cards — not Workflow Engine complete.
     if workflow_commit_persist_enabled():
         return CommitResult(
             ok=True,

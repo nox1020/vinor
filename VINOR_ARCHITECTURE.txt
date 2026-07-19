@@ -1,246 +1,684 @@
 ================================================================================
-                    مستند فنی معماری Vinor
-                    تاریخ: ۱۴۰۵/۰۴/۲۵
-                    Doc Version: v4.0
+                         مستند معماری Vinor
+                    Current-State Architecture
+                    تاریخ بازبینی: ۱۴۰۵/۰۴/۲۸
+                         Doc Version: v5.0
 ================================================================================
 
-این سند وضعیت فعلی کدبیس Vinor را بدون پیشنهاد پیاده‌سازی توصیف می‌کند.
-Vinor یک Flask monolith برای بازار املاک محلی (گرمابسرد، دماوند) با پنل
-همکاران اکسپرس، چت AI مبتنی بر DeepSeek، و ذخیره‌سازی عمدتاً JSON فایل است.
+وضعیت سند
+----------
+این سند وضعیت واقعی کدبیس Vinor در تاریخ بالا را توصیف می‌کند. منبع حقیقت،
+کد اجراشونده و Registry/Configهای پروژه است؛ ROADMAP و Change Log صرفاً سابقه
+تکامل‌اند. اعداد benchmark تاریخی، تضمین production نیستند.
+
+دامنه بازبینی:
+  app/، admin/، scripts/، tests/، run.py، passenger_wsgi.py، config.py،
+  requirements*.txt، route/agent/workflow registryها و قراردادهای storage.
+
+اصل امنیتی مستندسازی:
+  هیچ API key، شماره کاربر، محتوای چت، داده ملک یا مقدار حساس runtime در این
+  سند بازنشر نشده است.
 
 
 ================================================================================
-1. Architecture Overview
+1. خلاصه اجرایی
 ================================================================================
 
-1.1 ساختار کلی سیستم
+Vinor یک Flask monolith برای عملیات فروش املاک است که این اجزا را در یک
+application واحد ترکیب می‌کند:
+
+  - سایت عمومی و صفحه ملک
+  - پنل Express Partner و نقش‌های Buyer/Seller/Owner
+  - پنل Admin، RBAC، Audit، SMS و AI Mission Control
+  - قیف کسب‌وکار Lead تا Visit، Offer، Contract، Deal و Settlement
+  - دستیار DeepSeek با Conversation/Workflow، RAG، Memory و Function Calling
+  - شش Agent تخصصی با اجرای موازی، Decision Engine و Business Intelligence
+  - لایه‌های Goal، World Model، Long Planner، Evaluation و Reflection
+  - موتورهای background برای Optimization، Learning، Improvement و Business AI
+
+معماری فیزیکی:
+
+  Client
+    Jinja2 + Tailwind + Alpine.js + Vanilla JS + Partner PWA
+      |
+      v
+  Flask Application Factory (app/__init__.py)
+      |
+      +-- Public / Partner / Role Portals / Admin / JSON APIs
+      |
+      +-- Business OS
+      |     Foundation -> CRM -> Visit Result -> Commercial -> Closing
+      |     Roles -> Integration Journey -> Hardening
+      |
+      +-- AI Request Pipeline
+      |     Conversation -> Executive/Goals -> Supervisor -> Agents
+      |     -> Decision/BI/World/LongPlan -> Adaptive
+      |     -> Memory/RAG/Planning/Tools/LLM
+      |     -> Evaluation/Reflection
+      |
+      +-- External Services
+      |     DeepSeek, SMS.ir, Firebase/FCM, Web Push, Git Webhook
+      |
+      v
+  Persistence
+    instance/data/*.json + *.jsonl + subdirectories
+    instance/vinor.db (SQLAlchemy initialized; no active db.Model)
+
+سبک معماری:
+  - Monolith ماژولار، نه microservice
+  - Server-rendered، نه SPA
+  - JSON-first، نه relational-domain-first
+  - DI و Protocol در لایه‌های AI جدید
+  - Rule-first و fail-open در orchestration داخلی
+  - Human-in-the-loop برای mutationهای حساس AI
+  - Additive compatibility با قیف legacy همکار
+
+
+================================================================================
+2. ساختار Repository و Runtime
+================================================================================
+
+2.1 نقاط ورود
+---------------
+
+run.py
+  - create_app() را صدا می‌زند و app را export می‌کند.
+  - dev server را با FLASK_RUN_HOST/PORT اجرا می‌کند.
+  - FLASK_DEBUG در run.py به‌صورت پیش‌فرض ON است.
+  - Rotating log را در instance/logs/app.log تنظیم می‌کند.
+  - favicon و JSON 404 handler را فراهم می‌کند.
+
+passenger_wsgi.py
+  - entrypoint تولید روی cPanel/LiteSpeed/Passenger است.
+  - INSTANCE_PATH را روی مسیر production قرار می‌دهد.
+  - schedulerهای in-worker را OFF می‌کند تا worker نگه داشته نشود:
+      VINOR_SALES_COACH_SCHEDULER=0
+      VINOR_CELEBRATION_SMS_SCHEDULER=0
+      VINOR_ADMIN_SMS_SCHEDULER=0
+      VINOR_OPTIMIZATION_SCHEDULER=0
+  - application را از run.app می‌گیرد.
+
+app/__init__.py
+  - Flask application factory
+  - config، session، proxy، CORS، CSRF، SQLAlchemy و Blueprintها
+  - PWA root routes و landing gate
+  - Firebase bootstrap
+  - start اختیاری schedulerها
+
+2.2 Package inventory
+---------------------
+
+Application / HTTP:
+  app/api              JSON APIهای express، SMS، push، FCM و uploads
+  app/routes           public routes و webhook
+  app/express_partner  پنل و عملیات همکار
+  app/roles            role portals
+  app/templates        قالب‌های عمومی
+  app/static           assetهای frontend و PWA
+  admin                Blueprint مستقل پنل مدیریت
+
+Business OS:
+  app/foundation       Activity/Timeline و Workflow Commit
+  app/crm              Contact/Lead/Call/FollowUp/Task
+  app/visit_result     نتیجه بازدید و No-Show
+  app/commercial       Negotiation/Offer/Counter/Reservation
+  app/closing          Deal/Contract/Payment/Settlement
+  app/integration      Journey و bridgeهای یکپارچه
+  app/hardening        Audit/RBAC/OS KPI/soft deprecation
+
+AI Core and cognition:
+  app/ai
+  app/conversation
+  app/workflow
+  app/knowledge
+  app/memory
+  app/planning
+  app/supervisor
+  app/adaptive
+  app/agents
+  app/decision
+  app/business_intelligence
+  app/evaluation
+  app/optimization
+  app/goals
+  app/world_model
+  app/long_planner
+  app/self_learning
+  app/self_reflection
+  app/self_improvement
+  app/executive
+  app/business_ai
+  app/ai_console
+
+Shared:
+  app/services          SMS، Postchi، Firebase و notification services
+  app/utils             JSON storage، SEO، filters و helpers
+  app/extensions.py     SQLAlchemy extension
+  app/keys.py           secret resolution wrapper
+
+Operational:
+  scripts               cron، index build، benchmark، assets و maintenance
+  tests                 unittest test modules
+  data                  legacy/dev seed data
+  packages              vendored Linux wheels برای deploy محدود/offline
+  instance              داده و log runtime؛ نباید source code تلقی شود
+
+
+================================================================================
+3. Application Factory، Blueprintها و امنیت HTTP
+================================================================================
+
+3.1 Blueprintها
+----------------
+
+Blueprint / Module                         Surface
+----------------------------------------  --------------------------------------
+main_bp / app/routes                      / و public pages
+roles_bp / app/roles/routes.py            /my، /portal/seller، /portal/owner
+webhook_bp / app/routes/webhook.py        /git-webhook
+express_api_bp / app/api/express.py       /api/*
+sms_api_bp / app/api/sms.py               /api/sms/*
+api_push_bp / app/api/push.py             /api/push/*
+api_fcm_bp / app/api/fcm.py               /api/fcm/*
+uploads_bp / app/api/uploads.py           /uploads/* و /api/uploads/images
+express_partner_bp / app/express_partner  /express/partner/*
+ai_bp / app/ai/routes.py                  /ai/*
+admin_bp / admin                          /admin/*
+
+Public REST API v1 قدیمی حذف شده است. مسیرهای فعلی باید از Registry و route
+decoratorهای بالا استخراج شوند، نه از اسناد قدیمی API v1.
+
+3.2 Session و Proxy
+-------------------
+
+  - نام cookie: vinor_session
+  - HttpOnly و SameSite=Lax
+  - lifetime پیش‌فرض بلندمدت (۱۸۰ روز)
+  - TRUST_PROXY در کد به‌صورت پیش‌فرض ON و ProxyFix فعال است.
+  - SESSION_COOKIE_SECURE با وضعیت proxy/production هماهنگ می‌شود.
+  - SECRET_KEY باید در production از env تأمین شود؛ fallback توسعه‌ای کافی نیست.
+
+3.3 CSRF و CORS
+---------------
+
+  - Flask-WTF برای فرم‌های HTML فعال است.
+  - XSRF-TOKEN برای پاسخ‌های HTML تنظیم می‌شود.
+  - endpointهای webhook و APIهای JSON منتخب، از CSRF معاف‌اند.
+  - CORS روی /api/* تعریف شده است.
+  - Mutationهای Admin علاوه بر login با RBAC لایه Hardening محدود می‌شوند.
+
+3.4 Landing gate و PWA
+----------------------
+
+  - کاربر ناشناس در مسیرهای غیرعمومی به Partner Home هدایت می‌شود.
+  - public allowlist شامل landing، property/express، AI public و health است.
+  - /sw.js به Service Worker پنل همکار هدایت می‌شود.
+  - manifest عمومی fallback دارد؛ Partner manifest و SW مستقل نیز موجود است.
+  - PWA ماهیت partner-centric دارد و نباید به‌عنوان SPA سراسری توصیف شود.
+
+
+================================================================================
+4. نقش‌ها، رابط‌ها و Product Surface
+================================================================================
+
+4.1 نقش‌ها
+-----------
+
+  Guest
+    دسترسی عمومی محدود و سقف پاسخ AI
+
+  User / Buyer
+    درخواست همکاری/خدمات و portal در /my
+
+  Partner
+    فایل اختصاصی، CRM، بازدید، مذاکره، معامله و پورسانت
+
+  Premium/Special Partner
+    نقش مالک/فروشنده ویژه و inboxهای تخصصی
+
+  Seller / Owner
+    portalهای /portal/seller و /portal/owner
+
+  Admin / Super Admin
+    مدیریت، finance، visit، SMS، audit، AI console و control surfaces
+
+Role resolution دو مسیر سازگار دارد:
+  - Conversation roles برای رفتار چت
+  - app/roles برای portal assignment و نقش‌های توسعه‌یافته
+
+4.2 صفحات عمومی مهم
 --------------------
 
-+-----------------------------------------------------------------------------+
-|                              Client Layer                                    |
-|  Jinja2 HTML + Tailwind + Alpine.js + Vanilla JS + PWA (Service Worker)     |
-|  Express Partner Portal  (/express/partner/*)                                  |
-|  Public site             (/ , /express/<code>)                                 |
-|  Admin panel             (/admin/*)                                          |
-+-----------------------------------+-----------------------------------------+
-                                    | HTTP (HTML + JSON API)
-+-----------------------------------v-----------------------------------------+
-|                         Flask Application (run.py)                             |
-|  create_app() -> Blueprints: main, express_partner, ai, admin, webhook,      |
-|  express_api, sms_api, push_api, fcm_api, uploads                            |
-+---------------+--------------------------------+-----------------------------+
-                |                                |
-                v                                v
-+---------------------------+    +---------------------------------------------+
-|     Domain Services       |    |              AI Layer                        |
-|  storage.py               |    |  Conversation Engine → Workflow Engine → Supervisor → Agents |
-|  SMS, commissions         |    |  services.py -> DeepSeek API               |
-|  missions, sales_coach    |    |  agent_tools, context, chat_store            |
-|                           |    |  escalations, credits                        |
-+-------------+-------------+    +---------------------------------------------+
-              |
-              v
-+-----------------------------------------------------------------------------+
-|  Persistence: instance/data/*.json (+ sqlite vinor.db — بدون مدل فعال)       |
-|  Uploads: app/data/uploads, instance/data/ai_chats/...                       |
-+-----------------------------------------------------------------------------+
+  /                         landing
+  /express/<code>           صفحه عمومی ملک
+  /property/<code>          alias/صفحه ملک
+  /partners                 همکاران
+  /start                    شروع
+  /public                   سطح عمومی
+  /my/offers                پیشنهادهای Buyer
+  /r/<ref>                  referral
+  /d                        APK/download surface
+  /help، /privacy، /profile
+  /.well-known/assetlinks.json
+  /healthz
 
+4.3 پنل Express Partner
+------------------------
 
-1.2 اتصال Frontend، Backend، Database و AI
-------------------------------------------
+Core:
+  /home، /dashboard، /files، /land/<code>
+  /favorites، /requests، /notifications، /profile
 
-لایه          | نقش                              | اتصال
---------------|----------------------------------|----------------------------------
-Frontend      | قالب Jinja2 + Tailwind/Alpine    | HTTP به Flask؛ چت AI از
-              | در express_partner و admin       | POST /express/partner/ai/chat
-              |                                  | و POST /ai/chat
-Backend       | Flask 2.3 App Factory            | Blueprintها؛ سرویس‌ها در
-              | app/__init__.py                  | app/services/, express_partner/, ai/
-Database      | JSON در instance/data/           | storage.py — منبع حقیقت داده
-              | (SQLAlchemy بدون db.Model)       | sqlite فقط initialize می‌شود
-AI            | DeepSeek Chat Completions        | services.py -> API خارجی
-              | + Function Calling               | context از JSON lands/partners
+Authentication:
+  /login، /login/otp، /verify، /otp/resend
 
-نکته: سیستم SPA جدا (React/Vue) ندارد. UI با سرور رندر می‌شود و چت AI با
-fetch/XHR به JSON endpointها متصل است.
+Business OS:
+  /customers                CRM
+  /negotiations             Offer/Counter/Reservation
+  /inbox-offers             Special owner inbox
+  /deals                    Closing
+  /journey                  Unified activity journey
 
+Operations:
+  /commissions، withdrawals، bank accounts، routine، training، help،
+  invite، notes و فایل‌های همکار
 
-================================================================================
-2. AI Layer
-================================================================================
+app/express_partner/routes.py یک ماژول route بزرگ و مرکز سازگاری بین قیف legacy،
+Business OS جدید و AI chat است. منطق reusable در service moduleهای همان package
+قرار دارد، از جمله:
+  visit_requests.py
+  commissions_flow.py
+  partner_withdrawals.py
+  partner_missions.py
+  sales_coach.py
+  special_visit_inbox.py
+  special_offer_inbox.py
 
-2.1 مدل AI
+4.4 Admin
 ----------
-Provider:     DeepSeek API (DEEPSEEK_BASE_URL, DEEPSEEK_API_KEY)
-مدل‌ها:       deepseek-v4-flash و deepseek-v4-pro
-انتخاب:       پنل ادمین -> settings.json -> ai.model_choice
-              مقادیر: auto | flash | pro
-پیش‌فرض:      auto و flash هر دو به Flash map می‌شوند
-فایل:         app/ai/runtime_settings.py
 
-اولویت کلید API:
-  1. settings.json -> ai.api_key
-  2. متغیر محیطی DEEPSEEK_API_KEY
-  3. api_keys.py (ریشه پروژه)
-فایل:         app/keys.py
+admin/routes.py:
+  lands، partners، visits، commissions، withdrawals، settings، SMS،
+  tier/role actions، audit و super-admin
+
+admin/ai_console_routes.py:
+  /admin/ai-console/* برای Mission Control، analytics و قابلیت‌های AI
+
+admin/control_routes.py:
+  /admin/control/* برای نماهای مدیریتی/evaluation
+
+ماژول‌های تکمیلی:
+  sms_scheduled.py، sms_recipients.py، sms_campaign، push pages،
+  otp store و people directory
 
 
-2.2 محل Promptها
+================================================================================
+5. Vinor OS Business Architecture
+================================================================================
+
+5.1 قیف مرجع
+-------------
+
+  Lead / Contact
+       |
+       v
+  Call / Follow-Up / Task
+       |
+       v
+  Visit Request -> Visit Result | No-Show
+       |
+       v
+  Negotiation -> Offer -> Counter Offer -> Reservation
+       |
+       v
+  Deal -> Contract -> Payment Milestones -> Settlement
+       |
+       +--> legacy Assignment / Commission / Withdrawal
+       |
+       v
+  Activity + Timeline + Journey + Admin Audit + OS KPIs
+
+مسیر legacy شامل express_visit_requests، express_assignments،
+express_commissions و withdrawals حذف نشده است. Closing و Commercial به‌صورت
+additive و bridge-based روی آن قرار گرفته‌اند.
+
+5.2 Foundation
+---------------
+
+مسیر: app/foundation/
+
+مسئولیت‌ها:
+  - Activity append-only
+  - Timeline per entity/user
+  - Workflow Commit Plan/Result
+  - Storage adapter برای commitهای کسب‌وکار
+  - Hook تکمیل workflow از Conversation Manager
+
+فایل‌های داده:
+  foundation_activities.json
+  foundation_timeline.json
+
+فلگ‌های اصلی:
+  VINOR_FOUNDATION_ENABLED
+  VINOR_ACTIVITY_STORE_ENABLED
+  VINOR_TIMELINE_STORE_ENABLED
+  VINOR_WORKFLOW_COMMIT_ENABLED
+  VINOR_WORKFLOW_COMMIT_PERSIST
+
+5.3 CRM
+-------
+
+مسیر: app/crm/
+
+موجودیت‌ها:
+  Contact، Lead، CallLog، FollowUp، Task
+
+قابلیت‌ها:
+  - CRUD و storage مستقل
+  - sync مشتری از Visit
+  - صفحه /express/partner/customers
+  - activity hook
+  - هدف تماس بازدید کسب‌وکار: 09121471301
+
+AI tools:
+  propose_log_call
+  propose_followup
+
+فایل‌های داده:
+  crm_contacts.json
+  crm_leads.json
+  crm_call_logs.json
+  crm_followups.json
+  crm_tasks.json
+
+5.4 Visit Result
 ----------------
-نوع                    | فایل                    | محتوا
------------------------|-------------------------|---------------------------
-System Prompt اصلی     | app/ai/config.py        | VINOR_AI_PUBLIC_PROMPT
-                       |                         | VINOR_AI_PARTNER_PROMPT
-                       |                         | VINOR_AI_SPECIAL_PROMPT
-راهنمای Agent          | app/ai/agent_tools.py   | agent_system_hint()
-نیت چیپ‌های سریع       | app/ai/intents.py       | CHIP_INTENT_HINTS
-Escalation marker      | app/ai/config.py        | [[ESCALATE:...]]
 
+مسیر: app/visit_result/
 
-2.3 مدیریت System Prompt
--------------------------
-جریان در _build_messages() — app/ai/services.py:
+outcomeها:
+  interested، not_interested، follow_up، no_show
 
-  1. prompt_for_voice(voice) — یکی از سه پرامپت بر اساس مخاطب
-  2. اگر with_tools=True -> agent_system_hint(voice)
-  3. اگر chip_intent -> hint از intents.py
-  4. اگر user_key -> context دینامیک از _build_system_prompt()
+اتصال‌ها:
+  - status bridge در app/express_partner/visit_requests.py
+  - tx_mode=visit_no_show برای No-Show
+  - Admin filter/action
+  - Special visit inbox
+  - Commercial bridge از نتیجه interested
 
-Voice/Audience — app/ai/audience.py:
-  - public   : مشتری / خریدار
-  - partner  : همکار پورسانت‌گیر (واسط فروشنده و خریدار)
-  - special  : مالک/فروشنده ویژه (بالاترین دسترسی)
+AI tools:
+  propose_visit_result
+  propose_no_show
 
+Workflow:
+  VisitResultWorkflow
 
-2.4 ساخت Context
------------------
-فایل اصلی: app/ai/context.py
-کش:        app/ai/context_cache.py
+فایل داده:
+  visit_results.json
 
-مخاطب Partner:
-  - build_partner_context_base(phone)     — بخش ثابت، کش per phone
-  - build_partner_status_context(phone)   — وضعیت زنده (مأموریت، پورسانت، اقدام فوری)
-  - build_partner_land_context(...)       — بر اساس پیام کاربر و focus_codes
+5.5 Commercial
+---------------
 
-مخاطب Public:
-  - build_public_context_base()           — کش global
-  - build_public_land_context(...)        — نمونه فایل‌ها + جستجوی heuristics
+مسیر: app/commercial/
 
-Context از خواندن JSON ساخته می‌شود:
-  lands.json, express_assignments, express_partners,
-  express_visit_requests, partner_missions, settings, ...
+موجودیت‌ها:
+  Negotiation، Offer، CounterOffer، Reservation
 
-محدودیت طول: max_context_chars (پیش‌فرض 3000 کاراکتر)
-فوکوس گفتگو: recent_thread_land_codes() از chat_store — حداکثر 3 کد ملک اخیر thread
+قابلیت‌ها:
+  - Visit interested -> open negotiation
+  - Partner negotiation pages
+  - Special owner inbox
+  - Buyer offers portal
+  - soft reservation بدون جایگزینی lock legacy
 
-خلاصه ملک (_land_summary) شامل:
-  کد، عنوان، شهر، محله، نوع، قیمت، متراژ، وضعیت تخصیص، پورسانت
+AI tools:
+  propose_offer
+  propose_counter_offer
+  propose_reservation
 
+Workflow:
+  OfferWorkflow
 
-2.5 Memory (حافظه گفتگو)
-------------------------
-فایل: app/ai/chat_store.py
-مسیر: instance/data/ai_chats/{audience}/{phone}.json
+فایل‌های داده:
+  commercial_negotiations.json
+  commercial_offers.json
+  commercial_counters.json
+  commercial_reservations.json
 
-ساختار:
-  threads[] -> هر thread دارای messages[]
-  هر message: role, content, land_codes, agent_actions, ...
+5.6 Closing & Finance
+----------------------
 
-محدودیت‌ها:
-  - 80 پیام per thread
-  - 30 thread per user (مهمان: 2 thread)
-  - max_history ارسالی به مدل: 5 پیام (قابل تنظیم در settings)
+مسیر: app/closing/
 
-حافظه بلندمدت معنایی (vector / long-term memory) وجود ندارد.
-فقط JSON per-user و context snapshot در هر درخواست.
+موجودیت‌ها:
+  Deal، Contract، Payment، Settlement، SettlementParty
 
+قابلیت‌ها:
+  - Deal bridge از mark_in_transaction و commission action
+  - lifecycle قرارداد و سند
+  - payment milestones
+  - settlement چندطرفه
+  - لینک اختیاری withdrawal
 
-2.6 سایر مکانیزم‌های AI
-------------------------
-Credits:     app/ai/credits.py
-             - rate limit (min_interval_sec)
-             - dedup پاسخ تکراری
-             - سقف 20 پاسخ برای مهمان بدون لاگین
-             - notify ادمین در صورت اتمام balance API
+AI tools:
+  propose_contract
+  propose_payment_milestone
+  propose_settlement
 
-Escalation:  app/ai/escalations.py
-             - marker [[ESCALATE:خلاصه]] در پاسخ مدل
-             - ذخیره سوال -> پاسخ ادمین -> inject در چت بعدی
+Workflow:
+  ClosingContractWorkflow
 
-Postchi:     app/services/postchi.py
-             - thread جدا __postchi__ برای پیام‌های رسمی وینور (غیر-AI)
+فایل‌های داده:
+  closing_deals.json
+  closing_contracts.json
+  closing_payments.json
+  closing_settlements.json
+
+5.7 Roles
+---------
+
+مسیر: app/roles/
+
+  - RoleAssignment و ResolvedPortals
+  - buyer، seller، owner، super_admin
+  - identity bridge با roleهای موجود
+  - /my، /portal/seller، /portal/owner
+  - role_assignments.json
+
+5.8 Integration
+---------------
+
+مسیر: app/integration/
+
+  - Journey aggregator روی Lead تا Settlement
+  - /express/partner/journey
+  - workflowهای thin/gated برای visit result، CRM follow-up و closing
+  - activity hook
+
+AI tools:
+  propose_lead
+  propose_task
+
+5.9 Hardening
+---------------
+
+مسیر: app/hardening/
+
+  Audit:
+    actionهای Admin را با source=admin در Foundation Activity ثبت می‌کند.
+
+  RBAC:
+    permissionهای دانه‌ریز برای partner، finance، visit و super-admin mutation.
+
+  OS KPIs:
+    شاخص‌های قیف را با Business Intelligence و Admin dashboard ادغام می‌کند.
+
+  Soft cleanup:
+    مسیرهای جدید را ترجیح می‌دهد ولی propose_deal، commission و withdrawal
+    legacy را حذف نمی‌کند.
 
 
 ================================================================================
-3. Agent Logic
+6. AI HTTP Surface و Chat-First
 ================================================================================
 
-3.1 Chatbot یا Agent؟
----------------------
-Agent محدود با Function Calling — نه chatbot ساده.
+6.1 Public AI (/ai)
+--------------------
 
-ویژگی‌ها:
-  - حداکثر 2 دور tool call (_MAX_TOOL_ROUNDS در services.py)
-  - ابزارها در agent_tools.py؛ schema بر اساس voice
-  - اکشن‌های حساس با کارت تأیید + confirm_action_from_token()
-  - تا تأیید کاربر، ثبت واقعی (بازدید/معامله/همکاری) انجام نمی‌شود
+  GET   /ai/
+  GET   /ai/health
+  GET   /ai/sync
+  GET   /ai/history
+  POST  /ai/chat
+  POST  /ai/clear
+  POST  /ai/agent/confirm
+  POST  /ai/agent/cancel
+  POST  /ai/thread/switch
+  POST  /ai/thread/delete
+  POST  /ai/api/chat             legacy compatibility
 
+6.2 Partner AI (/express/partner/ai)
+-------------------------------------
 
-3.2 تصمیم‌گیری AI
------------------
-جریان generate_reply():
+سطح متناظر chat/history/sync/clear/thread/confirm/cancel را با session همکار
+ارائه می‌کند. endpointهای مهم:
 
-  User message
-      |
-      +-- credit guard / guest limit
-      +-- chip_intent == "visit" -> clear_visit_draft
-      +-- try_continue_visit_from_user_message()
-      |       -> rule-based short-circuit (بدون فراخوانی API)
-      |
-      +-- _build_messages() + _run_agent_loop()
-              |
-              +-- call_ai() -> tool_calls?
-              |       +-- run_tool() -> نتیجه به messages
-              +-- پاسخ نهایی
-                      +-- [[ESCALATE]] -> escalations
-                      +-- [[LAND:کد]] -> land_cards
-                      +-- agent_actions -> UI cards
+  POST /express/partner/ai/chat
+  POST /express/partner/ai/agent/confirm
+  POST /express/partner/ai/agent/cancel
+  GET  /express/partner/ai/history
 
-
-3.3 Workflow درخواست کاربر
+6.3 Chat-First components
 --------------------------
 
-مشتری (public):
-  1. POST /ai/chat یا redirect به /express/partner/home?ai=1
-  2. generate_reply() با tools:
-     search_lands, get_cooperation_info, get_application_status,
-     propose_partner_application
-  3. پاسخ + کارت ملک / کارت ثبت همکاری
+app/ai/chat_store.py
+  thread/message persistence
 
-همکار (partner):
-  1. POST /express/partner/ai/chat (نیاز به session)
-  2. tools:
-     search_lands, suggest_next_action, draft_listing_copy,
-     propose_visit_request, propose_complete_visit,
-     propose_deal, propose_release_deal
-  3. POST /express/partner/ai/agent/confirm برای تأیید اکشن
+app/ai/card_registry.py
+  schema و lifecycle کارت:
+  pending، confirmed، executing، completed، cancelled، expired، failed،
+  active، used، superseded
 
-Rule-based bypass:
-  جریان چندمرحله‌ای بازدید (try_continue_visit_from_user_message)
-  بدون فراخوانی مدل ادامه می‌یابد.
+app/ai/case_store.py
+  mirror پرونده per thread با stateهای:
+  open، in_progress، waiting، completed، cancelled، closed
+
+app/ai/chat_events.py
+  ثبت system/timeline eventهای چت
+
+app/ai/message_types.py
+  نوع‌بندی messageها
+
+app/static/express-partner/ai-chat.js
+  client چت، thread، confirm card، Postchi و حالت inline/layer
+
+محدودیت‌های فعلی chat_store:
+  - 200 پیام per thread
+  - 30 thread per user
+  - 2 thread برای guest
+  - حداکثر 4000 کاراکتر برای محتوای هر پیام
+  - max_history مدل به‌صورت پیش‌فرض 5 پیام و runtime-configurable
+
+ذخیره exchange نهایی در route handler انجام می‌شود، نه داخل generate_reply.
 
 
-3.4 ابزارهای Agent (Function Calling)
---------------------------------------
-مشترک (همه voiceها):
+================================================================================
+7. Provider، Prompt، Context و Agent Tools
+================================================================================
+
+7.1 LLM Provider
+-----------------
+
+Provider اجرایی:
+  DeepSeek Chat Completions از app/ai/provider_router.py
+
+مدل‌ها:
+  deepseek-v4-flash
+  deepseek-v4-pro
+
+انتخاب runtime:
+  settings.json -> ai.model_choice = auto | flash | pro
+  auto و flash به Flash map می‌شوند؛ pro به Pro.
+
+پارامترهای پیش‌فرض:
+  max_tokens=512
+  temperature=0.45
+  max_history=5
+  max_context_chars=3000
+
+اولویت API key:
+  1. instance/data/settings.json -> ai.api_key
+  2. DEEPSEEK_API_KEY
+  3. root api_keys.py از طریق app/keys.py
+
+مقدار secret نباید در سند، log یا source جدید ثبت شود.
+
+7.2 Prompt composition
+-----------------------
+
+System prompts:
+  app/ai/config.py
+    VINOR_AI_PUBLIC_PROMPT
+    VINOR_AI_PARTNER_PROMPT
+    VINOR_AI_SPECIAL_PROMPT
+
+Audience:
+  public، partner، special در app/ai/audience.py
+
+پیام‌های مدل به‌ترتیب از این منابع ساخته می‌شوند:
+  1. prompt ثابت audience
+  2. agent_system_hint در صورت فعال بودن tools
+  3. chip intent hint
+  4. context کسب‌وکار و ملک
+  5. memory block مرتبط
+  6. history و summary اختیاری history قدیمی
+  7. planning hint/tool seeds
+  8. یکی از decision / parallel merge / per-agent hints
+
+markerها:
+  [[ESCALATE:...]]   ارجاع به Admin
+  [[LAND:<code>]]    ساخت land card
+
+7.3 Context
+------------
+
+فایل اصلی:
+  app/ai/context.py
+
+Cache:
+  app/ai/context_cache.py
+  prompt core cache در app/ai/services.py
+
+Partner context:
+  build_partner_context_base
+  build_partner_status_context
+  build_partner_land_context
+
+Public context:
+  build_public_context_base
+  build_public_land_context
+
+منابع:
+  lands، assignments، partners، visits، missions، settings، commissions و
+  داده‌های مرتبط از JSON storage.
+
+Focus:
+  recent_thread_land_codes حداکثر سه کد ملک اخیر thread را نگه می‌دارد.
+
+7.4 Function Calling
+---------------------
+
+حداکثر دو دور tool call و حداکثر سه API call در یک agent loop.
+اگر structured tool_calls برنگردد، DSML inline fallback نیز parse می‌شود.
+
+Public tools:
   search_lands
-
-Public voice:
   get_cooperation_info
   get_application_status
   propose_partner_application
 
-Partner / Special voice:
+Partner/Special core:
+  search_lands
   suggest_next_action
   draft_listing_copy
   propose_visit_request
@@ -248,2249 +686,1118 @@ Partner / Special voice:
   propose_deal
   propose_release_deal
 
-فایل: app/ai/agent_tools.py
+Business OS gated tools:
+  propose_log_call
+  propose_followup
+  propose_visit_result
+  propose_no_show
+  propose_offer
+  propose_counter_offer
+  propose_reservation
+  propose_contract
+  propose_payment_milestone
+  propose_settlement
+  propose_lead
+  propose_task
+
+7.5 Human-in-the-loop
+----------------------
+
+Mutation حساس مستقیماً با پیشنهاد مدل persist نمی‌شود:
+
+  Tool proposal
+    -> ui_action / confirm card
+    -> signed/registered pending token
+    -> user confirm endpoint
+    -> confirm_action_from_token()
+    -> business persistence
+    -> card/chat event update
+
+visit collection چندمرحله‌ای می‌تواند با rule-based
+try_continue_visit_from_user_message بدون LLM ادامه پیدا کند.
 
 
 ================================================================================
-4. Knowledge / RAG
+8. جریان واقعی generate_reply
 ================================================================================
 
-4.1 ورود اطلاعات ملک به AI
----------------------------
-بدون RAG و بدون Embedding.
+مرجع: app/ai/services.py
 
-روش                    | محل
------------------------|------------------------------------------
-Context injection      | context.py — خلاصه متنی _land_summary()
-Tool search            | _tool_search_lands() — keyword/heuristic
-Marker در پاسخ         | [[LAND:کد]] -> land_cards.py
+  1. تنظیم flask.g برای thread، audience، focus land و پیام کاربر
+  2. ai_config و service-enabled guard
+  3. credit/rate/dedup/guest guard؛ امکان early return
+  4. normalize chip intent
+  5. Conversation Engine
+       handled + no handoff:
+         Executive goals-only + Goals -> return بدون LLM
+       pass-through:
+         ادامه pipeline
+  6. Executive plan و Goal Engine
+  7. Supervisor route/policy
+  8. Agent preparation
+       default parallel:
+         DAG agents -> Decision -> BI -> World Model -> Long Plan
+       fallback:
+         sequential single-agent
+  9. Adaptive begin و after-agent-prepare
+ 10. reset visit draft در chip مربوط
+ 11. rule-based visit continuation؛ امکان early return
+ 12. schema ابزارها با Supervisor gate
+ 13. build messages:
+       prompt + context/RAG + memory + history/summary
+ 14. Planning:
+       compact hint + safe tool seeds
+ 15. Agent hint priority:
+       Decision > Parallel Merge > per-agent hints
+ 16. DeepSeek agent loop
+ 17. post-process:
+       escalation، land codes/cards، agent actions و HTML cards
+ 18. Adaptive after-response یا fail
+ 19. response dedup cache
+ 20. Memory learn_from_exchange
+ 21. token analytics -> evaluation -> self-reflection
+ 22. route handler append_exchange به chat_store
 
-داده منبع:
-  lands.json / load_express_lands_cached()
-  فیلتر جغرافی: land_in_service_focus() — روستای گرمابسرد
-
-
-4.2 Embedding
--------------
-وجود ندارد.
-جستجو در کدبیس برای chromadb، faiss، pinecone، embedding نتیجه‌ای ندارد.
-
-
-4.3 Vector Search
------------------
-وجود ندارد.
-
-
-4.4 مبنای تولید پاسخ
----------------------
-  1. System prompt ثابت (قواعد کسب‌وکار وینور)
-  2. Context دینامیک (JSON -> متن فشرده)
-  3. تاریخچه چت (5 پیام اخیر)
-  4. خروجی tool calls (جستجو، وضعیت، پیشنهاد اکشن)
-  5. پاسخ‌های escalation ادمین (اگر سوال مشابه باشد)
-
-
-================================================================================
-5. Database Structure
-================================================================================
-
-5.1 مدل داده
-------------
-JSON-first — رابطه‌ها implicit در فیلدهای dict هستند، نه FK در RDBMS.
-SQLAlchemy (app/extensions.py) initialize می‌شود ولی هیچ db.Model تعریف نشده.
-
-
-5.2 فایل‌های اصلی (instance/data/)
-----------------------------------
-فایل                              | موجودیت           | نقش
-----------------------------------|-------------------|---------------------------
-lands.json                        | Property/Land     | آگهی‌های اصلی
-express_partner_applications.json | Application       | درخواست همکاری
-express_partners.json             | User (Partner)    | پروفایل همکار
-users.json                        | User              | کاربران عمومی
-express_assignments.json          | Assignment        | تخصیص فایل به همکار
-express_visit_requests.json       | Visit             | درخواست بازدید
-express_commissions.json          | Transaction       | پورسانت و معامله
-partner_missions.json             | Mission           | مأموریت رندوم AI
-express_partner_sales.json        | Sale              | فروش ثبت‌شده
-ai_chats/{audience}/*.json        | Conversation      | گفتگوی AI
-ai_escalations.json               | Escalation        | سوالات ارجاع‌شده
-settings.json                     | Config            | تنظیمات شامل AI
-sms_history.json                  | SMS               | تاریخچه ارسال
-sms_recipient_groups.json         | SMS Groups        | گروه‌های مخاطب انبوه
-postchi_messages.json             | Postchi           | پیام‌های رسمی
-notifications.json                | Notification      | اعلان‌ها
-express_views.json                | Analytics         | بازدید صفحات
-
-
-5.3 ارتباط User، Property، Conversation و Transaction
-------------------------------------------------------
-
-User (phone)
-  |
-  +-- express_partners          (پروفایل همکار)
-  +-- express_assignments       (land_code -> partner_phone)
-  +-- express_visit_requests    (partner + land + customer)
-  +-- express_commissions       (tx_mode: visit | deal | deal_pending | ...)
-  +-- partner_missions          (land_code + thread seed)
-  +-- ai_chats                  (threads/messages per audience)
-
-Land (code)
-  |
-  +-- در lands.json
-  +-- assignment.status: active | in_transaction | sold | pending | ...
-  +-- visit_requests و commissions مرتبط با land_code
-
-Conversation
-  -> bind به User با phone/user_key و audience (public | partner)
-  -> thread_id برای جداسازی گفتگوها (شامل __postchi__ برای پستچی)
-
-Transaction
-  -> express_commissions + state مأموریت/assignment
-  -> tx_mode در sales_coach.py و agent_tools هم‌راستا می‌شود:
-     visit, visit_commission_pending, deal, deal_pending, release, blocked, ...
-
-
-5.4 SQLite
-----------
-مسیر: sqlite:///instance/vinor.db
-وضعیت: initialize می‌شود (db.create_all) ولی بدون schema فعال.
-منبع حقیقت: JSON files.
+نکات مهم:
+  - Decision، BI، World Model و Long Planner در مسیر live به branch اجرای
+    Parallel Agents وابسته‌اند.
+  - Conversation form و visit continuation می‌توانند کل LLM path را دور بزنند.
+  - Stateهای Supervisor/Adaptive/Executive عمدتاً object روی flask.g هستند و
+    خودشان وارد Prompt نمی‌شوند.
+  - BI object تولید می‌شود؛ با وجود flag مربوط، BI hint مستقلی در message
+    injection فعلی wire نشده است.
 
 
 ================================================================================
-6. Backend
+9. Conversation و Workflow
 ================================================================================
 
-6.1 فریم‌ورک
-------------
-Flask 2.3.3 + Jinja2 + Flask-WTF
-Gunicorn (production) / Passenger WSGI (passenger_wsgi.py)
-SQLAlchemy 2.0 (غیرفعال از نظر domain models)
+9.1 Conversation Engine
+------------------------
 
+مسیر: app/conversation/
 
-6.2 Blueprintها
----------------
-Blueprint              | Prefix              | نقش
------------------------|---------------------|----------------------------------
-main_bp                | /                   | سایت عمومی، لندینگ
-express_partner_bp     | /express/partner    | پنل همکار + AI chat API
-ai_bp                  | /ai                 | چت عمومی، health، sync
-admin_bp               | /admin              | مدیریت، AI settings، SMS
-express_api_bp         | (خود blueprint)     | API پنل
-sms_api_bp             | (خود blueprint)     | SMS.ir
-push_api_bp            | (خود blueprint)     | Web Push
-fcm_api_bp             | (خود blueprint)     | FCM برای APK
-uploads_bp             | /uploads            | فایل‌های رسانه
-webhook_bp             | (خود blueprint)     | webhook خارجی
+اجزا:
+  Identity Resolver
+  Role Resolver
+  Intent Resolver
+  Workflow Resolver
+  Session Store
+  DefaultConversationManager
 
+State:
+  START، COLLECTING، WAITING، COMPLETED، FAILED
 
-6.3 APIهای AI
--------------
-Method | Path                              | کار
--------|-----------------------------------|----------------------------------
-POST   | /express/partner/ai/chat          | چت همکار
-POST   | /express/partner/ai/agent/confirm   | تأیید اکشن agent
-GET    | /express/partner/ai/history         | تاریخچه thread
-POST   | /ai/chat                          | چت عمومی
-GET    | /ai/health                        | وضعیت سرویس AI
-GET    | /ai/sync                          | پیام‌های جدید (پاسخ ادمین)
+ذخیره:
+  instance/data/ai_conversation/{user}.json
 
+رفتار:
+  - قبل از Supervisor اجرا می‌شود.
+  - فقط fieldهای missing را سؤال می‌کند.
+  - workflowهای فرم را بدون LLM پیش می‌برد.
+  - search/compare/recommendation/negotiation/general را pass-through می‌کند.
+  - Foundation commit hook را در completion صدا می‌زند.
 
-6.4 سرویس‌های اصلی
-------------------
-سرویس              | مسیر                                    | نقش
--------------------|-----------------------------------------|---------------------------
-Storage            | app/utils/storage.py                    | CRUD JSON
-SMS                | app/services/sms.py                     | sms.ir
-Partner Missions   | app/express_partner/partner_missions.py | تخصیص فایل + seed چت
-Sales Coach        | app/express_partner/sales_coach.py      | nudge روزانه 10/14/20 تهران
-Commissions Flow   | app/express_partner/commissions_flow.py | قیف پورسانت
-Postchi            | app/services/postchi.py                 | inbox رسمی
-Visit Requests     | app/express_partner/visit_requests.py   | مدیریت بازدید
-Admin SMS          | admin/sms_scheduled.py                  | ارسال زمان‌دار
-Admin Recipients   | admin/sms_recipients.py                 | گروه‌های مخاطب
-
-
-================================================================================
-7. Frontend
-================================================================================
-
-7.1 تکنولوژی
-------------
-Server-rendered:  Jinja2
-CSS:              Tailwind CSS 3.4 (local vendor)
-JS:               Alpine.js 3.14 + Vanilla JS
-PWA:              manifest.webmanifest, sw.js, Service Worker
-فونت/آیکون:       Font Awesome، فونت‌های محلی
-
-بدون: React، Vue، Next.js، Webpack/Vite در مسیر اصلی.
-
-
-7.2 صفحات اصلی Express Partner (/express/partner/)
-----------------------------------------------------
-صفحه           | Endpoint              | توضیح
----------------|-----------------------|----------------------------------
-Home           | /home                 | داشبورد + چت AI لایه‌ای
-Dashboard      | /dashboard            | فایل‌های اختصاصی
-Files          | /files                | لیست فایل‌ها
-Land detail    | /land/<code>          | جزئیات ملک
-Commissions    | /commissions          | کیف پول و برداشت
-Apply          | /apply/*              | ثبت همکاری (چند مرحله)
-Auth           | /auth/*               | OTP لاگین
-Favorites      | /favorites            | علاقه‌مندی‌ها
-Requests       | /requests             | درخواست‌ها
-Notifications  | /notifications        | اعلان‌ها
-Profile        | /profile              | پروفایل
-
-
-7.3 کامپوننت‌های AI (Partials)
--------------------------------
-app/express_partner/templates/express_partner/partials/
-  ai_chat_layer.html          — لایه چت شناور
-  ai_chat_composer.html       — ورودی پیام
-  ai_chat_message.html        — رندر پیام
-  ai_chat_panel.html          — پنل کامل
-  ai_chat_threads.html        — لیست threadها
-  home_journey_card.html      — کارت سفر قیف فروش
-  ep_ai_fab.html              — دکمه شناور AI
-
-
-7.4 Admin (/admin/)
--------------------
-  مدیریت lands، partners، commissions
-  SMS همکاران (colleagues_sms.html)
-  گروه‌های مخاطب SMS (sms_recipients_index.html)
-  تنظیمات AI و سوالات escalation (/admin/ai-questions)
-
-
-7.5 Public (/)
---------------
-  /                  — لندینگ
-  /express/<code>    — جزئیات ملک عمومی
-  /partners          — صفحه همکاران
-  /start             — شروع
-
-
-================================================================================
-8. Deployment
-================================================================================
-
-8.1 اجرا
---------
-محیط          | روش
---------------|--------------------------------------------------
-Development   | python run.py — Flask dev server
-Production    | passenger_wsgi.py -> from run import app
-              | روی cPanel / LiteSpeed
-
-
-8.2 Schedulerها
----------------
-در production داخل worker خاموش (VINOR_*_SCHEDULER=0 در passenger_wsgi.py).
-
-Cron scripts:
-  */10 * * * *  scripts/run_sales_coach_nudge.py
-  * * * * *     scripts/run_admin_sms_scheduled_jobs.py
-  (اختیاری)     scripts/run_daily_celebration_sms.py
-
-
-8.3 متغیرهای محیطی
-------------------
-متغیر                        | نقش
------------------------------|------------------------------------------
-INSTANCE_PATH                | مسیر instance/
-DATABASE_URL                 | SQLite (اختیاری)
-SECRET_KEY                   | session Flask
-DEEPSEEK_API_KEY             | کلید AI
-FLASK_DEBUG                  | حالت debug
-VINOR_SALES_COACH_SCHEDULER  | scheduler داخلی sales coach
-VINOR_ADMIN_SMS_SCHEDULER    | scheduler داخلی SMS
-VINOR_CELEBRATION_SMS_SCHEDULER | scheduler جشن فروش
-TRUST_PROXY                  | پشت reverse proxy
-SESSION_COOKIE_SECURE        | کوکی امن
-
-
-8.4 وابستگی‌ها (requirements.txt)
-----------------------------------
-Flask 2.3.3, requests, Pillow, pywebpush, aiohttp, pytz, tzdata,
-gunicorn, flask-sqlalchemy, flask-cors, flask-wtf, cryptography
-
-
-8.5 کلیدها و تنظیمات
+9.2 Workflow Engine
 --------------------
-api_keys.py (ریشه پروژه) — کلیدهای پیش‌فرض
-settings.json (instance/data/) — تنظیمات runtime شامل AI
-config.py — VAPID و تنظیمات Flask
+
+مسیر: app/workflow/
+
+State Machine:
+  INIT -> COLLECTING -> VALIDATING -> WAITING_USER
+       -> READY -> COMPLETED
+       -> FAILED | CANCELLED
+
+Validatorها:
+  non_empty، price، area، phone، national_id، photos، yes_no،
+  land_code، deal_type
+
+Registry فعلی شامل 11 Workflow است:
+  1. PropertyRegistrationWorkflow
+  2. PropertyEditingWorkflow
+  3. PartnerWorkflow
+  4. VisitWorkflow
+  5. DealWorkflow
+  6. OfferWorkflow
+  7. VisitResultWorkflow
+  8. CrmFollowupWorkflow
+  9. ClosingContractWorkflow
+ 10. SupportWorkflow
+ 11. GeneralConversationWorkflow
+
+Offer و workflowهای Integration با feature flag جدا gate می‌شوند.
+VINOR_WORKFLOW_HANDOFF_SUPERVISOR در کد فعلی پیش‌فرض ON است.
 
 
 ================================================================================
-9. Current AI Capability
+10. Knowledge، RAG، Memory و Planning
 ================================================================================
 
-9.1 Vinor الان چه کارهایی انجام می‌دهد؟
-----------------------------------------
+10.1 RAG
+---------
 
-برای مشتری (public):
-  - جستجوی ملک در گرمابسرد (search_lands)
-  - توضیح سطوح / شرایط / مسیر همکاری
-  - وضعیت درخواست همکاری
-  - پیشنهاد کارت ثبت همکاری (با تأیید کاربر)
-  - ارجاع سوال به ادمین ([[ESCALATE]])
+Vinor اکنون RAG دارد؛ هر ادعای «RAG/Embedding/Vector Search وجود ندارد» تاریخی
+و منسوخ است.
 
-برای همکار (partner / special):
-  - پیشنهاد «کار بعدی» از وضعیت داشبورد
-  - متن آگهی دیوار / اینستا (draft_listing_copy)
-  - ثبت بازدید چندمرحله‌ای با کارت تأیید
-  - «بازدید انجام شد»، ثبت معامله، انصراف از معامله
-  - جستجوی فایل + کارت ملک
-  - آگاهی از مأموریت فعال و tx_mode
+مسیر:
+  app/knowledge/
 
-غیر-AI ولی مرتبط:
-  - Sales Coach: پیامک/اعلان rule-based سه‌بار در روز (10، 14، 20 تهران)
-  - Partner Missions: تخصیص فایل رندوم + seed پیام اول چت
-  - Postchi: inbox رسمی (بدون LLM)
+Contracts:
+  PropertyRetriever
+  EmbeddingProvider
+  VectorStore
 
+Bridge:
+  app/ai/context.py::_select_lands_by_rag
 
-9.2 بخش‌های Agent
------------------
-قابلیت                          | نوع
---------------------------------|----------------------------------
-Tool calling (2 round)          | Agent
-کارت تأیید + confirm_action     | Agent + Human-in-the-loop
-Chip intents                    | Agent steering
-Visit step continuation         | Hybrid (rule + agent)
-Context injection از JSON       | Agent context (نه RAG)
+قرارداد خروجی:
+  فقط property_code؛ متن Prompt و _land_summary از land object فعلی ساخته می‌شود.
 
+Provider adapters:
+  OpenAI، DeepSeek، BGE، Jina
 
-9.3 بخش‌های Rule-based
-----------------------
-حوزه                    | مکان
-------------------------|------------------------------------------
-احراز هویت OTP          | express_partner/routes.py
-تخصیص فایل / مأموریت    | partner_missions.py
-قیف tx_mode و دکمه‌ها   | sales_coach.py, land_chat_detail.py
-پورسانت و برداشت        | commissions_flow.py
-SMS زمان‌بندی           | admin/sms_scheduled.py
-فیلتر جغرافی گرمابسرد   | iran_cities.py
-Rate limit / guest cap  | credits.py
-Visit draft state       | agent_tools.py
-Celebration SMS         | scripts/run_daily_celebration_sms.py
+Vector store adapters:
+  InMemory، FAISS، Qdrant، Chroma
 
+Default:
+  VINOR_EMBEDDING_PROVIDER=deepseek
+  VINOR_VECTOR_STORE=inmemory
 
-================================================================================
-10. Improvement Roadmap (تحلیل شکاف)
-================================================================================
+Fallback:
+  TF-IDF retriever در خطای provider/store یا محیط dev
 
-برای تبدیل Vinor به یک Vertical AI Real Estate Agent کامل، شکاف‌های
-معماری فعلی به شرح زیر است. این بخش تحلیل شکاف است، نه پیشنهاد توسعه.
+ویژگی‌ها:
+  metadata filtering
+  dynamic top-k
+  allowed-code boundary
+  lexical boost
+  dedup property_code
+  query/retrieval cache
+  incremental index بر اساس signature ملک
+  index persistence در instance/data/rag/lands_index.json
 
+FAISS/Qdrant/Chroma adapterها وجود دارند، اما dependencyهای آن‌ها در
+requirements اصلی الزامی نیست؛ استفاده production نیازمند نصب/config جداست.
 
-10.1 شکاف‌های لایه AI
----------------------
-موجود                          | مفقود
--------------------------------|------------------------------------------
-Function calling محدود (2 round)| Planning چندمرحله‌ای طولانی‌تر، sub-agents
-Context متنی از JSON           | RAG روی توضیحات، سند، قرارداد، نقشه
-Keyword search                 | Semantic / vector search
-Memory per-thread              | Long-term memory cross-session
-3 voice ثابت                   | Dynamic persona بر اساس مرحله قیف
+10.2 Memory
+------------
 
+مسیر:
+  app/memory/
 
-10.2 شکاف‌های Knowledge
------------------------
-موجود                          | مفقود
--------------------------------|------------------------------------------
-lands.json flat                | Pipeline ingest سند (PDF، عکس OCR، سند ملک)
-خلاصه دستی _land_summary       | Embedding index per property
-محدوده ثابت گرمابسرد           | گسترش جغرافی با knowledge graph
+Types:
+  short_term
+  long_term
+  semantic
+  relationship
 
+اجزا:
+  FileMemoryStore
+  RuleMemoryExtractor
+  CompactMemorySummarizer
+  DynamicMemoryRetriever
+  DefaultMemoryManager/Provider
 
-10.3 شکاف‌های Agent / Workflow
---------------------------------
-موجود                          | مفقود
--------------------------------|------------------------------------------
-Human confirm برای اکشن        | Autonomous execution با policy engine
-2 round tool                   | Orchestrator برای زنجیره طولانی
-Escalation دستی ادمین          | Self-healing + KB از پاسخ‌های ادمین
-Sales coach rule-based         | Coach یکپارچه با LLM و context معامله
+ذخیره:
+  instance/data/ai_memory/{phone}.json
 
+Lifecycle:
+  retrieve پیش از LLM
+  budget-controlled block
+  learn_from_exchange پس از پاسخ موفق
 
-10.4 شکاف‌های Data / Platform
------------------------------
-موجود                          | مفقود
--------------------------------|------------------------------------------
-JSON files                     | RDBMS / transactional DB برای consistency
-بدون audit trail مرکزی         | Event log برای تصمیمات AI
-Phone-centric identity         | CRM integration، lead scoring
+کنترل‌ها:
+  budget پیش‌فرض 280 کاراکتر
+  relevance/top-k
+  fingerprint dedup
+  noise filter
+  edit/delete/version
+  fail-open
 
+10.3 Planning
+--------------
 
-10.5 شکاف‌های Product
----------------------
-موجود                          | مفقود
--------------------------------|------------------------------------------
-چت متنی فارسی                  | Voice، multimodal (عکس ملک)
-پنل همکار                      | Agent برای خریدار end-to-end تا قرارداد
-یک منطقه (گرمابسرد)            | Multi-market vertical agent
+مسیر:
+  app/planning/
 
+RulePlanner بدون LLM:
+  property_search
+  property_compare
+  property_recommendation
+  follow_up
+  information
 
-10.6 جمع‌بندی شکاف
-------------------
-Vinor امروز یک AI-assisted operations platform برای همکاران املاک محلی است:
-Agent محدود با tool calling و human-in-the-loop برای تراکنش‌های حساس،
-نه یک autonomous vertical agent با knowledge base معنایی، حافظه بلندمدت،
-و orchestration پیچیده.
+ToolExecutor فقط ابزارهای موجود و safe pre-execution را استفاده می‌کند.
+Plan object وارد Prompt نمی‌شود؛ فقط hint فشرده و tool seed ممکن است اضافه شود.
+برای form intentهای visit/deal/release/coop_apply planning skip می‌شود.
+
+10.4 Caching
+-------------
+
+  - context cache
+  - prompt core cache
+  - embedding cache
+  - retrieval cache
+  - response/dedup cache
+  - per-agent in-process TTL caches
+
+این cacheها transactional datastore نیستند و نباید با durable memory اشتباه شوند.
 
 
 ================================================================================
-فایل‌های مرجع کلیدی
+11. Supervisor، Adaptive و Agent Architecture
 ================================================================================
 
-حوزه              | مسیر
-------------------|----------------------------------------------------------
-App factory       | app/__init__.py
-AI orchestration  | app/ai/services.py
-Tools & actions   | app/ai/agent_tools.py
-Prompts           | app/ai/config.py
-Context           | app/ai/context.py
-Chat memory       | app/ai/chat_store.py
-Audience/Voice    | app/ai/audience.py
-Credits           | app/ai/credits.py
-Escalations       | app/ai/escalations.py
-Runtime settings  | app/ai/runtime_settings.py
-Partner AI routes | app/express_partner/routes.py (حدود خط 4711+)
-JSON storage      | app/utils/storage.py
-Partner missions  | app/express_partner/partner_missions.py
-Sales coach       | app/express_partner/sales_coach.py
-Commissions       | app/express_partner/commissions_flow.py
-Deploy dev        | run.py
-Deploy prod       | passenger_wsgi.py
-Dependencies      | requirements.txt
+11.1 Supervisor
+----------------
 
+مسیر: app/supervisor/
 
-================================================================================
-جریان چت AI همکار (خلاصه)
-================================================================================
+اجزا:
+  RuleRouter
+  RuleExecutionPolicy
+  Workflow/ComponentFlags
+  DefaultSupervisor
 
-  [Partner UI]
-       |
-       | POST /express/partner/ai/chat
-       v
-  [generate_reply]
-       |
-       +---> context.py (build system context)
-       |
-       +---> DeepSeek API (messages + tools)
-       |         |
-       |         +---> tool_calls? -> agent_tools.run_tool
-       |         |
-       |         +---> final reply
-       |
-       +---> chat_store.append_exchange
-       |
-       v
-  [JSON response: reply + agent_actions + land_cards]
-       |
-       | (اگر کارت تأیید)
-       v
-  POST /express/partner/ai/agent/confirm
-       |
-       v
-  confirm_action_from_token -> persist visit/deal/...
+Routeها:
+  greeting
+  general_chat
+  faq
+  follow_up
+  property_search
+  property_compare
+  partner_ops
 
+خروجی policy:
+  use_planning، use_memory، use_rag، use_tools، use_llm،
+  context_budget_chars و executed/skipped components.
 
-================================================================================
-11. RAG Layer (Phase 1 - lands.json)
-================================================================================
+11.2 Adaptive
+--------------
 
-11.1 هدف فاز فعلی
------------------
-- افزودن RAG فقط برای انتخاب هوشمند فایل‌های ملکی
-- منبع داده فقط lands.json
-- بدون تغییر قالب Prompt و متن Context فعلی
-- خروجی RAG فقط property_code
-- در خطا یا عدم دسترسی RAG، fallback کامل به منطق قبلی
+مسیر: app/adaptive/
 
-11.2 معماری اضافه‌شده
----------------------
-- Knowledge Interface:
-  - app/knowledge/interfaces.py
-  - RetrievalRequest + PropertyRetriever
-- RAG Core:
-  - app/knowledge/rag/retriever.py (LandsRagRetriever)
-  - app/knowledge/rag/vector_store.py (TF-IDF vector store + metadata filtering)
-  - app/knowledge/rag/query_analysis.py (تحلیل query و استخراج filter)
-  - app/knowledge/rag/sources.py (تبدیل lands.json به اسناد embedding)
-  - app/knowledge/rag/cache.py (TTL cache)
-  - app/knowledge/rag/config.py (VINOR_RAG_ENABLED و تنظیمات RAG)
-- Service Bridge:
-  - app/knowledge/service.py (singleton provider)
+اجزا:
+  RuleWorkflowMachine
+  RuleConfidenceEstimator
+  RuleQualityEvaluator
+  RuleRetryPolicy
+  RuleRecoveryPolicy
+  DefaultAdaptiveController
 
-11.3 نقطه ادغام با سیستم فعلی
------------------------------
-- فایل: app/ai/context.py
-- تابع فعلی _select_lands_for_query حفظ شده و فقط یک مسیر RAG قبل از heuristic
-  به آن اضافه شده است.
-- تابع جدید _select_lands_by_rag:
-  - Retriever را صدا می‌زند
-  - allowed_codes را فقط از pool فعلی می‌گیرد
-  - فقط code برمی‌گرداند
-  - سپس همان آبجکت land موجود برای _land_summary و قالب قبلی Context استفاده می‌شود
+State:
+  INIT -> SEARCHING -> ANALYZING -> READY -> DONE | FAILED
 
-11.4 جریان اجرای فاز 1
-----------------------
-User
-  -> _select_lands_for_query
-    -> _select_lands_by_rag
-      -> Retriever
-        -> property_codes
-      -> همان lands فعلی
-    -> _land_summary / قالب‌های Context فعلی
-  -> LLM
+Retry:
+  حداکثر یک بار و بدون LLM اضافه؛ lean strategy فقط planning hint/seed را
+  کاهش می‌دهد.
 
-11.5 Production Readiness در فاز 1
-----------------------------------
-- Index persistence روی instance/data/rag/lands_index.json
-- auto rebuild بر اساس mtime فایل lands.json
-- caching با TTL برای queryهای تکراری
-- metadata filtering (city/category/status/price/area/tags)
-- hybrid lexical boost روی code/city/location/category
-- script آماده prebuild:
-  - scripts/build_property_rag_index.py
+State/confidence وارد Prompt نمی‌شود.
 
-11.6 Test Coverage
-------------------
-- tests/test_rag_vector_store.py
-  - صحت retrieval با metadata filter
-- tests/test_context_rag_bridge.py
-  - استفاده از RAG وقتی available است
-  - fallback به heuristic وقتی RAG خروجی ندارد
-- tests/test_rag_di_retriever.py
-  - مسیر اصلی DI-based embedding retriever
-  - fallback خودکار به TF-IDF در خطای provider
+11.3 Agent Registry
+--------------------
 
-11.7 DI Architecture (Production-grade RAG)
--------------------------------------------
-- Interface اصلی Knowledge Layer اکنون شامل سه قرارداد مستقل است:
-  - PropertyRetriever
-  - EmbeddingProvider
-  - VectorStore
-- Retriever از طریق Dependency Injection ساخته می‌شود:
-  - provider factory: app/knowledge/rag/di.py -> make_embedding_provider()
-  - vector store factory: app/knowledge/rag/di.py -> make_vector_store()
-- Embedding Providerهای قابل تعویض:
-  - OpenAIEmbeddingProvider
-  - DeepSeekEmbeddingProvider
-  - BGEEmbeddingProvider
-  - JinaEmbeddingProvider
-  - TF-IDF فقط در نقش fallback retriever (نه مسیر اصلی production)
-- Vector Storeهای قابل تعویض:
-  - FaissVectorStore (adapter)
-  - QdrantVectorStore (adapter)
-  - ChromaVectorStore (adapter)
-  - InMemoryVectorStore (اجرای فعلی)
-- مسیر اصلی production:
-  - User query -> EmbeddingProvider -> VectorStore.search -> property_codes
-- مسیر fallback/dev:
-  - در هر خطای provider/store، LandsRagRetriever به TfidfFallbackRetriever سوییچ می‌کند
-- نتیجه:
-  - Agent/Prompt/context template بدون تغییر باقی مانده و فقط لایه دانش قابل تعویض شده است.
+شش Agent فعال:
+  property_search       PropertySearchAgent
+  property_analysis     PropertyAnalysisAgent
+  recommendation        RecommendationAgent
+  customer_memory       CustomerMemoryAgent
+  negotiation           NegotiationAgent
+  follow_up              CustomerSuccessAgent
 
-12. Optimization Sprint (Production Performance)
-------------------------------------------------
+Agent Skeleton فعالی در Registry وجود ندارد؛ make_skeleton_agents خروجی خالی
+دارد. هر Agent علاوه بر active بودن Registry، service-level feature gate دارد.
 
-12.1 Token Optimization (Instrumentation + Runtime)
-- افزودن ماژول تحلیل توکن:
-  - app/ai/token_analytics.py
-- ثبت analytics برای هر درخواست AI در:
-  - instance/data/ai_token_analytics.jsonl
-- فیلدهای ثبت‌شده:
-  - input_tokens
-  - output_tokens
-  - system_prompt_tokens
-  - context_tokens
-  - history_tokens
-  - rag_tokens
-  - total_tokens
-  - total_cost (configurable by env rates)
-  - response_time_ms
-  - api_rounds
-  - provider/model/cache_hit
-
-12.2 Dynamic Context
-- مسیر قبلی حفظ شده و رفتار کاربر تغییر نکرده است.
-- Context ملک همچنان فقط در queryهای مرتبط وارد می‌شود (منطق قبلی حفظ شده).
-- Prompt core context cache با TTL کوتاه اضافه شد تا build تکراری کاهش یابد:
-  - _PROMPT_CACHE در app/ai/services.py
-
-12.3 Conversation Compression
-- قابلیت فشرده‌سازی history قدیمی اضافه شد ولی پیش‌فرض خاموش است:
-  - VINOR_HISTORY_SUMMARY=0 (default)
-  - در حالت فعال، فقط وقتی summary از پیام‌های حذف‌شده کم‌هزینه‌تر باشد استفاده می‌شود.
-- هدف: جلوگیری از افزایش token و حفظ رفتار پیش‌فرض فعلی.
-
-12.4 Smart RAG
-- Dynamic Top-K در retriever اضافه شد (کوتاه/بلند بودن query).
-- Metadata filtering قبل از retrieval اعمال می‌شود (city/category/status/price/area/tags).
-- Dedup در سطح property_code حفظ شده است.
-
-12.5 Incremental Index
-- RAG index از حالت full re-embed به incremental تغییر کرد:
-  - signature per property
-  - re-embed فقط برای اسناد تغییرکرده
-  - حذف اسناد پاک‌شده بدون rebuild embedding کامل
-- فایل: app/knowledge/rag/retriever.py
-
-12.6 Cache Layers
-- Embedding Cache: hash(text)->vector در retriever
-- Retrieval Cache: TTL cache روی query/filt/top_k/allowed
-- Prompt Cache: TTL cache برای core context build
-- Response Cache: مسیر قبلی credits.py حفظ و فعال
-
-12.7 Benchmark & Verification
-- اسکریپت benchmark اضافه شد:
-  - scripts/benchmark_ai_prompt_optimization.py
-- خروجی benchmark (local synthetic):
-  - avg tokens before/after: 1309 / 1309 (بدون تغییر در default mode)
-  - avg build ms before/after: 21.95 / 28.49
-- نتیجه: بهینه‌سازی‌های این sprint روی runtime واقعی API/RAG/analytics متمرکز شد و
-    فشرده‌سازی history به‌صورت پیش‌فرض خاموش ماند تا رفتار و کیفیت فعلی تغییر نکند.
-- تست‌ها:
-  - 6 unit test PASS
-  - test_rag_incremental_index.py اضافه شد
-
-
-13. Memory Layer (Phase 5)
---------------------------
-
-13.1 هدف
-- تبدیل Vinor به Memory Agent بدون تغییر Prompt/RAG/Agent tools
-- Memory فقط از طریق Interface و DI قابل استفاده است
-- کنترل سخت Token با budget و retrieval پویا
-
-13.2 ساختار
-app/memory/
-  interfaces.py      MemoryProvider/Store/Retriever/Extractor/Summarizer/Manager
-  config.py          VINOR_MEMORY_* flags/budgets
-  store.py           FileMemoryStore (+ InMemory for tests)
-  extractor.py       RuleMemoryExtractor (بدون LLM)
-  summarizer.py      CompactMemorySummarizer
-  retriever.py       DynamicMemoryRetriever
-  manager.py         DefaultMemoryManager + DefaultMemoryProvider
-  di.py              factories
-  service.py         singleton facade for AI layer
-
-13.3 Memory Types
-- short_term: وضعیت مکالمه جاری / آخرین intent
-- long_term: بودجه، منطقه، نوع ملک، ترجیحات
-- semantic: facts مفید استخراج‌شده از گفتگو
-- relationship: viewed/liked/rejected land codes
-
-13.4 Integration (non-breaking)
-- Retrieve قبل از LLM در _build_system_prompt/_build_messages
-  (بلوک جدا: === حافظه مرتبط کاربر ===)
-- Ingest بعد از پاسخ موفق در generate_reply -> learn_from_exchange
-- RAG/Knowledge/Prompt templates بدون تغییر
-
-13.5 Token Controls
-- VINOR_MEMORY_BUDGET_CHARS (default 280)
-- Dynamic relevance scoring + top_k
-- Duplicate fingerprint on upsert
-- Noise filter (سلام/ممنون/…)
-- Fail-open: خطای Memory هیچ‌وقت چت را نمی‌شکند
-
-13.6 Observability
-در ai_token_analytics.jsonl:
-  memory_retrieved, memory_used, memory_tokens,
-  total_prompt_tokens, latency_ms
-
-13.7 Safety
-- delete_memory / edit_memory / version روی هر item
-- Storage جدا از conversation: instance/data/ai_memory/{phone}.json
-
-13.8 Benchmark (Phase 5)
-- scripts/benchmark_memory_layer.py
-- Before avg tokens: 1120.00
-- After avg tokens:  1174.00
-- Token delta: +4.82%
-- Avg memory tokens injected: 50.00
-- Tests: 10/10 PASS
-
-
-14. Planning Layer (Phase 6)
+11.4 Parallel Collaboration
 ----------------------------
 
-14.1 هدف
-- تبدیل Vinor به Planning Agent بدون Multi-Agent
-- بدون تغییر Prompt / Memory / RAG / Tool set فعلی
-
-14.2 ساختار
-app/planning/
-  interfaces.py   Planner, Plan, Task, Executor, Evaluator, PlanningManager
-  config.py       VINOR_PLANNING_* flags
-  planner.py      RulePlanner (zero LLM tokens)
-  executor.py     ToolExecutor (only existing run_tool tools)
-  evaluator.py    GoalEvaluator
-  manager.py      DefaultPlanningManager
-  di.py / service.py
-
-14.3 Plan Types
-- property_search
-- property_compare
-- property_recommendation
-- follow_up
-- information
-
-14.4 Integration
-- generate_reply: run_planning_once BEFORE agent loop (once)
-- Plan object never enters Prompt
-- Optional compact hint (=== یافتهٔ برنامه‌ریز ===) + seeded tool messages
-- Skip planning for multi-step form intents: visit/deal/release/coop_apply
-- Merge plan land_codes / agent_actions into final result
-
-14.5 Token Controls
-- Rule planner (planning_tokens=0)
-- Hint budget default 120 chars
-- Seed tool results to avoid duplicate LLM tool rounds
-- Token delta target < 10%
-
-14.6 Observability
-planning_time_ms, tasks_count, executed_tasks,
-planning_tokens, execution_tokens, plan_type, total_cost
-
-14.7 Benchmark
-- scripts/benchmark_planning_layer.py
-- Before: 1100 tokens | After: 1153 tokens | Delta: +4.82%
-- Avg planning time: 0.32 ms
-- Tests: 14/14 PASS
-
-
-15. Supervisor / Orchestrator Layer (Phase 7)
----------------------------------------------
-
-15.1 هدف
-- لایه Orchestration مستقل برای مدیریت Planning + Memory + RAG + Tools + LLM
-- پایه Multi-Agent آینده (بدون پیاده‌سازی Multi-Agent واقعی در این فاز)
-- Rule-Based Routing (بدون LLM برای تصمیم داخلی)
-
-15.2 Architecture Diagram
-
-User
-  ↓
-Supervisor (Router + ExecutionPolicy + Workflow)
-  ↓
-[optional] Planning
-  ↓
-[optional] Memory
-  ↓
-[optional] Knowledge/RAG
-  ↓
-[optional] Tool Calling
-  ↓
-LLM
-  ↓
-Response
-
-15.3 Sequence Diagram
-
-generate_reply
-  -> Supervisor.orchestrate(message, intent)
-  -> set flags on request context
-  -> _build_messages
-       -> Memory retrieve IFF flags.use_memory
-       -> land context / RAG IFF flags.use_rag (via allow_component gate)
-  -> Planning.run_once IFF flags.use_planning
-  -> AgentLoop with tools IFF flags.use_tools
-  -> LLM final response
-  -> analytics(routed_workflow, executed/skipped, tokens, latency)
-
-15.4 Folder Structure
-app/supervisor/
-  interfaces.py
-  config.py
-  router.py
-  policy.py
-  workflow.py
-  manager.py
-  di.py
-  service.py
-
-15.5 فایل‌های جدید
-- app/supervisor/*
-- tests/test_supervisor_layer.py
-- scripts/benchmark_supervisor_layer.py
-
-15.6 کلاس‌های جدید
-- RuleRouter
-- RuleExecutionPolicy
-- Workflow / ComponentFlags
-- DefaultSupervisor
-- DefaultSupervisorManager
-- service gates: allow_component / orchestrate_request
-
-15.7 Routes
-- greeting -> LLM only
-- general_chat -> Memory + Tools + LLM
-- faq -> Planning + Tools + LLM
-- follow_up -> Memory + Planning + Tools + LLM
-- property_search/compare -> Planning + Memory + RAG + Tools + LLM
-- partner_ops -> Memory + Tools + LLM (skip planning/rag)
-
-15.8 اتصال به سیستم فعلی (non-breaking)
-- generate_reply: orchestrate قبل از context/planning
-- memory gate در _memory_block_for_prompt
-- rag gate در _select_lands_by_rag
-- planning/tools gated در generate_reply
-- Prompt templates / Memory / RAG / Planning internals untouched
-
-15.9 Dependency Injection
-make_supervisor_manager()
-  -> DefaultSupervisor(RuleRouter, RuleExecutionPolicy)
-  -> DefaultSupervisorManager
-
-15.10 Token Flow
-Supervisor overhead ≈ 0 LLM tokens (rule-based)
-Savings via skipping Memory/RAG/Planning on lightweight routes
-Context Budget Manager via flags.context_budget_chars
-
-15.11 Benchmark (Phase 7)
-scripts/benchmark_supervisor_layer.py
-- greeting:        token delta +0.00% | rag_skipped=True  | memory_skipped=True
-- property_search: token delta +0.00% | rag_skipped=False | memory_skipped=False
-- follow_up:       token delta +0.00% | rag_skipped=True  | memory_skipped=False
-- Supervisor routing latency ~5–7ms
-- Tests: 19/19 PASS
-- Max token increase vs previous version: ≤ 0% on measured paths (under 5% cap)
-
-
-16. Multi-Agent Framework (Phase 8)
------------------------------------
-
-16.1 هدف
-- چارچوب Multi-Agent روی Supervisor فعلی
-- فقط Property Search Agent فعال؛ بقیه Skeleton برای فازهای بعد
-- بدون بازنویسی RAG / Memory / Planning / Tools
-- افزایش Token ≤ 5٪
-
-16.2 Agent Architecture
-
-Supervisor (route + ComponentFlags)
-  ↓
-AgentRegistry + AgentSelector
-  ↓
-Property Search Agent (ACTIVE)
-  → Planning → Memory → RAG → Tools → LLM  (existing pipeline, no duplication)
-  ↓
-Skeletons (inactive):
-  Property Analysis | Customer Memory | Recommendation | Negotiation | Follow-up
-
-16.3 Agent Lifecycle
-1. Supervisor.orchestrate → route + flags
-2. AgentSelector.select(route) → at most one agent
-3. If selected & active → Agent.run(AgentContext) [prepare only]
-4. generate_reply continues existing Memory/Planning/RAG/Tools/LLM gates
-5. Observability: selected_agent / skipped_agents / agent_tokens / latency
-
-16.4 Registry Diagram
-
-make_agent_manager()
-  → InMemoryAgentRegistry
-       register(PropertySearchAgent)          # active=True
-       register(SkeletonAgent × 5)            # active=False
-  → RuleAgentSelector(registry)
-  → DefaultAgentManager(registry, selector)
-
-16.5 Sequence Diagram
-
-generate_reply
-  -> Supervisor.orchestrate
-  -> set_supervisor_context
-  -> prepare_agent_after_supervisor(route)
-       -> AgentSelector.select
-       -> PropertySearchAgent.run  IFF route in {property_search, property_compare}
-            (agent_tokens=0; confirms shared flags; no prompt injection)
-  -> _build_messages (Memory/RAG gated)
-  -> Planning (gated)
-  -> Tools + LLM
-  -> analytics(+ agent fields)
-
-16.6 Folder Structure
-app/agents/
-  __init__.py
-  interfaces.py      # Agent, AgentContext, AgentResult, Registry, Selector, Manager
-  config.py
-  registry.py
-  cache.py           # Lazy Agent Cache
-  selector.py
-  property_search.py # ACTIVE
-  skeletons.py
-  manager.py
-  di.py
-  service.py
-
-16.7 فایل‌های جدید
-- app/agents/*
-- tests/test_agents_layer.py
-- scripts/benchmark_agents_layer.py
-
-16.8 کلاس‌های جدید
-- PropertySearchAgent
-- SkeletonAgent
-- InMemoryAgentRegistry
-- RuleAgentSelector
-- DefaultAgentManager
-- AgentCache
-
-16.9 اتصال به Supervisor
-- Supervisor همچنان Orchestrator است (route + flags)
-- پس از orchestrate، AgentSelector فقط بر اساس route تصمیم می‌گیرد
-- property_search / property_compare → PropertySearchAgent
-- سایر routeها → هیچ Agentی (Lazy; skipped_agents = همه)
-- allow_component gates بدون تغییر باقی می‌مانند
-
-16.10 Token Optimization
-- Lazy Agent Loading (فقط در صورت نیاز)
-- Agent Cache (VINOR_AGENTS_CACHE)
-- Shared Context (AgentContext.shared + Supervisor flags)
-- جلوگیری از اجرای هم‌زمان Agentها (حداکثر یکی)
-- Context Budget مشترک از Supervisor
-- agent_tokens هدف = 0 (بدون injection به Prompt)
-
-16.11 Benchmark / Token Report (Phase 8)
-scripts/benchmark_agents_layer.py
-- greeting:        before=956  after=956  delta=+0.00% selected=- agent_tokens=0
-- property_search: before=1100 after=1100 delta=+0.00% selected=property_search agent_tokens=0
-- follow_up:       before=1135 after=1135 delta=+0.00% selected=- agent_tokens=0
-- Agent prepare latency ~10–14ms (شامل Supervisor + message build)
-- Tests: agents 7/7 + supervisor 5/5 = 12/12 PASS
-- Max token increase: 0% (under 5% cap)
-
-
-17. Adaptive Autonomous Execution (Phase 9)
--------------------------------------------
-
-17.1 هدف
-- تبدیل Multi-Agent به Adaptive Autonomous Agent
-- مدیریت Workflow بدون دخالت کاربر
-- بدون بازنویسی Supervisor / Planning / Memory / RAG / Multi-Agent
-- افزایش Token < 3٪؛ بدون Prompt بزرگ جدید
-
-17.2 Adaptive Execution Diagram
-
-Supervisor → Agents (prepare)
-  ↓
-Adaptive Controller
-  ├─ Workflow State Machine (objects only)
-  ├─ Confidence Estimator (rule-based)
-  ├─ Retry Policy (max 1, strategy lean)
-  ├─ Quality Evaluator (rule-based)
-  └─ Recovery Policy (fail-soft, no loop)
-  ↓
-Existing pipeline (Planning/Memory/RAG/Tools/LLM) — unchanged
-  ↓
-Adaptive.after_response → DONE | FAILED
-
-17.3 Workflow State Machine
-
-INIT → SEARCHING → ANALYZING → READY → DONE
-                              ↘ FAILED
-Light routes: INIT → ANALYZING → READY → DONE
-Illegal transitions → FAILED (no crash, no infinite loop)
-
-17.4 Confidence Flow
-- prepare: از agent_status + used_components
-- response: از reply length + land_codes + ok + route
-- آستانه پایین: VINOR_ADAPTIVE_CONF_THRESHOLD (default 0.55)
-- فقط Object؛ وارد Prompt نمی‌شود
-
-17.5 Retry Policy
-- حداکثر ۱ بار (VINOR_ADAPTIVE_MAX_RETRIES=1)
-- فقط روی property_search/compare و confidence پایین در prepare
-- Strategy بعدی: lean → حذف planning hint/seed (کاهش نویز، نه افزایش Prompt)
-- بدون فراخوانی LLM اضافه
-
-17.6 Recovery Flow
-- on LLM failure → FAILED + recovery_count++
-- quality partial (search بدون land) → needs_continue + DONE (deferred)
-- recovery_cap ≤ 2 → جلوگیری از Loop
-- بدون Crash در caller
-
-17.7 Folder Structure
-app/adaptive/
-  interfaces.py
-  config.py
-  state.py
-  confidence.py
-  evaluator.py
-  retry.py
-  recovery.py
-  controller.py
-  di.py
-  service.py
-
-17.8 فایل‌های جدید
-- app/adaptive/*
-- tests/test_adaptive_layer.py
-- scripts/benchmark_adaptive_layer.py
-
-17.9 کلاس‌های جدید
-- RuleWorkflowMachine
-- RuleConfidenceEstimator
-- RuleQualityEvaluator
-- RuleRetryPolicy
-- RuleRecoveryPolicy
-- DefaultAdaptiveController
-
-17.10 اتصال
-- generate_reply: begin + after_agent_prepare بعد از Agent
-- use_lean_strategy() روی inject_hint/seed_tools
-- after_response_adaptive بعد از ساخت reply/land_codes
-- fail_adaptive روی خطای LLM
-- analytics: workflow_state, confidence_score, retry_count, recovery_count, skipped_steps
-
-17.11 Benchmark / Token Report (Phase 9)
-scripts/benchmark_adaptive_layer.py
-- greeting:        before=956  after=956  delta=+0.00% state=DONE conf=0.85 retry=0 recovery=0
-- property_search: before=1100 after=1100 delta=+0.00% state=DONE conf=1.00 retry=0 recovery=0
-- follow_up:       before=1135 after=1135 delta=+0.00% state=DONE conf=0.90 retry=0 recovery=0
-- success_rate=100% (60/60)
-- retry_events=0 | recovery_events=0 (مسیرهای سالم)
-- adaptive_extra_tokens=0
-- latency ~9–15ms
-- Tests: adaptive 9/9 + agents 7/7 = 16/16 PASS
-- Max token increase: 0% (under 3% cap)
-
-
-18. Property Analysis Agent (Phase 10)
---------------------------------------
-
-18.1 هدف
-- فعال‌سازی کامل Property Analysis Agent (خروج از Skeleton)
-- Rule-First؛ بدون بازنویسی Supervisor / Adaptive / Planning / Memory / RAG / Tools
-- افزایش Token < 3٪؛ بدون Prompt بزرگ جدید
-- سایر Agentها همچنان Skeleton
-
-18.2 Architecture Diagram
-
-Supervisor (route)
-  ↓
-AgentSelector
-  ├─ property_search → PropertySearchAgent
-  └─ property_compare / تحلیل‌keywords → PropertyAnalysisAgent
-        ↓
-     Search handoff (shared flags only — no re-query)
-        ↓
-     AnalysisManager + RuleAnalysisStrategy + AnalysisCache
-        ↓
-     compact hint (=== تحلیل فایل ===) ≤ ~100 chars
-        ↓
-     Existing LLM pipeline (reasoning)
-
-Categories (rule-based):
-  Price | Location | Amenities | Investment | Comparison
-
-18.3 Sequence Diagram
-
-generate_reply
-  -> Supervisor.orchestrate
-  -> prepare_agent_after_supervisor
-       -> if analysis selected: SearchAgent.run (flags) then AnalysisAgent.run
-  -> Planning (reuse land_codes)
-  -> run_property_analysis(codes from planning/shared)  # no re-RAG/search
-  -> inject compact analysis hint IFF present
-  -> Tools + LLM
-  -> analytics(analysis_*)
-
-18.4 Folder Structure
-app/agents/analysis/
-  interfaces.py
-  config.py
-  cache.py
-  strategy.py
-  manager.py
-  property_analysis.py
-  di.py
-  service.py
-
-18.5 فایل‌های جدید
-- app/agents/analysis/*
-- tests/test_property_analysis_agent.py
-- scripts/benchmark_analysis_agent.py
-
-18.6 کلاس‌های جدید
-- PropertyAnalysisAgent
-- RuleAnalysisStrategy
-- DefaultAnalysisManager
-- MemoryAnalysisCache
-- AnalysisRequest / AnalysisResult / AnalysisCategoryResult
-
-18.7 Agent Lifecycle
-1. Selector: compare/analysis keywords → property_analysis
-2. Manager: Search handoff (shared pipeline flags)
-3. AnalysisManager: cache → load lands via accessible_lands_map → rule analyze
-4. compact_hint stored (objects + optional system line)
-5. LLM موجود پاسخ نهایی را می‌سازد (بدون LLM جدا برای Analysis)
-
-18.8 Integration
-- Supervisor: بدون تغییر؛ route موجود کافی است
-- Search Agent: shared handoff flags
-- generate_reply: بعد از Planning، reuse کدها و inject hint
-- Prompt templates / RAG / Memory / Planning internals untouched
-
-18.9 Token Flow
-- Lazy: فقط compare/تحلیل
-- Hint budget: VINOR_ANALYSIS_HINT_CHARS (default 100)
-- Reuse RAG/Memory/Planning flags — بدون اجرای دوباره
-- Analysis Cache (TTL)
-
-18.10 Benchmark / Performance / Token Report
-scripts/benchmark_analysis_agent.py
-- greeting:         delta=+0.00% | selected=- | analysis_tokens=0
-- property_search:  delta=+0.00% | selected=property_search | analysis_tokens=0
-- property_compare: delta=+2.19% | selected=property_analysis | analysis_tokens≈20
-  reuse_rag=True reuse_mem=True | latency≈24ms
-- Max token increase on analysis path: +2.19% (under 3% cap)
-- Tests: 14/14 PASS (analysis 7 + agents 7)
-
-
-19. Recommendation Agent (Phase 11)
------------------------------------
-
-19.1 هدف
-- فعال‌سازی Recommendation Agent (خروج از Skeleton)
-- رتبه‌بندی و پیشنهاد بهترین فایل با Structured Object
-- بدون Search/RAG/Memory/Analysis جدید (فقط Reuse + Cache)
-- افزایش Token < 3٪
-- Customer Memory / Negotiation / Follow-up همچنان Skeleton
-
-19.2 Architecture Diagram
-
-Supervisor → AgentSelector
-  ├─ Search
-  ├─ Analysis
-  └─ Recommendation (keywords: پیشنهاد/بهترین/…)
-        ↓
-     Search handoff (flags)
-        ↓
-     Structured Analysis Object (cache reuse)
-        ↓
-     RuleRecommendationEngine → RecommendationItem[]
-        ↓
-     Compact hint (=== پیشنهاد فایل ===)
-        ↓
-     LLM
-
-19.3 Recommendation Pipeline / Ranking Flow
-Search Results + Analysis Categories + Message prefs (بودجه/منطقه/نوع)
-  + shared memory_prefs (بدون retrieve دوباره)
-  → score / match_reasons / weaknesses / priority / confidence
-  → selected + alternate + rejected
-  → compact hint ≤ ~90 chars
-
-19.4 Recommendation Object
-RecommendationItem:
-  property_code, score, match_reasons, weaknesses, priority, confidence
-
-19.5 Folder Structure
-app/agents/recommendation/
-  interfaces.py, config.py, cache.py, engine.py,
-  manager.py, agent.py, di.py, service.py
-
-19.6 فایل‌ها / کلاس‌ها
-- RecommendationAgent, RuleRecommendationEngine
-- DefaultRecommendationManager, MemoryRecommendationCache
-- RecommendationRequest/Result/Item
-
-19.7 Integration
-- Analysis: categories از run_property_analysis (cache) → shared
-- Search/Analysis Agent files: بدون تغییر
-- Supervisor/Adaptive/Planning/Memory/RAG/Tools: بدون بازنویسی
-- generate_reply: inject فقط compact recommendation hint
-
-19.8 Benchmark / Token / Performance
-scripts/benchmark_recommendation_agent.py
-- greeting:        delta=+0.00%
-- property_search: delta=+0.00%
-- recommendation:  delta=+2.63% | rec_tokens≈23 | reuse_search=True reuse_analysis=True
-  pick=20250101120001 | latency≈65ms
-- re_search_count=0 | re_analysis_new_queries=0
-- Tests: 20/20 PASS
-- Max token increase: +2.63% (under 3% cap)
-
-
-20. Conversation Engine (Phase 11.5)
-------------------------------------
-
-20.1 هدف
-- تبدیل UX از Form-Based به Conversation-Based بدون تغییر Agentها
-- لایه جدید قبل از Supervisor؛ Supervisor / Planning / Memory / RAG / Adaptive
-  / Multi-Agent بدون بازنویسی
-- فرم‌های HTML برای سازگاری HTTP باقی می‌مانند؛ مسیر اصلی چت است
-- هیچ Agent جدیدی فعال نمی‌شود
-- افزایش Token < 5٪ (مسیر form: early-return → +0٪ روی LLM prompt)
-
-20.2 Architecture Diagram
-
-User
-  ↓
-Conversation Engine
-  ├─ Identity Resolver   (session / phone / login / partner profile)
-  ├─ Role Resolver       (guest → user → partner → premium_partner)
-  ├─ Intent Resolver     (rule + chip; بدون Prompt)
-  ├─ Workflow Resolver   (intent → workflow | WF_NONE pass-through)
-  ├─ Conversation Forms  (step questions؛ فقط فیلدهای missing)
-  ├─ Conversation State  (START→COLLECTING→WAITING→COMPLETED|FAILED)
-  └─ Session Manager     (file store؛ خارج از Prompt)
-  ↓
-Supervisor → Agents (فقط اگر pass-through یا CE خاموش)
-
-20.3 Identity / Role / Intent
-Identity: Session + Memory signals + Login Status + Phone — بدون Prompt
-Roles: Guest | User | Partner | Premium Partner (قابل ارتقاء؛ بدون صفحه انتخاب)
-Intents:
-  Search Property | Register Property | Become Partner | Compare |
-  Recommendation | Negotiation | Visit | Deal | Support | General Chat
-
-20.4 Workflow Engine / Conversation Forms
-Intent → Workflow:
-  register_property → property_registration → PropertyRegistration
-  become_partner    → partner_onboarding    → PartnerApplication
-  visit             → visit                 → VisitRequest
-  deal              → deal                  → DealRequest
-  support           → support               → SupportTicket
-  search/compare/recommendation/negotiation/general → WF_NONE (Supervisor)
-
-هر Step فقط اگر فیلد موجود نباشد پرسیده می‌شود.
-لغو: لغو / انصراف | تأیید نهایی: بله / خیر
-
-20.5 State Machine / Session
-States: START | COLLECTING | WAITING | COMPLETED | FAILED
-Session fields (خارج از Prompt):
-  Current Workflow, Current Step, Collected Fields, Missing Fields, Role, Intent
-Store: instance/data/ai_conversation/{user}.json
-
-20.6 Folder Structure
-app/conversation/
-  interfaces.py, config.py, identity.py, roles.py, intent.py,
-  workflow.py, state.py, forms.py, session.py, manager.py,
-  service.py, di.py, __init__.py
-
-20.7 فایل‌ها / کلاس‌ها
-- RuleIdentityResolver, RuleRoleResolver, RuleIntentResolver
-- RuleWorkflowResolver, DefaultConversationManager
-- FileSessionStore, ConversationSession / ConversationOutcome
-- FORMS (WorkflowDefinition + WorkflowStep)
-- try_conversation_engine / get_conversation_obs (service)
-
-20.8 Integration
-generate_reply:
-  credit_guard → chip_intent → try_conversation_engine
-    → اگر handled و !pass_to_supervisor: early return (بدون Supervisor/LLM)
-    → وگرنه Supervisor → Agents (مانند قبل)
-Env: VINOR_CONVERSATION_ENABLED (default on),
-     VINOR_CONVERSATION_EARLY_RETURN (default on)
-Observability on g / analytics:
-  detected_role, detected_intent, conversation_workflow,
-  conversation_state, conversation_step, completed_fields,
-  missing_fields, session_duration_ms, conversation_extra_tokens
-
-20.9 Sequence Diagram (form workflow)
-
-User: «درخواست همکاری»
-  → CE: identity/role/intent → partner_onboarding → Q: نام؟
-User: «علی»
-  → CE: collect → Q: کد ملی؟
-  … (بدون Supervisor)
-User: «بله»
-  → CE: COMPLETED + PartnerApplication object + summary reply
-  → early return (extra_tokens=0)
-
-20.10 Benchmark / Token / Performance
-scripts/benchmark_conversation_engine.py
-- greeting:           delta=+0.00% | handled=False | latency≈14ms
-- search_passthrough: delta=+0.00% | handled=False | latency≈10ms
-- partner_workflow:   delta=-97.30% (early return؛ بدون build_messages کامل)
-  handled=True | workflow=partner_onboarding | state=COLLECTING
-  extra_tokens=0 | latency≈12ms
-- Max LLM token increase on pass-through: +0.00% (under 5% cap)
-- Form path: conversation_extra_tokens=0؛ State/Workflow/Role خارج از Prompt
-- Tests: 7/7 PASS (tests/test_conversation_engine.py)
-- form_html_removed=False (compat؛ chat primary)
-
-
-21. Workflow Engine (Phase 12)
+مسیر: app/agents/parallel/
+
+Dependency DAG:
+  Wave 0: Property Search || Customer Memory
+  Wave 1: Property Analysis
+  Wave 2: Recommendation
+  Wave 3: Negotiation
+  Wave 4: Customer Success
+
+اجزا:
+  RuleExecutionPlanner
+  StaticDependencyGraphBuilder
+  ThreadPoolParallelExecutor
+  CompactAgentResultMerger
+
+shared context بین Agentها reuse می‌شود تا Search/RAG/Memory تکراری کاهش یابد.
+VINOR_PARALLEL_AGENTS پیش‌فرض ON است. در حالت OFF، manager ترتیبی استفاده می‌شود.
+
+11.5 تخصص Agentها
+------------------
+
+Property Search:
+  تأیید route/flags و reuse مسیر RAG/tools
+
+Property Analysis:
+  تحلیل rule-based قیمت، موقعیت، امکانات، سرمایه‌گذاری و مقایسه
+
+Recommendation:
+  score، match reasons، weaknesses، priority و confidence
+
+Customer Memory:
+  پروفایل ساختاری از ترجیحات، بودجه، مکان، علایق و relationship
+
+Negotiation:
+  risk، strategy، target/min/max/suggested price، tone و deal probability
+
+Customer Success:
+  stage، next action، follow-up type/time، priority و conversion probability
+
+Hintها بودجه‌دارند. در parallel mode، Decision hint یا merge hint به hintهای
+تک‌تک Agentها اولویت دارد.
+
+
+================================================================================
+12. Decision، BI و Autonomy Stack
+================================================================================
+
+12.1 Decision Engine
+---------------------
+
+مسیر: app/decision/
+
+جریان:
+  Agent outputs
+    -> weighted scorer
+    -> conflict resolver
+    -> decision builder
+    -> DecisionResult
+
+خروجی:
+  selected_property
+  alternatives
+  score/confidence
+  reasons/warnings
+  recommended_actions
+  next_step
+  conflicts
+
+وزن‌های پیش‌فرض قابل تنظیم:
+  Search 0.10
+  Analysis 0.20
+  Recommendation 0.30
+  Negotiation 0.20
+  Memory 0.10
+  Success 0.10
+
+Decision در live request به parallel agent branch وابسته است.
+
+12.2 Business Intelligence
+---------------------------
+
+مسیر: app/business_intelligence/
+
+Analyzerها:
+  Market
+  Property
+  Customer
+  Trend
+  Business Signal Builder
+
+Signals:
+  market attractiveness
+  property score/freshness
+  region popularity
+  price competitiveness
+  purchase probability
+  seller flexibility
+  lead quality
+  demand/supply trend
+  opportunity/risk
+
+خروجی روی flask.g/shared context قرار می‌گیرد. BI در مسیر فعلی hint مستقل به
+Prompt تزریق نمی‌کند، حتی اگر VINOR_BI_INJECT_HINT در config روشن باشد.
+
+12.3 Evaluation
+----------------
+
+مسیر: app/evaluation/
+
+پس از token analytics:
+  MetricsCollector
+  PerformanceCollector
+  CostCollector
+  RuleQualityEvaluator
+  AnalyticsAggregator
+
+ذخیره:
+  instance/data/ai_evaluation.jsonl
+
+ابعاد:
+  request/role/intent/workflow
+  selected agents/graph
+  decision/property/conflicts
+  tokens/cost/latency
+  RAG/Memory/Planning/Tool/LLM timing
+  quality/errors/warnings/retry
+
+12.4 Optimization
+------------------
+
+مسیر: app/optimization/
+
+Optimizerها:
+  Decision، RAG، Memory، Workflow، Performance
+
+فقط recommendation/report می‌سازد؛ applied همیشه False است.
+در request path اجرا نمی‌شود.
+
+اجرا:
+  scripts/run_optimization_engine.py
+  optional in-process scheduler
+
+ذخیره:
+  instance/data/optimization_reports/
+
+12.5 Goal / World / Long Plan
 ------------------------------
 
-21.1 هدف
-- ارتقای Conversation Engine از Router ساده به Workflow Engine کامل
-- مدیریت فرآیندهای اصلی Vinor با State Machine / Step / Validation
-- قبل از فعال‌سازی Customer Memory Agent
-- Supervisor / Adaptive / Planning / Memory / RAG / Multi-Agent / Agents: بدون تغییر
-- افزایش Token < 3٪؛ State/Workflow/Validation خارج از Prompt
-- هیچ Agent جدیدی فعال نمی‌شود
+Goal Engine:
+  app/goals/
+  Goal extraction، priority و lifecycle
+  instance/data/ai_goals/{user}.json
+  قبل از Supervisor
 
-21.2 Architecture Diagram
+World Model:
+  app/world_model/
+  Property/Customer/Partner/Market/Conversation state از خروجی‌های موجود
+  request-scoped روی flask.g؛ durable store مستقل ندارد.
 
-User
-  ↓
-Conversation Engine
-  ├─ Identity / Role / Intent  (انتخاب Workflow)
-  ↓
-Workflow Engine
-  ├─ Workflow Definition
-  ├─ State Machine (INIT→COLLECTING→VALIDATING→WAITING_USER→READY→COMPLETED|FAILED|CANCELLED)
-  ├─ Step Engine (فقط missing fields)
-  ├─ Validation (rule-based، بدون LLM)
-  ├─ Workflow Context (خارج از Prompt)
-  └─ Structured Workflow Object
-  ↓
-Supervisor → Agents   (جمع‌آوری فرم توسط Agent انجام نمی‌شود)
-  ※ handoff اختیاری: VINOR_WORKFLOW_HANDOFF_SUPERVISOR=1
+Long Horizon Planner:
+  app/long_planner/
+  PlanGraph/Node/Edge و execution waves
+  برنامه را اجرا نمی‌کند و durable store مستقل ندارد.
 
-21.3 Workflow Objects (۷ عدد)
-1. PropertyRegistrationWorkflow
-2. PropertyEditingWorkflow
-3. PartnerWorkflow
-4. VisitWorkflow
-5. DealWorkflow
-6. SupportWorkflow
-7. GeneralConversationWorkflow (pass-through → Supervisor)
+12.6 Learning / Reflection / Improvement
+-----------------------------------------
 
-21.4 Lifecycle / Validation
-INIT → COLLECTING → VALIDATING → WAITING_USER → … → READY → COMPLETED
-  یا FAILED / CANCELLED
-Validators: non_empty, price, area, phone, national_id, photos, yes_no, land_code, deal_type
+Self Reflection:
+  app/self_reflection/
+  پس از analytics در request path، object روی flask.g
 
-21.5 Folder Structure
-app/workflow/
-  interfaces.py, config.py, state_machine.py, validation.py,
-  registry.py, engine.py, di.py, __init__.py
-  definitions/
-    base.py, property_registration.py, property_editing.py,
-    partner_onboarding.py, visit.py, deal.py, support.py, general.py
+Self Learning:
+  app/self_learning/
+  background pattern/success/failure analysis
+  instance/data/self_learning/
 
-21.6 فایل‌ها / کلاس‌ها
-- DefaultWorkflowEngine, WorkflowRegistry, WorkflowContext
-- BaseWorkflow + ۷ Workflow Object
-- validate_* (بدون LLM)
-- Conversation Manager → delegate start/continue/cancel به Engine
+Self Improvement:
+  app/self_improvement/
+  پیشنهاد از Learning/Reflection؛ applied=False
+  instance/data/self_improvement/
 
-21.7 Integration
-Conversation: Intent → resolve workflow_id → Engine.start/continue_
-Supervisor: بدون تغییر؛ form steps early-return (بدون LLM)
-  Completed object روی g.ai_conversation_object؛ Agent form-manager نیست
-Env: VINOR_WORKFLOW_ENGINE_ENABLED (default on)
-     VINOR_WORKFLOW_HANDOFF_SUPERVISOR (default off — token-safe)
+Business AI:
+  app/business_ai/
+  گزارش مدیریتی از Evaluation/BI:
+  region، conversion، partner performance، opportunity، trend و revenue proxy
+  instance/data/business_ai/
 
-21.8 Sequence Diagram
+background runner مشترک:
+  scripts/run_autonomy_background.py
 
-User: «ثبت ملک»
-  → CE Intent=register_property
-  → Engine.start → WAITING_USER → «نوع ملک؟»
-User: «ویلا»
-  → Engine.continue → VALIDATING → collect → «شهر؟»
-…
-User: «بله»
-  → READY → COMPLETED + PropertyRegistration object
-  → early return (extra_tokens=0) یا handoff Supervisor
+12.7 Executive AI
+------------------
 
-21.9 Benchmark / Token / Performance
-scripts/benchmark_workflow_engine.py
-- greeting:              delta=+0.00% | latency≈19ms
-- search_passthrough:    delta=+0.00% | latency≈22ms
-- partner_workflow:      early-return | extra_tokens=0 | latency≈37ms
-- property_registration: early-return | extra_tokens=0 | latency≈37ms
-- Max LLM token increase (pass-through): +0.00% (under 3% cap)
-- workflow_extra_tokens=0 | State/Validation خارج از Prompt
-- Tests: 16/16 PASS (workflow 9 + conversation 7)
+مسیر: app/executive/
 
+ExecutivePlan مشخص می‌کند کدام بخش‌ها اجرا شوند:
+  goals، supervisor، agents، decision، BI، world model، long plan، reflection
 
-22. Customer Memory Agent (Phase 13)
-------------------------------------
+حالت‌های مهم:
+  - Conversation early-return: عمده pipeline skip
+  - greeting/light: agent/decision/BI ممکن است skip شوند
+  - full cognitive: stack کامل با gateها
 
-22.1 هدف
-- فعال‌سازی Customer Memory Agent (خروج از Skeleton)
-- تحلیل Memory موجود → Customer Profile (بدون Memory Store جدید)
-- Memory Layer (Phase 5) / Conversation / Workflow / Supervisor / Adaptive /
-  Planning / RAG / Agentهای فعلی: بدون بازنویسی
-- افزایش Token < 2٪
-- Negotiation / Follow-up همچنان Skeleton
-
-22.2 Architecture Diagram
-
-Memory Layer (reuse read-only)
-Conversation Session / Workflow Context
-Analysis / Recommendation shared signals
-        ↓
-Customer Memory Agent
-  ├─ PreferenceExtractor
-  ├─ RelationshipAnalyzer
-  └─ CustomerProfileBuilder
-        ↓
-Structured Customer Profile (خارج از Prompt)
-  + compact hint «=== پروفایل مشتری ===»
-        ↓
-LLM (فقط hint فشرده)
-Profile object → Recommendation / Negotiation / Follow-up (via g.ai_customer_profile)
-
-22.3 Customer Profile
-CustomerPreferences, Budget Profile, Location Preferences,
-Property Interests, Interaction Style, Last Activities,
-Relationship Score, Confidence, Next Suggested Action
-
-22.4 Folder Structure
-app/agents/customer_memory/
-  interfaces.py, config.py, cache.py, preferences.py,
-  relationship.py, builder.py, manager.py, agent.py,
-  service.py, di.py, __init__.py
-
-22.5 فایل‌ها / کلاس‌ها
-- CustomerMemoryAgent (active)
-- DefaultCustomerMemoryManager
-- RulePreferenceExtractor, RuleRelationshipAnalyzer, RuleCustomerProfileBuilder
-- MemoryCustomerProfileCache (in-process؛ نه Memory Store)
-- CustomerProfile / CustomerPreferences
-
-22.6 Integration
-- Memory: retrieve/list از لایه موجود؛ learn/write ندارد
-- Conversation/Workflow: get_conversation_obs + FileSessionStore (read)
-- Recommendation: shared memory_prefs + get_customer_profile() برای فازهای بعد
-- Selector: keywords پروفایل/ترجیح/سابقه → customer_memory
-- generate_reply: inject compact hint (بودجه ~55 chars)
-- Env: VINOR_CUSTOMER_MEMORY_ENABLED, HINT_CHARS, CACHE, INJECT_HINT
-
-22.7 Benchmark / Token / Performance
-scripts/benchmark_customer_memory_agent.py
-- greeting:         delta=+0.00% | cm_tokens=0
-- property_search:  delta=+0.00% | cm_tokens=0
-- customer_memory:  delta=+1.67% | cm_tokens≈14 | reuse_memory=True
-  latency≈8.5ms | under 2% cap
-- no_new_memory_store=True
-- Tests: 8/8 PASS
-
-
-23. Negotiation Agent (Phase 14)
---------------------------------
-
-23.1 هدف
-- فعال‌سازی Negotiation Agent (خروج از Skeleton)
-- تولید Negotiation Strategy + Plan (بدون متن مذاکره)
-- فقط Reuse خروجی Analysis / Recommendation / Customer Profile / Workflow
-- بدون Search / RAG / Memory جدید؛ بدون Tool جدید
-- افزایش Token < 2٪
-- Follow-up همچنان Skeleton
-
-23.2 Architecture Diagram
-
-Customer Profile + Recommendation + Analysis + Workflow Context
-        ↓
-Negotiation Agent
-  ├─ NegotiationRiskAnalyzer
-  ├─ NegotiationStrategyBuilder
-  └─ NegotiationPlanner
-        ↓
-NegotiationPlan (خارج از Prompt)
-  → g.ai_negotiation_plan / shared["negotiation_plan"]
-  + compact hint «=== مذاکره ===» (≤60 chars)
-        ↓
-LLM (فقط hint)
-
-23.3 Negotiation Plan
-TargetPrice, MinimumPrice, MaximumPrice, SuggestedOffer,
-RiskScore/Level, Confidence, RecommendedStrategy, RecommendedTone,
-SuggestedActions, DealProbability, NextAction
-
-23.4 Folder Structure
-app/agents/negotiation/
-  interfaces.py, config.py, cache.py, risk.py, strategy.py,
-  planner.py, manager.py, agent.py, service.py, di.py, __init__.py
-
-23.5 کلاس‌ها
-- NegotiationAgent (active)
-- DefaultNegotiationManager, RuleNegotiationPlanner
-- RuleNegotiationRiskAnalyzer, RuleNegotiationStrategyBuilder
-- NegotiationPlan, MemoryNegotiationCache
-
-23.6 Integration
-- Selector: مذاکره/چانه/تخفیف → negotiation
-- generate_reply: inject compact hint
-- Env: VINOR_NEGOTIATION_ENABLED, HINT_CHARS(≤60), CACHE, INJECT_HINT
-
-23.7 Benchmark / Token / Performance
-scripts/benchmark_negotiation_agent.py
-- greeting:        delta=+0.00%
-- property_search: delta=+0.00%
-- negotiation:     delta=+1.68% | neg_tokens≈12 | reuse_*=True
-  latency≈8ms | under 2% cap
-- no_dialogue_text=True
-- Tests: 6/6 PASS
-
-
-24. Customer Success Agent (Phase 15)
-------------------------------------
-
-24.1 هدف
-- فعال‌سازی Follow-up / Customer Success Agent (آخرین Skeleton)
-- مدیریت چرخه ارتباط پس از تعامل: Stage / Next Action / Follow-up Plan
-- فقط Reuse Profile / Negotiation / Recommendation / Analysis / Workflow
-- بدون Search / RAG / Memory جدید؛ بدون متن Follow-up
-- افزایش Token < 2٪
-- هیچ Skeleton فعالی باقی نماند
-
-24.2 Architecture Diagram
-
-Customer Profile + Negotiation Plan + Recommendation + Analysis + Workflow
-        ↓
-Customer Success Agent (agent_id=follow_up)
-  ├─ ConversionAnalyzer
-  ├─ NextActionBuilder
-  └─ FollowUpPlanner
-        ↓
-CustomerSuccessPlan (خارج از Prompt)
-  → g.ai_customer_success / shared["customer_success"]
-  + compact hint «=== پیگیری ===» (≤60 chars)
-        ↓
-LLM (فقط hint)
-
-24.3 Customer Success Plan / Lifecycle
-Stages: aware → interested → evaluating → negotiating → ready → won|dormant
-Fields: Customer Stage, Next Action, FollowUp Type/Time, Priority,
-        Conversion Probability, Urgency, Reason, Confidence
-
-24.4 Folder Structure
-app/agents/customer_success/
-  interfaces.py, config.py, cache.py, conversion.py, actions.py,
-  planner.py, manager.py, agent.py, service.py, di.py, __init__.py
-
-24.5 کلاس‌ها
-- CustomerSuccessAgent (active, AGENT_FOLLOW_UP)
-- DefaultCustomerSuccessManager, RuleFollowUpPlanner
-- RuleConversionAnalyzer, RuleNextActionBuilder
-- CustomerSuccessPlan, MemoryCustomerSuccessCache
-
-24.6 Integration
-- Selector: پیگیری/فالوآپ/اقدام بعدی → follow_up
-- generate_reply: inject compact hint
-- Env: VINOR_CUSTOMER_SUCCESS_ENABLED, HINT_CHARS(≤60), CACHE, INJECT_HINT
-
-24.7 Benchmark / Token / Performance
-scripts/benchmark_customer_success_agent.py
-- greeting:         delta=+0.00%
-- property_search:  delta=+0.00%
-- customer_success: delta=+1.45% | cs_tokens≈10 | reuse_*=True
-  latency≈14ms | under 2% cap
-- no_followup_text=True | skeletons_remaining=0
-- Tests: 6/6 PASS (+ related agent tests updated)
-
-
-25. Parallel Multi-Agent Collaboration (Phase 16)
--------------------------------------------------
-
-25.1 هدف
-- اجرای هم‌زمان چند Agent موجود (بدون Agent جدید)
-- Supervisor فقط Workflow/route را تعیین می‌کند
-- Execution Planner گراف DAG را می‌سازد
-- ParallelExecutor موج‌های مستقل را همزمان اجرا می‌کند
-- AgentResultMerger یک Object + یک compact hint برای LLM
-- افزایش Token < 3٪؛ بدون Search/RAG/Memory/Tool تکراری
-
-25.2 Architecture Diagram
-
-Supervisor (route)
-  ↓
-Execution Planner → Dependency Graph (DAG)
-  ↓
-Parallel Executor (waves)
-  ├─ Wave0: Search ∥ Customer Memory
-  ├─ Wave1: Analysis
-  ├─ Wave2: Recommendation
-  ├─ Wave3: Negotiation
-  └─ Wave4: Customer Success
-  ↓
-Agent Result Merger → compact hint «=== همکاری ===»
-  ↓
-Decision Engine (Phase 17) → Final Decision Object + «=== تصمیم ===»
-  ↓
-LLM (Decision hint ترجیح؛ نه خروجی تک‌تک Agentها)
-shared[] برای همه Agentها مشترک است
-
-25.3 Dependency Graph
-Search → Analysis → Recommendation → Negotiation → Customer Success
-Customer Memory مستقل (موازی با Search/Analysis در صورت انتخاب)
-
-25.4 Folder Structure
-app/agents/parallel/
-  interfaces.py, config.py, graph.py, planner.py,
-  executor.py, merger.py, manager.py, service.py, di.py, __init__.py
-
-25.5 کلاس‌ها
-- RuleExecutionPlanner, StaticDependencyGraphBuilder
-- ThreadPoolParallelExecutor, CompactAgentResultMerger
-- DefaultParallelCollaborationManager
-- ExecutionContext / ExecutionPlan / ExecutionResult / DependencyGraph
-
-25.6 Integration
-- prepare_agent → parallel path وقتی VINOR_PARALLEL_AGENTS=1
-- fallback به DefaultAgentManager (sequential single-agent)
-- generate_reply: اگر Decision selected → فقط decision hint؛ وگرنه merge hint
-- Env: VINOR_PARALLEL_AGENTS, WORKERS, MERGE_HINT_CHARS, INJECT_MERGE_HINT
-
-25.7 Benchmark (Sequential vs Parallel)
-scripts/benchmark_parallel_collaboration.py
-- greeting:        delta=+0.00% | speedup≈1.54x
-- property_search: delta=+0.82% | speedup≈1.30x | parallel_tasks=1
-- recommendation:  delta=+0.91% | waves=3 | merge_tokens≈6
-- Max token increase: +0.91% (under 3% cap)
-- Tests: 8/8 PASS (+ agents layer)
+Executive orchestration object-based و fail-open است و Prompt مستقل تولید نمی‌کند.
 
 
 ================================================================================
-26. Decision Engine (Phase 17)
+13. Persistence و Data Ownership
 ================================================================================
 
-26.1 هدف
-- آخرین مرحله قبل از LLM: Merge / Score / Conflict Resolve / Final Decision
-- Rule-based؛ بدون LLM / Prompt / API / Agent جدید / Search / RAG / Memory جدید
-- Decision Object خارج از Prompt؛ Hint فشرده ≤70 کاراکتر؛ افزایش Token < 1٪
+13.1 اصل کلی
+--------------
 
-26.2 Architecture Diagram
+Canonical writable root:
+  <INSTANCE_PATH>/data/
 
-Parallel Collaboration (merged shared)
-  ↓
-Decision Scorer (weighted agents)
-  ↓
-Conflict Resolver (rules + alternatives)
-  ↓
-Decision Builder → Decision Object
-  ↓
-g.ai_decision + shared["decision"]
-  ↓
-LLM ← فقط «=== تصمیم ===» hint (در صورت selected_property)
+Helper:
+  app/utils/storage.py::data_dir()
 
-26.3 Decision Flow
-1) جمع‌آوری خروجی Agentها از parallel_merge + shared (+ soft-pull از g)
-2) Score هر property با وزن‌های Config
-3) Resolve Conflict (close scores / rec vs neg / warnings)
-4) انتخاب winner + نگهداری alternatives
-5) ساخت Decision Object + compact hint
-6) Observability روی g.ai_decision_obs
+Legacy roots:
+  repo/data/
+  app/data/
 
-26.4 Conflict Resolution
-- close_scores اگر اختلاف top2 < conflict_margin
-- rec_vs_neg: اگر negotiation deal_probability≥0.7 → prefer negotiation
-- در غیر این صورت prefer recommendation
-- warning روی winner → alternative نگه داشته می‌شود
-- Conflictها در Decision Object ثبت می‌شوند
+برخی داده‌های legacy در اولین استفاده به instance مهاجرت می‌شوند. config.py
+هنوز مسیرهایی زیر app/data دارد؛ در توسعه باید از ویرایش اشتباه نسخه legacy
+به‌جای instance جلوگیری شود.
 
-26.5 Weighted Decision
-وزن‌ها (قابل تنظیم با Env):
-  VINOR_DECISION_W_SEARCH | ANALYSIS | RECOMMENDATION |
-  NEGOTIATION | MEMORY | SUCCESS
-پیش‌فرض نرمال‌شده: Search 0.10 / Analysis 0.20 / Recommendation 0.30 /
-  Negotiation 0.20 / Memory 0.10 / Success 0.10
-سایر: VINOR_DECISION_ENABLED, INJECT_HINT, HINT_CHARS(≤70), CONFLICT_MARGIN
+13.2 Core stores
+-----------------
 
-26.6 Decision Object
-selected_property, alternative_properties, decision_score, confidence,
-reasons, warnings, recommended_actions, next_step, conflicts
+  lands.json
+  users.json
+  consults.json
+  settings.json
+  express_partners.json
+  express_partner_applications.json
+  express_assignments.json
+  express_visit_requests.json
+  express_commissions.json
+  express_partner_sales.json
+  partner_missions.json
+  partner_withdrawals.json
+  notifications.json
+  postchi_messages.json
+  sms_history.json
+  sms_recipient_groups.json
+  express_views.json
+  express_partner_routines.json
+  express_partner_notes.json
+  express_partner_files.json
+  referrals/bank accounts/reports/presence و فایل‌های کمکی storage.py
 
-26.7 Folder Structure
-app/decision/
-  interfaces.py, config.py, scorer.py, conflict.py, builder.py,
-  engine.py, manager.py, service.py, di.py, __init__.py
+رابطه‌ها با phone، land_code، thread_id و شناسه‌های dict برقرار می‌شوند؛ FK
+پایگاه‌داده‌ای وجود ندارد.
 
-26.8 کلاس‌ها (DI)
-- DecisionConfig / DecisionRequest / DecisionResult / ScoredCandidate
-- RuleDecisionScorer, RuleConflictResolver, RuleDecisionBuilder
-- RuleDecisionEngine, DefaultDecisionManager
-- Protocols: DecisionEngine, DecisionManager, DecisionScorer,
-  ConflictResolver, DecisionBuilder
+13.3 Business OS stores
+------------------------
 
-26.9 Integration
-- prepare_agent: بعد از run_parallel_collaboration → run_decision(...)
-- generate_reply: اگر decision.selected_property → فقط decision hint
-  وگرنه parallel merge hint؛ Sequential per-agent فقط وقتی parallel merge نبود
-- Analytics: decision_time_ms, decision_score, confidence, conflict_count,
-  alternative_count, decision_selected_property, decision_tokens,
-  conflict_resolve_time_ms
+Foundation:
+  foundation_activities.json
+  foundation_timeline.json
 
-26.10 Benchmark / Token / Performance
-scripts/benchmark_decision_engine.py
-- Decision vs Parallel-only (بدون Decision)
-- گزارش: Decision Build Time, Conflict Resolve Time, Token Δ, Latency
-- هدف: Token Δ < 1٪؛ Hint ≤70 chars؛ بدون متن تصمیم در Prompt body
+CRM:
+  crm_contacts.json
+  crm_leads.json
+  crm_call_logs.json
+  crm_followups.json
+  crm_tasks.json
 
-26.11 Performance Report / Token Report
-Live (parallel path; بدون کد ملک در env فعلی → fail-open):
-- greeting / property_search / recommendation: delta=+0.00%
-Synthetic (با candidates واقعی):
-- Decision Build Time ≈ 0.13ms
-- Conflict Resolve Time ≈ 0.00ms (زیر دقت ms)
-- score≈0.71 | confidence≈0.77 | conflicts=3 | alts=2
-- hint_len=38 (≤70) | hint_tokens≈10
-- Token Δ vs parallel merge hint: −0.10% (under 1% cap)
-- Tests: 7/7 PASS (+ parallel 8/8)
-- no_llm_decision=True | no_agent_rerun=True
+Visit:
+  visit_results.json
 
+Commercial:
+  commercial_negotiations.json
+  commercial_offers.json
+  commercial_counters.json
+  commercial_reservations.json
 
-================================================================================
-27. Evaluation & Observability Platform (Phase 17.5)
-================================================================================
+Closing:
+  closing_deals.json
+  closing_contracts.json
+  closing_payments.json
+  closing_settlements.json
 
-27.1 هدف
-- مانیتورینگ و ارزیابی کل Pipeline از Conversation تا Response
-- بدون تغییر رفتار Agentها / Prompt / Search / RAG / Memory / Tools
-- افزایش Token هدف: 0٪ — هیچ داده Evaluation وارد Prompt نمی‌شود
+Roles:
+  role_assignments.json
 
-27.2 Architecture Diagram
+13.4 AI stores
+---------------
 
-Pipeline (موجود، بدون تغییر)
-  Conversation → Workflow → Supervisor → Adaptive → Planning
-  → Memory → RAG → Parallel → Decision → LLM/Tools
-       ↓ (پس از analytics موجود)
-  Evaluation Platform
-    MetricsCollector → PerformanceCollector → CostCollector
-       ↓
-    QualityEvaluator (rule-based)
-       ↓
-    EvaluationRecord → instance/data/ai_evaluation.jsonl
-       ↓
-    AnalyticsAggregator (daily / weekly / monthly)
+  ai_chats/{audience}/{phone}.json
+  ai_cases/{audience}/{phone}.json
+  ai_conversation/{user}.json
+  ai_memory/{phone}.json
+  ai_goals/{user}.json
+  ai_escalations.json
+  ai_pending_actions.json
+  ai_credit_cache.json
+  ai_token_analytics.jsonl
+  ai_evaluation.jsonl
+  rag/lands_index.json
 
-27.3 Metrics (per request)
-Request ID, User ID, Role, Intent, Workflow, Selected Agents,
-Execution Graph, Decision Score/Confidence, Property Selected,
-Alternatives, Prompt/Completion/Total Tokens, Estimated Cost,
-Latency, RAG/Memory/Planning/Decision/LLM/Tool Time,
-Errors, Warnings, Retry Count
-+ Layer snapshots: Conversation, Workflow, Supervisor, Adaptive,
-  Planning, Memory, RAG, Parallel, Decision, LLM, Tools
+Background:
+  optimization_reports/
+  self_learning/
+  self_improvement/
+  business_ai/
 
-27.4 Evaluation (Rule-based)
-Accuracy, Conflict Rate, Decision Quality, Recommendation Quality,
-Negotiation Quality, Customer Success Quality, Overall
+13.5 SQLite
+------------
 
-27.5 Analytics
-Daily / Weekly / Monthly:
-  Top Queries, Failed Queries, Most Used Agents,
-  Average Cost / Token / Latency / Quality / Conflict Rate
+Default URL:
+  sqlite:///instance/vinor.db
 
-27.6 Storage / Observability
-- Log جدا: instance/data/ai_evaluation.jsonl (جدا از ai_token_analytics.jsonl)
-- g.ai_evaluation / g.ai_evaluation_obs (خارج از Prompt)
-- Env: VINOR_EVALUATION_ENABLED, VINOR_EVALUATION_STORE,
-  VINOR_EVALUATION_TOP_QUERIES
+SQLAlchemy initialize و db.create_all به‌صورت configurable اجرا می‌شود، اما
+در کدبیس فعلی db.Model domain class وجود ندارد. منبع حقیقت کسب‌وکار JSON است.
 
-27.7 Folder Structure
-app/evaluation/
-  interfaces.py, config.py, metrics.py, performance.py, cost.py,
-  quality.py, analytics.py, storage.py, manager.py, service.py,
-  di.py, __init__.py
+13.6 Consistency model
+-----------------------
 
-27.8 کلاس‌ها (DI)
-- EvaluationConfig / EvaluationRecord / LayerMetrics / QualityScores /
-  AnalyticsSummary
-- RowMetricsCollector, RowPerformanceCollector, RowCostCollector
-- RuleQualityEvaluator, RuleAnalyticsAggregator
-- DefaultEvaluationManager
-- Protocols: EvaluationManager, MetricsCollector, PerformanceCollector,
-  CostCollector, QualityEvaluator, AnalyticsAggregator
-
-27.9 Integration
-- _record_request_analytics → record_token_analytics(row)
-  سپس record_evaluation(analytics_row=row) — fail-open
-- هیچ تغییر در messages / hints / agents
-
-27.10 Benchmark / Token / Performance
-scripts/benchmark_evaluation_platform.py
-- Token Δ = +0.00%
-- eval_ms ≈ 2–3ms (outside critical LLM path overhead only post-response)
-- Tests: 8/8 PASS
-- no_prompt_injection=True | no_agent_rerun=True
+  - writeها عمدتاً file-based و process-local lock/helper هستند.
+  - transaction سراسری بین چند فایل وجود ندارد.
+  - bridgeها برای سازگاری legacy/new state استفاده می‌شوند.
+  - Activity/Audit observability را بهبود می‌دهد، اما جای ACID transaction را
+    نمی‌گیرد.
+  - اجرای چند worker نیازمند توجه به race، atomic write و cache invalidation است.
 
 
 ================================================================================
-28. Business Intelligence Layer (Phase 18)
+14. Frontend و Assets
 ================================================================================
 
-28.1 هدف
-- موتور تحلیل کسب‌وکار املاک روی داده‌های موجود
-- تولید Business Signals برای Decision Engine / Agentها (مصرف اختیاری)
-- بدون Agent / Prompt / Search / RAG / Memory / Tool جدید
-- افزایش Token هدف: 0٪ — Hint پیش‌فرض تولید نمی‌شود
+Stack:
+  Jinja2 server rendering
+  Tailwind CSS 3.4.17 local vendor
+  Alpine.js 3.14.1
+  Vanilla JavaScript
+  Font Awesome و فونت‌های محلی
+  PWA manifest + Service Worker
 
-28.2 Architecture Diagram
+سیستم اصلی React، Vue، Next.js، Vite یا Webpack ندارد.
 
-Parallel → Decision → Business Intelligence
-  Inputs (reuse only):
-    Decision / Profiles / Negotiation / Recommendation /
-    Evaluation / Property Metadata / Shared Context
-       ↓
-  MarketAnalyzer ∥ PropertyAnalyzer ∥ CustomerAnalyzer ∥ TrendAnalyzer
-       ↓
-  BusinessSignalBuilder → BusinessInsights Object
-       ↓
-  g.ai_business_intelligence + shared["business_intelligence"]
-  (خارج از Prompt؛ VINOR_BI_INJECT_HINT پیش‌فرض=0)
+AI partialها در:
+  app/express_partner/templates/express_partner/partials/
 
-28.3 Business Signals
-Property Score, Market Attractiveness, Region Popularity,
-Price Competitiveness, Customer Purchase Probability,
-Seller Flexibility Score, Lead Quality, Demand Trend,
-Supply Trend, Listing Freshness, Recommendation Success Rate
+مهم‌ترین partialها:
+  ai_chat_layer.html
+  ai_chat_inline.html
+  ai_chat_composer.html
+  ai_chat_message.html
+  ai_chat_panel.html
+  ai_chat_threads.html
+  home_journey_card.html
+  ep_ai_fab.html
 
-28.4 Business Insights Object
-property_insights, customer_insights, market_insights,
-business_metrics, trend_signals, opportunity_score,
-risk_indicators, signals
+Business templates:
+  customers.html
+  negotiations.html
+  special_offer_inbox.html
+  deals.html
+  journey.html
 
-28.5 Market / Customer / Property / Trend
-- Market: attractiveness, region popularity, price competitiveness
-- Property: score, freshness, analysis/rec blend, alternatives
-- Customer: purchase probability, seller flexibility, lead quality
-- Trend: demand/supply, recommendation success, trend_score
-
-28.6 Folder Structure
-app/business_intelligence/
-  interfaces.py, config.py, market.py, property_analyzer.py,
-  customer.py, trend.py, signals.py, manager.py, service.py,
-  di.py, __init__.py
-
-28.7 کلاس‌ها (DI)
-- BusinessIntelligenceConfig / BusinessIntelligenceRequest /
-  BusinessInsights / BusinessSignals
-- RuleMarketAnalyzer, RulePropertyAnalyzer, RuleCustomerAnalyzer,
-  RuleTrendAnalyzer, RuleBusinessSignalBuilder
-- DefaultBusinessIntelligenceManager
-- Protocols: BusinessIntelligenceManager, MarketAnalyzer,
-  PropertyAnalyzer, CustomerAnalyzer, TrendAnalyzer,
-  BusinessSignalBuilder
-
-28.8 Integration / Observability
-- prepare_agent: بعد از run_decision → run_business_intelligence
-- Analytics: bi_market_score, bi_property_score, bi_lead_score,
-  bi_trend_score, bi_opportunity_score, bi_analysis_time_ms
-- Env: VINOR_BI_ENABLED, VINOR_BI_INJECT_HINT (default 0)
-
-28.9 Performance / Token Report
-scripts/benchmark_business_intelligence.py
-- Token Δ = +0.00%
-- Analysis Time ≈ 0.35–0.45ms
-- Memory delta ≈ 29KB (tracemalloc sample)
-- Storage object ≈ 1.5KB
-- Tests: 8/8 PASS
-- no_prompt_injection=True | no_default_hint=True
+Role templates:
+  app/templates/portals/buyer_hub.html
+  app/templates/portals/seller_hub.html
+  app/templates/portals/owner_hub.html
 
 
 ================================================================================
-29. Continuous Optimization Engine (Phase 19)
+15. External Integrations
 ================================================================================
 
-29.1 هدف
-- موتور بهینه‌سازی پس‌زمینه بر اساس Evaluation / BI / Analytics
-- فقط Recommendation تولید می‌کند — هیچ تغییر خودکاری اعمال نمی‌شود
-- خارج از Request Path؛ بدون تأثیر Latency / Token پاسخ
-- بدون Agent / Prompt / Search / RAG / Memory / Tool جدید در مسیر پاسخ
+DeepSeek:
+  LLM و embedding provider قابل انتخاب
 
-29.2 Architecture Diagram
+SMS.ir:
+  app/services/sms.py و Admin scheduled/campaign modules
 
-Historical Logs (evaluation / token analytics / BI fields)
-       ↓
-  [Background / Manual / Optional Scheduler]
-       ↓
-  DecisionOptimizer | RagOptimizer | MemoryOptimizer
-  WorkflowOptimizer | PerformanceOptimizer
-       ↓
-  OptimizationReportBuilder → OptimizationReport
-       ↓
-  instance/data/optimization_reports/*.json
-  (Admin/manual visibility only — never into Prompt)
+Firebase / FCM:
+  app/services/firebase_config.py
+  app/api/fcm.py
+  APK/app-link scripts
 
-29.3 Optimization Areas
-Decision Weights, Agent Selection Rules, RAG Top-K, Memory Budget,
-Planning Thresholds, Business Signal Weights, Workflow Bottlenecks,
-Latency Trends, Cost Trends
+Web Push:
+  app/api/push.py و pywebpush/VAPID
 
-29.4 OptimizationReport
-suggestions, performance_findings, cost_findings,
-recommended_config_changes, priority, expected_impact, confidence,
-estimated_gain, cost_saving | applied=False همیشه
+Git Webhook:
+  app/routes/webhook.py
+  HMAC verification برای deploy webhook
 
-29.5 Background Execution
-- Manual: scripts/run_optimization_engine.py
-- Scheduler: VINOR_OPTIMIZATION_SCHEDULER=1 (پیش‌فرض OFF)
-- create_app فقط start_optimization_scheduler را صدا می‌زند (noop اگر خاموش)
-- هیچ فراخوانی در prepare_agent / generate_reply
+Uploads:
+  GET /uploads/*
+  POST /api/uploads/images
+  مسیرهای app/data/uploads و instance/data/uploads در بخش‌های مختلف موجودند؛
+  مالکیت مسیر باید هنگام deploy صریح تنظیم شود.
 
-29.6 Folder Structure
-app/optimization/
-  interfaces.py, config.py, decision_optimizer.py, rag_optimizer.py,
-  memory_optimizer.py, workflow_optimizer.py, performance_optimizer.py,
-  report_builder.py, storage.py, manager.py, service.py, scheduler.py,
-  di.py, __init__.py
-scripts/run_optimization_engine.py
-scripts/benchmark_optimization_engine.py
-
-29.7 کلاس‌ها (DI)
-- OptimizationConfig / OptimizationContext / OptimizationSuggestion /
-  OptimizationReport
-- RuleDecisionOptimizer, RuleRagOptimizer, RuleMemoryOptimizer,
-  RuleWorkflowOptimizer, RulePerformanceOptimizer
-- DefaultOptimizationReportBuilder, DefaultOptimizationManager
-- Protocols: OptimizationManager, DecisionOptimizer, RagOptimizer,
-  MemoryOptimizer, WorkflowOptimizer, PerformanceOptimizer,
-  OptimizationReportBuilder
-
-29.8 Observability
-optimization_duration_ms, optimization_count, recommended_changes,
-estimated_gain, cost_saving | applied=False
-
-29.9 Performance / Token Report
-scripts/benchmark_optimization_engine.py
-- Token Δ = +0.00% (outside request path)
-- Background runtime ≈ 9ms
-- Memory Δ ≈ 132KB | Storage sample ≈ 83KB (15 runs)
-- Tests: 10/10 PASS
-- no_auto_apply=True | scheduler_default_off=True
+Postchi:
+  app/services/postchi.py
+  thread رسمی __postchi__؛ پیام رسمی است و LLM محسوب نمی‌شود.
 
 
 ================================================================================
-30. Autonomous Goal Engine (Phase 20)
-================================================================================
-- بعد از Conversation، قبل از Workflow/Supervisor
-- Goal Object فقط؛ بدون Prompt/Hint/اجرای تصمیم
-- g.ai_goals + shared["goals"] + session file در instance/data/ai_goals/
-- کلاس‌ها: Goal, GoalType/Priority/Status, GoalExtractor, GoalRegistry,
-  GoalPrioritizer, GoalLifecycleManager, DefaultGoalManager
-- Token: +0.00%
-
-
-================================================================================
-31. World Model (Phase 21)
-================================================================================
-- State داخلی Property/Customer/Partner/Market/Conversation
-- g.ai_world_model + shared["world_model"]
-- RuleWorldReasoner از Decision/BI/Goals/Profile (reuse)
-- بدون متن/Prompt
-
-
-================================================================================
-32. Long Horizon Planner (Phase 22)
-================================================================================
-- PlanGraph / PlanNode / PlanEdge فقط — بدون اجرای Task/Tool
-- shared["long_plan"] / g.ai_long_plan
-- RuleHorizonPlanner + ExecutionGraphBuilder (waves)
-
-
-================================================================================
-33. Self Learning Engine (Phase 23)
-================================================================================
-- PatternExtractor / SuccessDetector / FailureDetector / LearningManager
-- Rule-based؛ بدون Fine-Tune/Prompt
-- ذخیره: instance/data/self_learning/
-- Background: scripts/run_autonomy_background.py
-
-
-================================================================================
-34. Self Reflection Engine (Phase 24)
-================================================================================
-- پس از analytics/evaluation: Goal کامل؟ Agent مناسب؟ Tool زیاد؟ Cost؟ Reply؟
-- shared["reflection"] / g.ai_reflection
-- بدون تغییر Prompt
-
-
-================================================================================
-35. Self Improvement Engine (Phase 25)
-================================================================================
-- پیشنهاد از Reflection + Learning — applied همیشه False
-- instance/data/self_improvement/
-
-
-================================================================================
-36. Executive AI (Phase 26)
-================================================================================
-- Orchestrator شناختی: ExecutivePlan flags (goals/world/long_plan/supervisor/
-  agents/decision/bi/reflection)
-- هیچ Agent/Prompt/متن جدید
-- generate_reply و prepare_agent فقط در صورت flag لایه را اجرا می‌کنند
-- Fail-open: disabled → full passthrough (رفتار قبلی)
-
-
-================================================================================
-37. Autonomous Business AI (Phase 27)
-================================================================================
-- گزارش مدیریتی از Evaluation/BI logs
-- best regions, sale probability, conversion, partner performance,
-  opportunities, trends, revenue proxy, growth suggestions
-- instance/data/business_ai/ — خارج از Prompt
-
-
-================================================================================
-38. AI Organization / True Autonomy OS (Phase 28)
+16. Feature Flags و Runtime Configuration
 ================================================================================
 
-38.1 معماری نهایی (v4.0)
+16.1 قانون پیش‌فرض
+-------------------
 
-Client
-  ↓
-Conversation Engine
-  ↓
-Executive AI (flags)
-  ├─ Goal Engine
-  ├─ Supervisor → Workflow / Adaptive / Planning
-  ├─ Memory / RAG (موجود)
-  ├─ Multi-Agent Parallel → Decision → BI → World Model → Long Plan
-  └─ LLM (Prompt موجود — بدون injection لایه‌های جدید)
-  ↓
-Evaluation → Reflection
-  ↓ (Background)
-Self Learning / Self Improvement / Continuous Optimization / Business AI
+Feature flagهای VINOR_* در کد فعلی به‌طور پیش‌فرض ON هستند و با
+0/false/no/off خاموش می‌شوند. nested flag ممکن است علاوه بر مقدار خود به master
+وابسته باشد.
 
-38.2 قابلیت‌های Production-Ready
-Conversation, Workflow, Goal, World Model, Long Horizon Planner,
-Planning, Memory, RAG, Multi-Agent, Decision, BI, Self Learning,
-Self Reflection, Self Improvement, Continuous Optimization,
-Executive AI, Autonomous Business AI
+استثنای عملیاتی:
+  passenger_wsgi.py schedulerهای in-worker را صریحاً OFF می‌کند.
 
-38.3 اصول ماندگار
-Non-breaking · DI · Fail-open · Thread-safe · Objects خارج Prompt ·
-Token هدف 0% (سقف 2%) · بدون Agent/Prompt جدید در مسیر پاسخ
+16.2 AI/Cognition flags مهم
+----------------------------
+
+  VINOR_AI_ENABLED
+  VINOR_CONVERSATION_ENABLED
+  VINOR_CONVERSATION_EARLY_RETURN
+  VINOR_WORKFLOW_ENGINE_ENABLED
+  VINOR_WORKFLOW_HANDOFF_SUPERVISOR
+  VINOR_SUPERVISOR_ENABLED
+  VINOR_ADAPTIVE_ENABLED
+  VINOR_PLANNING_ENABLED
+  VINOR_MEMORY_ENABLED
+  VINOR_RAG_ENABLED
+  VINOR_AGENTS_ENABLED
+  VINOR_PARALLEL_AGENTS
+  VINOR_ANALYSIS_ENABLED
+  VINOR_RECOMMENDATION_ENABLED
+  VINOR_CUSTOMER_MEMORY_ENABLED
+  VINOR_NEGOTIATION_ENABLED
+  VINOR_CUSTOMER_SUCCESS_ENABLED
+  VINOR_DECISION_ENABLED
+  VINOR_BI_ENABLED
+  VINOR_EVALUATION_ENABLED
+  VINOR_GOALS_ENABLED
+  VINOR_WORLD_MODEL_ENABLED
+  VINOR_LONG_PLANNER_ENABLED
+  VINOR_EXECUTIVE_ENABLED
+  VINOR_REFLECTION_ENABLED
+  VINOR_SELF_LEARNING_ENABLED
+  VINOR_SELF_IMPROVEMENT_ENABLED
+  VINOR_BUSINESS_AI_ENABLED
+  VINOR_OPTIMIZATION_ENABLED
+  VINOR_AI_CONSOLE_ENABLED
+
+پیش‌فرض‌های مهم:
+  VINOR_HISTORY_SUMMARY=1
+  VINOR_WORKFLOW_HANDOFF_SUPERVISOR=1
+  VINOR_BI_INJECT_HINT=1
+  VINOR_OPTIMIZATION_SCHEDULER=1 در app config
+  VINOR_EMBEDDING_PROVIDER=deepseek
+  VINOR_VECTOR_STORE=inmemory
+  VINOR_MEMORY_BUDGET_CHARS=280
+
+نکته:
+  روشن بودن VINOR_BI_INJECT_HINT به معنی وجود wiring تزریق BI hint نیست؛
+  implementation فعلی BI object را خارج Prompt نگه می‌دارد.
+
+16.3 Business OS flags
+-----------------------
+
+Master و subflagهای این prefixها پیش‌فرض ON هستند:
+  VINOR_FOUNDATION_*
+  VINOR_CRM_*
+  VINOR_VISIT_RESULT_*
+  VINOR_COMMERCIAL_*
+  VINOR_CLOSING_*
+  VINOR_ROLES_*
+  VINOR_INTEGRATION_*
+  VINOR_HARDENING_*
+
+16.4 App/Deployment variables
+------------------------------
+
+  INSTANCE_PATH
+  DATABASE_URL
+  SECRET_KEY
+  DEEPSEEK_API_KEY
+  FLASK_DEBUG
+  FLASK_RUN_HOST
+  FLASK_RUN_PORT
+  TRUST_PROXY
+  SESSION_COOKIE_SECURE
+  VINOR_DB_CREATE_ALL
+  VINOR_MAX_CONTENT_LENGTH_MB
+  VINOR_SUPER_ADMIN_PHONES
+
+16.5 Scheduler flags
+---------------------
+
+کد app:
+  scheduler masterها ON by default
+
+Passenger:
+  Sales Coach، Celebration SMS، Admin SMS و Optimization را OFF می‌کند.
+
+Cron/worker باید jobها را اجرا کند؛ هم‌زمان کردن cron و in-process scheduler
+ممکن است duplicate execution بسازد.
 
 
 ================================================================================
-Change Log
+17. Deployment، Scheduler و Dependencies
 ================================================================================
 
-[2026-07-16 21:50 +03:30] Phases 20–28 — True Autonomy Stack → v4.0
-  - Phase 20: app/goals (Goal Engine)
-  - Phase 21: app/world_model
-  - Phase 22: app/long_planner
-  - Phase 23: app/self_learning
-  - Phase 24: app/self_reflection
-  - Phase 25: app/self_improvement
-  - Phase 26: app/executive (Orchestrator)
-  - Phase 27: app/business_ai
-  - Phase 28: AI Organization مستندسازی + هماهنگی Executive
-  - Integration: Conversation→Goals/Executive→Supervisor/Agents؛
-    پس از Decision: BI/World/LongPlan؛ پس از analytics: Reflection
-  - Background: scripts/run_autonomy_background.py
-  - Benchmark: Token +0.00%؛ autonomy_stack≈142ms؛ تست‌ها 10/10 PASS
-  - بدون Agent جدید / بدون تغییر Prompt/Context/Agents موجود
-  - Doc Version -> v4.0
+17.1 محیط‌ها
+-------------
 
-[2026-07-16 21:36 +03:30] Phase 19 — Continuous Optimization Engine
-  - افزودن app/optimization: Decision/RAG/Memory/Workflow/Performance optimizers (DI)
-  - فقط پیشنهاد؛ applied همیشه False؛ ذخیره در optimization_reports/
-  - اجرای Background/Manual؛ Scheduler پیش‌فرض خاموش
-  - بدون اتصال به Request Path / Prompt / Agent
-  - Benchmark: Token +0.00%؛ bg≈9ms؛ تست‌ها 10/10 PASS
-  - Doc Version -> v3.1
+Development:
+  python run.py
 
-[2026-07-16 21:32 +03:30] Phase 18 — Business Intelligence Layer
-  - افزودن app/business_intelligence: Market/Property/Customer/Trend/Signals (DI)
-  - BusinessInsights روی g.ai_business_intelligence + shared["business_intelligence"]
-  - فقط reuse داده‌های موجود؛ بدون Agent/Prompt/Search/RAG/Memory جدید
-  - Hint پیش‌فرض خاموش (0% token)
-  - Observability: market/property/lead/trend/opportunity + analysis_time
-  - Benchmark: Token +0.00%؛ analysis≈0.4ms؛ تست‌ها 8/8 PASS
-  - Doc Version -> v3.0
+Production:
+  passenger_wsgi.py -> run.app
+  cPanel / LiteSpeed / LSAPI
 
-[2026-07-16 21:27 +03:30] Phase 17.5 — AI Evaluation & Observability Platform
-  - افزودن app/evaluation: Metrics/Performance/Cost/Quality/Analytics (DI)
-  - ثبت EvaluationRecord بعد از token analytics؛ خارج از Prompt
-  - Rule-based quality؛ Daily/Weekly/Monthly aggregator
-  - Storage جدا: ai_evaluation.jsonl
-  - Benchmark: Token +0.00%؛ eval≈3ms؛ تست‌ها 8/8 PASS
-  - بدون Agent/Prompt/Search/RAG/Memory/Tool جدید
-  - Doc Version -> v2.9
+Alternative:
+  gunicorn در requirements موجود است.
 
-[2026-07-16 21:22 +03:30] Phase 17 — Decision Engine
-  - افزودن app/decision: Scorer / ConflictResolver / Builder / Engine / Manager (DI)
-  - بعد از Parallel Collaboration: Final Decision Object روی g.ai_decision + shared["decision"]
-  - Rule-based وزن‌دار؛ بدون LLM/Prompt/Agent جدید؛ بدون re-run Search/RAG/Memory
-  - Hint «=== تصمیم ===» ≤70 chars؛ جایگزین parallel merge hint هنگام selected
-  - Observability: decision_time/score/confidence/conflicts/alts/tokens
-  - Benchmark: live +0.00%؛ synthetic −0.10% (<1%)؛ build≈0.13ms
-  - تست‌ها: 7/7 PASS
-  - Doc Version -> v2.8
+17.2 Cron scripts
+------------------
 
-[2026-07-16 21:12 +03:30] Phase 16 — Parallel Multi-Agent Collaboration
-  - افزودن app/agents/parallel: Planner / Graph / Executor / Merger (DI)
-  - DAG روی Agentهای موجود؛ Customer Memory موازی با Search
-  - Merge Layer: یک Object + یک hint برای LLM؛ بدون Prompt تکراری
-  - prepare_agent → parallel با fallback sequential
-  - Observability: parallel_tasks, execution_graph, merged/skipped agents
-  - Benchmark: +0.82%/+0.91% token (<3%)؛ latency بهتر از sequential
-  - تست‌ها: 8/8 PASS
-  - Doc Version -> v2.7
+  scripts/run_sales_coach_nudge.py
+    پیشنهاد schedule: هر 10 دقیقه
 
-[2026-07-16 21:06 +03:30] Phase 15 — Customer Success / Follow-up Agent (Production Ready)
-  - فعال‌سازی CustomerSuccessAgent روی AGENT_FOLLOW_UP؛ آخرین Skeleton حذف شد
-  - app/agents/customer_success با DI: Conversion/Actions/Planner/Manager/Cache
-  - CustomerSuccessPlan خارج از Prompt؛ hint ≤60 chars؛ بدون متن Follow-up
-  - Reuse Profile/Negotiation/Recommendation/Analysis/Workflow/Planning
-  - Observability: stage/conversion/next_action/priority/confidence/reuse_*
-  - Benchmark: customer_success +1.45% (<2%)؛ greeting/search +0.00%
-  - تست‌ها: 6/6 PASS (+ سازگاری Multi-Agent)
-  - Doc Version -> v2.6
+  scripts/run_admin_sms_scheduled_jobs.py
+    پیشنهاد schedule: هر دقیقه
 
-[2026-07-16 21:00 +03:30] Phase 14 — Negotiation Agent (Production Ready)
-  - فعال‌سازی NegotiationAgent؛ Skeleton حذف شد (Follow-up ماند)
-  - app/agents/negotiation با DI: Risk/Strategy/Planner/Manager/Cache
-  - NegotiationPlan خارج از Prompt؛ hint ≤60 chars؛ بدون متن مذاکره
-  - Reuse Analysis/Recommendation/Customer Profile/Workflow/Planning
-  - Observability: negotiation_time/confidence/risk/deal_probability/reuse_*
-  - Benchmark: negotiation +1.68% (<2%)؛ greeting/search +0.00%
-  - تست‌ها: 6/6 PASS
-  - Doc Version -> v2.5
+  scripts/run_daily_celebration_sms.py
+    اجرای روزانه/اختیاری
 
-[2026-07-16 20:55 +03:30] Phase 13 — Customer Memory Agent (Production Ready)
-  - فعال‌سازی CustomerMemoryAgent؛ Skeleton حذف شد (Negotiation/Follow-up ماندند)
-  - app/agents/customer_memory با DI: Extractor/Analyzer/Builder/Manager/Cache
-  - Structured Customer Profile خارج از Prompt؛ compact hint بودجه‌دار
-  - فقط Reuse Memory Layer موجود؛ بدون Memory Store / RAG / Search جدید
-  - Observability: profile_build_time, relationship_score, preference_count, reuse_*
-  - Benchmark: customer_memory +1.67% (<2%)؛ greeting/search +0.00%
-  - تست‌ها: 8/8 PASS
-  - Doc Version -> v2.4
+  scripts/run_optimization_engine.py
+    اجرای manual/background optimization
 
-[2026-07-16 20:42 +03:30] Phase 12 — Workflow Engine (Full Process Workflows)
-  - افزودن app/workflow با State Machine / Step Engine / Validation / Registry
-  - ۷ Workflow Object: Registration, Editing, Partner, Visit, Deal, Support, General
-  - Conversation Engine فقط انتخاب می‌کند؛ Engine اجرای Step را انجام می‌دهد
-  - Validation بدون LLM؛ Context خارج از Prompt؛ extra_tokens=0
-  - Supervisor/Agents بدون تغییر؛ بدون Agent جدید
-  - Observability: workflow_name/state/step/completed/missing/validation_errors
-  - Benchmark: pass-through +0.00% (<3%)؛ form early-return بدون Token اضافه
-  - تست‌ها: 16/16 PASS
-  - Doc Version -> v2.3
+  scripts/run_autonomy_background.py
+    learning + improvement + business AI
 
-[2026-07-16 20:35 +03:30] Phase 11.5 — Conversation Engine (Form → Chat UX)
-  - افزودن app/conversation قبل از Supervisor (Identity/Role/Intent/Workflow/State/Session)
-  - تبدیل فرم‌های ثبت ملک / همکاری / بازدید / معامله / پشتیبانی به Conversation Workflow
-  - HTTP forms برای سازگاری باقی؛ مسیر اصلی گفتگو
-  - Pass-through برای Search/Compare/Recommend/… بدون تغییر Agentها
-  - Early return در COLLECTING/COMPLETED → بدون Supervisor/LLM (extra_tokens=0)
-  - Observability: role/intent/workflow/state/step/fields/session_duration
-  - Benchmark: pass-through +0.00%؛ form early-return بدون Token اضافه (<5%)
-  - تست‌ها: 7/7 PASS
-  - Doc Version -> v2.2
+  scripts/build_property_rag_index.py
+    prebuild RAG index
 
-[2026-07-16 20:25 +03:30] Phase 11 — Recommendation Agent (Production Ready)
-  - فعال‌سازی RecommendationAgent؛ Skeleton حذف شد
-  - app/agents/recommendation با DI: Engine/Cache/Manager (Rule ranking)
-  - Structured Recommendation Object + compact hint بودجه‌دار
-  - Reuse Search/Analysis/Memory/Planning؛ بدون re-query
-  - Observability: recommendation_time/score/selected_property/cache/reuse_*
-  - Benchmark: recommendation +2.63% token (<3%)؛ search/greeting +0.00%
-  - تست‌ها: 20/20 PASS
-  - Doc Version -> v2.1
+17.3 Dependencies
+------------------
 
-[2026-07-16 20:19 +03:30] Phase 10 — Property Analysis Agent (Production Ready)
-  - فعال‌سازی PropertyAnalysisAgent؛ Skeleton حذف شد (سایر Agentها Skeleton ماندند)
-  - app/agents/analysis با DI: Strategy/Cache/Manager (Rule-First)
-  - Search→Analysis handoff بدون re-query / re-RAG / re-tool
-  - Compact hint بودجه‌دار؛ بدون Prompt بزرگ
-  - Observability: analysis_time/tokens/cache_hit/reused_*
-  - Benchmark: compare +2.19% token (<3%)؛ search/greeting +0.00%
-  - تست‌ها: 14/14 PASS
-  - Doc Version -> v2.0
+Core pinned dependencies شامل:
+  Flask 2.3.3
+  Jinja2 3.1.3
+  Werkzeug 2.3.7
+  Flask-CORS 6.0.2
+  Flask-SQLAlchemy 3.1.1
+  Flask-WTF 1.2.1
+  SQLAlchemy 2.0.23
+  requests 2.32.3
+  aiohttp 3.13.5
+  Pillow 11.2.1
+  cryptography 45.0.7
+  pywebpush 2.3.0
+  gunicorn 21.2.0
+  pytz/tzdata
 
-[2026-07-16 16:22 +03:30] Phase 9 — Adaptive Autonomous Execution
-  - افزودن app/adaptive با State Machine / Confidence / Retry / Quality / Recovery
-  - تمام State و Confidence خارج از Prompt (extra_tokens=0)
-  - Retry حداکثر ۱ بار با strategy lean (بدون LLM اضافه)
-  - Recovery بدون Crash/Loop؛ Quality Evaluator کاملاً Rule-Based
-  - Observability: workflow_state, confidence_score, retry_count, recovery_count, skipped_steps
-  - Benchmark: +0.00% token؛ success_rate 100%
-  - تست‌ها: 16/16 PASS
-  - Doc Version -> v1.9
+Optional vector backendها dependency اجباری requirements.txt نیستند.
+requirements-linux-wheels.txt و packages/ باید هنگام release با requirements
+اصلی تطبیق داده شوند.
 
-[2026-07-16 16:16 +03:30] Phase 8 — Multi-Agent Framework (Property Search active)
-  - افزودن app/agents با DI: Registry/Selector/Manager/Cache
-  - PropertySearchAgent فعال؛ ۵ Agent دیگر فقط Skeleton
-  - Supervisor-driven selection: فقط property_search/compare Agent اجرا می‌شود
-  - بدون تکرار منطق Planning/Memory/RAG/Tools؛ agent_tokens=0
-  - Observability: selected_agent, skipped_agents, agent_tokens, agent_execution_time_ms
-  - Benchmark: +0.00% token روی مسیرهای اندازه‌گیری‌شده
-  - تست‌ها: 12/12 PASS
-  - Doc Version -> v1.8
 
-[2026-07-16 16:06 +03:30] Phase 7 — Supervisor/Orchestrator (rule-based, DI)
-  - افزودن app/supervisor با Router/ExecutionPolicy/Workflow/SupervisorManager
-  - Rule-Based routing برای greeting/faq/search/follow_up/partner_ops/general
-  - Lazy gates روی Memory/Planning/RAG/Tools بدون بازنویسی لایه‌ها
-  - Context budget از Supervisor flags
-  - Observability: routed_workflow, executed/skipped components, latency, tokens
-  - Benchmark: +0.00% token روی مسیرهای اندازه‌گیری‌شده؛ skip کامل RAG+Memory در greeting
-  - تست‌ها: 19/19 PASS
-  - Doc Version -> v1.7
+================================================================================
+18. Observability، Testing و Benchmark
+================================================================================
 
-[2026-07-16 15:33 +03:30] Phase 6 — Planning Layer (structured Plan + existing tools)
-  - افزودن app/planning با DI: Planner/Executor/Evaluator/PlanningManager
-  - RulePlanner بدون LLM؛ Plan فقط Structured Object
-  - ToolExecutor فقط از agent_tools.run_tool موجود استفاده می‌کند (بدون tool جدید)
-  - ادغام non-breaking در generate_reply: یک‌بار قبل از agent loop
-  - Compact hint + seed tool messages؛ Plan کامل وارد Prompt نمی‌شود
-  - Observability: planning_time/tasks/executed/planning_tokens/execution_tokens
-  - Benchmark: +4.82% token (<10%)؛ planning avg 0.32ms
-  - تست‌ها: 14/14 PASS
-  - Doc Version -> v1.6
+18.1 Runtime observability
+---------------------------
 
-[2026-07-16 15:20 +03:30] Phase 5 — Memory Layer (DI, budget-controlled)
-  - افزودن app/memory با Interfaceهای MemoryProvider/Store/Retriever/Extractor/Summarizer/Manager
-  - پیاده‌سازی FileMemoryStore مستقل از conversation (قابل تعویض با Redis/Postgres)
-  - استخراج Rule-based بدون LLM + retrieval پویا با budget کاراکتر
-  - ادغام non-breaking در services.py: retrieve قبل از LLM، ingest بعد از پاسخ
-  - Observability: memory_retrieved/used/tokens + latency در analytics
-  - Safety: delete/edit/version روی memory items
-  - Benchmark: +4.82% token (avg memory inject ≈ 50 tok) — زیر آستانه افزایش محسوس
-  - تست‌ها: 10/10 PASS (شامل 4 تست memory)
-  - Doc Version -> v1.5
+app/ai/token_analytics.py:
+  instance/data/ai_token_analytics.jsonl
 
-[2026-07-16 12:40 +03:30] Optimization Sprint (Token/Performance) بدون تغییر رفتار کاربر
-  - افزودن Token Analytics per-request در app/ai/token_analytics.py
-  - ثبت metrics: input/output/system/context/history/rag tokens + cost + response time
-  - افزودن Prompt Core Cache با TTL کوتاه برای کاهش build تکراری
-  - افزودن Conversation Compression اختیاری (VINOR_HISTORY_SUMMARY) با default خاموش
-  - ارتقای Smart RAG: dynamic top-k + metadata pre-filter + duplicate-safe selection
-  - پیاده‌سازی Incremental Index: re-embed فقط برای اسناد تغییرکرده lands.json
-  - افزودن Embedding Cache + Retrieval Cache + حفظ Response Cache قبلی
-  - افزودن benchmark script و تست incremental index
-  - نتیجه تست: 6/6 PASS
-  - به‌روزرسانی نسخه مستند به v1.4
+داده‌های ثبت‌شده شامل:
+  input/output/system/context/history/RAG/memory/planning/agent/decision tokens
+  provider/model/cache
+  response/API/layer latency
+  cost estimate
+  route/workflow/agent graph
+  decision/BI/adaptive/evaluation fields
 
-[2026-07-16 12:36 +03:30] تایید نهایی تست‌های DI RAG
-  - اجرای مجدد تست‌ها پس از DI updates با نتیجه موفق
-  - مجموع تست‌های اجراشده: 5 مورد
-  - نتیجه: همه تست‌ها PASS (OK)
-  - بدون تغییر معماری/کد؛ فقط ثبت وضعیت verification در مستند
+app/evaluation:
+  رکورد جدا در ai_evaluation.jsonl
 
-[2026-07-16 12:29 +03:30] ارتقای RAG به DI و Pluggable Provider/Store (Production Path)
-  - افزودن interfaceهای EmbeddingProvider و VectorStore در app/knowledge/interfaces.py
-  - افزودن providerهای قابل تعویض (OpenAI/DeepSeek/BGE/Jina) در embedding_providers.py
-  - افزودن vector storeهای قابل تعویض (FAISS/Qdrant/Chroma/InMemory) در vector_stores.py
-  - افزودن DI factory در rag/di.py برای سوییچ provider/store بدون تغییر Agent یا Prompt
-  - بازطراحی LandsRagRetriever: مسیر اصلی embedding-based، TF-IDF فقط fallback/dev
-  - حفظ کامل RAG contract فعلی: خروجی فقط property_code و Context Builder همان قالب قبلی
-  - افزودن 2 تست جدید DI/fallback و عبور کامل 5 تست (OK)
-  - به‌روزرسانی نسخه مستند به v1.3
+Admin:
+  app/ai_console readers/catalog
+  admin/ai-console
+  admin/control evaluation views
 
-[2026-07-16 12:17 +03:30] پیاده‌سازی RAG فاز 1 (lands.json-only) با fallback کامل
-  - افزودن Knowledge Layer ماژولار در app/knowledge با interface مستقل
-  - افزودن LandsRagRetriever با خروجی صرفاً property_code و بدون تولید متن
-  - افزودن vector store پایدار + metadata filtering + caching + query analysis
-  - ادغام non-breaking با app/ai/context.py از طریق _select_lands_by_rag
-  - حفظ کامل قالب Prompt و Context فعلی (_land_summary و بلوک‌های فعلی)
-  - افزودن script ساخت ایندکس و 3 unit test برای RAG bridge/vector retrieval
-  - به‌روزرسانی نسخه مستند به v1.2
+18.2 Test strategy
+-------------------
 
-[2026-07-16 12:12 +03:30] ارتقای ساختار مستندات به نسخه‌بندی دائمی
-  - افزودن فیلد ثابت Doc Version در ابتدای مستند (نسخه فعلی: v1.1)
-  - تعریف سیاست به‌روزرسانی: از این مرحله به بعد، هر تغییر پروژه باید در همین
-    فایل مستند شود و با تاریخ/زمان ثبت شود
-  - افزودن بخش Change Log برای نگهداری تاریخچه تغییرات به‌صورت لیست‌وار
-  - بدون تغییر در محتوای فنی معماری، فقط بهبود ساختار مدیریت مستند
+Framework واقعی:
+  Python unittest
+
+Command:
+  python -m unittest discover -s tests -p "test_*.py"
+
+Coverage moduleها شامل:
+  RAG، Memory، Planning، Supervisor، Agents، Adaptive،
+  Conversation، Workflow، Parallel، Decision، Evaluation، BI،
+  Optimization، Autonomy، Foundation، CRM، Visit Result،
+  Commercial، Closing، Roles، Integration، Hardening،
+  AI Console، Control و Chat-First.
+
+Snapshot بازبینی ۱۴۰۵/۰۴/۲۸:
+  241 test اجرا شد.
+  3 failure مشاهده شد:
+    ConversationEngineTests.test_cancel_workflow
+    WorkflowEngineFlowTests.test_cancel
+    WorkflowEngineFlowTests.test_edit_property_intent
+
+این سند failureها را اصلاح نمی‌کند، چون تغییر کد خارج از دامنه بازنویسی معماری
+است. بنابراین ادعای «کل suite سبز است» در این نسخه وجود ندارد.
+
+18.3 Benchmark
+---------------
+
+scripts/benchmark_*.py برای لایه‌های AI موجود است. اعداد ثبت‌شده در نسخه‌های
+قدیمی سند local/synthetic و متعلق به snapshot همان فاز بودند. معیار معتبر فعلی:
+  - اجرای دوباره script در environment هدف
+  - ذخیره output همراه commit/config/model
+  - تفکیک build latency از network/LLM latency
+
+هیچ عدد تاریخی این سند SLA production محسوب نمی‌شود.
+
+
+================================================================================
+19. محدودیت‌ها و ریسک‌های معماری فعلی
+================================================================================
+
+Data consistency:
+  JSON چندفایلی ACID نیست و relationها implicit هستند.
+
+Concurrency:
+  چند worker و threadهای parallel نیازمند atomic write و lock دقیق‌اند.
+
+Large route module:
+  app/express_partner/routes.py مسئولیت‌های زیادی را متمرکز کرده است.
+
+Conditional cognition:
+  Decision/BI/World/LongPlan به parallel prepare path وابسته‌اند.
+
+Ephemeral state:
+  World Model، Long Plan، Decision و بخشی از BI request-scoped هستند.
+
+Offline autonomy:
+  Learning، Improvement و Business AI background هستند؛ autonomous mutation
+  انجام نمی‌دهند. Optimization نیز فقط suggestion با applied=False می‌سازد.
+
+BI hint mismatch:
+  flag تزریق وجود دارد ولی wiring prompt مستقل وجود ندارد.
+
+Optional vector stores:
+  adapter وجود دارد اما dependency/config production باید جدا تأمین شود.
+
+Dual data paths:
+  instance/data در کنار data و app/data احتمال اشتباه عملیاتی ایجاد می‌کند.
+
+Secret hygiene:
+  production باید SECRET_KEY، VAPID، API keys و credentialها را از secret/env
+  امن بگیرد؛ fallbackهای source نباید مبنای production باشند.
+
+Scheduler duplication:
+  cron و in-process scheduler نباید هم‌زمان یک job را اجرا کنند.
+
+Test health:
+  در snapshot فعلی سه تست Conversation/Workflow شکست دارند.
+
+Documentation drift:
+  هر تغییر Registry، route، feature default یا data store باید این سند را
+  به‌روزرسانی کند.
+
+
+================================================================================
+20. فایل‌های مرجع کلیدی
+================================================================================
+
+App / HTTP:
+  app/__init__.py
+  run.py
+  passenger_wsgi.py
+  config.py
+  app/routes/
+  app/api/
+  app/express_partner/routes.py
+  admin/routes.py
+  admin/ai_console_routes.py
+  admin/control_routes.py
+
+Storage:
+  app/utils/storage.py
+  app/extensions.py
+
+AI:
+  app/ai/services.py
+  app/ai/provider_router.py
+  app/ai/runtime_settings.py
+  app/ai/config.py
+  app/ai/context.py
+  app/ai/agent_tools.py
+  app/ai/chat_store.py
+  app/ai/card_registry.py
+  app/ai/case_store.py
+  app/ai/chat_events.py
+  app/ai/token_analytics.py
+
+Orchestration:
+  app/conversation/
+  app/workflow/
+  app/supervisor/
+  app/adaptive/
+  app/planning/
+  app/memory/
+  app/knowledge/
+  app/agents/
+  app/decision/
+  app/business_intelligence/
+  app/evaluation/
+  app/executive/
+
+Autonomy/background:
+  app/goals/
+  app/world_model/
+  app/long_planner/
+  app/optimization/
+  app/self_learning/
+  app/self_reflection/
+  app/self_improvement/
+  app/business_ai/
+
+Business OS:
+  app/foundation/
+  app/crm/
+  app/visit_result/
+  app/commercial/
+  app/closing/
+  app/roles/
+  app/integration/
+  app/hardening/
+
+Operations:
+  requirements.txt
+  requirements-linux-wheels.txt
+  scripts/
+  tests/
+  ROADMAP.md
+
+
+================================================================================
+21. Change Log فشرده
+================================================================================
+
+[۱۴۰۵/۰۴/۲۸] v5.0 — Current-State Rewrite
+  - بازبینی سراسری app/admin/scripts/tests/config/deployment
+  - حذف تناقض «بدون RAG/Memory» و ثبت پیاده‌سازی فعلی
+  - ثبت شش Agent فعال، parallel DAG و 11 Workflow
+  - ثبت جریان واقعی generate_reply و early-returnها
+  - افزودن کامل Vinor OS: Foundation تا Hardening
+  - افزودن Chat-First cases/cards/events
+  - تکمیل Blueprint، route surface، persistence و role portals
+  - اصلاح default فلگ‌ها بر اساس کد: ON by default
+  - تفکیک app scheduler defaults از Passenger overrides
+  - مشخص‌کردن conditional/ephemeral/offline بودن لایه‌های autonomy
+  - جایگزینی PASSهای تاریخی با snapshot واقعی suite
+
+سوابق پیش از v5.0:
+  v1.x
+    RAG، Optimization، Memory، Planning، Supervisor، Multi-Agent و Adaptive
+
+  v2.x
+    Analysis، Recommendation، Conversation، Workflow، Customer Memory،
+    Negotiation، Customer Success، Parallel و Decision
+
+  v3.x
+    Evaluation، Business Intelligence و Continuous Optimization
+
+  v4.0
+    Goals، World Model، Long Planner، Learning، Reflection، Improvement،
+    Executive AI و Business AI
+
+  Vinor OS Phases 0–7
+    Foundation، CRM، Visit Result، Commercial، Closing، Roles،
+    Integration و Hardening؛ اکنون در متن اصلی v5.0 ادغام شده‌اند.
 
 
 ================================================================================

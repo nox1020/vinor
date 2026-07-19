@@ -93,10 +93,38 @@ class ConversationEngineTests(unittest.TestCase):
 
     def test_cancel_workflow(self) -> None:
         uk = "09121112233"
-        self.mgr.handle(message="ثبت بازدید", user_key=uk, audience="partner", chip_intent="visit")
-        out = self.mgr.handle(message="لغو کن", user_key=uk, audience="partner")
+        # Start a form workflow that persists a session, then cancel it.
+        self.mgr.handle(
+            message="می‌خواهم همکار شوم درخواست همکاری",
+            user_key=uk,
+            audience="public",
+        )
+        out = self.mgr.handle(message="لغو کن", user_key=uk, audience="public")
         self.assertTrue(out.handled)
         self.assertIn("لغو", out.reply)
+
+    def test_session_scoped_by_thread_id(self) -> None:
+        """Active form on thread A must not leak into thread B."""
+        uk = "09121112233"
+        self.mgr.handle(
+            message="می‌خواهم همکار شوم درخواست همکاری",
+            user_key=uk,
+            audience="public",
+            thread_id="thread-a",
+        )
+        sess_a = self.store.load(uk, thread_id="thread-a")
+        self.assertIsNotNone(sess_a)
+        self.assertEqual(sess_a.workflow_id, WF_PARTNER_ONBOARDING)
+        sess_b = self.store.load(uk, thread_id="thread-b")
+        self.assertIsNone(sess_b)
+        # Cancel only thread A — thread B stays empty; legacy key unused.
+        self.mgr.handle(
+            message="لغو کن",
+            user_key=uk,
+            audience="public",
+            thread_id="thread-a",
+        )
+        self.assertIsNone(self.store.load(uk, thread_id="thread-a"))
 
     def test_role_upgrade_order(self) -> None:
         self.assertTrue(RuleRoleResolver.can_upgrade(ROLE_GUEST, ROLE_USER))

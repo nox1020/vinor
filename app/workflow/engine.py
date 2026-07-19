@@ -56,6 +56,50 @@ def _step_validator(spec, step_id: str) -> str:
     return "non_empty"
 
 
+def _resolve_focus_land_code(user_key: str) -> str:
+    """کد فایل موضوع گفتگو — از مأموریت/ترد/اختصاص؛ هرگز از کاربر نپرس."""
+    uk = (user_key or "").strip()
+    if not uk:
+        return ""
+    try:
+        from flask import g
+
+        cached = str(getattr(g, "ai_focus_land_code", "") or "").strip()
+        if cached:
+            return cached
+        thread_id = getattr(g, "ai_tool_thread_id", None)
+    except Exception:
+        thread_id = None
+    try:
+        from app.ai.agent_tools import resolve_conversation_land_code
+
+        code = resolve_conversation_land_code(uk, thread_id=thread_id)
+        if code:
+            try:
+                from flask import g
+
+                g.ai_focus_land_code = code
+            except Exception:
+                pass
+            return code
+    except Exception:
+        pass
+    return ""
+
+
+def _autofill_land_code(ctx: WorkflowContext) -> bool:
+    """اگر مرحله land_code خالی است از زمینه پر کن. True اگر چیزی پر شد."""
+    if str(ctx.collected.get("land_code") or "").strip():
+        return False
+    code = _resolve_focus_land_code(ctx.user_key)
+    if not code:
+        return False
+    ctx.collected["land_code"] = code
+    if "land_code" not in (ctx.completed_steps or []):
+        ctx.completed_steps = list(ctx.completed_steps or []) + ["land_code"]
+    return True
+
+
 class DefaultWorkflowEngine(WorkflowEngine):
     """Rule-based Workflow Engine — State/Steps/Validation outside Prompt."""
 
@@ -123,7 +167,20 @@ class DefaultWorkflowEngine(WorkflowEngine):
             updated_at=now,
         )
         transition(ctx, WF_STATE_COLLECTING)
+        # Chat-First: کد فایل را از مأموریت/گفتگو بگیر — از کاربر نپرس
+        _autofill_land_code(ctx)
         step = _next_step(spec, ctx.collected)
+        # اگر فقط land_code می‌ماند و زمینه نداریم → به Supervisor بسپار (ابزار AI)
+        if step == "land_code":
+            return WorkflowEngineResult(
+                handled=False,
+                pass_to_supervisor=True,
+                next_action="pass_supervisor",
+                extra_tokens=0,
+                observability=self._obs(ctx, t0),
+            )
+        if not step:
+            return self._finish(wf, ctx, t0)
         ctx.current_step = step
         ctx.missing = _missing(spec, ctx.collected)
         transition(ctx, WF_STATE_WAITING_USER)
@@ -147,9 +204,31 @@ class DefaultWorkflowEngine(WorkflowEngine):
             return WorkflowEngineResult(handled=False, pass_to_supervisor=True, next_action="pass_supervisor")
 
         spec = wf.spec
+        # جلسهٔ گیرکرده روی land_code: از زمینه پر کن و پیام را برای قدم بعد مصرف کن
+        _autofill_land_code(ctx)
+        if str(ctx.current_step or "") == "land_code" and str(
+            ctx.collected.get("land_code") or ""
+        ).strip():
+            nxt = _next_step(spec, ctx.collected)
+            if not nxt:
+                return self._finish(wf, ctx, t0)
+            ctx.current_step = nxt
+            ctx.missing = _missing(spec, ctx.collected)
+
         step_id = ctx.current_step or _next_step(spec, ctx.collected)
         if not step_id:
             return self._finish(wf, ctx, t0)
+
+        # اگر هنوز land_code است و زمینه نداریم → Supervisor (نپرس)
+        if step_id == "land_code":
+            return WorkflowEngineResult(
+                handled=False,
+                pass_to_supervisor=True,
+                next_action="pass_supervisor",
+                context=ctx,
+                extra_tokens=0,
+                observability=self._obs(ctx, t0),
+            )
 
         transition(ctx, WF_STATE_VALIDATING)
         vkey = _step_validator(spec, step_id)

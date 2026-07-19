@@ -13,7 +13,7 @@ from flask import current_app
 from app.ai.audience import AUDIENCE_PARTNER, AUDIENCE_PUBLIC
 from app.ai.paths import ai_data_file
 
-_MAX_MESSAGES = 80
+_MAX_MESSAGES = 200  # Chat-First: keep longer case history in-thread
 _MAX_THREADS = 30
 _GUEST_MAX_THREADS = 2
 _MAX_CONTENT = 4000
@@ -125,34 +125,70 @@ def _finalize_record(
     return _prune_threads(record, max_threads=_thread_limit(user_key))
 
 
+def _new_message_id() -> str:
+    return uuid.uuid4().hex
+
+
+def _normalize_actions(actions: list | None) -> list[dict[str, Any]]:
+    from app.ai.card_registry import normalize_card
+
+    out: list[dict[str, Any]] = []
+    for a in actions or []:
+        if isinstance(a, dict):
+            out.append(normalize_card(a))
+        if len(out) >= 5:
+            break
+    return out
+
+
 def _clean_messages(raw: list) -> list[dict[str, Any]]:
+    from app.ai.message_types import normalize_message_type
+
     cleaned: list[dict[str, Any]] = []
     for item in raw or []:
         if not isinstance(item, dict):
             continue
         role = str(item.get("role") or "").strip()
         content = str(item.get("content") or "").strip()[:_MAX_CONTENT]
-        if role in ("user", "assistant") and content:
-            row: dict[str, Any] = {
-                "role": role,
-                "content": content,
-                "created_at": item.get("created_at") or _now_iso(),
-            }
-            if item.get("source"):
-                row["source"] = str(item.get("source"))
-            if item.get("escalation_id"):
-                row["escalation_id"] = str(item.get("escalation_id"))
-            codes = item.get("land_codes")
-            if isinstance(codes, list) and codes:
-                row["land_codes"] = [str(c).strip() for c in codes if str(c).strip()][:5]
-            actions = item.get("agent_actions")
-            if isinstance(actions, list) and actions:
-                cleaned_actions = [a for a in actions if isinstance(a, dict)][:5]
-                if cleaned_actions:
-                    row["agent_actions"] = cleaned_actions
-            if item.get("hide_ui") or item.get("hide_user"):
-                row["hide_ui"] = True
-            cleaned.append(row)
+        actions = item.get("agent_actions")
+        codes = item.get("land_codes")
+        has_actions = isinstance(actions, list) and any(isinstance(a, dict) for a in actions)
+        has_codes = isinstance(codes, list) and any(str(c).strip() for c in codes)
+        # Allow system/card messages with actions even if content empty-ish
+        if role not in ("user", "assistant"):
+            continue
+        if not content and not has_actions and not has_codes:
+            continue
+        if not content and (has_actions or has_codes):
+            content = str(item.get("content") or "جزئیات را در کارت زیر بررسی کنید.")[:_MAX_CONTENT]
+        row: dict[str, Any] = {
+            "id": str(item.get("id") or "").strip() or _new_message_id(),
+            "role": role,
+            "content": content,
+            "created_at": item.get("created_at") or _now_iso(),
+            "type": normalize_message_type(
+                item.get("type"),
+                role=role,
+                source=str(item.get("source") or ""),
+            ),
+        }
+        if item.get("source"):
+            row["source"] = str(item.get("source"))
+        if item.get("escalation_id"):
+            row["escalation_id"] = str(item.get("escalation_id"))
+        if item.get("event"):
+            row["event"] = str(item.get("event"))
+        if isinstance(item.get("meta"), dict) and item.get("meta"):
+            row["meta"] = dict(item["meta"])
+        if has_codes:
+            row["land_codes"] = [str(c).strip() for c in codes if str(c).strip()][:5]
+        if has_actions:
+            row["agent_actions"] = _normalize_actions(actions)
+        if item.get("hide_ui") or item.get("hide_user"):
+            row["hide_ui"] = True
+        if item.get("case_id"):
+            row["case_id"] = str(item.get("case_id"))
+        cleaned.append(row)
     return cleaned[-_MAX_MESSAGES:]
 
 
@@ -355,7 +391,10 @@ def _counts_toward_guest_quota(m: Any) -> bool:
     if m.get("quota") is False:
         return False
     source = str(m.get("source") or "").strip().lower()
-    if source in ("admin_escalation", "postchi"):
+    if source in ("admin_escalation", "postchi", "system"):
+        return False
+    mtype = str(m.get("type") or "").strip().lower()
+    if mtype in ("system", "timeline", "admin", "progress", "status", "warning", "error"):
         return False
     content = str(m.get("content") or "").strip()
     actions = m.get("agent_actions") or m.get("land_codes") or []
@@ -514,6 +553,8 @@ def append_exchange(
     audience: str | None = None,
     hide_user: bool = False,
 ) -> tuple[list[dict[str, Any]], str]:
+    from app.ai.message_types import MSG_AI, MSG_CARD, MSG_TEXT
+
     record = load_user_record(user_key, audience)
     tid = thread_id or record.get("active_id") or ""
     th = _find_thread(record, tid) if tid else _active_thread(record)
@@ -528,9 +569,13 @@ def append_exchange(
     ts = _now_iso()
     user_text = (user_text or "").strip()[:_MAX_CONTENT]
     assistant_text = (assistant_text or "").strip()[:_MAX_CONTENT]
+    actions = _normalize_actions(assistant_agent_actions)
+    codes = [str(c).strip() for c in (assistant_land_codes or []) if str(c).strip()][:5]
     if user_text:
         user_entry: dict[str, Any] = {
+            "id": _new_message_id(),
             "role": "user",
+            "type": MSG_TEXT,
             "content": user_text,
             "created_at": ts,
         }
@@ -542,17 +587,18 @@ def append_exchange(
                 th["title"] = _title_from_text(user_text)
             else:
                 th["title"] = "گفتگوی مأموریت"
-    if assistant_text or assistant_agent_actions:
+    if assistant_text or actions or codes:
+        msg_type = MSG_CARD if actions else MSG_AI
         entry: dict[str, Any] = {
+            "id": _new_message_id(),
             "role": "assistant",
+            "type": msg_type,
             "content": assistant_text or "جزئیات را در کارت زیر بررسی کنید.",
             "created_at": ts,
             "quota": True,
         }
-        codes = [str(c).strip() for c in (assistant_land_codes or []) if str(c).strip()]
         if codes:
-            entry["land_codes"] = codes[:5]
-        actions = [a for a in (assistant_agent_actions or []) if isinstance(a, dict)][:5]
+            entry["land_codes"] = codes
         if actions:
             entry["agent_actions"] = actions
         msgs.append(entry)
@@ -560,7 +606,171 @@ def append_exchange(
     th["updated_at"] = ts
     record["active_id"] = tid
     _save_record(record, user_key, audience)
+    # Soft-link Case to thread (non-fatal)
+    try:
+        from app.ai.case_store import ensure_case_for_thread
+
+        land = codes[0] if codes else ""
+        for a in actions:
+            if not land and isinstance(a, dict):
+                land = str(a.get("land_code") or "").strip()
+        ensure_case_for_thread(
+            user_key,
+            tid,
+            audience=audience,
+            land_code=land,
+            title=str(th.get("title") or ""),
+        )
+    except Exception:
+        pass
     return _enrich_messages_for_ui(user_key, th["messages"], audience), tid
+
+
+def append_typed_message(
+    user_key: str,
+    text: str,
+    *,
+    thread_id: str | None = None,
+    audience: str | None = None,
+    msg_type: str = "system",
+    source: str = "system",
+    land_codes: list[str] | None = None,
+    agent_actions: list[dict[str, Any]] | None = None,
+    event: str = "",
+    meta: dict[str, Any] | None = None,
+    quota: bool = False,
+) -> tuple[list[dict[str, Any]], str]:
+    """Append a single assistant-side typed message (system / timeline / …)."""
+    from app.ai.message_types import normalize_message_type
+
+    record = load_user_record(user_key, audience)
+    tid = thread_id or record.get("active_id") or ""
+    th = _find_thread(record, tid) if tid else _active_thread(record)
+    if not th:
+        tid = create_thread(user_key, activate=True, audience=audience)
+        record = load_user_record(user_key, audience)
+        th = _find_thread(record, tid)
+    assert th is not None
+    tid = str(th["id"])
+
+    body = (text or "").strip()[:_MAX_CONTENT]
+    actions = _normalize_actions(agent_actions)
+    codes = [str(c).strip() for c in (land_codes or []) if str(c).strip()][:5]
+    if not body and not actions and not codes:
+        return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience), tid
+
+    ts = _now_iso()
+    entry: dict[str, Any] = {
+        "id": _new_message_id(),
+        "role": "assistant",
+        "type": normalize_message_type(msg_type, role="assistant", source=source),
+        "content": body or "—",
+        "created_at": ts,
+        "source": str(source or "system"),
+        "quota": bool(quota),
+    }
+    if event:
+        entry["event"] = str(event)
+    if meta:
+        entry["meta"] = dict(meta)
+    if codes:
+        entry["land_codes"] = codes
+    if actions:
+        entry["agent_actions"] = actions
+
+    msgs = list(th.get("messages") or [])
+    msgs.append(entry)
+    th["messages"] = msgs[-_MAX_MESSAGES:]
+    th["updated_at"] = ts
+    record["active_id"] = tid
+    _save_record(record, user_key, audience)
+    return _enrich_messages_for_ui(user_key, th["messages"], audience), tid
+
+
+def update_agent_action_by_token(
+    user_key: str,
+    token: str,
+    *,
+    thread_id: str | None = None,
+    audience: str | None = None,
+    new_state: str,
+    event: str = "",
+    result: dict[str, Any] | None = None,
+    lines: list[str] | None = None,
+    note: str = "",
+    actor: str = "",
+) -> tuple[bool, list[dict[str, Any]], str]:
+    """Update a living card in-place by token (or card_id if passed as token)."""
+    from app.ai.card_registry import apply_card_transition
+
+    tok = (token or "").strip()
+    if not tok:
+        return False, [], ""
+
+    record = load_user_record(user_key, audience)
+    tid = (thread_id or "").strip() or str(record.get("active_id") or "")
+    threads = list(record.get("threads") or [])
+    # Prefer active thread, then scan all (card may be in mission thread)
+    order: list[dict[str, Any]] = []
+    primary = _find_thread(record, tid) if tid else _active_thread(record)
+    if primary:
+        order.append(primary)
+    for th in threads:
+        if primary and th.get("id") == primary.get("id"):
+            continue
+        order.append(th)
+
+    found = False
+    out_tid = tid
+    for th in order:
+        msgs = list(th.get("messages") or [])
+        changed = False
+        for msg in msgs:
+            if not isinstance(msg, dict):
+                continue
+            actions = msg.get("agent_actions")
+            if not isinstance(actions, list):
+                continue
+            new_actions: list[dict[str, Any]] = []
+            for action in actions:
+                if not isinstance(action, dict):
+                    continue
+                match = (
+                    str(action.get("token") or "") == tok
+                    or str(action.get("card_id") or "") == tok
+                )
+                if match:
+                    new_actions.append(
+                        apply_card_transition(
+                            action,
+                            new_state,
+                            event=event,
+                            result=result,
+                            lines=lines,
+                            note=note,
+                            actor=actor,
+                        )
+                    )
+                    found = True
+                    changed = True
+                else:
+                    new_actions.append(action)
+            if changed:
+                msg["agent_actions"] = new_actions
+                msg["updated_at"] = _now_iso()
+        if changed:
+            th["messages"] = msgs
+            th["updated_at"] = _now_iso()
+            out_tid = str(th.get("id") or out_tid)
+            break
+
+    if not found:
+        return False, [], out_tid
+
+    record["active_id"] = out_tid or record.get("active_id")
+    _save_record(record, user_key, audience)
+    ui = messages_for_ui(user_key, out_tid, audience)
+    return True, ui, out_tid
 
 
 def inject_admin_reply(
@@ -623,12 +833,18 @@ def inject_admin_reply(
         if existing == body.strip():
             return True
 
+    from app.ai.message_types import MSG_ADMIN
+
     ts = _now_iso()
     entry: dict[str, Any] = {
+        "id": _new_message_id(),
         "role": "assistant",
+        "type": MSG_ADMIN,
         "content": body[:_MAX_CONTENT],
         "created_at": ts,
         "source": "admin_escalation",
+        "event": "admin_replied",
+        "quota": False,
     }
     if eid:
         entry["escalation_id"] = eid
@@ -639,6 +855,18 @@ def inject_admin_reply(
     th["updated_at"] = ts
     record["active_id"] = str(th["id"])
     _save_record(record, user_key, audience)
+    try:
+        from app.ai.case_store import append_case_timeline
+
+        append_case_timeline(
+            user_key,
+            str(th["id"]),
+            audience=audience,
+            event="admin_replied",
+            label="پاسخ تیم وینور ثبت شد",
+        )
+    except Exception:
+        pass
     return True
 
 

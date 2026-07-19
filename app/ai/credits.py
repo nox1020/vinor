@@ -155,8 +155,13 @@ def _prune_replies(store: dict[str, Any], ttl: int) -> None:
 
 
 def check_rate_limit(user_key: str, audience: str) -> str | None:
-    """اگر خیلی زود درخواست داده → پیام خطا (بدون API)."""
+    """اگر خیلی زود درخواست داده → پیام خطا (بدون API).
+
+    همکار (partner): بدون فاصله اجباری — چت باید بلافاصله ارسال شود.
+    """
     if not user_key:
+        return None
+    if audience == AUDIENCE_PARTNER:
         return None
     cfg = budget_config()
     min_iv = cfg["min_interval_sec"]

@@ -15,7 +15,7 @@ def maybe_record_workflow_commit(
 ) -> Optional[CommitResult]:
     """
     Safe hook after Workflow Engine persist.
-    Default OFF → immediate None (zero behavior change).
+    Flags default ON; writes Activity/Timeline only (storage persist remains shadow).
     Failures never propagate.
     """
     if not foundation_enabled() or not workflow_commit_enabled():

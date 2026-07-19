@@ -59,13 +59,36 @@
 1. در هر نوبت **فقط یک فاز** اجرا شود.
 2. هیچ قابلیت فعلی حذف یا بازنویسی نشود (فقط Additive).
 3. Backward Compatibility باید ۱۰۰٪ حفظ شود.
-4. Feature Flagهای قابلیت جدید به‌صورت پیش‌فرض **خاموش** باشند.
+4. Feature Flagهای قابلیت جدید به‌صورت پیش‌فرض **روشن** باشند (`"1"` / ON)؛ خاموش‌کردن با `VINOR_*=0`.
 5. قبل از رفتن به فاز بعد، تست رگرسیون مسیرهای فعلی اجباری است:
    - Guest / User / Partner / Special Partner
    - Visit → Deal → Commission → Withdrawal
    - AI Chat / Workflow Engine / Conversation Engine
 6. اگر تغییری مسیر فعلی را بشکند، آن تغییر انجام نشود.
 7. اگر قابلیتی با هدف طلایی (فروش / تبدیل / تماس بازدید) هم‌راستا نباشد، وارد اسپرینت نشود.
+
+---
+
+## حقیقت معماری مدار فروش (منبع حقیقت)
+
+سیستم **دو لایه** دارد؛ فازهای ۰–۷ به‌معنی «یک مسیر واحد از فرم تا JSON کسب‌وکار» نیستند.
+
+| لایه | نقش | نوشتن JSON کسب‌وکار؟ |
+|------|-----|----------------------|
+| **مسیر زنده** | HTTP Partner + AI tools + confirm cards (`agent_tools` / `card_registry` / `chat_store`) | **بله** — Visit / Offer / Deal / CRM |
+| **Conversation + Workflow Engine** | جمع‌آوری فیلد متنی در چت؛ برای Partner روی intentهای عملیاتی به tools/cards واگذار می‌شود | **خیر** — فقط Foundation Activity/Timeline (shadow) |
+| **Foundation commit persist** | `VINOR_WORKFLOW_COMMIT_PERSIST` | **فعلاً no-op** (`phase0_persist_blocked`) حتی اگر فلگ ON باشد |
+
+```
+UI (ai-chat.js)
+  → /ai/* یا /express/partner/ai/*
+  → generate_reply
+       ├─ conversation/workflow (اختیاری؛ Partner ops → skip به tools)
+       └─ supervisor + agent_tools + confirm cards  ← ثبت واقعی
+  → chat_store (+ case_store نرم)
+```
+
+**استقرار:** در local، schedulers (از جمله sales coach) پیش‌فرض ON هستند؛ در `passenger_wsgi` ممکن است `VINOR_SALES_COACH_SCHEDULER=0` ست شود — رفتار nudge بین محیط‌ها فرق دارد.
 
 ---
 
@@ -106,14 +129,14 @@ Lead → Contact → Call(09121471301) → Visit → Offer → Contract
 - Hook اختیاری در `app/conversation/manager.py`
 - تست: `tests/test_foundation_phase0.py`
 
-**فلگ‌ها (پیش‌فرض OFF)**
+**فلگ‌ها (پیش‌فرض ON)**
 | Flag | پیش‌فرض | نقش |
 |------|---------|-----|
-| `VINOR_FOUNDATION_ENABLED` | `0` | کلید اصلی |
-| `VINOR_ACTIVITY_STORE_ENABLED` | `1` اگر Foundation روشن باشد | Activity |
-| `VINOR_TIMELINE_STORE_ENABLED` | `1` اگر Foundation روشن باشد | Timeline |
-| `VINOR_WORKFLOW_COMMIT_ENABLED` | `0` | ثبت commit روی complete |
-| `VINOR_WORKFLOW_COMMIT_PERSIST` | `0` | نوشتن به JSON کسب‌وکار (در فاز ۰ حتی روشن هم shadow) |
+| `VINOR_FOUNDATION_ENABLED` | `1` | کلید اصلی |
+| `VINOR_ACTIVITY_STORE_ENABLED` | `1` | Activity |
+| `VINOR_TIMELINE_STORE_ENABLED` | `1` | Timeline |
+| `VINOR_WORKFLOW_COMMIT_ENABLED` | `1` | ثبت Activity/Timeline روی complete |
+| `VINOR_WORKFLOW_COMMIT_PERSIST` | `1` | رزرو شده — فعلاً همیشه shadow (`phase0_persist_blocked`) |
 
 **خروجی داده**
 - `instance/data/foundation_activities.json`
@@ -134,7 +157,7 @@ Lead → Contact → Call(09121471301) → Visit → Offer → Contract
 - UI همکار: مشتریان من + ثبت تماس / پیگیری
 - AI tools جدید (کنار tools فعلی): `propose_log_call`, `propose_followup`
 - اتصال رویدادهای CRM به Activity / Timeline
-- فلگ‌های جدا برای CRM (پیش‌فرض OFF)
+- فلگ‌های جدا برای CRM (پیش‌فرض ON)
 
 **مسیر کد**
 - `app/crm/`
@@ -142,14 +165,14 @@ Lead → Contact → Call(09121471301) → Visit → Offer → Contract
 - UI: `/customers` + لینک تنظیمات (پشت `VINOR_CRM_UI_ENABLED`)
 - تست: `tests/test_crm_phase1.py`
 
-**فلگ‌ها (پیش‌فرض OFF)**
+**فلگ‌ها (پیش‌فرض ON)**
 | Flag | پیش‌فرض | نقش |
 |------|---------|-----|
-| `VINOR_CRM_ENABLED` | `0` | کلید اصلی |
-| `VINOR_CRM_UI_ENABLED` | `1` اگر CRM روشن باشد | صفحه مشتریان |
-| `VINOR_CRM_AI_TOOLS_ENABLED` | `0` | propose_log_call / propose_followup |
-| `VINOR_CRM_VISIT_SYNC_ENABLED` | `1` اگر CRM روشن باشد | Visit → Contact |
-| `VINOR_CRM_ACTIVITY_HOOK_ENABLED` | `1` اگر CRM روشن باشد | Activity/Timeline |
+| `VINOR_CRM_ENABLED` | `1` | کلید اصلی |
+| `VINOR_CRM_UI_ENABLED` | `1` | صفحه مشتریان |
+| `VINOR_CRM_AI_TOOLS_ENABLED` | `1` | propose_log_call / propose_followup |
+| `VINOR_CRM_VISIT_SYNC_ENABLED` | `1` | Visit → Contact |
+| `VINOR_CRM_ACTIVITY_HOOK_ENABLED` | `1` | Activity/Timeline |
 
 **خروجی داده**
 - `instance/data/crm_contacts.json`
@@ -185,14 +208,14 @@ Lead → Contact → Call(09121471301) → Visit → Offer → Contract
 - AI: `propose_visit_result` / `propose_no_show`
 - تست: `tests/test_visit_result_phase2.py`
 
-**فلگ‌ها (پیش‌فرض OFF)**
+**فلگ‌ها (پیش‌فرض ON)**
 | Flag | پیش‌فرض | نقش |
 |------|---------|-----|
-| `VINOR_VISIT_RESULT_ENABLED` | `0` | کلید اصلی |
-| `VINOR_VISIT_RESULT_UI_ENABLED` | `1` اگر master روشن | Admin/Special result actions |
-| `VINOR_VISIT_RESULT_AI_TOOLS_ENABLED` | `0` | propose_visit_result / propose_no_show |
-| `VINOR_VISIT_NO_SHOW_STATUS_ENABLED` | `1` اگر master روشن | نوشتن status=no_show |
-| `VINOR_VISIT_RESULT_ACTIVITY_HOOK_ENABLED` | `1` اگر master روشن | Activity/Timeline |
+| `VINOR_VISIT_RESULT_ENABLED` | `1` | کلید اصلی |
+| `VINOR_VISIT_RESULT_UI_ENABLED` | `1` | Admin/Special result actions |
+| `VINOR_VISIT_RESULT_AI_TOOLS_ENABLED` | `1` | propose_visit_result / propose_no_show |
+| `VINOR_VISIT_NO_SHOW_STATUS_ENABLED` | `1` | نوشتن status=no_show |
+| `VINOR_VISIT_RESULT_ACTIVITY_HOOK_ENABLED` | `1` | Activity/Timeline |
 
 **خروجی داده**
 - `instance/data/visit_results.json`
@@ -221,16 +244,16 @@ Lead → Contact → Call(09121471301) → Visit → Offer → Contract
 - AI: `propose_offer` / `propose_counter_offer` / `propose_reservation`
 - تست: `tests/test_commercial_phase3.py`
 
-**فلگ‌ها (پیش‌فرض OFF)**
+**فلگ‌ها (پیش‌فرض ON)**
 | Flag | پیش‌فرض | نقش |
 |------|---------|-----|
-| `VINOR_COMMERCIAL_ENABLED` | `0` | کلید اصلی |
-| `VINOR_COMMERCIAL_UI_ENABLED` | `1` اگر master روشن | Partner + Special UI |
-| `VINOR_COMMERCIAL_BUYER_UI_ENABLED` | `0` | `/my/offers` |
-| `VINOR_COMMERCIAL_AI_TOOLS_ENABLED` | `0` | propose tools |
-| `VINOR_COMMERCIAL_ACTIVITY_HOOK_ENABLED` | `1` اگر master روشن | Activity/Timeline |
-| `VINOR_COMMERCIAL_WORKFLOW_ENABLED` | `0` | Offer form workflow |
-| `VINOR_COMMERCIAL_VISIT_BRIDGE_ENABLED` | `1` اگر master روشن | interested → Negotiation |
+| `VINOR_COMMERCIAL_ENABLED` | `1` | کلید اصلی |
+| `VINOR_COMMERCIAL_UI_ENABLED` | `1` | Partner + Special UI |
+| `VINOR_COMMERCIAL_BUYER_UI_ENABLED` | `1` | `/my/offers` |
+| `VINOR_COMMERCIAL_AI_TOOLS_ENABLED` | `1` | propose tools |
+| `VINOR_COMMERCIAL_ACTIVITY_HOOK_ENABLED` | `1` | Activity/Timeline |
+| `VINOR_COMMERCIAL_WORKFLOW_ENABLED` | `1` | Offer form workflow (Guest/User؛ Partner → tools/cards) |
+| `VINOR_COMMERCIAL_VISIT_BRIDGE_ENABLED` | `1` | interested → Negotiation |
 
 **خروجی داده**
 - `instance/data/commercial_negotiations.json`
@@ -435,12 +458,12 @@ Lead → Contact → Call(09121471301) → Visit → Offer → Contract
 - [ ] ورود OTP
 - [ ] Guest (سقف AI / مشاهده)
 - [ ] User (apply)
-- [ ] Partner (visit → deal → commission)
+- [ ] Partner (visit → deal → commission) — مسیر زنده: HTTP یا AI confirm cards
 - [ ] Special Partner (listings / inbox)
 - [ ] Withdrawal
 - [ ] AI Chat (public + partner tools)
-- [ ] Workflow Engine + Conversation Engine
-- [ ] Foundation flags default OFF (بدون اثر جانبی)
+- [ ] Workflow Engine + Conversation Engine (فرم/shadow؛ Partner ops → tools)
+- [ ] Foundation flags default ON؛ persist همچنان shadow/no-op
 
 ---
 

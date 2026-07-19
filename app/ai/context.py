@@ -329,22 +329,22 @@ def _partner_profile_block(phone: str) -> str:
     partners = load_express_partners() or []
     prof = next((p for p in partners if _norm_phone(str(p.get("phone") or "")) == me), None)
     if not prof:
-        return "پروفایل همکار: هنوز تأیید نشده یا ثبت نشده.\nنقش مخاطب: مشتری/خریدار تا تأیید همکاری."
+        return "پروفایل بازاریاب: هنوز تأیید نشده یا ثبت نشده.\nنقش مخاطب: مشتری/خریدار تا تأیید بازاریاب شدن."
     name = str(prof.get("name") or prof.get("full_name") or "—").strip()
     city = str(prof.get("city") or "—").strip()
     status = str(prof.get("status") or "—").strip()
-    role_fa = "همکار اکسپرس (واسط فروش)"
+    role_fa = "بازاریاب فروش"
     try:
         from app.express_partner.partner_roles import partner_is_approved, partner_is_special
 
         if partner_is_special(prof):
-            role_fa = "همکار ویژه (مالک/فروشنده — بالاترین دسترسی)"
+            role_fa = "بازاریاب ویژه (مالک/فروشنده — بالاترین دسترسی)"
         elif not partner_is_approved(prof):
-            role_fa = "متقاضی همکاری (در انتظار تأیید)"
+            role_fa = "متقاضی بازاریاب شدن (در انتظار تأیید)"
     except Exception:
         pass
     return (
-        f"پروفایل همکار: نام={name} | شهر={city} | وضعیت={status}\n"
+        f"پروفایل بازاریاب: نام={name} | شهر={city} | وضعیت={status}\n"
         f"نقش مخاطب: {role_fa}"
     )
 
@@ -378,7 +378,8 @@ def _assigned_lands(phone: str) -> list[dict[str, Any]]:
         attach_express_land_commission(item)
         out.append(item)
     out.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
-    return out[:12]
+    # سقف بالاتر تا همکار از چت به فایل‌های بازدید/اختصاص بیشتری دسترسی داشته باشد
+    return out[:80]
 
 
 def _public_lands_sample(limit: int = 8) -> list[dict[str, Any]]:
@@ -472,38 +473,31 @@ def build_partner_status_context(phone: str) -> str:
             follow_up_count=follow_up,
         )
 
-        lines = ["=== وضعیت فعلی ==="]
+        lines = [
+            "=== وضعیت فعلی ===",
+            "نقش: بازاریاب فروش — مأموریت اجباری نیست.",
+            "مسیر چت: (۱) مشتری+معیار → search_lands → [[LAND:کد]] "
+            "یا (۲) نوع فایل برای بازاریابی → search_lands → معرفی.",
+        ]
         try:
-            from app.express_partner.partner_missions import get_active_mission, refresh_mission_if_land_closed
-
-            mission = refresh_mission_if_land_closed(ph) or get_active_mission(ph)
-            if mission:
-                mcode = str(mission.get("land_code") or "").strip()
+            personal_codes: list[str] = []
+            for a in assigned or []:
+                if not isinstance(a, dict) or not a.get("_assignment_id"):
+                    continue
+                c = str(a.get("code") or a.get("land_code") or "").strip()
+                if c and c not in personal_codes:
+                    personal_codes.append(c)
+            if len(personal_codes) == 1:
                 lines.append(
-                    f"ماموریت فعال: فایل {mcode} — همین فایل موضوع گفتگوست؛ "
-                    "کد فایل را از کاربر نپرس؛ برای propose_* و draft_listing_copy همین کد را استفاده کن "
-                    "یا land_code را خالی بگذار تا سیستم خودش بگیرد. "
-                    "پاسخ‌ها کوتاه و ماموریت‌محور؛ مفصل فقط اگر کاربر توضیح بیشتر بخواهد."
+                    f"فایل شخصی فعال: {personal_codes[0]} — اگر گفتگو همین فایل است کد نپرس؛ "
+                    "propose_* را با land_code خالی بزن."
                 )
-            else:
-                personal_codes: list[str] = []
-                for a in assigned or []:
-                    if not isinstance(a, dict) or not a.get("_assignment_id"):
-                        continue
-                    c = str(a.get("code") or a.get("land_code") or "").strip()
-                    if c and c not in personal_codes:
-                        personal_codes.append(c)
-                if len(personal_codes) == 1:
-                    lines.append(
-                        f"فایل شخصی فعال: {personal_codes[0]} — کد را از کاربر نپرس؛ "
-                        "propose_* را با land_code خالی بزن."
-                    )
-                elif personal_codes:
-                    lines.append(
-                        "فایل‌های اختصاصی: "
-                        + "، ".join(personal_codes[:5])
-                        + " — اگر گفتگو روی یک فایل است کد نپرس؛ land_code خالی بگذار."
-                    )
+            elif personal_codes:
+                lines.append(
+                    "فایل‌های اختصاصی: "
+                    + "، ".join(personal_codes[:5])
+                    + " — اگر گفتگو روی یک فایل است کد نپرس؛ land_code خالی بگذار."
+                )
         except Exception:
             pass
         if actions:

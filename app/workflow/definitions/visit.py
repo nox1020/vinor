@@ -12,7 +12,14 @@ class VisitWorkflow(BaseWorkflow):
         intent=INTENT_VISIT,
         object_type="VisitRequest",
         steps=[
-            StepDefinition("land_code", "land_code", "کد فایل برای بازدید چیست؟", validator="land_code"),
+            # land_code از زمینه (مأموریت/ترد) autofill می‌شود — از کاربر پرسیده نمی‌شود
+            StepDefinition(
+                "land_code",
+                "land_code",
+                "",
+                required=True,
+                validator="land_code",
+            ),
             StepDefinition("visitor_name", "visitor_name", "نام بازدیدکننده؟", validator="non_empty"),
             StepDefinition("visitor_phone", "visitor_phone", "شماره موبایل بازدیدکننده؟", validator="phone"),
             StepDefinition("visit_date", "visit_date", "تاریخ بازدید؟", validator="non_empty"),

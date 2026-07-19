@@ -147,10 +147,17 @@ def render_land_chat_detail_html(code: str) -> Optional[Dict[str, str]]:
     land, is_approved = prepare_land_for_chat_detail(code)
     if not land:
         return None
+    try:
+        from app.crm.config import VISIT_CALL_TARGET
+
+        visit_call_target = str(VISIT_CALL_TARGET or "09121471301").strip()
+    except Exception:
+        visit_call_target = "09121471301"
     html = render_template(
         "express_partner/partials/land_chat_detail.html",
         land=land,
         is_approved=is_approved,
+        visit_call_target=visit_call_target,
     )
     return {
         "code": str(land.get("code") or code).strip(),

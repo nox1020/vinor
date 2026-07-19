@@ -269,7 +269,8 @@
     }, 160);
   }
   var POLL_MS = 15000;
-  var MIN_SUBMIT_GAP_MS = 4000;
+  /* فاصله اجباری بین ارسال‌ها حذف شد — فقط submitting از دوباره‌کلیک جلوگیری می‌کند */
+  var MIN_SUBMIT_GAP_MS = 0;
   var MIN_MSG_LEN = 1;
   var EMPTY_POLL_PAUSE = 60;
   var pollInFlight = false;
@@ -1421,85 +1422,42 @@
     body.appendChild(host);
     row.appendChild(body);
     wrap.appendChild(row);
-    list.insertBefore(wrap, list.firstChild);
+    /* بعد از Case header مأموریت؛ نه بالای آن */
+    var journey = list.querySelector('.ai-msg-wrap[data-vn-journey-inject="1"]');
+    if (journey && journey.nextSibling) {
+      list.insertBefore(wrap, journey.nextSibling);
+    } else if (journey) {
+      try {
+        journey.after(wrap);
+      } catch (_) {
+        list.appendChild(wrap);
+      }
+    } else {
+      list.insertBefore(wrap, list.firstChild);
+    }
+  }
+
+  function pinJourneyWrapToTop(wrap) {
+    if (!list || !wrap) return;
+    try {
+      if (list.firstChild !== wrap) {
+        list.insertBefore(wrap, list.firstChild);
+      }
+    } catch (_) {
+      try {
+        list.appendChild(wrap);
+      } catch (__) {}
+    }
   }
 
   function injectHomeJourneyCardIntoChat() {
     if (!homeInline || !list) return;
     scrubDashboardCardsOutsideChat();
-
-    var existing = list.querySelector('.ai-msg-wrap[data-vn-journey-inject="1"]');
-    if (existing) {
-      try {
-        list.appendChild(existing);
-      } catch (_) {}
-      injectHomeLandsCarouselIntoChat();
-      return;
+    /* مأموریت/کارت فایل اجباری حذف شد */
+    var existingAll = list.querySelectorAll('.ai-msg-wrap[data-vn-journey-inject="1"]');
+    for (var ei = 0; ei < existingAll.length; ei++) {
+      try { existingAll[ei].remove(); } catch (_) {}
     }
-
-    var cardsHost = document.createElement('div');
-    cardsHost.className = 'ai-msg-cards ai-msg-cards--journey w-full min-w-0 max-w-full';
-
-    var tpl = document.getElementById('vnJourneyChatTpl');
-    var mounted = false;
-    if (tpl && tpl.content) {
-      var frag = tpl.content.cloneNode(true);
-      while (frag.firstChild) {
-        cardsHost.appendChild(frag.firstChild);
-      }
-      mounted = !!cardsHost.querySelector('[data-vn-journey-card]');
-    }
-    if (!mounted) {
-      var legacy = document.getElementById('vnJourneyChatSource');
-      var srcCard = legacy && legacy.querySelector('[data-vn-journey-card]');
-      if (srcCard) {
-        cardsHost.appendChild(srcCard.cloneNode(true));
-        mounted = true;
-      }
-    }
-    if (!mounted) {
-      var strays = document.querySelectorAll('#homeDashboardPage [data-vn-journey-card]');
-      for (var si = 0; si < strays.length; si++) {
-        if (list.contains(strays[si])) continue;
-        cardsHost.appendChild(strays[si]);
-        mounted = true;
-        break;
-      }
-    }
-    if (!mounted) {
-      injectHomeLandsCarouselIntoChat();
-      return;
-    }
-
-    removeWelcome();
-    var liveCard = cardsHost.querySelector('[data-vn-journey-card]');
-    if (liveCard) {
-      try {
-        liveCard.id = 'vnJourneyCard';
-      } catch (_) {}
-    }
-
-    var wrap = document.createElement('div');
-    wrap.className = 'ai-msg-wrap ai-msg-wrap--assistant';
-    wrap.setAttribute('data-role', 'assistant');
-    wrap.setAttribute('data-vn-journey-inject', '1');
-    wrap.setAttribute('data-ephemeral', '1');
-
-    var row = document.createElement('div');
-    row.className = 'ai-msg-row';
-    var body = document.createElement('div');
-    body.className = 'ai-msg-body';
-    body.appendChild(cardsHost);
-    row.appendChild(body);
-    wrap.appendChild(row);
-    list.appendChild(wrap);
-
-    try {
-      if (typeof window.__vinorJourneyCollapseApply === 'function') {
-        window.__vinorJourneyCollapseApply();
-      }
-    } catch (_) {}
-    scrubDashboardCardsOutsideChat();
     injectHomeLandsCarouselIntoChat();
   }
 
@@ -1576,9 +1534,11 @@
   function setAgentCardState(card, status, noteText) {
     if (!card) return;
     card.setAttribute('data-agent-status', status || '');
+    card.setAttribute('data-agent-state', status || '');
     var actions = card.querySelector('.ai-agent-card__actions');
     if (actions) actions.remove();
     card.classList.add('ai-agent-card--done');
+    card.classList.add('ai-agent-card--' + (status || 'done'));
     var note = card.querySelector('[data-agent-note]') || card.querySelector('.ai-agent-card__note');
     if (!note) {
       note = document.createElement('div');
@@ -1587,6 +1547,56 @@
     }
     note.classList.remove('hidden');
     note.textContent = noteText || '';
+    var badge = card.querySelector('.ai-agent-card__badge');
+    if (badge) {
+      var labels = {
+        confirmed: 'تأیید شد',
+        completed: 'انجام شد',
+        cancelled: 'لغو شد',
+        expired: 'منقضی شد',
+        failed: 'ناموفق',
+      };
+      badge.textContent = labels[status] || status || '';
+    }
+  }
+
+  /** Patch living cards / append new system+timeline messages from server snapshot. */
+  function applyServerThreadMessages(serverMessages) {
+    var msgs = serverMessages || [];
+    if (!msgs.length) return;
+    var knownIds = {};
+    list.querySelectorAll('.ai-msg-wrap[data-msg-id]').forEach(function (w) {
+      knownIds[w.getAttribute('data-msg-id') || ''] = 1;
+    });
+    msgs.forEach(function (msg) {
+      if (!msg) return;
+      var mid = msg.id || '';
+      var cardsHtml = buildCardsHtml(msg);
+      if (cardsHtml) {
+        var patched = false;
+        var tmp = document.createElement('div');
+        tmp.innerHTML = cardsHtml;
+        tmp.querySelectorAll('.ai-agent-card[data-card-id], .ai-agent-card[data-token]').forEach(function (fresh) {
+          var cid = fresh.getAttribute('data-card-id') || '';
+          var tok = fresh.getAttribute('data-token') || '';
+          var live = null;
+          if (cid) live = list.querySelector('.ai-agent-card[data-card-id="' + cid + '"]');
+          if (!live && tok) live = list.querySelector('.ai-agent-card[data-token="' + tok + '"]');
+          if (live && live.parentNode) {
+            live.parentNode.replaceChild(fresh, live);
+            initCardsIn(fresh.parentNode);
+            patched = true;
+          }
+        });
+        if (patched) return;
+      }
+      if (mid && knownIds[mid]) return;
+      if (messageSeen(msg)) return;
+      appendMessage(msg);
+      if (mid) knownIds[mid] = 1;
+    });
+    scanLastSyncFromDom();
+    scrollChatToEnd();
   }
 
   async function confirmAgentAction(card) {
@@ -1618,16 +1628,20 @@
         }
         throw new Error((data && data.error) || 'ثبت اقدام ممکن نشد.');
       }
-      setAgentCardState(card, 'confirmed', data.message || 'ثبت شد.');
       if (data.thread_id) setActiveThreadId(data.thread_id);
       if (data.messages && data.messages.length) {
-        reconcileExchange(data.messages);
-      } else if (data.message) {
-        appendMessage({
-          role: 'assistant',
-          content: data.message,
-          created_at: new Date().toISOString(),
-        });
+        applyServerThreadMessages(data.messages);
+      } else {
+        setAgentCardState(card, 'completed', data.message || 'ثبت شد.');
+        if (data.message) {
+          appendMessage({
+            role: 'assistant',
+            type: 'timeline',
+            content: data.message,
+            created_at: new Date().toISOString(),
+            source: 'system',
+          });
+        }
       }
     } catch (err) {
       btns.forEach(function (b) {
@@ -1642,12 +1656,20 @@
     var token = card.getAttribute('data-token') || '';
     if (token && agentCancelUrl) {
       try {
-        await fetch(agentCancelUrl, {
+        var resp = await fetch(agentCancelUrl, {
           method: 'POST',
           headers: apiHeaders(true),
           credentials: 'same-origin',
-          body: JSON.stringify({ token: token }),
+          body: JSON.stringify({ token: token, thread_id: activeThreadId() }),
         });
+        var data = null;
+        try {
+          data = await resp.json();
+        } catch (_) {}
+        if (data && data.messages && data.messages.length) {
+          applyServerThreadMessages(data.messages);
+          return;
+        }
       } catch (_) {}
     }
     setAgentCardState(card, 'cancelled', 'انصراف داده شد.');
@@ -1703,6 +1725,10 @@
   }
 
   function messageSeen(msg) {
+    var mid = (msg && msg.id) || '';
+    if (mid && list.querySelector('.ai-msg-wrap[data-msg-id="' + mid + '"]')) {
+      return true;
+    }
     var eid = msg.escalation_id || '';
     if (eid) {
       if (seenEscalationIds[eid]) return true;
@@ -1782,6 +1808,13 @@
     if (messageSeen(msg)) return null;
     var role = msg.role || 'assistant';
     var text = (msg.content || '').trim();
+    var msgType = String(msg.type || '').toLowerCase();
+    var isSystemish =
+      msgType === 'system' ||
+      msgType === 'timeline' ||
+      msgType === 'progress' ||
+      msgType === 'status' ||
+      msg.source === 'system';
     /* پرامپت اکشن مأموریت — در چت نمایش نده */
     if (role === 'user' && (msg.hide_ui || msg.hide_user || opts.silent)) {
       var hk =
@@ -1793,6 +1826,7 @@
     var cardsHtml = buildCardsHtml(msg);
     var isAdmin =
       msg.source === 'admin_escalation' ||
+      msgType === 'admin' ||
       msg.source === 'postchi' ||
       (text && text.indexOf('پاسخ تیم وینور') === 0);
 
@@ -1803,8 +1837,16 @@
     var isUser = role === 'user';
     var wrap = document.createElement('div');
     wrap.className =
-      'ai-msg-wrap ' + (isUser ? 'ai-msg-wrap--user' : 'ai-msg-wrap--assistant');
+      'ai-msg-wrap ' +
+      (isUser
+        ? 'ai-msg-wrap--user'
+        : isSystemish
+          ? 'ai-msg-wrap--system'
+          : 'ai-msg-wrap--assistant');
     wrap.setAttribute('data-role', role);
+    if (msgType) wrap.setAttribute('data-msg-type', msgType);
+    if (msg.id) wrap.setAttribute('data-msg-id', msg.id);
+    if (msg.event) wrap.setAttribute('data-event', msg.event);
     if (msg.created_at) wrap.setAttribute('data-created-at', msg.created_at);
     if (msg.escalation_id) wrap.setAttribute('data-escalation-id', msg.escalation_id);
     if (msg.source === 'postchi' && role === 'assistant') {
@@ -1819,7 +1861,7 @@
     var row = document.createElement('div');
     row.className = 'ai-msg-row';
 
-    if (!isUser) {
+    if (!isUser && !isSystemish) {
       var avatar = document.createElement('div');
       avatar.className = 'ai-msg-avatar';
       avatar.setAttribute('aria-hidden', 'true');
@@ -1848,8 +1890,14 @@
       body.appendChild(streamBubble);
     } else if (text) {
       var bubble = document.createElement('div');
-      bubble.className = 'ai-msg-bubble';
-      if (isUser) {
+      bubble.className = isSystemish ? 'ai-msg-bubble ai-msg-bubble--system' : 'ai-msg-bubble';
+      if (isSystemish) {
+        var sysLabel = document.createElement('div');
+        sysLabel.className = 'ai-msg-system-label';
+        sysLabel.textContent = msgType === 'timeline' ? 'رویداد' : 'سیستم';
+        body.appendChild(sysLabel);
+        bubble.textContent = text;
+      } else if (isUser) {
         bubble.textContent = text;
       } else {
         bubble.innerHTML = formatAssistantHtml(text);
@@ -2373,17 +2421,11 @@
       }
       emptyPollStreak = 0;
       pollPaused = false;
-      var added = false;
-      data.messages.forEach(function (m) {
-        if (!m || !m.role) return;
-        if (messageHasContent(m)) {
-          if (appendMessage(m)) added = true;
-        }
-      });
-      if (added) {
+      var before = list.querySelectorAll('.ai-msg-wrap[data-msg-id], .ai-msg-wrap[data-created-at]').length;
+      applyServerThreadMessages(data.messages);
+      var after = list.querySelectorAll('.ai-msg-wrap[data-msg-id], .ai-msg-wrap[data-created-at]').length;
+      if (after >= before) {
         injectHomeJourneyCardIntoChat();
-        scanLastSyncFromDom();
-        scrollChatToEnd();
       }
     } catch (err) {
       if (err && err.name !== 'AbortError') {
@@ -2600,8 +2642,7 @@
     }
 
     var now = Date.now();
-    if (lastSubmitAt && now - lastSubmitAt < MIN_SUBMIT_GAP_MS) {
-      showEphemeralHint('لطفاً چند ثانیه صبر کنید و دوباره بفرستید.');
+    if (MIN_SUBMIT_GAP_MS > 0 && lastSubmitAt && now - lastSubmitAt < MIN_SUBMIT_GAP_MS) {
       return;
     }
 
@@ -2830,24 +2871,46 @@
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
+        var missionTid =
+          (btn.getAttribute('data-vn-mission-thread') || '').trim() ||
+          (function () {
+            var card = btn.closest('[data-vn-journey-card]');
+            return card ? (card.getAttribute('data-vn-mission-thread') || '').trim() : '';
+          })();
         var liveForm = document.getElementById('aiChatForm');
         var liveInput = document.getElementById('aiInput');
         if (liveForm && liveInput && document.getElementById('aiMessages')) {
           var intent = btn.getAttribute('data-vn-chat-intent') || '';
-          try {
-            liveForm.setAttribute('data-silent-user', '1');
-            liveForm.setAttribute('data-silent-message', prompt.trim());
-            if (intent) liveForm.setAttribute('data-pending-intent', intent);
-            else liveForm.removeAttribute('data-pending-intent');
-            liveInput.value = '';
-            liveInput.dispatchEvent(new Event('input', { bubbles: true }));
-          } catch (_) {}
-          setTimeout(function () {
+          function fireSilentSubmit() {
             try {
-              if (typeof liveForm.requestSubmit === 'function') liveForm.requestSubmit();
-              else liveForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+              liveForm.setAttribute('data-silent-user', '1');
+              liveForm.setAttribute('data-silent-message', prompt.trim());
+              if (intent) liveForm.setAttribute('data-pending-intent', intent);
+              else liveForm.removeAttribute('data-pending-intent');
+              liveInput.value = '';
+              liveInput.dispatchEvent(new Event('input', { bubbles: true }));
             } catch (_) {}
-          }, 40);
+            setTimeout(function () {
+              try {
+                if (typeof liveForm.requestSubmit === 'function') liveForm.requestSubmit();
+                else liveForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+              } catch (_) {}
+            }, 40);
+          }
+          if (
+            missionTid &&
+            typeof window.__vinorAiChatSwitchThread === 'function' &&
+            String(activeThreadId() || '') !== missionTid
+          ) {
+            try {
+              var sw = window.__vinorAiChatSwitchThread(missionTid);
+              if (sw && typeof sw.then === 'function') {
+                sw.then(fireSilentSubmit).catch(fireSilentSubmit);
+                return;
+              }
+            } catch (_) {}
+          }
+          fireSilentSubmit();
           return;
         }
         try {

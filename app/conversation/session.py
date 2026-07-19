@@ -24,9 +24,23 @@ def _store_dir() -> str:
     return path
 
 
-def _path_for(user_key: str) -> str:
-    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in (user_key or "anon"))[:64]
-    return os.path.join(_store_dir(), f"{safe}.json")
+def _safe_key(raw: str, *, max_len: int = 64) -> str:
+    return "".join(c if c.isalnum() or c in "-_" else "_" for c in (raw or "anon"))[:max_len]
+
+
+def _path_for(user_key: str, thread_id: str | None = None) -> str:
+    """Legacy: `{user}.json`. Thread-scoped: `{user}__t__{thread}.json`."""
+    safe_user = _safe_key(user_key)
+    tid = (thread_id or "").strip()
+    if tid:
+        return os.path.join(_store_dir(), f"{safe_user}__t__{_safe_key(tid, max_len=48)}.json")
+    return os.path.join(_store_dir(), f"{safe_user}.json")
+
+
+def _thread_id_of(session: ConversationSession) -> str | None:
+    meta = session.metadata if isinstance(session.metadata, dict) else {}
+    tid = str(meta.get("thread_id") or "").strip()
+    return tid or None
 
 
 def _to_dict(s: ConversationSession) -> dict[str, Any]:
@@ -72,10 +86,10 @@ def _from_dict(d: dict[str, Any]) -> ConversationSession:
 
 
 class FileSessionStore(SessionStore):
-    """Persist conversation session outside Prompt."""
+    """Persist conversation session outside Prompt — scoped by user_key + thread_id."""
 
-    def load(self, user_key: str) -> ConversationSession | None:
-        path = _path_for(user_key)
+    def load(self, user_key: str, thread_id: str | None = None) -> ConversationSession | None:
+        path = _path_for(user_key, thread_id)
         if not os.path.isfile(path):
             return None
         try:
@@ -89,27 +103,52 @@ class FileSessionStore(SessionStore):
 
     def save(self, session: ConversationSession) -> None:
         session.updated_at = time.time()
-        path = _path_for(session.user_key)
+        path = _path_for(session.user_key, _thread_id_of(session))
         with _LOCK:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(_to_dict(session), f, ensure_ascii=False, indent=2)
 
-    def clear(self, user_key: str) -> None:
-        path = _path_for(user_key)
+    def clear(self, user_key: str, thread_id: str | None = None) -> None:
+        tid = (thread_id or "").strip() or None
         with _LOCK:
+            if tid:
+                path = _path_for(user_key, tid)
+                try:
+                    if os.path.isfile(path):
+                        os.remove(path)
+                except Exception:
+                    pass
+                return
+            # No thread: clear legacy file + all thread-scoped sessions for this user.
+            legacy = _path_for(user_key, None)
             try:
-                if os.path.isfile(path):
-                    os.remove(path)
+                if os.path.isfile(legacy):
+                    os.remove(legacy)
+            except Exception:
+                pass
+            prefix = f"{_safe_key(user_key)}__t__"
+            try:
+                for name in os.listdir(_store_dir()):
+                    if name.startswith(prefix) and name.endswith(".json"):
+                        try:
+                            os.remove(os.path.join(_store_dir(), name))
+                        except Exception:
+                            pass
             except Exception:
                 pass
 
 
-def new_session(*, user_key: str, role: str) -> ConversationSession:
+def new_session(*, user_key: str, role: str, thread_id: str | None = None) -> ConversationSession:
     now = time.time()
+    meta: dict[str, Any] = {}
+    tid = (thread_id or "").strip()
+    if tid:
+        meta["thread_id"] = tid
     return ConversationSession(
         session_id=uuid.uuid4().hex[:16],
         user_key=user_key,
         role=role,
         started_at=now,
         updated_at=now,
+        metadata=meta,
     )

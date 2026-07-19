@@ -244,5 +244,36 @@ class CrmRegressionSafetyTests(unittest.TestCase):
         )
 
 
+class CrmPartnerUiSmokeTests(unittest.TestCase):
+    """GET /customers must render the CRM page (not redirect to settings)."""
+
+    def test_customers_page_renders(self) -> None:
+        from app import create_app
+
+        phone = "09121111111"
+        app = create_app()
+        app.config["TESTING"] = True
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["user_phone"] = phone
+            sess["logged_in"] = True
+            sess["VINOR_IS_EXPRESS_PARTNER"] = True
+        with mock.patch(
+            "app.express_partner.partner_roles.partner_is_approved", return_value=True
+        ), mock.patch(
+            "app.utils.storage.load_express_partners",
+            return_value=[{"phone": phone, "status": "approved"}],
+        ), mock.patch.dict(
+            os.environ,
+            {"VINOR_CRM_ENABLED": "1", "VINOR_CRM_UI_ENABLED": "1"},
+            clear=False,
+        ):
+            resp = client.get("/express/partner/customers")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.get_data(as_text=True)
+        self.assertIn("مشتریان من", html)
+        self.assertNotIn("settings", (resp.headers.get("Location") or "").lower())
+
+
 if __name__ == "__main__":
     unittest.main()

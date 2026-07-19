@@ -43,7 +43,8 @@ def accessible_lands_map(phone: str, audience: str | None = None) -> dict[str, d
             item = dict(land)
             item["_is_public"] = False
             out[code] = item
-    limit = 80 if aud == AUDIENCE_PARTNER else 25
+    # Partner: کاتالوگ اکسپرس وسیع‌تر تا انتخاب/بازدید از چت محدود به چند نمونه نباشد
+    limit = 200 if aud == AUDIENCE_PARTNER else 25
     for land in _public_lands_sample(limit):
         code = str(land.get("code") or "").strip()
         if not code or code in out:

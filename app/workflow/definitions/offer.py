@@ -14,7 +14,7 @@ class OfferWorkflow(BaseWorkflow):
         intent=INTENT_OFFER,
         object_type="OfferRequest",
         steps=[
-            StepDefinition("land_code", "land_code", "کد فایل پیشنهاد چیست؟", validator="land_code"),
+            StepDefinition("land_code", "land_code", "", validator="land_code"),
             StepDefinition("amount", "amount", "مبلغ پیشنهاد؟", validator="price"),
             StepDefinition("buyer_phone", "buyer_phone", "شماره خریدار؟ (یا بنویس رد)", validator="non_empty"),
             StepDefinition("confirm", "confirm", "پیشنهاد ثبت شود؟ (بله / خیر)", validator="yes_no"),

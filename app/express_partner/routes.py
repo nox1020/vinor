@@ -1363,8 +1363,8 @@ def _partner_tier_label(profile: Dict[str, Any] | None, *, is_approved: bool | N
     if not approved:
         return "کاربر عادی"
     if _is_partner_special(profile):
-        return "همکار ویژه"
-    return "همکار تأییدشده"
+        return "بازاریاب ویژه"
+    return "بازاریاب فروش"
 
 
 def require_special_partner(json_response: bool = False):
@@ -1601,7 +1601,7 @@ def serve_manifest():
     # Fallback JSON
     fallback_json = '''{
       "id": "/express/partner/",
-      "name": "وینور اکسپرس - پنل همکاران",
+      "name": "وینور اکسپرس - پنل بازاریاب فروش",
       "short_name": "وینور اکسپرس",
       "description": "پنل مدیریت همکاران وینور - دسترسی به آگهی‌های تخصیص یافته، کمیسیون‌ها و ابزارهای مدیریت",
       "dir": "rtl",
@@ -2791,22 +2791,11 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     withdrawable = int(comm_stats.get('withdrawable_balance') or 0) if ph else 0
     follow_up_count = _home_follow_up_count(ph, visit_rows) if ph else 0
 
-    mission = None
-    if ph and is_approved:
-        try:
-            from app.express_partner.partner_missions import ensure_random_mission
-
-            mission = ensure_random_mission(ph)
-        except Exception:
-            current_app.logger.exception('ensure_random_mission failed phone=%s', ph)
-            mission = None
-
+    # مأموریت/کارت فایل اجباری حذف شد — خانه = چت بازاریاب فروش
     assigned_lands: List[Dict[str, Any]] = []
     if ph:
-        # بعد از تخصیص مأموریت دوباره بساز تا assignment جدید دیده شود
         assigned_lands, _ = _build_partner_dashboard_lands(ph, is_approved)
 
-    # فقط فایل‌های اختصاص شخصی برای کارت مأموریت خانه (نه کل کاتالوگ)
     personal_lands = [
         L for L in (assigned_lands or [])
         if isinstance(L, dict) and L.get('_assignment_id')
@@ -2829,55 +2818,6 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         limit=1,
     ) if ph else []
 
-    journey_card = None
-    mission_code = str((mission or {}).get('land_code') or '').strip() if mission else ''
-    if mission_code and ph:
-        # اگر مأموریت روی فایلی است که اختصاص نیست، دوباره انتساب بساز
-        has_mission_assign = any(
-            str(L.get('code') or '').strip() == mission_code for L in personal_lands
-        )
-        if not has_mission_assign:
-            try:
-                from app.express_partner.partner_missions import _ensure_personal_assignment
-                from app.utils.storage import load_express_lands_cached
-
-                land_row = next(
-                    (
-                        L for L in (load_express_lands_cached() or [])
-                        if isinstance(L, dict) and str(L.get('code') or '').strip() == mission_code
-                    ),
-                    None,
-                )
-                if land_row:
-                    _ensure_personal_assignment(ph, land_row)
-                    assigned_lands, _ = _build_partner_dashboard_lands(ph, is_approved)
-                    personal_lands = [
-                        L for L in (assigned_lands or [])
-                        if isinstance(L, dict) and L.get('_assignment_id')
-                    ]
-            except Exception:
-                current_app.logger.exception(
-                    're-ensure mission assignment failed phone=%s code=%s', ph, mission_code
-                )
-        mission_cards = _home_suggested_files(
-            ph,
-            is_approved,
-            assigned_lands=[
-                L for L in personal_lands
-                if str(L.get('code') or '').strip() == mission_code
-            ],
-            visit_rows=visit_rows,
-            urgent_actions=urgent_actions,
-            limit=1,
-        )
-        if mission_cards:
-            journey_card = dict(mission_cards[0])
-            journey_card['is_mission'] = True
-            journey_card['mission_thread_id'] = str((mission or {}).get('thread_id') or '')
-            journey_card['show_fav'] = False
-    if journey_card is None:
-        journey_card = suggested_files[0] if suggested_files else None
-
     return {
         'success': True,
         'is_logged_in': bool(ph),
@@ -2885,14 +2825,27 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'has_pending_app': has_pending_app,
         'urgent_actions': urgent_actions,
         'suggested_files': suggested_files,
-        'journey_card': journey_card,
-        'mission': mission,
+        'journey_card': None,
+        'mission': None,
         'withdrawable_balance': withdrawable,
     }
 
 
 def _partner_ai_welcome(*, is_approved: bool, has_pending_app: bool, me_phone: str) -> str:
-    """پیام خوش‌آمد چت خانه."""
+    """پیام خوش‌آمد چت خانه — برای همه نقش‌ها مسیر فروش فایل از چت."""
+    if is_approved:
+        return (
+            'سلام بازاریاب فروش 👋\n'
+            'از همین چت کار کن:\n'
+            '۱) مشتری داری — بودجه، متراژ، نوع ملک و هر نکته‌ای را بفرست تا فایل مناسب پیدا کنم.\n'
+            '۲) فایل برای بازاریابی می‌خواهی — بگو چه نوعی می‌خواهی (زمین/باغ/ویلا، متراژ، بودجه…) تا معرفی کنم.'
+        )
+    if has_pending_app:
+        return (
+            'سلام، چطور می‌تونم کمکتون کنم؟\n'
+            'درخواست بازاریابی‌ات در حال بررسی است — تا تأیید، از همین چت بگو دنبال چه فایلی هستی.'
+        )
+    # مهمان / کاربر عادی / واردنشده — همان لحن بازاریاب، مسیر به فروش فایل
     return 'سلام، چطور می‌تونم کمکتون کنم؟'
 
 
@@ -2902,7 +2855,7 @@ def _partner_ai_layer_context(
     profile: Optional[Dict[str, Any]] = None,
     has_pending_app: bool = False,
 ) -> Dict[str, Any]:
-    """زمینهٔ چت خانه — همکار تأییدشده: کامل؛ مهمان/کاربر عادی: محدود (سطوح + همکاری)."""
+    """زمینهٔ چت خانه — بازاریاب تأییدشده: کامل؛ مهمان/کاربر عادی: جستجو+ورود به بازاریابی."""
     phone = (me_phone or '').strip()
     is_approved = _is_partner_approved(profile) if phone else False
     limited = not is_approved
@@ -3036,16 +2989,6 @@ def _partner_ai_layer_context(
 
         postchi_thread_id = POSTCHI_THREAD_ID
 
-        mission_tid = ''
-        try:
-            from app.express_partner.partner_missions import get_active_mission, refresh_mission_if_land_closed
-
-            m = refresh_mission_if_land_closed(phone) or get_active_mission(phone)
-            if m:
-                mission_tid = str(m.get('thread_id') or '').strip()
-        except Exception:
-            mission_tid = ''
-
         if is_postchi_thread(open_tid):
             active_thread_id = POSTCHI_THREAD_ID
             chat_messages = postchi_messages_for_ui(phone) or []
@@ -3053,14 +2996,7 @@ def _partner_ai_layer_context(
             home_ai_open = True
             home_ai_open_thread = POSTCHI_THREAD_ID
         else:
-            from app.ai.chat_store import set_active_thread
-
             ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
-            if mission_tid and not open_tid:
-                try:
-                    set_active_thread(phone, mission_tid, audience=AUDIENCE_PARTNER)
-                except Exception:
-                    pass
             threads_preview = threads_with_postchi(phone, audience=AUDIENCE_PARTNER)
             active_thread_id = next(
                 (t['id'] for t in threads_preview if t.get('is_active')),
@@ -3072,9 +3008,6 @@ def _partner_ai_layer_context(
                 home_ai_open = True
                 home_ai_open_thread = open_tid
                 active_thread_id = open_tid
-            elif mission_tid and mission_tid == active_thread_id:
-                # چت خانه همان مأموریت
-                pass
             chat_messages = messages_for_ui(
                 phone,
                 thread_id=active_thread_id or None,
@@ -3230,7 +3163,7 @@ def home_page():
         brand='وینور',
         domain='vinor.ir',
         seo_title='داشبورد | وینور اکسپرس',
-        seo_description='مرکز مدیریت روزانه همکار — اقدامات فوری و فایل‌های پیشنهادی.',
+        seo_description='پنل بازاریاب فروش — از چت مشتری یا نوع فایل بفرست تا فایل مناسب معرفی شود.',
         **ai_ctx,
     ))
     if not me_phone:
@@ -3538,8 +3471,24 @@ def _crm_ui_or_404():
 @express_partner_bp.get('/customers', endpoint='customers')
 @require_partner_access()
 def customers_page():
-    """صفحهٔ قدیمی مشتریان — گزارش زنده جایگزین شده."""
-    return redirect(url_for('express_partner.settings'))
+    """Phase 1 CRM — مشتریان من (فلگ VINOR_CRM_* پیش‌فرض ON)."""
+    _crm_ui_or_404()
+    me_phone = (session.get('user_phone') or '').strip()
+    from app.crm.config import VISIT_CALL_TARGET
+    from .customers import partner_customers_view
+
+    flash_msg = (request.args.get('msg') or '').strip()
+    flash_ok = (request.args.get('ok') or '1').strip() != '0'
+    return render_template(
+        'express_partner/customers.html',
+        me_phone=me_phone,
+        customers=partner_customers_view(me_phone),
+        visit_call_target=VISIT_CALL_TARGET,
+        flash_msg=flash_msg,
+        flash_ok=flash_ok,
+        hide_header=True,
+        bottom_nav_active='profile',
+    )
 
 
 @express_partner_bp.post('/customers', endpoint='customers_create')
@@ -5152,10 +5101,10 @@ def ai_chat():
 @express_partner_bp.post('/ai/agent/confirm', endpoint='ai_agent_confirm')
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_agent_confirm():
-    """تأیید کاربر برای اقدام پیشنهادی AI در چت مأموریت."""
-    from app.ai.agent_tools import confirm_action_from_token
+    """تأیید کاربر برای اقدام پیشنهادی AI — کارت زنده به‌روز می‌شود."""
+    from app.ai.agent_tools import apply_confirm_result_to_chat, confirm_action_from_token
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import append_exchange, ensure_active_thread
+    from app.ai.chat_store import ensure_active_thread
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
@@ -5171,20 +5120,20 @@ def ai_agent_confirm():
     if not out.get('ok'):
         return jsonify(out), 400
 
-    note = str(out.get('message') or 'اقدام با موفقیت انجام شد.')
-    msgs, tid = append_exchange(
-        phone,
-        '',
-        note,
+    chat = apply_confirm_result_to_chat(
+        phone=phone,
+        token=token,
         thread_id=thread_id,
         audience=AUDIENCE_PARTNER,
+        confirm_out=out,
     )
     return jsonify({
         'ok': True,
-        'message': out.get('message'),
+        'message': chat.get('message') or out.get('message'),
         'already': bool(out.get('already')),
-        'thread_id': tid,
-        'messages': msgs,
+        'thread_id': chat.get('thread_id') or thread_id,
+        'messages': chat.get('messages') or [],
+        'card_updated': bool(chat.get('card_updated')),
         'visit_id': out.get('visit_id') or '',
         'land_code': out.get('land_code') or '',
         'tx_mode': out.get('tx_mode') or '',
@@ -5195,13 +5144,22 @@ def ai_agent_confirm():
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_agent_cancel():
     from app.ai.agent_tools import cancel_pending_action
+    from app.ai.audience import AUDIENCE_PARTNER
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
     token = (data.get('token') or '').strip()
+    thread_id = (data.get('thread_id') or '').strip() or None
     if not token:
         return jsonify({'ok': False, 'error': 'توکن نامعتبر است.'}), 400
-    return jsonify(cancel_pending_action(phone=phone, token=token))
+    return jsonify(
+        cancel_pending_action(
+            phone=phone,
+            token=token,
+            thread_id=thread_id,
+            audience=AUDIENCE_PARTNER,
+        )
+    )
 
 
 @express_partner_bp.post('/ai/clear', endpoint='ai_clear')
@@ -5583,10 +5541,18 @@ def create_visit_request(code: str):
         )
 
     if not ctx.get('my_assignment'):
+        try:
+            from app.express_partner.partner_missions import claim_express_land_for_partner
+
+            if claim_express_land_for_partner(me_phone, code, source='chat_claim'):
+                ctx = _express_land_partner_ctx(code, me_phone) or ctx
+        except Exception:
+            pass
+    if not ctx.get('my_assignment'):
         return _mark_in_transaction_finish(
             code,
             success=False,
-            message='برای این فایل انتساب فعالی برای شما ثبت نشده است. با پشتیبانی تماس بگیرید.',
+            message='این فایل برای ثبت بازدید در دسترس نیست (فروخته یا قفل همکار دیگر).',
             category='error',
         )
 
@@ -5676,7 +5642,7 @@ def create_visit_request(code: str):
             code,
             success=True,
             message=(
-                'این بازدید از قبل ثبت شده. قدم بعدی: با مشتری هماهنگ کن؛ '
+                'این بازدید از قبل ثبت شده. برای هماهنگی با 09121471301 تماس بگیر؛ '
                 'بعد از بازدید از چت خانه بگو «بازدید انجام شد».'
             ),
             category='success',
@@ -5762,12 +5728,12 @@ def create_visit_request(code: str):
             'visit_submitted partner SMS failed phone=%s code=%s', me_phone, code
         )
     msg = (
-        'بازدید ثبت شد. قدم بعدی: با مشتری هماهنگ کن؛ '
+        'بازدید ثبت شد. برای هماهنگی با 09121471301 تماس بگیر؛ '
         'بعد از بازدید از چت خانه بگو «بازدید انجام شد» — لازم نیست به صفحه دیگری بروی.'
     )
     if not sms_result.get('ok') and not sms_result.get('skipped'):
         msg = (
-            'بازدید ثبت شد (پیامک ادمین ناموفق بود). قدم بعدی: با مشتری هماهنگ کن؛ '
+            'بازدید ثبت شد (پیامک ادمین ناموفق بود). برای هماهنگی با 09121471301 تماس بگیر؛ '
             'بعد از بازدید از چت خانه بگو «بازدید انجام شد».'
         )
 
@@ -7032,7 +6998,7 @@ def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
             }
 
     role_label = (
-        'همکار ویژه' if is_special else ('همکار تأییدشده' if is_approved else 'کاربر عادی')
+        'بازاریاب ویژه' if is_special else ('بازاریاب فروش' if is_approved else 'کاربر عادی')
     )
     city = (str((profile or {}).get('city') or '')).strip() if isinstance(profile, dict) else ''
     bio = (str((profile or {}).get('bio') or '')).strip() if isinstance(profile, dict) else ''

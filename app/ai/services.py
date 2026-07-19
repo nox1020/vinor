@@ -213,6 +213,15 @@ def _build_system_prompt(
         )
     except Exception:
         focus_codes = []
+    # تضمین: مأموریت/پرونده هم در فوکوس بیاید حتی اگر هنوز در messages نباشد
+    try:
+        from .agent_tools import resolve_conversation_land_code
+
+        resolved = resolve_conversation_land_code(user_key, thread_id=thread_id)
+        if resolved and resolved not in focus_codes:
+            focus_codes = [resolved] + list(focus_codes)
+    except Exception:
+        pass
     try:
         core_cache_key = _system_context_cache_key(
             user_key=user_key,
@@ -847,7 +856,9 @@ def _run_agent_loop(
             )
             ui = tool_out.get("ui_action")
             if isinstance(ui, dict):
-                agent_actions.append(ui)
+                from app.ai.card_registry import normalize_card
+
+                agent_actions.append(normalize_card(ui))
             # کارت فایل فقط از جستجو — نه از اکشن‌های فروش/آگهی
             if name == "search_lands":
                 for code in tool_out.get("land_codes") or []:
@@ -972,6 +983,20 @@ def generate_reply(
     if not text:
         return {"ok": False, "error": "پیام خالی است."}
 
+    # فوکوس فایل موضوع گفتگو از همان ابتدا — ابزارها/مدل کد نپرسند
+    try:
+        from flask import g
+        from .agent_tools import resolve_conversation_land_code
+
+        g.ai_tool_thread_id = (thread_id or "").strip() or None
+        g.ai_tool_audience = aud
+        g.ai_last_user_message = text
+        focus0 = resolve_conversation_land_code(key, thread_id=thread_id)
+        if focus0:
+            g.ai_focus_land_code = focus0
+    except Exception:
+        pass
+
     cfg = ai_config()
     if not cfg["enabled"]:
         return {"ok": False, "error": "سرویس هوش مصنوعی موقتاً غیرفعال است."}
@@ -1029,16 +1054,28 @@ def generate_reply(
                 )
             except Exception:
                 pass
+            meta = dict(ce.get("meta") or {"provider": "conversation_engine"})
+            meta.setdefault("workflow_form_only", True)
+            meta.setdefault("persists_business", False)
             return {
                 "ok": True,
                 "reply": str(ce.get("reply") or "").strip(),
                 "land_codes": [],
                 "land_cards": [],
                 "agent_actions": list(ce.get("agent_actions") or []),
-                "meta": ce.get("meta") or {"provider": "conversation_engine"},
+                "meta": meta,
             }
-    except Exception:
-        pass
+    except Exception as exc:
+        try:
+            current_app.logger.warning(
+                "conversation_engine outer fail-open | user=%s thread=%s err=%s",
+                (key or "")[:32],
+                (thread_id or "")[:48],
+                exc,
+                exc_info=True,
+            )
+        except Exception:
+            pass
 
     # Executive AI (Phase 26) + Goal Engine (Phase 20) — before Supervisor/Workflow.
     exec_plan = None
@@ -1142,12 +1179,21 @@ def generate_reply(
             clear_adaptive()
         except Exception:
             pass
-    # شروع تازهٔ ثبت بازدید / بازدید مجدد — پیش‌نویس قبلی فیلدها را قاطی نکند
+    # شروع تازهٔ ثبت بازدید — نام/شماره قبلی پاک شود، ولی کد فایل موضوع حفظ شود
     if intent == "visit" and key:
         try:
-            from .agent_tools import clear_visit_draft
+            from .agent_tools import reset_visit_draft_keep_land
 
-            clear_visit_draft(key)
+            focus_land = reset_visit_draft_keep_land(key, thread_id=thread_id)
+            try:
+                from flask import g
+
+                if focus_land:
+                    g.ai_focus_land_code = focus_land
+                g.ai_tool_thread_id = (thread_id or "").strip() or None
+                g.ai_tool_audience = aud
+            except Exception:
+                pass
         except Exception:
             pass
     # ادامهٔ مرحله‌ای بازدید (نام/موبایل/تاریخ) بدون اینکه مدل دوباره نام‌خانوادگی بپرسد
@@ -1484,13 +1530,17 @@ def generate_reply(
                 land_codes.append(c)
     land_codes = land_codes[:5]
 
+    from app.ai.card_registry import normalize_card
+
     agent_actions = [
-        a for a in (result.get("agent_actions") or []) if isinstance(a, dict)
+        normalize_card(a)
+        for a in (result.get("agent_actions") or [])
+        if isinstance(a, dict)
     ]
     if plan_out is not None:
         for a in plan_out.agent_actions or []:
             if isinstance(a, dict):
-                agent_actions.append(a)
+                agent_actions.append(normalize_card(a))
     if any(str(a.get("type") or "") == "copy_blocks" for a in agent_actions):
         reply = _strip_listing_dump_when_copy_cards(reply)
     # اگر کارت تأیید اکشن هست، کارت فایل همان کد را دوباره نشان نده

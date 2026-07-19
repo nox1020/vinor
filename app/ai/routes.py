@@ -171,8 +171,8 @@ def clear():
 @ai_bp.post("/agent/confirm", endpoint="agent_confirm")
 def agent_confirm():
     """تأیید کارت اجنت برای مخاطب عمومی / کاربر عادی (مثلاً ثبت همکاری)."""
-    from app.ai.agent_tools import confirm_action_from_token
-    from app.ai.chat_store import append_exchange, ensure_active_thread
+    from app.ai.agent_tools import apply_confirm_result_to_chat, confirm_action_from_token
+    from app.ai.chat_store import ensure_active_thread
 
     phone = (session.get("user_phone") or "").strip()
     if not phone:
@@ -196,20 +196,21 @@ def agent_confirm():
     if not out.get("ok"):
         return jsonify(out), 400
 
-    note = str(out.get("message") or "انجام شد.")
-    msgs, tid = append_exchange(
-        ai_user_key(),
-        "",
-        note,
+    chat = apply_confirm_result_to_chat(
+        phone=phone,
+        token=token,
         thread_id=thread_id,
         audience=AUDIENCE_PUBLIC,
+        confirm_out=out,
     )
+    note = str(chat.get("message") or out.get("message") or "انجام شد.")
     return jsonify({
         "ok": True,
         "message": note,
         "already": bool(out.get("already")),
-        "thread_id": tid,
-        "messages": msgs,
+        "thread_id": chat.get("thread_id") or thread_id,
+        "messages": chat.get("messages") or [],
+        "card_updated": bool(chat.get("card_updated")),
         "application_id": out.get("application_id") or "",
     })
 
@@ -221,11 +222,19 @@ def agent_cancel():
     phone = (session.get("user_phone") or "").strip()
     data = request.get_json(silent=True) or {}
     token = (data.get("token") or "").strip()
+    thread_id = (data.get("thread_id") or "").strip() or None
     if not token:
         return jsonify({"ok": False, "error": "توکن نامعتبر است."}), 400
     if not phone:
         return jsonify({"ok": False, "error": "برای انصراف وارد شوید.", "need_login": True}), 401
-    return jsonify(cancel_pending_action(phone=phone, token=token))
+    return jsonify(
+        cancel_pending_action(
+            phone=phone,
+            token=token,
+            thread_id=thread_id,
+            audience=AUDIENCE_PUBLIC,
+        )
+    )
 
 
 @ai_bp.post("/thread/switch", endpoint="switch_thread")

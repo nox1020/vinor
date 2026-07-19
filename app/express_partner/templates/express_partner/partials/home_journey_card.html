@@ -31,18 +31,19 @@
   }
   .vn-journey-card__head-inner {
     display: flex;
-    gap: 0.65rem;
-    padding: 0.7rem 0.7rem 0.45rem;
+    gap: 0.55rem;
+    padding: 0.55rem 0.65rem 0.4rem;
+    align-items: flex-start;
   }
   .vn-journey-card__head:active .vn-journey-card__head-inner {
     opacity: 0.92;
   }
   .vn-journey-card__media {
     position: relative;
-    width: 4.5rem;
-    height: 4.5rem;
+    width: 3.35rem;
+    height: 3.35rem;
     flex-shrink: 0;
-    border-radius: 0.85rem;
+    border-radius: 0.7rem;
     overflow: hidden;
     background: #2f2f2f;
     align-self: flex-start;
@@ -57,9 +58,16 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.28rem;
     padding-top: 0;
     text-align: right;
+  }
+  .vn-journey-card__title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.4rem;
+    min-width: 0;
   }
   .vn-journey-card__meta-row {
     display: flex;
@@ -73,52 +81,80 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.15rem 0.5rem;
+    padding: 0.12rem 0.45rem;
     border-radius: 9999px;
-    background: #2f2f2f;
+    background: #059669;
     color: #fff;
-    font-size: 0.6rem;
+    font-size: 0.58rem;
     font-weight: 700;
     line-height: 1.2;
+    flex-shrink: 0;
   }
   .vn-journey-card__title {
     margin: 0;
-    font-size: 0.875rem;
+    flex: 1 1 8rem;
+    min-width: 0;
+    font-size: 0.82rem;
     font-weight: 700;
-    line-height: 1.35;
+    line-height: 1.3;
     color: var(--vj-text);
     letter-spacing: -0.015em;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .vn-journey-card__loc {
+  /* ردیف فشردهٔ موقعیت / قیمت / پورسانت — مثل چیپ تلگرام */
+  .vn-journey-card__facts {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.28rem;
     margin: 0;
-    font-size: 0.65rem;
-    color: var(--vj-muted);
-    line-height: 1.25;
+    padding: 0;
+    list-style: none;
   }
-  .vn-journey-card__price-label { display: none; }
-  .vn-journey-card__price {
-    margin: 0.05rem 0 0;
-    font-size: 0.75rem;
-    font-weight: 800;
+  .vn-journey-card__fact {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.22rem;
+    max-width: 100%;
+    min-height: 1.35rem;
+    padding: 0.12rem 0.42rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #c7c7cc;
+    font-size: 0.62rem;
+    font-weight: 600;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .vn-journey-card__fact i {
+    font-size: 0.55rem;
+    opacity: 0.75;
+    flex-shrink: 0;
+  }
+  .vn-journey-card__fact span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .vn-journey-card__fact--price {
     color: #fff;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.2;
+    font-weight: 800;
   }
-  .vn-journey-card__comm {
-    margin: 0;
-    font-size: 0.65rem;
-    font-weight: 700;
+  .vn-journey-card__fact--comm {
     color: #34d399;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.2;
+    font-weight: 700;
+    background: rgba(52, 211, 153, 0.1);
+    border-color: rgba(52, 211, 153, 0.22);
   }
+  /* سازگاری با کلاس‌های قدیمی (اگر جایی هنوز استفاده شود) */
+  .vn-journey-card__loc,
+  .vn-journey-card__price,
+  .vn-journey-card__comm,
+  .vn-journey-card__price-label { display: none; }
   .vn-journey-card__compact-price {
     font-size: 0.62rem;
     font-weight: 700;
@@ -340,7 +376,8 @@
          aria-label="کار بعدی روی فایل"
          data-tour="home-journey"
          data-vn-journey-card
-         data-vn-journey-code="{{ card.code }}">
+         data-vn-journey-code="{{ card.code }}"
+         data-vn-mission-thread="{{ card.mission_thread_id|default('') }}">
 <script>
 (function () {
   try {
@@ -391,26 +428,38 @@
         {% endif %}
       </div>
       <div class="vn-journey-card__body">
-        {% if card.is_mission|default(false) %}
-        <div class="vn-journey-card__meta-row">
-          <span class="vn-journey-card__stage" style="background:#059669">
-            <i class="fas fa-bullseye text-[8px]" aria-hidden="true"></i>
-            ماموریت فعال
+        <div class="vn-journey-card__title-row">
+          {% if card.is_mission|default(false) %}
+          <span class="vn-journey-card__stage">
+            <i class="fas fa-bullseye" aria-hidden="true"></i>
+            ماموریت
           </span>
+          {% elif card.stage_label %}
+          <span class="vn-journey-card__stage" style="background:#2f2f2f">{{ card.stage_label }}</span>
+          {% endif %}
+          <h2 class="vn-journey-card__title" title="{{ card.title|e }}">{{ card.title }}</h2>
         </div>
-        {% endif %}
-        <h2 class="vn-journey-card__title">{{ card.title }}</h2>
-        {% if loc %}
-        <p class="vn-journey-card__loc">
-          <i class="fas fa-location-dot text-[9px]" aria-hidden="true"></i>
-          <span class="truncate">{{ loc }}</span>
-        </p>
-        {% endif %}
-        {% if card.price_total %}
-        <p class="vn-journey-card__price">{{ card.price_total|toman }}</p>
-        {% endif %}
-        {% if card.commission_amount and is_approved|default(false) %}
-        <p class="vn-journey-card__comm">پورسانت {{ card.commission_amount|toman }}</p>
+        {% if loc or card.price_total or (card.commission_amount and is_approved|default(false)) %}
+        <ul class="vn-journey-card__facts" aria-label="خلاصه فایل">
+          {% if loc %}
+          <li class="vn-journey-card__fact" title="{{ loc|e }}">
+            <i class="fas fa-location-dot" aria-hidden="true"></i>
+            <span>{{ loc }}</span>
+          </li>
+          {% endif %}
+          {% if card.price_total %}
+          <li class="vn-journey-card__fact vn-journey-card__fact--price">
+            <i class="fas fa-tag" aria-hidden="true"></i>
+            <span>{{ card.price_total|toman }}</span>
+          </li>
+          {% endif %}
+          {% if card.commission_amount and is_approved|default(false) %}
+          <li class="vn-journey-card__fact vn-journey-card__fact--comm">
+            <i class="fas fa-coins" aria-hidden="true"></i>
+            <span>پورسانت {{ card.commission_amount|toman }}</span>
+          </li>
+          {% endif %}
+        </ul>
         {% endif %}
       </div>
     </div>
@@ -427,6 +476,7 @@
             data-vn-chat-prompt="{{ step_prompt|e }}"
             data-vn-chat-intent="{{ step.chat_intent|default('') }}"
             data-vn-funnel-step="{{ step.key|default('') }}"
+            data-vn-mission-thread="{{ card.mission_thread_id|default('') }}"
             aria-label="مرحله {{ step.label }}">
       <span class="vn-journey-card__dot" aria-hidden="true">
         <i class="fas {{ step.icon|default('fa-circle') }}"></i>
@@ -460,7 +510,8 @@
               class="vn-journey-card__cta"
               data-vn-chat-prompt="{{ card.cta_chat_prompt|e }}"
               data-vn-chat-intent="{{ card.cta_action|default('') }}"
-              data-vn-funnel-key="{{ card.funnel_key|default('') }}">
+              data-vn-funnel-key="{{ card.funnel_key|default('') }}"
+              data-vn-mission-thread="{{ card.mission_thread_id|default('') }}">
         <i class="fas {{ card.cta_icon|default('fa-comments') }}" aria-hidden="true"></i>
         {{ card.cta_label|default('ادامه در چت') }}
       </button>
@@ -468,7 +519,8 @@
       <button type="button"
               class="vn-journey-card__cta vn-journey-card__cta--secondary"
               data-vn-chat-prompt="{{ card.cta_secondary_prompt|e }}"
-              data-vn-chat-intent="{{ card.cta_secondary_action|default('') }}">
+              data-vn-chat-intent="{{ card.cta_secondary_action|default('') }}"
+              data-vn-mission-thread="{{ card.mission_thread_id|default('') }}">
         <i class="fas {{ card.cta_secondary_icon|default('fa-calendar-plus') }}" aria-hidden="true"></i>
         {{ card.cta_secondary_label|default('بازدید مجدد') }}
       </button>

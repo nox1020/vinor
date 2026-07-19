@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 from typing import Any
 
@@ -7,6 +8,7 @@ from app.conversation.config import conversation_enabled
 from app.conversation.di import make_conversation_manager
 from app.conversation.interfaces import ConversationManager, ConversationOutcome
 
+_LOG = logging.getLogger(__name__)
 _LOCK = threading.Lock()
 _MANAGER: ConversationManager | None = None
 _FALLBACK_OBS: dict[str, Any] = {}
@@ -102,6 +104,7 @@ def try_conversation_engine(
             }
 
         # Active form step — return chat reply without Supervisor/LLM.
+        # Form collector only: no confirm cards and no business JSON write.
         if out.handled and not out.pass_to_supervisor:
             return {
                 "ok": True,
@@ -110,7 +113,12 @@ def try_conversation_engine(
                 "land_codes": [],
                 "land_cards": [],
                 "agent_actions": [],
-                "meta": {"provider": "conversation_engine"},
+                "meta": {
+                    "provider": "conversation_engine",
+                    "workflow_form_only": True,
+                    "persists_business": False,
+                    "needs_confirm_card": False,
+                },
                 "observability": obs,
             }
 
@@ -139,5 +147,22 @@ def try_conversation_engine(
             "reply": out.reply or "",
             "observability": obs,
         }
-    except Exception:
+    except Exception as exc:
+        _LOG.warning(
+            "conversation_engine_fail_open user_key=%s thread_id=%s err=%s",
+            (user_key or "")[:32],
+            (thread_id or "")[:48],
+            exc,
+            exc_info=True,
+        )
+        try:
+            from flask import g, has_app_context, has_request_context
+
+            if has_app_context() or has_request_context():
+                g.ai_conversation_fail_open = {
+                    "error": str(exc)[:240],
+                    "thread_id": (thread_id or "").strip() or None,
+                }
+        except Exception:
+            pass
         return None

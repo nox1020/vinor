@@ -14,7 +14,7 @@ class ClosingContractWorkflow(BaseWorkflow):
         intent=INTENT_CONTRACT,
         object_type="ContractRequest",
         steps=[
-            StepDefinition("land_code", "land_code", "کد فایل قرارداد؟", validator="land_code"),
+            StepDefinition("land_code", "land_code", "", validator="land_code"),
             StepDefinition("title", "title", "عنوان قرارداد؟", validator="non_empty"),
             StepDefinition("document_ref", "document_ref", "مرجع سند؟ (یا بنویس رد)", validator="non_empty"),
             StepDefinition("confirm", "confirm", "قرارداد ثبت شود؟ (بله / خیر)", validator="yes_no"),

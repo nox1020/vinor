@@ -218,44 +218,38 @@ def _inject_partner_system_chat(
     land_code: str = "",
     body: str,
     agent_actions: list | None = None,
+    event: str = "",
 ) -> bool:
-    """پیام سیستمی در چت همکار (ترد مأموریت اگر باشد، وگرنه ترد فعال)."""
+    """پیام سیستمی/timeline در چت همکار (ترد مأموریت اگر باشد، وگرنه ترد فعال)."""
     ph = normalize_iran_mobile(str(partner_phone or "").strip())
     text = (body or "").strip()
     actions = [a for a in (agent_actions or []) if isinstance(a, dict)][:3]
     if not is_valid_iran_mobile(ph) or (not text and not actions):
         return False
     try:
-        from .partner_missions import append_mission_chat_followup, get_active_mission
+        from app.ai.audience import AUDIENCE_PARTNER
+        from app.ai.chat_events import emit_chat_event
+        from app.ai.message_types import MSG_SYSTEM, MSG_TIMELINE
+        from .partner_missions import get_active_mission
 
         mission = get_active_mission(ph)
         tid = ""
         code = str(land_code or "").strip()
         if mission and str(mission.get("land_code") or "").strip() == code and code:
             tid = str(mission.get("thread_id") or "").strip()
-        if tid:
-            return bool(
-                append_mission_chat_followup(
-                    ph,
-                    land_code=code,
-                    thread_id=tid,
-                    body=text,
-                    agent_actions=actions,
-                )
-            )
-        from app.ai.audience import AUDIENCE_PARTNER
-        from app.ai.chat_store import append_exchange, ensure_active_thread
-
-        tid = ensure_active_thread(ph, audience=AUDIENCE_PARTNER)
-        append_exchange(
+        ev = str(event or "").strip() or "progress"
+        out = emit_chat_event(
             ph,
-            "",
-            text,
-            thread_id=tid,
+            event=ev,
+            body=text,
             audience=AUDIENCE_PARTNER,
-            assistant_agent_actions=actions or None,
+            thread_id=tid,
+            land_code=code,
+            msg_type=MSG_TIMELINE if ev != "progress" else MSG_SYSTEM,
+            agent_actions=actions or None,
+            case_status="in_progress",
         )
-        return True
+        return bool(out.get("ok"))
     except Exception as exc:
         current_app.logger.warning("partner system chat inject failed: %s", exc)
         return False
@@ -320,10 +314,12 @@ def build_progress_update(
             f"{notif_title} — {file_bit}"
             + (f" · {vdate}" if vdate else "")
             + ".\n"
-            "قدم بعدی: با مشتری هماهنگ کن؛ بعد از بازدید از همین چت بگو «بازدید انجام شد» "
-            "تا کارت تأیید بیاید."
+            "برای هماهنگی بازدید با ۰۹۱۲۱۴۷۱۳۰۱ تماس بگیر؛ "
+            "بعد از بازدید از همین چت بگو «بازدید انجام شد» تا کارت تأیید بیاید."
         )
-        notif_body = f"{file_bit} تأیید شد. بعد از بازدید از چت بگو بازدید انجام شد."
+        notif_body = (
+            f"{file_bit} تأیید شد. هماهنگی: 09121471301 — بعد از بازدید از چت بگو بازدید انجام شد."
+        )
         return notif_title, chat_body, notif_body
 
     if ev == "visit_done_pending":
@@ -481,6 +477,7 @@ def deliver_partner_progress_update(
         land_code=str(land_code or ""),
         body=chat_body,
         agent_actions=actions,
+        event=str(event or "progress"),
     )
     return out
 
@@ -1012,18 +1009,9 @@ def resolve_stuck_nudge_for_partner(
         return None
     from .routes import _home_funnel_for_land, _home_score_suggested_land
 
-    mission = None
+    # مأموریت خودکار حذف شد — پیگیری فقط روی فایل‌های اختصاصی/فعال
     mission_code = ""
     mission_tid = ""
-    try:
-        from .partner_missions import refresh_mission_if_land_closed
-
-        mission = refresh_mission_if_land_closed(ph)
-        if mission:
-            mission_code = str(mission.get("land_code") or "").strip()
-            mission_tid = str(mission.get("thread_id") or "").strip()
-    except Exception:
-        mission = None
 
     def _nudge_from_land(land: Dict[str, Any], *, is_mission: bool = False) -> Optional[Dict[str, Any]]:
         st = str(land.get("_assignment_status") or "").strip().lower()

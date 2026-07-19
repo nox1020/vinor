@@ -139,13 +139,13 @@ class WorkflowResolver(Protocol):
 
 
 class SessionStore(Protocol):
-    def load(self, user_key: str) -> ConversationSession | None:
+    def load(self, user_key: str, thread_id: str | None = None) -> ConversationSession | None:
         ...
 
     def save(self, session: ConversationSession) -> None:
         ...
 
-    def clear(self, user_key: str) -> None:
+    def clear(self, user_key: str, thread_id: str | None = None) -> None:
         ...
 
 

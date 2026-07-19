@@ -48,42 +48,57 @@ TOOL_LEAD = "propose_lead"
 TOOL_TASK = "propose_task"
 
 
-def _active_mission_land_code(phone: str) -> str:
-    """کد فایل مأموریت فعال همکار — اگر نباشد خالی."""
-    ph = (phone or "").strip()
+def _norm_partner_phone(phone: str) -> str:
+    ph = str(phone or "").strip()
     if not ph:
         return ""
     try:
-        from app.express_partner.partner_missions import (
-            get_active_mission,
-            refresh_mission_if_land_closed,
-        )
+        from app.services.sms import normalize_iran_mobile
 
-        mission = refresh_mission_if_land_closed(ph) or get_active_mission(ph)
-        if not mission:
-            return ""
-        return str(mission.get("land_code") or "").strip()
+        return normalize_iran_mobile(ph) or ph
     except Exception:
-        return ""
+        return ph
+
+
+def _tool_thread_meta() -> tuple[str | None, str]:
+    try:
+        from flask import g
+
+        tid = getattr(g, "ai_tool_thread_id", None)
+        aud = getattr(g, "ai_tool_audience", None)
+    except Exception:
+        return None, AUDIENCE_PARTNER
+    tid_s = str(tid or "").strip() or None
+    aud_s = aud if aud in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    return tid_s, aud_s
+
+
+def _active_mission_land_code(phone: str, thread_id: str | None = None) -> str:
+    """بازنشسته: مأموریت خودکار حذف شد — همیشه خالی."""
+    return ""
 
 
 def _active_assignment_land_codes(phone: str) -> list[str]:
     """کد فایل‌های اختصاص شخصی (active / in_transaction) — معاملهٔ باز اول."""
-    ph = (phone or "").strip()
+    ph = _norm_partner_phone(phone)
     if not ph:
         return []
     try:
         from app.utils.storage import load_express_assignments
 
-        rows = [
-            a
-            for a in (load_express_assignments() or [])
-            if isinstance(a, dict)
-            and str(a.get("partner_phone") or "").strip() == ph
-            and str(a.get("status") or "active").strip().lower()
-            in ("", "active", "in_transaction")
-            and str(a.get("land_code") or "").strip()
-        ]
+        rows = []
+        for a in load_express_assignments() or []:
+            if not isinstance(a, dict):
+                continue
+            aph = _norm_partner_phone(str(a.get("partner_phone") or ""))
+            if aph != ph:
+                continue
+            st = str(a.get("status") or "active").strip().lower()
+            if st not in ("", "active", "in_transaction"):
+                continue
+            if not str(a.get("land_code") or "").strip():
+                continue
+            rows.append(a)
         rows.sort(key=lambda a: str(a.get("created_at") or ""), reverse=True)
         in_tx: list[str] = []
         active: list[str] = []
@@ -103,28 +118,52 @@ def _active_assignment_land_codes(phone: str) -> list[str]:
         return []
 
 
-def _thread_focus_land_code(phone: str) -> str:
-    """آخرین کد فایلی که روی همین گفتگو (کارت/اکشن) آمده."""
-    ph = (phone or "").strip()
+def _thread_focus_land_code(phone: str, thread_id: str | None = None) -> str:
+    """آخرین کد فایلی که روی همین گفتگو (کارت/اکشن/پرونده) آمده."""
+    ph = _norm_partner_phone(phone) or str(phone or "").strip()
     if not ph:
         return ""
-    try:
-        from flask import g
+    tid, aud = _tool_thread_meta()
+    if thread_id:
+        tid = str(thread_id).strip() or tid
+    # Case پرونده
+    if tid:
+        try:
+            from app.ai.case_store import get_case_for_thread
 
-        thread_id = getattr(g, "ai_tool_thread_id", None)
-        audience = getattr(g, "ai_tool_audience", None)
-    except Exception:
-        thread_id = None
-        audience = None
+            case = get_case_for_thread(ph, tid, aud)
+            if case:
+                c = str(case.get("land_code") or "").strip()
+                if c:
+                    return c
+        except Exception:
+            pass
+    # پیام‌ها / کارت‌های thread
     try:
         from app.ai.chat_store import recent_thread_land_codes
 
-        aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
-        codes = recent_thread_land_codes(ph, thread_id, audience=aud, limit=3)
+        codes = recent_thread_land_codes(ph, tid, audience=aud, limit=5)
         if codes:
             return str(codes[0] or "").strip()
     except Exception:
         pass
+    # عنوان thread مثل «ماموریت 123…»
+    if tid:
+        try:
+            import re
+            from app.ai.chat_store import load_user_record
+
+            record = load_user_record(ph, aud)
+            for th in record.get("threads") or []:
+                if str(th.get("id") or "") != tid:
+                    continue
+                title = str(th.get("title") or "")
+                m = re.search(r"(?:ماموریت|ماموريت|فایل|کد)\s*([0-9]{6,20})", title)
+                if m:
+                    return str(m.group(1) or "").strip()
+                break
+        except Exception:
+            pass
     return ""
 
 
@@ -137,45 +176,101 @@ def _land_code_from_user_message() -> str:
         text = str(getattr(g, "ai_last_user_message", "") or "")
         if not text:
             return ""
-        m = re.search(r"(?:فایل|کد\s*فایل|کد\s*ملک)\s*[#:：]?\s*(\d{10,20})", text)
+        m = re.search(
+            r"(?:فایل|کد\s*فایل|کد\s*ملک|ماموریت)\s*[#:：]?\s*(\d{6,20})",
+            text,
+        )
         if m:
             return str(m.group(1) or "").strip()
+        # کد خام طولانی در پیام
+        m2 = re.search(r"\b(\d{10,20})\b", text)
+        if m2:
+            return str(m2.group(1) or "").strip()
     except Exception:
         pass
     return ""
 
 
-def _resolve_tool_land_code(phone: str, args: dict[str, Any] | None = None) -> str:
-    """کد فایل: آرگومان → مأموریت → پیام کاربر → پیش‌نویس → اختصاص/گفتگو."""
+def resolve_conversation_land_code(
+    phone: str,
+    args: dict[str, Any] | None = None,
+    *,
+    thread_id: str | None = None,
+) -> str:
+    """کد فایل موضوع گفتگو — هرگز از کاربر نپرس؛ از زمینه بگیر.
+
+    اولویت:
+    آرگومان → cache → فوکوس thread/case → پیام کاربر → مأموریت همان thread
+    → پیش‌نویس → اختصاص‌ها
+    """
+    tid, _aud = _tool_thread_meta()
+    if thread_id:
+        tid = str(thread_id).strip() or tid
+
     raw = ""
     if isinstance(args, dict):
         raw = str(args.get("land_code") or "").strip()
     if raw:
         return raw
-    mission = _active_mission_land_code(phone)
-    if mission:
-        return mission
+
+    # cache روی g برای یک دور ابزار
+    try:
+        from flask import g
+
+        cached = str(getattr(g, "ai_focus_land_code", "") or "").strip()
+        if cached:
+            return cached
+    except Exception:
+        pass
+
+    thread_code = _thread_focus_land_code(phone, tid)
+    if thread_code:
+        return thread_code
+
     msg_code = _land_code_from_user_message()
     if msg_code:
         return msg_code
+
+    mission = _active_mission_land_code(phone, tid)
+    if mission:
+        return mission
+
     try:
         draft_code = str(_load_visit_draft(phone).get("land_code") or "").strip()
         if draft_code:
             return draft_code
     except Exception:
         pass
+
     assigned = _active_assignment_land_codes(phone)
-    thread_code = _thread_focus_land_code(phone)
-    # کارت گفتگو فقط اگر همان فایل اختصاصی باشد؛ وگرنه اختصاص تکی اولویت دارد
-    if thread_code and thread_code in assigned:
-        return thread_code
     if len(assigned) == 1:
         return assigned[0]
-    if thread_code:
-        return thread_code
     if assigned:
+        # چند فایل: جدیدترین/معامله‌باز — باز هم از کاربر نپرس
         return assigned[0]
     return ""
+
+
+def _resolve_tool_land_code(phone: str, args: dict[str, Any] | None = None) -> str:
+    return resolve_conversation_land_code(phone, args)
+
+
+def _never_ask_land_instruction(phone: str = "") -> str:
+    focus = ""
+    try:
+        focus = resolve_conversation_land_code(phone) if phone else ""
+    except Exception:
+        focus = ""
+    if focus:
+        return (
+            f"کد فایل موضوع: {focus}. به کاربر کد فایل را نپرس و نام نبر مگر لازم باشد. "
+            f"propose_* / draft_listing_copy را با land_code خالی یا «{focus}» بزن."
+        )
+    return (
+        "اگر فایل موضوع گفتگو معلوم نیست: معیار مشتری یا نوع فایل را بپرس، "
+        "بعد search_lands بزن و با [[LAND:کد]] پیشنهاد بده. "
+        "روی فایل توافق‌شده propose_* را با land_code خالی صدا بزن."
+    )
 
 
 def agent_system_hint(voice: str | None) -> str:
@@ -183,14 +278,15 @@ def agent_system_hint(voice: str | None) -> str:
     v = (voice or "").strip().lower()
     if v == VOICE_PUBLIC:
         return (
-            "ابزار: search→ملک | coop_info→همکاری | app_status→وضعیت | propose_apply→کارت ثبت "
-            "(نام/کدملی/شهر یکی‌یکی؛ need_login=منوی راست). فروش همکار نزن."
+            "بازاریاب فروش برای مهمان/کاربر عادی: جواب را به فروش فایل ببر. "
+            "خرید/جستجو→search_lands→[[LAND]] | فروش/بازاریاب شدن→coop_info سپس propose_apply "
+            "(نام/کدملی/شهر یکی‌یکی؛ need_login=منوی راست). propose_visit/deal نزن."
         )
     return (
-        "ابزار وقتی لازم: search→[[LAND]] | next→کار بعدی | listing→کارت کپی "
-        "| propose_visit/complete/deal/release→کارت تأیید. "
-        "بازدید/بازدید مجدد یکی‌یکی: فوری propose با land_code خالی (کد نپرس) → عین «نام مشتری را بگو» → "
-        "شماره → لیست تاریخ → فقط visit_date. نام کوچک/خانوادگی جدا ممنوع. چند فیلد یکجا نه."
+        "بازاریاب فروش: مشتری→معیار→search_lands→[[LAND]] | یا نوع فایل→search→معرفی. "
+        "listing→کارت کپی | propose_visit/complete/deal/release→کارت تأیید. "
+        "بازدید یکی‌یکی: propose با land_code موضوع گفتگو → «نام مشتری را بگو» → شماره → تاریخ. "
+        "مأموریت اجباری نداریم."
     )
 
 
@@ -694,13 +790,19 @@ def run_tool(
     voice: str | None,
     thread_id: str | None = None,
 ) -> dict[str, Any]:
-    args = arguments if isinstance(arguments, dict) else {}
+    args = dict(arguments) if isinstance(arguments, dict) else {}
     n = (name or "").strip()
     try:
         from flask import g
 
         g.ai_tool_thread_id = (thread_id or "").strip() or None
         g.ai_tool_audience = audience
+        focus = resolve_conversation_land_code(phone, args, thread_id=thread_id)
+        if focus:
+            g.ai_focus_land_code = focus
+            # تزریق خودکار — مدل نباید کد را از کاربر بگیرد
+            if not str(args.get("land_code") or "").strip():
+                args["land_code"] = focus
     except Exception:
         pass
     try:
@@ -824,9 +926,9 @@ def _tool_coop_info(args: dict[str, Any]) -> dict[str, Any]:
 
     blocks: dict[str, str] = {
         "levels": (
-            "سطوح: ۱) کاربر عادی — چت و درخواست همکاری. "
-            "۲) همکار — بعد از تأیید، فایل آماده می‌گیرد، می‌فروشد، پورسانت می‌گیرد؛ کار اصلی از چت. "
-            "۳) همکار ویژه — مالک/فروشنده با آگهی و بازدیدهای خودش."
+            "سطوح: ۱) کاربر عادی — چت و درخواست بازاریاب شدن. "
+            "۲) بازاریاب فروش — بعد از تأیید از چت مشتری یا نوع فایل می‌فرستد، فایل می‌گیرد، می‌فروشد، پورسانت می‌گیرد. "
+            "۳) بازاریاب ویژه — مالک/فروشنده با آگهی و بازدیدهای خودش."
         ),
         "terms": (
             "شرایط: فایل‌های تأییدشده با قیمت و پورسانت مشخص؛ فروش؛ بعد از تأیید معامله پورسانت به کیف پول. "
@@ -883,8 +985,8 @@ def _tool_application_status(*, phone: str) -> dict[str, Any]:
             model = {
                 "ok": True,
                 "status": "approved",
-                "label": "همکار تأییدشده",
-                "instruction": "کوتاه بگو الان همکار است و از چت خانه کار فروش را جلو ببرد.",
+                "label": "بازاریاب فروش",
+                "instruction": "کوتاه بگو الان بازاریاب فروش است؛ از چت مشتری یا نوع فایل بفرستد تا فایل معرفی شود.",
             }
             return {"ok": True, "model_result": model}
 
@@ -1316,10 +1418,7 @@ def _tool_draft_listing(
     code = _resolve_tool_land_code(phone, args)
     channel = str(args.get("channel") or "both").strip().lower() or "both"
     if not code:
-        return _denied(
-            "کد فایل مشخص نیست. land_code را خالی بگذار و دوباره بزن؛ "
-            "از کاربر کد نپرس مگر چند فایل بدون زمینه باشد — وگرنه search_lands."
-        )
+        return _denied(_never_ask_land_instruction(phone))
 
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
     lands_map = accessible_lands_map(phone, aud)
@@ -1431,6 +1530,19 @@ def clear_visit_draft(user_key: str) -> None:
     _clear_visit_draft(user_key)
 
 
+def reset_visit_draft_keep_land(
+    user_key: str,
+    *,
+    thread_id: str | None = None,
+) -> str:
+    """پاک کردن نام/شماره پیش‌نویس بازدید؛ نگه داشتن کد فایل موضوع گفتگو."""
+    focus = resolve_conversation_land_code(user_key, thread_id=thread_id)
+    _clear_visit_draft(user_key)
+    if focus:
+        _save_visit_draft(user_key, {"land_code": focus})
+    return focus
+
+
 VISIT_ASK_NAME = "نام مشتری را بگو"
 VISIT_ASK_PHONE = "شماره موبایل مشتری را بگو"
 
@@ -1478,8 +1590,164 @@ def _looks_like_customer_name(text: str) -> bool:
 def _format_visit_date_ask(labels: list[str]) -> str:
     lines = ["کدام تاریخ؟ فقط شماره را بفرست:"]
     for i, lab in enumerate(labels[:5], start=1):
-        lines.append(f"{i}) {lab}")
+        text = str(lab or "").strip()
+        # label از list_upcoming_visit_dates خودش «۱) …» دارد
+        if text and (text[0].isdigit() or text[0] in "۰۱۲۳۴۵۶۷۸۹"):
+            lines.append(text)
+        else:
+            lines.append(f"{i}) {text}")
     return "\n".join(lines)
+
+
+def _visit_call_info_ui(
+    *,
+    title: str,
+    lines: list[str],
+    note: str,
+    land_code: str = "",
+) -> dict[str, Any]:
+    """کارت پایانی فقط برای تماس هماهنگی بازدید (بدون توکن تأیید)."""
+    call_phone = _visit_coord_call_target()
+    return {
+        "type": "confirm_visit",
+        "title": title,
+        "lines": [str(x) for x in lines if str(x).strip()],
+        "status": "completed",
+        "state": "completed",
+        "note": note,
+        "show_visit_call": True,
+        "call_phone": call_phone,
+        "land_code": str(land_code or ""),
+        "token_active": False,
+    }
+
+
+def _offer_complete_visit_for_open(
+    *, phone: str, land_code: str, existing_visit_id: str = ""
+) -> dict[str, Any]:
+    """بازدید تأییدشده باز → کارت «بازدید انجام شد» + تماس هماهنگی."""
+    call_phone = _visit_coord_call_target()
+    out = _tool_propose_simple_tx(
+        {"land_code": land_code},
+        phone=phone,
+        action_type="confirm_complete_visit",
+    )
+    if out.get("ok") and isinstance(out.get("ui_action"), dict):
+        ui = dict(out["ui_action"])
+        ui["show_visit_call"] = True
+        ui["call_phone"] = call_phone
+        out["ui_action"] = ui
+        mr = dict(out.get("model_result") or {})
+        mr["ok"] = True
+        mr["existing_visit_id"] = existing_visit_id
+        mr["speak_exactly"] = (
+            f"بازدید این فایل باز است. برای هماهنگی با {call_phone} تماس بگیر. "
+            "اگر بازدید انجام شده، کارت زیر را تأیید کن."
+        )
+        mr["instruction"] = (
+            "عین speak_exactly را بفرست. نام/شماره/تاریخ جدید نپرس. "
+            "کارت تأیید «بازدید انجام شد» نشان داده شده."
+        )
+        out["model_result"] = mr
+        out["ok"] = True
+        return out
+    err = ""
+    if isinstance(out.get("model_result"), dict):
+        err = str(out["model_result"].get("error") or "")
+    note = err or "وضعیت بازدید را از چت پیگیری کن."
+    return {
+        "ok": True,
+        "model_result": {
+            "ok": True,
+            "status": "open_visit_info",
+            "land_code": land_code,
+            "existing_visit_id": existing_visit_id,
+            "speak_exactly": note,
+            "instruction": "عین speak_exactly را بفرست.",
+        },
+        "ui_action": _visit_call_info_ui(
+            title="هماهنگی بازدید",
+            lines=[f"فایل: {land_code}", f"هماهنگی: {call_phone}"],
+            note=note,
+            land_code=land_code,
+        ),
+    }
+
+
+def _response_for_open_visit(
+    *, phone: str, land_code: str, open_rec: dict[str, Any]
+) -> dict[str, Any]:
+    """بازدید باز: به‌جای خطای تکراری، کارت/پیام درست بر اساس وضعیت."""
+    from app.express_partner.visit_requests import (
+        APPROVED_STATUS,
+        DONE_PENDING_STATUS,
+        PENDING_STATUS,
+    )
+
+    st = str(open_rec.get("status") or "").strip()
+    code = str(land_code or "").strip()
+    vid = str(open_rec.get("id") or "")
+    call_phone = _visit_coord_call_target()
+
+    if st == APPROVED_STATUS:
+        return _offer_complete_visit_for_open(
+            phone=phone, land_code=code, existing_visit_id=vid
+        )
+
+    if st == DONE_PENDING_STATUS:
+        speak = (
+            "اعلام «بازدید انجام شد» قبلاً ثبت شده و منتظر تأیید ادمین است. "
+            "لازم نیست دوباره بنویسی؛ بعد از تأیید می‌تونی معامله ثبت کنی."
+        )
+        return {
+            "ok": True,
+            "model_result": {
+                "ok": True,
+                "status": "visit_done_awaiting_admin",
+                "land_code": code,
+                "existing_visit_id": vid,
+                "speak_exactly": speak,
+                "instruction": (
+                    "عین speak_exactly را بفرست. "
+                    "دیگر propose_visit یا propose_complete_visit نزن."
+                ),
+            },
+            "ui_action": _visit_call_info_ui(
+                title="بازدید انجام شد — منتظر تأیید",
+                lines=[f"فایل: {code}", f"هماهنگی: {call_phone}"],
+                note=speak,
+                land_code=code,
+            ),
+        }
+
+    if st == PENDING_STATUS:
+        speak = (
+            f"درخواست بازدید ثبت شده و منتظر تأیید است. "
+            f"برای هماهنگی با {call_phone} تماس بگیر؛ "
+            "بعد از تأیید می‌تونی «بازدید انجام شد» بزنی."
+        )
+    else:
+        speak = (
+            f"برای این فایل بازدید باز دارید. "
+            f"برای هماهنگی با {call_phone} تماس بگیر."
+        )
+    return {
+        "ok": True,
+        "model_result": {
+            "ok": True,
+            "status": "open_visit_pending",
+            "land_code": code,
+            "existing_visit_id": vid,
+            "speak_exactly": speak,
+            "instruction": "عین speak_exactly را بفرست. نام/شماره/تاریخ جدید نپرس.",
+        },
+        "ui_action": _visit_call_info_ui(
+            title="بازدید در جریان",
+            lines=[f"فایل: {code}", f"هماهنگی: {call_phone}"],
+            note=speak,
+            land_code=code,
+        ),
+    }
 
 
 def _visit_tool_to_chat_result(tool_out: dict[str, Any]) -> dict[str, Any] | None:
@@ -1530,8 +1798,21 @@ def try_continue_visit_from_user_message(
     msg = (text or "").strip()
     if not me or not msg:
         return None
+    try:
+        from flask import g
+
+        g.ai_tool_thread_id = (thread_id or "").strip() or None
+        g.ai_tool_audience = audience or AUDIENCE_PARTNER
+        g.ai_last_user_message = msg
+    except Exception:
+        pass
     draft = _load_visit_draft(me)
     code = str(draft.get("land_code") or "").strip()
+    if not code:
+        code = resolve_conversation_land_code(me, thread_id=thread_id)
+        if code:
+            _save_visit_draft(me, {**draft, "land_code": code})
+            draft = _load_visit_draft(me)
     if not code:
         return None
 
@@ -1692,11 +1973,30 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "mission_land_code": _active_mission_land_code(me),
             "assigned_land_codes": _active_assignment_land_codes(me),
             "instruction": (
-                "کد فایل را از کاربر نپرس. دوباره propose_visit_request را با land_code خالی بزن "
-                "تا سیستم از مأموریت/گفتگو/اختصاص بگیرد. فقط اگر چند فایل و هیچ زمینه‌ای نیست کوتاه بپرس کدام. "
-                "هنوز نام/شماره/تاریخ نپرس."
+                _never_ask_land_instruction(me)
+                + " هنوز نام/شماره/تاریخ نپرس. به کاربر چیزی درباره کد فایل نگو."
             ),
+            "speak_exactly": "",
         }
+
+    # بازدید باز را قبل از نام/شماره/تاریخ بگو — وگرنه چت در حلقهٔ تاریخ می‌ماند
+    try:
+        visit_requests_early = load_express_visit_requests() or []
+        if not isinstance(visit_requests_early, list):
+            visit_requests_early = []
+        open_rec_early = partner_open_visit(visit_requests_early, me, str(code))
+        if open_rec_early:
+            clear_visit_draft(me)
+            return {
+                "ok": True,
+                "status": "open_visit",
+                "land_code": code,
+                "open_visit": open_rec_early,
+                "existing_visit_id": str(open_rec_early.get("id") or ""),
+            }
+    except Exception:
+        pass
+
     if not full_name:
         return {
             "ok": False,
@@ -1796,9 +2096,18 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     if ctx is None:
         return {"ok": False, "error": "فایل پیدا نشد یا در اکسپرس نیست."}
     if not ctx.get("my_assignment"):
+        # Chat-first: فایل اکسپرس باز را همان لحظه claim کن تا عملیات از چت قفل نشود
+        try:
+            from app.express_partner.partner_missions import claim_express_land_for_partner
+
+            if claim_express_land_for_partner(me, code, source="chat_claim"):
+                ctx = _express_land_partner_ctx(code, me) or ctx
+        except Exception:
+            pass
+    if not ctx.get("my_assignment"):
         return {
             "ok": False,
-            "error": "برای این فایل انتساب فعالی ندارید؛ فقط فایل اختصاصی خودتان.",
+            "error": "این فایل برای ثبت بازدید در دسترس نیست (فروخته/قفل همکار دیگر).",
         }
 
     current_status = ctx["global_status"]
@@ -1810,8 +2119,10 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     open_rec = partner_open_visit(visit_requests, me, str(code))
     if open_rec:
         return {
-            "ok": False,
-            "error": "برای این فایل درخواست بازدید باز دارید؛ بعد از بازدید از همین چت بگو «بازدید انجام شد».",
+            "ok": True,
+            "status": "open_visit",
+            "land_code": code,
+            "open_visit": open_rec,
             "existing_visit_id": str(open_rec.get("id") or ""),
         }
 
@@ -1879,6 +2190,12 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     from app.utils.dates import format_display_jalali_date
 
     checked = _validate_visit_proposal(args, phone=phone)
+    # بازدید باز: کارت/پیام وضعیت‌محور (نه خطای «بنویس بازدید انجام شد»)
+    if checked.get("status") == "open_visit":
+        open_rec = checked.get("open_visit") if isinstance(checked.get("open_visit"), dict) else {}
+        code = str(checked.get("land_code") or args.get("land_code") or "").strip()
+        return _response_for_open_visit(phone=phone, land_code=code, open_rec=open_rec)
+
     # مرحلهٔ انتخاب تاریخ — موفقیت‌آمیز برای مدل، بدون کارت تأیید
     if checked.get("status") == "needs_date_choice":
         model = {k: v for k, v in checked.items() if k != "payload"}
@@ -1907,11 +2224,13 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
         str(payload.get("customer_name") or "").strip()
         or f"{payload.get('customer_first_name') or ''} {payload.get('customer_last_name') or ''}".strip()
     )
+    call_phone = _visit_coord_call_target()
     lines = [
         f"فایل: {payload.get('land_title')} ({payload.get('land_code')})",
         f"تاریخ شمسی: {date_show}",
         f"مشتری: {cust_show}",
-        f"تماس: {masked}",
+        f"تماس مشتری: {masked}",
+        f"هماهنگی بازدید: {call_phone}",
     ]
     ui = {
         "type": "confirm_visit",
@@ -1920,6 +2239,8 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
         "lines": lines,
         "status": "pending",
         "land_code": str(payload.get("land_code") or ""),
+        "call_phone": call_phone,
+        "show_visit_call": True,
     }
     model = {
         "ok": True,
@@ -1927,7 +2248,8 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
         "land_code": payload.get("land_code"),
         "visit_date_jalali": date_show,
         "instruction": (
-            "کارت تأیید نشان داده شد؛ تاریخ را فقط شمسی بگو. بگو چک کند و تأیید بزند. هنوز ثبت نشده."
+            "کارت تأیید نشان داده شد؛ تاریخ را فقط شمسی بگو. بگو چک کند و تأیید بزند. هنوز ثبت نشده. "
+            f"بعد از تأیید برای هماهنگی بازدید با {call_phone} تماس بگیرد."
         ),
     }
     return {
@@ -2127,7 +2449,11 @@ def _resolve_visit_for_result_tools(args: dict[str, Any], *, phone: str) -> dict
     if not code:
         code = _active_mission_land_code(me) or _land_code_from_user_message()
     if not code:
-        return {"ok": False, "error": "کد فایل مشخص نیست."}
+        return {
+            "ok": False,
+            "error": "فایل موضوع گفتگو پیدا نشد.",
+            "instruction": _never_ask_land_instruction(me),
+        }
     visits = load_express_visit_requests() or []
     if not isinstance(visits, list):
         visits = []
@@ -2304,7 +2630,7 @@ def _tool_propose_offer(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     if not land_code:
         land_code = _active_mission_land_code(me) or _land_code_from_user_message()
     if not land_code:
-        return _denied("کد فایل مشخص نیست.")
+        return _denied(_never_ask_land_instruction(me))
     # optional prefill from AI negotiation plan
     try:
         from flask import g
@@ -2834,10 +3160,7 @@ def _tool_propose_simple_tx(
             "model_result": {
                 "ok": False,
                 "error": "کد فایل مشخص نیست.",
-                "instruction": (
-                    "کد را از کاربر نپرس؛ دوباره با land_code خالی صدا بزن "
-                    "(مأموریت/گفتگو/اختصاص). فقط اگر چند فایل بدون زمینه است کوتاه بپرس کدام."
-                ),
+                "instruction": _never_ask_land_instruction(phone),
             },
         }
     snap = _partner_tx_snapshot(phone, code)
@@ -2847,19 +3170,55 @@ def _tool_propose_simple_tx(
     mode = str(snap.get("tx_mode") or "")
     ok_modes = meta.get("tool_ok_modes") or ()
     if action_type == "confirm_deal" and not snap.get("has_assignment"):
+        try:
+            from app.express_partner.partner_missions import claim_express_land_for_partner
+
+            if claim_express_land_for_partner(phone, code, source="chat_claim"):
+                snap = _partner_tx_snapshot(phone, code)
+                mode = str(snap.get("tx_mode") or "")
+        except Exception:
+            pass
+    if action_type == "confirm_deal" and not snap.get("has_assignment"):
         return {
             "ok": False,
             "model_result": {
                 "ok": False,
                 "error": (
-                    "این فایل در اختصاص شما نیست؛ ثبت معامله فقط روی فایل اختصاص‌یافته ممکن است. "
-                    "فایل مأموریت/اختصاص فعال را بگو یا از خانه ادامه بده."
+                    "این فایل برای ثبت معامله در دسترس نیست "
+                    "(فروخته‌شده یا در معامله همکار دیگر)."
                 ),
                 "tx_mode": mode,
                 "land_code": code,
             },
         }
     if mode not in ok_modes:
+        # اعلام انجام قبلاً ثبت شده — پیام شفاف، نه خطای گیج‌کننده
+        if action_type == "confirm_complete_visit" and mode == "visit_done_pending":
+            speak = (
+                "اعلام «بازدید انجام شد» قبلاً ثبت شده و منتظر تأیید ادمین است. "
+                "لازم نیست دوباره بنویسی."
+            )
+            return {
+                "ok": True,
+                "model_result": {
+                    "ok": True,
+                    "status": "visit_done_awaiting_admin",
+                    "land_code": code,
+                    "tx_mode": mode,
+                    "speak_exactly": speak,
+                    "instruction": "عین speak_exactly را بفرست. دوباره propose_complete_visit نزن.",
+                },
+                "ui_action": _visit_call_info_ui(
+                    title="بازدید انجام شد — منتظر تأیید",
+                    lines=[
+                        f"فایل: {snap.get('land_title')} ({code})",
+                        f"هماهنگی: {_visit_coord_call_target()}",
+                    ],
+                    note=speak,
+                    land_code=code,
+                ),
+                "land_codes": [],
+            }
         hints = {
             "confirm_complete_visit": "الان نمی‌شود «بازدید انجام شد» زد؛ باید بازدید تأییدشده در جریان باشد.",
             "confirm_deal": {
@@ -3002,14 +3361,42 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         customer_last_name=str(fresh.get("customer_last_name") or ""),
         customer_phone=str(fresh.get("customer_phone") or ""),
     )
+    call_phone = _visit_coord_call_target()
     if err == "already_pending":
         _consume_pending_action(token)
+        # به‌جای پیام خام، وضعیت واقعی + کارت مناسب
+        try:
+            from app.express_partner.visit_requests import partner_open_visit as _pov
+
+            open_rec = _pov(visit_requests, me, code)
+        except Exception:
+            open_rec = None
+        if isinstance(open_rec, dict):
+            offered = _response_for_open_visit(phone=me, land_code=code, open_rec=open_rec)
+            mr = offered.get("model_result") if isinstance(offered.get("model_result"), dict) else {}
+            msg = str(mr.get("speak_exactly") or "").strip() or (
+                f"این بازدید از قبل ثبت شده. برای هماهنگی با {call_phone} تماس بگیر."
+            )
+            out = {
+                "ok": True,
+                "already": True,
+                "call_phone": call_phone,
+                "show_visit_call": True,
+                "message": msg,
+                "land_code": code,
+            }
+            ui = offered.get("ui_action")
+            if isinstance(ui, dict):
+                out["ui_action"] = ui
+            return out
         return {
             "ok": True,
             "already": True,
+            "call_phone": call_phone,
+            "show_visit_call": True,
             "message": (
-                "این بازدید از قبل ثبت شده. قدم بعدی: با مشتری هماهنگ کن؛ "
-                "بعد از بازدید از همین چت بگو «بازدید انجام شد»."
+                "این بازدید از قبل ثبت شده. "
+                f"برای هماهنگی بازدید با {call_phone} تماس بگیر."
             ),
         }
     if err or not rec:
@@ -3076,12 +3463,15 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         "ok": True,
         "message": (
             f"بازدید{date_bit} ثبت شد. "
-            "قدم بعدی: با مشتری هماهنگ کن؛ بعد از بازدید از همین چت بگو «بازدید انجام شد» "
+            f"برای هماهنگی بازدید همین حالا با {call_phone} تماس بگیر؛ "
+            "بعد از بازدید از همین چت بگو «بازدید انجام شد» "
             "تا کارت تأیید بیاید — لازم نیست به صفحه دیگری بروی."
         ),
         "visit_id": str(rec.get("id") or ""),
         "land_code": code,
         "visit_date_jalali": vdate_j,
+        "call_phone": call_phone,
+        "show_visit_call": True,
     }
 
 
@@ -3133,10 +3523,20 @@ def confirm_action_from_token(*, phone: str, token: str) -> dict[str, Any]:
     mode = str(snap.get("tx_mode") or "")
     ok_modes = _SIMPLE_TX_META[action_type].get("tool_ok_modes") or ()
     if action_type == "confirm_deal" and not snap.get("has_assignment"):
+        try:
+            from app.express_partner.partner_missions import claim_express_land_for_partner
+
+            if claim_express_land_for_partner(me, code, source="chat_claim"):
+                snap = _partner_tx_snapshot(me, code)
+                mode = str(snap.get("tx_mode") or "")
+        except Exception:
+            pass
+    if action_type == "confirm_deal" and not snap.get("has_assignment"):
         return {
             "ok": False,
             "error": (
-                "این فایل در اختصاص شما نیست؛ ثبت معامله فقط روی فایل اختصاص‌یافته ممکن است."
+                "این فایل برای ثبت معامله در دسترس نیست "
+                "(فروخته‌شده یا در معامله همکار دیگر)."
             ),
         }
     if mode not in ok_modes:
@@ -3678,14 +4078,177 @@ def _execute_release_deal(phone: str, code: str) -> dict[str, Any]:
     }
 
 
-def cancel_pending_action(*, phone: str, token: str) -> dict[str, Any]:
+def cancel_pending_action(
+    *,
+    phone: str,
+    token: str,
+    thread_id: str | None = None,
+    audience: str | None = None,
+) -> dict[str, Any]:
+    from app.ai.card_registry import STATE_CANCELLED, result_lines_from_confirm
+    from app.ai.chat_store import update_agent_action_by_token
+    from app.ai.message_types import MSG_TIMELINE
+
     pending = _load_pending_action(token)
-    if not pending:
-        return {"ok": True, "cancelled": True}
-    if str(pending.get("user_key") or "") != (phone or "").strip():
+    me = (phone or "").strip()
+    if pending and str(pending.get("user_key") or "") != me:
         return {"ok": False, "error": "دسترسی ندارید."}
-    _consume_pending_action(token)
-    return {"ok": True, "cancelled": True}
+    if pending:
+        _consume_pending_action(token)
+
+    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    note = "انصراف داده شد."
+    lines = result_lines_from_confirm(card_type="", message=note, out={})
+    updated, msgs, tid = update_agent_action_by_token(
+        me,
+        token,
+        thread_id=thread_id,
+        audience=aud,
+        new_state=STATE_CANCELLED,
+        event="card_cancelled",
+        lines=lines,
+        note=note,
+        actor=me,
+        result={"cancelled": True},
+    )
+    # Soft timeline (avoid duplicate if card not found — still ok)
+    try:
+        from app.ai.chat_events import emit_timeline
+
+        if updated:
+            emit_timeline(
+                me,
+                event="card_cancelled",
+                body=note,
+                audience=aud,
+                thread_id=tid or (thread_id or ""),
+            )
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "cancelled": True,
+        "card_updated": updated,
+        "thread_id": tid or thread_id,
+        "messages": msgs,
+        "message_type": MSG_TIMELINE,
+    }
+
+
+def apply_confirm_result_to_chat(
+    *,
+    phone: str,
+    token: str,
+    thread_id: str | None,
+    audience: str,
+    confirm_out: dict[str, Any],
+) -> dict[str, Any]:
+    """After successful confirm: update living card + emit timeline (no dead card)."""
+    from app.ai.card_registry import (
+        STATE_COMPLETED,
+        STATE_FAILED,
+        result_lines_from_confirm,
+    )
+    from app.ai.chat_store import update_agent_action_by_token
+    from app.ai.chat_events import emit_timeline
+
+    me = (phone or "").strip()
+    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    ok = bool(confirm_out.get("ok"))
+    note = str(confirm_out.get("message") or ("انجام شد." if ok else "ناموفق"))
+    lines = result_lines_from_confirm(
+        card_type=str(confirm_out.get("action_type") or ""),
+        message=note,
+        out=confirm_out,
+    )
+    state = STATE_COMPLETED if ok else STATE_FAILED
+    updated, msgs, tid = update_agent_action_by_token(
+        me,
+        token,
+        thread_id=thread_id,
+        audience=aud,
+        new_state=state,
+        event="card_confirmed" if ok else "card_failed",
+        result=dict(confirm_out),
+        lines=lines,
+        note=note,
+        actor=me,
+    )
+    event_key = "card_confirmed"
+    # Prefer domain-specific timeline labels when possible
+    if ok:
+        if confirm_out.get("visit_id"):
+            event_key = "visit_requested"
+        elif str(confirm_out.get("tx_mode") or "") in ("deal_pending", "release", "deal"):
+            event_key = "deal_started"
+        elif confirm_out.get("application_id"):
+            event_key = "card_confirmed"
+    try:
+        if ok:
+            emit_timeline(
+                me,
+                event=event_key,
+                body=note,
+                audience=aud,
+                thread_id=tid or (thread_id or ""),
+                land_code=str(confirm_out.get("land_code") or ""),
+                meta={"token": token[:12], "visit_id": confirm_out.get("visit_id")},
+                case_status="in_progress" if ok else None,
+            )
+            from app.ai.chat_store import messages_for_ui
+
+            msgs = messages_for_ui(me, tid or thread_id, aud)
+        elif not updated:
+            # Backward-compatible fallback: plain assistant note
+            from app.ai.chat_store import append_exchange
+
+            msgs, tid = append_exchange(
+                me,
+                "",
+                note,
+                thread_id=tid or thread_id,
+                audience=aud,
+            )
+    except Exception:
+        if not msgs:
+            try:
+                from app.ai.chat_store import append_exchange
+
+                msgs, tid = append_exchange(
+                    me, "", note, thread_id=thread_id, audience=aud
+                )
+            except Exception:
+                pass
+    return {
+        "card_updated": updated,
+        "thread_id": tid or thread_id,
+        "messages": msgs,
+        "message": note,
+    }
+
+
+def _visit_coord_call_target() -> str:
+    try:
+        from app.crm.config import VISIT_CALL_TARGET
+
+        return str(VISIT_CALL_TARGET or "09121471301").strip() or "09121471301"
+    except Exception:
+        return "09121471301"
+
+
+def _visit_coord_call_btn_html(*, block: bool = False) -> str:
+    """دکمه تماس هماهنگی بازدید — همیشه به شماره ثابت North Star."""
+    phone = _visit_coord_call_target()
+    cls = "ai-agent-btn ai-agent-btn--call"
+    if block:
+        cls += " ai-agent-btn--call-block"
+    return (
+        f'<a class="{cls}" href="tel:{escape(phone)}" '
+        f'data-vinor-direct-action="1" dir="ltr" '
+        f'aria-label="تماس برای هماهنگی بازدید">'
+        f'<span aria-hidden="true">📞</span> '
+        f'تماس برای هماهنگی بازدید · {escape(phone)}</a>'
+    )
 
 
 def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
@@ -3791,8 +4354,22 @@ def _render_copy_blocks_card(action: dict[str, Any]) -> str:
 
 
 def _render_confirm_action_card(action: dict[str, Any]) -> str:
+    from app.ai.card_registry import (
+        STATE_CANCELLED,
+        STATE_COMPLETED,
+        STATE_CONFIRMED,
+        STATE_EXPIRED,
+        STATE_FAILED,
+        STATE_PENDING,
+        normalize_card,
+    )
+
+    action = normalize_card(action)
     atype = str(action.get("type") or "confirm_visit")
     token = str(action.get("token") or "").strip()
+    card_id = str(action.get("card_id") or "").strip()
+    version = int(action.get("version") or 1)
+    schema_version = int(action.get("schema_version") or 1)
     defaults = {
         "confirm_visit": "تأیید ثبت بازدید",
         "confirm_complete_visit": "تأیید: بازدید انجام شد",
@@ -3815,34 +4392,86 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
     title = escape(str(action.get("title") or defaults.get(atype) or "تأیید اقدام"))
     confirm_label = escape(str(action.get("confirm_label") or "تأیید و ثبت").strip() or "تأیید و ثبت")
     cancel_label = escape(str(action.get("cancel_label") or "انصراف").strip() or "انصراف")
-    status = str(action.get("status") or "pending")
-    if status == "pending" and token and _load_pending_action(token) is None:
-        status = "expired"
+    status = str(action.get("state") or action.get("status") or STATE_PENDING)
+    token_active = action.get("token_active", True)
+    if status == STATE_PENDING and token and token_active and _load_pending_action(token) is None:
+        status = STATE_EXPIRED
     lines = action.get("lines") if isinstance(action.get("lines"), list) else []
     body = "".join(
         f'<div class="ai-agent-line">{escape(str(line))}</div>' for line in lines if str(line).strip()
     )
-    if status != "pending" or not token:
-        if status == "confirmed":
-            note = "انجام شد."
-        elif status == "cancelled":
-            note = "انصراف داده شد."
-        else:
-            note = "این پیشنهاد منقضی یا دیگر فعال نیست."
+    state_labels = {
+        STATE_PENDING: "در انتظار تأیید",
+        STATE_CONFIRMED: "تأیید شد",
+        STATE_COMPLETED: "انجام شد",
+        STATE_CANCELLED: "لغو شد",
+        STATE_EXPIRED: "منقضی شد",
+        STATE_FAILED: "ناموفق",
+        "executing": "در حال اجرا",
+    }
+    badge = escape(state_labels.get(status, status))
+    attrs = (
+        f'data-agent-type="{escape(atype)}" '
+        f'data-agent-status="{escape(status)}" '
+        f'data-agent-state="{escape(status)}" '
+        f'data-card-id="{escape(card_id)}" '
+        f'data-card-version="{version}" '
+        f'data-schema-version="{schema_version}"'
+    )
+    if token:
+        attrs += f' data-token="{escape(token)}"'
+
+    terminal = status in (
+        STATE_CONFIRMED,
+        STATE_COMPLETED,
+        STATE_CANCELLED,
+        STATE_EXPIRED,
+        STATE_FAILED,
+    ) or status != STATE_PENDING or not token or not token_active
+
+    # بازدید نهایی / ثبت بازدید — دکمه تماس هماهنگی در همه وضعیت‌های کارت
+    show_visit_call = atype == "confirm_visit" or bool(action.get("show_visit_call"))
+    call_html = _visit_coord_call_btn_html() if show_visit_call else ""
+
+    if terminal:
+        note = str(action.get("note") or "").strip()
+        if not note:
+            if status in (STATE_CONFIRMED, STATE_COMPLETED):
+                note = "انجام شد."
+            elif status == STATE_CANCELLED:
+                note = "انصراف داده شد."
+            elif status == STATE_FAILED:
+                note = "اجرا ناموفق بود."
+            else:
+                note = "این پیشنهاد منقضی یا دیگر فعال نیست."
+        call_block = (
+            f'<div class="ai-agent-card__actions ai-agent-card__actions--call">{call_html}</div>'
+            if call_html
+            else ""
+        )
         return (
-            f'<div class="ai-agent-card ai-agent-card--done" data-agent-status="{escape(status)}">'
+            f'<div class="ai-agent-card ai-agent-card--done ai-agent-card--{escape(status)}" {attrs}>'
+            f'<div class="ai-agent-card__head">'
             f'<div class="ai-agent-card__title">{title}</div>'
+            f'<span class="ai-agent-card__badge">{badge}</span>'
+            f"</div>"
             f'<div class="ai-agent-card__body">{body}</div>'
-            f'<div class="ai-agent-card__note">{escape(note)}</div>'
+            f'<div class="ai-agent-card__note" data-agent-note>{escape(note)}</div>'
+            f"{call_block}"
             f"</div>"
         )
+    call_pending = f"{call_html}" if call_html else ""
     return (
-        f'<div class="ai-agent-card" data-agent-type="{escape(atype)}" data-token="{escape(token)}">'
+        f'<div class="ai-agent-card ai-agent-card--pending" {attrs}>'
+        f'<div class="ai-agent-card__head">'
         f'<div class="ai-agent-card__title">{title}</div>'
+        f'<span class="ai-agent-card__badge">{badge}</span>'
+        f"</div>"
         f'<div class="ai-agent-card__body">{body}</div>'
         f'<div class="ai-agent-card__actions">'
         f'<button type="button" class="ai-agent-btn ai-agent-btn--confirm" data-agent-confirm>{confirm_label}</button>'
         f'<button type="button" class="ai-agent-btn ai-agent-btn--cancel" data-agent-cancel>{cancel_label}</button>'
+        f"{call_pending}"
         f"</div>"
         f'<div class="ai-agent-card__note hidden" data-agent-note></div>'
         f"</div>"

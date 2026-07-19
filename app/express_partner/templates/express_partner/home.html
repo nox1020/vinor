@@ -2,7 +2,7 @@
 {% block title %}{{ seo_title|default('داشبورد | وینور اکسپرس') }}{% endblock %}
 {% block head %}
   {{ super() }}
-  <meta name="description" content="{{ seo_description|default('مرکز مدیریت روزانه همکار — اقدامات فوری و فایل‌های پیشنهادی.') }}">
+  <meta name="description" content="{{ seo_description|default('پنل بازاریاب فروش — از چت مشتری یا نوع فایل بفرست تا فایل مناسب معرفی شود.') }}">
 {% endblock %}
 
 {% block content %}
@@ -19,30 +19,19 @@
   <div class="vn-home-shell mx-auto flex w-full max-w-lg flex-col">
     {% if not home_ai_enabled|default(false) %}
     <div class="vn-home-top" data-vn-home-top>
-      {% if me_phone and not home_ai_limited|default(false) %}
-      {% set card = journey_card or (suggested_files[0] if suggested_files else none) %}
-      {% if card %}
-        {% include 'express_partner/partials/home_journey_card.html' %}
-      {% elif is_approved|default(false) %}
+      {% if me_phone and is_approved|default(false) and not home_ai_limited|default(false) %}
       <div class="vn-home-feed">
-        <section class="vn-home-empty" aria-label="بدون فایل پیشنهادی" data-tour="home-urgent">
+        <section class="vn-home-empty" aria-label="بازاریاب فروش" data-view="home-marketer">
           <div class="vn-home-empty__body">
-            <p class="vn-home-empty__title">فایل آماده‌ای نیست</p>
-            <p class="vn-home-empty__sub">همه فایل‌ها فروخته یا بسته شده‌اند. از ادمین بخواه فایل جدید باز کند یا از دکمه + گفتگو را شروع کن</p>
+            <p class="vn-home-empty__title">از چت شروع کن</p>
+            <p class="vn-home-empty__sub">مشتری داری مشخصاتش را بفرست — یا بگو چه فایلی برای بازاریابی می‌خواهی تا معرفی کنم</p>
           </div>
         </section>
       </div>
       {% endif %}
-      {% endif %}
     </div>
     {% else %}
-    {# حالت AI: هیچ کارتی بیرون از چت نیست — قالب فقط برای تزریق داخل #aiMessages #}
-    {% set card = journey_card or (suggested_files[0] if suggested_files else none) %}
-    {% if me_phone and not home_ai_limited|default(false) and card %}
-    <template id="vnJourneyChatTpl">
-      {% include 'express_partner/partials/home_journey_card.html' %}
-    </template>
-    {% endif %}
+    {# حالت AI: بدون کارت مأموریت — فقط چت بازاریاب #}
     {% if home_ai_limited|default(false) %}
     <div id="vnHomeLandsChatSource" hidden aria-hidden="true">
       {% include 'express_partner/partials/home_public_lands_carousel.html' %}
@@ -281,7 +270,7 @@
 </script>
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=78"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=83"></script>
 <script>
 (function () {
   function syncHomeDockPad() {

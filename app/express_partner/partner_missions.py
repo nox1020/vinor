@@ -325,7 +325,9 @@ def _pick_random_open_land(phone: str) -> Optional[Dict[str, Any]]:
     return random.choice(top)
 
 
-def _ensure_personal_assignment(phone: str, land: Dict[str, Any]) -> None:
+def _ensure_personal_assignment(
+    phone: str, land: Dict[str, Any], *, source: str = "random_mission"
+) -> None:
     ph = _norm_phone(phone)
     code = str(land.get("code") or "").strip()
     if not ph or not code:
@@ -360,10 +362,61 @@ def _ensure_personal_assignment(phone: str, land: Dict[str, Any]) -> None:
             "commission_pct": pct,
             "status": "active",
             "created_at": _now_iso(),
-            "source": "random_mission",
+            "source": (source or "random_mission").strip() or "random_mission",
         }
     )
     save_express_assignments(items)
+
+
+def claim_express_land_for_partner(
+    phone: str, land_code: str, *, source: str = "chat_claim"
+) -> bool:
+    """
+    اختصاص شخصی فوری برای فایل اکسپرس باز — تا Visit/Deal از چت بدون انتساب قبلی کار کند.
+    True اگر انتساب از قبل بود یا همین الان ساخته شد.
+    """
+    ph = _norm_phone(phone)
+    code = str(land_code or "").strip()
+    if not ph or not code:
+        return False
+    land = None
+    for row in load_express_lands_cached() or []:
+        if isinstance(row, dict) and str(row.get("code") or "").strip() == code:
+            land = row
+            break
+    if land is None:
+        return False
+    # فایل فروخته‌شده را claim نکن
+    st = str(land.get("status") or land.get("express_status") or "").strip().lower()
+    if st in ("sold", "فروخته", "فروخته شده"):
+        return False
+    try:
+        items = load_express_assignments() or []
+        for a in items if isinstance(items, list) else []:
+            if not isinstance(a, dict):
+                continue
+            if str(a.get("land_code") or "").strip() != code:
+                continue
+            aph = _norm_phone(str(a.get("partner_phone") or ""))
+            ast = str(a.get("status") or "active").strip().lower()
+            if aph and aph != ph and ast in ("in_transaction", "sold"):
+                return False
+    except Exception:
+        pass
+    _ensure_personal_assignment(ph, land, source=source)
+    # تأیید وجود
+    try:
+        for a in load_express_assignments() or []:
+            if not isinstance(a, dict):
+                continue
+            if _norm_phone(str(a.get("partner_phone") or "")) != ph:
+                continue
+            if str(a.get("land_code") or "").strip() != code:
+                continue
+            return True
+    except Exception:
+        return False
+    return False
 
 
 def _seed_mission_chat(
@@ -445,6 +498,29 @@ def _seed_mission_chat(
         assistant_agent_actions=agent_actions or None,
         hide_user=True,
     )
+    try:
+        from app.ai.case_store import CASE_IN_PROGRESS, ensure_case_for_thread
+        from app.ai.chat_events import emit_timeline
+
+        ensure_case_for_thread(
+            ph,
+            tid,
+            audience=AUDIENCE_PARTNER,
+            land_code=code,
+            case_type="mission",
+            title=f"ماموریت {code}" if code else "ماموریت فروش",
+        )
+        emit_timeline(
+            ph,
+            event="mission_started",
+            body=f"ماموریت جدید برای فایل {code} ایجاد شد." if code else "ماموریت جدید ایجاد شد.",
+            audience=AUDIENCE_PARTNER,
+            thread_id=tid,
+            land_code=code,
+            case_status=CASE_IN_PROGRESS,
+        )
+    except Exception:
+        pass
     set_active_thread(ph, tid, audience=AUDIENCE_PARTNER)
     return tid
 
@@ -533,69 +609,11 @@ def _attach_mission_thread(
 
 def ensure_random_mission(phone: str) -> Optional[Dict[str, Any]]:
     """
-    اگر مأموریت فعال باز باشد همان را برگردان (و در صورت sold کامل کن).
-    وگرنه فایل را بردار؛ اگر قبلاً مأموریت/چت همین فایل بوده همان را زنده کن — چت کپی نساز.
+    بازنشسته: مأموریت تصادفی حذف شد.
+    جریان محصول = بازاریاب فروش از چت (مشتری→فایل یا نوع فایل→معرفی).
+    claim_express_land_for_partner همچنان برای گرفتن فایل از چت فعال است.
     """
-    ph = _norm_phone(phone)
-    if not ph:
-        return None
-
-    existing = refresh_mission_if_land_closed(ph)
-    if existing:
-        return _attach_mission_thread(ph, existing)
-
-    fd = _try_acquire_lock()
-    if fd is None:
-        time.sleep(0.05)
-        again = get_active_mission(ph)
-        return _attach_mission_thread(ph, again) if again else None
-
-    try:
-        existing = refresh_mission_if_land_closed(ph)
-        if existing:
-            return _attach_mission_thread(ph, existing)
-
-        land = _pick_random_open_land(ph)
-        if not land:
-            return None
-
-        code = str(land.get("code") or "").strip()
-        _ensure_personal_assignment(ph, land)
-
-        prev = _latest_mission_for_land(ph, code)
-        if prev:
-            revived = _reactivate_mission_row(ph, land, prev)
-            if revived:
-                return revived
-
-        thread_id = ""
-        try:
-            thread_id = _seed_mission_chat(ph, land)
-        except Exception:
-            current_app.logger.exception(
-                "mission chat seed failed phone=%s code=%s", ph, code
-            )
-
-        mid = str(uuid.uuid4())
-        row = {
-            "id": mid,
-            "partner_phone": ph,
-            "land_code": code,
-            "status": _STATUS_ACTIVE,
-            "thread_id": thread_id,
-            "assigned_at": _now_iso(),
-            "source": "random_home",
-            "last_followup_at": "",
-        }
-        rows = _missions_list()
-        rows.append(row)
-        save_partner_missions(rows)
-        return dict(row)
-    except Exception:
-        current_app.logger.exception("ensure_random_mission failed phone=%s", ph)
-        return None
-    finally:
-        _release_lock(fd)
+    return None
 
 
 def mark_mission_followup(phone: str, land_code: str) -> None:

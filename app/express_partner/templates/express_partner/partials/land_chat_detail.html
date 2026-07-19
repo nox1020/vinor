@@ -17,6 +17,7 @@
 {% set visit_customer_phone = (land._visit_customer_phone|default('')|string)|trim %}
 {% set owner_contact_phone = (land.owner_phone or land.vinor_contact or '')|string|trim %}
 {% set contact_phone = visit_customer_phone or owner_contact_phone %}
+{% set visit_call_target = (visit_call_target|default('09121471301')|string)|trim %}
 
 <style>
   .vn-lcd {
@@ -353,14 +354,25 @@
         {{ chat_cta.secondary_label|default('بازدید مجدد') }}
       </button>
       {% endif %}
-      {% if contact_phone %}
-      <a class="vn-lcd__btn vn-lcd__btn--call" href="tel:{{ contact_phone }}" data-vinor-direct-action="1" aria-label="تماس">
+      <a class="vn-lcd__btn vn-lcd__btn--call"
+         href="tel:{{ visit_call_target }}"
+         data-vinor-direct-action="1"
+         aria-label="تماس برای هماهنگی بازدید {{ visit_call_target }}"
+         title="هماهنگی بازدید {{ visit_call_target }}">
         <i class="fas fa-phone" aria-hidden="true"></i>
       </a>
-      {% endif %}
     </div>
-    {% elif not is_approved %}
-    <p class="vn-lcd__hint">پس از تأیید همکاری، اقدام‌های بازدید و معامله از همین چت فعال می‌شود.</p>
+    {% else %}
+    <div class="vn-lcd__actions">
+      <a class="vn-lcd__btn"
+         href="tel:{{ visit_call_target }}"
+         data-vinor-direct-action="1"
+         dir="ltr"
+         aria-label="تماس برای هماهنگی بازدید">
+        <i class="fas fa-phone" aria-hidden="true"></i>
+        تماس هماهنگی بازدید · {{ visit_call_target }}
+      </a>
+    </div>
     {% endif %}
   </div>
 </article>
