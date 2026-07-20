@@ -23,12 +23,6 @@
     </div>
     {% endif %}
     <div class="ai-msg-body">
-      {% if is_system and msg.content %}
-      <div class="ai-msg-system-label">{% if msg.type == 'timeline' %}رویداد{% else %}سیستم{% endif %}</div>
-      <div class="ai-msg-bubble ai-msg-bubble--system">{{ msg.content }}</div>
-      {% elif msg.content %}
-      <div class="ai-msg-bubble">{{ msg.content }}</div>
-      {% endif %}
       {% if msg.cards_html %}
       <div class="ai-msg-cards">
         {{ msg.cards_html|safe }}
@@ -41,6 +35,12 @@
           {% endfor %}
         </div>
       </div>
+      {% endif %}
+      {% if is_system and msg.content %}
+      <div class="ai-msg-system-label">{% if msg.type == 'timeline' %}رویداد{% else %}سیستم{% endif %}</div>
+      <div class="ai-msg-bubble ai-msg-bubble--system">{{ msg.content }}</div>
+      {% elif msg.content %}
+      <div class="ai-msg-bubble">{{ msg.content }}</div>
       {% endif %}
       {% if not is_user and msg.content %}
       <div class="ai-msg-actions" data-ai-msg-actions>

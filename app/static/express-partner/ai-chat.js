@@ -473,6 +473,27 @@
     return 3;
   }
 
+  function insertCardsAtStart(body, cardsHtml) {
+    if (!body || !cardsHtml || body.querySelector('.ai-msg-cards')) return null;
+    var cardsWrap = document.createElement('div');
+    cardsWrap.innerHTML = cardsHtml;
+    var cardsEl = cardsWrap.firstElementChild;
+    if (!cardsEl) return null;
+    var host = cardsEl;
+    if (!cardsEl.classList.contains('ai-msg-cards')) {
+      host = document.createElement('div');
+      host.className = 'ai-msg-cards';
+      host.appendChild(cardsEl);
+    }
+    if (body.firstChild) {
+      body.insertBefore(host, body.firstChild);
+    } else {
+      body.appendChild(host);
+    }
+    initCardsIn(body);
+    return host;
+  }
+
   function typewriteAssistantMessage(msg) {
     if (!msg || (msg.role || 'assistant') === 'user') {
       return Promise.resolve(appendMessage(msg));
@@ -480,7 +501,7 @@
     if (messageSeen(msg)) return Promise.resolve(null);
 
     var text = (msg.content || '').trim();
-    /* land_cards را موقع پایان تایپ اعمال کن تا آرایش نوار با جواب هم‌زمان عوض شود */
+    /* land_cards را از اول نشان بده؛ متن زیر کارت تایپ شود */
     var cardsHtml = buildCardsHtml(msg, { deferHomeMirror: true });
     var hasLands =
       (msg.land_cards && msg.land_cards.length) ||
@@ -491,7 +512,7 @@
     removeThinking();
     removeWelcome();
 
-    /* اسکلت پیام را بساز؛ متن را تدریجی پر کن */
+    /* اسکلت پیام را بساز؛ کارت اول، متن تدریجی */
     var wrap = appendMessage(
       {
         role: 'assistant',
@@ -499,6 +520,11 @@
         created_at: msg.created_at,
         escalation_id: msg.escalation_id,
         source: msg.source,
+        cards_html: msg.cards_html,
+        land_cards: msg.land_cards,
+        land_detail_html: msg.land_detail_html,
+        land_code: msg.land_code,
+        agent_actions: msg.agent_actions,
       },
       { streamShell: true }
     );
@@ -507,6 +533,10 @@
     }
 
     wrap.setAttribute('data-streaming', '1');
+    var body = wrap.querySelector('.ai-msg-body');
+    if (body && cardsHtml && !body.querySelector('.ai-msg-cards')) {
+      insertCardsAtStart(body, cardsHtml);
+    }
     var bubble = wrap.querySelector('.ai-msg-bubble');
     if (!bubble) {
       wrap.removeAttribute('data-streaming');
@@ -529,24 +559,8 @@
           bubble.innerHTML = formatAssistantHtml(text);
           bubble.setAttribute('data-formatted', '1');
         }
-        if (cardsHtml) {
-          var body = wrap.querySelector('.ai-msg-body');
-          if (body && !body.querySelector('.ai-msg-cards')) {
-            var cardsWrap = document.createElement('div');
-            cardsWrap.innerHTML = cardsHtml;
-            var cardsEl = cardsWrap.firstElementChild;
-            if (cardsEl) {
-              if (!cardsEl.classList.contains('ai-msg-cards')) {
-                var cardsHost = document.createElement('div');
-                cardsHost.className = 'ai-msg-cards';
-                cardsHost.appendChild(cardsEl);
-                body.appendChild(cardsHost);
-              } else {
-                body.appendChild(cardsEl);
-              }
-              initCardsIn(body);
-            }
-          }
+        if (cardsHtml && body && !body.querySelector('.ai-msg-cards')) {
+          insertCardsAtStart(body, cardsHtml);
         }
         routeLandCardsToHome(msg);
         wireCopyBlocks(wrap);
@@ -1844,6 +1858,11 @@
     var body = document.createElement('div');
     body.className = 'ai-msg-body';
 
+    /* کارت‌ها اول؛ متن/حباب بعد */
+    if (cardsHtml && !opts.thinking) {
+      insertCardsAtStart(body, cardsHtml);
+    }
+
     if (opts.thinking) {
       var thinking = document.createElement('div');
       thinking.className = 'ai-msg-bubble ai-msg-thinking';
@@ -1874,28 +1893,17 @@
       body.appendChild(bubble);
     }
 
-    if (cardsHtml) {
-      var cardsWrap = document.createElement('div');
-      cardsWrap.innerHTML = cardsHtml;
-      var cardsEl = cardsWrap.firstElementChild;
-      if (cardsEl) {
-        if (!cardsEl.classList.contains('ai-msg-cards')) {
-          var cardsHost = document.createElement('div');
-          cardsHost.className = 'ai-msg-cards';
-          cardsHost.appendChild(cardsEl);
-          body.appendChild(cardsHost);
-        } else {
-          body.appendChild(cardsEl);
-        }
-        initCardsIn(body);
-      }
-    }
-
     if (msg.land_detail_html) {
       var detailHost = document.createElement('div');
       detailHost.className = 'ai-msg-cards ai-msg-cards--land-detail w-full min-w-0 max-w-full mt-1';
       detailHost.innerHTML = msg.land_detail_html;
-      body.appendChild(detailHost);
+      /* جزئیات فایل هم بالای متن، بعد از کارت‌های اصلی */
+      var afterCards = body.querySelector('.ai-msg-bubble');
+      if (afterCards) {
+        body.insertBefore(detailHost, afterCards);
+      } else {
+        body.appendChild(detailHost);
+      }
       if (msg.land_code) wrap.setAttribute('data-land-chat-code', String(msg.land_code));
       wrap.setAttribute('data-ephemeral', '1');
       initCardsIn(detailHost);
@@ -2827,6 +2835,15 @@
           return;
         }
         removePendingUser();
+        if (data && data.cards_html) {
+          removeThinking();
+          await typewriteAssistantMessage({
+            role: 'assistant',
+            content: errText,
+            cards_html: data.cards_html,
+          });
+          return;
+        }
         throw new Error(errText);
       }
       if (data.thread_id) setActiveThreadId(data.thread_id);

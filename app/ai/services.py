@@ -18,6 +18,7 @@ from flask import current_app
 
 from .agent_tools import (
     agent_system_hint,
+    append_support_call_if_needed,
     parse_tool_arguments,
     render_agent_actions_html,
     run_tool,
@@ -971,10 +972,12 @@ def _escalation_fallback_reply(
             "meta": {"provider": "escalation", "reason": reason},
         }
     else:
+        err = intro + "لطفاً بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید."
         out = {
             "ok": False,
-            "error": intro + "لطفاً بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.",
+            "error": err,
             "error_code": "api_unavailable",
+            "cards_html": append_support_call_if_needed("", err, audience=AUDIENCE_PUBLIC),
         }
     return out
 
@@ -1030,6 +1033,15 @@ def generate_reply(
                     guard["cards_html"] = land_html + prev
             except Exception:
                 pass
+        try:
+            guard["cards_html"] = append_support_call_if_needed(
+                str(guard.get("cards_html") or ""),
+                str(guard.get("reply") or guard.get("error") or ""),
+                land_codes=list(guard.get("land_codes") or []),
+                audience=aud,
+            )
+        except Exception:
+            pass
         return guard
 
     from .intents import normalize_chip_intent
@@ -1232,7 +1244,13 @@ def generate_reply(
                 a for a in (short.get("agent_actions") or []) if isinstance(a, dict)
             ]
             actions_html = render_agent_actions_html(agent_actions) if agent_actions else ""
-            return {
+            cards_html = append_support_call_if_needed(
+                actions_html,
+                reply,
+                agent_actions=agent_actions,
+                audience=aud,
+            )
+            out = {
                 "ok": True,
                 "reply": reply,
                 "land_codes": [],
@@ -1241,6 +1259,9 @@ def generate_reply(
                 "agent_actions_html": actions_html,
                 "meta": short.get("meta") or {"provider": "visit_step"},
             }
+            if cards_html:
+                out["cards_html"] = cards_html
+            return out
     tools = tools_schema_for_voice(voice) if key else []
     try:
         from app.supervisor.service import allow_component, current_flags
@@ -1631,8 +1652,16 @@ def generate_reply(
                 card_parts.append(actions_html)
         except Exception:
             pass
-    if card_parts:
-        result["cards_html"] = "".join(card_parts)
+    cards_html = "".join(card_parts)
+    cards_html = append_support_call_if_needed(
+        cards_html,
+        reply,
+        land_codes=land_codes or [],
+        agent_actions=agent_actions or [],
+        audience=aud,
+    )
+    if cards_html:
+        result["cards_html"] = cards_html
 
     # Adaptive: evaluate quality + confidence (objects only — no prompt injection).
     try:

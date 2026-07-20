@@ -1453,14 +1453,23 @@ def _visit_draft_key(user_key: str) -> str:
     return f"visit_draft:{(user_key or '').strip()}"
 
 
+def _visit_draft_awaiting(draft: dict[str, Any]) -> str:
+    """مرحلهٔ فعال فرم بازدید: name | phone | date | ''."""
+    raw = str((draft or {}).get("awaiting") or "").strip().lower()
+    if raw in ("name", "phone", "date"):
+        return raw
+    return ""
+
+
 def _save_visit_draft(user_key: str, draft: dict[str, Any]) -> None:
-    """پیش‌نویس نام/شماره/فایل بین مرحلهٔ انتخاب تاریخ."""
+    """پیش‌نویس نام/شماره/فایل — فقط وقتی فرم بازدید عمداً شروع شده (awaiting)."""
     uk = (user_key or "").strip()
     if not uk or not isinstance(draft, dict):
         return
     store = _read_pending_store()
     _prune_pending(store)
     now = datetime.now(timezone.utc)
+    awaiting = _visit_draft_awaiting(draft)
     store[_visit_draft_key(uk)] = {
         "user_key": uk,
         "action_type": "visit_draft",
@@ -1470,6 +1479,7 @@ def _save_visit_draft(user_key: str, draft: dict[str, Any]) -> None:
             "customer_first_name": str(draft.get("customer_first_name") or "").strip(),
             "customer_last_name": str(draft.get("customer_last_name") or "").strip(),
             "customer_phone": str(draft.get("customer_phone") or "").strip(),
+            "awaiting": awaiting,
         },
         "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "expires_at": (now + timedelta(minutes=_PENDING_TTL_MIN)).strftime(
@@ -1520,11 +1530,10 @@ def reset_visit_draft_keep_land(
     *,
     thread_id: str | None = None,
 ) -> str:
-    """پاک کردن نام/شماره پیش‌نویس بازدید؛ نگه داشتن کد فایل موضوع گفتگو."""
+    """پاک کردن پیش‌نویس بازدید؛ فوکوس فایل فقط برای ابزار (بدون شروع فرم نام)."""
     focus = resolve_conversation_land_code(user_key, thread_id=thread_id)
     _clear_visit_draft(user_key)
-    if focus:
-        _save_visit_draft(user_key, {"land_code": focus})
+    # عمداً draft نمی‌سازیم — وگرنه چت عادی «نام مشتری را بگو» می‌پرسد.
     return focus
 
 
@@ -1778,7 +1787,10 @@ def try_continue_visit_from_user_message(
     voice: str = "",
     thread_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """اگر پیش‌نویس بازدید منتظر نام/موبایل/تاریخ است، جواب کاربر را مستقیم به ابزار بده."""
+    """فقط اگر فرم بازدید قبلاً با propose_visit شروع شده (awaiting)، جواب را مرحله‌ای بگیر.
+
+    نام مشتری را برای سلام/جستجو/فایل‌خواهی نپرس — فقط وقتی بازاریاب مسیر بازدید را شروع کرده.
+    """
     me = (phone or "").strip()
     msg = (text or "").strip()
     if not me or not msg:
@@ -1793,12 +1805,13 @@ def try_continue_visit_from_user_message(
         pass
     draft = _load_visit_draft(me)
     code = str(draft.get("land_code") or "").strip()
-    if not code:
-        code = resolve_conversation_land_code(me, thread_id=thread_id)
-        if code:
-            _save_visit_draft(me, {**draft, "land_code": code})
-            draft = _load_visit_draft(me)
-    if not code:
+    awaiting = _visit_draft_awaiting(draft)
+    # پیش‌نویس یتیم (فقط کد فایل بدون شروع فرم) را پاک کن — باعث پرسش زودهنگام نام می‌شد
+    if code and not awaiting and not _visit_draft_has_name(draft):
+        if not str(draft.get("customer_phone") or "").strip():
+            clear_visit_draft(me)
+            return None
+    if not code or not awaiting:
         return None
 
     from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
@@ -1813,7 +1826,9 @@ def try_continue_visit_from_user_message(
     if str(draft.get("customer_phone") or "").strip():
         args["customer_phone"] = str(draft.get("customer_phone") or "").strip()
 
-    if not _visit_draft_has_name(draft):
+    if awaiting == "name" or (
+        awaiting in ("phone", "date") and not _visit_draft_has_name(draft)
+    ):
         if not _looks_like_customer_name(msg):
             return {
                 "ok": True,
@@ -1822,7 +1837,12 @@ def try_continue_visit_from_user_message(
                 "meta": {"provider": "visit_step", "forced": True},
             }
         args["customer_name"] = msg
-    elif not is_valid_iran_mobile(normalize_iran_mobile(str(draft.get("customer_phone") or "")) or ""):
+    elif awaiting == "phone" or (
+        awaiting == "date"
+        and not is_valid_iran_mobile(
+            normalize_iran_mobile(str(draft.get("customer_phone") or "")) or ""
+        )
+    ):
         phone_try = normalize_iran_mobile(msg) or msg
         if not is_valid_iran_mobile(phone_try):
             return {
@@ -1832,7 +1852,7 @@ def try_continue_visit_from_user_message(
                 "meta": {"provider": "visit_step", "forced": True},
             }
         args["customer_phone"] = phone_try
-    else:
+    elif awaiting == "date":
         available = list_upcoming_visit_dates(limit=5)
         vd = resolve_visit_date_choice(msg, options=available)
         if vd is None:
@@ -1845,6 +1865,8 @@ def try_continue_visit_from_user_message(
             }
         args["customer_phone"] = str(draft.get("customer_phone") or "").strip()
         args["visit_date"] = msg.strip()
+    else:
+        return None
 
     tool_out = run_tool(
         TOOL_VISIT,
@@ -1936,18 +1958,15 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     available = list_upcoming_visit_dates(limit=5)
     available_labels = [str(x.get("label") or "") for x in available]
 
-    # پیش‌نویس جزئی را نگه دار تا مراحل یکی‌یکی ادامه پیدا کند
-    if code or full_name or phone_raw:
-        _save_visit_draft(
-            me,
-            {
-                "land_code": code,
-                "customer_name": full_name,
-                "customer_first_name": first,
-                "customer_last_name": last,
-                "customer_phone": cust_phone if is_valid_iran_mobile(cust_phone) else phone_raw,
-            },
-        )
+    def _draft_payload(*, awaiting: str) -> dict[str, Any]:
+        return {
+            "land_code": code,
+            "customer_name": full_name,
+            "customer_first_name": first,
+            "customer_last_name": last,
+            "customer_phone": cust_phone if is_valid_iran_mobile(cust_phone) else phone_raw,
+            "awaiting": awaiting,
+        }
 
     # فقط همان قدم بعدی را برگردان تا مدل یکی‌یکی بپرسد
     if not code:
@@ -1983,6 +2002,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
         pass
 
     if not full_name:
+        _save_visit_draft(me, _draft_payload(awaiting="name"))
         return {
             "ok": False,
             "error": "اطلاعات ناقص",
@@ -1996,6 +2016,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             ),
         }
     if not phone_raw:
+        _save_visit_draft(me, _draft_payload(awaiting="phone"))
         return {
             "ok": False,
             "error": "اطلاعات ناقص",
@@ -2010,6 +2031,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
         }
 
     if not is_valid_iran_mobile(cust_phone):
+        _save_visit_draft(me, _draft_payload(awaiting="phone"))
         return {
             "ok": False,
             "error": "شماره تماس مشتری معتبر نیست.",
@@ -2026,6 +2048,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "customer_first_name": first,
             "customer_last_name": last,
             "customer_phone": cust_phone,
+            "awaiting": "date",
         },
     )
 
@@ -4285,19 +4308,116 @@ def _visit_coord_call_target() -> str:
         return "09121471301"
 
 
-def _visit_coord_call_btn_html(*, block: bool = False) -> str:
-    """دکمه تماس هماهنگی بازدید — همیشه به شماره ثابت North Star."""
-    phone = _visit_coord_call_target()
+def support_call_phone() -> str:
+    """شماره پشتیبانی / هماهنگی بازدید (North Star)."""
+    return _visit_coord_call_target()
+
+
+def support_call_btn_html(
+    *,
+    block: bool = False,
+    label: str | None = None,
+) -> str:
+    """دکمه tel: به شماره پشتیبانی وینور."""
+    phone = support_call_phone()
+    text = (label or "").strip() or f"تماس با پشتیبانی · {phone}"
     cls = "ai-agent-btn ai-agent-btn--call"
     if block:
         cls += " ai-agent-btn--call-block"
     return (
         f'<a class="{cls}" href="tel:{escape(phone)}" '
         f'data-vinor-direct-action="1" dir="ltr" '
-        f'aria-label="تماس برای هماهنگی بازدید">'
+        f'aria-label="تماس با پشتیبانی وینور">'
         f'<span aria-hidden="true">📞</span> '
-        f'تماس برای هماهنگی بازدید · {escape(phone)}</a>'
+        f"{escape(text)}</a>"
     )
+
+
+def _visit_coord_call_btn_html(*, block: bool = False) -> str:
+    """دکمه تماس هماهنگی بازدید — همان شماره پشتیبانی."""
+    phone = support_call_phone()
+    return support_call_btn_html(
+        block=block,
+        label=f"تماس برای هماهنگی بازدید · {phone}",
+    )
+
+
+def _cards_html_has_call_btn(cards_html: str) -> bool:
+    html = cards_html or ""
+    return "ai-agent-btn--call" in html or 'href="tel:' in html
+
+
+def reply_needs_support_call(
+    reply: str,
+    *,
+    land_codes: list[str] | None = None,
+    agent_actions: list[dict[str, Any]] | None = None,
+    audience: str | None = None,
+) -> bool:
+    """آیا این پاسخ نیاز به دکمه تماس پشتیبانی دارد؟"""
+    text = str(reply or "")
+    phone = support_call_phone()
+    if phone and phone in text:
+        return True
+
+    # کارت‌های بازدید/هماهنگی
+    for a in agent_actions or []:
+        if not isinstance(a, dict):
+            continue
+        atype = str(a.get("type") or "")
+        if atype == "confirm_visit" or a.get("show_visit_call"):
+            return True
+
+    # خریدار: بعد از پیشنهاد فایل → تماس برای بازدید
+    if (audience or "").strip().lower() == AUDIENCE_PUBLIC and land_codes:
+        return True
+
+    markers = (
+        "تماس بگیر",
+        "تماس بگیرید",
+        "تماس کن",
+        "تماس برای",
+        "هماهنگی",
+        "پشتیبانی",
+        "زنگ بزن",
+        "با ما تماس",
+        "شماره پشتیبانی",
+        "تماس با پشتیبانی",
+        "تماس با وینور",
+    )
+    if any(m in text for m in markers):
+        # «ثبت تماس» CRM با مشتری — دکمه پشتیبانی لازم نیست مگر صریحاً پشتیبانی/هماهنگی
+        if "ثبت تماس" in text and "پشتیبانی" not in text and "هماهنگی" not in text:
+            return False
+        return True
+    return False
+
+
+def append_support_call_if_needed(
+    cards_html: str,
+    reply: str,
+    *,
+    land_codes: list[str] | None = None,
+    agent_actions: list[dict[str, Any]] | None = None,
+    audience: str | None = None,
+) -> str:
+    """اگر نیاز به تماس است و دکمه هنوز نیست، دکمه پشتیبانی را اضافه کن."""
+    html = cards_html or ""
+    if _cards_html_has_call_btn(html):
+        return html
+    if not reply_needs_support_call(
+        reply,
+        land_codes=land_codes,
+        agent_actions=agent_actions,
+        audience=audience,
+    ):
+        return html
+    btn = (
+        '<div class="ai-agent-actions mt-2.5 flex w-full max-w-full flex-col gap-2.5">'
+        f'<div class="ai-support-call">{support_call_btn_html(block=True)}</div>'
+        "</div>"
+    )
+    return html + btn
 
 
 def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
@@ -4478,8 +4598,11 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
         STATE_FAILED,
     ) or status != STATE_PENDING or not token or not token_active
 
-    # بازدید نهایی / ثبت بازدید — دکمه تماس هماهنگی در همه وضعیت‌های کارت
-    show_visit_call = atype == "confirm_visit" or bool(action.get("show_visit_call"))
+    # بازدید / انجام بازدید — دکمه تماس هماهنگی در همه وضعیت‌های کارت
+    show_visit_call = atype in (
+        "confirm_visit",
+        "confirm_complete_visit",
+    ) or bool(action.get("show_visit_call"))
     call_html = _visit_coord_call_btn_html() if show_visit_call else ""
 
     if terminal:

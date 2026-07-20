@@ -124,9 +124,3 @@ celerybeat.pid
 # Redis dump
 dump.rdb
 
-# مدل AI آفلاین (GGUF — حجم بالا)
-ai_models/*.gguf
-ai_models/**/*.gguf
-ai_models/.cache/
-ai_models/**/*.part
-
