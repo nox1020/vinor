@@ -25,10 +25,10 @@
     max-width: 100%;
     margin: 0;
   }
-  /* Case header مأموریت — پین بالای Conversation */
+  /* Case header مأموریت — پین زیر هدر شناور */
   #aiHomeInline #aiMessages .ai-msg-wrap[data-vn-journey-inject="1"] {
     position: sticky;
-    top: 0;
+    top: calc(0.45rem + 2.5rem + 0.15rem);
     z-index: 6;
     margin: 0 0 0.35rem;
     padding: 0.15rem 0 0.25rem;
@@ -84,6 +84,8 @@
     -ms-overflow-style: none;
     /* ارتفاع واقعی داک با JS در --vn-home-dock-h ست می‌شود + بافر تا کارت روی فوتر نیاید */
     padding-bottom: calc(var(--vn-home-dock-h, 8.5rem) + 1.25rem);
+    /* فضای هدر شناور — اسکرول از زیر منو */
+    scroll-padding-top: calc(0.45rem + 2.5rem + 0.55rem);
   }
   #homeDashboardPage.home-dashboard-page--ai .vn-home-scroll::-webkit-scrollbar {
     display: none;
@@ -115,7 +117,8 @@
     display: flex;
     flex-direction: column;
     gap: 1.35rem;
-    padding: 0.85rem 1rem 1.5rem;
+    /* از زیر هدر شناور (منو 2.5rem + فاصله) شروع شود */
+    padding: calc(0.45rem + 2.5rem + 0.55rem) 1rem 1.5rem;
     overflow: visible;
     min-height: 8rem;
   }

@@ -5,9 +5,10 @@ from app.keys import (
     get_deepseek_api_key,
 )
 
-from .audience import VOICE_PARTNER, VOICE_SPECIAL
+from .audience import VOICE_ADMIN, VOICE_PARTNER, VOICE_SPECIAL
 from .goal import (
     GEO_SCOPE_FA,
+    GOAL_ADMIN_SYSTEM,
     GOAL_SYSTEM,
     VISIT_COORD_PHONE,
 )
@@ -81,9 +82,35 @@ VINOR_AI_SPECIAL_PROMPT = f"""{GOAL_SYSTEM}
 {_SPECIAL_GUIDE}
 {_COMMON_RULES}"""
 
+_ADMIN_RULES = """
+قوانین عملیات:
+- فارسی کوتاه؛ لینک/مسیر صفحه نده — از ابزار + کارت تأیید جلو ببر.
+- اقدامات مخرب/ارسال فقط با propose_* و کارت؛ تا تأیید نزده نگو انجام شد.
+- فروش به مشتری / propose_visit مشتری نکن؛ آن کار چت public/partner است.
+- برای پیام همگانی: متن را از ادمین بگیر → propose_broadcast_sms یا propose_broadcast_push.
+- فایل جدید: فیلدهای الزامی را یکی‌یکی جمع کن سپس propose_add_express_listing.
+- کارت فایل ([[LAND]] / پیشنهاد ویژوال) نشان نده مگر ادمین صریحاً بگوید «کارت نشان بده» / «پیشنهاد بده» — آن‌وقت admin_search_lands با show_cards=true.
+- خلاصهٔ متنی فایل (کد، عنوان، قیمت) بدون کارت کافی است.
+- نگو «هوش مصنوعی» یا «چند ایجنت»."""
+
+VINOR_AI_ADMIN_PROMPT = f"""{GOAL_ADMIN_SYSTEM}
+
+مخاطب: ادمین لاگین‌شده — کنترل عملیات از همین چت.
+
+ابزار هسته (+کارت):
+admin_ops_summary | admin_search_lands | admin_partner_status |
+propose_broadcast_sms | propose_broadcast_push |
+propose_add_express_listing | propose_update_listing_status |
+propose_partner_decision | propose_visit_admin_action |
+propose_commission_action | answer_escalation
+
+{_ADMIN_RULES}"""
+
 
 def prompt_for_voice(voice: str | None) -> str:
     v = (voice or "").strip().lower()
+    if v == VOICE_ADMIN:
+        return VINOR_AI_ADMIN_PROMPT
     if v == VOICE_SPECIAL:
         return VINOR_AI_SPECIAL_PROMPT
     if v == VOICE_PARTNER:

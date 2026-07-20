@@ -1161,24 +1161,8 @@ def select_portal():
     """صفحه انتخاب پنل بعد از لاگین: وینور اصلی یا وینور اکسپرس."""
     return render_template('admin/select_portal.html')
 
-@admin_bp.route('', endpoint='admin_root', strict_slashes=False)
-@admin_bp.route('/', endpoint='dashboard', strict_slashes=False)
-@login_required
-def dashboard():
-    """Vinor Control — Mission Control (AI + ops snapshot)."""
-    ctx = _admin_dashboard_context()
-    ai_snap = {}
-    try:
-        from app.ai_console.service import dashboard_snapshot
 
-        ai_snap = dashboard_snapshot() or {}
-    except Exception:
-        ai_snap = {}
-    ctx['ai_snap'] = ai_snap
-    # aliases used by Mission Control widgets
-    ctx.setdefault('visits_today', ctx.get('pending_visits_count') or 0)
-    ctx.setdefault('deals_today', ctx.get('pending_commissions_count') or 0)
-    return render_template('admin/dashboard.html', **ctx)
+# dashboard / admin_root → admin.ops_chat_routes (چت عملیات)
 
 
 @admin_bp.route('/super-admin', endpoint='super_admin_info')

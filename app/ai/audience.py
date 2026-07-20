@@ -1,9 +1,7 @@
 """تشخیص مخاطب و لحن Vinor AI.
 
-سه لحن، یک هویت: بازاریاب فروش (هدف قفل در roadmap/AGENT_GOAL.md).
-- public: مشتری/مهمان — پیشنهاد فایل یا مسیر استخدام بازاریاب
-- partner: بازاریاب تأییدشده — دستیار روزانه فروش
-- special: مالک/فروشنده ویژه — همچنان فروش فایل سیستم
+- public / partner / special: بازاریاب فروش (هدف قفل در roadmap/AGENT_GOAL.md)
+- admin: دستیار عملیات پنل ادمین — نه فروش مشتری
 """
 from __future__ import annotations
 
@@ -11,11 +9,13 @@ from typing import Any
 
 AUDIENCE_PARTNER = "partner"
 AUDIENCE_PUBLIC = "public"
+AUDIENCE_ADMIN = "admin"
 
 # لحن گفتگو (جدا از کلید ذخیره‌سازی چت)
 VOICE_PUBLIC = "public"
 VOICE_PARTNER = "partner"
 VOICE_SPECIAL = "special"
+VOICE_ADMIN = "admin"
 
 
 def _norm_phone(phone: str) -> str:
@@ -60,7 +60,7 @@ def resolve_audience_for_session(
     partner_profile: dict[str, Any] | None = None,
     force: str | None = None,
 ) -> str:
-    if force in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC):
+    if force in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC, AUDIENCE_ADMIN):
         return force
     if partner_profile is not None and is_express_partner_profile(partner_profile):
         return AUDIENCE_PARTNER
@@ -78,11 +78,12 @@ def resolve_ai_voice(
     audience: str | None = None,
 ) -> str:
     """
-    لحن پاسخ — هر سه همان هویت بازاریاب فروش (AGENT_GOAL.md):
-    - public: مشتری / خریدار / مسیر استخدام
-    - partner: بازاریاب تأییدشده — دستیار روزانه فروش
-    - special: مالک/فروشنده ویژه — همچنان فروش فایل سیستم
+    لحن پاسخ:
+    - admin: دستیار عملیات (نه فروش مشتری)
+    - public / partner / special: بازاریاب فروش (AGENT_GOAL.md)
     """
+    if audience == AUDIENCE_ADMIN:
+        return VOICE_ADMIN
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else None
     prof = partner_profile
     if prof is None and phone:

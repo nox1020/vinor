@@ -14,6 +14,10 @@ except Exception:
 # Attach route modules (side-effect imports register routes on admin_bp)
 from . import routes  # core/admin basics, lands, settings, consults, auth (existing)
 try:
+    from . import ops_chat_routes  # Admin ops chat (home dashboard)
+except Exception:
+    pass
+try:
     from . import sms_campaign  # sms campaign page
 except Exception:
     pass

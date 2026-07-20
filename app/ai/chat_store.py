@@ -10,7 +10,7 @@ from typing import Any
 
 from flask import current_app
 
-from app.ai.audience import AUDIENCE_PARTNER, AUDIENCE_PUBLIC
+from app.ai.audience import AUDIENCE_ADMIN, AUDIENCE_PARTNER, AUDIENCE_PUBLIC
 from app.ai.paths import ai_data_file
 
 _MAX_MESSAGES = 200  # Chat-First: keep longer case history in-thread
@@ -36,7 +36,11 @@ def _chats_dir() -> str:
 
 
 def _normalize_audience(audience: str | None) -> str:
-    return audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    return (
+        audience
+        if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC, AUDIENCE_ADMIN)
+        else AUDIENCE_PARTNER
+    )
 
 
 def _storage_key(user_key: str) -> str:
@@ -617,8 +621,10 @@ def _enrich_messages_for_ui(
     audience: str | None = None,
 ) -> list[dict[str, Any]]:
     from app.ai.agent_tools import render_agent_actions_html
+    from app.ai.audience import AUDIENCE_ADMIN
     from app.ai.land_cards import land_cards_payload
 
+    aud = (audience or "").strip().lower()
     out: list[dict[str, Any]] = []
     for item in messages or []:
         if not isinstance(item, dict):
@@ -626,16 +632,24 @@ def _enrich_messages_for_ui(
         row = dict(item)
         codes = row.get("land_codes") or []
         actions = row.get("agent_actions") or []
-        if row.get("role") == "assistant" and (codes or actions):
+        # ادمین: کارت فایل فقط با meta.show_land_cards؛ کارت تأیید اکشن می‌ماند
+        show_land = aud != AUDIENCE_ADMIN or bool(
+            (row.get("meta") or {}).get("show_land_cards")
+            if isinstance(row.get("meta"), dict)
+            else False
+        )
+        if row.get("role") == "assistant" and ((codes and show_land) or actions):
             try:
                 from app.ai.land_cards import render_land_cards_html
 
                 parts: list[str] = []
-                if codes:
+                if codes and show_land:
                     row["land_cards"] = land_cards_payload(user_key, codes, audience=audience)
                     land_html = render_land_cards_html(user_key, codes, audience=audience) or ""
                     if land_html:
                         parts.append(land_html)
+                elif codes and not show_land:
+                    row.pop("land_cards", None)
                 if isinstance(actions, list) and actions:
                     actions_html = render_agent_actions_html(actions) or ""
                     if actions_html:
@@ -749,6 +763,9 @@ def append_exchange(
         }
         if codes:
             entry["land_codes"] = codes
+            # ادمین: فقط وقتی land_codes عمداً پاس شده (show_cards) کارت نشان بده
+            if (audience or "").strip().lower() == "admin":
+                entry["meta"] = {"show_land_cards": True}
         if actions:
             entry["agent_actions"] = actions
         msgs.append(entry)

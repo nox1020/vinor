@@ -26,6 +26,7 @@ from .agent_tools import (
     try_continue_visit_from_user_message,
 )
 from .audience import (
+    AUDIENCE_ADMIN,
     AUDIENCE_PARTNER,
     AUDIENCE_PUBLIC,
     resolve_ai_voice,
@@ -206,7 +207,11 @@ def _build_system_prompt(
     user_message: str = "",
     thread_id: str | None = None,
 ) -> str:
-    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    aud = (
+        audience
+        if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC, AUDIENCE_ADMIN)
+        else AUDIENCE_PARTNER
+    )
     if not user_key:
         return ""
     max_ctx = budget_config()["max_context_chars"]
@@ -247,6 +252,9 @@ def _build_system_prompt(
         cached_core = _get_prompt_cache(core_cache_key)
         if cached_core is not None:
             ctx = cached_core
+        elif aud == AUDIENCE_ADMIN:
+            ctx = _build_admin_ops_context()
+            _set_prompt_cache(core_cache_key, ctx)
         elif aud == AUDIENCE_PARTNER:
             base = get_partner_context_base(
                 user_key,
@@ -424,6 +432,33 @@ def _get_planning_obs() -> dict[str, Any]:
     }
 
 
+def _build_admin_ops_context() -> str:
+    """خلاصهٔ کوتاه صف عملیات برای prompt ادمین."""
+    try:
+        from .admin_tools import _tool_ops_summary
+
+        out = _tool_ops_summary()
+        model = out.get("model_result") if isinstance(out, dict) else None
+        if not isinstance(model, dict) or not model.get("ok"):
+            return "مخاطب: ادمین عملیات وینور."
+        return (
+            "مخاطب: ادمین عملیات وینور.\n"
+            f"صف: همکاران معلق={model.get('pending_partner_apps', 0)}، "
+            f"بازدید={model.get('pending_visits', 0)}، "
+            f"پورسانت={model.get('pending_commissions', 0)}، "
+            f"برداشت={model.get('open_withdrawals', 0)}، "
+            f"escalation={model.get('pending_escalations', 0)}."
+        )
+    except Exception:
+        return "مخاطب: ادمین عملیات وینور."
+
+
+def _normalize_chat_audience(audience: str | None) -> str:
+    if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC, AUDIENCE_ADMIN):
+        return audience
+    return AUDIENCE_PARTNER
+
+
 def _trim_history_content(role: str, content: str, cfg: dict[str, Any]) -> str:
     text = (content or "").strip()
     if role == "assistant":
@@ -446,7 +481,7 @@ def _build_messages(
     chip_intent: str | None = None,
     thread_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    aud = _normalize_chat_audience(audience)
     cfg = budget_config()
     resolved_voice = voice or resolve_ai_voice(phone=user_key or "", audience=aud)
     base_prompt = prompt_for_voice(resolved_voice)
@@ -875,8 +910,8 @@ def _run_agent_loop(
                 from app.ai.card_registry import normalize_card
 
                 agent_actions.append(normalize_card(ui))
-            # کارت فایل فقط از جستجو — نه از اکشن‌های فروش/آگهی
-            if name == "search_lands":
+            # کارت فایل: جستجوی فروش یا جستجوی ادمین با show_cards
+            if name in ("search_lands", "admin_search_lands"):
                 for code in tool_out.get("land_codes") or []:
                     c = str(code).strip()
                     if c and c not in tool_land_codes:
@@ -994,7 +1029,7 @@ def generate_reply(
 ) -> dict[str, Any]:
     started = time.perf_counter()
     key = (user_key or phone or "").strip()
-    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    aud = _normalize_chat_audience(audience)
     voice = resolve_ai_voice(phone=key, audience=aud)
 
     text = (message or "").strip()
@@ -1009,9 +1044,10 @@ def generate_reply(
         g.ai_tool_thread_id = (thread_id or "").strip() or None
         g.ai_tool_audience = aud
         g.ai_last_user_message = text
-        focus0 = resolve_conversation_land_code(key, thread_id=thread_id)
-        if focus0:
-            g.ai_focus_land_code = focus0
+        if aud != AUDIENCE_ADMIN:
+            focus0 = resolve_conversation_land_code(key, thread_id=thread_id)
+            if focus0:
+                g.ai_focus_land_code = focus0
     except Exception:
         pass
 
@@ -1019,30 +1055,41 @@ def generate_reply(
     if not cfg["enabled"]:
         return {"ok": False, "error": "سرویس هوش مصنوعی موقتاً غیرفعال است."}
 
-    guard = apply_credit_guard(key, aud, text)
-    if guard is not None:
-        if guard.get("ok") and guard.get("land_codes"):
-            codes = guard.get("land_codes") or []
-            guard["land_cards"] = land_cards_payload(key, codes, audience=aud)
-            try:
-                from .land_cards import render_land_cards_html
+    if aud != AUDIENCE_ADMIN:
+        guard = apply_credit_guard(key, aud, text)
+        if guard is not None:
+            if guard.get("ok") and guard.get("land_codes"):
+                codes = guard.get("land_codes") or []
+                guard["land_cards"] = land_cards_payload(key, codes, audience=aud)
+                try:
+                    from .land_cards import render_land_cards_html
 
-                land_html = render_land_cards_html(key, codes, audience=aud) or ""
-                if land_html:
-                    prev = str(guard.get("cards_html") or "")
-                    guard["cards_html"] = land_html + prev
+                    land_html = render_land_cards_html(key, codes, audience=aud) or ""
+                    if land_html:
+                        prev = str(guard.get("cards_html") or "")
+                        guard["cards_html"] = land_html + prev
+                except Exception:
+                    pass
+            try:
+                guard["cards_html"] = append_support_call_if_needed(
+                    str(guard.get("cards_html") or ""),
+                    str(guard.get("reply") or guard.get("error") or ""),
+                    land_codes=list(guard.get("land_codes") or []),
+                    audience=aud,
+                )
             except Exception:
                 pass
+            return guard
+    else:
+        err = None
         try:
-            guard["cards_html"] = append_support_call_if_needed(
-                str(guard.get("cards_html") or ""),
-                str(guard.get("reply") or guard.get("error") or ""),
-                land_codes=list(guard.get("land_codes") or []),
-                audience=aud,
-            )
+            from .credits import validate_message_length
+
+            err = validate_message_length(text)
         except Exception:
-            pass
-        return guard
+            err = None
+        if err:
+            return {"ok": False, "error": err}
 
     from .intents import normalize_chip_intent
 
@@ -1050,48 +1097,49 @@ def generate_reply(
     # Conversation Engine (Phase 11.5): before Supervisor — form workflows via chat.
     conversation_handled = False
     try:
-        from app.conversation.service import try_conversation_engine
+        if aud != AUDIENCE_ADMIN:
+            from app.conversation.service import try_conversation_engine
 
-        ce = try_conversation_engine(
-            message=text,
-            user_key=key,
-            audience=aud,
-            voice=voice,
-            chip_intent=intent or "",
-            thread_id=thread_id,
-        )
-        if isinstance(ce, dict) and ce.get("ok") and ce.get("handled") and not ce.get("pass_to_supervisor"):
-            conversation_handled = True
-            # Executive + Goals still run (objects outside prompt); then early return.
-            try:
-                from app.executive.service import plan_execution
-                from app.goals.service import run_goals
+            ce = try_conversation_engine(
+                message=text,
+                user_key=key,
+                audience=aud,
+                voice=voice,
+                chip_intent=intent or "",
+                thread_id=thread_id,
+            )
+            if isinstance(ce, dict) and ce.get("ok") and ce.get("handled") and not ce.get("pass_to_supervisor"):
+                conversation_handled = True
+                # Executive + Goals still run (objects outside prompt); then early return.
+                try:
+                    from app.executive.service import plan_execution
+                    from app.goals.service import run_goals
 
-                plan_execution(
-                    message=text,
-                    audience=aud,
-                    intent=intent or "",
-                    conversation_handled=True,
-                )
-                run_goals(
-                    message=text,
-                    user_key=key,
-                    audience=aud,
-                    intent=intent or "",
-                )
-            except Exception:
-                pass
-            meta = dict(ce.get("meta") or {"provider": "conversation_engine"})
-            meta.setdefault("workflow_form_only", True)
-            meta.setdefault("persists_business", False)
-            return {
-                "ok": True,
-                "reply": str(ce.get("reply") or "").strip(),
-                "land_codes": [],
-                "land_cards": [],
-                "agent_actions": list(ce.get("agent_actions") or []),
-                "meta": meta,
-            }
+                    plan_execution(
+                        message=text,
+                        audience=aud,
+                        intent=intent or "",
+                        conversation_handled=True,
+                    )
+                    run_goals(
+                        message=text,
+                        user_key=key,
+                        audience=aud,
+                        intent=intent or "",
+                    )
+                except Exception:
+                    pass
+                meta = dict(ce.get("meta") or {"provider": "conversation_engine"})
+                meta.setdefault("workflow_form_only", True)
+                meta.setdefault("persists_business", False)
+                return {
+                    "ok": True,
+                    "reply": str(ce.get("reply") or "").strip(),
+                    "land_codes": [],
+                    "land_cards": [],
+                    "agent_actions": list(ce.get("agent_actions") or []),
+                    "meta": meta,
+                }
     except Exception as exc:
         try:
             current_app.logger.warning(
@@ -1224,7 +1272,7 @@ def generate_reply(
         except Exception:
             pass
     # ادامهٔ مرحله‌ای بازدید (نام/موبایل/تاریخ) بدون اینکه مدل دوباره نام‌خانوادگی بپرسد
-    if intent != "visit" and key:
+    if intent != "visit" and key and aud != AUDIENCE_ADMIN:
         try:
             from flask import g
 
@@ -1567,6 +1615,14 @@ def generate_reply(
             if c and c not in land_codes:
                 land_codes.append(c)
     land_codes = land_codes[:5]
+    # ادمین: کارت فایل فقط وقتی ابزار صریحاً land_codes برگرداند (show_cards)
+    if aud == AUDIENCE_ADMIN:
+        allowed = [
+            str(c).strip()
+            for c in (result.get("tool_land_codes") or [])
+            if str(c).strip()
+        ]
+        land_codes = [c for c in land_codes if c in allowed][:5]
 
     from app.ai.card_registry import normalize_card
 
@@ -1635,6 +1691,8 @@ def generate_reply(
     card_parts: list[str] = []
     if land_codes:
         result["land_codes"] = land_codes
+        if aud == AUDIENCE_ADMIN:
+            result["show_land_cards"] = True
         result["land_cards"] = land_cards_payload(key, land_codes, audience=aud)
         try:
             from .land_cards import render_land_cards_html
@@ -1644,6 +1702,9 @@ def generate_reply(
                 card_parts.append(land_html)
         except Exception:
             pass
+    elif aud == AUDIENCE_ADMIN:
+        result["land_codes"] = []
+        result["land_cards"] = []
     if agent_actions:
         result["agent_actions"] = agent_actions
         try:

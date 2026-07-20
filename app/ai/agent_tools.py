@@ -11,8 +11,10 @@ from flask import current_app
 from markupsafe import escape
 
 from app.ai.audience import (
+    AUDIENCE_ADMIN,
     AUDIENCE_PARTNER,
     AUDIENCE_PUBLIC,
+    VOICE_ADMIN,
     VOICE_PARTNER,
     VOICE_PUBLIC,
     VOICE_SPECIAL,
@@ -279,9 +281,16 @@ def _never_ask_land_instruction(phone: str = "") -> str:
 
 def agent_system_hint(voice: str | None) -> str:
     """یادآوری کوتاه هدف قفل — جزئیات در goal.py / config."""
-    from .goal import GOAL_SYSTEM
+    from .goal import GOAL_ADMIN_SYSTEM, GOAL_SYSTEM
 
     v = (voice or "").strip().lower()
+    if v == VOICE_ADMIN:
+        return (
+            f"{GOAL_ADMIN_SYSTEM} "
+            "پیام همگانی→propose_broadcast_* | فایل→propose_add/update | "
+            "همکار→propose_partner_decision | بازدید/مالی/escalation با کارت. "
+            "تا تأیید نزده نگو انجام شد."
+        )
     if v == VOICE_PUBLIC:
         path = (
             "مهمان: خرید→search_lands (حداکثر ۲)→نزدیک‌ترین را با [[LAND]] معرفی کن | "
@@ -298,12 +307,12 @@ def agent_system_hint(voice: str | None) -> str:
 
 
 def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
-    """فقط ابزارهای هستهٔ فروش — هدف: یک بازاریاب از چت.
-
-    ابزارهای commercial/closing/integration/visit_result در schema چت نیستند
-    (handler برای کارت‌های قدیمی می‌ماند).
-    """
+    """Schema ابزار چت — فروش (public/partner) یا عملیات ادمین."""
     v = (voice or "").strip().lower()
+    if v == VOICE_ADMIN:
+        from .admin_tools import tools_schema_admin
+
+        return tools_schema_admin()
     schemas: list[dict[str, Any]] = [_schema_search()]
     if v == VOICE_PUBLIC:
         schemas.append(_schema_coop_info())
@@ -788,6 +797,13 @@ def run_tool(
     except Exception:
         pass
     try:
+        if (voice or "").strip().lower() == VOICE_ADMIN or (
+            audience or ""
+        ).strip().lower() == AUDIENCE_ADMIN:
+            from .admin_tools import CORE_ADMIN_TOOL_NAMES, run_admin_tool
+
+            if n in CORE_ADMIN_TOOL_NAMES:
+                return run_admin_tool(n, args, admin_key=phone)
         if n == TOOL_SEARCH:
             return _tool_search_lands(args, phone=phone, audience=audience)
         if n == TOOL_COOP_INFO:
@@ -3537,6 +3553,13 @@ def confirm_action_from_token(*, phone: str, token: str) -> dict[str, Any]:
         return _confirm_task(phone=me, token=token, pending=pending)
     if action_type == "confirm_partner_application":
         return _confirm_partner_application(phone=me, token=token, pending=pending)
+    try:
+        from .admin_tools import ADMIN_CONFIRM_TYPES, confirm_admin_action
+
+        if action_type in ADMIN_CONFIRM_TYPES:
+            return confirm_admin_action(admin_key=me, token=token)
+    except Exception:
+        pass
     if action_type not in _SIMPLE_TX_META:
         return {"ok": False, "error": "نوع اقدام نامعتبر است."}
 
@@ -4355,6 +4378,8 @@ def reply_needs_support_call(
     audience: str | None = None,
 ) -> bool:
     """آیا این پاسخ نیاز به دکمه تماس پشتیبانی دارد؟"""
+    if (audience or "").strip().lower() == AUDIENCE_ADMIN:
+        return False
     text = str(reply or "")
     phone = support_call_phone()
     if phone and phone in text:
@@ -4446,6 +4471,14 @@ def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
             "confirm_settlement",
             "confirm_lead",
             "confirm_task",
+            "confirm_broadcast_sms",
+            "confirm_broadcast_push",
+            "confirm_add_express_listing",
+            "confirm_update_listing_status",
+            "confirm_partner_decision",
+            "confirm_visit_admin_action",
+            "confirm_commission_action",
+            "confirm_answer_escalation",
         ):
             parts.append(_render_confirm_action_card(action))
         elif atype == "need_login":
@@ -4557,6 +4590,14 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
         "confirm_settlement": "تأیید باز کردن تسویه",
         "confirm_lead": "تأیید ثبت لید",
         "confirm_task": "تأیید ثبت وظیفه",
+        "confirm_broadcast_sms": "تأیید ارسال پیامک همگانی",
+        "confirm_broadcast_push": "تأیید ارسال پوش همگانی",
+        "confirm_add_express_listing": "تأیید افزودن فایل",
+        "confirm_update_listing_status": "تأیید تغییر وضعیت فایل",
+        "confirm_partner_decision": "تأیید تصمیم همکار",
+        "confirm_visit_admin_action": "تأیید اقدام بازدید",
+        "confirm_commission_action": "تأیید اقدام مالی",
+        "confirm_answer_escalation": "تأیید پاسخ escalation",
     }
     title = escape(str(action.get("title") or defaults.get(atype) or "تأیید اقدام"))
     confirm_label = escape(str(action.get("confirm_label") or "تأیید و ثبت").strip() or "تأیید و ثبت")

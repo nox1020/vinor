@@ -73,7 +73,7 @@
 
       <a href="{{ url_for('admin.dashboard') }}" class="hidden sm:flex items-center gap-2 shrink-0">
         <span class="font-bold text-sm tracking-tight text-white">Vinor</span>
-        <span class="text-[10px] font-semibold text-signal uppercase tracking-wider">Control</span>
+        <span class="text-[10px] font-semibold text-signal uppercase tracking-wider">Ops</span>
       </a>
 
       <h1 class="sm:hidden text-sm font-semibold truncate min-w-0" data-i18n="{% block page_title_i18n %}nav.command{% endblock %}">
@@ -175,27 +175,27 @@
     <div class="grid grid-cols-5 gap-0 px-1 py-1">
       {% set ep = request.endpoint or '' %}
       <a href="{{ url_for('admin.dashboard') }}" class="{% if ep == 'admin.dashboard' %}is-active{% endif %}">
-        <i class="fa-solid fa-satellite-dish text-base"></i>
-        <span data-i18n="bottom.command"></span>
+        <i class="fa-solid fa-comments text-base"></i>
+        <span>چت</span>
       </a>
-      <a href="{{ url_for('admin.ai_console_dashboard') }}"
-         class="{% if ep and ep.startswith('admin.ai_console_') %}is-active{% endif %}">
-        <i class="fa-solid fa-brain text-base"></i>
-        <span data-i18n="bottom.ai"></span>
+      <a href="{{ url_for('admin.express_listings') }}"
+         class="{% if ep in ['admin.express_listings', 'admin.add_express_listing', 'admin.edit_express_listing'] %}is-active{% endif %}">
+        <i class="fa-solid fa-building text-base"></i>
+        <span>فایل</span>
       </a>
-      <a href="{{ url_for('admin.control_market') }}"
-         class="{% if ep and (ep.startswith('admin.control_market') or ep in ['admin.express_listings', 'admin.express_visit_requests', 'admin.express_commissions', 'admin.financial_withdrawals']) %}is-active{% endif %}">
-        <i class="fa-solid fa-layer-group text-base"></i>
-        <span data-i18n="bottom.market"></span>
+      <a href="{{ url_for('admin.express_partners') }}"
+         class="{% if ep in ['admin.express_partners', 'admin.express_partner_detail'] %}is-active{% endif %}">
+        <i class="fa-solid fa-user-group text-base"></i>
+        <span>همکار</span>
       </a>
-      <a href="{{ url_for('admin.ai_console_errors') }}"
-         class="{% if ep in ['admin.ai_console_errors', 'admin.ai_console_timeline', 'admin.ai_console_audit', 'admin.audit_log'] %}is-active{% endif %}">
-        <i class="fa-solid fa-wave-square text-base"></i>
-        <span data-i18n="bottom.observe"></span>
+      <a href="{{ url_for('admin.express_visit_requests') }}"
+         class="{% if ep == 'admin.express_visit_requests' %}is-active{% endif %}">
+        <i class="fa-solid fa-route text-base"></i>
+        <span>بازدید</span>
       </a>
-      <a href="{{ url_for('admin.control_more') }}" class="{% if ep == 'admin.control_more' %}is-active{% endif %}">
-        <i class="fa-solid fa-ellipsis text-base"></i>
-        <span data-i18n="bottom.more"></span>
+      <a href="{{ url_for('admin.settings') }}" class="{% if ep == 'admin.settings' %}is-active{% endif %}">
+        <i class="fa-solid fa-gear text-base"></i>
+        <span>تنظیمات</span>
       </a>
     </div>
   </nav>
@@ -203,18 +203,7 @@
   {% endblock admin_bottom_nav %}
 
   {% block control_fab %}
-  <div class="vc-fab" x-data="{ fabOpen: false }">
-    <button type="button" class="vc-fab-main focusable" @click="fabOpen = !fabOpen" data-i18n-aria="common.quick_actions">
-      <i class="fa-solid" :class="fabOpen ? 'fa-xmark' : 'fa-bolt'"></i>
-    </button>
-    <template x-if="fabOpen">
-      <div class="flex flex-col-reverse gap-2">
-        <a href="{{ url_for('admin.ai_console_tools') }}" class="vc-fab-sec" data-i18n-title="fab.confirms"><i class="fa-solid fa-check-double text-sm"></i></a>
-        <a href="{{ url_for('admin.express_visit_requests') }}" class="vc-fab-sec" data-i18n-title="fab.visits"><i class="fa-solid fa-route text-sm"></i></a>
-        <button type="button" @click="openCmd(); fabOpen=false" class="vc-fab-sec" data-i18n-title="fab.command"><i class="fa-solid fa-terminal text-sm"></i></button>
-      </div>
-    </template>
-  </div>
+  {# ops chat home — FAB Mission Control خاموش #}
   {% endblock control_fab %}
 
   <div x-show="notifOpen" @click="notifOpen = false" class="fixed inset-0 z-50 bg-black/40" x-cloak></div>

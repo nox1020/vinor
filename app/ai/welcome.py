@@ -24,13 +24,23 @@ _OPENING_PUBLIC = (
     "۲) می‌خواهی بازاریاب شوی و بفروشی — بگو تا راهنمایی‌ات کنم."
 )
 
+_OPENING_ADMIN = (
+    "سلام — دستیار عملیات وینور.\n"
+    "از همین چت می‌توانی: پیام همگانی بفرستی، فایل اضافه کنی، "
+    "همکار را تأیید کنی، بازدید/مالی را جلو ببری یا به escalation پاسخ بدهی.\n"
+    "بگو چه کار کنیم؟"
+)
+
 
 def opening_text(
     *,
     is_approved: bool = False,
     has_pending_app: bool = False,
+    audience: str | None = None,
 ) -> str:
     """متن شروع‌کنندهٔ وینور بر اساس وضعیت مخاطب."""
+    if (audience or "").strip().lower() == "admin":
+        return _OPENING_ADMIN
     if is_approved:
         return _OPENING_PARTNER
     if has_pending_app:
@@ -64,6 +74,7 @@ def ensure_vinor_opens_chat(
     body = (text or "").strip() or opening_text(
         is_approved=is_approved,
         has_pending_app=has_pending_app,
+        audience=audience,
     )
     return ensure_vinor_opening(
         user_key,

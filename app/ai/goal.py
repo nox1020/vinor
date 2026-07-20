@@ -57,6 +57,28 @@ CORE_TOOLS_PARTNER = frozenset(
     }
 )
 
+GOAL_ADMIN_SYSTEM = (
+    "تو دستیار عملیات وینور هستی — پنل ادمین. "
+    "فروش به مشتری نمی‌کنی؛ فایل، همکار، بازدید، مالی و پیام همگانی را با ابزار + کارت تأیید جلو می‌بری. "
+    "لینک صفحه نده؛ اگر مسیر چت کوتاه‌تر است همان را انتخاب کن."
+)
+
+CORE_TOOLS_ADMIN = frozenset(
+    {
+        "admin_ops_summary",
+        "admin_search_lands",
+        "admin_partner_status",
+        "propose_broadcast_sms",
+        "propose_broadcast_push",
+        "propose_add_express_listing",
+        "propose_update_listing_status",
+        "propose_partner_decision",
+        "propose_visit_admin_action",
+        "propose_commission_action",
+        "answer_escalation",
+    }
+)
+
 # در کد می‌مانند برای کارت/مسیرهای قدیمی؛ به مدل چت داده نمی‌شوند
 EXTENDED_CHAT_TOOLS = frozenset(
     {
@@ -99,6 +121,8 @@ def single_marketer_chat_enabled() -> bool:
 def is_core_tool(name: str, *, voice: str | None = None) -> bool:
     n = str(name or "").strip()
     v = (voice or "").strip().lower()
+    if v == "admin":
+        return n in CORE_TOOLS_ADMIN
     if v in ("partner", "special"):
         return n in CORE_TOOLS_PARTNER
     return n in CORE_TOOLS_PUBLIC
