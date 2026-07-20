@@ -158,14 +158,20 @@ def chat():
 
 @ai_bp.post("/clear", endpoint="clear")
 def clear():
-    from app.ai.chat_store import clear_chat
+    from app.ai.chat_store import clear_chat, messages_for_ui
     from app.ai.http_errors import ai_chat_http_status
+    from app.ai.welcome import opening_text
 
     key = ai_user_key()
-    out = clear_chat(key, audience=AUDIENCE_PUBLIC)
+    opening = opening_text()
+    out = clear_chat(key, audience=AUDIENCE_PUBLIC, opening_text=opening)
     if not out.get("ok"):
         return jsonify(out), ai_chat_http_status(out)
-    return jsonify({"ok": True, "thread_id": out.get("thread_id")})
+    tid = out.get("thread_id")
+    msgs = out.get("messages")
+    if msgs is None:
+        msgs = messages_for_ui(key, thread_id=tid, audience=AUDIENCE_PUBLIC)
+    return jsonify({"ok": True, "thread_id": tid, "messages": msgs})
 
 
 @ai_bp.post("/agent/confirm", endpoint="agent_confirm")

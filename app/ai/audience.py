@@ -1,4 +1,10 @@
-"""تشخیص مخاطب و لحن Vinor AI: مشتری | همکار | همکار ویژه."""
+"""تشخیص مخاطب و لحن Vinor AI.
+
+سه لحن، یک هویت: بازاریاب فروش (هدف قفل در roadmap/AGENT_GOAL.md).
+- public: مشتری/مهمان — پیشنهاد فایل یا مسیر استخدام بازاریاب
+- partner: بازاریاب تأییدشده — دستیار روزانه فروش
+- special: مالک/فروشنده ویژه — همچنان فروش فایل سیستم
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -72,10 +78,10 @@ def resolve_ai_voice(
     audience: str | None = None,
 ) -> str:
     """
-    لحن پاسخ:
-    - public: مشتری / خریدار
-    - partner: همکار پورسانت‌گیر (واسط فروشنده و خریدار)
-    - special: همکار ویژه (مالک/فروشنده با بیشترین دسترسی)
+    لحن پاسخ — هر سه همان هویت بازاریاب فروش (AGENT_GOAL.md):
+    - public: مشتری / خریدار / مسیر استخدام
+    - partner: بازاریاب تأییدشده — دستیار روزانه فروش
+    - special: مالک/فروشنده ویژه — همچنان فروش فایل سیستم
     """
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else None
     prof = partner_profile

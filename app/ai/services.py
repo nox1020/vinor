@@ -1,4 +1,9 @@
-"""منطق هوش مصنوعی وینور — DeepSeek API."""
+"""منطق هوش مصنوعی وینور — DeepSeek API.
+
+هدف محصول قفل: app/ai/goal.py · roadmap/AGENT_GOAL.md
+یک ایجنت = یک بازاریاب؛ فروش فایل سیستم از چت.
+Hintهای داخلی (parallel/decision/…) فقط کمک فروش‌اند — هویت چندایجنتی به کاربر نمی‌روند.
+"""
 from __future__ import annotations
 
 import json
@@ -30,6 +35,7 @@ from .config import (
     get_deepseek_api_key,
     prompt_for_voice,
 )
+from .goal import single_marketer_chat_enabled, wrap_internal_hint
 from .context import (
     append_admin_answers_block,
     build_partner_context_base,
@@ -86,6 +92,13 @@ _TOOL_RESULT_DROP_KEYS = frozenset(
         "payload",
     }
 )
+
+
+def _append_sales_hint(messages: list[dict[str, Any]], content: str | None) -> None:
+    """Hint داخلی را زیر هویت تک‌بازاریاب به پیام‌ها اضافه کن."""
+    wrapped = wrap_internal_hint(content)
+    if wrapped:
+        messages.append({"role": "system", "content": wrapped})
 
 
 def _compact_tool_model_payload(payload: Any) -> Any:
@@ -444,7 +457,7 @@ def _build_messages(
 
         hint = hint_for_chip_intent(chip_intent)
         if hint:
-            messages.append({"role": "system", "content": hint})
+            _append_sales_hint(messages, hint)
     if user_key:
         ctx = _build_system_prompt(
             user_key, audience, user_message=text, thread_id=thread_id
@@ -635,6 +648,8 @@ def _call_deepseek(
     messages: list[dict[str, Any]],
     *,
     tools: list[dict[str, Any]] | None = None,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
 ) -> dict[str, Any]:
     api_key = get_deepseek_api_key()
     if not api_key:
@@ -658,8 +673,8 @@ def _call_deepseek(
         "model": model,
         "messages": messages,
         "stream": False,
-        "max_tokens": bcfg["max_tokens"],
-        "temperature": bcfg["temperature"],
+        "max_tokens": int(max_tokens) if max_tokens is not None else bcfg["max_tokens"],
+        "temperature": float(temperature) if temperature is not None else bcfg["temperature"],
     }
     if tools:
         payload["tools"] = tools
@@ -1286,182 +1301,184 @@ def generate_reply(
     if plan_out is not None:
         _set_planning_obs(plan_out)
         if inject_hint and plan_out.compact_hint:
-            messages.append({"role": "system", "content": plan_out.compact_hint})
+            _append_sales_hint(messages, plan_out.compact_hint)
         if seed_tools and plan_out.seed_messages:
             messages.extend(plan_out.seed_messages)
-    # Agents → Prompt hints. Phase 16: Parallel merge hint only (no per-agent re-run/re-hint).
-    try:
-        from app.agents.parallel.config import parallel_enabled
-        from app.agents.parallel.service import get_parallel_merge_hint, get_parallel_obs
-        from app.agents.service import get_agent_obs
-
-        aobs = get_agent_obs()
-        selected = str(aobs.get("selected_agent") or "")
-        parallel_obs = get_parallel_obs() if parallel_enabled() else {}
-        # Phase 17: prefer Decision hint (replaces parallel merge hint when present).
+    # Agents/Decision/Parallel → Prompt hints: سایهٔ فنی؛ هویت محصول = یک بازاریاب.
+    # با VINOR_SINGLE_MARKETER_CHAT=1 (پیش‌فرض) hint چندایجنت به messages تزریق نمی‌شود.
+    if not single_marketer_chat_enabled():
         try:
-            from app.decision.config import decision_enabled
-            from app.decision.service import get_decision_hint, get_decision_obs
+            from app.agents.parallel.config import parallel_enabled
+            from app.agents.parallel.service import get_parallel_merge_hint, get_parallel_obs
+            from app.agents.service import get_agent_obs
 
-            if decision_enabled() and get_decision_obs().get("selected_property"):
-                dhint = get_decision_hint()
-                if dhint:
-                    messages.append({"role": "system", "content": dhint})
+            aobs = get_agent_obs()
+            selected = str(aobs.get("selected_agent") or "")
+            parallel_obs = get_parallel_obs() if parallel_enabled() else {}
+            # Phase 17: prefer Decision hint (replaces parallel merge hint when present).
+            try:
+                from app.decision.config import decision_enabled
+                from app.decision.service import get_decision_hint, get_decision_obs
+
+                if decision_enabled() and get_decision_obs().get("selected_property"):
+                    dhint = get_decision_hint()
+                    if dhint:
+                        _append_sales_hint(messages, dhint)
+                    elif parallel_obs.get("merged_agents"):
+                        phint = get_parallel_merge_hint()
+                        if phint:
+                            _append_sales_hint(messages, phint)
                 elif parallel_obs.get("merged_agents"):
                     phint = get_parallel_merge_hint()
                     if phint:
-                        messages.append({"role": "system", "content": phint})
-            elif parallel_obs.get("merged_agents"):
-                phint = get_parallel_merge_hint()
-                if phint:
-                    messages.append({"role": "system", "content": phint})
-        except Exception:
-            if parallel_obs.get("merged_agents"):
-                phint = get_parallel_merge_hint()
-                if phint:
-                    messages.append({"role": "system", "content": phint})
-        # Sequential per-agent hints only when Parallel did not merge (Decision may still apply above).
-        if not parallel_obs.get("merged_agents"):
-            from app.agents.analysis.service import get_analysis_hint, should_run_analysis
-
-            route_now = str((aobs.get("agent_reason") or ""))
-            try:
-                from app.supervisor.service import get_supervisor_obs
-
-                route_now = str(get_supervisor_obs().get("routed_workflow") or route_now)
+                        _append_sales_hint(messages, phint)
             except Exception:
-                pass
-            need_analysis = selected in ("property_analysis", "recommendation") or should_run_analysis(
-                route=route_now, message=text, chip_intent=intent or ""
-            )
-            analysis_categories = []
-            codes = []
-            if plan_out is not None:
-                codes = [str(c).strip() for c in (plan_out.land_codes or []) if str(c).strip()]
-            shared = {
-                "pipeline": "planning|memory|rag|tools|llm",
-                "property_search_agent": True,
-                "search_handoff": True,
-                "reused_rag": True,
-                "reused_memory": True,
-                "reused_planning": True,
-                "planning_land_codes": codes,
-                "property_codes": codes,
-                "land_codes": codes,
-            }
-            if need_analysis:
-                from app.agents.analysis.service import run_property_analysis as _run_pa
+                if parallel_obs.get("merged_agents"):
+                    phint = get_parallel_merge_hint()
+                    if phint:
+                        _append_sales_hint(messages, phint)
+            # Sequential per-agent hints only when Parallel did not merge (Decision may still apply above).
+            if not parallel_obs.get("merged_agents"):
+                from app.agents.analysis.service import get_analysis_hint, should_run_analysis
 
-                ar = _run_pa(
-                    property_codes=codes,
-                    message=text,
-                    route=route_now,
-                    audience=aud,
-                    user_key=key,
-                    shared=shared,
-                )
-                if ar is not None:
-                    analysis_categories = list(ar.categories or [])
-                    shared["analysis_categories"] = analysis_categories
-                hint = get_analysis_hint()
-                if hint and selected != "recommendation":
-                    messages.append({"role": "system", "content": hint})
-            try:
-                from app.agents.recommendation.service import (
-                    get_recommendation_hint,
-                    run_recommendation,
-                    should_run_recommendation,
-                )
+                route_now = str((aobs.get("agent_reason") or ""))
+                try:
+                    from app.supervisor.service import get_supervisor_obs
 
-                need_rec = selected == "recommendation" or should_run_recommendation(
+                    route_now = str(get_supervisor_obs().get("routed_workflow") or route_now)
+                except Exception:
+                    pass
+                need_analysis = selected in ("property_analysis", "recommendation") or should_run_analysis(
                     route=route_now, message=text, chip_intent=intent or ""
                 )
-                if need_rec:
-                    run_recommendation(
+                analysis_categories = []
+                codes = []
+                if plan_out is not None:
+                    codes = [str(c).strip() for c in (plan_out.land_codes or []) if str(c).strip()]
+                shared = {
+                    "pipeline": "planning|memory|rag|tools|llm",
+                    "property_search_agent": True,
+                    "search_handoff": True,
+                    "reused_rag": True,
+                    "reused_memory": True,
+                    "reused_planning": True,
+                    "planning_land_codes": codes,
+                    "property_codes": codes,
+                    "land_codes": codes,
+                }
+                if need_analysis:
+                    from app.agents.analysis.service import run_property_analysis as _run_pa
+
+                    ar = _run_pa(
                         property_codes=codes,
                         message=text,
                         route=route_now,
                         audience=aud,
                         user_key=key,
                         shared=shared,
-                        analysis_categories=analysis_categories,
                     )
-                    rhint = get_recommendation_hint()
-                    if rhint:
-                        messages.append({"role": "system", "content": rhint})
-            except Exception:
-                pass
-            try:
-                from app.agents.customer_memory.service import (
-                    get_customer_memory_hint,
-                    run_customer_memory,
-                    should_run_customer_memory,
-                )
+                    if ar is not None:
+                        analysis_categories = list(ar.categories or [])
+                        shared["analysis_categories"] = analysis_categories
+                    hint = get_analysis_hint()
+                    if hint and selected != "recommendation":
+                        _append_sales_hint(messages, hint)
+                try:
+                    from app.agents.recommendation.service import (
+                        get_recommendation_hint,
+                        run_recommendation,
+                        should_run_recommendation,
+                    )
 
-                need_cm = selected == "customer_memory" or should_run_customer_memory(
-                    route=route_now, message=text, chip_intent=intent or ""
-                )
-                if need_cm:
-                    run_customer_memory(
-                        message=text,
-                        route=route_now,
-                        audience=aud,
-                        user_key=key,
-                        shared=shared,
+                    need_rec = selected == "recommendation" or should_run_recommendation(
+                        route=route_now, message=text, chip_intent=intent or ""
                     )
-                    cmhint = get_customer_memory_hint()
-                    if cmhint:
-                        messages.append({"role": "system", "content": cmhint})
-            except Exception:
-                pass
-            try:
-                from app.agents.negotiation.service import (
-                    get_negotiation_hint,
-                    run_negotiation,
-                    should_run_negotiation,
-                )
+                    if need_rec:
+                        run_recommendation(
+                            property_codes=codes,
+                            message=text,
+                            route=route_now,
+                            audience=aud,
+                            user_key=key,
+                            shared=shared,
+                            analysis_categories=analysis_categories,
+                        )
+                        rhint = get_recommendation_hint()
+                        if rhint:
+                            _append_sales_hint(messages, rhint)
+                except Exception:
+                    pass
+                try:
+                    from app.agents.customer_memory.service import (
+                        get_customer_memory_hint,
+                        run_customer_memory,
+                        should_run_customer_memory,
+                    )
 
-                need_neg = selected == "negotiation" or should_run_negotiation(
-                    route=route_now, message=text, chip_intent=intent or ""
-                )
-                if need_neg:
-                    run_negotiation(
-                        message=text,
-                        route=route_now,
-                        audience=aud,
-                        user_key=key,
-                        shared=shared,
+                    need_cm = selected == "customer_memory" or should_run_customer_memory(
+                        route=route_now, message=text, chip_intent=intent or ""
                     )
-                    nhint = get_negotiation_hint()
-                    if nhint:
-                        messages.append({"role": "system", "content": nhint})
-            except Exception:
-                pass
-            try:
-                from app.agents.customer_success.service import (
-                    get_customer_success_hint,
-                    run_customer_success,
-                    should_run_customer_success,
-                )
+                    if need_cm:
+                        run_customer_memory(
+                            message=text,
+                            route=route_now,
+                            audience=aud,
+                            user_key=key,
+                            shared=shared,
+                        )
+                        cmhint = get_customer_memory_hint()
+                        if cmhint:
+                            _append_sales_hint(messages, cmhint)
+                except Exception:
+                    pass
+                try:
+                    from app.agents.negotiation.service import (
+                        get_negotiation_hint,
+                        run_negotiation,
+                        should_run_negotiation,
+                    )
 
-                need_cs = selected == "follow_up" or should_run_customer_success(
-                    route=route_now, message=text, chip_intent=intent or ""
-                )
-                if need_cs:
-                    run_customer_success(
-                        message=text,
-                        route=route_now,
-                        audience=aud,
-                        user_key=key,
-                        shared=shared,
+                    need_neg = selected == "negotiation" or should_run_negotiation(
+                        route=route_now, message=text, chip_intent=intent or ""
                     )
-                    cshint = get_customer_success_hint()
-                    if cshint:
-                        messages.append({"role": "system", "content": cshint})
-            except Exception:
-                pass
-    except Exception:
-        pass
+                    if need_neg:
+                        run_negotiation(
+                            message=text,
+                            route=route_now,
+                            audience=aud,
+                            user_key=key,
+                            shared=shared,
+                        )
+                        nhint = get_negotiation_hint()
+                        if nhint:
+                            _append_sales_hint(messages, nhint)
+                except Exception:
+                    pass
+                try:
+                    from app.agents.customer_success.service import (
+                        get_customer_success_hint,
+                        run_customer_success,
+                        should_run_customer_success,
+                    )
+
+                    need_cs = selected == "follow_up" or should_run_customer_success(
+                        route=route_now, message=text, chip_intent=intent or ""
+                    )
+                    if need_cs:
+                        run_customer_success(
+                            message=text,
+                            route=route_now,
+                            audience=aud,
+                            user_key=key,
+                            shared=shared,
+                        )
+                        cshint = get_customer_success_hint()
+                        if cshint:
+                            _append_sales_hint(messages, cshint)
+                except Exception:
+                    pass
+        except Exception:
+            pass
     prompt_parts = _prompt_token_parts(messages)
     try:
         from flask import g
@@ -1642,6 +1659,18 @@ def generate_reply(
             thread_id=thread_id,
             land_codes=land_codes or [],
         )
+    except Exception:
+        pass
+    # خلاصهٔ حافظهٔ صفحهٔ تنظیمات — هر چت بازنویسی
+    try:
+        from app.express_partner.partner_live_memory import rewrite_partner_live_memory
+
+        if key and not str(key).startswith("guest:"):
+            rewrite_partner_live_memory(
+                key,
+                last_user=text,
+                last_assistant=reply,
+            )
     except Exception:
         pass
     _record_request_analytics(

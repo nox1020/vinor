@@ -1,4 +1,4 @@
-{# نوار پایین جزئیات: فقط تماس + هدایت به چت مأموریت (بدون فرم بازدید/معامله) #}
+{# نوار پایین جزئیات: فقط تماس + هدایت به چت فروش (بدون فرم بازدید/معامله) #}
 {% set visit_customer_phone = (land._visit_customer_phone|default('')|string)|trim %}
 {% set owner_contact_phone = (land.owner_phone or land.vinor_contact or '')|string|trim %}
 {% set contact_phone = visit_customer_phone or owner_contact_phone %}
@@ -30,7 +30,7 @@
                 data-ld-chat-prompt="{{ (chat_cta.prompt|default(''))|e }}"
                 data-ld-home-url="{{ url_for('express_partner.home') }}">
           <i class="fas {{ chat_cta.icon|default('fa-comments') }}" aria-hidden="true"></i>
-          <span>{{ chat_cta.label|default('چت مأموریت') }} — از چت</span>
+          <span>{{ chat_cta.label|default('چت فروش') }} — از چت</span>
         </button>
         {% elif not is_approved %}
         <div class="ld-action-bar__btn ld-action-bar__btn--muted" role="status">

@@ -11,7 +11,7 @@ When the user (or conversation context) mentions a code/config/doc path for revi
 2. Prefer absolute paths under the workspace; resolve relative paths from the project root.
 3. If a path is ambiguous, search with Glob/Grep first, then read the best match — still without asking.
 4. Only ask if the file is missing after search, or if multiple unrelated matches need a choice that cannot be inferred.
-5. Apply the same rule to file lists, architecture docs (`VINOR_ARCHITECTURE.txt`, `ROADMAP.md`), and related modules needed for the review.
+5. Apply the same rule to file lists, architecture docs (`roadmap/AGENT_GOAL.md`, `roadmap/PROJECT_CHART.html`), and related modules needed for the review.
 
 Examples that must trigger auto-read (no questions):
 - «ببین `app/foundation/…`»

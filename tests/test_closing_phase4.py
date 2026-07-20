@@ -192,11 +192,11 @@ class ClosingAiToolsFlagTests(unittest.TestCase):
             from app.ai.audience import VOICE_PARTNER
 
             names = [t["function"]["name"] for t in tools_schema_for_voice(VOICE_PARTNER)]
-            self.assertIn("propose_contract", names)
-            self.assertIn("propose_payment_milestone", names)
-            self.assertIn("propose_settlement", names)
             self.assertIn("propose_deal", names)
             self.assertIn("propose_release_deal", names)
+            self.assertNotIn("propose_contract", names)
+            self.assertNotIn("propose_payment_milestone", names)
+            self.assertNotIn("propose_settlement", names)
 
 
 class DealPathUntouchedTests(unittest.TestCase):

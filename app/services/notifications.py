@@ -64,7 +64,7 @@ def _load_all() -> Dict[str, List[Dict[str, Any]]]:
         return {}
     
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8-sig') as f:
             raw = json.load(f)
     except Exception as e:
         try:

@@ -203,6 +203,7 @@ class VisitResultAiToolsFlagTests(unittest.TestCase):
             self.assertNotIn("propose_no_show", names)
 
     def test_tools_present_when_flag_on(self) -> None:
+        """هدف قفل: visit_result/no_show در schema چت نیست."""
         with mock.patch.dict(
             os.environ,
             {
@@ -215,9 +216,9 @@ class VisitResultAiToolsFlagTests(unittest.TestCase):
             from app.ai.audience import VOICE_PARTNER
 
             names = [t["function"]["name"] for t in tools_schema_for_voice(VOICE_PARTNER)]
-            self.assertIn("propose_visit_result", names)
-            self.assertIn("propose_no_show", names)
             self.assertIn("propose_complete_visit", names)
+            self.assertNotIn("propose_visit_result", names)
+            self.assertNotIn("propose_no_show", names)
 
 
 class VisitResultActivityHookTests(unittest.TestCase):

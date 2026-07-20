@@ -396,11 +396,11 @@
           class="vn-journey-card__compact"
           data-vn-journey-expand
           aria-expanded="false"
-          aria-label="باز کردن کارت مأموریت">
+          aria-label="باز کردن کارت فروش">
     <span class="vn-journey-card__compact-dot" aria-hidden="true"></span>
     <span class="vn-journey-card__compact-text">
       <span class="vn-journey-card__compact-kicker">
-        {% if card.is_mission|default(false) %}ماموریت فعال{% else %}فایل مأموریت{% endif %}
+        {% if card.is_mission|default(false) %}کار جاری{% else %}فایل فروش{% endif %}
       </span>
       <span class="vn-journey-card__compact-title">{{ card.title }}</span>
       {% if card.commission_amount and is_approved|default(false) %}
@@ -432,7 +432,7 @@
           {% if card.is_mission|default(false) %}
           <span class="vn-journey-card__stage">
             <i class="fas fa-bullseye" aria-hidden="true"></i>
-            ماموریت
+            فروش
           </span>
           {% elif card.stage_label %}
           <span class="vn-journey-card__stage" style="background:#2f2f2f">{{ card.stage_label }}</span>
@@ -466,7 +466,7 @@
   </div>
 
   {% if steps %}
-  <div class="vn-journey-card__track" aria-label="مراحل ماموریت — برای جابه‌جایی لمس کنید">
+  <div class="vn-journey-card__track" aria-label="مراحل فروش — برای جابه‌جایی لمس کنید">
     {% for step in steps %}
     {% set step_prompt = step.chat_prompt|default('') %}
     {% set step_ok = step.actionable|default(false) and step_prompt %}
@@ -501,7 +501,7 @@
             class="vn-journey-card__collapse"
             data-vn-journey-collapse
             aria-expanded="true"
-            aria-label="جمع کردن کارت مأموریت">
+            aria-label="جمع کردن کارت فروش">
       <i class="fas fa-chevron-up" aria-hidden="true"></i>
     </button>
     <div class="vn-journey-card__cta-wrap">

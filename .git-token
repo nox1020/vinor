@@ -1,5 +1,0 @@
-# Put your GitHub Personal Access Token (classic or fine-grained) on a single line.
-# Example:
-# ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-# Do NOT commit this file. It is ignored via .gitignore.
-

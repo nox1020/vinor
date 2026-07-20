@@ -4,16 +4,11 @@
 {% block content %}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
 
-{% set _name = (me_name or partner_name or 'همکار وینور')|trim %}
-{% set _avatar = (profile.get('avatar') or '').strip() if profile else '' %}
-{% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar else '' %}
 {% set _report = report|default({}) %}
-{% set _role = _report.get('role_label') or ('همکار ویژه' if is_special|default(false) else ('همکار تأییدشده' if is_approved|default(false) else 'کاربر عادی')) %}
-{% set _items = _report.get('memory_items') or [] %}
 {% set _summary = _report.get('summary') or '' %}
+{% set _wallet = (_report.get('kpis') or {}).get('withdrawable_balance') or 0 %}
 
 <style>
-  /* ChatGPT black — Memory */
   html:has(#partnerSettingsPage),
   body:has(#partnerSettingsPage) {
     background: #000 !important;
@@ -41,7 +36,6 @@
   #partnerSettingsPage {
     --ps-bg: #000;
     --ps-surface: #1a1a1a;
-    --ps-surface-2: #111;
     --ps-hover: rgba(255, 255, 255, 0.06);
     --ps-line: rgba(255, 255, 255, 0.1);
     --ps-text: #fff;
@@ -55,62 +49,18 @@
     padding: 0.5rem 1.1rem 2.25rem;
   }
   #partnerSettingsPage .ps-intro {
-    margin: 0 0 1.25rem;
+    margin: 0 0 1rem;
     font-size: 0.9rem;
     line-height: 1.6;
-    font-weight: 400;
     color: var(--ps-muted);
     text-align: right;
   }
-  #partnerSettingsPage .ps-hero {
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
-    margin-bottom: 1.5rem;
-    padding: 0.85rem 0.95rem;
-    border-radius: 1.15rem;
-    background: var(--ps-surface);
-    border: 1px solid var(--ps-line);
-  }
-  #partnerSettingsPage .ps-avatar {
-    flex-shrink: 0;
-    width: 3.65rem;
-    height: 3.65rem;
-    border-radius: 9999px;
-    overflow: hidden;
-    display: grid;
-    place-items: center;
-    background: #2f2f2f;
-    color: #fff;
-    font-size: 1.15rem;
-    font-weight: 700;
-    text-decoration: none;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-  }
-  #partnerSettingsPage .ps-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  #partnerSettingsPage .ps-hero-meta { min-width: 0; flex: 1; text-align: right; }
-  #partnerSettingsPage .ps-name {
-    margin: 0;
-    font-size: 1.2rem;
-    font-weight: 650;
-    letter-spacing: -0.02em;
-    color: #fff;
-  }
-  #partnerSettingsPage .ps-role {
-    margin: 0.25rem 0 0;
-    font-size: 0.8125rem;
-    color: var(--ps-muted);
-  }
   #partnerSettingsPage .ps-live {
-    margin-top: 0.35rem;
+    margin: 0 0 1.1rem;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     color: rgba(255, 255, 255, 0.45);
   }
   #partnerSettingsPage .ps-live-dot {
@@ -120,12 +70,10 @@
     background: #22c55e;
     box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
   }
-
   #partnerSettingsPage .ps-block-label {
     margin: 0 0.15rem 0.55rem;
     font-size: 0.78rem;
     font-weight: 600;
-    letter-spacing: 0.01em;
     color: rgba(255, 255, 255, 0.5);
     text-align: right;
   }
@@ -137,7 +85,6 @@
     border: 1px solid var(--ps-line);
     font-size: 0.95rem;
     line-height: 1.7;
-    font-weight: 400;
     color: #fff;
     text-align: right;
     white-space: pre-wrap;
@@ -148,48 +95,6 @@
     line-height: 1.45;
     color: rgba(255, 255, 255, 0.4);
   }
-
-  #partnerSettingsPage .ps-mem-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin: 0 0 1.5rem;
-    padding: 0;
-    list-style: none;
-  }
-  #partnerSettingsPage .ps-mem {
-    display: block;
-    width: 100%;
-    padding: 0.9rem 1rem;
-    border-radius: 1rem;
-    border: 1px solid var(--ps-line);
-    background: var(--ps-surface-2);
-    color: #fff;
-    text-decoration: none;
-    text-align: right;
-    transition: background 0.14s ease, border-color 0.14s ease;
-  }
-  #partnerSettingsPage a.ps-mem:hover,
-  #partnerSettingsPage a.ps-mem:active {
-    background: #1a1a1a;
-    border-color: rgba(255, 255, 255, 0.16);
-  }
-  #partnerSettingsPage .ps-mem__cat {
-    display: block;
-    font-size: 0.68rem;
-    font-weight: 650;
-    color: rgba(255, 255, 255, 0.42);
-    margin-bottom: 0.3rem;
-  }
-  #partnerSettingsPage .ps-mem__text {
-    display: block;
-    font-size: 0.925rem;
-    line-height: 1.55;
-    font-weight: 400;
-    color: #fff;
-    white-space: pre-wrap;
-  }
-
   #partnerSettingsPage .ps-actions {
     border-radius: 1.15rem;
     border: 1px solid var(--ps-line);
@@ -213,8 +118,13 @@
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
-  #partnerSettingsPage .ps-action + .ps-action {
+  #partnerSettingsPage .ps-action + .ps-action,
+  #partnerSettingsPage form + .ps-action,
+  #partnerSettingsPage .ps-action + form {
     border-top: 1px solid var(--ps-line);
+  }
+  #partnerSettingsPage form {
+    margin: 0;
   }
   #partnerSettingsPage .ps-action:hover,
   #partnerSettingsPage .ps-action:active {
@@ -223,25 +133,18 @@
   #partnerSettingsPage .ps-action i {
     width: 1.2rem;
     text-align: center;
-    color: #fff;
     opacity: 0.85;
   }
   #partnerSettingsPage .ps-action--danger,
   #partnerSettingsPage .ps-action--danger i { color: #ff6b7a; }
   #partnerSettingsPage .ps-action__grow { flex: 1; min-width: 0; }
+  #partnerSettingsPage .ps-action__meta {
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.5);
+  }
   #partnerSettingsPage .ps-action__chev {
     opacity: 0.4;
     font-size: 0.72rem;
-    color: #fff;
-  }
-  #partnerSettingsPage .ps-empty {
-    padding: 1.35rem 1rem;
-    text-align: center;
-    color: var(--ps-muted);
-    font-size: 0.875rem;
-    border-radius: 1rem;
-    border: 1px dashed rgba(255, 255, 255, 0.12);
-    background: var(--ps-surface-2);
   }
 </style>
 
@@ -254,91 +157,32 @@
       data-report-url="{{ url_for('express_partner.settings_data') }}"
       data-updated-at="{{ _report.get('updated_at') or '' }}">
   <div class="ps-shell">
-
     <p class="ps-intro">
-      وینور این‌ها را دربارهٔ تو به‌خاطر می‌سپارد تا چت و مأموریت‌ها شخصی‌تر باشند.
-      همه‌چیز همین‌جاست — همیشه به‌روز.
+      خلاصهٔ حافظه با مدل نوشته می‌شود (مثل Memory در ChatGPT) و با هر چت یا اقدام از نو ادغام می‌شود.
     </p>
-
-    <div class="ps-hero">
-      <a href="{{ url_for('express_partner.profile_edit') }}"
-         data-vinor-express-nav
-         class="ps-avatar"
-         aria-label="ویرایش پروفایل">
-        {% if _avatar_url %}
-        <img src="{{ _avatar_url }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='grid';">
-        <span style="display:none;place-items:center;width:100%;height:100%">{{ _name|avatar_initials }}</span>
-        {% else %}
-        <span>{{ _name|avatar_initials }}</span>
-        {% endif %}
-      </a>
-      <div class="ps-hero-meta">
-        <h1 class="ps-name" data-report-name>{{ _name }}</h1>
-        <p class="ps-role" data-report-role>{{ _role }}</p>
-        <p class="ps-live" aria-live="polite">
-          <span class="ps-live-dot" aria-hidden="true"></span>
-          <span data-report-live>به‌روز</span>
-        </p>
-      </div>
-    </div>
+    <p class="ps-live" aria-live="polite">
+      <span class="ps-live-dot" aria-hidden="true"></span>
+      <span data-report-live>به‌روز</span>
+    </p>
 
     <h2 class="ps-block-label">خلاصه حافظه</h2>
     <div class="ps-summary" data-memory-summary>
-      <span data-memory-summary-text>{% if _summary %}{{ _summary }}{% else %}هنوز خلاصه‌ای ساخته نشده — با چت و کار روی فایل‌ها پر می‌شود.{% endif %}</span>
-      <p class="ps-summary-hint">این خلاصه خودکار از پروفایل، مأموریت و عملکردت ساخته می‌شود.</p>
+      <span data-memory-summary-text>{% if _summary %}{{ _summary }}{% else %}هنوز خلاصه‌ای نیست — با چت یا اقدام بعدی پر می‌شود.{% endif %}</span>
+      <p class="ps-summary-hint">متن را مدل می‌نویسد — آمار خام کپی نمی‌شود.</p>
     </div>
-
-    <h2 class="ps-block-label">موارد ذخیره‌شده</h2>
-    <ul class="ps-mem-list" data-memory-list aria-label="موارد حافظه">
-      {% if _items %}
-        {% for item in _items %}
-        <li>
-          {% if item.href %}
-          <a class="ps-mem"
-             href="{{ item.href }}"
-             data-vinor-express-nav
-             data-mem-id="{{ item.id }}"
-             data-live-key="{{ item.live_key or '' }}">
-            <span class="ps-mem__cat">{{ item.category }}</span>
-            <span class="ps-mem__text">{{ item.text }}</span>
-          </a>
-          {% else %}
-          <div class="ps-mem" data-mem-id="{{ item.id }}" data-live-key="{{ item.live_key or '' }}">
-            <span class="ps-mem__cat">{{ item.category }}</span>
-            <span class="ps-mem__text">{{ item.text }}</span>
-          </div>
-          {% endif %}
-        </li>
-        {% endfor %}
-      {% else %}
-        <li class="ps-empty">موردی ثبت نشده</li>
-      {% endif %}
-    </ul>
 
     <h2 class="ps-block-label">حساب</h2>
     <div class="ps-actions">
-      <a href="{{ url_for('express_partner.profile_edit') }}"
-         data-vinor-express-nav
-         class="ps-action">
-        <i class="fas fa-pen" aria-hidden="true"></i>
-        <span class="ps-action__grow">ویرایش مشخصات</span>
-        <i class="fas fa-chevron-left ps-action__chev" aria-hidden="true"></i>
-      </a>
+      {% if is_approved|default(false) %}
       <a href="{{ url_for('express_partner.commissions') }}"
          data-vinor-express-nav
          class="ps-action">
         <i class="fas fa-wallet" aria-hidden="true"></i>
-        <span class="ps-action__grow">کیف پول و برداشت</span>
+        <span class="ps-action__grow">کیف پول</span>
+        <span class="ps-action__meta" data-wallet-balance>{{ _wallet|toman }}</span>
         <i class="fas fa-chevron-left ps-action__chev" aria-hidden="true"></i>
       </a>
-      <a href="{{ url_for('express_partner.home') }}"
-         data-vinor-express-nav
-         class="ps-action">
-        <i class="fas fa-comments" aria-hidden="true"></i>
-        <span class="ps-action__grow">ادامه در چت</span>
-        <i class="fas fa-chevron-left ps-action__chev" aria-hidden="true"></i>
-      </a>
+      {% endif %}
       <form id="settingsLogoutForm" method="post" action="{{ url_for('express_partner.logout') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="ps-action ps-action--danger" data-vinor-logout>
@@ -373,78 +217,19 @@
     }
   });
 
-  function setText(sel, text) {
-    var el = page.querySelector(sel);
-    if (el) el.textContent = text;
-  }
-
-  function renderItems(items) {
-    var list = page.querySelector('[data-memory-list]');
-    if (!list || !items || !items.length) return;
-    var html = items
-      .map(function (item) {
-        var cat = (item.category || '').replace(/</g, '&lt;');
-        var text = (item.text || '').replace(/</g, '&lt;');
-        var id = (item.id || '').replace(/"/g, '');
-        var live = (item.live_key || '').replace(/"/g, '');
-        var href = (item.href || '').replace(/"/g, '');
-        var inner =
-          '<span class="ps-mem__cat">' +
-          cat +
-          '</span><span class="ps-mem__text">' +
-          text +
-          '</span>';
-        if (href) {
-          return (
-            '<li><a class="ps-mem" href="' +
-            href +
-            '" data-vinor-express-nav data-mem-id="' +
-            id +
-            '" data-live-key="' +
-            live +
-            '">' +
-            inner +
-            '</a></li>'
-          );
-        }
-        return (
-          '<li><div class="ps-mem" data-mem-id="' +
-          id +
-          '" data-live-key="' +
-          live +
-          '">' +
-          inner +
-          '</div></li>'
-        );
-      })
-      .join('');
-    list.innerHTML = html;
-  }
-
   function applyReport(data) {
     if (!data || !data.ok) return;
     page.setAttribute('data-updated-at', data.updated_at || '');
-    if (data.partner_name || data.me_name) {
-      setText('[data-report-name]', data.partner_name || data.me_name || '');
-    }
-    if (data.role_label) setText('[data-report-role]', data.role_label);
     if (data.summary) {
-      var box = page.querySelector('[data-memory-summary]');
-      if (box) {
-        var summaryText = box.querySelector('[data-memory-summary-text]');
-        if (summaryText) {
-          summaryText.textContent = data.summary;
-        } else {
-          box.textContent = data.summary;
-          var p = document.createElement('p');
-          p.className = 'ps-summary-hint';
-          p.textContent = 'این خلاصه خودکار از پروفایل، مأموریت و عملکردت ساخته می‌شود.';
-          box.appendChild(p);
-        }
-      }
+      var summaryText = page.querySelector('[data-memory-summary-text]');
+      if (summaryText) summaryText.textContent = data.summary;
     }
-    if (data.memory_items && data.memory_items.length) {
-      renderItems(data.memory_items);
+    var wallet = page.querySelector('[data-wallet-balance]');
+    if (wallet && data.kpis && data.kpis.withdrawable_balance != null) {
+      try {
+        var n = Number(data.kpis.withdrawable_balance) || 0;
+        wallet.textContent = n.toLocaleString('fa-IR') + ' تومان';
+      } catch (_) {}
     }
     var live = page.querySelector('[data-report-live]');
     if (live) {
@@ -480,7 +265,7 @@
       });
   }
 
-  timer = setInterval(poll, 10000);
+  timer = setInterval(poll, 8000);
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) poll();
   });
@@ -491,7 +276,7 @@
     },
     { once: true }
   );
-  setTimeout(poll, 1200);
+  setTimeout(poll, 800);
 })();
 </script>
 {% endblock %}

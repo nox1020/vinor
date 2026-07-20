@@ -572,9 +572,6 @@
   <div class="ep-profile-drawer__top">
     <div class="ep-profile-drawer__top-row">
       <span class="ep-profile-drawer__brand">وینور</span>
-      <button type="button" class="ep-profile-drawer__close" id="epProfileDrawerClose" aria-label="بستن">
-        <i class="fas fa-times" aria-hidden="true"></i>
-      </button>
     </div>
   </div>
 
@@ -689,7 +686,7 @@
     {% endif %}
   </div>
 
-  {% if me_phone %}
+  {% if me_phone and is_approved|default(false) %}
   <a href="{{ url_for('express_partner.commissions') }}"
      data-vinor-express-nav
      class="ep-profile-drawer__wallet-bar"
@@ -698,6 +695,8 @@
     <span class="ep-profile-drawer__wallet-bar-amount">{{ (withdrawable_balance or 0)|toman }}</span>
     <i class="fas fa-chevron-left" aria-hidden="true"></i>
   </a>
+  {% endif %}
+  {% if me_phone %}
   <div class="ep-profile-drawer__foot">
     <a href="{{ url_for('express_partner.settings') }}"
        data-vinor-express-nav

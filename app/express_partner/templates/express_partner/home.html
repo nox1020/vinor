@@ -31,12 +31,7 @@
       {% endif %}
     </div>
     {% else %}
-    {# حالت AI: بدون کارت مأموریت — فقط چت بازاریاب #}
-    {% if home_ai_limited|default(false) %}
-    <div id="vnHomeLandsChatSource" hidden aria-hidden="true">
-      {% include 'express_partner/partials/home_public_lands_carousel.html' %}
-    </div>
-    {% endif %}
+    {# حالت AI: فقط چت بازاریاب — بدون کاتالوگ فایل در بدو ورود #}
     {% endif %}
 
     <div id="vnHomeScroll" class="vn-home-scroll">
@@ -270,7 +265,7 @@
 </script>
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=83"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=84"></script>
 <script>
 (function () {
   function syncHomeDockPad() {
@@ -278,14 +273,17 @@
     var dock = document.getElementById('vnHomeComposerDock');
     if (!page || !dock) return;
     var h = Math.ceil(dock.getBoundingClientRect().height || 0);
-    if (h < 72) h = 120;
-    page.style.setProperty('--vn-home-dock-h', h + 'px');
+    if (h < 88) h = 132;
+    /* بافر اضافه برای کارت افقی فایل */
+    page.style.setProperty('--vn-home-dock-h', (h + 8) + 'px');
   }
   var dock = document.getElementById('vnHomeComposerDock');
   if (dock && typeof ResizeObserver !== 'undefined') {
     try {
       var ro = new ResizeObserver(function () { syncHomeDockPad(); });
       ro.observe(dock);
+      var apkHost = document.getElementById('vinorApkStripHost');
+      if (apkHost) ro.observe(apkHost);
     } catch (_) {}
   }
   window.addEventListener('resize', syncHomeDockPad, { passive: true });

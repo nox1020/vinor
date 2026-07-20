@@ -1,51 +1,53 @@
-"""نیت چیپ‌های سریع چت — راهنمای کوتاه ابزار برای همان نوبت (بدون پرامپت طولانی در پیام کاربر)."""
+"""نیت چیپ‌های سریع — فقط مسیر فروش فایل / استخدام بازاریاب."""
 from __future__ import annotations
 
-# hintها کوتاه نگه داشته می‌شوند تا توکن هدر نرود
+from .goal import VISIT_COORD_PHONE, wrap_internal_hint
+
 CHIP_INTENT_HINTS: dict[str, str] = {
     "coop_levels": (
-        "نیت چیپ: سطوح همکاری. همین الان get_cooperation_info با topic=levels را بزن؛ "
-        "۲–۴ جمله؛ لینک نده؛ اگر خواست شروع کند بگو «می‌خواهم همکار شوم»."
+        "هدف: استخدام بازاریاب. get_cooperation_info topic=levels؛ کوتاه؛ لینک نده."
     ),
     "coop_terms": (
-        "نیت چیپ: شرایط/پورسانت. get_cooperation_info با topic=terms را بزن؛ کوتاه؛ لینک نده."
+        "هدف: استخدام بازاریاب. get_cooperation_info topic=terms؛ کوتاه؛ لینک نده."
     ),
     "coop_how": (
-        "نیت چیپ: مسیر شروع. get_cooperation_info با topic=how را بزن؛ ۳ قدم؛ لینک نده."
+        "هدف: استخدام بازاریاب. get_cooperation_info topic=how؛ ۳ قدم؛ لینک نده."
     ),
     "coop_apply": (
-        "نیت چیپ: ثبت همکاری. اگر لاگین نیست propose_partner_application را بزن تا need_login بیاید؛ "
-        "وگرنه فیلدهای نام، کد ملی، شهر را یکی‌یکی بپرس — شهر فقط گرمابسرد — و در پایان propose_partner_application."
+        "هدف: استخدام بازاریاب. propose_partner_application؛ "
+        "نام→کدملی→شهر گرمابسرد یکی‌یکی؛ need_login→منوی راست."
     ),
     "coop_status": (
-        "نیت چیپ: وضعیت درخواست. get_application_status را بزن و کوتاه بگو؛ لینک نده."
+        "هدف: وضعیت استخدام. get_application_status؛ کوتاه؛ لینک نده."
     ),
     "next_action": (
-        "نیت چیپ: کار بعدی. suggest_next_action را بزن؛ یک قدم واضح بگو؛ اگر ثبت لازم است ابزار propose_*."
+        "هدف: فروش امروز. suggest_next_action؛ یک قدم واضح برای بستن فروش."
     ),
     "marketing": (
-        "نیت چیپ: بازاریابی. draft_listing_copy را بزن؛ متن‌ها در کارت کپی می‌آیند؛ در پیام تکرار نکن."
+        "هدف: فروش فایل. draft_listing_copy؛ متن در کارت؛ در پیام تکرار نکن."
     ),
     "visit": (
-        "نیت چیپ: ثبت بازدید یا بازدید مجدد — هر دو یکی‌یکی. "
-        "فوری propose_visit_request را با land_code خالی بزن (کد را از کاربر نپرس؛ بدون نام/شماره/تاریخ). "
-        "instruction ابزار را عیناً اجرا کن؛ اگر speak_exactly بود همان را بدون تغییر بگو. "
-        "(نام مشتری → موبایل). هرگز نام کوچک یا نام خانوادگی جدا نپرس. "
-        "بعد از موبایل بدون تاریخ بزن تا لیست ۱…۵ بیاید؛ فقط شماره تاریخ را بفرست. "
-        "چند سؤال را در یک پیام نپرس."
+        f"هدف: رساندن به بازدید/فروش. propose_visit_request با land_code خالی؛ "
+        f"نام مشتری→موبایل→تاریخ یکی‌یکی. تماس کسب‌وکار: {VISIT_COORD_PHONE}."
     ),
     "complete_visit": (
-        "نیت چیپ: بازدید انجام شد. propose_complete_visit را بزن و کارت تأیید بده."
+        "هدف: بستن قیف. propose_complete_visit + کارت تأیید."
     ),
     "deal": (
-        "نیت چیپ: معامله. propose_deal را بزن و کارت تأیید بده."
+        "هدف: معامله نهایی. propose_deal + کارت تأیید."
     ),
     "release": (
-        "نیت چیپ: بستن معامله. propose_release_deal را بزن و کارت تأیید بده."
+        "هدف: آزادسازی فایل برای فروش دوباره. propose_release_deal + کارت."
     ),
     "find_land": (
-        "نیت چیپ: پیدا کردن ملک فقط در گرمابسرد (دماوند، تهران). "
-        "اگر بودجه نگفته کوتاه بپرس؛ جای دیگر پیشنهاد نده؛ search_lands و [[LAND:کد]]."
+        "هدف: پیشنهاد بهترین فایل سیستم (فقط گرمابسرد). "
+        "معیار کوتاه→search_lands→[[LAND:کد]]→هل به بازدید."
+    ),
+    "log_call": (
+        "هدف: پیگیری فروش. propose_log_call با موبایل مشتری."
+    ),
+    "followup": (
+        "هدف: پیگیری روزانه فروش. propose_followup با موبایل و due_at."
     ),
 }
 
@@ -57,4 +59,5 @@ def normalize_chip_intent(raw: str | None) -> str:
 
 def hint_for_chip_intent(intent: str | None) -> str:
     key = normalize_chip_intent(intent)
-    return CHIP_INTENT_HINTS.get(key, "")
+    raw = CHIP_INTENT_HINTS.get(key, "")
+    return wrap_internal_hint(raw) if raw else ""

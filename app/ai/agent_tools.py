@@ -22,7 +22,8 @@ from app.ai.land_cards import accessible_lands_map, partner_is_approved
 from app.ai.paths import ai_data_file
 
 _PENDING_TTL_MIN = 30
-_MAX_SEARCH = 5
+_MAX_SEARCH = 2
+_MAX_LAND_CARDS = 2
 
 TOOL_SEARCH = "search_lands"
 TOOL_NEXT = "suggest_next_action"
@@ -74,7 +75,9 @@ def _tool_thread_meta() -> tuple[str | None, str]:
 
 
 def _active_mission_land_code(phone: str, thread_id: str | None = None) -> str:
-    """بازنشسته: مأموریت خودکار حذف شد — همیشه خالی."""
+    """بازنشسته: مأموریت خودکار حذف شد — همیشه خالی (هویت: یک بازاریاب از چت)."""
+    _ = (phone, thread_id)
+    return ""
     return ""
 
 
@@ -200,7 +203,8 @@ def resolve_conversation_land_code(
     """کد فایل موضوع گفتگو — هرگز از کاربر نپرس؛ از زمینه بگیر.
 
     اولویت:
-    آرگومان → cache → فوکوس thread/case → پیام کاربر → مأموریت همان thread
+    آرگومان → cache → فوکوس thread/case → پیام کاربر → عنوان قدیمی thread
+    (عنوان‌های قدیمی «ماموریت …» فقط برای تطبیق تاریخچه؛ محصول مأموریت اجباری ندارد)
     → پیش‌نویس → اختصاص‌ها
     """
     tid, _aud = _tool_thread_meta()
@@ -274,23 +278,31 @@ def _never_ask_land_instruction(phone: str = "") -> str:
 
 
 def agent_system_hint(voice: str | None) -> str:
-    """یادآوری کوتاه مسیریابی ابزار — جزئیات در system prompt است."""
+    """یادآوری کوتاه هدف قفل — جزئیات در goal.py / config."""
+    from .goal import GOAL_SYSTEM
+
     v = (voice or "").strip().lower()
     if v == VOICE_PUBLIC:
-        return (
-            "بازاریاب فروش برای مهمان/کاربر عادی: جواب را به فروش فایل ببر. "
-            "خرید/جستجو→search_lands→[[LAND]] | فروش/بازاریاب شدن→coop_info سپس propose_apply "
-            "(نام/کدملی/شهر یکی‌یکی؛ need_login=منوی راست). propose_visit/deal نزن."
+        path = (
+            "مهمان: خرید→search_lands (حداکثر ۲)→نزدیک‌ترین را با [[LAND]] معرفی کن | "
+            "بازاریاب شدن→coop_info سپس propose_apply "
+            "(نام/کدملی/شهر یکی‌یکی). propose_visit/deal نزن."
         )
-    return (
-        "بازاریاب فروش: مشتری→معیار→search_lands→[[LAND]] | یا نوع فایل→search→معرفی. "
-        "listing→کارت کپی | propose_visit/complete/deal/release→کارت تأیید. "
-        "بازدید یکی‌یکی: propose با land_code موضوع گفتگو → «نام مشتری را بگو» → شماره → تاریخ. "
-        "مأموریت اجباری نداریم."
-    )
+    else:
+        path = (
+            "بازاریاب: مشتری→search_lands (حداکثر ۲ کارت؛ نزدیک‌ترین اول)→[[LAND]] | فایل→معرفی. "
+            "روزانه: next_action + listing + visit/complete/deal + call/followup. "
+            "بازدید یکی‌یکی. تا کارت تأیید نزده نگو ثبت شد."
+        )
+    return f"{GOAL_SYSTEM} {path}"
 
 
 def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
+    """فقط ابزارهای هستهٔ فروش — هدف: یک بازاریاب از چت.
+
+    ابزارهای commercial/closing/integration/visit_result در schema چت نیستند
+    (handler برای کارت‌های قدیمی می‌ماند).
+    """
     v = (voice or "").strip().lower()
     schemas: list[dict[str, Any]] = [_schema_search()]
     if v == VOICE_PUBLIC:
@@ -305,46 +317,13 @@ def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
         schemas.append(_schema_complete_visit())
         schemas.append(_schema_deal())
         schemas.append(_schema_release())
-        # Phase 1 CRM tools — only when VINOR_CRM_AI_TOOLS_ENABLED (default ON)
+        # پیگیری روزانه فروش — هستهٔ هدف
         try:
             from app.crm.config import crm_ai_tools_enabled
+
             if crm_ai_tools_enabled():
                 schemas.append(_schema_log_call())
                 schemas.append(_schema_followup())
-        except Exception:
-            pass
-        # Phase 2 Visit Result tools — only when VINOR_VISIT_RESULT_AI_TOOLS_ENABLED
-        try:
-            from app.visit_result.config import visit_result_ai_tools_enabled
-            if visit_result_ai_tools_enabled():
-                schemas.append(_schema_visit_result())
-                schemas.append(_schema_no_show())
-        except Exception:
-            pass
-        # Phase 3 Commercial tools
-        try:
-            from app.commercial.config import commercial_ai_tools_enabled
-            if commercial_ai_tools_enabled():
-                schemas.append(_schema_offer())
-                schemas.append(_schema_counter_offer())
-                schemas.append(_schema_reservation())
-        except Exception:
-            pass
-        # Phase 4 Closing tools
-        try:
-            from app.closing.config import closing_ai_tools_enabled
-            if closing_ai_tools_enabled():
-                schemas.append(_schema_contract())
-                schemas.append(_schema_payment_milestone())
-                schemas.append(_schema_settlement())
-        except Exception:
-            pass
-        # Phase 6 Integration tools
-        try:
-            from app.integration.config import integration_ai_tools_enabled
-            if integration_ai_tools_enabled():
-                schemas.append(_schema_lead())
-                schemas.append(_schema_task())
         except Exception:
             pass
     return schemas
@@ -355,12 +334,15 @@ def _schema_search() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_SEARCH,
-            "description": "جستجوی ملک در لیست قابل‌دسترس (شهر/کد/نوع/کلیدواژه).",
+            "description": (
+                "جستجوی بهترین فایل قابل‌فروش در سیستم (گرمابسرد). "
+                "حداکثر ۲ نتیجه؛ نزدیک‌ترین به معیار را اول برگردان تا با [[LAND:کد]] معرفی شود."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "عبارت جستجو"},
-                    "limit": {"type": "integer", "description": "۱ تا ۵"},
+                    "limit": {"type": "integer", "description": "۱ یا ۲ (پیش‌فرض ۲)"},
                 },
                 "required": ["query"],
             },
@@ -433,7 +415,7 @@ def _schema_listing() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_LISTING,
-            "description": "متن دیوار/اینستا برای فایل (مأموریت فعال→land_code لازم نیست).",
+            "description": "متن دیوار/اینستا برای فایل موضوع گفتگو (land_code خالی=از زمینه).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -453,7 +435,7 @@ def _schema_visit() -> dict[str, Any]:
             "name": TOOL_VISIT,
             "description": (
                 "کارت ثبت بازدید یا بازدید مجدد. فیلدها یکی‌یکی؛ چندتایی نفرست. "
-                "فوری با land_code خالی بزن (کد را از کاربر نپرس؛ سیستم از مأموریت/گفتگو/اختصاص می‌گیرد) سپس: "
+                "فوری با land_code خالی بزن (کد را از کاربر نپرس؛ سیستم از گفتگو/کارت/اختصاص می‌گیرد) سپس: "
                 "customer_name → customer_phone → "
                 "بدون visit_date صدا بزن تا لیست ۱…۵ تاریخ بیاید → فقط شمارهٔ تاریخ را در visit_date بفرست. "
                 "ثبت فقط بعد از تأیید کارت."
@@ -1261,13 +1243,16 @@ def _tool_search_lands(
         "ok": True,
         "count": len(items),
         "lands": items,
+        "recommended_code": (items[0].get("code") if items else ""),
         "service_area": loc_label,
         "instruction": (
-            f"فقط فایل‌های {village} را پیشنهاد بده؛ برای هر کدام [[LAND:کد]] در خط جدا. "
+            f"فقط فایل‌های {village}. حداکثر ۲ کارت. "
+            "نزدیک‌ترین به معیار را اول با یک جمله دلیل معرفی کن و [[LAND:کد]] بگذار؛ "
+            "دومی فقط به‌عنوان گزینهٔ جایگزین با [[LAND:کد]]. "
             f"اگر کاربر جای دیگری خواست، بگو فعلا فقط {loc_label}."
         ),
     }
-    return {"ok": True, "model_result": model, "land_codes": codes}
+    return {"ok": True, "model_result": model, "land_codes": codes[:_MAX_LAND_CARDS]}
 
 
 def _tool_suggest_next_action(*, phone: str) -> dict[str, Any]:
@@ -1374,7 +1359,7 @@ def _tool_suggest_next_action(*, phone: str) -> dict[str, Any]:
             "coach_land_code": coach_land_code,
             "stats": stats_bit,
             "instruction": (
-                "همین کار بعدی را اولویت بده و از چت مأموریت جلو ببر. "
+                "همین کار بعدی را اولویت بده و از همین چت جلو ببر. "
                 "اگر coach_tip هست یک جمله تشویقی اضافه کن. "
                 "اگر action.chat_prompt هست همان مسیر را با ابزار propose_* ادامه بده؛ لینک صفحه نده. "
                 "برای آگهی دیوار/اینستا از draft_listing_copy استفاده کن."
@@ -3099,7 +3084,7 @@ def _partner_tx_snapshot(phone: str, code: str) -> dict[str, Any]:
             and str(a.get("land_code") or "").strip() == code_s
         ]
         if not mine:
-            return {"ok": False, "error": "این فایل در مأموریت/اختصاص شما نیست."}
+            return {"ok": False, "error": "این فایل در اختصاص/دسترس شما نیست."}
         gs = str(mine[0].get("status") or "active").strip().lower()
     else:
         gs = str(ctx.get("global_status") or "active").strip().lower()
@@ -3459,20 +3444,37 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         with_weekday=True,
     ) or format_display_jalali_date(vdate_iso)
     date_bit = f" برای {vdate_j}" if vdate_j else ""
-    return {
+    # بلافاصله کارت تماس + «بازدید انجام شد» — بدون دور دوباره مدل
+    follow = _offer_complete_visit_for_open(
+        phone=me,
+        land_code=code,
+        existing_visit_id=str(rec.get("id") or ""),
+    )
+    ui = follow.get("ui_action") if isinstance(follow.get("ui_action"), dict) else None
+    follow_mr = follow.get("model_result") if isinstance(follow.get("model_result"), dict) else {}
+    follow_speak = str(follow_mr.get("speak_exactly") or "").strip()
+    msg = (
+        f"بازدید{date_bit} ثبت شد. "
+        f"برای هماهنگی همین حالا با {call_phone} تماس بگیر. "
+        "اگر بازدید انجام شده، کارت زیر را تأیید کن."
+    )
+    out: dict[str, Any] = {
         "ok": True,
-        "message": (
-            f"بازدید{date_bit} ثبت شد. "
-            f"برای هماهنگی بازدید همین حالا با {call_phone} تماس بگیر؛ "
-            "بعد از بازدید از همین چت بگو «بازدید انجام شد» "
-            "تا کارت تأیید بیاید — لازم نیست به صفحه دیگری بروی."
-        ),
+        "message": msg,
         "visit_id": str(rec.get("id") or ""),
         "land_code": code,
         "visit_date_jalali": vdate_j,
         "call_phone": call_phone,
         "show_visit_call": True,
+        "followup_message": follow_speak or msg,
     }
+    if ui:
+        # ensure call button on complete card
+        ui = dict(ui)
+        ui["show_visit_call"] = True
+        ui["call_phone"] = call_phone
+        out["ui_action"] = ui
+    return out
 
 
 def confirm_action_from_token(*, phone: str, token: str) -> dict[str, Any]:
@@ -3986,6 +3988,18 @@ def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
     if not rec:
         return {"ok": False, "error": "ثبت انجام بازدید ممکن نشد."}
     save_express_visit_requests(visits)
+    st = str(rec.get("status") or "").strip()
+    if st == "completed" or err == "already_completed":
+        msg = (
+            "بازدید انجام شد ثبت و تأیید شد. "
+            "قدم بعدی: از همین چت بگو «ثبت معامله»."
+        )
+        if err == "already_completed":
+            msg = (
+                "بازدید قبلاً انجام‌شده ثبت شده. "
+                "قدم بعدی: از همین چت معامله را ثبت کن."
+            )
+        return {"ok": True, "message": msg, "land_code": code, "tx_mode": "deal"}
     msg = (
         "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است. "
         "قدم بعدی: بعد از تأیید، از همین چت بگو «ثبت معامله»."
@@ -4219,11 +4233,46 @@ def apply_confirm_result_to_chat(
                 )
             except Exception:
                 pass
+
+    # کارت بعدی (مثلاً complete_visit بعد از ثبت بازدید)
+    ui = confirm_out.get("ui_action")
+    if ok and isinstance(ui, dict):
+        try:
+            from app.ai.chat_store import append_exchange
+
+            follow = str(
+                confirm_out.get("followup_message")
+                or confirm_out.get("message")
+                or "قدم بعدی را در کارت زیر تأیید کن."
+            ).strip()
+            msgs, tid = append_exchange(
+                me,
+                "",
+                follow,
+                thread_id=tid or thread_id,
+                audience=aud,
+                assistant_agent_actions=[ui],
+                hide_user=True,
+            )
+        except Exception:
+            pass
+
+    if ok and me:
+        try:
+            from app.express_partner.partner_live_memory import rewrite_partner_live_memory
+
+            rewrite_partner_live_memory(me, action_note=note)
+        except Exception:
+            pass
+
     return {
         "card_updated": updated,
         "thread_id": tid or thread_id,
         "messages": msgs,
         "message": note,
+        "ui_action": ui if isinstance(ui, dict) else None,
+        "call_phone": confirm_out.get("call_phone") or "",
+        "show_visit_call": bool(confirm_out.get("show_visit_call")),
     }
 
 

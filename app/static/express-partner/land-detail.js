@@ -2190,7 +2190,7 @@
   }
 
   function scheduleVisitModalRecovery() {
-    /* no-op: فرم بازدید حذف شده؛ ثبت از چت مأموریت */
+    /* no-op: فرم بازدید حذف شده؛ ثبت از چت فروش */
   }
 
   function initLandDetailChatCta() {
@@ -3101,7 +3101,7 @@
 
     hoistLandModalsSafe();
     hoistLandDetailFooter();
-    // فرم‌های بازدید/معامله حذف شده‌اند — ثبت فقط از چت مأموریت
+    // فرم‌های بازدید/معامله حذف شده‌اند — ثبت فقط از چت فروش
 
     initGallery(cfg);
     initVideoSound();

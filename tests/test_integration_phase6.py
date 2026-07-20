@@ -156,6 +156,7 @@ class IntegrationAiToolsFlagTests(unittest.TestCase):
             self.assertNotIn("propose_task", names)
 
     def test_tools_present_when_on(self) -> None:
+        """هدف قفل: lead/task در schema چت نیست."""
         with mock.patch.dict(
             os.environ,
             {
@@ -168,9 +169,9 @@ class IntegrationAiToolsFlagTests(unittest.TestCase):
             from app.ai.audience import VOICE_PARTNER
 
             names = [t["function"]["name"] for t in tools_schema_for_voice(VOICE_PARTNER)]
-            self.assertIn("propose_lead", names)
-            self.assertIn("propose_task", names)
             self.assertIn("propose_deal", names)
+            self.assertNotIn("propose_lead", names)
+            self.assertNotIn("propose_task", names)
 
 
 class DealPathUntouchedTests(unittest.TestCase):

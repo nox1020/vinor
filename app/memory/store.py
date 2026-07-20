@@ -11,6 +11,7 @@ from typing import Any
 
 from flask import current_app
 
+from app.memory.config import memory_max_bytes
 from app.memory.interfaces import MemoryItem, MemoryStore
 
 
@@ -40,13 +41,66 @@ def default_memory_dir() -> str:
     return path
 
 
-class FileMemoryStore(MemoryStore):
-    """JSON file store per user — swappable later with Redis/Postgres."""
+def _payload_bytes(data: dict[str, Any]) -> int:
+    # همان serialization که روی دیسک نوشته می‌شود (indent=2)
+    return len(json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"))
 
-    def __init__(self, root_dir: str | None = None):
+
+def _item_sort_key(row: dict[str, Any]) -> str:
+    return str(row.get("updated_at") or row.get("created_at") or "")
+
+
+def _trim_items_to_quota(data: dict[str, Any], max_bytes: int) -> dict[str, Any]:
+    """حذف قدیمی‌ترین آیتم‌ها تا حجم فایل زیر سقف کاربر بماند (in-place)."""
+    items = [r for r in (data.get("items") or []) if isinstance(r, dict)]
+    data["items"] = items
+    data["max_bytes"] = int(max_bytes)
+    while True:
+        size = _payload_bytes(data)
+        if size <= max_bytes:
+            data["bytes_used"] = size
+            return data
+        items = data["items"]
+        if not items:
+            data["bytes_used"] = size
+            return data
+        if len(items) == 1:
+            row = dict(items[0])
+            val = str(row.get("value") or "")
+            overhead = max(256, size - len(val.encode("utf-8")))
+            allow = max(64, max_bytes - overhead)
+            encoded = val.encode("utf-8")
+            if len(encoded) > allow:
+                row["value"] = encoded[:allow].decode("utf-8", errors="ignore")
+                row["updated_at"] = _now_iso()
+            data["items"] = [row]
+            data["bytes_used"] = _payload_bytes(data)
+            return data
+        items = sorted(items, key=_item_sort_key)
+        items.pop(0)
+        data["items"] = items
+
+
+class FileMemoryStore(MemoryStore):
+    """فایل JSON اختصاصی هر کاربر — سقف حجم: memory_max_bytes() (پیش‌فرض ۱۰MB)."""
+
+    def __init__(self, root_dir: str | None = None, *, max_bytes: int | None = None):
         self._root = root_dir or default_memory_dir()
         os.makedirs(self._root, exist_ok=True)
         self._lock = threading.Lock()
+        self._max_bytes = int(max_bytes) if max_bytes is not None else memory_max_bytes()
+
+    def max_bytes(self) -> int:
+        return int(self._max_bytes)
+
+    def usage_bytes(self, user_key: str) -> int:
+        path = self._path(user_key)
+        if not path or not os.path.isfile(path):
+            return 0
+        try:
+            return int(os.path.getsize(path))
+        except Exception:
+            return 0
 
     def _path(self, user_key: str) -> str | None:
         key = _safe_user_key(user_key)
@@ -56,27 +110,40 @@ class FileMemoryStore(MemoryStore):
 
     def _load(self, user_key: str) -> dict[str, Any]:
         path = self._path(user_key)
+        blank = {
+            "user_key": _safe_user_key(user_key),
+            "items": [],
+            "version": 1,
+            "max_bytes": self._max_bytes,
+            "bytes_used": 0,
+        }
         if not path or not os.path.isfile(path):
-            return {"user_key": _safe_user_key(user_key), "items": [], "version": 1}
+            return blank
         try:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             if not isinstance(data, dict):
-                return {"user_key": _safe_user_key(user_key), "items": [], "version": 1}
+                return blank
             data.setdefault("items", [])
             data.setdefault("version", 1)
+            data["max_bytes"] = self._max_bytes
             return data
         except Exception:
-            return {"user_key": _safe_user_key(user_key), "items": [], "version": 1}
+            return blank
 
     def _save(self, user_key: str, data: dict[str, Any]) -> None:
         path = self._path(user_key)
         if not path:
             return
+        _trim_items_to_quota(data, self._max_bytes)
         tmp = f"{path}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         os.replace(tmp, path)
+        try:
+            data["bytes_used"] = int(os.path.getsize(path))
+        except Exception:
+            data["bytes_used"] = _payload_bytes(data)
 
     def list_items(self, user_key: str, *, memory_type: str | None = None) -> list[MemoryItem]:
         with self._lock:
@@ -95,7 +162,6 @@ class FileMemoryStore(MemoryStore):
             data = self._load(item.user_key)
             items = [r for r in (data.get("items") or []) if isinstance(r, dict)]
             now = _now_iso()
-            # Dedup by type+key fingerprint
             fp = _fingerprint(item.memory_type, item.key, item.value)
             for i, row in enumerate(items):
                 same_key = (
@@ -115,9 +181,13 @@ class FileMemoryStore(MemoryStore):
                         "fingerprint": fp,
                     }
                     items[i] = updated
-                    data["items"] = items[-400:]
+                    data["items"] = items
                     data["version"] = int(data.get("version") or 1) + 1
                     self._save(item.user_key, data)
+                    # ممکن است بعد از trim حذف شده باشد
+                    for r in data.get("items") or []:
+                        if isinstance(r, dict) and str(r.get("id") or "") == str(updated.get("id") or ""):
+                            return _row_to_item(r)
                     return _row_to_item(updated)
             new_id = item.id or str(uuid.uuid4())
             row = {
@@ -134,9 +204,12 @@ class FileMemoryStore(MemoryStore):
                 "fingerprint": fp,
             }
             items.append(row)
-            data["items"] = items[-400:]
+            data["items"] = items
             data["version"] = int(data.get("version") or 1) + 1
             self._save(item.user_key, data)
+            for r in data.get("items") or []:
+                if isinstance(r, dict) and str(r.get("id") or "") == new_id:
+                    return _row_to_item(r)
             return _row_to_item(row)
 
     def delete(self, user_key: str, memory_id: str) -> bool:
@@ -189,21 +262,45 @@ class FileMemoryStore(MemoryStore):
                 data["items"] = items
                 data["version"] = int(data.get("version") or 1) + 1
                 self._save(user_key, data)
+                for r in data.get("items") or []:
+                    if isinstance(r, dict) and str(r.get("id") or "") == mid:
+                        return _row_to_item(r)
                 return _row_to_item(row)
         return None
 
 
 class InMemoryMemoryStore(MemoryStore):
-    """In-process store for tests/dev."""
+    """In-process store for tests/dev — همان سقف بایت اختصاصی هر کاربر."""
 
-    def __init__(self):
-        self._data: dict[str, list[dict[str, Any]]] = {}
+    def __init__(self, *, max_bytes: int | None = None):
+        self._data: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
+        self._max_bytes = int(max_bytes) if max_bytes is not None else memory_max_bytes()
+
+    def max_bytes(self) -> int:
+        return int(self._max_bytes)
+
+    def usage_bytes(self, user_key: str) -> int:
+        key = _safe_user_key(user_key)
+        with self._lock:
+            data = self._data.get(key)
+            if not data:
+                return 0
+            return int(data.get("bytes_used") or _payload_bytes(data))
+
+    def _blank(self, user_key: str) -> dict[str, Any]:
+        return {
+            "user_key": _safe_user_key(user_key),
+            "items": [],
+            "version": 1,
+            "max_bytes": self._max_bytes,
+            "bytes_used": 0,
+        }
 
     def list_items(self, user_key: str, *, memory_type: str | None = None) -> list[MemoryItem]:
         key = _safe_user_key(user_key)
         with self._lock:
-            rows = list(self._data.get(key) or [])
+            rows = list((self._data.get(key) or {}).get("items") or [])
         out = []
         for row in rows:
             if memory_type and str(row.get("memory_type") or "") != memory_type:
@@ -214,7 +311,8 @@ class InMemoryMemoryStore(MemoryStore):
     def upsert(self, item: MemoryItem) -> MemoryItem:
         key = _safe_user_key(item.user_key)
         with self._lock:
-            rows = list(self._data.get(key) or [])
+            data = dict(self._data.get(key) or self._blank(item.user_key))
+            rows = [dict(r) for r in (data.get("items") or []) if isinstance(r, dict)]
             fp = _fingerprint(item.memory_type, item.key, item.value)
             now = _now_iso()
             for i, row in enumerate(rows):
@@ -229,7 +327,13 @@ class InMemoryMemoryStore(MemoryStore):
                         "fingerprint": fp,
                     }
                     rows[i] = row
-                    self._data[key] = rows
+                    data["items"] = rows
+                    data["version"] = int(data.get("version") or 1) + 1
+                    data = _trim_items_to_quota(data, self._max_bytes)
+                    self._data[key] = data
+                    for r in data.get("items") or []:
+                        if str(r.get("id") or "") == str(row.get("id") or ""):
+                            return _row_to_item(r)
                     return _row_to_item(row)
             row = {
                 "id": item.id or str(uuid.uuid4()),
@@ -245,18 +349,27 @@ class InMemoryMemoryStore(MemoryStore):
                 "fingerprint": fp,
             }
             rows.append(row)
-            self._data[key] = rows[-400:]
+            data["items"] = rows
+            data["version"] = int(data.get("version") or 1) + 1
+            data = _trim_items_to_quota(data, self._max_bytes)
+            self._data[key] = data
+            for r in data.get("items") or []:
+                if str(r.get("id") or "") == str(row.get("id") or ""):
+                    return _row_to_item(r)
             return _row_to_item(row)
 
     def delete(self, user_key: str, memory_id: str) -> bool:
         key = _safe_user_key(user_key)
         mid = str(memory_id or "").strip()
         with self._lock:
-            rows = list(self._data.get(key) or [])
+            data = dict(self._data.get(key) or self._blank(user_key))
+            rows = list(data.get("items") or [])
             nxt = [r for r in rows if str(r.get("id") or "") != mid]
             if len(nxt) == len(rows):
                 return False
-            self._data[key] = nxt
+            data["items"] = nxt
+            data["version"] = int(data.get("version") or 1) + 1
+            self._data[key] = _trim_items_to_quota(data, self._max_bytes)
             return True
 
     def update(
@@ -270,7 +383,8 @@ class InMemoryMemoryStore(MemoryStore):
         key = _safe_user_key(user_key)
         mid = str(memory_id or "").strip()
         with self._lock:
-            rows = list(self._data.get(key) or [])
+            data = dict(self._data.get(key) or self._blank(user_key))
+            rows = [dict(r) for r in (data.get("items") or []) if isinstance(r, dict)]
             for i, row in enumerate(rows):
                 if str(row.get("id") or "") != mid:
                     continue
@@ -281,7 +395,13 @@ class InMemoryMemoryStore(MemoryStore):
                 row["version"] = int(row.get("version") or 1) + 1
                 row["updated_at"] = _now_iso()
                 rows[i] = row
-                self._data[key] = rows
+                data["items"] = rows
+                data["version"] = int(data.get("version") or 1) + 1
+                data = _trim_items_to_quota(data, self._max_bytes)
+                self._data[key] = data
+                for r in data.get("items") or []:
+                    if str(r.get("id") or "") == mid:
+                        return _row_to_item(r)
                 return _row_to_item(row)
         return None
 

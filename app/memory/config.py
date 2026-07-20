@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+_DEFAULT_MAX_BYTES = 10 * 1024 * 1024  # 10 MiB per user
+
 
 def memory_enabled() -> bool:
     return (os.environ.get("VINOR_MEMORY_ENABLED") or "1").strip().lower() in (
@@ -28,3 +30,16 @@ def memory_top_k() -> int:
 
 def memory_store_backend() -> str:
     return (os.environ.get("VINOR_MEMORY_STORE") or "file").strip().lower()
+
+
+def memory_max_bytes() -> int:
+    """سقف بایت حافظهٔ اختصاصی هر کاربر (پیش‌فرض ۱۰ مگابایت)."""
+    raw = (os.environ.get("VINOR_MEMORY_MAX_BYTES") or "").strip()
+    if not raw:
+        return _DEFAULT_MAX_BYTES
+    try:
+        n = int(raw)
+    except Exception:
+        return _DEFAULT_MAX_BYTES
+    # حداقل ۶۴KB؛ حداکثر ۵۱۲MB برای ایمنی دیسک
+    return max(64 * 1024, min(512 * 1024 * 1024, n))

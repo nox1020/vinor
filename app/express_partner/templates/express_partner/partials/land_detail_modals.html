@@ -1,4 +1,4 @@
-{# مودال‌ها — فقط تماس و نقشه (ثبت بازدید/معامله از چت مأموریت است) #}
+{# مودال‌ها — فقط تماس و نقشه (ثبت بازدید/معامله از چت فروش است) #}
 {% set visit_customer_phone = (land._visit_customer_phone|default('')|string)|trim %}
 {% set owner_contact_phone = (land.owner_phone or land.vinor_contact or '')|string|trim %}
 {% set contact_phone = visit_customer_phone or owner_contact_phone %}

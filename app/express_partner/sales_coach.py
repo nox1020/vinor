@@ -150,7 +150,7 @@ def deliver_voided_encouragement(
     land_title: str = "",
     reason: str = "",
 ) -> Dict[str, Any]:
-    """اعلان داخل اپ + پیام در چت مأموریت (در صورت وجود)."""
+    """اعلان داخل اپ + پیام در چت فروش (در صورت وجود)."""
     ph = normalize_iran_mobile(str(partner_phone or "").strip())
     if not is_valid_iran_mobile(ph):
         return {"ok": False, "error": "bad_phone"}
@@ -688,7 +688,7 @@ def enrich_funnel_steps_for_nav(
     code_s = (code or "").strip()
     title_s = (title or "").strip()
     mode = (tx_mode or "").strip()
-    bits = [f"فایل {code_s}"] if code_s else ["فایل مأموریت"]
+    bits = [f"فایل {code_s}"] if code_s else ["فایل فروش"]
     if title_s:
         bits.append(f"({title_s})")
     head = " ".join(bits)
@@ -706,7 +706,7 @@ def enrich_funnel_steps_for_nav(
     )
     complete_prompt = f"{head}: بازدید انجام شد — کارت تأییدش رو بده."
     deal_prompt = f"{head}: می‌خوام معامله ثبت کنم — کارت تأیید بده."
-    status_prompt = f"{head}: وضعیت مأموریت و قدم بعدی رو کوتاه بگو."
+    status_prompt = f"{head}: وضعیت فروش و قدم بعدی رو کوتاه بگو."
 
     out: List[Dict[str, Any]] = []
     for raw in steps or []:
@@ -846,7 +846,7 @@ def build_ai_quick_prompts(
     title_s = (title or "").strip()
     stage = (stage_label or "").strip()
     mode = (tx_mode or "").strip()
-    head = f"فایل {code_s}" if code_s else "فایل مأموریت"
+    head = f"فایل {code_s}" if code_s else "فایل فروش"
     if title_s:
         head = f"{head} ({title_s})"
 
@@ -1265,9 +1265,9 @@ def build_nudge_messages(
     body = bodies.get(phase) or bodies["follow"]
     sms = sms_map.get(phase) or sms_map["follow"]
     if bool(nudge.get("is_mission")):
-        title = f"ماموریت {code}" if code else "ماموریت فروش"
-        body = f"ماموریت فایل {code} — تا معامله رها نکن. {body}"
-        sms = f"ماموریت وینور فایل {code}: {sms}"
+        title = f"پیگیری فروش {code}" if code else "پیگیری فروش"
+        body = f"فایل {code} — تا معامله رها نکن. {body}"
+        sms = f"وینور فروش فایل {code}: {sms}"
     return title, body, sms
 
 
@@ -1508,13 +1508,14 @@ def run_sales_coach_nudge_slot(
         else:
             item["sms"] = {"ok": False, "skipped": "sms_disabled"}
 
-        # پیگیری داخل چت مأموریت (حداکثر یک‌بار در هر اسلات)
+        # پیگیری داخل چت فروش (حداکثر یک‌بار در هر اسلات)
         mission_tid = str(nudge.get("mission_thread_id") or "").strip()
         if bool(nudge.get("is_mission")) and mission_tid and not dry_run:
             tip = str(nudge.get("tip") or "").strip()
             chat_body = (
-                f"یادآوری ماموریت ({_SLOT_LABELS.get(int(slot_hour), 'امروز')}): "
-                f"فایل {code} هنوز باز است. {tip or 'قدم بعدی را همین امروز بردار.'}"
+                f"یادآوری فروش ({_SLOT_LABELS.get(int(slot_hour), 'امروز')}): "
+                f"فایل {code} هنوز باز است. {tip or 'قدم بعدی را همین امروز بردار.'} "
+                f"از همین چت جلو برو؛ هماهنگی بازدید: 09121471301"
             )
             try:
                 from .partner_missions import append_mission_chat_followup

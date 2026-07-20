@@ -6052,12 +6052,25 @@ def _approve_express_partner(
             add_notification(
                 user_id=phone,
                 title='تأیید همکاری وینور اکسپرس',
-                body='درخواست شما تأیید شد. اکنون می‌توانید از پنل همکاری استفاده کنید.',
+                body=(
+                    'درخواست شما تأیید شد. همان چت قبلی‌ات باز است — '
+                    'الان می‌تونی بازدید و معامله را از چت ثبت کنی.'
+                ),
                 ntype='success',
                 action_url=url_for('express_partner.home', _external=True),
             )
         except Exception as e:
             current_app.logger.error('Error sending approval notification: %s', e, exc_info=True)
+
+    # ارتقای همان thread: چت public → partner تا ابزارهای کامل فعال شوند
+    chat_migrated = 0
+    try:
+        from app.ai.chat_store import promote_public_chat_to_partner
+
+        mig = promote_public_chat_to_partner(phone)
+        chat_migrated = int(mig.get("migrated") or 0)
+    except Exception as e:
+        current_app.logger.error('promote_public_chat_to_partner failed: %s', e, exc_info=True)
 
     if send_sms and phone.startswith('09'):
         try:
@@ -6102,6 +6115,7 @@ def _approve_express_partner(
         'ref_skip_reason': ref_skip_reason,
         'referred_by_phone': ref_by,
         'application_id': int(app.get('id') or 0) if app else 0,
+        'chat_migrated': chat_migrated,
     }
 
 

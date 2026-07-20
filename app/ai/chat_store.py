@@ -272,6 +272,65 @@ def _save_record(record: dict[str, Any], user_key: str, audience: str | None = N
             pass
 
 
+def promote_public_chat_to_partner(user_key: str) -> dict[str, Any]:
+    """
+    بعد از تأیید بازاریاب: تاریخچهٔ چت public را به partner منتقل/ادغام کن
+    تا همان thread با ابزارهای کامل ادامه پیدا کند.
+    """
+    key = _storage_key(user_key)
+    if not key:
+        return {"ok": False, "migrated": 0, "error": "invalid_key"}
+    pub = load_user_record(user_key, AUDIENCE_PUBLIC)
+    pub_threads = [t for t in (pub.get("threads") or []) if isinstance(t, dict)]
+    if not pub_threads:
+        return {"ok": True, "migrated": 0, "active_id": None}
+
+    part = load_user_record(user_key, AUDIENCE_PARTNER)
+    by_id = {
+        str(t.get("id") or ""): t
+        for t in (part.get("threads") or [])
+        if isinstance(t, dict) and str(t.get("id") or "").strip()
+    }
+    migrated = 0
+    for th in pub_threads:
+        tid = str(th.get("id") or "").strip()
+        if not tid:
+            continue
+        if tid not in by_id:
+            by_id[tid] = dict(th)
+            migrated += 1
+            continue
+        # ادغام پیام‌ها اگر thread از قبل در partner هست
+        existing = by_id[tid]
+        old_msgs = list(existing.get("messages") or [])
+        old_ids = {str(m.get("id") or "") for m in old_msgs if isinstance(m, dict)}
+        added = 0
+        for m in th.get("messages") or []:
+            if not isinstance(m, dict):
+                continue
+            mid = str(m.get("id") or "")
+            if mid and mid in old_ids:
+                continue
+            old_msgs.append(m)
+            if mid:
+                old_ids.add(mid)
+            added += 1
+        if added:
+            existing["messages"] = old_msgs[-_MAX_MESSAGES:]
+            existing["updated_at"] = th.get("updated_at") or existing.get("updated_at") or _now_iso()
+            if th.get("title") and existing.get("title") in (None, "", "گفتگوی جدید"):
+                existing["title"] = th.get("title")
+            migrated += 1
+
+    threads = list(by_id.values())
+    active = str(pub.get("active_id") or "").strip() or str(part.get("active_id") or "").strip()
+    if active and not any(str(t.get("id")) == active for t in threads):
+        active = str(threads[0].get("id")) if threads else ""
+    out = {"user_key": key, "active_id": active or None, "threads": threads}
+    _save_record(out, user_key, AUDIENCE_PARTNER)
+    return {"ok": True, "migrated": migrated, "active_id": out.get("active_id")}
+
+
 def _find_thread(record: dict[str, Any], thread_id: str | None) -> dict[str, Any] | None:
     tid = str(thread_id or "").strip()
     if not tid:
@@ -314,6 +373,25 @@ def create_thread(user_key: str, *, activate: bool = True, audience: str | None 
     return tid
 
 
+def _is_welcome_msg(m: Any) -> bool:
+    if not isinstance(m, dict):
+        return False
+    if str(m.get("source") or "").strip().lower() == "welcome":
+        return True
+    meta = m.get("meta")
+    return isinstance(meta, dict) and bool(meta.get("welcome"))
+
+
+def is_thread_open_slate(th: dict[str, Any] | None) -> bool:
+    """ترد خالی یا فقط با پیام شروع وینور — قابل بازنشانی برای گفتگوی جدید."""
+    if not th:
+        return True
+    msgs = [m for m in (th.get("messages") or []) if isinstance(m, dict)]
+    if not msgs:
+        return True
+    return all(_is_welcome_msg(m) for m in msgs)
+
+
 def guest_new_thread_blocked(user_key: str, audience: str | None = None) -> dict[str, Any] | None:
     """اگر مهمان به سقف ۲ گفتگو رسیده و گفتگوی خالی برای بازنشانی ندارد."""
     if not _is_guest_key(user_key):
@@ -323,7 +401,7 @@ def guest_new_thread_blocked(user_key: str, audience: str | None = None) -> dict
     if len(threads) < _GUEST_MAX_THREADS:
         return None
     th = _active_thread(record)
-    if th and not (th.get("messages") or []):
+    if th and is_thread_open_slate(th):
         return None
     return {
         "ok": False,
@@ -334,24 +412,96 @@ def guest_new_thread_blocked(user_key: str, audience: str | None = None) -> dict
     }
 
 
-def clear_chat(user_key: str, audience: str | None = None) -> dict[str, Any]:
-    """گفتگوی جدید — اگر گفتگوی فعال خالی است همان را بازنشانی می‌کند."""
+def clear_chat(
+    user_key: str,
+    audience: str | None = None,
+    *,
+    opening_text: str | None = None,
+) -> dict[str, Any]:
+    """گفتگوی جدید — اگر فقط شروع وینور است همان را بازنشانی می‌کند."""
     record = load_user_record(user_key, audience)
     th = _active_thread(record)
-    if th and not (th.get("messages") or []):
+    if th and is_thread_open_slate(th):
         ts = _now_iso()
         th["title"] = "گفتگوی جدید"
         th["updated_at"] = ts
+        th["messages"] = []
         record["active_id"] = th["id"]
         _save_record(record, user_key, audience)
-        return {"ok": True, "thread_id": str(th["id"])}
+        tid = str(th["id"])
+        if opening_text:
+            msgs, tid = ensure_vinor_opening(
+                user_key,
+                opening_text,
+                audience=audience,
+                thread_id=tid,
+            )
+            return {"ok": True, "thread_id": tid, "messages": msgs}
+        return {"ok": True, "thread_id": tid}
 
     blocked = guest_new_thread_blocked(user_key, audience)
     if blocked:
         return blocked
 
     tid = create_thread(user_key, activate=True, audience=audience)
+    if opening_text:
+        msgs, tid = ensure_vinor_opening(
+            user_key,
+            opening_text,
+            audience=audience,
+            thread_id=tid,
+        )
+        return {"ok": True, "thread_id": tid, "messages": msgs}
     return {"ok": True, "thread_id": tid}
+
+
+def ensure_vinor_opening(
+    user_key: str,
+    text: str,
+    *,
+    audience: str | None = None,
+    thread_id: str | None = None,
+) -> tuple[list[dict[str, Any]], str]:
+    """وینور شروع‌کنندهٔ چت: اگر ترد بدون گفتگوی واقعی است، پیام اول را بگذار."""
+    body = (text or "").strip()[:_MAX_CONTENT]
+    if not body:
+        tid = thread_id or ensure_active_thread(user_key, audience=audience)
+        return messages_for_ui(user_key, thread_id=tid, audience=audience), tid
+
+    record = load_user_record(user_key, audience)
+    tid = (thread_id or record.get("active_id") or "").strip()
+    th = _find_thread(record, tid) if tid else _active_thread(record)
+    if not th:
+        tid = create_thread(user_key, activate=True, audience=audience)
+        record = load_user_record(user_key, audience)
+        th = _find_thread(record, tid)
+    assert th is not None
+    tid = str(th["id"])
+
+    msgs = [m for m in (th.get("messages") or []) if isinstance(m, dict)]
+    if msgs and not is_thread_open_slate(th):
+        return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience), tid
+    if msgs and all(_is_welcome_msg(m) for m in msgs):
+        return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience), tid
+
+    ts = _now_iso()
+    entry: dict[str, Any] = {
+        "id": _new_message_id(),
+        "role": "assistant",
+        "type": "ai",
+        "content": body,
+        "created_at": ts,
+        "source": "welcome",
+        "quota": False,
+        "meta": {"welcome": True},
+    }
+    th["messages"] = [entry]
+    th["updated_at"] = ts
+    if not (th.get("title") or "").strip() or th.get("title") == "گفتگوی جدید":
+        th["title"] = "گفتگوی جدید"
+    record["active_id"] = tid
+    _save_record(record, user_key, audience)
+    return _enrich_messages_for_ui(user_key, th["messages"], audience), tid
 
 
 def set_active_thread(user_key: str, thread_id: str, audience: str | None = None) -> bool:
@@ -391,7 +541,7 @@ def _counts_toward_guest_quota(m: Any) -> bool:
     if m.get("quota") is False:
         return False
     source = str(m.get("source") or "").strip().lower()
-    if source in ("admin_escalation", "postchi", "system"):
+    if source in ("admin_escalation", "postchi", "system", "welcome"):
         return False
     mtype = str(m.get("type") or "").strip().lower()
     if mtype in ("system", "timeline", "admin", "progress", "status", "warning", "error"):
@@ -586,7 +736,7 @@ def append_exchange(
             if not hide_user:
                 th["title"] = _title_from_text(user_text)
             else:
-                th["title"] = "گفتگوی مأموریت"
+                th["title"] = "گفتگوی فروش"
     if assistant_text or actions or codes:
         msg_type = MSG_CARD if actions else MSG_AI
         entry: dict[str, Any] = {

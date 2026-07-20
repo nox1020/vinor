@@ -196,7 +196,7 @@ def prepare_agent_after_supervisor(
     thread_id: str | None = None,
     context_budget_chars: int = 3000,
 ) -> AgentOutcome | None:
-    """Public hook used by generate_reply after Supervisor.orchestrate."""
+    """Hook داخلی بعد از Supervisor — هویت محصول همان یک بازاریاب چت است."""
     out = prepare_agent(
         message=message,
         route=route,

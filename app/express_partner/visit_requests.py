@@ -30,6 +30,21 @@ NO_SHOW_STATUS = "no_show"
 
 OPEN_VISIT_STATUSES = frozenset({PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS})
 
+
+def visit_requests_auto_approve_enabled() -> bool:
+    """
+    پیش‌فرض ON: درخواست بازدید و اعلام انجام بدون صف تأیید ادمین نهایی می‌شوند.
+    خاموش با VINOR_VISIT_REQUESTS_AUTO_APPROVE=0
+    """
+    import os
+
+    return (os.environ.get("VINOR_VISIT_REQUESTS_AUTO_APPROVE") or "1").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
 VISIT_PROGRESS_STEP_KEYS = (
     ("visit_requested", "درخواست بازدید"),
     ("visit_approved", "نهایی شدن بازدید"),
@@ -641,7 +656,8 @@ def create_visit_request(
 
     now_iso = datetime.utcnow().isoformat() + "Z"
     full_name = f"{first} {last}".strip()
-    # درخواست بازدید بدون صف تأیید ادمین نهایی می‌شود؛ فقط پیامک اطلاع‌رسانی می‌رود.
+    # پیش‌فرض: بدون صف تأیید ادمین — فقط اطلاع‌رسانی
+    auto = visit_requests_auto_approve_enabled()
     rec: Dict[str, Any] = {
         "id": uuid.uuid4().hex[:16],
         "partner_phone": ph,
@@ -653,12 +669,13 @@ def create_visit_request(
         "customer_last_name": last,
         "customer_name": full_name,
         "customer_phone": cust_phone,
-        "status": APPROVED_STATUS,
+        "status": APPROVED_STATUS if auto else PENDING_STATUS,
         "created_at": now_iso,
         "updated_at": now_iso,
-        "approved_at": now_iso,
-        "auto_approved": True,
+        "auto_approved": bool(auto),
     }
+    if auto:
+        rec["approved_at"] = now_iso
     requests.append(rec)
     return rec, None
 
@@ -870,16 +887,45 @@ def commission_for_visit_request(
 def request_visit_done_confirmation(
     requests: List[Dict[str, Any]], phone: str, land_code: str
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    اعلام «بازدید انجام شد».
+    با auto-approve پیش‌فرض: مستقیم completed (بدون صف ادمین).
+    """
+    done = partner_visit_completed(requests, phone, land_code)
+    if done:
+        return done, "already_completed"
+
     pending = partner_visit_done_pending(requests, phone, land_code)
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    auto = visit_requests_auto_approve_enabled()
+
     if pending:
+        if auto:
+            pending["status"] = COMPLETED_STATUS
+            pending["updated_at"] = now_iso
+            pending["completed_at"] = now_iso
+            pending["auto_completed"] = True
+            if not pending.get("visit_done_requested_at"):
+                pending["visit_done_requested_at"] = now_iso
+            return pending, None
         return pending, "already_pending"
+
     rec = partner_visit_approved_for_deal(requests, phone, land_code)
     if not rec:
         return None, "not_approved"
-    now_iso = datetime.utcnow().isoformat() + "Z"
-    rec["status"] = DONE_PENDING_STATUS
+
     rec["updated_at"] = now_iso
     rec["visit_done_requested_at"] = now_iso
+    if auto:
+        rec["status"] = COMPLETED_STATUS
+        rec["completed_at"] = now_iso
+        rec["auto_completed"] = True
+        if not rec.get("approved_at"):
+            rec["approved_at"] = now_iso
+    else:
+        rec["status"] = DONE_PENDING_STATUS
+        if not rec.get("approved_at"):
+            rec["approved_at"] = now_iso
     return rec, None
 
 
@@ -1058,19 +1104,19 @@ def admin_row_dict(
     st = (str(row.get("status") or PENDING_STATUS)).strip()
     labels = {
         PENDING_STATUS: "در انتظار تأیید",
-        APPROVED_STATUS: "تأیید شده — در انتظار انجام بازدید",
-        DONE_PENDING_STATUS: "در انتظار تأیید انجام بازدید",
-        COMPLETED_STATUS: "بازدید انجام شد",
+        APPROVED_STATUS: "تأیید شده — منتظر بازدید",
+        DONE_PENDING_STATUS: "تأیید انجام",
+        COMPLETED_STATUS: "انجام شد",
         CANCELLED_STATUS: "بسته شده",
-        NO_SHOW_STATUS: "عدم حضور (No-Show)",
+        NO_SHOW_STATUS: "عدم حضور",
     }
     hints = {
-        PENDING_STATUS: "تأیید کنید تا همکار پس از انجام بازدید، آن را روی فایل ثبت کند.",
-        APPROVED_STATUS: "همکار باید پس از انجام بازدید، آن را از روی فایل ثبت کند.",
-        DONE_PENDING_STATUS: "همکار انجام بازدید را ثبت کرده؛ پس از تأیید شما، همکار می‌تواند معامله ثبت کند.",
-        COMPLETED_STATUS: "بازدید انجام شده؛ همکار می‌تواند درخواست معامله (فروش) ثبت کند.",
+        PENDING_STATUS: "تأیید = بازاریاب می‌تواند بازدید را هماهنگ کند.",
+        APPROVED_STATUS: "منتظر اعلام «بازدید انجام شد» از چت بازاریاب.",
+        DONE_PENDING_STATUS: "بازاریاب اعلام کرده — تأیید = معامله آزاد می‌شود.",
+        COMPLETED_STATUS: "بازدید انجام شده؛ معامله از چت ممکن است.",
         CANCELLED_STATUS: "این درخواست بسته شده است.",
-        NO_SHOW_STATUS: "مشتری حاضر نشد. همکار می‌تواند بازدید مجدد ثبت کند.",
+        NO_SHOW_STATUS: "مشتری حاضر نشد؛ بازدید مجدد از چت ممکن است.",
     }
     progress_steps = visit_progress_steps(row, commissions)
     progress_summary = visit_progress_summary(progress_steps)
@@ -1211,16 +1257,16 @@ def admin_visit_workflow_steps(
         else:
             s2, hint, action = "blocked", "", False
     elif st == DONE_PENDING_STATUS:
-        s2, hint, action = "current", "همکار «بازدید انجام شد» را ثبت کرده؛ تأیید یا رد کنید.", True
+        s2, hint, action = "current", "اعلام انجام رسیده — تأیید یا رد کنید (معامله آزاد).", True
     elif st == COMPLETED_STATUS:
         s2, hint, action = "done", "", False
     elif st == APPROVED_STATUS:
-        s2, hint, action = "waiting", "منتظر ثبت «بازدید انجام شد» توسط همکار روی فایل.", False
+        s2, hint, action = "waiting", "منتظر «بازدید انجام شد» از چت.", False
     else:
-        s2, hint, action = "waiting", "پس از تأیید درخواست بازدید.", False
+        s2, hint, action = "waiting", "پس از تأیید درخواست.", False
     steps.append({
         "key": "visit_done",
-        "label": "تأیید انجام بازدید",
+        "label": "تأیید انجام",
         "state": s2,
         "hint": hint,
         "needs_action": action,

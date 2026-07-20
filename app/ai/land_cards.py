@@ -110,7 +110,7 @@ def collect_land_codes(
     for c in from_markers:
         if c in lands_map and c not in merged:
             merged.append(c)
-    return cleaned, merged[:5]
+    return cleaned, merged[:2]
 
 
 def resolve_lands(phone: str, codes: list[str], audience: str | None = None) -> list[dict[str, Any]]:
@@ -133,7 +133,7 @@ def render_land_cards_html(
 ) -> str:
     """HTML کارت‌های داشبورد (همان partial)."""
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
-    lands = resolve_lands(phone, codes, aud)
+    lands = resolve_lands(phone, codes[:2], aud)
     if not lands:
         return ""
     parts: list[str] = []
@@ -170,7 +170,7 @@ def land_cards_payload(
 ) -> list[dict[str, str]]:
     """برای API JSON: کد + HTML هر کارت."""
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
-    lands = resolve_lands(phone, codes, aud)
+    lands = resolve_lands(phone, codes[:2], aud)
     if not lands:
         return []
     show_commission = aud == AUDIENCE_PARTNER and partner_is_approved(phone)

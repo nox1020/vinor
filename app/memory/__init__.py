@@ -1,1 +1,1 @@
-"""Independent Memory Layer for Vinor AI (Phase 5)."""
+"""Independent Memory Layer for Vinor AI — فایل اختصاصی هر کاربر تا ۱۰MB."""

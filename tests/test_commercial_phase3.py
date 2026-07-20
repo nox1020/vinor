@@ -154,6 +154,7 @@ class CommercialAiToolsFlagTests(unittest.TestCase):
             self.assertNotIn("propose_reservation", names)
 
     def test_tools_present_when_on(self) -> None:
+        """هدف قفل: commercial در schema چت نیست — حتی با flag روشن."""
         with mock.patch.dict(
             os.environ,
             {
@@ -164,12 +165,13 @@ class CommercialAiToolsFlagTests(unittest.TestCase):
         ):
             from app.ai.agent_tools import tools_schema_for_voice
             from app.ai.audience import VOICE_PARTNER
+            from app.ai.goal import EXTENDED_CHAT_TOOLS
 
             names = [t["function"]["name"] for t in tools_schema_for_voice(VOICE_PARTNER)]
-            self.assertIn("propose_offer", names)
-            self.assertIn("propose_counter_offer", names)
-            self.assertIn("propose_reservation", names)
             self.assertIn("propose_deal", names)
+            for ext in ("propose_offer", "propose_counter_offer", "propose_reservation"):
+                self.assertNotIn(ext, names)
+                self.assertIn(ext, EXTENDED_CHAT_TOOLS)
 
 
 class CommercialWorkflowFlagTests(unittest.TestCase):

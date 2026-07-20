@@ -157,7 +157,7 @@ class WorkflowEngineFlowTests(unittest.TestCase):
         self.assertTrue(out.pass_to_supervisor)
         self.assertEqual(
             (out.observability or {}).get("skip_reason"),
-            "partner_ops_tools_cards",
+            "partner_chat_tools_only",
         )
 
 

@@ -80,3 +80,24 @@ def learn_from_exchange(
         return len(saved)
     except Exception:
         return 0
+
+
+def memory_quota_for_user(user_key: str) -> dict[str, int]:
+    """مصرف و سقف حافظهٔ اختصاصی یک کاربر (بایت)."""
+    from app.memory.config import memory_max_bytes
+    from app.memory.di import make_memory_store
+
+    max_b = memory_max_bytes()
+    used = 0
+    if user_key:
+        try:
+            store = make_memory_store()
+            used_fn = getattr(store, "usage_bytes", None)
+            if callable(used_fn):
+                used = int(used_fn(user_key) or 0)
+            max_fn = getattr(store, "max_bytes", None)
+            if callable(max_fn):
+                max_b = int(max_fn() or max_b)
+        except Exception:
+            used = 0
+    return {"bytes_used": used, "max_bytes": max_b}

@@ -1395,46 +1395,13 @@
   }
 
   function injectHomeLandsCarouselIntoChat() {
+    /* AGENT_GOAL: بدو ورود فقط welcome چت — کاتالوگ فایل تزریق نشود (تداخل با چت). */
     if (!homeInline || !list) return;
-    if (list.querySelector('.ai-msg-wrap[data-vn-lands-inject="1"]')) return;
-    var source = document.getElementById('vnHomeLandsChatSource');
-    var carousel = source && source.querySelector('#homePublicLandsCarousel');
-    if (!carousel || carousel.getAttribute('data-has-lands') !== '1') return;
-
-    removeWelcome();
-    var node = carousel.cloneNode(true);
-    try {
-      node.id = 'homePublicLandsCarouselChat';
-    } catch (_) {}
-
-    var wrap = document.createElement('div');
-    wrap.className = 'ai-msg-wrap ai-msg-wrap--assistant';
-    wrap.setAttribute('data-role', 'assistant');
-    wrap.setAttribute('data-vn-lands-inject', '1');
-    wrap.setAttribute('data-ephemeral', '1');
-    var row = document.createElement('div');
-    row.className = 'ai-msg-row';
-    var body = document.createElement('div');
-    body.className = 'ai-msg-body';
-    var host = document.createElement('div');
-    host.className = 'ai-msg-cards ai-msg-cards--home-lands w-full min-w-0 max-w-full';
-    host.appendChild(node);
-    body.appendChild(host);
-    row.appendChild(body);
-    wrap.appendChild(row);
-    /* بعد از Case header مأموریت؛ نه بالای آن */
-    var journey = list.querySelector('.ai-msg-wrap[data-vn-journey-inject="1"]');
-    if (journey && journey.nextSibling) {
-      list.insertBefore(wrap, journey.nextSibling);
-    } else if (journey) {
+    list.querySelectorAll('.ai-msg-wrap[data-vn-lands-inject="1"]').forEach(function (el) {
       try {
-        journey.after(wrap);
-      } catch (_) {
-        list.appendChild(wrap);
-      }
-    } else {
-      list.insertBefore(wrap, list.firstChild);
-    }
+        el.remove();
+      } catch (_) {}
+    });
   }
 
   function pinJourneyWrapToTop(wrap) {
@@ -1852,6 +1819,7 @@
     if (msg.source === 'postchi' && role === 'assistant') {
       wrap.setAttribute('data-postchi', '1');
     }
+    if (msg.source) wrap.setAttribute('data-source', String(msg.source));
     if (isAdmin && msg.source !== 'postchi') wrap.setAttribute('data-admin-reply', '1');
     if (opts.pendingUser) wrap.setAttribute('data-pending-user', '1');
     if (opts.welcome) wrap.setAttribute('data-welcome', '1');
@@ -1977,7 +1945,22 @@
     list.innerHTML = '';
     seenEscalationIds = {};
     lastSyncAt = '';
-    (messages || []).forEach(function (m) {
+    var rows = messages || [];
+    var onlyOpening =
+      rows.length === 1 &&
+      rows[0] &&
+      rows[0].role === 'assistant' &&
+      messageHasContent(rows[0]) &&
+      isOpeningAssistantMsg(rows[0]);
+    if (onlyOpening) {
+      playVinorOpening(rows[0]);
+      injectHomeJourneyCardIntoChat();
+      scanLastSyncFromDom();
+      syncChipBarVisibility();
+      scrollChatToLatest();
+      return;
+    }
+    rows.forEach(function (m) {
       if (!m) return;
       if (m.role && messageHasContent(m)) {
         appendMessage(m);
@@ -1990,10 +1973,99 @@
     scrollChatToLatest();
   }
 
+  function isOpeningAssistantMsg(msg) {
+    if (!msg || msg.role !== 'assistant') return false;
+    if (String(msg.source || '').toLowerCase() === 'welcome') return true;
+    if (msg.meta && msg.meta.welcome) return true;
+    return false;
+  }
+
+  function openingTypedKey() {
+    return 'vinor_opening_typed_' + (activeThreadId() || 'none');
+  }
+
+  function wasOpeningTyped() {
+    try {
+      return sessionStorage.getItem(openingTypedKey()) === '1';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function markOpeningTyped() {
+    try {
+      sessionStorage.setItem(openingTypedKey(), '1');
+    } catch (_) {}
+  }
+
+  function playVinorOpening(msg, opts) {
+    opts = opts || {};
+    var payload = {
+      role: 'assistant',
+      content: ((msg && msg.content) || welcome || '').trim(),
+      created_at: (msg && msg.created_at) || '',
+      id: (msg && msg.id) || '',
+      source: (msg && msg.source) || 'welcome',
+      type: (msg && msg.type) || 'ai',
+    };
+    if (!payload.content) return Promise.resolve(null);
+
+    if (opts.keepDomIfTyped && wasOpeningTyped()) {
+      var existing = list.querySelector('.ai-msg-wrap[data-role="assistant"]');
+      if (existing) {
+        existing.removeAttribute('data-welcome');
+        enhanceAssistantBubbles(existing);
+        ensureMsgActions(existing);
+        return Promise.resolve(existing);
+      }
+    }
+
+    /* پیام شروع را مثل جواب عادی وینور تایپ کن — نه بنر ephemeral */
+    list.querySelectorAll('.ai-msg-wrap[data-role]').forEach(function (w) {
+      try {
+        w.remove();
+      } catch (_) {}
+    });
+
+    if (wasOpeningTyped()) {
+      appendMessage(payload);
+      return Promise.resolve(null);
+    }
+
+    return typewriteAssistantMessage(payload).then(function (wrap) {
+      markOpeningTyped();
+      return wrap;
+    });
+  }
+
   function showWelcomeIfEmpty() {
     if (isPostchiMode()) return;
-    if (list.querySelector('.ai-msg-wrap[data-role]')) return;
-    appendMessage({ role: 'assistant', content: welcome }, { welcome: true });
+    var wraps = list.querySelectorAll('.ai-msg-wrap[data-role]');
+    if (wraps.length === 1) {
+      var w = wraps[0];
+      if (w.getAttribute('data-role') !== 'assistant') return;
+      var src = (w.getAttribute('data-source') || '').toLowerCase();
+      var plain = (assistantPlainText(w) || '').trim();
+      var isOpening =
+        src === 'welcome' ||
+        w.getAttribute('data-welcome') === '1' ||
+        plain === String(welcome || '').trim() ||
+        /^سلام[،,]?\s*چطور کمک کنم/.test(plain);
+      if (!isOpening) return;
+      playVinorOpening(
+        {
+          role: 'assistant',
+          content: plain || welcome,
+          created_at: w.getAttribute('data-created-at') || '',
+          id: w.getAttribute('data-msg-id') || '',
+          source: src || 'welcome',
+        },
+        { keepDomIfTyped: true }
+      );
+      return;
+    }
+    if (wraps.length > 0) return;
+    playVinorOpening({ role: 'assistant', content: welcome, source: 'welcome' });
   }
 
   async function markPostchiOpened() {
@@ -2373,7 +2445,10 @@
         throw new Error((data && data.error) || 'خطا');
       }
       if (data.thread_id) setActiveThreadId(data.thread_id);
-      renderMessages([]);
+      try {
+        sessionStorage.removeItem(openingTypedKey());
+      } catch (_) {}
+      renderMessages(Array.isArray(data.messages) ? data.messages : []);
       lastThreadsKey = '';
       await refreshHistory(true);
       closeSideMenu();

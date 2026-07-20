@@ -83,6 +83,64 @@ class MemoryLayerTests(unittest.TestCase):
         self.assertEqual(edited.value, "ترجیح زمین سرمايه‌گذاری")
         self.assertTrue(self.manager.delete_memory("09121111111", mid))
 
+    def test_per_user_quota_10mb_default_and_trim(self) -> None:
+        from app.memory.config import memory_max_bytes
+        from app.memory.interfaces import MemoryItem
+        from app.memory.store import FileMemoryStore, InMemoryMemoryStore
+
+        self.assertEqual(memory_max_bytes(), 10 * 1024 * 1024)
+
+        # سقف کوچک برای تست trim
+        store = InMemoryMemoryStore(max_bytes=2500)
+        self.assertEqual(store.max_bytes(), 2500)
+        for i in range(40):
+            store.upsert(
+                MemoryItem(
+                    id="",
+                    user_key="09123334445",
+                    memory_type="semantic",
+                    key=f"note-{i}",
+                    value=("یادداشت فروش فایل " + str(i) + " ") * 20,
+                    score=0.5,
+                )
+            )
+        used = store.usage_bytes("09123334445")
+        self.assertLessEqual(used, 2500)
+        self.assertGreater(used, 0)
+        # کاربر دیگر سهم جدا دارد
+        store.upsert(
+            MemoryItem(
+                id="",
+                user_key="09125556667",
+                memory_type="long_term",
+                key="budget",
+                value="بودجه ۱۰ میلیارد",
+                score=0.9,
+            )
+        )
+        self.assertGreater(len(store.list_items("09125556667")), 0)
+        self.assertNotEqual(
+            store.usage_bytes("09123334445"),
+            0,
+        )
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            fstore = FileMemoryStore(root_dir=tmp, max_bytes=3000)
+            for i in range(30):
+                fstore.upsert(
+                    MemoryItem(
+                        id="",
+                        user_key="09127778889",
+                        memory_type="semantic",
+                        key=f"k-{i}",
+                        value=("حافظه اختصاصی " * 15) + str(i),
+                        score=0.4,
+                    )
+                )
+            self.assertLessEqual(fstore.usage_bytes("09127778889"), 3000)
+            self.assertGreater(fstore.usage_bytes("09127778889"), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -239,19 +239,11 @@ class DefaultConversationManager(ConversationManager):
                 observability=obs,
             )
 
-        # Partner ops: always skip form workflow — AI tools/cards are the live path.
-        # Match partner profile OR partner chat surface (audience=partner).
-        _tool_intents = {
-            INTENT_VISIT,
-            INTENT_DEAL,
-            INTENT_OFFER,
-            INTENT_VISIT_RESULT,
-            INTENT_CONTRACT,
-        }
+        # Partner chat = مسیر زنده واحد (tools/cards). Workflow فرم فقط برای غیرهمکار.
         _partner_surface = bool(getattr(identity, "is_partner", False)) or (
             (audience or "").strip().lower() == "partner"
         )
-        if intent_info.intent in _tool_intents and _partner_surface:
+        if _partner_surface:
             self._sessions.clear(user_key, thread_id=tid)
             return ConversationOutcome(
                 handled=False,
@@ -264,7 +256,8 @@ class DefaultConversationManager(ConversationManager):
                     "workflow": WF_NONE,
                     "workflow_name": "",
                     "workflow_state": "",
-                    "skip_reason": "partner_ops_tools_cards",
+                    "skip_reason": "partner_chat_tools_only",
+                    "persists_business": False,
                     "conversation_extra_tokens": 0,
                     "workflow_extra_tokens": 0,
                 },

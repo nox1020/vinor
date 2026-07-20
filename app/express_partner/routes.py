@@ -2832,21 +2832,11 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
 
 
 def _partner_ai_welcome(*, is_approved: bool, has_pending_app: bool, me_phone: str) -> str:
-    """پیام خوش‌آمد چت خانه — برای همه نقش‌ها مسیر فروش فایل از چت."""
-    if is_approved:
-        return (
-            'سلام بازاریاب فروش 👋\n'
-            'از همین چت کار کن:\n'
-            '۱) مشتری داری — بودجه، متراژ، نوع ملک و هر نکته‌ای را بفرست تا فایل مناسب پیدا کنم.\n'
-            '۲) فایل برای بازاریابی می‌خواهی — بگو چه نوعی می‌خواهی (زمین/باغ/ویلا، متراژ، بودجه…) تا معرفی کنم.'
-        )
-    if has_pending_app:
-        return (
-            'سلام، چطور می‌تونم کمکتون کنم؟\n'
-            'درخواست بازاریابی‌ات در حال بررسی است — تا تأیید، از همین چت بگو دنبال چه فایلی هستی.'
-        )
-    # مهمان / کاربر عادی / واردنشده — همان لحن بازاریاب، مسیر به فروش فایل
-    return 'سلام، چطور می‌تونم کمکتون کنم؟'
+    """پیام شروع‌کنندهٔ وینور در چت خانه — خریدار | استخدام/فروش."""
+    from app.ai.welcome import opening_text
+
+    _ = me_phone
+    return opening_text(is_approved=is_approved, has_pending_app=bool(has_pending_app))
 
 
 def _partner_ai_layer_context(
@@ -2904,6 +2894,7 @@ def _partner_ai_layer_context(
             from app.ai.audience import AUDIENCE_PUBLIC
             from app.ai.chat_store import ensure_active_thread, messages_for_ui, threads_for_ui
             from app.ai.user_key import ai_user_key
+            from app.ai.welcome import ensure_vinor_opens_chat
 
             user_key = ai_user_key()
             ensure_active_thread(user_key, audience=AUDIENCE_PUBLIC)
@@ -2918,11 +2909,19 @@ def _partner_ai_layer_context(
                 home_ai_open = True
                 home_ai_open_thread = open_tid
                 active_thread_id = open_tid
-            chat_messages = messages_for_ui(
+            chat_messages, active_thread_id = ensure_vinor_opens_chat(
                 user_key,
-                thread_id=active_thread_id or None,
                 audience=AUDIENCE_PUBLIC,
-            ) or []
+                thread_id=active_thread_id or None,
+                text=ctx['ai_chat_welcome'],
+                has_pending_app=bool(has_pending_app),
+            )
+            if not chat_messages:
+                chat_messages = messages_for_ui(
+                    user_key,
+                    thread_id=active_thread_id or None,
+                    audience=AUDIENCE_PUBLIC,
+                ) or []
             chat_threads = threads_for_ui(user_key, audience=AUDIENCE_PUBLIC)
             if want_ai or open_tid:
                 home_ai_open = True
@@ -2996,6 +2995,8 @@ def _partner_ai_layer_context(
             home_ai_open = True
             home_ai_open_thread = POSTCHI_THREAD_ID
         else:
+            from app.ai.welcome import ensure_vinor_opens_chat
+
             ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
             threads_preview = threads_with_postchi(phone, audience=AUDIENCE_PARTNER)
             active_thread_id = next(
@@ -3008,11 +3009,19 @@ def _partner_ai_layer_context(
                 home_ai_open = True
                 home_ai_open_thread = open_tid
                 active_thread_id = open_tid
-            chat_messages = messages_for_ui(
+            chat_messages, active_thread_id = ensure_vinor_opens_chat(
                 phone,
-                thread_id=active_thread_id or None,
                 audience=AUDIENCE_PARTNER,
-            ) or []
+                thread_id=active_thread_id or None,
+                text=ctx['ai_chat_welcome'],
+                is_approved=True,
+            )
+            if not chat_messages:
+                chat_messages = messages_for_ui(
+                    phone,
+                    thread_id=active_thread_id or None,
+                    audience=AUDIENCE_PARTNER,
+                ) or []
             if want_ai or open_tid:
                 home_ai_open = True
                 if open_tid:
@@ -3099,44 +3108,9 @@ def home_page():
         pass
 
     ai_quick_prompts = []
-    try:
-        from app.express_partner.sales_coach import (
-            build_ai_quick_prompts,
-            build_limited_ai_quick_prompts,
-        )
-
-        if ai_ctx.get('home_ai_limited'):
-            ai_quick_prompts = build_limited_ai_quick_prompts(
-                me_phone=me_phone,
-                has_pending_app=bool(payload.get('has_pending_app')),
-            )
-        else:
-            _card = payload.get('journey_card') or {}
-            if isinstance(_card, dict) and _card.get('code'):
-                ai_quick_prompts = build_ai_quick_prompts(
-                    code=str(_card.get('code') or ''),
-                    title=str(_card.get('title') or ''),
-                    stage_label=str(_card.get('stage_label') or ''),
-                    is_mission=bool(_card.get('is_mission')),
-                    tx_mode=str(
-                        _card.get('tx_mode')
-                        or _card.get('cta_action')
-                        or ''
-                    ),
-                    can_revisit=bool(_card.get('can_revisit')),
-                )
-            else:
-                ai_quick_prompts = build_ai_quick_prompts()
-    except Exception:
-        ai_quick_prompts = []
-
+    # پیشنهادهای سریع حذف شد — همه مسیرها فقط از گفتگو
     public_home_lands: List[Dict[str, Any]] = []
-    if ai_ctx.get('home_ai_limited'):
-        try:
-            public_home_lands = _home_public_carousel_lands(limit=50)
-        except Exception:
-            public_home_lands = []
-
+    # کاتالوگ فایل در بدو ورود خانه تزریق نمی‌شود — فقط از چت با search_lands
     resp = make_response(render_template(
         'express_partner/home.html',
         profile=drawer_profile or profile,
@@ -5166,14 +5140,24 @@ def ai_agent_cancel():
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_clear():
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import clear_chat
+    from app.ai.chat_store import clear_chat, messages_for_ui
     from app.ai.http_errors import ai_chat_http_status
+    from app.ai.welcome import opening_text
 
     phone = (session.get('user_phone') or '').strip()
-    out = clear_chat(phone, audience=AUDIENCE_PARTNER)
+    profile = getattr(g, 'express_partner_profile', None)
+    if profile is None and phone:
+        profile = _partner_profile_for_phone(phone)
+    is_approved = _is_partner_approved(profile) if profile else False
+    opening = opening_text(is_approved=is_approved)
+    out = clear_chat(phone, audience=AUDIENCE_PARTNER, opening_text=opening)
     if not out.get('ok'):
         return jsonify(out), ai_chat_http_status(out)
-    return jsonify({'ok': True, 'thread_id': out.get('thread_id')})
+    tid = out.get('thread_id')
+    msgs = out.get('messages')
+    if msgs is None:
+        msgs = messages_for_ui(phone, thread_id=tid, audience=AUDIENCE_PARTNER)
+    return jsonify({'ok': True, 'thread_id': tid, 'messages': msgs})
 
 
 @express_partner_bp.post('/ai/thread/switch', endpoint='ai_switch_thread')
@@ -5767,7 +5751,7 @@ def create_visit_request(code: str):
 @express_partner_bp.route('/visit-requests/<code>/complete', methods=['POST'], endpoint='complete_visit_request')
 @require_partner_access()
 def complete_visit_request(code: str):
-    """ثبت اعلام «بازدید انجام شد» توسط همکار؛ تأیید نهایی با ادمین است."""
+    """ثبت اعلام «بازدید انجام شد» — پیش‌فرض بدون صف ادمین نهایی می‌شود."""
     me_phone = (session.get('user_phone') or '').strip()
     partners = load_express_partners() or []
     partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
@@ -5809,7 +5793,8 @@ def complete_visit_request(code: str):
         )
     save_express_visit_requests(visit_requests)
 
-    if err is None:
+    auto_done = str(rec.get('status') or '').strip() == COMPLETED_STATUS
+    if err is None and not auto_done:
         lands_all = load_ads_cached() or []
         land = next((l for l in lands_all if str(l.get('code')) == str(code)), None)
         land_title = (land.get('title') if land else None) or str(code)
@@ -5837,6 +5822,22 @@ def complete_visit_request(code: str):
             )
         except Exception:
             current_app.logger.exception('visit_done_pending partner SMS failed phone=%s code=%s', me_phone, code)
+    elif err is None and auto_done:
+        lands_all = load_ads_cached() or []
+        land = next((l for l in lands_all if str(l.get('code')) == str(code)), None)
+        land_title = (land.get('title') if land else None) or str(code)
+        try:
+            from .visit_sms import notify_partner_land_tx_sms
+            notify_partner_land_tx_sms(
+                partner_phone=me_phone,
+                event='visit_completed',
+                land_code=str(code),
+                land_title=str(land_title),
+                visit_date=str(rec.get('visit_date') or ''),
+                reference_id=str(rec.get('id') or ''),
+            )
+        except Exception:
+            current_app.logger.exception('visit_completed partner SMS failed phone=%s code=%s', me_phone, code)
 
     tx_state = _partner_land_tx_payload(
         code,
@@ -5844,6 +5845,20 @@ def complete_visit_request(code: str):
         is_partner_approved=True,
         global_assignment_status=ctx.get('global_status') or 'active',
     )
+    if auto_done or err == 'already_completed':
+        msg = 'بازدید انجام شد ثبت و تأیید شد. می‌توانی معامله را از چت ثبت کنی.'
+        if err == 'already_completed':
+            msg = 'بازدید قبلاً انجام‌شده ثبت شده. می‌توانی معامله را از چت ثبت کنی.'
+        return _mark_in_transaction_finish(
+            code,
+            success=True,
+            message=msg,
+            category='success',
+            new_status=ctx.get('global_status') or 'active',
+            tx_mode=tx_state.get('tx_mode') or 'deal',
+            visit_date=tx_state.get('visit_date') or None,
+            can_revisit=tx_state.get('can_revisit'),
+        )
     msg = 'بازدید انجام شد ثبت شد و منتظر تأیید ادمین است.'
     if err == 'already_pending':
         msg = 'بازدید انجام شد قبلاً ثبت شده و منتظر تأیید ادمین است.'
@@ -7018,10 +7033,10 @@ def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
     if mission_out.get('active') and mission_out.get('code'):
         stage = mission_out.get('stage_label') or 'فعال'
         summary_bits.append(
-            f'مأموریت جاری روی فایل {mission_out["code"]} ({stage}).'
+            f'کار جاری روی فایل {mission_out["code"]} ({stage}).'
         )
     else:
-        summary_bits.append('الان مأموریت فعالی ندارد.')
+        summary_bits.append('الان کار جاری مشخصی ندارد — از چت ادامه بده.')
     summary_bits.append(
         f'{open_files} فایل باز، {visits_open} بازدید جاری، {deals_open} معامله جاری.'
     )
@@ -7064,7 +7079,7 @@ def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
         memory_items.append(_mem('bio', 'پروفایل', f'درباره: {bio}', href='/express/partner/profile/edit'))
 
     if mission_out.get('active'):
-        mtxt = f"مأموریت فعال: فایل {mission_out.get('code') or '—'}"
+        mtxt = f"کار جاری: فایل {mission_out.get('code') or '—'}"
         if mission_out.get('stage_label'):
             mtxt += f" — {mission_out['stage_label']}"
         if mission_out.get('title'):
@@ -7072,7 +7087,7 @@ def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
         memory_items.append(_mem('mission', 'کار جاری', mtxt, href='/express/partner/home', live_key='mission'))
     else:
         memory_items.append(
-            _mem('mission', 'کار جاری', 'مأموریت فعالی نیست — از چت خانه ادامه بده', href='/express/partner/home', live_key='mission')
+            _mem('mission', 'کار جاری', 'کار جاری مشخص نیست — از چت خانه ادامه بده', href='/express/partner/home', live_key='mission')
         )
 
     memory_items.append(
@@ -7096,6 +7111,23 @@ def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
     )
 
     updated_at = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    # خلاصهٔ نمایشی = فقط حافظهٔ مدل (نه کپی KPI)
+    live_summary = ''
+    try:
+        from app.express_partner.partner_live_memory import load_partner_live_memory
+
+        saved = load_partner_live_memory(ph)
+        live_summary = str((saved or {}).get('summary') or '').strip()
+        if saved.get('updated_at'):
+            updated_at = str(saved.get('updated_at'))
+    except Exception:
+        live_summary = ''
+    if not live_summary:
+        live_summary = (
+            'هنوز حافظه‌ای نوشته نشده — با چت یا ثبت بازدید/معامله، '
+            'وینور مثل ChatGPT یک خلاصهٔ حافظه می‌سازد.'
+        )
+
     return {
         'ok': True,
         'updated_at': updated_at,
@@ -7110,8 +7142,8 @@ def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
             'bio': bio,
             'birth_date': birth_date,
         },
-        'summary': ' '.join(summary_bits).strip(),
-        'memory_items': memory_items,
+        'summary': live_summary,
+        'memory_items': [],
         'kpis': {
             'open_files': int(open_files),
             'visits_open': int(visits_open),
@@ -7121,6 +7153,7 @@ def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
             'approved_commission': approved_comm,
         },
         'mission': mission_out,
+        'wallet_href': '/express/partner/commissions',
     }
 
 

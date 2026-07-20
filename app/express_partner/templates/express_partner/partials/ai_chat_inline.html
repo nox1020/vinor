@@ -82,8 +82,8 @@
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    /* ارتفاع واقعی داک با JS در --vn-home-dock-h ست می‌شود */
-    padding-bottom: calc(var(--vn-home-dock-h, 7.5rem) + 0.5rem);
+    /* ارتفاع واقعی داک با JS در --vn-home-dock-h ست می‌شود + بافر تا کارت روی فوتر نیاید */
+    padding-bottom: calc(var(--vn-home-dock-h, 8.5rem) + 1.25rem);
   }
   #homeDashboardPage.home-dashboard-page--ai .vn-home-scroll::-webkit-scrollbar {
     display: none;
@@ -126,15 +126,32 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 10;
+    z-index: 30;
     display: flex;
     flex-direction: column;
     align-items: stretch;
     gap: 0.35rem;
-    padding: 0;
+    padding: 0.85rem 0 0;
     margin: 0;
-    background: transparent;
+    /* پس‌زمینهٔ مات تا کارت فایل زیر نوار APK/کامپوزر دیده نشود */
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0.88) 22%,
+      #000 42%
+    );
     pointer-events: none;
+  }
+  #homeDashboardPage.home-dashboard-page--ai .vn-home-composer-dock::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 1.1rem;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0), #000);
+    opacity: 0.55;
   }
   #homeDashboardPage.home-dashboard-page--ai .vinor-apk-strip-host {
     position: static;
@@ -152,7 +169,10 @@
   }
   #homeDashboardPage.home-dashboard-page--ai .vinor-apk-strip-host .vinor-apk-download-strip {
     display: flex;
-    margin: 0 0.75rem 0.15rem;
+    margin: 0 0.85rem 0.35rem;
+    max-width: 42rem;
+    width: calc(100% - 1.7rem);
+    margin-inline: auto;
     pointer-events: auto;
   }
   #homeDashboardPage.home-dashboard-page--ai .vn-home-composer-dock > #aiChatForm.ai-composer,
@@ -209,6 +229,18 @@
   }
   #aiHomeInline #aiMessages .ai-msg-cards .vinor-premium-card-mobile { display: flex !important; }
   #aiHomeInline #aiMessages .ai-msg-cards .vinor-premium-card > .hidden.sm\:block { display: none !important; }
+  /* کارت فایل زیر لایهٔ فوتر نماند / روی داک نیاید */
+  #aiHomeInline #aiMessages .ai-land-cards,
+  #aiHomeInline #aiMessages .ai-msg-cards,
+  #aiHomeInline #aiMessages .vinor-premium-card {
+    position: relative;
+    z-index: 0;
+    isolation: isolate;
+  }
+  #aiHomeInline #aiMessages .ai-msg-wrap {
+    position: relative;
+    z-index: 0;
+  }
 
   .ai-agent-card {
     width: 100%;
