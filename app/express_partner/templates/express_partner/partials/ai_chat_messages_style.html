@@ -404,4 +404,105 @@
   #aiPageMain.ai-page-shell .ai-scroll-bottom {
     bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
   }
+
+  /* کارت تأیید / اکشن — مشترک چت همکار و ادمین */
+  #aiMessages .ai-agent-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-top: 0.15rem;
+  }
+  #aiMessages .ai-msg-cards .ai-agent-actions {
+    margin-top: 0;
+  }
+  #aiMessages .ai-agent-card {
+    width: 100%;
+    max-width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.85rem;
+    background: rgba(15, 23, 42, 0.92);
+    padding: 0.85rem 0.9rem;
+  }
+  #aiMessages .ai-agent-card--done { opacity: 0.92; }
+  #aiMessages .ai-agent-card--completed,
+  #aiMessages .ai-agent-card--confirmed { border-color: rgba(52, 211, 153, 0.35); }
+  #aiMessages .ai-agent-card--cancelled { border-color: rgba(248, 113, 113, 0.35); }
+  #aiMessages .ai-agent-card--expired,
+  #aiMessages .ai-agent-card--failed { border-color: rgba(251, 191, 36, 0.35); }
+  #aiMessages .ai-agent-card__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+  }
+  #aiMessages .ai-agent-card__badge {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    padding: 0.12rem 0.45rem;
+    white-space: nowrap;
+  }
+  #aiMessages .ai-agent-card__title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 0;
+  }
+  #aiMessages .ai-agent-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-bottom: 0.65rem;
+  }
+  #aiMessages .ai-agent-line {
+    font-size: 0.82rem;
+    color: #cbd5e1;
+    line-height: 1.45;
+  }
+  #aiMessages .ai-agent-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+  #aiMessages .ai-agent-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.1rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 0.65rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  #aiMessages .ai-agent-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  #aiMessages .ai-agent-btn--confirm { background: #0ea5e9; color: #0f172a; }
+  #aiMessages .ai-agent-btn--cancel {
+    background: transparent;
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+  #aiMessages .ai-agent-btn--call {
+    background: #059669;
+    color: #ecfdf5;
+    border-color: rgba(16, 185, 129, 0.45);
+    gap: 0.35rem;
+  }
+  #aiMessages .ai-agent-btn--call-block { width: 100%; }
+  #aiMessages .ai-agent-card__actions--call { margin-top: 0.55rem; }
+  #aiMessages .ai-agent-card__note {
+    margin-top: 0.55rem;
+    font-size: 0.78rem;
+    color: #94a3b8;
+  }
+  #aiMessages .ai-agent-card__note.hidden { display: none; }
 </style>

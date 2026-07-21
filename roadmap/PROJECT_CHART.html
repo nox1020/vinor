@@ -3,484 +3,636 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Vinor — مدار محصول</title>
+  <title>وینور — مدار محصول</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <style>
     :root {
       --ink: #ececec;
       --muted: #9a9a9a;
       --paper: #0d0d0d;
-      --card: #1a1a1a;
-      --line: rgba(255, 255, 255, 0.1);
+      --panel: #141414;
+      --line: rgba(255,255,255,.1);
       --live: #3dd68c;
-      --live-soft: rgba(61, 214, 140, 0.12);
-      --shadow: #e8a054;
-      --shadow-soft: rgba(232, 160, 84, 0.12);
+      --live-dim: rgba(61,214,140,.12);
+      --live-border: rgba(61,214,140,.28);
       --ops: #6eb6ff;
-      --ops-soft: rgba(110, 182, 255, 0.12);
+      --ops-dim: rgba(110,182,255,.1);
+      --ops-border: rgba(110,182,255,.28);
+      --stack: #a78bfa;
+      --stack-dim: rgba(167,139,250,.1);
+      --stack-border: rgba(167,139,250,.28);
+      --shadow: #e8a054;
+      --shadow-dim: rgba(232,160,84,.08);
+      --shadow-border: rgba(232,160,84,.3);
       --accent: #7ddea8;
-      --warn: #f0b35a;
-      --radius: 18px;
-      --stage: #141414;
+      --watch: #5ec4e8;
+      --watch-dim: rgba(94,196,232,.1);
+      --watch-border: rgba(94,196,232,.35);
+      --reach: #c4a0ff;
+      --reach-dim: rgba(196,160,255,.1);
+      --reach-border: rgba(196,160,255,.35);
+      --seller: #f0b35a;
+      --gap: 12px;
+      --radius: 12px;
     }
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     html { color-scheme: dark; }
     body {
-      margin: 0;
       font-family: "Vazirmatn", Tahoma, sans-serif;
       color: var(--ink);
-      background:
-        radial-gradient(1100px 560px at 88% -8%, rgba(30, 90, 60, 0.28) 0%, transparent 55%),
-        radial-gradient(900px 500px at -8% 100%, rgba(120, 70, 20, 0.18) 0%, transparent 50%),
-        var(--paper);
-      line-height: 1.65;
+      background: var(--paper);
       min-height: 100vh;
+      line-height: 1.55;
     }
-    .wrap { max-width: 1080px; margin: 0 auto; padding: 1.5rem 1.1rem 3rem; }
-
-    header.hero {
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 1.5rem 1rem 2rem;
+    }
+    header {
       text-align: center;
-      padding: 1.4rem 0 1.8rem;
-      animation: rise .7s ease both;
+      margin-bottom: 1.25rem;
     }
-    header.hero .brand {
-      display: inline-block;
+    header h1 {
+      font-size: 1.75rem;
       font-weight: 800;
-      font-size: clamp(2rem, 5vw, 2.8rem);
-      letter-spacing: -.02em;
       color: var(--accent);
-      margin: 0;
     }
-    header.hero .tag {
-      margin: .55rem auto 0;
-      max-width: 36rem;
-      font-size: 1.05rem;
-      font-weight: 600;
-      color: var(--ink);
-    }
-    header.hero .sub {
-      margin: .55rem auto 0;
-      max-width: 38rem;
+    header p {
+      margin-top: .35rem;
       color: var(--muted);
+      font-size: .88rem;
+    }
+
+    .lane {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem 1.1rem;
+      margin-bottom: var(--gap);
+    }
+    .lane-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: .35rem .75rem;
+      margin-bottom: .85rem;
+      padding-bottom: .65rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .lane-num {
+      font-size: .68rem;
+      font-weight: 800;
+      padding: .15rem .45rem;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .lane-title {
       font-size: .92rem;
+      font-weight: 800;
+      flex: 1;
     }
-    .phone {
-      display: inline-flex;
-      align-items: center;
-      gap: .4rem;
-      margin-top: 1rem;
-      padding: .45rem .9rem;
-      border-radius: 999px;
-      background: var(--live-soft);
-      color: var(--live);
-      font-weight: 700;
-      font-size: .88rem;
-      border: 1px solid rgba(61, 214, 140, 0.28);
-      text-decoration: none;
-      transition: transform .2s ease, box-shadow .2s ease;
-    }
-    .phone:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(61,214,140,.18); }
-
-    .legend {
-      display: flex; flex-wrap: wrap; gap: .55rem; justify-content: center;
-      margin: 0 0 1.4rem; animation: rise .7s .08s ease both;
-    }
-    .chip {
-      display: inline-flex; align-items: center; gap: .4rem;
-      padding: .35rem .75rem; border-radius: 999px;
-      background: var(--card); border: 1px solid var(--line);
-      font-size: .78rem; font-weight: 600; color: var(--muted);
-    }
-    .dot { width: .55rem; height: .55rem; border-radius: 50%; }
-    .dot.live { background: var(--live); box-shadow: 0 0 0 3px rgba(61,214,140,.18); }
-    .dot.shadow { background: var(--shadow); box-shadow: 0 0 0 3px rgba(232,160,84,.15); }
-    .dot.ops { background: var(--ops); box-shadow: 0 0 0 3px rgba(110,182,255,.15); }
-    .dot.neutral { background: #7a8674; }
-
-    .stage {
-      background: var(--stage);
-      border: 1px solid var(--line);
-      border-radius: calc(var(--radius) + 4px);
-      padding: 1rem .5rem 1.2rem;
-      overflow-x: auto;
-      box-shadow: 0 18px 40px rgba(0, 0, 0, .35);
-      animation: rise .75s .12s ease both;
-    }
-    svg.map { display: block; margin: 0 auto; min-width: 920px; width: 100%; height: auto; }
-    .edge { fill: none; stroke: rgba(255,255,255,.18); stroke-width: 2; }
-    .edge.live { stroke: var(--live); stroke-width: 2.4; }
-    .edge.ops { stroke: var(--ops); stroke-width: 2.2; }
-    .edge.shadow { stroke: var(--shadow); stroke-width: 2; stroke-dasharray: 6 5; opacity: .85; }
-    .edge.draw { stroke-dasharray: 8 6; animation: dash 18s linear infinite; }
-    .edge.live.draw { stroke-dasharray: 10 7; animation-duration: 14s; }
-    .edge.ops.draw { stroke-dasharray: 9 6; animation-duration: 16s; }
-    .node-label { font-family: "Vazirmatn", Tahoma, sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-      margin-top: 1.4rem;
-      animation: rise .8s .18s ease both;
-    }
-    .grid.trio {
-      grid-template-columns: 1fr 1fr 1fr;
-    }
-    @media (max-width: 900px) {
-      .grid.trio { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
-
-    .panel {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 1.05rem 1.15rem 1.15rem;
-    }
-    .panel.live { border-color: rgba(61, 214, 140, 0.32); background: linear-gradient(180deg, rgba(61,214,140,.08), var(--card)); }
-    .panel.shadow { border-color: rgba(232, 160, 84, 0.32); background: linear-gradient(180deg, rgba(232,160,84,.08), var(--card)); }
-    .panel.ops { border-color: rgba(110, 182, 255, 0.32); background: linear-gradient(180deg, rgba(110,182,255,.08), var(--card)); }
-    .panel h2 {
-      margin: 0 0 .65rem;
-      font-size: .98rem;
-      display: flex; align-items: center; gap: .45rem;
-      color: var(--ink);
-    }
-    .panel h2 .mark {
-      width: .65rem; height: .65rem; border-radius: 50%;
-      display: inline-block;
-    }
-    .panel.live h2 .mark { background: var(--live); }
-    .panel.shadow h2 .mark { background: var(--shadow); }
-    .panel.ops h2 .mark { background: var(--ops); }
-    .panel p { margin: 0 0 .7rem; color: var(--muted); font-size: .86rem; }
-    .panel ul { margin: 0; padding: 0; list-style: none; }
-    .panel li {
-      position: relative;
-      padding: .35rem 0 .35rem 0;
-      padding-right: .95rem;
-      font-size: .88rem;
-      border-bottom: 1px dashed rgba(255,255,255,.06);
-      color: var(--ink);
-    }
-    .panel li:last-child { border-bottom: 0; }
-    .panel li::before {
-      content: "";
-      position: absolute;
-      right: 0; top: .75rem;
-      width: .35rem; height: .35rem;
-      border-radius: 50%;
-      background: currentColor;
-      opacity: .45;
-    }
-    .panel.live li::before { background: var(--live); opacity: .8; }
-    .panel.shadow li::before { background: var(--shadow); opacity: .8; }
-    .panel.ops li::before { background: var(--ops); opacity: .8; }
-    .panel code {
-      font-family: ui-monospace, Consolas, monospace;
-      font-size: .78em;
-      background: rgba(255,255,255,.06);
-      padding: .05rem .28rem;
-      border-radius: 5px;
-      color: #c8e6d4;
-    }
-    .muted { color: var(--muted); font-size: .82rem; }
-
-    .paths {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-      margin-top: 1rem;
-      animation: rise .85s .22s ease both;
-    }
-    @media (max-width: 760px) { .paths { grid-template-columns: 1fr; } }
-    .path {
-      border-radius: var(--radius);
-      padding: 1.05rem 1.15rem;
-      border: 1px solid var(--line);
-      background: var(--card);
-    }
-    .path h3 { margin: 0 0 .35rem; font-size: .95rem; color: var(--accent); }
-    .flow {
-      display: flex; flex-wrap: wrap; gap: .35rem; align-items: center;
-      margin-top: .7rem; font-size: .8rem; font-weight: 600;
-    }
-    .flow span.step {
-      background: var(--live-soft);
-      color: var(--live);
-      padding: .28rem .55rem;
-      border-radius: 8px;
-    }
-    .flow span.step.ops {
-      background: var(--ops-soft);
-      color: var(--ops);
-    }
-    .flow span.arrow { color: var(--muted); font-weight: 500; }
-
-    .truth {
-      margin-top: 1.2rem;
-      padding: 1rem 1.15rem;
-      border-radius: var(--radius);
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.03);
-      animation: rise .9s .26s ease both;
-    }
-    .truth h2 { margin: 0 0 .55rem; font-size: .95rem; color: var(--ink); }
-    .truth ol { margin: 0; padding-right: 1.2rem; color: var(--muted); font-size: .86rem; }
-    .truth li { margin: .25rem 0; }
-
-    footer.src {
-      text-align: center;
-      margin-top: 1.6rem;
+    .lane-sub {
+      width: 100%;
+      font-size: .76rem;
       color: var(--muted);
-      font-size: .75rem;
-    }
-    footer.src code {
-      background: rgba(255,255,255,.06);
-      padding: .1rem .35rem;
-      border-radius: 4px;
+      font-weight: 600;
     }
 
-    @keyframes rise {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: none; }
+    .card {
+      border-radius: 10px;
+      padding: .8rem .9rem;
     }
-    @keyframes dash {
-      to { stroke-dashoffset: -120; }
+    .card .title {
+      font-size: .92rem;
+      font-weight: 800;
+      margin-bottom: .35rem;
+      text-align: center;
+    }
+    .explain {
+      font-size: .74rem;
+      line-height: 1.7;
+      color: #b4b4b4;
+      text-align: right;
+      list-style: none;
+    }
+    .explain li {
+      margin-bottom: .3rem;
+      padding-right: .65rem;
+      border-right: 2px solid rgba(255,255,255,.08);
+    }
+    .explain li:last-child { margin-bottom: 0; }
+
+    .tech {
+      margin-top: .55rem;
+      font-size: .66rem;
+    }
+    .tech summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 600;
+      list-style: none;
+      text-align: center;
+    }
+    .tech summary::-webkit-details-marker { display: none; }
+    .tech summary::before { content: "▸ "; }
+    .tech[open] summary::before { content: "▾ "; }
+    .tech .code {
+      display: block;
+      margin-top: .35rem;
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: .64rem;
+      color: #7a8694;
+      direction: ltr;
+      text-align: center;
+      word-break: break-all;
+    }
+
+    .path-bar {
+      font-size: .7rem;
+      text-align: center;
+      padding: .4rem .55rem;
+      border-radius: 6px;
+      background: rgba(255,255,255,.03);
+    }
+
+    .lane--live { border-color: var(--live-border); }
+    .lane--live .lane-num { background: var(--live-dim); color: var(--live); }
+    .lane--live .lane-title { color: var(--live); }
+
+    .lane--ops { border-color: var(--ops-border); }
+    .lane--ops .lane-num { background: var(--ops-dim); color: var(--ops); }
+    .lane--ops .lane-title { color: var(--ops); }
+
+    .lane--stack { border-color: var(--stack-border); }
+    .lane--stack .lane-num { background: var(--stack-dim); color: var(--stack); }
+    .lane--stack .lane-title { color: var(--stack); }
+
+    .lane--shadow { border-color: var(--shadow-border); border-style: dashed; }
+    .lane--shadow .lane-num { background: var(--shadow-dim); color: var(--shadow); }
+    .lane--shadow .lane-title { color: var(--shadow); }
+
+    /* مخاطبان */
+    .audiences-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--gap);
+      margin-bottom: var(--gap);
+    }
+    .card--guest {
+      background: #1a1f1c;
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    .card--guest .title { color: var(--accent); }
+    .card--guest .explain li { border-color: rgba(125,222,168,.25); }
+
+    .card--seller {
+      background: #1f2418;
+      border: 1px solid rgba(240,179,90,.35);
+    }
+    .card--seller .title { color: var(--seller); }
+    .card--seller .explain li { border-color: rgba(240,179,90,.25); }
+
+    .card--partner {
+      background: #142820;
+      border: 1.5px solid var(--live-border);
+    }
+    .card--partner .title { color: var(--live); }
+    .card--partner .explain li { border-color: rgba(61,214,140,.2); }
+
+    /* هسته چت */
+    .hub-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .45rem;
+      margin-bottom: var(--gap);
+    }
+    .hub-arrows {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      width: 100%;
+      gap: var(--gap);
+      font-size: .78rem;
+      color: var(--live);
+      text-align: center;
+      opacity: .85;
+    }
+    .hub-arrows span:last-child { visibility: hidden; }
+    .card--hub {
+      width: 100%;
+      max-width: 480px;
+      background: linear-gradient(135deg, #146b4f, #1f8f68);
+      border: 2px solid var(--live);
+      padding: .9rem 1rem;
+      text-align: center;
+    }
+    .card--hub .title { color: #fff; font-size: 1.05rem; }
+    .card--hub .explain { color: #c8e6d8; text-align: center; }
+    .card--hub .explain li {
+      border: none;
+      padding: 0;
+      margin-bottom: .2rem;
+    }
+
+    .paths-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--gap);
+      margin-bottom: var(--gap);
+    }
+    .paths-row .path-bar:nth-child(1) { color: var(--accent); background: rgba(125,222,168,.06); }
+    .paths-row .path-bar:nth-child(2) { color: var(--seller); background: rgba(240,179,90,.08); }
+    .paths-row .path-bar:nth-child(3) { color: var(--live); background: var(--live-dim); }
+
+    .follow-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--gap);
+    }
+    .card--watch {
+      background: var(--watch-dim);
+      border: 1px solid var(--watch-border);
+    }
+    .card--watch .title { color: var(--watch); font-size: .85rem; }
+    .card--watch .explain li { border-color: rgba(94,196,232,.25); }
+
+    .card--reach {
+      background: var(--reach-dim);
+      border: 1px solid var(--reach-border);
+    }
+    .card--reach .title { color: var(--reach); font-size: .85rem; }
+    .card--reach .explain li { border-color: rgba(196,160,255,.25); }
+
+    .access-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--gap);
+    }
+    .card--ops {
+      background: #152030;
+      border: 1.5px solid var(--ops-border);
+      text-align: right;
+    }
+    .card--ops .title { color: var(--ops); font-size: .88rem; text-align: center; }
+    .card--ops .explain li { border-color: rgba(110,182,255,.2); }
+
+    .pipeline {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      flex-wrap: wrap;
+    }
+    .pipe-node { flex: 1 1 110px; min-width: 90px; }
+    .pipe-node .card { height: 100%; text-align: center; }
+    .pipe-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--stack);
+      font-size: .9rem;
+      padding: 0 .1rem;
+      opacity: .65;
+      flex-shrink: 0;
+    }
+    .card--front, .card--back {
+      background: #1e1830;
+      border: 1.5px solid var(--stack-border);
+    }
+    .card--front .title, .card--back .title { color: var(--stack); font-size: .85rem; }
+    .card--http {
+      background: #2d2640;
+      border: 1px solid var(--stack-border);
+      padding: .75rem .4rem;
+    }
+    .card--http .title { color: var(--stack); font-size: .78rem; }
+    .card--store {
+      background: var(--ops-dim);
+      border: 1px solid var(--ops-border);
+    }
+    .card--store .title { color: var(--ops); font-size: .85rem; }
+    .card--send {
+      background: var(--reach-dim);
+      border: 1px solid var(--reach-border);
+    }
+    .card--send .title { color: var(--reach); font-size: .85rem; }
+    .pipe-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--gap);
+      flex: 1 1 220px;
+    }
+
+    .shadow-body {
+      font-size: .76rem;
+      color: #b4b4b4;
+      text-align: right;
+      line-height: 1.65;
+    }
+
+    .map-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .78rem;
+    }
+    .map-table th, .map-table td {
+      padding: .65rem .75rem;
+      border: 1px solid var(--line);
+      text-align: center;
+      vertical-align: middle;
+    }
+    .map-table th {
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      font-size: .7rem;
+      font-weight: 700;
+    }
+    .map-table .role { font-weight: 800; font-size: .82rem; }
+    .map-table .path {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: .64rem;
+      color: #7a8694;
+      direction: ltr;
+      display: block;
+      margin-top: .15rem;
+    }
+    .c-guest { color: var(--accent); }
+    .c-partner { color: var(--live); }
+    .c-seller { color: var(--seller); }
+    .c-ops { color: var(--ops); }
+
+    footer {
+      margin-top: 1rem;
+      text-align: center;
+      font-size: .72rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 720px) {
+      .audiences-row,
+      .paths-row,
+      .follow-row,
+      .access-row,
+      .pipe-split,
+      .hub-arrows {
+        grid-template-columns: 1fr;
+      }
+      .hub-arrows { display: none; }
+      .pipeline { flex-direction: column; }
+      .pipe-arrow { transform: rotate(90deg); padding: .2rem 0; }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <header class="hero">
-      <p class="brand">Vinor</p>
-      <p class="tag">یک ایجنت = یک بازاریاب. چت می‌فروشد · ادمین کنترل می‌کند · APK همکار را روی گوشی می‌آورد.</p>
-      <p class="sub">مرکز فروش = چت · سبز = مسیر زنده · آبی = عملیات / موبایل · نارنجی خط‌چین = سایه</p>
-      <a class="phone" href="tel:09121471301" dir="ltr">تماس هماهنگی بازدید: 09121471301</a>
+    <header>
+      <h1>وینور</h1>
+      <p>یک بازاریاب · دو مسیر · از صفحه تا ذخیره</p>
     </header>
 
-    <div class="legend">
-      <span class="chip"><span class="dot live"></span>چت → JSON کسب‌وکار</span>
-      <span class="chip"><span class="dot ops"></span>ادمین / APK → عملیات و شِل</span>
-      <span class="chip"><span class="dot shadow"></span>سایه → بدون persist کسب‌وکار</span>
-      <span class="chip"><span class="dot neutral"></span>دو مخاطب فروش: مهمان / بازاریاب</span>
-    </div>
+    <!-- ① فروش -->
+    <section class="lane lane--live" aria-label="لایه فروش">
+      <div class="lane-head">
+        <span class="lane-num">①</span>
+        <span class="lane-title">فروش — یک بازاریاب · دو مسیر + پیگیری</span>
+        <span class="lane-sub">مهمان · فروشنده · همکار — همه از چت می‌گذرند · فروشنده = نوع ویژهٔ همکار</span>
+      </div>
 
-    <div class="stage">
-      <svg class="map" viewBox="0 0 980 640" role="img" aria-label="مدار محصول Vinor">
-        <defs>
-          <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity=".45"/>
-          </filter>
-          <linearGradient id="centerFill" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#146b4f"/>
-            <stop offset="100%" stop-color="#1f8f68"/>
-          </linearGradient>
-        </defs>
+      <div class="audiences-row">
+        <div class="card card--guest">
+          <div class="title">مهمان</div>
+          <ul class="explain">
+            <li><strong>مسیر ۱ · خریدار:</strong> کسی که می‌خواهد زمین بخرد — از صفحات عمومی سایت می‌آید.</li>
+            <li>معیارش را می‌گوید → بازاریاب <strong>بهترین فایل داخل وینور</strong> را پیشنهاد می‌دهد.</li>
+            <li>پیشنهاد → بازدید → پیگیری → معامله. ثبت مهم با <strong>کارت تأیید</strong>.</li>
+            <li>می‌تواند دربارهٔ همکاری بپرسد یا درخواست همکار بدهد — هنوز مهمان است.</li>
+          </ul>
+          <details class="tech">
+            <summary>مسیر فنی</summary>
+            <span class="code">search_lands · apply · /ai/chat</span>
+          </details>
+        </div>
 
-        <!-- edges from center -->
-        <path class="edge live draw" d="M490 230 C490 160, 220 130, 170 100" />
-        <path class="edge live draw" d="M490 230 C490 160, 760 130, 810 100" />
-        <path class="edge" d="M490 230 C400 300, 280 320, 200 360" />
-        <path class="edge live draw" d="M490 230 C580 300, 700 320, 780 360" />
-        <path class="edge ops draw" d="M390 250 C280 280, 180 300, 140 330" />
-        <path class="edge ops draw" d="M590 250 C700 280, 800 300, 840 330" />
-        <path class="edge shadow draw" d="M490 280 C490 360, 490 420, 490 490" />
+        <div class="card card--seller">
+          <div class="title">فروشنده</div>
+          <ul class="explain">
+            <li><strong>زیرنوع مسیر ۲:</strong> مالک زمین خود — می‌خواهد <strong>فایل خود</strong> را بفروشد.</li>
+            <li>همان <strong>پنل همکار</strong> با صدای ویژه؛ مسیر سوم محصول نیست.</li>
+            <li>ثبت فایل → آگهی → بازدید → معامله — با کمک چت و کارت تأیید.</li>
+            <li>بازاریاب متن آگهی، قدم بعد و هماهنگی بازدید را پیشنهاد می‌دهد.</li>
+          </ul>
+          <details class="tech">
+            <summary>مسیر فنی</summary>
+            <span class="code">express/partner · voice=special · visit · deal</span>
+          </details>
+        </div>
 
-        <!-- center -->
-        <g filter="url(#soft)">
-          <ellipse cx="490" cy="230" rx="118" ry="72" fill="url(#centerFill)" />
-          <text class="node-label" x="490" y="212" fill="#fff" font-size="18" font-weight="800">چت = بازاریاب</text>
-          <text class="node-label" x="490" y="234" fill="#d7eee4" font-size="12">فروش فایل سیستم</text>
-          <text class="node-label" x="490" y="254" fill="#9fcbbb" font-size="11">tools + کارت تأیید</text>
-        </g>
-
-        <!-- guest -->
-        <g filter="url(#soft)">
-          <rect x="55" y="28" width="230" height="98" rx="16" fill="#1f1f1f" stroke="rgba(255,255,255,.14)" stroke-width="1.5"/>
-          <text class="node-label" x="170" y="52" fill="#7ddea8" font-size="14" font-weight="700">مهمان / عادی</text>
-          <text class="node-label" x="170" y="74" fill="#9a9a9a" font-size="11">خرید؟ یا بازاریاب شو؟</text>
-          <text class="node-label" x="170" y="94" fill="#9a9a9a" font-size="11">search · apply</text>
-          <text class="node-label" x="170" y="112" fill="#e8a054" font-size="10">بدون visit / deal</text>
-        </g>
-
-        <!-- partner -->
-        <g filter="url(#soft)">
-          <rect x="695" y="28" width="230" height="98" rx="16" fill="#143528" stroke="#3dd68c" stroke-width="2"/>
-          <text class="node-label" x="810" y="52" fill="#3dd68c" font-size="14" font-weight="700">بازاریاب تأییدشده</text>
-          <text class="node-label" x="810" y="74" fill="#a7e6c4" font-size="11">visit → کارت → داده</text>
-          <text class="node-label" x="810" y="94" fill="#a7e6c4" font-size="11">complete · deal · CRM</text>
-          <text class="node-label" x="810" y="112" fill="#a7e6c4" font-size="10">conversation همیشه skip</text>
-        </g>
-
-        <!-- guest funnel detail -->
-        <g filter="url(#soft)">
-          <rect x="70" y="330" width="260" height="100" rx="16" fill="#1f1f1f" stroke="rgba(255,255,255,.14)"/>
-          <text class="node-label" x="200" y="356" fill="#7ddea8" font-size="13" font-weight="700">مسیر خریدار</text>
-          <text class="node-label" x="200" y="378" fill="#9a9a9a" font-size="11">معیار → search_lands</text>
-          <text class="node-label" x="200" y="398" fill="#9a9a9a" font-size="11">پیشنهاد [[LAND]] → تماس</text>
-          <text class="node-label" x="200" y="418" fill="#3dd68c" font-size="11" font-weight="600">09121471301 → بازدید</text>
-        </g>
-
-        <!-- partner funnel -->
-        <g filter="url(#soft)">
-          <rect x="650" y="330" width="260" height="100" rx="16" fill="#143528" stroke="#3dd68c" stroke-width="2"/>
-          <text class="node-label" x="780" y="356" fill="#3dd68c" font-size="13" font-weight="700">مسیر فروش بازاریاب</text>
-          <text class="node-label" x="780" y="378" fill="#a7e6c4" font-size="11">propose_visit_request</text>
-          <text class="node-label" x="780" y="398" fill="#a7e6c4" font-size="11">کارت تماس + complete</text>
-          <text class="node-label" x="780" y="418" fill="#a7e6c4" font-size="11">deal · call · followup</text>
-        </g>
-
-        <!-- admin -->
-        <g filter="url(#soft)">
-          <rect x="30" y="460" width="280" height="110" rx="16" fill="#152030" stroke="#6eb6ff" stroke-width="2"/>
-          <text class="node-label" x="170" y="486" fill="#6eb6ff" font-size="13" font-weight="700">پنل ادمین /admin</text>
-          <text class="node-label" x="170" y="508" fill="#9bb8d9" font-size="11">چت عملیات + کارت تأیید</text>
-          <text class="node-label" x="170" y="528" fill="#9bb8d9" font-size="11">فایل · همکار · SMS · مالی</text>
-          <text class="node-label" x="170" y="548" fill="#7a9ab8" font-size="10">کد: admin/ops — نه فروش مشتری</text>
-        </g>
-
-        <!-- apk -->
-        <g filter="url(#soft)">
-          <rect x="670" y="460" width="280" height="110" rx="16" fill="#152030" stroke="#6eb6ff" stroke-width="2"/>
-          <text class="node-label" x="810" y="486" fill="#6eb6ff" font-size="13" font-weight="700">APK اندروید</text>
-          <text class="node-label" x="810" y="508" fill="#9bb8d9" font-size="11">WebView → express/partner</text>
-          <text class="node-label" x="810" y="528" fill="#9bb8d9" font-size="11">FCM · deep link · bridges</text>
-          <text class="node-label" x="810" y="548" fill="#7a9ab8" font-size="10">repo: apk/ — شِل نه منطق فروش</text>
-        </g>
-
-        <!-- shadow -->
-        <g filter="url(#soft)">
-          <rect x="340" y="500" width="300" height="72" rx="16" fill="#2a2118" stroke="#e8a054" stroke-width="1.8" stroke-dasharray="5 4"/>
-          <text class="node-label" x="490" y="526" fill="#e8a054" font-size="13" font-weight="700">لایه سایه — هویت محصول نیست</text>
-          <text class="node-label" x="490" y="548" fill="#c9a06a" font-size="11">۶ agent موازی · Workflow · PERSIST=no-op</text>
-        </g>
-      </svg>
-    </div>
-
-    <div class="paths">
-      <div class="path">
-        <h3>۱) خریدار</h3>
-        <p class="muted">معیار کوتاه → بهترین فایل سیستم → پیشنهاد → هماهنگی بازدید → پیگیری تا معامله</p>
-        <div class="flow">
-          <span class="step">معیار</span><span class="arrow">←</span>
-          <span class="step">search</span><span class="arrow">←</span>
-          <span class="step">پیشنهاد</span><span class="arrow">←</span>
-          <span class="step">تماس</span><span class="arrow">←</span>
-          <span class="step">بازدید</span><span class="arrow">←</span>
-          <span class="step">معامله</span>
+        <div class="card card--partner">
+          <div class="title">بازاریاب</div>
+          <ul class="explain">
+            <li><strong>مسیر ۲ · همکار:</strong> بازاریاب اکسپرس — استخدام‌شده یا با دستیار روزانه.</li>
+            <li>فایل سیستم → آگهی → بازدید → معامله؛ <strong>مدیریت تماس</strong> و پیگیری.</li>
+            <li>پنل همکار روی وب؛ روی موبایل همان پنل در <strong>اپ اندروید</strong>.</li>
+            <li>پورسانت و ثبت‌ها از چت. ناظر و رسدکننده تا نتیجه همراهش می‌مانند.</li>
+          </ul>
+          <details class="tech">
+            <summary>مسیر فنی</summary>
+            <span class="code">express/partner · voice=partner · CRM</span>
+          </details>
         </div>
       </div>
-      <div class="path">
-        <h3>۲) بازاریاب</h3>
-        <p class="muted">استخدام یا دستیار روزانه → فایل → آگهی → بازدید → پیگیری → معامله</p>
-        <div class="flow">
-          <span class="step">استخدام</span><span class="arrow">←</span>
-          <span class="step">فایل</span><span class="arrow">←</span>
-          <span class="step">آگهی</span><span class="arrow">←</span>
-          <span class="step">بازدید</span><span class="arrow">←</span>
-          <span class="step">پیگیری</span><span class="arrow">←</span>
-          <span class="step">معامله</span>
+
+      <div class="hub-row">
+        <div class="hub-arrows" aria-hidden="true">
+          <span>← به چت</span>
+          <span>← به چت</span>
+          <span>← به چت</span>
+        </div>
+        <div class="card card--hub">
+          <div class="title">چت = بازاریاب</div>
+          <ul class="explain">
+            <li>یک ایجنت · یک هویت · محل کار = همین چت</li>
+            <li>ابزار → کارت تأیید → ذخیره در سیستم</li>
+          </ul>
+          <details class="tech">
+            <summary>مسیر فنی</summary>
+            <span class="code">app/ai · agent_tools · instance/data</span>
+          </details>
         </div>
       </div>
-    </div>
 
-    <div class="paths" style="margin-top:1rem">
-      <div class="path">
-        <h3>۳) ادمین</h3>
-        <p class="muted">چت عملیات + کارت تأیید — انبار فایل و همکاران؛ فروش به مشتری از اینجا نیست</p>
-        <div class="flow">
-          <span class="step ops">چت ops</span><span class="arrow">←</span>
-          <span class="step ops">ابزار</span><span class="arrow">←</span>
-          <span class="step ops">کارت تأیید</span><span class="arrow">←</span>
-          <span class="step ops">SMS/فایل</span><span class="arrow">←</span>
-          <span class="step ops">همکار/مالی</span>
+      <div class="paths-row">
+        <div class="path-bar">معیار → فایل → بازدید → معامله</div>
+        <div class="path-bar">فایل خود → آگهی → معامله</div>
+        <div class="path-bar">استخدام → فایل → آگهی → معامله</div>
+      </div>
+
+      <div class="follow-row">
+        <div class="card card--watch">
+          <div class="title">ناظر — داخلی · بدون رابط</div>
+          <ul class="explain">
+            <li>همیشه فعال؛ مرحلهٔ هر مهمان، فروشنده و همکار را می‌بیند: جستجو، فایل، بازدید، معامله، یا راکد.</li>
+            <li><strong>اهداف</strong> را نگه می‌دارد و می‌سنجد چقدر به نتیجه نزدیک شده.</li>
+            <li>مسیر درست و قدم بعد را داخلی پیشنهاد می‌دهد — فقط راهنما برای چت و رسدکننده.</li>
+            <li>پیام نمی‌فرستد؛ اگر گیر دید به <strong>رسدکننده</strong> سیگنال می‌دهد.</li>
+          </ul>
+          <details class="tech">
+            <summary>مسیر فنی</summary>
+            <span class="code">supervisor · goals · executive</span>
+          </details>
+        </div>
+
+        <div class="card card--reach">
+          <div class="title">رسدکننده — خودکار</div>
+          <ul class="explain">
+            <li>هر روز وضعیت خریدار، فروشنده و همکار را می‌بیند: کجا ماندند و چه قدمی مانده.</li>
+            <li>اگر راکد ماند، <strong>خودکار</strong> پیگیری می‌کند — پیامک، پوش موبایل، یادآوری — <strong>بدون تأیید ادمین</strong>.</li>
+            <li>قواعد از هدف و مرحله می‌آید؛ ارسال جدا از چت زنده و از ذخیرهٔ اصلی.</li>
+            <li>تا رسیدن به نتیجه تکرار می‌شود. جای بازاریاب در چت نیست — پیگیری پس‌زمینه است.</li>
+          </ul>
+          <details class="tech">
+            <summary>مسیر فنی</summary>
+            <span class="code">scheduler · SMS · FCM · customer_success</span>
+          </details>
         </div>
       </div>
-      <div class="path">
-        <h3>۴) APK</h3>
-        <p class="muted">شِل WebView — همان پنل همکار روی گوشی؛ منو و منطق از وب</p>
-        <div class="flow">
-          <span class="step ops">Splash</span><span class="arrow">←</span>
-          <span class="step ops">WebView</span><span class="arrow">←</span>
-          <span class="step ops">partner/</span><span class="arrow">←</span>
-          <span class="step ops">FCM</span><span class="arrow">←</span>
-          <span class="step ops">چت داخل وب</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid trio">
-      <section class="panel live">
-        <h2><span class="mark"></span>چت زنده</h2>
-        <p>تنها نویسندۀ JSON کسب‌وکار در چت Partner:</p>
-        <ul>
-          <li><code>agent_tools</code> → کارت تأیید → <code>instance/data</code></li>
-          <li>مهمان: <code>search_lands</code> · <code>propose_partner_application</code></li>
-          <li>Partner: visit · complete · deal · CRM</li>
-          <li>تماس بازدید: <b dir="ltr">09121471301</b></li>
-        </ul>
-      </section>
-      <section class="panel ops">
-        <h2><span class="mark"></span>پنل ادمین</h2>
-        <p>چت عملیات — مسیر: <code>/admin</code></p>
-        <ul>
-          <li>خانه = چت ops · <code>propose_*</code> + کارت تأیید</li>
-          <li>SMS/پوش همگانی · افزودن فایل · تأیید همکار</li>
-          <li>بازدید · پورسانت · escalation از همان چت</li>
-          <li>لیست‌ها فقط برای مرور؛ Agents/Workflows دفن</li>
-        </ul>
-      </section>
-      <section class="panel ops">
-        <h2><span class="mark"></span>APK</h2>
-        <p>شِل موبایل — repo: <code>apk/</code></p>
-        <ul>
-          <li>WebView-only روی <code>express/partner</code></li>
-          <li>منو از وب <code>/api/menu</code></li>
-          <li>FCM · App Links · آپدیت APK</li>
-          <li>bridges: speech · notify · shell</li>
-        </ul>
-      </section>
-    </div>
-
-    <div class="grid" style="margin-top:1rem">
-      <section class="panel shadow">
-        <h2><span class="mark"></span>سایه (عمدی)</h2>
-        <p>در کد هست؛ هویت محصول و نویسندهٔ فروش نیست:</p>
-        <ul>
-          <li>Partner chat: <code>skip_reason=partner_chat_tools_only</code></li>
-          <li><code>VINOR_WORKFLOW_COMMIT_PERSIST</code> → no-op</li>
-          <li><code>app/agents/*</code> شش‌تایی + Decision = hint داخلی</li>
-          <li>ابزارهای extended از schema چت پنهان‌اند</li>
-        </ul>
-      </section>
-      <section class="panel live">
-        <h2><span class="mark"></span>مرز نقش‌ها</h2>
-        <p>هر سطح یک کار؛ جایگزین هم نیستند:</p>
-        <ul>
-          <li>چت = فروش و ثبت با کارت تأیید</li>
-          <li>ادمین = چت عملیات + کارت تأیید</li>
-          <li>APK = دسترسی موبایل به پنل همکار + چت وب</li>
-          <li>سایه = hint داخلی؛ به کاربر نشان داده نمی‌شود</li>
-        </ul>
-      </section>
-    </div>
-
-    <section class="truth">
-      <h2>قانون تصمیم (از AGENT_GOAL)</h2>
-      <ol>
-        <li>آیا فروش فایل سیستم است؟</li>
-        <li>آیا مسیر چت کوتاه‌تر می‌شود؟</li>
-        <li>آیا یک بازاریاب می‌ماند؟</li>
-      </ol>
-      <p class="muted" style="margin:.55rem 0 0">اگر نه → اولویت ندارد. ادمین و APK فقط وقتی عملیات یا دسترسی موبایل را جلو می‌برند.</p>
     </section>
 
-    <footer class="src">
-      منبع حقیقت: <code>AGENT_GOAL.md</code> · کد: <code>app/ai/goal.py</code> · ادمین: <code>admin/</code> · APK: <code>apk/</code> · چارت: <code>PROJECT_CHART.html</code>
-    </footer>
+    <!-- ② دسترسی -->
+    <section class="lane lane--ops" aria-label="لایه دسترسی">
+      <div class="lane-head">
+        <span class="lane-num">②</span>
+        <span class="lane-title">دسترسی — جایگزین چت نیست</span>
+        <span class="lane-sub">کنترل عملیات و موبایل همکار</span>
+      </div>
+      <div class="access-row">
+        <div class="card card--ops">
+          <div class="title">ادمین · چت عملیات</div>
+          <ul class="explain">
+            <li>کنترل فایل، همکار، مالی، پیامک و موارد عملیاتی — از چت، نه محل فروش.</li>
+          </ul>
+          <details class="tech">
+            <summary>مسیر فنی</summary>
+            <span class="code">admin/ · /admin/ops/chat</span>
+          </details>
+        </div>
+        <div class="card card--ops">
+          <div class="title">اپ همکار · نمای وب</div>
+          <ul class="explain">
+            <li>شِل اندروید؛ منو و منطق از سایت — نیتیو فقط پل (پوش، لینک، …).</li>
+          </ul>
+          <details class="tech">
+            <summary>مسیر فنی</summary>
+            <span class="code">apk/ · WebView → express/partner</span>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ③ پیاده‌سازی -->
+    <section class="lane lane--stack" aria-label="لایه پیاده‌سازی">
+      <div class="lane-head">
+        <span class="lane-num">③</span>
+        <span class="lane-title">پیاده‌سازی</span>
+        <span class="lane-sub">صفحه → درخواست → سرویس → ذخیره · ارسال جدا</span>
+      </div>
+      <div class="pipeline">
+        <div class="pipe-node">
+          <div class="card card--front">
+            <div class="title">رابط</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">←</div>
+        <div class="pipe-node">
+          <div class="card card--http">
+            <div class="title">درخواست</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">←</div>
+        <div class="pipe-node">
+          <div class="card card--back">
+            <div class="title">سرویس</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">←</div>
+        <div class="pipe-split">
+          <div class="card card--store">
+            <div class="title">ذخیره</div>
+          </div>
+          <div class="card card--send">
+            <div class="title">ارسال</div>
+          </div>
+        </div>
+      </div>
+      <details class="tech" style="margin-top:.65rem">
+        <summary>مسیر فنی</summary>
+        <span class="code">templates · /ai · Flask · instance/data · SMS · FCM</span>
+      </details>
+    </section>
+
+    <!-- ④ سایه -->
+    <section class="lane lane--shadow" aria-label="لایه سایه">
+      <div class="lane-head">
+        <span class="lane-num">④</span>
+        <span class="lane-title">سایه — راهنمای داخلی هوش مصنوعی</span>
+        <span class="lane-sub">نه دسترسی · نه رابط · هویت محصول نیست</span>
+      </div>
+      <p class="shadow-body">
+        گردش‌کار موازی و تصمیم‌ساز داخلی — فقط راهنمای پشت‌صحنه برای چت؛ کاربر نمی‌بیند، جایگذین چت نیست.
+      </p>
+      <details class="tech">
+        <summary>مسیر فنی</summary>
+        <span class="code">app/agents · workflow · skip persist</span>
+      </details>
+    </section>
+
+    <!-- نگاشت -->
+    <section class="lane" aria-label="نگاشت نقش و مسیر">
+      <div class="lane-head">
+        <span class="lane-num" style="background:rgba(255,255,255,.06);color:var(--muted)">↳</span>
+        <span class="lane-title" style="color:var(--ink)">نگاشت نقش → صفحه → سرویس</span>
+      </div>
+      <table class="map-table">
+        <thead>
+          <tr>
+            <th>نقش</th>
+            <th>صفحه</th>
+            <th>سرویس</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="role c-guest">مهمان</span></td>
+            <td>صفحات عمومی</td>
+            <td><span class="path">/ai/chat</span></td>
+          </tr>
+          <tr>
+            <td><span class="role c-seller">فروشنده</span></td>
+            <td>پنل همکار</td>
+            <td><span class="path">/ai · voice=special</span></td>
+          </tr>
+          <tr>
+            <td><span class="role c-partner">همکار</span></td>
+            <td>پنل همکار</td>
+            <td><span class="path">/ai · voice=partner</span></td>
+          </tr>
+          <tr>
+            <td><span class="role c-ops">ادمین</span></td>
+            <td>پنل ادمین</td>
+            <td><span class="path">/admin/ops/chat</span></td>
+          </tr>
+          <tr>
+            <td><span class="role c-ops">اپ همکار</span></td>
+            <td>نمای وب</td>
+            <td><span class="path">express/partner</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>منبع: AGENT_GOAL.md · run.py · app/ai · admin · apk/</footer>
   </div>
 </body>
 </html>

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""AI Mission Control — additive routes under /admin/ai-console/*."""
+"""AI ops observe — monitor, flags, pending confirms, errors (AGENT_GOAL buried scope)."""
 from __future__ import annotations
 
 from flask import abort, flash, redirect, render_template, request, url_for
@@ -20,7 +20,7 @@ def _ai_console_gate(permission: str = "admin.ai.read"):
         from app.hardening.permissions import has_permission
 
         if not has_permission(permission):
-            flash("دسترسی AI Mission Control ندارید.", "error")
+            flash("دسترسی AI observe ندارید.", "error")
             return redirect(url_for("admin.dashboard"))
     except Exception:
         pass
@@ -37,14 +37,7 @@ def ai_console_dashboard():
     denied = _ai_console_gate("admin.ai.read")
     if denied is not None:
         return denied
-    from app.ai_console.service import dashboard_snapshot
-
-    snap = dashboard_snapshot()
-    return render_template(
-        "admin/ai_console/dashboard.html",
-        snap=snap,
-        **_nav_ctx("dashboard"),
-    )
+    return redirect(url_for("admin.ai_console_monitor"))
 
 
 @admin_bp.route("/ai-console/monitor", endpoint="ai_console_monitor")
@@ -55,7 +48,6 @@ def ai_console_monitor():
         return denied
     from app.ai_console import readers
 
-    # Poll-based monitor from recent token/eval rows (no websocket yet)
     tokens = readers.list_token_rows(limit=80)
     evals = readers.list_evaluation_rows(limit=40)
     events = []
@@ -86,66 +78,6 @@ def ai_console_monitor():
         "admin/ai_console/monitor.html",
         events=events[:100],
         **_nav_ctx("monitor"),
-    )
-
-
-@admin_bp.route("/ai-console/conversations", endpoint="ai_console_conversations")
-@login_required
-def ai_console_conversations():
-    denied = _ai_console_gate("admin.ai.read")
-    if denied is not None:
-        return denied
-    from app.ai_console import readers
-
-    audience = (request.args.get("audience") or "").strip()
-    q = (request.args.get("q") or "").strip()
-    items = readers.list_conversation_index(limit=100, audience=audience, q=q)
-    detail = None
-    aud = (request.args.get("aud") or "").strip()
-    uk = (request.args.get("user") or "").strip()
-    tid = (request.args.get("thread") or "").strip()
-    if aud and uk:
-        denied_d = _ai_console_gate("admin.ai.debug")
-        if denied_d is None:
-            detail = readers.get_conversation(audience=aud, user_key=uk, thread_id=tid)
-    return render_template(
-        "admin/ai_console/conversations.html",
-        items=items,
-        detail=detail,
-        audience=audience,
-        q=q,
-        **_nav_ctx("conversations"),
-    )
-
-
-@admin_bp.route("/ai-console/workflows", endpoint="ai_console_workflows")
-@login_required
-def ai_console_workflows():
-    denied = _ai_console_gate("admin.ai.read")
-    if denied is not None:
-        return denied
-    from app.ai_console import catalog, readers
-
-    return render_template(
-        "admin/ai_console/workflows.html",
-        definitions=catalog.list_workflow_definitions(),
-        sessions=readers.list_workflow_sessions(limit=100),
-        **_nav_ctx("workflows"),
-    )
-
-
-@admin_bp.route("/ai-console/agents", endpoint="ai_console_agents")
-@login_required
-def ai_console_agents():
-    denied = _ai_console_gate("admin.ai.read")
-    if denied is not None:
-        return denied
-    from app.ai_console import catalog
-
-    return render_template(
-        "admin/ai_console/agents.html",
-        agents=catalog.list_agents(),
-        **_nav_ctx("agents"),
     )
 
 
@@ -197,42 +129,6 @@ def ai_console_tools():
     )
 
 
-@admin_bp.route("/ai-console/prompts", endpoint="ai_console_prompts")
-@login_required
-def ai_console_prompts():
-    denied = _ai_console_gate("admin.ai.read")
-    if denied is not None:
-        return denied
-    from app.ai_console import catalog
-
-    return render_template(
-        "admin/ai_console/prompts.html",
-        prompts=catalog.list_prompts(),
-        **_nav_ctx("prompts"),
-    )
-
-
-@admin_bp.route("/ai-console/memory", endpoint="ai_console_memory")
-@login_required
-def ai_console_memory():
-    denied = _ai_console_gate("admin.ai.read")
-    if denied is not None:
-        return denied
-    from app.ai_console import readers
-
-    users = readers.list_memory_users(limit=100)
-    detail = None
-    uk = (request.args.get("user") or "").strip()
-    if uk:
-        detail = readers.get_memory_detail(uk)
-    return render_template(
-        "admin/ai_console/memory.html",
-        users=users,
-        detail=detail,
-        **_nav_ctx("memory"),
-    )
-
-
 @admin_bp.route("/ai-console/flags", endpoint="ai_console_flags")
 @login_required
 def ai_console_flags():
@@ -252,25 +148,6 @@ def ai_console_flags():
     )
 
 
-@admin_bp.route("/ai-console/analytics", endpoint="ai_console_analytics")
-@login_required
-def ai_console_analytics():
-    denied = _ai_console_gate("admin.ai.read")
-    if denied is not None:
-        return denied
-    from app.ai_console import readers
-    from app.ai_console.service import dashboard_snapshot
-
-    snap = dashboard_snapshot()
-    return render_template(
-        "admin/ai_console/analytics.html",
-        snap=snap,
-        tokens=readers.list_token_rows(limit=50),
-        evals=readers.list_evaluation_rows(limit=50),
-        **_nav_ctx("analytics"),
-    )
-
-
 @admin_bp.route("/ai-console/errors", endpoint="ai_console_errors")
 @login_required
 def ai_console_errors():
@@ -286,78 +163,19 @@ def ai_console_errors():
     )
 
 
+# Legacy Mission Control pages → monitor
+@admin_bp.route("/ai-console/conversations", endpoint="ai_console_conversations")
+@admin_bp.route("/ai-console/workflows", endpoint="ai_console_workflows")
+@admin_bp.route("/ai-console/agents", endpoint="ai_console_agents")
+@admin_bp.route("/ai-console/prompts", endpoint="ai_console_prompts")
+@admin_bp.route("/ai-console/memory", endpoint="ai_console_memory")
+@admin_bp.route("/ai-console/analytics", endpoint="ai_console_analytics")
 @admin_bp.route("/ai-console/timeline", endpoint="ai_console_timeline")
-@login_required
-def ai_console_timeline():
-    denied = _ai_console_gate("admin.ai.read")
-    if denied is not None:
-        return denied
-    phone = (request.args.get("phone") or "").strip()
-    land = (request.args.get("land_code") or "").strip()
-    events = []
-    if phone or land:
-        try:
-            from app.integration.service import journey_as_dicts
-
-            events = journey_as_dicts(partner_phone=phone, land_code=land, limit=100)
-        except Exception:
-            events = []
-    return render_template(
-        "admin/ai_console/timeline.html",
-        events=events,
-        phone=phone,
-        land_code=land,
-        **_nav_ctx("timeline"),
-    )
-
-
 @admin_bp.route("/ai-console/audit", endpoint="ai_console_audit")
-@login_required
-def ai_console_audit():
-    denied = _ai_console_gate("admin.ai.read")
-    if denied is not None:
-        return denied
-    rows = []
-    try:
-        from app.hardening.service import list_admin_audit
-
-        rows = [
-            r
-            for r in list_admin_audit(limit=150)
-            if str(r.get("action") or "").startswith("ai_")
-            or str(r.get("entity_type") or "").startswith("ai")
-        ]
-    except Exception:
-        rows = []
-    return render_template(
-        "admin/ai_console/audit.html",
-        events=rows,
-        **_nav_ctx("audit"),
-    )
-
-
 @admin_bp.route("/ai-console/settings", endpoint="ai_console_settings")
 @login_required
-def ai_console_settings():
+def ai_console_legacy_pages():
     denied = _ai_console_gate("admin.ai.read")
     if denied is not None:
         return denied
-    runtime = {}
-    try:
-        from app.ai import runtime_settings
-
-        if hasattr(runtime_settings, "load_ai_runtime_settings"):
-            runtime = runtime_settings.load_ai_runtime_settings() or {}
-        elif hasattr(runtime_settings, "get_ai_settings"):
-            runtime = runtime_settings.get_ai_settings() or {}
-    except Exception:
-        runtime = {}
-    from app.ai_console.service import console_status
-
-    return render_template(
-        "admin/ai_console/settings.html",
-        runtime=runtime if isinstance(runtime, dict) else {},
-        status=console_status(),
-        escalations_url=url_for("admin.ai_questions"),
-        **_nav_ctx("settings"),
-    )
+    return redirect(url_for("admin.ai_console_monitor"))

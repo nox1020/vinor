@@ -18,16 +18,16 @@ class VinorControlRoutesTests(unittest.TestCase):
             sess["logged_in"] = True
             sess["username"] = "admin"
 
-    def test_dashboard_is_mission_control(self) -> None:
+    def test_dashboard_is_ops_chat(self) -> None:
         self._login()
         r = self.client.get("/admin/")
         self.assertEqual(r.status_code, 200)
         body = r.data.decode("utf-8", errors="ignore")
-        self.assertIn("Mission Control", body)
+        self.assertIn("adminOpsChatPage", body)
+        self.assertIn("چت عملیات", body)
         self.assertIn("vinor-control.css", body)
-        self.assertIn("Vinor Control", body)
 
-    def test_control_hubs_reachable(self) -> None:
+    def test_control_hubs_redirect_to_ops_home(self) -> None:
         self._login()
         for path in (
             "/admin/control/market",
@@ -40,15 +40,18 @@ class VinorControlRoutesTests(unittest.TestCase):
             "/admin/control/more",
         ):
             r = self.client.get(path)
-            self.assertEqual(r.status_code, 200, msg=path)
+            self.assertIn(r.status_code, (301, 302), msg=path)
+            self.assertIn("/admin", r.location or "")
 
-    def test_ai_console_still_works(self) -> None:
+    def test_ai_console_redirects_to_monitor(self) -> None:
         self._login()
-        r = self.client.get("/admin/ai-console")
-        self.assertIn(r.status_code, (200, 302, 404))
-        if r.status_code == 200:
-            body = r.data.decode("utf-8", errors="ignore")
-            self.assertIn("Intelligence", body)
+        r = self.client.get("/admin/ai-console", follow_redirects=False)
+        self.assertIn(r.status_code, (302, 404))
+        if r.status_code == 302:
+            r2 = self.client.get(r.location)
+            self.assertEqual(r2.status_code, 200)
+            body = r2.data.decode("utf-8", errors="ignore")
+            self.assertIn("Live Monitor", body)
 
     def test_command_palette_markup(self) -> None:
         self._login()
@@ -57,12 +60,20 @@ class VinorControlRoutesTests(unittest.TestCase):
         self.assertIn("vinorControlShell", body)
         self.assertIn("⌘K", body)
 
-    def test_memory_detail_and_add_land_templates(self) -> None:
+    def test_legacy_ai_console_pages_redirect(self) -> None:
         self._login()
-        r = self.client.get("/admin/ai-console/memory?user=09101528014")
+        for path in (
+            "/admin/ai-console/memory?user=09101528014",
+            "/admin/ai-console/agents",
+            "/admin/ai-console/workflows",
+        ):
+            r = self.client.get(path, follow_redirects=False)
+            self.assertIn(r.status_code, (301, 302, 404), msg=path)
+
+    def test_add_land_template_still_reachable(self) -> None:
+        self._login()
+        r = self.client.get("/admin/add-land")
         self.assertEqual(r.status_code, 200)
-        r2 = self.client.get("/admin/add-land")
-        self.assertEqual(r2.status_code, 200)
 
 
 if __name__ == "__main__":

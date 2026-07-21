@@ -70,14 +70,6 @@ html[dir="ltr"] .vc-main-offset {
     padding-right: 0;
   }
 }
-html[dir="rtl"] .vc-fab {
-  left: 1rem;
-  right: auto;
-}
-html[dir="ltr"] .vc-fab {
-  right: 1rem;
-  left: auto;
-}
 html[dir="rtl"] .vc-notif-panel {
   left: 0;
   right: auto;
@@ -407,47 +399,6 @@ a.vc-stat:hover,
 .vc-mono {
   font-family: var(--vc-mono);
   font-size: 12px;
-}
-
-.vc-fab {
-  position: fixed;
-  z-index: 45;
-  left: 1rem;
-  bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 0.5rem;
-}
-
-@media (min-width: 1024px) {
-  .vc-fab {
-    bottom: 1.5rem;
-    left: 1.5rem;
-  }
-}
-
-.vc-fab-main {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 999px;
-  background: var(--vc-signal);
-  color: #042f2e;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-
-.vc-fab-sec {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 999px;
-  background: var(--vc-panel);
-  border: 1px solid var(--vc-line);
-  color: var(--vc-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .vc-bottom {

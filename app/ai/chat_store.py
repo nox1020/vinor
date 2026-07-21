@@ -639,25 +639,28 @@ def _enrich_messages_for_ui(
             else False
         )
         if row.get("role") == "assistant" and ((codes and show_land) or actions):
-            try:
-                from app.ai.land_cards import render_land_cards_html
+            parts: list[str] = []
+            if codes and show_land:
+                try:
+                    from app.ai.land_cards import render_land_cards_html
 
-                parts: list[str] = []
-                if codes and show_land:
                     row["land_cards"] = land_cards_payload(user_key, codes, audience=audience)
                     land_html = render_land_cards_html(user_key, codes, audience=audience) or ""
                     if land_html:
                         parts.append(land_html)
-                elif codes and not show_land:
+                except Exception:
                     row.pop("land_cards", None)
-                if isinstance(actions, list) and actions:
+            elif codes and not show_land:
+                row.pop("land_cards", None)
+            if isinstance(actions, list) and actions:
+                try:
                     actions_html = render_agent_actions_html(actions) or ""
                     if actions_html:
                         parts.append(actions_html)
-                # فایل + تأیید + کپی + ماموریت — همه داخل نخ گفتگو
-                row["cards_html"] = "".join(parts)
-            except Exception:
-                row["cards_html"] = ""
+                except Exception:
+                    pass
+            # فایل + تأیید + کپی + ماموریت — همه داخل نخ گفتگو
+            row["cards_html"] = "".join(parts)
         out.append(row)
     return out
 

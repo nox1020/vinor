@@ -1,27 +1,15 @@
-{% set items = [
-  ('dashboard', 'admin.ai_console_dashboard', 'ai_nav.overview', 'fa-gauge-high'),
+{% set ai_nav = [
   ('monitor', 'admin.ai_console_monitor', 'ai_nav.monitor', 'fa-heart-pulse'),
-  ('conversations', 'admin.ai_console_conversations', 'ai_nav.conversations', 'fa-comments'),
-  ('workflows', 'admin.ai_console_workflows', 'ai_nav.workflows', 'fa-diagram-project'),
-  ('agents', 'admin.ai_console_agents', 'ai_nav.agents', 'fa-robot'),
   ('tools', 'admin.ai_console_tools', 'ai_nav.tools', 'fa-wrench'),
-  ('prompts', 'admin.ai_console_prompts', 'ai_nav.prompts', 'fa-pen-nib'),
-  ('memory', 'admin.ai_console_memory', 'ai_nav.memory', 'fa-database'),
   ('flags', 'admin.ai_console_flags', 'ai_nav.flags', 'fa-flag'),
-  ('analytics', 'admin.ai_console_analytics', 'ai_nav.analytics', 'fa-chart-line'),
   ('errors', 'admin.ai_console_errors', 'ai_nav.errors', 'fa-triangle-exclamation'),
-  ('timeline', 'admin.ai_console_timeline', 'ai_nav.timeline', 'fa-timeline'),
-  ('audit', 'admin.ai_console_audit', 'ai_nav.audit', 'fa-clipboard-list'),
-  ('settings', 'admin.ai_console_settings', 'ai_nav.settings', 'fa-sliders'),
 ] %}
 <nav class="flex flex-wrap gap-1.5 mb-4">
-  {% for key, endpoint, label_key, icon in items %}
-  <a href="{{ url_for(endpoint) }}"
+  {% for key, ep, label_key, icon in ai_nav %}
+  <a href="{{ url_for(ep) }}"
      class="vc-chip {% if ai_console_active == key %}vc-chip-signal{% endif %}">
-    <i class="fa-solid {{ icon }} text-[10px]"></i><span data-i18n="{{ label_key }}"></span>
+    <i class="fa-solid {{ icon }} text-[10px]"></i>
+    <span data-i18n="{{ label_key }}"></span>
   </a>
   {% endfor %}
-  <a href="{{ url_for('admin.control_reasoning') }}" class="vc-chip"><i class="fa-solid fa-lightbulb text-[10px]"></i><span data-i18n="ai_nav.reasoning"></span></a>
-  <a href="{{ url_for('admin.control_evaluations') }}" class="vc-chip"><i class="fa-solid fa-flask text-[10px]"></i><span data-i18n="ai_nav.evals"></span></a>
-  <a href="{{ url_for('admin.ai_questions') }}" class="vc-chip vc-chip-orbit"><i class="fa-solid fa-circle-question text-[10px]"></i><span data-i18n="ai_nav.escalations"></span></a>
 </nav>
