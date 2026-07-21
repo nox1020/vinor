@@ -503,6 +503,15 @@ def _build_messages(
         mem_text = _get_memory_prompt_text()
         if mem_text:
             messages.append({"role": "system", "content": mem_text})
+        # hint ناظر قیف (بدون پیام به کاربر)
+        try:
+            from app.supervisor.funnel_service import chat_hint
+
+            fh = chat_hint(user_key)
+            if fh:
+                _append_sales_hint(messages, fh)
+        except Exception:
+            pass
     if history:
         keep_last = int(cfg["max_history"])
         summary = _summarize_older_history(history, keep_last=keep_last)
@@ -1041,6 +1050,7 @@ def generate_reply(
         from flask import g
         from .agent_tools import resolve_conversation_land_code
 
+        g.ai_user_key = key
         g.ai_tool_thread_id = (thread_id or "").strip() or None
         g.ai_tool_audience = aud
         g.ai_last_user_message = text
@@ -1048,6 +1058,13 @@ def generate_reply(
             focus0 = resolve_conversation_land_code(key, thread_id=thread_id)
             if focus0:
                 g.ai_focus_land_code = focus0
+            # ناظر قیف — قبل از بازیابی حافظه/پاسخ (سیگنال بدون پیام)
+            try:
+                from app.supervisor.funnel_service import watch_user
+
+                watch_user(key, audience=aud, voice=voice or "")
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -1751,11 +1768,18 @@ def generate_reply(
         )
     except Exception:
         pass
+    # ناظر قیف: مرحله/پیشرفت + سیگنال به رسد (بدون پیام)
+    try:
+        from app.supervisor.funnel_service import watch_user
+
+        watch_user(key, audience=aud, voice=voice or "")
+    except Exception:
+        pass
     # خلاصهٔ حافظهٔ صفحهٔ تنظیمات — هر چت بازنویسی
     try:
         from app.express_partner.partner_live_memory import rewrite_partner_live_memory
 
-        if key and not str(key).startswith("guest:"):
+        if key and not str(key).startswith("guest_"):
             rewrite_partner_live_memory(
                 key,
                 last_user=text,

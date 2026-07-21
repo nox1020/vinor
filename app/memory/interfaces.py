@@ -39,6 +39,7 @@ class MemoryRetrieveRequest:
     thread_id: str | None = None
     budget_chars: int = 280
     top_k: int = 8
+    stage: str = ""  # search|buy|visit|negotiate|sell|… از goals
 
 
 @dataclass(frozen=True)

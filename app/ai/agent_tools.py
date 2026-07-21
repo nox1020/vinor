@@ -49,6 +49,36 @@ TOOL_PAYMENT_MILESTONE = "propose_payment_milestone"
 TOOL_SETTLEMENT = "propose_settlement"
 TOOL_LEAD = "propose_lead"
 TOOL_TASK = "propose_task"
+TOOL_FORGET_MEMORY = "propose_forget_memory"
+
+
+def _remember_sales(
+    phone: str,
+    event: str,
+    *,
+    land_code: str = "",
+    detail: str = "",
+    audience: str = "partner",
+) -> None:
+    """ثبت رویداد فروش در ai_memory — fail-open."""
+    try:
+        from app.memory.events import record_sales_event
+
+        record_sales_event(
+            phone,
+            event,
+            land_code=land_code,
+            detail=detail,
+            audience=audience,
+        )
+    except Exception:
+        pass
+    try:
+        from app.supervisor.funnel_service import watch_user
+
+        watch_user(phone, audience=audience, voice="")
+    except Exception:
+        pass
 
 
 def _norm_partner_phone(phone: str) -> str:
@@ -318,6 +348,7 @@ def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
         schemas.append(_schema_coop_info())
         schemas.append(_schema_app_status())
         schemas.append(_schema_propose_apply())
+        schemas.append(_schema_forget_memory())
         return schemas
     if v in (VOICE_PARTNER, VOICE_SPECIAL):
         schemas.append(_schema_next())
@@ -326,6 +357,7 @@ def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
         schemas.append(_schema_complete_visit())
         schemas.append(_schema_deal())
         schemas.append(_schema_release())
+        schemas.append(_schema_forget_memory())
         # پیگیری روزانه فروش — هستهٔ هدف
         try:
             from app.crm.config import crm_ai_tools_enabled
@@ -371,6 +403,32 @@ def _schema_coop_info() -> dict[str, Any]:
                     "topic": {"type": "string", "description": "levels|terms|how|all"},
                 },
                 "required": [],
+            },
+        },
+    }
+
+
+def _schema_forget_memory() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": TOOL_FORGET_MEMORY,
+            "description": (
+                "وقتی کاربر می‌گوید بودجه/ترجیح عوض شد یا «یادت نره / فراموش کن»، "
+                "کارت تأیید حذف حافظه نشان بده. scope: budget|city|category|land|all|key"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "scope": {
+                        "type": "string",
+                        "description": "budget|city|category|land|all|key",
+                    },
+                    "land_code": {"type": "string", "description": "اگر scope=land"},
+                    "key": {"type": "string", "description": "اگر scope=key — کلید دقیق"},
+                    "reason": {"type": "string", "description": "دلیل کوتاه برای کارت"},
+                },
+                "required": ["scope"],
             },
         },
     }
@@ -812,6 +870,8 @@ def run_tool(
             return _tool_application_status(phone=phone)
         if n == TOOL_PROPOSE_APPLY:
             return _tool_propose_partner_application(args, phone=phone)
+        if n == TOOL_FORGET_MEMORY:
+            return _tool_propose_forget_memory(args, phone=phone)
         if n == TOOL_NEXT:
             if (voice or "").strip().lower() == VOICE_PUBLIC:
                 return _denied("این ابزار برای مشتری عادی فعال نیست.")
@@ -1182,6 +1242,116 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
         ),
     }
     return {"ok": True, "model_result": model, "ui_action": ui}
+
+
+def _tool_propose_forget_memory(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
+    me = (phone or "").strip() or _session_phone()
+    if not me:
+        return _denied("کاربر شناسایی نشد.")
+    scope = str(args.get("scope") or "").strip().lower() or "all"
+    land = str(args.get("land_code") or "").strip()
+    key = str(args.get("key") or "").strip()
+    reason = str(args.get("reason") or "").strip()
+    if scope not in ("budget", "city", "category", "land", "all", "key"):
+        return _denied("scope نامعتبر است.")
+    if scope == "land" and not land:
+        return _denied("برای scope=land باید land_code بدهی.")
+    if scope == "key" and not key:
+        return _denied("برای scope=key باید key بدهی.")
+
+    payload = {"scope": scope, "land_code": land, "key": key, "reason": reason}
+    token = _store_pending_action(
+        user_key=me,
+        action_type="confirm_forget_memory",
+        payload=payload,
+    )
+    scope_fa = {
+        "budget": "بودجه",
+        "city": "شهر/منطقه",
+        "category": "نوع ملک",
+        "land": f"فایل {land}",
+        "all": "همهٔ حافظهٔ گفتگو",
+        "key": f"کلید {key}",
+    }.get(scope, scope)
+    lines = [f"حذف: {scope_fa}"]
+    if reason:
+        lines.append(f"دلیل: {reason[:80]}")
+    try:
+        from app.memory.service import list_memory_brief
+
+        brief = list_memory_brief(me, limit=4)
+        for row in brief[:3]:
+            lines.append(f"• {row.get('value') or row.get('key')}")
+    except Exception:
+        pass
+    ui = {
+        "type": "confirm_forget_memory",
+        "token": token,
+        "title": "تأیید پاک‌کردن حافظه",
+        "lines": lines,
+        "status": "pending",
+    }
+    model = {
+        "ok": True,
+        "status": "needs_user_confirmation",
+        "instruction": "کارت حذف حافظه نشان داده شد؛ هنوز پاک نشده.",
+    }
+    return {"ok": True, "model_result": model, "ui_action": ui, "land_codes": []}
+
+
+def _confirm_forget_memory(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
+    from app.memory.service import forget_memories
+
+    payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
+    scope = str(payload.get("scope") or "all").strip().lower()
+    land = str(payload.get("land_code") or "").strip()
+    key = str(payload.get("key") or "").strip()
+    kwargs: dict[str, Any] = {}
+    if scope == "budget":
+        kwargs["keys"] = ["budget"]
+        kwargs["key_prefix"] = "budget"
+    elif scope == "city":
+        kwargs["key_prefix"] = "city:"
+    elif scope == "category":
+        kwargs["key_prefix"] = "category:"
+    elif scope == "land" and land:
+        # همهٔ relationهای این فایل
+        kwargs["keys"] = [
+            f"liked:{land}",
+            f"rejected:{land}",
+            f"viewed:{land}",
+            f"visit:{land}",
+            f"visit_done:{land}",
+            f"deal:{land}",
+            f"deal_release:{land}",
+        ]
+    elif scope == "key" and key:
+        kwargs["keys"] = [key]
+    elif scope == "all":
+        try:
+            from app.memory.di import make_memory_store
+
+            ids = [
+                str(it.id or "")
+                for it in (make_memory_store().list_items(phone) or [])
+                if it.id
+            ]
+            kwargs["memory_ids"] = ids
+        except Exception:
+            kwargs["memory_ids"] = []
+    else:
+        return {"ok": False, "error": "محدودهٔ حذف نامعتبر است."}
+
+    out = forget_memories(phone, **kwargs)
+    if not out.get("ok"):
+        return {"ok": False, "error": str(out.get("error") or "حذف ممکن نشد.")}
+    _consume_pending_action(token)
+    n = int(out.get("deleted") or 0)
+    return {
+        "ok": True,
+        "message": f"{n} مورد از حافظه پاک شد." if n else "موردی برای پاک‌کردن نبود.",
+        "deleted": n,
+    }
 
 
 def _tool_search_lands(
@@ -3513,6 +3683,13 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         ui["show_visit_call"] = True
         ui["call_phone"] = call_phone
         out["ui_action"] = ui
+    _remember_sales(
+        me,
+        "visit",
+        land_code=code,
+        detail=vdate_j or visit_date,
+        audience="partner",
+    )
     return out
 
 
@@ -3527,6 +3704,8 @@ def confirm_action_from_token(*, phone: str, token: str) -> dict[str, Any]:
     action_type = str(pending.get("action_type") or "")
     if action_type == "confirm_visit":
         return confirm_visit_from_token(phone=phone, token=token)
+    if action_type == "confirm_forget_memory":
+        return _confirm_forget_memory(phone=me, token=token, pending=pending)
     if action_type == "confirm_log_call":
         return _confirm_log_call(phone=me, token=token, pending=pending)
     if action_type == "confirm_followup":
@@ -3599,6 +3778,12 @@ def confirm_action_from_token(*, phone: str, token: str) -> dict[str, Any]:
 
     if out.get("ok"):
         _consume_pending_action(token)
+        if action_type == "confirm_complete_visit":
+            _remember_sales(me, "visit_done", land_code=code)
+        elif action_type == "confirm_deal":
+            _remember_sales(me, "deal", land_code=code)
+        else:
+            _remember_sales(me, "deal_release", land_code=code)
     return out
 
 
@@ -3658,6 +3843,12 @@ def _confirm_log_call(*, phone: str, token: str, pending: dict[str, Any]) -> dic
     if not call:
         return {"ok": False, "error": "ثبت تماس ممکن نشد."}
     _consume_pending_action(token)
+    _remember_sales(
+        phone,
+        "call",
+        detail=str(payload.get("outcome") or ""),
+        audience="partner",
+    )
     return {
         "ok": True,
         "message": "تماس ثبت شد.",
@@ -3685,6 +3876,12 @@ def _confirm_followup(*, phone: str, token: str, pending: dict[str, Any]) -> dic
     if not fu:
         return {"ok": False, "error": "ثبت پیگیری ممکن نشد."}
     _consume_pending_action(token)
+    _remember_sales(
+        phone,
+        "followup",
+        detail=str(payload.get("due_at") or ""),
+        audience="partner",
+    )
     return {
         "ok": True,
         "message": "پیگیری ثبت شد.",
@@ -3803,6 +4000,13 @@ def _confirm_visit_result(*, phone: str, token: str, pending: dict[str, Any]) ->
     if result is None:
         return {"ok": False, "error": "ثبت نتیجه بازدید ممکن نشد."}
     _consume_pending_action(token)
+    land = str(result.land_code or payload.get("land_code") or "")
+    if outcome == "interested":
+        _remember_sales(phone, "liked", land_code=land, detail=outcome)
+    elif outcome == "not_interested":
+        _remember_sales(phone, "rejected", land_code=land, detail=outcome)
+    else:
+        _remember_sales(phone, "viewed", land_code=land, detail=outcome)
     return {
         "ok": True,
         "message": "نتیجه بازدید ثبت شد.",

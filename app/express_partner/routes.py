@@ -959,6 +959,16 @@ def _redirect_after_login(phone: str | None = None) -> str:
 
 def _finalize_partner_login(phone: str) -> str:
     canonical = _canonical_partner_phone(phone)
+    # قبل از پاک شدن session: ادغام حافظه/اهداف مهمان → شماره
+    try:
+        from app.memory.merge import merge_guest_goals, merge_guest_session_memory
+
+        merge_guest_session_memory(canonical)
+        gid = str(session.get("ai_guest_id") or "").strip()
+        if gid:
+            merge_guest_goals(f"guest_{gid}", canonical)
+    except Exception:
+        pass
     session['user_id'] = canonical
     session['user_phone'] = canonical
     session.permanent = True

@@ -17,3 +17,20 @@ def supervisor_default_context_budget() -> int:
         return max(800, min(6000, int(os.environ.get("VINOR_SUPERVISOR_CONTEXT_BUDGET") or 3000)))
     except Exception:
         return 3000
+
+
+def funnel_watch_enabled() -> bool:
+    """ناظر قیف فروش — پیش‌فرض ON."""
+    return (os.environ.get("VINOR_FUNNEL_WATCH_ENABLED") or "1").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def funnel_stall_hours() -> float:
+    try:
+        return max(1.0, min(168.0, float(os.environ.get("VINOR_FUNNEL_STALL_HOURS") or 24)))
+    except Exception:
+        return 24.0

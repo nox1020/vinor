@@ -182,6 +182,20 @@ def _collect_facts(phone: str) -> dict[str, Any]:
             facts["recent_chat"] = recent
     except Exception:
         pass
+
+    # منبع حقیقت ساخت‌یافته: ai_memory
+    try:
+        from app.memory.service import list_memory_brief
+
+        brief = list_memory_brief(ph, limit=8)
+        if brief:
+            facts["ai_memory"] = [
+                str(row.get("value") or "").strip()
+                for row in brief
+                if str(row.get("value") or "").strip()
+            ]
+    except Exception:
+        pass
     return facts
 
 
@@ -271,8 +285,16 @@ def rewrite_partner_live_memory(
         if action_note:
             bits.append(f"آخرین اقدام: {action_note[:100]}")
         summary = "\n".join(bits).strip() or "هنوز حافظه‌ای ساخته نشده — با چت بعدی پر می‌شود."
-    return save_partner_live_memory(
+    row = save_partner_live_memory(
         ph,
         summary=summary,
         meta={"facts_keys": list(facts.keys()), "source": "llm" if summary else "fallback"},
     )
+    # همگام با منبع حقیقت ai_memory
+    try:
+        from app.memory.service import upsert_live_summary
+
+        upsert_live_summary(ph, summary)
+    except Exception:
+        pass
+    return row

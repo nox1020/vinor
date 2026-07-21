@@ -10,6 +10,7 @@ class GoalType(str, Enum):
     BUY = "buy"
     SELL = "sell"
     VISIT = "visit"
+    DEAL = "deal"
     NEGOTIATE = "negotiate"
     SUPPORT = "support"
     PARTNER = "partner"

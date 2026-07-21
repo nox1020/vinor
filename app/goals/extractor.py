@@ -31,6 +31,8 @@ class RuleGoalExtractor(GoalExtractor):
             add(GoalType.SELL.value, "فروش ملک", GoalPriority.HIGH.value, 0.7)
         if any(k in text for k in ("بازدید", "نشون بده", "ببینم")) or "visit" in intent:
             add(GoalType.VISIT.value, "بازدید ملک", GoalPriority.MEDIUM.value, 0.65)
+        if any(k in text for k in ("معامله", "قرارداد", "ببندیم", "فروش قطعی")) or "deal" in intent:
+            add(GoalType.DEAL.value, "معامله", GoalPriority.CRITICAL.value, 0.8)
         if any(k in text for k in ("قیمت", "تخفیف", "چانه", "مذاکره")) or "negotiat" in intent:
             add(GoalType.NEGOTIATE.value, "مذاکره قیمت", GoalPriority.MEDIUM.value, 0.6)
         if any(k in text for k in ("همکار", "نماینده", "پورسانت")) or "partner" in intent:

@@ -33,6 +33,9 @@
       --reach: #c4a0ff;
       --reach-dim: rgba(196,160,255,.1);
       --reach-border: rgba(196,160,255,.35);
+      --mem: #7ddea8;
+      --mem-dim: rgba(125,222,168,.1);
+      --mem-border: rgba(125,222,168,.32);
       --seller: #f0b35a;
       --gap: 12px;
       --radius: 12px;
@@ -266,6 +269,23 @@
     .card--reach .title { color: var(--reach); font-size: .85rem; }
     .card--reach .explain li { border-color: rgba(196,160,255,.25); }
 
+    .memory-row {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: var(--gap);
+      margin-top: var(--gap);
+    }
+    .card--mem {
+      background: var(--mem-dim);
+      border: 1px solid var(--mem-border);
+      text-align: right;
+    }
+    .card--mem .title { color: var(--mem); font-size: .85rem; text-align: center; }
+    .card--mem .explain li { border-color: rgba(125,222,168,.28); }
+    .card--mem-core {
+      border-width: 1.5px;
+    }
+
     .access-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -374,6 +394,7 @@
       .audiences-row,
       .paths-row,
       .follow-row,
+      .memory-row,
       .access-row,
       .pipe-split,
       .hub-arrows {
@@ -389,15 +410,15 @@
   <div class="wrap">
     <header>
       <h1>وینور</h1>
-      <p>یک بازاریاب · دو مسیر · از صفحه تا ذخیره</p>
+      <p>یک بازاریاب · دو مسیر · حافظه تا معامله</p>
     </header>
 
     <!-- ① فروش -->
     <section class="lane lane--live" aria-label="لایه فروش">
       <div class="lane-head">
         <span class="lane-num">①</span>
-        <span class="lane-title">فروش — یک بازاریاب · دو مسیر + پیگیری</span>
-        <span class="lane-sub">مهمان · فروشنده · همکار — همه از چت می‌گذرند · فروشنده = نوع ویژهٔ همکار</span>
+        <span class="lane-title">فروش — یک بازاریاب · دو مسیر + حافظه + پیگیری</span>
+        <span class="lane-sub">مهمان · فروشنده · همکار — همه از چت می‌گذرند · حافظه تا معامله همراه است</span>
       </div>
 
       <div class="audiences-row">
@@ -455,10 +476,11 @@
           <ul class="explain">
             <li>یک ایجنت · یک هویت · محل کار = همین چت</li>
             <li>ابزار → کارت تأیید → ذخیره در سیستم</li>
+            <li>حافظهٔ هر کاربر به prompt می‌آید؛ رویداد فروش مستقیم ذخیره می‌شود</li>
           </ul>
           <details class="tech">
             <summary>مسیر فنی</summary>
-            <span class="code">app/ai · agent_tools · instance/data</span>
+            <span class="code">app/ai · agent_tools · app/memory · instance/data</span>
           </details>
         </div>
       </div>
@@ -469,18 +491,59 @@
         <div class="path-bar">استخدام → فایل → آگهی → معامله</div>
       </div>
 
+      <div class="memory-row" aria-label="حافظه">
+        <div class="card card--mem card--mem-core">
+          <div class="title">حافظهٔ هر کاربر — منبع حقیقت</div>
+          <ul class="explain">
+            <li>فایل جدا برای هر کاربر: ترجیح، بودجه، فایل دیده‌شده، بازدید، معامله.</li>
+            <li>رویداد فروش (بازدید · معامله · تماس · رد/علاقه) مستقیم نوشته می‌شود — نه فقط از متن چت.</li>
+            <li>کوتاه‌مدت منقضی می‌شود؛ بودجه/شهر/liked↔rejected تناقض‌ها حل می‌شوند.</li>
+            <li>بازیابی بر اساس <strong>مرحله</strong> ناظر (جستجو · بازدید · معامله) اولویت می‌گیرد.</li>
+            <li>مهمان → لاگین: حافظه و اهداف ادغام می‌شوند. پاک‌کردن با کارت <strong>propose_forget_memory</strong>.</li>
+          </ul>
+          <details class="tech">
+            <summary>مسیر فنی</summary>
+            <span class="code">instance/data/ai_memory/{user}.json · events · lifecycle · merge · forget</span>
+          </details>
+        </div>
+        <div class="card card--mem">
+          <div class="title">چت · اهداف · خلاصه زنده</div>
+          <ul class="explain">
+            <li>تاریخچهٔ گفتگو جدا از حافظهٔ ساخت‌یافته.</li>
+            <li>اهداف جلسه برای ناظر و اولویت بازیابی.</li>
+            <li>خلاصهٔ زندهٔ همکار با <strong>ai_memory</strong> همگام است — هویت جدا نیست.</li>
+          </ul>
+          <details class="tech">
+            <summary>مسیر فنی</summary>
+            <span class="code">ai_chats · ai_goals · partner_live → live_summary</span>
+          </details>
+        </div>
+        <div class="card card--mem">
+          <div class="title">دانش کلی سیستم</div>
+          <ul class="explain">
+            <li>موجودی فایل‌ها و دادهٔ کسب‌وکار — مشترک برای همه، نه حافظهٔ شخصی.</li>
+            <li>جستجو / RAG روی lands؛ هویت ایجنت از goal/prompt.</li>
+          </ul>
+          <details class="tech">
+            <summary>مسیر فنی</summary>
+            <span class="code">lands.json · app/knowledge · app/ai/goal</span>
+          </details>
+        </div>
+      </div>
+
       <div class="follow-row">
         <div class="card card--watch">
           <div class="title">ناظر — داخلی · بدون رابط</div>
           <ul class="explain">
             <li>همیشه فعال؛ مرحلهٔ هر مهمان، فروشنده و همکار را می‌بیند: جستجو، فایل، بازدید، معامله، یا راکد.</li>
             <li><strong>اهداف</strong> را نگه می‌دارد و می‌سنجد چقدر به نتیجه نزدیک شده.</li>
+            <li>مرحله به بازیابی حافظه هم می‌رسد — اولویت فایل/بازدید در مرحلهٔ درست.</li>
             <li>مسیر درست و قدم بعد را داخلی پیشنهاد می‌دهد — فقط راهنما برای چت و رسدکننده.</li>
             <li>پیام نمی‌فرستد؛ اگر گیر دید به <strong>رسدکننده</strong> سیگنال می‌دهد.</li>
           </ul>
           <details class="tech">
             <summary>مسیر فنی</summary>
-            <span class="code">supervisor · goals · executive</span>
+            <span class="code">supervisor/funnel · goals · executive · ai_funnel</span>
           </details>
         </div>
 
@@ -494,7 +557,7 @@
           </ul>
           <details class="tech">
             <summary>مسیر فنی</summary>
-            <span class="code">scheduler · SMS · FCM · customer_success</span>
+            <span class="code">reach · sales_coach · SMS · FCM · scheduler</span>
           </details>
         </div>
       </div>
@@ -560,6 +623,9 @@
         <div class="pipe-split">
           <div class="card card--store">
             <div class="title">ذخیره</div>
+            <ul class="explain" style="margin-top:.35rem">
+              <li>کسب‌وکار + <strong>ai_memory</strong> هر کاربر</li>
+            </ul>
           </div>
           <div class="card card--send">
             <div class="title">ارسال</div>
@@ -568,7 +634,7 @@
       </div>
       <details class="tech" style="margin-top:.65rem">
         <summary>مسیر فنی</summary>
-        <span class="code">templates · /ai · Flask · instance/data · SMS · FCM</span>
+        <span class="code">templates · /ai · Flask · instance/data · ai_memory · SMS · FCM</span>
       </details>
     </section>
 
@@ -581,10 +647,11 @@
       </div>
       <p class="shadow-body">
         گردش‌کار موازی و تصمیم‌ساز داخلی — فقط راهنمای پشت‌صحنه برای چت؛ کاربر نمی‌بیند، جایگذین چت نیست.
+        پروفایل مشتری از همان <strong>ai_memory</strong> ساخته می‌شود — حافظهٔ محصول جدا نیست.
       </p>
       <details class="tech">
         <summary>مسیر فنی</summary>
-        <span class="code">app/agents · workflow · skip persist</span>
+        <span class="code">app/agents · customer_memory ← ai_memory · workflow · skip persist</span>
       </details>
     </section>
 
@@ -632,7 +699,7 @@
       </table>
     </section>
 
-    <footer>منبع: AGENT_GOAL.md · run.py · app/ai · admin · apk/</footer>
+    <footer>منبع: AGENT_GOAL.md · run.py · app/ai · app/memory · app/reach · supervisor/funnel · admin · apk/</footer>
   </div>
 </body>
 </html>

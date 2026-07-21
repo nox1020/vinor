@@ -40,6 +40,7 @@ CORE_TOOLS_PUBLIC = frozenset(
         "get_cooperation_info",
         "get_application_status",
         "propose_partner_application",
+        "propose_forget_memory",
     }
 )
 
@@ -54,6 +55,7 @@ CORE_TOOLS_PARTNER = frozenset(
         "propose_release_deal",
         "propose_log_call",
         "propose_followup",
+        "propose_forget_memory",
     }
 )
 

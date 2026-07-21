@@ -64,21 +64,21 @@ VINOR_AI_PUBLIC_PROMPT = f"""{GOAL_SYSTEM}
 - فروش/پورسانت/بازاریاب شدن → get_cooperation_info سپس propose_partner_application (نام→کدملی→شهر گرمابسرد یکی‌یکی)
 - مبهم → یک سؤال: خرید می‌خواهی یا می‌خواهی فایل بفروشی؟
 
-ابزار هسته: search_lands | get_cooperation_info | get_application_status | propose_partner_application
+ابزار هسته: search_lands | get_cooperation_info | get_application_status | propose_partner_application | propose_forget_memory
 visit/deal نزن.
 {_COMMON_RULES}"""
 
 VINOR_AI_PARTNER_PROMPT = f"""{GOAL_SYSTEM}
 
 مخاطب: بازاریاب تأییدشده — تیز، بی‌حاشیه، هر پیام یک قدم فروش.
-ابزار هسته (+کارت): search_lands | suggest_next_action | draft_listing_copy | propose_visit_request | propose_complete_visit | propose_deal | propose_release_deal | propose_log_call | propose_followup
+ابزار هسته (+کارت): search_lands | suggest_next_action | draft_listing_copy | propose_visit_request | propose_complete_visit | propose_deal | propose_release_deal | propose_log_call | propose_followup | propose_forget_memory
 {_PARTNER_GUIDE}
 {_COMMON_RULES}"""
 
 VINOR_AI_SPECIAL_PROMPT = f"""{GOAL_SYSTEM}
 
 مخاطب: ویژه — یک خط وضعیت + یک خط حرکت.
-ابزار هسته (+کارت): search_lands | suggest_next_action | draft_listing_copy | propose_visit_request | propose_complete_visit | propose_deal | propose_release_deal | propose_log_call | propose_followup
+ابزار هسته (+کارت): search_lands | suggest_next_action | draft_listing_copy | propose_visit_request | propose_complete_visit | propose_deal | propose_release_deal | propose_log_call | propose_followup | propose_forget_memory
 {_SPECIAL_GUIDE}
 {_COMMON_RULES}"""
 

@@ -43,3 +43,11 @@ def memory_max_bytes() -> int:
         return _DEFAULT_MAX_BYTES
     # حداقل ۶۴KB؛ حداکثر ۵۱۲MB برای ایمنی دیسک
     return max(64 * 1024, min(512 * 1024 * 1024, n))
+
+
+def memory_short_ttl_hours() -> int:
+    """عمر حافظهٔ کوتاه‌مدت (ساعت). پیش‌فرض ۴۸."""
+    try:
+        return max(1, min(168, int(os.environ.get("VINOR_MEMORY_SHORT_TTL_HOURS") or 48)))
+    except Exception:
+        return 48

@@ -11,6 +11,7 @@ from app.memory.interfaces import (
     MemoryRetriever,
     MemoryStore,
 )
+from app.memory.lifecycle import purge_expired, resolve_conflicts
 
 
 class DefaultMemoryManager(MemoryManager):
@@ -26,6 +27,10 @@ class DefaultMemoryManager(MemoryManager):
         self._retriever = retriever
 
     def retrieve_for_prompt(self, req: MemoryRetrieveRequest) -> MemoryRetrieveResult:
+        try:
+            purge_expired(self._store, req.user_key)
+        except Exception:
+            pass
         return self._retriever.retrieve(req)
 
     def ingest_exchange(self, req: MemoryExtractRequest) -> list[MemoryItem]:
@@ -34,6 +39,10 @@ class DefaultMemoryManager(MemoryManager):
         for item in extracted:
             if not (item.value or "").strip():
                 continue
+            try:
+                resolve_conflicts(self._store, item)
+            except Exception:
+                pass
             saved.append(self._store.upsert(item))
         return saved
 

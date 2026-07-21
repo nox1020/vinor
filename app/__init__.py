@@ -764,6 +764,13 @@ def create_app() -> Flask:
         app.logger.warning("Sales coach nudge scheduler not started: %s", e)
 
     try:
+        from app.reach.scheduler import schedule_reach
+
+        schedule_reach(app)
+    except Exception as e:
+        app.logger.warning("Reach scheduler not started: %s", e)
+
+    try:
         from admin.sms_scheduled import schedule_admin_sms_jobs
         schedule_admin_sms_jobs(app)
     except Exception as e:

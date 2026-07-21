@@ -48,8 +48,8 @@
 
 | لایه | نقش | وضعیت |
 |------|-----|--------|
-| **ناظر** | نظارت داخلی همیشه‌فعال بر مرحله و هدف هر کاربر (خرید · فروش · بازدید · معامله) | داخلی · بدون UI · `supervisor` · `goals` · `executive` |
-| **رسدکننده** | followup خودکار تا نتیجه — SMS/FCM/scheduler بدون تأیید ادمین | خودکار · `scheduler` · `goals` · SMS · FCM |
+| **ناظر** | نظارت داخلی همیشه‌فعال بر مرحله و هدف هر کاربر (خرید · فروش · بازدید · معامله) | داخلی · بدون UI · `supervisor/funnel` · `goals` · `executive` |
+| **رسدکننده** | followup خودکار تا نتیجه — SMS/FCM/scheduler بدون تأیید ادمین | خودکار · `reach` · `sales_coach` · SMS · FCM |
 
 قانون: **ناظر** پیام نمی‌فرستد و UI ندارد — فقط مرحله و هدف را می‌سنجد و به رسدکننده/چت hint می‌دهد. **رسدکننده** پیگیری پس‌زمینه است — خودکار اجرا می‌شود، نیاز به تأیید ادمین یا کارت ندارد. **چت** همچنان برای فروش زنده و اقدام‌های حساس (بازدید، معامله، …) = ابزار + کارت تأیید. ارسال رسد از لایه **ارسال** (SMS · FCM) جدا از **ذخیره** (`instance/data`).
 
@@ -63,8 +63,8 @@
 
 | مخاطب | ابزار در schema |
 |-------|-----------------|
-| مهمان | `search_lands` · `get_cooperation_info` · `get_application_status` · `propose_partner_application` |
-| Partner / Special (فروشنده) | `search_lands` · `suggest_next_action` · `draft_listing_copy` · visit/complete/deal/release · `propose_log_call` · `propose_followup` |
+| مهمان | `search_lands` · `get_cooperation_info` · `get_application_status` · `propose_partner_application` · `propose_forget_memory` |
+| Partner / Special (فروشنده) | `search_lands` · `suggest_next_action` · `draft_listing_copy` · visit/complete/deal/release · `propose_log_call` · `propose_followup` · `propose_forget_memory` |
 
 شماره تماس بازدید کسب‌وکار: **`09121471301`**
 
