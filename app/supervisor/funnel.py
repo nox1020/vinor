@@ -465,14 +465,45 @@ def clear_reach_signal(user_key: str) -> None:
     save_snapshot(snap)
 
 
-def refresh_funnels_for_reach(*, limit: int = 400) -> int:
-    """قبل از نوبت رسد: همهٔ snapshotها را دوباره بسنج تا سیگنال تازه شود."""
-    root = _funnel_dir()
-    n = 0
+def _discover_public_chat_keys(*, limit: int = 400) -> list[str]:
+    """کلیدهای چت عمومی/مهمان با شماره — برای کشف خریدارانی که هنوز snapshot ندارند."""
+    out: list[str] = []
+    seen: set[str] = set()
+    try:
+        from app.ai.paths import ai_data_file
+
+        root = os.path.join(ai_data_file("ai_chats"), "public")
+    except Exception:
+        return []
+    if not os.path.isdir(root):
+        return []
     try:
         names = os.listdir(root)
     except Exception:
-        return 0
+        return []
+    for name in names:
+        if not name.endswith(".json"):
+            continue
+        stem = name[:-5]
+        if stem.startswith("guest_"):
+            continue
+        digits = re.sub(r"\D+", "", stem)
+        if len(digits) < 10:
+            continue
+        phone = digits[-11:] if len(digits) >= 11 else digits
+        if phone in seen:
+            continue
+        seen.add(phone)
+        out.append(phone)
+        if len(out) >= max(1, int(limit)):
+            break
+    return out
+
+
+def refresh_funnels_for_reach(*, limit: int = 400) -> int:
+    """قبل از نوبت رسد: snapshotها + خریداران چت عمومی را بسنج تا سیگنال تازه شود."""
+    root = _funnel_dir()
+    n = 0
     stall = None
     try:
         from app.supervisor.config import funnel_stall_hours
@@ -480,7 +511,14 @@ def refresh_funnels_for_reach(*, limit: int = 400) -> int:
         stall = funnel_stall_hours()
     except Exception:
         stall = _STALL_HOURS_DEFAULT
-    for name in names[: max(1, int(limit))]:
+
+    # user_key → audience از snapshot موجود
+    pending: dict[str, str] = {}
+    try:
+        names = os.listdir(root)
+    except Exception:
+        names = []
+    for name in names:
         if not name.endswith(".json"):
             continue
         path = os.path.join(root, name)
@@ -490,12 +528,27 @@ def refresh_funnels_for_reach(*, limit: int = 400) -> int:
             if not isinstance(data, dict):
                 continue
             uk = str(data.get("user_key") or "").strip()
-            if not uk or uk.startswith("guest_"):
+            if not uk or uk.startswith("guest_") or uk.startswith("admin_"):
+                continue
+            aud = str(data.get("audience") or "public").strip().lower() or "public"
+            if aud == "admin":
+                continue
+            pending[uk] = aud
+        except Exception:
+            continue
+
+    # کشف خریداران چت عمومی که هنوز در ai_funnel نیستند
+    for phone in _discover_public_chat_keys(limit=limit):
+        pending.setdefault(phone, "public")
+
+    for uk, aud in list(pending.items())[: max(1, int(limit))]:
+        try:
+            if aud == "partner":
+                # همکار را sales_coach پوشش می‌دهد — سیگنال خریدار نساز
                 continue
             snap = assess_funnel(
                 uk,
-                audience=str(data.get("audience") or "public"),
-                voice=str(data.get("voice") or ""),
+                audience=aud or "public",
                 stall_hours=stall,
             )
             save_snapshot(snap)

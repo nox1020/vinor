@@ -183,14 +183,15 @@ def run_buyer_reach_slot(
 
     for snap in signals:
         phone = str(snap.user_key or "").strip()
-        if not phone or phone.startswith("guest_"):
+        if not phone or phone.startswith("guest_") or phone.startswith("admin_"):
             skipped += 1
             continue
         # همکار تأییدشده را sales_coach پوشش می‌دهد
         if _is_partner_phone(phone):
             skipped += 1
             continue
-        if (snap.audience or "").strip().lower() == "partner":
+        aud = (snap.audience or "").strip().lower()
+        if aud in ("partner", "admin"):
             skipped += 1
             continue
 
