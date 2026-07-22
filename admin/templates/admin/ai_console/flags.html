@@ -1,23 +1,46 @@
 {% extends 'admin/base_admin.html' %}
-{% block page_title %}AI Flags{% endblock %}
+{% block page_title %}فلگ‌های قابلیت{% endblock %}
 {% block content %}
 <div class="space-y-4 adm-page">
-  <h2 class="text-lg font-bold text-gray-900 dark:text-white">Feature Flag Manager <span class="text-xs font-normal text-gray-500">(read-only live values)</span></h2>
+  <h2 class="text-lg font-bold text-gray-900 dark:text-white">
+    فلگ‌های قابلیت
+    <span class="text-xs font-normal text-gray-500">(فقط مشاهده — مقدار زنده)</span>
+  </h2>
   {% include 'admin/ai_console/_nav.html' %}
-  <p class="text-xs text-gray-500">تغییر فلگ از env سرور است؛ Toggle در UI برای فاز بعد (Super + Audit).</p>
+  <p class="text-xs text-gray-500 leading-relaxed">
+    هر فلگ با متغیر محیطی روی سرور کنترل می‌شود.
+    مقدار پیش‌فرض روشن است؛ برای خاموش کردن مثلاً
+    <span class="font-mono" dir="ltr">VINOR_…=0</span>
+    بگذارید. تغییر از این صفحه در فاز بعد اضافه می‌شود.
+  </p>
   {% for group, rows in groups.items() %}
   <section class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-    <h3 class="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">{{ group }}</h3>
-    <ul class="space-y-1.5">
+    <h3 class="text-sm font-bold text-gray-800 dark:text-gray-100 mb-3">
+      {{ rows[0].group_label_fa if rows and rows[0].group_label_fa else group }}
+      <span class="text-[10px] font-normal text-gray-400 ms-1 uppercase tracking-wide" dir="ltr">{{ group }}</span>
+    </h3>
+    <ul class="space-y-3">
       {% for f in rows %}
-      <li class="flex flex-wrap items-center justify-between gap-2 text-xs py-1 border-b border-gray-50 dark:border-gray-800">
-        <span class="font-mono text-gray-800 dark:text-gray-200">{{ f.name }}</span>
-        <span class="flex items-center gap-2">
-          <span class="text-[10px] text-gray-400">{{ f.source }}</span>
-          <span class="font-bold {% if f.value %}text-emerald-600{% elif f.value is sameas false %}text-zinc-400{% else %}text-amber-600{% endif %}">
-            {% if f.value %}ON{% elif f.value is sameas false %}OFF{% else %}?{% endif %}
-          </span>
-        </span>
+      <li class="py-2 border-b border-gray-50 dark:border-gray-800 last:border-0">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div class="min-w-0 flex-1">
+            <div class="font-mono text-xs text-gray-800 dark:text-gray-200 break-all" dir="ltr">{{ f.name }}</div>
+            {% if f.description_fa %}
+            <p class="mt-1 text-[12px] leading-relaxed text-gray-600 dark:text-gray-400">{{ f.description_fa }}</p>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-2 shrink-0 pt-0.5">
+            <span class="text-[10px] text-gray-400" title="منبع مقدار">
+              {% if f.source == 'env' %}از env{% else %}پیش‌فرض{% endif %}
+            </span>
+            <span class="font-bold text-xs px-2 py-0.5 rounded-md
+              {% if f.value %}bg-emerald-500/15 text-emerald-600 dark:text-emerald-400
+              {% elif f.value is sameas false %}bg-zinc-500/15 text-zinc-400
+              {% else %}bg-amber-500/15 text-amber-600{% endif %}">
+              {% if f.value %}روشن{% elif f.value is sameas false %}خاموش{% else %}نامشخص{% endif %}
+            </span>
+          </div>
+        </div>
       </li>
       {% endfor %}
     </ul>
