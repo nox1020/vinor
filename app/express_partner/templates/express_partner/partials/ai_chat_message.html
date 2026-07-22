@@ -19,7 +19,7 @@
      {% if is_admin %}data-admin-reply="1"{% endif %}
      {% if is_postchi %}data-postchi="1"{% endif %}>
   <div class="ai-msg-row">
-    {% if not is_user and not is_system %}
+    {% if not is_user and not is_system and not is_supervisor %}
     <div class="ai-msg-avatar" aria-hidden="true">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>
@@ -44,12 +44,19 @@
       {% if is_supervisor and msg.content %}
       <div class="ai-supervisor-head">
         <span class="ai-supervisor-agent">ناظر عملیات</span>
-        {% if msg.created_at %}<span>{{ msg.created_at }}</span>{% endif %}
+        {% if msg.created_at %}<span>{{ msg.created_at|time_ago }}</span>{% endif %}
         {% if msg.meta and msg.meta.report_status %}
-        <span class="ai-supervisor-badge ai-supervisor-badge--{{ msg.meta.report_status }}">{{ msg.meta.report_status }}</span>
+        {% set _st = msg.meta.report_status %}
+        <span class="ai-supervisor-badge ai-supervisor-badge--{{ _st }}">
+          {%- if _st == 'success' -%}انجام شد
+          {%- elif _st == 'error' -%}خطا
+          {%- elif _st == 'in_progress' -%}در جریان
+          {%- elif _st == 'reminder' -%}یادآوری
+          {%- else -%}اطلاع{%- endif -%}
+        </span>
         {% endif %}
         {% if msg.meta and msg.meta.entity_url and msg.meta.entity_label %}
-        <a class="ai-supervisor-link" href="{{ msg.meta.entity_url }}">{{ msg.meta.entity_label }}</a>
+        <a class="ai-supervisor-link" href="{{ msg.meta.entity_url }}" data-land-filter="{{ msg.meta.land_code or '' }}">{{ msg.meta.entity_label }}</a>
         {% endif %}
       </div>
       <div class="ai-msg-bubble ai-msg-bubble--supervisor">{{ msg.content }}</div>
@@ -59,7 +66,7 @@
       {% elif msg.content %}
       <div class="ai-msg-bubble">{{ msg.content }}</div>
       {% endif %}
-      {% if not is_user and msg.content %}
+      {% if not is_user and not is_supervisor and msg.content %}
       <div class="ai-msg-actions" data-ai-msg-actions>
         <div class="ai-msg-action-wrap">
           <button type="button" class="ai-msg-action" data-ai-msg-more aria-label="بیشتر" aria-haspopup="true" aria-expanded="false">

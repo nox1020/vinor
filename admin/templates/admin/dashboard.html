@@ -6,16 +6,76 @@
 
 {% block admin_main_class %}vc-main-offset vc-ops-chat-main{% endblock %}
 {% block admin_main_pad_class %}p-0 pb-0 lg:pb-0{% endblock %}
+{% block admin_bottom_nav %}{% endblock %}
+
+{% block admin_flash %}
+{% with messages = get_flashed_messages(with_categories=True) %}
+  {% if messages %}
+  <div id="opsFlashStack" class="ops-flash-stack" aria-live="polite">
+    {% for category, msg in messages %}
+    <div class="ops-flash-toast ops-flash-toast--{{ category }}" role="status">{{ msg }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endwith %}
+{% endblock admin_flash %}
 
 {% block head %}
 {{ super() }}
 <style>
+  body:has(#adminOpsChatPage) .vc-ops-chat-main {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
   .vc-ops-chat-main > .adm-page {
     max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
     height: calc(100dvh - 3.25rem);
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+  }
+  #opsFlashStack.ops-flash-stack {
+    position: fixed;
+    top: 3.35rem;
+    inset-inline: 0.75rem;
+    z-index: 80;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    pointer-events: none;
+    max-width: 22rem;
+    margin-inline: auto;
+  }
+  #opsFlashStack .ops-flash-toast {
+    pointer-events: auto;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.65rem;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(20, 23, 28, 0.96);
+    color: #e2e8f0;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    animation: opsFlashIn 0.2s ease;
+  }
+  #opsFlashStack .ops-flash-toast--success,
+  #opsFlashStack .ops-flash-toast--ok { border-color: rgba(52, 211, 153, 0.35); color: #a7f3d0; }
+  #opsFlashStack .ops-flash-toast--warning { border-color: rgba(251, 191, 36, 0.35); color: #fde68a; }
+  #opsFlashStack .ops-flash-toast--info { border-color: rgba(56, 189, 248, 0.35); color: #bae6fd; }
+  #opsFlashStack .ops-flash-toast--danger,
+  #opsFlashStack .ops-flash-toast--error { border-color: rgba(248, 113, 113, 0.35); color: #fecaca; }
+  #opsFlashStack .ops-flash-toast.is-dismissed {
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  @keyframes opsFlashIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   #adminOpsChatPage {
     height: 100%;
@@ -66,7 +126,8 @@
     padding: 1rem 1rem 1.5rem;
   }
   #adminOpsChatPage .ops-chat-banner {
-    padding: 0.65rem 1rem 0.25rem;
+    flex-shrink: 0;
+    padding: 0.5rem 1rem 0.15rem;
     max-width: 48rem;
     margin-inline: auto;
     width: 100%;
@@ -82,13 +143,44 @@
     margin-top: 0.15rem;
   }
   #adminOpsChatPage .ops-report-filters {
+    flex-shrink: 0;
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 0.35rem;
-    padding: 0.35rem 1rem 0.5rem;
+    padding: 0.25rem 1rem 0.45rem;
     max-width: 48rem;
     margin-inline: auto;
     width: 100%;
+  }
+  #adminOpsChatPage .ops-land-filter {
+    margin-inline-start: auto;
+    border-color: rgba(96, 165, 250, 0.45);
+    color: #bfdbfe;
+  }
+  #adminOpsChatPage #aiHomeInline {
+    display: block;
+    width: 100%;
+    min-height: 0;
+  }
+  #adminOpsChatPage #aiHomeInline #aiPageMain.ai-page-shell,
+  #adminOpsChatPage #aiHomeInline #aiChat.ai-chat-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: visible;
+  }
+  #adminOpsChatPage #aiHomeInline #aiMessages.ai-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    min-height: 4rem;
+  }
+  #adminOpsChatPage .ai-msg-wrap--supervisor .ai-msg-row {
+    align-items: flex-start;
+  }
+  #adminOpsChatPage .ai-msg-wrap--supervisor .ai-msg-avatar {
+    display: none;
   }
   #adminOpsChatPage .ops-report-filters[hidden] { display: none !important; }
   #adminOpsChatPage .ops-report-chip {
@@ -155,8 +247,8 @@
 {% block content %}
 <div id="adminOpsChatPage" data-vinor-ops-chat>
   <div class="ops-chat-banner px-3">
-    <h1>چت عملیات</h1>
-    <p>گزارش ناظر عملیات + پیام همگانی، فایل، همکار، بازدید و مالی</p>
+    <h1 class="sr-only">چت عملیات</h1>
+    <p class="text-[0.72rem] text-slate-400 leading-snug m-0">گزارش ناظر + عملیات از همین چت</p>
   </div>
   <div id="opsReportFilters" class="ops-report-filters" role="toolbar" aria-label="فیلتر گزارش‌ها">
     <button type="button" class="ops-report-chip is-active" data-report-filter="">همه</button>
@@ -166,6 +258,7 @@
     <button type="button" class="ops-report-chip" data-report-filter="partner">همکار</button>
     <button type="button" class="ops-report-chip" data-report-filter="customer">مشتری</button>
     <button type="button" class="ops-report-chip" data-report-filter="system">سیستم</button>
+    <button type="button" id="opsLandFilterChip" class="ops-report-chip ops-land-filter" data-land-filter-clear hidden>پرونده</button>
   </div>
   <div class="vn-ops-shell flex flex-col flex-1 min-h-0">
     <div id="vnOpsScroll" class="vn-ops-scroll flex-1">
@@ -185,9 +278,24 @@
 
 {% block scripts %}
 {{ super() }}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=86"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=88"></script>
 <script>
 (function () {
+  var flashStack = document.getElementById('opsFlashStack');
+  if (flashStack) {
+    flashStack.querySelectorAll('.ops-flash-toast').forEach(function (el, i) {
+      setTimeout(function () {
+        el.classList.add('is-dismissed');
+        setTimeout(function () {
+          try { el.remove(); } catch (_) {}
+          if (!flashStack.querySelector('.ops-flash-toast')) {
+            try { flashStack.remove(); } catch (_) {}
+          }
+        }, 280);
+      }, 3800 + i * 400);
+    });
+  }
+
   function syncDock() {
     var page = document.getElementById('adminOpsChatPage');
     var dock = document.getElementById('vnOpsComposerDock');
@@ -207,6 +315,14 @@
     syncDock();
   }
   setTimeout(syncDock, 120);
+  setTimeout(function () {
+    var sc = document.getElementById('vnOpsScroll');
+    if (sc) sc.scrollTop = sc.scrollHeight;
+  }, 200);
+  setTimeout(function () {
+    var sc = document.getElementById('vnOpsScroll');
+    if (sc) sc.scrollTop = sc.scrollHeight;
+  }, 600);
 })();
 </script>
 {% endblock %}

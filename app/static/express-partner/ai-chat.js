@@ -131,7 +131,7 @@
       }
     } catch (_) {}
     try {
-      var scroll = document.getElementById('vnHomeScroll');
+      var scroll = inlineScrollEl();
       if (scroll) scroll.scrollTop = scroll.scrollHeight;
     } catch (_) {}
     setTimeout(function () {
@@ -293,9 +293,14 @@
   var scrollBottomBound = false;
   var scrollLatestGen = 0;
 
+  function inlineScrollEl() {
+    if (!homeInline) return null;
+    return document.getElementById('vnOpsScroll') || document.getElementById('vnHomeScroll') || null;
+  }
+
   function chatScrollEl() {
     if (homeInline) {
-      return document.getElementById('vnHomeScroll') || list;
+      return inlineScrollEl() || list;
     }
     return list;
   }
@@ -388,11 +393,7 @@
       syncScrollBottomBtn();
       return;
     }
-    var el = null;
-    if (homeInline) {
-      el = document.getElementById('vnHomeScroll');
-    }
-    if (!el) el = list;
+    var el = chatScrollEl();
     if (!el) return;
     try {
       if (smooth && typeof el.scrollTo === 'function') {
@@ -426,7 +427,7 @@
         requestAnimationFrame(go);
       });
     } catch (_) {}
-    [40, 120, 280, 520].forEach(function (ms) {
+    [40, 120, 280, 520, 900].forEach(function (ms) {
       setTimeout(go, ms);
     });
     if (typeof ResizeObserver === 'undefined') return;
@@ -1583,7 +1584,7 @@
       if (mid) knownIds[mid] = 1;
     });
     scanLastSyncFromDom();
-    scrollChatToEnd();
+    scrollChatToEnd({ force: homeInline });
   }
 
   async function confirmAgentAction(card) {
@@ -1806,10 +1807,23 @@
     }
   }
 
+  function syncLandFilterChip() {
+    var chip = document.getElementById('opsLandFilterChip');
+    if (!chip) return;
+    if (!activeLandFilter) {
+      chip.hidden = true;
+      chip.textContent = '';
+      return;
+    }
+    chip.hidden = false;
+    chip.textContent = 'پرونده ' + activeLandFilter + ' ×';
+  }
+
   function applyReportFilter() {
     if (!homeInline || !reportsUrl) return;
     var cat = activeReportFilter;
     var land = activeLandFilter;
+    syncLandFilterChip();
     list.querySelectorAll('.ai-msg-wrap').forEach(function (w) {
       if (w.getAttribute('data-welcome') === '1') {
         w.style.display = '';
@@ -1838,12 +1852,31 @@
     if (!bar || bar.getAttribute('data-bound') === '1') return;
     bar.setAttribute('data-bound', '1');
     bar.addEventListener('click', function (ev) {
+      var landClear = ev.target && ev.target.closest ? ev.target.closest('[data-land-filter-clear]') : null;
+      if (landClear && bar.contains(landClear)) {
+        activeLandFilter = '';
+        applyReportFilter();
+        return;
+      }
       var chip = ev.target && ev.target.closest ? ev.target.closest('[data-report-filter]') : null;
       if (!chip || !bar.contains(chip)) return;
       activeReportFilter = chip.getAttribute('data-report-filter') || '';
       activeLandFilter = '';
-      bar.querySelectorAll('.ops-report-chip').forEach(function (c) {
+      bar.querySelectorAll('[data-report-filter]').forEach(function (c) {
         c.classList.toggle('is-active', c === chip);
+      });
+      applyReportFilter();
+    });
+    list.addEventListener('click', function (ev) {
+      var landLink = ev.target && ev.target.closest ? ev.target.closest('[data-land-filter]') : null;
+      if (!landLink || !list.contains(landLink)) return;
+      var code = landLink.getAttribute('data-land-filter') || '';
+      if (!code || ev.ctrlKey || ev.metaKey || ev.button !== 0) return;
+      ev.preventDefault();
+      activeLandFilter = code;
+      activeReportFilter = '';
+      bar.querySelectorAll('[data-report-filter]').forEach(function (c) {
+        c.classList.toggle('is-active', !(c.getAttribute('data-report-filter') || ''));
       });
       applyReportFilter();
     });
@@ -1873,13 +1906,15 @@
       link.className = 'ai-supervisor-link';
       link.href = meta.entity_url;
       link.textContent = meta.entity_label;
+      link.title = 'فیلتر timeline این پرونده — Ctrl+کلیک برای باز کردن صفحه';
       link.addEventListener('click', function (ev) {
-        if (meta.land_code) {
+        if (meta.land_code && !ev.ctrlKey && !ev.metaKey && ev.button === 0) {
+          ev.preventDefault();
           activeLandFilter = String(meta.land_code);
           activeReportFilter = '';
           var bar = document.getElementById('opsReportFilters');
           if (bar) {
-            bar.querySelectorAll('.ops-report-chip').forEach(function (c) {
+            bar.querySelectorAll('[data-report-filter]').forEach(function (c) {
               c.classList.toggle('is-active', !(c.getAttribute('data-report-filter') || ''));
             });
           }
@@ -2051,13 +2086,13 @@
     row.appendChild(body);
     wrap.appendChild(row);
     list.appendChild(wrap);
-    if (!isUser && !opts.thinking && !opts.streamShell) {
+    if (!isUser && !opts.thinking && !opts.streamShell && !isSupervisor) {
       wireCopyBlocks(wrap);
       ensureMsgActions(wrap);
     }
     if (msg.created_at) bumpLastSyncAt(msg.created_at);
     applyReportFilter();
-    scrollChatToEnd();
+    scrollChatToEnd({ force: !!(homeInline && document.getElementById('vnOpsScroll')) });
     return wrap;
   }
 
