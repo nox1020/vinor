@@ -67,7 +67,8 @@ def _ops_chat_context() -> dict[str, Any]:
         "history_api_url": url_for("admin.ops_ai_history"),
         "switch_thread_url": url_for("admin.ops_ai_switch_thread"),
         "delete_thread_url": url_for("admin.ops_ai_delete_thread"),
-        "sync_api_url": "",
+        "sync_api_url": url_for("admin.ops_ai_sync"),
+        "reports_api_url": url_for("admin.ops_supervisor_reports"),
         "agent_confirm_url": url_for("admin.ops_ai_agent_confirm"),
         "agent_cancel_url": url_for("admin.ops_ai_agent_cancel"),
         "postchi_thread_id": "",
@@ -121,6 +122,69 @@ def ops_ai_history():
             user_key, thread_id or active, audience=AUDIENCE_ADMIN
         )
     return jsonify(payload)
+
+
+@admin_bp.get("/ops/chat/sync", endpoint="ops_ai_sync")
+@login_required
+def ops_ai_sync():
+    from app.ai.audience import AUDIENCE_ADMIN
+    from app.ai.chat_store import messages_since
+
+    user_key = _admin_ops_user_key()
+    thread_id = (request.args.get("thread_id") or "").strip() or None
+    after = (request.args.get("after") or "").strip()
+    after_count = request.args.get("count", type=int) or 0
+    msgs = messages_since(
+        user_key,
+        thread_id,
+        after,
+        audience=AUDIENCE_ADMIN,
+        after_count=max(0, after_count),
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "messages": msgs,
+            "thread_id": thread_id,
+            "total": len(msgs),
+        }
+    )
+
+
+@admin_bp.get("/ops/reports", endpoint="ops_supervisor_reports")
+@login_required
+def ops_supervisor_reports():
+    from app.supervisor_agent.categories import ALL_REPORT_CATEGORIES, REPORT_CATEGORY_LABELS
+    from app.supervisor_agent.service import list_reports
+
+    category = (request.args.get("category") or "").strip().lower()
+    land_code = (request.args.get("land_code") or request.args.get("code") or "").strip()
+    case_id = (request.args.get("case_id") or "").strip()
+    limit = request.args.get("limit", type=int) or 100
+    if category and category not in ALL_REPORT_CATEGORIES:
+        return jsonify({"ok": False, "error": "دسته نامعتبر است."}), 400
+    rows = list_reports(
+        category=category,
+        land_code=land_code,
+        case_id=case_id,
+        limit=limit,
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "reports": rows,
+            "total": len(rows),
+            "categories": [
+                {"id": k, "label": REPORT_CATEGORY_LABELS.get(k, k)}
+                for k in sorted(ALL_REPORT_CATEGORIES)
+            ],
+            "filters": {
+                "category": category,
+                "land_code": land_code,
+                "case_id": case_id,
+            },
+        }
+    )
 
 
 @admin_bp.post("/ops/chat", endpoint="ops_ai_chat")

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.ai.audience import AUDIENCE_PARTNER
+from app.ai.audience import AUDIENCE_ADMIN, AUDIENCE_PARTNER
 from app.ai.message_types import (
     MSG_ERROR,
     MSG_PROGRESS,
@@ -143,6 +143,20 @@ def emit_chat_event(
             )
         except Exception:
             case = None
+
+    try:
+        from app.supervisor_agent.service import report_from_chat_event
+
+        if audience != AUDIENCE_ADMIN:
+            report_from_chat_event(
+                event=ev,
+                body=text,
+                land_code=land_code,
+                user_key=user_key,
+                meta=meta,
+            )
+    except Exception:
+        pass
 
     return {
         "ok": True,

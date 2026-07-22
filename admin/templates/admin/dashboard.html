@@ -81,6 +81,69 @@
     color: #94a3b8;
     margin-top: 0.15rem;
   }
+  #adminOpsChatPage .ops-report-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.35rem 1rem 0.5rem;
+    max-width: 48rem;
+    margin-inline: auto;
+    width: 100%;
+  }
+  #adminOpsChatPage .ops-report-filters[hidden] { display: none !important; }
+  #adminOpsChatPage .ops-report-chip {
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(30, 41, 59, 0.65);
+    color: #cbd5e1;
+    font-size: 0.72rem;
+    padding: 0.28rem 0.55rem;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  #adminOpsChatPage .ops-report-chip.is-active {
+    background: #1d4ed8;
+    border-color: #3b82f6;
+    color: #fff;
+  }
+  #adminOpsChatPage .ai-msg-wrap--supervisor .ai-msg-bubble--supervisor {
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 0.85rem;
+    padding: 0.65rem 0.75rem;
+    white-space: pre-line;
+    font-size: 0.84rem;
+    line-height: 1.55;
+  }
+  #adminOpsChatPage .ai-supervisor-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    margin-bottom: 0.35rem;
+    font-size: 0.7rem;
+    color: #94a3b8;
+  }
+  #adminOpsChatPage .ai-supervisor-agent {
+    color: #93c5fd;
+    font-weight: 600;
+  }
+  #adminOpsChatPage .ai-supervisor-badge {
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.65rem;
+    border: 1px solid transparent;
+  }
+  #adminOpsChatPage .ai-supervisor-badge--success { background: rgba(34,197,94,.15); color: #86efac; }
+  #adminOpsChatPage .ai-supervisor-badge--error { background: rgba(239,68,68,.15); color: #fca5a5; }
+  #adminOpsChatPage .ai-supervisor-badge--in_progress { background: rgba(59,130,246,.15); color: #93c5fd; }
+  #adminOpsChatPage .ai-supervisor-badge--reminder { background: rgba(245,158,11,.15); color: #fcd34d; }
+  #adminOpsChatPage .ai-supervisor-badge--info { background: rgba(148,163,184,.12); color: #cbd5e1; }
+  #adminOpsChatPage .ai-supervisor-link {
+    color: #60a5fa;
+    text-decoration: none;
+    font-size: 0.7rem;
+  }
+  #adminOpsChatPage .ai-supervisor-link:hover { text-decoration: underline; }
   /* hide Mission Control chrome on ops home */
   body:has(#adminOpsChatPage) .vc-fab,
   body:has(#adminOpsChatPage) .vc-bottom {
@@ -93,7 +156,16 @@
 <div id="adminOpsChatPage" data-vinor-ops-chat>
   <div class="ops-chat-banner px-3">
     <h1>چت عملیات</h1>
-    <p>پیام همگانی، فایل، همکار، بازدید و مالی — با کارت تأیید</p>
+    <p>گزارش ناظر عملیات + پیام همگانی، فایل، همکار، بازدید و مالی</p>
+  </div>
+  <div id="opsReportFilters" class="ops-report-filters" role="toolbar" aria-label="فیلتر گزارش‌ها">
+    <button type="button" class="ops-report-chip is-active" data-report-filter="">همه</button>
+    <button type="button" class="ops-report-chip" data-report-filter="followup">پیگیری</button>
+    <button type="button" class="ops-report-chip" data-report-filter="deal">معامله</button>
+    <button type="button" class="ops-report-chip" data-report-filter="visit">بازدید</button>
+    <button type="button" class="ops-report-chip" data-report-filter="partner">همکار</button>
+    <button type="button" class="ops-report-chip" data-report-filter="customer">مشتری</button>
+    <button type="button" class="ops-report-chip" data-report-filter="system">سیستم</button>
   </div>
   <div class="vn-ops-shell flex flex-col flex-1 min-h-0">
     <div id="vnOpsScroll" class="vn-ops-scroll flex-1">
@@ -113,7 +185,7 @@
 
 {% block scripts %}
 {{ super() }}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=85"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=86"></script>
 <script>
 (function () {
   function syncDock() {

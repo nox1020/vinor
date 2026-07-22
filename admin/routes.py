@@ -1341,6 +1341,13 @@ def _send_colleagues_notification_broadcast(
         admin_user=admin_user,
     )
 
+    try:
+        from app.supervisor_agent.hooks import report_admin_broadcast_push
+
+        report_admin_broadcast_push(sent=sent, failed=failed, title=title)
+    except Exception:
+        pass
+
     return {
         'broadcast': record,
         'sent': sent,

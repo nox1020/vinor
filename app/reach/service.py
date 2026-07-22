@@ -241,6 +241,14 @@ def run_buyer_reach_slot(
         state["users"] = users
         _save_state(state)
 
+    if sent > 0:
+        try:
+            from app.supervisor_agent.service import emit_domain_event
+
+            emit_domain_event("reach_nudge_sent", sent_count=sent)
+        except Exception:
+            pass
+
     return {
         "ok": True,
         "slot": slot_hour,

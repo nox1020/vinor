@@ -1632,6 +1632,13 @@ def maybe_run_evening_sales_coach_nudge(
             }
             _save_state(state)
         result["slot_key"] = slot_key
+        try:
+            from app.supervisor_agent.hooks import report_sales_coach_result
+
+            if not dry_run:
+                report_sales_coach_result(result)
+        except Exception:
+            pass
         return result
     finally:
         _release_run_lock(lock_fd)

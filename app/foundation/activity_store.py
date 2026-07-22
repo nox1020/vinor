@@ -78,6 +78,12 @@ def append_activity(
             rows = _load_raw(app)
             rows.append(activity.to_dict())
             _save_raw(rows, app)
+        try:
+            from app.supervisor_agent.service import report_from_activity
+
+            report_from_activity(activity)
+        except Exception:
+            pass
         return activity
     except Exception:
         return None

@@ -44,6 +44,10 @@
   var switchUrl = form.getAttribute('data-switch-url') || '';
   var deleteUrl = form.getAttribute('data-delete-url') || '';
   var syncUrl = form.getAttribute('data-sync-url') || '';
+  var reportsUrl = form.getAttribute('data-reports-url') || '';
+  var activeReportFilter = '';
+  var activeLandFilter = '';
+  var reportsUrl = form.getAttribute('data-reports-url') || '';
   var agentConfirmUrl = form.getAttribute('data-agent-confirm-url') || '';
   var agentCancelUrl = form.getAttribute('data-agent-cancel-url') || '';
   var postchiThreadId = form.getAttribute('data-postchi-thread-id') || '__postchi__';
@@ -68,6 +72,8 @@
   var submitting = false;
   var lastSubmitAt = 0;
   var seenHiddenMsgKeys = {};
+  var activeReportFilter = '';
+  var activeLandFilter = '';
   var guestRepliesRemaining = null;
   try {
     var remRaw = form.getAttribute('data-guest-replies-remaining');
@@ -1772,6 +1778,123 @@
     return ids;
   }
 
+  function isSupervisorMsg(msg) {
+    if (!msg) return false;
+    if (String(msg.source || '') === 'supervisor_agent') return true;
+    return !!(msg.meta && msg.meta.supervisor);
+  }
+
+  function supervisorStatusLabel(status) {
+    var map = {
+      success: 'انجام شد',
+      error: 'خطا',
+      in_progress: 'در جریان',
+      reminder: 'یادآوری',
+      info: 'اطلاع',
+    };
+    return map[String(status || '').toLowerCase()] || 'گزارش';
+  }
+
+  function formatReportTime(iso) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleString('fa-IR', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function applyReportFilter() {
+    if (!homeInline || !reportsUrl) return;
+    var cat = activeReportFilter;
+    var land = activeLandFilter;
+    list.querySelectorAll('.ai-msg-wrap').forEach(function (w) {
+      if (w.getAttribute('data-welcome') === '1') {
+        w.style.display = '';
+        return;
+      }
+      var isSup = w.getAttribute('data-source') === 'supervisor_agent';
+      if (!cat && !land) {
+        w.style.display = '';
+        return;
+      }
+      if (!isSup) {
+        w.style.display = '';
+        return;
+      }
+      var wcat = w.getAttribute('data-report-category') || '';
+      var wland = w.getAttribute('data-land-code') || '';
+      var catOk = !cat || wcat === cat;
+      var landOk = !land || wland === land;
+      w.style.display = catOk && landOk ? '' : 'none';
+    });
+  }
+
+  function bindReportFilters() {
+    if (!homeInline || !reportsUrl) return;
+    var bar = document.getElementById('opsReportFilters');
+    if (!bar || bar.getAttribute('data-bound') === '1') return;
+    bar.setAttribute('data-bound', '1');
+    bar.addEventListener('click', function (ev) {
+      var chip = ev.target && ev.target.closest ? ev.target.closest('[data-report-filter]') : null;
+      if (!chip || !bar.contains(chip)) return;
+      activeReportFilter = chip.getAttribute('data-report-filter') || '';
+      activeLandFilter = '';
+      bar.querySelectorAll('.ops-report-chip').forEach(function (c) {
+        c.classList.toggle('is-active', c === chip);
+      });
+      applyReportFilter();
+    });
+  }
+
+  function buildSupervisorMessage(body, msg) {
+    var meta = msg.meta || {};
+    var head = document.createElement('div');
+    head.className = 'ai-supervisor-head';
+    var agent = document.createElement('span');
+    agent.className = 'ai-supervisor-agent';
+    agent.textContent = 'ناظر عملیات';
+    head.appendChild(agent);
+    var when = formatReportTime(msg.created_at);
+    if (when) {
+      var timeEl = document.createElement('span');
+      timeEl.textContent = when;
+      head.appendChild(timeEl);
+    }
+    var status = String(meta.report_status || 'info').toLowerCase();
+    var badge = document.createElement('span');
+    badge.className = 'ai-supervisor-badge ai-supervisor-badge--' + (status || 'info');
+    badge.textContent = supervisorStatusLabel(status);
+    head.appendChild(badge);
+    if (meta.entity_url && meta.entity_label) {
+      var link = document.createElement('a');
+      link.className = 'ai-supervisor-link';
+      link.href = meta.entity_url;
+      link.textContent = meta.entity_label;
+      link.addEventListener('click', function (ev) {
+        if (meta.land_code) {
+          activeLandFilter = String(meta.land_code);
+          activeReportFilter = '';
+          var bar = document.getElementById('opsReportFilters');
+          if (bar) {
+            bar.querySelectorAll('.ops-report-chip').forEach(function (c) {
+              c.classList.toggle('is-active', !(c.getAttribute('data-report-filter') || ''));
+            });
+          }
+          applyReportFilter();
+        }
+      });
+      head.appendChild(link);
+    }
+    body.appendChild(head);
+    var bubble = document.createElement('div');
+    bubble.className = 'ai-msg-bubble ai-msg-bubble--supervisor';
+    bubble.textContent = (msg.content || '').trim();
+    body.appendChild(bubble);
+  }
+
   function removeWelcome() {
     list.querySelectorAll('.ai-msg-wrap[data-welcome="1"]').forEach(function (w) {
       w.remove();
@@ -1790,12 +1913,14 @@
     var role = msg.role || 'assistant';
     var text = (msg.content || '').trim();
     var msgType = String(msg.type || '').toLowerCase();
+    var isSupervisor = isSupervisorMsg(msg);
     var isSystemish =
-      msgType === 'system' ||
+      !isSupervisor &&
+      (msgType === 'system' ||
       msgType === 'timeline' ||
       msgType === 'progress' ||
       msgType === 'status' ||
-      msg.source === 'system';
+      msg.source === 'system');
     /* پرامپت اکشن مأموریت — در چت نمایش نده */
     if (role === 'user' && (msg.hide_ui || msg.hide_user || opts.silent)) {
       var hk =
@@ -1821,7 +1946,9 @@
       'ai-msg-wrap ' +
       (isUser
         ? 'ai-msg-wrap--user'
-        : isSystemish
+        : isSupervisor
+          ? 'ai-msg-wrap--supervisor'
+          : isSystemish
           ? 'ai-msg-wrap--system'
           : 'ai-msg-wrap--assistant');
     wrap.setAttribute('data-role', role);
@@ -1834,6 +1961,14 @@
       wrap.setAttribute('data-postchi', '1');
     }
     if (msg.source) wrap.setAttribute('data-source', String(msg.source));
+    if (isSupervisor && msg.meta) {
+      if (msg.meta.report_category) {
+        wrap.setAttribute('data-report-category', String(msg.meta.report_category));
+      }
+      if (msg.meta.land_code) {
+        wrap.setAttribute('data-land-code', String(msg.meta.land_code));
+      }
+    }
     if (isAdmin && msg.source !== 'postchi') wrap.setAttribute('data-admin-reply', '1');
     if (opts.pendingUser) wrap.setAttribute('data-pending-user', '1');
     if (opts.welcome) wrap.setAttribute('data-welcome', '1');
@@ -1876,6 +2011,9 @@
       streamBubble.setAttribute('aria-live', 'off');
       body.appendChild(streamBubble);
     } else if (text) {
+      if (isSupervisor) {
+        buildSupervisorMessage(body, msg);
+      } else {
       var bubble = document.createElement('div');
       bubble.className = isSystemish ? 'ai-msg-bubble ai-msg-bubble--system' : 'ai-msg-bubble';
       if (isSystemish) {
@@ -1891,6 +2029,7 @@
         bubble.setAttribute('data-formatted', '1');
       }
       body.appendChild(bubble);
+      }
     }
 
     if (msg.land_detail_html) {
@@ -1917,6 +2056,7 @@
       ensureMsgActions(wrap);
     }
     if (msg.created_at) bumpLastSyncAt(msg.created_at);
+    applyReportFilter();
     scrollChatToEnd();
     return wrap;
   }
@@ -1963,12 +2103,13 @@
     if (onlyOpening) {
       playVinorOpening(rows[0]);
       injectHomeJourneyCardIntoChat();
-      scanLastSyncFromDom();
-      syncChipBarVisibility();
-      scrollChatToLatest();
-      return;
-    }
-    rows.forEach(function (m) {
+    scanLastSyncFromDom();
+    syncChipBarVisibility();
+    applyReportFilter();
+    scrollChatToLatest();
+    return;
+  }
+  rows.forEach(function (m) {
       if (!m) return;
       if (m.role && messageHasContent(m)) {
         appendMessage(m);
@@ -1978,6 +2119,7 @@
     injectHomeJourneyCardIntoChat();
     scanLastSyncFromDom();
     syncChipBarVisibility();
+    applyReportFilter();
     scrollChatToLatest();
   }
 
@@ -3076,6 +3218,7 @@
       });
   };
 
+  bindReportFilters();
   autoGrowInput();
   syncComposerReady();
   syncChipBarVisibility();

@@ -844,6 +844,12 @@ def _exec_broadcast_sms(payload: dict[str, Any]) -> dict[str, Any]:
         line = (get_sms_line_number() or "09981801922").strip()
         recipients = load_sms_recipients(group, limit=None, offset=0, validate=False)
         sent, failed, _details = send_direct_to_recipients(recipients, message, line)
+        try:
+            from app.supervisor_agent.hooks import report_admin_broadcast_sms
+
+            report_admin_broadcast_sms(sent=sent, failed=failed, group_label=label)
+        except Exception:
+            pass
         return {
             "ok": True,
             "message": f"پیامک به {sent} نفر از «{label}» ارسال شد"
