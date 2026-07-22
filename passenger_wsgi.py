@@ -13,8 +13,10 @@ os.environ.setdefault("INSTANCE_PATH", os.path.join(project_home, "instance"))
 # این override فقط برای passenger است؛ پیش‌فرض کد اپلیکیشن ON است.
 # پیگیری فروش / SMS زمان‌بندی‌شده فقط با cron:
 #   */10 * * * * cd ~/public_html/vinor && ./venv/bin/python scripts/run_sales_coach_nudge.py
+#   */10 * * * * cd ~/public_html/vinor && ./venv/bin/python scripts/run_reach_followup.py
 #   * * * * *     cd ~/public_html/vinor && ./venv/bin/python scripts/run_admin_sms_scheduled_jobs.py
 os.environ.setdefault("VINOR_SALES_COACH_SCHEDULER", "0")
+os.environ.setdefault("VINOR_REACH_SCHEDULER", "0")
 os.environ.setdefault("VINOR_CELEBRATION_SMS_SCHEDULER", "0")
 os.environ.setdefault("VINOR_ADMIN_SMS_SCHEDULER", "0")
 os.environ.setdefault("VINOR_OPTIMIZATION_SCHEDULER", "0")

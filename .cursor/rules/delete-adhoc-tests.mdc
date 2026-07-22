@@ -1,15 +1,15 @@
 ---
-description: Ad-hoc verification tests must be deleted after running
+description: تست‌های موقت تأیید باید پس از اجرا حذف شوند
 alwaysApply: true
 ---
 
-# Temporary tests — delete after use
+# تست‌های موقت — حذف پس از استفاده
 
-When you write a test file under `tests/` (or elsewhere) only to verify a fix in this chat:
+وقتی فایل تستی زیر `tests/` (یا جای دیگر) فقط برای تأیید یک fix در همین چت می‌نویسی:
 
-1. Run it once if needed.
-2. **Delete the test file immediately after** — do not leave it in the repo.
-3. Do not commit those ad-hoc test files.
-4. Prefer fixing code and confirming via existing behavior / manual check when enough; avoid creating permanent test files unless the user explicitly asks to keep a test suite.
+1. در صورت نیاز یک‌بار اجرا کن.
+2. **بلافاصله پس از آن فایل تست را حذف کن** — آن را در repo نگذار.
+3. آن فایل‌های تست ad-hoc را commit نکن.
+4. ترجیح بده کد را اصلاح کنی و با رفتار موجود / بررسی دستی تأیید کنی؛ از ساخت تست دائمی خودداری کن مگر اینکه کاربر صریحاً بخواهد test suite نگه داشته شود.
 
-Existing long-lived tests already in the project stay until the user asks to remove them.
+تست‌های بلندمدت موجود در پروژه تا وقتی کاربر درخواست حذف نکند، باقی می‌مانند.

@@ -250,6 +250,42 @@ def run_buyer_reach_slot(
     }
 
 
+def _active_slot_hour(now: datetime | None = None) -> int | None:
+    now = now or _tehran_now()
+    h = int(now.hour)
+    if h in REACH_HOURS:
+        return h
+    return None
+
+
+def maybe_run_reach_followup(
+    *,
+    force: bool = False,
+    dry_run: bool = False,
+    slot_hour: int | None = None,
+) -> dict[str, Any]:
+    """پیگیری خریدار از سیگنال ناظر — نوبت‌های ۱۰/۱۴/۲۰ تهران (برای cron)."""
+    if not reach_enabled():
+        return {"skipped": True, "reason": "disabled"}
+
+    now = _tehran_now()
+    hour = int(slot_hour) if slot_hour is not None else _active_slot_hour(now)
+    if hour is None and not force:
+        return {
+            "skipped": True,
+            "reason": "not_reach_slot",
+            "hour": now.hour,
+            "slots": list(REACH_HOURS),
+        }
+    if hour is None and force:
+        hour = int(now.hour) if now.hour in REACH_HOURS else REACH_HOURS[0]
+
+    from app.supervisor.funnel import refresh_funnels_for_reach
+
+    refresh_funnels_for_reach()
+    return run_buyer_reach_slot(slot_hour=int(hour), dry_run=dry_run)
+
+
 def run_reach_slot(*, slot_hour: int | None = None, dry_run: bool = False) -> dict[str, Any]:
     """یک نوبت کامل: خریدار از ناظر + همکار از sales_coach."""
     if not reach_enabled():

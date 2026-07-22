@@ -1,19 +1,19 @@
 ---
-description: Auto-read mentioned code files for review without asking
+description: خواندن خودکار فایل‌های کد ذکرشده برای بررسی، بدون پرسیدن
 alwaysApply: true
 ---
 
-# Auto-fetch code files
+# خواندن خودکار فایل‌های کد
 
-When the user (or conversation context) mentions a code/config/doc path for review, visit, or discussion:
+وقتی کاربر (یا زمینهٔ گفتگو) مسیر کد/config/doc را برای بررسی، بازدید یا بحث ذکر می‌کند:
 
-1. **Read it immediately** with the Read/Glob tools — do not ask for permission or confirmation.
-2. Prefer absolute paths under the workspace; resolve relative paths from the project root.
-3. If a path is ambiguous, search with Glob/Grep first, then read the best match — still without asking.
-4. Only ask if the file is missing after search, or if multiple unrelated matches need a choice that cannot be inferred.
-5. Apply the same rule to file lists, architecture docs (`roadmap/AGENT_GOAL.md`, `roadmap/PROJECT_CHART.html`), and related modules needed for the review.
+1. **فوراً با ابزار Read/Glob بخوان** — اجازه یا تأیید نپرس.
+2. مسیرهای مطلق زیر workspace را ترجیح بده؛ مسیرهای نسبی را از ریشهٔ پروژه resolve کن.
+3. اگر مسیر مبهم بود، ابتدا با Glob/Grep جستجو کن، سپس بهترین match را بخوان — باز هم بدون پرسیدن.
+4. فقط وقتی بپرس که پس از جستجو فایل پیدا نشد، یا چند match نامرتبط وجود دارد و انتخابی لازم است که قابل استنتاج نیست.
+5. همین قانون را برای لیست فایل‌ها، اسناد معماری (`roadmap/AGENT_GOAL.md`, `roadmap/PROJECT_CHART.html`) و ماژول‌های مرتبط موردنیاز برای بررسی اعمال کن.
 
-Examples that must trigger auto-read (no questions):
+مثال‌هایی که باید خواندن خودکار را فعال کنند (بدون سؤال):
 - «ببین `app/foundation/…`»
 - «بازدید از `manager.py`»
 - «این فایل‌ها: A, B, C»
