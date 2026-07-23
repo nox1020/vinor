@@ -163,12 +163,108 @@ def ai_console_errors():
     )
 
 
+@admin_bp.route("/ai-console/memory", endpoint="ai_console_memory", methods=["GET", "POST"])
+@login_required
+def ai_console_memory():
+    from app.hardening.permissions import PERM_AI_MEMORY
+
+    denied = _ai_console_gate(PERM_AI_MEMORY)
+    if denied is not None:
+        return denied
+
+    from app.ai_console import readers
+    from app.ai_console.config import ai_console_mutate_enabled
+    from app.hardening.permissions import has_permission
+
+    can_mutate = bool(has_permission(PERM_AI_MEMORY) and ai_console_mutate_enabled())
+
+    if request.method == "POST":
+        if not can_mutate:
+            flash("مجوز تغییر حافظه را ندارید یا mutate خاموش است.", "error")
+            return redirect(url_for("admin.ai_console_memory"))
+        action = (request.form.get("action") or "").strip()
+        tab = (request.form.get("tab") or request.args.get("tab") or "system").strip()
+        user_q = (request.form.get("user") or "").strip()
+
+        if action == "add_system":
+            out = readers.add_system_memory(
+                request.form.get("key") or "",
+                request.form.get("value") or "",
+            )
+            flash("دانش سیستم افزوده شد." if out.get("ok") else (out.get("error") or "ناموفق"), "success" if out.get("ok") else "error")
+            return redirect(url_for("admin.ai_console_memory", tab="system"))
+
+        if action == "delete_system":
+            out = readers.delete_system_memory(request.form.get("id") or "")
+            flash("حذف شد." if out.get("ok") else (out.get("error") or "یافت نشد"), "success" if out.get("ok") else "warning")
+            return redirect(url_for("admin.ai_console_memory", tab="system"))
+
+        if action == "add_user":
+            uk = (request.form.get("user_key") or user_q or "").strip()
+            out = readers.upsert_user_memory(
+                uk,
+                key=request.form.get("key") or "",
+                value=request.form.get("value") or "",
+                memory_type=request.form.get("memory_type") or "long_term",
+            )
+            flash("حافظه کاربر ذخیره شد." if out.get("ok") else (out.get("error") or "ناموفق"), "success" if out.get("ok") else "error")
+            return redirect(url_for("admin.ai_console_memory", tab="users", user=uk, q=request.form.get("q") or ""))
+
+        if action == "delete_user_item":
+            uk = (request.form.get("user_key") or user_q or "").strip()
+            out = readers.delete_user_memory_item(uk, request.form.get("id") or "")
+            flash("آیتم حذف شد." if out.get("ok") else (out.get("error") or "یافت نشد"), "success" if out.get("ok") else "warning")
+            return redirect(url_for("admin.ai_console_memory", tab="users", user=uk, q=request.form.get("q") or ""))
+
+        if action == "wipe_user":
+            uk = (request.form.get("user_key") or user_q or "").strip()
+            out = readers.wipe_user_memory(uk)
+            flash(
+                f"حافظه کاربر پاک شد ({out.get('deleted') or 0} آیتم)." if out.get("ok") else (out.get("error") or "ناموفق"),
+                "success" if out.get("ok") else "error",
+            )
+            return redirect(url_for("admin.ai_console_memory", tab="users", user=uk, q=request.form.get("q") or ""))
+
+        flash("اقدام نامعتبر.", "warning")
+        return redirect(url_for("admin.ai_console_memory", tab=tab, user=user_q or None))
+
+    tab = (request.args.get("tab") or "system").strip()
+    if tab not in ("system", "users"):
+        tab = "system"
+    q = (request.args.get("q") or "").strip()
+    user_key = (request.args.get("user") or "").strip()
+
+    system_items = readers.list_system_memory()
+    # Always count users so the users-tab chip stays accurate on the system tab too.
+    memory_user_count = readers.count_memory_users()
+    memory_users = readers.list_memory_users(limit=100, q=q) if tab == "users" else []
+    detail = readers.get_memory_detail(user_key) if user_key else None
+    lands = readers.lands_inventory_summary()
+    goal = readers.agent_goal_summary() if tab == "system" else {}
+    rag = readers.knowledge_rag_status() if tab == "system" else {}
+
+    return render_template(
+        "admin/ai_console/memory.html",
+        tab=tab,
+        q=q,
+        user_key=user_key,
+        system_items=system_items,
+        memory_users=memory_users,
+        memory_user_count=memory_user_count,
+        detail=detail,
+        lands=lands,
+        goal=goal,
+        rag=rag,
+        can_mutate=can_mutate,
+        **_nav_ctx("memory"),
+    )
+
+
 # Legacy Mission Control pages → monitor
 @admin_bp.route("/ai-console/conversations", endpoint="ai_console_conversations")
 @admin_bp.route("/ai-console/workflows", endpoint="ai_console_workflows")
 @admin_bp.route("/ai-console/agents", endpoint="ai_console_agents")
 @admin_bp.route("/ai-console/prompts", endpoint="ai_console_prompts")
-@admin_bp.route("/ai-console/memory", endpoint="ai_console_memory")
 @admin_bp.route("/ai-console/analytics", endpoint="ai_console_analytics")
 @admin_bp.route("/ai-console/timeline", endpoint="ai_console_timeline")
 @admin_bp.route("/ai-console/audit", endpoint="ai_console_audit")

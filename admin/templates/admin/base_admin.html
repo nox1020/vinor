@@ -265,6 +265,7 @@
         dashboard: '{{ url_for("admin.dashboard") }}',
         tools: '{{ url_for("admin.ai_console_tools") }}',
         monitor: '{{ url_for("admin.ai_console_monitor") }}',
+        memory: '{{ url_for("admin.ai_console_memory") }}',
         visits: '{{ url_for("admin.express_visit_requests") }}',
         escalations: '{{ url_for("admin.ai_questions") }}',
         listings: '{{ url_for("admin.express_listings") }}',
@@ -297,6 +298,7 @@
           ]},
           { nameKey: 'cmd.group_observe', items: [
             { labelKey: 'cmd.monitor', href: hrefs.monitor, icon: 'fa-heart-pulse' },
+            { labelKey: 'cmd.memory', aliasKey: 'search_aliases.memory', href: hrefs.memory, icon: 'fa-brain' },
             { labelKey: 'cmd.errors', aliasKey: 'search_aliases.error', href: hrefs.errors, icon: 'fa-bug' },
             { labelKey: 'cmd.audit', href: hrefs.audit, icon: 'fa-clipboard-list' },
             { labelKey: 'cmd.flags', href: hrefs.flags, icon: 'fa-flag' },

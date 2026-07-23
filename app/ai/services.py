@@ -282,6 +282,9 @@ def _build_system_prompt(
             _set_prompt_cache(core_cache_key, ctx)
         notes = consume_pending_answers(user_key, audience=aud)
         ctx = append_admin_answers_block(ctx, notes)
+        # Shared business facts are injected as a SEPARATE system message in
+        # _build_messages (not baked into ctx) so core prompt cache + ctx[:max_ctx]
+        # cannot drop them. See _system_memory_prompt_for_messages.
         # Memory is retrieved here for observability + later injection as a
         # SEPARATE system message (keeps core prompt cache and token accounting clean).
         mem_text, mem_meta = _memory_block_for_prompt(
@@ -377,6 +380,17 @@ def _get_memory_prompt_text() -> str:
         from flask import g
 
         return str(getattr(g, "ai_memory_prompt_text", "") or "").strip()
+    except Exception:
+        return ""
+
+
+def _system_memory_prompt_for_messages() -> str:
+    """Load shared business facts for a dedicated system message (fail-open)."""
+    try:
+        from app.memory.config import system_memory_budget_chars
+        from app.memory.system_store import system_memory_prompt_text
+
+        return (system_memory_prompt_text(max_chars=system_memory_budget_chars()) or "").strip()
     except Exception:
         return ""
 
@@ -501,6 +515,11 @@ def _build_messages(
         )
         if ctx:
             messages.append({"role": "system", "content": ctx})
+        # Shared business/system facts — always after core context, outside
+        # prompt cache, so admin edits apply even when core ctx is cached/full.
+        sys_mem = _system_memory_prompt_for_messages()
+        if sys_mem:
+            messages.append({"role": "system", "content": sys_mem})
         mem_text = _get_memory_prompt_text()
         if mem_text:
             messages.append({"role": "system", "content": mem_text})
@@ -513,6 +532,11 @@ def _build_messages(
                 _append_sales_hint(messages, fh)
         except Exception:
             pass
+    else:
+        # No per-user context — still inject shared business facts.
+        sys_mem = _system_memory_prompt_for_messages()
+        if sys_mem:
+            messages.append({"role": "system", "content": sys_mem})
     if history:
         keep_last = int(cfg["max_history"])
         summary = _summarize_older_history(history, keep_last=keep_last)

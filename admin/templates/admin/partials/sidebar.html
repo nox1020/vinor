@@ -65,6 +65,14 @@
        class="vc-nav-link {% if ep == 'admin.ai_console_monitor' %}is-active{% endif %}">
       <i class="fa-solid fa-heart-pulse"></i><span>مانیتور</span>
     </a>
+    <a href="{{ url_for('admin.ai_console_memory', tab='system') }}"
+       class="vc-nav-link {% if ep == 'admin.ai_console_memory' and (request.args.get('tab') or 'system') != 'users' %}is-active{% endif %}">
+      <i class="fa-solid fa-brain"></i><span>دانش سیستم</span>
+    </a>
+    <a href="{{ url_for('admin.ai_console_memory', tab='users') }}"
+       class="vc-nav-link {% if ep == 'admin.ai_console_memory' and request.args.get('tab') == 'users' %}is-active{% endif %}">
+      <i class="fa-solid fa-address-book"></i><span>حافظه کاربران</span>
+    </a>
   </nav>
 
   <div class="border-t border-line pt-3 px-1">

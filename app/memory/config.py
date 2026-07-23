@@ -21,6 +21,17 @@ def memory_budget_chars() -> int:
         return 280
 
 
+def system_memory_budget_chars() -> int:
+    """Char budget for shared business/system facts in the model prompt."""
+    try:
+        return max(
+            200,
+            min(2000, int(os.environ.get("VINOR_SYSTEM_MEMORY_BUDGET_CHARS") or 1200)),
+        )
+    except Exception:
+        return 1200
+
+
 def memory_top_k() -> int:
     try:
         return max(1, min(16, int(os.environ.get("VINOR_MEMORY_TOP_K") or 8)))
