@@ -18,7 +18,8 @@ def build_entity_link(
     land_code: str = "",
     partner_phone: str = "",
 ) -> dict[str, str]:
-    et = (entity_type or "").strip().lower()
+    et = (entity_type or "").strip()
+    et_l = et.lower()
     eid = (entity_id or "").strip()
     land = str(land_code or "").strip()
     partner = _norm_phone(partner_phone)
@@ -27,26 +28,28 @@ def build_entity_link(
     url = ""
 
     if land:
-        label = land
+        label = f"ملک {land}"
         url = f"/admin/lands?q={land}"
-    elif et == "land" and eid:
-        label = eid
+    elif et_l in ("land", "property") and eid:
+        label = f"ملک {eid}"
         url = f"/admin/lands?q={eid}"
-    elif et in ("partner", "contact", "lead") and (partner or eid):
+    elif et_l in ("partner", "contact", "lead", "partnerapplication") or "partner" in et_l:
         ph = partner or _norm_phone(eid)
         if ph:
             label = f"همکار {ph[-4:]}" if len(ph) >= 4 else "همکار"
             url = f"/admin/express/partners/{ph}"
-    elif et == "negotiation" and eid:
+    elif "visit" in et_l:
+        label = f"بازدید {(eid[:8] if eid else land) or ''}".strip() or "بازدید"
+        if land:
+            url = f"/admin/lands?q={land}"
+        else:
+            url = "/admin/express/visits"
+    elif "deal" in et_l or "offer" in et_l or "contract" in et_l:
+        label = f"معامله {(eid[:8] if eid else '')}".strip() or "معامله"
+        if land:
+            url = f"/admin/lands?q={land}"
+    elif et_l == "negotiation" and eid:
         label = f"مذاکره {eid[:8]}"
-        if land:
-            url = f"/admin/lands?q={land}"
-    elif et == "visit" and eid:
-        label = f"بازدید {eid[:8]}"
-        if land:
-            url = f"/admin/lands?q={land}"
-    elif et == "deal" and eid:
-        label = f"معامله {eid[:8]}"
         if land:
             url = f"/admin/lands?q={land}"
 

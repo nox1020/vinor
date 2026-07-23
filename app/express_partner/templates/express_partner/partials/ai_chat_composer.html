@@ -212,6 +212,7 @@
   .ai-composer--gpt.ai-composer--readonly .ai-composer__shell { opacity: 0.55; }
 </style>
 <form id="aiChatForm" class="ai-composer ai-composer--gpt" method="post" action="#" autocomplete="off" novalidate
+      data-vinor-chat-surface="partner"
       data-mode="{{ chat_mode }}"
       data-chat-url="{{ chat_api_url }}"
       data-history-url="{{ history_api_url }}"
@@ -219,7 +220,6 @@
       data-switch-url="{{ switch_thread_url }}"
       data-delete-url="{{ delete_thread_url }}"
       data-sync-url="{{ sync_api_url }}"
-      data-reports-url="{{ reports_api_url|default('') }}"
       data-agent-confirm-url="{{ agent_confirm_url|default('') }}"
       data-agent-cancel-url="{{ agent_cancel_url|default('') }}"
       data-postchi-thread-id="{{ postchi_thread_id|default('__postchi__') }}"

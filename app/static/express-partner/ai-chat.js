@@ -4,6 +4,9 @@
 (function () {
   'use strict';
 
+  /* جدا از چت عملیات ادمین — اگر صفحه ops باشد وارد نشو */
+  if (document.getElementById('adminOpsChatPage')) return;
+
   if (typeof window.__vinorAiChatTeardown === 'function') {
     try {
       window.__vinorAiChatTeardown();
@@ -24,6 +27,7 @@
   var composer = document.getElementById('aiChatForm');
 
   if (!form || !input || !list || !btn) return;
+  if ((form.getAttribute('data-vinor-chat-surface') || '') === 'admin') return;
 
   var mode = form.getAttribute('data-mode') || '';
   var embedded = mode === 'embedded';
@@ -1882,6 +1886,31 @@
     });
   }
 
+  function humanizeSupervisorContent(text, landCode) {
+    var raw = String(text || '').trim();
+    if (!raw) return '';
+    var m = raw.match(/^(?:workflow_complete|workflow_completed)[:\s]+([A-Za-z][\w]*)$/i);
+    if (!m) return raw;
+    var map = {
+      VisitRequest: 'درخواست بازدید',
+      DealRequest: 'درخواست معامله',
+      PartnerApplication: 'درخواست همکاری',
+      PropertyRegistration: 'ثبت فایل',
+      PropertyEditing: 'ویرایش فایل',
+      SupportTicket: 'تیکت پشتیبانی',
+      OfferRequest: 'پیشنهاد قیمت',
+      VisitResultRequest: 'نتیجه بازدید',
+      FollowupRequest: 'پیگیری',
+      ContractRequest: 'قرارداد',
+    };
+    var label = map[m[1]] || '';
+    var land = String(landCode || '').trim();
+    if (label && land) return label + ' برای ملک ' + land + ' تکمیل شد.';
+    if (label) return label + ' تکمیل شد.';
+    if (land) return 'اقدام مربوط به ملک ' + land + ' تکمیل شد.';
+    return 'اقدام گردش‌کار تکمیل شد.';
+  }
+
   function buildSupervisorMessage(body, msg) {
     var meta = msg.meta || {};
     var head = document.createElement('div');
@@ -1901,16 +1930,22 @@
     badge.className = 'ai-supervisor-badge ai-supervisor-badge--' + (status || 'info');
     badge.textContent = supervisorStatusLabel(status);
     head.appendChild(badge);
-    if (meta.entity_url && meta.entity_label) {
+    var landCode = String(meta.land_code || '').trim();
+    var entityLabel = String(meta.entity_label || '').trim();
+    if (landCode && (!entityLabel || entityLabel === landCode)) {
+      entityLabel = 'ملک ' + landCode;
+    }
+    if (meta.entity_url && entityLabel) {
       var link = document.createElement('a');
       link.className = 'ai-supervisor-link';
       link.href = meta.entity_url;
-      link.textContent = meta.entity_label;
+      link.textContent = entityLabel;
+      link.setAttribute('data-land-filter', landCode);
       link.title = 'فیلتر timeline این پرونده — Ctrl+کلیک برای باز کردن صفحه';
       link.addEventListener('click', function (ev) {
-        if (meta.land_code && !ev.ctrlKey && !ev.metaKey && ev.button === 0) {
+        if (landCode && !ev.ctrlKey && !ev.metaKey && ev.button === 0) {
           ev.preventDefault();
-          activeLandFilter = String(meta.land_code);
+          activeLandFilter = landCode;
           activeReportFilter = '';
           var bar = document.getElementById('opsReportFilters');
           if (bar) {
@@ -1926,7 +1961,7 @@
     body.appendChild(head);
     var bubble = document.createElement('div');
     bubble.className = 'ai-msg-bubble ai-msg-bubble--supervisor';
-    bubble.textContent = (msg.content || '').trim();
+    bubble.textContent = humanizeSupervisorContent(msg.content || '', landCode);
     body.appendChild(bubble);
   }
 

@@ -630,6 +630,31 @@ def _enrich_messages_for_ui(
         if not isinstance(item, dict):
             continue
         row = dict(item)
+        # پیام‌های قدیمی ناظر با متن فنی (مثل workflow_complete:VisitRequest)
+        if str(row.get("source") or "") == "supervisor_agent":
+            try:
+                from app.supervisor_agent.renderer import humanize_supervisor_message_content
+
+                meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+                land = ""
+                if meta.get("land_code"):
+                    land = str(meta.get("land_code") or "")
+                elif row.get("land_codes"):
+                    land = str((row.get("land_codes") or [""])[0] or "")
+                human = humanize_supervisor_message_content(
+                    str(row.get("content") or ""),
+                    land_code=land,
+                    meta=meta,
+                )
+                if human:
+                    row["content"] = human
+                # برچسب لینک ملک اگر خام بود
+                if land and meta.get("entity_label") == land:
+                    meta = dict(meta)
+                    meta["entity_label"] = f"ملک {land}"
+                    row["meta"] = meta
+            except Exception:
+                pass
         codes = row.get("land_codes") or []
         actions = row.get("agent_actions") or []
         # ادمین: کارت فایل فقط با meta.show_land_cards؛ کارت تأیید اکشن می‌ماند

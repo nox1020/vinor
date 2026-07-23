@@ -11,6 +11,7 @@ from .audience import AUDIENCE_ADMIN, VOICE_ADMIN
 TOOL_ADMIN_OPS_SUMMARY = "admin_ops_summary"
 TOOL_ADMIN_SEARCH_LANDS = "admin_search_lands"
 TOOL_ADMIN_PARTNER_STATUS = "admin_partner_status"
+TOOL_ADMIN_LIST_QUEUE = "admin_list_queue"
 TOOL_PROPOSE_BROADCAST_SMS = "propose_broadcast_sms"
 TOOL_PROPOSE_BROADCAST_PUSH = "propose_broadcast_push"
 TOOL_PROPOSE_ADD_LISTING = "propose_add_express_listing"
@@ -38,6 +39,7 @@ CORE_ADMIN_TOOL_NAMES = frozenset(
         TOOL_ADMIN_OPS_SUMMARY,
         TOOL_ADMIN_SEARCH_LANDS,
         TOOL_ADMIN_PARTNER_STATUS,
+        TOOL_ADMIN_LIST_QUEUE,
         TOOL_PROPOSE_BROADCAST_SMS,
         TOOL_PROPOSE_BROADCAST_PUSH,
         TOOL_PROPOSE_ADD_LISTING,
@@ -151,6 +153,28 @@ def tools_schema_admin() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
+                "name": TOOL_ADMIN_LIST_QUEUE,
+                "description": (
+                    "لیست آیتم‌های صف عملیات با شناسه/شماره برای اقدام. "
+                    "kind: partners | listings | visits | commissions | withdrawals | escalations | all"
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "kind": {
+                            "type": "string",
+                            "description": (
+                                "partners|listings|visits|commissions|withdrawals|escalations|all"
+                            ),
+                        },
+                        "limit": {"type": "integer", "description": "حداکثر آیتم هر صف (۱–۲۰)"},
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": TOOL_PROPOSE_BROADCAST_SMS,
                 "description": (
                     "پیشنهاد ارسال پیامک همگانی. متن را از پیام ادمین بگیر. "
@@ -255,12 +279,19 @@ def tools_schema_admin() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": TOOL_PROPOSE_VISIT_ADMIN,
-                "description": "پیشنهاد اقدام ادمین روی بازدید (مثلاً approved|cancelled|completed).",
+                "description": (
+                    "پیشنهاد اقدام ادمین روی بازدید. "
+                    "pending→approved|cancelled ؛ done_pending→completed|cancelled|approved. "
+                    "از allowed_next_statuses در admin_list_queue استفاده کن."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "visit_id": {"type": "string"},
-                        "status": {"type": "string"},
+                        "status": {
+                            "type": "string",
+                            "description": "approved|cancelled|completed|…",
+                        },
                         "admin_note": {"type": "string"},
                     },
                     "required": ["visit_id", "status"],
@@ -272,8 +303,10 @@ def tools_schema_admin() -> list[dict[str, Any]]:
             "function": {
                 "name": TOOL_PROPOSE_COMMISSION,
                 "description": (
-                    "پیشنهاد اقدام مالی: approve_commission | reject_commission | "
-                    "paid_withdrawal (برداشت پرداخت‌شده)."
+                    "پیشنهاد اقدام مالی. action: "
+                    "approve_commission | reject_commission | "
+                    "approve_withdrawal | reject_withdrawal | "
+                    "processing_withdrawal | paid_withdrawal."
                 ),
                 "parameters": {
                     "type": "object",
@@ -323,6 +356,8 @@ def run_admin_tool(
         return _tool_search_lands(args)
     if n == TOOL_ADMIN_PARTNER_STATUS:
         return _tool_partner_status(args)
+    if n == TOOL_ADMIN_LIST_QUEUE:
+        return _tool_list_queue(args)
     if n == TOOL_PROPOSE_BROADCAST_SMS:
         return _tool_propose_broadcast_sms(args, admin_key=me)
     if n == TOOL_PROPOSE_BROADCAST_PUSH:
@@ -387,47 +422,337 @@ def _tool_ops_summary() -> dict[str, Any]:
             load_partner_withdrawals,
         )
         from app.ai.escalations import list_pending_for_admin
+        from admin.routes import _lands_path, load_json
 
         apps = load_express_partner_apps() or []
         visits = load_express_visit_requests() or []
         commissions = load_express_commissions() or []
         withdrawals = load_partner_withdrawals() or []
-        pending_apps = sum(
-            1
+        lands = load_json(_lands_path()) or []
+        if not isinstance(lands, list):
+            lands = []
+        pending_apps = [
+            a
             for a in apps
             if isinstance(a, dict)
             and str(a.get("status") or "").lower() not in ("approved", "rejected")
-        )
-        pending_visits = sum(
-            1
+        ]
+        pending_visits = [
+            v
             for v in visits
             if isinstance(v, dict)
             and str(v.get("status") or "").lower() in ("pending", "done_pending")
-        )
-        pending_comm = sum(
-            1
+        ]
+        pending_comm = [
+            c
             for c in commissions
-            if isinstance(c, dict) and str(c.get("status") or "") == "pending"
-        )
-        pending_wd = sum(
-            1
+            if isinstance(c, dict) and str(c.get("status") or "").lower() == "pending"
+        ]
+        pending_wd = [
+            w
             for w in withdrawals
             if isinstance(w, dict)
             and str(w.get("status") or "").lower() in ("pending", "approved", "processing")
-        )
+        ]
+        pending_lands = [
+            l
+            for l in lands
+            if isinstance(l, dict) and str(l.get("status") or "pending").lower() == "pending"
+        ]
         esc = list_pending_for_admin() or []
+
+        sample_partners = [
+            {
+                "phone": _norm_phone(str(a.get("phone") or "")),
+                "name": a.get("name"),
+                "city": a.get("city"),
+                "status": a.get("status"),
+            }
+            for a in pending_apps[:5]
+            if _norm_phone(str(a.get("phone") or ""))
+        ]
+        sample_listings = [
+            {
+                "land_code": l.get("code"),
+                "title": l.get("title"),
+                "city": l.get("city"),
+                "status": l.get("status") or "pending",
+            }
+            for l in pending_lands[:5]
+            if l.get("code")
+        ]
+        sample_visits = [
+            {
+                "visit_id": v.get("id"),
+                "land_code": v.get("land_code"),
+                "status": v.get("status"),
+                "partner_phone": _norm_phone(str(v.get("partner_phone") or v.get("phone") or "")),
+            }
+            for v in pending_visits[:5]
+            if v.get("id")
+        ]
+        sample_comm = [
+            {
+                "commission_id": c.get("id"),
+                "partner_phone": _norm_phone(str(c.get("partner_phone") or c.get("phone") or "")),
+                "amount": c.get("amount") or c.get("commission_amount"),
+                "land_code": c.get("land_code"),
+            }
+            for c in pending_comm[:5]
+        ]
+        sample_wd = [
+            {
+                "withdrawal_id": w.get("id"),
+                "partner_phone": _norm_phone(str(w.get("partner_phone") or w.get("phone") or "")),
+                "amount": w.get("amount"),
+                "status": w.get("status"),
+            }
+            for w in pending_wd[:5]
+            if w.get("id")
+        ]
+        sample_esc = [
+            {
+                "escalation_id": e.get("id") if isinstance(e, dict) else getattr(e, "id", ""),
+                "question": (
+                    str(e.get("question") or "")[:120]
+                    if isinstance(e, dict)
+                    else str(getattr(e, "question", "") or "")[:120]
+                ),
+            }
+            for e in esc[:5]
+        ]
+
         model = {
             "ok": True,
-            "pending_partner_apps": pending_apps,
-            "pending_visits": pending_visits,
-            "pending_commissions": pending_comm,
-            "open_withdrawals": pending_wd,
+            "pending_partner_apps": len(pending_apps),
+            "pending_listings": len(pending_lands),
+            "pending_visits": len(pending_visits),
+            "pending_commissions": len(pending_comm),
+            "open_withdrawals": len(pending_wd),
             "pending_escalations": len(esc),
-            "instruction": "خلاصه را کوتاه بگو و یک اقدام پیشنهادی بده.",
+            "sample_partners": sample_partners,
+            "sample_listings": sample_listings,
+            "sample_visits": sample_visits,
+            "sample_commissions": sample_comm,
+            "sample_withdrawals": sample_wd,
+            "sample_escalations": sample_esc,
+            "instruction": (
+                "خلاصه را کوتاه بگو. اگر صف خالی نیست، با شناسه/شمارهٔ نمونه "
+                "یک اقدام مشخص پیشنهاد بده (مثلاً تأیید همکار، تأیید فایل، یا پاسخ escalation). "
+                "برای لیست کامل‌تر admin_list_queue بزن."
+            ),
         }
         return {"ok": True, "model_result": model}
     except Exception as exc:
         return _denied(f"خلاصه عملیات ممکن نشد: {exc}")
+
+
+def _tool_list_queue(args: dict[str, Any]) -> dict[str, Any]:
+    kind = str(args.get("kind") or "all").strip().lower() or "all"
+    try:
+        limit = max(1, min(int(args.get("limit") or 10), 20))
+    except Exception:
+        limit = 10
+    allowed = {
+        "partners",
+        "listings",
+        "visits",
+        "commissions",
+        "withdrawals",
+        "escalations",
+        "all",
+    }
+    if kind not in allowed:
+        return _denied(
+            "kind نامعتبر است. یکی از: partners|listings|visits|commissions|withdrawals|escalations|all"
+        )
+
+    out: dict[str, Any] = {"ok": True}
+    try:
+        from app.utils.storage import (
+            load_express_commissions,
+            load_express_partner_apps,
+            load_express_visit_requests,
+            load_partner_withdrawals,
+        )
+        from app.ai.escalations import list_pending_for_admin
+        from admin.routes import _lands_path, load_json
+
+        if kind in ("partners", "all"):
+            apps = load_express_partner_apps() or []
+            rows = []
+            for a in apps:
+                if not isinstance(a, dict):
+                    continue
+                st = str(a.get("status") or "").lower()
+                if st in ("approved", "rejected"):
+                    continue
+                phone = _norm_phone(str(a.get("phone") or ""))
+                if not phone:
+                    continue
+                rows.append(
+                    {
+                        "phone": phone,
+                        "name": a.get("name"),
+                        "city": a.get("city"),
+                        "status": a.get("status") or "pending",
+                        "id": a.get("id"),
+                    }
+                )
+                if len(rows) >= limit:
+                    break
+            out["partners"] = rows
+
+        if kind in ("listings", "all"):
+            lands = load_json(_lands_path()) or []
+            if not isinstance(lands, list):
+                lands = []
+            rows = []
+            for l in lands:
+                if not isinstance(l, dict):
+                    continue
+                if str(l.get("status") or "pending").lower() != "pending":
+                    continue
+                code = str(l.get("code") or "").strip()
+                if not code:
+                    continue
+                rows.append(
+                    {
+                        "land_code": code,
+                        "title": l.get("title"),
+                        "city": l.get("city"),
+                        "location": l.get("location"),
+                        "status": l.get("status") or "pending",
+                        "is_express": bool(l.get("is_express")),
+                    }
+                )
+                if len(rows) >= limit:
+                    break
+            out["listings"] = rows
+
+        if kind in ("visits", "all"):
+            from app.express_partner.visit_requests import _admin_transitions
+
+            visits = load_express_visit_requests() or []
+            rows = []
+            transitions = _admin_transitions()
+            for v in visits:
+                if not isinstance(v, dict):
+                    continue
+                st = str(v.get("status") or "").lower()
+                if st not in ("pending", "done_pending"):
+                    continue
+                next_st = sorted(
+                    s for s in (transitions.get(st) or frozenset()) if s != st
+                )
+                rows.append(
+                    {
+                        "visit_id": v.get("id"),
+                        "land_code": v.get("land_code"),
+                        "status": v.get("status"),
+                        "customer_name": v.get("customer_name"),
+                        "partner_phone": _norm_phone(
+                            str(v.get("partner_phone") or v.get("phone") or "")
+                        ),
+                        "visit_at": v.get("visit_at") or v.get("scheduled_at"),
+                        "allowed_next_statuses": next_st,
+                    }
+                )
+                if len(rows) >= limit:
+                    break
+            out["visits"] = rows
+
+        if kind in ("commissions", "all"):
+            commissions = load_express_commissions() or []
+            rows = []
+            for c in commissions:
+                if not isinstance(c, dict):
+                    continue
+                if str(c.get("status") or "").lower() != "pending":
+                    continue
+                rows.append(
+                    {
+                        "commission_id": c.get("id"),
+                        "partner_phone": _norm_phone(
+                            str(c.get("partner_phone") or c.get("phone") or "")
+                        ),
+                        "amount": c.get("amount") or c.get("commission_amount"),
+                        "land_code": c.get("land_code"),
+                        "status": c.get("status"),
+                    }
+                )
+                if len(rows) >= limit:
+                    break
+            out["commissions"] = rows
+
+        if kind in ("withdrawals", "all"):
+            from app.express_partner.partner_withdrawals import ADMIN_STATUS_TRANSITIONS
+
+            withdrawals = load_partner_withdrawals() or []
+            rows = []
+            for w in withdrawals:
+                if not isinstance(w, dict):
+                    continue
+                st = str(w.get("status") or "").lower()
+                if st not in ("pending", "approved", "processing"):
+                    continue
+                next_st = sorted(
+                    s
+                    for s in (ADMIN_STATUS_TRANSITIONS.get(st) or frozenset())
+                    if s != st
+                )
+                rows.append(
+                    {
+                        "withdrawal_id": w.get("id"),
+                        "partner_phone": _norm_phone(
+                            str(w.get("partner_phone") or w.get("phone") or "")
+                        ),
+                        "amount": w.get("amount"),
+                        "status": w.get("status"),
+                        "allowed_next_statuses": next_st,
+                    }
+                )
+                if len(rows) >= limit:
+                    break
+            out["withdrawals"] = rows
+
+        if kind in ("escalations", "all"):
+            esc = list_pending_for_admin() or []
+            rows = []
+            for e in esc[:limit]:
+                if isinstance(e, dict):
+                    rows.append(
+                        {
+                            "escalation_id": e.get("id"),
+                            "user_key": e.get("user_key"),
+                            "question": str(e.get("question") or "")[:200],
+                            "created_at": e.get("created_at"),
+                        }
+                    )
+                else:
+                    rows.append(
+                        {
+                            "escalation_id": getattr(e, "id", ""),
+                            "user_key": getattr(e, "user_key", ""),
+                            "question": str(getattr(e, "question", "") or "")[:200],
+                            "created_at": getattr(e, "created_at", ""),
+                        }
+                    )
+            out["escalations"] = rows
+
+        out["model_result"] = {
+            "ok": True,
+            "kind": kind,
+            "instruction": (
+                "لیست را کوتاه بگو (نام/شماره/شناسه). "
+                "برای فایل معلق: propose_update_listing_status(land_code, approved|rejected). "
+                "برای همکار/بازدید/مالی/escalation از propose_* با کارت تأیید استفاده کن."
+            ),
+            **{k: v for k, v in out.items() if k not in ("ok", "model_result")},
+        }
+        return {"ok": True, "model_result": out["model_result"]}
+    except Exception as exc:
+        return _denied(f"لیست صف ممکن نشد: {exc}")
 
 
 def _tool_search_lands(args: dict[str, Any]) -> dict[str, Any]:
@@ -440,8 +765,7 @@ def _tool_search_lands(args: dict[str, Any]) -> dict[str, Any]:
     if not query:
         return _denied("عبارت جستجو خالی است.")
     try:
-        from admin.routes import _lands_path
-        from app.utils.storage import load_json
+        from admin.routes import _lands_path, load_json
 
         lands = load_json(_lands_path()) or []
         if not isinstance(lands, list):
@@ -769,12 +1093,23 @@ def _tool_propose_visit_admin(args: dict[str, Any], *, admin_key: str) -> dict[s
 
 def _tool_propose_commission(args: dict[str, Any], *, admin_key: str) -> dict[str, Any]:
     action = str(args.get("action") or "").strip().lower()
-    if action not in ("approve_commission", "reject_commission", "paid_withdrawal"):
+    allowed_actions = (
+        "approve_commission",
+        "reject_commission",
+        "approve_withdrawal",
+        "reject_withdrawal",
+        "processing_withdrawal",
+        "paid_withdrawal",
+    )
+    if action not in allowed_actions:
         return {
             "ok": True,
             "model_result": {
                 "ok": False,
-                "instruction": "action یکی از approve_commission|reject_commission|paid_withdrawal.",
+                "instruction": (
+                    "action یکی از approve_commission|reject_commission|"
+                    "approve_withdrawal|reject_withdrawal|processing_withdrawal|paid_withdrawal."
+                ),
             },
         }
     payload = {
@@ -784,7 +1119,7 @@ def _tool_propose_commission(args: dict[str, Any], *, admin_key: str) -> dict[st
         "note": str(args.get("note") or "").strip(),
     }
     lines = [f"اقدام: {action}"]
-    if payload.get("commission_id") is not None:
+    if payload.get("commission_id") is not None and str(payload.get("commission_id") or "").strip():
         lines.append(f"پورسانت: {payload['commission_id']}")
     if payload.get("withdrawal_id"):
         lines.append(f"برداشت: {payload['withdrawal_id']}")
@@ -894,8 +1229,7 @@ def _exec_broadcast_push(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _exec_add_listing(payload: dict[str, Any]) -> dict[str, Any]:
     try:
-        from admin.routes import _lands_path, _next_numeric_code
-        from app.utils.storage import load_json, save_json
+        from admin.routes import _lands_path, _next_numeric_code, load_json, save_json
 
         title = str(payload.get("title") or "").strip()
         city = str(payload.get("city") or "").strip()
@@ -955,8 +1289,7 @@ def _exec_update_listing(payload: dict[str, Any]) -> dict[str, Any]:
     status = str(payload.get("status") or "").strip().lower()
     reason = str(payload.get("reason") or "").strip()
     try:
-        from admin.routes import _lands_path
-        from app.utils.storage import load_json, save_json
+        from admin.routes import _lands_path, load_json, save_json
 
         lands = load_json(_lands_path()) or []
         if not isinstance(lands, list):
@@ -1107,8 +1440,9 @@ def _exec_commission(payload: dict[str, Any]) -> dict[str, Any]:
                     continue
             if not target:
                 return {"ok": False, "error": "پورسانت یافت نشد."}
+            cur = str(target.get("status") or "").lower()
             if action == "approve_commission":
-                if target.get("status") != "pending":
+                if cur != "pending":
                     return {
                         "ok": True,
                         "message": "پورسانت قبلاً تأیید شده یا قابل تأیید نیست.",
@@ -1118,51 +1452,154 @@ def _exec_commission(payload: dict[str, Any]) -> dict[str, Any]:
                 target["approved_at"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
                 save_express_commissions(items)
                 return {"ok": True, "message": f"پورسانت {cid} تأیید شد."}
-            if target.get("status") not in ("pending", "approved"):
+            if cur not in ("pending", "approved"):
                 return {"ok": False, "error": "این پورسانت قابل رد نیست."}
             target["status"] = "rejected"
             save_express_commissions(items)
             return {"ok": True, "message": f"پورسانت {cid} رد شد."}
 
-        if action == "paid_withdrawal":
-            wid = str(payload.get("withdrawal_id") or "").strip()
-            if not wid:
-                return {"ok": False, "error": "withdrawal_id لازم است."}
-            items = load_partner_withdrawals() or []
-            row = next(
-                (
-                    w
-                    for w in items
-                    if isinstance(w, dict) and str(w.get("id") or "") == wid
-                ),
-                None,
+        wd_action_map = {
+            "approve_withdrawal": "approved",
+            "reject_withdrawal": "rejected",
+            "processing_withdrawal": "processing",
+            "paid_withdrawal": "paid",
+        }
+        if action in wd_action_map:
+            return _exec_withdrawal_status(
+                withdrawal_id=str(payload.get("withdrawal_id") or "").strip(),
+                new_status=wd_action_map[action],
+                note=str(payload.get("note") or "").strip(),
             )
-            if not row:
-                return {"ok": False, "error": "برداشت یافت نشد."}
-            old = str(row.get("status") or "").lower()
-            if old == "paid":
-                return {"ok": True, "message": "قبلاً پرداخت‌شده است.", "already": True}
-            try:
-                from app.express_partner.partner_withdrawals import admin_can_transition
-
-                if not admin_can_transition(old, "paid"):
-                    return {
-                        "ok": False,
-                        "error": f"تغییر از {old} به paid مجاز نیست.",
-                    }
-            except Exception:
-                pass
-            row["status"] = "paid"
-            row["updated_at"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-            note = str(payload.get("note") or "").strip()
-            if note:
-                row["admin_note"] = note
-            save_partner_withdrawals(items)
-            return {"ok": True, "message": f"برداشت {wid} پرداخت‌شده شد."}
 
         return {"ok": False, "error": "اقدام مالی نامعتبر است."}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+def _exec_withdrawal_status(
+    *,
+    withdrawal_id: str,
+    new_status: str,
+    note: str = "",
+) -> dict[str, Any]:
+    wid = (withdrawal_id or "").strip()
+    new_status = (new_status or "").strip().lower()
+    if not wid:
+        return {"ok": False, "error": "withdrawal_id لازم است."}
+    if new_status not in ("approved", "rejected", "processing", "paid"):
+        return {"ok": False, "error": "وضعیت برداشت نامعتبر است."}
+
+    from app.utils.storage import (
+        load_express_commissions,
+        load_partner_withdrawals,
+        save_express_commissions,
+        save_partner_withdrawals,
+    )
+    from app.express_partner.partner_withdrawals import (
+        admin_can_transition,
+        apply_paid_withdrawal_to_commissions,
+        link_withdrawal_to_commissions,
+        release_withdrawal_commissions,
+        status_label,
+    )
+
+    items = load_partner_withdrawals() or []
+    if not isinstance(items, list):
+        items = []
+    row = next(
+        (w for w in items if isinstance(w, dict) and str(w.get("id") or "") == wid),
+        None,
+    )
+    if not row:
+        return {"ok": False, "error": "برداشت یافت نشد."}
+
+    old = str(row.get("status") or "pending").strip().lower()
+    if old == new_status:
+        return {"ok": True, "message": f"برداشت از قبل «{status_label(new_status)}» است.", "already": True}
+    if not admin_can_transition(old, new_status):
+        return {"ok": False, "error": f"تغییر از {old} به {new_status} مجاز نیست."}
+
+    partner_phone = str(row.get("phone") or row.get("partner_phone") or "").strip()
+    commissions = load_express_commissions() or []
+    if not isinstance(commissions, list):
+        commissions = []
+    commissions_dirty = False
+    now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    row["status"] = new_status
+    row["updated_at"] = now_iso
+    if note:
+        row["admin_note"] = note
+
+    if new_status == "approved" and old not in ("approved", "processing", "paid"):
+        linked = link_withdrawal_to_commissions(
+            commissions,
+            partner_phone,
+            int(row.get("amount") or 0),
+            wid,
+            items,
+        )
+        if linked > 0:
+            commissions_dirty = True
+
+    if new_status == "rejected" and old != "rejected":
+        release_withdrawal_commissions(commissions, wid)
+        commissions_dirty = True
+
+    if new_status == "paid" and old != "paid":
+        wd_amount = int(row.get("amount") or 0)
+        already = int(row.get("commission_allocated_amount") or 0)
+        need = max(0, wd_amount - already)
+        if need > 0:
+            if old not in ("approved", "processing"):
+                link_withdrawal_to_commissions(
+                    commissions,
+                    partner_phone,
+                    wd_amount,
+                    wid,
+                    items,
+                )
+                commissions_dirty = True
+            allocated = apply_paid_withdrawal_to_commissions(
+                commissions,
+                partner_phone,
+                need,
+                wid,
+                now_iso,
+                items,
+            )
+            if allocated > 0:
+                commissions_dirty = True
+                row["commission_allocated_amount"] = already + allocated
+
+    if commissions_dirty:
+        save_express_commissions(commissions)
+    save_partner_withdrawals(items)
+
+    try:
+        from app.express_partner.commission_sms import notify_partner_commission_txn
+
+        event = {
+            "approved": "withdrawal_approved",
+            "rejected": "withdrawal_rejected",
+            "paid": "withdrawal_paid",
+        }.get(new_status)
+        if event:
+            notify_partner_commission_txn(
+                partner_phone=partner_phone,
+                event=event,
+                amount=int(row.get("amount") or 0),
+                bank_summary=str(row.get("bank_summary") or ""),
+                reference_id=wid,
+            )
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "message": f"برداشت {wid}: {status_label(old)} → {status_label(new_status)}.",
+        "withdrawal_id": wid,
+    }
 
 
 def _exec_answer_escalation(payload: dict[str, Any]) -> dict[str, Any]:

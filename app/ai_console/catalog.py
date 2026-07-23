@@ -40,33 +40,109 @@ def list_agents() -> List[dict[str, Any]]:
     return rows
 
 
-def list_tools() -> List[dict[str, Any]]:
-    """Tool names from agent_tools constants."""
-    try:
-        from app.ai import agent_tools as at
+TOOL_PHASE_LABELS_FA: dict[str, str] = {
+    "core": "هستهٔ فروش",
+    "core_partner": "همکار — بازدید و معامله",
+    "crm/integration": "CRM و پیگیری",
+    "visit_result": "نتیجهٔ بازدید",
+    "commercial": "مذاکره و پیشنهاد",
+    "closing": "قرارداد و تسویه",
+    "admin_ops": "عملیات ادمین",
+}
 
-        names = []
-        for attr in dir(at):
-            if attr.startswith("TOOL_"):
-                val = getattr(at, attr, None)
+TOOL_DESCRIPTIONS_FA: dict[str, str] = {
+    # هستهٔ چت فروش
+    "search_lands": "جستجوی فایل‌های سیستم بر اساس معیار خریدار و نمایش کارت پیشنهاد.",
+    "suggest_next_action": "پیشنهاد قدم بعدی فروش به همکار (آگهی، بازدید، پیگیری و …).",
+    "draft_listing_copy": "نوشتن متن آگهی برای دیوار/اینستا بر اساس فایل.",
+    "get_cooperation_info": "توضیح شرایط همکاری و بازاریابی برای مهمان/متقاضی.",
+    "get_application_status": "وضعیت درخواست همکاری کاربر را گزارش می‌دهد.",
+    "propose_partner_application": "پیشنهاد ثبت درخواست همکاری (نیاز به تأیید کاربر).",
+    "propose_forget_memory": "پیشنهاد پاک‌کردن حافظهٔ گفتگو/ترجیحات کاربر (نیاز به تأیید).",
+    # بازدید و معامله
+    "propose_visit_request": "پیشنهاد ثبت درخواست بازدید برای یک فایل (کارت تأیید).",
+    "propose_complete_visit": "پیشنهاد اعلام انجام بازدید (کارت تأیید).",
+    "propose_deal": "پیشنهاد شروع/ثبت معامله روی فایل (کارت تأیید).",
+    "propose_release_deal": "پیشنهاد لغو یا آزادسازی معامله (کارت تأیید).",
+    # CRM
+    "propose_log_call": "پیشنهاد ثبت تماس با مشتری در CRM (کارت تأیید).",
+    "propose_followup": "پیشنهاد ثبت پیگیری زمان‌بندی‌شده برای مشتری (کارت تأیید).",
+    "propose_lead": "پیشنهاد ثبت سرنخ (lead) مشتری (کارت تأیید).",
+    "propose_task": "پیشنهاد ثبت کار/تسک برای همکار (کارت تأیید).",
+    # نتیجه بازدید
+    "propose_visit_result": "پیشنهاد ثبت نتیجهٔ بازدید (علاقه‌مند، رد و …).",
+    "propose_no_show": "پیشنهاد ثبت عدم‌حضور در بازدید.",
+    # تجاری
+    "propose_offer": "پیشنهاد ثبت پیشنهاد قیمت به مشتری.",
+    "propose_counter_offer": "پیشنهاد ثبت پیشنهاد متقابل در مذاکره.",
+    "propose_reservation": "پیشنهاد رزرو موقت فایل برای مشتری.",
+    # بستن معامله
+    "propose_contract": "پیشنهاد ثبت قرارداد در مسیر بستن معامله.",
+    "propose_payment_milestone": "پیشنهاد ثبت مرحلهٔ پرداخت/قسط.",
+    "propose_settlement": "پیشنهاد ثبت تسویهٔ نهایی معامله.",
+    # ادمین
+    "admin_ops_summary": "خلاصهٔ صف عملیات ادمین: همکار معلق، فایل، بازدید، مالی.",
+    "admin_list_queue": "لیست آیتم‌های صف با شناسه/شماره برای اقدام (همکار، فایل معلق، بازدید، پورسانت، برداشت، escalation).",
+    "admin_search_lands": "جستجوی فایل‌ها از چت عملیات ادمین.",
+    "admin_partner_status": "وضعیت همکار/درخواست همکاری را برای ادمین نشان می‌دهد.",
+    "propose_broadcast_sms": "پیشنهاد ارسال پیامک همگانی (نیاز به تأیید ادمین).",
+    "propose_broadcast_push": "پیشنهاد ارسال اعلان همگانی (نیاز به تأیید ادمین).",
+    "propose_add_express_listing": "پیشنهاد افزودن فایل اکسپرس جدید از چت ادمین.",
+    "propose_update_listing_status": "پیشنهاد تغییر وضعیت فایل (تأیید/رد/فروخته و …).",
+    "propose_partner_decision": "پیشنهاد تأیید یا رد درخواست همکاری.",
+    "propose_visit_admin_action": "پیشنهاد اقدام ادمین روی درخواست بازدید.",
+    "propose_commission_action": "پیشنهاد تأیید/رد پورسانت و تأیید/رد/پرداخت برداشت.",
+    "answer_escalation": "پاسخ به سوال ارجاع‌شدهٔ AI (escalation) از چت ادمین.",
+}
+
+
+def list_tools() -> List[dict[str, Any]]:
+    """Tool names from agent_tools + admin_tools constants."""
+    names: list[str] = []
+    for mod_path in ("app.ai.agent_tools", "app.ai.admin_tools"):
+        try:
+            import importlib
+
+            mod = importlib.import_module(mod_path)
+            for attr in dir(mod):
+                if not attr.startswith("TOOL_"):
+                    continue
+                val = getattr(mod, attr, None)
                 if isinstance(val, str) and val.strip():
                     names.append(val.strip())
-        names = sorted(set(names))
-    except Exception:
-        names = []
+        except Exception:
+            continue
+    names = sorted(set(names))
     out = []
     for n in names:
+        phase = _tool_phase(n)
         out.append(
             {
                 "name": n,
-                "confirm": n.startswith("propose_"),
-                "phase_hint": _tool_phase(n),
+                "confirm": n.startswith("propose_") or n == "answer_escalation",
+                "phase_hint": phase,
+                "phase_label_fa": TOOL_PHASE_LABELS_FA.get(phase, phase),
+                "description_fa": TOOL_DESCRIPTIONS_FA.get(
+                    n, "ابزار چت وینور — توضیح اختصاصی ثبت نشده."
+                ),
+                "confirm_label_fa": "نیاز به تأیید" if (n.startswith("propose_") or n == "answer_escalation") else "بدون کارت تأیید",
             }
         )
     return out
 
 
 def _tool_phase(name: str) -> str:
+    if name.startswith("admin_") or name in (
+        "propose_broadcast_sms",
+        "propose_broadcast_push",
+        "propose_add_express_listing",
+        "propose_update_listing_status",
+        "propose_partner_decision",
+        "propose_visit_admin_action",
+        "propose_commission_action",
+        "answer_escalation",
+    ):
+        return "admin_ops"
     if name in ("propose_log_call", "propose_followup", "propose_lead", "propose_task"):
         return "crm/integration"
     if name in ("propose_visit_result", "propose_no_show"):
@@ -75,10 +151,14 @@ def _tool_phase(name: str) -> str:
         return "commercial"
     if name in ("propose_contract", "propose_payment_milestone", "propose_settlement"):
         return "closing"
-    if name in ("propose_deal", "propose_release_deal", "propose_complete_visit", "propose_visit_request"):
+    if name in (
+        "propose_deal",
+        "propose_release_deal",
+        "propose_complete_visit",
+        "propose_visit_request",
+    ):
         return "core_partner"
     return "core"
-
 
 def list_prompts() -> List[dict[str, Any]]:
     try:

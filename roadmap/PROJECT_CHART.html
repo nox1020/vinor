@@ -305,8 +305,11 @@
       gap: 0;
       flex-wrap: wrap;
     }
-    .pipe-node { flex: 1 1 110px; min-width: 90px; }
-    .pipe-node .card { height: 100%; text-align: center; }
+    .pipe-node { flex: 1 1 130px; min-width: 110px; }
+    .pipe-node .card { height: 100%; }
+    .pipe-node .explain li { border-color: rgba(167,139,250,.25); }
+    .card--store .explain li { border-color: rgba(110,182,255,.25); }
+    .card--send .explain li { border-color: rgba(196,160,255,.25); }
     .pipe-arrow {
       display: flex;
       align-items: center;
@@ -325,9 +328,8 @@
     .card--http {
       background: #2d2640;
       border: 1px solid var(--stack-border);
-      padding: .75rem .4rem;
     }
-    .card--http .title { color: var(--stack); font-size: .78rem; }
+    .card--http .title { color: var(--stack); font-size: .85rem; }
     .card--store {
       background: var(--ops-dim);
       border: 1px solid var(--ops-border);
@@ -605,30 +607,47 @@
         <div class="pipe-node">
           <div class="card card--front">
             <div class="title">رابط</div>
+            <ul class="explain">
+              <li>صفحهٔ وب یا اپ که کاربر می‌بیند و با آن حرف می‌زند.</li>
+              <li>قالب‌ها، چت، پنل همکار و ادمین.</li>
+            </ul>
           </div>
         </div>
         <div class="pipe-arrow">←</div>
         <div class="pipe-node">
           <div class="card card--http">
             <div class="title">درخواست</div>
+            <ul class="explain">
+              <li>مسیر HTTP که پیام را از رابط می‌گیرد.</li>
+              <li>مثل <strong>/ai</strong> یا چت ops ادمین.</li>
+            </ul>
           </div>
         </div>
         <div class="pipe-arrow">←</div>
         <div class="pipe-node">
           <div class="card card--back">
             <div class="title">سرویس</div>
+            <ul class="explain">
+              <li>منطق Flask: ایجنت، ابزار، حافظه، ناظر.</li>
+              <li>پاسخ می‌سازد و تصمیم می‌گیرد کجا بنویسد یا بفرستد.</li>
+            </ul>
           </div>
         </div>
         <div class="pipe-arrow">←</div>
         <div class="pipe-split">
           <div class="card card--store">
             <div class="title">ذخیره</div>
-            <ul class="explain" style="margin-top:.35rem">
-              <li>کسب‌وکار + <strong>ai_memory</strong> هر کاربر</li>
+            <ul class="explain">
+              <li>دادهٔ کسب‌وکار و <strong>ai_memory</strong> هر کاربر روی دیسک.</li>
+              <li>منبع حقیقت ماندگار — جدا از ارسال.</li>
             </ul>
           </div>
           <div class="card card--send">
             <div class="title">ارسال</div>
+            <ul class="explain">
+              <li>خروجی به بیرون: پیامک و پوش موبایل.</li>
+              <li>پیگیری رسدکننده — موازی با ذخیره، نه جایگزین آن.</li>
+            </ul>
           </div>
         </div>
       </div>

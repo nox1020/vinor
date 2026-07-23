@@ -1,0 +1,508 @@
+﻿{# استایل پیام‌های چت — چیدمان GPT #}
+<style id="vinor-ops-messages-gpt">
+  #adminOpsChatPage #aiMessages.ai-messages {
+    --gpt-msg-max: 48rem;
+    --gpt-user-bg: #2f2f2f;
+    --gpt-text: #ececec;
+    --gpt-muted: #8e8e8e;
+    --gpt-avatar-bg: #0d0d0d;
+    --gpt-avatar-border: rgba(255, 255, 255, 0.14);
+    display: flex;
+    flex-direction: column;
+    gap: 1.35rem;
+    width: 100%;
+    padding: 1rem 1rem 1.5rem;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap {
+    display: flex;
+    width: 100%;
+    max-width: var(--gpt-msg-max);
+    margin-inline: auto;
+    flex-direction: column;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    width: 100%;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap--user .ai-msg-row {
+    justify-content: flex-end;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap--assistant .ai-msg-row {
+    justify-content: flex-start;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-avatar {
+    flex-shrink: 0;
+    width: 1.75rem;
+    height: 1.75rem;
+    margin-top: 0.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid var(--gpt-avatar-border);
+    background: var(--gpt-avatar-bg);
+    color: #f4f4f4;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap--user .ai-msg-body {
+    flex: 0 1 auto;
+    max-width: min(85%, 32rem);
+    align-items: flex-end;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-bubble {
+    font-size: 0.975rem;
+    line-height: 1.7;
+    color: var(--gpt-text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap[data-streaming="1"] .ai-msg-bubble::after {
+    content: '';
+    display: inline-block;
+    width: 0.42em;
+    height: 1em;
+    margin-inline-start: 0.1em;
+    vertical-align: -0.08em;
+    border-radius: 1px;
+    background: currentColor;
+    opacity: 0.8;
+    animation: aiStreamCaret 0.85s steps(1) infinite;
+  }
+  @keyframes aiStreamCaret {
+    0%, 49% { opacity: 0.85; }
+    50%, 100% { opacity: 0; }
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap--user .ai-msg-bubble {
+    background: var(--gpt-user-bg);
+    border-radius: 1.5rem;
+    padding: 0.7rem 1.05rem;
+    border: 0;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap--assistant .ai-msg-bubble {
+    background: transparent;
+    border-radius: 0;
+    padding: 0.2rem 0;
+    border: 0;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap[data-welcome="1"] .ai-msg-bubble {
+    color: var(--gpt-text);
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap[data-admin-reply="1"] .ai-msg-bubble {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fffbeb;
+    border-radius: 1.1rem;
+    padding: 0.7rem 1rem;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap[data-postchi="1"] .ai-msg-bubble {
+    background: rgba(16, 185, 129, 0.12);
+    color: #d1fae5;
+    border-radius: 1.1rem;
+    padding: 0.7rem 1rem;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-cards {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  /* کارت فایل داخل گفتگو (افقی / اسکرول) */
+  #adminOpsChatPage #aiMessages .ai-land-cards {
+    display: flex;
+    flex-direction: row;
+    gap: 0.65rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.15rem 0 0.35rem;
+    margin-top: 0.35rem;
+    scrollbar-width: none;
+  }
+  #adminOpsChatPage #aiMessages .ai-land-cards::-webkit-scrollbar { display: none; }
+  #adminOpsChatPage #aiMessages .ai-land-cards__slot {
+    flex: 0 0 min(18.5rem, 86vw);
+    max-width: min(18.5rem, 86vw);
+    min-width: 0;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-cards .ai-land-cards {
+    margin-top: 0;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-thinking {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 1.5rem;
+    padding: 0.35rem 0;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-dot {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: #b4b4b4;
+    animation: aiMsgDotPulse 1.2s ease-in-out infinite;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-dot:nth-child(2) { animation-delay: 0.15s; }
+  #adminOpsChatPage #aiMessages .ai-msg-dot:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes aiMsgDotPulse {
+    0%, 80%, 100% { opacity: 0.28; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-2px); }
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap[data-pending-user="1"] .ai-msg-bubble {
+    opacity: 0.88;
+  }
+
+  /* بلاک کپی GPT-style — موبایل‌محور */
+  #adminOpsChatPage #aiMessages .ai-copy-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    width: 100%;
+    max-width: 100%;
+    margin-top: 0.35rem;
+    min-width: 0;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-cards .ai-copy-blocks {
+    margin-top: 0;
+  }
+  #adminOpsChatPage #aiMessages .ai-copy-block {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    border-radius: 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #0d0d0d;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #adminOpsChatPage #aiMessages .ai-copy-block__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    min-height: 2.35rem;
+    padding: 0.35rem 0.45rem 0.35rem 0.75rem;
+    background: #2f2f2f;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  #adminOpsChatPage #aiMessages .ai-copy-block__label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: #ececec;
+    line-height: 1.2;
+  }
+  #adminOpsChatPage #aiMessages .ai-copy-block__btn {
+    flex: 0 0 auto;
+    width: 2.1rem;
+    height: 2.1rem;
+    min-width: 2.1rem;
+    min-height: 2.1rem;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: #c4c4c4;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  #adminOpsChatPage #aiMessages .ai-copy-block__btn svg {
+    width: 1.05rem;
+    height: 1.05rem;
+    display: block;
+    pointer-events: none;
+  }
+  #adminOpsChatPage #aiMessages .ai-copy-block__btn:hover,
+  #adminOpsChatPage #aiMessages .ai-copy-block__btn:active {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+  #adminOpsChatPage #aiMessages .ai-copy-block__btn.is-copied {
+    color: #86efac;
+    background: rgba(34, 197, 94, 0.12);
+  }
+  #adminOpsChatPage #aiMessages .ai-copy-block__icon-check { display: none; }
+  #adminOpsChatPage #aiMessages .ai-copy-block__btn.is-copied .ai-copy-block__icon-copy { display: none; }
+  #adminOpsChatPage #aiMessages .ai-copy-block__btn.is-copied .ai-copy-block__icon-check { display: block; }
+  #adminOpsChatPage #aiMessages .ai-copy-block__pre {
+    margin: 0;
+    padding: 0.7rem 0.8rem 0.85rem;
+    max-height: min(40vh, 14rem);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: #ececec;
+    background: transparent;
+    direction: rtl;
+    text-align: right;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-bubble .ai-copy-blocks {
+    margin-top: 0.55rem;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-prose {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  /* نوار اکشن زیر جواب — شبیه GPT */
+  #adminOpsChatPage #aiMessages .ai-msg-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.15rem;
+    margin-top: 0.15rem;
+    direction: ltr;
+    justify-content: flex-start;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-wrap--user .ai-msg-actions {
+    display: none;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.85rem;
+    height: 1.85rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.45rem;
+    background: transparent;
+    color: #b4b4b4;
+    cursor: pointer;
+    position: relative;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-action:hover,
+  #adminOpsChatPage #aiMessages .ai-msg-action:focus-visible {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ececec;
+    outline: none;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-action:active {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-action svg {
+    width: 1.05rem;
+    height: 1.05rem;
+    display: block;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-action.is-active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-action.is-ok {
+    color: #86efac;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-action-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-action-menu {
+    position: absolute;
+    bottom: calc(100% + 0.35rem);
+    left: 0;
+    min-width: 9.5rem;
+    padding: 0.3rem;
+    border-radius: 0.65rem;
+    background: #2f2f2f;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    z-index: 20;
+    display: none;
+    direction: rtl;
+    text-align: right;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-action-menu.is-open {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-action-menu button {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: #ececec;
+    font-size: 0.78rem;
+    font-weight: 500;
+    text-align: right;
+    padding: 0.45rem 0.55rem;
+    border-radius: 0.45rem;
+    cursor: pointer;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-action-menu button:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  /* دکمه رفتن به پایین گفتگو — شبیه ChatGPT */
+  .ai-scroll-bottom {
+    position: absolute;
+    left: 50%;
+    bottom: 5.75rem;
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    margin: 0;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+    background: #303030;
+    color: #ececec;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    transform: translateX(-50%);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ai-scroll-bottom[hidden] {
+    display: none !important;
+  }
+  .ai-scroll-bottom:active {
+    background: #3a3a3a;
+    transform: translateX(-50%) scale(0.96);
+  }
+  .ai-scroll-bottom svg {
+    width: 1.125rem;
+    height: 1.125rem;
+    display: block;
+  }
+  #homeDashboardPage .vn-home-shell {
+    position: relative;
+  }
+  #homeDashboardPage.home-dashboard-page--ai .ai-scroll-bottom {
+    bottom: calc(var(--vn-home-dock-h, 7.25rem) + 0.55rem);
+  }
+  #aiChat.ai-chat-shell {
+    position: relative;
+  }
+  #aiHomeLayer #aiChat.ai-chat-shell .ai-scroll-bottom,
+  #aiPageMain.ai-page-shell .ai-scroll-bottom {
+    bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* کارت تأیید / اکشن — مشترک چت همکار و ادمین */
+  #adminOpsChatPage #aiMessages .ai-agent-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-top: 0.15rem;
+  }
+  #adminOpsChatPage #aiMessages .ai-msg-cards .ai-agent-actions {
+    margin-top: 0;
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-card {
+    width: 100%;
+    max-width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.85rem;
+    background: rgba(15, 23, 42, 0.92);
+    padding: 0.85rem 0.9rem;
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-card--done { opacity: 0.92; }
+  #adminOpsChatPage #aiMessages .ai-agent-card--completed,
+  #adminOpsChatPage #aiMessages .ai-agent-card--confirmed { border-color: rgba(52, 211, 153, 0.35); }
+  #adminOpsChatPage #aiMessages .ai-agent-card--cancelled { border-color: rgba(248, 113, 113, 0.35); }
+  #adminOpsChatPage #aiMessages .ai-agent-card--expired,
+  #adminOpsChatPage #aiMessages .ai-agent-card--failed { border-color: rgba(251, 191, 36, 0.35); }
+  #adminOpsChatPage #aiMessages .ai-agent-card__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-card__badge {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    padding: 0.12rem 0.45rem;
+    white-space: nowrap;
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-card__title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 0;
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-bottom: 0.65rem;
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-line {
+    font-size: 0.82rem;
+    color: #cbd5e1;
+    line-height: 1.45;
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.1rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 0.65rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  #adminOpsChatPage #aiMessages .ai-agent-btn--confirm { background: #0ea5e9; color: #0f172a; }
+  #adminOpsChatPage #aiMessages .ai-agent-btn--cancel {
+    background: transparent;
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-btn--call {
+    background: #059669;
+    color: #ecfdf5;
+    border-color: rgba(16, 185, 129, 0.45);
+    gap: 0.35rem;
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-btn--call-block { width: 100%; }
+  #adminOpsChatPage #aiMessages .ai-agent-card__actions--call { margin-top: 0.55rem; }
+  #adminOpsChatPage #aiMessages .ai-agent-card__note {
+    margin-top: 0.55rem;
+    font-size: 0.78rem;
+    color: #94a3b8;
+  }
+  #adminOpsChatPage #aiMessages .ai-agent-card__note.hidden { display: none; }
+</style>

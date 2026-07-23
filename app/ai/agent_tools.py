@@ -317,6 +317,7 @@ def agent_system_hint(voice: str | None) -> str:
     if v == VOICE_ADMIN:
         return (
             f"{GOAL_ADMIN_SYSTEM} "
+            "صف→admin_ops_summary/admin_list_queue | "
             "پیام همگانی→propose_broadcast_* | فایل→propose_add/update | "
             "همکار→propose_partner_decision | بازدید/مالی/escalation با کارت. "
             "تا تأیید نزده نگو انجام شد."
@@ -4360,7 +4361,11 @@ def cancel_pending_action(
     if pending:
         _consume_pending_action(token)
 
-    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    aud = (
+        audience
+        if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC, AUDIENCE_ADMIN)
+        else AUDIENCE_PARTNER
+    )
     note = "انصراف داده شد."
     lines = result_lines_from_confirm(card_type="", message=note, out={})
     updated, msgs, tid = update_agent_action_by_token(
@@ -4417,7 +4422,11 @@ def apply_confirm_result_to_chat(
     from app.ai.chat_events import emit_timeline
 
     me = (phone or "").strip()
-    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    aud = (
+        audience
+        if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC, AUDIENCE_ADMIN)
+        else AUDIENCE_PARTNER
+    )
     ok = bool(confirm_out.get("ok"))
     note = str(confirm_out.get("message") or ("انجام شد." if ok else "ناموفق"))
     lines = result_lines_from_confirm(

@@ -107,27 +107,79 @@ def _is_partner_phone(phone: str) -> bool:
         return False
 
 
-def _message_for_signal(snap: Any) -> tuple[str, str]:
+def _message_for_signal(snap: Any) -> tuple[str, str, str]:
+    """(title, notif_body, sms_body) — هدف واضح + دعوت ورود به اپ وینور."""
     stage = str(getattr(snap, "stage", "") or "")
     land = str(getattr(snap, "land_code", "") or "").strip()
-    code_bit = f" ({land})" if land else ""
+    land_bit = f" {land}" if land else ""
+    cta = "وارد اپلیکیشن وینور شو و از چت ادامه بده."
+
     if stage == "deal":
-        title = "پیگیری معامله"
-        body = f"وینور: معامله{code_bit} هنوز باز است. از چت پیگیری کن تا نهایی شود."
+        title = "معامله رو نهایی کن"
+        body = (
+            f"معامله فایل{land_bit} هنوز بازه — الان بهترین زمان برای بستنشه. "
+            f"{cta}"
+        )
+        sms = (
+            f"وینور\nمعامله{land_bit} هنوز بازه\n"
+            f"وارد اپ وینور شو و از چت نهایی‌اش کن"
+        )
     elif stage == "visit":
-        title = "یادآوری بازدید"
-        body = f"وینور: بازدید{code_bit} منتظر اقدام توست. از چت جلو ببر."
+        title = "بازدیدت منتظر اقدامه"
+        body = (
+            f"بازدید فایل{land_bit} هنوز کامل نشده. "
+            f"یک قدم کوچیک کافیه تا پرونده جلو بره. {cta}"
+        )
+        sms = (
+            f"وینور\nبازدید{land_bit} منتظرته\n"
+            f"وارد اپ وینور شو و از چت جلو ببر"
+        )
     elif stage == "land":
-        title = "ادامهٔ پیشنهاد فایل"
-        body = f"وینور: فایل{code_bit} را دیدی — برای بازدید یا تصمیم از چت ادامه بده."
+        title = "این فایل هنوز منتظرته"
+        body = (
+            f"فایل{land_bit} رو دیدی ولی تصمیم نگرفتی. "
+            f"اگر مناسبه، بازدید رو هماهنگ کن. {cta}"
+        )
+        sms = (
+            f"وینور\nفایل{land_bit} منتظر تصمیمت هست\n"
+            f"وارد اپ وینور شو و از چت بگو بریم جلو"
+        )
     else:
-        title = "ادامهٔ جستجو"
-        body = "وینور: هنوز فایل مناسبت را نهایی نکردی. از چت معیارت را بگو تا بهترین گزینه را پیشنهاد دهیم."
-    return title, body
+        title = "هنوز بهترین فایل رو ندیدی"
+        body = (
+            "معیارت نصفه مونده؛ وینور منتظره تا بهترین گزینهٔ گرمابسرد رو برات جور کنه. "
+            f"{cta}"
+        )
+        sms = (
+            "وینور\nهنوز فایل مناسبت نهایی نشده\n"
+            "وارد اپ وینور شو و از چت معیارت رو بگو"
+        )
+    return title, body, sms
 
 
-def _send_one(phone: str, title: str, body: str, *, dry_run: bool) -> dict[str, Any]:
-    item: dict[str, Any] = {"phone": phone, "title": title, "notif": False, "sms": False}
+def _clip_sms(text: str, *, limit: int = 160) -> str:
+    t = (text or "").strip()
+    if len(t) <= limit:
+        return t
+    return t[: max(0, limit - 1)] + "…"
+
+
+def _send_one(
+    phone: str,
+    title: str,
+    body: str,
+    *,
+    sms_body: str = "",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "phone": phone,
+        "title": title,
+        "body": body,
+        "sms_body": sms_body or body,
+        "notif": False,
+        "sms": False,
+    }
     if dry_run:
         item["dry_run"] = True
         return item
@@ -145,8 +197,7 @@ def _send_one(phone: str, title: str, body: str, *, dry_run: bool) -> dict[str, 
 
             ph = normalize_iran_mobile(phone) or phone
             if is_valid_iran_mobile(ph):
-                sms = body if len(body) <= 160 else (body[:157] + "…")
-                send_sms_direct(ph, sms)
+                send_sms_direct(ph, _clip_sms(sms_body or body))
                 item["sms"] = True
         except Exception:
             pass
@@ -205,8 +256,8 @@ def run_buyer_reach_slot(
             skipped += 1
             continue
 
-        title, body = _message_for_signal(snap)
-        item = _send_one(phone, title, body, dry_run=dry_run)
+        title, body, sms_body = _message_for_signal(snap)
+        item = _send_one(phone, title, body, sms_body=sms_body, dry_run=dry_run)
         item.update(
             {
                 "stage": snap.stage,

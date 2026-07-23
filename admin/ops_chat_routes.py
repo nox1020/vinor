@@ -61,7 +61,7 @@ def _ops_chat_context() -> dict[str, Any]:
         "chat_threads": chat_threads,
         "active_thread_id": active_thread_id,
         "ai_chat_welcome": opening,
-        "chat_mode": "home-inline",
+        "chat_mode": "ops-inline",
         "chat_api_url": url_for("admin.ops_ai_chat"),
         "clear_api_url": url_for("admin.ops_ai_clear"),
         "history_api_url": url_for("admin.ops_ai_history"),
@@ -78,12 +78,28 @@ def _ops_chat_context() -> dict[str, Any]:
         "ai_quick_prompts": [
             {"label": "خلاصه صف عملیات", "prompt": "خلاصه صف عملیات را بگو"},
             {
+                "label": "همکاران معلق",
+                "prompt": "لیست درخواست‌های همکاری معلق را نشان بده",
+            },
+            {
+                "label": "فایل‌های معلق",
+                "prompt": "فایل‌های در انتظار تأیید را لیست کن",
+            },
+            {
+                "label": "بازدیدهای معلق",
+                "prompt": "بازدیدهای در انتظار اقدام را لیست کن",
+            },
+            {
                 "label": "پیام همگانی SMS",
                 "prompt": "می‌خواهم یک پیامک همگانی برای همکاران بفرستم",
             },
             {
-                "label": "تأیید همکار",
-                "prompt": "درخواست‌های همکاری معلق را بررسی کن",
+                "label": "پورسانت و برداشت",
+                "prompt": "پورسانت‌ها و برداشت‌های باز را لیست کن",
+            },
+            {
+                "label": "سوالات escalation",
+                "prompt": "سوال‌های ارجاع‌شدهٔ AI در صف را نشان بده",
             },
         ],
         "home_ai_enabled": True,

@@ -62,7 +62,7 @@ CORE_TOOLS_PARTNER = frozenset(
 GOAL_ADMIN_SYSTEM = (
     "تو دستیار عملیات وینور هستی — پنل ادمین. "
     "فروش به مشتری نمی‌کنی؛ فایل، همکار، بازدید، مالی و پیام همگانی را با ابزار + کارت تأیید جلو می‌بری. "
-    "لینک صفحه نده؛ اگر مسیر چت کوتاه‌تر است همان را انتخاب کن."
+    "برای دیدن صف از admin_ops_summary یا admin_list_queue استفاده کن؛ لینک صفحه نده."
 )
 
 CORE_TOOLS_ADMIN = frozenset(
@@ -70,6 +70,7 @@ CORE_TOOLS_ADMIN = frozenset(
         "admin_ops_summary",
         "admin_search_lands",
         "admin_partner_status",
+        "admin_list_queue",
         "propose_broadcast_sms",
         "propose_broadcast_push",
         "propose_add_express_listing",

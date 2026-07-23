@@ -124,13 +124,12 @@ def render_report(
     if ev == "customer_visit_confirmed":
         return "مشتری زمان بازدید را تأیید کرد.", REPORT_CUSTOMER, STATUS_SUCCESS
 
-  # --- بازدید ---
+    # --- بازدید ---
     if ev in ("visit_requested", "visit_scheduled"):
         when = (visit_time or "").strip()
         if when:
             return (
-                f"بازدید {land_phrase} برای {when} هماهنگ شد.\n"
-                "پیام تأیید برای خریدار و همکار ارسال شد.",
+                f"بازدید {land_phrase} برای {when} هماهنگ شد.",
                 REPORT_VISIT,
                 STATUS_SUCCESS,
             )
@@ -297,8 +296,9 @@ def render_report(
         )
 
     if ev == "card_confirmed":
-        if body:
-            return body, REPORT_SYSTEM, STATUS_SUCCESS
+        cleaned = _humanize_technical_body(body, land_code=land)
+        if cleaned:
+            return cleaned, REPORT_SYSTEM, STATUS_SUCCESS
         return "اقدام تأیید و انجام شد.", REPORT_SYSTEM, STATUS_SUCCESS
 
     # نگاشت رویدادهای timeline چت
@@ -317,14 +317,100 @@ def render_report(
         cat, st = _CHAT_EVENT_MAP[ev]
         from app.ai.chat_events import EVENT_LABELS
 
-        text = (body or "").strip() or EVENT_LABELS.get(ev, "")
+        text = _humanize_technical_body(body, land_code=land) or EVENT_LABELS.get(ev, "")
         if land and ev == "land_suggested":
             text = f"فایل {land} برای {person} پیشنهاد شد."
         return text, cat, st
 
-    if body:
-        return body.strip(), REPORT_SYSTEM, STATUS_INFO
+    cleaned = _humanize_technical_body(body, land_code=land)
+    if cleaned:
+        return cleaned, REPORT_SYSTEM, STATUS_INFO
     return None
+
+
+_TECHNICAL_BODY_RE = re.compile(
+    r"^(?:workflow_complete|workflow_completed)[:\s]+([A-Za-z][\w]*)$",
+    re.IGNORECASE,
+)
+
+_OBJECT_TYPE_FA: dict[str, str] = {
+    "VisitRequest": "درخواست بازدید",
+    "DealRequest": "درخواست معامله",
+    "PartnerApplication": "درخواست همکاری",
+    "PropertyRegistration": "ثبت فایل",
+    "PropertyEditing": "ویرایش فایل",
+    "SupportTicket": "تیکت پشتیبانی",
+    "OfferRequest": "پیشنهاد قیمت",
+    "VisitResultRequest": "نتیجه بازدید",
+    "FollowupRequest": "پیگیری",
+    "ContractRequest": "قرارداد",
+}
+
+# object_typeهایی که از مسیر واقعی چت (emit_chat_event) هم گزارش می‌شوند
+_SHADOW_SKIP_OBJECT_TYPES = frozenset(
+    {
+        "VisitRequest",
+        "DealRequest",
+        "VisitResultRequest",
+        "OfferRequest",
+        "ContractRequest",
+        "PartnerApplication",
+    }
+)
+
+_WORKFLOW_OBJECT_EVENT: dict[str, str] = {
+    "VisitRequest": "visit_requested",
+    "DealRequest": "deal_started",
+    "PartnerApplication": "partner_application_pending",
+    "VisitResultRequest": "visit_completed",
+    "OfferRequest": "deal_pending",
+    "ContractRequest": "contract_created",
+    "FollowupRequest": "followup_started",
+    "PropertyRegistration": "customer_request_received",
+}
+
+
+def _looks_technical_body(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return False
+    if _TECHNICAL_BODY_RE.match(t):
+        return True
+    if ":" in t and re.search(r"[A-Za-z]{3,}", t) and not re.search(r"[\u0600-\u06FF]", t):
+        return True
+    return False
+
+
+def _humanize_technical_body(body: str = "", *, land_code: str = "") -> str:
+    """تبدیل متن فنی ذخیره‌شده به فارسی؛ اگر عادی بود همان را برمی‌گرداند."""
+    raw = (body or "").strip()
+    if not raw:
+        return ""
+    if not _looks_technical_body(raw):
+        return raw
+    m = _TECHNICAL_BODY_RE.match(raw)
+    obj = m.group(1) if m else ""
+    label = _OBJECT_TYPE_FA.get(obj) or _OBJECT_TYPE_FA.get(obj.replace("_", "")) or ""
+    land = _land_ref(land_code) if land_code else ""
+    if label and land:
+        return f"{label} برای {land} تکمیل شد."
+    if label:
+        return f"{label} تکمیل شد."
+    if land:
+        return f"اقدام مربوط به {land} تکمیل شد."
+    return "اقدام گردش‌کار تکمیل شد."
+
+
+def humanize_supervisor_message_content(
+    content: str,
+    *,
+    land_code: str = "",
+    meta: dict[str, Any] | None = None,
+) -> str:
+    """برای نمایش پیام‌های قدیمی ناظر که هنوز متن فنی دارند."""
+    meta = meta if isinstance(meta, dict) else {}
+    land = str(land_code or meta.get("land_code") or "").strip()
+    return _humanize_technical_body(content, land_code=land) or (content or "").strip()
 
 
 def render_from_activity(
@@ -339,7 +425,74 @@ def render_from_activity(
     """نگاشت فعالیت Foundation به (event, body, category, status)."""
     act = (action or "").strip()
     pl = dict(payload or {})
-    land = str(land_code or pl.get("land_code") or "").strip()
+    fields = pl.get("fields") if isinstance(pl.get("fields"), dict) else {}
+    storage = pl.get("storage") if isinstance(pl.get("storage"), dict) else {}
+    land = str(
+        land_code
+        or pl.get("land_code")
+        or fields.get("land_code")
+        or fields.get("code")
+        or ""
+    ).strip()
+    object_type = str(
+        entity_type or pl.get("object_type") or fields.get("type") or ""
+    ).strip()
+    if not object_type and summary:
+        m = _TECHNICAL_BODY_RE.match(summary.strip())
+        if m:
+            object_type = m.group(1)
+
+    # phase0 shadow: مسیر واقعی چت قبلاً گزارش می‌دهد — از تکرار متن فنی پرهیز کن
+    reason = str(storage.get("reason") or "").strip()
+    shadowed = bool(storage.get("shadowed"))
+    persisted = bool(storage.get("persisted"))
+    if act == "workflow_completed" and shadowed and not persisted:
+        if reason.startswith("phase0") or object_type in _SHADOW_SKIP_OBJECT_TYPES:
+            return None
+
+    if act == "workflow_completed":
+        ev = _WORKFLOW_OBJECT_EVENT.get(object_type) or "card_confirmed"
+        visit_time = str(
+            fields.get("visit_at")
+            or fields.get("scheduled_at")
+            or fields.get("visit_time")
+            or ""
+        ).strip()
+        customer_name = str(
+            fields.get("visitor_name")
+            or fields.get("customer_name")
+            or fields.get("display_name")
+            or pl.get("customer_name")
+            or ""
+        ).strip()
+        customer_phone = str(
+            fields.get("visitor_phone")
+            or fields.get("customer_phone")
+            or fields.get("buyer_phone")
+            or pl.get("customer_phone")
+            or ""
+        ).strip()
+        # متن فنی summary را به مدل نده
+        body = ""
+        if ev == "card_confirmed":
+            body = _humanize_technical_body(
+                summary or f"workflow_complete:{object_type or 'unknown'}",
+                land_code=land,
+            )
+        rendered = render_report(
+            ev,
+            land_code=land,
+            customer_phone=customer_phone,
+            customer_name=customer_name,
+            deal_code=land,
+            visit_time=visit_time,
+            body=body,
+            meta={"entity_type": object_type or entity_type, "entity_id": entity_id},
+        )
+        if not rendered:
+            return None
+        text, cat, status = rendered
+        return ev, text, cat, status
 
     _ACTIVITY_MAP: dict[str, str] = {
         "crm_lead_created": "customer_request_received",
@@ -351,7 +504,6 @@ def render_from_activity(
         "closing_contract_created": "contract_created",
         "roles_partner_approved": "partner_approved",
         "roles_partner_rejected": "partner_rejected",
-        "workflow_completed": "card_confirmed",
     }
     ev = _ACTIVITY_MAP.get(act)
     if not ev:
@@ -359,10 +511,20 @@ def render_from_activity(
     rendered = render_report(
         ev,
         land_code=land,
-        customer_phone=str(pl.get("customer_phone") or pl.get("buyer_phone") or ""),
-        customer_name=str(pl.get("display_name") or pl.get("customer_name") or ""),
+        customer_phone=str(
+            pl.get("customer_phone")
+            or pl.get("buyer_phone")
+            or fields.get("visitor_phone")
+            or ""
+        ),
+        customer_name=str(
+            pl.get("display_name")
+            or pl.get("customer_name")
+            or fields.get("visitor_name")
+            or ""
+        ),
         deal_code=land,
-        body=summary,
+        body="" if _looks_technical_body(summary) else summary,
         meta={"entity_type": entity_type, "entity_id": entity_id},
     )
     if not rendered:

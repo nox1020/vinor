@@ -93,7 +93,11 @@ def report_from_activity(activity: Any) -> dict[str, Any]:
             str(getattr(activity, "action", "") or ""),
             summary=str(getattr(activity, "summary", "") or ""),
             land_code=str(getattr(activity, "land_code", "") or ""),
-            entity_type=str(getattr(activity, "entity_type", "") or ""),
+            entity_type=str(
+                getattr(activity, "object_type", "")
+                or getattr(activity, "entity_type", "")
+                or ""
+            ),
             entity_id=str(getattr(activity, "entity_id", "") or ""),
             payload=dict(getattr(activity, "payload", None) or {}),
         )

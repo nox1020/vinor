@@ -444,6 +444,7 @@ def _build_admin_ops_context() -> str:
         return (
             "مخاطب: ادمین عملیات وینور.\n"
             f"صف: همکاران معلق={model.get('pending_partner_apps', 0)}، "
+            f"فایل معلق={model.get('pending_listings', 0)}، "
             f"بازدید={model.get('pending_visits', 0)}، "
             f"پورسانت={model.get('pending_commissions', 0)}، "
             f"برداشت={model.get('open_withdrawals', 0)}، "
