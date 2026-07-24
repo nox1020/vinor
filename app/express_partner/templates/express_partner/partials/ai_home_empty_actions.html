@@ -1,0 +1,53 @@
+{# پیشنهادهای سریع حالت خالی GPT — زیر کامپوزر خانه #}
+{% macro ai_home_empty_icon(name) -%}
+{%- if name == 'search' -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" stroke-linecap="round"/></svg>
+{%- elif name == 'pen' -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M4 20h4L18.5 9.5a2.12 2.12 0 0 0-3-3L5 17v3z" stroke-linejoin="round"/><path d="M13.5 6.5l3 3" stroke-linecap="round"/></svg>
+{%- elif name == 'bolt' -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 10-14h-7l0-6z" stroke-linejoin="round"/></svg>
+{%- elif name == 'users' -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a3 3 0 0 1 0 5.74"/></svg>
+{%- elif name == 'clipboard' -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4V3h6v1" stroke-linecap="round"/></svg>
+{%- elif name == 'handshake' -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M8 13l3 3 7-7" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12l4-4 3 2"/><path d="M14 10l3-2 4 4"/></svg>
+{%- else -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M12 3l1.8 5.5H19l-4.4 3.2 1.7 5.3L12 14.8 7.7 17l1.7-5.3L5 8.5h5.2L12 3z" stroke-linejoin="round"/></svg>
+{%- endif -%}
+{%- endmacro %}
+
+{% if ai_quick_prompts %}
+{% set _empty_user_msgs = chat_messages|default([])|selectattr('role', 'equalto', 'user')|list %}
+<ul id="aiHomeEmptyActions"
+    class="ai-home-empty-actions"
+    role="list"
+    aria-label="پیشنهادهای سریع"
+    data-ai-home-empty-actions
+    {% if _empty_user_msgs %}hidden{% endif %}>
+  {% for item in ai_quick_prompts %}
+  <li role="none">
+    {% if item.href %}
+    <a href="{{ item.href }}"
+       class="ai-home-empty__action"
+       role="listitem"
+       data-vinor-express-nav
+       title="{{ item.label|e }}">
+      <span class="ai-home-empty__action-icon">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
+      <span class="ai-home-empty__action-label">{{ item.label }}</span>
+    </a>
+    {% else %}
+    <button type="button"
+            class="ai-home-empty__action"
+            role="listitem"
+            data-ai-quick-prompt="{{ item.prompt|e }}"
+            {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
+            title="{{ item.label|e }}">
+      <span class="ai-home-empty__action-icon">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
+      <span class="ai-home-empty__action-label">{{ item.label }}</span>
+    </button>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}

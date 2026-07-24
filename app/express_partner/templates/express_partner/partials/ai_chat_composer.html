@@ -132,7 +132,7 @@
     display: inline-block;
     white-space: nowrap;
     color: var(--gpt-muted);
-    font-size: 0.95rem;
+    font-size: 1.0625rem;
     line-height: 1.45;
     vertical-align: middle;
     will-change: transform;
@@ -176,7 +176,7 @@
     border-radius: 0;
     background: transparent !important;
     color: var(--gpt-text);
-    font-size: 0.95rem;
+    font-size: 1.0625rem;
     line-height: 1.45;
     padding: 0.55rem 0.15rem;
     outline: none;
@@ -231,36 +231,6 @@
   {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
   <input type="hidden" id="aiActiveThreadId" value="{{ active_thread_id or '' }}">
   <div class="ai-composer__inner">
-    {% if chat_mode == 'home-inline' and ai_quick_prompts %}
-    {% set _user_msgs = chat_messages|default([])|selectattr('role', 'equalto', 'user')|list %}
-    <div class="ai-composer__suggestions"
-         role="list"
-         aria-label="پیشنهادهای سریع"
-         data-ai-chip-bar
-         data-chip-count="{{ ai_quick_prompts|length }}"
-         {% if _user_msgs %} hidden{% endif %}>
-      {% for item in ai_quick_prompts %}
-      {% if item.href %}
-      <a href="{{ item.href }}"
-         class="ai-composer__chip"
-         role="listitem"
-         data-vinor-express-nav
-         title="{{ item.label|e }}">
-        <span class="ai-composer__chip-label">{{ item.label }}</span>
-      </a>
-      {% else %}
-      <button type="button"
-              class="ai-composer__chip"
-              role="listitem"
-              data-ai-quick-prompt="{{ item.prompt|e }}"
-              {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
-              title="{{ item.label|e }}">
-        <span class="ai-composer__chip-label">{{ item.label }}</span>
-      </button>
-      {% endif %}
-      {% endfor %}
-    </div>
-    {% endif %}
     <div class="ai-composer__shell">
       <button type="button" class="ai-composer__plus" id="aiComposerPlus" aria-label="افزودن" tabindex="-1">
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
@@ -274,7 +244,7 @@
         </div>
       </div>
       <textarea id="aiInput" name="message" rows="1"
-                placeholder=""
+                placeholder="{% if chat_mode == 'home-inline' %}هر سوالی دارید بپرسید{% endif %}"
                 class="ai-composer__input"
                 enterkeyhint="send"></textarea>
       <button type="submit" id="aiSendBtn" class="ai-composer__send" aria-label="ارسال" disabled>
@@ -285,15 +255,18 @@
     </div>
   </div>
 </form>
-{% if chat_mode == 'home-inline' and ai_quick_prompts %}
+{% if chat_mode == 'home-inline' %}
 <script>
 (function () {
-  var form = document.getElementById('aiChatForm');
-  if (!form || form.getAttribute('data-quick-bound') === '1') return;
-  form.setAttribute('data-quick-bound', '1');
-  form.addEventListener('click', function (ev) {
+  if (window.__vinorAiQuickBound) return;
+  window.__vinorAiQuickBound = true;
+  document.addEventListener('click', function (ev) {
     var chip = ev.target && ev.target.closest ? ev.target.closest('[data-ai-quick-prompt]') : null;
-    if (!chip || !form.contains(chip)) return;
+    if (!chip) return;
+    var page = document.getElementById('homeDashboardPage');
+    if (!page || !page.contains(chip)) return;
+    var form = document.getElementById('aiChatForm');
+    if (!form) return;
     ev.preventDefault();
     var prompt = chip.getAttribute('data-ai-quick-prompt') || '';
     if (!prompt) return;

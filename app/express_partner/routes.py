@@ -3117,10 +3117,58 @@ def home_page():
     except Exception:
         pass
 
-    ai_quick_prompts = []
-    # پیشنهادهای سریع حذف شد — همه مسیرها فقط از گفتگو
+    # پیشنهادهای سریع خانه — لیست GPT در حالت خالی
+    ai_quick_prompts: List[Dict[str, str]] = []
+    try:
+        from .sales_coach import build_limited_ai_quick_prompts
+
+        if ai_ctx.get('home_ai_limited'):
+            ai_quick_prompts = build_limited_ai_quick_prompts(
+                me_phone=me_phone,
+                has_pending_app=bool(payload.get('has_pending_app')),
+            )
+        else:
+            ai_quick_prompts = [
+                {
+                    'label': 'پیدا کردن فایل',
+                    'prompt': 'یه فایل مناسب برای بازاریابی می‌خوام',
+                    'intent': 'find_land',
+                    'icon': 'search',
+                },
+                {
+                    'label': 'متن آگهی',
+                    'prompt': 'متن آگهی دیوار و اینستا بده',
+                    'intent': 'marketing',
+                    'icon': 'pen',
+                },
+                {
+                    'label': 'قدم بعدی',
+                    'prompt': 'قدم بعدی‌م چیه؟',
+                    'intent': 'next_action',
+                    'icon': 'bolt',
+                },
+            ]
+        # آیکن برای لیست خالی GPT (مهمان)
+        _icon_by_intent = {
+            'coop_levels': 'users',
+            'coop_status': 'clipboard',
+            'coop_apply': 'handshake',
+            'find_land': 'search',
+            'marketing': 'pen',
+            'next_action': 'bolt',
+        }
+        for _item in ai_quick_prompts:
+            if not _item.get('icon'):
+                _item['icon'] = _icon_by_intent.get(
+                    str(_item.get('intent') or '').strip(),
+                    'spark',
+                )
+    except Exception:
+        ai_quick_prompts = []
+
     public_home_lands: List[Dict[str, Any]] = []
     # کاتالوگ فایل در بدو ورود خانه تزریق نمی‌شود — فقط از چت با search_lands
+    # ai_quick_prompts بعد از **ai_ctx تا با کلید هم‌نام در context بازنویسی نشود
     resp = make_response(render_template(
         'express_partner/home.html',
         profile=drawer_profile or profile,
@@ -3140,8 +3188,6 @@ def home_page():
         suggested_files=payload.get('suggested_files') or [],
         journey_card=payload.get('journey_card'),
         withdrawable_balance=int(payload.get('withdrawable_balance') or 0),
-        ai_quick_prompts=ai_quick_prompts,
-        public_home_lands=public_home_lands,
         hide_header=True,
         bottom_nav_active='home',
         brand='وینور',
@@ -3149,6 +3195,8 @@ def home_page():
         seo_title='داشبورد | وینور اکسپرس',
         seo_description='پنل بازاریاب فروش — از چت مشتری یا نوع فایل بفرست تا فایل مناسب معرفی شود.',
         **ai_ctx,
+        ai_quick_prompts=ai_quick_prompts,
+        public_home_lands=public_home_lands,
     ))
     if not me_phone:
         # مهمان هم چت محدود دارد — کش عمومی ممنوع

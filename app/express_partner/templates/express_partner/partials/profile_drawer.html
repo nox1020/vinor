@@ -56,7 +56,9 @@
     right: 0;
     left: auto;
     z-index: 81;
-    width: min(100%, 17.5rem);
+    /* مثل GPT موبایل: حدود ۸۵٪ عرض، نوار باریک محتوا در چپ دیده شود */
+    width: min(85vw, 26rem);
+    max-width: calc(100vw - 3.25rem);
     display: flex;
     flex-direction: column;
     background: var(--ep-drawer-bg);
@@ -81,30 +83,31 @@
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    padding: 0.75rem 0.65rem 0.35rem;
+    padding: 1rem 1rem 0.45rem;
   }
   .ep-profile-drawer__top-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.35rem;
-    padding-inline: 0.25rem;
+    padding-inline: 0.15rem;
   }
   .ep-profile-drawer__brand {
-    font-size: 0.9375rem;
+    font-size: 1.375rem;
     font-weight: 700;
     color: #fff;
     letter-spacing: -0.02em;
+    line-height: 1.2;
   }
   .ep-profile-drawer__close {
-    width: 2rem;
-    height: 2rem;
+    width: 2.35rem;
+    height: 2.35rem;
     border-radius: 9999px;
     display: grid;
     place-items: center;
     border: 0;
-    background: transparent;
-    color: var(--ep-drawer-muted);
+    background: #2f2f2f;
+    color: #fff;
     transition: background 0.15s ease, color 0.15s ease;
   }
   .ep-profile-drawer__close:hover,
@@ -117,14 +120,14 @@
     width: 100%;
     align-items: center;
     justify-content: flex-start;
-    gap: 0.65rem;
+    gap: 0.75rem;
     border: 0;
     border-radius: 0.85rem;
     background: transparent;
     color: var(--ep-drawer-text);
-    padding: 0.65rem 0.7rem;
-    font-size: 0.875rem;
-    font-weight: 560;
+    padding: 0.85rem 0.85rem;
+    font-size: 1.0625rem;
+    font-weight: 500;
     transition: background 0.15s ease;
   }
   #epProfileDrawer .ep-profile-drawer__ai #aiNewChatBtn:hover,
@@ -132,10 +135,10 @@
     background: var(--ep-drawer-hover);
   }
   #epProfileDrawer .ep-profile-drawer__ai #aiNewChatBtn i {
-    width: 1.1rem;
+    width: 1.25rem;
     text-align: center;
-    font-size: 0.8rem;
-    opacity: 0.9;
+    font-size: 1rem;
+    opacity: 0.95;
   }
 
   .ep-profile-drawer__body {
@@ -146,7 +149,7 @@
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    padding: 0.15rem 0.5rem 0.85rem;
+    padding: 0.25rem 0.75rem 0.85rem;
   }
   .ep-profile-drawer__body::-webkit-scrollbar {
     display: none;
@@ -155,8 +158,8 @@
   }
 
   .ep-profile-drawer__label {
-    padding: 0.65rem 0.75rem 0.35rem;
-    font-size: 0.75rem;
+    padding: 0.85rem 0.85rem 0.45rem;
+    font-size: 0.8125rem;
     font-weight: 560;
     color: var(--ep-drawer-muted);
   }
@@ -169,7 +172,7 @@
   #epProfileDrawer #aiHistoryList {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.2rem;
     max-height: none;
     min-height: 0;
     overflow: visible;
@@ -179,12 +182,12 @@
     display: flex;
     align-items: center;
     width: 100%;
-    min-height: 2.55rem;
+    min-height: 2.75rem;
     border: 0;
     border-radius: 0.85rem;
     background: transparent;
     color: var(--ep-drawer-text);
-    padding: 0.5rem 0.65rem;
+    padding: 0.65rem 0.85rem;
     text-align: right;
     transition: background 0.14s ease;
     box-sizing: border-box;
@@ -211,9 +214,9 @@
     gap: 0.4rem;
     flex: 1 1 auto;
     min-width: 0;
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
     font-weight: 500;
-    line-height: 1.3;
+    line-height: 1.35;
     color: var(--ep-drawer-text);
   }
   #epProfileDrawer .ai-thread-item__title > span {
@@ -276,12 +279,12 @@
   #epProfileDrawer .ep-profile-drawer__nav {
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
+    gap: 0.2rem;
   }
   #epProfileDrawer .ep-profile-drawer__nav .profile-menu-row {
-    gap: 0.7rem;
+    gap: 0.85rem;
     margin: 0;
-    padding: 0.55rem 0.65rem;
+    padding: 0.85rem 0.85rem;
     border-radius: 0.85rem;
   }
   #epProfileDrawer .ep-profile-drawer__nav .profile-menu-row:hover,
@@ -289,8 +292,8 @@
     background: var(--ep-drawer-hover);
   }
   #epProfileDrawer .ep-profile-drawer__nav .profile-menu-row > div:first-child {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 1.35rem;
+    height: 1.35rem;
     border-radius: 0;
     background: transparent !important;
     box-shadow: none !important;
@@ -299,10 +302,10 @@
     color: var(--ep-drawer-muted);
   }
   #epProfileDrawer .ep-profile-drawer__nav .profile-menu-row > div:first-child i {
-    font-size: 0.8rem;
+    font-size: 1.05rem;
   }
   #epProfileDrawer .ep-profile-drawer__nav .profile-menu-row .text-\[15px\] {
-    font-size: 0.8125rem;
+    font-size: 1.0625rem;
     font-weight: 500;
     color: var(--ep-drawer-text);
   }
@@ -314,7 +317,7 @@
   .ep-profile-drawer__foot {
     flex-shrink: 0;
     border-top: 1px solid var(--ep-drawer-sep);
-    padding: 0.7rem 0.75rem calc(0.8rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.85rem 1rem calc(0.95rem + env(safe-area-inset-bottom, 0px));
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -351,13 +354,13 @@
     font-size: 1rem;
   }
   .ep-profile-drawer__chat-btn {
-    min-height: 2.75rem;
-    padding: 0 1.15rem;
+    min-height: 2.85rem;
+    padding: 0 1.25rem;
     border-radius: 9999px;
     background: #2563eb;
     color: #fff;
     gap: 0.55rem;
-    font-size: 0.9375rem;
+    font-size: 1.0625rem;
     font-weight: 650;
     font-family: inherit;
     direction: rtl;
@@ -410,14 +413,14 @@
   }
   .ep-profile-drawer__guest-title {
     margin: 0;
-    font-size: 0.875rem;
+    font-size: 1.0625rem;
     font-weight: 700;
     color: #fff;
     letter-spacing: -0.01em;
   }
   .ep-profile-drawer__guest-lead {
-    margin: 0.35rem 0 0;
-    font-size: 0.6875rem;
+    margin: 0.4rem 0 0;
+    font-size: 0.875rem;
     line-height: 1.45;
     color: var(--ep-drawer-muted);
   }
@@ -728,6 +731,155 @@
   {% endif %}
 </aside>
 
+{# مودال تأیید حذف گفتگو #}
+<style id="vinor-ai-thread-delete-modal">
+  #aiThreadDeleteModal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    pointer-events: none;
+  }
+  #aiThreadDeleteModal.is-open {
+    display: flex !important;
+    pointer-events: auto;
+  }
+  @media (min-width: 640px) {
+    #aiThreadDeleteModal.is-open {
+      align-items: center;
+      padding: 1rem;
+    }
+  }
+  #aiThreadDeleteModal .ai-del-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  #aiThreadDeleteModal .ai-del-modal__panel {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 24rem;
+    margin: 0;
+    padding: 1.35rem 1.15rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.25rem 1.25rem 0 0;
+    background: #212121;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+    color: #ececec;
+    text-align: center;
+    pointer-events: auto;
+  }
+  @media (min-width: 640px) {
+    #aiThreadDeleteModal .ai-del-modal__panel {
+      border-radius: 1.15rem;
+      padding: 1.5rem 1.35rem 1.35rem;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+    }
+  }
+  #aiThreadDeleteModal .ai-del-modal__icon {
+    display: grid;
+    place-items: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    margin: 0 auto 0.85rem;
+    border-radius: 9999px;
+    background: rgba(244, 63, 94, 0.14);
+    color: #fb7185;
+    font-size: 1.15rem;
+  }
+  #aiThreadDeleteModal .ai-del-modal__title {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.01em;
+  }
+  #aiThreadDeleteModal .ai-del-modal__text {
+    margin: 0.55rem 0 0;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: #a1a1aa;
+  }
+  #aiThreadDeleteModal .ai-del-modal__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    margin-top: 1.25rem;
+  }
+  #aiThreadDeleteModal .ai-del-modal__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    width: 100%;
+    min-height: 2.85rem;
+    padding: 0.7rem 1rem;
+    border: 0;
+    border-radius: 0.85rem;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.14s ease, opacity 0.14s ease, transform 0.1s ease;
+  }
+  #aiThreadDeleteModal .ai-del-modal__btn:active {
+    transform: scale(0.985);
+  }
+  #aiThreadDeleteModal .ai-del-modal__btn--danger {
+    background: #e11d48;
+    color: #fff;
+  }
+  #aiThreadDeleteModal .ai-del-modal__btn--danger:hover {
+    background: #be123c;
+  }
+  #aiThreadDeleteModal .ai-del-modal__btn--ghost {
+    background: transparent;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+  }
+  #aiThreadDeleteModal .ai-del-modal__btn--ghost:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  html.vinor-ai-del-modal-open {
+    overflow: hidden;
+  }
+</style>
+<div id="aiThreadDeleteModal"
+     class="ai-thread-delete-modal"
+     aria-hidden="true"
+     hidden>
+  <div class="ai-del-modal__backdrop" data-ai-del-backdrop></div>
+  <div class="ai-del-modal__panel"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="aiThreadDeleteTitle"
+       aria-describedby="aiThreadDeleteDesc">
+    <div class="ai-del-modal__icon" aria-hidden="true">
+      <i class="fas fa-trash-alt"></i>
+    </div>
+    <h2 id="aiThreadDeleteTitle" class="ai-del-modal__title">حذف گفتگو</h2>
+    <p id="aiThreadDeleteDesc" class="ai-del-modal__text">
+      این گفتگو حذف شود؟ این کار قابل بازگشت نیست.
+    </p>
+    <div class="ai-del-modal__actions">
+      <button type="button" class="ai-del-modal__btn ai-del-modal__btn--danger" data-ai-del-confirm>
+        <i class="fas fa-trash-alt" aria-hidden="true"></i>
+        <span>بله، حذف کن</span>
+      </button>
+      <button type="button" class="ai-del-modal__btn ai-del-modal__btn--ghost" data-ai-del-cancel>
+        انصراف
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   var backdrop = document.getElementById('epProfileDrawerBackdrop');
@@ -963,7 +1115,9 @@
   });
 
   document.addEventListener('keydown', function onEsc(e) {
-    if (e.key === 'Escape' && isOpen()) closeDrawer();
+    if (e.key !== 'Escape') return;
+    if (document.documentElement.classList.contains('vinor-ai-del-modal-open')) return;
+    if (isOpen()) closeDrawer();
   });
 
   window.addEventListener('vinor:express-page-swap', function onSwap() {
