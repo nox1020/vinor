@@ -2902,41 +2902,51 @@ def _partner_ai_layer_context(
         # مهمان / کاربر عادی / متقاضی: چت عمومی محدود — بدون پستچی و ابزار فروش
         try:
             from app.ai.audience import AUDIENCE_PUBLIC
-            from app.ai.chat_store import ensure_active_thread, messages_for_ui, threads_for_ui
+            from app.ai.chat_store import (
+                clear_chat,
+                ensure_active_thread,
+                messages_for_ui,
+                set_active_thread,
+                threads_for_ui,
+            )
             from app.ai.user_key import ai_user_key
             from app.ai.welcome import ensure_vinor_opens_chat
 
             user_key = ai_user_key()
-            ensure_active_thread(user_key, audience=AUDIENCE_PUBLIC)
-            threads_preview = threads_for_ui(user_key, audience=AUDIENCE_PUBLIC)
-            active_thread_id = next(
-                (t['id'] for t in threads_preview if t.get('is_active')),
-                '',
-            )
-            if not active_thread_id:
-                active_thread_id = ensure_active_thread(user_key, audience=AUDIENCE_PUBLIC)
-            if open_tid and open_tid != active_thread_id:
+            if open_tid:
+                # لینک مستقیم به یک گفتگو
+                if set_active_thread(user_key, open_tid, audience=AUDIENCE_PUBLIC):
+                    active_thread_id = open_tid
+                else:
+                    active_thread_id = ensure_active_thread(user_key, audience=AUDIENCE_PUBLIC)
                 home_ai_open = True
                 home_ai_open_thread = open_tid
-                active_thread_id = open_tid
-            chat_messages, active_thread_id = ensure_vinor_opens_chat(
-                user_key,
-                audience=AUDIENCE_PUBLIC,
-                thread_id=active_thread_id or None,
-                text=ctx['ai_chat_welcome'],
-                has_pending_app=bool(has_pending_app),
-            )
-            if not chat_messages:
-                chat_messages = messages_for_ui(
+                chat_messages, active_thread_id = ensure_vinor_opens_chat(
                     user_key,
-                    thread_id=active_thread_id or None,
                     audience=AUDIENCE_PUBLIC,
-                ) or []
+                    thread_id=active_thread_id or None,
+                    text=ctx['ai_chat_welcome'],
+                    has_pending_app=bool(has_pending_app),
+                )
+                if not chat_messages:
+                    chat_messages = messages_for_ui(
+                        user_key,
+                        thread_id=active_thread_id or None,
+                        audience=AUDIENCE_PUBLIC,
+                    ) or []
+            else:
+                # بدو ورود: همیشه صفحه خالی GPT — چت قبلی فقط در کشو
+                out = clear_chat(user_key, audience=AUDIENCE_PUBLIC, opening_text=None)
+                if out.get('ok'):
+                    active_thread_id = str(out.get('thread_id') or '').strip()
+                else:
+                    active_thread_id = ensure_active_thread(
+                        user_key, audience=AUDIENCE_PUBLIC
+                    )
+                chat_messages = []
+                if want_ai:
+                    home_ai_open = True
             chat_threads = threads_for_ui(user_key, audience=AUDIENCE_PUBLIC)
-            if want_ai or open_tid:
-                home_ai_open = True
-                if open_tid:
-                    home_ai_open_thread = open_tid
         except Exception:
             chat_messages = []
             chat_threads = []
@@ -3004,21 +3014,17 @@ def _partner_ai_layer_context(
             open_postchi(phone)
             home_ai_open = True
             home_ai_open_thread = POSTCHI_THREAD_ID
-        else:
+        elif open_tid:
+            # لینک مستقیم به یک گفتگو
+            from app.ai.chat_store import set_active_thread
             from app.ai.welcome import ensure_vinor_opens_chat
 
-            ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
-            threads_preview = threads_with_postchi(phone, audience=AUDIENCE_PARTNER)
-            active_thread_id = next(
-                (t['id'] for t in threads_preview if t.get('is_active')),
-                '',
-            )
-            if not active_thread_id:
-                active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
-            if open_tid and open_tid != active_thread_id:
-                home_ai_open = True
-                home_ai_open_thread = open_tid
+            if set_active_thread(phone, open_tid, audience=AUDIENCE_PARTNER):
                 active_thread_id = open_tid
+            else:
+                active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
+            home_ai_open = True
+            home_ai_open_thread = open_tid
             chat_messages, active_thread_id = ensure_vinor_opens_chat(
                 phone,
                 audience=AUDIENCE_PARTNER,
@@ -3032,10 +3038,18 @@ def _partner_ai_layer_context(
                     thread_id=active_thread_id or None,
                     audience=AUDIENCE_PARTNER,
                 ) or []
-            if want_ai or open_tid:
+        else:
+            # بدو ورود: همیشه صفحه خالی GPT — چت قبلی فقط در کشو
+            from app.ai.chat_store import clear_chat
+
+            out = clear_chat(phone, audience=AUDIENCE_PARTNER, opening_text=None)
+            if out.get('ok'):
+                active_thread_id = str(out.get('thread_id') or '').strip()
+            else:
+                active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
+            chat_messages = []
+            if want_ai:
                 home_ai_open = True
-                if open_tid:
-                    home_ai_open_thread = open_tid
         chat_threads = threads_with_postchi(
             phone,
             audience=AUDIENCE_PARTNER,
