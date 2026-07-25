@@ -443,10 +443,18 @@ def uploaded_file(filename):
                         wanted_base = ''
                     if wanted_base and wanted_base == os.path.basename(fn_norm):
                         try:
-                            disp = "attachment; filename*=UTF-8''" + quote(download_as) + f'; filename=\"{download_as}\""
+                            disp = (
+                                "attachment; filename*=UTF-8''"
+                                + quote(download_as)
+                                + '; filename="'
+                                + download_as
+                                + '"'
+                            )
                             resp.headers['Content-Disposition'] = disp
                         except Exception:
-                            resp.headers['Content-Disposition'] = f'attachment; filename=\"{download_as}\"'
+                            resp.headers['Content-Disposition'] = (
+                                'attachment; filename="' + download_as + '"'
+                            )
         except Exception:
             pass
         return resp
