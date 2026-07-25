@@ -335,9 +335,11 @@ def short_apk_download(download_name=None):
             mimetype="application/vnd.android.package-archive",
             as_attachment=True,
             download_name=download_as,
-            conditional=True,
+            conditional=False,
+            max_age=300,
         )
         resp.headers["Cache-Control"] = "public, max-age=300"
+        resp.headers["X-Content-Type-Options"] = "nosniff"
         return resp
 
     # مسیر ذخیره‌شده روی دیسک پیدا نشد — redirect به URL نسبی
