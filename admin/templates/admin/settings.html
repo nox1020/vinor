@@ -322,12 +322,13 @@
     <div id="adminApkUploadStatus" class="hidden text-sm rounded-lg px-3 py-2" data-apk-status role="status" aria-live="polite"></div>
 
     {% set _apk_sms_default = 'نسخه {version}\n📢 وینور بروزرسانی شد!\nبرای تجربه بهتر، نسخه جدید رو از لینک زیر دریافت کنید 👇\n🌐 {link}' %}
+    {% set _apk_sms_group = apk_sms_group or settings.android_apk_update_sms_recipient_group or 'all_users' %}
     <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-950/50 p-4 space-y-3" data-apk-sms-box>
       <div class="flex flex-wrap items-start justify-between gap-2">
         <div class="min-w-0">
           <h4 class="text-sm font-bold text-gray-900 dark:text-white">پیامک بروزرسانی</h4>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            با آپلود نسخهٔ جدید، برای همکاران تأییدشده ارسال می‌شود.
+            با آپلود نسخهٔ جدید، به گروه انتخاب‌شده ارسال می‌شود.
             متغیرها: <code class="text-[11px]" dir="ltr">{version}</code> و <code class="text-[11px]" dir="ltr">{link}</code>
           </p>
         </div>
@@ -336,6 +337,31 @@
           ارسال پیامک پس از آپلود
         </label>
       </div>
+
+      <div class="space-y-1.5">
+        <label for="android_apk_update_sms_recipient_group" class="block text-xs font-semibold text-gray-700 dark:text-gray-200">گروه ارسال</label>
+        <select id="android_apk_update_sms_recipient_group"
+                class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
+                data-apk-sms-group
+                aria-label="گروه گیرندگان پیامک بروزرسانی">
+          {% if apk_sms_groups %}
+            {% for g in apk_sms_groups %}
+            <option value="{{ g.key }}"
+                    {% if _apk_sms_group == g.key %}selected{% endif %}
+                    data-hint="{{ g.hint }}"
+                    data-count="{{ g.count }}">
+              {{ g.label }}{% if g.count is not none %} ({{ g.count }}){% endif %}
+            </option>
+            {% endfor %}
+          {% else %}
+            <option value="all_users" {% if _apk_sms_group == 'all_users' %}selected{% endif %}>همه کاربران</option>
+            <option value="approved" {% if _apk_sms_group == 'approved' %}selected{% endif %}>همکاران تأییدشده</option>
+            <option value="customer_club" {% if _apk_sms_group == 'customer_club' %}selected{% endif %}>باشگاه مشتریان</option>
+          {% endif %}
+        </select>
+        <p class="text-[11px] text-gray-500 dark:text-gray-400" data-apk-sms-group-hint></p>
+      </div>
+
       <textarea id="android_apk_update_sms_message" rows="5" dir="rtl"
                 class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
                 data-apk-sms-template
@@ -350,7 +376,7 @@
                 data-apk-sms-save
                 data-apk-sms-template-url="{{ url_for('admin.settings_apk_sms_template') }}">
           <i class="fa-solid fa-floppy-disk"></i>
-          ذخیره متن پیامک
+          ذخیره متن و گروه
         </button>
         <span class="text-[11px] text-gray-500 dark:text-gray-400 hidden" data-apk-sms-save-status></span>
       </div>
@@ -363,9 +389,16 @@
         <i class="fa-solid fa-link mt-0.5 text-vinor-600"></i>
         <div class="min-w-0 space-y-1">
           <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">لینک کوتاه دانلود</div>
+          {% if settings.android_apk_version %}
+          {% set _apk_dl_name = 'vinor-' ~ (settings.android_apk_version|string) ~ '.apk' %}
+          <a class="text-blue-600 dark:text-blue-400 underline break-all" href="{{ url_for('main.short_apk_download', download_name=_apk_dl_name) }}" target="_blank" rel="noopener" data-apk-short-url>
+            {{ url_for('main.short_apk_download', download_name=_apk_dl_name, _external=True) }}
+          </a>
+          {% else %}
           <a class="text-blue-600 dark:text-blue-400 underline break-all" href="{{ url_for('main.short_apk_download') }}" target="_blank" rel="noopener" data-apk-short-url>
             {{ url_for('main.short_apk_download', _external=True) }}
           </a>
+          {% endif %}
           <div class="text-xs text-gray-500 dark:text-gray-400 pt-1">فایل:</div>
           <a class="text-blue-600 dark:text-blue-400 underline break-all text-xs" href="{{ settings.android_apk_url or '#' }}" target="_blank" rel="noopener" data-apk-file-url>
             {{ settings.android_apk_url or '—' }}
@@ -412,6 +445,8 @@
   var smsTpl = card.querySelector('[data-apk-sms-template]');
   var smsPreview = card.querySelector('[data-apk-sms-preview]');
   var smsSend = card.querySelector('[data-apk-sms-send]');
+  var smsGroup = card.querySelector('[data-apk-sms-group]');
+  var smsGroupHint = card.querySelector('[data-apk-sms-group-hint]');
   var smsSaveBtn = card.querySelector('[data-apk-sms-save]');
   var smsSaveStatus = card.querySelector('[data-apk-sms-save-status]');
   var smsTemplateUrl = smsSaveBtn ? (smsSaveBtn.getAttribute('data-apk-sms-template-url') || '') : '';
@@ -419,6 +454,25 @@
   var csrfToken = csrf ? csrf.value : '';
   var busy = false;
   var DEFAULT_LINK = 'vinor.ir/d';
+
+  function selectedGroupLabel() {
+    if (!smsGroup || !smsGroup.options || smsGroup.selectedIndex < 0) return 'همه کاربران';
+    var opt = smsGroup.options[smsGroup.selectedIndex];
+    return (opt && opt.textContent || '').replace(/\s*\(\d+\)\s*$/, '').trim() || 'همه کاربران';
+  }
+
+  function refreshGroupHint() {
+    if (!smsGroup || !smsGroupHint) return;
+    var opt = smsGroup.options[smsGroup.selectedIndex];
+    var hint = opt ? (opt.getAttribute('data-hint') || '') : '';
+    var count = opt ? opt.getAttribute('data-count') : '';
+    var parts = [];
+    if (hint) parts.push(hint);
+    if (count !== null && count !== '' && count !== 'undefined') {
+      parts.push(count + ' گیرنده');
+    }
+    smsGroupHint.textContent = parts.join(' — ');
+  }
 
   function setDropBusy(on) {
     if (!dropzone) return;
@@ -482,6 +536,10 @@
     if (smsTpl && data.android_apk_update_sms_message) {
       smsTpl.value = data.android_apk_update_sms_message;
     }
+    if (smsGroup && data.android_apk_update_sms_recipient_group) {
+      smsGroup.value = data.android_apk_update_sms_recipient_group;
+      refreshGroupHint();
+    }
     if (smsPreview && data.sms_preview) {
       smsPreview.textContent = data.sms_preview;
     } else {
@@ -520,8 +578,9 @@
   function uploadStatusText(data) {
     var ver = data.android_apk_version || '';
     var base = 'آپلود شد — نسخه ' + ver + ' ذخیره گردید.';
+    var groupLabel = data.sms_recipient_group_label || selectedGroupLabel();
     if (data.sms_queued) {
-      return base + ' پیامک بروزرسانی برای همکاران در صف ارسال قرار گرفت.';
+      return base + ' پیامک بروزرسانی برای «' + groupLabel + '» در صف ارسال قرار گرفت.';
     }
     if (data.sms_skipped_same_version) {
       return base + ' نسخه تغییر نکرد — پیامک ارسال نشد.';
@@ -545,6 +604,7 @@
     var fd = new FormData();
     fd.append('android_apk', file);
     if (smsTpl) fd.append('android_apk_update_sms_message', smsTpl.value || '');
+    if (smsGroup) fd.append('android_apk_update_sms_recipient_group', smsGroup.value || 'all_users');
     fd.append('send_update_sms', (smsSend && smsSend.checked) ? '1' : '0');
     if (csrfToken) fd.append('csrf_token', csrfToken);
     fetch(uploadUrl, {
@@ -588,6 +648,7 @@
     }
     var fd = new FormData();
     fd.append('android_apk_update_sms_message', smsTpl.value || '');
+    if (smsGroup) fd.append('android_apk_update_sms_recipient_group', smsGroup.value || 'all_users');
     if (csrfToken) fd.append('csrf_token', csrfToken);
     fetch(smsTemplateUrl, {
       method: 'POST',
@@ -607,6 +668,10 @@
         if (payload.data.android_apk_update_sms_message) {
           smsTpl.value = payload.data.android_apk_update_sms_message;
         }
+        if (smsGroup && payload.data.android_apk_update_sms_recipient_group) {
+          smsGroup.value = payload.data.android_apk_update_sms_recipient_group;
+          refreshGroupHint();
+        }
         if (smsPreview && payload.data.sms_preview) {
           smsPreview.textContent = payload.data.sms_preview;
         } else {
@@ -614,7 +679,8 @@
         }
         if (smsSaveStatus) {
           smsSaveStatus.classList.add('text-emerald-600');
-          smsSaveStatus.textContent = 'متن پیامک ذخیره شد.';
+          var gLabel = payload.data.sms_recipient_group_label || selectedGroupLabel();
+          smsSaveStatus.textContent = 'متن و گروه «' + gLabel + '» ذخیره شد.';
         }
       })
       .catch(function (err) {
@@ -632,6 +698,10 @@
   if (smsTpl) {
     smsTpl.addEventListener('input', refreshSmsPreview);
     refreshSmsPreview();
+  }
+  if (smsGroup) {
+    smsGroup.addEventListener('change', refreshGroupHint);
+    refreshGroupHint();
   }
   if (smsSaveBtn) {
     smsSaveBtn.addEventListener('click', function (e) {

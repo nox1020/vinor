@@ -662,13 +662,19 @@
     }
   }
 
+  function apkDownloadFilename(version) {
+    var ver = String(version || serverApkVersion || '').trim().replace(/[^\w.\-]+/g, '');
+    return ver ? ('vinor-' + ver + '.apk') : 'vinor.apk';
+  }
+
   function triggerApkInstallDownload(url) {
     var abs = String(url || serverApkUrl || '').trim();
     if (!abs || abs === '#') return;
+    var fname = apkDownloadFilename(serverApkVersion);
     if (isVinorApkClient()) {
       try {
         if (window.VinorNativeDownload && typeof window.VinorNativeDownload.downloadUrl === 'function') {
-          window.VinorNativeDownload.downloadUrl(abs, 'vinor.apk');
+          window.VinorNativeDownload.downloadUrl(abs, fname);
           return;
         }
       } catch (_) {}

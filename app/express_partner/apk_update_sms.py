@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""پیامک بروزرسانی APK به همکاران تأییدشده."""
+"""پیامک بروزرسانی APK به گروه گیرندگان انتخاب‌شده."""
 from __future__ import annotations
 
 import threading
@@ -8,7 +8,12 @@ from typing import Any, Dict, Optional
 
 from flask import Flask, current_app
 
-from .new_land_sms import list_approved_express_partners
+from admin.sms_recipients import (
+    RECIPIENT_GROUP_ALL_USERS,
+    RECIPIENT_GROUP_LABELS,
+    load_sms_recipients,
+    recipient_group_label,
+)
 from ..services.sms import send_sms_direct
 from ..services.sms_config import get_sms_line_number
 from ..utils.storage import load_settings, load_sms_history, save_sms_history
@@ -20,10 +25,22 @@ DEFAULT_APK_UPDATE_SMS = (
     "🌐 {link}"
 )
 DEFAULT_APK_UPDATE_LINK = "vinor.ir/d"
+DEFAULT_APK_UPDATE_RECIPIENT_GROUP = RECIPIENT_GROUP_ALL_USERS
 
 
 def default_apk_update_sms_message() -> str:
     return DEFAULT_APK_UPDATE_SMS
+
+
+def default_apk_update_sms_recipient_group() -> str:
+    return DEFAULT_APK_UPDATE_RECIPIENT_GROUP
+
+
+def normalize_apk_update_sms_group(value: Optional[str]) -> str:
+    key = (value or DEFAULT_APK_UPDATE_RECIPIENT_GROUP).strip().lower()
+    if key in RECIPIENT_GROUP_LABELS:
+        return key
+    return DEFAULT_APK_UPDATE_RECIPIENT_GROUP
 
 
 def render_apk_update_sms_message(
@@ -35,7 +52,6 @@ def render_apk_update_sms_message(
     tpl = (template or "").strip() or DEFAULT_APK_UPDATE_SMS
     ver = (version or "").strip() or "—"
     href = (link or "").strip() or DEFAULT_APK_UPDATE_LINK
-    # پشتیبانی از هر دو شکل placeholder
     out = (
         tpl.replace("{version}", ver)
         .replace("{VERSION}", ver)
@@ -65,27 +81,41 @@ def notify_partners_apk_update(
     version: str,
     message: Optional[str] = None,
     link: str = DEFAULT_APK_UPDATE_LINK,
+    recipient_group: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """ارسال پیامک بروزرسانی اپ به همه همکاران تأییدشده."""
+    """ارسال پیامک بروزرسانی اپ به گروه گیرندگان انتخاب‌شده."""
     settings = load_settings(current_app) or {}
     line_number = (
         settings.get("sms_line_number") or get_sms_line_number() or "09981801922"
     ).strip()
+    group = normalize_apk_update_sms_group(
+        recipient_group
+        if recipient_group is not None
+        else settings.get("android_apk_update_sms_recipient_group")
+    )
+    group_label = recipient_group_label(group)
     template = (message or settings.get("android_apk_update_sms_message") or "").strip()
     body = render_apk_update_sms_message(template, version=version, link=link)
     if not body:
-        return {"ok": False, "skipped": True, "reason": "empty_message"}
+        return {"ok": False, "skipped": True, "reason": "empty_message", "recipient_group": group}
 
-    partners = list_approved_express_partners()
-    if not partners:
+    recipients = load_sms_recipients(group, limit=None, offset=0, validate=False)
+    if not recipients:
         current_app.logger.warning(
-            "APK update SMS skipped: no approved partners version=%s", version
+            "APK update SMS skipped: no recipients group=%s version=%s", group, version
         )
-        return {"ok": False, "skipped": True, "reason": "no_partners", "version": version}
+        return {
+            "ok": False,
+            "skipped": True,
+            "reason": "no_recipients",
+            "version": version,
+            "recipient_group": group,
+            "recipient_group_label": group_label,
+        }
 
     sent = 0
     failed = 0
-    for partner in partners:
+    for partner in recipients:
         phone = partner["phone"]
         try:
             result = send_sms_direct(mobile=phone, message=body, line_number=line_number)
@@ -100,6 +130,7 @@ def notify_partners_apk_update(
                 "recipient_name": partner.get("name"),
                 "version": version,
                 "link": link,
+                "recipient_group": group,
                 "message": body,
                 "success": ok,
                 "ok": ok,
@@ -112,7 +143,7 @@ def notify_partners_apk_update(
         except Exception as exc:
             failed += 1
             current_app.logger.exception(
-                "APK update SMS failed version=%s phone=%s", version, phone
+                "APK update SMS failed version=%s phone=%s group=%s", version, phone, group
             )
             _append_sms_history({
                 "type": "android_apk_update",
@@ -120,6 +151,7 @@ def notify_partners_apk_update(
                 "recipient_name": partner.get("name"),
                 "version": version,
                 "link": link,
+                "recipient_group": group,
                 "message": body,
                 "success": False,
                 "ok": False,
@@ -129,18 +161,21 @@ def notify_partners_apk_update(
             })
 
     current_app.logger.info(
-        "APK update SMS version=%s sent=%s failed=%s total=%s",
+        "APK update SMS version=%s group=%s sent=%s failed=%s total=%s",
         version,
+        group,
         sent,
         failed,
-        len(partners),
+        len(recipients),
     )
     return {
         "ok": sent > 0,
         "version": version,
+        "recipient_group": group,
+        "recipient_group_label": group_label,
         "sent": sent,
         "failed": failed,
-        "total": len(partners),
+        "total": len(recipients),
         "message": body,
     }
 
@@ -151,10 +186,16 @@ def _run_apk_update_sms_batch(
     version: str,
     message: str,
     link: str,
+    recipient_group: str,
 ) -> None:
     with app.app_context():
         try:
-            notify_partners_apk_update(version=version, message=message, link=link)
+            notify_partners_apk_update(
+                version=version,
+                message=message,
+                link=link,
+                recipient_group=recipient_group,
+            )
         except Exception:
             app.logger.exception("Background APK update SMS failed version=%s", version)
 
@@ -164,12 +205,18 @@ def notify_partners_apk_update_background(
     version: str,
     message: Optional[str] = None,
     link: str = DEFAULT_APK_UPDATE_LINK,
+    recipient_group: Optional[str] = None,
 ) -> None:
     """ارسال غیرمسدودکننده بعد از آپلود APK."""
     app = current_app._get_current_object()
     settings = load_settings(app) or {}
     template = (message or settings.get("android_apk_update_sms_message") or "").strip()
     body_tpl = template or DEFAULT_APK_UPDATE_SMS
+    group = normalize_apk_update_sms_group(
+        recipient_group
+        if recipient_group is not None
+        else settings.get("android_apk_update_sms_recipient_group")
+    )
     threading.Thread(
         target=_run_apk_update_sms_batch,
         kwargs={
@@ -177,6 +224,7 @@ def notify_partners_apk_update_background(
             "version": str(version or "").strip(),
             "message": body_tpl,
             "link": (link or DEFAULT_APK_UPDATE_LINK).strip(),
+            "recipient_group": group,
         },
         daemon=True,
         name=f"vinor-apk-update-sms-{version or 'x'}",

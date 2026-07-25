@@ -300,17 +300,47 @@ def short_referral(ref: str):
     return resp
 
 
-@main_bp.route("/d", endpoint="short_apk_download")
-def short_apk_download():
-    """لینک کوتاه دانلود APK."""
-    from ..utils.short_urls import apk_file_url_from_settings
+@main_bp.route("/d", defaults={"download_name": None}, endpoint="short_apk_download")
+@main_bp.route("/d/<path:download_name>", endpoint="short_apk_download")
+def short_apk_download(download_name=None):
+    """لینک کوتاه دانلود APK — نام فایل کاربر: vinor-{version}.apk"""
+    from flask import send_file
+
+    from ..utils.short_urls import (
+        apk_file_url_from_settings,
+        apk_public_download_filename,
+        resolve_apk_filesystem_path,
+    )
     from ..utils.storage import load_settings
 
-    target = apk_file_url_from_settings(load_settings() or {})
+    settings = load_settings() or {}
+    target = apk_file_url_from_settings(settings)
     if not target:
         abort(404)
+
+    download_as = apk_public_download_filename(settings)
+    # اگر کلاینت نام دیگری در URL گذاشته بود، فقط الگوی vinor-*.apk امن را بپذیر
+    if download_name:
+        base = os.path.basename(str(download_name).replace("\\", "/")).strip()
+        if base.lower().endswith(".apk") and base.lower().startswith("vinor"):
+            download_as = base
+
     if target.startswith(("http://", "https://")):
         return redirect(target, code=302)
+
+    fp, _ = resolve_apk_filesystem_path(settings)
+    if fp and os.path.isfile(fp):
+        resp = send_file(
+            fp,
+            mimetype="application/vnd.android.package-archive",
+            as_attachment=True,
+            download_name=download_as,
+            conditional=True,
+        )
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+
+    # مسیر ذخیره‌شده روی دیسک پیدا نشد — redirect به URL نسبی
     return redirect(target, code=302)
 
 
@@ -399,23 +429,24 @@ def uploaded_file(filename):
             fn_norm = (filename or '').replace('\\', '/')
             if fn_norm.lower().endswith('.apk') and fn_norm.startswith('apk/'):
                 try:
+                    from ..utils.short_urls import apk_public_download_filename
                     from ..utils.storage import load_settings
-                    settings = load_settings()
+                    settings = load_settings() or {}
                 except Exception:
                     settings = {}
                 wanted_url = str(settings.get('android_apk_url') or '')
-                orig_name = str(settings.get('android_apk_original_name') or '').strip()
-                if wanted_url and orig_name:
+                download_as = apk_public_download_filename(settings)
+                if wanted_url and download_as:
                     try:
                         wanted_base = os.path.basename(wanted_url)
                     except Exception:
                         wanted_base = ''
                     if wanted_base and wanted_base == os.path.basename(fn_norm):
                         try:
-                            disp = "attachment; filename*=UTF-8''" + quote(orig_name) + f"; filename=\"{orig_name}\""
+                            disp = "attachment; filename*=UTF-8''" + quote(download_as) + f'; filename=\"{download_as}\""
                             resp.headers['Content-Disposition'] = disp
                         except Exception:
-                            resp.headers['Content-Disposition'] = f'attachment; filename=\"{orig_name}\"'
+                            resp.headers['Content-Disposition'] = f'attachment; filename=\"{download_as}\"'
         except Exception:
             pass
         return resp

@@ -566,6 +566,7 @@ def _default_settings() -> Dict[str, Any]:
             'برای تجربه بهتر، نسخه جدید رو از لینک زیر دریافت کنید 👇\n'
             '🌐 {link}'
         ),
+        'android_apk_update_sms_recipient_group': 'all_users',
         # تنظیمات SMS
         'sms_line_number': '09981801922',  # شماره خط اختصاصی SMS
         # پیام درخواست همکاری (برای همکار)
@@ -2183,14 +2184,17 @@ def _save_uploaded_android_apk(
     *,
     sms_message: Optional[str] = None,
     send_update_sms: bool = True,
+    recipient_group: Optional[str] = None,
 ) -> Dict[str, Any]:
     """ذخیره APK + استخراج versionName + به‌روزرسانی settings. خطا → exception با پیام فارسی."""
     from app.express_partner.apk_update_sms import (
         DEFAULT_APK_UPDATE_LINK,
         default_apk_update_sms_message,
+        normalize_apk_update_sms_group,
         notify_partners_apk_update_background,
         render_apk_update_sms_message,
     )
+    from admin.sms_recipients import recipient_group_label
     from app.utils.apk_meta import extract_apk_version_name
 
     if not file_storage or not getattr(file_storage, "filename", None):
@@ -2258,6 +2262,12 @@ def _save_uploaded_android_apk(
     sms_tpl = (sms_message if sms_message is not None else current.get("android_apk_update_sms_message") or "").strip()
     if not sms_tpl:
         sms_tpl = default_apk_update_sms_message()
+    sms_group = normalize_apk_update_sms_group(
+        recipient_group
+        if recipient_group is not None
+        else current.get("android_apk_update_sms_recipient_group")
+    )
+    sms_group_label = recipient_group_label(sms_group)
 
     save_settings(
         {
@@ -2268,11 +2278,20 @@ def _save_uploaded_android_apk(
             "android_apk_sha256": sha256,
             "android_apk_original_name": original_name,
             "android_apk_update_sms_message": sms_tpl,
+            "android_apk_update_sms_recipient_group": sms_group,
         }
     )
     short_url = ""
     try:
-        short_url = url_for("main.short_apk_download", _external=True)
+        from app.utils.short_urls import public_apk_download_url
+
+        short_url = public_apk_download_url(
+            {
+                "android_apk_url": apk_url,
+                "android_apk_version": version,
+            },
+            external=True,
+        )
     except Exception:
         short_url = "/d"
     link = DEFAULT_APK_UPDATE_LINK
@@ -2285,6 +2304,7 @@ def _save_uploaded_android_apk(
                 version=version,
                 message=sms_tpl,
                 link=link,
+                recipient_group=sms_group,
             )
             sms_queued = True
         except Exception as e:
@@ -2299,6 +2319,8 @@ def _save_uploaded_android_apk(
         "android_apk_sha256": sha256,
         "android_apk_original_name": original_name,
         "android_apk_update_sms_message": sms_tpl,
+        "android_apk_update_sms_recipient_group": sms_group,
+        "sms_recipient_group_label": sms_group_label,
         "sms_preview": preview,
         "sms_queued": sms_queued,
         "sms_skipped_same_version": bool(version and version == prev_version),
@@ -2408,9 +2430,21 @@ def settings():
     lands = load_json(_lands_path())
     p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
     settings_data = get_settings()
-    return render_template('admin/settings.html',
-                           settings=settings_data,
-                           pending_count=p, approved_count=a, rejected_count=r)
+    from admin.sms_recipients import list_sms_recipient_groups_summary
+    from app.express_partner.apk_update_sms import normalize_apk_update_sms_group
+    apk_sms_groups = list_sms_recipient_groups_summary()
+    apk_sms_group = normalize_apk_update_sms_group(
+        (settings_data or {}).get('android_apk_update_sms_recipient_group')
+    )
+    return render_template(
+        'admin/settings.html',
+        settings=settings_data,
+        pending_count=p,
+        approved_count=a,
+        rejected_count=r,
+        apk_sms_groups=apk_sms_groups,
+        apk_sms_group=apk_sms_group,
+    )
 
 
 @admin_bp.route('/settings/apk-upload', methods=['POST'], endpoint='settings_apk_upload')
@@ -2419,6 +2453,7 @@ def settings_apk_upload():
     """آپلود فوری APK با انتخاب فایل — نسخه از مانیفست خوانده می‌شود."""
     f = request.files.get('android_apk') or request.files.get('file')
     sms_message = request.form.get('android_apk_update_sms_message')
+    recipient_group = request.form.get('android_apk_update_sms_recipient_group')
     send_flag = (request.form.get('send_update_sms') or '1').strip().lower()
     send_update_sms = send_flag not in ('0', 'false', 'no', 'off')
     try:
@@ -2426,6 +2461,7 @@ def settings_apk_upload():
             f,
             sms_message=sms_message,
             send_update_sms=send_update_sms,
+            recipient_group=recipient_group,
         )
         return jsonify(result)
     except ValueError as e:
@@ -2438,17 +2474,25 @@ def settings_apk_upload():
 @admin_bp.route('/settings/apk-sms-template', methods=['POST'], endpoint='settings_apk_sms_template')
 @login_required
 def settings_apk_sms_template():
-    """ذخیره متن قابل‌ویرایش پیامک بروزرسانی اپ."""
+    """ذخیره متن و گروه پیامک بروزرسانی اپ."""
+    from admin.sms_recipients import recipient_group_label
     from app.express_partner.apk_update_sms import (
         DEFAULT_APK_UPDATE_LINK,
         default_apk_update_sms_message,
+        normalize_apk_update_sms_group,
         render_apk_update_sms_message,
     )
 
     raw = (request.form.get('android_apk_update_sms_message') or '').strip()
     if not raw:
         raw = default_apk_update_sms_message()
-    save_settings({'android_apk_update_sms_message': raw})
+    group = normalize_apk_update_sms_group(
+        request.form.get('android_apk_update_sms_recipient_group')
+    )
+    save_settings({
+        'android_apk_update_sms_message': raw,
+        'android_apk_update_sms_recipient_group': group,
+    })
     version = str((get_settings() or {}).get('android_apk_version') or '1.0.0').strip() or '1.0.0'
     preview = render_apk_update_sms_message(
         raw,
@@ -2458,6 +2502,8 @@ def settings_apk_sms_template():
     return jsonify({
         'ok': True,
         'android_apk_update_sms_message': raw,
+        'android_apk_update_sms_recipient_group': group,
+        'sms_recipient_group_label': recipient_group_label(group),
         'sms_preview': preview,
     })
 

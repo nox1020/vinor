@@ -273,6 +273,7 @@ def load_settings(app=None):
             "برای تجربه بهتر، نسخه جدید رو از لینک زیر دریافت کنید 👇\n"
             "🌐 {link}"
         ),
+        "android_apk_update_sms_recipient_group": "all_users",
         "sms_line_number": "09981801922",
         "partner_application_sms_message": "درخواست همکاری شما ثبت شد و در حال بررسی است. وینور",
         "partner_approval_sms_message": "پنل همکاری وینور برای شما فعال شد. وینور",
@@ -302,6 +303,7 @@ def load_settings_cached(app=None, default_settings=None):
                 "برای تجربه بهتر، نسخه جدید رو از لینک زیر دریافت کنید 👇\n"
                 "🌐 {link}"
             ),
+            "android_apk_update_sms_recipient_group": "all_users",
             "sms_line_number": "09981801922",
             "partner_application_sms_message": "درخواست همکاری شما ثبت شد و در حال بررسی است. وینور",
             "partner_approval_sms_message": "پنل همکاری وینور برای شما فعال شد. وینور",
