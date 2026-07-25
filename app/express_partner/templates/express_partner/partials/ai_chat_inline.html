@@ -495,8 +495,15 @@
   #homeDashboardPage.ai-home-is-empty .vn-home-composer-dock::before {
     display: none;
   }
+  /* بدو ورود: بنر دانلود/بروزرسانی بالای کامپوزر — صریحاً نشان بده */
   #homeDashboardPage.ai-home-is-empty .vinor-apk-strip-host {
+    display: block !important;
+  }
+  #homeDashboardPage.ai-home-is-empty .vinor-apk-strip-host:not(:has([data-apk-strip])) {
     display: none !important;
+  }
+  #homeDashboardPage.ai-home-is-empty .vinor-apk-strip-host .vinor-apk-download-strip {
+    margin-bottom: 0.55rem;
   }
   #homeDashboardPage.ai-home-is-empty #aiChatForm.ai-composer {
     padding: 0 1.15rem;

@@ -497,7 +497,9 @@
     } catch (_) {}
     if (strip) {
       const fallbackUrl = strip.getAttribute('data-apk-update-url') || strip.href;
-      if (fallbackUrl && fallbackUrl !== '#') window.location.href = fallbackUrl;
+      if (fallbackUrl && fallbackUrl !== '#') {
+        triggerApkInstallDownload(fallbackUrl);
+      }
     }
   }
 
@@ -634,13 +636,75 @@
     } catch (_) {}
   });
 
+  function startBrowserApkDownload(url) {
+    var abs = String(url || '').trim();
+    if (!abs || abs === '#') return false;
+    try {
+      abs = new URL(abs, window.location.origin).href;
+    } catch (_) {}
+    /*
+      ناوبری مستقیم به /d وقتی اپ نصب است → Android App Links اپ را باز می‌کند
+      و دانلود از دست می‌رود. iframe معمولاً App Link را تریگر نمی‌کند.
+    */
+    try {
+      var frame = document.createElement('iframe');
+      frame.setAttribute('hidden', 'hidden');
+      frame.setAttribute('aria-hidden', 'true');
+      frame.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none';
+      frame.src = abs;
+      document.body.appendChild(frame);
+      window.setTimeout(function () {
+        try { frame.remove(); } catch (_) {}
+      }, 90000);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function triggerApkInstallDownload(url) {
+    var abs = String(url || serverApkUrl || '').trim();
+    if (!abs || abs === '#') return;
+    if (isVinorApkClient()) {
+      try {
+        if (window.VinorNativeDownload && typeof window.VinorNativeDownload.downloadUrl === 'function') {
+          window.VinorNativeDownload.downloadUrl(abs, 'vinor.apk');
+          return;
+        }
+      } catch (_) {}
+      ensureNativeApkDownload({ url: abs, version: serverApkVersion });
+      return;
+    }
+    if (!startBrowserApkDownload(abs)) {
+      try { window.location.assign(abs); } catch (_) {}
+    }
+  }
+
   document.addEventListener('click', function (e) {
     const strip = e.target.closest && e.target.closest('[data-apk-strip]');
-    if (!strip || strip.getAttribute('data-apk-strip-mode') !== 'update') return;
-    if (!isVinorApkClient()) return;
-    e.preventDefault();
-    e.stopPropagation();
-    triggerApkUpdateInstall();
+    if (!strip) return;
+    const mode = strip.getAttribute('data-apk-strip-mode') || 'install';
+    const url = (
+      strip.getAttribute('data-apk-update-url') ||
+      strip.getAttribute('href') ||
+      serverApkUrl ||
+      ''
+    ).trim();
+
+    if (mode === 'update' && isVinorApkClient()) {
+      e.preventDefault();
+      e.stopPropagation();
+      triggerApkUpdateInstall();
+      return;
+    }
+
+    /* نصب از مرورگر/وب‌ویو: جلوگیری از تداخل App Links */
+    if (mode === 'install' || (mode === 'update' && !isVinorApkClient())) {
+      if (!url || url === '#') return;
+      e.preventDefault();
+      e.stopPropagation();
+      triggerApkInstallDownload(url);
+    }
   }, true);
 
   window.addEventListener('vinor:notifications:update', function (ev) {
