@@ -267,6 +267,12 @@ def load_settings(app=None):
         "android_apk_size_bytes": "",
         "android_apk_sha256": "",
         "android_apk_original_name": "",
+        "android_apk_update_sms_message": (
+            "نسخه {version}\n"
+            "📢 وینور بروزرسانی شد!\n"
+            "برای تجربه بهتر، نسخه جدید رو از لینک زیر دریافت کنید 👇\n"
+            "🌐 {link}"
+        ),
         "sms_line_number": "09981801922",
         "partner_application_sms_message": "درخواست همکاری شما ثبت شد و در حال بررسی است. وینور",
         "partner_approval_sms_message": "پنل همکاری وینور برای شما فعال شد. وینور",
@@ -290,6 +296,12 @@ def load_settings_cached(app=None, default_settings=None):
             "android_apk_size_bytes": "",
             "android_apk_sha256": "",
             "android_apk_original_name": "",
+            "android_apk_update_sms_message": (
+                "نسخه {version}\n"
+                "📢 وینور بروزرسانی شد!\n"
+                "برای تجربه بهتر، نسخه جدید رو از لینک زیر دریافت کنید 👇\n"
+                "🌐 {link}"
+            ),
             "sms_line_number": "09981801922",
             "partner_application_sms_message": "درخواست همکاری شما ثبت شد و در حال بررسی است. وینور",
             "partner_approval_sms_message": "پنل همکاری وینور برای شما فعال شد. وینور",

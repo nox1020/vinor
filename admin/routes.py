@@ -559,6 +559,13 @@ def _default_settings() -> Dict[str, Any]:
         'android_apk_size_bytes': '',
         'android_apk_sha256': '',
         'android_apk_original_name': '',
+        # پیامک بروزرسانی اپ — {version} و {link}
+        'android_apk_update_sms_message': (
+            'نسخه {version}\n'
+            '📢 وینور بروزرسانی شد!\n'
+            'برای تجربه بهتر، نسخه جدید رو از لینک زیر دریافت کنید 👇\n'
+            '🌐 {link}'
+        ),
         # تنظیمات SMS
         'sms_line_number': '09981801922',  # شماره خط اختصاصی SMS
         # پیام درخواست همکاری (برای همکار)
@@ -2171,138 +2178,230 @@ def notifications_test():
         stats=stats
     )
 
+def _save_uploaded_android_apk(
+    file_storage,
+    *,
+    sms_message: Optional[str] = None,
+    send_update_sms: bool = True,
+) -> Dict[str, Any]:
+    """ذخیره APK + استخراج versionName + به‌روزرسانی settings. خطا → exception با پیام فارسی."""
+    from app.express_partner.apk_update_sms import (
+        DEFAULT_APK_UPDATE_LINK,
+        default_apk_update_sms_message,
+        notify_partners_apk_update_background,
+        render_apk_update_sms_message,
+    )
+    from app.utils.apk_meta import extract_apk_version_name
+
+    if not file_storage or not getattr(file_storage, "filename", None):
+        raise ValueError("فایلی انتخاب نشده است.")
+    fname_lower = str(file_storage.filename or "").lower()
+    if not fname_lower.endswith(".apk"):
+        raise ValueError("فقط فایل APK مجاز است.")
+
+    max_bytes = 200 * 1024 * 1024
+    content_len = getattr(file_storage, "content_length", None)
+    if content_len and content_len > max_bytes:
+        raise ValueError("حجم فایل بیش از ۲۰۰ مگابایت است.")
+
+    uploads_root = os.path.join(
+        current_app.config.get("UPLOAD_FOLDER")
+        or os.path.join(current_app.root_path, "data", "uploads"),
+        "apk",
+    )
+    os.makedirs(uploads_root, exist_ok=True)
+    ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    safe_name = secure_filename(f"vinor_{ts}.apk")
+    dest = os.path.join(uploads_root, safe_name)
+    file_storage.save(dest)
+
+    try:
+        size_bytes = os.path.getsize(dest)
+    except Exception:
+        size_bytes = None
+    if size_bytes is not None and size_bytes > max_bytes:
+        try:
+            os.remove(dest)
+        except Exception:
+            pass
+        raise ValueError("حجم فایل بیش از ۲۰۰ مگابایت است.")
+
+    try:
+        import hashlib
+
+        h = hashlib.sha256()
+        with open(dest, "rb") as fp:
+            for chunk in iter(lambda: fp.read(8192), b""):
+                h.update(chunk)
+        sha256 = h.hexdigest()
+    except Exception:
+        sha256 = ""
+
+    try:
+        original_name = secure_filename(file_storage.filename)
+    except Exception:
+        original_name = ""
+
+    version = extract_apk_version_name(dest, original_name=original_name or file_storage.filename)
+    if not version:
+        try:
+            os.remove(dest)
+        except Exception:
+            pass
+        raise ValueError("نسخه از فایل APK خوانده نشد. فایل معتبر وینور انتخاب کنید.")
+
+    current = get_settings()
+    prev_version = str(current.get("android_apk_version") or "").strip()
+    apk_url = f"/uploads/apk/{safe_name}"
+    updated_at = datetime.utcnow().isoformat() + "Z"
+
+    sms_tpl = (sms_message if sms_message is not None else current.get("android_apk_update_sms_message") or "").strip()
+    if not sms_tpl:
+        sms_tpl = default_apk_update_sms_message()
+
+    save_settings(
+        {
+            "android_apk_url": apk_url,
+            "android_apk_version": version,
+            "android_apk_updated_at": updated_at,
+            "android_apk_size_bytes": size_bytes if size_bytes is not None else "",
+            "android_apk_sha256": sha256,
+            "android_apk_original_name": original_name,
+            "android_apk_update_sms_message": sms_tpl,
+        }
+    )
+    short_url = ""
+    try:
+        short_url = url_for("main.short_apk_download", _external=True)
+    except Exception:
+        short_url = "/d"
+    link = DEFAULT_APK_UPDATE_LINK
+    preview = render_apk_update_sms_message(sms_tpl, version=version, link=link)
+
+    sms_queued = False
+    if send_update_sms and version and version != prev_version:
+        try:
+            notify_partners_apk_update_background(
+                version=version,
+                message=sms_tpl,
+                link=link,
+            )
+            sms_queued = True
+        except Exception as e:
+            current_app.logger.exception("Failed to queue APK update SMS: %s", e)
+
+    return {
+        "ok": True,
+        "android_apk_url": apk_url,
+        "android_apk_version": version,
+        "android_apk_updated_at": updated_at,
+        "android_apk_size_bytes": size_bytes if size_bytes is not None else "",
+        "android_apk_sha256": sha256,
+        "android_apk_original_name": original_name,
+        "android_apk_update_sms_message": sms_tpl,
+        "sms_preview": preview,
+        "sms_queued": sms_queued,
+        "sms_skipped_same_version": bool(version and version == prev_version),
+        "short_url": short_url,
+    }
+
+
 @admin_bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
     if request.method == 'POST':
         defaults = _default_settings()
-        approval_method = request.form.get('approval_method', 'manual')
-        if approval_method not in ('manual', 'auto'):
-            approval_method = 'manual'
-
-        # مقدار انتخابی از UI: 0 (نامحدود) یا 30/60/90
-        raw_exp = request.form.get('ad_expiry_days', '30')
-        try:
-            ad_expiry_days = int(raw_exp)
-        except Exception:
-            ad_expiry_days = 30
-        if ad_expiry_days < 0:
-            ad_expiry_days = 0
-        if ad_expiry_days not in (0, 30, 60, 90):
-            ad_expiry_days = 30
-
-        try:
-            post_price_toman = int(request.form.get('ad_post_price_toman', '10000') or '10000')
-        except Exception:
-            post_price_toman = 10000
-        if post_price_toman < 0:
-            post_price_toman = 0
-
-        # پورسانت بازدید حذف شده — همیشه صفر
-        visit_commission_amount_toman = 0
-
-        # تنظیمات SMS — خط ارسال ثابت است
-        from app.services.sms_config import get_sms_line_number
-        sms_line_number = get_sms_line_number()
-        partner_application_sms_message = (
-            request.form.get('partner_application_sms_message', '').strip()
-            or defaults['partner_application_sms_message']
-        )
-        partner_approval_sms_message = (
-            request.form.get('partner_approval_sms_message', '').strip()
-            or defaults['partner_approval_sms_message']
-        )
-        partner_application_admin_phone = (
-            request.form.get('partner_application_admin_phone', '').strip()
-            or defaults['partner_application_admin_phone']
-        )
-        partner_application_admin_sms_message = (
-            request.form.get('partner_application_admin_sms_message', '').strip()
-            or defaults['partner_application_admin_sms_message']
-        )
-
-        # Android APK upload/version
-        android_apk_version = (request.form.get('android_apk_version') or '').strip()
-        android_apk_url = None
-        f = request.files.get('android_apk')
-        apk_uploaded = bool(f and f.filename)
-        android_apk_size_bytes = None
-        android_apk_sha256 = None
-        android_apk_original_name = None
-        if apk_uploaded:
-            try:
-                # Validate extension and (approx) size
-                fname_lower = f.filename.lower()
-                if not fname_lower.endswith('.apk'):
-                    raise Exception('BAD_EXT')
-                # Max 200MB
-                max_bytes = 200 * 1024 * 1024
-                content_len = getattr(f, 'content_length', None)
-                if content_len and content_len > max_bytes:
-                    raise Exception('FILE_TOO_LARGE')
-                uploads_root = os.path.join(current_app.config.get('UPLOAD_FOLDER') or os.path.join(current_app.root_path, 'data', 'uploads'), 'apk')
-                os.makedirs(uploads_root, exist_ok=True)
-                ts = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-                safe_name = secure_filename(f"vinor_{ts}.apk")
-                dest = os.path.join(uploads_root, safe_name)
-                f.save(dest)
-                # keep original client filename (sanitized) for download display
-                try:
-                    android_apk_original_name = secure_filename(f.filename)
-                except Exception:
-                    android_apk_original_name = None
-                # Post-save validations and metadata
-                try:
-                    android_apk_size_bytes = os.path.getsize(dest)
-                except Exception:
-                    android_apk_size_bytes = None
-                try:
-                    import hashlib
-                    h = hashlib.sha256()
-                    with open(dest, 'rb') as _fp:
-                        for chunk in iter(lambda: _fp.read(8192), b''):
-                            h.update(chunk)
-                    android_apk_sha256 = h.hexdigest()
-                except Exception:
-                    android_apk_sha256 = None
-                # public URL via /uploads/ path
-                android_apk_url = f"/uploads/apk/{safe_name}"
-            except Exception as e:
-                current_app.logger.exception("APK upload failed: %s", e)
-                flash('خطا در بارگذاری فایل APK.', 'error')
-
-        # merge with existing settings to preserve APK url when no new file
+        scope = (request.form.get('settings_scope') or 'site').strip().lower()
+        if scope not in ('site', 'app', 'all'):
+            scope = 'site'
         current = get_settings()
-        if android_apk_url is None:
-            android_apk_url = current.get('android_apk_url', '') or ''
-        if apk_uploaded and android_apk_url:
-            android_apk_updated_at = datetime.utcnow().isoformat() + 'Z'
-        else:
-            android_apk_updated_at = current.get('android_apk_updated_at') or ''
-        if not android_apk_version:
-            android_apk_version = current.get('android_apk_version', '') or ''
-        if android_apk_original_name is None:
-            android_apk_original_name = current.get('android_apk_original_name', '') or ''
+        patch: Dict[str, Any] = {}
 
-        save_settings({
-            'approval_method': approval_method,
-            'ad_expiry_days': ad_expiry_days,
-            'show_submit_button': (request.form.get('show_submit_button') == 'on'),
-            'ad_post_price_toman': post_price_toman,
-            'visit_commission_amount_toman': visit_commission_amount_toman,
-            'sms_line_number': sms_line_number,
-            'partner_application_sms_message': partner_application_sms_message,
-            'partner_approval_sms_message': partner_approval_sms_message,
-            'partner_application_admin_phone': partner_application_admin_phone,
-            'partner_application_admin_sms_message': partner_application_admin_sms_message,
-            'android_apk_url': android_apk_url,
-            'android_apk_version': android_apk_version,
-            'android_apk_updated_at': android_apk_updated_at,
-            'android_apk_size_bytes': android_apk_size_bytes if android_apk_size_bytes is not None else current.get('android_apk_size_bytes', ''),
-            'android_apk_sha256': android_apk_sha256 if android_apk_sha256 is not None else current.get('android_apk_sha256', ''),
-            'android_apk_original_name': android_apk_original_name,
-        })
-        flash('تنظیمات با موفقیت ذخیره شد.', 'success')
+        if scope in ('site', 'all'):
+            approval_method = request.form.get('approval_method', 'manual')
+            if approval_method not in ('manual', 'auto'):
+                approval_method = 'manual'
+
+            # مقدار انتخابی از UI: 0 (نامحدود) یا 30/60/90
+            raw_exp = request.form.get('ad_expiry_days', '30')
+            try:
+                ad_expiry_days = int(raw_exp)
+            except Exception:
+                ad_expiry_days = 30
+            if ad_expiry_days < 0:
+                ad_expiry_days = 0
+            if ad_expiry_days not in (0, 30, 60, 90):
+                ad_expiry_days = 30
+
+            try:
+                post_price_toman = int(request.form.get('ad_post_price_toman', '10000') or '10000')
+            except Exception:
+                post_price_toman = 10000
+            if post_price_toman < 0:
+                post_price_toman = 0
+
+            # پورسانت بازدید حذف شده — همیشه صفر
+            visit_commission_amount_toman = 0
+
+            # تنظیمات SMS — خط ارسال ثابت است
+            from app.services.sms_config import get_sms_line_number
+            sms_line_number = get_sms_line_number()
+            partner_application_sms_message = (
+                request.form.get('partner_application_sms_message', '').strip()
+                or defaults['partner_application_sms_message']
+            )
+            partner_approval_sms_message = (
+                request.form.get('partner_approval_sms_message', '').strip()
+                or defaults['partner_approval_sms_message']
+            )
+            partner_application_admin_phone = (
+                request.form.get('partner_application_admin_phone', '').strip()
+                or defaults['partner_application_admin_phone']
+            )
+            partner_application_admin_sms_message = (
+                request.form.get('partner_application_admin_sms_message', '').strip()
+                or defaults['partner_application_admin_sms_message']
+            )
+
+            patch.update({
+                'approval_method': approval_method,
+                'ad_expiry_days': ad_expiry_days,
+                'show_submit_button': (request.form.get('show_submit_button') == 'on'),
+                'ad_post_price_toman': post_price_toman,
+                'visit_commission_amount_toman': visit_commission_amount_toman,
+                'sms_line_number': sms_line_number,
+                'partner_application_sms_message': partner_application_sms_message,
+                'partner_approval_sms_message': partner_approval_sms_message,
+                'partner_application_admin_phone': partner_application_admin_phone,
+                'partner_application_admin_sms_message': partner_application_admin_sms_message,
+            })
+
+        if scope in ('app', 'all'):
+            # آپلود فوری از UI جداست؛ اینجا فقط نسخهٔ دستی (در صورت ارسال بدون فایل)
+            f = request.files.get('android_apk')
+            if f and f.filename:
+                try:
+                    _save_uploaded_android_apk(f)
+                    flash('اپلیکیشن با موفقیت آپلود شد.', 'success')
+                except ValueError as e:
+                    flash(str(e) or 'خطا در بارگذاری فایل APK.', 'error')
+                except Exception as e:
+                    current_app.logger.exception("APK upload failed: %s", e)
+                    flash('خطا در بارگذاری فایل APK.', 'error')
+                return redirect(url_for('admin.settings'))
+
+            android_apk_version = (request.form.get('android_apk_version') or '').strip()
+            if android_apk_version:
+                patch['android_apk_version'] = android_apk_version
+
+        if patch:
+            save_settings(patch)
+            if scope == 'app':
+                flash('تنظیمات اپلیکیشن ذخیره شد.', 'success')
+            elif scope == 'site':
+                flash('تنظیمات سایت ذخیره شد.', 'success')
+            else:
+                flash('تنظیمات با موفقیت ذخیره شد.', 'success')
         return redirect(url_for('admin.settings'))
 
     cleanup_expired_ads()
@@ -2312,6 +2411,55 @@ def settings():
     return render_template('admin/settings.html',
                            settings=settings_data,
                            pending_count=p, approved_count=a, rejected_count=r)
+
+
+@admin_bp.route('/settings/apk-upload', methods=['POST'], endpoint='settings_apk_upload')
+@login_required
+def settings_apk_upload():
+    """آپلود فوری APK با انتخاب فایل — نسخه از مانیفست خوانده می‌شود."""
+    f = request.files.get('android_apk') or request.files.get('file')
+    sms_message = request.form.get('android_apk_update_sms_message')
+    send_flag = (request.form.get('send_update_sms') or '1').strip().lower()
+    send_update_sms = send_flag not in ('0', 'false', 'no', 'off')
+    try:
+        result = _save_uploaded_android_apk(
+            f,
+            sms_message=sms_message,
+            send_update_sms=send_update_sms,
+        )
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e) or 'آپلود ناموفق بود.'}), 400
+    except Exception as e:
+        current_app.logger.exception("APK ajax upload failed: %s", e)
+        return jsonify({'ok': False, 'error': 'خطا در بارگذاری فایل APK.'}), 500
+
+
+@admin_bp.route('/settings/apk-sms-template', methods=['POST'], endpoint='settings_apk_sms_template')
+@login_required
+def settings_apk_sms_template():
+    """ذخیره متن قابل‌ویرایش پیامک بروزرسانی اپ."""
+    from app.express_partner.apk_update_sms import (
+        DEFAULT_APK_UPDATE_LINK,
+        default_apk_update_sms_message,
+        render_apk_update_sms_message,
+    )
+
+    raw = (request.form.get('android_apk_update_sms_message') or '').strip()
+    if not raw:
+        raw = default_apk_update_sms_message()
+    save_settings({'android_apk_update_sms_message': raw})
+    version = str((get_settings() or {}).get('android_apk_version') or '1.0.0').strip() or '1.0.0'
+    preview = render_apk_update_sms_message(
+        raw,
+        version=version,
+        link=DEFAULT_APK_UPDATE_LINK,
+    )
+    return jsonify({
+        'ok': True,
+        'android_apk_update_sms_message': raw,
+        'sms_preview': preview,
+    })
 
 
 # -----------------------------------------------------------------------------

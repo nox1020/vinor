@@ -11,16 +11,16 @@
       تنظیمات سایت
     </h2>
     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-      تأیید آگهی، هزینه ثبت، پیامک‌ها و اپ اندروید
+      تأیید آگهی، هزینه ثبت، پیامک‌ها و درخواست همکاری
     </p>
   </div>
 
   <form method="post"
         action="{{ url_for('admin.settings') }}"
         class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm px-4 sm:px-6 py-5 space-y-6"
-        enctype="multipart/form-data"
         autocomplete="off">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="settings_scope" value="site">
 
     <!-- آگهی‌ها -->
     <section class="space-y-4">
@@ -103,61 +103,6 @@
 
     <div class="border-t border-gray-200 dark:border-gray-700"></div>
 
-    <!-- Android APK -->
-    <section class="space-y-4">
-      <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <i class="fa-brands fa-android text-vinor-600"></i>
-        اپلیکیشن اندروید
-      </h3>
-
-      <div class="grid sm:grid-cols-2 gap-4">
-        <div class="space-y-2">
-          <label for="android_apk_version" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-            نسخه (Version)
-          </label>
-          <input id="android_apk_version" name="android_apk_version" type="text" dir="ltr"
-                 value="{{ settings.android_apk_version or '' }}"
-                 class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
-                 placeholder="1.0.3">
-        </div>
-        <div class="space-y-2">
-          <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-            فایل APK جدید
-          </label>
-          <input type="file" name="android_apk" accept=".apk,application/vnd.android.package-archive"
-                 class="block w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-gray-300 dark:file:border-gray-600 file:bg-white dark:file:bg-gray-950 file:text-gray-700 dark:file:text-gray-200">
-          <p class="text-xs text-gray-500 dark:text-gray-400">حداکثر ۲۰۰ مگابایت — فقط با آپلود جدید، تاریخ بروزرسانی عوض می‌شود.</p>
-        </div>
-      </div>
-
-      {% if settings.android_apk_url %}
-      <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950/60 p-3 space-y-2 text-sm">
-        <div class="flex items-start gap-2 text-gray-700 dark:text-gray-300">
-          <i class="fa-solid fa-link mt-0.5 text-vinor-600"></i>
-          <a class="text-blue-600 dark:text-blue-400 underline break-all" href="{{ settings.android_apk_url }}" target="_blank" rel="noopener">
-            {{ settings.android_apk_url }}
-          </a>
-        </div>
-        <div class="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-          <div>آخرین بروزرسانی: {{ settings.android_apk_updated_at or '—' }}</div>
-          {% if settings.android_apk_size_bytes %}
-          {% set sz = settings.android_apk_size_bytes|int %}
-          <div>حجم فایل:
-            {% if sz >= 1048576 %}{{ '%.1f'|format(sz / 1048576) }} مگابایت
-            {% elif sz >= 1024 %}{{ '%.0f'|format(sz / 1024) }} کیلوبایت
-            {% else %}{{ sz }} بایت{% endif %}
-          </div>
-          {% endif %}
-          {% if settings.android_apk_sha256 %}
-          <div class="break-all font-mono text-[11px]">SHA256: {{ settings.android_apk_sha256 }}</div>
-          {% endif %}
-        </div>
-      </div>
-      {% endif %}
-    </section>
-
-    <div class="border-t border-gray-200 dark:border-gray-700"></div>
-
     <!-- همکاری -->
     <section class="space-y-4">
       <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -221,9 +166,511 @@
               class="inline-flex items-center gap-2 bg-vinor-600 hover:bg-vinor-700 text-white
                      font-semibold text-sm px-5 py-2.5 rounded-lg transition focusable">
         <i class="fa-solid fa-floppy-disk"></i>
-        ذخیره تنظیمات
+        ذخیره تنظیمات سایت
       </button>
     </div>
   </form>
+
+  {# —— کارت مجزای اپلیکیشن اندروید —— #}
+  <div>
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+      <i class="fa-brands fa-android text-vinor-600"></i>
+      اپلیکیشن
+    </h2>
+    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      با انتخاب فایل APK، آپلود و استخراج نسخه خودکار انجام می‌شود
+    </p>
+  </div>
+
+  <style id="admin-apk-divar-upload">
+    #adminAppSettingsCard[data-divar-upload] {
+      --divar-red: #a62626;
+      --divar-red-soft: rgba(166, 38, 38, 0.08);
+      --divar-border: #ebebeb;
+      --divar-muted: #707070;
+      --divar-bg: #f5f5f5;
+      --divar-tile: #fafafa;
+    }
+    html.dark #adminAppSettingsCard[data-divar-upload] {
+      --divar-border: #3f3f46;
+      --divar-muted: #a1a1aa;
+      --divar-bg: #18181b;
+      --divar-tile: #27272a;
+      --divar-red-soft: rgba(239, 68, 68, 0.12);
+    }
+    #adminAppSettingsCard[data-divar-upload] .divar-upload-tile {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.55rem;
+      width: 7.75rem;
+      height: 7.75rem;
+      margin: 0;
+      padding: 0.75rem;
+      border: 1px solid var(--divar-border);
+      border-radius: 0.35rem;
+      background: var(--divar-tile);
+      color: var(--divar-muted);
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    #adminAppSettingsCard[data-divar-upload] .divar-upload-tile:hover,
+    #adminAppSettingsCard[data-divar-upload] .divar-upload-tile:focus-within {
+      border-color: var(--divar-red);
+      background: var(--divar-red-soft);
+      color: var(--divar-red);
+    }
+    #adminAppSettingsCard[data-divar-upload] .divar-upload-tile[data-busy="1"] {
+      pointer-events: none;
+      opacity: 0.72;
+    }
+    #adminAppSettingsCard[data-divar-upload] .divar-upload-plus {
+      display: grid;
+      place-items: center;
+      width: 2.35rem;
+      height: 2.35rem;
+      border-radius: 9999px;
+      border: 1.5px solid currentColor;
+      font-size: 1.15rem;
+      line-height: 1;
+      font-weight: 400;
+    }
+    #adminAppSettingsCard[data-divar-upload] .divar-upload-label {
+      font-size: 0.75rem;
+      font-weight: 500;
+      line-height: 1.35;
+      text-align: center;
+      color: inherit;
+    }
+    #adminAppSettingsCard[data-divar-upload] .divar-field {
+      border: 1px solid var(--divar-border);
+      border-radius: 0.35rem;
+      background: #fff;
+      padding: 0.65rem 0.85rem;
+    }
+    html.dark #adminAppSettingsCard[data-divar-upload] .divar-field {
+      background: #09090b;
+    }
+    #adminAppSettingsCard[data-divar-upload] .divar-field-label {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--divar-muted);
+    }
+    #adminAppSettingsCard[data-divar-upload] .divar-field-value {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      font-size: 1.125rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: inherit;
+      outline: none;
+    }
+  </style>
+
+  <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm px-4 sm:px-6 py-5 space-y-5"
+       id="adminAppSettingsCard"
+       data-divar-upload
+       data-apk-upload-url="{{ url_for('admin.settings_apk_upload') }}">
+    <div class="flex items-center gap-3 pb-1">
+      <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(166,38,38,0.08)] text-[#a62626]">
+        <i class="fa-brands fa-android text-lg"></i>
+      </span>
+      <div class="min-w-0">
+        <h3 class="text-sm font-bold text-gray-900 dark:text-white">اپلیکیشن اندروید</h3>
+        <p class="text-xs text-gray-500 dark:text-gray-400">فایل را اضافه کنید؛ نسخه خودکار از APK خوانده می‌شود.</p>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-start gap-4">
+      <div class="space-y-2">
+        <span class="block text-xs font-medium text-[color:var(--divar-muted,#707070)]">فایل نصب</span>
+        <label for="android_apk_file" class="divar-upload-tile" data-apk-dropzone>
+          <input id="android_apk_file" type="file" accept=".apk,application/vnd.android.package-archive"
+                 class="sr-only"
+                 data-apk-file>
+          <span class="divar-upload-plus" aria-hidden="true">
+            <i class="fa-solid fa-plus text-sm" data-apk-drop-icon></i>
+          </span>
+          <span class="divar-upload-label">افزودن<br>فایل APK</span>
+        </label>
+        <p class="text-[11px] text-[color:var(--divar-muted,#707070)] max-w-[7.75rem] leading-relaxed">
+          حداکثر ۲۰۰ مگابایت
+        </p>
+      </div>
+
+      <div class="flex-1 min-w-[12rem] space-y-2 pt-0 sm:pt-6">
+        <div class="divar-field">
+          <label class="divar-field-label" for="android_apk_version">نسخه</label>
+          <input id="android_apk_version" type="text" dir="ltr" readonly
+                 value="{{ settings.android_apk_version or '' }}"
+                 class="divar-field-value tabular-nums text-gray-900 dark:text-white placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                 placeholder="—"
+                 data-apk-version
+                 aria-label="نسخه خودکار اپلیکیشن">
+        </div>
+        <p class="text-[11px] text-[color:var(--divar-muted,#707070)]">پس از افزودن فایل، نسخه از مانیفست پر می‌شود.</p>
+      </div>
+    </div>
+
+    <div id="adminApkUploadStatus" class="hidden text-sm rounded-lg px-3 py-2" data-apk-status role="status" aria-live="polite"></div>
+
+    {% set _apk_sms_default = 'نسخه {version}\n📢 وینور بروزرسانی شد!\nبرای تجربه بهتر، نسخه جدید رو از لینک زیر دریافت کنید 👇\n🌐 {link}' %}
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-950/50 p-4 space-y-3" data-apk-sms-box>
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div class="min-w-0">
+          <h4 class="text-sm font-bold text-gray-900 dark:text-white">پیامک بروزرسانی</h4>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            با آپلود نسخهٔ جدید، برای همکاران تأییدشده ارسال می‌شود.
+            متغیرها: <code class="text-[11px]" dir="ltr">{version}</code> و <code class="text-[11px]" dir="ltr">{link}</code>
+          </p>
+        </div>
+        <label class="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 shrink-0 cursor-pointer select-none">
+          <input type="checkbox" class="rounded border-gray-300 text-vinor-600 focus:ring-vinor-600" checked data-apk-sms-send>
+          ارسال پیامک پس از آپلود
+        </label>
+      </div>
+      <textarea id="android_apk_update_sms_message" rows="5" dir="rtl"
+                class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-vinor-600 focus:border-transparent"
+                data-apk-sms-template
+                aria-label="متن پیامک بروزرسانی اپ">{{ settings.android_apk_update_sms_message or _apk_sms_default }}</textarea>
+      <div class="space-y-1.5">
+        <div class="text-[11px] font-semibold text-gray-500 dark:text-gray-400">پیش‌نمایش</div>
+        <pre class="whitespace-pre-wrap text-xs rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-950 px-3 py-2 text-gray-700 dark:text-gray-300 font-sans leading-relaxed" data-apk-sms-preview></pre>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="button"
+                class="inline-flex items-center gap-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-semibold px-3 py-2 hover:opacity-90 disabled:opacity-50"
+                data-apk-sms-save
+                data-apk-sms-template-url="{{ url_for('admin.settings_apk_sms_template') }}">
+          <i class="fa-solid fa-floppy-disk"></i>
+          ذخیره متن پیامک
+        </button>
+        <span class="text-[11px] text-gray-500 dark:text-gray-400 hidden" data-apk-sms-save-status></span>
+      </div>
+    </div>
+
+    <div id="adminApkMetaPanel"
+         class="{% if not settings.android_apk_url %}hidden {% endif %}rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950/60 p-3 space-y-2 text-sm"
+         data-apk-meta>
+      <div class="flex items-start gap-2 text-gray-700 dark:text-gray-300">
+        <i class="fa-solid fa-link mt-0.5 text-vinor-600"></i>
+        <div class="min-w-0 space-y-1">
+          <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">لینک کوتاه دانلود</div>
+          <a class="text-blue-600 dark:text-blue-400 underline break-all" href="{{ url_for('main.short_apk_download') }}" target="_blank" rel="noopener" data-apk-short-url>
+            {{ url_for('main.short_apk_download', _external=True) }}
+          </a>
+          <div class="text-xs text-gray-500 dark:text-gray-400 pt-1">فایل:</div>
+          <a class="text-blue-600 dark:text-blue-400 underline break-all text-xs" href="{{ settings.android_apk_url or '#' }}" target="_blank" rel="noopener" data-apk-file-url>
+            {{ settings.android_apk_url or '—' }}
+          </a>
+        </div>
+      </div>
+      <div class="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+        <div>آخرین بروزرسانی: <span data-apk-updated>{{ settings.android_apk_updated_at or '—' }}</span></div>
+        <div data-apk-size-row {% if not settings.android_apk_size_bytes %}class="hidden"{% endif %}>
+          حجم فایل: <span data-apk-size>
+            {% if settings.android_apk_size_bytes %}
+              {% set sz = settings.android_apk_size_bytes|int %}
+              {% if sz >= 1048576 %}{{ '%.1f'|format(sz / 1048576) }} مگابایت
+              {% elif sz >= 1024 %}{{ '%.0f'|format(sz / 1024) }} کیلوبایت
+              {% else %}{{ sz }} بایت{% endif %}
+            {% endif %}
+          </span>
+        </div>
+        <div class="break-all font-mono text-[11px] {% if not settings.android_apk_sha256 %}hidden{% endif %}" data-apk-sha-row>
+          SHA256: <span data-apk-sha>{{ settings.android_apk_sha256 or '' }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="adminApkEmptyHint"
+         class="{% if settings.android_apk_url %}hidden {% endif %}rounded-xl border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/70 dark:bg-gray-950/40 px-4 py-3 text-sm text-gray-500 dark:text-gray-400"
+         data-apk-empty>
+      هنوز فایلی آپلود نشده — یک APK انتخاب کنید تا نسخه و لینک دانلود فعال شود.
+    </div>
+  </div>
 </div>
+<script>
+(function () {
+  var card = document.getElementById('adminAppSettingsCard');
+  if (!card) return;
+  var uploadUrl = card.getAttribute('data-apk-upload-url') || '';
+  var fileInput = card.querySelector('[data-apk-file]');
+  var dropzone = card.querySelector('[data-apk-dropzone]');
+  var dropIcon = card.querySelector('[data-apk-drop-icon]');
+  var versionInput = card.querySelector('[data-apk-version]');
+  var statusEl = card.querySelector('[data-apk-status]');
+  var meta = card.querySelector('[data-apk-meta]');
+  var emptyHint = card.querySelector('[data-apk-empty]');
+  var smsTpl = card.querySelector('[data-apk-sms-template]');
+  var smsPreview = card.querySelector('[data-apk-sms-preview]');
+  var smsSend = card.querySelector('[data-apk-sms-send]');
+  var smsSaveBtn = card.querySelector('[data-apk-sms-save]');
+  var smsSaveStatus = card.querySelector('[data-apk-sms-save-status]');
+  var smsTemplateUrl = smsSaveBtn ? (smsSaveBtn.getAttribute('data-apk-sms-template-url') || '') : '';
+  var csrf = document.querySelector('input[name="csrf_token"]');
+  var csrfToken = csrf ? csrf.value : '';
+  var busy = false;
+  var DEFAULT_LINK = 'vinor.ir/d';
+
+  function setDropBusy(on) {
+    if (!dropzone) return;
+    dropzone.setAttribute('data-busy', on ? '1' : '0');
+    if (dropIcon) {
+      dropIcon.className = on
+        ? 'fa-solid fa-spinner fa-spin text-sm'
+        : 'fa-solid fa-plus text-sm';
+    }
+  }
+
+  function formatSize(n) {
+    var sz = Number(n) || 0;
+    if (sz >= 1048576) return (sz / 1048576).toFixed(1) + ' مگابایت';
+    if (sz >= 1024) return Math.round(sz / 1024) + ' کیلوبایت';
+    return sz + ' بایت';
+  }
+
+  function currentVersionForPreview() {
+    return (versionInput && versionInput.value && versionInput.value.trim()) || '1.0.350';
+  }
+
+  function renderSmsPreview(tpl, version) {
+    var t = (tpl || '').trim();
+    var ver = (version || currentVersionForPreview()).trim() || '—';
+    return t
+      .replace(/\{version\}/gi, ver)
+      .replace(/\{link\}/gi, DEFAULT_LINK)
+      .replace(/\{url\}/gi, DEFAULT_LINK);
+  }
+
+  function refreshSmsPreview() {
+    if (!smsPreview || !smsTpl) return;
+    smsPreview.textContent = renderSmsPreview(smsTpl.value, currentVersionForPreview());
+  }
+
+  function setStatus(kind, text) {
+    if (!statusEl) return;
+    statusEl.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-800', 'dark:bg-emerald-900/20', 'dark:text-emerald-200',
+      'bg-amber-50', 'text-amber-800', 'dark:bg-amber-900/20', 'dark:text-amber-200',
+      'bg-rose-50', 'text-rose-800', 'dark:bg-rose-900/20', 'dark:text-rose-200');
+    if (!text) {
+      statusEl.classList.add('hidden');
+      statusEl.textContent = '';
+      return;
+    }
+    statusEl.textContent = text;
+    if (kind === 'ok') {
+      statusEl.classList.add('bg-emerald-50', 'text-emerald-800', 'dark:bg-emerald-900/20', 'dark:text-emerald-200');
+    } else if (kind === 'busy') {
+      statusEl.classList.add('bg-amber-50', 'text-amber-800', 'dark:bg-amber-900/20', 'dark:text-amber-200');
+    } else {
+      statusEl.classList.add('bg-rose-50', 'text-rose-800', 'dark:bg-rose-900/20', 'dark:text-rose-200');
+    }
+  }
+
+  function applyResult(data) {
+    if (versionInput) versionInput.value = data.android_apk_version || '';
+    if (meta) meta.classList.remove('hidden');
+    if (emptyHint) emptyHint.classList.add('hidden');
+    if (smsTpl && data.android_apk_update_sms_message) {
+      smsTpl.value = data.android_apk_update_sms_message;
+    }
+    if (smsPreview && data.sms_preview) {
+      smsPreview.textContent = data.sms_preview;
+    } else {
+      refreshSmsPreview();
+    }
+    var shortA = card.querySelector('[data-apk-short-url]');
+    var fileA = card.querySelector('[data-apk-file-url]');
+    var updated = card.querySelector('[data-apk-updated]');
+    var sizeRow = card.querySelector('[data-apk-size-row]');
+    var sizeEl = card.querySelector('[data-apk-size]');
+    var shaRow = card.querySelector('[data-apk-sha-row]');
+    var shaEl = card.querySelector('[data-apk-sha]');
+    if (shortA && data.short_url) {
+      shortA.href = data.short_url;
+      shortA.textContent = data.short_url;
+    }
+    if (fileA && data.android_apk_url) {
+      fileA.href = data.android_apk_url;
+      fileA.textContent = data.android_apk_url;
+    }
+    if (updated) updated.textContent = data.android_apk_updated_at || '—';
+    if (sizeRow && sizeEl) {
+      if (data.android_apk_size_bytes) {
+        sizeRow.classList.remove('hidden');
+        sizeEl.textContent = formatSize(data.android_apk_size_bytes);
+      }
+    }
+    if (shaRow && shaEl) {
+      if (data.android_apk_sha256) {
+        shaRow.classList.remove('hidden');
+        shaEl.textContent = data.android_apk_sha256;
+      }
+    }
+  }
+
+  function uploadStatusText(data) {
+    var ver = data.android_apk_version || '';
+    var base = 'آپلود شد — نسخه ' + ver + ' ذخیره گردید.';
+    if (data.sms_queued) {
+      return base + ' پیامک بروزرسانی برای همکاران در صف ارسال قرار گرفت.';
+    }
+    if (data.sms_skipped_same_version) {
+      return base + ' نسخه تغییر نکرد — پیامک ارسال نشد.';
+    }
+    if (smsSend && !smsSend.checked) {
+      return base + ' ارسال پیامک خاموش بود.';
+    }
+    return base;
+  }
+
+  function uploadApk(file) {
+    if (!uploadUrl || !file || busy) return;
+    if (!/\.apk$/i.test(file.name || '')) {
+      setStatus('err', 'فقط فایل APK مجاز است.');
+      return;
+    }
+    busy = true;
+    if (fileInput) fileInput.disabled = true;
+    setDropBusy(true);
+    setStatus('busy', 'در حال آپلود و خواندن نسخه…');
+    var fd = new FormData();
+    fd.append('android_apk', file);
+    if (smsTpl) fd.append('android_apk_update_sms_message', smsTpl.value || '');
+    fd.append('send_update_sms', (smsSend && smsSend.checked) ? '1' : '0');
+    if (csrfToken) fd.append('csrf_token', csrfToken);
+    fetch(uploadUrl, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (payload) {
+        if (!payload.ok || !payload.data || !payload.data.ok) {
+          throw new Error((payload.data && payload.data.error) || 'آپلود ناموفق بود.');
+        }
+        applyResult(payload.data);
+        setStatus('ok', uploadStatusText(payload.data));
+      })
+      .catch(function (err) {
+        setStatus('err', (err && err.message) || 'خطا در آپلود.');
+      })
+      .finally(function () {
+        busy = false;
+        setDropBusy(false);
+        if (fileInput) {
+          fileInput.disabled = false;
+          try { fileInput.value = ''; } catch (_) {}
+        }
+      });
+  }
+
+  function saveSmsTemplate() {
+    if (!smsTemplateUrl || !smsTpl || busy) return;
+    busy = true;
+    if (smsSaveBtn) smsSaveBtn.disabled = true;
+    if (smsSaveStatus) {
+      smsSaveStatus.classList.remove('hidden', 'text-emerald-600', 'text-rose-600');
+      smsSaveStatus.textContent = 'در حال ذخیره…';
+    }
+    var fd = new FormData();
+    fd.append('android_apk_update_sms_message', smsTpl.value || '');
+    if (csrfToken) fd.append('csrf_token', csrfToken);
+    fetch(smsTemplateUrl, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (payload) {
+        if (!payload.ok || !payload.data || !payload.data.ok) {
+          throw new Error((payload.data && payload.data.error) || 'ذخیره ناموفق بود.');
+        }
+        if (payload.data.android_apk_update_sms_message) {
+          smsTpl.value = payload.data.android_apk_update_sms_message;
+        }
+        if (smsPreview && payload.data.sms_preview) {
+          smsPreview.textContent = payload.data.sms_preview;
+        } else {
+          refreshSmsPreview();
+        }
+        if (smsSaveStatus) {
+          smsSaveStatus.classList.add('text-emerald-600');
+          smsSaveStatus.textContent = 'متن پیامک ذخیره شد.';
+        }
+      })
+      .catch(function (err) {
+        if (smsSaveStatus) {
+          smsSaveStatus.classList.add('text-rose-600');
+          smsSaveStatus.textContent = (err && err.message) || 'خطا در ذخیره.';
+        }
+      })
+      .finally(function () {
+        busy = false;
+        if (smsSaveBtn) smsSaveBtn.disabled = false;
+      });
+  }
+
+  if (smsTpl) {
+    smsTpl.addEventListener('input', refreshSmsPreview);
+    refreshSmsPreview();
+  }
+  if (smsSaveBtn) {
+    smsSaveBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      saveSmsTemplate();
+    });
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener('change', function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (f) uploadApk(f);
+    });
+  }
+
+  if (dropzone) {
+    ['dragenter', 'dragover'].forEach(function (evt) {
+      dropzone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.style.borderColor = '#a62626';
+        dropzone.style.background = 'rgba(166, 38, 38, 0.08)';
+        dropzone.style.color = '#a62626';
+      });
+    });
+    ['dragleave', 'drop'].forEach(function (evt) {
+      dropzone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.style.borderColor = '';
+        dropzone.style.background = '';
+        dropzone.style.color = '';
+      });
+    });
+    dropzone.addEventListener('drop', function (e) {
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) uploadApk(f);
+    });
+  }
+})();
+</script>
 {% endblock %}
