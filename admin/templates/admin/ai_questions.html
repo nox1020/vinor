@@ -154,19 +154,24 @@
       </div>
 
       <div class="rounded-lg border border-teal-200 dark:border-teal-900/50 bg-teal-50/80 dark:bg-teal-950/30 px-3 py-2 text-[11px] text-teal-900 dark:text-teal-100 leading-5">
-        <strong>قفل قطعی:</strong> فقط <span class="font-mono">deepseek-v4-flash</span>.
-        مدل Pro در کد مسدود است و به API فرستاده نمی‌شود — حتی اگر در settings قدیمی Pro ذخیره شده باشد.
+        انتخاب مدل و استعلام موجودی در
+        <a href="{{ url_for('admin.ai_model') }}" class="font-semibold underline underline-offset-2">مدل و موجودی API</a>
+        متمرکز شده است. Flash پیش‌فرض است؛ Pro گران‌تر است.
       </div>
 
       <fieldset class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/40 p-4">
-        <legend class="px-1 text-xs font-bold text-gray-700 dark:text-gray-200">مدل DeepSeek — فقط Flash</legend>
+        <legend class="px-1 text-xs font-bold text-gray-700 dark:text-gray-200">مدل DeepSeek</legend>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {% for opt in ai_model_options %}
-          <label class="relative flex flex-col gap-1 rounded-xl border border-teal-500 bg-teal-50 dark:bg-teal-900/20 ring-1 ring-teal-400/40 px-3 py-3">
+          <label class="relative flex flex-col gap-1 rounded-xl border px-3 py-3 cursor-pointer
+            {% if ai_settings.model_choice == opt.value %}border-teal-500 bg-teal-50 dark:bg-teal-900/20 ring-1 ring-teal-400/40{% else %}border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900{% endif %}">
             <span class="flex items-center gap-2">
-              <input type="radio" name="ai_model_choice" value="flash" class="text-teal-600 focus:ring-teal-500" checked>
+              <input type="radio" name="ai_model_choice" value="{{ opt.value }}" class="text-teal-600 focus:ring-teal-500"
+                     {% if ai_settings.model_choice == opt.value %}checked{% endif %}>
               <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ opt.label }}</span>
-              <span class="text-[10px] font-bold text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/40 px-1.5 py-0.5 rounded">تنها مدل</span>
+              {% if opt.value == 'pro' %}
+              <span class="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 rounded">گران</span>
+              {% endif %}
             </span>
             <span class="text-[11px] text-gray-500 dark:text-gray-400 leading-5 pr-6">{{ opt.hint }}</span>
             <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 ltr text-left">{{ opt.api_id }}</span>

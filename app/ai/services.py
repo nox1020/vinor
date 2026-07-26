@@ -772,8 +772,6 @@ def _call_deepseek(
         }
 
     model = assert_flash_model(resolve_deepseek_model(has_tools=bool(tools)))
-    if model != MODEL_ID_FLASH:
-        model = MODEL_ID_FLASH
     url = f"{DEEPSEEK_BASE_URL.rstrip('/')}/chat/completions"
     bcfg = budget_config()
     use_thinking = thinking_enabled()

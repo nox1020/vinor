@@ -2529,8 +2529,8 @@ def ai_questions():
                     'enabled': request.form.get('ai_enabled') == '1',
                     'escalation_sms_enabled': request.form.get('ai_escalation_sms_enabled') == '1',
                     'spend_fuse_enabled': request.form.get('ai_spend_fuse_enabled') == '1',
-                    'model_choice': 'flash',
-                    'thinking_enabled': False,
+                    'model_choice': (request.form.get('ai_model_choice') or 'flash').strip().lower(),
+                    'thinking_enabled': request.form.get('ai_thinking_enabled') == '1',
                     'min_interval_sec': float(request.form.get('ai_min_interval_sec') or ai_def['min_interval_sec']),
                     'dedup_ttl_sec': int(request.form.get('ai_dedup_ttl_sec') or ai_def['dedup_ttl_sec']),
                     'max_history': int(request.form.get('ai_max_history') or ai_def['max_history']),
@@ -2617,6 +2617,116 @@ def ai_questions():
         api_key_masked=mask_api_key(active_api_key),
         api_key_source='settings' if stored_api_key else ('file' if active_api_key else 'none'),
         has_stored_api_key=bool(stored_api_key),
+    )
+
+
+# -----------------------------------------------------------------------------
+# مدل DeepSeek — انتخاب مدل، Thinking، استعلام موجودی API
+# -----------------------------------------------------------------------------
+@admin_bp.route('/ai-model', methods=['GET', 'POST'], endpoint='ai_model')
+@login_required
+def ai_model():
+    from app.ai.credits import (
+        clear_api_balance_depleted,
+        get_last_balance_probe,
+        is_api_balance_depleted,
+        probe_deepseek_api_balance,
+    )
+    from app.ai.runtime_settings import (
+        force_flash_enabled,
+        get_ai_settings,
+        get_stored_ai_api_key,
+        mask_api_key,
+        model_choice_options,
+        save_ai_settings,
+    )
+    from app.ai.services import ai_config
+    from app.keys import get_deepseek_api_key
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or 'save').strip()
+        if action == 'check_balance':
+            result = probe_deepseek_api_balance(clear_on_ok=True)
+            if result.get('ok') and result.get('is_available', True):
+                bals = result.get('balances') or []
+                detail = ''
+                if bals:
+                    parts = []
+                    for b in bals:
+                        cur = b.get('currency') or ''
+                        tot = b.get('total_balance') or ''
+                        if cur or tot:
+                            parts.append(f'{cur} {tot}'.strip())
+                    detail = ' · '.join(parts)
+                flash(
+                    'استعلام موجودی موفق بود'
+                    + (f' — {detail}' if detail else '')
+                    + ('؛ قفل محلی موجودی برداشته شد.' if result.get('local_flag_cleared') else '.'),
+                    'success',
+                )
+            elif result.get('depleted') or result.get('error_code') == 'balance_depleted':
+                flash(result.get('error') or 'موجودی API کافی نیست.', 'error')
+            else:
+                flash(result.get('error') or 'استعلام موجودی ناموفق بود.', 'error')
+            return redirect(url_for('admin.ai_model'))
+
+        if action == 'clear_balance_flag':
+            clear_api_balance_depleted()
+            flash('قفل محلی «اتمام موجودی» پاک شد. برای اطمینان، استعلام مجدد بزنید.', 'success')
+            return redirect(url_for('admin.ai_model'))
+
+        try:
+            patch = {
+                'enabled': request.form.get('ai_enabled') == '1',
+                'model_choice': (request.form.get('ai_model_choice') or 'flash').strip().lower(),
+                'thinking_enabled': request.form.get('ai_thinking_enabled') == '1',
+                'max_tokens': int(request.form.get('ai_max_tokens') or get_ai_settings()['max_tokens']),
+                'temperature': float(
+                    request.form.get('ai_temperature') or get_ai_settings()['temperature']
+                ),
+                'api_key': (request.form.get('ai_api_key') or '').strip(),
+                'clear_api_key': request.form.get('ai_clear_api_key') == '1',
+            }
+            save_ai_settings(patch)
+            flash('تنظیمات مدل ذخیره شد.', 'success')
+        except (TypeError, ValueError):
+            flash('مقدار نامعتبر در فرم مدل.', 'error')
+        return redirect(url_for('admin.ai_model'))
+
+    ai_settings = get_ai_settings()
+    ai_status = ai_config()
+    stored_api_key = get_stored_ai_api_key()
+    active_api_key = get_deepseek_api_key()
+    last_probe = get_last_balance_probe()
+    if last_probe.get('probed_at'):
+        try:
+            from datetime import datetime
+
+            last_probe = dict(last_probe)
+            last_probe['probed_at_label'] = datetime.fromtimestamp(
+                float(last_probe['probed_at'])
+            ).strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            last_probe['probed_at_label'] = ''
+    try:
+        lands = load_json(_lands_path())
+        p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
+    except Exception:
+        p, a, r = 0, 0, 0
+    return render_template(
+        'admin/ai_model.html',
+        ai_settings=ai_settings,
+        ai_status=ai_status,
+        ai_model_options=model_choice_options(),
+        force_flash=force_flash_enabled(),
+        balance_depleted=is_api_balance_depleted(),
+        last_balance_probe=last_probe,
+        api_key_masked=mask_api_key(active_api_key),
+        api_key_source='settings' if stored_api_key else ('file' if active_api_key else 'none'),
+        has_stored_api_key=bool(stored_api_key),
+        pending_count=p,
+        approved_count=a,
+        rejected_count=r,
     )
 
 

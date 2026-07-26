@@ -4,10 +4,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-# DeepSeek V4 — فقط Flash در runtime (Pro عمداً مسدود است)
+# DeepSeek V4 — Flash پیش‌فرض؛ Pro از پنل ادمین قابل انتخاب (مگر VINOR_AI_FORCE_FLASH=1)
 MODEL_ID_FLASH = "deepseek-v4-flash"
-MODEL_ID_PRO = "deepseek-v4-pro"  # فقط برای تشخیص/بلاک؛ هرگز به API فرستاده نمی‌شود
-MODEL_CHOICES = ("flash", "auto")  # auto ≡ flash — Pro از گزینه‌ها حذف شد
+MODEL_ID_PRO = "deepseek-v4-pro"
+MODEL_CHOICES = ("flash", "pro", "auto")
+
 
 _AI_DEFAULTS: dict[str, Any] = {
     "enabled": True,
@@ -39,57 +40,82 @@ def default_ai_settings() -> dict[str, Any]:
 
 
 def force_flash_enabled() -> bool:
-    """همیشه Flash — Pro در این پروژه مجاز نیست."""
-    return True
+    """قفل اجباری Flash با env — پیش‌فرض خاموش تا ادمین بتواند مدل را انتخاب کند."""
+    return (os.environ.get("VINOR_AI_FORCE_FLASH") or "0").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 
 def model_choice_options() -> list[dict[str, str]]:
-    """فقط Flash — Pro از پنل و API حذف شده."""
     return [
         {
             "value": "flash",
-            "label": "Flash (تنها مدل)",
-            "hint": "deepseek-v4-flash — تنها مدل مجاز؛ Pro عمداً مسدود است",
+            "label": "Flash",
+            "hint": "سریع و کم‌هزینه — پیشنهاد پیش‌فرض برای تولید",
             "api_id": MODEL_ID_FLASH,
+        },
+        {
+            "value": "pro",
+            "label": "Pro",
+            "hint": "قوی‌تر و گران‌تر — فقط وقتی لازم است انتخاب کنید",
+            "api_id": MODEL_ID_PRO,
         },
     ]
 
 
 def _normalize_model_choice(raw: Any) -> str:
-    """هر مقدار ورودی (از جمله pro/auto/قدیمی) → flash."""
-    _ = raw
+    v = str(raw or "").strip().lower()
+    if force_flash_enabled():
+        return "flash"
+    if v in ("pro", "v4-pro", MODEL_ID_PRO, "reasoner"):
+        return "pro"
+    if v in ("flash", "auto", "v4-flash", MODEL_ID_FLASH, ""):
+        return "flash"
     return "flash"
 
 
 def resolve_deepseek_model(*, has_tools: bool = False) -> str:
-    """همیشه deepseek-v4-flash — هیچ‌وقت Pro."""
     _ = has_tools
-    return MODEL_ID_FLASH
+    if force_flash_enabled():
+        return MODEL_ID_FLASH
+    choice = _normalize_model_choice(get_ai_settings().get("model_choice"))
+    return MODEL_ID_PRO if choice == "pro" else MODEL_ID_FLASH
 
 
 def assert_flash_model(model_id: str) -> str:
-    """آخرین خط دفاع قبل از ارسال به API — هر چیزی غیر Flash رد می‌شود."""
-    mid = str(model_id or "").strip().lower()
-    if mid != MODEL_ID_FLASH or "pro" in mid or "reasoner" in mid:
+    """نرمال‌سازی قبل از ارسال به API — با احترام به انتخاب ادمین مگر قفل env."""
+    if force_flash_enabled():
         return MODEL_ID_FLASH
+    mid = str(model_id or "").strip().lower()
+    if mid == MODEL_ID_PRO or "pro" in mid or "reasoner" in mid:
+        return MODEL_ID_PRO
     return MODEL_ID_FLASH
 
 
 def thinking_enabled() -> bool:
-    """Thinking — پیش‌فرض خاموش؛ فقط با VINOR_AI_THINKING=1."""
+    """Thinking — env اولویت دارد؛ وگرنه مقدار ذخیره‌شده در پنل."""
     env = os.environ.get("VINOR_AI_THINKING")
     if env is not None and str(env).strip() != "":
         return str(env).strip().lower() in ("1", "true", "yes", "on")
-    return False
+    try:
+        return bool(get_ai_settings().get("thinking_enabled"))
+    except Exception:
+        return False
 
 
 def resolve_deepseek_model_label() -> str:
+    mid = resolve_deepseek_model()
+    if mid == MODEL_ID_PRO:
+        return f"Pro ({MODEL_ID_PRO})"
     return f"Flash ({MODEL_ID_FLASH})"
 
 
 def model_choice_label(choice: str | None = None) -> str:
-    _ = choice
-    return "Flash (تنها مدل)"
+    c = _normalize_model_choice(choice if choice is not None else get_ai_settings().get("model_choice"))
+    return "Pro" if c == "pro" else "Flash"
 
 
 def _coerce_ai_settings(raw: dict[str, Any] | None) -> dict[str, Any]:
@@ -199,9 +225,10 @@ def get_ai_settings() -> dict[str, Any]:
         )
 
     env_model = os.environ.get("VINOR_AI_MODEL_CHOICE")
-    # هر env مدل (حتی pro) نادیده → flash
-    _ = env_model
-    out["model_choice"] = "flash"
+    if env_model is not None and str(env_model).strip() != "":
+        out["model_choice"] = _normalize_model_choice(env_model)
+    elif force_flash_enabled():
+        out["model_choice"] = "flash"
 
     env_thinking = os.environ.get("VINOR_AI_THINKING")
     if env_thinking is not None and str(env_thinking).strip() != "":
@@ -211,8 +238,6 @@ def get_ai_settings() -> dict[str, Any]:
             "yes",
             "on",
         )
-    else:
-        out["thinking_enabled"] = False
 
     # سقف سخت هزینه — settings قدیمی (مثلاً max_context=3500) را پایین بکش
     try:
@@ -248,9 +273,8 @@ def save_ai_settings(patch: dict[str, Any]) -> dict[str, Any]:
     ai = _coerce_ai_settings(raw_ai)
     tunable = {k: v for k, v in (patch or {}).items() if k not in ("api_key", "clear_api_key")}
     ai.update(_coerce_ai_settings({**ai, **tunable}))
-    # قفل قطعی: هرگز Pro ذخیره نشود
-    ai["model_choice"] = "flash"
-    ai["thinking_enabled"] = False
+    if force_flash_enabled():
+        ai["model_choice"] = "flash"
 
     if patch.get("clear_api_key"):
         ai.pop("api_key", None)

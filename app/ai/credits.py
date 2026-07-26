@@ -113,6 +113,154 @@ def clear_api_balance_depleted() -> None:
     _save_cache(data)
 
 
+def get_last_balance_probe() -> dict[str, Any]:
+    data = _load_cache()
+    raw = (data.get("flags") or {}).get("last_balance_probe")
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _store_balance_probe(payload: dict[str, Any]) -> None:
+    data = _load_cache()
+    flags = data.setdefault("flags", {})
+    flags["last_balance_probe"] = dict(payload or {})
+    data["flags"] = flags
+    _save_cache(data)
+
+
+def probe_deepseek_api_balance(*, clear_on_ok: bool = True) -> dict[str, Any]:
+    """استعلام زندهٔ موجودی از DeepSeek `/user/balance`."""
+    import requests
+
+    from app.keys import DEEPSEEK_BASE_URL, get_deepseek_api_key
+
+    api_key = get_deepseek_api_key()
+    if not api_key:
+        out = {
+            "ok": False,
+            "error": "کلید API تنظیم نشده است.",
+            "error_code": "no_api_key",
+            "probed_at": time.time(),
+        }
+        _store_balance_probe(out)
+        return out
+
+    url = f"{DEEPSEEK_BASE_URL.rstrip('/')}/user/balance"
+    try:
+        resp = requests.get(
+            url,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Accept": "application/json",
+            },
+            timeout=25,
+        )
+    except requests.Timeout:
+        out = {
+            "ok": False,
+            "error": "زمان استعلام موجودی به پایان رسید.",
+            "error_code": "timeout",
+            "probed_at": time.time(),
+        }
+        _store_balance_probe(out)
+        return out
+    except Exception as exc:
+        out = {
+            "ok": False,
+            "error": f"خطای شبکه در استعلام موجودی: {exc}",
+            "error_code": "network",
+            "probed_at": time.time(),
+        }
+        _store_balance_probe(out)
+        return out
+
+    body: Any = {}
+    try:
+        body = resp.json() if resp.content else {}
+    except Exception:
+        body = {"raw": (resp.text or "")[:400]}
+
+    probed_at = time.time()
+    if resp.status_code == 402:
+        mark_api_balance_depleted()
+        out = {
+            "ok": False,
+            "depleted": True,
+            "status_code": 402,
+            "error": "موجودی API کافی نیست (402).",
+            "error_code": "balance_depleted",
+            "body": body if isinstance(body, dict) else {},
+            "probed_at": probed_at,
+        }
+        _store_balance_probe(out)
+        return out
+
+    if resp.status_code == 401:
+        out = {
+            "ok": False,
+            "status_code": 401,
+            "error": "کلید API نامعتبر است.",
+            "error_code": "unauthorized",
+            "body": body if isinstance(body, dict) else {},
+            "probed_at": probed_at,
+        }
+        _store_balance_probe(out)
+        return out
+
+    if not resp.ok:
+        msg = ""
+        if isinstance(body, dict):
+            err = body.get("error")
+            if isinstance(err, dict):
+                msg = str(err.get("message") or "").strip()
+            msg = msg or str(body.get("message") or "").strip()
+        out = {
+            "ok": False,
+            "status_code": resp.status_code,
+            "error": msg or f"پاسخ ناموفق از DeepSeek ({resp.status_code})",
+            "error_code": "api_error",
+            "body": body if isinstance(body, dict) else {},
+            "probed_at": probed_at,
+        }
+        _store_balance_probe(out)
+        return out
+
+    infos = []
+    is_available = True
+    if isinstance(body, dict):
+        is_available = bool(body.get("is_available", True))
+        raw_infos = body.get("balance_infos")
+        if isinstance(raw_infos, list):
+            for item in raw_infos:
+                if not isinstance(item, dict):
+                    continue
+                infos.append(
+                    {
+                        "currency": str(item.get("currency") or ""),
+                        "total_balance": str(item.get("total_balance") or ""),
+                        "granted_balance": str(item.get("granted_balance") or ""),
+                        "topped_up_balance": str(item.get("topped_up_balance") or ""),
+                    }
+                )
+
+    if clear_on_ok and is_available:
+        clear_api_balance_depleted()
+    elif not is_available:
+        mark_api_balance_depleted()
+
+    out = {
+        "ok": True,
+        "depleted": not is_available,
+        "is_available": is_available,
+        "status_code": resp.status_code,
+        "balances": infos,
+        "body": body if isinstance(body, dict) else {},
+        "probed_at": probed_at,
+        "local_flag_cleared": bool(clear_on_ok and is_available),
+    }
+    _store_balance_probe(out)
+    return out
+
+
 # --- شیر اطمینان مصرف (Spend Fuse) ---
 SPEND_FUSE_ERROR = (
     "مصرف هوش مصنوعی به‌خاطر سقف ایمنی قطع شده است. "
