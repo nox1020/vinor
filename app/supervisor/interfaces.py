@@ -22,7 +22,7 @@ class ComponentFlags:
     use_llm: bool = True
     inject_planning_hint: bool = False
     seed_planning_tools: bool = False
-    context_budget_chars: int = 3000
+    context_budget_chars: int = 2400
 
 
 @dataclass

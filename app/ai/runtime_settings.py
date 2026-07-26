@@ -4,27 +4,33 @@ from __future__ import annotations
 import os
 from typing import Any
 
-# DeepSeek V4 — نام‌های پایدار API (مستندات ۱۴۰۵)
+# DeepSeek V4 — فقط Flash در runtime (Pro عمداً مسدود است)
 MODEL_ID_FLASH = "deepseek-v4-flash"
-MODEL_ID_PRO = "deepseek-v4-pro"
-MODEL_CHOICES = ("auto", "flash", "pro")
+MODEL_ID_PRO = "deepseek-v4-pro"  # فقط برای تشخیص/بلاک؛ هرگز به API فرستاده نمی‌شود
+MODEL_CHOICES = ("flash", "auto")  # auto ≡ flash — Pro از گزینه‌ها حذف شد
 
 _AI_DEFAULTS: dict[str, Any] = {
     "enabled": True,
-    # auto | flash | pro — انتخاب پنل؛ auto بر اساس ابزار/پیچیدگی
-    "model_choice": "auto",
+    "model_choice": "flash",
+    # DeepSeek V4 thinking پیش‌فرض API روشن است — اینجا عمداً خاموش (هزینه/توکن)
+    "thinking_enabled": False,
     "min_interval_sec": 4.0,
     "dedup_ttl_sec": 180,
-    "max_history": 5,
+    "max_history": 4,
     "max_msg_chars": 700,
     "max_assistant_history_chars": 300,
-    "max_context_chars": 3000,
+    "max_context_chars": 2400,
     "max_tokens": 512,
     "temperature": 0.45,
     "public_ctx_ttl_sec": 300,
     "partner_ctx_ttl_sec": 180,
     "min_message_chars": 1,
     "escalation_sms_enabled": True,
+    # شیر اطمینان مصرف — پیش‌فرض روشن
+    "spend_fuse_enabled": True,
+    "spend_fuse_window_sec": 86400,  # پنجرهٔ غلتان ۲۴ ساعته
+    "spend_fuse_max_tokens": 2_500_000,  # سقف توکن در پنجره
+    "spend_fuse_max_requests": 600,  # سقف تعداد درخواست API در پنجره
 }
 
 
@@ -32,74 +38,58 @@ def default_ai_settings() -> dict[str, Any]:
     return dict(_AI_DEFAULTS)
 
 
+def force_flash_enabled() -> bool:
+    """همیشه Flash — Pro در این پروژه مجاز نیست."""
+    return True
+
+
 def model_choice_options() -> list[dict[str, str]]:
-    """سه گزینهٔ قابل انتخاب در پنل ادمین."""
+    """فقط Flash — Pro از پنل و API حذف شده."""
     return [
         {
-            "value": "auto",
-            "label": "خودکار",
-            "hint": "همان Flash — ابزارها هم فعال؛ برای Pro گزینهٔ Pro را بزن",
-            "api_id": MODEL_ID_FLASH,
-        },
-        {
             "value": "flash",
-            "label": "Flash",
-            "hint": "سریع و کم‌هزینه — چت و ابزار (deepseek-v4-flash)",
+            "label": "Flash (تنها مدل)",
+            "hint": "deepseek-v4-flash — تنها مدل مجاز؛ Pro عمداً مسدود است",
             "api_id": MODEL_ID_FLASH,
-        },
-        {
-            "value": "pro",
-            "label": "Pro",
-            "hint": "دقیق‌تر و گران‌تر (deepseek-v4-pro)",
-            "api_id": MODEL_ID_PRO,
         },
     ]
 
 
 def _normalize_model_choice(raw: Any) -> str:
-    v = str(raw or "").strip().lower()
-    # سازگاری با شناسه‌های قدیمی/کامل
-    if v in ("deepseek-v4-flash", "flash", "chat", "deepseek-chat"):
-        return "flash"
-    if v in ("deepseek-v4-pro", "pro", "reasoner", "deepseek-reasoner"):
-        return "pro"
-    if v in MODEL_CHOICES:
-        return v
-    return "auto"
+    """هر مقدار ورودی (از جمله pro/auto/قدیمی) → flash."""
+    _ = raw
+    return "flash"
 
 
 def resolve_deepseek_model(*, has_tools: bool = False) -> str:
-    """شناسهٔ مدل API از انتخاب پنل ادمین.
-
-    - flash / pro: قطعی (هیچ env نباید flash را به pro تبدیل کند)
-    - auto: پیش‌فرض Flash — هر دو مدل ابزار دارند؛ ارتقا به Pro فقط با انتخاب صریح Pro
-      (قدیماً has_tools=True برای همکار همیشه Pro می‌فرستاد و انتخاب Flash/Auto بی‌اثر می‌شد)
-    """
-    _ = has_tools  # سازگاری امضا؛ دیگر معیار ارتقا نیست
-    choice = _normalize_model_choice(get_ai_settings().get("model_choice"))
-    if choice == "pro":
-        return MODEL_ID_PRO
+    """همیشه deepseek-v4-flash — هیچ‌وقت Pro."""
+    _ = has_tools
     return MODEL_ID_FLASH
 
 
+def assert_flash_model(model_id: str) -> str:
+    """آخرین خط دفاع قبل از ارسال به API — هر چیزی غیر Flash رد می‌شود."""
+    mid = str(model_id or "").strip().lower()
+    if mid != MODEL_ID_FLASH or "pro" in mid or "reasoner" in mid:
+        return MODEL_ID_FLASH
+    return MODEL_ID_FLASH
+
+
+def thinking_enabled() -> bool:
+    """Thinking — پیش‌فرض خاموش؛ فقط با VINOR_AI_THINKING=1."""
+    env = os.environ.get("VINOR_AI_THINKING")
+    if env is not None and str(env).strip() != "":
+        return str(env).strip().lower() in ("1", "true", "yes", "on")
+    return False
+
+
 def resolve_deepseek_model_label() -> str:
-    """برچسب وضعیت برای پنل: نام انتخاب + شناسهٔ واقعی API."""
-    choice = _normalize_model_choice(get_ai_settings().get("model_choice"))
-    model_id = resolve_deepseek_model()
-    label = model_choice_label(choice)
-    if choice == "auto":
-        return f"{label} → {model_id}"
-    return f"{label} ({model_id})"
+    return f"Flash ({MODEL_ID_FLASH})"
 
 
 def model_choice_label(choice: str | None = None) -> str:
-    c = _normalize_model_choice(
-        choice if choice is not None else get_ai_settings().get("model_choice")
-    )
-    for opt in model_choice_options():
-        if opt["value"] == c:
-            return opt["label"]
-    return "خودکار"
+    _ = choice
+    return "Flash (تنها مدل)"
 
 
 def _coerce_ai_settings(raw: dict[str, Any] | None) -> dict[str, Any]:
@@ -110,7 +100,12 @@ def _coerce_ai_settings(raw: dict[str, Any] | None) -> dict[str, Any]:
         if key not in raw or raw[key] is None:
             continue
         val = raw[key]
-        if key == "enabled" or key == "escalation_sms_enabled":
+        if key in (
+            "enabled",
+            "escalation_sms_enabled",
+            "thinking_enabled",
+            "spend_fuse_enabled",
+        ):
             if isinstance(val, bool):
                 out[key] = val
             else:
@@ -178,6 +173,9 @@ def get_ai_settings() -> dict[str, Any]:
         "public_ctx_ttl_sec": "VINOR_AI_PUBLIC_CTX_TTL",
         "partner_ctx_ttl_sec": "VINOR_AI_PARTNER_CTX_TTL",
         "min_message_chars": "VINOR_AI_MIN_MESSAGE_CHARS",
+        "spend_fuse_window_sec": "VINOR_AI_SPEND_FUSE_WINDOW_SEC",
+        "spend_fuse_max_tokens": "VINOR_AI_SPEND_FUSE_MAX_TOKENS",
+        "spend_fuse_max_requests": "VINOR_AI_SPEND_FUSE_MAX_REQUESTS",
     }
     for key, env_key in env_map.items():
         raw = os.environ.get(env_key)
@@ -191,9 +189,51 @@ def get_ai_settings() -> dict[str, Any]:
         except (TypeError, ValueError):
             pass
 
+    env_fuse = os.environ.get("VINOR_AI_SPEND_FUSE")
+    if env_fuse is not None and str(env_fuse).strip() != "":
+        out["spend_fuse_enabled"] = str(env_fuse).strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+
     env_model = os.environ.get("VINOR_AI_MODEL_CHOICE")
-    if env_model and str(env_model).strip():
-        out["model_choice"] = _normalize_model_choice(env_model)
+    # هر env مدل (حتی pro) نادیده → flash
+    _ = env_model
+    out["model_choice"] = "flash"
+
+    env_thinking = os.environ.get("VINOR_AI_THINKING")
+    if env_thinking is not None and str(env_thinking).strip() != "":
+        out["thinking_enabled"] = str(env_thinking).strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+    else:
+        out["thinking_enabled"] = False
+
+    # سقف سخت هزینه — settings قدیمی (مثلاً max_context=3500) را پایین بکش
+    try:
+        out["max_history"] = max(1, min(int(out["max_history"]), 4))
+        out["max_msg_chars"] = max(120, min(int(out["max_msg_chars"]), 700))
+        out["max_assistant_history_chars"] = max(
+            80, min(int(out["max_assistant_history_chars"]), 300)
+        )
+        out["max_context_chars"] = max(400, min(int(out["max_context_chars"]), 2400))
+        out["max_tokens"] = max(64, min(int(out["max_tokens"]), 512))
+        out["spend_fuse_window_sec"] = max(
+            300, min(int(out["spend_fuse_window_sec"]), 7 * 86400)
+        )
+        out["spend_fuse_max_tokens"] = max(
+            50_000, min(int(out["spend_fuse_max_tokens"]), 100_000_000)
+        )
+        out["spend_fuse_max_requests"] = max(
+            20, min(int(out["spend_fuse_max_requests"]), 100_000)
+        )
+    except Exception:
+        pass
     return out
 
 
@@ -208,6 +248,9 @@ def save_ai_settings(patch: dict[str, Any]) -> dict[str, Any]:
     ai = _coerce_ai_settings(raw_ai)
     tunable = {k: v for k, v in (patch or {}).items() if k not in ("api_key", "clear_api_key")}
     ai.update(_coerce_ai_settings({**ai, **tunable}))
+    # قفل قطعی: هرگز Pro ذخیره نشود
+    ai["model_choice"] = "flash"
+    ai["thinking_enabled"] = False
 
     if patch.get("clear_api_key"):
         ai.pop("api_key", None)

@@ -51,7 +51,7 @@ class RuleExecutionPolicy(ExecutionPolicy):
                 use_llm=True,
                 inject_planning_hint=True,
                 seed_planning_tools=True,
-                context_budget_chars=min(budget, 2600),
+                context_budget_chars=min(budget, 2400),
             )
         if route == ROUTE_FOLLOW_UP:
             return ComponentFlags(

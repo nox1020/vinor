@@ -239,6 +239,55 @@ def send_admin_balance_depleted_sms() -> bool:
         return False
 
 
+def send_admin_spend_fuse_sms(
+    *,
+    tokens: int,
+    requests: int,
+    max_tokens: int,
+    max_requests: int,
+) -> bool:
+    """پیامک قطع مصرف به‌خاطر سقف ایمنی — تا ادمین دوباره فعال نکند API قطع است."""
+    admin_phone, line = _admin_sms_target()
+    if not admin_phone or len(admin_phone) != 11 or not admin_phone.startswith("09"):
+        try:
+            current_app.logger.warning(
+                "AI spend fuse SMS skipped — invalid admin phone | norm=%s",
+                admin_phone,
+            )
+        except Exception:
+            pass
+        return False
+    msg = (
+        "وینور AI — شیر اطمینان\n"
+        "مصرف بیش از سقف بود؛ API قطع شد.\n"
+        f"توکن: {int(tokens):,}/{int(max_tokens):,}\n"
+        f"درخواست: {int(requests):,}/{int(max_requests):,}\n"
+        "فعال‌سازی: پنل ادمین ← سوالات AI"
+    )
+    try:
+        result = send_sms_direct(mobile=admin_phone, message=msg, line_number=line)
+        ok = bool(result.get("ok"))
+        if not ok:
+            try:
+                current_app.logger.error(
+                    "AI spend fuse SMS failed | admin=%s | status=%s | body=%s",
+                    admin_phone,
+                    result.get("status"),
+                    result.get("body"),
+                )
+            except Exception:
+                pass
+        return ok
+    except Exception:
+        try:
+            current_app.logger.exception(
+                "AI spend fuse SMS exception | admin=%s", admin_phone
+            )
+        except Exception:
+            pass
+        return False
+
+
 def _notify_admin_sms(rec: dict[str, Any]) -> bool:
     from app.ai.runtime_settings import get_ai_settings
 

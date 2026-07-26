@@ -52,14 +52,21 @@ from .credits import (
     budget_config,
     clear_api_balance_depleted,
     is_api_balance_depleted,
+    is_spend_fuse_tripped,
     mark_api_balance_depleted,
     record_api_call,
+    record_spend_usage,
+    spend_fuse_status,
+    SPEND_FUSE_ERROR,
     store_cached_reply,
 )
 from .runtime_settings import (
+    MODEL_ID_FLASH,
+    assert_flash_model,
     get_ai_settings,
     model_choice_label,
     resolve_deepseek_model,
+    thinking_enabled,
 )
 from .escalations import consume_pending_answers, create_escalation
 from .land_cards import collect_land_codes, land_cards_payload
@@ -71,8 +78,8 @@ from .token_analytics import (
     usage_cost,
 )
 
-_MAX_TOOL_ROUNDS = 2
-_MAX_TOOL_RESULT_CHARS = 1800
+_MAX_TOOL_ROUNDS = 1  # حداکثر ۱ دور ابزار + ۱ پاسخ نهایی (قبلاً ۲=۳ درخواست API)
+_MAX_TOOL_RESULT_CHARS = 800
 _PROMPT_CACHE: dict[str, tuple[float, str]] = {}
 _PROMPT_CACHE_TTL_SEC = 20.0
 _PLANNING_SKIP_INTENTS = frozenset(
@@ -111,10 +118,25 @@ def _compact_tool_model_payload(payload: Any) -> Any:
     for k, v in payload.items():
         if k in _TOOL_RESULT_DROP_KEYS:
             continue
-        if k == "lands" and isinstance(v, list) and len(v) > 5:
-            out[k] = v[:5]
-        elif k == "instruction" and isinstance(v, str) and len(v) > 420:
-            out[k] = v[:417] + "…"
+        if k == "lands" and isinstance(v, list):
+            slim: list[Any] = []
+            for row in v[:3]:
+                if not isinstance(row, dict):
+                    continue
+                slim.append(
+                    {
+                        "code": row.get("code"),
+                        "title": str(row.get("title") or "")[:80],
+                        "summary": str(row.get("summary") or "")[:160],
+                        "city": row.get("city"),
+                        "assigned": row.get("assigned"),
+                    }
+                )
+            out[k] = slim
+        elif k == "instruction" and isinstance(v, str) and len(v) > 220:
+            out[k] = v[:217] + "…"
+        elif k == "note" and isinstance(v, str) and len(v) > 160:
+            out[k] = v[:157] + "…"
         else:
             out[k] = v
     return out
@@ -126,14 +148,18 @@ def ai_config() -> dict[str, Any]:
     api_key = get_deepseek_api_key()
     cfg = get_ai_settings()
     choice = str(cfg.get("model_choice") or "auto")
+    fuse = spend_fuse_status()
     return {
         "enabled": bool(cfg.get("enabled")),
         "provider": "deepseek",
         "model_choice": choice,
         "model_choice_label": model_choice_label(choice),
         "model": resolve_deepseek_model(),
+        "thinking_enabled": thinking_enabled(),
         "api_key_set": bool(api_key),
         "api_balance_ok": not is_api_balance_depleted(),
+        "spend_fuse": fuse,
+        "spend_fuse_ok": not bool(fuse.get("tripped")),
     }
 
 
@@ -539,10 +565,12 @@ def _build_messages(
             messages.append({"role": "system", "content": sys_mem})
     if history:
         keep_last = int(cfg["max_history"])
-        summary = _summarize_older_history(history, keep_last=keep_last)
+        # فقط ته تاریخچه را پردازش کن — نه کل ۲۰۰ پیام thread
+        hist_window = list(history[-(keep_last + 6) :])
+        summary = _summarize_older_history(hist_window, keep_last=keep_last)
         if summary:
             reduced_keep = max(2, keep_last - 2)
-            dropped = history[-keep_last:-reduced_keep] if keep_last > reduced_keep else []
+            dropped = hist_window[-keep_last:-reduced_keep] if keep_last > reduced_keep else []
             dropped_tokens = 0
             for item in dropped:
                 if isinstance(item, dict):
@@ -550,7 +578,7 @@ def _build_messages(
             if estimate_tokens(summary) < dropped_tokens:
                 messages.append({"role": "system", "content": summary})
                 keep_last = reduced_keep
-        for item in history[-keep_last:]:
+        for item in hist_window[-keep_last:]:
             if not isinstance(item, dict):
                 continue
             role = str(item.get("role") or "").strip()
@@ -735,17 +763,31 @@ def _call_deepseek(
             "error_code": "balance_depleted",
             "balance_depleted": True,
         }
+    if is_spend_fuse_tripped():
+        return {
+            "ok": False,
+            "error": SPEND_FUSE_ERROR,
+            "error_code": "spend_fuse",
+            "spend_fuse": True,
+        }
 
-    model = resolve_deepseek_model(has_tools=bool(tools))
+    model = assert_flash_model(resolve_deepseek_model(has_tools=bool(tools)))
+    if model != MODEL_ID_FLASH:
+        model = MODEL_ID_FLASH
     url = f"{DEEPSEEK_BASE_URL.rstrip('/')}/chat/completions"
     bcfg = budget_config()
+    use_thinking = thinking_enabled()
     payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "stream": False,
         "max_tokens": int(max_tokens) if max_tokens is not None else bcfg["max_tokens"],
         "temperature": float(temperature) if temperature is not None else bcfg["temperature"],
+        # V4 پیش‌فرض thinking روشن است — بدون این فلگ، هزاران توکن reasoning در هر درخواست می‌سوزد.
+        "thinking": {"type": "enabled" if use_thinking else "disabled"},
     }
+    # سقف سخت completion — حتی اگر caller عدد بزرگ بدهد
+    payload["max_tokens"] = max(32, min(int(payload["max_tokens"]), 512))
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
@@ -756,10 +798,11 @@ def _call_deepseek(
     }
     try:
         current_app.logger.info(
-            "DeepSeek request | model=%s tools=%s choice=%s",
+            "DeepSeek request | model=%s tools=%s choice=%s thinking=%s",
             model,
             len(tools) if tools else 0,
             get_ai_settings().get("model_choice"),
+            "on" if use_thinking else "off",
         )
     except Exception:
         pass
@@ -850,6 +893,13 @@ def _call_deepseek(
     usage = body.get("usage") if isinstance(body, dict) else None
     if isinstance(usage, dict):
         try:
+            record_spend_usage(
+                prompt_tokens=int(usage.get("prompt_tokens") or 0),
+                completion_tokens=int(usage.get("completion_tokens") or 0),
+            )
+        except Exception:
+            pass
+        try:
             hit = int(usage.get("prompt_cache_hit_tokens") or 0)
             miss = int(usage.get("prompt_cache_miss_tokens") or 0)
             prompt_tok = usage.get("prompt_tokens")
@@ -893,7 +943,7 @@ def _run_agent_loop(
     voice: str,
     thread_id: str | None = None,
 ) -> dict[str, Any]:
-    """حلقه کوتاه tool-calling؛ حداکثر ۲ دور ابزار سپس پاسخ نهایی."""
+    """حلقه کوتاه tool-calling؛ حداکثر ۱ دور ابزار سپس پاسخ نهایی."""
     agent_actions: list[dict[str, Any]] = []
     tool_land_codes: list[str] = []
     result: dict[str, Any] = {"ok": False, "error": "پاسخی دریافت نشد."}
@@ -917,11 +967,10 @@ def _run_agent_loop(
             "content": result.get("reply") or None,
             "tool_calls": tool_calls,
         }
-        # DeepSeek thinking mode: reasoning_content MUST be passed back with tool_calls
-        if "reasoning_content" in result:
-            asst_msg["reasoning_content"] = result.get("reasoning_content") or ""
-        else:
-            asst_msg["reasoning_content"] = ""
+        # Thinking mode: reasoning_content فقط وقتی واقعاً هست باید برگردد (نه رشتهٔ خالی).
+        rc = result.get("reasoning_content")
+        if isinstance(rc, str) and rc.strip():
+            asst_msg["reasoning_content"] = rc
         messages.append(asst_msg)
 
         for tc in tool_calls:
@@ -1096,6 +1145,13 @@ def generate_reply(
     cfg = ai_config()
     if not cfg["enabled"]:
         return {"ok": False, "error": "سرویس هوش مصنوعی موقتاً غیرفعال است."}
+    if cfg.get("spend_fuse") and cfg["spend_fuse"].get("tripped"):
+        return {
+            "ok": False,
+            "error": SPEND_FUSE_ERROR,
+            "error_code": "spend_fuse",
+            "spend_fuse": True,
+        }
 
     if aud != AUDIENCE_ADMIN:
         guard = apply_credit_guard(key, aud, text)
@@ -1237,10 +1293,10 @@ def generate_reply(
                     from app.agents.service import prepare_agent_after_supervisor
 
                     route = ""
-                    budget = 3000
+                    budget = 2400
                     if sup_out is not None:
                         route = str(sup_out.workflow.route or "")
-                        budget = int(sup_out.workflow.flags.context_budget_chars or 3000)
+                        budget = int(sup_out.workflow.flags.context_budget_chars or 2400)
                     prepare_agent_after_supervisor(
                         message=text,
                         route=route,
@@ -1597,9 +1653,14 @@ def generate_reply(
         g.ai_last_user_message = (text or "").strip()
     except Exception:
         pass
+    # اگر planning قبلاً ابزار را seed کرده، دوباره schema/جستجو نفرست
+    # (قبلاً مدل search را دوباره می‌زد → +۱ درخواست API و هزاران توکن).
+    loop_tools: list[dict[str, Any]] | None = tools or None
+    if plan_out is not None and seed_tools and plan_out.seed_messages:
+        loop_tools = None
     result = _run_agent_loop(
         messages,
-        tools=tools or None,
+        tools=loop_tools,
         phone=key,
         audience=aud,
         voice=voice,
@@ -1800,7 +1861,7 @@ def generate_reply(
         watch_user(key, audience=aud, voice=voice or "")
     except Exception:
         pass
-    # خلاصهٔ حافظهٔ صفحهٔ تنظیمات — هر چت بازنویسی
+    # خلاصهٔ حافظهٔ صفحهٔ تنظیمات — پیش‌فرض بدون LLM (هر چت یک درخواست اضافه نمی‌سوزاند)
     try:
         from app.express_partner.partner_live_memory import rewrite_partner_live_memory
 
@@ -1895,6 +1956,26 @@ def _record_request_analytics(
         usage = meta.get("usage") if isinstance(meta.get("usage"), dict) else {}
         input_tokens = int(usage.get("prompt_tokens") or 0) or estimate_messages_tokens(messages)
         output_tokens = int(usage.get("completion_tokens") or 0) or estimate_tokens(result.get("reply") or "")
+        reasoning_tokens = 0
+        details = usage.get("completion_tokens_details")
+        if isinstance(details, dict):
+            try:
+                reasoning_tokens = int(details.get("reasoning_tokens") or 0)
+            except Exception:
+                reasoning_tokens = 0
+        if not reasoning_tokens:
+            try:
+                reasoning_tokens = int(usage.get("reasoning_tokens") or 0)
+            except Exception:
+                reasoning_tokens = 0
+        try:
+            cache_hit = int(usage.get("prompt_cache_hit_tokens") or 0)
+        except Exception:
+            cache_hit = 0
+        try:
+            cache_miss = int(usage.get("prompt_cache_miss_tokens") or 0)
+        except Exception:
+            cache_miss = 0
         rag_tokens = int(prompt_parts.get("context_tokens") or 0)
         mem_obs = _get_memory_obs()
         plan_obs = _get_planning_obs()
@@ -2142,6 +2223,10 @@ def _record_request_analytics(
             "total_tokens": input_tokens + output_tokens,
             "total_prompt_tokens": input_tokens,
             "prompt_tokens": input_tokens,
+            "reasoning_tokens": reasoning_tokens,
+            "prompt_cache_hit_tokens": cache_hit,
+            "prompt_cache_miss_tokens": cache_miss,
+            "thinking_enabled": thinking_enabled(),
             "total_cost": usage_cost(usage),
             "response_time_ms": int((time.perf_counter() - started) * 1000),
             "latency_ms": int((time.perf_counter() - started) * 1000),

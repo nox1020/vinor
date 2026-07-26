@@ -199,6 +199,23 @@ def _collect_facts(phone: str) -> dict[str, Any]:
     return facts
 
 
+def _llm_rewrite_allowed() -> bool:
+    """بازنویسی حافظه با LLM — پیش‌فرض خاموش (هر چت = یک درخواست اضافهٔ DeepSeek)."""
+    return (os.environ.get("VINOR_PARTNER_LIVE_MEMORY_LLM") or "0").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _llm_rewrite_min_interval_sec() -> int:
+    try:
+        return max(60, min(86_400, int(os.environ.get("VINOR_PARTNER_LIVE_MEMORY_LLM_INTERVAL_SEC") or 900)))
+    except Exception:
+        return 900
+
+
 def _llm_rewrite_summary(
     *,
     previous: str,
@@ -207,6 +224,8 @@ def _llm_rewrite_summary(
     last_assistant: str = "",
     action_note: str = "",
 ) -> str:
+    if not _llm_rewrite_allowed():
+        return ""
     from app.ai.services import _call_deepseek
 
     payload = {
@@ -226,7 +245,7 @@ def _llm_rewrite_summary(
             {"role": "user", "content": user_msg},
         ],
         tools=None,
-        max_tokens=280,
+        max_tokens=220,
         temperature=0.35,
     )
     if not out.get("ok"):
@@ -235,8 +254,8 @@ def _llm_rewrite_summary(
     # پاک‌سازی حداقلی
     text = re.sub(r"^#+\s*", "", text, flags=re.M)
     text = re.sub(r"^(حافظه|Memory)\s*[:：]\s*", "", text, flags=re.I).strip()
-    if len(text) > 1200:
-        text = text[:1199].rstrip() + "…"
+    if len(text) > 900:
+        text = text[:899].rstrip() + "…"
     return text
 
 
@@ -247,7 +266,7 @@ def rewrite_partner_live_memory(
     last_assistant: str = "",
     action_note: str = "",
 ) -> dict[str, Any]:
-    """ارسال به مدل و بازنویسی خلاصهٔ حافظه مثل GPT Memory."""
+    """بازنویسی خلاصهٔ حافظه — پیش‌فرض بدون LLM؛ LLM فقط با VINOR_PARTNER_LIVE_MEMORY_LLM=1."""
     ph = _norm_phone(phone)
     if not ph:
         return {}
@@ -258,21 +277,37 @@ def rewrite_partner_live_memory(
         previous = ""
     facts = _collect_facts(ph)
     summary = ""
-    try:
-        summary = _llm_rewrite_summary(
-            previous=previous,
-            facts=facts,
-            last_user=last_user,
-            last_assistant=last_assistant,
-            action_note=action_note,
-        )
-    except Exception as exc:
+    use_llm = _llm_rewrite_allowed()
+    if use_llm:
+        # throttle: حداکثر یک‌بار در بازه (پیش‌فرض ۱۵ دقیقه)
         try:
-            current_app.logger.warning("partner memory LLM failed: %s", exc)
+            from datetime import datetime, timezone
+
+            updated = str((prev_row or {}).get("updated_at") or "")
+            if updated and (prev_row or {}).get("meta", {}).get("source") == "llm":
+                prev_dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                age = (datetime.now(timezone.utc) - prev_dt).total_seconds()
+                if age < _llm_rewrite_min_interval_sec():
+                    use_llm = False
+                    summary = previous
         except Exception:
             pass
+    if use_llm:
+        try:
+            summary = _llm_rewrite_summary(
+                previous=previous,
+                facts=facts,
+                last_user=last_user,
+                last_assistant=last_assistant,
+                action_note=action_note,
+            )
+        except Exception as exc:
+            try:
+                current_app.logger.warning("partner memory LLM failed: %s", exc)
+            except Exception:
+                pass
     if not summary:
-        # fallback کوتاه — نه کپی KPI
+        # fallback کوتاه — نه کپی KPI و نه درخواست DeepSeek
         name = str(facts.get("name") or "").strip()
         role = str(facts.get("role") or "").strip()
         bits = []
@@ -284,11 +319,17 @@ def rewrite_partner_live_memory(
             bits.append(f"آخرین موضوع گفتگو: {last_user[:100]}")
         if action_note:
             bits.append(f"آخرین اقدام: {action_note[:100]}")
-        summary = "\n".join(bits).strip() or "هنوز حافظه‌ای ساخته نشده — با چت بعدی پر می‌شود."
+        if previous and not bits:
+            summary = previous
+        else:
+            summary = "\n".join(bits).strip() or "هنوز حافظه‌ای ساخته نشده — با چت بعدی پر می‌شود."
     row = save_partner_live_memory(
         ph,
         summary=summary,
-        meta={"facts_keys": list(facts.keys()), "source": "llm" if summary else "fallback"},
+        meta={
+            "facts_keys": list(facts.keys()),
+            "source": "llm" if (use_llm and summary and summary != previous) else "local",
+        },
     )
     # همگام با منبع حقیقت ai_memory
     try:

@@ -14,9 +14,9 @@ def supervisor_enabled() -> bool:
 
 def supervisor_default_context_budget() -> int:
     try:
-        return max(800, min(6000, int(os.environ.get("VINOR_SUPERVISOR_CONTEXT_BUDGET") or 3000)))
+        return max(800, min(2400, int(os.environ.get("VINOR_SUPERVISOR_CONTEXT_BUDGET") or 2400)))
     except Exception:
-        return 3000
+        return 2400
 
 
 def funnel_watch_enabled() -> bool:

@@ -310,31 +310,26 @@ def _never_ask_land_instruction(phone: str = "") -> str:
 
 
 def agent_system_hint(voice: str | None) -> str:
-    """یادآوری کوتاه هدف قفل — جزئیات در goal.py / config."""
-    from .goal import GOAL_ADMIN_SYSTEM, GOAL_SYSTEM
-
+    """یادآوری کوتاه مسیر فروش — بدون تکرار GOAL_SYSTEM (قبلاً در base prompt است)."""
     v = (voice or "").strip().lower()
     if v == VOICE_ADMIN:
         return (
-            f"{GOAL_ADMIN_SYSTEM} "
             "صف→admin_ops_summary/admin_list_queue | "
             "پیام همگانی→propose_broadcast_* | فایل→propose_add/update | "
             "همکار→propose_partner_decision | بازدید/مالی/escalation با کارت. "
             "تا تأیید نزده نگو انجام شد."
         )
     if v == VOICE_PUBLIC:
-        path = (
+        return (
             "مهمان: خرید→search_lands (حداکثر ۲)→نزدیک‌ترین را با [[LAND]] معرفی کن | "
             "بازاریاب شدن→coop_info سپس propose_apply "
             "(نام/کدملی/شهر یکی‌یکی). propose_visit/deal نزن."
         )
-    else:
-        path = (
-            "بازاریاب: مشتری→search_lands (حداکثر ۲ کارت؛ نزدیک‌ترین اول)→[[LAND]] | فایل→معرفی. "
-            "روزانه: next_action + listing + visit/complete/deal + call/followup. "
-            "بازدید یکی‌یکی. تا کارت تأیید نزده نگو ثبت شد."
-        )
-    return f"{GOAL_SYSTEM} {path}"
+    return (
+        "بازاریاب: مشتری→search_lands (حداکثر ۲ کارت؛ نزدیک‌ترین اول)→[[LAND]] | فایل→معرفی. "
+        "روزانه: next_action + listing + visit/complete/deal + call/followup. "
+        "بازدید یکی‌یکی. تا کارت تأیید نزده نگو ثبت شد."
+    )
 
 
 def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
@@ -1433,10 +1428,8 @@ def _tool_search_lands(
         "recommended_code": (items[0].get("code") if items else ""),
         "service_area": loc_label,
         "instruction": (
-            f"فقط فایل‌های {village}. حداکثر ۲ کارت. "
-            "نزدیک‌ترین به معیار را اول با یک جمله دلیل معرفی کن و [[LAND:کد]] بگذار؛ "
-            "دومی فقط به‌عنوان گزینهٔ جایگزین با [[LAND:کد]]. "
-            f"اگر کاربر جای دیگری خواست، بگو فعلا فقط {loc_label}."
+            f"فقط {village}. نزدیک‌ترین را با [[LAND:کد]] معرفی کن؛ "
+            "دومی جایگزین. جای دیگر پیشنهاد نده."
         ),
     }
     return {"ok": True, "model_result": model, "land_codes": codes[:_MAX_LAND_CARDS]}

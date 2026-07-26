@@ -113,6 +113,179 @@ def clear_api_balance_depleted() -> None:
     _save_cache(data)
 
 
+# --- شیر اطمینان مصرف (Spend Fuse) ---
+SPEND_FUSE_ERROR = (
+    "مصرف هوش مصنوعی به‌خاطر سقف ایمنی قطع شده است. "
+    "ادمین باید از پنل دوباره فعال کند."
+)
+
+
+def _spend_fuse_limits() -> dict[str, Any]:
+    cfg = get_ai_settings()
+    try:
+        window = max(300, min(7 * 86400, int(cfg.get("spend_fuse_window_sec") or 86400)))
+    except Exception:
+        window = 86400
+    try:
+        max_tok = max(50_000, min(100_000_000, int(cfg.get("spend_fuse_max_tokens") or 2_500_000)))
+    except Exception:
+        max_tok = 2_500_000
+    try:
+        max_req = max(20, min(100_000, int(cfg.get("spend_fuse_max_requests") or 600)))
+    except Exception:
+        max_req = 600
+    enabled = bool(cfg.get("spend_fuse_enabled", True))
+    return {
+        "enabled": enabled,
+        "window_sec": window,
+        "max_tokens": max_tok,
+        "max_requests": max_req,
+    }
+
+
+def _roll_spend_window(spend: dict[str, Any], window_sec: int) -> dict[str, Any]:
+    now = time.time()
+    start = float(spend.get("window_start") or 0)
+    if not start or (now - start) >= window_sec:
+        return {
+            "window_start": now,
+            "tokens": 0,
+            "requests": 0,
+        }
+    spend.setdefault("window_start", start)
+    spend["tokens"] = int(spend.get("tokens") or 0)
+    spend["requests"] = int(spend.get("requests") or 0)
+    return spend
+
+
+def spend_fuse_status() -> dict[str, Any]:
+    """وضعیت شیر اطمینان برای پنل ادمین و ai_config."""
+    limits = _spend_fuse_limits()
+    data = _load_cache()
+    flags = data.get("flags") or {}
+    spend = _roll_spend_window(dict(data.get("spend") or {}), int(limits["window_sec"]))
+    tripped = bool(flags.get("spend_fuse_tripped"))
+    return {
+        "enabled": bool(limits["enabled"]),
+        "tripped": tripped,
+        "tripped_at": float(flags.get("spend_fuse_tripped_at") or 0) or None,
+        "reason": str(flags.get("spend_fuse_reason") or ""),
+        "sms_sent": bool(flags.get("spend_fuse_sms_sent_at")),
+        "window_sec": int(limits["window_sec"]),
+        "max_tokens": int(limits["max_tokens"]),
+        "max_requests": int(limits["max_requests"]),
+        "used_tokens": int(spend.get("tokens") or 0),
+        "used_requests": int(spend.get("requests") or 0),
+        "window_started_at": float(spend.get("window_start") or 0) or None,
+    }
+
+
+def is_spend_fuse_tripped() -> bool:
+    """اگر شیر خورده باشد، هر فراخوانی DeepSeek باید قطع شود."""
+    limits = _spend_fuse_limits()
+    if not limits["enabled"]:
+        return False
+    data = _load_cache()
+    return bool((data.get("flags") or {}).get("spend_fuse_tripped"))
+
+
+def clear_spend_fuse(*, reset_counters: bool = True) -> dict[str, Any]:
+    """فعال‌سازی مجدد مصرف توسط ادمین."""
+    data = _load_cache()
+    flags = data.setdefault("flags", {})
+    for key in (
+        "spend_fuse_tripped",
+        "spend_fuse_tripped_at",
+        "spend_fuse_reason",
+        "spend_fuse_sms_sent_at",
+    ):
+        flags.pop(key, None)
+    data["flags"] = flags
+    if reset_counters:
+        data["spend"] = {
+            "window_start": time.time(),
+            "tokens": 0,
+            "requests": 0,
+        }
+    _save_cache(data)
+    try:
+        current_app.logger.warning("AI spend fuse cleared by admin")
+    except Exception:
+        pass
+    return spend_fuse_status()
+
+
+def trip_spend_fuse(*, tokens: int, requests: int, max_tokens: int, max_requests: int) -> None:
+    """قطع مصرف + پیامک یک‌بار به ادمین."""
+    data = _load_cache()
+    flags = data.setdefault("flags", {})
+    already = bool(flags.get("spend_fuse_tripped"))
+    reason = (
+        f"سقف مصرف: {int(tokens):,} توکن / {int(max_tokens):,} "
+        f"| {int(requests):,} درخواست / {int(max_requests):,}"
+    )
+    flags["spend_fuse_tripped"] = True
+    flags["spend_fuse_tripped_at"] = time.time()
+    flags["spend_fuse_reason"] = reason
+    data["flags"] = flags
+    _save_cache(data)
+    if already and flags.get("spend_fuse_sms_sent_at"):
+        return
+    try:
+        from app.ai.escalations import send_admin_spend_fuse_sms
+
+        if send_admin_spend_fuse_sms(
+            tokens=tokens,
+            requests=requests,
+            max_tokens=max_tokens,
+            max_requests=max_requests,
+        ):
+            data = _load_cache()
+            data.setdefault("flags", {})["spend_fuse_sms_sent_at"] = time.time()
+            _save_cache(data)
+    except Exception:
+        try:
+            current_app.logger.exception("AI spend fuse SMS failed")
+        except Exception:
+            pass
+    try:
+        current_app.logger.error("AI spend fuse TRIPPED | %s", reason)
+    except Exception:
+        pass
+
+
+def record_spend_usage(*, prompt_tokens: int = 0, completion_tokens: int = 0) -> dict[str, Any]:
+    """ثبت مصرف هر فراخوانی API؛ در صورت عبور از سقف، شیر را بزن."""
+    limits = _spend_fuse_limits()
+    if not limits["enabled"]:
+        return spend_fuse_status()
+    try:
+        prompt_n = max(0, int(prompt_tokens or 0))
+        completion_n = max(0, int(completion_tokens or 0))
+    except Exception:
+        prompt_n, completion_n = 0, 0
+    added = prompt_n + completion_n
+    data = _load_cache()
+    spend = _roll_spend_window(dict(data.get("spend") or {}), int(limits["window_sec"]))
+    spend["tokens"] = int(spend.get("tokens") or 0) + max(0, added)
+    spend["requests"] = int(spend.get("requests") or 0) + 1
+    data["spend"] = spend
+    _save_cache(data)
+
+    used_tok = int(spend["tokens"])
+    used_req = int(spend["requests"])
+    max_tok = int(limits["max_tokens"])
+    max_req = int(limits["max_requests"])
+    if used_tok >= max_tok or used_req >= max_req:
+        trip_spend_fuse(
+            tokens=used_tok,
+            requests=used_req,
+            max_tokens=max_tok,
+            max_requests=max_req,
+        )
+    return spend_fuse_status()
+
+
 def _save_cache(data: dict[str, Any]) -> None:
     path = _cache_file()
     tmp = path + ".tmp"
@@ -353,6 +526,14 @@ def apply_credit_guard(
 
     if is_api_balance_depleted():
         return None
+
+    if is_spend_fuse_tripped():
+        return {
+            "ok": False,
+            "error": SPEND_FUSE_ERROR,
+            "error_code": "spend_fuse",
+            "spend_fuse": True,
+        }
 
     rate_err = check_rate_limit(user_key, audience)
     if rate_err:

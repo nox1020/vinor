@@ -16,9 +16,13 @@ def _deepseek(
 
 def _api_usable() -> bool:
     from .config import get_deepseek_api_key
-    from .credits import is_api_balance_depleted
+    from .credits import is_api_balance_depleted, is_spend_fuse_tripped
 
-    return bool(get_deepseek_api_key()) and not is_api_balance_depleted()
+    return (
+        bool(get_deepseek_api_key())
+        and not is_api_balance_depleted()
+        and not is_spend_fuse_tripped()
+    )
 
 
 def call_ai(
@@ -30,12 +34,21 @@ def call_ai(
         return _deepseek(messages, tools=tools)
 
     from .config import get_deepseek_api_key
+    from .credits import SPEND_FUSE_ERROR, is_spend_fuse_tripped
 
     if not get_deepseek_api_key():
         return {
             "ok": False,
             "error": "کلید API هوش مصنوعی تنظیم نشده است.",
             "error_code": "no_api_key",
+        }
+
+    if is_spend_fuse_tripped():
+        return {
+            "ok": False,
+            "error": SPEND_FUSE_ERROR,
+            "error_code": "spend_fuse",
+            "spend_fuse": True,
         }
 
     return {

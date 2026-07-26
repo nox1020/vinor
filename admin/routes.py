@@ -2528,7 +2528,9 @@ def ai_questions():
                 patch = {
                     'enabled': request.form.get('ai_enabled') == '1',
                     'escalation_sms_enabled': request.form.get('ai_escalation_sms_enabled') == '1',
-                    'model_choice': (request.form.get('ai_model_choice') or 'auto').strip(),
+                    'spend_fuse_enabled': request.form.get('ai_spend_fuse_enabled') == '1',
+                    'model_choice': 'flash',
+                    'thinking_enabled': False,
                     'min_interval_sec': float(request.form.get('ai_min_interval_sec') or ai_def['min_interval_sec']),
                     'dedup_ttl_sec': int(request.form.get('ai_dedup_ttl_sec') or ai_def['dedup_ttl_sec']),
                     'max_history': int(request.form.get('ai_max_history') or ai_def['max_history']),
@@ -2542,6 +2544,15 @@ def ai_questions():
                     'public_ctx_ttl_sec': int(request.form.get('ai_public_ctx_ttl_sec') or ai_def['public_ctx_ttl_sec']),
                     'partner_ctx_ttl_sec': int(request.form.get('ai_partner_ctx_ttl_sec') or ai_def['partner_ctx_ttl_sec']),
                     'min_message_chars': int(request.form.get('ai_min_message_chars') or ai_def['min_message_chars']),
+                    'spend_fuse_window_sec': int(
+                        request.form.get('ai_spend_fuse_window_sec') or ai_def['spend_fuse_window_sec']
+                    ),
+                    'spend_fuse_max_tokens': int(
+                        request.form.get('ai_spend_fuse_max_tokens') or ai_def['spend_fuse_max_tokens']
+                    ),
+                    'spend_fuse_max_requests': int(
+                        request.form.get('ai_spend_fuse_max_requests') or ai_def['spend_fuse_max_requests']
+                    ),
                     'api_key': (request.form.get('ai_api_key') or '').strip(),
                     'clear_api_key': request.form.get('ai_clear_api_key') == '1',
                 }
@@ -2549,6 +2560,20 @@ def ai_questions():
                 flash('تنظیمات پیکربندی AI ذخیره شد.', 'success')
             except (TypeError, ValueError):
                 flash('مقدار نامعتبر در فرم تنظیمات.', 'error')
+            return redirect(url_for('admin.ai_questions'))
+
+        if action == 'clear_spend_fuse':
+            try:
+                from app.ai.credits import clear_spend_fuse
+
+                st = clear_spend_fuse(reset_counters=True)
+                flash(
+                    'شیر اطمینان مصرف باز شد — API دوباره فعال است. '
+                    f"(شمارنده صفر شد؛ سقف: {st.get('max_tokens'):,} توکن / {st.get('max_requests')} درخواست)",
+                    'success',
+                )
+            except Exception:
+                flash('باز کردن شیر اطمینان ممکن نشد.', 'error')
             return redirect(url_for('admin.ai_questions'))
 
         eid = (request.form.get('escalation_id') or '').strip()

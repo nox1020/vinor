@@ -89,20 +89,31 @@ def build_seed_messages(results: list[TaskResult]) -> list[dict[str, Any]]:
                 },
             }
         )
+        payload = r.model_result
         try:
-            content = json.dumps(r.model_result, ensure_ascii=False)[:1800]
+            from app.ai.services import _compact_tool_model_payload
+
+            payload = _compact_tool_model_payload(payload)
         except Exception:
-            content = str(r.model_result)[:1800]
+            pass
+        try:
+            content = json.dumps(payload, ensure_ascii=False)[:700]
+        except Exception:
+            content = str(payload)[:700]
         tool_msgs.append({"role": "tool", "tool_call_id": tc_id, "content": content})
     if not tool_calls:
         return []
-    return [
-        {
-            "role": "assistant",
-            "content": None,
-            # DeepSeek thinking mode rejects tool_calls turns without this field.
-            "reasoning_content": "",
-            "tool_calls": tool_calls,
-        },
-        *tool_msgs,
-    ]
+    asst: dict[str, Any] = {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": tool_calls,
+    }
+    # فقط وقتی Thinking روشن است reasoning_content لازم است
+    try:
+        from app.ai.runtime_settings import thinking_enabled
+
+        if thinking_enabled():
+            asst["reasoning_content"] = ""
+    except Exception:
+        pass
+    return [asst, *tool_msgs]

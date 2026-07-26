@@ -24,7 +24,7 @@
     </div>
 
     <div class="px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
         <div class="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-3 py-2">
           <p class="text-gray-500 dark:text-gray-400">وضعیت سرویس</p>
           <p class="mt-0.5 font-semibold {% if ai_status.enabled %}text-emerald-600 dark:text-emerald-400{% else %}text-red-600 dark:text-red-400{% endif %}">
@@ -44,6 +44,14 @@
           </p>
         </div>
         <div class="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-3 py-2">
+          <p class="text-gray-500 dark:text-gray-400">شیر اطمینان</p>
+          <p class="mt-0.5 font-semibold {% if ai_status.spend_fuse_ok %}text-emerald-600 dark:text-emerald-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+            {% if not ai_settings.spend_fuse_enabled %}خاموش
+            {% elif ai_status.spend_fuse_ok %}باز
+            {% else %}قطع مصرف{% endif %}
+          </p>
+        </div>
+        <div class="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-3 py-2">
           <p class="text-gray-500 dark:text-gray-400">مدل</p>
           <p class="mt-0.5 font-semibold text-gray-800 dark:text-gray-200">
             {{ ai_status.model_choice_label or 'خودکار' }}
@@ -51,6 +59,36 @@
           </p>
         </div>
       </div>
+      {% set fuse = ai_status.spend_fuse or {} %}
+      {% if fuse.tripped %}
+      <div class="mt-3 rounded-xl border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-3 text-sm text-red-900 dark:text-red-100">
+        <p class="font-bold mb-1">مصرف قطع شده — شیر اطمینان خورده است</p>
+        <p class="text-xs leading-5 opacity-90">{{ fuse.reason or 'سقف مصرف رد شد.' }}</p>
+        <p class="mt-2 text-[11px] opacity-80">
+          تا وقتی از دکمهٔ زیر دوباره فعال نکنید، هیچ درخواست DeepSeek ارسال نمی‌شود.
+        </p>
+        <form method="post" action="{{ url_for('admin.ai_questions') }}" class="mt-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="clear_spend_fuse">
+          <button type="submit"
+                  class="inline-flex items-center gap-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-2">
+            <i class="fa-solid fa-unlock"></i>
+            فعال‌سازی مجدد مصرف
+          </button>
+        </form>
+      </div>
+      {% elif ai_settings.spend_fuse_enabled %}
+      <p class="mt-3 text-[11px] text-gray-500 dark:text-gray-400">
+        مصرف فعلی پنجره:
+        <span class="ltr font-medium text-gray-700 dark:text-gray-300">
+          {{ '{:,}'.format(fuse.used_tokens or 0) }} / {{ '{:,}'.format(fuse.max_tokens or 0) }} توکن
+        </span>
+        <span class="mx-1">·</span>
+        <span class="ltr font-medium text-gray-700 dark:text-gray-300">
+          {{ fuse.used_requests or 0 }} / {{ fuse.max_requests or 0 }} درخواست
+        </span>
+      </p>
+      {% endif %}
       <p class="mt-3 text-[11px] text-gray-500 dark:text-gray-400">
         شماره SMS سوالات AI:
         <span class="ltr font-medium text-gray-700 dark:text-gray-300">{{ site_settings.partner_application_admin_phone or '—' }}</span>
@@ -74,24 +112,61 @@
                  {% if ai_settings.escalation_sms_enabled %}checked{% endif %}>
           پیامک سوال جدید به ادمین
         </label>
+        <label class="inline-flex items-center gap-2 text-sm text-rose-800 dark:text-rose-200 cursor-pointer">
+          <input type="checkbox" name="ai_spend_fuse_enabled" value="1" class="rounded border-gray-300 text-rose-600 focus:ring-rose-500"
+                 {% if ai_settings.spend_fuse_enabled %}checked{% endif %}>
+          شیر اطمینان مصرف (قطع خودکار + پیامک)
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200 cursor-pointer">
+          <input type="checkbox" name="ai_thinking_enabled" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                 {% if ai_settings.thinking_enabled %}checked{% endif %}>
+          Thinking Mode (گران — پیش‌فرض خاموش)
+        </label>
+      </div>
+
+      <div class="rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/70 dark:bg-rose-950/20 p-4 space-y-3">
+        <p class="text-xs font-bold text-rose-900 dark:text-rose-100">سقف شیر اطمینان (پنجرهٔ غلتان)</p>
+        <p class="text-[11px] text-rose-800/90 dark:text-rose-200/80 leading-5">
+          اگر مجموع توکن یا تعداد درخواست‌های API در این بازه از سقف بگذرد، مصرف قطع می‌شود و پیامک به ادمین می‌رود.
+          فقط با دکمهٔ «فعال‌سازی مجدد مصرف» دوباره باز می‌شود.
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">بازه (ثانیه)</label>
+            <input type="number" name="ai_spend_fuse_window_sec" min="300" max="604800" step="60"
+                   value="{{ ai_settings.spend_fuse_window_sec }}"
+                   class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm px-3 py-2 ltr text-left">
+            <p class="mt-1 text-[10px] text-gray-500">پیش‌فرض ۸۶۴۰۰ = ۲۴ ساعت</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">سقف توکن</label>
+            <input type="number" name="ai_spend_fuse_max_tokens" min="50000" max="100000000" step="10000"
+                   value="{{ ai_settings.spend_fuse_max_tokens }}"
+                   class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm px-3 py-2 ltr text-left">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">سقف درخواست API</label>
+            <input type="number" name="ai_spend_fuse_max_requests" min="20" max="100000" step="10"
+                   value="{{ ai_settings.spend_fuse_max_requests }}"
+                   class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm px-3 py-2 ltr text-left">
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-lg border border-teal-200 dark:border-teal-900/50 bg-teal-50/80 dark:bg-teal-950/30 px-3 py-2 text-[11px] text-teal-900 dark:text-teal-100 leading-5">
+        <strong>قفل قطعی:</strong> فقط <span class="font-mono">deepseek-v4-flash</span>.
+        مدل Pro در کد مسدود است و به API فرستاده نمی‌شود — حتی اگر در settings قدیمی Pro ذخیره شده باشد.
       </div>
 
       <fieldset class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/40 p-4">
-        <legend class="px-1 text-xs font-bold text-gray-700 dark:text-gray-200">مدل DeepSeek V4</legend>
-        <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 leading-5">
-          سه گزینه: Flash (پیشنهادی)، خودکار(=Flash)، یا Pro.
-          شناسهٔ API بر اساس مستندات: <span class="ltr">deepseek-v4-flash / deepseek-v4-pro</span>.
-          نام‌های قدیمی <span class="ltr">deepseek-chat / deepseek-reasoner</span> از ۲۰۲۶/۰۷/۲۴ منسوخ می‌شوند.
-        </p>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <legend class="px-1 text-xs font-bold text-gray-700 dark:text-gray-200">مدل DeepSeek — فقط Flash</legend>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {% for opt in ai_model_options %}
-          <label class="relative flex flex-col gap-1 rounded-xl border px-3 py-3 cursor-pointer transition
-                        {% if (ai_settings.model_choice or 'auto') == opt.value %}border-violet-500 bg-violet-50 dark:bg-violet-900/20 ring-1 ring-violet-400/40{% else %}border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-600{% endif %}">
+          <label class="relative flex flex-col gap-1 rounded-xl border border-teal-500 bg-teal-50 dark:bg-teal-900/20 ring-1 ring-teal-400/40 px-3 py-3">
             <span class="flex items-center gap-2">
-              <input type="radio" name="ai_model_choice" value="{{ opt.value }}"
-                     class="text-violet-600 focus:ring-violet-500"
-                     {% if (ai_settings.model_choice or 'auto') == opt.value %}checked{% endif %}>
+              <input type="radio" name="ai_model_choice" value="flash" class="text-teal-600 focus:ring-teal-500" checked>
               <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ opt.label }}</span>
+              <span class="text-[10px] font-bold text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/40 px-1.5 py-0.5 rounded">تنها مدل</span>
             </span>
             <span class="text-[11px] text-gray-500 dark:text-gray-400 leading-5 pr-6">{{ opt.hint }}</span>
             <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 ltr text-left">{{ opt.api_id }}</span>

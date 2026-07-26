@@ -71,7 +71,7 @@ def _tasks_for_plan(plan_type: str, goal: str, intent: str) -> list[Task]:
     if plan_type == PLAN_PROPERTY_SEARCH:
         return [
             Task(id="t1", name="analyze_need"),
-            Task(id="t2", name="search", tool_name="search_lands", tool_args={"query": goal, "limit": 5}),
+            Task(id="t2", name="search", tool_name="search_lands", tool_args={"query": goal, "limit": 2}),
             Task(id="t3", name="rank_results"),
             Task(id="t4", name="select_best"),
             Task(id="t5", name="compose_response"),
@@ -79,14 +79,14 @@ def _tasks_for_plan(plan_type: str, goal: str, intent: str) -> list[Task]:
     if plan_type == PLAN_PROPERTY_COMPARE:
         return [
             Task(id="t1", name="analyze_compare_need"),
-            Task(id="t2", name="search", tool_name="search_lands", tool_args={"query": goal, "limit": 5}),
+            Task(id="t2", name="search", tool_name="search_lands", tool_args={"query": goal, "limit": 2}),
             Task(id="t3", name="compare_candidates"),
             Task(id="t4", name="compose_response"),
         ]
     if plan_type == PLAN_PROPERTY_RECOMMENDATION:
         return [
             Task(id="t1", name="analyze_preferences"),
-            Task(id="t2", name="search", tool_name="search_lands", tool_args={"query": goal, "limit": 5}),
+            Task(id="t2", name="search", tool_name="search_lands", tool_args={"query": goal, "limit": 2}),
             Task(id="t3", name="recommend"),
             Task(id="t4", name="compose_response"),
         ]
