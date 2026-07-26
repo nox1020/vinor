@@ -87,6 +87,7 @@ def list_conversation_index(*, limit: int = 100, audience: str = "", q: str = ""
                     last = msgs[-1] if isinstance(msgs[-1], dict) else {}
                     last_role = str(last.get("role") or "")
                     last_preview = str(last.get("content") or "")[:80]
+                updated = str(th.get("updated_at") or th.get("created_at") or "")
                 rows.append(
                     {
                         "audience": aud,
@@ -95,7 +96,8 @@ def list_conversation_index(*, limit: int = 100, audience: str = "", q: str = ""
                         "thread_id": str(th.get("id") or ""),
                         "title": str(th.get("title") or "گفتگو"),
                         "msg_count": len(msgs),
-                        "updated_at": str(th.get("updated_at") or th.get("created_at") or ""),
+                        "updated_at": updated,
+                        "updated_label": _ts_label(updated),
                         "last_role": last_role,
                         "last_preview": last_preview,
                     }
@@ -139,12 +141,14 @@ def get_conversation(
         if not isinstance(m, dict):
             continue
         content = str(m.get("content") or "")
+        ts = str(m.get("ts") or m.get("created_at") or "")
         msgs.append(
             {
                 "role": str(m.get("role") or ""),
                 "content": content,
                 "content_preview": content[:500],
-                "ts": str(m.get("ts") or m.get("created_at") or ""),
+                "ts": ts,
+                "ts_label": _ts_label(ts),
             }
         )
     return {
@@ -295,6 +299,240 @@ def list_token_rows(*, limit: int = 100) -> List[dict[str, Any]]:
         except Exception:
             return []
     return _tail_jsonl(path, limit=limit)
+
+
+def _row_int(row: dict[str, Any], *keys: str) -> int:
+    for k in keys:
+        try:
+            v = row.get(k)
+            if v is None or v == "":
+                continue
+            return int(v)
+        except Exception:
+            continue
+    return 0
+
+
+def _row_float(row: dict[str, Any], *keys: str) -> float:
+    for k in keys:
+        try:
+            v = row.get(k)
+            if v is None or v == "":
+                continue
+            return float(v)
+        except Exception:
+            continue
+    return 0.0
+
+
+def _ts_label(raw: Any) -> str:
+    """Unix epoch or ISO → short display label."""
+    if raw is None or raw == "":
+        return "—"
+    try:
+        n = int(raw)
+        if n > 1_000_000_000_000:  # ms
+            n = n // 1000
+        if n > 1_000_000_000:
+            return datetime.fromtimestamp(n, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        pass
+    s = str(raw)
+    if "T" in s:
+        return s.replace("T", " ")[:16]
+    return s[:19] if len(s) > 19 else s
+
+
+def token_usage_report(
+    *,
+    limit: int = 5000,
+    user: str = "",
+    audience: str = "",
+    since_ts: int = 0,
+) -> dict[str, Any]:
+    """Network-wide + per-user token/cost aggregates from ai_token_analytics.jsonl."""
+    blank: dict[str, Any] = {
+        "sample_count": 0,
+        "requests": 0,
+        "ok_count": 0,
+        "error_count": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "total_cost": 0.0,
+        "avg_latency_ms": 0,
+        "by_audience": {},
+        "by_model": {},
+        "users": [],
+        "recent": [],
+        "user_filter": (user or "").strip(),
+        "audience_filter": (audience or "").strip(),
+    }
+    rows = list_token_rows(limit=max(100, int(limit or 5000)))
+    user_q = (user or "").strip()
+    user_digits = re.sub(r"\D+", "", user_q)
+    aud_q = (audience or "").strip().lower()
+    since = int(since_ts or 0)
+
+    filtered: List[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        ts_raw = row.get("ts") or row.get("created_at") or 0
+        try:
+            ts_n = int(ts_raw)
+            if ts_n > 1_000_000_000_000:
+                ts_n = ts_n // 1000
+        except Exception:
+            ts_n = 0
+        if since and ts_n and ts_n < since:
+            continue
+        uk = str(row.get("user") or row.get("user_key") or "").strip()
+        aud = str(row.get("audience") or "").strip().lower()
+        if aud_q and aud != aud_q:
+            continue
+        if user_q:
+            uk_digits = re.sub(r"\D+", "", uk)
+            if user_q.lower() not in uk.lower() and not (
+                user_digits and user_digits in uk_digits
+            ):
+                continue
+        filtered.append(row)
+
+    by_user: dict[str, dict[str, Any]] = {}
+    by_aud: dict[str, dict[str, int]] = {}
+    by_model: dict[str, int] = {}
+    sum_in = sum_out = sum_total = 0
+    sum_cost = 0.0
+    sum_lat = 0
+    lat_n = 0
+    ok_n = err_n = 0
+
+    for row in filtered:
+        uk = str(row.get("user") or row.get("user_key") or "").strip() or "—"
+        aud = str(row.get("audience") or "").strip() or "—"
+        model = str(row.get("model") or row.get("provider") or "—").strip() or "—"
+        inp = _row_int(row, "input_tokens", "prompt_tokens", "total_prompt_tokens")
+        out = _row_int(row, "output_tokens", "completion_tokens")
+        tot = _row_int(row, "total_tokens") or (inp + out)
+        cost = _row_float(row, "total_cost", "cost")
+        lat = _row_int(row, "latency_ms", "response_time_ms", "duration_ms")
+        is_err = bool(row.get("error") or row.get("ok") is False)
+
+        sum_in += inp
+        sum_out += out
+        sum_total += tot
+        sum_cost += cost
+        if lat > 0:
+            sum_lat += lat
+            lat_n += 1
+        if is_err:
+            err_n += 1
+        else:
+            ok_n += 1
+
+        ba = by_aud.setdefault(aud, {"requests": 0, "total_tokens": 0})
+        ba["requests"] += 1
+        ba["total_tokens"] += tot
+        by_model[model] = int(by_model.get(model) or 0) + 1
+
+        u = by_user.setdefault(
+            uk,
+            {
+                "user_key": uk,
+                "user_masked": _mask_phone(uk),
+                "requests": 0,
+                "ok_count": 0,
+                "error_count": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "total_cost": 0.0,
+                "audiences": set(),
+                "last_ts": 0,
+                "last_ts_label": "—",
+            },
+        )
+        u["requests"] += 1
+        if is_err:
+            u["error_count"] += 1
+        else:
+            u["ok_count"] += 1
+        u["input_tokens"] += inp
+        u["output_tokens"] += out
+        u["total_tokens"] += tot
+        u["total_cost"] += cost
+        if aud and aud != "—":
+            u["audiences"].add(aud)
+        ts_raw = row.get("ts") or row.get("created_at") or 0
+        try:
+            ts_n = int(ts_raw)
+            if ts_n > 1_000_000_000_000:
+                ts_n = ts_n // 1000
+        except Exception:
+            ts_n = 0
+        if ts_n >= int(u.get("last_ts") or 0):
+            u["last_ts"] = ts_n
+            u["last_ts_label"] = _ts_label(ts_n or ts_raw)
+
+    users_out: List[dict[str, Any]] = []
+    for u in by_user.values():
+        auds = u.pop("audiences", set()) or set()
+        users_out.append(
+            {
+                **u,
+                "audiences": sorted(auds),
+                "total_cost": round(float(u.get("total_cost") or 0), 6),
+            }
+        )
+    users_out.sort(key=lambda r: int(r.get("total_tokens") or 0), reverse=True)
+
+    recent: List[dict[str, Any]] = []
+    for row in filtered[:80]:
+        uk = str(row.get("user") or row.get("user_key") or "")
+        inp = _row_int(row, "input_tokens", "prompt_tokens", "total_prompt_tokens")
+        out = _row_int(row, "output_tokens", "completion_tokens")
+        tot = _row_int(row, "total_tokens") or (inp + out)
+        recent.append(
+            {
+                "ts": row.get("ts") or row.get("created_at") or "",
+                "ts_label": _ts_label(row.get("ts") or row.get("created_at") or ""),
+                "user_key": uk,
+                "user_masked": _mask_phone(uk),
+                "audience": str(row.get("audience") or ""),
+                "model": str(row.get("model") or ""),
+                "input_tokens": inp,
+                "output_tokens": out,
+                "total_tokens": tot,
+                "total_cost": round(_row_float(row, "total_cost", "cost"), 6),
+                "latency_ms": _row_int(row, "latency_ms", "response_time_ms"),
+                "ok": not bool(row.get("error") or row.get("ok") is False),
+                "intent": str(
+                    row.get("detected_intent")
+                    or row.get("routed_workflow")
+                    or row.get("selected_agent")
+                    or ""
+                ),
+            }
+        )
+
+    return {
+        "sample_count": len(filtered),
+        "requests": len(filtered),
+        "ok_count": ok_n,
+        "error_count": err_n,
+        "input_tokens": sum_in,
+        "output_tokens": sum_out,
+        "total_tokens": sum_total,
+        "total_cost": round(sum_cost, 6),
+        "avg_latency_ms": int(sum_lat / lat_n) if lat_n else 0,
+        "by_audience": by_aud,
+        "by_model": dict(sorted(by_model.items(), key=lambda x: -x[1])[:12]),
+        "users": users_out,
+        "recent": recent,
+        "user_filter": user_q,
+        "audience_filter": aud_q,
+    }
 
 
 def list_escalations(*, limit: int = 50) -> List[dict[str, Any]]:

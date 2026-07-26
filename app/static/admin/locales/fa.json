@@ -131,6 +131,7 @@
     "crm": "هاب CRM",
     "timeline": "خط زمان",
     "monitor": "مانیتور زنده",
+    "usage": "مصرف توکن و مکالمات",
     "errors": "خطاها",
     "audit": "ممیزی",
     "analytics": "تحلیل",
@@ -214,6 +215,7 @@
   "ai_nav": {
     "overview": "نمای کلی",
     "monitor": "مانیتور",
+    "usage": "مصرف و مکالمات",
     "conversations": "گفتگوها",
     "workflows": "گردش‌کارها",
     "agents": "عامل‌ها",

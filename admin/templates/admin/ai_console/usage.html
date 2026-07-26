@@ -1,0 +1,284 @@
+{% extends 'admin/base_admin.html' %}
+{% block page_title %}مصرف توکن و مکالمات{% endblock %}
+{% block content %}
+<div class="space-y-4 adm-page">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-bold text-gray-900 dark:text-white">مصرف توکن و مکالمات</h2>
+      <p class="text-xs text-gray-500 mt-0.5">کل شبکه و تفکیک هر کاربر — منبع: analytics + ai_chats</p>
+    </div>
+    <form method="get" class="flex flex-wrap items-center gap-2 text-xs">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      {% if user_key %}<input type="hidden" name="user" value="{{ user_key }}">{% endif %}
+      {% if audience %}<input type="hidden" name="audience" value="{{ audience }}">{% endif %}
+      {% if thread_id %}<input type="hidden" name="thread" value="{{ thread_id }}">{% endif %}
+      <label class="text-gray-500">بازه</label>
+      <select name="days" class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1.5" onchange="this.form.submit()">
+        <option value="7" {% if days==7 %}selected{% endif %}>۷ روز</option>
+        <option value="30" {% if days==30 %}selected{% endif %}>۳۰ روز</option>
+        <option value="90" {% if days==90 %}selected{% endif %}>۹۰ روز</option>
+        <option value="0" {% if days==0 %}selected{% endif %}>همه (نمونه اخیر)</option>
+      </select>
+    </form>
+  </div>
+
+  {% include 'admin/ai_console/_nav.html' %}
+
+  <div class="flex flex-wrap gap-2 text-xs font-semibold">
+    <a href="{{ url_for('admin.ai_console_usage', tab='network', days=days, q=q) }}"
+       class="px-3 py-1.5 rounded-lg {% if tab=='network' %}bg-teal-600 text-white{% else %}bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200{% endif %}">
+      کل شبکه
+    </a>
+    <a href="{{ url_for('admin.ai_console_usage', tab='users', days=days, q=q, user=user_key or none) }}"
+       class="px-3 py-1.5 rounded-lg {% if tab=='users' %}bg-teal-600 text-white{% else %}bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200{% endif %}">
+      کاربران ({{ users_count }})
+    </a>
+    <a href="{{ url_for('admin.ai_console_usage', tab='chats', days=days, q=q, user=user_key or none, audience=audience or none) }}"
+       class="px-3 py-1.5 rounded-lg {% if tab=='chats' %}bg-teal-600 text-white{% else %}bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200{% endif %}">
+      مکالمات
+    </a>
+  </div>
+
+  {# --- Summary cards (always for network/users; also when viewing a user chat) --- #}
+  {% if tab in ('network', 'users') or (tab=='chats' and user_key) %}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+      <div class="text-[10px] text-gray-500">درخواست‌ها</div>
+      <div class="text-xl font-bold tabular-nums text-gray-900 dark:text-white mt-1">{{ report.requests }}</div>
+      <div class="text-[10px] text-gray-400 mt-0.5">ok {{ report.ok_count }} · err {{ report.error_count }}</div>
+    </div>
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+      <div class="text-[10px] text-gray-500">کل توکن</div>
+      <div class="text-xl font-bold tabular-nums text-gray-900 dark:text-white mt-1">{{ "{:,}".format(report.total_tokens) }}</div>
+      <div class="text-[10px] text-gray-400 mt-0.5" dir="ltr">in {{ "{:,}".format(report.input_tokens) }} · out {{ "{:,}".format(report.output_tokens) }}</div>
+    </div>
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+      <div class="text-[10px] text-gray-500">هزینه تخمینی</div>
+      <div class="text-xl font-bold tabular-nums text-teal-700 dark:text-teal-300 mt-1" dir="ltr">${{ "%.4f"|format(report.total_cost) }}</div>
+      <div class="text-[10px] text-gray-400 mt-0.5">بر اساس نرخ env</div>
+    </div>
+    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+      <div class="text-[10px] text-gray-500">میانگین تأخیر</div>
+      <div class="text-xl font-bold tabular-nums text-gray-900 dark:text-white mt-1">{{ report.avg_latency_ms or '—' }}{% if report.avg_latency_ms %}<span class="text-xs font-normal text-gray-400"> ms</span>{% endif %}</div>
+      <div class="text-[10px] text-gray-400 mt-0.5">نمونه {{ report.sample_count }}</div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if tab == 'network' %}
+    {% if report.by_audience or report.by_model %}
+    <div class="grid md:grid-cols-2 gap-3">
+      <section class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+        <h3 class="text-sm font-bold text-gray-900 dark:text-white mb-2">بر اساس audience</h3>
+        {% if report.by_audience %}
+        <ul class="space-y-1.5 text-xs">
+          {% for aud, st in report.by_audience.items() %}
+          <li class="flex justify-between gap-2">
+            <span class="font-mono text-gray-600 dark:text-gray-300" dir="ltr">{{ aud }}</span>
+            <span class="tabular-nums text-gray-800 dark:text-gray-100">{{ st.requests }} req · {{ "{:,}".format(st.total_tokens) }} tok</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-xs text-gray-400">داده‌ای نیست</p>
+        {% endif %}
+      </section>
+      <section class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+        <h3 class="text-sm font-bold text-gray-900 dark:text-white mb-2">مدل‌ها</h3>
+        {% if report.by_model %}
+        <ul class="space-y-1.5 text-xs">
+          {% for model, n in report.by_model.items() %}
+          <li class="flex justify-between gap-2">
+            <span class="font-mono text-gray-600 dark:text-gray-300 truncate" dir="ltr">{{ model }}</span>
+            <span class="tabular-nums shrink-0">{{ n }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-xs text-gray-400">داده‌ای نیست</p>
+        {% endif %}
+      </section>
+    </div>
+    {% endif %}
+
+    <section class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+        <h3 class="text-sm font-bold text-gray-900 dark:text-white">آخرین درخواست‌ها</h3>
+        <a href="{{ url_for('admin.ai_console_usage', tab='users', days=days) }}" class="text-[11px] text-teal-600 font-semibold">جدول کاربران ←</a>
+      </div>
+      {% if not report.recent %}
+      <p class="text-sm text-gray-500 py-10 text-center">هنوز ردیف analytics نیست</p>
+      {% else %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-xs text-right">
+          <thead class="bg-gray-50 dark:bg-gray-800 text-gray-500">
+            <tr>
+              <th class="px-3 py-2">زمان</th>
+              <th class="px-3 py-2">کاربر</th>
+              <th class="px-3 py-2">Audience</th>
+              <th class="px-3 py-2">توکن</th>
+              <th class="px-3 py-2">هزینه</th>
+              <th class="px-3 py-2">ms</th>
+              <th class="px-3 py-2">Intent</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+            {% for r in report.recent %}
+            <tr class="{% if not r.ok %}bg-rose-50/50 dark:bg-rose-950/20{% endif %}">
+              <td class="px-3 py-2 font-mono text-gray-500 whitespace-nowrap" dir="ltr">{{ r.ts_label }}</td>
+              <td class="px-3 py-2">
+                <a href="{{ url_for('admin.ai_console_usage', tab='users', days=days, user=r.user_key) }}"
+                   class="font-mono text-teal-700 dark:text-teal-300" dir="ltr">{{ r.user_masked }}</a>
+              </td>
+              <td class="px-3 py-2 font-mono text-gray-500" dir="ltr">{{ r.audience or '—' }}</td>
+              <td class="px-3 py-2 tabular-nums" dir="ltr">{{ "{:,}".format(r.total_tokens) }} <span class="text-gray-400 text-[10px]">({{ r.input_tokens }}/{{ r.output_tokens }})</span></td>
+              <td class="px-3 py-2 tabular-nums" dir="ltr">${{ "%.5f"|format(r.total_cost) }}</td>
+              <td class="px-3 py-2 tabular-nums">{{ r.latency_ms or '—' }}</td>
+              <td class="px-3 py-2 text-gray-600 dark:text-gray-300 truncate max-w-[10rem]">{{ r.intent or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {% if tab == 'users' %}
+    <form method="get" class="flex flex-wrap gap-2">
+      <input type="hidden" name="tab" value="users">
+      <input type="hidden" name="days" value="{{ days }}">
+      <input type="search" name="user" value="{{ user_key }}" placeholder="جستجوی شماره / user_key"
+             class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-xs min-w-[14rem]" dir="ltr">
+      <button type="submit" class="rounded-lg bg-teal-600 text-white px-3 py-2 text-xs font-bold">فیلتر</button>
+      {% if user_key %}
+      <a href="{{ url_for('admin.ai_console_usage', tab='users', days=days) }}" class="rounded-lg bg-gray-100 dark:bg-gray-800 px-3 py-2 text-xs">پاک کردن</a>
+      {% endif %}
+    </form>
+
+    {% if not report.users %}
+    <div class="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 px-4 py-10 text-center text-sm text-gray-500">کاربری در این بازه نیست</div>
+    {% else %}
+    <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+      <table class="min-w-full text-xs text-right">
+        <thead class="bg-gray-50 dark:bg-gray-800 text-gray-500">
+          <tr>
+            <th class="px-3 py-2">کاربر</th>
+            <th class="px-3 py-2">درخواست</th>
+            <th class="px-3 py-2">توکن</th>
+            <th class="px-3 py-2">in / out</th>
+            <th class="px-3 py-2">هزینه</th>
+            <th class="px-3 py-2">آخرین فعالیت</th>
+            <th class="px-3 py-2"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+          {% for u in report.users %}
+          <tr class="{% if user_key and user_key == u.user_key %}bg-teal-50/60 dark:bg-teal-950/30{% endif %}">
+            <td class="px-3 py-2">
+              <div class="font-mono font-semibold text-gray-900 dark:text-white" dir="ltr">{{ u.user_masked }}</div>
+              <div class="text-[10px] text-gray-400 font-mono" dir="ltr">{{ u.audiences|join(', ') or '—' }}</div>
+            </td>
+            <td class="px-3 py-2 tabular-nums">{{ u.requests }} <span class="text-gray-400 text-[10px]">(e{{ u.error_count }})</span></td>
+            <td class="px-3 py-2 tabular-nums font-semibold">{{ "{:,}".format(u.total_tokens) }}</td>
+            <td class="px-3 py-2 tabular-nums text-gray-500" dir="ltr">{{ "{:,}".format(u.input_tokens) }} / {{ "{:,}".format(u.output_tokens) }}</td>
+            <td class="px-3 py-2 tabular-nums" dir="ltr">${{ "%.4f"|format(u.total_cost) }}</td>
+            <td class="px-3 py-2 font-mono text-gray-500 whitespace-nowrap" dir="ltr">{{ u.last_ts_label }}</td>
+            <td class="px-3 py-2 whitespace-nowrap">
+              <a href="{{ url_for('admin.ai_console_usage', tab='chats', days=days, user=u.user_key, audience=(u.audiences[0] if u.audiences else 'partner')) }}"
+                 class="text-teal-600 font-semibold">مکالمات</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  {% endif %}
+
+  {% if tab == 'chats' %}
+    <form method="get" class="flex flex-wrap gap-2 items-center">
+      <input type="hidden" name="tab" value="chats">
+      <input type="hidden" name="days" value="{{ days }}">
+      <input type="search" name="q" value="{{ q or user_key }}" placeholder="شماره کاربر"
+             class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-xs min-w-[12rem]" dir="ltr">
+      <select name="audience" class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-2 text-xs">
+        <option value="" {% if not audience %}selected{% endif %}>همه</option>
+        <option value="partner" {% if audience=='partner' %}selected{% endif %}>partner</option>
+        <option value="public" {% if audience=='public' %}selected{% endif %}>public</option>
+      </select>
+      <button type="submit" class="rounded-lg bg-teal-600 text-white px-3 py-2 text-xs font-bold">جستجو</button>
+    </form>
+
+    <div class="grid lg:grid-cols-5 gap-3">
+      <section class="lg:col-span-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+        <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-800 text-xs font-bold text-gray-700 dark:text-gray-200">
+          فهرست گفتگوها ({{ conversations|length }})
+        </div>
+        {% if not conversations %}
+        <p class="text-xs text-gray-500 py-8 text-center">گفتگویی یافت نشد</p>
+        {% else %}
+        <ul class="divide-y divide-gray-100 dark:divide-gray-800 max-h-[70vh] overflow-y-auto">
+          {% for c in conversations %}
+          <li>
+            <a href="{{ url_for('admin.ai_console_usage', tab='chats', days=days, user=c.user_key, audience=c.audience, thread=c.thread_id, q=q) }}"
+               class="block px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/60 {% if conversation and thread_id==c.thread_id and user_key==c.user_key %}bg-teal-50 dark:bg-teal-950/40{% endif %}">
+              <div class="flex justify-between gap-2 text-[11px]">
+                <span class="font-mono font-semibold text-teal-700 dark:text-teal-300" dir="ltr">{{ c.user_masked }}</span>
+                <span class="text-gray-400 font-mono shrink-0" dir="ltr">{{ c.audience }}</span>
+              </div>
+              <div class="text-xs text-gray-800 dark:text-gray-100 mt-0.5 truncate">{{ c.title }} · {{ c.msg_count }} پیام</div>
+              <div class="text-[10px] text-gray-400 mt-0.5 truncate">{{ c.last_preview or '—' }}</div>
+              <div class="text-[10px] text-gray-400 font-mono mt-0.5" dir="ltr">{{ c.updated_label or c.updated_at or '—' }}</div>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </section>
+
+      <section class="lg:col-span-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden flex flex-col min-h-[20rem]">
+        {% if not conversation %}
+        <p class="text-sm text-gray-500 py-16 text-center">یک گفتگو از فهرست انتخاب کنید</p>
+        {% else %}
+        <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div class="text-sm font-bold text-gray-900 dark:text-white">
+              {{ conversation.thread.title if conversation.thread else 'گفتگو' }}
+            </div>
+            <div class="text-[11px] text-gray-500 font-mono mt-0.5" dir="ltr">
+              {{ conversation.user_masked }} · {{ conversation.audience }}
+              {% if conversation.thread %} · {{ conversation.thread.id[:12] }}…{% endif %}
+            </div>
+          </div>
+          <a href="{{ url_for('admin.ai_console_usage', tab='users', days=days, user=conversation.user_key) }}"
+             class="text-[11px] text-teal-600 font-semibold">مصرف این کاربر ←</a>
+        </div>
+        {% if user_key %}
+        <div class="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 text-[11px] flex flex-wrap gap-3 border-b border-gray-100 dark:border-gray-800">
+          <span>توکن: <strong class="tabular-nums">{{ "{:,}".format(report.total_tokens) }}</strong></span>
+          <span>هزینه: <strong class="tabular-nums" dir="ltr">${{ "%.4f"|format(report.total_cost) }}</strong></span>
+          <span>درخواست: <strong class="tabular-nums">{{ report.requests }}</strong></span>
+        </div>
+        {% endif %}
+        <div class="flex-1 overflow-y-auto max-h-[65vh] p-3 space-y-2">
+          {% if not conversation.messages %}
+          <p class="text-xs text-gray-400 text-center py-8">پیامی ثبت نشده</p>
+          {% else %}
+          {% for m in conversation.messages %}
+          <div class="rounded-lg px-3 py-2 text-xs {% if m.role == 'assistant' %}bg-teal-50/80 dark:bg-teal-950/30{% elif m.role == 'user' %}bg-gray-50 dark:bg-gray-800/60{% else %}bg-amber-50/50 dark:bg-amber-950/20{% endif %}">
+            <div class="flex justify-between gap-2 mb-1">
+              <span class="font-bold text-[10px] uppercase tracking-wide text-gray-500">{{ m.role or '—' }}</span>
+              <span class="font-mono text-[10px] text-gray-400" dir="ltr">{{ m.ts_label or m.ts or '—' }}</span>
+            </div>
+            <div class="text-gray-800 dark:text-gray-100 whitespace-pre-wrap leading-relaxed">{{ m.content }}</div>
+          </div>
+          {% endfor %}
+          {% endif %}
+        </div>
+        {% endif %}
+      </section>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

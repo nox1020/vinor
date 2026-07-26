@@ -260,12 +260,107 @@ def ai_console_memory():
     )
 
 
-# Legacy Mission Control pages → monitor
+@admin_bp.route("/ai-console/usage", endpoint="ai_console_usage")
+@login_required
+def ai_console_usage():
+    """Network + per-user token usage and conversation monitor."""
+    denied = _ai_console_gate("admin.ai.read")
+    if denied is not None:
+        return denied
+    from app.ai_console import readers
+
+    tab = (request.args.get("tab") or "network").strip()
+    if tab not in ("network", "users", "chats"):
+        tab = "network"
+    q = (request.args.get("q") or "").strip()
+    user_key = (request.args.get("user") or "").strip()
+    audience = (request.args.get("audience") or "").strip()
+    thread_id = (request.args.get("thread") or "").strip()
+    days_raw = (request.args.get("days") or "30").strip()
+    try:
+        days = max(0, min(365, int(days_raw)))
+    except Exception:
+        days = 30
+
+    since_ts = 0
+    if days > 0:
+        from time import time as _time
+
+        since_ts = int(_time()) - days * 86400
+
+    aud_norm = audience if audience in ("public", "partner", "admin") else ""
+    filter_user = ""
+    if tab == "users":
+        filter_user = user_key
+    elif tab == "chats" and user_key:
+        filter_user = user_key
+
+    report = readers.token_usage_report(
+        limit=5000,
+        user=filter_user,
+        audience=aud_norm if tab != "chats" else (aud_norm if filter_user else ""),
+        since_ts=since_ts,
+    )
+    # Unfiltered user count for tab chip (when a single user is focused).
+    users_count = len(report.get("users") or [])
+    if filter_user:
+        users_count = len(
+            readers.token_usage_report(limit=5000, since_ts=since_ts).get("users") or []
+        )
+
+    conversations = []
+    conversation = None
+    if tab == "chats":
+        conversations = readers.list_conversation_index(
+            limit=120,
+            audience=audience if audience in ("public", "partner") else "",
+            q=user_key or q,
+        )
+        if user_key and audience in ("public", "partner", "admin"):
+            conversation = readers.get_conversation(
+                audience=audience,
+                user_key=user_key,
+                thread_id=thread_id,
+            )
+
+    return render_template(
+        "admin/ai_console/usage.html",
+        tab=tab,
+        q=q,
+        user_key=user_key,
+        audience=audience,
+        thread_id=thread_id,
+        days=days,
+        report=report,
+        users_count=users_count,
+        conversations=conversations,
+        conversation=conversation,
+        **_nav_ctx("usage"),
+    )
+
+
+# Legacy Mission Control pages → usage / monitor
 @admin_bp.route("/ai-console/conversations", endpoint="ai_console_conversations")
+@login_required
+def ai_console_conversations_redirect():
+    denied = _ai_console_gate("admin.ai.read")
+    if denied is not None:
+        return denied
+    return redirect(url_for("admin.ai_console_usage", tab="chats"))
+
+
+@admin_bp.route("/ai-console/analytics", endpoint="ai_console_analytics")
+@login_required
+def ai_console_analytics_redirect():
+    denied = _ai_console_gate("admin.ai.read")
+    if denied is not None:
+        return denied
+    return redirect(url_for("admin.ai_console_usage", tab="network"))
+
+
 @admin_bp.route("/ai-console/workflows", endpoint="ai_console_workflows")
 @admin_bp.route("/ai-console/agents", endpoint="ai_console_agents")
 @admin_bp.route("/ai-console/prompts", endpoint="ai_console_prompts")
-@admin_bp.route("/ai-console/analytics", endpoint="ai_console_analytics")
 @admin_bp.route("/ai-console/timeline", endpoint="ai_console_timeline")
 @admin_bp.route("/ai-console/audit", endpoint="ai_console_audit")
 @admin_bp.route("/ai-console/settings", endpoint="ai_console_settings")
