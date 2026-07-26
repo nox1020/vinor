@@ -2621,6 +2621,63 @@ def ai_questions():
 
 
 # -----------------------------------------------------------------------------
+# وکیل ملکی — کنترل کامل شخصیت و دانش
+# -----------------------------------------------------------------------------
+@admin_bp.route('/lawyer', methods=['GET', 'POST'], endpoint='lawyer')
+@login_required
+def lawyer_admin():
+    from app.lawyer.config import (
+        default_lawyer_settings,
+        get_lawyer_settings,
+        lawyer_feature_enabled,
+        save_lawyer_settings,
+    )
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or 'save').strip()
+        if action == 'reset_defaults':
+            save_lawyer_settings(default_lawyer_settings())
+            flash('تنظیمات وکیل ملکی به پیش‌فرض بازگشت.', 'success')
+            return redirect(url_for('admin.lawyer'))
+
+        feature_on = lawyer_feature_enabled()
+        current = get_lawyer_settings()
+        patch = {
+            'enabled': (
+                current.get('enabled')
+                if not feature_on
+                else (request.form.get('lawyer_enabled') == '1')
+            ),
+            'show_disclaimer': request.form.get('lawyer_show_disclaimer') == '1',
+            'display_name': (request.form.get('lawyer_display_name') or '').strip(),
+            'welcome': (request.form.get('lawyer_welcome') or '').strip(),
+            'system_prompt': (request.form.get('lawyer_system_prompt') or '').strip(),
+            'knowledge_notes': (request.form.get('lawyer_knowledge_notes') or '').strip(),
+        }
+        try:
+            save_lawyer_settings(patch)
+            flash('تنظیمات وکیل ملکی ذخیره شد.', 'success')
+        except Exception:
+            flash('ذخیره تنظیمات وکیل ممکن نشد.', 'error')
+        return redirect(url_for('admin.lawyer'))
+
+    lawyer = get_lawyer_settings()
+    try:
+        lands = load_json(_lands_path())
+        p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
+    except Exception:
+        p, a, r = 0, 0, 0
+    return render_template(
+        'admin/lawyer.html',
+        lawyer=lawyer,
+        lawyer_feature_flag=lawyer_feature_enabled(),
+        pending_count=p,
+        approved_count=a,
+        rejected_count=r,
+    )
+
+
+# -----------------------------------------------------------------------------
 # فهرست آگهی‌ها (با صفحه‌بندی)
 # -----------------------------------------------------------------------------
 @admin_bp.route('/lands')

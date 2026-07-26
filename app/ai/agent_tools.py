@@ -15,6 +15,7 @@ from app.ai.audience import (
     AUDIENCE_PARTNER,
     AUDIENCE_PUBLIC,
     VOICE_ADMIN,
+    VOICE_LAWYER,
     VOICE_PARTNER,
     VOICE_PUBLIC,
     VOICE_SPECIAL,
@@ -319,6 +320,12 @@ def agent_system_hint(voice: str | None) -> str:
             "همکار→propose_partner_decision | بازدید/مالی/escalation با کارت. "
             "تا تأیید نزده نگو انجام شد."
         )
+    if v == VOICE_LAWYER:
+        return (
+            "وکیل ملکی: فقط راهنمایی حقوق املاک ایران. "
+            "ابزار فروش/بازدید نزن. قطعی‌گویی بی‌مدرک نکن. "
+            "در پایان یادآوری کن جایگزین وکالت رسمی نیست."
+        )
     if v == VOICE_PUBLIC:
         return (
             "مهمان: خرید→search_lands (حداکثر ۲)→نزدیک‌ترین را با [[LAND]] معرفی کن | "
@@ -339,6 +346,9 @@ def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
         from .admin_tools import tools_schema_admin
 
         return tools_schema_admin()
+    if v == VOICE_LAWYER:
+        # وکیل ملکی ابزار فروش ندارد — فقط گفتگو
+        return []
     schemas: list[dict[str, Any]] = [_schema_search()]
     if v == VOICE_PUBLIC:
         schemas.append(_schema_coop_info())

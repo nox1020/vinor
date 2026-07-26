@@ -1,0 +1,123 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}وکیل ملکی{% endblock %}
+{% block page_title %}وکیل ملکی{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-4xl">
+
+  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 text-sm text-amber-900 dark:text-amber-100">
+    <p class="font-medium mb-1">راهنما</p>
+    <p class="text-amber-800 dark:text-amber-200/90 leading-6">
+      شخصیت جدا از ایجنت فروش: در منوی ساید کاربر، بالای گفتگوها دکمهٔ «وکیل ملکی» دیده می‌شود.
+      برای مهمان دکمه غیرفعال است و با ورود فعال می‌شود.
+      پاسخ‌ها بر اساس پرامپت و دانش زیر ساخته می‌شوند و ابزار فروش / پیشنهاد فایل ندارند.
+      برای قطع کامل از env می‌توانید <span class="ltr font-mono text-xs">VINOR_LAWYER_ENABLED=0</span> بگذارید.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500 dark:text-gray-400">وضعیت در اپ</p>
+      <p class="mt-0.5 font-semibold {% if lawyer.enabled %}text-emerald-600 dark:text-emerald-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+        {% if lawyer.enabled %}فعال{% else %}غیرفعال{% endif %}
+      </p>
+    </div>
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500 dark:text-gray-400">فلگ محیطی</p>
+      <p class="mt-0.5 font-semibold {% if lawyer_feature_flag %}text-emerald-600 dark:text-emerald-400{% else %}text-amber-600 dark:text-amber-400{% endif %}">
+        {% if lawyer_feature_flag %}VINOR_LAWYER_ENABLED روشن{% else %}خاموش در env{% endif %}
+      </p>
+    </div>
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500 dark:text-gray-400">نام نمایشی</p>
+      <p class="mt-0.5 font-semibold text-gray-800 dark:text-gray-200">{{ lawyer.display_name }}</p>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('admin.lawyer') }}" class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4">
+      <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <i class="fa-solid fa-scale-balanced text-amber-500"></i>
+        کنترل وکیل ملکی
+      </h2>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">روشن/خاموش، خوش‌آمد، پرامپت سیستم و دانش قوانین ایران</p>
+    </div>
+
+    <div class="px-4 sm:px-6 py-5 space-y-5">
+      <div class="flex flex-wrap gap-6">
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+          <input type="checkbox" name="lawyer_enabled" value="1"
+                 class="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                 {% if lawyer.enabled %}checked{% endif %}
+                 {% if not lawyer_feature_flag %}disabled{% endif %}>
+          نمایش وکیل در منوی ساید کاربر
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+          <input type="checkbox" name="lawyer_show_disclaimer" value="1"
+                 class="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                 {% if lawyer.show_disclaimer %}checked{% endif %}>
+          یادآوری «راهنمایی عمومی / نه وکالت رسمی» در هر پاسخ
+        </label>
+      </div>
+      {% if not lawyer_feature_flag %}
+      <p class="text-xs text-amber-700 dark:text-amber-300">فلگ محیطی خاموش است — تا وقتی env روشن نشود، دکمه در اپ دیده نمی‌شود.</p>
+      {% endif %}
+
+      <div class="space-y-2">
+        <label for="lawyer_display_name" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">نام نمایشی</label>
+        <input id="lawyer_display_name" name="lawyer_display_name" type="text" maxlength="80"
+               value="{{ lawyer.display_name }}"
+               class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600
+                      text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2
+                      focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">
+      </div>
+
+      <div class="space-y-2">
+        <label for="lawyer_welcome" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">پیام خوش‌آمد (اول ورود به وکیل)</label>
+        <textarea id="lawyer_welcome" name="lawyer_welcome" rows="5"
+                  class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600
+                         text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm leading-6
+                         focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">{{ lawyer.welcome }}</textarea>
+      </div>
+
+      <div class="space-y-2">
+        <label for="lawyer_system_prompt" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">پرامپت سیستم (شخصیت وکیل)</label>
+        <textarea id="lawyer_system_prompt" name="lawyer_system_prompt" rows="14"
+                  class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600
+                         text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm leading-6 font-mono
+                         focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">{{ lawyer.system_prompt }}</textarea>
+        <p class="text-xs text-gray-500 dark:text-gray-400">دامنهٔ پاسخ، لحن، قوانین ایران و ساختار پاسخ را اینجا کنترل کنید.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label for="lawyer_knowledge_notes" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">دانش / یادداشت ادمین (قوانین و نکات به‌روز)</label>
+        <textarea id="lawyer_knowledge_notes" name="lawyer_knowledge_notes" rows="10"
+                  class="block w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600
+                         text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm leading-6
+                         focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent">{{ lawyer.knowledge_notes }}</textarea>
+        <p class="text-xs text-gray-500 dark:text-gray-400">
+          مواد قانونی جدید، بخشنامه‌ها، یا نکات داخلی وینور را اینجا بنویسید تا به پرامپت سیستم پیوست شود.
+        </p>
+      </div>
+    </div>
+
+    <div class="border-t border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3">
+      <button type="submit" name="action" value="save"
+              class="inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-2">
+        <i class="fa-solid fa-floppy-disk"></i>
+        ذخیره
+      </button>
+      <button type="submit" name="action" value="reset_defaults"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600
+                     text-gray-700 dark:text-gray-200 text-sm font-medium px-4 py-2
+                     hover:bg-gray-50 dark:hover:bg-gray-800"
+              onclick="return confirm('بازگشت به پیش‌فرض؟ متن‌های فعلی جایگزین می‌شوند.');">
+        <i class="fa-solid fa-rotate-left"></i>
+        بازگشت به پیش‌فرض
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

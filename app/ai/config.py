@@ -5,7 +5,7 @@ from app.keys import (
     get_deepseek_api_key,
 )
 
-from .audience import VOICE_ADMIN, VOICE_PARTNER, VOICE_SPECIAL
+from .audience import VOICE_ADMIN, VOICE_LAWYER, VOICE_PARTNER, VOICE_SPECIAL
 from .goal import (
     GEO_SCOPE_FA,
     GOAL_ADMIN_SYSTEM,
@@ -97,6 +97,16 @@ def prompt_for_voice(voice: str | None) -> str:
     v = (voice or "").strip().lower()
     if v == VOICE_ADMIN:
         return VINOR_AI_ADMIN_PROMPT
+    if v == VOICE_LAWYER:
+        try:
+            from app.lawyer.config import build_lawyer_system_prompt
+
+            return build_lawyer_system_prompt()
+        except Exception:
+            return (
+                "تو وکیل مشاور ملکی وینور هستی. دربارهٔ حقوق املاک ایران راهنمایی کن. "
+                "پاسخ جنبهٔ راهنمایی دارد و جایگزین وکالت رسمی نیست."
+            )
     if v == VOICE_SPECIAL:
         return VINOR_AI_SPECIAL_PROMPT
     if v == VOICE_PARTNER:

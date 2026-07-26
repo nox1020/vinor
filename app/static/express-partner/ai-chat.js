@@ -58,6 +58,9 @@
   var postchiMessagesUrl = form.getAttribute('data-postchi-messages-url') || '';
   var postchiSendUrl = form.getAttribute('data-postchi-send-url') || '';
   var postchiOpenUrl = form.getAttribute('data-postchi-open-url') || '';
+  var lawyerThreadId = form.getAttribute('data-lawyer-thread-id') || '__lawyer__';
+  var lawyerEnabled = form.getAttribute('data-lawyer-enabled') === '1';
+  var lawyerOpenBtn = document.getElementById('aiLawyerOpenBtn');
   var menuUnreadDot = document.getElementById('aiMenuUnreadDot');
   var welcome = list.getAttribute('data-welcome') || 'سلام، چطور می‌تونم کمکتون کنم؟';
   var historyAbort = null;
@@ -159,6 +162,8 @@
   function isHomeChatEmpty() {
     if (!homeInline || !list) return false;
     if (isPostchiMode()) return false;
+    /* وکیل ملکی خوش‌آمد دارد ولی بدو ورود فروش نیست */
+    if (typeof isLawyerMode === 'function' && isLawyerMode()) return false;
     try {
       if (list.querySelector('.ai-msg-wrap[data-role="user"]')) return false;
       if (list.querySelector('.ai-msg-wrap[data-thinking="1"]')) return false;
@@ -169,6 +174,7 @@
         if (w.getAttribute('data-ephemeral') === '1') continue;
         var src = (w.getAttribute('data-source') || '').toLowerCase();
         if (src === 'welcome') continue;
+        if (src === 'lawyer') return false;
         /* پاسخ واقعی / کارت = گفتگو شروع شده */
         return false;
       }
@@ -753,6 +759,14 @@
     return activeThreadId() === postchiThreadId;
   }
 
+  function isLawyerMode() {
+    return activeThreadId() === lawyerThreadId;
+  }
+
+  function isLawyerThreadId(id) {
+    return String(id || '') === lawyerThreadId;
+  }
+
   function setActiveThreadId(id) {
     if (threadInput) threadInput.value = id || '';
     setComposerMode(isPostchiMode());
@@ -761,6 +775,7 @@
     } else {
       resumePoll();
     }
+    if (isLawyerMode()) hideChipBar();
   }
 
   function syncComposerReady() {
@@ -1024,6 +1039,12 @@
           dismiss: false,
           placeholder: 'به سقف رسیدید — برای ادامه وارد شوید…',
         });
+      } else if (isLawyerMode()) {
+        stopTypeHintPlaceholder({
+          dismiss: false,
+          placeholder: 'سوال حقوقی ملکی بپرسید…',
+        });
+        hideChipBar();
       } else {
         startTypeHintPlaceholder();
       }
@@ -1521,6 +1542,7 @@
 
   function injectHomeJourneyCardIntoChat() {
     if (!homeInline || !list) return;
+    if (isLawyerMode()) return;
     scrubDashboardCardsOutsideChat();
     /* مأموریت/کارت فایل اجباری حذف شد */
     var existingAll = list.querySelectorAll('.ai-msg-wrap[data-vn-journey-inject="1"]');
@@ -2249,22 +2271,27 @@
       messageHasContent(rows[0]) &&
       isOpeningAssistantMsg(rows[0]);
     if (onlyOpening) {
-      if (homeInline) {
-        /* بدو ورود خانه = صفحه GPT خالی؛ حباب خوش‌آمد نشان داده نمی‌شود */
+      var isLawyerOpening =
+        isLawyerMode() ||
+        String((rows[0] && rows[0].source) || '').toLowerCase() === 'lawyer';
+      if (homeInline && !isLawyerOpening) {
+        /* بدو ورود خانه = صفحه GPT خالی؛ حباب خوش‌آمد فروش نشان داده نمی‌شود */
         syncHomeEmptyState();
         syncChipBarVisibility();
         applyReportFilter();
         return;
       }
       playVinorOpening(rows[0]);
-      injectHomeJourneyCardIntoChat();
-    scanLastSyncFromDom();
-    syncChipBarVisibility();
-    applyReportFilter();
-    scrollChatToLatest();
-    return;
-  }
-  rows.forEach(function (m) {
+      if (!isLawyerOpening) {
+        injectHomeJourneyCardIntoChat();
+      }
+      scanLastSyncFromDom();
+      syncChipBarVisibility();
+      applyReportFilter();
+      scrollChatToLatest();
+      return;
+    }
+    rows.forEach(function (m) {
       if (!m) return;
       if (m.role && messageHasContent(m)) {
         appendMessage(m);
@@ -2280,6 +2307,8 @@
 
   function isOpeningAssistantMsg(msg) {
     if (!msg || msg.role !== 'assistant') return false;
+    /* خوش‌آمد وکیل = پیام واقعی گفتگو، نه بدو ورود فروش */
+    if (String(msg.source || '').toLowerCase() === 'lawyer') return false;
     if (String(msg.source || '').toLowerCase() === 'welcome') return true;
     if (msg.meta && msg.meta.welcome) return true;
     return false;
@@ -2504,6 +2533,8 @@
     }
     threads.forEach(function (th) {
       var isPostchi = th.kind === 'postchi' || th.id === postchiThreadId;
+      var isLawyer = th.kind === 'lawyer' || th.id === lawyerThreadId;
+      if (isLawyer) return; /* دکمهٔ جدا در کشو */
       var btnEl = document.createElement('button');
       btnEl.type = 'button';
       btnEl.className =
@@ -2678,7 +2709,21 @@
         signal: switchAbort.signal,
       });
       var data = await resp.json();
-      if (!resp.ok || !data.ok) throw new Error((data && data.error) || 'خطا');
+      if (!resp.ok || !data.ok) {
+        if (data && data.need_login) {
+          try {
+            if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
+              window.vinorProfileDrawer.open();
+            }
+            if (typeof window.vinorDrawerOpenLogin === 'function') {
+              window.vinorDrawerOpenLogin();
+            }
+          } catch (_) {}
+          showEphemeralHint(data.error || 'برای ادامه وارد شوید.');
+          return;
+        }
+        throw new Error((data && data.error) || 'خطا');
+      }
       setActiveThreadId(data.thread_id);
       renderMessages(data.messages);
       if (data.threads) applyThreads(data.threads);
@@ -2688,6 +2733,9 @@
       } else {
         postchiOpened = false;
         resumePoll();
+      }
+      if (data.mode === 'lawyer' || isLawyerThreadId(data.thread_id)) {
+        hideChipBar();
       }
       closeSideMenu();
       ensureChatVisible();
@@ -2828,7 +2876,7 @@
   }
 
   async function deleteThread(threadId) {
-    if (!deleteUrl || !threadId || threadId === postchiThreadId) return;
+    if (!deleteUrl || !threadId || threadId === postchiThreadId || isLawyerThreadId(threadId)) return;
     if (isDeleteThreadModalOpen()) return;
     var ok = await confirmDeleteThread();
     if (!ok) return;
@@ -3033,6 +3081,7 @@
     pollPaused = true;
     markPostchiOpened();
   }
+  if (isLawyerMode()) hideChipBar();
   list.querySelectorAll('.ai-msg-wrap').forEach(function (w) {
     initCardsIn(w);
     var eid = w.getAttribute('data-escalation-id');
@@ -3076,6 +3125,29 @@
   if (sideClose) sideClose.addEventListener('click', closeSideMenu);
   if (sideBackdrop) sideBackdrop.addEventListener('click', closeSideMenu);
   if (newChatBtn) newChatBtn.addEventListener('click', startNewChat);
+  if (lawyerOpenBtn) {
+    lawyerOpenBtn.addEventListener('click', function () {
+      var locked =
+        lawyerOpenBtn.getAttribute('data-lawyer-locked') === '1' ||
+        lawyerOpenBtn.classList.contains('is-disabled') ||
+        !lawyerEnabled;
+      if (locked) {
+        try {
+          if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
+            window.vinorProfileDrawer.open();
+          }
+          if (typeof window.vinorDrawerOpenLogin === 'function') {
+            window.vinorDrawerOpenLogin();
+          }
+        } catch (_) {}
+        showEphemeralHint('برای مشاوره با وکیل ملکی وارد شوید.');
+        return;
+      }
+      var tid =
+        lawyerOpenBtn.getAttribute('data-lawyer-thread-id') || lawyerThreadId || '__lawyer__';
+      if (tid) switchThread(tid);
+    });
+  }
 
   var profileMenuBtn = document.getElementById('epProfileMenuBtn');
   if (profileMenuBtn && homeInline) {
@@ -3221,6 +3293,7 @@
       var body = { message: msg, thread_id: activeThreadId() };
       if (intent) body.intent = intent;
       if (silentUser) body.hide_user = true;
+      if (isLawyerMode()) body.mode = 'lawyer';
       var resp = await fetch(chatUrl, {
         method: 'POST',
         headers: apiHeaders(true),

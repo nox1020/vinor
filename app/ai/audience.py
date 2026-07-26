@@ -16,6 +16,7 @@ VOICE_PUBLIC = "public"
 VOICE_PARTNER = "partner"
 VOICE_SPECIAL = "special"
 VOICE_ADMIN = "admin"
+VOICE_LAWYER = "lawyer"
 
 
 def _norm_phone(phone: str) -> str:

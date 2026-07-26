@@ -17,6 +17,19 @@ def _redirect_approved_partner() -> str | None:
     return None
 
 
+def _session_phone() -> str:
+    return (session.get("user_phone") or "").strip()
+
+
+def _lawyer_login_required_response():
+    return jsonify({
+        "ok": False,
+        "error": "برای مشاوره با وکیل ملکی وارد شوید.",
+        "need_login": True,
+        "login_url": url_for("express_partner.home", menu=1),
+    }), 401
+
+
 @ai_bp.get("/", endpoint="index")
 def index():
     """چت AI عمومی — همکاران تأییدشده و کاربران پرتال به خانه هدایت می‌شوند."""
@@ -69,28 +82,40 @@ def sync():
 @ai_bp.get("/history", endpoint="history")
 def history():
     from app.ai.chat_store import messages_for_ui, threads_for_ui
+    from app.lawyer.service import is_lawyer_thread, threads_with_lawyer
 
     key = ai_user_key()
     thread_id = (request.args.get("thread_id") or "").strip() or None
     threads_only = request.args.get("threads_only", "").lower() in ("1", "true", "yes")
+    logged_in = bool(_session_phone())
+    if is_lawyer_thread(thread_id) and not logged_in:
+        return _lawyer_login_required_response()
+    threads = (
+        threads_with_lawyer(key, audience=AUDIENCE_PUBLIC, active_thread_id=thread_id)
+        if logged_in
+        else (threads_for_ui(key, audience=AUDIENCE_PUBLIC) or [])
+    )
     payload = {
         "ok": True,
-        "threads": threads_for_ui(key, audience=AUDIENCE_PUBLIC),
+        "threads": threads,
         "thread_id": thread_id,
         "audience": AUDIENCE_PUBLIC,
     }
     if not threads_only:
         payload["messages"] = messages_for_ui(key, thread_id, audience=AUDIENCE_PUBLIC)
+        payload["mode"] = (
+            "lawyer" if logged_in and is_lawyer_thread(thread_id) else "chat"
+        )
     return jsonify(payload)
 
 
 @ai_bp.post("/chat", endpoint="chat")
 def chat():
+    from app.ai.audience import VOICE_LAWYER
     from app.ai.chat_store import (
         append_exchange,
         ensure_active_thread,
         history_for_api,
-        threads_for_ui,
     )
     from app.ai.credits import (
         GUEST_FREE_ASSISTANT_REPLIES,
@@ -99,6 +124,13 @@ def chat():
         is_guest_user_key,
         record_guest_assistant_reply,
     )
+    from app.lawyer.config import lawyer_enabled
+    from app.lawyer.service import (
+        ensure_lawyer_thread,
+        is_lawyer_thread,
+        threads_with_lawyer,
+    )
+    from app.ai.chat_store import threads_for_ui
 
     key = ai_user_key()
     data = request.get_json(silent=True) or {}
@@ -106,12 +138,23 @@ def chat():
     thread_id = (data.get("thread_id") or "").strip() or None
     chip_intent = (data.get("intent") or data.get("chip_intent") or "").strip()
     hide_user = bool(data.get("hide_user") or data.get("silent") or data.get("hide_ui"))
+    mode = (data.get("mode") or "").strip().lower()
     if not message:
         return jsonify({"ok": False, "error": "پیام خالی است."}), 400
 
     gate = check_guest_login_required(key)
     if gate:
         return jsonify(gate), ai_chat_http_status(gate)
+
+    voice = None
+    if mode in ("lawyer", "vakil") or is_lawyer_thread(thread_id):
+        if not _session_phone():
+            return _lawyer_login_required_response()
+        if not lawyer_enabled():
+            return jsonify({"ok": False, "error": "وکیل ملکی فعلاً غیرفعال است."}), 403
+        thread_id = ensure_lawyer_thread(key, audience=AUDIENCE_PUBLIC)
+        voice = VOICE_LAWYER
+        chip_intent = ""
 
     if not thread_id:
         thread_id = ensure_active_thread(key, audience=AUDIENCE_PUBLIC)
@@ -124,12 +167,13 @@ def chat():
         audience=AUDIENCE_PUBLIC,
         thread_id=thread_id,
         chip_intent=chip_intent,
+        voice=voice,
     )
     if not result.get("ok"):
         return jsonify(result), ai_chat_http_status(result)
 
-    land_codes = result.get("land_codes") or []
-    agent_actions = result.get("agent_actions") or []
+    land_codes = [] if voice == VOICE_LAWYER else (result.get("land_codes") or [])
+    agent_actions = [] if voice == VOICE_LAWYER else (result.get("agent_actions") or [])
     msgs, tid = append_exchange(
         key,
         message,
@@ -152,7 +196,15 @@ def chat():
     result["messages"] = msgs
     result["thread_id"] = tid
     result["audience"] = AUDIENCE_PUBLIC
-    result["threads"] = threads_for_ui(key, audience=AUDIENCE_PUBLIC)
+    result["mode"] = "lawyer" if is_lawyer_thread(tid) else "chat"
+    if _session_phone():
+        result["threads"] = threads_with_lawyer(
+            key,
+            audience=AUDIENCE_PUBLIC,
+            active_thread_id=tid,
+        )
+    else:
+        result["threads"] = threads_for_ui(key, audience=AUDIENCE_PUBLIC) or []
     return jsonify(result)
 
 
@@ -246,36 +298,78 @@ def agent_cancel():
 @ai_bp.post("/thread/switch", endpoint="switch_thread")
 def switch_thread():
     from app.ai.chat_store import messages_for_ui, set_active_thread, threads_for_ui
+    from app.lawyer.config import lawyer_enabled
+    from app.lawyer.service import (
+        ensure_lawyer_thread,
+        is_lawyer_thread,
+        threads_with_lawyer,
+    )
 
     key = ai_user_key()
     data = request.get_json(silent=True) or {}
     thread_id = (data.get("thread_id") or "").strip()
-    if not thread_id or not set_active_thread(key, thread_id, audience=AUDIENCE_PUBLIC):
+    if not thread_id:
+        return jsonify({"ok": False, "error": "گفتگو یافت نشد."}), 404
+    logged_in = bool(_session_phone())
+
+    def _threads(active_id: str | None):
+        if logged_in:
+            return threads_with_lawyer(
+                key,
+                audience=AUDIENCE_PUBLIC,
+                active_thread_id=active_id,
+            )
+        return threads_for_ui(key, audience=AUDIENCE_PUBLIC) or []
+
+    if is_lawyer_thread(thread_id) or thread_id in ("lawyer", "vakil"):
+        if not logged_in:
+            return _lawyer_login_required_response()
+        if not lawyer_enabled():
+            return jsonify({"ok": False, "error": "وکیل ملکی فعلاً غیرفعال است."}), 403
+        tid = ensure_lawyer_thread(key, audience=AUDIENCE_PUBLIC)
+        return jsonify({
+            "ok": True,
+            "thread_id": tid,
+            "mode": "lawyer",
+            "messages": messages_for_ui(key, tid, audience=AUDIENCE_PUBLIC),
+            "threads": _threads(tid),
+        })
+    if not set_active_thread(key, thread_id, audience=AUDIENCE_PUBLIC):
         return jsonify({"ok": False, "error": "گفتگو یافت نشد."}), 404
     return jsonify({
         "ok": True,
         "thread_id": thread_id,
+        "mode": "chat",
         "messages": messages_for_ui(key, thread_id, audience=AUDIENCE_PUBLIC),
-        "threads": threads_for_ui(key, audience=AUDIENCE_PUBLIC),
+        "threads": _threads(thread_id),
     })
 
 
 @ai_bp.post("/thread/delete", endpoint="delete_thread")
 def delete_thread():
     from app.ai.chat_store import delete_thread, load_user_record, messages_for_ui, threads_for_ui
+    from app.lawyer.service import is_lawyer_thread, threads_with_lawyer
 
     key = ai_user_key()
     data = request.get_json(silent=True) or {}
     thread_id = (data.get("thread_id") or "").strip()
+    if is_lawyer_thread(thread_id):
+        return jsonify({"ok": False, "error": "این گفتگو قابل حذف نیست."}), 400
     if not thread_id or not delete_thread(key, thread_id, audience=AUDIENCE_PUBLIC):
         return jsonify({"ok": False, "error": "حذف ممکن نیست."}), 400
     record = load_user_record(key, audience=AUDIENCE_PUBLIC)
     active = record.get("active_id")
+    logged_in = bool(_session_phone())
+    threads = (
+        threads_with_lawyer(key, audience=AUDIENCE_PUBLIC, active_thread_id=active)
+        if logged_in
+        else (threads_for_ui(key, audience=AUDIENCE_PUBLIC) or [])
+    )
     return jsonify({
         "ok": True,
         "thread_id": active,
         "messages": messages_for_ui(key, active, audience=AUDIENCE_PUBLIC),
-        "threads": threads_for_ui(key, audience=AUDIENCE_PUBLIC),
+        "threads": threads,
     })
 
 

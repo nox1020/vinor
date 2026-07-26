@@ -51,6 +51,10 @@
       <i class="fa-solid fa-circle-question"></i><span>پیام‌ها / Escalations</span>
       {% if control_badges and control_badges.pending %}<span class="vc-badge" data-i18n-number="{{ control_badges.pending }}">{{ control_badges.pending }}</span>{% endif %}
     </a>
+    <a href="{{ url_for('admin.lawyer') }}"
+       class="vc-nav-link {% if ep == 'admin.lawyer' %}is-active{% endif %}">
+      <i class="fa-solid fa-scale-balanced"></i><span>وکیل ملکی</span>
+    </a>
 
     <div class="vc-nav-label">تنظیمات</div>
     <a href="{{ url_for('admin.settings') }}"

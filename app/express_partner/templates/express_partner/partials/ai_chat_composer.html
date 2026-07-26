@@ -226,6 +226,8 @@
       data-postchi-messages-url="{{ postchi_messages_url|default('') }}"
       data-postchi-send-url="{{ postchi_send_url|default('') }}"
       data-postchi-open-url="{{ postchi_open_url|default('') }}"
+      data-lawyer-thread-id="{{ lawyer_thread_id|default('__lawyer__') }}"
+      data-lawyer-enabled="{{ '1' if (lawyer_enabled|default(false) and me_phone) else '0' }}"
       {% if guest_replies_remaining is not none %}data-guest-replies-remaining="{{ guest_replies_remaining }}"{% endif %}
       {% if guest_replies_limit is not none %}data-guest-replies-limit="{{ guest_replies_limit }}"{% endif %}>
   {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}

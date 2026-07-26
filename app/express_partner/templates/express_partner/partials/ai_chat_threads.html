@@ -14,22 +14,22 @@
 
 <div id="aiHistoryList" class="ai-scroll {% if not _in_drawer %}flex-1 overflow-y-auto overscroll-contain px-3 pb-3 space-y-2{% endif %}" {% if not _in_drawer %}style="min-height: 8rem; max-height: 18rem;"{% endif %}>
   {% if chat_threads %}
-    {% for th in chat_threads %}
+    {% for th in chat_threads if th.kind != 'lawyer' %}
     <button type="button"
-            class="ai-thread-item {% if not _in_drawer %}w-full rounded-xl border px-3 py-2.5 text-right transition {% if th.kind == 'postchi' %}{% if th.is_active %}border-emerald-500/40 bg-emerald-500/15{% else %}border-emerald-500/20 bg-emerald-500/[0.06]{% endif %}{% else %}{% if th.is_active %}border-violet-500/40 bg-violet-500/15{% else %}border-white/10 bg-white/[0.03]{% endif %}{% endif %}{% endif %} {% if th.is_active %}is-active{% endif %}"
+            class="ai-thread-item {% if not _in_drawer %}w-full rounded-xl border px-3 py-2.5 text-right transition {% if th.kind == 'postchi' %}{% if th.is_active %}border-emerald-500/40 bg-emerald-500/15{% else %}border-emerald-500/20 bg-emerald-500/[0.06]{% endif %}{% elif th.kind == 'lawyer' %}{% if th.is_active %}border-amber-500/40 bg-amber-500/15{% else %}border-amber-500/20 bg-amber-500/[0.06]{% endif %}{% else %}{% if th.is_active %}border-violet-500/40 bg-violet-500/15{% else %}border-white/10 bg-white/[0.03]{% endif %}{% endif %}{% endif %} {% if th.is_active %}is-active{% endif %}"
             data-thread-id="{{ th.id }}"
             data-active="{{ '1' if th.is_active else '0' }}"
-            {% if th.kind == 'postchi' %}data-thread-kind="postchi"{% endif %}>
+            {% if th.kind == 'postchi' %}data-thread-kind="postchi"{% elif th.kind == 'lawyer' %}data-thread-kind="lawyer"{% endif %}>
       <div class="ai-thread-item__row{% if not _in_drawer %} flex items-center justify-between gap-2{% endif %}">
         <span class="ai-thread-item__title {% if not _in_drawer %}text-xs font-semibold text-white line-clamp-2 leading-snug flex items-center gap-1.5{% endif %}">
-          {% if th.kind == 'postchi' %}<i class="fas fa-envelope text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>{% endif %}
+          {% if th.kind == 'postchi' %}<i class="fas fa-envelope text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>{% elif th.kind == 'lawyer' %}<i class="fas fa-scale-balanced text-[10px] text-amber-400 shrink-0" aria-hidden="true"></i>{% endif %}
           <span>{{ th.title }}</span>
         </span>
         <span class="ai-thread-item__actions{% if not _in_drawer %} flex shrink-0 items-center gap-1{% endif %}">
           {% if th.unread and th.unread > 0 %}
           <span class="ai-thread-unread {% if not _in_drawer %}rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white tabular-nums{% endif %}">{{ th.unread if th.unread < 100 else '99+' }}</span>
           {% endif %}
-          {% if th.kind != 'postchi' %}
+          {% if th.kind != 'postchi' and th.kind != 'lawyer' %}
           <span class="ai-thread-delete {% if not _in_drawer %}grid h-7 w-7 place-items-center rounded-lg text-zinc-500{% endif %}" data-thread-id="{{ th.id }}" role="button" aria-label="حذف گفتگو" tabindex="-1">
             <i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
           </span>
@@ -39,7 +39,7 @@
       {% if th.preview and not _in_drawer %}
       <p class="ai-thread-item__preview mt-1 text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">{{ th.preview }}</p>
       {% endif %}
-      {% if th.kind != 'postchi' and not _in_drawer %}
+      {% if th.kind != 'postchi' and th.kind != 'lawyer' and not _in_drawer %}
       <p class="ai-thread-item__meta mt-1.5 text-[9px] text-zinc-600 flex items-center justify-between gap-2">
         <span>{{ th.message_count }} پیام</span>
         <time class="tabular-nums" datetime="{{ th.updated_at or '' }}">{{ th.updated_at[:10] if th.updated_at else '' }}</time>

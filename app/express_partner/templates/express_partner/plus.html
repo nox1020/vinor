@@ -1,0 +1,289 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}{{ seo_title|default('وینور پلاس') }}{% endblock %}
+
+{% block content %}
+{% set _has_plus = is_special|default(false) %}
+{% set _price = plus_price_toman|default(990000) %}
+{% set _period = plus_period_label|default('ماهانه') %}
+
+<style>
+  html:has(#vinorPlusPage),
+  body:has(#vinorPlusPage) {
+    background: #000 !important;
+  }
+  #vinorPlusPage {
+    --vp-bg: #000;
+    --vp-text: #f4f4f5;
+    --vp-muted: #a1a1aa;
+    --vp-line: rgba(255, 255, 255, 0.1);
+    --vp-surface: #111113;
+    --vp-accent: #fafafa;
+    min-height: 100dvh;
+    background:
+      radial-gradient(120% 70% at 50% -10%, rgba(255, 255, 255, 0.08), transparent 55%),
+      var(--vp-bg);
+    color: var(--vp-text);
+    padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+  }
+  #vinorPlusPage .vp-top {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: calc(0.55rem + env(safe-area-inset-top, 0px)) 0.9rem 0.55rem;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.96), rgba(0, 0, 0, 0.72) 70%, transparent);
+  }
+  #vinorPlusPage .vp-back {
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 9999px;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border: 0;
+    text-decoration: none;
+  }
+  #vinorPlusPage .vp-shell {
+    max-width: 28rem;
+    margin: 0 auto;
+    padding: 0.5rem 1.25rem 1.5rem;
+    text-align: center;
+  }
+  #vinorPlusPage .vp-mark {
+    width: 3.4rem;
+    height: 3.4rem;
+    margin: 1.1rem auto 1.15rem;
+    border-radius: 1rem;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(145deg, #2a2a2e, #141416);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+  #vinorPlusPage .vp-brand {
+    margin: 0;
+    font-size: clamp(2rem, 8vw, 2.65rem);
+    font-weight: 760;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    color: #fff;
+  }
+  #vinorPlusPage .vp-lead {
+    margin: 0.85rem auto 0;
+    max-width: 22rem;
+    font-size: 1rem;
+    line-height: 1.65;
+    color: var(--vp-muted);
+  }
+  #vinorPlusPage .vp-benefits {
+    margin: 2rem 0 0;
+    padding: 0;
+    list-style: none;
+    text-align: right;
+    display: grid;
+    gap: 0.85rem;
+  }
+  #vinorPlusPage .vp-benefits li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    color: #e4e4e7;
+  }
+  #vinorPlusPage .vp-benefits i {
+    margin-top: 0.2rem;
+    color: #fff;
+    opacity: 0.85;
+    width: 1rem;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  #vinorPlusPage .vp-plan {
+    margin-top: 2rem;
+    padding: 1.15rem 1.1rem 1.2rem;
+    border-radius: 1.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.03);
+    text-align: right;
+  }
+  #vinorPlusPage .vp-plan.is-selected {
+    border-color: rgba(255, 255, 255, 0.34);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  }
+  #vinorPlusPage .vp-plan-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  #vinorPlusPage .vp-plan-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+  }
+  #vinorPlusPage .vp-plan-period {
+    margin-top: 0.2rem;
+    font-size: 0.78rem;
+    color: var(--vp-muted);
+  }
+  #vinorPlusPage .vp-plan-price {
+    font-size: 1.05rem;
+    font-weight: 720;
+    color: #fff;
+    direction: ltr;
+    font-variant-numeric: tabular-nums;
+  }
+  #vinorPlusPage .vp-plan-price small {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--vp-muted);
+    margin-inline-start: 0.25rem;
+  }
+  #vinorPlusPage .vp-cta-wrap {
+    margin-top: 1.35rem;
+    position: sticky;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+  #vinorPlusPage .vp-cta {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    min-height: 3.15rem;
+    border: 0;
+    border-radius: 9999px;
+    background: #fff;
+    color: #000;
+    font-size: 1.02rem;
+    font-weight: 720;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: none;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  }
+  #vinorPlusPage .vp-cta:active {
+    transform: scale(0.985);
+  }
+  #vinorPlusPage .vp-cta--ghost {
+    background: transparent;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: none;
+  }
+  #vinorPlusPage .vp-note {
+    margin: 0.85rem 0 0;
+    font-size: 0.72rem;
+    line-height: 1.55;
+    color: rgba(255, 255, 255, 0.42);
+  }
+  #vinorPlusPage .vp-flash {
+    margin: 0 0 1rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.9rem;
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.28);
+    color: #bbf7d0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    text-align: right;
+  }
+  #vinorPlusPage .vp-flash--err {
+    background: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.28);
+    color: #fecdd3;
+  }
+</style>
+
+<div id="vinorPlusPage">
+  <div class="vp-top">
+    <a href="{{ url_for('express_partner.home') }}"
+       data-vinor-express-nav
+       class="vp-back"
+       aria-label="بازگشت">
+      <i class="fas fa-chevron-right" aria-hidden="true"></i>
+    </a>
+    <span style="font-size:0.82rem;font-weight:650;color:#fff">وینور پلاس</span>
+    <span style="width:2.4rem" aria-hidden="true"></span>
+  </div>
+
+  <div class="vp-shell">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="vp-flash{% if category in ['error', 'danger'] %} vp-flash--err{% endif %}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="vp-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7">
+        <path d="M12 3l1.6 4.9L18.5 9.5l-4.9 1.6L12 16l-1.6-4.9L5.5 9.5l4.9-1.6L12 3z" stroke-linejoin="round"/>
+        <path d="M18.5 14.5l.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1z" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <h1 class="vp-brand">Vinor Plus</h1>
+    <p class="vp-lead">
+      {% if _has_plus %}
+      اشتراک پلاس شما فعال است — از امکانات ویژه و اولویت پاسخ استفاده کنید.
+      {% else %}
+      امکانات بیشتر، اولویت در معرفی فایل، و تجربهٔ حرفه‌ای‌تر بازاریابی با وینور.
+      {% endif %}
+    </p>
+
+    <ul class="vp-benefits" aria-label="مزایای پلاس">
+      <li><i class="fas fa-bolt" aria-hidden="true"></i><span>اولویت در معرفی فایل و پاسخ هوشمند</span></li>
+      <li><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>ابزارهای ویژهٔ بازاریابی و متن آگهی</span></li>
+      <li><i class="fas fa-scale-balanced" aria-hidden="true"></i><span>دسترسی کامل به وکیل ملکی وینور</span></li>
+      <li><i class="fas fa-building" aria-hidden="true"></i><span>امکانات سطح ویژه برای ثبت و مدیریت آگهی</span></li>
+    </ul>
+
+    {% if not _has_plus %}
+    <div class="vp-plan is-selected" role="group" aria-label="پلن انتخاب‌شده">
+      <div class="vp-plan-row">
+        <div>
+          <div class="vp-plan-name">پلاس</div>
+          <div class="vp-plan-period">{{ _period }} · قابل تمدید</div>
+        </div>
+        <div class="vp-plan-price">
+          {{ '{:,}'.format(_price)|replace(',', '،') }}
+          <small>تومان</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="vp-cta-wrap">
+      {% if me_phone %}
+      <form method="post" action="{{ url_for('express_partner.plus') }}">
+        {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <input type="hidden" name="action" value="request_plus">
+        <button type="submit" class="vp-cta">دریافت پلاس</button>
+      </form>
+      {% else %}
+      <a href="{{ url_for('express_partner.home', menu=1, next=url_for('express_partner.plus')) }}"
+         data-vinor-express-nav
+         class="vp-cta">ورود برای دریافت پلاس</a>
+      {% endif %}
+      <p class="vp-note">پس از ثبت درخواست، تیم وینور برای فعال‌سازی با شما هماهنگ می‌کند. این صفحه جایگزین درگاه پرداخت قطعی نیست.</p>
+    </div>
+    {% else %}
+    <div class="vp-cta-wrap">
+      <a href="{{ url_for('express_partner.home', ai=1) }}"
+         data-vinor-express-nav
+         class="vp-cta">ادامه در چت</a>
+      <a href="{{ url_for('express_partner.home') }}"
+         data-vinor-express-nav
+         class="vp-cta vp-cta--ghost"
+         style="margin-top:0.65rem">بازگشت به خانه</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

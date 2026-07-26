@@ -775,7 +775,10 @@ def append_exchange(
             user_entry["hide_ui"] = True
         msgs.append(user_entry)
         if th.get("title") in (None, "", "گفتگوی جدید") and len(msgs) == 1:
-            if not hide_user:
+            if str(th.get("kind") or "") == "lawyer" or tid == "__lawyer__":
+                th["title"] = "وکیل ملکی"
+                th["kind"] = "lawyer"
+            elif not hide_user:
                 th["title"] = _title_from_text(user_text)
             else:
                 th["title"] = "گفتگوی فروش"

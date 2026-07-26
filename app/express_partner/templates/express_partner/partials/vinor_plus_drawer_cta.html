@@ -1,0 +1,33 @@
+{# دکمهٔ دریافت/ارتقا به پلاس — سبک GPT (سایدبار) #}
+{% set _has_plus = is_special|default(false) %}
+{% set _plus_url = url_for('express_partner.plus') %}
+{% if not _has_plus %}
+<a href="{{ _plus_url }}"
+   data-vinor-express-nav
+   class="ep-profile-drawer__plus-cta"
+   aria-label="دریافت وینور پلاس">
+  <span class="ep-profile-drawer__plus-cta-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+      <path d="M12 3l1.6 4.9L18.5 9.5l-4.9 1.6L12 16l-1.6-4.9L5.5 9.5l4.9-1.6L12 3z" stroke-linejoin="round"/>
+      <path d="M18.5 14.5l.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1z" stroke-linejoin="round"/>
+    </svg>
+  </span>
+  <span class="ep-profile-drawer__plus-cta-text">
+    <strong>ارتقا به پلاس</strong>
+    <small>پاسخ سریع‌تر و امکانات ویژه</small>
+  </span>
+  <i class="fas fa-chevron-left ep-profile-drawer__plus-cta-chevron" aria-hidden="true"></i>
+</a>
+{% else %}
+<div class="ep-profile-drawer__plus-cta ep-profile-drawer__plus-cta--active" aria-label="وینور پلاس فعال است">
+  <span class="ep-profile-drawer__plus-cta-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+      <path d="M12 3l1.6 4.9L18.5 9.5l-4.9 1.6L12 16l-1.6-4.9L5.5 9.5l4.9-1.6L12 3z" stroke-linejoin="round"/>
+    </svg>
+  </span>
+  <span class="ep-profile-drawer__plus-cta-text">
+    <strong>وینور پلاس</strong>
+    <small>اشتراک شما فعال است</small>
+  </span>
+</div>
+{% endif %}

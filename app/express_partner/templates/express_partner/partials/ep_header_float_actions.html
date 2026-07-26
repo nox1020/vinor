@@ -1,7 +1,8 @@
-{# حباب شناور هدر: + چپ | منو راست #}
+{# حباب شناور هدر: دریافت پلاس (وسط) | منو راست #}
 {% set _menu_href = menu_href|default(url_for('express_partner.home', menu=1)) %}
 {% set _use_drawer = profile_drawer|default(false) %}
 {% set _show_ai_plus = show_ai_plus|default(false) %}
+{% set _show_get_plus = show_get_plus|default(false) and not (is_special|default(false)) %}
 <style>
   .ep-header-float-actions {
     position: fixed;
@@ -22,14 +23,58 @@
     right: auto;
     left: calc(env(safe-area-inset-left, 0px) + 0.7rem);
   }
-  .ep-header-float-actions .ep-partner-header-btn {
+  .ep-header-float-actions--plus {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .ep-header-float-actions .ep-partner-header-btn,
+  .ep-header-float-actions .ep-get-plus-pill {
     margin: 0;
     pointer-events: auto;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
+  .ep-get-plus-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 2.15rem;
+    padding: 0 0.85rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(24, 24, 27, 0.78);
+    color: #fafafa;
+    font-size: 0.78rem;
+    font-weight: 700;
+    font-family: inherit;
+    text-decoration: none;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  }
+  .ep-get-plus-pill:active {
+    transform: scale(0.98);
+  }
+  .ep-get-plus-pill svg {
+    width: 0.85rem;
+    height: 0.85rem;
+    flex-shrink: 0;
+  }
 </style>
-{% if _show_ai_plus %}
+{% if _show_get_plus %}
+<div class="ep-header-float-actions ep-header-float-actions--plus" aria-label="وینور پلاس">
+  <a href="{{ url_for('express_partner.plus') }}"
+     data-vinor-express-nav
+     class="ep-get-plus-pill"
+     title="دریافت پلاس">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+      <path d="M12 3l1.45 4.45L18 9l-4.55 1.55L12 15l-1.45-4.45L6 9l4.55-1.55L12 3z" stroke-linejoin="round"/>
+    </svg>
+    <span>دریافت پلاس</span>
+  </a>
+</div>
+{% elif _show_ai_plus %}
 <div class="ep-header-float-actions ep-header-float-actions--start" aria-label="گفتگوی جدید">
   <button type="button"
           id="aiNewChatBtn"
@@ -86,7 +131,7 @@
 })();
 </script>
 {% endif %}
-{% if _show_ai_plus %}
+{% if _show_ai_plus and not _show_get_plus %}
 <script>
 (function () {
   function focusAiComposer() {
@@ -104,7 +149,6 @@
     var btn = document.getElementById('aiNewChatBtn');
     if (!btn || btn.__vinorPlusFallback) return;
     btn.__vinorPlusFallback = true;
-    /* اگر ai-chat.js هنوز bind نکرده، حداقل فوکوس روی ورودی */
     btn.addEventListener('click', function () {
       setTimeout(focusAiComposer, 80);
     });

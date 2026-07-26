@@ -1109,15 +1109,32 @@ def generate_reply(
     audience: str | None = None,
     thread_id: str | None = None,
     chip_intent: str | None = None,
+    voice: str | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     key = (user_key or phone or "").strip()
     aud = _normalize_chat_audience(audience)
-    voice = resolve_ai_voice(phone=key, audience=aud)
+    from .audience import VOICE_LAWYER
+
+    voice = (voice or "").strip().lower() or resolve_ai_voice(phone=key, audience=aud)
+    is_lawyer = voice == VOICE_LAWYER
 
     text = (message or "").strip()
     if not text:
         return {"ok": False, "error": "پیام خالی است."}
+
+    if is_lawyer:
+        try:
+            from app.lawyer.config import lawyer_enabled
+
+            if not lawyer_enabled():
+                return {
+                    "ok": False,
+                    "error": "وکیل ملکی فعلاً غیرفعال است.",
+                    "error_code": "lawyer_disabled",
+                }
+        except Exception:
+            pass
 
     # فوکوس فایل موضوع گفتگو از همان ابتدا — ابزارها/مدل کد نپرسند
     try:
@@ -1128,7 +1145,7 @@ def generate_reply(
         g.ai_tool_thread_id = (thread_id or "").strip() or None
         g.ai_tool_audience = aud
         g.ai_last_user_message = text
-        if aud != AUDIENCE_ADMIN:
+        if aud != AUDIENCE_ADMIN and not is_lawyer:
             focus0 = resolve_conversation_land_code(key, thread_id=thread_id)
             if focus0:
                 g.ai_focus_land_code = focus0
@@ -1195,7 +1212,7 @@ def generate_reply(
     # Conversation Engine (Phase 11.5): before Supervisor — form workflows via chat.
     conversation_handled = False
     try:
-        if aud != AUDIENCE_ADMIN:
+        if aud != AUDIENCE_ADMIN and not is_lawyer:
             from app.conversation.service import try_conversation_engine
 
             ce = try_conversation_engine(
@@ -1253,28 +1270,29 @@ def generate_reply(
     # Executive AI (Phase 26) + Goal Engine (Phase 20) — before Supervisor/Workflow.
     exec_plan = None
     try:
-        from app.executive.service import plan_execution
-        from app.goals.service import run_goals
+        if not is_lawyer:
+            from app.executive.service import plan_execution
+            from app.goals.service import run_goals
 
-        exec_plan = plan_execution(
-            message=text,
-            audience=aud,
-            intent=intent or "",
-            conversation_handled=False,
-        )
-        if exec_plan.run_goals:
-            run_goals(
+            exec_plan = plan_execution(
                 message=text,
-                user_key=key,
                 audience=aud,
                 intent=intent or "",
+                conversation_handled=False,
             )
+            if exec_plan.run_goals:
+                run_goals(
+                    message=text,
+                    user_key=key,
+                    audience=aud,
+                    intent=intent or "",
+                )
     except Exception:
         exec_plan = None
 
     # Supervisor / Orchestrator (rule-based): decide which components to run.
     try:
-        run_sup = exec_plan is None or bool(exec_plan.run_supervisor)
+        run_sup = (not is_lawyer) and (exec_plan is None or bool(exec_plan.run_supervisor))
         if run_sup:
             from app.supervisor.service import orchestrate_request, set_supervisor_context
 
@@ -1370,7 +1388,7 @@ def generate_reply(
         except Exception:
             pass
     # ادامهٔ مرحله‌ای بازدید (نام/موبایل/تاریخ) بدون اینکه مدل دوباره نام‌خانوادگی بپرسد
-    if intent != "visit" and key and aud != AUDIENCE_ADMIN:
+    if (not is_lawyer) and intent != "visit" and key and aud != AUDIENCE_ADMIN:
         try:
             from flask import g
 
@@ -1429,17 +1447,18 @@ def generate_reply(
     )
     # Planning Layer (once): gated by Supervisor; Plan never enters Prompt fully.
     plan_out = None
-    allow_planning = True
-    inject_hint = True
-    seed_tools = True
+    allow_planning = not is_lawyer
+    inject_hint = not is_lawyer
+    seed_tools = not is_lawyer
     try:
-        from app.supervisor.service import allow_component, current_flags
+        if not is_lawyer:
+            from app.supervisor.service import allow_component, current_flags
 
-        allow_planning = allow_component("planning", default=True)
-        fl = current_flags()
-        if fl is not None:
-            inject_hint = bool(fl.inject_planning_hint)
-            seed_tools = bool(fl.seed_planning_tools)
+            allow_planning = allow_component("planning", default=True)
+            fl = current_flags()
+            if fl is not None:
+                inject_hint = bool(fl.inject_planning_hint)
+                seed_tools = bool(fl.seed_planning_tools)
     except Exception:
         pass
     # Adaptive retry strategy "lean": skip planning hint/seed (no new prompt text).
@@ -1451,7 +1470,7 @@ def generate_reply(
             seed_tools = False
     except Exception:
         pass
-    if key and intent not in _PLANNING_SKIP_INTENTS and allow_planning:
+    if (not is_lawyer) and key and intent not in _PLANNING_SKIP_INTENTS and allow_planning:
         try:
             from app.planning.service import run_planning_once
 
@@ -1473,7 +1492,7 @@ def generate_reply(
             messages.extend(plan_out.seed_messages)
     # Agents/Decision/Parallel → Prompt hints: سایهٔ فنی؛ هویت محصول = یک بازاریاب.
     # با VINOR_SINGLE_MARKETER_CHAT=1 (پیش‌فرض) hint چندایجنت به messages تزریق نمی‌شود.
-    if not single_marketer_chat_enabled():
+    if (not is_lawyer) and not single_marketer_chat_enabled():
         try:
             from app.agents.parallel.config import parallel_enabled
             from app.agents.parallel.service import get_parallel_merge_hint, get_parallel_obs

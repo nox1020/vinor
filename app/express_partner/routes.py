@@ -2874,6 +2874,9 @@ def _partner_ai_layer_context(
         'chat_threads': [],
         'active_thread_id': '',
         'postchi_thread_id': '__postchi__',
+        'lawyer_thread_id': '__lawyer__',
+        'lawyer_enabled': False,
+        'lawyer_feature_on': False,
         'home_ai_open': False,
         'home_ai_open_thread': '',
         'chat_api_url': '',
@@ -2900,6 +2903,10 @@ def _partner_ai_layer_context(
 
     if limited:
         # مهمان / کاربر عادی / متقاضی: چت عمومی محدود — بدون پستچی و ابزار فروش
+        # وکیل ملکی فقط برای کاربر واردشده (دارای شماره)
+        lawyer_thread_id = '__lawyer__'
+        lawyer_on = False
+        lawyer_feature_on = False
         try:
             from app.ai.audience import AUDIENCE_PUBLIC
             from app.ai.chat_store import (
@@ -2911,9 +2918,32 @@ def _partner_ai_layer_context(
             )
             from app.ai.user_key import ai_user_key
             from app.ai.welcome import ensure_vinor_opens_chat
+            from app.lawyer.config import lawyer_enabled as _lawyer_enabled
+            from app.lawyer.service import (
+                LAWYER_THREAD_ID,
+                ensure_lawyer_thread,
+                is_lawyer_thread,
+                threads_with_lawyer,
+            )
 
             user_key = ai_user_key()
-            if open_tid:
+            lawyer_feature_on = bool(_lawyer_enabled())
+            lawyer_on = lawyer_feature_on and bool(phone)
+            lawyer_thread_id = LAWYER_THREAD_ID
+            if (is_lawyer_thread(open_tid) or open_tid in ('lawyer', 'vakil')) and lawyer_on:
+                active_thread_id = ensure_lawyer_thread(
+                    user_key, audience=AUDIENCE_PUBLIC
+                )
+                chat_messages = messages_for_ui(
+                    user_key,
+                    thread_id=active_thread_id,
+                    audience=AUDIENCE_PUBLIC,
+                ) or []
+                home_ai_open = True
+                home_ai_open_thread = LAWYER_THREAD_ID
+            elif open_tid and not (
+                is_lawyer_thread(open_tid) or open_tid in ('lawyer', 'vakil')
+            ):
                 # لینک مستقیم به یک گفتگو
                 if set_active_thread(user_key, open_tid, audience=AUDIENCE_PUBLIC):
                     active_thread_id = open_tid
@@ -2936,6 +2966,7 @@ def _partner_ai_layer_context(
                     ) or []
             else:
                 # بدو ورود: همیشه صفحه خالی GPT — چت قبلی فقط در کشو
+                # (?thread=lawyer برای مهمان نادیده گرفته می‌شود)
                 out = clear_chat(user_key, audience=AUDIENCE_PUBLIC, opening_text=None)
                 if out.get('ok'):
                     active_thread_id = str(out.get('thread_id') or '').strip()
@@ -2946,13 +2977,22 @@ def _partner_ai_layer_context(
                 chat_messages = []
                 if want_ai:
                     home_ai_open = True
-            chat_threads = threads_for_ui(user_key, audience=AUDIENCE_PUBLIC)
+            if lawyer_on:
+                chat_threads = threads_with_lawyer(
+                    user_key,
+                    audience=AUDIENCE_PUBLIC,
+                    active_thread_id=active_thread_id,
+                )
+            else:
+                chat_threads = threads_for_ui(user_key, audience=AUDIENCE_PUBLIC) or []
         except Exception:
             chat_messages = []
             chat_threads = []
             active_thread_id = ''
             home_ai_open = False
             home_ai_open_thread = ''
+            lawyer_on = False
+            lawyer_feature_on = False
 
         guest_remaining = None
         guest_limit = None
@@ -2977,6 +3017,9 @@ def _partner_ai_layer_context(
             'chat_threads': chat_threads,
             'active_thread_id': active_thread_id,
             'postchi_thread_id': '',
+            'lawyer_thread_id': lawyer_thread_id,
+            'lawyer_enabled': lawyer_on,
+            'lawyer_feature_on': lawyer_feature_on,
             'home_ai_open': home_ai_open,
             'home_ai_open_thread': home_ai_open_thread,
             'chat_api_url': url_for('ai.chat'),
@@ -3003,10 +3046,17 @@ def _partner_ai_layer_context(
             is_postchi_thread,
             open_postchi,
             postchi_messages_for_ui,
-            threads_with_postchi,
+        )
+        from app.lawyer.config import lawyer_enabled as _lawyer_enabled
+        from app.lawyer.service import (
+            LAWYER_THREAD_ID,
+            ensure_lawyer_thread,
+            is_lawyer_thread,
+            threads_with_lawyer_and_postchi,
         )
 
         postchi_thread_id = POSTCHI_THREAD_ID
+        lawyer_thread_id = LAWYER_THREAD_ID
 
         if is_postchi_thread(open_tid):
             active_thread_id = POSTCHI_THREAD_ID
@@ -3014,6 +3064,19 @@ def _partner_ai_layer_context(
             open_postchi(phone)
             home_ai_open = True
             home_ai_open_thread = POSTCHI_THREAD_ID
+        elif is_lawyer_thread(open_tid) or open_tid in ('lawyer', 'vakil'):
+            if _lawyer_enabled():
+                active_thread_id = ensure_lawyer_thread(phone, audience=AUDIENCE_PARTNER)
+                chat_messages = messages_for_ui(
+                    phone,
+                    thread_id=active_thread_id,
+                    audience=AUDIENCE_PARTNER,
+                ) or []
+                home_ai_open = True
+                home_ai_open_thread = LAWYER_THREAD_ID
+            else:
+                active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
+                chat_messages = messages_for_ui(phone, active_thread_id, audience=AUDIENCE_PARTNER) or []
         elif open_tid:
             # لینک مستقیم به یک گفتگو
             from app.ai.chat_store import set_active_thread
@@ -3050,7 +3113,7 @@ def _partner_ai_layer_context(
             chat_messages = []
             if want_ai:
                 home_ai_open = True
-        chat_threads = threads_with_postchi(
+        chat_threads = threads_with_lawyer_and_postchi(
             phone,
             audience=AUDIENCE_PARTNER,
             active_thread_id=active_thread_id,
@@ -3061,12 +3124,16 @@ def _partner_ai_layer_context(
         active_thread_id = ''
         home_ai_open = False
         home_ai_open_thread = ''
+        lawyer_thread_id = '__lawyer__'
 
     ctx.update({
         'chat_messages': chat_messages,
         'chat_threads': chat_threads,
         'active_thread_id': active_thread_id,
         'postchi_thread_id': postchi_thread_id,
+        'lawyer_thread_id': lawyer_thread_id,
+        'lawyer_enabled': True,
+        'lawyer_feature_on': True,
         'home_ai_open': home_ai_open,
         'home_ai_open_thread': home_ai_open_thread,
         'chat_api_url': url_for('express_partner.ai_chat'),
@@ -3081,6 +3148,15 @@ def _partner_ai_layer_context(
         'postchi_send_url': url_for('express_partner.api_postchi_send'),
         'postchi_open_url': url_for('express_partner.api_postchi_open'),
     })
+    try:
+        from app.lawyer.config import lawyer_enabled as _le
+
+        _on = bool(_le())
+        ctx['lawyer_enabled'] = _on
+        ctx['lawyer_feature_on'] = _on
+    except Exception:
+        ctx['lawyer_enabled'] = False
+        ctx['lawyer_feature_on'] = False
     return ctx
 
 
@@ -5050,16 +5126,16 @@ def ai_sync():
 def ai_history():
     from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import messages_for_ui
+    from app.lawyer.service import is_lawyer_thread, threads_with_lawyer_and_postchi
     from app.services.postchi import (
         is_postchi_thread,
         postchi_messages_for_ui,
-        threads_with_postchi,
     )
 
     phone = (session.get('user_phone') or '').strip()
     thread_id = (request.args.get('thread_id') or '').strip() or None
     threads_only = request.args.get('threads_only', '').lower() in ('1', 'true', 'yes')
-    active = thread_id if is_postchi_thread(thread_id) else None
+    active = thread_id if (is_postchi_thread(thread_id) or is_lawyer_thread(thread_id)) else None
     if not active:
         from app.ai.chat_store import load_user_record
 
@@ -5067,7 +5143,7 @@ def ai_history():
         active = record.get('active_id')
     payload = {
         'ok': True,
-        'threads': threads_with_postchi(
+        'threads': threads_with_lawyer_and_postchi(
             phone,
             audience=AUDIENCE_PARTNER,
             active_thread_id=thread_id or active,
@@ -5077,15 +5153,20 @@ def ai_history():
     if not threads_only:
         if is_postchi_thread(thread_id):
             payload['messages'] = postchi_messages_for_ui(phone)
+            payload['mode'] = 'postchi'
+        elif is_lawyer_thread(thread_id):
+            payload['messages'] = messages_for_ui(phone, thread_id, audience=AUDIENCE_PARTNER)
+            payload['mode'] = 'lawyer'
         else:
             payload['messages'] = messages_for_ui(phone, thread_id, audience=AUDIENCE_PARTNER)
+            payload['mode'] = 'chat'
     return jsonify(payload)
 
 
 @express_partner_bp.post('/ai/chat', endpoint='ai_chat')
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_chat():
-    from app.ai.audience import AUDIENCE_PARTNER
+    from app.ai.audience import AUDIENCE_PARTNER, VOICE_LAWYER
     from app.ai.chat_store import (
         append_exchange,
         ensure_active_thread,
@@ -5093,7 +5174,13 @@ def ai_chat():
     )
     from app.ai.http_errors import ai_chat_http_status
     from app.ai.services import generate_reply
-    from app.services.postchi import is_postchi_thread, threads_with_postchi
+    from app.lawyer.config import lawyer_enabled
+    from app.lawyer.service import (
+        ensure_lawyer_thread,
+        is_lawyer_thread,
+        threads_with_lawyer_and_postchi,
+    )
+    from app.services.postchi import is_postchi_thread
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
@@ -5101,10 +5188,19 @@ def ai_chat():
     thread_id = (data.get('thread_id') or '').strip() or None
     chip_intent = (data.get('intent') or data.get('chip_intent') or '').strip()
     hide_user = bool(data.get('hide_user') or data.get('silent') or data.get('hide_ui'))
+    mode = (data.get('mode') or '').strip().lower()
     if not message:
         return jsonify({'ok': False, 'error': 'پیام خالی است.'}), 400
     if is_postchi_thread(thread_id):
         return jsonify({'ok': False, 'error': 'برای پیام به وینور، گفتگوی پستچی را انتخاب کنید.'}), 400
+
+    voice = None
+    if mode in ('lawyer', 'vakil') or is_lawyer_thread(thread_id):
+        if not lawyer_enabled():
+            return jsonify({'ok': False, 'error': 'وکیل ملکی فعلاً غیرفعال است.'}), 403
+        thread_id = ensure_lawyer_thread(phone, audience=AUDIENCE_PARTNER)
+        voice = VOICE_LAWYER
+        chip_intent = ''
 
     if not thread_id:
         thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
@@ -5117,12 +5213,13 @@ def ai_chat():
         audience=AUDIENCE_PARTNER,
         thread_id=thread_id,
         chip_intent=chip_intent,
+        voice=voice,
     )
     if not result.get('ok'):
         return jsonify(result), ai_chat_http_status(result)
 
-    land_codes = result.get('land_codes') or []
-    agent_actions = result.get('agent_actions') or []
+    land_codes = [] if voice == VOICE_LAWYER else (result.get('land_codes') or [])
+    agent_actions = [] if voice == VOICE_LAWYER else (result.get('agent_actions') or [])
     msgs, tid = append_exchange(
         phone,
         message,
@@ -5136,11 +5233,17 @@ def ai_chat():
     result['messages'] = msgs
     result['audience'] = AUDIENCE_PARTNER
     result['thread_id'] = tid
-    result['threads'] = threads_with_postchi(
+    result['mode'] = 'lawyer' if is_lawyer_thread(tid) else 'chat'
+    result['threads'] = threads_with_lawyer_and_postchi(
         phone,
         audience=AUDIENCE_PARTNER,
         active_thread_id=tid,
     )
+    if voice == VOICE_LAWYER:
+        result.pop('land_cards', None)
+        result.pop('cards_html', None)
+        result['land_codes'] = []
+        result['agent_actions'] = []
     return jsonify(result)
 
 
@@ -5237,12 +5340,18 @@ def ai_clear():
 def ai_switch_thread():
     from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import messages_for_ui, set_active_thread
+    from app.lawyer.config import lawyer_enabled
+    from app.lawyer.service import (
+        LAWYER_THREAD_ID,
+        ensure_lawyer_thread,
+        is_lawyer_thread,
+        threads_with_lawyer_and_postchi,
+    )
     from app.services.postchi import (
         POSTCHI_THREAD_ID,
         is_postchi_thread,
         open_postchi,
         postchi_messages_for_ui,
-        threads_with_postchi,
     )
 
     phone = (session.get('user_phone') or '').strip()
@@ -5257,10 +5366,25 @@ def ai_switch_thread():
             'thread_id': POSTCHI_THREAD_ID,
             'mode': 'postchi',
             'messages': postchi_messages_for_ui(phone),
-            'threads': threads_with_postchi(
+            'threads': threads_with_lawyer_and_postchi(
                 phone,
                 audience=AUDIENCE_PARTNER,
                 active_thread_id=POSTCHI_THREAD_ID,
+            ),
+        })
+    if is_lawyer_thread(thread_id) or thread_id in ('lawyer', 'vakil'):
+        if not lawyer_enabled():
+            return jsonify({'ok': False, 'error': 'وکیل ملکی فعلاً غیرفعال است.'}), 403
+        tid = ensure_lawyer_thread(phone, audience=AUDIENCE_PARTNER)
+        return jsonify({
+            'ok': True,
+            'thread_id': tid,
+            'mode': 'lawyer',
+            'messages': messages_for_ui(phone, tid, audience=AUDIENCE_PARTNER),
+            'threads': threads_with_lawyer_and_postchi(
+                phone,
+                audience=AUDIENCE_PARTNER,
+                active_thread_id=tid,
             ),
         })
     if not set_active_thread(phone, thread_id, audience=AUDIENCE_PARTNER):
@@ -5268,8 +5392,9 @@ def ai_switch_thread():
     return jsonify({
         'ok': True,
         'thread_id': thread_id,
+        'mode': 'chat',
         'messages': messages_for_ui(phone, thread_id, audience=AUDIENCE_PARTNER),
-        'threads': threads_with_postchi(
+        'threads': threads_with_lawyer_and_postchi(
             phone,
             audience=AUDIENCE_PARTNER,
             active_thread_id=thread_id,
@@ -5282,12 +5407,13 @@ def ai_switch_thread():
 def ai_delete_thread():
     from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import delete_thread, load_user_record, messages_for_ui
-    from app.services.postchi import is_postchi_thread, threads_with_postchi
+    from app.lawyer.service import is_lawyer_thread, threads_with_lawyer_and_postchi
+    from app.services.postchi import is_postchi_thread
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
     thread_id = (data.get('thread_id') or '').strip()
-    if is_postchi_thread(thread_id):
+    if is_postchi_thread(thread_id) or is_lawyer_thread(thread_id):
         return jsonify({'ok': False, 'error': 'این گفتگو قابل حذف نیست.'}), 400
     if not thread_id or not delete_thread(phone, thread_id, audience=AUDIENCE_PARTNER):
         return jsonify({'ok': False, 'error': 'حذف ممکن نیست.'}), 400
@@ -5297,7 +5423,7 @@ def ai_delete_thread():
         'ok': True,
         'thread_id': active,
         'messages': messages_for_ui(phone, active, audience=AUDIENCE_PARTNER),
-        'threads': threads_with_postchi(
+        'threads': threads_with_lawyer_and_postchi(
             phone,
             audience=AUDIENCE_PARTNER,
             active_thread_id=active,
@@ -7249,6 +7375,61 @@ def settings_page():
         hide_header=True,
         bottom_nav_active='profile',
         seo_title='حافظه | وینور اکسپرس',
+    )
+
+
+@express_partner_bp.route('/plus', methods=['GET', 'POST'], endpoint='plus')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def plus_page():
+    """صفحهٔ خرید / ارتقا به وینور پلاس — سبک GPT Plus."""
+    me_phone = (session.get('user_phone') or '').strip()
+    profile = getattr(g, 'express_partner_profile', None)
+    if profile is None and me_phone:
+        profile = _partner_profile_for_phone(me_phone)
+    is_special = _is_partner_special(profile) if isinstance(profile, dict) else False
+    plus_price = 990000
+    try:
+        from app.utils.storage import load_settings
+
+        raw = (load_settings() or {}).get('vinor_plus_price_toman')
+        if raw is not None and str(raw).strip() != '':
+            plus_price = max(0, int(raw))
+    except Exception:
+        plus_price = 990000
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or '').strip()
+        if action == 'request_plus':
+            if not me_phone:
+                flash('برای درخواست پلاس ابتدا وارد شوید.', 'error')
+                return redirect(url_for('express_partner.home', menu=1))
+            if is_special:
+                flash('اشتراک پلاس شما از قبل فعال است.', 'success')
+                return redirect(url_for('express_partner.plus'))
+            try:
+                from .admin_action_sms import notify_admin_pending_action
+
+                notify_admin_pending_action(
+                    'vinor_plus',
+                    partner_phone=me_phone,
+                    partner_name=(
+                        (profile.get('name') if isinstance(profile, dict) else None) or me_phone
+                    ),
+                    detail=f'درخواست Vinor Plus · {me_phone}',
+                )
+            except Exception:
+                pass
+            flash('درخواست پلاس ثبت شد. به‌زودی برای فعال‌سازی با شما هماهنگ می‌شود.', 'success')
+            return redirect(url_for('express_partner.plus'))
+
+    return render_template(
+        'express_partner/plus.html',
+        me_phone=me_phone,
+        is_special=is_special,
+        plus_price_toman=plus_price,
+        plus_period_label='ماهانه',
+        hide_header=True,
+        seo_title='وینور پلاس | ارتقا',
     )
 
 
