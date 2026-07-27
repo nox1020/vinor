@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime
+from unittest import mock
 
 from app.express_partner.plus_subscription import (
     PLUS_RENEW_WINDOW_DAYS,
@@ -126,6 +127,108 @@ class PlusSmsMessageTests(unittest.TestCase):
     def test_expired_default(self) -> None:
         msg = build_plus_expired_sms_message()
         self.assertIn("منقضی", msg)
+
+
+class PlusIsolationTests(unittest.TestCase):
+    def test_backfill_only_mutates_target_profile(self) -> None:
+        from app.express_partner.plus_subscription import (
+            PLUS_EXPIRES_AT_KEY,
+            persist_plus_expiry_backfill_for_phone,
+        )
+
+        partners = [
+            {"phone": "09121111111", "status": "approved", "partner_tier": "special"},
+            {"phone": "09122222222", "status": "approved", "partner_tier": "partner"},
+        ]
+        saved = []
+
+        def _save(items):
+            saved.append([dict(p) for p in items])
+
+        with mock.patch(
+            "app.utils.storage.load_express_partners", return_value=partners
+        ), mock.patch("app.utils.storage.save_express_partners", side_effect=_save):
+            self.assertTrue(persist_plus_expiry_backfill_for_phone("09121111111"))
+
+        self.assertEqual(len(saved), 1)
+        out = saved[0]
+        self.assertTrue(str(out[0].get(PLUS_EXPIRES_AT_KEY) or "").strip())
+        self.assertFalse(str(out[1].get(PLUS_EXPIRES_AT_KEY) or "").strip())
+
+    def test_grant_only_updates_matching_phone(self) -> None:
+        from app.express_partner.plus_grant import grant_vinor_plus_for_phone
+
+        partners = [
+            {"phone": "09121111111", "status": "approved", "partner_tier": "partner"},
+            {"phone": "09122222222", "status": "approved", "partner_tier": "partner"},
+        ]
+        saved = []
+
+        def _save(items):
+            saved.append([dict(p) for p in items])
+
+        with mock.patch(
+            "app.utils.storage.load_express_partners", return_value=partners
+        ), mock.patch("app.utils.storage.save_express_partners", side_effect=_save), mock.patch(
+            "app.express_partner.zarinpal_config.plus_subscription_days", return_value=30
+        ):
+            res = grant_vinor_plus_for_phone("09121111111")
+
+        self.assertTrue(res.get("ok"))
+        self.assertEqual(len(saved), 1)
+        out = saved[0]
+        self.assertEqual(str(out[0].get("partner_tier")), "special")
+        self.assertEqual(str(out[1].get("partner_tier")), "partner")
+
+    def test_apply_grant_blocks_session_phone_mismatch(self) -> None:
+        from app.express_partner.plus_checkout import _apply_plus_grant_for_txn
+
+        txn = {
+            "id": "t1",
+            "phone": "09121111111",
+            "partner_name": "A",
+            "plus_grant_applied": False,
+        }
+        with mock.patch(
+            "app.express_partner.plus_checkout.grant_vinor_plus_for_phone"
+        ) as grant_mock:
+            out = _apply_plus_grant_for_txn(txn, session_phone="09122222222")
+        grant_mock.assert_not_called()
+        self.assertEqual(out.get("error"), "session_phone_mismatch")
+
+    def test_sync_session_skips_foreign_plus_profile(self) -> None:
+        from app import create_app
+        from app.express_partner.partner_session_sync import sync_partner_session_after_plus
+
+        app = create_app()
+        app.config["TESTING"] = True
+        partners = [
+            {
+                "phone": "09121111111",
+                "status": "approved",
+                "partner_tier": "special",
+                "plus_expires_at": "2099-01-01T12:00:00Z",
+            },
+            {"phone": "09122222222", "status": "approved", "partner_tier": "partner"},
+        ]
+        with app.test_request_context():
+            from flask import g, session
+
+            session["user_phone"] = "09122222222"
+            with mock.patch(
+                "app.utils.storage.load_express_partners", return_value=partners
+            ), mock.patch(
+                "app.express_partner.plus_subscription.persist_plus_expiry_backfill_for_phone",
+                return_value=False,
+            ):
+                sync_partner_session_after_plus("09121111111")
+            prof = getattr(g, "express_partner_profile", None)
+            self.assertNotEqual(
+                (prof or {}).get("phone"),
+                "09121111111",
+                "پروفایل کاربر دیگر نباید روی g بنشیند",
+            )
+            self.assertFalse(session.get("VINOR_PLUS_ACTIVE"))
 
 
 if __name__ == "__main__":

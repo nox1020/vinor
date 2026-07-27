@@ -16,6 +16,8 @@ from .plus_transactions import (
     mark_cancelled,
     mark_failed,
     mark_paid,
+    mark_plus_grant_applied,
+    plus_grant_applied,
 )
 from .zarinpal_client import payment_request, payment_verify, start_pay_url
 import logging
@@ -87,13 +89,36 @@ def begin_plus_payment(
     return True, pay_url, ""
 
 
+def _apply_plus_grant_for_txn(
+    txn: Dict[str, Any],
+    *,
+    session_phone: str = "",
+) -> Dict[str, Any]:
+    """Grant فقط روی شمارهٔ تراکنش و فقط اگر سشن با آن یکی باشد (یا هنوز grant نشده و سشن خالی)."""
+    txn_phone = canonical_partner_phone(str(txn.get("phone") or ""))
+    sess = canonical_partner_phone(str(session_phone or "").strip())
+    if sess and txn_phone and not phones_match(sess, txn_phone):
+        return {"ok": False, "skipped": True, "error": "session_phone_mismatch", "phone": txn_phone}
+    if plus_grant_applied(txn):
+        return {"ok": True, "skipped": True, "error": "already_granted", "phone": txn_phone}
+    grant = grant_vinor_plus_for_phone(
+        txn_phone,
+        partner_name=str(txn.get("partner_name") or ""),
+    )
+    if grant.get("ok"):
+        txn = mark_plus_grant_applied(txn)
+    grant["txn"] = txn
+    return grant
+
+
 def complete_plus_payment_from_callback(
     *,
     authority: str,
     status_param: str,
+    session_phone: str = "",
 ) -> Dict[str, Any]:
     """
-    Idempotent: اگر قبلاً paid بود بدون grant دوباره، success برمی‌گردد.
+    Idempotent: paid + grant_applied؛ اگر پرداخت شده ولی grant نخورده، با سشن درست دوباره grant می‌شود.
     """
     auth = str(authority or "").strip()
     st = str(status_param or "").strip().upper()
@@ -104,7 +129,23 @@ def complete_plus_payment_from_callback(
         return {"ok": False, "reason": "unknown_authority"}
 
     if str(txn.get("status") or "") == STATUS_PAID:
-        return {"ok": True, "reason": "already_paid", "txn": txn, "granted": False}
+        grant = _apply_plus_grant_for_txn(txn, session_phone=session_phone)
+        if grant.get("error") == "session_phone_mismatch":
+            return {
+                "ok": False,
+                "reason": "session_phone_mismatch",
+                "txn": txn,
+                "grant": grant,
+                "granted": False,
+            }
+        granted = bool(grant.get("ok")) and not bool(grant.get("skipped"))
+        return {
+            "ok": True,
+            "reason": "already_paid",
+            "txn": grant.get("txn") if isinstance(grant.get("txn"), dict) else txn,
+            "grant": grant,
+            "granted": granted,
+        }
 
     if st != "OK":
         mark_cancelled(txn, message=f"gateway_status={st or 'NOK'}")
@@ -133,11 +174,17 @@ def complete_plus_payment_from_callback(
         verify_message=str(verify.get("message") or ""),
         authority=auth,
     )
-    grant = grant_vinor_plus_for_phone(
-        str(txn.get("phone") or ""),
-        partner_name=str(txn.get("partner_name") or ""),
-    )
-    if grant.get("ok"):
+    grant = _apply_plus_grant_for_txn(txn, session_phone=session_phone)
+    if grant.get("error") == "session_phone_mismatch":
+        return {
+            "ok": False,
+            "reason": "session_phone_mismatch",
+            "txn": txn,
+            "grant": grant,
+            "granted": False,
+        }
+    txn = grant.get("txn") if isinstance(grant.get("txn"), dict) else txn
+    if grant.get("ok") and not grant.get("skipped"):
         try:
             from .plus_sms import notify_plus_payment_success_sms
             from .partner_session_sync import find_partner_record
@@ -160,24 +207,30 @@ def complete_plus_payment_from_callback(
         "reason": "paid",
         "txn": txn,
         "grant": grant,
-        "granted": bool(grant.get("ok")),
+        "granted": bool(grant.get("ok")) and not bool(grant.get("skipped")),
     }
 
 
 def handle_callback_http(authority: str, status_param: str):
     """Redirect + flash برای route callback."""
     me = canonical_partner_phone(session.get("user_phone") or "")
-    result = complete_plus_payment_from_callback(authority=authority, status_param=status_param)
+    result = complete_plus_payment_from_callback(
+        authority=authority,
+        status_param=status_param,
+        session_phone=me,
+    )
+    reason = result.get("reason") or "failed"
+    if reason == "session_phone_mismatch":
+        flash(
+            "این پرداخت برای شمارهٔ دیگری ثبت شده است. با همان شماره‌ای که پرداخت کردید وارد شوید.",
+            "error",
+        )
+        return redirect(url_for("express_partner.plus"))
     if result.get("ok"):
         txn = result.get("txn") if isinstance(result.get("txn"), dict) else {}
         txn_phone = canonical_partner_phone(str(txn.get("phone") or ""))
-        if me and txn_phone and not phones_match(me, txn_phone):
-            flash(
-                "این پرداخت برای شمارهٔ دیگری ثبت شده است. با همان شماره‌ای که پرداخت کردید وارد شوید.",
-                "error",
-            )
-            return redirect(url_for("express_partner.plus"))
-        sync_partner_session_after_plus(me or txn_phone)
+        if me:
+            sync_partner_session_after_plus(me)
         if result.get("reason") == "already_paid":
             flash("پرداخت شما قبلاً تأیید شده است. اشتراک پلاس فعال است.", "success")
         else:
@@ -187,7 +240,6 @@ def handle_callback_http(authority: str, status_param: str):
             else:
                 flash("پرداخت موفق بود. Vinor Plus برای حساب شما فعال شد.", "success")
         return redirect(url_for("express_partner.plus", plus_activated="1"))
-    reason = result.get("reason") or "failed"
     if reason == "user_cancelled":
         flash("پرداخت لغو شد.", "warning")
     elif reason == "verify_failed":

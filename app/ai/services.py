@@ -81,7 +81,15 @@ from .token_analytics import (
 _MAX_TOOL_ROUNDS = 1  # حداکثر ۱ دور ابزار + ۱ پاسخ نهایی (قبلاً ۲=۳ درخواست API)
 _MAX_TOOL_RESULT_CHARS = 800
 _PROMPT_CACHE: dict[str, tuple[float, str]] = {}
-_PROMPT_CACHE_TTL_SEC = 20.0
+
+
+def _prompt_cache_ttl_sec() -> float:
+    try:
+        from .prompt_optimize import prompt_cache_ttl_sec
+
+        return float(prompt_cache_ttl_sec())
+    except Exception:
+        return 20.0
 _PLANNING_SKIP_INTENTS = frozenset(
     {
         "visit",
@@ -524,7 +532,14 @@ def _system_memory_prompt_for_messages() -> str:
         from app.memory.config import system_memory_budget_chars
         from app.memory.system_store import system_memory_prompt_text
 
-        return (system_memory_prompt_text(max_chars=system_memory_budget_chars()) or "").strip()
+        budget = system_memory_budget_chars()
+        try:
+            from .prompt_optimize import system_memory_char_budget
+
+            budget = system_memory_char_budget(budget)
+        except Exception:
+            pass
+        return (system_memory_prompt_text(max_chars=budget) or "").strip()
     except Exception:
         return ""
 
@@ -640,13 +655,27 @@ def _build_messages(
     base_prompt = prompt_for_voice(resolved_voice)
     messages: list[dict[str, Any]] = [{"role": "system", "content": base_prompt}]
     if with_tools:
-        messages.append({"role": "system", "content": agent_system_hint(resolved_voice)})
-    if chip_intent and ab.get("inject_partner_context", True):
-        from .intents import hint_for_chip_intent
+        try:
+            from .prompt_optimize import skip_redundant_tool_hint
 
-        hint = hint_for_chip_intent(chip_intent)
-        if hint:
-            _append_sales_hint(messages, hint)
+            inject_tool_hint = not skip_redundant_tool_hint()
+        except Exception:
+            inject_tool_hint = True
+        if inject_tool_hint:
+            messages.append({"role": "system", "content": agent_system_hint(resolved_voice)})
+    if chip_intent and ab.get("inject_partner_context", True):
+        try:
+            from .prompt_optimize import skip_redundant_sales_hints
+
+            skip_chip = with_tools and skip_redundant_sales_hints()
+        except Exception:
+            skip_chip = False
+        if not skip_chip:
+            from .intents import hint_for_chip_intent
+
+            hint = hint_for_chip_intent(chip_intent)
+            if hint:
+                _append_sales_hint(messages, hint)
     if user_key and ab.get("inject_partner_context", True):
         ctx = _build_system_prompt(
             user_key,
@@ -668,17 +697,34 @@ def _build_messages(
             messages.append({"role": "system", "content": mem_text})
     if user_key and ab.get("inject_funnel_hint", True):
         try:
-            from app.supervisor.funnel_service import chat_hint
+            from .prompt_optimize import skip_redundant_sales_hints
 
-            fh = chat_hint(user_key)
-            if fh:
-                _append_sales_hint(messages, fh)
+            skip_funnel = skip_redundant_sales_hints()
         except Exception:
-            pass
+            skip_funnel = False
+        if not skip_funnel:
+            try:
+                from app.supervisor.funnel_service import chat_hint
+
+                fh = chat_hint(user_key)
+                if fh:
+                    _append_sales_hint(messages, fh)
+            except Exception:
+                pass
     if history:
-        # فقط ته تاریخچه را پردازش کن — نه کل ۲۰۰ پیام thread
-        hist_window = list(history[-(keep_last + 6) :])
-        summary = _summarize_older_history(hist_window, keep_last=keep_last)
+        try:
+            from .prompt_optimize import effective_history_params
+
+            hp = effective_history_params(keep_last)
+        except Exception:
+            hp = {"window_extra": 6, "summary_pick": 6, "summary_char_cap": 80}
+        hist_window = list(history[-(keep_last + int(hp.get("window_extra") or 6)) :])
+        summary = _summarize_older_history(
+            hist_window,
+            keep_last=keep_last,
+            pick=int(hp.get("summary_pick") or 6),
+            char_cap=int(hp.get("summary_char_cap") or 80),
+        )
         if summary:
             reduced_keep = max(2, keep_last - 2)
             dropped = hist_window[-keep_last:-reduced_keep] if keep_last > reduced_keep else []
@@ -704,6 +750,8 @@ def _summarize_older_history(
     history: list[dict[str, str]] | None,
     *,
     keep_last: int,
+    pick: int = 6,
+    char_cap: int = 80,
 ) -> str:
     if (os.environ.get("VINOR_HISTORY_SUMMARY") or "1").strip().lower() not in ("1", "true", "yes", "on"):
         return ""
@@ -712,7 +760,9 @@ def _summarize_older_history(
         return ""
     older = rows[: -int(keep_last)]
     # Keep only the latest meaningful slices from old part.
-    picked = older[-6:]
+    n_pick = max(1, min(12, int(pick or 6)))
+    picked = older[-n_pick:]
+    cap = max(40, min(120, int(char_cap or 80)))
     bits: list[str] = []
     for item in picked:
         role = str(item.get("role") or "").strip()
@@ -722,10 +772,10 @@ def _summarize_older_history(
         if not content:
             continue
         prefix = "کاربر" if role == "user" else "دستیار"
-        bits.append(f"{prefix}: {content[:80]}")
+        bits.append(f"{prefix}: {content[:cap]}")
     if not bits:
         return ""
-    return "خلاصه گفتگوهای قبلی:\n- " + "\n- ".join(bits[:6])
+    return "خلاصه گفتگوهای قبلی:\n- " + "\n- ".join(bits[:n_pick])
 
 
 def _system_context_cache_key(
@@ -751,7 +801,7 @@ def _get_prompt_cache(key: str) -> str | None:
     if not item:
         return None
     ts, value = item
-    if (time.time() - ts) > _PROMPT_CACHE_TTL_SEC:
+    if (time.time() - ts) > _prompt_cache_ttl_sec():
         _PROMPT_CACHE.pop(key, None)
         return None
     return value
@@ -897,9 +947,10 @@ def _call_deepseek(
     }
     # سقف سخت completion — حتی اگر caller عدد بزرگ بدهد
     payload["max_tokens"] = max(32, min(int(payload["max_tokens"]), 512))
-    if tools:
+    if tools is not None:
         payload["tools"] = tools
-        payload["tool_choice"] = "auto"
+        if tools:
+            payload["tool_choice"] = "auto"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -1052,24 +1103,92 @@ def _run_agent_loop(
     voice: str,
     thread_id: str | None = None,
     max_tokens: int | None = None,
+    user_message: str = "",
+    chip_intent: str = "",
 ) -> dict[str, Any]:
     """حلقه کوتاه tool-calling؛ حداکثر ۱ دور ابزار سپس پاسخ نهایی."""
+    from .token_diag import estimate_tools_schema_tokens
+    from .tools.selection import per_round_tool_selection_enabled, select_tools_for_api_round
+
     agent_actions: list[dict[str, Any]] = []
     tool_land_codes: list[str] = []
     result: dict[str, Any] = {"ok": False, "error": "پاسخی دریافت نشد."}
     api_rounds = 0
+    tool_catalog = list(tools) if tools else None
+    tools_used: set[str] = set()
+    tool_rounds: list[dict[str, Any]] = []
+    schema_tokens_total = 0
+    payload_profiler_rounds: list[dict[str, Any]] = []
+
+    def _stash_payload_profiler_rounds() -> None:
+        if not payload_profiler_rounds:
+            return
+        try:
+            from flask import g
+
+            g.ai_payload_profiler_rounds = payload_profiler_rounds
+        except Exception:
+            pass
 
     for round_i in range(_MAX_TOOL_ROUNDS + 1):
-        allow_tools = bool(tools) and round_i < _MAX_TOOL_ROUNDS
+        if per_round_tool_selection_enabled():
+            round_tools = select_tools_for_api_round(
+                voice,
+                round_index=round_i,
+                max_tool_rounds=_MAX_TOOL_ROUNDS,
+                user_message=user_message,
+                chip_intent=chip_intent,
+                messages=messages,
+                catalog=tool_catalog,
+            )
+        else:
+            allow_tools = bool(tool_catalog) and round_i < _MAX_TOOL_ROUNDS
+            round_tools = list(tool_catalog) if allow_tools and tool_catalog else []
+
+        round_tok = estimate_tools_schema_tokens(round_tools)
+        schema_tokens_total += round_tok
+        tool_rounds.append(
+            {
+                "round": round_i,
+                "tools_sent": len(round_tools),
+                "tool_names": [
+                    str(
+                        (t.get("function") or {}).get("name") or ""
+                        if isinstance(t, dict)
+                        else ""
+                    ).strip()
+                    for t in round_tools
+                    if isinstance(t, dict)
+                ],
+                "tool_schema_tokens": round_tok,
+            }
+        )
+
+        try:
+            from .payload_profiler import payload_profiler_enabled, profile_messages_for_round
+
+            if payload_profiler_enabled():
+                payload_profiler_rounds.append(
+                    profile_messages_for_round(
+                        messages,
+                        round_tools,
+                        round_index=round_i,
+                        tools_sent=len(round_tools),
+                    )
+                )
+        except Exception:
+            pass
+
         result = call_ai(
             messages,
-            tools=tools if allow_tools else None,
+            tools=round_tools,
             max_tokens=max_tokens,
         )
         api_rounds += 1
         if not result.get("ok"):
             break
 
+        allow_tools = bool(round_tools)
         tool_calls = result.get("tool_calls") if allow_tools else None
         if not isinstance(tool_calls, list):
             tool_calls = []
@@ -1093,6 +1212,8 @@ def _run_agent_loop(
             tc_id = str(tc.get("id") or "")
             fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
             name = str(fn.get("name") or "").strip()
+            if name:
+                tools_used.add(name)
             args = parse_tool_arguments(fn.get("arguments"))
             tool_out = run_tool(
                 name,
@@ -1137,6 +1258,7 @@ def _run_agent_loop(
                 speak = str(model_payload.get("speak_exactly") or "").strip()
             if speak:
                 forced_actions = list(agent_actions)
+                _stash_payload_profiler_rounds()
                 return {
                     "ok": True,
                     "reply": speak,
@@ -1144,13 +1266,41 @@ def _run_agent_loop(
                     "tool_land_codes": tool_land_codes,
                     "api_rounds": api_rounds,
                     "meta": result.get("meta") if isinstance(result.get("meta"), dict) else {"provider": "deepseek"},
+                    "tool_selection": _tool_selection_payload(
+                        tool_rounds, tools_used, schema_tokens_total
+                    ),
                 }
+
+    _stash_payload_profiler_rounds()
 
     if result.get("ok"):
         result["agent_actions"] = agent_actions
         result["tool_land_codes"] = tool_land_codes
         result["api_rounds"] = api_rounds
+        result["tool_selection"] = _tool_selection_payload(
+            tool_rounds, tools_used, schema_tokens_total
+        )
     return result
+
+
+def _tool_selection_payload(
+    tool_rounds: list[dict[str, Any]],
+    tools_used: set[str],
+    schema_tokens_total: int,
+) -> dict[str, Any]:
+    from .tools.selection import per_round_tool_selection_enabled
+
+    sent_counts = [int(r.get("tools_sent") or 0) for r in tool_rounds]
+    tools_sent_count = max(sent_counts) if sent_counts else 0
+    used_list = sorted(tools_used)
+    return {
+        "tools_sent_count": tools_sent_count,
+        "tools_actually_used_count": len(used_list),
+        "tools_actually_used": used_list,
+        "tool_schema_tokens": int(schema_tokens_total),
+        "tool_rounds": tool_rounds,
+        "per_round_tools": per_round_tool_selection_enabled(),
+    }
 
 
 def _escalation_fallback_reply(
@@ -1779,18 +1929,39 @@ def generate_reply(
                     pass
         except Exception:
             pass
-    prompt_parts = _prompt_token_parts(messages)
-    try:
-        from flask import g
-
-        g.ai_last_user_message = (text or "").strip()
-    except Exception:
-        pass
+        except Exception:
+            pass
     # اگر planning قبلاً ابزار را seed کرده، دوباره schema/جستجو نفرست
     # (قبلاً مدل search را دوباره می‌زد → +۱ درخواست API و هزاران توکن).
     loop_tools: list[dict[str, Any]] | None = tools or None
     if plan_out is not None and seed_tools and plan_out.seed_messages:
         loop_tools = None
+    from .token_diag import apply_threshold_fixes
+
+    token_fixes: dict[str, Any] = {}
+    messages, loop_tools, token_fixes = apply_threshold_fixes(
+        messages,
+        loop_tools,
+        voice=voice,
+        user_message=text,
+        chip_intent=intent or "",
+    )
+    try:
+        from .tools.selection import per_round_tool_selection_enabled
+
+        if per_round_tool_selection_enabled() and tools:
+            loop_tools = list(tools)
+    except Exception:
+        pass
+    prompt_parts = _prompt_token_parts(messages)
+    try:
+        from flask import g
+
+        g.ai_last_user_message = (text or "").strip()
+        g.ai_tools_schema = loop_tools
+        g.ai_token_fixes_applied = token_fixes
+    except Exception:
+        pass
     from .agent_budget import agent_budget
 
     completion_cap = int(agent_budget(voice).get("max_tokens") or budget_config()["max_tokens"])
@@ -1802,7 +1973,15 @@ def generate_reply(
         voice=voice,
         thread_id=thread_id,
         max_tokens=completion_cap,
+        user_message=text,
+        chip_intent=intent or "",
     )
+    try:
+        from flask import g
+
+        g.ai_tool_selection = result.get("tool_selection") if isinstance(result, dict) else None
+    except Exception:
+        pass
     if not result.get("ok"):
         try:
             from app.adaptive.service import fail_adaptive
@@ -2377,6 +2556,44 @@ def _record_request_analytics(
             "cache_hit": bool((meta.get("provider") == "cache") if isinstance(meta, dict) else False),
         }
         record_token_analytics(row)
+        try:
+            from flask import g
+
+            from .token_diag import breakdown_prompt_sections, record_token_breakdown
+
+            tools_for_diag = getattr(g, "ai_tools_schema", None)
+            fixes_applied = getattr(g, "ai_token_fixes_applied", None)
+            tool_selection = getattr(g, "ai_tool_selection", None)
+            bd = breakdown_prompt_sections(
+                messages,
+                tools=tools_for_diag if isinstance(tools_for_diag, list) else None,
+                api_input_tokens=input_tokens,
+            )
+            if isinstance(tool_selection, dict) and int(tool_selection.get("tool_schema_tokens") or 0) > 0:
+                bd["tool_schema_tokens"] = int(tool_selection["tool_schema_tokens"])
+            record_token_breakdown(
+                bd,
+                user_key=user_key,
+                audience=audience,
+                voice=voice,
+                output_tokens=output_tokens,
+                fixes_applied=fixes_applied if isinstance(fixes_applied, dict) else None,
+                tool_selection=tool_selection if isinstance(tool_selection, dict) else None,
+            )
+            from .payload_profiler import finalize_payload_profile_request, payload_profiler_enabled
+
+            profiler_rounds = getattr(g, "ai_payload_profiler_rounds", None)
+            if payload_profiler_enabled() and isinstance(profiler_rounds, list) and profiler_rounds:
+                finalize_payload_profile_request(
+                    profiler_rounds,
+                    user_key=user_key,
+                    audience=audience,
+                    voice=voice,
+                    api_rounds=int(result.get("api_rounds") or 0),
+                    request_id=str(row.get("request_id") or ""),
+                )
+        except Exception:
+            pass
         # Phase 17.5: Evaluation & Observability — outside prompt, 0% token impact.
         try:
             from uuid import uuid4

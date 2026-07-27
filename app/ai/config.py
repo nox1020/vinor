@@ -37,6 +37,19 @@ _STYLE_RULES = """
 - اگر داده کم است، فقط یک سؤال شفاف بپرس.
 - انتهای پاسخ همیشه یک «مرحله بعد: ...» داشته باشد."""
 
+# نسخهٔ فشرده — همان قیود رفتاری؛ کمتر توکن (فقط وقتی VINOR_AI_TOKEN_OPTIMIZE روشن است)
+_COMMON_RULES_COMPACT = f"""
+قوانین: فقط داده/ابزار وینور؛ مجهول→[[ESCALATE:خلاصه]]؛ فارسی ۲–۵ جمله؛ بدون لینک/URL.
+هوش‌مصنوعی/چندایجنت نگو؛ ویژگی ملک نساز. هر پاسخ یک قدم فروش.
+فرم/کارت: همان مرحله؛ حداکثر ۲ کارت + [[LAND:کد]]. تاریخ شمسی از ابزار.
+بازدید: {VISIT_COORD_PHONE}. محدوده: {GEO_SCOPE_FA}."""
+
+_STYLE_RULES_COMPACT = """
+سبک پاسخ وینور (اجباری):
+- مستقیم شروع کن؛ خروجی ۴ تا ۸ خط کوتاه.
+- چندگزینه: یک خط «گزینه‌ها: A / B / C»؛ یک CTA؛ داده کم→یک سؤال.
+- انتهای پاسخ همیشه یک «مرحله بعد: ...» داشته باشد."""
+
 _PARTNER_GUIDE = f"""
 بازاریاب تأییدشده — هر پیام یک قدم فروش.
 مشتری: معیار→search_lands→[[LAND]]→propose_visit_request (نام→موبایل→تاریخ)→complete→deal.
@@ -45,6 +58,44 @@ land_code را نپرس (از زمینه). ثبت فقط با کارت. پشتی
 
 _SPECIAL_GUIDE = f"""
 ویژه — کوتاه و تصمیم‌محور. propose_* با کارت. تماس بازدید: {VISIT_COORD_PHONE}."""
+
+_PARTNER_GUIDE_COMPACT = (
+    "بازاریاب تأییدشده — هر پیام یک قدم فروش. "
+    "مشتری: معیار→search→[[LAND]]→visit→deal. land_code از زمینه؛ ثبت با کارت."
+)
+_SPECIAL_GUIDE_COMPACT = f"ویژه: کوتاه؛ propose_* با کارت. بازدید: {VISIT_COORD_PHONE}."
+
+_ADMIN_RULES_COMPACT = """
+ادمین: فارسی کوتاه؛ بدون لینک؛ مخرب فقط propose_*+کارت؛ تا تأیید نگو انجام شد.
+فروش مشتری نکن. «صف/معلق»→admin_ops_summary/admin_list_queue.
+همکار/فایل/بازدید/مالی/escalation: id از صف سپس propose_*.
+پیام همگانی→propose_broadcast_*؛ فایل جدید→propose_add_express_listing.
+کارت [[LAND]] فقط اگر ادمین صریح بخواهد. پایان: «مرحله بعد: ...»."""
+
+
+def _sales_rules_blocks(*, compact: bool) -> tuple[str, str]:
+    if compact:
+        return _COMMON_RULES_COMPACT, _STYLE_RULES_COMPACT
+    return _COMMON_RULES, _STYLE_RULES
+
+
+def _assemble_voice_prompt(
+    *,
+    goal: str,
+    body: str,
+    guide: str,
+    tools_line: str = "",
+    compact: bool,
+) -> str:
+    common, style = _sales_rules_blocks(compact=compact)
+    parts = [goal.strip(), body.strip()]
+    if tools_line and not compact:
+        parts.append(tools_line.strip())
+    if guide.strip():
+        parts.append(guide.strip())
+    parts.extend([common.strip(), style.strip()])
+    return "\n\n".join(p for p in parts if p)
+
 
 VINOR_AI_PUBLIC_PROMPT = f"""{GOAL_SYSTEM}
 
@@ -59,6 +110,15 @@ visit/deal نزن.
 {_COMMON_RULES}
 {_STYLE_RULES}"""
 
+VINOR_AI_PUBLIC_PROMPT_COMPACT = _assemble_voice_prompt(
+    goal=GOAL_SYSTEM,
+    body="""مخاطب: مهمان. خرید→معیار→search_lands→[[LAND]]→بازدید/تماس.
+فروش/همکاری→get_cooperation_info→propose_partner_application (نام/کدملی/شهر).
+مبهم→یک سؤال: خرید یا فروش فایل؟ visit/deal نزن.""",
+    guide="",
+    compact=True,
+)
+
 VINOR_AI_PARTNER_PROMPT = f"""{GOAL_SYSTEM}
 
 مخاطب: بازاریاب تأییدشده — تیز، بی‌حاشیه، هر پیام یک قدم فروش.
@@ -67,6 +127,13 @@ VINOR_AI_PARTNER_PROMPT = f"""{GOAL_SYSTEM}
 {_COMMON_RULES}
 {_STYLE_RULES}"""
 
+VINOR_AI_PARTNER_PROMPT_COMPACT = _assemble_voice_prompt(
+    goal=GOAL_SYSTEM,
+    body="مخاطب: بازاریاب تأییدشده — تیز، هر پیام یک قدم فروش.",
+    guide=_PARTNER_GUIDE_COMPACT,
+    compact=True,
+)
+
 VINOR_AI_SPECIAL_PROMPT = f"""{GOAL_SYSTEM}
 
 مخاطب: ویژه — یک خط وضعیت + یک خط حرکت.
@@ -74,6 +141,13 @@ VINOR_AI_SPECIAL_PROMPT = f"""{GOAL_SYSTEM}
 {_SPECIAL_GUIDE}
 {_COMMON_RULES}
 {_STYLE_RULES}"""
+
+VINOR_AI_SPECIAL_PROMPT_COMPACT = _assemble_voice_prompt(
+    goal=GOAL_SYSTEM,
+    body="مخاطب: ویژه — یک خط وضعیت + یک خط حرکت.",
+    guide=_SPECIAL_GUIDE_COMPACT,
+    compact=True,
+)
 
 _ADMIN_RULES = """
 قوانین عملیات:
@@ -105,23 +179,44 @@ propose_commission_action | answer_escalation
 
 {_ADMIN_RULES}"""
 
+VINOR_AI_ADMIN_PROMPT_COMPACT = f"""{GOAL_ADMIN_SYSTEM}
+
+مخاطب: ادمین — عملیات از چت. ابزار: admin_ops_summary | admin_list_queue | admin_search_lands | propose_* عملیاتی.
+
+{_ADMIN_RULES_COMPACT}"""
+
+_VOICE_PROMPT_CACHE: dict[str, str] = {}
+
 
 def prompt_for_voice(voice: str | None) -> str:
     v = (voice or "").strip().lower()
+    try:
+        from .prompt_optimize import use_compact_prompts
+
+        compact = use_compact_prompts()
+    except Exception:
+        compact = False
+    cache_key = f"{v}|{'c' if compact else 'f'}"
+    hit = _VOICE_PROMPT_CACHE.get(cache_key)
+    if hit:
+        return hit
     if v == VOICE_ADMIN:
-        return VINOR_AI_ADMIN_PROMPT
-    if v == VOICE_LAWYER:
+        out = VINOR_AI_ADMIN_PROMPT_COMPACT if compact else VINOR_AI_ADMIN_PROMPT
+    elif v == VOICE_LAWYER:
         try:
             from app.lawyer.config import build_lawyer_system_prompt
 
-            return build_lawyer_system_prompt()
+            out = build_lawyer_system_prompt()
         except Exception:
-            return (
+            out = (
                 "تو وکیل مشاور ملکی وینور هستی. دربارهٔ حقوق املاک ایران راهنمایی کن. "
                 "پاسخ جنبهٔ راهنمایی دارد و جایگزین وکالت رسمی نیست."
             )
-    if v == VOICE_SPECIAL:
-        return VINOR_AI_SPECIAL_PROMPT
-    if v == VOICE_PARTNER:
-        return VINOR_AI_PARTNER_PROMPT
-    return VINOR_AI_PUBLIC_PROMPT
+    elif v == VOICE_SPECIAL:
+        out = VINOR_AI_SPECIAL_PROMPT_COMPACT if compact else VINOR_AI_SPECIAL_PROMPT
+    elif v == VOICE_PARTNER:
+        out = VINOR_AI_PARTNER_PROMPT_COMPACT if compact else VINOR_AI_PARTNER_PROMPT
+    else:
+        out = VINOR_AI_PUBLIC_PROMPT_COMPACT if compact else VINOR_AI_PUBLIC_PROMPT
+    _VOICE_PROMPT_CACHE[cache_key] = out
+    return out

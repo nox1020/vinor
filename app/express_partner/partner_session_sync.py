@@ -45,6 +45,14 @@ def sync_partner_session_after_plus(phone: str) -> None:
     if not ph:
         return
 
+    session_user = canonical_partner_phone(str(session.get("user_phone") or ""))
+    if session_user:
+        if not phones_match(session_user, ph):
+            return
+        ph = session_user
+    else:
+        return
+
     for key in (
         "_express_partners_list_cached",
         "_express_partner_by_phone",

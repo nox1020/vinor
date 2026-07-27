@@ -182,10 +182,17 @@ def _focus_lands_block(
     lands: list[dict[str, Any]],
     *,
     show_commission: bool = True,
+    compact_focus: bool = False,
 ) -> str:
     if not lands:
         return ""
     codes = [str(l.get("code") or "").strip() for l in lands if l.get("code")]
+    if compact_focus:
+        return (
+            "=== فایل‌های موضوع چت ===\n"
+            f"کدها: {', '.join(codes)}. "
+            "«این فایل/قیمت/متراژ» = همین کدها؛ جزئیات با search_lands."
+        )
     parts = [
         "=== فایل‌های روی این گفتگو (موضوع پیش‌فرض) ===",
         "کاربر به این فایل‌ها اشاره می‌کند («این فایل»، خصوصیات، قیمت، …). "
@@ -206,6 +213,15 @@ def _focus_lands_block(
             )
         )
     return "\n".join(parts)
+
+
+def _land_context_compact_focus() -> bool:
+    try:
+        from app.ai.prompt_optimize import use_compact_land_focus
+
+        return use_compact_land_focus()
+    except Exception:
+        return False
 
 
 def _land_matches_query(land: dict[str, Any], query: str) -> bool:
@@ -688,15 +704,38 @@ def build_partner_land_context(
         parts: list[str] = []
         if focus_assigned or focus_public:
             merged = focus_assigned + focus_public
-            parts.append(_focus_lands_block(merged, show_commission=True))
+            parts.append(
+                _focus_lands_block(
+                    merged,
+                    show_commission=True,
+                    compact_focus=_land_context_compact_focus(),
+                )
+            )
             return "\n".join(parts)
     if not _needs_land_context(user_message):
         return ""
+    try:
+        from app.ai.prompt_optimize import land_query_limits
+
+        lim = land_query_limits(assigned_default=4, public_default=3)
+    except Exception:
+        lim = {
+            "assigned_default": 4,
+            "public_default": 3,
+            "match_limit_assigned": 6,
+            "match_limit_public": 4,
+        }
     picked_assigned = _select_lands_for_query(
-        assigned, user_message, default_limit=4, match_limit=6
+        assigned,
+        user_message,
+        default_limit=int(lim["assigned_default"]),
+        match_limit=int(lim["match_limit_assigned"]),
     )
     picked_public = _select_lands_for_query(
-        public, user_message, default_limit=3, match_limit=4
+        public,
+        user_message,
+        default_limit=int(lim["public_default"]),
+        match_limit=int(lim["match_limit_public"]),
     )
     parts = []
     if picked_assigned:
@@ -757,10 +796,30 @@ def build_public_land_context(
     if focus and _should_prefer_chat_focus(user_message, focus, prepared):
         focused = focused_lookup or _lands_by_codes(prepared, focus)
         if focused:
-            return _focus_lands_block(focused, show_commission=False)
+            return _focus_lands_block(
+                focused,
+                show_commission=False,
+                compact_focus=_land_context_compact_focus(),
+            )
     if not _needs_land_context(user_message):
         return ""
-    picked = _select_lands_for_query(public, user_message, default_limit=4, match_limit=6)
+    try:
+        from app.ai.prompt_optimize import land_query_limits
+
+        lim = land_query_limits(assigned_default=4, public_default=4)
+    except Exception:
+        lim = {
+            "assigned_default": 4,
+            "public_default": 4,
+            "match_limit_assigned": 6,
+            "match_limit_public": 6,
+        }
+    picked = _select_lands_for_query(
+        public,
+        user_message,
+        default_limit=int(lim["public_default"]),
+        match_limit=int(lim["match_limit_public"]),
+    )
     if not picked:
         return ""
     parts = [f"--- آگهی‌های عمومی ({len(picked)}) ---"]

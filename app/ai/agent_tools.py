@@ -339,13 +339,82 @@ def agent_system_hint(voice: str | None) -> str:
     )
 
 
+def _shrink_tool_schemas(schemas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """کوتاه‌کردن descriptionها بدون تغییر نام/پارامتر ابزار."""
+    try:
+        from app.ai.prompt_optimize import use_compact_tool_schemas
+
+        if not use_compact_tool_schemas():
+            return schemas
+    except Exception:
+        return schemas
+    max_fn = 64
+    max_param = 0  # حذف description پارامتر — نام فیلد برای مدل کافی است
+
+    def walk(node: Any, *, in_params: bool = False) -> Any:
+        if isinstance(node, dict):
+            out: dict[str, Any] = {}
+            for k, v in node.items():
+                if k == "description" and isinstance(v, str):
+                    if in_params and max_param <= 0:
+                        continue
+                    cap = max_param if in_params else max_fn
+                    if cap <= 0:
+                        continue
+                    out[k] = v if len(v) <= cap else v[: max(0, cap - 1)] + "…"
+                elif k == "properties" and isinstance(v, dict):
+                    out[k] = {
+                        pk: walk(pv, in_params=True) for pk, pv in v.items()
+                    }
+                else:
+                    out[k] = walk(v, in_params=in_params)
+            return out
+        if isinstance(node, list):
+            return [walk(x, in_params=in_params) for x in node]
+        return node
+
+    return [walk(s) for s in schemas]
+
+
+def _tool_schema_name(schema: dict[str, Any]) -> str:
+    fn = schema.get("function") if isinstance(schema.get("function"), dict) else {}
+    return str(fn.get("name") or "").strip()
+
+
+def tools_schema_subset_for_request(
+    voice: str | None,
+    *,
+    user_message: str = "",
+    chip_intent: str = "",
+    schemas: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """زیرمجموعهٔ ابزار — منطق در app.ai.tools.selection (per-round / threshold)."""
+    full = list(schemas) if schemas is not None else tools_schema_for_voice(voice)
+    if not full:
+        return full
+    try:
+        from app.ai.tools.selection import filter_catalog_subset, per_round_tool_selection_enabled
+        from app.ai.prompt_optimize import token_optimize_enabled
+
+        if per_round_tool_selection_enabled() or token_optimize_enabled():
+            return filter_catalog_subset(
+                voice,
+                user_message=user_message,
+                chip_intent=chip_intent,
+                catalog=full,
+            )
+    except Exception:
+        pass
+    return full
+
+
 def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
     """Schema ابزار چت — فروش (public/partner) یا عملیات ادمین."""
     v = (voice or "").strip().lower()
     if v == VOICE_ADMIN:
         from .admin_tools import tools_schema_admin
 
-        return tools_schema_admin()
+        return _shrink_tool_schemas(tools_schema_admin())
     if v == VOICE_LAWYER:
         # وکیل ملکی ابزار فروش ندارد — فقط گفتگو
         return []
@@ -355,7 +424,7 @@ def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
         schemas.append(_schema_app_status())
         schemas.append(_schema_propose_apply())
         schemas.append(_schema_forget_memory())
-        return schemas
+        return _shrink_tool_schemas(schemas)
     if v in (VOICE_PARTNER, VOICE_SPECIAL):
         schemas.append(_schema_next())
         schemas.append(_schema_listing())
@@ -373,7 +442,8 @@ def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
                 schemas.append(_schema_followup())
         except Exception:
             pass
-    return schemas
+        return _shrink_tool_schemas(schemas)
+    return _shrink_tool_schemas(schemas)
 
 
 def _schema_search() -> dict[str, Any]:

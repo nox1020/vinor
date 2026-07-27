@@ -412,10 +412,12 @@ def _express_partners_cached() -> List[Dict[str, Any]]:
 
 def _partner_profile_for_phone(phone: str) -> Dict[str, Any] | None:
     """پروفایل یک همکار از لیست کش‌شدهٔ درخواست (بدون خواندن مجدد فایل)."""
+    from .partner_session_sync import canonical_partner_phone
+
     phone = (phone or '').strip()
     if not phone:
         return None
-    norm = _normalize_phone(phone)
+    norm = canonical_partner_phone(phone)
     by_phone = getattr(g, '_express_partner_by_phone', None)
     if by_phone is None:
         partners = _express_partners_cached()
@@ -426,10 +428,10 @@ def _partner_profile_for_phone(phone: str) -> Dict[str, Any] | None:
             p_phone = str(p.get('phone') or '').strip()
             if not p_phone:
                 continue
+            p_norm = canonical_partner_phone(p_phone)
             by_phone[p_phone] = p
-            pn = _normalize_phone(p_phone)
-            if pn:
-                by_phone.setdefault(pn, p)
+            if p_norm:
+                by_phone.setdefault(p_norm, p)
         g._express_partner_by_phone = by_phone
     return by_phone.get(phone) or (by_phone.get(norm) if norm else None)
 
@@ -474,7 +476,9 @@ def _ensure_session_partner_on_g() -> None:
     if getattr(g, '_express_partner_ctx_ready', False):
         return
     g._express_partner_ctx_ready = True
-    me_phone = (session.get('user_phone') or '').strip()
+    from .partner_session_sync import canonical_partner_phone
+
+    me_phone = canonical_partner_phone(str(session.get('user_phone') or ''))
     if not me_phone:
         g.express_partner_profile = None
         return
@@ -990,6 +994,8 @@ def _finalize_partner_login(phone: str) -> str:
         pass
     try:
         session.pop('VINOR_IS_EXPRESS_PARTNER', None)
+        session.pop('VINOR_PLUS_ACTIVE', None)
+        session.pop('_plus_lifecycle_sms_ts', None)
         session.modified = True
     except Exception:
         pass

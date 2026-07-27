@@ -143,3 +143,14 @@ def attach_authority(txn: Dict[str, Any], authority: str) -> Dict[str, Any]:
     row["authority"] = str(authority or "").strip()
     row["updated_at"] = _utc_now_iso()
     return upsert(row)
+
+
+def plus_grant_applied(txn: Dict[str, Any]) -> bool:
+    return bool(txn.get("plus_grant_applied"))
+
+
+def mark_plus_grant_applied(txn: Dict[str, Any]) -> Dict[str, Any]:
+    row = dict(txn)
+    row["plus_grant_applied"] = True
+    row["updated_at"] = _utc_now_iso()
+    return upsert(row)
