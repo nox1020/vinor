@@ -27,7 +27,11 @@ def partner_tier(profile: Optional[Dict[str, Any]]) -> str:
 
 
 def partner_is_special(profile: Optional[Dict[str, Any]]) -> bool:
-    return partner_tier(profile) == PARTNER_TIER_SPECIAL
+    if partner_tier(profile) != PARTNER_TIER_SPECIAL:
+        return False
+    from app.express_partner.plus_subscription import plus_subscription_active
+
+    return plus_subscription_active(profile)
 
 
 def set_partner_tier(profile: Dict[str, Any], special: bool) -> None:

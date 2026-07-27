@@ -2525,12 +2525,10 @@ def ai_questions():
             try:
                 from app.ai.runtime_settings import default_ai_settings
                 ai_def = default_ai_settings()
+                cur = get_ai_settings()
                 patch = {
-                    'enabled': request.form.get('ai_enabled') == '1',
                     'escalation_sms_enabled': request.form.get('ai_escalation_sms_enabled') == '1',
                     'spend_fuse_enabled': request.form.get('ai_spend_fuse_enabled') == '1',
-                    'model_choice': (request.form.get('ai_model_choice') or 'flash').strip().lower(),
-                    'thinking_enabled': request.form.get('ai_thinking_enabled') == '1',
                     'min_interval_sec': float(request.form.get('ai_min_interval_sec') or ai_def['min_interval_sec']),
                     'dedup_ttl_sec': int(request.form.get('ai_dedup_ttl_sec') or ai_def['dedup_ttl_sec']),
                     'max_history': int(request.form.get('ai_max_history') or ai_def['max_history']),
@@ -2539,8 +2537,8 @@ def ai_questions():
                         request.form.get('ai_max_assistant_history_chars') or ai_def['max_assistant_history_chars']
                     ),
                     'max_context_chars': int(request.form.get('ai_max_context_chars') or ai_def['max_context_chars']),
-                    'max_tokens': int(request.form.get('ai_max_tokens') or ai_def['max_tokens']),
-                    'temperature': float(request.form.get('ai_temperature') or ai_def['temperature']),
+                    'max_tokens': int(request.form.get('ai_max_tokens') or cur['max_tokens']),
+                    'temperature': float(request.form.get('ai_temperature') or cur['temperature']),
                     'public_ctx_ttl_sec': int(request.form.get('ai_public_ctx_ttl_sec') or ai_def['public_ctx_ttl_sec']),
                     'partner_ctx_ttl_sec': int(request.form.get('ai_partner_ctx_ttl_sec') or ai_def['partner_ctx_ttl_sec']),
                     'min_message_chars': int(request.form.get('ai_min_message_chars') or ai_def['min_message_chars']),
@@ -2553,8 +2551,6 @@ def ai_questions():
                     'spend_fuse_max_requests': int(
                         request.form.get('ai_spend_fuse_max_requests') or ai_def['spend_fuse_max_requests']
                     ),
-                    'api_key': (request.form.get('ai_api_key') or '').strip(),
-                    'clear_api_key': request.form.get('ai_clear_api_key') == '1',
                 }
                 save_ai_settings(patch)
                 flash('تنظیمات پیکربندی AI ذخیره شد.', 'success')
@@ -2597,7 +2593,20 @@ def ai_questions():
     site_settings = get_settings()
     stored_api_key = get_stored_ai_api_key()
     active_api_key = get_deepseek_api_key()
-    from app.ai.runtime_settings import model_choice_options
+    from app.ai.credits import get_last_balance_probe, is_api_balance_depleted
+    from app.ai.runtime_settings import force_flash_enabled, model_choice_options
+
+    last_probe = get_last_balance_probe()
+    if last_probe.get('probed_at'):
+        try:
+            from datetime import datetime
+
+            last_probe = dict(last_probe)
+            last_probe['probed_at_label'] = datetime.fromtimestamp(
+                float(last_probe['probed_at'])
+            ).strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            last_probe['probed_at_label'] = ''
     try:
         lands = load_json(_lands_path())
         p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
@@ -2617,6 +2626,9 @@ def ai_questions():
         api_key_masked=mask_api_key(active_api_key),
         api_key_source='settings' if stored_api_key else ('file' if active_api_key else 'none'),
         has_stored_api_key=bool(stored_api_key),
+        force_flash=force_flash_enabled(),
+        balance_depleted=is_api_balance_depleted(),
+        last_balance_probe=last_probe,
     )
 
 
@@ -2643,6 +2655,9 @@ def ai_model():
     from app.ai.services import ai_config
     from app.keys import get_deepseek_api_key
 
+    if request.method == 'GET':
+        return redirect(url_for('admin.ai_questions'))
+
     if request.method == 'POST':
         action = (request.form.get('action') or 'save').strip()
         if action == 'check_balance':
@@ -2668,12 +2683,12 @@ def ai_model():
                 flash(result.get('error') or 'موجودی API کافی نیست.', 'error')
             else:
                 flash(result.get('error') or 'استعلام موجودی ناموفق بود.', 'error')
-            return redirect(url_for('admin.ai_model'))
+            return redirect(url_for('admin.ai_questions'))
 
         if action == 'clear_balance_flag':
             clear_api_balance_depleted()
             flash('قفل محلی «اتمام موجودی» پاک شد. برای اطمینان، استعلام مجدد بزنید.', 'success')
-            return redirect(url_for('admin.ai_model'))
+            return redirect(url_for('admin.ai_questions'))
 
         try:
             patch = {
@@ -2691,7 +2706,7 @@ def ai_model():
             flash('تنظیمات مدل ذخیره شد.', 'success')
         except (TypeError, ValueError):
             flash('مقدار نامعتبر در فرم مدل.', 'error')
-        return redirect(url_for('admin.ai_model'))
+        return redirect(url_for('admin.ai_questions'))
 
     ai_settings = get_ai_settings()
     ai_status = ai_config()
@@ -2784,6 +2799,72 @@ def lawyer_admin():
         pending_count=p,
         approved_count=a,
         rejected_count=r,
+    )
+
+
+@admin_bp.route('/zarinpal-plus', methods=['GET', 'POST'], endpoint='zarinpal_plus')
+@login_required
+def zarinpal_plus_admin():
+    from app.express_partner.plus_subscription import PLUS_RENEW_WINDOW_DAYS
+    from app.express_partner.plus_transactions import load_all as load_plus_txns
+    from app.express_partner.zarinpal_config import (
+        default_zarinpal_settings,
+        get_zarinpal_settings,
+        save_zarinpal_settings,
+        zarinpal_plus_feature_enabled,
+    )
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or 'save').strip()
+        if action == 'reset_defaults':
+            save_zarinpal_settings(default_zarinpal_settings())
+            flash('تنظیمات زرین‌پال به پیش‌فرض بازگشت.', 'success')
+            return redirect(url_for('admin.zarinpal_plus'))
+        patch = {
+            'enabled': request.form.get('zp_enabled') == '1',
+            'merchant_id': (request.form.get('zp_merchant_id') or '').strip(),
+            'sandbox': request.form.get('zp_sandbox') == '1',
+            'amount_toman': (request.form.get('zp_amount_toman') or '').strip(),
+            'subscription_days': (request.form.get('zp_subscription_days') or '').strip(),
+            'callback_url': (request.form.get('zp_callback_url') or '').strip(),
+            'description': (request.form.get('zp_description') or '').strip(),
+            'partner_sms_enabled': request.form.get('zp_partner_sms_enabled') == '1',
+            'sms_activation_message': (request.form.get('zp_sms_activation') or '').strip(),
+            'sms_renewal_message': (request.form.get('zp_sms_renewal') or '').strip(),
+            'sms_expiry_reminder_message': (request.form.get('zp_sms_expiry_reminder') or '').strip(),
+            'sms_expired_message': (request.form.get('zp_sms_expired') or '').strip(),
+        }
+        save_zarinpal_settings(patch)
+        flash('تنظیمات زرین‌پال ذخیره شد.', 'success')
+        return redirect(url_for('admin.zarinpal_plus'))
+
+    zp = get_zarinpal_settings()
+    auto_callback = url_for('express_partner.plus_zarinpal_callback', _external=True)
+    txns_raw = load_plus_txns()
+    txns = []
+    for row in txns_raw:
+        if isinstance(row, dict):
+            txns.append(admin_row_dict(row))
+    txns.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+
+    flt = (request.args.get('filter') or 'all').strip().lower()
+    if flt != 'all':
+        txns = [t for t in txns if str(t.get('status') or '') == flt]
+
+    paid_n = sum(1 for t in txns_raw if isinstance(t, dict) and t.get('status') == 'paid')
+    pending_n = sum(1 for t in txns_raw if isinstance(t, dict) and t.get('status') == 'pending')
+
+    return render_template(
+        'admin/zarinpal_plus.html',
+        zarinpal=zp,
+        zarinpal_feature_flag=zarinpal_plus_feature_enabled(),
+        auto_callback_url=auto_callback,
+        transactions=txns,
+        txn_filter=flt,
+        pending_count=pending_n,
+        paid_count=paid_n,
+        all_count=len(txns_raw),
+        plus_renew_window_days=PLUS_RENEW_WINDOW_DAYS,
     )
 
 
@@ -4396,6 +4477,7 @@ def express_partner_set_special(phone: str):
     except Exception:
         pass
     from app.express_partner.partner_roles import partner_is_approved, set_partner_tier
+    from app.express_partner.plus_subscription import backfill_plus_expires_at
     from app.utils.storage import load_express_partners, save_express_partners
 
     phone = _normalize_phone((phone or '').strip())
@@ -4421,6 +4503,8 @@ def express_partner_set_special(phone: str):
         return redirect(url_for('admin.express_partner_detail', **redirect_kw))
 
     set_partner_tier(found, want_special)
+    if want_special:
+        backfill_plus_expires_at(found)
     try:
         save_express_partners(partners)
     except Exception:

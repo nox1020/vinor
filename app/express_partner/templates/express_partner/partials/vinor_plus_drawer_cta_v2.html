@@ -1,0 +1,51 @@
+{# CTA وینور پلاس در دراور: ردیفی (بدون اشتراک) یا فشرده هدر (اشتراک فعال) #}
+{% set _has_plus = is_special|default(false) %}
+{% set _plus_url = url_for('express_partner.plus') %}
+{% set _plus_guest = not me_phone|default(false) %}
+{% set _plus_cta_mode = plus_cta_mode|default('list') %}
+{% set _plus_sub = plus_subscription|default({}) %}
+{% set _plus_days_remaining = _plus_sub.days_remaining|default(0)|int %}
+{% set _plus_period_days = _plus_sub.period_days|default(_plus_sub.duration_days|default(30))|int %}
+{% if _plus_period_days <= 0 %}
+  {% set _plus_period_days = 30 %}
+{% endif %}
+{% if _plus_days_remaining < 0 %}
+  {% set _plus_days_remaining = 0 %}
+{% endif %}
+{% set _plus_progress_pct = ((_plus_days_remaining * 100) / _plus_period_days)|round(0, 'floor')|int %}
+{% if _plus_progress_pct < 0 %}
+  {% set _plus_progress_pct = 0 %}
+{% elif _plus_progress_pct > 100 %}
+  {% set _plus_progress_pct = 100 %}
+{% endif %}
+
+{% if _plus_cta_mode == 'header' and _has_plus %}
+<a href="{{ _plus_url }}"
+   {% if _plus_guest %}data-ep-plus-guest-login="1"{% else %}data-vinor-express-nav{% endif %}
+   class="ep-profile-drawer__plus-cta ep-profile-drawer__plus-cta--active ep-profile-drawer__plus-cta--compact"
+   style="--plus-progress: {{ _plus_progress_pct }};"
+   aria-label="مدیریت وینور پلاس">
+  <span class="ep-profile-drawer__plus-cta-icon ep-profile-drawer__plus-cta-icon--progress" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+      <path d="M12 3l1.6 4.9L18.5 9.5l-4.9 1.6L12 16l-1.6-4.9L5.5 9.5l4.9-1.6L12 3z" stroke-linejoin="round"/>
+    </svg>
+  </span>
+</a>
+{% elif _plus_cta_mode == 'list' and not _has_plus %}
+<a href="{{ _plus_url }}"
+   {% if _plus_guest %}data-ep-plus-guest-login="1"{% else %}data-vinor-express-nav{% endif %}
+   class="ep-profile-drawer__plus-cta"
+   aria-label="دریافت وینور پلاس">
+  <span class="ep-profile-drawer__plus-cta-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7">
+      <path d="M12 3l1.6 4.9L18.5 9.5l-4.9 1.6L12 16l-1.6-4.9L5.5 9.5l4.9-1.6L12 3z" stroke-linejoin="round"/>
+      <path d="M18.5 14.5l.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1z" stroke-linejoin="round"/>
+    </svg>
+  </span>
+  <span class="ep-profile-drawer__plus-cta-text">
+    <strong>ارتقا به پلاس</strong>
+    <small>پاسخ سريع‌تر و امکانات ويژه</small>
+  </span>
+  <i class="fas fa-chevron-left ep-profile-drawer__plus-cta-chevron" aria-hidden="true"></i>
+</a>
+{% endif %}

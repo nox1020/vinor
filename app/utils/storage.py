@@ -249,7 +249,20 @@ def save_ads(items, app=None):
     _save(path, items)
     _update_ads_cache_after_save(path, items)
 
-def load_users(app=None):        return _load(ensure_file('USERS_FILE','users.json',[],app))
+def _normalize_users(raw):
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        if not raw:
+            return []
+        if all(isinstance(v, dict) for v in raw.values()):
+            return list(raw.values())
+        return []
+    return []
+
+
+def load_users(app=None):
+    return _normalize_users(_load(ensure_file('USERS_FILE', 'users.json', [], app)))
 def save_users(items, app=None): return _save(ensure_file('USERS_FILE','users.json',[],app), items)
 
 def load_consults(app=None):        return _load(ensure_file('CONSULTS_FILE','consults.json',[],app))
@@ -463,6 +476,14 @@ def load_partner_withdrawals(app=None):
 
 def save_partner_withdrawals(items, app=None):
     return _save(ensure_file('EXPRESS_PARTNER_WITHDRAWALS_FILE', 'express_partner_withdrawals.json', [], app), items)
+
+# تراکنش‌های پرداخت Vinor Plus (زرین‌پال)
+def load_zarinpal_plus_transactions(app=None):
+    return _load(ensure_file('ZARINPAL_PLUS_TRANSACTIONS_FILE', 'zarinpal_plus_transactions.json', [], app))
+
+
+def save_zarinpal_plus_transactions(items, app=None):
+    return _save(ensure_file('ZARINPAL_PLUS_TRANSACTIONS_FILE', 'zarinpal_plus_transactions.json', [], app), items)
 
 # درخواست بازدید فایل اکسپرس
 _VISIT_REQUESTS_CACHE = {"path": None, "mtime": None, "size": None, "data": None}

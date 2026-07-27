@@ -46,14 +46,14 @@
        class="vc-nav-link {% if ep == 'admin.financial_withdrawals' %}is-active{% endif %}">
       <i class="fa-solid fa-money-bill-transfer"></i><span>برداشت‌ها</span>
     </a>
-    <a href="{{ url_for('admin.ai_questions') }}"
-       class="vc-nav-link {% if ep == 'admin.ai_questions' %}is-active{% endif %}">
-      <i class="fa-solid fa-circle-question"></i><span>پیام‌ها / Escalations</span>
-      {% if control_badges and control_badges.pending %}<span class="vc-badge" data-i18n-number="{{ control_badges.pending }}">{{ control_badges.pending }}</span>{% endif %}
+    <a href="{{ url_for('admin.zarinpal_plus') }}"
+       class="vc-nav-link {% if ep == 'admin.zarinpal_plus' %}is-active{% endif %}">
+      <i class="fa-solid fa-credit-card"></i><span>زرین‌پال / پلاس</span>
     </a>
-    <a href="{{ url_for('admin.ai_model') }}"
-       class="vc-nav-link {% if ep == 'admin.ai_model' %}is-active{% endif %}">
-      <i class="fa-solid fa-microchip"></i><span>مدل و موجودی API</span>
+    <a href="{{ url_for('admin.ai_questions') }}"
+       class="vc-nav-link {% if ep in ['admin.ai_questions', 'admin.ai_model'] %}is-active{% endif %}">
+      <i class="fa-solid fa-microchip"></i><span>پیام‌ها و مدل AI</span>
+      {% if control_badges and control_badges.pending %}<span class="vc-badge" data-i18n-number="{{ control_badges.pending }}">{{ control_badges.pending }}</span>{% endif %}
     </a>
     <a href="{{ url_for('admin.lawyer') }}"
        class="vc-nav-link {% if ep == 'admin.lawyer' %}is-active{% endif %}">

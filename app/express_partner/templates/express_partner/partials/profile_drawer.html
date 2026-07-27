@@ -444,21 +444,6 @@
   .ep-profile-drawer__chat-btn i {
     font-size: 0.95rem;
   }
-  .ep-profile-drawer__wallet-bar {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    width: 100%;
-    margin: 0;
-    padding: 0.85rem 1rem;
-    border: 0;
-    border-top: 1px solid var(--ep-drawer-sep);
-    background: #0a0a0a;
-    color: #fff;
-    text-decoration: none;
-  }
   .ep-profile-drawer__plus-cta {
     flex-shrink: 0;
     display: flex;
@@ -474,13 +459,39 @@
     text-decoration: none;
     text-align: right;
     -webkit-tap-highlight-color: transparent;
+    direction: rtl;
+  }
+  .ep-profile-drawer__plus-cta--compact {
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ep-profile-drawer__plus-cta--compact:hover,
+  .ep-profile-drawer__plus-cta--compact:active {
+    background: transparent;
+    opacity: 1;
+  }
+  .ep-profile-drawer__plus-cta--compact .ep-profile-drawer__plus-cta-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    order: 1;
+  }
+  .ep-profile-drawer__plus-cta--compact .ep-profile-drawer__plus-cta-text,
+  .ep-profile-drawer__plus-cta--compact .ep-profile-drawer__plus-cta-chevron {
+    display: none;
   }
   .ep-profile-drawer__plus-cta:hover,
   .ep-profile-drawer__plus-cta:active {
     background: linear-gradient(180deg, #121216, #050505);
   }
   .ep-profile-drawer__plus-cta--active {
-    cursor: default;
     opacity: 0.92;
   }
   .ep-profile-drawer__plus-cta-icon {
@@ -492,6 +503,29 @@
     background: rgba(255, 255, 255, 0.08);
     color: #fff;
     flex-shrink: 0;
+    order: 3;
+    position: relative;
+  }
+  .ep-profile-drawer__plus-cta-icon--progress::before {
+    content: "";
+    position: absolute;
+    inset: -0.22rem;
+    border-radius: 9999px;
+    background: conic-gradient(
+      #22c55e calc(var(--plus-progress, 0) * 1%),
+      rgba(255, 255, 255, 0.16) 0
+    );
+  }
+  .ep-profile-drawer__plus-cta-icon--progress::after {
+    content: "";
+    position: absolute;
+    inset: -0.08rem;
+    border-radius: 9999px;
+    background: #0d0d0f;
+  }
+  .ep-profile-drawer__plus-cta-icon--progress > svg {
+    position: relative;
+    z-index: 1;
   }
   .ep-profile-drawer__plus-cta-text {
     display: flex;
@@ -499,6 +533,7 @@
     gap: 0.08rem;
     min-width: 0;
     flex: 1;
+    order: 1;
   }
   .ep-profile-drawer__plus-cta-text strong {
     font-size: 0.9rem;
@@ -514,29 +549,8 @@
     color: #71717a;
     font-size: 0.65rem;
     flex-shrink: 0;
+    order: 2;
   }
-  .ep-profile-drawer__wallet-bar {
-    direction: rtl;
-    touch-action: manipulation;
-    transition: background 0.15s ease;
-  }
-  .ep-profile-drawer__wallet-bar:hover,
-  .ep-profile-drawer__wallet-bar:active {
-    background: #141414;
-  }
-  .ep-profile-drawer__wallet-bar-amount {
-    font-size: 1rem;
-    font-weight: 750;
-    letter-spacing: -0.02em;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.2;
-  }
-  .ep-profile-drawer__wallet-bar i {
-    font-size: 0.75rem;
-    color: var(--ep-drawer-muted);
-    flex-shrink: 0;
-  }
-
   .ep-profile-drawer__guest {
     padding: 0.85rem 0.55rem 0.65rem;
     text-align: right;
@@ -705,6 +719,8 @@
   <div class="ep-profile-drawer__top">
     <div class="ep-profile-drawer__top-row">
       <span class="ep-profile-drawer__brand">وینور</span>
+      {% set plus_cta_mode = 'header' %}
+      {% include 'express_partner/partials/vinor_plus_drawer_cta_v2.html' %}
     </div>
   </div>
 
@@ -814,13 +830,7 @@
       </button>
       {% endif %}
       <div class="ep-profile-drawer__top-row" style="margin-bottom:0.5rem">
-        <p class="ep-profile-drawer__label" style="margin:0">گفتگوها</p>
-        <button type="button" id="aiNewChatBtn" aria-label="گفتگوی جدید"
-                class="ep-profile-drawer__guest-btn ep-profile-drawer__guest-btn--ghost"
-                style="min-height:2rem;padding:0.25rem 0.65rem;font-size:0.7rem">
-          <i class="fas fa-pen-to-square" aria-hidden="true"></i>
-          جدید
-        </button>
+        <p class="ep-profile-drawer__label" style="margin:0">گفتگو</p>
       </div>
       {% set ai_threads_in_drawer = true %}
       {% include 'express_partner/partials/ai_chat_threads.html' %}
@@ -865,18 +875,9 @@
     {% endif %}
   </div>
 
-  {% include 'express_partner/partials/vinor_plus_drawer_cta.html' %}
+  {% set plus_cta_mode = 'list' %}
+  {% include 'express_partner/partials/vinor_plus_drawer_cta_v2.html' %}
 
-  {% if me_phone and is_approved|default(false) %}
-  <a href="{{ url_for('express_partner.commissions') }}"
-     data-vinor-express-nav
-     class="ep-profile-drawer__wallet-bar"
-     data-tour="commissions-link"
-     aria-label="موجودی قابل برداشت">
-    <span class="ep-profile-drawer__wallet-bar-amount">{{ (withdrawable_balance or 0)|toman }}</span>
-    <i class="fas fa-chevron-left" aria-hidden="true"></i>
-  </a>
-  {% endif %}
   {% if me_phone %}
   <div class="ep-profile-drawer__foot">
     <a href="{{ url_for('express_partner.settings') }}"
@@ -1268,6 +1269,54 @@
   hoist();
   if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
   backdrop.addEventListener('click', closeDrawer);
+
+  /* پلاس: قبل از express-nav (ثبت زودتر) — soft-nav + fallback بارگذاری کامل */
+  if (!window.__vinorDrawerPlusNavBound) {
+    window.__vinorDrawerPlusNavBound = true;
+    document.addEventListener('click', function (e) {
+      var api = window.vinorProfileDrawer;
+      if (!api || typeof api.isOpen !== 'function' || !api.isOpen()) return;
+      var plusLink = e.target.closest && e.target.closest('#epProfileDrawer a.ep-profile-drawer__plus-cta[href]');
+      if (!plusLink) return;
+      e.preventDefault();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      var dest = plusLink.getAttribute('href') || '';
+      if (!dest) return;
+      var guestPlus = plusLink.getAttribute('data-ep-plus-guest-login') === '1' ||
+        !!document.getElementById('epDrawerLoginRoot');
+      if (guestPlus) {
+        if (typeof window.vinorDrawerOpenLogin === 'function') {
+          window.vinorDrawerOpenLogin(dest);
+          return;
+        }
+        if (api && typeof api.openLogin === 'function') {
+          api.openLogin(dest);
+          return;
+        }
+        try {
+          window.location.assign(
+            '/express/partner/home?menu=1&login_next=' + encodeURIComponent(dest)
+          );
+        } catch (_) {}
+        return;
+      }
+      if (typeof api.close === 'function') api.close();
+      function goFull() {
+        try { window.location.assign(dest); } catch (_) { window.location.href = dest; }
+      }
+      if (typeof window.vinorExpressNavigate === 'function') {
+        try {
+          window.vinorExpressNavigate(dest, { forward: true }).then(function (ok) {
+            if (ok === false) goFull();
+          }).catch(goFull);
+        } catch (_) {
+          goFull();
+        }
+      } else {
+        goFull();
+      }
+    }, true);
+  }
 
   drawer.addEventListener('click', function (e) {
     var chatBtn = e.target.closest && e.target.closest('#aiNewChatBtn.ep-profile-drawer__chat-btn');

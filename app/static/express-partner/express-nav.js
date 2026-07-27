@@ -25,6 +25,7 @@
     '/express/partner/commissions': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/profile': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
     '/express/partner/settings': { tab: 'home', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/plus': { tab: 'home', depth: 1, bottomNav: false, prefetch: true },
     '/express/partner/profile/edit': { tab: 'home', depth: 2, bottomNav: true, prefetch: false },
     '/express/partner/favorites': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/requests': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -342,6 +343,34 @@
     } catch (_) {
       return '/express/partner/home?menu=1';
     }
+  }
+
+  function openGuestPlusLogin(plusHref) {
+    var dest = plusHref || '/express/partner/plus';
+    try {
+      if (typeof window.vinorDrawerOpenLogin === 'function') {
+        window.vinorDrawerOpenLogin(dest);
+        return true;
+      }
+      if (
+        window.vinorProfileDrawer &&
+        typeof window.vinorProfileDrawer.openLogin === 'function'
+      ) {
+        window.vinorProfileDrawer.openLogin(dest);
+        return true;
+      }
+    } catch (_) {}
+    try {
+      window.location.assign(loginUrlForPartnerDest(dest));
+    } catch (_) {}
+    return true;
+  }
+
+  function isGuestPlusCtaLink(a, href) {
+    if (!a || isLoggedInUser()) return false;
+    if (a.getAttribute('data-ep-plus-guest-login') === '1') return true;
+    if (a.classList && a.classList.contains('ep-get-plus-pill--guest')) return true;
+    return false;
   }
 
   function shouldPrefetchNav(fromHref, toHref) {
@@ -1641,6 +1670,23 @@
       if (a.getAttribute('download')) return;
       if (a.getAttribute('target') === '_blank') return;
       var href = a.getAttribute('href');
+      if (isGuestPlusCtaLink(a, href)) {
+        e.preventDefault();
+        e.stopPropagation();
+        var plusDest = href || '/express/partner/plus';
+        try {
+          var guestPlusU = parseUrl(plusDest);
+          if (guestPlusU) {
+            var guestPlusPath = normPath(guestPlusU.pathname);
+            if (guestPlusPath !== '/express/partner/plus') {
+              var ln = (guestPlusU.searchParams.get('login_next') || '').trim();
+              if (ln.indexOf('/express/partner/') === 0) plusDest = ln;
+            }
+          }
+        } catch (_) {}
+        openGuestPlusLogin(plusDest);
+        return;
+      }
       if (a.getAttribute('data-vinor-express-full-nav') === '1') {
         e.preventDefault();
         if (href) window.location.assign(rewriteRetiredPartnerPaths(href));

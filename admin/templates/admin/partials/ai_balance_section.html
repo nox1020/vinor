@@ -1,0 +1,70 @@
+{% set probe = last_balance_probe or {} %}
+<section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+  <div class="border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <i class="fa-solid fa-wallet text-emerald-500"></i>
+        موجودی API DeepSeek
+      </h2>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">استعلام زنده از <span class="font-mono" dir="ltr">/user/balance</span></p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <form method="post" action="{{ url_for('admin.ai_model') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="check_balance">
+        <button type="submit"
+                class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2">
+          <i class="fa-solid fa-arrows-rotate"></i>
+          استعلام مجدد موجودی
+        </button>
+      </form>
+      {% if balance_depleted %}
+      <form method="post" action="{{ url_for('admin.ai_model') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="clear_balance_flag">
+        <button type="submit"
+                class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-xs font-medium px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800">
+          پاک کردن قفل محلی
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  <div class="px-4 sm:px-6 py-4 space-y-3 text-sm">
+    {% if probe %}
+    <div class="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 px-3 py-3">
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+        آخرین استعلام:
+        {% if probe.probed_at_label %}
+        <span class="ltr font-mono text-[11px]" dir="ltr">{{ probe.probed_at_label }}</span>
+        {% elif probe.probed_at %}
+        <span class="ltr font-mono text-[11px]" dir="ltr">{{ probe.probed_at }}</span>
+        {% else %}—{% endif %}
+        ·
+        {% if probe.ok %}
+        <span class="text-emerald-600 dark:text-emerald-400 font-semibold">موفق</span>
+        {% else %}
+        <span class="text-red-600 dark:text-red-400 font-semibold">ناموفق</span>
+        {% endif %}
+      </p>
+      {% if probe.error %}
+      <p class="text-xs text-red-700 dark:text-red-300 mb-2">{{ probe.error }}</p>
+      {% endif %}
+      {% if probe.balances %}
+      <ul class="space-y-1.5">
+        {% for b in probe.balances %}
+        <li class="flex flex-wrap items-center justify-between gap-2 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 px-2.5 py-2">
+          <span class="font-semibold text-gray-800 dark:text-gray-100">{{ b.currency or '—' }}</span>
+          <span class="ltr font-mono text-gray-700 dark:text-gray-200" dir="ltr">{{ b.total_balance or '—' }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% elif probe.ok %}
+      <p class="text-xs text-gray-600 dark:text-gray-300">موجودی در دسترس است؛ جزئیات عددی برنگشت.</p>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="text-xs text-gray-500 dark:text-gray-400">هنوز استعلامی انجام نشده — دکمهٔ بالا را بزنید.</p>
+    {% endif %}
+  </div>
+</section>

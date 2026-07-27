@@ -23,7 +23,7 @@ def budget_config() -> dict[str, Any]:
         "dedup_ttl_sec": int(cfg["dedup_ttl_sec"]),
         "max_history": int(cfg["max_history"]),
         "max_msg_chars": int(cfg["max_msg_chars"]),
-        "max_assistant_history_chars": int(cfg.get("max_assistant_history_chars") or 420),
+        "max_assistant_history_chars": int(cfg.get("max_assistant_history_chars") or 300),
         "max_context_chars": int(cfg["max_context_chars"]),
         "max_tokens": int(cfg["max_tokens"]),
         "temperature": float(cfg["temperature"]),
@@ -59,10 +59,55 @@ def _load_cache() -> dict[str, Any]:
 
 BALANCE_SMS_COOLDOWN_SEC = 21600  # حداکثر یک پیامک هر ۶ ساعت
 
-# مهمان بدون لاگین: تا این تعداد پاسخ؛ بعد الزام ورود
-GUEST_FREE_ASSISTANT_REPLIES = 20
 GUEST_LOGIN_URL = "/express/partner/home?menu=1"
-GUEST_LOGIN_ERROR = "به سقف ۲۰ پاسخ رسیدید. برای ادامه وارد شوید."
+
+
+def _env_bool(name: str, default: str = "1") -> bool:
+    return (os.environ.get(name) or default).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def guest_ai_limits_enabled() -> bool:
+    """محدودیت پاسخ/گفتگو برای مهمان — پیش‌فرض روشن."""
+    return _env_bool("VINOR_GUEST_AI_LIMITS_ENABLED", "1")
+
+
+def guest_free_assistant_replies() -> int:
+    """سقف پاسخ AI برای مهمان (پیش‌فرض ۳)."""
+    if not guest_ai_limits_enabled():
+        return 10**9
+    raw = (os.environ.get("VINOR_GUEST_FREE_REPLIES") or "3").strip()
+    try:
+        return max(1, min(int(raw), 100))
+    except ValueError:
+        return 3
+
+
+def guest_max_threads() -> int:
+    """حداکثر گفتگوی هم‌زمان برای مهمان (پیش‌فرض ۱)."""
+    if not guest_ai_limits_enabled():
+        return 30
+    raw = (os.environ.get("VINOR_GUEST_MAX_THREADS") or "1").strip()
+    try:
+        return max(1, min(int(raw), 5))
+    except ValueError:
+        return 1
+
+
+def guest_login_error() -> str:
+    n = guest_free_assistant_replies()
+    if n >= 10**8:
+        return "برای ادامه وارد شوید."
+    return f"به سقف {n} پاسخ رسیدید. برای ادامه وارد شوید."
+
+
+# سازگاری با importهای قدیمی
+GUEST_FREE_ASSISTANT_REPLIES = guest_free_assistant_replies()
+GUEST_LOGIN_ERROR = guest_login_error()
 
 
 def mark_api_balance_depleted() -> None:
@@ -598,25 +643,27 @@ def guest_assistant_reply_count(user_key: str) -> int:
 
 
 def guest_replies_remaining(user_key: str) -> int | None:
-    if not is_guest_user_key(user_key):
+    if not is_guest_user_key(user_key) or not guest_ai_limits_enabled():
         return None
-    return max(0, GUEST_FREE_ASSISTANT_REPLIES - guest_assistant_reply_count(user_key))
+    limit = guest_free_assistant_replies()
+    return max(0, limit - guest_assistant_reply_count(user_key))
 
 
 def check_guest_login_required(user_key: str) -> dict[str, Any] | None:
     """اگر مهمان سقف پاسخ را تمام کرده → نیاز به ورود."""
-    if not is_guest_user_key(user_key):
+    if not is_guest_user_key(user_key) or not guest_ai_limits_enabled():
         return None
+    limit = guest_free_assistant_replies()
     used = guest_assistant_reply_count(user_key)
-    if used < GUEST_FREE_ASSISTANT_REPLIES:
+    if used < limit:
         return None
     return {
         "ok": False,
-        "error": GUEST_LOGIN_ERROR,
+        "error": guest_login_error(),
         "need_login": True,
         "login_url": GUEST_LOGIN_URL,
         "guest_replies_used": used,
-        "guest_replies_limit": GUEST_FREE_ASSISTANT_REPLIES,
+        "guest_replies_limit": limit,
         "guest_replies_remaining": 0,
     }
 
@@ -652,7 +699,7 @@ def record_guest_assistant_reply(user_key: str) -> int:
             user_key,
             n,
             chat_count,
-            GUEST_FREE_ASSISTANT_REPLIES,
+            guest_free_assistant_replies(),
         )
     except Exception:
         pass
@@ -671,6 +718,10 @@ def apply_credit_guard(
     err = validate_message_length(message)
     if err:
         return {"ok": False, "error": err}
+
+    guest_gate = check_guest_login_required(user_key)
+    if guest_gate:
+        return guest_gate
 
     if is_api_balance_depleted():
         return None

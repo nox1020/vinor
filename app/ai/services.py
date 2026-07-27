@@ -226,12 +226,115 @@ def _strip_listing_dump_when_copy_cards(text: str) -> str:
     return cleaned
 
 
+def _style_enforce_enabled() -> bool:
+    return (os.environ.get("VINOR_AI_STYLE_ENFORCE") or "1").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _compact_option_blocks(text: str) -> str:
+    lines = [ln.strip() for ln in (text or "").splitlines()]
+    out: list[str] = []
+    bucket: list[str] = []
+
+    def flush_bucket() -> None:
+        nonlocal bucket
+        if len(bucket) >= 2:
+            picked = [x for x in bucket if x][:4]
+            if picked:
+                out.append("گزینه‌ها: " + " / ".join(picked))
+            bucket = []
+            return
+        if len(bucket) == 1:
+            out.append(bucket[0])
+        bucket = []
+
+    for raw in lines:
+        if not raw:
+            flush_bucket()
+            continue
+        m = re.match(r"^\s*(?:[-*•]|\d+[)\.-]|[✅☑️🔹🔸▫️▪️])\s*(.+?)\s*$", raw)
+        if m:
+            label = re.sub(r"\s+", " ", (m.group(1) or "").strip())
+            label = re.sub(r"^گزینه(?:‌)?ها?\s*:\s*", "", label, flags=re.IGNORECASE)
+            if label:
+                bucket.append(label[:32])
+            continue
+        if " / " in raw and ("گزینه" in raw or raw.count("/") >= 2):
+            flush_bucket()
+            out.append(raw)
+            continue
+        flush_bucket()
+        out.append(raw)
+    flush_bucket()
+    return "\n".join([x for x in out if x]).strip()
+
+
+def _truncate_lines(text: str, max_lines: int = 8) -> str:
+    lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+    if len(lines) <= max_lines:
+        return "\n".join(lines)
+    return "\n".join(lines[:max_lines])
+
+
+def _ensure_next_step(reply: str) -> str:
+    text = (reply or "").strip()
+    if not text:
+        return "مرحله بعد: یکی از گزینه‌ها را انتخاب کن."
+    if re.search(r"(?im)^\s*مرحله بعد\s*:", text):
+        return text
+    return text.rstrip() + "\n" + "مرحله بعد: برای ادامه یکی از گزینه‌ها را انتخاب کن."
+
+
+def _enforce_vinor_response_style(reply: str, *, voice: str, audience: str) -> str:
+    if not _style_enforce_enabled():
+        return (reply or "").strip()
+    raw = re.sub(r"\r\n?", "\n", str(reply or "")).strip()
+    if not raw:
+        return "الان آماده‌ام کمک کنم.\nگزینه‌ها: 🏡 خرید ملک / 💰 فروش ملک / 🤝 همکاری / 📅 رزرو بازدید\nCTA: یکی را انتخاب کن.\nمرحله بعد: گزینهٔ مدنظرت را بفرست."
+    text = re.sub(r"\n{3,}", "\n\n", raw)
+    text = _compact_option_blocks(text)
+    text = re.sub(r"\n{2,}", "\n", text).strip()
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    # فقط یک سؤال روشن نگه‌دار.
+    q_seen = False
+    one_q: list[str] = []
+    for ln in lines:
+        if "؟" in ln:
+            if q_seen:
+                ln = ln.replace("؟", ".")
+            q_seen = True
+        one_q.append(ln)
+    lines = one_q
+    # CTA واحد را نزدیک انتها نگه‌دار.
+    cta_line = "CTA: یکی را انتخاب کن."
+    lines = [ln for ln in lines if not ln.lower().startswith("cta:")]
+    if len(lines) < 3:
+        lines.append("گزینه‌ها: 🏡 خرید ملک / 💰 فروش ملک / 🤝 همکاری / 📅 رزرو بازدید")
+    lines.append(cta_line)
+    shaped = "\n".join(lines)
+    shaped = _ensure_next_step(shaped)
+    shaped = _truncate_lines(shaped, max_lines=8)
+    final_lines = [ln for ln in shaped.splitlines() if ln.strip()]
+    while len(final_lines) < 4:
+        if len(final_lines) == 3:
+            final_lines.insert(2, "گزینه‌ها: 🏡 خرید ملک / 💰 فروش ملک / 🤝 همکاری / 📅 رزرو بازدید")
+        else:
+            final_lines.append("...")
+    return "\n".join(final_lines[:8]).strip()
+
+
 def _build_system_prompt(
     user_key: str | None,
     audience: str | None = None,
     *,
     user_message: str = "",
     thread_id: str | None = None,
+    max_context_chars: int | None = None,
+    retrieve_user_memory: bool = True,
 ) -> str:
     aud = (
         audience
@@ -240,7 +343,7 @@ def _build_system_prompt(
     )
     if not user_key:
         return ""
-    max_ctx = budget_config()["max_context_chars"]
+    max_ctx = int(max_context_chars) if max_context_chars is not None else budget_config()["max_context_chars"]
     try:
         from app.supervisor.service import current_flags
 
@@ -308,20 +411,25 @@ def _build_system_prompt(
             _set_prompt_cache(core_cache_key, ctx)
         notes = consume_pending_answers(user_key, audience=aud)
         ctx = append_admin_answers_block(ctx, notes)
-        # Shared business facts are injected as a SEPARATE system message in
-        # _build_messages (not baked into ctx) so core prompt cache + ctx[:max_ctx]
-        # cannot drop them. See _system_memory_prompt_for_messages.
-        # Memory is retrieved here for observability + later injection as a
-        # SEPARATE system message (keeps core prompt cache and token accounting clean).
-        mem_text, mem_meta = _memory_block_for_prompt(
-            user_key=user_key,
-            audience=aud,
-            user_message=user_message,
-            thread_id=thread_id,
-            remaining_chars=max(0, max_ctx - len(ctx)),
-        )
-        _set_memory_obs(mem_meta)
-        _set_memory_prompt_text(mem_text)
+        if retrieve_user_memory:
+            mem_text, mem_meta = _memory_block_for_prompt(
+                user_key=user_key,
+                audience=aud,
+                user_message=user_message,
+                thread_id=thread_id,
+                remaining_chars=max(0, max_ctx - len(ctx)),
+            )
+            _set_memory_obs(mem_meta)
+            _set_memory_prompt_text(mem_text)
+        else:
+            _set_memory_obs(
+                {
+                    "memory_retrieved": 0,
+                    "memory_used": 0,
+                    "memory_tokens": 0,
+                }
+            )
+            _set_memory_prompt_text("")
         return ctx[:max_ctx]
     except Exception as exc:
         try:
@@ -525,31 +633,40 @@ def _build_messages(
     aud = _normalize_chat_audience(audience)
     cfg = budget_config()
     resolved_voice = voice or resolve_ai_voice(phone=user_key or "", audience=aud)
+    from .agent_budget import agent_budget
+
+    ab = agent_budget(resolved_voice)
+    keep_last = int(ab.get("max_history") or cfg["max_history"])
     base_prompt = prompt_for_voice(resolved_voice)
     messages: list[dict[str, Any]] = [{"role": "system", "content": base_prompt}]
     if with_tools:
         messages.append({"role": "system", "content": agent_system_hint(resolved_voice)})
-    if chip_intent:
+    if chip_intent and ab.get("inject_partner_context", True):
         from .intents import hint_for_chip_intent
 
         hint = hint_for_chip_intent(chip_intent)
         if hint:
             _append_sales_hint(messages, hint)
-    if user_key:
+    if user_key and ab.get("inject_partner_context", True):
         ctx = _build_system_prompt(
-            user_key, audience, user_message=text, thread_id=thread_id
+            user_key,
+            audience,
+            user_message=text,
+            thread_id=thread_id,
+            max_context_chars=int(ab.get("max_context_chars") or cfg["max_context_chars"]),
+            retrieve_user_memory=bool(ab.get("inject_user_memory", True)),
         )
         if ctx:
             messages.append({"role": "system", "content": ctx})
-        # Shared business/system facts — always after core context, outside
-        # prompt cache, so admin edits apply even when core ctx is cached/full.
+    if ab.get("inject_system_memory", True):
         sys_mem = _system_memory_prompt_for_messages()
         if sys_mem:
             messages.append({"role": "system", "content": sys_mem})
+    if user_key and ab.get("inject_user_memory", True):
         mem_text = _get_memory_prompt_text()
         if mem_text:
             messages.append({"role": "system", "content": mem_text})
-        # hint ناظر قیف (بدون پیام به کاربر)
+    if user_key and ab.get("inject_funnel_hint", True):
         try:
             from app.supervisor.funnel_service import chat_hint
 
@@ -558,13 +675,7 @@ def _build_messages(
                 _append_sales_hint(messages, fh)
         except Exception:
             pass
-    else:
-        # No per-user context — still inject shared business facts.
-        sys_mem = _system_memory_prompt_for_messages()
-        if sys_mem:
-            messages.append({"role": "system", "content": sys_mem})
     if history:
-        keep_last = int(cfg["max_history"])
         # فقط ته تاریخچه را پردازش کن — نه کل ۲۰۰ پیام thread
         hist_window = list(history[-(keep_last + 6) :])
         summary = _summarize_older_history(hist_window, keep_last=keep_last)
@@ -940,6 +1051,7 @@ def _run_agent_loop(
     audience: str,
     voice: str,
     thread_id: str | None = None,
+    max_tokens: int | None = None,
 ) -> dict[str, Any]:
     """حلقه کوتاه tool-calling؛ حداکثر ۱ دور ابزار سپس پاسخ نهایی."""
     agent_actions: list[dict[str, Any]] = []
@@ -949,7 +1061,11 @@ def _run_agent_loop(
 
     for round_i in range(_MAX_TOOL_ROUNDS + 1):
         allow_tools = bool(tools) and round_i < _MAX_TOOL_ROUNDS
-        result = call_ai(messages, tools=tools if allow_tools else None)
+        result = call_ai(
+            messages,
+            tools=tools if allow_tools else None,
+            max_tokens=max_tokens,
+        )
         api_rounds += 1
         if not result.get("ok"):
             break
@@ -1675,6 +1791,9 @@ def generate_reply(
     loop_tools: list[dict[str, Any]] | None = tools or None
     if plan_out is not None and seed_tools and plan_out.seed_messages:
         loop_tools = None
+    from .agent_budget import agent_budget
+
+    completion_cap = int(agent_budget(voice).get("max_tokens") or budget_config()["max_tokens"])
     result = _run_agent_loop(
         messages,
         tools=loop_tools,
@@ -1682,6 +1801,7 @@ def generate_reply(
         audience=aud,
         voice=voice,
         thread_id=thread_id,
+        max_tokens=completion_cap,
     )
     if not result.get("ok"):
         try:
@@ -1802,6 +1922,9 @@ def generate_reply(
     if not reply and agent_actions:
         reply = "جزئیات را در کارت زیر بررسی کنید."
 
+    if reply:
+        reply = _enforce_vinor_response_style(reply, voice=voice, audience=aud)
+
     result["reply"] = reply
     result["audience"] = aud
     result["voice"] = voice
@@ -1882,7 +2005,7 @@ def generate_reply(
     try:
         from app.express_partner.partner_live_memory import rewrite_partner_live_memory
 
-        if key and not str(key).startswith("guest_"):
+        if key and not is_lawyer and not str(key).startswith("guest_"):
             rewrite_partner_live_memory(
                 key,
                 last_user=text,
@@ -2103,10 +2226,13 @@ def _record_request_analytics(
         decision_tokens = int(
             prompt_parts.get("decision_tokens") or decision_obs.get("decision_tokens") or 0
         )
+        from .agent_budget import agent_budget as _agent_budget
+
         row = {
             "user": user_key,
             "audience": audience,
             "voice": voice,
+            "agent_completion_cap": int(_agent_budget(voice).get("max_tokens") or 0),
             "ok": bool(result.get("ok")),
             "provider": meta.get("provider") or "",
             "model": meta.get("model") or "",

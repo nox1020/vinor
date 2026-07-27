@@ -15,7 +15,6 @@ from app.ai.paths import ai_data_file
 
 _MAX_MESSAGES = 200  # Chat-First: keep longer case history in-thread
 _MAX_THREADS = 30
-_GUEST_MAX_THREADS = 2
 _MAX_CONTENT = 4000
 _TITLE_LEN = 48
 _MAX_PREVIEW = 80
@@ -26,7 +25,11 @@ def _is_guest_key(user_key: str) -> bool:
 
 
 def _thread_limit(user_key: str) -> int:
-    return _GUEST_MAX_THREADS if _is_guest_key(user_key) else _MAX_THREADS
+    if _is_guest_key(user_key):
+        from app.ai.credits import guest_max_threads
+
+        return guest_max_threads()
+    return _MAX_THREADS
 
 
 def _chats_dir() -> str:
@@ -354,7 +357,7 @@ def create_thread(user_key: str, *, activate: bool = True, audience: str | None 
     limit = _thread_limit(user_key)
     threads = list(record.get("threads") or [])
     if len(threads) >= limit:
-        # سقف پر است — گفتگوی جدید نساز (مهمان: ۲)
+        # سقف پر است — گفتگوی جدید نساز (مهمان: معمولاً ۱)
         th = _active_thread(record) or (threads[0] if threads else None)
         if th:
             if activate:
@@ -397,22 +400,29 @@ def is_thread_open_slate(th: dict[str, Any] | None) -> bool:
 
 
 def guest_new_thread_blocked(user_key: str, audience: str | None = None) -> dict[str, Any] | None:
-    """اگر مهمان به سقف ۲ گفتگو رسیده و گفتگوی خالی برای بازنشانی ندارد."""
+    """اگر مهمان به سقف گفتگو رسیده و گفتگوی خالی برای بازنشانی ندارد."""
     if not _is_guest_key(user_key):
         return None
+    from app.ai.credits import guest_ai_limits_enabled, guest_max_threads
+
+    if not guest_ai_limits_enabled():
+        return None
+    max_th = guest_max_threads()
     record = load_user_record(user_key, audience)
     threads = list(record.get("threads") or [])
-    if len(threads) < _GUEST_MAX_THREADS:
+    if len(threads) < max_th:
         return None
     th = _active_thread(record)
     if th and is_thread_open_slate(th):
         return None
     return {
         "ok": False,
-        "error": "بدون ورود حداکثر ۲ گفتگو مجاز است. برای گفتگوی بیشتر وارد شوید.",
+        "error": (
+            f"بدون ورود حداکثر {max_th} گفتگو مجاز است. برای گفتگوی بیشتر وارد شوید."
+        ),
         "need_login": True,
         "login_url": "/express/partner/home?menu=1",
-        "thread_limit": _GUEST_MAX_THREADS,
+        "thread_limit": max_th,
     }
 
 
@@ -560,8 +570,12 @@ def _counts_toward_guest_quota(m: Any) -> bool:
 def threads_for_ui(user_key: str, audience: str | None = None) -> list[dict[str, Any]]:
     record = load_user_record(user_key, audience)
     active = record.get("active_id")
+    thread_rows = list(record.get("threads") or [])
+    if _is_guest_key(user_key):
+        th = _active_thread(record) or (thread_rows[0] if thread_rows else None)
+        thread_rows = [th] if th else []
     out: list[dict[str, Any]] = []
-    for th in record.get("threads") or []:
+    for th in thread_rows:
         msgs = th.get("messages") or []
         preview = ""
         for m in reversed(msgs):
@@ -1128,6 +1142,11 @@ def messages_since(
 
 
 def delete_thread(user_key: str, thread_id: str, audience: str | None = None) -> bool:
+    if _is_guest_key(user_key):
+        from app.ai.credits import guest_ai_limits_enabled
+
+        if guest_ai_limits_enabled():
+            return False
     record = load_user_record(user_key, audience)
     before = len(record.get("threads") or [])
     record["threads"] = [t for t in (record.get("threads") or []) if t.get("id") != thread_id]

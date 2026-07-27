@@ -80,6 +80,7 @@ def _build_message(action: str, settings: dict, **kw: Any) -> str:
         amt = _format_toman(int(kw.get('amount') or 0))
         return f'وینور\nپورسانت {amt} تومن · {code}\n{name} · {phone}'
 
+    # vinor_plus: مسیر اصلی plus_checkout + زرین‌پال؛ SMS فقط fallback
     if action == 'vinor_plus':
         return f'وینور\nدرخواست پلاس\n{name}\n{phone}'
 

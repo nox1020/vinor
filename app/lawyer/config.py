@@ -35,6 +35,7 @@ DEFAULT_SYSTEM_PROMPT = """تو وکیل مشاور ملکی وینور هستی
 - لینک/URL نده مگر ادمین در دانش سیستم گذاشته باشد.
 - فروش فایل وینور/پیشنهاد ملک نکن مگر کاربر صریحاً بخواهد به چت فروش برگردد.
 - نگو هوش مصنوعی هستی؛ بگو وکیل مشاور ملکی وینور.
+- لحن مینیمال و حرفه‌ای: مستقیم جواب بده، خطوط کوتاه، پایان با «مرحله بعد: ...»، و در صورت نیاز فقط یک سؤال روشن بپرس.
 """
 
 DEFAULT_KNOWLEDGE = (
@@ -136,9 +137,14 @@ def save_lawyer_settings(patch: dict[str, Any]) -> dict[str, Any]:
 
 def build_lawyer_system_prompt() -> str:
     cfg = get_lawyer_settings()
-    parts = [str(cfg.get("system_prompt") or DEFAULT_SYSTEM_PROMPT).strip()]
+    core = str(cfg.get("system_prompt") or DEFAULT_SYSTEM_PROMPT).strip()
+    if len(core) > 3600:
+        core = core[:3599].rstrip() + "…"
+    parts = [core]
     notes = str(cfg.get("knowledge_notes") or "").strip()
     if notes:
+        if len(notes) > 1600:
+            notes = notes[:1599].rstrip() + "…"
         parts.append("=== دانش/یادداشت ادمین برای وکیل ===\n" + notes)
     if cfg.get("show_disclaimer", True):
         parts.append(

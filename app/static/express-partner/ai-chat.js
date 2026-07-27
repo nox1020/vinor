@@ -267,6 +267,18 @@
     }
   }
 
+  function guestLoginLimitMessage(fallback) {
+    var lim = 3;
+    try {
+      var raw = form.getAttribute('data-guest-replies-limit');
+      if (raw) lim = Math.max(1, parseInt(raw, 10) || 3);
+    } catch (_) {}
+    return (
+      fallback ||
+      'به سقف ' + lim + ' پاسخ رسیدید. برای ادامه وارد شوید.'
+    );
+  }
+
   function noteGuestRepliesFromPayload(data) {
     if (!data || typeof data.guest_replies_remaining !== 'number') return;
     guestRepliesRemaining = Math.max(0, data.guest_replies_remaining);
@@ -298,7 +310,7 @@
 
   function openGuestLoginDrawer(hint) {
     loginPromptActive = true;
-    var hintText = hint || 'به سقف ۲۰ پاسخ رسیدید. برای ادامه وارد شوید.';
+    var hintText = hint || guestLoginLimitMessage();
     try {
       if (typeof window.vinorDrawerOpenLogin === 'function') {
         window.vinorDrawerOpenLogin({ hint: hintText });
@@ -325,7 +337,7 @@
   function promptGuestLoginLimit(message) {
     var msg =
       message ||
-      'به سقف ۲۰ پاسخ رسیدید. برای ادامه وارد شوید.';
+      guestLoginLimitMessage();
     guestRepliesRemaining = 0;
     try {
       form.setAttribute('data-guest-replies-remaining', '0');
@@ -2552,9 +2564,10 @@
             (th.unread > 99 ? '99+' : String(th.unread)) +
             '</span>'
           : '';
-      var deleteBtn = isPostchi
-        ? ''
-        : '<span class="ai-thread-delete" data-thread-id="' +
+      var deleteBtn =
+        isPostchi || isGuestAuth()
+          ? ''
+          : '<span class="ai-thread-delete" data-thread-id="' +
           escapeHtml(th.id || '') +
           '" role="button" aria-label="حذف گفتگو" tabindex="-1">' +
           '<i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i></span>';
@@ -2647,19 +2660,19 @@
 
   function syncNewChatAvailability(threads) {
     if (!newChatBtn) return;
-    if (!isGuestAuth()) {
-      newChatBtn.disabled = false;
-      newChatBtn.removeAttribute('title');
+    if (isGuestAuth()) {
+      newChatBtn.disabled = true;
+      newChatBtn.setAttribute('title', 'برای گفتگوی جدید وارد شوید');
+      try {
+        newChatBtn.style.display = 'none';
+      } catch (_) {}
       return;
     }
-    var n = Array.isArray(threads) ? threads.length : 0;
-    var atLimit = n >= 2;
-    newChatBtn.disabled = atLimit;
-    if (atLimit) {
-      newChatBtn.setAttribute('title', 'بدون ورود حداکثر ۲ گفتگو — برای بیشتر وارد شوید');
-    } else {
-      newChatBtn.removeAttribute('title');
-    }
+    newChatBtn.disabled = false;
+    newChatBtn.removeAttribute('title');
+    try {
+      newChatBtn.style.display = '';
+    } catch (_) {}
   }
 
   function applyThreads(threads) {
@@ -2908,6 +2921,11 @@
   }
 
   async function startNewChat() {
+    if (isGuestAuth()) {
+      showEphemeralHint('برای گفتگوی جدید وارد شوید.');
+      openGuestLoginDrawer('برای گفتگوی جدید وارد شوید.');
+      return;
+    }
     if (!clearUrl) return;
     setBusy(true);
     try {
@@ -2952,6 +2970,8 @@
 
   async function pollSync() {
     if (!syncUrl || document.hidden || pollPaused || pollInFlight || isPostchiMode()) return;
+    /* بدو ورود خانه: تا شروع گفتگو پیام ترد فعال را نکش — مهمان هم همان UX */
+    if (homeInline && isHomeChatEmpty()) return;
     if (layerGated && !sheetOpen) return;
     var tid = activeThreadId();
     if (!tid) return;
@@ -3225,7 +3245,7 @@
           autoGrowInput();
         }
       } catch (_) {}
-      promptGuestLoginLimit('به سقف ۲۰ پاسخ رسیدید. برای ادامه وارد شوید.');
+      promptGuestLoginLimit(guestLoginLimitMessage());
       return;
     }
 
@@ -3318,7 +3338,7 @@
           } catch (_) {}
           guestRepliesRemaining = 0;
           noteGuestRepliesFromPayload({ guest_replies_remaining: 0 });
-          promptGuestLoginLimit(errText || 'به سقف ۲۰ پاسخ رسیدید. برای ادامه وارد شوید.');
+          promptGuestLoginLimit(errText || guestLoginLimitMessage());
           return;
         }
         if (data && data.escalated && data.reply) {
@@ -3588,6 +3608,7 @@
   syncComposerReady();
   syncChipBarVisibility();
   syncHomeEmptyState();
+  syncNewChatAvailability([]);
   if (homeInline) {
     stopTypeHintPlaceholder({ dismiss: true, placeholder: staticComposerPlaceholder() });
   } else {

@@ -24,14 +24,15 @@ class AgentGoalLockTests(unittest.TestCase):
         from app.ai.goal import GOAL_SYSTEM
 
         pub = agent_system_hint("public")
-        self.assertIn(GOAL_SYSTEM, pub)
+        # hint کوتاه است — GOAL_SYSTEM در base prompt است، نه تکرار در hint (صرفه‌جویی توکن)
+        self.assertNotIn(GOAL_SYSTEM, pub)
         self.assertIn("خرید", pub)
-        self.assertIn("بازاریاب", pub)
+        self.assertIn("search_lands", pub.lower())
         self.assertNotIn("مأموریت", pub)
 
         partner = agent_system_hint("partner")
-        self.assertIn(GOAL_SYSTEM, partner)
-        self.assertIn("propose_visit", partner.lower() + "propose_visit")
+        self.assertNotIn(GOAL_SYSTEM, partner)
+        self.assertIn("search_lands", partner.lower())
         self.assertTrue("visit" in partner.lower() or "بازدید" in partner or "next_action" in partner)
         self.assertNotIn("مأموریت", partner)
 

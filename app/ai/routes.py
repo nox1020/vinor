@@ -118,8 +118,8 @@ def chat():
         history_for_api,
     )
     from app.ai.credits import (
-        GUEST_FREE_ASSISTANT_REPLIES,
         check_guest_login_required,
+        guest_free_assistant_replies,
         guest_replies_remaining,
         is_guest_user_key,
         record_guest_assistant_reply,
@@ -186,9 +186,10 @@ def chat():
     )
     used = record_guest_assistant_reply(key)
     remaining = guest_replies_remaining(key)
+    guest_limit = guest_free_assistant_replies()
     if remaining is not None:
         result["guest_replies_remaining"] = remaining
-        result["guest_replies_limit"] = GUEST_FREE_ASSISTANT_REPLIES
+        result["guest_replies_limit"] = guest_limit
         result["guest_replies_used"] = used
     # اگر همین پاسخ سقف را پر کرد، فلگ برای UI
     if remaining == 0 and is_guest_user_key(key):
@@ -348,6 +349,7 @@ def switch_thread():
 @ai_bp.post("/thread/delete", endpoint="delete_thread")
 def delete_thread():
     from app.ai.chat_store import delete_thread, load_user_record, messages_for_ui, threads_for_ui
+    from app.ai.credits import is_guest_user_key
     from app.lawyer.service import is_lawyer_thread, threads_with_lawyer
 
     key = ai_user_key()
@@ -355,6 +357,13 @@ def delete_thread():
     thread_id = (data.get("thread_id") or "").strip()
     if is_lawyer_thread(thread_id):
         return jsonify({"ok": False, "error": "این گفتگو قابل حذف نیست."}), 400
+    if is_guest_user_key(key) and not _session_phone():
+        return jsonify({
+            "ok": False,
+            "error": "برای حذف گفتگو وارد شوید.",
+            "need_login": True,
+            "login_url": url_for("express_partner.home", menu=1),
+        }), ai_chat_http_status({"need_login": True})
     if not thread_id or not delete_thread(key, thread_id, audience=AUDIENCE_PUBLIC):
         return jsonify({"ok": False, "error": "حذف ممکن نیست."}), 400
     record = load_user_record(key, audience=AUDIENCE_PUBLIC)

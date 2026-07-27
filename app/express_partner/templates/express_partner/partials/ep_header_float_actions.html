@@ -3,6 +3,8 @@
 {% set _use_drawer = profile_drawer|default(false) %}
 {% set _show_ai_plus = show_ai_plus|default(false) %}
 {% set _show_get_plus = show_get_plus|default(false) and not (is_special|default(false)) %}
+{% set _plus_url = url_for('express_partner.plus') %}
+{% set _plus_href = _plus_url if me_phone|default(false) else url_for('express_partner.home', menu=1, login_next=_plus_url) %}
 <style>
   .ep-header-float-actions {
     position: fixed;
@@ -64,9 +66,9 @@
 </style>
 {% if _show_get_plus %}
 <div class="ep-header-float-actions ep-header-float-actions--plus" aria-label="وینور پلاس">
-  <a href="{{ url_for('express_partner.plus') }}"
+  <a href="{{ _plus_href }}"
      data-vinor-express-nav
-     class="ep-get-plus-pill"
+     class="ep-get-plus-pill{% if not me_phone|default(false) %} ep-get-plus-pill--guest{% endif %}"
      title="دریافت پلاس">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
       <path d="M12 3l1.45 4.45L18 9l-4.55 1.55L12 15l-1.45-4.45L6 9l4.55-1.55L12 3z" stroke-linejoin="round"/>

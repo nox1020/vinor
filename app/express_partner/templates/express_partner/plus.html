@@ -3,8 +3,11 @@
 
 {% block content %}
 {% set _has_plus = is_special|default(false) %}
+{% set _sub = plus_subscription|default({}) %}
+{% set _sub_status = _sub.status|default('none') %}
+{% set _expired = _sub_status == 'expired' %}
 {% set _price = plus_price_toman|default(990000) %}
-{% set _period = plus_period_label|default('ماهانه') %}
+{% set _period = plus_period_label|default('۳۰ روز') %}
 
 <style>
   html:has(#vinorPlusPage),
@@ -171,6 +174,12 @@
   #vinorPlusPage .vp-cta:active {
     transform: scale(0.985);
   }
+  #vinorPlusPage .vp-cta:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
   #vinorPlusPage .vp-cta--ghost {
     background: transparent;
     color: #fff;
@@ -198,6 +207,53 @@
     background: rgba(244, 63, 94, 0.12);
     border-color: rgba(244, 63, 94, 0.28);
     color: #fecdd3;
+  }
+  #vinorPlusPage .vp-sub {
+    margin-top: 1.75rem;
+    padding: 1.1rem 1rem;
+    border-radius: 1.15rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    text-align: right;
+  }
+  #vinorPlusPage .vp-sub-label {
+    font-size: 0.72rem;
+    color: var(--vp-muted);
+    margin: 0 0 0.35rem;
+  }
+  #vinorPlusPage .vp-sub-date {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 720;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+  #vinorPlusPage .vp-sub-meta {
+    margin: 0.45rem 0 0;
+    font-size: 0.82rem;
+    color: #d4d4d8;
+    line-height: 1.5;
+  }
+  #vinorPlusPage .vp-sub-badge {
+    display: inline-block;
+    margin-top: 0.55rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 650;
+    background: rgba(34, 197, 94, 0.15);
+    color: #86efac;
+    border: 1px solid rgba(34, 197, 94, 0.25);
+  }
+  #vinorPlusPage .vp-sub-badge--warn {
+    background: rgba(251, 191, 36, 0.12);
+    color: #fde68a;
+    border-color: rgba(251, 191, 36, 0.28);
+  }
+  #vinorPlusPage .vp-flash--warn {
+    background: rgba(251, 191, 36, 0.1);
+    border-color: rgba(251, 191, 36, 0.28);
+    color: #fde68a;
   }
 </style>
 
@@ -233,6 +289,8 @@
     <p class="vp-lead">
       {% if _has_plus %}
       اشتراک پلاس شما فعال است — از امکانات ویژه و اولویت پاسخ استفاده کنید.
+      {% elif _expired %}
+      اشتراک پلاس شما به پایان رسیده است. برای ادامهٔ دسترسی، اشتراک را تمدید کنید.
       {% else %}
       امکانات بیشتر، اولویت در معرفی فایل، و تجربهٔ حرفه‌ای‌تر بازاریابی با وینور.
       {% endif %}
@@ -244,6 +302,12 @@
       <li><i class="fas fa-scale-balanced" aria-hidden="true"></i><span>دسترسی کامل به وکیل ملکی وینور</span></li>
       <li><i class="fas fa-building" aria-hidden="true"></i><span>امکانات سطح ویژه برای ثبت و مدیریت آگهی</span></li>
     </ul>
+
+    {% if _expired %}
+    <div class="vp-flash vp-flash--warn" role="status">
+      پایان اشتراک: {{ _sub.expires_at_jalali or '—' }} — برای بازگرداندن امکانات پلاس، تمدید کنید.
+    </div>
+    {% endif %}
 
     {% if not _has_plus %}
     <div class="vp-plan is-selected" role="group" aria-label="پلن انتخاب‌شده">
@@ -263,27 +327,69 @@
       {% if me_phone %}
       <form method="post" action="{{ url_for('express_partner.plus') }}">
         {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
-        <input type="hidden" name="action" value="request_plus">
-        <button type="submit" class="vp-cta">دریافت پلاس</button>
+        <input type="hidden" name="action" value="{{ 'pay_plus' if plus_payment_enabled|default(false) else 'request_plus' }}">
+        <button type="submit" class="vp-cta">
+          {% if plus_payment_enabled|default(false) %}{% if _expired %}تمدید و پرداخت پلاس{% else %}پرداخت و فعال‌سازی پلاس{% endif %}{% else %}دریافت پلاس{% endif %}
+        </button>
       </form>
       {% else %}
-      <a href="{{ url_for('express_partner.home', menu=1, next=url_for('express_partner.plus')) }}"
+      <a href="{{ url_for('express_partner.home', menu=1, login_next=url_for('express_partner.plus')) }}"
          data-vinor-express-nav
          class="vp-cta">ورود برای دریافت پلاس</a>
       {% endif %}
-      <p class="vp-note">پس از ثبت درخواست، تیم وینور برای فعال‌سازی با شما هماهنگ می‌کند. این صفحه جایگزین درگاه پرداخت قطعی نیست.</p>
+      <p class="vp-note">
+        {% if plus_payment_enabled|default(false) %}
+        پرداخت امن از طریق زرین‌پال (حالت تست تا زمان فعال‌سازی درگاه واقعی). پس از تأیید، پلاس بلافاصله فعال می‌شود.
+        {% else %}
+        پس از ثبت درخواست، تیم وینور برای فعال‌سازی با شما هماهنگ می‌کند — یا درگاه از پنل ادمین تنظیم نشده است.
+        {% endif %}
+      </p>
     </div>
     {% else %}
+    <div class="vp-sub" role="region" aria-label="وضعیت اشتراک">
+      <p class="vp-sub-label">پایان اشتراک</p>
+      <p class="vp-sub-date">{{ _sub.expires_at_jalali or '—' }}</p>
+      <p class="vp-sub-meta">
+        {% if _sub.days_remaining is not none %}
+        {{ _sub.days_remaining }} روز تا پایان اشتراک
+        {% else %}
+        اشتراک فعال
+        {% endif %}
+      </p>
+      <span class="vp-sub-badge{% if _sub.days_remaining is not none and _sub.days_remaining <= 7 %} vp-sub-badge--warn{% endif %}">فعال</span>
+    </div>
+
     <div class="vp-cta-wrap">
-      <a href="{{ url_for('express_partner.home', ai=1) }}"
-         data-vinor-express-nav
-         class="vp-cta">ادامه در چت</a>
-      <a href="{{ url_for('express_partner.home') }}"
-         data-vinor-express-nav
-         class="vp-cta vp-cta--ghost"
-         style="margin-top:0.65rem">بازگشت به خانه</a>
+      {% if me_phone and plus_payment_enabled|default(false) %}
+      {% set _renew_ok = plus_renew_allowed|default(false) %}
+      {% set _renew_window = plus_renew_window_days|default(7) %}
+      <form method="post" action="{{ url_for('express_partner.plus') }}">
+        {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <input type="hidden" name="action" value="pay_plus">
+        <button type="submit" class="vp-cta"{% if not _renew_ok %} disabled aria-disabled="true"{% endif %}>تمدید</button>
+      </form>
+      {% if _renew_ok %}
+      <p class="vp-note">با تمدید، {{ plus_period_label|default('۳۰ روز') }} به اشتراک فعلی اضافه می‌شود.</p>
+      {% else %}
+      <p class="vp-note">تمدید از {{ _renew_window }} روز قبل از پایان اشتراک فعال می‌شود.</p>
+      {% endif %}
+      {% endif %}
     </div>
     {% endif %}
   </div>
 </div>
+{% if request.args.get('plus_activated') %}
+<script>
+(function () {
+  try {
+    var u = new URL(window.location.href);
+    if (u.searchParams.has('plus_activated')) {
+      u.searchParams.delete('plus_activated');
+      var qs = u.searchParams.toString();
+      history.replaceState(null, '', u.pathname + (qs ? ('?' + qs) : '') + u.hash);
+    }
+  } catch (e) {}
+})();
+</script>
+{% endif %}
 {% endblock %}

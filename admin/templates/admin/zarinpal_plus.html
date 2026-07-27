@@ -1,0 +1,173 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}زرین‌پال — Vinor Plus{% endblock %}
+{% block page_title %}زرین‌پال / Vinor Plus{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-5xl">
+
+  <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg p-4 text-sm text-sky-900 dark:text-sky-100">
+    <p class="font-medium mb-1">راهنما</p>
+    <p class="text-sky-800 dark:text-sky-200/90 leading-6 text-xs">
+      درگاه برای خرید <strong>Vinor Plus</strong> — پس از verify موفق، <code class="text-[11px]">partner_tier=special</code> (همان is_special) روی همکار اعمال می‌شود.
+      پیش‌فرض: <span class="ltr font-mono">sandbox</span> روشن. merchant را از پنل sandbox زرین‌پال بگیرید.
+      Callback خالی = <span class="ltr text-[11px] break-all">{{ auto_callback_url }}</span>
+    </p>
+  </div>
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500">فلگ env</p>
+      <p class="mt-0.5 font-semibold {% if zarinpal_feature_flag %}text-emerald-600{% else %}text-amber-600{% endif %}">
+        {% if zarinpal_feature_flag %}VINOR_ZARINPAL_PLUS_ENABLED{% else %}خاموش{% endif %}
+      </p>
+    </div>
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500">حالت</p>
+      <p class="mt-0.5 font-semibold">{{ 'Sandbox' if zarinpal.sandbox else 'Production' }}</p>
+    </div>
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500">تراکنش موفق</p>
+      <p class="mt-0.5 font-semibold text-emerald-600">{{ paid_count }}</p>
+    </div>
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500">در انتظار</p>
+      <p class="mt-0.5 font-semibold text-amber-600">{{ pending_count }}</p>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('admin.zarinpal_plus') }}" class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="save">
+    <div class="border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4">
+      <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <i class="fa-solid fa-credit-card text-sky-500"></i>
+        تنظیمات درگاه
+      </h2>
+    </div>
+    <div class="px-4 sm:px-6 py-5 space-y-4 text-sm">
+      <label class="inline-flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" name="zp_enabled" value="1" {% if zarinpal.enabled %}checked{% endif %}>
+        <span>درگاه فعال (settings.json)</span>
+      </label>
+      <label class="inline-flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" name="zp_sandbox" value="1" {% if zarinpal.sandbox %}checked{% endif %}>
+        <span>Sandbox / تست</span>
+      </label>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Merchant ID</label>
+        <input name="zp_merchant_id" value="{{ zarinpal.merchant_id or '' }}" dir="ltr"
+               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">مبلغ پلاس (تومان)</label>
+        <input name="zp_amount_toman" value="{{ zarinpal.amount_toman }}" dir="ltr" type="number" min="0"
+               class="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">مدت اشتراک پس از هر پرداخت (روز)</label>
+        <input name="zp_subscription_days" value="{{ zarinpal.subscription_days|default(30) }}" dir="ltr" type="number" min="1"
+               class="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm">
+        <p class="mt-1 text-[11px] text-gray-400">پیش‌فرض ۳۰ روز — تمدید از تاریخ پایان فعلی (یا از امروز اگر منقضی شده).</p>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Callback URL (اختیاری)</label>
+        <input name="zp_callback_url" value="{{ zarinpal.callback_url or '' }}" dir="ltr"
+               placeholder="{{ auto_callback_url }}"
+               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">توضیح تراکنش</label>
+        <input name="zp_description" value="{{ zarinpal.description or '' }}"
+               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm">
+      </div>
+    </div>
+    <div class="px-4 sm:px-6 py-5 space-y-4 text-sm border-t border-gray-200 dark:border-gray-700">
+      <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <i class="fa-solid fa-message text-emerald-500"></i>
+        پیامک چرخهٔ پلاس (همکار)
+      </h3>
+      <p class="text-[11px] text-gray-400 leading-5">
+        پس از پرداخت موفق، یادآوری {{ plus_renew_window_days }} روز مانده به پایان، و اطلاع انقضا.
+        متغیرها: <code class="text-[10px]">{name}</code>، <code class="text-[10px]">{expires_jalali}</code>، <code class="text-[10px]">{days_remaining}</code>
+      </p>
+      <label class="inline-flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" name="zp_partner_sms_enabled" value="1"
+               {% if zarinpal.partner_sms_enabled %}checked{% endif %}>
+        <span>ارسال پیامک پلاس به همکار فعال</span>
+      </label>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">فعال‌سازی (اولین خرید)</label>
+        <textarea name="zp_sms_activation" rows="3"
+                  placeholder="وینور&#10;Vinor Plus برای شما فعال شد."
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm">{{ zarinpal.sms_activation_message or '' }}</textarea>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">تمدید موفق</label>
+        <textarea name="zp_sms_renewal" rows="3"
+                  placeholder="وینور&#10;اشتراک پلاس با موفقیت تمدید شد."
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm">{{ zarinpal.sms_renewal_message or '' }}</textarea>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">یادآوری پایان اشتراک</label>
+        <textarea name="zp_sms_expiry_reminder" rows="3"
+                  placeholder="وینور&#10;اشتراک پلاس رو به پایان است. لطفاً تمدید کنید."
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm">{{ zarinpal.sms_expiry_reminder_message or '' }}</textarea>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">منقضی شدن</label>
+        <textarea name="zp_sms_expired" rows="3"
+                  placeholder="وینور&#10;اشتراک پلاس منقضی شد."
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm">{{ zarinpal.sms_expired_message or '' }}</textarea>
+      </div>
+    </div>
+    <div class="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-2">
+      <button type="submit" class="px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700">ذخیره</button>
+    </div>
+  </form>
+  <form method="post" action="{{ url_for('admin.zarinpal_plus') }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="reset_defaults">
+    <button type="submit" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm">بازنشانی پیش‌فرض</button>
+  </form>
+
+  <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+    <div class="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-2">
+      <h2 class="text-sm font-bold text-gray-900 dark:text-white">تراکنش‌ها</h2>
+      <div class="flex gap-2 text-xs">
+        <a href="{{ url_for('admin.zarinpal_plus', filter='all') }}" class="{% if txn_filter == 'all' %}font-bold text-sky-600{% else %}text-gray-500{% endif %}">همه ({{ all_count }})</a>
+        <a href="{{ url_for('admin.zarinpal_plus', filter='paid') }}" class="{% if txn_filter == 'paid' %}font-bold{% endif %}">paid</a>
+        <a href="{{ url_for('admin.zarinpal_plus', filter='pending') }}" class="{% if txn_filter == 'pending' %}font-bold{% endif %}">pending</a>
+        <a href="{{ url_for('admin.zarinpal_plus', filter='failed') }}">failed</a>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs text-right">
+        <thead class="bg-gray-50 dark:bg-gray-800 text-gray-500">
+          <tr>
+            <th class="px-3 py-2">وضعیت</th>
+            <th class="px-3 py-2">مبلغ</th>
+            <th class="px-3 py-2">موبایل</th>
+            <th class="px-3 py-2">authority</th>
+            <th class="px-3 py-2">ref_id</th>
+            <th class="px-3 py-2">created_at</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transactions %}
+          <tr class="border-t border-gray-100 dark:border-gray-800">
+            <td class="px-3 py-2 font-medium">{{ t.status or '—' }}</td>
+            <td class="px-3 py-2 tabular-nums">{{ t.amount_toman|default(0) }}</td>
+            <td class="px-3 py-2 ltr">{{ t.phone or '—' }}</td>
+            <td class="px-3 py-2 ltr max-w-[8rem] truncate" title="{{ t.authority or '' }}">{{ t.authority or '—' }}</td>
+            <td class="px-3 py-2 ltr">{{ t.ref_id or '—' }}</td>
+            <td class="px-3 py-2">{{ t.created_at or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">تراکنشی ثبت نشده</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

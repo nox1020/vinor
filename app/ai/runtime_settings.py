@@ -21,7 +21,7 @@ _AI_DEFAULTS: dict[str, Any] = {
     "max_msg_chars": 700,
     "max_assistant_history_chars": 300,
     "max_context_chars": 2400,
-    "max_tokens": 512,
+    "max_tokens": 384,
     "temperature": 0.45,
     "public_ctx_ttl_sec": 300,
     "partner_ctx_ttl_sec": 180,

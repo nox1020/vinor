@@ -478,6 +478,15 @@ def _ensure_session_partner_on_g() -> None:
     if not me_phone:
         g.express_partner_profile = None
         return
+    from .plus_subscription import persist_plus_expiry_backfill_for_phone
+
+    if persist_plus_expiry_backfill_for_phone(me_phone):
+        for key in ('_express_partners_list_cached', '_express_partner_by_phone'):
+            if hasattr(g, key):
+                try:
+                    delattr(g, key)
+                except Exception:
+                    pass
     g.express_partner_profile = _partner_profile_for_phone(me_phone)
 
 
@@ -1474,6 +1483,23 @@ def track_online_partner():
             except Exception:
                 pass
             _defer_online_partner_ping(phone, display_name, request.remote_addr or 'نامشخص')
+
+        plus_ping_ts = session.get('_plus_lifecycle_sms_ts') or 0
+        if now_ts - float(plus_ping_ts) >= 21600:
+            session['_plus_lifecycle_sms_ts'] = now_ts
+            try:
+                from .partner_roles import PARTNER_TIER_SPECIAL, partner_tier
+                from .plus_sms import defer_plus_lifecycle_sms_check
+
+                prof = _partner_profile_for_phone(phone)
+                if isinstance(prof, dict) and partner_tier(prof) == PARTNER_TIER_SPECIAL:
+                    defer_plus_lifecycle_sms_check(
+                        current_app._get_current_object(),
+                        phone,
+                        prof,
+                    )
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -2971,9 +2997,30 @@ def _partner_ai_layer_context(
                 if out.get('ok'):
                     active_thread_id = str(out.get('thread_id') or '').strip()
                 else:
-                    active_thread_id = ensure_active_thread(
-                        user_key, audience=AUDIENCE_PUBLIC
+                    from app.ai.chat_store import (
+                        is_thread_open_slate,
+                        load_user_record,
+                        set_active_thread,
                     )
+
+                    record = load_user_record(user_key, audience=AUDIENCE_PUBLIC)
+                    slate_tid = ''
+                    for th in record.get('threads') or []:
+                        if not isinstance(th, dict):
+                            continue
+                        tid = str(th.get('id') or '').strip()
+                        if tid and is_thread_open_slate(th):
+                            slate_tid = tid
+                            break
+                    if slate_tid:
+                        set_active_thread(
+                            user_key, slate_tid, audience=AUDIENCE_PUBLIC
+                        )
+                        active_thread_id = slate_tid
+                    else:
+                        active_thread_id = ensure_active_thread(
+                            user_key, audience=AUDIENCE_PUBLIC
+                        )
                 chat_messages = []
                 if want_ai:
                     home_ai_open = True
@@ -2998,7 +3045,7 @@ def _partner_ai_layer_context(
         guest_limit = None
         try:
             from app.ai.credits import (
-                GUEST_FREE_ASSISTANT_REPLIES,
+                guest_free_assistant_replies,
                 guest_replies_remaining,
                 is_guest_user_key,
             )
@@ -3007,7 +3054,7 @@ def _partner_ai_layer_context(
             uk = ai_user_key()
             if is_guest_user_key(uk):
                 guest_remaining = guest_replies_remaining(uk)
-                guest_limit = GUEST_FREE_ASSISTANT_REPLIES
+                guest_limit = guest_free_assistant_replies()
         except Exception:
             guest_remaining = None
             guest_limit = None
@@ -4677,6 +4724,7 @@ def _clear_express_partner_auth_session() -> None:
     for k in (
         'user_id', 'user_phone', 'otp_code', 'otp_phone', 'otp_created_at', 'next',
         'VINOR_IS_EXPRESS_PARTNER',
+        'VINOR_PLUS_ACTIVE',
         'VINOR_PORTAL_ROLES',
         '_routine_auto_mkt_day', '_express_online_ping_ts',
     ):
@@ -7381,56 +7429,143 @@ def settings_page():
 @express_partner_bp.route('/plus', methods=['GET', 'POST'], endpoint='plus')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def plus_page():
-    """صفحهٔ خرید / ارتقا به وینور پلاس — سبک GPT Plus."""
-    me_phone = (session.get('user_phone') or '').strip()
+    """صفحهٔ خرید / ارتقا به وینور پلاس — پرداخت زرین‌پال (اولویت) یا درخواست SMS."""
+    from .partner_session_sync import canonical_partner_phone, sync_partner_session_after_plus
+
+    me_phone = canonical_partner_phone(session.get('user_phone') or '')
+    if request.args.get('plus_activated') and me_phone:
+        sync_partner_session_after_plus(me_phone)
     profile = getattr(g, 'express_partner_profile', None)
     if profile is None and me_phone:
-        profile = _partner_profile_for_phone(me_phone)
-    is_special = _is_partner_special(profile) if isinstance(profile, dict) else False
-    plus_price = 990000
-    try:
-        from app.utils.storage import load_settings
+        _ensure_session_partner_on_g()
+        profile = getattr(g, 'express_partner_profile', None)
+        if profile is None:
+            profile = _partner_profile_for_phone(me_phone)
+    elif me_phone:
+        from .plus_subscription import persist_plus_expiry_backfill_for_phone
 
-        raw = (load_settings() or {}).get('vinor_plus_price_toman')
-        if raw is not None and str(raw).strip() != '':
-            plus_price = max(0, int(raw))
-    except Exception:
-        plus_price = 990000
+        if persist_plus_expiry_backfill_for_phone(me_phone):
+            for key in ('_express_partners_list_cached', '_express_partner_by_phone', '_express_partner_ctx_ready'):
+                if hasattr(g, key):
+                    try:
+                        delattr(g, key)
+                    except Exception:
+                        pass
+            _ensure_session_partner_on_g()
+            profile = getattr(g, 'express_partner_profile', None) or _partner_profile_for_phone(me_phone)
+    is_special = _is_partner_special(profile) if isinstance(profile, dict) else False
+    settings_root = load_settings() or {}
+    from .plus_subscription import (
+        PLUS_RENEW_WINDOW_DAYS,
+        plus_period_label,
+        plus_renew_allowed,
+        plus_subscription_view,
+    )
+    from .zarinpal_config import (
+        payment_flow_active,
+        plus_amount_toman,
+        plus_subscription_days,
+        zarinpal_payment_primary,
+    )
+
+    sub_days = plus_subscription_days()
+    plus_sub = plus_subscription_view(profile if isinstance(profile, dict) else None)
+    plus_price = plus_amount_toman(settings_root)
 
     if request.method == 'POST':
         action = (request.form.get('action') or '').strip()
-        if action == 'request_plus':
-            if not me_phone:
-                flash('برای درخواست پلاس ابتدا وارد شوید.', 'error')
-                return redirect(url_for('express_partner.home', menu=1))
-            if is_special:
-                flash('اشتراک پلاس شما از قبل فعال است.', 'success')
-                return redirect(url_for('express_partner.plus'))
-            try:
-                from .admin_action_sms import notify_admin_pending_action
-
-                notify_admin_pending_action(
-                    'vinor_plus',
-                    partner_phone=me_phone,
-                    partner_name=(
-                        (profile.get('name') if isinstance(profile, dict) else None) or me_phone
-                    ),
-                    detail=f'درخواست Vinor Plus · {me_phone}',
-                )
-            except Exception:
-                pass
-            flash('درخواست پلاس ثبت شد. به‌زودی برای فعال‌سازی با شما هماهنگ می‌شود.', 'success')
+        if action not in ('pay_plus', 'request_plus'):
+            return redirect(url_for('express_partner.plus'))
+        if not me_phone:
+            flash('برای دریافت پلاس ابتدا وارد شوید.', 'error')
+            return redirect(url_for('express_partner.home', menu=1))
+        if is_special and action == 'request_plus':
+            flash('اشتراک پلاس شما از قبل فعال است.', 'success')
             return redirect(url_for('express_partner.plus'))
 
+        if action == 'pay_plus' and is_special and not plus_renew_allowed(
+            profile if isinstance(profile, dict) else None
+        ):
+            flash(
+                f'تمدید اشتراک از {PLUS_RENEW_WINDOW_DAYS} روز قبل از پایان امکان‌پذیر است.',
+                'error',
+            )
+            return redirect(url_for('express_partner.plus'))
+
+        want_pay = action == 'pay_plus' or (
+            zarinpal_payment_primary() and payment_flow_active()
+        )
+        if want_pay and payment_flow_active():
+            from .plus_checkout import begin_plus_payment
+
+            pname = (profile.get('name') if isinstance(profile, dict) else None) or me_phone
+            ok, pay_url, err = begin_plus_payment(phone=me_phone, partner_name=str(pname))
+            if ok and pay_url:
+                return redirect(pay_url)
+            detail = (err or '').strip()
+            if detail and detail not in ('payment_not_configured', 'request_failed', 'invalid_response'):
+                flash(
+                    f'اتصال به درگاه پرداخت ممکن نشد ({detail}). لطفاً بعداً دوباره تلاش کنید.',
+                    'error',
+                )
+            else:
+                flash('اتصال به درگاه پرداخت ممکن نشد. لطفاً بعداً دوباره تلاش کنید.', 'error')
+            return redirect(url_for('express_partner.plus'))
+
+        if action == 'pay_plus':
+            flash(
+                'درگاه پرداخت آنلاین هنوز پیکربندی نشده است (مرچنت در حالت production لازم است). '
+                'از دکمهٔ «دریافت پلاس» برای ثبت درخواست دستی استفاده کنید یا در پنل ادمین مرچنت را وارد کنید.',
+                'error',
+            )
+            return redirect(url_for('express_partner.plus'))
+
+        # fallback: SMS به ادمین — وقتی پرداخت غیرفعال است یا VINOR_ZARINPAL_PLUS_PAYMENT_PRIMARY=0
+        try:
+            from .admin_action_sms import notify_admin_pending_action
+
+            notify_admin_pending_action(
+                'vinor_plus',
+                partner_phone=me_phone,
+                partner_name=(
+                    (profile.get('name') if isinstance(profile, dict) else None) or me_phone
+                ),
+                detail=f'درخواست Vinor Plus · {me_phone}',
+            )
+        except Exception:
+            pass
+        flash(
+            'درخواست پلاس ثبت شد. به‌زودی برای فعال‌سازی با شما هماهنگ می‌شود.',
+            'success',
+        )
+        return redirect(url_for('express_partner.plus'))
+
+    pay_enabled = payment_flow_active() and zarinpal_payment_primary()
+    renew_allowed = plus_renew_allowed(profile if isinstance(profile, dict) else None)
     return render_template(
         'express_partner/plus.html',
         me_phone=me_phone,
         is_special=is_special,
+        plus_subscription=plus_sub,
         plus_price_toman=plus_price,
-        plus_period_label='ماهانه',
+        plus_period_label=plus_period_label(sub_days),
+        plus_payment_enabled=pay_enabled,
+        plus_renew_allowed=renew_allowed,
+        plus_renew_window_days=PLUS_RENEW_WINDOW_DAYS,
         hide_header=True,
         seo_title='وینور پلاس | ارتقا',
     )
+
+
+@express_partner_bp.route('/plus/zarinpal/callback', methods=['GET'], endpoint='plus_zarinpal_callback')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def plus_zarinpal_callback():
+    """بازگشت از درگاه — Status=OK|NOK و Authority."""
+    from .plus_checkout import handle_callback_http
+
+    authority = (request.args.get('Authority') or request.args.get('authority') or '').strip()
+    status_param = (request.args.get('Status') or request.args.get('status') or '').strip()
+    return handle_callback_http(authority, status_param)
 
 
 @express_partner_bp.get('/settings/data', endpoint='settings_data')

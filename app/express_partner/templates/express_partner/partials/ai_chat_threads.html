@@ -1,7 +1,7 @@
 {# لیست گفتگوها — در کشو: ساده؛ در لایه فایل‌ها: با دکمه گفتگوی جدید #}
 {% set _in_drawer = ai_threads_in_drawer|default(false) %}
 
-{% if not _in_drawer %}
+{% if not _in_drawer and vinor_express_auth_segment|default('guest') != 'guest' %}
 <div class="shrink-0 border-b border-white/10 p-3">
   <button type="button" id="aiNewChatBtn"
           class="flex w-full items-center justify-center gap-2 rounded-xl border border-violet-500/35 bg-violet-600/90 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500">
@@ -10,6 +10,8 @@
   </button>
 </div>
 <p class="shrink-0 px-4 pt-3 pb-1 text-[10px] font-semibold text-zinc-500">گفتگوها</p>
+{% elif not _in_drawer %}
+<p class="shrink-0 px-4 pt-3 pb-1 text-[10px] font-semibold text-zinc-500">گفتگو</p>
 {% endif %}
 
 <div id="aiHistoryList" class="ai-scroll {% if not _in_drawer %}flex-1 overflow-y-auto overscroll-contain px-3 pb-3 space-y-2{% endif %}" {% if not _in_drawer %}style="min-height: 8rem; max-height: 18rem;"{% endif %}>
@@ -29,7 +31,7 @@
           {% if th.unread and th.unread > 0 %}
           <span class="ai-thread-unread {% if not _in_drawer %}rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white tabular-nums{% endif %}">{{ th.unread if th.unread < 100 else '99+' }}</span>
           {% endif %}
-          {% if th.kind != 'postchi' and th.kind != 'lawyer' %}
+          {% if th.kind != 'postchi' and th.kind != 'lawyer' and vinor_express_auth_segment|default('guest') != 'guest' %}
           <span class="ai-thread-delete {% if not _in_drawer %}grid h-7 w-7 place-items-center rounded-lg text-zinc-500{% endif %}" data-thread-id="{{ th.id }}" role="button" aria-label="حذف گفتگو" tabindex="-1">
             <i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i>
           </span>

@@ -28,6 +28,15 @@ _COMMON_RULES = f"""
 - تاریخ شمسی از لیست ابزار. تماس بازدید: {VISIT_COORD_PHONE}.
 - محدوده: {GEO_SCOPE_FA} — خارج از گرمابسرد پیشنهاد نده."""
 
+_STYLE_RULES = """
+سبک پاسخ وینور (اجباری):
+- پاسخ مستقیم و بدون مقدمهٔ طولانی شروع شود.
+- خروجی ۴ تا ۸ خط باشد و هر خط کوتاه بماند.
+- در حالت چند انتخاب، گزینه‌ها را فشرده در یک خط بده: گزینه‌ها: A / B / C.
+- فقط یک CTA در هر پاسخ بده.
+- اگر داده کم است، فقط یک سؤال شفاف بپرس.
+- انتهای پاسخ همیشه یک «مرحله بعد: ...» داشته باشد."""
+
 _PARTNER_GUIDE = f"""
 بازاریاب تأییدشده — هر پیام یک قدم فروش.
 مشتری: معیار→search_lands→[[LAND]]→propose_visit_request (نام→موبایل→تاریخ)→complete→deal.
@@ -47,21 +56,24 @@ VINOR_AI_PUBLIC_PROMPT = f"""{GOAL_SYSTEM}
 
 ابزار هسته: search_lands | get_cooperation_info | get_application_status | propose_partner_application | propose_forget_memory
 visit/deal نزن.
-{_COMMON_RULES}"""
+{_COMMON_RULES}
+{_STYLE_RULES}"""
 
 VINOR_AI_PARTNER_PROMPT = f"""{GOAL_SYSTEM}
 
 مخاطب: بازاریاب تأییدشده — تیز، بی‌حاشیه، هر پیام یک قدم فروش.
 ابزار هسته (+کارت): search_lands | suggest_next_action | draft_listing_copy | propose_visit_request | propose_complete_visit | propose_deal | propose_release_deal | propose_log_call | propose_followup | propose_forget_memory
 {_PARTNER_GUIDE}
-{_COMMON_RULES}"""
+{_COMMON_RULES}
+{_STYLE_RULES}"""
 
 VINOR_AI_SPECIAL_PROMPT = f"""{GOAL_SYSTEM}
 
 مخاطب: ویژه — یک خط وضعیت + یک خط حرکت.
 ابزار هسته (+کارت): search_lands | suggest_next_action | draft_listing_copy | propose_visit_request | propose_complete_visit | propose_deal | propose_release_deal | propose_log_call | propose_followup | propose_forget_memory
 {_SPECIAL_GUIDE}
-{_COMMON_RULES}"""
+{_COMMON_RULES}
+{_STYLE_RULES}"""
 
 _ADMIN_RULES = """
 قوانین عملیات:
@@ -77,7 +89,8 @@ _ADMIN_RULES = """
 - فایل جدید: فیلدهای الزامی را یکی‌یکی جمع کن سپس propose_add_express_listing.
 - کارت فایل ([[LAND]] / پیشنهاد ویژوال) نشان نده مگر ادمین صریحاً بگوید «کارت نشان بده» / «پیشنهاد بده» — آن‌وقت admin_search_lands با show_cards=true.
 - خلاصهٔ متنی فایل (کد، عنوان، قیمت) بدون کارت کافی است.
-- نگو «هوش مصنوعی» یا «چند ایجنت»."""
+- نگو «هوش مصنوعی» یا «چند ایجنت».
+- پاسخ کوتاه/مستقیم بده و با «مرحله بعد: ...» تمام کن."""
 
 VINOR_AI_ADMIN_PROMPT = f"""{GOAL_ADMIN_SYSTEM}
 

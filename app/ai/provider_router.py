@@ -8,10 +8,17 @@ def _deepseek(
     messages: list[dict[str, Any]],
     *,
     tools: list[dict[str, Any]] | None = None,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
 ) -> dict[str, Any]:
     from .services import _call_deepseek
 
-    return _call_deepseek(messages, tools=tools)
+    return _call_deepseek(
+        messages,
+        tools=tools,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
 
 
 def _api_usable() -> bool:
@@ -29,9 +36,16 @@ def call_ai(
     messages: list[dict[str, Any]],
     *,
     tools: list[dict[str, Any]] | None = None,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
 ) -> dict[str, Any]:
     if _api_usable():
-        return _deepseek(messages, tools=tools)
+        return _deepseek(
+            messages,
+            tools=tools,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
 
     from .config import get_deepseek_api_key
     from .credits import SPEND_FUSE_ERROR, is_spend_fuse_tripped
