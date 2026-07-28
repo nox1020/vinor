@@ -55,13 +55,13 @@ def _env_bool(name: str, default: str = "1") -> bool:
 
 
 def lawyer_feature_enabled() -> bool:
-    """فلگ قابلیت — پیش‌فرض روشن."""
+    """فلگ env — پیش‌فرض روشن. برای قطع اضطراری بدون پنل."""
     return _env_bool("VINOR_LAWYER_ENABLED", "1")
 
 
 def default_lawyer_settings() -> dict[str, Any]:
     return {
-        "enabled": True,
+        "enabled": False,
         "display_name": "وکیل ملکی",
         "welcome": DEFAULT_WELCOME,
         "system_prompt": DEFAULT_SYSTEM_PROMPT,
@@ -115,8 +115,25 @@ def get_lawyer_settings() -> dict[str, Any]:
     return out
 
 
+def lawyer_system_enabled() -> bool:
+    """
+    Master کل سیستم وکیل ملکی سمت کاربر.
+    env (VINOR_LAWYER_ENABLED، پیش‌فرض روشن) AND settings.lawyer.enabled.
+
+    پیش‌فرض settings وقتی کلید غایب است: خاموش (False).
+    اگر در settings.json مقدار true ذخیره شده باشد، همان می‌ماند.
+    """
+    if not lawyer_feature_enabled():
+        return False
+    try:
+        return bool(get_lawyer_settings().get("enabled", False))
+    except Exception:
+        return False
+
+
 def lawyer_enabled() -> bool:
-    return bool(get_lawyer_settings().get("enabled"))
+    """Alias سازگار با کد قبلی — همان lawyer_system_enabled."""
+    return lawyer_system_enabled()
 
 
 def save_lawyer_settings(patch: dict[str, Any]) -> dict[str, Any]:

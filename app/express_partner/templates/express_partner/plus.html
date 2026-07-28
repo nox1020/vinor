@@ -299,7 +299,9 @@
     <ul class="vp-benefits" aria-label="مزایای پلاس">
       <li><i class="fas fa-bolt" aria-hidden="true"></i><span>اولویت در معرفی فایل و پاسخ هوشمند</span></li>
       <li><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>ابزارهای ویژهٔ بازاریابی و متن آگهی</span></li>
+      {% if lawyer_system_enabled|default(false) %}
       <li><i class="fas fa-scale-balanced" aria-hidden="true"></i><span>دسترسی کامل به وکیل ملکی وینور</span></li>
+      {% endif %}
       <li><i class="fas fa-building" aria-hidden="true"></i><span>امکانات سطح ویژه برای ثبت و مدیریت آگهی</span></li>
     </ul>
 

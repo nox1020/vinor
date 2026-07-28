@@ -2755,17 +2755,30 @@ def lawyer_admin():
         default_lawyer_settings,
         get_lawyer_settings,
         lawyer_feature_enabled,
+        lawyer_system_enabled,
         save_lawyer_settings,
     )
 
     if request.method == 'POST':
         action = (request.form.get('action') or 'save').strip()
+        feature_on = lawyer_feature_enabled()
         if action == 'reset_defaults':
             save_lawyer_settings(default_lawyer_settings())
             flash('تنظیمات وکیل ملکی به پیش‌فرض بازگشت.', 'success')
             return redirect(url_for('admin.lawyer'))
+        if action == 'toggle_system':
+            if not feature_on:
+                flash('فلگ محیطی VINOR_LAWYER_ENABLED خاموش است — از env روشن کنید.', 'error')
+                return redirect(url_for('admin.lawyer'))
+            current = get_lawyer_settings()
+            new_on = not bool(current.get('enabled'))
+            save_lawyer_settings({'enabled': new_on})
+            flash(
+                'سیستم وکیل ملکی فعال شد.' if new_on else 'سیستم وکیل ملکی غیرفعال شد.',
+                'success',
+            )
+            return redirect(url_for('admin.lawyer'))
 
-        feature_on = lawyer_feature_enabled()
         current = get_lawyer_settings()
         patch = {
             'enabled': (
@@ -2796,6 +2809,7 @@ def lawyer_admin():
         'admin/lawyer.html',
         lawyer=lawyer,
         lawyer_feature_flag=lawyer_feature_enabled(),
+        lawyer_system_on=lawyer_system_enabled(),
         pending_count=p,
         approved_count=a,
         rejected_count=r,
@@ -2810,18 +2824,37 @@ def zarinpal_plus_admin():
     from app.express_partner.zarinpal_config import (
         default_zarinpal_settings,
         get_zarinpal_settings,
+        plus_system_enabled,
         save_zarinpal_settings,
         zarinpal_plus_feature_enabled,
     )
 
     if request.method == 'POST':
         action = (request.form.get('action') or 'save').strip()
+        feature_on = zarinpal_plus_feature_enabled()
         if action == 'reset_defaults':
             save_zarinpal_settings(default_zarinpal_settings())
             flash('تنظیمات زرین‌پال به پیش‌فرض بازگشت.', 'success')
             return redirect(url_for('admin.zarinpal_plus'))
+        if action == 'toggle_system':
+            if not feature_on:
+                flash('فلگ محیطی VINOR_ZARINPAL_PLUS_ENABLED خاموش است — از env روشن کنید.', 'error')
+                return redirect(url_for('admin.zarinpal_plus'))
+            current = get_zarinpal_settings()
+            new_on = not bool(current.get('enabled'))
+            save_zarinpal_settings({'enabled': new_on})
+            flash(
+                'سیستم پرداخت و Vinor Plus فعال شد.' if new_on else 'سیستم پرداخت و Vinor Plus غیرفعال شد.',
+                'success',
+            )
+            return redirect(url_for('admin.zarinpal_plus'))
+        current = get_zarinpal_settings()
         patch = {
-            'enabled': request.form.get('zp_enabled') == '1',
+            'enabled': (
+                current.get('enabled')
+                if not feature_on
+                else (request.form.get('zp_enabled') == '1')
+            ),
             'merchant_id': (request.form.get('zp_merchant_id') or '').strip(),
             'sandbox': request.form.get('zp_sandbox') == '1',
             'amount_toman': (request.form.get('zp_amount_toman') or '').strip(),
@@ -2858,6 +2891,7 @@ def zarinpal_plus_admin():
         'admin/zarinpal_plus.html',
         zarinpal=zp,
         zarinpal_feature_flag=zarinpal_plus_feature_enabled(),
+        plus_system_on=plus_system_enabled(),
         auto_callback_url=auto_callback,
         transactions=txns,
         txn_filter=flt,

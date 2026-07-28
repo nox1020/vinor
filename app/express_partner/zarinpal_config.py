@@ -24,8 +24,24 @@ def _env_bool(name: str, default: str = "1") -> bool:
 
 
 def zarinpal_plus_feature_enabled() -> bool:
-    """فلگ master — پیش‌فرض روشن."""
+    """فلگ env — پیش‌فرض روشن. برای قطع اضطراری بدون پنل."""
     return _env_bool("VINOR_ZARINPAL_PLUS_ENABLED", "1")
+
+
+def plus_system_enabled() -> bool:
+    """
+    Master کل سیستم پرداخت + Vinor Plus سمت کاربر/همکار.
+    env (VINOR_ZARINPAL_PLUS_ENABLED، پیش‌فرض روشن) AND settings.zarinpal.enabled.
+
+    پیش‌فرض settings وقتی کلید غایب است: خاموش (False).
+    اگر در settings.json مقدار true ذخیره شده باشد، همان می‌ماند.
+    """
+    if not zarinpal_plus_feature_enabled():
+        return False
+    try:
+        return bool(get_zarinpal_settings().get("enabled", False))
+    except Exception:
+        return False
 
 
 def zarinpal_payment_primary() -> bool:
@@ -33,14 +49,14 @@ def zarinpal_payment_primary() -> bool:
     اگر روشن باشد، CTA صفحهٔ پلاس مستقیم به درگاه می‌رود.
     اگر خاموش باشد، همان مسیر قدیمی request_plus (SMS به ادمین) استفاده می‌شود.
     """
-    if not zarinpal_plus_feature_enabled():
+    if not plus_system_enabled():
         return False
     return _env_bool("VINOR_ZARINPAL_PLUS_PAYMENT_PRIMARY", "1")
 
 
 def default_zarinpal_settings() -> dict[str, Any]:
     return {
-        "enabled": True,
+        "enabled": False,
         "merchant_id": (os.environ.get("ZARINPAL_MERCHANT_ID") or "").strip(),
         "sandbox": True,
         "amount_toman": 990_000,
@@ -135,6 +151,8 @@ def get_zarinpal_settings() -> dict[str, Any]:
         cfg["sandbox"] = False
     elif env_sandbox in ("1", "true", "yes", "on"):
         cfg["sandbox"] = True
+    if not zarinpal_plus_feature_enabled():
+        cfg["enabled"] = False
     return cfg
 
 
@@ -227,9 +245,7 @@ def plus_subscription_days() -> int:
 
 def payment_flow_active() -> bool:
     """درگاه برای CTA فعال است؟"""
-    if not zarinpal_plus_feature_enabled():
+    if not plus_system_enabled():
         return False
     cfg = get_zarinpal_settings()
-    if not cfg.get("enabled"):
-        return False
     return bool(effective_merchant_id(cfg))

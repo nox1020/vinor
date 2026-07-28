@@ -1601,6 +1601,22 @@ def inject_role_flags():
     else:
         vinor_express_auth_segment = "user"
 
+    plus_system_on = False
+    try:
+        from .zarinpal_config import plus_system_enabled as _plus_system_enabled
+
+        plus_system_on = bool(_plus_system_enabled())
+    except Exception:
+        plus_system_on = False
+
+    lawyer_system_on = False
+    try:
+        from app.lawyer.config import lawyer_system_enabled as _lawyer_system_enabled
+
+        lawyer_system_on = bool(_lawyer_system_enabled())
+    except Exception:
+        lawyer_system_on = False
+
     return {
         "VINOR_IS_EXPRESS_PARTNER": is_express_partner,
         "vinor_express_auth_segment": vinor_express_auth_segment,
@@ -1614,6 +1630,8 @@ def inject_role_flags():
         "show_app_update_nav": show_app_update_nav,
         "auth_flash_categories": AUTH_FLASH_CATEGORY_FILTER,
         "vinor_robots_meta": vinor_robots_meta,
+        "plus_system_enabled": plus_system_on,
+        "lawyer_system_enabled": lawyer_system_on,
     }
 
 
@@ -3311,6 +3329,13 @@ def home_page():
 
     public_home_lands: List[Dict[str, Any]] = []
     # کاتالوگ فایل در بدو ورود خانه تزریق نمی‌شود — فقط از چت با search_lands
+    divar_ads_ctx: Dict[str, Any] = {}
+    try:
+        from .divar_pro_ads import home_divar_ads_context
+
+        divar_ads_ctx = home_divar_ads_context() or {}
+    except Exception:
+        divar_ads_ctx = {}
     # ai_quick_prompts بعد از **ai_ctx تا با کلید هم‌نام در context بازنویسی نشود
     resp = make_response(render_template(
         'express_partner/home.html',
@@ -3340,6 +3365,7 @@ def home_page():
         **ai_ctx,
         ai_quick_prompts=ai_quick_prompts,
         public_home_lands=public_home_lands,
+        **divar_ads_ctx,
     ))
     if not me_phone:
         # مهمان هم چت محدود دارد — کش عمومی ممنوع
@@ -7437,6 +7463,11 @@ def settings_page():
 def plus_page():
     """صفحهٔ خرید / ارتقا به وینور پلاس — پرداخت زرین‌پال (اولویت) یا درخواست SMS."""
     from .partner_session_sync import canonical_partner_phone, sync_partner_session_after_plus
+    from .zarinpal_config import plus_system_enabled
+
+    if not plus_system_enabled():
+        flash('سیستم Vinor Plus در حال حاضر در دسترس نیست.', 'warning')
+        return redirect(url_for('express_partner.home'))
 
     me_phone = canonical_partner_phone(session.get('user_phone') or '')
     if request.args.get('plus_activated') and me_phone:
@@ -7567,7 +7598,12 @@ def plus_page():
 @require_partner_access(allow_pending=True, allow_guest=True)
 def plus_zarinpal_callback():
     """بازگشت از درگاه — Status=OK|NOK و Authority."""
+    from .zarinpal_config import plus_system_enabled
     from .plus_checkout import handle_callback_http
+
+    if not plus_system_enabled():
+        flash('سیستم پرداخت Vinor Plus غیرفعال است.', 'error')
+        return redirect(url_for('express_partner.home'))
 
     authority = (request.args.get('Authority') or request.args.get('authority') or '').strip()
     status_param = (request.args.get('Status') or request.args.get('status') or '').strip()

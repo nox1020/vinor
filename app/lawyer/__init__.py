@@ -5,6 +5,7 @@ from app.lawyer.config import (
     get_lawyer_settings,
     lawyer_enabled,
     lawyer_feature_enabled,
+    lawyer_system_enabled,
     lawyer_welcome_text,
     save_lawyer_settings,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "is_lawyer_thread",
     "lawyer_enabled",
     "lawyer_feature_enabled",
+    "lawyer_system_enabled",
     "lawyer_thread_for_ui",
     "lawyer_welcome_text",
     "save_lawyer_settings",

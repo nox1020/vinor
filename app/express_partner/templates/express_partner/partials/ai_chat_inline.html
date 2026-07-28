@@ -461,17 +461,25 @@
   #homeDashboardPage.ai-home-is-empty .vn-home-shell {
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
   }
   #homeDashboardPage.ai-home-is-empty .vn-home-scroll {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     min-height: 0;
     overflow: visible;
     padding-bottom: 0 !important;
     scroll-padding-top: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
   #homeDashboardPage.ai-home-is-empty #aiHomeInline {
     display: block;
+    /* هدر شناور را نوار دیوار پوشش می‌دهد؛ فاصلهٔ اضافه کم */
+    padding: 0.35rem 0 1.15rem;
+  }
+  /* اگر نوار دیوار نباشد، همان فاصلهٔ قبلی زیر هدر */
+  #homeDashboardPage.ai-home-is-empty:not(:has(#homeDivarAdsCarousel)) #aiHomeInline {
     padding: calc(0.45rem + 2.5rem + 0.35rem) 0 1.15rem;
   }
   #homeDashboardPage.ai-home-is-empty #aiHomeInline #aiPageMain,

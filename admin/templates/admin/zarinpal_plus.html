@@ -11,10 +11,48 @@
       درگاه برای خرید <strong>Vinor Plus</strong> — پس از verify موفق، <code class="text-[11px]">partner_tier=special</code> (همان is_special) روی همکار اعمال می‌شود.
       پیش‌فرض: <span class="ltr font-mono">sandbox</span> روشن. merchant را از پنل sandbox زرین‌پال بگیرید.
       Callback خالی = <span class="ltr text-[11px] break-all">{{ auto_callback_url }}</span>
+      پیش‌فرض سیستم خاموش است؛ با دکمهٔ زیر فعال کنید. نصب جدید / کلید غایب = غیرفعال؛ مقدار ذخیره‌شده در settings حفظ می‌شود.
+      با خاموش کردن سیستم، CTA پلاس، صفحهٔ خرید و شروع پرداخت در سمت همکار کاملاً مخفی/مسدود می‌شود.
     </p>
   </div>
 
+  <div class="rounded-2xl border {% if plus_system_on %}border-emerald-200 dark:border-emerald-800{% else %}border-red-200 dark:border-red-800{% endif %} bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+    <div class="px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <i class="fa-solid fa-power-off {% if plus_system_on %}text-emerald-500{% else %}text-red-500{% endif %}"></i>
+          سیستم پرداخت و Vinor Plus
+        </h2>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {% if plus_system_on %}
+            فعال — CTA، صفحهٔ پلاس و درگاه در اپ همکار در دسترس است.
+          {% else %}
+            غیرفعال — کل مسیر خرید/پرداخت پلاس از سمت کاربر مخفی و مسدود است.
+          {% endif %}
+        </p>
+        {% if not zarinpal_feature_flag %}
+        <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">فلگ محیطی خاموش است — تا وقتی <span class="ltr font-mono">VINOR_ZARINPAL_PLUS_ENABLED</span> روشن نشود، سیستم فعال نمی‌شود.</p>
+        {% endif %}
+      </div>
+      <form method="post" action="{{ url_for('admin.zarinpal_plus') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="toggle_system">
+        <button type="submit"
+                class="px-4 py-2 rounded-lg text-sm font-medium {% if plus_system_on %}bg-red-600 hover:bg-red-700 text-white{% else %}bg-emerald-600 hover:bg-emerald-700 text-white{% endif %}"
+                {% if not zarinpal_feature_flag %}disabled{% endif %}>
+          {% if plus_system_on %}غیرفعال کردن{% else %}فعال کردن{% endif %}
+        </button>
+      </form>
+    </div>
+  </div>
+
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500">وضعیت در اپ</p>
+      <p class="mt-0.5 font-semibold {% if plus_system_on %}text-emerald-600{% else %}text-red-600{% endif %}">
+        {% if plus_system_on %}فعال{% else %}غیرفعال{% endif %}
+      </p>
+    </div>
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
       <p class="text-gray-500">فلگ env</p>
       <p class="mt-0.5 font-semibold {% if zarinpal_feature_flag %}text-emerald-600{% else %}text-amber-600{% endif %}">
@@ -26,18 +64,15 @@
       <p class="mt-0.5 font-semibold">{{ 'Sandbox' if zarinpal.sandbox else 'Production' }}</p>
     </div>
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
-      <p class="text-gray-500">تراکنش موفق</p>
-      <p class="mt-0.5 font-semibold text-emerald-600">{{ paid_count }}</p>
-    </div>
-    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
-      <p class="text-gray-500">در انتظار</p>
-      <p class="mt-0.5 font-semibold text-amber-600">{{ pending_count }}</p>
+      <p class="text-gray-500">تراکنش موفق / در انتظار</p>
+      <p class="mt-0.5 font-semibold"><span class="text-emerald-600">{{ paid_count }}</span> / <span class="text-amber-600">{{ pending_count }}</span></p>
     </div>
   </div>
 
   <form method="post" action="{{ url_for('admin.zarinpal_plus') }}" class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="save">
+    <input type="hidden" name="zp_enabled" value="{{ '1' if zarinpal.enabled else '0' }}">
     <div class="border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4">
       <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
         <i class="fa-solid fa-credit-card text-sky-500"></i>
@@ -45,10 +80,6 @@
       </h2>
     </div>
     <div class="px-4 sm:px-6 py-5 space-y-4 text-sm">
-      <label class="inline-flex items-center gap-2 cursor-pointer">
-        <input type="checkbox" name="zp_enabled" value="1" {% if zarinpal.enabled %}checked{% endif %}>
-        <span>درگاه فعال (settings.json)</span>
-      </label>
       <label class="inline-flex items-center gap-2 cursor-pointer">
         <input type="checkbox" name="zp_sandbox" value="1" {% if zarinpal.sandbox %}checked{% endif %}>
         <span>Sandbox / تست</span>

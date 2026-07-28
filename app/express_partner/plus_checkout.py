@@ -27,6 +27,7 @@ from .zarinpal_config import (
     get_zarinpal_settings,
     payment_flow_active,
     plus_amount_toman,
+    plus_system_enabled,
 )
 
 _log = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ def begin_plus_payment(
     تراکنش pending + درخواست authority.
     برمی‌گرداند: (ok, redirect_url, error_message)
     """
-    if not payment_flow_active():
+    if not plus_system_enabled() or not payment_flow_active():
         return False, None, "payment_not_configured"
 
     from .plus_transactions import create_pending
@@ -213,6 +214,9 @@ def complete_plus_payment_from_callback(
 
 def handle_callback_http(authority: str, status_param: str):
     """Redirect + flash برای route callback."""
+    if not plus_system_enabled():
+        flash("سیستم پرداخت Vinor Plus غیرفعال است.", "error")
+        return redirect(url_for("express_partner.home"))
     me = canonical_partner_phone(session.get("user_phone") or "")
     result = complete_plus_payment_from_callback(
         authority=authority,

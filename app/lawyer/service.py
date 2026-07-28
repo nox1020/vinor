@@ -27,6 +27,7 @@ def ensure_lawyer_thread(
     """ترد ثابت وکیل را در chat_store بساز؛ در صورت خالی‌بودن خوش‌آمد بگذار.
 
     activate=True فقط هنگام باز کردن/ارسال (نه هنگام لیست‌کردن تردها).
+    وقتی سیستم وکیل خاموش است، ترد ساخته نمی‌شود.
     """
     from app.ai.chat_store import (
         _find_thread,
@@ -35,6 +36,9 @@ def ensure_lawyer_thread(
         load_user_record,
         set_active_thread,
     )
+
+    if not lawyer_enabled():
+        return LAWYER_THREAD_ID
 
     key = str(user_key or "").strip()
     if not key:

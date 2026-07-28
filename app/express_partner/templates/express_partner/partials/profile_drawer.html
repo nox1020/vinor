@@ -719,8 +719,10 @@
   <div class="ep-profile-drawer__top">
     <div class="ep-profile-drawer__top-row">
       <span class="ep-profile-drawer__brand">وینور</span>
+      {% if plus_system_enabled|default(false) %}
       {% set plus_cta_mode = 'header' %}
       {% include 'express_partner/partials/vinor_plus_drawer_cta_v2.html' %}
+      {% endif %}
     </div>
   </div>
 
@@ -875,8 +877,10 @@
     {% endif %}
   </div>
 
+  {% if plus_system_enabled|default(false) %}
   {% set plus_cta_mode = 'list' %}
   {% include 'express_partner/partials/vinor_plus_drawer_cta_v2.html' %}
+  {% endif %}
 
   {% if me_phone %}
   <div class="ep-profile-drawer__foot">

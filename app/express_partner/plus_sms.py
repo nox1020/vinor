@@ -92,6 +92,13 @@ def _plus_sms_cfg() -> Dict[str, Any]:
 def plus_partner_sms_enabled() -> bool:
     if not plus_partner_sms_feature_enabled():
         return False
+    try:
+        from .zarinpal_config import plus_system_enabled
+
+        if not plus_system_enabled():
+            return False
+    except Exception:
+        pass
     return bool(_plus_sms_cfg().get("enabled"))
 
 

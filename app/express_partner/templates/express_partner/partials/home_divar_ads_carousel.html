@@ -1,0 +1,227 @@
+{# نوار افقی آگهی‌های پروفایل Divar Pro — فقط بدو ورود خانه #}
+{% set _divar_ads = divar_pro_ads|default([]) %}
+{% if divar_pro_ads_enabled|default(false) and _divar_ads %}
+<style id="vinor-home-divar-ads">
+  #homeDivarAdsCarousel.vn-home-divar {
+    display: none;
+    flex-shrink: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0 0 0.35rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, #050505 0%, #000 100%);
+  }
+  #homeDashboardPage.ai-home-is-empty #homeDivarAdsCarousel.vn-home-divar {
+    display: block;
+    /* زیر هدر شناور */
+    margin-top: calc(0.45rem + 2.5rem + 0.2rem);
+    padding-top: 0.35rem;
+  }
+  #homeDashboardPage:not(.ai-home-is-empty) #homeDivarAdsCarousel.vn-home-divar {
+    display: none !important;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0 0.85rem 0.45rem;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #f4f4f5;
+    text-align: right;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__meta {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: #71717a;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__all {
+    flex-shrink: 0;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #a1a1aa;
+    text-decoration: none;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__all:hover,
+  #homeDivarAdsCarousel .vn-home-divar__all:focus-visible {
+    color: #e4e4e7;
+    outline: none;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__track {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.55rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 0 0.85rem 0.55rem;
+    max-width: 100%;
+    pointer-events: auto;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__track::-webkit-scrollbar {
+    display: none;
+    height: 0;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__card {
+    flex: 0 0 auto;
+    width: min(9.75rem, 42vw);
+    max-width: 11rem;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+    border-radius: 0.85rem;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #0f1419;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__card:hover,
+  #homeDivarAdsCarousel .vn-home-divar__card:focus-visible {
+    border-color: rgba(255, 255, 255, 0.22);
+    outline: none;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__card:active {
+    transform: scale(0.98);
+  }
+  #homeDivarAdsCarousel .vn-home-divar__media {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #1a2332;
+    overflow: hidden;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__media-ph {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    color: #52525b;
+    font-size: 1.25rem;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__shots {
+    position: absolute;
+    bottom: 0.35rem;
+    inset-inline-end: 0.35rem;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.12rem 0.35rem;
+    border-radius: 0.35rem;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 0.58rem;
+    font-weight: 600;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+    padding: 0.45rem 0.5rem 0.55rem;
+    min-height: 4.1rem;
+    text-align: right;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__name {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: #f4f4f5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__price {
+    margin: 0;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #fafafa;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__loc {
+    margin: 0;
+    font-size: 0.6rem;
+    font-weight: 500;
+    color: #71717a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+</style>
+<section id="homeDivarAdsCarousel"
+         class="vn-home-divar"
+         aria-label="آگهی‌های دیوار"
+         data-vn-home-divar
+         data-has-ads="1">
+  <div class="vn-home-divar__head">
+    <h2 class="vn-home-divar__title">
+      آگهی‌های دیوار
+      <span class="vn-home-divar__meta"> · {{ _divar_ads|length|fa_digits }} آگهی — بکشید</span>
+    </h2>
+    {% if divar_pro_profile_url|default('') %}
+    <a class="vn-home-divar__all"
+       href="{{ divar_pro_profile_url }}"
+       target="_blank"
+       rel="noopener noreferrer">همه در دیوار</a>
+    {% endif %}
+  </div>
+  <div class="vn-home-divar__track no-scrollbar"
+       id="homeDivarAdsTrack"
+       tabindex="0"
+       role="list"
+       aria-label="اسکرول افقی آگهی‌های دیوار">
+    {% for ad in _divar_ads %}
+    <a class="vn-home-divar__card"
+       role="listitem"
+       href="{{ ad.url }}"
+       target="_blank"
+       rel="noopener noreferrer"
+       title="{{ ad.title|e }}">
+      <div class="vn-home-divar__media">
+        {% if ad.image_url %}
+        <img src="{{ ad.image_url }}"
+             alt=""
+             {% if loop.index <= 3 %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %}>
+        {% else %}
+        <div class="vn-home-divar__media-ph" aria-hidden="true"><i class="fas fa-image"></i></div>
+        {% endif %}
+        {% if ad.image_count and ad.image_count > 1 %}
+        <span class="vn-home-divar__shots" aria-hidden="true">
+          <i class="fas fa-camera"></i>{{ ad.image_count|fa_digits }}
+        </span>
+        {% endif %}
+      </div>
+      <div class="vn-home-divar__body">
+        <h3 class="vn-home-divar__name">{{ ad.title }}</h3>
+        {% if ad.price %}
+        <p class="vn-home-divar__price">{{ ad.price }}</p>
+        {% endif %}
+        {% if ad.location %}
+        <p class="vn-home-divar__loc">{{ ad.location }}</p>
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}

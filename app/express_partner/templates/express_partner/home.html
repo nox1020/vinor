@@ -15,7 +15,7 @@
   {% set menu_href = url_for('express_partner.home') %}
   {% set profile_drawer = true %}
   {% set show_ai_plus = false %}
-  {% set show_get_plus = true %}
+  {% set show_get_plus = plus_system_enabled|default(false) %}
   {% include 'express_partner/partials/ep_header_float_actions.html' %}
 
   <div class="vn-home-shell mx-auto flex w-full max-w-lg flex-col">
@@ -33,7 +33,8 @@
       {% endif %}
     </div>
     {% else %}
-    {# حالت AI: فقط چت بازاریاب — بدون کاتالوگ فایل در بدو ورود #}
+    {# حالت AI: نوار آگهی دیوار بالای بدو ورود چت #}
+    {% include 'express_partner/partials/home_divar_ads_carousel.html' %}
     {% endif %}
 
     <div id="vnHomeScroll" class="vn-home-scroll">

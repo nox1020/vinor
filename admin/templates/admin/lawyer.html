@@ -7,19 +7,51 @@
 
   <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 text-sm text-amber-900 dark:text-amber-100">
     <p class="font-medium mb-1">راهنما</p>
-    <p class="text-amber-800 dark:text-amber-200/90 leading-6">
+    <p class="text-amber-800 dark:text-amber-200/90 leading-6 text-xs">
       شخصیت جدا از ایجنت فروش: در منوی ساید کاربر، بالای گفتگوها دکمهٔ «وکیل ملکی» دیده می‌شود.
       برای مهمان دکمه غیرفعال است و با ورود فعال می‌شود.
       پاسخ‌ها بر اساس پرامپت و دانش زیر ساخته می‌شوند و ابزار فروش / پیشنهاد فایل ندارند.
-      برای قطع کامل از env می‌توانید <span class="ltr font-mono text-xs">VINOR_LAWYER_ENABLED=0</span> بگذارید.
+      پیش‌فرض سیستم خاموش است؛ با دکمهٔ زیر فعال کنید.
+      برای قطع اضطراری از env می‌توانید <span class="ltr font-mono text-xs">VINOR_LAWYER_ENABLED=0</span> بگذارید.
+      با خاموش کردن سیستم، منوی وکیل، پرسونا و مسیرهای گفتگو در سمت کاربر کاملاً مخفی/مسدود می‌شود.
     </p>
+  </div>
+
+  <div class="rounded-2xl border {% if lawyer_system_on %}border-emerald-200 dark:border-emerald-800{% else %}border-red-200 dark:border-red-800{% endif %} bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+    <div class="px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <i class="fa-solid fa-power-off {% if lawyer_system_on %}text-emerald-500{% else %}text-red-500{% endif %}"></i>
+          سیستم وکیل ملکی
+        </h2>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {% if lawyer_system_on %}
+            فعال — منوی وکیل، چت و مسیرهای مرتبط در اپ کاربر در دسترس است.
+          {% else %}
+            غیرفعال — کل مسیر وکیل از سمت کاربر مخفی و مسدود است.
+          {% endif %}
+        </p>
+        {% if not lawyer_feature_flag %}
+        <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">فلگ محیطی خاموش است — تا وقتی <span class="ltr font-mono">VINOR_LAWYER_ENABLED</span> روشن نشود، سیستم فعال نمی‌شود.</p>
+        {% endif %}
+      </div>
+      <form method="post" action="{{ url_for('admin.lawyer') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="toggle_system">
+        <button type="submit"
+                class="px-4 py-2 rounded-lg text-sm font-medium {% if lawyer_system_on %}bg-red-600 hover:bg-red-700 text-white{% else %}bg-emerald-600 hover:bg-emerald-700 text-white{% endif %}"
+                {% if not lawyer_feature_flag %}disabled{% endif %}>
+          {% if lawyer_system_on %}غیرفعال کردن{% else %}فعال کردن{% endif %}
+        </button>
+      </form>
+    </div>
   </div>
 
   <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
       <p class="text-gray-500 dark:text-gray-400">وضعیت در اپ</p>
-      <p class="mt-0.5 font-semibold {% if lawyer.enabled %}text-emerald-600 dark:text-emerald-400{% else %}text-red-600 dark:text-red-400{% endif %}">
-        {% if lawyer.enabled %}فعال{% else %}غیرفعال{% endif %}
+      <p class="mt-0.5 font-semibold {% if lawyer_system_on %}text-emerald-600 dark:text-emerald-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+        {% if lawyer_system_on %}فعال{% else %}غیرفعال{% endif %}
       </p>
     </div>
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
@@ -36,24 +68,19 @@
 
   <form method="post" action="{{ url_for('admin.lawyer') }}" class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="save">
+    <input type="hidden" name="lawyer_enabled" value="{{ '1' if lawyer.enabled else '0' }}">
 
     <div class="border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4">
       <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
         <i class="fa-solid fa-scale-balanced text-amber-500"></i>
-        کنترل وکیل ملکی
+        شخصیت و دانش وکیل
       </h2>
-      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">روشن/خاموش، خوش‌آمد، پرامپت سیستم و دانش قوانین ایران</p>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">خوش‌آمد، پرامپت سیستم و دانش قوانین ایران</p>
     </div>
 
     <div class="px-4 sm:px-6 py-5 space-y-5">
       <div class="flex flex-wrap gap-6">
-        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-          <input type="checkbox" name="lawyer_enabled" value="1"
-                 class="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                 {% if lawyer.enabled %}checked{% endif %}
-                 {% if not lawyer_feature_flag %}disabled{% endif %}>
-          نمایش وکیل در منوی ساید کاربر
-        </label>
         <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
           <input type="checkbox" name="lawyer_show_disclaimer" value="1"
                  class="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
@@ -61,9 +88,6 @@
           یادآوری «راهنمایی عمومی / نه وکالت رسمی» در هر پاسخ
         </label>
       </div>
-      {% if not lawyer_feature_flag %}
-      <p class="text-xs text-amber-700 dark:text-amber-300">فلگ محیطی خاموش است — تا وقتی env روشن نشود، دکمه در اپ دیده نمی‌شود.</p>
-      {% endif %}
 
       <div class="space-y-2">
         <label for="lawyer_display_name" class="block text-sm font-semibold text-gray-700 dark:text-gray-200">نام نمایشی</label>
@@ -104,20 +128,24 @@
     </div>
 
     <div class="border-t border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3">
-      <button type="submit" name="action" value="save"
+      <button type="submit"
               class="inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-2">
         <i class="fa-solid fa-floppy-disk"></i>
         ذخیره
       </button>
-      <button type="submit" name="action" value="reset_defaults"
-              class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600
-                     text-gray-700 dark:text-gray-200 text-sm font-medium px-4 py-2
-                     hover:bg-gray-50 dark:hover:bg-gray-800"
-              onclick="return confirm('بازگشت به پیش‌فرض؟ متن‌های فعلی جایگزین می‌شوند.');">
-        <i class="fa-solid fa-rotate-left"></i>
-        بازگشت به پیش‌فرض
-      </button>
     </div>
+  </form>
+  <form method="post" action="{{ url_for('admin.lawyer') }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="reset_defaults">
+    <button type="submit"
+            class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600
+                   text-gray-700 dark:text-gray-200 text-sm font-medium px-4 py-2
+                   hover:bg-gray-50 dark:hover:bg-gray-800"
+            onclick="return confirm('بازگشت به پیش‌فرض؟ متن‌ها و وضعیت فعال/غیرفعال جایگزین می‌شوند (پیش‌فرض: غیرفعال).');">
+      <i class="fa-solid fa-rotate-left"></i>
+      بازگشت به پیش‌فرض
+    </button>
   </form>
 </div>
 {% endblock %}

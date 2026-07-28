@@ -2,6 +2,7 @@
 """Unit tests — helpers زرین‌پال Vinor Plus."""
 from __future__ import annotations
 
+import os
 import unittest
 from datetime import datetime
 from unittest import mock
@@ -229,6 +230,78 @@ class PlusIsolationTests(unittest.TestCase):
                 "پروفایل کاربر دیگر نباید روی g بنشیند",
             )
             self.assertFalse(session.get("VINOR_PLUS_ACTIVE"))
+
+
+class PlusSystemMasterToggleTests(unittest.TestCase):
+    def test_plus_system_enabled_when_settings_on(self) -> None:
+        from app.express_partner.zarinpal_config import plus_system_enabled
+
+        with mock.patch.dict(os.environ, {}, clear=False), mock.patch(
+            "app.express_partner.zarinpal_config.get_zarinpal_settings",
+            return_value={"enabled": True},
+        ), mock.patch(
+            "app.express_partner.zarinpal_config.zarinpal_plus_feature_enabled",
+            return_value=True,
+        ):
+            self.assertTrue(plus_system_enabled())
+
+    def test_plus_system_defaults_off_when_key_missing(self) -> None:
+        from app.express_partner.zarinpal_config import (
+            default_zarinpal_settings,
+            plus_system_enabled,
+        )
+
+        self.assertFalse(default_zarinpal_settings().get("enabled"))
+        with mock.patch(
+            "app.express_partner.zarinpal_config.zarinpal_plus_feature_enabled",
+            return_value=True,
+        ), mock.patch(
+            "app.express_partner.zarinpal_config.get_zarinpal_settings",
+            return_value=default_zarinpal_settings(),
+        ):
+            self.assertFalse(plus_system_enabled())
+
+    def test_plus_system_off_when_settings_disabled(self) -> None:
+        from app.express_partner.zarinpal_config import plus_system_enabled
+
+        with mock.patch(
+            "app.express_partner.zarinpal_config.zarinpal_plus_feature_enabled",
+            return_value=True,
+        ), mock.patch(
+            "app.express_partner.zarinpal_config.get_zarinpal_settings",
+            return_value={"enabled": False},
+        ):
+            self.assertFalse(plus_system_enabled())
+
+    def test_plus_system_off_when_env_disabled(self) -> None:
+        from app.express_partner.zarinpal_config import plus_system_enabled
+
+        with mock.patch(
+            "app.express_partner.zarinpal_config.zarinpal_plus_feature_enabled",
+            return_value=False,
+        ):
+            self.assertFalse(plus_system_enabled())
+
+    def test_begin_payment_rejects_when_system_off(self) -> None:
+        from app.express_partner.plus_checkout import begin_plus_payment
+
+        with mock.patch(
+            "app.express_partner.plus_checkout.plus_system_enabled",
+            return_value=False,
+        ):
+            ok, url, err = begin_plus_payment(phone="09121111111", partner_name="A")
+        self.assertFalse(ok)
+        self.assertIsNone(url)
+        self.assertEqual(err, "payment_not_configured")
+
+    def test_payment_flow_inactive_when_system_off(self) -> None:
+        from app.express_partner.zarinpal_config import payment_flow_active
+
+        with mock.patch(
+            "app.express_partner.zarinpal_config.plus_system_enabled",
+            return_value=False,
+        ):
+            self.assertFalse(payment_flow_active())
 
 
 if __name__ == "__main__":
