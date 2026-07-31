@@ -2269,8 +2269,21 @@ def _thanks_page_kwargs(me_phone: str, ctx: dict | None = None, *, pending_revie
 
 @express_partner_bp.route('/download-app', methods=['GET'], endpoint='download_app')
 def download_app():
-    """سازگاری با لینک قدیمی — هدایت به صفحه تشکر."""
-    return redirect(url_for('express_partner.thanks'))
+    """سازگاری با لینک قدیمی — هدایت به دانلود APK (نه صفحه تشکر)."""
+    from ..utils.short_urls import (
+        apk_file_url_from_settings,
+        canonical_public_apk_download_url,
+        public_apk_download_url,
+    )
+
+    _settings = _express_settings_cached()
+    if not apk_file_url_from_settings(_settings):
+        return redirect(url_for('express_partner.home'))
+    # نسبی برای مرورگر همین origin؛ مطلق برای کلاینت‌های خارجی
+    target = public_apk_download_url(_settings, external=False) or canonical_public_apk_download_url(
+        _settings
+    )
+    return redirect(target or url_for('main.short_apk_download'))
 
 
 def create_partner_application_core(
@@ -7227,8 +7240,8 @@ def profile_data():
     _settings = _express_settings_cached()
     _raw_apk_url = (_settings.get('android_apk_url') or '').strip()
     android_apk_version = (_settings.get('android_apk_version') or '').strip()
-    from ..utils.short_urls import public_apk_download_url
-    android_apk_url = public_apk_download_url(_settings, external=False) if _raw_apk_url else ''
+    from ..utils.short_urls import canonical_public_apk_download_url
+    android_apk_url = canonical_public_apk_download_url(_settings) if _raw_apk_url else ''
     from ..utils.apk_version import should_show_apk_update
     show_app_update = should_show_apk_update(
         android_apk_version,

@@ -1668,7 +1668,34 @@
 
       var a = e.target.closest && e.target.closest('a[href]');
       if (!a) return;
-      if (a.getAttribute('download')) return;
+      if (a.getAttribute('download') || a.getAttribute('data-vinor-apk-download') === '1') {
+        var apkHref = (a.getAttribute('href') || '').trim();
+        if (apkHref && apkHref !== '#' && (
+          a.getAttribute('data-vinor-apk-download') === '1' ||
+          /\.apk(\?|#|$)/i.test(apkHref) ||
+          /\/d(\/|$)/i.test(apkHref) ||
+          /\/uploads\/apk\//i.test(apkHref)
+        )) {
+          e.preventDefault();
+          e.stopPropagation();
+          try {
+            var abs = new URL(apkHref, window.location.origin).href;
+            var frame = document.createElement('iframe');
+            frame.setAttribute('hidden', 'hidden');
+            frame.setAttribute('aria-hidden', 'true');
+            frame.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none';
+            frame.src = abs;
+            document.body.appendChild(frame);
+            window.setTimeout(function () {
+              try { frame.remove(); } catch (_) {}
+            }, 90000);
+          } catch (_) {
+            try { window.location.assign(apkHref); } catch (__) {}
+          }
+          return;
+        }
+        if (a.getAttribute('download')) return;
+      }
       if (a.getAttribute('target') === '_blank') return;
       var href = a.getAttribute('href');
       if (isGuestPlusCtaLink(a, href)) {

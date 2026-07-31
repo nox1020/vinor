@@ -24,7 +24,7 @@ DEFAULT_APK_UPDATE_SMS = (
     "برای تجربه بهتر، نسخه جدید رو از لینک زیر دریافت کنید 👇\n"
     "🌐 {link}"
 )
-DEFAULT_APK_UPDATE_LINK = "vinor.ir/d"
+DEFAULT_APK_UPDATE_LINK = "https://vinor.ir/d"
 DEFAULT_APK_UPDATE_RECIPIENT_GROUP = RECIPIENT_GROUP_ALL_USERS
 
 
@@ -43,6 +43,32 @@ def normalize_apk_update_sms_group(value: Optional[str]) -> str:
     return DEFAULT_APK_UPDATE_RECIPIENT_GROUP
 
 
+def normalize_apk_update_link(link: Optional[str] = None) -> str:
+    """لینک پیامک را به https مطلق روی vinor.ir نرمال می‌کند."""
+    from urllib.parse import urlparse
+
+    href = (link or "").strip() or DEFAULT_APK_UPDATE_LINK
+    if href.startswith("//"):
+        href = "https:" + href
+    elif "://" not in href:
+        href = "https://" + href.lstrip("/")
+    try:
+        host = (urlparse(href).hostname or "").lower().removeprefix("www.")
+    except Exception:
+        host = ""
+    if host == "vinor.ir" or host.endswith(".vinor.ir"):
+        return href
+    try:
+        from ..utils.short_urls import canonical_public_apk_download_url
+
+        canon = canonical_public_apk_download_url()
+        if canon:
+            return canon
+    except Exception:
+        pass
+    return DEFAULT_APK_UPDATE_LINK
+
+
 def render_apk_update_sms_message(
     template: str,
     *,
@@ -51,7 +77,7 @@ def render_apk_update_sms_message(
 ) -> str:
     tpl = (template or "").strip() or DEFAULT_APK_UPDATE_SMS
     ver = (version or "").strip() or "—"
-    href = (link or "").strip() or DEFAULT_APK_UPDATE_LINK
+    href = normalize_apk_update_link(link)
     out = (
         tpl.replace("{version}", ver)
         .replace("{VERSION}", ver)

@@ -2262,6 +2262,7 @@ def _save_uploaded_android_apk(
     from app.express_partner.apk_update_sms import (
         DEFAULT_APK_UPDATE_LINK,
         default_apk_update_sms_message,
+        normalize_apk_update_link,
         normalize_apk_update_sms_group,
         notify_partners_apk_update_background,
         render_apk_update_sms_message,
@@ -2355,18 +2356,17 @@ def _save_uploaded_android_apk(
     )
     short_url = ""
     try:
-        from app.utils.short_urls import public_apk_download_url
+        from app.utils.short_urls import canonical_public_apk_download_url
 
-        short_url = public_apk_download_url(
+        short_url = canonical_public_apk_download_url(
             {
                 "android_apk_url": apk_url,
                 "android_apk_version": version,
-            },
-            external=True,
+            }
         )
     except Exception:
-        short_url = "/d"
-    link = DEFAULT_APK_UPDATE_LINK
+        short_url = ""
+    link = normalize_apk_update_link(short_url or DEFAULT_APK_UPDATE_LINK)
     preview = render_apk_update_sms_message(sms_tpl, version=version, link=link)
 
     sms_queued = False

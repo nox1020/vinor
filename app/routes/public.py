@@ -198,11 +198,21 @@ def partners():
         _settings = load_settings()
     except Exception:
         _settings = {}
+    _size_label = ''
+    try:
+        n = int((_settings or {}).get('android_apk_size_bytes') or 0)
+        if n >= 1_048_576:
+            _size_label = f'حدود {max(1, round(n / 1_048_576))} مگابایت'
+        elif n >= 1024:
+            _size_label = f'حدود {max(1, round(n / 1024))} کیلوبایت'
+    except Exception:
+        _size_label = ''
     html = render_template("home/partners.html",
                            brand="وینور",
                            domain="vinor.ir",
                            android_apk_url=public_apk_download_url(_settings),
-                           android_apk_version=_settings.get('android_apk_version') or '')
+                           android_apk_version=_settings.get('android_apk_version') or '',
+                           android_apk_size_label=_size_label)
     if guest:
         try:
             _mc_set("page:partners", html, ttl=15)

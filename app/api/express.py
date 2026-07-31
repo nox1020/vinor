@@ -15,7 +15,7 @@ def _cover_image_urls(cover) -> tuple[str, str, str]:
     return thumb, url, url
 from app.services.notifications import add_notification
 from app.utils.share_tokens import encode_partner_ref
-from app.utils.short_urls import public_apk_download_url
+from app.utils.short_urls import canonical_public_apk_download_url
 
 express_api_bp = Blueprint('express_api', __name__, url_prefix='/api')
 
@@ -29,14 +29,16 @@ def get_app_version():
         payload = {
             "success": True,
             "android_apk_version": settings.get("android_apk_version") or "",
-            "android_apk_url": public_apk_download_url(settings) or "",
+            # Absolute https://vinor.ir/d/... for Android trust + DownloadManager
+            "android_apk_url": canonical_public_apk_download_url(settings) or "",
             "android_apk_updated_at": settings.get("android_apk_updated_at") or "",
             "android_apk_size_bytes": settings.get("android_apk_size_bytes") or "",
             "android_apk_sha256": settings.get("android_apk_sha256") or "",
             "android_apk_original_name": settings.get("android_apk_original_name") or "",
         }
         resp = make_response(jsonify(payload))
-        resp.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=120"
+        # No SW/browser cache for version — update banner must stay fresh
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
         resp.headers["Vary"] = "Accept-Encoding"
         return resp
     except Exception as e:

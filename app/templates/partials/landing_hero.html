@@ -23,7 +23,7 @@
         </div>
         <div class="flex flex-col items-start text-right">
           {% if android_apk_url %}
-          <a href="{{ android_apk_url }}" download rel="noopener"
+          <a href="{{ android_apk_url }}" download rel="noopener" data-vinor-apk-download="1"
              class="focusable inline-flex items-center gap-2 text-sm sm:text-base font-bold text-white hover:text-emerald-300 transition-colors">
             <span>دانلود اپلیکیشن اندروید</span>
           </a>
@@ -34,9 +34,11 @@
           </a>
           {% endif %}
           <p class="mt-1 text-[11px] sm:text-xs text-zinc-500 tabular-nums">
-            نسخه {{ android_apk_version or '۱.۲.۳' }}
+            نسخه {{ android_apk_version or '—' }}
+            {% if android_apk_size_label %}
             <span class="mx-1 text-zinc-600" aria-hidden="true">·</span>
-            حدود ۲۱ مگابایت
+            {{ android_apk_size_label }}
+            {% endif %}
           </p>
         </div>
       </div>

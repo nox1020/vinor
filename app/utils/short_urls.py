@@ -80,16 +80,39 @@ def resolve_apk_filesystem_path(
     return None, download_name
 
 
+_PUBLIC_HOST = "vinor.ir"
+
+
+def canonical_public_apk_download_url(
+    settings: Optional[Dict[str, Any]] = None,
+) -> str:
+    """لینک مطلق پایدار برای کلاینت‌ها (اپ، پیامک، API) — همیشه https://vinor.ir/d/..."""
+    data = _load_settings_safe(settings)
+    if not apk_file_url_from_settings(data):
+        return ""
+    name = apk_public_download_filename(data)
+    path = f"/d/{name}" if name else "/d"
+    return f"https://{_PUBLIC_HOST}{path}"
+
+
 def public_apk_download_url(
     settings: Optional[Dict[str, Any]] = None,
     *,
     external: bool = True,
 ) -> str:
-    """لینک کوتاه دانلود: /d/vinor-{version}.apk (یا /d)."""
+    """لینک کوتاه دانلود: /d/vinor-{version}.apk (یا /d).
+
+    برای مصرف‌کننده‌های خارجی (Android / SMS) از canonical_public_apk_download_url
+    استفاده کنید تا host اشتباه (localhost / proxy) در URL نیاید.
+    """
     data = _load_settings_safe(settings)
     if not apk_file_url_from_settings(data):
         return ""
     name = apk_public_download_filename(data)
+    if external:
+        # Absolute URL for emails/SMS/native — prefer canonical production host
+        # so Android trust checks (vinor.ir) never see an internal origin.
+        return canonical_public_apk_download_url(data)
     try:
         from flask import has_request_context, url_for
 
@@ -97,7 +120,7 @@ def public_apk_download_url(
             return url_for(
                 "main.short_apk_download",
                 download_name=name,
-                _external=external,
+                _external=False,
             )
     except Exception:
         pass

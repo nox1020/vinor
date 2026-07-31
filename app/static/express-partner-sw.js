@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.62-logout-redirect';
+const VERSION = 'v1.0.63-apk-version-nocache';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -218,6 +218,9 @@ function shouldCachePartnerApi(request, response) {
   if (!response || !response.ok) return false;
   const url = new URL(request.url);
   if (request.method !== 'GET') return false;
+  // نسخهٔ اپ نباید کش شود — بنر بروزرسانی باید فوری باشد
+  const p = (url.pathname || '').replace(/\/+$/, '') || '/';
+  if (p === '/api/express/app-version' || p === '/api/app/version') return false;
   if (isSessionPartnerApiPath(url.pathname)) {
     return isVinorApkRequest(request);
   }
