@@ -1,10 +1,10 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}چت عملیات | Vinor Control{% endblock %}
+{% block title %}داشبورد | Vinor Control{% endblock %}
 {% block page_title_key %}dashboard.browser_title{% endblock %}
 {% block i18n_page_title %}dashboard.browser_title{% endblock %}
 {% block page_title_i18n %}dashboard.page_title{% endblock %}
 
-{% block admin_main_class %}vc-main-offset vc-ops-chat-main{% endblock %}
+{% block admin_main_class %}vc-main-offset vc-ops-dash-main{% endblock %}
 {% block admin_main_pad_class %}p-0 pb-0 lg:pb-0{% endblock %}
 {% block admin_bottom_nav %}{% endblock %}
 
@@ -22,7 +22,7 @@
 
 {% block head %}
 {{ super() }}
-<link rel="stylesheet" href="{{ url_for('static', filename='admin/ops-chat.css') }}?v=1">
+<link rel="stylesheet" href="{{ 'admin/ops-chat.css'|static_version }}">
 <style>
   #opsFlashStack.ops-flash-stack {
     position: fixed;
@@ -67,40 +67,162 @@
 {% endblock %}
 
 {% block content %}
-<div id="adminOpsChatPage" data-vinor-ops-chat data-vinor-chat-surface="admin">
-  <div class="ops-chat-banner px-3">
-    <h1 class="sr-only">چت عملیات</h1>
-    <p class="text-[0.72rem] text-slate-400 leading-snug m-0">گزارش ناظر + عملیات از همین چت</p>
-  </div>
-  <div id="opsReportFilters" class="ops-report-filters" role="toolbar" aria-label="فیلتر گزارش‌ها">
-    <button type="button" class="ops-report-chip is-active" data-report-filter="">همه</button>
-    <button type="button" class="ops-report-chip" data-report-filter="followup">پیگیری</button>
-    <button type="button" class="ops-report-chip" data-report-filter="deal">معامله</button>
-    <button type="button" class="ops-report-chip" data-report-filter="visit">بازدید</button>
-    <button type="button" class="ops-report-chip" data-report-filter="partner">همکار</button>
-    <button type="button" class="ops-report-chip" data-report-filter="customer">مشتری</button>
-    <button type="button" class="ops-report-chip" data-report-filter="system">سیستم</button>
-    <button type="button" id="opsLandFilterChip" class="ops-report-chip ops-land-filter" data-land-filter-clear hidden>پرونده</button>
-  </div>
-  <div class="vn-ops-shell flex flex-col flex-1 min-h-0">
-    <div id="vnOpsScroll" class="vn-ops-scroll flex-1">
-      <div id="aiHomeInline" class="is-open" role="region" aria-label="Admin Ops Chat">
-        {% set chat_mode = 'ops-inline' %}
-        {% set omit_composer = true %}
-        {% include 'admin/partials/ops_chat_panel.html' %}
+{% set ov = dash_overview|default({}) %}
+<div id="adminOpsChatPage" class="ops-dash-layout" data-vinor-ops-chat data-vinor-chat-surface="admin">
+
+  {# ——— داشبورد ——— #}
+  <section class="ops-dash-board" aria-label="داشبورد عملیات">
+    <header class="ops-dash-hero">
+      <div>
+        <p class="ops-dash-kicker">Vinor Ops</p>
+        <h1 class="ops-dash-title">داشبورد</h1>
+        <p class="ops-dash-sub">وضعیت صف‌ها و میانبرها — چت عملیات در پنل کناری</p>
+      </div>
+      <button type="button" class="ops-dash-chat-toggle lg:hidden" id="opsDashChatOpen" aria-controls="opsAgentPanel">
+        <i class="fa-solid fa-message" aria-hidden="true"></i>
+        چت عملیات
+      </button>
+    </header>
+
+    <div class="ops-dash-kpis" role="list">
+      <a role="listitem" class="ops-kpi" href="{{ url_for('admin.express_partners', filter='pending') }}">
+        <span class="ops-kpi__label">همکار معلق</span>
+        <span class="ops-kpi__value tabular-nums">{{ ov.partners_pending|default(0)|fa_digits }}</span>
+      </a>
+      <a role="listitem" class="ops-kpi" href="{{ url_for('admin.express_listings') }}">
+        <span class="ops-kpi__label">فایل معلق</span>
+        <span class="ops-kpi__value tabular-nums">{{ ov.lands_pending|default(0)|fa_digits }}</span>
+      </a>
+      <a role="listitem" class="ops-kpi" href="{{ url_for('admin.express_visit_requests') }}">
+        <span class="ops-kpi__label">بازدید معلق</span>
+        <span class="ops-kpi__value tabular-nums">{{ ov.visits_pending|default(0)|fa_digits }}</span>
+      </a>
+      <a role="listitem" class="ops-kpi" href="{{ url_for('admin.financial_withdrawals', filter='pending') }}">
+        <span class="ops-kpi__label">برداشت معلق</span>
+        <span class="ops-kpi__value tabular-nums">{{ ov.withdrawals_pending|default(0)|fa_digits }}</span>
+      </a>
+      <a role="listitem" class="ops-kpi" href="{{ url_for('admin.ai_console_tools') }}">
+        <span class="ops-kpi__label">تأیید AI</span>
+        <span class="ops-kpi__value tabular-nums">{{ ov.ai_pending|default(0)|fa_digits }}</span>
+      </a>
+      <a role="listitem" class="ops-kpi ops-kpi--warn" href="{{ url_for('admin.ai_console_errors') }}">
+        <span class="ops-kpi__label">خطای AI</span>
+        <span class="ops-kpi__value tabular-nums">{{ ov.ai_errors|default(0)|fa_digits }}</span>
+      </a>
+    </div>
+
+    <div class="ops-dash-section">
+      <h2 class="ops-dash-section__title">میانبرها</h2>
+      <div class="ops-dash-links">
+        {% for link in ov.quick_links|default([]) %}
+        <a class="ops-dash-link" href="{{ link.url }}">
+          <i class="fa-solid {{ link.icon }}" aria-hidden="true"></i>
+          <span>{{ link.label }}</span>
+        </a>
+        {% endfor %}
       </div>
     </div>
-    <div id="vnOpsComposerDock" class="vn-ops-composer-dock">
-      {% set chat_mode = 'ops-inline' %}
-      {% include 'admin/partials/ops_chat_composer.html' %}
+
+    <div class="ops-dash-section">
+      <h2 class="ops-dash-section__title">گزارش ناظر</h2>
+      <div id="opsReportFilters" class="ops-report-filters" role="toolbar" aria-label="فیلتر گزارش‌ها">
+        <button type="button" class="ops-report-chip is-active" data-report-filter="">همه</button>
+        <button type="button" class="ops-report-chip" data-report-filter="followup">پیگیری</button>
+        <button type="button" class="ops-report-chip" data-report-filter="deal">معامله</button>
+        <button type="button" class="ops-report-chip" data-report-filter="visit">بازدید</button>
+        <button type="button" class="ops-report-chip" data-report-filter="partner">همکار</button>
+        <button type="button" class="ops-report-chip" data-report-filter="customer">مشتری</button>
+        <button type="button" class="ops-report-chip" data-report-filter="system">سیستم</button>
+        <button type="button" id="opsLandFilterChip" class="ops-report-chip ops-land-filter" data-land-filter-clear hidden>پرونده</button>
+      </div>
+      <p class="ops-dash-hint">فیلتر گزارش‌ها روی پیام‌های ناظر داخل پنل چت اعمال می‌شود.</p>
     </div>
-  </div>
+  </section>
+
+  {# ——— پنل چت عمودی به سبک Cursor Agent ——— #}
+  <aside id="opsAgentPanel" class="ops-agent-panel" aria-label="چت عملیات">
+    <div class="ops-agent-panel__backdrop lg:hidden" id="opsDashChatClose" hidden></div>
+    <div class="ops-agent-panel__frame">
+      <header class="ops-agent-panel__head">
+        <div class="ops-agent-panel__brand">
+          <button type="button" id="aiMenuBtn" class="ops-agent-panel__icon-btn" aria-label="گفتگوها" aria-expanded="false" aria-controls="aiSidePanel">
+            <i class="fa-solid fa-bars" aria-hidden="true"></i>
+            <span id="aiMenuUnreadDot" class="ops-agent-panel__unread hidden" aria-hidden="true"></span>
+          </button>
+          <span class="ops-agent-panel__dot" aria-hidden="true"></span>
+          <div>
+            <strong>Agent</strong>
+            <small>چت عملیات وینور</small>
+          </div>
+        </div>
+        <div class="ops-agent-panel__head-actions">
+          <button type="button" id="aiNewChatBtn" class="ops-agent-panel__icon-btn" aria-label="گفتگوی جدید" title="گفتگوی جدید">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+          </button>
+          <button type="button" class="ops-agent-panel__close lg:hidden" id="opsDashChatCloseBtn" aria-label="بستن چت">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
+      </header>
+
+      <div id="aiSideBackdrop" class="ops-thread-backdrop" aria-hidden="true"></div>
+      <aside id="aiSidePanel" class="ops-thread-panel" aria-hidden="true" aria-label="منوی گفتگو">
+        <div class="ops-thread-panel__head">
+          <h2>گفتگوها</h2>
+          <button type="button" id="aiSideClose" class="ops-agent-panel__icon-btn" aria-label="بستن">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div id="aiHistoryList" class="ops-thread-panel__list ai-scroll">
+          {% if chat_threads %}
+            {% for th in chat_threads %}
+            <button type="button"
+                    class="ai-thread-item {% if th.is_active %}is-active{% endif %}"
+                    data-thread-id="{{ th.id }}"
+                    data-active="{{ '1' if th.is_active else '0' }}">
+              <div class="ai-thread-item__row">
+                <span class="ai-thread-item__title">{{ th.title }}</span>
+                <span class="ai-thread-item__actions">
+                  {% if th.unread and th.unread > 0 %}
+                  <span class="ai-thread-unread">{{ th.unread if th.unread < 100 else '99+' }}</span>
+                  {% endif %}
+                  <span class="ai-thread-delete" data-thread-id="{{ th.id }}" role="button" aria-label="حذف گفتگو" tabindex="-1">
+                    <i class="fa-solid fa-trash-alt" aria-hidden="true"></i>
+                  </span>
+                </span>
+              </div>
+              {% if th.preview %}
+              <p class="ai-thread-item__preview">{{ th.preview }}</p>
+              {% endif %}
+            </button>
+            {% endfor %}
+          {% else %}
+            <p class="ops-thread-empty">هنوز گفتگویی ذخیره نشده است.</p>
+          {% endif %}
+        </div>
+      </aside>
+
+      <div class="vn-ops-shell flex flex-col flex-1 min-h-0">
+        <div id="vnOpsScroll" class="vn-ops-scroll flex-1">
+          <div id="aiHomeInline" class="is-open" role="region" aria-label="Admin Ops Chat">
+            {% set chat_mode = 'ops-inline' %}
+            {% set omit_composer = true %}
+            {% include 'admin/partials/ops_chat_panel.html' %}
+          </div>
+        </div>
+        <div id="vnOpsComposerDock" class="vn-ops-composer-dock">
+          {% set chat_mode = 'ops-inline' %}
+          {% include 'admin/partials/ops_chat_composer.html' %}
+        </div>
+      </div>
+    </div>
+  </aside>
 </div>
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
-<script src="{{ url_for('static', filename='admin/ops-chat.js') }}?v=1"></script>
+<script src="{{ 'admin/ops-chat.js'|static_version }}"></script>
 <script>
 (function () {
   var flashStack = document.getElementById('opsFlashStack');
@@ -118,8 +240,54 @@
     });
   }
 
+  var page = document.getElementById('adminOpsChatPage');
+  var openBtn = document.getElementById('opsDashChatOpen');
+  var closeBtn = document.getElementById('opsDashChatCloseBtn');
+  var closeBg = document.getElementById('opsDashChatClose');
+  var lockClass = 'ops-dash-chat-lock';
+
+  function setChatOpen(on) {
+    if (!page) return;
+    var open = !!on;
+    page.classList.toggle('is-chat-open', open);
+    if (closeBg) closeBg.hidden = !open;
+    document.documentElement.classList.toggle(lockClass, open);
+    if (!open) {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      var side = document.getElementById('aiSidePanel');
+      var backdrop = document.getElementById('aiSideBackdrop');
+      var menu = document.getElementById('aiMenuBtn');
+      if (side) {
+        side.classList.remove('is-open');
+        side.setAttribute('aria-hidden', 'true');
+      }
+      if (backdrop) {
+        backdrop.classList.remove('is-open');
+        backdrop.setAttribute('aria-hidden', 'true');
+      }
+      if (menu) menu.setAttribute('aria-expanded', 'false');
+    } else if (window.matchMedia && window.matchMedia('(max-width: 1023px)').matches) {
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+    }
+  }
+  window.__vinorOpsDashSetChatOpen = setChatOpen;
+
+  if (openBtn) openBtn.addEventListener('click', function () { setChatOpen(true); });
+  if (closeBtn) closeBtn.addEventListener('click', function () { setChatOpen(false); });
+  if (closeBg) closeBg.addEventListener('click', function () { setChatOpen(false); });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (e.defaultPrevented) return;
+    if (!page || !page.classList.contains('is-chat-open')) return;
+    var side = document.getElementById('aiSidePanel');
+    if (side && side.classList.contains('is-open')) return;
+    setChatOpen(false);
+  });
+
   function syncDock() {
-    var page = document.getElementById('adminOpsChatPage');
     var dock = document.getElementById('vnOpsComposerDock');
     if (!page || !dock) return;
     var h = Math.ceil(dock.getBoundingClientRect().height || 0);

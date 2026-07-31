@@ -3328,12 +3328,55 @@ def home_page():
         ai_quick_prompts = []
 
     public_home_lands: List[Dict[str, Any]] = []
-    # کاتالوگ فایل در بدو ورود خانه تزریق نمی‌شود — فقط از چت با search_lands
     divar_ads_ctx: Dict[str, Any] = {}
     try:
         from .divar_pro_ads import home_divar_ads_context
+        from .home_ads_config import (
+            get_home_ads_settings,
+            home_ads_show_divar,
+            home_ads_show_vinor,
+            home_ads_system_enabled,
+        )
 
-        divar_ads_ctx = home_divar_ads_context() or {}
+        if home_ads_system_enabled():
+            cfg = get_home_ads_settings()
+            divar_ads_ctx = home_divar_ads_context() or {}
+            vinor_lands: List[Dict[str, Any]] = []
+            if home_ads_show_vinor():
+                try:
+                    vinor_lands = _home_public_carousel_lands(
+                        limit=int(cfg.get('vinor_limit') or 40)
+                    )
+                except Exception:
+                    vinor_lands = []
+            divar_list: List[Dict[str, Any]] = []
+            if home_ads_show_divar():
+                raw_divar = divar_ads_ctx.get('divar_pro_ads')
+                divar_list = raw_divar if isinstance(raw_divar, list) else []
+            merged_ads = _merge_home_ads_carousel(divar_list, vinor_lands)
+            if merged_ads:
+                vinor_n = sum(1 for a in merged_ads if str(a.get('source') or '') == 'vinor')
+                divar_n = len(merged_ads) - vinor_n
+                divar_ads_ctx = dict(divar_ads_ctx or {})
+                divar_ads_ctx['divar_pro_ads_enabled'] = True
+                divar_ads_ctx['divar_pro_ads'] = merged_ads
+                divar_ads_ctx['divar_pro_ads_title'] = str(cfg.get('title') or 'آگهی‌ها')
+                divar_ads_ctx['home_ads_vinor_count'] = vinor_n
+                divar_ads_ctx['home_ads_divar_count'] = divar_n
+            else:
+                divar_ads_ctx = {
+                    'divar_pro_ads_enabled': False,
+                    'divar_pro_ads': [],
+                    'divar_pro_ads_title': str(cfg.get('title') or 'آگهی‌ها'),
+                    'divar_pro_profile_url': str(cfg.get('divar_profile_url') or ''),
+                }
+        else:
+            divar_ads_ctx = {
+                'divar_pro_ads_enabled': False,
+                'divar_pro_ads': [],
+                'divar_pro_ads_title': '',
+                'divar_pro_profile_url': '',
+            }
     except Exception:
         divar_ads_ctx = {}
     # ai_quick_prompts بعد از **ai_ctx تا با کلید هم‌نام در context بازنویسی نشود
@@ -3493,7 +3536,13 @@ def _public_lands_payload(limit=50):
 
 def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
     """فایل‌های عمومی کامل برای نوار کشویی خانه (مهمان / کاربر عادی)."""
-    from ..utils.images import sanitize_land_media
+    sanitize_land_media = None
+    try:
+        from ..utils.images import sanitize_land_media as _sanitize_land_media
+
+        sanitize_land_media = _sanitize_land_media
+    except Exception:
+        sanitize_land_media = None
 
     try:
         express_lands = load_express_lands_cached() or []
@@ -3528,13 +3577,114 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
             item['_detail_url'] = url_for('express_partner.land_detail', code=code)
         except Exception:
             item['_detail_url'] = f'/express/partner/lands/{code}'
-        try:
-            out.append(sanitize_land_media(item))
-        except Exception:
+        if sanitize_land_media is not None:
+            try:
+                out.append(sanitize_land_media(item))
+            except Exception:
+                out.append(item)
+        else:
             out.append(item)
         if len(out) >= max(1, int(limit or 50)):
             break
     return out
+
+
+def _format_home_ad_price_toman(amount: Any) -> str:
+    try:
+        num = int(float(amount or 0))
+    except Exception:
+        return ''
+    if num <= 0:
+        return ''
+    try:
+        grouped = f'{num:,}'.replace(',', '،').translate(
+            str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹')
+        )
+        return f'{grouped} تومان'
+    except Exception:
+        return f'{num} تومان'
+
+
+def _vinor_land_to_home_ad(land: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """نرمال‌سازی فایل داخلی وینور به شکل کارت نوار آگهی‌ها."""
+    if not isinstance(land, dict):
+        return None
+    code = str(land.get('code') or '').strip()
+    if not code:
+        return None
+    title = str(land.get('title') or '').strip() or 'فایل وینور'
+    try:
+        price_n = int(land.get('price_total') or land.get('price') or 0)
+    except Exception:
+        price_n = 0
+    city = str(land.get('city') or '').strip()
+    location = str(land.get('location') or '').strip()
+    loc_parts = [p for p in (city, location) if p]
+    images = land.get('images') if isinstance(land.get('images'), list) else []
+    image_url = ''
+    try:
+        from ..utils.images import partner_card_image_url
+
+        image_url = str(partner_card_image_url(land) or '').strip()
+    except Exception:
+        image_url = ''
+    if not image_url and images:
+        raw0 = str(images[0] or '').strip()
+        if raw0.startswith('http://') or raw0.startswith('https://') or raw0.startswith('/'):
+            image_url = raw0
+        elif raw0:
+            image_url = '/uploads/' + raw0.lstrip('/')
+    detail = str(land.get('_detail_url') or '').strip()
+    if not detail:
+        try:
+            detail = url_for('express_partner.land_detail', code=code)
+        except Exception:
+            detail = f'/express/partner/lands/{code}'
+    return {
+        'token': code,
+        'title': title,
+        'price': _format_home_ad_price_toman(price_n),
+        'location': '، '.join(loc_parts),
+        'image_url': image_url,
+        'badge': 'وینور',
+        'image_count': len(images),
+        'url': detail,
+        'source': 'vinor',
+        'external': False,
+    }
+
+
+def _merge_home_ads_carousel(
+    divar_ads: List[Dict[str, Any]],
+    vinor_lands: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """وینور اول، سپس دیوار — بدون تکرار توکن/کد."""
+    merged: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for land in vinor_lands or []:
+        ad = _vinor_land_to_home_ad(land)
+        if not ad:
+            continue
+        key = f"vinor:{ad['token']}"
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(ad)
+    for raw in divar_ads or []:
+        if not isinstance(raw, dict):
+            continue
+        ad = dict(raw)
+        tok = str(ad.get('token') or '').strip()
+        key = f"divar:{tok}" if tok else f"divar:{ad.get('url') or id(ad)}"
+        if key in seen:
+            continue
+        seen.add(key)
+        ad.setdefault('source', 'divar')
+        ad.setdefault('external', True)
+        if not str(ad.get('badge') or '').strip():
+            ad['badge'] = 'دیوار'
+        merged.append(ad)
+    return merged
 
 
 @express_partner_bp.get('/dashboard/data', endpoint='dashboard_data')
@@ -7438,13 +7588,36 @@ def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
 @express_partner_bp.route('/settings', methods=['GET'], endpoint='settings')
 @require_partner_access(allow_pending=True)
 def settings_page():
-    """حافظهٔ همکار — یک صفحه مثل Memory در ChatGPT؛ همه‌چیز کاربر اینجاست."""
+    """هاب تنظیمات همکار — کیف پول، حافظه، خروج."""
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     partners = load_express_partners() or []
     profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
     report = _build_partner_report_snapshot(me_phone, profile)
     return render_template(
         'express_partner/settings.html',
+        me_phone=me_phone,
+        me_name=report.get('me_name') or '',
+        partner_name=report.get('partner_name') or '',
+        profile=profile,
+        is_approved=bool(report.get('is_approved')),
+        is_special=bool(report.get('is_special')),
+        report=report,
+        hide_header=True,
+        bottom_nav_active='profile',
+        seo_title='تنظیمات | وینور اکسپرس',
+    )
+
+
+@express_partner_bp.route('/settings/memory', methods=['GET'], endpoint='settings_memory')
+@require_partner_access(allow_pending=True)
+def settings_memory_page():
+    """صفحهٔ حافظهٔ همکار — خلاصهٔ زنده مثل Memory در ChatGPT."""
+    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
+    partners = load_express_partners() or []
+    profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
+    report = _build_partner_report_snapshot(me_phone, profile)
+    return render_template(
+        'express_partner/settings_memory.html',
         me_phone=me_phone,
         me_name=report.get('me_name') or '',
         partner_name=report.get('partner_name') or '',
@@ -7613,7 +7786,7 @@ def plus_zarinpal_callback():
 @express_partner_bp.get('/settings/data', endpoint='settings_data')
 @require_partner_access(allow_pending=True, json_response=True)
 def settings_data():
-    """JSON حافظهٔ زنده برای polling صفحه."""
+    """JSON حافظهٔ زنده برای polling صفحهٔ حافظه."""
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     profile = getattr(g, 'express_partner_profile', None)
     if not isinstance(profile, dict):

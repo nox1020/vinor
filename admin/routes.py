@@ -1538,6 +1538,78 @@ def api_colleagues_notification_history():
     })
 
 # -----------------------------------------------------------------------------
+# هاب پیامک و نوتیفیکیشن (ورود از سایدبار)
+# -----------------------------------------------------------------------------
+@admin_bp.route('/sms-notifications', methods=['GET'], endpoint='sms_notifications')
+@login_required
+def sms_notifications():
+    """صفحهٔ ورود پیامک و نوتیفیکیشن — لینک به ابزارهای کامل + خلاصه آمار."""
+    from app.services.notification_history import list_broadcasts, broadcast_stats
+    from app.services.sms_config import get_sms_line_number
+
+    ensure_sms_recipient_groups_initialized()
+    groups = list_sms_recipient_groups_summary()
+    recipient_total = 0
+    for g in groups or []:
+        try:
+            recipient_total += int((g or {}).get('count') or 0)
+        except (TypeError, ValueError):
+            pass
+
+    sms_hist = []
+    sms_hist_stats = {'total': 0, 'sent': 0, 'failed': 0}
+    try:
+        sms_hist = list(load_sms_history() or [])
+        sms_hist.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+        sms_hist_stats['total'] = len(sms_hist)
+        sms_hist_stats['sent'] = sum(1 for h in sms_hist if h.get('success'))
+        sms_hist_stats['failed'] = sms_hist_stats['total'] - sms_hist_stats['sent']
+        sms_hist = sms_hist[:8]
+    except Exception:
+        current_app.logger.exception('sms_notifications: failed loading SMS history')
+
+    notif_history = []
+    notif_stats = {}
+    try:
+        notif_history = list_broadcasts(limit=8)
+        notif_stats = broadcast_stats() or {}
+    except Exception:
+        current_app.logger.exception('sms_notifications: failed loading notification history')
+
+    partners_count = 0
+    try:
+        partners_count = len(_load_approved_express_partners() or [])
+    except Exception:
+        partners_count = 0
+
+    line_number = ''
+    try:
+        line_number = (get_sms_line_number() or '').strip()
+    except Exception:
+        line_number = ''
+
+    scheduled_jobs = []
+    try:
+        scheduled_jobs = list_active_scheduled_jobs() or []
+    except Exception:
+        scheduled_jobs = []
+
+    return render_template(
+        'admin/sms_notifications.html',
+        groups=groups,
+        recipient_total=recipient_total,
+        sms_hist=sms_hist,
+        sms_hist_stats=sms_hist_stats,
+        notif_history=notif_history,
+        notif_stats=notif_stats,
+        partners_count=partners_count,
+        sms_line_number=line_number,
+        scheduled_jobs=scheduled_jobs,
+        scheduled_count=len(scheduled_jobs),
+    )
+
+
+# -----------------------------------------------------------------------------
 # ارسال پیامک به همکاران (Express Partners)
 # -----------------------------------------------------------------------------
 def _normalize_for_sms_ir(mobile: str) -> str:
@@ -2813,6 +2885,101 @@ def lawyer_admin():
         pending_count=p,
         approved_count=a,
         rejected_count=r,
+    )
+
+
+@admin_bp.route('/home-ads', methods=['GET', 'POST'], endpoint='home_ads')
+@login_required
+def home_ads_admin():
+    from app.express_partner.divar_pro_ads import clear_divar_pro_ads_cache, get_divar_pro_ads
+    from app.express_partner.home_ads_config import (
+        add_divar_profile_url,
+        default_home_ads_settings,
+        get_home_ads_settings,
+        home_ads_feature_enabled,
+        home_ads_system_enabled,
+        remove_divar_profile_url,
+        save_home_ads_settings,
+    )
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or 'save').strip()
+        feature_on = home_ads_feature_enabled()
+        if action == 'reset_defaults':
+            save_home_ads_settings(default_home_ads_settings())
+            flash('تنظیمات نوار آگهی به پیش‌فرض بازگشت.', 'success')
+            return redirect(url_for('admin.home_ads'))
+        if action == 'toggle_system':
+            if not feature_on:
+                flash('فلگ محیطی نوار آگهی خاموش است — از env روشن کنید.', 'error')
+                return redirect(url_for('admin.home_ads'))
+            current = get_home_ads_settings()
+            new_on = not bool(current.get('enabled'))
+            save_home_ads_settings({'enabled': new_on})
+            flash(
+                'نوار آگهی خانه فعال شد.' if new_on else 'نوار آگهی خانه غیرفعال شد.',
+                'success',
+            )
+            return redirect(url_for('admin.home_ads'))
+        if action == 'add_profile':
+            ok, msg, _ = add_divar_profile_url(request.form.get('ha_new_profile_url') or '')
+            flash(msg, 'success' if ok else 'error')
+            return redirect(url_for('admin.home_ads'))
+        if action == 'remove_profile':
+            ok, msg, _ = remove_divar_profile_url(request.form.get('ha_remove_url') or '')
+            flash(msg, 'success' if ok else 'error')
+            return redirect(url_for('admin.home_ads'))
+        if action == 'clear_cache':
+            clear_divar_pro_ads_cache()
+            flash('کش آگهی‌های دیوار پاک شد.', 'success')
+            return redirect(url_for('admin.home_ads'))
+        if action == 'refresh_cache':
+            clear_divar_pro_ads_cache()
+            result = get_divar_pro_ads(force_refresh=True, ignore_disabled=True)
+            n = len(result.get('ads') or []) if isinstance(result, dict) else 0
+            if result.get('ok'):
+                flash(f'کش دیوار تازه شد — {n} آگهی.', 'success')
+            else:
+                flash(
+                    f'رفرش کش ناموفق بود: {result.get("error") or "unknown"}',
+                    'error',
+                )
+            return redirect(url_for('admin.home_ads'))
+
+        current = get_home_ads_settings()
+        patch = {
+            'enabled': (
+                current.get('enabled')
+                if not feature_on
+                else (request.form.get('ha_enabled') == '1')
+            ),
+            'show_vinor': request.form.get('ha_show_vinor') == '1',
+            'show_divar': request.form.get('ha_show_divar') == '1',
+            'title': (request.form.get('ha_title') or '').strip(),
+            'vinor_limit': (request.form.get('ha_vinor_limit') or '').strip(),
+            'cache_ttl_sec': (request.form.get('ha_cache_ttl_sec') or '').strip(),
+        }
+        save_home_ads_settings(patch)
+        flash('تنظیمات نوار آگهی ذخیره شد.', 'success')
+        return redirect(url_for('admin.home_ads'))
+
+    cfg = get_home_ads_settings()
+    cache_ads_count = 0
+    cache_from_cache = False
+    try:
+        snap = get_divar_pro_ads(force_refresh=False)
+        cache_ads_count = len(snap.get('ads') or []) if isinstance(snap, dict) else 0
+        cache_from_cache = bool(snap.get('from_cache')) if isinstance(snap, dict) else False
+    except Exception:
+        pass
+
+    return render_template(
+        'admin/home_ads.html',
+        home_ads=cfg,
+        home_ads_feature_flag=home_ads_feature_enabled(),
+        home_ads_system_on=home_ads_system_enabled(),
+        cache_ads_count=cache_ads_count,
+        cache_from_cache=cache_from_cache,
     )
 
 

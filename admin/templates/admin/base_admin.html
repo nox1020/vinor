@@ -176,9 +176,9 @@
   <nav class="vc-bottom lg:hidden">
     <div class="grid grid-cols-5 gap-0 px-1 py-1">
       {% set ep = request.endpoint or '' %}
-      <a href="{{ url_for('admin.dashboard') }}" class="{% if ep == 'admin.dashboard' %}is-active{% endif %}">
-        <i class="fa-solid fa-comments text-base"></i>
-        <span>چت</span>
+      <a href="{{ url_for('admin.dashboard') }}" class="{% if ep in ['admin.dashboard', 'admin.admin_root'] %}is-active{% endif %}">
+        <i class="fa-solid fa-gauge-high text-base"></i>
+        <span>داشبورد</span>
       </a>
       <a href="{{ url_for('admin.express_listings') }}"
          class="{% if ep in ['admin.express_listings', 'admin.add_express_listing', 'admin.edit_express_listing'] %}is-active{% endif %}">
@@ -277,6 +277,9 @@
         audit: '{{ url_for("admin.audit_log") }}',
         flags: '{{ url_for("admin.ai_console_flags") }}',
         settings: '{{ url_for("admin.settings") }}',
+        smsNotifications: '{{ url_for("admin.sms_notifications") }}',
+        smsColleagues: '{{ url_for("admin.sms_colleagues") }}',
+        notifColleagues: '{{ url_for("admin.notifications_colleagues") }}',
       };
       return {
         menuOpen: false,
@@ -286,7 +289,7 @@
         lang: (window.VinorI18n && VinorI18n.getLanguage()) || 'en',
         cmdSpec: [
           { nameKey: 'cmd.group_command', items: [
-            { labelKey: 'cmd.ops_chat', aliasKey: 'search_aliases.dashboard', href: hrefs.dashboard, icon: 'fa-comments' },
+            { labelKey: 'cmd.ops_chat', aliasKey: 'search_aliases.dashboard', href: hrefs.dashboard, icon: 'fa-gauge-high' },
             { labelKey: 'cmd.pending_confirms', aliasKey: 'search_aliases.tools', href: hrefs.tools, icon: 'fa-check-double' },
             { labelKey: 'cmd.visits', aliasKey: 'search_aliases.visit', href: hrefs.visits, icon: 'fa-route' },
             { labelKey: 'cmd.escalations', href: hrefs.escalations, icon: 'fa-circle-question' },
@@ -307,6 +310,9 @@
           ]},
           { nameKey: 'cmd.group_govern', items: [
             { labelKey: 'cmd.settings', href: hrefs.settings, icon: 'fa-gear' },
+            { labelKey: 'cmd.sms_notifications', aliasKey: 'search_aliases.sms', href: hrefs.smsNotifications, icon: 'fa-comment-sms' },
+            { labelKey: 'cmd.sms_send', href: hrefs.smsColleagues, icon: 'fa-sms' },
+            { labelKey: 'cmd.colleague_notifications', href: hrefs.notifColleagues, icon: 'fa-bell' },
           ]},
         ],
         buildCmdGroups() {

@@ -98,6 +98,7 @@
     "roles": "Roles",
     "feature_flags": "Feature Flags",
     "sms": "SMS",
+    "sms_notifications": "SMS & notifications",
     "more": "More"
   },
   "bottom": {
@@ -137,13 +138,16 @@
     "analytics": "Analytics",
     "flags": "Feature Flags",
     "settings": "Settings",
+    "sms_notifications": "SMS & notifications",
+    "sms_send": "Send SMS",
+    "colleague_notifications": "Colleague notifications",
     "users": "Users"
   },
   "dashboard": {
-    "title": "Ops chat",
-    "subtitle": "Broadcast, listings, partners, visits, and money — with confirm cards.",
-    "page_title": "Ops chat",
-    "browser_title": "Ops chat | Vinor Control",
+    "title": "Dashboard",
+    "subtitle": "Queue status, shortcuts, and ops chat.",
+    "page_title": "Dashboard",
+    "browser_title": "Dashboard | Vinor Control",
     "confirms": "Confirmations",
     "monitor": "Monitor",
     "ai_health": "AI Health",
@@ -381,6 +385,7 @@
     "workflow": ["workflow", "workflows"],
     "memory": ["memory"],
     "error": ["error", "errors", "bugs"],
-    "analytics": ["analytics", "funnel", "revenue"]
+    "analytics": ["analytics", "funnel", "revenue"],
+    "sms": ["sms", "notification", "notifications", "broadcast", "پیامک"]
   }
 }

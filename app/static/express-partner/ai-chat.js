@@ -193,6 +193,21 @@
       document.querySelector('[data-ai-home-empty-actions]');
     var empty = isHomeChatEmpty();
     if (page) page.classList.toggle('ai-home-is-empty', empty);
+    try {
+      var divar = document.getElementById('homeDivarAdsCarousel');
+      if (divar) {
+        var drawerOpen = document.documentElement.classList.contains('vinor-profile-drawer-open') ||
+          divar.getAttribute('data-drawer-locked') === '1';
+        if (drawerOpen) {
+          divar.setAttribute('aria-hidden', 'true');
+          divar.setAttribute('inert', '');
+        } else {
+          divar.setAttribute('aria-hidden', empty ? 'false' : 'true');
+          if (empty) divar.removeAttribute('inert');
+          else divar.setAttribute('inert', '');
+        }
+      }
+    } catch (_) {}
     if (emptyEl) {
       if (empty) {
         emptyEl.removeAttribute('hidden');

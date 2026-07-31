@@ -1,11 +1,10 @@
 {% extends 'express_partner/base.html' %}
-{% block title %}{{ seo_title|default('حافظه | وینور اکسپرس') }}{% endblock %}
+{% block title %}{{ seo_title|default('تنظیمات | وینور اکسپرس') }}{% endblock %}
 
 {% block content %}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
 
 {% set _report = report|default({}) %}
-{% set _summary = _report.get('summary') or '' %}
 {% set _wallet = (_report.get('kpis') or {}).get('withdrawable_balance') or 0 %}
 
 <style>
@@ -48,52 +47,12 @@
     margin-inline: auto;
     padding: 0.5rem 1.1rem 2.25rem;
   }
-  #partnerSettingsPage .ps-intro {
-    margin: 0 0 1rem;
-    font-size: 0.9rem;
-    line-height: 1.6;
-    color: var(--ps-muted);
-    text-align: right;
-  }
-  #partnerSettingsPage .ps-live {
-    margin: 0 0 1.1rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.72rem;
-    color: rgba(255, 255, 255, 0.45);
-  }
-  #partnerSettingsPage .ps-live-dot {
-    width: 0.4rem;
-    height: 0.4rem;
-    border-radius: 9999px;
-    background: #22c55e;
-    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
-  }
   #partnerSettingsPage .ps-block-label {
     margin: 0 0.15rem 0.55rem;
     font-size: 0.78rem;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.5);
     text-align: right;
-  }
-  #partnerSettingsPage .ps-summary {
-    margin: 0 0 1.5rem;
-    padding: 1.05rem 1.1rem;
-    border-radius: 1.15rem;
-    background: var(--ps-surface);
-    border: 1px solid var(--ps-line);
-    font-size: 0.95rem;
-    line-height: 1.7;
-    color: #fff;
-    text-align: right;
-    white-space: pre-wrap;
-  }
-  #partnerSettingsPage .ps-summary-hint {
-    margin: 0.65rem 0 0;
-    font-size: 0.72rem;
-    line-height: 1.45;
-    color: rgba(255, 255, 255, 0.4);
   }
   #partnerSettingsPage .ps-actions {
     border-radius: 1.15rem;
@@ -149,28 +108,12 @@
 </style>
 
 {{ ep_header_start(id='partnerSettingsHeader') }}
-{% call ep_header_row('حافظه', url_for('express_partner.home'), show_title=true, inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{% call ep_header_row('تنظیمات', url_for('express_partner.home'), show_title=true, inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
 {{ ep_header_end() }}
 
 <main id="partnerSettingsPage"
-      class="partner-page-scroll-pad min-h-[100dvh] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]"
-      data-report-url="{{ url_for('express_partner.settings_data') }}"
-      data-updated-at="{{ _report.get('updated_at') or '' }}">
+      class="partner-page-scroll-pad min-h-[100dvh] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
   <div class="ps-shell">
-    <p class="ps-intro">
-      خلاصهٔ حافظه با مدل نوشته می‌شود (مثل Memory در ChatGPT) و با هر چت یا اقدام از نو ادغام می‌شود.
-    </p>
-    <p class="ps-live" aria-live="polite">
-      <span class="ps-live-dot" aria-hidden="true"></span>
-      <span data-report-live>به‌روز</span>
-    </p>
-
-    <h2 class="ps-block-label">خلاصه حافظه</h2>
-    <div class="ps-summary" data-memory-summary>
-      <span data-memory-summary-text>{% if _summary %}{{ _summary }}{% else %}هنوز خلاصه‌ای نیست — با چت یا اقدام بعدی پر می‌شود.{% endif %}</span>
-      <p class="ps-summary-hint">متن را مدل می‌نویسد — آمار خام کپی نمی‌شود.</p>
-    </div>
-
     <h2 class="ps-block-label">حساب</h2>
     <div class="ps-actions">
       {% if is_approved|default(false) %}
@@ -183,6 +126,13 @@
         <i class="fas fa-chevron-left ps-action__chev" aria-hidden="true"></i>
       </a>
       {% endif %}
+      <a href="{{ url_for('express_partner.settings_memory') }}"
+         data-vinor-express-nav
+         class="ps-action">
+        <i class="fas fa-brain" aria-hidden="true"></i>
+        <span class="ps-action__grow">حافظه</span>
+        <i class="fas fa-chevron-left ps-action__chev" aria-hidden="true"></i>
+      </a>
       <form id="settingsLogoutForm" method="post" action="{{ url_for('express_partner.logout') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="ps-action ps-action--danger" data-vinor-logout>
@@ -216,67 +166,6 @@
       if (form) form.submit();
     }
   });
-
-  function applyReport(data) {
-    if (!data || !data.ok) return;
-    page.setAttribute('data-updated-at', data.updated_at || '');
-    if (data.summary) {
-      var summaryText = page.querySelector('[data-memory-summary-text]');
-      if (summaryText) summaryText.textContent = data.summary;
-    }
-    var wallet = page.querySelector('[data-wallet-balance]');
-    if (wallet && data.kpis && data.kpis.withdrawable_balance != null) {
-      try {
-        var n = Number(data.kpis.withdrawable_balance) || 0;
-        wallet.textContent = n.toLocaleString('fa-IR') + ' تومان';
-      } catch (_) {}
-    }
-    var live = page.querySelector('[data-report-live]');
-    if (live) {
-      try {
-        var d = data.updated_at ? new Date(data.updated_at) : new Date();
-        live.textContent =
-          'به‌روز ' + d.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
-      } catch (_) {
-        live.textContent = 'به‌روز';
-      }
-    }
-  }
-
-  var url = page.getAttribute('data-report-url') || '';
-  if (!url) return;
-  var timer = null;
-  var inFlight = false;
-
-  function poll() {
-    if (document.hidden || inFlight) return;
-    inFlight = true;
-    fetch(url, {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    })
-      .then(function (r) {
-        return r.json();
-      })
-      .then(applyReport)
-      .catch(function () {})
-      .finally(function () {
-        inFlight = false;
-      });
-  }
-
-  timer = setInterval(poll, 8000);
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) poll();
-  });
-  window.addEventListener(
-    'vinor:express-page-swap',
-    function () {
-      if (timer) clearInterval(timer);
-    },
-    { once: true }
-  );
-  setTimeout(poll, 800);
 })();
 </script>
 {% endblock %}

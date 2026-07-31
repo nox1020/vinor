@@ -50,9 +50,6 @@
   var deleteUrl = form.getAttribute('data-delete-url') || '';
   var syncUrl = form.getAttribute('data-sync-url') || '';
   var reportsUrl = form.getAttribute('data-reports-url') || '';
-  var activeReportFilter = '';
-  var activeLandFilter = '';
-  var reportsUrl = form.getAttribute('data-reports-url') || '';
   var agentConfirmUrl = form.getAttribute('data-agent-confirm-url') || '';
   var agentCancelUrl = form.getAttribute('data-agent-cancel-url') || '';
   var postchiThreadId = '';
@@ -345,7 +342,12 @@
     });
     var host = null;
     if (homeInline) {
-      host = document.querySelector('#homeDashboardPage .vn-home-shell') || document.getElementById('homeDashboardPage');
+      host =
+        document.querySelector('#adminOpsChatPage .vn-ops-shell') ||
+        document.getElementById('opsAgentPanel') ||
+        (document.getElementById('vnOpsScroll') && document.getElementById('vnOpsScroll').parentElement) ||
+        document.querySelector('#homeDashboardPage .vn-home-shell') ||
+        document.getElementById('homeDashboardPage');
     } else {
       host = document.getElementById('aiChat') || (form && form.parentElement);
     }
@@ -1846,6 +1848,20 @@
     });
   }
 
+  function openMobileOpsChatIfNeeded() {
+    if (!window.matchMedia || !window.matchMedia('(max-width: 1023px)').matches) return;
+    if (typeof window.__vinorOpsDashSetChatOpen === 'function') {
+      window.__vinorOpsDashSetChatOpen(true);
+      return;
+    }
+    var page = document.getElementById('adminOpsChatPage');
+    if (!page) return;
+    page.classList.add('is-chat-open');
+    var closeBg = document.getElementById('opsDashChatClose');
+    if (closeBg) closeBg.hidden = false;
+    document.documentElement.classList.add('ops-dash-chat-lock');
+  }
+
   function bindReportFilters() {
     if (!homeInline || !reportsUrl) return;
     var bar = document.getElementById('opsReportFilters');
@@ -1855,6 +1871,12 @@
       var landClear = ev.target && ev.target.closest ? ev.target.closest('[data-land-filter-clear]') : null;
       if (landClear && bar.contains(landClear)) {
         activeLandFilter = '';
+        bar.querySelectorAll('[data-report-filter]').forEach(function (c) {
+          c.classList.toggle(
+            'is-active',
+            (c.getAttribute('data-report-filter') || '') === (activeReportFilter || '')
+          );
+        });
         applyReportFilter();
         return;
       }
@@ -1866,6 +1888,7 @@
         c.classList.toggle('is-active', c === chip);
       });
       applyReportFilter();
+      openMobileOpsChatIfNeeded();
     });
     list.addEventListener('click', function (ev) {
       var landLink = ev.target && ev.target.closest ? ev.target.closest('[data-land-filter]') : null;
@@ -1879,6 +1902,7 @@
         c.classList.toggle('is-active', !(c.getAttribute('data-report-filter') || ''));
       });
       applyReportFilter();
+      openMobileOpsChatIfNeeded();
     });
   }
 
@@ -1950,6 +1974,7 @@
             });
           }
           applyReportFilter();
+          openMobileOpsChatIfNeeded();
         }
       });
       head.appendChild(link);
@@ -2509,7 +2534,13 @@
     sideBackdrop.classList.remove('is-open');
     sideBackdrop.setAttribute('aria-hidden', 'true');
     if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
-    document.body.style.overflow = '';
+    if (opsRoot && opsRoot.classList.contains('is-chat-open') && window.matchMedia && window.matchMedia('(max-width: 1023px)').matches) {
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    }
   }
 
   function ensureChatVisible() {
@@ -2782,7 +2813,7 @@
       onVisChange = null;
     }
     if (onKeydown) {
-      document.removeEventListener('keydown', onKeydown);
+      document.removeEventListener('keydown', onKeydown, true);
       onKeydown = null;
     }
     if (window.visualViewport) {
@@ -2887,13 +2918,18 @@
     if (e.key !== 'Escape') return;
     if (sidePanel && sidePanel.classList.contains('is-open')) {
       closeSideMenu();
+      /* Prevent dashboard Escape from also closing the mobile Agent drawer. */
+      e.preventDefault();
+      e.stopImmediatePropagation();
       return;
     }
     if (homeInline && window.vinorProfileDrawer && window.vinorProfileDrawer.isOpen && window.vinorProfileDrawer.isOpen()) {
       closeSideMenu();
+      e.preventDefault();
+      e.stopImmediatePropagation();
     }
   };
-  document.addEventListener('keydown', onKeydown);
+  document.addEventListener('keydown', onKeydown, true);
 
   if (window.visualViewport) {
     onViewportResize = syncComposerInset;

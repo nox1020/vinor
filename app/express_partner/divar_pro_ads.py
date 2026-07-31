@@ -43,16 +43,58 @@ def _env_bool(name: str, default: str = "1") -> bool:
 
 
 def divar_pro_ads_enabled() -> bool:
-    """فلگ قابلیت — پیش‌فرض روشن."""
-    return _env_bool("VINOR_DIVAR_PRO_ADS_ENABLED", "1")
+    """فلگ قابلیت دیوار — پیش‌فرض روشن؛ پنل ادمین (home_ads) هم اعمال می‌شود."""
+    try:
+        from .home_ads_config import home_ads_show_divar
+
+        return home_ads_show_divar()
+    except Exception:
+        return _env_bool("VINOR_DIVAR_PRO_ADS_ENABLED", "1")
 
 
 def divar_pro_profile_url() -> str:
+    try:
+        from .home_ads_config import home_ads_divar_profile_urls
+
+        urls = home_ads_divar_profile_urls()
+        if urls:
+            return str(urls[0] or "").strip()
+    except Exception:
+        pass
+    try:
+        from .home_ads_config import get_home_ads_settings
+
+        cfg_url = str((get_home_ads_settings() or {}).get("divar_profile_url") or "").strip()
+        if cfg_url:
+            return cfg_url
+    except Exception:
+        pass
     raw = (os.environ.get("VINOR_DIVAR_PRO_PROFILE_URL") or DEFAULT_PROFILE_URL).strip()
     return raw or DEFAULT_PROFILE_URL
 
 
+def divar_pro_profile_urls() -> list[str]:
+    try:
+        from .home_ads_config import home_ads_divar_profile_urls
+
+        urls = home_ads_divar_profile_urls()
+        if urls:
+            return list(urls)
+    except Exception:
+        pass
+    one = divar_pro_profile_url()
+    return [one] if one else [DEFAULT_PROFILE_URL]
+
+
 def divar_pro_cache_ttl_sec() -> int:
+    try:
+        from .home_ads_config import get_home_ads_settings
+
+        ttl = int((get_home_ads_settings() or {}).get("cache_ttl_sec") or 0)
+        if ttl >= 60:
+            return ttl
+    except Exception:
+        pass
     try:
         return max(60, int(os.environ.get("VINOR_DIVAR_PRO_ADS_CACHE_TTL") or DEFAULT_CACHE_TTL_SEC))
     except Exception:
@@ -91,7 +133,8 @@ def _read_disk_cache(brand_token: str) -> dict[str, Any] | None:
         return None
     if not isinstance(raw, dict):
         return None
-    if str(raw.get("brand_token") or "") != brand_token:
+    stored_key = str(raw.get("brand_token") or raw.get("cache_key") or "")
+    if stored_key != brand_token:
         return None
     return raw
 
@@ -292,28 +335,30 @@ def fetch_divar_pro_ads(brand_token: str | None = None, profile_url: str | None 
     return out
 
 
-def get_divar_pro_ads(*, force_refresh: bool = False) -> dict[str, Any]:
+def get_divar_pro_ads(*, force_refresh: bool = False, ignore_disabled: bool = False) -> dict[str, Any]:
     """
-    آگهی‌ها با کش حافظه + فایل.
+    آگهی‌ها از همهٔ پروفایل‌های تنظیم‌شده — با کش حافظه + فایل.
     اگر واکشی تازه شکست بخورد و کش قدیمی باشد، همان را برمی‌گرداند.
     """
-    if not divar_pro_ads_enabled():
+    profiles = divar_pro_profile_urls()
+    primary = profiles[0] if profiles else divar_pro_profile_url()
+    if not ignore_disabled and not divar_pro_ads_enabled():
         return {
             "ok": False,
             "ads": [],
             "title": "",
-            "profile_url": divar_pro_profile_url(),
-            "brand_token": extract_brand_token(),
+            "profile_url": primary,
+            "profile_urls": profiles,
+            "brand_token": extract_brand_token(primary),
             "error": "disabled",
             "fetched_at": 0.0,
             "from_cache": False,
         }
 
-    profile = divar_pro_profile_url()
-    token = extract_brand_token(profile)
     ttl = divar_pro_cache_ttl_sec()
     now = time.time()
-    cache_key = token or profile
+    tokens = [extract_brand_token(u) for u in profiles]
+    cache_key = "|".join(t or u for t, u in zip(tokens, profiles))
     disk: dict[str, Any] | None = None
 
     with _CACHE_LOCK:
@@ -328,14 +373,15 @@ def get_divar_pro_ads(*, force_refresh: bool = False) -> dict[str, Any]:
                 "ok": True,
                 "ads": list(_MEM_CACHE.get("ads") or []),
                 "title": str(_MEM_CACHE.get("title") or ""),
-                "profile_url": str(_MEM_CACHE.get("profile_url") or profile),
-                "brand_token": token,
+                "profile_url": str(_MEM_CACHE.get("profile_url") or primary),
+                "profile_urls": profiles,
+                "brand_token": extract_brand_token(primary),
                 "error": "",
                 "fetched_at": float(_MEM_CACHE.get("fetched_at") or 0),
                 "from_cache": True,
             }
 
-        disk = _read_disk_cache(token) if token else None
+        disk = _read_disk_cache(cache_key)
         if (
             disk
             and not force_refresh
@@ -348,7 +394,7 @@ def get_divar_pro_ads(*, force_refresh: bool = False) -> dict[str, Any]:
                     "fetched_at": float(disk.get("fetched_at") or now),
                     "ads": list(disk.get("ads") or []),
                     "title": str(disk.get("title") or ""),
-                    "profile_url": str(disk.get("profile_url") or profile),
+                    "profile_url": str(disk.get("profile_url") or primary),
                     "error": "",
                 }
             )
@@ -356,39 +402,77 @@ def get_divar_pro_ads(*, force_refresh: bool = False) -> dict[str, Any]:
                 "ok": True,
                 "ads": list(disk.get("ads") or []),
                 "title": str(disk.get("title") or ""),
-                "profile_url": str(disk.get("profile_url") or profile),
-                "brand_token": token,
+                "profile_url": str(disk.get("profile_url") or primary),
+                "profile_urls": profiles,
+                "brand_token": extract_brand_token(primary),
                 "error": "",
                 "fetched_at": float(disk.get("fetched_at") or 0),
                 "from_cache": True,
             }
 
-    fresh = fetch_divar_pro_ads(brand_token=token, profile_url=profile)
-    if fresh.get("ok"):
+    all_ads: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    page_title = ""
+    errors: list[str] = []
+    any_ok = False
+    for profile in profiles:
+        token = extract_brand_token(profile)
+        fresh = fetch_divar_pro_ads(brand_token=token, profile_url=profile)
+        if fresh.get("ok"):
+            any_ok = True
+            if not page_title:
+                page_title = str(fresh.get("title") or "").strip()
+            for ad in fresh.get("ads") or []:
+                if not isinstance(ad, dict):
+                    continue
+                tok = str(ad.get("token") or "").strip()
+                if not tok or tok in seen:
+                    continue
+                seen.add(tok)
+                ad2 = dict(ad)
+                ad2.setdefault("source", "divar")
+                ad2.setdefault("external", True)
+                ad2.setdefault("badge", "دیوار")
+                ad2["profile_url"] = profile
+                all_ads.append(ad2)
+        else:
+            err = str(fresh.get("error") or "fetch_failed")
+            errors.append(f"{token or profile}:{err}")
+
+    if any_ok:
         payload = {
-            "brand_token": token,
-            "profile_url": profile,
-            "title": fresh.get("title") or "",
-            "ads": fresh.get("ads") or [],
-            "fetched_at": float(fresh.get("fetched_at") or now),
+            "brand_token": cache_key,
+            "profile_url": primary,
+            "profile_urls": profiles,
+            "title": page_title or "آگهی‌های دیوار",
+            "ads": all_ads,
+            "fetched_at": now,
         }
         _write_disk_cache(payload)
         with _CACHE_LOCK:
             _MEM_CACHE.update(
                 {
                     "key": cache_key,
-                    "fetched_at": payload["fetched_at"],
-                    "ads": list(payload["ads"]),
+                    "fetched_at": now,
+                    "ads": list(all_ads),
                     "title": payload["title"],
-                    "profile_url": profile,
+                    "profile_url": primary,
                     "error": "",
                 }
             )
-        fresh["from_cache"] = False
-        return fresh
+        return {
+            "ok": True,
+            "ads": all_ads,
+            "title": payload["title"],
+            "profile_url": primary,
+            "profile_urls": profiles,
+            "brand_token": extract_brand_token(primary),
+            "error": "; ".join(errors) if errors else "",
+            "fetched_at": now,
+            "from_cache": False,
+        }
 
-    # شکست — کش کهنه اگر باشد
-    stale = disk if disk else _read_disk_cache(token) if token else None
+    stale = disk if disk else _read_disk_cache(cache_key)
     if stale and isinstance(stale.get("ads"), list) and stale["ads"]:
         with _CACHE_LOCK:
             _MEM_CACHE.update(
@@ -397,24 +481,55 @@ def get_divar_pro_ads(*, force_refresh: bool = False) -> dict[str, Any]:
                     "fetched_at": float(stale.get("fetched_at") or 0),
                     "ads": list(stale.get("ads") or []),
                     "title": str(stale.get("title") or ""),
-                    "profile_url": str(stale.get("profile_url") or profile),
-                    "error": str(fresh.get("error") or "stale"),
+                    "profile_url": str(stale.get("profile_url") or primary),
+                    "error": "; ".join(errors) or "stale",
                 }
             )
         return {
             "ok": True,
             "ads": list(stale.get("ads") or []),
             "title": str(stale.get("title") or ""),
-            "profile_url": str(stale.get("profile_url") or profile),
-            "brand_token": token,
-            "error": str(fresh.get("error") or ""),
+            "profile_url": str(stale.get("profile_url") or primary),
+            "profile_urls": profiles,
+            "brand_token": extract_brand_token(primary),
+            "error": "; ".join(errors),
             "fetched_at": float(stale.get("fetched_at") or 0),
             "from_cache": True,
             "stale": True,
         }
 
-    fresh["from_cache"] = False
-    return fresh
+    return {
+        "ok": False,
+        "ads": [],
+        "title": "",
+        "profile_url": primary,
+        "profile_urls": profiles,
+        "brand_token": extract_brand_token(primary),
+        "error": "; ".join(errors) or "fetch_failed",
+        "fetched_at": now,
+        "from_cache": False,
+    }
+
+
+def clear_divar_pro_ads_cache() -> None:
+    """پاک کردن کش حافظه + فایل آگهی‌های دیوار."""
+    with _CACHE_LOCK:
+        _MEM_CACHE.update(
+            {
+                "key": None,
+                "fetched_at": 0.0,
+                "ads": [],
+                "title": "",
+                "profile_url": "",
+                "error": "",
+            }
+        )
+    path = _cache_path()
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+    except Exception:
+        _log.debug("divar_pro_ads: cache file remove failed", exc_info=True)
 
 
 def home_divar_ads_context() -> dict[str, Any]:
@@ -425,8 +540,22 @@ def home_divar_ads_context() -> dict[str, Any]:
         "divar_pro_ads_title": "",
         "divar_pro_profile_url": divar_pro_profile_url(),
     }
+    try:
+        from .home_ads_config import get_home_ads_settings, home_ads_system_enabled
+
+        if not home_ads_system_enabled():
+            return empty
+        title = str((get_home_ads_settings() or {}).get("title") or "آگهی‌ها").strip() or "آگهی‌ها"
+    except Exception:
+        title = "آگهی‌ها"
     if not divar_pro_ads_enabled():
-        return empty
+        # دیوار خاموش است؛ وینور ممکن است جداگانه در routes ادغام شود
+        return {
+            "divar_pro_ads_enabled": False,
+            "divar_pro_ads": [],
+            "divar_pro_ads_title": title,
+            "divar_pro_profile_url": divar_pro_profile_url(),
+        }
     try:
         result = get_divar_pro_ads()
     except Exception:
@@ -434,10 +563,15 @@ def home_divar_ads_context() -> dict[str, Any]:
         return empty
     ads = result.get("ads") if isinstance(result.get("ads"), list) else []
     if not ads:
-        return empty
+        return {
+            "divar_pro_ads_enabled": False,
+            "divar_pro_ads": [],
+            "divar_pro_ads_title": title,
+            "divar_pro_profile_url": str(result.get("profile_url") or divar_pro_profile_url()),
+        }
     return {
         "divar_pro_ads_enabled": True,
         "divar_pro_ads": ads,
-        "divar_pro_ads_title": str(result.get("title") or "آگهی‌های دیوار"),
+        "divar_pro_ads_title": title or str(result.get("title") or "آگهی‌های دیوار"),
         "divar_pro_profile_url": str(result.get("profile_url") or divar_pro_profile_url()),
     }

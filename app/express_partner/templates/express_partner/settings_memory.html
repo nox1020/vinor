@@ -1,0 +1,188 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}{{ seo_title|default('حافظه | وینور اکسپرس') }}{% endblock %}
+
+{% block content %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+
+{% set _report = report|default({}) %}
+{% set _summary = _report.get('summary') or '' %}
+
+<style>
+  html:has(#partnerMemoryPage),
+  body:has(#partnerMemoryPage) {
+    background: #000 !important;
+  }
+  #partnerMemoryHeader.ep-partner-header,
+  #partnerMemoryHeader .ep-partner-header-bar {
+    background: #000 !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+  #partnerMemoryHeader .ep-header-title-pill,
+  #partnerMemoryHeader .vinor-dash-glass-pill {
+    background: #1a1a1a !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
+  #partnerMemoryHeader .ep-partner-header-title,
+  #partnerMemoryHeader .ep-partner-header-btn,
+  #partnerMemoryHeader .ep-partner-header-btn-icon {
+    color: #fff !important;
+  }
+
+  #partnerMemoryPage {
+    --ps-bg: #000;
+    --ps-surface: #1a1a1a;
+    --ps-line: rgba(255, 255, 255, 0.1);
+    --ps-text: #fff;
+    --ps-muted: rgba(255, 255, 255, 0.55);
+    background: var(--ps-bg);
+    color: var(--ps-text);
+  }
+  #partnerMemoryPage .ps-shell {
+    max-width: 40rem;
+    margin-inline: auto;
+    padding: 0.5rem 1.1rem 2.25rem;
+  }
+  #partnerMemoryPage .ps-intro {
+    margin: 0 0 1rem;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--ps-muted);
+    text-align: right;
+  }
+  #partnerMemoryPage .ps-live {
+    margin: 0 0 1.1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.45);
+  }
+  #partnerMemoryPage .ps-live-dot {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+  }
+  #partnerMemoryPage .ps-block-label {
+    margin: 0 0.15rem 0.55rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: right;
+  }
+  #partnerMemoryPage .ps-summary {
+    margin: 0 0 1.5rem;
+    padding: 1.05rem 1.1rem;
+    border-radius: 1.15rem;
+    background: var(--ps-surface);
+    border: 1px solid var(--ps-line);
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: #fff;
+    text-align: right;
+    white-space: pre-wrap;
+  }
+  #partnerMemoryPage .ps-summary-hint {
+    margin: 0.65rem 0 0;
+    font-size: 0.72rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.4);
+  }
+</style>
+
+{{ ep_header_start(id='partnerMemoryHeader') }}
+{% call ep_header_row('حافظه', url_for('express_partner.settings'), show_title=true, inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{{ ep_header_end() }}
+
+<main id="partnerMemoryPage"
+      class="partner-page-scroll-pad min-h-[100dvh] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]"
+      data-report-url="{{ url_for('express_partner.settings_data') }}"
+      data-updated-at="{{ _report.get('updated_at') or '' }}">
+  <div class="ps-shell">
+    <p class="ps-intro">
+      خلاصهٔ حافظه با مدل نوشته می‌شود (مثل Memory در ChatGPT) و با هر چت یا اقدام از نو ادغام می‌شود.
+    </p>
+    <p class="ps-live" aria-live="polite">
+      <span class="ps-live-dot" aria-hidden="true"></span>
+      <span data-report-live>به‌روز</span>
+    </p>
+
+    <h2 class="ps-block-label">خلاصه حافظه</h2>
+    <div class="ps-summary" data-memory-summary>
+      <span data-memory-summary-text>{% if _summary %}{{ _summary }}{% else %}هنوز خلاصه‌ای نیست — با چت یا اقدام بعدی پر می‌شود.{% endif %}</span>
+      <p class="ps-summary-hint">متن را مدل می‌نویسد — آمار خام کپی نمی‌شود.</p>
+    </div>
+  </div>
+</main>
+
+{% set bottom_nav_active = 'profile' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var page = document.getElementById('partnerMemoryPage');
+  if (!page) return;
+
+  function applyReport(data) {
+    if (!data || !data.ok) return;
+    page.setAttribute('data-updated-at', data.updated_at || '');
+    if (data.summary) {
+      var summaryText = page.querySelector('[data-memory-summary-text]');
+      if (summaryText) summaryText.textContent = data.summary;
+    }
+    var live = page.querySelector('[data-report-live]');
+    if (live) {
+      try {
+        var d = data.updated_at ? new Date(data.updated_at) : new Date();
+        live.textContent =
+          'به‌روز ' + d.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+      } catch (_) {
+        live.textContent = 'به‌روز';
+      }
+    }
+  }
+
+  var url = page.getAttribute('data-report-url') || '';
+  if (!url) return;
+  var timer = null;
+  var inFlight = false;
+
+  function poll() {
+    if (document.hidden || inFlight) return;
+    inFlight = true;
+    fetch(url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(applyReport)
+      .catch(function () {})
+      .finally(function () {
+        inFlight = false;
+      });
+  }
+
+  timer = setInterval(poll, 8000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) poll();
+  });
+  window.addEventListener(
+    'vinor:express-page-swap',
+    function () {
+      if (timer) clearInterval(timer);
+    },
+    { once: true }
+  );
+  setTimeout(poll, 800);
+})();
+</script>
+{% endblock %}

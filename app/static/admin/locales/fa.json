@@ -98,6 +98,7 @@
     "roles": "نقش‌ها",
     "feature_flags": "فلگ‌های ویژگی",
     "sms": "پیامک",
+    "sms_notifications": "پیامک و نوتیفیکیشن",
     "more": "بیشتر"
   },
   "bottom": {
@@ -137,13 +138,16 @@
     "analytics": "تحلیل",
     "flags": "فلگ‌های ویژگی",
     "settings": "تنظیمات",
+    "sms_notifications": "پیامک و نوتیفیکیشن",
+    "sms_send": "ارسال پیامک",
+    "colleague_notifications": "اعلان همکاران",
     "users": "کاربران"
   },
   "dashboard": {
-    "title": "چت عملیات",
-    "subtitle": "پیام همگانی، فایل، همکار، بازدید و مالی — با کارت تأیید.",
-    "page_title": "چت عملیات",
-    "browser_title": "چت عملیات | Vinor Control",
+    "title": "داشبورد",
+    "subtitle": "وضعیت صف‌ها، میانبرها و چت عملیات.",
+    "page_title": "داشبورد",
+    "browser_title": "داشبورد | Vinor Control",
     "confirms": "تأییدها",
     "monitor": "مانیتور",
     "ai_health": "سلامت هوش مصنوعی",
@@ -381,6 +385,7 @@
     "workflow": ["گردش کار", "ورکفلو"],
     "memory": ["حافظه"],
     "error": ["خطا", "خطاها", "باگ"],
-    "analytics": ["تحلیل", "قیف", "درآمد"]
+    "analytics": ["تحلیل", "قیف", "درآمد"],
+    "sms": ["پیامک", "نوتیفیکیشن", "اعلان", "اس ام اس", "sms"]
   }
 }

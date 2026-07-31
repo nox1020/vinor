@@ -27,6 +27,86 @@ def _admin_ops_user_key() -> str:
     return f"admin_{safe or 'ops'}"
 
 
+def _dashboard_overview() -> dict[str, Any]:
+    """آمار خلاصه برای داشبورد ادمین (fail-open)."""
+    overview: dict[str, Any] = {
+        "partners_pending": 0,
+        "lands_pending": 0,
+        "visits_pending": 0,
+        "withdrawals_pending": 0,
+        "ai_pending": 0,
+        "ai_errors": 0,
+        "quick_links": [
+            {"label": "فایل‌ها", "href": "admin.express_listings", "icon": "fa-building"},
+            {"label": "همکاران", "href": "admin.express_partners", "icon": "fa-user-group"},
+            {"label": "بازدیدها", "href": "admin.express_visit_requests", "icon": "fa-route"},
+            {"label": "برداشت‌ها", "href": "admin.financial_withdrawals", "icon": "fa-money-bill-transfer"},
+            {"label": "پیام‌ها و مدل AI", "href": "admin.ai_questions", "icon": "fa-microchip"},
+            {"label": "نوار آگهی", "href": "admin.home_ads", "icon": "fa-images"},
+            {"label": "پیامک و نوتیفیکیشن", "href": "admin.sms_notifications", "icon": "fa-comment-sms"},
+        ],
+    }
+    try:
+        from app.utils.storage import load_express_partner_apps
+
+        apps = load_express_partner_apps() or []
+        overview["partners_pending"] = sum(
+            1
+            for a in apps
+            if isinstance(a, dict)
+            and str(a.get("status") or "").strip().lower()
+            in ("pending", "under_review", "waiting", "review")
+        )
+    except Exception:
+        pass
+    try:
+        from .routes import _lands_path, counts_by_status, load_json
+
+        lands = load_json(_lands_path())
+        express = [
+            l
+            for l in (lands if isinstance(lands, list) else [])
+            if isinstance(l, dict) and l.get("is_express")
+        ]
+        p, _a, _r = counts_by_status(express)
+        overview["lands_pending"] = int(p or 0)
+    except Exception:
+        pass
+    try:
+        from app.utils.storage import load_express_visit_requests
+
+        visits = load_express_visit_requests() or []
+        overview["visits_pending"] = sum(
+            1
+            for v in visits
+            if isinstance(v, dict)
+            and str(v.get("status") or "").strip() in ("pending", "done_pending")
+        )
+    except Exception:
+        pass
+    try:
+        from app.utils.storage import load_partner_withdrawals
+
+        rows = load_partner_withdrawals() or []
+        overview["withdrawals_pending"] = sum(
+            1
+            for w in rows
+            if isinstance(w, dict) and str(w.get("status") or "").strip() == "pending"
+        )
+    except Exception:
+        pass
+    try:
+        from app.ai_console.service import dashboard_snapshot
+
+        snap = dashboard_snapshot() or {}
+        k = snap.get("kpis") or {}
+        overview["ai_pending"] = int(k.get("pending_confirms") or 0)
+        overview["ai_errors"] = int(k.get("errors_sample") or 0)
+    except Exception:
+        pass
+    return overview
+
+
 def _ops_chat_context() -> dict[str, Any]:
     from app.ai.audience import AUDIENCE_ADMIN
     from app.ai.chat_store import (
@@ -54,6 +134,13 @@ def _ops_chat_context() -> dict[str, Any]:
         active_thread_id = ""
         chat_messages = []
         chat_threads = []
+
+    overview = _dashboard_overview()
+    for link in overview.get("quick_links") or []:
+        try:
+            link["url"] = url_for(link["href"])
+        except Exception:
+            link["url"] = "#"
 
     return {
         "ops_user_key": user_key,
@@ -105,6 +192,7 @@ def _ops_chat_context() -> dict[str, Any]:
         "home_ai_enabled": True,
         "home_ai_open": True,
         "home_ai_open_thread": active_thread_id or "",
+        "dash_overview": overview,
     }
 
 
@@ -112,7 +200,7 @@ def _ops_chat_context() -> dict[str, Any]:
 @admin_bp.route("/", endpoint="dashboard", strict_slashes=False)
 @login_required
 def dashboard():
-    """خانهٔ ادمین = چت عملیات."""
+    """خانهٔ ادمین = داشبورد عملیات + پنل چت."""
     ctx = _ops_chat_context()
     return render_template("admin/dashboard.html", **ctx)
 

@@ -7,7 +7,7 @@
       <img src="{{ url_for('static', filename='icons/icon-48.png') }}" alt="" width="28" height="28" class="rounded-md object-cover shrink-0" decoding="async">
       <div class="min-w-0 leading-tight">
         <div class="font-bold text-sm text-white truncate">Vinor Ops</div>
-        <div class="text-[10px] text-[#6B7380]">چت عملیات</div>
+        <div class="text-[10px] text-[#6B7380]">داشبورد</div>
       </div>
     </a>
     <button type="button" @click="menuOpen = false" class="lg:hidden p-1 text-[#6B7380] focusable rounded" data-i18n-aria="common.close">
@@ -19,8 +19,8 @@
 
     <div class="vc-nav-label">اصلی</div>
     <a href="{{ url_for('admin.dashboard') }}"
-       class="vc-nav-link {% if ep == 'admin.dashboard' %}is-active{% endif %}">
-      <i class="fa-solid fa-comments"></i><span>چت عملیات</span>
+       class="vc-nav-link {% if ep in ['admin.dashboard', 'admin.admin_root'] %}is-active{% endif %}">
+      <i class="fa-solid fa-gauge-high"></i><span>داشبورد</span>
     </a>
 
     <div class="vc-nav-label">مرور</div>
@@ -58,6 +58,20 @@
     <a href="{{ url_for('admin.lawyer') }}"
        class="vc-nav-link {% if ep == 'admin.lawyer' %}is-active{% endif %}">
       <i class="fa-solid fa-scale-balanced"></i><span>وکیل ملکی</span>
+    </a>
+    <a href="{{ url_for('admin.home_ads') }}"
+       class="vc-nav-link {% if ep == 'admin.home_ads' %}is-active{% endif %}">
+      <i class="fa-solid fa-images"></i><span>نوار آگهی خانه</span>
+    </a>
+    <a href="{{ url_for('admin.sms_notifications') }}"
+       class="vc-nav-link {% if ep in [
+         'admin.sms_notifications',
+         'admin.sms_colleagues', 'admin.sms_history', 'admin.sms_campaign',
+         'admin.sms_recipients', 'admin.sms_recipients_edit',
+         'admin.notifications_colleagues', 'admin.notifications_broadcast',
+         'admin.notifications_test'
+       ] %}is-active{% endif %}">
+      <i class="fa-solid fa-comment-sms"></i><span>پیامک و نوتیفیکیشن</span>
     </a>
 
     <div class="vc-nav-label">تنظیمات</div>

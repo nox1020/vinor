@@ -160,6 +160,7 @@
 
   function swipeTargetOk(el) {
     if (!el || !el.closest) return null;
+    if (el.closest('#homeDivarAdsCarousel, [data-vn-home-divar]')) return null;
     var card = el.closest('[data-vn-journey-card]');
     if (!card) return null;
     /* CTA / لینک‌ها را رد کن؛ روی بدنه، مراحل، و دکمه جمع/باز اجازه بده */
@@ -175,7 +176,10 @@
   function chatScrollSwipeOk(el) {
     if (!el || !el.closest) return false;
     if (!el.closest('#vnHomeScroll')) return false;
-    if (el.closest('a[href], input, textarea, select, [data-vn-chat-prompt], .ai-composer')) return false;
+    /* نوار افقی دیوار / لینک‌ها را با سوایپ جمع کارت قاطی نکن */
+    if (el.closest('#homeDivarAdsCarousel, [data-vn-home-divar], a[href], input, textarea, select, [data-vn-chat-prompt], .ai-composer')) {
+      return false;
+    }
     return true;
   }
 
@@ -278,7 +282,7 @@
 </script>
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=95"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=97"></script>
 <script>
 (function () {
   function syncHomeDockPad() {

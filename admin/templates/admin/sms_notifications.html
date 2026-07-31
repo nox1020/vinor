@@ -1,0 +1,163 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}پیامک و نوتیفیکیشن | پنل مدیریت وینور{% endblock %}
+{% block page_title %}پیامک و نوتیفیکیشن{% endblock %}
+{% block page_title_i18n %}nav.sms_notifications{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-5xl">
+
+  <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg p-4 text-sm text-sky-900 dark:text-sky-100">
+    <p class="font-medium mb-1">ارتباط با همکاران و کاربران</p>
+    <p class="text-sky-800 dark:text-sky-200/90 leading-6 text-xs">
+      ارسال پیامک گروهی، اعلان درون‌برنامه/پوش، مدیریت گیرندگان، سابقه و کمپین تبلیغاتی از اینجا در دسترس است.
+      {% if sms_line_number %}خط ارسال پیامک: <span dir="ltr" class="font-mono">{{ sms_line_number }}</span>{% endif %}
+    </p>
+  </div>
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500">گیرندگان ذخیره‌شده</p>
+      <p class="mt-0.5 font-semibold tabular-nums">{{ recipient_total|default(0) }}</p>
+    </div>
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500">همکار تأییدشده</p>
+      <p class="mt-0.5 font-semibold tabular-nums">{{ partners_count|default(0) }}</p>
+    </div>
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500">سابقه پیامک</p>
+      <p class="mt-0.5 font-semibold tabular-nums">{{ sms_hist_stats.sent|default(0) }} / {{ sms_hist_stats.total|default(0) }}</p>
+    </div>
+    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+      <p class="text-gray-500">برودکست اعلان</p>
+      <p class="mt-0.5 font-semibold tabular-nums">{{ notif_stats.total_broadcasts|default(0) }}</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <a href="{{ url_for('admin.sms_colleagues') }}"
+       class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 shadow-sm hover:border-blue-300 dark:hover:border-blue-700 transition block">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+          <i class="fa-solid fa-sms text-emerald-600 dark:text-emerald-400"></i>
+        </span>
+        <div>
+          <h2 class="text-sm font-bold text-gray-900 dark:text-white">ارسال پیامک</h2>
+          <p class="text-[11px] text-gray-500">آنی، زمان‌دار و تکرارشونده</p>
+        </div>
+      </div>
+      <p class="text-xs text-gray-600 dark:text-gray-400 leading-6">
+        پیامک به گروه‌های گیرنده با متن مستقیم یا قالب، صف زمان‌دار
+        {% if scheduled_count %}(فعال: {{ scheduled_count }}){% endif %}
+        و پیش‌نمایش سابقه.
+      </p>
+    </a>
+
+    <a href="{{ url_for('admin.notifications_colleagues') }}"
+       class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 shadow-sm hover:border-blue-300 dark:hover:border-blue-700 transition block">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+          <i class="fa-solid fa-bell text-violet-600 dark:text-violet-400"></i>
+        </span>
+        <div>
+          <h2 class="text-sm font-bold text-gray-900 dark:text-white">اعلان همکاران</h2>
+          <p class="text-[11px] text-gray-500">نوتیفیکیشن درون‌برنامه و پوش</p>
+        </div>
+      </div>
+      <p class="text-xs text-gray-600 dark:text-gray-400 leading-6">
+        برودکست اعلان به همکاران تأییدشده، تست دریافت و سابقه ارسال‌ها.
+      </p>
+    </a>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <a href="{{ url_for('admin.sms_recipients') }}"
+       class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-800/60 transition flex items-center gap-3">
+      <i class="fa-solid fa-users text-blue-500 w-4 text-center"></i>
+      <span class="font-medium text-gray-900 dark:text-white">گیرندگان پیامک</span>
+    </a>
+    <a href="{{ url_for('admin.sms_history') }}"
+       class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-800/60 transition flex items-center gap-3">
+      <i class="fa-solid fa-clock-rotate-left text-amber-500 w-4 text-center"></i>
+      <span class="font-medium text-gray-900 dark:text-white">سابقه پیامک</span>
+    </a>
+    <a href="{{ url_for('admin.sms_campaign') }}"
+       class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-800/60 transition flex items-center gap-3">
+      <i class="fa-solid fa-bullhorn text-rose-500 w-4 text-center"></i>
+      <span class="font-medium text-gray-900 dark:text-white">تبلیغات پیامکی</span>
+    </a>
+    <a href="{{ url_for('admin.settings') }}#sms"
+       class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-800/60 transition flex items-center gap-3">
+      <i class="fa-solid fa-gear text-gray-500 w-4 text-center"></i>
+      <span class="font-medium text-gray-900 dark:text-white">تنظیمات پیامک</span>
+    </a>
+  </div>
+
+  {% if groups %}
+  <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+    <div class="px-4 sm:px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
+      <h3 class="text-sm font-bold text-gray-900 dark:text-white">گروه‌های گیرنده</h3>
+      <a href="{{ url_for('admin.sms_recipients') }}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">مدیریت</a>
+    </div>
+    <div class="divide-y divide-gray-100 dark:divide-gray-800">
+      {% for g in groups %}
+      <a href="{{ url_for('admin.sms_recipients_edit', group_key=g.key) }}"
+         class="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-800/50">
+        <span class="text-gray-900 dark:text-white">{{ g.label or g.key }}</span>
+        <span class="tabular-nums text-gray-500 text-xs">{{ g.count|default(0) }} نفر</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+      <div class="px-4 sm:px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <h3 class="text-sm font-bold text-gray-900 dark:text-white">آخرین پیامک‌ها</h3>
+        <a href="{{ url_for('admin.sms_history') }}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">همه</a>
+      </div>
+      {% if sms_hist %}
+      <ul class="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
+        {% for h in sms_hist %}
+        <li class="px-4 sm:px-5 py-2.5 flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <p class="font-mono text-gray-800 dark:text-gray-200 truncate" dir="ltr">{{ h.mobile or '—' }}</p>
+            <p class="text-gray-500 truncate mt-0.5">{{ (h.message or h.body or h.template_id or '—')|truncate(64) }}</p>
+          </div>
+          <span class="shrink-0 {% if h.success %}text-emerald-600{% else %}text-rose-500{% endif %}">
+            {% if h.success %}موفق{% else %}خطا{% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="px-4 py-6 text-xs text-gray-500 text-center">سابقه‌ای ثبت نشده.</p>
+      {% endif %}
+    </div>
+
+    <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+      <div class="px-4 sm:px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <h3 class="text-sm font-bold text-gray-900 dark:text-white">آخرین اعلان‌ها</h3>
+        <a href="{{ url_for('admin.notifications_colleagues') }}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">مرکز اعلان</a>
+      </div>
+      {% if notif_history %}
+      <ul class="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
+        {% for b in notif_history %}
+        <li class="px-4 sm:px-5 py-2.5">
+          <p class="font-medium text-gray-900 dark:text-white truncate">{{ b.title or 'اعلان' }}</p>
+          <p class="text-gray-500 truncate mt-0.5">{{ (b.body or '')|truncate(72) }}</p>
+          <p class="text-gray-400 mt-1 tabular-nums">
+            {{ b.sent|default(b.success_count)|default(0) }} ارسال
+            · {{ (b.created_at or b.ts or '')[:16] }}
+          </p>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="px-4 py-6 text-xs text-gray-500 text-center">برودکستی ثبت نشده.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -7,37 +7,65 @@
     flex-shrink: 0;
     width: 100%;
     margin: 0;
-    padding: 0 0 0.35rem;
+    padding: 0 0 0.25rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     background: linear-gradient(180deg, #050505 0%, #000 100%);
+    position: relative;
+    /* زیر دکمه‌های شناور هدر (z-index: 90) و زیر کشوی منو (80/81) */
+    z-index: 1;
   }
   #homeDashboardPage.ai-home-is-empty #homeDivarAdsCarousel.vn-home-divar {
     display: block;
-    /* زیر هدر شناور */
-    margin-top: calc(0.45rem + 2.5rem + 0.2rem);
-    padding-top: 0.35rem;
+    /* زیر هدر شناور (منو 2.5rem) */
+    margin-top: calc(0.45rem + 2.5rem + 0.25rem);
+    padding-top: 0.2rem;
   }
   #homeDashboardPage:not(.ai-home-is-empty) #homeDivarAdsCarousel.vn-home-divar {
     display: none !important;
+    pointer-events: none !important;
+  }
+  /* وقتی منوی ساید باز است: نوار آگهی تعامل/فوکوس نگیرد و زیر بک‌دراپ بماند */
+  html.vinor-profile-drawer-open #homeDivarAdsCarousel.vn-home-divar {
+    pointer-events: none !important;
+    touch-action: none;
   }
   #homeDivarAdsCarousel .vn-home-divar__head {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 0.5rem;
-    padding: 0 0.85rem 0.45rem;
+    /* فضای دکمه منو سمت راست تا عنوان زیر همبرگر نرود */
+    padding: 0 0.85rem 0.4rem;
+    padding-inline-start: max(0.85rem, 3.4rem);
+  }
+  /* «دریافت پلاس» وسط هدر روی عنوان نوار می‌افتد — عنوان را در نیم‌راست نگه دار */
+  html:has(#homeDashboardPage.ai-home-is-empty):has(.ep-header-float-actions--plus) #homeDivarAdsCarousel .vn-home-divar__title {
+    max-width: calc(50% - 5.25rem);
+  }
+  html:has(#homeDashboardPage.ai-home-is-empty):has(.ep-header-float-actions--plus) #homeDivarAdsCarousel .vn-home-divar__all {
+    max-width: calc(50% - 5.25rem);
   }
   #homeDivarAdsCarousel .vn-home-divar__title {
     margin: 0;
+    min-width: 0;
+    flex: 1 1 auto;
     font-size: 0.8125rem;
     font-weight: 700;
     color: #f4f4f5;
     text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   #homeDivarAdsCarousel .vn-home-divar__meta {
     font-size: 0.6875rem;
     font-weight: 500;
     color: #71717a;
+  }
+  @media (max-width: 390px) {
+    #homeDivarAdsCarousel .vn-home-divar__meta {
+      display: none;
+    }
   }
   #homeDivarAdsCarousel .vn-home-divar__all {
     flex-shrink: 0;
@@ -45,6 +73,9 @@
     font-weight: 600;
     color: #a1a1aa;
     text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   #homeDivarAdsCarousel .vn-home-divar__all:hover,
   #homeDivarAdsCarousel .vn-home-divar__all:focus-visible {
@@ -58,10 +89,12 @@
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;
+    overscroll-behavior-y: none;
+    touch-action: pan-x;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding: 0 0.85rem 0.55rem;
+    padding: 0 0.85rem 0.45rem;
     max-width: 100%;
     pointer-events: auto;
   }
@@ -131,6 +164,28 @@
     font-size: 0.58rem;
     font-weight: 600;
   }
+  #homeDivarAdsCarousel .vn-home-divar__badge {
+    position: absolute;
+    top: 0.35rem;
+    inset-inline-start: 0.35rem;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.12rem 0.4rem;
+    border-radius: 0.35rem;
+    background: rgba(0, 0, 0, 0.62);
+    color: #f4f4f5;
+    font-size: 0.58rem;
+    font-weight: 700;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__badge--vinor {
+    background: rgba(37, 99, 235, 0.9);
+    color: #fff;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__badge--divar {
+    background: rgba(220, 38, 38, 0.9);
+    color: #fff;
+  }
   #homeDivarAdsCarousel .vn-home-divar__body {
     display: flex;
     flex-direction: column;
@@ -167,35 +222,81 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* ارتفاع کوتاه: کارت‌ها جمع‌تر تا با بدو ورود هم‌زیستی کنند */
+  @media (max-height: 700px) {
+    #homeDashboardPage.ai-home-is-empty #homeDivarAdsCarousel.vn-home-divar {
+      margin-top: calc(0.35rem + 2.5rem + 0.15rem);
+      padding-bottom: 0.1rem;
+    }
+    #homeDivarAdsCarousel .vn-home-divar__head {
+      padding-bottom: 0.28rem;
+    }
+    #homeDivarAdsCarousel .vn-home-divar__card {
+      width: min(8.35rem, 38vw);
+    }
+    #homeDivarAdsCarousel .vn-home-divar__body {
+      min-height: 3.35rem;
+      padding: 0.32rem 0.42rem 0.4rem;
+      gap: 0.18rem;
+    }
+    #homeDivarAdsCarousel .vn-home-divar__track {
+      gap: 0.45rem;
+      padding-bottom: 0.3rem;
+    }
+  }
+  /* ارتفاع خیلی کوتاه: نوار دیوار جمع شود تا کامپوزر/بدو ورود نمانند */
+  @media (max-height: 640px) {
+    #homeDashboardPage.ai-home-is-empty #homeDivarAdsCarousel.vn-home-divar {
+      flex-shrink: 1;
+      min-height: 0;
+      max-height: 34vh;
+      overflow: hidden;
+    }
+    #homeDivarAdsCarousel .vn-home-divar__media {
+      aspect-ratio: 16 / 10;
+    }
+  }
 </style>
+{% set _divar_home_empty = not (chat_messages|default([])|selectattr('role', 'equalto', 'user')|list) %}
+{% set _ads_title = divar_pro_ads_title|default('آگهی‌ها') %}
+{% set _vinor_n = home_ads_vinor_count|default(0) %}
+{% set _divar_n = home_ads_divar_count|default(0) %}
 <section id="homeDivarAdsCarousel"
          class="vn-home-divar"
-         aria-label="آگهی‌های دیوار"
+         aria-label="{{ _ads_title }}"
          data-vn-home-divar
-         data-has-ads="1">
+         data-has-ads="1"
+         data-no-drawer-swipe
+         aria-hidden="{{ 'false' if _divar_home_empty else 'true' }}"
+         {% if not _divar_home_empty %}inert{% endif %}>
   <div class="vn-home-divar__head">
     <h2 class="vn-home-divar__title">
-      آگهی‌های دیوار
+      {{ _ads_title }}
       <span class="vn-home-divar__meta"> · {{ _divar_ads|length|fa_digits }} آگهی — بکشید</span>
     </h2>
-    {% if divar_pro_profile_url|default('') %}
+    {% if _divar_n and divar_pro_profile_url|default('') %}
     <a class="vn-home-divar__all"
        href="{{ divar_pro_profile_url }}"
        target="_blank"
        rel="noopener noreferrer">همه در دیوار</a>
+    {% elif _vinor_n %}
+    <a class="vn-home-divar__all"
+       href="{{ url_for('express_partner.dashboard') }}"
+       data-vinor-express-nav>فایل‌های وینور</a>
     {% endif %}
   </div>
   <div class="vn-home-divar__track no-scrollbar"
        id="homeDivarAdsTrack"
        tabindex="0"
        role="list"
-       aria-label="اسکرول افقی آگهی‌های دیوار">
+       aria-label="اسکرول افقی آگهی‌ها">
     {% for ad in _divar_ads %}
+    {% set _src = (ad.source|default('divar'))|string|lower %}
+    {% set _ext = ad.external|default(_src != 'vinor') %}
     <a class="vn-home-divar__card"
        role="listitem"
        href="{{ ad.url }}"
-       target="_blank"
-       rel="noopener noreferrer"
+       {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav{% endif %}
        title="{{ ad.title|e }}">
       <div class="vn-home-divar__media">
         {% if ad.image_url %}
@@ -204,6 +305,10 @@
              {% if loop.index <= 3 %}loading="eager" fetchpriority="high"{% else %}loading="lazy" decoding="async"{% endif %}>
         {% else %}
         <div class="vn-home-divar__media-ph" aria-hidden="true"><i class="fas fa-image"></i></div>
+        {% endif %}
+        {% if ad.badge %}
+        <span class="vn-home-divar__badge{% if _src == 'vinor' %} vn-home-divar__badge--vinor{% elif _src == 'divar' %} vn-home-divar__badge--divar{% endif %}"
+              aria-hidden="true">{{ ad.badge }}</span>
         {% endif %}
         {% if ad.image_count and ad.image_count > 1 %}
         <span class="vn-home-divar__shots" aria-hidden="true">

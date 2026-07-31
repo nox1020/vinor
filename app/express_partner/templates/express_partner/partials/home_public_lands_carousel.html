@@ -43,6 +43,7 @@
     padding: 0 0.85rem 0.45rem;
     max-width: 100%;
     pointer-events: auto;
+    touch-action: pan-x;
   }
   #homePublicLandsCarousel .vn-home-lands__track::-webkit-scrollbar {
     display: none;
@@ -82,6 +83,7 @@
          class="vn-home-lands"
          aria-label="فایل‌های ملک"
          data-vn-home-lands
+         data-no-drawer-swipe
          {% if _home_lands %}data-has-lands="1"{% endif %}>
   <div class="vn-home-lands__head">
     <h2 class="vn-home-lands__title">

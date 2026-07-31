@@ -888,10 +888,10 @@
        data-vinor-express-nav
        class="ep-profile-drawer__foot-btn ep-profile-drawer__settings-btn"
        id="epDrawerSettingsBtn"
-       aria-label="حافظه"
-       title="حافظه"
+       aria-label="تنظیمات"
+       title="تنظیمات"
        data-tour="profile-section">
-      <i class="fas fa-chart-line" aria-hidden="true"></i>
+      <i class="fas fa-cog" aria-hidden="true"></i>
     </a>
     {% if home_ai_enabled|default(false) %}
     <button type="button"
@@ -1101,6 +1101,29 @@
     return drawer.classList.contains('is-open');
   }
 
+  function setHomeDivarDrawerLock(locked) {
+    var divar = document.getElementById('homeDivarAdsCarousel');
+    if (!divar) return;
+    try {
+      if (locked) {
+        divar.setAttribute('data-drawer-locked', '1');
+        divar.setAttribute('aria-hidden', 'true');
+        divar.setAttribute('inert', '');
+      } else {
+        divar.removeAttribute('data-drawer-locked');
+        var home = document.getElementById('homeDashboardPage');
+        var empty = !!(home && home.classList.contains('ai-home-is-empty'));
+        if (empty) {
+          divar.removeAttribute('inert');
+          divar.setAttribute('aria-hidden', 'false');
+        } else {
+          divar.setAttribute('inert', '');
+          divar.setAttribute('aria-hidden', 'true');
+        }
+      }
+    } catch (_) {}
+  }
+
   function openDrawer() {
     hoist();
     drawer.classList.add('is-open');
@@ -1108,6 +1131,7 @@
     drawer.setAttribute('aria-hidden', 'false');
     backdrop.setAttribute('aria-hidden', 'false');
     document.documentElement.classList.add('vinor-profile-drawer-open');
+    setHomeDivarDrawerLock(true);
     var menuBtn = document.getElementById('epProfileMenuBtn');
     if (menuBtn) menuBtn.setAttribute('aria-expanded', 'true');
   }
@@ -1118,6 +1142,7 @@
     drawer.setAttribute('aria-hidden', 'true');
     backdrop.setAttribute('aria-hidden', 'true');
     document.documentElement.classList.remove('vinor-profile-drawer-open');
+    setHomeDivarDrawerLock(false);
     var menuBtn = document.getElementById('epProfileMenuBtn');
     if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
     try {
@@ -1153,7 +1178,8 @@
     _el: drawer
   };
 
-  /* ژست کشیدن روی خانه: چپ → باز کردن منوی راست | راست → بستن */
+  /* ژست کشیدن روی خانه: چپ → باز کردن منوی راست | راست → بستن
+     نوار افقی فایل/آگهی (دیوار، فایل‌های ملک، …) از این ژست مستثنی است. */
   (function bindHomeDrawerSwipe() {
     var EDGE_PX = 36;
     var MIN_DX = 56;
@@ -1163,6 +1189,7 @@
     var tracking = false;
     var axis = '';
     var fromEdge = false;
+    var blockedZone = false;
     var touchId = null;
 
     function onHome() {
@@ -1170,11 +1197,82 @@
         /\/express\/partner\/home\/?$/.test(window.location.pathname || '');
     }
 
-    function ignoreTarget(t) {
+    function elFromTouch(t) {
+      if (!t) return null;
+      if (t.nodeType === 3) return t.parentElement;
+      return t.nodeType === 1 ? t : null;
+    }
+
+    /** محدودهٔ سوایپ افقی فایل/آگهی — منو اینجا باز/بسته نشود */
+    function isFileSwipeZoneEl(el) {
+      if (!el || !el.closest) return false;
+      if (el.closest(
+        '#homeDivarAdsCarousel, [data-vn-home-divar], .vn-home-divar, .vn-home-divar__track, .vn-home-divar__card, ' +
+        '#homePublicLandsCarousel, [data-vn-home-lands], .vn-home-lands, .vn-home-lands__track, .vn-home-lands__slot, ' +
+        '[data-no-drawer-swipe], .ld-gallery__swipe'
+      )) return true;
+      return false;
+    }
+
+    function isHorizScrollableAncestor(el) {
+      var node = el;
+      var hops = 0;
+      while (node && node.nodeType === 1 && hops < 12) {
+        try {
+          var style = window.getComputedStyle(node);
+          var ox = style && style.overflowX;
+          if ((ox === 'auto' || ox === 'scroll' || ox === 'overlay') &&
+              node.scrollWidth > node.clientWidth + 8) {
+            return true;
+          }
+        } catch (_) {}
+        node = node.parentElement;
+        hops += 1;
+      }
+      return false;
+    }
+
+    function pointInFileSwipeZone(clientX, clientY) {
+      var sels = [
+        '#homeDivarAdsCarousel',
+        '[data-vn-home-divar]',
+        '#homePublicLandsCarousel',
+        '[data-vn-home-lands]',
+        '[data-no-drawer-swipe]'
+      ];
+      for (var s = 0; s < sels.length; s++) {
+        var nodes = document.querySelectorAll(sels[s]);
+        for (var i = 0; i < nodes.length; i++) {
+          var el = nodes[i];
+          if (!el || el.getAttribute('aria-hidden') === 'true') continue;
+          try {
+            var st = window.getComputedStyle(el);
+            if (st && (st.display === 'none' || st.visibility === 'hidden')) continue;
+            var r = el.getBoundingClientRect();
+            if (r.width < 8 || r.height < 8) continue;
+            if (clientX >= r.left && clientX <= r.right &&
+                clientY >= r.top && clientY <= r.bottom) {
+              return true;
+            }
+          } catch (_) {}
+        }
+      }
+      return false;
+    }
+
+    function ignoreFormControls(t) {
       if (!t || !t.closest) return true;
       if (t.closest('input, textarea, select, [contenteditable="true"]')) return true;
-      if (t.closest('.vn-home-lands__track, .vn-home-lands, [data-vn-home-lands]')) return true;
-      if (t.closest('.ld-gallery__swipe, [data-no-drawer-swipe]')) return true;
+      return false;
+    }
+
+    function shouldBlockDrawerSwipe(target, clientX, clientY) {
+      var el = elFromTouch(target);
+      if (ignoreFormControls(el || target)) return true;
+      if (isFileSwipeZoneEl(el)) return true;
+      if (el && isHorizScrollableAncestor(el)) return true;
+      if (typeof clientX === 'number' && typeof clientY === 'number' &&
+          pointInFileSwipeZone(clientX, clientY)) return true;
       return false;
     }
 
@@ -1186,7 +1284,13 @@
       if (!onHome()) return;
       var touch = e.changedTouches && e.changedTouches[0];
       if (!touch) return;
-      if (ignoreTarget(e.target)) return;
+      blockedZone = shouldBlockDrawerSwipe(e.target, touch.clientX, touch.clientY);
+      if (blockedZone) {
+        tracking = false;
+        axis = '';
+        touchId = null;
+        return;
+      }
       var w = window.innerWidth || 0;
       startX = touch.clientX;
       startY = touch.clientY;
@@ -1197,7 +1301,7 @@
     }
 
     function onMove(e) {
-      if (!tracking) return;
+      if (!tracking || blockedZone) return;
       var touch = null;
       var list = e.changedTouches || e.touches;
       if (!list || !list.length) return;
@@ -1205,6 +1309,13 @@
         if (list[i].identifier === touchId) { touch = list[i]; break; }
       }
       if (!touch) touch = list[0];
+      /* اگر انگشت وارد محدودهٔ فایل شد، ژست منو را باطل کن */
+      if (shouldBlockDrawerSwipe(document.elementFromPoint(touch.clientX, touch.clientY), touch.clientX, touch.clientY)) {
+        blockedZone = true;
+        tracking = false;
+        axis = '';
+        return;
+      }
       var dx = touch.clientX - startX;
       var dy = touch.clientY - startY;
       if (!axis) {
@@ -1217,7 +1328,13 @@
     }
 
     function onEnd(e) {
-      if (!tracking) return;
+      if (!tracking || blockedZone) {
+        tracking = false;
+        blockedZone = false;
+        axis = '';
+        touchId = null;
+        return;
+      }
       tracking = false;
       var touch = null;
       var list = e.changedTouches || [];
@@ -1230,27 +1347,61 @@
       var dx = endX - startX;
       var dy = endY - startY;
       touchId = null;
-      if (axis === 'y') return;
+      axis = axis || (Math.abs(dx) >= Math.abs(dy) * LOCK_RATIO ? 'x' : 'y');
+      if (axis === 'y') {
+        axis = '';
+        return;
+      }
+      /* شروع یا پایان داخل نوار فایل → منو را دست نزن */
+      if (pointInFileSwipeZone(startX, startY) || pointInFileSwipeZone(endX, endY)) {
+        axis = '';
+        return;
+      }
       var needDx = (fromEdge || isOpen()) ? MIN_DX : 88;
-      if (Math.abs(dx) < needDx || Math.abs(dx) < Math.abs(dy) * LOCK_RATIO) return;
+      if (Math.abs(dx) < needDx || Math.abs(dx) < Math.abs(dy) * LOCK_RATIO) {
+        axis = '';
+        return;
+      }
 
       var api = drawerApi();
-      if (!api) return;
+      if (!api) {
+        axis = '';
+        return;
+      }
       var open = typeof api.isOpen === 'function' ? api.isOpen() : false;
 
-      /* کشیدن به چپ → باز | کشیدن به راست → بسته */
+      /* کشیدن به چپ → باز | کشیدن به راست → بسته (خارج از نوار فایل‌ها) */
       if (dx < 0) {
         if (!open && typeof api.open === 'function') api.open();
       } else if (dx > 0) {
         if (open && typeof api.close === 'function') api.close();
       }
+      axis = '';
     }
 
     function onCancel() {
       tracking = false;
+      blockedZone = false;
       axis = '';
       touchId = null;
     }
+
+    /* فقط یک listener سراسری — از تکرار در soft-nav جلوگیری کن */
+    if (window.__vinorHomeDrawerSwipeHandlers) {
+      try {
+        var old = window.__vinorHomeDrawerSwipeHandlers;
+        document.removeEventListener('touchstart', old.onStart, true);
+        document.removeEventListener('touchmove', old.onMove, true);
+        document.removeEventListener('touchend', old.onEnd, true);
+        document.removeEventListener('touchcancel', old.onCancel, true);
+      } catch (_) {}
+    }
+    window.__vinorHomeDrawerSwipeHandlers = {
+      onStart: onStart,
+      onMove: onMove,
+      onEnd: onEnd,
+      onCancel: onCancel
+    };
 
     document.addEventListener('touchstart', onStart, { passive: true, capture: true });
     document.addEventListener('touchmove', onMove, { passive: false, capture: true });
@@ -1264,6 +1415,10 @@
         document.removeEventListener('touchmove', onMove, true);
         document.removeEventListener('touchend', onEnd, true);
         document.removeEventListener('touchcancel', onCancel, true);
+        if (window.__vinorHomeDrawerSwipeHandlers &&
+            window.__vinorHomeDrawerSwipeHandlers.onStart === onStart) {
+          window.__vinorHomeDrawerSwipeHandlers = null;
+        }
       } catch (_) {}
       prevDestroy();
     };

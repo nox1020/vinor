@@ -25,6 +25,7 @@
     '/express/partner/commissions': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/profile': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
     '/express/partner/settings': { tab: 'home', depth: 1, bottomNav: true, prefetch: false },
+    '/express/partner/settings/memory': { tab: 'home', depth: 2, bottomNav: true, prefetch: false },
     '/express/partner/plus': { tab: 'home', depth: 1, bottomNav: false, prefetch: true },
     '/express/partner/profile/edit': { tab: 'home', depth: 2, bottomNav: true, prefetch: false },
     '/express/partner/favorites': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
