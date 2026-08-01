@@ -638,6 +638,21 @@ def commission_to_txn_row(c: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """ردیف نمایشی تراکنش پورسانت — رویداد تاریخی، نه ماندهٔ زنده."""
     if not isinstance(c, dict):
         return None
+    try:
+        return _commission_to_txn_row_inner(c)
+    except Exception:
+        # fail-open: ردیف حداقلی تا صفحه ۵۰۰ نشود
+        st = _commission_status(c)
+        amt = _signed_amount_int(c.get("commission_amount"))
+        row = dict(c)
+        row["txn_type"] = "commission"
+        row["status"] = st or "pending"
+        row["commission_amount"] = amt
+        row["created_at"] = c.get("created_at") or ""
+        return row
+
+
+def _commission_to_txn_row_inner(c: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     st = _commission_status(c)
     is_adj = (str(c.get("commission_type") or "")).strip() == COMMISSION_TYPE_MANUAL_ADJUSTMENT
     # تعدیل دستی می‌تواند منفی باشد؛ بقیهٔ پورسانت‌ها غیرمنفی‌اند.
@@ -954,20 +969,32 @@ def build_partner_txn_feed(
             continue
         if not partner_phones_match(c.get("partner_phone"), phone):
             continue
-        row = commission_to_txn_row(c)
+        try:
+            row = commission_to_txn_row(c)
+        except Exception:
+            row = None
         if row:
             rows.append(row)
-    for w in withdrawals_for_phone(withdrawals, phone):
-        st = (str(w.get("status") or "pending")).strip()
-        if st == "paid":
-            rows.append(withdrawal_to_txn_row(w))
-        else:
-            rows.append(withdrawal_request_to_txn_row(w))
-    rows.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-    wd_by_id: Dict[str, Dict[str, Any]] = {}
-    for w in withdrawals_for_phone(withdrawals, phone):
+    # از رکورد خام برداشت استفاده کن — partner_row_dict فیلدهای بانک را حذف می‌کند.
+    partner_withdrawals: List[Dict[str, Any]] = []
+    for w in withdrawals:
         if not isinstance(w, dict):
             continue
+        if not partner_phones_match(w.get("phone"), phone):
+            continue
+        partner_withdrawals.append(w)
+    for w in partner_withdrawals:
+        st = (str(w.get("status") or "pending")).strip()
+        try:
+            if st == "paid":
+                rows.append(withdrawal_to_txn_row(w))
+            else:
+                rows.append(withdrawal_request_to_txn_row(w))
+        except Exception:
+            continue
+    rows.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    wd_by_id: Dict[str, Dict[str, Any]] = {}
+    for w in partner_withdrawals:
         wid = str(w.get("id") or "").strip()
         if wid:
             wd_by_id[wid] = w
@@ -987,7 +1014,33 @@ def build_partner_txn_feed(
             }
         r["_txn_kind"] = partner_txn_kind(r)
         r["_txn_filter"] = partner_txn_filter_bucket(r)
-        r["_txn_detail"] = partner_txn_detail(r)
+        try:
+            r["_txn_detail"] = partner_txn_detail(r)
+        except Exception:
+            # fail-open: ردیف لیست بماند حتی اگر جزئیات خراب باشد
+            txn_type = (r.get("txn_type") or "commission").strip()
+            is_wd = txn_type in ("withdrawal", "withdrawal_request")
+            raw_amt = (
+                _amount_int(r.get("withdrawal_amount"))
+                if is_wd
+                else _signed_amount_int(r.get("commission_amount"))
+            )
+            r["_txn_detail"] = {
+                "txn_type": txn_type,
+                "title": _txn_type_title(r),
+                "description": (str(r.get("_txn_meta") or r.get("_txn_label") or "")).strip(),
+                "amount": abs(raw_amt),
+                "amount_sign": "-" if (is_wd or raw_amt < 0) else "+",
+                "status": (str(r.get("status") or "pending")).strip(),
+                "status_label": _txn_status_label(r),
+                "fields": [],
+                "wallet_fields": [],
+                "wallet_title": "",
+                "dates": [],
+                "primary_date": str(r.get("created_at") or ""),
+                "cancellable": bool(r.get("cancellable")),
+                "withdrawal_id": str(r.get("withdrawal_id") or ""),
+            }
     return rows
 
 

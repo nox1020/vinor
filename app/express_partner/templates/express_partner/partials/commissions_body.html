@@ -274,6 +274,10 @@
           });
         } catch (_) {}
         resizeObs = [];
+        /* تا afterPageSwap روی صفحهٔ تراکنش‌ها دوباره setup نزند */
+        if (window.__vinorCommissionsChrome === this) {
+          window.__vinorCommissionsChrome = null;
+        }
       }
     };
   })();

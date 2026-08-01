@@ -1,17 +1,16 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}تراکنش‌ها | کیف پول{% endblock %}
 
-{% block head %}
-{% include 'express_partner/partials/commissions_styles.html' %}
-{% include 'express_partner/partials/commissions_txn_page_styles.html' %}
-<style>
-  #commTxnFilterModal.comm-txn-filter-modal--open { display: flex !important; }
-  #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-backdrop { opacity: 1; }
-  #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-sheet { transform: translateY(0); }
-</style>
-{% endblock %}
-
 {% block content %}
+  {# استایل‌ها باید داخل content باشند — soft-nav فقط #vinor-express-page-swap را عوض می‌کند، نه <head> #}
+  {% include 'express_partner/partials/commissions_styles.html' %}
+  {% include 'express_partner/partials/commissions_txn_page_styles.html' %}
+  <style>
+    #commTxnFilterModal.comm-txn-filter-modal--open { display: flex !important; }
+    #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-backdrop { opacity: 1; }
+    #commTxnFilterModal.comm-txn-filter-modal--open .comm-txn-filter-sheet { transform: translateY(0); }
+  </style>
+
   {% set _summary = txn_summary|default({}) %}
   {% from 'express_partner/partials/partner_header.html' import ep_back_link %}
 

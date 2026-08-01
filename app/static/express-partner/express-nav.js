@@ -934,8 +934,12 @@
     if (window.__vinorDashboardChrome) {
       window.__vinorDashboardChrome.teardown();
     }
+    var pathNorm = normPath(path);
     var onCommissions = isCommissionsPath(path);
-    if (onCommissions && window.__vinorCommissionsChrome) {
+    /* فقط صفحهٔ کیف پول — نه /commissions/transactions (وگرنه chrome کهنه scroll را قفل می‌کند) */
+    var onCommissionsWallet = pathNorm === '/express/partner/commissions';
+    var onCommTxnList = pathNorm === '/express/partner/commissions/transactions';
+    if (onCommissionsWallet && window.__vinorCommissionsChrome) {
       window.__vinorCommissionsChrome.setup({ resetScroll: !onDetail });
       if (typeof window.__vinorCloseTxnDetail === 'function') {
         try { window.__vinorCloseTxnDetail(); } catch (_) {}
@@ -949,18 +953,29 @@
         }
       });
     } else if (window.__vinorCommissionsChrome) {
-      window.__vinorCommissionsChrome.teardown();
+      try { window.__vinorCommissionsChrome.teardown(); } catch (_) {}
+      window.__vinorCommissionsChrome = null;
+      try { document.documentElement.removeAttribute('data-vinor-comm-scroll'); } catch (_) {}
     }
     try {
-      var onCommTxnList = normPath(path) === '/express/partner/commissions/transactions';
       if (!onCommTxnList && window.__vinorCommTxnPageChrome && window.__vinorCommTxnPageChrome.teardown) {
         window.__vinorCommTxnPageChrome.teardown();
       }
       if (!onCommissions && typeof window.removeVinorCommTxnModalsFromBody === 'function') {
         window.removeVinorCommTxnModalsFromBody();
       }
+      /* کیف پول → تراکنش‌ها: مودال برداشت روی body نماند */
+      if (onCommTxnList && typeof window.removeVinorCommissionModalsFromBody === 'function') {
+        try {
+          ['vnWithdrawModal', 'vnBankPickerModal', 'vnBankAddModal'].forEach(function (id) {
+            document.querySelectorAll('body > #' + CSS.escape(id)).forEach(function (el) {
+              try { el.remove(); } catch (_) {}
+            });
+          });
+        } catch (_) {}
+      }
     } catch (_) {}
-    if (!onCommissions) {
+    if (!onCommissionsWallet) {
       try {
         if (window.__vinorCommPullAbort) window.__vinorCommPullAbort.abort();
         if (window.__vinorCommModalAbort) window.__vinorCommModalAbort.abort();

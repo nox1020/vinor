@@ -4323,9 +4323,27 @@ def commissions_transactions_page():
 
     my_comms = _commissions_for_phone(me_phone)
     # آمار اول تا reconcile قبل از ساخت فید تراکنش اعمال شود (وگرنه ردیف‌ها کهنه می‌مانند).
-    comm_stats = _partner_commission_stats(me_phone, my_comms)
-    _attach_commission_txn_labels(my_comms)
-    txn_items = _partner_txn_items(me_phone, my_comms)
+    try:
+        comm_stats = _partner_commission_stats(me_phone, my_comms)
+    except Exception:
+        current_app.logger.exception('commissions_transactions stats failed')
+        comm_stats = {
+            "total_confirmed_amount": 0,
+            "total_confirmed_count": 0,
+            "paid_withdrawal_amount": 0,
+            "paid_withdrawal_count": 0,
+            "received_amount": 0,
+            "received_count": 0,
+        }
+    try:
+        _attach_commission_txn_labels(my_comms)
+    except Exception:
+        current_app.logger.exception('attach_commission_txn_labels failed')
+    try:
+        txn_items = _partner_txn_items(me_phone, my_comms)
+    except Exception:
+        current_app.logger.exception('partner_txn_items failed')
+        txn_items = []
     txn_summary = partner_txn_feed_summary(txn_items)
 
     resp = make_response(render_template(
