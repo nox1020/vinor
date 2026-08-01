@@ -447,6 +447,7 @@
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
       stopOnlineMonitor();
+      cancelProbeRetries();
       return;
     }
     if (!onlineToastActive) applyConnectivity();

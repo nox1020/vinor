@@ -1150,13 +1150,24 @@
           fetchNotifications(true);
         }
         document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState !== 'visible') return;
+          if (document.visibilityState !== 'visible') {
+            // پس‌زمینه / WebView pause — قطع poll تا اندروید deep sleep کند
+            stopPolling();
+            return;
+          }
+          startPolling();
           fetchUnreadCount();
           if (isNotificationsPage() || isNotifyCacheStale()) {
             fetchNotifications(true);
           }
         });
+        window.addEventListener('pagehide', () => { stopPolling(); }, { passive: true });
+        window.addEventListener('pageshow', () => {
+          if (document.visibilityState === 'visible') startPolling();
+        }, { passive: true });
         window.addEventListener('focus', () => {
+          if (document.visibilityState !== 'visible') return;
+          startPolling();
           fetchUnreadCount();
           if (isNotificationsPage() || isNotifyCacheStale()) {
             fetchNotifications(true);
