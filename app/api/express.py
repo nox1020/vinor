@@ -19,6 +19,21 @@ from app.utils.short_urls import canonical_public_apk_download_url
 
 express_api_bp = Blueprint('express_api', __name__, url_prefix='/api')
 
+_PUBLIC_HOST = "https://vinor.ir"
+
+
+def _android_apk_source_url(settings: dict) -> str:
+    """Absolute /uploads/apk/... — always ungated; fallback if /d is misconfigured."""
+    raw = (settings.get("android_apk_url") or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith("/uploads/"):
+        return f"{_PUBLIC_HOST}{raw}"
+    if raw.startswith("https://vinor.ir/uploads/") or raw.startswith("https://www.vinor.ir/uploads/"):
+        return raw.replace("https://www.vinor.ir/", f"{_PUBLIC_HOST}/", 1)
+    return ""
+
+
 @express_api_bp.route('/app/version', methods=['GET'])
 def get_app_version():
     """
@@ -31,6 +46,8 @@ def get_app_version():
             "android_apk_version": settings.get("android_apk_version") or "",
             # Absolute https://vinor.ir/d/... for Android trust + DownloadManager
             "android_apk_url": canonical_public_apk_download_url(settings) or "",
+            # Direct uploads path (public prefix) — client may fall back if /d fails
+            "android_apk_source_url": _android_apk_source_url(settings),
             "android_apk_updated_at": settings.get("android_apk_updated_at") or "",
             "android_apk_size_bytes": settings.get("android_apk_size_bytes") or "",
             "android_apk_sha256": settings.get("android_apk_sha256") or "",

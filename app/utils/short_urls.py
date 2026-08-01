@@ -91,7 +91,8 @@ def canonical_public_apk_download_url(
     if not apk_file_url_from_settings(data):
         return ""
     name = apk_public_download_filename(data)
-    path = f"/d/{name}" if name else "/d"
+    # Prefer versioned path (no trailing-slash 308). Bare /d is also valid.
+    path = f"/d/{name}" if name else "/d/"
     return f"https://{_PUBLIC_HOST}{path}"
 
 

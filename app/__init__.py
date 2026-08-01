@@ -799,17 +799,18 @@ def create_app() -> Flask:
                 current_app.logger.debug("PASS (admin-scope): %s", request.path)
             return
 
-        safe_prefixes = ("/static", "/api", "/uploads")
-        if request.path.startswith(safe_prefixes):
+        # دانلود عمومی APK قبل از بقیهٔ گیت — /d، /d/، /d/vinor-{ver}.apk
+        # (قبلاً فقط "/d" در safe_paths بود؛ URL نسخه‌دار یا 308 به /d/ → HTML خانه)
+        path_now = request.path or ""
+        if path_now == "/d" or path_now == "/d/" or path_now.startswith("/d/"):
             if debug:
-                current_app.logger.debug("PASS (prefix): %s", request.path)
+                current_app.logger.debug("PASS (apk-download): %s", path_now)
             return
 
-        # دانلود عمومی APK: /d و /d/vinor-{version}.apk — بدون لاگین
-        # (قبلاً فقط "/d" در safe_paths بود و URL نسخه‌دار به HTML خانه ریدایرکت می‌شد)
-        if request.path == "/d" or request.path.startswith("/d/"):
+        safe_prefixes = ("/static", "/api", "/uploads")
+        if path_now.startswith(safe_prefixes):
             if debug:
-                current_app.logger.debug("PASS (apk-download): %s", request.path)
+                current_app.logger.debug("PASS (prefix): %s", path_now)
             return
 
         safe_paths = {
@@ -818,6 +819,7 @@ def create_app() -> Flask:
             "/site.webmanifest", "/manifest.webmanifest", "/sw.js",
             "/git-webhook", "/git-webhook/",
             "/healthz", "/diag", "/connection",
+            "/d", "/d/",  # belt-and-suspenders با چک بالا
             # Public help pages (accessible بدون لاگین)
             "/help", "/راهنما",
             "/privacy",

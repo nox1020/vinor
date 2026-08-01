@@ -310,9 +310,10 @@ def short_referral(ref: str):
     return resp
 
 
-@main_bp.route("/d", defaults={"download_name": None}, endpoint="short_apk_download")
-@main_bp.route("/d/", defaults={"download_name": None}, endpoint="short_apk_download")
-@main_bp.route("/d/<path:download_name>", endpoint="short_apk_download")
+# strict_slashes=False: جلوگیری از 308 روی /d → /d/ (پروکسی/Werkzeug) که با گیت قدیمی
+# به HTML لاگین ختم می‌شد و دانلود داخل اپ را می‌شکست.
+@main_bp.route("/d", defaults={"download_name": None}, endpoint="short_apk_download", strict_slashes=False)
+@main_bp.route("/d/<path:download_name>", endpoint="short_apk_download", strict_slashes=False)
 def short_apk_download(download_name=None):
     """لینک کوتاه دانلود APK — نام فایل کاربر: vinor-{version}.apk"""
     from flask import send_file
