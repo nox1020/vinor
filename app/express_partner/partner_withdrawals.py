@@ -853,12 +853,23 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
             if link_st:
                 wallet_fields.append({"label": "وضعیت برداشت", "value": status_label(link_st)})
 
-        if row.get("created_at"):
-            dates.append({"label": "تاریخ ثبت", "value": str(row.get("created_at") or "")})
-        if row.get("approved_at"):
-            dates.append({"label": "تاریخ تأیید", "value": str(row.get("approved_at") or "")})
-        if row.get("paid_at"):
-            dates.append({"label": "تاریخ پرداخت", "value": str(row.get("paid_at") or "")})
+        # created_at در commission_to_txn_row برای مرتب‌سازی/لیست به تاریخ فاز بازنویسی می‌شود؛
+        # برچسب تاریخ مودال را از فیلدهای اصلی بساز تا تکراری/گمراه‌کننده نشود.
+        paid_at = str(row.get("paid_at") or "").strip()
+        approved_at = str(row.get("approved_at") or "").strip()
+        primary = str(row.get("created_at") or "").strip()
+        if st == "paid" and paid_at:
+            dates.append({"label": "تاریخ پرداخت", "value": paid_at})
+            if approved_at and approved_at != paid_at:
+                dates.append({"label": "تاریخ تأیید", "value": approved_at})
+        elif st == "approved" and row.get("_txn_phase") == "approval":
+            dates.append({"label": "تاریخ تأیید", "value": approved_at or primary})
+        elif primary:
+            dates.append({"label": "تاریخ ثبت", "value": primary})
+            if approved_at and approved_at != primary:
+                dates.append({"label": "تاریخ تأیید", "value": approved_at})
+            if paid_at and paid_at != primary:
+                dates.append({"label": "تاریخ پرداخت", "value": paid_at})
         cid = row.get("id")
         if cid is not None and str(cid).strip() != "":
             fields.append({"label": "شناسه پورسانت", "value": str(cid)})

@@ -625,7 +625,10 @@ def _attach_commission_txn_labels(my_comms: List[Dict[str, Any]]) -> None:
             if note:
                 c['_txn_meta'] = note
             elif prev is not None and tgt is not None:
-                c['_txn_meta'] = f'از {int(prev):,} به {int(tgt):,} تومان'
+                try:
+                    c['_txn_meta'] = f'از {int(float(prev)):,} به {int(float(tgt)):,} تومان'
+                except (TypeError, ValueError):
+                    c['_txn_meta'] = 'توسط ادمین'
             else:
                 c['_txn_meta'] = 'توسط ادمین'
             continue
@@ -4319,10 +4322,11 @@ def commissions_transactions_page():
         return redirect(url_for('express_partner.commissions'))
 
     my_comms = _commissions_for_phone(me_phone)
+    # آمار اول تا reconcile قبل از ساخت فید تراکنش اعمال شود (وگرنه ردیف‌ها کهنه می‌مانند).
+    comm_stats = _partner_commission_stats(me_phone, my_comms)
     _attach_commission_txn_labels(my_comms)
     txn_items = _partner_txn_items(me_phone, my_comms)
     txn_summary = partner_txn_feed_summary(txn_items)
-    comm_stats = _partner_commission_stats(me_phone, my_comms)
 
     resp = make_response(render_template(
         "express_partner/commissions_txn_list.html",

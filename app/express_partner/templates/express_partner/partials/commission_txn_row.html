@@ -2,6 +2,7 @@
 {% set _txn_type = (c.txn_type or 'commission')|trim %}
 {% set _is_wd = _txn_type in ('withdrawal', 'withdrawal_request') %}
 {% set _is_referral = (c.commission_type or '')|trim == 'referral' %}
+{% set _is_adjustment = (c.commission_type or '')|trim == 'manual_adjustment' %}
 {% set _filter = c._txn_filter if c._txn_filter is defined else (c.status or 'pending')|trim %}
 {% set _kind = c._txn_kind if c._txn_kind is defined else ('withdrawal' if _is_wd else 'commission') %}
 {% set st = (c.status or 'pending')|trim %}
@@ -34,6 +35,8 @@
       <i class="fas fa-arrow-up"></i>
     {% elif _is_referral %}
       <i class="fas fa-gift"></i>
+    {% elif _is_adjustment %}
+      <i class="fas fa-sliders"></i>
     {% else %}
       <i class="fas fa-coins"></i>
     {% endif %}
