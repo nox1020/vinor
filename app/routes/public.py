@@ -311,6 +311,7 @@ def short_referral(ref: str):
 
 
 @main_bp.route("/d", defaults={"download_name": None}, endpoint="short_apk_download")
+@main_bp.route("/d/", defaults={"download_name": None}, endpoint="short_apk_download")
 @main_bp.route("/d/<path:download_name>", endpoint="short_apk_download")
 def short_apk_download(download_name=None):
     """لینک کوتاه دانلود APK — نام فایل کاربر: vinor-{version}.apk"""
@@ -335,7 +336,20 @@ def short_apk_download(download_name=None):
         if base.lower().endswith(".apk") and base.lower().startswith("vinor"):
             download_as = base
 
+    # از ریدایرکت به خود /d جلوگیری کن (حلقه)
+    def _is_self_or_d_url(url: str) -> bool:
+        u = (url or "").strip().lower()
+        if not u:
+            return True
+        if u == "/d" or u.startswith("/d/") or u.startswith("/d?"):
+            return True
+        if "vinor.ir/d" in u.replace("www.", ""):
+            return True
+        return False
+
     if target.startswith(("http://", "https://")):
+        if _is_self_or_d_url(target):
+            abort(404)
         return redirect(target, code=302)
 
     fp, _ = resolve_apk_filesystem_path(settings)
@@ -350,9 +364,12 @@ def short_apk_download(download_name=None):
         )
         resp.headers["Cache-Control"] = "public, max-age=300"
         resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["Content-Type"] = "application/vnd.android.package-archive"
         return resp
 
-    # مسیر ذخیره‌شده روی دیسک پیدا نشد — redirect به URL نسبی
+    # مسیر ذخیره‌شده روی دیسک پیدا نشد — redirect به URL نسبی (نه دوباره /d)
+    if _is_self_or_d_url(target):
+        abort(404)
     return redirect(target, code=302)
 
 
@@ -467,6 +484,10 @@ def uploaded_file(filename):
                             resp.headers['Content-Disposition'] = (
                                 'attachment; filename="' + download_as + '"'
                             )
+                        resp.headers['Content-Type'] = (
+                            'application/vnd.android.package-archive'
+                        )
+                        resp.headers['X-Content-Type-Options'] = 'nosniff'
         except Exception:
             pass
         return resp

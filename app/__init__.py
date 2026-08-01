@@ -805,6 +805,13 @@ def create_app() -> Flask:
                 current_app.logger.debug("PASS (prefix): %s", request.path)
             return
 
+        # دانلود عمومی APK: /d و /d/vinor-{version}.apk — بدون لاگین
+        # (قبلاً فقط "/d" در safe_paths بود و URL نسخه‌دار به HTML خانه ریدایرکت می‌شد)
+        if request.path == "/d" or request.path.startswith("/d/"):
+            if debug:
+                current_app.logger.debug("PASS (apk-download): %s", request.path)
+            return
+
         safe_paths = {
             "/", "/start", "/login", "/verify", "/logout",
             "/favicon.ico", "/robots.txt", "/sitemap.xml",
@@ -816,7 +823,6 @@ def create_app() -> Flask:
             "/privacy",
             # Public landing pages
             "/partners",
-            "/d",
             "/enamad-seal.png",
             # Express Partner auth paths (public)
             "/express/partner/login", "/express/partner/login/otp", "/express/partner/verify", "/express/partner/otp/resend",
