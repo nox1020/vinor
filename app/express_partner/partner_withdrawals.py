@@ -163,21 +163,18 @@ def apply_paid_withdrawal_to_commissions(
         take = min(amt, remaining)
         if take <= 0:
             continue
-        if take >= amt:
+        # همیشه مبلغ برداشت‌شده را در partial_paid_total نگه دار تا
+        # ردیف تاریخی تراکنش (و آمار درآمد) بعد از صفر شدن commission_amount گم نشود.
+        c["partial_paid_total"] = _amount_int(c.get("partial_paid_total")) + take
+        left = amt - take
+        if left <= 0:
             c["status"] = "paid"
             c["paid_at"] = paid_at
             c["commission_amount"] = 0
             if wid:
                 c["withdrawal_id"] = wid
         else:
-            c["commission_amount"] = amt - take
-            c["partial_paid_total"] = _amount_int(c.get("partial_paid_total")) + take
-            if c["commission_amount"] <= 0:
-                c["status"] = "paid"
-                c["paid_at"] = paid_at
-                c["commission_amount"] = 0
-                if wid:
-                    c["withdrawal_id"] = wid
+            c["commission_amount"] = left
         remaining -= take
         allocated += take
     return allocated
@@ -387,18 +384,22 @@ def partner_commission_dashboard(
         if not partner_phones_match(c.get("partner_phone"), phone):
             continue
         st = _commission_status(c)
-        amt = _amount_int(c.get("commission_amount"))
         if st == "pending":
+            amt = _amount_int(c.get("commission_amount"))
             pending_amount += amt
             pending_count += 1
         elif st == "approved":
+            amt = _approved_line_amount(c)
             approved_gross_amount += amt
             approved_gross_count += 1
             partial = _amount_int(c.get("partial_paid_total"))
             if partial:
                 paid_amount += partial
         elif st == "paid":
-            paid_amount += amt + _amount_int(c.get("partial_paid_total"))
+            line = _amount_int(c.get("commission_amount")) + _amount_int(c.get("partial_paid_total"))
+            if line <= 0:
+                line = _estimate_commission_display_amount(c)
+            paid_amount += line
             paid_count += 1
 
     in_withdrawal_amount = reserved_withdrawal_total(withdrawals, phone)
@@ -621,12 +622,26 @@ def cancel_partner_withdrawal(
     return False, "not_found"
 
 
+def _estimate_commission_display_amount(c: Dict[str, Any]) -> int:
+    """بازسازی مبلغ نمایشی وقتی commission_amount صفر شده و partial هم خالی است."""
+    sale = _amount_int(c.get("sale_amount"))
+    pct_raw = c.get("commission_pct")
+    if sale <= 0 or pct_raw is None or str(pct_raw).strip() == "":
+        return 0
+    try:
+        return max(0, int(round(sale * float(pct_raw) / 100.0)))
+    except (TypeError, ValueError):
+        return 0
+
+
 def commission_to_txn_row(c: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """ردیف نمایشی تراکنش پورسانت — رویداد تاریخی، نه ماندهٔ زنده."""
     if not isinstance(c, dict):
         return None
     st = _commission_status(c)
-    amt = _amount_int(c.get("commission_amount"))
+    is_adj = (str(c.get("commission_type") or "")).strip() == COMMISSION_TYPE_MANUAL_ADJUSTMENT
+    # تعدیل دستی می‌تواند منفی باشد؛ بقیهٔ پورسانت‌ها غیرمنفی‌اند.
+    amt = _signed_amount_int(c.get("commission_amount")) if is_adj else _amount_int(c.get("commission_amount"))
     partial = _amount_int(c.get("partial_paid_total"))
     row = dict(c)
     row["txn_type"] = "commission"
@@ -637,6 +652,14 @@ def commission_to_txn_row(c: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return row
 
     if st == "approved":
+        if is_adj:
+            if amt == 0:
+                return None
+            row["commission_amount"] = amt
+            row["created_at"] = c.get("approved_at") or c.get("created_at") or ""
+            row["status"] = "approved"
+            row["_txn_phase"] = "approval"
+            return row
         original = amt + partial
         if original <= 0:
             return None
@@ -650,6 +673,8 @@ def commission_to_txn_row(c: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     if st == "paid":
         total = amt + partial
+        if total <= 0:
+            total = _estimate_commission_display_amount(c)
         if total <= 0:
             return None
         row["commission_amount"] = total
@@ -704,7 +729,14 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
     txn_type = (row.get("txn_type") or "commission").strip()
     st = (str(row.get("status") or "pending")).strip()
     is_wd = txn_type in ("withdrawal", "withdrawal_request")
-    amt = _amount_int(row.get("withdrawal_amount") if is_wd else row.get("commission_amount"))
+    if is_wd:
+        raw_amt = _amount_int(row.get("withdrawal_amount"))
+        amt = raw_amt
+        amount_sign = "-"
+    else:
+        raw_amt = _signed_amount_int(row.get("commission_amount"))
+        amt = abs(raw_amt)
+        amount_sign = "-" if raw_amt < 0 else "+"
 
     fields: List[Dict[str, Any]] = []
     wallet_fields: List[Dict[str, Any]] = []
@@ -788,9 +820,13 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
                 fields.append({"label": "درصد پورسانت", "value": f"{float(pct_raw):g}٪"})
             except Exception:
                 pass
-        fields.append({"label": "مبلغ پورسانت", "value": amt, "format": "toman"})
+        fields.append({
+            "label": "مبلغ تعدیل" if (str(row.get("commission_type") or "")).strip() == COMMISSION_TYPE_MANUAL_ADJUSTMENT else "مبلغ پورسانت",
+            "value": raw_amt,
+            "format": "toman",
+        })
         partial = _amount_int(row.get("partial_paid_display"))
-        if partial > 0:
+        if partial > 0 and raw_amt >= 0:
             fields.append({"label": "واریز شده از این پورسانت", "value": partial, "format": "toman"})
             remaining = max(0, amt - partial)
             if remaining > 0 and st == "approved":
@@ -836,7 +872,7 @@ def partner_txn_detail(row: Dict[str, Any]) -> Dict[str, Any]:
         "title": _txn_type_title(row),
         "description": (str(row.get("_txn_meta") or row.get("_txn_label") or "")).strip(),
         "amount": amt,
-        "amount_sign": "-" if is_wd else "+",
+        "amount_sign": amount_sign,
         "status": st,
         "status_label": _txn_status_label(row),
         "fields": fields,

@@ -147,8 +147,8 @@
           <p class="font-medium text-gray-900 dark:text-white truncate">{{ b.title or 'اعلان' }}</p>
           <p class="text-gray-500 truncate mt-0.5">{{ (b.body or '')|truncate(72) }}</p>
           <p class="text-gray-400 mt-1 tabular-nums">
-            {{ b.sent|default(b.success_count)|default(0) }} ارسال
-            · {{ (b.created_at or b.ts or '')[:16] }}
+            {{ b.success_count|default(b.sent)|default(0) }} ارسال
+            · {{ b.created_at_display|default('—') }}
           </p>
         </li>
         {% endfor %}

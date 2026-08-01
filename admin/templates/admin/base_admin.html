@@ -272,7 +272,11 @@
         listings: '{{ url_for("admin.express_listings") }}',
         commissions: '{{ url_for("admin.express_commissions") }}',
         withdrawals: '{{ url_for("admin.financial_withdrawals") }}',
+        zarinpal: '{{ url_for("admin.zarinpal_plus") }}',
         partners: '{{ url_for("admin.express_partners") }}',
+        cities: '{{ url_for("admin.express_cities") }}',
+        homeAds: '{{ url_for("admin.home_ads") }}',
+        lawyer: '{{ url_for("admin.lawyer") }}',
         errors: '{{ url_for("admin.ai_console_errors") }}',
         audit: '{{ url_for("admin.audit_log") }}',
         flags: '{{ url_for("admin.ai_console_flags") }}',
@@ -289,30 +293,38 @@
         lang: (window.VinorI18n && VinorI18n.getLanguage()) || 'en',
         cmdSpec: [
           { nameKey: 'cmd.group_command', items: [
-            { labelKey: 'cmd.ops_chat', aliasKey: 'search_aliases.dashboard', href: hrefs.dashboard, icon: 'fa-gauge-high' },
-            { labelKey: 'cmd.pending_confirms', aliasKey: 'search_aliases.tools', href: hrefs.tools, icon: 'fa-check-double' },
-            { labelKey: 'cmd.visits', aliasKey: 'search_aliases.visit', href: hrefs.visits, icon: 'fa-route' },
-            { labelKey: 'cmd.escalations', href: hrefs.escalations, icon: 'fa-circle-question' },
+            { labelKey: 'cmd.dashboard', aliasKey: 'search_aliases.dashboard', href: hrefs.dashboard, icon: 'fa-gauge-high' },
           ]},
-          { nameKey: 'cmd.group_market', items: [
+          { nameKey: 'cmd.group_browse', items: [
             { labelKey: 'cmd.properties', href: hrefs.listings, icon: 'fa-building' },
-            { labelKey: 'cmd.deals', aliasKey: 'search_aliases.deal', href: hrefs.commissions, icon: 'fa-handshake' },
-            { labelKey: 'cmd.withdrawals', href: hrefs.withdrawals, icon: 'fa-money-bill-transfer' },
             { labelKey: 'cmd.partners', aliasKey: 'search_aliases.partner', href: hrefs.partners, icon: 'fa-users' },
+            { labelKey: 'cmd.visits', aliasKey: 'search_aliases.visit', href: hrefs.visits, icon: 'fa-route' },
+            { labelKey: 'cmd.cities', href: hrefs.cities, icon: 'fa-city' },
+            { labelKey: 'cmd.home_ads', href: hrefs.homeAds, icon: 'fa-images' },
+            { labelKey: 'cmd.lawyer', href: hrefs.lawyer, icon: 'fa-scale-balanced' },
           ]},
-          { nameKey: 'cmd.group_observe', items: [
+          { nameKey: 'cmd.group_finance', items: [
+            { labelKey: 'cmd.deals', aliasKey: 'search_aliases.deal', href: hrefs.commissions, icon: 'fa-wallet' },
+            { labelKey: 'cmd.withdrawals', href: hrefs.withdrawals, icon: 'fa-money-bill-transfer' },
+            { labelKey: 'cmd.zarinpal', href: hrefs.zarinpal, icon: 'fa-credit-card' },
+          ]},
+          { nameKey: 'cmd.group_comms', items: [
+            { labelKey: 'cmd.sms_notifications', aliasKey: 'search_aliases.sms', href: hrefs.smsNotifications, icon: 'fa-comment-sms' },
+            { labelKey: 'cmd.sms_send', href: hrefs.smsColleagues, icon: 'fa-sms' },
+            { labelKey: 'cmd.colleague_notifications', href: hrefs.notifColleagues, icon: 'fa-bell' },
+          ]},
+          { nameKey: 'cmd.group_intelligence', items: [
+            { labelKey: 'cmd.escalations', href: hrefs.escalations, icon: 'fa-microchip' },
+            { labelKey: 'cmd.pending_confirms', aliasKey: 'search_aliases.tools', href: hrefs.tools, icon: 'fa-check-double' },
             { labelKey: 'cmd.monitor', href: hrefs.monitor, icon: 'fa-heart-pulse' },
             { labelKey: 'cmd.usage', href: hrefs.usage, icon: 'fa-chart-column' },
             { labelKey: 'cmd.memory', aliasKey: 'search_aliases.memory', href: hrefs.memory, icon: 'fa-brain' },
-            { labelKey: 'cmd.errors', aliasKey: 'search_aliases.error', href: hrefs.errors, icon: 'fa-bug' },
-            { labelKey: 'cmd.audit', href: hrefs.audit, icon: 'fa-clipboard-list' },
+            { labelKey: 'cmd.errors', aliasKey: 'search_aliases.error', href: hrefs.errors, icon: 'fa-triangle-exclamation' },
             { labelKey: 'cmd.flags', href: hrefs.flags, icon: 'fa-flag' },
           ]},
           { nameKey: 'cmd.group_govern', items: [
             { labelKey: 'cmd.settings', href: hrefs.settings, icon: 'fa-gear' },
-            { labelKey: 'cmd.sms_notifications', aliasKey: 'search_aliases.sms', href: hrefs.smsNotifications, icon: 'fa-comment-sms' },
-            { labelKey: 'cmd.sms_send', href: hrefs.smsColleagues, icon: 'fa-sms' },
-            { labelKey: 'cmd.colleague_notifications', href: hrefs.notifColleagues, icon: 'fa-bell' },
+            { labelKey: 'cmd.audit', href: hrefs.audit, icon: 'fa-clipboard-list' },
           ]},
         ],
         buildCmdGroups() {

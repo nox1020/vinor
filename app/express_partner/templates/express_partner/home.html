@@ -43,15 +43,19 @@
 
     {% if home_ai_enabled|default(false) %}
     <div id="vnHomeComposerDock" class="vn-home-composer-dock" data-vn-home-dock>
-      <div id="vinorApkStripHost" class="vinor-apk-strip-host" data-apk-strip-host>
-        {% include 'express_partner/partials/apk_download_strip.html' %}
-      </div>
-      {% set chat_mode = 'home-inline' %}
-      {% include 'express_partner/partials/ai_chat_composer.html' %}
+      {# پیشنهادهای خالی بالای کامپوزر؛ خود کامپوزر به فوتر/safe-area می‌چسبد #}
       {% include 'express_partner/partials/ai_home_empty_actions.html' %}
+      {# ردیف فوتر: چیپ APK کنار کامپوزر (چپ بصری) #}
+      <div class="vn-home-composer-dock__row">
+        <div id="vinorApkStripHost" class="vinor-apk-strip-host" data-apk-strip-host>
+          {% include 'express_partner/partials/apk_download_strip.html' %}
+        </div>
+        {% set chat_mode = 'home-inline' %}
+        {% include 'express_partner/partials/ai_chat_composer.html' %}
+      </div>
     </div>
     <style id="vinor-home-apk-on-empty">
-      /* اولویت روی هر قانون قدیمی display:none در بدو ورود */
+      /* اولویت روی هر قانون قدیمی display:none در بدو ورود — چیپ کنار فوتر */
       #homeDashboardPage.ai-home-is-empty .vinor-apk-strip-host {
         display: block !important;
       }

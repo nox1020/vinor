@@ -4,24 +4,30 @@
     pointer-events: none;
     box-shadow: none !important;
     background: transparent;
-    padding-left: max(1rem, env(safe-area-inset-left, 0px));
-    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+    display: flex;
+    justify-content: flex-start;
+    padding-left: max(0.7rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.7rem, env(safe-area-inset-right, 0px));
     padding-top: 0.35rem;
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
   }
+  /* دکمهٔ جمع دانلود/بروزرسانی اپ — مربع گرد FAB */
   .vinor-apk-download-strip {
+    position: relative;
     pointer-events: auto;
-    margin: 0 0.85rem 0.45rem;
-    padding: 0.55rem 0.65rem 0.55rem 0.55rem;
-    border-radius: 1.15rem;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin: 0;
+    width: 3.25rem;
+    height: 3.25rem;
+    padding: 0.28rem 0.2rem 0.32rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     background: #2f2f2f;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    box-shadow: none;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.65rem;
+    justify-content: center;
+    gap: 0.12rem;
     text-decoration: none;
     color: inherit;
     touch-action: pan-y;
@@ -30,10 +36,10 @@
   }
   .vinor-apk-download-strip:hover {
     background: #3a3a3a;
-    border-color: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.14);
   }
   .vinor-apk-download-strip:active {
-    transform: scale(0.985);
+    transform: scale(0.96);
   }
   .vinor-apk-download-strip.is-swipe-dismissing {
     pointer-events: none;
@@ -42,59 +48,51 @@
   }
   .vinor-apk-download-strip__icon {
     flex-shrink: 0;
-    width: 2.15rem;
-    height: 2.15rem;
-    border-radius: 9999px;
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 0.45rem;
     display: grid;
     place-items: center;
     background: rgba(255, 255, 255, 0.08);
     color: #ececec;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
   }
   .vinor-apk-download-strip__text {
-    flex: 1;
-    min-width: 0;
-    text-align: right;
-  }
-  .vinor-apk-download-strip__title {
-    display: block;
-    font-size: 0.8125rem;
-    font-weight: 550;
-    letter-spacing: -0.01em;
-    color: #ececec;
-    line-height: 1.3;
-  }
-  .vinor-apk-download-strip__sub {
-    display: block;
-    font-size: 0.6875rem;
-    font-weight: 400;
-    color: #8f8f8f;
-    margin-top: 0.12rem;
-    line-height: 1.35;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   .vinor-apk-download-strip__cta {
     flex-shrink: 0;
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    padding: 0.42rem 0.85rem;
-    border-radius: 9999px;
-    background: #ffffff;
-    color: #0d0d0d;
+    font-size: 0.5625rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #a3a3a3;
     white-space: nowrap;
-    box-shadow: none;
+    line-height: 1.1;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .vinor-apk-download-strip--update {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: #2f2f2f;
+    border-color: rgba(14, 165, 233, 0.28);
+    background: #243040;
   }
   .vinor-apk-download-strip--update .vinor-apk-download-strip__icon {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: rgba(14, 165, 233, 0.18);
+    color: #7dd3fc;
   }
   .vinor-apk-download-strip--update .vinor-apk-download-strip__cta {
-    background: #ffffff;
-    color: #0d0d0d;
+    color: #bae6fd;
   }
 </style>
 <nav id="bottomNavMenu" data-tour="bottom-nav" class="tg-tabbar-shell fixed inset-x-0 bottom-0 z-[60]" aria-label="بنر اپلیکیشن">
@@ -410,7 +408,7 @@
 
     const icon = mode === 'update' ? 'fa-arrow-up' : 'fa-arrow-down';
     const title = mode === 'update' ? 'نسخه جدید آماده است' : 'اپ وینور را نصب کنید';
-    const cta = mode === 'update' ? 'بروزرسانی' : 'دانلود';
+    const cta = mode === 'update' ? 'آپدیت' : 'دانلود';
     const sub = version
       ? (mode === 'update' ? ('وینور ' + version) : ('نسخه ' + version + ' · اندروید'))
       : (mode === 'update' ? 'بروزرسانی اپ' : 'تجربه بهتر در اپ');
@@ -460,7 +458,7 @@
     }
     if (status === 'failed') {
       if (sub) sub.textContent = 'خطا در دانلود — دوباره تلاش کنید';
-      if (cta) cta.textContent = 'بروزرسانی';
+      if (cta) cta.textContent = 'آپدیت';
       strip.setAttribute('data-apk-download-status', 'failed');
       return;
     }

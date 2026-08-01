@@ -1,4 +1,4 @@
-{# بنر دانلود/بروزرسانی APK — یک نمونه در صفحه؛ سبک GPT/وینور #}
+{# دکمهٔ جمع دانلود/بروزرسانی APK — مربع گرد گوشهٔ چپ #}
 {% if show_apk_strip and android_apk_url %}
 <a href="{% if apk_strip_mode == 'update' %}#{% else %}{{ android_apk_url }}{% endif %}"
    class="vinor-apk-download-strip{% if apk_strip_mode == 'update' %} vinor-apk-download-strip--update{% endif %}"
@@ -19,6 +19,6 @@
     <span class="vinor-apk-download-strip__sub" data-apk-strip-sub>{% if android_apk_version %}نسخه {{ android_apk_version }} · اندروید{% else %}تجربه بهتر در اپ{% endif %}</span>
     {% endif %}
   </span>
-  <span class="vinor-apk-download-strip__cta" data-apk-strip-cta>{% if apk_strip_mode == 'update' %}بروزرسانی{% else %}دانلود{% endif %}</span>
+  <span class="vinor-apk-download-strip__cta" data-apk-strip-cta>{% if apk_strip_mode == 'update' %}آپدیت{% else %}دانلود{% endif %}</span>
 </a>
 {% endif %}

@@ -1540,6 +1540,21 @@ def api_colleagues_notification_history():
 # -----------------------------------------------------------------------------
 # هاب پیامک و نوتیفیکیشن (ورود از سایدبار)
 # -----------------------------------------------------------------------------
+def _sms_hub_format_ts(value) -> str:
+    """Format ISO string or unix timestamp for SMS/notifications hub cards."""
+    if value is None or value == '':
+        return ''
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(int(value)).strftime('%Y-%m-%d %H:%M')
+        except (OSError, OverflowError, ValueError, TypeError):
+            return str(value)
+    text = str(value).strip()
+    if not text:
+        return ''
+    return text[:16].replace('T', ' ')
+
+
 @admin_bp.route('/sms-notifications', methods=['GET'], endpoint='sms_notifications')
 @login_required
 def sms_notifications():
@@ -1547,8 +1562,14 @@ def sms_notifications():
     from app.services.notification_history import list_broadcasts, broadcast_stats
     from app.services.sms_config import get_sms_line_number
 
-    ensure_sms_recipient_groups_initialized()
-    groups = list_sms_recipient_groups_summary()
+    groups = []
+    try:
+        ensure_sms_recipient_groups_initialized()
+        groups = list_sms_recipient_groups_summary() or []
+    except Exception:
+        current_app.logger.exception('sms_notifications: failed loading recipient groups')
+        groups = []
+
     recipient_total = 0
     for g in groups or []:
         try:
@@ -1571,7 +1592,15 @@ def sms_notifications():
     notif_history = []
     notif_stats = {}
     try:
-        notif_history = list_broadcasts(limit=8)
+        raw_history = list_broadcasts(limit=8) or []
+        for row in raw_history:
+            if not isinstance(row, dict):
+                continue
+            item = dict(row)
+            item['created_at_display'] = _sms_hub_format_ts(
+                item.get('created_at') if item.get('created_at') is not None else item.get('ts')
+            )
+            notif_history.append(item)
         notif_stats = broadcast_stats() or {}
     except Exception:
         current_app.logger.exception('sms_notifications: failed loading notification history')

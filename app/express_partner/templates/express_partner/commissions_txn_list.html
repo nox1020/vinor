@@ -15,7 +15,7 @@
   {% set _summary = txn_summary|default({}) %}
   {% from 'express_partner/partials/partner_header.html' import ep_back_link %}
 
-  {% set _txn_hint = (items|length|string + ' تراکنش') if items and items|length > 0 else 'بدون تراکنش' %}
+  {% set _txn_hint = (items|length|fa_digits ~ ' تراکنش') if items and items|length > 0 else 'بدون تراکنش' %}
 
   <header id="commTxnListHeader"
           class="ep-partner-header ep-partner-header--shell-none"
@@ -122,7 +122,7 @@
                 role="option"
                 aria-selected="{{ 'true' if key == 'all' else 'false' }}">
           <span>{{ label }}</span>
-          <span class="text-[11px] tabular-nums opacity-70 shrink-0">{{ _summary.get(key, 0) }}</span>
+          <span class="text-[11px] tabular-nums opacity-70 shrink-0">{{ (_summary.get(key, 0) or 0)|fa_digits }}</span>
         </button>
         {% endmacro %}
         {{ filter_btn('all', 'همه') }}
@@ -164,6 +164,11 @@
     window.__vinorCommTxnPageAbort = new AbortController();
     var pageSignal = window.__vinorCommTxnPageAbort.signal;
 
+    function toFaDigits(s) {
+      return String(s || '').replace(/[0-9]/g, function (d) {
+        return '۰۱۲۳۴۵۶۷۸۹'[parseInt(d, 10)];
+      });
+    }
     function fmt(dt) {
       try {
         var d = new Date(String(dt || '').replace(' ', 'T'));
@@ -300,9 +305,9 @@
         return;
       }
       if (active === 'all') {
-        countHint.textContent = totalRows + ' تراکنش';
+        countHint.textContent = toFaDigits(totalRows) + ' تراکنش';
       } else {
-        countHint.textContent = shown + ' از ' + totalRows + ' · ' + activeLabelText;
+        countHint.textContent = toFaDigits(shown) + ' از ' + toFaDigits(totalRows) + ' · ' + activeLabelText;
       }
     }
 
