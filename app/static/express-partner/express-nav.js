@@ -1172,11 +1172,17 @@
       if (doc.title) document.title = doc.title;
       if (!opts.fromPopstate) {
         try {
-          history.pushState(
-            { vinorExpress: true, tabKey: navKey, depth: navDepthForUrl(finalHref) },
-            '',
-            finalHref
-          );
+          var histState = {
+            vinorExpress: true,
+            tabKey: navKey,
+            depth: navDepthForUrl(finalHref)
+          };
+          /* بعد از ورود: replace تا login/OTP در back-stack نماند */
+          if (opts.postLogin || opts.replace) {
+            history.replaceState(histState, '', finalHref);
+          } else {
+            history.pushState(histState, '', finalHref);
+          }
         } catch (_) {}
       }
       if (isStaleNav(gen)) return false;
@@ -1255,6 +1261,7 @@
     var gen = opts.navGen || bumpNavGeneration();
     var navOpts = { navGen: gen };
     if (opts.postLogin) navOpts.postLogin = true;
+    if (opts.replace) navOpts.replace = true;
     stopAllExpressMedia();
     var toDetail = false;
     try {
@@ -1348,7 +1355,11 @@
     } catch (_) {}
     try {
       var destPath = normPath(parseUrl(href).pathname);
-      if (!opts.postLogin && !isLoggedInUser() && requiresLoginPath(destPath) && !isAuthSoftPath(destPath)) {
+      /* کاربر لاگین‌شده نباید دوباره به شِل ورود برگردد (مثلاً back از چت) */
+      if (!opts.postLogin && isLoggedInUser() && isAuthSoftPath(destPath)) {
+        href = '/express/partner/home';
+        opts = Object.assign({}, opts, { replace: true, postLogin: true });
+      } else if (!opts.postLogin && !isLoggedInUser() && requiresLoginPath(destPath) && !isAuthSoftPath(destPath)) {
         href = loginUrlForPartnerDest(href);
       }
     } catch (_) {}
@@ -1364,6 +1375,11 @@
         stopAllExpressMedia();
         return softNavigate(href, authDir || 0, { navGen: bumpNavGeneration() });
       }
+      /* postLogin قبل از cross-shell تا replaceState اعمال شود و OTP در history نماند */
+      if (opts.postLogin) {
+        stopAllExpressMedia();
+        return softNavigate(href, 1, Object.assign({}, opts, { navGen: bumpNavGeneration() }));
+      }
       if (isLeavingAuthShell(href) || isEnteringAuthShell(from, href)) {
         var crossDir = opts.back ? -1 : (opts.forward ? 1 : navDirection(from, href, opts.dir));
         stopAllExpressMedia();
@@ -1375,15 +1391,11 @@
         }
         return softNavigate(href, 0, { navGen: bumpNavGeneration() });
       }
-      if (opts.postLogin) {
-        stopAllExpressMedia();
-        return softNavigate(href, 1, opts);
-      }
       var dir = navDirection(from, href, opts.dir);
       if (opts.back) dir = -1;
       if (opts.forward) dir = 1;
-      var authDir = authNavDirection(from, href);
-      if (authDir) dir = authDir;
+      var authDirNav = authNavDirection(from, href);
+      if (authDirNav) dir = authDirNav;
       if (dir) {
         try {
           sessionStorage.setItem(STORAGE_KEY, String(dir));
@@ -1593,6 +1605,26 @@
       }
       var authDir = authNavDirection(prevHref || '', target);
       if (authDir) dir = authDir;
+      /*
+       * Back از چت/خانه وقتی login/OTP هنوز در history است:
+       * اگر سشن معتبر است، به‌جای فرم ورود به خانه برگرد.
+       */
+      if (isLoggedInUser() && isAuthSoftPath(parseUrl(target).pathname)) {
+        target = '/express/partner/home';
+        dir = -1;
+        nextDepth = navDepthForUrl(target);
+        try {
+          history.replaceState(
+            { vinorExpress: true, tabKey: 'home', depth: nextDepth },
+            '',
+            target
+          );
+        } catch (_) {}
+        window.__vinorExpressNavDepth = nextDepth;
+        window.__vinorExpressLastHref = target;
+        softNavigate(target, dir, { fromPopstate: true, postLogin: true, replace: true });
+        return;
+      }
       window.__vinorExpressNavDepth = nextDepth;
       window.__vinorExpressLastHref = target;
     } catch (_) {}

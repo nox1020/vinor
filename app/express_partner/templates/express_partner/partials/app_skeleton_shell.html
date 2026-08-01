@@ -1,4 +1,4 @@
-{# اسکلت اولیه — ۱۰۰٪ inline (CSS/SVG/JS) بدون وابستگی شبکه #}
+{# اسکلت اولیه — GPT-ساده: فقط لوگو با پالس ملایم #}
 <style id="vinor-partner-sk-styles">
   #vinorPartnerSkeletonRoot,
   #vinorPartnerSkeletonRoot * { box-sizing: border-box; pointer-events: none !important; }
@@ -7,245 +7,77 @@
     inset: 0;
     z-index: 10050;
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
     background: #030712;
-    background-image:
-      radial-gradient(ellipse 90% 60% at 50% 0%, rgba(16, 185, 129, 0.18), transparent 58%),
-      linear-gradient(180deg, #030712, #050a0e 50%, #030712);
-    transition: opacity 0.22s ease, visibility 0.22s ease;
+    transition: opacity 0.18s ease, visibility 0.18s ease;
   }
   html:not(.dark) #vinorPartnerSkeletonRoot {
-    background: #f1f5f9;
-    background-image: radial-gradient(ellipse 90% 60% at 50% 0%, rgba(16, 185, 129, 0.1), transparent 58%), linear-gradient(180deg, #f8fafc, #f1f5f9);
+    background: #f9fafb;
   }
   #vinorPartnerSkeletonRoot.vinor-sk-hidden { opacity: 0; visibility: hidden; }
 
-  #vinorPartnerSkeletonRoot .vinor-sk-progress {
-    flex-shrink: 0;
-    height: 3px;
-    background: rgba(255, 255, 255, 0.06);
-    overflow: hidden;
-  }
-  #vinorPartnerSkeletonRoot .vinor-sk-progress > i {
-    display: block;
-    height: 100%;
-    width: 42%;
-    background: linear-gradient(90deg, transparent, #34d399, #6ee7b7, transparent);
-    animation: vinorSkBar 1.1s ease-in-out infinite;
-  }
-
-  #vinorPartnerSkeletonRoot .vinor-sk-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 16px 16px 8px;
-    gap: 20px;
-    min-height: 0;
-  }
-
-  #vinorPartnerSkeletonRoot .vinor-sk-hero { text-align: center; }
-  #vinorPartnerSkeletonRoot .vinor-sk-logo-box {
-    position: relative;
-    width: 64px;
-    height: 64px;
-    margin: 0 auto 14px;
-  }
-  #vinorPartnerSkeletonRoot .vinor-sk-ring {
-    position: absolute;
-    inset: -5px;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    border-top-color: #34d399;
-    border-right-color: rgba(52, 211, 153, 0.3);
-    animation: vinorSkSpin 0.85s linear infinite;
+  #vinorPartnerSkeletonRoot .vinor-sk-hero {
+    text-align: center;
   }
   #vinorPartnerSkeletonRoot .vinor-sk-logo-img {
     display: block;
-    width: 64px;
-    height: 64px;
-    border-radius: 14px;
+    width: 36px;
+    height: 36px;
+    margin: 0 auto;
+    border-radius: 8px;
     object-fit: cover;
+    animation: vinorSkPulse 1.6s ease-in-out infinite;
   }
-  #vinorPartnerSkeletonRoot .vinor-sk-title {
-    font-size: 17px;
-    font-weight: 800;
-    color: #f8fafc;
-    letter-spacing: 0.02em;
-  }
-  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-title { color: #0f172a; }
   #vinorPartnerSkeletonRoot .vinor-sk-sub {
-    margin-top: 6px;
-    font-size: 12px;
-    color: #94a3b8;
-    line-height: 1.5;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
+  #vinorPartnerSkeletonRoot.vinor-sk-offline .vinor-sk-sub {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 14px 0 0;
+    padding: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    font-size: 13px;
+    color: #94a3b8;
+    line-height: 1.4;
+  }
+  html:not(.dark) #vinorPartnerSkeletonRoot.vinor-sk-offline .vinor-sk-sub { color: #64748b; }
   #vinorPartnerSkeletonRoot .vinor-sk-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 10px;
-    padding: 5px 12px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
+    display: block;
+    margin-top: 8px;
+    font-size: 12px;
     color: #6ee7b7;
-    border: 1px solid rgba(52, 211, 153, 0.35);
-    background: rgba(6, 78, 59, 0.45);
   }
   #vinorPartnerSkeletonRoot .vinor-sk-badge[hidden] { display: none; }
-  #vinorPartnerSkeletonRoot .vinor-sk-badge-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #34d399;
-    box-shadow: 0 0 8px #34d399;
-  }
 
-  #vinorPartnerSkeletonRoot .vinor-sk-preview {
-    width: 100%;
-    max-width: 22rem;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  #vinorPartnerSkeletonRoot .vinor-sk-row {
-    display: flex;
-    gap: 10px;
-    min-height: 88px;
-    padding: 10px;
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    background: rgba(15, 23, 42, 0.65);
-    overflow: hidden;
-  }
-  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-row {
-    border-color: rgba(0, 0, 0, 0.06);
-    background: #fff;
-  }
-  #vinorPartnerSkeletonRoot .vinor-sk-thumb {
-    width: 32%;
-    max-width: 5.5rem;
-    flex-shrink: 0;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
-    position: relative;
-    overflow: hidden;
-  }
-  #vinorPartnerSkeletonRoot .vinor-sk-lines {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 8px;
-  }
-  #vinorPartnerSkeletonRoot .vinor-sk-line {
-    height: 10px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.07);
-    position: relative;
-    overflow: hidden;
-  }
-  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-line,
-  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-thumb {
-    background: #e2e8f0;
-  }
-  #vinorPartnerSkeletonRoot .vinor-sk-shine::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
-    animation: vinorSkShine 1.4s ease-in-out infinite;
-  }
-  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-shine::after {
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
-  }
-  #vinorPartnerSkeletonRoot .vinor-sk-d1::after { animation-delay: 0.1s; }
-  #vinorPartnerSkeletonRoot .vinor-sk-d2::after { animation-delay: 0.25s; }
-
-  #vinorPartnerSkeletonRoot .vinor-sk-tabs {
-    flex-shrink: 0;
-    display: flex;
-    justify-content: space-around;
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(5, 10, 14, 0.94);
-  }
-  html:not(.dark) #vinorPartnerSkeletonRoot .vinor-sk-tabs {
-    border-top-color: rgba(0, 0, 0, 0.06);
-    background: rgba(255, 255, 255, 0.96);
-  }
-  #vinorPartnerSkeletonRoot .vinor-sk-tab {
-    width: 44px;
-    height: 36px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.06);
-    position: relative;
-    overflow: hidden;
-  }
-  #vinorPartnerSkeletonRoot .vinor-sk-tab.on {
-    background: rgba(16, 185, 129, 0.2);
-    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.35);
-  }
-
-  @keyframes vinorSkShine { 100% { transform: translateX(100%); } }
-  @keyframes vinorSkSpin { to { transform: rotate(360deg); } }
-  @keyframes vinorSkBar {
-    0% { transform: translateX(-120%); }
-    100% { transform: translateX(320%); }
+  @keyframes vinorSkPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
   }
   @media (prefers-reduced-motion: reduce) {
-    #vinorPartnerSkeletonRoot .vinor-sk-shine::after,
-    #vinorPartnerSkeletonRoot .vinor-sk-ring,
-    #vinorPartnerSkeletonRoot .vinor-sk-progress > i { animation: none; }
+    #vinorPartnerSkeletonRoot .vinor-sk-logo-img { animation: none; opacity: 0.85; }
   }
 </style>
 
 <div id="vinorPartnerSkeletonRoot" aria-hidden="true" aria-busy="true" data-vinor-partner-skeleton="1">
-  <div class="vinor-sk-progress" aria-hidden="true"><i></i></div>
-
-  <div class="vinor-sk-body">
-    <div class="vinor-sk-hero">
-      <div class="vinor-sk-logo-box">
-        <div class="vinor-sk-ring" aria-hidden="true"></div>
-        <img class="vinor-sk-logo-img" src="{{ url_for('static', filename='icons/icon-96.png') }}" alt="" width="64" height="64" decoding="async">
-      </div>
-      <div class="vinor-sk-title">وینور اکسپرس</div>
-      <p class="vinor-sk-sub" id="vinorSkStatusText">در حال بارگذاری…</p>
-      <span class="vinor-sk-badge" id="vinorSkOfflineBadge" hidden>
-        <span class="vinor-sk-badge-dot" aria-hidden="true"></span>
-        آماده برای کار آفلاین
-      </span>
-    </div>
-
-    <div class="vinor-sk-preview" aria-hidden="true">
-      <div class="vinor-sk-row">
-        <div class="vinor-sk-thumb vinor-sk-shine vinor-sk-d1"></div>
-        <div class="vinor-sk-lines">
-          <div class="vinor-sk-line vinor-sk-shine" style="width:72%"></div>
-          <div class="vinor-sk-line vinor-sk-shine vinor-sk-d1" style="width:100%"></div>
-          <div class="vinor-sk-line vinor-sk-shine vinor-sk-d2" style="width:48%"></div>
-        </div>
-      </div>
-      <div class="vinor-sk-row" style="opacity:0.75">
-        <div class="vinor-sk-thumb vinor-sk-shine vinor-sk-d2"></div>
-        <div class="vinor-sk-lines">
-          <div class="vinor-sk-line vinor-sk-shine vinor-sk-d2" style="width:60%"></div>
-          <div class="vinor-sk-line vinor-sk-shine" style="width:88%"></div>
-        </div>
-      </div>
-    </div>
+  <div class="vinor-sk-hero">
+    <img class="vinor-sk-logo-img" src="{{ url_for('static', filename='icons/icon-96.png') }}" alt="" width="36" height="36" decoding="async">
+    <p class="vinor-sk-sub" id="vinorSkStatusText">بارگذاری…</p>
+    <span class="vinor-sk-badge" id="vinorSkOfflineBadge" hidden>آفلاین</span>
   </div>
-
-  <nav class="vinor-sk-tabs" aria-hidden="true">
-    <span class="vinor-sk-tab on vinor-sk-shine"></span>
-    <span class="vinor-sk-tab vinor-sk-shine vinor-sk-d1"></span>
-    <span class="vinor-sk-tab vinor-sk-shine vinor-sk-d2"></span>
-    <span class="vinor-sk-tab vinor-sk-shine"></span>
-  </nav>
 </div>
 
 <script>
@@ -262,12 +94,17 @@
         on = !!window.VinorConnectivity.isOnline();
       }
     } catch (_) {}
+    var root = document.getElementById('vinorPartnerSkeletonRoot');
     var badge = document.getElementById('vinorSkOfflineBadge');
     var txt = document.getElementById('vinorSkStatusText');
+    if (root) {
+      if (on) root.classList.remove('vinor-sk-offline');
+      else root.classList.add('vinor-sk-offline');
+    }
     if (badge) badge.hidden = on;
     if (txt) {
       txt.textContent = on
-        ? 'در حال بارگذاری…'
+        ? 'بارگذاری…'
         : 'اتصال اینترنت قطع است';
     }
     if (!on && typeof window.vinorExpressSyncConnectivity === 'function') {
