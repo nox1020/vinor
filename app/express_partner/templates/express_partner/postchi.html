@@ -57,6 +57,14 @@
               <div class="postchi-bubble" :class="msg.role === 'out' ? 'postchi-bubble--out' : 'postchi-bubble--in'">
                 <span x-text="msg.body"></span>
               </div>
+              <a x-show="msg.action_url && msg.role !== 'out'"
+                 x-cloak
+                 :href="msg.action_url"
+                 data-vinor-express-nav="1"
+                 class="postchi-msg__action text-[12px] font-medium text-emerald-400/90 hover:text-emerald-300"
+                 @click.prevent="typeof window.vinorExpressNavigate === 'function' ? window.vinorExpressNavigate(msg.action_url, { forward: true }) : (window.location.href = msg.action_url)">
+                مشاهده جزئیات
+              </a>
               <span class="postchi-msg__time tabular-nums" x-text="msg.timeLabel"></span>
             </div>
           </div>

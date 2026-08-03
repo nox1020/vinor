@@ -112,6 +112,8 @@ from .visit_requests import (
     CANCELLED_STATUS,
 )
 from .commissions_flow import (
+    APPROVED_STATUS,
+    PAID_STATUS,
     commission_blocks_new_deal_record,
     commission_is_deal,
     commission_is_visit,
@@ -2854,6 +2856,46 @@ def _partner_has_pending_app(me_phone: str) -> bool:
     return False
 
 
+def _partner_has_completed_deal(
+    me_phone: str,
+    commissions: Optional[List[Dict[str, Any]]] = None,
+) -> bool:
+    """True اگر حداقل یک پورسانت فروش (معامله) با وضعیت approved/paid داشته باشد."""
+    ph = (me_phone or '').strip()
+    if not ph:
+        return False
+    rows = commissions if commissions is not None else _commissions_for_phone(ph)
+    finalized = frozenset({APPROVED_STATUS, PAID_STATUS})
+    for c in rows or []:
+        if not isinstance(c, dict):
+            continue
+        try:
+            if not commission_is_deal(c):
+                continue
+        except Exception:
+            continue
+        if (str(c.get('status') or '')).strip().lower() in finalized:
+            return True
+    return False
+
+
+def _home_ai_empty_title(
+    *,
+    is_approved: bool,
+    has_pending_app: bool,
+    has_completed_deal: bool,
+) -> str:
+    """تیتر حالت خالی خانه — بر اساس مرحلهٔ کاربر."""
+    if is_approved:
+        if has_completed_deal:
+            return 'امروز دنبال فروشی یا جذب فایل؟'
+        return 'آماده‌ای اولین پورسانتت را بگیری؟'
+    if has_pending_app:
+        return 'تا تأیید، از همین‌جا بپرس'
+    # مهمان / واردنشده / لاگین‌شدهٔ غیرتأیید
+    return 'دنبال خرید ملکی یا همکاری با وینور؟'
+
+
 def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     ph = (me_phone or '').strip()
     is_approved = _is_partner_approved(profile)
@@ -2866,6 +2908,7 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     comm_stats = _partner_commission_stats(ph, my_comms) if ph else {}
     withdrawable = int(comm_stats.get('withdrawable_balance') or 0) if ph else 0
     follow_up_count = _home_follow_up_count(ph, visit_rows) if ph else 0
+    has_completed_deal = _partner_has_completed_deal(ph, my_comms) if ph and is_approved else False
 
     # مأموریت/کارت فایل اجباری حذف شد — خانه = چت بازاریاب فروش
     assigned_lands: List[Dict[str, Any]] = []
@@ -2899,6 +2942,7 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'is_logged_in': bool(ph),
         'is_approved': is_approved,
         'has_pending_app': has_pending_app,
+        'has_completed_deal': has_completed_deal,
         'urgent_actions': urgent_actions,
         'suggested_files': suggested_files,
         'journey_card': None,
@@ -3260,6 +3304,11 @@ def home_page():
         profile=profile if isinstance(profile, dict) else None,
         has_pending_app=bool(payload.get('has_pending_app')),
     )
+    ai_ctx['home_ai_empty_title'] = _home_ai_empty_title(
+        is_approved=bool(payload.get('is_approved')),
+        has_pending_app=bool(payload.get('has_pending_app')),
+        has_completed_deal=bool(payload.get('has_completed_deal')),
+    )
 
     # دادهٔ کشوی پروفایل (منوی GPT روی داشبورد)
     drawer_profile = profile if isinstance(profile, dict) else {}
@@ -3294,38 +3343,17 @@ def home_page():
     except Exception:
         pass
 
-    # پیشنهادهای سریع خانه — لیست GPT در حالت خالی
+    # پیشنهادهای سریع خانه — هم‌راستا با تیتر خالی (مرحلهٔ کاربر)
     ai_quick_prompts: List[Dict[str, str]] = []
     try:
-        from .sales_coach import build_limited_ai_quick_prompts
+        from .sales_coach import build_home_ai_quick_prompts
 
-        if ai_ctx.get('home_ai_limited'):
-            ai_quick_prompts = build_limited_ai_quick_prompts(
-                me_phone=me_phone,
-                has_pending_app=bool(payload.get('has_pending_app')),
-            )
-        else:
-            ai_quick_prompts = [
-                {
-                    'label': 'پیدا کردن فایل',
-                    'prompt': 'یه فایل مناسب برای بازاریابی می‌خوام',
-                    'intent': 'find_land',
-                    'icon': 'search',
-                },
-                {
-                    'label': 'متن آگهی',
-                    'prompt': 'متن آگهی دیوار و اینستا بده',
-                    'intent': 'marketing',
-                    'icon': 'pen',
-                },
-                {
-                    'label': 'قدم بعدی',
-                    'prompt': 'قدم بعدی‌م چیه؟',
-                    'intent': 'next_action',
-                    'icon': 'bolt',
-                },
-            ]
-        # آیکن برای لیست خالی GPT (مهمان)
+        ai_quick_prompts = build_home_ai_quick_prompts(
+            me_phone=me_phone,
+            is_approved=bool(payload.get('is_approved')),
+            has_pending_app=bool(payload.get('has_pending_app')),
+            has_completed_deal=bool(payload.get('has_completed_deal')),
+        )
         _icon_by_intent = {
             'coop_levels': 'users',
             'coop_status': 'clipboard',

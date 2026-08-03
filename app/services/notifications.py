@@ -275,7 +275,8 @@ def _save_all(data: Dict[str, List[Dict[str, Any]]], *, fast: bool = False) -> b
 
 def add_notification(user_id: str, title: str, body: str, ntype: str = "info",
                      ad_id: Optional[str] = None, action_url: Optional[str] = None,
-                     broadcast_id: Optional[str] = None, source: Optional[str] = None) -> Dict[str, Any]:
+                     broadcast_id: Optional[str] = None, source: Optional[str] = None,
+                     escalation_id: Optional[str] = None) -> Dict[str, Any]:
     """
     افزودن اعلان جدید برای یک کاربر
     """
@@ -306,6 +307,8 @@ def add_notification(user_id: str, title: str, body: str, ntype: str = "info",
         notif["broadcast_id"] = str(broadcast_id)
     if source:
         notif["source"] = str(source)
+    if escalation_id:
+        notif["escalation_id"] = str(escalation_id).strip()
     
     # افزودن به لیست اعلان‌های کاربر
     if normalized_user_id not in data:
@@ -338,11 +341,14 @@ def add_notification(user_id: str, title: str, body: str, ntype: str = "info",
 
     try:
         from app.services.fcm_push import send_fcm_to_user_background
+        from app.services.postchi import postchi_inbox_path
+
+        # کلیک پوش همیشه پستچی را باز می‌کند؛ action_url فقط CTA داخل پیام است
         send_fcm_to_user_background(
             normalized_user_id,
             title=str(title).strip(),
             body=str(body).strip(),
-            url=action_url or "/express/partner/home?thread=__postchi__",
+            url=postchi_inbox_path(),
         )
     except Exception:
         pass
@@ -416,11 +422,13 @@ def add_notifications_batch(
     if success_count:
         try:
             from app.services.fcm_push import send_fcm_batch_background
+            from app.services.postchi import postchi_inbox_path
+
             send_fcm_batch_background(
                 list(seen_phones),
                 title=title_s,
                 body=body_s,
-                url=action_url or "/express/partner/home?thread=__postchi__",
+                url=postchi_inbox_path(),
                 broadcast_id=broadcast_id,
             )
         except Exception:

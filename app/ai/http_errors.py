@@ -13,4 +13,6 @@ def ai_chat_http_status(result: dict[str, Any]) -> int:
         return 429
     if result.get("error_code") == "api_unavailable":
         return 503
+    if result.get("error_code") == "ai_paused":
+        return 503
     return 400

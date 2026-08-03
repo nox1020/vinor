@@ -2622,6 +2622,35 @@ def ai_questions():
 
     if request.method == 'POST':
         action = (request.form.get('action') or 'answer').strip()
+        if action in ('pause_ai', 'resume_ai'):
+            import os
+
+            env_ai = os.environ.get('VINOR_AI_ENABLED')
+            if env_ai is not None and str(env_ai).strip() != '':
+                flash(
+                    'قفل env فعال است (VINOR_AI_ENABLED) — '
+                    'تغییر از پنل اعمال نمی‌شود تا متغیر محیطی برداشته شود.',
+                    'error',
+                )
+                return redirect(url_for('admin.ai_questions'))
+            try:
+                enabling = action == 'resume_ai'
+                save_ai_settings({'enabled': enabling})
+                if enabling:
+                    flash('سرویس AI دوباره فعال شد.', 'success')
+                    try:
+                        from app.ai.credits import is_api_balance_depleted, schedule_balance_deferred_resume
+
+                        if not is_api_balance_depleted():
+                            schedule_balance_deferred_resume(trigger='admin_resume_ai')
+                    except Exception:
+                        pass
+                else:
+                    flash('سرویس AI متوقف شد — پیام‌های جدید مدل را صدا نمی‌زنند.', 'success')
+            except Exception:
+                flash('تغییر وضعیت AI ممکن نشد.', 'error')
+            return redirect(url_for('admin.ai_questions'))
+
         if action == 'save_config':
             try:
                 from app.ai.runtime_settings import default_ai_settings
@@ -2694,8 +2723,14 @@ def ai_questions():
     site_settings = get_settings()
     stored_api_key = get_stored_ai_api_key()
     active_api_key = get_deepseek_api_key()
+    import os
+
     from app.ai.credits import get_last_balance_probe, is_api_balance_depleted
+    from app.ai.escalations import count_pending_balance_deferred
     from app.ai.runtime_settings import force_flash_enabled, model_choice_options
+
+    _env_ai = os.environ.get('VINOR_AI_ENABLED')
+    ai_enabled_env_locked = _env_ai is not None and str(_env_ai).strip() != ''
 
     last_probe = get_last_balance_probe()
     if last_probe.get('probed_at'):
@@ -2713,6 +2748,10 @@ def ai_questions():
         p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
     except Exception:
         p, a, r = 0, 0, 0
+    try:
+        balance_deferred_count = count_pending_balance_deferred()
+    except Exception:
+        balance_deferred_count = 0
     return render_template(
         'admin/ai_questions.html',
         pending=pending,
@@ -2730,6 +2769,8 @@ def ai_questions():
         force_flash=force_flash_enabled(),
         balance_depleted=is_api_balance_depleted(),
         last_balance_probe=last_probe,
+        balance_deferred_count=balance_deferred_count,
+        ai_enabled_env_locked=ai_enabled_env_locked,
     )
 
 
@@ -6414,11 +6455,11 @@ def _approve_express_partner(
                 user_id=phone,
                 title='تأیید همکاری وینور اکسپرس',
                 body=(
-                    'درخواست شما تأیید شد. همان چت قبلی‌ات باز است — '
-                    'الان می‌تونی بازدید و معامله را از چت ثبت کنی.'
+                    'درخواست شما تأیید شد. پیام‌های رسمی و پشتیبانی را در پستچی وینور ببینید؛ '
+                    'از چت خانه هم می‌توانید بازدید و معامله ثبت کنید.'
                 ),
                 ntype='success',
-                action_url=url_for('express_partner.home', _external=True),
+                action_url=url_for('express_partner.home', ai=1, thread='__postchi__'),
             )
         except Exception as e:
             current_app.logger.error('Error sending approval notification: %s', e, exc_info=True)

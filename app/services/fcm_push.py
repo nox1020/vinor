@@ -122,7 +122,7 @@ def send_fcm_to_token(
     *,
     title: str,
     body: str,
-    url: str = "/express/partner/home?thread=__postchi__",
+    url: str = "/express/partner/home?ai=1&thread=__postchi__",
 ) -> Dict[str, Any]:
     if not token:
         return {"ok": False, "error": "NO_TOKEN"}
@@ -136,7 +136,7 @@ def send_fcm_to_token(
 
     title_s = str(title or "وینور").strip()[:120]
     body_s = str(body or "").strip()[:500]
-    url_s = url or "/express/partner/home?thread=__postchi__"
+    url_s = url or "/express/partner/home?ai=1&thread=__postchi__"
     payload = {
         "message": {
             "token": token,
@@ -234,7 +234,7 @@ def send_fcm_to_phones(
     *,
     title: str,
     body: str,
-    url: str = "/express/partner/home?thread=__postchi__",
+    url: str = "/express/partner/home?ai=1&thread=__postchi__",
 ) -> Dict[str, int]:
     tokens = tokens_for_phones(phones)
     if not tokens:
@@ -298,7 +298,7 @@ def send_fcm_to_user_background(
     if not is_fcm_configured():
         return
     app = current_app._get_current_object()
-    target_url = url or "/express/partner/home?thread=__postchi__"
+    target_url = url or "/express/partner/home?ai=1&thread=__postchi__"
 
     def _worker() -> None:
         with app.app_context():
@@ -327,7 +327,7 @@ def send_fcm_batch_background(
     if not phones:
         return
     app = current_app._get_current_object()
-    target_url = url or "/express/partner/home?thread=__postchi__"
+    target_url = url or "/express/partner/home?ai=1&thread=__postchi__"
     phone_list = list(phones)
     bid = (broadcast_id or "").strip() or None
 

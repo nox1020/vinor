@@ -10,11 +10,65 @@
     <p class="text-sky-800 dark:text-sky-200/90 leading-6">
       موجودی API، مدل DeepSeek و کلید را در بخش‌های پایین تنظیم کنید.
       سوالاتی که AI نتواند پاسخ دهد اینجا می‌آیند؛ پس از پاسخ، در همان گفتگوی کاربر نمایش داده می‌شود.
+      وقتی موجودی API تمام شود، با هر پیام کاربر دوباره استعلام می‌شود و پس از شارژ، سوالات معلق خودکار پاسخ داده می‌شوند.
       {% if force_flash %}
       <span class="block mt-1 text-amber-800 dark:text-amber-200">قفل env فعال است (<span class="font-mono text-xs" dir="ltr">VINOR_AI_FORCE_FLASH=1</span>) — فقط Flash اعمال می‌شود.</span>
       {% endif %}
     </p>
   </div>
+
+  <section class="rounded-2xl border {% if ai_status.enabled %}border-emerald-200 dark:border-emerald-800{% else %}border-amber-300 dark:border-amber-800{% endif %} bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+    <div class="px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+      <div class="min-w-0">
+        <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          {% if ai_status.enabled %}
+          <i class="fa-solid fa-circle-play text-emerald-500"></i>
+          وضعیت سرویس AI
+          {% else %}
+          <i class="fa-solid fa-circle-pause text-amber-500"></i>
+          وضعیت سرویس AI
+          {% endif %}
+        </h2>
+        <p class="mt-1 text-xs leading-5 {% if ai_status.enabled %}text-emerald-700 dark:text-emerald-300{% else %}text-amber-800 dark:text-amber-200{% endif %}">
+          {% if ai_status.enabled %}
+          الان فعال است — پیام‌های کاربر به مدل ارسال می‌شوند.
+          {% else %}
+          متوقف / غیرفعال — پیام‌های جدید مدل را صدا نمی‌زنند و پاسخ مودبانهٔ توقف می‌گیرند.
+          {% endif %}
+        </p>
+        {% if ai_enabled_env_locked %}
+        <p class="mt-1.5 text-[11px] text-amber-800 dark:text-amber-200">
+          قفل env (<span class="font-mono text-xs" dir="ltr">VINOR_AI_ENABLED</span>) فعال است — تغییر از این دکمه تا برداشتن متغیر اعمال نمی‌شود.
+        </p>
+        {% endif %}
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        {% if ai_status.enabled %}
+        <form method="post" action="{{ url_for('admin.ai_questions') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="pause_ai">
+          <button type="submit"
+                  {% if ai_enabled_env_locked %}disabled{% endif %}
+                  class="inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2">
+            <i class="fa-solid fa-pause"></i>
+            توقف AI
+          </button>
+        </form>
+        {% else %}
+        <form method="post" action="{{ url_for('admin.ai_questions') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="resume_ai">
+          <button type="submit"
+                  {% if ai_enabled_env_locked %}disabled{% endif %}
+                  class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2">
+            <i class="fa-solid fa-play"></i>
+            فعال‌سازی AI
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </section>
 
   <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
@@ -50,6 +104,11 @@
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
       <p class="text-gray-500 dark:text-gray-400">در انتظار پاسخ</p>
       <p class="mt-0.5 font-semibold text-amber-600 dark:text-amber-400">{{ pending|length }}</p>
+      {% if balance_deferred_count %}
+      <p class="mt-1 text-[10px] text-amber-700/80 dark:text-amber-300/80">
+        {{ balance_deferred_count }} معلق به‌خاطر موجودی (پس از شارژ خودکار پاسخ داده می‌شود)
+      </p>
+      {% endif %}
     </div>
   </div>
 

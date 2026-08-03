@@ -851,6 +851,7 @@ def append_typed_message(
     event: str = "",
     meta: dict[str, Any] | None = None,
     quota: bool = False,
+    escalation_id: str = "",
 ) -> tuple[list[dict[str, Any]], str]:
     """Append a single assistant-side typed message (system / timeline / …)."""
     from app.ai.message_types import normalize_message_type
@@ -871,6 +872,14 @@ def append_typed_message(
     if not body and not actions and not codes:
         return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience), tid
 
+    eid = (escalation_id or "").strip()
+    if eid:
+        for item in th.get("messages") or []:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("escalation_id") or "") == eid:
+                return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience), tid
+
     ts = _now_iso()
     entry: dict[str, Any] = {
         "id": _new_message_id(),
@@ -885,6 +894,8 @@ def append_typed_message(
         entry["event"] = str(event)
     if meta:
         entry["meta"] = dict(meta)
+    if eid:
+        entry["escalation_id"] = eid
     if codes:
         entry["land_codes"] = codes
     if actions:

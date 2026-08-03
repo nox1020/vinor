@@ -260,30 +260,55 @@
 {% if chat_mode == 'home-inline' %}
 <script>
 (function () {
+  /* fallback تا قبل از لود ai-chat.js؛ بعد از لود، __vinorFireHomeQuickPrompt اولویت دارد */
   if (window.__vinorAiQuickBound) return;
   window.__vinorAiQuickBound = true;
   document.addEventListener('click', function (ev) {
     var chip = ev.target && ev.target.closest ? ev.target.closest('[data-ai-quick-prompt]') : null;
     if (!chip) return;
+    if (chip.getAttribute('data-vn-quick-handled') === '1') return;
     var page = document.getElementById('homeDashboardPage');
     if (!page || !page.contains(chip)) return;
-    var form = document.getElementById('aiChatForm');
-    if (!form) return;
-    ev.preventDefault();
-    var prompt = chip.getAttribute('data-ai-quick-prompt') || '';
+    var prompt = (chip.getAttribute('data-ai-quick-prompt') || '').trim();
     if (!prompt) return;
+    ev.preventDefault();
+    ev.stopPropagation();
     var intent = chip.getAttribute('data-ai-intent') || '';
-    form.setAttribute('data-pending-intent', intent);
-    form.setAttribute('data-silent-user', '1');
-    form.setAttribute('data-silent-message', prompt);
+    if (typeof window.__vinorFireHomeQuickPrompt === 'function') {
+      try {
+        chip.setAttribute('data-vn-quick-handled', '1');
+      } catch (_) {}
+      window.__vinorFireHomeQuickPrompt(prompt, intent, chip);
+      return;
+    }
+    var form = document.getElementById('aiChatForm');
     var input = document.getElementById('aiInput');
-    if (!input || input.disabled) return;
-    input.value = '';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    var btn = document.getElementById('aiSendBtn');
+    if (!form) return;
+    try {
+      if (input) {
+        input.disabled = false;
+        input.removeAttribute('aria-disabled');
+        input.value = prompt;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      if (btn) {
+        btn.disabled = false;
+        btn.setAttribute('aria-disabled', 'false');
+      }
+      if (intent) form.setAttribute('data-pending-intent', intent);
+      else form.removeAttribute('data-pending-intent');
+      form.removeAttribute('data-silent-user');
+      form.removeAttribute('data-silent-message');
+    } catch (_) {}
     try {
       if (typeof form.requestSubmit === 'function') form.requestSubmit();
       else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    } catch (_) {}
+    } catch (_) {
+      try {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      } catch (__) {}
+    }
   });
 })();
 </script>

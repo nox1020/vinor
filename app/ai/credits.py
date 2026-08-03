@@ -150,12 +150,17 @@ def is_api_balance_depleted(max_age_sec: int = 604800) -> bool:
     return (time.time() - ts) < max_age_sec
 
 
-def clear_api_balance_depleted() -> None:
+def clear_api_balance_depleted(*, resume_deferred: bool = True) -> bool:
+    """قفل محلی اتمام موجودی را بردار. در صورت نیاز صف معلق را از سر بگیر."""
     data = _load_cache()
     flags = data.get("flags") or {}
+    had = bool(flags.get("api_balance_depleted"))
     flags.pop("api_balance_depleted", None)
     data["flags"] = flags
     _save_cache(data)
+    if had and resume_deferred:
+        schedule_balance_deferred_resume(trigger="clear_balance_flag")
+    return had
 
 
 def get_last_balance_probe() -> dict[str, Any]:
@@ -170,6 +175,60 @@ def _store_balance_probe(payload: dict[str, Any]) -> None:
     flags["last_balance_probe"] = dict(payload or {})
     data["flags"] = flags
     _save_cache(data)
+
+
+def recheck_api_balance_if_depleted() -> dict[str, Any]:
+    """اگر قفل اتمام موجودی فعال است، با هر پیام استعلام زنده بزن.
+
+    Returns:
+        dict با کلیدهای:
+        - depleted: آیا هنوز بدون موجودی است
+        - restored: آیا همین استعلام قفل را برداشت
+        - probed: آیا استعلام انجام شد
+        - probe: نتیجهٔ خام استعلام (در صورت اجرا)
+    """
+    if not is_api_balance_depleted():
+        return {"depleted": False, "restored": False, "probed": False, "probe": {}}
+
+    probe = probe_deepseek_api_balance(clear_on_ok=True)
+    probe_ok = bool(
+        probe.get("ok")
+        and probe.get("is_available", True)
+        and not probe.get("depleted")
+        and probe.get("error_code") != "balance_depleted"
+    )
+    if probe_ok:
+        # استعلام موفق = موجودی برگشته؛ قفل محلی را حتماً بردار
+        if is_api_balance_depleted():
+            clear_api_balance_depleted(
+                resume_deferred=not bool(probe.get("local_flag_cleared"))
+            )
+        return {
+            "depleted": False,
+            "restored": True,
+            "probed": True,
+            "probe": probe,
+        }
+
+    return {
+        "depleted": True,
+        "restored": False,
+        "probed": True,
+        "probe": probe,
+    }
+
+
+def schedule_balance_deferred_resume(*, trigger: str = "") -> None:
+    """پس از شارژ مجدد، پاسخ خودکار به سوالات معلق به‌خاطر موجودی (پس‌زمینه)."""
+    try:
+        from app.ai.escalations import schedule_resume_balance_deferred
+
+        schedule_resume_balance_deferred(trigger=trigger or "balance_restored")
+    except Exception:
+        try:
+            current_app.logger.exception("schedule balance deferred resume failed")
+        except Exception:
+            pass
 
 
 def probe_deepseek_api_balance(*, clear_on_ok: bool = True) -> dict[str, Any]:
@@ -287,8 +346,12 @@ def probe_deepseek_api_balance(*, clear_on_ok: bool = True) -> dict[str, Any]:
                     }
                 )
 
+    local_cleared = False
     if clear_on_ok and is_available:
-        clear_api_balance_depleted()
+        # resume را خودمان بعد از استعلام موفق زمان‌بندی می‌کنیم تا trigger دقیق باشد
+        local_cleared = clear_api_balance_depleted(resume_deferred=False)
+        if local_cleared:
+            schedule_balance_deferred_resume(trigger="probe_balance_ok")
     elif not is_available:
         mark_api_balance_depleted()
 
@@ -300,7 +363,7 @@ def probe_deepseek_api_balance(*, clear_on_ok: bool = True) -> dict[str, Any]:
         "balances": infos,
         "body": body if isinstance(body, dict) else {},
         "probed_at": probed_at,
-        "local_flag_cleared": bool(clear_on_ok and is_available),
+        "local_flag_cleared": bool(local_cleared),
     }
     _store_balance_probe(out)
     return out

@@ -23,6 +23,17 @@ WELCOME_BODY = (
 )
 
 POSTCHI_THREAD_ID = '__postchi__'
+POSTCHI_INBOX_PATH = '/express/partner/home?ai=1&thread=__postchi__'
+
+
+def postchi_inbox_path() -> str:
+    """مسیر استاندارد باز کردن پستچی در خانهٔ همکار."""
+    try:
+        from flask import url_for
+
+        return url_for('express_partner.home', ai=1, thread=POSTCHI_THREAD_ID)
+    except Exception:
+        return POSTCHI_INBOX_PATH
 
 
 def _data_path() -> str:
@@ -79,12 +90,20 @@ def _notif_as_message(notif: Dict[str, Any]) -> Dict[str, Any]:
         text = f'{title}\n{body}'
     else:
         text = body or title or 'اعلان جدید'
+    action = (notif.get('action_url') or '').strip() or None
+    # لینک خود پستچی را به‌عنوان CTA نشان نده
+    if action and (
+        'thread=__postchi__' in action
+        or action.rstrip('/').endswith('/postchi')
+        or '/postchi?' in action
+    ):
+        action = None
     return {
         'id': 'notif-' + str(notif.get('id') or uuid.uuid4().hex),
         'role': 'in',
         'body': text,
         'title': title or None,
-        'action_url': (notif.get('action_url') or '').strip() or None,
+        'action_url': action,
         'created_at': int(notif.get('created_at') or time.time()),
         'type': (notif.get('type') or 'info'),
         'is_read': bool(notif.get('is_read')),
@@ -152,6 +171,59 @@ def postchi_preview(user_id: str) -> Dict[str, Any]:
     }
 
 
+def deliver_support_reply(
+    user_id: str,
+    answer: str,
+    *,
+    question: str = '',
+    escalation_id: str = '',
+) -> bool:
+    """ثبت پاسخ پشتیبانی به‌عنوان اعلان — در ترد پستچی دیده می‌شود."""
+    uid = _normalize_user_id(user_id)
+    text = (answer or '').strip()
+    if not uid or not text:
+        return False
+
+    q = (question or '').strip()
+    title = 'پاسخ پشتیبانی وینور'
+    body = text
+    if q:
+        short_q = q[:120] + ('…' if len(q) > 120 else '')
+        body = f'در پاسخ به: {short_q}\n\n{text}'
+
+    try:
+        from .notifications import add_notification, get_user_notifications
+
+        eid = (escalation_id or '').strip()
+        if eid:
+            for n in get_user_notifications(uid, limit=40):
+                if str(n.get('escalation_id') or '').strip() == eid:
+                    return True
+                src = str(n.get('source') or '')
+                if src == 'admin_escalation' and (n.get('body') or '').strip() == body.strip():
+                    return True
+
+        notif = add_notification(
+            uid,
+            title=title,
+            body=body[:4000],
+            ntype='info',
+            action_url=None,
+            source='admin_escalation',
+            escalation_id=eid or None,
+        )
+        return bool(notif)
+    except Exception:
+        try:
+            current_app.logger.exception(
+                'Postchi support reply failed | user=%s',
+                uid,
+            )
+        except Exception:
+            pass
+        return False
+
+
 def send_user_message(user_id: str, text: str) -> Optional[Dict[str, Any]]:
     uid = _normalize_user_id(user_id)
     body = (text or '').strip()
@@ -170,6 +242,29 @@ def send_user_message(user_id: str, text: str) -> Optional[Dict[str, Any]]:
     items.append(msg)
     store[uid] = items[-200:]
     _save_store(store)
+
+    # پیام همکار در پستچی → صف پشتیبانی ادمین
+    try:
+        from app.ai.audience import AUDIENCE_PARTNER
+        from app.ai.escalations import create_escalation
+
+        create_escalation(
+            user_key=uid,
+            partner_phone=uid,
+            audience=AUDIENCE_PARTNER,
+            question=body,
+            user_message=body,
+            thread_id=POSTCHI_THREAD_ID,
+        )
+    except Exception:
+        try:
+            current_app.logger.exception(
+                'Postchi escalation create failed | user=%s',
+                uid,
+            )
+        except Exception:
+            pass
+
     return {
         'id': msg['id'],
         'role': 'out',

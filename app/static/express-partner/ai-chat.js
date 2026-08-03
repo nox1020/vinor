@@ -167,10 +167,13 @@
     try {
       if (list.querySelector('.ai-msg-wrap[data-role="user"]')) return false;
       if (list.querySelector('.ai-msg-wrap[data-thinking="1"]')) return false;
+      /* کارت فایل داخل چت = خروج از بدو ورود (حتی اگر ephemeral باشد) */
+      if (list.querySelector('.ai-msg-wrap[data-land-chat-code]')) return false;
       var wraps = list.querySelectorAll('.ai-msg-wrap[data-role]');
       for (var i = 0; i < wraps.length; i++) {
         var w = wraps[i];
         if (w.getAttribute('data-welcome') === '1') continue;
+        if (w.getAttribute('data-land-chat-code')) return false;
         if (w.getAttribute('data-ephemeral') === '1') continue;
         var src = (w.getAttribute('data-source') || '').toLowerCase();
         if (src === 'welcome') continue;
@@ -225,6 +228,8 @@
     if (empty && list) {
       try {
         list.querySelectorAll('.ai-msg-wrap[data-role]').forEach(function (w) {
+          /* کارت فایل را پاک نکن — همان کلیک بدو ورود است */
+          if (w.getAttribute('data-land-chat-code')) return;
           var src = (w.getAttribute('data-source') || '').toLowerCase();
           if (
             w.getAttribute('data-welcome') === '1' ||
@@ -1041,16 +1046,16 @@
   function setComposerMode(postchi) {
     if (!input) return;
     if (postchi) {
-      input.value = '';
-      stopTypeHintPlaceholder({ dismiss: false, placeholder: 'ارسال در پستچی غیرفعال است' });
-      input.disabled = true;
-      input.setAttribute('aria-disabled', 'true');
-      if (btn) {
-        btn.disabled = true;
-        btn.setAttribute('aria-disabled', 'true');
-      }
-      form.classList.add('ai-composer--readonly');
-      form.classList.remove('ai-composer--ready');
+      input.disabled = false;
+      input.removeAttribute('aria-disabled');
+      if (btn) btn.removeAttribute('aria-disabled');
+      form.classList.remove('ai-composer--readonly');
+      stopTypeHintPlaceholder({
+        dismiss: false,
+        placeholder: 'پیام به پشتیبانی وینور…',
+      });
+      hideChipBar();
+      syncComposerReady();
       autoGrowInput();
     } else {
       input.disabled = false;
@@ -1082,8 +1087,19 @@
 
   function setBusy(on) {
     if (isPostchiMode()) {
-      if (btn) btn.disabled = true;
-      if (input) input.disabled = true;
+      if (on) {
+        if (btn) btn.disabled = true;
+        if (input) input.disabled = true;
+        form.classList.remove('ai-composer--ready');
+      } else {
+        if (input) {
+          input.disabled = false;
+          input.removeAttribute('aria-disabled');
+        }
+        if (btn) btn.removeAttribute('aria-disabled');
+        form.classList.remove('ai-composer--readonly');
+        syncComposerReady();
+      }
       if (newChatBtn) newChatBtn.disabled = !!on;
       return;
     }
@@ -2229,6 +2245,30 @@
       }
     }
 
+    var actionUrl = (msg.action_url || '').trim();
+    if (actionUrl && msg.source === 'postchi' && !isUser && !opts.thinking) {
+      var actionWrap = document.createElement('div');
+      actionWrap.className = 'mt-1.5';
+      var actionLink = document.createElement('a');
+      actionLink.href = actionUrl;
+      actionLink.className =
+        'inline-flex items-center gap-1 text-[12px] font-medium text-emerald-400/90 hover:text-emerald-300';
+      actionLink.textContent = 'مشاهده جزئیات';
+      if (actionUrl.indexOf('/express/partner/') === 0) {
+        actionLink.setAttribute('data-vinor-express-nav', '1');
+        actionLink.addEventListener('click', function (ev) {
+          try {
+            if (typeof window.vinorExpressNavigate === 'function') {
+              ev.preventDefault();
+              window.vinorExpressNavigate(actionUrl, { forward: true });
+            }
+          } catch (_) {}
+        });
+      }
+      actionWrap.appendChild(actionLink);
+      body.appendChild(actionWrap);
+    }
+
     if (msg.land_detail_html) {
       var detailHost = document.createElement('div');
       detailHost.className = 'ai-msg-cards ai-msg-cards--land-detail w-full min-w-0 max-w-full mt-1';
@@ -2241,7 +2281,8 @@
         body.appendChild(detailHost);
       }
       if (msg.land_code) wrap.setAttribute('data-land-chat-code', String(msg.land_code));
-      wrap.setAttribute('data-ephemeral', '1');
+      /* ephemeral نباش — وگرنه بدو ورود خالی می‌ماند و چت دیده نمی‌شود */
+      wrap.removeAttribute('data-ephemeral');
       initCardsIn(detailHost);
     }
 
@@ -2254,7 +2295,12 @@
     }
     if (msg.created_at) bumpLastSyncAt(msg.created_at);
     applyReportFilter();
-    scrollChatToEnd({ force: !!(homeInline && document.getElementById('vnOpsScroll')) });
+    if (homeInline) {
+      try {
+        syncHomeEmptyState();
+      } catch (_) {}
+    }
+    scrollChatToEnd({ force: !!(homeInline && (document.getElementById('vnOpsScroll') || document.getElementById('vnHomeScroll'))) });
     return wrap;
   }
 
@@ -2474,6 +2520,7 @@
             content: m.body || '',
             created_at: postchiTsToIso(m.created_at),
             source: 'postchi',
+            action_url: m.action_url || '',
           };
         });
         renderMessages(mapped);
@@ -3054,6 +3101,73 @@
     );
   }
 
+  function fireHomeQuickPrompt(prompt, intent, chip) {
+    prompt = (prompt || '').trim();
+    if (!prompt || !homeInline) return false;
+    var liveForm = document.getElementById('aiChatForm');
+    var liveInput = document.getElementById('aiInput');
+    if (!liveForm) return false;
+    ensureChatVisible();
+    unlockComposer();
+    try {
+      if (liveInput) {
+        liveInput.disabled = false;
+        liveInput.removeAttribute('aria-disabled');
+        /* پیام را در ورودی بگذار تا بدو ورود خالی شود و وارد چت شود (نه silent) */
+        liveInput.value = prompt;
+        liveInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      intent = (intent || '').trim();
+      if (intent) liveForm.setAttribute('data-pending-intent', intent);
+      else liveForm.removeAttribute('data-pending-intent');
+      liveForm.removeAttribute('data-silent-user');
+      liveForm.removeAttribute('data-silent-message');
+      if (btn) {
+        btn.disabled = false;
+        btn.setAttribute('aria-disabled', 'false');
+      }
+    } catch (_) {}
+    function doSubmit() {
+      try {
+        if (typeof liveForm.requestSubmit === 'function') liveForm.requestSubmit();
+        else liveForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      } catch (_) {
+        try {
+          liveForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        } catch (__) {}
+      }
+      if (chip) {
+        try {
+          chip.removeAttribute('data-vn-quick-handled');
+        } catch (_) {}
+      }
+    }
+    setTimeout(doSubmit, 0);
+    return true;
+  }
+
+  function onHomeQuickPromptClick(e) {
+    if (!homeInline) return;
+    var chip = e.target && e.target.closest && e.target.closest('[data-ai-quick-prompt]');
+    if (!chip) return;
+    var page = document.getElementById('homeDashboardPage');
+    if (!page || !page.contains(chip)) return;
+    var prompt = (chip.getAttribute('data-ai-quick-prompt') || '').trim();
+    if (!prompt) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      e.stopImmediatePropagation();
+    } catch (_) {}
+    try {
+      chip.setAttribute('data-vn-quick-handled', '1');
+    } catch (_) {}
+    var intent = (chip.getAttribute('data-ai-intent') || '').trim();
+    fireHomeQuickPrompt(prompt, intent, chip);
+  }
+
+  window.__vinorFireHomeQuickPrompt = fireHomeQuickPrompt;
+
   function teardownAiChat() {
     if (pollTimer) {
       clearInterval(pollTimer);
@@ -3084,6 +3198,14 @@
     chatAbort = null;
     deleteAbort = null;
     closeSideMenu();
+    try {
+      document.removeEventListener('click', onHomeQuickPromptClick, true);
+    } catch (_) {}
+    try {
+      if (window.__vinorFireHomeQuickPrompt === fireHomeQuickPrompt) {
+        window.__vinorFireHomeQuickPrompt = null;
+      }
+    } catch (_) {}
     if (onVisChange) {
       document.removeEventListener('visibilitychange', onVisChange);
       onVisChange = null;
@@ -3109,6 +3231,10 @@
   window.__vinorAiChatTeardown = teardownAiChat;
   window.__vinorAiChatSwitchThread = switchThread;
   window.__vinorAiChatOpenSideMenu = openSideMenu;
+
+  if (homeInline) {
+    document.addEventListener('click', onHomeQuickPromptClick, true);
+  }
 
   showWelcomeIfEmpty();
   setComposerMode(isPostchiMode());
@@ -3571,18 +3697,34 @@
     if (landDetailPending === code) return Promise.resolve(false);
     landDetailPending = code;
 
+    function revealChatWithLand() {
+      try {
+        ensureChatVisible();
+      } catch (_) {}
+      try {
+        syncHomeEmptyState();
+      } catch (_) {}
+      try {
+        scrollChatToEnd({ force: true });
+      } catch (_) {}
+    }
+
     var existing = list.querySelector('.ai-msg-wrap[data-land-chat-code="' + code + '"]');
     if (existing) {
+      revealChatWithLand();
       try {
         existing.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } catch (_) {
-        scrollChatToEnd();
+        scrollChatToEnd({ force: true });
       }
       landDetailPending = null;
       return Promise.resolve(true);
     }
 
-    var thinking = showThinking();
+    showThinking();
+    try {
+      syncHomeEmptyState();
+    } catch (_) {}
     var url = '/express/partner/lands/' + encodeURIComponent(code) + '/chat-detail';
     return fetch(url, {
       credentials: 'same-origin',
@@ -3600,6 +3742,9 @@
           showEphemeralHint(
             (payload.data && payload.data.message) || 'جزئیات این فایل در دسترس نیست.'
           );
+          try {
+            syncHomeEmptyState();
+          } catch (_) {}
           return false;
         }
         appendMessage({
@@ -3608,12 +3753,16 @@
           land_detail_html: payload.data.html,
           land_code: payload.data.code || code,
         });
+        revealChatWithLand();
         return true;
       })
       .catch(function () {
         removeThinking();
         landDetailPending = null;
         showEphemeralHint('خطا در دریافت جزئیات فایل.');
+        try {
+          syncHomeEmptyState();
+        } catch (_) {}
         return false;
       });
   };

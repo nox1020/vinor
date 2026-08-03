@@ -418,7 +418,7 @@
     display: block !important;
   }
   #aiHomeEmpty .ai-home-empty__title {
-    margin: 0;
+    margin: 2rem 0 0;
     padding: 0 0.35rem;
     color: #f5f5f5;
     font-size: clamp(1.5rem, 5vw, 1.85rem);
@@ -435,7 +435,7 @@
     gap: 0.55rem;
     width: 100%;
     max-width: 24rem;
-    margin: 1.05rem auto 0;
+    margin: 0 auto;
     padding: 0.62rem 0.8rem;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 0.85rem;
@@ -524,10 +524,8 @@
   #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) #aiHomeInline {
     padding: 0.45rem 0 0.55rem;
   }
-  #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) #aiHomeEmpty .ai-home-news {
-    margin-top: 0.7rem;
-  }
   #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) #aiHomeEmpty .ai-home-empty__title {
+    margin-top: 1.55rem;
     font-size: clamp(1.25rem, 4.6vw, 1.65rem);
   }
   /* اگر نوار دیوار نباشد، همان فاصلهٔ قبلی زیر هدر */
@@ -552,7 +550,9 @@
     /* فقط safe-area؛ فاصلهٔ اضافه بین کامپوزر و لبهٔ پایین نباشد */
     padding: 0 0 env(safe-area-inset-bottom, 0px);
     background: transparent;
-    pointer-events: none;
+    /* بدو ورود: داک در جریان عادی است — auto تا کلیک کارت‌ها در WebView نخورد
+       (descendant با auto زیر parent با none گاهی رویداد نمی‌گیرد) */
+    pointer-events: auto;
   }
   #homeDashboardPage.ai-home-is-empty .vn-home-composer-dock::before {
     display: none;
@@ -590,7 +590,9 @@
     margin: 0 1.15rem 0.45rem auto;
     padding: 0 0.15rem;
     list-style: none;
-    pointer-events: auto;
+    position: relative;
+    z-index: 40;
+    pointer-events: auto !important;
   }
   #homeDashboardPage.ai-home-is-empty .ai-home-empty-actions {
     display: flex !important;
@@ -645,6 +647,9 @@
     line-height: 1.35;
     text-align: right;
     cursor: pointer;
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 1;
     -webkit-tap-highlight-color: transparent;
     transition: color 0.12s ease, background-color 0.12s ease;
   }
@@ -690,15 +695,6 @@
        role="region"
        aria-label="شروع گفتگو"
        {% if _empty_user_msgs %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
-    <h1 class="ai-home-empty__title">
-      {%- if not home_ai_limited|default(false) -%}
-      مشتری داری یا فایل می‌خواهی؟
-      {%- elif has_pending_app|default(false) -%}
-      تا تأیید، از همین‌جا بپرس
-      {%- else -%}
-      خرید می‌کنی یا همکار می‌شوی؟
-      {%- endif -%}
-    </h1>
     <div class="ai-home-news" role="status" aria-live="polite" aria-atomic="true" data-ai-home-news>
       <span class="ai-home-news__dot" aria-hidden="true"></span>
       <div class="ai-home-news__body">
@@ -706,6 +702,7 @@
         <span class="ai-home-news__text" data-ai-home-news-text>۸۰۰ متر زمین ویلایی در آمل فروخته شد</span>
       </div>
     </div>
+    <h1 class="ai-home-empty__title">{{ home_ai_empty_title|default('دنبال خرید ملکی یا همکاری با وینور؟') }}</h1>
   </div>
   {% set chat_mode = 'home-inline' %}
   {% set omit_composer = true %}
@@ -897,7 +894,9 @@
       '<span class="ai-home-news__label">خبر وینور</span>' +
       '<span class="ai-home-news__text" data-ai-home-news-text></span>' +
       '</div>';
-    empty.appendChild(box);
+    var title = empty.querySelector('.ai-home-empty__title');
+    if (title) empty.insertBefore(box, title);
+    else empty.appendChild(box);
     return box.querySelector('[data-ai-home-news-text]');
   }
 

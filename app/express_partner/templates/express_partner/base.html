@@ -1293,8 +1293,8 @@
           openNotification(notif) {
             if (!notif) return;
             if (!notif.is_read) this.markRead(notif);
-            const url = (notif.action_url || '').trim();
-            if (!url) return;
+            // جزئیات اعلان در پستچی است؛ CTA ثانویه (action_url) داخل پیام پستچی
+            const url = (this.postchiUrl || '/express/partner/home?ai=1&thread=__postchi__').trim();
             try {
               if (typeof window.vinorExpressNavigate === 'function' && url.indexOf('/express/partner/') === 0) {
                 window.vinorExpressNavigate(url, { forward: true });

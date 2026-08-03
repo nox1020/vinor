@@ -440,7 +440,7 @@ self.addEventListener('push', (event) => {
         icon: '/static/icons/icon-192.png',
         badge: '/static/icons/icon-48.png',
         tag: 'express-partner-notification',
-        data: data.url || '/express/partner/dashboard',
+        data: data.url || '/express/partner/home?ai=1&thread=__postchi__',
         dir: 'rtl',
         lang: 'fa'
       };
@@ -449,6 +449,7 @@ self.addEventListener('push', (event) => {
       event.waitUntil(self.registration.showNotification('پنل همکاران وینور', {
         body: 'پیام جدید',
         icon: '/static/icons/icon-192.png',
+        data: '/express/partner/home?ai=1&thread=__postchi__',
         dir: 'rtl',
         lang: 'fa'
       }));
@@ -459,7 +460,7 @@ self.addEventListener('push', (event) => {
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data || '/express/partner/dashboard';
+  const url = event.notification.data || '/express/partner/home?ai=1&thread=__postchi__';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       // جستجوی window باز Express Partner

@@ -806,29 +806,127 @@ def build_limited_ai_quick_prompts(
     me_phone: str = "",
     has_pending_app: bool = False,
 ) -> List[Dict[str, str]]:
-    """کیبورد جواب تلگرام برای مهمان / کاربر عادی — حداکثر ۲×۲."""
+    """پیشنهادهای سریع خانه برای مهمان / غیرتأیید / درخواست در انتظار."""
     out: List[Dict[str, str]] = []
 
-    def add(label: str, *, prompt: str, intent: str) -> None:
+    def add(label: str, *, prompt: str, intent: str, icon: str = "") -> None:
         label = (label or "").strip()
         prompt = (prompt or "").strip()
         intent = (intent or "").strip()
         if not label or not prompt or not intent:
             return
-        out.append({
+        item: Dict[str, str] = {
             "label": label,
             "prompt": prompt,
             "intent": intent,
-        })
+        }
+        if (icon or "").strip():
+            item["icon"] = icon.strip()
+        out.append(item)
 
-    add("همکاری", prompt="سطوح همکاری و پورسانت چطوره؟", intent="coop_levels")
+    # درخواست در انتظار تأیید — محدود به وضعیت و سؤال‌های کم‌ریسک
     if has_pending_app:
-        add("وضعیت درخواست", prompt="وضعیت درخواست همکاری‌ام چیه؟", intent="coop_status")
-    elif (me_phone or "").strip():
-        add("ثبت درخواست", prompt="می‌خوام همکار شم", intent="coop_apply")
+        add(
+            "وضعیت درخواست",
+            prompt="وضعیت درخواست همکاری‌ام چیه؟",
+            intent="coop_status",
+            icon="clipboard",
+        )
+        add(
+            "خرید ملک",
+            prompt="یه ملک مناسب می‌خوام",
+            intent="find_land",
+            icon="search",
+        )
+        add(
+            "سطوح همکاری",
+            prompt="سطوح همکاری و پورسانت چطوره؟",
+            intent="coop_levels",
+            icon="users",
+        )
+        return out[:3]
+
+    # مهمان / لاگین‌شدهٔ غیرتأیید — هم‌راستا با تیتر خرید/همکاری
+    _ = me_phone
+    add("خرید ملک", prompt="یه ملک مناسب می‌خوام", intent="find_land", icon="search")
+    add(
+        "همکاری با وینور",
+        prompt="می‌خوام همکار شم؛ چطور شروع کنم؟",
+        intent="coop_apply",
+        icon="handshake",
+    )
+    add(
+        "چطور شروع کنم؟",
+        prompt="چطور با وینور شروع کنم؟",
+        intent="next_action",
+        icon="bolt",
+    )
+    return out[:3]
+
+
+def build_home_ai_quick_prompts(
+    *,
+    me_phone: str = "",
+    is_approved: bool = False,
+    has_pending_app: bool = False,
+    has_completed_deal: bool = False,
+) -> List[Dict[str, str]]:
+    """پیشنهادهای سریع حالت خالی خانه — همان مراحل تیتر خالی."""
+    if not is_approved:
+        return build_limited_ai_quick_prompts(
+            me_phone=me_phone,
+            has_pending_app=has_pending_app,
+        )
+
+    out: List[Dict[str, str]] = []
+
+    def add(label: str, *, prompt: str, intent: str, icon: str) -> None:
+        label = (label or "").strip()
+        prompt = (prompt or "").strip()
+        intent = (intent or "").strip()
+        if label and prompt and intent:
+            out.append({
+                "label": label,
+                "prompt": prompt,
+                "intent": intent,
+                "icon": icon,
+            })
+
+    if has_completed_deal:
+        # فروشندهٔ فعال — فروش یا جذب فایل
+        add(
+            "پیدا کردن فایل",
+            prompt="یه فایل مناسب برای بازاریابی می‌خوام",
+            intent="find_land",
+            icon="search",
+        )
+        add(
+            "متن آگهی",
+            prompt="متن آگهی دیوار و اینستا بده",
+            intent="marketing",
+            icon="pen",
+        )
+        add("قدم بعدی", prompt="قدم بعدی‌م چیه؟", intent="next_action", icon="bolt")
     else:
-        add("شروع همکاری", prompt="می‌خوام همکار شم", intent="coop_apply")
-    add("پیدا کردن ملک", prompt="یه فایل مناسب می‌خوام", intent="find_land")
+        # تأییدشده بدون معامله — تمرکز روی اولین پورسانت
+        add(
+            "معرفی فایل به مشتری",
+            prompt="چطور یه فایل رو به مشتری معرفی کنم؟",
+            intent="marketing",
+            icon="pen",
+        )
+        add(
+            "گرفتن فایل جدید",
+            prompt="یه فایل جدید برای بازاریابی می‌خوام",
+            intent="find_land",
+            icon="search",
+        )
+        add(
+            "قدم بعدی پورسانت",
+            prompt="برای گرفتن اولین پورسانت قدم بعدی‌م چیه؟",
+            intent="next_action",
+            icon="bolt",
+        )
     return out[:3]
 
 

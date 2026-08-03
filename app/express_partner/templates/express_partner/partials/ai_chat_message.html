@@ -65,6 +65,13 @@
       <div class="ai-msg-bubble ai-msg-bubble--system">{{ msg.content }}</div>
       {% elif msg.content %}
       <div class="ai-msg-bubble">{{ msg.content }}</div>
+      {% if is_postchi and msg.action_url and not is_user %}
+      <div class="mt-1.5">
+        <a href="{{ msg.action_url }}"
+           data-vinor-express-nav="1"
+           class="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-400/90 hover:text-emerald-300">مشاهده جزئیات</a>
+      </div>
+      {% endif %}
       {% endif %}
       {% if not is_user and not is_supervisor and msg.content %}
       <div class="ai-msg-actions" data-ai-msg-actions>

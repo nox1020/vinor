@@ -54,6 +54,7 @@ from .credits import (
     is_api_balance_depleted,
     is_spend_fuse_tripped,
     mark_api_balance_depleted,
+    recheck_api_balance_if_depleted,
     record_api_call,
     record_spend_usage,
     spend_fuse_status,
@@ -1318,6 +1319,7 @@ def _escalation_fallback_reply(
         question=user_message[:200],
         user_message=user_message,
         thread_id=thread_id,
+        reason=reason,
     )
     if reason == "balance":
         reply = "به زودی به شما پاسخ خواهم داد."
@@ -1387,6 +1389,51 @@ def generate_reply(
     if not text:
         return {"ok": False, "error": "پیام خالی است."}
 
+    cfg = ai_config()
+    if not cfg["enabled"]:
+        return {
+            "ok": False,
+            "error": (
+                "سرویس هوش مصنوعی موقتاً متوقف شده است. "
+                "لطفاً کمی بعد دوباره پیام بدهید."
+            ),
+            "error_code": "ai_paused",
+        }
+
+    # اگر قبلاً اتمام موجودی ثبت شده، با هر پیام استعلام مجدد بزن
+    try:
+        from flask import g
+
+        in_balance_resume = bool(getattr(g, "ai_balance_resume", False))
+    except Exception:
+        in_balance_resume = False
+    if not in_balance_resume and is_api_balance_depleted():
+        try:
+            check = recheck_api_balance_if_depleted()
+            if check.get("restored"):
+                try:
+                    current_app.logger.info(
+                        "AI balance restored on message | user=%s | audience=%s",
+                        key,
+                        aud,
+                    )
+                except Exception:
+                    pass
+            elif check.get("depleted"):
+                # هنوز موجودی نیست — سوال را صف کن و زود برگرد (بدون ساخت پرامپت)
+                return _escalation_fallback_reply(
+                    user_key=key,
+                    audience=aud,
+                    user_message=text,
+                    thread_id=thread_id,
+                    reason="balance",
+                )
+        except Exception:
+            try:
+                current_app.logger.exception("AI balance recheck failed")
+            except Exception:
+                pass
+
     if is_lawyer:
         try:
             from app.lawyer.config import lawyer_enabled
@@ -1423,9 +1470,6 @@ def generate_reply(
     except Exception:
         pass
 
-    cfg = ai_config()
-    if not cfg["enabled"]:
-        return {"ok": False, "error": "سرویس هوش مصنوعی موقتاً غیرفعال است."}
     if cfg.get("spend_fuse") and cfg["spend_fuse"].get("tripped"):
         return {
             "ok": False,
