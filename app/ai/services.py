@@ -292,18 +292,22 @@ def _truncate_lines(text: str, max_lines: int = 8) -> str:
 def _ensure_next_step(reply: str) -> str:
     text = (reply or "").strip()
     if not text:
-        return "مرحله بعد: یکی از گزینه‌ها را انتخاب کن."
-    if re.search(r"(?im)^\s*مرحله بعد\s*:", text):
+        return "قدم بعد: بگو خرید می‌خوای یا فروش؟"
+    if re.search(r"(?im)^\s*(?:قدم|مرحله)\s*بعد\s*:", text):
         return text
-    return text.rstrip() + "\n" + "مرحله بعد: برای ادامه یکی از گزینه‌ها را انتخاب کن."
+    # فقط اگر پاسخ خیلی کوتاه و بدون سؤال است، یک قدم کوتاه اضافه کن
+    if "؟" in text or len(text) > 180:
+        return text
+    return text.rstrip() + "\n" + "قدم بعد: بگو چی کار کنیم."
 
 
 def _enforce_vinor_response_style(reply: str, *, voice: str, audience: str) -> str:
+    """کوتاه و هدف‌محور نگه دار — بدون پد کردن مصنوعی."""
     if not _style_enforce_enabled():
         return (reply or "").strip()
     raw = re.sub(r"\r\n?", "\n", str(reply or "")).strip()
     if not raw:
-        return "الان آماده‌ام کمک کنم.\nگزینه‌ها: 🏡 خرید ملک / 💰 فروش ملک / 🤝 همکاری / 📅 رزرو بازدید\nCTA: یکی را انتخاب کن.\nمرحله بعد: گزینهٔ مدنظرت را بفرست."
+        return "سلام! خرید فایل می‌خوای یا می‌خوای بازاریاب بشی؟"
     text = re.sub(r"\n{3,}", "\n\n", raw)
     text = _compact_option_blocks(text)
     text = re.sub(r"\n{2,}", "\n", text).strip()
@@ -318,22 +322,19 @@ def _enforce_vinor_response_style(reply: str, *, voice: str, audience: str) -> s
             q_seen = True
         one_q.append(ln)
     lines = one_q
-    # CTA واحد را نزدیک انتها نگه‌دار.
-    cta_line = "CTA: یکی را انتخاب کن."
+    # CTA تکراری را حذف کن؛ اجباری اضافه نکن مگر پاسخ خالی از جهت باشد
     lines = [ln for ln in lines if not ln.lower().startswith("cta:")]
-    if len(lines) < 3:
-        lines.append("گزینه‌ها: 🏡 خرید ملک / 💰 فروش ملک / 🤝 همکاری / 📅 رزرو بازدید")
-    lines.append(cta_line)
+    # نرمال‌سازی برچسب قدیم
+    lines = [
+        re.sub(r"(?i)^\s*مرحله بعد\s*:", "قدم بعد:", ln) for ln in lines
+    ]
     shaped = "\n".join(lines)
+    v = (voice or "").strip().lower()
+    max_lines = 3 if v in ("special",) else 5
+    shaped = _truncate_lines(shaped, max_lines=max_lines)
     shaped = _ensure_next_step(shaped)
-    shaped = _truncate_lines(shaped, max_lines=8)
-    final_lines = [ln for ln in shaped.splitlines() if ln.strip()]
-    while len(final_lines) < 4:
-        if len(final_lines) == 3:
-            final_lines.insert(2, "گزینه‌ها: 🏡 خرید ملک / 💰 فروش ملک / 🤝 همکاری / 📅 رزرو بازدید")
-        else:
-            final_lines.append("...")
-    return "\n".join(final_lines[:8]).strip()
+    shaped = _truncate_lines(shaped, max_lines=max_lines)
+    return shaped.strip()
 
 
 def _build_system_prompt(
@@ -1715,7 +1716,11 @@ def generate_reply(
             agent_actions = [
                 a for a in (short.get("agent_actions") or []) if isinstance(a, dict)
             ]
-            actions_html = render_agent_actions_html(agent_actions) if agent_actions else ""
+            actions_html = (
+                render_agent_actions_html(agent_actions, phone=key, audience=aud)
+                if agent_actions
+                else ""
+            )
             cards_html = append_support_call_if_needed(
                 actions_html,
                 reply,
@@ -2108,6 +2113,15 @@ def generate_reply(
     }
     if action_codes:
         land_codes = [c for c in land_codes if c not in action_codes]
+    # سمت کاربر: کد خام نماند — کارت جایگزین است
+    strip_codes = list(land_codes) + [c for c in action_codes if c]
+    if strip_codes:
+        try:
+            from .land_cards import strip_visible_land_codes
+
+            reply = strip_visible_land_codes(reply, strip_codes)
+        except Exception:
+            pass
     escalated = False
     escalation_id = ""
 
@@ -2174,7 +2188,9 @@ def generate_reply(
     if agent_actions:
         result["agent_actions"] = agent_actions
         try:
-            actions_html = render_agent_actions_html(agent_actions)
+            actions_html = render_agent_actions_html(
+                agent_actions, phone=key, audience=aud
+            )
             if actions_html:
                 card_parts.append(actions_html)
         except Exception:
@@ -2224,7 +2240,7 @@ def generate_reply(
         watch_user(key, audience=aud, voice=voice or "")
     except Exception:
         pass
-    # خلاصهٔ حافظهٔ صفحهٔ تنظیمات — پیش‌فرض بدون LLM (هر چت یک درخواست اضافه نمی‌سوزاند)
+    # خلاصهٔ حافظهٔ صفحهٔ تنظیمات — LLM با throttle (پیش‌فرض روشن)
     try:
         from app.express_partner.partner_live_memory import rewrite_partner_live_memory
 

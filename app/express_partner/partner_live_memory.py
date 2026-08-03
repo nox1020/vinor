@@ -15,7 +15,10 @@ _MEMORY_SYSTEM = """تو نویسندهٔ «حافظهٔ کاربر» هستی؛
 حقایق مهم دربارهٔ این شخص را نگه دار و با اطلاعات جدید ادغام/بازنویسی کن:
 نام، نقش، شهر، ترجیح‌ها، فایل‌های در حال پیگیری، بازدید/معامله، عادت فروش، نکات مفید بعدی.
 آمار خام و لیست KPI را کپی نکن؛ به زبان طبیعی بنویس.
+کد عددی/حرفی فایل را ننویس — فقط عنوان ملک یا «این فایل» بگو.
 عنوان نگذار، نگو «حافظه:»، فقط متن حافظه."""
+
+_EMPTY_SUMMARY = "هنوز حافظه‌ای ساخته نشده — با چت بعدی پر می‌شود."
 
 
 def _now_iso() -> str:
@@ -69,14 +72,16 @@ def save_partner_live_memory(
     path = _path_for(phone)
     if not path:
         return {}
+    meta_out = dict(meta) if isinstance(meta, dict) else {}
+    source = str(meta_out.get("source") or "local").strip() or "local"
+    meta_out["source"] = source
     row: dict[str, Any] = {
         "phone": _norm_phone(phone),
         "summary": (summary or "").strip(),
         "updated_at": _now_iso(),
-        "source": "llm",
+        "source": source,
+        "meta": meta_out,
     }
-    if isinstance(meta, dict) and meta:
-        row["meta"] = meta
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(row, f, ensure_ascii=False, indent=2)
@@ -86,6 +91,38 @@ def save_partner_live_memory(
         except Exception:
             pass
     return row
+
+
+def clear_partner_live_memory(phone: str) -> bool:
+    """پاک‌کردن خلاصهٔ زنده + کلید live_summary در ai_memory."""
+    ph = _norm_phone(phone)
+    if not ph:
+        return False
+    removed = False
+    path = _path_for(ph)
+    if path and os.path.isfile(path):
+        try:
+            os.remove(path)
+            removed = True
+        except Exception:
+            try:
+                current_app.logger.warning("partner live memory clear failed | %s", path)
+            except Exception:
+                pass
+    try:
+        from app.memory.service import forget_memories
+
+        forget_memories(ph, keys=["live_summary"])
+    except Exception:
+        pass
+    return removed
+
+
+def memory_source_of(row: dict[str, Any] | None) -> str:
+    if not isinstance(row, dict):
+        return ""
+    meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+    return str(meta.get("source") or row.get("source") or "").strip()
 
 
 def _collect_facts(phone: str) -> dict[str, Any]:
@@ -148,6 +185,18 @@ def _collect_facts(phone: str) -> dict[str, Any]:
             if mission:
                 facts["active_file"] = str(mission.get("land_code") or "").strip()
                 facts["active_stage"] = str(mission.get("stage_label") or "").strip()
+                try:
+                    from app.utils.storage import load_express_lands_cached
+
+                    code = facts["active_file"]
+                    for L in load_express_lands_cached() or []:
+                        if isinstance(L, dict) and str(L.get("code") or "").strip() == code:
+                            title = str(L.get("title") or "").strip()
+                            if title:
+                                facts["active_file_title"] = title
+                            break
+                except Exception:
+                    pass
         except Exception:
             pass
     except Exception:
@@ -200,8 +249,8 @@ def _collect_facts(phone: str) -> dict[str, Any]:
 
 
 def _llm_rewrite_allowed() -> bool:
-    """بازنویسی حافظه با LLM — پیش‌فرض خاموش (هر چت = یک درخواست اضافهٔ DeepSeek)."""
-    return (os.environ.get("VINOR_PARTNER_LIVE_MEMORY_LLM") or "0").strip().lower() in (
+    """بازنویسی حافظه با LLM — پیش‌فرض روشن؛ با VINOR_PARTNER_LIVE_MEMORY_LLM=0 خاموش."""
+    return (os.environ.get("VINOR_PARTNER_LIVE_MEMORY_LLM") or "1").strip().lower() in (
         "1",
         "true",
         "yes",
@@ -266,7 +315,7 @@ def rewrite_partner_live_memory(
     last_assistant: str = "",
     action_note: str = "",
 ) -> dict[str, Any]:
-    """بازنویسی خلاصهٔ حافظه — پیش‌فرض بدون LLM؛ LLM فقط با VINOR_PARTNER_LIVE_MEMORY_LLM=1."""
+    """بازنویسی خلاصهٔ حافظه — LLM با throttle؛ در صورت خطا fallback محلی."""
     ph = _norm_phone(phone)
     if not ph:
         return {}
@@ -281,15 +330,13 @@ def rewrite_partner_live_memory(
     if use_llm:
         # throttle: حداکثر یک‌بار در بازه (پیش‌فرض ۱۵ دقیقه)
         try:
-            from datetime import datetime, timezone
-
             updated = str((prev_row or {}).get("updated_at") or "")
-            if updated and (prev_row or {}).get("meta", {}).get("source") == "llm":
+            if updated and memory_source_of(prev_row) == "llm" and previous:
                 prev_dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
                 age = (datetime.now(timezone.utc) - prev_dt).total_seconds()
                 if age < _llm_rewrite_min_interval_sec():
-                    use_llm = False
-                    summary = previous
+                    # بدون bump کردن updated_at — همان ردیف قبلی
+                    return prev_row or {}
         except Exception:
             pass
     if use_llm:
@@ -306,6 +353,7 @@ def rewrite_partner_live_memory(
                 current_app.logger.warning("partner memory LLM failed: %s", exc)
             except Exception:
                 pass
+    wrote_llm = bool(use_llm and summary and summary != previous)
     if not summary:
         # fallback کوتاه — نه کپی KPI و نه درخواست DeepSeek
         name = str(facts.get("name") or "").strip()
@@ -315,6 +363,18 @@ def rewrite_partner_live_memory(
             bits.append(f"{name} ({role})" if role else name)
         elif role:
             bits.append(role)
+        city = str(facts.get("city") or "").strip()
+        if city and city != "—":
+            bits.append(f"فعال در {city}.")
+        active_file = str(facts.get("active_file") or "").strip()
+        if active_file:
+            stage = str(facts.get("active_stage") or "").strip()
+            title = str(facts.get("active_file_title") or "").strip() or "فایل انتخاب‌شده"
+            bits.append(
+                f"کار جاری روی «{title}»"
+                + (f" ({stage})" if stage else "")
+                + "."
+            )
         if last_user:
             bits.append(f"آخرین موضوع گفتگو: {last_user[:100]}")
         if action_note:
@@ -322,13 +382,18 @@ def rewrite_partner_live_memory(
         if previous and not bits:
             summary = previous
         else:
-            summary = "\n".join(bits).strip() or "هنوز حافظه‌ای ساخته نشده — با چت بعدی پر می‌شود."
+            summary = "\n".join(bits).strip() or _EMPTY_SUMMARY
+    land_codes = []
+    active = str(facts.get("active_file") or "").strip()
+    if active:
+        land_codes.append(active)
     row = save_partner_live_memory(
         ph,
         summary=summary,
         meta={
             "facts_keys": list(facts.keys()),
-            "source": "llm" if (use_llm and summary and summary != previous) else "local",
+            "source": "llm" if wrote_llm else "local",
+            "land_codes": land_codes[:3],
         },
     )
     # همگام با منبع حقیقت ai_memory

@@ -6720,6 +6720,58 @@ def express_partner_application_approve(aid: int):
     _flash_partner_approval_result(result, prefix='درخواست تأیید شد — ')
     return redirect(url_for('admin.express_partners', filter='pending'))
 
+
+def _pending_partner_application_status(status: Any) -> bool:
+    st = str(status or '').strip().lower()
+    return st not in ('approved', 'rejected', 'cancelled')
+
+
+@admin_bp.post('/express/partners/applications/approve-all')
+@login_required
+def express_partner_applications_approve_all():
+    """تأیید یکجای همه درخواست‌های معلق بازاریابی."""
+    back_q = (request.form.get('q') or '').strip()
+    back_filter = (request.form.get('filter') or 'pending').strip() or 'pending'
+    redirect_kw = {'q': back_q, 'filter': back_filter}
+
+    apps = [a for a in (load_express_partner_apps() or []) if isinstance(a, dict)]
+    pending = [a for a in apps if _pending_partner_application_status(a.get('status'))]
+    if not pending:
+        flash('درخواست معلقی برای تأیید وجود ندارد.', 'info')
+        return redirect(url_for('admin.express_partners', **redirect_kw))
+
+    approved = 0
+    failed = 0
+    for app in pending:
+        phone = str(app.get('phone') or '').strip()
+        if not phone:
+            failed += 1
+            continue
+        result = _approve_express_partner(
+            phone=phone,
+            name=(app.get('name') or '').strip(),
+            city=(app.get('city') or '').strip(),
+            national_id=(app.get('national_id') or '').strip(),
+            referred_by_phone=(app.get('referred_by_phone') or '').strip(),
+            application=app,
+            remove_application=True,
+            send_sms=True,
+            source='admin_partner_bulk_approve',
+        )
+        if result.get('ok'):
+            approved += 1
+        else:
+            failed += 1
+
+    if approved and not failed:
+        flash(f'{approved} درخواست بازاریابی تأیید شد.', 'success')
+    elif approved and failed:
+        flash(f'{approved} درخواست تأیید شد؛ {failed} مورد ناموفق بود.', 'warning')
+    else:
+        flash('هیچ درخواستی تأیید نشد.', 'warning')
+    return redirect(url_for('admin.express_partners', **redirect_kw))
+
+
 @admin_bp.post('/express/partners/applications/<int:aid>/reject')
 @login_required
 def express_partner_application_reject(aid: int):

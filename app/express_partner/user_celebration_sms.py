@@ -61,12 +61,9 @@ _YEAR_WORDS = {
 
 
 def _tehran_now() -> datetime:
-    if ZoneInfo is not None:
-        try:
-            return datetime.now(ZoneInfo("Asia/Tehran"))
-        except Exception:
-            pass
-    return datetime.now()
+    from app.utils.dates import tehran_now
+
+    return tehran_now()
 
 
 def _jalali_today() -> Tuple[int, int, int]:
@@ -213,13 +210,21 @@ def _release_run_lock(fd: Optional[int]) -> None:
 
 def build_birthday_sms_message(*, name: str, jm: int, jd: int) -> str:
     first = _first_name(name)
-    return f"وینور\n{first} عزیز، تولدت مبارک 🎂"
+    return (
+        f"وینور\n"
+        f"{first} جان، تولدت مبارک 🎂\n"
+        f"امروز روز خودته؛ خوش بگذره"
+    )
 
 
 def build_membership_anniversary_sms_message(*, name: str, years: int) -> str:
     first = _first_name(name)
     yr = _year_phrase(years)
-    return f"وینور\n{first} عزیز، {yr} با وینور 💚"
+    return (
+        f"وینور\n"
+        f"{first} جان، {yr} با هم بودیم 💚\n"
+        f"ممنون که کنار مایی"
+    )
 
 
 def _collect_recipients() -> List[Dict[str, Any]]:
@@ -459,16 +464,35 @@ def _scheduler_loop(app: Flask) -> None:
         time.sleep(3600)
 
 
+def _celebration_should_run() -> bool:
+    if os.environ.get("VINOR_DISABLE_CELEBRATION_SMS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return False
+    today = _jalali_today_key()
+    state = _load_state()
+    if state.get("last_run_date") == today:
+        return False
+    return int(_tehran_now().hour) >= 9
+
+
 def schedule_daily_celebration_sms(app: Flask) -> None:
-    """زمان‌بندی ساعتی — پیش‌فرض روشن؛ خاموش با VINOR_CELEBRATION_SMS_SCHEDULER=0."""
+    """PC: thread. هاست اشتراکی: lazy tick خودکار (بدون cron)."""
     if os.environ.get("VINOR_DISABLE_CELEBRATION_SMS", "").strip().lower() in ("1", "true", "yes"):
         app.logger.info("Celebration SMS scheduler disabled via VINOR_DISABLE_CELEBRATION_SMS")
         return
     flag = (os.environ.get("VINOR_CELEBRATION_SMS_SCHEDULER") or "1").strip().lower()
     if flag in ("0", "false", "no", "off"):
-        app.logger.info(
-            "Celebration SMS in-process scheduler off "
-            "(use cron script or set VINOR_CELEBRATION_SMS_SCHEDULER=1)"
+        from app.utils.lazy_scheduler import install_lazy_tick
+
+        install_lazy_tick(
+            app,
+            name="celebration-sms",
+            should_run=_celebration_should_run,
+            run=maybe_run_daily_celebration_sms,
+            min_interval_sec=300,
         )
         return
     threading.Thread(

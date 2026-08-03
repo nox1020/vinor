@@ -6,12 +6,9 @@ _DEFAULT_MAX_BYTES = 10 * 1024 * 1024  # 10 MiB per user
 
 
 def memory_enabled() -> bool:
-    return (os.environ.get("VINOR_MEMORY_ENABLED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_MEMORY_ENABLED", default=True)
 
 
 def memory_budget_chars() -> int:

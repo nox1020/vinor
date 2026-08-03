@@ -4,12 +4,9 @@ import os
 
 
 def customer_memory_enabled() -> bool:
-    return (os.environ.get("VINOR_CUSTOMER_MEMORY_ENABLED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_CUSTOMER_MEMORY_ENABLED", default=True)
 
 
 def customer_memory_hint_budget_chars() -> int:
@@ -20,18 +17,12 @@ def customer_memory_hint_budget_chars() -> int:
 
 
 def customer_memory_cache_enabled() -> bool:
-    return (os.environ.get("VINOR_CUSTOMER_MEMORY_CACHE") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_CUSTOMER_MEMORY_CACHE", default=True)
 
 
 def customer_memory_inject_hint() -> bool:
-    return (os.environ.get("VINOR_CUSTOMER_MEMORY_INJECT_HINT") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_CUSTOMER_MEMORY_INJECT_HINT", default=True)

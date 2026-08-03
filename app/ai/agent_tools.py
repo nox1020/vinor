@@ -526,17 +526,16 @@ def _schema_propose_apply() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_PROPOSE_APPLY,
-            "description": "کارت تأیید ثبت همکاری؛ فقط با نام+کدملی+شهر. مهمان→need_login.",
+            "description": "کارت تأیید همکاری بازاریاب؛ فقط نام+نام‌خانوادگی+کدملی. پس از تأیید کاربر خودکار فعال می‌شود. مهمان→need_login.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string"},
+                    "first_name": {"type": "string", "description": "نام"},
+                    "last_name": {"type": "string", "description": "نام خانوادگی"},
+                    "name": {"type": "string", "description": "نام کامل (اگر first/last جدا نیست)"},
                     "national_id": {"type": "string"},
-                    "city": {"type": "string"},
-                    "experience": {"type": "string"},
-                    "note": {"type": "string"},
                 },
-                "required": ["name", "national_id", "city"],
+                "required": ["national_id"],
             },
         },
     }
@@ -1061,16 +1060,16 @@ def _tool_coop_info(args: dict[str, Any]) -> dict[str, Any]:
     blocks: dict[str, str] = {
         "levels": (
             "سطوح: ۱) کاربر عادی — چت و درخواست بازاریاب شدن. "
-            "۲) بازاریاب فروش — بعد از تأیید از چت مشتری یا نوع فایل می‌فرستد، فایل می‌گیرد، می‌فروشد، پورسانت می‌گیرد. "
+            "۲) بازاریاب فروش — بعد از ثبت نام/کدملی و تأیید خودکار از چت مشتری یا نوع فایل می‌فرستد، فایل می‌گیرد، می‌فروشد، پورسانت می‌گیرد. "
             "۳) بازاریاب ویژه — مالک/فروشنده با آگهی و بازدیدهای خودش."
         ),
         "terms": (
             "شرایط: فایل‌های تأییدشده با قیمت و پورسانت مشخص؛ فروش؛ بعد از تأیید معامله پورسانت به کیف پول. "
-            "وینور پرونده را بررسی می‌کند. " + city_bit
+            "ثبت همکاری با نام، نام خانوادگی و کد ملی؛ تأیید خودکار. " + city_bit
         ),
         "how": (
             "شروع از همین چت: بگو می‌خواهم همکار شوم → اگر وارد نیستی منوی راست ورود → "
-            "نام، کد ملی، شهر → کارت تأیید → بررسی تیم. لینک صفحه نده."
+            "نام، نام خانوادگی، کد ملی → کارت تأیید → فعال‌سازی خودکار. لینک صفحه نده."
         ),
     }
     if topic in blocks:
@@ -1180,26 +1179,39 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
             },
         }
 
+    first_name = str(args.get("first_name") or "").strip()
+    last_name = str(args.get("last_name") or "").strip()
     name = str(args.get("name") or "").strip()
     national_id = str(args.get("national_id") or "").strip()
-    city = str(args.get("city") or "").strip()
-    experience = str(args.get("experience") or "").strip()
-    note = str(args.get("note") or "").strip()
-    missing = [k for k, v in (("name", name), ("national_id", national_id), ("city", city)) if not v]
+    if not first_name and not last_name and name:
+        parts = name.split(None, 1)
+        first_name = parts[0] if parts else ""
+        last_name = parts[1] if len(parts) > 1 else ""
+    missing = [
+        k
+        for k, v in (
+            ("first_name", first_name),
+            ("last_name", last_name),
+            ("national_id", national_id),
+        )
+        if not v
+    ]
     if missing:
         return {
             "ok": True,
             "model_result": {
                 "ok": False,
                 "missing": missing,
-                "instruction": "فقط فیلدهای missing را یکی‌یکی بپرس؛ لینک نده.",
+                "instruction": (
+                    "فقط فیلدهای missing را یکی‌یکی بپرس (نام، نام خانوادگی، کد ملی)؛ "
+                    "شهر نپرس؛ لینک نده."
+                ),
             },
         }
 
     try:
         from app.express_partner.routes import (
-            _active_cities_cached,
-            _clip_apply_fields,
+            _compose_apply_name,
             _get_my_last_application,
             _has_active_application,
             _is_partner_approved,
@@ -1229,17 +1241,11 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
                 },
             }
 
-        name, city, experience, note = _clip_apply_fields(name, city, experience, note)
-        try:
-            from app.utils.iran_cities import FOCUS_SERVICE_CITY, normalize_to_focus_city
-
-            city = normalize_to_focus_city(city) or city
-            if city and city != FOCUS_SERVICE_CITY and FOCUS_SERVICE_CITY in (normalize_to_focus_city(city) or ""):
-                city = FOCUS_SERVICE_CITY
-            if city and "گرمابسرد" in city:
-                city = FOCUS_SERVICE_CITY
-        except Exception:
-            pass
+        first_name, last_name, name = _compose_apply_name({
+            "first_name": first_name,
+            "last_name": last_name,
+            "name": name,
+        })
         national_id = _parse_apply_national_id(national_id)
         if not is_valid_iran_national_id(national_id):
             return {
@@ -1250,43 +1256,14 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
                     "instruction": "کد ملی نامعتبر است؛ دوباره بپرس.",
                 },
             }
-        cities = _active_cities_cached() or []
-        if cities and city not in cities:
-            # نام‌های معادل گرمابسرد را بپذیر
-            try:
-                from app.utils.iran_cities import FOCUS_SERVICE_CITY, normalize_to_focus_city
-
-                if normalize_to_focus_city(city) == FOCUS_SERVICE_CITY and FOCUS_SERVICE_CITY in cities:
-                    city = FOCUS_SERVICE_CITY
-                else:
-                    return {
-                        "ok": True,
-                        "model_result": {
-                            "ok": False,
-                            "invalid": "city",
-                            "allowed_cities": list(cities)[:20],
-                            "instruction": "شهر باید گرمابسرد باشد؛ دوباره بپرس.",
-                        },
-                    }
-            except Exception:
-                return {
-                    "ok": True,
-                    "model_result": {
-                        "ok": False,
-                        "invalid": "city",
-                        "allowed_cities": list(cities)[:20],
-                        "instruction": "شهر باید از allowed_cities باشد؛ دوباره بپرس.",
-                    },
-                }
     except Exception as exc:
         return _denied(str(exc))
 
     payload = {
+        "first_name": first_name,
+        "last_name": last_name,
         "name": name,
         "national_id": national_id,
-        "city": city,
-        "experience": experience,
-        "note": note,
         "source": "ai_chat",
     }
     token = _store_pending_action(
@@ -1294,26 +1271,31 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
         action_type="confirm_partner_application",
         payload=payload,
     )
-    lines = [f"نام: {name}", f"کد ملی: {national_id}", f"شهر: {city}"]
-    if experience:
-        lines.append(f"سابقه: {experience}")
-    if note:
-        lines.append(f"توضیح: {note}")
+    lines = [
+        f"نام: {first_name}",
+        f"نام خانوادگی: {last_name}",
+        f"کد ملی: {national_id}",
+    ]
     ui = {
         "type": "confirm_partner_application",
         "token": token,
-        "title": "تأیید ثبت درخواست همکاری",
+        "title": "تأیید همکاری بازاریاب",
         "lines": lines,
         "status": "pending",
-        "confirm_label": "ثبت درخواست",
+        "confirm_label": "ثبت و فعال‌سازی",
         "cancel_label": "انصراف",
     }
     model = {
         "ok": True,
         "pending_confirm": True,
-        "fields": {"name": name, "city": city, "national_id": national_id},
+        "fields": {
+            "first_name": first_name,
+            "last_name": last_name,
+            "name": name,
+            "national_id": national_id,
+        },
         "instruction": (
-            "کارت تأیید نشان داده می‌شود. بگو روی تأیید بزند. "
+            "کارت تأیید نشان داده می‌شود. بگو روی تأیید بزند تا همکاری فعال شود. "
             "تا تأیید نزده نگو ثبت شد. لینک صفحه نده."
         ),
     }
@@ -1421,6 +1403,13 @@ def _confirm_forget_memory(*, phone: str, token: str, pending: dict[str, Any]) -
     out = forget_memories(phone, **kwargs)
     if not out.get("ok"):
         return {"ok": False, "error": str(out.get("error") or "حذف ممکن نشد.")}
+    if scope == "all":
+        try:
+            from app.express_partner.partner_live_memory import clear_partner_live_memory
+
+            clear_partner_live_memory(phone)
+        except Exception:
+            pass
     _consume_pending_action(token)
     n = int(out.get("deleted") or 0)
     return {
@@ -3871,10 +3860,18 @@ def _confirm_partner_application(*, phone: str, token: str, pending: dict[str, A
         return {"ok": False, "error": f"ثبت درخواست ممکن نشد: {exc}"}
     if out.get("ok"):
         _consume_pending_action(token)
+        if out.get("auto_approved"):
+            return {
+                "ok": True,
+                "message": str(out.get("message") or "همکاری تأیید و فعال شد."),
+                "application_id": out.get("application_id"),
+                "auto_approved": True,
+            }
         return {
             "ok": True,
             "message": str(out.get("message") or "درخواست همکاری ثبت شد."),
             "application_id": out.get("application_id"),
+            "auto_approved": False,
         }
     return {"ok": False, "error": str(out.get("error") or "ثبت درخواست ناموفق بود.")}
 
@@ -4731,7 +4728,12 @@ def append_support_call_if_needed(
     return html + btn
 
 
-def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
+def render_agent_actions_html(
+    actions: list[dict[str, Any]] | None,
+    *,
+    phone: str = "",
+    audience: str | None = None,
+) -> str:
     if not actions:
         return ""
     parts: list[str] = []
@@ -4745,6 +4747,7 @@ def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
             "confirm_deal",
             "confirm_release",
             "confirm_partner_application",
+            "confirm_forget_memory",
             "confirm_log_call",
             "confirm_followup",
             "confirm_visit_result",
@@ -4766,7 +4769,9 @@ def render_agent_actions_html(actions: list[dict[str, Any]] | None) -> str:
             "confirm_commission_action",
             "confirm_answer_escalation",
         ):
-            parts.append(_render_confirm_action_card(action))
+            parts.append(
+                _render_confirm_action_card(action, phone=phone, audience=audience)
+            )
         elif atype == "need_login":
             parts.append(_render_need_login_card(action))
         elif atype == "next_action":
@@ -4841,7 +4846,12 @@ def _render_copy_blocks_card(action: dict[str, Any]) -> str:
     return '<div class="ai-copy-blocks">' + "".join(chunks) + "</div>"
 
 
-def _render_confirm_action_card(action: dict[str, Any]) -> str:
+def _render_confirm_action_card(
+    action: dict[str, Any],
+    *,
+    phone: str = "",
+    audience: str | None = None,
+) -> str:
     from app.ai.card_registry import (
         STATE_CANCELLED,
         STATE_COMPLETED,
@@ -4850,6 +4860,10 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
         STATE_FAILED,
         STATE_PENDING,
         normalize_card,
+    )
+    from app.ai.land_cards import (
+        filter_lines_without_land_codes,
+        render_land_cards_html,
     )
 
     action = normalize_card(action)
@@ -4863,7 +4877,7 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
         "confirm_complete_visit": "تأیید: بازدید انجام شد",
         "confirm_deal": "تأیید معامله",
         "confirm_release": "تأیید بستن معامله",
-        "confirm_partner_application": "تأیید ثبت درخواست همکاری",
+        "confirm_partner_application": "تأیید همکاری بازاریاب",
         "confirm_log_call": "تأیید ثبت تماس",
         "confirm_followup": "تأیید ثبت پیگیری",
         "confirm_visit_result": "تأیید ثبت نتیجه بازدید",
@@ -4892,10 +4906,21 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
     token_active = action.get("token_active", True)
     if status == STATE_PENDING and token and token_active and _load_pending_action(token) is None:
         status = STATE_EXPIRED
-    lines = action.get("lines") if isinstance(action.get("lines"), list) else []
+    land_code = str(action.get("land_code") or "").strip()
+    land_codes = [land_code] if land_code else []
+    raw_lines = action.get("lines") if isinstance(action.get("lines"), list) else []
+    lines = filter_lines_without_land_codes(raw_lines, land_codes)
     body = "".join(
         f'<div class="ai-agent-line">{escape(str(line))}</div>' for line in lines if str(line).strip()
     )
+    land_block = ""
+    if land_code:
+        try:
+            land_html = render_land_cards_html(phone or "", [land_code], audience=audience) or ""
+            if land_html:
+                land_block = f'<div class="ai-agent-card__land">{land_html}</div>'
+        except Exception:
+            land_block = ""
     state_labels = {
         STATE_PENDING: "در انتظار تأیید",
         STATE_CONFIRMED: "تأیید شد",
@@ -4916,6 +4941,8 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
     )
     if token:
         attrs += f' data-token="{escape(token)}"'
+    if land_code:
+        attrs += f' data-land-code="{escape(land_code)}"'
 
     terminal = status in (
         STATE_CONFIRMED,
@@ -4954,6 +4981,7 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
             f'<div class="ai-agent-card__title">{title}</div>'
             f'<span class="ai-agent-card__badge">{badge}</span>'
             f"</div>"
+            f"{land_block}"
             f'<div class="ai-agent-card__body">{body}</div>'
             f'<div class="ai-agent-card__note" data-agent-note>{escape(note)}</div>'
             f"{call_block}"
@@ -4966,6 +4994,7 @@ def _render_confirm_action_card(action: dict[str, Any]) -> str:
         f'<div class="ai-agent-card__title">{title}</div>'
         f'<span class="ai-agent-card__badge">{badge}</span>'
         f"</div>"
+        f"{land_block}"
         f'<div class="ai-agent-card__body">{body}</div>'
         f'<div class="ai-agent-card__actions">'
         f'<button type="button" class="ai-agent-btn ai-agent-btn--confirm" data-agent-confirm>{confirm_label}</button>'

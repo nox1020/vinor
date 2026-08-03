@@ -129,21 +129,118 @@ def ai_console_tools():
     )
 
 
-@admin_bp.route("/ai-console/flags", endpoint="ai_console_flags")
+@admin_bp.route("/ai-console/flags", endpoint="ai_console_flags", methods=["GET", "POST"])
 @login_required
 def ai_console_flags():
     denied = _ai_console_gate("admin.ai.read")
     if denied is not None:
         return denied
     from app.ai_console import catalog
+    from app.ai_console.config import ai_console_mutate_enabled
+    from app.ai_console.followup_settings import (
+        DEFAULT_HOURS,
+        followup_hours_env_locked,
+        followup_hours_source,
+        get_followup_hours,
+        hours_for_display,
+        set_followup_hours,
+    )
+
+    can_mutate = False
+    try:
+        from app.hardening.permissions import PERM_AI_FLAGS, has_permission
+
+        can_mutate = bool(has_permission(PERM_AI_FLAGS) and ai_console_mutate_enabled())
+    except Exception:
+        can_mutate = bool(ai_console_mutate_enabled())
+
+    if request.method == "POST":
+        if not can_mutate:
+            flash("مجوز تغییر فلگ را ندارید یا mutate خاموش است.", "error")
+            return redirect(url_for("admin.ai_console_flags"))
+        action = (request.form.get("action") or "").strip()
+        if action == "save_followup_hours":
+            raw_hours = request.form.getlist("hour")
+            out = set_followup_hours(raw_hours)
+            if out.get("ok"):
+                try:
+                    from app.hardening.audit import record_admin_audit
+
+                    record_admin_audit(
+                        action="ai_followup_hours",
+                        entity_type="ai_followup_hours",
+                        entity_id="hours",
+                        summary=f"Follow-up hours → {out.get('hours')}",
+                    )
+                except Exception:
+                    pass
+                hrs = "، ".join(f"{int(h):02d}:00" for h in (out.get("hours") or []))
+                flash(f"ساعت‌های پیگیری ذخیره شد: {hrs} (تهران)", "success")
+            elif out.get("error") == "env_locked":
+                flash(
+                    f"ساعت‌ها با env قفل است ({out.get('env')}) — از پنل قابل تغییر نیست.",
+                    "warning",
+                )
+            elif out.get("error") == "invalid_hours":
+                flash("حداقل یک ساعت معتبر (۰ تا ۲۳) انتخاب کنید.", "error")
+            else:
+                flash(out.get("error") or "ذخیره ساعت‌ها ناموفق بود.", "error")
+            return redirect(url_for("admin.ai_console_flags"))
+
+        flag = (request.form.get("flag") or "").strip()
+        if action == "toggle" and flag:
+            from app.ai_console.flag_settings import set_feature_flag
+
+            want_on = (request.form.get("enable") or "").strip() in ("1", "true", "on", "yes")
+            out = set_feature_flag(flag, want_on)
+            if out.get("ok"):
+                try:
+                    from app.hardening.audit import record_admin_audit
+
+                    record_admin_audit(
+                        action="ai_flag_toggle",
+                        entity_type="ai_feature_flag",
+                        entity_id=flag[:64],
+                        summary=f"AI flag {flag} → {'on' if want_on else 'off'}",
+                    )
+                except Exception:
+                    pass
+                flash(
+                    f"{'فعال' if want_on else 'غیرفعال'} شد: {flag}",
+                    "success",
+                )
+            elif out.get("error") == "env_locked":
+                flash(
+                    f"این فلگ با env قفل است ({out.get('env')}) — از پنل قابل تغییر نیست.",
+                    "warning",
+                )
+            else:
+                flash(out.get("error") or "تغییر ناموفق.", "error")
+        else:
+            flash("اقدام نامعتبر.", "warning")
+        return redirect(url_for("admin.ai_console_flags"))
 
     flags = catalog.list_ai_flags()
     groups: dict = {}
     for f in flags:
         groups.setdefault(f.get("group") or "other", []).append(f)
+
+    on_count = sum(1 for f in flags if f.get("value") is True)
+    off_count = sum(1 for f in flags if f.get("value") is False)
+    followup_hours = list(get_followup_hours())
+
     return render_template(
         "admin/ai_console/flags.html",
         groups=groups,
+        can_mutate=can_mutate,
+        flags_on=on_count,
+        flags_off=off_count,
+        flags_total=len(flags),
+        followup_hours=followup_hours,
+        followup_hour_rows=hours_for_display(selected=followup_hours),
+        followup_hours_source=followup_hours_source(),
+        followup_hours_locked=followup_hours_env_locked(),
+        followup_hours_default=list(DEFAULT_HOURS),
         **_nav_ctx("flags"),
     )
 

@@ -15,7 +15,9 @@ def _env_bool(name: str, default: str = "1") -> bool:
 
 
 def ai_console_enabled() -> bool:
-    return _env_bool("VINOR_AI_CONSOLE_ENABLED", "1")
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_AI_CONSOLE_ENABLED", default=True)
 
 
 def ai_console_ui_enabled() -> bool:

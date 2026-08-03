@@ -2,13 +2,8 @@
 # -*- coding: utf-8 -*-
 """پیگیری خودکار خریدار (رسدکننده) — نوبت‌های ۱۰، ۱۴، ۲۰ تهران.
 
-روی Passenger/LiteSpeed فقط از cron اجرا شود (نه thread داخل web worker).
-
-cron پیشنهادی (هر ۱۰ دقیقه):
-  */10 * * * * cd /home/vinorir/public_html/vinor && /home/vinorir/virtualenv/public_html/vinor/3.11/bin/python scripts/run_reach_followup.py
-
-تست:
-  python scripts/run_reach_followup.py --force --dry-run
+روی هاست اشتراکی معمولاً لازم نیست: lazy tick روی ترافیک وب خودش اجرا می‌شود.
+این اسکریپت فقط برای تست دستی اختیاری است.
 """
 from __future__ import annotations
 
@@ -20,7 +15,13 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+# هم‌تراز passenger_wsgi — مسیر داده + بدون scheduler داخل create_app
+os.environ.setdefault("INSTANCE_PATH", os.path.join(ROOT, "instance"))
 os.environ["VINOR_REACH_SCHEDULER"] = "0"
+os.environ["VINOR_SALES_COACH_SCHEDULER"] = "0"
+os.environ["VINOR_CELEBRATION_SMS_SCHEDULER"] = "0"
+os.environ["VINOR_ADMIN_SMS_SCHEDULER"] = "0"
+os.environ["VINOR_OPTIMIZATION_SCHEDULER"] = "0"
 
 from app import create_app
 from app.reach.service import maybe_run_reach_followup
@@ -33,9 +34,9 @@ def main() -> int:
     parser.add_argument(
         "--slot",
         type=int,
-        choices=(10, 14, 20),
+        choices=tuple(range(24)),
         default=None,
-        help="Force a specific Tehran hour slot",
+        help="Force a specific Tehran hour slot (0-23)",
     )
     args = parser.parse_args()
 

@@ -1,44 +1,188 @@
 {% extends 'admin/base_admin.html' %}
 {% block page_title %}فلگ‌های قابلیت{% endblock %}
 {% block content %}
-<div class="space-y-4 adm-page">
-  <h2 class="text-lg font-bold text-gray-900 dark:text-white">
-    فلگ‌های قابلیت
-    <span class="text-xs font-normal text-gray-500">(فقط مشاهده — مقدار زنده)</span>
-  </h2>
+<div class="space-y-5 adm-page">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-bold text-gray-900 dark:text-white">
+        فلگ‌های قابلیت
+        {% if can_mutate %}
+        <span class="text-xs font-normal text-emerald-600 dark:text-emerald-400">(قابل تغییر از پنل)</span>
+        {% else %}
+        <span class="text-xs font-normal text-gray-500">(فقط مشاهده)</span>
+        {% endif %}
+      </h2>
+      <p class="mt-1 text-xs text-gray-500 leading-relaxed max-w-2xl">
+        پیش‌فرض همه روشن است. ذخیره در
+        <span class="font-mono" dir="ltr">settings.json</span>.
+        اگر
+        <span class="font-mono" dir="ltr">VINOR_…</span>
+        روی سرور ست شده باشد، env اولویت دارد و قفل می‌شود.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2 text-[11px]">
+      <span class="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-medium">
+        روشن {{ flags_on }}
+      </span>
+      <span class="px-2.5 py-1 rounded-lg bg-zinc-500/10 text-zinc-600 dark:text-zinc-300 font-medium">
+        خاموش {{ flags_off }}
+      </span>
+      <span class="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 font-medium">
+        کل {{ flags_total }}
+      </span>
+    </div>
+  </div>
+
   {% include 'admin/ai_console/_nav.html' %}
-  <p class="text-xs text-gray-500 leading-relaxed">
-    هر فلگ با متغیر محیطی روی سرور کنترل می‌شود.
-    مقدار پیش‌فرض روشن است؛ برای خاموش کردن مثلاً
-    <span class="font-mono" dir="ltr">VINOR_…=0</span>
-    بگذارید. تغییر از این صفحه در فاز بعد اضافه می‌شود.
+
+  {% if not can_mutate %}
+  <p class="text-xs text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2">
+    برای تغییر به مجوز
+    <span class="font-mono" dir="ltr">admin.ai.flags</span>
+    و روشن بودن mutate کنسول نیاز است.
   </p>
+  {% endif %}
+
+  <section class="rounded-2xl border border-teal-200/80 dark:border-teal-800/60 bg-gradient-to-br from-teal-50/80 via-white to-white dark:from-teal-950/40 dark:via-gray-900 dark:to-gray-900 p-4 sm:p-5 shadow-sm">
+    <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+      <div>
+        <h3 class="text-sm font-bold text-teal-900 dark:text-teal-100 flex items-center gap-2">
+          <i class="fa-solid fa-clock text-teal-600 dark:text-teal-400"></i>
+          ساعت‌های پیگیری خودکار
+        </h3>
+        <p class="mt-1 text-[12px] text-teal-800/80 dark:text-teal-200/70 leading-relaxed max-w-xl">
+          نوبت‌های تهران برای <strong>رسدکننده</strong> (خریدار) و <strong>مربی فروش</strong> (همکار).
+          بعد از هر نوبت، با ترافیک وب پیگیری معوق خودکار اجرا می‌شود.
+        </p>
+      </div>
+      <div class="text-[10px] text-teal-700/80 dark:text-teal-300/70" dir="ltr">
+        {% if followup_hours_source == 'env' %}منبع: env
+        {% elif followup_hours_source == 'settings' %}منبع: پنل
+        {% else %}منبع: پیش‌فرض{% endif %}
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-1.5 mb-4">
+      {% for h in followup_hours %}
+      <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-teal-600 text-white text-xs font-semibold tabular-nums" dir="ltr">
+        {{ '%02d'|format(h) }}:00
+      </span>
+      {% else %}
+      <span class="text-xs text-gray-400">نوبتی انتخاب نشده</span>
+      {% endfor %}
+    </div>
+
+    {% if followup_hours_locked %}
+    <p class="text-[11px] text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-900/20 px-3 py-2">
+      قفل env —
+      <span class="font-mono" dir="ltr">VINOR_REACH_HOURS</span>
+      یا
+      <span class="font-mono" dir="ltr">VINOR_FOLLOWUP_HOURS</span>.
+    </p>
+    {% else %}
+    <form method="post" action="{{ url_for('admin.ai_console_flags') }}" class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="save_followup_hours">
+
+      <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-12 gap-1.5" dir="ltr">
+        {% for row in followup_hour_rows %}
+        <label class="block cursor-pointer {% if not can_mutate %}opacity-60 pointer-events-none{% endif %}">
+          <input type="checkbox" name="hour" value="{{ row.hour }}" class="peer sr-only"
+                 {% if row.selected %}checked{% endif %}
+                 {% if not can_mutate %}disabled{% endif %}>
+          <span class="flex items-center justify-center rounded-xl border px-1 py-2 text-[11px] font-bold tabular-nums transition
+                       border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/70 text-gray-600 dark:text-gray-300
+                       peer-checked:border-teal-500 peer-checked:bg-teal-600 peer-checked:text-white peer-checked:shadow-sm
+                       peer-focus-visible:ring-2 peer-focus-visible:ring-teal-400/60">
+            {{ row.label }}
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3 pt-1">
+        {% if can_mutate %}
+        <button type="submit"
+                class="px-4 py-2 rounded-xl text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white shadow-sm">
+          ذخیره ساعت‌ها
+        </button>
+        {% endif %}
+        <span class="text-[10px] text-gray-400">
+          پیش‌فرض:
+          {% for h in followup_hours_default %}
+          <span class="font-mono" dir="ltr">{{ '%02d'|format(h) }}:00</span>{% if not loop.last %} · {% endif %}
+          {% endfor %}
+        </span>
+      </div>
+    </form>
+
+    {% if can_mutate %}
+    <form method="post" action="{{ url_for('admin.ai_console_flags') }}" class="mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="save_followup_hours">
+      {% for h in followup_hours_default %}
+      <input type="hidden" name="hour" value="{{ h }}">
+      {% endfor %}
+      <button type="submit" class="text-[11px] text-teal-700 dark:text-teal-300 hover:underline">
+        بازگردانی به پیش‌فرض ۱۰ / ۱۴ / ۲۰
+      </button>
+    </form>
+    {% endif %}
+    {% endif %}
+  </section>
+
   {% for group, rows in groups.items() %}
-  <section class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-    <h3 class="text-sm font-bold text-gray-800 dark:text-gray-100 mb-3">
-      {{ rows[0].group_label_fa if rows and rows[0].group_label_fa else group }}
-      <span class="text-[10px] font-normal text-gray-400 ms-1 uppercase tracking-wide" dir="ltr">{{ group }}</span>
-    </h3>
-    <ul class="space-y-3">
+  <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 shadow-sm">
+    <div class="flex items-center justify-between gap-2 mb-3">
+      <h3 class="text-sm font-bold text-gray-800 dark:text-gray-100">
+        {{ rows[0].group_label_fa if rows and rows[0].group_label_fa else group }}
+      </h3>
+      <span class="text-[10px] font-normal text-gray-400 uppercase tracking-wide" dir="ltr">{{ group }} · {{ rows|length }}</span>
+    </div>
+    <ul class="divide-y divide-gray-100 dark:divide-gray-800">
       {% for f in rows %}
-      <li class="py-2 border-b border-gray-50 dark:border-gray-800 last:border-0">
-        <div class="flex flex-wrap items-start justify-between gap-2">
+      <li class="py-3 first:pt-0 last:pb-0">
+        <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
-            <div class="font-mono text-xs text-gray-800 dark:text-gray-200 break-all" dir="ltr">{{ f.name }}</div>
+            <div class="font-mono text-[11px] text-gray-700 dark:text-gray-200 break-all" dir="ltr">{{ f.name }}</div>
             {% if f.description_fa %}
             <p class="mt-1 text-[12px] leading-relaxed text-gray-600 dark:text-gray-400">{{ f.description_fa }}</p>
             {% endif %}
           </div>
-          <div class="flex items-center gap-2 shrink-0 pt-0.5">
-            <span class="text-[10px] text-gray-400" title="منبع مقدار">
-              {% if f.source == 'env' %}از env{% else %}پیش‌فرض{% endif %}
-            </span>
-            <span class="font-bold text-xs px-2 py-0.5 rounded-md
-              {% if f.value %}bg-emerald-500/15 text-emerald-600 dark:text-emerald-400
-              {% elif f.value is sameas false %}bg-zinc-500/15 text-zinc-400
-              {% else %}bg-amber-500/15 text-amber-600{% endif %}">
-              {% if f.value %}روشن{% elif f.value is sameas false %}خاموش{% else %}نامشخص{% endif %}
-            </span>
+          <div class="flex flex-col items-end gap-1.5 shrink-0">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] text-gray-400">
+                {% if f.source == 'env' %}از env
+                {% elif f.source == 'settings' %}از پنل
+                {% else %}پیش‌فرض{% endif %}
+              </span>
+              <span class="font-bold text-[11px] px-2 py-0.5 rounded-md
+                {% if f.value %}bg-emerald-500/15 text-emerald-600 dark:text-emerald-400
+                {% elif f.value is sameas false %}bg-zinc-500/15 text-zinc-400
+                {% else %}bg-amber-500/15 text-amber-600{% endif %}">
+                {% if f.value %}روشن{% elif f.value is sameas false %}خاموش{% else %}نامشخص{% endif %}
+              </span>
+            </div>
+            {% if f.mutable %}
+              {% if can_mutate and not f.env_locked %}
+              <form method="post" action="{{ url_for('admin.ai_console_flags') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="toggle">
+                <input type="hidden" name="flag" value="{{ f.name }}">
+                <input type="hidden" name="enable" value="{{ '0' if f.value else '1' }}">
+                <button type="submit"
+                        class="px-3 py-1.5 rounded-lg text-[11px] font-medium transition
+                          {% if f.value %}bg-red-600/90 hover:bg-red-700 text-white
+                          {% else %}bg-emerald-600 hover:bg-emerald-700 text-white{% endif %}">
+                  {% if f.value %}غیرفعال کردن{% else %}فعال کردن{% endif %}
+                </button>
+              </form>
+              {% elif f.env_locked %}
+              <span class="text-[10px] text-amber-600 dark:text-amber-400">قفل env</span>
+              {% endif %}
+            {% else %}
+              <span class="text-[10px] text-gray-400">فقط env</span>
+            {% endif %}
           </div>
         </div>
       </li>

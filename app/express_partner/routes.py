@@ -1745,31 +1745,53 @@ def _parse_apply_national_id(raw: str) -> str:
     return normalize_digits(raw)[:10]
 
 
+def _default_apply_city(raw: str = '') -> str:
+    """شهر فعالیت — در فرم ساده‌شده پیش‌فرض گرمابسرد."""
+    city = (raw or '').strip()[:APPLY_CITY_MAX_LEN]
+    if city:
+        return city
+    try:
+        from ..utils.iran_cities import FOCUS_SERVICE_CITY
+        return str(FOCUS_SERVICE_CITY or '').strip()[:APPLY_CITY_MAX_LEN] or 'گرمابسرد'
+    except Exception:
+        return 'گرمابسرد'
+
+
+def _compose_apply_name(data: dict) -> tuple[str, str, str]:
+    """نام + نام‌خانوادگی → (first, last, full). سازگار با فیلد قدیمی name."""
+    first = (data.get('first_name') or '').strip()[:APPLY_NAME_MAX_LEN]
+    last = (data.get('last_name') or '').strip()[:APPLY_NAME_MAX_LEN]
+    full = (data.get('name') or '').strip()
+    if first or last:
+        full = f'{first} {last}'.strip()
+    elif full:
+        parts = full.split(None, 1)
+        first = (parts[0] if parts else '')[:APPLY_NAME_MAX_LEN]
+        last = (parts[1] if len(parts) > 1 else '')[:APPLY_NAME_MAX_LEN]
+    full = full[: (APPLY_NAME_MAX_LEN * 2 + 1)]
+    return first, last, full
+
+
 def _apply_form_context(
     me_phone: str,
     *,
+    first_name: str = '',
+    last_name: str = '',
     name: str = '',
-    city: str = '',
     national_id: str = '',
-    experience: str = '',
-    note: str = '',
-    cities=None,
 ) -> dict:
     profile = _partner_profile_for_phone(me_phone) or {}
-    avatar = (profile.get('avatar') or '').strip()
-    from ..utils.images import display_avatar_url
-    avatar_updated_at = int(profile.get('avatar_updated_at') or 0)
+    if not first_name and not last_name and name:
+        first_name, last_name, name = _compose_apply_name({'name': name})
+    elif first_name or last_name:
+        _, _, name = _compose_apply_name({'first_name': first_name, 'last_name': last_name})
     display_name = (name or profile.get('name') or me_phone or '').strip()
     return {
         'me_phone': me_phone,
+        'first_name': first_name,
+        'last_name': last_name,
         'name': name,
-        'city': city,
         'national_id': national_id,
-        'experience': experience,
-        'note': note,
-        'cities': cities if cities is not None else _active_cities_cached(),
-        'has_avatar': bool(avatar),
-        'avatar_url': display_avatar_url(avatar, avatar_updated_at) if avatar else '',
         'avatar_initials_name': display_name,
         **_apply_limits_context(),
     }
@@ -1824,7 +1846,7 @@ def _apply_render_with_ref(**ctx):
 
 @express_partner_bp.route('/apply', methods=['GET', 'POST'], endpoint='apply')
 def apply():
-    """درخواست همکاری — تک‌صفحه، کم‌اصطکاک."""
+    """درخواست همکاری — نام، نام‌خانوادگی، کد ملی؛ پس از ارسال تأیید خودکار."""
     if not session.get("user_phone"):
         return _apply_login_redirect()
     me_phone = (session.get("user_phone") or "").strip()
@@ -1844,73 +1866,39 @@ def apply():
         return blocked
 
     defaults = _apply_form_defaults(me_phone)
-    cities = _active_cities_cached()
 
     if request.method == 'POST':
         if _has_active_application(me_phone):
             return redirect(_post_apply_landing_url(me_phone))
-        name, city, experience, note = _clip_apply_fields(
-            request.form.get('name') or '',
-            request.form.get('city') or '',
-            request.form.get('experience') or '',
-            request.form.get('note') or '',
-        )
+        first_name, last_name, name = _compose_apply_name({
+            'first_name': request.form.get('first_name') or '',
+            'last_name': request.form.get('last_name') or '',
+            'name': request.form.get('name') or '',
+        })
         national_id = _parse_apply_national_id(request.form.get('national_id') or '')
-        if not name or not city or not national_id:
-            flash('نام، کد ملی و شهر فعالیت الزامی است.', 'error')
+        if not first_name or not last_name or not national_id:
+            flash('نام، نام خانوادگی و کد ملی الزامی است.', 'error')
             return _apply_render_with_ref(**_apply_form_context(
-                me_phone, name=name, city=city, national_id=national_id,
-                experience=experience, note=note, cities=cities,
+                me_phone, first_name=first_name, last_name=last_name, national_id=national_id,
             ))
         from ..utils.iran_ids import is_valid_iran_national_id
         if not is_valid_iran_national_id(national_id):
             flash('کد ملی واردشده معتبر نیست.', 'error')
             return _apply_render_with_ref(**_apply_form_context(
-                me_phone, name=name, city=city, national_id=national_id,
-                experience=experience, note=note, cities=cities,
-            ))
-        if cities and city not in cities:
-            flash('شهر انتخاب‌شده معتبر نیست.', 'error')
-            return _apply_render_with_ref(**_apply_form_context(
-                me_phone, name=name, city=city, national_id=national_id,
-                experience=experience, note=note, cities=cities,
-            ))
-        avatar_file = request.files.get('avatar')
-        has_avatar = _partner_has_avatar(me_phone)
-        if avatar_file and avatar_file.filename:
-            saved_avatar = _save_partner_avatar_upload(me_phone, avatar_file)
-            if not saved_avatar:
-                flash('ذخیرهٔ تصویر پروفایل ناموفق بود. دوباره تلاش کنید.', 'error')
-                return _apply_render_with_ref(**_apply_form_context(
-                    me_phone, name=name, city=city, national_id=national_id,
-                    experience=experience, note=note, cities=cities,
-                ))
-            has_avatar = True
-        if not has_avatar:
-            flash('انتخاب تصویر پروفایل الزامی است.', 'error')
-            return _apply_render_with_ref(**_apply_form_context(
-                me_phone, name=name, city=city, national_id=national_id,
-                experience=experience, note=note, cities=cities,
+                me_phone, first_name=first_name, last_name=last_name, national_id=national_id,
             ))
         return _submit_partner_application(me_phone, {
+            'first_name': first_name,
+            'last_name': last_name,
             'name': name,
-            'city': city,
             'national_id': national_id,
-            'experience': experience,
-            'note': note,
         })
 
-    clipped = _clip_apply_fields(
-        defaults['name'], defaults['city'], defaults['experience'], defaults['note'],
-    )
     return _apply_render_with_ref(**_apply_form_context(
         me_phone,
-        name=clipped[0],
-        city=clipped[1],
+        first_name=defaults.get('first_name', ''),
+        last_name=defaults.get('last_name', ''),
         national_id=defaults.get('national_id', ''),
-        experience=clipped[2],
-        note=clipped[3],
-        cities=cities,
     ))
 
 
@@ -1985,24 +1973,23 @@ def _apply_form_defaults(me_phone: str) -> dict:
     profile = _partner_profile_for_phone(me_phone) or {}
     last_app = _get_my_last_application(me_phone)
     use_last = last_app and not _has_active_application(me_phone)
-    name, city, experience, note = _clip_apply_fields(
-        data.get('name') or profile.get('name') or (last_app.get('name') if use_last else '') or '',
-        data.get('city') or profile.get('city') or (last_app.get('city') if use_last else '') or '',
-        data.get('experience') or (last_app.get('experience') if use_last else '') or '',
-        data.get('note') or (last_app.get('note') if use_last else '') or '',
-    )
+    src = last_app if use_last else {}
+    first_name, last_name, name = _compose_apply_name({
+        'first_name': data.get('first_name') or src.get('first_name') or '',
+        'last_name': data.get('last_name') or src.get('last_name') or '',
+        'name': data.get('name') or profile.get('name') or (src.get('name') if use_last else '') or '',
+    })
     national_id = _parse_apply_national_id(
         data.get('national_id')
         or profile.get('national_id')
-        or (last_app.get('national_id') if use_last else '')
+        or (src.get('national_id') if use_last else '')
         or ''
     )
     return {
+        'first_name': first_name,
+        'last_name': last_name,
         'name': name,
-        'city': city,
         'national_id': national_id,
-        'experience': experience,
-        'note': note,
     }
 
 
@@ -2291,14 +2278,36 @@ def download_app():
     return redirect(target or url_for('main.short_apk_download'))
 
 
+def _auto_approve_partner_application(record: dict, *, source: str = 'partner_apply_auto') -> dict:
+    """تأیید فوری درخواست — همان مسیر ادمین."""
+    try:
+        from admin.routes import _approve_express_partner
+    except Exception as exc:
+        current_app.logger.error('auto-approve import failed: %s', exc, exc_info=True)
+        return {'ok': False, 'error': str(exc)}
+    phone = str(record.get('phone') or '').strip()
+    return _approve_express_partner(
+        phone=phone,
+        name=(record.get('name') or '').strip(),
+        city=(record.get('city') or '').strip(),
+        national_id=(record.get('national_id') or '').strip(),
+        referred_by_phone=(record.get('referred_by_phone') or '').strip(),
+        application=record,
+        remove_application=True,
+        send_sms=True,
+        source=source,
+    )
+
+
 def create_partner_application_core(
     me_phone: str,
     data: dict,
     *,
     form_ref: str = '',
     query_ref: str = '',
+    auto_approve: bool = True,
 ) -> dict:
-    """ثبت درخواست همکاری بدون redirect — برای فرم وب و اجنت چت."""
+    """ثبت درخواست همکاری بدون redirect — برای فرم وب و اجنت چت؛ پیش‌فرض تأیید خودکار."""
     phone = (me_phone or '').strip()
     if not phone:
         return {'ok': False, 'error': 'برای ثبت درخواست باید وارد شوید.'}
@@ -2307,25 +2316,18 @@ def create_partner_application_core(
     if _has_active_application(phone):
         return {'ok': False, 'error': 'درخواست فعال دارید؛ منتظر بررسی بمانید.', 'already_pending': True}
 
-    name, city, experience, note = _clip_apply_fields(
-        data.get('name') or '',
-        data.get('city') or '',
-        data.get('experience') or '',
-        data.get('note') or '',
-    )
+    first_name, last_name, name = _compose_apply_name(data)
+    experience = (data.get('experience') or '').strip()[:APPLY_EXPERIENCE_MAX_LEN]
+    note = (data.get('note') or '').strip()[:APPLY_NOTE_MAX_LEN]
+    city = _default_apply_city(data.get('city') or '')
     national_id = _parse_apply_national_id(data.get('national_id') or '')
-    if not name or not city or not national_id:
-        return {'ok': False, 'error': 'نام، کد ملی و شهر فعالیت الزامی است.'}
+    if not first_name or not last_name or not national_id:
+        return {'ok': False, 'error': 'نام، نام خانوادگی و کد ملی الزامی است.'}
+    if not name:
+        return {'ok': False, 'error': 'نام، نام خانوادگی و کد ملی الزامی است.'}
     from ..utils.iran_ids import is_valid_iran_national_id
     if not is_valid_iran_national_id(national_id):
         return {'ok': False, 'error': 'کد ملی واردشده معتبر نیست.'}
-    cities = _active_cities_cached() or []
-    if cities and city not in cities:
-        return {
-            'ok': False,
-            'error': 'شهر انتخاب‌شده معتبر نیست.',
-            'allowed_cities': list(cities)[:20],
-        }
 
     apps = load_express_partner_apps() or []
     new_id = (max([int(x.get('id', 0) or 0) for x in apps if isinstance(x, dict)], default=0) or 0) + 1
@@ -2344,6 +2346,8 @@ def create_partner_application_core(
     except Exception:
         referrer_phone = ''
     payload = {
+        'first_name': first_name,
+        'last_name': last_name,
         'name': name,
         'city': city,
         'national_id': national_id,
@@ -2352,6 +2356,8 @@ def create_partner_application_core(
     }
     record = {
         'id': new_id,
+        'first_name': first_name,
+        'last_name': last_name,
         'name': name,
         'phone': _canonical_partner_phone(phone),
         'national_id': national_id,
@@ -2379,6 +2385,39 @@ def create_partner_application_core(
         except Exception:
             pass
 
+    try:
+        session.pop('apply_data', None)
+    except Exception:
+        pass
+
+    if auto_approve:
+        approve_out = _auto_approve_partner_application(
+            record,
+            source=f"partner_apply_auto:{(data.get('source') or 'web')}",
+        )
+        if approve_out.get('ok'):
+            return {
+                'ok': True,
+                'application_id': new_id,
+                'name': name,
+                'first_name': first_name,
+                'last_name': last_name,
+                'city': city,
+                'auto_approved': True,
+                'already_approved': bool(approve_out.get('already_approved')),
+                'sms_sent': True,
+                'sms_skipped': False,
+                'sms_error': None,
+                'sms_infra_error': False,
+                'message': 'همکاری شما تأیید شد. پنل بازاریاب فعال است.',
+            }
+        current_app.logger.error(
+            'Partner auto-approve failed phone=%s app=%s err=%s',
+            phone,
+            new_id,
+            approve_out.get('error'),
+        )
+
     sms_out = {'ok': False, 'skipped': True, 'error': 'sms_error'}
     try:
         sms_out = _send_partner_application_sms(phone, name)
@@ -2392,15 +2431,14 @@ def create_partner_application_core(
             'infra_error': sms_is_infrastructure_error(err_msg),
         }
 
-    try:
-        session.pop('apply_data', None)
-    except Exception:
-        pass
     return {
         'ok': True,
         'application_id': new_id,
         'name': name,
+        'first_name': first_name,
+        'last_name': last_name,
         'city': city,
+        'auto_approved': False,
         'sms_sent': bool(sms_out.get('ok')),
         'sms_skipped': bool(sms_out.get('skipped')),
         'sms_error': sms_out.get('error'),
@@ -2424,6 +2462,9 @@ def _submit_partner_application(me_phone: str, data: dict):
             return redirect(_post_apply_landing_url(me_phone))
         flash(str(out.get('error') or 'ثبت درخواست ناموفق بود.'), 'error')
         return redirect(url_for('express_partner.apply'))
+    if out.get('auto_approved'):
+        flash(str(out.get('message') or 'همکاری شما تأیید شد.'), 'success')
+        return redirect(url_for('express_partner.home'))
     return _redirect_apply_thanks(
         out.get('name', ''),
         fresh_submit=True,
@@ -7407,244 +7448,88 @@ def _profile_edit_json(profile: Dict[str, Any], me_phone: str) -> Dict[str, Any]
     }
 
 
-def _build_partner_report_snapshot(me_phone: str, profile) -> Dict[str, Any]:
-    """خلاصه زنده عملکرد همکار برای صفحه گزارش."""
+def _build_partner_memory_snapshot(me_phone: str) -> Dict[str, Any]:
+    """خلاصهٔ سبک حافظهٔ زنده — برای صفحهٔ حافظه و polling (بدون KPI سنگین)."""
+    ph = _canonical_partner_phone(me_phone or '')
+    live_summary = ''
+    updated_at = ''
+    source = ''
+    land_codes: List[str] = []
+    land_cards: List[Dict[str, str]] = []
+    try:
+        from app.express_partner.partner_live_memory import (
+            load_partner_live_memory,
+            memory_source_of,
+        )
+
+        saved = load_partner_live_memory(ph)
+        live_summary = str((saved or {}).get('summary') or '').strip()
+        updated_at = str((saved or {}).get('updated_at') or '').strip()
+        source = memory_source_of(saved)
+        meta = (saved or {}).get('meta') if isinstance((saved or {}).get('meta'), dict) else {}
+        raw_codes = meta.get('land_codes') if isinstance(meta.get('land_codes'), list) else []
+        land_codes = [str(c).strip() for c in raw_codes if str(c).strip()][:3]
+    except Exception:
+        live_summary = ''
+        updated_at = ''
+        source = ''
+        land_codes = []
+    if not land_codes and ph:
+        try:
+            from app.express_partner.partner_missions import get_active_mission
+
+            mission = get_active_mission(ph)
+            code = str((mission or {}).get('land_code') or '').strip()
+            if code:
+                land_codes = [code]
+        except Exception:
+            pass
+    if land_codes:
+        try:
+            from app.ai.land_cards import land_cards_payload, strip_visible_land_codes
+
+            land_cards = land_cards_payload(ph, land_codes, audience='partner') or []
+            if live_summary:
+                live_summary = strip_visible_land_codes(live_summary, land_codes)
+        except Exception:
+            land_cards = []
+    has_memory = bool(live_summary)
+    if not updated_at:
+        updated_at = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    return {
+        'ok': True,
+        'updated_at': updated_at,
+        'me_phone': ph,
+        'summary': live_summary,
+        'has_memory': has_memory,
+        'source': source,
+        'land_codes': land_codes,
+        'land_cards': land_cards,
+    }
+
+
+def _settings_wallet_report(me_phone: str, profile) -> Dict[str, Any]:
+    """فقط موجودی قابل‌برداشت برای هاب تنظیمات — بدون بار کامل داشبورد."""
     ph = _canonical_partner_phone(me_phone or '')
     is_approved = _is_partner_approved(profile)
     is_special = _is_partner_special(profile) if is_approved else False
     me_name = (str((profile or {}).get('name') or '')).strip() if isinstance(profile, dict) else ''
     partner_name = me_name or (_partner_display_name(ph) if ph else '')
-
-    my_comms = _commissions_for_phone(ph) if ph else []
-    comm_stats = _partner_commission_stats(ph, my_comms) if ph else {}
-    visit_rows = load_express_visit_requests() or []
-    if not isinstance(visit_rows, list):
-        visit_rows = []
-
-    visits_open = 0
-    if ph:
-        open_visit_statuses = frozenset({PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS})
-        visits_open = sum(
-            1
-            for row in visit_rows
-            if isinstance(row, dict)
-            and str(row.get('partner_phone') or '').strip() == ph
-            and str(row.get('status') or '').strip() in open_visit_statuses
-        )
-
-    open_files = 0
-    if ph:
-        try:
-            assigned_lands, _ = _build_partner_dashboard_lands(ph, is_approved)
-            open_files = sum(
-                1
-                for L in (assigned_lands or [])
-                if isinstance(L, dict) and L.get('_assignment_id')
-            )
-        except Exception:
-            open_files = 0
-
-    deals_open = 0
-    if ph and my_comms:
-        for c in my_comms:
-            if not isinstance(c, dict):
-                continue
-            st = str(c.get('status') or '').strip().lower()
-            if st != 'pending':
-                continue
-            try:
-                if commission_is_deal(c):
-                    deals_open += 1
-            except Exception:
-                deals_open += 1
-
-    mission_out: Dict[str, Any] = {
-        'active': False,
-        'code': '',
-        'title': '',
-        'stage_label': '',
-        'thread_id': '',
-    }
+    withdrawable = 0
     if ph and is_approved:
         try:
-            from app.express_partner.partner_missions import get_active_mission
-
-            mission = get_active_mission(ph)
+            stats = _partner_commission_stats(ph, _commissions_for_phone(ph))
+            withdrawable = int(stats.get('withdrawable_balance') or 0)
         except Exception:
-            mission = None
-        if mission:
-            code = str(mission.get('land_code') or '').strip()
-            title = ''
-            stage_label = str(mission.get('stage_label') or '').strip()
-            if code:
-                try:
-                    for L in (load_express_lands_cached() or []):
-                        if isinstance(L, dict) and str(L.get('code') or '').strip() == code:
-                            title = str(L.get('title') or '').strip()
-                            break
-                except Exception:
-                    title = ''
-                if not stage_label:
-                    try:
-                        funnel = _home_funnel_for_land(
-                            ph,
-                            {'code': code},
-                            visit_rows=visit_rows,
-                            commissions=my_comms if isinstance(my_comms, list) else [],
-                        )
-                        stage_label = str((funnel or {}).get('stage_label') or '').strip()
-                    except Exception:
-                        stage_label = ''
-            mission_out = {
-                'active': True,
-                'code': code,
-                'title': title,
-                'stage_label': stage_label or 'فعال',
-                'thread_id': str(mission.get('thread_id') or '').strip(),
-            }
-
-    role_label = (
-        'بازاریاب ویژه' if is_special else ('بازاریاب فروش' if is_approved else 'کاربر عادی')
-    )
-    city = (str((profile or {}).get('city') or '')).strip() if isinstance(profile, dict) else ''
-    bio = (str((profile or {}).get('bio') or '')).strip() if isinstance(profile, dict) else ''
-    birth_date = (
-        str((profile or {}).get('birth_date') or '').strip() if isinstance(profile, dict) else ''
-    )
-    withdrawable = int(comm_stats.get('withdrawable_balance') or 0)
-    pending_comm = int(comm_stats.get('pending_amount') or 0)
-    approved_comm = int(comm_stats.get('approved_amount') or 0)
-
-    # خلاصهٔ متنی مثل Memory Summary در ChatGPT
-    summary_bits: List[str] = []
-    display = partner_name or 'همکار'
-    summary_bits.append(f'{display}، {role_label}.')
-    if city:
-        summary_bits.append(f'فعال در {city}.')
-    if mission_out.get('active') and mission_out.get('code'):
-        stage = mission_out.get('stage_label') or 'فعال'
-        summary_bits.append(
-            f'کار جاری روی فایل {mission_out["code"]} ({stage}).'
-        )
-    else:
-        summary_bits.append('الان کار جاری مشخصی ندارد — از چت ادامه بده.')
-    summary_bits.append(
-        f'{open_files} فایل باز، {visits_open} بازدید جاری، {deals_open} معامله جاری.'
-    )
-    if withdrawable or pending_comm or approved_comm:
-        summary_bits.append(
-            f'موجودی قابل برداشت {withdrawable:,} تومان؛ '
-            f'در انتظار {pending_comm:,}؛ تأییدشده {approved_comm:,}.'
-            .replace(',', '٬')
-        )
-    if bio:
-        summary_bits.append(bio[:160] + ('…' if len(bio) > 160 else ''))
-
-    def _mem(
-        mid: str,
-        category: str,
-        text: str,
-        *,
-        href: str = '',
-        live_key: str = '',
-    ) -> Dict[str, str]:
-        return {
-            'id': mid,
-            'category': category,
-            'text': text,
-            'href': href,
-            'live_key': live_key,
-        }
-
-    memory_items: List[Dict[str, str]] = []
-    if partner_name:
-        memory_items.append(_mem('name', 'پروفایل', f'نام: {partner_name}', href='/express/partner/profile/edit'))
-    if ph:
-        memory_items.append(_mem('phone', 'پروفایل', f'موبایل: {ph}'))
-    memory_items.append(_mem('role', 'پروفایل', f'نقش: {role_label}', live_key='role_label'))
-    if city:
-        memory_items.append(_mem('city', 'پروفایل', f'شهر: {city}', href='/express/partner/profile/edit'))
-    if birth_date:
-        memory_items.append(_mem('birth', 'پروفایل', f'تاریخ تولد: {birth_date}', href='/express/partner/profile/edit'))
-    if bio:
-        memory_items.append(_mem('bio', 'پروفایل', f'درباره: {bio}', href='/express/partner/profile/edit'))
-
-    if mission_out.get('active'):
-        mtxt = f"کار جاری: فایل {mission_out.get('code') or '—'}"
-        if mission_out.get('stage_label'):
-            mtxt += f" — {mission_out['stage_label']}"
-        if mission_out.get('title'):
-            mtxt += f" ({mission_out['title']})"
-        memory_items.append(_mem('mission', 'کار جاری', mtxt, href='/express/partner/home', live_key='mission'))
-    else:
-        memory_items.append(
-            _mem('mission', 'کار جاری', 'کار جاری مشخص نیست — از چت خانه ادامه بده', href='/express/partner/home', live_key='mission')
-        )
-
-    memory_items.append(
-        _mem('open_files', 'عملکرد', f'فایل‌های باز: {open_files}', live_key='open_files')
-    )
-    memory_items.append(
-        _mem('visits_open', 'عملکرد', f'بازدیدهای جاری: {visits_open}', live_key='visits_open')
-    )
-    memory_items.append(
-        _mem('deals_open', 'عملکرد', f'معاملات جاری: {deals_open}', live_key='deals_open')
-    )
-    memory_items.append(
-        _mem(
-            'wallet',
-            'کیف پول',
-            f'قابل برداشت {withdrawable:,} تومان · در انتظار {pending_comm:,} · تأییدشده {approved_comm:,}'
-            .replace(',', '٬'),
-            href='/express/partner/commissions',
-            live_key='wallet',
-        )
-    )
-
-    updated_at = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-    # خلاصهٔ نمایشی = فقط حافظهٔ مدل (نه کپی KPI)
-    live_summary = ''
-    try:
-        from app.express_partner.partner_live_memory import load_partner_live_memory
-
-        saved = load_partner_live_memory(ph)
-        live_summary = str((saved or {}).get('summary') or '').strip()
-        if saved.get('updated_at'):
-            updated_at = str(saved.get('updated_at'))
-    except Exception:
-        live_summary = ''
-    if not live_summary:
-        live_summary = (
-            'هنوز حافظه‌ای نوشته نشده — با چت یا ثبت بازدید/معامله، '
-            'وینور مثل ChatGPT یک خلاصهٔ حافظه می‌سازد.'
-        )
-
+            withdrawable = 0
     return {
         'ok': True,
-        'updated_at': updated_at,
         'me_phone': ph,
         'me_name': me_name,
         'partner_name': partner_name,
         'is_approved': is_approved,
         'is_special': is_special,
-        'role_label': role_label,
-        'profile': {
-            'city': city,
-            'bio': bio,
-            'birth_date': birth_date,
-        },
-        'summary': live_summary,
-        'memory_items': [],
-        'kpis': {
-            'open_files': int(open_files),
-            'visits_open': int(visits_open),
-            'deals_open': int(deals_open),
-            'withdrawable_balance': withdrawable,
-            'pending_commission': pending_comm,
-            'approved_commission': approved_comm,
-        },
-        'mission': mission_out,
-        'wallet_href': '/express/partner/commissions',
+        'kpis': {'withdrawable_balance': withdrawable},
     }
 
 
@@ -7655,7 +7540,7 @@ def settings_page():
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     partners = load_express_partners() or []
     profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
-    report = _build_partner_report_snapshot(me_phone, profile)
+    report = _settings_wallet_report(me_phone, profile)
     return render_template(
         'express_partner/settings.html',
         me_phone=me_phone,
@@ -7678,15 +7563,19 @@ def settings_memory_page():
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
     partners = load_express_partners() or []
     profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
-    report = _build_partner_report_snapshot(me_phone, profile)
+    is_approved = _is_partner_approved(profile)
+    is_special = _is_partner_special(profile) if is_approved else False
+    me_name = (str((profile or {}).get('name') or '')).strip()
+    partner_name = me_name or (_partner_display_name(me_phone) if me_phone else '')
+    report = _build_partner_memory_snapshot(me_phone)
     return render_template(
         'express_partner/settings_memory.html',
         me_phone=me_phone,
-        me_name=report.get('me_name') or '',
-        partner_name=report.get('partner_name') or '',
+        me_name=me_name,
+        partner_name=partner_name,
         profile=profile,
-        is_approved=bool(report.get('is_approved')),
-        is_special=bool(report.get('is_special')),
+        is_approved=is_approved,
+        is_special=is_special,
         report=report,
         hide_header=True,
         bottom_nav_active='profile',
@@ -7849,14 +7738,27 @@ def plus_zarinpal_callback():
 @express_partner_bp.get('/settings/data', endpoint='settings_data')
 @require_partner_access(allow_pending=True, json_response=True)
 def settings_data():
-    """JSON حافظهٔ زنده برای polling صفحهٔ حافظه."""
+    """JSON سبک حافظهٔ زنده برای polling صفحهٔ حافظه."""
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
-    profile = getattr(g, 'express_partner_profile', None)
-    if not isinstance(profile, dict):
-        partners = load_express_partners() or []
-        profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
-    report = _build_partner_report_snapshot(me_phone, profile)
-    return jsonify(report)
+    return jsonify(_build_partner_memory_snapshot(me_phone))
+
+
+@express_partner_bp.post('/settings/memory/clear', endpoint='settings_memory_clear')
+@require_partner_access(allow_pending=True, json_response=True)
+def settings_memory_clear():
+    """پاک‌کردن خلاصهٔ حافظهٔ زندهٔ همکار از صفحهٔ تنظیمات."""
+    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
+    if not me_phone:
+        return jsonify({'ok': False, 'error': 'نشست نامعتبر است.'}), 401
+    try:
+        from app.express_partner.partner_live_memory import clear_partner_live_memory
+
+        clear_partner_live_memory(me_phone)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'پاک‌کردن حافظه ممکن نشد.'}), 500
+    snap = _build_partner_memory_snapshot(me_phone)
+    snap['message'] = 'حافظه پاک شد.'
+    return jsonify(snap)
 
 
 @express_partner_bp.route('/profile/edit', methods=['GET', 'POST'], endpoint='profile_edit')

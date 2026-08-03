@@ -9,10 +9,23 @@ from typing import Any, List
 def list_agents() -> List[dict[str, Any]]:
     try:
         from app.agents.interfaces import ALL_AGENT_IDS
-        from app.agents.config import agents_enabled
+        from app.agents.config import agents_enabled, property_search_enabled
         from app.supervisor.config import supervisor_enabled
+        from app.agents.analysis.config import analysis_enabled
+        from app.agents.customer_memory.config import customer_memory_enabled
+        from app.agents.recommendation.config import recommendation_enabled
+        from app.agents.negotiation.config import negotiation_enabled
+        from app.agents.customer_success.config import customer_success_enabled
 
         master = agents_enabled()
+        per_agent = {
+            "property_search": (property_search_enabled, "VINOR_PROPERTY_SEARCH_ENABLED"),
+            "property_analysis": (analysis_enabled, "VINOR_ANALYSIS_ENABLED"),
+            "customer_memory": (customer_memory_enabled, "VINOR_CUSTOMER_MEMORY_ENABLED"),
+            "recommendation": (recommendation_enabled, "VINOR_RECOMMENDATION_ENABLED"),
+            "negotiation": (negotiation_enabled, "VINOR_NEGOTIATION_ENABLED"),
+            "follow_up": (customer_success_enabled, "VINOR_CUSTOMER_SUCCESS_ENABLED"),
+        }
     except Exception:
         ALL_AGENT_IDS = (
             "property_search",
@@ -24,16 +37,27 @@ def list_agents() -> List[dict[str, Any]]:
         )
         master = True
         supervisor_enabled = lambda: True  # type: ignore
+        per_agent = {}
 
     rows = []
     for aid in ALL_AGENT_IDS:
-        env_key = f"VINOR_AGENT_{aid.upper()}_ENABLED"
-        # Most agents use package-level flags; report master + id
+        fn_flag = per_agent.get(aid)
+        if fn_flag:
+            fn, flag_key = fn_flag
+            try:
+                agent_on = bool(fn())
+            except Exception:
+                agent_on = True
+        else:
+            agent_on = True
+            flag_key = f"VINOR_AGENT_{aid.upper()}_ENABLED"
         rows.append(
             {
                 "id": aid,
-                "enabled": bool(master),
-                "flag_hint": env_key,
+                "enabled": bool(master and agent_on),
+                "master_enabled": bool(master),
+                "agent_enabled": bool(agent_on),
+                "flag_hint": flag_key,
                 "supervisor_enabled": bool(supervisor_enabled()),
             }
         )
@@ -189,6 +213,7 @@ def list_prompts() -> List[dict[str, Any]]:
 FLAG_GROUP_LABELS_FA: dict[str, str] = {
     "supervisor": "ناظر و هدایت چت",
     "agents": "ایجنت‌های تخصصی",
+    "reach": "رسدکننده و پیگیری",
     "conversation": "موتور گفتگو",
     "workflow": "گردش‌کار ثبت",
     "memory": "حافظه",
@@ -208,6 +233,10 @@ FLAG_DESCRIPTIONS_FA: dict[str, str] = {
         "کدام لایه (حافظه، برنامه‌ریزی، جستجو، ابزار) در هر پیام فعال باشد. "
         "بدون UI جدا — فقط هدایت پشت‌صحنه."
     ),
+    "VINOR_SUPERVISOR_AGENT_ENABLED": (
+        "ایجنت گزارش‌دهنده در چت عملیات ادمین: رویدادهای دامنه "
+        "(بازدید، معامله، پیگیری و …) را به‌صورت گزارش فارسی می‌نویسد."
+    ),
     "VINOR_AGENTS_ENABLED": (
         "سوئیچ اصلی ایجنت‌های تخصصی فروش (جستجوی فایل، تحلیل، پیشنهاد، مذاکره و …). "
         "خاموش بودن یعنی این لایه‌ها در چت استفاده نمی‌شوند."
@@ -215,6 +244,32 @@ FLAG_DESCRIPTIONS_FA: dict[str, str] = {
     "VINOR_PARALLEL_AGENTS": (
         "اجرای موازی چند ایجنت تخصصی روی یک درخواست و ادغام نتیجه. "
         "برای سرعت و پوشش بهتر؛ اگر خاموش باشد ایجنت‌ها تک‌به‌تک یا ساده‌تر اجرا می‌شوند."
+    ),
+    "VINOR_PROPERTY_SEARCH_ENABLED": (
+        "ایجنت جستجوی فایل: آماده‌سازی pipeline جستجو "
+        "(برنامه‌ریزی، حافظه، RAG، ابزار، LLM) برای پیدا کردن فایل‌های سیستم."
+    ),
+    "VINOR_ANALYSIS_ENABLED": (
+        "ایجنت تحلیل فایل: مقایسه، ارزش خرید و خلاصهٔ مزایا/معایب روی فایل‌های پیدا‌شده."
+    ),
+    "VINOR_CUSTOMER_MEMORY_ENABLED": (
+        "ایجنت حافظهٔ مشتری: ساخت پروفایل از ai_memory "
+        "(ترجیح، بودجه، سابقه) برای شخصی‌سازی فروش."
+    ),
+    "VINOR_RECOMMENDATION_ENABLED": (
+        "ایجنت پیشنهاد: رتبه‌بندی نتایج جستجو/تحلیل و پیشنهاد بهترین گزینه به مشتری."
+    ),
+    "VINOR_NEGOTIATION_ENABLED": (
+        "ایجنت مذاکره: برنامهٔ چانه‌زنی و پیشنهاد قیمت "
+        "(hint داخلی — متن گفتگو را خودش نمی‌نویسد)."
+    ),
+    "VINOR_CUSTOMER_SUCCESS_ENABLED": (
+        "ایجنت پیگیری / موفقیت مشتری: برنامهٔ اقدام بعدی و چرخهٔ follow-up."
+    ),
+    "VINOR_REACH_ENABLED": (
+        "رسدکننده: پیگیری خودکار خریدار/فروشنده با SMS و اعلان "
+        "بدون نیاز به تأیید ادمین در هر نوبت. "
+        "ساعت‌های نوبت از همین صفحه (بخش ساعت‌های پیگیری) قابل تنظیم است."
     ),
     "VINOR_CONVERSATION_ENABLED": (
         "موتور گفتگو و نقش‌ها را فعال می‌کند: تشخیص نیت، وضعیت مکالمه، "
@@ -258,17 +313,32 @@ FLAG_DESCRIPTIONS_FA: dict[str, str] = {
     ),
     "VINOR_AI_CONSOLE_ENABLED": (
         "کنسول مانیتور ادمین (/admin/ai-console): فلگ‌ها، ابزارها، خطاها و مشاهدهٔ وضعیت AI. "
-        "خاموش بودن دسترسی به این صفحات را قطع می‌کند."
+        "خاموش بودن دسترسی به این صفحات را قطع می‌کند. فقط با env قابل تغییر است."
     ),
 }
 
 
 def list_ai_flags() -> List[dict[str, Any]]:
-    """Sample of AI/OS related flags with live values."""
+    """فلگ‌های AI/OS با مقدار زنده + قابلیت تغییر از پنل."""
+    from app.ai_console.flag_settings import (
+        MUTABLE_FLAG_KEYS,
+        flag_env_locked,
+        flag_source,
+        get_stored_flags,
+    )
+
     specs = [
         ("VINOR_SUPERVISOR_ENABLED", "supervisor", _try("app.supervisor.config", "supervisor_enabled")),
+        ("VINOR_SUPERVISOR_AGENT_ENABLED", "supervisor", _try("app.supervisor_agent.config", "supervisor_agent_enabled")),
         ("VINOR_AGENTS_ENABLED", "agents", _try("app.agents.config", "agents_enabled")),
         ("VINOR_PARALLEL_AGENTS", "agents", _try("app.agents.parallel.config", "parallel_enabled")),
+        ("VINOR_PROPERTY_SEARCH_ENABLED", "agents", _try("app.agents.config", "property_search_enabled")),
+        ("VINOR_ANALYSIS_ENABLED", "agents", _try("app.agents.analysis.config", "analysis_enabled")),
+        ("VINOR_CUSTOMER_MEMORY_ENABLED", "agents", _try("app.agents.customer_memory.config", "customer_memory_enabled")),
+        ("VINOR_RECOMMENDATION_ENABLED", "agents", _try("app.agents.recommendation.config", "recommendation_enabled")),
+        ("VINOR_NEGOTIATION_ENABLED", "agents", _try("app.agents.negotiation.config", "negotiation_enabled")),
+        ("VINOR_CUSTOMER_SUCCESS_ENABLED", "agents", _try("app.agents.customer_success.config", "customer_success_enabled")),
+        ("VINOR_REACH_ENABLED", "reach", _try("app.reach.config", "reach_enabled")),
         ("VINOR_CONVERSATION_ENABLED", "conversation", _try("app.conversation.config", "conversation_enabled")),
         ("VINOR_WORKFLOW_ENGINE_ENABLED", "workflow", _try("app.workflow.config", "workflow_engine_enabled")),
         ("VINOR_MEMORY_ENABLED", "memory", _try("app.memory.config", "memory_enabled")),
@@ -281,6 +351,7 @@ def list_ai_flags() -> List[dict[str, Any]]:
         ("VINOR_INTEGRATION_AI_TOOLS_ENABLED", "integration", _try("app.integration.config", "integration_ai_tools_enabled")),
         ("VINOR_AI_CONSOLE_ENABLED", "console", _try("app.ai_console.config", "ai_console_enabled")),
     ]
+    stored = get_stored_flags()
     rows = []
     for name, group, fn in specs:
         val = None
@@ -289,6 +360,9 @@ def list_ai_flags() -> List[dict[str, Any]]:
         except Exception:
             val = None
         env_raw = os.environ.get(name)
+        source = flag_source(name)
+        mutable = name in MUTABLE_FLAG_KEYS
+        locked = flag_env_locked(name)
         rows.append(
             {
                 "name": name,
@@ -297,7 +371,10 @@ def list_ai_flags() -> List[dict[str, Any]]:
                 "description_fa": FLAG_DESCRIPTIONS_FA.get(name, ""),
                 "value": val,
                 "env": env_raw,
-                "source": "env" if env_raw is not None else "default",
+                "source": source,
+                "mutable": mutable,
+                "env_locked": locked,
+                "stored": stored.get(name) if name in stored else None,
             }
         )
     return rows

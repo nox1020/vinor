@@ -5,12 +5,9 @@ import os
 
 
 def reach_enabled() -> bool:
-    return (os.environ.get("VINOR_REACH_ENABLED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_REACH_ENABLED", default=True)
 
 
 def reach_scheduler_enabled() -> bool:
@@ -22,31 +19,29 @@ def reach_scheduler_enabled() -> bool:
         "yes",
     ):
         return False
-    return (os.environ.get("VINOR_REACH_SCHEDULER") or "1").strip().lower() not in (
-        "0",
-        "false",
-        "no",
-        "off",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_REACH_SCHEDULER", default=True)
 
 
 def reach_sms_enabled() -> bool:
-    return (os.environ.get("VINOR_REACH_SMS") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_REACH_SMS", default=True)
 
 
 def reach_notif_enabled() -> bool:
-    return (os.environ.get("VINOR_REACH_NOTIF") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_REACH_NOTIF", default=True)
 
 
-# نوبت‌های تهران — هم‌تراز مربی فروش همکار
+def reach_hours() -> tuple[int, ...]:
+    """نوبت‌های تهران — از پنل/env قابل تنظیم؛ پیش‌فرض ۱۰/۱۴/۲۰."""
+    from app.ai_console.followup_settings import get_followup_hours
+
+    return get_followup_hours()
+
+
+# سازگاری با importهای قدیمی — مقدار پیش‌فرض؛ کد زنده باید reach_hours() را صدا بزند
 REACH_HOURS = (10, 14, 20)

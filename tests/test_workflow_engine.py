@@ -107,7 +107,7 @@ class WorkflowEngineFlowTests(unittest.TestCase):
         )
         self.assertTrue(out1.handled)
         self.assertIn("نام", out1.reply)
-        for ans in ("علی رضایی", "0012345678", "تهران", "۳ سال مشاور", "بله"):
+        for ans in ("علی", "رضایی", "0012345678", "بله"):
             out = self.mgr.handle(message=ans, user_key=uk, audience="public")
         self.assertTrue(out.handled)
         self.assertIsNotNone(out.structured_object)

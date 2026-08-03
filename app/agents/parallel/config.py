@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-import os
-
 
 def parallel_enabled() -> bool:
-    return (os.environ.get("VINOR_PARALLEL_AGENTS") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_PARALLEL_AGENTS", default=True)
 
 
 def parallel_max_workers() -> int:
+    import os
+
     try:
         return max(1, min(4, int(os.environ.get("VINOR_PARALLEL_WORKERS") or 3)))
     except Exception:
@@ -20,6 +17,8 @@ def parallel_max_workers() -> int:
 
 
 def parallel_merge_hint_chars() -> int:
+    import os
+
     try:
         return max(40, min(100, int(os.environ.get("VINOR_PARALLEL_MERGE_HINT_CHARS") or 80)))
     except Exception:
@@ -27,9 +26,6 @@ def parallel_merge_hint_chars() -> int:
 
 
 def parallel_inject_merged_hint() -> bool:
-    return (os.environ.get("VINOR_PARALLEL_INJECT_MERGE_HINT") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_PARALLEL_INJECT_MERGE_HINT", default=True)

@@ -30,7 +30,9 @@ def closing_ai_tools_enabled() -> bool:
     """propose_contract / payment / settlement. Requires master."""
     if not closing_enabled():
         return False
-    return _env_bool("VINOR_CLOSING_AI_TOOLS_ENABLED", "1")
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_CLOSING_AI_TOOLS_ENABLED", default=True)
 
 
 def closing_activity_hook_enabled() -> bool:

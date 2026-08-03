@@ -4,12 +4,9 @@ import os
 
 
 def negotiation_enabled() -> bool:
-    return (os.environ.get("VINOR_NEGOTIATION_ENABLED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_NEGOTIATION_ENABLED", default=True)
 
 
 def negotiation_hint_budget_chars() -> int:
@@ -20,18 +17,12 @@ def negotiation_hint_budget_chars() -> int:
 
 
 def negotiation_cache_enabled() -> bool:
-    return (os.environ.get("VINOR_NEGOTIATION_CACHE") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_NEGOTIATION_CACHE", default=True)
 
 
 def negotiation_inject_hint() -> bool:
-    return (os.environ.get("VINOR_NEGOTIATION_INJECT_HINT") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_NEGOTIATION_INJECT_HINT", default=True)

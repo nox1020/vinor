@@ -6,12 +6,9 @@ from app.evaluation.interfaces import EvaluationConfig
 
 
 def evaluation_enabled() -> bool:
-    return (os.environ.get("VINOR_EVALUATION_ENABLED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_EVALUATION_ENABLED", default=True)
 
 
 def evaluation_store_logs() -> bool:

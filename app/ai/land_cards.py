@@ -89,6 +89,56 @@ def strip_land_markers(text: str) -> tuple[str, list[str]]:
     return cleaned, codes
 
 
+def line_is_land_code_ref(line: str, codes: list[str] | None = None) -> bool:
+    """خط‌های «فایل: کد/عنوان» که با کارت جایگزین می‌شوند."""
+    s = str(line or "").strip()
+    if not s:
+        return False
+    code_set = {str(c).strip() for c in (codes or []) if str(c).strip()}
+    if re.match(r"^فایل\s*[:：]", s):
+        if not code_set:
+            return True
+        return any(c in s for c in code_set) or True
+    if code_set:
+        for c in code_set:
+            if not c:
+                continue
+            if s == c or s == f"فایل {c}" or f"({c})" in s:
+                return True
+    return False
+
+
+def filter_lines_without_land_codes(
+    lines: list[Any] | None,
+    codes: list[str] | None = None,
+) -> list[str]:
+    out: list[str] = []
+    for raw in lines or []:
+        s = str(raw or "").strip()
+        if not s or line_is_land_code_ref(s, codes):
+            continue
+        out.append(s)
+    return out
+
+
+def strip_visible_land_codes(text: str, codes: list[str] | None) -> str:
+    """حذف کد خام از متن قابل‌نمایش وقتی کارت فایل نشان داده می‌شود."""
+    out = str(text or "")
+    want = [str(c).strip() for c in (codes or []) if str(c).strip()]
+    if not out or not want:
+        return out
+    for c in want:
+        esc = re.escape(c)
+        out = re.sub(rf"\(\s*{esc}\s*\)", "", out)
+        out = re.sub(rf"فایل\s*[:：]\s*{esc}\b", "این فایل", out, flags=re.IGNORECASE)
+        out = re.sub(rf"فایل\s+{esc}\b", "این فایل", out, flags=re.IGNORECASE)
+        out = re.sub(rf"(?<![\w./-]){esc}(?![\w./-])", "", out)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    out = re.sub(r" ?، ?،", "،", out)
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    return out.strip()
+
+
 def collect_land_codes(
     reply_text: str,
     *,
@@ -110,6 +160,9 @@ def collect_land_codes(
     for c in from_markers:
         if c in lands_map and c not in merged:
             merged.append(c)
+    # وقتی کارت می‌آید، کد خام در متن نماند
+    if merged:
+        cleaned = strip_visible_land_codes(cleaned, merged)
     return cleaned, merged[:2]
 
 

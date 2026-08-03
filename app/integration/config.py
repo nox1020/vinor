@@ -39,7 +39,9 @@ def integration_workflows_enabled() -> bool:
 def integration_ai_tools_enabled() -> bool:
     if not integration_enabled():
         return False
-    return _env_bool("VINOR_INTEGRATION_AI_TOOLS_ENABLED", "1")
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_INTEGRATION_AI_TOOLS_ENABLED", default=True)
 
 
 def integration_activity_hook_enabled() -> bool:

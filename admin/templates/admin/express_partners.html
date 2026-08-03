@@ -130,6 +130,29 @@
     </form>
   </details>
 
+  {% if (stats.pending or 0) > 0 %}
+  <form method="post" action="{{ url_for('admin.express_partner_applications_approve_all') }}"
+        class="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20 p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="q" value="{{ q or '' }}">
+    <input type="hidden" name="filter" value="{{ filter_kind or 'all' }}">
+    <div class="min-w-0">
+      <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+        {{ stats.pending }} درخواست بازاریابی در انتظار
+      </p>
+      <p class="text-[11px] text-emerald-700/80 dark:text-emerald-300/70 mt-0.5">
+        همه درخواست‌های معلق را یکجا تأیید کنید
+      </p>
+    </div>
+    <button type="submit"
+            onclick="return confirm('همهٔ {{ stats.pending }} درخواست بازاریابی تأیید شوند؟')"
+            class="shrink-0 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">
+      <i class="fa-solid fa-check-double ml-1"></i>
+      تأیید خودکار همه درخواست‌های بازاریابی
+    </button>
+  </form>
+  {% endif %}
+
   <!-- جمع‌ها (جمع‌شونده) -->
   <details class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm">
     <summary class="px-4 py-3 cursor-pointer text-gray-700 dark:text-gray-300 font-medium select-none">

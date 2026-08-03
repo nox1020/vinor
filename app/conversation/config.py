@@ -4,12 +4,9 @@ import os
 
 
 def conversation_enabled() -> bool:
-    return (os.environ.get("VINOR_CONVERSATION_ENABLED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_CONVERSATION_ENABLED", default=True)
 
 
 def conversation_early_return() -> bool:

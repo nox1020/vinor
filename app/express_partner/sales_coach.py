@@ -33,20 +33,45 @@ from ..utils.storage import (
 )
 
 _APPROVED = frozenset({"approved", "active", "enabled", "ok", "true", "1"})
-# سه نوبت منظم به وقت تهران — تا فروش نهایی ادامه دارد
+# پیش‌فرض نوبت‌ها — مقدار زنده از reach_hours() / پنل ادمین
 _NUDGE_HOURS = (10, 14, 20)
 _STATE_NAME = "sales_coach_nudge_state.json"
 _LOCK_NAME = "sales_coach_nudge.run.lock"
-_SLOT_LABELS = {10: "صبح", 14: "ظهر", 20: "شب"}
+_SLOT_LABELS = {
+    8: "صبح زود",
+    9: "صبح",
+    10: "صبح",
+    11: "ظهر",
+    12: "ظهر",
+    13: "ظهر",
+    14: "ظهر",
+    15: "عصر",
+    16: "عصر",
+    17: "عصر",
+    18: "غروب",
+    19: "شب",
+    20: "شب",
+    21: "شب",
+    22: "شب",
+}
+
+
+def _nudge_hours() -> tuple:
+    try:
+        from app.reach.config import reach_hours
+
+        hours = reach_hours()
+        if hours:
+            return tuple(int(h) for h in hours)
+    except Exception:
+        pass
+    return _NUDGE_HOURS
 
 
 def _tehran_now() -> datetime:
-    if ZoneInfo is not None:
-        try:
-            return datetime.now(ZoneInfo("Asia/Tehran"))
-        except Exception:
-            pass
-    return datetime.now()
+    from app.utils.dates import tehran_now
+
+    return tehran_now()
 
 
 def _is_partner_approved(profile: Dict[str, Any] | None) -> bool:
@@ -81,28 +106,28 @@ def coach_tip_for_stage(
     sold: bool = False,
     commission_amount: int = 0,
 ) -> str:
-    """یک جمله عملی برای چت/اعلان — تشویق به فروش."""
+    """یک جمله خودمونی برای چت/اعلان — تشویق به فروش."""
     amt = _fmt_toman(commission_amount) if commission_amount else ""
-    por = f" تا پورسانت {amt} تومن مال خودت بشه" if amt and amt != "0" else " تا پورسانتت قطعی بشه"
+    por = f" تا پورسانت {amt} تومن مال خودت بشه" if amt and amt != "0" else " تا پورسانتت بشینه"
     if sold:
-        return "فروش تموم شد؛ برو از کیف پول برداشت بزن."
+        return "فروش تموم شد؛ برو از کیف پول بردار."
     if in_transaction:
-        return f"معامله رو از همین چت ببند یا پیگیری کن{por}."
+        return f"معامله بازه — از همین چت پیگیریش کن{por}."
     label = (stage_label or "").strip()
     if label in ("در انتظار تأیید انجام",) or "تأیید انجام" in label:
-        return "منتظر تأیید انجام بازدید باش؛ بعد قدم بعدی رو از چت می‌گی."
+        return "منتظر تأیید بازدید باش؛ بعدش از چت می‌گیم چیکار کنی."
     if label in ("معامله یا بازدید مجدد", "بازدید انجام شد"):
         return f"حله؛ از همین چت درخواست معامله بده{por}."
     if label in ("بازدید تأییدشد", "در انتظار بازدید", "پیگیری بازدید") or has_visit:
-        return "بازدید مهمه؛ وقتی رفتی، از چت «بازدید انجام شد» رو ثبت کن."
+        return "بازدید مهمه؛ وقتی رفتی، تو چت بزن «بازدید انجام شد»."
     if label in ("بازاریابی", "بازاریابی مجدد"):
         return (
-            "آگهی بده یا وقتی مشتری آماده شد از همین کارت «ثبت بازدید» بزن "
+            "آگهی بذار یا اگه مشتری آماده بود از همین کارت «ثبت بازدید» بزن"
             f"{por}."
         )
     return (
-        f"دیوار بذار و تو اینستا استوری/پست بزن"
-        f"{por}. متنش رو از همین چت بخواه؛ بازدید هم از اینجا ثبت می‌شه."
+        f"دیوار بذار و اینستا استوری/پست بزن"
+        f"{por}. متنش رو از همین چت بخواه."
     )
 
 
@@ -126,19 +151,18 @@ def build_voided_encouragement(
     if reason_s:
         head = reason_s
 
-    notif_title = "ممنون از تلاشت"
+    notif_title = "ممنون، ادامه بده"
     chat_body = (
         f"{notif_title}.\n"
         f"{head} — برای {file_bit}.\n"
-        "تلاشت رو دیدی؛ گاهی مشتری منصرف می‌شه و طبیعیه.\n\n"
-        "حالا دوباره برو جلو: دیوار رو آپدیت/ثبت کن، نردبان بزن، "
-        "اینستا پست/استوری بذار، و به هرکی ممکنه مشتری باشه معرفی کن.\n"
-        "متن دیوار یا کپشن خواستی همین‌جا بگو تا برات بنویسم."
+        "گاهی مشتری پشیمون می‌شه؛ عادیه.\n\n"
+        "دوباره برو جلو: دیوار رو آپدیت کن، نردبان بزن، "
+        "اینستا پست/استوری بذار، به آشناها بگو.\n"
+        "متن دیوار یا کپشن خواستی همین‌جا بگو برات بنویسم."
     )
     notif_body = (
         f"{head}. ممنون که تلاش کردی. "
-        "دوباره: دیوار + نردبان + اینستا + معرفی. "
-        "متن آماده رو از چت بخواه."
+        "دوباره دیوار + اینستا بذار. متن آماده رو از چت بخواه."
     )
     return notif_title, chat_body, notif_body
 
@@ -850,8 +874,8 @@ def build_limited_ai_quick_prompts(
     _ = me_phone
     add("خرید ملک", prompt="یه ملک مناسب می‌خوام", intent="find_land", icon="search")
     add(
-        "همکاری با وینور",
-        prompt="می‌خوام همکار شم؛ چطور شروع کنم؟",
+        "می‌خواهم بازاریاب وینور شوم",
+        prompt="می‌خواهم بازاریاب وینور شوم",
         intent="coop_apply",
         icon="handshake",
     )
@@ -1257,7 +1281,7 @@ def build_nudge_messages(
     slot_hour: int = 20,
     nudge_count: int = 0,
 ) -> Tuple[str, str, str]:
-    """(title, notif_body, sms_body) — متناسب مرحله + نوبت روز + شدت پیگیری."""
+    """(title, notif_body, sms_body) — لحن خودمونی کوتاه، شبیه پیامک بلوباک."""
     name = _first_name(partner_name)
     code = str(nudge.get("code") or "").strip()
     title_land = str(nudge.get("title") or code).strip()
@@ -1271,92 +1295,91 @@ def build_nudge_messages(
 
     if in_tx:
         titles = {
-            "start": "معامله رو جمع کن",
-            "follow": "پیگیری معامله",
-            "push": "معامله هنوز بازه",
-            "urgent": "امروز معامله رو ببند",
+            "start": "معامله‌ت بازه",
+            "follow": "یادت نره معامله",
+            "push": "هنوز جمعش نکردی؟",
+            "urgent": "امروز تمومش کن",
         }
         bodies = {
-            "start": f"{name}، فایل {title_land} در معامله است. با مشتری هماهنگ کن تا {por} قطعی بشه.",
-            "follow": f"{name}، هنوز معامله {title_land} بسته نشده. یک تماس کوتاه کافی‌ست.",
-            "push": f"{name}، معامله {code} معطل مونده. الان پیگیری کن؛ {por} منتظرته.",
-            "urgent": f"{name}، چند بار یادآوری شد — فایل {code} رو همین امروز ببند و {por} رو بگیر.",
+            "start": f"{name} جان، معامله {title_land} بازه. یه تماس کوچیک بزن تا {por} بشینه.",
+            "follow": f"{name} جان، معامله {title_land} هنوز تموم نشده. یه سر بهش بزن.",
+            "push": f"{name} جان، معامله {code} مونده. الان پیگیر شو؛ {por} منتظرته.",
+            "urgent": f"{name} جان، چند بار گفتیم — امروز {code} رو ببند و {por} رو بگیر.",
         }
         sms_map = {
-            "start": f"وینور\n{name} معامله {code} رو ببند\n{por}",
-            "follow": f"وینور\nپیگیری معامله {code}\n{por}",
-            "push": f"وینور\n{name} معامله {code} معطل است\nالان تماس بگیر\n{por}",
-            "urgent": f"وینور\nفوری: معامله {code} رو ببند\n{por}",
+            "start": f"وینور\n{name} جان، معامله {code} بازه\nبیا تمومش کن — {por}",
+            "follow": f"وینور\n{name} جان، یه سر به معامله {code} بزن\n{por}",
+            "push": f"وینور\n{name} جان، {code} هنوز معطلِه\nالان تماس بگیر — {por}",
+            "urgent": f"وینور\n{name} جان، امروز {code} رو ببند\n{por}",
         }
     elif stage in ("بازدید انجام شد",) or "انجام" in stage:
         titles = {
-            "start": "درخواست معامله بده",
-            "follow": "بعد از بازدید پیگیری کن",
+            "start": "وقت معامله‌ست",
+            "follow": "بعد بازدید پیگیری کن",
             "push": "معامله رو شروع کن",
-            "urgent": "فروش رو نهایی کن",
+            "urgent": "فروش نزدیکه",
         }
         bodies = {
-            "start": f"{name}، بازدید {title_land} انجام شده. الان درخواست معامله بده تا {por} مال خودت بشه.",
-            "follow": f"{name}، مشتری {code} رو پیگیری کن و معامله رو ثبت کن.",
-            "push": f"{name}، از بازدید {code} چند وقته گذشته — درخواست معامله رو عقب ننداز.",
-            "urgent": f"{name}، فروش {code} نزدیکه؛ امروز معامله رو ثبت کن و {por} رو بگیر.",
+            "start": f"{name} جان، بازدید {title_land} تموم شده. از چت درخواست معامله بده تا {por} مال خودت بشه.",
+            "follow": f"{name} جان، مشتری {code} رو پیگیر شو و معامله رو ثبت کن.",
+            "push": f"{name} جان، از بازدید {code} یه کم گذشته — معامله رو عقب ننداز.",
+            "urgent": f"{name} جان، فروش {code} نزدیکه؛ امروز معامله رو بزن و {por} رو بگیر.",
         }
         sms_map = {
-            "start": f"وینور\n{name} بعد بازدید {code}\nدرخواست معامله بده\n{por}",
-            "follow": f"وینور\nپیگیری معامله {code}\n{por}",
-            "push": f"وینور\n{name} معامله {code} رو شروع کن\n{por}",
-            "urgent": f"وینور\nفوری: فروش {code}\nمعامله ثبت کن\n{por}",
+            "start": f"وینور\n{name} جان، بازدید {code} تموم شد\nدرخواست معامله بده — {por}",
+            "follow": f"وینور\n{name} جان، {code} رو پیگیر شو\nمعامله ثبت کن — {por}",
+            "push": f"وینور\n{name} جان، معامله {code} رو شروع کن\n{por}",
+            "urgent": f"وینور\n{name} جان، امروز فروش {code}\nمعامله ثبت کن — {por}",
         }
     elif has_visit or stage in ("بازدید تأییدشد", "در انتظار بازدید", "پیگیری بازدید"):
         titles = {
-            "start": "بازدید رو جدی بگیر",
+            "start": "بازدیدت مهمه",
             "follow": "یادآوری بازدید",
             "push": "بازدید رو عقب ننداز",
-            "urgent": "امروز بازدید رو انجام بده",
+            "urgent": "امروز برو بازدید",
         }
         bodies = {
-            "start": f"{name}، برای {title_land} بازدید داری. قبلش فایل رو مرور کن و با مشتری هماهنگ باش.",
-            "follow": f"{name}، نوبت {slot}: وضعیت بازدید {code} رو چک کن و جلو ببر.",
-            "push": f"{name}، بازدید {code} هنوز تمام نشده. امروز پیگیری کن تا به فروش برسه.",
-            "urgent": f"{name}، چند بار گفتیم — بازدید {code} رو امروز ببند؛ بعدش معامله و {por}.",
+            "start": f"{name} جان، برای {title_land} بازدید داری. یه نگاه به فایل بنداز و با مشتری هماهنگ کن.",
+            "follow": f"{name} جان، نوبت {slot}: یه سر به بازدید {code} بزن.",
+            "push": f"{name} جان، بازدید {code} هنوز تموم نشده. امروز پیگیر شو.",
+            "urgent": f"{name} جان، امروز بازدید {code} رو تموم کن؛ بعدش معامله و {por}.",
         }
         sms_map = {
-            "start": f"وینور\n{name} بازدید {code}\nهماهنگ کن\n{por}",
-            "follow": f"وینور\nیادآوری بازدید {code}\n{por}",
-            "push": f"وینور\n{name} بازدید {code} رو امروز انجام بده\n{por}",
-            "urgent": f"وینور\nفوری: بازدید {code}\nامروز تمام کن\n{por}",
+            "start": f"وینور\n{name} جان، بازدید {code} داری\nهماهنگ کن — {por}",
+            "follow": f"وینور\n{name} جان، یادآوری بازدید {code}\n{por}",
+            "push": f"وینور\n{name} جان، امروز بازدید {code} رو برو\n{por}",
+            "urgent": f"وینور\n{name} جان، امروز {code} رو تموم کن\n{por}",
         }
     else:
-        # معرفی / آگهی
         titles = {
-            "start": "فایل رو آگهی کن",
+            "start": "فایل رو بذار بیرون",
             "follow": "یادآوری فروش",
             "push": "هنوز آگهی نزدی؟",
-            "urgent": "امروز حتماً آگهی کن",
+            "urgent": "امروز حتماً بذار",
         }
         bodies = {
             "start": (
-                f"{name}، فایل {title_land} مال توست. تو دیوار آگهی کن و تو اینستا پست/استوری بذار "
-                f"تا بفروشی و {por} بگیری."
+                f"{name} جان، فایل {title_land} مال توست. "
+                f"دیوار و اینستا بذار تا بفروشی و {por} بگیری."
             ),
             "follow": (
-                f"{name}، نوبت {slot}: فایل {code} هنوز فروش نرفته. "
-                f"دیوار یا اینستا رو امروز کار کن — {por}."
+                f"{name} جان، نوبت {slot}: فایل {code} هنوز فروش نرفته. "
+                f"امروز یه آگهی بزن — {por}."
             ),
             "push": (
-                f"{name}، چند بار یادآوری شد. فایل {code} رو همین امروز تو دیوار و اینستا بگذار؛ "
-                f"بدون آگهی فروشی نیست."
+                f"{name} جان، چند بار گفتیم. فایل {code} رو امروز تو دیوار و اینستا بگذار؛ "
+                f"بدون آگهی سخت‌تره."
             ),
             "urgent": (
-                f"{name}، پیگیری جدی: فایل {code} معطل مونده. "
-                f"الان آگهی کن، تماس‌ها رو به بازدید تبدیل کن، {por} مال خودته."
+                f"{name} جان، فایل {code} معطل مونده. "
+                f"الان آگهی کن، تماس‌ها رو بیار بازدید؛ {por} مال خودته."
             ),
         }
         sms_map = {
-            "start": f"وینور\n{name} فایل {code} رو تو دیوار/اینستا آگهی کن\n{por}",
-            "follow": f"وینور\nیادآوری {slot}: فایل {code}\nآگهی کن تا بفروشی\n{por}",
-            "push": f"وینور\n{name} هنوز {code} آگهی نشده\nامروز دیوار+اینستا\n{por}",
-            "urgent": f"وینور\nفوری: فایل {code}\nالان آگهی کن\n{por}",
+            "start": f"وینور\n{name} جان، {code} رو دیوار/اینستا بذار\n{por}",
+            "follow": f"وینور\n{name} جان، نوبت {slot}: {code}\nآگهی کن تا بفروشی — {por}",
+            "push": f"وینور\n{name} جان، هنوز {code} آگهی نشده\nامروز بذار — {por}",
+            "urgent": f"وینور\n{name} جان، الان {code} رو آگهی کن\n{por}",
         }
 
     title = titles.get(phase) or titles["follow"]
@@ -1364,8 +1387,8 @@ def build_nudge_messages(
     sms = sms_map.get(phase) or sms_map["follow"]
     if bool(nudge.get("is_mission")):
         title = f"پیگیری فروش {code}" if code else "پیگیری فروش"
-        body = f"فایل {code} — تا معامله رها نکن. {body}"
-        sms = f"وینور فروش فایل {code}: {sms}"
+        body = f"فایل {code} رو رها نکن. {body}"
+        sms = f"وینور\nفروش {code}\n{sms.split(chr(10), 1)[-1] if chr(10) in sms else sms}"
     return title, body, sms
 
 
@@ -1494,12 +1517,16 @@ def _send_nudge_sms(*, phone: str, message: str, dry_run: bool) -> Dict[str, Any
 
 
 def _active_slot_hour(now: datetime | None = None) -> Optional[int]:
-    """اگر الان داخل یکی از نوبت‌های روزانه هستیم، همان ساعت را برگردان."""
+    """نوبت جاری یا آخرین نوبت معوق امروز (برای lazy tick بدون cron)."""
     now = now or _tehran_now()
     h = int(now.hour)
-    if h in _NUDGE_HOURS:
-        return h
-    return None
+    due: Optional[int] = None
+    for slot in _nudge_hours():
+        if h >= int(slot):
+            due = int(slot)
+        else:
+            break
+    return due
 
 
 def run_sales_coach_nudge_slot(
@@ -1676,10 +1703,11 @@ def maybe_run_evening_sales_coach_nudge(
             "skipped": True,
             "reason": "not_nudge_slot",
             "hour": now.hour,
-            "slots": list(_NUDGE_HOURS),
+            "slots": list(_nudge_hours()),
         }
     if hour is None and force:
-        hour = int(now.hour) if now.hour in _NUDGE_HOURS else 20
+        hours = _nudge_hours()
+        hour = int(now.hour) if now.hour in hours else (hours[-1] if hours else 20)
 
     slot_key = f"{today}:{int(hour)}"
     lock_fd = _try_acquire_run_lock()
@@ -1742,6 +1770,14 @@ def maybe_run_evening_sales_coach_nudge(
         _release_run_lock(lock_fd)
 
 
+def _slot_already_done(slot_hour: int, *, now: datetime | None = None) -> bool:
+    now = now or _tehran_now()
+    slot_key = f"{now.date().isoformat()}:{int(slot_hour)}"
+    state = _load_state()
+    done = state.get("slots_done")
+    return isinstance(done, dict) and bool(done.get(slot_key))
+
+
 def _scheduler_loop(app: Flask) -> None:
     time.sleep(90)
     while True:
@@ -1753,8 +1789,65 @@ def _scheduler_loop(app: Flask) -> None:
         time.sleep(600)  # هر ۱۰ دقیقه چک نوبت
 
 
+def _install_lazy_tick(app: Flask) -> None:
+    """خودکار روی ترافیک وب — بدون cron روی Passenger."""
+    lazy_lock = threading.Lock()
+    last_attempt = {"ts": 0.0}
+    min_interval = 90.0
+
+    @app.before_request
+    def _sales_coach_lazy_tick():  # type: ignore[misc]
+        try:
+            if os.environ.get("VINOR_DISABLE_SALES_COACH_NUDGE", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            ):
+                return None
+            due = _active_slot_hour()
+            if due is None:
+                return None
+            now_ts = time.time()
+            if now_ts - float(last_attempt["ts"]) < min_interval:
+                return None
+            if not lazy_lock.acquire(blocking=False):
+                return None
+            try:
+                if now_ts - float(last_attempt["ts"]) < min_interval:
+                    return None
+                last_attempt["ts"] = now_ts
+                if _slot_already_done(due):
+                    return None
+
+                def _worker() -> None:
+                    try:
+                        with app.app_context():
+                            maybe_run_evening_sales_coach_nudge()
+                    except Exception:
+                        try:
+                            app.logger.exception("Sales coach lazy tick failed")
+                        except Exception:
+                            pass
+
+                threading.Thread(
+                    target=_worker,
+                    daemon=True,
+                    name="vinor-sales-coach-lazy",
+                ).start()
+            finally:
+                lazy_lock.release()
+        except Exception:
+            return None
+        return None
+
+    app.logger.info(
+        "Sales coach auto lazy-tick ON (Tehran slots %s — no cron required)",
+        list(_nudge_hours()),
+    )
+
+
 def schedule_sales_coach_nudge(app: Flask) -> None:
-    """زمان‌بندی پیگیری فروش — پیش‌فرض روشن؛ خاموش با VINOR_SALES_COACH_SCHEDULER=0."""
+    """PC: thread. هاست اشتراکی: lazy tick خودکار (بدون cron)."""
     if os.environ.get("VINOR_DISABLE_SALES_COACH_NUDGE", "").strip().lower() in (
         "1",
         "true",
@@ -1764,10 +1857,7 @@ def schedule_sales_coach_nudge(app: Flask) -> None:
         return
     flag = (os.environ.get("VINOR_SALES_COACH_SCHEDULER") or "1").strip().lower()
     if flag in ("0", "false", "no", "off"):
-        app.logger.info(
-            "Sales coach in-process scheduler off "
-            "(cron: scripts/run_sales_coach_nudge.py every 10min, or set VINOR_SALES_COACH_SCHEDULER=1)"
-        )
+        _install_lazy_tick(app)
         return
     threading.Thread(
         target=_scheduler_loop,
@@ -1777,5 +1867,5 @@ def schedule_sales_coach_nudge(app: Flask) -> None:
     ).start()
     app.logger.info(
         "Sales coach follow-up scheduler started (Tehran hours %s — notif+SMS until sold)",
-        list(_NUDGE_HOURS),
+        list(_nudge_hours()),
     )

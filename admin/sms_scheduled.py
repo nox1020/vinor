@@ -579,12 +579,7 @@ def _scheduler_loop(app: Flask) -> None:
 
 
 def schedule_admin_sms_jobs(app: Flask) -> None:
-    """زمان‌بندی درون‌پردازه بر اساس وقت تهران.
-
-    پیش‌فرض: روشن (مناسب debug/run.py).
-    خاموش‌کردن: VINOR_ADMIN_SMS_SCHEDULER=0 یا VINOR_DISABLE_SMS_SCHEDULER=1
-    (در passenger_wsgi برای پروداکشن به‌صورت پیش‌فرض ۰ است؛ از cron استفاده کنید).
-    """
+    """PC: thread. هاست اشتراکی: lazy tick خودکار روی درخواست (بدون cron)."""
     global _scheduler_started
     if _scheduler_started:
         return
@@ -593,8 +588,22 @@ def schedule_admin_sms_jobs(app: Flask) -> None:
         return
     env_raw = os.environ.get("VINOR_ADMIN_SMS_SCHEDULER", "").strip().lower()
     if env_raw in ("0", "false", "no", "off"):
-        app.logger.info(
-            "Admin SMS in-process scheduler off (use scripts/run_admin_sms_scheduled_jobs.py via cron)"
+        from app.utils.lazy_scheduler import install_lazy_tick
+
+        _scheduler_started = True
+
+        def _should() -> bool:
+            return True
+
+        def _run() -> None:
+            process_due_scheduled_jobs(app)
+
+        install_lazy_tick(
+            app,
+            name="admin-sms",
+            should_run=_should,
+            run=_run,
+            min_interval_sec=30,
         )
         return
     # env خالی / 1 / debug همگی روشن

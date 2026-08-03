@@ -139,4 +139,30 @@ class RuleExecutionPlanner(ExecutionPlanner):
         ):
             return set()
 
-        return selected
+        return self._filter_enabled(selected)
+
+    def _filter_enabled(self, selected: set[str]) -> set[str]:
+        """حذف ایجنت‌هایی که از پنل/env خاموش شده‌اند."""
+        checkers = {
+            AGENT_PROPERTY_SEARCH: ("app.agents.config", "property_search_enabled"),
+            AGENT_PROPERTY_ANALYSIS: ("app.agents.analysis.config", "analysis_enabled"),
+            AGENT_CUSTOMER_MEMORY: ("app.agents.customer_memory.config", "customer_memory_enabled"),
+            AGENT_RECOMMENDATION: ("app.agents.recommendation.config", "recommendation_enabled"),
+            AGENT_NEGOTIATION: ("app.agents.negotiation.config", "negotiation_enabled"),
+            AGENT_FOLLOW_UP: ("app.agents.customer_success.config", "customer_success_enabled"),
+        }
+        out: set[str] = set()
+        for aid in selected:
+            mod_attr = checkers.get(aid)
+            if not mod_attr:
+                out.add(aid)
+                continue
+            try:
+                import importlib
+
+                mod = importlib.import_module(mod_attr[0])
+                if bool(getattr(mod, mod_attr[1])()):
+                    out.add(aid)
+            except Exception:
+                out.add(aid)
+        return out

@@ -30,7 +30,12 @@ class PropertyAnalysisAgent(Agent):
 
     @property
     def active(self) -> bool:
-        return True
+        try:
+            from app.agents.analysis.config import analysis_enabled
+
+            return bool(analysis_enabled())
+        except Exception:
+            return True
 
     def run(self, ctx: AgentContext) -> AgentResult:
         t0 = time.perf_counter()

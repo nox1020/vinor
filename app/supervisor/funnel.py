@@ -85,19 +85,32 @@ def _parse_iso(ts: str) -> datetime | None:
 
 
 def _funnel_dir() -> str:
+    """مسیر ai_funnel — همیشه زیر instance/data (نه cwd؛ روی cron/Passenger حیاتی است)."""
     try:
-        from flask import current_app
+        from app.utils.storage import data_dir
 
-        root = current_app.instance_path
+        path = os.path.join(data_dir(), "ai_funnel")
     except Exception:
-        root = os.path.join(os.getcwd(), "instance")
-    path = os.path.join(root, "data", "ai_funnel")
+        try:
+            from flask import current_app
+
+            path = os.path.join(current_app.instance_path, "data", "ai_funnel")
+        except Exception:
+            from app.utils.storage import _standalone_instance_path
+
+            path = os.path.join(_standalone_instance_path(), "data", "ai_funnel")
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def _safe_key(user_key: str) -> str:
     digits = re.sub(r"\D+", "", str(user_key or ""))
+    if digits.startswith("0098") and len(digits) >= 14:
+        digits = "0" + digits[4:]
+    elif digits.startswith("98") and len(digits) >= 12 and digits[2:].startswith("9"):
+        digits = "0" + digits[2:]
+    elif len(digits) == 10 and digits.startswith("9"):
+        digits = "0" + digits
     if len(digits) >= 11:
         return digits[-11:]
     if len(digits) >= 8:
@@ -277,20 +290,20 @@ def _chat_last_activity(user_key: str, audience: str) -> datetime | None:
 
 def _hint_for_stage(stage: str, *, land_code: str = "", audience: str = "") -> str:
     code = (land_code or "").strip()
-    bit = f" فایل {code}" if code else ""
+    bit = f" {code}" if code else ""
     if stage == STAGE_DONE:
-        return "مسیر فروش تمام شده؛ اگر فایل جدید خواست کمک کن."
+        return "فروش تموم شده؛ اگه فایل جدید خواست کمک کن."
     if stage == STAGE_DEAL:
-        return f"مرحله معامله{bit} — پیگیری بستن معامله از چت."
+        return f"معامله{bit} بازه — از چت ببندش."
     if stage == STAGE_VISIT:
-        return f"مرحله بازدید{bit} — هماهنگی یا ثبت انجام بازدید."
+        return f"بازدید{bit} مونده — هماهنگ کن یا ثبت انجام بزن."
     if stage == STAGE_LAND:
-        return f"فایل انتخاب شده{bit} — هل به بازدید یا آگهی."
+        return f"فایل{bit} دیده شده — هل به بازدید یا آگهی."
     if stage == STAGE_SEARCH:
         if (audience or "") == "partner":
-            return "جستجو/آگهی — بهترین فایل را پیشنهاد بده و به بازدید برسان."
-        return "معیار خرید را کامل کن و بهترین فایل سیستم را پیشنهاد بده."
-    return "کاربر راکد است — با یک قدم فروش دوباره فعالش کن."
+            return "جستجو/آگهی — بهترین فایل رو بده و ببر بازدید."
+        return "معیار رو کامل کن و بهترین فایل سیستم رو پیشنهاد بده."
+    return "راکد است — با یک قدم فروش دوباره فعالش کن."
 
 
 def assess_funnel(
@@ -360,8 +373,14 @@ def assess_funnel(
     if stalled:
         progress = max(0.05, progress - 0.1)
 
-    # سیگنال به رسد: راکد + قابل تماس (نه guest ناشناس بدون شماره)
-    can_reach = (not uk.startswith("guest_")) and bool(_safe_key(uk))
+    # سیگنال به رسد: راکد + موبایل ایران معتبر (نه guest / شناسهٔ جعلی)
+    try:
+        from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
+
+        phone = normalize_iran_mobile(uk) or ""
+        can_reach = is_valid_iran_mobile(phone)
+    except Exception:
+        can_reach = (not uk.startswith("guest_")) and bool(_safe_key(uk))
     signal = bool(stalled and can_reach and stage != STAGE_DONE)
 
     hint = _hint_for_stage(stage if not stalled else STAGE_IDLE, land_code=land, audience=aud)
@@ -466,11 +485,12 @@ def clear_reach_signal(user_key: str) -> None:
 
 
 def _discover_public_chat_keys(*, limit: int = 400) -> list[str]:
-    """کلیدهای چت عمومی/مهمان با شماره — برای کشف خریدارانی که هنوز snapshot ندارند."""
+    """کلیدهای چت عمومی با موبایل ایران معتبر — برای کشف خریدارانی که هنوز snapshot ندارند."""
     out: list[str] = []
     seen: set[str] = set()
     try:
         from app.ai.paths import ai_data_file
+        from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
 
         root = os.path.join(ai_data_file("ai_chats"), "public")
     except Exception:
@@ -487,10 +507,9 @@ def _discover_public_chat_keys(*, limit: int = 400) -> list[str]:
         stem = name[:-5]
         if stem.startswith("guest_"):
             continue
-        digits = re.sub(r"\D+", "", stem)
-        if len(digits) < 10:
+        phone = normalize_iran_mobile(stem) or ""
+        if not is_valid_iran_mobile(phone):
             continue
-        phone = digits[-11:] if len(digits) >= 11 else digits
         if phone in seen:
             continue
         seen.add(phone)

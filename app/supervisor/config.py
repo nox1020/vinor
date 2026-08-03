@@ -4,12 +4,9 @@ import os
 
 
 def supervisor_enabled() -> bool:
-    return (os.environ.get("VINOR_SUPERVISOR_ENABLED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_SUPERVISOR_ENABLED", default=True)
 
 
 def supervisor_default_context_budget() -> int:
@@ -21,12 +18,9 @@ def supervisor_default_context_budget() -> int:
 
 def funnel_watch_enabled() -> bool:
     """ناظر قیف فروش — پیش‌فرض ON."""
-    return (os.environ.get("VINOR_FUNNEL_WATCH_ENABLED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_FUNNEL_WATCH_ENABLED", default=True)
 
 
 def funnel_stall_hours() -> float:

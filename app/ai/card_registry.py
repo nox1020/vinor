@@ -89,7 +89,7 @@ CARD_SPECS: dict[str, CardSpec] = {
     "confirm_deal": _confirm_spec("confirm_deal", "تأیید معامله"),
     "confirm_release": _confirm_spec("confirm_release", "تأیید بستن معامله"),
     "confirm_partner_application": _confirm_spec(
-        "confirm_partner_application", "تأیید ثبت درخواست همکاری"
+        "confirm_partner_application", "تأیید همکاری بازاریاب"
     ),
     "confirm_log_call": _confirm_spec("confirm_log_call", "تأیید ثبت تماس"),
     "confirm_followup": _confirm_spec("confirm_followup", "تأیید ثبت پیگیری"),
@@ -324,9 +324,7 @@ def result_lines_from_confirm(
     visit_id = str(data.get("visit_id") or "").strip()
     if visit_id:
         lines.append(f"شماره پیگیری بازدید: {visit_id}")
-    land = str(data.get("land_code") or "").strip()
-    if land:
-        lines.append(f"فایل: {land}")
+    # کد فایل در خط متن نمی‌آید — سمت کاربر با کارت فایل نشان داده می‌شود
     tx = str(data.get("tx_mode") or "").strip()
     if tx:
         lines.append(f"وضعیت معامله: {tx}")

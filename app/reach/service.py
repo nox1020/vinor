@@ -7,27 +7,12 @@ import threading
 from datetime import datetime
 from typing import Any
 
-from flask import current_app
-
-from app.reach.config import REACH_HOURS, reach_enabled, reach_notif_enabled, reach_sms_enabled
-
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    ZoneInfo = None  # type: ignore
+from app.reach.config import reach_enabled, reach_hours, reach_notif_enabled, reach_sms_enabled
+from app.utils.dates import tehran_now as _tehran_now
 
 _LOCK = threading.Lock()
 _STATE_NAME = "reach_nudge_state.json"
 _LOCK_NAME = "reach_nudge.run.lock"
-
-
-def _tehran_now() -> datetime:
-    if ZoneInfo is not None:
-        try:
-            return datetime.now(ZoneInfo("Asia/Tehran"))
-        except Exception:
-            pass
-    return datetime.now()
 
 
 def _state_path() -> str:
@@ -36,7 +21,9 @@ def _state_path() -> str:
 
         return os.path.join(data_dir(), _STATE_NAME)
     except Exception:
-        return os.path.join(os.getcwd(), "instance", "data", _STATE_NAME)
+        from app.utils.storage import _standalone_instance_path
+
+        return os.path.join(_standalone_instance_path(), "data", _STATE_NAME)
 
 
 def _load_state() -> dict[str, Any]:
@@ -108,51 +95,54 @@ def _is_partner_phone(phone: str) -> bool:
 
 
 def _message_for_signal(snap: Any) -> tuple[str, str, str]:
-    """(title, notif_body, sms_body) — هدف واضح + دعوت ورود به اپ وینور."""
+    """(title, notif_body, sms_body) — لحن خودمونی کوتاه، شبیه پیامک بلوباک."""
     stage = str(getattr(snap, "stage", "") or "")
     land = str(getattr(snap, "land_code", "") or "").strip()
     land_bit = f" {land}" if land else ""
-    cta = "وارد اپلیکیشن وینور شو و از چت ادامه بده."
 
     if stage == "deal":
-        title = "معامله رو نهایی کن"
+        title = "یه قدم مونده تموم شه"
         body = (
-            f"معامله فایل{land_bit} هنوز بازه — الان بهترین زمان برای بستنشه. "
-            f"{cta}"
+            f"معامله{land_bit} هنوز بازه. "
+            f"بیا تو اپ وینور، از چت جمعش کن."
         )
         sms = (
-            f"وینور\nمعامله{land_bit} هنوز بازه\n"
-            f"وارد اپ وینور شو و از چت نهایی‌اش کن"
+            f"وینور\n"
+            f"معامله‌ت{land_bit} هنوز بازه\n"
+            f"بیا تو اپ، از چت تمومش کن"
         )
     elif stage == "visit":
-        title = "بازدیدت منتظر اقدامه"
+        title = "بازدیدت مونده"
         body = (
-            f"بازدید فایل{land_bit} هنوز کامل نشده. "
-            f"یک قدم کوچیک کافیه تا پرونده جلو بره. {cta}"
+            f"بازدید{land_bit} هنوز تموم نشده. "
+            f"بیا تو اپ وینور، از چت بگو چیکار کنیم."
         )
         sms = (
-            f"وینور\nبازدید{land_bit} منتظرته\n"
-            f"وارد اپ وینور شو و از چت جلو ببر"
+            f"وینور\n"
+            f"بازدیدت{land_bit} هنوز تموم نشده\n"
+            f"بیا تو اپ، از چت جلو ببر"
         )
     elif stage == "land":
-        title = "این فایل هنوز منتظرته"
+        title = "این فایل رو دیدی؟"
         body = (
-            f"فایل{land_bit} رو دیدی ولی تصمیم نگرفتی. "
-            f"اگر مناسبه، بازدید رو هماهنگ کن. {cta}"
+            f"فایل{land_bit} رو دیدی ولی هنوز تصمیمی نگرفتی. "
+            f"اگه خوبه، بیا تو اپ وینور بگو بریم بازدید."
         )
         sms = (
-            f"وینور\nفایل{land_bit} منتظر تصمیمت هست\n"
-            f"وارد اپ وینور شو و از چت بگو بریم جلو"
+            f"وینور\n"
+            f"فایل{land_bit} رو دیدی؟\n"
+            f"بیا تو اپ بگو بریم جلو یا نه"
         )
     else:
-        title = "هنوز بهترین فایل رو ندیدی"
+        title = "کمکت کنیم پیدا کنی"
         body = (
-            "معیارت نصفه مونده؛ وینور منتظره تا بهترین گزینهٔ گرمابسرد رو برات جور کنه. "
-            f"{cta}"
+            "معیارت هنوز نصفه است. "
+            "بیا تو اپ وینور، از چت بگو چی می‌خوای تا برات جور کنیم."
         )
         sms = (
-            "وینور\nهنوز فایل مناسبت نهایی نشده\n"
-            "وارد اپ وینور شو و از چت معیارت رو بگو"
+            "وینور\n"
+            "هنوز فایل مناسبت پیدا نشده\n"
+            "بیا تو اپ، از چت بگو چی می‌خوای"
         )
     return title, body, sms
 
@@ -189,8 +179,14 @@ def _send_one(
 
             add_notification(phone, title, body, ntype="reach", action_url="/ai")
             item["notif"] = True
-        except Exception:
-            pass
+        except Exception as exc:
+            item["notif_error"] = str(exc)[:200]
+            try:
+                from flask import current_app
+
+                current_app.logger.warning("Reach notif failed phone=%s: %s", phone, exc)
+            except Exception:
+                pass
     if reach_sms_enabled():
         try:
             from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile, send_sms_direct
@@ -199,9 +195,31 @@ def _send_one(
             if is_valid_iran_mobile(ph):
                 send_sms_direct(ph, _clip_sms(sms_body or body))
                 item["sms"] = True
-        except Exception:
-            pass
+            else:
+                item["sms_error"] = "invalid_mobile"
+        except Exception as exc:
+            item["sms_error"] = str(exc)[:200]
+            try:
+                from flask import current_app
+
+                current_app.logger.warning("Reach SMS failed phone=%s: %s", phone, exc)
+            except Exception:
+                pass
     return item
+
+
+def _normalize_reach_phone(raw: str) -> str:
+    from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
+
+    ph = normalize_iran_mobile(raw) or ""
+    return ph if is_valid_iran_mobile(ph) else ""
+
+
+def _slot_already_done(slot_hour: int, *, now: datetime | None = None) -> bool:
+    now = now or _tehran_now()
+    slot_key = f"{now.strftime('%Y-%m-%d')}:{int(slot_hour)}"
+    slots = _load_state().get("slots")
+    return isinstance(slots, dict) and bool(slots.get(slot_key))
 
 
 def run_buyer_reach_slot(
@@ -233,8 +251,8 @@ def run_buyer_reach_slot(
     results: list[dict[str, Any]] = []
 
     for snap in signals:
-        phone = str(snap.user_key or "").strip()
-        if not phone or phone.startswith("guest_") or phone.startswith("admin_"):
+        phone = _normalize_reach_phone(str(snap.user_key or "").strip())
+        if not phone:
             skipped += 1
             continue
         # همکار تأییدشده را sales_coach پوشش می‌دهد
@@ -311,11 +329,19 @@ def run_buyer_reach_slot(
 
 
 def _active_slot_hour(now: datetime | None = None) -> int | None:
+    """نوبت جاری یا آخرین نوبت معوق امروز (تا قبل از نوبت بعدی).
+
+    روی هاست بدون cron، هر ترافیک وب بعد از نوبت، همان نوبت را جمع می‌کند.
+    """
     now = now or _tehran_now()
     h = int(now.hour)
-    if h in REACH_HOURS:
-        return h
-    return None
+    due: int | None = None
+    for slot in reach_hours():
+        if h >= int(slot):
+            due = int(slot)
+        else:
+            break
+    return due
 
 
 def maybe_run_reach_followup(
@@ -324,10 +350,11 @@ def maybe_run_reach_followup(
     dry_run: bool = False,
     slot_hour: int | None = None,
 ) -> dict[str, Any]:
-    """پیگیری خریدار از سیگنال ناظر — نوبت‌های ۱۰/۱۴/۲۰ تهران (برای cron)."""
+    """پیگیری خریدار از سیگنال ناظر — نوبت‌های قابل‌تنظیم تهران (خودکار روی وب/PC)."""
     if not reach_enabled():
         return {"skipped": True, "reason": "disabled"}
 
+    hours = reach_hours()
     now = _tehran_now()
     hour = int(slot_hour) if slot_hour is not None else _active_slot_hour(now)
     if hour is None and not force:
@@ -335,15 +362,33 @@ def maybe_run_reach_followup(
             "skipped": True,
             "reason": "not_reach_slot",
             "hour": now.hour,
-            "slots": list(REACH_HOURS),
+            "slots": list(hours),
+            "tehran": now.isoformat(),
         }
     if hour is None and force:
-        hour = int(now.hour) if now.hour in REACH_HOURS else REACH_HOURS[0]
+        hour = int(now.hour) if now.hour in hours else (hours[0] if hours else 10)
 
-    from app.supervisor.funnel import refresh_funnels_for_reach
+    # قبل از refresh سنگین — اگر نوبت انجام شده، زود خارج شو (مهم برای lazy tick هاست)
+    if not dry_run and not force and _slot_already_done(hour, now=now):
+        return {"ok": True, "skipped": "slot_done", "slot": hour}
 
-    refresh_funnels_for_reach()
-    return run_buyer_reach_slot(slot_hour=int(hour), dry_run=dry_run)
+    locked = False
+    if not dry_run:
+        if not _acquire_lock():
+            return {"skipped": True, "reason": "locked", "slot": hour}
+        locked = True
+    try:
+        from app.supervisor.funnel import refresh_funnels_for_reach
+
+        refreshed = refresh_funnels_for_reach()
+        result = run_buyer_reach_slot(slot_hour=int(hour), dry_run=dry_run)
+        if isinstance(result, dict):
+            result["refreshed"] = refreshed
+            result["tehran"] = now.isoformat()
+        return result
+    finally:
+        if locked:
+            _release_lock()
 
 
 def run_reach_slot(*, slot_hour: int | None = None, dry_run: bool = False) -> dict[str, Any]:
@@ -351,13 +396,16 @@ def run_reach_slot(*, slot_hour: int | None = None, dry_run: bool = False) -> di
     if not reach_enabled():
         return {"ok": False, "reason": "disabled"}
     now = _tehran_now()
-    hour = int(slot_hour if slot_hour is not None else now.hour)
-    if hour not in REACH_HOURS and slot_hour is None:
-        return {"ok": True, "skipped": "off_hours", "hour": hour}
+    hour = int(slot_hour) if slot_hour is not None else _active_slot_hour(now)
+    if hour is None:
+        return {"ok": True, "skipped": "off_hours", "hour": int(now.hour)}
 
     if not _acquire_lock() and not dry_run:
         return {"ok": False, "reason": "locked"}
     try:
+        from app.supervisor.funnel import refresh_funnels_for_reach
+
+        refresh_funnels_for_reach()
         buyer = run_buyer_reach_slot(slot_hour=hour, dry_run=dry_run)
         partner: dict[str, Any] = {}
         try:

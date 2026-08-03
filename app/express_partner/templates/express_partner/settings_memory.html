@@ -5,7 +5,10 @@
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
 
 {% set _report = report|default({}) %}
-{% set _summary = _report.get('summary') or '' %}
+{% set _summary = (_report.get('summary') or '')|trim %}
+{% set _has_memory = _report.get('has_memory') if _report.get('has_memory') is not none else (_summary|length > 0) %}
+{% set _source = (_report.get('source') or '')|trim %}
+{% set _empty_text = 'هنوز خلاصه‌ای نیست — با چت یا اقدام بعدی پر می‌شود.' %}
 
 <style>
   html:has(#partnerMemoryPage),
@@ -38,6 +41,7 @@
     --ps-line: rgba(255, 255, 255, 0.1);
     --ps-text: #fff;
     --ps-muted: rgba(255, 255, 255, 0.55);
+    --ps-danger: #ff6b7a;
     background: var(--ps-bg);
     color: var(--ps-text);
   }
@@ -47,14 +51,22 @@
     padding: 0.5rem 1.1rem 2.25rem;
   }
   #partnerMemoryPage .ps-intro {
-    margin: 0 0 1rem;
+    margin: 0 0 0.85rem;
     font-size: 0.9rem;
-    line-height: 1.6;
+    line-height: 1.65;
     color: var(--ps-muted);
     text-align: right;
   }
-  #partnerMemoryPage .ps-live {
+  #partnerMemoryPage .ps-meta-row {
     margin: 0 0 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  #partnerMemoryPage .ps-live {
+    margin: 0;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -68,6 +80,15 @@
     background: #22c55e;
     box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
   }
+  #partnerMemoryPage .ps-live-dot.is-stale {
+    background: rgba(255, 255, 255, 0.35);
+    box-shadow: none;
+  }
+  #partnerMemoryPage .ps-source {
+    margin: 0;
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.38);
+  }
   #partnerMemoryPage .ps-block-label {
     margin: 0 0.15rem 0.55rem;
     font-size: 0.78rem;
@@ -76,7 +97,7 @@
     text-align: right;
   }
   #partnerMemoryPage .ps-summary {
-    margin: 0 0 1.5rem;
+    margin: 0 0 1.15rem;
     padding: 1.05rem 1.1rem;
     border-radius: 1.15rem;
     background: var(--ps-surface);
@@ -86,12 +107,77 @@
     color: #fff;
     text-align: right;
     white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #partnerMemoryPage .ps-summary.is-empty [data-memory-summary-text] {
+    color: rgba(255, 255, 255, 0.45);
   }
   #partnerMemoryPage .ps-summary-hint {
     margin: 0.65rem 0 0;
     font-size: 0.72rem;
     line-height: 1.45;
     color: rgba(255, 255, 255, 0.4);
+  }
+  #partnerMemoryPage .ps-actions {
+    border-radius: 1.15rem;
+    border: 1px solid var(--ps-line);
+    background: var(--ps-surface);
+    overflow: hidden;
+  }
+  #partnerMemoryPage .ps-action {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    width: 100%;
+    padding: 0.95rem 1.05rem;
+    border: 0;
+    background: transparent;
+    color: var(--ps-danger);
+    text-align: right;
+    font: inherit;
+    font-size: 0.925rem;
+    font-weight: 500;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #partnerMemoryPage .ps-action:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  #partnerMemoryPage .ps-action:hover:not(:disabled),
+  #partnerMemoryPage .ps-action:active:not(:disabled) {
+    background: rgba(255, 107, 122, 0.08);
+  }
+  #partnerMemoryPage .ps-action i {
+    width: 1.2rem;
+    text-align: center;
+    opacity: 0.9;
+  }
+  #partnerMemoryPage .ps-action__grow { flex: 1; min-width: 0; }
+  #partnerMemoryPage .ps-status {
+    margin: 0.75rem 0.15rem 0;
+    min-height: 1.1rem;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: right;
+  }
+  #partnerMemoryPage .ps-status.is-error { color: var(--ps-danger); }
+  #partnerMemoryPage .ps-land-wrap {
+    margin: 0 0 1.15rem;
+  }
+  #partnerMemoryPage .ps-land-wrap[hidden] { display: none !important; }
+  #partnerMemoryPage .ps-land-wrap .ai-land-cards {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 0.15rem;
+  }
+  #partnerMemoryPage .ps-land-wrap .ai-land-cards::-webkit-scrollbar { display: none; }
+  #partnerMemoryPage .ps-land-wrap .ai-land-cards__slot {
+    flex: 0 0 min(88%, 18rem);
+    max-width: 18rem;
   }
 </style>
 
@@ -102,21 +188,60 @@
 <main id="partnerMemoryPage"
       class="partner-page-scroll-pad min-h-[100dvh] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]"
       data-report-url="{{ url_for('express_partner.settings_data') }}"
-      data-updated-at="{{ _report.get('updated_at') or '' }}">
+      data-clear-url="{{ url_for('express_partner.settings_memory_clear') }}"
+      data-updated-at="{{ _report.get('updated_at') or '' }}"
+      data-has-memory="{{ '1' if _has_memory else '0' }}"
+      data-source="{{ _source }}"
+      data-empty-text="{{ _empty_text }}">
   <div class="ps-shell">
     <p class="ps-intro">
-      خلاصهٔ حافظه با مدل نوشته می‌شود (مثل Memory در ChatGPT) و با هر چت یا اقدام از نو ادغام می‌شود.
+      وینور خلاصهٔ پایدار از گفتگو و کارهای شما می‌سازد تا در چت‌های بعدی همان زمینه را بداند.
+      این خلاصه با چت یا اقدام‌های جدید به‌روز می‌شود.
     </p>
-    <p class="ps-live" aria-live="polite">
-      <span class="ps-live-dot" aria-hidden="true"></span>
-      <span data-report-live>به‌روز</span>
-    </p>
+    <div class="ps-meta-row">
+      <p class="ps-live" aria-live="polite">
+        <span class="ps-live-dot" data-live-dot aria-hidden="true"></span>
+        <span data-report-live>به‌روز</span>
+      </p>
+      <p class="ps-source" data-memory-source>
+        {% if _source == 'llm' %}نوشته‌شده با مدل{% elif _has_memory %}خلاصهٔ سریع{% else %}—{% endif %}
+      </p>
+    </div>
 
     <h2 class="ps-block-label">خلاصه حافظه</h2>
-    <div class="ps-summary" data-memory-summary>
-      <span data-memory-summary-text>{% if _summary %}{{ _summary }}{% else %}هنوز خلاصه‌ای نیست — با چت یا اقدام بعدی پر می‌شود.{% endif %}</span>
-      <p class="ps-summary-hint">متن را مدل می‌نویسد — آمار خام کپی نمی‌شود.</p>
+    <div class="ps-summary{% if not _has_memory %} is-empty{% endif %}" data-memory-summary>
+      <span data-memory-summary-text>{% if _has_memory %}{{ _summary }}{% else %}{{ _empty_text }}{% endif %}</span>
+      <p class="ps-summary-hint" data-memory-hint>
+        {% if _source == 'llm' %}
+          متن را مدل می‌نویسد — آمار خام کپی نمی‌شود.
+        {% elif _has_memory %}
+          خلاصهٔ موقت تا بازنویسی بعدی با مدل.
+        {% else %}
+          بعد از چت یا ثبت بازدید/معامله اینجا ظاهر می‌شود.
+        {% endif %}
+      </p>
     </div>
+
+    {% set _land_cards = _report.get('land_cards') or [] %}
+    <div class="ps-land-wrap" data-memory-lands {% if not _land_cards %}hidden{% endif %}>
+      <h2 class="ps-block-label">فایل‌های مرتبط</h2>
+      <div class="ai-land-cards no-scrollbar" role="list" aria-label="فایل‌های حافظه" data-memory-lands-list>
+        {% for lc in _land_cards %}
+        {{ lc.html|safe }}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="ps-actions">
+      <button type="button"
+              class="ps-action"
+              data-memory-clear
+              {% if not _has_memory %}disabled{% endif %}>
+        <i class="fas fa-trash-can" aria-hidden="true"></i>
+        <span class="ps-action__grow">پاک‌کردن حافظه</span>
+      </button>
+    </div>
+    <p class="ps-status" data-memory-status role="status" aria-live="polite"></p>
   </div>
 </main>
 
@@ -130,38 +255,129 @@
   var page = document.getElementById('partnerMemoryPage');
   if (!page) return;
 
-  function applyReport(data) {
-    if (!data || !data.ok) return;
-    page.setAttribute('data-updated-at', data.updated_at || '');
-    if (data.summary) {
-      var summaryText = page.querySelector('[data-memory-summary-text]');
-      if (summaryText) summaryText.textContent = data.summary;
-    }
-    var live = page.querySelector('[data-report-live]');
-    if (live) {
-      try {
-        var d = data.updated_at ? new Date(data.updated_at) : new Date();
-        live.textContent =
-          'به‌روز ' + d.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
-      } catch (_) {
-        live.textContent = 'به‌روز';
+  var EMPTY = page.getAttribute('data-empty-text') || 'هنوز خلاصه‌ای نیست — با چت یا اقدام بعدی پر می‌شود.';
+  var lastSummary = '';
+  var lastUpdated = page.getAttribute('data-updated-at') || '';
+  var timer = null;
+  var inFlight = false;
+  var abortCtrl = null;
+
+  function setStatus(msg, isError) {
+    var el = page.querySelector('[data-memory-status]');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.toggle('is-error', !!isError);
+  }
+
+  function formatUpdatedAt(iso) {
+    if (!iso) return 'به‌روز';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return 'به‌روز';
+      var diffSec = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+      if (diffSec < 45) return 'همین الان';
+      if (diffSec < 3600) {
+        var mins = Math.max(1, Math.round(diffSec / 60));
+        return mins + ' دقیقه پیش';
       }
+      if (diffSec < 86400) {
+        var hrs = Math.max(1, Math.round(diffSec / 3600));
+        return hrs + ' ساعت پیش';
+      }
+      return (
+        'به‌روز ' +
+        d.toLocaleDateString('fa-IR', { month: 'short', day: 'numeric' }) +
+        ' ' +
+        d.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
+      );
+    } catch (_) {
+      return 'به‌روز';
     }
   }
 
-  var url = page.getAttribute('data-report-url') || '';
-  if (!url) return;
-  var timer = null;
-  var inFlight = false;
+  function applyReport(data) {
+    if (!data || !data.ok) return;
+    var summary = (data.summary || '').trim();
+    var hasMemory = data.has_memory != null ? !!data.has_memory : !!summary;
+    var source = (data.source || '').trim();
+    var updatedAt = data.updated_at || '';
+
+    page.setAttribute('data-updated-at', updatedAt);
+    page.setAttribute('data-has-memory', hasMemory ? '1' : '0');
+    page.setAttribute('data-source', source);
+
+    var box = page.querySelector('[data-memory-summary]');
+    var summaryText = page.querySelector('[data-memory-summary-text]');
+    var hint = page.querySelector('[data-memory-hint]');
+    var sourceEl = page.querySelector('[data-memory-source]');
+    var clearBtn = page.querySelector('[data-memory-clear]');
+    var live = page.querySelector('[data-report-live]');
+    var dot = page.querySelector('[data-live-dot]');
+
+    if (summaryText && summary !== lastSummary) {
+      summaryText.textContent = hasMemory ? summary : EMPTY;
+      lastSummary = summary;
+    } else if (summaryText && !hasMemory) {
+      summaryText.textContent = EMPTY;
+      lastSummary = '';
+    }
+    if (box) box.classList.toggle('is-empty', !hasMemory);
+    if (clearBtn) clearBtn.disabled = !hasMemory;
+    if (sourceEl) {
+      sourceEl.textContent = source === 'llm' ? 'نوشته‌شده با مدل' : hasMemory ? 'خلاصهٔ سریع' : '—';
+    }
+    if (hint) {
+      if (source === 'llm') {
+        hint.textContent = 'متن را مدل می‌نویسد — آمار خام کپی نمی‌شود.';
+      } else if (hasMemory) {
+        hint.textContent = 'خلاصهٔ موقت تا بازنویسی بعدی با مدل.';
+      } else {
+        hint.textContent = 'بعد از چت یا ثبت بازدید/معامله اینجا ظاهر می‌شود.';
+      }
+    }
+    if (live) live.textContent = formatUpdatedAt(updatedAt);
+    if (dot) {
+      var ageMs = 0;
+      try {
+        ageMs = updatedAt ? Date.now() - new Date(updatedAt).getTime() : 0;
+      } catch (_) {
+        ageMs = 0;
+      }
+      dot.classList.toggle('is-stale', !hasMemory || ageMs > 36e5);
+    }
+    var landsWrap = page.querySelector('[data-memory-lands]');
+    var landsList = page.querySelector('[data-memory-lands-list]');
+    if (landsWrap && landsList) {
+      var cards = Array.isArray(data.land_cards) ? data.land_cards : [];
+      var html = cards
+        .map(function (c) {
+          return (c && c.html) || '';
+        })
+        .filter(Boolean)
+        .join('');
+      landsList.innerHTML = html;
+      if (html) landsWrap.removeAttribute('hidden');
+      else landsWrap.setAttribute('hidden', '');
+    }
+    lastUpdated = updatedAt;
+  }
 
   function poll() {
     if (document.hidden || inFlight) return;
+    var url = page.getAttribute('data-report-url') || '';
+    if (!url) return;
     inFlight = true;
+    if (abortCtrl) {
+      try { abortCtrl.abort(); } catch (_) {}
+    }
+    abortCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     fetch(url, {
       credentials: 'same-origin',
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      signal: abortCtrl ? abortCtrl.signal : undefined,
     })
       .then(function (r) {
+        if (!r.ok) throw new Error('bad_status');
         return r.json();
       })
       .then(applyReport)
@@ -171,7 +387,67 @@
       });
   }
 
-  timer = setInterval(poll, 8000);
+  function clearMemory() {
+    var btn = page.querySelector('[data-memory-clear]');
+    if (!btn || btn.disabled) return;
+    if (!window.confirm('حافظهٔ ذخیره‌شده پاک شود؟ این کار قابل بازگشت نیست.')) return;
+    var url = page.getAttribute('data-clear-url') || '';
+    if (!url) return;
+    btn.disabled = true;
+    setStatus('در حال پاک‌کردن…', false);
+    var headers =
+      typeof window.vinorCsrfFetchHeaders === 'function'
+        ? window.vinorCsrfFetchHeaders({ 'Content-Type': 'application/json' })
+        : {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          };
+    fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: headers,
+      body: '{}',
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j || {} };
+        });
+      })
+      .then(function (res) {
+        if (!res.ok || !res.j.ok) {
+          throw new Error((res.j && res.j.error) || 'clear_failed');
+        }
+        applyReport(res.j);
+        setStatus(res.j.message || 'حافظه پاک شد.', false);
+      })
+      .catch(function () {
+        setStatus('پاک‌کردن حافظه ممکن نشد. دوباره تلاش کنید.', true);
+        btn.disabled = page.getAttribute('data-has-memory') !== '1';
+      });
+  }
+
+  var clearBtn = page.querySelector('[data-memory-clear]');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      clearMemory();
+    });
+  }
+
+  // seed UI from server-rendered state
+  lastSummary = page.getAttribute('data-has-memory') === '1'
+    ? ((page.querySelector('[data-memory-summary-text]') || {}).textContent || '').trim()
+    : '';
+  applyReport({
+    ok: true,
+    summary: lastSummary,
+    has_memory: page.getAttribute('data-has-memory') === '1',
+    source: page.getAttribute('data-source') || '',
+    updated_at: lastUpdated,
+  });
+
+  timer = setInterval(poll, 12000);
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) poll();
   });
@@ -179,10 +455,13 @@
     'vinor:express-page-swap',
     function () {
       if (timer) clearInterval(timer);
+      if (abortCtrl) {
+        try { abortCtrl.abort(); } catch (_) {}
+      }
     },
     { once: true }
   );
-  setTimeout(poll, 800);
+  setTimeout(poll, 600);
 })();
 </script>
 {% endblock %}

@@ -4,12 +4,9 @@ import os
 
 
 def analysis_enabled() -> bool:
-    return (os.environ.get("VINOR_ANALYSIS_ENABLED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_ANALYSIS_ENABLED", default=True)
 
 
 def analysis_hint_budget_chars() -> int:
@@ -20,18 +17,12 @@ def analysis_hint_budget_chars() -> int:
 
 
 def analysis_cache_enabled() -> bool:
-    return (os.environ.get("VINOR_ANALYSIS_CACHE") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_ANALYSIS_CACHE", default=True)
 
 
 def analysis_inject_hint() -> bool:
-    return (os.environ.get("VINOR_ANALYSIS_INJECT_HINT") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_ANALYSIS_INJECT_HINT", default=True)

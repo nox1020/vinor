@@ -662,14 +662,23 @@ def _enrich_messages_for_ui(
                 )
                 if human:
                     row["content"] = human
-                # برچسب لینک ملک اگر خام بود
+                # برچسب لینک ملک اگر خام بود — بدون نشان دادن کد خام
                 if land and meta.get("entity_label") == land:
                     meta = dict(meta)
-                    meta["entity_label"] = f"ملک {land}"
+                    meta["entity_label"] = "مشاهده فایل"
                     row["meta"] = meta
+                if land and not row.get("land_codes"):
+                    row["land_codes"] = [land]
             except Exception:
                 pass
         codes = row.get("land_codes") or []
+        if str(row.get("source") or "") == "supervisor_agent" and codes and row.get("content"):
+            try:
+                from app.ai.land_cards import strip_visible_land_codes
+
+                row["content"] = strip_visible_land_codes(str(row.get("content") or ""), codes)
+            except Exception:
+                pass
         actions = row.get("agent_actions") or []
         # ادمین: کارت فایل فقط با meta.show_land_cards؛ کارت تأیید اکشن می‌ماند
         show_land = aud != AUDIENCE_ADMIN or bool(
@@ -677,14 +686,32 @@ def _enrich_messages_for_ui(
             if isinstance(row.get("meta"), dict)
             else False
         )
+        # وقتی کارت فایل هست، کد خام را از متن قابل‌نمایش بردار
+        if row.get("role") == "assistant" and codes and show_land and row.get("content"):
+            try:
+                from app.ai.land_cards import strip_visible_land_codes
+
+                row["content"] = strip_visible_land_codes(str(row.get("content") or ""), codes)
+            except Exception:
+                pass
+        # اکشن‌های confirm با land_code هم کارت فایل می‌گیرند
+        action_land_codes: list[str] = []
+        if isinstance(actions, list):
+            for a in actions:
+                if isinstance(a, dict):
+                    ac = str(a.get("land_code") or "").strip()
+                    if ac and ac not in action_land_codes:
+                        action_land_codes.append(ac)
         if row.get("role") == "assistant" and ((codes and show_land) or actions):
             parts: list[str] = []
-            if codes and show_land:
+            # کارت‌های جدا فقط برای land_codes پیام؛ confirm خودش کارت را داخل دارد
+            show_codes = [c for c in codes if str(c).strip() and str(c).strip() not in action_land_codes]
+            if show_codes and show_land:
                 try:
                     from app.ai.land_cards import render_land_cards_html
 
-                    row["land_cards"] = land_cards_payload(user_key, codes, audience=audience)
-                    land_html = render_land_cards_html(user_key, codes, audience=audience) or ""
+                    row["land_cards"] = land_cards_payload(user_key, show_codes, audience=audience)
+                    land_html = render_land_cards_html(user_key, show_codes, audience=audience) or ""
                     if land_html:
                         parts.append(land_html)
                 except Exception:
@@ -693,7 +720,9 @@ def _enrich_messages_for_ui(
                 row.pop("land_cards", None)
             if isinstance(actions, list) and actions:
                 try:
-                    actions_html = render_agent_actions_html(actions) or ""
+                    actions_html = render_agent_actions_html(
+                        actions, phone=user_key, audience=audience
+                    ) or ""
                     if actions_html:
                         parts.append(actions_html)
                 except Exception:

@@ -19,7 +19,12 @@ class CustomerMemoryAgent(Agent):
 
     @property
     def active(self) -> bool:
-        return True
+        try:
+            from app.agents.customer_memory.config import customer_memory_enabled
+
+            return bool(customer_memory_enabled())
+        except Exception:
+            return True
 
     def run(self, ctx: AgentContext) -> AgentResult:
         t0 = time.perf_counter()

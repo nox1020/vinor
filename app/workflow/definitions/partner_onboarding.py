@@ -12,10 +12,9 @@ class PartnerWorkflow(BaseWorkflow):
         intent=INTENT_BECOME_PARTNER,
         object_type="PartnerApplication",
         steps=[
-            StepDefinition("name", "name", "نام و نام‌خانوادگی‌تان چیست؟", validator="non_empty"),
+            StepDefinition("first_name", "first_name", "نام‌تان چیست؟", validator="non_empty"),
+            StepDefinition("last_name", "last_name", "نام خانوادگی‌تان چیست؟", validator="non_empty"),
             StepDefinition("national_id", "national_id", "کد ملی را وارد کنید.", validator="national_id"),
-            StepDefinition("city", "city", "شهر فعالیت‌تان کجاست؟", validator="non_empty"),
-            StepDefinition("experience", "experience", "سابقه فروش ملک‌تان را کوتاه بگویید.", validator="non_empty"),
-            StepDefinition("confirm", "confirm", "درخواست همکاری ثبت شود؟ (بله / خیر)", validator="yes_no"),
+            StepDefinition("confirm", "confirm", "همکاری ثبت و فعال شود؟ (بله / خیر)", validator="yes_no"),
         ],
     )

@@ -1,4 +1,9 @@
-"""زمان‌بندی رسدکننده — نوبت‌های تهران ۱۰/۱�۴/۲۰."""
+"""زمان‌بندی رسدکننده — نوبت‌های تهران ۱۰/۱۴/۲۰.
+
+روی PC: thread پس‌زمینه (پیش‌فرض).
+روی Passenger/LiteSpeed: VINOR_REACH_SCHEDULER=0 → بدون thread ماندگار؛
+  lazy tick روی درخواست‌های وب نوبت معوق را خودکار اجرا می‌کند (بدون نیاز به cron).
+"""
 from __future__ import annotations
 
 import os
@@ -7,19 +12,12 @@ import time
 
 from flask import Flask
 
-from app.reach.config import REACH_HOURS, reach_enabled
+from app.reach.config import reach_enabled, reach_hours
+from app.utils.dates import tehran_now
 
-
-def _tehran_hour() -> int:
-    try:
-        from zoneinfo import ZoneInfo
-        from datetime import datetime
-
-        return int(datetime.now(ZoneInfo("Asia/Tehran")).hour)
-    except Exception:
-        from datetime import datetime
-
-        return int(datetime.now().hour)
+_lazy_lock = threading.Lock()
+_lazy_last_attempt = 0.0
+_LAZY_MIN_INTERVAL_SEC = 90
 
 
 def _loop(app: Flask) -> None:
@@ -27,13 +25,13 @@ def _loop(app: Flask) -> None:
     while True:
         try:
             with app.app_context():
-                h = _tehran_hour()
-                if h in REACH_HOURS and h != last_slot:
-                    from app.reach.service import maybe_run_reach_followup
+                from app.reach.service import _active_slot_hour, maybe_run_reach_followup
 
+                due = _active_slot_hour()
+                if due is not None and due != last_slot:
                     maybe_run_reach_followup()
-                    last_slot = h
-                if h not in REACH_HOURS:
+                    last_slot = due
+                if due is None:
                     last_slot = None
         except Exception:
             try:
@@ -43,8 +41,65 @@ def _loop(app: Flask) -> None:
         time.sleep(600)
 
 
+def _install_lazy_tick(app: Flask) -> None:
+    """خودکار روی ترافیک وب — نوبت معوق را بدون cron و بدون دستور دستی اجرا می‌کند."""
+
+    @app.before_request
+    def _reach_lazy_tick():  # type: ignore[misc]
+        global _lazy_last_attempt
+        try:
+            if not reach_enabled():
+                return None
+            from app.reach.service import (
+                _active_slot_hour,
+                _slot_already_done,
+                maybe_run_reach_followup,
+            )
+
+            due = _active_slot_hour()
+            if due is None:
+                return None
+            now_ts = time.time()
+            if now_ts - _lazy_last_attempt < _LAZY_MIN_INTERVAL_SEC:
+                return None
+            if not _lazy_lock.acquire(blocking=False):
+                return None
+            try:
+                if now_ts - _lazy_last_attempt < _LAZY_MIN_INTERVAL_SEC:
+                    return None
+                _lazy_last_attempt = now_ts
+                if _slot_already_done(due):
+                    return None
+
+                def _worker() -> None:
+                    try:
+                        with app.app_context():
+                            maybe_run_reach_followup()
+                    except Exception:
+                        try:
+                            app.logger.exception("Reach lazy tick failed")
+                        except Exception:
+                            pass
+
+                threading.Thread(
+                    target=_worker,
+                    daemon=True,
+                    name="vinor-reach-lazy",
+                ).start()
+            finally:
+                _lazy_lock.release()
+        except Exception:
+            return None
+        return None
+
+    app.logger.info(
+        "Reach auto lazy-tick ON (Tehran slots %s — no cron required)",
+        list(reach_hours()),
+    )
+
+
 def schedule_reach(app: Flask) -> None:
-    """پیش‌فرض in-process ON؛ روی Passenger/LiteSpeed باید ۰ باشد (cron)."""
+    """PC: thread. هاست اشتراکی: lazy tick خودکار (بدون cron)."""
     if not reach_enabled():
         app.logger.info("Reach disabled via VINOR_REACH_ENABLED=0")
         return
@@ -57,10 +112,7 @@ def schedule_reach(app: Flask) -> None:
         return
     flag = (os.environ.get("VINOR_REACH_SCHEDULER") or "1").strip().lower()
     if flag in ("0", "false", "no", "off"):
-        app.logger.info(
-            "Reach in-process scheduler off "
-            "(cron: scripts/run_reach_followup.py every 10min, or set VINOR_REACH_SCHEDULER=1)"
-        )
+        _install_lazy_tick(app)
         return
     threading.Thread(
         target=_loop,
@@ -70,5 +122,5 @@ def schedule_reach(app: Flask) -> None:
     ).start()
     app.logger.info(
         "Reach follow-up scheduler started (Tehran hours %s - buyer SMS/FCM from funnel signals)",
-        list(REACH_HOURS),
+        list(reach_hours()),
     )

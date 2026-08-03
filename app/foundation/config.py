@@ -16,7 +16,9 @@ def _env_bool(name: str, default: str = "1") -> bool:
 
 def foundation_enabled() -> bool:
     """Master switch for Phase 0 Foundation layer."""
-    return _env_bool("VINOR_FOUNDATION_ENABLED", "1")
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_FOUNDATION_ENABLED", default=True)
 
 
 def activity_store_enabled() -> bool:

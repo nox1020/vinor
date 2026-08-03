@@ -20,7 +20,12 @@ class RecommendationAgent(Agent):
 
     @property
     def active(self) -> bool:
-        return True
+        try:
+            from app.agents.recommendation.config import recommendation_enabled
+
+            return bool(recommendation_enabled())
+        except Exception:
+            return True
 
     def run(self, ctx: AgentContext) -> AgentResult:
         t0 = time.perf_counter()

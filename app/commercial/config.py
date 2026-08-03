@@ -37,7 +37,9 @@ def commercial_ai_tools_enabled() -> bool:
     """propose_offer / counter / reservation. Requires master."""
     if not commercial_enabled():
         return False
-    return _env_bool("VINOR_COMMERCIAL_AI_TOOLS_ENABLED", "1")
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_COMMERCIAL_AI_TOOLS_ENABLED", default=True)
 
 
 def commercial_activity_hook_enabled() -> bool:

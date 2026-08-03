@@ -33,7 +33,9 @@ def crm_ai_tools_enabled() -> bool:
     """propose_log_call / propose_followup. Requires crm_enabled."""
     if not crm_enabled():
         return False
-    return _env_bool("VINOR_CRM_AI_TOOLS_ENABLED", "1")
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_CRM_AI_TOOLS_ENABLED", default=True)
 
 
 def crm_visit_sync_enabled() -> bool:

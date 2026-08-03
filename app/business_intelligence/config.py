@@ -6,12 +6,9 @@ from app.business_intelligence.interfaces import BusinessIntelligenceConfig
 
 
 def bi_enabled() -> bool:
-    return (os.environ.get("VINOR_BI_ENABLED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from app.ai_console.flag_settings import resolve_feature_flag
+
+    return resolve_feature_flag("VINOR_BI_ENABLED", default=True)
 
 
 def bi_inject_hint() -> bool:

@@ -79,12 +79,12 @@ class ConversationEngineTests(unittest.TestCase):
         self.assertIn("نام", out1.reply)
         self.assertEqual(out1.extra_tokens, 0)
 
-        out2 = self.mgr.handle(message="علی رضایی", user_key=uk, audience="public")
+        out2 = self.mgr.handle(message="علی", user_key=uk, audience="public")
         self.assertTrue(out2.handled)
-        self.assertIn("کد ملی", out2.reply)
+        self.assertIn("نام خانوادگی", out2.reply)
 
         # fill remaining quickly
-        for ans in ("0012345678", "تهران", "۳ سال مشاور", "بله"):
+        for ans in ("رضایی", "0012345678", "بله"):
             out = self.mgr.handle(message=ans, user_key=uk, audience="public")
         self.assertTrue(out.handled)
         self.assertIsNotNone(out.structured_object)

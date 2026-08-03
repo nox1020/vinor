@@ -1,15 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""پیگیری منظم فروش همکار (اعلان + پیامک) — نوبت‌های ۱۰، ۱۴، ۲۰ تهران.
-
-تا وقتی فایل فروخته نشده برای همان همکار ادامه می‌دهد.
-
-cron پیشنهادی (هر ۱۰ دقیقه):
-  */10 * * * * cd /path/to/vinor && .venv/bin/python scripts/run_sales_coach_nudge.py
-
-تست:
-  python scripts/run_sales_coach_nudge.py --force --dry-run
-"""
+"""پیگیری فروش همکار — اختیاری؛ روی هاست lazy tick خودکار کافی است."""
 from __future__ import annotations
 
 import argparse
@@ -20,7 +11,12 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+os.environ.setdefault("INSTANCE_PATH", os.path.join(ROOT, "instance"))
 os.environ["VINOR_SALES_COACH_SCHEDULER"] = "0"
+os.environ["VINOR_REACH_SCHEDULER"] = "0"
+os.environ["VINOR_CELEBRATION_SMS_SCHEDULER"] = "0"
+os.environ["VINOR_ADMIN_SMS_SCHEDULER"] = "0"
+os.environ["VINOR_OPTIMIZATION_SCHEDULER"] = "0"
 
 from app import create_app
 from app.express_partner.sales_coach import maybe_run_evening_sales_coach_nudge
@@ -33,9 +29,9 @@ def main() -> int:
     parser.add_argument(
         "--slot",
         type=int,
-        choices=(10, 14, 20),
+        choices=tuple(range(24)),
         default=None,
-        help="Force a specific Tehran hour slot",
+        help="Force a specific Tehran hour slot (0-23)",
     )
     args = parser.parse_args()
 

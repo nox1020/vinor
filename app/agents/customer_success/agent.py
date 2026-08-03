@@ -22,7 +22,12 @@ class CustomerSuccessAgent(Agent):
 
     @property
     def active(self) -> bool:
-        return True
+        try:
+            from app.agents.customer_success.config import customer_success_enabled
+
+            return bool(customer_success_enabled())
+        except Exception:
+            return True
 
     def run(self, ctx: AgentContext) -> AgentResult:
         t0 = time.perf_counter()

@@ -43,12 +43,12 @@ def agent_budget(voice: str | None) -> dict[str, Any]:
         return out
 
     if v == VOICE_PUBLIC:
-        out["max_tokens"] = min(int(base["max_tokens"]), 320)
-        out["max_context_chars"] = min(int(base["max_context_chars"]), 2000)
+        out["max_tokens"] = min(int(base["max_tokens"]), 256)
+        out["max_context_chars"] = min(int(base["max_context_chars"]), 1800)
         return out
 
     if v in (VOICE_PARTNER, VOICE_SPECIAL):
-        out["max_tokens"] = min(int(base["max_tokens"]), 384)
+        out["max_tokens"] = min(int(base["max_tokens"]), 320)
         return out
 
     if v == VOICE_ADMIN:

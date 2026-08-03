@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""اجرای روزانه پیامک تبریک تولد و سالگرد عضویت — برای cron.
-
-مثال cron (هر روز ساعت ۹:۳۰ صبح به وقت تهران ≈ 06:00 UTC):
-  0 6 * * * cd /path/to/vinor && .venv/bin/python scripts/run_daily_celebration_sms.py
-"""
+"""پیامک تبریک روزانه — اختیاری؛ روی هاست lazy tick خودکار کافی است."""
 from __future__ import annotations
 
 import argparse
@@ -15,7 +11,12 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-os.environ.setdefault("VINOR_DISABLE_CELEBRATION_SMS", "1")
+os.environ.setdefault("INSTANCE_PATH", os.path.join(ROOT, "instance"))
+os.environ["VINOR_CELEBRATION_SMS_SCHEDULER"] = "0"
+os.environ["VINOR_REACH_SCHEDULER"] = "0"
+os.environ["VINOR_SALES_COACH_SCHEDULER"] = "0"
+os.environ["VINOR_ADMIN_SMS_SCHEDULER"] = "0"
+os.environ["VINOR_OPTIMIZATION_SCHEDULER"] = "0"
 
 from app import create_app
 from app.express_partner.user_celebration_sms import maybe_run_daily_celebration_sms
