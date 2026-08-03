@@ -433,6 +433,21 @@ def clear_chat(
     opening_text: str | None = None,
 ) -> dict[str, Any]:
     """گفتگوی جدید — اگر فقط شروع وینور است همان را بازنشانی می‌کند."""
+    # قطع ادامهٔ فرم سراسری قدیمی؛ پیش‌نویس تردهای دیگر دست‌نخورده می‌ماند
+    try:
+        from app.ai.agent_tools import clear_legacy_visit_draft
+
+        clear_legacy_visit_draft(user_key)
+    except Exception:
+        pass
+    try:
+        from flask import g
+
+        if hasattr(g, "ai_focus_land_code"):
+            g.ai_focus_land_code = ""
+    except Exception:
+        pass
+
     record = load_user_record(user_key, audience)
     th = _active_thread(record)
     if th and is_thread_open_slate(th):
@@ -443,6 +458,7 @@ def clear_chat(
         record["active_id"] = th["id"]
         _save_record(record, user_key, audience)
         tid = str(th["id"])
+        _clear_thread_side_state(user_key, tid)
         if opening_text:
             msgs, tid = ensure_vinor_opening(
                 user_key,
@@ -458,6 +474,7 @@ def clear_chat(
         return blocked
 
     tid = create_thread(user_key, activate=True, audience=audience)
+    _clear_thread_side_state(user_key, tid)
     if opening_text:
         msgs, tid = ensure_vinor_opening(
             user_key,
@@ -467,6 +484,26 @@ def clear_chat(
         )
         return {"ok": True, "thread_id": tid, "messages": msgs}
     return {"ok": True, "thread_id": tid}
+
+
+def _clear_thread_side_state(user_key: str, thread_id: str | None) -> None:
+    """پاک‌کردن وضعیت فرم گفتگو برای ترد (موتور conversation)."""
+    tid = str(thread_id or "").strip()
+    try:
+        from app.conversation.session import FileConversationSessionStore
+
+        store = FileConversationSessionStore()
+        store.clear(user_key)  # سراسری قدیمی
+        if tid:
+            store.clear(user_key, thread_id=tid)
+    except Exception:
+        pass
+    try:
+        from app.ai.agent_tools import clear_visit_draft
+
+        clear_visit_draft(user_key, thread_id=tid or None)
+    except Exception:
+        pass
 
 
 def ensure_vinor_opening(

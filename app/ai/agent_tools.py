@@ -232,13 +232,13 @@ def resolve_conversation_land_code(
     args: dict[str, Any] | None = None,
     *,
     thread_id: str | None = None,
+    allow_assignment_fallback: bool = False,
 ) -> str:
     """کد فایل موضوع گفتگو — هرگز از کاربر نپرس؛ از زمینه بگیر.
 
     اولویت:
     آرگومان → cache → فوکوس thread/case → پیام کاربر → عنوان قدیمی thread
-    (عنوان‌های قدیمی «ماموریت …» فقط برای تطبیق تاریخچه؛ محصول مأموریت اجباری ندارد)
-    → پیش‌نویس → اختصاص‌ها
+    → پیش‌نویس همین گفتگو → (اختیاری) اختصاص‌ها فقط برای ابزار
     """
     tid, _aud = _tool_thread_meta()
     if thread_id:
@@ -273,11 +273,17 @@ def resolve_conversation_land_code(
         return mission
 
     try:
-        draft_code = str(_load_visit_draft(phone).get("land_code") or "").strip()
+        draft_code = str(
+            _load_visit_draft(phone, thread_id=tid).get("land_code") or ""
+        ).strip()
         if draft_code:
             return draft_code
     except Exception:
         pass
+
+    # اختصاص‌ها فقط وقتی ابزار صریحاً نیاز دارد — وگرنه گفتگوی جدید قاطی می‌شود
+    if not allow_assignment_fallback:
+        return ""
 
     assigned = _active_assignment_land_codes(phone)
     if len(assigned) == 1:
@@ -289,7 +295,9 @@ def resolve_conversation_land_code(
 
 
 def _resolve_tool_land_code(phone: str, args: dict[str, Any] | None = None) -> str:
-    return resolve_conversation_land_code(phone, args)
+    return resolve_conversation_land_code(
+        phone, args, allow_assignment_fallback=True
+    )
 
 
 def _never_ask_land_instruction(phone: str = "") -> str:
@@ -921,7 +929,12 @@ def run_tool(
 
         g.ai_tool_thread_id = (thread_id or "").strip() or None
         g.ai_tool_audience = audience
-        focus = resolve_conversation_land_code(phone, args, thread_id=thread_id)
+        focus = resolve_conversation_land_code(
+            phone,
+            args,
+            thread_id=thread_id,
+            allow_assignment_fallback=True,
+        )
         if focus:
             g.ai_focus_land_code = focus
             # تزریق خودکار — مدل نباید کد را از کاربر بگیرد
@@ -1698,8 +1711,12 @@ def _tool_draft_listing(
     return out
 
 
-def _visit_draft_key(user_key: str) -> str:
-    return f"visit_draft:{(user_key or '').strip()}"
+def _visit_draft_key(user_key: str, thread_id: str | None = None) -> str:
+    uk = (user_key or "").strip()
+    tid = (thread_id or "").strip()
+    if tid:
+        return f"visit_draft:{uk}:t:{tid}"
+    return f"visit_draft:{uk}"
 
 
 def _visit_draft_awaiting(draft: dict[str, Any]) -> str:
@@ -1710,57 +1727,114 @@ def _visit_draft_awaiting(draft: dict[str, Any]) -> str:
     return ""
 
 
-def _save_visit_draft(user_key: str, draft: dict[str, Any]) -> None:
+def _save_visit_draft(
+    user_key: str,
+    draft: dict[str, Any],
+    *,
+    thread_id: str | None = None,
+) -> None:
     """پیش‌نویس نام/شماره/فایل — فقط وقتی فرم بازدید عمداً شروع شده (awaiting)."""
     uk = (user_key or "").strip()
     if not uk or not isinstance(draft, dict):
         return
+    tid = (thread_id or "").strip() or (_tool_thread_meta()[0] or "")
     store = _read_pending_store()
     _prune_pending(store)
     now = datetime.now(timezone.utc)
     awaiting = _visit_draft_awaiting(draft)
-    store[_visit_draft_key(uk)] = {
+    payload = {
+        "land_code": str(draft.get("land_code") or "").strip(),
+        "customer_name": str(draft.get("customer_name") or "").strip(),
+        "customer_first_name": str(draft.get("customer_first_name") or "").strip(),
+        "customer_last_name": str(draft.get("customer_last_name") or "").strip(),
+        "customer_phone": str(draft.get("customer_phone") or "").strip(),
+        "awaiting": awaiting,
+        "thread_id": tid,
+    }
+    store[_visit_draft_key(uk, tid or None)] = {
         "user_key": uk,
         "action_type": "visit_draft",
-        "payload": {
-            "land_code": str(draft.get("land_code") or "").strip(),
-            "customer_name": str(draft.get("customer_name") or "").strip(),
-            "customer_first_name": str(draft.get("customer_first_name") or "").strip(),
-            "customer_last_name": str(draft.get("customer_last_name") or "").strip(),
-            "customer_phone": str(draft.get("customer_phone") or "").strip(),
-            "awaiting": awaiting,
-        },
+        "payload": payload,
         "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "expires_at": (now + timedelta(minutes=_PENDING_TTL_MIN)).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         ),
     }
+    # پیش‌نویس سراسری قدیمی را برندار تا گفتگوهای دیگر قاطی نشوند
+    if tid:
+        store.pop(_visit_draft_key(uk), None)
     _write_pending_store(store)
 
 
-def _load_visit_draft(user_key: str) -> dict[str, Any]:
+def _load_visit_draft(
+    user_key: str,
+    *,
+    thread_id: str | None = None,
+) -> dict[str, Any]:
     uk = (user_key or "").strip()
     if not uk:
         return {}
+    tid = (thread_id or "").strip() or (_tool_thread_meta()[0] or "")
     store = _read_pending_store()
     _prune_pending(store)
-    item = store.get(_visit_draft_key(uk))
-    if not isinstance(item, dict):
-        return {}
-    exp = str(item.get("expires_at") or "")
-    try:
-        exp_dt = datetime.strptime(exp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-        if exp_dt < datetime.now(timezone.utc):
-            store.pop(_visit_draft_key(uk), None)
-            _write_pending_store(store)
+
+    def _payload_of(key: str) -> dict[str, Any]:
+        item = store.get(key)
+        if not isinstance(item, dict):
             return {}
-    except Exception:
-        pass
-    payload = item.get("payload")
-    return payload if isinstance(payload, dict) else {}
+        exp = str(item.get("expires_at") or "")
+        try:
+            exp_dt = datetime.strptime(exp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if exp_dt < datetime.now(timezone.utc):
+                store.pop(key, None)
+                _write_pending_store(store)
+                return {}
+        except Exception:
+            pass
+        payload = item.get("payload")
+        return payload if isinstance(payload, dict) else {}
+
+    if tid:
+        scoped = _payload_of(_visit_draft_key(uk, tid))
+        if scoped:
+            return scoped
+        # پیش‌نویس سراسری قدیمی فقط اگر به همین ترد وصل است
+        legacy = _payload_of(_visit_draft_key(uk))
+        if not legacy:
+            return {}
+        legacy_tid = str(legacy.get("thread_id") or "").strip()
+        if legacy_tid and legacy_tid != tid:
+            return {}
+        # بدون thread_id ذخیره‌شده = متعلق به گفتگوی دیگر فرض می‌شود (ایزوله‌سازی)
+        if not legacy_tid:
+            return {}
+        return legacy
+
+    return _payload_of(_visit_draft_key(uk))
 
 
-def _clear_visit_draft(user_key: str) -> None:
+def _clear_visit_draft(user_key: str, *, thread_id: str | None = None) -> None:
+    uk = (user_key or "").strip()
+    if not uk:
+        return
+    tid = (thread_id or "").strip() or (_tool_thread_meta()[0] or "")
+    store = _read_pending_store()
+    changed = False
+    if tid and store.pop(_visit_draft_key(uk, tid), None) is not None:
+        changed = True
+    if store.pop(_visit_draft_key(uk), None) is not None:
+        changed = True
+    if changed:
+        _write_pending_store(store)
+
+
+def clear_visit_draft(user_key: str, *, thread_id: str | None = None) -> None:
+    """شروع مجدد فرم بازدید / بازدید مجدد — پیش‌نویس مراحل قبلی پاک می‌شود."""
+    _clear_visit_draft(user_key, thread_id=thread_id)
+
+
+def clear_legacy_visit_draft(user_key: str) -> None:
+    """فقط پیش‌نویس سراسری قدیمی (بدون thread) — برای شروع گفتگوی جدید."""
     uk = (user_key or "").strip()
     if not uk:
         return
@@ -1769,9 +1843,20 @@ def _clear_visit_draft(user_key: str) -> None:
         _write_pending_store(store)
 
 
-def clear_visit_draft(user_key: str) -> None:
-    """شروع مجدد فرم بازدید / بازدید مجدد — پیش‌نویس مراحل قبلی پاک می‌شود."""
-    _clear_visit_draft(user_key)
+def clear_all_visit_drafts_for_user(user_key: str) -> None:
+    """همهٔ پیش‌نویس‌های بازدید این کاربر — برای گفتگوی جدید."""
+    uk = (user_key or "").strip()
+    if not uk:
+        return
+    store = _read_pending_store()
+    prefix = f"visit_draft:{uk}"
+    removed = False
+    for key in list(store.keys()):
+        if str(key).startswith(prefix):
+            store.pop(key, None)
+            removed = True
+    if removed:
+        _write_pending_store(store)
 
 
 def reset_visit_draft_keep_land(
@@ -1780,8 +1865,12 @@ def reset_visit_draft_keep_land(
     thread_id: str | None = None,
 ) -> str:
     """پاک کردن پیش‌نویس بازدید؛ فوکوس فایل فقط برای ابزار (بدون شروع فرم نام)."""
-    focus = resolve_conversation_land_code(user_key, thread_id=thread_id)
-    _clear_visit_draft(user_key)
+    focus = resolve_conversation_land_code(
+        user_key,
+        thread_id=thread_id,
+        allow_assignment_fallback=True,
+    )
+    _clear_visit_draft(user_key, thread_id=thread_id)
     # عمداً draft نمی‌سازیم — وگرنه چت عادی «نام مشتری را بگو» می‌پرسد.
     return focus
 
@@ -2052,13 +2141,13 @@ def try_continue_visit_from_user_message(
         g.ai_last_user_message = msg
     except Exception:
         pass
-    draft = _load_visit_draft(me)
+    draft = _load_visit_draft(me, thread_id=thread_id)
     code = str(draft.get("land_code") or "").strip()
     awaiting = _visit_draft_awaiting(draft)
     # پیش‌نویس یتیم (فقط کد فایل بدون شروع فرم) را پاک کن — باعث پرسش زودهنگام نام می‌شد
     if code and not awaiting and not _visit_draft_has_name(draft):
         if not str(draft.get("customer_phone") or "").strip():
-            clear_visit_draft(me)
+            clear_visit_draft(me, thread_id=thread_id)
             return None
     if not code or not awaiting:
         return None

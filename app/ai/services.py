@@ -679,13 +679,19 @@ def _build_messages(
             if hint:
                 _append_sales_hint(messages, hint)
     if user_key and ab.get("inject_partner_context", True):
+        # گفتگوی تازه: حافظهٔ سراسری را تزریق نکن تا ادامهٔ چت قبلی حس نشود
+        hist_has_user = any(
+            isinstance(h, dict) and str(h.get("role") or "") == "user"
+            for h in (history or [])
+        )
+        use_memory = bool(ab.get("inject_user_memory", True)) and hist_has_user
         ctx = _build_system_prompt(
             user_key,
             audience,
             user_message=text,
             thread_id=thread_id,
             max_context_chars=int(ab.get("max_context_chars") or cfg["max_context_chars"]),
-            retrieve_user_memory=bool(ab.get("inject_user_memory", True)),
+            retrieve_user_memory=use_memory,
         )
         if ctx:
             messages.append({"role": "system", "content": ctx})
@@ -693,11 +699,15 @@ def _build_messages(
         sys_mem = _system_memory_prompt_for_messages()
         if sys_mem:
             messages.append({"role": "system", "content": sys_mem})
-    if user_key and ab.get("inject_user_memory", True):
+    hist_has_user = any(
+        isinstance(h, dict) and str(h.get("role") or "") == "user"
+        for h in (history or [])
+    )
+    if user_key and ab.get("inject_user_memory", True) and hist_has_user:
         mem_text = _get_memory_prompt_text()
         if mem_text:
             messages.append({"role": "system", "content": mem_text})
-    if user_key and ab.get("inject_funnel_hint", True):
+    if user_key and ab.get("inject_funnel_hint", True) and hist_has_user:
         try:
             from .prompt_optimize import skip_redundant_sales_hints
 
