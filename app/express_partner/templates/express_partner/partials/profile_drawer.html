@@ -777,20 +777,7 @@
          data-apply-url="{{ url_for('express_partner.apply') }}"
          data-default-next="{{ url_for('express_partner.home') }}">
       <div class="ep-drawer-login" data-ep-drawer-login>
-        <div class="ep-drawer-login__step" data-login-step="gate">
-          <p class="ep-profile-drawer__guest-title">به وینور خوش آمدید</p>
-          <p class="ep-profile-drawer__guest-lead">برای مدیریت حساب وارد شوید — یا از چت خانه درباره همکاری بپرسید</p>
-          <div class="ep-drawer-login__actions ep-drawer-login__actions--stack">
-            <button type="button" id="epDrawerOpenLogin" class="ep-profile-drawer__guest-btn ep-profile-drawer__guest-btn--primary">
-              ورود
-            </button>
-            <button type="button" id="epDrawerStartApply" class="ep-profile-drawer__guest-btn ep-profile-drawer__guest-btn--ghost">
-              شروع همکاری
-            </button>
-          </div>
-        </div>
-
-        <div class="ep-drawer-login__step" data-login-step="phone" hidden>
+        <div class="ep-drawer-login__step" data-login-step="phone">
           <p class="ep-profile-drawer__guest-title">ورود به وینور</p>
           <p class="ep-profile-drawer__guest-lead">شماره موبایل را وارد کنید؛ کد تأیید پیامک می‌شود.</p>
           <form id="epDrawerPhoneForm" method="POST" action="{{ url_for('express_partner.login') }}" novalidate>
@@ -813,9 +800,6 @@
             <div class="ep-drawer-login__actions ep-drawer-login__actions--stack">
               <button type="submit" id="epDrawerPhoneBtn" class="ep-profile-drawer__guest-btn ep-profile-drawer__guest-btn--primary" disabled>
                 <span data-btn-label>ادامه</span>
-              </button>
-              <button type="button" id="epDrawerBackGate" class="ep-profile-drawer__guest-btn ep-profile-drawer__guest-btn--ghost">
-                بازگشت
               </button>
             </div>
           </form>
@@ -1613,7 +1597,6 @@
 
     var phoneStep = root.querySelector('[data-login-step="phone"]');
     var otpStep = root.querySelector('[data-login-step="otp"]');
-    var gateStep = root.querySelector('[data-login-step="gate"]');
     var phoneForm = document.getElementById('epDrawerPhoneForm');
     var otpForm = document.getElementById('epDrawerOtpForm');
     var phoneInput = document.getElementById('epDrawerPhone');
@@ -1629,9 +1612,6 @@
     var changePhoneBtn = document.getElementById('epDrawerChangePhone');
     var resendBtn = document.getElementById('epDrawerResendBtn');
     var resendTimer = document.getElementById('epDrawerResendTimer');
-    var openLoginBtn = document.getElementById('epDrawerOpenLogin');
-    var startApplyBtn = document.getElementById('epDrawerStartApply');
-    var backGateBtn = document.getElementById('epDrawerBackGate');
 
     var faDigits = '۰۱۲۳۴۵۶۷۸۹';
     var arDigits = '٠١٢٣٤٥٦٧٨٩';
@@ -1721,7 +1701,7 @@
       } catch (_) {}
     }
     function showStep(name) {
-      if (gateStep) gateStep.hidden = name !== 'gate';
+      if (name === 'gate') name = 'phone';
       if (phoneStep) phoneStep.hidden = name !== 'phone';
       if (otpStep) otpStep.hidden = name !== 'otp';
       if (name === 'otp') {
@@ -1886,25 +1866,6 @@
         fillOtpFromString(raw);
       });
       syncOtpBtn();
-    }
-
-    if (openLoginBtn) {
-      openLoginBtn.addEventListener('click', function () {
-        openLoginForm(defaultNext);
-      });
-    }
-    if (startApplyBtn) {
-      startApplyBtn.addEventListener('click', function () {
-        /* بعد از ورود در خانه/چت بماند — نه ریدایرکت به /apply */
-        openLoginForm(homeUrl);
-        showHint(phoneHint, 'بعد از ورود از همین چت درخواست همکاری را ادامه بده.', true);
-      });
-    }
-    if (backGateBtn) {
-      backGateBtn.addEventListener('click', function () {
-        showHint(phoneHint, '');
-        showStep('gate');
-      });
     }
 
     if (changePhoneBtn) {

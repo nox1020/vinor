@@ -337,8 +337,8 @@ def agent_system_hint(voice: str | None) -> str:
     if v == VOICE_PUBLIC:
         return (
             "مهمان: خرید→search_lands (حداکثر ۲)→نزدیک‌ترین را با [[LAND]] معرفی کن | "
-            "بازاریاب شدن→coop_info سپس propose_apply "
-            "(نام/کدملی/شهر یکی‌یکی). propose_visit/deal نزن."
+            "بازاریاب شدن→اول coop_info (شرایط+نحوه ارتقا) بعد شروع ثبت "
+            "(نام→نام‌خانوادگی→کدملی یکی‌یکی→propose_apply). شهر نپرس. propose_visit/deal نزن."
         )
     return (
         "بازاریاب: مشتری→search_lands (حداکثر ۲ کارت؛ نزدیک‌ترین اول)→[[LAND]] | فایل→معرفی. "
@@ -1094,8 +1094,10 @@ def _tool_coop_info(args: dict[str, Any]) -> dict[str, Any]:
         "topic": topic if topic in blocks else "all",
         "facts": chosen,
         "instruction": (
-            "همین facts را کوتاه و خودمونی بگو. URL/مسیر صفحه نده. "
-            "اگر خواست ثبت کند، فیلدها را یکی‌یکی بپرس و propose_partner_application بزن."
+            "همین facts را کوتاه و خودمونی بگو: شرایط همکاری + نحوه ارتقا به بازاریاب. "
+            "URL/مسیر صفحه نده. "
+            "بعد از توضیح، ثبت را شروع کن — اول فقط نام کوچک را بپرس؛ "
+            "نام‌خانوادگی و کدملی را یکی‌یکی بعداً بگیر؛ وقتی کامل شد propose_partner_application بزن."
         ),
     }
     return {"ok": True, "model_result": model}

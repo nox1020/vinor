@@ -1,4 +1,4 @@
-{# حباب شناور هدر: دریافت پلاس (وسط) | منو راست #}
+{# حباب شناور هدر: منو چپ | برند وینور راست | دریافت پلاس (وسط) #}
 {% set _menu_href = menu_href|default(url_for('express_partner.home', menu=1)) %}
 {% set _use_drawer = profile_drawer|default(false) %}
 {% set _show_ai_plus = show_ai_plus|default(false) %}
@@ -31,11 +31,28 @@
     transform: translateX(-50%);
   }
   .ep-header-float-actions .ep-partner-header-btn,
-  .ep-header-float-actions .ep-get-plus-pill {
+  .ep-header-float-actions .ep-get-plus-pill,
+  .ep-header-float-actions .ep-header-float-brand {
     margin: 0;
     pointer-events: auto;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
+  }
+  .ep-header-float-brand {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+    padding: 0 0.15rem;
+    border: 0;
+    background: transparent;
+    color: #fff;
+    font-size: 1.375rem;
+    font-weight: 700;
+    font-family: inherit;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    text-decoration: none;
+    user-select: none;
   }
   .ep-get-plus-pill {
     display: inline-flex;
@@ -67,6 +84,10 @@
     visibility: hidden;
     pointer-events: none;
   }
+  html.vinor-profile-drawer-open .ep-header-float-actions--brand {
+    visibility: hidden;
+    pointer-events: none;
+  }
 </style>
 {% if _show_get_plus %}
 <div class="ep-header-float-actions ep-header-float-actions--plus" aria-label="وینور پلاس">
@@ -91,7 +112,7 @@
   </button>
 </div>
 {% endif %}
-<div class="ep-header-float-actions" aria-label="دسترسی سریع" data-tour="home-menu">
+<div class="ep-header-float-actions ep-header-float-actions--start" aria-label="دسترسی سریع" data-tour="home-menu">
   {% if _use_drawer %}
   <button type="button"
           id="epProfileMenuBtn"
@@ -112,6 +133,9 @@
     <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
   </a>
   {% endif %}
+</div>
+<div class="ep-header-float-actions ep-header-float-actions--brand" aria-label="وینور" data-tour="home-brand">
+  <span class="ep-header-float-brand">وینور</span>
 </div>
 {% if _use_drawer %}
 <script>

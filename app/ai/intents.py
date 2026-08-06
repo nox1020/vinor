@@ -14,8 +14,11 @@ CHIP_INTENT_HINTS: dict[str, str] = {
         "هدف: استخدام بازاریاب. get_cooperation_info topic=how؛ ۳ قدم کوتاه؛ لینک نده."
     ),
     "coop_apply": (
-        "هدف: استخدام بازاریاب. propose_partner_application؛ "
-        "نام→نام‌خانوادگی→کدملی یکی‌یکی؛ شهر نپرس؛ need_login→منوی راست."
+        "هدف: استخدام بازاریاب. "
+        "۱) اول get_cooperation_info با topic=all — شرایط همکاری و نحوه ارتقا به بازاریاب را کوتاه و خودمونی بگو (لینک نده). "
+        "۲) بعد در همان پاسخ ثبت را شروع کن: فقط نام کوچک را بپرس. "
+        "نام→نام‌خانوادگی→کدملی یکی‌یکی؛ وقتی هر سه را داشتی propose_partner_application. "
+        "مهمان بدون ورود→need_login / منوی راست. شهر نپرس."
     ),
     "coop_status": (
         "هدف: وضعیت استخدام. get_application_status؛ کوتاه؛ لینک نده."

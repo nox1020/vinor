@@ -875,15 +875,12 @@ def build_limited_ai_quick_prompts(
     add("خرید ملک", prompt="یه ملک مناسب می‌خوام", intent="find_land", icon="search")
     add(
         "می‌خواهم بازاریاب وینور شوم",
-        prompt="می‌خواهم بازاریاب وینور شوم",
+        prompt=(
+            "می‌خواهم بازاریاب وینور شوم. "
+            "اول شرایط همکاری و نحوه ارتقا به بازاریاب را توضیح بده، بعد ثبت‌نام را شروع کن."
+        ),
         intent="coop_apply",
         icon="handshake",
-    )
-    add(
-        "چطور شروع کنم؟",
-        prompt="چطور با وینور شروع کنم؟",
-        intent="next_action",
-        icon="bolt",
     )
     return out[:3]
 

@@ -26,7 +26,7 @@ _CHIP_TOOL_NAMES: dict[str, frozenset[str]] = {
     "coop_levels": frozenset({TOOL_COOP_INFO}),
     "coop_terms": frozenset({TOOL_COOP_INFO}),
     "coop_how": frozenset({TOOL_COOP_INFO}),
-    "coop_apply": frozenset({TOOL_PROPOSE_APPLY}),
+    "coop_apply": frozenset({TOOL_COOP_INFO, TOOL_PROPOSE_APPLY}),
     "coop_status": frozenset({TOOL_APP_STATUS}),
     "next_action": frozenset({TOOL_NEXT}),
     "marketing": frozenset({TOOL_LISTING}),
