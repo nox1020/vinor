@@ -34,10 +34,23 @@
   var homeLayer = mode === 'home-layer';
   var homeInline = mode === 'home-inline';
   var layerGated = embedded || homeLayer || homeInline;
+  /* خانهٔ اینلاین همیشه «باز» است — poll/ارسال بعدی وابسته به sheet کلاس نباشد */
   var sheetOpen =
     !layerGated ||
+    homeInline ||
     document.documentElement.classList.contains('vinor-ai-open') ||
     document.documentElement.classList.contains('vinor-ai-sheet-open');
+  /* خانه: لایهٔ چت باز از منو (وینور/پشتیبانی) — Back → بدو ورود */
+  var homeChatLayerOpen = false;
+  var forceShowOpeningInHome = false;
+  var lastVinorThreadId = '';
+  try {
+    var _initTid = (threadInput && threadInput.value) || '';
+    if (_initTid && _initTid !== (form.getAttribute('data-postchi-thread-id') || '__postchi__') &&
+        _initTid !== (form.getAttribute('data-lawyer-thread-id') || '__lawyer__')) {
+      lastVinorThreadId = _initTid;
+    }
+  } catch (_) {}
   /* خانه: چت همیشه بخشی از داشبورد است — poll همیشه فعال */
   if (homeInline) {
     sheetOpen = true;
@@ -51,7 +64,6 @@
   var reportsUrl = form.getAttribute('data-reports-url') || '';
   var activeReportFilter = '';
   var activeLandFilter = '';
-  var reportsUrl = form.getAttribute('data-reports-url') || '';
   var agentConfirmUrl = form.getAttribute('data-agent-confirm-url') || '';
   var agentCancelUrl = form.getAttribute('data-agent-cancel-url') || '';
   var postchiThreadId = form.getAttribute('data-postchi-thread-id') || '__postchi__';
@@ -79,8 +91,6 @@
   var submitting = false;
   var lastSubmitAt = 0;
   var seenHiddenMsgKeys = {};
-  var activeReportFilter = '';
-  var activeLandFilter = '';
   var guestRepliesRemaining = null;
   try {
     var remRaw = form.getAttribute('data-guest-replies-remaining');
@@ -161,6 +171,8 @@
 
   function isHomeChatEmpty() {
     if (!homeInline || !list) return false;
+    /* لایهٔ چت باز از منو = دیگر بدو ورود نیست */
+    if (homeChatLayerOpen) return false;
     if (isPostchiMode()) return false;
     /* وکیل ملکی خوش‌آمد دارد ولی بدو ورود فروش نیست */
     if (typeof isLawyerMode === 'function' && isLawyerMode()) return false;
@@ -224,6 +236,11 @@
       if (empty) actionsEl.removeAttribute('hidden');
       else actionsEl.setAttribute('hidden', 'hidden');
     }
+    try {
+      if (input && !(input.value || '').trim()) {
+        input.placeholder = staticComposerPlaceholder();
+      }
+    } catch (_) {}
     /* در حالت خالی، پیام welcome SSR را از DOM بردار تا با برگشت به چت چشمک نزند */
     if (empty && list) {
       try {
@@ -806,9 +823,88 @@
       pollPaused = true;
     } else {
       resumePoll();
+      if (id && !isLawyerThreadId(id)) lastVinorThreadId = String(id);
     }
     if (isLawyerMode()) hideChipBar();
   }
+
+  function pushHomeChatHistory() {
+    if (!homeInline) return;
+    try {
+      var st = history.state;
+      if (st && st.vinorHomeChat === 1) return;
+      history.pushState(
+        Object.assign({}, st && typeof st === 'object' ? st : {}, { vinorHomeChat: 1 }),
+        '',
+        window.location.href
+      );
+    } catch (_) {}
+  }
+
+  /** برگشت به بدو ورود خانه — بدون لاگ‌اوت / بدون ترک /home */
+  function returnToHomeEmptyEntry() {
+    if (!homeInline) return false;
+    if (!homeChatLayerOpen && isHomeChatEmpty()) return false;
+    homeChatLayerOpen = false;
+    forceShowOpeningInHome = false;
+    pollPaused = true;
+    try {
+      cancelTypewriter();
+    } catch (_) {}
+    try {
+      if (chatAbort) {
+        chatAbort.abort();
+        chatAbort = null;
+      }
+    } catch (_) {}
+    try {
+      if (syncAbort) {
+        syncAbort.abort();
+        syncAbort = null;
+      }
+    } catch (_) {}
+    try {
+      if (list) list.innerHTML = '';
+    } catch (_) {}
+    lastSyncAt = '';
+    emptyPollStreak = 0;
+    seenEscalationIds = {};
+    try {
+      if (isPostchiMode() || isLawyerMode()) {
+        var backTid = lastVinorThreadId || '';
+        if (backTid) setActiveThreadId(backTid);
+        else if (threadInput) threadInput.value = '';
+        postchiOpened = false;
+        showChipBar();
+        /* setActiveThreadId ممکن است resumePoll کند — دوباره ببند تا بدو ورود پاک بماند */
+        pollPaused = true;
+      }
+    } catch (_) {}
+    try {
+      syncHomeEmptyState();
+    } catch (_) {}
+    try {
+      syncChipBarVisibility();
+    } catch (_) {}
+    try {
+      if (input) {
+        input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    } catch (_) {}
+    try {
+      submitting = false;
+      unlockComposer();
+    } catch (_) {}
+    return true;
+  }
+
+  /** برای express-nav popstate: اگر لایهٔ چت باز است، فقط بدو ورود */
+  window.__vinorAiConsumeHomeChatBack = function () {
+    if (!homeInline) return false;
+    if (!homeChatLayerOpen && isHomeChatEmpty()) return false;
+    return returnToHomeEmptyEntry();
+  };
 
   function syncComposerReady() {
     if (!form || !input || !btn) return;
@@ -889,7 +985,9 @@
     ) {
       return 'به سقف رسیدید — برای ادامه وارد شوید…';
     }
-    if (homeInline) return 'هر سوالی دارید بپرسید';
+    if (homeInline) {
+      return '';
+    }
     return 'از وینور AI بپرسید…';
   }
 
@@ -908,7 +1006,7 @@
   /** پدینگ راهنما = دقیقاً محدودهٔ textarea (مهم برای موبایل) */
   function syncTypeHintGeometry() {
     if (!typeHintHost || !input) return;
-    var shell = input.closest('.ai-composer__shell');
+    var shell = input.closest('.ai-composer__shell-row') || input.closest('.ai-composer__shell');
     if (!shell) return;
     var sr = shell.getBoundingClientRect();
     var ir = input.getBoundingClientRect();
@@ -1888,6 +1986,14 @@
       return true;
     }
     var text = (msg.content || '').trim();
+    /* پیام در حال ارسال — با پاسخ سرور دوبل نشود */
+    if (role === 'user' && text) {
+      var pendingUsers = list.querySelectorAll('.ai-msg-wrap[data-pending-user="1"][data-role="user"]');
+      for (var pu = 0; pu < pendingUsers.length; pu++) {
+        var bub = pendingUsers[pu].querySelector('.ai-msg-bubble');
+        if (bub && (bub.textContent || '').trim() === text) return true;
+      }
+    }
     if (text && text.indexOf('پاسخ تیم وینور') === 0) {
       var wraps = list.querySelectorAll('.ai-msg-wrap[data-admin-reply="1"] .ai-msg-bubble');
       for (var i = 0; i < wraps.length; i++) {
@@ -2347,8 +2453,8 @@
       var isLawyerOpening =
         isLawyerMode() ||
         String((rows[0] && rows[0].source) || '').toLowerCase() === 'lawyer';
-      if (homeInline && !isLawyerOpening) {
-        /* بدو ورود خانه = صفحه GPT خالی؛ حباب خوش‌آمد فروش نشان داده نمی‌شود */
+      /* بدو ورود خانه؛ مگر ورود صریح از منو به چت وینور */
+      if (homeInline && !isLawyerOpening && !forceShowOpeningInHome) {
         syncHomeEmptyState();
         syncChipBarVisibility();
         applyReportFilter();
@@ -2359,6 +2465,7 @@
         injectHomeJourneyCardIntoChat();
       }
       scanLastSyncFromDom();
+      syncHomeEmptyState();
       syncChipBarVisibility();
       applyReportFilter();
       scrollChatToLatest();
@@ -2373,6 +2480,7 @@
     showWelcomeIfEmpty();
     injectHomeJourneyCardIntoChat();
     scanLastSyncFromDom();
+    syncHomeEmptyState();
     syncChipBarVisibility();
     applyReportFilter();
     scrollChatToLatest();
@@ -2605,10 +2713,27 @@
         '<p class="px-2 py-4 text-center text-xs text-zinc-500">هنوز گفتگویی نیست</p>';
       return;
     }
+    /* فقط پستچی + یک گفتگوی وینور (بقیه ادغام‌شده) */
+    var postchiTh = null;
+    var vinorTh = null;
     threads.forEach(function (th) {
       var isPostchi = th.kind === 'postchi' || th.id === postchiThreadId;
       var isLawyer = th.kind === 'lawyer' || th.id === lawyerThreadId;
-      if (isLawyer) return; /* دکمهٔ جدا در کشو */
+      if (isLawyer) return;
+      if (isPostchi) {
+        postchiTh = th;
+        return;
+      }
+      if (!vinorTh || th.is_active) vinorTh = th;
+    });
+    var display = [];
+    if (postchiTh) display.push(postchiTh);
+    if (vinorTh) {
+      vinorTh = Object.assign({}, vinorTh, { title: 'وینور', kind: 'vinor' });
+      display.push(vinorTh);
+    }
+    display.forEach(function (th) {
+      var isPostchi = th.kind === 'postchi' || th.id === postchiThreadId;
       var btnEl = document.createElement('button');
       btnEl.type = 'button';
       btnEl.className =
@@ -2620,22 +2745,18 @@
       btnEl.setAttribute('data-thread-id', th.id);
       btnEl.setAttribute('data-active', th.is_active ? '1' : '0');
       if (isPostchi) btnEl.setAttribute('data-thread-kind', 'postchi');
+      else btnEl.setAttribute('data-thread-kind', 'vinor');
       var unreadBadge =
         th.unread > 0
           ? '<span class="ai-thread-unread">' +
             (th.unread > 99 ? '99+' : String(th.unread)) +
             '</span>'
           : '';
-      var deleteBtn =
-        isPostchi || isGuestAuth()
-          ? ''
-          : '<span class="ai-thread-delete" data-thread-id="' +
-          escapeHtml(th.id || '') +
-          '" role="button" aria-label="حذف گفتگو" tabindex="-1">' +
-          '<i class="fas fa-trash-alt text-[10px]" aria-hidden="true"></i></span>';
+      /* حذف روی تک‌ترد وینور معنا ندارد — گفتگوی جدید همان ریست است */
+      var deleteBtn = '';
       var extras = '';
       if (!inDrawer) {
-        if (th.preview) {
+        if (th.preview && !isPostchi) {
           extras +=
             '<p class="ai-thread-item__preview mt-1 text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">' +
             escapeHtml(th.preview) +
@@ -2652,6 +2773,13 @@
             '</time></p>';
         }
       }
+      var vinorIcon =
+        '<span class="ai-thread-smart-icon" aria-hidden="true">' +
+        '<svg viewBox="0 0 16 16" width="12" height="12" focusable="false">' +
+        '<circle class="ai-thread-smart-icon__glow" cx="8" cy="8" r="6.2"></circle>' +
+        '<circle class="ai-thread-smart-icon__core" cx="8" cy="8" r="2.55"></circle>' +
+        '<path class="ai-thread-smart-icon__ray" d="M8 1.15v1.9M8 12.95v1.9M1.15 8h1.9M12.95 8h1.9M3.05 3.05l1.35 1.35M11.6 11.6l1.35 1.35M3.05 12.95l1.35-1.35M11.6 4.4l1.35-1.35"></path>' +
+        '</svg></span>';
       btnEl.innerHTML =
         '<div class="ai-thread-item__row' +
         (inDrawer ? '' : ' flex items-center justify-between gap-2') +
@@ -2659,9 +2787,9 @@
         '<span class="ai-thread-item__title">' +
         (isPostchi
           ? '<i class="fas fa-envelope text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>'
-          : '') +
+          : vinorIcon) +
         '<span>' +
-        escapeHtml(th.title || 'گفتگو') +
+        escapeHtml(isPostchi ? th.title || 'پشتیبانی' : 'وینور') +
         '</span></span>' +
         '<span class="ai-thread-item__actions' +
         (inDrawer ? '' : ' flex shrink-0 items-center gap-1') +
@@ -2800,7 +2928,30 @@
         throw new Error((data && data.error) || 'خطا');
       }
       setActiveThreadId(data.thread_id);
-      renderMessages(data.messages);
+      var enterVinorChat =
+        !!(
+          homeInline &&
+          data.thread_id !== postchiThreadId &&
+          !isLawyerThreadId(data.thread_id)
+        );
+      var enterSpecialChat =
+        !!(
+          homeInline &&
+          (data.mode === 'postchi' ||
+            data.thread_id === postchiThreadId ||
+            data.mode === 'lawyer' ||
+            isLawyerThreadId(data.thread_id))
+        );
+      if (enterVinorChat || enterSpecialChat) {
+        homeChatLayerOpen = true;
+      }
+      /* ورود از منو به چت وینور: حتی با فقط خوش‌آمد، وارد چت شو */
+      forceShowOpeningInHome = enterVinorChat;
+      try {
+        renderMessages(data.messages);
+      } finally {
+        forceShowOpeningInHome = false;
+      }
       if (data.threads) applyThreads(data.threads);
       if (data.mode === 'postchi' || data.thread_id === postchiThreadId) {
         postchiOpened = true;
@@ -2812,8 +2963,14 @@
       if (data.mode === 'lawyer' || isLawyerThreadId(data.thread_id)) {
         hideChipBar();
       }
+      if (enterVinorChat || enterSpecialChat) {
+        pushHomeChatHistory();
+      }
       closeSideMenu();
       ensureChatVisible();
+      try {
+        syncHomeEmptyState();
+      } catch (_) {}
     } catch (err) {
       if (err && err.name !== 'AbortError') alert(err.message || 'خطا');
     } finally {
@@ -3034,7 +3191,8 @@
     if (!syncUrl || document.hidden || pollPaused || pollInFlight || isPostchiMode()) return;
     /* بدو ورود خانه: تا شروع گفتگو پیام ترد فعال را نکش — مهمان هم همان UX */
     if (homeInline && isHomeChatEmpty()) return;
-    if (layerGated && !sheetOpen) return;
+    /* خانهٔ اینلاین همیشه مجاز به poll است؛ فقط sheet لایهٔ موبایل را ببند */
+    if (layerGated && !sheetOpen && !homeInline) return;
     var tid = activeThreadId();
     if (!tid) return;
     if (syncAbort) syncAbort.abort();
@@ -3082,13 +3240,24 @@
   }
 
   function resumePoll() {
-    if (layerGated && !sheetOpen) {
+    if (layerGated && !sheetOpen && !homeInline) {
       pollPaused = true;
       return;
     }
     pollPaused = false;
     emptyPollStreak = 0;
     pollSync();
+  }
+
+  /** خروج فوری از بدو ورود تا #aiChat مخفی نماند و ارسال دیده شود (بدون poll زودهنگام) */
+  function beginHomeChatSend() {
+    if (!homeInline) return;
+    homeChatLayerOpen = true;
+    sheetOpen = true;
+    try {
+      syncHomeEmptyState();
+    } catch (_) {}
+    pushHomeChatHistory();
   }
 
   function syncComposerInset() {
@@ -3108,6 +3277,7 @@
     var liveInput = document.getElementById('aiInput');
     if (!liveForm) return false;
     ensureChatVisible();
+    beginHomeChatSend();
     unlockComposer();
     try {
       if (liveInput) {
@@ -3226,6 +3396,7 @@
     window.__vinorAiChatTeardown = null;
     window.__vinorAiChatSetSheetOpen = null;
     window.__vinorAiChatSwitchThread = null;
+    window.__vinorAiConsumeHomeChatBack = null;
   }
 
   window.__vinorAiChatTeardown = teardownAiChat;
@@ -3397,13 +3568,17 @@
 
     submitting = true;
     lastSubmitAt = now;
+    /* اول لایهٔ چت را باز کن تا #aiChat با CSS بدو ورود مخفی نماند */
+    beginHomeChatSend();
     hideChipBar();
     removeWelcome();
     if (!silentUser) {
       appendMessage({ role: 'user', content: msg }, { pendingUser: true });
     }
     showThinking();
-    syncHomeEmptyState();
+    try {
+      syncHomeEmptyState();
+    } catch (_) {}
     input.value = '';
     autoGrowInput();
     setBusy(true);
@@ -3414,6 +3589,12 @@
       if (!postchiSendUrl) {
         submitting = false;
         setBusy(false);
+        try {
+          if (!silentUser) {
+            input.value = msg;
+            autoGrowInput();
+          }
+        } catch (_) {}
         return;
       }
       try {
@@ -3434,6 +3615,10 @@
         await refreshHistory(true);
       } catch (err) {
         removePendingUser();
+        try {
+          input.value = msg;
+          autoGrowInput();
+        } catch (_) {}
         showEphemeralHint(err.message || 'خطا در ارسال پیام');
       } finally {
         removeThinking();
@@ -3531,6 +3716,10 @@
     } catch (err) {
       if (err && err.name === 'AbortError') return;
       removePendingUser();
+      try {
+        input.value = msg;
+        autoGrowInput();
+      } catch (_) {}
       var errMsg = String(err.message || 'خطای ناشناخته');
       showEphemeralHint(errMsg);
       if (/اعتبار API|InsufficientBalance|402/i.test(errMsg)) {
@@ -3542,6 +3731,7 @@
         submitting = false;
         setBusy(false);
         try {
+          syncComposerReady();
           input.focus();
         } catch (_) {}
       } else {
@@ -3700,6 +3890,12 @@
     function revealChatWithLand() {
       try {
         ensureChatVisible();
+      } catch (_) {}
+      try {
+        if (homeInline) {
+          homeChatLayerOpen = true;
+          pushHomeChatHistory();
+        }
       } catch (_) {}
       try {
         syncHomeEmptyState();

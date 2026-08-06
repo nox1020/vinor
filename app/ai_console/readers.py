@@ -172,6 +172,109 @@ def get_conversation(
     }
 
 
+def list_user_vinor_chats(
+    user_key: str,
+    *,
+    thread_id: str = "",
+    audience: str = "",
+    max_threads: int = 16,
+    max_messages: int = 120,
+) -> dict[str, Any]:
+    """تردها و ریز پیام‌های چت وینور یک کاربر — برای کارت پروفایل ادمین."""
+    uk = (user_key or "").strip()
+    empty: dict[str, Any] = {
+        "user_key": uk,
+        "threads": [],
+        "conversation": None,
+        "msg_total": 0,
+        "thread_count": 0,
+    }
+    if not uk:
+        return empty
+
+    try:
+        from app.ai.chat_store import load_user_record
+    except Exception:
+        return empty
+
+    threads: List[dict[str, Any]] = []
+    msg_total = 0
+    for aud in ("partner", "public"):
+        try:
+            record = load_user_record(uk, aud)
+        except Exception:
+            continue
+        if not isinstance(record, dict):
+            continue
+        for th in record.get("threads") or []:
+            if not isinstance(th, dict):
+                continue
+            msgs_raw = th.get("messages") if isinstance(th.get("messages"), list) else []
+            visible = [m for m in msgs_raw if isinstance(m, dict)]
+            last_preview = ""
+            if visible:
+                last = visible[-1]
+                last_preview = str(last.get("content") or "")[:100]
+            updated = str(th.get("updated_at") or th.get("created_at") or "")
+            tid = str(th.get("id") or "")
+            n = len(visible)
+            msg_total += n
+            threads.append(
+                {
+                    "audience": aud,
+                    "thread_id": tid,
+                    "title": str(th.get("title") or "گفتگو"),
+                    "msg_count": n,
+                    "updated_at": updated,
+                    "updated_label": _ts_label(updated),
+                    "last_preview": last_preview,
+                }
+            )
+
+    threads.sort(key=lambda r: str(r.get("updated_at") or ""), reverse=True)
+    threads = threads[: max(1, int(max_threads or 16))]
+
+    want_tid = (thread_id or "").strip()
+    want_aud = (audience or "").strip()
+    if want_aud not in ("public", "partner"):
+        want_aud = ""
+    selected = None
+    if want_tid:
+        for row in threads:
+            if row.get("thread_id") == want_tid and (not want_aud or row.get("audience") == want_aud):
+                selected = row
+                break
+    if selected is None and threads:
+        selected = threads[0]
+
+    conversation = None
+    if selected:
+        conversation = get_conversation(
+            audience=str(selected.get("audience") or "partner"),
+            user_key=uk,
+            thread_id=str(selected.get("thread_id") or ""),
+        )
+        if conversation and isinstance(conversation.get("messages"), list):
+            msgs = conversation["messages"]
+            cap = max(1, int(max_messages or 120))
+            if len(msgs) > cap:
+                conversation = dict(conversation)
+                conversation["messages"] = msgs[-cap:]
+                conversation["messages_truncated"] = True
+                conversation["messages_total"] = len(msgs)
+            else:
+                conversation["messages_truncated"] = False
+                conversation["messages_total"] = len(msgs)
+
+    return {
+        "user_key": uk,
+        "threads": threads,
+        "conversation": conversation,
+        "msg_total": msg_total,
+        "thread_count": len(threads),
+    }
+
+
 def list_pending_confirms(*, limit: int = 100) -> List[dict[str, Any]]:
     try:
         from datetime import timedelta

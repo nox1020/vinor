@@ -1606,6 +1606,17 @@
   window.addEventListener('popstate', function (ev) {
     if (!document.getElementById('vinor-express-page-swap')) return;
     if (!isPartnerUrl(window.location.href)) return;
+    /*
+     * Back از چت وینور/پشتیبانی داخل خانه → بدو ورود (بدون لاگ‌اوت / بدون ترک /home)
+     */
+    try {
+      if (
+        typeof window.__vinorAiConsumeHomeChatBack === 'function' &&
+        window.__vinorAiConsumeHomeChatBack()
+      ) {
+        return;
+      }
+    } catch (_) {}
     var target = window.location.href;
     var prevHref = window.__vinorExpressLastHref || '';
     var dir = 0;

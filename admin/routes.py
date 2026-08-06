@@ -4622,6 +4622,23 @@ def express_partner_detail(phone: str):
     except Exception:
         pass
 
+    vinor_chats = {
+        'user_key': phone,
+        'threads': [],
+        'conversation': None,
+        'msg_total': 0,
+        'thread_count': 0,
+    }
+    try:
+        from app.ai_console.readers import list_user_vinor_chats
+        vinor_chats = list_user_vinor_chats(
+            phone,
+            thread_id=(request.args.get('vinor_thread') or '').strip(),
+            audience=(request.args.get('vinor_aud') or '').strip(),
+        )
+    except Exception:
+        current_app.logger.exception('list_user_vinor_chats failed')
+
     return render_template(
         'admin/express_partner_detail.html',
         person=person,
@@ -4630,6 +4647,7 @@ def express_partner_detail(phone: str):
         page_title=f'پروفایل {display_name}',
         show_referral_retry=show_referral_retry,
         fcm_token_count=fcm_token_count,
+        vinor_chats=vinor_chats,
     )
 
 

@@ -53,11 +53,23 @@
         </div>
       </div>
 
-      {% if acc.partner_approved and person.phone %}
+      {% if person.phone %}
       <div class="hidden lg:flex flex-wrap gap-1.5 shrink-0 justify-end max-w-md">
+        <a href="#admVinorChats"
+           class="adm-pd-action"
+           title="مکالمات با وینور">
+          <i class="fa-solid fa-comments"></i>مکالمات
+        </a>
+        <a href="{{ url_for('admin.ai_console_memory', tab='users', user=person.phone) }}"
+           class="adm-pd-action"
+           title="حافظه AI این کاربر">
+          <i class="fa-solid fa-brain"></i>حافظه
+        </a>
+        {% if acc.partner_approved %}
         <a href="{{ url_for('admin.express_commissions') }}" class="adm-pd-action"><i class="fa-solid fa-wallet"></i>پورسانت</a>
         <a href="{{ url_for('admin.financial_withdrawals') }}" class="adm-pd-action"><i class="fa-solid fa-money-bill-transfer"></i>برداشت</a>
         <a href="{{ url_for('admin.express_visit_requests') }}" class="adm-pd-action"><i class="fa-solid fa-calendar-check"></i>بازدید</a>
+        {% endif %}
       </div>
       {% endif %}
     </div>
@@ -174,6 +186,106 @@
             </span>
           {% endfor %}
         </div>
+      </section>
+
+      {# مکالمات با وینور #}
+      {% set _vc = vinor_chats or {} %}
+      {% set _vc_threads = _vc.threads or [] %}
+      {% set _vc_conv = _vc.conversation %}
+      {% set _vc_sel_tid = (_vc_conv.thread.id if _vc_conv and _vc_conv.thread else '') %}
+      {% set _vc_sel_aud = (_vc_conv.audience if _vc_conv else '') %}
+      <section id="admVinorChats" class="adm-pd-card overflow-hidden scroll-mt-20">
+        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/50">
+          <h2 class="adm-pd-section-title text-gray-700 dark:text-gray-200 flex items-center gap-2 mb-0">
+            <i class="fa-solid fa-comments text-teal-500"></i>
+            مکالمات با وینور
+          </h2>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-[10px] text-gray-400 tabular-nums">
+              {{ _vc.thread_count or 0 }} گفتگو · {{ _vc.msg_total or 0 }} پیام
+            </span>
+            {% if person.phone %}
+            <a href="{{ url_for('admin.ai_console_usage', tab='chats', user=person.phone, audience=(_vc_sel_aud or 'partner')) }}"
+               class="text-[10px] font-semibold text-teal-600 dark:text-teal-400 hover:underline">
+              کنسول کامل ←
+            </a>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if not _vc_threads %}
+          <p class="text-xs text-center text-gray-400 py-8 px-4">هنوز مکالمه‌ای با وینور ثبت نشده.</p>
+        {% else %}
+          <div class="grid lg:grid-cols-5 min-h-0">
+            <div class="lg:col-span-2 border-b lg:border-b-0 lg:border-l border-gray-100 dark:border-gray-800 max-h-64 lg:max-h-[28rem] overflow-y-auto">
+              <ul class="divide-y divide-gray-100 dark:divide-gray-800">
+                {% for th in _vc_threads %}
+                <li>
+                  <a href="{{ url_for('admin.express_partner_detail', phone=person.phone, q=back_q or '', filter=back_filter or 'all', vinor_thread=th.thread_id, vinor_aud=th.audience) }}#admVinorChats"
+                     class="block px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-950/60 transition
+                            {% if _vc_sel_tid == th.thread_id and _vc_sel_aud == th.audience %}bg-teal-50 dark:bg-teal-950/35{% endif %}">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-xs font-bold text-gray-800 dark:text-gray-100 truncate">{{ th.title or 'گفتگو' }}</span>
+                      <span class="text-[9px] font-mono text-gray-400 shrink-0" dir="ltr">{{ th.audience }}</span>
+                    </div>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">{{ th.last_preview or '—' }}</p>
+                    <div class="flex justify-between gap-2 mt-0.5 text-[9px] text-gray-400">
+                      <span class="tabular-nums">{{ th.msg_count or 0 }} پیام</span>
+                      <span class="font-mono" dir="ltr">{{ th.updated_label or th.updated_at or '—' }}</span>
+                    </div>
+                  </a>
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+
+            <div class="lg:col-span-3 flex flex-col min-h-[14rem] max-h-[28rem]">
+              {% if not _vc_conv %}
+                <p class="text-xs text-gray-400 text-center py-12">یک گفتگو را انتخاب کنید</p>
+              {% else %}
+                <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                  <div class="min-w-0">
+                    <p class="text-xs font-bold text-gray-900 dark:text-white truncate">
+                      {{ _vc_conv.thread.title if _vc_conv.thread else 'گفتگو' }}
+                    </p>
+                    <p class="text-[10px] text-gray-400 font-mono mt-0.5" dir="ltr">
+                      {{ _vc_conv.audience }}
+                      {% if _vc_conv.thread and _vc_conv.thread.id %} · {{ _vc_conv.thread.id[:10] }}…{% endif %}
+                    </p>
+                  </div>
+                  {% if _vc_conv.messages_truncated %}
+                    <span class="text-[9px] text-amber-600 dark:text-amber-400">آخرین {{ _vc_conv.messages|length }} از {{ _vc_conv.messages_total }}</span>
+                  {% endif %}
+                </div>
+                <div class="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50/40 dark:bg-gray-950/30">
+                  {% if not _vc_conv.messages %}
+                    <p class="text-xs text-gray-400 text-center py-8">پیامی در این گفتگو نیست</p>
+                  {% else %}
+                    {% for m in _vc_conv.messages %}
+                    <div class="rounded-lg px-2.5 py-2 text-xs
+                                {% if m.role == 'assistant' %}bg-teal-50 dark:bg-teal-950/35 border border-teal-100/80 dark:border-teal-900/40
+                                {% elif m.role == 'user' %}bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800
+                                {% else %}bg-amber-50/70 dark:bg-amber-950/25 border border-amber-100/70 dark:border-amber-900/30{% endif %}">
+                      <div class="flex items-center justify-between gap-2 mb-1">
+                        <span class="text-[10px] font-bold
+                          {% if m.role == 'assistant' %}text-teal-700 dark:text-teal-300
+                          {% elif m.role == 'user' %}text-gray-600 dark:text-gray-300
+                          {% else %}text-amber-700 dark:text-amber-300{% endif %}">
+                          {% if m.role == 'assistant' %}وینور
+                          {% elif m.role == 'user' %}کاربر
+                          {% else %}{{ m.role or '—' }}{% endif %}
+                        </span>
+                        <span class="font-mono text-[9px] text-gray-400 shrink-0" dir="ltr">{{ m.ts_label or m.ts or '—' }}</span>
+                      </div>
+                      <div class="text-gray-800 dark:text-gray-100 whitespace-pre-wrap leading-relaxed break-words">{{ m.content }}</div>
+                    </div>
+                    {% endfor %}
+                  {% endif %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
       </section>
 
       {# فعالیت — آکاردئون #}
@@ -565,6 +677,18 @@
   <footer class="border-t border-gray-100 dark:border-gray-800 p-4 sm:px-6 bg-gray-50/90 dark:bg-gray-950/60">
     <div class="adm-pd-sticky-actions lg:static lg:border-0 lg:bg-transparent lg:shadow-none lg:p-0 lg:backdrop-filter-none">
       <div class="flex flex-wrap gap-2 justify-center lg:justify-start">
+        {% if person.phone %}
+          <a href="#admVinorChats"
+             class="adm-pd-action"
+             title="مکالمات با وینور">
+            <i class="fa-solid fa-comments"></i>مکالمات
+          </a>
+          <a href="{{ url_for('admin.ai_console_memory', tab='users', user=person.phone) }}"
+             class="adm-pd-action"
+             title="حافظه AI این کاربر">
+            <i class="fa-solid fa-brain"></i>حافظه
+          </a>
+        {% endif %}
         {% if acc.partner_pending or (acc.site_user and not acc.partner_approved) %}
           {% if app and app.id %}
           <form method="post" action="{{ url_for('admin.express_partner_application_approve', aid=app.id) }}" class="contents">

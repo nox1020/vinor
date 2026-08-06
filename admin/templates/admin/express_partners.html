@@ -260,6 +260,14 @@
 
               <i class="fa-solid fa-chevron-left text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-blue-500 shrink-0"></i>
             </a>
+            {% if person.phone %}
+            <a href="{{ url_for('admin.ai_console_memory', tab='users', user=person.phone) }}"
+               class="shrink-0 grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40 dark:hover:text-teal-300 transition"
+               title="حافظه {{ person.name or person.phone }}"
+               aria-label="حافظه کاربر">
+              <i class="fa-solid fa-brain text-xs"></i>
+            </a>
+            {% endif %}
             {% if acc.partner_pending or (acc.site_user and not acc.partner_approved) %}
               {% if app and app.id %}
               <form method="post" action="{{ url_for('admin.express_partner_application_approve', aid=app.id) }}" class="shrink-0">

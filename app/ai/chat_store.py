@@ -18,6 +18,7 @@ _MAX_THREADS = 30
 _MAX_CONTENT = 4000
 _TITLE_LEN = 48
 _MAX_PREVIEW = 80
+VINOR_THREAD_TITLE = "وینور"
 
 
 def _is_guest_key(user_key: str) -> bool:
@@ -352,28 +353,109 @@ def _active_thread(record: dict[str, Any]) -> dict[str, Any] | None:
     return _find_thread(record, record.get("active_id"))
 
 
-def create_thread(user_key: str, *, activate: bool = True, audience: str | None = None) -> str:
+def consolidate_ai_threads(user_key: str, audience: str | None = None) -> str | None:
+    """همهٔ گفتگوهای عادی را در یک ترد «وینور» ادغام کن (پستچی/وکیل جدا می‌مانند).
+
+    پیام‌ها به‌ترتیب زمان در ترد اصلی جمع می‌شوند؛ بقیهٔ تردها حذف می‌شوند.
+    """
     record = load_user_record(user_key, audience)
-    limit = _thread_limit(user_key)
+    threads = [t for t in (record.get("threads") or []) if isinstance(t, dict)]
+    if not threads:
+        return None
+
+    active = str(record.get("active_id") or "").strip()
+    # پستچی/وکیل id مصنوعی‌اند و داخل threads نیستند — active را دست نزن
+    active_is_special = active.startswith("__") or active in (
+        "__postchi__",
+        "__lawyer__",
+    )
+    primary = None if active_is_special else (_find_thread(record, active) if active else None)
+    if not primary:
+        primary = max(
+            threads,
+            key=lambda t: (
+                str(t.get("updated_at") or t.get("created_at") or ""),
+                len(t.get("messages") or []),
+            ),
+        )
+
+    primary_id = str(primary.get("id") or "").strip()
+    if not primary_id:
+        return None
+
+    def _commit(primary_th: dict[str, Any], *, force_active: bool) -> None:
+        record["threads"] = [primary_th]
+        if force_active or not active_is_special:
+            record["active_id"] = primary_id
+        _save_record(record, user_key, audience)
+
+    if len(threads) == 1:
+        changed = False
+        if str(primary.get("title") or "").strip() != VINOR_THREAD_TITLE:
+            primary["title"] = VINOR_THREAD_TITLE
+            changed = True
+        if primary.get("kind"):
+            primary.pop("kind", None)
+            changed = True
+        if changed:
+            _commit(primary, force_active=False)
+        return primary_id
+
+    all_msgs: list[dict[str, Any]] = []
+    for th in threads:
+        for m in th.get("messages") or []:
+            if isinstance(m, dict):
+                all_msgs.append(m)
+    all_msgs.sort(key=lambda m: str(m.get("created_at") or ""))
+
+    seen_ids: set[str] = set()
+    merged: list[dict[str, Any]] = []
+    for m in all_msgs:
+        mid = str(m.get("id") or "").strip()
+        if mid:
+            if mid in seen_ids:
+                continue
+            seen_ids.add(mid)
+        merged.append(m)
+    if len(merged) > _MAX_MESSAGES:
+        merged = merged[-_MAX_MESSAGES:]
+
+    ts = _now_iso()
+    primary["messages"] = merged
+    primary["title"] = VINOR_THREAD_TITLE
+    primary.pop("kind", None)
+    primary["updated_at"] = ts
+    if not primary.get("created_at"):
+        primary["created_at"] = ts
+
+    _commit(primary, force_active=False)
+    return primary_id
+
+
+def create_thread(user_key: str, *, activate: bool = True, audience: str | None = None) -> str:
+    """یک گفتگوی وینور — اگر از قبل هست همان را برمی‌گرداند (بدون ساختن ترد جدید)."""
+    consolidate_ai_threads(user_key, audience)
+    record = load_user_record(user_key, audience)
     threads = list(record.get("threads") or [])
-    if len(threads) >= limit:
-        # سقف پر است — گفتگوی جدید نساز (مهمان: معمولاً ۱)
-        th = _active_thread(record) or (threads[0] if threads else None)
-        if th:
-            if activate:
-                record["active_id"] = th["id"]
-                _save_record(record, user_key, audience)
-            return str(th["id"])
+    th = _active_thread(record) or (threads[0] if threads else None)
+    if th:
+        th["title"] = VINOR_THREAD_TITLE
+        th.pop("kind", None)
+        if activate:
+            record["active_id"] = th["id"]
+        _save_record(record, user_key, audience)
+        return str(th["id"])
+
     tid = str(uuid.uuid4())
     ts = _now_iso()
     thread = {
         "id": tid,
-        "title": "گفتگوی جدید",
+        "title": VINOR_THREAD_TITLE,
         "created_at": ts,
         "updated_at": ts,
         "messages": [],
     }
-    record["threads"] = [thread] + threads
+    record["threads"] = [thread]
     if activate:
         record["active_id"] = tid
     _save_record(record, user_key, audience)
@@ -432,7 +514,7 @@ def clear_chat(
     *,
     opening_text: str | None = None,
 ) -> dict[str, Any]:
-    """گفتگوی جدید — اگر فقط شروع وینور است همان را بازنشانی می‌کند."""
+    """گفتگوی جدید — همان ترد واحد «وینور» را خالی/بازنشانی می‌کند."""
     # قطع ادامهٔ فرم سراسری قدیمی؛ پیش‌نویس تردهای دیگر دست‌نخورده می‌ماند
     try:
         from app.ai.agent_tools import clear_legacy_visit_draft
@@ -448,11 +530,13 @@ def clear_chat(
     except Exception:
         pass
 
+    consolidate_ai_threads(user_key, audience)
     record = load_user_record(user_key, audience)
     th = _active_thread(record)
+
     if th and is_thread_open_slate(th):
         ts = _now_iso()
-        th["title"] = "گفتگوی جدید"
+        th["title"] = VINOR_THREAD_TITLE
         th["updated_at"] = ts
         th["messages"] = []
         record["active_id"] = th["id"]
@@ -469,11 +553,21 @@ def clear_chat(
             return {"ok": True, "thread_id": tid, "messages": msgs}
         return {"ok": True, "thread_id": tid}
 
-    blocked = guest_new_thread_blocked(user_key, audience)
-    if blocked:
-        return blocked
-
-    tid = create_thread(user_key, activate=True, audience=audience)
+    # تک‌ترد: حتی اگر پر باشد همان را خالی کن (مهمان هم اجازهٔ ریست دارد)
+    if not th:
+        tid = create_thread(user_key, activate=True, audience=audience)
+        record = load_user_record(user_key, audience)
+        th = _find_thread(record, tid)
+    assert th is not None
+    tid = str(th["id"])
+    ts = _now_iso()
+    th["title"] = VINOR_THREAD_TITLE
+    th["updated_at"] = ts
+    th["messages"] = []
+    th.pop("kind", None)
+    record["active_id"] = tid
+    record["threads"] = [th]
+    _save_record(record, user_key, audience)
     _clear_thread_side_state(user_key, tid)
     if opening_text:
         msgs, tid = ensure_vinor_opening(
@@ -548,8 +642,7 @@ def ensure_vinor_opening(
     }
     th["messages"] = [entry]
     th["updated_at"] = ts
-    if not (th.get("title") or "").strip() or th.get("title") == "گفتگوی جدید":
-        th["title"] = "گفتگوی جدید"
+    th["title"] = VINOR_THREAD_TITLE
     record["active_id"] = tid
     _save_record(record, user_key, audience)
     return _enrich_messages_for_ui(user_key, th["messages"], audience), tid
@@ -565,6 +658,7 @@ def set_active_thread(user_key: str, thread_id: str, audience: str | None = None
 
 
 def ensure_active_thread(user_key: str, audience: str | None = None) -> str:
+    consolidate_ai_threads(user_key, audience)
     record = load_user_record(user_key, audience)
     th = _active_thread(record)
     if th:
@@ -605,12 +699,13 @@ def _counts_toward_guest_quota(m: Any) -> bool:
 
 
 def threads_for_ui(user_key: str, audience: str | None = None) -> list[dict[str, Any]]:
+    consolidate_ai_threads(user_key, audience)
     record = load_user_record(user_key, audience)
     active = record.get("active_id")
     thread_rows = list(record.get("threads") or [])
-    if _is_guest_key(user_key):
-        th = _active_thread(record) or (thread_rows[0] if thread_rows else None)
-        thread_rows = [th] if th else []
+    # تک‌ترد وینور — حداکثر یک آیتم در لیست
+    th = _active_thread(record) or (thread_rows[0] if thread_rows else None)
+    thread_rows = [th] if th else []
     out: list[dict[str, Any]] = []
     for th in thread_rows:
         msgs = th.get("messages") or []
@@ -622,12 +717,13 @@ def threads_for_ui(user_key: str, audience: str | None = None) -> list[dict[str,
         out.append(
             {
                 "id": th.get("id"),
-                "title": th.get("title") or "گفتگو",
+                "title": VINOR_THREAD_TITLE,
                 "preview": preview,
                 "updated_at": th.get("updated_at"),
                 "created_at": th.get("created_at"),
                 "message_count": len(msgs),
                 "is_active": th.get("id") == active,
+                "kind": "vinor",
             }
         )
     return out
@@ -854,14 +950,12 @@ def append_exchange(
         if hide_user:
             user_entry["hide_ui"] = True
         msgs.append(user_entry)
-        if th.get("title") in (None, "", "گفتگوی جدید") and len(msgs) == 1:
+        if th.get("title") in (None, "", "گفتگوی جدید", VINOR_THREAD_TITLE) and len(msgs) == 1:
             if str(th.get("kind") or "") == "lawyer" or tid == "__lawyer__":
                 th["title"] = "وکیل ملکی"
                 th["kind"] = "lawyer"
-            elif not hide_user:
-                th["title"] = _title_from_text(user_text)
             else:
-                th["title"] = "گفتگوی فروش"
+                th["title"] = VINOR_THREAD_TITLE
     if assistant_text or actions or codes:
         msg_type = MSG_CARD if actions else MSG_AI
         entry: dict[str, Any] = {
@@ -1235,7 +1329,7 @@ def delete_thread(user_key: str, thread_id: str, audience: str | None = None) ->
         record["threads"] = [
             {
                 "id": tid,
-                "title": "گفتگوی جدید",
+                "title": VINOR_THREAD_TITLE,
                 "created_at": ts,
                 "updated_at": ts,
                 "messages": [],
@@ -1246,5 +1340,9 @@ def delete_thread(user_key: str, thread_id: str, audience: str | None = None) ->
         record, _ = _finalize_record(record)
         if record.get("active_id") == thread_id:
             record["active_id"] = record["threads"][0]["id"] if record["threads"] else None
+        # پس از حذف، بقیه را در یک وینور ادغام کن
+        _save_record(record, user_key, audience)
+        consolidate_ai_threads(user_key, audience)
+        return True
     _save_record(record, user_key, audience)
     return True

@@ -137,7 +137,7 @@ def build_thread(user_id: str, *, limit: int = 120) -> List[Dict[str, Any]]:
             'id': 'welcome',
             'role': 'in',
             'body': WELCOME_BODY,
-            'title': 'پستچی وینور',
+            'title': 'پشتیبانی',
             'action_url': None,
             'created_at': int(time.time()),
             'type': 'info',
@@ -328,7 +328,7 @@ def postchi_thread_for_ui(user_id: str) -> dict[str, Any]:
     if not uid:
         return {
             'id': POSTCHI_THREAD_ID,
-            'title': 'پستچی وینور',
+            'title': 'پشتیبانی',
             'preview': 'پیام‌های رسمی وینور',
             'updated_at': '',
             'created_at': '',
@@ -343,7 +343,7 @@ def postchi_thread_for_ui(user_id: str) -> dict[str, Any]:
     first_ts = int((thread[0] or {}).get('created_at') or 0) if thread else 0
     return {
         'id': POSTCHI_THREAD_ID,
-        'title': 'پستچی وینور',
+        'title': 'پشتیبانی',
         'preview': preview.get('preview') or 'پیام‌های رسمی وینور',
         'updated_at': _ts_to_iso(last_ts),
         'created_at': _ts_to_iso(first_ts),

@@ -4021,7 +4021,7 @@ def _commercial_ui_or_404():
 @require_partner_access()
 def negotiations_page():
     """صفحهٔ قدیمی مذاکرات — گزارش زنده جایگزین شده."""
-    return redirect(url_for('express_partner.settings'))
+    return redirect(url_for('express_partner.home'))
 
 
 @express_partner_bp.post('/negotiations', endpoint='negotiations_create')
@@ -4137,7 +4137,7 @@ def _closing_ui_or_404():
 @require_partner_access()
 def deals_page():
     """صفحهٔ قدیمی معاملات — گزارش زنده جایگزین شده."""
-    return redirect(url_for('express_partner.settings'))
+    return redirect(url_for('express_partner.home'))
 
 
 @express_partner_bp.post('/deals/<deal_id>/contracts', endpoint='deal_contract_create')
@@ -4283,7 +4283,7 @@ def _integration_ui_or_404():
 @require_partner_access()
 def journey_page():
     """صفحهٔ قدیمی مسیر معامله — گزارش زنده جایگزین شده."""
-    return redirect(url_for('express_partner.settings'))
+    return redirect(url_for('express_partner.home'))
 
 
 @express_partner_bp.post('/api/favorites/cards')
@@ -7508,52 +7508,11 @@ def _build_partner_memory_snapshot(me_phone: str) -> Dict[str, Any]:
     }
 
 
-def _settings_wallet_report(me_phone: str, profile) -> Dict[str, Any]:
-    """فقط موجودی قابل‌برداشت برای هاب تنظیمات — بدون بار کامل داشبورد."""
-    ph = _canonical_partner_phone(me_phone or '')
-    is_approved = _is_partner_approved(profile)
-    is_special = _is_partner_special(profile) if is_approved else False
-    me_name = (str((profile or {}).get('name') or '')).strip() if isinstance(profile, dict) else ''
-    partner_name = me_name or (_partner_display_name(ph) if ph else '')
-    withdrawable = 0
-    if ph and is_approved:
-        try:
-            stats = _partner_commission_stats(ph, _commissions_for_phone(ph))
-            withdrawable = int(stats.get('withdrawable_balance') or 0)
-        except Exception:
-            withdrawable = 0
-    return {
-        'ok': True,
-        'me_phone': ph,
-        'me_name': me_name,
-        'partner_name': partner_name,
-        'is_approved': is_approved,
-        'is_special': is_special,
-        'kpis': {'withdrawable_balance': withdrawable},
-    }
-
-
 @express_partner_bp.route('/settings', methods=['GET'], endpoint='settings')
 @require_partner_access(allow_pending=True)
 def settings_page():
-    """هاب تنظیمات همکار — کیف پول، حافظه، خروج."""
-    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
-    partners = load_express_partners() or []
-    profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
-    report = _settings_wallet_report(me_phone, profile)
-    return render_template(
-        'express_partner/settings.html',
-        me_phone=me_phone,
-        me_name=report.get('me_name') or '',
-        partner_name=report.get('partner_name') or '',
-        profile=profile,
-        is_approved=bool(report.get('is_approved')),
-        is_special=bool(report.get('is_special')),
-        report=report,
-        hide_header=True,
-        bottom_nav_active='profile',
-        seo_title='تنظیمات | وینور اکسپرس',
-    )
+    """صفحهٔ تنظیمات حذف شد — ریدایرکت به خانه."""
+    return redirect(url_for('express_partner.home'), code=301)
 
 
 @express_partner_bp.route('/settings/memory', methods=['GET'], endpoint='settings_memory')
