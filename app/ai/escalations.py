@@ -280,7 +280,7 @@ def send_admin_balance_depleted_sms() -> bool:
         "پنل ادمین: سوالات AI"
     )
     try:
-        result = send_sms_direct(mobile=admin_phone, message=msg, line_number=line)
+        result = send_sms_direct(mobile=admin_phone, message=msg, line_number=line, history_source='ai_escalation', recipient_name='ادمین')
         ok = bool(result.get("ok"))
         if not ok:
             try:
@@ -327,7 +327,7 @@ def send_admin_spend_fuse_sms(
         "فعال‌سازی: پنل ادمین ← سوالات AI"
     )
     try:
-        result = send_sms_direct(mobile=admin_phone, message=msg, line_number=line)
+        result = send_sms_direct(mobile=admin_phone, message=msg, line_number=line, history_source='ai_escalation', recipient_name='ادمین')
         ok = bool(result.get("ok"))
         if not ok:
             try:
@@ -376,7 +376,7 @@ def _notify_admin_sms(rec: dict[str, Any]) -> bool:
         f"پنل ادمین: سوالات AI"
     )
     try:
-        result = send_sms_direct(mobile=admin_phone, message=msg, line_number=line)
+        result = send_sms_direct(mobile=admin_phone, message=msg, line_number=line, history_source='ai_escalation', recipient_name='ادمین')
         ok = bool(result.get("ok"))
         if not ok:
             try:

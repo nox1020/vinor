@@ -481,8 +481,20 @@
     -webkit-font-smoothing: antialiased;
   }
   #homeDashboardPage.ai-home-is-empty #aiChatForm .ai-composer__input::placeholder {
+    color: #8f8f8f;
+    opacity: 1;
+  }
+  #homeDashboardPage.ai-home-is-empty #aiChatForm.ai-composer--ready .ai-composer__input::placeholder {
     color: transparent;
     opacity: 0;
+  }
+  #homeDashboardPage.ai-home-is-empty #aiChatForm .ai-composer__type-hint-clip {
+    direction: rtl;
+    text-align: right;
+  }
+  #homeDashboardPage.ai-home-is-empty #aiChatForm .ai-composer__type-hint-text {
+    direction: rtl;
+    unicode-bidi: plaintext;
   }
   #homeDashboardPage.ai-home-is-empty #aiChatForm .ai-composer__send[aria-disabled="true"],
   #homeDashboardPage.ai-home-is-empty #aiChatForm .ai-composer__send:disabled {

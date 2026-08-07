@@ -168,7 +168,7 @@ def notify_all_partners_new_express_land(land: Dict[str, Any]) -> Dict[str, Any]
     for partner in partners:
         phone = partner["phone"]
         try:
-            result = send_sms_direct(mobile=phone, message=message, line_number=line_number)
+            result = send_sms_direct(mobile=phone, message=message, line_number=line_number, record_history=False)
             ok = bool(result.get("ok"))
             if ok:
                 sent += 1

@@ -16,34 +16,48 @@
   </div>
   {% endif %}
 
-  <!-- گیرندگان -->
-  <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-    <div class="flex items-start justify-between gap-3 mb-3">
-      <div>
-        <p class="text-sm font-medium text-gray-900 dark:text-white">گیرندگان</p>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">گروه را انتخاب کنید یا لیست را ویرایش کنید.</p>
+  <!-- گیرنده و فرستنده -->
+  <details id="recipientSenderPanel" class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden group">
+    <summary class="px-4 py-3 cursor-pointer list-none flex items-center justify-between gap-2 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">
+      <span class="min-w-0 text-right">
+        <span class="text-sm font-medium text-gray-900 dark:text-white">گیرنده و فرستنده</span>
+        <span id="recipientSenderSummary" class="text-xs text-gray-500 dark:text-gray-400 mr-1">
+          · {{ recipient_group_labels.get(recipient_group, recipient_group) }} ({{ recipient_counts.get(recipient_group, 0) }})
+          · خط <span dir="ltr" class="font-mono">{{ sms_line_number }}</span>
+        </span>
+      </span>
+      <svg class="w-4 h-4 shrink-0 text-gray-500 transition-transform duration-200 group-open:rotate-180" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/>
+      </svg>
+    </summary>
+    <div class="px-4 pb-4 border-t border-gray-100 dark:border-gray-800 space-y-3 pt-3">
+      <div class="flex items-start justify-between gap-3">
+        <p class="text-xs text-gray-500 dark:text-gray-400">گروه را انتخاب کنید یا لیست را ویرایش کنید.</p>
+        <a href="{{ url_for('admin.sms_recipients') }}"
+           class="shrink-0 text-xs text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap">
+          مدیریت گیرندگان
+        </a>
       </div>
-      <a href="{{ url_for('admin.sms_recipients') }}"
-         class="shrink-0 text-xs text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap">
-        مدیریت گیرندگان
-      </a>
+      <label for="recipientGroupSelect" class="sr-only">گروه گیرندگان</label>
+      <select id="recipientGroupSelect"
+              class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2.5 text-sm text-gray-900 dark:text-white">
+        {% for key, label in recipient_group_labels.items() %}
+        <option value="{{ key }}" {% if recipient_group == key %}selected{% endif %}
+                data-count="{{ recipient_counts.get(key, 0) }}"
+                data-hint="{{ recipient_group_hints.get(key, '') }}">
+          {{ label }} ({{ recipient_counts.get(key, 0) }})
+        </option>
+        {% endfor %}
+      </select>
+      <p id="recipientGroupHint" class="text-xs text-gray-500 dark:text-gray-400">
+        <span id="recipientGroupHintText">{{ recipient_group_hints.get(recipient_group, '') }}</span>
+        <span id="recipientGroupSaved" class="hidden text-emerald-600 dark:text-emerald-400 mr-2">· ذخیره شد</span>
+      </p>
+      <p class="text-xs text-gray-500 dark:text-gray-400">
+        ارسال از خط <span id="smsLineNumberDisplay" dir="ltr" class="font-mono text-gray-700 dark:text-gray-300">{{ sms_line_number }}</span>
+      </p>
     </div>
-    <label for="recipientGroupSelect" class="sr-only">گروه گیرندگان</label>
-    <select id="recipientGroupSelect"
-            class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2.5 text-sm text-gray-900 dark:text-white">
-      {% for key, label in recipient_group_labels.items() %}
-      <option value="{{ key }}" {% if recipient_group == key %}selected{% endif %}
-              data-count="{{ recipient_counts.get(key, 0) }}"
-              data-hint="{{ recipient_group_hints.get(key, '') }}">
-        {{ label }} ({{ recipient_counts.get(key, 0) }})
-      </option>
-      {% endfor %}
-    </select>
-    <p id="recipientGroupHint" class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-      <span id="recipientGroupHintText">{{ recipient_group_hints.get(recipient_group, '') }}</span>
-      <span id="recipientGroupSaved" class="hidden text-emerald-600 dark:text-emerald-400 mr-2">· ذخیره شد</span>
-    </p>
-  </div>
+  </details>
 
   <!-- فرم اصلی: ارسال مستقیم -->
   <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
@@ -70,12 +84,23 @@
         </p>
       </div>
 
-      <p class="text-xs text-gray-500 dark:text-gray-400">
-        ارسال از خط <span dir="ltr" class="font-mono text-gray-700 dark:text-gray-300">{{ sms_line_number }}</span>
-      </p>
+      <div class="rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-3" id="sendTimingPanel">
+        <button type="button" id="sendTimingToggle"
+                class="w-full flex items-center justify-between gap-2 text-right cursor-pointer rounded-md -mx-1 px-1 py-0.5 hover:bg-gray-100/80 dark:hover:bg-gray-700/40 transition-colors"
+                aria-expanded="false"
+                aria-controls="sendTimingBody">
+          <span class="min-w-0">
+            <span class="text-sm font-medium text-gray-900 dark:text-white">زمان ارسال</span>
+            <span id="sendTimingSummary" class="text-xs text-gray-500 dark:text-gray-400 mr-1">
+              · {% if form_send_timing == 'scheduled' %}ارسال زمان‌دار{% elif form_send_timing == 'recurring' %}ارسال تکرارشونده{% else %}ارسال آنی{% endif %}
+            </span>
+          </span>
+          <svg id="sendTimingChevron" class="w-4 h-4 shrink-0 text-gray-500 transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/>
+          </svg>
+        </button>
 
-      <div class="rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-3">
-        <p class="text-sm font-medium text-gray-900 dark:text-white">زمان ارسال</p>
+        <div id="sendTimingBody" class="hidden space-y-3 pt-3 mt-3 border-t border-gray-200/80 dark:border-gray-700/80">
         <div class="space-y-2 text-sm">
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="radio" name="send_timing" value="instant" class="text-blue-600"
@@ -172,6 +197,7 @@
                    class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-mono text-gray-900 dark:text-white">
           </div>
         </div>
+        </div>
       </div>
 
       <button
@@ -187,22 +213,30 @@
   </div>
 
   {% if scheduled_jobs and scheduled_jobs|length %}
-  <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
-    <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">زمان‌بندی‌های در انتظار</h2>
-    <ul class="space-y-3">
+  <details class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 overflow-hidden group">
+    <summary class="px-4 py-3 cursor-pointer list-none flex items-center justify-between gap-2 hover:bg-amber-100/60 dark:hover:bg-amber-900/30">
+      <span class="text-sm font-semibold text-gray-900 dark:text-white">زمان‌بندی‌های در انتظار</span>
+      <span class="text-xs text-amber-800 dark:text-amber-200 tabular-nums">{{ scheduled_jobs|length }} مورد</span>
+    </summary>
+    <div class="px-4 pb-4 border-t border-amber-200/80 dark:border-amber-900/40">
+    <ul class="space-y-3 mt-3">
       {% for job in scheduled_jobs %}
       <li class="rounded-lg border border-amber-100 dark:border-amber-900/40 bg-white dark:bg-gray-900 p-3 text-sm">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
-            <p class="text-gray-900 dark:text-white truncate">{{ job.message[:80] }}{% if job.message|length > 80 %}…{% endif %}</p>
+            {% set job_msg = job.message or '' %}
+            <p class="text-gray-900 dark:text-white truncate">{{ job_msg[:80] }}{% if job_msg|length > 80 %}…{% endif %}</p>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {{ recipient_group_labels.get(job.recipient_group, job.recipient_group) }}
-              · {% if job.send_batch_label %}{{ job.send_batch_label }}{% else %}{{ job.recipient_count }} نفر{% endif %}
+              · {% if job.send_batch_label %}{{ job.send_batch_label }}{% else %}{{ job.recipient_count|default(0) }} نفر{% endif %}
               ·
               {% if job.send_timing == 'recurring' %}
                 تکرارشونده
               {% else %}
                 یک‌بار
+              {% endif %}
+              {% if job.runs_completed|default(0) > 0 %}
+              · {{ job.runs_completed }} اجرا
               {% endif %}
             </p>
             <p class="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
@@ -214,11 +248,15 @@
               <span class="font-medium">{{ job.next_run_display or '—' }}</span>
               <span class="text-gray-400 font-normal">تهران</span>
             </p>
+            {% if job.last_run_at %}
+            <p class="text-[11px] text-gray-400 mt-0.5">آخرین اجرا: {{ job.last_run_display or job.last_run_at }}</p>
+            {% endif %}
           </div>
-          <form method="post" class="shrink-0" onsubmit="return confirm('این زمان‌بندی لغو شود؟');">
+          <form method="post" class="shrink-0" action="{{ url_for('admin.sms_colleagues', recipient_group=recipient_group) }}" onsubmit="return confirm('این زمان‌بندی لغو شود؟');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="cancel_scheduled">
             <input type="hidden" name="job_id" value="{{ job.id }}">
+            <input type="hidden" name="recipient_group" value="{{ recipient_group or 'approved' }}">
             <button type="submit" class="text-xs px-2 py-1 rounded border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20">
               لغو
             </button>
@@ -227,7 +265,8 @@
       </li>
       {% endfor %}
     </ul>
-  </div>
+    </div>
+  </details>
   {% endif %}
 
   <!-- حالت پیشرفته: قالب sms.ir -->
@@ -305,10 +344,16 @@
           <p class="text-gray-900 dark:text-white truncate">
             {{ record.recipient_name or record.mobile or '—' }}
           </p>
-          <p class="text-xs text-gray-500 dark:text-gray-400 font-mono" dir="ltr">
+          {% if record.preview and record.preview != '—' %}
+          <p class="text-xs text-gray-600 dark:text-gray-300 mt-0.5 truncate">{{ record.preview }}</p>
+          {% endif %}
+          <p class="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5" dir="ltr">
             {{ record.mobile or '—' }}
             ·
-            {% if record.created_at %}{{ record.created_at[:16]|replace('T', ' ') }}{% else %}—{% endif %}
+            {% if record.created_at_display %}{{ record.created_at_display }}{% elif record.created_at %}{{ record.created_at[:16]|replace('T', ' ') }}{% else %}—{% endif %}
+            {% if record.source_label %}
+            · <span class="font-sans">{{ record.source_label }}</span>
+            {% endif %}
           </p>
           {% if record.error %}
           <p class="text-xs text-rose-600 dark:text-rose-400 mt-0.5 truncate">{{ record.error }}</p>
@@ -423,6 +468,14 @@ function syncRecipientGroupUi() {
   if (hintEl && sel && sel.selectedOptions && sel.selectedOptions[0]) {
     hintEl.textContent = sel.selectedOptions[0].getAttribute('data-hint') || '';
   }
+  var summaryEl = document.getElementById('recipientSenderSummary');
+  if (summaryEl) {
+    var lineEl = document.getElementById('smsLineNumberDisplay');
+    var line = lineEl ? (lineEl.textContent || '').trim() : '';
+    summaryEl.innerHTML =
+      ' · ' + getSelectedRecipientLabel() + ' (' + count + ')' +
+      (line ? ' · خط <span dir="ltr" class="font-mono">' + line + '</span>' : '');
+  }
 }
 
 var _recipientGroupSaveTimer = null;
@@ -485,6 +538,33 @@ function getSelectedSendTiming() {
   return (checked && checked.value) ? checked.value : 'instant';
 }
 
+var SEND_TIMING_LABELS = {
+  instant: 'ارسال آنی',
+  scheduled: 'ارسال زمان‌دار',
+  recurring: 'ارسال تکرارشونده'
+};
+
+function isSendTimingPanelOpen() {
+  var body = document.getElementById('sendTimingBody');
+  return !!(body && !body.classList.contains('hidden'));
+}
+
+function setSendTimingPanelOpen(open) {
+  var body = document.getElementById('sendTimingBody');
+  var toggle = document.getElementById('sendTimingToggle');
+  var chevron = document.getElementById('sendTimingChevron');
+  if (body) body.classList.toggle('hidden', !open);
+  if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (chevron) chevron.classList.toggle('rotate-180', open);
+}
+
+function syncSendTimingSummary() {
+  var el = document.getElementById('sendTimingSummary');
+  if (!el) return;
+  var timing = getSelectedSendTiming();
+  el.textContent = ' · ' + (SEND_TIMING_LABELS[timing] || SEND_TIMING_LABELS.instant);
+}
+
 function syncScheduledAtClock() {
   var dt = document.getElementById('scheduled_at');
   var hint = document.getElementById('scheduledAtHint');
@@ -532,6 +612,7 @@ function syncSendTimingUi() {
     weekdayWrap.classList.toggle('hidden', freq.value !== 'weekly');
     dayWrap.classList.toggle('hidden', freq.value !== 'monthly');
   }
+  syncSendTimingSummary();
 }
 
 function confirmSend() {
@@ -596,6 +677,12 @@ function confirmSend() {
   document.querySelectorAll('#directSmsForm input[name="send_timing"]').forEach(function (el) {
     el.addEventListener('change', syncSendTimingUi);
   });
+  document.getElementById('sendTimingToggle')?.addEventListener('click', function () {
+    setSendTimingPanelOpen(!isSendTimingPanelOpen());
+  });
+  {% if error and form_send_timing != 'instant' %}
+  setSendTimingPanelOpen(true);
+  {% endif %}
   document.getElementById('recurrence_freq')?.addEventListener('change', syncSendTimingUi);
   document.getElementById('send_limit')?.addEventListener('input', syncSendTimingUi);
   syncSendTimingUi();

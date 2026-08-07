@@ -348,7 +348,12 @@ def _run_sms_job(app, job_id: str, numbers: list[str], template_id: int, params:
                     if dry_run:
                         resp = {"ok": True, "status": 200}
                     else:
-                        resp = send_sms_template(mobile=to_send, template_id=template_id, parameters=params)
+                        resp = send_sms_template(
+                            mobile=to_send,
+                            template_id=template_id,
+                            parameters=params,
+                            history_source='admin_sms_campaign',
+                        )
                     if resp.get('ok'):
                         sent += 1
                     else:
@@ -440,7 +445,12 @@ def sms_test_send():
 
     to_send = _normalize_for_sms_ir(phone)
     try:
-        resp = send_sms_template(mobile=to_send, template_id=template_id, parameters=params)
+        resp = send_sms_template(
+            mobile=to_send,
+            template_id=template_id,
+            parameters=params,
+            history_source='admin_sms_campaign',
+        )
         ok = bool(resp.get('ok'))
         code = resp.get('status')
         body = resp.get('body')

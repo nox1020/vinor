@@ -113,7 +113,8 @@ def send_sms():
             mobile=mobile,
             template_id=int(template_id),
             parameters=parameters if parameters else None,
-            api_key=api_key
+            api_key=api_key,
+            record_history=False,
         )
         
         # ذخیره سابقه
@@ -303,7 +304,8 @@ def bulk_send_sms():
                     mobile=mobile_str,
                     template_id=int(template_id),
                     parameters=parameters if parameters else None,
-                    api_key=api_key
+                    api_key=api_key,
+                    record_history=False,
                 )
                 
                 # ذخیره سابقه

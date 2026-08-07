@@ -89,7 +89,7 @@ def _build_message(action: str, settings: dict, **kw: Any) -> str:
 
 
 def _send_sms_to(mobile: str, msg: str, *, line: str, action: str, recipient_name: str, **kwargs: Any) -> dict:
-    sms_result = send_sms_direct(mobile=mobile, message=msg, line_number=line)
+    sms_result = send_sms_direct(mobile=mobile, message=msg, line_number=line, record_history=False)
     ok = bool(sms_result.get('ok'))
     err = None
     body = sms_result.get('body') or {}
@@ -98,7 +98,7 @@ def _send_sms_to(mobile: str, msg: str, *, line: str, action: str, recipient_nam
         err = str(body.get('message') or body.get('error') or 'sms_send_failed')
         if sms_is_infrastructure_error(err):
             time.sleep(0.6)
-            sms_result = send_sms_direct(mobile=mobile, message=msg, line_number=line)
+            sms_result = send_sms_direct(mobile=mobile, message=msg, line_number=line, record_history=False)
             ok = bool(sms_result.get('ok'))
             body = sms_result.get('body') or {}
             if ok:

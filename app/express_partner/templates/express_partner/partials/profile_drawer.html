@@ -71,6 +71,9 @@
     will-change: transform;
     color: var(--ep-drawer-text);
   }
+  #epProfileDrawer:has(.ep-profile-drawer__foot) {
+    padding-bottom: 0;
+  }
   #epProfileDrawer.is-open {
     transform: translate3d(0, 0, 0);
   }
@@ -398,6 +401,10 @@
     direction: ltr;
     background: #000;
   }
+  .ep-profile-drawer__foot--login {
+    direction: rtl;
+    align-items: stretch;
+  }
   .ep-profile-drawer__foot-btn {
     display: inline-flex;
     align-items: center;
@@ -596,6 +603,21 @@
     padding: 0.85rem 0.55rem 0.65rem;
     text-align: right;
   }
+  .ep-profile-drawer__foot .ep-profile-drawer__guest {
+    width: 100%;
+    padding: 0.15rem 0.1rem 0;
+  }
+  .ep-profile-drawer__foot .ep-profile-drawer__guest-title {
+    font-size: 0.95rem;
+  }
+  .ep-profile-drawer__foot .ep-profile-drawer__guest-lead {
+    margin-top: 0.25rem;
+    font-size: 0.78rem;
+  }
+  .ep-profile-drawer__foot .ep-drawer-login__legal {
+    margin-top: 0.45rem;
+    font-size: 0.68rem;
+  }
   .ep-profile-drawer__guest-title {
     margin: 0;
     font-size: 1.0625rem;
@@ -769,72 +791,6 @@
 
   <div class="ep-profile-drawer__body">
     {% if not me_phone %}
-    <div class="ep-profile-drawer__guest" id="epDrawerLoginRoot"
-         data-login-url="{{ url_for('express_partner.login') }}"
-         data-verify-url="{{ url_for('express_partner.verify') }}"
-         data-resend-url="{{ url_for('express_partner.otp_resend') }}"
-         data-home-url="{{ url_for('express_partner.home') }}"
-         data-apply-url="{{ url_for('express_partner.apply') }}"
-         data-default-next="{{ url_for('express_partner.home') }}">
-      <div class="ep-drawer-login" data-ep-drawer-login>
-        <div class="ep-drawer-login__step" data-login-step="phone">
-          <p class="ep-profile-drawer__guest-title">ورود به وینور</p>
-          <p class="ep-profile-drawer__guest-lead">شماره موبایل را وارد کنید؛ کد تأیید پیامک می‌شود.</p>
-          <form id="epDrawerPhoneForm" method="POST" action="{{ url_for('express_partner.login') }}" novalidate>
-            {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
-            <input type="hidden" name="accept_legal" value="1">
-            <input type="hidden" name="next" id="epDrawerLoginNext" value="{{ url_for('express_partner.home') }}">
-            <div class="ep-drawer-login__field">
-              <input id="epDrawerPhone" class="ep-drawer-login__input" type="tel" name="phone"
-                     required inputmode="numeric" autocomplete="tel" dir="ltr"
-                     placeholder="09xxxxxxxxx" maxlength="11" aria-label="شماره موبایل">
-            </div>
-            <p id="epDrawerPhoneHint" class="ep-drawer-login__hint" role="alert"></p>
-            <p class="ep-drawer-login__legal">
-              با ادامه،
-              <a href="{{ url_for('express_partner.legal_terms', next=url_for('express_partner.home', menu=1)) }}" target="_blank" rel="noopener">شرایط</a>
-              و
-              <a href="{{ url_for('main.privacy', next=url_for('express_partner.home', menu=1)) }}" target="_blank" rel="noopener">حریم خصوصی</a>
-              را می‌پذیرید.
-            </p>
-            <div class="ep-drawer-login__actions ep-drawer-login__actions--stack">
-              <button type="submit" id="epDrawerPhoneBtn" class="ep-profile-drawer__guest-btn ep-profile-drawer__guest-btn--primary" disabled>
-                <span data-btn-label>ادامه</span>
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <div class="ep-drawer-login__step" data-login-step="otp" hidden>
-          <div class="ep-drawer-login__meta">
-            <span class="ep-drawer-login__phone" id="epDrawerOtpPhone" dir="ltr"></span>
-            <button type="button" class="ep-drawer-login__link" id="epDrawerChangePhone">تغییر شماره</button>
-          </div>
-          <form id="epDrawerOtpForm" method="POST" action="{{ url_for('express_partner.verify') }}" novalidate>
-            {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
-            <input type="hidden" name="phone" id="epDrawerOtpPhoneHidden" value="">
-            <input type="hidden" name="next" id="epDrawerOtpNext" value="{{ url_for('express_partner.home') }}">
-            <div class="ep-drawer-login__field">
-              <input id="epDrawerOtp" class="ep-drawer-login__input ep-drawer-login__input--otp" type="text"
-                     name="otp_code" inputmode="numeric" pattern="[0-9]*"
-                     autocomplete="one-time-code" autocapitalize="off" autocorrect="off"
-                     spellcheck="false" enterkeyhint="done"
-                     maxlength="5" dir="ltr" placeholder="-----" aria-label="کد تأیید ۵ رقمی">
-            </div>
-            <p id="epDrawerOtpHint" class="ep-drawer-login__hint" role="alert"></p>
-            <div class="ep-drawer-login__meta">
-              <button type="button" class="ep-drawer-login__link" id="epDrawerResendBtn" disabled>ارسال مجدد</button>
-              <span class="ep-drawer-login__link" id="epDrawerResendTimer" aria-live="polite"></span>
-            </div>
-            <div class="ep-drawer-login__actions">
-              <button type="submit" id="epDrawerOtpBtn" class="ep-profile-drawer__guest-btn ep-profile-drawer__guest-btn--primary" disabled>
-                <span data-btn-label>ورود</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
     {% if home_ai_enabled|default(false) %}
     <div class="ep-profile-drawer__ai" aria-label="گفتگوهای Vinor AI">
       {% if lawyer_feature_on|default(lawyer_enabled|default(false)) %}
@@ -971,6 +927,75 @@
         {% endif %}
       </span>
     </a>
+  </div>
+  {% else %}
+  <div class="ep-profile-drawer__foot ep-profile-drawer__foot--login">
+    <div class="ep-profile-drawer__guest" id="epDrawerLoginRoot"
+         data-login-url="{{ url_for('express_partner.login') }}"
+         data-verify-url="{{ url_for('express_partner.verify') }}"
+         data-resend-url="{{ url_for('express_partner.otp_resend') }}"
+         data-home-url="{{ url_for('express_partner.home') }}"
+         data-apply-url="{{ url_for('express_partner.apply') }}"
+         data-default-next="{{ url_for('express_partner.home') }}">
+      <div class="ep-drawer-login" data-ep-drawer-login>
+        <div class="ep-drawer-login__step" data-login-step="phone">
+          <p class="ep-profile-drawer__guest-title">ورود به وینور</p>
+          <p class="ep-profile-drawer__guest-lead">شماره موبایل را وارد کنید؛ کد تأیید پیامک می‌شود.</p>
+          <form id="epDrawerPhoneForm" method="POST" action="{{ url_for('express_partner.login') }}" novalidate>
+            {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+            <input type="hidden" name="accept_legal" value="1">
+            <input type="hidden" name="next" id="epDrawerLoginNext" value="{{ url_for('express_partner.home') }}">
+            <div class="ep-drawer-login__field">
+              <input id="epDrawerPhone" class="ep-drawer-login__input" type="tel" name="phone"
+                     required inputmode="numeric" autocomplete="tel" dir="ltr"
+                     placeholder="09xxxxxxxxx" maxlength="11" aria-label="شماره موبایل">
+            </div>
+            <p id="epDrawerPhoneHint" class="ep-drawer-login__hint" role="alert"></p>
+            <p class="ep-drawer-login__legal">
+              با ادامه،
+              <a href="{{ url_for('express_partner.legal_terms', next=url_for('express_partner.home', menu=1)) }}" target="_blank" rel="noopener">شرایط</a>
+              و
+              <a href="{{ url_for('main.privacy', next=url_for('express_partner.home', menu=1)) }}" target="_blank" rel="noopener">حریم خصوصی</a>
+              را می‌پذیرید.
+            </p>
+            <div class="ep-drawer-login__actions ep-drawer-login__actions--stack">
+              <button type="submit" id="epDrawerPhoneBtn" class="ep-profile-drawer__guest-btn ep-profile-drawer__guest-btn--primary" disabled>
+                <span data-btn-label>ادامه</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="ep-drawer-login__step" data-login-step="otp" hidden>
+          <div class="ep-drawer-login__meta">
+            <span class="ep-drawer-login__phone" id="epDrawerOtpPhone" dir="ltr"></span>
+            <button type="button" class="ep-drawer-login__link" id="epDrawerChangePhone">تغییر شماره</button>
+          </div>
+          <form id="epDrawerOtpForm" method="POST" action="{{ url_for('express_partner.verify') }}" novalidate>
+            {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+            <input type="hidden" name="phone" id="epDrawerOtpPhoneHidden" value="">
+            <input type="hidden" name="next" id="epDrawerOtpNext" value="{{ url_for('express_partner.home') }}">
+            <div class="ep-drawer-login__field">
+              <input id="epDrawerOtp" class="ep-drawer-login__input ep-drawer-login__input--otp" type="text"
+                     name="otp_code" inputmode="numeric" pattern="[0-9]*"
+                     autocomplete="one-time-code" autocapitalize="off" autocorrect="off"
+                     spellcheck="false" enterkeyhint="done"
+                     maxlength="5" dir="ltr" placeholder="-----" aria-label="کد تأیید ۵ رقمی">
+            </div>
+            <p id="epDrawerOtpHint" class="ep-drawer-login__hint" role="alert"></p>
+            <div class="ep-drawer-login__meta">
+              <button type="button" class="ep-drawer-login__link" id="epDrawerResendBtn" disabled>ارسال مجدد</button>
+              <span class="ep-drawer-login__link" id="epDrawerResendTimer" aria-live="polite"></span>
+            </div>
+            <div class="ep-drawer-login__actions">
+              <button type="submit" id="epDrawerOtpBtn" class="ep-profile-drawer__guest-btn ep-profile-drawer__guest-btn--primary" disabled>
+                <span data-btn-label>ورود</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
   {% endif %}
 </aside>
@@ -1620,6 +1645,7 @@
     var resendLeft = 0;
     var resendTimerId = 0;
     var busy = false;
+    var verifyInflight = false;
     var currentPhone = '';
     var webOtpAbort = null;
 
@@ -1670,7 +1696,7 @@
       showHint(otpHint, '');
       otpInput.value = digits;
       syncOtpBtn();
-      if (digits.length === OTP_LEN && otpForm && !busy) {
+      if (digits.length === OTP_LEN && otpForm && !busy && !verifyInflight) {
         try {
           if (typeof otpForm.requestSubmit === 'function') otpForm.requestSubmit();
           else otpForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
@@ -1702,9 +1728,11 @@
     }
     function showStep(name) {
       if (name === 'gate') name = 'phone';
+      if (name === 'phone') stopResendCountdown();
       if (phoneStep) phoneStep.hidden = name !== 'phone';
       if (otpStep) otpStep.hidden = name !== 'otp';
       if (name === 'otp') {
+        resumeResendCountdownIfNeeded();
         startWebOtpListen();
         try {
           if (typeof window.vinorApkOtpPageReady === 'function') window.vinorApkOtpPageReady();
@@ -1724,7 +1752,10 @@
     }
     try {
       window.vinorFillOtpFromApp = fillOtpFromString;
-      window.__vinorDrawerStopWebOtp = stopWebOtpListen;
+      window.__vinorDrawerStopWebOtp = function () {
+        stopWebOtpListen();
+        clearResendTimer();
+      };
     } catch (_) {}
     function openLoginForm(nextUrlOrOpts, maybeOpts) {
       var opts = {};
@@ -1742,14 +1773,22 @@
       } catch (_) {}
       if (nextUrl) setNext(nextUrl);
       else setNext(defaultNext);
-      showStep('phone');
+      var forcePhone = !!(opts.forcePhone || opts.reset);
+      var otpPending = !forcePhone && currentPhone && otpPhoneHidden && otpPhoneHidden.value;
+      if (otpPending) {
+        if (otpPhoneLabel) otpPhoneLabel.textContent = formatPhoneDisplay(currentPhone);
+        showStep('otp');
+      } else {
+        showStep('phone');
+      }
       if (opts.hint) {
         showHint(phoneHint, opts.hint, true);
       }
       window.setTimeout(function () {
-        if (phoneInput) {
-          try { phoneInput.focus({ preventScroll: true }); } catch (_) {
-            try { phoneInput.focus(); } catch (_) {}
+        var focusEl = otpPending ? otpInput : phoneInput;
+        if (focusEl) {
+          try { focusEl.focus({ preventScroll: true }); } catch (_) {
+            try { focusEl.focus(); } catch (_) {}
           }
         }
       }, 120);
@@ -1783,6 +1822,60 @@
         if (btn === otpBtn) syncOtpBtn();
       }
     }
+    function applyCsrfToken(token) {
+      if (!token) return;
+      try {
+        root.querySelectorAll('input[name="csrf_token"]').forEach(function (el) {
+          el.value = token;
+        });
+      } catch (_) {}
+    }
+    function clearResendTimer() {
+      if (resendTimerId) {
+        window.clearTimeout(resendTimerId);
+        resendTimerId = 0;
+      }
+    }
+    function stopResendCountdown(fullReset) {
+      clearResendTimer();
+      if (fullReset !== false) {
+        resendLeft = 0;
+        if (resendTimer) resendTimer.textContent = '';
+        if (resendBtn) resendBtn.disabled = true;
+      }
+    }
+    function resumeResendCountdownIfNeeded() {
+      if (resendLeft > 0 && !resendTimerId) {
+        if (resendBtn) resendBtn.disabled = true;
+        function tick() {
+          if (resendTimer) {
+            resendTimer.textContent = resendLeft > 0 ? (resendLeft + 'ث') : '';
+          }
+          if (resendLeft <= 0) {
+            if (resendBtn) resendBtn.disabled = false;
+            if (resendTimer) resendTimer.textContent = '';
+            return;
+          }
+          resendLeft -= 1;
+          resendTimerId = window.setTimeout(tick, 1000);
+        }
+        tick();
+        return;
+      }
+      if (resendLeft <= 0) {
+        if (resendBtn) resendBtn.disabled = false;
+        if (resendTimer) resendTimer.textContent = '';
+      }
+    }
+    function authErrorFromPayload(payload, hintEl) {
+      var data = (payload && payload.data) || {};
+      if (data.csrf_token) applyCsrfToken(data.csrf_token);
+      if (data.error === 'csrf_expired') {
+        showHint(hintEl, data.message || 'جلسه منقضی شد. دوباره تلاش کنید.');
+        return true;
+      }
+      return false;
+    }
     function postForm(url, formEl) {
       return fetch(url, {
         method: 'POST',
@@ -1793,7 +1886,10 @@
           Accept: 'application/json'
         }
       }).then(function (res) {
+        var csrfHdr = res.headers.get('X-CSRF-Token');
+        if (csrfHdr) applyCsrfToken(csrfHdr);
         return res.json().then(function (data) {
+          if (data && data.csrf_token) applyCsrfToken(data.csrf_token);
           return { ok: res.ok, status: res.status, data: data || {} };
         }).catch(function () {
           return { ok: false, status: res.status, data: {} };
@@ -1824,6 +1920,7 @@
     function startResendCountdown() {
       resendLeft = RESEND_SEC;
       if (resendBtn) resendBtn.disabled = true;
+      clearResendTimer();
       function tick() {
         if (resendTimer) {
           resendTimer.textContent = resendLeft > 0 ? (resendLeft + 'ث') : '';
@@ -1836,7 +1933,6 @@
         resendLeft -= 1;
         resendTimerId = window.setTimeout(tick, 1000);
       }
-      if (resendTimerId) window.clearTimeout(resendTimerId);
       tick();
     }
 
@@ -1853,7 +1949,7 @@
         showHint(otpHint, '');
         otpInput.value = normalizeOtp(otpInput.value);
         syncOtpBtn();
-        if (normalizeOtp(otpInput.value).length === OTP_LEN && otpForm && !busy) {
+        if (normalizeOtp(otpInput.value).length === OTP_LEN && otpForm && !busy && !verifyInflight) {
           otpForm.requestSubmit ? otpForm.requestSubmit() : otpForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
         }
       });
@@ -1870,6 +1966,9 @@
 
     if (changePhoneBtn) {
       changePhoneBtn.addEventListener('click', function () {
+        stopResendCountdown();
+        stopWebOtpListen();
+        if (phoneInput && currentPhone) phoneInput.value = currentPhone;
         showStep('phone');
         showHint(otpHint, '');
         if (otpInput) otpInput.value = '';
@@ -1891,6 +1990,7 @@
         setBusy(true, phoneBtn, 'در حال ارسال…');
         postForm(loginUrl, phoneForm).then(function (payload) {
           setBusy(false, phoneBtn);
+          if (authErrorFromPayload(payload, phoneHint)) return;
           var data = payload.data || {};
           if (payload.ok && data.ok) {
             currentPhone = phone;
@@ -1912,7 +2012,7 @@
     if (otpForm) {
       otpForm.addEventListener('submit', function (e) {
         e.preventDefault();
-        if (busy) return;
+        if (busy || verifyInflight) return;
         var code = normalizeOtp(otpInput && otpInput.value);
         if (otpInput) otpInput.value = code;
         if (code.length !== OTP_LEN) {
@@ -1921,6 +2021,7 @@
         }
         if (otpPhoneHidden && !otpPhoneHidden.value) otpPhoneHidden.value = currentPhone;
         showHint(otpHint, '');
+        verifyInflight = true;
         setBusy(true, otpBtn, 'در حال ورود…');
         postForm(verifyUrl, otpForm).then(function (payload) {
           var data = payload.data || {};
@@ -1928,14 +2029,20 @@
             goRedirect(data.redirect);
             return;
           }
+          verifyInflight = false;
           setBusy(false, otpBtn);
+          if (authErrorFromPayload(payload, otpHint)) return;
           if (data.redirect && /\/login/.test(String(data.redirect))) {
+            stopResendCountdown();
+            currentPhone = '';
+            if (otpPhoneHidden) otpPhoneHidden.value = '';
             showStep('phone');
             showHint(phoneHint, data.error || 'جلسه منقضی شد. دوباره شماره را وارد کنید.');
             return;
           }
           showHint(otpHint, data.error || 'کد نادرست است.');
         }).catch(function () {
+          verifyInflight = false;
           setBusy(false, otpBtn);
           showHint(otpHint, 'ارتباط برقرار نشد. دوباره تلاش کنید.');
         });
@@ -1962,11 +2069,26 @@
             Accept: 'application/json'
           }
         }).then(function (res) {
+          var csrfHdr = res.headers.get('X-CSRF-Token');
+          if (csrfHdr) applyCsrfToken(csrfHdr);
           return res.json().then(function (data) {
+            if (data && data.csrf_token) applyCsrfToken(data.csrf_token);
             return { ok: res.ok, data: data || {} };
           }).catch(function () { return { ok: false, data: {} }; });
         }).then(function (payload) {
           var data = payload.data || {};
+          if (authErrorFromPayload(payload, otpHint)) {
+            resendBtn.disabled = resendLeft <= 0;
+            return;
+          }
+          if (!payload.ok && data.error && /منقضی|ابتدا شماره/.test(String(data.error))) {
+            stopResendCountdown(true);
+            currentPhone = '';
+            if (otpPhoneHidden) otpPhoneHidden.value = '';
+            showStep('phone');
+            showHint(phoneHint, data.error);
+            return;
+          }
           if (payload.ok && data.ok) {
             showHint(otpHint, data.message || 'کد مجدد ارسال شد.', true);
             if (otpInput) { otpInput.value = ''; syncOtpBtn(); try { otpInput.focus(); } catch (_) {} }
@@ -2010,7 +2132,10 @@
       }
     } catch (_) {}
 
-    window.addEventListener('pagehide', stopWebOtpListen);
+    window.addEventListener('pagehide', function () {
+      stopWebOtpListen();
+      stopResendCountdown(true);
+    });
   })();
 
   try {

@@ -113,7 +113,23 @@ def _sms_request_post(url: str, *, headers: dict, json_payload: dict, timeout: i
     raise RuntimeError("SMS request failed")
 
 
-def send_sms_code(phone: str, code: str) -> dict:
+def _template_message_preview(parameters: dict | None, template_id: int) -> str:
+    params = parameters or {}
+    for key in ("MESSAGE", "message", "text", "body"):
+        val = params.get(key)
+        if val:
+            return str(val).strip()[:500]
+    return f"قالب #{template_id}"
+
+
+def send_sms_code(
+    phone: str,
+    code: str,
+    *,
+    history_source: str = "otp",
+    recipient_name: str | None = None,
+    record_history: bool = True,
+) -> dict:
     """
     ارسال OTP با قالب sms.ir.
 
@@ -172,13 +188,27 @@ def send_sms_code(phone: str, code: str) -> dict:
                 )
             except Exception:
                 pass
-        return {"ok": ok, "status": resp.status_code, "body": body}
+        result = {"ok": ok, "status": resp.status_code, "body": body}
     except Exception as e:
         try:
             current_app.logger.error("SMS error: %s", e)
         except Exception:
             print("SMS error:", e)
-        return {"ok": False, "status": 0, "body": {"error": str(e)}}
+        result = {"ok": False, "status": 0, "body": {"error": str(e)}}
+
+    if record_history and mobile:
+        from app.services.sms_history import record_sms_send_result
+
+        record_sms_send_result(
+            result,
+            mobile=mobile,
+            source=history_source,
+            recipient_name=recipient_name,
+            message="کد تأیید (OTP)",
+            template_id=get_sms_template_id(),
+            record_history=True,
+        )
+    return result
 
 
 def send_sms_template(
@@ -186,6 +216,10 @@ def send_sms_template(
     template_id: int,
     parameters: dict | None = None,
     api_key: str | None = None,
+    *,
+    history_source: str = "system",
+    recipient_name: str | None = None,
+    record_history: bool = True,
 ) -> dict:
     """
     ارسال پیامک با قالب آماده (Ultra Fast/Verify API در sms.ir).
@@ -200,8 +234,9 @@ def send_sms_template(
     if parameters:
         for name, value in parameters.items():
             params_list.append({"name": str(name), "value": str(value)})
+    norm_mobile = normalize_iran_mobile(mobile) or str(mobile)
     payload = {
-        "mobile": normalize_iran_mobile(mobile) or str(mobile),
+        "mobile": norm_mobile,
         "templateId": int(template_id),
         "parameters": params_list,
     }
@@ -214,13 +249,28 @@ def send_sms_template(
             else {"raw": resp.text}
         )
         ok = _sms_ir_response_ok(resp.status_code, body)
-        return {"ok": ok, "status": resp.status_code, "body": body}
+        result = {"ok": ok, "status": resp.status_code, "body": body}
     except Exception as e:
         try:
             current_app.logger.error("SMS template error: %s", e)
         except Exception:
             print("SMS template error:", e)
-        return {"ok": False, "status": 0, "body": {"error": str(e)}}
+        result = {"ok": False, "status": 0, "body": {"error": str(e)}}
+
+    if record_history:
+        from app.services.sms_history import record_sms_send_result
+
+        record_sms_send_result(
+            result,
+            mobile=norm_mobile,
+            source=history_source,
+            recipient_name=recipient_name,
+            message=_template_message_preview(parameters, int(template_id)),
+            template_id=int(template_id),
+            parameters=parameters,
+            record_history=True,
+        )
+    return result
 
 
 def send_sms_direct(
@@ -228,6 +278,10 @@ def send_sms_direct(
     message: str,
     line_number: str | None = None,
     api_key: str | None = None,
+    *,
+    history_source: str = "system",
+    recipient_name: str | None = None,
+    record_history: bool = True,
 ) -> dict:
     """ارسال پیامک مستقیم بدون قالب (bulk API در sms.ir)."""
     final_line_number = get_sms_line_number()
@@ -237,10 +291,11 @@ def send_sms_direct(
         "Accept": "application/json",
         "x-api-key": (api_key or get_sms_api_key()),
     }
+    norm_mobile = normalize_iran_mobile(mobile) or str(mobile)
     payload = {
         "lineNumber": str(final_line_number),
         "messageText": str(message),
-        "mobiles": [normalize_iran_mobile(mobile) or str(mobile)],
+        "mobiles": [norm_mobile],
         "sendDateTime": None,
     }
     try:
@@ -252,10 +307,23 @@ def send_sms_direct(
             else {"raw": resp.text}
         )
         ok = _sms_ir_response_ok(resp.status_code, body)
-        return {"ok": ok, "status": resp.status_code, "body": body}
+        result = {"ok": ok, "status": resp.status_code, "body": body}
     except Exception as e:
         try:
             current_app.logger.error("SMS direct error: %s", e)
         except Exception:
             print("SMS direct error:", e)
-        return {"ok": False, "status": 0, "body": {"error": str(e)}}
+        result = {"ok": False, "status": 0, "body": {"error": str(e)}}
+
+    if record_history:
+        from app.services.sms_history import record_sms_send_result
+
+        record_sms_send_result(
+            result,
+            mobile=norm_mobile,
+            source=history_source,
+            recipient_name=recipient_name,
+            message=str(message)[:500],
+            record_history=True,
+        )
+    return result

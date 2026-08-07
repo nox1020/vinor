@@ -25,8 +25,6 @@ from ..utils.storage import (
     load_express_partners,
     load_express_visit_requests,
     load_settings,
-    load_sms_history,
-    save_sms_history,
     _load,
     _save,
     data_dir,
@@ -1488,26 +1486,8 @@ def _send_nudge_sms(*, phone: str, message: str, dry_run: bool) -> Dict[str, Any
         return {"ok": True, "dry_run": True, "phone": ph, "message": message}
     try:
         line = get_sms_line_number()
-        ok = send_sms_direct(ph, message, line_number=line)
-        try:
-            history = load_sms_history(current_app) or []
-            if not isinstance(history, list):
-                history = []
-            history.append(
-                {
-                    "phone": ph,
-                    "message": message,
-                    "type": "sales_coach_nudge",
-                    "ok": bool(ok),
-                    "created_at": datetime.utcnow().isoformat() + "Z",
-                }
-            )
-            if len(history) > 5000:
-                history = history[-5000:]
-            save_sms_history(history, current_app)
-        except Exception:
-            pass
-        return {"ok": bool(ok), "phone": ph}
+        result = send_sms_direct(ph, message, line_number=line, history_source='sales_coach')
+        return {"ok": bool(result.get("ok")), "phone": ph}
     except Exception as exc:
         current_app.logger.warning("sales coach SMS failed: %s", exc)
         return {"ok": False, "error": str(exc)}

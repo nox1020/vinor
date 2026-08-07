@@ -193,7 +193,7 @@ def _send_one(
 
             ph = normalize_iran_mobile(phone) or phone
             if is_valid_iran_mobile(ph):
-                send_sms_direct(ph, _clip_sms(sms_body or body))
+                send_sms_direct(ph, _clip_sms(sms_body or body), history_source='reach')
                 item["sms"] = True
             else:
                 item["sms_error"] = "invalid_mobile"

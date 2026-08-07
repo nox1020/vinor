@@ -301,7 +301,7 @@ def _send_celebration_sms(
         _mark_sent_today(state, sms_type, mobile)
         return {"ok": True, "skipped": False, "dry_run": True}
 
-    result = send_sms_direct(mobile=mobile, message=message, line_number=line_number)
+    result = send_sms_direct(mobile=mobile, message=message, line_number=line_number, record_history=False)
     ok = bool(result.get("ok"))
     err = None
     if not ok:

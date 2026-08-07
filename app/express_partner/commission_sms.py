@@ -111,7 +111,7 @@ def notify_partner_commission_txn(
     if not msg:
         return {"ok": False, "skipped": True, "error": "empty_message"}
 
-    sms_result = send_sms_direct(mobile=mobile, message=msg, line_number=sms_line_number)
+    sms_result = send_sms_direct(mobile=mobile, message=msg, line_number=sms_line_number, record_history=False)
     ok = bool(sms_result.get("ok"))
     err: Optional[str] = None
     if not ok:

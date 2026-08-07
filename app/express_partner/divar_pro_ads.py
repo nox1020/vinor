@@ -31,6 +31,10 @@ _MEM_CACHE: dict[str, Any] = {
     "profile_url": "",
     "error": "",
 }
+# جلوگیری از stampede: یک واکشی هم‌زمان برای هر cache_key
+_INFLIGHT: dict[str, threading.Event] = {}
+# فقط برای force_refresh همگام؛ مسیر خانه نباید روی شبکهٔ دیوار منتظر بماند
+_FETCH_WAIT_SEC = max(20.0, DEFAULT_HTTP_TIMEOUT_SEC * 2)
 
 
 def _env_bool(name: str, default: str = "1") -> bool:
@@ -141,15 +145,71 @@ def _read_disk_cache(brand_token: str) -> dict[str, Any] | None:
 
 def _write_disk_cache(payload: dict[str, Any]) -> None:
     path = _cache_path()
+    tmp = ""
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = path + ".tmp"
+        # نام یکتا تا روی ویندوز با نوشتن موازی قفل نشود
+        tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.{int(time.time() * 1000)}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
         os.replace(tmp, path)
+        tmp = ""
     except Exception:
         _log.exception("divar_pro_ads: failed to write cache")
+    finally:
+        if tmp:
+            try:
+                if os.path.isfile(tmp):
+                    os.remove(tmp)
+            except Exception:
+                pass
 
+
+def _mem_hit(cache_key: str, *, now: float, ttl: int, force_refresh: bool) -> dict[str, Any] | None:
+    if force_refresh:
+        return None
+    if (
+        _MEM_CACHE.get("key") == cache_key
+        and isinstance(_MEM_CACHE.get("ads"), list)
+        and (now - float(_MEM_CACHE.get("fetched_at") or 0)) < ttl
+    ):
+        return {
+            "ok": True,
+            "ads": list(_MEM_CACHE.get("ads") or []),
+            "title": str(_MEM_CACHE.get("title") or ""),
+            "profile_url": str(_MEM_CACHE.get("profile_url") or ""),
+            "brand_token": "",
+            "error": "",
+            "fetched_at": float(_MEM_CACHE.get("fetched_at") or 0),
+            "from_cache": True,
+        }
+    return None
+
+
+def _result_from_disk(
+    disk: dict[str, Any] | None,
+    *,
+    profiles: list[str],
+    primary: str,
+) -> dict[str, Any] | None:
+    if not disk or not isinstance(disk.get("ads"), list):
+        return None
+    return {
+        "ok": True,
+        "ads": list(disk.get("ads") or []),
+        "title": str(disk.get("title") or ""),
+        "profile_url": str(disk.get("profile_url") or primary),
+        "profile_urls": profiles,
+        "brand_token": extract_brand_token(primary),
+        "error": "",
+        "fetched_at": float(disk.get("fetched_at") or 0),
+        "from_cache": True,
+    }
 
 def _warmup_cookies(opener: urllib.request.OpenerDirector, profile_url: str) -> None:
     try:
@@ -335,59 +395,209 @@ def fetch_divar_pro_ads(brand_token: str | None = None, profile_url: str | None 
     return out
 
 
+def _empty_ads_result(
+    *,
+    primary: str,
+    profiles: list[str],
+    error: str = "",
+    fetched_at: float = 0.0,
+) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "ads": [],
+        "title": "",
+        "profile_url": primary,
+        "profile_urls": profiles,
+        "brand_token": extract_brand_token(primary),
+        "error": error,
+        "fetched_at": fetched_at,
+        "from_cache": False,
+    }
+
+
+def _fetch_profiles_into_cache(
+    *,
+    cache_key: str,
+    profiles: list[str],
+    primary: str,
+    disk: dict[str, Any] | None,
+    wait_ev: threading.Event,
+) -> dict[str, Any]:
+    """واکشی شبکه + نوشتن کش. همیشه wait_ev را set می‌کند."""
+    now = time.time()
+    all_ads: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    page_title = ""
+    errors: list[str] = []
+    any_ok = False
+    try:
+        for profile in profiles:
+            token = extract_brand_token(profile)
+            fresh = fetch_divar_pro_ads(brand_token=token, profile_url=profile)
+            if fresh.get("ok"):
+                any_ok = True
+                if not page_title:
+                    page_title = str(fresh.get("title") or "").strip()
+                for ad in fresh.get("ads") or []:
+                    if not isinstance(ad, dict):
+                        continue
+                    tok = str(ad.get("token") or "").strip()
+                    if not tok or tok in seen:
+                        continue
+                    seen.add(tok)
+                    ad2 = dict(ad)
+                    ad2.setdefault("source", "divar")
+                    ad2.setdefault("external", True)
+                    ad2.setdefault("badge", "دیوار")
+                    ad2["profile_url"] = profile
+                    all_ads.append(ad2)
+            else:
+                err = str(fresh.get("error") or "fetch_failed")
+                errors.append(f"{token or profile}:{err}")
+
+        if any_ok:
+            payload = {
+                "brand_token": cache_key,
+                "profile_url": primary,
+                "profile_urls": profiles,
+                "title": page_title or "آگهی‌های دیوار",
+                "ads": all_ads,
+                "fetched_at": now,
+            }
+            with _CACHE_LOCK:
+                _write_disk_cache(payload)
+                _MEM_CACHE.update(
+                    {
+                        "key": cache_key,
+                        "fetched_at": now,
+                        "ads": list(all_ads),
+                        "title": payload["title"],
+                        "profile_url": primary,
+                        "error": "",
+                    }
+                )
+            return {
+                "ok": True,
+                "ads": all_ads,
+                "title": payload["title"],
+                "profile_url": primary,
+                "profile_urls": profiles,
+                "brand_token": extract_brand_token(primary),
+                "error": "; ".join(errors) if errors else "",
+                "fetched_at": now,
+                "from_cache": False,
+            }
+
+        stale = disk if disk else _read_disk_cache(cache_key)
+        if stale and isinstance(stale.get("ads"), list) and stale["ads"]:
+            with _CACHE_LOCK:
+                _MEM_CACHE.update(
+                    {
+                        "key": cache_key,
+                        "fetched_at": float(stale.get("fetched_at") or 0),
+                        "ads": list(stale.get("ads") or []),
+                        "title": str(stale.get("title") or ""),
+                        "profile_url": str(stale.get("profile_url") or primary),
+                        "error": "; ".join(errors) or "stale",
+                    }
+                )
+            return {
+                "ok": True,
+                "ads": list(stale.get("ads") or []),
+                "title": str(stale.get("title") or ""),
+                "profile_url": str(stale.get("profile_url") or primary),
+                "profile_urls": profiles,
+                "brand_token": extract_brand_token(primary),
+                "error": "; ".join(errors),
+                "fetched_at": float(stale.get("fetched_at") or 0),
+                "from_cache": True,
+                "stale": True,
+            }
+
+        return _empty_ads_result(
+            primary=primary,
+            profiles=profiles,
+            error="; ".join(errors) or "fetch_failed",
+            fetched_at=now,
+        )
+    finally:
+        with _CACHE_LOCK:
+            if _INFLIGHT.get(cache_key) is wait_ev:
+                _INFLIGHT.pop(cache_key, None)
+            wait_ev.set()
+
+
+def _schedule_background_refresh(
+    *,
+    cache_key: str,
+    profiles: list[str],
+    primary: str,
+    disk: dict[str, Any] | None,
+) -> bool:
+    """اگر واکشی در جریان نباشد، در thread پس‌زمینه شروع می‌کند. True = همین الان lead شد."""
+    with _CACHE_LOCK:
+        if cache_key in _INFLIGHT:
+            return False
+        wait_ev = threading.Event()
+        _INFLIGHT[cache_key] = wait_ev
+
+    def _worker() -> None:
+        try:
+            _fetch_profiles_into_cache(
+                cache_key=cache_key,
+                profiles=profiles,
+                primary=primary,
+                disk=disk,
+                wait_ev=wait_ev,
+            )
+        except Exception:
+            _log.exception("divar_pro_ads: background refresh failed")
+            with _CACHE_LOCK:
+                if _INFLIGHT.get(cache_key) is wait_ev:
+                    _INFLIGHT.pop(cache_key, None)
+                wait_ev.set()
+
+    threading.Thread(
+        target=_worker,
+        name="divar-pro-ads-refresh",
+        daemon=True,
+    ).start()
+    return True
+
+
 def get_divar_pro_ads(*, force_refresh: bool = False, ignore_disabled: bool = False) -> dict[str, Any]:
     """
     آگهی‌ها از همهٔ پروفایل‌های تنظیم‌شده — با کش حافظه + فایل.
-    اگر واکشی تازه شکست بخورد و کش قدیمی باشد، همان را برمی‌گرداند.
+
+    مسیر عادی (خانه): کش تازه/کهنه را فوری برمی‌گرداند و در صورت نیاز واکشی
+    را در پس‌زمینه انجام می‌دهد — درخواست HTTP روی شبکهٔ دیوار بلاک نمی‌شود.
+    force_refresh=True (ادمین): همگام منتظر واکشی می‌ماند.
     """
     profiles = divar_pro_profile_urls()
     primary = profiles[0] if profiles else divar_pro_profile_url()
     if not ignore_disabled and not divar_pro_ads_enabled():
-        return {
-            "ok": False,
-            "ads": [],
-            "title": "",
-            "profile_url": primary,
-            "profile_urls": profiles,
-            "brand_token": extract_brand_token(primary),
-            "error": "disabled",
-            "fetched_at": 0.0,
-            "from_cache": False,
-        }
+        return _empty_ads_result(primary=primary, profiles=profiles, error="disabled")
 
     ttl = divar_pro_cache_ttl_sec()
     now = time.time()
     tokens = [extract_brand_token(u) for u in profiles]
     cache_key = "|".join(t or u for t, u in zip(tokens, profiles))
-    disk: dict[str, Any] | None = None
 
     with _CACHE_LOCK:
-        mem_ok = (
-            _MEM_CACHE.get("key") == cache_key
-            and isinstance(_MEM_CACHE.get("ads"), list)
-            and (now - float(_MEM_CACHE.get("fetched_at") or 0)) < ttl
-            and not force_refresh
-        )
-        if mem_ok:
-            return {
-                "ok": True,
-                "ads": list(_MEM_CACHE.get("ads") or []),
-                "title": str(_MEM_CACHE.get("title") or ""),
-                "profile_url": str(_MEM_CACHE.get("profile_url") or primary),
-                "profile_urls": profiles,
-                "brand_token": extract_brand_token(primary),
-                "error": "",
-                "fetched_at": float(_MEM_CACHE.get("fetched_at") or 0),
-                "from_cache": True,
-            }
+        hit = _mem_hit(cache_key, now=now, ttl=ttl, force_refresh=force_refresh)
+        if hit is not None:
+            hit["profile_urls"] = profiles
+            hit["profile_url"] = hit["profile_url"] or primary
+            hit["brand_token"] = extract_brand_token(primary)
+            return hit
 
         disk = _read_disk_cache(cache_key)
-        if (
+        disk_fresh = bool(
             disk
-            and not force_refresh
             and (now - float(disk.get("fetched_at") or 0)) < ttl
             and isinstance(disk.get("ads"), list)
-        ):
+        )
+        if disk_fresh and not force_refresh:
             _MEM_CACHE.update(
                 {
                     "key": cache_key,
@@ -398,117 +608,68 @@ def get_divar_pro_ads(*, force_refresh: bool = False, ignore_disabled: bool = Fa
                     "error": "",
                 }
             )
-            return {
-                "ok": True,
-                "ads": list(disk.get("ads") or []),
-                "title": str(disk.get("title") or ""),
-                "profile_url": str(disk.get("profile_url") or primary),
-                "profile_urls": profiles,
-                "brand_token": extract_brand_token(primary),
-                "error": "",
-                "fetched_at": float(disk.get("fetched_at") or 0),
-                "from_cache": True,
-            }
+            out = _result_from_disk(disk, profiles=profiles, primary=primary)
+            if out:
+                return out
 
-    all_ads: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    page_title = ""
-    errors: list[str] = []
-    any_ok = False
-    for profile in profiles:
-        token = extract_brand_token(profile)
-        fresh = fetch_divar_pro_ads(brand_token=token, profile_url=profile)
-        if fresh.get("ok"):
-            any_ok = True
-            if not page_title:
-                page_title = str(fresh.get("title") or "").strip()
-            for ad in fresh.get("ads") or []:
-                if not isinstance(ad, dict):
-                    continue
-                tok = str(ad.get("token") or "").strip()
-                if not tok or tok in seen:
-                    continue
-                seen.add(tok)
-                ad2 = dict(ad)
-                ad2.setdefault("source", "divar")
-                ad2.setdefault("external", True)
-                ad2.setdefault("badge", "دیوار")
-                ad2["profile_url"] = profile
-                all_ads.append(ad2)
-        else:
-            err = str(fresh.get("error") or "fetch_failed")
-            errors.append(f"{token or profile}:{err}")
+    # کش کهنه یا نبود کش: برای خانه فوری برگردان + رفرش پس‌زمینه
+    if not force_refresh:
+        stale_out = _result_from_disk(disk, profiles=profiles, primary=primary)
+        _schedule_background_refresh(
+            cache_key=cache_key,
+            profiles=profiles,
+            primary=primary,
+            disk=disk,
+        )
+        if stale_out:
+            stale_out["stale"] = True
+            return stale_out
+        return _empty_ads_result(
+            primary=primary,
+            profiles=profiles,
+            error="fetch_in_progress",
+            fetched_at=now,
+        )
 
-    if any_ok:
-        payload = {
-            "brand_token": cache_key,
-            "profile_url": primary,
-            "profile_urls": profiles,
-            "title": page_title or "آگهی‌های دیوار",
-            "ads": all_ads,
-            "fetched_at": now,
-        }
-        _write_disk_cache(payload)
+    # force_refresh همگام
+    wait_ev: threading.Event | None = None
+    lead = False
+    with _CACHE_LOCK:
+        wait_ev = _INFLIGHT.get(cache_key)
+        if wait_ev is None:
+            wait_ev = threading.Event()
+            _INFLIGHT[cache_key] = wait_ev
+            lead = True
+
+    if not lead and wait_ev is not None:
+        wait_ev.wait(timeout=_FETCH_WAIT_SEC)
         with _CACHE_LOCK:
-            _MEM_CACHE.update(
-                {
-                    "key": cache_key,
-                    "fetched_at": now,
-                    "ads": list(all_ads),
-                    "title": payload["title"],
-                    "profile_url": primary,
-                    "error": "",
-                }
-            )
-        return {
-            "ok": True,
-            "ads": all_ads,
-            "title": payload["title"],
-            "profile_url": primary,
-            "profile_urls": profiles,
-            "brand_token": extract_brand_token(primary),
-            "error": "; ".join(errors) if errors else "",
-            "fetched_at": now,
-            "from_cache": False,
-        }
+            hit = _mem_hit(cache_key, now=time.time(), ttl=ttl, force_refresh=False)
+            if hit is not None:
+                hit["profile_urls"] = profiles
+                hit["profile_url"] = hit["profile_url"] or primary
+                hit["brand_token"] = extract_brand_token(primary)
+                return hit
+        stale_wait = disk if disk else _read_disk_cache(cache_key)
+        out = _result_from_disk(stale_wait, profiles=profiles, primary=primary)
+        if out:
+            out["stale"] = True
+            return out
+        return _empty_ads_result(
+            primary=primary,
+            profiles=profiles,
+            error="fetch_in_progress",
+            fetched_at=now,
+        )
 
-    stale = disk if disk else _read_disk_cache(cache_key)
-    if stale and isinstance(stale.get("ads"), list) and stale["ads"]:
-        with _CACHE_LOCK:
-            _MEM_CACHE.update(
-                {
-                    "key": cache_key,
-                    "fetched_at": float(stale.get("fetched_at") or 0),
-                    "ads": list(stale.get("ads") or []),
-                    "title": str(stale.get("title") or ""),
-                    "profile_url": str(stale.get("profile_url") or primary),
-                    "error": "; ".join(errors) or "stale",
-                }
-            )
-        return {
-            "ok": True,
-            "ads": list(stale.get("ads") or []),
-            "title": str(stale.get("title") or ""),
-            "profile_url": str(stale.get("profile_url") or primary),
-            "profile_urls": profiles,
-            "brand_token": extract_brand_token(primary),
-            "error": "; ".join(errors),
-            "fetched_at": float(stale.get("fetched_at") or 0),
-            "from_cache": True,
-            "stale": True,
-        }
-
-    return {
-        "ok": False,
-        "ads": [],
-        "title": "",
-        "profile_url": primary,
-        "profile_urls": profiles,
-        "brand_token": extract_brand_token(primary),
-        "error": "; ".join(errors) or "fetch_failed",
-        "fetched_at": now,
-        "from_cache": False,
-    }
+    assert wait_ev is not None
+    return _fetch_profiles_into_cache(
+        cache_key=cache_key,
+        profiles=profiles,
+        primary=primary,
+        disk=disk,
+        wait_ev=wait_ev,
+    )
 
 
 def clear_divar_pro_ads_cache() -> None:
@@ -524,12 +685,30 @@ def clear_divar_pro_ads_cache() -> None:
                 "error": "",
             }
         )
+        for ev in list(_INFLIGHT.values()):
+            try:
+                ev.set()
+            except Exception:
+                pass
+        _INFLIGHT.clear()
     path = _cache_path()
     try:
         if os.path.isfile(path):
             os.remove(path)
     except Exception:
         _log.debug("divar_pro_ads: cache file remove failed", exc_info=True)
+    # پاک‌سازی فایل‌های tmp رهاشده
+    try:
+        folder = os.path.dirname(path)
+        base = os.path.basename(path)
+        for name in os.listdir(folder):
+            if name.startswith(base) and name.endswith(".tmp"):
+                try:
+                    os.remove(os.path.join(folder, name))
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 
 def home_divar_ads_context() -> dict[str, Any]:

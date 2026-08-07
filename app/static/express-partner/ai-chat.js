@@ -238,7 +238,7 @@
     }
     try {
       if (input && !(input.value || '').trim()) {
-        input.placeholder = staticComposerPlaceholder();
+        startTypeHintPlaceholder();
       }
     } catch (_) {}
     /* در حالت خالی، پیام welcome SSR را از DOM بردار تا با برگشت به چت چشمک نزند */
@@ -953,19 +953,11 @@
     input.style.height = Math.max(24, next) + 'px';
   }
 
-  var TYPE_HINT_PHRASES = [
-    'زمین ویلایی تو گرمابسرد دماوند می‌خوام',
-    'دشت اول گرمابسرد، حدود ۵۰۰ متری نشون بده',
-    'بودجه‌ام برای گرمابسرد حدود ۲ میلیارد تومانه',
-  ];
   var typeHintTimer = 0;
   var typeHintDismissed = false;
   var typeHintRunning = false;
   var typeHintGen = 0;
   var typeHintHost = form.querySelector('[data-ai-type-hint]');
-  var typeHintClip = typeHintHost
-    ? typeHintHost.querySelector('.ai-composer__type-hint-clip')
-    : null;
   var typeHintTextEl = typeHintHost
     ? typeHintHost.querySelector('[data-ai-type-hint-text]')
     : null;
@@ -985,10 +977,7 @@
     ) {
       return 'به سقف رسیدید — برای ادامه وارد شوید…';
     }
-    if (homeInline) {
-      return '';
-    }
-    return 'از وینور AI بپرسید…';
+    return 'از وینور بپرس';
   }
 
   function hideTypeHintOverlay() {
@@ -997,56 +986,6 @@
       typeHintTextEl.textContent = '';
       typeHintTextEl.style.transform = '';
     }
-  }
-
-  function showTypeHintOverlay() {
-    if (typeHintHost) typeHintHost.hidden = false;
-  }
-
-  /** پدینگ راهنما = دقیقاً محدودهٔ textarea (مهم برای موبایل) */
-  function syncTypeHintGeometry() {
-    if (!typeHintHost || !input) return;
-    var shell = input.closest('.ai-composer__shell-row') || input.closest('.ai-composer__shell');
-    if (!shell) return;
-    var sr = shell.getBoundingClientRect();
-    var ir = input.getBoundingClientRect();
-    if (!sr.width || !ir.width) return;
-    typeHintHost.style.paddingLeft = Math.max(0, ir.left - sr.left) + 'px';
-    typeHintHost.style.paddingRight = Math.max(0, sr.right - ir.right) + 'px';
-    typeHintHost.style.paddingTop = Math.max(0, ir.top - sr.top) + 'px';
-    typeHintHost.style.paddingBottom = Math.max(0, sr.bottom - ir.bottom) + 'px';
-  }
-
-  /** متن در یک خط؛ سرریز به چپ شیفت می‌شود تا انتهای تایپ دیده شود */
-  function renderTypeHintVisible(full) {
-    if (!typeHintTextEl || !typeHintClip) {
-      if (input) input.placeholder = full || '';
-      return;
-    }
-    showTypeHintOverlay();
-    if (input) input.placeholder = '';
-    var text = full || '';
-    typeHintTextEl.style.transform = 'translateX(0)';
-    typeHintTextEl.textContent = text;
-    if (!text) return;
-
-    function applyShift() {
-      if (!typeHintTextEl || !typeHintClip) return;
-      syncTypeHintGeometry();
-      var maxW = typeHintClip.clientWidth;
-      if (maxW < 12 && input) {
-        maxW = Math.max(12, Math.floor(input.getBoundingClientRect().width) - 4);
-      }
-      var need = typeHintTextEl.scrollWidth || typeHintTextEl.offsetWidth || 0;
-      var dx = Math.max(0, need - maxW);
-      typeHintTextEl.style.transform = dx > 0 ? 'translateX(' + -dx + 'px)' : 'translateX(0)';
-    }
-
-    applyShift();
-    requestAnimationFrame(function () {
-      applyShift();
-      requestAnimationFrame(applyShift);
-    });
   }
 
   function stopTypeHintPlaceholder(opts) {
@@ -1062,83 +1001,19 @@
       return;
     }
     if (!(input.value || '').length) {
-      input.placeholder = typeHintDismissed ? staticComposerPlaceholder() : '';
+      input.placeholder = staticComposerPlaceholder();
     }
   }
 
-  function canRunTypeHint() {
-    if (!input || typeHintDismissed) return false;
-    if (isPostchiMode()) return false;
-    if (form.classList.contains('ai-composer--readonly')) return false;
-    if (input.disabled) return false;
-    if ((input.value || '').length > 0) return false;
-    if (
-      isGuestQuotaUser() &&
-      guestRepliesRemaining !== null &&
-      guestRepliesRemaining <= 0
-    ) {
-      return false;
-    }
-    return true;
-  }
-
+  /** placeholder ثابت موبایل‌محور — بدون انیمیشن تایپ */
   function startTypeHintPlaceholder() {
-    if (!canRunTypeHint()) {
-      if (input && !(input.value || '').length && typeHintDismissed) {
-        hideTypeHintOverlay();
-        input.placeholder = staticComposerPlaceholder();
-      }
-      return;
-    }
-    if (typeHintRunning) return;
-    typeHintRunning = true;
-    var gen = ++typeHintGen;
-    var phraseIdx = 0;
-
-    function schedule(fn, ms) {
-      clearTypeHintTimer();
-      typeHintTimer = setTimeout(fn, ms);
-    }
-
-    function erase(text, i) {
-      if (gen !== typeHintGen || !canRunTypeHint()) {
-        typeHintRunning = false;
-        return;
-      }
-      if (i < 0) {
-        schedule(function () {
-          phraseIdx = (phraseIdx + 1) % TYPE_HINT_PHRASES.length;
-          typePhrase(TYPE_HINT_PHRASES[phraseIdx], 0);
-        }, 400);
-        return;
-      }
-      renderTypeHintVisible(text.slice(0, i));
-      schedule(function () {
-        erase(text, i - 1);
-      }, 20);
-    }
-
-    function typePhrase(text, i) {
-      if (gen !== typeHintGen || !canRunTypeHint()) {
-        typeHintRunning = false;
-        return;
-      }
-      if (i > text.length) {
-        schedule(function () {
-          erase(text, text.length);
-        }, 1600);
-        return;
-      }
-      renderTypeHintVisible(text.slice(0, i));
-      schedule(function () {
-        typePhrase(text, i + 1);
-      }, i === 0 ? 260 : 46);
-    }
-
-    if (input) input.placeholder = '';
-    showTypeHintOverlay();
-    renderTypeHintVisible('');
-    typePhrase(TYPE_HINT_PHRASES[phraseIdx], 0);
+    clearTypeHintTimer();
+    typeHintRunning = false;
+    hideTypeHintOverlay();
+    if (!input || (input.value || '').length > 0) return;
+    if (isPostchiMode() || isLawyerMode()) return;
+    typeHintDismissed = false;
+    input.placeholder = staticComposerPlaceholder();
   }
 
   function setComposerMode(postchi) {
@@ -3763,10 +3638,8 @@
   input.addEventListener('input', function () {
     if ((input.value || '').length > 0) {
       stopTypeHintPlaceholder({ dismiss: true, placeholder: '' });
-    } else if (!typeHintDismissed) {
-      startTypeHintPlaceholder();
     } else {
-      input.placeholder = staticComposerPlaceholder();
+      startTypeHintPlaceholder();
     }
     autoGrowInput();
     syncComposerReady();
@@ -3969,11 +3842,7 @@
   syncChipBarVisibility();
   syncHomeEmptyState();
   syncNewChatAvailability([]);
-  if (homeInline) {
-    stopTypeHintPlaceholder({ dismiss: true, placeholder: staticComposerPlaceholder() });
-  } else {
-    startTypeHintPlaceholder();
-  }
+  startTypeHintPlaceholder();
   bindChatScrollBottom();
   injectHomeJourneyCardIntoChat();
   scrollChatToLatest();

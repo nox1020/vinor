@@ -144,7 +144,7 @@ def notify_partners_apk_update(
     for partner in recipients:
         phone = partner["phone"]
         try:
-            result = send_sms_direct(mobile=phone, message=body, line_number=line_number)
+            result = send_sms_direct(mobile=phone, message=body, line_number=line_number, record_history=False)
             ok = bool(result.get("ok"))
             if ok:
                 sent += 1

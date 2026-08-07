@@ -276,14 +276,14 @@ def _send_partner_message(
         return {"ok": True, "skipped": True, "error": "already_sent"}
 
     line = _sms_line()
-    sms_result = send_sms_direct(mobile=mobile, message=message, line_number=line)
+    sms_result = send_sms_direct(mobile=mobile, message=message, line_number=line, record_history=False)
     ok = bool(sms_result.get("ok"))
     err: Optional[str] = None
     body = sms_result.get("body") or {}
     if not ok:
         err = str(body.get("message") or body.get("error") or "sms_send_failed")
         if sms_is_infrastructure_error(err):
-            sms_result = send_sms_direct(mobile=mobile, message=message, line_number=line)
+            sms_result = send_sms_direct(mobile=mobile, message=message, line_number=line, record_history=False)
             ok = bool(sms_result.get("ok"))
             body = sms_result.get("body") or {}
             if ok:

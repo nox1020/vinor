@@ -1540,19 +1540,23 @@ def api_colleagues_notification_history():
 # -----------------------------------------------------------------------------
 # هاب پیامک و نوتیفیکیشن (ورود از سایدبار)
 # -----------------------------------------------------------------------------
-def _sms_hub_format_ts(value) -> str:
-    """Format ISO string or unix timestamp for SMS/notifications hub cards."""
-    if value is None or value == '':
-        return ''
-    if isinstance(value, (int, float)):
-        try:
-            return datetime.fromtimestamp(int(value)).strftime('%Y-%m-%d %H:%M')
-        except (OSError, OverflowError, ValueError, TypeError):
-            return str(value)
-    text = str(value).strip()
-    if not text:
-        return ''
-    return text[:16].replace('T', ' ')
+def _sms_hist_preview(row: dict) -> str:
+    """متن خلاصه برای کارت سابقه پیامک در هاب."""
+    if not isinstance(row, dict):
+        return '—'
+    msg = str(row.get('message') or row.get('body') or '').strip()
+    if msg:
+        return msg
+    params = row.get('parameters') or {}
+    if isinstance(params, dict):
+        for key in ('MESSAGE', 'message', 'text', 'body'):
+            val = params.get(key)
+            if val:
+                return str(val).strip()
+    tid = row.get('template_id')
+    if tid not in (None, ''):
+        return f'قالب #{tid}'
+    return '—'
 
 
 @admin_bp.route('/sms-notifications', methods=['GET'], endpoint='sms_notifications')
@@ -1586,6 +1590,10 @@ def sms_notifications():
         sms_hist_stats['sent'] = sum(1 for h in sms_hist if h.get('success'))
         sms_hist_stats['failed'] = sms_hist_stats['total'] - sms_hist_stats['sent']
         sms_hist = sms_hist[:8]
+        for row in sms_hist:
+            if isinstance(row, dict):
+                row['preview'] = _sms_hist_preview(row)
+                row['created_at_display'] = format_tehran_iso_display(row.get('created_at'))
     except Exception:
         current_app.logger.exception('sms_notifications: failed loading SMS history')
 
@@ -1597,7 +1605,7 @@ def sms_notifications():
             if not isinstance(row, dict):
                 continue
             item = dict(row)
-            item['created_at_display'] = _sms_hub_format_ts(
+            item['created_at_display'] = format_tehran_iso_display(
                 item.get('created_at') if item.get('created_at') is not None else item.get('ts')
             )
             notif_history.append(item)
@@ -1622,6 +1630,16 @@ def sms_notifications():
         scheduled_jobs = list_active_scheduled_jobs() or []
     except Exception:
         scheduled_jobs = []
+
+    group_labels = {
+        str((g or {}).get('key') or ''): str((g or {}).get('label') or (g or {}).get('key') or '')
+        for g in (groups or [])
+    }
+    for job in scheduled_jobs:
+        if not isinstance(job, dict):
+            continue
+        rk = str(job.get('recipient_group') or '')
+        job['group_label'] = group_labels.get(rk) or rk or '—'
 
     return render_template(
         'admin/sms_notifications.html',
@@ -1869,9 +1887,16 @@ def sms_colleagues():
         if action == 'cancel_scheduled':
             job_id = (request.form.get('job_id') or '').strip()
             if cancel_scheduled_job(job_id):
-                message = 'زمان‌بندی لغو شد.'
+                flash('زمان‌بندی لغو شد.', 'success')
             else:
-                error = 'زمان‌بندی یافت نشد یا قبلاً اجرا/لغو شده است.'
+                flash('زمان‌بندی یافت نشد یا قبلاً اجرا/لغو شده است.', 'error')
+            rg = normalize_recipient_group(
+                request.form.get('recipient_group')
+                or request.args.get('recipient_group')
+                or get_saved_recipient_group()
+                or recipient_group
+            )
+            return redirect(url_for('admin.sms_colleagues', recipient_group=rg))
         else:
             send_mode = request.form.get('send_mode', 'direct')
             recipient_group = normalize_recipient_group(request.form.get('recipient_group') or recipient_group)
@@ -2010,6 +2035,7 @@ def sms_colleagues():
                                         mobile=phone_normalized,
                                         template_id=template_id,
                                         parameters=parameters if parameters else None,
+                                        record_history=False,
                                     )
                                     history_batch.append({
                                         'mobile': phone_normalized,
@@ -2068,26 +2094,26 @@ def sms_colleagues():
     group_label = dynamic_labels.get(recipient_group) or recipient_group_label(recipient_group)
 
     try:
+        from app.services.sms_history import normalize_sms_history_row, sms_source_label
+
         history = load_sms_history() or []
-        colleagues_history = [
-            h for h in history
-            if h.get('source') in (
-                'admin_colleagues',
-                'admin_colleagues_direct',
-                'admin_colleagues_scheduled',
-                'admin_colleagues_recurring',
-            )
+        all_history = [
+            normalize_sms_history_row(h) for h in history if isinstance(h, dict)
         ]
-        colleagues_history.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        all_history.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         history_page = max(1, int(request.args.get('history_page', 1)))
         history_per_page = 15
-        history_total = len(colleagues_history)
+        history_total = len(all_history)
         history_start = (history_page - 1) * history_per_page
-        paginated_history = colleagues_history[history_start:history_start + history_per_page]
+        paginated_history = all_history[history_start:history_start + history_per_page]
+        for row in paginated_history:
+            row['preview'] = _sms_hist_preview(row)
+            row['created_at_display'] = format_tehran_iso_display(row.get('created_at'))
+            row['source_label'] = sms_source_label(row.get('source'))
         history_stats = {
             'total': history_total,
-            'sent': len([h for h in colleagues_history if h.get('success')]),
-            'failed': len([h for h in colleagues_history if not h.get('success')]),
+            'sent': len([h for h in all_history if h.get('success')]),
+            'failed': len([h for h in all_history if not h.get('success')]),
         }
         history_total_pages = (history_total + history_per_page - 1) // history_per_page if history_total else 0
     except Exception as e:
@@ -4706,6 +4732,9 @@ def express_partner_send_message(phone: str):
                     mobile=phone,
                     message=sms_text,
                     line_number=sms_line_number,
+                    history_source='admin_partner_message',
+                    recipient_name=(request.form.get('recipient_name') or '').strip() or None,
+                    record_history=False,
                 )
                 try:
                     history = load_sms_history() or []
@@ -6500,7 +6529,14 @@ def _approve_express_partner(
             if not sms_message or not sms_message.strip():
                 sms_message = 'وینور\nپنل همکاری‌ت فعاله. بزن بریم!'
             current_app.logger.info('Sending approval SMS to partner: %s (%s)', name, phone)
-            sms_result = send_sms_direct(mobile=phone, message=sms_message, line_number=sms_line_number)
+            sms_result = send_sms_direct(
+                mobile=phone,
+                message=sms_message,
+                line_number=sms_line_number,
+                history_source=source,
+                recipient_name=name,
+                record_history=False,
+            )
             try:
                 history = load_sms_history() or []
                 record = {

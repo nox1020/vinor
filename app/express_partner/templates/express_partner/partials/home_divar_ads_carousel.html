@@ -31,6 +31,7 @@
   }
   #homeDivarAdsCarousel .vn-home-divar__track {
     display: flex;
+    flex-direction: row;
     flex-wrap: nowrap;
     gap: 0.55rem;
     overflow-x: auto;
@@ -41,9 +42,63 @@
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding: 0 0.85rem 0.45rem;
+    padding: 0 0.85rem 0.45rem 2.75rem; /* فضای دکمهٔ لیست در چپ فیزیکی */
     max-width: 100%;
     pointer-events: auto;
+    /* کارت اول راست؛ ادامهٔ لیست به چپ (overflow سمت چپ) */
+    direction: rtl;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__all-btn {
+    position: absolute;
+    left: 0.45rem;
+    top: 50%;
+    z-index: 4;
+    transform: translateY(-55%);
+    display: grid;
+    place-items: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 9999px;
+    background: rgba(15, 20, 25, 0.92);
+    color: #f4f4f5;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__all-btn:hover,
+  #homeDivarAdsCarousel .vn-home-divar__all-btn:focus-visible {
+    border-color: rgba(255, 255, 255, 0.28);
+    background: rgba(24, 32, 42, 0.96);
+    outline: none;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__all-btn:active {
+    transform: translateY(-55%) scale(0.96);
+  }
+  #homeDivarAdsCarousel .vn-home-divar__all-btn i {
+    font-size: 0.85rem;
+    line-height: 1;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__all-btn .vn-home-divar__all-count {
+    position: absolute;
+    top: -0.2rem;
+    right: -0.2rem;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    padding: 0 0.22rem;
+    border-radius: 9999px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 0.55rem;
+    font-weight: 700;
+    line-height: 1.05rem;
+    text-align: center;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__track.is-auto-scrolling {
+    scroll-snap-type: none;
   }
   #homeDivarAdsCarousel .vn-home-divar__track::-webkit-scrollbar {
     display: none;
@@ -186,6 +241,7 @@
     #homeDivarAdsCarousel .vn-home-divar__track {
       gap: 0.45rem;
       padding-bottom: 0.3rem;
+      padding-left: 2.55rem;
     }
   }
   /* ارتفاع خیلی کوتاه: نوار دیوار جمع شود تا کامپوزر/بدو ورود نمانند */
@@ -200,9 +256,256 @@
       aspect-ratio: 16 / 10;
     }
   }
+  /* پاپ‌آپ لیست کامل آگهی‌ها */
+  #homeDivarAdsAllModal.vn-home-divar-all {
+    position: fixed;
+    inset: 0;
+    z-index: 95;
+    display: none;
+  }
+  #homeDivarAdsAllModal.vn-home-divar-all.is-open {
+    display: block;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__shell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 100%;
+    pointer-events: none;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__panel {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 28rem;
+    margin: 0 auto;
+    max-height: min(88dvh, 40rem);
+    border-radius: 1.25rem 1.25rem 0 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: none;
+    background: #121820;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  }
+  @media (min-width: 640px) {
+    #homeDivarAdsAllModal .vn-home-divar-all__shell {
+      justify-content: center;
+      padding: 1rem;
+    }
+    #homeDivarAdsAllModal .vn-home-divar-all__panel {
+      max-height: min(86dvh, 38rem);
+      border-radius: 1.15rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__handle {
+    display: flex;
+    justify-content: center;
+    padding: 0.55rem 0 0.2rem;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__handle span {
+    width: 2.5rem;
+    height: 0.25rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.2);
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.55rem 3rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #f4f4f5;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__close {
+    position: absolute;
+    left: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: none;
+    border-radius: 9999px;
+    background: transparent;
+    color: #a1a1aa;
+    cursor: pointer;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__close:hover,
+  #homeDivarAdsAllModal .vn-home-divar-all__close:focus-visible {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    outline: none;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__list::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__row {
+    display: flex;
+    flex-direction: row;
+    direction: rtl;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 5.35rem;
+    padding: 0.65rem 0.85rem;
+    text-decoration: none;
+    color: inherit;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 0;
+    background: transparent;
+    transition: background 0.15s ease;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__row:last-child {
+    border-bottom: none;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__row:hover,
+  #homeDivarAdsAllModal .vn-home-divar-all__row:focus-visible {
+    background: rgba(255, 255, 255, 0.04);
+    outline: none;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__row:active {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__thumb {
+    position: relative;
+    flex: 0 0 5.25rem;
+    width: 5.25rem;
+    height: 5.25rem;
+    border-radius: 0.45rem;
+    background: #1a2332;
+    overflow: hidden;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__thumb-ph {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    color: #52525b;
+    font-size: 1.1rem;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__badge {
+    position: absolute;
+    top: 0.28rem;
+    inset-inline-start: 0.28rem;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.32rem;
+    border-radius: 0.28rem;
+    font-size: 0.52rem;
+    font-weight: 700;
+    line-height: 1.2;
+    background: rgba(0, 0, 0, 0.62);
+    color: #f4f4f5;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__badge--vinor {
+    background: rgba(37, 99, 235, 0.92);
+    color: #fff;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__badge--divar {
+    background: rgba(220, 38, 38, 0.92);
+    color: #fff;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__shots {
+    position: absolute;
+    bottom: 0.28rem;
+    inset-inline-end: 0.28rem;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.1rem 0.28rem;
+    border-radius: 0.28rem;
+    background: rgba(0, 0, 0, 0.58);
+    color: #fff;
+    font-size: 0.52rem;
+    font-weight: 600;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: stretch;
+    gap: 0.28rem;
+    padding: 0.1rem 0;
+    text-align: right;
+    direction: rtl;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__name {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.45;
+    color: #f4f4f5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__price {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #fafafa;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+  }
+  #homeDivarAdsAllModal .vn-home-divar-all__loc {
+    margin: 0;
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: #71717a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+  html.vinor-home-divar-all-open {
+    overflow: hidden;
+  }
 </style>
 {% set _divar_home_empty = not (chat_messages|default([])|selectattr('role', 'equalto', 'user')|list) %}
 {% set _ads_title = divar_pro_ads_title|default('آگهی‌ها') %}
+{% set _ads_count = _divar_ads|length %}
 <section id="homeDivarAdsCarousel"
          class="vn-home-divar"
          aria-label="{{ _ads_title }}"
@@ -211,6 +514,18 @@
          data-no-drawer-swipe
          aria-hidden="{{ 'false' if _divar_home_empty else 'true' }}"
          {% if not _divar_home_empty %}inert{% endif %}>
+  <button type="button"
+          class="vn-home-divar__all-btn"
+          id="homeDivarAdsAllBtn"
+          aria-label="مشاهده همهٔ {{ _ads_title }}"
+          aria-haspopup="dialog"
+          aria-controls="homeDivarAdsAllModal"
+          title="همهٔ آگهی‌ها">
+    <i class="fas fa-th-large" aria-hidden="true"></i>
+    {% if _ads_count > 0 %}
+    <span class="vn-home-divar__all-count" aria-hidden="true">{{ _ads_count|fa_digits }}</span>
+    {% endif %}
+  </button>
   <div class="vn-home-divar__track no-scrollbar"
        id="homeDivarAdsTrack"
        tabindex="0"
@@ -255,4 +570,460 @@
     {% endfor %}
   </div>
 </section>
+
+<div id="homeDivarAdsAllModal"
+     class="vn-home-divar-all"
+     hidden
+     aria-hidden="true"
+     data-tg-body-modal>
+  <div class="vn-home-divar-all__backdrop" data-divar-all-close aria-hidden="true"></div>
+  <div class="vn-home-divar-all__shell">
+    <div class="vn-home-divar-all__panel"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="homeDivarAdsAllTitle"
+         tabindex="-1">
+      <div class="vn-home-divar-all__handle" aria-hidden="true"><span></span></div>
+      <header class="vn-home-divar-all__head">
+        <button type="button" class="vn-home-divar-all__close" data-divar-all-close aria-label="بستن">
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+        <h2 id="homeDivarAdsAllTitle" class="vn-home-divar-all__title">{{ _ads_title }}</h2>
+      </header>
+      <div class="vn-home-divar-all__list no-scrollbar" role="list">
+        {% for ad in _divar_ads %}
+        {% set _src = (ad.source|default('divar'))|string|lower %}
+        {% set _ext = ad.external|default(_src != 'vinor') %}
+        <a class="vn-home-divar-all__row"
+           role="listitem"
+           href="{{ ad.url }}"
+           data-divar-all-close
+           {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav{% endif %}
+           title="{{ ad.title|e }}">
+          <div class="vn-home-divar-all__thumb" aria-hidden="true">
+            {% if ad.image_url %}
+            <img src="{{ ad.image_url }}" alt="" loading="lazy" decoding="async">
+            {% else %}
+            <div class="vn-home-divar-all__thumb-ph"><i class="fas fa-image"></i></div>
+            {% endif %}
+            {% if ad.badge %}
+            <span class="vn-home-divar-all__badge{% if _src == 'vinor' %} vn-home-divar-all__badge--vinor{% elif _src == 'divar' %} vn-home-divar-all__badge--divar{% endif %}">{{ ad.badge }}</span>
+            {% endif %}
+            {% if ad.image_count and ad.image_count > 1 %}
+            <span class="vn-home-divar-all__shots" aria-hidden="true">
+              <i class="fas fa-camera"></i>{{ ad.image_count|fa_digits }}
+            </span>
+            {% endif %}
+          </div>
+          <div class="vn-home-divar-all__meta">
+            <h3 class="vn-home-divar-all__name">{{ ad.title }}</h3>
+            {% if ad.price %}
+            <p class="vn-home-divar-all__price">{{ ad.price }}</p>
+            {% endif %}
+            {% if ad.location %}
+            <p class="vn-home-divar-all__loc">{{ ad.location }}</p>
+            {% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var SPEED_PX_S = 26;
+  var RESUME_MS = 4200;
+  var S = (window.__vinorDivarAdsState = window.__vinorDivarAdsState || {
+    section: null,
+    track: null,
+    raf: 0,
+    idleTimer: 0,
+    lastTs: 0,
+    paused: false,
+    resumeTimer: 0,
+    loopWidth: 0,
+    /* علامت scrollLeft برای رفتن به سمت کارت‌های باقی‌مانده (چپ) */
+    scrollStep: 0,
+    listenersBoundTo: null,
+    popupOpen: false,
+  });
+
+  function prefersReducedMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isEmptyHome() {
+    var page = document.getElementById('homeDashboardPage');
+    return !!(page && page.classList.contains('ai-home-is-empty'));
+  }
+
+  function drawerOpen() {
+    return document.documentElement.classList.contains('vinor-profile-drawer-open');
+  }
+
+  function canRun() {
+    if (!S.section || !S.track) return false;
+    if (prefersReducedMotion()) return false;
+    if (document.hidden) return false;
+    if (!isEmptyHome()) return false;
+    if (drawerOpen()) return false;
+    if (S.popupOpen) return false;
+    if (S.paused) return false;
+    if (S.section.getAttribute('aria-hidden') === 'true') return false;
+    if (S.track.scrollWidth <= S.track.clientWidth + 8) return false;
+    if (S.loopWidth < 16) return false;
+    if (!S.scrollStep) return false;
+    return true;
+  }
+
+  function measureLoop() {
+    if (!S.track) {
+      S.loopWidth = 0;
+      return;
+    }
+    var first = S.track.querySelector('.vn-home-divar__card:not([data-divar-clone="1"])');
+    var clone = S.track.querySelector('.vn-home-divar__card[data-divar-clone="1"]');
+    if (first && clone) {
+      var dx = Math.abs((clone.offsetLeft || 0) - (first.offsetLeft || 0));
+      if (dx > 8) {
+        S.loopWidth = dx;
+        return;
+      }
+    }
+    var originals = S.track.querySelectorAll('.vn-home-divar__card:not([data-divar-clone="1"])');
+    if (!originals.length) {
+      S.loopWidth = 0;
+      return;
+    }
+    var gap = 0;
+    try {
+      gap = parseFloat(getComputedStyle(S.track).columnGap || getComputedStyle(S.track).gap) || 0;
+    } catch (_) {}
+    var w = 0;
+    for (var i = 0; i < originals.length; i++) {
+      w += originals[i].offsetWidth || 0;
+      if (i < originals.length - 1) w += gap;
+    }
+    S.loopWidth = w;
+  }
+
+  function ensureClones() {
+    if (!S.track || S.track.querySelector('[data-divar-clone="1"]')) return;
+    var originals = Array.prototype.slice.call(
+      S.track.querySelectorAll('.vn-home-divar__card:not([data-divar-clone="1"])')
+    );
+    if (originals.length < 2) return;
+    /* در direction:rtl کارت‌های بعدی سمت چپ‌اند؛ کلون‌ها هم به انتهای لیست (چپ) می‌روند */
+    originals.forEach(function (card) {
+      var clone = card.cloneNode(true);
+      clone.setAttribute('data-divar-clone', '1');
+      clone.setAttribute('aria-hidden', 'true');
+      clone.setAttribute('tabindex', '-1');
+      try {
+        clone.removeAttribute('data-vinor-express-nav');
+      } catch (_) {}
+      S.track.appendChild(clone);
+    });
+  }
+
+  /**
+   * علامت scrollLeft که کارت اول را روی صفحه به راست ببرد
+   * (= viewport به سمت کارت‌های باقی‌مانده در چپ برود).
+   */
+  function detectScrollTowardLeftOverflow() {
+    var card = S.track && S.track.querySelector('.vn-home-divar__card');
+    if (!card) {
+      S.scrollStep = 1;
+      return;
+    }
+    var before = S.track.scrollLeft;
+    var x0 = card.getBoundingClientRect().left;
+    S.track.scrollLeft = before + 12;
+    var xPlus = card.getBoundingClientRect().left;
+    S.track.scrollLeft = before - 12;
+    var xMinus = card.getBoundingClientRect().left;
+    S.track.scrollLeft = before;
+
+    var movePlus = xPlus - x0;
+    var moveMinus = xMinus - x0;
+    /* حرکت کارت به راست روی صفحه = محتوای چپ وارد viewport می‌شود */
+    if (movePlus > 0.5 && movePlus >= Math.abs(moveMinus)) {
+      S.scrollStep = 1;
+    } else if (moveMinus > 0.5) {
+      S.scrollStep = -1;
+    } else if (movePlus < -0.5 && moveMinus <= 0.5) {
+      S.scrollStep = -1;
+    } else {
+      /* Chrome RTL: افزایش scrollLeft معمولاً به انتهای لیست (چپ) می‌رود */
+      S.scrollStep = 1;
+    }
+  }
+
+  function snapToStart() {
+    if (!S.track) return;
+    /* ابتدای لیست RTL = کارت اول سمت راست */
+    S.track.scrollLeft = 0;
+  }
+
+  function wrapScroll() {
+    if (!S.track || S.loopWidth < 16 || !S.scrollStep) return;
+    var sl = S.track.scrollLeft;
+    if (S.scrollStep > 0) {
+      /* پیشروی با scrollLeft مثبت (Chrome RTL) */
+      if (sl >= S.loopWidth - 0.5) {
+        S.track.scrollLeft = sl - S.loopWidth;
+      }
+    } else {
+      /* پیشروی با scrollLeft منفی (Firefox RTL) یا LTR-like */
+      if (sl <= -S.loopWidth + 0.5) {
+        S.track.scrollLeft = sl + S.loopWidth;
+      } else if (sl <= 0.5 && sl >= -0.5) {
+        /* اگر به لبهٔ ۰ چسبیدیم و هنوز منفی نمی‌شود */
+        var probe = S.track.scrollLeft;
+        S.track.scrollLeft = probe - 4;
+        if (Math.abs(S.track.scrollLeft - probe) < 0.5) {
+          S.track.scrollLeft = probe + S.loopWidth;
+        }
+      }
+    }
+  }
+
+  function stopRaf() {
+    if (S.raf) {
+      window.cancelAnimationFrame(S.raf);
+      S.raf = 0;
+    }
+    S.lastTs = 0;
+    if (S.track) S.track.classList.remove('is-auto-scrolling');
+  }
+
+  function clearIdle() {
+    if (S.idleTimer) {
+      window.clearTimeout(S.idleTimer);
+      S.idleTimer = 0;
+    }
+  }
+
+  function tick(ts) {
+    S.raf = 0;
+    if (!canRun()) {
+      stopRaf();
+      queueIdle();
+      return;
+    }
+    S.track.classList.add('is-auto-scrolling');
+    if (!S.lastTs) S.lastTs = ts;
+    var dt = Math.min(40, Math.max(0, ts - S.lastTs));
+    S.lastTs = ts;
+    var dx = (SPEED_PX_S * dt) / 1000;
+    if (dx > 0) {
+      S.track.scrollLeft += S.scrollStep * dx;
+      wrapScroll();
+    }
+    S.raf = window.requestAnimationFrame(tick);
+  }
+
+  function queueIdle() {
+    clearIdle();
+    S.idleTimer = window.setTimeout(function () {
+      S.idleTimer = 0;
+      start();
+    }, 700);
+  }
+
+  function start() {
+    if (S.raf) return;
+    if (!canRun()) {
+      queueIdle();
+      return;
+    }
+    clearIdle();
+    S.lastTs = 0;
+    S.raf = window.requestAnimationFrame(tick);
+  }
+
+  function pauseTemp() {
+    S.paused = true;
+    stopRaf();
+    if (S.resumeTimer) window.clearTimeout(S.resumeTimer);
+    S.resumeTimer = window.setTimeout(function () {
+      S.paused = false;
+      start();
+    }, RESUME_MS);
+  }
+
+  function onInteract() {
+    pauseTemp();
+  }
+
+  function onScroll() {
+    if (!S.track || !S.track.classList.contains('is-auto-scrolling')) pauseTemp();
+  }
+
+  function bindTrack() {
+    if (!S.track || S.listenersBoundTo === S.track) return;
+    S.listenersBoundTo = S.track;
+    ['pointerdown', 'touchstart', 'wheel', 'keydown'].forEach(function (ev) {
+      S.track.addEventListener(ev, onInteract, { passive: true });
+    });
+    S.track.addEventListener('scroll', onScroll, { passive: true });
+  }
+
+  function resolveEls() {
+    S.section = document.getElementById('homeDivarAdsCarousel');
+    S.track = document.getElementById('homeDivarAdsTrack');
+    return !!(S.section && S.track);
+  }
+
+  function getAllModal() {
+    return document.getElementById('homeDivarAdsAllModal');
+  }
+
+  function setPopupOpen(open) {
+    var modal = getAllModal();
+    var btn = document.getElementById('homeDivarAdsAllBtn');
+    S.popupOpen = !!open;
+    try {
+      document.documentElement.classList.toggle('vinor-home-divar-all-open', !!open);
+      document.documentElement.classList.toggle('vinor-express-overlay-modal-open', !!open);
+    } catch (_) {}
+    if (modal) {
+      if (open) {
+        modal.hidden = false;
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        var panel = modal.querySelector('.vn-home-divar-all__panel');
+        if (panel && typeof panel.focus === 'function') {
+          try { panel.focus(); } catch (_) {}
+        }
+      } else {
+        modal.classList.remove('is-open');
+        modal.hidden = true;
+        modal.setAttribute('aria-hidden', 'true');
+      }
+    }
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      stopRaf();
+    } else {
+      start();
+    }
+  }
+
+  function openAllPopup(e) {
+    if (e) {
+      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+    }
+    setPopupOpen(true);
+  }
+
+  function closeAllPopup(e) {
+    if (e) {
+      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+    }
+    setPopupOpen(false);
+  }
+
+  function bindAllPopup() {
+    var btn = document.getElementById('homeDivarAdsAllBtn');
+    var modal = getAllModal();
+    if (btn && !btn.__vinorDivarAllBound) {
+      btn.__vinorDivarAllBound = true;
+      btn.setAttribute('aria-expanded', 'false');
+      btn.addEventListener('click', openAllPopup);
+    }
+    if (modal && !modal.__vinorDivarAllBound) {
+      modal.__vinorDivarAllBound = true;
+      modal.addEventListener('click', function (ev) {
+        var t = ev.target;
+        if (!t) return;
+        if (t.closest && t.closest('[data-divar-all-close]')) {
+          /* لینک داخلی: ببند سپس ناوبری soft-swap انجام شود */
+          setPopupOpen(false);
+        }
+      });
+    }
+  }
+
+  function boot() {
+    stopRaf();
+    if (!resolveEls()) return;
+    bindTrack();
+    bindAllPopup();
+    ensureClones();
+    measureLoop();
+    detectScrollTowardLeftOverflow();
+    if (!S.scrollStep) S.scrollStep = 1;
+    S.scrollStep = -S.scrollStep; /* جهت برعکس — بقیهٔ رفتار ثابت */
+    snapToStart();
+    start();
+  }
+
+  window.__vinorDivarAdsBoot = boot;
+  window.__vinorDivarAdsCloseAll = closeAllPopup;
+
+  if (!window.__vinorDivarAdsAutoScrollInit) {
+    window.__vinorDivarAdsAutoScrollInit = true;
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stopRaf();
+      else start();
+    });
+
+    document.addEventListener('keydown', function (ev) {
+      if (!S.popupOpen) return;
+      if (ev.key === 'Escape' || ev.keyCode === 27) {
+        closeAllPopup(ev);
+      }
+    });
+
+    try {
+      var page = document.getElementById('homeDashboardPage');
+      if (page && typeof MutationObserver === 'function') {
+        new MutationObserver(function () {
+          stopRaf();
+          start();
+        }).observe(page, { attributes: true, attributeFilter: ['class'] });
+      }
+      new MutationObserver(function () {
+        stopRaf();
+        start();
+      }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    } catch (_) {}
+
+    window.addEventListener(
+      'resize',
+      function () {
+        if (!S.track) return;
+        measureLoop();
+        detectScrollTowardLeftOverflow();
+        if (!S.scrollStep) S.scrollStep = 1;
+        S.scrollStep = -S.scrollStep;
+      },
+      { passive: true }
+    );
+
+    window.addEventListener('vinor:express-page-swap', function () {
+      S.listenersBoundTo = null;
+      setPopupOpen(false);
+      window.setTimeout(function () {
+        if (typeof window.__vinorDivarAdsBoot === 'function') window.__vinorDivarAdsBoot();
+      }, 120);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+      window.setTimeout(boot, 80);
+    });
+  } else {
+    window.setTimeout(boot, 80);
+  }
+})();
+</script>
 {% endif %}

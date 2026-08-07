@@ -2,9 +2,11 @@
 {% block title %}پیامک و نوتیفیکیشن | پنل مدیریت وینور{% endblock %}
 {% block page_title %}پیامک و نوتیفیکیشن{% endblock %}
 {% block page_title_i18n %}nav.sms_notifications{% endblock %}
+{% block page_title_key %}sms_notifications.browser_title{% endblock %}
+{% block i18n_page_title %}sms_notifications.browser_title{% endblock %}
 
 {% block content %}
-<div class="space-y-6 max-w-5xl">
+<div class="space-y-6 max-w-5xl pb-2">
 
   <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg p-4 text-sm text-sky-900 dark:text-sky-100">
     <p class="font-medium mb-1">ارتباط با همکاران و کاربران</p>
@@ -16,7 +18,7 @@
 
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
-      <p class="text-gray-500">گیرندگان ذخیره‌شده</p>
+      <p class="text-gray-500">مجموع اعضای گروه‌ها</p>
       <p class="mt-0.5 font-semibold tabular-nums">{{ recipient_total|default(0) }}</p>
     </div>
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
@@ -25,11 +27,17 @@
     </div>
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
       <p class="text-gray-500">سابقه پیامک</p>
-      <p class="mt-0.5 font-semibold tabular-nums">{{ sms_hist_stats.sent|default(0) }} / {{ sms_hist_stats.total|default(0) }}</p>
+      <p class="mt-0.5 font-semibold tabular-nums">{{ sms_hist_stats.sent|default(0) }} موفق</p>
+      {% if sms_hist_stats.failed|default(0) > 0 %}
+      <p class="text-[10px] text-rose-500 tabular-nums">{{ sms_hist_stats.failed }} خطا</p>
+      {% endif %}
     </div>
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
       <p class="text-gray-500">برودکست اعلان</p>
       <p class="mt-0.5 font-semibold tabular-nums">{{ notif_stats.total_broadcasts|default(0) }}</p>
+      {% if notif_stats.total_delivered|default(0) > 0 %}
+      <p class="text-[10px] text-gray-500 tabular-nums">{{ notif_stats.total_delivered }} تحویل</p>
+      {% endif %}
     </div>
   </div>
 
@@ -92,6 +100,29 @@
     </a>
   </div>
 
+  {% if scheduled_jobs %}
+  <div class="rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/20 shadow-sm overflow-hidden">
+    <div class="px-4 sm:px-5 py-3 border-b border-amber-200/80 dark:border-amber-900/40 flex items-center justify-between gap-2">
+      <h3 class="text-sm font-bold text-gray-900 dark:text-white">صف زمان‌بندی پیامک</h3>
+      <a href="{{ url_for('admin.sms_colleagues') }}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">مدیریت</a>
+    </div>
+    <ul class="divide-y divide-amber-100 dark:divide-amber-900/30 text-xs">
+      {% for job in scheduled_jobs %}
+      <li class="px-4 sm:px-5 py-2.5 flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="font-medium text-gray-900 dark:text-white truncate">{{ job.group_label or job.recipient_group or '—' }}</p>
+          <p class="text-gray-600 dark:text-gray-400 truncate mt-0.5">{{ (job.message or '')|truncate(72) }}</p>
+          {% if job.recurrence_label %}
+          <p class="text-gray-500 mt-0.5">{{ job.recurrence_label }}</p>
+          {% endif %}
+        </div>
+        <span class="shrink-0 text-amber-700 dark:text-amber-300 tabular-nums whitespace-nowrap">{{ job.next_run_display or '—' }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
   {% if groups %}
   <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
     <div class="px-4 sm:px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
@@ -122,7 +153,10 @@
         <li class="px-4 sm:px-5 py-2.5 flex items-start justify-between gap-2">
           <div class="min-w-0">
             <p class="font-mono text-gray-800 dark:text-gray-200 truncate" dir="ltr">{{ h.mobile or '—' }}</p>
-            <p class="text-gray-500 truncate mt-0.5">{{ (h.message or h.body or h.template_id or '—')|truncate(64) }}</p>
+            <p class="text-gray-500 truncate mt-0.5">{{ (h.preview or h.message or h.body or h.template_id or '—')|truncate(64) }}</p>
+            {% if h.created_at_display %}
+            <p class="text-gray-400 mt-0.5 tabular-nums">{{ h.created_at_display }}</p>
+            {% endif %}
           </div>
           <span class="shrink-0 {% if h.success %}text-emerald-600{% else %}text-rose-500{% endif %}">
             {% if h.success %}موفق{% else %}خطا{% endif %}

@@ -2040,7 +2040,7 @@ def _send_partner_application_sms(me_phone: str, recipient_name: str) -> dict:
         sms_message = 'وینور\nدرخواست همکاری‌ت ثبت شد؛ منتظر بررسی.'
     sms_line_number = (settings.get('sms_line_number') or get_sms_line_number() or '09981801922').strip()
 
-    sms_result = send_sms_direct(mobile=mobile, message=sms_message, line_number=sms_line_number)
+    sms_result = send_sms_direct(mobile=mobile, message=sms_message, line_number=sms_line_number, record_history=False)
     ok = bool(sms_result.get('ok'))
     err = None
     if not ok:
@@ -2048,7 +2048,7 @@ def _send_partner_application_sms(me_phone: str, recipient_name: str) -> dict:
         err = str(body.get('message') or body.get('error') or 'sms_send_failed')
         if sms_is_infrastructure_error(err):
             time.sleep(0.6)
-            sms_result = send_sms_direct(mobile=mobile, message=sms_message, line_number=sms_line_number)
+            sms_result = send_sms_direct(mobile=mobile, message=sms_message, line_number=sms_line_number, record_history=False)
             ok = bool(sms_result.get('ok'))
             if ok:
                 err = None

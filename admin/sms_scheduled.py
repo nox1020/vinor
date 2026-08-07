@@ -145,6 +145,15 @@ def _combine_tehran_date_time(day: datetime, hour: int, minute: int) -> datetime
     return local.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
+def _coerce_int(value: Any, default: Optional[int] = None) -> Optional[int]:
+    if value is None or value == "":
+        return default
+    try:
+        return int(to_en_digits(str(value)).strip())
+    except (TypeError, ValueError):
+        return default
+
+
 def compute_next_recurring_run(
     *,
     freq: str,
@@ -163,7 +172,7 @@ def compute_next_recurring_run(
         return candidate
 
     if freq == RECURRENCE_WEEKLY:
-        wd = weekday if weekday is not None else 5
+        wd = _coerce_int(weekday, 5)
         days_ahead = (wd - now.weekday()) % 7
         target = _combine_tehran_date_time(now + timedelta(days=days_ahead), hour, minute)
         if target <= now:
@@ -171,8 +180,8 @@ def compute_next_recurring_run(
         return target
 
     if freq == RECURRENCE_MONTHLY:
-        dom = month_day if month_day is not None else now.day
-        dom = max(1, min(31, int(dom)))
+        dom = _coerce_int(month_day, now.day) or now.day
+        dom = max(1, min(31, dom))
         year, month = now.year, now.month
         for _ in range(24):
             try:
@@ -247,11 +256,11 @@ def recurrence_summary(job: Dict[str, Any]) -> str:
     if freq == RECURRENCE_DAILY:
         return f"هر روز ساعت {t}"
     if freq == RECURRENCE_WEEKLY:
-        wd = job.get("recurrence_weekday", 5)
+        wd = _coerce_int(job.get("recurrence_weekday"), 5)
         label = _WEEKDAY_LABELS.get(wd, str(wd))
         return f"هر {label} ساعت {t}"
     if freq == RECURRENCE_MONTHLY:
-        dom = job.get("recurrence_day") or 1
+        dom = _coerce_int(job.get("recurrence_day"), 1) or 1
         return f"هر ماه روز {dom} ساعت {t}"
     return t
 
@@ -292,6 +301,7 @@ def send_direct_to_recipients(
                 mobile=phone_normalized,
                 message=message,
                 line_number=line_number,
+                record_history=False,
             )
             history_batch.append({
                 "mobile": phone_normalized,
@@ -400,15 +410,10 @@ def create_scheduled_job(
         if not parsed_time:
             return None, "ساعت تکرار نامعتبر است (وقت تهران)."
         hour, minute = parsed_time
-        wd = recurrence_weekday
+        wd = _coerce_int(recurrence_weekday, 5)
         dom = recurrence_day
-        if freq == RECURRENCE_WEEKLY and wd is None:
-            wd = 5
         if freq == RECURRENCE_MONTHLY:
-            try:
-                dom = max(1, min(31, int(dom or 1)))
-            except (TypeError, ValueError):
-                dom = 1
+            dom = max(1, min(31, _coerce_int(dom, 1) or 1))
         next_run = compute_next_recurring_run(
             freq=freq,
             hour=hour,
@@ -432,16 +437,49 @@ def create_scheduled_job(
 
 
 def cancel_scheduled_job(job_id: str) -> bool:
+    if not (job_id or "").strip():
+        return False
     jobs = load_scheduled_jobs()
     changed = False
     for job in jobs:
-        if job.get("id") == job_id and job.get("status") == _STATUS_PENDING:
-            job["status"] = _STATUS_CANCELLED
-            job["cancelled_at"] = tehran_now().isoformat()
-            changed = True
-            break
+        if job.get("id") != job_id:
+            continue
+        if job.get("status") not in (_STATUS_PENDING, _STATUS_RUNNING):
+            return False
+        job["status"] = _STATUS_CANCELLED
+        job["cancelled_at"] = tehran_now().isoformat()
+        job.pop("run_started_at", None)
+        changed = True
+        break
     if changed:
         save_scheduled_jobs(jobs)
+    return changed
+
+
+def _recover_stale_running_jobs(jobs: List[Dict[str, Any]], now: datetime) -> bool:
+    """اگر اجرا نیمه‌کاره بماند (crash)، بعد از ۲۰ دقیقه دوباره pending شود."""
+    changed = False
+    for job in jobs:
+        if job.get("status") != _STATUS_RUNNING:
+            continue
+        started_raw = job.get("run_started_at")
+        recover = False
+        if not started_raw:
+            recover = True
+        else:
+            try:
+                started = _to_tehran(
+                    datetime.fromisoformat(str(started_raw).replace("Z", "+00:00"))
+                )
+                recover = (now - started).total_seconds() > 20 * 60
+            except ValueError:
+                recover = True
+        if recover:
+            job["status"] = _STATUS_PENDING
+            job.pop("run_started_at", None)
+            prev = job.get("last_result") if isinstance(job.get("last_result"), dict) else {}
+            job["last_result"] = {**prev, "recovered_stale_run": True}
+            changed = True
     return changed
 
 
@@ -453,6 +491,7 @@ def list_active_scheduled_jobs(limit: int = 20) -> List[Dict[str, Any]]:
     for job in active[:limit]:
         row = dict(job)
         row["next_run_display"] = format_tehran_iso_display(job.get("next_run_at"))
+        row["last_run_display"] = format_tehran_iso_display(job.get("last_run_at"))
         row["recurrence_label"] = (
             recurrence_summary(job) if job.get("send_timing") == SEND_TIMING_RECURRING else ""
         )
@@ -464,6 +503,7 @@ def list_active_scheduled_jobs(limit: int = 20) -> List[Dict[str, Any]]:
 def _execute_job(app: Flask, job: Dict[str, Any]) -> None:
     group = job.get("recipient_group") or "approved"
     total = count_sms_recipients(group)
+    job["recipient_count"] = total
     if total < 1:
         job["last_result"] = {"sent": 0, "failed": 0, "error": "no_recipients"}
         return
@@ -474,11 +514,10 @@ def _execute_job(app: Flask, job: Dict[str, Any]) -> None:
     except (TypeError, ValueError):
         limit = 0
 
-    offset = int(job.get("send_offset") or 0)
+    offset = _coerce_int(job.get("send_offset"), 0) or 0
     if limit > 0 and limit < total:
         batch = load_sms_recipients(group, limit=limit, offset=offset, validate=False)
     else:
-        # بدون محدودیت — فقط برای گروه‌های کوچک مجاز است
         batch = load_sms_recipients(group, validate=False)
 
     if not batch:
@@ -513,7 +552,7 @@ def process_due_scheduled_jobs(app: Flask) -> int:
         with app.app_context():
             jobs = load_scheduled_jobs(app)
             now = tehran_now()
-            changed = False
+            changed = _recover_stale_running_jobs(jobs, now)
 
             for job in jobs:
                 if job.get("status") != _STATUS_PENDING:
@@ -531,12 +570,15 @@ def process_due_scheduled_jobs(app: Flask) -> int:
                     continue
 
                 job["status"] = _STATUS_RUNNING
+                job["run_started_at"] = now.isoformat()
                 changed = True
                 try:
                     _execute_job(app, job)
                 except Exception as e:
                     app.logger.exception("Scheduled SMS job %s failed: %s", job.get("id"), e)
                     job["last_result"] = {"sent": 0, "failed": 0, "error": str(e)}
+
+                job.pop("run_started_at", None)
 
                 if job.get("send_timing") == SEND_TIMING_RECURRING:
                     parsed = parse_time_hm(job.get("recurrence_time") or "")
@@ -546,10 +588,17 @@ def process_due_scheduled_jobs(app: Flask) -> int:
                             freq=job.get("recurrence_freq") or RECURRENCE_DAILY,
                             hour=hour,
                             minute=minute,
-                            weekday=job.get("recurrence_weekday"),
-                            month_day=job.get("recurrence_day"),
+                            weekday=_coerce_int(job.get("recurrence_weekday"), 5),
+                            month_day=_coerce_int(job.get("recurrence_day"), 1),
                             after=tehran_now(),
                         ).isoformat()
+                    else:
+                        app.logger.error(
+                            "Scheduled SMS job %s has invalid recurrence_time: %r",
+                            job.get("id"),
+                            job.get("recurrence_time"),
+                        )
+                        job["next_run_at"] = (now + timedelta(hours=1)).isoformat()
                     job["status"] = _STATUS_PENDING
                 else:
                     job["status"] = _STATUS_COMPLETED

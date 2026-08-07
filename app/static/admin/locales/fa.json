@@ -151,6 +151,9 @@
     "colleague_notifications": "اعلان همکاران",
     "users": "کاربران"
   },
+  "sms_notifications": {
+    "browser_title": "پیامک و نوتیفیکیشن | Vinor Control"
+  },
   "dashboard": {
     "title": "داشبورد",
     "subtitle": "وضعیت صف‌ها، میانبرها و چت عملیات.",
