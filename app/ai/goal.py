@@ -48,6 +48,7 @@ CORE_TOOLS_PARTNER = frozenset(
         "search_lands",
         "suggest_next_action",
         "draft_listing_copy",
+        "propose_lead",
         "propose_visit_request",
         "propose_complete_visit",
         "propose_deal",
@@ -93,7 +94,6 @@ EXTENDED_CHAT_TOOLS = frozenset(
         "propose_contract",
         "propose_payment_milestone",
         "propose_settlement",
-        "propose_lead",
         "propose_task",
     }
 )

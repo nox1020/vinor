@@ -436,6 +436,7 @@ def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
     if v in (VOICE_PARTNER, VOICE_SPECIAL):
         schemas.append(_schema_next())
         schemas.append(_schema_listing())
+        schemas.append(_schema_lead())
         schemas.append(_schema_visit())
         schemas.append(_schema_complete_visit())
         schemas.append(_schema_deal())
@@ -879,13 +880,22 @@ def _schema_lead() -> dict[str, Any]:
         "type": "function",
         "function": {
             "name": TOOL_LEAD,
-            "description": "کارت تأیید ثبت Lead/Contact در CRM. customer_phone یا display_name.",
+            "description": (
+                "کارت «ثبت مشتری» (نام + موبایل). فیلدها یکی‌یکی؛ "
+                "اول display_name خالی بزن تا نام بپرسد، بعد customer_phone، "
+                "سپس هر دو را بفرست تا کارت تأیید بیاید. ثبت فقط بعد از تأیید کارت."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "customer_phone": {"type": "string"},
-                    "display_name": {"type": "string"},
-                    "notes": {"type": "string"},
+                    "display_name": {
+                        "type": "string",
+                        "description": "نام مشتری (یکجا)",
+                    },
+                    "customer_phone": {
+                        "type": "string",
+                        "description": "موبایل ۱۱ رقمی ایران",
+                    },
                 },
                 "required": [],
             },
@@ -3268,7 +3278,7 @@ def _integration_ai_tools_gate(phone: str) -> dict[str, Any] | None:
     if not me:
         return _denied("کاربر شناسایی نشد.")
     if not partner_is_approved(me):
-        return _denied("برای ثبت لید/وظیفه باید حساب همکاری تأیید شده باشد.")
+        return _denied("برای ثبت مشتری باید حساب همکاری تأیید شده باشد.")
     return None
 
 
@@ -3282,42 +3292,62 @@ def _tool_propose_lead(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     me = (phone or "").strip()
     phone_raw = str(args.get("customer_phone") or "").strip()
     cust = normalize_iran_mobile(phone_raw) or phone_raw
-    display_name = str(args.get("display_name") or "").strip()
-    notes = str(args.get("notes") or "").strip()
-    if cust and not is_valid_iran_mobile(cust):
+    display_name = (
+        str(args.get("display_name") or "").strip()
+        or str(args.get("customer_name") or "").strip()
+    )
+    # MVP: فقط نام + موبایل — یکی‌یکی
+    if not display_name:
+        return {
+            "ok": True,
+            "model_result": {
+                "ok": True,
+                "status": "needs_customer_name",
+                "speak_exactly": "نام مشتری چیست؟",
+                "instruction": (
+                    "عین speak_exactly را بپرس. هنوز شماره نپرس و کارت نساز."
+                ),
+            },
+        }
+    if not phone_raw:
+        return {
+            "ok": True,
+            "model_result": {
+                "ok": True,
+                "status": "needs_customer_phone",
+                "customer_name": display_name,
+                "speak_exactly": "شماره موبایل مشتری را بفرست.",
+                "instruction": (
+                    "عین speak_exactly را بپرس. بعد با display_name و customer_phone "
+                    "دوباره propose_lead بزن."
+                ),
+            },
+        }
+    if not is_valid_iran_mobile(cust):
         return {
             "ok": False,
             "model_result": {"ok": False, "error": "شماره مشتری معتبر نیست."},
             "error": "شماره مشتری معتبر نیست.",
         }
-    if not cust and not display_name:
-        return {
-            "ok": False,
-            "model_result": {"ok": False, "error": "شماره یا نام لید لازم است."},
-            "error": "شماره یا نام لید لازم است.",
-        }
-    first, last = ("", "")
-    if display_name:
-        first, last = split_customer_full_name(display_name)
+    first, last = split_customer_full_name(display_name)
     payload = {
         "customer_phone": cust,
         "display_name": display_name,
+        "customer_name": display_name,
         "first_name": first,
         "last_name": last,
-        "notes": notes,
+        "notes": "",
     }
     token = _store_pending_action(user_key=me, action_type="confirm_lead", payload=payload)
-    masked = (cust[:4] + "***" + cust[-3:]) if cust and len(cust) >= 7 else (cust or "—")
+    masked = cust[:4] + "***" + cust[-3:] if len(cust) >= 7 else cust
     lines = [
-        f"نام: {display_name or '—'}",
+        f"نام: {display_name}",
         f"تماس: {masked}",
     ]
-    if notes:
-        lines.append(f"یادداشت: {notes}")
     ui = {
         "type": "confirm_lead",
         "token": token,
-        "title": "تأیید ثبت لید",
+        "title": "ثبت مشتری",
         "lines": lines,
         "status": "pending",
     }
@@ -3326,7 +3356,9 @@ def _tool_propose_lead(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
         "model_result": {
             "ok": True,
             "status": "needs_user_confirmation",
-            "instruction": "کارت تأیید لید نشان داده شد؛ هنوز ثبت نشده.",
+            "instruction": (
+                "کارت «ثبت مشتری» نشان داده شد؛ بگو چک کند و تأیید بزند. هنوز ثبت نشده."
+            ),
         },
         "ui_action": ui,
         "land_codes": [],
@@ -4060,8 +4092,13 @@ def _confirm_lead(*, phone: str, token: str, pending: dict[str, Any]) -> dict[st
         return {"ok": False, "error": "ابزار یکپارچه‌سازی غیرفعال است."}
     payload = pending.get("payload") if isinstance(pending.get("payload"), dict) else {}
     cust = str(payload.get("customer_phone") or "").strip()
-    display_name = str(payload.get("display_name") or "").strip()
+    display_name = (
+        str(payload.get("display_name") or "").strip()
+        or str(payload.get("customer_name") or "").strip()
+    )
     notes = str(payload.get("notes") or "").strip()
+    if not display_name or not cust:
+        return {"ok": False, "error": "نام و شماره مشتری لازم است."}
     lead = create_lead(
         partner_phone=phone,
         customer_phone=cust,
@@ -4072,27 +4109,56 @@ def _confirm_lead(*, phone: str, token: str, pending: dict[str, Any]) -> dict[st
         metadata={"source": "ai"},
     )
     if not lead:
-        return {"ok": False, "error": "ثبت لید ممکن نشد."}
-    contact_id = ""
-    if cust:
-        contact = upsert_contact(
-            partner_phone=phone,
-            customer_phone=cust,
-            first_name=str(payload.get("first_name") or ""),
-            last_name=str(payload.get("last_name") or ""),
-            display_name=display_name or lead.display_name,
-            source="lead",
-            lead_id=lead.id,
-            notes=notes,
+        return {"ok": False, "error": "ثبت مشتری ممکن نشد."}
+    contact = upsert_contact(
+        partner_phone=phone,
+        customer_phone=cust,
+        first_name=str(payload.get("first_name") or ""),
+        last_name=str(payload.get("last_name") or ""),
+        display_name=display_name or lead.display_name,
+        source="lead",
+        lead_id=lead.id,
+        notes=notes,
+    )
+    contact_id = contact.id if contact else ""
+    # Seed visit_draft تا propose_visit_request نام/شماره را دوباره نپرسد
+    try:
+        first = str(payload.get("first_name") or "").strip()
+        last = str(payload.get("last_name") or "").strip()
+        if not first and not last and display_name:
+            from app.express_partner.visit_requests import split_customer_full_name
+
+            first, last = split_customer_full_name(display_name)
+        _save_visit_draft(
+            phone,
+            {
+                "land_code": "",
+                "customer_name": display_name,
+                "customer_first_name": first,
+                "customer_last_name": last,
+                "customer_phone": cust,
+                "awaiting": "",
+            },
         )
-        if contact:
-            contact_id = contact.id
+    except Exception:
+        pass
     _consume_pending_action(token)
     return {
         "ok": True,
-        "message": "لید ثبت شد.",
+        "action_type": "confirm_lead",
+        "message": "مشتری ثبت شد.",
         "lead_id": lead.id,
         "contact_id": contact_id,
+        "followup_message": "حالا برای مشتری ملک مناسب پیدا کنیم؟",
+        "ui_action": {
+            "type": "next_action",
+            "title": "پیدا کردن ملک",
+            "subtitle": "حالا برای مشتری ملک مناسب پیدا کنیم؟",
+            "cta": "پیدا کردن ملک",
+            "chat_prompt": "برای این مشتری یک ملک مناسب پیدا کن",
+            "chat_intent": "find_land",
+            "status": "ready",
+        },
     }
 
 
@@ -4979,7 +5045,7 @@ def _render_confirm_action_card(
         "confirm_contract": "تأیید ثبت قرارداد",
         "confirm_payment_milestone": "تأیید ثبت قسط",
         "confirm_settlement": "تأیید باز کردن تسویه",
-        "confirm_lead": "تأیید ثبت لید",
+        "confirm_lead": "ثبت مشتری",
         "confirm_task": "تأیید ثبت وظیفه",
         "confirm_broadcast_sms": "تأیید ارسال پیامک همگانی",
         "confirm_broadcast_push": "تأیید ارسال پوش همگانی",

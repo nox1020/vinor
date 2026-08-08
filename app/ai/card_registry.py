@@ -103,7 +103,7 @@ CARD_SPECS: dict[str, CardSpec] = {
         "confirm_payment_milestone", "تأیید ثبت قسط"
     ),
     "confirm_settlement": _confirm_spec("confirm_settlement", "تأیید باز کردن تسویه"),
-    "confirm_lead": _confirm_spec("confirm_lead", "تأیید ثبت لید"),
+    "confirm_lead": _confirm_spec("confirm_lead", "ثبت مشتری"),
     "confirm_task": _confirm_spec("confirm_task", "تأیید ثبت وظیفه"),
     "need_login": CardSpec(
         type="need_login",

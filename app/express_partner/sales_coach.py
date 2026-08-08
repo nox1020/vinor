@@ -914,25 +914,25 @@ def build_home_ai_quick_prompts(
     if has_completed_deal:
         # فروشندهٔ فعال — فروش یا جذب فایل
         add(
+            "مشتری دارم",
+            prompt="مشتری دارم — مشخصاتش را ثبت کنیم",
+            intent="have_customer",
+            icon="users",
+        )
+        add(
             "پیدا کردن فایل",
             prompt="یه فایل مناسب برای بازاریابی می‌خوام",
             intent="find_land",
             icon="search",
         )
-        add(
-            "متن آگهی",
-            prompt="متن آگهی دیوار و اینستا بده",
-            intent="marketing",
-            icon="pen",
-        )
         add("قدم بعدی", prompt="قدم بعدی‌م چیه؟", intent="next_action", icon="bolt")
     else:
         # تأییدشده بدون معامله — تمرکز روی اولین پورسانت
         add(
-            "معرفی فایل به مشتری",
-            prompt="چطور یه فایل رو به مشتری معرفی کنم؟",
-            intent="marketing",
-            icon="pen",
+            "مشتری دارم",
+            prompt="مشتری دارم — مشخصاتش را ثبت کنیم",
+            intent="have_customer",
+            icon="users",
         )
         add(
             "گرفتن فایل جدید",
