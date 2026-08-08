@@ -224,37 +224,36 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  /* ارتفاع کوتاه: کارت‌ها جمع‌تر تا با بدو ورود هم‌زیستی کنند */
-  @media (max-height: 700px) {
-    #homeDashboardPage.ai-home-is-empty #homeDivarAdsCarousel.vn-home-divar {
-      margin-top: calc(0.35rem + 2.5rem + 0.15rem);
-      padding-bottom: 0.1rem;
-    }
-    #homeDivarAdsCarousel .vn-home-divar__card {
-      width: min(8.35rem, 38vw);
-    }
-    #homeDivarAdsCarousel .vn-home-divar__body {
-      min-height: 3.35rem;
-      padding: 0.32rem 0.42rem 0.4rem;
-      gap: 0.18rem;
-    }
-    #homeDivarAdsCarousel .vn-home-divar__track {
-      gap: 0.45rem;
-      padding-bottom: 0.3rem;
-      padding-left: 2.55rem;
-    }
+  /*
+    ارتفاع کوتاه واقعی دستگاه (نه کیبورد): کلاس‌ها از home.html ست می‌شوند.
+    @media (max-height) با interactive-widget=resizes-content هنگام IME فعال می‌شد و کارت‌ها را خرد می‌کرد.
+  */
+  html.vn-short-viewport #homeDashboardPage.ai-home-is-empty #homeDivarAdsCarousel.vn-home-divar {
+    margin-top: calc(0.35rem + 2.5rem + 0.15rem);
+    padding-bottom: 0.1rem;
   }
-  /* ارتفاع خیلی کوتاه: نوار دیوار جمع شود تا کامپوزر/بدو ورود نمانند */
-  @media (max-height: 640px) {
-    #homeDashboardPage.ai-home-is-empty #homeDivarAdsCarousel.vn-home-divar {
-      flex-shrink: 1;
-      min-height: 0;
-      max-height: 34vh;
-      overflow: hidden;
-    }
-    #homeDivarAdsCarousel .vn-home-divar__media {
-      aspect-ratio: 16 / 10;
-    }
+  html.vn-short-viewport #homeDivarAdsCarousel .vn-home-divar__card {
+    width: min(8.35rem, 38vw);
+  }
+  html.vn-short-viewport #homeDivarAdsCarousel .vn-home-divar__body {
+    min-height: 3.35rem;
+    padding: 0.32rem 0.42rem 0.4rem;
+    gap: 0.18rem;
+  }
+  html.vn-short-viewport #homeDivarAdsCarousel .vn-home-divar__track {
+    gap: 0.45rem;
+    padding-bottom: 0.3rem;
+    padding-left: 2.55rem;
+  }
+  /* ارتفاع خیلی کوتاه دستگاه: سقف rem ثابت — نه vh که با کیبورد آب می‌رود */
+  html.vn-short-viewport-tight #homeDashboardPage.ai-home-is-empty #homeDivarAdsCarousel.vn-home-divar {
+    flex-shrink: 1;
+    min-height: 0;
+    max-height: 11.5rem;
+    overflow: hidden;
+  }
+  html.vn-short-viewport-tight #homeDivarAdsCarousel .vn-home-divar__media {
+    aspect-ratio: 16 / 10;
   }
   /* پاپ‌آپ لیست کامل آگهی‌ها */
   #homeDivarAdsAllModal.vn-home-divar-all {

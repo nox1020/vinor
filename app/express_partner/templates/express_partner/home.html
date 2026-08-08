@@ -3,6 +3,39 @@
 {% block head %}
   {{ super() }}
   <meta name="description" content="{{ seo_description|default('پنل بازاریاب فروش — از چت مشتری یا نوع فایل بفرست تا فایل مناسب معرفی شود.') }}">
+  {# ارتفاع کوتاه را یک‌بار (و فقط با عوض شدن عرض/چرخش) قفل کن — باز شدن کیبورد نباید کارت‌ها را فشرده کند #}
+  <script>
+  (function () {
+    var lastW = 0;
+    var lockedH = 0;
+    function applyShortViewport(h) {
+      var root = document.documentElement;
+      root.classList.toggle('vn-short-viewport', h <= 700);
+      root.classList.toggle('vn-short-viewport-tight', h <= 640);
+      try {
+        root.style.setProperty('--vn-stable-vh', h + 'px');
+      } catch (_) {}
+    }
+    function syncShortViewport(force) {
+      var w = window.innerWidth || 0;
+      var h = window.innerHeight || 0;
+      if (!h) return;
+      /* فقط ارتفاع عوض شده ≈ کیبورد/نوار مرورگر — کلاس فشرده را دست نزن */
+      if (!force && lastW && w === lastW && lockedH) {
+        var drop = lockedH - h;
+        if (drop > 80 || (h - lockedH) > 80) return;
+      }
+      lastW = w;
+      lockedH = h;
+      applyShortViewport(h);
+    }
+    syncShortViewport(true);
+    window.addEventListener('resize', function () { syncShortViewport(false); }, { passive: true });
+    window.addEventListener('orientationchange', function () {
+      window.setTimeout(function () { syncShortViewport(true); }, 250);
+    }, { passive: true });
+  })();
+  </script>
 {% endblock %}
 
 {% block content %}
@@ -286,7 +319,7 @@
 </script>
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=113"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=114"></script>
 <script>
 (function () {
   function syncHomeDockPad() {
@@ -294,6 +327,7 @@
     var dock = document.getElementById('vnHomeComposerDock');
     if (!page || !dock) return;
     var h = Math.ceil(dock.getBoundingClientRect().height || 0);
+    /* padding کیبورد داخل داک است؛ برای فضای اسکرول همان را می‌خواهیم، ولی کف حداقلی ثابت بماند */
     if (h < 88) h = 132;
     /* بافر اضافه برای کارت افقی فایل */
     page.style.setProperty('--vn-home-dock-h', (h + 8) + 'px');
@@ -308,7 +342,15 @@
       if (apkHost) ro.observe(apkHost);
     } catch (_) {}
   }
-  window.addEventListener('resize', syncHomeDockPad, { passive: true });
+  /* فقط عوض شدن عرض (چرخش) — نه هر resize کیبورد */
+  var dockPadLastW = window.innerWidth || 0;
+  window.addEventListener('resize', function () {
+    var w = window.innerWidth || 0;
+    if (w !== dockPadLastW) {
+      dockPadLastW = w;
+      syncHomeDockPad();
+    }
+  }, { passive: true });
   window.addEventListener('vinor:express-page-swap', function () {
     setTimeout(syncHomeDockPad, 0);
   });

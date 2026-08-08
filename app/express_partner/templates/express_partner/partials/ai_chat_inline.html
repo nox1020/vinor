@@ -673,12 +673,12 @@
   #homeDashboardPage.ai-home-is-empty .ai-home-empty-actions:not([hidden]) {
     display: flex !important;
   }
-  /* با نوار دیوار: پیشنهادها فشرده‌تر تا داک از ویوپورت بیرون نزند */
+  /* با نوار دیوار: پیشنهادها فشرده‌تر — سقف rem تا با کیبورد (vh) خرد نشوند */
   #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) .ai-home-empty-actions {
     margin-top: 0;
     margin-bottom: 0.35rem;
     gap: 0.12rem;
-    max-height: min(32vh, 11.5rem);
+    max-height: 11.5rem;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -692,12 +692,10 @@
     padding: 0.62rem 0.45rem;
     font-size: 0.95rem;
   }
-  @media (max-height: 700px) {
-    #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) .ai-home-empty-actions {
-      max-height: min(26vh, 8.5rem);
-      margin-top: 0;
-      margin-bottom: 0.3rem;
-    }
+  html.vn-short-viewport #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) .ai-home-empty-actions {
+    max-height: 8.5rem;
+    margin-top: 0;
+    margin-bottom: 0.3rem;
   }
   .ai-home-empty-actions[hidden],
   #homeDashboardPage.ai-home-is-empty .ai-home-empty-actions[hidden] {

@@ -3136,13 +3136,23 @@
   }
 
   function syncComposerInset() {
-    if (!composer || !window.visualViewport) return;
+    if (!window.visualViewport) return;
     var vv = window.visualViewport;
     var inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-    composer.style.setProperty(
-      '--ai-keyboard-inset',
-      inset > 0 ? inset + 'px' : '0px'
-    );
+    /*
+      با interactive-widget=resizes-content معمولاً layout از قبل جمع شده و inset≈0 است.
+      نوسان کوچک (نوار آدرس) را نادیده بگیر تا کارت‌ها/داک نپرند.
+    */
+    if (inset < 48) inset = 0;
+    var px = inset > 0 ? inset + 'px' : '0px';
+    if (composer) composer.style.setProperty('--ai-keyboard-inset', px);
+    /* Siblingهایی مثل چیپ APK هم از var ارث ببرند */
+    try {
+      var homePage = document.getElementById('homeDashboardPage');
+      if (homePage) homePage.style.setProperty('--ai-keyboard-inset', px);
+      var dock = document.getElementById('vnHomeComposerDock');
+      if (dock) dock.style.setProperty('--ai-keyboard-inset', px);
+    } catch (_) {}
   }
 
   function fireHomeQuickPrompt(prompt, intent, chip) {
@@ -3266,6 +3276,12 @@
       onViewportScroll = null;
     }
     if (composer) composer.style.removeProperty('--ai-keyboard-inset');
+    try {
+      var homePage = document.getElementById('homeDashboardPage');
+      if (homePage) homePage.style.removeProperty('--ai-keyboard-inset');
+      var dockEl = document.getElementById('vnHomeComposerDock');
+      if (dockEl) dockEl.style.removeProperty('--ai-keyboard-inset');
+    } catch (_) {}
     cancelTypewriter();
     scrollLatestGen += 1;
     window.__vinorAiChatTeardown = null;
