@@ -948,15 +948,23 @@ def _call_deepseek(
     url = f"{DEEPSEEK_BASE_URL.rstrip('/')}/chat/completions"
     bcfg = budget_config()
     use_thinking = thinking_enabled()
+    # با thinking، max_tokens خیلی کوچک ممکن است فقط reasoning بسوزاند و content خالی بماند
+    raw_max = int(max_tokens) if max_tokens is not None else bcfg["max_tokens"]
+    if use_thinking:
+        raw_max = max(raw_max, 256)
     payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "stream": False,
-        "max_tokens": int(max_tokens) if max_tokens is not None else bcfg["max_tokens"],
-        "temperature": float(temperature) if temperature is not None else bcfg["temperature"],
+        "max_tokens": raw_max,
         # V4 پیش‌فرض thinking روشن است — بدون این فلگ، هزاران توکن reasoning در هر درخواست می‌سوزد.
         "thinking": {"type": "enabled" if use_thinking else "disabled"},
     }
+    # temperature در thinking mode بی‌اثر است؛ فقط در حالت غیرفعال بفرست
+    if not use_thinking:
+        payload["temperature"] = (
+            float(temperature) if temperature is not None else bcfg["temperature"]
+        )
     # سقف سخت completion — حتی اگر caller عدد بزرگ بدهد
     payload["max_tokens"] = max(32, min(int(payload["max_tokens"]), 512))
     if tools is not None:

@@ -2830,7 +2830,7 @@ def ai_model():
         action = (request.form.get('action') or 'save').strip()
         if action == 'check_balance':
             result = probe_deepseek_api_balance(clear_on_ok=True)
-            if result.get('ok') and result.get('is_available', True):
+            if result.get('ok') and result.get('is_available', True) and not result.get('depleted'):
                 bals = result.get('balances') or []
                 detail = ''
                 if bals:
@@ -2841,12 +2841,20 @@ def ai_model():
                         if cur or tot:
                             parts.append(f'{cur} {tot}'.strip())
                     detail = ' · '.join(parts)
-                flash(
-                    'استعلام موجودی موفق بود'
-                    + (f' — {detail}' if detail else '')
-                    + ('؛ قفل محلی موجودی برداشته شد.' if result.get('local_flag_cleared') else '.'),
-                    'success',
-                )
+                if result.get('low_balance'):
+                    flash(
+                        'موجودی DeepSeek کم است'
+                        + (f' — {detail}' if detail else '')
+                        + '؛ لطفاً به‌زودی شارژ کنید.',
+                        'warning',
+                    )
+                else:
+                    flash(
+                        'استعلام موجودی موفق بود'
+                        + (f' — {detail}' if detail else '')
+                        + ('؛ قفل محلی موجودی برداشته شد.' if result.get('local_flag_cleared') else '.'),
+                        'success',
+                    )
             elif result.get('depleted') or result.get('error_code') == 'balance_depleted':
                 flash(result.get('error') or 'موجودی API کافی نیست.', 'error')
             else:

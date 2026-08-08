@@ -58,6 +58,41 @@ def _load_cache() -> dict[str, Any]:
 
 
 BALANCE_SMS_COOLDOWN_SEC = 21600  # حداکثر یک پیامک هر ۶ ساعت
+# آستانهٔ موجودی DeepSeek (USD) — زیر این مقدار practically خالی است
+_BALANCE_EMPTY_USD = 0.001
+# هشدار موجودی کم برای پنل/لاگ (قفل نمی‌کند)
+_BALANCE_LOW_WARN_USD = 1.0
+
+
+def _parse_usd_amount(raw: Any) -> float | None:
+    """عدد موجودی را از رشته/عدد DeepSeek بخوان."""
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return None
+    s = str(raw).strip().replace(",", "")
+    if not s:
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _max_total_balance_usd(infos: list[dict[str, Any]]) -> float | None:
+    totals: list[float] = []
+    for item in infos:
+        if not isinstance(item, dict):
+            continue
+        n = _parse_usd_amount(item.get("total_balance"))
+        if n is not None:
+            totals.append(n)
+    if not totals:
+        return None
+    return max(totals)
 
 GUEST_LOGIN_URL = "/express/partner/home?menu=1"
 
@@ -346,19 +381,42 @@ def probe_deepseek_api_balance(*, clear_on_ok: bool = True) -> dict[str, Any]:
                     }
                 )
 
+    total_usd = _max_total_balance_usd(infos)
+    # بعضی پاسخ‌ها is_available=true می‌دهند ولی موجودی عملاً صفر است
+    balance_empty = total_usd is not None and total_usd <= _BALANCE_EMPTY_USD
+    low_balance = (
+        total_usd is not None
+        and total_usd > _BALANCE_EMPTY_USD
+        and total_usd < _BALANCE_LOW_WARN_USD
+    )
+    if balance_empty:
+        is_available = False
+
     local_cleared = False
-    if clear_on_ok and is_available:
+    if clear_on_ok and is_available and not balance_empty:
         # resume را خودمان بعد از استعلام موفق زمان‌بندی می‌کنیم تا trigger دقیق باشد
         local_cleared = clear_api_balance_depleted(resume_deferred=False)
         if local_cleared:
             schedule_balance_deferred_resume(trigger="probe_balance_ok")
-    elif not is_available:
+    elif (not is_available) or balance_empty:
         mark_api_balance_depleted()
+
+    if low_balance:
+        try:
+            current_app.logger.warning(
+                "DeepSeek balance low | total_usd=%s threshold=%s",
+                total_usd,
+                _BALANCE_LOW_WARN_USD,
+            )
+        except Exception:
+            pass
 
     out = {
         "ok": True,
-        "depleted": not is_available,
-        "is_available": is_available,
+        "depleted": (not is_available) or balance_empty,
+        "is_available": bool(is_available) and not balance_empty,
+        "low_balance": bool(low_balance),
+        "total_balance_usd": total_usd,
         "status_code": resp.status_code,
         "balances": infos,
         "body": body if isinstance(body, dict) else {},

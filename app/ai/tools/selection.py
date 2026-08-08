@@ -11,6 +11,7 @@ from app.ai.agent_tools import (
     TOOL_DEAL,
     TOOL_FOLLOWUP,
     TOOL_FORGET_MEMORY,
+    TOOL_LEAD,
     TOOL_LISTING,
     TOOL_LOG_CALL,
     TOOL_NEXT,
@@ -35,6 +36,7 @@ _CHIP_TOOL_NAMES: dict[str, frozenset[str]] = {
     "deal": frozenset({TOOL_DEAL}),
     "release": frozenset({TOOL_RELEASE}),
     "find_land": frozenset({TOOL_SEARCH}),
+    "have_customer": frozenset({TOOL_LEAD}),
     "log_call": frozenset({TOOL_LOG_CALL}),
     "followup": frozenset({TOOL_FOLLOWUP}),
 }
@@ -92,6 +94,16 @@ def _message_signals(msg: str) -> dict[str, bool]:
         "deal": any(k in m for k in ("معامله", "deal", "فروش", "release", "آزاد")),
         "listing": any(k in m for k in ("آگهی", "listing", "متن آگهی", "مارکتینگ")),
         "crm": any(k in m for k in ("تماس", "پیگیری", "follow", "call", "crm")),
+        "lead": any(
+            k in m
+            for k in (
+                "مشتری دارم",
+                "ثبت مشتری",
+                "مشتری",
+                "customer",
+                "lead",
+            )
+        ),
         "coop": any(k in m for k in ("همکاری", "بازاریاب", "coop", "apply", "ثبت نام")),
         "admin_partner": any(k in m for k in ("همکار", "partner", "درخواست همکاری")),
         "admin_msg": any(k in m for k in ("پیام", "sms", "اعلان", "push", "همگانی")),
@@ -184,6 +196,11 @@ def select_tool_names_for_request(
             keep.update({TOOL_DEAL, TOOL_RELEASE})
         elif sig["listing"]:
             keep.add(TOOL_LISTING)
+        elif sig["lead"]:
+            # ثبت مشتری قبل از جستجو — وگرنه مدل فقط search می‌بیند و ثبت را hallucinate می‌کند
+            keep.add(TOOL_LEAD)
+            if len(keep) < 3:
+                keep.add(TOOL_SEARCH)
         elif sig["crm"]:
             keep.update({TOOL_LOG_CALL, TOOL_FOLLOWUP})
         elif sig["search"] or len(msg) < 6:

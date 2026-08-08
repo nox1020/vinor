@@ -341,9 +341,10 @@ def agent_system_hint(voice: str | None) -> str:
             "(نام→نام‌خانوادگی→کدملی یکی‌یکی→propose_apply). شهر نپرس. propose_visit/deal نزن."
         )
     return (
-        "بازاریاب: مشتری→search_lands (حداکثر ۲ کارت؛ نزدیک‌ترین اول)→[[LAND]] | فایل→معرفی. "
-        "روزانه: next_action + listing + visit/complete/deal + call/followup. "
-        "بازدید یکی‌یکی. تا کارت تأیید نزده نگو ثبت شد."
+        "بازاریاب: مشتری دارم→propose_lead (نام→موبایل)→کارت ثبت مشتری | "
+        "سپس search_lands (حداکثر ۲ کارت)→[[LAND]]→visit/complete/deal. "
+        "روزانه: next_action + listing + call/followup. "
+        "بازدید یکی‌یکی. تا tool+کارت تأیید موفق نشده، نگو ثبت/انجام شد."
     )
 
 
