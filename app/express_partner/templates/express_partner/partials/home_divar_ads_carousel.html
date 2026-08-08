@@ -740,6 +740,8 @@
       S.scrollStep = 1;
       return;
     }
+    var wasAuto = S.track.classList.contains('is-auto-scrolling');
+    if (wasAuto) S.track.classList.remove('is-auto-scrolling');
     var before = S.track.scrollLeft;
     var x0 = card.getBoundingClientRect().left;
     S.track.scrollLeft = before + 12;
@@ -747,6 +749,7 @@
     S.track.scrollLeft = before - 12;
     var xMinus = card.getBoundingClientRect().left;
     S.track.scrollLeft = before;
+    if (wasAuto) S.track.classList.add('is-auto-scrolling');
 
     var movePlus = xPlus - x0;
     var moveMinus = xMinus - x0;
@@ -761,6 +764,14 @@
       /* Chrome RTL: افزایش scrollLeft معمولاً به انتهای لیست (چپ) می‌رود */
       S.scrollStep = 1;
     }
+  }
+
+  /** جهت نهایی autoplay — یک‌بار محاسبه؛ با کیبورد عوض نشود */
+  function resolveScrollStep() {
+    detectScrollTowardLeftOverflow();
+    if (!S.scrollStep) S.scrollStep = 1;
+    /* جهت برعکس نسبت به «حرکت به overflow چپ» — رفتار محصول */
+    S.scrollStep = -S.scrollStep;
   }
 
   function snapToStart() {
@@ -956,9 +967,7 @@
     bindAllPopup();
     ensureClones();
     measureLoop();
-    detectScrollTowardLeftOverflow();
-    if (!S.scrollStep) S.scrollStep = 1;
-    S.scrollStep = -S.scrollStep; /* جهت برعکس — بقیهٔ رفتار ثابت */
+    resolveScrollStep();
     snapToStart();
     start();
   }
@@ -968,6 +977,7 @@
 
   if (!window.__vinorDivarAdsAutoScrollInit) {
     window.__vinorDivarAdsAutoScrollInit = true;
+    var lastOrientW = window.innerWidth || 0;
 
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) stopRaf();
@@ -1000,9 +1010,16 @@
       function () {
         if (!S.track) return;
         measureLoop();
-        detectScrollTowardLeftOverflow();
-        if (!S.scrollStep) S.scrollStep = 1;
-        S.scrollStep = -S.scrollStep;
+        /*
+          باز شدن کیبورد فقط ارتفاع را عوض می‌کند؛ اگر جهت را دوباره detect/flip کنیم
+          (و probe وسط انیمیشن غلط شود) حرکت کارت‌ها برعکس دیده می‌شود.
+          فقط با عوض شدن عرض (چرخش) جهت را از نو قفل کن.
+        */
+        var w = window.innerWidth || 0;
+        if (w && w !== lastOrientW) {
+          lastOrientW = w;
+          resolveScrollStep();
+        }
       },
       { passive: true }
     );
