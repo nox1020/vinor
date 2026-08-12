@@ -76,9 +76,7 @@
 
     {% if home_ai_enabled|default(false) %}
     <div id="vnHomeComposerDock" class="vn-home-composer-dock" data-vn-home-dock>
-      {# پیشنهادهای خالی بالای کامپوزر؛ خود کامپوزر به فوتر/safe-area می‌چسبد #}
-      {% include 'express_partner/partials/ai_home_empty_actions.html' %}
-      {# ردیف فوتر: چیپ APK کنار کامپوزر (چپ بصری) #}
+      {# ردیف فوتر: چیپ APK کنار کامپوزر (چپ بصری) — اکشن‌های خالی زیر خبر در ai_chat_inline #}
       <div class="vn-home-composer-dock__row">
         <div id="vinorApkStripHost" class="vinor-apk-strip-host" data-apk-strip-host>
           {% include 'express_partner/partials/apk_download_strip.html' %}
@@ -102,6 +100,9 @@
 
 {% include 'express_partner/partials/partner_tab_footer.html' %}
 {% include 'express_partner/partials/profile_drawer.html' %}
+{% if home_ai_enabled|default(false) and is_approved|default(false) %}
+{% include 'express_partner/partials/home_customer_modal.html' %}
+{% endif %}
 {% if not me_phone %}
 {% include 'express_partner/partials/auth_apk_otp_bridge.html' %}
 {% endif %}

@@ -831,7 +831,15 @@ def build_limited_ai_quick_prompts(
     """پیشنهادهای سریع خانه برای مهمان / غیرتأیید / درخواست در انتظار."""
     out: List[Dict[str, str]] = []
 
-    def add(label: str, *, prompt: str, intent: str, icon: str = "") -> None:
+    def add(
+        label: str,
+        *,
+        prompt: str,
+        intent: str,
+        icon: str = "",
+        subtitle: str = "",
+        variant: str = "",
+    ) -> None:
         label = (label or "").strip()
         prompt = (prompt or "").strip()
         intent = (intent or "").strip()
@@ -844,6 +852,10 @@ def build_limited_ai_quick_prompts(
         }
         if (icon or "").strip():
             item["icon"] = icon.strip()
+        if (subtitle or "").strip():
+            item["subtitle"] = subtitle.strip()
+        if (variant or "").strip():
+            item["variant"] = variant.strip()
         out.append(item)
 
     # درخواست در انتظار تأیید — محدود به وضعیت و سؤال‌های کم‌ریسک
@@ -853,24 +865,37 @@ def build_limited_ai_quick_prompts(
             prompt="وضعیت درخواست همکاری‌ام چیه؟",
             intent="coop_status",
             icon="clipboard",
+            subtitle="پیگیری تأیید همکاری",
+            variant="tile",
         )
         add(
             "خرید ملک",
             prompt="یه ملک مناسب می‌خوام",
             intent="find_land",
             icon="search",
+            subtitle="جستجوی فایل و ملک",
+            variant="tile",
         )
         add(
             "سطوح همکاری",
             prompt="سطوح همکاری و پورسانت چطوره؟",
             intent="coop_levels",
             icon="users",
+            subtitle="شرایط و پورسانت",
+            variant="tile",
         )
         return out[:3]
 
     # مهمان / لاگین‌شدهٔ غیرتأیید — هم‌راستا با تیتر خرید/همکاری
     _ = me_phone
-    add("خرید ملک", prompt="یه ملک مناسب می‌خوام", intent="find_land", icon="search")
+    add(
+        "خرید ملک",
+        prompt="یه ملک مناسب می‌خوام",
+        intent="find_land",
+        icon="search",
+        subtitle="جستجوی فایل و ملک",
+        variant="tile",
+    )
     add(
         "می‌خواهم بازاریاب وینور شوم",
         prompt=(
@@ -879,6 +904,8 @@ def build_limited_ai_quick_prompts(
         ),
         intent="coop_apply",
         icon="handshake",
+        subtitle="شروع همکاری فروش",
+        variant="tile",
     )
     return out[:3]
 
@@ -890,7 +917,7 @@ def build_home_ai_quick_prompts(
     has_pending_app: bool = False,
     has_completed_deal: bool = False,
 ) -> List[Dict[str, str]]:
-    """پیشنهادهای سریع حالت خالی خانه — همان مراحل تیتر خالی."""
+    """پیشنهادهای سریع حالت خالی خانه — کارت اصلی + دو اکشن."""
     if not is_approved:
         return build_limited_ai_quick_prompts(
             me_phone=me_phone,
@@ -899,53 +926,67 @@ def build_home_ai_quick_prompts(
 
     out: List[Dict[str, str]] = []
 
-    def add(label: str, *, prompt: str, intent: str, icon: str) -> None:
+    def add(
+        label: str,
+        *,
+        prompt: str,
+        intent: str,
+        icon: str,
+        subtitle: str = "",
+        variant: str = "tile",
+    ) -> None:
         label = (label or "").strip()
         prompt = (prompt or "").strip()
         intent = (intent or "").strip()
-        if label and prompt and intent:
-            out.append({
-                "label": label,
-                "prompt": prompt,
-                "intent": intent,
-                "icon": icon,
-            })
+        if not (label and prompt and intent):
+            return
+        item: Dict[str, str] = {
+            "label": label,
+            "prompt": prompt,
+            "intent": intent,
+            "icon": icon,
+            "variant": (variant or "tile").strip() or "tile",
+        }
+        if (subtitle or "").strip():
+            item["subtitle"] = subtitle.strip()
+        out.append(item)
 
-    if has_completed_deal:
-        # فروشندهٔ فعال — فروش یا جذب فایل
-        add(
-            "مشتری دارم",
-            prompt="مشتری دارم — مشخصاتش را ثبت کنیم",
-            intent="have_customer",
-            icon="users",
-        )
-        add(
-            "پیدا کردن فایل",
-            prompt="یه فایل مناسب برای بازاریابی می‌خوام",
-            intent="find_land",
-            icon="search",
-        )
-        add("قدم بعدی", prompt="قدم بعدی‌م چیه؟", intent="next_action", icon="bolt")
-    else:
-        # تأییدشده بدون معامله — تمرکز روی اولین پورسانت
-        add(
-            "مشتری دارم",
-            prompt="مشتری دارم — مشخصاتش را ثبت کنیم",
-            intent="have_customer",
-            icon="users",
-        )
-        add(
-            "گرفتن فایل جدید",
-            prompt="یه فایل جدید برای بازاریابی می‌خوام",
-            intent="find_land",
-            icon="search",
-        )
-        add(
-            "قدم بعدی پورسانت",
-            prompt="برای گرفتن اولین پورسانت قدم بعدی‌م چیه؟",
-            intent="next_action",
-            icon="bolt",
-        )
+    # کارت اصلی: ثبت مشتری → مدال مشخصات + بازدید خودکار
+    add(
+        "ثبت مشتری جدید",
+        prompt="مشتری دارم — مشخصاتش را ثبت کنیم",
+        intent="have_customer",
+        icon="user_plus",
+        subtitle="مشتری خود را ثبت کنید و روند فروش را شروع کنید",
+        variant="hero",
+    )
+    # فلگ UI برای باز کردن مدال به‌جای ارسال به چت
+    if out:
+        out[-1]["ui_action"] = "open_customer_modal"
+    add(
+        "پیدا کردن فایل",
+        prompt=(
+            "یه فایل مناسب برای بازاریابی می‌خوام"
+            if has_completed_deal
+            else "یه فایل جدید برای بازاریابی می‌خوام"
+        ),
+        intent="find_land",
+        icon="search",
+        subtitle="جستجوی فایل و ملک",
+        variant="tile",
+    )
+    add(
+        "قدم بعدی",
+        prompt=(
+            "قدم بعدی‌م چیه؟"
+            if has_completed_deal
+            else "برای گرفتن اولین پورسانت قدم بعدی‌م چیه؟"
+        ),
+        intent="next_action",
+        icon="bolt",
+        subtitle="وظایف و پیشنهادات شما",
+        variant="tile",
+    )
     return out[:3]
 
 

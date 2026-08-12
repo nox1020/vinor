@@ -436,13 +436,13 @@
     pointer-events: none !important;
   }
 
-  /* —— حالت خالی GPT: خبر وسط + تیتر داخل باکس پیام + پیشنهادها —— */
+  /* —— حالت خالی همکار: خبر + کارت ثبت مشتری + دو اکشن —— */
   #aiHomeEmpty.ai-home-empty {
     display: none;
     width: 100%;
     max-width: 28rem;
     margin: 0 auto;
-    padding: 0 1.15rem;
+    padding: 0 1rem;
     text-align: center;
     pointer-events: none;
   }
@@ -451,7 +451,11 @@
     display: none !important;
   }
   #homeDashboardPage.ai-home-is-empty #aiHomeEmpty.ai-home-empty:not([hidden]) {
-    display: block !important;
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+    pointer-events: none;
   }
   /* بدو ورود: کامپوزر عادی — بدون تیترِ placeholder */
   #homeDashboardPage.ai-home-is-empty #aiChatForm .ai-composer__shell {
@@ -514,15 +518,16 @@
     align-items: center;
     gap: 0.55rem;
     width: 100%;
-    max-width: 24rem;
-    margin: 0 auto;
-    padding: 0.62rem 0.8rem;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 0.85rem;
-    background: rgba(16, 185, 129, 0.08);
+    max-width: 100%;
+    margin: 0;
+    padding: 0.58rem 0.75rem;
+    border: 1px solid rgba(52, 211, 153, 0.38);
+    border-radius: 0.75rem;
+    background: rgba(8, 28, 22, 0.92);
     text-align: right;
     pointer-events: none;
     overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.06);
   }
   #homeDashboardPage:not(.ai-home-is-empty) #aiHomeEmpty .ai-home-news {
     display: none !important;
@@ -545,7 +550,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.12rem;
+    gap: 0.1rem;
     align-items: flex-start;
   }
   #aiHomeEmpty .ai-home-news__label {
@@ -557,7 +562,7 @@
   #aiHomeEmpty .ai-home-news__text {
     width: 100%;
     min-height: 1.35em;
-    color: #d4d4d4;
+    color: #ececec;
     font-size: 0.8rem;
     font-weight: 500;
     line-height: 1.45;
@@ -576,7 +581,6 @@
     flex-direction: column;
     justify-content: flex-start;
     min-height: 0;
-    /* داک پایین پین؛ اسکرول فقط وسط — از clip شدن کل صفحه جلوگیری */
     overflow: hidden;
   }
   #homeDashboardPage.ai-home-is-empty .vn-home-scroll {
@@ -590,23 +594,17 @@
     scroll-padding-top: 0;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-  }
-  /* با نوار دیوار: وسط‌چین عمودی با کارت‌ها می‌جنگد — از بالا بچین */
-  #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) .vn-home-scroll {
     justify-content: flex-start;
   }
   #homeDashboardPage.ai-home-is-empty #aiHomeInline {
     display: block;
-    /* هدر شناور را نوار دیوار پوشش می‌دهد؛ فاصلهٔ اضافه کم */
-    padding: 0.35rem 0 1.15rem;
+    padding: 0.35rem 0 0.85rem;
   }
   #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) #aiHomeInline {
-    padding: 0.45rem 0 0.55rem;
+    padding: 0.35rem 0 0.45rem;
   }
-  /* اگر نوار دیوار (با آگهی) نباشد، فاصلهٔ هدر شناور را خود اینلاین بدهد */
   #homeDashboardPage.ai-home-is-empty:not(:has(#homeDivarAdsCarousel[data-has-ads])) #aiHomeInline {
-    padding: calc(0.45rem + 2.5rem + 0.35rem) 0 1.15rem;
+    padding: calc(0.45rem + 2.5rem + 0.35rem) 0 0.85rem;
   }
   #homeDashboardPage.ai-home-is-empty #aiHomeInline #aiPageMain,
   #homeDashboardPage.ai-home-is-empty #aiHomeInline #aiChat {
@@ -623,17 +621,13 @@
     transform: none;
     margin: 0;
     gap: 0;
-    /* فقط safe-area؛ فاصلهٔ اضافه بین کامپوزر و لبهٔ پایین نباشد */
     padding: 0 0 env(safe-area-inset-bottom, 0px);
     background: transparent;
-    /* بدو ورود: داک در جریان عادی است — auto تا کلیک کارت‌ها در WebView نخورد
-       (descendant با auto زیر parent با none گاهی رویداد نمی‌گیرد) */
     pointer-events: auto;
   }
   #homeDashboardPage.ai-home-is-empty .vn-home-composer-dock::before {
     display: none;
   }
-  /* بدو ورود: چیپ دانلود کنار فوتر سمت چپ — صریحاً نشان بده */
   #homeDashboardPage.ai-home-is-empty .vinor-apk-strip-host {
     display: block !important;
   }
@@ -645,7 +639,6 @@
     padding-left: max(0.85rem, env(safe-area-inset-left, 0px));
   }
   #homeDashboardPage.ai-home-is-empty #aiChatForm.ai-composer {
-    /* کامپوزر به فوتر چسبیده؛ فقط کمی فاصلهٔ لمسی + کیبورد */
     padding: 0 1.15rem calc(0.35rem + var(--ai-keyboard-inset, 0px));
   }
   #homeDashboardPage.ai-home-is-empty .vn-home-composer-dock__row:has([data-apk-strip]) > #aiChatForm.ai-composer {
@@ -655,16 +648,16 @@
     max-width: 28rem;
   }
 
+  /* هاب اکشن‌های خالی — زیر خبر */
   .ai-home-empty-actions {
     display: none;
     flex-direction: column;
     align-items: stretch;
-    gap: 0.35rem;
+    gap: 0.75rem;
     width: 100%;
-    max-width: 20rem;
-    /* بالای کامپوزر — راست بصری؛ margin-left:auto (نه center / نه inline-start در RTL) */
-    margin: 0 1.15rem 0.45rem auto;
-    padding: 0 0.15rem;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
     list-style: none;
     position: relative;
     z-index: 40;
@@ -673,51 +666,201 @@
   #homeDashboardPage.ai-home-is-empty .ai-home-empty-actions:not([hidden]) {
     display: flex !important;
   }
-  /* با نوار دیوار: پیشنهادها فشرده‌تر — سقف rem تا با کیبورد (vh) خرد نشوند */
-  #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) .ai-home-empty-actions {
-    margin-top: 0;
-    margin-bottom: 0.35rem;
-    gap: 0.12rem;
-    max-height: 11.5rem;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: none;
-  }
-  #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) .ai-home-empty-actions::-webkit-scrollbar {
-    display: none;
-    width: 0;
-  }
-  #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) .ai-home-empty-actions .ai-home-empty__action {
-    padding: 0.62rem 0.45rem;
-    font-size: 0.95rem;
-  }
-  html.vn-short-viewport #homeDashboardPage.ai-home-is-empty:has(#homeDivarAdsCarousel[data-has-ads]) .ai-home-empty-actions {
-    max-height: 8.5rem;
-    margin-top: 0;
-    margin-bottom: 0.3rem;
-  }
   .ai-home-empty-actions[hidden],
   #homeDashboardPage.ai-home-is-empty .ai-home-empty-actions[hidden] {
     display: none !important;
+  }
+
+  .ai-home-empty__hero-wrap {
+    width: 100%;
+  }
+  .ai-home-empty__hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    width: 100%;
+    margin: 0;
+    padding: 1.15rem 1rem 0.85rem;
+    border: 1px solid rgba(52, 211, 153, 0.42);
+    border-radius: 1.05rem;
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(52, 211, 153, 0.22) 0%, transparent 55%),
+      linear-gradient(180deg, #0f3d2e 0%, #0a2a20 100%);
+    box-shadow:
+      0 0 0 1px rgba(16, 185, 129, 0.08),
+      0 10px 28px rgba(6, 78, 59, 0.35);
+    color: #fff;
+    text-decoration: none;
+    text-align: center;
+    cursor: pointer;
+    pointer-events: auto !important;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  }
+  .ai-home-empty__hero:hover,
+  .ai-home-empty__hero:focus-visible {
+    border-color: rgba(110, 231, 183, 0.55);
+    outline: none;
+    box-shadow:
+      0 0 0 1px rgba(52, 211, 153, 0.16),
+      0 12px 32px rgba(6, 78, 59, 0.42);
+  }
+  .ai-home-empty__hero:active {
+    transform: scale(0.985);
+  }
+  .ai-home-empty__hero-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    color: #f4f4f5;
+    margin-bottom: 0.15rem;
+  }
+  .ai-home-empty__hero-icon svg {
+    display: block;
+    width: 2rem;
+    height: 2rem;
+  }
+  .ai-home-empty__hero-title {
+    display: block;
+    font-size: 1.125rem;
+    font-weight: 800;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    color: #fff;
+  }
+  .ai-home-empty__hero-sub {
+    display: block;
+    max-width: 18rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    line-height: 1.45;
+    color: rgba(228, 228, 231, 0.78);
+  }
+  .ai-home-empty__hero-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-top: 0.2rem;
+    color: rgba(244, 244, 245, 0.72);
+  }
+  .ai-home-empty__hero-chevron svg {
+    display: block;
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .ai-home-empty__tiles {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    width: 100%;
+    gap: 0;
+  }
+  .ai-home-empty__tiles-divider {
+    flex: 0 0 1px;
+    width: 1px;
+    align-self: stretch;
+    margin: 0.35rem 0;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .ai-home-empty__tile {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0.55rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0.55rem 0.45rem;
+    border: 0;
+    border-radius: 0.75rem;
+    background: transparent;
+    color: #e4e4e7;
+    text-decoration: none;
+    text-align: right;
+    cursor: pointer;
+    pointer-events: auto !important;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.12s ease;
+  }
+  .ai-home-empty__tile:hover,
+  .ai-home-empty__tile:focus-visible {
+    background: rgba(255, 255, 255, 0.04);
+    outline: none;
+  }
+  .ai-home-empty__tile:active {
+    background: rgba(255, 255, 255, 0.07);
+  }
+  .ai-home-empty__tile-icon {
+    flex-shrink: 0;
+    display: inline-flex;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-top: 0.1rem;
+    align-items: center;
+    justify-content: center;
+    color: #d4d4d8;
+  }
+  .ai-home-empty__tile-icon svg {
+    display: block;
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+  .ai-home-empty__tile-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    align-items: flex-start;
+  }
+  .ai-home-empty__tile-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: #f4f4f5;
+  }
+  .ai-home-empty__tile-sub {
+    font-size: 0.68rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: #8e8e93;
+  }
+
+  /* حالت لیست (مهمان / غیرتأیید) */
+  .ai-home-empty-actions--list .ai-home-empty__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
   .ai-home-empty-actions .ai-home-empty__action {
     display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
-    gap: 0.85rem;
+    gap: 0.75rem;
     width: 100%;
     margin: 0;
-    padding: 0.85rem 0.45rem;
+    padding: 0.75rem 0.45rem;
     border: 0;
     border-radius: 0.65rem;
     background: transparent;
     color: #d4d4d4;
-    font-size: 1.0625rem;
+    font-size: 1rem;
     font-weight: 500;
     line-height: 1.35;
     text-align: right;
+    text-decoration: none;
     cursor: pointer;
     pointer-events: auto !important;
     position: relative;
@@ -751,6 +894,40 @@
   .ai-home-empty-actions .ai-home-empty__action-label {
     flex: 1 1 auto;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.12rem;
+  }
+  .ai-home-empty-actions .ai-home-empty__action-title {
+    font-size: inherit;
+    font-weight: 600;
+    color: inherit;
+  }
+  .ai-home-empty-actions .ai-home-empty__action-sub {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #8e8e93;
+  }
+
+  html.vn-short-viewport #homeDashboardPage.ai-home-is-empty #aiHomeEmpty.ai-home-empty:not([hidden]) {
+    gap: 0.65rem;
+  }
+  html.vn-short-viewport .ai-home-empty__hero {
+    padding: 0.9rem 0.85rem 0.7rem;
+    gap: 0.28rem;
+  }
+  html.vn-short-viewport .ai-home-empty__hero-title {
+    font-size: 1.02rem;
+  }
+  html.vn-short-viewport .ai-home-empty__hero-sub {
+    font-size: 0.72rem;
+  }
+  html.vn-short-viewport-tight .ai-home-empty__hero-sub {
+    display: none;
+  }
+  html.vn-short-viewport-tight .ai-home-empty__tile-sub {
+    display: none;
   }
 </style>
 
@@ -775,6 +952,7 @@
         <span class="ai-home-news__text" data-ai-home-news-text>۸۰۰ متر زمین ویلایی در آمل فروخته شد</span>
       </div>
     </div>
+    {% include 'express_partner/partials/ai_home_empty_actions.html' %}
   </div>
   {% set chat_mode = 'home-inline' %}
   {% set omit_composer = true %}

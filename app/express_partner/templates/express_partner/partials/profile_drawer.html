@@ -870,6 +870,14 @@
   {% set _drawer_avatar_url = (_drawer_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _drawer_avatar and profile else '' %}
   <nav class="ep-profile-drawer__section ep-profile-drawer__nav" aria-label="حساب">
     {% if is_approved|default(false) %}
+    {{ profile_menu_row(
+      url_for('express_partner.requests'),
+      'fa-clipboard-list',
+      'درخواست‌ها',
+      subtitle='بازدیدها و روند فروش',
+      tour='profile-section',
+      row_id='epDrawerRequestsBtn'
+    ) }}
     <a href="{{ url_for('express_partner.commissions') }}"
        id="epDrawerWalletBtn"
        data-tour="profile-section"

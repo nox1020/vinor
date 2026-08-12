@@ -1,4 +1,4 @@
-{# پیشنهادهای سریع حالت خالی GPT — بالای کامپوزر خانه #}
+{# پیشنهادهای سریع حالت خالی — کارت اصلی سبز + دو اکشن (مطابق صفحه اصلی همکار) #}
 {% macro ai_home_empty_icon(name) -%}
 {%- if name == 'search' -%}
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" stroke-linecap="round"/></svg>
@@ -8,6 +8,8 @@
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 10-14h-7l0-6z" stroke-linejoin="round"/></svg>
 {%- elif name == 'users' -%}
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a3 3 0 0 1 0 5.74"/></svg>
+{%- elif name == 'user_plus' -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3"/><path d="M19 8v6M22 11h-6" stroke-linecap="round"/></svg>
 {%- elif name == 'clipboard' -%}
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4V3h6v1" stroke-linecap="round"/></svg>
 {%- elif name == 'handshake' -%}
@@ -19,35 +21,130 @@
 
 {% if ai_quick_prompts %}
 {% set _empty_user_msgs = chat_messages|default([])|selectattr('role', 'equalto', 'user')|list %}
-<ul id="aiHomeEmptyActions"
-    class="ai-home-empty-actions"
-    role="list"
-    aria-label="پیشنهادهای سریع"
-    data-ai-home-empty-actions
-    {% if _empty_user_msgs %}hidden{% endif %}>
-  {% for item in ai_quick_prompts %}
-  <li role="none">
+{% set _heroes = ai_quick_prompts|selectattr('variant', 'equalto', 'hero')|list %}
+{% set _tiles = ai_quick_prompts|rejectattr('variant', 'equalto', 'hero')|list %}
+{% set _hub = _heroes|length > 0 %}
+<div id="aiHomeEmptyActions"
+     class="ai-home-empty-actions{% if _hub %} ai-home-empty-actions--hub{% else %} ai-home-empty-actions--list{% endif %}"
+     role="list"
+     aria-label="پیشنهادهای سریع"
+     data-ai-home-empty-actions
+     {% if _empty_user_msgs %}hidden{% endif %}>
+  {% if _hub %}
+  {% for item in _heroes %}
+  <div class="ai-home-empty__hero-wrap" role="listitem">
     {% if item.href %}
     <a href="{{ item.href }}"
-       class="ai-home-empty__action"
-       role="listitem"
+       class="ai-home-empty__hero"
        data-vinor-express-nav
        title="{{ item.label|e }}">
-      <span class="ai-home-empty__action-icon">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
-      <span class="ai-home-empty__action-label">{{ item.label }}</span>
+      <span class="ai-home-empty__hero-icon" aria-hidden="true">{{ ai_home_empty_icon(item.icon|default('user_plus')) }}</span>
+      <span class="ai-home-empty__hero-title">{{ item.label }}</span>
+      {% if item.subtitle %}
+      <span class="ai-home-empty__hero-sub">{{ item.subtitle }}</span>
+      {% endif %}
+      <span class="ai-home-empty__hero-chevron" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
     </a>
     {% else %}
     <button type="button"
-            class="ai-home-empty__action"
+            class="ai-home-empty__hero"
+            {% if item.ui_action == 'open_customer_modal' %}
+            data-open-customer-modal
+            {% else %}
+            data-ai-quick-prompt="{{ item.prompt|e }}"
+            {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
+            {% endif %}
+            title="{{ item.label|e }}">
+      <span class="ai-home-empty__hero-icon" aria-hidden="true">{{ ai_home_empty_icon(item.icon|default('user_plus')) }}</span>
+      <span class="ai-home-empty__hero-title">{{ item.label }}</span>
+      {% if item.subtitle %}
+      <span class="ai-home-empty__hero-sub">{{ item.subtitle }}</span>
+      {% endif %}
+      <span class="ai-home-empty__hero-chevron" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+    </button>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% if _tiles %}
+  <div class="ai-home-empty__tiles" role="presentation">
+    {% for item in _tiles %}
+    {% if not loop.first %}
+    <span class="ai-home-empty__tiles-divider" aria-hidden="true"></span>
+    {% endif %}
+    {% if item.href %}
+    <a href="{{ item.href }}"
+       class="ai-home-empty__tile"
+       role="listitem"
+       data-vinor-express-nav
+       title="{{ item.label|e }}">
+      <span class="ai-home-empty__tile-icon" aria-hidden="true">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
+      <span class="ai-home-empty__tile-text">
+        <span class="ai-home-empty__tile-title">{{ item.label }}</span>
+        {% if item.subtitle %}
+        <span class="ai-home-empty__tile-sub">{{ item.subtitle }}</span>
+        {% endif %}
+      </span>
+    </a>
+    {% else %}
+    <button type="button"
+            class="ai-home-empty__tile"
             role="listitem"
             data-ai-quick-prompt="{{ item.prompt|e }}"
             {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
             title="{{ item.label|e }}">
-      <span class="ai-home-empty__action-icon">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
-      <span class="ai-home-empty__action-label">{{ item.label }}</span>
+      <span class="ai-home-empty__tile-icon" aria-hidden="true">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
+      <span class="ai-home-empty__tile-text">
+        <span class="ai-home-empty__tile-title">{{ item.label }}</span>
+        {% if item.subtitle %}
+        <span class="ai-home-empty__tile-sub">{{ item.subtitle }}</span>
+        {% endif %}
+      </span>
     </button>
     {% endif %}
-  </li>
-  {% endfor %}
-</ul>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% else %}
+  <ul class="ai-home-empty__list" role="presentation">
+    {% for item in ai_quick_prompts %}
+    <li role="none">
+      {% if item.href %}
+      <a href="{{ item.href }}"
+         class="ai-home-empty__action"
+         role="listitem"
+         data-vinor-express-nav
+         title="{{ item.label|e }}">
+        <span class="ai-home-empty__action-icon">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
+        <span class="ai-home-empty__action-label">
+          <span class="ai-home-empty__action-title">{{ item.label }}</span>
+          {% if item.subtitle %}
+          <span class="ai-home-empty__action-sub">{{ item.subtitle }}</span>
+          {% endif %}
+        </span>
+      </a>
+      {% else %}
+      <button type="button"
+              class="ai-home-empty__action"
+              role="listitem"
+              data-ai-quick-prompt="{{ item.prompt|e }}"
+              {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
+              title="{{ item.label|e }}">
+        <span class="ai-home-empty__action-icon">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
+        <span class="ai-home-empty__action-label">
+          <span class="ai-home-empty__action-title">{{ item.label }}</span>
+          {% if item.subtitle %}
+          <span class="ai-home-empty__action-sub">{{ item.subtitle }}</span>
+          {% endif %}
+        </span>
+      </button>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
 {% endif %}

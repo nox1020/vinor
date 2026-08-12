@@ -194,6 +194,54 @@ def list_upcoming_visit_dates(*, limit: int = 7, days_ahead: int = 90) -> List[D
     return out
 
 
+def next_auto_visit_date() -> Optional[Dict[str, Any]]:
+    """اولین روز مجاز خالی برای زمان‌بندی خودکار بازدید."""
+    dates = list_upcoming_visit_dates(limit=1)
+    return dates[0] if dates else None
+
+
+def partner_visits_for_phone(
+    requests: List[Dict[str, Any]],
+    phone: str,
+) -> List[Dict[str, Any]]:
+    """همهٔ درخواست‌های بازدید یک همکار — جدید به قدیم."""
+    ph = (phone or "").strip()
+    if not ph:
+        return []
+    out: List[Dict[str, Any]] = []
+    for r in requests or []:
+        if not isinstance(r, dict):
+            continue
+        if (str(r.get("partner_phone") or "").strip()) != ph:
+            continue
+        out.append(r)
+    out.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+    return out
+
+
+def partner_request_feed_item(
+    row: Dict[str, Any],
+    commissions: List[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    """کارت نمایشی صفحهٔ درخواست‌ها برای همکار."""
+    base = admin_row_dict(row, commissions)
+    summary = base.get("progress_summary") or {}
+    return {
+        **base,
+        "kind": "visit",
+        "title": str(base.get("land_title") or base.get("land_code") or "فایل"),
+        "subtitle": (
+            (str(base.get("customer_name") or "").strip() or "مشتری")
+            + (
+                f" · {base.get('visit_date_jalali')}"
+                if base.get("visit_date_jalali")
+                else ""
+            )
+        ),
+        "stage_label": str(summary.get("current_label") or base.get("status_label") or "در جریان"),
+    }
+
+
 _VISIT_DATE_ORDINALS: Dict[str, int] = {
     "1": 1, "۱": 1, "اول": 1, "اولی": 1, "یک": 1, "یکه": 1, "نخست": 1, "نخستین": 1,
     "2": 2, "۲": 2, "دوم": 2, "دومی": 2, "دو": 2,

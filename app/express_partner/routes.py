@@ -3412,6 +3412,18 @@ def home_page():
     except Exception:
         ai_quick_prompts = []
 
+    customer_modal_ctx: Dict[str, Any] = {
+        'customer_modal_lands': [],
+        'next_auto_visit': None,
+    }
+    try:
+        customer_modal_ctx = _home_customer_modal_context(
+            me_phone,
+            bool(payload.get('is_approved')),
+        )
+    except Exception:
+        pass
+
     public_home_lands: List[Dict[str, Any]] = []
     divar_ads_ctx: Dict[str, Any] = {}
     try:
@@ -3493,6 +3505,8 @@ def home_page():
         **ai_ctx,
         ai_quick_prompts=ai_quick_prompts,
         public_home_lands=public_home_lands,
+        customer_modal_lands=customer_modal_ctx.get('customer_modal_lands') or [],
+        next_auto_visit=customer_modal_ctx.get('next_auto_visit'),
         **divar_ads_ctx,
     ))
     if not me_phone:
@@ -4317,8 +4331,268 @@ def api_favorites_cards():
 @express_partner_bp.get('/requests', endpoint='requests')
 @require_partner_access(allow_pending=True)
 def requests_page():
-    """صفحهٔ قدیمی بازدیدها حذف شد — همهٔ پیگیری در چت خانه است."""
-    return redirect(url_for('express_partner.home'))
+    """لیست بازدیدها و روند فروش همکار."""
+    me_phone = (session.get('user_phone') or '').strip()
+    profile = getattr(g, 'express_partner_profile', None)
+    is_approved = _is_partner_approved(profile)
+    from .visit_requests import (
+        OPEN_VISIT_STATUSES,
+        partner_request_feed_item,
+        partner_visits_for_phone,
+    )
+
+    visit_rows = load_express_visit_requests() or []
+    if not isinstance(visit_rows, list):
+        visit_rows = []
+    commissions = load_express_commissions_cached() or []
+    mine = partner_visits_for_phone(visit_rows, me_phone)
+    items = [partner_request_feed_item(r, commissions) for r in mine]
+    open_count = sum(
+        1
+        for r in mine
+        if str(r.get('status') or '').strip() in OPEN_VISIT_STATUSES
+    )
+
+    resp = make_response(render_template(
+        'express_partner/requests.html',
+        items=items,
+        open_count=open_count,
+        me_phone=me_phone,
+        is_approved=is_approved,
+        hide_header=True,
+        brand='وینور',
+        domain='vinor.ir',
+    ))
+    if is_approved:
+        _append_partner_tab_prefetch(resp)
+    return resp
+
+
+@express_partner_bp.post('/home/register-customer', endpoint='home_register_customer')
+@require_partner_access()
+def home_register_customer():
+    """ثبت مشتری از مدال خانه + زمان‌بندی خودکار بازدید روی اولین روز مجاز."""
+    me_phone = (session.get('user_phone') or '').strip()
+    payload = {}
+    if request.is_json:
+        try:
+            payload = request.get_json(silent=True) or {}
+        except Exception:
+            payload = {}
+    if not payload:
+        payload = request.form.to_dict(flat=True) or {}
+
+    first = str(payload.get('customer_first_name') or '').strip()
+    last = str(payload.get('customer_last_name') or '').strip()
+    phone_raw = str(payload.get('customer_phone') or '').strip()
+    land_code = str(payload.get('land_code') or '').strip()
+    customer_phone = normalize_iran_mobile(phone_raw) or phone_raw
+
+    def _fail(msg: str, code: int = 400):
+        return jsonify({'ok': False, 'error': msg}), code
+
+    if not first or not last or not phone_raw:
+        return _fail('نام، نام خانوادگی و شماره تماس مشتری الزامی است.')
+    if not is_valid_iran_mobile(customer_phone):
+        return _fail('شماره تماس مشتری معتبر نیست.')
+
+    partners = load_express_partners() or []
+    partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
+    try:
+        is_pa = _is_partner_approved(partner_profile)
+    except Exception:
+        is_pa = False
+    if not is_pa:
+        return _fail('برای ثبت مشتری باید حساب همکاری شما تأیید شده باشد.', 403)
+
+    from .visit_requests import next_auto_visit_date
+
+    next_slot = next_auto_visit_date()
+    if not next_slot or not next_slot.get('iso'):
+        return _fail('روز مجاز بازدید پیدا نشد. با پشتیبانی هماهنگ کنید.')
+
+    visit_date = str(next_slot.get('iso') or '')
+    lands, _ = _build_partner_dashboard_lands(me_phone, True)
+    visit_requests = load_express_visit_requests() or []
+    if not isinstance(visit_requests, list):
+        visit_requests = []
+
+    eligible: List[Dict[str, Any]] = []
+    for land in lands or []:
+        code = str(land.get('code') or '').strip()
+        if not code:
+            continue
+        st = str(land.get('_assignment_status') or '').strip().lower()
+        if st in ('sold', 'in_transaction'):
+            continue
+        if not partner_can_request_new_visit(st, visit_requests, me_phone, code):
+            continue
+        eligible.append(land)
+
+    if not land_code and eligible:
+        land_code = str(eligible[0].get('code') or '').strip()
+    if not land_code:
+        return _fail('فایل فعالی برای بازدید ندارید. اول یک فایل بگیرید.')
+
+    land = next((L for L in (lands or []) if str(L.get('code') or '') == land_code), None)
+    if land is None:
+        return _fail('فایل انتخاب‌شده پیدا نشد.')
+    st = str(land.get('_assignment_status') or '').strip().lower()
+    if st == 'sold':
+        return _fail('این فایل قبلاً فروخته شده است.')
+    if st == 'in_transaction' or land.get('_in_transaction'):
+        return _fail('این فایل در حال معامله است.')
+    if not partner_can_request_new_visit(st, visit_requests, me_phone, land_code):
+        return _fail('برای این فایل امکان ثبت بازدید جدید نیست.')
+
+    land_title = str(land.get('title') or land_code)
+    partner_name = (partner_profile.get('name') if partner_profile else None) or me_phone
+
+    # CRM: ذخیره مشتری
+    try:
+        from app.crm.service import create_lead, upsert_contact
+
+        display_name = f'{first} {last}'.strip()
+        lead = create_lead(
+            partner_phone=me_phone,
+            customer_phone=customer_phone,
+            first_name=first,
+            last_name=last,
+            display_name=display_name,
+            metadata={'source': 'home_modal'},
+        )
+        upsert_contact(
+            partner_phone=me_phone,
+            customer_phone=customer_phone,
+            first_name=first,
+            last_name=last,
+            display_name=display_name,
+            source='home_modal',
+            lead_id=(lead.id if lead else ''),
+        )
+    except Exception:
+        current_app.logger.exception(
+            'home_register_customer CRM failed phone=%s', me_phone
+        )
+
+    rec, err = record_visit_request(
+        visit_requests,
+        partner_phone=me_phone,
+        partner_name=partner_name,
+        land_code=land_code,
+        land_title=land_title,
+        visit_date=visit_date,
+        customer_first_name=first,
+        customer_last_name=last,
+        customer_phone=customer_phone,
+    )
+    if err == 'already_pending':
+        return jsonify({
+            'ok': True,
+            'already_pending': True,
+            'message': 'برای این فایل بازدید باز از قبل دارید.',
+            'redirect_url': url_for('express_partner.requests'),
+        })
+    if err == 'weekday_not_allowed':
+        return _fail('تاریخ خودکار در روزهای مجاز نیست.')
+    if err or not rec:
+        return _fail('ثبت بازدید ممکن نشد.')
+
+    save_express_visit_requests(visit_requests)
+    _sync_visit_customer_to_club(
+        customer_phone=customer_phone,
+        customer_first_name=first,
+        customer_last_name=last,
+    )
+    try:
+        from app.crm.visit_sync import sync_contact_from_visit
+
+        sync_contact_from_visit(rec)
+    except Exception:
+        pass
+
+    sms_admin = _send_visit_admin_sms(
+        partner_phone=me_phone,
+        partner_name=partner_name,
+        land_code=land_code,
+        land_title=land_title,
+        visit_date=str(rec.get('visit_date') or visit_date),
+    )
+    try:
+        from .visit_sms import notify_partner_land_tx_sms
+
+        notify_partner_land_tx_sms(
+            partner_phone=me_phone,
+            event='visit_submitted',
+            land_code=land_code,
+            land_title=land_title,
+            visit_date=str(rec.get('visit_date') or visit_date),
+            reference_id=str(rec.get('id') or ''),
+        )
+    except Exception:
+        current_app.logger.exception(
+            'home_register_customer partner SMS failed phone=%s code=%s',
+            me_phone,
+            land_code,
+        )
+
+    msg = (
+        f"مشتری ثبت شد و بازدید برای "
+        f"{next_slot.get('weekday') or ''} {next_slot.get('jalali_fa') or visit_date} "
+        f"زمان‌بندی شد."
+    ).strip()
+    if not sms_admin.get('ok') and not sms_admin.get('skipped'):
+        msg += ' (پیامک ادمین ناموفق بود)'
+
+    return jsonify({
+        'ok': True,
+        'message': msg,
+        'visit_id': rec.get('id'),
+        'visit_date': rec.get('visit_date'),
+        'visit_date_label': next_slot.get('label') or '',
+        'land_code': land_code,
+        'redirect_url': url_for('express_partner.requests'),
+    })
+
+
+def _home_customer_modal_context(me_phone: str, is_approved: bool) -> Dict[str, Any]:
+    """فایل‌های قابل بازدید + اولین روز مجاز برای مدال ثبت مشتری."""
+    from .visit_requests import next_auto_visit_date
+
+    out: Dict[str, Any] = {
+        'customer_modal_lands': [],
+        'next_auto_visit': None,
+    }
+    if not me_phone or not is_approved:
+        return out
+    try:
+        out['next_auto_visit'] = next_auto_visit_date()
+    except Exception:
+        out['next_auto_visit'] = None
+    try:
+        lands, _ = _build_partner_dashboard_lands(me_phone, True)
+        visit_rows = load_express_visit_requests() or []
+        if not isinstance(visit_rows, list):
+            visit_rows = []
+        modal_lands: List[Dict[str, Any]] = []
+        for land in lands or []:
+            code = str(land.get('code') or '').strip()
+            if not code:
+                continue
+            st = str(land.get('_assignment_status') or '').strip().lower()
+            if st in ('sold', 'in_transaction'):
+                continue
+            if not partner_can_request_new_visit(st, visit_rows, me_phone, code):
+                continue
+            modal_lands.append({
+                'code': code,
+                'title': str(land.get('title') or code),
+                'city': str(land.get('city') or ''),
+            })
+        out['customer_modal_lands'] = modal_lands[:40]
+    except Exception:
+        out['customer_modal_lands'] = []
+    return out
 
 
 @express_partner_bp.get('/commissions', endpoint='commissions')

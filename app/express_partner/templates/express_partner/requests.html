@@ -1,0 +1,192 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}درخواست‌ها | وینور اکسپرس{% endblock %}
+
+{% block content %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{{ ep_header_start(id='partnerRequestsHeader') }}
+{% call ep_header_row('درخواست‌ها', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{{ ep_header_end() }}
+
+<style>
+  #partnerRequestsPage {
+    --rq-line: rgba(255, 255, 255, 0.08);
+    --rq-muted: #8e8e93;
+    --rq-text: #ececec;
+  }
+  #partnerRequestsPage .rq-summary {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--rq-line);
+    font-size: 0.75rem;
+    color: var(--rq-muted);
+    font-weight: 600;
+  }
+  #partnerRequestsPage .rq-summary strong {
+    color: #6ee7b7;
+    font-weight: 800;
+  }
+  #partnerRequestsPage .rq-card {
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid var(--rq-line);
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #partnerRequestsPage .rq-card:active {
+    background: rgba(255, 255, 255, 0.03);
+  }
+  #partnerRequestsPage .rq-card__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.65rem;
+  }
+  #partnerRequestsPage .rq-card__title {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--rq-text);
+    line-height: 1.35;
+  }
+  #partnerRequestsPage .rq-card__sub {
+    margin: 0.3rem 0 0;
+    font-size: 0.75rem;
+    color: var(--rq-muted);
+    line-height: 1.4;
+  }
+  #partnerRequestsPage .rq-card__status {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.45rem;
+    border-radius: 9999px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    background: rgba(52, 211, 153, 0.12);
+    color: #6ee7b7;
+    white-space: nowrap;
+  }
+  #partnerRequestsPage .rq-card__status.is-pending {
+    background: rgba(251, 191, 36, 0.14);
+    color: #fcd34d;
+  }
+  #partnerRequestsPage .rq-card__status.is-done {
+    background: rgba(96, 165, 250, 0.14);
+    color: #93c5fd;
+  }
+  #partnerRequestsPage .rq-card__status.is-closed {
+    background: rgba(161, 161, 170, 0.14);
+    color: #a1a1aa;
+  }
+  #partnerRequestsPage .rq-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.65rem;
+  }
+  #partnerRequestsPage .rq-step {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.12rem 0.4rem;
+    border-radius: 9999px;
+    font-size: 0.58rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.05);
+    color: #71717a;
+  }
+  #partnerRequestsPage .rq-step.is-done {
+    background: rgba(16, 185, 129, 0.14);
+    color: #34d399;
+  }
+  #partnerRequestsPage .rq-step.is-current {
+    background: rgba(37, 99, 235, 0.18);
+    color: #93c5fd;
+  }
+  #partnerRequestsPage .rq-step.is-rejected {
+    background: rgba(248, 113, 113, 0.14);
+    color: #fca5a5;
+  }
+  #partnerRequestsPage .rq-empty {
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: var(--rq-muted);
+  }
+  #partnerRequestsPage .rq-empty__title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--rq-text);
+  }
+  #partnerRequestsPage .rq-empty__sub {
+    margin: 0.4rem 0 0;
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+  #partnerRequestsPage .rq-empty__cta {
+    display: inline-flex;
+    margin-top: 1rem;
+    min-height: 2.4rem;
+    padding: 0 1rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: #059669;
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+</style>
+
+<div id="partnerRequestsPage"
+     class="partner-page-scroll-pad min-h-[100dvh] bg-black pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
+  <main class="mx-auto w-full max-w-lg">
+    <p class="rq-summary">
+      {% if open_count %}
+      <strong>{{ open_count|fa_digits }}</strong> مورد در جریان
+      {% else %}
+      فعلاً مورد بازی نیست
+      {% endif %}
+      · {{ items|length|fa_digits }} درخواست
+    </p>
+
+    {% if items %}
+    <section aria-label="بازدیدها و روندها">
+      {% for item in items %}
+      {% set st = item.status|default('') %}
+      {% set st_cls = 'is-pending' if st in ('pending', 'done_pending') else ('is-done' if st == 'completed' else ('is-closed' if st in ('cancelled', 'no_show') else '')) %}
+      <a class="rq-card"
+         href="{{ url_for('express_partner.home', land=item.land_code) if item.land_code else url_for('express_partner.home') }}"
+         data-vinor-express-nav>
+        <div class="rq-card__top">
+          <div class="min-w-0 flex-1 text-right">
+            <h2 class="rq-card__title">{{ item.title }}</h2>
+            <p class="rq-card__sub">{{ item.subtitle }}</p>
+          </div>
+          <span class="rq-card__status {{ st_cls }}">{{ item.stage_label }}</span>
+        </div>
+        {% if item.progress_steps %}
+        <div class="rq-steps" aria-hidden="true">
+          {% for step in item.progress_steps %}
+          <span class="rq-step{% if step.state == 'done' %} is-done{% elif step.state == 'current' %} is-current{% elif step.state == 'rejected' %} is-rejected{% endif %}">
+            {{ step.label }}
+          </span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </a>
+      {% endfor %}
+    </section>
+    {% else %}
+    <div class="rq-empty">
+      <p class="rq-empty__title">هنوز درخواستی ثبت نشده</p>
+      <p class="rq-empty__sub">با «ثبت مشتری جدید» در صفحه اصلی، بازدید و روند فروش اینجا دیده می‌شود.</p>
+      <a class="rq-empty__cta" href="{{ url_for('express_partner.home') }}" data-vinor-express-nav>برو به صفحه اصلی</a>
+    </div>
+    {% endif %}
+  </main>
+
+  {% set bottom_nav_active = 'home' %}
+  {% include 'express_partner/partials/partner_tab_footer.html' %}
+</div>
+{% endblock %}
