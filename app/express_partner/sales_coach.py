@@ -834,21 +834,25 @@ def build_limited_ai_quick_prompts(
     def add(
         label: str,
         *,
-        prompt: str,
-        intent: str,
+        prompt: str = "",
+        intent: str = "",
         icon: str = "",
         subtitle: str = "",
         variant: str = "",
+        href: str = "",
     ) -> None:
         label = (label or "").strip()
         prompt = (prompt or "").strip()
         intent = (intent or "").strip()
-        if not label or not prompt or not intent:
+        href = (href or "").strip()
+        if not label:
+            return
+        if not href and not (prompt and intent):
             return
         item: Dict[str, str] = {
             "label": label,
-            "prompt": prompt,
-            "intent": intent,
+            "prompt": prompt or label,
+            "intent": intent or "nav",
         }
         if (icon or "").strip():
             item["icon"] = icon.strip()
@@ -856,9 +860,26 @@ def build_limited_ai_quick_prompts(
             item["subtitle"] = subtitle.strip()
         if (variant or "").strip():
             item["variant"] = variant.strip()
+        if href:
+            item["href"] = href
         out.append(item)
 
-    # درخواست در انتظار تأیید — محدود به وضعیت و سؤال‌های کم‌ریسک
+    apply_url = "/express/partner/apply"
+    thanks_url = "/express/partner/thanks"
+    guest_apply_url = "/express/partner/home?menu=1&login_next=apply"
+    try:
+        from flask import has_request_context, url_for
+
+        if has_request_context():
+            apply_url = url_for("express_partner.apply")
+            thanks_url = url_for("express_partner.thanks")
+            guest_apply_url = url_for(
+                "express_partner.home", menu=1, login_next="apply"
+            )
+    except Exception:
+        pass
+
+    # درخواست در انتظار تأیید — کارت اصلی وضعیت + دو اکشن کم‌ریسک
     if has_pending_app:
         add(
             "وضعیت درخواست",
@@ -866,7 +887,8 @@ def build_limited_ai_quick_prompts(
             intent="coop_status",
             icon="clipboard",
             subtitle="پیگیری تأیید همکاری",
-            variant="tile",
+            variant="hero",
+            href=thanks_url,
         )
         add(
             "خرید ملک",
@@ -876,6 +898,8 @@ def build_limited_ai_quick_prompts(
             subtitle="جستجوی فایل و ملک",
             variant="tile",
         )
+        if out:
+            out[-1]["ui_action"] = "open_divar_ads_all"
         add(
             "سطوح همکاری",
             prompt="سطوح همکاری و پورسانت چطوره؟",
@@ -886,16 +910,8 @@ def build_limited_ai_quick_prompts(
         )
         return out[:3]
 
-    # مهمان / لاگین‌شدهٔ غیرتأیید — هم‌راستا با تیتر خرید/همکاری
-    _ = me_phone
-    add(
-        "خرید ملک",
-        prompt="یه ملک مناسب می‌خوام",
-        intent="find_land",
-        icon="search",
-        subtitle="جستجوی فایل و ملک",
-        variant="tile",
-    )
+    # مهمان / لاگین‌شدهٔ غیرتأیید — کارت اصلی مثل «ثبت مشتری» برای همکارها
+    become_href = apply_url if (me_phone or "").strip() else guest_apply_url
     add(
         "می‌خواهم بازاریاب وینور شوم",
         prompt=(
@@ -904,7 +920,26 @@ def build_limited_ai_quick_prompts(
         ),
         intent="coop_apply",
         icon="handshake",
-        subtitle="شروع همکاری فروش",
+        subtitle="شروع همکاری فروش و دریافت پورسانت",
+        variant="hero",
+        href=become_href,
+    )
+    add(
+        "خرید ملک",
+        prompt="یه ملک مناسب می‌خوام",
+        intent="find_land",
+        icon="search",
+        subtitle="جستجوی فایل و ملک",
+        variant="tile",
+    )
+    if out:
+        out[-1]["ui_action"] = "open_divar_ads_all"
+    add(
+        "سطوح همکاری",
+        prompt="سطوح همکاری و پورسانت چطوره؟",
+        intent="coop_levels",
+        icon="users",
+        subtitle="شرایط و پورسانت",
         variant="tile",
     )
     return out[:3]
@@ -975,6 +1010,8 @@ def build_home_ai_quick_prompts(
         subtitle="جستجوی فایل و ملک",
         variant="tile",
     )
+    if out:
+        out[-1]["ui_action"] = "open_divar_ads_all"
     add(
         "قدم بعدی",
         prompt=(

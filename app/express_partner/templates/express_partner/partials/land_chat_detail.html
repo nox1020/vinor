@@ -68,12 +68,46 @@
     background: #0a0a0a;
   }
   .vn-lcd__body { padding: 0.7rem 0.85rem 0.85rem; }
+  .vn-lcd__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+  }
   .vn-lcd__title {
-    margin: 0 0 0.35rem;
+    margin: 0;
     font-size: 0.95rem;
     font-weight: 800;
     line-height: 1.35;
     color: #fff;
+    flex: 1;
+    min-width: 0;
+  }
+  .vn-lcd__fav {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    margin: -0.15rem 0 0;
+    border: 0;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #d4d4d8;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .vn-lcd__fav:hover,
+  .vn-lcd__fav:focus-visible {
+    background: rgba(255, 255, 255, 0.1);
+    outline: none;
+  }
+  .vn-lcd__fav .vinor-fav-icon {
+    font-size: 0.85rem;
+  }
+  .vn-lcd__fav .vinor-fav-icon.text-amber-400 {
+    color: #fbbf24;
   }
   .vn-lcd__meta {
     display: flex;
@@ -250,7 +284,20 @@
   {% endif %}
 
   <div class="vn-lcd__body">
-    <h3 class="vn-lcd__title">{{ land.title or 'فایل' }}</h3>
+    <div class="vn-lcd__head">
+      <h3 class="vn-lcd__title">{{ land.title or 'فایل' }}</h3>
+      {% if land.code %}
+      <button type="button"
+              class="vn-lcd__fav"
+              data-fav-code="{{ land.code }}"
+              data-land-detail-fav
+              aria-label="نشان کردن"
+              aria-pressed="false"
+              title="نشان کردن">
+        <i class="far fa-bookmark vinor-fav-icon" aria-hidden="true"></i>
+      </button>
+      {% endif %}
+    </div>
     <div class="vn-lcd__meta">
       {% if _st == 'in_transaction' %}
       <span class="vn-lcd__badge vn-lcd__badge--tx">در حال معامله</span>
@@ -338,6 +385,16 @@
 
     {% if is_approved and _st != 'sold' and chat_cta.prompt %}
     <div class="vn-lcd__actions">
+      {% if chat_cta.action == 'visit' %}
+      <button type="button"
+              class="vn-lcd__btn"
+              data-open-customer-modal
+              data-land-code="{{ land.code|e }}"
+              aria-label="درخواست تعیین وقت بازدید">
+        <i class="fas {{ chat_cta.icon|default('fa-calendar-days') }}" aria-hidden="true"></i>
+        {{ chat_cta.label|default('ثبت بازدید') }}
+      </button>
+      {% else %}
       <button type="button"
               class="vn-lcd__btn"
               data-vn-chat-prompt="{{ (chat_cta.prompt|default(''))|e }}"
@@ -345,7 +402,18 @@
         <i class="fas {{ chat_cta.icon|default('fa-comments') }}" aria-hidden="true"></i>
         {{ chat_cta.label|default('ادامه در چت') }}
       </button>
+      {% endif %}
       {% if chat_cta.secondary_prompt %}
+      {% if chat_cta.secondary_action == 'visit' %}
+      <button type="button"
+              class="vn-lcd__btn vn-lcd__btn--secondary"
+              data-open-customer-modal
+              data-land-code="{{ land.code|e }}"
+              aria-label="بازدید مجدد">
+        <i class="fas {{ chat_cta.secondary_icon|default('fa-calendar-plus') }}" aria-hidden="true"></i>
+        {{ chat_cta.secondary_label|default('بازدید مجدد') }}
+      </button>
+      {% else %}
       <button type="button"
               class="vn-lcd__btn vn-lcd__btn--secondary"
               data-vn-chat-prompt="{{ (chat_cta.secondary_prompt|default(''))|e }}"
@@ -353,6 +421,7 @@
         <i class="fas {{ chat_cta.secondary_icon|default('fa-calendar-plus') }}" aria-hidden="true"></i>
         {{ chat_cta.secondary_label|default('بازدید مجدد') }}
       </button>
+      {% endif %}
       {% endif %}
       <a class="vn-lcd__btn vn-lcd__btn--call"
          href="tel:{{ visit_call_target }}"

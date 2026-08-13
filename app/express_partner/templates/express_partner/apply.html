@@ -4,10 +4,59 @@
 {% block content %}
 <div id="applyPage" class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
 
-  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+  {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_spacer %}
+  {% set apply_back_url = back_url|default(url_for('express_partner.home')) %}
   {{ ep_header_start(sticky=true, id='profileApplyHeader') }}
-  {% call ep_header_row('درخواست همکاری', url_for('express_partner.home'), back_nav=false, inner_class='max-w-lg mx-auto w-full lg:max-w-xl') %}{% endcall %}
+  <div class="express-dash-header-inner w-full px-3 sm:px-4 pt-2.5 pb-2 max-w-lg mx-auto w-full lg:max-w-xl ep-partner-header-inner--auto">
+    <div class="flex items-center gap-2">
+      <a href="{{ apply_back_url }}"
+         id="applyPageBack"
+         class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
+         aria-label="بازگشت">
+        <i class="fas fa-arrow-right ep-partner-header-btn-icon" aria-hidden="true"></i>
+      </a>
+      <div class="vinor-dash-glass-pill ep-header-title-pill flex min-w-0 flex-1 items-center justify-center rounded-full px-3 sm:px-4 h-[42px]">
+        <div class="min-w-0 w-full text-center">
+          <h1 class="ep-partner-header-title">درخواست همکاری</h1>
+        </div>
+      </div>
+      <div class="shrink-0 flex min-w-[42px] items-center justify-end">{{ ep_header_spacer() }}</div>
+    </div>
+  </div>
   {{ ep_header_end() }}
+  <script>
+  (function () {
+    var btn = document.getElementById('applyPageBack');
+    if (!btn || btn.__vinorApplyBackBound) return;
+    btn.__vinorApplyBackBound = true;
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var fallback = btn.getAttribute('href') || '/express/partner/home';
+      var dest = fallback;
+      try {
+        var last = String(window.__vinorExpressLastHref || '').trim();
+        if (last) {
+          var u = new URL(last, window.location.origin);
+          var p = String(u.pathname || '');
+          if (
+            u.origin === window.location.origin &&
+            p.indexOf('/express/partner/') === 0 &&
+            p.indexOf('/apply') < 0 &&
+            p.indexOf('/login') < 0
+          ) {
+            dest = p + (u.search || '') + (u.hash || '');
+          }
+        }
+      } catch (_) {}
+      if (typeof window.vinorExpressNavigate === 'function') {
+        window.vinorExpressNavigate(dest, { back: true });
+      } else {
+        window.location.href = dest;
+      }
+    }, true);
+  })();
+  </script>
 
   <main class="partner-page-scroll-pad mx-auto max-w-lg px-4 pb-5 pt-3 lg:max-w-xl">
 

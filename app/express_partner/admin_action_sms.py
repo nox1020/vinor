@@ -71,6 +71,19 @@ def _build_message(action: str, settings: dict, **kw: Any) -> str:
             msg += f'\n{vdate}'
         return msg
 
+    if action == 'visit_schedule':
+        # درخواست تعیین وقت بازدید از مدال خانه → پیامک پشتیبان
+        lines = ['وینور', 'درخواست تعیین وقت بازدید', name]
+        notes = (kw.get('notes') or '').strip()
+        if notes:
+            lines.append(notes)
+        sys_date = (kw.get('system_date') or '').strip()
+        if sys_date:
+            lines.append(sys_date)
+        if phone:
+            lines.append(phone)
+        return '\n'.join(lines)
+
     if action == 'visit_done':
         code = str(kw.get('land_code') or '—')
         return f'وینور\nانجام بازدید · {code}\n{name} · {phone}'
@@ -192,7 +205,7 @@ def _notify_special_land_owner(action: str, msg: str, line: str, **kwargs: Any) 
 def notify_admin_pending_action(action: str, **kwargs: Any) -> dict:
     """
     بلافاصله پس از ایجاد هر مورد در صف اقدام داشبورد ادمین، پیامک به شمارهٔ تنظیمات.
-    action: application | withdrawal | visit | commission
+    action: application | withdrawal | visit | visit_schedule | commission
     """
     settings = load_settings(current_app) or {}
     admin_phone = normalize_iran_mobile(

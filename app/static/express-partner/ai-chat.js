@@ -2265,6 +2265,11 @@
       /* ephemeral نباش — وگرنه بدو ورود خالی می‌ماند و چت دیده نمی‌شود */
       wrap.removeAttribute('data-ephemeral');
       initCardsIn(detailHost);
+      try {
+        if (typeof window.vinorSyncFavButtons === 'function') {
+          window.vinorSyncFavButtons(detailHost);
+        }
+      } catch (_) {}
     }
 
     row.appendChild(body);

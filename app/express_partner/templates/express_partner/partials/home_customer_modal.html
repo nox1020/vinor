@@ -1,6 +1,4 @@
-{# مدال ثبت مشتری جدید + زمان‌بندی خودکار بازدید #}
-{% set _modal_lands = customer_modal_lands|default([]) %}
-{% set _next_visit = next_auto_visit|default(none) %}
+{# مدال درخواست تعیین وقت بازدید — فقط توضیحات اختیاری #}
 <style id="vinor-customer-modal">
   #vnCustomerModal.vn-cust-modal {
     position: fixed;
@@ -107,60 +105,40 @@
     flex-direction: column;
     gap: 0.75rem;
   }
-  #vnCustomerModal .vn-cust-modal__hint {
-    margin: 0;
-    padding: 0.65rem 0.75rem;
-    border-radius: 0.75rem;
-    border: 1px solid rgba(52, 211, 153, 0.28);
-    background: rgba(16, 185, 129, 0.08);
-    color: #d1fae5;
-    font-size: 0.75rem;
-    line-height: 1.45;
-    text-align: right;
-  }
-  #vnCustomerModal .vn-cust-modal__hint strong {
-    color: #6ee7b7;
-    font-weight: 700;
-  }
-  #vnCustomerModal .vn-cust-modal__grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.55rem;
-  }
   #vnCustomerModal .vn-cust-field {
     display: flex;
     flex-direction: column;
     gap: 0.28rem;
     text-align: right;
   }
-  #vnCustomerModal .vn-cust-field--full {
-    grid-column: 1 / -1;
-  }
   #vnCustomerModal .vn-cust-field__label {
     font-size: 0.7rem;
     font-weight: 600;
     color: #a1a1aa;
   }
-  #vnCustomerModal .vn-cust-field__input,
-  #vnCustomerModal .vn-cust-field__select {
+  #vnCustomerModal .vn-cust-field__label-hint {
+    font-weight: 500;
+    color: #71717a;
+  }
+  #vnCustomerModal .vn-cust-field__textarea {
     width: 100%;
-    min-height: 2.65rem;
-    padding: 0.55rem 0.75rem;
+    min-height: 7.5rem;
+    padding: 0.7rem 0.85rem;
     border-radius: 0.75rem;
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: #12181f;
     color: #f4f4f5;
     font-size: 0.9rem;
     font-family: inherit;
+    line-height: 1.55;
+    resize: vertical;
   }
-  #vnCustomerModal .vn-cust-field__input:focus,
-  #vnCustomerModal .vn-cust-field__select:focus {
+  #vnCustomerModal .vn-cust-field__textarea:focus {
     outline: none;
     border-color: rgba(52, 211, 153, 0.55);
   }
-  #vnCustomerModal .vn-cust-field__input--ltr {
-    direction: ltr;
-    text-align: left;
+  #vnCustomerModal .vn-cust-field__textarea::placeholder {
+    color: #71717a;
   }
   #vnCustomerModal .vn-cust-modal__error {
     display: none;
@@ -190,7 +168,7 @@
     border-radius: 0.9rem;
     background: linear-gradient(180deg, #059669 0%, #047857 100%);
     color: #fff;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 800;
     font-family: inherit;
     cursor: pointer;
@@ -230,62 +208,19 @@
         <h2 id="vnCustomerModalTitle" class="vn-cust-modal__title">ثبت مشتری جدید</h2>
       </header>
       <form id="vnCustomerModalForm" class="vn-cust-modal__body" novalidate>
-        {% if _next_visit %}
-        <p class="vn-cust-modal__hint">
-          وقت بازدید خودکار:
-          <strong>{{ _next_visit.weekday }} {{ _next_visit.jalali_fa }}</strong>
-          — بعد از ثبت، برای شما و ادمین پیامک می‌رود.
-        </p>
-        {% else %}
-        <p class="vn-cust-modal__hint">
-          فعلاً روز مجاز بازدید تنظیم نشده. بعد از ثبت مشتری با پشتیبانی هماهنگ کنید.
-        </p>
-        {% endif %}
-
-        <div class="vn-cust-modal__grid">
-          <label class="vn-cust-field">
-            <span class="vn-cust-field__label">نام</span>
-            <input class="vn-cust-field__input" name="customer_first_name" required autocomplete="given-name" placeholder="نام">
-          </label>
-          <label class="vn-cust-field">
-            <span class="vn-cust-field__label">نام خانوادگی</span>
-            <input class="vn-cust-field__input" name="customer_last_name" required autocomplete="family-name" placeholder="نام خانوادگی">
-          </label>
-          <label class="vn-cust-field vn-cust-field--full">
-            <span class="vn-cust-field__label">شماره موبایل مشتری</span>
-            <input class="vn-cust-field__input vn-cust-field__input--ltr"
-                   name="customer_phone"
-                   required
-                   inputmode="tel"
-                   autocomplete="tel"
-                   placeholder="09xxxxxxxxx"
-                   dir="ltr">
-          </label>
-          <label class="vn-cust-field vn-cust-field--full">
-            <span class="vn-cust-field__label">فایل برای بازدید</span>
-            {% if _modal_lands %}
-            <select class="vn-cust-field__select" name="land_code" required>
-              {% for land in _modal_lands %}
-              <option value="{{ land.code }}"{% if loop.first %} selected{% endif %}>
-                {{ land.title }}{% if land.city %} — {{ land.city }}{% endif %}
-              </option>
-              {% endfor %}
-            </select>
-            {% else %}
-            <p class="vn-cust-modal__hint" style="margin:0">
-              هنوز فایل فعالی برای بازدید ندارید. اول از «پیدا کردن فایل» یک فایل بگیرید.
-            </p>
-            <input type="hidden" name="land_code" value="">
-            {% endif %}
-          </label>
-        </div>
+        <label class="vn-cust-field">
+          <span class="vn-cust-field__label">توضیحات <span class="vn-cust-field__label-hint">(اختیاری)</span></span>
+          <textarea class="vn-cust-field__textarea"
+                    name="notes"
+                    rows="5"
+                    placeholder="مثلاً ترجیح روز/ساعت، منطقه، یا نکتهٔ مهم برای تعیین وقت بازدید"></textarea>
+        </label>
         <p id="vnCustomerModalError" class="vn-cust-modal__error" role="alert"></p>
         <div class="vn-cust-modal__foot">
           <button type="submit"
                   class="vn-cust-modal__submit"
-                  id="vnCustomerModalSubmit"
-                  {% if not _modal_lands or not _next_visit %}disabled{% endif %}>
-            ثبت و زمان‌بندی بازدید
+                  id="vnCustomerModalSubmit">
+            ارسال درخواست تعیین وقت بازدید
           </button>
         </div>
       </form>
@@ -331,10 +266,23 @@
     errEl.classList.add('is-on');
   }
 
-  function openModal(e) {
+  function openModal(e, opts) {
     if (e) {
       try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
     }
+    opts = opts || {};
+    var landCode = String(opts.landCode || '').trim();
+    if (!landCode && e && e.target && e.target.closest) {
+      var opener = e.target.closest('[data-open-customer-modal]');
+      if (opener) landCode = String(opener.getAttribute('data-land-code') || '').trim();
+    }
+    modal.setAttribute('data-pending-land-code', landCode || '');
+    try {
+      var titleEl = document.getElementById('vnCustomerModalTitle');
+      if (titleEl) {
+        titleEl.textContent = landCode ? 'درخواست تعیین وقت بازدید' : 'ثبت مشتری جدید';
+      }
+    } catch (_) {}
     modal.hidden = false;
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
@@ -344,8 +292,8 @@
     } catch (_) {}
     setError('');
     try {
-      var first = form && form.querySelector('input[name="customer_first_name"]');
-      if (first) first.focus();
+      var notes = form && form.querySelector('textarea[name="notes"]');
+      if (notes) notes.focus();
     } catch (_) {}
   }
 
@@ -356,6 +304,11 @@
     modal.classList.remove('is-open');
     modal.hidden = true;
     modal.setAttribute('aria-hidden', 'true');
+    modal.removeAttribute('data-pending-land-code');
+    try {
+      var titleEl = document.getElementById('vnCustomerModalTitle');
+      if (titleEl) titleEl.textContent = 'ثبت مشتری جدید';
+    } catch (_) {}
     try {
       document.documentElement.classList.remove('vinor-customer-modal-open');
       document.documentElement.classList.remove('vinor-express-overlay-modal-open');
@@ -391,19 +344,9 @@
 
       var fd = new FormData(form);
       var payload = {
-        customer_first_name: String(fd.get('customer_first_name') || '').trim(),
-        customer_last_name: String(fd.get('customer_last_name') || '').trim(),
-        customer_phone: String(fd.get('customer_phone') || '').trim(),
-        land_code: String(fd.get('land_code') || '').trim()
+        notes: String(fd.get('notes') || '').trim(),
+        land_code: String(modal.getAttribute('data-pending-land-code') || '').trim()
       };
-      if (!payload.customer_first_name || !payload.customer_last_name || !payload.customer_phone) {
-        setError('نام، نام خانوادگی و شماره مشتری الزامی است.');
-        return;
-      }
-      if (!payload.land_code) {
-        setError('فایل فعالی برای بازدید انتخاب نشده است.');
-        return;
-      }
 
       var url = modal.getAttribute('data-register-url') || '';
       if (!url) {
@@ -413,7 +356,7 @@
 
       submitBtn.disabled = true;
       var prevLabel = submitBtn.textContent;
-      submitBtn.textContent = 'در حال ثبت…';
+      submitBtn.textContent = 'در حال ارسال…';
 
       fetch(url, {
         method: 'POST',
@@ -436,7 +379,7 @@
         .then(function (res) {
           var data = res.data || {};
           if (!res.okHttp || !data.ok) {
-            setError(data.error || data.message || 'ثبت انجام نشد.');
+            setError(data.error || data.message || 'ارسال انجام نشد.');
             submitBtn.disabled = false;
             submitBtn.textContent = prevLabel;
             return;

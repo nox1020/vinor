@@ -168,25 +168,27 @@
   }
   #homeDivarAdsCarousel .vn-home-divar__badge {
     position: absolute;
-    top: 0.35rem;
-    inset-inline-start: 0.35rem;
+    top: 0.42rem;
+    inset-inline-start: 0.42rem;
     z-index: 1;
-    display: inline-flex;
-    align-items: center;
-    padding: 0.12rem 0.4rem;
-    border-radius: 0.35rem;
-    background: rgba(0, 0, 0, 0.62);
-    color: #f4f4f5;
-    font-size: 0.58rem;
-    font-weight: 700;
+    display: block;
+    width: 0.85rem;
+    height: 0.85rem;
+    padding: 0;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    background: #dc2626;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    overflow: hidden;
   }
   #homeDivarAdsCarousel .vn-home-divar__badge--vinor {
-    background: rgba(37, 99, 235, 0.9);
-    color: #fff;
+    background: #2563eb;
   }
   #homeDivarAdsCarousel .vn-home-divar__badge--divar {
-    background: rgba(220, 38, 38, 0.9);
-    color: #fff;
+    background: #dc2626;
   }
   #homeDivarAdsCarousel .vn-home-divar__body {
     display: flex;
@@ -421,26 +423,27 @@
   }
   #homeDivarAdsAllModal .vn-home-divar-all__badge {
     position: absolute;
-    top: 0.28rem;
-    inset-inline-start: 0.28rem;
+    top: 0.36rem;
+    inset-inline-start: 0.36rem;
     z-index: 1;
-    display: inline-flex;
-    align-items: center;
-    padding: 0.1rem 0.32rem;
-    border-radius: 0.28rem;
-    font-size: 0.52rem;
-    font-weight: 700;
-    line-height: 1.2;
-    background: rgba(0, 0, 0, 0.62);
-    color: #f4f4f5;
+    display: block;
+    width: 0.78rem;
+    height: 0.78rem;
+    padding: 0;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    background: #dc2626;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    overflow: hidden;
   }
   #homeDivarAdsAllModal .vn-home-divar-all__badge--vinor {
-    background: rgba(37, 99, 235, 0.92);
-    color: #fff;
+    background: #2563eb;
   }
   #homeDivarAdsAllModal .vn-home-divar-all__badge--divar {
-    background: rgba(220, 38, 38, 0.92);
-    color: #fff;
+    background: #dc2626;
   }
   #homeDivarAdsAllModal .vn-home-divar-all__shots {
     position: absolute;
@@ -520,7 +523,7 @@
           aria-haspopup="dialog"
           aria-controls="homeDivarAdsAllModal"
           title="همهٔ آگهی‌ها">
-    <i class="fas fa-th-large" aria-hidden="true"></i>
+    <i class="fas fa-arrow-left" aria-hidden="true"></i>
     {% if _ads_count > 0 %}
     <span class="vn-home-divar__all-count" aria-hidden="true">{{ _ads_count|fa_digits }}</span>
     {% endif %}
@@ -546,10 +549,9 @@
         {% else %}
         <div class="vn-home-divar__media-ph" aria-hidden="true"><i class="fas fa-image"></i></div>
         {% endif %}
-        {% if ad.badge %}
-        <span class="vn-home-divar__badge{% if _src == 'vinor' %} vn-home-divar__badge--vinor{% elif _src == 'divar' %} vn-home-divar__badge--divar{% endif %}"
-              aria-hidden="true">{{ ad.badge }}</span>
-        {% endif %}
+        <span class="vn-home-divar__badge{% if _src == 'vinor' %} vn-home-divar__badge--vinor{% else %} vn-home-divar__badge--divar{% endif %}"
+              title="{% if _src == 'vinor' %}وینور{% else %}دیوار{% endif %}"
+              aria-label="{% if _src == 'vinor' %}وینور{% else %}دیوار{% endif %}"></span>
         {% if ad.image_count and ad.image_count > 1 %}
         <span class="vn-home-divar__shots" aria-hidden="true">
           <i class="fas fa-camera"></i>{{ ad.image_count|fa_digits }}
@@ -605,9 +607,9 @@
             {% else %}
             <div class="vn-home-divar-all__thumb-ph"><i class="fas fa-image"></i></div>
             {% endif %}
-            {% if ad.badge %}
-            <span class="vn-home-divar-all__badge{% if _src == 'vinor' %} vn-home-divar-all__badge--vinor{% elif _src == 'divar' %} vn-home-divar-all__badge--divar{% endif %}">{{ ad.badge }}</span>
-            {% endif %}
+            <span class="vn-home-divar-all__badge{% if _src == 'vinor' %} vn-home-divar-all__badge--vinor{% else %} vn-home-divar-all__badge--divar{% endif %}"
+                  title="{% if _src == 'vinor' %}وینور{% else %}دیوار{% endif %}"
+                  aria-label="{% if _src == 'vinor' %}وینور{% else %}دیوار{% endif %}"></span>
             {% if ad.image_count and ad.image_count > 1 %}
             <span class="vn-home-divar-all__shots" aria-hidden="true">
               <i class="fas fa-camera"></i>{{ ad.image_count|fa_digits }}
@@ -939,6 +941,22 @@
     setPopupOpen(false);
   }
 
+  window.__vinorOpenDivarAdsAll = openAllPopup;
+  window.__vinorCloseDivarAdsAll = closeAllPopup;
+  window.__vinorDivarAdsBoot = boot;
+
+  if (!window.__vinorDivarAdsAllTriggersBound) {
+    window.__vinorDivarAdsAllTriggersBound = true;
+    document.addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (!t || !t.closest) return;
+      if (!t.closest('[data-open-divar-ads-all]')) return;
+      if (typeof window.__vinorOpenDivarAdsAll === 'function') {
+        window.__vinorOpenDivarAdsAll(ev);
+      }
+    }, true);
+  }
+
   function bindAllPopup() {
     var btn = document.getElementById('homeDivarAdsAllBtn');
     var modal = getAllModal();
@@ -971,9 +989,6 @@
     snapToStart();
     start();
   }
-
-  window.__vinorDivarAdsBoot = boot;
-  window.__vinorDivarAdsCloseAll = closeAllPopup;
 
   if (!window.__vinorDivarAdsAutoScrollInit) {
     window.__vinorDivarAdsAutoScrollInit = true;

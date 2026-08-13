@@ -1772,6 +1772,30 @@ def _compose_apply_name(data: dict) -> tuple[str, str, str]:
     return first, last, full
 
 
+def _apply_back_url() -> str:
+    """صفحهٔ قبل در مسیر همکار؛ در غیر این صورت خانه."""
+    home = url_for('express_partner.home')
+    ref = (request.referrer or '').strip()
+    if not ref:
+        return home
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(ref)
+        if parsed.netloc and parsed.netloc != request.host:
+            return home
+        path = (parsed.path or '').strip() or '/'
+        if not path.startswith('/express/partner/'):
+            return home
+        low = path.lower()
+        if any(x in low for x in ('/apply', '/login', '/otp')):
+            return home
+        qs = ('?' + parsed.query) if parsed.query else ''
+        return path + qs
+    except Exception:
+        return home
+
+
 def _apply_form_context(
     me_phone: str,
     *,
@@ -1793,6 +1817,7 @@ def _apply_form_context(
         'name': name,
         'national_id': national_id,
         'avatar_initials_name': display_name,
+        'back_url': _apply_back_url(),
         **_apply_limits_context(),
     }
 
@@ -2137,6 +2162,126 @@ def _send_visit_admin_sms(
         land_title=land_title,
         visit_date=_format_visit_date_sms(visit_date),
     )
+
+
+def _send_visit_schedule_admin_sms(
+    *,
+    partner_phone: str,
+    partner_name: str,
+    notes: str = '',
+) -> dict:
+    """پیامک پشتیبان برای درخواست تعیین وقت بازدید از مدال خانه."""
+    from .admin_action_sms import notify_admin_pending_action
+    from ..utils.dates import format_display_jalali_datetime
+
+    return notify_admin_pending_action(
+        'visit_schedule',
+        partner_phone=partner_phone,
+        partner_name=partner_name,
+        notes=(notes or '').strip(),
+        system_date=format_display_jalali_datetime(None),
+    )
+
+
+def _visit_schedule_support_phone() -> str:
+    """شماره پشتیبان برای هماهنگی وقت بازدید."""
+    from ..services.sms import normalize_iran_mobile, is_valid_iran_mobile
+    from ..utils.storage import load_settings
+
+    settings = load_settings(current_app) or {}
+    raw = str(settings.get('partner_application_admin_phone') or '').strip()
+    phone = normalize_iran_mobile(raw)
+    if is_valid_iran_mobile(phone):
+        return phone
+    try:
+        from app.crm.config import VISIT_CALL_TARGET
+        fallback = normalize_iran_mobile(str(VISIT_CALL_TARGET or '').strip())
+        if is_valid_iran_mobile(fallback):
+            return fallback
+    except Exception:
+        pass
+    return '09121471301'
+
+
+def _send_visit_schedule_partner_sms(
+    *,
+    partner_phone: str,
+    weekday: str = '',
+    jalali_date: str = '',
+    visit_time: str = '',
+    support_phone: str = '',
+) -> dict:
+    """پیامک بازاریاب: روز/تاریخ/ساعت تعیین‌شده + شماره پشتیبان برای هماهنگی."""
+    from datetime import datetime
+
+    from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
+    from ..utils.storage import load_settings, load_sms_history, save_sms_history
+    from app.services.sms_config import get_sms_line_number
+
+    mobile = normalize_iran_mobile(partner_phone)
+    if not is_valid_iran_mobile(mobile):
+        return {'ok': False, 'skipped': True, 'error': 'invalid_partner_phone'}
+
+    support = normalize_iran_mobile(support_phone) or _visit_schedule_support_phone()
+    day = (weekday or '').strip()
+    date_s = (jalali_date or '').strip()
+    time_s = (visit_time or '').strip()
+
+    when_parts = [p for p in (day, date_s) if p]
+    when_line = ' '.join(when_parts) if when_parts else '—'
+    lines = [
+        'وینور',
+        'وقت بازدید تعیین شد',
+        when_line,
+    ]
+    if time_s:
+        lines.append(f'ساعت {time_s}')
+    lines.append(f'هماهنگی با پشتیبانی: {support}')
+    msg = '\n'.join(lines)
+
+    settings = load_settings(current_app) or {}
+    line = (settings.get('sms_line_number') or get_sms_line_number() or '09981801922').strip()
+    sms_result = send_sms_direct(mobile=mobile, message=msg, line_number=line, record_history=False)
+    ok = bool(sms_result.get('ok'))
+    err = None
+    body = sms_result.get('body') or {}
+    if not ok:
+        err = str(body.get('message') or body.get('error') or 'sms_send_failed')
+        try:
+            current_app.logger.error(
+                'Visit schedule partner SMS failed mobile=%s status=%s body=%s',
+                mobile,
+                sms_result.get('status'),
+                body,
+            )
+        except Exception:
+            pass
+
+    try:
+        history = load_sms_history(current_app) or []
+        if not isinstance(history, list):
+            history = []
+        history.append({
+            'type': 'partner_visit_schedule',
+            'mobile': mobile,
+            'partner_phone': partner_phone,
+            'message': msg,
+            'ok': ok,
+            'error': err,
+            'status_code': sms_result.get('status', 0),
+            'response': body,
+            'created_at': datetime.utcnow().isoformat() + 'Z',
+        })
+        if len(history) > 5000:
+            history = history[-5000:]
+        save_sms_history(history, current_app)
+    except Exception:
+        try:
+            current_app.logger.exception('Visit schedule partner SMS history failed')
+        except Exception:
+            pass
+
+    return {'ok': ok, 'skipped': False, 'error': err}
 
 
 def _apply_post_submit_context(
@@ -4331,12 +4476,16 @@ def api_favorites_cards():
 @express_partner_bp.get('/requests', endpoint='requests')
 @require_partner_access(allow_pending=True)
 def requests_page():
-    """لیست بازدیدها و روند فروش همکار."""
+    """لیست سادهٔ بازدیدهای همکار + اکشن حذف/بازدید مجدد."""
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile)
     from .visit_requests import (
+        COMPLETED_STATUS,
+        CANCELLED_STATUS,
+        NO_SHOW_STATUS,
         OPEN_VISIT_STATUSES,
+        partner_can_request_new_visit,
         partner_request_feed_item,
         partner_visits_for_phone,
     )
@@ -4344,9 +4493,41 @@ def requests_page():
     visit_rows = load_express_visit_requests() or []
     if not isinstance(visit_rows, list):
         visit_rows = []
-    commissions = load_express_commissions_cached() or []
     mine = partner_visits_for_phone(visit_rows, me_phone)
-    items = [partner_request_feed_item(r, commissions) for r in mine]
+
+    land_status: Dict[str, str] = {}
+    if me_phone and is_approved:
+        try:
+            lands, _ = _build_partner_dashboard_lands(me_phone, True)
+            for land in lands or []:
+                code = str(land.get('code') or '').strip()
+                if code:
+                    land_status[code] = str(land.get('_assignment_status') or 'active').strip().lower()
+        except Exception:
+            land_status = {}
+
+    support_phone = ''
+    try:
+        support_phone = _visit_schedule_support_phone()
+    except Exception:
+        support_phone = '09121471301'
+
+    items = []
+    for r in mine:
+        code = str(r.get('land_code') or '').strip()
+        st = str(r.get('status') or '').strip()
+        gs = land_status.get(code, 'active')
+        can_revisit = bool(
+            code
+            and st in (COMPLETED_STATUS, CANCELLED_STATUS, NO_SHOW_STATUS)
+            and partner_can_request_new_visit(gs, visit_rows, me_phone, code)
+        )
+        items.append(partner_request_feed_item(
+            r,
+            can_revisit=can_revisit,
+            support_phone=support_phone,
+        ))
+
     open_count = sum(
         1
         for r in mine
@@ -4357,6 +4538,7 @@ def requests_page():
         'express_partner/requests.html',
         items=items,
         open_count=open_count,
+        support_phone=support_phone,
         me_phone=me_phone,
         is_approved=is_approved,
         hide_header=True,
@@ -4368,10 +4550,182 @@ def requests_page():
     return resp
 
 
+def _requests_action_json(ok: bool, *, message: str = '', error: str = '', **extra):
+    payload = {'ok': bool(ok), 'message': message, 'error': error}
+    payload.update(extra)
+    return jsonify(payload), (200 if ok else 400)
+
+
+@express_partner_bp.post('/requests/<vid>/remove', endpoint='requests_remove')
+@require_partner_access()
+def requests_remove(vid: str):
+    """لغو درخواست باز یا حذف قطعی درخواست لغو/عدم‌حضور."""
+    me_phone = (session.get('user_phone') or '').strip()
+    from .visit_requests import partner_cancel_own_visit, partner_delete_own_visit
+
+    visit_rows = load_express_visit_requests() or []
+    if not isinstance(visit_rows, list):
+        visit_rows = []
+
+    updated, err = partner_cancel_own_visit(
+        visit_rows, request_id=str(vid or ''), partner_phone=me_phone
+    )
+    if updated and not err:
+        try:
+            save_express_visit_requests(visit_rows)
+        except Exception:
+            current_app.logger.exception('requests_remove cancel save failed id=%s', vid)
+            return _requests_action_json(False, error='ذخیره نشد.')
+        try:
+            from .visit_sms import notify_partner_land_tx_sms
+            notify_partner_land_tx_sms(
+                partner_phone=me_phone,
+                event='visit_rejected',
+                land_code=str(updated.get('land_code') or ''),
+                land_title=str(updated.get('land_title') or ''),
+                visit_date=str(updated.get('visit_date') or ''),
+                reference_id=str(updated.get('id') or ''),
+            )
+        except Exception:
+            pass
+        return _requests_action_json(True, message='درخواست حذف شد.', action='cancelled')
+
+    if err in (None, 'not_cancellable'):
+        ok, derr = partner_delete_own_visit(
+            visit_rows, request_id=str(vid or ''), partner_phone=me_phone
+        )
+        if ok:
+            try:
+                save_express_visit_requests(visit_rows)
+            except Exception:
+                current_app.logger.exception('requests_remove delete save failed id=%s', vid)
+                return _requests_action_json(False, error='ذخیره نشد.')
+            return _requests_action_json(True, message='از لیست حذف شد.', action='deleted')
+        err = derr or err
+
+    msg = {
+        'not_cancellable': 'این درخواست قابل حذف نیست.',
+        'not_deletable': 'این درخواست قابل حذف نیست.',
+        'forbidden': 'دسترسی ندارید.',
+        'not_found': 'درخواست پیدا نشد.',
+        'invalid': 'درخواست نامعتبر است.',
+    }.get(err or '', 'حذف انجام نشد.')
+    return _requests_action_json(False, error=msg)
+
+
+@express_partner_bp.post('/requests/<vid>/revisit', endpoint='requests_revisit')
+@require_partner_access()
+def requests_revisit(vid: str):
+    """ثبت بازدید مجدد با زمان‌بندی خودکار روی همان فایل."""
+    me_phone = (session.get('user_phone') or '').strip()
+    partners = load_express_partners() or []
+    partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
+    try:
+        is_pa = _is_partner_approved(partner_profile)
+    except Exception:
+        is_pa = False
+    if not is_pa:
+        return _requests_action_json(False, error='حساب همکاری تأیید نشده است.')
+
+    from .visit_requests import (
+        COMPLETED_STATUS,
+        CANCELLED_STATUS,
+        NO_SHOW_STATUS,
+        create_visit_request as record_visit_request,
+        next_auto_visit_date,
+        partner_can_request_new_visit,
+    )
+
+    visit_rows = load_express_visit_requests() or []
+    if not isinstance(visit_rows, list):
+        visit_rows = []
+
+    prev = None
+    rid = str(vid or '').strip()
+    for r in visit_rows:
+        if isinstance(r, dict) and str(r.get('id') or '').strip() == rid:
+            prev = r
+            break
+    if not prev or str(prev.get('partner_phone') or '').strip() != me_phone:
+        return _requests_action_json(False, error='درخواست پیدا نشد.')
+
+    st = str(prev.get('status') or '').strip()
+    if st not in (COMPLETED_STATUS, CANCELLED_STATUS, NO_SHOW_STATUS):
+        return _requests_action_json(False, error='برای این مورد بازدید مجدد ممکن نیست.')
+
+    land_code = str(prev.get('land_code') or '').strip()
+    if not land_code:
+        return _requests_action_json(False, error='فایل مرتبط پیدا نشد.')
+
+    lands, _ = _build_partner_dashboard_lands(me_phone, True)
+    land = next((L for L in (lands or []) if str(L.get('code') or '') == land_code), None)
+    if land is None:
+        return _requests_action_json(False, error='فایل در دسترس نیست.')
+    gs = str(land.get('_assignment_status') or '').strip().lower()
+    if not partner_can_request_new_visit(gs, visit_rows, me_phone, land_code):
+        return _requests_action_json(False, error='الان امکان بازدید مجدد نیست.')
+
+    next_slot = next_auto_visit_date()
+    if not next_slot or not next_slot.get('iso'):
+        return _requests_action_json(False, error='روز مجاز بازدید پیدا نشد.')
+
+    land_title = str(land.get('title') or prev.get('land_title') or land_code)
+    partner_name = (partner_profile.get('name') if partner_profile else None) or me_phone
+    rec, err = record_visit_request(
+        visit_rows,
+        partner_phone=me_phone,
+        partner_name=partner_name,
+        land_code=land_code,
+        land_title=land_title,
+        visit_date=str(next_slot.get('iso') or ''),
+        customer_first_name=str(prev.get('customer_first_name') or ''),
+        customer_last_name=str(prev.get('customer_last_name') or ''),
+        customer_phone=str(prev.get('customer_phone') or ''),
+        notes=str(prev.get('notes') or ''),
+        require_customer=False,
+    )
+    if err == 'already_pending':
+        return _requests_action_json(False, error='برای این فایل بازدید باز دارید.')
+    if err or not rec:
+        return _requests_action_json(False, error='ثبت بازدید مجدد ممکن نشد.')
+
+    try:
+        save_express_visit_requests(visit_rows)
+    except Exception:
+        current_app.logger.exception('requests_revisit save failed id=%s', vid)
+        return _requests_action_json(False, error='ذخیره نشد.')
+
+    try:
+        _send_visit_schedule_admin_sms(
+            partner_phone=me_phone,
+            partner_name=partner_name,
+            notes=str(prev.get('notes') or ''),
+        )
+    except Exception:
+        pass
+    try:
+        _send_visit_schedule_partner_sms(
+            partner_phone=me_phone,
+            weekday=str(next_slot.get('weekday') or ''),
+            jalali_date=str(next_slot.get('jalali_fa') or next_slot.get('jalali') or ''),
+            visit_time=str(next_slot.get('time') or '').strip(),
+        )
+    except Exception:
+        pass
+
+    label = f"{next_slot.get('weekday') or ''} {next_slot.get('jalali_fa') or ''}".strip()
+    return _requests_action_json(
+        True,
+        message=f'بازدید مجدد ثبت شد{(" — " + label) if label else ""}.',
+        visit_id=rec.get('id'),
+        redirect_url=url_for('express_partner.requests'),
+    )
+
+
 @express_partner_bp.post('/home/register-customer', endpoint='home_register_customer')
 @require_partner_access()
 def home_register_customer():
-    """ثبت مشتری از مدال خانه + زمان‌بندی خودکار بازدید روی اولین روز مجاز."""
+    """درخواست تعیین وقت بازدید از مدال خانه (توضیحات اختیاری + زمان‌بندی خودکار)."""
     me_phone = (session.get('user_phone') or '').strip()
     payload = {}
     if request.is_json:
@@ -4382,19 +4736,16 @@ def home_register_customer():
     if not payload:
         payload = request.form.to_dict(flat=True) or {}
 
-    first = str(payload.get('customer_first_name') or '').strip()
-    last = str(payload.get('customer_last_name') or '').strip()
-    phone_raw = str(payload.get('customer_phone') or '').strip()
+    notes = str(
+        payload.get('notes')
+        or payload.get('description')
+        or payload.get('توضیحات')
+        or ''
+    ).strip()
     land_code = str(payload.get('land_code') or '').strip()
-    customer_phone = normalize_iran_mobile(phone_raw) or phone_raw
 
     def _fail(msg: str, code: int = 400):
         return jsonify({'ok': False, 'error': msg}), code
-
-    if not first or not last or not phone_raw:
-        return _fail('نام، نام خانوادگی و شماره تماس مشتری الزامی است.')
-    if not is_valid_iran_mobile(customer_phone):
-        return _fail('شماره تماس مشتری معتبر نیست.')
 
     partners = load_express_partners() or []
     partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
@@ -4403,7 +4754,7 @@ def home_register_customer():
     except Exception:
         is_pa = False
     if not is_pa:
-        return _fail('برای ثبت مشتری باید حساب همکاری شما تأیید شده باشد.', 403)
+        return _fail('برای ثبت درخواست باید حساب همکاری شما تأیید شده باشد.', 403)
 
     from .visit_requests import next_auto_visit_date
 
@@ -4448,33 +4799,6 @@ def home_register_customer():
     land_title = str(land.get('title') or land_code)
     partner_name = (partner_profile.get('name') if partner_profile else None) or me_phone
 
-    # CRM: ذخیره مشتری
-    try:
-        from app.crm.service import create_lead, upsert_contact
-
-        display_name = f'{first} {last}'.strip()
-        lead = create_lead(
-            partner_phone=me_phone,
-            customer_phone=customer_phone,
-            first_name=first,
-            last_name=last,
-            display_name=display_name,
-            metadata={'source': 'home_modal'},
-        )
-        upsert_contact(
-            partner_phone=me_phone,
-            customer_phone=customer_phone,
-            first_name=first,
-            last_name=last,
-            display_name=display_name,
-            source='home_modal',
-            lead_id=(lead.id if lead else ''),
-        )
-    except Exception:
-        current_app.logger.exception(
-            'home_register_customer CRM failed phone=%s', me_phone
-        )
-
     rec, err = record_visit_request(
         visit_requests,
         partner_phone=me_phone,
@@ -4482,9 +4806,8 @@ def home_register_customer():
         land_code=land_code,
         land_title=land_title,
         visit_date=visit_date,
-        customer_first_name=first,
-        customer_last_name=last,
-        customer_phone=customer_phone,
+        notes=notes,
+        require_customer=False,
     )
     if err == 'already_pending':
         return jsonify({
@@ -4496,53 +4819,31 @@ def home_register_customer():
     if err == 'weekday_not_allowed':
         return _fail('تاریخ خودکار در روزهای مجاز نیست.')
     if err or not rec:
-        return _fail('ثبت بازدید ممکن نشد.')
+        return _fail('ثبت درخواست بازدید ممکن نشد.')
 
     save_express_visit_requests(visit_requests)
-    _sync_visit_customer_to_club(
-        customer_phone=customer_phone,
-        customer_first_name=first,
-        customer_last_name=last,
-    )
-    try:
-        from app.crm.visit_sync import sync_contact_from_visit
 
-        sync_contact_from_visit(rec)
-    except Exception:
-        pass
-
-    sms_admin = _send_visit_admin_sms(
+    sms_admin = _send_visit_schedule_admin_sms(
         partner_phone=me_phone,
         partner_name=partner_name,
-        land_code=land_code,
-        land_title=land_title,
-        visit_date=str(rec.get('visit_date') or visit_date),
+        notes=notes,
     )
-    try:
-        from .visit_sms import notify_partner_land_tx_sms
-
-        notify_partner_land_tx_sms(
-            partner_phone=me_phone,
-            event='visit_submitted',
-            land_code=land_code,
-            land_title=land_title,
-            visit_date=str(rec.get('visit_date') or visit_date),
-            reference_id=str(rec.get('id') or ''),
-        )
-    except Exception:
-        current_app.logger.exception(
-            'home_register_customer partner SMS failed phone=%s code=%s',
-            me_phone,
-            land_code,
-        )
+    sms_partner = _send_visit_schedule_partner_sms(
+        partner_phone=me_phone,
+        weekday=str(next_slot.get('weekday') or ''),
+        jalali_date=str(next_slot.get('jalali_fa') or next_slot.get('jalali') or ''),
+        visit_time=str(next_slot.get('time') or next_slot.get('visit_time') or '').strip(),
+    )
 
     msg = (
-        f"مشتری ثبت شد و بازدید برای "
+        f"درخواست تعیین وقت بازدید برای "
         f"{next_slot.get('weekday') or ''} {next_slot.get('jalali_fa') or visit_date} "
-        f"زمان‌بندی شد."
+        f"ثبت شد."
     ).strip()
     if not sms_admin.get('ok') and not sms_admin.get('skipped'):
-        msg += ' (پیامک ادمین ناموفق بود)'
+        msg += ' (پیامک پشتیبان ناموفق بود)'
+    if not sms_partner.get('ok') and not sms_partner.get('skipped'):
+        msg += ' (پیامک شما ناموفق بود)'
 
     return jsonify({
         'ok': True,

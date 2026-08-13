@@ -222,24 +222,113 @@ def partner_visits_for_phone(
 def partner_request_feed_item(
     row: Dict[str, Any],
     commissions: List[Dict[str, Any]] | None = None,
+    *,
+    can_revisit: bool = False,
+    support_phone: str = "",
 ) -> Dict[str, Any]:
-    """کارت نمایشی صفحهٔ درخواست‌ها برای همکار."""
-    base = admin_row_dict(row, commissions)
-    summary = base.get("progress_summary") or {}
-    return {
-        **base,
-        "kind": "visit",
-        "title": str(base.get("land_title") or base.get("land_code") or "فایل"),
-        "subtitle": (
-            (str(base.get("customer_name") or "").strip() or "مشتری")
-            + (
-                f" · {base.get('visit_date_jalali')}"
-                if base.get("visit_date_jalali")
-                else ""
-            )
-        ),
-        "stage_label": str(summary.get("current_label") or base.get("status_label") or "در جریان"),
+    """کارت سادهٔ صفحهٔ درخواست‌ها برای همکار."""
+    del commissions  # پورسانت در کارت ساده لازم نیست
+    st = (str(row.get("status") or PENDING_STATUS)).strip()
+    labels = {
+        PENDING_STATUS: "در جریان",
+        APPROVED_STATUS: "زمان‌بندی شده",
+        DONE_PENDING_STATUS: "منتظر تأیید",
+        COMPLETED_STATUS: "انجام شد",
+        CANCELLED_STATUS: "لغو شده",
+        NO_SHOW_STATUS: "عدم حضور",
     }
+    first = str(row.get("customer_first_name") or "").strip()
+    last = str(row.get("customer_last_name") or "").strip()
+    cust_name = str(row.get("customer_name") or "").strip() or f"{first} {last}".strip()
+    visit_date = str(row.get("visit_date") or "").strip()
+    jalali = format_display_jalali_date(visit_date) or format_iso_date_jalali(visit_date) or ""
+    weekday = ""
+    try:
+        d = parse_gregorian_iso_date(visit_date)
+        if d is not None:
+            weekday = visit_weekday_label_for_date(d)
+    except Exception:
+        weekday = ""
+    visit_time = str(row.get("visit_time") or row.get("time") or "").strip()
+    when_parts = [p for p in (weekday, jalali) if p]
+    visit_when = " ".join(when_parts)
+    if visit_time:
+        visit_when = f"{visit_when} — ساعت {visit_time}".strip(" —")
+    notes = str(row.get("notes") or "").strip()
+    land_code = str(row.get("land_code") or "").strip()
+    land_title = str(row.get("land_title") or land_code or "فایل").strip()
+    support = (support_phone or "").strip()
+    can_cancel = st in (PENDING_STATUS, APPROVED_STATUS)
+    can_delete = st in (CANCELLED_STATUS, NO_SHOW_STATUS)
+    return {
+        "id": str(row.get("id") or "").strip(),
+        "kind": "visit",
+        "land_code": land_code,
+        "land_title": land_title,
+        "title": land_title or land_code or "فایل",
+        "customer_name": cust_name,
+        "visit_date": visit_date,
+        "visit_date_jalali": jalali,
+        "visit_weekday": weekday,
+        "visit_time": visit_time,
+        "visit_when": visit_when,
+        "notes": notes,
+        "support_phone": support,
+        "status": st,
+        "status_label": labels.get(st, st or "در جریان"),
+        "can_cancel": can_cancel,
+        "can_delete": can_delete,
+        "can_revisit": bool(can_revisit),
+        "can_remove": can_cancel or can_delete,
+    }
+
+
+def partner_cancel_own_visit(
+    requests: List[Dict[str, Any]],
+    *,
+    request_id: str,
+    partner_phone: str,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """لغو درخواست بازدید باز توسط خود همکار."""
+    ph = (partner_phone or "").strip()
+    rid = (request_id or "").strip()
+    if not ph or not rid:
+        return None, "invalid"
+    rec = _find_visit_request(requests, rid)
+    if not rec:
+        return None, "not_found"
+    if str(rec.get("partner_phone") or "").strip() != ph:
+        return None, "forbidden"
+    st = (str(rec.get("status") or PENDING_STATUS)).strip()
+    if st not in (PENDING_STATUS, APPROVED_STATUS):
+        return None, "not_cancellable"
+    return admin_update_visit_request_status(requests, rid, CANCELLED_STATUS)
+
+
+def partner_delete_own_visit(
+    requests: List[Dict[str, Any]],
+    *,
+    request_id: str,
+    partner_phone: str,
+) -> Tuple[bool, Optional[str]]:
+    """حذف قطعی درخواست لغو/عدم‌حضور از لیست همکار."""
+    ph = (partner_phone or "").strip()
+    rid = (request_id or "").strip()
+    if not ph or not rid:
+        return False, "invalid"
+    for i, r in enumerate(list(requests or [])):
+        if not isinstance(r, dict):
+            continue
+        if str(r.get("id") or "").strip() != rid:
+            continue
+        if str(r.get("partner_phone") or "").strip() != ph:
+            return False, "forbidden"
+        st = (str(r.get("status") or "")).strip()
+        if st not in (CANCELLED_STATUS, NO_SHOW_STATUS):
+            return False, "not_deletable"
+        requests.pop(i)
+        return True, None
+    return False, "not_found"
 
 
 _VISIT_DATE_ORDINALS: Dict[str, int] = {
@@ -680,16 +769,19 @@ def create_visit_request(
     customer_first_name: str = "",
     customer_last_name: str = "",
     customer_phone: str = "",
+    notes: str = "",
+    require_customer: bool = True,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     ph = (partner_phone or "").strip()
     code = (land_code or "").strip()
     first = (customer_first_name or "").strip()
     last = (customer_last_name or "").strip()
     cust_phone = (customer_phone or "").strip()
+    note = (notes or "").strip()
     vd = _parse_visit_date(visit_date)
     if not ph or not code:
         return None, "invalid"
-    if not first or not last or not cust_phone:
+    if require_customer and (not first or not last or not cust_phone):
         return None, "customer_required"
     if vd is None:
         return None, "invalid_date"
@@ -722,6 +814,8 @@ def create_visit_request(
         "updated_at": now_iso,
         "auto_approved": bool(auto),
     }
+    if note:
+        rec["notes"] = note
     if auto:
         rec["approved_at"] = now_iso
     requests.append(rec)
@@ -1192,6 +1286,7 @@ def admin_row_dict(
         "visit_done_requested_at": row.get("visit_done_requested_at") or "",
         "completed_at": row.get("completed_at") or "",
         "admin_note": row.get("admin_note") or "",
+        "notes": str(row.get("notes") or "").strip(),
         "progress_steps": progress_steps,
         "progress_summary": progress_summary,
         "filter_bucket": visit_filter_bucket(st),

@@ -52,6 +52,8 @@
             class="ai-home-empty__hero"
             {% if item.ui_action == 'open_customer_modal' %}
             data-open-customer-modal
+            {% elif item.ui_action == 'open_divar_ads_all' %}
+            data-open-divar-ads-all
             {% else %}
             data-ai-quick-prompt="{{ item.prompt|e }}"
             {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
@@ -93,8 +95,14 @@
     <button type="button"
             class="ai-home-empty__tile"
             role="listitem"
+            {% if item.ui_action == 'open_customer_modal' %}
+            data-open-customer-modal
+            {% elif item.ui_action == 'open_divar_ads_all' %}
+            data-open-divar-ads-all
+            {% else %}
             data-ai-quick-prompt="{{ item.prompt|e }}"
             {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
+            {% endif %}
             title="{{ item.label|e }}">
       <span class="ai-home-empty__tile-icon" aria-hidden="true">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
       <span class="ai-home-empty__tile-text">
@@ -130,8 +138,14 @@
       <button type="button"
               class="ai-home-empty__action"
               role="listitem"
+              {% if item.ui_action == 'open_customer_modal' %}
+              data-open-customer-modal
+              {% elif item.ui_action == 'open_divar_ads_all' %}
+              data-open-divar-ads-all
+              {% else %}
               data-ai-quick-prompt="{{ item.prompt|e }}"
               {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
+              {% endif %}
               title="{{ item.label|e }}">
         <span class="ai-home-empty__action-icon">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
         <span class="ai-home-empty__action-label">

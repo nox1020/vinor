@@ -14,7 +14,7 @@
     --rq-text: #ececec;
   }
   #partnerRequestsPage .rq-summary {
-    padding: 0.75rem 1rem;
+    padding: 0.7rem 1rem;
     border-bottom: 1px solid var(--rq-line);
     font-size: 0.75rem;
     color: var(--rq-muted);
@@ -25,21 +25,8 @@
     font-weight: 800;
   }
   #partnerRequestsPage .rq-card {
-    padding: 0.9rem 1rem;
+    padding: 0.85rem 1rem;
     border-bottom: 1px solid var(--rq-line);
-    text-decoration: none;
-    color: inherit;
-    display: block;
-    -webkit-tap-highlight-color: transparent;
-  }
-  #partnerRequestsPage .rq-card:active {
-    background: rgba(255, 255, 255, 0.03);
-  }
-  #partnerRequestsPage .rq-card__top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.65rem;
   }
   #partnerRequestsPage .rq-card__title {
     margin: 0;
@@ -48,17 +35,34 @@
     color: var(--rq-text);
     line-height: 1.35;
   }
-  #partnerRequestsPage .rq-card__sub {
-    margin: 0.3rem 0 0;
-    font-size: 0.75rem;
+  #partnerRequestsPage .rq-card__facts {
+    margin: 0.45rem 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+    text-align: right;
+  }
+  #partnerRequestsPage .rq-card__fact {
+    margin: 0;
+    font-size: 0.74rem;
     color: var(--rq-muted);
     line-height: 1.4;
+  }
+  #partnerRequestsPage .rq-card__fact strong {
+    color: #d4d4d8;
+    font-weight: 650;
+  }
+  #partnerRequestsPage .rq-card__fact a {
+    color: #93c5fd;
+    text-decoration: none;
+    direction: ltr;
+    unicode-bidi: isolate;
   }
   #partnerRequestsPage .rq-card__status {
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
-    padding: 0.15rem 0.45rem;
+    padding: 0.14rem 0.45rem;
     border-radius: 9999px;
     font-size: 0.62rem;
     font-weight: 700;
@@ -78,32 +82,73 @@
     background: rgba(161, 161, 170, 0.14);
     color: #a1a1aa;
   }
-  #partnerRequestsPage .rq-steps {
+  #partnerRequestsPage .rq-card__row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.65rem;
+  }
+  #partnerRequestsPage .rq-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.3rem;
-    margin-top: 0.65rem;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
   }
-  #partnerRequestsPage .rq-step {
+  #partnerRequestsPage .rq-btn {
     display: inline-flex;
     align-items: center;
-    padding: 0.12rem 0.4rem;
-    border-radius: 9999px;
-    font-size: 0.58rem;
-    font-weight: 600;
-    background: rgba(255, 255, 255, 0.05);
-    color: #71717a;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 2rem;
+    padding: 0 0.75rem;
+    border-radius: 0.65rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: #e4e4e7;
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
   }
-  #partnerRequestsPage .rq-step.is-done {
-    background: rgba(16, 185, 129, 0.14);
-    color: #34d399;
+  #partnerRequestsPage .rq-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
-  #partnerRequestsPage .rq-step.is-current {
-    background: rgba(37, 99, 235, 0.18);
+  #partnerRequestsPage .rq-btn--call {
+    border-color: rgba(96, 165, 250, 0.4);
+    background: rgba(59, 130, 246, 0.14);
     color: #93c5fd;
   }
-  #partnerRequestsPage .rq-step.is-rejected {
-    background: rgba(248, 113, 113, 0.14);
+  #partnerRequestsPage .rq-btn--revisit {
+    border-color: rgba(52, 211, 153, 0.35);
+    background: rgba(16, 185, 129, 0.12);
+    color: #6ee7b7;
+  }
+  #partnerRequestsPage .rq-btn--remove {
+    border-color: rgba(248, 113, 113, 0.28);
+    background: rgba(248, 113, 113, 0.08);
+    color: #fca5a5;
+  }
+  #partnerRequestsPage .rq-toast {
+    display: none;
+    margin: 0.65rem 1rem 0;
+    padding: 0.55rem 0.7rem;
+    border-radius: 0.65rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    text-align: right;
+  }
+  #partnerRequestsPage .rq-toast.is-on {
+    display: block;
+  }
+  #partnerRequestsPage .rq-toast.is-ok {
+    background: rgba(16, 185, 129, 0.12);
+    color: #6ee7b7;
+  }
+  #partnerRequestsPage .rq-toast.is-err {
+    background: rgba(248, 113, 113, 0.12);
     color: #fca5a5;
   }
   #partnerRequestsPage .rq-empty {
@@ -136,52 +181,149 @@
     font-weight: 700;
     text-decoration: none;
   }
+
+  #rqDeleteModal.rq-del-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    display: none;
+  }
+  #rqDeleteModal.rq-del-modal.is-open {
+    display: block;
+  }
+  #rqDeleteModal .rq-del-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+  }
+  #rqDeleteModal .rq-del-modal__panel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(22rem, calc(100vw - 2rem));
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #12161c;
+    padding: 1.1rem 1rem 1rem;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+    text-align: right;
+  }
+  #rqDeleteModal .rq-del-modal__title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #f4f4f5;
+  }
+  #rqDeleteModal .rq-del-modal__text {
+    margin: 0.45rem 0 0;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: #a1a1aa;
+  }
+  #rqDeleteModal .rq-del-modal__actions {
+    display: flex;
+    gap: 0.45rem;
+    margin-top: 1rem;
+  }
+  #rqDeleteModal .rq-del-modal__btn {
+    flex: 1;
+    min-height: 2.5rem;
+    border-radius: 0.75rem;
+    border: 0;
+    font-size: 0.82rem;
+    font-weight: 750;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  #rqDeleteModal .rq-del-modal__btn--ghost {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e4e4e7;
+  }
+  #rqDeleteModal .rq-del-modal__btn--danger {
+    background: #dc2626;
+    color: #fff;
+  }
+  #rqDeleteModal .rq-del-modal__btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  html.rq-del-modal-open {
+    overflow: hidden;
+  }
 </style>
 
+{% set _support = (support_phone or '')|trim %}
+
 <div id="partnerRequestsPage"
-     class="partner-page-scroll-pad min-h-[100dvh] bg-black pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
+     class="partner-page-scroll-pad min-h-[100dvh] bg-black pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16"
+     data-csrf="{{ csrf_token() if csrf_token else '' }}">
   <main class="mx-auto w-full max-w-lg">
     <p class="rq-summary">
       {% if open_count %}
-      <strong>{{ open_count|fa_digits }}</strong> مورد در جریان
+      <strong>{{ open_count|fa_digits }}</strong> در جریان
       {% else %}
-      فعلاً مورد بازی نیست
+      مورد بازی نیست
       {% endif %}
       · {{ items|length|fa_digits }} درخواست
     </p>
+    <p id="rqToast" class="rq-toast" role="status" aria-live="polite"></p>
 
     {% if items %}
-    <section aria-label="بازدیدها و روندها">
+    <section aria-label="درخواست‌ها">
       {% for item in items %}
       {% set st = item.status|default('') %}
-      {% set st_cls = 'is-pending' if st in ('pending', 'done_pending') else ('is-done' if st == 'completed' else ('is-closed' if st in ('cancelled', 'no_show') else '')) %}
-      <a class="rq-card"
-         href="{{ url_for('express_partner.home', land=item.land_code) if item.land_code else url_for('express_partner.home') }}"
-         data-vinor-express-nav>
-        <div class="rq-card__top">
+      {% set st_cls = 'is-pending' if st in ('pending', 'done_pending') else ('is-done' if st in ('completed', 'approved') else ('is-closed' if st in ('cancelled', 'no_show') else '')) %}
+      {% set phone = (item.support_phone or _support)|trim %}
+      <article class="rq-card"
+               data-request-id="{{ item.id }}"
+               data-remove-url="{{ url_for('express_partner.requests_remove', vid=item.id) }}"
+               data-revisit-url="{{ url_for('express_partner.requests_revisit', vid=item.id) }}"
+               data-title="{{ item.title }}">
+        <div class="rq-card__row">
           <div class="min-w-0 flex-1 text-right">
             <h2 class="rq-card__title">{{ item.title }}</h2>
-            <p class="rq-card__sub">{{ item.subtitle }}</p>
+            <div class="rq-card__facts">
+              {% if item.visit_when %}
+              <p class="rq-card__fact"><strong>زمان بازدید:</strong> {{ item.visit_when }}</p>
+              {% elif item.visit_date_jalali %}
+              <p class="rq-card__fact"><strong>زمان بازدید:</strong> {{ item.visit_date_jalali }}</p>
+              {% endif %}
+              {% if phone %}
+              <p class="rq-card__fact">
+                <strong>شماره پشتیبان:</strong>
+                <a href="tel:{{ phone }}" dir="ltr">{{ phone }}</a>
+              </p>
+              {% endif %}
+              {% if item.notes %}
+              <p class="rq-card__fact"><strong>توضیح:</strong> {{ item.notes[:80] }}{% if item.notes|length > 80 %}…{% endif %}</p>
+              {% endif %}
+            </div>
           </div>
-          <span class="rq-card__status {{ st_cls }}">{{ item.stage_label }}</span>
+          <span class="rq-card__status {{ st_cls }}">{{ item.status_label }}</span>
         </div>
-        {% if item.progress_steps %}
-        <div class="rq-steps" aria-hidden="true">
-          {% for step in item.progress_steps %}
-          <span class="rq-step{% if step.state == 'done' %} is-done{% elif step.state == 'current' %} is-current{% elif step.state == 'rejected' %} is-rejected{% endif %}">
-            {{ step.label }}
-          </span>
-          {% endfor %}
+        <div class="rq-actions">
+          {% if phone %}
+          <a class="rq-btn rq-btn--call" href="tel:{{ phone }}" aria-label="تماس با پشتیبانی">
+            <i class="fas fa-phone" aria-hidden="true"></i>
+            تماس
+          </a>
+          {% endif %}
+          {% if item.can_revisit %}
+          <button type="button" class="rq-btn rq-btn--revisit" data-rq-revisit>بازدید مجدد</button>
+          {% endif %}
+          {% if item.can_remove %}
+          <button type="button" class="rq-btn rq-btn--remove" data-rq-remove>حذف</button>
+          {% endif %}
         </div>
-        {% endif %}
-      </a>
+      </article>
       {% endfor %}
     </section>
     {% else %}
     <div class="rq-empty">
-      <p class="rq-empty__title">هنوز درخواستی ثبت نشده</p>
-      <p class="rq-empty__sub">با «ثبت مشتری جدید» در صفحه اصلی، بازدید و روند فروش اینجا دیده می‌شود.</p>
-      <a class="rq-empty__cta" href="{{ url_for('express_partner.home') }}" data-vinor-express-nav>برو به صفحه اصلی</a>
+      <p class="rq-empty__title">هنوز درخواستی نیست</p>
+      <p class="rq-empty__sub">از صفحه اصلی «ثبت مشتری جدید» را بزنید تا وقت بازدید اینجا بیاید.</p>
+      <a class="rq-empty__cta" href="{{ url_for('express_partner.home') }}" data-vinor-express-nav>صفحه اصلی</a>
     </div>
     {% endif %}
   </main>
@@ -189,4 +331,187 @@
   {% set bottom_nav_active = 'home' %}
   {% include 'express_partner/partials/partner_tab_footer.html' %}
 </div>
+
+<div id="rqDeleteModal"
+     class="rq-del-modal"
+     hidden
+     aria-hidden="true">
+  <div class="rq-del-modal__backdrop" data-rq-del-close aria-hidden="true"></div>
+  <div class="rq-del-modal__panel"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="rqDeleteModalTitle"
+       tabindex="-1">
+    <h2 id="rqDeleteModalTitle" class="rq-del-modal__title">حذف درخواست</h2>
+    <p class="rq-del-modal__text" id="rqDeleteModalText">این درخواست حذف شود؟ این کار قابل بازگشت نیست.</p>
+    <div class="rq-del-modal__actions">
+      <button type="button" class="rq-del-modal__btn rq-del-modal__btn--ghost" data-rq-del-close>انصراف</button>
+      <button type="button" class="rq-del-modal__btn rq-del-modal__btn--danger" id="rqDeleteConfirmBtn">بله، حذف کن</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var page = document.getElementById('partnerRequestsPage');
+  if (!page || page.__rqBound) return;
+  page.__rqBound = true;
+  var toast = document.getElementById('rqToast');
+  var delModal = document.getElementById('rqDeleteModal');
+  var delConfirm = document.getElementById('rqDeleteConfirmBtn');
+  var delText = document.getElementById('rqDeleteModalText');
+  var pendingRemove = null;
+
+  function csrf() {
+    try {
+      if (window.vinorReadCsrfToken) {
+        var t = window.vinorReadCsrfToken();
+        if (t) return String(t);
+      }
+    } catch (_) {}
+    return String(page.getAttribute('data-csrf') || '');
+  }
+
+  function showToast(msg, ok) {
+    if (!toast) return;
+    var t = String(msg || '').trim();
+    if (!t) {
+      toast.textContent = '';
+      toast.className = 'rq-toast';
+      return;
+    }
+    toast.textContent = t;
+    toast.className = 'rq-toast is-on ' + (ok ? 'is-ok' : 'is-err');
+  }
+
+  function openDeleteModal(card) {
+    if (!delModal || !card) return;
+    pendingRemove = {
+      card: card,
+      url: card.getAttribute('data-remove-url') || ''
+    };
+    var title = String(card.getAttribute('data-title') || '').trim();
+    if (delText) {
+      delText.textContent = title
+        ? ('«' + title + '» حذف شود؟ این کار قابل بازگشت نیست.')
+        : 'این درخواست حذف شود؟ این کار قابل بازگشت نیست.';
+    }
+    delModal.hidden = false;
+    delModal.classList.add('is-open');
+    delModal.setAttribute('aria-hidden', 'false');
+    try { document.documentElement.classList.add('rq-del-modal-open'); } catch (_) {}
+  }
+
+  function closeDeleteModal() {
+    pendingRemove = null;
+    if (!delModal) return;
+    delModal.classList.remove('is-open');
+    delModal.hidden = true;
+    delModal.setAttribute('aria-hidden', 'true');
+    try { document.documentElement.classList.remove('rq-del-modal-open'); } catch (_) {}
+    if (delConfirm) delConfirm.disabled = false;
+  }
+
+  function postAction(url, btn) {
+    if (!url) return Promise.reject(new Error('no_url'));
+    if (btn) btn.disabled = true;
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrf(),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: '{}'
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        return { okHttp: r.ok, data: data || {} };
+      }).catch(function () {
+        return { okHttp: r.ok, data: {} };
+      });
+    }).finally(function () {
+      if (btn) btn.disabled = false;
+    });
+  }
+
+  if (delModal) {
+    delModal.addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (!t || !t.closest) return;
+      if (t.closest('[data-rq-del-close]')) {
+        ev.preventDefault();
+        closeDeleteModal();
+      }
+    });
+  }
+  document.addEventListener('keydown', function (ev) {
+    if (!delModal || !delModal.classList.contains('is-open')) return;
+    if (ev.key === 'Escape' || ev.keyCode === 27) closeDeleteModal();
+  });
+  if (delConfirm) {
+    delConfirm.addEventListener('click', function () {
+      if (!pendingRemove || !pendingRemove.url) return;
+      var card = pendingRemove.card;
+      var url = pendingRemove.url;
+      delConfirm.disabled = true;
+      postAction(url, delConfirm).then(function (res) {
+        var data = res.data || {};
+        closeDeleteModal();
+        if (!res.okHttp || !data.ok) {
+          showToast(data.error || 'حذف انجام نشد.', false);
+          return;
+        }
+        if (card && card.parentNode) card.remove();
+        showToast(data.message || 'حذف شد.', true);
+        if (!page.querySelector('[data-request-id]')) {
+          window.location.reload();
+        }
+      }).catch(function () {
+        delConfirm.disabled = false;
+        showToast('ارتباط برقرار نشد.', false);
+      });
+    });
+  }
+
+  page.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    var card = t.closest('[data-request-id]');
+    if (!card) return;
+
+    if (t.closest('[data-rq-remove]')) {
+      ev.preventDefault();
+      openDeleteModal(card);
+      return;
+    }
+
+    if (t.closest('[data-rq-revisit]')) {
+      ev.preventDefault();
+      var revisitBtn = t.closest('[data-rq-revisit]');
+      postAction(card.getAttribute('data-revisit-url'), revisitBtn).then(function (res) {
+        var data = res.data || {};
+        if (!res.okHttp || !data.ok) {
+          showToast(data.error || 'بازدید مجدد ثبت نشد.', false);
+          return;
+        }
+        showToast(data.message || 'بازدید مجدد ثبت شد.', true);
+        var next = data.redirect_url || '';
+        setTimeout(function () {
+          if (next && typeof window.vinorExpressNavigate === 'function') {
+            window.vinorExpressNavigate(next, { forward: true });
+          } else if (next) {
+            window.location.href = next;
+          } else {
+            window.location.reload();
+          }
+        }, 450);
+      }).catch(function () {
+        showToast('ارتباط برقرار نشد.', false);
+      });
+    }
+  });
+})();
+</script>
 {% endblock %}

@@ -42,7 +42,7 @@
     window.__vinorFavGlobalBound = true;
     document.addEventListener('click', function (ev) {
       var btn = ev.target.closest && ev.target.closest('[data-fav-code]');
-      if (!btn || (!btn.closest('.vinor-premium-card') && !btn.closest('[data-land-detail-fav]') && !btn.closest('[data-favorites-card]'))) return;
+      if (!btn || (!btn.closest('.vinor-premium-card') && !btn.closest('[data-land-detail-fav]') && !btn.closest('[data-favorites-card]') && !btn.closest('.vn-lcd'))) return;
       ev.preventDefault();
       ev.stopPropagation();
       var code = String(btn.getAttribute('data-fav-code') || '');

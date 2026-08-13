@@ -388,6 +388,30 @@
     font: inherit;
     text-align: right;
   }
+  #epProfileDrawer .ep-profile-drawer__nav-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  #epProfileDrawer .ep-profile-drawer__nav-group + .ep-profile-drawer__nav-group {
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--ep-drawer-sep);
+  }
+  #epProfileDrawer .ep-profile-drawer__nav-label {
+    margin: 0;
+    padding: 0.35rem 0.85rem 0.2rem;
+    font-size: 0.68rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    color: var(--ep-drawer-muted);
+    text-align: right;
+  }
+  #epProfileDrawer .ep-profile-drawer__nav-group--account {
+    margin-top: 0.45rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--ep-drawer-sep);
+  }
 
   .ep-profile-drawer__foot {
     flex-shrink: 0;
@@ -856,7 +880,6 @@
     </div>
     {% endif %}
     {% endif %}
-  </div>
 
   {% if plus_system_enabled|default(false) %}
   {% set plus_cta_mode = 'list' %}
@@ -868,47 +891,139 @@
   {% set _drawer_name = (me_name or partner_name or 'همکار وینور')|trim %}
   {% set _drawer_avatar = (profile.get('avatar') or '')|trim if profile else '' %}
   {% set _drawer_avatar_url = (_drawer_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _drawer_avatar and profile else '' %}
-  <nav class="ep-profile-drawer__section ep-profile-drawer__nav" aria-label="حساب">
-    {% if is_approved|default(false) %}
-    {{ profile_menu_row(
-      url_for('express_partner.requests'),
-      'fa-clipboard-list',
-      'درخواست‌ها',
-      subtitle='بازدیدها و روند فروش',
-      tour='profile-section',
-      row_id='epDrawerRequestsBtn'
-    ) }}
-    <a href="{{ url_for('express_partner.commissions') }}"
-       id="epDrawerWalletBtn"
-       data-tour="profile-section"
-       data-vinor-express-nav
-       class="profile-menu-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors"
-       aria-label="کیف پول — {{ _drawer_wallet|toman }}">
-      <div class="relative flex h-11 w-11 shrink-0 items-center justify-center">
-        <i class="fas fa-wallet text-base" aria-hidden="true"></i>
-      </div>
-      <div class="min-w-0 flex-1">
-        <div class="text-[15px] font-medium leading-tight text-white">کیف پول</div>
-      </div>
-      <span class="ep-profile-drawer__wallet-bal" data-wallet-balance>{{ _drawer_wallet|toman }}</span>
-      <i class="fas fa-chevron-left shrink-0" aria-hidden="true"></i>
-    </a>
-    {% endif %}
-    <button type="button"
-            id="epDrawerLogoutBtn"
-            class="profile-menu-row profile-menu-row--danger flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors"
-            data-vinor-logout
-            data-tour="profile-section"
-            aria-label="خروج">
-      <div class="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 sm:h-12 sm:w-12">
-        <i class="fas fa-right-from-bracket text-base" aria-hidden="true"></i>
-      </div>
-      <div class="min-w-0 flex-1">
-        <div class="text-[15px] font-medium leading-tight text-white">خروج</div>
-      </div>
-    </button>
-  </nav>
+  <nav class="ep-profile-drawer__section ep-profile-drawer__nav" aria-label="منو">
 
+    {% if is_approved|default(false) %}
+    <div class="ep-profile-drawer__nav-group" aria-label="فروش">
+      <p class="ep-profile-drawer__nav-label">فروش</p>
+      {{ profile_menu_row(
+        url_for('express_partner.requests'),
+        'fa-clipboard-list',
+        'درخواست‌ها',
+        subtitle='بازدیدها و روند فروش',
+        tour='profile-section',
+        row_id='epDrawerRequestsBtn'
+      ) }}
+      <a href="{{ url_for('express_partner.commissions') }}"
+         id="epDrawerWalletBtn"
+         data-tour="profile-section"
+         data-vinor-express-nav
+         class="profile-menu-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors"
+         aria-label="کیف پول — {{ _drawer_wallet|toman }}">
+        <div class="relative flex h-11 w-11 shrink-0 items-center justify-center">
+          <i class="fas fa-wallet text-base" aria-hidden="true"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[15px] font-medium leading-tight text-white">کیف پول</div>
+        </div>
+        <span class="ep-profile-drawer__wallet-bal" data-wallet-balance>{{ _drawer_wallet|toman }}</span>
+        <i class="fas fa-chevron-left shrink-0" aria-hidden="true"></i>
+      </a>
+      {{ profile_menu_row(
+        url_for('express_partner.favorites'),
+        'fa-bookmark',
+        'نشان‌ها',
+        tour='favorites-link',
+        row_id='epDrawerFavoritesBtn',
+        badge_key='favorites'
+      ) }}
+    </div>
+
+    <div class="ep-profile-drawer__nav-group" aria-label="رشد">
+      <p class="ep-profile-drawer__nav-label">رشد</p>
+      {{ profile_menu_row(
+        url_for('express_partner.invite_colleagues'),
+        'fa-user-plus',
+        'دعوت همکار',
+        tour='invite-colleagues-link',
+        row_id='epDrawerInviteBtn'
+      ) }}
+    </div>
+
+    {% if is_special|default(false) %}
+    <div class="ep-profile-drawer__nav-group" aria-label="آگهی ویژه">
+      <p class="ep-profile-drawer__nav-label">پلاس</p>
+      {{ profile_menu_row(
+        url_for('express_partner.special_listings'),
+        'fa-building',
+        'آگهی‌های من',
+        tour='special-listings-link',
+        row_id='epDrawerListingsBtn'
+      ) }}
+      {{ profile_menu_row(
+        url_for('express_partner.special_visit_inbox'),
+        'fa-calendar-check',
+        'صندوق بازدید',
+        tour='special-visit-inbox-link',
+        row_id='epDrawerVisitInboxBtn'
+      ) }}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="ep-profile-drawer__nav-group" aria-label="شروع همکاری">
+      <p class="ep-profile-drawer__nav-label">شروع</p>
+      {% if not has_pending_app|default(false) %}
+      {{ profile_menu_row(
+        url_for('express_partner.apply'),
+        'fa-user-plus',
+        'درخواست همکاری',
+        tour='apply-link',
+        row_id='epDrawerApplyBtn'
+      ) }}
+      {% else %}
+      {{ profile_menu_row(
+        url_for('express_partner.thanks'),
+        'fa-clock',
+        'وضعیت درخواست',
+        tour='apply-pending-link',
+        row_id='epDrawerApplyPendingBtn'
+      ) }}
+      {% endif %}
+      {{ profile_menu_row(
+        url_for('express_partner.invite_colleagues'),
+        'fa-share-nodes',
+        'دعوت دوستان',
+        tour='invite-friends-link',
+        row_id='epDrawerInviteBtn'
+      ) }}
+    </div>
+    {% endif %}
+
+    {% if is_vinor_apk|default(false) and show_app_update_card|default(false) and android_apk_url %}
+    <div class="ep-profile-drawer__nav-group" aria-label="اپ">
+      {{ profile_menu_row(
+        android_apk_url,
+        'fa-download',
+        'بروزرسانی اپ',
+        nav=false,
+        download=true,
+        extra_class='text-amber-200',
+        row_id='epDrawerApkUpdateBtn'
+      ) }}
+    </div>
+    {% endif %}
+
+    <div class="ep-profile-drawer__nav-group ep-profile-drawer__nav-group--account" aria-label="حساب">
+      <button type="button"
+              id="epDrawerLogoutBtn"
+              class="profile-menu-row profile-menu-row--danger flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors"
+              data-vinor-logout
+              data-tour="profile-section"
+              aria-label="خروج">
+        <div class="relative flex h-11 w-11 shrink-0 items-center justify-center">
+          <i class="fas fa-right-from-bracket text-base" aria-hidden="true"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[15px] font-medium leading-tight text-white">خروج</div>
+        </div>
+      </button>
+    </div>
+  </nav>
+  {% endif %}
+  </div>
+
+  {% if me_phone %}
   <div class="ep-profile-drawer__foot">
     <a href="{{ url_for('express_partner.profile_edit') }}"
        data-vinor-express-nav
