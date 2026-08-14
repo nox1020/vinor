@@ -952,7 +952,7 @@ def build_home_ai_quick_prompts(
     has_pending_app: bool = False,
     has_completed_deal: bool = False,
 ) -> List[Dict[str, str]]:
-    """پیشنهادهای سریع حالت خالی خانه — تا ۴ چیپ چت (بدون مدال جدا)."""
+    """پیشنهادهای سریع حالت خالی خانه — اکشن‌های پنل؛ چت AI فقط از منو → وینور."""
     if not is_approved:
         return build_limited_ai_quick_prompts(
             me_phone=me_phone,
@@ -964,36 +964,55 @@ def build_home_ai_quick_prompts(
     def add(
         label: str,
         *,
-        prompt: str,
-        intent: str,
+        prompt: str = "",
+        intent: str = "",
         icon: str,
         subtitle: str = "",
         variant: str = "tile",
+        ui_action: str = "",
+        href: str = "",
     ) -> None:
         label = (label or "").strip()
         prompt = (prompt or "").strip()
         intent = (intent or "").strip()
-        if not (label and prompt and intent):
+        ui_action = (ui_action or "").strip()
+        href = (href or "").strip()
+        if not label:
+            return
+        if not href and not ui_action and not (prompt and intent):
             return
         item: Dict[str, str] = {
             "label": label,
-            "prompt": prompt,
-            "intent": intent,
+            "prompt": prompt or label,
+            "intent": intent or "next_action",
             "icon": icon,
             "variant": (variant or "tile").strip() or "tile",
         }
         if (subtitle or "").strip():
             item["subtitle"] = subtitle.strip()
+        if ui_action:
+            item["ui_action"] = ui_action
+        if href:
+            item["href"] = href
         out.append(item)
 
-    # کارت اصلی: شروع قیف مشتری در همین چت (نه مدال جدا)
+    requests_url = "/express/partner/requests"
+    try:
+        from flask import has_request_context, url_for
+
+        if has_request_context():
+            requests_url = url_for("express_partner.requests")
+    except Exception:
+        pass
+
     add(
         "مشتری دارم",
         prompt="مشتری دارم",
         intent="have_customer",
         icon="user_plus",
-        subtitle="نام و موبایل را می‌گیریم؛ ثبت فقط با تأیید شما",
+        subtitle="برای مشتری وقت بازدید بگیرید",
         variant="hero",
+        ui_action="open_customer_modal",
     )
     add(
         "دنبال ملک",
@@ -1003,27 +1022,21 @@ def build_home_ai_quick_prompts(
         subtitle=(
             "فایل مناسب برای مشتری"
             if has_completed_deal
-            else "جستجوی فایل داخل سیستم"
+            else "جستجوی فایل و ملک"
         ),
         variant="tile",
+        ui_action="open_divar_ads_all",
     )
     add(
         "پیگیری مشتری",
-        prompt="می‌خوام مشتری را پیگیری کنم",
+        prompt="پیگیری مشتری",
         intent="followup",
         icon="clipboard",
-        subtitle="تماس و یادآوری بعدی",
+        subtitle="بازدیدها و روند فروش",
         variant="tile",
+        href=requests_url,
     )
-    add(
-        "وضعیت معامله",
-        prompt="وضعیت معامله و قدم بعدی‌م چیه؟",
-        intent="next_action",
-        icon="bolt",
-        subtitle="یک کار بعدی مشخص",
-        variant="tile",
-    )
-    return out[:4]
+    return out[:3]
 
 
 def build_ai_quick_prompts(

@@ -111,6 +111,9 @@
     gap: 0.28rem;
     text-align: right;
   }
+  #vnCustomerModal .vn-cust-field[hidden] {
+    display: none !important;
+  }
   #vnCustomerModal .vn-cust-field__label {
     font-size: 0.7rem;
     font-weight: 600;
@@ -120,9 +123,9 @@
     font-weight: 500;
     color: #71717a;
   }
+  #vnCustomerModal .vn-cust-field__select,
   #vnCustomerModal .vn-cust-field__textarea {
     width: 100%;
-    min-height: 7.5rem;
     padding: 0.7rem 0.85rem;
     border-radius: 0.75rem;
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -131,14 +134,34 @@
     font-size: 0.9rem;
     font-family: inherit;
     line-height: 1.55;
+  }
+  #vnCustomerModal .vn-cust-field__select {
+    min-height: 2.75rem;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23a1a1aa' d='M1.4.6L6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: left 0.85rem center;
+    padding-left: 2rem;
+  }
+  #vnCustomerModal .vn-cust-field__textarea {
+    min-height: 6.5rem;
     resize: vertical;
   }
+  #vnCustomerModal .vn-cust-field__select:focus,
   #vnCustomerModal .vn-cust-field__textarea:focus {
     outline: none;
     border-color: rgba(52, 211, 153, 0.55);
   }
   #vnCustomerModal .vn-cust-field__textarea::placeholder {
     color: #71717a;
+  }
+  #vnCustomerModal .vn-cust-field__hint {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1.45;
+    color: #86efac;
+    text-align: right;
   }
   #vnCustomerModal .vn-cust-modal__error {
     display: none;
@@ -186,13 +209,17 @@
   }
 </style>
 
+{% set _nv = next_auto_visit if next_auto_visit is mapping else none %}
 <div id="vnCustomerModal"
      class="vn-cust-modal"
      hidden
      aria-hidden="true"
      data-tg-body-modal
      data-register-url="{{ url_for('express_partner.home_register_customer') }}"
-     data-requests-url="{{ url_for('express_partner.requests') }}">
+     data-requests-url="{{ url_for('express_partner.requests') }}"
+     data-lands='{{ customer_modal_lands|default([])|tojson }}'
+     data-plus-users='{{ customer_modal_plus_users|default([])|tojson }}'
+     data-next-visit="{% if _nv %}{{ ((_nv.weekday|default('')) ~ ' ' ~ (_nv.jalali_fa|default(_nv.jalali|default(''))) ~ ((' ساعت ' ~ _nv.time) if _nv.time else ''))|trim }}{% endif %}">
   <div class="vn-cust-modal__backdrop" data-cust-modal-close aria-hidden="true"></div>
   <div class="vn-cust-modal__shell">
     <div class="vn-cust-modal__panel"
@@ -208,6 +235,19 @@
         <h2 id="vnCustomerModalTitle" class="vn-cust-modal__title">ثبت مشتری جدید</h2>
       </header>
       <form id="vnCustomerModalForm" class="vn-cust-modal__body" novalidate>
+        <label class="vn-cust-field" id="vnCustomerLandField" hidden>
+          <span class="vn-cust-field__label">فایل برای بازدید <span class="vn-cust-field__label-hint">(اختیاری)</span></span>
+          <select class="vn-cust-field__select" name="land_code" id="vnCustomerLandSelect">
+            <option value="">بدون انتخاب فایل</option>
+          </select>
+        </label>
+        <label class="vn-cust-field" id="vnCustomerPlusField">
+          <span class="vn-cust-field__label">کاربر پلاس <span class="vn-cust-field__label-hint">(اختیاری)</span></span>
+          <select class="vn-cust-field__select" name="plus_user_phone" id="vnCustomerPlusSelect">
+            <option value="">بدون انتخاب کاربر پلاس</option>
+          </select>
+        </label>
+        <p id="vnCustomerVisitHint" class="vn-cust-field__hint" hidden></p>
         <label class="vn-cust-field">
           <span class="vn-cust-field__label">توضیحات <span class="vn-cust-field__label-hint">(اختیاری)</span></span>
           <textarea class="vn-cust-field__textarea"
@@ -237,6 +277,94 @@
   var form = document.getElementById('vnCustomerModalForm');
   var errEl = document.getElementById('vnCustomerModalError');
   var submitBtn = document.getElementById('vnCustomerModalSubmit');
+  var landField = document.getElementById('vnCustomerLandField');
+  var landSelect = document.getElementById('vnCustomerLandSelect');
+  var plusField = document.getElementById('vnCustomerPlusField');
+  var plusSelect = document.getElementById('vnCustomerPlusSelect');
+  var visitHint = document.getElementById('vnCustomerVisitHint');
+
+  function modalLands() {
+    try {
+      var raw = modal.getAttribute('data-lands') || '[]';
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function modalPlusUsers() {
+    try {
+      var raw = modal.getAttribute('data-plus-users') || '[]';
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function fillLandSelect(selectedCode) {
+    if (!landSelect) return;
+    var lands = modalLands();
+    landSelect.innerHTML = '';
+    var ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = 'بدون انتخاب فایل';
+    landSelect.appendChild(ph);
+    lands.forEach(function (item) {
+      if (!item) return;
+      var opt = document.createElement('option');
+      opt.value = String(item.code || '').trim();
+      var title = String(item.title || item.code || '').trim();
+      var city = String(item.city || '').trim();
+      opt.textContent = city ? (title + ' — ' + city) : title;
+      landSelect.appendChild(opt);
+    });
+    var code = String(selectedCode || '').trim();
+    landSelect.value = code && lands.some(function (item) {
+      return String((item && item.code) || '').trim() === code;
+    }) ? code : '';
+  }
+
+  function fillPlusSelect(selectedPhone) {
+    if (!plusSelect) return;
+    var users = modalPlusUsers();
+    plusSelect.innerHTML = '';
+    var ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = users.length ? 'بدون انتخاب کاربر پلاس' : 'کاربر پلاسی در لیست نیست';
+    plusSelect.appendChild(ph);
+    users.forEach(function (item) {
+      if (!item) return;
+      var opt = document.createElement('option');
+      opt.value = String(item.phone || '').trim();
+      var name = String(item.name || item.phone || '').trim();
+      var phone = String(item.phone || '').trim();
+      opt.textContent = (name && phone && name !== phone) ? (name + ' — ' + phone) : (name || phone);
+      plusSelect.appendChild(opt);
+    });
+    var phone = String(selectedPhone || '').trim();
+    plusSelect.value = phone || '';
+  }
+
+  function syncLandUi(landCode) {
+    fillLandSelect(landCode);
+    fillPlusSelect('');
+    if (landField) landField.hidden = !!landCode;
+    if (plusField) plusField.hidden = false;
+    if (visitHint) {
+      var label = String(modal.getAttribute('data-next-visit') || '').trim();
+      if (label) {
+        visitHint.hidden = false;
+        visitHint.textContent = 'اولین وقت مجاز: ' + label;
+      } else {
+        visitHint.hidden = true;
+        visitHint.textContent = '';
+      }
+    }
+    if (submitBtn) submitBtn.disabled = false;
+    setError('');
+  }
 
   function csrfToken() {
     try {
@@ -283,6 +411,8 @@
         titleEl.textContent = landCode ? 'درخواست تعیین وقت بازدید' : 'ثبت مشتری جدید';
       }
     } catch (_) {}
+    setError('');
+    syncLandUi(landCode);
     modal.hidden = false;
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
@@ -290,10 +420,11 @@
       document.documentElement.classList.add('vinor-customer-modal-open');
       document.documentElement.classList.add('vinor-express-overlay-modal-open');
     } catch (_) {}
-    setError('');
     try {
-      var notes = form && form.querySelector('textarea[name="notes"]');
-      if (notes) notes.focus();
+      var focusEl = (!landCode && landSelect && landField && !landField.hidden)
+        ? landSelect
+        : (form && form.querySelector('textarea[name="notes"]'));
+      if (focusEl) focusEl.focus();
     } catch (_) {}
   }
 
@@ -313,6 +444,7 @@
       document.documentElement.classList.remove('vinor-customer-modal-open');
       document.documentElement.classList.remove('vinor-express-overlay-modal-open');
     } catch (_) {}
+    if (submitBtn) submitBtn.disabled = false;
     setError('');
   }
 
@@ -343,9 +475,19 @@
       if (!submitBtn || submitBtn.disabled) return;
 
       var fd = new FormData(form);
+      var pending = String(modal.getAttribute('data-pending-land-code') || '').trim();
+      var picked = '';
+      if (!pending && landSelect && landField && !landField.hidden) {
+        picked = String(landSelect.value || '').trim();
+      }
+      var plusPhone = '';
+      if (plusSelect && plusField && !plusField.hidden) {
+        plusPhone = String(plusSelect.value || '').trim();
+      }
       var payload = {
         notes: String(fd.get('notes') || '').trim(),
-        land_code: String(modal.getAttribute('data-pending-land-code') || '').trim()
+        land_code: pending || picked,
+        plus_user_phone: plusPhone
       };
 
       var url = modal.getAttribute('data-register-url') || '';

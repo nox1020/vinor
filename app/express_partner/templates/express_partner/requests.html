@@ -289,6 +289,9 @@
               {% elif item.visit_date_jalali %}
               <p class="rq-card__fact"><strong>زمان بازدید:</strong> {{ item.visit_date_jalali }}</p>
               {% endif %}
+              {% if item.plus_user_name %}
+              <p class="rq-card__fact"><strong>کاربر پلاس:</strong> {{ item.plus_user_name }}</p>
+              {% endif %}
               {% if phone %}
               <p class="rq-card__fact">
                 <strong>شماره پشتیبان:</strong>

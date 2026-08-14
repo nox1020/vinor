@@ -3559,6 +3559,7 @@ def home_page():
 
     customer_modal_ctx: Dict[str, Any] = {
         'customer_modal_lands': [],
+        'customer_modal_plus_users': [],
         'next_auto_visit': None,
     }
     try:
@@ -3651,6 +3652,7 @@ def home_page():
         ai_quick_prompts=ai_quick_prompts,
         public_home_lands=public_home_lands,
         customer_modal_lands=customer_modal_ctx.get('customer_modal_lands') or [],
+        customer_modal_plus_users=customer_modal_ctx.get('customer_modal_plus_users') or [],
         next_auto_visit=customer_modal_ctx.get('next_auto_visit'),
         **divar_ads_ctx,
     ))
@@ -4481,12 +4483,9 @@ def requests_page():
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile)
     from .visit_requests import (
-        COMPLETED_STATUS,
-        CANCELLED_STATUS,
-        NO_SHOW_STATUS,
         OPEN_VISIT_STATUSES,
-        partner_can_request_new_visit,
         partner_request_feed_item,
+        partner_requests_can_revisit,
         partner_visits_for_phone,
     )
 
@@ -4515,12 +4514,12 @@ def requests_page():
     items = []
     for r in mine:
         code = str(r.get('land_code') or '').strip()
-        st = str(r.get('status') or '').strip()
         gs = land_status.get(code, 'active')
-        can_revisit = bool(
-            code
-            and st in (COMPLETED_STATUS, CANCELLED_STATUS, NO_SHOW_STATUS)
-            and partner_can_request_new_visit(gs, visit_rows, me_phone, code)
+        can_revisit = partner_requests_can_revisit(
+            r,
+            assignment_status=gs,
+            visit_requests=visit_rows,
+            phone=me_phone,
         )
         items.append(partner_request_feed_item(
             r,
@@ -4634,6 +4633,8 @@ def requests_revisit(vid: str):
         create_visit_request as record_visit_request,
         next_auto_visit_date,
         partner_can_request_new_visit,
+        partner_cancel_own_visit,
+        partner_requests_can_revisit,
     )
 
     visit_rows = load_express_visit_requests() or []
@@ -4649,10 +4650,6 @@ def requests_revisit(vid: str):
     if not prev or str(prev.get('partner_phone') or '').strip() != me_phone:
         return _requests_action_json(False, error='درخواست پیدا نشد.')
 
-    st = str(prev.get('status') or '').strip()
-    if st not in (COMPLETED_STATUS, CANCELLED_STATUS, NO_SHOW_STATUS):
-        return _requests_action_json(False, error='برای این مورد بازدید مجدد ممکن نیست.')
-
     land_code = str(prev.get('land_code') or '').strip()
     if not land_code:
         return _requests_action_json(False, error='فایل مرتبط پیدا نشد.')
@@ -4662,6 +4659,30 @@ def requests_revisit(vid: str):
     if land is None:
         return _requests_action_json(False, error='فایل در دسترس نیست.')
     gs = str(land.get('_assignment_status') or '').strip().lower()
+    if not partner_requests_can_revisit(
+        prev,
+        assignment_status=gs,
+        visit_requests=visit_rows,
+        phone=me_phone,
+    ):
+        return _requests_action_json(False, error='برای این مورد بازدید مجدد ممکن نیست.')
+
+    st = str(prev.get('status') or '').strip()
+    past_open = st not in (COMPLETED_STATUS, CANCELLED_STATUS, NO_SHOW_STATUS)
+    if past_open:
+        closed, cerr = partner_cancel_own_visit(
+            visit_rows, request_id=rid, partner_phone=me_phone
+        )
+        if not closed:
+            return _requests_action_json(
+                False,
+                error={
+                    'not_cancellable': 'این درخواست قابل بستن نیست.',
+                    'forbidden': 'دسترسی ندارید.',
+                    'not_found': 'درخواست پیدا نشد.',
+                }.get(cerr or '', 'بازدید قبلی بسته نشد.'),
+            )
+
     if not partner_can_request_new_visit(gs, visit_rows, me_phone, land_code):
         return _requests_action_json(False, error='الان امکان بازدید مجدد نیست.')
 
@@ -4678,6 +4699,7 @@ def requests_revisit(vid: str):
         land_code=land_code,
         land_title=land_title,
         visit_date=str(next_slot.get('iso') or ''),
+        visit_time=str(next_slot.get('time_en') or next_slot.get('time') or ''),
         customer_first_name=str(prev.get('customer_first_name') or ''),
         customer_last_name=str(prev.get('customer_last_name') or ''),
         customer_phone=str(prev.get('customer_phone') or ''),
@@ -4686,6 +4708,8 @@ def requests_revisit(vid: str):
     )
     if err == 'already_pending':
         return _requests_action_json(False, error='برای این فایل بازدید باز دارید.')
+    if err in ('no_hours', 'hour_not_allowed', 'weekday_not_allowed'):
+        return _requests_action_json(False, error='وقت مجاز بازدید برای ثبت مجدد پیدا نشد.')
     if err or not rec:
         return _requests_action_json(False, error='ثبت بازدید مجدد ممکن نشد.')
 
@@ -4708,12 +4732,15 @@ def requests_revisit(vid: str):
             partner_phone=me_phone,
             weekday=str(next_slot.get('weekday') or ''),
             jalali_date=str(next_slot.get('jalali_fa') or next_slot.get('jalali') or ''),
-            visit_time=str(next_slot.get('time') or '').strip(),
+            visit_time=str(next_slot.get('time') or next_slot.get('time_en') or '').strip(),
         )
     except Exception:
         pass
 
     label = f"{next_slot.get('weekday') or ''} {next_slot.get('jalali_fa') or ''}".strip()
+    time_bit = str(next_slot.get('time') or rec.get('visit_time') or '').strip()
+    if time_bit:
+        label = f"{label} ساعت {time_bit}".strip()
     return _requests_action_json(
         True,
         message=f'بازدید مجدد ثبت شد{(" — " + label) if label else ""}.',
@@ -4725,7 +4752,7 @@ def requests_revisit(vid: str):
 @express_partner_bp.post('/home/register-customer', endpoint='home_register_customer')
 @require_partner_access()
 def home_register_customer():
-    """درخواست تعیین وقت بازدید از مدال خانه (توضیحات اختیاری + زمان‌بندی خودکار)."""
+    """درخواست تعیین وقت بازدید از مدال خانه (فایل و کاربر پلاس اختیاری)."""
     me_phone = (session.get('user_phone') or '').strip()
     payload = {}
     if request.is_json:
@@ -4743,6 +4770,11 @@ def home_register_customer():
         or ''
     ).strip()
     land_code = str(payload.get('land_code') or '').strip()
+    plus_user_phone = str(
+        payload.get('plus_user_phone')
+        or payload.get('plus_phone')
+        or ''
+    ).strip()
 
     def _fail(msg: str, code: int = 400):
         return jsonify({'ok': False, 'error': msg}), code
@@ -4768,35 +4800,65 @@ def home_register_customer():
     if not isinstance(visit_requests, list):
         visit_requests = []
 
-    eligible: List[Dict[str, Any]] = []
-    for land in lands or []:
-        code = str(land.get('code') or '').strip()
-        if not code:
-            continue
+    from .visit_requests import (
+        list_plus_users_for_visit,
+        partner_cancel_own_visit,
+        visit_slot_has_passed,
+    )
+
+    plus_user_name = ''
+    if plus_user_phone:
+        from .partner_session_sync import canonical_partner_phone
+
+        plus_users = list_plus_users_for_visit()
+        want = canonical_partner_phone(plus_user_phone) or plus_user_phone
+        plus_hit = next(
+            (
+                u for u in plus_users
+                if (canonical_partner_phone(str(u.get('phone') or '')) or str(u.get('phone') or '').strip()) == want
+                or str(u.get('phone') or '').strip() == plus_user_phone
+            ),
+            None,
+        )
+        if plus_hit is None:
+            return _fail('کاربر پلاس انتخاب‌شده پیدا نشد.')
+        plus_user_name = str(plus_hit.get('name') or plus_user_phone)
+        plus_user_phone = str(plus_hit.get('phone') or want)
+
+    land = None
+    land_title = ''
+    if land_code:
+        land = next((L for L in (lands or []) if str(L.get('code') or '') == land_code), None)
+        if land is None:
+            return _fail('فایل انتخاب‌شده پیدا نشد.')
         st = str(land.get('_assignment_status') or '').strip().lower()
-        if st in ('sold', 'in_transaction'):
-            continue
-        if not partner_can_request_new_visit(st, visit_requests, me_phone, code):
-            continue
-        eligible.append(land)
+        if st == 'sold':
+            return _fail('این فایل قبلاً فروخته شده است.')
+        if st == 'in_transaction' or land.get('_in_transaction'):
+            return _fail('این فایل در حال معامله است.')
+        land_title = str(land.get('title') or land_code)
+        open_rec = partner_open_visit(visit_requests, me_phone, land_code)
+        if open_rec:
+            open_st = str(open_rec.get('status') or '').strip()
+            if (
+                open_st in (PENDING_STATUS, APPROVED_STATUS)
+                and visit_slot_has_passed(open_rec)
+            ):
+                closed, _cerr = partner_cancel_own_visit(
+                    visit_requests,
+                    request_id=str(open_rec.get('id') or ''),
+                    partner_phone=me_phone,
+                )
+                if not closed:
+                    return _fail('بازدید قبلی این فایل بسته نشد.')
+            elif not partner_can_request_new_visit(st, visit_requests, me_phone, land_code):
+                return jsonify({
+                    'ok': True,
+                    'already_pending': True,
+                    'message': 'برای این فایل بازدید باز از قبل دارید.',
+                    'redirect_url': url_for('express_partner.requests'),
+                })
 
-    if not land_code and eligible:
-        land_code = str(eligible[0].get('code') or '').strip()
-    if not land_code:
-        return _fail('فایل فعالی برای بازدید ندارید. اول یک فایل بگیرید.')
-
-    land = next((L for L in (lands or []) if str(L.get('code') or '') == land_code), None)
-    if land is None:
-        return _fail('فایل انتخاب‌شده پیدا نشد.')
-    st = str(land.get('_assignment_status') or '').strip().lower()
-    if st == 'sold':
-        return _fail('این فایل قبلاً فروخته شده است.')
-    if st == 'in_transaction' or land.get('_in_transaction'):
-        return _fail('این فایل در حال معامله است.')
-    if not partner_can_request_new_visit(st, visit_requests, me_phone, land_code):
-        return _fail('برای این فایل امکان ثبت بازدید جدید نیست.')
-
-    land_title = str(land.get('title') or land_code)
     partner_name = (partner_profile.get('name') if partner_profile else None) or me_phone
 
     rec, err = record_visit_request(
@@ -4806,8 +4868,11 @@ def home_register_customer():
         land_code=land_code,
         land_title=land_title,
         visit_date=visit_date,
+        visit_time=str(next_slot.get('time_en') or next_slot.get('time') or ''),
         notes=notes,
         require_customer=False,
+        plus_user_phone=plus_user_phone,
+        plus_user_name=plus_user_name,
     )
     if err == 'already_pending':
         return jsonify({
@@ -4818,26 +4883,38 @@ def home_register_customer():
         })
     if err == 'weekday_not_allowed':
         return _fail('تاریخ خودکار در روزهای مجاز نیست.')
+    if err in ('no_hours', 'hour_not_allowed'):
+        return _fail('برای این روز ساعت مجاز بازدید نمانده است.')
     if err or not rec:
         return _fail('ثبت درخواست بازدید ممکن نشد.')
 
     save_express_visit_requests(visit_requests)
 
+    sms_notes = notes
+    if plus_user_name or plus_user_phone:
+        plus_bit = f"کاربر پلاس: {plus_user_name or plus_user_phone}"
+        sms_notes = f"{sms_notes}\n{plus_bit}".strip() if sms_notes else plus_bit
+    if land_title:
+        land_bit = f"فایل: {land_title}"
+        sms_notes = f"{sms_notes}\n{land_bit}".strip() if sms_notes else land_bit
+
     sms_admin = _send_visit_schedule_admin_sms(
         partner_phone=me_phone,
         partner_name=partner_name,
-        notes=notes,
+        notes=sms_notes,
     )
     sms_partner = _send_visit_schedule_partner_sms(
         partner_phone=me_phone,
         weekday=str(next_slot.get('weekday') or ''),
         jalali_date=str(next_slot.get('jalali_fa') or next_slot.get('jalali') or ''),
-        visit_time=str(next_slot.get('time') or next_slot.get('visit_time') or '').strip(),
+        visit_time=str(next_slot.get('time_en') or next_slot.get('time') or '').strip(),
     )
 
+    time_bit = str(next_slot.get('time') or rec.get('visit_time') or '').strip()
     msg = (
         f"درخواست تعیین وقت بازدید برای "
-        f"{next_slot.get('weekday') or ''} {next_slot.get('jalali_fa') or visit_date} "
+        f"{next_slot.get('weekday') or ''} {next_slot.get('jalali_fa') or visit_date}"
+        f"{(' ساعت ' + time_bit) if time_bit else ''} "
         f"ثبت شد."
     ).strip()
     if not sms_admin.get('ok') and not sms_admin.get('skipped'):
@@ -4857,11 +4934,12 @@ def home_register_customer():
 
 
 def _home_customer_modal_context(me_phone: str, is_approved: bool) -> Dict[str, Any]:
-    """فایل‌های قابل بازدید + اولین روز مجاز برای مدال ثبت مشتری."""
-    from .visit_requests import next_auto_visit_date
+    """فایل‌ها و کاربران پلاس (اختیاری) + اولین روز مجاز برای مدال ثبت مشتری."""
+    from .visit_requests import list_plus_users_for_visit, next_auto_visit_date
 
     out: Dict[str, Any] = {
         'customer_modal_lands': [],
+        'customer_modal_plus_users': [],
         'next_auto_visit': None,
     }
     if not me_phone or not is_approved:
@@ -4871,26 +4949,30 @@ def _home_customer_modal_context(me_phone: str, is_approved: bool) -> Dict[str, 
     except Exception:
         out['next_auto_visit'] = None
     try:
+        out['customer_modal_plus_users'] = list_plus_users_for_visit()
+    except Exception:
+        out['customer_modal_plus_users'] = []
+    try:
         lands, _ = _build_partner_dashboard_lands(me_phone, True)
-        visit_rows = load_express_visit_requests() or []
-        if not isinstance(visit_rows, list):
-            visit_rows = []
-        modal_lands: List[Dict[str, Any]] = []
+        assigned_first: List[Dict[str, Any]] = []
+        others: List[Dict[str, Any]] = []
         for land in lands or []:
             code = str(land.get('code') or '').strip()
             if not code:
                 continue
             st = str(land.get('_assignment_status') or '').strip().lower()
-            if st in ('sold', 'in_transaction'):
+            if st == 'sold':
                 continue
-            if not partner_can_request_new_visit(st, visit_rows, me_phone, code):
-                continue
-            modal_lands.append({
+            item = {
                 'code': code,
                 'title': str(land.get('title') or code),
                 'city': str(land.get('city') or ''),
-            })
-        out['customer_modal_lands'] = modal_lands[:40]
+            }
+            if land.get('_assignment_id'):
+                assigned_first.append(item)
+            else:
+                others.append(item)
+        out['customer_modal_lands'] = assigned_first + others
     except Exception:
         out['customer_modal_lands'] = []
     return out
@@ -6588,6 +6670,7 @@ def create_visit_request(code: str):
         except Exception:
             json_payload = {}
     visit_date = _request_visit_field('visit_date', json_payload)
+    visit_time = _request_visit_field('visit_time', json_payload)
     customer_first_name = _request_visit_field('customer_first_name', json_payload)
     customer_last_name = _request_visit_field('customer_last_name', json_payload)
     customer_phone_raw = _request_visit_field('customer_phone', json_payload)
@@ -6712,6 +6795,7 @@ def create_visit_request(code: str):
         land_code=str(code),
         land_title=str(land_title),
         visit_date=visit_date,
+        visit_time=visit_time,
         customer_first_name=customer_first_name,
         customer_last_name=customer_last_name,
         customer_phone=customer_phone,
@@ -6777,6 +6861,14 @@ def create_visit_request(code: str):
             message='تاریخ انتخاب‌شده در روزهای مجاز بازدید نیست. روزهای مجاز: ' + visit_allowed_weekdays_summary(),
             category='error',
         )
+    if err in ('no_hours', 'hour_not_allowed'):
+        from .visit_requests import visit_allowed_hours_summary
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='ساعت انتخاب‌شده در نوبت‌های مجاز نیست. ساعت‌های مجاز: ' + visit_allowed_hours_summary(),
+            category='error',
+        )
     if err or not rec:
         return _mark_in_transaction_finish(
             code,
@@ -6812,6 +6904,7 @@ def create_visit_request(code: str):
             land_code=str(code),
             land_title=str(land_title),
             visit_date=str(rec.get('visit_date') or visit_date),
+            visit_time=str(rec.get('visit_time') or ''),
             reference_id=str(rec.get('id') or ''),
         )
     except Exception:

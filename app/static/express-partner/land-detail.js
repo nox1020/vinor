@@ -1222,11 +1222,42 @@
     return allowed.indexOf(d.getDay()) >= 0;
   }
 
+  function tehranHourNow() {
+    try {
+      var parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Tehran',
+        hour: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date());
+      var row = parts.find(function (p) { return p.type === 'hour'; });
+      var h = parseInt(row && row.value ? row.value : '', 10);
+      return isNaN(h) ? new Date().getHours() : h;
+    } catch (e) {
+      return new Date().getHours();
+    }
+  }
+
+  function dateHasRemainingVisitHours(d) {
+    var cfg = readConfig();
+    var hours = (cfg && cfg.visitAllowedHours) || [];
+    if (!hours.length) return true;
+    var iso = toLocalISODate(d);
+    var todayIso = toLocalISODate(visitCalState.minDate || new Date());
+    if (iso > todayIso) return true;
+    if (iso < todayIso) return false;
+    var nowH = tehranHourNow();
+    for (var i = 0; i < hours.length; i++) {
+      if (Number(hours[i]) > nowH) return true;
+    }
+    return false;
+  }
+
   function isDateInVisitRange(d) {
     var iso = toLocalISODate(d);
     return iso >= toLocalISODate(visitCalState.minDate)
       && iso <= toLocalISODate(visitCalState.maxDate)
-      && isVisitWeekdayAllowed(d);
+      && isVisitWeekdayAllowed(d)
+      && dateHasRemainingVisitHours(d);
   }
 
   function syncVisitSelectedLabel(iso, jalaliText) {

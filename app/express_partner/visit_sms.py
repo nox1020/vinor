@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 from flask import current_app
 
 from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
-from ..utils.dates import format_iso_date_jalali
+from ..utils.dates import format_iso_date_jalali, to_fa_digits
 from ..utils.storage import load_settings, load_sms_history, save_sms_history
 from app.services.sms_config import get_sms_line_number
 
@@ -41,9 +41,13 @@ _STATUS_TO_EVENT = {
 }
 
 
-def _format_visit_date_sms(iso_date: str) -> str:
+def _format_visit_date_sms(iso_date: str, visit_time: str = "") -> str:
     jalali = format_iso_date_jalali(iso_date)
-    return jalali or (iso_date or "")[:10] or "—"
+    base = jalali or (iso_date or "")[:10] or "—"
+    t = (visit_time or "").strip()
+    if t and base != "—":
+        return f"{base} ساعت {to_fa_digits(t)}"
+    return base
 
 
 def _land_short(land_title: str, land_code: str) -> str:
@@ -81,7 +85,7 @@ def visit_status_change_event(new_status: str, prev_status: str) -> Optional[str
 def _build_message(event: str, ctx: Dict[str, Any]) -> str:
     """الگوی یکسان: وینور + خبر کوتاه (+ جزئیات لازم)."""
     land = _land_short(str(ctx.get("land_title") or ""), str(ctx.get("land_code") or ""))
-    vdate = _format_visit_date_sms(str(ctx.get("visit_date") or ""))
+    vdate = _format_visit_date_sms(str(ctx.get("visit_date") or ""), str(ctx.get("visit_time") or ""))
     note = (ctx.get("admin_note") or "").strip()
     if len(note) > 60:
         note = note[:60] + "…"
@@ -130,6 +134,7 @@ def notify_partner_land_tx_sms(
     land_code: str = "",
     land_title: str = "",
     visit_date: str = "",
+    visit_time: str = "",
     admin_note: str = "",
     reference_id: str = "",
     visit_commission_pending: bool = False,
@@ -162,6 +167,7 @@ def notify_partner_land_tx_sms(
                 "land_code": land_code,
                 "land_title": land_title,
                 "visit_date": visit_date,
+                "visit_time": visit_time,
                 "admin_note": admin_note,
             })
     else:
@@ -169,6 +175,7 @@ def notify_partner_land_tx_sms(
             "land_code": land_code,
             "land_title": land_title,
             "visit_date": visit_date,
+            "visit_time": visit_time,
             "admin_note": admin_note,
             "visit_commission_pending": visit_commission_pending,
         })

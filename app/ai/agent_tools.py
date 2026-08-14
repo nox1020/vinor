@@ -2528,8 +2528,11 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
         partner_can_request_new_visit,
         partner_open_visit,
         partner_visit_completed,
+        remaining_visit_hours_for_date,
         resolve_visit_date_choice,
         split_customer_full_name,
+        format_visit_hour_label,
+        format_visit_time_stored,
         is_visit_weekday_allowed,
         visit_allowed_weekdays_summary,
         _today,
@@ -2737,6 +2740,19 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "land_code": code,
             "instruction": "از لیست تاریخ‌های مجاز فقط یک شماره بخواهد.",
         }
+    remain_hours = remaining_visit_hours_for_date(vd)
+    if not remain_hours:
+        return {
+            "ok": True,
+            "status": "needs_date_choice",
+            "error": "برای این روز نوبت خالی نمانده.",
+            "available_date_labels": available_labels,
+            "land_code": code,
+            "instruction": "از لیست تاریخ‌های مجاز فقط یک شماره بخواهد.",
+        }
+    visit_hour = remain_hours[0]
+    visit_time_en = format_visit_time_stored(visit_hour)
+    visit_time_label = format_visit_hour_label(visit_hour)
 
     ctx = _express_land_partner_ctx(code, me)
     if ctx is None:
@@ -2823,6 +2839,8 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "visit_date": visit_iso,  # ذخیره داخلی میلادی
             "visit_date_jalali": visit_jalali,
             "visit_date_display": visit_jalali_wd,
+            "visit_time": visit_time_en,
+            "visit_time_label": visit_time_label,
             "customer_first_name": first,
             "customer_last_name": last,
             "customer_name": full_name or f"{first} {last}".strip(),
@@ -2866,6 +2884,7 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
         or str(payload.get("visit_date_jalali") or "").strip()
         or format_display_jalali_date(str(payload.get("visit_date") or ""))
     )
+    time_show = str(payload.get("visit_time_label") or payload.get("visit_time") or "").strip()
     cust_show = (
         str(payload.get("customer_name") or "").strip()
         or f"{payload.get('customer_first_name') or ''} {payload.get('customer_last_name') or ''}".strip()
@@ -2873,7 +2892,7 @@ def _tool_propose_visit(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     call_phone = _visit_coord_call_target()
     lines = [
         f"فایل: {payload.get('land_title')} ({payload.get('land_code')})",
-        f"تاریخ شمسی: {date_show}",
+        f"تاریخ شمسی: {date_show}" + (f" — ساعت {time_show}" if time_show else ""),
         f"مشتری: {cust_show}",
         f"تماس مشتری: {masked}",
         f"هماهنگی بازدید: {call_phone}",
@@ -4034,6 +4053,7 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         land_code=code,
         land_title=land_title,
         visit_date=visit_date,
+        visit_time=str(fresh.get("visit_time") or ""),
         customer_first_name=str(fresh.get("customer_first_name") or ""),
         customer_last_name=str(fresh.get("customer_last_name") or ""),
         customer_phone=str(fresh.get("customer_phone") or ""),
@@ -4122,6 +4142,7 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
             land_code=code,
             land_title=land_title,
             visit_date=str(rec.get("visit_date") or visit_date),
+            visit_time=str(rec.get("visit_time") or ""),
             reference_id=str(rec.get("id") or ""),
         )
     except Exception:
@@ -4131,11 +4152,14 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
     from app.utils.dates import format_display_jalali_date
 
     vdate_iso = str(rec.get("visit_date") or visit_date or "").strip()
+    vtime = str(rec.get("visit_time") or fresh.get("visit_time") or "").strip()
     vdate_j = format_display_jalali_date(
         str(fresh.get("visit_date_jalali") or "") or vdate_iso,
         with_weekday=True,
     ) or format_display_jalali_date(vdate_iso)
     date_bit = f" برای {vdate_j}" if vdate_j else ""
+    if date_bit and vtime:
+        date_bit = f"{date_bit} ساعت {vtime}"
     # بلافاصله کارت تماس + «بازدید انجام شد» — بدون دور دوباره مدل
     follow = _offer_complete_visit_for_open(
         phone=me,

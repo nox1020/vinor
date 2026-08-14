@@ -85,6 +85,10 @@ VISIT_WEEKDAY_ORDER = (
 
 DEFAULT_VISIT_ALLOWED_WEEKDAYS = list(VISIT_WEEKDAY_ORDER)
 
+# ساعت‌های مجاز بازدید (تهران) — پیش‌فرض نوبت‌های معمول ملک
+DEFAULT_VISIT_ALLOWED_HOURS = list(range(8, 18))  # ۸:۰۰ تا ۱۷:۰۰
+VISIT_HOUR_UI_RANGE = range(7, 22)
+
 # Python weekday (دوشنبه=۰ … جمعه=۴، شنبه=۵، یکشنبه=۶) → JS Date.getDay()
 _PY_WEEKDAY_TO_JS = {
     VISIT_WEEKDAY_SAT: 6,
@@ -109,8 +113,34 @@ def _today() -> date:
             return datetime.utcnow().date()
 
 
+def visit_slot_has_passed(row: Dict[str, Any] | None) -> bool:
+    """وقت برنامه‌ریزی‌شدهٔ بازدید نسبت به الان تهران گذشته است."""
+    if not isinstance(row, dict):
+        return False
+    vd = _parse_visit_date(row.get("visit_date"))
+    if vd is None:
+        return False
+    try:
+        from ..utils.dates import tehran_now
+
+        now = tehran_now()
+    except Exception:
+        now = datetime.utcnow()
+    hour = parse_visit_hour(row.get("visit_time") or row.get("time") or "")
+    if now.date() > vd:
+        return True
+    if now.date() < vd:
+        return False
+    if hour is None:
+        return not remaining_visit_hours_for_date(vd)
+    return int(now.hour) > hour or (int(now.hour) == hour and int(getattr(now, "minute", 0) or 0) > 0)
+
+
 def visit_date_min_iso() -> str:
-    """حداقل تاریخ قابل انتخاب بازدید (امروز به وقت تهران)."""
+    """حداقل تاریخ قابل انتخاب بازدید — اگر امروز نوبتی نمانده، اولین روز مجاز بعدی."""
+    slot = next_auto_visit_date()
+    if slot and slot.get("iso"):
+        return str(slot["iso"])
     return _today().isoformat()
 
 
@@ -139,11 +169,131 @@ def get_visit_allowed_weekdays() -> List[int]:
 
 
 def save_visit_allowed_weekdays(weekdays: List[int]) -> List[int]:
-    from admin.routes import get_settings, save_settings
+    from admin.routes import save_settings
 
     normalized = _normalize_weekday_list(weekdays)
     save_settings({"visit_allowed_weekdays": normalized})
     return normalized
+
+
+def parse_visit_hour(raw: Any) -> Optional[int]:
+    """«۱۰»، «10:00»، «۱۰:۳۰» → ساعت ۰…۲۳."""
+    s = to_en_digits(str(raw or "")).strip()
+    if not s:
+        return None
+    s = s.replace(".", ":").replace(" ", "")
+    if ":" in s:
+        s = s.split(":", 1)[0]
+    digits = "".join(ch for ch in s if ch.isdigit())
+    if not digits:
+        return None
+    try:
+        h = int(digits)
+    except ValueError:
+        return None
+    if 0 <= h <= 23:
+        return h
+    return None
+
+
+def format_visit_hour_label(hour: int) -> str:
+    return to_fa_digits(f"{int(hour):02d}:00")
+
+
+def format_visit_time_stored(hour: int) -> str:
+    return f"{int(hour):02d}:00"
+
+
+def _normalize_hour_list(raw: Any) -> List[int]:
+    if not isinstance(raw, (list, tuple, set)):
+        return list(DEFAULT_VISIT_ALLOWED_HOURS)
+    out: List[int] = []
+    for item in raw:
+        if isinstance(item, bool):
+            continue
+        h: Optional[int]
+        if isinstance(item, int):
+            h = item if 0 <= item <= 23 else None
+        else:
+            h = parse_visit_hour(item)
+        if h is None or h in out:
+            continue
+        out.append(h)
+    out.sort()
+    return out or list(DEFAULT_VISIT_ALLOWED_HOURS)
+
+
+def get_visit_allowed_hours() -> List[int]:
+    try:
+        from admin.routes import get_settings
+
+        settings = get_settings() or {}
+        raw = settings.get("visit_allowed_hours")
+        # پیش‌فرض قبلی ۱۰–۱۶ بدون ۸/۹/۱۳/۱۷ — اگر هنوز همان است، پیش‌فرض جدید اعمال شود
+        if list(raw or []) == [10, 11, 12, 14, 15, 16]:
+            raw = None
+        return _normalize_hour_list(raw)
+    except Exception:
+        return list(DEFAULT_VISIT_ALLOWED_HOURS)
+
+
+def save_visit_allowed_hours(hours: List[int]) -> List[int]:
+    from admin.routes import save_settings
+
+    normalized = _normalize_hour_list(hours)
+    save_settings({"visit_allowed_hours": normalized})
+    return normalized
+
+
+def save_visit_schedule(*, weekdays: List[int], hours: List[int]) -> Tuple[List[int], List[int]]:
+    """یک‌بار ذخیرهٔ روز + ساعت مجاز."""
+    from admin.routes import save_settings
+
+    days = _normalize_weekday_list(weekdays)
+    hrs = _normalize_hour_list(hours)
+    save_settings({
+        "visit_allowed_weekdays": days,
+        "visit_allowed_hours": hrs,
+    })
+    return days, hrs
+
+
+def visit_allowed_hours_summary() -> str:
+    hours = get_visit_allowed_hours()
+    return "، ".join(format_visit_hour_label(h) for h in hours)
+
+
+def visit_hour_rows(*, selected: Optional[List[int]] = None) -> List[Dict[str, Any]]:
+    chosen = set(selected if selected is not None else get_visit_allowed_hours())
+    hours = list(VISIT_HOUR_UI_RANGE)
+    for h in sorted(chosen):
+        if h not in hours:
+            hours.append(h)
+    hours.sort()
+    return [
+        {"hour": h, "label": f"{h:02d}:00", "selected": h in chosen}
+        for h in hours
+    ]
+
+
+def remaining_visit_hours_for_date(
+    d: date,
+    *,
+    hours: Optional[List[int]] = None,
+) -> List[int]:
+    """نوبت‌های باقی‌ماندهٔ یک روز (تهران). امروز: ساعت‌های شروع‌نشده."""
+    allowed = _normalize_hour_list(hours if hours is not None else get_visit_allowed_hours())
+    today = _today()
+    if d < today:
+        return []
+    if d > today:
+        return list(allowed)
+    try:
+        from ..utils.dates import tehran_now
+        now_h = int(tehran_now().hour)
+    except Exception:
+        now_h = datetime.utcnow().hour
+    return [h for h in allowed if h > now_h]
 
 
 def visit_allowed_weekdays_for_js() -> List[int]:
@@ -174,28 +324,37 @@ def list_upcoming_visit_dates(*, limit: int = 7, days_ahead: int = 90) -> List[D
     lim = max(1, min(int(limit) or 7, 15))
     while d <= end and len(out) < lim:
         if is_visit_weekday_allowed(d):
-            iso = d.isoformat()
-            jalali = format_iso_date_jalali(iso) or ""
-            jalali_fa = format_display_jalali_date(iso)
-            weekday = visit_weekday_label_for_date(d)
-            n_fa = to_fa_digits(n)
-            out.append(
-                {
-                    "n": n,
-                    "iso": iso,  # داخلی — به کاربر نشان داده نشود
-                    "jalali": jalali,
-                    "jalali_fa": jalali_fa,
-                    "weekday": weekday,
-                    "label": f"{n_fa}) {weekday} {jalali_fa}",
-                }
-            )
-            n += 1
+            remain = remaining_visit_hours_for_date(d)
+            if remain:
+                iso = d.isoformat()
+                jalali = format_iso_date_jalali(iso) or ""
+                jalali_fa = format_display_jalali_date(iso)
+                weekday = visit_weekday_label_for_date(d)
+                n_fa = to_fa_digits(n)
+                first_h = remain[0]
+                time_label = format_visit_hour_label(first_h)
+                time_en = format_visit_time_stored(first_h)
+                out.append(
+                    {
+                        "n": n,
+                        "iso": iso,  # داخلی — به کاربر نشان داده نشود
+                        "jalali": jalali,
+                        "jalali_fa": jalali_fa,
+                        "weekday": weekday,
+                        "hour": first_h,
+                        "time": time_label,
+                        "time_en": time_en,
+                        "hours": remain,
+                        "label": f"{n_fa}) {weekday} {jalali_fa}",
+                    }
+                )
+                n += 1
         d += timedelta(days=1)
     return out
 
 
 def next_auto_visit_date() -> Optional[Dict[str, Any]]:
-    """اولین روز مجاز خالی برای زمان‌بندی خودکار بازدید."""
+    """اولین نوبت مجاز باقی‌مانده برای زمان‌بندی خودکار بازدید."""
     dates = list_upcoming_visit_dates(limit=1)
     return dates[0] if dates else None
 
@@ -217,6 +376,54 @@ def partner_visits_for_phone(
         out.append(r)
     out.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
     return out
+
+
+def list_plus_users_for_visit(exclude_phone: str = "") -> List[Dict[str, str]]:
+    """همهٔ همکاران پلاس (ویژه) برای انتخاب در ثبت وقت بازدید."""
+    from .partner_roles import PARTNER_TIER_SPECIAL
+    from .partner_session_sync import canonical_partner_phone
+
+    del exclude_phone  # همهٔ پلاس‌ها در لیست می‌مانند
+    plus_tiers = {PARTNER_TIER_SPECIAL, "vip", "ویژه"}
+    out: List[Dict[str, str]] = []
+    seen: set[str] = set()
+    try:
+        from ..utils.storage import load_express_partners
+
+        partners = load_express_partners() or []
+    except Exception:
+        partners = []
+    for p in partners:
+        if not isinstance(p, dict):
+            continue
+        tier = str(p.get("partner_tier") or "").strip().lower()
+        if tier not in plus_tiers:
+            continue
+        raw_phone = str(p.get("phone") or "").strip()
+        phone = canonical_partner_phone(raw_phone) or raw_phone
+        if not phone or phone in seen:
+            continue
+        seen.add(phone)
+        name = str(p.get("name") or "").strip() or phone
+        out.append({"phone": phone, "name": name})
+    out.sort(key=lambda x: str(x.get("name") or ""))
+    return out
+
+
+def visit_request_display_title(row: Dict[str, Any] | None) -> str:
+    if not isinstance(row, dict):
+        return "وقت بازدید"
+    code = str(row.get("land_code") or "").strip()
+    land_title = str(row.get("land_title") or "").strip()
+    plus_name = str(row.get("plus_user_name") or "").strip()
+    plus_phone = str(row.get("plus_user_phone") or "").strip()
+    if land_title and land_title not in ("وقت بازدید", "فایل"):
+        return land_title
+    if code:
+        return land_title or code
+    if plus_name or plus_phone:
+        return f"کاربر پلاس — {plus_name or plus_phone}"
+    return "وقت بازدید"
 
 
 def partner_request_feed_item(
@@ -253,10 +460,12 @@ def partner_request_feed_item(
     when_parts = [p for p in (weekday, jalali) if p]
     visit_when = " ".join(when_parts)
     if visit_time:
-        visit_when = f"{visit_when} — ساعت {visit_time}".strip(" —")
+        visit_when = f"{visit_when} — ساعت {to_fa_digits(visit_time)}".strip(" —")
     notes = str(row.get("notes") or "").strip()
     land_code = str(row.get("land_code") or "").strip()
-    land_title = str(row.get("land_title") or land_code or "فایل").strip()
+    land_title = visit_request_display_title(row)
+    plus_user_name = str(row.get("plus_user_name") or "").strip()
+    plus_user_phone = str(row.get("plus_user_phone") or "").strip()
     support = (support_phone or "").strip()
     can_cancel = st in (PENDING_STATUS, APPROVED_STATUS)
     can_delete = st in (CANCELLED_STATUS, NO_SHOW_STATUS)
@@ -265,7 +474,9 @@ def partner_request_feed_item(
         "kind": "visit",
         "land_code": land_code,
         "land_title": land_title,
-        "title": land_title or land_code or "فایل",
+        "plus_user_name": plus_user_name,
+        "plus_user_phone": plus_user_phone,
+        "title": land_title,
         "customer_name": cust_name,
         "visit_date": visit_date,
         "visit_date_jalali": jalali,
@@ -758,6 +969,30 @@ def partner_can_request_new_visit(
     return True
 
 
+def partner_requests_can_revisit(
+    row: Dict[str, Any] | None,
+    *,
+    assignment_status: str,
+    visit_requests: List[Dict[str, Any]] | None = None,
+    phone: str = "",
+) -> bool:
+    """دکمهٔ بازدید مجدد در صفحهٔ درخواست‌ها — بعد از اتمام/لغو، یا وقتی وقت بازدید گذشته."""
+    if not isinstance(row, dict):
+        return False
+    code = str(row.get("land_code") or "").strip()
+    if not code:
+        return False
+    gs = (assignment_status or "active").strip().lower()
+    if gs in ("sold", "in_transaction"):
+        return False
+    st = str(row.get("status") or "").strip()
+    if st in (COMPLETED_STATUS, CANCELLED_STATUS, NO_SHOW_STATUS):
+        return partner_can_request_new_visit(gs, visit_requests or [], phone, code)
+    if st in (PENDING_STATUS, APPROVED_STATUS) and visit_slot_has_passed(row):
+        return True
+    return False
+
+
 def create_visit_request(
     requests: List[Dict[str, Any]],
     *,
@@ -770,7 +1005,10 @@ def create_visit_request(
     customer_last_name: str = "",
     customer_phone: str = "",
     notes: str = "",
+    visit_time: str = "",
     require_customer: bool = True,
+    plus_user_phone: str = "",
+    plus_user_name: str = "",
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     ph = (partner_phone or "").strip()
     code = (land_code or "").strip()
@@ -778,8 +1016,10 @@ def create_visit_request(
     last = (customer_last_name or "").strip()
     cust_phone = (customer_phone or "").strip()
     note = (notes or "").strip()
+    plus_phone = (plus_user_phone or "").strip()
+    plus_name = (plus_user_name or "").strip()
     vd = _parse_visit_date(visit_date)
-    if not ph or not code:
+    if not ph:
         return None, "invalid"
     if require_customer and (not first or not last or not cust_phone):
         return None, "customer_required"
@@ -791,11 +1031,26 @@ def create_visit_request(
         return None, "date_too_far"
     if not is_visit_weekday_allowed(vd):
         return None, "weekday_not_allowed"
-    if partner_open_visit(requests, ph, code):
+    remain = remaining_visit_hours_for_date(vd)
+    if not remain:
+        return None, "no_hours"
+    hour = parse_visit_hour(visit_time)
+    if hour is None:
+        hour = remain[0]
+    elif hour not in remain:
+        return None, "hour_not_allowed"
+    if code and partner_open_visit(requests, ph, code):
         return None, "already_pending"
 
     now_iso = datetime.utcnow().isoformat() + "Z"
     full_name = f"{first} {last}".strip()
+    stored_title = (land_title or "").strip() or code
+    if not stored_title:
+        stored_title = (
+            f"کاربر پلاس — {plus_name or plus_phone}"
+            if (plus_name or plus_phone)
+            else "وقت بازدید"
+        )
     # پیش‌فرض: بدون صف تأیید ادمین — فقط اطلاع‌رسانی
     auto = visit_requests_auto_approve_enabled()
     rec: Dict[str, Any] = {
@@ -803,8 +1058,9 @@ def create_visit_request(
         "partner_phone": ph,
         "partner_name": (partner_name or "").strip() or ph,
         "land_code": code,
-        "land_title": (land_title or "").strip() or code,
+        "land_title": stored_title,
         "visit_date": vd.isoformat(),
+        "visit_time": format_visit_time_stored(hour),
         "customer_first_name": first,
         "customer_last_name": last,
         "customer_name": full_name,
@@ -816,6 +1072,9 @@ def create_visit_request(
     }
     if note:
         rec["notes"] = note
+    if plus_phone:
+        rec["plus_user_phone"] = plus_phone
+        rec["plus_user_name"] = plus_name or plus_phone
     if auto:
         rec["approved_at"] = now_iso
     requests.append(rec)
@@ -825,7 +1084,58 @@ def create_visit_request(
         notify_special_owner_new_visit(rec)
     except Exception:
         pass
+    try:
+        _notify_plus_user_new_visit(rec)
+    except Exception:
+        pass
     return rec, None
+
+
+def _notify_plus_user_new_visit(rec: Dict[str, Any] | None) -> None:
+    """اعلان درون‌برنامه برای کاربر پلاس انتخاب‌شده در وقت بازدید."""
+    if not isinstance(rec, dict):
+        return
+    plus_phone = str(rec.get("plus_user_phone") or "").strip()
+    if not plus_phone:
+        return
+    requester = str(rec.get("partner_phone") or "").strip()
+    if plus_phone == requester:
+        return
+    partner_name = str(rec.get("partner_name") or "").strip() or "یک همکار"
+    title = visit_request_display_title(rec)
+    date_bit = ""
+    visit_date = str(rec.get("visit_date") or "").strip()
+    if visit_date:
+        jalali = format_iso_date_jalali(visit_date)
+        if jalali:
+            date_bit = f" — {jalali}"
+    try:
+        from flask import url_for
+
+        from app.services.notifications import add_notification
+
+        try:
+            action_url = url_for("express_partner.requests")
+        except Exception:
+            action_url = "/express/partner/requests"
+        add_notification(
+            user_id=plus_phone,
+            title="درخواست بازدید",
+            body=f"{partner_name} برای «{title}» وقت بازدید ثبت کرد{date_bit}.",
+            ntype="visit",
+            ad_id=str(rec.get("land_code") or "") or None,
+            action_url=action_url,
+            source="visit_plus_user",
+        )
+    except Exception:
+        try:
+            from flask import current_app
+
+            current_app.logger.exception(
+                "notify plus user visit failed plus=%s", plus_phone
+            )
+        except Exception:
+            pass
 
 
 ADMIN_VISIT_STATUSES = frozenset({
@@ -1179,6 +1489,9 @@ def resolve_partner_land_tx_state(
     )
     visit_date = (active_visit or {}).get("visit_date") or ""
     visit_date_jalali = format_iso_date_jalali(str(visit_date))
+    visit_time = str((active_visit or {}).get("visit_time") or (active_visit or {}).get("time") or "").strip()
+    if visit_date_jalali and visit_time:
+        visit_date_jalali = f"{visit_date_jalali} — ساعت {to_fa_digits(visit_time)}"
     customer_phone = str((active_visit or {}).get("customer_phone") or "").strip()
     customer_name = str((active_visit or {}).get("customer_name") or "").strip()
     if not customer_name and active_visit:
@@ -1279,6 +1592,7 @@ def admin_row_dict(
         "land_title": row.get("land_title") or "",
         "visit_date": row.get("visit_date") or "",
         "visit_date_jalali": format_iso_date_jalali(str(row.get("visit_date") or "")),
+        "visit_time": str(row.get("visit_time") or row.get("time") or "").strip(),
         "customer_first_name": first,
         "customer_last_name": last,
         "customer_name": cust_name,
@@ -1552,6 +1866,7 @@ def merge_admin_visit_cards_by_partner_land(
                 "id": h.get("id"),
                 "visit_date": h.get("visit_date") or "",
                 "visit_date_jalali": h.get("visit_date_jalali") or h.get("visit_date") or "",
+                "visit_time": h.get("visit_time") or "",
                 "customer_name": h.get("customer_name") or "",
                 "customer_phone": h.get("customer_phone") or "",
                 "status": h.get("status") or "",

@@ -2633,21 +2633,15 @@
         '<p class="px-2 py-4 text-center text-xs text-zinc-500">هنوز گفتگویی نیست</p>';
       return;
     }
-    /* فقط پستچی + یک گفتگوی وینور (بقیه ادغام‌شده) */
-    var postchiTh = null;
+    /* فقط یک گفتگوی وینور — پشتیبانی/پستچی داخل همین چت ادغام شده است */
     var vinorTh = null;
     threads.forEach(function (th) {
       var isPostchi = th.kind === 'postchi' || th.id === postchiThreadId;
       var isLawyer = th.kind === 'lawyer' || th.id === lawyerThreadId;
-      if (isLawyer) return;
-      if (isPostchi) {
-        postchiTh = th;
-        return;
-      }
+      if (isLawyer || isPostchi) return;
       if (!vinorTh || th.is_active) vinorTh = th;
     });
     var display = [];
-    if (postchiTh) display.push(postchiTh);
     if (vinorTh) {
       vinorTh = Object.assign({}, vinorTh, { title: 'وینور', kind: 'vinor' });
       display.push(vinorTh);

@@ -579,6 +579,8 @@ def _default_settings() -> Dict[str, Any]:
         'partner_application_admin_sms_message': 'وینور\nهمکاری جدید',
         # روزهای مجاز ثبت بازدید توسط همکار (۵=شنبه … ۴=جمعه)
         'visit_allowed_weekdays': [5, 6, 0, 1, 2, 3, 4],
+        # ساعت‌های مجاز بازدید (تهران)
+        'visit_allowed_hours': list(range(8, 18)),
         # مبلغ ثابت پورسانت هر بازدید (تومان)
         'visit_commission_amount_toman': 0,
         # Vinor AI — مقادیر پیش‌فرض (ویرایش از پنل سوالات AI)
@@ -5723,23 +5725,42 @@ def express_visit_requests():
         admin_visit_workflow_needs_action,
         admin_visit_workflow_steps,
         get_visit_allowed_weekdays,
+        get_visit_allowed_hours,
         merge_admin_visit_cards_by_partner_land,
-        save_visit_allowed_weekdays,
+        save_visit_schedule,
+        visit_allowed_hours_summary,
         visit_allowed_weekdays_summary,
+        visit_hour_rows,
     )
 
-    if request.method == 'POST' and (request.form.get('action') or '').strip() == 'save_visit_weekdays':
+    if request.method == 'POST' and (request.form.get('action') or '').strip() in (
+        'save_visit_weekdays',
+        'save_visit_schedule',
+    ):
         raw_days = request.form.getlist('visit_weekdays')
+        raw_hours = request.form.getlist('visit_hours')
         try:
-            parsed = [int(x) for x in raw_days]
+            parsed_days = [int(x) for x in raw_days]
         except ValueError:
-            parsed = []
-        if not parsed:
+            parsed_days = []
+        parsed_hours: list[int] = []
+        for item in raw_hours:
+            try:
+                parsed_hours.append(int(item))
+            except ValueError:
+                continue
+        flt = (request.form.get('filter') or 'workflow').strip().lower()
+        if not parsed_days:
             flash('حداقل یک روز هفته را برای بازدید انتخاب کنید.', 'warning')
-            flt = (request.form.get('filter') or 'workflow').strip().lower()
             return redirect(url_for('admin.express_visit_requests', filter=flt or None))
-        save_visit_allowed_weekdays(parsed)
-        flash(f'روزهای مجاز بازدید ذخیره شد: {visit_allowed_weekdays_summary()}', 'success')
+        if not parsed_hours:
+            flash('حداقل یک ساعت مجاز بازدید را انتخاب کنید.', 'warning')
+            return redirect(url_for('admin.express_visit_requests', filter=flt or None))
+        save_visit_schedule(weekdays=parsed_days, hours=parsed_hours)
+        flash(
+            f'وقت‌های بازدید ذخیره شد: {visit_allowed_weekdays_summary()} — ساعت {visit_allowed_hours_summary()}',
+            'success',
+        )
         flt = (request.form.get('filter') or request.args.get('filter') or 'workflow').strip().lower()
         return redirect(url_for('admin.express_visit_requests', filter=flt or None))
 
@@ -5960,6 +5981,9 @@ def express_visit_requests():
         visit_weekday_order=VISIT_WEEKDAY_ORDER,
         visit_allowed_weekdays=get_visit_allowed_weekdays(),
         visit_allowed_weekdays_summary=visit_allowed_weekdays_summary(),
+        visit_hour_rows=visit_hour_rows(),
+        visit_allowed_hours=get_visit_allowed_hours(),
+        visit_allowed_hours_summary=visit_allowed_hours_summary(),
     )
 
 
