@@ -593,9 +593,10 @@ def _clear_thread_side_state(user_key: str, thread_id: str | None) -> None:
     except Exception:
         pass
     try:
-        from app.ai.agent_tools import clear_visit_draft
+        from app.ai.agent_tools import clear_lead_draft, clear_visit_draft
 
         clear_visit_draft(user_key, thread_id=tid or None)
+        clear_lead_draft(user_key, thread_id=tid or None)
     except Exception:
         pass
 

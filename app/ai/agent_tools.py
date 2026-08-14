@@ -341,10 +341,11 @@ def agent_system_hint(voice: str | None) -> str:
             "(نام→نام‌خانوادگی→کدملی یکی‌یکی→propose_apply). شهر نپرس. propose_visit/deal نزن."
         )
     return (
-        "بازاریاب: مشتری دارم→propose_lead (نام→موبایل)→کارت ثبت مشتری | "
-        "سپس search_lands (حداکثر ۲ کارت)→[[LAND]]→visit/complete/deal. "
-        "روزانه: next_action + listing + call/followup. "
-        "بازدید یکی‌یکی. تا tool+کارت تأیید موفق نشده، نگو ثبت/انجام شد."
+        "دستیار فروش: حرف بزن، یک سؤال بعدی بپرس، کارت تأیید آماده کن. "
+        "مشتری دارم→نام→موبایل→propose_lead→کارت «برای ثبت تأیید کنید». "
+        "سپس search_lands (حداکثر ۲)→[[LAND]]→visit/complete/deal. "
+        "روزانه: next_action + listing + call/followup. بازدید یکی‌یکی. "
+        "تا tool + کارت + تأیید Backend موفق نشده، نگو ثبت/انجام/ذخیره شد."
     )
 
 
@@ -396,6 +397,8 @@ def tools_schema_subset_for_request(
     user_message: str = "",
     chip_intent: str = "",
     schemas: list[dict[str, Any]] | None = None,
+    user_key: str = "",
+    thread_id: str = "",
 ) -> list[dict[str, Any]]:
     """زیرمجموعهٔ ابزار — منطق در app.ai.tools.selection (per-round / threshold)."""
     full = list(schemas) if schemas is not None else tools_schema_for_voice(voice)
@@ -411,6 +414,8 @@ def tools_schema_subset_for_request(
                 user_message=user_message,
                 chip_intent=chip_intent,
                 catalog=full,
+                user_key=user_key,
+                thread_id=thread_id,
             )
     except Exception:
         pass
@@ -882,9 +887,9 @@ def _schema_lead() -> dict[str, Any]:
         "function": {
             "name": TOOL_LEAD,
             "description": (
-                "کارت «ثبت مشتری» (نام + موبایل). فیلدها یکی‌یکی؛ "
-                "اول display_name خالی بزن تا نام بپرسد، بعد customer_phone، "
-                "سپس هر دو را بفرست تا کارت تأیید بیاید. ثبت فقط بعد از تأیید کارت."
+                "کارت تأیید ثبت مشتری (نام + موبایل). فیلد ناقص = فقط همان سؤال. "
+                "هر دو کامل = کارت «برای ثبت تأیید کنید». هرگز نگو ثبت شد؛ "
+                "ثبت فقط بعد از تأیید کاربر و موفقیت Backend."
             ),
             "parameters": {
                 "type": "object",
@@ -935,6 +940,8 @@ def run_tool(
 ) -> dict[str, Any]:
     args = dict(arguments) if isinstance(arguments, dict) else {}
     n = (name or "").strip()
+    v = (voice or "").strip().lower()
+    aud = (audience or "").strip().lower()
     try:
         from flask import g
 
@@ -954,13 +961,17 @@ def run_tool(
     except Exception:
         pass
     try:
-        if (voice or "").strip().lower() == VOICE_ADMIN or (
-            audience or ""
-        ).strip().lower() == AUDIENCE_ADMIN:
+        if v == VOICE_ADMIN or aud == AUDIENCE_ADMIN:
             from .admin_tools import CORE_ADMIN_TOOL_NAMES, run_admin_tool
 
             if n in CORE_ADMIN_TOOL_NAMES:
                 return run_admin_tool(n, args, admin_key=phone)
+            return _denied("این ابزار در چت ادمین فعال نیست.")
+        from .goal import is_core_tool
+
+        voice_for_core = v or ("partner" if aud == AUDIENCE_PARTNER else "public")
+        if n and not is_core_tool(n, voice=voice_for_core):
+            return _denied("این ابزار در چت فعال نیست.")
         if n == TOOL_SEARCH:
             return _tool_search_lands(args, phone=phone, audience=audience)
         if n == TOOL_COOP_INFO:
@@ -1914,6 +1925,16 @@ def _looks_like_customer_name(text: str) -> bool:
         "پیشنهاد",
         "قدم بعدی",
         "بازاریابی",
+        "مشتری دارم",
+        "ثبت مشتری",
+        "سلام",
+        "درود",
+        "پیدا کردن",
+        "پیگیری",
+        "وضعیت معامله",
+        "دنبال ملک",
+        "ویلا",
+        "جستجو",
     )
     if any(b in low for b in blocked):
         return False
@@ -1930,6 +1951,166 @@ def _looks_like_customer_name(text: str) -> bool:
     if not any(("\u0600" <= ch <= "\u06FF") or ch.isalpha() for ch in s):
         return False
     return True
+
+
+LEAD_ASK_NAME = "حتماً. اسم مشتری چیست؟"
+LEAD_ASK_PHONE = "شماره موبایل؟"
+LEAD_READY = "اطلاعات مشتری آماده است. برای ثبت، تأیید کنید؟"
+_LEAD_START_KEYS = ("مشتری دارم", "ثبت مشتری")
+
+
+def _lead_draft_key(user_key: str, thread_id: str | None = None) -> str:
+    uk = (user_key or "").strip()
+    tid = (thread_id or "").strip()
+    if tid:
+        return f"lead_draft:{uk}:t:{tid}"
+    return f"lead_draft:{uk}"
+
+
+def _lead_draft_awaiting(draft: dict[str, Any]) -> str:
+    raw = str((draft or {}).get("awaiting") or "").strip().lower()
+    if raw in ("name", "phone"):
+        return raw
+    return ""
+
+
+def _save_lead_draft(
+    user_key: str,
+    draft: dict[str, Any],
+    *,
+    thread_id: str | None = None,
+) -> None:
+    uk = (user_key or "").strip()
+    if not uk or not isinstance(draft, dict):
+        return
+    tid = (thread_id or "").strip() or (_tool_thread_meta()[0] or "")
+    store = _read_pending_store()
+    _prune_pending(store)
+    now = datetime.now(timezone.utc)
+    payload = {
+        "display_name": str(draft.get("display_name") or draft.get("customer_name") or "").strip(),
+        "customer_phone": str(draft.get("customer_phone") or "").strip(),
+        "awaiting": _lead_draft_awaiting(draft),
+        "thread_id": tid,
+    }
+    store[_lead_draft_key(uk, tid or None)] = {
+        "user_key": uk,
+        "action_type": "lead_draft",
+        "payload": payload,
+        "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "expires_at": (now + timedelta(minutes=_PENDING_TTL_MIN)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        ),
+    }
+    if tid:
+        store.pop(_lead_draft_key(uk), None)
+    _write_pending_store(store)
+
+
+def _load_lead_draft(
+    user_key: str,
+    *,
+    thread_id: str | None = None,
+) -> dict[str, Any]:
+    uk = (user_key or "").strip()
+    if not uk:
+        return {}
+    tid = (thread_id or "").strip() or (_tool_thread_meta()[0] or "")
+    store = _read_pending_store()
+    _prune_pending(store)
+
+    def _payload_of(key: str) -> dict[str, Any]:
+        item = store.get(key)
+        if not isinstance(item, dict):
+            return {}
+        exp = str(item.get("expires_at") or "")
+        try:
+            exp_dt = datetime.strptime(exp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if exp_dt < datetime.now(timezone.utc):
+                store.pop(key, None)
+                _write_pending_store(store)
+                return {}
+        except Exception:
+            pass
+        payload = item.get("payload")
+        return payload if isinstance(payload, dict) else {}
+
+    if tid:
+        scoped = _payload_of(_lead_draft_key(uk, tid))
+        if scoped:
+            return scoped
+        legacy = _payload_of(_lead_draft_key(uk))
+        if not legacy:
+            return {}
+        legacy_tid = str(legacy.get("thread_id") or "").strip()
+        if legacy_tid and legacy_tid != tid:
+            return {}
+        if not legacy_tid:
+            return {}
+        return legacy
+    return _payload_of(_lead_draft_key(uk))
+
+
+def _clear_lead_draft(user_key: str, *, thread_id: str | None = None) -> None:
+    uk = (user_key or "").strip()
+    if not uk:
+        return
+    tid = (thread_id or "").strip() or (_tool_thread_meta()[0] or "")
+    store = _read_pending_store()
+    changed = False
+    if tid and store.pop(_lead_draft_key(uk, tid), None) is not None:
+        changed = True
+    if store.pop(_lead_draft_key(uk), None) is not None:
+        changed = True
+    if changed:
+        _write_pending_store(store)
+
+
+def clear_lead_draft(user_key: str, *, thread_id: str | None = None) -> None:
+    _clear_lead_draft(user_key, thread_id=thread_id)
+
+
+def lead_form_awaiting(user_key: str, thread_id: str | None = None) -> str:
+    return _lead_draft_awaiting(_load_lead_draft(user_key, thread_id=thread_id))
+
+
+def visit_form_awaiting(user_key: str, thread_id: str | None = None) -> str:
+    return _visit_draft_awaiting(_load_visit_draft(user_key, thread_id=thread_id))
+
+
+def partner_customer_ready_for_visit(user_key: str, thread_id: str | None = None) -> bool:
+    """بعد از ثبت مشتری: نام+موبایل در پیش‌نویس بازدید هست و فرم بازدید باز نیست."""
+    draft = _load_visit_draft(user_key, thread_id=thread_id)
+    if _visit_draft_awaiting(draft):
+        return False
+    phone = str(draft.get("customer_phone") or "").strip()
+    return bool(_visit_draft_has_name(draft) and phone)
+
+
+def _lead_tool_to_chat_result(tool_out: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(tool_out, dict):
+        return None
+    model = tool_out.get("model_result")
+    if not isinstance(model, dict):
+        model = {}
+    speak = str(model.get("speak_exactly") or "").strip()
+    ui = tool_out.get("ui_action") if isinstance(tool_out.get("ui_action"), dict) else None
+    actions = [ui] if ui else []
+    if speak:
+        return {
+            "ok": True,
+            "reply": speak,
+            "agent_actions": actions,
+            "meta": {"provider": "lead_step", "forced": True},
+        }
+    if ui and str(ui.get("type") or "").startswith("confirm_"):
+        return {
+            "ok": True,
+            "reply": LEAD_READY,
+            "agent_actions": actions,
+            "meta": {"provider": "lead_step", "forced": True},
+        }
+    return None
 
 
 def _format_visit_date_ask(labels: list[str]) -> str:
@@ -2228,6 +2409,112 @@ def try_continue_visit_from_user_message(
         thread_id=thread_id,
     )
     return _visit_tool_to_chat_result(tool_out)
+
+
+def try_continue_lead_from_user_message(
+    phone: str,
+    text: str,
+    *,
+    audience: str = "",
+    voice: str = "",
+    thread_id: str | None = None,
+    chip_intent: str = "",
+) -> dict[str, Any] | None:
+    """جمع‌آوری نام/موبایل مشتری بدون LLM — همان الگوی visit_draft."""
+    v = (voice or "").strip().lower()
+    aud = (audience or "").strip().lower()
+    if v in (VOICE_PUBLIC, VOICE_ADMIN, VOICE_LAWYER) or aud == AUDIENCE_ADMIN:
+        return None
+    me = (phone or "").strip()
+    msg = (text or "").strip()
+    if not me or not msg:
+        return None
+    if not partner_is_approved(me):
+        return None
+    if _visit_draft_awaiting(_load_visit_draft(me, thread_id=thread_id)):
+        return None
+
+    try:
+        from flask import g
+
+        g.ai_tool_thread_id = (thread_id or "").strip() or None
+        g.ai_tool_audience = audience or AUDIENCE_PARTNER
+        g.ai_last_user_message = msg
+    except Exception:
+        pass
+
+    draft = _load_lead_draft(me, thread_id=thread_id)
+    awaiting = _lead_draft_awaiting(draft)
+    start_chip = str(chip_intent or "").strip().lower() == "have_customer"
+    start_text = any(k in msg for k in _LEAD_START_KEYS)
+
+    if not awaiting:
+        if not (start_chip or start_text):
+            return None
+        _save_lead_draft(me, {"awaiting": "name"}, thread_id=thread_id)
+        return {
+            "ok": True,
+            "reply": LEAD_ASK_NAME,
+            "agent_actions": [],
+            "meta": {"provider": "lead_step", "forced": True},
+        }
+
+    if start_text:
+        ask = LEAD_ASK_NAME if awaiting == "name" else LEAD_ASK_PHONE
+        return {
+            "ok": True,
+            "reply": ask,
+            "agent_actions": [],
+            "meta": {"provider": "lead_step", "forced": True},
+        }
+
+    from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
+
+    chip = str(chip_intent or "").strip().lower()
+    switched = chip in ("find_land", "followup", "next_action", "visit", "marketing", "deal")
+
+    if awaiting == "name":
+        if not _looks_like_customer_name(msg):
+            if switched:
+                return None
+            return {
+                "ok": True,
+                "reply": "نام مشتری چیست؟",
+                "agent_actions": [],
+                "meta": {"provider": "lead_step", "forced": True},
+            }
+        _save_lead_draft(
+            me,
+            {"awaiting": "phone", "display_name": msg},
+            thread_id=thread_id,
+        )
+        return {
+            "ok": True,
+            "reply": LEAD_ASK_PHONE,
+            "agent_actions": [],
+            "meta": {"provider": "lead_step", "forced": True},
+        }
+
+    if awaiting == "phone":
+        phone_try = normalize_iran_mobile(msg) or msg
+        if not is_valid_iran_mobile(phone_try):
+            if switched:
+                return None
+            return {
+                "ok": True,
+                "reply": LEAD_ASK_PHONE,
+                "agent_actions": [],
+                "meta": {"provider": "lead_step", "forced": True},
+            }
+        display_name = str(draft.get("display_name") or "").strip()
+        tool_out = _tool_propose_lead(
+            {"display_name": display_name, "customer_phone": phone_try},
+            phone=me,
+        )
+        _clear_lead_draft(me, thread_id=thread_id)
+        return _lead_tool_to_chat_result(tool_out)
+
+    return None
 
 
 def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
@@ -3299,28 +3586,34 @@ def _tool_propose_lead(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
     )
     # MVP: فقط نام + موبایل — یکی‌یکی
     if not display_name:
+        _save_lead_draft(me, {"awaiting": "name"})
         return {
             "ok": True,
             "model_result": {
                 "ok": True,
                 "status": "needs_customer_name",
-                "speak_exactly": "نام مشتری چیست؟",
+                "speak_exactly": LEAD_ASK_NAME,
                 "instruction": (
-                    "عین speak_exactly را بپرس. هنوز شماره نپرس و کارت نساز."
+                    "عین speak_exactly را بپرس. هنوز شماره نپرس، کارت نساز، "
+                    "و نگو ثبت شد."
                 ),
             },
         }
     if not phone_raw:
+        _save_lead_draft(
+            me,
+            {"awaiting": "phone", "display_name": display_name},
+        )
         return {
             "ok": True,
             "model_result": {
                 "ok": True,
                 "status": "needs_customer_phone",
                 "customer_name": display_name,
-                "speak_exactly": "شماره موبایل مشتری را بفرست.",
+                "speak_exactly": LEAD_ASK_PHONE,
                 "instruction": (
                     "عین speak_exactly را بپرس. بعد با display_name و customer_phone "
-                    "دوباره propose_lead بزن."
+                    "دوباره propose_lead بزن. نگو ثبت شد."
                 ),
             },
         }
@@ -3340,6 +3633,7 @@ def _tool_propose_lead(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
         "notes": "",
     }
     token = _store_pending_action(user_key=me, action_type="confirm_lead", payload=payload)
+    _clear_lead_draft(me)
     masked = cust[:4] + "***" + cust[-3:] if len(cust) >= 7 else cust
     lines = [
         f"نام: {display_name}",
@@ -3358,8 +3652,10 @@ def _tool_propose_lead(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
             "ok": True,
             "status": "needs_user_confirmation",
             "instruction": (
-                "کارت «ثبت مشتری» نشان داده شد؛ بگو چک کند و تأیید بزند. هنوز ثبت نشده."
+                "اطلاعات مشتری آماده است. برای ثبت، تأیید کنید. هنوز ثبت نشده. "
+                "نگو ثبت شد."
             ),
+            "speak_exactly": LEAD_READY,
         },
         "ui_action": ui,
         "land_codes": [],
@@ -4122,6 +4418,11 @@ def _confirm_lead(*, phone: str, token: str, pending: dict[str, Any]) -> dict[st
         notes=notes,
     )
     contact_id = contact.id if contact else ""
+    tid = _tool_thread_meta()[0]
+    try:
+        _clear_lead_draft(phone, thread_id=tid)
+    except Exception:
+        pass
     # Seed visit_draft تا propose_visit_request نام/شماره را دوباره نپرسد
     try:
         first = str(payload.get("first_name") or "").strip()
@@ -4140,6 +4441,7 @@ def _confirm_lead(*, phone: str, token: str, pending: dict[str, Any]) -> dict[st
                 "customer_phone": cust,
                 "awaiting": "",
             },
+            thread_id=tid,
         )
     except Exception:
         pass

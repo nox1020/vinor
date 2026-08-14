@@ -38,6 +38,18 @@
 
 <div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
   <main class="mx-auto w-full max-w-lg">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="px-4 pt-3 space-y-2">
+        {% for category, message in messages %}
+        <div class="rounded-xl border px-4 py-3 text-sm {% if category in ['error', 'danger'] %}border-rose-500/30 bg-rose-950/30 text-rose-200{% else %}border-emerald-500/30 bg-emerald-950/30 text-emerald-200{% endif %}">
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+
     {% if items %}
     <section class="sp-list" aria-label="آگهی‌های من">
       {% for item in items %}

@@ -88,6 +88,8 @@
   var emptyPollStreak = 0;
   var pollPaused = layerGated && !sheetOpen;
   var pendingChipIntent = '';
+  var FUNNEL_INTENT_KEY = 'vinor_ai_funnel_intent';
+  var STICKY_CHIP_INTENTS = { have_customer: 1, visit: 1 };
   var submitting = false;
   var lastSubmitAt = 0;
   var seenHiddenMsgKeys = {};
@@ -99,6 +101,42 @@
     }
   } catch (_) {}
 
+  function readStickyFunnelIntent() {
+    try {
+      var v = (sessionStorage.getItem(FUNNEL_INTENT_KEY) || '').trim();
+      return STICKY_CHIP_INTENTS[v] ? v : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function writeStickyFunnelIntent(intent) {
+    intent = (intent || '').trim();
+    try {
+      if (STICKY_CHIP_INTENTS[intent]) sessionStorage.setItem(FUNNEL_INTENT_KEY, intent);
+    } catch (_) {}
+  }
+
+  function clearStickyFunnelIntent() {
+    try {
+      sessionStorage.removeItem(FUNNEL_INTENT_KEY);
+    } catch (_) {}
+  }
+
+  function clearStickyFunnelIfCards(data) {
+    var acts = (data && data.agent_actions) || [];
+    var html = String((data && data.cards_html) || '');
+    var sticky = readStickyFunnelIntent();
+    var i;
+    for (i = 0; i < acts.length; i++) {
+      var t = String((acts[i] && acts[i].type) || '');
+      if (t === 'confirm_lead' && sticky === 'have_customer') clearStickyFunnelIntent();
+      if (t === 'confirm_visit' && sticky === 'visit') clearStickyFunnelIntent();
+    }
+    if (html.indexOf('confirm_lead') >= 0 && sticky === 'have_customer') clearStickyFunnelIntent();
+    if (html.indexOf('confirm_visit') >= 0 && sticky === 'visit') clearStickyFunnelIntent();
+  }
+
   function takePendingChipIntent() {
     var fromForm = '';
     try {
@@ -107,6 +145,8 @@
     } catch (_) {}
     var intent = fromForm || pendingChipIntent || '';
     pendingChipIntent = '';
+    if (!intent) intent = readStickyFunnelIntent();
+    if (intent && STICKY_CHIP_INTENTS[intent]) writeStickyFunnelIntent(intent);
     return intent;
   }
 
@@ -3597,6 +3637,7 @@
       }
       if (data.thread_id) setActiveThreadId(data.thread_id);
       noteGuestRepliesFromPayload(data);
+      clearStickyFunnelIfCards(data);
       await reconcileExchange(data.messages, { stream: true });
       if (data.guest_limit_reached || (typeof data.guest_replies_remaining === 'number' && data.guest_replies_remaining <= 0 && isGuestQuotaUser())) {
         guestRepliesRemaining = 0;

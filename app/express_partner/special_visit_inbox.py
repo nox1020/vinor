@@ -15,6 +15,7 @@ from .visit_requests import (
     COMPLETED_STATUS,
     DONE_PENDING_STATUS,
     NO_SHOW_STATUS,
+    OPEN_VISIT_STATUSES,
     PENDING_STATUS,
     admin_can_transition_visit,
     admin_update_visit_request_status,
@@ -31,6 +32,92 @@ def owned_land_codes(phone: str) -> Set[str]:
         for land in listings_owned_by(phone)
         if str(land.get("code") or "").strip()
     }
+
+
+def visit_inbox_badge_count(phone: str) -> int:
+    """تعداد بازدیدهای باز روی آگهی‌های مالک — برای بج منو."""
+    codes = owned_land_codes(phone)
+    if not codes:
+        return 0
+    rows = load_express_visit_requests() or []
+    n = 0
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("land_code") or "").strip() not in codes:
+            continue
+        st = str(row.get("status") or PENDING_STATUS).strip() or PENDING_STATUS
+        if st in OPEN_VISIT_STATUSES:
+            n += 1
+    return n
+
+
+def notify_special_owner_new_visit(rec: Dict[str, Any] | None) -> None:
+    """اعلان سریع (درون‌برنامه + پوش) برای مالک آگهی ویژه وقتی بازدید ثبت می‌شود."""
+    if not isinstance(rec, dict):
+        return
+    code = str(rec.get("land_code") or "").strip()
+    requester = _norm_phone(rec.get("partner_phone") or "")
+    if not code:
+        return
+    try:
+        from app.utils.storage import load_ads_cached
+
+        lands = load_ads_cached() or []
+    except Exception:
+        lands = []
+    land = None
+    for item in lands if isinstance(lands, list) else []:
+        if isinstance(item, dict) and str(item.get("code") or "").strip() == code:
+            land = item
+            break
+    if not isinstance(land, dict) or not land.get("is_express"):
+        return
+    owner = _norm_phone(str(land.get("owner") or land.get("user_phone") or ""))
+    if not owner or len(owner) != 11 or owner == requester:
+        return
+    if code not in owned_land_codes(owner):
+        return
+    title = str(rec.get("land_title") or land.get("title") or code).strip() or code
+    partner_name = str(rec.get("partner_name") or "").strip() or "یک همکار"
+    date_bit = ""
+    visit_date = str(rec.get("visit_date") or "").strip()
+    if visit_date:
+        try:
+            jalali = format_iso_date_jalali(visit_date)
+            if jalali:
+                date_bit = f" — {jalali}"
+        except Exception:
+            pass
+    try:
+        from flask import url_for
+
+        from app.services.notifications import add_notification
+
+        try:
+            action_url = url_for("express_partner.special_visit_inbox")
+        except Exception:
+            action_url = "/express/partner/inbox-visits"
+        add_notification(
+            user_id=owner,
+            title="بازدید جدید",
+            body=f"{partner_name} برای «{title}» درخواست بازدید ثبت کرد{date_bit}.",
+            ntype="visit",
+            ad_id=code,
+            action_url=action_url,
+            source="visit_inbox",
+        )
+    except Exception:
+        try:
+            from flask import current_app
+
+            current_app.logger.exception(
+                "notify_special_owner_new_visit failed code=%s owner=%s",
+                code,
+                owner,
+            )
+        except Exception:
+            pass
 
 
 def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:

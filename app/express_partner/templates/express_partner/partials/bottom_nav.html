@@ -182,6 +182,11 @@
   function syncAllNavBadges() {
     syncFavoritesBadge();
     try {
+      if (typeof window.__vinorVisitInboxCount === 'number') {
+        setNavBadge('visit-inbox', window.__vinorVisitInboxCount);
+      }
+    } catch (_) {}
+    try {
       if (window.VinorNotifyCenter && typeof window.VinorNotifyCenter.getState === 'function') {
         var st = window.VinorNotifyCenter.getState();
         if (st && typeof st.unread !== 'undefined') {
@@ -713,6 +718,15 @@
     try {
       const u = ev && ev.detail && typeof ev.detail.unread !== 'undefined' ? ev.detail.unread : null;
       if (u !== null) setNavBadge('notifications', u);
+    } catch (_) {}
+  });
+
+  window.addEventListener('vinor:visit-inbox:update', function (ev) {
+    try {
+      var n = ev && ev.detail && typeof ev.detail.count !== 'undefined' ? Number(ev.detail.count) : 0;
+      if (!isFinite(n) || n < 0) n = 0;
+      window.__vinorVisitInboxCount = n;
+      setNavBadge('visit-inbox', n);
     } catch (_) {}
   });
 

@@ -296,7 +296,7 @@ def create_special_listing_from_express_form(
         "payment_terms": payment_terms,
         "is_express": True,
         "express_status": "approved",
-        "expert_verified": bool((form.get("expert_verified") or "").strip()),
+        "expert_verified": False,
         "express_documents": documents,
         "vinor_contact": vinor_contact,
         "extras": {

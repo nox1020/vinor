@@ -407,12 +407,6 @@
     color: var(--ep-drawer-muted);
     text-align: right;
   }
-  #epProfileDrawer .ep-profile-drawer__nav-group--account {
-    margin-top: 0.45rem;
-    padding-top: 0.35rem;
-    border-top: 1px solid var(--ep-drawer-sep);
-  }
-
   .ep-profile-drawer__foot {
     flex-shrink: 0;
     border-top: 1px solid var(--ep-drawer-sep);
@@ -424,6 +418,7 @@
     position: relative;
     direction: ltr;
     background: #000;
+    overflow: visible;
   }
   .ep-profile-drawer__foot--login {
     direction: rtl;
@@ -443,12 +438,93 @@
     transform: scale(0.97);
   }
   /* پروفایل کاربر — سبک GPT در فوتر کشو */
+  .ep-profile-drawer__user-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    position: relative;
+    direction: rtl;
+    gap: 0.1rem;
+  }
+  .ep-profile-drawer__user-more {
+    flex-shrink: 0;
+    width: 2.15rem;
+    height: 2.15rem;
+    border: 0;
+    border-radius: 9999px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.62);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .ep-profile-drawer__user-more i {
+    font-size: 0.95rem;
+  }
+  .ep-profile-drawer__user-more:hover,
+  .ep-profile-drawer__user-more[aria-expanded="true"] {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+  .ep-profile-drawer__user-menu {
+    position: absolute;
+    bottom: calc(100% + 0.4rem);
+    left: 0.2rem;
+    right: auto;
+    min-width: 11.75rem;
+    padding: 0.3rem;
+    border-radius: 0.9rem;
+    background: #2f2f2f;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+    z-index: 6;
+  }
+  .ep-profile-drawer__user-menu[hidden] {
+    display: none;
+  }
+  .ep-profile-drawer__user-menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.7rem;
+    width: 100%;
+    padding: 0.7rem 0.8rem;
+    border: 0;
+    border-radius: 0.65rem;
+    background: transparent;
+    color: #ececec;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    text-align: right;
+    direction: rtl;
+    font-family: inherit;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ep-profile-drawer__user-menu-item--danger {
+    color: #ff6b7a;
+  }
+  .ep-profile-drawer__user-menu-item i {
+    width: 1.1rem;
+    text-align: center;
+    font-size: 0.9rem;
+  }
+  .ep-profile-drawer__user-menu-item:hover,
+  .ep-profile-drawer__user-menu-item:active {
+    background: rgba(255, 255, 255, 0.08);
+  }
   .ep-profile-drawer__user {
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 0.7rem;
     padding: 0.35rem 0.45rem;
     margin: 0;
@@ -955,7 +1031,8 @@
         'fa-calendar-check',
         'صندوق بازدید',
         tour='special-visit-inbox-link',
-        row_id='epDrawerVisitInboxBtn'
+        row_id='epDrawerVisitInboxBtn',
+        badge_key='visit-inbox'
       ) }}
     </div>
     {% endif %}
@@ -1003,53 +1080,72 @@
       ) }}
     </div>
     {% endif %}
-
-    <div class="ep-profile-drawer__nav-group ep-profile-drawer__nav-group--account" aria-label="حساب">
-      <button type="button"
-              id="epDrawerLogoutBtn"
-              class="profile-menu-row profile-menu-row--danger flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors"
-              data-vinor-logout
-              data-tour="profile-section"
-              aria-label="خروج">
-        <div class="relative flex h-11 w-11 shrink-0 items-center justify-center">
-          <i class="fas fa-right-from-bracket text-base" aria-hidden="true"></i>
-        </div>
-        <div class="min-w-0 flex-1">
-          <div class="text-[15px] font-medium leading-tight text-white">خروج</div>
-        </div>
-      </button>
-    </div>
   </nav>
   {% endif %}
   </div>
 
   {% if me_phone %}
   <div class="ep-profile-drawer__foot">
-    <a href="{{ url_for('express_partner.profile_edit') }}"
-       data-vinor-express-nav
-       class="ep-profile-drawer__user"
-       id="epDrawerUserCard"
-       aria-label="پروفایل {{ _drawer_name }}"
-       title="ویرایش پروفایل"
-       data-tour="profile-section">
-      <span class="ep-profile-drawer__user-meta">
-        <span class="ep-profile-drawer__user-name">{{ _drawer_name }}</span>
-        <span class="ep-profile-drawer__user-phone" dir="ltr">{{ me_phone }}</span>
-      </span>
-      <span class="ep-profile-drawer__user-avatar" aria-hidden="true">
-        {% if _drawer_avatar_url %}
-        <img src="{{ _drawer_avatar_url }}"
-             alt=""
-             loading="lazy"
-             decoding="async"
-             referrerpolicy="no-referrer"
-             onerror="this.style.display='none';var f=this.nextElementSibling;if(f)f.hidden=false;">
-        <span hidden>{{ _drawer_name|avatar_initials }}</span>
-        {% else %}
-        <span>{{ _drawer_name|avatar_initials }}</span>
-        {% endif %}
-      </span>
-    </a>
+    <div class="ep-profile-drawer__user-row">
+      <a href="{{ url_for('express_partner.profile_edit') }}"
+         data-vinor-express-nav
+         class="ep-profile-drawer__user"
+         id="epDrawerUserCard"
+         aria-label="پروفایل {{ _drawer_name }}"
+         title="ویرایش پروفایل"
+         data-tour="profile-section">
+        <span class="ep-profile-drawer__user-avatar" aria-hidden="true">
+          {% if _drawer_avatar_url %}
+          <img src="{{ _drawer_avatar_url }}"
+               alt=""
+               loading="lazy"
+               decoding="async"
+               referrerpolicy="no-referrer"
+               onerror="this.style.display='none';var f=this.nextElementSibling;if(f)f.hidden=false;">
+          <span hidden>{{ _drawer_name|avatar_initials }}</span>
+          {% else %}
+          <span>{{ _drawer_name|avatar_initials }}</span>
+          {% endif %}
+        </span>
+        <span class="ep-profile-drawer__user-meta">
+          <span class="ep-profile-drawer__user-name">{{ _drawer_name }}</span>
+          <span class="ep-profile-drawer__user-phone" dir="ltr">{{ me_phone }}</span>
+        </span>
+      </a>
+      <button type="button"
+              class="ep-profile-drawer__user-more"
+              id="epDrawerUserMenuBtn"
+              aria-label="منوی حساب"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-controls="epDrawerUserMenu">
+        <i class="fas fa-ellipsis-vertical" aria-hidden="true"></i>
+      </button>
+      <div class="ep-profile-drawer__user-menu"
+           id="epDrawerUserMenu"
+           role="menu"
+           hidden
+           aria-labelledby="epDrawerUserMenuBtn">
+        <a href="{{ url_for('express_partner.settings') }}"
+           class="ep-profile-drawer__user-menu-item"
+           id="epDrawerSettingsBtn"
+           role="menuitem"
+           data-vinor-express-nav
+           aria-label="تنظیمات">
+          <i class="fas fa-gear" aria-hidden="true"></i>
+          تنظیمات
+        </a>
+        <button type="button"
+                class="ep-profile-drawer__user-menu-item ep-profile-drawer__user-menu-item--danger"
+                id="epDrawerLogoutBtn"
+                role="menuitem"
+                data-vinor-logout
+                aria-label="خروج">
+          <i class="fas fa-right-from-bracket" aria-hidden="true"></i>
+          خروج
+        </button>
+      </div>
+    </div>
   </div>
   {% else %}
   <div class="ep-profile-drawer__foot ep-profile-drawer__foot--login">
@@ -1343,9 +1439,35 @@
     setHomeDivarDrawerLock(true);
     var menuBtn = document.getElementById('epProfileMenuBtn');
     if (menuBtn) menuBtn.setAttribute('aria-expanded', 'true');
+    try {
+      if (window.VinorNotifyCenter && typeof window.VinorNotifyCenter.fetchUnread === 'function') {
+        window.VinorNotifyCenter.fetchUnread();
+      }
+    } catch (_) {}
+  }
+
+  function closeUserMenu() {
+    var menu = document.getElementById('epDrawerUserMenu');
+    var btn = document.getElementById('epDrawerUserMenuBtn');
+    if (menu) menu.hidden = true;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleUserMenu() {
+    var menu = document.getElementById('epDrawerUserMenu');
+    var btn = document.getElementById('epDrawerUserMenuBtn');
+    if (!menu || !btn) return;
+    var willOpen = !!menu.hidden;
+    if (willOpen) {
+      menu.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+    } else {
+      closeUserMenu();
+    }
   }
 
   function closeDrawer() {
+    closeUserMenu();
     drawer.classList.remove('is-open');
     backdrop.classList.remove('is-open');
     drawer.setAttribute('aria-hidden', 'true');
@@ -1635,6 +1757,13 @@
   })();
 
   hoist();
+  try {
+    if (typeof window.__vinorVisitInboxCount === 'number') {
+      window.dispatchEvent(new CustomEvent('vinor:visit-inbox:update', {
+        detail: { count: window.__vinorVisitInboxCount }
+      }));
+    }
+  } catch (_) {}
   if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
   backdrop.addEventListener('click', closeDrawer);
 
@@ -1687,6 +1816,16 @@
   }
 
   drawer.addEventListener('click', function (e) {
+    var moreBtn = e.target.closest && e.target.closest('#epDrawerUserMenuBtn');
+    if (moreBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleUserMenu();
+      return;
+    }
+    if (!(e.target.closest && e.target.closest('#epDrawerUserMenu'))) {
+      closeUserMenu();
+    }
     var logoutBtn = e.target.closest && e.target.closest('[data-vinor-logout]');
     if (logoutBtn) {
       e.preventDefault();
@@ -1719,6 +1858,12 @@
   document.addEventListener('keydown', function onEsc(e) {
     if (e.key !== 'Escape') return;
     if (document.documentElement.classList.contains('vinor-ai-del-modal-open')) return;
+    var userMenu = document.getElementById('epDrawerUserMenu');
+    if (userMenu && !userMenu.hidden) {
+      e.preventDefault();
+      closeUserMenu();
+      return;
+    }
     if (isOpen()) closeDrawer();
   });
 

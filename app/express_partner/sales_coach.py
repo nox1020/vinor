@@ -952,7 +952,7 @@ def build_home_ai_quick_prompts(
     has_pending_app: bool = False,
     has_completed_deal: bool = False,
 ) -> List[Dict[str, str]]:
-    """پیشنهادهای سریع حالت خالی خانه — کارت اصلی + دو اکشن."""
+    """پیشنهادهای سریع حالت خالی خانه — تا ۴ چیپ چت (بدون مدال جدا)."""
     if not is_approved:
         return build_limited_ai_quick_prompts(
             me_phone=me_phone,
@@ -986,45 +986,44 @@ def build_home_ai_quick_prompts(
             item["subtitle"] = subtitle.strip()
         out.append(item)
 
-    # کارت اصلی: ثبت مشتری → مدال مشخصات + بازدید خودکار
+    # کارت اصلی: شروع قیف مشتری در همین چت (نه مدال جدا)
     add(
-        "ثبت مشتری جدید",
-        prompt="مشتری دارم — مشخصاتش را ثبت کنیم",
+        "مشتری دارم",
+        prompt="مشتری دارم",
         intent="have_customer",
         icon="user_plus",
-        subtitle="مشتری خود را ثبت کنید و روند فروش را شروع کنید",
+        subtitle="نام و موبایل را می‌گیریم؛ ثبت فقط با تأیید شما",
         variant="hero",
     )
-    # فلگ UI برای باز کردن مدال به‌جای ارسال به چت
-    if out:
-        out[-1]["ui_action"] = "open_customer_modal"
     add(
-        "پیدا کردن فایل",
-        prompt=(
-            "یه فایل مناسب برای بازاریابی می‌خوام"
-            if has_completed_deal
-            else "یه فایل جدید برای بازاریابی می‌خوام"
-        ),
+        "دنبال ملک",
+        prompt="دنبال ملک مناسب هستم",
         intent="find_land",
         icon="search",
-        subtitle="جستجوی فایل و ملک",
+        subtitle=(
+            "فایل مناسب برای مشتری"
+            if has_completed_deal
+            else "جستجوی فایل داخل سیستم"
+        ),
         variant="tile",
     )
-    if out:
-        out[-1]["ui_action"] = "open_divar_ads_all"
     add(
-        "قدم بعدی",
-        prompt=(
-            "قدم بعدی‌م چیه؟"
-            if has_completed_deal
-            else "برای گرفتن اولین پورسانت قدم بعدی‌م چیه؟"
-        ),
+        "پیگیری مشتری",
+        prompt="می‌خوام مشتری را پیگیری کنم",
+        intent="followup",
+        icon="clipboard",
+        subtitle="تماس و یادآوری بعدی",
+        variant="tile",
+    )
+    add(
+        "وضعیت معامله",
+        prompt="وضعیت معامله و قدم بعدی‌م چیه؟",
         intent="next_action",
         icon="bolt",
-        subtitle="وظایف و پیشنهادات شما",
+        subtitle="یک کار بعدی مشخص",
         variant="tile",
     )
-    return out[:3]
+    return out[:4]
 
 
 def build_ai_quick_prompts(

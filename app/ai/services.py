@@ -23,6 +23,7 @@ from .agent_tools import (
     render_agent_actions_html,
     run_tool,
     tools_schema_for_voice,
+    try_continue_lead_from_user_message,
     try_continue_visit_from_user_message,
 )
 from .audience import (
@@ -335,6 +336,45 @@ def _enforce_vinor_response_style(reply: str, *, voice: str, audience: str) -> s
     shaped = _ensure_next_step(shaped)
     shaped = _truncate_lines(shaped, max_lines=max_lines)
     return shaped.strip()
+
+
+_UNCONFIRMED_CLAIM_RE = re.compile(
+    r"(مشتری\s*ثبت\s*شد|بازدید\s*ثبت\s*شد|معامله\s*ثبت\s*شد|"
+    r"ثبت\s*شد|انجام\s*شد|تکمیل\s*شد|ذخیره\s*شد|معامله\s*شد)",
+    re.I,
+)
+
+
+def _has_pending_confirm_card(actions: list[dict[str, Any]] | None) -> bool:
+    for a in actions or []:
+        if not isinstance(a, dict):
+            continue
+        t = str(a.get("type") or "")
+        st = str(a.get("state") or a.get("status") or "pending").strip().lower()
+        if t.startswith("confirm_") and st in ("pending", ""):
+            return True
+    return False
+
+
+def _sanitize_unconfirmed_action_claims(
+    reply: str,
+    *,
+    agent_actions: list[dict[str, Any]] | None = None,
+    escalated: bool = False,
+) -> str:
+    """مدل نباید بگوید ثبت شد مگر همین نوبت confirm Backend بوده (مسیر جدا)."""
+    if escalated:
+        return (reply or "").strip()
+    text = (reply or "").strip()
+    if not text or not _UNCONFIRMED_CLAIM_RE.search(text):
+        return text
+    if _has_pending_confirm_card(agent_actions):
+        return "اطلاعات آماده است. برای ثبت، تأیید کنید."
+    parts = re.split(r"(?<=[.؟!])\s+", text)
+    kept = [p for p in parts if p and not _UNCONFIRMED_CLAIM_RE.search(p)]
+    if kept:
+        return " ".join(kept).strip()
+    return "هنوز ثبت نشده. اگر بخواهید کارت تأیید می‌آورم."
 
 
 def _build_system_prompt(
@@ -1160,6 +1200,8 @@ def _run_agent_loop(
                 chip_intent=chip_intent,
                 messages=messages,
                 catalog=tool_catalog,
+                user_key=phone,
+                thread_id=thread_id or "",
             )
         else:
             allow_tools = bool(tool_catalog) and round_i < _MAX_TOOL_ROUNDS
@@ -1757,6 +1799,43 @@ def generate_reply(
             if cards_html:
                 out["cards_html"] = cards_html
             return out
+    if (not is_lawyer) and intent != "visit" and key and aud != AUDIENCE_ADMIN:
+        lead_short = try_continue_lead_from_user_message(
+            key,
+            text,
+            audience=aud,
+            voice=voice,
+            thread_id=thread_id,
+            chip_intent=intent or "",
+        )
+        if lead_short and lead_short.get("ok"):
+            reply = str(lead_short.get("reply") or "").strip()
+            agent_actions = [
+                a for a in (lead_short.get("agent_actions") or []) if isinstance(a, dict)
+            ]
+            actions_html = (
+                render_agent_actions_html(agent_actions, phone=key, audience=aud)
+                if agent_actions
+                else ""
+            )
+            cards_html = append_support_call_if_needed(
+                actions_html,
+                reply,
+                agent_actions=agent_actions,
+                audience=aud,
+            )
+            out = {
+                "ok": True,
+                "reply": reply,
+                "land_codes": [],
+                "land_cards": [],
+                "agent_actions": agent_actions,
+                "agent_actions_html": actions_html,
+                "meta": lead_short.get("meta") or {"provider": "lead_step"},
+            }
+            if cards_html:
+                out["cards_html"] = cards_html
+            return out
     tools = tools_schema_for_voice(voice) if key else []
     try:
         from app.supervisor.service import allow_component, current_flags
@@ -2179,6 +2258,11 @@ def generate_reply(
 
     if reply:
         reply = _enforce_vinor_response_style(reply, voice=voice, audience=aud)
+        reply = _sanitize_unconfirmed_action_claims(
+            reply,
+            agent_actions=agent_actions,
+            escalated=escalated,
+        )
 
     result["reply"] = reply
     result["audience"] = aud

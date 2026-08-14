@@ -819,6 +819,12 @@ def create_visit_request(
     if auto:
         rec["approved_at"] = now_iso
     requests.append(rec)
+    try:
+        from .special_visit_inbox import notify_special_owner_new_visit
+
+        notify_special_owner_new_visit(rec)
+    except Exception:
+        pass
     return rec, None
 
 

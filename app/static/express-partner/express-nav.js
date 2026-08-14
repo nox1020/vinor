@@ -31,7 +31,7 @@
     '/express/partner/favorites': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/requests': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/listings': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
-    '/express/partner/listings/new': { tab: 'profile', depth: 2, bottomNav: true, prefetch: false },
+    '/express/partner/listings/new': { tab: 'profile', depth: 2, bottomNav: false, prefetch: false },
     '/express/partner/inbox-visits': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/invite': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/training': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },

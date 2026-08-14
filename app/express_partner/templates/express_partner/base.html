@@ -321,6 +321,64 @@
       .card-img-loading .vinor-card-load-ring { animation: none; }
       #vinorExpressPullHint.is-refreshing { animation: none; }
     }
+    .vinor-quick-toast {
+      position: fixed;
+      top: calc(0.75rem + env(safe-area-inset-top, 0px));
+      left: 50%;
+      z-index: 120;
+      width: min(22rem, calc(100vw - 1.5rem));
+      transform: translateX(-50%) translateY(-0.6rem);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .vinor-quick-toast.is-on {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
+    }
+    .vinor-quick-toast__card {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      width: 100%;
+      padding: 0.7rem 0.85rem;
+      border: 0;
+      border-radius: 1rem;
+      background: #111827;
+      color: #fff;
+      text-align: right;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+    }
+    .vinor-quick-toast__icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.25rem;
+      height: 2.25rem;
+      flex-shrink: 0;
+      border-radius: 9999px;
+      background: rgba(37, 99, 235, 0.22);
+      color: #93c5fd;
+    }
+    .vinor-quick-toast__text {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+    .vinor-quick-toast__title {
+      font-size: 0.8125rem;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    .vinor-quick-toast__body {
+      font-size: 0.75rem;
+      line-height: 1.4;
+      color: #d4d4d8;
+    }
     {% block styles %}{% endblock %}
   </style>
   {% include 'express_partner/partials/partner_header_styles.html' %}
@@ -333,6 +391,15 @@
 
   {% include 'express_partner/partials/app_skeleton_shell.html' %}
   {% include 'express_partner/partials/offline_connectivity_bar.html' %}
+  <div id="vinorQuickToast" class="vinor-quick-toast" hidden role="status" aria-live="polite">
+    <button type="button" id="vinorQuickToastBtn" class="vinor-quick-toast__card">
+      <span class="vinor-quick-toast__icon" aria-hidden="true"><i class="fas fa-calendar-check"></i></span>
+      <span class="vinor-quick-toast__text">
+        <span id="vinorQuickToastTitle" class="vinor-quick-toast__title"></span>
+        <span id="vinorQuickToastBody" class="vinor-quick-toast__body"></span>
+      </span>
+    </button>
+  </div>
 
   {# Tailwind/Alpine پایین body — head سبک‌تر، اسکلتون زودتر paint می‌شود #}
   <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
@@ -880,6 +947,10 @@
       let bootstrapped = false;
       const knownNotificationIds = new Set();
       let notificationSoundBaselineReady = false;
+      let visitInboxBaselineReady = false;
+      let lastVisitInboxCount = 0;
+      let quickToastHideTimer = null;
+      const VISIT_INBOX_HREF = '/express/partner/inbox-visits';
       const NOTIFY_CACHE_KEY = 'vinor_express_notifications_v1';
       const NOTIFY_CACHE_MAX_AGE_MS = 90 * 1000;
 
@@ -949,18 +1020,106 @@
           return;
         }
         var shouldPlay = false;
+        var visitToast = null;
         list.forEach(function (n) {
           if (!n || n.id == null || n.id === '') return;
           var id = String(n.id);
           if (knownNotificationIds.has(id)) return;
           knownNotificationIds.add(id);
-          if (!n.is_read) shouldPlay = true;
+          if (!n.is_read) {
+            shouldPlay = true;
+            var src = String(n.source || '').toLowerCase();
+            var typ = String(n.type || '').toLowerCase();
+            if (src === 'visit_inbox' || typ === 'visit') visitToast = n;
+          }
         });
         if (shouldPlay && typeof window.playVinorNotificationSound === 'function') {
           window.playVinorNotificationSound();
         }
+        if (visitToast) {
+          showVinorQuickToast({
+            title: visitToast.title || 'بازدید جدید',
+            body: visitToast.body || 'یک درخواست بازدید روی آگهی شما ثبت شد.',
+            href: visitToast.action_url || VISIT_INBOX_HREF
+          });
+        }
       }
       window.__vinorNotifyIngestForSound = maybePlaySoundForNewNotifications;
+
+      function hideVinorQuickToast() {
+        var el = document.getElementById('vinorQuickToast');
+        if (!el) return;
+        el.classList.remove('is-on');
+        el.hidden = true;
+      }
+
+      function showVinorQuickToast(opts) {
+        var el = document.getElementById('vinorQuickToast');
+        var btn = document.getElementById('vinorQuickToastBtn');
+        var titleEl = document.getElementById('vinorQuickToastTitle');
+        var bodyEl = document.getElementById('vinorQuickToastBody');
+        if (!el || !btn) return;
+        var title = String((opts && opts.title) || 'بازدید جدید').trim();
+        var body = String((opts && opts.body) || '').trim();
+        var href = String((opts && opts.href) || VISIT_INBOX_HREF).trim() || VISIT_INBOX_HREF;
+        if (titleEl) titleEl.textContent = title;
+        if (bodyEl) {
+          bodyEl.textContent = body;
+          bodyEl.hidden = !body;
+        }
+        btn.setAttribute('data-href', href);
+        el.hidden = false;
+        el.classList.add('is-on');
+        window.__vinorVisitToastAt = Date.now();
+        if (quickToastHideTimer) window.clearTimeout(quickToastHideTimer);
+        quickToastHideTimer = window.setTimeout(hideVinorQuickToast, 6500);
+      }
+      window.showVinorQuickToast = showVinorQuickToast;
+
+      function applyVisitInboxCount(rawCount, opts) {
+        var next = Math.max(0, Number(rawCount) || 0);
+        var silent = !!(opts && opts.silent);
+        window.dispatchEvent(new CustomEvent('vinor:visit-inbox:update', {
+          detail: { count: next }
+        }));
+        if (!visitInboxBaselineReady) {
+          lastVisitInboxCount = next;
+          visitInboxBaselineReady = true;
+          return;
+        }
+        if (!silent && next > lastVisitInboxCount) {
+          var prevToastAt = window.__vinorVisitToastAt || 0;
+          Promise.resolve(fetchNotifications(true)).then(function () {
+            if ((window.__vinorVisitToastAt || 0) > prevToastAt) return;
+            if (typeof window.playVinorNotificationSound === 'function') {
+              window.playVinorNotificationSound();
+            }
+            showVinorQuickToast({
+              title: 'بازدید جدید',
+              body: 'یک درخواست بازدید روی آگهی شما ثبت شد.',
+              href: VISIT_INBOX_HREF
+            });
+          }).catch(function () {});
+        }
+        lastVisitInboxCount = next;
+      }
+
+      (function bindQuickToastClick() {
+        var btn = document.getElementById('vinorQuickToastBtn');
+        if (!btn || btn.getAttribute('data-bound') === '1') return;
+        btn.setAttribute('data-bound', '1');
+        btn.addEventListener('click', function () {
+          var href = (btn.getAttribute('data-href') || VISIT_INBOX_HREF).trim();
+          hideVinorQuickToast();
+          try {
+            if (typeof window.vinorExpressNavigate === 'function' && href.indexOf('/express/partner/') === 0) {
+              window.vinorExpressNavigate(href, { forward: true });
+              return;
+            }
+          } catch (_) {}
+          window.location.href = href;
+        });
+      })();
 
       window.__vinorNotifySeedFromPage = function (list, unread) {
         if (!enabled) return;
@@ -999,12 +1158,19 @@
           }
           const data = await res.json();
           if (!data || data.success !== true) return state.unread;
+          if (typeof data.visit_inbox_count !== 'undefined') {
+            applyVisitInboxCount(data.visit_inbox_count);
+          }
           const nextUnread = Number(data.unread_count || 0);
           if (nextUnread !== state.unread) {
+            const rose = nextUnread > state.unread;
             state.unread = nextUnread;
             notifyNativeUnread(nextUnread);
             writeNotifyCache(state.notifications, nextUnread);
             dispatch('vinor:notifications:update', cloneState());
+            if (rose) {
+              try { fetchNotifications(true); } catch (_) {}
+            }
           }
           return nextUnread;
         } catch (_) {
@@ -1050,6 +1216,9 @@
           }
           const data = await res.json();
           if (!data.success) return [];
+          if (typeof data.visit_inbox_count !== 'undefined') {
+            applyVisitInboxCount(data.visit_inbox_count, { silent: true });
+          }
           const incoming = Array.isArray(data.notifications) ? data.notifications : [];
           return applyNotifyPayload(incoming, data.unread_count || 0);
         } catch (err) {

@@ -1,6 +1,7 @@
 """انتخاب ابزار قبل از هر فراخوانی LLM — هدف: ۱–۳ schema در اکثر درخواست‌ها."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.ai.audience import VOICE_ADMIN, VOICE_PARTNER, VOICE_PUBLIC, VOICE_SPECIAL
@@ -40,6 +41,11 @@ _CHIP_TOOL_NAMES: dict[str, frozenset[str]] = {
     "log_call": frozenset({TOOL_LOG_CALL}),
     "followup": frozenset({TOOL_FOLLOWUP}),
 }
+
+_GREETING_RE = re.compile(
+    r"^(سلام|درود|صبح بخیر|عصر بخیر|شب بخیر|hello|hi|hey|خوبی|چطوری)[\s!.؟?]*$",
+    re.I,
+)
 
 
 def _env_bool(name: str, default: str = "1") -> bool:
@@ -99,7 +105,6 @@ def _message_signals(msg: str) -> dict[str, bool]:
             for k in (
                 "مشتری دارم",
                 "ثبت مشتری",
-                "مشتری",
                 "customer",
                 "lead",
             )
@@ -115,18 +120,26 @@ def _message_signals(msg: str) -> dict[str, bool]:
     }
 
 
+def _is_guidance_only_message(user_message: str, chip_intent: str = "") -> bool:
+    if str(chip_intent or "").strip():
+        return False
+    m = (user_message or "").strip()
+    if not m or len(m) <= 2:
+        return True
+    return bool(_GREETING_RE.match(m))
+
+
 def select_tool_names_for_request(
     voice: str | None,
     *,
     user_message: str = "",
     chip_intent: str = "",
+    user_key: str = "",
+    thread_id: str = "",
 ) -> list[str]:
     """نام ابزارهای پیشنهادی برای دور tool-calling (بدون ساخت schema)."""
     v = (voice or "").strip().lower()
     chip = _normalize_chip(chip_intent)
-    if chip:
-        return sorted(_CHIP_TOOL_NAMES[chip])
-
     msg = f"{user_message} {chip_intent}".strip()
     sig = _message_signals(msg)
     keep: set[str] = set()
@@ -181,6 +194,10 @@ def select_tool_names_for_request(
         return sorted(keep)[:3]
 
     if v == VOICE_PUBLIC:
+        if chip:
+            return sorted(_CHIP_TOOL_NAMES[chip])
+        if _is_guidance_only_message(user_message, chip_intent):
+            return []
         if sig["coop"]:
             keep.update({TOOL_COOP_INFO, TOOL_APP_STATUS, TOOL_PROPOSE_APPLY})
         elif sig["forget"]:
@@ -190,6 +207,37 @@ def select_tool_names_for_request(
         return sorted(keep)[:3]
 
     if v in (VOICE_PARTNER, VOICE_SPECIAL):
+        awaiting_visit = ""
+        awaiting_lead = ""
+        customer_ready = False
+        if user_key:
+            try:
+                from app.ai.agent_tools import (
+                    lead_form_awaiting,
+                    partner_customer_ready_for_visit,
+                    visit_form_awaiting,
+                )
+
+                awaiting_visit = visit_form_awaiting(user_key, thread_id or None)
+                awaiting_lead = lead_form_awaiting(user_key, thread_id or None)
+                customer_ready = partner_customer_ready_for_visit(
+                    user_key, thread_id or None
+                )
+            except Exception:
+                awaiting_visit = ""
+                awaiting_lead = ""
+                customer_ready = False
+        if awaiting_visit:
+            return [TOOL_VISIT]
+        if chip and chip != "have_customer":
+            names = set(_CHIP_TOOL_NAMES[chip])
+            if chip == "find_land" and customer_ready:
+                names.add(TOOL_VISIT)
+            return sorted(names)
+        if awaiting_lead or chip == "have_customer":
+            return [TOOL_LEAD]
+        if _is_guidance_only_message(user_message, chip_intent):
+            return []
         if sig["visit"]:
             keep.update({TOOL_VISIT, TOOL_COMPLETE_VISIT})
         elif sig["deal"]:
@@ -197,16 +245,19 @@ def select_tool_names_for_request(
         elif sig["listing"]:
             keep.add(TOOL_LISTING)
         elif sig["lead"]:
-            # ثبت مشتری قبل از جستجو — وگرنه مدل فقط search می‌بیند و ثبت را hallucinate می‌کند
             keep.add(TOOL_LEAD)
-            if len(keep) < 3:
-                keep.add(TOOL_SEARCH)
         elif sig["crm"]:
             keep.update({TOOL_LOG_CALL, TOOL_FOLLOWUP})
-        elif sig["search"] or len(msg) < 6:
-            keep.update({TOOL_SEARCH, TOOL_NEXT})
+        elif sig["search"]:
+            keep.add(TOOL_SEARCH)
+            if customer_ready:
+                keep.add(TOOL_VISIT)
+            elif len(keep) < 3:
+                keep.add(TOOL_NEXT)
+        elif sig["forget"]:
+            keep.add(TOOL_FORGET_MEMORY)
         else:
-            keep.update({TOOL_SEARCH, TOOL_NEXT})
+            return []
         if sig["forget"] and len(keep) < 3:
             keep.add(TOOL_FORGET_MEMORY)
         return sorted(keep)[:3]
@@ -246,6 +297,8 @@ def select_tools_for_api_round(
     chip_intent: str = "",
     messages: list[dict[str, Any]] | None = None,
     catalog: list[dict[str, Any]] | None = None,
+    user_key: str = "",
+    thread_id: str = "",
 ) -> list[dict[str, Any]]:
     """schemaهای همان دور API؛ خالی = tools=[] در درخواست."""
     cat = list(catalog) if catalog else []
@@ -264,6 +317,8 @@ def select_tools_for_api_round(
         voice,
         user_message=user_message,
         chip_intent=chip_intent,
+        user_key=user_key,
+        thread_id=thread_id,
     )
     if not names:
         return []
@@ -280,6 +335,8 @@ def filter_catalog_subset(
     user_message: str = "",
     chip_intent: str = "",
     catalog: list[dict[str, Any]] | None = None,
+    user_key: str = "",
+    thread_id: str = "",
 ) -> list[dict[str, Any]]:
     """سازگاری با token_diag threshold — همان انتخاب per-request."""
     cat = list(catalog) if catalog else []
@@ -289,7 +346,11 @@ def filter_catalog_subset(
         voice,
         user_message=user_message,
         chip_intent=chip_intent,
+        user_key=user_key,
+        thread_id=thread_id,
     )
+    if not names:
+        return []
     by_name = {_schema_tool_name(s): s for s in cat}
     picked = [by_name[n] for n in names if n in by_name]
     return picked if picked else cat

@@ -7660,6 +7660,7 @@ def special_listing_upload_document():
 
 
 def _render_special_listing_form(me_phone: str = ''):
+    """فرم ثبت آگهی همکار ویژه — قالب مشترک با ادمین، داخل شِل پرتال."""
     cities = load_active_cities() or []
     phone = (me_phone or '').strip()
     return render_template(
@@ -7674,11 +7675,16 @@ def _render_special_listing_form(me_phone: str = ''):
         listing_upload_image_url=url_for('express_partner.special_listing_upload_image'),
         listing_upload_video_url=url_for('express_partner.special_listing_upload_video'),
         listing_upload_document_url=url_for('express_partner.special_listing_upload_document'),
-        listing_page_title='ثبت آگهی همکار ویژه',
+        listing_page_title='ثبت آگهی',
         listing_page_subtitle='اطلاعات ملک را وارد و منتشر کنید',
         listing_vinor_contact_locked=True,
         listing_vinor_contact_default=phone,
         listing_hide_contact_section=True,
+        listing_hide_builtin_header=True,
+        listing_hide_expert_verified=True,
+        listing_partner_shell=True,
+        hide_header=True,
+        listing_submit_label='ثبت و انتشار آگهی',
     )
 
 
@@ -7920,6 +7926,14 @@ def profile_data():
     except Exception:
         csrf_token = ''
     is_special = _is_partner_special(profile) if is_approved else False
+    visit_inbox_count = 0
+    if is_special:
+        try:
+            from .special_visit_inbox import visit_inbox_badge_count
+
+            visit_inbox_count = int(visit_inbox_badge_count(me_phone) or 0)
+        except Exception:
+            visit_inbox_count = 0
     return jsonify({
         'success': True,
         'me_phone': me_phone,
@@ -7927,6 +7941,7 @@ def profile_data():
         'avatar_url': avatar_url,
         'is_approved': is_approved,
         'is_special': is_special,
+        'visit_inbox_count': visit_inbox_count,
         'partner_tier': _partner_tier_label(profile, is_approved=is_approved),
         'android_apk_url': android_apk_url if show_app_update else '',
         'android_apk_version': android_apk_version if show_app_update else '',
@@ -8086,8 +8101,25 @@ def _build_partner_memory_snapshot(me_phone: str) -> Dict[str, Any]:
 @express_partner_bp.route('/settings', methods=['GET'], endpoint='settings')
 @require_partner_access(allow_pending=True)
 def settings_page():
-    """صفحهٔ تنظیمات حذف شد — ریدایرکت به خانه."""
-    return redirect(url_for('express_partner.home'), code=301)
+    """هاب تنظیمات همکار — پروفایل، خروج."""
+    me_phone = _canonical_partner_phone(session.get('user_phone') or '')
+    partners = load_express_partners() or []
+    profile = _find_partner_record(partners, me_phone) or {'phone': me_phone}
+    is_approved = _is_partner_approved(profile)
+    me_name = (str((profile or {}).get('name') or '')).strip()
+    partner_name = me_name or (_partner_display_name(me_phone) if me_phone else '')
+    return render_template(
+        'express_partner/settings.html',
+        me_phone=me_phone,
+        me_name=me_name,
+        partner_name=partner_name,
+        profile=profile,
+        is_approved=is_approved,
+        is_special=_is_partner_special(profile) if is_approved else False,
+        hide_header=True,
+        bottom_nav_active='profile',
+        seo_title='تنظیمات | وینور اکسپرس',
+    )
 
 
 @express_partner_bp.route('/settings/memory', methods=['GET'], endpoint='settings_memory')
@@ -8665,11 +8697,21 @@ def get_notifications():
     me_phone = _normalize_user_id(me_phone_raw) if me_phone_raw else ""
     notifications = get_user_notifications(me_phone, limit=50)
     unread = unread_count(me_phone)
+    visit_inbox_count = 0
+    try:
+        profile = getattr(g, "express_partner_profile", None)
+        if _is_partner_special(profile):
+            from .special_visit_inbox import visit_inbox_badge_count
+
+            visit_inbox_count = int(visit_inbox_badge_count(me_phone_raw) or 0)
+    except Exception:
+        visit_inbox_count = 0
 
     return jsonify({
         "success": True,
         "notifications": notifications,
         "unread_count": unread,
+        "visit_inbox_count": visit_inbox_count,
     })
 
 
@@ -8682,9 +8724,19 @@ def get_unread_count():
     me_phone_raw = (session.get("user_phone") or "").strip()
     # استفاده از همان تابع normalize که در notifications.py استفاده می‌شود
     me_phone = _normalize_user_id(me_phone_raw) if me_phone_raw else ""
+    visit_inbox_count = 0
+    try:
+        profile = getattr(g, "express_partner_profile", None)
+        if _is_partner_special(profile):
+            from .special_visit_inbox import visit_inbox_badge_count
+
+            visit_inbox_count = int(visit_inbox_badge_count(me_phone_raw) or 0)
+    except Exception:
+        visit_inbox_count = 0
     resp = jsonify({
         "success": True,
-        "unread_count": unread_count(me_phone)
+        "unread_count": unread_count(me_phone),
+        "visit_inbox_count": visit_inbox_count,
     })
     resp.headers['Cache-Control'] = 'no-store'
     return resp

@@ -339,6 +339,13 @@
     return state;
   }
 
+  function setClearVisible(clearEl, visible) {
+    if (!clearEl) return;
+    clearEl.classList.toggle('hidden', !visible);
+    clearEl.hidden = !visible;
+    clearEl.style.display = visible ? 'grid' : 'none';
+  }
+
   function setPickerUi(pickBtn, state, displayName) {
     if (!pickBtn) return;
     const nameEl = pickBtn.querySelector('.doc-pick-name') || pickBtn.querySelector('#videoFileName');
@@ -350,7 +357,7 @@
     if (state.status === 'uploading') {
       pickBtn.classList.add('is-uploading');
       if (actionEl) actionEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i>';
-      if (clearEl) clearEl.classList.add('hidden');
+      setClearVisible(clearEl, false);
       return;
     }
 
@@ -361,7 +368,7 @@
         nameEl.classList.remove('hidden');
       }
       if (actionEl) actionEl.textContent = 'تلاش مجدد';
-      if (clearEl) clearEl.classList.remove('hidden');
+      setClearVisible(clearEl, true);
       return;
     }
 
@@ -372,7 +379,7 @@
         nameEl.classList.remove('hidden');
       }
       if (actionEl) actionEl.textContent = 'تغییر';
-      if (clearEl) clearEl.classList.remove('hidden');
+      setClearVisible(clearEl, true);
       return;
     }
 
@@ -381,8 +388,12 @@
       nameEl.classList.add('hidden');
     }
     if (actionEl) actionEl.textContent = 'انتخاب';
-    if (clearEl) clearEl.classList.add('hidden');
+    setClearVisible(clearEl, false);
   }
+
+  $$('.dv-media-pick__clear', form).forEach((el) => {
+    if (el.classList.contains('hidden') || el.hidden) setClearVisible(el, false);
+  });
 
   async function uploadMediaItem(state, pickBtn, hiddenEl, url, file, displayName) {
     state.file = file;
@@ -1079,7 +1090,8 @@
     const sizeNum = rawFrom(sizeEl);
     const priceNum = rawFrom(priceEl);
     const paymentMethod = (pm?.value || '').trim();
-    const contact = $('input[name="vinor_contact"]', form)?.value.trim();
+    const contactEl = $('input[name="vinor_contact"]', form);
+    const contact = contactEl ? contactEl.value.trim() : '';
 
     if (!title || !location || !city || !sizeNum || !priceNum) {
       e.preventDefault();
@@ -1096,7 +1108,7 @@
       alert('نحوه پرداخت را انتخاب کنید.');
       return;
     }
-    if (!contact || parseDigits(contact).length < 10) {
+    if (contactEl && (!contact || parseDigits(contact).length < 10)) {
       e.preventDefault();
       alert('شماره تماس پشتیبانی معتبر نیست.');
       return;
@@ -1118,7 +1130,6 @@
     priceEl.value = String(priceNum);
     const ppmEl = $('#price_per_meter', form);
     if (ppmEl && sizeNum > 0) ppmEl.value = String(Math.round(priceNum / sizeNum));
-    const contactEl = $('input[name="vinor_contact"]', form);
     if (contactEl) contactEl.value = String(parseDigits(contact));
     if (paymentMethod === 'اقساطی') {
       $$('.installment-row', instRows).forEach((r) => {
