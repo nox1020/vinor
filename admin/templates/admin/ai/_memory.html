@@ -1,9 +1,5 @@
-{% extends 'admin/base_admin.html' %}
-{% block page_title %}حافظه AI{% endblock %}
-{% block content %}
-<div class="space-y-4 adm-page">
-  <h2 class="text-lg font-bold text-gray-900 dark:text-white">حافظه سیستم و کاربران</h2>
-  {% include 'admin/ai_console/_nav.html' %}
+<div class="space-y-4">
+  <h3 class="text-base font-bold text-gray-900 dark:text-white">حافظه سیستم و کاربران</h3>
 
   <div class="flex gap-2 text-xs font-semibold">
     <a href="{{ url_for('admin.ai_console_memory', tab='system') }}"
@@ -360,4 +356,3 @@
     </div>
   {% endif %}
 </div>
-{% endblock %}

@@ -10,11 +10,11 @@ class VinorResponseStyleTests(unittest.TestCase):
 
         for voice in ("public", "partner", "special"):
             prompt = prompt_for_voice(voice)
-            self.assertIn("سبک پاسخ وینور (اجباری)", prompt)
-            self.assertIn("۴ تا ۸ خط", prompt)
-            self.assertIn("مرحله بعد:", prompt)
+            self.assertIn("۱ تا ۳ جمله", prompt)
+            self.assertIn("قدم بعد", prompt)
 
     def test_postprocess_compacts_options_and_caps_lines(self) -> None:
+        from app.ai.postprocess import enforce_response_style
         from app.ai.services import _enforce_vinor_response_style
 
         raw = (
@@ -28,14 +28,16 @@ class VinorResponseStyleTests(unittest.TestCase):
             "یک سوال دیگر؟\n"
             "پایان"
         )
-        out = _enforce_vinor_response_style(raw, voice="public", audience="public")
+        out = enforce_response_style(raw, voice="public", audience="public")
         lines = [ln for ln in out.splitlines() if ln.strip()]
-        self.assertGreaterEqual(len(lines), 4)
+        self.assertGreaterEqual(len(lines), 1)
         self.assertLessEqual(len(lines), 8)
         self.assertIn("گزینه‌ها:", out)
-        self.assertIn("CTA:", out)
-        self.assertIn("مرحله بعد:", out)
         self.assertLessEqual(out.count("؟"), 1)
+        # services همان تابع را برای مسیرهای قدیمی alias می‌کند
+        self.assertEqual(
+            _enforce_vinor_response_style(raw, voice="public", audience="public"), out
+        )
 
 
 if __name__ == "__main__":

@@ -263,12 +263,8 @@
     function vinorControlShell() {
       const hrefs = {
         dashboard: '{{ url_for("admin.dashboard") }}',
-        tools: '{{ url_for("admin.ai_console_tools") }}',
-        monitor: '{{ url_for("admin.ai_console_monitor") }}',
-        usage: '{{ url_for("admin.ai_console_usage") }}',
-        memory: '{{ url_for("admin.ai_console_memory") }}',
+        ai: '{{ url_for("admin.ai_hub") }}',
         visits: '{{ url_for("admin.express_visit_requests") }}',
-        escalations: '{{ url_for("admin.ai_questions") }}',
         listings: '{{ url_for("admin.express_listings") }}',
         commissions: '{{ url_for("admin.express_commissions") }}',
         withdrawals: '{{ url_for("admin.financial_withdrawals") }}',
@@ -277,9 +273,7 @@
         cities: '{{ url_for("admin.express_cities") }}',
         homeAds: '{{ url_for("admin.home_ads") }}',
         lawyer: '{{ url_for("admin.lawyer") }}',
-        errors: '{{ url_for("admin.ai_console_errors") }}',
         audit: '{{ url_for("admin.audit_log") }}',
-        flags: '{{ url_for("admin.ai_console_flags") }}',
         settings: '{{ url_for("admin.settings") }}',
         smsNotifications: '{{ url_for("admin.sms_notifications") }}',
         smsColleagues: '{{ url_for("admin.sms_colleagues") }}',
@@ -301,7 +295,6 @@
             { labelKey: 'cmd.visits', aliasKey: 'search_aliases.visit', href: hrefs.visits, icon: 'fa-route' },
             { labelKey: 'cmd.cities', href: hrefs.cities, icon: 'fa-city' },
             { labelKey: 'cmd.home_ads', href: hrefs.homeAds, icon: 'fa-images' },
-            { labelKey: 'cmd.lawyer', href: hrefs.lawyer, icon: 'fa-scale-balanced' },
           ]},
           { nameKey: 'cmd.group_finance', items: [
             { labelKey: 'cmd.deals', aliasKey: 'search_aliases.deal', href: hrefs.commissions, icon: 'fa-wallet' },
@@ -314,13 +307,8 @@
             { labelKey: 'cmd.colleague_notifications', href: hrefs.notifColleagues, icon: 'fa-bell' },
           ]},
           { nameKey: 'cmd.group_intelligence', items: [
-            { labelKey: 'cmd.escalations', href: hrefs.escalations, icon: 'fa-microchip' },
-            { labelKey: 'cmd.pending_confirms', aliasKey: 'search_aliases.tools', href: hrefs.tools, icon: 'fa-check-double' },
-            { labelKey: 'cmd.monitor', href: hrefs.monitor, icon: 'fa-heart-pulse' },
-            { labelKey: 'cmd.usage', href: hrefs.usage, icon: 'fa-chart-column' },
-            { labelKey: 'cmd.memory', aliasKey: 'search_aliases.memory', href: hrefs.memory, icon: 'fa-brain' },
-            { labelKey: 'cmd.errors', aliasKey: 'search_aliases.error', href: hrefs.errors, icon: 'fa-triangle-exclamation' },
-            { labelKey: 'cmd.flags', href: hrefs.flags, icon: 'fa-flag' },
+            { labelKey: 'cmd.ai_hub', aliasKey: 'search_aliases.tools', href: hrefs.ai, icon: 'fa-robot' },
+            { labelKey: 'cmd.lawyer', href: hrefs.lawyer, icon: 'fa-scale-balanced' },
           ]},
           { nameKey: 'cmd.group_govern', items: [
             { labelKey: 'cmd.settings', href: hrefs.settings, icon: 'fa-gear' },

@@ -25,7 +25,9 @@ class VinorOpensChatTests(unittest.TestCase):
 
         key = "guest_test_open"
         tid = ensure_active_thread(key, audience=AUDIENCE_PUBLIC)
-        self.assertEqual(messages_for_ui(key, tid, audience=AUDIENCE_PUBLIC), [])
+        seeded = messages_for_ui(key, tid, audience=AUDIENCE_PUBLIC)
+        # گفتگوی تازه یا خالی است یا فقط پیام خوش‌آمد وینور را دارد
+        self.assertTrue(all(is_welcome_message(m) for m in seeded))
 
         msgs, out_tid = ensure_vinor_opens_chat(
             key,
@@ -37,7 +39,7 @@ class VinorOpensChatTests(unittest.TestCase):
         self.assertEqual(len(msgs), 1)
         self.assertEqual(msgs[0]["role"], "assistant")
         self.assertTrue(is_welcome_message(msgs[0]))
-        self.assertIn("چطور کمک کنم", msgs[0]["content"])
+        self.assertEqual(msgs[0]["content"].strip(), opening_text().strip())
 
         # دوباره صدا زدن پیام تکراری نسازد
         msgs2, _ = ensure_vinor_opens_chat(

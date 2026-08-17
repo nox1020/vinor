@@ -172,6 +172,21 @@ body:has(#adminOpsChatPage) .vc-ops-chat-main {
   color: #2dd4bf;
   opacity: 0.9;
 }
+#adminOpsChatPage .ops-dash-link--ai {
+  margin: 0 0 1.25rem;
+  justify-content: flex-start;
+}
+#adminOpsChatPage .ops-dash-link__badge {
+  margin-inline-start: auto;
+  min-width: 1.35rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.16);
+  color: #fbbf24;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: center;
+}
 #adminOpsChatPage .ops-dash-hint {
   margin: 0.45rem 0 0;
   font-size: 0.7rem;

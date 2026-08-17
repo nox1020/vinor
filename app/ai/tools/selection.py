@@ -1,10 +1,10 @@
 """انتخاب ابزار قبل از هر فراخوانی LLM — هدف: ۱–۳ schema در اکثر درخواست‌ها."""
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from app.ai.audience import VOICE_ADMIN, VOICE_PARTNER, VOICE_PUBLIC, VOICE_SPECIAL
+from app.ai.intents import is_guidance_only, message_signals
 from app.ai.agent_tools import (
     TOOL_APP_STATUS,
     TOOL_COOP_INFO,
@@ -42,12 +42,6 @@ _CHIP_TOOL_NAMES: dict[str, frozenset[str]] = {
     "followup": frozenset({TOOL_FOLLOWUP}),
 }
 
-_GREETING_RE = re.compile(
-    r"^(سلام|درود|صبح بخیر|عصر بخیر|شب بخیر|hello|hi|hey|خوبی|چطوری)[\s!.؟?]*$",
-    re.I,
-)
-
-
 def _env_bool(name: str, default: str = "1") -> bool:
     import os
 
@@ -80,53 +74,12 @@ def _normalize_chip(chip_intent: str) -> str:
 
 
 def _message_signals(msg: str) -> dict[str, bool]:
-    m = (msg or "").strip().lower()
-    return {
-        "search": any(
-            k in m
-            for k in (
-                "جستجو",
-                "search",
-                "ویلا",
-                "ملک",
-                "فایل",
-                "land",
-                "خرید",
-                "پیشنهاد",
-                "گزینه",
-            )
-        ),
-        "visit": any(k in m for k in ("بازدید", "visit", "رزرو")),
-        "deal": any(k in m for k in ("معامله", "deal", "فروش", "release", "آزاد")),
-        "listing": any(k in m for k in ("آگهی", "listing", "متن آگهی", "مارکتینگ")),
-        "crm": any(k in m for k in ("تماس", "پیگیری", "follow", "call", "crm")),
-        "lead": any(
-            k in m
-            for k in (
-                "مشتری دارم",
-                "ثبت مشتری",
-                "customer",
-                "lead",
-            )
-        ),
-        "coop": any(k in m for k in ("همکاری", "بازاریاب", "coop", "apply", "ثبت نام")),
-        "admin_partner": any(k in m for k in ("همکار", "partner", "درخواست همکاری")),
-        "admin_msg": any(k in m for k in ("پیام", "sms", "اعلان", "push", "همگانی")),
-        "admin_visit": any(k in m for k in ("بازدید", "visit")),
-        "admin_money": any(k in m for k in ("پورسانت", "commission", "برداشت")),
-        "admin_esc": any(k in m for k in ("سوال", "escalation", "پاسخ")),
-        "admin_queue": any(k in m for k in ("صف", "queue", "عملیات", "خلاصه")),
-        "forget": any(k in m for k in ("فراموش", "حذف حافظه", "forget")),
-    }
+    """سازگاری با فراخوان‌های قبلی — منبع واحد در app.ai.intents است."""
+    return message_signals(msg)
 
 
 def _is_guidance_only_message(user_message: str, chip_intent: str = "") -> bool:
-    if str(chip_intent or "").strip():
-        return False
-    m = (user_message or "").strip()
-    if not m or len(m) <= 2:
-        return True
-    return bool(_GREETING_RE.match(m))
+    return is_guidance_only(user_message, chip_intent)
 
 
 def select_tool_names_for_request(

@@ -101,15 +101,16 @@
         <span class="ops-kpi__label">برداشت معلق</span>
         <span class="ops-kpi__value tabular-nums">{{ ov.withdrawals_pending|default(0)|fa_digits }}</span>
       </a>
-      <a role="listitem" class="ops-kpi" href="{{ url_for('admin.ai_console_tools') }}">
-        <span class="ops-kpi__label">تأیید AI</span>
-        <span class="ops-kpi__value tabular-nums">{{ ov.ai_pending|default(0)|fa_digits }}</span>
-      </a>
-      <a role="listitem" class="ops-kpi ops-kpi--warn" href="{{ url_for('admin.ai_console_errors') }}">
-        <span class="ops-kpi__label">خطای AI</span>
-        <span class="ops-kpi__value tabular-nums">{{ ov.ai_errors|default(0)|fa_digits }}</span>
-      </a>
     </div>
+
+    {% set _ai_alerts = (ov.ai_pending|default(0)) + (ov.ai_errors|default(0)) %}
+    <a class="ops-dash-link ops-dash-link--ai" href="{{ url_for('admin.ai_hub') }}">
+      <i class="fa-solid fa-robot" aria-hidden="true"></i>
+      <span>هوش مصنوعی</span>
+      {% if _ai_alerts %}
+      <span class="ops-dash-link__badge tabular-nums">{{ _ai_alerts|fa_digits }}</span>
+      {% endif %}
+    </a>
 
     <div class="ops-dash-section">
       <h2 class="ops-dash-section__title">میانبرها</h2>
@@ -151,7 +152,7 @@
           </button>
           <span class="ops-agent-panel__dot" aria-hidden="true"></span>
           <div>
-            <strong>Agent</strong>
+            <strong>دستیار عملیات</strong>
             <small>چت عملیات وینور</small>
           </div>
         </div>

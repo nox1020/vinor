@@ -230,8 +230,8 @@ def clear():
 @ai_bp.post("/agent/confirm", endpoint="agent_confirm")
 def agent_confirm():
     """تأیید کارت اجنت برای مخاطب عمومی / کاربر عادی (مثلاً ثبت همکاری)."""
-    from app.ai.agent_tools import apply_confirm_result_to_chat, confirm_action_from_token
     from app.ai.chat_store import ensure_active_thread
+    from app.ai.confirmation import apply_confirm_to_chat, confirm_action
 
     phone = (session.get("user_phone") or "").strip()
     if not phone:
@@ -251,11 +251,11 @@ def agent_confirm():
     if not thread_id:
         thread_id = ensure_active_thread(ai_user_key(), audience=AUDIENCE_PUBLIC)
 
-    out = confirm_action_from_token(phone=phone, token=token)
+    out = confirm_action(phone=phone, token=token)
     if not out.get("ok"):
         return jsonify(out), 400
 
-    chat = apply_confirm_result_to_chat(
+    chat = apply_confirm_to_chat(
         phone=phone,
         token=token,
         thread_id=thread_id,
@@ -276,7 +276,7 @@ def agent_confirm():
 
 @ai_bp.post("/agent/cancel", endpoint="agent_cancel")
 def agent_cancel():
-    from app.ai.agent_tools import cancel_pending_action
+    from app.ai.confirmation import cancel_action
 
     phone = (session.get("user_phone") or "").strip()
     data = request.get_json(silent=True) or {}
@@ -287,7 +287,7 @@ def agent_cancel():
     if not phone:
         return jsonify({"ok": False, "error": "برای انصراف وارد شوید.", "need_login": True}), 401
     return jsonify(
-        cancel_pending_action(
+        cancel_action(
             phone=phone,
             token=token,
             thread_id=thread_id,

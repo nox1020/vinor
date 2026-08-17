@@ -152,11 +152,11 @@ class IntegrationAiToolsFlagTests(unittest.TestCase):
 
             names = [t["function"]["name"] for t in tools_schema_for_voice(VOICE_PARTNER)]
             self.assertIn("propose_deal", names)
-            self.assertNotIn("propose_lead", names)
+            self.assertIn("propose_lead", names)
             self.assertNotIn("propose_task", names)
 
     def test_tools_present_when_on(self) -> None:
-        """هدف قفل: lead/task در schema چت نیست."""
+        """هدف قفل: کاتالوگ چت همان CORE_TOOLS_PARTNER است؛ EXTENDED (task) بیرون."""
         with mock.patch.dict(
             os.environ,
             {
@@ -170,7 +170,7 @@ class IntegrationAiToolsFlagTests(unittest.TestCase):
 
             names = [t["function"]["name"] for t in tools_schema_for_voice(VOICE_PARTNER)]
             self.assertIn("propose_deal", names)
-            self.assertNotIn("propose_lead", names)
+            self.assertIn("propose_lead", names)
             self.assertNotIn("propose_task", names)
 
 

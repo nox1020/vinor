@@ -2643,10 +2643,12 @@ def settings_apk_sms_template():
 @admin_bp.route('/ai-questions', methods=['GET', 'POST'], endpoint='ai_questions')
 @login_required
 def ai_questions():
-    from app.ai.escalations import answer_escalation, list_pending_for_admin, list_recent_answered
-    from app.ai.runtime_settings import get_ai_settings, get_stored_ai_api_key, mask_api_key, save_ai_settings
-    from app.ai.services import ai_config
-    from app.keys import get_deepseek_api_key
+    """POST تنظیمات/پاسخ escalation؛ GET به تب «پیام‌ها و مدل» در /admin/ai می‌رود."""
+    if request.method == 'GET':
+        return redirect(url_for('admin.ai_hub', tab='messages'))
+
+    from app.ai.escalations import answer_escalation
+    from app.ai.runtime_settings import get_ai_settings, save_ai_settings
 
     if request.method == 'POST':
         action = (request.form.get('action') or 'answer').strip()
@@ -2744,62 +2746,7 @@ def ai_questions():
             flash(result.get('error') or 'خطا در ثبت پاسخ.', 'error')
         return redirect(url_for('admin.ai_questions'))
 
-    pending = list_pending_for_admin()
-    answered = list_recent_answered()
-    ai_settings = get_ai_settings()
-    ai_status = ai_config()
-    site_settings = get_settings()
-    stored_api_key = get_stored_ai_api_key()
-    active_api_key = get_deepseek_api_key()
-    import os
-
-    from app.ai.credits import get_last_balance_probe, is_api_balance_depleted
-    from app.ai.escalations import count_pending_balance_deferred
-    from app.ai.runtime_settings import force_flash_enabled, model_choice_options
-
-    _env_ai = os.environ.get('VINOR_AI_ENABLED')
-    ai_enabled_env_locked = _env_ai is not None and str(_env_ai).strip() != ''
-
-    last_probe = get_last_balance_probe()
-    if last_probe.get('probed_at'):
-        try:
-            from datetime import datetime
-
-            last_probe = dict(last_probe)
-            last_probe['probed_at_label'] = datetime.fromtimestamp(
-                float(last_probe['probed_at'])
-            ).strftime('%Y-%m-%d %H:%M:%S')
-        except Exception:
-            last_probe['probed_at_label'] = ''
-    try:
-        lands = load_json(_lands_path())
-        p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
-    except Exception:
-        p, a, r = 0, 0, 0
-    try:
-        balance_deferred_count = count_pending_balance_deferred()
-    except Exception:
-        balance_deferred_count = 0
-    return render_template(
-        'admin/ai_questions.html',
-        pending=pending,
-        answered=answered,
-        pending_count=p,
-        approved_count=a,
-        rejected_count=r,
-        ai_settings=ai_settings,
-        ai_status=ai_status,
-        ai_model_options=model_choice_options(),
-        site_settings=site_settings,
-        api_key_masked=mask_api_key(active_api_key),
-        api_key_source='settings' if stored_api_key else ('file' if active_api_key else 'none'),
-        has_stored_api_key=bool(stored_api_key),
-        force_flash=force_flash_enabled(),
-        balance_depleted=is_api_balance_depleted(),
-        last_balance_probe=last_probe,
-        balance_deferred_count=balance_deferred_count,
-        ai_enabled_env_locked=ai_enabled_env_locked,
-    )
+    return redirect(url_for('admin.ai_hub', tab='messages'))
 
 
 # -----------------------------------------------------------------------------
@@ -2808,25 +2755,11 @@ def ai_questions():
 @admin_bp.route('/ai-model', methods=['GET', 'POST'], endpoint='ai_model')
 @login_required
 def ai_model():
-    from app.ai.credits import (
-        clear_api_balance_depleted,
-        get_last_balance_probe,
-        is_api_balance_depleted,
-        probe_deepseek_api_balance,
-    )
-    from app.ai.runtime_settings import (
-        force_flash_enabled,
-        get_ai_settings,
-        get_stored_ai_api_key,
-        mask_api_key,
-        model_choice_options,
-        save_ai_settings,
-    )
-    from app.ai.services import ai_config
-    from app.keys import get_deepseek_api_key
+    from app.ai.credits import clear_api_balance_depleted, probe_deepseek_api_balance
+    from app.ai.runtime_settings import get_ai_settings, save_ai_settings
 
     if request.method == 'GET':
-        return redirect(url_for('admin.ai_questions'))
+        return redirect(url_for('admin.ai_hub', tab='messages'))
 
     if request.method == 'POST':
         action = (request.form.get('action') or 'save').strip()
@@ -2886,41 +2819,7 @@ def ai_model():
             flash('مقدار نامعتبر در فرم مدل.', 'error')
         return redirect(url_for('admin.ai_questions'))
 
-    ai_settings = get_ai_settings()
-    ai_status = ai_config()
-    stored_api_key = get_stored_ai_api_key()
-    active_api_key = get_deepseek_api_key()
-    last_probe = get_last_balance_probe()
-    if last_probe.get('probed_at'):
-        try:
-            from datetime import datetime
-
-            last_probe = dict(last_probe)
-            last_probe['probed_at_label'] = datetime.fromtimestamp(
-                float(last_probe['probed_at'])
-            ).strftime('%Y-%m-%d %H:%M:%S')
-        except Exception:
-            last_probe['probed_at_label'] = ''
-    try:
-        lands = load_json(_lands_path())
-        p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
-    except Exception:
-        p, a, r = 0, 0, 0
-    return render_template(
-        'admin/ai_model.html',
-        ai_settings=ai_settings,
-        ai_status=ai_status,
-        ai_model_options=model_choice_options(),
-        force_flash=force_flash_enabled(),
-        balance_depleted=is_api_balance_depleted(),
-        last_balance_probe=last_probe,
-        api_key_masked=mask_api_key(active_api_key),
-        api_key_source='settings' if stored_api_key else ('file' if active_api_key else 'none'),
-        has_stored_api_key=bool(stored_api_key),
-        pending_count=p,
-        approved_count=a,
-        rejected_count=r,
-    )
+    return redirect(url_for('admin.ai_hub', tab='messages'))
 
 
 # -----------------------------------------------------------------------------

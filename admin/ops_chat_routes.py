@@ -41,7 +41,6 @@ def _dashboard_overview() -> dict[str, Any]:
             {"label": "همکاران", "href": "admin.express_partners", "icon": "fa-user-group"},
             {"label": "بازدیدها", "href": "admin.express_visit_requests", "icon": "fa-route"},
             {"label": "برداشت‌ها", "href": "admin.financial_withdrawals", "icon": "fa-money-bill-transfer"},
-            {"label": "پیام‌ها و مدل AI", "href": "admin.ai_questions", "icon": "fa-microchip"},
             {"label": "نوار آگهی", "href": "admin.home_ads", "icon": "fa-images"},
             {"label": "پیامک و نوتیفیکیشن", "href": "admin.sms_notifications", "icon": "fa-comment-sms"},
         ],
@@ -343,9 +342,9 @@ def ops_ai_chat():
 @admin_bp.post("/ops/chat/confirm", endpoint="ops_ai_agent_confirm")
 @login_required
 def ops_ai_agent_confirm():
-    from app.ai.agent_tools import apply_confirm_result_to_chat, confirm_action_from_token
     from app.ai.audience import AUDIENCE_ADMIN
     from app.ai.chat_store import ensure_active_thread
+    from app.ai.confirmation import apply_confirm_to_chat, confirm_action
 
     user_key = _admin_ops_user_key()
     data = request.get_json(silent=True) or {}
@@ -356,11 +355,11 @@ def ops_ai_agent_confirm():
     if not thread_id:
         thread_id = ensure_active_thread(user_key, audience=AUDIENCE_ADMIN)
 
-    out = confirm_action_from_token(phone=user_key, token=token)
+    out = confirm_action(phone=user_key, token=token)
     if not out.get("ok"):
         return jsonify(out), 400
 
-    chat = apply_confirm_result_to_chat(
+    chat = apply_confirm_to_chat(
         phone=user_key,
         token=token,
         thread_id=thread_id,
@@ -382,8 +381,8 @@ def ops_ai_agent_confirm():
 @admin_bp.post("/ops/chat/cancel", endpoint="ops_ai_agent_cancel")
 @login_required
 def ops_ai_agent_cancel():
-    from app.ai.agent_tools import cancel_pending_action
     from app.ai.audience import AUDIENCE_ADMIN
+    from app.ai.confirmation import cancel_action
 
     user_key = _admin_ops_user_key()
     data = request.get_json(silent=True) or {}
@@ -392,7 +391,7 @@ def ops_ai_agent_cancel():
     if not token:
         return jsonify({"ok": False, "error": "توکن نامعتبر است."}), 400
     return jsonify(
-        cancel_pending_action(
+        cancel_action(
             phone=user_key,
             token=token,
             thread_id=thread_id,

@@ -7,7 +7,7 @@
       <img src="{{ url_for('static', filename='icons/icon-48.png') }}" alt="" width="28" height="28" class="rounded-md object-cover shrink-0" decoding="async">
       <div class="min-w-0 leading-tight">
         <div class="font-bold text-sm text-white truncate">Vinor Ops</div>
-        <div class="text-[10px] text-[#6B7380]">داشبورد</div>
+        <div class="text-[10px] text-[#6B7380]">پنل عملیات</div>
       </div>
     </a>
     <button type="button" @click="menuOpen = false" class="lg:hidden p-1 text-[#6B7380] focusable rounded" data-i18n-aria="common.close">
@@ -17,16 +17,14 @@
 
   <nav class="admin-sidebar-scroll flex-1 space-y-0.5 pb-6">
 
-    <div class="vc-nav-label">اصلی</div>
+    <div class="vc-nav-label">عملیات</div>
     <a href="{{ url_for('admin.dashboard') }}"
        class="vc-nav-link {% if ep in ['admin.dashboard', 'admin.admin_root'] %}is-active{% endif %}">
       <i class="fa-solid fa-gauge-high"></i><span>داشبورد</span>
     </a>
-
-    <div class="vc-nav-label">مرور</div>
     <a href="{{ url_for('admin.express_listings') }}"
        class="vc-nav-link {% if ep in ['admin.express_listings', 'admin.express', 'admin.edit_express_listing', 'admin.add_express_listing'] %}is-active{% endif %}">
-      <i class="fa-solid fa-building"></i><span>فایل‌ها</span>
+      <i class="fa-solid fa-building"></i><span>آگهی‌های اکسپرس</span>
     </a>
     <a href="{{ url_for('admin.express_partners') }}"
        class="vc-nav-link {% if ep in ['admin.express_partners', 'admin.express_partner_detail', 'admin.express_partner_applications'] %}is-active{% endif %}">
@@ -35,20 +33,22 @@
     </a>
     <a href="{{ url_for('admin.express_visit_requests') }}"
        class="vc-nav-link {% if ep == 'admin.express_visit_requests' %}is-active{% endif %}">
-      <i class="fa-solid fa-route"></i><span>بازدیدها</span>
+      <i class="fa-solid fa-route"></i><span>روند بازدید</span>
       {% if control_badges and control_badges.visits %}<span class="vc-badge" data-i18n-number="{{ control_badges.visits }}">{{ control_badges.visits }}</span>{% endif %}
     </a>
-    <a href="{{ url_for('admin.express_cities') }}"
-       class="vc-nav-link {% if ep == 'admin.express_cities' %}is-active{% endif %}">
-      <i class="fa-solid fa-city"></i><span>شهرهای فعال</span>
+    <a href="{{ url_for('admin.reports_list') }}"
+       class="vc-nav-link {% if ep == 'admin.reports_list' %}is-active{% endif %}">
+      <i class="fa-solid fa-flag"></i><span>گزارش‌های کاربران</span>
     </a>
+
+    <div class="vc-nav-label">نمایش</div>
     <a href="{{ url_for('admin.home_ads') }}"
        class="vc-nav-link {% if ep == 'admin.home_ads' %}is-active{% endif %}">
       <i class="fa-solid fa-images"></i><span>نوار آگهی خانه</span>
     </a>
-    <a href="{{ url_for('admin.lawyer') }}"
-       class="vc-nav-link {% if ep == 'admin.lawyer' %}is-active{% endif %}">
-      <i class="fa-solid fa-scale-balanced"></i><span>وکیل ملکی</span>
+    <a href="{{ url_for('admin.express_cities') }}"
+       class="vc-nav-link {% if ep == 'admin.express_cities' %}is-active{% endif %}">
+      <i class="fa-solid fa-city"></i><span>شهرهای فعال</span>
     </a>
 
     <div class="vc-nav-label">مالی</div>
@@ -58,11 +58,11 @@
     </a>
     <a href="{{ url_for('admin.financial_withdrawals') }}"
        class="vc-nav-link {% if ep == 'admin.financial_withdrawals' %}is-active{% endif %}">
-      <i class="fa-solid fa-money-bill-transfer"></i><span>برداشت‌ها</span>
+      <i class="fa-solid fa-money-bill-transfer"></i><span>درخواست‌های برداشت</span>
     </a>
     <a href="{{ url_for('admin.zarinpal_plus') }}"
        class="vc-nav-link {% if ep == 'admin.zarinpal_plus' %}is-active{% endif %}">
-      <i class="fa-solid fa-credit-card"></i><span>زرین‌پال / پلاس</span>
+      <i class="fa-solid fa-credit-card"></i><span>زرین‌پال / Vinor Plus</span>
     </a>
 
     <div class="vc-nav-label">ارتباط</div>
@@ -78,55 +78,40 @@
     </a>
 
     <div class="vc-nav-label">هوش مصنوعی</div>
-    <a href="{{ url_for('admin.ai_questions') }}"
-       class="vc-nav-link {% if ep in ['admin.ai_questions', 'admin.ai_model'] %}is-active{% endif %}">
-      <i class="fa-solid fa-microchip"></i><span>پیام‌ها و مدل AI</span>
-    </a>
-    <a href="{{ url_for('admin.ai_console_tools') }}"
-       class="vc-nav-link {% if ep == 'admin.ai_console_tools' %}is-active{% endif %}">
-      <i class="fa-solid fa-check-double"></i><span>صف تأیید</span>
-      {% if control_badges and control_badges.pending %}<span class="vc-badge" data-i18n-number="{{ control_badges.pending }}">{{ control_badges.pending }}</span>{% endif %}
-    </a>
-    <a href="{{ url_for('admin.ai_console_monitor') }}"
-       class="vc-nav-link {% if ep == 'admin.ai_console_monitor' %}is-active{% endif %}">
-      <i class="fa-solid fa-heart-pulse"></i><span>مانیتور</span>
-    </a>
-    <a href="{{ url_for('admin.ai_console_usage') }}"
-       class="vc-nav-link {% if ep in ['admin.ai_console_usage', 'admin.ai_console_conversations', 'admin.ai_console_analytics'] %}is-active{% endif %}">
-      <i class="fa-solid fa-chart-column"></i><span>مصرف و مکالمات</span>
-    </a>
-    <a href="{{ url_for('admin.ai_console_memory', tab='system') }}"
-       class="vc-nav-link {% if ep == 'admin.ai_console_memory' and (request.args.get('tab') or 'system') != 'users' %}is-active{% endif %}">
-      <i class="fa-solid fa-brain"></i><span>دانش سیستم</span>
-    </a>
-    <a href="{{ url_for('admin.ai_console_memory', tab='users') }}"
-       class="vc-nav-link {% if ep == 'admin.ai_console_memory' and request.args.get('tab') == 'users' %}is-active{% endif %}">
-      <i class="fa-solid fa-address-book"></i><span>حافظه کاربران</span>
-    </a>
-    <a href="{{ url_for('admin.ai_console_errors') }}"
-       class="vc-nav-link {% if ep == 'admin.ai_console_errors' %}is-active{% endif %}">
-      <i class="fa-solid fa-triangle-exclamation"></i><span>خطاها</span>
-      {% if control_badges and control_badges.errors %}<span class="vc-badge" data-i18n-number="{{ control_badges.errors }}">{{ control_badges.errors }}</span>{% endif %}
-    </a>
-    <a href="{{ url_for('admin.ai_console_flags') }}"
-       class="vc-nav-link {% if ep == 'admin.ai_console_flags' %}is-active{% endif %}">
-      <i class="fa-solid fa-flag"></i><span>فلگ‌های ویژگی</span>
+    <a href="{{ url_for('admin.ai_hub') }}"
+       class="vc-nav-link {% if ep in [
+         'admin.ai_hub', 'admin.ai_questions', 'admin.ai_model',
+         'admin.ai_console_dashboard', 'admin.ai_console_monitor',
+         'admin.ai_console_tools', 'admin.ai_console_memory',
+         'admin.ai_console_usage', 'admin.ai_console_conversations',
+         'admin.ai_console_analytics', 'admin.ai_console_errors',
+         'admin.ai_console_flags'
+       ] %}is-active{% endif %}">
+      <i class="fa-solid fa-robot"></i><span>هوش مصنوعی</span>
+      {% set _ai_alerts = (control_badges.pending if control_badges else 0) + (control_badges.errors if control_badges else 0) %}
+      {% if _ai_alerts %}<span class="vc-badge" data-i18n-number="{{ _ai_alerts }}">{{ _ai_alerts }}</span>{% endif %}
     </a>
 
-    <div class="vc-nav-label">تنظیمات</div>
+    <div class="vc-nav-label">خدمات</div>
+    <a href="{{ url_for('admin.lawyer') }}"
+       class="vc-nav-link {% if ep == 'admin.lawyer' %}is-active{% endif %}">
+      <i class="fa-solid fa-scale-balanced"></i><span>وکیل ملکی</span>
+    </a>
+
+    <div class="vc-nav-label">سیستم</div>
     <a href="{{ url_for('admin.settings') }}"
        class="vc-nav-link {% if ep in ['admin.settings', 'admin.settings_apk_upload', 'admin.settings_apk_sms_template'] %}is-active{% endif %}">
-      <i class="fa-solid fa-gear"></i><span>تنظیمات</span>
+      <i class="fa-solid fa-gear"></i><span>تنظیمات کلی</span>
     </a>
     <a href="{{ url_for('admin.audit_log') }}"
        class="vc-nav-link {% if ep == 'admin.audit_log' %}is-active{% endif %}">
-      <i class="fa-solid fa-clipboard-list"></i><span>ممیزی</span>
+      <i class="fa-solid fa-clipboard-list"></i><span>ممیزی ادمین</span>
     </a>
   </nav>
 
   <div class="border-t border-line pt-3 px-1">
     <a href="{{ url_for('admin.logout') }}" class="vc-nav-link text-[#F87171]">
-      <i class="fa-solid fa-right-from-bracket"></i><span data-i18n="common.logout"></span>
+      <i class="fa-solid fa-right-from-bracket"></i><span data-i18n="common.logout">خروج</span>
     </a>
   </div>
 </div>

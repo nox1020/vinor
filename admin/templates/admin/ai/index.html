@@ -1,0 +1,63 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}هوش مصنوعی{% endblock %}
+{% block page_title %}هوش مصنوعی{% endblock %}
+
+{% block content %}
+<div class="space-y-4 adm-page">
+
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-bold text-gray-900 dark:text-white">هوش مصنوعی وینور</h2>
+      <p class="text-xs text-gray-500 mt-0.5">
+        دستیار عملیات در داشبورد است؛ اینجا مدل، ابزار، حافظه، مصرف و خطاها را می‌بینید.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2 text-[11px]">
+      {% if ai_badges and ai_badges.pending %}
+      <a href="{{ url_for('admin.ai_hub', tab='tools', sub='pending') }}"
+         class="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium">
+        در انتظار تأیید {{ ai_badges.pending }}
+      </a>
+      {% endif %}
+      {% if ai_badges and ai_badges.errors %}
+      <a href="{{ url_for('admin.ai_hub', tab='errors') }}"
+         class="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-700 dark:text-rose-300 font-medium">
+        خطا {{ ai_badges.errors }}
+      </a>
+      {% endif %}
+      <a href="{{ url_for('admin.dashboard') }}"
+         class="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-medium">
+        دستیار عملیات ←
+      </a>
+    </div>
+  </div>
+
+  <nav class="ai-tabs" aria-label="بخش‌های هوش مصنوعی">
+    {% for t in ai_tabs %}
+    <a href="{{ url_for('admin.ai_hub', tab=t.id) }}"
+       class="ai-tab {% if ai_tab == t.id %}is-active{% endif %}"
+       {% if ai_tab == t.id %}aria-current="page"{% endif %}>
+      <i class="fa-solid {{ t.icon }} text-[11px]"></i>
+      <span>{{ t.label }}</span>
+    </a>
+    {% endfor %}
+  </nav>
+
+  {% if ai_tab == 'overview' %}
+    {% include 'admin/ai/_overview.html' %}
+  {% elif ai_tab == 'messages' %}
+    {% include 'admin/ai/_messages.html' %}
+  {% elif ai_tab == 'tools' %}
+    {% include 'admin/ai/_tools.html' %}
+  {% elif ai_tab == 'memory' %}
+    {% include 'admin/ai/_memory.html' %}
+  {% elif ai_tab == 'usage' %}
+    {% include 'admin/ai/_usage.html' %}
+  {% elif ai_tab == 'errors' %}
+    {% include 'admin/ai/_errors.html' %}
+  {% elif ai_tab == 'flags' %}
+    {% include 'admin/ai/_flags.html' %}
+  {% endif %}
+
+</div>
+{% endblock %}

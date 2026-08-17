@@ -6242,9 +6242,9 @@ def ai_chat():
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_agent_confirm():
     """تأیید کاربر برای اقدام پیشنهادی AI — کارت زنده به‌روز می‌شود."""
-    from app.ai.agent_tools import apply_confirm_result_to_chat, confirm_action_from_token
     from app.ai.audience import AUDIENCE_PARTNER
     from app.ai.chat_store import ensure_active_thread
+    from app.ai.confirmation import apply_confirm_to_chat, confirm_action
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
@@ -6256,11 +6256,11 @@ def ai_agent_confirm():
     if not thread_id:
         thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
 
-    out = confirm_action_from_token(phone=phone, token=token)
+    out = confirm_action(phone=phone, token=token)
     if not out.get('ok'):
         return jsonify(out), 400
 
-    chat = apply_confirm_result_to_chat(
+    chat = apply_confirm_to_chat(
         phone=phone,
         token=token,
         thread_id=thread_id,
@@ -6283,8 +6283,8 @@ def ai_agent_confirm():
 @express_partner_bp.post('/ai/agent/cancel', endpoint='ai_agent_cancel')
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_agent_cancel():
-    from app.ai.agent_tools import cancel_pending_action
     from app.ai.audience import AUDIENCE_PARTNER
+    from app.ai.confirmation import cancel_action
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
@@ -6293,7 +6293,7 @@ def ai_agent_cancel():
     if not token:
         return jsonify({'ok': False, 'error': 'توکن نامعتبر است.'}), 400
     return jsonify(
-        cancel_pending_action(
+        cancel_action(
             phone=phone,
             token=token,
             thread_id=thread_id,

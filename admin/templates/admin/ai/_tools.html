@@ -1,9 +1,5 @@
-{% extends 'admin/base_admin.html' %}
-{% block page_title %}ابزارهای AI{% endblock %}
-{% block content %}
-<div class="space-y-4 adm-page">
-  <h2 class="text-lg font-bold text-gray-900 dark:text-white">مدیریت ابزارهای چت</h2>
-  {% include 'admin/ai_console/_nav.html' %}
+<div class="space-y-4">
+  <h3 class="text-base font-bold text-gray-900 dark:text-white">مدیریت ابزارهای چت</h3>
   <div class="flex gap-2 text-xs font-semibold">
     <a href="{{ url_for('admin.ai_console_tools', tab='catalog') }}" class="px-3 py-1.5 rounded-lg {% if tab!='pending' %}bg-teal-600 text-white{% else %}bg-gray-100 dark:bg-gray-800{% endif %}">فهرست ابزارها</a>
     <a href="{{ url_for('admin.ai_console_tools', tab='pending') }}" class="px-3 py-1.5 rounded-lg {% if tab=='pending' %}bg-amber-500 text-white{% else %}bg-gray-100 dark:bg-gray-800{% endif %}">در انتظار تأیید ({{ pending|length }})</a>
@@ -69,4 +65,3 @@
     </div>
   {% endif %}
 </div>
-{% endblock %}

@@ -1,10 +1,7 @@
-{% extends 'admin/base_admin.html' %}
-{% block page_title %}مصرف توکن و مکالمات{% endblock %}
-{% block content %}
-<div class="space-y-4 adm-page">
+<div class="space-y-4">
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div>
-      <h2 class="text-lg font-bold text-gray-900 dark:text-white">مصرف توکن و مکالمات</h2>
+      <h3 class="text-base font-bold text-gray-900 dark:text-white">مصرف توکن و مکالمات</h3>
       <p class="text-xs text-gray-500 mt-0.5">کل شبکه و تفکیک هر کاربر — منبع: analytics + ai_chats</p>
     </div>
     <form method="get" class="flex flex-wrap items-center gap-2 text-xs">
@@ -21,8 +18,6 @@
       </select>
     </form>
   </div>
-
-  {% include 'admin/ai_console/_nav.html' %}
 
   <div class="flex flex-wrap gap-2 text-xs font-semibold">
     <a href="{{ url_for('admin.ai_console_usage', tab='network', days=days, q=q) }}"
@@ -281,4 +276,3 @@
     </div>
   {% endif %}
 </div>
-{% endblock %}

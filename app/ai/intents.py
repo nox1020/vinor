@@ -1,5 +1,13 @@
-"""نیت چیپ‌های سریع — فقط مسیر فروش فایل / استخدام بازاریاب."""
+"""نیت گفتگو — یک matcher مشترک برای انتخاب ابزار و seed برنامه‌ریز.
+
+`CHIP_INTENT_HINTS` نیت چیپ‌های سریع است (مسیر فروش فایل / استخدام بازاریاب).
+`detect_intent` تنها تشخیص‌دهندهٔ متن است؛ هم `tools/selection.py` و هم
+`assistant.py` از همین استفاده می‌کنند تا سیگنال‌ها یک‌جا بمانند.
+"""
 from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
 
 from .goal import VISIT_COORD_PHONE, wrap_internal_hint
 
@@ -71,3 +79,99 @@ def hint_for_chip_intent(intent: str | None) -> str:
     key = normalize_chip_intent(intent)
     raw = CHIP_INTENT_HINTS.get(key, "")
     return wrap_internal_hint(raw) if raw else ""
+
+
+# --- matcher مشترک ---------------------------------------------------------
+
+# چیپ‌هایی که فرم مرحله‌ای دارند؛ برنامه‌ریز نباید روی آن‌ها جستجوی اضافه بزند
+PLANNING_SKIP_CHIPS = frozenset(
+    {
+        "visit",
+        "complete_visit",
+        "deal",
+        "release",
+        "coop_apply",
+    }
+)
+
+_GREETING_RE = re.compile(
+    r"^(سلام|درود|صبح بخیر|عصر بخیر|شب بخیر|hello|hi|hey|خوبی|چطوری)[\s!.؟?]*$",
+    re.I,
+)
+
+# «زمین» عمداً در سیگنال جستجو هست: «زمین گرمابسرد» باید search_lands بزند.
+_SIGNAL_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "search": (
+        "جستجو",
+        "search",
+        "زمین",
+        "قطعه",
+        "ویلا",
+        "ملک",
+        "فایل",
+        "land",
+        "خرید",
+        "پیشنهاد",
+        "گزینه",
+    ),
+    "visit": ("بازدید", "visit", "رزرو"),
+    "deal": ("معامله", "deal", "فروش", "release", "آزاد"),
+    "listing": ("آگهی", "listing", "متن آگهی", "مارکتینگ"),
+    "crm": ("تماس", "پیگیری", "follow", "call", "crm"),
+    "lead": ("مشتری دارم", "ثبت مشتری", "customer", "lead"),
+    "coop": ("همکاری", "بازاریاب", "coop", "apply", "ثبت نام"),
+    "admin_partner": ("همکار", "partner", "درخواست همکاری"),
+    "admin_msg": ("پیام", "sms", "اعلان", "push", "همگانی"),
+    "admin_visit": ("بازدید", "visit"),
+    "admin_money": ("پورسانت", "commission", "برداشت"),
+    "admin_esc": ("سوال", "escalation", "پاسخ"),
+    "admin_queue": ("صف", "queue", "عملیات", "خلاصه"),
+    "forget": ("فراموش", "حذف حافظه", "forget"),
+}
+
+
+def message_signals(msg: str) -> dict[str, bool]:
+    """سیگنال‌های کلیدواژه‌ای پیام — منبع واحد انتخاب ابزار."""
+    m = (msg or "").strip().lower()
+    return {name: any(k in m for k in keys) for name, keys in _SIGNAL_KEYWORDS.items()}
+
+
+def is_guidance_only(user_message: str, chip_intent: str = "") -> bool:
+    """پیام بدون درخواست عملی (سلام/تک‌حرف) — ابزار لازم نیست."""
+    if str(chip_intent or "").strip():
+        return False
+    m = (user_message or "").strip()
+    if not m or len(m) <= 2:
+        return True
+    return bool(_GREETING_RE.match(m))
+
+
+@dataclass(frozen=True)
+class ChatIntent:
+    """نتیجهٔ یک بار تشخیص نیت برای کل درخواست."""
+
+    chip: str = ""
+    raw_chip: str = ""
+    signals: dict[str, bool] = field(default_factory=dict)
+    guidance_only: bool = False
+
+    @property
+    def wants_search(self) -> bool:
+        return bool(self.signals.get("search")) or self.chip == "find_land"
+
+    @property
+    def skip_planning(self) -> bool:
+        return self.chip in PLANNING_SKIP_CHIPS
+
+
+def detect_intent(message: str, chip_intent: str | None = "") -> ChatIntent:
+    """یک بار تشخیص نیت؛ selection و assistant هر دو از همین می‌خوانند."""
+    raw_chip = str(chip_intent or "").strip()
+    chip = normalize_chip_intent(raw_chip)
+    blob = f"{message or ''} {raw_chip}".strip()
+    return ChatIntent(
+        chip=chip,
+        raw_chip=raw_chip,
+        signals=message_signals(blob),
+        guidance_only=is_guidance_only(message or "", raw_chip),
+    )

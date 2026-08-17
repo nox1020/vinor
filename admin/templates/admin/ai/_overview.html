@@ -1,9 +1,5 @@
-{% extends 'admin/base_admin.html' %}
-{% block page_title %}AI Live Monitor{% endblock %}
-{% block content %}
-<div class="space-y-4 adm-page">
-  <h2 class="text-lg font-bold text-gray-900 dark:text-white">Live Monitor <span class="text-xs text-teal-600">(poll)</span></h2>
-  {% include 'admin/ai_console/_nav.html' %}
+<div class="space-y-4">
+  <h3 class="text-base font-bold text-gray-900 dark:text-white">Live Monitor <span class="text-xs text-teal-600">(poll)</span></h3>
   <p class="text-xs text-gray-500">بر اساس آخرین ردیف‌های token/evaluation — WebSocket در فاز بعد.</p>
   {% if not events %}
   <div class="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 px-4 py-10 text-center text-sm text-gray-500">هنوز ترافیکی در لاگ نیست</div>
@@ -36,4 +32,3 @@
   </div>
   {% endif %}
 </div>
-{% endblock %}

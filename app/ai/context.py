@@ -1,7 +1,15 @@
-"""ساخت زمینهٔ داخلی وینور برای چت AI همکار."""
+"""ساخت زمینهٔ داخلی وینور برای چت AI همکار.
+
+دو سطح دارد:
+- `AssistantContext`: شناسنامهٔ کوچک یک نوبت گفتگو (کلید کاربر، مخاطب، لحن،
+  فایل موضوع، وضعیت پیش‌نویس بازدید/مشتری). هیچ دادهٔ سنگینی ندارد.
+- `build_*_context`: بلوک متنی prompt که فقط فایل‌های مرتبط را می‌آورد،
+  نه کل `lands.json`.
+"""
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from app.utils.storage import (
@@ -46,6 +54,88 @@ _DEICTIC_LAND_RE = re.compile(
     r"چطوره|چیه\b|چی داره)",
     re.I,
 )
+
+
+@dataclass(frozen=True)
+class AssistantContext:
+    """شناسنامهٔ یک نوبت گفتگو — سبک و قابل log کردن."""
+
+    user_key: str
+    audience: str
+    voice: str
+    thread_id: str | None = None
+    is_lawyer: bool = False
+    is_admin: bool = False
+    focus_land_code: str = ""
+    awaiting_visit_field: str = ""
+    awaiting_lead_field: str = ""
+    customer_ready_for_visit: bool = False
+
+    @property
+    def has_open_form(self) -> bool:
+        return bool(self.awaiting_visit_field or self.awaiting_lead_field)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "user_key": self.user_key,
+            "audience": self.audience,
+            "voice": self.voice,
+            "thread_id": self.thread_id or "",
+            "is_lawyer": self.is_lawyer,
+            "is_admin": self.is_admin,
+            "focus_land_code": self.focus_land_code,
+            "awaiting_visit_field": self.awaiting_visit_field,
+            "awaiting_lead_field": self.awaiting_lead_field,
+            "customer_ready_for_visit": self.customer_ready_for_visit,
+        }
+
+
+def build_assistant_context(
+    *,
+    user_key: str,
+    audience: str,
+    voice: str,
+    thread_id: str | None = None,
+) -> AssistantContext:
+    """وضعیت گفتگو را یک‌بار بخوان — fail-open، بدون هیچ فراخوان مدل."""
+    from .audience import AUDIENCE_ADMIN, VOICE_LAWYER
+
+    key = (user_key or "").strip()
+    is_admin = audience == AUDIENCE_ADMIN
+    is_lawyer = (voice or "").strip().lower() == VOICE_LAWYER
+
+    focus = ""
+    awaiting_visit = ""
+    awaiting_lead = ""
+    ready = False
+    if key and not is_admin and not is_lawyer:
+        try:
+            from .agent_tools import (
+                lead_form_awaiting,
+                partner_customer_ready_for_visit,
+                resolve_conversation_land_code,
+                visit_form_awaiting,
+            )
+
+            focus = resolve_conversation_land_code(key, thread_id=thread_id) or ""
+            awaiting_visit = visit_form_awaiting(key, thread_id) or ""
+            awaiting_lead = lead_form_awaiting(key, thread_id) or ""
+            ready = bool(partner_customer_ready_for_visit(key, thread_id))
+        except Exception:
+            pass
+
+    return AssistantContext(
+        user_key=key,
+        audience=audience,
+        voice=voice,
+        thread_id=(thread_id or "").strip() or None,
+        is_lawyer=is_lawyer,
+        is_admin=is_admin,
+        focus_land_code=focus,
+        awaiting_visit_field=awaiting_visit,
+        awaiting_lead_field=awaiting_lead,
+        customer_ready_for_visit=ready,
+    )
 
 
 def _needs_land_context(query: str) -> bool:

@@ -1,9 +1,5 @@
-{% extends 'admin/base_admin.html' %}
-{% block page_title %}AI Errors{% endblock %}
-{% block content %}
-<div class="space-y-4 adm-page">
-  <h2 class="text-lg font-bold text-gray-900 dark:text-white">Error Center</h2>
-  {% include 'admin/ai_console/_nav.html' %}
+<div class="space-y-4">
+  <h3 class="text-base font-bold text-gray-900 dark:text-white">Error Center</h3>
   {% if not errors %}
   <p class="text-sm text-gray-500 py-10 text-center">خطای باز در نمونه لاگ نیست</p>
   {% else %}
@@ -21,4 +17,3 @@
   </ul>
   {% endif %}
 </div>
-{% endblock %}
