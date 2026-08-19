@@ -19,6 +19,15 @@
 {%- endif -%}
 {%- endmacro %}
 
+{% macro ai_home_empty_count(item) -%}
+{%- if item.ui_action == 'open_divar_ads_all' -%}
+{%- set n = (divar_pro_ads|default([]))|length -%}
+{%- if n > 0 -%}
+<span class="ai-home-empty__count" aria-hidden="true">{{ n|fa_digits }}</span>
+{%- endif -%}
+{%- endif -%}
+{%- endmacro %}
+
 {% if ai_quick_prompts %}
 {% set _empty_user_msgs = chat_messages|default([])|selectattr('role', 'equalto', 'user')|list %}
 {% set _heroes = ai_quick_prompts|selectattr('variant', 'equalto', 'hero')|list %}
@@ -39,7 +48,7 @@
        data-vinor-express-nav
        title="{{ item.label|e }}">
       <span class="ai-home-empty__hero-icon" aria-hidden="true">{{ ai_home_empty_icon(item.icon|default('user_plus')) }}</span>
-      <span class="ai-home-empty__hero-title">{{ item.label }}</span>
+      <span class="ai-home-empty__hero-title">{{ item.label }}{{ ai_home_empty_count(item) }}</span>
       {% if item.subtitle %}
       <span class="ai-home-empty__hero-sub">{{ item.subtitle }}</span>
       {% endif %}
@@ -54,13 +63,16 @@
             data-open-customer-modal
             {% elif item.ui_action == 'open_divar_ads_all' %}
             data-open-divar-ads-all
+            aria-haspopup="dialog"
+            aria-controls="homeDivarAdsAllModal"
+            aria-expanded="false"
             {% else %}
             data-ai-quick-prompt="{{ item.prompt|e }}"
             {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
             {% endif %}
             title="{{ item.label|e }}">
       <span class="ai-home-empty__hero-icon" aria-hidden="true">{{ ai_home_empty_icon(item.icon|default('user_plus')) }}</span>
-      <span class="ai-home-empty__hero-title">{{ item.label }}</span>
+      <span class="ai-home-empty__hero-title">{{ item.label }}{{ ai_home_empty_count(item) }}</span>
       {% if item.subtitle %}
       <span class="ai-home-empty__hero-sub">{{ item.subtitle }}</span>
       {% endif %}
@@ -85,7 +97,10 @@
        title="{{ item.label|e }}">
       <span class="ai-home-empty__tile-icon" aria-hidden="true">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
       <span class="ai-home-empty__tile-text">
-        <span class="ai-home-empty__tile-title">{{ item.label }}</span>
+        <span class="ai-home-empty__tile-title-row">
+          <span class="ai-home-empty__tile-title">{{ item.label }}</span>
+          {{ ai_home_empty_count(item) }}
+        </span>
         {% if item.subtitle %}
         <span class="ai-home-empty__tile-sub">{{ item.subtitle }}</span>
         {% endif %}
@@ -99,6 +114,9 @@
             data-open-customer-modal
             {% elif item.ui_action == 'open_divar_ads_all' %}
             data-open-divar-ads-all
+            aria-haspopup="dialog"
+            aria-controls="homeDivarAdsAllModal"
+            aria-expanded="false"
             {% else %}
             data-ai-quick-prompt="{{ item.prompt|e }}"
             {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
@@ -106,7 +124,10 @@
             title="{{ item.label|e }}">
       <span class="ai-home-empty__tile-icon" aria-hidden="true">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
       <span class="ai-home-empty__tile-text">
-        <span class="ai-home-empty__tile-title">{{ item.label }}</span>
+        <span class="ai-home-empty__tile-title-row">
+          <span class="ai-home-empty__tile-title">{{ item.label }}</span>
+          {{ ai_home_empty_count(item) }}
+        </span>
         {% if item.subtitle %}
         <span class="ai-home-empty__tile-sub">{{ item.subtitle }}</span>
         {% endif %}
@@ -128,7 +149,7 @@
          title="{{ item.label|e }}">
         <span class="ai-home-empty__action-icon">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
         <span class="ai-home-empty__action-label">
-          <span class="ai-home-empty__action-title">{{ item.label }}</span>
+          <span class="ai-home-empty__action-title">{{ item.label }}{{ ai_home_empty_count(item) }}</span>
           {% if item.subtitle %}
           <span class="ai-home-empty__action-sub">{{ item.subtitle }}</span>
           {% endif %}
@@ -142,6 +163,9 @@
               data-open-customer-modal
               {% elif item.ui_action == 'open_divar_ads_all' %}
               data-open-divar-ads-all
+              aria-haspopup="dialog"
+              aria-controls="homeDivarAdsAllModal"
+              aria-expanded="false"
               {% else %}
               data-ai-quick-prompt="{{ item.prompt|e }}"
               {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
@@ -149,7 +173,7 @@
               title="{{ item.label|e }}">
         <span class="ai-home-empty__action-icon">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
         <span class="ai-home-empty__action-label">
-          <span class="ai-home-empty__action-title">{{ item.label }}</span>
+          <span class="ai-home-empty__action-title">{{ item.label }}{{ ai_home_empty_count(item) }}</span>
           {% if item.subtitle %}
           <span class="ai-home-empty__action-sub">{{ item.subtitle }}</span>
           {% endif %}

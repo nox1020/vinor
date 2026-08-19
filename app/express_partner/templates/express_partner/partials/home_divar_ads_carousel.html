@@ -42,60 +42,11 @@
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding: 0 0.85rem 0.45rem 2.75rem; /* فضای دکمهٔ لیست در چپ فیزیکی */
+    padding: 0 0.85rem 0.45rem;
     max-width: 100%;
     pointer-events: auto;
     /* کارت اول راست؛ ادامهٔ لیست به چپ (overflow سمت چپ) */
     direction: rtl;
-  }
-  #homeDivarAdsCarousel .vn-home-divar__all-btn {
-    position: absolute;
-    left: 0.45rem;
-    top: 50%;
-    z-index: 4;
-    transform: translateY(-55%);
-    display: grid;
-    place-items: center;
-    width: 2.35rem;
-    height: 2.35rem;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 9999px;
-    background: rgba(15, 20, 25, 0.92);
-    color: #f4f4f5;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
-  }
-  #homeDivarAdsCarousel .vn-home-divar__all-btn:hover,
-  #homeDivarAdsCarousel .vn-home-divar__all-btn:focus-visible {
-    border-color: rgba(255, 255, 255, 0.28);
-    background: rgba(24, 32, 42, 0.96);
-    outline: none;
-  }
-  #homeDivarAdsCarousel .vn-home-divar__all-btn:active {
-    transform: translateY(-55%) scale(0.96);
-  }
-  #homeDivarAdsCarousel .vn-home-divar__all-btn i {
-    font-size: 0.85rem;
-    line-height: 1;
-  }
-  #homeDivarAdsCarousel .vn-home-divar__all-btn .vn-home-divar__all-count {
-    position: absolute;
-    top: -0.2rem;
-    right: -0.2rem;
-    min-width: 1.05rem;
-    height: 1.05rem;
-    padding: 0 0.22rem;
-    border-radius: 9999px;
-    background: #2563eb;
-    color: #fff;
-    font-size: 0.55rem;
-    font-weight: 700;
-    line-height: 1.05rem;
-    text-align: center;
   }
   #homeDivarAdsCarousel .vn-home-divar__track.is-auto-scrolling {
     scroll-snap-type: none;
@@ -507,7 +458,6 @@
 </style>
 {% set _divar_home_empty = not (chat_messages|default([])|selectattr('role', 'equalto', 'user')|list) %}
 {% set _ads_title = divar_pro_ads_title|default('آگهی‌ها') %}
-{% set _ads_count = _divar_ads|length %}
 <section id="homeDivarAdsCarousel"
          class="vn-home-divar"
          aria-label="{{ _ads_title }}"
@@ -516,18 +466,6 @@
          data-no-drawer-swipe
          aria-hidden="{{ 'false' if _divar_home_empty else 'true' }}"
          {% if not _divar_home_empty %}inert{% endif %}>
-  <button type="button"
-          class="vn-home-divar__all-btn"
-          id="homeDivarAdsAllBtn"
-          aria-label="مشاهده همهٔ {{ _ads_title }}"
-          aria-haspopup="dialog"
-          aria-controls="homeDivarAdsAllModal"
-          title="همهٔ آگهی‌ها">
-    <i class="fas fa-arrow-left" aria-hidden="true"></i>
-    {% if _ads_count > 0 %}
-    <span class="vn-home-divar__all-count" aria-hidden="true">{{ _ads_count|fa_digits }}</span>
-    {% endif %}
-  </button>
   <div class="vn-home-divar__track no-scrollbar"
        id="homeDivarAdsTrack"
        tabindex="0"
@@ -898,7 +836,7 @@
 
   function setPopupOpen(open) {
     var modal = getAllModal();
-    var btn = document.getElementById('homeDivarAdsAllBtn');
+    var triggers = document.querySelectorAll('[data-open-divar-ads-all]');
     S.popupOpen = !!open;
     try {
       document.documentElement.classList.toggle('vinor-home-divar-all-open', !!open);
@@ -919,7 +857,9 @@
         modal.setAttribute('aria-hidden', 'true');
       }
     }
-    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    for (var i = 0; i < triggers.length; i++) {
+      triggers[i].setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
     if (open) {
       stopRaf();
     } else {
@@ -958,13 +898,7 @@
   }
 
   function bindAllPopup() {
-    var btn = document.getElementById('homeDivarAdsAllBtn');
     var modal = getAllModal();
-    if (btn && !btn.__vinorDivarAllBound) {
-      btn.__vinorDivarAllBound = true;
-      btn.setAttribute('aria-expanded', 'false');
-      btn.addEventListener('click', openAllPopup);
-    }
     if (modal && !modal.__vinorDivarAllBound) {
       modal.__vinorDivarAllBound = true;
       modal.addEventListener('click', function (ev) {

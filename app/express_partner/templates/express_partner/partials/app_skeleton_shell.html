@@ -9,7 +9,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+    font-family: 'Vazirmatn', Tahoma, sans-serif;
     background: #030712;
     transition: opacity 0.18s ease, visibility 0.18s ease;
   }
@@ -149,10 +149,29 @@
     return !!(swap && swap.childElementCount > 0);
   }
 
+  function whenFontsReady(cb) {
+    var doneFonts = false;
+    function go() {
+      if (doneFonts) return;
+      doneFonts = true;
+      cb();
+    }
+    try {
+      if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+        document.fonts.ready.then(go, go);
+        window.setTimeout(go, 400);
+        return;
+      }
+    } catch (_) {}
+    go();
+  }
+
   function scheduleHide() {
     var wait = Math.max(0, MIN_MS - (Date.now() - t0));
     window.setTimeout(function () {
-      if (pageReady()) hidePartnerSkeleton();
+      whenFontsReady(function () {
+        if (pageReady()) hidePartnerSkeleton();
+      });
     }, wait);
     window.setTimeout(hidePartnerSkeleton, MAX_MS);
   }

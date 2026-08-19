@@ -821,6 +821,14 @@
     gap: 0.15rem;
     align-items: flex-start;
   }
+  .ai-home-empty__tile-title-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    max-width: 100%;
+  }
   .ai-home-empty__tile-title {
     font-size: 0.9rem;
     font-weight: 700;
@@ -829,7 +837,29 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .ai-home-empty__count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    min-width: 1.2rem;
+    height: 1.15rem;
+    padding: 0 0.32rem;
+    border-radius: 9999px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0;
+  }
+  .ai-home-empty__hero-title .ai-home-empty__count,
+  .ai-home-empty__action-title .ai-home-empty__count {
+    margin-inline-start: 0.4rem;
+    vertical-align: middle;
   }
   .ai-home-empty__tile-sub {
     font-size: 0.68rem;

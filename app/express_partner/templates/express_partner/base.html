@@ -62,15 +62,26 @@
   {# --- CSS/Fonts --- #}
   <script>
     window.tailwind = window.tailwind || {};
-    window.tailwind.config = { darkMode: 'class' };
+    window.tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Vazirmatn', 'Tahoma', 'sans-serif']
+          }
+        }
+      }
+    };
   </script>
-  <!-- Local CSS/fonts — بارگذاری غیرمسدودکننده -->
+  {# وزیرمتن باید قبل از اولین paint ثبت شود — media=print باعث FOUT/پرش فونت بعد از اسکلت می‌شد #}
+  <link rel="preload" as="font" href="{{ url_for('static', filename='fonts/vazirmatn-regular.woff2') }}" type="font/woff2" crossorigin>
+  <link rel="preload" as="font" href="{{ url_for('static', filename='fonts/vazirmatn-medium.woff2') }}" type="font/woff2" crossorigin>
+  <link rel="preload" as="font" href="{{ url_for('static', filename='fonts/vazirmatn-bold.woff2') }}" type="font/woff2" crossorigin>
   <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-solid-900.woff2') }}" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}" media="print" onload="this.media='all'">
-  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}" media="print" onload="this.media='all'">
   <noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
   </noscript>
   <link rel="stylesheet" href="{{ 'express-partner/express-partner-auth.css'|static_version }}">
   <link rel="preload" as="script" href="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}">
@@ -79,7 +90,8 @@
     html { color-scheme: light; }
     html.dark { color-scheme: dark; }
     html,body{overscroll-behavior-y:contain;overscroll-behavior-x:auto}
-    body{font-family:'Vazirmatn',sans-serif;scroll-behavior:smooth}
+    html,body{font-family:'Vazirmatn',Tahoma,sans-serif}
+    body{scroll-behavior:smooth}
     *, *::before, *::after{
       -webkit-user-select:none;
       -moz-user-select:none;

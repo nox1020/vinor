@@ -1015,7 +1015,7 @@ def build_home_ai_quick_prompts(
         ui_action="open_customer_modal",
     )
     add(
-        "دنبال ملک",
+        "لیست ملک‌ها",
         prompt="دنبال ملک مناسب هستم",
         intent="find_land",
         icon="search",
