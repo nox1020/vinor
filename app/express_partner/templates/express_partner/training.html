@@ -5,14 +5,7 @@
 <style>
   .ep-help {
     --ep-help-accent: #059669;
-    --ep-help-accent-2: #047857;
-    --ep-help-hero: #065f46;
     color: inherit;
-  }
-  html.dark .ep-help {
-    --ep-help-accent: #34d399;
-    --ep-help-accent-2: #10b981;
-    --ep-help-hero: #064e3b;
   }
 
   .ep-help-hero {
@@ -51,7 +44,7 @@
     border-radius: 9999px;
     padding: .28rem .7rem;
   }
-  .ep-help-hero h1 {
+  .ep-help-hero__title {
     margin: .85rem 0 .4rem;
     font-size: 1.55rem;
     line-height: 1.35;
@@ -71,7 +64,8 @@
     gap: .5rem;
     background: #fff;
     border-radius: 1.35rem;
-    padding: .35rem .4rem .35rem .9rem;
+    padding-block: .35rem;
+    padding-inline: .9rem .4rem;
     box-shadow: 0 10px 28px rgba(0,0,0,.18);
   }
   .ep-help-search input {
@@ -81,8 +75,12 @@
     outline: none;
     background: transparent;
     color: #111827;
-    font-size: .9rem;
+    font-size: 16px;
+    line-height: 1.4;
     height: 2.4rem;
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 0;
   }
   .ep-help-search input::placeholder { color: #9ca3af; }
   .ep-help-search button {
@@ -95,6 +93,7 @@
     display: grid;
     place-items: center;
     cursor: pointer;
+    flex-shrink: 0;
   }
   .ep-help-hero .ep-help-hint {
     margin-top: .7rem;
@@ -160,6 +159,14 @@
   }
   .ep-help-step:nth-child(2) .ep-help-step__num { background: #d97706; }
   .ep-help-step:nth-child(3) .ep-help-step__num { background: #6366f1; }
+  .ep-help-step__text {
+    flex: 1;
+    min-width: 0;
+  }
+  .ep-help-step__title,
+  .ep-help-step__sub {
+    display: block;
+  }
   .ep-help-step__title {
     font-size: .9rem;
     font-weight: 700;
@@ -167,16 +174,17 @@
   }
   html.dark .ep-help-step__title { color: #f3f4f6; }
   .ep-help-step__sub {
-    margin-top: .15rem;
+    margin-top: .2rem;
     font-size: .72rem;
     color: #6b7280;
     line-height: 1.5;
   }
   html.dark .ep-help-step__sub { color: #9ca3af; }
-  .ep-help-step i.fa-chevron-left {
-    margin-right: auto;
+  .ep-help-step > i {
+    margin-inline-start: auto;
     color: #9ca3af;
     font-size: .75rem;
+    flex-shrink: 0;
   }
 
   .ep-help-video {
@@ -191,6 +199,7 @@
 
   .ep-help-faq {
     margin-top: 1.75rem;
+    scroll-margin-top: calc(var(--vn-partner-header-pad, 3.5rem) + 0.75rem);
   }
   .ep-help-tabs {
     display: flex;
@@ -202,12 +211,13 @@
   }
   .ep-help-tabs::-webkit-scrollbar { display: none; }
   .ep-help-tab {
-    flex: 1 0 auto;
+    flex: 1 1 0;
+    min-width: 0;
     border: 1px solid #e5e7eb;
     background: #fff;
     color: #374151;
     border-radius: 9999px;
-    padding: .45rem .85rem;
+    padding: .5rem .75rem;
     font-size: .8rem;
     font-weight: 700;
     cursor: pointer;
@@ -243,23 +253,29 @@
   .ep-help-item summary {
     list-style: none;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: .75rem;
     padding: .95rem 1rem;
     cursor: pointer;
     font-size: .9rem;
-    font-weight: 650;
+    font-weight: 600;
     color: #111827;
   }
   html.dark .ep-help-item summary { color: #f3f4f6; }
   .ep-help-item summary::-webkit-details-marker { display: none; }
-  .ep-help-item summary i.fa-chevron-left {
-    margin-right: auto;
+  .ep-help-q {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.6;
+  }
+  .ep-help-item summary > i {
+    margin-top: .35rem;
     color: #9ca3af;
     font-size: .7rem;
+    flex-shrink: 0;
     transition: transform .18s;
   }
-  .ep-help-item[open] summary i.fa-chevron-left { transform: rotate(-90deg); }
+  .ep-help-item[open] summary > i { transform: rotate(-90deg); }
   .ep-help-item .ep-help-item__body {
     padding: 0 1rem 1rem;
     font-size: .84rem;
@@ -312,7 +328,7 @@
         <i class="fas fa-graduation-cap" aria-hidden="true"></i>
         راهنمای همکاری وینور
       </span>
-      <h1 id="epHelpTitle">چطور می‌تونم کمکت کنم؟</h1>
+      <p class="ep-help-hero__title" id="epHelpTitle">چطور می‌تونم کمکت کنم؟</p>
       <p>آموزش ۳ مرحله‌ای جذب مشتری، بازدید و بستن معامله.</p>
       <form class="ep-help-search" id="epHelpSearchForm" role="search" action="#" method="get">
         <input id="epHelpSearch"
@@ -322,7 +338,7 @@
                placeholder="مثلاً آگهی را کجا منتشر کنم؟"
                aria-label="جستجو در آموزش">
         <button type="submit" aria-label="جستجو">
-          <i class="fas fa-chevron-left" aria-hidden="true"></i>
+          <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
         </button>
       </form>
       <p class="ep-help-hint">سؤال‌های پرتکرار را بخوان؛ مسیر فروش از بازاریابی تا قرارداد همین‌جاست.</p>
@@ -330,26 +346,26 @@
 
     <div class="ep-help-body">
       <h2 class="ep-help-h2">مسیر موفقیت در همکاری</h2>
-      <div class="ep-help-steps" role="tablist" aria-label="مراحل آموزش">
-        <button type="button" class="ep-help-step is-active" data-help-tab="market" aria-selected="true">
+      <div class="ep-help-steps" aria-label="مراحل آموزش">
+        <button type="button" class="ep-help-step is-active" data-help-tab="market" data-help-scroll="1" aria-pressed="true">
           <span class="ep-help-step__num">۱</span>
-          <span class="min-w-0">
+          <span class="ep-help-step__text">
             <span class="ep-help-step__title">بازاریابی</span>
             <span class="ep-help-step__sub">انتشار آگهی در همه جا و جذب مشتری</span>
           </span>
           <i class="fas fa-chevron-left" aria-hidden="true"></i>
         </button>
-        <button type="button" class="ep-help-step" data-help-tab="visit" aria-selected="false">
+        <button type="button" class="ep-help-step" data-help-tab="visit" data-help-scroll="1" aria-pressed="false">
           <span class="ep-help-step__num">۲</span>
-          <span class="min-w-0">
+          <span class="ep-help-step__text">
             <span class="ep-help-step__title">بازدید</span>
             <span class="ep-help-step__sub">هماهنگی و مدیریت حرفه‌ای بازدید</span>
           </span>
           <i class="fas fa-chevron-left" aria-hidden="true"></i>
         </button>
-        <button type="button" class="ep-help-step" data-help-tab="deal" aria-selected="false">
+        <button type="button" class="ep-help-step" data-help-tab="deal" data-help-scroll="1" aria-pressed="false">
           <span class="ep-help-step__num">۳</span>
-          <span class="min-w-0">
+          <span class="ep-help-step__text">
             <span class="ep-help-step__title">معامله</span>
             <span class="ep-help-step__sub">پیگیری، قرارداد و پورسانت</span>
           </span>
@@ -365,16 +381,16 @@
 
       <section class="ep-help-faq" id="epHelpFaq" aria-labelledby="epHelpFaqTitle">
         <h2 class="ep-help-h2" id="epHelpFaqTitle">پرتکرارترین سؤال‌ها</h2>
-        <div class="ep-help-tabs" role="tablist">
-          <button type="button" class="ep-help-tab is-active" data-help-tab="market">بازاریابی</button>
-          <button type="button" class="ep-help-tab" data-help-tab="visit">بازدید</button>
-          <button type="button" class="ep-help-tab" data-help-tab="deal">معامله</button>
+        <div class="ep-help-tabs" role="tablist" aria-label="دسته‌بندی سؤال‌ها">
+          <button type="button" class="ep-help-tab is-active" role="tab" aria-selected="true" data-help-tab="market">بازاریابی</button>
+          <button type="button" class="ep-help-tab" role="tab" aria-selected="false" data-help-tab="visit">بازدید</button>
+          <button type="button" class="ep-help-tab" role="tab" aria-selected="false" data-help-tab="deal">معامله</button>
         </div>
 
-        <div class="ep-help-list" id="epHelpList">
+        <div class="ep-help-list" id="epHelpList" role="tabpanel">
           <details class="ep-help-item" data-tab="market" data-search="آگهی منتشر اینستاگرام کانال دیوار بازاریابی" open>
             <summary>
-              آگهی را کجا منتشر کنم؟
+              <span class="ep-help-q">آگهی را کجا منتشر کنم؟</span>
               <i class="fas fa-chevron-left" aria-hidden="true"></i>
             </summary>
             <div class="ep-help-item__body">
@@ -390,7 +406,7 @@
 
           <details class="ep-help-item" data-tab="market" data-search="فایل مطالعه معرفی تلفنی مشتری بازاریابی">
             <summary>
-              فایل را چطور به مشتری معرفی کنم؟
+              <span class="ep-help-q">فایل را چطور به مشتری معرفی کنم؟</span>
               <i class="fas fa-chevron-left" aria-hidden="true"></i>
             </summary>
             <div class="ep-help-item__body">
@@ -401,7 +417,7 @@
 
           <details class="ep-help-item" data-tab="market" data-search="پاسخ سریع پیام تماس بازاریابی">
             <summary>
-              بعد از انتشار آگهی چه کار کنم؟
+              <span class="ep-help-q">بعد از انتشار آگهی چه کار کنم؟</span>
               <i class="fas fa-chevron-left" aria-hidden="true"></i>
             </summary>
             <div class="ep-help-item__body">
@@ -412,7 +428,7 @@
 
           <details class="ep-help-item" data-tab="visit" data-search="بازدید ناظر هماهنگی ملک" hidden>
             <summary>
-              بازدید را چطور هماهنگ کنم؟
+              <span class="ep-help-q">بازدید را چطور هماهنگ کنم؟</span>
               <i class="fas fa-chevron-left" aria-hidden="true"></i>
             </summary>
             <div class="ep-help-item__body">
@@ -423,7 +439,7 @@
 
           <details class="ep-help-item" data-tab="visit" data-search="نتیجه بازدید علاقه مشتری" hidden>
             <summary>
-              هدف بازدید فقط دیدن ملک است؟
+              <span class="ep-help-q">هدف بازدید فقط دیدن ملک است؟</span>
               <i class="fas fa-chevron-left" aria-hidden="true"></i>
             </summary>
             <div class="ep-help-item__body">
@@ -434,7 +450,7 @@
 
           <details class="ep-help-item" data-tab="deal" data-search="معامله قرارداد پورسانت مذاکره" hidden>
             <summary>
-              بعد از بازدید چطور معامله را ببندم؟
+              <span class="ep-help-q">بعد از بازدید چطور معامله را ببندم؟</span>
               <i class="fas fa-chevron-left" aria-hidden="true"></i>
             </summary>
             <div class="ep-help-item__body">
@@ -443,7 +459,7 @@
             </div>
           </details>
         </div>
-        <p class="ep-help-empty" id="epHelpEmpty">نتیجه‌ای پیدا نشد. عبارت دیگری امتحان کنید.</p>
+        <p class="ep-help-empty" id="epHelpEmpty" hidden>نتیجه‌ای پیدا نشد. عبارت دیگری امتحان کنید.</p>
       </section>
     </div>
   </div>
@@ -463,49 +479,78 @@
   var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-help-tab]'));
   var currentTab = 'market';
 
-  function setTab(tab) {
+  function norm(s) {
+    return String(s || '')
+      .replace(/ي/g, 'ی')
+      .replace(/ك/g, 'ک')
+      .replace(/[أإآ]/g, 'ا')
+      .replace(/[\u200c\u200f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  function setTab(tab, opts) {
+    opts = opts || {};
+    var hadQuery = !!(search && search.value);
+    var same = currentTab === tab && !hadQuery;
     currentTab = tab;
     tabs.forEach(function (el) {
       var on = el.getAttribute('data-help-tab') === tab;
       el.classList.toggle('is-active', on);
-      if (el.classList.contains('ep-help-step')) el.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (el.classList.contains('ep-help-step')) el.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (el.getAttribute('role') === 'tab') el.setAttribute('aria-selected', on ? 'true' : 'false');
     });
     if (search) search.value = '';
-    applyFilter();
-    var faq = document.getElementById('epHelpFaq');
-    if (faq) faq.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    applyFilter({ openFirst: true });
+    if (opts.scroll && !same) {
+      var faq = document.getElementById('epHelpFaq');
+      if (faq) faq.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
-  function applyFilter() {
-    var q = ((search && search.value) || '').trim().toLowerCase();
+  function applyFilter(opts) {
+    opts = opts || {};
+    var q = norm(search && search.value);
     var shown = 0;
+    var firstMatch = null;
     items.forEach(function (item) {
       var tabOk = !q && item.getAttribute('data-tab') === currentTab;
-      var text = ((item.getAttribute('data-search') || '') + ' ' + item.textContent).toLowerCase();
+      var text = norm((item.getAttribute('data-search') || '') + ' ' + item.textContent);
       var match = q ? text.indexOf(q) !== -1 : tabOk;
       item.hidden = !match;
-      if (match) shown += 1;
+      if (match) {
+        shown += 1;
+        if (!firstMatch) firstMatch = item;
+      }
       if (!q && item.getAttribute('data-tab') !== currentTab) item.open = false;
     });
-    if (empty) empty.classList.toggle('is-visible', shown === 0);
+    if (opts.openFirst && firstMatch) firstMatch.open = true;
+    if (empty) {
+      empty.hidden = shown !== 0;
+      empty.classList.toggle('is-visible', shown === 0);
+    }
+    return firstMatch;
   }
 
   tabs.forEach(function (el) {
-    el.addEventListener('click', function () { setTab(el.getAttribute('data-help-tab')); });
+    el.addEventListener('click', function () {
+      setTab(el.getAttribute('data-help-tab'), {
+        scroll: el.getAttribute('data-help-scroll') === '1'
+      });
+    });
   });
   if (search) {
-    search.addEventListener('input', applyFilter);
+    search.addEventListener('input', function () {
+      applyFilter({ openFirst: true });
+    });
   }
   var form = document.getElementById('epHelpSearchForm');
   if (form) {
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      applyFilter();
-      var first = items.find(function (item) { return !item.hidden; });
-      if (first) {
-        first.open = true;
-        first.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      var first = applyFilter({ openFirst: true });
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   }
 })();
