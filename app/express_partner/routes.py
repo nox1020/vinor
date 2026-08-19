@@ -5915,7 +5915,7 @@ def help():
 @express_partner_bp.route('/training', methods=['GET'], endpoint='training')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def training():
-    """صفحه آموزش — راهنمای همکاری (بازبینی UI)"""
+    """صفحه آموزش — استایل داخل content برای soft-nav"""
     # URL ویدئو آموزش - می‌تواند از تنظیمات یا متغیر محیطی خوانده شود
     training_video_url = os.environ.get("TRAINING_VIDEO_URL", "")
     # اگر URL خالی است، از یک placeholder استفاده می‌کنیم

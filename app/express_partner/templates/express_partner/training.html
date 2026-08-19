@@ -1,7 +1,7 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}آموزش همکاری | راهنمای وینور{% endblock %}
 
-{% block styles %}
+{% block content %}
 <style>
   .ep-help {
     --ep-help-accent: #059669;
@@ -314,9 +314,7 @@
   }
   .ep-help-empty.is-visible { display: block; }
 </style>
-{% endblock %}
 
-{% block content %}
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(sticky=true) }}
   {% call ep_header_row('آموزش', url_for('express_partner.home'), inner_class='max-w-4xl mx-auto w-full') %}{% endcall %}
