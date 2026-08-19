@@ -3816,9 +3816,14 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
         item = dict(land)
         item['_assignment_status'] = 'public'
         item['_in_transaction'] = False
-        item['_commission_pct'] = 0
-        item['_commission_amount'] = 0
         item['_is_public'] = True
+        try:
+            from .new_land_sms import attach_express_land_commission
+
+            attach_express_land_commission(item)
+        except Exception:
+            item.setdefault('_commission_pct', 0)
+            item.setdefault('_commission_amount', 0)
         try:
             item['_detail_url'] = url_for('express_partner.land_detail', code=code)
         except Exception:
@@ -3886,6 +3891,16 @@ def _vinor_land_to_home_ad(land: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             detail = url_for('express_partner.land_detail', code=code)
         except Exception:
             detail = f'/express/partner/lands/{code}'
+    try:
+        from .new_land_sms import attach_express_land_commission
+
+        attach_express_land_commission(land)
+    except Exception:
+        pass
+    try:
+        commission_amount = int(land.get('_commission_amount') or 0)
+    except Exception:
+        commission_amount = 0
     return {
         'token': code,
         'title': title,
@@ -3897,6 +3912,8 @@ def _vinor_land_to_home_ad(land: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         'url': detail,
         'source': 'vinor',
         'external': False,
+        'commission_amount': max(0, commission_amount),
+        'commission_pct': land.get('_commission_pct') or 0,
     }
 
 
@@ -3927,6 +3944,7 @@ def _merge_home_ads_carousel(
         seen.add(key)
         ad.setdefault('source', 'divar')
         ad.setdefault('external', True)
+        ad.setdefault('commission_amount', 0)
         if not str(ad.get('badge') or '').strip():
             ad['badge'] = 'دیوار'
         merged.append(ad)

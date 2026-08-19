@@ -42,7 +42,7 @@
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding: 0 0.85rem 0.45rem;
+    padding: 0 0.5rem 0.45rem;
     max-width: 100%;
     pointer-events: auto;
     /* کارت اول راست؛ ادامهٔ لیست به چپ (overflow سمت چپ) */
@@ -57,15 +57,15 @@
   }
   #homeDivarAdsCarousel .vn-home-divar__card {
     flex: 0 0 auto;
-    width: min(9.75rem, 42vw);
-    max-width: 11rem;
+    width: min(13.25rem, 62vw);
+    max-width: 15rem;
     scroll-snap-align: start;
     scroll-snap-stop: always;
     display: flex;
     flex-direction: column;
     text-decoration: none;
     color: inherit;
-    border-radius: 0.85rem;
+    border-radius: 0.95rem;
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: #0f1419;
@@ -144,29 +144,40 @@
   #homeDivarAdsCarousel .vn-home-divar__body {
     display: flex;
     flex-direction: column;
-    gap: 0.28rem;
-    padding: 0.45rem 0.5rem 0.55rem;
-    min-height: 4.1rem;
+    gap: 0.22rem;
+    padding: 0.55rem 0.62rem 0.62rem;
+    min-height: 0;
     text-align: right;
   }
   #homeDivarAdsCarousel .vn-home-divar__name {
     margin: 0;
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 700;
     line-height: 1.35;
     color: #f4f4f5;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
   #homeDivarAdsCarousel .vn-home-divar__price {
     margin: 0;
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: #fafafa;
+    font-size: 0.66rem;
+    font-weight: 600;
+    color: #d4d4d8;
     font-variant-numeric: tabular-nums;
-    line-height: 1.3;
+    line-height: 1.35;
+  }
+  #homeDivarAdsCarousel .vn-home-divar__comm {
+    margin: 0;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #34d399;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   #homeDivarAdsCarousel .vn-home-divar__loc {
     margin: 0;
@@ -186,24 +197,22 @@
     padding-bottom: 0.1rem;
   }
   html.vn-short-viewport #homeDivarAdsCarousel .vn-home-divar__card {
-    width: min(8.35rem, 38vw);
+    width: min(13.25rem, 62vw);
   }
   html.vn-short-viewport #homeDivarAdsCarousel .vn-home-divar__body {
-    min-height: 3.35rem;
-    padding: 0.32rem 0.42rem 0.4rem;
-    gap: 0.18rem;
+    padding: 0.48rem 0.58rem 0.52rem;
+    gap: 0.14rem;
   }
   html.vn-short-viewport #homeDivarAdsCarousel .vn-home-divar__track {
-    gap: 0.45rem;
-    padding-bottom: 0.3rem;
-    padding-left: 2.55rem;
+    gap: 0.5rem;
+    padding: 0 0.5rem 0.3rem;
   }
-  /* ارتفاع خیلی کوتاه دستگاه: سقف rem ثابت — نه vh که با کیبورد آب می‌رود */
+  /* ارتفاع کوتاه: نوار باید کل کارت (قیمت + پورسانت) را نشان بدهد */
   html.vn-short-viewport-tight #homeDashboardPage.ai-home-is-empty #homeDivarAdsCarousel.vn-home-divar {
-    flex-shrink: 1;
+    flex-shrink: 0;
     min-height: 0;
-    max-height: 11.5rem;
-    overflow: hidden;
+    max-height: none;
+    overflow: visible;
   }
   html.vn-short-viewport-tight #homeDivarAdsCarousel .vn-home-divar__media {
     aspect-ratio: 16 / 10;
@@ -442,6 +451,14 @@
     font-variant-numeric: tabular-nums;
     line-height: 1.3;
   }
+  #homeDivarAdsAllModal .vn-home-divar-all__comm {
+    margin: 0.1rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #34d399;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+  }
   #homeDivarAdsAllModal .vn-home-divar-all__loc {
     margin: 0;
     font-size: 0.68rem;
@@ -501,6 +518,9 @@
         {% if ad.price %}
         <p class="vn-home-divar__price">{{ ad.price }}</p>
         {% endif %}
+        {% if is_approved and ad.commission_amount %}
+        <p class="vn-home-divar__comm">پورسانت {{ ad.commission_amount|toman(false) }} تومان</p>
+        {% endif %}
         {% if ad.location %}
         <p class="vn-home-divar__loc">{{ ad.location }}</p>
         {% endif %}
@@ -558,6 +578,9 @@
             <h3 class="vn-home-divar-all__name">{{ ad.title }}</h3>
             {% if ad.price %}
             <p class="vn-home-divar-all__price">{{ ad.price }}</p>
+            {% endif %}
+            {% if is_approved and ad.commission_amount %}
+            <p class="vn-home-divar-all__comm">پورسانت {{ ad.commission_amount|toman(false) }} تومان</p>
             {% endif %}
             {% if ad.location %}
             <p class="vn-home-divar-all__loc">{{ ad.location }}</p>
