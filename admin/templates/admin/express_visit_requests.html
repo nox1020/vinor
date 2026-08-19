@@ -6,66 +6,19 @@
 <div class="max-w-2xl mx-auto space-y-5">
 
   {# ── هدر ── #}
-  <div class="flex items-start justify-between gap-3">
-    <div>
-      <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-        {% if action_count %}
-        <span class="font-semibold text-amber-600 dark:text-amber-400">{{ action_count }} پرونده</span> منتظر تأیید شماست.
-        {% elif workflow_count %}
-        {{ workflow_count }} پرونده در روند — فعلاً اقدامی لازم نیست.
-        {% else %}
-        پرونده فعالی وجود ندارد.
-        {% endif %}
-      </p>
-    </div>
-    <details class="shrink-0">
-      <summary class="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200">
-        <i class="fa-solid fa-gear ml-1"></i>تنظیمات وقت بازدید
-      </summary>
-      <form method="post" class="mt-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 space-y-4 w-[22rem] max-w-[calc(100vw-2rem)]">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="action" value="save_visit_schedule">
-        <input type="hidden" name="filter" value="{{ current_filter }}">
-        <div>
-          <p class="text-xs font-medium text-gray-800 dark:text-gray-200">روزهای مجاز بازدید</p>
-          {% if visit_allowed_weekdays_summary %}
-          <p class="text-[11px] text-teal-600 dark:text-teal-400 mt-0.5">{{ visit_allowed_weekdays_summary }}</p>
-          {% endif %}
-          <div class="grid grid-cols-2 gap-1.5 mt-2">
-            {% for wd in visit_weekday_order %}
-            <label class="flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs cursor-pointer
-                          {% if wd in visit_allowed_weekdays %}border-blue-400 bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-600{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300{% endif %}">
-              <input type="checkbox" name="visit_weekdays" value="{{ wd }}" class="rounded text-blue-600"
-                     {% if wd in visit_allowed_weekdays %}checked{% endif %}>
-              {{ visit_weekday_labels.get(wd, wd) }}
-            </label>
-            {% endfor %}
-          </div>
-        </div>
-        <div>
-          <p class="text-xs font-medium text-gray-800 dark:text-gray-200">ساعت‌های مجاز (تهران)</p>
-          {% if visit_allowed_hours_summary %}
-          <p class="text-[11px] text-teal-600 dark:text-teal-400 mt-0.5">{{ visit_allowed_hours_summary }}</p>
-          {% endif %}
-          <div class="grid grid-cols-4 gap-1.5 mt-2" dir="ltr">
-            {% for row in visit_hour_rows %}
-            <label class="block cursor-pointer">
-              <input type="checkbox" name="visit_hours" value="{{ row.hour }}" class="peer sr-only"
-                     {% if row.selected %}checked{% endif %}>
-              <span class="flex items-center justify-center rounded-lg border px-1 py-1.5 text-[11px] font-bold tabular-nums
-                           border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300
-                           peer-checked:border-blue-500 peer-checked:bg-blue-600 peer-checked:text-white">
-                {{ row.label }}
-              </span>
-            </label>
-            {% endfor %}
-          </div>
-        </div>
-        <button type="submit" class="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium">
-          ذخیره وقت‌ها
-        </button>
-      </form>
-    </details>
+  <div>
+    <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+      {% if current_filter == 'plus' %}
+      مانیتور بازدیدهای همکاران پلاس
+      {% if plus_count %}<span class="font-semibold text-teal-600 dark:text-teal-400"> — {{ plus_count }} پرونده</span>{% endif %}
+      {% elif action_count %}
+      <span class="font-semibold text-amber-600 dark:text-amber-400">{{ action_count }} پرونده</span> منتظر تأیید شماست.
+      {% elif workflow_count %}
+      {{ workflow_count }} پرونده در روند — فعلاً اقدامی لازم نیست.
+      {% else %}
+      پرونده فعالی وجود ندارد.
+      {% endif %}
+    </p>
   </div>
 
   {# ── فیلترها ── #}
@@ -80,6 +33,7 @@
       {{ label }}{% if count %} <span class="tabular-nums opacity-75">({{ count }})</span>{% endif %}
     </a>
     {% endmacro %}
+    {{ filter_pill('plus', 'پلاس', plus_count|default(0), 'blue') }}
     {{ filter_pill('actions', 'نیاز به اقدام', action_count, 'amber') }}
     {{ filter_pill('done_pending', 'تأیید انجام', done_pending_count, 'amber') }}
     {{ filter_pill('workflow', 'در روند', workflow_count, 'blue') }}
@@ -112,47 +66,79 @@
                     {% if v.workflow_needs_action %}border-amber-300 dark:border-amber-700 shadow-sm shadow-amber-100/50 dark:shadow-none
                     {% else %}border-gray-200 dark:border-gray-700{% endif %}">
 
-      {# سرِ کارت #}
+      {# سرِ کارت — همکار / بازاریاب / وقت / فایل #}
       <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2 flex-wrap">
-              {% if v.partner_phone %}
-              <a href="{{ url_for('admin.express_partner_detail', phone=v.partner_phone) }}"
-                 class="font-semibold text-sm text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 truncate">
-                {{ v.partner_name or 'همکار' }}
-              </a>
-              {% else %}
-              <span class="font-semibold text-sm text-gray-900 dark:text-white">{{ v.partner_name or 'همکار' }}</span>
-              {% endif %}
-              {% if v.workflow_needs_action %}
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                اقدام لازم
-              </span>
-              {% endif %}
-            </div>
-            <p class="mt-1 text-sm text-gray-700 dark:text-gray-300 truncate">{{ v.land_title or '—' }}</p>
-            <p class="mt-0.5 text-[11px] text-gray-400 font-mono" dir="ltr">{{ v.land_code or '—' }}</p>
-            {% if (v.merged_visit_count or 1) <= 1 and (v.customer_name or v.customer_phone) %}
-            <p class="mt-1.5 text-[11px] text-emerald-700 dark:text-emerald-300">
-              مشتری:
-              {% if v.customer_name %}{{ v.customer_name }}{% endif %}
-              {% if v.customer_phone %}
-              <span class="font-mono tabular-nums" dir="ltr">{% if v.customer_name %} · {% endif %}{{ v.customer_phone }}</span>
-              {% endif %}
-            </p>
+        <div class="flex items-center justify-between gap-2 mb-3">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            {% if v.is_plus %}
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">پلاس</span>
+            {% endif %}
+            {% if v.workflow_needs_action %}
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">اقدام لازم</span>
             {% endif %}
           </div>
-          <div class="shrink-0 text-left">
-            <p class="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{{ v.visit_date_jalali or v.visit_date|default('—') }}{% if v.visit_time %} <span class="font-medium text-gray-500 dark:text-gray-400">ساعت {{ v.visit_time }}</span>{% endif %}</p>
-            <p class="text-[10px] mt-0.5 {% if st == 'cancelled' %}text-red-500 dark:text-red-400 font-semibold{% else %}text-gray-400{% endif %}">{{ v.status_label }}</p>
-            {% if (v.merged_visit_count or 1) > 1 %}
-            <p class="mt-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 tabular-nums">
-              {{ v.merged_visit_count }} بازدید
-            </p>
-            {% endif %}
-          </div>
+          <p class="text-[10px] shrink-0 {% if st == 'cancelled' %}text-red-500 dark:text-red-400 font-semibold{% else %}text-gray-400{% endif %}">{{ v.status_label }}</p>
         </div>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+          <div class="min-w-0">
+            <dt class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">همکار</dt>
+            <dd class="mt-0.5 font-semibold text-gray-900 dark:text-white truncate">
+              {% set _col_phone = v.colleague_phone or v.plus_user_phone or v.land_owner_phone %}
+              {% set _col_name = v.colleague_name or v.plus_user_name or v.land_owner_name or '—' %}
+              {% if _col_phone %}
+              <a href="{{ url_for('admin.express_partner_detail', phone=_col_phone) }}"
+                 class="hover:text-blue-600 dark:hover:text-blue-400">{{ _col_name }}</a>
+              <span class="block font-normal font-mono text-[11px] text-gray-400 tabular-nums" dir="ltr">{{ _col_phone }}</span>
+              {% else %}
+              {{ _col_name }}
+              {% endif %}
+            </dd>
+          </div>
+          <div class="min-w-0">
+            <dt class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">بازاریاب</dt>
+            <dd class="mt-0.5 font-semibold text-gray-900 dark:text-white truncate">
+              {% set _mkt_phone = v.marketer_phone or v.partner_phone %}
+              {% set _mkt_name = v.marketer_name or v.partner_name or '—' %}
+              {% if _mkt_phone %}
+              <a href="{{ url_for('admin.express_partner_detail', phone=_mkt_phone) }}"
+                 class="hover:text-blue-600 dark:hover:text-blue-400">{{ _mkt_name }}</a>
+              <span class="block font-normal font-mono text-[11px] text-gray-400 tabular-nums" dir="ltr">{{ _mkt_phone }}</span>
+              {% else %}
+              {{ _mkt_name }}
+              {% endif %}
+            </dd>
+          </div>
+          <div class="min-w-0">
+            <dt class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">وقت بازدید</dt>
+            <dd class="mt-0.5 font-bold text-gray-900 dark:text-white tabular-nums">
+              {{ v.visit_date_jalali or v.visit_date or '—' }}
+              {% if v.visit_time %}
+              <span class="font-medium text-gray-500 dark:text-gray-400">ساعت {{ v.visit_time }}</span>
+              {% endif %}
+            </dd>
+          </div>
+          <div class="min-w-0">
+            <dt class="text-[10px] font-semibold text-gray-400 dark:text-gray-500">فایل مورد نظر</dt>
+            <dd class="mt-0.5 font-semibold text-gray-900 dark:text-white truncate">{{ v.land_title or '—' }}</dd>
+            {% if v.land_code %}
+            <dd class="font-mono text-[11px] text-gray-400 tabular-nums" dir="ltr">#{{ v.land_code }}</dd>
+            {% endif %}
+          </div>
+        </dl>
+        {% if (v.merged_visit_count or 1) <= 1 and (v.customer_name or v.customer_phone) %}
+        <p class="mt-2.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+          مشتری:
+          {% if v.customer_name %}{{ v.customer_name }}{% endif %}
+          {% if v.customer_phone %}
+          <span class="font-mono tabular-nums" dir="ltr">{% if v.customer_name %} · {% endif %}{{ v.customer_phone }}</span>
+          {% endif %}
+        </p>
+        {% endif %}
+        {% if (v.merged_visit_count or 1) > 1 %}
+        <p class="mt-2 text-[10px] font-semibold text-blue-600 dark:text-blue-400 tabular-nums">
+          {{ v.merged_visit_count }} بازدید روی این فایل
+        </p>
+        {% endif %}
         {% if v.admin_note %}
         <p class="mt-2 text-[11px] text-gray-600 dark:text-gray-400 px-2.5 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-800/60">
           {{ v.admin_note }}
@@ -257,6 +243,7 @@
     <i class="fa-regular fa-folder-open text-3xl text-gray-300 dark:text-gray-600 mb-3"></i>
     <p class="text-sm text-gray-500 dark:text-gray-400">
       {% if current_filter == 'actions' %}پرونده‌ای منتظر اقدام شما نیست.
+      {% elif current_filter == 'plus' %}بازدیدی برای کاربران پلاس ثبت نشده.
       {% elif current_filter == 'workflow' %}پرونده‌ای در روند نیست.
       {% elif current_filter == 'all' %}هنوز درخواستی ثبت نشده.
       {% else %}موردی یافت نشد.{% endif %}

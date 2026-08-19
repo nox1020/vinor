@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Supervisor Agent — گزارش‌دهنده و کنترل‌کننده چت عملیات ادمین."""
+"""Supervisor Agent — گزارش‌دهندهٔ عملیات ادمین."""
 from __future__ import annotations
 
 from app.supervisor_agent.config import supervisor_agent_enabled

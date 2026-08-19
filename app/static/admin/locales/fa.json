@@ -157,7 +157,7 @@
   },
   "dashboard": {
     "title": "داشبورد",
-    "subtitle": "وضعیت صف‌ها، میانبرها و چت عملیات.",
+    "subtitle": "وضعیت صف‌ها و میانبرهای عملیات.",
     "page_title": "داشبورد",
     "browser_title": "داشبورد | Vinor Control",
     "confirms": "تأییدها",
@@ -264,7 +264,7 @@
     "crm_surfaces": "سطوح CRM",
     "calls_followups": "تماس و پیگیری",
     "quick_links": "میانبرها",
-    "express_listings": "آگهی‌های Express",
+    "express_listings": "آگهی‌ها",
     "add_listing": "ثبت آگهی",
     "lands": "زمین‌ها",
     "pending_lands": "زمین‌های معلق",

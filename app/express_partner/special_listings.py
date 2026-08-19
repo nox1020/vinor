@@ -116,6 +116,114 @@ def listings_owned_by(phone: str) -> List[Dict[str, Any]]:
     return out
 
 
+ADMIN_CREATED_OWNERS = frozenset({"vinor_support", "admin", "vinor"})
+ADMIN_CREATED_SOURCES = frozenset({"admin", "admin_ops_chat", "admin_panel"})
+
+
+def is_admin_created_express_listing(land: Dict[str, Any] | None) -> bool:
+    """آگهی اکسپرسی که از پنل/چت ادمین ثبت شده، نه توسط همکار پلاس."""
+    if not isinstance(land, dict) or not land.get("is_express"):
+        return False
+    src = str(land.get("source") or "").strip().lower()
+    if src in ADMIN_CREATED_SOURCES:
+        return True
+    owner = str(land.get("owner") or "").strip().lower()
+    if owner in ADMIN_CREATED_OWNERS:
+        return True
+    return False
+
+
+def plus_partner_map() -> Dict[str, Dict[str, Any]]:
+    """کلید: شماره نرمال‌شده → رکورد همکار پلاس فعال."""
+    from .partner_roles import partner_is_special
+    from .partner_session_sync import canonical_partner_phone
+    from app.utils.storage import load_express_partners
+
+    out: Dict[str, Dict[str, Any]] = {}
+    try:
+        partners = load_express_partners() or []
+    except Exception:
+        partners = []
+    for rec in partners:
+        if not isinstance(rec, dict) or not partner_is_special(rec):
+            continue
+        raw = str(rec.get("phone") or "").strip()
+        keys = {_norm_phone(raw)}
+        try:
+            can = canonical_partner_phone(raw)
+            if can:
+                keys.add(_norm_phone(can))
+                keys.add(can)
+        except Exception:
+            pass
+        keys.discard("")
+        for key in keys:
+            out[key] = rec
+    return out
+
+
+def _plus_display_name(rec: Dict[str, Any] | None, fallback: str = "") -> str:
+    if not isinstance(rec, dict):
+        return fallback
+    return str(
+        rec.get("name")
+        or rec.get("full_name")
+        or rec.get("display_name")
+        or rec.get("phone")
+        or fallback
+    ).strip() or fallback
+
+
+def listings_owned_by_plus_partners() -> List[Dict[str, Any]]:
+    """آگهی‌های وینور ثبت‌شده توسط همکاران پلاس فعلی."""
+    plus = plus_partner_map()
+    if not plus:
+        return []
+    lands = load_ads_cached() or []
+    out: List[Dict[str, Any]] = []
+    for land in lands if isinstance(lands, list) else []:
+        if not isinstance(land, dict) or not land.get("is_express"):
+            continue
+        if is_admin_created_express_listing(land):
+            continue
+        owner_raw = str(land.get("owner") or land.get("user_phone") or "")
+        owner = _norm_phone(owner_raw)
+        rec = plus.get(owner)
+        if rec is None:
+            try:
+                from .partner_session_sync import canonical_partner_phone
+
+                rec = plus.get(canonical_partner_phone(owner_raw))
+            except Exception:
+                rec = None
+        if rec is None:
+            continue
+        item = dict(land)
+        item["_source"] = "plus"
+        item["_owner_phone"] = owner
+        item["_owner_name"] = _plus_display_name(rec, owner)
+        out.append(item)
+    try:
+        out.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+    except Exception:
+        pass
+    return out
+
+
+def plus_listing_owner_by_code() -> Dict[str, Dict[str, str]]:
+    """کد آگهی → مالک پلاس."""
+    out: Dict[str, Dict[str, str]] = {}
+    for land in listings_owned_by_plus_partners():
+        code = str(land.get("code") or "").strip()
+        if not code:
+            continue
+        out[code] = {
+            "phone": str(land.get("_owner_phone") or "").strip(),
+            "name": str(land.get("_owner_name") or "").strip(),
+        }
+    return out
+
+
 def land_owned_by_special(land: Dict[str, Any] | None, phone: str) -> bool:
     if not isinstance(land, dict):
         return False

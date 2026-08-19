@@ -2347,7 +2347,11 @@ def try_continue_visit_from_user_message(
         return None
 
     from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
-    from app.express_partner.visit_requests import resolve_visit_date_choice, list_upcoming_visit_dates
+    from app.express_partner.visit_requests import (
+        plus_phone_for_land_code,
+        resolve_visit_date_choice,
+        list_upcoming_visit_dates,
+    )
 
     args: dict[str, Any] = {"land_code": code}
     if _visit_draft_has_name(draft):
@@ -2385,7 +2389,10 @@ def try_continue_visit_from_user_message(
             }
         args["customer_phone"] = phone_try
     elif awaiting == "date":
-        available = list_upcoming_visit_dates(limit=5)
+        available = list_upcoming_visit_dates(
+            limit=5,
+            plus_user_phone=plus_phone_for_land_code(code),
+        )
         vd = resolve_visit_date_choice(msg, options=available)
         if vd is None:
             labels = [str(x.get("label") or "") for x in available if str(x.get("label") or "").strip()]
@@ -2528,6 +2535,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
         partner_can_request_new_visit,
         partner_open_visit,
         partner_visit_completed,
+        plus_phone_for_land_code,
         remaining_visit_hours_for_date,
         resolve_visit_date_choice,
         split_customer_full_name,
@@ -2596,7 +2604,8 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
     phone_raw = str(merged.get("customer_phone") or "").strip()
     cust_phone = normalize_iran_mobile(phone_raw) or phone_raw
 
-    available = list_upcoming_visit_dates(limit=5)
+    plus_phone = plus_phone_for_land_code(code)
+    available = list_upcoming_visit_dates(limit=5, plus_user_phone=plus_phone)
     available_labels = [str(x.get("label") or "") for x in available]
 
     def _draft_payload(*, awaiting: str) -> dict[str, Any]:
@@ -2698,7 +2707,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             return {
                 "ok": False,
                 "error": "الان روز مجازی برای بازدید تعریف نشده است.",
-                "allowed_weekdays": visit_allowed_weekdays_summary(),
+                "allowed_weekdays": visit_allowed_weekdays_summary(plus_user_phone=plus_phone),
                 "instruction": "به کاربر بگو با پشتیبانی هماهنگ کند.",
             }
         return {
@@ -2707,7 +2716,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "land_code": code,
             "customer_name": full_name,
             "available_date_labels": available_labels,
-            "allowed_weekdays": visit_allowed_weekdays_summary(),
+            "allowed_weekdays": visit_allowed_weekdays_summary(plus_user_phone=plus_phone),
             "speak_exactly": _format_visit_date_ask(available_labels),
             "instruction": (
                 f"عین speak_exactly را بفرست؛ تاریخ خودت نساز. "
@@ -2730,17 +2739,17 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
         return {"ok": False, "error": "تاریخ بازدید نمی‌تواند در گذشته باشد."}
     if vd > _today() + timedelta(days=90):
         return {"ok": False, "error": "تاریخ بازدید حداکثر تا ۹۰ روز آینده قابل انتخاب است."}
-    if not is_visit_weekday_allowed(vd):
+    if not is_visit_weekday_allowed(vd, plus_user_phone=plus_phone):
         return {
             "ok": True,
             "status": "needs_date_choice",
             "error": "روز انتخاب‌شده مجاز نیست.",
-            "allowed": visit_allowed_weekdays_summary(),
+            "allowed": visit_allowed_weekdays_summary(plus_user_phone=plus_phone),
             "available_date_labels": available_labels,
             "land_code": code,
             "instruction": "از لیست تاریخ‌های مجاز فقط یک شماره بخواهد.",
         }
-    remain_hours = remaining_visit_hours_for_date(vd)
+    remain_hours = remaining_visit_hours_for_date(vd, plus_user_phone=plus_phone)
     if not remain_hours:
         return {
             "ok": True,
@@ -2846,6 +2855,7 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "customer_name": full_name or f"{first} {last}".strip(),
             "customer_phone": cust_phone,
             "partner_name": partner_name,
+            "plus_user_phone": plus_phone,
         },
     }
 
@@ -4057,6 +4067,7 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         customer_first_name=str(fresh.get("customer_first_name") or ""),
         customer_last_name=str(fresh.get("customer_last_name") or ""),
         customer_phone=str(fresh.get("customer_phone") or ""),
+        plus_user_phone=str(fresh.get("plus_user_phone") or ""),
     )
     call_phone = _visit_coord_call_target()
     if err == "already_pending":

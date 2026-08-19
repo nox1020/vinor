@@ -970,6 +970,27 @@
   <nav class="ep-profile-drawer__section ep-profile-drawer__nav" aria-label="منو">
 
     {% if is_approved|default(false) %}
+    {% if is_special|default(false) %}
+    <div class="ep-profile-drawer__nav-group" aria-label="آگهی ویژه">
+      <p class="ep-profile-drawer__nav-label">پلاس</p>
+      {{ profile_menu_row(
+        url_for('express_partner.special_listings'),
+        'fa-building',
+        'آگهی‌های من',
+        tour='special-listings-link',
+        row_id='epDrawerListingsBtn'
+      ) }}
+      {{ profile_menu_row(
+        url_for('express_partner.special_visit_inbox'),
+        'fa-calendar-check',
+        'صندوق بازدید',
+        tour='special-visit-inbox-link',
+        row_id='epDrawerVisitInboxBtn',
+        badge_key='visit-inbox'
+      ) }}
+    </div>
+    {% endif %}
+
     <div class="ep-profile-drawer__nav-group" aria-label="فروش">
       <p class="ep-profile-drawer__nav-label">فروش</p>
       {{ profile_menu_row(
@@ -1003,6 +1024,13 @@
         row_id='epDrawerFavoritesBtn',
         badge_key='favorites'
       ) }}
+      {{ profile_menu_row(
+        url_for('express_partner.training'),
+        'fa-graduation-cap',
+        'آموزش',
+        tour='training-link',
+        row_id='epDrawerTrainingBtn'
+      ) }}
     </div>
 
     <div class="ep-profile-drawer__nav-group" aria-label="رشد">
@@ -1015,27 +1043,6 @@
         row_id='epDrawerInviteBtn'
       ) }}
     </div>
-
-    {% if is_special|default(false) %}
-    <div class="ep-profile-drawer__nav-group" aria-label="آگهی ویژه">
-      <p class="ep-profile-drawer__nav-label">پلاس</p>
-      {{ profile_menu_row(
-        url_for('express_partner.special_listings'),
-        'fa-building',
-        'آگهی‌های من',
-        tour='special-listings-link',
-        row_id='epDrawerListingsBtn'
-      ) }}
-      {{ profile_menu_row(
-        url_for('express_partner.special_visit_inbox'),
-        'fa-calendar-check',
-        'صندوق بازدید',
-        tour='special-visit-inbox-link',
-        row_id='epDrawerVisitInboxBtn',
-        badge_key='visit-inbox'
-      ) }}
-    </div>
-    {% endif %}
 
     {% else %}
     <div class="ep-profile-drawer__nav-group" aria-label="شروع همکاری">
@@ -1946,8 +1953,16 @@
       if (ok) el.classList.add('ep-drawer-login__hint--ok');
       else el.classList.remove('ep-drawer-login__hint--ok');
     }
+    function resolveLoginNext(raw) {
+      var s = String(raw || '').trim();
+      if (!s) return defaultNext;
+      var low = s.toLowerCase();
+      if (low === 'apply' || low === 'coop' || low === 'cooperation') return applyUrl;
+      if (s.charAt(0) === '/') return s;
+      return defaultNext;
+    }
     function setNext(url) {
-      var u = url || defaultNext;
+      var u = resolveLoginNext(url || defaultNext);
       if (nextPhone) nextPhone.value = u;
       if (nextOtp) nextOtp.value = u;
     }
@@ -2380,12 +2395,11 @@
       var params = new URLSearchParams(window.location.search || '');
       var ln = (params.get('login_next') || '').trim();
       var wantLogin = params.get('menu') === '1' || params.get('drawer') === '1';
-      if (ln === 'apply') {
-        /* همکاری از چت — بعد از ورود به خانه برگرد، نه فرم جدا */
-        setNext(homeUrl);
+      if (ln === 'apply' || ln === 'coop' || ln === 'cooperation' || ln === applyUrl || ln.indexOf('/express/partner/apply') === 0) {
+        setNext(applyUrl);
         if (wantLogin) {
-          openLoginForm(homeUrl);
-          showHint(phoneHint, 'بعد از ورود از همین چت درخواست همکاری را ادامه بده.', true);
+          openLoginForm(applyUrl);
+          showHint(phoneHint, 'بعد از ورود، فرم همکاری باز می‌شود.', true);
         }
       } else if (ln.indexOf('/express/partner/') === 0) {
         setNext(ln);

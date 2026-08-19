@@ -3,11 +3,11 @@
 
 {% block content %}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
-{{ ep_header_start(id='specialListingNewHeader') }}
-{{ ep_header_row('ثبت آگهی', url_for('express_partner.special_listings'), inner_class='max-w-lg mx-auto w-full') }}
+{{ ep_header_start(id='specialListingNewHeader', sticky=true) }}
+{{ ep_header_row('ثبت آگهی', url_for('express_partner.special_listings'), inner_class='max-w-lg mx-auto w-full', show_title=false) }}
 {{ ep_header_end() }}
 
-<div class="min-h-[100dvh] bg-[#030712] text-zinc-100">
+<div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] text-zinc-100">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
     <div class="mx-auto w-full max-w-lg px-3 sm:px-4 pt-2 space-y-2">

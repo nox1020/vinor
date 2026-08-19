@@ -19,6 +19,7 @@ _MAX_CONTENT = 4000
 _TITLE_LEN = 48
 _MAX_PREVIEW = 80
 VINOR_THREAD_TITLE = "وینور"
+LAND_DETAIL_SOURCE = "land_detail"
 
 
 def _is_guest_key(user_key: str) -> bool:
@@ -687,7 +688,7 @@ def _counts_toward_guest_quota(m: Any) -> bool:
     if m.get("quota") is False:
         return False
     source = str(m.get("source") or "").strip().lower()
-    if source in ("admin_escalation", "postchi", "system", "welcome"):
+    if source in ("admin_escalation", "postchi", "system", "welcome", LAND_DETAIL_SOURCE):
         return False
     mtype = str(m.get("type") or "").strip().lower()
     if mtype in ("system", "timeline", "admin", "progress", "status", "warning", "error"):
@@ -712,9 +713,13 @@ def threads_for_ui(user_key: str, audience: str | None = None) -> list[dict[str,
         msgs = th.get("messages") or []
         preview = ""
         for m in reversed(msgs):
-            if isinstance(m, dict) and m.get("role") == "user":
+            if not isinstance(m, dict):
+                continue
+            if m.get("role") == "user":
                 preview = str(m.get("content") or "")[:_MAX_PREVIEW]
                 break
+            if str(m.get("source") or "") == LAND_DETAIL_SOURCE and not preview:
+                preview = str(m.get("content") or "")[:_MAX_PREVIEW]
         out.append(
             {
                 "id": th.get("id"),
@@ -724,6 +729,20 @@ def threads_for_ui(user_key: str, audience: str | None = None) -> list[dict[str,
                 "created_at": th.get("created_at"),
                 "message_count": len(msgs),
                 "is_active": th.get("id") == active,
+                "kind": "vinor",
+            }
+        )
+    if not out:
+        # منوی ساید همیشه یک آیتم «وینور» دارد — حتی قبل از شروع مکالمه
+        out.append(
+            {
+                "id": active or "",
+                "title": VINOR_THREAD_TITLE,
+                "preview": "",
+                "updated_at": "",
+                "created_at": "",
+                "message_count": 0,
+                "is_active": True,
                 "kind": "vinor",
             }
         )
@@ -746,6 +765,8 @@ def messages_for_api(
             continue
         role = str(item.get("role") or "").strip()
         content = str(item.get("content") or "").strip()
+        if str(item.get("source") or "").strip().lower() == LAND_DETAIL_SOURCE:
+            continue
         if role in ("user", "assistant") and content:
             out.append({"role": role, "content": content})
     return out
@@ -778,6 +799,31 @@ def _enrich_messages_for_ui(
         if not isinstance(item, dict):
             continue
         row = dict(item)
+        meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+        is_land_detail = (
+            str(row.get("source") or "").strip().lower() == LAND_DETAIL_SOURCE
+            or bool(meta.get("land_chat_detail"))
+        )
+        if is_land_detail:
+            codes = row.get("land_codes") or []
+            code = str(
+                (codes[0] if codes else "") or meta.get("land_code") or ""
+            ).strip()
+            if code:
+                try:
+                    from app.express_partner.land_chat_detail import (
+                        render_land_chat_detail_html,
+                    )
+
+                    payload = render_land_chat_detail_html(code)
+                    if payload and payload.get("html"):
+                        row["land_detail_html"] = payload["html"]
+                        row["land_code"] = str(payload.get("code") or code).strip()
+                        row["content"] = ""
+                except Exception:
+                    pass
+            out.append(row)
+            continue
         # پیام‌های قدیمی ناظر با متن فنی (مثل workflow_complete:VisitRequest)
         if str(row.get("source") or "") == "supervisor_agent":
             try:
@@ -1069,6 +1115,56 @@ def append_typed_message(
     record["active_id"] = tid
     _save_record(record, user_key, audience)
     return _enrich_messages_for_ui(user_key, th["messages"], audience), tid
+
+
+def record_land_chat_view(
+    user_key: str,
+    land_code: str,
+    *,
+    audience: str | None = None,
+    title: str = "",
+    thread_id: str | None = None,
+) -> str | None:
+    """نمایش جزئیات فایل در چت را در همان ترد وینور ذخیره کن تا در منوی ساید بماند."""
+    code = str(land_code or "").strip()
+    if not (user_key or "").strip() or not code:
+        return None
+    tid = (thread_id or "").strip() or ensure_active_thread(user_key, audience=audience)
+    record = load_user_record(user_key, audience)
+    th = _find_thread(record, tid) if tid else _active_thread(record)
+    if not th:
+        tid = ensure_active_thread(user_key, audience=audience)
+        record = load_user_record(user_key, audience)
+        th = _find_thread(record, tid)
+    if not th:
+        return None
+    tid = str(th.get("id") or tid)
+    for item in reversed(list(th.get("messages") or [])):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("source") or "").strip().lower() != LAND_DETAIL_SOURCE:
+            break
+        codes = item.get("land_codes") or []
+        last = str((codes[0] if codes else "") or "").strip()
+        if last == code:
+            return tid
+        break
+    label = str(title or "").strip()
+    body = f"جزئیات فایل {code}"
+    if label:
+        body = f"{body} — {label}"
+    _, tid = append_typed_message(
+        user_key,
+        body,
+        thread_id=tid,
+        audience=audience,
+        msg_type="card",
+        source=LAND_DETAIL_SOURCE,
+        land_codes=[code],
+        meta={"land_chat_detail": True, "land_code": code},
+        quota=False,
+    )
+    return tid
 
 
 def update_agent_action_by_token(

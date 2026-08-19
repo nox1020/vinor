@@ -12,6 +12,7 @@ DEFAULT_TITLE = "آگهی‌ها"
 DEFAULT_CACHE_TTL_SEC = 1800
 DEFAULT_VINOR_LIMIT = 40
 _MAX_DIVAR_PROFILES = 20
+_MAX_DIVAR_PROFILES_PER_USER = 10
 
 
 def _env_bool(name: str, default: str = "1") -> bool:
@@ -205,46 +206,165 @@ def save_home_ads_settings(patch: dict[str, Any]) -> dict[str, Any]:
 
 
 def add_divar_profile_url(url: str) -> tuple[bool, str, dict[str, Any]]:
-    """افزودن یک پروفایل دیوار. برمی‌گرداند: ok, message, settings."""
-    normalized = normalize_divar_profile_url(url)
-    if not normalized:
-        return False, "آدرس پروفایل نامعتبر است.", get_home_ads_settings()
-    cfg = get_home_ads_settings()
-    urls = list(cfg.get("divar_profile_urls") or [])
-    if normalized.lower() in {u.lower() for u in urls}:
-        return False, "این پروفایل از قبل اضافه شده است.", cfg
-    if len(urls) >= _MAX_DIVAR_PROFILES:
-        return False, f"حداکثر {_MAX_DIVAR_PROFILES} پروفایل مجاز است.", cfg
-    urls.append(normalized)
-    saved = save_home_ads_settings({"divar_profile_urls": urls})
-    return True, "پروفایل دیوار اضافه شد.", saved
+    """سازگاری قدیمی — پروفایل‌ها دیگر روی همکار پلاس ذخیره می‌شوند."""
+    return False, "پروفایل دیوار را از آگهی‌های من اضافه کنید.", get_home_ads_settings()
 
 
 def remove_divar_profile_url(url: str) -> tuple[bool, str, dict[str, Any]]:
-    """حذف یک پروفایل دیوار."""
+    del url
+    return False, "پروفایل دیوار را از آگهی‌های من حذف کنید.", get_home_ads_settings()
+
+
+def _find_plus_partner(phone: str):
+    from .partner_roles import partner_is_special
+    from .partner_session_sync import find_partner_record
+    from ..utils.storage import load_express_partners
+
+    partners = load_express_partners() or []
+    rec = find_partner_record(partners, phone)
+    if rec is None or not partner_is_special(rec):
+        return None, partners
+    return rec, partners
+
+
+def partner_divar_profile_urls(phone: str) -> list[str]:
+    rec, _ = _find_plus_partner(phone)
+    if rec is None:
+        return []
+    return _normalize_url_list(rec.get("divar_profile_urls"))
+
+
+def add_partner_divar_profile_url(phone: str, url: str) -> tuple[bool, str, list[str]]:
+    """افزودن پروفایل دیوار برای یک همکار پلاس."""
+    from ..utils.storage import save_express_partners
+
+    normalized = normalize_divar_profile_url(url)
+    if not normalized:
+        return False, "آدرس پروفایل نامعتبر است.", partner_divar_profile_urls(phone)
+    rec, partners = _find_plus_partner(phone)
+    if rec is None:
+        return False, "فقط همکار پلاس می‌تواند پروفایل اضافه کند.", []
+    urls = _normalize_url_list(rec.get("divar_profile_urls"))
+    if normalized.lower() in {u.lower() for u in urls}:
+        return False, "این پروفایل از قبل اضافه شده است.", urls
+    if len(urls) >= _MAX_DIVAR_PROFILES_PER_USER:
+        return False, f"حداکثر {_MAX_DIVAR_PROFILES_PER_USER} پروفایل مجاز است.", urls
+    urls.append(normalized)
+    rec["divar_profile_urls"] = urls
+    save_express_partners(partners)
+    try:
+        from .divar_pro_ads import clear_divar_pro_ads_cache
+
+        clear_divar_pro_ads_cache()
+    except Exception:
+        pass
+    return True, "پروفایل دیوار اضافه شد.", urls
+
+
+def remove_partner_divar_profile_url(phone: str, url: str) -> tuple[bool, str, list[str]]:
+    """حذف پروفایل دیوار یک همکار پلاس."""
+    from ..utils.storage import save_express_partners
+
     target = normalize_divar_profile_url(url) or str(url or "").strip()
-    cfg = get_home_ads_settings()
-    urls = list(cfg.get("divar_profile_urls") or [])
-    if not urls:
-        return False, "لیست پروفایل خالی است.", cfg
-    if len(urls) <= 1:
-        return False, "حداقل یک پروفایل باید باقی بماند.", cfg
+    rec, partners = _find_plus_partner(phone)
+    if rec is None:
+        return False, "فقط همکار پلاس می‌تواند پروفایل حذف کند.", []
+    urls = _normalize_url_list(rec.get("divar_profile_urls"))
     filtered = [u for u in urls if u.lower() != target.lower()]
     if len(filtered) == len(urls):
-        return False, "پروفایل پیدا نشد.", cfg
-    if not filtered:
-        filtered = [DEFAULT_PROFILE_URL]
-    saved = save_home_ads_settings({"divar_profile_urls": filtered})
-    return True, "پروفایل حذف شد.", saved
+        return False, "پروفایل پیدا نشد.", urls
+    rec["divar_profile_urls"] = filtered
+    save_express_partners(partners)
+    try:
+        from .divar_pro_ads import clear_divar_pro_ads_cache
+
+        clear_divar_pro_ads_cache()
+    except Exception:
+        pass
+    return True, "پروفایل حذف شد.", filtered
+
+
+def _plus_partner_display_name(rec: dict[str, Any]) -> str:
+    return str(
+        rec.get("name")
+        or rec.get("full_name")
+        or rec.get("display_name")
+        or rec.get("phone")
+        or ""
+    ).strip()
+
+
+def all_plus_divar_profile_entries(*, max_count: int | None = None) -> list[dict[str, str]]:
+    """پروفایل‌های دیوار همهٔ همکاران پلاس با نام/شماره."""
+    from .partner_roles import partner_is_special
+    from .partner_session_sync import canonical_partner_phone
+    from ..utils.storage import load_express_partners
+
+    cap = _MAX_DIVAR_PROFILES if max_count is None else max(0, int(max_count))
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    try:
+        partners = load_express_partners() or []
+    except Exception:
+        partners = []
+    for p in partners:
+        if not isinstance(p, dict) or not partner_is_special(p):
+            continue
+        phone = ""
+        try:
+            phone = canonical_partner_phone(str(p.get("phone") or ""))
+        except Exception:
+            phone = str(p.get("phone") or "").strip()
+        name = _plus_partner_display_name(p) or phone
+        for url in _normalize_url_list(p.get("divar_profile_urls")):
+            key = url.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({"url": url, "phone": phone, "name": name})
+            if cap and len(out) >= cap:
+                return out
+    return out
+
+
+def all_plus_divar_profile_urls(*, max_count: int | None = None) -> list[str]:
+    """ادغام پروفایل‌های همهٔ همکاران پلاس برای نوار خانه."""
+    return [e["url"] for e in all_plus_divar_profile_entries(max_count=max_count) if e.get("url")]
 
 
 def home_ads_divar_profile_urls() -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def _add(url: str) -> None:
+        u = normalize_divar_profile_url(url)
+        if not u:
+            return
+        key = u.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(u)
+
+    env_url = normalize_divar_profile_url(os.environ.get("VINOR_DIVAR_PRO_PROFILE_URL") or "")
+    if env_url:
+        _add(env_url)
+    for url in all_plus_divar_profile_urls(max_count=_MAX_DIVAR_PROFILES):
+        _add(url)
+        if len(out) >= _MAX_DIVAR_PROFILES:
+            return out
+    if out:
+        return out
     cfg = get_home_ads_settings()
-    urls = _normalize_url_list(cfg.get("divar_profile_urls"))
-    if urls:
-        return urls
-    single = normalize_divar_profile_url(str(cfg.get("divar_profile_url") or ""))
-    return [single] if single else [DEFAULT_PROFILE_URL]
+    for url in _normalize_url_list(cfg.get("divar_profile_urls")):
+        _add(url)
+        if len(out) >= _MAX_DIVAR_PROFILES:
+            break
+    if not out:
+        single = normalize_divar_profile_url(str(cfg.get("divar_profile_url") or ""))
+        if single:
+            _add(single)
+    return out
 
 
 def home_ads_system_enabled() -> bool:

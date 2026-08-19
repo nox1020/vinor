@@ -1093,7 +1093,99 @@ def select_portal():
     return render_template('admin/select_portal.html')
 
 
-# dashboard / admin_root → admin.ops_chat_routes (چت عملیات)
+def _dashboard_overview() -> dict[str, Any]:
+    """آمار خلاصه برای داشبورد ادمین (fail-open)."""
+    overview: dict[str, Any] = {
+        "partners_pending": 0,
+        "lands_pending": 0,
+        "visits_pending": 0,
+        "withdrawals_pending": 0,
+        "ai_pending": 0,
+        "ai_errors": 0,
+        "quick_links": [
+            {"label": "فایل‌ها", "href": "admin.express_listings", "icon": "fa-building"},
+            {"label": "همکاران", "href": "admin.express_partners", "icon": "fa-user-group"},
+            {"label": "بازدیدها", "href": "admin.express_visit_requests", "icon": "fa-route"},
+            {"label": "برداشت‌ها", "href": "admin.financial_withdrawals", "icon": "fa-money-bill-transfer"},
+            {"label": "نوار آگهی", "href": "admin.home_ads", "icon": "fa-images"},
+            {"label": "پیامک و نوتیفیکیشن", "href": "admin.sms_notifications", "icon": "fa-comment-sms"},
+        ],
+    }
+    try:
+        from app.utils.storage import load_express_partner_apps
+
+        apps = load_express_partner_apps() or []
+        overview["partners_pending"] = sum(
+            1
+            for a in apps
+            if isinstance(a, dict)
+            and str(a.get("status") or "").strip().lower()
+            in ("pending", "under_review", "waiting", "review")
+        )
+    except Exception:
+        pass
+    try:
+        lands = load_json(_lands_path())
+        express = [
+            l
+            for l in (lands if isinstance(lands, list) else [])
+            if isinstance(l, dict) and l.get("is_express")
+        ]
+        p, _a, _r = counts_by_status(express)
+        overview["lands_pending"] = int(p or 0)
+    except Exception:
+        pass
+    try:
+        from app.utils.storage import load_express_visit_requests
+
+        visits = load_express_visit_requests() or []
+        overview["visits_pending"] = sum(
+            1
+            for v in visits
+            if isinstance(v, dict)
+            and str(v.get("status") or "").strip() in ("pending", "done_pending")
+        )
+    except Exception:
+        pass
+    try:
+        from app.utils.storage import load_partner_withdrawals
+
+        rows = load_partner_withdrawals() or []
+        overview["withdrawals_pending"] = sum(
+            1
+            for w in rows
+            if isinstance(w, dict) and str(w.get("status") or "").strip() == "pending"
+        )
+    except Exception:
+        pass
+    try:
+        from app.ai_console.service import dashboard_snapshot
+
+        snap = dashboard_snapshot() or {}
+        k = snap.get("kpis") or {}
+        overview["ai_pending"] = int(k.get("pending_confirms") or 0)
+        overview["ai_errors"] = int(k.get("errors_sample") or 0)
+    except Exception:
+        pass
+    return overview
+
+
+@admin_bp.route("", endpoint="admin_root", strict_slashes=False)
+@admin_bp.route("/", endpoint="dashboard", strict_slashes=False)
+@login_required
+def dashboard():
+    """خانهٔ ادمین = داشبورد عملیات."""
+    try:
+        _purge_admin_created_express_listings()
+    except Exception:
+        pass
+    overview = _dashboard_overview()
+    for link in overview.get("quick_links") or []:
+        try:
+            link["url"] = url_for(link["href"])
+        except Exception:
+            link["url"] = "#"
+    return render_template("admin/dashboard.html", dash_overview=overview)
 
 
 @admin_bp.route('/super-admin', endpoint='super_admin_info')
@@ -2885,12 +2977,11 @@ def lawyer_admin():
 def home_ads_admin():
     from app.express_partner.divar_pro_ads import clear_divar_pro_ads_cache, get_divar_pro_ads
     from app.express_partner.home_ads_config import (
-        add_divar_profile_url,
         default_home_ads_settings,
         get_home_ads_settings,
+        home_ads_divar_profile_urls,
         home_ads_feature_enabled,
         home_ads_system_enabled,
-        remove_divar_profile_url,
         save_home_ads_settings,
     )
 
@@ -2912,14 +3003,6 @@ def home_ads_admin():
                 'نوار آگهی خانه فعال شد.' if new_on else 'نوار آگهی خانه غیرفعال شد.',
                 'success',
             )
-            return redirect(url_for('admin.home_ads'))
-        if action == 'add_profile':
-            ok, msg, _ = add_divar_profile_url(request.form.get('ha_new_profile_url') or '')
-            flash(msg, 'success' if ok else 'error')
-            return redirect(url_for('admin.home_ads'))
-        if action == 'remove_profile':
-            ok, msg, _ = remove_divar_profile_url(request.form.get('ha_remove_url') or '')
-            flash(msg, 'success' if ok else 'error')
             return redirect(url_for('admin.home_ads'))
         if action == 'clear_cache':
             clear_divar_pro_ads_cache()
@@ -2972,6 +3055,7 @@ def home_ads_admin():
         home_ads_system_on=home_ads_system_enabled(),
         cache_ads_count=cache_ads_count,
         cache_from_cache=cache_from_cache,
+        divar_profile_count=len(home_ads_divar_profile_urls()),
     )
 
 
@@ -3595,6 +3679,96 @@ def _express_land_price_int(land: Dict[str, Any]) -> int:
         return 0
 
 
+def _purge_admin_created_express_listings() -> int:
+    """حذف آگهی‌هایی که از پنل/چت ادمین ثبت شده‌اند."""
+    from app.express_partner.special_listings import is_admin_created_express_listing
+
+    lands_data = load_json(_lands_path())
+    lands_list = lands_data if isinstance(lands_data, list) else []
+    keep: List[Dict[str, Any]] = []
+    removed = 0
+    for land in lands_list:
+        if is_admin_created_express_listing(land if isinstance(land, dict) else None):
+            try:
+                _delete_ad_images(land)
+            except Exception:
+                pass
+            removed += 1
+            continue
+        keep.append(land)
+    if removed:
+        save_ads(keep)
+    return removed
+
+
+def _divar_ad_as_admin_land(ad: Dict[str, Any], partner_by_url: Dict[str, Dict[str, str]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(ad, dict):
+        return None
+    token = str(ad.get('token') or '').strip()
+    title = str(ad.get('title') or '').strip() or 'آگهی دیوار'
+    image_url = str(ad.get('image_url') or '').strip()
+    profile_url = str(ad.get('profile_url') or '').strip()
+    partner = partner_by_url.get(profile_url.lower()) or {}
+    images = [image_url] if image_url else []
+    return {
+        'code': token or str(ad.get('url') or ''),
+        'title': title,
+        'location': str(ad.get('location') or '').strip(),
+        'city': '',
+        'images': images,
+        'price_total': 0,
+        'price_display': str(ad.get('price') or '').strip(),
+        'express_status': 'approved',
+        '_assignment_status': 'active',
+        '_source': 'divar',
+        '_external_url': str(ad.get('url') or '').strip() or (f'https://divar.ir/v/{token}' if token else ''),
+        '_owner_name': str(partner.get('name') or '').strip(),
+        '_owner_phone': str(partner.get('phone') or '').strip(),
+        '_profile_url': profile_url,
+        '_public_views_count': 0,
+        '_partner_views_count': 0,
+        '_assignment_count': 0,
+        'created_at': '',
+    }
+
+
+def _load_plus_divar_admin_lands() -> List[Dict[str, Any]]:
+    from app.express_partner.divar_pro_ads import get_divar_pro_ads
+    from app.express_partner.home_ads_config import all_plus_divar_profile_entries
+
+    entries = all_plus_divar_profile_entries(max_count=80)
+    urls = [e.get('url') or '' for e in entries if e.get('url')]
+    partner_by_url: Dict[str, Dict[str, str]] = {}
+    for e in entries:
+        url = str(e.get('url') or '').strip()
+        if url:
+            partner_by_url[url.lower()] = {
+                'name': str(e.get('name') or '').strip(),
+                'phone': str(e.get('phone') or '').strip(),
+            }
+    if not urls:
+        return []
+    try:
+        result = get_divar_pro_ads(ignore_disabled=True, profiles=urls)
+    except Exception:
+        current_app.logger.exception('admin express: divar ads fetch failed')
+        return []
+    ads = result.get('ads') if isinstance(result.get('ads'), list) else []
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for ad in ads:
+        item = _divar_ad_as_admin_land(ad if isinstance(ad, dict) else {}, partner_by_url)
+        if not item:
+            continue
+        key = str(item.get('code') or '')
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        out.append(item)
+    return out
+
+
 def _enrich_admin_express_land(
     land: Dict[str, Any],
     *,
@@ -3619,12 +3793,20 @@ def _enrich_admin_express_land(
 @admin_bp.route('/express')
 @login_required
 def express_listings():
-    """لیست آگهی‌های اکسپرس"""
+    """لیست آگهی‌های همکاران پلاس و لینک‌های پروفایل دیوارشان."""
     cleanup_expired_ads()
-    lands_data = load_json(_lands_path())
-    lands_list = lands_data if isinstance(lands_data, list) else []
+    removed = 0
+    try:
+        removed = _purge_admin_created_express_listings()
+    except Exception:
+        current_app.logger.exception('purge admin-created express listings failed')
+    if removed:
+        flash(f'{removed} آگهی ثبت‌شده از این پنل حذف شد.', 'info')
 
-    express_all = [land for land in lands_list if land.get('is_express', False)]
+    from app.express_partner.special_listings import listings_owned_by_plus_partners
+
+    plus_lands = listings_owned_by_plus_partners() or []
+    divar_lands = _load_plus_divar_admin_lands()
 
     public_views_data = load_express_views() or []
     if not isinstance(public_views_data, list):
@@ -3661,29 +3843,7 @@ def express_listings():
         except Exception:
             pass
 
-    filter_kind = (request.args.get('filter') or 'all').strip().lower()
-    express_lands = list(express_all)
-    if filter_kind == 'sold':
-        express_lands = [
-            l for l in express_lands
-            if str(l.get('express_status') or '').strip().lower() == 'sold'
-        ]
-    elif filter_kind == 'active':
-        express_lands = [
-            l for l in express_lands
-            if str(l.get('express_status') or '').strip().lower() != 'sold'
-        ]
-
-    # جدیدترین اول؛ فروخته‌شده‌ها همیشه پایین لیست (در تب «همه»)
-    express_lands.sort(
-        key=lambda l: str(l.get('created_at') or l.get('updated_at') or ''),
-        reverse=True,
-    )
-    express_lands.sort(
-        key=lambda l: str(l.get('express_status') or '').strip().lower() == 'sold',
-    )
-
-    for land in express_lands:
+    for land in plus_lands:
         code = str(land.get('code') or '')
         _enrich_admin_express_land(
             land,
@@ -3692,22 +3852,49 @@ def express_listings():
             assignment_count=assignment_count_by_code.get(code, 0),
         )
 
+    filter_kind = (request.args.get('filter') or 'all').strip().lower()
+    plus_sold = [
+        l for l in plus_lands
+        if str(l.get('express_status') or '').strip().lower() == 'sold'
+    ]
+    plus_active = [
+        l for l in plus_lands
+        if str(l.get('express_status') or '').strip().lower() != 'sold'
+    ]
+
+    if filter_kind == 'sold':
+        express_lands = list(plus_sold)
+    elif filter_kind == 'divar':
+        express_lands = list(divar_lands)
+    elif filter_kind == 'plus':
+        express_lands = list(plus_lands)
+    elif filter_kind == 'active':
+        express_lands = list(plus_active) + list(divar_lands)
+    else:
+        express_lands = list(plus_lands) + list(divar_lands)
+
+    express_lands.sort(
+        key=lambda l: str(l.get('created_at') or l.get('updated_at') or ''),
+        reverse=True,
+    )
+    express_lands.sort(
+        key=lambda l: str(l.get('express_status') or '').strip().lower() == 'sold',
+    )
+
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", PER_PAGE_DEFAULT))
     pagination = paginate(express_lands, page, per_page)
 
-    sold_count = sum(
-        1 for l in express_all
-        if str(l.get('express_status') or '').strip().lower() == 'sold'
-    )
     stats = {
-        'total': len(express_all),
-        'active': len(express_all) - sold_count,
-        'sold': sold_count,
+        'total': len(plus_lands) + len(divar_lands),
+        'plus': len(plus_lands),
+        'divar': len(divar_lands),
+        'active': len(plus_active) + len(divar_lands),
+        'sold': len(plus_sold),
         'shown': len(express_lands),
     }
 
-    p, a, r = counts_by_status(express_all)
+    p, a, r = counts_by_status(plus_lands)
     return render_template(
         'admin/express_listings.html',
         lands=pagination["items"],
@@ -3898,256 +4085,10 @@ def _add_express_listing_form(cities, land: Optional[Dict[str, Any]] = None):
 @admin_bp.route('/express/add', methods=['GET', 'POST'])
 @login_required
 def add_express_listing():
-    """افزودن آگهی اکسپرس جدید"""
-    cities = load_active_cities() or []
-    if request.method == 'POST':
-        form = request.form
-        files = request.files
-        
-        # اعتبارسنجی فیلدهای اجباری
-        title = form.get('title', '').strip()
-        location = form.get('location', '').strip()
-        city = (form.get('city') or '').strip()
-        size_raw = form.get('size', '').strip()
-        price_total_raw = form.get('price_total', '').strip()
-        
-        # پاک کردن فرمت از اعداد (حذف کاما و کاراکترهای غیر عددی)
-        size_clean = re.sub(r'[^\d]', '', size_raw) if size_raw else ''
-        price_total_clean = re.sub(r'[^\d]', '', price_total_raw) if price_total_raw else ''
-        
-        if not all([title, location, city, size_clean, price_total_clean]):
-            flash('لطفاً فیلدهای اجباری را پر کنید.', 'error')
-            return _add_express_listing_form(cities)
+    """ثبت آگهی از پنل ادمین غیرفعال است — فقط همکاران پلاس ثبت می‌کنند."""
+    flash('ثبت آگهی از این پنل انجام نمی‌شود. آگهی‌ها را همکاران پلاس ثبت می‌کنند.', 'info')
+    return redirect(url_for('admin.express_listings'))
 
-        if cities and city not in cities:
-            flash('شهر آگهی باید از بین شهرهای فعال انتخاب شود.', 'error')
-            return _add_express_listing_form(cities)
-        
-        if len(title) < 10:
-            flash('عنوان باید حداقل ۱۰ کاراکتر باشد.', 'error')
-            return _add_express_listing_form(cities)
-        
-        # تبدیل به عدد
-        try:
-            size = int(size_clean)
-            price_total = int(price_total_clean)
-        except (ValueError, TypeError):
-            flash('متراژ و قیمت باید عدد معتبر باشند.', 'error')
-            return _add_express_listing_form(cities)
-        
-        if size <= 0 or price_total <= 0:
-            flash('متراژ و قیمت باید بیشتر از صفر باشند.', 'error')
-            return _add_express_listing_form(cities)
-
-        payment_method = (form.get('payment_method') or '').strip()
-        if not payment_method:
-            flash('نحوه پرداخت را انتخاب کنید.', 'error')
-            return _add_express_listing_form(cities)
-
-        vinor_contact = re.sub(r'[^\d]', '', (form.get('vinor_contact') or '').strip())
-        if not vinor_contact or len(vinor_contact) < 10:
-            flash('شماره تماس پشتیبانی معتبر نیست.', 'error')
-            return _add_express_listing_form(cities)
-        
-        # بارگذاری لیست آگهی‌ها برای تولید کد
-        lands = load_json(_lands_path())
-        if not isinstance(lands, list):
-            lands = []
-        
-        # تولید کد منحصر به فرد
-        new_code = form.get("code") or _next_numeric_code(lands)
-        
-        # ذخیره مدارک (آپلود فوری از hidden یا فایل فرم)
-        documents = []
-        for doc_key in ('document_1', 'document_2'):
-            pre = (form.get(doc_key) or '').strip()
-            if pre:
-                documents.append(pre)
-        for key, file in files.items():
-            if key.startswith('document_') and file.filename:
-                doc_filename = _save_express_document(file, new_code)
-                if doc_filename and doc_filename not in documents:
-                    documents.append(doc_filename)
-        
-        # پردازش تصاویر (آپلود فوری از hidden یا فایل فرم)
-        images = _normalize_images_from_form(form, files)
-        
-        # کمیسیون همکاران (الزامی)
-        pct_raw = (form.get('express_commission_pct') or '').strip()
-        if not pct_raw:
-            flash('درصد پورسانت الزامی است.', 'error')
-            return _add_express_listing_form(cities)
-        try:
-            express_commission_pct = float(pct_raw)
-            if express_commission_pct <= 0 or express_commission_pct > 100:
-                flash('درصد پورسانت باید بین ۰ و ۱۰۰ باشد.', 'error')
-                return _add_express_listing_form(cities)
-        except (ValueError, TypeError):
-            flash('درصد پورسانت باید یک عدد معتبر باشد.', 'error')
-            return _add_express_listing_form(cities)
-        # محاسبه قیمت در متر
-        price_per_meter_raw = form.get('price_per_meter', '').strip()
-        price_per_meter_clean = re.sub(r'[^\d]', '', price_per_meter_raw) if price_per_meter_raw else ''
-        try:
-            price_per_meter = int(price_per_meter_clean) if price_per_meter_clean else 0
-            # اگر قیمت در متر محاسبه نشده، خودمان محاسبه می‌کنیم
-            if price_per_meter == 0 and size > 0:
-                price_per_meter = int(round(price_total / size))
-        except (ValueError, TypeError):
-            price_per_meter = int(round(price_total / size)) if size > 0 else 0
-        
-        # محاسبه کمیسیون
-        try:
-            price_int = price_total  # قبلاً تبدیل شده
-        except Exception:
-            price_int = 0
-        express_commission_amount = int(round(price_int * ((express_commission_pct or 0)/100.0))) if price_int and (express_commission_pct is not None) else None
-
-        # دریافت مختصات جغرافیایی
-        latitude = None
-        longitude = None
-        try:
-            lat_str = form.get('latitude', '').strip()
-            lon_str = form.get('longitude', '').strip()
-            if lat_str:
-                latitude = float(lat_str)
-            if lon_str:
-                longitude = float(lon_str)
-        except (ValueError, TypeError):
-            pass  # اگر مقدار نامعتبر بود، None می‌ماند
-
-        # ویدئو (اختیاری — آپلود فوری از hidden یا فایل فرم)
-        video_path = (form.get('video') or '').strip() or None
-        if not video_path:
-            try:
-                video_path = _save_video_from_form(files)
-            except Exception:
-                video_path = None
-
-        # ایجاد آگهی اکسپرس
-        payment_terms = []
-        try:
-            if payment_method == 'اقساطی':
-                months_list = request.form.getlist('installment_months[]')
-                amounts_list = request.form.getlist('installment_amounts[]')
-                for i in range(max(len(months_list), len(amounts_list))):
-                    m_raw = (months_list[i] if i < len(months_list) else '') or ''
-                    a_raw = (amounts_list[i] if i < len(amounts_list) else '') or ''
-                    try:
-                        m = int(re.sub(r'[^\d]', '', str(m_raw))) if m_raw else 0
-                    except Exception:
-                        m = 0
-                    try:
-                        a = int(re.sub(r'[^\d]', '', str(a_raw))) if a_raw else 0
-                    except Exception:
-                        a = 0
-                    if m > 0 and a > 0:
-                        payment_terms.append({'months': m, 'amount': a})
-        except Exception:
-            payment_terms = []
-
-        if payment_method == 'اقساطی' and not payment_terms:
-            flash('برای پرداخت اقساطی حداقل یک قسط معتبر وارد کنید.', 'error')
-            return _add_express_listing_form(cities)
-
-        new_express_land = {
-            'code': new_code,
-            'title': title,
-            'location': location,
-            'city': city,
-            'size': size,  # حالا int است
-            'price_total': price_total,  # حالا int است
-            'price_per_meter': price_per_meter,
-            'description': form.get('description', '').strip(),
-            'images': images,
-            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'owner': 'vinor_support',  # شماره پشتیبانی وینور
-            'status': 'approved',  # آگهی‌های اکسپرس مستقیماً تأیید می‌شوند
-            'ad_type': 'express',
-            'category': form.get('category', ''),
-            'payment_method': payment_method,
-            'payment_terms': payment_terms,
-            'is_express': True,
-            'express_status': 'approved',
-            'expert_verified': bool((form.get('expert_verified') or '').strip()),
-            'express_documents': documents,
-            'vinor_contact': vinor_contact,
-            'extras': {
-                'express_commission_pct': express_commission_pct,
-                'express_commission_amount': express_commission_amount,
-            }
-        }
-
-        if video_path:
-            new_express_land['video'] = video_path
-        
-        # افزودن مختصات جغرافیایی در صورت وجود
-        if latitude is not None:
-            new_express_land['latitude'] = latitude
-        if longitude is not None:
-            new_express_land['longitude'] = longitude
-
-        apply_category_specs_from_form(new_express_land, form)
-        
-        # ذخیره در فایل
-        lands = load_json(_lands_path())
-        lands.append(new_express_land)
-        save_ads(lands)
-
-        try:
-            from app.express_partner.new_land_sms import notify_all_partners_new_express_land_background
-            notify_all_partners_new_express_land_background(new_express_land)
-        except Exception:
-            current_app.logger.exception(
-                'New express land partner SMS queue failed code=%s', new_code
-            )
-        
-        # ارسال نوتیفیکیشن به کاربران منطقه
-        # در صورت انتخاب «ارسال خودکار برای تمامی همکاران» → ساخت انتساب برای همه + اعلان
-        if (form.get('auto_send_all_partners') or '').strip():
-            try:
-                partners = load_express_partners() or []
-                items = load_express_assignments() or []
-                existing = {(str(a.get('partner_phone')), str(a.get('land_code'))) for a in items if isinstance(a, dict)}
-                for p in partners:
-                    phone = str((p or {}).get('phone') or '').strip()
-                    if not phone:
-                        continue
-                    key = (phone, new_code)
-                    if key not in existing:
-                        new_id = (max([int(x.get('id',0) or 0) for x in items if isinstance(x, dict)], default=0) or 0) + 1
-                        items.append({
-                            'id': new_id,
-                            'partner_phone': phone,
-                            'land_code': new_code,
-                            'commission_pct': express_commission_pct or 0,
-                            'status': 'active',
-                            'created_at': iso_z(utcnow())
-                        })
-                        existing.add(key)
-                    try:
-                        phone_normalized = _normalize_phone(phone)
-                        if phone_normalized and len(phone_normalized) == 11:
-                            add_notification(
-                                user_id=phone_normalized,
-                                title='فایل جدید اکسپرس',
-                                body=f"کد فایل: {new_code} - {title}",
-                                ntype='info',
-                                ad_id=new_code,
-                                action_url=url_for('express_partner.land_detail', code=new_code, _external=True)
-                            )
-                    except Exception as e:
-                        current_app.logger.error(f"Error sending file assignment notification to {phone}: {e}", exc_info=True)
-                        continue
-                save_express_assignments(items)
-            except Exception:
-                pass
-        
-        flash(f'آگهی اکسپرس با کد {new_code} با موفقیت ثبت شد.', 'success')
-        return redirect(url_for('admin.express_listings'))
-    
-    # GET — فرم سبک بدون cleanup سنگین
-    return _add_express_listing_form(cities)
 
 @admin_bp.route('/express/<string:code>/edit', methods=['GET', 'POST'])
 @login_required
@@ -4912,7 +4853,7 @@ def express_partner_application_delete(aid: int):
 # Express visit requests redirect helper
 # -----------------------------------------------------------------------------
 def _express_visit_requests_redirect(filter_hint: str = '', vid: str = '') -> str:
-    flt = (filter_hint or 'workflow').strip()
+    flt = (filter_hint or 'plus').strip()
     if flt == 'actions':
         flt = 'workflow'
     url = url_for('admin.express_visit_requests', filter=flt or None)
@@ -5592,7 +5533,7 @@ def financial_withdrawals():
     )
 
 
-@admin_bp.route('/express/visit-requests', methods=['GET', 'POST'], endpoint='express_visit_requests')
+@admin_bp.route('/express/visit-requests', methods=['GET'], endpoint='express_visit_requests')
 @login_required
 def express_visit_requests():
     from app.express_partner.visit_requests import (
@@ -5602,55 +5543,25 @@ def express_visit_requests():
         DONE_PENDING_STATUS,
         NO_SHOW_STATUS,
         PENDING_STATUS,
-        VISIT_WEEKDAY_LABELS,
-        VISIT_WEEKDAY_ORDER,
         admin_row_dict as visit_admin_row,
         admin_can_transition_visit,
         admin_visit_in_workflow,
         admin_visit_status_options,
         admin_visit_workflow_needs_action,
         admin_visit_workflow_steps,
-        get_visit_allowed_weekdays,
-        get_visit_allowed_hours,
         merge_admin_visit_cards_by_partner_land,
-        save_visit_schedule,
-        visit_allowed_hours_summary,
-        visit_allowed_weekdays_summary,
-        visit_hour_rows,
+        mark_admin_visit_plus,
+        purge_admin_legacy_visits,
     )
 
-    if request.method == 'POST' and (request.form.get('action') or '').strip() in (
-        'save_visit_weekdays',
-        'save_visit_schedule',
-    ):
-        raw_days = request.form.getlist('visit_weekdays')
-        raw_hours = request.form.getlist('visit_hours')
-        try:
-            parsed_days = [int(x) for x in raw_days]
-        except ValueError:
-            parsed_days = []
-        parsed_hours: list[int] = []
-        for item in raw_hours:
-            try:
-                parsed_hours.append(int(item))
-            except ValueError:
-                continue
-        flt = (request.form.get('filter') or 'workflow').strip().lower()
-        if not parsed_days:
-            flash('حداقل یک روز هفته را برای بازدید انتخاب کنید.', 'warning')
-            return redirect(url_for('admin.express_visit_requests', filter=flt or None))
-        if not parsed_hours:
-            flash('حداقل یک ساعت مجاز بازدید را انتخاب کنید.', 'warning')
-            return redirect(url_for('admin.express_visit_requests', filter=flt or None))
-        save_visit_schedule(weekdays=parsed_days, hours=parsed_hours)
-        flash(
-            f'وقت‌های بازدید ذخیره شد: {visit_allowed_weekdays_summary()} — ساعت {visit_allowed_hours_summary()}',
-            'success',
-        )
-        flt = (request.form.get('filter') or request.args.get('filter') or 'workflow').strip().lower()
-        return redirect(url_for('admin.express_visit_requests', filter=flt or None))
-
-    flt = (request.args.get('filter') or 'workflow').strip().lower()
+    flt = (request.args.get('filter') or 'plus').strip().lower()
+    removed_legacy = 0
+    try:
+        removed_legacy = purge_admin_legacy_visits()
+    except Exception:
+        current_app.logger.exception('purge admin-legacy visits failed')
+    if removed_legacy:
+        flash(f'{removed_legacy} بازدید قدیمی ثبت‌شده از پنل ادمین حذف شد.', 'info')
     items_raw = load_express_visit_requests() or []
     if not isinstance(items_raw, list):
         items_raw = []
@@ -5736,6 +5647,16 @@ def express_visit_requests():
         return False
 
     name_map = _partner_name_lookup()
+    plus_map: Dict[str, Any] = {}
+    owner_by_code: Dict[str, Dict[str, str]] = {}
+    try:
+        from app.express_partner.special_listings import plus_listing_owner_by_code, plus_partner_map
+
+        plus_map = plus_partner_map() or {}
+        owner_by_code = plus_listing_owner_by_code() or {}
+    except Exception:
+        plus_map = {}
+        owner_by_code = {}
     items = []
     for row in items_raw:
         if not isinstance(row, dict):
@@ -5772,6 +5693,7 @@ def express_visit_requests():
             _st in (PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS)
             and admin_can_transition_visit(_st, CANCELLED_STATUS)
         )
+        mark_admin_visit_plus(item, plus_map=plus_map, owner_by_code=owner_by_code)
         items.append(item)
 
     # یک کارت به ازای هر همکار+فایل؛ بازدیدهای بعدی داخل همان کارت
@@ -5797,6 +5719,7 @@ def express_visit_requests():
     )
     workflow_count = sum(1 for x in items if x.get('in_workflow'))
     action_count = sum(1 for x in items if x.get('workflow_needs_action'))
+    plus_count = sum(1 for x in items if x.get('is_plus'))
 
     visit_result_ui = False
     try:
@@ -5805,7 +5728,11 @@ def express_visit_requests():
     except Exception:
         visit_result_ui = False
 
-    if flt == 'actions':
+    if flt == 'plus':
+        visible = [x for x in items if x.get('is_plus')]
+        visible.sort(key=lambda x: x.get('updated_at') or x.get('created_at') or '', reverse=True)
+        visible.sort(key=lambda x: 0 if x.get('workflow_needs_action') else 1)
+    elif flt == 'actions':
         visible = [x for x in items if x.get('workflow_needs_action')]
         visible.sort(key=lambda x: x.get('updated_at') or x.get('created_at') or '', reverse=True)
     elif flt == 'workflow':
@@ -5836,7 +5763,7 @@ def express_visit_requests():
         visible.sort(key=lambda x: x.get('updated_at') or x.get('created_at') or '', reverse=True)
         visible.sort(key=lambda x: 0 if x.get('workflow_needs_action') else 1)
 
-    if flt not in ('workflow', 'actions'):
+    if flt not in ('workflow', 'actions', 'plus'):
         visible.sort(key=lambda x: x.get('created_at') or '', reverse=True)
         visible.sort(key=lambda x: {
             PENDING_STATUS: 0,
@@ -5860,16 +5787,10 @@ def express_visit_requests():
         active_count=active_count,
         workflow_count=workflow_count,
         action_count=action_count,
+        plus_count=plus_count,
         all_count=all_count,
         current_filter=flt,
         visit_result_ui_enabled=visit_result_ui,
-        visit_weekday_labels=VISIT_WEEKDAY_LABELS,
-        visit_weekday_order=VISIT_WEEKDAY_ORDER,
-        visit_allowed_weekdays=get_visit_allowed_weekdays(),
-        visit_allowed_weekdays_summary=visit_allowed_weekdays_summary(),
-        visit_hour_rows=visit_hour_rows(),
-        visit_allowed_hours=get_visit_allowed_hours(),
-        visit_allowed_hours_summary=visit_allowed_hours_summary(),
     )
 
 

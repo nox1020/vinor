@@ -229,6 +229,9 @@
     flex-wrap: wrap;
     gap: 0.4rem;
     margin-top: 0.7rem;
+    position: relative;
+    z-index: 2;
+    pointer-events: auto;
   }
   .vn-lcd__btn {
     flex: 1 1 auto;
@@ -245,6 +248,7 @@
     font-size: 0.75rem;
     font-weight: 700;
     cursor: pointer;
+    pointer-events: auto;
     -webkit-tap-highlight-color: transparent;
   }
   .vn-lcd__btn--secondary {
@@ -264,7 +268,9 @@
   }
 </style>
 
-<article class="vn-lcd" data-vn-land-chat-detail="{{ land.code|e }}" data-land-code="{{ land.code|e }}">
+<article class="vn-lcd" data-vn-land-chat-detail="{{ land.code|e }}" data-land-code="{{ land.code|e }}"
+         data-complete-url="{{ url_for('express_partner.complete_visit_request', code=land.code) }}"
+         data-deal-url="{{ url_for('express_partner.mark_in_transaction', code=land.code) }}">
   {% if has_video or images %}
   <div class="vn-lcd__gallery" dir="ltr" aria-label="گالری فایل">
     {% if has_video %}
@@ -383,7 +389,7 @@
     <p class="vn-lcd__desc">{{ desc }}</p>
     {% endif %}
 
-    {% if is_approved and _st != 'sold' and chat_cta.prompt %}
+    {% if is_approved and _st != 'sold' and chat_cta.action %}
     <div class="vn-lcd__actions">
       {% if chat_cta.action == 'visit' %}
       <button type="button"
@@ -397,13 +403,13 @@
       {% else %}
       <button type="button"
               class="vn-lcd__btn"
-              data-vn-chat-prompt="{{ (chat_cta.prompt|default(''))|e }}"
-              data-vn-chat-intent="{{ chat_cta.action|default('') }}">
+              data-vn-lcd-action="{{ chat_cta.action|e }}"
+              data-land-code="{{ land.code|e }}">
         <i class="fas {{ chat_cta.icon|default('fa-comments') }}" aria-hidden="true"></i>
-        {{ chat_cta.label|default('ادامه در چت') }}
+        {{ chat_cta.label|default('ادامه') }}
       </button>
       {% endif %}
-      {% if chat_cta.secondary_prompt %}
+      {% if chat_cta.secondary_action %}
       {% if chat_cta.secondary_action == 'visit' %}
       <button type="button"
               class="vn-lcd__btn vn-lcd__btn--secondary"
@@ -416,8 +422,8 @@
       {% else %}
       <button type="button"
               class="vn-lcd__btn vn-lcd__btn--secondary"
-              data-vn-chat-prompt="{{ (chat_cta.secondary_prompt|default(''))|e }}"
-              data-vn-chat-intent="{{ chat_cta.secondary_action|default('') }}">
+              data-vn-lcd-action="{{ chat_cta.secondary_action|e }}"
+              data-land-code="{{ land.code|e }}">
         <i class="fas {{ chat_cta.secondary_icon|default('fa-calendar-plus') }}" aria-hidden="true"></i>
         {{ chat_cta.secondary_label|default('بازدید مجدد') }}
       </button>

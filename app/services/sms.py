@@ -5,8 +5,12 @@ sms.ir — ارسال OTP و پیامک قالب‌دار/مستقیم.
 کلید و قالب: api_keys.py در ریشه پروژه.
 """
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
 import requests
 from flask import current_app
+from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException, Timeout
 
 from app.services.sms_config import (
@@ -15,6 +19,13 @@ from app.services.sms_config import (
     get_sms_retriever_hash,
     get_sms_template_id,
 )
+
+# اتصال گرم به sms.ir — TLS/TCP برای OTP دوباره برقرار نشود
+_SMS_SESSION: requests.Session | None = None
+_SMS_SESSION_LOCK = threading.Lock()
+# timeout=1s باعث قطع ارسال می‌شد؛ sms.ir اغلب چند ثانیه طول می‌کشد
+_OTP_HTTP_TIMEOUT = 20
+_OTP_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="vinor-otp")
 
 # ارقام فارسی/عربی → لاتین
 _DIGIT_TRANSLATION = str.maketrans(
@@ -79,6 +90,25 @@ def normalize_otp_code(code: str) -> str:
     return re.sub(r"\D+", "", s)[:5]
 
 
+def format_otp_sms_message(code: str) -> str:
+    """متن OTP برای خط اختصاصی وینور — Web OTP + SMS Retriever.
+
+    نمونه:
+        کد تایید:
+        <#> 32564
+        @vinor.ir #32564
+        4R707/AKLt0
+    """
+    digits = normalize_otp_code(code)
+    retriever_hash = get_sms_retriever_hash() or "4R707/AKLt0"
+    return (
+        "کد تایید:\n"
+        f"<#> {digits}\n"
+        f"@vinor.ir #{digits}\n"
+        f"{retriever_hash}"
+    )
+
+
 def _sms_ir_response_ok(status_code: int, body: object) -> bool:
     """HTTP 2xx + status==1 در بدنهٔ sms.ir."""
     if not (200 <= status_code < 300):
@@ -91,15 +121,39 @@ def _sms_ir_response_ok(status_code: int, body: object) -> bool:
     return True
 
 
-def _sms_request_post(url: str, *, headers: dict, json_payload: dict, timeout: int = 25) -> requests.Response:
-    """POST به sms.ir با یک بار retry در صورت timeout."""
+def _sms_http_session() -> requests.Session:
+    global _SMS_SESSION
+    sess = _SMS_SESSION
+    if sess is not None:
+        return sess
+    with _SMS_SESSION_LOCK:
+        if _SMS_SESSION is None:
+            s = requests.Session()
+            adapter = HTTPAdapter(pool_connections=8, pool_maxsize=8, max_retries=0)
+            s.mount("https://", adapter)
+            s.mount("http://", adapter)
+            _SMS_SESSION = s
+        return _SMS_SESSION
+
+
+def _sms_request_post(
+    url: str,
+    *,
+    headers: dict,
+    json_payload: dict,
+    timeout: float | tuple = 12,
+    retry: bool = False,
+) -> requests.Response:
+    """POST به sms.ir روی Session مشترک. OTP retry ندارد تا تأخیر دوبل نشود."""
+    sess = _sms_http_session()
+    attempts = 2 if retry else 1
     last_err = None
-    for attempt in range(2):
+    for attempt in range(attempts):
         try:
-            return requests.post(url, headers=headers, json=json_payload, timeout=timeout)
+            return sess.post(url, headers=headers, json=json_payload, timeout=timeout)
         except Timeout as e:
             last_err = e
-            if attempt == 0:
+            if retry and attempt == 0:
                 try:
                     current_app.logger.warning("SMS API timeout (retrying): %s", url)
                 except Exception:
@@ -122,6 +176,41 @@ def _template_message_preview(parameters: dict | None, template_id: int) -> str:
     return f"قالب #{template_id}"
 
 
+def _send_otp_verify(mobile: str, digits: str) -> dict:
+    url = "https://api.sms.ir/v1/send/verify"
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "x-api-key": get_sms_api_key(),
+    }
+    payload = {
+        "mobile": mobile,
+        "templateId": get_sms_template_id(),
+        "parameters": [
+            {"name": "CODE", "value": digits},
+            {"name": "HASH", "value": get_sms_retriever_hash() or "4R707/AKLt0"},
+        ],
+    }
+    try:
+        resp = _sms_request_post(
+            url,
+            headers=headers,
+            json_payload=payload,
+            timeout=_OTP_HTTP_TIMEOUT,
+            retry=True,
+        )
+        content_type = resp.headers.get("content-type", "")
+        body = (
+            resp.json()
+            if content_type.lower().startswith("application/json")
+            else {"raw": resp.text}
+        )
+        ok = _sms_ir_response_ok(resp.status_code, body)
+        return {"ok": ok, "status": resp.status_code, "body": body}
+    except Exception as e:
+        return {"ok": False, "status": 0, "body": {"error": str(e)}}
+
+
 def send_sms_code(
     phone: str,
     code: str,
@@ -130,15 +219,7 @@ def send_sms_code(
     recipient_name: str | None = None,
     record_history: bool = True,
 ) -> dict:
-    """
-    ارسال OTP با قالب sms.ir.
-
-    قالب:
-        کد تایید:
-        <#> #CODE#
-        @vinor.ir ##CODE#
-        #HASH#
-    """
+    """OTP: اول Verify خدماتی، اگر نرسید bulk از خط ۹۹۸."""
     mobile = normalize_iran_mobile(phone)
     if not is_valid_iran_mobile(mobile):
         return {
@@ -146,55 +227,45 @@ def send_sms_code(
             "status": 0,
             "body": {"error": "invalid_mobile", "mobile": mobile},
         }
+    digits = normalize_otp_code(code)
+    if not digits:
+        return {
+            "ok": False,
+            "status": 0,
+            "body": {"error": "invalid_otp_code"},
+        }
 
-    url = "https://api.sms.ir/v1/send/verify"
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "x-api-key": get_sms_api_key(),
-    }
-    data = {
-        "mobile": mobile,
-        "templateId": get_sms_template_id(),
-        "parameters": [{"name": "CODE", "value": str(code)}],
-    }
-    retriever_hash = get_sms_retriever_hash()
-    if retriever_hash:
-        data["parameters"].append({"name": "HASH", "value": retriever_hash})
-    else:
+    template_id = get_sms_template_id()
+    result = _send_otp_verify(mobile, digits)
+    used_template = bool(result.get("ok"))
+    if not result.get("ok"):
         try:
             current_app.logger.warning(
-                "SMS_RETRIEVER_HASH is empty — APK auto-fill needs hash as last line after "
-                "@vinor.ir #CODE (see AppSignatureHelper logcat)."
+                "OTP verify failed; fallback bulk 998 | phone=%s | body=%s",
+                mobile,
+                result.get("body"),
             )
         except Exception:
             pass
-    try:
-        resp = _sms_request_post(url, headers=headers, json_payload=data, timeout=25)
-        content_type = resp.headers.get("content-type", "")
-        body = (
-            resp.json()
-            if content_type.lower().startswith("application/json")
-            else {"raw": resp.text}
+        result = send_sms_direct(
+            mobile,
+            format_otp_sms_message(digits),
+            line_number=get_sms_line_number() or "09981801922",
+            history_source=history_source,
+            recipient_name=recipient_name,
+            record_history=False,
         )
-        ok = _sms_ir_response_ok(resp.status_code, body)
-        if not ok:
-            try:
-                current_app.logger.error(
-                    "OTP SMS failed | status=%s | phone=%s | body=%s",
-                    resp.status_code,
-                    mobile,
-                    body,
-                )
-            except Exception:
-                pass
-        result = {"ok": ok, "status": resp.status_code, "body": body}
-    except Exception as e:
+
+    if not result.get("ok"):
         try:
-            current_app.logger.error("SMS error: %s", e)
+            current_app.logger.error(
+                "OTP SMS failed | phone=%s | status=%s | body=%s",
+                mobile,
+                result.get("status"),
+                result.get("body"),
+            )
         except Exception:
-            print("SMS error:", e)
-        result = {"ok": False, "status": 0, "body": {"error": str(e)}}
+            pass
 
     if record_history and mobile:
         from app.services.sms_history import record_sms_send_result
@@ -204,11 +275,25 @@ def send_sms_code(
             mobile=mobile,
             source=history_source,
             recipient_name=recipient_name,
-            message="کد تأیید (OTP)",
-            template_id=get_sms_template_id(),
+            message=format_otp_sms_message(digits),
+            template_id=template_id if used_template else None,
             record_history=True,
         )
     return result
+
+
+def send_otp_sms_background(phone: str, code: str) -> None:
+    """ارسال OTP خارج از درخواست ورود تا timeout رابط را قفل نکند."""
+    app = current_app._get_current_object()
+
+    def _worker() -> None:
+        with app.app_context():
+            try:
+                send_sms_code(phone, code)
+            except Exception:
+                app.logger.exception("OTP SMS background exception | phone=%s", phone)
+
+    _OTP_EXECUTOR.submit(_worker)
 
 
 def send_sms_template(
@@ -241,7 +326,7 @@ def send_sms_template(
         "parameters": params_list,
     }
     try:
-        resp = _sms_request_post(url, headers=headers, json_payload=payload, timeout=25)
+        resp = _sms_request_post(url, headers=headers, json_payload=payload, timeout=12, retry=False)
         content_type = resp.headers.get("content-type", "")
         body = (
             resp.json()
@@ -283,8 +368,8 @@ def send_sms_direct(
     recipient_name: str | None = None,
     record_history: bool = True,
 ) -> dict:
-    """ارسال پیامک مستقیم بدون قالب (bulk API در sms.ir)."""
-    final_line_number = get_sms_line_number()
+    """ارسال پیامک مستقیم بدون قالب (bulk API در sms.ir) از خط اختصاصی."""
+    final_line_number = (line_number or "").strip() or get_sms_line_number() or "09981801922"
     url = "https://api.sms.ir/v1/send/bulk"
     headers = {
         "Content-Type": "application/json",
@@ -296,10 +381,9 @@ def send_sms_direct(
         "lineNumber": str(final_line_number),
         "messageText": str(message),
         "mobiles": [norm_mobile],
-        "sendDateTime": None,
     }
     try:
-        resp = _sms_request_post(url, headers=headers, json_payload=payload, timeout=25)
+        resp = _sms_request_post(url, headers=headers, json_payload=payload, timeout=12, retry=False)
         content_type = resp.headers.get("content-type", "")
         body = (
             resp.json()

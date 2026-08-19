@@ -130,7 +130,7 @@
         <span>مشاهده فایل‌های آماده</span>
       </a>
       {% else %}
-      <a href="{{ url_for('express_partner.home', menu=1, login_next='apply') }}"
+      <a href="{{ url_for('express_partner.home', menu=1, login_next=url_for('express_partner.apply')) }}"
          data-vinor-express-nav
          class="coop-btn coop-btn--primary">
         <i class="fas fa-user-plus text-xs" aria-hidden="true"></i>

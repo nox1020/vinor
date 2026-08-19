@@ -2424,11 +2424,17 @@
           ? data.message
           : VISIT_SENT_MSG;
         showTxToast(toastMsg, false);
-        if (data.redirect_url) {
+        var redir = String(data.redirect_url || '').trim();
+        var redirIsHome = false;
+        try {
+          var rp = new URL(redir, window.location.origin).pathname.replace(/\/+$/, '') || '/';
+          redirIsHome = rp === '/express/partner/home' || rp === '/express/partner/dashboard';
+        } catch (_) {}
+        if (redir && !redirIsHome) {
           if (window.vinorExpressNavigate) {
-            window.vinorExpressNavigate(data.redirect_url, { forward: true });
+            window.vinorExpressNavigate(redir, { forward: true });
           } else {
-            window.location.href = data.redirect_url;
+            window.location.href = redir;
           }
           return;
         }

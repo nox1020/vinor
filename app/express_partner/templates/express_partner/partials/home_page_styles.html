@@ -44,7 +44,7 @@
     padding-inline-end: max(0.85rem, var(--vn-home-menu-clear));
   }
 
-  /* منوی شناور — fixed روی گوشه، بالاتر از محتوا */
+  /* منوی شناور — شیشهٔ مات، نه دایرهٔ تخت خاکستری */
   html:has(#homeDashboardPage) .ep-header-float-actions {
     position: fixed !important;
     z-index: 90;
@@ -53,23 +53,31 @@
   html:has(#homeDashboardPage) .ep-header-float-actions .ep-partner-header-btn,
   html:has(#homeDashboardPage) .ep-header-float-actions .vinor-dash-glass-pill,
   html:has(#homeDashboardPage) .ep-header-float-actions .comm-header-glass-btn {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 2.55rem;
+    height: 2.55rem;
     border-radius: 9999px !important;
-    border: 0 !important;
-    background: #2f2f2f !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    color: #fff !important;
     pointer-events: auto;
   }
-  html:has(#homeDashboardPage) .ep-header-float-actions .ep-partner-header-btn:active,
-  html:has(#homeDashboardPage) .ep-header-float-actions .vinor-dash-glass-pill:active {
-    background: #3a3a3a !important;
+  html:has(#homeDashboardPage) #epProfileMenuBtn.ep-menu-orb {
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 42%, rgba(12, 12, 14, 0.42) 100%),
+      rgba(32, 32, 36, 0.52) !important;
+    box-shadow:
+      0 0 0 0.5px rgba(255, 255, 255, 0.05),
+      0 10px 24px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -0.5px 0 rgba(0, 0, 0, 0.35) !important;
+    backdrop-filter: blur(18px) saturate(1.4) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.4) !important;
+    color: #f4f4f5 !important;
   }
-  html:has(#homeDashboardPage) #aiMenuUnreadDot {
-    box-shadow: 0 0 0 2px #000;
+  html:has(#homeDashboardPage) #epProfileMenuBtn.ep-menu-orb:active {
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.12) 0%, rgba(40, 40, 44, 0.72) 100%) !important;
+  }
+  html:has(#homeDashboardPage) #epProfileMenuBtn.ep-menu-orb #aiMenuUnreadDot {
+    box-shadow: 0 0 0 2px rgba(8, 8, 10, 0.92), 0 0 8px rgba(255, 59, 48, 0.55);
   }
 
   #homeDashboardPage .vn-home-guest-strip,

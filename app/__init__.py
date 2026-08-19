@@ -355,7 +355,7 @@ def create_app() -> Flask:
         if max_mb:
             msg = f"حجم فایل زیاد است. حداکثر حجم مجاز: {max_mb}MB"
         flash(msg, "warning")
-        return redirect(request.referrer or url_for("admin.add_express_listing"))
+        return redirect(request.referrer or url_for("admin.express_listings"))
 
     @app.context_processor
     def inject_vinor_globals():

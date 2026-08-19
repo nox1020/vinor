@@ -80,6 +80,71 @@
     height: 0.85rem;
     flex-shrink: 0;
   }
+  #epProfileMenuBtn.ep-menu-orb {
+    position: relative;
+    width: 2.55rem;
+    height: 2.55rem;
+    overflow: visible;
+    color: #f4f4f5;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 42%, rgba(12, 12, 14, 0.42) 100%),
+      rgba(32, 32, 36, 0.52) !important;
+    box-shadow:
+      0 0 0 0.5px rgba(255, 255, 255, 0.05),
+      0 10px 24px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -0.5px 0 rgba(0, 0, 0, 0.35) !important;
+    backdrop-filter: blur(18px) saturate(1.4) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.4) !important;
+    transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  #epProfileMenuBtn.ep-menu-orb:hover,
+  #epProfileMenuBtn.ep-menu-orb:focus-visible {
+    border-color: rgba(255, 255, 255, 0.28) !important;
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.06) 46%, rgba(18, 18, 20, 0.5) 100%),
+      rgba(48, 48, 52, 0.58) !important;
+    box-shadow:
+      0 0 0 0.5px rgba(255, 255, 255, 0.08),
+      0 12px 28px rgba(0, 0, 0, 0.48),
+      inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+    outline: none;
+  }
+  #epProfileMenuBtn.ep-menu-orb:active {
+    transform: scale(0.94);
+  }
+  #epProfileMenuBtn.ep-menu-orb .ep-menu-orb__icon {
+    width: 1.05rem;
+    height: 1.05rem;
+    display: block;
+    pointer-events: none;
+  }
+  #epProfileMenuBtn.ep-menu-orb .ep-menu-orb__icon path {
+    stroke: currentColor;
+    stroke-width: 1.85;
+    stroke-linecap: round;
+    fill: none;
+  }
+  #epProfileMenuBtn.ep-menu-orb #aiMenuUnreadDot {
+    top: 1px;
+    inset-inline-end: 1px;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: #ff3b30;
+    box-shadow: 0 0 0 2px rgba(8, 8, 10, 0.92), 0 0 8px rgba(255, 59, 48, 0.55);
+    animation: epMenuOrbPulse 2.2s ease-in-out infinite;
+  }
+  @keyframes epMenuOrbPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.12); opacity: 0.88; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #epProfileMenuBtn.ep-menu-orb #aiMenuUnreadDot {
+      animation: none;
+    }
+  }
   #epProfileMenuBtn[aria-expanded="true"] {
     visibility: hidden;
     pointer-events: none;
@@ -116,13 +181,17 @@
   {% if _use_drawer %}
   <button type="button"
           id="epProfileMenuBtn"
-          class="ep-partner-header-btn relative vinor-dash-glass-pill comm-header-glass-btn"
+          class="ep-partner-header-btn ep-menu-orb relative vinor-dash-glass-pill comm-header-glass-btn"
           aria-label="منو"
           title="منو"
           aria-expanded="false"
           aria-controls="epProfileDrawer">
-    <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
-    <span id="aiMenuUnreadDot" class="hidden absolute top-0.5 end-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-black" aria-hidden="true"></span>
+    <svg class="ep-menu-orb__icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6.5 8.25h11"/>
+      <path d="M6.5 12h11"/>
+      <path d="M6.5 15.75h11"/>
+    </svg>
+    <span id="aiMenuUnreadDot" class="hidden absolute" aria-hidden="true"></span>
   </button>
   {% else %}
   <a href="{{ _menu_href }}"

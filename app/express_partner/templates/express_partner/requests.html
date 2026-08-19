@@ -3,7 +3,7 @@
 
 {% block content %}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
-{{ ep_header_start(id='partnerRequestsHeader') }}
+{{ ep_header_start(id='partnerRequestsHeader', sticky=true) }}
 {% call ep_header_row('درخواست‌ها', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
 {{ ep_header_end() }}
 
@@ -34,6 +34,22 @@
     font-weight: 700;
     color: var(--rq-text);
     line-height: 1.35;
+  }
+  #partnerRequestsPage .rq-card__title--link {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #partnerRequestsPage .rq-card__title--link:hover,
+  #partnerRequestsPage .rq-card__title--link:focus-visible {
+    color: #93c5fd;
   }
   #partnerRequestsPage .rq-card__facts {
     margin: 0.45rem 0 0;
@@ -277,13 +293,22 @@
       {% set phone = (item.support_phone or _support)|trim %}
       <article class="rq-card"
                data-request-id="{{ item.id }}"
+               data-land-code="{{ item.land_code|default('') }}"
                data-remove-url="{{ url_for('express_partner.requests_remove', vid=item.id) }}"
                data-revisit-url="{{ url_for('express_partner.requests_revisit', vid=item.id) }}"
-               data-title="{{ item.title }}">
+               data-title="{{ item.title }}"
+               {% if item.can_cancel %}data-rq-cancel="1"{% endif %}>
         <div class="rq-card__row">
           <div class="min-w-0 flex-1 text-right">
+            {% if item.land_code %}
+            <button type="button" class="rq-card__title rq-card__title--link" data-rq-open-land>{{ item.title }}</button>
+            {% else %}
             <h2 class="rq-card__title">{{ item.title }}</h2>
+            {% endif %}
             <div class="rq-card__facts">
+              {% if item.customer_name %}
+              <p class="rq-card__fact"><strong>مشتری:</strong> {{ item.customer_name }}</p>
+              {% endif %}
               {% if item.visit_when %}
               <p class="rq-card__fact"><strong>زمان بازدید:</strong> {{ item.visit_when }}</p>
               {% elif item.visit_date_jalali %}
@@ -295,7 +320,7 @@
               {% if phone %}
               <p class="rq-card__fact">
                 <strong>شماره پشتیبان:</strong>
-                <a href="tel:{{ phone }}" dir="ltr">{{ phone }}</a>
+                <a href="tel:{{ phone }}" dir="ltr" data-vinor-direct-action>{{ phone|fa_digits }}</a>
               </p>
               {% endif %}
               {% if item.notes %}
@@ -307,7 +332,7 @@
         </div>
         <div class="rq-actions">
           {% if phone %}
-          <a class="rq-btn rq-btn--call" href="tel:{{ phone }}" aria-label="تماس با پشتیبانی">
+          <a class="rq-btn rq-btn--call" href="tel:{{ phone }}" data-vinor-direct-action aria-label="تماس با پشتیبانی">
             <i class="fas fa-phone" aria-hidden="true"></i>
             تماس
           </a>
@@ -315,7 +340,9 @@
           {% if item.can_revisit %}
           <button type="button" class="rq-btn rq-btn--revisit" data-rq-revisit>بازدید مجدد</button>
           {% endif %}
-          {% if item.can_remove %}
+          {% if item.can_cancel %}
+          <button type="button" class="rq-btn rq-btn--remove" data-rq-remove>لغو</button>
+          {% elif item.can_delete %}
           <button type="button" class="rq-btn rq-btn--remove" data-rq-remove>حذف</button>
           {% endif %}
         </div>
@@ -325,13 +352,13 @@
     {% else %}
     <div class="rq-empty">
       <p class="rq-empty__title">هنوز درخواستی نیست</p>
-      <p class="rq-empty__sub">از صفحه اصلی «ثبت مشتری جدید» را بزنید تا وقت بازدید اینجا بیاید.</p>
+      <p class="rq-empty__sub">از صفحه اصلی «مشتری دارم» را بزنید تا وقت بازدید اینجا بیاید.</p>
       <a class="rq-empty__cta" href="{{ url_for('express_partner.home') }}" data-vinor-express-nav>صفحه اصلی</a>
     </div>
     {% endif %}
   </main>
 
-  {% set bottom_nav_active = 'home' %}
+  {% set bottom_nav_active = 'profile' %}
   {% include 'express_partner/partials/partner_tab_footer.html' %}
 </div>
 
@@ -354,14 +381,38 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
 <script>
 (function () {
+  if (window.__vinorCommissionsChrome && window.__vinorCommissionsChrome.teardown) {
+    try { window.__vinorCommissionsChrome.teardown(); } catch (_) {}
+  }
+  if (window.__vinorDashboardChrome && window.__vinorDashboardChrome.teardown) {
+    try { window.__vinorDashboardChrome.teardown(); } catch (_) {}
+  }
+  if (window.__vinorPartnerHeaderChromeSetup) {
+    try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
+  }
+})();
+</script>
+<script>
+(function () {
+  if (window.__vinorRequestsPageCtrl) {
+    try { window.__vinorRequestsPageCtrl.abort(); } catch (_) {}
+  }
+  window.__vinorRequestsPageCtrl = new AbortController();
+  var sig = window.__vinorRequestsPageCtrl.signal;
+  var sigOpts = { signal: sig };
+
   var page = document.getElementById('partnerRequestsPage');
-  if (!page || page.__rqBound) return;
-  page.__rqBound = true;
+  if (!page) return;
   var toast = document.getElementById('rqToast');
   var delModal = document.getElementById('rqDeleteModal');
   var delConfirm = document.getElementById('rqDeleteConfirmBtn');
+  var delTitle = document.getElementById('rqDeleteModalTitle');
   var delText = document.getElementById('rqDeleteModalText');
   var pendingRemove = null;
 
@@ -387,17 +438,45 @@
     toast.className = 'rq-toast is-on ' + (ok ? 'is-ok' : 'is-err');
   }
 
+  function refreshList() {
+    if (typeof window.vinorExpressSoftRefresh === 'function') {
+      window.vinorExpressSoftRefresh();
+    } else {
+      window.location.reload();
+    }
+  }
+
+  function openLand(code) {
+    code = String(code || '').trim();
+    if (!code) return;
+    if (typeof window.vinorOpenLandInChat === 'function') {
+      window.vinorOpenLandInChat(code);
+      return;
+    }
+    window.location.assign('/express/partner/home?land=' + encodeURIComponent(code));
+  }
+
   function openDeleteModal(card) {
     if (!delModal || !card) return;
+    var isCancel = card.getAttribute('data-rq-cancel') === '1';
     pendingRemove = {
       card: card,
-      url: card.getAttribute('data-remove-url') || ''
+      url: card.getAttribute('data-remove-url') || '',
+      cancel: isCancel
     };
     var title = String(card.getAttribute('data-title') || '').trim();
+    if (delTitle) delTitle.textContent = isCancel ? 'لغو درخواست' : 'حذف درخواست';
+    if (delConfirm) delConfirm.textContent = isCancel ? 'بله، لغو کن' : 'بله، حذف کن';
     if (delText) {
-      delText.textContent = title
-        ? ('«' + title + '» حذف شود؟ این کار قابل بازگشت نیست.')
-        : 'این درخواست حذف شود؟ این کار قابل بازگشت نیست.';
+      if (isCancel) {
+        delText.textContent = title
+          ? ('«' + title + '» لغو شود؟')
+          : 'این درخواست لغو شود؟';
+      } else {
+        delText.textContent = title
+          ? ('«' + title + '» از لیست حذف شود؟ این کار قابل بازگشت نیست.')
+          : 'این درخواست از لیست حذف شود؟ این کار قابل بازگشت نیست.';
+      }
     }
     delModal.hidden = false;
     delModal.classList.add('is-open');
@@ -447,16 +526,15 @@
         ev.preventDefault();
         closeDeleteModal();
       }
-    });
+    }, sigOpts);
   }
   document.addEventListener('keydown', function (ev) {
     if (!delModal || !delModal.classList.contains('is-open')) return;
     if (ev.key === 'Escape' || ev.keyCode === 27) closeDeleteModal();
-  });
+  }, sigOpts);
   if (delConfirm) {
     delConfirm.addEventListener('click', function () {
       if (!pendingRemove || !pendingRemove.url) return;
-      var card = pendingRemove.card;
       var url = pendingRemove.url;
       delConfirm.disabled = true;
       postAction(url, delConfirm).then(function (res) {
@@ -466,16 +544,13 @@
           showToast(data.error || 'حذف انجام نشد.', false);
           return;
         }
-        if (card && card.parentNode) card.remove();
         showToast(data.message || 'حذف شد.', true);
-        if (!page.querySelector('[data-request-id]')) {
-          window.location.reload();
-        }
+        setTimeout(refreshList, 350);
       }).catch(function () {
         delConfirm.disabled = false;
         showToast('ارتباط برقرار نشد.', false);
       });
-    });
+    }, sigOpts);
   }
 
   page.addEventListener('click', function (ev) {
@@ -500,21 +575,23 @@
           return;
         }
         showToast(data.message || 'بازدید مجدد ثبت شد.', true);
-        var next = data.redirect_url || '';
-        setTimeout(function () {
-          if (next && typeof window.vinorExpressNavigate === 'function') {
-            window.vinorExpressNavigate(next, { forward: true });
-          } else if (next) {
-            window.location.href = next;
-          } else {
-            window.location.reload();
-          }
-        }, 450);
+        setTimeout(refreshList, 450);
       }).catch(function () {
         showToast('ارتباط برقرار نشد.', false);
       });
+      return;
     }
-  });
+
+    if (t.closest('a[href^="tel:"]') || t.closest('[data-vinor-direct-action]')) return;
+
+    if (t.closest('[data-rq-open-land]') || t.closest('.rq-card__row')) {
+      var code = card.getAttribute('data-land-code') || '';
+      if (code) {
+        ev.preventDefault();
+        openLand(code);
+      }
+    }
+  }, sigOpts);
 })();
 </script>
 {% endblock %}

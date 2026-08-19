@@ -4,8 +4,7 @@
 (function () {
   'use strict';
 
-  /* جدا از چت عملیات ادمین — اگر صفحه ops باشد وارد نشو */
-  if (document.getElementById('adminOpsChatPage')) return;
+  if (document.getElementById('adminOpsDashPage') || document.getElementById('adminOpsChatPage')) return;
 
   if (typeof window.__vinorAiChatTeardown === 'function') {
     try {
@@ -942,6 +941,10 @@
   /** برای express-nav popstate: اگر لایهٔ چت باز است، فقط بدو ورود */
   window.__vinorAiConsumeHomeChatBack = function () {
     if (!homeInline) return false;
+    try {
+      var path = String(window.location.pathname || '').replace(/\/+$/, '') || '/';
+      if (path !== '/express/partner/home') return false;
+    } catch (_) {}
     if (!homeChatLayerOpen && isHomeChatEmpty()) return false;
     return returnToHomeEmptyEntry();
   };
@@ -2628,24 +2631,28 @@
     updatePostchiUnreadFromThreads(threads);
     historyList.innerHTML = '';
     var inDrawer = !!(historyList.closest && historyList.closest('#epProfileDrawer'));
-    if (!threads || !threads.length) {
-      historyList.innerHTML =
-        '<p class="px-2 py-4 text-center text-xs text-zinc-500">هنوز گفتگویی نیست</p>';
-      return;
-    }
     /* فقط یک گفتگوی وینور — پشتیبانی/پستچی داخل همین چت ادغام شده است */
     var vinorTh = null;
-    threads.forEach(function (th) {
+    (threads || []).forEach(function (th) {
       var isPostchi = th.kind === 'postchi' || th.id === postchiThreadId;
       var isLawyer = th.kind === 'lawyer' || th.id === lawyerThreadId;
       if (isLawyer || isPostchi) return;
       if (!vinorTh || th.is_active) vinorTh = th;
     });
     var display = [];
-    if (vinorTh) {
-      vinorTh = Object.assign({}, vinorTh, { title: 'وینور', kind: 'vinor' });
-      display.push(vinorTh);
+    if (!vinorTh) {
+      vinorTh = {
+        id: lastVinorThreadId || activeThreadId() || '',
+        title: 'وینور',
+        kind: 'vinor',
+        is_active: true,
+        message_count: 0,
+        preview: '',
+        updated_at: '',
+      };
     }
+    vinorTh = Object.assign({}, vinorTh, { title: 'وینور', kind: 'vinor' });
+    display.push(vinorTh);
     display.forEach(function (th) {
       var isPostchi = th.kind === 'postchi' || th.id === postchiThreadId;
       var btnEl = document.createElement('button');
@@ -2780,7 +2787,7 @@
   }
 
   function applyThreads(threads) {
-    if (threads && threads.length) renderThreadList(threads);
+    renderThreadList(threads || []);
     syncNewChatAvailability(threads || []);
   }
 
@@ -3734,9 +3741,6 @@
   };
 
   var landDetailPending = null;
-  function sendChatPromptFromDetail(prompt, intent) {
-    submitSilentPrompt(prompt, intent);
-  }
 
   if (!window.__vinorChatPromptCaptureBound) {
     window.__vinorChatPromptCaptureBound = true;
@@ -3745,6 +3749,7 @@
       function (e) {
         var btn = e.target && e.target.closest && e.target.closest('[data-vn-chat-prompt]');
         if (!btn) return;
+        if (btn.closest('.vn-lcd')) return;
         var prompt = btn.getAttribute('data-vn-chat-prompt') || '';
         if (!prompt.trim()) return;
         e.preventDefault();
@@ -3792,19 +3797,148 @@
           fireSilentSubmit();
           return;
         }
+        var intentNav = (btn.getAttribute('data-vn-chat-intent') || '').trim();
         try {
           sessionStorage.setItem('vinor_ai_home_prompt', prompt.trim());
           sessionStorage.setItem('vinor_ai_home_autosend', '1');
           sessionStorage.setItem('vinor_ai_home_silent', '1');
-          var intentNav = (btn.getAttribute('data-vn-chat-intent') || '').trim();
           if (intentNav) sessionStorage.setItem('vinor_ai_home_intent', intentNav);
           else sessionStorage.removeItem('vinor_ai_home_intent');
         } catch (_) {}
+        if (document.getElementById('homeDashboardPage')) {
+          if (typeof window.__vinorFireHomeQuickPrompt === 'function') {
+            window.__vinorFireHomeQuickPrompt(prompt.trim(), intentNav || '');
+          }
+          return;
+        }
         if (typeof window.vinorExpressNavigate === 'function') {
           window.vinorExpressNavigate('/express/partner/home', { forward: true });
         } else {
           window.location.assign('/express/partner/home');
         }
+      },
+      true
+    );
+  }
+
+  function lcdCsrfToken() {
+    try {
+      if (window.VINOR_NOTIFY_CFG && window.VINOR_NOTIFY_CFG.csrfToken) {
+        return String(window.VINOR_NOTIFY_CFG.csrfToken || '');
+      }
+    } catch (_) {}
+    try {
+      return csrfToken();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function refreshLandChatCard(code) {
+    code = String(code || '').trim();
+    if (!code || !list) return;
+    var wrap = list.querySelector('.ai-msg-wrap[data-land-chat-code="' + code + '"]');
+    if (!wrap) return;
+    var url = '/express/partner/lands/' + encodeURIComponent(code) + '/chat-detail';
+    fetch(url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.ok || !data.html) return;
+        var host = wrap.querySelector('.ai-msg-cards--land-detail') || wrap.querySelector('.ai-msg-body');
+        if (!host) return;
+        if (host.classList.contains('ai-msg-cards--land-detail')) {
+          host.innerHTML = data.html;
+        } else {
+          var existing = host.querySelector('.vn-lcd');
+          if (existing && existing.parentNode) existing.outerHTML = data.html;
+          else host.insertAdjacentHTML('beforeend', data.html);
+        }
+        try {
+          initCardsIn(host);
+        } catch (_) {}
+        try {
+          if (typeof window.vinorSyncFavButtons === 'function') {
+            window.vinorSyncFavButtons(host);
+          }
+        } catch (_) {}
+      })
+      .catch(function () {});
+  }
+
+  function postLandChatAction(url, onOk) {
+    var csrf = lcdCsrfToken();
+    var body = new FormData();
+    if (csrf) body.append('csrf_token', csrf);
+    var hdrs = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+    if (csrf) hdrs['X-CSRFToken'] = csrf;
+    return fetch(url, {
+      method: 'POST',
+      body: body,
+      credentials: 'same-origin',
+      headers: hdrs,
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (result) {
+        if (!result.ok || !result.data || result.data.success === false) {
+          throw new Error((result.data && result.data.message) || 'خطا در انجام عملیات');
+        }
+        if (onOk) onOk(result.data);
+        return result.data;
+      });
+  }
+
+  if (!window.__vinorLcdActionBound) {
+    window.__vinorLcdActionBound = true;
+    document.addEventListener(
+      'click',
+      function (e) {
+        var btn = e.target && e.target.closest && e.target.closest('[data-vn-lcd-action]');
+        if (!btn) return;
+        var card = btn.closest('.vn-lcd');
+        if (!card) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var action = (btn.getAttribute('data-vn-lcd-action') || '').trim();
+        var code =
+          (btn.getAttribute('data-land-code') || card.getAttribute('data-land-code') || '').trim();
+        if (btn.disabled || btn.getAttribute('data-busy') === '1') return;
+        if (action === 'visit') {
+          if (typeof window.__vinorOpenCustomerModal === 'function') {
+            window.__vinorOpenCustomerModal(e, { landCode: code });
+          }
+          return;
+        }
+        if (action === 'marketing' || action === 'status') {
+          showEphemeralHint('این مرحله روی همین کارت انجام می‌شود.');
+          return;
+        }
+        var url = '';
+        if (action === 'complete_visit') url = card.getAttribute('data-complete-url') || '';
+        else if (action === 'deal' || action === 'release') url = card.getAttribute('data-deal-url') || '';
+        if (!url) {
+          showEphemeralHint('این عملیات الان در دسترس نیست.');
+          return;
+        }
+        btn.setAttribute('data-busy', '1');
+        btn.disabled = true;
+        postLandChatAction(url, function (data) {
+          showEphemeralHint((data && data.message) || 'ثبت شد.');
+          refreshLandChatCard(code);
+        }).catch(function (err) {
+          showEphemeralHint((err && err.message) || 'خطا در انجام عملیات');
+        }).finally(function () {
+          btn.removeAttribute('data-busy');
+          btn.disabled = false;
+        });
       },
       true
     );
@@ -3837,6 +3971,9 @@
     var existing = list.querySelector('.ai-msg-wrap[data-land-chat-code="' + code + '"]');
     if (existing) {
       revealChatWithLand();
+      try {
+        refreshLandChatCard(code);
+      } catch (_) {}
       try {
         existing.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } catch (_) {

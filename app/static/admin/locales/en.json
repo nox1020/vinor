@@ -157,7 +157,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "subtitle": "Queue status, shortcuts, and ops chat.",
+    "subtitle": "Queue status and operations shortcuts.",
     "page_title": "Dashboard",
     "browser_title": "Dashboard | Vinor Control",
     "confirms": "Confirmations",
@@ -264,7 +264,7 @@
     "crm_surfaces": "CRM Surfaces",
     "calls_followups": "Calls & Follow-ups",
     "quick_links": "Quick Links",
-    "express_listings": "Express Listings",
+    "express_listings": "Ads",
     "add_listing": "Add Listing",
     "lands": "Lands",
     "pending_lands": "Pending Lands",

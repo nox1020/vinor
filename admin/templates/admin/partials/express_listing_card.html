@@ -73,7 +73,10 @@
             {% if _is_sold %}
             <span class="inline-flex rounded-md bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">فروخته شد</span>
             {% else %}
-            <span class="inline-flex rounded-md bg-[#d4b996] px-1.5 py-0.5 text-[9px] font-bold text-neutral-900">اکسپرس</span>
+            <span class="inline-flex rounded-md bg-[#d4b996] px-1.5 py-0.5 text-[9px] font-bold text-neutral-900">پلاس</span>
+            {% endif %}
+            {% if land._owner_name %}
+            <span class="inline-flex rounded-md bg-black/40 px-1.5 py-0.5 text-[9px] text-white/80 truncate max-w-[8rem]">{{ land._owner_name }}</span>
             {% endif %}
             <span class="inline-flex rounded-md bg-black/40 px-1.5 py-0.5 text-[9px] text-white/80 tabular-nums">#{{ land.code }}</span>
           </div>
@@ -129,7 +132,7 @@
         {% if _is_sold %}
         <span class="rounded-lg bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">فروخته شد</span>
         {% else %}
-        <span class="rounded-lg bg-[#d4b996] px-2.5 py-1 text-[11px] font-bold text-neutral-900 shadow-sm">اکسپرس</span>
+        <span class="rounded-lg bg-[#d4b996] px-2.5 py-1 text-[11px] font-bold text-neutral-900 shadow-sm">پلاس</span>
         {% endif %}
       </div>
 
@@ -148,6 +151,9 @@
       <div class="land-card-title-block absolute bottom-[4.25rem] left-0 right-0 z-10 px-3 pb-2 pt-6 flex flex-col gap-2">
         <div class="min-w-0 text-end">
           <h3 class="text-lg font-bold text-white leading-snug line-clamp-2 drop-shadow-md">{{ land.title or '—' }}</h3>
+          {% if land._owner_name %}
+          <p class="mt-0.5 text-[11px] text-white/70">{{ land._owner_name }}{% if land._owner_phone %} · {{ land._owner_phone }}{% endif %}</p>
+          {% endif %}
           {% if loc_line %}
           <p class="mt-1 flex items-center justify-end gap-1 text-xs text-white/85">
             <span class="truncate">{{ loc_line }}</span>

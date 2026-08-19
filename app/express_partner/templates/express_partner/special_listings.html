@@ -34,6 +34,42 @@
     align-items: center; border-radius: .5rem; background: #e22828; color: #fff;
     font-weight: 700; font-size: .8125rem; text-decoration: none;
   }
+  .sp-divar {
+    margin: .75rem 1rem 0;
+    padding: .9rem 1rem 1rem;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: .85rem;
+    background: #0b1220;
+  }
+  .sp-divar__title { margin: 0; font-size: .82rem; font-weight: 800; color: #f3f4f6; }
+  .sp-divar__sub { margin: .3rem 0 0; font-size: .7rem; line-height: 1.45; color: #8b919a; }
+  .sp-divar ul { margin: 0; padding: 0; list-style: none; }
+  .sp-divar__row {
+    display: flex; align-items: center; gap: .5rem;
+    margin-top: .55rem; padding: .5rem .6rem;
+    border: 1px solid rgba(255,255,255,.08); border-radius: .55rem;
+    background: rgba(255,255,255,.03);
+  }
+  .sp-divar__url {
+    flex: 1; min-width: 0; font-size: .7rem; color: #93c5fd;
+    direction: ltr; text-align: left; text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .sp-divar__del {
+    flex-shrink: 0; border: 0; background: none; color: #fca5a5;
+    font-size: .7rem; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .sp-divar__add { display: flex; gap: .4rem; margin-top: .7rem; }
+  .sp-divar__add input {
+    flex: 1; min-width: 0; min-height: 2.2rem; padding: 0 .65rem;
+    border-radius: .5rem; border: 1px solid rgba(255,255,255,.12);
+    background: #111827; color: #e5e7eb; font-size: .75rem; font-family: inherit;
+  }
+  .sp-divar__add button {
+    flex-shrink: 0; min-height: 2.2rem; padding: 0 .8rem; border: 0;
+    border-radius: .5rem; background: #059669; color: #fff;
+    font-size: .75rem; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
 </style>
 
 <div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
@@ -49,6 +85,33 @@
       </div>
       {% endif %}
     {% endwith %}
+
+    <section class="sp-divar" aria-label="پروفایل دیوار">
+      <h2 class="sp-divar__title">آدرس‌های پروفایل دیوار (Pro)</h2>
+      <p class="sp-divar__sub">چند پروفایل اضافه کنید؛ آگهی‌های همه در نوار خانه ادغام می‌شوند.</p>
+      {% set _urls = divar_profile_urls|default([]) %}
+      {% if _urls %}
+      <ul>
+        {% for u in _urls %}
+        <li class="sp-divar__row">
+          <a class="sp-divar__url" href="{{ u }}" target="_blank" rel="noopener noreferrer" dir="ltr">{{ u }}</a>
+          <form method="post" action="{{ url_for('express_partner.special_listings_divar_profile') }}" data-vinor-direct-action>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="remove">
+            <input type="hidden" name="profile_url" value="{{ u }}">
+            <button type="submit" class="sp-divar__del">حذف</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <form class="sp-divar__add" method="post" action="{{ url_for('express_partner.special_listings_divar_profile') }}" data-vinor-direct-action>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add">
+        <input name="profile_url" dir="ltr" placeholder="https://divar.ir/pro/…" autocomplete="off">
+        <button type="submit">افزودن</button>
+      </form>
+    </section>
 
     {% if items %}
     <section class="sp-list" aria-label="آگهی‌های من">

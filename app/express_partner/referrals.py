@@ -21,7 +21,7 @@ from ..utils.storage import (
 )
 from .commissions_flow import ACTIVE_COMMISSION_STATUSES
 
-REFERRAL_BONUS_AMOUNT = 500_000
+REFERRAL_BONUS_AMOUNT = 100_000
 REFERRAL_LAND_CODE = "referral"
 COMMISSION_TYPE_REFERRAL = "referral"
 

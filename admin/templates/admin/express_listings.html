@@ -1,6 +1,6 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}آگهی‌های اکسپرس{% endblock %}
-{% block page_title %}آگهی‌های اکسپرس{% endblock %}
+{% block title %}آگهی‌ها{% endblock %}
+{% block page_title %}آگهی‌ها{% endblock %}
 
 {% block head %}
   {{ super() }}
@@ -66,7 +66,8 @@
     <div class="flex flex-wrap gap-2 text-xs">
       {% set tabs = [
         ('all', 'همه', stats.total),
-        ('active', 'فعال', stats.active),
+        ('plus', 'پلاس', stats.plus),
+        ('divar', 'دیوار', stats.divar),
         ('sold', 'فروخته‌شده', stats.sold),
       ] %}
       {% for key, label, count in tabs %}
@@ -87,7 +88,11 @@
   {% if lands and lands|length > 0 %}
     <div id="adminExpressCards" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
       {% for land in lands %}
-        {% include 'admin/partials/express_listing_card.html' %}
+        {% if land._source == 'divar' %}
+          {% include 'admin/partials/express_divar_card.html' %}
+        {% else %}
+          {% include 'admin/partials/express_listing_card.html' %}
+        {% endif %}
       {% endfor %}
     </div>
 
@@ -121,18 +126,15 @@
       <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-2">
         {% if filter_kind == 'sold' %}
           آگهی فروخته‌شده‌ای نیست
-        {% elif filter_kind == 'active' %}
-          آگهی فعالی نیست
+        {% elif filter_kind == 'divar' %}
+          آگهی دیوار از لینک همکاران پلاس نیست
+        {% elif filter_kind == 'plus' %}
+          آگهی پلاس ثبت‌شده‌ای نیست
         {% else %}
-          هنوز آگهی اکسپرس ثبت نشده
+          آگهی همکار پلاس یا لینک پروفایل نیست
         {% endif %}
       </h3>
-      <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">از دکمه «ثبت آگهی» در نوار پایین استفاده کنید</p>
-      <a href="{{ url_for('admin.add_express_listing') }}"
-         class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-4 py-2 rounded-lg transition focusable">
-        <i class="fa-solid fa-plus"></i>
-        ثبت آگهی جدید
-      </a>
+      <p class="text-sm text-gray-600 dark:text-gray-400">آگهی‌ها را همکاران پلاس از «آگهی‌های من» ثبت می‌کنند.</p>
     </div>
   {% endif %}
 

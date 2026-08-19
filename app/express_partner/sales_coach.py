@@ -287,7 +287,7 @@ def _referral_invite_action() -> Dict[str, Any]:
         bonus_fa = f"{bonus:,}".replace(",", "،") if bonus else "۰"
         url = url_for("express_partner.invite_colleagues")
     except Exception:
-        bonus_fa = "۵۰۰٬۰۰۰"
+        bonus_fa = "۱۰۰٬۰۰۰"
         url = "/express/partner/invite"
     return {
         "type": "next_action",
@@ -866,7 +866,7 @@ def build_limited_ai_quick_prompts(
 
     apply_url = "/express/partner/apply"
     thanks_url = "/express/partner/thanks"
-    guest_apply_url = "/express/partner/home?menu=1&login_next=apply"
+    guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/apply"
     try:
         from flask import has_request_context, url_for
 
@@ -874,7 +874,9 @@ def build_limited_ai_quick_prompts(
             apply_url = url_for("express_partner.apply")
             thanks_url = url_for("express_partner.thanks")
             guest_apply_url = url_for(
-                "express_partner.home", menu=1, login_next="apply"
+                "express_partner.home",
+                menu=1,
+                login_next=apply_url,
             )
     except Exception:
         pass

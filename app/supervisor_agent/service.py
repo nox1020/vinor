@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
-"""ثبت گزارش Supervisor Agent در چت عملیات ادمین."""
+"""گزارش‌دهندهٔ عملیات ادمین (بدون چت)."""
 from __future__ import annotations
 
 from typing import Any
 
 from app.ai.audience import AUDIENCE_ADMIN
-from app.ai.message_types import MSG_NOTIFICATION
 from app.supervisor_agent.admin_target import resolve_admin_ops_user_key
 from app.supervisor_agent.categories import ALL_REPORT_CATEGORIES, REPORT_SYSTEM, STATUS_INFO
 from app.supervisor_agent.config import supervisor_agent_enabled
-from app.supervisor_agent.entity_links import entity_meta
 from app.supervisor_agent.renderer import render_from_activity, render_report
 
 
@@ -164,45 +162,13 @@ def report_to_admin(
     case_id: str = "",
     meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """پیام دائمی در گفتگوی فعال چت عملیات."""
+    """چت عملیات حذف شده؛ گزارش‌ها دیگر به گفتگوی ادمین نوشته نمی‌شوند."""
+    del category, status, land_code, partner_phone, customer_name
+    del entity_type, entity_id, case_id, meta
     content = (text or "").strip()
     if not content:
         return {"ok": False, "error": "empty"}
-
-    try:
-        from app.ai.chat_store import append_typed_message, ensure_active_thread
-
-        user_key = resolve_admin_ops_user_key()
-        thread_id = ensure_active_thread(user_key, audience=AUDIENCE_ADMIN)
-        msg_meta = entity_meta(
-            entity_type=entity_type,
-            entity_id=entity_id,
-            land_code=land_code,
-            partner_phone=partner_phone,
-            customer_name=customer_name,
-            case_id=case_id,
-            extra={
-                "report_category": category,
-                "report_status": status,
-                **(meta or {}),
-            },
-        )
-        codes = [str(land_code).strip()] if land_code else None
-        msgs, tid = append_typed_message(
-            user_key,
-            content,
-            thread_id=thread_id,
-            audience=AUDIENCE_ADMIN,
-            msg_type=MSG_NOTIFICATION,
-            source="supervisor_agent",
-            land_codes=codes,
-            event=(event or "supervisor_report").strip(),
-            meta=msg_meta,
-            quota=False,
-        )
-        return {"ok": True, "thread_id": tid, "messages": msgs, "event": event}
-    except Exception as exc:
-        return {"ok": False, "error": str(exc)[:120]}
+    return {"ok": True, "skipped": "no_ops_chat", "event": event}
 
 
 def list_reports(

@@ -103,6 +103,78 @@
     return '/express/partner/home?land=' + encodeURIComponent(code);
   }
 
+  function currentlyOnHomePage() {
+    return !!document.getElementById('homeDashboardPage') ||
+      normPath(window.location.pathname) === '/express/partner/home';
+  }
+
+  function resolvePartnerLoginNext(raw) {
+    var s = String(raw || '').trim();
+    if (!s) return '';
+    var low = s.toLowerCase();
+    if (low === 'apply' || low === 'coop' || low === 'cooperation') {
+      return '/express/partner/apply';
+    }
+    if (s.charAt(0) === '/') return s;
+    return s;
+  }
+
+  function extractHomeLandParam(href) {
+    try {
+      var u = parseUrl(href);
+      if (!u) return '';
+      var p = normPath(u.pathname);
+      if (p === '/express/partner/home' || p === '/express/partner/dashboard') {
+        return String(u.searchParams.get('land') || '').trim();
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  /**
+   * روی خانه، لینک/اکشنِ /home را دوباره swap نکن — چت را خالی می‌کند و «داشبورد» خالی برمی‌گردد.
+   */
+  function handleHomeUrlInPlace(href) {
+    if (!currentlyOnHomePage()) return false;
+    var u = parseUrl(href);
+    if (!u) return false;
+    var p = normPath(u.pathname);
+    if (p !== '/express/partner/home' && p !== '/express/partner/dashboard') return false;
+    var land = String(u.searchParams.get('land') || '').trim();
+    if (land) {
+      openLandInChat(land);
+      return true;
+    }
+    var menu = String(u.searchParams.get('menu') || '').trim();
+    if (menu === '1') {
+      try {
+        var loginNext = resolvePartnerLoginNext(u.searchParams.get('login_next') || '');
+        if (loginNext && typeof window.vinorDrawerOpenLogin === 'function') {
+          window.vinorDrawerOpenLogin(loginNext);
+          return true;
+        }
+        if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
+          window.vinorProfileDrawer.open();
+        }
+      } catch (_) {}
+      return true;
+    }
+    var thread = String(u.searchParams.get('thread') || '').trim();
+    if (thread && typeof window.__vinorAiChatSwitchThread === 'function') {
+      try { window.__vinorAiChatSwitchThread(thread); } catch (_) {}
+      return true;
+    }
+    return true;
+  }
+
+  function openLandFromNavTarget(href) {
+    var code =
+      extractLandCodeFromHref(href) ||
+      extractHomeLandParam(href);
+    if (!code) return false;
+    return openLandInChat(code);
+  }
+
   function openLandInChat(code) {
     code = String(code || '').trim();
     if (!code) return false;
@@ -1240,6 +1312,11 @@
       .then(function (res) {
         if (isStaleNav(gen)) return null;
         if (isNavFetchRedirect(res)) {
+          var loc = '';
+          try { loc = res.headers.get('Location') || ''; } catch (_) {}
+          if (openLandFromNavTarget(loc || href) || handleHomeUrlInPlace(loc || href)) {
+            return null;
+          }
           var blockedPath = normPath(parseUrl(href).pathname);
           if (!opts.postLogin && !isLoggedInUser() && requiresLoginPath(blockedPath)) {
             window.location.assign(loginUrlForPartnerDest(href));
@@ -1266,6 +1343,7 @@
       .catch(function (err) {
         if (err && err.name === 'AbortError') return false;
         if (isStaleNav(gen)) return false;
+        if (openLandFromNavTarget(href) || handleHomeUrlInPlace(href)) return false;
         window.location.href = href;
         return false;
       });
@@ -1362,9 +1440,12 @@
       return Promise.resolve(false);
     }
     try {
-      var landCodeNav = extractLandCodeFromHref(href);
-      if (landCodeNav) {
-        openLandInChat(landCodeNav);
+      if (openLandFromNavTarget(href)) {
+        return Promise.resolve(true);
+      }
+    } catch (_) {}
+    try {
+      if (!opts.postLogin && handleHomeUrlInPlace(href)) {
         return Promise.resolve(true);
       }
     } catch (_) {}

@@ -18,13 +18,13 @@ class VinorControlRoutesTests(unittest.TestCase):
             sess["logged_in"] = True
             sess["username"] = "admin"
 
-    def test_dashboard_is_ops_chat(self) -> None:
+    def test_dashboard_loads(self) -> None:
         self._login()
         r = self.client.get("/admin/")
         self.assertEqual(r.status_code, 200)
         body = r.data.decode("utf-8", errors="ignore")
-        self.assertIn("adminOpsChatPage", body)
-        self.assertIn("چت عملیات", body)
+        self.assertIn("adminOpsDashPage", body)
+        self.assertNotIn("opsDashChatOpen", body)
         self.assertIn("vinor-control.css", body)
 
     def test_control_hubs_redirect_to_ops_home(self) -> None:

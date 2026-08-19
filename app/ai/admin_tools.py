@@ -944,72 +944,14 @@ def _tool_propose_broadcast_push(args: dict[str, Any], *, admin_key: str) -> dic
 
 
 def _tool_propose_add_listing(args: dict[str, Any], *, admin_key: str) -> dict[str, Any]:
-    title = str(args.get("title") or "").strip()
-    city = str(args.get("city") or "").strip()
-    location = str(args.get("location") or "").strip()
-    try:
-        size = int(args.get("size") or 0)
-        price_total = int(args.get("price_total") or 0)
-        pct = float(args.get("express_commission_pct") or 0)
-    except Exception:
-        return {
-            "ok": True,
-            "model_result": {
-                "ok": False,
-                "instruction": "متراژ، قیمت و درصد پورسانت باید عدد باشند.",
-            },
-        }
-    missing = []
-    if not title or len(title) < 10:
-        missing.append("title")
-    if not city:
-        missing.append("city")
-    if not location:
-        missing.append("location")
-    if size <= 0:
-        missing.append("size")
-    if price_total <= 0:
-        missing.append("price_total")
-    if pct <= 0 or pct > 100:
-        missing.append("express_commission_pct")
-    if missing:
-        return {
-            "ok": True,
-            "model_result": {
-                "ok": False,
-                "missing": missing,
-                "instruction": "فیلدهای ناقص را یکی‌یکی بپرس؛ لینک فرم نده.",
-            },
-        }
-    payment_method = str(args.get("payment_method") or "نقدی").strip() or "نقدی"
-    vinor_contact = re.sub(r"\D+", "", str(args.get("vinor_contact") or "09121471301"))
-    payload = {
-        "title": title,
-        "city": city,
-        "location": location,
-        "size": size,
-        "price_total": price_total,
-        "express_commission_pct": pct,
-        "payment_method": payment_method,
-        "description": str(args.get("description") or "").strip(),
-        "category": str(args.get("category") or "").strip(),
-        "vinor_contact": vinor_contact or "09121471301",
+    del args, admin_key
+    return {
+        "ok": True,
+        "model_result": {
+            "ok": False,
+            "instruction": "ثبت فایل از پنل ادمین غیرفعال است. آگهی را همکار پلاس از آگهی‌های من ثبت می‌کند.",
+        },
     }
-    return _propose_card(
-        user_key=admin_key,
-        action_type="confirm_add_express_listing",
-        payload=payload,
-        title="تأیید افزودن فایل اکسپرس",
-        lines=[
-            f"عنوان: {title}",
-            f"شهر/موقعیت: {city} — {location}",
-            f"متراژ: {size}",
-            f"قیمت: {price_total:,}",
-            f"پورسانت: {pct}%",
-            f"پرداخت: {payment_method}",
-        ],
-        confirm_label="ثبت فایل",
-    )
 
 
 def _tool_propose_update_listing(args: dict[str, Any], *, admin_key: str) -> dict[str, Any]:
@@ -1228,60 +1170,11 @@ def _exec_broadcast_push(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _exec_add_listing(payload: dict[str, Any]) -> dict[str, Any]:
-    try:
-        from admin.routes import _lands_path, _next_numeric_code, load_json, save_json
-
-        title = str(payload.get("title") or "").strip()
-        city = str(payload.get("city") or "").strip()
-        location = str(payload.get("location") or "").strip()
-        size = int(payload.get("size") or 0)
-        price_total = int(payload.get("price_total") or 0)
-        pct = float(payload.get("express_commission_pct") or 0)
-        if not all([title, city, location]) or size <= 0 or price_total <= 0 or pct <= 0:
-            return {"ok": False, "error": "اطلاعات فایل ناقص است."}
-        lands = load_json(_lands_path()) or []
-        if not isinstance(lands, list):
-            lands = []
-        code = _next_numeric_code(lands)
-        ppm = int(round(price_total / size)) if size else 0
-        amount = int(round(price_total * (pct / 100.0)))
-        land = {
-            "code": code,
-            "title": title,
-            "location": location,
-            "city": city,
-            "size": size,
-            "price_total": price_total,
-            "price_per_meter": ppm,
-            "description": str(payload.get("description") or "").strip(),
-            "images": [],
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "owner": "vinor_support",
-            "status": "approved",
-            "ad_type": "express",
-            "category": str(payload.get("category") or "").strip(),
-            "payment_method": str(payload.get("payment_method") or "نقدی").strip(),
-            "payment_terms": [],
-            "is_express": True,
-            "express_status": "approved",
-            "expert_verified": False,
-            "express_documents": [],
-            "vinor_contact": str(payload.get("vinor_contact") or "09121471301"),
-            "extras": {
-                "express_commission_pct": pct,
-                "express_commission_amount": amount,
-            },
-            "source": "admin_ops_chat",
-        }
-        lands.append(land)
-        save_json(_lands_path(), lands)
-        return {
-            "ok": True,
-            "message": f"فایل «{title}» با کد {code} ثبت شد.",
-            "land_code": code,
-        }
-    except Exception as exc:
-        return {"ok": False, "error": f"ثبت فایل ناموفق: {exc}"}
+    del payload
+    return {
+        "ok": False,
+        "error": "ثبت فایل از پنل ادمین غیرفعال است. آگهی را همکار پلاس ثبت می‌کند.",
+    }
 
 
 def _exec_update_listing(payload: dict[str, Any]) -> dict[str, Any]:

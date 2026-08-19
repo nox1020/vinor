@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 def supervisor_agent_enabled() -> bool:
-    """ایجنت گزارش‌دهنده چت عملیات ادمین."""
+    """ایجنت گزارش‌دهندهٔ عملیات ادمین."""
     from app.ai_console.flag_settings import resolve_feature_flag
 
     return resolve_feature_flag("VINOR_SUPERVISOR_AGENT_ENABLED", default=True)

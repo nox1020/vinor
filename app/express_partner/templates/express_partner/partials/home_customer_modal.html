@@ -552,6 +552,24 @@
           closeModal();
           try { form.reset(); } catch (_) {}
           var nextUrl = data.redirect_url || modal.getAttribute('data-requests-url') || '';
+          var onHome = !!document.getElementById('homeDashboardPage');
+          var landCodeStay = pending || picked;
+          if (onHome) {
+            try {
+              if (typeof window.showVinorQuickToast === 'function') {
+                window.showVinorQuickToast({
+                  title: 'ثبت شد',
+                  body: data.message || 'درخواست بازدید ثبت شد.'
+                });
+              }
+            } catch (_) {}
+            if (landCodeStay && typeof window.vinorShowLandInChat === 'function') {
+              try { window.vinorShowLandInChat(landCodeStay); } catch (_) {}
+            }
+            submitBtn.disabled = false;
+            submitBtn.textContent = prevLabel;
+            return;
+          }
           if (nextUrl) {
             if (typeof window.vinorExpressNavigate === 'function') {
               window.vinorExpressNavigate(nextUrl, { forward: true });

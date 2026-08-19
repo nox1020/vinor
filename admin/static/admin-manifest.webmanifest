@@ -19,7 +19,7 @@
   "shortcuts": [
     { "name": "داشبورد", "short_name": "داشبورد", "url": "/admin/" },
     { "name": "همکاران", "short_name": "همکاران", "url": "/admin/express/partners" },
-    { "name": "آگهی‌های اکسپرس", "short_name": "آگهی‌ها", "url": "/admin/express/listings" }
+    { "name": "آگهی‌ها", "short_name": "آگهی‌ها", "url": "/admin/express/listings" }
   ],
   "capture_links": "existing-client-navigate",
   "launch_handler": { "client_mode": "auto" }

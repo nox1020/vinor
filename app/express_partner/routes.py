@@ -835,26 +835,10 @@ def _store_otp_session(phone: str, code: str) -> None:
 
 
 def _dispatch_otp_sms(phone: str, code: str) -> None:
-    """ارسال OTP در پس‌زمینه — پاسخ HTTP بلافاصله برگردد."""
-    app = current_app._get_current_object()
+    """OTP در پس‌زمینه — ورود فوری برگردد؛ ارسال تا ۲۰ثانیه فرصت دارد."""
+    from ..services.sms import send_otp_sms_background
 
-    def _worker() -> None:
-        with app.app_context():
-            try:
-                from ..services.sms import send_sms_code
-
-                result = send_sms_code(phone, code)
-                if not result.get('ok'):
-                    app.logger.error(
-                        'async OTP SMS failed | phone=%s | status=%s | body=%s',
-                        phone,
-                        result.get('status'),
-                        result.get('body'),
-                    )
-            except Exception:
-                app.logger.exception('async OTP SMS exception | phone=%s', phone)
-
-    threading.Thread(target=_worker, daemon=True).start()
+    send_otp_sms_background(phone, code)
 
 
 def _ensure_user_record_background(phone: str) -> None:
@@ -879,19 +863,31 @@ def _ensure_user_record_background(phone: str) -> None:
     threading.Thread(target=_worker, daemon=True).start()
 
 
-def _login_next_preserve():
-    nxt = (request.args.get('next') or request.form.get('next') or '').strip()
-    if nxt and nxt.startswith('/') and not nxt.startswith('//'):
+_APPLY_LOGIN_NEXT_ALIASES = frozenset({'apply', 'coop', 'cooperation'})
+
+
+def _resolve_login_next_url(raw: str) -> str | None:
+    """alias مثل apply → مسیر واقعی فرم همکاری؛ فقط مسیر داخلی همکار."""
+    nxt = (raw or '').strip()
+    if not nxt:
+        return None
+    if nxt.lower() in _APPLY_LOGIN_NEXT_ALIASES:
+        return url_for('express_partner.apply')
+    if nxt.startswith('/') and not nxt.startswith('//'):
         return nxt
     return None
+
+
+def _login_next_preserve():
+    return _resolve_login_next_url(
+        request.args.get('next') or request.form.get('next') or ''
+    )
 
 
 def _session_next_safe():
     raw = session.get('next')
     if isinstance(raw, str):
-        raw = raw.strip()
-        if raw.startswith('/') and not raw.startswith('//'):
-            return raw
+        return _resolve_login_next_url(raw)
     return None
 
 
@@ -962,6 +958,20 @@ def _redirect_after_login(phone: str | None = None) -> str:
     ph = _canonical_partner_phone(phone or session.get('user_phone') or '')
     is_partner = _is_phone_approved_partner(ph)
     _cache_session_partner_role(is_partner)
+    apply_path = _post_login_path_only(url_for('express_partner.apply'))
+    if nxt and _post_login_path_only(nxt) == apply_path:
+        try:
+            session.pop('next', None)
+        except Exception:
+            pass
+        if is_partner:
+            return _default_post_login_url(ph)
+        try:
+            if _has_active_application(ph):
+                return url_for('express_partner.thanks')
+        except Exception:
+            pass
+        return nxt
     if nxt and not (is_partner and _is_generic_post_login_next(nxt)):
         try:
             session.pop('next', None)
@@ -1841,7 +1851,7 @@ def _apply_login_redirect():
             capture_ref_on_login()
     except Exception:
         pass
-    resp = make_response(redirect(url_for('express_partner.login', next=next_apply)))
+    resp = make_response(redirect(url_for('express_partner.home', menu=1, login_next=next_apply)))
     if ref:
         set_ref_cookie_on_response(resp, ref)
     return resp
@@ -2715,6 +2725,8 @@ def _home_urgent_actions(
             'subtitle': 'از چت خانه قدم بعدی را بزن',
             'cta': 'برو به چت',
             'url': url_for('express_partner.home'),
+            'chat_prompt': 'قدم بعدی فروش من چیست؟ از همین چت جلو ببر.',
+            'chat_intent': 'next_action',
             'priority': 80,
         })
 
@@ -3206,7 +3218,6 @@ def _partner_ai_layer_context(
         try:
             from app.ai.audience import AUDIENCE_PUBLIC
             from app.ai.chat_store import (
-                clear_chat,
                 ensure_active_thread,
                 messages_for_ui,
                 set_active_thread,
@@ -3261,36 +3272,10 @@ def _partner_ai_layer_context(
                         audience=AUDIENCE_PUBLIC,
                     ) or []
             else:
-                # بدو ورود: همیشه صفحه خالی GPT — چت قبلی فقط در کشو
-                # (?thread=lawyer برای مهمان نادیده گرفته می‌شود)
-                out = clear_chat(user_key, audience=AUDIENCE_PUBLIC, opening_text=None)
-                if out.get('ok'):
-                    active_thread_id = str(out.get('thread_id') or '').strip()
-                else:
-                    from app.ai.chat_store import (
-                        is_thread_open_slate,
-                        load_user_record,
-                        set_active_thread,
-                    )
-
-                    record = load_user_record(user_key, audience=AUDIENCE_PUBLIC)
-                    slate_tid = ''
-                    for th in record.get('threads') or []:
-                        if not isinstance(th, dict):
-                            continue
-                        tid = str(th.get('id') or '').strip()
-                        if tid and is_thread_open_slate(th):
-                            slate_tid = tid
-                            break
-                    if slate_tid:
-                        set_active_thread(
-                            user_key, slate_tid, audience=AUDIENCE_PUBLIC
-                        )
-                        active_thread_id = slate_tid
-                    else:
-                        active_thread_id = ensure_active_thread(
-                            user_key, audience=AUDIENCE_PUBLIC
-                        )
+                # بدو ورود: صفحه خالی GPT — تاریخچه پاک نمی‌شود؛ چت قبلی در کشو می‌ماند
+                active_thread_id = ensure_active_thread(
+                    user_key, audience=AUDIENCE_PUBLIC
+                )
                 chat_messages = []
                 if want_ai:
                     home_ai_open = True
@@ -3419,14 +3404,8 @@ def _partner_ai_layer_context(
                     audience=AUDIENCE_PARTNER,
                 ) or []
         else:
-            # بدو ورود: همیشه صفحه خالی GPT — چت قبلی فقط در کشو
-            from app.ai.chat_store import clear_chat
-
-            out = clear_chat(phone, audience=AUDIENCE_PARTNER, opening_text=None)
-            if out.get('ok'):
-                active_thread_id = str(out.get('thread_id') or '').strip()
-            else:
-                active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
+            # بدو ورود: صفحه خالی GPT — تاریخچه پاک نمی‌شود؛ چت قبلی در کشو می‌ماند
+            active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
             chat_messages = []
             if want_ai:
                 home_ai_open = True
@@ -3800,6 +3779,13 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
     for land in express_lands:
         if not isinstance(land, dict):
             continue
+        try:
+            from .special_listings import is_admin_created_express_listing
+
+            if is_admin_created_express_listing(land):
+                continue
+        except Exception:
+            pass
         code = str(land.get('code') or '').strip()
         if not code:
             continue
@@ -4524,9 +4510,15 @@ def requests_page():
         except Exception:
             land_status = {}
 
-    support_phone = ''
+    support_phone = '09121471301'
     try:
-        support_phone = _visit_schedule_support_phone()
+        from app.crm.config import VISIT_CALL_TARGET
+        raw = str(VISIT_CALL_TARGET or '').strip()
+        phone = normalize_iran_mobile(raw)
+        if is_valid_iran_mobile(phone):
+            support_phone = phone
+        elif raw:
+            support_phone = raw
     except Exception:
         support_phone = '09121471301'
 
@@ -4577,7 +4569,7 @@ def _requests_action_json(ok: bool, *, message: str = '', error: str = '', **ext
 @express_partner_bp.post('/requests/<vid>/remove', endpoint='requests_remove')
 @require_partner_access()
 def requests_remove(vid: str):
-    """لغو درخواست باز یا حذف قطعی درخواست لغو/عدم‌حضور."""
+    """لغو درخواست باز یا حذف قطعی درخواست لغو/عدم‌حضور/انجام‌شده."""
     me_phone = (session.get('user_phone') or '').strip()
     from .visit_requests import partner_cancel_own_visit, partner_delete_own_visit
 
@@ -4768,7 +4760,6 @@ def requests_revisit(vid: str):
         True,
         message=f'بازدید مجدد ثبت شد{(" — " + label) if label else ""}.',
         visit_id=rec.get('id'),
-        redirect_url=url_for('express_partner.requests'),
     )
 
 
@@ -6022,7 +6013,7 @@ def invite_colleagues():
             'paid_commission': 0,
             'total_earned': 0,
         }
-        bonus_per_invite = 500_000
+        bonus_per_invite = 100_000
     return render_template(
         'express_partner/invite_colleagues.html',
         invite_url=invite_url,
@@ -6541,7 +6532,15 @@ def _mark_in_transaction_finish(
         if customer_name:
             payload['customer_name'] = str(customer_name).strip()
         if success and redirect_url:
-            payload['redirect_url'] = redirect_url
+            home_path = '/express/partner/home'
+            try:
+                home_path = url_for('express_partner.home')
+            except Exception:
+                pass
+            dest_path = str(redirect_url).split('?', 1)[0].rstrip('/') or '/'
+            home_cmp = str(home_path).split('?', 1)[0].rstrip('/') or '/'
+            if dest_path not in (home_cmp, '/express/partner/home', '/express/partner/dashboard'):
+                payload['redirect_url'] = redirect_url
         return jsonify(payload), (200 if success else 400)
     if message:
         flash(message, 'land')
@@ -6891,19 +6890,19 @@ def create_visit_request(code: str):
             category='error',
         )
     if err == 'weekday_not_allowed':
-        from .visit_requests import visit_allowed_weekdays_summary
+        from .visit_requests import plus_phone_for_land_code, visit_allowed_weekdays_summary
         return _mark_in_transaction_finish(
             code,
             success=False,
-            message='تاریخ انتخاب‌شده در روزهای مجاز بازدید نیست. روزهای مجاز: ' + visit_allowed_weekdays_summary(),
+            message='تاریخ انتخاب‌شده در روزهای مجاز بازدید نیست. روزهای مجاز: ' + visit_allowed_weekdays_summary(plus_user_phone=plus_phone_for_land_code(code)),
             category='error',
         )
     if err in ('no_hours', 'hour_not_allowed'):
-        from .visit_requests import visit_allowed_hours_summary
+        from .visit_requests import plus_phone_for_land_code, visit_allowed_hours_summary
         return _mark_in_transaction_finish(
             code,
             success=False,
-            message='ساعت انتخاب‌شده در نوبت‌های مجاز نیست. ساعت‌های مجاز: ' + visit_allowed_hours_summary(),
+            message='ساعت انتخاب‌شده در نوبت‌های مجاز نیست. ساعت‌های مجاز: ' + visit_allowed_hours_summary(plus_user_phone=plus_phone_for_land_code(code)),
             category='error',
         )
     if err or not rec:
@@ -7702,12 +7701,41 @@ def special_listings_page():
             'image_url': partner_card_image_url(land) or None,
             'detail_url': url_for('express_partner.land_detail', code=land.get('code')),
         })
+    from .home_ads_config import partner_divar_profile_urls
+    divar_urls = partner_divar_profile_urls(me_phone)
     return render_template(
         'express_partner/special_listings.html',
         items=items,
+        divar_profile_urls=divar_urls,
         hide_header=True,
         bottom_nav_active='profile',
     )
+
+
+@express_partner_bp.post('/listings/divar-profile', endpoint='special_listings_divar_profile')
+@require_special_partner()
+def special_listings_divar_profile():
+    """افزودن یا حذف پروفایل دیوار Pro توسط همکار پلاس."""
+    me_phone = (session.get('user_phone') or '').strip()
+    from .home_ads_config import (
+        add_partner_divar_profile_url,
+        remove_partner_divar_profile_url,
+    )
+
+    action = (request.form.get('action') or '').strip()
+    if action == 'add':
+        ok, msg, _ = add_partner_divar_profile_url(
+            me_phone, request.form.get('profile_url') or ''
+        )
+        flash(msg, 'success' if ok else 'error')
+    elif action == 'remove':
+        ok, msg, _ = remove_partner_divar_profile_url(
+            me_phone, request.form.get('profile_url') or ''
+        )
+        flash(msg, 'success' if ok else 'error')
+    else:
+        flash('درخواست نامعتبر است.', 'error')
+    return redirect(url_for('express_partner.special_listings'))
 
 
 @express_partner_bp.route('/listings/upload-image', methods=['POST'], endpoint='special_listing_upload_image')
@@ -7867,6 +7895,14 @@ def special_visit_inbox_page():
     """صندوق بازدیدهای دریافتی روی آگهی‌های ویژه."""
     me_phone = (session.get('user_phone') or '').strip()
     from .special_visit_inbox import visits_for_special_owner
+    from .visit_requests import (
+        VISIT_WEEKDAY_LABELS,
+        VISIT_WEEKDAY_ORDER,
+        get_visit_allowed_weekdays,
+        visit_allowed_hours_summary,
+        visit_allowed_weekdays_summary,
+        visit_hour_rows,
+    )
 
     items = visits_for_special_owner(me_phone)
     needs = sum(1 for i in items if i.get('needs_action'))
@@ -7876,7 +7912,59 @@ def special_visit_inbox_page():
         needs_count=needs,
         hide_header=True,
         bottom_nav_active='profile',
+        visit_weekday_labels=VISIT_WEEKDAY_LABELS,
+        visit_weekday_order=VISIT_WEEKDAY_ORDER,
+        visit_allowed_weekdays=get_visit_allowed_weekdays(plus_user_phone=me_phone),
+        visit_allowed_weekdays_summary=visit_allowed_weekdays_summary(plus_user_phone=me_phone),
+        visit_hour_rows=visit_hour_rows(plus_user_phone=me_phone),
+        visit_allowed_hours_summary=visit_allowed_hours_summary(plus_user_phone=me_phone),
+        schedule_open=(request.args.get('schedule') or '').strip() == '1',
     )
+
+
+@express_partner_bp.post('/inbox-visits/schedule', endpoint='special_visit_schedule')
+@require_special_partner()
+def special_visit_schedule():
+    """وقت بازدید مجاز این همکار پلاس."""
+    me_phone = (session.get('user_phone') or '').strip()
+    from .visit_requests import (
+        save_plus_visit_schedule,
+        visit_allowed_hours_summary,
+        visit_allowed_weekdays_summary,
+    )
+
+    raw_days = request.form.getlist('visit_weekdays')
+    raw_hours = request.form.getlist('visit_hours')
+    try:
+        parsed_days = [int(x) for x in raw_days]
+    except ValueError:
+        parsed_days = []
+    parsed_hours: list[int] = []
+    for item in raw_hours:
+        try:
+            parsed_hours.append(int(item))
+        except ValueError:
+            continue
+    inbox_url = url_for('express_partner.special_visit_inbox', schedule=1)
+    if not parsed_days:
+        flash('حداقل یک روز هفته را برای بازدید انتخاب کنید.', 'warning')
+        return redirect(inbox_url)
+    if not parsed_hours:
+        flash('حداقل یک ساعت مجاز بازدید را انتخاب کنید.', 'warning')
+        return redirect(inbox_url)
+    _days, _hrs, err = save_plus_visit_schedule(
+        me_phone,
+        weekdays=parsed_days,
+        hours=parsed_hours,
+    )
+    if err:
+        flash(err, 'warning')
+        return redirect(inbox_url)
+    flash(
+        f'وقت‌های بازدید شما ذخیره شد: {visit_allowed_weekdays_summary(plus_user_phone=me_phone)} — ساعت {visit_allowed_hours_summary(plus_user_phone=me_phone)}',
+        'success',
+    )
+    return redirect(url_for('express_partner.special_visit_inbox'))
 
 
 @express_partner_bp.route('/inbox-offers', methods=['GET'], endpoint='special_offer_inbox')

@@ -132,7 +132,8 @@ def visit_slot_has_passed(row: Dict[str, Any] | None) -> bool:
     if now.date() < vd:
         return False
     if hour is None:
-        return not remaining_visit_hours_for_date(vd)
+        plus = str(row.get("plus_user_phone") or "")
+        return not remaining_visit_hours_for_date(vd, plus_user_phone=plus)
     return int(now.hour) > hour or (int(now.hour) == hour and int(getattr(now, "minute", 0) or 0) > 0)
 
 
@@ -158,7 +159,40 @@ def _normalize_weekday_list(raw: Any) -> List[int]:
     return out or list(DEFAULT_VISIT_ALLOWED_WEEKDAYS)
 
 
-def get_visit_allowed_weekdays() -> List[int]:
+def _plus_partner_record(phone: str) -> Optional[Dict[str, Any]]:
+    ph = _canonical_visit_phone(phone) if phone else ""
+    if not ph:
+        ph = str(phone or "").strip()
+    if not ph:
+        return None
+    try:
+        from .partner_roles import partner_is_special
+        from .partner_session_sync import find_partner_record
+        from ..utils.storage import load_express_partners
+
+        rec = find_partner_record(load_express_partners() or [], ph)
+        if rec is None or not partner_is_special(rec):
+            return None
+        return rec
+    except Exception:
+        return None
+
+
+def plus_phone_for_land_code(land_code: str) -> str:
+    """شمارهٔ همکار پلاس مالک فایل — برای تقویم و وقت بازدید."""
+    code = str(land_code or "").strip()
+    if not code:
+        return ""
+    try:
+        from .special_listings import plus_listing_owner_by_code
+
+        owner = (plus_listing_owner_by_code() or {}).get(code) or {}
+        return _canonical_visit_phone(owner.get("phone")) or str(owner.get("phone") or "").strip()
+    except Exception:
+        return ""
+
+
+def _global_visit_allowed_weekdays() -> List[int]:
     try:
         from admin.routes import get_settings
 
@@ -166,6 +200,13 @@ def get_visit_allowed_weekdays() -> List[int]:
         return _normalize_weekday_list(settings.get("visit_allowed_weekdays"))
     except Exception:
         return list(DEFAULT_VISIT_ALLOWED_WEEKDAYS)
+
+
+def get_visit_allowed_weekdays(*, plus_user_phone: str = "") -> List[int]:
+    rec = _plus_partner_record(plus_user_phone) if plus_user_phone else None
+    if rec is not None and rec.get("visit_allowed_weekdays") is not None:
+        return _normalize_weekday_list(rec.get("visit_allowed_weekdays"))
+    return _global_visit_allowed_weekdays()
 
 
 def save_visit_allowed_weekdays(weekdays: List[int]) -> List[int]:
@@ -223,18 +264,33 @@ def _normalize_hour_list(raw: Any) -> List[int]:
     return out or list(DEFAULT_VISIT_ALLOWED_HOURS)
 
 
-def get_visit_allowed_hours() -> List[int]:
+def _legacy_hours_needs_reset(raw: Any) -> bool:
+    return list(raw or []) == [10, 11, 12, 14, 15, 16]
+
+
+def _global_visit_allowed_hours() -> List[int]:
     try:
         from admin.routes import get_settings
 
         settings = get_settings() or {}
         raw = settings.get("visit_allowed_hours")
         # پیش‌فرض قبلی ۱۰–۱۶ بدون ۸/۹/۱۳/۱۷ — اگر هنوز همان است، پیش‌فرض جدید اعمال شود
-        if list(raw or []) == [10, 11, 12, 14, 15, 16]:
+        if _legacy_hours_needs_reset(raw):
             raw = None
         return _normalize_hour_list(raw)
     except Exception:
         return list(DEFAULT_VISIT_ALLOWED_HOURS)
+
+
+def get_visit_allowed_hours(*, plus_user_phone: str = "") -> List[int]:
+    rec = _plus_partner_record(plus_user_phone) if plus_user_phone else None
+    if rec is not None and rec.get("visit_allowed_hours") is not None:
+        raw = rec.get("visit_allowed_hours")
+        if _legacy_hours_needs_reset(raw):
+            raw = None
+        if raw is not None:
+            return _normalize_hour_list(raw)
+    return _global_visit_allowed_hours()
 
 
 def save_visit_allowed_hours(hours: List[int]) -> List[int]:
@@ -246,7 +302,7 @@ def save_visit_allowed_hours(hours: List[int]) -> List[int]:
 
 
 def save_visit_schedule(*, weekdays: List[int], hours: List[int]) -> Tuple[List[int], List[int]]:
-    """یک‌بار ذخیرهٔ روز + ساعت مجاز."""
+    """یک‌بار ذخیرهٔ روز + ساعت مجاز (سراسری — پیش‌فرض وقتی پلاس تنظیم نکرده)."""
     from admin.routes import save_settings
 
     days = _normalize_weekday_list(weekdays)
@@ -258,13 +314,45 @@ def save_visit_schedule(*, weekdays: List[int], hours: List[int]) -> Tuple[List[
     return days, hrs
 
 
-def visit_allowed_hours_summary() -> str:
-    hours = get_visit_allowed_hours()
+def save_plus_visit_schedule(
+    phone: str,
+    *,
+    weekdays: List[int],
+    hours: List[int],
+) -> Tuple[Optional[List[int]], Optional[List[int]], str]:
+    """ذخیرهٔ وقت بازدید روی رکورد همکار پلاس. خطای خالی یعنی موفق."""
+    from .partner_roles import partner_is_special
+    from .partner_session_sync import find_partner_record
+    from ..utils.storage import load_express_partners, save_express_partners
+
+    ph = _canonical_visit_phone(phone) or str(phone or "").strip()
+    if not ph:
+        return None, None, "کاربر شناسایی نشد."
+    partners = load_express_partners() or []
+    rec = find_partner_record(partners, ph)
+    if rec is None or not partner_is_special(rec):
+        return None, None, "فقط همکار پلاس می‌تواند وقت بازدید را تنظیم کند."
+    days = _normalize_weekday_list(weekdays)
+    hrs = _normalize_hour_list(hours)
+    rec["visit_allowed_weekdays"] = days
+    rec["visit_allowed_hours"] = hrs
+    save_express_partners(partners)
+    return days, hrs, ""
+
+
+def visit_allowed_hours_summary(*, plus_user_phone: str = "") -> str:
+    hours = get_visit_allowed_hours(plus_user_phone=plus_user_phone)
     return "، ".join(format_visit_hour_label(h) for h in hours)
 
 
-def visit_hour_rows(*, selected: Optional[List[int]] = None) -> List[Dict[str, Any]]:
-    chosen = set(selected if selected is not None else get_visit_allowed_hours())
+def visit_hour_rows(
+    *,
+    selected: Optional[List[int]] = None,
+    plus_user_phone: str = "",
+) -> List[Dict[str, Any]]:
+    chosen = set(
+        selected if selected is not None else get_visit_allowed_hours(plus_user_phone=plus_user_phone)
+    )
     hours = list(VISIT_HOUR_UI_RANGE)
     for h in sorted(chosen):
         if h not in hours:
@@ -281,9 +369,12 @@ def remaining_visit_hours_for_date(
     *,
     hours: Optional[List[int]] = None,
     occupied: Optional[set] = None,
+    plus_user_phone: str = "",
 ) -> List[int]:
     """نوبت‌های باقی‌ماندهٔ یک روز (تهران). امروز: ساعت‌های شروع‌نشده."""
-    allowed = _normalize_hour_list(hours if hours is not None else get_visit_allowed_hours())
+    allowed = _normalize_hour_list(
+        hours if hours is not None else get_visit_allowed_hours(plus_user_phone=plus_user_phone)
+    )
     today = _today()
     if d < today:
         return []
@@ -402,6 +493,8 @@ def resolve_free_visit_slot(
     """اولین نوبت خالی این ادمین — اگر ساعت پر باشد، ساعت بعدی همان روز یا روز بعد."""
     rows = requests if requests is not None else _load_visit_rows()
     admin_key = visit_admin_identity(None, plus_phone=plus_user_phone)
+    allowed_days = get_visit_allowed_weekdays(plus_user_phone=plus_user_phone)
+    allowed_hours = get_visit_allowed_hours(plus_user_phone=plus_user_phone)
     today = _today()
     start = visit_day or today
     if start < today:
@@ -410,9 +503,9 @@ def resolve_free_visit_slot(
     d = start
     min_hour = int(visit_hour) if visit_hour is not None else None
     while d <= end:
-        if is_visit_weekday_allowed(d):
+        if is_visit_weekday_allowed(d, allowed=allowed_days):
             occ = occupied_visit_hours(rows, visit_day=d, admin_key=admin_key)
-            remain = remaining_visit_hours_for_date(d, occupied=occ)
+            remain = remaining_visit_hours_for_date(d, hours=allowed_hours, occupied=occ)
             if d == start and min_hour is not None:
                 if min_hour in remain:
                     return d, min_hour
@@ -437,21 +530,32 @@ def format_visit_slot_hint(slot: Optional[Dict[str, Any]]) -> str:
     return label
 
 
-def visit_allowed_weekdays_for_js() -> List[int]:
-    return [_PY_WEEKDAY_TO_JS[wd] for wd in get_visit_allowed_weekdays() if wd in _PY_WEEKDAY_TO_JS]
+def visit_allowed_weekdays_for_js(*, plus_user_phone: str = "") -> List[int]:
+    return [
+        _PY_WEEKDAY_TO_JS[wd]
+        for wd in get_visit_allowed_weekdays(plus_user_phone=plus_user_phone)
+        if wd in _PY_WEEKDAY_TO_JS
+    ]
 
 
 def visit_weekday_label_for_date(d: date) -> str:
     return VISIT_WEEKDAY_LABELS.get(d.weekday(), "")
 
 
-def is_visit_weekday_allowed(d: date, *, allowed: Optional[List[int]] = None) -> bool:
-    days = _normalize_weekday_list(allowed if allowed is not None else get_visit_allowed_weekdays())
+def is_visit_weekday_allowed(
+    d: date,
+    *,
+    allowed: Optional[List[int]] = None,
+    plus_user_phone: str = "",
+) -> bool:
+    days = _normalize_weekday_list(
+        allowed if allowed is not None else get_visit_allowed_weekdays(plus_user_phone=plus_user_phone)
+    )
     return d.weekday() in days
 
 
-def visit_allowed_weekdays_summary() -> str:
-    days = get_visit_allowed_weekdays()
+def visit_allowed_weekdays_summary(*, plus_user_phone: str = "") -> str:
+    days = get_visit_allowed_weekdays(plus_user_phone=plus_user_phone)
     return "، ".join(VISIT_WEEKDAY_LABELS.get(wd, str(wd)) for wd in VISIT_WEEKDAY_ORDER if wd in days)
 
 
@@ -471,10 +575,12 @@ def list_upcoming_visit_dates(
     lim = max(1, min(int(limit) or 7, 15))
     rows = requests if requests is not None else _load_visit_rows()
     admin_key = visit_admin_identity(None, plus_phone=plus_user_phone)
+    allowed_days = get_visit_allowed_weekdays(plus_user_phone=plus_user_phone)
+    allowed_hours = get_visit_allowed_hours(plus_user_phone=plus_user_phone)
     while d <= end and len(out) < lim:
-        if is_visit_weekday_allowed(d):
+        if is_visit_weekday_allowed(d, allowed=allowed_days):
             occ = occupied_visit_hours(rows, visit_day=d, admin_key=admin_key)
-            remain = remaining_visit_hours_for_date(d, occupied=occ)
+            remain = remaining_visit_hours_for_date(d, hours=allowed_hours, occupied=occ)
             if remain:
                 iso = d.isoformat()
                 jalali = format_iso_date_jalali(iso) or ""
@@ -614,11 +720,18 @@ def partner_request_feed_item(
             weekday = visit_weekday_label_for_date(d)
     except Exception:
         weekday = ""
-    visit_time = str(row.get("visit_time") or row.get("time") or "").strip()
+    visit_time_raw = str(row.get("visit_time") or row.get("time") or "").strip()
+    hour = parse_visit_hour(visit_time_raw)
+    if hour is not None:
+        visit_time = format_visit_hour_label(hour)
+    elif visit_time_raw:
+        visit_time = to_fa_digits(visit_time_raw)
+    else:
+        visit_time = ""
     when_parts = [p for p in (weekday, jalali) if p]
     visit_when = " ".join(when_parts)
     if visit_time:
-        visit_when = f"{visit_when} — ساعت {to_fa_digits(visit_time)}".strip(" —")
+        visit_when = f"{visit_when} — ساعت {visit_time}".strip(" —")
     notes = str(row.get("notes") or "").strip()
     land_code = str(row.get("land_code") or "").strip()
     land_title = visit_request_display_title(row)
@@ -626,7 +739,7 @@ def partner_request_feed_item(
     plus_user_phone = str(row.get("plus_user_phone") or "").strip()
     support = (support_phone or "").strip()
     can_cancel = st in (PENDING_STATUS, APPROVED_STATUS)
-    can_delete = st in (CANCELLED_STATUS, NO_SHOW_STATUS)
+    can_delete = st in (CANCELLED_STATUS, NO_SHOW_STATUS, COMPLETED_STATUS)
     return {
         "id": str(row.get("id") or "").strip(),
         "kind": "visit",
@@ -680,7 +793,7 @@ def partner_delete_own_visit(
     request_id: str,
     partner_phone: str,
 ) -> Tuple[bool, Optional[str]]:
-    """حذف قطعی درخواست لغو/عدم‌حضور از لیست همکار."""
+    """حذف قطعی درخواست لغو/عدم‌حضور/انجام‌شده از لیست همکار."""
     ph = (partner_phone or "").strip()
     rid = (request_id or "").strip()
     if not ph or not rid:
@@ -693,7 +806,7 @@ def partner_delete_own_visit(
         if str(r.get("partner_phone") or "").strip() != ph:
             return False, "forbidden"
         st = (str(r.get("status") or "")).strip()
-        if st not in (CANCELLED_STATUS, NO_SHOW_STATUS):
+        if st not in (CANCELLED_STATUS, NO_SHOW_STATUS, COMPLETED_STATUS):
             return False, "not_deletable"
         requests.pop(i)
         return True, None
@@ -1176,6 +1289,8 @@ def create_visit_request(
     note = (notes or "").strip()
     plus_phone = (plus_user_phone or "").strip()
     plus_name = (plus_user_name or "").strip()
+    if not plus_phone and code:
+        plus_phone = plus_phone_for_land_code(code)
     vd = _parse_visit_date(visit_date)
     if not ph:
         return None, "invalid"
@@ -1187,7 +1302,7 @@ def create_visit_request(
         return None, "past_date"
     if vd > _today() + timedelta(days=90):
         return None, "date_too_far"
-    if not is_visit_weekday_allowed(vd):
+    if not is_visit_weekday_allowed(vd, plus_user_phone=plus_phone):
         return None, "weekday_not_allowed"
     requested_hour = parse_visit_hour(visit_time)
     picked = resolve_free_visit_slot(
@@ -1757,6 +1872,8 @@ def admin_row_dict(
         "customer_last_name": last,
         "customer_name": cust_name,
         "customer_phone": str(row.get("customer_phone") or "").strip(),
+        "plus_user_phone": str(row.get("plus_user_phone") or "").strip(),
+        "plus_user_name": str(row.get("plus_user_name") or "").strip(),
         "status": st,
         "status_label": labels.get(st, st),
         "status_hint": hints.get(st, ""),
@@ -1773,6 +1890,140 @@ def admin_row_dict(
         "is_editable": st in (PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS),
         "needs_action": st in (PENDING_STATUS, DONE_PENDING_STATUS),
     }
+
+
+def mark_admin_visit_plus(
+    item: Dict[str, Any],
+    *,
+    plus_map: Dict[str, Any] | None = None,
+    owner_by_code: Dict[str, Dict[str, str]] | None = None,
+) -> None:
+    """پرچم پلاس برای مانیتور ادمین: درخواست‌دهنده، تقویم پلاس، یا مالک آگهی."""
+    if not isinstance(item, dict):
+        return
+    from .special_listings import _plus_display_name, plus_listing_owner_by_code, plus_partner_map
+
+    pmap = plus_map if plus_map is not None else plus_partner_map()
+    owners = owner_by_code if owner_by_code is not None else plus_listing_owner_by_code()
+
+    def _lookup(phone: str) -> Any:
+        raw = str(phone or "").strip()
+        if not raw:
+            return None
+        rec = pmap.get(raw) or pmap.get(_canonical_visit_phone(raw))
+        if rec is None:
+            digits = "".join(ch for ch in raw if ch.isdigit())
+            rec = pmap.get(digits)
+        return rec
+
+    requester_phone = str(item.get("partner_phone") or "").strip()
+    calendar_phone = str(item.get("plus_user_phone") or "").strip()
+    code = str(item.get("land_code") or "").strip()
+    requester_rec = _lookup(requester_phone)
+    calendar_rec = _lookup(calendar_phone) if calendar_phone else None
+    owner = owners.get(code) if code else None
+
+    item["is_plus"] = bool(requester_rec or calendar_phone or owner)
+    if calendar_phone:
+        item["plus_user_phone"] = _canonical_visit_phone(calendar_phone) or calendar_phone
+        item["plus_user_name"] = (
+            str(item.get("plus_user_name") or "").strip()
+            or _plus_display_name(calendar_rec, calendar_phone)
+        )
+        item["plus_role"] = "calendar"
+    elif requester_rec:
+        item["plus_user_phone"] = _canonical_visit_phone(requester_phone) or requester_phone
+        item["plus_user_name"] = _plus_display_name(requester_rec, requester_phone)
+        item["plus_role"] = "requester"
+    if owner:
+        item["land_owner_phone"] = str(owner.get("phone") or "").strip()
+        item["land_owner_name"] = str(owner.get("name") or "").strip()
+        if not item.get("plus_role"):
+            item["plus_role"] = "owner"
+
+    marketer_phone = _canonical_visit_phone(requester_phone) or requester_phone
+    item["marketer_phone"] = marketer_phone
+    item["marketer_name"] = (
+        str(item.get("partner_name") or "").strip()
+        or _plus_display_name(requester_rec, marketer_phone)
+        or marketer_phone
+        or "بازاریاب"
+    )
+    colleague_phone = str(item.get("plus_user_phone") or "").strip()
+    colleague_name = str(item.get("plus_user_name") or "").strip()
+    if not colleague_phone and owner:
+        colleague_phone = str(owner.get("phone") or "").strip()
+        colleague_name = str(owner.get("name") or "").strip()
+    item["colleague_phone"] = colleague_phone
+    item["colleague_name"] = colleague_name or colleague_phone or "همکار پلاس"
+
+
+def is_admin_legacy_visit(
+    row: Dict[str, Any] | None,
+    *,
+    plus_map: Dict[str, Any] | None = None,
+    owner_by_code: Dict[str, Dict[str, str]] | None = None,
+    admin_land_codes: set[str] | None = None,
+) -> bool:
+    """بازدید قدیمی پنل ادمین — بدون کاربر/آگهی پلاس."""
+    if not isinstance(row, dict):
+        return False
+    from .special_listings import plus_listing_owner_by_code, plus_partner_map
+
+    pmap = plus_map if plus_map is not None else plus_partner_map()
+    owners = owner_by_code if owner_by_code is not None else plus_listing_owner_by_code()
+    admin_codes = admin_land_codes if admin_land_codes is not None else set()
+
+    plus_phone = str(row.get("plus_user_phone") or "").strip()
+    if plus_phone:
+        return False
+    partner = _canonical_visit_phone(row.get("partner_phone"))
+    digits = "".join(ch for ch in partner if ch.isdigit())
+    if partner and (pmap.get(partner) or pmap.get(digits)):
+        return False
+    code = str(row.get("land_code") or "").strip()
+    if code and owners.get(code):
+        return False
+    if code and code in admin_codes:
+        return True
+    return True
+
+
+def purge_admin_legacy_visits() -> int:
+    """حذف بازدیدهایی که از پنل ادمین / بدون پلاس مانده‌اند."""
+    from app.utils.storage import load_ads_cached, load_express_visit_requests, save_express_visit_requests
+
+    from .special_listings import is_admin_created_express_listing, plus_listing_owner_by_code, plus_partner_map
+
+    plus_map = plus_partner_map() or {}
+    owners = plus_listing_owner_by_code() or {}
+    admin_codes: set[str] = set()
+    try:
+        for land in load_ads_cached() or []:
+            if is_admin_created_express_listing(land if isinstance(land, dict) else None):
+                code = str((land or {}).get("code") or "").strip()
+                if code:
+                    admin_codes.add(code)
+    except Exception:
+        admin_codes = set()
+    rows = load_express_visit_requests() or []
+    if not isinstance(rows, list):
+        return 0
+    keep: List[Dict[str, Any]] = []
+    removed = 0
+    for row in rows:
+        if is_admin_legacy_visit(
+            row if isinstance(row, dict) else None,
+            plus_map=plus_map,
+            owner_by_code=owners,
+            admin_land_codes=admin_codes,
+        ):
+            removed += 1
+            continue
+        keep.append(row)
+    if removed:
+        save_express_visit_requests(keep)
+    return removed
 
 
 ADMIN_VISIT_TRANSITIONS: Dict[str, frozenset] = {
@@ -2034,6 +2285,9 @@ def merge_admin_visit_cards_by_partner_land(
                 "admin_note": h.get("admin_note") or "",
                 "workflow_needs_action": bool(h.get("workflow_needs_action")),
                 "in_workflow": bool(h.get("in_workflow")),
+                "plus_user_name": h.get("plus_user_name") or "",
+                "plus_user_phone": h.get("plus_user_phone") or "",
+                "is_plus": bool(h.get("is_plus")),
                 "is_primary": str(h.get("id") or "").strip() == primary_id,
             }
             for h in history
@@ -2043,6 +2297,28 @@ def merge_admin_visit_cards_by_partner_land(
         card["group_all_cancelled"] = all(
             (str(h.get("status") or "")).strip() == CANCELLED_STATUS for h in history
         )
+        card["is_plus"] = any(bool(h.get("is_plus")) for h in history) or bool(card.get("is_plus"))
+        if not card.get("plus_user_name"):
+            for h in history:
+                if h.get("plus_user_name") or h.get("plus_user_phone"):
+                    card["plus_user_name"] = h.get("plus_user_name") or ""
+                    card["plus_user_phone"] = h.get("plus_user_phone") or ""
+                    break
+        if not card.get("land_owner_name"):
+            for h in history:
+                if h.get("land_owner_name") or h.get("land_owner_phone"):
+                    card["land_owner_name"] = h.get("land_owner_name") or ""
+                    card["land_owner_phone"] = h.get("land_owner_phone") or ""
+                    break
+        if not card.get("colleague_name"):
+            for h in history:
+                if h.get("colleague_name") or h.get("colleague_phone"):
+                    card["colleague_name"] = h.get("colleague_name") or ""
+                    card["colleague_phone"] = h.get("colleague_phone") or ""
+                    break
+        if not card.get("marketer_name"):
+            card["marketer_name"] = card.get("partner_name") or ""
+            card["marketer_phone"] = card.get("partner_phone") or ""
         merged.append(card)
     return merged
 

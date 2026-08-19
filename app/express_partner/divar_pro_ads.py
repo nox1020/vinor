@@ -565,7 +565,12 @@ def _schedule_background_refresh(
     return True
 
 
-def get_divar_pro_ads(*, force_refresh: bool = False, ignore_disabled: bool = False) -> dict[str, Any]:
+def get_divar_pro_ads(
+    *,
+    force_refresh: bool = False,
+    ignore_disabled: bool = False,
+    profiles: list[str] | None = None,
+) -> dict[str, Any]:
     """
     آگهی‌ها از همهٔ پروفایل‌های تنظیم‌شده — با کش حافظه + فایل.
 
@@ -573,8 +578,24 @@ def get_divar_pro_ads(*, force_refresh: bool = False, ignore_disabled: bool = Fa
     را در پس‌زمینه انجام می‌دهد — درخواست HTTP روی شبکهٔ دیوار بلاک نمی‌شود.
     force_refresh=True (ادمین): همگام منتظر واکشی می‌ماند.
     """
-    profiles = divar_pro_profile_urls()
-    primary = profiles[0] if profiles else divar_pro_profile_url()
+    if profiles is None:
+        profiles = divar_pro_profile_urls()
+    else:
+        from .home_ads_config import normalize_divar_profile_url
+
+        clean: list[str] = []
+        seen: set[str] = set()
+        for raw in profiles:
+            url = normalize_divar_profile_url(str(raw or ""))
+            key = url.lower()
+            if not url or key in seen:
+                continue
+            seen.add(key)
+            clean.append(url)
+        profiles = clean
+    if not profiles:
+        return _empty_ads_result(primary="", profiles=[], error="no_profiles")
+    primary = profiles[0]
     if not ignore_disabled and not divar_pro_ads_enabled():
         return _empty_ads_result(primary=primary, profiles=profiles, error="disabled")
 

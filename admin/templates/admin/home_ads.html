@@ -8,7 +8,7 @@
   <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg p-4 text-sm text-sky-900 dark:text-sky-100">
     <p class="font-medium mb-1">راهنما</p>
     <p class="text-sky-800 dark:text-sky-200/90 leading-6 text-xs">
-      این نوار بالای چت بدو ورود خانهٔ همکار/کاربر نمایش داده می‌شود و می‌تواند فایل‌های داخلی وینور و آگهی‌های پروفایل دیوار را با هم نشان دهد.
+      این نوار بالای چت بدو ورود خانهٔ همکار/کاربر نمایش داده می‌شود و می‌تواند فایل‌های داخلی وینور و آگهی‌های پروفایل دیوار همکاران پلاس را با هم نشان دهد.
       با خاموش کردن سیستم، کل نوار از سمت کاربر مخفی می‌شود.
       فلگ محیطی: <span class="ltr font-mono text-[11px]">VINOR_HOME_ADS_ENABLED</span> / <span class="ltr font-mono text-[11px]">VINOR_DIVAR_PRO_ADS_ENABLED</span>
     </p>
@@ -61,7 +61,7 @@
     </div>
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
       <p class="text-gray-500">پروفایل‌های دیوار</p>
-      <p class="mt-0.5 font-semibold tabular-nums">{{ (home_ads.divar_profile_urls|default([]))|length }}</p>
+      <p class="mt-0.5 font-semibold tabular-nums">{{ divar_profile_count|default(0) }}</p>
     </div>
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
       <p class="text-gray-500">کش دیوار</p>
@@ -99,27 +99,9 @@
         <input name="ha_title" value="{{ home_ads.title or '' }}"
                class="w-full max-w-md rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm">
       </div>
-      <div>
-        <label class="block text-xs text-gray-500 mb-1">آدرس‌های پروفایل دیوار (Pro)</label>
-        <p class="text-[11px] text-gray-400 mb-2">می‌توانید چند پروفایل اضافه کنید؛ آگهی‌های همه در نوار ادغام می‌شوند.</p>
-        {% set _urls = home_ads.divar_profile_urls|default([]) %}
-        {% if _urls %}
-        <ul class="space-y-2 mb-3">
-          {% for u in _urls %}
-          <li class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 px-3 py-2">
-            <a href="{{ u }}" target="_blank" rel="noopener noreferrer" class="ltr flex-1 min-w-0 text-xs text-sky-700 dark:text-sky-300 truncate" dir="ltr">{{ u }}</a>
-            {% if _urls|length > 1 %}
-            <button type="submit" form="haRemoveProfileForm" name="ha_remove_url" value="{{ u }}"
-                    class="shrink-0 px-2.5 py-1 rounded-md text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
-                    onclick="return confirm('این پروفایل حذف شود؟');">
-              حذف
-            </button>
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-      </div>
+      <p class="text-[11px] text-gray-400">
+        آدرس پروفایل دیوار را هر همکار پلاس از «آگهی‌های من» اضافه می‌کند؛ آگهی‌های همه در نوار ادغام می‌شوند.
+      </p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs text-gray-500 mb-1">سقف فایل وینور در نوار</label>
@@ -141,34 +123,6 @@
               class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
               onclick="return confirm('بازگشت به پیش‌فرض؟');">
         پیش‌فرض
-      </button>
-    </div>
-  </form>
-
-  <form id="haRemoveProfileForm" method="post" action="{{ url_for('admin.home_ads') }}" class="hidden">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="action" value="remove_profile">
-  </form>
-
-  <form method="post" action="{{ url_for('admin.home_ads') }}" class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="action" value="add_profile">
-    <div class="border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4">
-      <h2 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <i class="fa-solid fa-plus text-emerald-500"></i>
-        افزودن پروفایل دیوار
-      </h2>
-    </div>
-    <div class="px-4 sm:px-6 py-5 space-y-3 text-sm">
-      <label class="block text-xs text-gray-500 mb-1">آدرس یا توکن پروفایل Pro</label>
-      <input name="ha_new_profile_url" value="" dir="ltr"
-             placeholder="https://divar.ir/pro/… یا توکن برند"
-             class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm">
-      <p class="text-[11px] text-gray-400">مثال: <span class="ltr font-mono">https://divar.ir/pro/pnMLadIG</span></p>
-    </div>
-    <div class="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-      <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white">
-        افزودن پروفایل
       </button>
     </div>
   </form>
