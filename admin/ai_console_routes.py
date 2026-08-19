@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """صفحهٔ واحد مدیریت هوش مصنوعی — /admin/ai با تب‌ها.
 
-یک صفحه، هفت تب: مرور زنده، پیام‌ها و مدل، ابزار و صف تأیید، حافظه، مصرف،
-خطاها، فلگ‌ها. آدرس‌های قدیمی `/admin/ai-console/*` و `/admin/ai-questions`
-حذف نشده‌اند: GET به تب مربوطه redirect می‌شود و POSTها سر جای خود کار می‌کنند
-تا فرم‌های موجود (فلگ، حافظه، منقضی‌کردن pending، مدل، پاسخ escalation) نشکنند.
+یک صفحه، هشت تب: مرور زنده، پیام‌ها و مدل، ابزار و صف تأیید، حافظه، مصرف،
+خطاها، فلگ‌ها، وکیل ملکی. آدرس‌های قدیمی `/admin/ai-console/*`، `/admin/ai-questions`
+و `/admin/lawyer` حذف نشده‌اند: GET به تب مربوطه redirect می‌شود و POSTها سر جای خود کار می‌کنند
+تا فرم‌های موجود (فلگ، حافظه، منقضی‌کردن pending، مدل، پاسخ escalation، وکیل) نشکنند.
 
 دستیار عملیات روی `/admin` می‌ماند؛ اینجا فقط مدیریت است.
 """
@@ -25,6 +25,7 @@ AI_TABS: list[dict[str, str]] = [
     {"id": "usage", "label": "مصرف و مکالمات", "icon": "fa-chart-column"},
     {"id": "errors", "label": "خطاها", "icon": "fa-triangle-exclamation"},
     {"id": "flags", "label": "فلگ‌ها", "icon": "fa-toggle-on"},
+    {"id": "lawyer", "label": "وکیل ملکی", "icon": "fa-scale-balanced"},
 ]
 _TAB_IDS = frozenset(t["id"] for t in AI_TABS)
 
@@ -92,6 +93,7 @@ def ai_hub():
         "usage": _usage_context,
         "errors": _errors_context,
         "flags": _flags_context,
+        "lawyer": _lawyer_context,
     }
     try:
         ctx = builders[tab]()
@@ -201,6 +203,20 @@ def _flags_context() -> dict[str, Any]:
         "followup_hours_source": followup_hours_source(),
         "followup_hours_locked": followup_hours_env_locked(),
         "followup_hours_default": list(DEFAULT_HOURS),
+    }
+
+
+def _lawyer_context() -> dict[str, Any]:
+    from app.lawyer.config import (
+        get_lawyer_settings,
+        lawyer_feature_enabled,
+        lawyer_system_enabled,
+    )
+
+    return {
+        "lawyer": get_lawyer_settings(),
+        "lawyer_feature_flag": lawyer_feature_enabled(),
+        "lawyer_system_on": lawyer_system_enabled(),
     }
 
 

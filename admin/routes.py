@@ -2828,69 +2828,56 @@ def ai_model():
 @admin_bp.route('/lawyer', methods=['GET', 'POST'], endpoint='lawyer')
 @login_required
 def lawyer_admin():
+    """POST تنظیمات وکیل؛ GET به تب «وکیل ملکی» در /admin/ai می‌رود."""
+    if request.method == 'GET':
+        return redirect(url_for('admin.ai_hub', tab='lawyer'))
+
     from app.lawyer.config import (
         default_lawyer_settings,
         get_lawyer_settings,
         lawyer_feature_enabled,
-        lawyer_system_enabled,
         save_lawyer_settings,
     )
 
-    if request.method == 'POST':
-        action = (request.form.get('action') or 'save').strip()
-        feature_on = lawyer_feature_enabled()
-        if action == 'reset_defaults':
-            save_lawyer_settings(default_lawyer_settings())
-            flash('تنظیمات وکیل ملکی به پیش‌فرض بازگشت.', 'success')
-            return redirect(url_for('admin.lawyer'))
-        if action == 'toggle_system':
-            if not feature_on:
-                flash('فلگ محیطی VINOR_LAWYER_ENABLED خاموش است — از env روشن کنید.', 'error')
-                return redirect(url_for('admin.lawyer'))
-            current = get_lawyer_settings()
-            new_on = not bool(current.get('enabled'))
-            save_lawyer_settings({'enabled': new_on})
-            flash(
-                'سیستم وکیل ملکی فعال شد.' if new_on else 'سیستم وکیل ملکی غیرفعال شد.',
-                'success',
-            )
-            return redirect(url_for('admin.lawyer'))
-
+    hub = url_for('admin.ai_hub', tab='lawyer')
+    action = (request.form.get('action') or 'save').strip()
+    feature_on = lawyer_feature_enabled()
+    if action == 'reset_defaults':
+        save_lawyer_settings(default_lawyer_settings())
+        flash('تنظیمات وکیل ملکی به پیش‌فرض بازگشت.', 'success')
+        return redirect(hub)
+    if action == 'toggle_system':
+        if not feature_on:
+            flash('فلگ محیطی VINOR_LAWYER_ENABLED خاموش است — از env روشن کنید.', 'error')
+            return redirect(hub)
         current = get_lawyer_settings()
-        patch = {
-            'enabled': (
-                current.get('enabled')
-                if not feature_on
-                else (request.form.get('lawyer_enabled') == '1')
-            ),
-            'show_disclaimer': request.form.get('lawyer_show_disclaimer') == '1',
-            'display_name': (request.form.get('lawyer_display_name') or '').strip(),
-            'welcome': (request.form.get('lawyer_welcome') or '').strip(),
-            'system_prompt': (request.form.get('lawyer_system_prompt') or '').strip(),
-            'knowledge_notes': (request.form.get('lawyer_knowledge_notes') or '').strip(),
-        }
-        try:
-            save_lawyer_settings(patch)
-            flash('تنظیمات وکیل ملکی ذخیره شد.', 'success')
-        except Exception:
-            flash('ذخیره تنظیمات وکیل ممکن نشد.', 'error')
-        return redirect(url_for('admin.lawyer'))
+        new_on = not bool(current.get('enabled'))
+        save_lawyer_settings({'enabled': new_on})
+        flash(
+            'سیستم وکیل ملکی فعال شد.' if new_on else 'سیستم وکیل ملکی غیرفعال شد.',
+            'success',
+        )
+        return redirect(hub)
 
-    lawyer = get_lawyer_settings()
+    current = get_lawyer_settings()
+    patch = {
+        'enabled': (
+            current.get('enabled')
+            if not feature_on
+            else (request.form.get('lawyer_enabled') == '1')
+        ),
+        'show_disclaimer': request.form.get('lawyer_show_disclaimer') == '1',
+        'display_name': (request.form.get('lawyer_display_name') or '').strip(),
+        'welcome': (request.form.get('lawyer_welcome') or '').strip(),
+        'system_prompt': (request.form.get('lawyer_system_prompt') or '').strip(),
+        'knowledge_notes': (request.form.get('lawyer_knowledge_notes') or '').strip(),
+    }
     try:
-        lands = load_json(_lands_path())
-        p, a, r = counts_by_status(lands if isinstance(lands, list) else [])
+        save_lawyer_settings(patch)
+        flash('تنظیمات وکیل ملکی ذخیره شد.', 'success')
     except Exception:
-        p, a, r = 0, 0, 0
-    return render_template(
-        'admin/lawyer.html',
-        lawyer=lawyer,
-        lawyer_feature_flag=lawyer_feature_enabled(),
-        lawyer_system_on=lawyer_system_enabled(),
-        pending_count=p,
-        approved_count=a,
-        rejected_count=r,
-    )
+        flash('ذخیره تنظیمات وکیل ممکن نشد.', 'error')
+    return redirect(hub)
 
 
 @admin_bp.route('/home-ads', methods=['GET', 'POST'], endpoint='home_ads')

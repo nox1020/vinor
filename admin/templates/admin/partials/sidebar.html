@@ -85,27 +85,17 @@
          'admin.ai_console_tools', 'admin.ai_console_memory',
          'admin.ai_console_usage', 'admin.ai_console_conversations',
          'admin.ai_console_analytics', 'admin.ai_console_errors',
-         'admin.ai_console_flags'
+         'admin.ai_console_flags', 'admin.lawyer'
        ] %}is-active{% endif %}">
       <i class="fa-solid fa-robot"></i><span>هوش مصنوعی</span>
       {% set _ai_alerts = (control_badges.pending if control_badges else 0) + (control_badges.errors if control_badges else 0) %}
       {% if _ai_alerts %}<span class="vc-badge" data-i18n-number="{{ _ai_alerts }}">{{ _ai_alerts }}</span>{% endif %}
     </a>
 
-    <div class="vc-nav-label">خدمات</div>
-    <a href="{{ url_for('admin.lawyer') }}"
-       class="vc-nav-link {% if ep == 'admin.lawyer' %}is-active{% endif %}">
-      <i class="fa-solid fa-scale-balanced"></i><span>وکیل ملکی</span>
-    </a>
-
     <div class="vc-nav-label">سیستم</div>
     <a href="{{ url_for('admin.settings') }}"
        class="vc-nav-link {% if ep in ['admin.settings', 'admin.settings_apk_upload', 'admin.settings_apk_sms_template'] %}is-active{% endif %}">
       <i class="fa-solid fa-gear"></i><span>تنظیمات کلی</span>
-    </a>
-    <a href="{{ url_for('admin.audit_log') }}"
-       class="vc-nav-link {% if ep == 'admin.audit_log' %}is-active{% endif %}">
-      <i class="fa-solid fa-clipboard-list"></i><span>ممیزی ادمین</span>
     </a>
   </nav>
 

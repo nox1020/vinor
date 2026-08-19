@@ -9,7 +9,7 @@
     <div>
       <h2 class="text-lg font-bold text-gray-900 dark:text-white">هوش مصنوعی وینور</h2>
       <p class="text-xs text-gray-500 mt-0.5">
-        دستیار عملیات در داشبورد است؛ اینجا مدل، ابزار، حافظه، مصرف و خطاها را می‌بینید.
+        دستیار عملیات در داشبورد است؛ اینجا مدل، ابزار، حافظه، مصرف، خطاها و وکیل ملکی را می‌بینید.
       </p>
     </div>
     <div class="flex flex-wrap gap-2 text-[11px]">
@@ -57,6 +57,8 @@
     {% include 'admin/ai/_errors.html' %}
   {% elif ai_tab == 'flags' %}
     {% include 'admin/ai/_flags.html' %}
+  {% elif ai_tab == 'lawyer' %}
+    {% include 'admin/ai/_lawyer.html' %}
   {% endif %}
 
 </div>

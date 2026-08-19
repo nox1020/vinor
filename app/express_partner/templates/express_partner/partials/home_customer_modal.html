@@ -219,7 +219,8 @@
      data-requests-url="{{ url_for('express_partner.requests') }}"
      data-lands='{{ customer_modal_lands|default([])|tojson }}'
      data-plus-users='{{ customer_modal_plus_users|default([])|tojson }}'
-     data-next-visit="{% if _nv %}{{ ((_nv.weekday|default('')) ~ ' ' ~ (_nv.jalali_fa|default(_nv.jalali|default(''))) ~ ((' ساعت ' ~ _nv.time) if _nv.time else ''))|trim }}{% endif %}">
+     data-next-visit="{% if _nv %}{{ ((_nv.weekday|default('')) ~ ' ' ~ (_nv.jalali_fa|default(_nv.jalali|default(''))) ~ ((' ساعت ' ~ _nv.time) if _nv.time else ''))|trim }}{% endif %}"
+     data-next-visit-by-plus='{{ next_auto_visit_by_plus|default({})|tojson }}'>
   <div class="vn-cust-modal__backdrop" data-cust-modal-close aria-hidden="true"></div>
   <div class="vn-cust-modal__shell">
     <div class="vn-cust-modal__panel"
@@ -326,6 +327,32 @@
     }) ? code : '';
   }
 
+  function visitHintMap() {
+    try {
+      var raw = modal.getAttribute('data-next-visit-by-plus') || '{}';
+      var obj = JSON.parse(raw);
+      return obj && typeof obj === 'object' ? obj : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function syncVisitHint() {
+    if (!visitHint) return;
+    var map = visitHintMap();
+    var phone = (plusSelect && plusField && !plusField.hidden)
+      ? String(plusSelect.value || '').trim()
+      : '';
+    var label = String(map[phone] || map[''] || modal.getAttribute('data-next-visit') || '').trim();
+    if (label) {
+      visitHint.hidden = false;
+      visitHint.textContent = 'اولین وقت مجاز: ' + label;
+    } else {
+      visitHint.hidden = true;
+      visitHint.textContent = '';
+    }
+  }
+
   function fillPlusSelect(selectedPhone) {
     if (!plusSelect) return;
     var users = modalPlusUsers();
@@ -347,21 +374,17 @@
     plusSelect.value = phone || '';
   }
 
+  if (plusSelect && !plusSelect.__vinorVisitHintBound) {
+    plusSelect.__vinorVisitHintBound = true;
+    plusSelect.addEventListener('change', syncVisitHint);
+  }
+
   function syncLandUi(landCode) {
     fillLandSelect(landCode);
     fillPlusSelect('');
     if (landField) landField.hidden = !!landCode;
     if (plusField) plusField.hidden = false;
-    if (visitHint) {
-      var label = String(modal.getAttribute('data-next-visit') || '').trim();
-      if (label) {
-        visitHint.hidden = false;
-        visitHint.textContent = 'اولین وقت مجاز: ' + label;
-      } else {
-        visitHint.hidden = true;
-        visitHint.textContent = '';
-      }
-    }
+    syncVisitHint();
     if (submitBtn) submitBtn.disabled = false;
     setError('');
   }

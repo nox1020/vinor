@@ -3654,6 +3654,7 @@ def home_page():
         customer_modal_lands=customer_modal_ctx.get('customer_modal_lands') or [],
         customer_modal_plus_users=customer_modal_ctx.get('customer_modal_plus_users') or [],
         next_auto_visit=customer_modal_ctx.get('next_auto_visit'),
+        next_auto_visit_by_plus=customer_modal_ctx.get('next_auto_visit_by_plus') or {},
         **divar_ads_ctx,
     ))
     if not me_phone:
@@ -4704,7 +4705,9 @@ def requests_revisit(vid: str):
     if not partner_can_request_new_visit(gs, visit_rows, me_phone, land_code):
         return _requests_action_json(False, error='الان امکان بازدید مجدد نیست.')
 
-    next_slot = next_auto_visit_date()
+    next_slot = next_auto_visit_date(
+        plus_user_phone=str(prev.get('plus_user_phone') or ''),
+    )
     if not next_slot or not next_slot.get('iso'):
         return _requests_action_json(False, error='روز مجاز بازدید پیدا نشد.')
 
@@ -4723,6 +4726,8 @@ def requests_revisit(vid: str):
         customer_phone=str(prev.get('customer_phone') or ''),
         notes=str(prev.get('notes') or ''),
         require_customer=False,
+        plus_user_phone=str(prev.get('plus_user_phone') or ''),
+        plus_user_name=str(prev.get('plus_user_name') or ''),
     )
     if err == 'already_pending':
         return _requests_action_json(False, error='برای این فایل بازدید باز دارید.')
@@ -4806,20 +4811,9 @@ def home_register_customer():
     if not is_pa:
         return _fail('برای ثبت درخواست باید حساب همکاری شما تأیید شده باشد.', 403)
 
-    from .visit_requests import next_auto_visit_date
-
-    next_slot = next_auto_visit_date()
-    if not next_slot or not next_slot.get('iso'):
-        return _fail('روز مجاز بازدید پیدا نشد. با پشتیبانی هماهنگ کنید.')
-
-    visit_date = str(next_slot.get('iso') or '')
-    lands, _ = _build_partner_dashboard_lands(me_phone, True)
-    visit_requests = load_express_visit_requests() or []
-    if not isinstance(visit_requests, list):
-        visit_requests = []
-
     from .visit_requests import (
         list_plus_users_for_visit,
+        next_auto_visit_date,
         partner_cancel_own_visit,
         visit_slot_has_passed,
     )
@@ -4842,6 +4836,16 @@ def home_register_customer():
             return _fail('کاربر پلاس انتخاب‌شده پیدا نشد.')
         plus_user_name = str(plus_hit.get('name') or plus_user_phone)
         plus_user_phone = str(plus_hit.get('phone') or want)
+
+    next_slot = next_auto_visit_date(plus_user_phone=plus_user_phone)
+    if not next_slot or not next_slot.get('iso'):
+        return _fail('روز مجاز بازدید پیدا نشد. با پشتیبانی هماهنگ کنید.')
+
+    visit_date = str(next_slot.get('iso') or '')
+    lands, _ = _build_partner_dashboard_lands(me_phone, True)
+    visit_requests = load_express_visit_requests() or []
+    if not isinstance(visit_requests, list):
+        visit_requests = []
 
     land = None
     land_title = ''
@@ -4953,23 +4957,38 @@ def home_register_customer():
 
 def _home_customer_modal_context(me_phone: str, is_approved: bool) -> Dict[str, Any]:
     """فایل‌ها و کاربران پلاس (اختیاری) + اولین روز مجاز برای مدال ثبت مشتری."""
-    from .visit_requests import list_plus_users_for_visit, next_auto_visit_date
+    from .visit_requests import (
+        format_visit_slot_hint,
+        list_plus_users_for_visit,
+        next_auto_visit_date,
+    )
 
     out: Dict[str, Any] = {
         'customer_modal_lands': [],
         'customer_modal_plus_users': [],
         'next_auto_visit': None,
+        'next_auto_visit_by_plus': {},
     }
     if not me_phone or not is_approved:
         return out
     try:
-        out['next_auto_visit'] = next_auto_visit_date()
+        default_slot = next_auto_visit_date()
+        out['next_auto_visit'] = default_slot
+        by_plus: Dict[str, str] = {'': format_visit_slot_hint(default_slot)}
+        plus_users = list_plus_users_for_visit()
+        out['customer_modal_plus_users'] = plus_users
+        for user in plus_users:
+            phone = str((user or {}).get('phone') or '').strip()
+            if not phone:
+                continue
+            by_plus[phone] = format_visit_slot_hint(
+                next_auto_visit_date(plus_user_phone=phone)
+            )
+        out['next_auto_visit_by_plus'] = by_plus
     except Exception:
         out['next_auto_visit'] = None
-    try:
-        out['customer_modal_plus_users'] = list_plus_users_for_visit()
-    except Exception:
         out['customer_modal_plus_users'] = []
+        out['next_auto_visit_by_plus'] = {}
     try:
         lands, _ = _build_partner_dashboard_lands(me_phone, True)
         assigned_first: List[Dict[str, Any]] = []

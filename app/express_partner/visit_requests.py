@@ -280,6 +280,7 @@ def remaining_visit_hours_for_date(
     d: date,
     *,
     hours: Optional[List[int]] = None,
+    occupied: Optional[set] = None,
 ) -> List[int]:
     """نوبت‌های باقی‌ماندهٔ یک روز (تهران). امروز: ساعت‌های شروع‌نشده."""
     allowed = _normalize_hour_list(hours if hours is not None else get_visit_allowed_hours())
@@ -287,13 +288,153 @@ def remaining_visit_hours_for_date(
     if d < today:
         return []
     if d > today:
-        return list(allowed)
+        remain = list(allowed)
+    else:
+        try:
+            from ..utils.dates import tehran_now
+            now_h = int(tehran_now().hour)
+        except Exception:
+            now_h = datetime.utcnow().hour
+        remain = [h for h in allowed if h > now_h]
+    if occupied:
+        remain = [h for h in remain if h not in occupied]
+    return remain
+
+
+def _canonical_visit_phone(raw: Any) -> str:
+    phone = str(raw or "").strip()
+    if not phone:
+        return ""
     try:
-        from ..utils.dates import tehran_now
-        now_h = int(tehran_now().hour)
+        from .partner_session_sync import canonical_partner_phone
+
+        return canonical_partner_phone(phone) or phone
     except Exception:
-        now_h = datetime.utcnow().hour
-    return [h for h in allowed if h > now_h]
+        return phone
+
+
+def _default_visit_admin_key() -> str:
+    """تقویم مشترک وقتی کاربر پلاس انتخاب نشده — همان ادمین هماهنگی بازدید."""
+    try:
+        from flask import current_app, has_app_context
+
+        if has_app_context():
+            from ..utils.storage import load_settings
+            from ..services.sms import is_valid_iran_mobile, normalize_iran_mobile
+
+            settings = load_settings(current_app) or {}
+            raw = str(settings.get("partner_application_admin_phone") or "").strip()
+            phone = normalize_iran_mobile(raw)
+            if is_valid_iran_mobile(phone):
+                return phone
+    except Exception:
+        pass
+    try:
+        from app.crm.config import VISIT_CALL_TARGET
+        from ..services.sms import is_valid_iran_mobile, normalize_iran_mobile
+
+        fallback = normalize_iran_mobile(str(VISIT_CALL_TARGET or "").strip())
+        if is_valid_iran_mobile(fallback):
+            return fallback
+    except Exception:
+        pass
+    return "__default_admin__"
+
+
+def visit_admin_identity(row: Dict[str, Any] | None = None, *, plus_phone: str = "") -> str:
+    """کلید تقویم ادمین: کاربر پلاس انتخاب‌شده، وگرنه ادمین پیش‌فرض."""
+    if isinstance(row, dict):
+        plus = _canonical_visit_phone(row.get("plus_user_phone"))
+        if plus:
+            return plus
+    extra = _canonical_visit_phone(plus_phone)
+    if extra:
+        return extra
+    return _default_visit_admin_key()
+
+
+def _load_visit_rows() -> List[Dict[str, Any]]:
+    try:
+        from ..utils.storage import load_express_visit_requests
+
+        rows = load_express_visit_requests() or []
+        return rows if isinstance(rows, list) else []
+    except Exception:
+        return []
+
+
+def occupied_visit_hours(
+    requests: Optional[List[Dict[str, Any]]],
+    *,
+    visit_day: date,
+    admin_key: str,
+) -> set:
+    """ساعت‌هایی که برای این ادمین در آن روز بازدید باز دارند."""
+    occupied: set = set()
+    want = str(admin_key or "").strip()
+    if not want:
+        want = _default_visit_admin_key()
+    iso = visit_day.isoformat()
+    for row in requests or []:
+        if not isinstance(row, dict):
+            continue
+        st = str(row.get("status") or "").strip()
+        if st not in OPEN_VISIT_STATUSES:
+            continue
+        if str(row.get("visit_date") or "").strip() != iso:
+            continue
+        if visit_admin_identity(row) != want:
+            continue
+        hour = parse_visit_hour(row.get("visit_time") or row.get("time") or "")
+        if hour is not None:
+            occupied.add(int(hour))
+    return occupied
+
+
+def resolve_free_visit_slot(
+    requests: Optional[List[Dict[str, Any]]] = None,
+    *,
+    visit_day: Optional[date] = None,
+    visit_hour: Optional[int] = None,
+    plus_user_phone: str = "",
+    days_ahead: int = 90,
+) -> Optional[Tuple[date, int]]:
+    """اولین نوبت خالی این ادمین — اگر ساعت پر باشد، ساعت بعدی همان روز یا روز بعد."""
+    rows = requests if requests is not None else _load_visit_rows()
+    admin_key = visit_admin_identity(None, plus_phone=plus_user_phone)
+    today = _today()
+    start = visit_day or today
+    if start < today:
+        start = today
+    end = today + timedelta(days=max(1, int(days_ahead) or 90))
+    d = start
+    min_hour = int(visit_hour) if visit_hour is not None else None
+    while d <= end:
+        if is_visit_weekday_allowed(d):
+            occ = occupied_visit_hours(rows, visit_day=d, admin_key=admin_key)
+            remain = remaining_visit_hours_for_date(d, occupied=occ)
+            if d == start and min_hour is not None:
+                if min_hour in remain:
+                    return d, min_hour
+                remain = [h for h in remain if h > min_hour]
+            if remain:
+                return d, remain[0]
+        d += timedelta(days=1)
+        min_hour = None
+    return None
+
+
+def format_visit_slot_hint(slot: Optional[Dict[str, Any]]) -> str:
+    if not isinstance(slot, dict):
+        return ""
+    weekday = str(slot.get("weekday") or "").strip()
+    jalali = str(slot.get("jalali_fa") or slot.get("jalali") or "").strip()
+    time_label = str(slot.get("time") or "").strip()
+    parts = [p for p in (weekday, jalali) if p]
+    label = " ".join(parts)
+    if time_label:
+        label = (label + " ساعت " + time_label).strip()
+    return label
 
 
 def visit_allowed_weekdays_for_js() -> List[int]:
@@ -314,7 +455,13 @@ def visit_allowed_weekdays_summary() -> str:
     return "، ".join(VISIT_WEEKDAY_LABELS.get(wd, str(wd)) for wd in VISIT_WEEKDAY_ORDER if wd in days)
 
 
-def list_upcoming_visit_dates(*, limit: int = 7, days_ahead: int = 90) -> List[Dict[str, Any]]:
+def list_upcoming_visit_dates(
+    *,
+    limit: int = 7,
+    days_ahead: int = 90,
+    plus_user_phone: str = "",
+    requests: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
     """تاریخ‌های مجاز بعدی برای انتخاب در چت — شماره‌دار، فقط برچسب شمسی."""
     today = _today()
     end = today + timedelta(days=max(1, int(days_ahead) or 90))
@@ -322,9 +469,12 @@ def list_upcoming_visit_dates(*, limit: int = 7, days_ahead: int = 90) -> List[D
     d = today
     n = 1
     lim = max(1, min(int(limit) or 7, 15))
+    rows = requests if requests is not None else _load_visit_rows()
+    admin_key = visit_admin_identity(None, plus_phone=plus_user_phone)
     while d <= end and len(out) < lim:
         if is_visit_weekday_allowed(d):
-            remain = remaining_visit_hours_for_date(d)
+            occ = occupied_visit_hours(rows, visit_day=d, admin_key=admin_key)
+            remain = remaining_visit_hours_for_date(d, occupied=occ)
             if remain:
                 iso = d.isoformat()
                 jalali = format_iso_date_jalali(iso) or ""
@@ -353,9 +503,17 @@ def list_upcoming_visit_dates(*, limit: int = 7, days_ahead: int = 90) -> List[D
     return out
 
 
-def next_auto_visit_date() -> Optional[Dict[str, Any]]:
-    """اولین نوبت مجاز باقی‌مانده برای زمان‌بندی خودکار بازدید."""
-    dates = list_upcoming_visit_dates(limit=1)
+def next_auto_visit_date(
+    *,
+    plus_user_phone: str = "",
+    requests: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
+    """اولین نوبت خالی این ادمین — اگر ساعت پر باشد، ساعت بعدی."""
+    dates = list_upcoming_visit_dates(
+        limit=1,
+        plus_user_phone=plus_user_phone,
+        requests=requests,
+    )
     return dates[0] if dates else None
 
 
@@ -1031,14 +1189,16 @@ def create_visit_request(
         return None, "date_too_far"
     if not is_visit_weekday_allowed(vd):
         return None, "weekday_not_allowed"
-    remain = remaining_visit_hours_for_date(vd)
-    if not remain:
+    requested_hour = parse_visit_hour(visit_time)
+    picked = resolve_free_visit_slot(
+        requests,
+        visit_day=vd,
+        visit_hour=requested_hour,
+        plus_user_phone=plus_phone,
+    )
+    if not picked:
         return None, "no_hours"
-    hour = parse_visit_hour(visit_time)
-    if hour is None:
-        hour = remain[0]
-    elif hour not in remain:
-        return None, "hour_not_allowed"
+    vd, hour = picked
     if code and partner_open_visit(requests, ph, code):
         return None, "already_pending"
 
