@@ -198,11 +198,28 @@
     } catch (_) {}
   }
 
+  var lastCachedAt = 0;
+
+  function formatLastCached(ts) {
+    if (!ts) return '';
+    try {
+      var d = new Date(Number(ts));
+      if (isNaN(d.getTime())) return '';
+      var hh = d.getHours();
+      var mm = d.getMinutes();
+      return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+    } catch (_) { return ''; }
+  }
+
   function syncHeaderBrand(online) {
     var on = !!online;
     var el = document.getElementById('epHeaderBrandText');
     var wrap = document.getElementById('epHeaderBrand');
-    var label = on ? BRAND_ONLINE : BRAND_CONNECTING;
+    var label = BRAND_ONLINE;
+    if (!on) {
+      var t = formatLastCached(lastCachedAt);
+      label = t ? ('آفلاین · ' + t) : BRAND_CONNECTING;
+    }
     if (el && el.textContent !== label) el.textContent = label;
     if (wrap) wrap.setAttribute('aria-label', label);
   }
@@ -296,6 +313,7 @@
     var on = !!online;
     var prev = lastOnline;
     var nativeSource = opts.source === 'native';
+    if (opts.lastCachedAt) lastCachedAt = Number(opts.lastCachedAt) || lastCachedAt;
 
     if (prev === on && !opts.onlineToast && !opts.message) {
       if (!nativeSource || !opts.force) return;
@@ -452,6 +470,53 @@
     }
     if (!onlineToastActive) applyConnectivity();
     else if (lastOnline !== false) startOnlineMonitor();
+  });
+
+  window.addEventListener('vinor:network', function (ev) {
+    try {
+      var d = ev && ev.detail ? ev.detail : {};
+      if (d.lastCachedAt) lastCachedAt = Number(d.lastCachedAt) || lastCachedAt;
+      if (d.online === false) syncHeaderBrand(false);
+    } catch (_) {}
+  });
+
+  window.vinorReplayOfflineQueue = function (items) {
+    if (!items || !items.length) return;
+    if (!window.VinorNativeCache) return;
+    (async function () {
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i] || {};
+        var id = it.id;
+        var url = it.url;
+        if (!id || !url) continue;
+        try {
+          var resp = await fetch(url, {
+            method: it.method || 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json; charset=utf-8',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: it.payload ? it.payload : undefined
+          });
+          if (resp && resp.ok) {
+            if (VinorNativeCache.ackQueueItem) VinorNativeCache.ackQueueItem(id);
+          } else {
+            if (VinorNativeCache.failQueueItem) VinorNativeCache.failQueueItem(id, 'http');
+          }
+        } catch (_) {
+          if (VinorNativeCache.failQueueItem) VinorNativeCache.failQueueItem(id, 'network');
+        }
+      }
+    })();
+  };
+
+  window.addEventListener('vinor:offline-sync', function (ev) {
+    try {
+      var q = ev && ev.detail && ev.detail.queue;
+      window.vinorReplayOfflineQueue(q || []);
+    } catch (_) {}
   });
 
   if (document.readyState === 'loading') {

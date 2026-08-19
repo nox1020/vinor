@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.64-loader-no-progress';
+const VERSION = 'v1.0.65-apk-offline-cache';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -211,6 +211,11 @@ function isSessionPartnerApiPath(pathname) {
   const p = (pathname || '').replace(/\/+$/, '') || '/';
   return p.startsWith('/express/partner/api/') ||
     p === '/express/partner/dashboard/data' ||
+    p === '/express/partner/profile/data' ||
+    p === '/express/partner/profile/edit/data' ||
+    p === '/express/partner/routine/data' ||
+    p === '/express/partner/routine/steps/detail' ||
+    p === '/express/partner/commissions/data' ||
     p.startsWith('/express/partner/notifications');
 }
 
@@ -279,7 +284,13 @@ self.addEventListener('fetch', (event) => {
             try {
               return await fetch(request);
             } catch (_) {
-              return new Response(JSON.stringify({ error: 'Offline', message: 'شما آفلاین هستید' }), { 
+              return new Response(JSON.stringify({
+                success: false,
+                ok: false,
+                offline: true,
+                error: 'Offline',
+                message: 'برای انجام این عملیات اینترنت لازم است'
+              }), { 
                 status: 503, 
                 headers: { 'Content-Type': 'application/json' } 
               });
@@ -408,9 +419,14 @@ self.addEventListener('fetch', (event) => {
       } catch (_) {
         const cached = await cache.match(request);
         if (cached) return cached;
-        return new Response(JSON.stringify({ error: 'Offline', message: 'شما آفلاین هستید' }), { 
+        return new Response(JSON.stringify({
+          success: false,
+          offline: true,
+          error: 'Offline',
+          message: 'آخرین اطلاعات ذخیره‌شده در دسترس نیست'
+        }), { 
           status: 503, 
-          headers: { 'Content-Type': 'application/json' } 
+          headers: { 'Content-Type': 'application/json', 'X-Vinor-Cache': 'MISS' } 
         });
       }
     })());
