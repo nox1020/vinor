@@ -1,105 +1,513 @@
 {% extends 'express_partner/base.html' %}
-{% block title %}آموزش و دستورالعمل‌ها | روتین ۳ مرحله‌ای{% endblock %}
-{% block content %}
+{% block title %}آموزش همکاری | راهنمای وینور{% endblock %}
 
+{% block styles %}
+<style>
+  .ep-help {
+    --ep-help-accent: #059669;
+    --ep-help-accent-2: #047857;
+    --ep-help-hero: #065f46;
+    color: inherit;
+  }
+  html.dark .ep-help {
+    --ep-help-accent: #34d399;
+    --ep-help-accent-2: #10b981;
+    --ep-help-hero: #064e3b;
+  }
+
+  .ep-help-hero {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(18rem 14rem at 12% -10%, rgba(255,255,255,.14), transparent 60%),
+      radial-gradient(12rem 10rem at 92% 8%, rgba(255,255,255,.10), transparent 55%),
+      linear-gradient(165deg, #047857 0%, #065f46 48%, #064e3b 100%);
+    color: #fff;
+    padding: 1.15rem 1.1rem 1.6rem;
+    border-radius: 0 0 1.75rem 1.75rem;
+  }
+  .ep-help-hero::after {
+    content: "";
+    position: absolute;
+    inset: auto auto -2.5rem -1.5rem;
+    width: 9rem;
+    height: 9rem;
+    background:
+      radial-gradient(circle at 30% 30%, rgba(255,255,255,.18) 0 1px, transparent 2px),
+      radial-gradient(circle at 70% 55%, rgba(255,255,255,.12) 0 1.5px, transparent 3px);
+    background-size: 2.4rem 2.4rem;
+    transform: rotate(18deg);
+    pointer-events: none;
+    opacity: .55;
+  }
+  .ep-help-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .72rem;
+    font-weight: 700;
+    background: rgba(255,255,255,.16);
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: 9999px;
+    padding: .28rem .7rem;
+  }
+  .ep-help-hero h1 {
+    margin: .85rem 0 .4rem;
+    font-size: 1.55rem;
+    line-height: 1.35;
+    font-weight: 800;
+    letter-spacing: -.02em;
+  }
+  .ep-help-hero > p {
+    margin: 0;
+    font-size: .875rem;
+    line-height: 1.7;
+    color: rgba(255,255,255,.86);
+  }
+  .ep-help-search {
+    margin-top: 1.15rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    background: #fff;
+    border-radius: 1.35rem;
+    padding: .35rem .4rem .35rem .9rem;
+    box-shadow: 0 10px 28px rgba(0,0,0,.18);
+  }
+  .ep-help-search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: #111827;
+    font-size: .9rem;
+    height: 2.4rem;
+  }
+  .ep-help-search input::placeholder { color: #9ca3af; }
+  .ep-help-search button {
+    width: 2.4rem;
+    height: 2.4rem;
+    border: 0;
+    border-radius: 9999px;
+    background: #e5e7eb;
+    color: #374151;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+  .ep-help-hero .ep-help-hint {
+    margin-top: .7rem;
+    font-size: .72rem;
+    color: rgba(255,255,255,.78);
+  }
+
+  .ep-help-body {
+    max-width: 42rem;
+    margin: 0 auto;
+    padding: 1.25rem 1rem 0;
+  }
+  .ep-help-h2 {
+    text-align: center;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #111827;
+    margin: 0 0 1rem;
+  }
+  html.dark .ep-help-h2 { color: #f9fafb; }
+
+  .ep-help-steps {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: .65rem;
+  }
+  @media (min-width: 640px) {
+    .ep-help-steps { grid-template-columns: repeat(3, 1fr); }
+  }
+  .ep-help-step {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    text-align: right;
+    width: 100%;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    border-radius: 1rem;
+    padding: .9rem 1rem;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .ep-help-step:hover,
+  .ep-help-step.is-active {
+    border-color: #6ee7b7;
+    box-shadow: 0 0 0 3px rgba(16,185,129,.12);
+  }
+  html.dark .ep-help-step {
+    background: #111827;
+    border-color: #1f2937;
+  }
+  .ep-help-step__num {
+    width: 2.15rem;
+    height: 2.15rem;
+    border-radius: 9999px;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    font-size: .85rem;
+    color: #fff;
+    background: #059669;
+    flex-shrink: 0;
+  }
+  .ep-help-step:nth-child(2) .ep-help-step__num { background: #d97706; }
+  .ep-help-step:nth-child(3) .ep-help-step__num { background: #6366f1; }
+  .ep-help-step__title {
+    font-size: .9rem;
+    font-weight: 700;
+    color: #111827;
+  }
+  html.dark .ep-help-step__title { color: #f3f4f6; }
+  .ep-help-step__sub {
+    margin-top: .15rem;
+    font-size: .72rem;
+    color: #6b7280;
+    line-height: 1.5;
+  }
+  html.dark .ep-help-step__sub { color: #9ca3af; }
+  .ep-help-step i.fa-chevron-left {
+    margin-right: auto;
+    color: #9ca3af;
+    font-size: .75rem;
+  }
+
+  .ep-help-video {
+    margin-top: 1.5rem;
+    overflow: hidden;
+    border-radius: 1.1rem;
+    background: #000;
+    aspect-ratio: 16/9;
+    border: 1px solid rgba(255,255,255,.08);
+  }
+  .ep-help-video iframe { width: 100%; height: 100%; border: 0; }
+
+  .ep-help-faq {
+    margin-top: 1.75rem;
+  }
+  .ep-help-tabs {
+    display: flex;
+    gap: .4rem;
+    overflow-x: auto;
+    padding-bottom: .15rem;
+    margin-bottom: .75rem;
+    scrollbar-width: none;
+  }
+  .ep-help-tabs::-webkit-scrollbar { display: none; }
+  .ep-help-tab {
+    flex: 1 0 auto;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    color: #374151;
+    border-radius: 9999px;
+    padding: .45rem .85rem;
+    font-size: .8rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  html.dark .ep-help-tab {
+    background: #111827;
+    border-color: #1f2937;
+    color: #d1d5db;
+  }
+  .ep-help-tab.is-active {
+    background: #059669;
+    border-color: #059669;
+    color: #fff;
+  }
+
+  .ep-help-list {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+  }
+  .ep-help-item {
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+  html.dark .ep-help-item {
+    background: #111827;
+    border-color: #1f2937;
+  }
+  .ep-help-item[hidden] { display: none !important; }
+  .ep-help-item summary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .95rem 1rem;
+    cursor: pointer;
+    font-size: .9rem;
+    font-weight: 650;
+    color: #111827;
+  }
+  html.dark .ep-help-item summary { color: #f3f4f6; }
+  .ep-help-item summary::-webkit-details-marker { display: none; }
+  .ep-help-item summary i.fa-chevron-left {
+    margin-right: auto;
+    color: #9ca3af;
+    font-size: .7rem;
+    transition: transform .18s;
+  }
+  .ep-help-item[open] summary i.fa-chevron-left { transform: rotate(-90deg); }
+  .ep-help-item .ep-help-item__body {
+    padding: 0 1rem 1rem;
+    font-size: .84rem;
+    line-height: 1.85;
+    color: #4b5563;
+  }
+  html.dark .ep-help-item .ep-help-item__body { color: #d1d5db; }
+
+  .ep-help-channels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin-top: .7rem;
+  }
+  .ep-help-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    border-radius: 9999px;
+    padding: .28rem .7rem;
+    font-size: .75rem;
+    font-weight: 700;
+    background: #ecfdf5;
+    color: #047857;
+  }
+  html.dark .ep-help-chip {
+    background: rgba(16,185,129,.14);
+    color: #6ee7b7;
+  }
+  .ep-help-empty {
+    display: none;
+    text-align: center;
+    padding: 1.5rem .5rem;
+    font-size: .85rem;
+    color: #6b7280;
+  }
+  .ep-help-empty.is-visible { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(sticky=true) }}
-  {% call ep_header_row('آموزش و دستورالعمل‌ها', url_for('express_partner.home'), inner_class='max-w-4xl mx-auto w-full') %}{% endcall %}
+  {% call ep_header_row('آموزش', url_for('express_partner.home'), inner_class='max-w-4xl mx-auto w-full') %}{% endcall %}
   {{ ep_header_end() }}
 
-  <main class="max-w-4xl mx-auto px-3 sm:px-5 pb-24 pt-2">
-
-    <!-- معرفی -->
-    <section class="mt-4 rounded-2xl border border-emerald-200/60 dark:border-emerald-900/50 bg-gradient-to-br from-emerald-50/90 via-white to-white dark:from-emerald-950/40 dark:via-gray-900 dark:to-gray-950 p-4 sm:p-5 shadow-sm" aria-labelledby="training-intro-title">
-      <div class="flex items-start gap-3">
-        <div class="shrink-0 w-11 h-11 rounded-xl bg-emerald-500/15 dark:bg-emerald-400/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-          <i class="fas fa-route text-lg" aria-hidden="true"></i>
-        </div>
-        <div class="min-w-0 flex-1">
-          <h2 id="training-intro-title" class="text-base sm:text-lg font-extrabold text-gray-900 dark:text-white leading-snug">
-            آموزش ۳ مرحله‌ای موفقیت در همکاری
-          </h2>
-          <p class="mt-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-            روش سریع و کاربردی برای جذب مشتری، مدیریت بازدید و بستن قرارداد. آمار روتین در صفحه جداگانه به‌صورت خودکار ثبت می‌شود.
-          </p>
-        </div>
-      </div>
+  <div class="ep-help pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
+    <section class="ep-help-hero" aria-labelledby="epHelpTitle">
+      <span class="ep-help-badge">
+        <i class="fas fa-graduation-cap" aria-hidden="true"></i>
+        راهنمای همکاری وینور
+      </span>
+      <h1 id="epHelpTitle">چطور می‌تونم کمکت کنم؟</h1>
+      <p>آموزش ۳ مرحله‌ای جذب مشتری، بازدید و بستن معامله.</p>
+      <form class="ep-help-search" id="epHelpSearchForm" role="search" action="#" method="get">
+        <input id="epHelpSearch"
+               type="search"
+               enterkeyhint="search"
+               autocomplete="off"
+               placeholder="مثلاً آگهی را کجا منتشر کنم؟"
+               aria-label="جستجو در آموزش">
+        <button type="submit" aria-label="جستجو">
+          <i class="fas fa-chevron-left" aria-hidden="true"></i>
+        </button>
+      </form>
+      <p class="ep-help-hint">سؤال‌های پرتکرار را بخوان؛ مسیر فروش از بازاریابی تا قرارداد همین‌جاست.</p>
     </section>
 
-    {% if training_video_url %}
-    <div class="mt-6">
-      <div class="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800 bg-black aspect-video shadow-lg shadow-gray-900/15 ring-1 ring-black/5 dark:ring-white/10">
-        <iframe src="{{ training_video_url }}" class="w-full h-full min-h-[180px]" allowfullscreen loading="lazy" title="ویدیو آموزش همکاری"></iframe>
+    <div class="ep-help-body">
+      <h2 class="ep-help-h2">مسیر موفقیت در همکاری</h2>
+      <div class="ep-help-steps" role="tablist" aria-label="مراحل آموزش">
+        <button type="button" class="ep-help-step is-active" data-help-tab="market" aria-selected="true">
+          <span class="ep-help-step__num">۱</span>
+          <span class="min-w-0">
+            <span class="ep-help-step__title">بازاریابی</span>
+            <span class="ep-help-step__sub">انتشار آگهی در همه جا و جذب مشتری</span>
+          </span>
+          <i class="fas fa-chevron-left" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="ep-help-step" data-help-tab="visit" aria-selected="false">
+          <span class="ep-help-step__num">۲</span>
+          <span class="min-w-0">
+            <span class="ep-help-step__title">بازدید</span>
+            <span class="ep-help-step__sub">هماهنگی و مدیریت حرفه‌ای بازدید</span>
+          </span>
+          <i class="fas fa-chevron-left" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="ep-help-step" data-help-tab="deal" aria-selected="false">
+          <span class="ep-help-step__num">۳</span>
+          <span class="min-w-0">
+            <span class="ep-help-step__title">معامله</span>
+            <span class="ep-help-step__sub">پیگیری، قرارداد و پورسانت</span>
+          </span>
+          <i class="fas fa-chevron-left" aria-hidden="true"></i>
+        </button>
       </div>
+
+      {% if training_video_url %}
+      <div class="ep-help-video mt-6">
+        <iframe src="{{ training_video_url }}" allowfullscreen loading="lazy" title="ویدیو آموزش همکاری"></iframe>
+      </div>
+      {% endif %}
+
+      <section class="ep-help-faq" id="epHelpFaq" aria-labelledby="epHelpFaqTitle">
+        <h2 class="ep-help-h2" id="epHelpFaqTitle">پرتکرارترین سؤال‌ها</h2>
+        <div class="ep-help-tabs" role="tablist">
+          <button type="button" class="ep-help-tab is-active" data-help-tab="market">بازاریابی</button>
+          <button type="button" class="ep-help-tab" data-help-tab="visit">بازدید</button>
+          <button type="button" class="ep-help-tab" data-help-tab="deal">معامله</button>
+        </div>
+
+        <div class="ep-help-list" id="epHelpList">
+          <details class="ep-help-item" data-tab="market" data-search="آگهی منتشر اینستاگرام کانال دیوار بازاریابی" open>
+            <summary>
+              آگهی را کجا منتشر کنم؟
+              <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </summary>
+            <div class="ep-help-item__body">
+              آگهی‌ها را در <strong>همه جا</strong> منتشر کنید — فقط یک پلتفرم کافی نیست.
+              فایل را در اینستاگرام، کانال‌های تلگرام و دیوار بگذارید تا مشتری از هر مسیری شما را پیدا کند.
+              <div class="ep-help-channels" aria-label="کانال‌های انتشار">
+                <span class="ep-help-chip"><i class="fab fa-instagram" aria-hidden="true"></i> اینستاگرام</span>
+                <span class="ep-help-chip"><i class="fab fa-telegram" aria-hidden="true"></i> کانال‌ها</span>
+                <span class="ep-help-chip"><i class="fas fa-border-all" aria-hidden="true"></i> دیوار</span>
+              </div>
+            </div>
+          </details>
+
+          <details class="ep-help-item" data-tab="market" data-search="فایل مطالعه معرفی تلفنی مشتری بازاریابی">
+            <summary>
+              فایل را چطور به مشتری معرفی کنم؟
+              <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </summary>
+            <div class="ep-help-item__body">
+              فایل را کامل و دقیق بخوانید، بعد به‌صورت تلفنی و شفاف معرفی کنید.
+              مشتری باید از قیمت، موقعیت، متراژ و شرایط بازدید تصویر روشنی بگیرد تا مشتری واقعی جذب شود.
+            </div>
+          </details>
+
+          <details class="ep-help-item" data-tab="market" data-search="پاسخ سریع پیام تماس بازاریابی">
+            <summary>
+              بعد از انتشار آگهی چه کار کنم؟
+              <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </summary>
+            <div class="ep-help-item__body">
+              به پیام و تماس مشتری سریع جواب بدهید. تأخیر در پاسخ یعنی از دست رفتن فایل به نفع مشاور دیگر.
+              هر سرنخ را ثبت کنید و تا تعیین وقت بازدید رها نکنید.
+            </div>
+          </details>
+
+          <details class="ep-help-item" data-tab="visit" data-search="بازدید ناظر هماهنگی ملک" hidden>
+            <summary>
+              بازدید را چطور هماهنگ کنم؟
+              <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </summary>
+            <div class="ep-help-item__body">
+              قبل از بازدید با ناظر معامله تلفنی هماهنگ کنید. زمان، آدرس و شرایط ورود را دقیق بگویید
+              تا مشتری و مالک هر دو آماده باشند.
+            </div>
+          </details>
+
+          <details class="ep-help-item" data-tab="visit" data-search="نتیجه بازدید علاقه مشتری" hidden>
+            <summary>
+              هدف بازدید فقط دیدن ملک است؟
+              <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </summary>
+            <div class="ep-help-item__body">
+              خیر. بازدید را حرفه‌ای مدیریت کنید، میزان علاقه مشتری را بسنجید و نتیجه را ثبت کنید.
+              بدون ثبت نتیجه، پیگیری معامله ناقص می‌ماند.
+            </div>
+          </details>
+
+          <details class="ep-help-item" data-tab="deal" data-search="معامله قرارداد پورسانت مذاکره" hidden>
+            <summary>
+              بعد از بازدید چطور معامله را ببندم؟
+              <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </summary>
+            <div class="ep-help-item__body">
+              با پیگیری مؤثر و مذاکره اصولی، مشتری را به قرارداد برسانید.
+              نتیجه این مرحله بستن معامله و دریافت پورسانت است؛ رها کردن مشتری بعد از بازدید یعنی از دست رفتن فروش.
+            </div>
+          </details>
+        </div>
+        <p class="ep-help-empty" id="epHelpEmpty">نتیجه‌ای پیدا نشد. عبارت دیگری امتحان کنید.</p>
+      </section>
     </div>
-    {% endif %}
-
-    <!-- مراحل -->
-    <section class="mt-8 mb-2">
-      <div class="relative">
-        <!-- خط اتصال عمودی (RTL: سمت راست) -->
-        <div class="absolute top-8 bottom-8 right-[1.15rem] sm:right-[1.25rem] w-px bg-gradient-to-b from-emerald-200 via-gray-200 to-indigo-200 dark:from-emerald-900 dark:via-gray-700 dark:to-indigo-900 hidden sm:block pointer-events-none" aria-hidden="true"></div>
-
-        <ol class="space-y-5 sm:space-y-6 list-none p-0 m-0">
-          <li>
-            <article class="relative flex gap-3 sm:gap-4 rounded-2xl border border-gray-200/90 dark:border-gray-700/90 bg-white dark:bg-gray-900/70 p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-emerald-200/80 dark:hover:border-emerald-800/60 transition duration-200">
-              <div class="shrink-0 relative z-10 flex flex-col items-center">
-                <span class="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center text-sm font-black shadow-md shadow-emerald-900/20 ring-4 ring-white dark:ring-gray-950">۱</span>
-              </div>
-              <div class="min-w-0 flex-1 pt-0.5">
-                <h3 class="text-sm sm:text-base font-bold text-gray-900 dark:text-white leading-snug">
-                  <span class="text-emerald-600 dark:text-emerald-300">۱️⃣ بازاریابی</span>
-                </h3>
-                <p class="mt-2 text-xs sm:text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
-                  وظیفه مشاور این است که فایل را به‌صورت کامل و دقیق مطالعه کرده و آن را به‌صورت تلفنی و شفاف به مشتری معرفی کند تا مشتری واقعی جذب شود.
-                  این مرحله شامل مطالعه کامل فایل، انتشار آگهی و پاسخ‌گویی سریع به مشتریان است.
-                </p>
-              </div>
-            </article>
-          </li>
-
-          <li>
-            <article class="relative flex gap-3 sm:gap-4 rounded-2xl border border-gray-200/90 dark:border-gray-700/90 bg-white dark:bg-gray-900/70 p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-amber-200/80 dark:hover:border-amber-900/50 transition duration-200">
-              <div class="shrink-0 relative z-10 flex flex-col items-center">
-                <span class="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-amber-500 text-white flex items-center justify-center text-sm font-black shadow-md shadow-amber-900/20 ring-4 ring-white dark:ring-gray-950">۲</span>
-              </div>
-              <div class="min-w-0 flex-1 pt-0.5">
-                <h3 class="text-sm sm:text-base font-bold text-gray-900 dark:text-white leading-snug">
-                  <span class="text-amber-600 dark:text-amber-300">۲️⃣ بازدید</span>
-                </h3>
-                <p class="mt-2 text-xs sm:text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
-                  در این مرحله مشاور باید با ناظر معامله هماهنگی‌های لازم را به‌صورت تلفنی انجام دهد و بازدید را حرفه‌ای مدیریت کند تا مشتری به تصمیم نزدیک شود.
-                  هدف بازدید فقط دیدن ملک نیست، بلکه سنجش میزان علاقه و ثبت نتیجه بازدید است.
-                </p>
-              </div>
-            </article>
-          </li>
-
-          <li>
-            <article class="relative flex gap-3 sm:gap-4 rounded-2xl border border-gray-200/90 dark:border-gray-700/90 bg-white dark:bg-gray-900/70 p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-indigo-200/80 dark:hover:border-indigo-900/50 transition duration-200">
-              <div class="shrink-0 relative z-10 flex flex-col items-center">
-                <span class="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-indigo-600 dark:bg-indigo-500 text-white flex items-center justify-center text-sm font-black shadow-md shadow-indigo-900/30 ring-4 ring-white dark:ring-gray-950">۳</span>
-              </div>
-              <div class="min-w-0 flex-1 pt-0.5">
-                <h3 class="text-sm sm:text-base font-bold text-gray-900 dark:text-white leading-snug">
-                  <span class="text-indigo-600 dark:text-indigo-300">۳️⃣ معامله 💰</span>
-                </h3>
-                <p class="mt-2 text-xs sm:text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
-                  پس از بازدید، مشاور با پیگیری مؤثر و مذاکره اصولی، معامله را به قرارداد تبدیل می‌کند.
-                  نتیجه این مرحله بستن قرارداد و دریافت پورسانت است.
-                </p>
-              </div>
-            </article>
-          </li>
-        </ol>
-      </div>
-    </section>
+  </div>
 
   {% include 'express_partner/partials/partner_tab_footer.html' %}
-
-  </main>
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
+<script>
+(function () {
+  var list = document.getElementById('epHelpList');
+  if (!list) return;
+  var items = Array.prototype.slice.call(list.querySelectorAll('.ep-help-item'));
+  var empty = document.getElementById('epHelpEmpty');
+  var search = document.getElementById('epHelpSearch');
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-help-tab]'));
+  var currentTab = 'market';
+
+  function setTab(tab) {
+    currentTab = tab;
+    tabs.forEach(function (el) {
+      var on = el.getAttribute('data-help-tab') === tab;
+      el.classList.toggle('is-active', on);
+      if (el.classList.contains('ep-help-step')) el.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    if (search) search.value = '';
+    applyFilter();
+    var faq = document.getElementById('epHelpFaq');
+    if (faq) faq.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function applyFilter() {
+    var q = ((search && search.value) || '').trim().toLowerCase();
+    var shown = 0;
+    items.forEach(function (item) {
+      var tabOk = !q && item.getAttribute('data-tab') === currentTab;
+      var text = ((item.getAttribute('data-search') || '') + ' ' + item.textContent).toLowerCase();
+      var match = q ? text.indexOf(q) !== -1 : tabOk;
+      item.hidden = !match;
+      if (match) shown += 1;
+      if (!q && item.getAttribute('data-tab') !== currentTab) item.open = false;
+    });
+    if (empty) empty.classList.toggle('is-visible', shown === 0);
+  }
+
+  tabs.forEach(function (el) {
+    el.addEventListener('click', function () { setTab(el.getAttribute('data-help-tab')); });
+  });
+  if (search) {
+    search.addEventListener('input', applyFilter);
+  }
+  var form = document.getElementById('epHelpSearchForm');
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      applyFilter();
+      var first = items.find(function (item) { return !item.hidden; });
+      if (first) {
+        first.open = true;
+        first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}

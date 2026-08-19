@@ -962,6 +962,20 @@
   {% include 'express_partner/partials/vinor_plus_drawer_cta_v2.html' %}
   {% endif %}
 
+  {% if not me_phone %}
+  <nav class="ep-profile-drawer__section ep-profile-drawer__nav" aria-label="منو">
+    <div class="ep-profile-drawer__nav-group" aria-label="آموزش">
+      {{ profile_menu_row(
+        url_for('express_partner.training'),
+        'fa-graduation-cap',
+        'آموزش',
+        tour='training-link',
+        row_id='epDrawerTrainingBtn'
+      ) }}
+    </div>
+  </nav>
+  {% endif %}
+
   {% if me_phone %}
   {% set _drawer_wallet = withdrawable_balance|default(0) %}
   {% set _drawer_name = (me_name or partner_name or 'همکار وینور')|trim %}
@@ -1070,6 +1084,13 @@
         'دعوت دوستان',
         tour='invite-friends-link',
         row_id='epDrawerInviteBtn'
+      ) }}
+      {{ profile_menu_row(
+        url_for('express_partner.training'),
+        'fa-graduation-cap',
+        'آموزش',
+        tour='training-link',
+        row_id='epDrawerTrainingBtn'
       ) }}
     </div>
     {% endif %}
