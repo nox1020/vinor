@@ -1,4 +1,4 @@
-"""کارت فایل داشبورد — برای نمایش در چت Vinor AI."""
+"""کارت فایل برای چت Vinor AI — پیش‌فرض کارت کامل جزئیات، نه کارت فشردهٔ داشبورد."""
 from __future__ import annotations
 
 import re
@@ -178,41 +178,74 @@ def resolve_lands(phone: str, codes: list[str], audience: str | None = None) -> 
     return out
 
 
+def _compact_premium_card_html(land: dict[str, Any], *, show_commission: bool) -> str:
+    return render_template(
+        "express_partner/partials/land_premium_card.html",
+        land=land,
+        is_approved=show_commission,
+        tour_land_card=False,
+        for_ai_chat=True,
+        card_layout="horizontal",
+    )
+
+
+def _full_land_card_html(code: str) -> str:
+    """کارت کامل فایل داخل چت — نه کارت فشردهٔ داشبورد."""
+    if not code:
+        return ""
+    try:
+        from app.express_partner.land_chat_detail import render_land_chat_detail_html
+
+        payload = render_land_chat_detail_html(code)
+    except Exception:
+        payload = None
+    if not payload:
+        return ""
+    return str(payload.get("html") or "").strip()
+
+
+def _slot_html(inner: str, *, full: bool) -> str:
+    slot_cls = "ai-land-cards__slot vinor-dash-card-slot"
+    if full:
+        slot_cls += " ai-land-cards__slot--full"
+    return f'<div class="{slot_cls}" role="listitem">{inner}</div>'
+
+
 def render_land_cards_html(
     phone: str,
     codes: list[str],
     *,
     audience: str | None = None,
+    layout: str = "full",
 ) -> str:
-    """HTML کارت‌های داشبورد (همان partial)."""
+    """HTML فایل‌ها برای چت: پیش‌فرض کارت کامل (`vn-lcd`). compact فقط برای صفحات جانبی."""
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    full = (layout or "full").strip().lower() != "compact"
     lands = resolve_lands(phone, codes[:2], aud)
     if not lands:
         return ""
     parts: list[str] = []
     show_commission = aud == AUDIENCE_PARTNER and partner_is_approved(phone)
     for land in lands:
-        parts.append(
-            render_template(
-                "express_partner/partials/land_premium_card.html",
-                land=land,
-                is_approved=show_commission,
-                tour_land_card=False,
-                for_ai_chat=True,
-                card_layout="horizontal",
-            )
+        code = str(land.get("code") or "").strip()
+        inner = (
+            _full_land_card_html(code)
+            if full
+            else _compact_premium_card_html(land, show_commission=show_commission)
         )
-    wrapper = (
-        '<div class="ai-land-cards no-scrollbar" role="list" aria-label="فایل‌های پیشنهادی">'
-        + "".join(
-            '<div class="ai-land-cards__slot vinor-dash-card-slot" role="listitem">'
-            + p
-            + "</div>"
-            for p in parts
-        )
+        if not inner:
+            continue
+        parts.append(_slot_html(inner, full=full))
+    if not parts:
+        return ""
+    wrap_cls = "ai-land-cards no-scrollbar"
+    if full:
+        wrap_cls += " ai-land-cards--full"
+    return (
+        f'<div class="{wrap_cls}" role="list" aria-label="فایل‌های پیشنهادی">'
+        + "".join(parts)
         + "</div>"
     )
-    return wrapper
 
 
 def land_cards_payload(
@@ -220,9 +253,11 @@ def land_cards_payload(
     codes: list[str],
     *,
     audience: str | None = None,
+    layout: str = "full",
 ) -> list[dict[str, str]]:
     """برای API JSON: کد + HTML هر کارت."""
     aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    full = (layout or "full").strip().lower() != "compact"
     lands = resolve_lands(phone, codes[:2], aud)
     if not lands:
         return []
@@ -230,22 +265,12 @@ def land_cards_payload(
     payload: list[dict[str, str]] = []
     for land in lands:
         code = str(land.get("code") or "").strip()
-        html = render_template(
-            "express_partner/partials/land_premium_card.html",
-            land=land,
-            is_approved=show_commission,
-            tour_land_card=False,
-            for_ai_chat=True,
-            card_layout="horizontal",
+        inner = (
+            _full_land_card_html(code)
+            if full
+            else _compact_premium_card_html(land, show_commission=show_commission)
         )
-        payload.append(
-            {
-                "code": code,
-                "html": (
-                    '<div class="ai-land-cards__slot vinor-dash-card-slot" role="listitem">'
-                    + html
-                    + "</div>"
-                ),
-            }
-        )
+        if not inner:
+            continue
+        payload.append({"code": code, "html": _slot_html(inner, full=full)})
     return payload

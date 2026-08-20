@@ -8318,7 +8318,9 @@ def _build_partner_memory_snapshot(me_phone: str) -> Dict[str, Any]:
         try:
             from app.ai.land_cards import land_cards_payload, strip_visible_land_codes
 
-            land_cards = land_cards_payload(ph, land_codes, audience='partner') or []
+            land_cards = land_cards_payload(
+                ph, land_codes, audience='partner', layout='compact'
+            ) or []
             if live_summary:
                 live_summary = strip_visible_land_codes(live_summary, land_codes)
         except Exception:

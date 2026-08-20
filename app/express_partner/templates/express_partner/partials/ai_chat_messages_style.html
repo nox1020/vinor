@@ -113,7 +113,7 @@
     max-width: 100%;
     min-width: 0;
   }
-  /* کارت فایل داخل گفتگو (افقی / اسکرول) */
+  /* کارت فایل داخل گفتگو */
   #aiMessages .ai-land-cards {
     display: flex;
     flex-direction: row;
@@ -132,6 +132,16 @@
     flex: 0 0 min(18.5rem, 86vw);
     max-width: min(18.5rem, 86vw);
     min-width: 0;
+  }
+  #aiMessages .ai-land-cards--full {
+    flex-direction: column;
+    overflow: visible;
+    gap: 0.75rem;
+  }
+  #aiMessages .ai-land-cards__slot--full {
+    flex: 1 1 auto;
+    max-width: 100%;
+    width: 100%;
   }
   #aiMessages .ai-msg-cards .ai-land-cards {
     margin-top: 0;
@@ -467,6 +477,12 @@
   #aiMessages .ai-agent-card__land .ai-land-cards__slot {
     flex: 0 0 min(100%, 17.5rem);
     max-width: 17.5rem;
+  }
+  #aiMessages .ai-agent-card__land .ai-land-cards--full,
+  #aiMessages .ai-agent-card__land .ai-land-cards__slot--full {
+    flex: 1 1 auto;
+    max-width: 100%;
+    width: 100%;
   }
   #aiMessages .ai-agent-card__body {
     display: flex;

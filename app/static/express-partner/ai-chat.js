@@ -1890,8 +1890,14 @@
     box.innerHTML = String(html);
     var landCards = [];
     box.querySelectorAll('.ai-land-cards').forEach(function (root) {
-      root.querySelectorAll('.vinor-premium-card, .express-card, .ai-land-cards__slot').forEach(function (card) {
-        var codeEl = card.closest('[data-land-code]') || card;
+      root.querySelectorAll(
+        '.vn-lcd, [data-vn-land-chat-detail], .vinor-premium-card, .express-card, .ai-land-cards__slot'
+      ).forEach(function (card) {
+        var codeEl =
+          (card.getAttribute && card.getAttribute('data-land-code') && card) ||
+          card.closest('[data-land-code]') ||
+          card.querySelector('[data-land-code]') ||
+          card;
         var code = (codeEl.getAttribute && codeEl.getAttribute('data-land-code')) || '';
         landCards.push({ code: code, html: card.outerHTML });
       });
@@ -1912,8 +1918,11 @@
       .join('');
     if (!inner) return '';
     if (inner.indexOf('ai-land-cards') !== -1) return inner;
+    var full = /vn-lcd|data-vn-land-chat-detail/.test(inner);
     return (
-      '<div class="ai-land-cards no-scrollbar" role="list" aria-label="فایل‌های پیشنهادی">' +
+      '<div class="ai-land-cards' +
+      (full ? ' ai-land-cards--full' : '') +
+      ' no-scrollbar" role="list" aria-label="فایل‌های پیشنهادی">' +
       inner +
       '</div>'
     );
@@ -1952,6 +1961,63 @@
     }
     bindAgentActions(wrap);
     wireCopyBlocks(wrap);
+    upgradeCompactLandCardsInChat(wrap);
+  }
+
+  function upgradeCompactLandCardsInChat(root) {
+    var scope = root || list;
+    if (!scope || !list) return;
+    var cards = scope.querySelectorAll
+      ? scope.querySelectorAll('.vinor-premium-card[data-land-code]')
+      : [];
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      if (!list.contains(card)) continue;
+      if (card.closest('.vn-lcd, [data-vn-land-chat-detail]')) continue;
+      if (card.closest('[data-vn-home-lands], #homePublicLandsCarousel')) continue;
+      var code = String(card.getAttribute('data-land-code') || '').trim();
+      if (!code || card.getAttribute('data-vn-upgrading') === '1') continue;
+      card.setAttribute('data-vn-upgrading', '1');
+      (function (el, landCode) {
+        var url = '/express/partner/lands/' + encodeURIComponent(landCode) + '/chat-detail';
+        fetch(url, {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { ok: res.ok, data: data };
+            });
+          })
+          .then(function (payload) {
+            if (!el.isConnected) return;
+            if (!payload.ok || !payload.data || !payload.data.ok || !payload.data.html) {
+              el.removeAttribute('data-vn-upgrading');
+              return;
+            }
+            var box = document.createElement('div');
+            box.innerHTML = payload.data.html;
+            var detail =
+              box.querySelector('[data-vn-land-chat-detail], .vn-lcd') || box.firstElementChild;
+            if (!detail) {
+              el.removeAttribute('data-vn-upgrading');
+              return;
+            }
+            var slot = el.closest('.ai-land-cards__slot') || el;
+            var parent = slot.parentNode;
+            slot.replaceWith(detail);
+            if (parent && parent.classList) parent.classList.add('ai-land-cards--full');
+            if (typeof window.vinorSyncFavButtons === 'function') {
+              window.vinorSyncFavButtons(detail);
+            }
+          })
+          .catch(function () {
+            try {
+              el.removeAttribute('data-vn-upgrading');
+            } catch (_) {}
+          });
+      })(card, code);
+    }
   }
 
   function setAgentCardState(card, status, noteText) {

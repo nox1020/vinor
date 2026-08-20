@@ -154,9 +154,7 @@
 
   .ai-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.12) transparent; }
   #aiMessages .ai-msg-cards .ai-land-cards { width: 100%; max-width: 100%; }
-  #aiMessages .ai-msg-cards .vinor-premium-card { cursor: pointer; }
-  #aiMessages .ai-msg-cards .vinor-premium-card-mobile { display: flex !important; }
-  #aiMessages .ai-msg-cards .vinor-premium-card > .hidden.sm\:block { display: none !important; }
+  #aiMessages .ai-msg-cards .vn-lcd { width: 100%; max-width: 100%; }
   #aiSidePanel.ai-side-panel,
   aside.ai-side-panel {
     position: fixed;
@@ -212,7 +210,7 @@
   } catch (_) {}
 })();
 </script>
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=120"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=121"></script>
 <script>
 (function () {
   try {
