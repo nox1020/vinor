@@ -122,38 +122,17 @@ def _find_existing_mission_thread(
     *,
     preferred_tid: str = "",
 ) -> str:
-    """ترد قبلی مأموریت همین فایل را پیدا کن — بدون ساختن ترد جدید."""
+    """همهٔ چت‌های وینور یکی‌اند — همان ترد واحد را برگردان (پستچی جداست)."""
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import load_user_record, _find_thread
+    from app.ai.chat_store import ensure_active_thread
 
     ph = _norm_phone(phone)
-    code = str(land_code or "").strip()
-    prefer = str(preferred_tid or "").strip()
+    if not ph:
+        return ""
     try:
-        record = load_user_record(ph, AUDIENCE_PARTNER)
+        return ensure_active_thread(ph, audience=AUDIENCE_PARTNER)
     except Exception:
-        return ""
-    if not isinstance(record, dict):
-        return ""
-    if prefer and _find_thread(record, prefer):
-        return prefer
-    want_title = f"ماموریت {code}" if code else ""
-    if not want_title:
-        return ""
-    threads = record.get("threads") or []
-    if not isinstance(threads, list):
-        return ""
-    # جدیدترین هم‌عنوان
-    found = ""
-    for th in threads:
-        if not isinstance(th, dict):
-            continue
-        if str(th.get("title") or "").strip() != want_title:
-            continue
-        tid = str(th.get("id") or "").strip()
-        if tid:
-            found = tid
-    return found
+        return str(preferred_tid or "").strip()
 
 
 def _land_by_code(code: str) -> Optional[Dict[str, Any]]:
@@ -419,49 +398,54 @@ def claim_express_land_for_partner(
     return False
 
 
+def _land_already_in_vinor_thread(phone: str, land_code: str, thread_id: str) -> bool:
+    from app.ai.audience import AUDIENCE_PARTNER
+    from app.ai.chat_store import messages_for_ui
+
+    code = str(land_code or "").strip()
+    tid = str(thread_id or "").strip()
+    if not code or not tid:
+        return False
+    try:
+        msgs = messages_for_ui(phone, thread_id=tid, audience=AUDIENCE_PARTNER) or []
+    except Exception:
+        return False
+    for item in reversed(msgs):
+        if not isinstance(item, dict):
+            continue
+        codes = item.get("land_codes") or []
+        if code in [str(c).strip() for c in codes]:
+            return True
+        meta = item.get("meta") if isinstance(item.get("meta"), dict) else {}
+        if str(meta.get("land_code") or "").strip() == code:
+            return True
+    return False
+
+
 def _seed_mission_chat(
     phone: str,
     land: Dict[str, Any],
     *,
     reuse_thread_id: str = "",
 ) -> str:
-    """ترد مأموریت را بگیر یا بساز؛ برای یک فایل فقط یک ترد."""
+    """مأموریت را در همان چت واحد «وینور» بگذار — ترد جدید ساخته نمی‌شود."""
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import (
-        append_exchange,
-        create_thread,
-        load_user_record,
-        set_active_thread,
-        _find_thread,
-        _save_record,
-    )
+    from app.ai.chat_store import append_exchange, ensure_active_thread, set_active_thread
     from .sales_coach import build_coach_chat_prompt, draft_listing_copy
 
     ph = _norm_phone(phone)
     code = str(land.get("code") or "").strip()
     title = str(land.get("title") or "").strip()
 
-    existing_tid = _find_existing_mission_thread(
+    tid = _find_existing_mission_thread(
         ph, code, preferred_tid=reuse_thread_id
-    )
-    if existing_tid:
-        try:
-            set_active_thread(ph, existing_tid, audience=AUDIENCE_PARTNER)
-        except Exception:
-            pass
-        return existing_tid
-
-    tid = create_thread(ph, activate=True, audience=AUDIENCE_PARTNER)
-
-    # عنوان صریح مأموریت
+    ) or ensure_active_thread(ph, audience=AUDIENCE_PARTNER)
     try:
-        record = load_user_record(ph, AUDIENCE_PARTNER)
-        th = _find_thread(record, tid)
-        if th:
-            th["title"] = f"ماموریت {code}" if code else "ماموریت فروش"
-            _save_record(record, ph, AUDIENCE_PARTNER)
+        set_active_thread(ph, tid, audience=AUDIENCE_PARTNER)
     except Exception:
         pass
+    if _land_already_in_vinor_thread(ph, code, tid):
+        return tid
 
     user_msg = build_coach_chat_prompt(code=code, title=title, stage_label="علاقه‌مند")
     copies = draft_listing_copy(land, channel="both")

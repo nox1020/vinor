@@ -3220,7 +3220,6 @@ def _partner_ai_layer_context(
             from app.ai.chat_store import (
                 ensure_active_thread,
                 messages_for_ui,
-                set_active_thread,
                 threads_for_ui,
             )
             from app.ai.user_key import ai_user_key
@@ -3251,13 +3250,10 @@ def _partner_ai_layer_context(
             elif open_tid and not (
                 is_lawyer_thread(open_tid) or open_tid in ('lawyer', 'vakil')
             ):
-                # لینک مستقیم به یک گفتگو
-                if set_active_thread(user_key, open_tid, audience=AUDIENCE_PUBLIC):
-                    active_thread_id = open_tid
-                else:
-                    active_thread_id = ensure_active_thread(user_key, audience=AUDIENCE_PUBLIC)
+                # لینک مستقیم هم به همان چت واحد وینور
+                active_thread_id = ensure_active_thread(user_key, audience=AUDIENCE_PUBLIC)
                 home_ai_open = True
-                home_ai_open_thread = open_tid
+                home_ai_open_thread = active_thread_id
                 chat_messages, active_thread_id = ensure_vinor_opens_chat(
                     user_key,
                     audience=AUDIENCE_PUBLIC,
@@ -3380,16 +3376,12 @@ def _partner_ai_layer_context(
                 active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
                 chat_messages = messages_for_ui(phone, active_thread_id, audience=AUDIENCE_PARTNER) or []
         elif open_tid:
-            # لینک مستقیم به یک گفتگو
-            from app.ai.chat_store import set_active_thread
+            # لینک قدیمی مأموریت/فایل هم به همان چت واحد وینور می‌رود
             from app.ai.welcome import ensure_vinor_opens_chat
 
-            if set_active_thread(phone, open_tid, audience=AUDIENCE_PARTNER):
-                active_thread_id = open_tid
-            else:
-                active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
+            active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
             home_ai_open = True
-            home_ai_open_thread = open_tid
+            home_ai_open_thread = active_thread_id
             chat_messages, active_thread_id = ensure_vinor_opens_chat(
                 phone,
                 audience=AUDIENCE_PARTNER,
@@ -6376,7 +6368,7 @@ def ai_clear():
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_switch_thread():
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import messages_for_ui, set_active_thread
+    from app.ai.chat_store import messages_for_ui, ensure_active_thread
     from app.lawyer.config import lawyer_enabled
     from app.lawyer.service import (
         LAWYER_THREAD_ID,
@@ -6424,8 +6416,9 @@ def ai_switch_thread():
                 active_thread_id=tid,
             ),
         })
-    if not set_active_thread(phone, thread_id, audience=AUDIENCE_PARTNER):
-        return jsonify({'ok': False, 'error': 'گفتگو یافت نشد.'}), 404
+    from app.ai.chat_store import ensure_active_thread
+
+    thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
     return jsonify({
         'ok': True,
         'thread_id': thread_id,
@@ -9165,6 +9158,23 @@ def land_chat_detail(code: str):
             "error": "not_found",
             "message": "این فایل پیدا نشد یا دیگر در دسترس نیست.",
         }), 404
+
+    try:
+        from app.ai.audience import AUDIENCE_PARTNER, AUDIENCE_PUBLIC
+        from app.ai.chat_store import record_land_chat_view
+        from app.ai.user_key import ai_user_key
+
+        me_phone = (session.get("user_phone") or "").strip()
+        uk = me_phone or ai_user_key()
+        aud = AUDIENCE_PARTNER if me_phone else AUDIENCE_PUBLIC
+        record_land_chat_view(
+            uk,
+            payload["code"],
+            audience=aud,
+            title=str(payload.get("title") or ""),
+        )
+    except Exception:
+        pass
 
     return jsonify({
         "ok": True,

@@ -1166,7 +1166,42 @@
       tid = '';
     }
     if (tid && tid !== postchiThreadId && tid !== lawyerThreadId) return tid;
+    try {
+      tid = String(activeThreadId() || '');
+    } catch (_) {
+      tid = '';
+    }
+    if (tid && tid !== postchiThreadId && tid !== lawyerThreadId) return tid;
     return '';
+  }
+
+  function ensureVinorHistoryThen(fn) {
+    var tid = vinorThreadIdForReturn();
+    var listEmpty = !(list && list.querySelector('.ai-msg-wrap'));
+    var onSpecial = isPostchiMode() || isLawyerMode();
+    var needLoad =
+      onSpecial ||
+      (homeInline &&
+        (!homeChatLayerOpen ||
+          (typeof isHomeChatEmpty === 'function' && isHomeChatEmpty()) ||
+          listEmpty));
+    function go() {
+      try {
+        if (typeof fn === 'function') return fn();
+      } catch (_) {}
+      return undefined;
+    }
+    if (needLoad && tid && tid !== postchiThreadId && !isLawyerThreadId(tid)) {
+      return Promise.resolve(switchThread(tid)).then(go, go);
+    }
+    try {
+      if (homeInline) {
+        homeChatLayerOpen = true;
+        ensureChatVisible();
+        syncHomeEmptyState();
+      }
+    } catch (_) {}
+    return Promise.resolve(go());
   }
 
   function switchHomeMode(mode) {
@@ -4054,12 +4089,6 @@
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        var missionTid =
-          (btn.getAttribute('data-vn-mission-thread') || '').trim() ||
-          (function () {
-            var card = btn.closest('[data-vn-journey-card]');
-            return card ? (card.getAttribute('data-vn-mission-thread') || '').trim() : '';
-          })();
         var liveForm = document.getElementById('aiChatForm');
         var liveInput = document.getElementById('aiInput');
         if (liveForm && liveInput && document.getElementById('aiMessages')) {
@@ -4080,20 +4109,11 @@
               } catch (_) {}
             }, 40);
           }
-          if (
-            missionTid &&
-            typeof window.__vinorAiChatSwitchThread === 'function' &&
-            String(activeThreadId() || '') !== missionTid
-          ) {
-            try {
-              var sw = window.__vinorAiChatSwitchThread(missionTid);
-              if (sw && typeof sw.then === 'function') {
-                sw.then(fireSilentSubmit).catch(fireSilentSubmit);
-                return;
-              }
-            } catch (_) {}
+          if (typeof ensureVinorHistoryThen === 'function') {
+            ensureVinorHistoryThen(fireSilentSubmit);
+          } else {
+            fireSilentSubmit();
           }
-          fireSilentSubmit();
           return;
         }
         var intentNav = (btn.getAttribute('data-vn-chat-intent') || '').trim();
@@ -4267,65 +4287,80 @@
       } catch (_) {}
     }
 
-    var existing = list.querySelector('.ai-msg-wrap[data-land-chat-code="' + code + '"]');
-    if (existing) {
-      revealChatWithLand();
-      try {
-        refreshLandChatCard(code);
-      } catch (_) {}
-      try {
-        existing.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      } catch (_) {
-        scrollChatToEnd({ force: true });
-      }
-      landDetailPending = null;
-      return Promise.resolve(true);
-    }
-
-    showThinking();
-    try {
-      syncHomeEmptyState();
-    } catch (_) {}
-    var url = '/express/partner/lands/' + encodeURIComponent(code) + '/chat-detail';
-    return fetch(url, {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    })
-      .then(function (res) {
-        return res.json().then(function (data) {
-          return { ok: res.ok, data: data };
-        });
-      })
-      .then(function (payload) {
-        removeThinking();
+    function showLandInVinor() {
+      var existing = list.querySelector('.ai-msg-wrap[data-land-chat-code="' + code + '"]');
+      if (existing) {
+        revealChatWithLand();
+        try {
+          refreshLandChatCard(code);
+        } catch (_) {}
+        try {
+          existing.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } catch (_) {
+          scrollChatToEnd({ force: true });
+        }
         landDetailPending = null;
-        if (!payload.ok || !payload.data || !payload.data.ok || !payload.data.html) {
-          showEphemeralHint(
-            (payload.data && payload.data.message) || 'جزئیات این فایل در دسترس نیست.'
-          );
+        return Promise.resolve(true);
+      }
+
+      showThinking();
+      try {
+        syncHomeEmptyState();
+      } catch (_) {}
+      var url = '/express/partner/lands/' + encodeURIComponent(code) + '/chat-detail';
+      return fetch(url, {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { ok: res.ok, data: data };
+          });
+        })
+        .then(function (payload) {
+          removeThinking();
+          landDetailPending = null;
+          if (!payload.ok || !payload.data || !payload.data.ok || !payload.data.html) {
+            showEphemeralHint(
+              (payload.data && payload.data.message) || 'جزئیات این فایل در دسترس نیست.'
+            );
+            try {
+              syncHomeEmptyState();
+            } catch (_) {}
+            return false;
+          }
+          var again = list.querySelector('.ai-msg-wrap[data-land-chat-code="' + code + '"]');
+          if (again) {
+            revealChatWithLand();
+            try {
+              refreshLandChatCard(code);
+            } catch (_) {}
+            return true;
+          }
+          appendMessage({
+            role: 'assistant',
+            content: '',
+            land_detail_html: payload.data.html,
+            land_code: payload.data.code || code,
+          });
+          revealChatWithLand();
+          return true;
+        })
+        .catch(function () {
+          removeThinking();
+          landDetailPending = null;
+          showEphemeralHint('خطا در دریافت جزئیات فایل.');
           try {
             syncHomeEmptyState();
           } catch (_) {}
           return false;
-        }
-        appendMessage({
-          role: 'assistant',
-          content: '',
-          land_detail_html: payload.data.html,
-          land_code: payload.data.code || code,
         });
-        revealChatWithLand();
-        return true;
-      })
-      .catch(function () {
-        removeThinking();
-        landDetailPending = null;
-        showEphemeralHint('خطا در دریافت جزئیات فایل.');
-        try {
-          syncHomeEmptyState();
-        } catch (_) {}
-        return false;
-      });
+    }
+
+    return ensureVinorHistoryThen(showLandInVinor).catch(function () {
+      landDetailPending = null;
+      return false;
+    });
   };
 
   bindReportFilters();

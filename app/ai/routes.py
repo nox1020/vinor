@@ -298,7 +298,7 @@ def agent_cancel():
 
 @ai_bp.post("/thread/switch", endpoint="switch_thread")
 def switch_thread():
-    from app.ai.chat_store import messages_for_ui, set_active_thread, threads_for_ui
+    from app.ai.chat_store import messages_for_ui, ensure_active_thread, threads_for_ui
     from app.lawyer.config import lawyer_enabled
     from app.lawyer.service import (
         ensure_lawyer_thread,
@@ -335,8 +335,7 @@ def switch_thread():
             "messages": messages_for_ui(key, tid, audience=AUDIENCE_PUBLIC),
             "threads": _threads(tid),
         })
-    if not set_active_thread(key, thread_id, audience=AUDIENCE_PUBLIC):
-        return jsonify({"ok": False, "error": "گفتگو یافت نشد."}), 404
+    thread_id = ensure_active_thread(key, audience=AUDIENCE_PUBLIC)
     return jsonify({
         "ok": True,
         "thread_id": thread_id,
