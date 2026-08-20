@@ -13,6 +13,8 @@ DEFAULT_CACHE_TTL_SEC = 1800
 DEFAULT_VINOR_LIMIT = 40
 _MAX_DIVAR_PROFILES = 20
 _MAX_DIVAR_PROFILES_PER_USER = 10
+DEFAULT_DIVAR_COMMISSION_PCT = 2.0
+_FA_TO_EN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
 
 def _env_bool(name: str, default: str = "1") -> bool:
@@ -227,38 +229,215 @@ def _find_plus_partner(phone: str):
     return rec, partners
 
 
-def partner_divar_profile_urls(phone: str) -> list[str]:
-    rec, _ = _find_plus_partner(phone)
-    if rec is None:
+def parse_commission_pct(raw: Any) -> tuple[float | None, str]:
+    """پارس درصد پورسانت. خالی → (None, '')."""
+    if raw is None:
+        return None, ""
+    text = str(raw).strip().replace("٪", "").replace("%", "")
+    if not text:
+        return None, ""
+    text = text.translate(_FA_TO_EN_DIGITS).replace("٫", ".").replace(",", ".")
+    try:
+        pct = float(text)
+    except (TypeError, ValueError):
+        return None, "درصد پورسانت نامعتبر است."
+    if pct < 0 or pct > 100:
+        return None, "درصد پورسانت باید بین ۰ تا ۱۰۰ باشد."
+    return pct, ""
+
+
+def format_commission_pct(pct: Any) -> str:
+    try:
+        n = float(pct or 0)
+    except (TypeError, ValueError):
+        return ""
+    if n <= 0:
+        return ""
+    rounded = round(n, 2)
+    if abs(rounded - int(rounded)) < 1e-9:
+        return str(int(rounded))
+    return f"{rounded:g}"
+
+
+def parse_divar_price_toman(text: Any) -> int:
+    """متن قیمت دیوار → تومان. «توافقی» و مقادیر نامعتبر صفر می‌شوند."""
+    raw = str(text or "").strip().translate(_FA_TO_EN_DIGITS)
+    if not raw or "توافق" in raw:
+        return 0
+    compact = raw.replace("٬", ",").replace("،", ",").replace("٫", ".")
+    m = re.search(
+        r"(\d+(?:[.,]\d+)?)\s*(میلیارد|billion|میلیون|million|هزار|thousand)",
+        compact,
+        re.I,
+    )
+    if m:
+        num_s = m.group(1).replace(",", ".")
+        try:
+            num = float(num_s)
+        except ValueError:
+            num = 0.0
+        unit = (m.group(2) or "").lower()
+        if unit in ("میلیارد", "billion"):
+            return max(0, int(round(num * 1_000_000_000)))
+        if unit in ("میلیون", "million"):
+            return max(0, int(round(num * 1_000_000)))
+        return max(0, int(round(num * 1_000)))
+    digits = re.sub(r"[^\d]", "", compact)
+    if not digits:
+        return 0
+    try:
+        return max(0, int(digits))
+    except ValueError:
+        return 0
+
+
+def _entries_from_partner_rec(rec: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(rec, dict):
         return []
-    return _normalize_url_list(rec.get("divar_profile_urls"))
-
-
-def add_partner_divar_profile_url(phone: str, url: str) -> tuple[bool, str, list[str]]:
-    """افزودن پروفایل دیوار برای یک همکار پلاس."""
-    from ..utils.storage import save_express_partners
-
-    normalized = normalize_divar_profile_url(url)
-    if not normalized:
-        return False, "آدرس پروفایل نامعتبر است.", partner_divar_profile_urls(phone)
-    rec, partners = _find_plus_partner(phone)
-    if rec is None:
-        return False, "فقط همکار پلاس می‌تواند پروفایل اضافه کند.", []
     urls = _normalize_url_list(rec.get("divar_profile_urls"))
-    if normalized.lower() in {u.lower() for u in urls}:
-        return False, "این پروفایل از قبل اضافه شده است.", urls
-    if len(urls) >= _MAX_DIVAR_PROFILES_PER_USER:
-        return False, f"حداکثر {_MAX_DIVAR_PROFILES_PER_USER} پروفایل مجاز است.", urls
-    urls.append(normalized)
-    rec["divar_profile_urls"] = urls
-    save_express_partners(partners)
+    pct_by_url: dict[str, float] = {}
+    extra: list[str] = []
+    raw_entries = rec.get("divar_profile_entries")
+    if isinstance(raw_entries, list):
+        for item in raw_entries:
+            if isinstance(item, dict):
+                url = normalize_divar_profile_url(str(item.get("url") or ""))
+                pct, _err = parse_commission_pct(item.get("commission_pct"))
+            else:
+                url = normalize_divar_profile_url(str(item or ""))
+                pct = None
+            if not url:
+                continue
+            extra.append(url)
+            if pct is not None:
+                pct_by_url[url.lower()] = pct
+    seen = {u.lower() for u in urls}
+    for url in extra:
+        key = url.lower()
+        if key in seen:
+            continue
+        if len(urls) >= _MAX_DIVAR_PROFILES_PER_USER:
+            break
+        seen.add(key)
+        urls.append(url)
+    out: list[dict[str, Any]] = []
+    for url in urls:
+        key = url.lower()
+        if key in pct_by_url:
+            pct = float(pct_by_url[key])
+        else:
+            pct = DEFAULT_DIVAR_COMMISSION_PCT
+        out.append(
+            {
+                "url": url,
+                "commission_pct": pct,
+                "commission_pct_display": format_commission_pct(pct) or "0",
+            }
+        )
+    return out
+
+
+def _write_partner_divar_entries(rec: dict[str, Any], entries: list[dict[str, Any]]) -> None:
+    rec["divar_profile_urls"] = [str(e.get("url") or "") for e in entries if e.get("url")]
+    rec["divar_profile_entries"] = [
+        {
+            "url": str(e.get("url") or ""),
+            "commission_pct": float(e.get("commission_pct") or 0.0),
+        }
+        for e in entries
+        if e.get("url")
+    ]
+
+
+def _clear_divar_ads_cache() -> None:
     try:
         from .divar_pro_ads import clear_divar_pro_ads_cache
 
         clear_divar_pro_ads_cache()
     except Exception:
         pass
-    return True, "پروفایل دیوار اضافه شد.", urls
+
+
+def partner_divar_profile_entries(phone: str) -> list[dict[str, Any]]:
+    rec, _ = _find_plus_partner(phone)
+    if rec is None:
+        return []
+    return _entries_from_partner_rec(rec)
+
+
+def partner_divar_profile_urls(phone: str) -> list[str]:
+    return [str(e.get("url") or "") for e in partner_divar_profile_entries(phone) if e.get("url")]
+
+
+def add_partner_divar_profile_url(
+    phone: str,
+    url: str,
+    commission_pct: Any = None,
+) -> tuple[bool, str, list[str]]:
+    """افزودن پروفایل دیوار برای یک همکار پلاس."""
+    from ..utils.storage import save_express_partners
+
+    normalized = normalize_divar_profile_url(url)
+    if not normalized:
+        return False, "آدرس پروفایل نامعتبر است.", partner_divar_profile_urls(phone)
+    pct, err = parse_commission_pct(commission_pct)
+    if err:
+        return False, err, partner_divar_profile_urls(phone)
+    if pct is None:
+        pct = DEFAULT_DIVAR_COMMISSION_PCT
+    rec, partners = _find_plus_partner(phone)
+    if rec is None:
+        return False, "فقط همکار پلاس می‌تواند پروفایل اضافه کند.", []
+    entries = _entries_from_partner_rec(rec)
+    if normalized.lower() in {str(e.get("url") or "").lower() for e in entries}:
+        return False, "این پروفایل از قبل اضافه شده است.", [str(e.get("url") or "") for e in entries]
+    if len(entries) >= _MAX_DIVAR_PROFILES_PER_USER:
+        return False, f"حداکثر {_MAX_DIVAR_PROFILES_PER_USER} پروفایل مجاز است.", [
+            str(e.get("url") or "") for e in entries
+        ]
+    entries.append(
+        {
+            "url": normalized,
+            "commission_pct": pct,
+            "commission_pct_display": format_commission_pct(pct),
+        }
+    )
+    _write_partner_divar_entries(rec, entries)
+    save_express_partners(partners)
+    _clear_divar_ads_cache()
+    return True, "پروفایل دیوار اضافه شد.", [str(e.get("url") or "") for e in entries]
+
+
+def set_partner_divar_profile_commission(
+    phone: str,
+    url: str,
+    commission_pct: Any,
+) -> tuple[bool, str, list[dict[str, Any]]]:
+    """به‌روزرسانی درصد پورسانت یک پروفایل دیوار."""
+    from ..utils.storage import save_express_partners
+
+    target = normalize_divar_profile_url(url) or str(url or "").strip()
+    pct, err = parse_commission_pct(commission_pct)
+    if err:
+        return False, err, partner_divar_profile_entries(phone)
+    if pct is None:
+        return False, "درصد پورسانت را وارد کنید.", partner_divar_profile_entries(phone)
+    rec, partners = _find_plus_partner(phone)
+    if rec is None:
+        return False, "فقط همکار پلاس می‌تواند پورسانت را تغییر دهد.", []
+    entries = _entries_from_partner_rec(rec)
+    found = False
+    for item in entries:
+        if str(item.get("url") or "").lower() == target.lower():
+            item["commission_pct"] = pct
+            item["commission_pct_display"] = format_commission_pct(pct)
+            found = True
+            break
+    if not found:
+        return False, "پروفایل پیدا نشد.", entries
+    _write_partner_divar_entries(rec, entries)
+    save_express_partners(partners)
+    return True, "درصد پورسانت ذخیره شد.", entries
 
 
 def remove_partner_divar_profile_url(phone: str, url: str) -> tuple[bool, str, list[str]]:
@@ -269,19 +448,49 @@ def remove_partner_divar_profile_url(phone: str, url: str) -> tuple[bool, str, l
     rec, partners = _find_plus_partner(phone)
     if rec is None:
         return False, "فقط همکار پلاس می‌تواند پروفایل حذف کند.", []
-    urls = _normalize_url_list(rec.get("divar_profile_urls"))
-    filtered = [u for u in urls if u.lower() != target.lower()]
-    if len(filtered) == len(urls):
-        return False, "پروفایل پیدا نشد.", urls
-    rec["divar_profile_urls"] = filtered
+    entries = _entries_from_partner_rec(rec)
+    filtered = [e for e in entries if str(e.get("url") or "").lower() != target.lower()]
+    if len(filtered) == len(entries):
+        return False, "پروفایل پیدا نشد.", [str(e.get("url") or "") for e in entries]
+    _write_partner_divar_entries(rec, filtered)
     save_express_partners(partners)
-    try:
-        from .divar_pro_ads import clear_divar_pro_ads_cache
+    _clear_divar_ads_cache()
+    return True, "پروفایل حذف شد.", [str(e.get("url") or "") for e in filtered]
 
-        clear_divar_pro_ads_cache()
-    except Exception:
-        pass
-    return True, "پروفایل حذف شد.", filtered
+
+def divar_commission_pct_by_profile_url() -> dict[str, float]:
+    """url.lower() → درصد پورسانت پروفایل‌های همکاران پلاس."""
+    out: dict[str, float] = {}
+    for e in all_plus_divar_profile_entries():
+        url = normalize_divar_profile_url(str(e.get("url") or "")).lower()
+        if not url or url in out:
+            continue
+        try:
+            out[url] = float(e.get("commission_pct") or 0)
+        except (TypeError, ValueError):
+            out[url] = 0.0
+    return out
+
+
+def attach_divar_ad_commission(
+    ad: dict[str, Any],
+    pct_by_url: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """محاسبه مبلغ پورسانت آگهی دیوار از درصد پروفایل و متن قیمت."""
+    if not isinstance(ad, dict):
+        return ad
+    mapping = pct_by_url if pct_by_url is not None else divar_commission_pct_by_profile_url()
+    profile = str(ad.get("profile_url") or "").strip()
+    key = normalize_divar_profile_url(profile).lower() if profile else ""
+    pct = float(mapping.get(key) or 0) if key else 0.0
+    if pct <= 0 and not key and len(mapping) == 1:
+        pct = float(next(iter(mapping.values())) or 0)
+    price = parse_divar_price_toman(ad.get("price"))
+    amount = int(round(price * (pct / 100.0))) if price and pct else 0
+    ad["commission_pct"] = pct
+    ad["commission_amount"] = max(0, amount)
+    ad["price_toman"] = price
+    return ad
 
 
 def _plus_partner_display_name(rec: dict[str, Any]) -> str:
@@ -294,14 +503,14 @@ def _plus_partner_display_name(rec: dict[str, Any]) -> str:
     ).strip()
 
 
-def all_plus_divar_profile_entries(*, max_count: int | None = None) -> list[dict[str, str]]:
-    """پروفایل‌های دیوار همهٔ همکاران پلاس با نام/شماره."""
+def all_plus_divar_profile_entries(*, max_count: int | None = None) -> list[dict[str, Any]]:
+    """پروفایل‌های دیوار همهٔ همکاران پلاس با نام/شماره و درصد پورسانت."""
     from .partner_roles import partner_is_special
     from .partner_session_sync import canonical_partner_phone
     from ..utils.storage import load_express_partners
 
     cap = _MAX_DIVAR_PROFILES if max_count is None else max(0, int(max_count))
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     seen: set[str] = set()
     try:
         partners = load_express_partners() or []
@@ -316,12 +525,20 @@ def all_plus_divar_profile_entries(*, max_count: int | None = None) -> list[dict
         except Exception:
             phone = str(p.get("phone") or "").strip()
         name = _plus_partner_display_name(p) or phone
-        for url in _normalize_url_list(p.get("divar_profile_urls")):
+        for item in _entries_from_partner_rec(p):
+            url = str(item.get("url") or "").strip()
             key = url.lower()
-            if key in seen:
+            if not url or key in seen:
                 continue
             seen.add(key)
-            out.append({"url": url, "phone": phone, "name": name})
+            out.append(
+                {
+                    "url": url,
+                    "phone": phone,
+                    "name": name,
+                    "commission_pct": float(item.get("commission_pct") or 0),
+                }
+            )
             if cap and len(out) >= cap:
                 return out
     return out

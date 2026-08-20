@@ -67,7 +67,7 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Vazirmatn', 'Tahoma', 'sans-serif']
+            sans: ['Vazirmatn', 'Vazirmatn Fallback', 'Tahoma', 'sans-serif']
           }
         }
       }
@@ -79,10 +79,11 @@
   <link rel="preload" as="font" href="{{ url_for('static', filename='fonts/vazirmatn-bold.woff2') }}" type="font/woff2" crossorigin>
   <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-solid-900.woff2') }}" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}" media="print" onload="this.media='all'">
-  <noscript>
-    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-  </noscript>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <style id="vinor-fa-display">
+    @font-face{font-family:"Font Awesome 6 Free";font-style:normal;font-weight:900;font-display:optional;src:url({{ url_for('static', filename='vendor/fontawesome/webfonts/fa-solid-900.woff2') }}) format("woff2")}
+    .fas,.fa-solid{min-width:1em;font-synthesis:none}
+  </style>
   <link rel="stylesheet" href="{{ 'express-partner/express-partner-auth.css'|static_version }}">
   <link rel="preload" as="script" href="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}">
 
@@ -90,7 +91,7 @@
     html { color-scheme: light; }
     html.dark { color-scheme: dark; }
     html,body{overscroll-behavior-y:contain;overscroll-behavior-x:auto}
-    html,body{font-family:'Vazirmatn',Tahoma,sans-serif}
+    html,body{font-family:Vazirmatn,'Vazirmatn Fallback',Tahoma,sans-serif;font-synthesis:none}
     body{scroll-behavior:smooth}
     *, *::before, *::after{
       -webkit-user-select:none;
@@ -569,6 +570,9 @@
     (function(){
       function registerPartnerSw() {
         if (!('serviceWorker' in navigator)) return;
+        try {
+          if ((navigator.userAgent || '').indexOf('VinorApp/') !== -1) return;
+        } catch (_) {}
         navigator.serviceWorker.register('{{ url_for("express_partner.service_worker") }}', {
           scope: '/express/partner/',
           updateViaCache: 'none'

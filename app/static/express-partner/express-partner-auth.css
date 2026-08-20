@@ -8,7 +8,8 @@ html, body {
   color-scheme: dark;
 }
 body {
-  font-family: 'Vazirmatn', Tahoma, sans-serif;
+  font-family: Vazirmatn, 'Vazirmatn Fallback', Tahoma, sans-serif;
+  font-synthesis: none;
   overscroll-behavior-y: contain;
 }
 input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),

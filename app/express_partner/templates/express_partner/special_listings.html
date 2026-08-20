@@ -45,13 +45,13 @@
   .sp-divar__sub { margin: .3rem 0 0; font-size: .7rem; line-height: 1.45; color: #8b919a; }
   .sp-divar ul { margin: 0; padding: 0; list-style: none; }
   .sp-divar__row {
-    display: flex; align-items: center; gap: .5rem;
-    margin-top: .55rem; padding: .5rem .6rem;
+    display: flex; flex-wrap: wrap; align-items: center; gap: .45rem;
+    margin-top: .55rem; padding: .5rem .6rem .55rem;
     border: 1px solid rgba(255,255,255,.08); border-radius: .55rem;
     background: rgba(255,255,255,.03);
   }
   .sp-divar__url {
-    flex: 1; min-width: 0; font-size: .7rem; color: #93c5fd;
+    flex: 1 1 10rem; min-width: 0; font-size: .7rem; color: #93c5fd;
     direction: ltr; text-align: left; text-decoration: none;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
@@ -59,13 +59,44 @@
     flex-shrink: 0; border: 0; background: none; color: #fca5a5;
     font-size: .7rem; font-weight: 700; font-family: inherit; cursor: pointer;
   }
-  .sp-divar__add { display: flex; gap: .4rem; margin-top: .7rem; }
-  .sp-divar__add input {
-    flex: 1; min-width: 0; min-height: 2.2rem; padding: 0 .65rem;
+  .sp-divar__pct {
+    display: flex; align-items: center; gap: .28rem; flex: 1 1 auto;
+    min-width: 0;
+  }
+  .sp-divar__pct label {
+    flex-shrink: 0; font-size: .65rem; color: #9ca3af; white-space: nowrap;
+  }
+  .sp-divar__pct input {
+    width: 3.6rem; min-height: 1.85rem; padding: 0 .4rem;
+    border-radius: .4rem; border: 1px solid rgba(255,255,255,.12);
+    background: #111827; color: #e5e7eb; font-size: .72rem; font-family: inherit;
+  }
+  .sp-divar__pct span { font-size: .65rem; color: #9ca3af; }
+  .sp-divar__pct button {
+    flex-shrink: 0; min-height: 1.85rem; padding: 0 .55rem; border: 0;
+    border-radius: .4rem; background: #1f2937; color: #d1d5db;
+    font-size: .68rem; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .sp-divar__add { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .7rem; }
+  .sp-divar__add input[name="profile_url"] {
+    flex: 1 1 100%; min-width: 0; min-height: 2.2rem; padding: 0 .65rem;
     border-radius: .5rem; border: 1px solid rgba(255,255,255,.12);
     background: #111827; color: #e5e7eb; font-size: .75rem; font-family: inherit;
   }
-  .sp-divar__add button {
+  .sp-divar__add-pct {
+    display: flex; align-items: center; gap: .3rem; flex: 1 1 auto;
+    min-width: 0;
+  }
+  .sp-divar__add-pct label {
+    flex-shrink: 0; font-size: .7rem; color: #9ca3af; white-space: nowrap;
+  }
+  .sp-divar__add-pct input {
+    width: 4rem; min-height: 2.2rem; padding: 0 .5rem;
+    border-radius: .5rem; border: 1px solid rgba(255,255,255,.12);
+    background: #111827; color: #e5e7eb; font-size: .75rem; font-family: inherit;
+  }
+  .sp-divar__add-pct span { font-size: .7rem; color: #9ca3af; }
+  .sp-divar__add button[type="submit"] {
     flex-shrink: 0; min-height: 2.2rem; padding: 0 .8rem; border: 0;
     border-radius: .5rem; background: #059669; color: #fff;
     font-size: .75rem; font-weight: 700; font-family: inherit; cursor: pointer;
@@ -88,17 +119,27 @@
 
     <section class="sp-divar" aria-label="پروفایل دیوار">
       <h2 class="sp-divar__title">آدرس‌های پروفایل دیوار (Pro)</h2>
-      <p class="sp-divar__sub">چند پروفایل اضافه کنید؛ آگهی‌های همه در نوار خانه ادغام می‌شوند.</p>
-      {% set _urls = divar_profile_urls|default([]) %}
-      {% if _urls %}
+      <p class="sp-divar__sub">چند پروفایل اضافه کنید؛ آگهی‌های همه در نوار خانه ادغام می‌شوند. درصد پورسانت هر پروفایل روی کارت‌های خانه نمایش داده می‌شود.</p>
+      {% set _entries = divar_profile_entries|default([]) %}
+      {% if _entries %}
       <ul>
-        {% for u in _urls %}
+        {% for e in _entries %}
         <li class="sp-divar__row">
-          <a class="sp-divar__url" href="{{ u }}" target="_blank" rel="noopener noreferrer" dir="ltr">{{ u }}</a>
+          <a class="sp-divar__url" href="{{ e.url }}" target="_blank" rel="noopener noreferrer" dir="ltr">{{ e.url }}</a>
+          <form class="sp-divar__pct" method="post" action="{{ url_for('express_partner.special_listings_divar_profile') }}" data-vinor-direct-action>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="set_commission">
+            <input type="hidden" name="profile_url" value="{{ e.url }}">
+            <label for="divarPct{{ loop.index }}">پورسانت</label>
+            <input id="divarPct{{ loop.index }}" name="commission_pct" type="number" inputmode="decimal" step="0.1" min="0" max="100" dir="ltr" required
+                   value="{{ e.commission_pct_display }}" placeholder="۲">
+            <span>٪</span>
+            <button type="submit">ثبت</button>
+          </form>
           <form method="post" action="{{ url_for('express_partner.special_listings_divar_profile') }}" data-vinor-direct-action>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="remove">
-            <input type="hidden" name="profile_url" value="{{ u }}">
+            <input type="hidden" name="profile_url" value="{{ e.url }}">
             <button type="submit" class="sp-divar__del">حذف</button>
           </form>
         </li>
@@ -109,6 +150,11 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="add">
         <input name="profile_url" dir="ltr" placeholder="https://divar.ir/pro/…" autocomplete="off">
+        <div class="sp-divar__add-pct">
+          <label for="divarAddPct">پورسانت</label>
+          <input id="divarAddPct" name="commission_pct" type="number" inputmode="decimal" step="0.1" min="0" max="100" dir="ltr" value="2" placeholder="۲">
+          <span>٪</span>
+        </div>
         <button type="submit">افزودن</button>
       </form>
     </section>

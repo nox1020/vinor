@@ -9,7 +9,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Vazirmatn', Tahoma, sans-serif;
+    font-family: Vazirmatn, 'Vazirmatn Fallback', Tahoma, sans-serif;
+    font-synthesis: none;
     background: #030712;
     transition: opacity 0.18s ease, visibility 0.18s ease;
   }
@@ -151,15 +152,26 @@
 
   function whenFontsReady(cb) {
     var doneFonts = false;
+    var timer;
     function go() {
       if (doneFonts) return;
       doneFonts = true;
+      if (timer) window.clearTimeout(timer);
       cb();
     }
+    timer = window.setTimeout(go, 1500);
     try {
-      if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
-        document.fonts.ready.then(go, go);
-        window.setTimeout(go, 400);
+      if (document.fonts && typeof document.fonts.load === 'function') {
+        Promise.all([
+          document.fonts.load('400 1em Vazirmatn'),
+          document.fonts.load('500 1em Vazirmatn'),
+          document.fonts.load('700 1em Vazirmatn'),
+          document.fonts.load('800 1em Vazirmatn')
+        ]).then(function () {
+          if (document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+            return document.fonts.ready;
+          }
+        }).then(go, go);
         return;
       }
     } catch (_) {}
@@ -170,7 +182,11 @@
     var wait = Math.max(0, MIN_MS - (Date.now() - t0));
     window.setTimeout(function () {
       whenFontsReady(function () {
-        if (pageReady()) hidePartnerSkeleton();
+        window.requestAnimationFrame(function () {
+          window.requestAnimationFrame(function () {
+            if (pageReady()) hidePartnerSkeleton();
+          });
+        });
       });
     }, wait);
     window.setTimeout(hidePartnerSkeleton, MAX_MS);

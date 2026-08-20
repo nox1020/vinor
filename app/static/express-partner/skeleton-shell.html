@@ -6,11 +6,15 @@
   <meta name="theme-color" content="#030712" />
   <meta name="color-scheme" content="dark light" />
   <title>وینور اکسپرس</title>
+  <link rel="preload" as="font" href="/static/fonts/vazirmatn-regular.woff2" type="font/woff2" crossorigin>
+  <link rel="preload" as="font" href="/static/fonts/vazirmatn-bold.woff2" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/fonts/vazirmatn.css">
   <style>
     * { box-sizing: border-box; margin: 0; }
     body {
       min-height: 100dvh;
-      font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+      font-family: Vazirmatn, 'Vazirmatn Fallback', Tahoma, sans-serif;
+      font-synthesis: none;
       background: #030712;
       color: #e2e8f0;
       display: flex;

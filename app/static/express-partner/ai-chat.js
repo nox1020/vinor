@@ -43,6 +43,10 @@
   var homeChatLayerOpen = false;
   var forceShowOpeningInHome = false;
   var lastVinorThreadId = '';
+  var homeModeWasEmpty = false;
+  var homeModeSwitching = false;
+  var homeModeSwitchEl = document.getElementById('vinorHomeModeSwitch');
+  var homeModeUnbind = null;
   try {
     var _initTid = (threadInput && threadInput.value) || '';
     if (_initTid && _initTid !== (form.getAttribute('data-postchi-thread-id') || '__postchi__') &&
@@ -862,9 +866,14 @@
       pollPaused = true;
     } else {
       resumePoll();
-      if (id && !isLawyerThreadId(id)) lastVinorThreadId = String(id);
+      if (id && !isLawyerThreadId(id) && id !== postchiThreadId) lastVinorThreadId = String(id);
+      try {
+        var swSave = homeModeSwitchEl || document.getElementById('vinorHomeModeSwitch');
+        if (swSave && lastVinorThreadId) swSave.setAttribute('data-vinor-thread-id', lastVinorThreadId);
+      } catch (_) {}
     }
     if (isLawyerMode()) hideChipBar();
+    syncHomeModeSwitch();
   }
 
   function pushHomeChatHistory() {
@@ -1068,7 +1077,7 @@
       form.classList.remove('ai-composer--readonly');
       stopTypeHintPlaceholder({
         dismiss: false,
-        placeholder: 'پیام به پشتیبانی وینور…',
+        placeholder: 'پیام به پستچی وینور…',
       });
       hideChipBar();
       syncComposerReady();
@@ -1101,6 +1110,224 @@
     }
   }
 
+  function canUsePostchi() {
+    return !!postchiMessagesUrl;
+  }
+
+  function syncHomeModeSwitch() {
+    var postchi = isPostchiMode();
+    var sw = homeModeSwitchEl || document.getElementById('vinorHomeModeSwitch');
+    homeModeSwitchEl = sw;
+    if (sw) {
+      sw.setAttribute('data-mode', postchi ? 'postchi' : 'vinor');
+      var buttons = sw.querySelectorAll('[data-home-mode]');
+      for (var i = 0; i < buttons.length; i++) {
+        var b = buttons[i];
+        var on = (b.getAttribute('data-home-mode') === 'postchi') === postchi;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      }
+    }
+    if (historyList) {
+      var items = historyList.querySelectorAll('.ai-thread-item');
+      for (var j = 0; j < items.length; j++) {
+        var item = items[j];
+        var kind = item.getAttribute('data-thread-kind') || 'vinor';
+        var onItem = postchi ? kind === 'postchi' : kind === 'vinor';
+        item.classList.toggle('is-active', onItem);
+        item.setAttribute('data-active', onItem ? '1' : '0');
+      }
+    }
+    try {
+      document.documentElement.classList.toggle('vinor-home-mode-postchi', postchi);
+    } catch (_) {}
+    var tabBadge = document.getElementById('vinorHomePostchiUnread');
+    if (tabBadge && postchi) {
+      tabBadge.hidden = true;
+    }
+  }
+
+  function vinorThreadIdForReturn() {
+    var tid = lastVinorThreadId || '';
+    if (tid && tid !== postchiThreadId && tid !== lawyerThreadId) return tid;
+    try {
+      var item =
+        historyList &&
+        historyList.querySelector('.ai-thread-item[data-thread-kind="vinor"]');
+      tid = item ? item.getAttribute('data-thread-id') || '' : '';
+    } catch (_) {
+      tid = '';
+    }
+    if (tid && tid !== postchiThreadId && tid !== lawyerThreadId) return tid;
+    try {
+      var sw = homeModeSwitchEl || document.getElementById('vinorHomeModeSwitch');
+      tid = sw ? sw.getAttribute('data-vinor-thread-id') || '' : '';
+    } catch (_) {
+      tid = '';
+    }
+    if (tid && tid !== postchiThreadId && tid !== lawyerThreadId) return tid;
+    return '';
+  }
+
+  function switchHomeMode(mode) {
+    var wantPostchi = mode === 'postchi';
+    if (homeModeSwitching) return Promise.resolve();
+    if (wantPostchi) {
+      if (isPostchiMode()) {
+        syncHomeModeSwitch();
+        return Promise.resolve();
+      }
+      if (!canUsePostchi()) {
+        try {
+          if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
+            window.vinorProfileDrawer.open();
+          }
+          if (typeof window.vinorDrawerOpenLogin === 'function') {
+            window.vinorDrawerOpenLogin();
+          }
+        } catch (_) {}
+        showEphemeralHint('برای پیام به پستچی وینور وارد شوید.');
+        return Promise.resolve();
+      }
+      homeModeWasEmpty = isHomeChatEmpty();
+      homeModeSwitching = true;
+      return Promise.resolve(switchThread(postchiThreadId)).finally(function () {
+        homeModeSwitching = false;
+        syncHomeModeSwitch();
+      });
+    }
+    if (!isPostchiMode() && !isLawyerMode()) {
+      syncHomeModeSwitch();
+      return Promise.resolve();
+    }
+    if (homeModeWasEmpty) {
+      homeModeWasEmpty = false;
+      returnToHomeEmptyEntry();
+      syncHomeModeSwitch();
+      return Promise.resolve();
+    }
+    var tid = vinorThreadIdForReturn();
+    if (!tid) {
+      homeModeWasEmpty = false;
+      returnToHomeEmptyEntry();
+      syncHomeModeSwitch();
+      return Promise.resolve();
+    }
+    homeModeSwitching = true;
+    return Promise.resolve(switchThread(tid)).finally(function () {
+      homeModeSwitching = false;
+      syncHomeModeSwitch();
+    });
+  }
+
+  function bindHomeModeUi() {
+    if (homeModeUnbind) return;
+    if (!homeInline) return;
+    var sw = homeModeSwitchEl || document.getElementById('vinorHomeModeSwitch');
+    homeModeSwitchEl = sw;
+    if (!sw) return;
+    var surface = document.getElementById('vnHomeScroll') || document.getElementById('aiHomeInline');
+
+    function onSwitchClick(e) {
+      var btn = e.target && e.target.closest && e.target.closest('[data-home-mode]');
+      if (!btn || !sw.contains(btn)) return;
+      e.preventDefault();
+      switchHomeMode(btn.getAttribute('data-home-mode') || 'vinor');
+    }
+
+    var swipe = null;
+
+    function swipeIgnore(el) {
+      if (!el || !el.closest) return true;
+      if (sw.contains(el)) return false;
+      if (
+        el.closest(
+          '#homeDivarAdsCarousel, [data-vn-home-divar], [data-no-home-mode-swipe], a[href], input, textarea, select, .ai-composer, .vn-home-divar'
+        )
+      ) {
+        return true;
+      }
+      return false;
+    }
+
+    function onTouchStart(e) {
+      if (!e.touches || e.touches.length !== 1) {
+        swipe = null;
+        return;
+      }
+      var onSwitch = sw.contains(e.target);
+      var page = document.getElementById('homeDashboardPage');
+      var homeEmpty = !!(page && page.classList.contains('ai-home-is-empty'));
+      if (homeEmpty && !onSwitch) {
+        swipe = null;
+        return;
+      }
+      if (!onSwitch && swipeIgnore(e.target)) {
+        swipe = null;
+        return;
+      }
+      swipe = {
+        x0: e.touches[0].clientX,
+        y0: e.touches[0].clientY,
+        onSwitch: onSwitch,
+        axis: '',
+        active: true,
+      };
+    }
+
+    function onTouchMove(e) {
+      if (!swipe || !swipe.active || !e.touches || e.touches.length !== 1) return;
+      var dx = e.touches[0].clientX - swipe.x0;
+      var dy = e.touches[0].clientY - swipe.y0;
+      if (!swipe.axis) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        swipe.axis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+      }
+      if (swipe.axis === 'y') swipe.active = false;
+    }
+
+    function onTouchEnd(e) {
+      if (!swipe || !swipe.active || !e.changedTouches || !e.changedTouches.length) {
+        swipe = null;
+        return;
+      }
+      var t = e.changedTouches[0];
+      var dx = t.clientX - swipe.x0;
+      var dy = t.clientY - swipe.y0;
+      var fromSwitch = swipe.onSwitch;
+      swipe = null;
+      if (Math.abs(dx) < (fromSwitch ? 36 : 56)) return;
+      if (Math.abs(dx) < Math.abs(dy) * 1.25) return;
+      if (dx < 0) switchHomeMode('postchi');
+      else switchHomeMode('vinor');
+    }
+
+    function onTouchCancel() {
+      swipe = null;
+    }
+
+    sw.addEventListener('click', onSwitchClick);
+    var roots = [sw];
+    if (surface && surface !== sw) roots.push(surface);
+    roots.forEach(function (root) {
+      root.addEventListener('touchstart', onTouchStart, { passive: true });
+      root.addEventListener('touchmove', onTouchMove, { passive: true });
+      root.addEventListener('touchend', onTouchEnd, { passive: true });
+      root.addEventListener('touchcancel', onTouchCancel, { passive: true });
+    });
+
+    homeModeUnbind = function () {
+      sw.removeEventListener('click', onSwitchClick);
+      roots.forEach(function (root) {
+        root.removeEventListener('touchstart', onTouchStart);
+        root.removeEventListener('touchmove', onTouchMove);
+        root.removeEventListener('touchend', onTouchEnd);
+        root.removeEventListener('touchcancel', onTouchCancel);
+      });
+      homeModeUnbind = null;
+    };
+  }
+
   function setBusy(on) {
     if (isPostchiMode()) {
       if (on) {
@@ -1130,12 +1357,23 @@
   }
 
   function syncMenuUnreadBadge(unread) {
-    if (!menuUnreadDot) return;
     var n = Number(unread || 0);
-    if (n > 0) {
-      menuUnreadDot.classList.remove('hidden');
-    } else {
-      menuUnreadDot.classList.add('hidden');
+    if (menuUnreadDot) {
+      if (n > 0 && !isPostchiMode()) {
+        menuUnreadDot.classList.remove('hidden');
+      } else {
+        menuUnreadDot.classList.add('hidden');
+      }
+    }
+    var tabBadge = document.getElementById('vinorHomePostchiUnread');
+    if (tabBadge) {
+      if (n > 0 && !isPostchiMode()) {
+        tabBadge.hidden = false;
+        tabBadge.textContent = n > 99 ? '99+' : String(n);
+      } else {
+        tabBadge.hidden = true;
+        tabBadge.textContent = '';
+      }
     }
   }
 
@@ -2411,8 +2649,9 @@
 
   function isOpeningAssistantMsg(msg) {
     if (!msg || msg.role !== 'assistant') return false;
-    /* خوش‌آمد وکیل = پیام واقعی گفتگو، نه بدو ورود فروش */
-    if (String(msg.source || '').toLowerCase() === 'lawyer') return false;
+    /* خوش‌آمد وکیل/پستچی = پیام واقعی گفتگو، نه بدو ورود فروش */
+    var src = String(msg.source || '').toLowerCase();
+    if (src === 'lawyer' || src === 'postchi') return false;
     if (String(msg.source || '').toLowerCase() === 'welcome') return true;
     if (msg.meta && msg.meta.welcome) return true;
     return false;
@@ -2626,17 +2865,25 @@
   function renderThreadList(threads) {
     if (!historyList) return;
     var key = threadsCacheKey(threads);
-    if (key && key === lastThreadsKey) return;
+    if (key && key === lastThreadsKey) {
+      updatePostchiUnreadFromThreads(threads);
+      syncHomeModeSwitch();
+      return;
+    }
     lastThreadsKey = key;
     updatePostchiUnreadFromThreads(threads);
     historyList.innerHTML = '';
     var inDrawer = !!(historyList.closest && historyList.closest('#epProfileDrawer'));
-    /* فقط یک گفتگوی وینور — پشتیبانی/پستچی داخل همین چت ادغام شده است */
     var vinorTh = null;
+    var postchiTh = null;
     (threads || []).forEach(function (th) {
       var isPostchi = th.kind === 'postchi' || th.id === postchiThreadId;
       var isLawyer = th.kind === 'lawyer' || th.id === lawyerThreadId;
-      if (isLawyer || isPostchi) return;
+      if (isLawyer) return;
+      if (isPostchi) {
+        postchiTh = th;
+        return;
+      }
       if (!vinorTh || th.is_active) vinorTh = th;
     });
     var display = [];
@@ -2645,14 +2892,40 @@
         id: lastVinorThreadId || activeThreadId() || '',
         title: 'وینور',
         kind: 'vinor',
-        is_active: true,
+        is_active: !isPostchiMode(),
         message_count: 0,
         preview: '',
         updated_at: '',
+        unread: 0,
       };
     }
-    vinorTh = Object.assign({}, vinorTh, { title: 'وینور', kind: 'vinor' });
+    vinorTh = Object.assign({}, vinorTh, {
+      title: 'وینور',
+      kind: 'vinor',
+      is_active: !isPostchiMode() && !isLawyerMode(),
+    });
     display.push(vinorTh);
+    if (canUsePostchi()) {
+      if (postchiTh) {
+        postchiTh = Object.assign({}, postchiTh, {
+          title: 'پستچی',
+          kind: 'postchi',
+          is_active: isPostchiMode(),
+        });
+      } else {
+        postchiTh = {
+          id: postchiThreadId,
+          title: 'پستچی',
+          kind: 'postchi',
+          is_active: isPostchiMode(),
+          unread: 0,
+          preview: '',
+          updated_at: '',
+          message_count: 0,
+        };
+      }
+      display.push(postchiTh);
+    }
     display.forEach(function (th) {
       var isPostchi = th.kind === 'postchi' || th.id === postchiThreadId;
       var btnEl = document.createElement('button');
@@ -2665,15 +2938,13 @@
         threadItemClasses(th);
       btnEl.setAttribute('data-thread-id', th.id);
       btnEl.setAttribute('data-active', th.is_active ? '1' : '0');
-      if (isPostchi) btnEl.setAttribute('data-thread-kind', 'postchi');
-      else btnEl.setAttribute('data-thread-kind', 'vinor');
+      btnEl.setAttribute('data-thread-kind', isPostchi ? 'postchi' : 'vinor');
       var unreadBadge =
         th.unread > 0
           ? '<span class="ai-thread-unread">' +
             (th.unread > 99 ? '99+' : String(th.unread)) +
             '</span>'
           : '';
-      /* حذف روی تک‌ترد وینور معنا ندارد — گفتگوی جدید همان ریست است */
       var deleteBtn = '';
       var extras = '';
       if (!inDrawer) {
@@ -2701,16 +2972,16 @@
         '<circle class="ai-thread-smart-icon__core" cx="8" cy="8" r="2.55"></circle>' +
         '<path class="ai-thread-smart-icon__ray" d="M8 1.15v1.9M8 12.95v1.9M1.15 8h1.9M12.95 8h1.9M3.05 3.05l1.35 1.35M11.6 11.6l1.35 1.35M3.05 12.95l1.35-1.35M11.6 4.4l1.35-1.35"></path>' +
         '</svg></span>';
+      var postchiIcon =
+        '<i class="fas fa-envelope text-[10px] text-sky-400 shrink-0" aria-hidden="true"></i>';
       btnEl.innerHTML =
         '<div class="ai-thread-item__row' +
         (inDrawer ? '' : ' flex items-center justify-between gap-2') +
         '">' +
         '<span class="ai-thread-item__title">' +
-        (isPostchi
-          ? '<i class="fas fa-envelope text-[10px] text-emerald-400 shrink-0" aria-hidden="true"></i>'
-          : vinorIcon) +
+        (isPostchi ? postchiIcon : vinorIcon) +
         '<span>' +
-        escapeHtml(isPostchi ? th.title || 'پشتیبانی' : 'وینور') +
+        escapeHtml(isPostchi ? 'پستچی' : 'وینور') +
         '</span></span>' +
         '<span class="ai-thread-item__actions' +
         (inDrawer ? '' : ' flex shrink-0 items-center gap-1') +
@@ -2721,6 +2992,7 @@
         extras;
       historyList.appendChild(btnEl);
     });
+    syncHomeModeSwitch();
   }
 
   function openSideMenu() {
@@ -2821,6 +3093,25 @@
 
   async function switchThread(threadId) {
     if (!switchUrl || !threadId) return;
+    if (String(threadId) === String(activeThreadId())) {
+      var listEmpty = !(list && list.querySelector('.ai-msg-wrap'));
+      var needOpenChat =
+        homeInline &&
+        (!homeChatLayerOpen || (typeof isHomeChatEmpty === 'function' && isHomeChatEmpty()) || listEmpty);
+      if (!needOpenChat) {
+        if (homeInline) {
+          homeChatLayerOpen = true;
+          ensureChatVisible();
+          try {
+            syncHomeEmptyState();
+          } catch (_) {}
+        }
+        closeSideMenu();
+        syncHomeModeSwitch();
+        return;
+      }
+      /* همان ترد فعال روی بدو ورود خانه است — ادامه بده تا پیام‌ها بیاید و چت باز شود */
+    }
     if (switchAbort) switchAbort.abort();
     switchAbort = new AbortController();
     setBusy(true);
@@ -2866,8 +3157,8 @@
       if (enterVinorChat || enterSpecialChat) {
         homeChatLayerOpen = true;
       }
-      /* ورود از منو به چت وینور: حتی با فقط خوش‌آمد، وارد چت شو */
-      forceShowOpeningInHome = enterVinorChat;
+      /* ورود از منو به چت وینور/پستچی: حتی با فقط خوش‌آمد، وارد چت شو */
+      forceShowOpeningInHome = enterVinorChat || enterSpecialChat;
       try {
         renderMessages(data.messages);
       } finally {
@@ -2875,8 +3166,8 @@
       }
       if (data.threads) applyThreads(data.threads);
       if (data.mode === 'postchi' || data.thread_id === postchiThreadId) {
-        postchiOpened = true;
         pollPaused = true;
+        markPostchiOpened();
       } else {
         postchiOpened = false;
         resumePoll();
@@ -3330,14 +3621,19 @@
     } catch (_) {}
     cancelTypewriter();
     scrollLatestGen += 1;
+    try {
+      if (typeof homeModeUnbind === 'function') homeModeUnbind();
+    } catch (_) {}
     window.__vinorAiChatTeardown = null;
     window.__vinorAiChatSetSheetOpen = null;
     window.__vinorAiChatSwitchThread = null;
+    window.__vinorAiChatSwitchHomeMode = null;
     window.__vinorAiConsumeHomeChatBack = null;
   }
 
   window.__vinorAiChatTeardown = teardownAiChat;
   window.__vinorAiChatSwitchThread = switchThread;
+  window.__vinorAiChatSwitchHomeMode = switchHomeMode;
   window.__vinorAiChatOpenSideMenu = openSideMenu;
 
   if (homeInline) {
@@ -3346,6 +3642,8 @@
 
   showWelcomeIfEmpty();
   setComposerMode(isPostchiMode());
+  syncHomeModeSwitch();
+  bindHomeModeUi();
   if (isPostchiMode()) {
     pollPaused = true;
     markPostchiOpened();
@@ -3443,6 +3741,8 @@
       }
       var item = e.target.closest('.ai-thread-item');
       if (!item) return;
+      e.preventDefault();
+      e.stopPropagation();
       var tid = item.getAttribute('data-thread-id');
       if (tid) switchThread(tid);
     });
@@ -3471,7 +3771,6 @@
 
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
-    if (isPostchiMode()) return;
     if (submitting) return;
     var silentUser = false;
     try {
@@ -3487,7 +3786,7 @@
     }
 
     /* سقف مهمان: دکمه فعال می‌ماند؛ با ارسال → پیام + منوی ورود */
-    if (isGuestQuotaUser() && guestRepliesRemaining !== null && guestRepliesRemaining <= 0) {
+    if (isGuestQuotaUser() && guestRepliesRemaining !== null && guestRepliesRemaining <= 0 && !isPostchiMode()) {
       try {
         if (!silentUser) {
           input.value = msg;

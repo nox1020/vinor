@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.65-apk-offline-cache';
+const VERSION = 'v1.0.68-apk-offline-sw-bypass';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -181,6 +181,14 @@ function isVinorApkRequest(request) {
   }
 }
 
+function isVinorAppShell() {
+  try {
+    return (self.navigator && self.navigator.userAgent || '').includes('VinorApp/');
+  } catch (_) {
+    return false;
+  }
+}
+
 function isAuthPartnerPath(pathname) {
   const p = (pathname || '').replace(/\/+$/, '') || '/';
   return p === '/express/partner/login' ||
@@ -267,6 +275,12 @@ async function matchCachedNavigation(request) {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // APK: native shouldInterceptRequest مالک آفلاین است.
+  // fetch()+clone() روی پاسخ intercept رندرر Chromium را می‌کشد.
+  if (isVinorAppShell() || isVinorApkRequest(request)) {
+    return;
+  }
 
   // فقط Express Partner routes را handle کن
   if (!isExpressPartnerRoute(url) && !isExpressPartnerAPI(request) && !isStaticAsset(request) && !isUploadAsset(request) && !isLikelyImageRequest(request)) {

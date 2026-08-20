@@ -270,12 +270,18 @@
     line-height: 1.35;
     color: var(--ep-drawer-text);
   }
-  #epProfileDrawer .ai-thread-item__title > span {
+  #epProfileDrawer .ai-thread-item__title > span:not(.ai-thread-smart-icon) {
     display: block;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  #epProfileDrawer .ai-thread-item__title .ai-thread-smart-icon {
+    flex-shrink: 0;
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
   }
   #epProfileDrawer .ai-thread-item__actions {
     display: flex;
@@ -950,7 +956,7 @@
         {% endif %}
       </button>
       {% endif %}
-      <p class="ep-profile-drawer__label">وینور</p>
+      <p class="ep-profile-drawer__label">گفتگوها</p>
       {% set ai_threads_in_drawer = true %}
       {% include 'express_partner/partials/ai_chat_threads.html' %}
     </div>

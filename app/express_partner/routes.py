@@ -3911,6 +3911,16 @@ def _merge_home_ads_carousel(
     """وینور اول، سپس دیوار — بدون تکرار توکن/کد."""
     merged: List[Dict[str, Any]] = []
     seen: set[str] = set()
+    try:
+        from .home_ads_config import (
+            attach_divar_ad_commission,
+            divar_commission_pct_by_profile_url,
+        )
+
+        _divar_pct_map = divar_commission_pct_by_profile_url()
+    except Exception:
+        attach_divar_ad_commission = None  # type: ignore[assignment]
+        _divar_pct_map = {}
     for land in vinor_lands or []:
         ad = _vinor_land_to_home_ad(land)
         if not ad:
@@ -3931,9 +3941,17 @@ def _merge_home_ads_carousel(
         seen.add(key)
         ad.setdefault('source', 'divar')
         ad.setdefault('external', True)
-        ad.setdefault('commission_amount', 0)
         if not str(ad.get('badge') or '').strip():
             ad['badge'] = 'دیوار'
+        if attach_divar_ad_commission is not None:
+            try:
+                attach_divar_ad_commission(ad, _divar_pct_map)
+            except Exception:
+                ad.setdefault('commission_amount', 0)
+                ad.setdefault('commission_pct', 0)
+        else:
+            ad.setdefault('commission_amount', 0)
+            ad.setdefault('commission_pct', 0)
         merged.append(ad)
     return merged
 
@@ -7701,12 +7719,13 @@ def special_listings_page():
             'image_url': partner_card_image_url(land) or None,
             'detail_url': url_for('express_partner.land_detail', code=land.get('code')),
         })
-    from .home_ads_config import partner_divar_profile_urls
-    divar_urls = partner_divar_profile_urls(me_phone)
+    from .home_ads_config import partner_divar_profile_entries
+    divar_entries = partner_divar_profile_entries(me_phone)
     return render_template(
         'express_partner/special_listings.html',
         items=items,
-        divar_profile_urls=divar_urls,
+        divar_profile_entries=divar_entries,
+        divar_profile_urls=[e.get('url') for e in divar_entries if e.get('url')],
         hide_header=True,
         bottom_nav_active='profile',
     )
@@ -7715,17 +7734,27 @@ def special_listings_page():
 @express_partner_bp.post('/listings/divar-profile', endpoint='special_listings_divar_profile')
 @require_special_partner()
 def special_listings_divar_profile():
-    """افزودن یا حذف پروفایل دیوار Pro توسط همکار پلاس."""
+    """افزودن، ویرایش پورسانت، یا حذف پروفایل دیوار Pro توسط همکار پلاس."""
     me_phone = (session.get('user_phone') or '').strip()
     from .home_ads_config import (
         add_partner_divar_profile_url,
         remove_partner_divar_profile_url,
+        set_partner_divar_profile_commission,
     )
 
     action = (request.form.get('action') or '').strip()
     if action == 'add':
         ok, msg, _ = add_partner_divar_profile_url(
-            me_phone, request.form.get('profile_url') or ''
+            me_phone,
+            request.form.get('profile_url') or '',
+            request.form.get('commission_pct'),
+        )
+        flash(msg, 'success' if ok else 'error')
+    elif action == 'set_commission':
+        ok, msg, _ = set_partner_divar_profile_commission(
+            me_phone,
+            request.form.get('profile_url') or '',
+            request.form.get('commission_pct'),
         )
         flash(msg, 'success' if ok else 'error')
     elif action == 'remove':

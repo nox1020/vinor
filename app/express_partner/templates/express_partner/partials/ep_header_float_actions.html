@@ -32,11 +32,87 @@
   }
   .ep-header-float-actions .ep-partner-header-btn,
   .ep-header-float-actions .ep-get-plus-pill,
-  .ep-header-float-actions .ep-header-float-brand {
+  .ep-header-float-actions .ep-header-float-brand,
+  .ep-header-float-actions .ep-home-mode-switch {
     margin: 0;
     pointer-events: auto;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
+  }
+  .ep-header-float-actions--modes {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .ep-home-mode-switch {
+    display: inline-flex;
+    align-items: stretch;
+    position: relative;
+    height: 2.5rem;
+    max-width: min(100%, 16rem);
+    padding: 3px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(24, 24, 27, 0.78);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+    user-select: none;
+  }
+  .ep-home-mode-switch__btn {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.28rem;
+    min-width: 0;
+    padding: 0 0.75rem;
+    border: 0;
+    border-radius: 9999px;
+    background: transparent;
+    color: #a1a1aa;
+    font-size: 0.78rem;
+    font-weight: 700;
+    font-family: inherit;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .ep-home-mode-switch__btn.is-active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .ep-home-mode-switch__unread {
+    min-width: 0.95rem;
+    height: 0.95rem;
+    padding: 0 0.28rem;
+    border-radius: 9999px;
+    background: #ff3b30;
+    color: #fff;
+    font-size: 0.58rem;
+    font-weight: 800;
+    line-height: 0.95rem;
+    text-align: center;
+  }
+  .ep-home-mode-switch__unread[hidden] {
+    display: none !important;
+  }
+  /* خانهٔ خالی: هدر قبلی (پلاس وسط). چت وینور/پستچی: سوییچر وسط */
+  #homeDashboardPage.ai-home-is-empty .ep-header-float-actions--modes {
+    display: none !important;
+  }
+  #homeDashboardPage:not(.ai-home-is-empty):has(#vinorHomeModeSwitch) .ep-header-float-actions--plus {
+    display: none !important;
+  }
+  #homeDashboardPage:not(.ai-home-is-empty):has(#vinorHomeModeSwitch) .ep-header-float-actions--brand {
+    visibility: hidden;
+    pointer-events: none;
+  }
+  html.vinor-profile-drawer-open .ep-header-float-actions--modes {
+    visibility: hidden;
+    pointer-events: none;
   }
   .ep-header-float-brand {
     display: inline-flex;
@@ -206,6 +282,42 @@
 <div class="ep-header-float-actions ep-header-float-actions--brand" aria-label="وینور" data-tour="home-brand">
   <span class="ep-header-float-brand">وینور</span>
 </div>
+{% if home_ai_enabled|default(false) and postchi_messages_url|default('') %}
+{% set _mode_vinor_tid = namespace(id='') %}
+{% for th in chat_threads|default([]) %}
+  {% if th.kind != 'lawyer' and th.kind != 'postchi' and th.id and not _mode_vinor_tid.id %}
+    {% set _mode_vinor_tid.id = th.id %}
+  {% endif %}
+{% endfor %}
+{% if not _mode_vinor_tid.id and active_thread_id|default('') and active_thread_id != (postchi_thread_id|default('__postchi__')) and active_thread_id != (lawyer_thread_id|default('__lawyer__')) %}
+  {% set _mode_vinor_tid.id = active_thread_id %}
+{% endif %}
+<div class="ep-header-float-actions ep-header-float-actions--modes" aria-label="حالت گفتگو">
+  <div id="vinorHomeModeSwitch"
+       class="ep-home-mode-switch"
+       role="tablist"
+       dir="rtl"
+       data-vinor-thread-id="{{ _mode_vinor_tid.id }}"
+       data-mode="{{ 'postchi' if (active_thread_id|default('') == (postchi_thread_id|default('__postchi__'))) else 'vinor' }}">
+    <button type="button"
+            class="ep-home-mode-switch__btn{% if active_thread_id|default('') != (postchi_thread_id|default('__postchi__')) %} is-active{% endif %}"
+            role="tab"
+            id="vinorHomeModeVinor"
+            data-home-mode="vinor"
+            aria-selected="{{ 'false' if (active_thread_id|default('') == (postchi_thread_id|default('__postchi__'))) else 'true' }}">وینور</button>
+    <button type="button"
+            class="ep-home-mode-switch__btn{% if active_thread_id|default('') == (postchi_thread_id|default('__postchi__')) %} is-active{% endif %}"
+            role="tab"
+            id="vinorHomeModePostchi"
+            data-home-mode="postchi"
+            aria-label="پستچی"
+            aria-selected="{{ 'true' if (active_thread_id|default('') == (postchi_thread_id|default('__postchi__'))) else 'false' }}">
+      <span>پستچی</span>
+      <span id="vinorHomePostchiUnread" class="ep-home-mode-switch__unread" hidden></span>
+    </button>
+  </div>
+</div>
+{% endif %}
 {% if _use_drawer %}
 <script>
 (function () {
