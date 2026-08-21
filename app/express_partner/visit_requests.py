@@ -659,6 +659,62 @@ def next_auto_visit_date(
     return dates[0] if dates else None
 
 
+def list_upcoming_visit_slots(
+    *,
+    limit: int = 10,
+    days_ahead: int = 90,
+    plus_user_phone: str = "",
+    requests: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """نوبت‌های خالی بعدی (تاریخ + ساعت) برای انتخاب در مدال ثبت مشتری."""
+    cap = max(1, min(int(limit) or 10, 16))
+    dates = list_upcoming_visit_dates(
+        limit=cap,
+        days_ahead=days_ahead,
+        plus_user_phone=plus_user_phone,
+        requests=requests,
+    )
+    out: List[Dict[str, Any]] = []
+    for row in dates:
+        if not isinstance(row, dict):
+            continue
+        iso = str(row.get("iso") or "").strip()
+        weekday = str(row.get("weekday") or "").strip()
+        jalali_fa = str(row.get("jalali_fa") or row.get("jalali") or "").strip()
+        hours = row.get("hours")
+        if not isinstance(hours, list) or not hours:
+            hour = row.get("hour")
+            hours = [hour] if hour is not None else []
+        for raw_h in hours:
+            try:
+                hour = int(raw_h)
+            except (TypeError, ValueError):
+                continue
+            if hour < 0 or hour > 23:
+                continue
+            time_label = format_visit_hour_label(hour)
+            time_en = format_visit_time_stored(hour)
+            label = " ".join(p for p in (weekday, jalali_fa) if p)
+            if time_label:
+                label = f"{label} ساعت {time_label}".strip()
+            out.append(
+                {
+                    "iso": iso,
+                    "hour": hour,
+                    "time": time_label,
+                    "time_en": time_en,
+                    "weekday": weekday,
+                    "jalali_fa": jalali_fa,
+                    "value": f"{iso}|{hour:02d}",
+                    "label": label,
+                    "sub": time_label,
+                }
+            )
+            if len(out) >= cap:
+                return out
+    return out
+
+
 def partner_visits_for_phone(
     requests: List[Dict[str, Any]],
     phone: str,

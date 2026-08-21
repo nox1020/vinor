@@ -3745,6 +3745,7 @@ def home_page():
         customer_modal_plus_users=customer_modal_ctx.get('customer_modal_plus_users') or [],
         next_auto_visit=customer_modal_ctx.get('next_auto_visit'),
         next_auto_visit_by_plus=customer_modal_ctx.get('next_auto_visit_by_plus') or {},
+        visit_slots_by_plus=customer_modal_ctx.get('visit_slots_by_plus') or {},
         **divar_ads_ctx,
     ))
     if not me_phone:
@@ -4924,6 +4925,12 @@ def home_register_customer():
         or payload.get('plus_phone')
         or ''
     ).strip()
+    visit_slot_raw = str(payload.get('visit_slot') or '').strip()
+    visit_date_in = str(payload.get('visit_date') or '').strip()
+    visit_time_in = str(payload.get('visit_time') or '').strip()
+    customer_first_name = str(payload.get('customer_first_name') or '').strip()
+    customer_last_name = str(payload.get('customer_last_name') or '').strip()
+    customer_phone_raw = str(payload.get('customer_phone') or '').strip()
 
     def _fail(msg: str, code: int = 400):
         return jsonify({'ok': False, 'error': msg}), code
@@ -4939,7 +4946,9 @@ def home_register_customer():
 
     from .visit_requests import (
         list_plus_users_for_visit,
+        list_upcoming_visit_slots,
         next_auto_visit_date,
+        parse_visit_hour,
         partner_cancel_own_visit,
         visit_slot_has_passed,
     )
@@ -4963,7 +4972,31 @@ def home_register_customer():
         plus_user_name = str(plus_hit.get('name') or plus_user_phone)
         plus_user_phone = str(plus_hit.get('phone') or want)
 
-    next_slot = next_auto_visit_date(plus_user_phone=plus_user_phone)
+    customer_phone = ''
+    if customer_phone_raw:
+        customer_phone = normalize_iran_mobile(customer_phone_raw) or customer_phone_raw
+        if not is_valid_iran_mobile(customer_phone):
+            return _fail('شماره مشتری معتبر نیست.')
+
+    if '|' in visit_slot_raw:
+        visit_date_in, _, visit_time_in = visit_slot_raw.partition('|')
+        visit_date_in = visit_date_in.strip()
+        visit_time_in = visit_time_in.strip()
+
+    slots = list_upcoming_visit_slots(plus_user_phone=plus_user_phone)
+    next_slot = None
+    want_hour = parse_visit_hour(visit_time_in) if visit_time_in else None
+    if visit_date_in:
+        for item in slots:
+            if str(item.get('iso') or '') != visit_date_in:
+                continue
+            if want_hour is None or int(item.get('hour') or -1) == want_hour:
+                next_slot = item
+                break
+        if next_slot is None:
+            return _fail('وقت انتخاب‌شده دیگر آزاد نیست. وقت دیگری انتخاب کنید.')
+    if next_slot is None:
+        next_slot = next_auto_visit_date(plus_user_phone=plus_user_phone) or (slots[0] if slots else None)
     if not next_slot or not next_slot.get('iso'):
         return _fail('روز مجاز بازدید پیدا نشد. با پشتیبانی هماهنگ کنید.')
 
@@ -5021,6 +5054,9 @@ def home_register_customer():
         require_customer=False,
         plus_user_phone=plus_user_phone,
         plus_user_name=plus_user_name,
+        customer_first_name=customer_first_name,
+        customer_last_name=customer_last_name,
+        customer_phone=customer_phone,
     )
     if err == 'already_pending':
         return jsonify({
@@ -5037,6 +5073,12 @@ def home_register_customer():
         return _fail('ثبت درخواست بازدید ممکن نشد.')
 
     save_express_visit_requests(visit_requests)
+    if customer_phone:
+        _sync_visit_customer_to_club(
+            customer_phone=customer_phone,
+            customer_first_name=customer_first_name,
+            customer_last_name=customer_last_name,
+        )
 
     sms_notes = notes
     if plus_user_name or plus_user_phone:
@@ -5090,10 +5132,11 @@ def home_register_customer():
 
 
 def _home_customer_modal_context(me_phone: str, is_approved: bool) -> Dict[str, Any]:
-    """فایل‌ها و کاربران پلاس (اختیاری) + اولین روز مجاز برای مدال ثبت مشتری."""
+    """فایل‌ها، کاربران پلاس و نوبت‌های مجاز برای مدال ثبت مشتری."""
     from .visit_requests import (
         format_visit_slot_hint,
         list_plus_users_for_visit,
+        list_upcoming_visit_slots,
         next_auto_visit_date,
     )
 
@@ -5102,13 +5145,16 @@ def _home_customer_modal_context(me_phone: str, is_approved: bool) -> Dict[str, 
         'customer_modal_plus_users': [],
         'next_auto_visit': None,
         'next_auto_visit_by_plus': {},
+        'visit_slots_by_plus': {},
     }
     if not me_phone or not is_approved:
         return out
     try:
         default_slot = next_auto_visit_date()
         out['next_auto_visit'] = default_slot
+        default_slots = list_upcoming_visit_slots()
         by_plus: Dict[str, str] = {'': format_visit_slot_hint(default_slot)}
+        slots_by_plus: Dict[str, List[Dict[str, Any]]] = {'': default_slots}
         plus_users = list_plus_users_for_visit()
         out['customer_modal_plus_users'] = plus_users
         for user in plus_users:
@@ -5118,11 +5164,14 @@ def _home_customer_modal_context(me_phone: str, is_approved: bool) -> Dict[str, 
             by_plus[phone] = format_visit_slot_hint(
                 next_auto_visit_date(plus_user_phone=phone)
             )
+            slots_by_plus[phone] = list_upcoming_visit_slots(plus_user_phone=phone)
         out['next_auto_visit_by_plus'] = by_plus
+        out['visit_slots_by_plus'] = slots_by_plus
     except Exception:
         out['next_auto_visit'] = None
         out['customer_modal_plus_users'] = []
         out['next_auto_visit_by_plus'] = {}
+        out['visit_slots_by_plus'] = {}
     try:
         lands, _ = _build_partner_dashboard_lands(me_phone, True)
         assigned_first: List[Dict[str, Any]] = []

@@ -1,0 +1,544 @@
+/* فهرست همکاران — Vinor Control */
+
+#adminPartnersPage.ops-ppl {
+  color: #e8eaed;
+}
+
+#adminPartnersPage .ops-ppl-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+#adminPartnersPage .ops-ppl-kicker {
+  margin: 0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2dd4bf;
+}
+
+#adminPartnersPage .ops-ppl-title {
+  margin: 0.12rem 0 0;
+  font-size: 1.4rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  color: #f8fafc;
+}
+
+#adminPartnersPage .ops-ppl-sub {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #8b949e;
+}
+
+#adminPartnersPage .ops-ppl-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+@media (min-width: 640px) {
+  #adminPartnersPage .ops-ppl-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  #adminPartnersPage .ops-ppl-kpis {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+#adminPartnersPage .ops-ppl-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(42, 49, 64, 0.95);
+  background: #0e1014;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+#adminPartnersPage .ops-ppl-kpi:hover {
+  border-color: rgba(45, 212, 191, 0.35);
+  background: #12151b;
+}
+
+#adminPartnersPage .ops-ppl-kpi.is-active {
+  border-color: rgba(45, 212, 191, 0.45);
+  background:
+    linear-gradient(180deg, rgba(45, 212, 191, 0.1), transparent 70%),
+    #11141a;
+}
+
+#adminPartnersPage .ops-ppl-kpi.is-hot:not(.is-active) {
+  border-color: rgba(245, 165, 36, 0.35);
+}
+
+#adminPartnersPage .ops-ppl-kpi__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #8b949e;
+}
+
+#adminPartnersPage .ops-ppl-kpi__value {
+  font-size: 1.25rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  color: #f8fafc;
+}
+
+#adminPartnersPage .ops-ppl-kpi.is-hot .ops-ppl-kpi__value {
+  color: #fbbf24;
+}
+
+#adminPartnersPage .ops-ppl-kpi.is-live .ops-ppl-kpi__value {
+  color: #34d399;
+}
+
+#adminPartnersPage .ops-ppl-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(245, 165, 36, 0.32);
+  background:
+    linear-gradient(180deg, rgba(245, 165, 36, 0.1), transparent 80%),
+    #11141a;
+}
+
+#adminPartnersPage .ops-ppl-banner h2 {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fde68a;
+}
+
+#adminPartnersPage .ops-ppl-banner p {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: #a7b0be;
+}
+
+#adminPartnersPage .ops-ppl-toolbar {
+  position: sticky;
+  top: 3.15rem;
+  z-index: 15;
+  margin-bottom: 0.85rem;
+  padding: 0.65rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(42, 49, 64, 0.95);
+  background: rgba(14, 16, 20, 0.94);
+  backdrop-filter: blur(10px);
+}
+
+#adminPartnersPage .ops-ppl-search {
+  display: flex;
+  gap: 0.45rem;
+}
+
+#adminPartnersPage .ops-ppl-search input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 0.6rem;
+  border: 1px solid #2a3140;
+  background: #07080a;
+  color: #f3f5f7;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  outline: none;
+}
+
+#adminPartnersPage .ops-ppl-search input:focus {
+  border-color: rgba(45, 212, 191, 0.45);
+}
+
+#adminPartnersPage .ops-ppl-search button,
+#adminPartnersPage .ops-ppl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  font-family: inherit;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+#adminPartnersPage .ops-ppl-btn--primary {
+  background: #2dd4bf;
+  color: #042f2e;
+}
+
+#adminPartnersPage .ops-ppl-btn--primary:hover {
+  background: #5eead4;
+}
+
+#adminPartnersPage .ops-ppl-btn--ghost {
+  background: transparent;
+  border-color: #2a3140;
+  color: #a7b0be;
+}
+
+#adminPartnersPage .ops-ppl-btn--ghost:hover,
+#adminPartnersPage .ops-ppl-btn--ghost.is-open {
+  background: #1b1f27;
+  color: #fff;
+}
+
+#adminPartnersPage .ops-ppl-btn--ok {
+  background: #059669;
+  color: #fff;
+}
+
+#adminPartnersPage .ops-ppl-btn--ok:hover {
+  background: #047857;
+}
+
+#adminPartnersPage .ops-ppl-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.7rem;
+  color: #6b7380;
+}
+
+#adminPartnersPage .ops-ppl-add {
+  margin-bottom: 0.85rem;
+  padding: 0.9rem 1rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(45, 212, 191, 0.22);
+  background: #0e1014;
+}
+
+#adminPartnersPage .ops-ppl-add h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+#adminPartnersPage .ops-ppl-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+}
+
+@media (min-width: 640px) {
+  #adminPartnersPage .ops-ppl-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+#adminPartnersPage .ops-ppl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+#adminPartnersPage .ops-ppl-field--wide {
+  grid-column: 1 / -1;
+}
+
+#adminPartnersPage .ops-ppl-field span {
+  font-size: 0.7rem;
+  color: #8b949e;
+}
+
+#adminPartnersPage .ops-ppl-field input[type="text"],
+#adminPartnersPage .ops-ppl-field input[type="tel"],
+#adminPartnersPage .ops-ppl-field input:not([type]) {
+  width: 100%;
+  border-radius: 0.55rem;
+  border: 1px solid #2a3140;
+  background: #07080a;
+  color: #f3f5f7;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+}
+
+#adminPartnersPage .ops-ppl-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.75rem;
+  color: #a7b0be;
+  grid-column: 1 / -1;
+}
+
+#adminPartnersPage .ops-ppl-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "aside"
+    "list";
+  gap: 0.9rem;
+  align-items: start;
+}
+
+#adminPartnersPage .ops-ppl-main {
+  grid-area: list;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  #adminPartnersPage .ops-ppl-layout {
+    grid-template-columns: minmax(0, 1.7fr) minmax(15rem, 0.75fr);
+    grid-template-areas: "list aside";
+  }
+  #adminPartnersPage .ops-ppl-aside {
+    position: sticky;
+    top: 7.4rem;
+  }
+}
+
+#adminPartnersPage .ops-ppl-section {
+  margin-bottom: 1rem;
+}
+
+#adminPartnersPage .ops-ppl-section__title {
+  margin: 0 0 0.45rem;
+  padding-inline: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #8b949e;
+  letter-spacing: 0.02em;
+}
+
+#adminPartnersPage .ops-ppl-list {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(42, 49, 64, 0.95);
+  background: #0e1014;
+  overflow: hidden;
+}
+
+#adminPartnersPage .ops-ppl-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+  border-bottom: 1px solid rgba(42, 49, 64, 0.7);
+}
+
+#adminPartnersPage .ops-ppl-row:last-child {
+  border-bottom: 0;
+}
+
+#adminPartnersPage .ops-ppl-row:hover {
+  background: #12151b;
+}
+
+#adminPartnersPage .ops-ppl-row.is-pending {
+  background: linear-gradient(90deg, rgba(245, 165, 36, 0.08), transparent 42%);
+}
+
+#adminPartnersPage .ops-ppl-person {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.8rem 0.9rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+#adminPartnersPage .ops-ppl-avatar {
+  position: relative;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 999px;
+  background: #1b1f27;
+  color: #cbd5e1;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 750;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+#adminPartnersPage .ops-ppl-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#adminPartnersPage .ops-ppl-dot {
+  position: absolute;
+  bottom: 0;
+  inset-inline-end: 0;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #34d399;
+  border: 2px solid #0e1014;
+}
+
+#adminPartnersPage .ops-ppl-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+#adminPartnersPage .ops-ppl-name strong {
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: #f8fafc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#adminPartnersPage .ops-ppl-meta,
+#adminPartnersPage .ops-ppl-ref {
+  margin: 0.18rem 0 0;
+  font-size: 0.72rem;
+  color: #6b7380;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#adminPartnersPage .ops-ppl-ref {
+  color: #5eead4;
+}
+
+#adminPartnersPage .ops-ppl-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+#adminPartnersPage .ops-ppl-metric {
+  font-size: 0.65rem;
+  color: #a7b0be;
+  background: #14171c;
+  border: 1px solid #2a3140;
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+}
+
+#adminPartnersPage .ops-ppl-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.55rem 0.65rem 0.55rem 0;
+}
+
+#adminPartnersPage .ops-ppl-iconbtn {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.5rem;
+  color: #6b7380;
+  text-decoration: none;
+}
+
+#adminPartnersPage .ops-ppl-iconbtn:hover {
+  background: rgba(45, 212, 191, 0.1);
+  color: #2dd4bf;
+}
+
+#adminPartnersPage .ops-ppl-approve {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 0.5rem;
+  background: #059669;
+  color: #fff;
+  cursor: pointer;
+}
+
+#adminPartnersPage .ops-ppl-approve:hover {
+  background: #047857;
+}
+
+#adminPartnersPage .ops-ppl-aside {
+  grid-area: aside;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.9rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(42, 49, 64, 0.95);
+  background: #0e1014;
+}
+
+#adminPartnersPage .ops-ppl-aside h2 {
+  margin: 0 0 0.15rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+#adminPartnersPage .ops-ppl-aside .ops-ppl-hint {
+  margin-bottom: 0.35rem;
+}
+
+#adminPartnersPage .ops-ppl-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+#adminPartnersPage .ops-ppl-stat {
+  padding: 0.55rem 0.6rem;
+  border-radius: 0.65rem;
+  background: #14171c;
+  border: 1px solid rgba(42, 49, 64, 0.8);
+}
+
+#adminPartnersPage .ops-ppl-stat b {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: #f1f5f9;
+}
+
+#adminPartnersPage .ops-ppl-stat span {
+  font-size: 0.65rem;
+  color: #8b949e;
+}
+
+#adminPartnersPage .ops-ppl-empty {
+  padding: 3rem 1rem;
+  text-align: center;
+  border-radius: 0.9rem;
+  border: 1px dashed #2a3140;
+  color: #8b949e;
+  font-size: 0.85rem;
+  background: #0e1014;
+}
+
+#adminPartnersPage .ops-ppl-empty i {
+  display: block;
+  margin-bottom: 0.55rem;
+  color: #2dd4bf;
+  font-size: 1.15rem;
+}

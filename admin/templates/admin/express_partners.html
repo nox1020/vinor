@@ -1,308 +1,278 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}همکاران{% endblock %}
+{% block title %}همکاران | Vinor Control{% endblock %}
 {% block page_title %}همکاران{% endblock %}
+{% block page_title_i18n %}cmd.partners{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="{{ 'admin/ops-partners.css'|static_version }}">
+{% endblock %}
 
 {% block content %}
 {% set agg = stats.agg or {} %}
 {% set agg_shown = stats.agg_shown or {} %}
 {% set filtered = (filter_kind or 'all') != 'all' or (q or '') %}
 {% set display_agg = agg_shown if filtered else agg %}
+{% set fk = filter_kind or 'all' %}
 
-<div class="max-w-3xl mx-auto space-y-4">
-
-  <!-- خلاصه -->
-  <div class="flex flex-wrap gap-2 text-xs">
-    <span class="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-gray-700 dark:text-gray-300">
-      <span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ stats.total or 0 }}</span> نفر
-    </span>
-    <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-emerald-700 dark:text-emerald-300">
-      <span class="font-semibold tabular-nums">{{ stats.partners or 0 }}</span> همکار
-    </span>
-    {% if (stats.pending or 0) > 0 %}
-    <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 text-amber-700 dark:text-amber-300">
-      <span class="font-semibold tabular-nums">{{ stats.pending }}</span> انتظار
-    </span>
-    {% endif %}
-    {% if (stats.online or 0) > 0 %}
-    <span class="inline-flex items-center gap-1.5 rounded-full border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/20 px-3 py-1.5 text-teal-700 dark:text-teal-300">
-      <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
-      <span class="font-semibold tabular-nums">{{ stats.online }}</span> آنلاین
-    </span>
-    {% endif %}
-    <span class="inline-flex items-center gap-1.5 rounded-full border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 px-3 py-1.5 text-violet-700 dark:text-violet-300">
-      <span class="font-semibold tabular-nums">{{ display_agg.visits_total or 0 }}</span> بازدید
-    </span>
-  </div>
-
-  <!-- جستجو -->
-  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 space-y-3">
-    <form method="get" class="flex gap-2">
-      <input type="hidden" name="filter" value="{{ filter_kind or 'all' }}">
-      <input
-        name="q"
-        value="{{ q or '' }}"
-        placeholder="نام، موبایل، شهر یا معرف..."
-        class="flex-1 min-w-0 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-      <button type="submit" class="shrink-0 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
-        جستجو
-      </button>
-    </form>
-
-    <div class="flex flex-wrap gap-1.5">
-      {% set tabs = [
-        ('all', 'همه', stats.total),
-        ('partners', 'همکار', stats.partners),
-        ('pending', 'انتظار', stats.pending),
-        ('users', 'کاربر', stats.site_users),
-        ('online', 'آنلاین', stats.recent_online or stats.online),
-      ] %}
-      {% for key, label, count in tabs %}
-        <a
-          href="{{ url_for('admin.express_partners', filter=key, q=q or '') }}"
-          class="px-2.5 py-1 rounded-lg text-xs font-medium transition
-            {% if (filter_kind or 'all') == key %}
-              bg-blue-600 text-white
-            {% else %}
-              text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800
-            {% endif %}"
-        >
-          {{ label }}
-          <span class="tabular-nums opacity-80">{{ count or 0 }}</span>
-        </a>
-      {% endfor %}
+<div id="adminPartnersPage" class="ops-ppl" x-data="{ addOpen: false }">
+  <header class="ops-ppl-hero">
+    <div>
+      <p class="ops-ppl-kicker">Vinor Ops</p>
+      <h1 class="ops-ppl-title">همکاران</h1>
+      <p class="ops-ppl-sub">فهرست یکپارچه همکاران، درخواست‌ها و کاربران سایت</p>
     </div>
+    <button type="button" class="ops-ppl-btn ops-ppl-btn--ghost" :class="addOpen && 'is-open'" @click="addOpen = !addOpen">
+      <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+      افزودن همکار
+    </button>
+  </header>
 
-    {% if filtered %}
-    <p class="text-[11px] text-gray-500 dark:text-gray-400">
-      {{ stats.shown or 0 }} نفر از {{ stats.total or 0 }}
-    </p>
-    {% endif %}
+  <div class="ops-ppl-kpis" role="list">
+    <a role="listitem" class="ops-ppl-kpi {% if fk == 'all' %}is-active{% endif %}"
+       href="{{ url_for('admin.express_partners', filter='all', q=q or '') }}">
+      <span class="ops-ppl-kpi__label">همه</span>
+      <span class="ops-ppl-kpi__value tabular-nums">{{ (stats.total or 0)|fa_digits }}</span>
+    </a>
+    <a role="listitem" class="ops-ppl-kpi {% if fk == 'pending' %}is-active{% endif %} {% if stats.pending %}is-hot{% endif %}"
+       href="{{ url_for('admin.express_partners', filter='pending', q=q or '') }}">
+      <span class="ops-ppl-kpi__label">در انتظار</span>
+      <span class="ops-ppl-kpi__value tabular-nums">{{ (stats.pending or 0)|fa_digits }}</span>
+    </a>
+    <a role="listitem" class="ops-ppl-kpi {% if fk == 'partners' %}is-active{% endif %}"
+       href="{{ url_for('admin.express_partners', filter='partners', q=q or '') }}">
+      <span class="ops-ppl-kpi__label">همکار</span>
+      <span class="ops-ppl-kpi__value tabular-nums">{{ (stats.partners or 0)|fa_digits }}</span>
+    </a>
+    <a role="listitem" class="ops-ppl-kpi {% if fk == 'online' %}is-active{% endif %} {% if stats.online or stats.recent_online %}is-live{% endif %}"
+       href="{{ url_for('admin.express_partners', filter='online', q=q or '') }}">
+      <span class="ops-ppl-kpi__label">آنلاین</span>
+      <span class="ops-ppl-kpi__value tabular-nums">{{ (stats.recent_online or stats.online or 0)|fa_digits }}</span>
+    </a>
+    <a role="listitem" class="ops-ppl-kpi {% if fk == 'users' %}is-active{% endif %}"
+       href="{{ url_for('admin.express_partners', filter='users', q=q or '') }}">
+      <span class="ops-ppl-kpi__label">کاربر سایت</span>
+      <span class="ops-ppl-kpi__value tabular-nums">{{ (stats.site_users or 0)|fa_digits }}</span>
+    </a>
   </div>
-
-  <!-- افزودن دستی همکار -->
-  <details class="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 text-sm">
-    <summary class="px-4 py-3 cursor-pointer text-blue-800 dark:text-blue-200 font-medium select-none">
-      <i class="fa-solid fa-user-plus ml-1"></i>
-      افزودن همکار دستی
-    </summary>
-    <form method="post" action="{{ url_for('admin.express_partner_add_manual') }}" class="px-4 pb-4 space-y-3 border-t border-blue-100 dark:border-blue-900/50 pt-3">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="q" value="{{ q or '' }}">
-      <input type="hidden" name="filter" value="{{ filter_kind or 'all' }}">
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label class="block space-y-1">
-          <span class="text-xs text-gray-600 dark:text-gray-400">نام <span class="text-red-500">*</span></span>
-          <input name="name" required placeholder="نام و نام خانوادگی"
-                 class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm">
-        </label>
-        <label class="block space-y-1">
-          <span class="text-xs text-gray-600 dark:text-gray-400">موبایل <span class="text-red-500">*</span></span>
-          <input name="phone" required dir="ltr" inputmode="tel" placeholder="09123456789"
-                 class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm">
-        </label>
-        <label class="block space-y-1">
-          <span class="text-xs text-gray-600 dark:text-gray-400">شهر</span>
-          <input name="city" placeholder="تهران"
-                 class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm">
-        </label>
-        <label class="block space-y-1">
-          <span class="text-xs text-gray-600 dark:text-gray-400">کد ملی</span>
-          <input name="national_id" dir="ltr" inputmode="numeric" placeholder="اختیاری"
-                 class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm">
-        </label>
-        <label class="block space-y-1 sm:col-span-2">
-          <span class="text-xs text-gray-600 dark:text-gray-400">شماره معرف (اختیاری)</span>
-          <input name="referred_by_phone" dir="ltr" inputmode="tel" placeholder="09..."
-                 class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm">
-        </label>
-      </div>
-      <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-        <input type="checkbox" name="send_sms" value="1" checked class="rounded border-gray-300">
-        ارسال پیامک تأیید همکاری
-      </label>
-      <div class="flex justify-end">
-        <button type="submit" onclick="return confirm('همکار جدید اضافه و تأیید شود؟')"
-                class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
-          افزودن و تأیید
-        </button>
-      </div>
-    </form>
-  </details>
 
   {% if (stats.pending or 0) > 0 %}
-  <form method="post" action="{{ url_for('admin.express_partner_applications_approve_all') }}"
-        class="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20 p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3">
+  <form method="post" action="{{ url_for('admin.express_partner_applications_approve_all') }}" class="ops-ppl-banner">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="q" value="{{ q or '' }}">
-    <input type="hidden" name="filter" value="{{ filter_kind or 'all' }}">
-    <div class="min-w-0">
-      <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">
-        {{ stats.pending }} درخواست بازاریابی در انتظار
-      </p>
-      <p class="text-[11px] text-emerald-700/80 dark:text-emerald-300/70 mt-0.5">
-        همه درخواست‌های معلق را یکجا تأیید کنید
-      </p>
+    <input type="hidden" name="filter" value="{{ fk }}">
+    <div>
+      <h2>{{ (stats.pending or 0)|fa_digits }} درخواست بازاریابی در انتظار</h2>
+      <p>می‌توانید یک‌به‌یک از لیست تأیید کنید، یا همه را یکجا بپذیرید.</p>
     </div>
-    <button type="submit"
-            onclick="return confirm('همهٔ {{ stats.pending }} درخواست بازاریابی تأیید شوند؟')"
-            class="shrink-0 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">
-      <i class="fa-solid fa-check-double ml-1"></i>
-      تأیید خودکار همه درخواست‌های بازاریابی
+    <button type="submit" class="ops-ppl-btn ops-ppl-btn--ok"
+            onclick="return confirm('همهٔ {{ stats.pending }} درخواست بازاریابی تأیید شوند؟')">
+      <i class="fa-solid fa-check-double" aria-hidden="true"></i>
+      تأیید همه
     </button>
   </form>
   {% endif %}
 
-  <!-- جمع‌ها (جمع‌شونده) -->
-  <details class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm">
-    <summary class="px-4 py-3 cursor-pointer text-gray-700 dark:text-gray-300 font-medium select-none">
-      جمع فعالیت‌ها
-      <span class="text-xs font-normal text-gray-400 mr-1">
-        {% if filtered %}(فیلتر جاری){% else %}(کل){% endif %}
-      </span>
-    </summary>
-    <div class="px-4 pb-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-center border-t border-gray-100 dark:border-gray-800 pt-3">
-      <div>
-        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.visits_total or 0 }}</p>
-        <p class="text-[11px] text-gray-500">بازدید{% if display_agg.visits_pending %} · {{ display_agg.visits_pending }} انتظار{% endif %}</p>
-      </div>
-      <div>
-        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.assignments_active or 0 }}</p>
-        <p class="text-[11px] text-gray-500">انتساب فعال</p>
-      </div>
-      <div>
-        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.commissions_total or 0 }}</p>
-        <p class="text-[11px] text-gray-500">پورسانت</p>
-      </div>
-      <div>
-        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.files or 0 }}</p>
-        <p class="text-[11px] text-gray-500">فایل</p>
-      </div>
-      <div>
-        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.withdrawals_active or 0 }}</p>
-        <p class="text-[11px] text-gray-500">برداشت</p>
-      </div>
-      <div>
-        <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ display_agg.routine_days or 0 }}</p>
-        <p class="text-[11px] text-gray-500">روتین ماه</p>
-      </div>
-    </div>
-  </details>
+  <div class="ops-ppl-toolbar">
+    <form method="get" class="ops-ppl-search">
+      <input type="hidden" name="filter" value="{{ fk }}">
+      <input
+        name="q"
+        value="{{ q or '' }}"
+        placeholder="نام، موبایل، شهر یا معرف…"
+        autocomplete="off"
+      >
+      <button type="submit" class="ops-ppl-btn ops-ppl-btn--primary">جستجو</button>
+      {% if q %}
+      <a class="ops-ppl-btn ops-ppl-btn--ghost" href="{{ url_for('admin.express_partners', filter=fk) }}">پاک</a>
+      {% endif %}
+    </form>
+    {% if filtered %}
+    <p class="ops-ppl-hint">نمایش {{ (stats.shown or 0)|fa_digits }} نفر از {{ (stats.total or 0)|fa_digits }}</p>
+    {% endif %}
+  </div>
 
-  <!-- لیست -->
-  {% if people_groups and people_groups|length > 0 %}
-  <div class="space-y-4">
-    {% for group in people_groups %}
-      {% if group.people and group.people|length > 0 %}
-        {% if group.label %}
-        <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 px-1">{{ group.label }} ({{ group.people|length }})</p>
-        {% endif %}
-        <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800 overflow-hidden">
-          {% for person in group.people %}
-            {% set acc = person.access or {} %}
-            {% set cnt = person.counts or {} %}
-            {% set prof = person.profile or {} %}
-            {% set app = person.application or {} %}
-            <div class="flex items-center gap-2 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition group">
-            <a
-              href="{{ url_for('admin.express_partner_detail', phone=person.phone, q=q or '', filter=filter_kind or 'all') }}"
-              class="flex items-center gap-3 flex-1 min-w-0"
-            >
-              <div class="relative shrink-0">
-                <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-sm font-bold text-gray-600 dark:text-gray-300">
-                  {{ (person.name or person.phone or '?')[:1] }}
-                </div>
-                {% if acc.online_now %}
-                <span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-gray-900"></span>
-                {% endif %}
-              </div>
+  <div class="ops-ppl-add" x-show="addOpen" x-cloak x-transition.opacity.duration.150ms>
+    <h2>افزودن همکار دستی</h2>
+    <form method="post" action="{{ url_for('admin.express_partner_add_manual') }}" class="ops-ppl-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="q" value="{{ q or '' }}">
+      <input type="hidden" name="filter" value="{{ fk }}">
+      <label class="ops-ppl-field">
+        <span>نام <span class="text-[#F87171]">*</span></span>
+        <input name="name" required placeholder="نام و نام خانوادگی">
+      </label>
+      <label class="ops-ppl-field">
+        <span>موبایل <span class="text-[#F87171]">*</span></span>
+        <input name="phone" required dir="ltr" inputmode="tel" placeholder="09123456789">
+      </label>
+      <label class="ops-ppl-field">
+        <span>شهر</span>
+        <input name="city" placeholder="تهران">
+      </label>
+      <label class="ops-ppl-field">
+        <span>کد ملی</span>
+        <input name="national_id" dir="ltr" inputmode="numeric" placeholder="اختیاری">
+      </label>
+      <label class="ops-ppl-field ops-ppl-field--wide">
+        <span>شماره معرف (اختیاری)</span>
+        <input name="referred_by_phone" dir="ltr" inputmode="tel" placeholder="09…">
+      </label>
+      <label class="ops-ppl-check">
+        <input type="checkbox" name="send_sms" value="1" checked>
+        ارسال پیامک تأیید همکاری
+      </label>
+      <div class="ops-ppl-field--wide flex justify-end gap-2">
+        <button type="button" class="ops-ppl-btn ops-ppl-btn--ghost" @click="addOpen = false">انصراف</button>
+        <button type="submit" class="ops-ppl-btn ops-ppl-btn--primary"
+                onclick="return confirm('همکار جدید اضافه و تأیید شود؟')">
+          افزودن و تأیید
+        </button>
+      </div>
+    </form>
+  </div>
 
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 min-w-0">
-                  <span class="font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                    {{ person.name or 'بدون نام' }}
-                  </span>
-                  {% if acc.partner_special %}
-                    <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">ویژه</span>
-                  {% elif acc.partner_approved %}
-                    <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">همکار</span>
-                  {% elif acc.partner_pending %}
-                    <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">انتظار</span>
-                  {% elif acc.site_user %}
-                    <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">کاربر</span>
-                  {% endif %}
-                </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate" dir="ltr">
-                  {{ person.phone or '—' }}
-                  {% if person.city %}<span class="mx-1 opacity-40">·</span><span dir="rtl">{{ person.city }}</span>{% endif %}
-                </p>
-                <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 tabular-nums">
-                  بازدید {{ cnt.visits_total or 0 }}
-                  <span class="mx-1 opacity-40">·</span>
-                  انتساب {{ cnt.assignments_active or 0 }}
-                  <span class="mx-1 opacity-40">·</span>
-                  پورسانت {{ cnt.commissions_total or 0 }}
-                </p>
-                {% if prof.referred_by_phone %}
-                <p class="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5 truncate">
-                  معرف:
-                  {% if prof.referred_by_name %}<span>{{ prof.referred_by_name }}</span><span class="mx-1 opacity-40">·</span>{% endif %}
-                  <span class="ltr">{{ prof.referred_by_phone }}</span>
-                </p>
-                {% endif %}
-                {% if (filter_kind or '') == 'online' and person.last_activity %}
-                <p class="text-[10px] text-gray-400 mt-0.5 {% if acc.online_now %}text-emerald-600 dark:text-emerald-400{% endif %}">
-                  {% if acc.online_now %}آنلاین{% else %}آخرین{% endif %}
-                  · <span class="jalali-dt" data-dt="{{ person.last_activity }}"></span>
-                </p>
-                {% endif %}
-              </div>
-
-              <i class="fa-solid fa-chevron-left text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-blue-500 shrink-0"></i>
-            </a>
-            {% if person.phone %}
-            <a href="{{ url_for('admin.ai_console_memory', tab='users', user=person.phone) }}"
-               class="shrink-0 grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40 dark:hover:text-teal-300 transition"
-               title="حافظه {{ person.name or person.phone }}"
-               aria-label="حافظه کاربر">
-              <i class="fa-solid fa-brain text-xs"></i>
-            </a>
+  <div class="ops-ppl-layout">
+    <div class="ops-ppl-main">
+      {% if people_groups and people_groups|length > 0 %}
+        {% for pgroup in people_groups %}
+          {% if pgroup.people and pgroup.people|length > 0 %}
+          <section class="ops-ppl-section">
+            {% if pgroup.label %}
+            <h2 class="ops-ppl-section__title">{{ pgroup.label }} · {{ (pgroup.people|length)|fa_digits }}</h2>
             {% endif %}
-            {% if acc.partner_pending or (acc.site_user and not acc.partner_approved) %}
-              {% if app and app.id %}
-              <form method="post" action="{{ url_for('admin.express_partner_application_approve', aid=app.id) }}" class="shrink-0">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" onclick="return confirm('تأیید همکاری {{ person.name or person.phone }}؟')"
-                        class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium whitespace-nowrap"
-                        title="تأیید همکار">
-                  <i class="fa-solid fa-check"></i>
-                </button>
-              </form>
-              {% elif person.phone %}
-              <form method="post" action="{{ url_for('admin.express_partner_approve_by_phone', phone=person.phone) }}" class="shrink-0">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="q" value="{{ q or '' }}">
-                <input type="hidden" name="filter" value="{{ filter_kind or 'all' }}">
-                <input type="hidden" name="next" value="list">
-                <button type="submit" onclick="return confirm('تأیید همکاری {{ person.name or person.phone }}؟')"
-                        class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium whitespace-nowrap"
-                        title="تأیید همکار">
-                  <i class="fa-solid fa-check"></i>
-                </button>
-              </form>
-              {% endif %}
-            {% endif %}
+            <div class="ops-ppl-list">
+              {% for person in pgroup.people %}
+                {% set acc = person.access or {} %}
+                {% set cnt = person.counts or {} %}
+                {% set prof = person.profile or {} %}
+                {% set app = person.application or {} %}
+                <div class="ops-ppl-row {% if acc.partner_pending %}is-pending{% endif %}">
+                  <a class="ops-ppl-person"
+                     href="{{ url_for('admin.express_partner_detail', phone=person.phone, q=q or '', filter=fk) }}">
+                    <div class="ops-ppl-avatar">
+                      {% if prof.avatar %}
+                      <img src="{{ prof.avatar }}" alt="" width="40" height="40" loading="lazy" decoding="async">
+                      {% else %}
+                      {{ (person.name or person.phone or '?')[:1] }}
+                      {% endif %}
+                      {% if acc.online_now %}<span class="ops-ppl-dot" title="آنلاین"></span>{% endif %}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="ops-ppl-name">
+                        <strong>{{ person.name or 'بدون نام' }}</strong>
+                        {% if acc.partner_special %}
+                          <span class="vc-chip vc-chip-orbit">ویژه</span>
+                        {% elif acc.partner_approved %}
+                          <span class="vc-chip vc-chip-ok">همکار</span>
+                        {% elif acc.partner_pending %}
+                          <span class="vc-chip vc-chip-warn">انتظار</span>
+                        {% elif acc.site_user %}
+                          <span class="vc-chip vc-chip-signal">کاربر</span>
+                        {% endif %}
+                      </div>
+                      <p class="ops-ppl-meta">
+                        <span dir="ltr">{{ person.phone or '—' }}</span>
+                        {% if person.city %}<span> · {{ person.city }}</span>{% endif %}
+                      </p>
+                      <div class="ops-ppl-metrics">
+                        <span class="ops-ppl-metric">بازدید {{ (cnt.visits_total or 0)|fa_digits }}</span>
+                        <span class="ops-ppl-metric">انتساب {{ (cnt.assignments_active or 0)|fa_digits }}</span>
+                        <span class="ops-ppl-metric">پورسانت {{ (cnt.commissions_total or 0)|fa_digits }}</span>
+                      </div>
+                      {% if prof.referred_by_phone %}
+                      <p class="ops-ppl-ref">
+                        معرف:
+                        {% if prof.referred_by_name %}{{ prof.referred_by_name }} · {% endif %}
+                        <span dir="ltr">{{ prof.referred_by_phone }}</span>
+                      </p>
+                      {% endif %}
+                      {% if fk == 'online' and person.last_activity %}
+                      <p class="ops-ppl-meta {% if acc.online_now %}text-[#34D399]{% endif %}">
+                        {% if acc.online_now %}آنلاین{% else %}آخرین فعالیت{% endif %}
+                        · <span class="jalali-dt" data-dt="{{ person.last_activity }}"></span>
+                      </p>
+                      {% endif %}
+                    </div>
+                  </a>
+                  <div class="ops-ppl-actions">
+                    {% if person.phone %}
+                    <a class="ops-ppl-iconbtn"
+                       href="{{ url_for('admin.ai_console_memory', tab='users', user=person.phone) }}"
+                       title="حافظه {{ person.name or person.phone }}"
+                       aria-label="حافظه کاربر">
+                      <i class="fa-solid fa-brain text-xs"></i>
+                    </a>
+                    {% endif %}
+                    {% if acc.partner_pending or (acc.site_user and not acc.partner_approved) %}
+                      {% if app and app.id %}
+                      <form method="post" action="{{ url_for('admin.express_partner_application_approve', aid=app.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="ops-ppl-approve"
+                                onclick="return confirm('تأیید همکاری {{ person.name or person.phone }}؟')"
+                                title="تأیید همکار" aria-label="تأیید همکار">
+                          <i class="fa-solid fa-check text-xs"></i>
+                        </button>
+                      </form>
+                      {% elif person.phone %}
+                      <form method="post" action="{{ url_for('admin.express_partner_approve_by_phone', phone=person.phone) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="q" value="{{ q or '' }}">
+                        <input type="hidden" name="filter" value="{{ fk }}">
+                        <input type="hidden" name="next" value="list">
+                        <button type="submit" class="ops-ppl-approve"
+                                onclick="return confirm('تأیید همکاری {{ person.name or person.phone }}؟')"
+                                title="تأیید همکار" aria-label="تأیید همکار">
+                          <i class="fa-solid fa-check text-xs"></i>
+                        </button>
+                      </form>
+                      {% endif %}
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
             </div>
-          {% endfor %}
+          </section>
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        <div class="ops-ppl-empty">
+          <i class="fa-solid fa-user-group" aria-hidden="true"></i>
+          موردی یافت نشد.
         </div>
       {% endif %}
-    {% endfor %}
-  </div>
-  {% else %}
-  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-12 text-center">
-    <p class="text-sm text-gray-500 dark:text-gray-400">موردی یافت نشد.</p>
-  </div>
-  {% endif %}
+    </div>
 
+    <aside class="ops-ppl-aside">
+      <h2>جمع فعالیت‌ها</h2>
+      <p class="ops-ppl-hint">{% if filtered %}بر اساس فیلتر جاری{% else %}برای کل فهرست{% endif %}</p>
+      <div class="ops-ppl-stats">
+        <div class="ops-ppl-stat">
+          <b class="tabular-nums">{{ (display_agg.visits_total or 0)|fa_digits }}</b>
+          <span>بازدید{% if display_agg.visits_pending %} · {{ (display_agg.visits_pending or 0)|fa_digits }} انتظار{% endif %}</span>
+        </div>
+        <div class="ops-ppl-stat">
+          <b class="tabular-nums">{{ (display_agg.assignments_active or 0)|fa_digits }}</b>
+          <span>انتساب فعال</span>
+        </div>
+        <div class="ops-ppl-stat">
+          <b class="tabular-nums">{{ (display_agg.commissions_total or 0)|fa_digits }}</b>
+          <span>پورسانت</span>
+        </div>
+        <div class="ops-ppl-stat">
+          <b class="tabular-nums">{{ (display_agg.files or 0)|fa_digits }}</b>
+          <span>فایل</span>
+        </div>
+        <div class="ops-ppl-stat">
+          <b class="tabular-nums">{{ (display_agg.withdrawals_active or 0)|fa_digits }}</b>
+          <span>برداشت</span>
+        </div>
+        <div class="ops-ppl-stat">
+          <b class="tabular-nums">{{ (display_agg.routine_days or 0)|fa_digits }}</b>
+          <span>روتین ماه</span>
+        </div>
+      </div>
+    </aside>
+  </div>
 </div>
 {% endblock %}

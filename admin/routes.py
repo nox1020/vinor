@@ -1112,6 +1112,77 @@ def _dashboard_overview() -> dict[str, Any]:
             {"label": "نوار آگهی", "href": "admin.home_ads", "icon": "fa-images"},
             {"label": "پیامک و نوتیفیکیشن", "href": "admin.sms_notifications", "icon": "fa-comment-sms"},
         ],
+        "work_queues": [
+            {
+                "key": "partners",
+                "label": "همکار معلق",
+                "hint": "درخواست همکاری در انتظار بررسی",
+                "href": "admin.express_partners",
+                "url_kwargs": {"filter": "pending"},
+                "icon": "fa-user-group",
+                "count_key": "partners_pending",
+            },
+            {
+                "key": "lands",
+                "label": "فایل معلق",
+                "hint": "آگهی اکسپرس منتظر تأیید",
+                "href": "admin.express_listings",
+                "icon": "fa-building",
+                "count_key": "lands_pending",
+            },
+            {
+                "key": "visits",
+                "label": "بازدید معلق",
+                "hint": "روند بازدید نیازمند اقدام",
+                "href": "admin.express_visit_requests",
+                "icon": "fa-route",
+                "count_key": "visits_pending",
+            },
+            {
+                "key": "withdrawals",
+                "label": "برداشت معلق",
+                "hint": "درخواست تسویه همکاران",
+                "href": "admin.financial_withdrawals",
+                "url_kwargs": {"filter": "pending"},
+                "icon": "fa-money-bill-transfer",
+                "count_key": "withdrawals_pending",
+            },
+        ],
+        "module_groups": [
+            {
+                "title": "عملیات",
+                "links": [
+                    {"label": "آگهی‌ها", "href": "admin.express_listings", "icon": "fa-building"},
+                    {"label": "همکاران", "href": "admin.express_partners", "icon": "fa-user-group"},
+                    {"label": "روند بازدید", "href": "admin.express_visit_requests", "icon": "fa-route"},
+                    {"label": "گزارش کاربران", "href": "admin.reports_list", "icon": "fa-flag"},
+                ],
+            },
+            {
+                "title": "نمایش",
+                "links": [
+                    {"label": "نوار آگهی خانه", "href": "admin.home_ads", "icon": "fa-images"},
+                    {"label": "شهرهای فعال", "href": "admin.express_cities", "icon": "fa-city"},
+                    {"label": "فروشنده‌های برتر", "href": "admin.top_sellers", "icon": "fa-trophy"},
+                ],
+            },
+            {
+                "title": "مالی",
+                "links": [
+                    {"label": "پورسانت‌ها", "href": "admin.express_commissions", "icon": "fa-wallet"},
+                    {"label": "برداشت‌ها", "href": "admin.financial_withdrawals", "icon": "fa-money-bill-transfer"},
+                    {"label": "زرین‌پال / Plus", "href": "admin.zarinpal_plus", "icon": "fa-credit-card"},
+                ],
+            },
+            {
+                "title": "ارتباط و سیستم",
+                "links": [
+                    {"label": "پیامک و نوتیفیکیشن", "href": "admin.sms_notifications", "icon": "fa-comment-sms"},
+                    {"label": "هوش مصنوعی", "href": "admin.ai_hub", "icon": "fa-robot"},
+                    {"label": "تنظیمات", "href": "admin.settings", "icon": "fa-gear"},
+                ],
+            },
+        ],
     }
     try:
         from app.utils.storage import load_express_partner_apps
@@ -1169,6 +1240,12 @@ def _dashboard_overview() -> dict[str, Any]:
         overview["ai_errors"] = int(k.get("errors_sample") or 0)
     except Exception:
         pass
+    overview["queue_total"] = (
+        int(overview.get("partners_pending") or 0)
+        + int(overview.get("lands_pending") or 0)
+        + int(overview.get("visits_pending") or 0)
+        + int(overview.get("withdrawals_pending") or 0)
+    )
     return overview
 
 
@@ -1182,11 +1259,23 @@ def dashboard():
     except Exception:
         pass
     overview = _dashboard_overview()
-    for link in overview.get("quick_links") or []:
+
+    def _resolve_href(item: dict) -> None:
+        href = item.get("href") or ""
+        kwargs = item.get("url_kwargs") or {}
         try:
-            link["url"] = url_for(link["href"])
+            item["url"] = url_for(href, **kwargs) if href else "#"
         except Exception:
-            link["url"] = "#"
+            item["url"] = "#"
+
+    for link in overview.get("quick_links") or []:
+        _resolve_href(link)
+    for queue in overview.get("work_queues") or []:
+        _resolve_href(queue)
+        queue["count"] = int(overview.get(queue.get("count_key") or "") or 0)
+    for group in overview.get("module_groups") or []:
+        for item in group.get("links") or []:
+            _resolve_href(item)
     return render_template("admin/dashboard.html", dash_overview=overview)
 
 

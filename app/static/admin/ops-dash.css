@@ -1,33 +1,32 @@
 /* داشبورد عملیات ادمین */
 
 #adminOpsDashPage.ops-dash-layout {
-  background: #07080a;
+  background: transparent;
   color: #e8eaed;
-  margin: -1rem -0.75rem 0;
+  margin: -0.25rem 0 0;
   padding: 0;
-  border-radius: 0.85rem;
-  overflow: hidden;
-}
-@media (min-width: 640px) {
-  #adminOpsDashPage.ops-dash-layout {
-    margin-inline: -1.25rem;
-  }
 }
 
 #adminOpsDashPage .ops-dash-board {
   min-width: 0;
-  padding: 1rem 1.15rem 1.5rem;
-  background:
-    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(45, 212, 191, 0.06), transparent 55%),
-    #07080a;
+  padding: 0 0 0.5rem;
 }
+
 #adminOpsDashPage .ops-dash-hero {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1.1rem;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.35rem;
+  padding: 1.05rem 1.15rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(42, 49, 64, 0.9);
+  background:
+    radial-gradient(ellipse 70% 80% at 100% 0%, rgba(45, 212, 191, 0.1), transparent 58%),
+    linear-gradient(180deg, #12151b 0%, #0e1014 100%);
 }
+
 #adminOpsDashPage .ops-dash-kicker {
   margin: 0;
   font-size: 0.65rem;
@@ -36,108 +35,296 @@
   text-transform: uppercase;
   color: #2dd4bf;
 }
+
 #adminOpsDashPage .ops-dash-title {
   margin: 0.15rem 0 0;
-  font-size: 1.35rem;
+  font-size: 1.45rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   color: #f8fafc;
 }
+
 #adminOpsDashPage .ops-dash-sub {
-  margin: 0.35rem 0 0;
-  font-size: 0.78rem;
-  line-height: 1.45;
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
   color: #8b949e;
-  max-width: 28rem;
+  max-width: 32rem;
 }
-#adminOpsDashPage .ops-dash-kpis {
+
+#adminOpsDashPage .ops-dash-hero__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+#adminOpsDashPage .ops-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+#adminOpsDashPage .ops-pill i {
+  font-size: 0.7rem;
+}
+
+#adminOpsDashPage .ops-pill--warn {
+  background: rgba(245, 165, 36, 0.12);
+  border-color: rgba(245, 165, 36, 0.28);
+  color: #fbbf24;
+}
+
+#adminOpsDashPage .ops-pill--ok {
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.22);
+  color: #6ee7b7;
+}
+
+#adminOpsDashPage .ops-dash-body {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
-  margin-bottom: 1.25rem;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-bottom: 1.35rem;
 }
-@media (min-width: 640px) {
-  #adminOpsDashPage .ops-dash-kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+@media (min-width: 1024px) {
+  #adminOpsDashPage .ops-dash-body {
+    grid-template-columns: minmax(0, 1.7fr) minmax(16rem, 0.9fr);
+    align-items: stretch;
   }
 }
-#adminOpsDashPage .ops-kpi {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+
+#adminOpsDashPage .ops-dash-section {
+  margin-bottom: 0;
+}
+
+#adminOpsDashPage .ops-dash-section__head {
+  margin-bottom: 0.7rem;
+}
+
+#adminOpsDashPage .ops-dash-section__title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  letter-spacing: 0.01em;
+}
+
+#adminOpsDashPage .ops-dash-section__hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
+  color: #6b7380;
+}
+
+#adminOpsDashPage .ops-queue-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  #adminOpsDashPage .ops-queue-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+#adminOpsDashPage .ops-queue {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 0.7rem;
+  row-gap: 0.15rem;
+  align-items: center;
   padding: 0.85rem 0.9rem;
-  border-radius: 0.75rem;
+  border-radius: 0.9rem;
   border: 1px solid rgba(42, 49, 64, 0.95);
   background: #0e1014;
   text-decoration: none;
   color: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+#adminOpsDashPage .ops-queue:hover {
+  background: #12151b;
+  transform: translateY(-1px);
+}
+
+#adminOpsDashPage .ops-queue.is-hot {
+  border-color: rgba(245, 165, 36, 0.38);
+  background:
+    linear-gradient(180deg, rgba(245, 165, 36, 0.08), transparent 70%),
+    #11141a;
+}
+
+#adminOpsDashPage .ops-queue.is-hot:hover {
+  border-color: rgba(245, 165, 36, 0.55);
+}
+
+#adminOpsDashPage .ops-queue.is-clear:hover {
+  border-color: rgba(45, 212, 191, 0.3);
+}
+
+#adminOpsDashPage .ops-queue__icon {
+  grid-row: 1 / span 2;
+  width: 2.15rem;
+  height: 2.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.65rem;
+  background: rgba(45, 212, 191, 0.1);
+  color: #2dd4bf;
+  font-size: 0.85rem;
+}
+
+#adminOpsDashPage .ops-queue.is-hot .ops-queue__icon {
+  background: rgba(245, 165, 36, 0.14);
+  color: #fbbf24;
+}
+
+#adminOpsDashPage .ops-queue__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+#adminOpsDashPage .ops-queue__label {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: #f1f5f9;
+}
+
+#adminOpsDashPage .ops-queue__hint {
+  font-size: 0.68rem;
+  color: #6b7380;
+  line-height: 1.35;
+}
+
+#adminOpsDashPage .ops-queue__count {
+  grid-row: 1 / span 2;
+  font-size: 1.45rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  color: #f8fafc;
+  min-width: 1.6rem;
+  text-align: end;
+}
+
+#adminOpsDashPage .ops-queue.is-clear .ops-queue__count {
+  color: #64748b;
+}
+
+#adminOpsDashPage .ops-ai-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  min-height: 10.5rem;
+  padding: 1rem 1.05rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(45, 212, 191, 0.22);
+  background:
+    radial-gradient(ellipse 80% 70% at 0% 0%, rgba(45, 212, 191, 0.12), transparent 55%),
+    #0e1014;
+  text-decoration: none;
+  color: inherit;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-#adminOpsDashPage .ops-kpi:hover {
-  border-color: rgba(45, 212, 191, 0.35);
-  background: #12151b;
+
+#adminOpsDashPage .ops-ai-card:hover {
+  border-color: rgba(45, 212, 191, 0.45);
+  background:
+    radial-gradient(ellipse 80% 70% at 0% 0%, rgba(45, 212, 191, 0.16), transparent 55%),
+    #12151b;
 }
-#adminOpsDashPage .ops-kpi__label {
-  font-size: 0.7rem;
-  color: #8b949e;
-  font-weight: 500;
-}
-#adminOpsDashPage .ops-kpi__value {
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: #f1f5f9;
-  letter-spacing: -0.02em;
-}
-#adminOpsDashPage .ops-dash-section {
-  margin-bottom: 1.25rem;
-}
-#adminOpsDashPage .ops-dash-section__title {
-  margin: 0 0 0.55rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #8b949e;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-#adminOpsDashPage .ops-dash-links {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.45rem;
-}
-@media (min-width: 640px) {
-  #adminOpsDashPage .ops-dash-links {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-#adminOpsDashPage .ops-dash-link {
+
+#adminOpsDashPage .ops-ai-card__head {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.65rem 0.75rem;
-  border-radius: 0.65rem;
-  border: 1px solid rgba(42, 49, 64, 0.9);
-  background: #0e1014;
-  color: #d1d5db;
-  text-decoration: none;
-  font-size: 0.8rem;
-  font-weight: 500;
+  gap: 0.7rem;
 }
-#adminOpsDashPage .ops-dash-link:hover {
-  border-color: rgba(45, 212, 191, 0.3);
-  color: #fff;
-}
-#adminOpsDashPage .ops-dash-link i {
-  width: 1rem;
-  text-align: center;
+
+#adminOpsDashPage .ops-ai-card__icon {
+  width: 2.4rem;
+  height: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background: rgba(45, 212, 191, 0.14);
   color: #2dd4bf;
-  opacity: 0.9;
+  font-size: 1rem;
 }
-#adminOpsDashPage .ops-dash-link--ai {
-  margin: 0 0 1.25rem;
-  justify-content: flex-start;
+
+#adminOpsDashPage .ops-ai-card__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f8fafc;
 }
+
+#adminOpsDashPage .ops-ai-card__sub {
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+  color: #8b949e;
+}
+
+#adminOpsDashPage .ops-ai-card__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+#adminOpsDashPage .ops-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.7rem;
+  background: rgba(20, 23, 28, 0.75);
+  border: 1px solid rgba(42, 49, 64, 0.8);
+}
+
+#adminOpsDashPage .ops-stat__value {
+  font-size: 1.15rem;
+  font-weight: 750;
+  color: #e2e8f0;
+}
+
+#adminOpsDashPage .ops-stat__label {
+  font-size: 0.65rem;
+  color: #8b949e;
+}
+
+#adminOpsDashPage .ops-stat.is-warn {
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+#adminOpsDashPage .ops-stat.is-warn .ops-stat__value {
+  color: #fbbf24;
+}
+
+#adminOpsDashPage .ops-stat.is-danger {
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+#adminOpsDashPage .ops-stat.is-danger .ops-stat__value {
+  color: #fca5a5;
+}
+
 #adminOpsDashPage .ops-dash-link__badge {
-  margin-inline-start: auto;
+  position: absolute;
+  top: 0.85rem;
+  inset-inline-end: 0.85rem;
   min-width: 1.35rem;
   padding: 0.1rem 0.4rem;
   border-radius: 999px;
@@ -146,4 +333,68 @@
   font-size: 0.7rem;
   font-weight: 700;
   text-align: center;
+}
+
+#adminOpsDashPage .ops-modules {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  #adminOpsDashPage .ops-modules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  #adminOpsDashPage .ops-modules {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+#adminOpsDashPage .ops-module {
+  padding: 0.8rem 0.85rem 0.9rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(42, 49, 64, 0.9);
+  background: #0e1014;
+}
+
+#adminOpsDashPage .ops-module__title {
+  margin: 0 0 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #6b7380;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#adminOpsDashPage .ops-module__links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+#adminOpsDashPage .ops-dash-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.55rem;
+  border-radius: 0.55rem;
+  color: #d1d5db;
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+#adminOpsDashPage .ops-dash-link:hover {
+  background: #14171c;
+  color: #fff;
+}
+
+#adminOpsDashPage .ops-dash-link i {
+  width: 1rem;
+  text-align: center;
+  color: #2dd4bf;
+  opacity: 0.9;
 }

@@ -1323,10 +1323,10 @@ def group_people_for_admin_list(
             other.append(person)
 
     groups: List[Dict[str, Any]] = []
-    if partners:
-        groups.append({'key': 'partners', 'label': 'همکاران', 'people': partners})
     if pending:
         groups.append({'key': 'pending', 'label': 'در انتظار تأیید', 'people': pending})
+    if partners:
+        groups.append({'key': 'partners', 'label': 'همکاران', 'people': partners})
     if users:
         groups.append({'key': 'users', 'label': 'کاربران', 'people': users})
     if other:

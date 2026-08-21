@@ -64,52 +64,101 @@
 
 {% block content %}
 {% set ov = dash_overview|default({}) %}
+{% set queue_total = ov.queue_total|default(0) %}
+{% set ai_alerts = (ov.ai_pending|default(0)) + (ov.ai_errors|default(0)) %}
 <div id="adminOpsDashPage" class="ops-dash-layout">
   <section class="ops-dash-board" aria-label="داشبورد عملیات">
+
     <header class="ops-dash-hero">
-      <div>
-        <p class="ops-dash-kicker">Vinor Ops</p>
-        <h1 class="ops-dash-title">داشبورد</h1>
-        <p class="ops-dash-sub">وضعیت صف‌ها و میانبرهای عملیات</p>
+      <div class="ops-dash-hero__copy">
+        <p class="ops-dash-kicker" data-i18n="dashboard.kicker">مرکز عملیات</p>
+        <h1 class="ops-dash-title" data-i18n="dashboard.title">داشبورد</h1>
+        <p class="ops-dash-sub" data-i18n="dashboard.subtitle">وضعیت صف‌ها و میانبرهای عملیات.</p>
+      </div>
+      <div class="ops-dash-hero__meta">
+        {% if queue_total %}
+        <span class="ops-pill ops-pill--warn">
+          <i class="fa-solid fa-inbox" aria-hidden="true"></i>
+          <span class="tabular-nums">{{ queue_total|fa_digits }}</span>
+          <span data-i18n="dashboard.waiting_count">مورد در صف</span>
+        </span>
+        {% else %}
+        <span class="ops-pill ops-pill--ok">
+          <i class="fa-solid fa-check" aria-hidden="true"></i>
+          <span data-i18n="dashboard.ops_empty">اقدام عملیاتی معلقی نیست.</span>
+        </span>
+        {% endif %}
       </div>
     </header>
 
-    <div class="ops-dash-kpis" role="list">
-      <a role="listitem" class="ops-kpi" href="{{ url_for('admin.express_partners', filter='pending') }}">
-        <span class="ops-kpi__label">همکار معلق</span>
-        <span class="ops-kpi__value tabular-nums">{{ ov.partners_pending|default(0)|fa_digits }}</span>
-      </a>
-      <a role="listitem" class="ops-kpi" href="{{ url_for('admin.express_listings') }}">
-        <span class="ops-kpi__label">فایل معلق</span>
-        <span class="ops-kpi__value tabular-nums">{{ ov.lands_pending|default(0)|fa_digits }}</span>
-      </a>
-      <a role="listitem" class="ops-kpi" href="{{ url_for('admin.express_visit_requests') }}">
-        <span class="ops-kpi__label">بازدید معلق</span>
-        <span class="ops-kpi__value tabular-nums">{{ ov.visits_pending|default(0)|fa_digits }}</span>
-      </a>
-      <a role="listitem" class="ops-kpi" href="{{ url_for('admin.financial_withdrawals', filter='pending') }}">
-        <span class="ops-kpi__label">برداشت معلق</span>
-        <span class="ops-kpi__value tabular-nums">{{ ov.withdrawals_pending|default(0)|fa_digits }}</span>
-      </a>
+    <div class="ops-dash-body">
+      <div class="ops-dash-primary">
+        <div class="ops-dash-section">
+          <div class="ops-dash-section__head">
+            <h2 class="ops-dash-section__title" data-i18n="dashboard.pending_actions">اقدام‌های معلق</h2>
+            <p class="ops-dash-section__hint" data-i18n="dashboard.queue_hint">اول صف‌هایی را ببین که نیاز به تأیید دارند.</p>
+          </div>
+          <div class="ops-queue-grid" role="list">
+            {% for q in ov.work_queues|default([]) %}
+            {% set count = q.count|default(0) %}
+            <a role="listitem" class="ops-queue {% if count %}is-hot{% else %}is-clear{% endif %}" href="{{ q.url }}">
+              <span class="ops-queue__icon" aria-hidden="true">
+                <i class="fa-solid {{ q.icon }}"></i>
+              </span>
+              <span class="ops-queue__body">
+                <span class="ops-queue__label">{{ q.label }}</span>
+                <span class="ops-queue__hint">{{ q.hint }}</span>
+              </span>
+              <span class="ops-queue__count tabular-nums">{{ count|fa_digits }}</span>
+            </a>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <aside class="ops-dash-aside">
+        <a class="ops-ai-card" href="{{ url_for('admin.ai_hub') }}">
+          <div class="ops-ai-card__head">
+            <span class="ops-ai-card__icon" aria-hidden="true"><i class="fa-solid fa-robot"></i></span>
+            <div>
+              <h2 class="ops-ai-card__title" data-i18n="dashboard.ai_hub">هوش مصنوعی</h2>
+              <p class="ops-ai-card__sub" data-i18n="dashboard.ai_health">سلامت هوش مصنوعی</p>
+            </div>
+          </div>
+          <div class="ops-ai-card__stats">
+            <span class="ops-stat {% if ov.ai_pending %}is-warn{% endif %}">
+              <span class="ops-stat__value tabular-nums">{{ ov.ai_pending|default(0)|fa_digits }}</span>
+              <span class="ops-stat__label" data-i18n="dashboard.pending_confirm">تأیید معلق</span>
+            </span>
+            <span class="ops-stat {% if ov.ai_errors %}is-danger{% endif %}">
+              <span class="ops-stat__value tabular-nums">{{ ov.ai_errors|default(0)|fa_digits }}</span>
+              <span class="ops-stat__label" data-i18n="dashboard.errors">خطاها</span>
+            </span>
+          </div>
+          {% if ai_alerts %}
+          <span class="ops-dash-link__badge tabular-nums">{{ ai_alerts|fa_digits }}</span>
+          {% endif %}
+        </a>
+      </aside>
     </div>
 
-    {% set _ai_alerts = (ov.ai_pending|default(0)) + (ov.ai_errors|default(0)) %}
-    <a class="ops-dash-link ops-dash-link--ai" href="{{ url_for('admin.ai_hub') }}">
-      <i class="fa-solid fa-robot" aria-hidden="true"></i>
-      <span>هوش مصنوعی</span>
-      {% if _ai_alerts %}
-      <span class="ops-dash-link__badge tabular-nums">{{ _ai_alerts|fa_digits }}</span>
-      {% endif %}
-    </a>
-
     <div class="ops-dash-section">
-      <h2 class="ops-dash-section__title">میانبرها</h2>
-      <div class="ops-dash-links">
-        {% for link in ov.quick_links|default([]) %}
-        <a class="ops-dash-link" href="{{ link.url }}">
-          <i class="fa-solid {{ link.icon }}" aria-hidden="true"></i>
-          <span>{{ link.label }}</span>
-        </a>
+      <div class="ops-dash-section__head">
+        <h2 class="ops-dash-section__title" data-i18n="dashboard.modules">میانبر ماژول‌ها</h2>
+      </div>
+      <div class="ops-modules">
+        {% for group in ov.module_groups|default([]) %}
+        <section class="ops-module">
+          <h3 class="ops-module__title">{{ group.title }}</h3>
+          <div class="ops-module__links">
+            {% for link in group.links|default([]) %}
+            <a class="ops-dash-link" href="{{ link.url }}">
+              <i class="fa-solid {{ link.icon }}" aria-hidden="true"></i>
+              <span>{{ link.label }}</span>
+            </a>
+            {% endfor %}
+          </div>
+        </section>
         {% endfor %}
       </div>
     </div>

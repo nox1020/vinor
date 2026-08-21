@@ -144,16 +144,80 @@
     padding-left: 2rem;
   }
   #vnCustomerModal .vn-cust-field__textarea {
-    min-height: 6.5rem;
+    min-height: 4.25rem;
     resize: vertical;
   }
   #vnCustomerModal .vn-cust-field__select:focus,
-  #vnCustomerModal .vn-cust-field__textarea:focus {
+  #vnCustomerModal .vn-cust-field__textarea:focus,
+  #vnCustomerModal .vn-cust-field__input:focus {
     outline: none;
     border-color: rgba(52, 211, 153, 0.55);
   }
+  #vnCustomerModal .vn-cust-field__input {
+    width: 100%;
+    padding: 0.65rem 0.8rem;
+    border-radius: 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #12181f;
+    color: #f4f4f5;
+    font-size: 0.88rem;
+    font-family: inherit;
+  }
+  #vnCustomerModal .vn-cust-field__input::placeholder,
   #vnCustomerModal .vn-cust-field__textarea::placeholder {
     color: #71717a;
+  }
+  #vnCustomerModal .vn-cust-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+  #vnCustomerModal .vn-cust-extra {
+    border-radius: 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #10161d;
+    padding: 0.15rem 0.7rem 0.7rem;
+  }
+  #vnCustomerModal .vn-cust-extra > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 0.65rem 0.1rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #d4d4d8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  #vnCustomerModal .vn-cust-extra > summary::-webkit-details-marker {
+    display: none;
+  }
+  #vnCustomerModal .vn-cust-extra > summary::after {
+    content: "+";
+    color: #86efac;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+  #vnCustomerModal .vn-cust-extra[open] > summary::after {
+    content: "–";
+  }
+  #vnCustomerModal .vn-cust-extra .vn-cust-field {
+    margin-top: 0.35rem;
+  }
+  #vnCustomerModal .vn-cust-slot-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-height: 11.5rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  #vnCustomerModal .vn-cust-slot-empty {
+    margin: 0;
+    font-size: 0.75rem;
+    color: #fbbf24;
+    text-align: right;
   }
   #vnCustomerModal .vn-cust-plus-list {
     display: flex;
@@ -301,7 +365,8 @@
      data-lands='{{ customer_modal_lands|default([])|tojson }}'
      data-plus-users='{{ customer_modal_plus_users|default([])|tojson }}'
      data-next-visit="{% if _nv %}{{ ((_nv.weekday|default('')) ~ ' ' ~ (_nv.jalali_fa|default(_nv.jalali|default(''))) ~ ((' ساعت ' ~ _nv.time) if _nv.time else ''))|trim }}{% endif %}"
-     data-next-visit-by-plus='{{ next_auto_visit_by_plus|default({})|tojson }}'>
+     data-next-visit-by-plus='{{ next_auto_visit_by_plus|default({})|tojson }}'
+     data-visit-slots-by-plus='{{ visit_slots_by_plus|default({})|tojson }}'>
   <div class="vn-cust-modal__backdrop" data-cust-modal-close aria-hidden="true"></div>
   <div class="vn-cust-modal__shell">
     <div class="vn-cust-modal__panel"
@@ -348,13 +413,37 @@
             {% endfor %}
           </div>
         </div>
-        <p id="vnCustomerVisitHint" class="vn-cust-field__hint" hidden></p>
+        <div class="vn-cust-field" id="vnCustomerSlotField">
+          <span class="vn-cust-field__label" id="vnCustomerSlotLabel">وقت بازدید</span>
+          <div class="vn-cust-slot-list"
+               id="vnCustomerSlotList"
+               role="radiogroup"
+               aria-labelledby="vnCustomerSlotLabel"></div>
+          <p id="vnCustomerSlotEmpty" class="vn-cust-slot-empty" hidden>وقت مجازی باقی نمانده است.</p>
+        </div>
+        <details class="vn-cust-extra" id="vnCustomerExtra">
+          <summary>مشخصات مشتری <span class="vn-cust-field__label-hint">(اختیاری)</span></summary>
+          <div class="vn-cust-grid">
+            <label class="vn-cust-field">
+              <span class="vn-cust-field__label">نام</span>
+              <input class="vn-cust-field__input" name="customer_first_name" autocomplete="given-name" placeholder="نام">
+            </label>
+            <label class="vn-cust-field">
+              <span class="vn-cust-field__label">نام خانوادگی</span>
+              <input class="vn-cust-field__input" name="customer_last_name" autocomplete="family-name" placeholder="نام خانوادگی">
+            </label>
+          </div>
+          <label class="vn-cust-field">
+            <span class="vn-cust-field__label">موبایل</span>
+            <input class="vn-cust-field__input" name="customer_phone" dir="ltr" inputmode="tel" autocomplete="tel" placeholder="0912…">
+          </label>
+        </details>
         <label class="vn-cust-field">
           <span class="vn-cust-field__label">توضیحات <span class="vn-cust-field__label-hint">(اختیاری)</span></span>
           <textarea class="vn-cust-field__textarea"
                     name="notes"
-                    rows="5"
-                    placeholder="مثلاً ترجیح روز/ساعت، منطقه، یا نکتهٔ مهم برای تعیین وقت بازدید"></textarea>
+                    rows="3"
+                    placeholder="مثلاً ترجیح منطقه یا نکتهٔ مهم برای بازدید"></textarea>
         </label>
         <p id="vnCustomerModalError" class="vn-cust-modal__error" role="alert"></p>
         <div class="vn-cust-modal__foot">
@@ -382,7 +471,10 @@
   var landList = document.getElementById('vnCustomerLandList');
   var plusField = document.getElementById('vnCustomerPlusField');
   var plusList = document.getElementById('vnCustomerPlusList');
-  var visitHint = document.getElementById('vnCustomerVisitHint');
+  var slotField = document.getElementById('vnCustomerSlotField');
+  var slotList = document.getElementById('vnCustomerSlotList');
+  var slotEmpty = document.getElementById('vnCustomerSlotEmpty');
+  var extraEl = document.getElementById('vnCustomerExtra');
 
   function modalLands() {
     try {
@@ -482,9 +574,9 @@
     if (landField) landField.hidden = !!code || !lands.length;
   }
 
-  function visitHintMap() {
+  function slotsByPlus() {
     try {
-      var raw = modal.getAttribute('data-next-visit-by-plus') || '{}';
+      var raw = modal.getAttribute('data-visit-slots-by-plus') || '{}';
       var obj = JSON.parse(raw);
       return obj && typeof obj === 'object' ? obj : {};
     } catch (_) {
@@ -502,18 +594,32 @@
     return checkedValue(plusList, 'plus_user_phone');
   }
 
-  function syncVisitHint() {
-    if (!visitHint) return;
-    var map = visitHintMap();
+  function getVisitSlot() {
+    if (!slotList) return '';
+    return checkedValue(slotList, 'visit_slot');
+  }
+
+  function fillSlotSelect() {
+    if (!slotList) return;
+    var map = slotsByPlus();
     var phone = getPlusPhone();
-    var label = String(map[phone] || map[''] || modal.getAttribute('data-next-visit') || '').trim();
-    if (label) {
-      visitHint.hidden = false;
-      visitHint.textContent = 'اولین وقت مجاز: ' + label;
-    } else {
-      visitHint.hidden = true;
-      visitHint.textContent = '';
-    }
+    var slots = map[phone] || map[''] || [];
+    if (!Array.isArray(slots)) slots = [];
+    slotList.innerHTML = '';
+    slots.forEach(function (item, idx) {
+      if (!item || !item.value) return;
+      appendPickCard(slotList, {
+        name: 'visit_slot',
+        value: String(item.value),
+        title: String(item.label || item.value),
+        sub: '',
+        on: idx === 0
+      });
+    });
+    var has = slotList.children.length > 0;
+    if (slotField) slotField.hidden = false;
+    if (slotEmpty) slotEmpty.hidden = has;
+    if (submitBtn) submitBtn.disabled = !has;
   }
 
   function fillPlusSelect(selectedPhone) {
@@ -555,15 +661,21 @@
     plusList.__vinorVisitHintBound = true;
     plusList.addEventListener('change', function () {
       markPickCards(plusList);
-      syncVisitHint();
+      fillSlotSelect();
+    });
+  }
+
+  if (slotList && !slotList.__vinorPickBound) {
+    slotList.__vinorPickBound = true;
+    slotList.addEventListener('change', function () {
+      markPickCards(slotList);
     });
   }
 
   function syncLandUi(landCode) {
     fillLandSelect(landCode);
     fillPlusSelect('');
-    syncVisitHint();
-    if (submitBtn) submitBtn.disabled = false;
+    fillSlotSelect();
     setError('');
   }
 
@@ -691,10 +803,19 @@
       var pending = String(modal.getAttribute('data-pending-land-code') || '').trim();
       var picked = getLandCode();
       var plusPhone = getPlusPhone();
+      var visitSlot = getVisitSlot();
+      if (!visitSlot) {
+        setError('یک وقت مجاز انتخاب کنید.');
+        return;
+      }
       var payload = {
         notes: String(fd.get('notes') || '').trim(),
         land_code: pending || picked,
-        plus_user_phone: plusPhone
+        plus_user_phone: plusPhone,
+        visit_slot: visitSlot,
+        customer_first_name: String(fd.get('customer_first_name') || '').trim(),
+        customer_last_name: String(fd.get('customer_last_name') || '').trim(),
+        customer_phone: String(fd.get('customer_phone') || '').trim()
       };
 
       var url = modal.getAttribute('data-register-url') || '';
@@ -735,6 +856,7 @@
           }
           closeModal();
           try { form.reset(); } catch (_) {}
+          try { if (extraEl) extraEl.open = false; } catch (_) {}
           var nextUrl = data.redirect_url || modal.getAttribute('data-requests-url') || '';
           var onHome = !!document.getElementById('homeDashboardPage');
           var landCodeStay = pending || picked;

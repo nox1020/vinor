@@ -17,7 +17,7 @@
 
   <nav class="admin-sidebar-scroll flex-1 space-y-0.5 pb-6">
 
-    <div class="vc-nav-label">عملیات</div>
+    <div class="vc-nav-label">صف کار</div>
     <a href="{{ url_for('admin.dashboard') }}"
        class="vc-nav-link {% if ep in ['admin.dashboard', 'admin.admin_root'] %}is-active{% endif %}">
       <i class="fa-solid fa-gauge-high"></i><span>داشبورد</span>
@@ -36,9 +36,13 @@
       <i class="fa-solid fa-route"></i><span>روند بازدید</span>
       {% if control_badges and control_badges.visits %}<span class="vc-badge" data-i18n-number="{{ control_badges.visits }}">{{ control_badges.visits }}</span>{% endif %}
     </a>
+    <a href="{{ url_for('admin.financial_withdrawals') }}"
+       class="vc-nav-link {% if ep == 'admin.financial_withdrawals' %}is-active{% endif %}">
+      <i class="fa-solid fa-money-bill-transfer"></i><span>برداشت‌ها</span>
+    </a>
     <a href="{{ url_for('admin.reports_list') }}"
        class="vc-nav-link {% if ep == 'admin.reports_list' %}is-active{% endif %}">
-      <i class="fa-solid fa-flag"></i><span>گزارش‌های کاربران</span>
+      <i class="fa-solid fa-flag"></i><span>گزارش کاربران</span>
     </a>
 
     <div class="vc-nav-label">نمایش</div>
@@ -50,19 +54,19 @@
        class="vc-nav-link {% if ep == 'admin.express_cities' %}is-active{% endif %}">
       <i class="fa-solid fa-city"></i><span>شهرهای فعال</span>
     </a>
+    <a href="{{ url_for('admin.top_sellers') }}"
+       class="vc-nav-link {% if ep == 'admin.top_sellers' %}is-active{% endif %}">
+      <i class="fa-solid fa-trophy"></i><span>فروشنده‌های برتر</span>
+    </a>
 
     <div class="vc-nav-label">مالی</div>
     <a href="{{ url_for('admin.express_commissions') }}"
        class="vc-nav-link {% if ep in ['admin.express_commissions', 'admin.express_commission_edit'] %}is-active{% endif %}">
       <i class="fa-solid fa-wallet"></i><span>پورسانت‌ها</span>
     </a>
-    <a href="{{ url_for('admin.financial_withdrawals') }}"
-       class="vc-nav-link {% if ep == 'admin.financial_withdrawals' %}is-active{% endif %}">
-      <i class="fa-solid fa-money-bill-transfer"></i><span>درخواست‌های برداشت</span>
-    </a>
     <a href="{{ url_for('admin.zarinpal_plus') }}"
        class="vc-nav-link {% if ep == 'admin.zarinpal_plus' %}is-active{% endif %}">
-      <i class="fa-solid fa-credit-card"></i><span>زرین‌پال / Vinor Plus</span>
+      <i class="fa-solid fa-credit-card"></i><span>زرین‌پال / Plus</span>
     </a>
 
     <div class="vc-nav-label">ارتباط</div>
