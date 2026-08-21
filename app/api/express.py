@@ -15,6 +15,7 @@ def _cover_image_urls(cover) -> tuple[str, str, str]:
     return thumb, url, url
 from app.services.notifications import add_notification
 from app.utils.share_tokens import encode_partner_ref
+from app.utils.apk_version import android_apk_version_payload
 from app.utils.short_urls import canonical_public_apk_download_url
 
 express_api_bp = Blueprint('express_api', __name__, url_prefix='/api')
@@ -41,9 +42,16 @@ def get_app_version():
     """
     try:
         settings = load_settings() or {}
+        ver = android_apk_version_payload(settings)
         payload = {
             "success": True,
-            "android_apk_version": settings.get("android_apk_version") or "",
+            "android_apk_version": ver.get("android_apk_version") or "",
+            "android_apk_version_name": ver.get("android_apk_version_name") or "",
+            "android_apk_version_code": ver.get("android_apk_version_code") or 0,
+            "android_apk_min_supported_version_code": ver.get(
+                "android_apk_min_supported_version_code"
+            )
+            or 0,
             # Absolute https://vinor.ir/d/... for Android trust + DownloadManager
             "android_apk_url": canonical_public_apk_download_url(settings) or "",
             # Direct uploads path (public prefix) — client may fall back if /d fails

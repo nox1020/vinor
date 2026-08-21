@@ -429,13 +429,13 @@
   }
 
   function ensureNativeApkDownload(opts) {
-    opts = opts || {};
-    const url = String(opts.url || serverApkUrl || '').trim();
-    const version = String(opts.version || serverApkVersion || '').trim();
-    if (!url || !version) return;
+    if (!isVinorApkClient()) return;
     try {
+      if (window.VinorNativeAppUpdate && typeof window.VinorNativeAppUpdate.retryDownload === 'function') {
+        return;
+      }
       if (window.VinorNativeAppUpdate && typeof window.VinorNativeAppUpdate.ensureDownload === 'function') {
-        window.VinorNativeAppUpdate.ensureDownload(url, version);
+        window.VinorNativeAppUpdate.ensureDownload('', '');
       }
     } catch (_) {}
   }
@@ -443,30 +443,47 @@
   function applyApkDownloadUi(detail) {
     const strip = getApkStripEl();
     if (!strip || strip.getAttribute('data-apk-strip-mode') !== 'update') return;
+    const title = strip.querySelector('[data-apk-strip-title]');
     const sub = strip.querySelector('[data-apk-strip-sub]');
     const cta = strip.querySelector('[data-apk-strip-cta]');
     const status = String((detail && detail.status) || '').toLowerCase();
-    const version = String((detail && detail.version) || serverApkVersion || '').trim();
-    if (status === 'downloading') {
-      if (sub) sub.textContent = 'در حال دانلود بروزرسانی…';
+    const version = String((detail && (detail.versionName || detail.version)) || serverApkVersion || '').trim();
+    const percent = Number(detail && detail.percent);
+    const hasPct = Number.isFinite(percent) && percent >= 0;
+    const pctLabel = hasPct ? String(Math.min(100, Math.round(percent))) + '٪' : '';
+
+    if (status === 'downloading' || status === 'paused' || status === 'verifying' ||
+        status === 'available' || status === 'checking') {
+      if (title) title.textContent = 'نسخه جدید موجود است';
+      let msg = 'در حال دانلود بروزرسانی…';
+      if (status === 'paused') msg = 'قطع شد — پس از اتصال ادامه می‌یابد…';
+      if (status === 'verifying') msg = 'در حال بررسی فایل…';
+      if (status === 'available' || status === 'checking') msg = 'نسخه جدید موجود است';
+      if ((status === 'downloading' || status === 'paused') && pctLabel) {
+        msg = 'در حال دانلود بروزرسانی... ' + pctLabel;
+      }
+      if (sub) sub.textContent = msg;
       if (cta) cta.textContent = 'دانلود';
       strip.setAttribute('data-apk-download-status', 'downloading');
       return;
     }
-    if (status === 'ready') {
-      if (sub) sub.textContent = version ? ('نسخه جدید ' + version + ' — آماده نصب') : 'آماده نصب';
+    if (status === 'ready' || status === 'installing') {
+      if (title) title.textContent = 'نسخه جدید آماده نصب است';
+      if (sub) sub.textContent = version ? ('وینور ' + version) : 'آماده نصب';
       if (cta) cta.textContent = 'نصب';
       strip.setAttribute('data-apk-download-status', 'ready');
       return;
     }
     if (status === 'failed') {
-      if (sub) sub.textContent = 'خطا در دانلود — دوباره تلاش کنید';
-      if (cta) cta.textContent = 'آپدیت';
+      if (title) title.textContent = 'دانلود بروزرسانی ناموفق بود';
+      if (sub) sub.textContent = 'برای تلاش دوباره لمس کنید';
+      if (cta) cta.textContent = 'تلاش دوباره';
       strip.setAttribute('data-apk-download-status', 'failed');
       return;
     }
     strip.removeAttribute('data-apk-download-status');
-    if (sub && version) sub.textContent = 'نسخه جدید ' + version;
+    if (title) title.textContent = 'نسخه جدید آماده است';
+    if (sub && version) sub.textContent = 'وینور ' + version;
   }
 
   function syncNativeDownloadUi() {
@@ -485,13 +502,16 @@
     const status = strip && strip.getAttribute('data-apk-download-status');
     if (status === 'downloading') return;
     try {
+      if (status === 'failed' && window.VinorNativeAppUpdate &&
+          typeof window.VinorNativeAppUpdate.retryDownload === 'function') {
+        window.VinorNativeAppUpdate.retryDownload();
+        return;
+      }
       if (window.VinorNativeAppUpdate && typeof window.VinorNativeAppUpdate.installUpdate === 'function') {
         const installed = window.VinorNativeAppUpdate.installUpdate();
-        if (!installed) {
-          const stored = readUpdateNav() || {};
-          const url = (strip && strip.getAttribute('data-apk-update-url')) || stored.url || serverApkUrl;
-          const version = stored.version || serverApkVersion;
-          ensureNativeApkDownload({ url: url, version: version });
+        if (!installed && status === 'failed' &&
+            typeof window.VinorNativeAppUpdate.retryDownload === 'function') {
+          window.VinorNativeAppUpdate.retryDownload();
         }
         return;
       }
@@ -552,6 +572,7 @@
       try { window.VinorNativeAppUpdate.refresh(); } catch (_) {}
       return;
     }
+    /* فقط برای کلاینت بدون پل نیتیو — نسخهٔ قدیمی */
     const clientV = parseClientAppVersion();
     if (!clientV) {
       removeInstallApkStrip();
@@ -592,6 +613,23 @@
 
     removeInstallApkStrip();
 
+    if (window.VinorNativeAppUpdate && typeof window.VinorNativeAppUpdate.getCachedState === 'function') {
+      try {
+        const nativeRaw = window.VinorNativeAppUpdate.getCachedState();
+        const nativeState = nativeRaw ? JSON.parse(nativeRaw) : null;
+        if (nativeState && nativeState.show) {
+          persistUpdateNav(nativeState);
+          applyUpdateNav(true, nativeState);
+          applyApkDownloadUi(nativeState);
+          return;
+        }
+      } catch (_) {}
+      renderApkStrip(false);
+      persistUpdateNav(null);
+      applyUpdateNav(false);
+      return;
+    }
+
     const clientV = parseClientAppVersion();
     const serverV = String(serverApkVersion || '').trim();
     const url = String(serverApkUrl || '').trim();
@@ -617,6 +655,20 @@
 
   window.__vinorSyncBottomNavBadges = syncAllNavBadges;
   window.vinorClearBottomNavMenuCache = function () {};
+
+  window.addEventListener('vinor:app-update:state', function (ev) {
+    try {
+      const d = (ev && ev.detail) || {};
+      if (d.show) {
+        persistUpdateNav(d);
+        applyUpdateNav(true, d);
+        applyApkDownloadUi(d);
+      } else {
+        persistUpdateNav(null);
+        applyUpdateNav(false);
+      }
+    } catch (_) {}
+  });
 
   window.addEventListener('vinor:app-update:nav', function (ev) {
     try {

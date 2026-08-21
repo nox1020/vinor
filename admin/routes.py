@@ -555,6 +555,8 @@ def _default_settings() -> Dict[str, Any]:
         # Android APK info
         'android_apk_url': '',
         'android_apk_version': '',
+        'android_apk_version_code': 0,
+        'android_apk_min_supported_version_code': 0,
         'android_apk_updated_at': '',
         'android_apk_size_bytes': '',
         'android_apk_sha256': '',
@@ -2417,7 +2419,7 @@ def _save_uploaded_android_apk(
         render_apk_update_sms_message,
     )
     from admin.sms_recipients import recipient_group_label
-    from app.utils.apk_meta import extract_apk_version_name
+    from app.utils.apk_meta import extract_apk_version_meta
 
     if not file_storage or not getattr(file_storage, "filename", None):
         raise ValueError("فایلی انتخاب نشده است.")
@@ -2468,7 +2470,9 @@ def _save_uploaded_android_apk(
     except Exception:
         original_name = ""
 
-    version = extract_apk_version_name(dest, original_name=original_name or file_storage.filename)
+    version, version_code = extract_apk_version_meta(
+        dest, original_name=original_name or file_storage.filename
+    )
     if not version:
         try:
             os.remove(dest)
@@ -2495,6 +2499,7 @@ def _save_uploaded_android_apk(
         {
             "android_apk_url": apk_url,
             "android_apk_version": version,
+            "android_apk_version_code": int(version_code or 0),
             "android_apk_updated_at": updated_at,
             "android_apk_size_bytes": size_bytes if size_bytes is not None else "",
             "android_apk_sha256": sha256,
@@ -2535,6 +2540,7 @@ def _save_uploaded_android_apk(
         "ok": True,
         "android_apk_url": apk_url,
         "android_apk_version": version,
+        "android_apk_version_code": int(version_code or 0),
         "android_apk_updated_at": updated_at,
         "android_apk_size_bytes": size_bytes if size_bytes is not None else "",
         "android_apk_sha256": sha256,

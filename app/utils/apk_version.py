@@ -13,6 +13,8 @@ _VINOR_APP_UA = re.compile(
 def is_vinor_apk_request(req) -> bool:
     if (req.headers.get('X-Vinor-App-Version') or '').strip():
         return True
+    if (req.headers.get('X-Vinor-App-Version-Code') or '').strip():
+        return True
     ua = (req.headers.get('User-Agent') or '')
     return bool(re.search(r'VinorApp/(?:Android|WebViewOnly)', ua, re.IGNORECASE))
 
@@ -64,12 +66,66 @@ def is_server_apk_newer(server_version: str, client_version: str) -> bool:
     return compare_versions(client, server) < 0
 
 
+def parse_vinor_app_version_code(req=None, header_code: str = '') -> int:
+    raw = (header_code or '').strip()
+    if not raw and req is not None:
+        raw = (req.headers.get('X-Vinor-App-Version-Code') or '').strip()
+    try:
+        n = int(str(raw).split('.')[0])
+        return n if n > 0 else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def resolve_android_apk_version_code(settings: Optional[dict] = None) -> int:
+    """versionCode ذخیره‌شده، در غیر این صورت از فایل APK، در نهایت از versionName."""
+    data = settings if isinstance(settings, dict) else {}
+    raw = data.get('android_apk_version_code')
+    try:
+        stored = int(raw)
+        if stored > 0:
+            return stored
+    except (TypeError, ValueError):
+        pass
+    try:
+        from .apk_meta import extract_apk_version_code, version_code_from_name
+        from .short_urls import resolve_apk_filesystem_path
+
+        fp, _name = resolve_apk_filesystem_path(data)
+        if fp:
+            code = int(extract_apk_version_code(fp) or 0)
+            if code > 0:
+                return code
+        return version_code_from_name(str(data.get('android_apk_version') or ''))
+    except Exception:
+        return 0
+
+
+def android_apk_version_payload(settings: Optional[dict] = None) -> dict:
+    data = settings if isinstance(settings, dict) else {}
+    version_name = str(data.get('android_apk_version') or '').strip()
+    version_code = resolve_android_apk_version_code(data)
+    min_code = 0
+    try:
+        min_code = int(data.get('android_apk_min_supported_version_code') or 0)
+    except (TypeError, ValueError):
+        min_code = 0
+    return {
+        'android_apk_version': version_name,
+        'android_apk_version_name': version_name,
+        'android_apk_version_code': version_code if version_code > 0 else 0,
+        'android_apk_min_supported_version_code': min_code if min_code > 0 else 0,
+    }
+
+
 def should_show_apk_update(
     server_version: str,
     *,
     client_version: Optional[str] = None,
     apk_url: str = '',
     req=None,
+    server_version_code: int = 0,
+    client_version_code: int = 0,
 ) -> bool:
     hdr_client = ''
     if req is not None:
@@ -79,8 +135,14 @@ def should_show_apk_update(
         return False
     if not (apk_url or '').strip():
         return False
-    if not (server_version or '').strip():
+    if not (server_version or '').strip() and int(server_version_code or 0) <= 0:
         return False
+    client_code = int(client_version_code or 0)
+    if client_code <= 0:
+        client_code = parse_vinor_app_version_code(req)
+    server_code = int(server_version_code or 0)
+    if server_code > 0 and client_code > 0:
+        return client_code < server_code
     if client_version is not None and str(client_version).strip():
         client = str(client_version).strip()
     elif req is not None:

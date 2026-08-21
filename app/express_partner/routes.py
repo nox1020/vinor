@@ -1580,7 +1580,7 @@ def inject_role_flags():
             _apk_settings = _express_settings_cached()
             _raw_apk_url = (_apk_settings.get('android_apk_url') or '').strip()
             android_apk_version = (_apk_settings.get('android_apk_version') or '').strip()
-            from ..utils.apk_version import should_show_apk_update
+            from ..utils.apk_version import resolve_android_apk_version_code, should_show_apk_update
             from ..utils.short_urls import public_apk_download_url
             if _raw_apk_url:
                 android_apk_url = public_apk_download_url(_apk_settings, external=False)
@@ -1588,6 +1588,7 @@ def inject_role_flags():
                 android_apk_version,
                 apk_url=_raw_apk_url,
                 req=request,
+                server_version_code=resolve_android_apk_version_code(_apk_settings),
             )
             if show_app_update_nav and _raw_apk_url:
                 show_apk_strip = True
@@ -3600,12 +3601,17 @@ def home_page():
         android_apk_version = (_settings.get('android_apk_version') or '').strip()
         from ..utils.short_urls import public_apk_download_url
         android_apk_url = public_apk_download_url(_settings, external=False) if _raw_apk_url else ''
-        from ..utils.apk_version import is_vinor_apk_request, should_show_apk_update
+        from ..utils.apk_version import (
+            is_vinor_apk_request,
+            resolve_android_apk_version_code,
+            should_show_apk_update,
+        )
         is_vinor_apk = is_vinor_apk_request(request)
         show_app_update_card = should_show_apk_update(
             android_apk_version,
             apk_url=_raw_apk_url,
             req=request,
+            server_version_code=resolve_android_apk_version_code(_settings),
         )
         # اگر آپدیت لازم نیست، URL را برای کارت منو خالی بگذار (بنر نصب از context می‌آید)
         if is_vinor_apk and not show_app_update_card:
@@ -8319,11 +8325,12 @@ def profile_data():
     android_apk_version = (_settings.get('android_apk_version') or '').strip()
     from ..utils.short_urls import canonical_public_apk_download_url
     android_apk_url = canonical_public_apk_download_url(_settings) if _raw_apk_url else ''
-    from ..utils.apk_version import should_show_apk_update
+    from ..utils.apk_version import resolve_android_apk_version_code, should_show_apk_update
     show_app_update = should_show_apk_update(
         android_apk_version,
         apk_url=_raw_apk_url,
         req=request,
+        server_version_code=resolve_android_apk_version_code(_settings),
     )
     try:
         from flask_wtf.csrf import generate_csrf
