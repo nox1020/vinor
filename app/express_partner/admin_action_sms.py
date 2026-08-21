@@ -77,6 +77,9 @@ def _build_message(action: str, settings: dict, **kw: Any) -> str:
         notes = (kw.get('notes') or '').strip()
         if notes:
             lines.append(notes)
+        addr = (kw.get('presence_address') or '').strip()
+        if addr:
+            lines.append(f'آدرس حضور: {addr}')
         sys_date = (kw.get('system_date') or '').strip()
         if sys_date:
             lines.append(sys_date)
@@ -148,7 +151,7 @@ def _send_sms_to(mobile: str, msg: str, *, line: str, action: str, recipient_nam
 
 def _notify_special_land_owner(action: str, msg: str, line: str, **kwargs: Any) -> None:
     """برای بازدید روی آگهی ویژه، علاوه بر ادمین به مالک ویژه هم پیامک بزن."""
-    if action not in ('visit', 'visit_done'):
+    if action not in ('visit', 'visit_done', 'commission'):
         return
     land_code = str(kwargs.get('land_code') or '').strip()
     if not land_code:
@@ -183,6 +186,11 @@ def _notify_special_land_owner(action: str, msg: str, line: str, **kwargs: Any) 
         elif action == 'visit_done':
             owner_msg = (
                 f"وینور\nانجام بازدید روی آگهی‌ت · {land_code}\n"
+                f"از صندوق بازدید تأیید کن"
+            )
+        elif action == 'commission':
+            owner_msg = (
+                f"وینور\nدرخواست فروش روی آگهی‌ت · {land_code}\n"
                 f"از صندوق بازدید تأیید کن"
             )
         _send_sms_to(

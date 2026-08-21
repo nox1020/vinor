@@ -319,6 +319,7 @@ def save_plus_visit_schedule(
     *,
     weekdays: List[int],
     hours: List[int],
+    presence_address: str | None = None,
 ) -> Tuple[Optional[List[int]], Optional[List[int]], str]:
     """ذخیرهٔ وقت بازدید روی رکورد همکار پلاس. خطای خالی یعنی موفق."""
     from .partner_roles import partner_is_special
@@ -336,8 +337,43 @@ def save_plus_visit_schedule(
     hrs = _normalize_hour_list(hours)
     rec["visit_allowed_weekdays"] = days
     rec["visit_allowed_hours"] = hrs
+    if presence_address is not None:
+        rec["visit_presence_address"] = _normalize_presence_address(presence_address)
     save_express_partners(partners)
     return days, hrs, ""
+
+
+VISIT_PRESENCE_ADDRESS_MAX = 200
+
+
+def _normalize_presence_address(raw: Any) -> str:
+    text = " ".join(str(raw or "").replace("\r", "\n").split())
+    if len(text) > VISIT_PRESENCE_ADDRESS_MAX:
+        text = text[:VISIT_PRESENCE_ADDRESS_MAX].rstrip()
+    return text
+
+
+def get_plus_visit_presence_address(phone: str = "") -> str:
+    rec = _plus_partner_record(phone) if phone else None
+    if rec is None:
+        return ""
+    return _normalize_presence_address(rec.get("visit_presence_address"))
+
+
+def resolve_visit_presence_address(
+    *,
+    stored: str = "",
+    plus_user_phone: str = "",
+    land_code: str = "",
+) -> str:
+    """آدرس حضور ذخیره‌شده روی بازدید، وگرنه آدرس فعلی کاربر پلاس."""
+    addr = _normalize_presence_address(stored)
+    if addr:
+        return addr
+    plus = (plus_user_phone or "").strip()
+    if not plus and land_code:
+        plus = plus_phone_for_land_code(land_code)
+    return get_plus_visit_presence_address(plus) if plus else ""
 
 
 def visit_allowed_hours_summary(*, plus_user_phone: str = "") -> str:
@@ -737,6 +773,9 @@ def partner_request_feed_item(
     land_title = visit_request_display_title(row)
     plus_user_name = str(row.get("plus_user_name") or "").strip()
     plus_user_phone = str(row.get("plus_user_phone") or "").strip()
+    presence_address = _normalize_presence_address(row.get("visit_presence_address"))
+    if not presence_address and plus_user_phone:
+        presence_address = get_plus_visit_presence_address(plus_user_phone)
     support = (support_phone or "").strip()
     can_cancel = st in (PENDING_STATUS, APPROVED_STATUS)
     can_delete = st in (CANCELLED_STATUS, NO_SHOW_STATUS, COMPLETED_STATUS)
@@ -747,6 +786,7 @@ def partner_request_feed_item(
         "land_title": land_title,
         "plus_user_name": plus_user_name,
         "plus_user_phone": plus_user_phone,
+        "visit_presence_address": presence_address,
         "title": land_title,
         "customer_name": cust_name,
         "visit_date": visit_date,
@@ -1350,6 +1390,9 @@ def create_visit_request(
     if plus_phone:
         rec["plus_user_phone"] = plus_phone
         rec["plus_user_name"] = plus_name or plus_phone
+        addr = get_plus_visit_presence_address(plus_phone)
+        if addr:
+            rec["visit_presence_address"] = addr
     if auto:
         rec["approved_at"] = now_iso
     requests.append(rec)

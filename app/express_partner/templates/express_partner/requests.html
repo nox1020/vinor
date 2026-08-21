@@ -317,6 +317,9 @@
               {% if item.plus_user_name %}
               <p class="rq-card__fact"><strong>کاربر پلاس:</strong> {{ item.plus_user_name }}</p>
               {% endif %}
+              {% if item.visit_presence_address %}
+              <p class="rq-card__fact"><strong>آدرس حضور:</strong> {{ item.visit_presence_address }}</p>
+              {% endif %}
               {% if phone %}
               <p class="rq-card__fact">
                 <strong>شماره پشتیبان:</strong>

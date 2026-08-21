@@ -617,7 +617,7 @@ def build_journey_chat_cta(
     if mode == "visit_done" or stage == "بازدید تأییدشد":
         return {
             "label": "بازدید انجام شد",
-            "icon": "fa-map-marker-alt",
+            "icon": "fa-check-double",
             "action": "complete_visit",
             "prompt": f"{head}: بازدید انجام شد — کارت تأییدش رو بده.",
         }

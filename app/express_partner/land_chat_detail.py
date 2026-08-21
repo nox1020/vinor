@@ -5,6 +5,72 @@ from typing import Any, Dict, Optional, Tuple
 
 from flask import render_template, session
 
+_PLUS_OUTCOME_LABELS = {
+    "interested": "علاقه‌مند",
+    "not_interested": "بی‌علاقه",
+    "follow_up": "نیاز به پیگیری",
+    "no_show": "عدم حضور",
+}
+
+
+def _attach_plus_feedback(land: Dict[str, Any], visit_row: Optional[Dict[str, Any]]) -> None:
+    """نام کاربر پلاس و بازخورد ثبت‌شده روی کارت فایل چت."""
+    land["_plus_user_name"] = ""
+    land["_plus_user_phone"] = ""
+    land["_plus_feedback"] = None
+    if not isinstance(visit_row, dict):
+        return
+    land["_plus_user_name"] = str(visit_row.get("plus_user_name") or "").strip()
+    land["_plus_user_phone"] = str(visit_row.get("plus_user_phone") or "").strip()
+    vid = str(visit_row.get("id") or "").strip()
+    if not vid:
+        return
+    try:
+        from app.visit_result.store import get_result_for_visit
+
+        vr = get_result_for_visit(vid)
+    except Exception:
+        vr = None
+    if vr is None:
+        return
+    oc = str(getattr(vr, "outcome", "") or "").strip()
+    if not oc:
+        return
+    tone = "ok"
+    if oc in ("not_interested", "no_show"):
+        tone = "down"
+    elif oc == "follow_up":
+        tone = "wait"
+    land["_plus_feedback"] = {
+        "outcome": oc,
+        "label": _PLUS_OUTCOME_LABELS.get(oc, oc),
+        "notes": str(getattr(vr, "notes", "") or "").strip(),
+        "tone": tone,
+    }
+
+
+def _tune_land_chat_cta(cta: Dict[str, Any], *, can_revisit: bool) -> Dict[str, Any]:
+    """برچسب دکمه‌های کارت فایل داخل چت — بدون پرامپت سفر."""
+    out = dict(cta or {})
+    action = str(out.get("action") or "").strip()
+    label = str(out.get("label") or "").strip()
+    if action == "visit" and label in ("ادامه", ""):
+        out["label"] = "ثبت بازدید"
+        out["icon"] = str(out.get("icon") or "").strip() or "fa-calendar-days"
+    if action == "complete_visit":
+        out["label"] = "بازدید انجام شد"
+        out["icon"] = "fa-check-double"
+    sec = str(out.get("secondary_action") or "").strip()
+    sec_label = str(out.get("secondary_label") or "").strip()
+    if sec == "visit" and not sec_label:
+        out["secondary_label"] = "بازدید مجدد" if can_revisit else "ثبت بازدید"
+        out["secondary_icon"] = str(out.get("secondary_icon") or "").strip() or "fa-calendar-plus"
+    if sec and not str(out.get("secondary_label") or "").strip():
+        out["secondary_action"] = ""
+        out["secondary_icon"] = ""
+        out["secondary_prompt"] = ""
+    return out
+
 
 def prepare_land_for_chat_detail(code: str) -> Tuple[Optional[Dict[str, Any]], bool]:
     """آماده‌سازی dict فایل + is_approved برای قالب جزئیات چت."""
@@ -95,19 +161,27 @@ def prepare_land_for_chat_detail(code: str) -> Tuple[Optional[Dict[str, Any]], b
     land["_tx_button_mode"] = tx_state.get("tx_mode") or "visit"
     land["_can_revisit"] = bool(tx_state.get("can_revisit"))
 
+    visit_row = None
+    if is_approved and me_phone:
+        visit_row = partner_active_visit_record(visit_requests_list, me_phone, code_s)
+    _attach_plus_feedback(land, visit_row)
+
     try:
-        land["_chat_cta"] = build_journey_chat_cta(
-            code=code_s,
-            title=str(land.get("title") or "").strip(),
-            tx_mode=str(land.get("_tx_button_mode") or ""),
-            stage_label="",
+        land["_chat_cta"] = _tune_land_chat_cta(
+            build_journey_chat_cta(
+                code=code_s,
+                title=str(land.get("title") or "").strip(),
+                tx_mode=str(land.get("_tx_button_mode") or ""),
+                stage_label="",
+                can_revisit=bool(land.get("_can_revisit")),
+            ),
             can_revisit=bool(land.get("_can_revisit")),
         )
     except Exception:
         land["_chat_cta"] = {
-            "label": "ادامه در چت",
-            "icon": "fa-comments",
-            "action": "",
+            "label": "ثبت بازدید",
+            "icon": "fa-calendar-days",
+            "action": "visit",
             "prompt": (
                 f"فایل {code_s}: قدم بعدی فروش را از چت پیش ببر و اگر ثبت لازم است "
                 "ابزار مربوطه را با کارت تأیید پیشنهاد بده."
@@ -117,7 +191,7 @@ def prepare_land_for_chat_detail(code: str) -> Tuple[Optional[Dict[str, Any]], b
     land["_visit_progress_steps"] = []
     land["_visit_progress_summary"] = {}
     if is_approved and me_phone:
-        progress_row = partner_active_visit_record(visit_requests_list, me_phone, code_s)
+        progress_row = visit_row
         if progress_row is None:
             progress_row = {
                 "partner_phone": me_phone,

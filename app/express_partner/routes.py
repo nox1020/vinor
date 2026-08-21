@@ -2179,6 +2179,7 @@ def _send_visit_schedule_admin_sms(
     partner_phone: str,
     partner_name: str,
     notes: str = '',
+    presence_address: str = '',
 ) -> dict:
     """پیامک پشتیبان برای درخواست تعیین وقت بازدید از مدال خانه."""
     from .admin_action_sms import notify_admin_pending_action
@@ -2189,6 +2190,7 @@ def _send_visit_schedule_admin_sms(
         partner_phone=partner_phone,
         partner_name=partner_name,
         notes=(notes or '').strip(),
+        presence_address=(presence_address or '').strip(),
         system_date=format_display_jalali_datetime(None),
     )
 
@@ -2213,30 +2215,35 @@ def _visit_schedule_support_phone() -> str:
     return '09121471301'
 
 
-def _send_visit_schedule_partner_sms(
+def _visit_schedule_party_lines(label: str, name: str, phone: str) -> list:
+    """مشخصات طرف مقابل — نام و شماره؛ اگر خالی باشد خطی اضافه نمی‌شود."""
+    label_s = (label or '').strip()
+    name_s = (name or '').strip()
+    phone_s = (phone or '').strip()
+    if not label_s or (not name_s and not phone_s):
+        return []
+    shown = name_s or phone_s
+    lines = [f'{label_s}: {shown}']
+    if phone_s and phone_s != shown:
+        lines.append(phone_s)
+    return lines
+
+
+def _build_visit_schedule_sms(
     *,
-    partner_phone: str,
     weekday: str = '',
     jalali_date: str = '',
     visit_time: str = '',
+    presence_address: str = '',
     support_phone: str = '',
-) -> dict:
-    """پیامک بازاریاب: روز/تاریخ/ساعت تعیین‌شده + شماره پشتیبان برای هماهنگی."""
-    from datetime import datetime
-
-    from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
-    from ..utils.storage import load_settings, load_sms_history, save_sms_history
-    from app.services.sms_config import get_sms_line_number
-
-    mobile = normalize_iran_mobile(partner_phone)
-    if not is_valid_iran_mobile(mobile):
-        return {'ok': False, 'skipped': True, 'error': 'invalid_partner_phone'}
-
-    support = normalize_iran_mobile(support_phone) or _visit_schedule_support_phone()
+    counterpart_label: str = '',
+    counterpart_name: str = '',
+    counterpart_phone: str = '',
+) -> str:
+    """قالب یکسان تعیین وقت — فقط مشخصات طرف مقابل فرق می‌کند."""
     day = (weekday or '').strip()
     date_s = (jalali_date or '').strip()
     time_s = (visit_time or '').strip()
-
     when_parts = [p for p in (day, date_s) if p]
     when_line = ' '.join(when_parts) if when_parts else '—'
     lines = [
@@ -2246,12 +2253,38 @@ def _send_visit_schedule_partner_sms(
     ]
     if time_s:
         lines.append(f'ساعت {time_s}')
-    lines.append(f'هماهنگی با پشتیبانی: {support}')
-    msg = '\n'.join(lines)
+    addr = (presence_address or '').strip()
+    if addr:
+        lines.append(f'آدرس حضور: {addr}')
+    lines.extend(_visit_schedule_party_lines(
+        counterpart_label, counterpart_name, counterpart_phone,
+    ))
+    support = (support_phone or '').strip()
+    if support:
+        lines.append(f'هماهنگی با پشتیبانی: {support}')
+    return '\n'.join(lines)
+
+
+def _send_visit_schedule_sms_to(
+    *,
+    to_phone: str,
+    message: str,
+    history_type: str,
+    partner_phone: str = '',
+) -> dict:
+    from datetime import datetime
+
+    from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
+    from ..utils.storage import load_settings, load_sms_history, save_sms_history
+    from app.services.sms_config import get_sms_line_number
+
+    mobile = normalize_iran_mobile(to_phone)
+    if not is_valid_iran_mobile(mobile):
+        return {'ok': False, 'skipped': True, 'error': 'invalid_phone'}
 
     settings = load_settings(current_app) or {}
     line = (settings.get('sms_line_number') or get_sms_line_number() or '09981801922').strip()
-    sms_result = send_sms_direct(mobile=mobile, message=msg, line_number=line, record_history=False)
+    sms_result = send_sms_direct(mobile=mobile, message=message, line_number=line, record_history=False)
     ok = bool(sms_result.get('ok'))
     err = None
     body = sms_result.get('body') or {}
@@ -2259,7 +2292,8 @@ def _send_visit_schedule_partner_sms(
         err = str(body.get('message') or body.get('error') or 'sms_send_failed')
         try:
             current_app.logger.error(
-                'Visit schedule partner SMS failed mobile=%s status=%s body=%s',
+                'Visit schedule SMS failed type=%s mobile=%s status=%s body=%s',
+                history_type,
                 mobile,
                 sms_result.get('status'),
                 body,
@@ -2272,10 +2306,10 @@ def _send_visit_schedule_partner_sms(
         if not isinstance(history, list):
             history = []
         history.append({
-            'type': 'partner_visit_schedule',
+            'type': history_type,
             'mobile': mobile,
-            'partner_phone': partner_phone,
-            'message': msg,
+            'partner_phone': partner_phone or to_phone,
+            'message': message,
             'ok': ok,
             'error': err,
             'status_code': sms_result.get('status', 0),
@@ -2287,11 +2321,90 @@ def _send_visit_schedule_partner_sms(
         save_sms_history(history, current_app)
     except Exception:
         try:
-            current_app.logger.exception('Visit schedule partner SMS history failed')
+            current_app.logger.exception('Visit schedule SMS history failed type=%s', history_type)
         except Exception:
             pass
 
     return {'ok': ok, 'skipped': False, 'error': err}
+
+
+def _send_visit_schedule_partner_sms(
+    *,
+    partner_phone: str,
+    partner_name: str = '',
+    weekday: str = '',
+    jalali_date: str = '',
+    visit_time: str = '',
+    support_phone: str = '',
+    presence_address: str = '',
+    plus_user_phone: str = '',
+    plus_user_name: str = '',
+    land_code: str = '',
+) -> dict:
+    """پیامک تعیین وقت یکسان برای بازاریاب و کاربر پلاس؛ فقط مشخصات طرفین فرق دارد."""
+    from ..services.sms import normalize_iran_mobile
+
+    support = normalize_iran_mobile(support_phone) or _visit_schedule_support_phone()
+    addr = (presence_address or '').strip()
+    if not addr:
+        try:
+            from .visit_requests import resolve_visit_presence_address
+            addr = resolve_visit_presence_address(
+                plus_user_phone=plus_user_phone,
+                land_code=land_code,
+            )
+        except Exception:
+            addr = ''
+
+    common = {
+        'weekday': weekday,
+        'jalali_date': jalali_date,
+        'visit_time': visit_time,
+        'presence_address': addr,
+        'support_phone': support,
+    }
+    partner_n = normalize_iran_mobile(partner_phone)
+    plus_n = normalize_iran_mobile(plus_user_phone)
+    same_person = bool(partner_n and plus_n and partner_n == plus_n)
+
+    partner_msg = _build_visit_schedule_sms(
+        **common,
+        counterpart_label='' if (not plus_n or same_person) else 'کاربر پلاس',
+        counterpart_name=plus_user_name,
+        counterpart_phone=plus_user_phone,
+    )
+    partner_res = _send_visit_schedule_sms_to(
+        to_phone=partner_phone,
+        message=partner_msg,
+        history_type='partner_visit_schedule',
+        partner_phone=partner_phone,
+    )
+
+    plus_res = {'ok': True, 'skipped': True, 'error': None}
+    if plus_n and not same_person:
+        plus_msg = _build_visit_schedule_sms(
+            **common,
+            counterpart_label='بازاریاب',
+            counterpart_name=partner_name or partner_phone,
+            counterpart_phone=partner_phone,
+        )
+        plus_res = _send_visit_schedule_sms_to(
+            to_phone=plus_user_phone,
+            message=plus_msg,
+            history_type='plus_visit_schedule',
+            partner_phone=partner_phone,
+        )
+
+    plus_failed = (not plus_res.get('ok')) and (not plus_res.get('skipped'))
+    partner_failed = (not partner_res.get('ok')) and (not partner_res.get('skipped'))
+    return {
+        'ok': bool(partner_res.get('ok')) and not plus_failed,
+        'skipped': bool(partner_res.get('skipped')) and bool(plus_res.get('skipped')),
+        'error': partner_res.get('error') or plus_res.get('error'),
+        'plus': plus_res,
+        'partner_failed': partner_failed,
+        'plus_failed': plus_failed,
+    }
 
 
 def _apply_post_submit_context(
@@ -4749,15 +4862,21 @@ def requests_revisit(vid: str):
             partner_phone=me_phone,
             partner_name=partner_name,
             notes=str(prev.get('notes') or ''),
+            presence_address=str(rec.get('visit_presence_address') or prev.get('visit_presence_address') or ''),
         )
     except Exception:
         pass
     try:
         _send_visit_schedule_partner_sms(
             partner_phone=me_phone,
+            partner_name=partner_name,
             weekday=str(next_slot.get('weekday') or ''),
             jalali_date=str(next_slot.get('jalali_fa') or next_slot.get('jalali') or ''),
             visit_time=str(next_slot.get('time') or next_slot.get('time_en') or '').strip(),
+            presence_address=str(rec.get('visit_presence_address') or ''),
+            plus_user_phone=str(rec.get('plus_user_phone') or prev.get('plus_user_phone') or ''),
+            plus_user_name=str(rec.get('plus_user_name') or prev.get('plus_user_name') or ''),
+            land_code=str(rec.get('land_code') or prev.get('land_code') or ''),
         )
     except Exception:
         pass
@@ -4925,12 +5044,18 @@ def home_register_customer():
         partner_phone=me_phone,
         partner_name=partner_name,
         notes=sms_notes,
+        presence_address=str(rec.get('visit_presence_address') or ''),
     )
     sms_partner = _send_visit_schedule_partner_sms(
         partner_phone=me_phone,
+        partner_name=partner_name,
         weekday=str(next_slot.get('weekday') or ''),
         jalali_date=str(next_slot.get('jalali_fa') or next_slot.get('jalali') or ''),
         visit_time=str(next_slot.get('time_en') or next_slot.get('time') or '').strip(),
+        presence_address=str(rec.get('visit_presence_address') or ''),
+        plus_user_phone=plus_user_phone,
+        plus_user_name=plus_user_name,
+        land_code=land_code,
     )
 
     time_bit = str(next_slot.get('time') or rec.get('visit_time') or '').strip()
@@ -4942,8 +5067,10 @@ def home_register_customer():
     ).strip()
     if not sms_admin.get('ok') and not sms_admin.get('skipped'):
         msg += ' (پیامک پشتیبان ناموفق بود)'
-    if not sms_partner.get('ok') and not sms_partner.get('skipped'):
+    if sms_partner.get('partner_failed'):
         msg += ' (پیامک شما ناموفق بود)'
+    if sms_partner.get('plus_failed'):
+        msg += ' (پیامک کاربر پلاس ناموفق بود)'
 
     return jsonify({
         'ok': True,
@@ -7914,12 +8041,13 @@ def special_listing_new():
 @express_partner_bp.route('/inbox-visits', methods=['GET'], endpoint='special_visit_inbox')
 @require_special_partner()
 def special_visit_inbox_page():
-    """صندوق بازدیدهای دریافتی روی آگهی‌های ویژه."""
+    """صندوق بازدید تا فروش نهایی روی آگهی‌های ویژه."""
     me_phone = (session.get('user_phone') or '').strip()
     from .special_visit_inbox import visits_for_special_owner
     from .visit_requests import (
         VISIT_WEEKDAY_LABELS,
         VISIT_WEEKDAY_ORDER,
+        get_plus_visit_presence_address,
         get_visit_allowed_weekdays,
         visit_allowed_hours_summary,
         visit_allowed_weekdays_summary,
@@ -7927,10 +8055,19 @@ def special_visit_inbox_page():
     )
 
     items = visits_for_special_owner(me_phone)
-    needs = sum(1 for i in items if i.get('needs_action'))
+    offers = []
+    try:
+        from app.commercial.config import commercial_ui_enabled
+        if commercial_ui_enabled():
+            from .special_offer_inbox import offers_for_special_owner
+            offers = offers_for_special_owner(me_phone) or []
+    except Exception:
+        offers = []
+    needs = sum(1 for i in items if i.get('needs_action')) + len(offers)
     return render_template(
         'express_partner/special_visit_inbox.html',
         items=items,
+        offers=offers,
         needs_count=needs,
         hide_header=True,
         bottom_nav_active='profile',
@@ -7940,6 +8077,7 @@ def special_visit_inbox_page():
         visit_allowed_weekdays_summary=visit_allowed_weekdays_summary(plus_user_phone=me_phone),
         visit_hour_rows=visit_hour_rows(plus_user_phone=me_phone),
         visit_allowed_hours_summary=visit_allowed_hours_summary(plus_user_phone=me_phone),
+        visit_presence_address=get_plus_visit_presence_address(me_phone),
         schedule_open=(request.args.get('schedule') or '').strip() == '1',
     )
 
@@ -7950,6 +8088,7 @@ def special_visit_schedule():
     """وقت بازدید مجاز این همکار پلاس."""
     me_phone = (session.get('user_phone') or '').strip()
     from .visit_requests import (
+        get_plus_visit_presence_address,
         save_plus_visit_schedule,
         visit_allowed_hours_summary,
         visit_allowed_weekdays_summary,
@@ -7978,14 +8117,18 @@ def special_visit_schedule():
         me_phone,
         weekdays=parsed_days,
         hours=parsed_hours,
+        presence_address=(request.form.get('visit_presence_address') or ''),
     )
     if err:
         flash(err, 'warning')
         return redirect(inbox_url)
-    flash(
-        f'وقت‌های بازدید شما ذخیره شد: {visit_allowed_weekdays_summary(plus_user_phone=me_phone)} — ساعت {visit_allowed_hours_summary(plus_user_phone=me_phone)}',
-        'success',
+    addr = get_plus_visit_presence_address(me_phone)
+    msg = (
+        f'وقت‌های بازدید شما ذخیره شد: {visit_allowed_weekdays_summary(plus_user_phone=me_phone)} — ساعت {visit_allowed_hours_summary(plus_user_phone=me_phone)}'
     )
+    if addr:
+        msg += f' · آدرس حضور: {addr}'
+    flash(msg, 'success')
     return redirect(url_for('express_partner.special_visit_inbox'))
 
 
@@ -8048,6 +8191,8 @@ def special_offer_action(oid: str, action: str):
         flash('اقدام ناموفق بود.', 'warning')
     else:
         flash('انجام شد.', 'success')
+    if (request.form.get('return_to') or '').strip() == 'visits':
+        return redirect(url_for('express_partner.special_visit_inbox'))
     return redirect(url_for('express_partner.special_offer_inbox'))
 
 
@@ -8092,18 +8237,30 @@ def special_visit_action(vid: str, action: str):
             'warning',
         )
         return redirect(url_for('express_partner.special_visit_inbox'))
+    extra_err = {
+        'no_assignment': 'این همکار روی فایل اختصاص ندارد؛ معامله فقط از سمت همکار اختصاص‌یافته ممکن است.',
+        'already_sold': 'این فایل قبلاً فروخته شده است.',
+        'held_by_other': 'فایل در حال معامله توسط همکار دیگری است.',
+        'deal_limit': 'این همکار هم‌زمان روی دو فایل در حال معامله است.',
+        'already_pending': 'فروش نهایی قبلاً ثبت شده و منتظر تأیید شماست.',
+        'blocked': 'رد معامله فعلاً ممکن نیست.',
+    }
+    if err and err in extra_err:
+        flash(extra_err[err], 'warning')
+        return redirect(url_for('express_partner.special_visit_inbox'))
     if err and err not in ('unchanged', 'note_updated'):
         flash('تغییر وضعیت ناموفق بود.', 'warning')
         return redirect(url_for('express_partner.special_visit_inbox'))
 
-    try:
-        save_express_visit_requests(visit_requests)
-    except Exception:
-        current_app.logger.exception('special visit action save failed id=%s', vid)
-        flash('ذخیره وضعیت ناموفق بود.', 'danger')
-        return redirect(url_for('express_partner.special_visit_inbox'))
-
     act_l = str(action or '').strip().lower()
+    deal_only = act_l in ('start_deal', 'approve_deal', 'reject_deal', 'result')
+    if not deal_only:
+        try:
+            save_express_visit_requests(visit_requests)
+        except Exception:
+            current_app.logger.exception('special visit action save failed id=%s', vid)
+            flash('ذخیره وضعیت ناموفق بود.', 'danger')
+            return redirect(url_for('express_partner.special_visit_inbox'))
 
     if rec and err not in ('unchanged',):
         new_status = str(rec.get('status') or '')
@@ -8129,7 +8286,15 @@ def special_visit_action(vid: str, action: str):
     elif act_l == 'reject':
         flash('بازدید رد شد.', 'info')
     elif act_l == 'complete':
-        flash('انجام بازدید تأیید شد.', 'success')
+        flash('انجام بازدید تأیید شد — مسیر معامله باز است.', 'success')
+    elif act_l == 'reject_done':
+        flash('انجام بازدید رد شد. همکار می‌تواند دوباره اعلام کند.', 'info')
+    elif act_l == 'start_deal':
+        flash('فروش نهایی ثبت شد. با تأیید شما فایل بسته می‌شود.', 'success')
+    elif act_l == 'approve_deal':
+        flash('فروش نهایی تأیید شد: فایل بسته شد و پورسانت به کیف پول همکار اضافه شد.', 'success')
+    elif act_l == 'reject_deal':
+        flash('معامله رد شد. همکار می‌تواند دوباره درخواست بدهد.', 'info')
     else:
         flash('وضعیت بروزرسانی شد.', 'success')
     return redirect(url_for('express_partner.special_visit_inbox'))

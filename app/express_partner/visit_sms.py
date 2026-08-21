@@ -94,9 +94,16 @@ def _build_message(event: str, ctx: Dict[str, Any]) -> str:
         msg = f"وینور\nبازدید نهایی شد · {land}"
         if vdate and vdate != "—":
             msg += f"\n{vdate}"
+        addr = str(ctx.get("presence_address") or "").strip()
+        if addr:
+            msg += f"\nآدرس حضور: {addr}"
         return msg
     if event == "visit_approved":
-        return f"وینور\nبازدیدت تأیید شد · {land}\n{vdate}"
+        msg = f"وینور\nبازدیدت تأیید شد · {land}\n{vdate}"
+        addr = str(ctx.get("presence_address") or "").strip()
+        if addr:
+            msg += f"\nآدرس حضور: {addr}"
+        return msg
     if event == "visit_rejected":
         msg = (
             f"وینور\nبازدید منتفی شد · {land}\n"
@@ -138,6 +145,8 @@ def notify_partner_land_tx_sms(
     admin_note: str = "",
     reference_id: str = "",
     visit_commission_pending: bool = False,
+    presence_address: str = "",
+    plus_user_phone: str = "",
 ) -> Dict[str, Any]:
     """ارسال پیامک تغییر بازدید/معامله به همکار."""
     ev = (event or "").strip()
@@ -158,27 +167,37 @@ def notify_partner_land_tx_sms(
         )
         return {"ok": False, "skipped": True, "error": "invalid_partner_phone"}
 
+    addr = (presence_address or "").strip()
+    if ev in ("visit_submitted", "visit_pending", "visit_approved") and not addr:
+        try:
+            from .visit_requests import resolve_visit_presence_address
+            addr = resolve_visit_presence_address(
+                plus_user_phone=plus_user_phone,
+                land_code=land_code,
+            )
+        except Exception:
+            addr = ""
+
+    ctx = {
+        "land_code": land_code,
+        "land_title": land_title,
+        "visit_date": visit_date,
+        "visit_time": visit_time,
+        "admin_note": admin_note,
+        "visit_commission_pending": visit_commission_pending,
+        "presence_address": addr,
+    }
+
     if ev == "visit_approved":
         custom = (settings.get("visit_approval_sms_message") or "").strip()
         if custom:
             msg = custom
+            if addr and "آدرس حضور" not in custom:
+                msg = f"{msg}\nآدرس حضور: {addr}"
         else:
-            msg = _build_message(ev, {
-                "land_code": land_code,
-                "land_title": land_title,
-                "visit_date": visit_date,
-                "visit_time": visit_time,
-                "admin_note": admin_note,
-            })
+            msg = _build_message(ev, ctx)
     else:
-        msg = _build_message(ev, {
-            "land_code": land_code,
-            "land_title": land_title,
-            "visit_date": visit_date,
-            "visit_time": visit_time,
-            "admin_note": admin_note,
-            "visit_commission_pending": visit_commission_pending,
-        })
+        msg = _build_message(ev, ctx)
 
     if not msg:
         return {"ok": False, "skipped": True, "error": "empty_message"}

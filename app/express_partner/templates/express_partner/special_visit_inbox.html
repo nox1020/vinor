@@ -1,13 +1,13 @@
 {% extends 'express_partner/base.html' %}
-{% block title %}بازدیدهای دریافتی | وینور اکسپرس{% endblock %}
+{% block title %}بازدید و معامله | وینور اکسپرس{% endblock %}
 
 {% block content %}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
 {{ ep_header_start(id='specialVisitInboxHeader') }}
-{% call ep_header_row('بازدیدهای دریافتی', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}
+{% call ep_header_row('بازدید و معامله', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}
 <details class="sv-schedule relative z-30"{% if schedule_open %} open{% endif %}>
   <summary class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
-           aria-label="تنظیمات وقت بازدید">
+           aria-label="تنظیم وقت بازدید و آدرس حضور">
     <i class="fas fa-cog ep-partner-header-btn-icon" aria-hidden="true"></i>
   </summary>
   <form method="post"
@@ -15,8 +15,8 @@
         data-vinor-direct-action
         class="sv-schedule__panel">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <p class="sv-schedule__title">وقت بازدید من</p>
-    <p class="sv-schedule__sub">روز و ساعتی که همکاران می‌توانند برای فایل‌های شما نوبت بگیرند.</p>
+    <p class="sv-schedule__title">وقت و آدرس حضور</p>
+    <p class="sv-schedule__sub">روز، ساعت و جایی که همکاران برای بازدید می‌آیند.</p>
     {% if visit_allowed_weekdays_summary %}
     <p class="sv-schedule__now">{{ visit_allowed_weekdays_summary }}{% if visit_allowed_hours_summary %} · {{ visit_allowed_hours_summary }}{% endif %}</p>
     {% endif %}
@@ -40,7 +40,10 @@
       </label>
       {% endfor %}
     </div>
-    <button type="submit" class="sv-schedule__save">ذخیره وقت‌ها</button>
+    <p class="sv-schedule__label">آدرس حضور</p>
+    <textarea name="visit_presence_address" class="sv-schedule__addr" rows="2" maxlength="200"
+              placeholder="دفتر، آدرس ملک، یا نقطهٔ ملاقات">{{ visit_presence_address|default('') }}</textarea>
+    <button type="submit" class="sv-schedule__save">ذخیره</button>
   </form>
 </details>
 {% endcall %}
@@ -64,6 +67,8 @@
     left: 0;
     z-index: 40;
     width: min(22rem, calc(100vw - 1.5rem));
+    max-height: min(28rem, calc(100dvh - 5.5rem));
+    overflow: auto;
     padding: .9rem 1rem 1rem;
     border-radius: .9rem;
     border: 1px solid rgba(255,255,255,.12);
@@ -104,6 +109,14 @@
     border: 0; border-radius: .55rem; background: #0d9488; color: #fff;
     font-size: .75rem; font-weight: 800; font-family: inherit; cursor: pointer;
   }
+  .sv-schedule__addr {
+    display: block; width: 100%; min-height: 3.4rem; margin: 0;
+    padding: .5rem .6rem; resize: vertical; box-sizing: border-box;
+    border-radius: .5rem; border: 1px solid rgba(255,255,255,.12);
+    background: #111827; color: #e5e7eb; font-size: .75rem; line-height: 1.45;
+    font-family: inherit;
+  }
+  .sv-schedule__addr::placeholder { color: #6b7280; }
   .sv-summary {
     padding: .75rem 1rem; border-bottom: 1px solid rgba(255,255,255,.08);
     font-size: .75rem; color: #8b919a; font-weight: 600;
@@ -122,15 +135,103 @@
   }
   .sv-card--need .sv-card__status { background: rgba(248,113,113,.14); color: #fca5a5; }
   .sv-card__meta { margin: .35rem 0 0; font-size: .75rem; color: #8b919a; line-height: 1.45; }
-  .sv-actions { display: flex; gap: .4rem; margin-top: .65rem; flex-wrap: wrap; }
+  .sv-actions {
+    display: flex; flex-direction: column; gap: .55rem; margin-top: .75rem;
+  }
+  .sv-actions form { margin: 0; }
+  .sv-btn-row {
+    display: grid; grid-template-columns: 1fr auto; gap: .4rem; align-items: stretch;
+  }
+  .sv-btn-row--solo { grid-template-columns: 1fr; }
+  .sv-btn-row form { display: flex; min-width: 0; }
   .sv-btn {
-    display: inline-flex; align-items: center; justify-content: center; min-height: 2rem;
-    padding: 0 .7rem; border-radius: .4rem; font-size: .75rem; font-weight: 700; border: 0;
-    text-decoration: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 2.5rem; width: 100%; padding: 0 .85rem;
+    border-radius: .65rem; font-size: .8125rem; font-weight: 800; border: 0;
+    font-family: inherit; text-decoration: none; cursor: pointer;
   }
   .sv-btn--ok { background: #059669; color: #fff; }
-  .sv-btn--no { background: transparent; color: #fca5a5; border: 1px solid rgba(248,113,113,.35); }
+  .sv-btn--deal { background: #0d9488; color: #fff; }
+  .sv-btn--no {
+    background: transparent; color: #fca5a5;
+    border: 1px solid rgba(248,113,113,.35); min-width: 4.75rem;
+  }
+  .sv-btn--ghost {
+    background: transparent; color: #9ca3af;
+    border: 1px dashed rgba(255,255,255,.14); font-weight: 700; font-size: .75rem;
+  }
+  .sv-result {
+    display: flex; flex-direction: column; gap: .45rem;
+    padding: .7rem .7rem .75rem;
+    border-radius: .75rem;
+    border: 1px solid rgba(255,255,255,.1);
+    background: rgba(255,255,255,.03);
+  }
+  .sv-result__label {
+    margin: 0; font-size: .6875rem; font-weight: 800; color: #d1d5db;
+  }
+  .sv-result__chips {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .35rem;
+  }
+  .sv-result__chip { display: block; cursor: pointer; position: relative; }
+  .sv-result__chip span {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 2.15rem; padding: 0 .3rem; border-radius: .5rem;
+    border: 1px solid rgba(255,255,255,.1);
+    font-size: .6875rem; font-weight: 700; color: #9ca3af; text-align: center;
+  }
+  .sv-result__chip input {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+  .sv-result__chip input:focus-visible + span {
+    outline: 2px solid #14b8a6; outline-offset: 1px;
+  }
+  .sv-result__chip input:checked + span {
+    border-color: rgba(45,212,191,.5); background: rgba(13,148,136,.22); color: #99f6e4;
+  }
+  .sv-result__chip--down input:checked + span {
+    border-color: rgba(248,113,113,.45); background: rgba(248,113,113,.12); color: #fecaca;
+  }
+  .sv-result__notes {
+    width: 100%; min-height: 2.35rem; padding: .45rem .65rem;
+    border-radius: .5rem; border: 1px solid rgba(255,255,255,.12);
+    background: #0a1018; color: #f3f4f6; font-size: .75rem; font-family: inherit;
+  }
+  .sv-result__notes::placeholder { color: #6b7280; }
   .sv-empty { padding: 2.5rem 1.5rem; text-align: center; color: #8b919a; }
+  .sv-card__code { margin: .15rem 0 0; font-size: .6875rem; color: #6b7280; direction: ltr; }
+  .sv-progress { display: flex; gap: .28rem; margin-top: .55rem; }
+  .sv-progress span {
+    flex: 1; height: .32rem; border-radius: 99px; background: rgba(255,255,255,.08);
+  }
+  .sv-progress span.is-done { background: #10b981; }
+  .sv-progress span.is-current { background: #f59e0b; }
+  .sv-progress span.is-blocked { background: rgba(248,113,113,.45); }
+  .sv-stage { margin: .4rem 0 0; font-size: .6875rem; color: #9ca3af; }
+  .sv-stage strong { color: #e5e7eb; font-weight: 800; }
+  .sv-hint {
+    margin: .45rem 0 0; padding: .55rem .65rem; border-radius: .5rem;
+    border: 1px solid rgba(251,191,36,.22); background: rgba(251,191,36,.08);
+    font-size: .6875rem; color: #fde68a; line-height: 1.5;
+  }
+  .sv-hint--ok {
+    border-color: rgba(16,185,129,.28); background: rgba(16,185,129,.08); color: #a7f3d0;
+  }
+  .sv-money { margin: .4rem 0 0; font-size: .75rem; color: #99f6e4; font-weight: 700; }
+  .sv-offer {
+    margin: .65rem 1rem 0; padding: .85rem 1rem;
+    border-radius: .85rem; border: 1px solid rgba(56,189,248,.22);
+    background: rgba(8,47,73,.45);
+  }
+  .sv-offer h2 { margin: 0; font-size: .8125rem; font-weight: 800; color: #e0f2fe; }
+  .sv-offer p { margin: .3rem 0 0; font-size: .72rem; color: #93c5fd; }
+  .sv-offer__actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .65rem; align-items: center; }
+  .sv-offer input[type="number"] {
+    width: 7.5rem; min-height: 2rem; padding: 0 .5rem;
+    border-radius: .4rem; border: 1px solid rgba(255,255,255,.12);
+    background: #0a1018; color: #fff; font-size: .7rem; font-family: inherit;
+  }
 </style>
 
 <div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
@@ -149,56 +250,166 @@
 
     <p class="sv-summary">
       {% if needs_count %}<strong>{{ needs_count }}</strong> مورد نیاز به اقدام{% else %}فعلاً کار لازمی نیست{% endif %}
-      · {{ items|length }} بازدید
+      · {{ items|length }} پرونده
+      {% if offers %} · {{ offers|length }} پیشنهاد{% endif %}
     </p>
 
+    {% if offers %}
+    <section class="px-0" aria-label="پیشنهادهای قیمت">
+      {% for off in offers %}
+      <article class="sv-offer">
+        <h2>پیشنهاد قیمت · فایل {{ off.land_code }}</h2>
+        <p>{{ '{:,}'.format(off.amount) }} تومان{% if off.terms %} · {{ off.terms }}{% endif %}</p>
+        <p class="!text-[10px] !text-zinc-500" dir="ltr">همکار: {{ off.partner_phone }}</p>
+        <div class="sv-offer__actions">
+          {% if off.can_accept %}
+          <form method="post" action="{{ url_for('express_partner.special_offer_action', oid=off.id, action='accept') }}" data-vinor-direct-action>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="return_to" value="visits">
+            <button type="submit" class="sv-btn sv-btn--ok">پذیرش پیشنهاد</button>
+          </form>
+          {% endif %}
+          {% if off.can_reject %}
+          <form method="post" action="{{ url_for('express_partner.special_offer_action', oid=off.id, action='reject') }}" data-vinor-direct-action>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="return_to" value="visits">
+            <button type="submit" class="sv-btn sv-btn--no">رد</button>
+          </form>
+          {% endif %}
+          {% if off.can_counter %}
+          <form method="post" action="{{ url_for('express_partner.special_offer_action', oid=off.id, action='counter') }}" data-vinor-direct-action class="flex gap-1 items-center">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="return_to" value="visits">
+            <input name="amount" type="number" min="1" required placeholder="مبلغ متقابل" dir="ltr">
+            <button type="submit" class="sv-btn sv-btn--deal">متقابل</button>
+          </form>
+          {% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </section>
+    {% endif %}
+
     {% if items %}
-    <section aria-label="بازدیدهای دریافتی">
+    <section aria-label="روند بازدید و معامله">
       {% for item in items %}
       <article class="sv-card{% if item.needs_action %} sv-card--need{% endif %}">
         <h2 class="sv-card__title">{{ item.land_title }}</h2>
+        {% if item.land_code %}<p class="sv-card__code">{{ item.land_code }}</p>{% endif %}
         <span class="sv-card__status">{{ item.status_label }}</span>
-        <p class="sv-card__meta">
-          {% if item.customer_name %}مشتری: {{ item.customer_name }}{% if item.customer_phone %} · <span dir="ltr">{{ item.customer_phone }}</span>{% endif %}<br>{% endif %}
-          همکار: {{ item.partner_name or item.partner_phone or '—' }}
-          {% if item.visit_date_jalali %}<br>تاریخ: {{ item.visit_date_jalali }}{% endif %}
+        {% if item.progress_steps %}
+        <div class="sv-progress" aria-hidden="true">
+          {% for step in item.progress_steps %}
+          <span class="{% if step.state == 'done' %}is-done{% elif step.state == 'current' %}is-current{% elif step.state in ['blocked', 'rejected'] %}is-blocked{% endif %}" title="{{ step.label }}"></span>
+          {% endfor %}
+        </div>
+        <p class="sv-stage">
+          مرحله: <strong>{{ item.stage_label or item.progress_summary.current_label }}</strong>
+          · {{ item.progress_summary.done_count|default(0) }} از {{ item.progress_summary.total|default(item.progress_steps|length) }}
         </p>
-        {% if item.can_approve or item.can_reject or item.can_complete or item.can_no_show or item.can_register_result %}
+        {% endif %}
+        {% if item.current_hint %}
+        <p class="sv-hint{% if item.deal_commission_status in ['approved', 'paid'] %} sv-hint--ok{% endif %}">{{ item.current_hint }}</p>
+        {% endif %}
+        {% if item.sale_amount or item.deal_commission_amount %}
+        <p class="sv-money">
+          {% if item.sale_amount %}مبلغ فروش {{ item.sale_amount|toman }}{% endif %}
+          {% if item.deal_commission_amount %}{% if item.sale_amount %} · {% endif %}پورسانت همکار {{ item.deal_commission_amount|toman }}{% endif %}
+        </p>
+        {% endif %}
+        <p class="sv-card__meta">
+          {% if item.customer_name %}مشتری: {{ item.customer_name }}{% if item.customer_phone %} · <a href="tel:{{ item.customer_phone }}" dir="ltr" class="text-sky-300">{{ item.customer_phone }}</a>{% endif %}<br>{% endif %}
+          همکار: {{ item.partner_name or '—' }}{% if item.partner_phone %} · <a href="tel:{{ item.partner_phone }}" dir="ltr" class="text-sky-300">{{ item.partner_phone }}</a>{% endif %}
+          {% if item.visit_date_jalali %}<br>تاریخ بازدید: {{ item.visit_date_jalali }}{% endif %}
+          {% if item.visit_presence_address %}<br>آدرس حضور: {{ item.visit_presence_address }}{% endif %}
+        </p>
+        {% if item.has_actions %}
         <div class="sv-actions">
-          {% if item.can_approve %}
-          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='approve') }}">
+          {% if item.can_approve or item.can_reject %}
+          <div class="sv-btn-row{% if not item.can_reject or not item.can_approve %} sv-btn-row--solo{% endif %}">
+            {% if item.can_approve %}
+            <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='approve') }}" data-vinor-direct-action>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="sv-btn sv-btn--ok">تأیید بازدید</button>
+            </form>
+            {% endif %}
+            {% if item.can_reject %}
+            <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject') }}" data-vinor-direct-action>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('این بازدید رد شود؟')">رد</button>
+            </form>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          {% if item.can_complete or item.can_reject_done %}
+          <div class="sv-btn-row{% if not item.can_reject_done or not item.can_complete %} sv-btn-row--solo{% endif %}">
+            {% if item.can_complete %}
+            <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='complete') }}" data-vinor-direct-action>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="sv-btn sv-btn--ok">تأیید انجام بازدید</button>
+            </form>
+            {% endif %}
+            {% if item.can_reject_done %}
+            <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject_done') }}" data-vinor-direct-action>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('انجام بازدید رد شود؟ همکار باید دوباره اعلام کند.')">رد انجام</button>
+            </form>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          {% if item.can_start_deal %}
+          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='start_deal') }}" data-vinor-direct-action>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="sv-btn sv-btn--ok">تأیید</button>
+            <button type="submit" class="sv-btn sv-btn--deal" onclick="return confirm('فروش نهایی برای این همکار ثبت شود؟ فایل در حال معامله می‌شود.')">ثبت معامله</button>
           </form>
           {% endif %}
-          {% if item.can_complete %}
-          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='complete') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="sv-btn sv-btn--ok">تأیید انجام</button>
-          </form>
+
+          {% if item.can_approve_deal or item.can_reject_deal %}
+          <div class="sv-btn-row{% if not item.can_reject_deal or not item.can_approve_deal %} sv-btn-row--solo{% endif %}">
+            {% if item.can_approve_deal %}
+            <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='approve_deal') }}" data-vinor-direct-action>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="sv-btn sv-btn--ok" onclick="return confirm('فروش تأیید و فایل بسته شود؟ پورسانت به کیف پول همکار اضافه می‌شود.')">تأیید فروش و بستن فایل</button>
+            </form>
+            {% endif %}
+            {% if item.can_reject_deal %}
+            <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject_deal') }}" data-vinor-direct-action>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('معامله رد شود؟ فایل دوباره فعال می‌شود.')">رد</button>
+            </form>
+            {% endif %}
+          </div>
           {% endif %}
-          {% if item.can_no_show %}
-          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='no_show') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('عدم حضور مشتری ثبت شود؟')">عدم حضور</button>
-          </form>
-          {% endif %}
+
           {% if item.can_register_result %}
-          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='result') }}" class="flex flex-wrap gap-1 items-center">
+          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='result') }}" data-vinor-direct-action class="sv-result">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <select name="outcome" class="rounded border border-white/15 bg-[#0a1018] px-2 py-1 text-[11px] text-zinc-200">
-              <option value="interested">علاقه‌مند</option>
-              <option value="not_interested">بی‌علاقه</option>
-              <option value="follow_up">نیاز به پیگیری</option>
-            </select>
-            <input name="notes" placeholder="یادداشت" class="rounded border border-white/15 bg-[#0a1018] px-2 py-1 text-[11px] text-white w-28">
+            <p class="sv-result__label">نتیجه بازدید</p>
+            <div class="sv-result__chips" role="radiogroup" aria-label="نتیجه بازدید">
+              <label class="sv-result__chip">
+                <input type="radio" name="outcome" value="interested" checked>
+                <span>علاقه‌مند</span>
+              </label>
+              <label class="sv-result__chip">
+                <input type="radio" name="outcome" value="follow_up">
+                <span>پیگیری</span>
+              </label>
+              <label class="sv-result__chip sv-result__chip--down">
+                <input type="radio" name="outcome" value="not_interested">
+                <span>بی‌علاقه</span>
+              </label>
+            </div>
+            <input name="notes" class="sv-result__notes" placeholder="یادداشت (اختیاری)" autocomplete="off">
             <button type="submit" class="sv-btn sv-btn--ok">ثبت نتیجه</button>
           </form>
           {% endif %}
-          {% if item.can_reject %}
-          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject') }}">
+
+          {% if item.can_no_show %}
+          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='no_show') }}" data-vinor-direct-action>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('این بازدید رد شود؟')">رد</button>
+            <button type="submit" class="sv-btn sv-btn--ghost" onclick="return confirm('عدم حضور مشتری ثبت شود؟')">مشتری حاضر نشد</button>
           </form>
           {% endif %}
         </div>
@@ -206,10 +417,10 @@
       </article>
       {% endfor %}
     </section>
-    {% else %}
+    {% elif not offers %}
     <section class="sv-empty">
-      <p class="font-bold text-zinc-200">هنوز بازدیدی نیامده</p>
-      <p class="mt-1 text-xs">وقتی روی آگهی‌های شما درخواست بازدید ثبت شود، اینجا می‌آید.</p>
+      <p class="font-bold text-zinc-200">هنوز پرونده‌ای نیست</p>
+      <p class="mt-1 text-xs">بازدید، پیشنهاد و معامله روی آگهی‌های شما اینجا کنترل می‌شود.</p>
       <a href="{{ url_for('express_partner.special_listings') }}" data-vinor-express-nav
          class="inline-flex mt-4 min-h-10 px-4 items-center rounded-lg bg-[#e22828] text-white text-sm font-bold">آگهی‌های من</a>
     </section>
@@ -218,4 +429,14 @@
   {% set bottom_nav_active = 'profile' %}
   {% include 'express_partner/partials/partner_tab_footer.html' %}
 </div>
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
+  <script>
+  (function () {
+    if (window.__vinorPartnerHeaderChromeSetup) {
+      try { window.__vinorPartnerHeaderChromeSetup(); } catch (_) {}
+    }
+  })();
+  </script>
 {% endblock %}

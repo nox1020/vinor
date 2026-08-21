@@ -227,14 +227,18 @@
   .vn-lcd__actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: stretch;
     gap: 0.4rem;
     margin-top: 0.7rem;
     position: relative;
     z-index: 2;
     pointer-events: auto;
   }
-  .vn-lcd__btn {
-    flex: 1 1 auto;
+  article.vn-lcd .vn-lcd__btn {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1 1 7.25rem;
+    min-width: 0;
     min-height: 2.35rem;
     display: inline-flex;
     align-items: center;
@@ -242,29 +246,118 @@
     gap: 0.35rem;
     padding: 0.45rem 0.7rem;
     border-radius: 0.75rem;
-    border: 0;
-    background: #0d9488;
+    border: 1px solid transparent;
+    background-color: #0d9488;
+    background-image: none;
+    background-clip: padding-box;
+    -webkit-background-clip: padding-box;
     color: #fff;
+    font-family: inherit;
     font-size: 0.75rem;
     font-weight: 700;
+    line-height: 1.2;
+    text-decoration: none;
+    white-space: nowrap;
     cursor: pointer;
     pointer-events: auto;
+    overflow: hidden;
+    box-sizing: border-box;
+    box-shadow: none;
     -webkit-tap-highlight-color: transparent;
   }
-  .vn-lcd__btn--secondary {
-    background: #27272a;
+  article.vn-lcd .vn-lcd__btn i {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    line-height: 1;
+  }
+  article.vn-lcd .vn-lcd__btn--secondary {
+    background-color: #27272a;
     color: #e4e4e7;
   }
-  .vn-lcd__btn--call {
-    flex: 0 0 auto;
+  article.vn-lcd .vn-lcd__btn--call {
+    flex: 0 0 2.35rem;
     width: 2.35rem;
+    min-width: 2.35rem;
     padding: 0;
-    background: #2563eb;
+    background-color: #2563eb;
+  }
+  article.vn-lcd .vn-lcd__btn--done {
+    background-color: #059669;
+  }
+  article.vn-lcd .vn-lcd__btn--done:hover,
+  article.vn-lcd .vn-lcd__btn--done:focus-visible {
+    background-color: #047857;
+  }
+  article.vn-lcd .vn-lcd__btn--done:not(:disabled):active {
+    background-color: #065f46;
+  }
+  article.vn-lcd .vn-lcd__btn:hover,
+  article.vn-lcd .vn-lcd__btn:focus-visible {
+    background-color: #0f766e;
+    outline: none;
+  }
+  article.vn-lcd .vn-lcd__btn--secondary:hover,
+  article.vn-lcd .vn-lcd__btn--secondary:focus-visible {
+    background-color: #3f3f46;
+  }
+  article.vn-lcd .vn-lcd__btn--call:hover,
+  article.vn-lcd .vn-lcd__btn--call:focus-visible {
+    background-color: #1d4ed8;
+  }
+  article.vn-lcd .vn-lcd__btn:not(:disabled):active {
+    background-color: #115e59;
+  }
+  article.vn-lcd .vn-lcd__btn--secondary:not(:disabled):active {
+    background-color: #18181b;
+  }
+  article.vn-lcd .vn-lcd__btn--call:not(:disabled):active {
+    background-color: #1e40af;
+  }
+  article.vn-lcd .vn-lcd__btn:disabled,
+  article.vn-lcd .vn-lcd__btn[data-busy="1"] {
+    opacity: 0.55;
+    cursor: wait;
+    pointer-events: none;
   }
   .vn-lcd__hint {
     margin: 0.35rem 0 0;
     font-size: 0.65rem;
     color: #9ca3af;
+  }
+  .vn-lcd__plus {
+    margin: 0.5rem 0 0;
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.65rem;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(52, 211, 153, 0.28);
+    text-align: right;
+  }
+  .vn-lcd__plus--wait {
+    background: rgba(251, 191, 36, 0.1);
+    border-color: rgba(251, 191, 36, 0.32);
+  }
+  .vn-lcd__plus--down {
+    background: rgba(248, 113, 113, 0.1);
+    border-color: rgba(248, 113, 113, 0.28);
+  }
+  .vn-lcd__plus-line {
+    margin: 0;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: #e4e4e7;
+  }
+  .vn-lcd__plus-line + .vn-lcd__plus-line {
+    margin-top: 0.18rem;
+  }
+  .vn-lcd__plus-k {
+    font-weight: 700;
+    color: #86efac;
+  }
+  .vn-lcd__plus--wait .vn-lcd__plus-k {
+    color: #fbbf24;
+  }
+  .vn-lcd__plus--down .vn-lcd__plus-k {
+    color: #fca5a5;
   }
 </style>
 
@@ -385,6 +478,21 @@
     </div>
     {% endif %}
 
+    {% set plus_name = (land._plus_user_name or land._plus_user_phone or '')|trim %}
+    {% set fb = land._plus_feedback if land._plus_feedback is mapping else none %}
+    {% if plus_name or fb %}
+    <div class="vn-lcd__plus{% if fb %} vn-lcd__plus--{{ fb.tone|default('ok') }}{% endif %}">
+      {% if plus_name %}
+      <p class="vn-lcd__plus-line"><span class="vn-lcd__plus-k">کاربر پلاس:</span> {{ plus_name }}</p>
+      {% endif %}
+      {% if fb %}
+      <p class="vn-lcd__plus-line"><span class="vn-lcd__plus-k">بازخورد پلاس:</span> {{ fb.label }}{% if fb.notes %} — {{ fb.notes }}{% endif %}</p>
+      {% elif plus_name and (land._tx_button_mode or '') in ('visit_done', 'visit_done_pending', 'deal', 'deal_pending', 'visit_no_show', 'release') %}
+      <p class="vn-lcd__plus-line">هنوز بازخوردی از کاربر پلاس ثبت نشده است.</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
     {% if desc %}
     <p class="vn-lcd__desc">{{ desc }}</p>
     {% endif %}
@@ -396,28 +504,29 @@
               class="vn-lcd__btn"
               data-open-customer-modal
               data-land-code="{{ land.code|e }}"
-              aria-label="درخواست تعیین وقت بازدید">
+              aria-label="{{ chat_cta.label|default('ثبت بازدید')|e }}">
         <i class="fas {{ chat_cta.icon|default('fa-calendar-days') }}" aria-hidden="true"></i>
         {{ chat_cta.label|default('ثبت بازدید') }}
       </button>
       {% else %}
       <button type="button"
-              class="vn-lcd__btn"
+              class="vn-lcd__btn{% if chat_cta.action == 'complete_visit' %} vn-lcd__btn--done{% endif %}"
               data-vn-lcd-action="{{ chat_cta.action|e }}"
-              data-land-code="{{ land.code|e }}">
+              data-land-code="{{ land.code|e }}"
+              aria-label="{{ chat_cta.label|e }}">
         <i class="fas {{ chat_cta.icon|default('fa-comments') }}" aria-hidden="true"></i>
         {{ chat_cta.label|default('ادامه') }}
       </button>
       {% endif %}
-      {% if chat_cta.secondary_action %}
+      {% if chat_cta.secondary_action and chat_cta.secondary_label %}
       {% if chat_cta.secondary_action == 'visit' %}
       <button type="button"
               class="vn-lcd__btn vn-lcd__btn--secondary"
               data-open-customer-modal
               data-land-code="{{ land.code|e }}"
-              aria-label="بازدید مجدد">
+              aria-label="{{ chat_cta.secondary_label|e }}">
         <i class="fas {{ chat_cta.secondary_icon|default('fa-calendar-plus') }}" aria-hidden="true"></i>
-        {{ chat_cta.secondary_label|default('بازدید مجدد') }}
+        {{ chat_cta.secondary_label }}
       </button>
       {% else %}
       <button type="button"
@@ -425,7 +534,7 @@
               data-vn-lcd-action="{{ chat_cta.secondary_action|e }}"
               data-land-code="{{ land.code|e }}">
         <i class="fas {{ chat_cta.secondary_icon|default('fa-calendar-plus') }}" aria-hidden="true"></i>
-        {{ chat_cta.secondary_label|default('بازدید مجدد') }}
+        {{ chat_cta.secondary_label }}
       </button>
       {% endif %}
       {% endif %}

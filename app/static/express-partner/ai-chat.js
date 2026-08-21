@@ -4221,11 +4221,11 @@
 
   function refreshLandChatCard(code) {
     code = String(code || '').trim();
-    if (!code || !list) return;
+    if (!code || !list) return Promise.resolve(false);
     var wrap = list.querySelector('.ai-msg-wrap[data-land-chat-code="' + code + '"]');
-    if (!wrap) return;
+    if (!wrap) return Promise.resolve(false);
     var url = '/express/partner/lands/' + encodeURIComponent(code) + '/chat-detail';
-    fetch(url, {
+    return fetch(url, {
       credentials: 'same-origin',
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     })
@@ -4233,9 +4233,9 @@
         return res.json();
       })
       .then(function (data) {
-        if (!data || !data.ok || !data.html) return;
+        if (!data || !data.ok || !data.html) return false;
         var host = wrap.querySelector('.ai-msg-cards--land-detail') || wrap.querySelector('.ai-msg-body');
-        if (!host) return;
+        if (!host) return false;
         if (host.classList.contains('ai-msg-cards--land-detail')) {
           host.innerHTML = data.html;
         } else {
@@ -4251,8 +4251,11 @@
             window.vinorSyncFavButtons(host);
           }
         } catch (_) {}
+        return true;
       })
-      .catch(function () {});
+      .catch(function () {
+        return false;
+      });
   }
 
   function postLandChatAction(url, onOk) {
@@ -4299,6 +4302,8 @@
         if (action === 'visit') {
           if (typeof window.__vinorOpenCustomerModal === 'function') {
             window.__vinorOpenCustomerModal(e, { landCode: code });
+          } else {
+            showEphemeralHint('برای تعیین وقت بازدید از صفحه اصلی اقدام کنید.');
           }
           return;
         }
@@ -4306,6 +4311,10 @@
           showEphemeralHint('این مرحله روی همین کارت انجام می‌شود.');
           return;
         }
+        var confirmMsg = '';
+        if (action === 'deal') confirmMsg = 'درخواست معامله برای این فایل ثبت شود؟';
+        else if (action === 'release') confirmMsg = 'معامله این فایل بسته شود و فایل دوباره فعال گردد؟';
+        if (confirmMsg && !window.confirm(confirmMsg)) return;
         var url = '';
         if (action === 'complete_visit') url = card.getAttribute('data-complete-url') || '';
         else if (action === 'deal' || action === 'release') url = card.getAttribute('data-deal-url') || '';
@@ -4313,17 +4322,28 @@
           showEphemeralHint('این عملیات الان در دسترس نیست.');
           return;
         }
+        var prevHtml = btn.innerHTML;
         btn.setAttribute('data-busy', '1');
         btn.disabled = true;
-        postLandChatAction(url, function (data) {
-          showEphemeralHint((data && data.message) || 'ثبت شد.');
-          refreshLandChatCard(code);
-        }).catch(function (err) {
-          showEphemeralHint((err && err.message) || 'خطا در انجام عملیات');
-        }).finally(function () {
-          btn.removeAttribute('data-busy');
-          btn.disabled = false;
-        });
+        btn.textContent = 'در حال ثبت…';
+        postLandChatAction(url)
+          .then(function (data) {
+            showEphemeralHint((data && data.message) || 'ثبت شد.');
+            return refreshLandChatCard(code);
+          })
+          .then(function (refreshed) {
+            if (refreshed || !btn.isConnected) return;
+            try { btn.innerHTML = prevHtml; } catch (_) {}
+          })
+          .catch(function (err) {
+            showEphemeralHint((err && err.message) || 'خطا در انجام عملیات');
+            try { if (btn.isConnected) btn.innerHTML = prevHtml; } catch (_) {}
+          })
+          .finally(function () {
+            if (!btn.isConnected) return;
+            btn.removeAttribute('data-busy');
+            btn.disabled = false;
+          });
       },
       true
     );
