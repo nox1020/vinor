@@ -31,7 +31,7 @@
     width: 100%;
     max-width: 28rem;
     margin: 0 auto;
-    max-height: min(92dvh, 40rem);
+    max-height: min(92dvh, 44rem);
     border-radius: 1.25rem 1.25rem 0 0;
     border: 1px solid rgba(52, 211, 153, 0.28);
     border-bottom: none;
@@ -99,11 +99,18 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: 0.85rem 1rem 1rem;
+    padding: 0.75rem 1rem 0.35rem;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.55rem;
+  }
+  #vnCustomerModal * {
+    scrollbar-width: none;
+  }
+  #vnCustomerModal *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
   #vnCustomerModal .vn-cust-field {
     display: flex;
@@ -172,46 +179,78 @@
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
   }
-  #vnCustomerModal .vn-cust-extra {
+  #vnCustomerModal .vn-cust-acc {
     border-radius: 0.85rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: #10161d;
-    padding: 0.15rem 0.7rem 0.7rem;
+    overflow: hidden;
   }
-  #vnCustomerModal .vn-cust-extra > summary {
-    list-style: none;
-    cursor: pointer;
-    padding: 0.65rem 0.1rem;
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #d4d4d8;
+  #vnCustomerModal .vn-cust-acc[hidden] {
+    display: none !important;
+  }
+  #vnCustomerModal .vn-cust-acc__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.65rem;
+    width: 100%;
+    margin: 0;
+    padding: 0.72rem 0.85rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    text-align: right;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
-  #vnCustomerModal .vn-cust-extra > summary::-webkit-details-marker {
-    display: none;
-  }
-  #vnCustomerModal .vn-cust-extra > summary::after {
-    content: "+";
-    color: #86efac;
-    font-size: 1rem;
-    font-weight: 700;
-  }
-  #vnCustomerModal .vn-cust-extra[open] > summary::after {
-    content: "–";
-  }
-  #vnCustomerModal .vn-cust-extra .vn-cust-field {
-    margin-top: 0.35rem;
-  }
-  #vnCustomerModal .vn-cust-slot-list {
+  #vnCustomerModal .vn-cust-acc__copy {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    max-height: 11.5rem;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    align-items: stretch;
+    gap: 0.12rem;
+    min-width: 0;
+    flex: 1;
+  }
+  #vnCustomerModal .vn-cust-acc__label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #a1a1aa;
+  }
+  #vnCustomerModal .vn-cust-acc__value {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: #f4f4f5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #vnCustomerModal .vn-cust-acc__value.is-empty {
+    color: #71717a;
+    font-weight: 500;
+  }
+  #vnCustomerModal .vn-cust-acc__chev {
+    flex-shrink: 0;
+    color: #86efac;
+    font-size: 0.7rem;
+    transition: transform 0.15s ease;
+  }
+  #vnCustomerModal .vn-cust-acc.is-open .vn-cust-acc__chev {
+    transform: rotate(180deg);
+  }
+  #vnCustomerModal .vn-cust-acc__body {
+    display: none;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0 0.7rem 0.75rem;
+  }
+  #vnCustomerModal .vn-cust-acc.is-open .vn-cust-acc__body {
+    display: flex;
+  }
+  #vnCustomerModal .vn-cust-extra-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
   }
   #vnCustomerModal .vn-cust-slot-empty {
     margin: 0;
@@ -219,13 +258,57 @@
     color: #fbbf24;
     text-align: right;
   }
-  #vnCustomerModal .vn-cust-plus-list {
+  #vnCustomerModal .vn-cust-plus-list,
+  #vnCustomerModal .vn-cust-slot-list {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
-    max-height: 10.5rem;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    max-height: none;
+    overflow: visible;
+  }
+  #vnCustomerModal .vn-cust-day {
+    border-radius: 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #12181f;
+    overflow: hidden;
+  }
+  #vnCustomerModal .vn-cust-day__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    margin: 0;
+    padding: 0.65rem 0.75rem;
+    border: 0;
+    background: transparent;
+    color: #f4f4f5;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-align: right;
+    cursor: pointer;
+  }
+  #vnCustomerModal .vn-cust-day__head::after {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    border-inline-end: 2px solid #86efac;
+    border-bottom: 2px solid #86efac;
+    transform: rotate(45deg);
+    transition: transform 0.15s ease;
+  }
+  #vnCustomerModal .vn-cust-day.is-open .vn-cust-day__head::after {
+    transform: rotate(-135deg);
+  }
+  #vnCustomerModal .vn-cust-day__hours {
+    display: none;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0 0.55rem 0.55rem;
+  }
+  #vnCustomerModal .vn-cust-day.is-open .vn-cust-day__hours {
+    display: flex;
   }
   #vnCustomerModal .vn-cust-plus-card {
     position: relative;
@@ -382,69 +465,95 @@
         <h2 id="vnCustomerModalTitle" class="vn-cust-modal__title">ثبت مشتری جدید</h2>
       </header>
       <form id="vnCustomerModalForm" class="vn-cust-modal__body" novalidate>
-        <div class="vn-cust-field" id="vnCustomerLandField" hidden>
-          <span class="vn-cust-field__label" id="vnCustomerLandLabel">فایل برای بازدید <span class="vn-cust-field__label-hint">(اختیاری)</span></span>
-          <div class="vn-cust-plus-list"
-               id="vnCustomerLandList"
-               role="radiogroup"
-               aria-labelledby="vnCustomerLandLabel"></div>
+        <div class="vn-cust-acc" id="vnCustomerLandField" hidden>
+          <button type="button" class="vn-cust-acc__head" data-acc-toggle aria-expanded="false">
+            <span class="vn-cust-acc__copy">
+              <span class="vn-cust-acc__label">فایل برای بازدید <span class="vn-cust-field__label-hint">(اختیاری)</span></span>
+              <span class="vn-cust-acc__value is-empty" data-acc-value>انتخاب کنید</span>
+            </span>
+            <i class="fas fa-chevron-down vn-cust-acc__chev" aria-hidden="true"></i>
+          </button>
+          <div class="vn-cust-acc__body">
+            <div class="vn-cust-plus-list"
+                 id="vnCustomerLandList"
+                 role="radiogroup"
+                 aria-label="فایل برای بازدید"></div>
+          </div>
         </div>
         {% set _plus_users = customer_modal_plus_users|default([]) %}
-        <div class="vn-cust-field" id="vnCustomerPlusField"{% if not _plus_users %} hidden{% endif %}>
-          <span class="vn-cust-field__label" id="vnCustomerPlusLabel">کاربر پلاس</span>
-          <div class="vn-cust-plus-list"
-               id="vnCustomerPlusList"
-               role="radiogroup"
-               aria-labelledby="vnCustomerPlusLabel">
-            {% for u in _plus_users %}
-              {% set _p = (u.phone or '')|trim %}
-              {% if _p %}
-              <label class="vn-cust-plus-card{% if loop.first %} is-on{% endif %}">
-                <input type="radio" name="plus_user_phone" value="{{ _p }}"{% if loop.first %} checked{% endif %}>
-                <span class="vn-cust-plus-card__meta">
-                  <span class="vn-cust-plus-card__name">{{ (u.name or _p)|trim }}</span>
-                  {% if u.name and (u.name|trim) != _p %}
-                  <span class="vn-cust-plus-card__phone">{{ _p }}</span>
-                  {% endif %}
-                </span>
-                <span class="vn-cust-plus-card__check" aria-hidden="true"><i class="fas fa-check"></i></span>
+        <div class="vn-cust-acc" id="vnCustomerPlusField"{% if not _plus_users %} hidden{% endif %}>
+          <button type="button" class="vn-cust-acc__head" data-acc-toggle aria-expanded="false">
+            <span class="vn-cust-acc__copy">
+              <span class="vn-cust-acc__label">کاربر پلاس</span>
+              <span class="vn-cust-acc__value is-empty" data-acc-value>انتخاب کنید</span>
+            </span>
+            <i class="fas fa-chevron-down vn-cust-acc__chev" aria-hidden="true"></i>
+          </button>
+          <div class="vn-cust-acc__body">
+            <div class="vn-cust-plus-list"
+                 id="vnCustomerPlusList"
+                 role="radiogroup"
+                 aria-label="کاربر پلاس"></div>
+          </div>
+        </div>
+        <div class="vn-cust-acc" id="vnCustomerSlotField">
+          <button type="button" class="vn-cust-acc__head" data-acc-toggle aria-expanded="false">
+            <span class="vn-cust-acc__copy">
+              <span class="vn-cust-acc__label">وقت بازدید</span>
+              <span class="vn-cust-acc__value is-empty" data-acc-value>انتخاب کنید</span>
+            </span>
+            <i class="fas fa-chevron-down vn-cust-acc__chev" aria-hidden="true"></i>
+          </button>
+          <div class="vn-cust-acc__body">
+            <div class="vn-cust-slot-list"
+                 id="vnCustomerSlotList"
+                 role="radiogroup"
+                 aria-label="وقت بازدید"></div>
+            <p id="vnCustomerSlotEmpty" class="vn-cust-slot-empty" hidden>وقت مجازی باقی نمانده است.</p>
+          </div>
+        </div>
+        <div class="vn-cust-acc" id="vnCustomerExtra">
+          <button type="button" class="vn-cust-acc__head" data-acc-toggle aria-expanded="false">
+            <span class="vn-cust-acc__copy">
+              <span class="vn-cust-acc__label">مشخصات مشتری <span class="vn-cust-field__label-hint">(اختیاری)</span></span>
+              <span class="vn-cust-acc__value is-empty" data-acc-value>در صورت نیاز اضافه کنید</span>
+            </span>
+            <i class="fas fa-chevron-down vn-cust-acc__chev" aria-hidden="true"></i>
+          </button>
+          <div class="vn-cust-acc__body">
+            <div class="vn-cust-extra-body">
+              <div class="vn-cust-grid">
+                <label class="vn-cust-field">
+                  <span class="vn-cust-field__label">نام</span>
+                  <input class="vn-cust-field__input" name="customer_first_name" autocomplete="given-name" placeholder="نام">
+                </label>
+                <label class="vn-cust-field">
+                  <span class="vn-cust-field__label">نام خانوادگی</span>
+                  <input class="vn-cust-field__input" name="customer_last_name" autocomplete="family-name" placeholder="نام خانوادگی">
+                </label>
+              </div>
+              <label class="vn-cust-field">
+                <span class="vn-cust-field__label">موبایل</span>
+                <input class="vn-cust-field__input" name="customer_phone" dir="ltr" inputmode="tel" autocomplete="tel" placeholder="0912…">
               </label>
-              {% endif %}
-            {% endfor %}
+            </div>
           </div>
         </div>
-        <div class="vn-cust-field" id="vnCustomerSlotField">
-          <span class="vn-cust-field__label" id="vnCustomerSlotLabel">وقت بازدید</span>
-          <div class="vn-cust-slot-list"
-               id="vnCustomerSlotList"
-               role="radiogroup"
-               aria-labelledby="vnCustomerSlotLabel"></div>
-          <p id="vnCustomerSlotEmpty" class="vn-cust-slot-empty" hidden>وقت مجازی باقی نمانده است.</p>
-        </div>
-        <details class="vn-cust-extra" id="vnCustomerExtra">
-          <summary>مشخصات مشتری <span class="vn-cust-field__label-hint">(اختیاری)</span></summary>
-          <div class="vn-cust-grid">
-            <label class="vn-cust-field">
-              <span class="vn-cust-field__label">نام</span>
-              <input class="vn-cust-field__input" name="customer_first_name" autocomplete="given-name" placeholder="نام">
-            </label>
-            <label class="vn-cust-field">
-              <span class="vn-cust-field__label">نام خانوادگی</span>
-              <input class="vn-cust-field__input" name="customer_last_name" autocomplete="family-name" placeholder="نام خانوادگی">
-            </label>
+        <div class="vn-cust-acc" id="vnCustomerNotesAcc">
+          <button type="button" class="vn-cust-acc__head" data-acc-toggle aria-expanded="false">
+            <span class="vn-cust-acc__copy">
+              <span class="vn-cust-acc__label">توضیحات <span class="vn-cust-field__label-hint">(اختیاری)</span></span>
+              <span class="vn-cust-acc__value is-empty" data-acc-value>در صورت نیاز بنویسید</span>
+            </span>
+            <i class="fas fa-chevron-down vn-cust-acc__chev" aria-hidden="true"></i>
+          </button>
+          <div class="vn-cust-acc__body">
+            <textarea class="vn-cust-field__textarea"
+                      name="notes"
+                      rows="3"
+                      placeholder="مثلاً ترجیح منطقه یا نکتهٔ مهم برای بازدید"></textarea>
           </div>
-          <label class="vn-cust-field">
-            <span class="vn-cust-field__label">موبایل</span>
-            <input class="vn-cust-field__input" name="customer_phone" dir="ltr" inputmode="tel" autocomplete="tel" placeholder="0912…">
-          </label>
-        </details>
-        <label class="vn-cust-field">
-          <span class="vn-cust-field__label">توضیحات <span class="vn-cust-field__label-hint">(اختیاری)</span></span>
-          <textarea class="vn-cust-field__textarea"
-                    name="notes"
-                    rows="3"
-                    placeholder="مثلاً ترجیح منطقه یا نکتهٔ مهم برای بازدید"></textarea>
-        </label>
+        </div>
         <p id="vnCustomerModalError" class="vn-cust-modal__error" role="alert"></p>
         <div class="vn-cust-modal__foot">
           <button type="submit"
@@ -475,6 +584,41 @@
   var slotList = document.getElementById('vnCustomerSlotList');
   var slotEmpty = document.getElementById('vnCustomerSlotEmpty');
   var extraEl = document.getElementById('vnCustomerExtra');
+  var notesAcc = document.getElementById('vnCustomerNotesAcc');
+  var accItems = [landField, plusField, slotField, extraEl, notesAcc];
+
+  function accValueEl(box) {
+    return box ? box.querySelector('[data-acc-value]') : null;
+  }
+
+  function setAccValue(box, text, empty) {
+    var el = accValueEl(box);
+    if (!el) return;
+    var t = String(text || '').trim();
+    el.textContent = t || (empty || 'انتخاب کنید');
+    if (t) el.classList.remove('is-empty');
+    else el.classList.add('is-empty');
+  }
+
+  function setAccOpen(box, open) {
+    if (!box || box.hidden) return;
+    box.classList.toggle('is-open', !!open);
+    var btn = box.querySelector('[data-acc-toggle]');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function closeOtherAcc(except) {
+    accItems.forEach(function (box) {
+      if (box && box !== except) setAccOpen(box, false);
+    });
+  }
+
+  function toggleAcc(box) {
+    if (!box || box.hidden) return;
+    var willOpen = !box.classList.contains('is-open');
+    closeOtherAcc(box);
+    setAccOpen(box, willOpen);
+  }
 
   function modalLands() {
     try {
@@ -572,6 +716,9 @@
       });
     });
     if (landField) landField.hidden = !!code || !lands.length;
+    if (!landField || landField.hidden) return;
+    var selected = landList.querySelector('.vn-cust-plus-card.is-on .vn-cust-plus-card__name');
+    setAccValue(landField, selected ? selected.textContent : '', 'اختیاری');
   }
 
   function slotsByPlus() {
@@ -606,20 +753,53 @@
     var slots = map[phone] || map[''] || [];
     if (!Array.isArray(slots)) slots = [];
     slotList.innerHTML = '';
-    slots.forEach(function (item, idx) {
+
+    var groups = [];
+    var byIso = {};
+    slots.forEach(function (item) {
       if (!item || !item.value) return;
-      appendPickCard(slotList, {
-        name: 'visit_slot',
-        value: String(item.value),
-        title: String(item.label || item.value),
-        sub: '',
-        on: idx === 0
-      });
+      var iso = String(item.iso || '').trim();
+      if (!iso) return;
+      if (!byIso[iso]) {
+        byIso[iso] = {
+          iso: iso,
+          title: [item.weekday, item.jalali_fa].filter(Boolean).join(' ') || iso,
+          hours: []
+        };
+        groups.push(byIso[iso]);
+      }
+      byIso[iso].hours.push(item);
     });
-    var has = slotList.children.length > 0;
+
+    groups.forEach(function (group, gi) {
+      var day = document.createElement('div');
+      day.className = 'vn-cust-day' + (gi === 0 ? ' is-open' : '');
+      var head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'vn-cust-day__head';
+      head.textContent = group.title;
+      var hours = document.createElement('div');
+      hours.className = 'vn-cust-day__hours';
+      group.hours.forEach(function (item, hi) {
+        appendPickCard(hours, {
+          name: 'visit_slot',
+          value: String(item.value),
+          title: String(item.time || item.sub || item.label || item.value),
+          sub: '',
+          on: gi === 0 && hi === 0
+        });
+      });
+      day.appendChild(head);
+      day.appendChild(hours);
+      slotList.appendChild(day);
+    });
+
+    var has = groups.length > 0;
     if (slotField) slotField.hidden = false;
     if (slotEmpty) slotEmpty.hidden = has;
     if (submitBtn) submitBtn.disabled = !has;
+    var first = slots[0];
+    setAccValue(slotField, first ? (first.label || first.time || '') : '', 'وقت مجازی نیست');
   }
 
   function fillPlusSelect(selectedPhone) {
@@ -648,12 +828,19 @@
         on: phone === active
       });
     });
+    var activeUser = users.filter(function (item) {
+      return String(item.phone || '').trim() === active;
+    })[0];
+    setAccValue(plusField, activeUser ? (activeUser.name || active) : active, 'انتخاب کنید');
   }
 
   if (landList && !landList.__vinorPickBound) {
     landList.__vinorPickBound = true;
     landList.addEventListener('change', function () {
       markPickCards(landList);
+      var card = landList.querySelector('.vn-cust-plus-card.is-on .vn-cust-plus-card__name');
+      setAccValue(landField, card ? card.textContent : '', 'اختیاری');
+      setAccOpen(landField, false);
     });
   }
 
@@ -661,14 +848,48 @@
     plusList.__vinorVisitHintBound = true;
     plusList.addEventListener('change', function () {
       markPickCards(plusList);
+      var card = plusList.querySelector('.vn-cust-plus-card.is-on .vn-cust-plus-card__name');
+      setAccValue(plusField, card ? card.textContent : '', 'انتخاب کنید');
       fillSlotSelect();
+      setAccOpen(plusField, false);
     });
   }
 
   if (slotList && !slotList.__vinorPickBound) {
     slotList.__vinorPickBound = true;
+    slotList.addEventListener('click', function (ev) {
+      var head = ev.target && ev.target.closest && ev.target.closest('.vn-cust-day__head');
+      if (!head) return;
+      ev.preventDefault();
+      var day = head.closest('.vn-cust-day');
+      if (!day) return;
+      var open = !day.classList.contains('is-open');
+      var days = slotList.querySelectorAll('.vn-cust-day');
+      for (var i = 0; i < days.length; i++) days[i].classList.remove('is-open');
+      if (open) day.classList.add('is-open');
+    });
     slotList.addEventListener('change', function () {
       markPickCards(slotList);
+      var card = slotList.querySelector('.vn-cust-plus-card.is-on');
+      var day = card && card.closest ? card.closest('.vn-cust-day') : null;
+      var dayTitle = day && day.querySelector('.vn-cust-day__head')
+        ? day.querySelector('.vn-cust-day__head').textContent
+        : '';
+      var hour = card && card.querySelector('.vn-cust-plus-card__name')
+        ? card.querySelector('.vn-cust-plus-card__name').textContent
+        : '';
+      setAccValue(slotField, [dayTitle, hour].filter(Boolean).join(' ساعت '), 'انتخاب کنید');
+      setAccOpen(slotField, false);
+    });
+  }
+
+  if (form && !form.__vinorAccBound) {
+    form.__vinorAccBound = true;
+    form.addEventListener('click', function (ev) {
+      var btn = ev.target && ev.target.closest && ev.target.closest('[data-acc-toggle]');
+      if (!btn || !form.contains(btn)) return;
+      ev.preventDefault();
+      toggleAcc(btn.closest('.vn-cust-acc'));
     });
   }
 
@@ -676,6 +897,7 @@
     fillLandSelect(landCode);
     fillPlusSelect('');
     fillSlotSelect();
+    closeOtherAcc(null);
     setError('');
   }
 
@@ -856,7 +1078,7 @@
           }
           closeModal();
           try { form.reset(); } catch (_) {}
-          try { if (extraEl) extraEl.open = false; } catch (_) {}
+          closeOtherAcc(null);
           var nextUrl = data.redirect_url || modal.getAttribute('data-requests-url') || '';
           var onHome = !!document.getElementById('homeDashboardPage');
           var landCodeStay = pending || picked;
