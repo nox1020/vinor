@@ -1,0 +1,251 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}سطوح همکاری | وینور{% endblock %}
+
+{% block content %}
+{% set _level = current_level|default('') %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{{ ep_header_start(id='coopLevelsHeader') }}
+{% call ep_header_row('سطوح همکاری', back_url|default(url_for('express_partner.home')), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{{ ep_header_end() }}
+
+<style>
+  html:has(#coopLevelsPage),
+  body:has(#coopLevelsPage) {
+    background: #030712 !important;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  html:has(#coopLevelsPage)::-webkit-scrollbar,
+  body:has(#coopLevelsPage)::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  html:has(#coopLevelsPage) #tg-page-shell {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  html:has(#coopLevelsPage) #tg-page-shell::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  #coopLevelsPage {
+    --cl-line: rgba(255, 255, 255, 0.08);
+    background: #030712;
+    color: #f4f4f5;
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  #coopLevelsPage::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  #coopLevelsPage .cl-shell {
+    max-width: 28rem;
+    margin: 0 auto;
+    padding: 0.25rem 1rem 1.5rem;
+  }
+  #coopLevelsPage .cl-lead {
+    margin: 0.35rem 0 1.15rem;
+    font-size: 0.86rem;
+    line-height: 1.7;
+    color: #a1a1aa;
+  }
+  #coopLevelsPage .cl-list {
+    display: grid;
+    gap: 0.7rem;
+  }
+  #coopLevelsPage .cl-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 2.6rem 1fr;
+    gap: 0.85rem;
+    align-items: start;
+    padding: 1rem 1rem 1.05rem;
+    border-radius: 1.05rem;
+    border: 1px solid var(--cl-line);
+    background: rgba(255, 255, 255, 0.03);
+    text-decoration: none;
+    color: inherit;
+  }
+  #coopLevelsPage .cl-card.is-you {
+    border-color: rgba(16, 185, 129, 0.45);
+    background: rgba(16, 185, 129, 0.07);
+  }
+  #coopLevelsPage .cl-card--plus {
+    border-color: rgba(250, 250, 250, 0.16);
+    background:
+      radial-gradient(120% 90% at 100% 0%, rgba(255, 255, 255, 0.08), transparent 55%),
+      rgba(255, 255, 255, 0.035);
+  }
+  #coopLevelsPage .cl-mark {
+    width: 2.55rem;
+    height: 2.55rem;
+    border-radius: 0.85rem;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    color: #e4e4e7;
+    font-size: 0.95rem;
+  }
+  #coopLevelsPage .cl-card--plus .cl-mark {
+    background: #fafafa;
+    color: #111;
+  }
+  #coopLevelsPage .cl-kicker {
+    margin: 0;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    color: #71717a;
+  }
+  #coopLevelsPage .cl-title {
+    margin: 0.1rem 0 0;
+    font-size: 1.05rem;
+    font-weight: 750;
+    color: #fff;
+  }
+  #coopLevelsPage .cl-you {
+    display: inline-block;
+    margin-inline-start: 0.4rem;
+    padding: 0.08rem 0.42rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.16);
+    vertical-align: 0.12em;
+  }
+  #coopLevelsPage .cl-copy {
+    margin: 0.35rem 0 0;
+    font-size: 0.8rem;
+    line-height: 1.65;
+    color: #a1a1aa;
+  }
+  #coopLevelsPage .cl-points {
+    margin: 0.55rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.28rem;
+  }
+  #coopLevelsPage .cl-points li {
+    font-size: 0.78rem;
+    color: #d4d4d8;
+    padding-inline-start: 0.85rem;
+    position: relative;
+  }
+  #coopLevelsPage .cl-points li::before {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0.55em;
+    width: 0.28rem;
+    height: 0.28rem;
+    border-radius: 999px;
+    background: #52525b;
+  }
+  #coopLevelsPage .cl-card.is-you .cl-points li::before,
+  #coopLevelsPage .cl-card--plus .cl-points li::before {
+    background: #34d399;
+  }
+  #coopLevelsPage .cl-foot {
+    margin-top: 1.1rem;
+  }
+  #coopLevelsPage .cl-cta {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    min-height: 3rem;
+    border: 0;
+    border-radius: 0.9rem;
+    background: #059669;
+    color: #fff;
+    font-size: 0.92rem;
+    font-weight: 750;
+    text-decoration: none;
+  }
+  #coopLevelsPage .cl-cta:active {
+    transform: scale(0.98);
+  }
+</style>
+
+<div id="coopLevelsPage">
+  <div class="cl-shell">
+    <p class="cl-lead">چهار سطح در وینور. هر کدام یک کار مشخص دارد — از دیدن فایل تا فروش و آگهی خودت.</p>
+
+    <div class="cl-list" role="list">
+      <article class="cl-card cl-card--plus{% if _level == 'plus' %} is-you{% endif %}" role="listitem">
+        <span class="cl-mark" aria-hidden="true"><i class="fas fa-gem"></i></span>
+        <div>
+          <p class="cl-kicker">بالاترین سطح</p>
+          <h2 class="cl-title">پلاس{% if _level == 'plus' %}<span class="cl-you">سطح شما</span>{% endif %}</h2>
+          <p class="cl-copy">مالک فایل‌های خودت هستی؛ آگهی، بازدید و معامله در پنل خودت جمع می‌شود.</p>
+          <ul class="cl-points">
+            <li>آگهی اختصاصی و مدیریت فایل‌ها</li>
+            <li>صندوق بازدید و معامله</li>
+            <li>اولویت در معرفی به مشتری</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="cl-card{% if _level == 'marketer' %} is-you{% endif %}" role="listitem">
+        <span class="cl-mark" aria-hidden="true"><i class="fas fa-briefcase"></i></span>
+        <div>
+          <p class="cl-kicker">فروش</p>
+          <h2 class="cl-title">بازاریاب{% if _level == 'marketer' %}<span class="cl-you">سطح شما</span>{% endif %}</h2>
+          <p class="cl-copy">فایل آمادهٔ وینور را به مشتری می‌فروشی و بعد از تأیید معامله، پورسانت به کیف پول می‌آید.</p>
+          <ul class="cl-points">
+            <li>چت مشتری و معرفی فایل</li>
+            <li>ثبت بازدید و فروش</li>
+            <li>پورسانت بعد از تأیید معامله</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="cl-card{% if _level == 'visitor' %} is-you{% endif %}" role="listitem">
+        <span class="cl-mark" aria-hidden="true"><i class="fas fa-map-location-dot"></i></span>
+        <div>
+          <p class="cl-kicker">بازدید</p>
+          <h2 class="cl-title">ویزیتور{% if _level == 'visitor' %}<span class="cl-you">سطح شما</span>{% endif %}</h2>
+          <p class="cl-copy">فایل را از نزدیک می‌بینی. وقت بازدید می‌گیری و همراه مشتری سر زمین می‌روی — هنوز فروش و پورسانت نداری.</p>
+          <ul class="cl-points">
+            <li>درخواست وقت بازدید</li>
+            <li>دیدن ملک از نزدیک</li>
+            <li>مسیر روشن تا بازاریاب شدن</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="cl-card{% if _level == 'regular' %} is-you{% endif %}" role="listitem">
+        <span class="cl-mark" aria-hidden="true"><i class="fas fa-user"></i></span>
+        <div>
+          <p class="cl-kicker">شروع</p>
+          <h2 class="cl-title">عادی{% if _level == 'regular' %}<span class="cl-you">سطح شما</span>{% endif %}</h2>
+          <p class="cl-copy">جستجو، چت و آشنایی با فایل‌ها. بدون فروش و بدون پورسانت.</p>
+          <ul class="cl-points">
+            <li>جستجوی ملک</li>
+            <li>گفتگو با وینور</li>
+            <li>درخواست همکاری هر وقت آماده باشی</li>
+          </ul>
+        </div>
+      </article>
+    </div>
+
+    <div class="cl-foot">
+      {% if not is_approved|default(false) %}
+      <a class="cl-cta" href="{% if session.get('user_phone') %}{{ url_for('express_partner.apply') }}{% else %}{{ url_for('express_partner.home', menu=1, login_next=url_for('express_partner.apply')) }}{% endif %}" data-vinor-express-nav>
+        بازاریاب شو
+      </a>
+      {% elif not is_special|default(false) %}
+      <a class="cl-cta" href="{{ url_for('express_partner.plus') }}" data-vinor-express-nav>
+        ارتقا به پلاس
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

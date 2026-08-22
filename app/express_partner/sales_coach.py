@@ -866,6 +866,7 @@ def build_limited_ai_quick_prompts(
 
     apply_url = "/express/partner/apply"
     thanks_url = "/express/partner/thanks"
+    levels_url = "/express/partner/levels"
     guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/apply"
     try:
         from flask import has_request_context, url_for
@@ -873,6 +874,7 @@ def build_limited_ai_quick_prompts(
         if has_request_context():
             apply_url = url_for("express_partner.apply")
             thanks_url = url_for("express_partner.thanks")
+            levels_url = url_for("express_partner.coop_levels")
             guest_apply_url = url_for(
                 "express_partner.home",
                 menu=1,
@@ -904,11 +906,10 @@ def build_limited_ai_quick_prompts(
             out[-1]["ui_action"] = "open_divar_ads_all"
         add(
             "سطوح همکاری",
-            prompt="سطوح همکاری و پورسانت چطوره؟",
-            intent="coop_levels",
             icon="users",
             subtitle="شرایط و پورسانت",
             variant="tile",
+            href=levels_url,
         )
         return out[:3]
 
@@ -938,11 +939,10 @@ def build_limited_ai_quick_prompts(
         out[-1]["ui_action"] = "open_divar_ads_all"
     add(
         "سطوح همکاری",
-        prompt="سطوح همکاری و پورسانت چطوره؟",
-        intent="coop_levels",
         icon="users",
         subtitle="شرایط و پورسانت",
         variant="tile",
+        href=levels_url,
     )
     return out[:3]
 

@@ -6,7 +6,6 @@ sms.ir — ارسال OTP و پیامک قالب‌دار/مستقیم.
 """
 import re
 import threading
-from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from flask import current_app
@@ -23,9 +22,7 @@ from app.services.sms_config import (
 # اتصال گرم به sms.ir — TLS/TCP برای OTP دوباره برقرار نشود
 _SMS_SESSION: requests.Session | None = None
 _SMS_SESSION_LOCK = threading.Lock()
-# timeout=1s باعث قطع ارسال می‌شد؛ sms.ir اغلب چند ثانیه طول می‌کشد
-_OTP_HTTP_TIMEOUT = 20
-_OTP_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="vinor-otp")
+# connect, read — sms.ir OTP Verify; no retry (one request = one SMS)
 
 # ارقام فارسی/عربی → لاتین
 _DIGIT_TRANSLATION = str.maketrans(
@@ -82,12 +79,13 @@ def sms_is_infrastructure_error(error: object) -> bool:
     return any(m in e for m in markers)
 
 
-def normalize_otp_code(code: str) -> str:
-    """کد OTP — فقط ارقام لاتین، حداکثر ۵ رقم."""
+def normalize_otp_code(code: str, *, max_digits: int = 6) -> str:
+    """کد OTP — فقط ارقام لاتین. ورود فعلی ۵ رقم است؛ /auth تا ۶ رقم می‌پذیرد."""
     if not code:
         return ""
+    limit = max_digits if 4 <= int(max_digits) <= 8 else 6
     s = str(code).strip().translate(_DIGIT_TRANSLATION)
-    return re.sub(r"\D+", "", s)[:5]
+    return re.sub(r"\D+", "", s)[:limit]
 
 
 def format_otp_sms_message(code: str) -> str:
@@ -196,8 +194,8 @@ def _send_otp_verify(mobile: str, digits: str) -> dict:
             url,
             headers=headers,
             json_payload=payload,
-            timeout=_OTP_HTTP_TIMEOUT,
-            retry=True,
+            timeout=(3.05, 12),
+            retry=False,
         )
         content_type = resp.headers.get("content-type", "")
         body = (
@@ -219,7 +217,7 @@ def send_sms_code(
     recipient_name: str | None = None,
     record_history: bool = True,
 ) -> dict:
-    """OTP: اول Verify خدماتی، اگر نرسید bulk از خط ۹۹۸."""
+    """OTP از قالب Verify خدماتی sms.ir — یک درخواست، بدون ارسال تکراری bulk."""
     mobile = normalize_iran_mobile(phone)
     if not is_valid_iran_mobile(mobile):
         return {
@@ -235,65 +233,45 @@ def send_sms_code(
             "body": {"error": "invalid_otp_code"},
         }
 
+    if not (get_sms_api_key() or "").strip():
+        return {
+            "ok": False,
+            "status": 401,
+            "body": {"error": "missing_api_key"},
+        }
+
     template_id = get_sms_template_id()
     result = _send_otp_verify(mobile, digits)
     used_template = bool(result.get("ok"))
-    if not result.get("ok"):
-        try:
-            current_app.logger.warning(
-                "OTP verify failed; fallback bulk 998 | phone=%s | body=%s",
-                mobile,
-                result.get("body"),
-            )
-        except Exception:
-            pass
-        result = send_sms_direct(
-            mobile,
-            format_otp_sms_message(digits),
-            line_number=get_sms_line_number() or "09981801922",
-            history_source=history_source,
-            recipient_name=recipient_name,
-            record_history=False,
-        )
 
     if not result.get("ok"):
         try:
+            from app.auth.otp.crypto import mask_phone
+
             current_app.logger.error(
-                "OTP SMS failed | phone=%s | status=%s | body=%s",
-                mobile,
+                "OTP SMS failed | phone=%s | status=%s",
+                mask_phone(mobile),
                 result.get("status"),
-                result.get("body"),
             )
         except Exception:
             pass
 
     if record_history and mobile:
-        from app.services.sms_history import record_sms_send_result
+        try:
+            from app.services.sms_history import record_sms_send_result
 
-        record_sms_send_result(
-            result,
-            mobile=mobile,
-            source=history_source,
-            recipient_name=recipient_name,
-            message=format_otp_sms_message(digits),
-            template_id=template_id if used_template else None,
-            record_history=True,
-        )
+            record_sms_send_result(
+                result,
+                mobile=mobile,
+                source=history_source,
+                recipient_name=recipient_name,
+                message=format_otp_sms_message("******"),
+                template_id=template_id if used_template else None,
+                record_history=True,
+            )
+        except Exception:
+            pass
     return result
-
-
-def send_otp_sms_background(phone: str, code: str) -> None:
-    """ارسال OTP خارج از درخواست ورود تا timeout رابط را قفل نکند."""
-    app = current_app._get_current_object()
-
-    def _worker() -> None:
-        with app.app_context():
-            try:
-                send_sms_code(phone, code)
-            except Exception:
-                app.logger.exception("OTP SMS background exception | phone=%s", phone)
-
-    _OTP_EXECUTOR.submit(_worker)
 
 
 def send_sms_template(

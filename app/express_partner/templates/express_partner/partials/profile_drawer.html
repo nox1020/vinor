@@ -600,7 +600,7 @@
   }
   .ep-profile-drawer__user-role {
     flex-shrink: 0;
-    margin-inline-start: auto;
+    margin-inline-start: 0.15rem;
     padding: 0.18rem 0.52rem;
     border-radius: 9999px;
     font-size: 0.65rem;
@@ -609,6 +609,13 @@
     letter-spacing: 0;
     white-space: nowrap;
     border: 1px solid transparent;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .ep-profile-drawer__user-role:hover,
+  .ep-profile-drawer__user-role:focus-visible {
+    filter: brightness(1.15);
   }
   .ep-profile-drawer__user-role.is-plus {
     color: #fbbf24;
@@ -1162,7 +1169,7 @@
          data-vinor-express-nav
          class="ep-profile-drawer__user"
          id="epDrawerUserCard"
-         aria-label="پروفایل {{ _drawer_name }} — {{ _drawer_role_label }}"
+         aria-label="ویرایش پروفایل {{ _drawer_name }}"
          title="ویرایش پروفایل"
          data-tour="profile-section">
         <span class="ep-profile-drawer__user-avatar" aria-hidden="true">
@@ -1182,8 +1189,13 @@
           <span class="ep-profile-drawer__user-name">{{ _drawer_name }}</span>
           <span class="ep-profile-drawer__user-phone" dir="ltr">{{ me_phone }}</span>
         </span>
-        <span class="ep-profile-drawer__user-role is-{{ _drawer_role_key }}">{{ _drawer_role_label }}</span>
       </a>
+      <a href="{{ url_for('express_partner.coop_levels') }}"
+         data-vinor-express-nav
+         class="ep-profile-drawer__user-role is-{{ _drawer_role_key }}"
+         id="epDrawerUserLevel"
+         aria-label="سطوح همکاری — {{ _drawer_role_label }}"
+         title="سطوح همکاری">{{ _drawer_role_label }}</a>
       <button type="button"
               class="ep-profile-drawer__user-more"
               id="epDrawerUserMenuBtn"
@@ -2044,7 +2056,7 @@
       showHint(otpHint, '');
       otpInput.value = digits;
       syncOtpBtn();
-      if (digits.length === OTP_LEN && otpForm && !busy && !verifyInflight) {
+      if (digits.length === OTP_LEN && otpForm && !busy && !verifyInflight && otpStep && !otpStep.hidden) {
         try {
           if (typeof otpForm.requestSubmit === 'function') otpForm.requestSubmit();
           else otpForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));

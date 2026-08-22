@@ -5,7 +5,7 @@ from urllib.parse import quote
 from flask import (
     render_template, send_from_directory, request, abort,
     redirect, url_for, session, make_response, current_app,
-    has_app_context, has_request_context,
+    has_app_context, has_request_context, jsonify,
 )
 
 from . import main_bp
@@ -415,7 +415,25 @@ def enamad_seal():
 
 @main_bp.route("/healthz", methods=("GET", "HEAD"), endpoint="healthz")
 def healthz():
-    """پین سلامت برای تشخیص آنلاین/آفلاین در کلاینت."""
+    """پین سلامت برای تشخیص آنلاین/آفلاین در کلاینت.
+
+    Default: 204 (کلاینت‌های فعلی فقط status را چک می‌کنند).
+    GET /healthz?detail=1 → JSON غیرمحرمانه شامل وضعیت SMS OTP.
+    """
+    if request.method == "HEAD":
+        resp = make_response("", 204)
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        return resp
+    want_detail = (request.args.get("detail") or "").strip() == "1"
+    if want_detail:
+        try:
+            from app.auth.otp.config import sms_health
+            payload = {"ok": True, "sms": sms_health()}
+        except Exception:
+            payload = {"ok": True, "sms": {"enabled": False, "configured": False}}
+        resp = jsonify(payload)
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        return resp
     resp = make_response("", 204)
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return resp

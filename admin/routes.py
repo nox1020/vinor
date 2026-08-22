@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import json
 import re
-import random
 import threading
 import uuid
 from datetime import datetime, timedelta
@@ -66,7 +65,7 @@ from app.express_partner.partner_withdrawals import (
     release_withdrawal_commissions,
 )
 from app.land_category_specs import apply_category_specs_from_form
-from app.services.sms import send_sms_template, send_sms_direct, send_sms_code
+from app.services.sms import send_sms_template, send_sms_direct
 from app.utils.storage import load_users, save_users, load_reports, save_reports, save_ads, load_ads_cached, load_express_lands_cached
 from admin.people_directory import (
     build_admin_people_directory,
@@ -100,7 +99,7 @@ from admin.sms_recipients import (
     get_saved_recipient_group,
     save_recipient_group_preference,
 )
-from admin.admin_otp_store import clear_admin_otp, load_admin_otp, save_admin_otp
+from admin.admin_otp_store import clear_admin_otp
 from admin.sms_scheduled import (
     SEND_TIMING_INSTANT,
     SEND_TIMING_RECURRING,
@@ -889,26 +888,28 @@ def login_required(view):
 # احراز هویت
 # -----------------------------------------------------------------------------
 
-def _store_admin_otp_session(code: str) -> None:
-    save_admin_otp(code)
+def _issue_admin_otp() -> bool:
+    from app.auth.otp.config import otp_digits
+    from app.auth.otp.request_meta import client_ip, client_user_agent
+    from app.auth.otp.service import PURPOSE_ADMIN, request_otp
 
-
-def _send_admin_login_otp_async(code: str, phone: str) -> None:
-    """ارسال OTP در thread جدا — درخواست HTTP بلافاصله آزاد می‌شود (مهم برای LSAPI workers)."""
-    app = current_app._get_current_object()
-
-    def _worker() -> None:
-        with app.app_context():
-            sms_result = send_sms_code(phone, code)
-            if not sms_result.get("ok"):
-                current_app.logger.error(
-                    "Admin login OTP send failed | phone=%s | status=%s | body=%s",
-                    phone,
-                    sms_result.get("status"),
-                    sms_result.get("body"),
-                )
-
-    threading.Thread(target=_worker, daemon=True, name="admin-login-otp").start()
+    issued = request_otp(
+        phone=ADMIN_LOGIN_OTP_PHONE,
+        purpose=PURPOSE_ADMIN,
+        digits=otp_digits(),
+        ip=client_ip(),
+        user_agent=client_user_agent(),
+    )
+    if not issued.accepted:
+        return False
+    session.permanent = True
+    session["admin_otp_pending"] = True
+    session["admin_otp_last_sent_at"] = datetime.utcnow().timestamp()
+    try:
+        session.modified = True
+    except Exception:
+        pass
+    return True
 
 
 @admin_bp.before_request
@@ -940,8 +941,14 @@ def login():
         return redirect(url_for('admin.dashboard'))
 
     now_ts = datetime.utcnow().timestamp()
-    otp_state = load_admin_otp()
-    last_sent_at = float((otp_state or {}).get('last_sent_at') or session.get('admin_otp_last_sent_at') or 0)
+    last_sent_at = float(session.get('admin_otp_last_sent_at') or 0)
+    try:
+        from app.auth.otp.service import PURPOSE_ADMIN
+        from app.auth.otp.store import last_sent_at as otp_last_sent
+
+        last_sent_at = max(last_sent_at, float(otp_last_sent(ADMIN_LOGIN_OTP_PHONE, PURPOSE_ADMIN) or 0))
+    except Exception:
+        pass
     cooldown_seconds = max(0, ADMIN_OTP_COOLDOWN_SECONDS - int(now_ts - last_sent_at)) if last_sent_at else 0
 
     def _render_login():
@@ -951,14 +958,13 @@ def login():
             otp_cooldown_seconds=max(0, int(cooldown_seconds)),
         )
 
-    # ورود به صفحه لاگین: ارسال خودکار OTP (غیرهمزمان — worker LiteSpeed بلاک نمی‌شود)
     if request.method == 'GET':
         if cooldown_seconds == 0:
-            code = f"{random.randint(10000, 99999)}"
-            _store_admin_otp_session(code)
-            cooldown_seconds = ADMIN_OTP_COOLDOWN_SECONDS
-            _send_admin_login_otp_async(code, ADMIN_LOGIN_OTP_PHONE)
-            flash('با اشتیاق منتظرتیم', 'info')
+            if _issue_admin_otp():
+                cooldown_seconds = ADMIN_OTP_COOLDOWN_SECONDS
+                flash('با اشتیاق منتظرتیم', 'info')
+            else:
+                flash('ارسال کد ممکن نشد. کمی بعد دوباره تلاش کنید.', 'danger')
         return _render_login()
 
     if request.method == 'POST':
@@ -969,26 +975,24 @@ def login():
             if cooldown_seconds > 0:
                 flash(f'امکان ارسال مجدد تا {cooldown_seconds} ثانیه دیگر فعال می‌شود.', 'warning')
                 return _render_login()
-            code = f"{random.randint(10000, 99999)}"
-            _store_admin_otp_session(code)
-            cooldown_seconds = ADMIN_OTP_COOLDOWN_SECONDS
-            _send_admin_login_otp_async(code, ADMIN_LOGIN_OTP_PHONE)
-            flash('با اشتیاق منتظرتیم', 'info')
+            if _issue_admin_otp():
+                cooldown_seconds = ADMIN_OTP_COOLDOWN_SECONDS
+                flash('با اشتیاق منتظرتیم', 'info')
+            else:
+                flash('ارسال کد ممکن نشد. کمی بعد دوباره تلاش کنید.', 'danger')
             return _render_login()
 
-        # مرحله ۲: تایید کد پیامکی
         if otp_code:
-            otp_state = load_admin_otp() or {}
-            expected_code = str(otp_state.get('code') or session.get('admin_otp_code') or '')
-            expires_at = otp_state.get('expires_at') or session.get('admin_otp_expires_at')
-            now_ts = datetime.utcnow().timestamp()
+            from app.auth.otp.config import otp_digits
+            from app.auth.otp.service import PURPOSE_ADMIN, verify_otp
 
-            if (not expires_at) or (now_ts > float(expires_at)):
-                clear_admin_otp()
-                flash('کد ورود منقضی شده است. دوباره وارد شوید.', 'warning')
-                return _render_login()
-
-            if otp_code == expected_code:
+            checked = verify_otp(
+                phone=ADMIN_LOGIN_OTP_PHONE,
+                purpose=PURPOSE_ADMIN,
+                code=otp_code,
+                digits=otp_digits(),
+            )
+            if checked.ok:
                 session['logged_in'] = True
                 session['username'] = ADMIN_USERNAME
                 session['admin_phone'] = ADMIN_LOGIN_OTP_PHONE

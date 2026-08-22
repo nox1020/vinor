@@ -322,6 +322,16 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning("Data dir / AI escalations init: %s", e)
 
+    try:
+        from app.auth.otp.store import init_schema, purge_old_challenges
+        from app.auth.otp.config import log_otp_startup
+        with app.app_context():
+            init_schema()
+            purge_old_challenges()
+        log_otp_startup(app.logger)
+    except Exception as e:
+        app.logger.warning("OTP store init skipped: %s", e)
+
     # Initialize DB (SQLAlchemy) — فقط وقتی لازم است
     try:
         from .extensions import db
@@ -442,6 +452,11 @@ def create_app() -> Flask:
         app.register_blueprint(webhook_bp)
     if express_api_bp is not None:
         app.register_blueprint(express_api_bp)
+    try:
+        from app.auth.otp.routes import auth_otp_bp
+        app.register_blueprint(auth_otp_bp)
+    except Exception as e:
+        app.logger.warning("Auth OTP blueprint disabled: %s", e)
     if sms_api_bp is not None:
         app.register_blueprint(sms_api_bp)
     if push_api_bp is not None:
@@ -548,6 +563,12 @@ def create_app() -> Flask:
             except Exception:
                 pass
 
+        try:
+            from app.auth.otp.routes import auth_otp_bp
+            csrf.exempt(auth_otp_bp)
+        except Exception:
+            pass
+
         # خروج و به‌روزرسانی پروفایل اپ اندروید (POST با کوکی، بدون CSRF)
         # خروج وب همکار: بدون CSRF تا با توکن کهنه در تب باز طولانی یا PWA خراب نشود
         for endpoint in (
@@ -555,6 +576,9 @@ def create_app() -> Flask:
             "express_partner.api_profile_update",
             "express_partner.api_profile_avatar",
             "express_partner.api_login_request",
+            "express_partner.api_verify",
+            "auth_otp.request_otp_view",
+            "auth_otp.verify_otp_view",
             "express_partner.logout",
             "express_partner.login",
             "express_partner.verify",
@@ -580,15 +604,9 @@ def create_app() -> Flask:
                 pass
 
         # APIهای JSON پرتال همکار — احراز هویت با session؛ CSRF در WebView/APK مشکل‌ساز است
-        _partner_api_csrf_skip = {
-            "/express/partner/api/login-request",
-            "/express/partner/api/verify",
-        }
         for rule in app.url_map.iter_rules():
             rule_path = (rule.rule or "").rstrip("/") or "/"
             if not rule_path.startswith("/express/partner/api"):
-                continue
-            if rule_path in _partner_api_csrf_skip:
                 continue
             if not rule.methods or not (rule.methods & {"POST", "PUT", "PATCH", "DELETE"}):
                 continue
@@ -629,11 +647,16 @@ def create_app() -> Flask:
                 from flask import flash
                 from app.utils.flash_messages import FLASH_AUTH_WARNING
 
+                form = dict(request.form)
+                for key in list(form):
+                    lk = str(key).lower()
+                    if "otp" in lk or lk in ("code", "password"):
+                        form[key] = "***"
                 current_app.logger.error(
                     "CSRF_ERROR: %s | path=%s | form=%s | headers=%s",
                     getattr(e, "description", str(e)),
                     request.path,
-                    dict(request.form),
+                    form,
                     dict(request.headers),
                 )
                 path = (request.path or "").rstrip("/")
@@ -642,6 +665,8 @@ def create_app() -> Flask:
                     "/express/partner/verify",
                     "/express/partner/otp/resend",
                     "/express/partner/api/login-request",
+                    "/auth/request-otp",
+                    "/auth/verify-otp",
                     "/admin/login",
                 }
                 if path in auth_paths or path.startswith("/express/partner/login"):
@@ -807,7 +832,7 @@ def create_app() -> Flask:
                 current_app.logger.debug("PASS (apk-download): %s", path_now)
             return
 
-        safe_prefixes = ("/static", "/api", "/uploads")
+        safe_prefixes = ("/static", "/api", "/uploads", "/auth")
         if path_now.startswith(safe_prefixes):
             if debug:
                 current_app.logger.debug("PASS (prefix): %s", path_now)

@@ -429,6 +429,7 @@ def build_sitemap_entries(app) -> List[Dict[str, str]]:
         ("main.privacy", {}),
         ("express_partner.home", {}),
         ("express_partner.cooperation_terms", {}),
+        ("express_partner.coop_levels", {}),
     ]
     with app.app_context():
         entries.append({"loc": SITE_ORIGIN + "/", "lastmod": today})
