@@ -1979,7 +1979,7 @@
       if (!code || card.getAttribute('data-vn-upgrading') === '1') continue;
       card.setAttribute('data-vn-upgrading', '1');
       (function (el, landCode) {
-        var url = '/express/partner/lands/' + encodeURIComponent(landCode) + '/chat-detail';
+        var url = landChatDetailUrl(landCode);
         fetch(url, {
           credentials: 'same-origin',
           headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -4219,12 +4219,20 @@
     }
   }
 
+  function landChatDetailUrl(code) {
+    code = String(code || '').trim();
+    if (code.indexOf('divar:') === 0) {
+      return '/express/partner/divar/' + encodeURIComponent(code.slice(6)) + '/chat-detail';
+    }
+    return '/express/partner/lands/' + encodeURIComponent(code) + '/chat-detail';
+  }
+
   function refreshLandChatCard(code) {
     code = String(code || '').trim();
     if (!code || !list) return Promise.resolve(false);
     var wrap = list.querySelector('.ai-msg-wrap[data-land-chat-code="' + code + '"]');
     if (!wrap) return Promise.resolve(false);
-    var url = '/express/partner/lands/' + encodeURIComponent(code) + '/chat-detail';
+    var url = landChatDetailUrl(code);
     return fetch(url, {
       credentials: 'same-origin',
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -4393,7 +4401,7 @@
       try {
         syncHomeEmptyState();
       } catch (_) {}
-      var url = '/express/partner/lands/' + encodeURIComponent(code) + '/chat-detail';
+      var url = landChatDetailUrl(code);
       return fetch(url, {
         credentials: 'same-origin',
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -4447,6 +4455,13 @@
       landDetailPending = null;
       return false;
     });
+  };
+
+  window.vinorShowDivarInChat = function (token) {
+    token = String(token || '').trim();
+    if (token.indexOf('divar:') === 0) token = token.slice(6);
+    if (!token) return Promise.resolve(false);
+    return window.vinorShowLandInChat('divar:' + token);
   };
 
   bindReportFilters();

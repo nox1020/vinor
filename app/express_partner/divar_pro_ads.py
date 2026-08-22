@@ -775,3 +775,231 @@ def home_divar_ads_context() -> dict[str, Any]:
         "divar_pro_ads_title": title or str(result.get("title") or "آگهی‌های دیوار"),
         "divar_pro_profile_url": str(result.get("profile_url") or divar_pro_profile_url()),
     }
+
+
+_POST_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{4,64}$")
+_POST_CACHE_LOCK = threading.Lock()
+_POST_MEM: dict[str, dict[str, Any]] = {}
+_POST_TTL_SEC = 1800
+_POST_HTTP_TIMEOUT_SEC = 8.0
+
+
+def sanitize_divar_post_token(token: str) -> str:
+    tok = str(token or "").strip()
+    if tok.lower().startswith("divar:"):
+        tok = tok[6:].strip()
+    if not _POST_TOKEN_RE.fullmatch(tok):
+        return ""
+    return tok
+
+
+def divar_public_url(token: str) -> str:
+    tok = sanitize_divar_post_token(token)
+    return f"https://divar.ir/v/{tok}" if tok else ""
+
+
+def find_cached_divar_ad(token: str) -> dict[str, Any] | None:
+    tok = sanitize_divar_post_token(token)
+    if not tok:
+        return None
+    try:
+        result = get_divar_pro_ads()
+    except Exception:
+        result = {}
+    for ad in result.get("ads") or []:
+        if not isinstance(ad, dict):
+            continue
+        if str(ad.get("token") or "").strip() == tok:
+            return dict(ad)
+    return None
+
+
+def _get_json_opener(
+    opener: urllib.request.OpenerDirector,
+    url: str,
+    *,
+    timeout: float = _POST_HTTP_TIMEOUT_SEC,
+) -> dict[str, Any]:
+    req = urllib.request.Request(
+        url,
+        method="GET",
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json",
+            "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
+            "Referer": "https://divar.ir/",
+            "Origin": "https://divar.ir",
+        },
+    )
+    with opener.open(req, timeout=timeout) as resp:
+        raw = resp.read().decode("utf-8", "replace")
+    if not raw:
+        return {}
+    parsed = json.loads(raw)
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _is_divar_image_url(url: str) -> bool:
+    s = str(url or "").strip()
+    if not s.startswith("http"):
+        return False
+    low = s.lower()
+    if any(x in low for x in (".svg", "placeholder", "icon")):
+        return False
+    return "divarcdn.com" in low or "s100.divarcdn" in low or "/post/" in low
+
+
+def _walk_divar_post(obj: Any, acc: dict[str, Any]) -> None:
+    if isinstance(obj, list):
+        for item in obj:
+            _walk_divar_post(item, acc)
+        return
+    if not isinstance(obj, dict):
+        return
+    wtype = str(obj.get("widget_type") or obj.get("type") or "").upper()
+    data = obj.get("data") if isinstance(obj.get("data"), dict) else {}
+    if "TITLE" in wtype:
+        title = str(data.get("title") or data.get("text") or "").strip()
+        if title and not acc.get("title"):
+            acc["title"] = title
+    if "DESCRIPTION" in wtype:
+        text = str(data.get("text") or data.get("description") or "").strip()
+        if text and len(text) > len(str(acc.get("description") or "")):
+            acc["description"] = text[:4000]
+    if wtype in ("UNEXPANDABLE_ROW", "GROUPED_UNEXPANDABLE_ROW", "FEATURE_ROW", "INFO_ROW"):
+        label = str(data.get("title") or data.get("key") or "").strip()
+        value = str(data.get("value") or data.get("text") or data.get("subtitle") or "").strip()
+        if label and value:
+            rows = acc.setdefault("rows", [])
+            if len(rows) < 16 and not any(
+                r.get("label") == label and r.get("value") == value for r in rows
+            ):
+                rows.append({"label": label, "value": value})
+    for key in ("image_url", "original_url", "prefix_url", "url", "src"):
+        raw = obj.get(key)
+        if isinstance(raw, str) and _is_divar_image_url(raw):
+            images = acc.setdefault("images", [])
+            if raw not in images and len(images) < 8:
+                images.append(raw)
+    img = obj.get("image")
+    if isinstance(img, dict):
+        _walk_divar_post(img, acc)
+    elif isinstance(img, str) and _is_divar_image_url(img):
+        images = acc.setdefault("images", [])
+        if img not in images and len(images) < 8:
+            images.append(img)
+    share = obj.get("share") if isinstance(obj.get("share"), dict) else None
+    if share:
+        title = str(share.get("title") or "").strip()
+        if title and not acc.get("title"):
+            acc["title"] = title
+        desc = str(share.get("description") or "").strip()
+        if desc and not acc.get("description"):
+            acc["description"] = desc[:4000]
+        img_u = str(share.get("image_url") or share.get("image") or "").strip()
+        if _is_divar_image_url(img_u):
+            images = acc.setdefault("images", [])
+            if img_u not in images and len(images) < 8:
+                images.append(img_u)
+    for val in obj.values():
+        if isinstance(val, (dict, list)):
+            _walk_divar_post(val, acc)
+
+
+def fetch_divar_post_detail(token: str) -> dict[str, Any]:
+    """جزئیات آگهی دیوار از API عمومی — کش حافظه؛ شکست یعنی dict خالی."""
+    tok = sanitize_divar_post_token(token)
+    if not tok:
+        return {}
+    now = time.time()
+    with _POST_CACHE_LOCK:
+        hit = _POST_MEM.get(tok)
+        if isinstance(hit, dict) and (now - float(hit.get("fetched_at") or 0)) < _POST_TTL_SEC:
+            return dict(hit.get("data") or {})
+    acc: dict[str, Any] = {"images": [], "rows": []}
+    jar = urllib.request.HTTPCookieProcessor()
+    opener = urllib.request.build_opener(jar)
+    urls = (
+        f"https://api.divar.ir/v8/posts-v2/web/{tok}",
+        f"https://api.divar.ir/v5/posts/{tok}",
+    )
+    try:
+        for url in urls:
+            try:
+                payload = _get_json_opener(opener, url)
+            except Exception:
+                payload = {}
+            if payload:
+                _walk_divar_post(payload, acc)
+                if acc.get("title") or acc.get("description") or acc.get("images"):
+                    break
+    except Exception:
+        _log.debug("divar_pro_ads: post detail failed token=%s", tok, exc_info=True)
+    images = [u for u in (acc.get("images") or []) if isinstance(u, str)]
+    data = {
+        "title": str(acc.get("title") or "").strip(),
+        "description": str(acc.get("description") or "").strip(),
+        "images": images[:8],
+        "rows": list(acc.get("rows") or [])[:16],
+    }
+    with _POST_CACHE_LOCK:
+        _POST_MEM[tok] = {"fetched_at": now, "data": data}
+        if len(_POST_MEM) > 400:
+            oldest = sorted(_POST_MEM.items(), key=lambda kv: float(kv[1].get("fetched_at") or 0))
+            for key, _ in oldest[:80]:
+                _POST_MEM.pop(key, None)
+    return data
+
+
+def divar_ad_detail_payload(token: str) -> dict[str, Any] | None:
+    """ادغام کارت نوار + جزئیات پست برای نمایش داخل وینور."""
+    tok = sanitize_divar_post_token(token)
+    if not tok:
+        return None
+    listed = find_cached_divar_ad(tok) or {}
+    extra = fetch_divar_post_detail(tok) or {}
+    title = str(extra.get("title") or listed.get("title") or "").strip() or "آگهی دیوار"
+    price = str(listed.get("price") or "").strip()
+    location = str(listed.get("location") or "").strip()
+    images: list[str] = []
+    for raw in extra.get("images") or []:
+        u = str(raw or "").strip()
+        if u and u not in images:
+            images.append(u)
+    cover = str(listed.get("image_url") or "").strip()
+    if cover and cover not in images:
+        images.insert(0, cover)
+    if not images and not listed:
+        return None
+    out: dict[str, Any] = {
+        "token": tok,
+        "title": title,
+        "price": price,
+        "location": location,
+        "image_url": images[0] if images else cover,
+        "images": images,
+        "description": str(extra.get("description") or "").strip(),
+        "rows": list(extra.get("rows") or []),
+        "badge": str(listed.get("badge") or "دیوار"),
+        "image_count": int(listed.get("image_count") or 0) or len(images),
+        "url": str(listed.get("divar_url") or listed.get("url") or "") or divar_public_url(tok),
+        "divar_url": divar_public_url(tok),
+        "source": "divar",
+        "profile_url": str(listed.get("profile_url") or ""),
+        "commission_amount": listed.get("commission_amount") or 0,
+        "commission_pct": listed.get("commission_pct") or 0,
+        "price_toman": listed.get("price_toman") or 0,
+    }
+    try:
+        from .home_ads_config import attach_divar_ad_commission
+
+        attach_divar_ad_commission(out)
+    except Exception:
+        pass
+    if not str(out.get("divar_url") or "").startswith("https://divar.ir/"):
+        out["divar_url"] = divar_public_url(tok)
+    return out

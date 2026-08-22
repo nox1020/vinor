@@ -444,7 +444,7 @@
      aria-hidden="true"
      data-tg-body-modal
      data-register-url="{{ url_for('express_partner.home_register_customer') }}"
-     data-requests-url="{{ url_for('express_partner.requests') }}"
+     data-requests-url="{{ url_for('express_partner.requests', tab='requests') }}"
      data-lands='{{ customer_modal_lands|default([])|tojson }}'
      data-plus-users='{{ customer_modal_plus_users|default([])|tojson }}'
      data-next-visit="{% if _nv %}{{ ((_nv.weekday|default('')) ~ ' ' ~ (_nv.jalali_fa|default(_nv.jalali|default(''))) ~ ((' ساعت ' ~ _nv.time) if _nv.time else ''))|trim }}{% endif %}"
@@ -731,13 +731,41 @@
     }
   }
 
+  function plusPhoneForLand(code) {
+    var want = String(code || '').trim();
+    if (!want) return '';
+    var lands = modalLands();
+    for (var i = 0; i < lands.length; i++) {
+      if (String(lands[i].code || '').trim() === want) {
+        return String(lands[i].plus_phone || '').trim();
+      }
+    }
+    return '';
+  }
+
+  function plusNameForLand(code) {
+    var want = String(code || '').trim();
+    if (!want) return '';
+    var lands = modalLands();
+    for (var i = 0; i < lands.length; i++) {
+      if (String(lands[i].code || '').trim() === want) {
+        return String(lands[i].plus_name || lands[i].plus_phone || '').trim();
+      }
+    }
+    return '';
+  }
+
   function getLandCode() {
-    if (!landList || (landField && landField.hidden)) return '';
+    var pending = String(modal.getAttribute('data-pending-land-code') || '').trim();
+    if (pending) return pending;
+    if (!landList) return '';
     return checkedValue(landList, 'land_code');
   }
 
   function getPlusPhone() {
-    if (!plusList || (plusField && plusField.hidden)) return '';
+    var landOwner = plusPhoneForLand(getLandCode());
+    if (landOwner) return landOwner;
+    if (!plusList) return '';
     return checkedValue(plusList, 'plus_user_phone');
   }
 
@@ -807,6 +835,20 @@
     var users = modalPlusUsers().filter(function (item) {
       return item && String(item.phone || '').trim();
     });
+    var landCode = getLandCode();
+    var landOwner = plusPhoneForLand(landCode);
+    if (landOwner) {
+      users = users.filter(function (item) {
+        return String(item.phone || '').trim() === landOwner;
+      });
+      if (!users.length) {
+        users = [{
+          phone: landOwner,
+          name: plusNameForLand(landCode) || landOwner
+        }];
+      }
+      selectedPhone = landOwner;
+    }
     plusList.innerHTML = '';
     if (plusField) plusField.hidden = !users.length;
     if (!users.length) return;
@@ -815,7 +857,7 @@
     var hasWanted = users.some(function (item) {
       return String(item.phone || '').trim() === wanted;
     });
-    var active = hasWanted ? wanted : String(users[0].phone || '').trim();
+    var active = hasWanted ? wanted : '';
 
     users.forEach(function (item) {
       var phone = String(item.phone || '').trim();
@@ -831,7 +873,7 @@
     var activeUser = users.filter(function (item) {
       return String(item.phone || '').trim() === active;
     })[0];
-    setAccValue(plusField, activeUser ? (activeUser.name || active) : active, 'انتخاب کنید');
+    setAccValue(plusField, activeUser ? (activeUser.name || active) : '', 'انتخاب کنید');
   }
 
   if (landList && !landList.__vinorPickBound) {
@@ -840,6 +882,9 @@
       markPickCards(landList);
       var card = landList.querySelector('.vn-cust-plus-card.is-on .vn-cust-plus-card__name');
       setAccValue(landField, card ? card.textContent : '', 'اختیاری');
+      var code = getLandCode();
+      fillPlusSelect(plusPhoneForLand(code));
+      fillSlotSelect();
       setAccOpen(landField, false);
     });
   }
@@ -895,7 +940,7 @@
 
   function syncLandUi(landCode) {
     fillLandSelect(landCode);
-    fillPlusSelect('');
+    fillPlusSelect(plusPhoneForLand(landCode));
     fillSlotSelect();
     closeOtherAcc(null);
     setError('');
@@ -935,16 +980,27 @@
     }
     opts = opts || {};
     var landCode = String(opts.landCode || '').trim();
-    if (!landCode && e && e.target && e.target.closest) {
+    var notesHint = String(opts.notes || '').trim();
+    if (e && e.target && e.target.closest) {
       var opener = e.target.closest('[data-open-customer-modal]');
-      if (opener) landCode = String(opener.getAttribute('data-land-code') || '').trim();
+      if (opener) {
+        if (!landCode) landCode = String(opener.getAttribute('data-land-code') || '').trim();
+        if (!notesHint) notesHint = String(opener.getAttribute('data-visit-notes') || '').trim();
+      }
     }
+    if (landCode.indexOf('divar:') === 0) landCode = '';
     modal.setAttribute('data-pending-land-code', landCode || '');
     try {
       var titleEl = document.getElementById('vnCustomerModalTitle');
       if (titleEl) {
-        titleEl.textContent = landCode ? 'درخواست تعیین وقت بازدید' : 'ثبت مشتری جدید';
+        titleEl.textContent = (landCode || notesHint) ? 'درخواست تعیین وقت بازدید' : 'ثبت مشتری جدید';
       }
+    } catch (_) {}
+    try {
+      var notesEl = form && form.querySelector('textarea[name="notes"]');
+      if (notesEl) notesEl.value = notesHint;
+      var notesAcc = document.getElementById('vnCustomerNotesAcc');
+      if (notesAcc) setAccValue(notesAcc, notesHint, 'در صورت نیاز بنویسید');
     } catch (_) {}
     setError('');
     syncLandUi(landCode);
@@ -980,6 +1036,14 @@
       document.documentElement.classList.remove('vinor-express-overlay-modal-open');
     } catch (_) {}
     if (submitBtn) submitBtn.disabled = false;
+    try {
+      var notesEl = form && form.querySelector('textarea[name="notes"]');
+      if (notesEl) notesEl.value = '';
+      var notesAcc = document.getElementById('vnCustomerNotesAcc');
+      if (notesAcc && typeof setAccValue === 'function') {
+        setAccValue(notesAcc, '', 'در صورت نیاز بنویسید');
+      }
+    } catch (_) {}
     setError('');
   }
 

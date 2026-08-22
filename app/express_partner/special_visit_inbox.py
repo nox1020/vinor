@@ -46,11 +46,24 @@ from .visit_requests import (
     get_plus_visit_presence_address,
     visit_progress_steps,
     visit_progress_summary,
+    visit_request_display_title,
 )
 
 
 def _norm_phone(phone: str) -> str:
     return re.sub(r"[^\d]", "", str(phone or "").strip())
+
+
+def _canon_phone(phone: str) -> str:
+    raw = str(phone or "").strip()
+    if not raw:
+        return ""
+    try:
+        from .partner_session_sync import canonical_partner_phone
+
+        return canonical_partner_phone(raw) or _norm_phone(raw)
+    except Exception:
+        return _norm_phone(raw)
 
 
 def owned_land_codes(phone: str) -> Set[str]:
@@ -59,6 +72,28 @@ def owned_land_codes(phone: str) -> Set[str]:
         for land in listings_owned_by(phone)
         if str(land.get("code") or "").strip()
     }
+
+
+def _visit_row_for_plus_owner(
+    row: Dict[str, Any],
+    owner_phone: str,
+    codes: Set[str] | None = None,
+) -> bool:
+    """بازدید روی آگهی مالک، یا وقت ثبت‌شده روی تقویم همین پلاس (حتی بدون فایل)."""
+    if not isinstance(row, dict):
+        return False
+    me = _canon_phone(owner_phone)
+    if not me:
+        return False
+    requester = _canon_phone(str(row.get("partner_phone") or ""))
+    if requester and requester == me:
+        return False
+    land_codes = codes if codes is not None else owned_land_codes(owner_phone)
+    code = str(row.get("land_code") or "").strip()
+    if code and code in land_codes:
+        return True
+    plus = _canon_phone(str(row.get("plus_user_phone") or ""))
+    return bool(plus) and plus == me
 
 
 def _land_tx_status(assignments: List[Dict[str, Any]] | None, land_code: str) -> Tuple[str, str]:
@@ -118,6 +153,23 @@ def _partner_open_tx_count(assignments: List[Dict[str, Any]] | None, phone: str)
     return n
 
 
+def special_inbox_pipeline_tab(item: Dict[str, Any] | None) -> str:
+    """بازدید صندوق پلاس → تب بازدید؛ معامله/فروش → تب معامله."""
+    from .visit_requests import PIPELINE_DEALS, PIPELINE_VISITS
+
+    if not isinstance(item, dict):
+        return PIPELINE_VISITS
+    if item.get("can_start_deal") or item.get("can_approve_deal") or item.get("can_reject_deal"):
+        return PIPELINE_DEALS
+    tx = str(item.get("tx_status") or "").strip().lower()
+    if tx in ("in_transaction", "sold"):
+        return PIPELINE_DEALS
+    deal_st = str(item.get("deal_commission_status") or "").strip().lower()
+    if deal_st in ("pending", "approved", "paid"):
+        return PIPELINE_DEALS
+    return PIPELINE_VISITS
+
+
 def _deal_status_label(status: str) -> str:
     st = str(status or "").strip().lower()
     return {
@@ -155,19 +207,19 @@ def _mark_land_sold(land_code: str) -> None:
 def visit_inbox_badge_count(phone: str) -> int:
     """بازدید باز + فروش نهایی در انتظار تأیید مالک — برای بج منو."""
     codes = owned_land_codes(phone)
-    if not codes:
+    me = _norm_phone(phone)
+    if not codes and not me:
         return 0
     rows = load_express_visit_requests() or []
     need: Set[str] = set()
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict):
             continue
-        code = str(row.get("land_code") or "").strip()
-        if code not in codes:
+        if not _visit_row_for_plus_owner(row, phone, codes):
             continue
         st = str(row.get("status") or PENDING_STATUS).strip() or PENDING_STATUS
         if st in OPEN_VISIT_STATUSES:
-            vid = str(row.get("id") or "").strip() or f"v:{code}:{row.get('partner_phone')}"
+            vid = str(row.get("id") or "").strip() or f"v:{row.get('land_code')}:{row.get('partner_phone')}"
             need.add(f"visit:{vid}")
     try:
         commissions = load_express_commissions_cached() or []
@@ -239,9 +291,9 @@ def notify_special_owner_new_visit(rec: Dict[str, Any] | None) -> None:
         from app.services.notifications import add_notification
 
         try:
-            action_url = url_for("express_partner.special_visit_inbox")
+            action_url = url_for("express_partner.requests", tab="visits")
         except Exception:
-            action_url = "/express/partner/inbox-visits"
+            action_url = "/express/partner/requests?tab=visits"
         add_notification(
             user_id=owner,
             title="بازدید جدید",
@@ -266,7 +318,8 @@ def notify_special_owner_new_visit(rec: Dict[str, Any] | None) -> None:
 
 def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
     codes = owned_land_codes(phone)
-    if not codes:
+    me = _norm_phone(phone)
+    if not codes and not me:
         return []
     rows = load_express_visit_requests() or []
     try:
@@ -307,7 +360,7 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
         if not isinstance(row, dict):
             continue
         code = str(row.get("land_code") or "").strip()
-        if code not in codes:
+        if not _visit_row_for_plus_owner(row, phone, codes):
             continue
         st = str(row.get("status") or PENDING_STATUS).strip() or PENDING_STATUS
         first = str(row.get("customer_first_name") or "").strip()
@@ -346,6 +399,18 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             DONE_PENDING_STATUS,
             COMPLETED_STATUS,
         ) and not deal_pending and not deal_final
+
+        owned_listing = bool(code) and code in codes
+        if not owned_listing:
+            can_approve = False
+            can_reject = False
+            can_complete = False
+            can_reject_done = False
+            can_no_show = False
+            can_approve_deal = False
+            can_reject_deal = False
+            can_start_deal = False
+            can_register_result = False
 
         progress_steps = visit_progress_steps(
             row,
@@ -412,7 +477,8 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
         out.append({
             "id": str(row.get("id") or ""),
             "land_code": code,
-            "land_title": str(row.get("land_title") or code),
+            "land_title": visit_request_display_title(row),
+            "inbox_origin": "listing" if owned_listing else "calendar",
             "partner_name": str(row.get("partner_name") or "").strip(),
             "partner_phone": partner_phone,
             "customer_name": cust_name,
@@ -451,6 +517,7 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             or can_reject
             or can_reject_done,
         })
+        out[-1]["pipeline_tab"] = special_inbox_pipeline_tab(out[-1])
 
     def _sort_key(item: Dict[str, Any]) -> tuple:
         if item.get("can_approve_deal"):

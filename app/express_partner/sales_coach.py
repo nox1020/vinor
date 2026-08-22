@@ -1030,11 +1030,11 @@ def build_home_ai_quick_prompts(
         ui_action="open_divar_ads_all",
     )
     add(
-        "پیگیری مشتری",
-        prompt="پیگیری مشتری",
+        "پیگیری",
+        prompt="پیگیری",
         intent="followup",
         icon="clipboard",
-        subtitle="بازدیدها و روند فروش",
+        subtitle="درخواست، بازدید و معامله",
         variant="tile",
         href=requests_url,
     )

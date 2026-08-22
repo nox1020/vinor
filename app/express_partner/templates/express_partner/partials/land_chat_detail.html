@@ -1,13 +1,16 @@
 {# جزئیات کامل فایل داخل حباب چت — بدون صفحه جدا / بدون landGallerySwipe #}
+{% set is_divar = (land._source|default('')|string|lower) == 'divar' %}
 {% set _st = (land._assignment_status|default('active')|string)|lower|trim %}
+{% if is_divar %}{% set _st = '' %}{% endif %}
 {% set loc_line = ([land.city, land.location]|select|join('، ')) if (land.city or land.location) else '' %}
 {% set price_total = land.price_total or land.price or 0 %}
-{% set _basis = price_basis_area(land) %}
-{% set ppm = land.price_per_meter or ((_basis and price_total / _basis)|round(0)|int or 0) %}
+{% set price_display = (land._price_display|default('')|string)|trim %}
+{% set _basis = price_basis_area(land) if not is_divar else none %}
+{% set ppm = land.price_per_meter or ((_basis and price_total / _basis)|round(0)|int or 0) if not is_divar else 0 %}
 {% set desc = (land.description or land.desc or '')|trim %}
 {% set deal_label = {'sale': 'فروش', 'presale': 'پیش‌فروش', 'rent': 'اجاره'}.get((land.deal_type or '')|string|lower, land.deal_type or land.payment_method or '') %}
 {% set tx_label = {'in_transaction': 'در حال معامله', 'sold': 'فروخته شد', 'active': 'فعال', 'pending': 'در انتظار', 'approved': 'تأیید شده', 'closed': 'بسته'}.get(_st, _st) %}
-{% set cat_rows = land_category_detail_rows(land) %}
+{% set cat_rows = [] if is_divar else land_category_detail_rows(land) %}
 {% set images = land.images or [] %}
 {% set video = land.video %}
 {% set has_video = video and (video|string|trim) %}
@@ -128,6 +131,7 @@
     font-size: 0.62rem;
     font-weight: 700;
   }
+  .vn-lcd__badge--divar { background: #dc2626; }
   .vn-lcd__badge--tx { background: #854d0e; }
   .vn-lcd__badge--sold { background: #166534; }
   .vn-lcd__price {
@@ -362,8 +366,8 @@
 </style>
 
 <article class="vn-lcd" data-vn-land-chat-detail="{{ land.code|e }}" data-land-code="{{ land.code|e }}"
-         data-complete-url="{{ url_for('express_partner.complete_visit_request', code=land.code) }}"
-         data-deal-url="{{ url_for('express_partner.mark_in_transaction', code=land.code) }}">
+         {% if is_divar %}data-source="divar"{% else %}data-complete-url="{{ url_for('express_partner.complete_visit_request', code=land.code) }}"
+         data-deal-url="{{ url_for('express_partner.mark_in_transaction', code=land.code) }}"{% endif %}>
   {% if has_video or images %}
   <div class="vn-lcd__gallery" dir="ltr" aria-label="گالری فایل">
     {% if has_video %}
@@ -385,7 +389,7 @@
   <div class="vn-lcd__body">
     <div class="vn-lcd__head">
       <h3 class="vn-lcd__title">{{ land.title or 'فایل' }}</h3>
-      {% if land.code %}
+      {% if land.code and not is_divar %}
       <button type="button"
               class="vn-lcd__fav"
               data-fav-code="{{ land.code }}"
@@ -398,18 +402,22 @@
       {% endif %}
     </div>
     <div class="vn-lcd__meta">
-      {% if _st == 'in_transaction' %}
+      {% if is_divar %}
+      <span class="vn-lcd__badge vn-lcd__badge--divar">دیوار</span>
+      {% elif _st == 'in_transaction' %}
       <span class="vn-lcd__badge vn-lcd__badge--tx">در حال معامله</span>
       {% elif _st == 'sold' %}
       <span class="vn-lcd__badge vn-lcd__badge--sold">فروخته شد</span>
       {% endif %}
       {% if loc_line %}<span><i class="fas fa-location-dot text-[9px] opacity-70" aria-hidden="true"></i> {{ loc_line }}</span>{% endif %}
-      {% if land.code %}<span dir="ltr">کد {{ land.code }}</span>{% endif %}
+      {% if land.code and not is_divar %}<span dir="ltr">کد {{ land.code }}</span>{% endif %}
     </div>
 
-    {% if price_total or (is_approved and land._commission_amount) %}
+    {% if price_display or price_total or (is_approved and land._commission_amount) %}
     <div class="vn-lcd__price">
-      {% if price_total %}
+      {% if price_display %}
+      <div class="vn-lcd__price-main">{{ price_display }}</div>
+      {% elif price_total %}
       <div class="vn-lcd__price-main">{{ price_total|toman(False) }} تومان</div>
       {% if ppm %}<p class="vn-lcd__price-sub">هر متر {{ ppm|toman }}</p>{% endif %}
       {% endif %}
@@ -440,6 +448,11 @@
     {% endif %}
 
     <div class="vn-lcd__rows">
+      {% if is_divar %}
+      {% for row in land._divar_rows|default([]) %}
+      <div class="vn-lcd__row"><span class="vn-lcd__row-k">{{ row.label }}</span><span class="vn-lcd__row-v">{{ row.value }}</span></div>
+      {% endfor %}
+      {% else %}
       {% if _st %}
       <div class="vn-lcd__row"><span class="vn-lcd__row-k">وضعیت معامله</span><span class="vn-lcd__row-v">{{ tx_label }}</span></div>
       {% endif %}
@@ -458,6 +471,7 @@
       {% for row in cat_rows[5:] %}
       <div class="vn-lcd__row"><span class="vn-lcd__row-k">{{ row.label }}</span><span class="vn-lcd__row-v">{{ row.value }}</span></div>
       {% endfor %}
+      {% endif %}
     </div>
 
     {% if is_approved and steps %}
@@ -497,7 +511,40 @@
     <p class="vn-lcd__desc">{{ desc }}</p>
     {% endif %}
 
-    {% if is_approved and _st != 'sold' and chat_cta.action %}
+    {% if is_divar %}
+    <div class="vn-lcd__actions">
+      {% if is_approved %}
+      <button type="button"
+              class="vn-lcd__btn"
+              data-open-customer-modal
+              data-visit-notes="آگهی دیوار: {{ land.title|e }}{% if land._divar_url %} — {{ land._divar_url|e }}{% endif %}"
+              aria-label="ثبت بازدید">
+        <i class="fas fa-calendar-days" aria-hidden="true"></i>
+        ثبت بازدید
+      </button>
+      {% endif %}
+      {% if land._divar_url %}
+      <a class="vn-lcd__btn{% if is_approved %} vn-lcd__btn--secondary{% endif %}"
+         href="{{ land._divar_url }}"
+         target="_blank"
+         rel="noopener noreferrer"
+         data-vinor-direct-action="1"
+         aria-label="دیدن آگهی در دیوار">
+        <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+        دیدن آگهی در دیوار
+      </a>
+      {% endif %}
+      {% if visit_call_target %}
+      <a class="vn-lcd__btn vn-lcd__btn--call"
+         href="tel:{{ visit_call_target }}"
+         data-vinor-direct-action="1"
+         aria-label="تماس برای هماهنگی بازدید {{ visit_call_target }}"
+         title="هماهنگی بازدید {{ visit_call_target }}">
+        <i class="fas fa-phone" aria-hidden="true"></i>
+      </a>
+      {% endif %}
+    </div>
+    {% elif is_approved and _st != 'sold' and chat_cta.action %}
     <div class="vn-lcd__actions">
       {% if chat_cta.action == 'visit' %}
       <button type="button"

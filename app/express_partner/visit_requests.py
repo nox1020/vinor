@@ -30,6 +30,25 @@ NO_SHOW_STATUS = "no_show"
 
 OPEN_VISIT_STATUSES = frozenset({PENDING_STATUS, APPROVED_STATUS, DONE_PENDING_STATUS})
 
+PIPELINE_REQUESTS = "requests"
+PIPELINE_VISITS = "visits"
+PIPELINE_DEALS = "deals"
+PIPELINE_TABS = frozenset({PIPELINE_REQUESTS, PIPELINE_VISITS, PIPELINE_DEALS})
+
+
+def partner_request_pipeline_tab(
+    status: str,
+    assignment_status: str = "",
+) -> str:
+    """مرحلهٔ قیف بازاریاب: وقت ثبت‌شده در درخواست‌ها می‌ماند تا بازدید انجام شود."""
+    gs = str(assignment_status or "").strip().lower()
+    if gs in ("in_transaction", "sold"):
+        return PIPELINE_DEALS
+    st = str(status or "").strip()
+    if st in (DONE_PENDING_STATUS, COMPLETED_STATUS, NO_SHOW_STATUS):
+        return PIPELINE_VISITS
+    return PIPELINE_REQUESTS
+
 
 def visit_requests_auto_approve_enabled() -> bool:
     """
@@ -720,14 +739,15 @@ def partner_visits_for_phone(
     phone: str,
 ) -> List[Dict[str, Any]]:
     """همهٔ درخواست‌های بازدید یک همکار — جدید به قدیم."""
-    ph = (phone or "").strip()
+    ph = _canonical_visit_phone(phone) or (phone or "").strip()
     if not ph:
         return []
     out: List[Dict[str, Any]] = []
     for r in requests or []:
         if not isinstance(r, dict):
             continue
-        if (str(r.get("partner_phone") or "").strip()) != ph:
+        rec_ph = str(r.get("partner_phone") or "").strip()
+        if rec_ph != ph and _canonical_visit_phone(rec_ph) != ph:
             continue
         out.append(r)
     out.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
@@ -788,10 +808,12 @@ def partner_request_feed_item(
     *,
     can_revisit: bool = False,
     support_phone: str = "",
+    assignment_status: str = "",
 ) -> Dict[str, Any]:
     """کارت سادهٔ صفحهٔ درخواست‌ها برای همکار."""
     del commissions  # پورسانت در کارت ساده لازم نیست
     st = (str(row.get("status") or PENDING_STATUS)).strip()
+    assign_st = str(assignment_status or "").strip().lower()
     labels = {
         PENDING_STATUS: "در جریان",
         APPROVED_STATUS: "زمان‌بندی شده",
@@ -858,6 +880,8 @@ def partner_request_feed_item(
         "can_delete": can_delete,
         "can_revisit": bool(can_revisit),
         "can_remove": can_cancel or can_delete,
+        "assignment_status": assign_st,
+        "pipeline_tab": partner_request_pipeline_tab(st, assign_st),
     }
 
 
@@ -1385,8 +1409,18 @@ def create_visit_request(
     note = (notes or "").strip()
     plus_phone = (plus_user_phone or "").strip()
     plus_name = (plus_user_name or "").strip()
-    if not plus_phone and code:
-        plus_phone = plus_phone_for_land_code(code)
+    if code:
+        owner_phone = plus_phone_for_land_code(code)
+        if owner_phone:
+            plus_phone = owner_phone
+            try:
+                from .special_listings import plus_listing_owner_by_code
+
+                owner = (plus_listing_owner_by_code() or {}).get(code) or {}
+                plus_name = str(owner.get("name") or "").strip() or plus_name
+            except Exception:
+                pass
+    plus_phone = _canonical_visit_phone(plus_phone) or plus_phone
     vd = _parse_visit_date(visit_date)
     if not ph:
         return None, "invalid"
@@ -1473,7 +1507,10 @@ def _notify_plus_user_new_visit(rec: Dict[str, Any] | None) -> None:
     if not plus_phone:
         return
     requester = str(rec.get("partner_phone") or "").strip()
-    if plus_phone == requester:
+    if _canonical_visit_phone(plus_phone) == _canonical_visit_phone(requester):
+        return
+    land_owner = plus_phone_for_land_code(str(rec.get("land_code") or ""))
+    if land_owner and _canonical_visit_phone(land_owner) == _canonical_visit_phone(plus_phone):
         return
     partner_name = str(rec.get("partner_name") or "").strip() or "یک همکار"
     title = visit_request_display_title(rec)
@@ -1489,9 +1526,9 @@ def _notify_plus_user_new_visit(rec: Dict[str, Any] | None) -> None:
         from app.services.notifications import add_notification
 
         try:
-            action_url = url_for("express_partner.requests")
+            action_url = url_for("express_partner.requests", tab="visits")
         except Exception:
-            action_url = "/express/partner/requests"
+            action_url = "/express/partner/requests?tab=visits"
         add_notification(
             user_id=plus_phone,
             title="درخواست بازدید",

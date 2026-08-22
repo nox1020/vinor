@@ -4075,9 +4075,20 @@ def _merge_home_ads_carousel(
             continue
         seen.add(key)
         ad.setdefault('source', 'divar')
-        ad.setdefault('external', True)
         if not str(ad.get('badge') or '').strip():
             ad['badge'] = 'دیوار'
+        public_url = str(ad.get('divar_url') or ad.get('url') or '').strip()
+        if tok and (not public_url or 'divar.ir' not in public_url):
+            public_url = f'https://divar.ir/v/{tok}'
+        ad['divar_url'] = public_url
+        if tok:
+            try:
+                ad['url'] = url_for('express_partner.divar_ad_detail', token=tok)
+            except Exception:
+                ad['url'] = f'/express/partner/divar/{tok}'
+            ad['external'] = False
+        else:
+            ad.setdefault('external', True)
         if attach_divar_ad_commission is not None:
             try:
                 attach_divar_ad_commission(ad, _divar_pct_map)
@@ -4455,8 +4466,8 @@ def _closing_ui_or_404():
 @express_partner_bp.get('/deals', endpoint='deals')
 @require_partner_access()
 def deals_page():
-    """صفحهٔ قدیمی معاملات — گزارش زنده جایگزین شده."""
-    return redirect(url_for('express_partner.home'))
+    """صفحهٔ قدیمی معاملات — ادغام در پیگیری."""
+    return redirect(_sales_pipeline_url('deals'))
 
 
 @express_partner_bp.post('/deals/<deal_id>/contracts', endpoint='deal_contract_create')
@@ -4633,15 +4644,31 @@ def api_favorites_cards():
     })
 
 
+def _sales_pipeline_url(tab: str = 'requests', **extra):
+    """صفحهٔ یکپارچهٔ پیگیری: درخواست / بازدید / معامله."""
+    from .visit_requests import PIPELINE_TABS
+
+    kwargs = dict(extra)
+    t = str(tab or '').strip().lower()
+    if t in PIPELINE_TABS:
+        kwargs['tab'] = t
+    return url_for('express_partner.requests', **kwargs)
+
+
 @express_partner_bp.get('/requests', endpoint='requests')
 @require_partner_access(allow_pending=True)
 def requests_page():
-    """لیست سادهٔ بازدیدهای همکار + اکشن حذف/بازدید مجدد."""
+    """پیگیری فروش — درخواست، بازدید و معامله در یک صفحه."""
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile)
+    is_special = _is_partner_special(profile) if is_approved else False
     from .visit_requests import (
         OPEN_VISIT_STATUSES,
+        PIPELINE_DEALS,
+        PIPELINE_REQUESTS,
+        PIPELINE_TABS,
+        PIPELINE_VISITS,
         partner_request_feed_item,
         partner_requests_can_revisit,
         partner_visits_for_phone,
@@ -4689,6 +4716,7 @@ def requests_page():
             r,
             can_revisit=can_revisit,
             support_phone=support_phone,
+            assignment_status=gs,
         ))
 
     open_count = sum(
@@ -4697,16 +4725,106 @@ def requests_page():
         if str(r.get('status') or '').strip() in OPEN_VISIT_STATUSES
     )
 
+    inbox_items: list = []
+    offers: list = []
+    visit_weekday_labels = {}
+    visit_weekday_order = []
+    visit_allowed_weekdays = []
+    visit_hour_rows_data = []
+    visit_allowed_weekdays_summary = ''
+    visit_allowed_hours_summary = ''
+    visit_presence_address = ''
+    if is_special:
+        try:
+            from .special_visit_inbox import visits_for_special_owner
+            from .visit_requests import (
+                VISIT_WEEKDAY_LABELS,
+                VISIT_WEEKDAY_ORDER,
+                get_plus_visit_presence_address,
+                get_visit_allowed_weekdays,
+                visit_allowed_hours_summary as _hours_summary,
+                visit_allowed_weekdays_summary as _days_summary,
+                visit_hour_rows,
+            )
+
+            inbox_items = visits_for_special_owner(me_phone) or []
+            visit_weekday_labels = VISIT_WEEKDAY_LABELS
+            visit_weekday_order = VISIT_WEEKDAY_ORDER
+            visit_allowed_weekdays = get_visit_allowed_weekdays(plus_user_phone=me_phone)
+            visit_allowed_weekdays_summary = _days_summary(plus_user_phone=me_phone)
+            visit_hour_rows_data = visit_hour_rows(plus_user_phone=me_phone)
+            visit_allowed_hours_summary = _hours_summary(plus_user_phone=me_phone)
+            visit_presence_address = get_plus_visit_presence_address(me_phone)
+        except Exception:
+            current_app.logger.exception('sales pipeline inbox load failed')
+            inbox_items = []
+        try:
+            from app.commercial.config import commercial_ui_enabled
+            if commercial_ui_enabled():
+                from .special_offer_inbox import offers_for_special_owner
+                offers = offers_for_special_owner(me_phone) or []
+        except Exception:
+            offers = []
+
+    tab_counts = {
+        PIPELINE_REQUESTS: 0,
+        PIPELINE_VISITS: 0,
+        PIPELINE_DEALS: 0,
+    }
+    for it in items:
+        key = str(it.get('pipeline_tab') or PIPELINE_REQUESTS)
+        if key in tab_counts:
+            tab_counts[key] += 1
+    for it in inbox_items:
+        key = str(it.get('pipeline_tab') or PIPELINE_VISITS)
+        if key in tab_counts:
+            tab_counts[key] += 1
+    if offers:
+        tab_counts[PIPELINE_DEALS] += len(offers)
+
+    inbox_needs = sum(1 for i in inbox_items if i.get('needs_action')) + len(offers)
+    inbox_visit_count = sum(
+        1
+        for i in inbox_items
+        if str(i.get('pipeline_tab') or PIPELINE_VISITS) == PIPELINE_VISITS
+    )
+    requested_tab = str(request.args.get('tab') or '').strip().lower()
+    if requested_tab not in PIPELINE_TABS:
+        deal_needs = any(
+            i.get('can_approve_deal') or i.get('can_start_deal')
+            for i in inbox_items
+        )
+        if is_special and deal_needs:
+            requested_tab = PIPELINE_DEALS
+        elif is_special and (inbox_needs or inbox_visit_count):
+            requested_tab = PIPELINE_VISITS
+        else:
+            requested_tab = PIPELINE_REQUESTS
+
     resp = make_response(render_template(
         'express_partner/requests.html',
         items=items,
+        inbox_items=inbox_items,
+        offers=offers,
+        tab_counts=tab_counts,
+        active_tab=requested_tab,
         open_count=open_count,
+        inbox_needs=inbox_needs,
         support_phone=support_phone,
         me_phone=me_phone,
         is_approved=is_approved,
+        is_special=is_special,
         hide_header=True,
         brand='وینور',
         domain='vinor.ir',
+        visit_weekday_labels=visit_weekday_labels,
+        visit_weekday_order=visit_weekday_order,
+        visit_allowed_weekdays=visit_allowed_weekdays,
+        visit_hour_rows=visit_hour_rows_data,
+        visit_allowed_weekdays_summary=visit_allowed_weekdays_summary,
+        visit_allowed_hours_summary=visit_allowed_hours_summary,
+        visit_presence_address=visit_presence_address,
+        schedule_open=(request.args.get('schedule') or '').strip() == '1',
     ))
     if is_approved:
         _append_partner_tab_prefetch(resp)
@@ -4973,10 +5091,14 @@ def home_register_customer():
         next_auto_visit_date,
         parse_visit_hour,
         partner_cancel_own_visit,
+        plus_phone_for_land_code,
         visit_slot_has_passed,
     )
 
     plus_user_name = ''
+    land_owner_phone = plus_phone_for_land_code(land_code) if land_code else ''
+    if land_owner_phone:
+        plus_user_phone = land_owner_phone
     if plus_user_phone:
         from .partner_session_sync import canonical_partner_phone
 
@@ -4990,10 +5112,13 @@ def home_register_customer():
             ),
             None,
         )
-        if plus_hit is None:
+        if plus_hit is None and not land_owner_phone:
             return _fail('کاربر پلاس انتخاب‌شده پیدا نشد.')
-        plus_user_name = str(plus_hit.get('name') or plus_user_phone)
-        plus_user_phone = str(plus_hit.get('phone') or want)
+        if plus_hit is not None:
+            plus_user_name = str(plus_hit.get('name') or plus_user_phone)
+            plus_user_phone = str(plus_hit.get('phone') or want)
+        else:
+            plus_user_name = plus_user_phone
 
     customer_phone = ''
     if customer_phone_raw:
@@ -5060,7 +5185,7 @@ def home_register_customer():
                     'ok': True,
                     'already_pending': True,
                     'message': 'برای این فایل بازدید باز از قبل دارید.',
-                    'redirect_url': url_for('express_partner.requests'),
+                    'redirect_url': url_for('express_partner.requests', tab='requests'),
                 })
 
     partner_name = (partner_profile.get('name') if partner_profile else None) or me_phone
@@ -5086,7 +5211,7 @@ def home_register_customer():
             'ok': True,
             'already_pending': True,
             'message': 'برای این فایل بازدید باز از قبل دارید.',
-            'redirect_url': url_for('express_partner.requests'),
+            'redirect_url': url_for('express_partner.requests', tab='requests'),
         })
     if err == 'weekday_not_allowed':
         return _fail('تاریخ خودکار در روزهای مجاز نیست.')
@@ -5150,7 +5275,7 @@ def home_register_customer():
         'visit_date': rec.get('visit_date'),
         'visit_date_label': next_slot.get('label') or '',
         'land_code': land_code,
-        'redirect_url': url_for('express_partner.requests'),
+        'redirect_url': url_for('express_partner.requests', tab='requests'),
     })
 
 
@@ -5161,6 +5286,7 @@ def _home_customer_modal_context(me_phone: str, is_approved: bool) -> Dict[str, 
         list_plus_users_for_visit,
         list_upcoming_visit_slots,
         next_auto_visit_date,
+        plus_phone_for_land_code,
     )
 
     out: Dict[str, Any] = {
@@ -5196,6 +5322,9 @@ def _home_customer_modal_context(me_phone: str, is_approved: bool) -> Dict[str, 
         out['next_auto_visit_by_plus'] = {}
         out['visit_slots_by_plus'] = {}
     try:
+        from .special_listings import plus_listing_owner_by_code
+
+        owners = plus_listing_owner_by_code() or {}
         lands, _ = _build_partner_dashboard_lands(me_phone, True)
         assigned_first: List[Dict[str, Any]] = []
         others: List[Dict[str, Any]] = []
@@ -5206,10 +5335,16 @@ def _home_customer_modal_context(me_phone: str, is_approved: bool) -> Dict[str, 
             st = str(land.get('_assignment_status') or '').strip().lower()
             if st == 'sold':
                 continue
+            owner = owners.get(code) if isinstance(owners, dict) else None
+            if not isinstance(owner, dict):
+                owner = {}
+            plus_phone = plus_phone_for_land_code(code) or str(owner.get('phone') or '').strip()
             item = {
                 'code': code,
                 'title': str(land.get('title') or code),
                 'city': str(land.get('city') or ''),
+                'plus_phone': plus_phone,
+                'plus_name': str(owner.get('name') or '').strip(),
             }
             if land.get('_assignment_id'):
                 assigned_first.append(item)
@@ -8134,47 +8269,13 @@ def special_listing_new():
 
 
 @express_partner_bp.route('/inbox-visits', methods=['GET'], endpoint='special_visit_inbox')
-@require_special_partner()
+@require_partner_access(allow_pending=True)
 def special_visit_inbox_page():
-    """صندوق بازدید تا فروش نهایی روی آگهی‌های ویژه."""
-    me_phone = (session.get('user_phone') or '').strip()
-    from .special_visit_inbox import visits_for_special_owner
-    from .visit_requests import (
-        VISIT_WEEKDAY_LABELS,
-        VISIT_WEEKDAY_ORDER,
-        get_plus_visit_presence_address,
-        get_visit_allowed_weekdays,
-        visit_allowed_hours_summary,
-        visit_allowed_weekdays_summary,
-        visit_hour_rows,
-    )
-
-    items = visits_for_special_owner(me_phone)
-    offers = []
-    try:
-        from app.commercial.config import commercial_ui_enabled
-        if commercial_ui_enabled():
-            from .special_offer_inbox import offers_for_special_owner
-            offers = offers_for_special_owner(me_phone) or []
-    except Exception:
-        offers = []
-    needs = sum(1 for i in items if i.get('needs_action')) + len(offers)
-    return render_template(
-        'express_partner/special_visit_inbox.html',
-        items=items,
-        offers=offers,
-        needs_count=needs,
-        hide_header=True,
-        bottom_nav_active='profile',
-        visit_weekday_labels=VISIT_WEEKDAY_LABELS,
-        visit_weekday_order=VISIT_WEEKDAY_ORDER,
-        visit_allowed_weekdays=get_visit_allowed_weekdays(plus_user_phone=me_phone),
-        visit_allowed_weekdays_summary=visit_allowed_weekdays_summary(plus_user_phone=me_phone),
-        visit_hour_rows=visit_hour_rows(plus_user_phone=me_phone),
-        visit_allowed_hours_summary=visit_allowed_hours_summary(plus_user_phone=me_phone),
-        visit_presence_address=get_plus_visit_presence_address(me_phone),
-        schedule_open=(request.args.get('schedule') or '').strip() == '1',
-    )
+    """صندوق بازدید پلاس — ادغام‌شده در صفحهٔ پیگیری."""
+    kwargs = {'tab': 'visits'}
+    if (request.args.get('schedule') or '').strip() == '1':
+        kwargs['schedule'] = 1
+    return redirect(_sales_pipeline_url(**kwargs))
 
 
 @express_partner_bp.post('/inbox-visits/schedule', endpoint='special_visit_schedule')
@@ -8201,7 +8302,7 @@ def special_visit_schedule():
             parsed_hours.append(int(item))
         except ValueError:
             continue
-    inbox_url = url_for('express_partner.special_visit_inbox', schedule=1)
+    inbox_url = _sales_pipeline_url('visits', schedule=1)
     if not parsed_days:
         flash('حداقل یک روز هفته را برای بازدید انتخاب کنید.', 'warning')
         return redirect(inbox_url)
@@ -8224,7 +8325,7 @@ def special_visit_schedule():
     if addr:
         msg += f' · آدرس حضور: {addr}'
     flash(msg, 'success')
-    return redirect(url_for('express_partner.special_visit_inbox'))
+    return redirect(_sales_pipeline_url('visits'))
 
 
 @express_partner_bp.route('/inbox-offers', methods=['GET'], endpoint='special_offer_inbox')
@@ -8287,7 +8388,7 @@ def special_offer_action(oid: str, action: str):
     else:
         flash('انجام شد.', 'success')
     if (request.form.get('return_to') or '').strip() == 'visits':
-        return redirect(url_for('express_partner.special_visit_inbox'))
+        return redirect(_sales_pipeline_url('deals'))
     return redirect(url_for('express_partner.special_offer_inbox'))
 
 
@@ -8319,19 +8420,19 @@ def special_visit_action(vid: str, action: str):
     )
     if err == 'not_found':
         flash('درخواست پیدا نشد.', 'warning')
-        return redirect(url_for('express_partner.special_visit_inbox'))
+        return redirect(_sales_pipeline_url('visits'))
     if err == 'forbidden':
         flash('اجازه مدیریت این درخواست را ندارید.', 'warning')
-        return redirect(url_for('express_partner.special_visit_inbox'))
+        return redirect(_sales_pipeline_url('visits'))
     if err == 'disabled':
         flash('ثبت نتیجه بازدید فعلاً فعال نیست.', 'warning')
-        return redirect(url_for('express_partner.special_visit_inbox'))
+        return redirect(_sales_pipeline_url('visits'))
     if err == 'invalid_transition':
         flash(
             'این تغییر مجاز نیست. تأیید انجام فقط وقتی ممکن است که همکار «بازدید انجام شد» را ثبت کرده باشد.',
             'warning',
         )
-        return redirect(url_for('express_partner.special_visit_inbox'))
+        return redirect(_sales_pipeline_url('visits'))
     extra_err = {
         'no_assignment': 'این همکار روی فایل اختصاص ندارد؛ معامله فقط از سمت همکار اختصاص‌یافته ممکن است.',
         'already_sold': 'این فایل قبلاً فروخته شده است.',
@@ -8342,10 +8443,10 @@ def special_visit_action(vid: str, action: str):
     }
     if err and err in extra_err:
         flash(extra_err[err], 'warning')
-        return redirect(url_for('express_partner.special_visit_inbox'))
+        return redirect(_sales_pipeline_url('visits'))
     if err and err not in ('unchanged', 'note_updated'):
         flash('تغییر وضعیت ناموفق بود.', 'warning')
-        return redirect(url_for('express_partner.special_visit_inbox'))
+        return redirect(_sales_pipeline_url('visits'))
 
     act_l = str(action or '').strip().lower()
     deal_only = act_l in ('start_deal', 'approve_deal', 'reject_deal', 'result')
@@ -8355,7 +8456,7 @@ def special_visit_action(vid: str, action: str):
         except Exception:
             current_app.logger.exception('special visit action save failed id=%s', vid)
             flash('ذخیره وضعیت ناموفق بود.', 'danger')
-            return redirect(url_for('express_partner.special_visit_inbox'))
+            return redirect(_sales_pipeline_url('visits'))
 
     if rec and err not in ('unchanged',):
         new_status = str(rec.get('status') or '')
@@ -8392,7 +8493,8 @@ def special_visit_action(vid: str, action: str):
         flash('معامله رد شد. همکار می‌تواند دوباره درخواست بدهد.', 'info')
     else:
         flash('وضعیت بروزرسانی شد.', 'success')
-    return redirect(url_for('express_partner.special_visit_inbox'))
+    pipeline_tab = 'deals' if act_l in ('start_deal', 'approve_deal', 'reject_deal') else 'visits'
+    return redirect(_sales_pipeline_url(pipeline_tab))
 
 
 @express_partner_bp.get('/profile/data', endpoint='profile_data')
@@ -9445,6 +9547,43 @@ def land_chat_detail(code: str):
         "title": payload.get("title") or "",
         "html": payload["html"],
     })
+
+
+@express_partner_bp.get('/divar/<string:token>/chat-detail', endpoint='divar_chat_detail')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def divar_chat_detail(token: str):
+    """جزئیات آگهی دیوار به‌صورت HTML برای تزریق در چت خانه."""
+    from .divar_pro_ads import sanitize_divar_post_token
+    from .land_chat_detail import render_divar_chat_detail_html
+
+    tok = sanitize_divar_post_token(token)
+    if not tok:
+        return jsonify({"ok": False, "error": "missing_token"}), 400
+    payload = render_divar_chat_detail_html(tok)
+    if not payload:
+        return jsonify({
+            "ok": False,
+            "error": "not_found",
+            "message": "این آگهی دیوار پیدا نشد یا دیگر در دسترس نیست.",
+        }), 404
+    return jsonify({
+        "ok": True,
+        "code": payload["code"],
+        "title": payload.get("title") or "",
+        "html": payload["html"],
+    })
+
+
+@express_partner_bp.get('/divar/<string:token>', endpoint='divar_ad_detail')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def divar_ad_detail(token: str):
+    """لینک آگهی دیوار نوار خانه → جزئیات داخل چت وینور."""
+    from .divar_pro_ads import sanitize_divar_post_token
+
+    tok = sanitize_divar_post_token(token)
+    if not tok:
+        return redirect(url_for('express_partner.home'))
+    return redirect(url_for('express_partner.home', divar=tok))
 
 
 @express_partner_bp.get('/lands/<string:code>', endpoint='land_detail')

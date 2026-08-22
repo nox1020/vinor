@@ -397,6 +397,43 @@
   } catch (_) {}
 
   try {
+    var divarTok =
+      sessionStorage.getItem('vinor_divar_chat_token') ||
+      (function () {
+        try {
+          return new URLSearchParams(window.location.search).get('divar') || '';
+        } catch (_) {
+          return '';
+        }
+      })();
+    if (divarTok) {
+      try {
+        sessionStorage.removeItem('vinor_divar_chat_token');
+      } catch (_) {}
+      try {
+        var du = new URL(window.location.href);
+        if (du.searchParams.has('divar')) {
+          du.searchParams.delete('divar');
+          history.replaceState(history.state || {}, '', du.pathname + (du.search || '') + (du.hash || ''));
+        }
+      } catch (_) {}
+      var dtries = 0;
+      (function waitShowDivar() {
+        dtries += 1;
+        if (typeof window.vinorShowDivarInChat === 'function') {
+          window.vinorShowDivarInChat(divarTok);
+          return;
+        }
+        if (typeof window.vinorShowLandInChat === 'function') {
+          window.vinorShowLandInChat('divar:' + divarTok);
+          return;
+        }
+        if (dtries < 40) setTimeout(waitShowDivar, 100);
+      })();
+    }
+  } catch (_) {}
+
+  try {
     var draft = sessionStorage.getItem('vinor_ai_home_prompt') || '';
     if (!draft) return;
     var input = document.getElementById('aiInput');

@@ -17,6 +17,7 @@
   var STORAGE_KEY = 'vinor_express_tab_nav_dir';
   var PREFIX = '/express/partner/';
   var LAND_DETAIL_RE = /^\/express\/partner\/lands\/[^/]+$/;
+  var DIVAR_DETAIL_RE = /^\/express\/partner\/divar\/[^/]+$/;
 
   /** @type {Record<string, {tab: string, depth: number, bottomNav?: boolean, prefetch?: boolean}>} */
   var ROUTE_REGISTRY = {
@@ -99,8 +100,30 @@
     }
   }
 
+  function extractDivarTokenFromPath(pathname) {
+    var m = normPath(pathname || '').match(/^\/express\/partner\/divar\/([^/]+)\/?$/);
+    if (!m) return '';
+    try {
+      return decodeURIComponent(m[1] || '').trim();
+    } catch (_) {
+      return String(m[1] || '').trim();
+    }
+  }
+
+  function extractDivarTokenFromHref(href) {
+    try {
+      return extractDivarTokenFromPath(parseUrl(href).pathname);
+    } catch (_) {
+      return '';
+    }
+  }
+
   function homeUrlWithLand(code) {
     return '/express/partner/home?land=' + encodeURIComponent(code);
+  }
+
+  function homeUrlWithDivar(token) {
+    return '/express/partner/home?divar=' + encodeURIComponent(token);
   }
 
   function currentlyOnHomePage() {
@@ -145,6 +168,11 @@
       openLandInChat(land);
       return true;
     }
+    var divar = String(u.searchParams.get('divar') || '').trim();
+    if (divar) {
+      openDivarInChat(divar);
+      return true;
+    }
     var menu = String(u.searchParams.get('menu') || '').trim();
     if (menu === '1') {
       try {
@@ -168,6 +196,8 @@
   }
 
   function openLandFromNavTarget(href) {
+    var divarTok = extractDivarTokenFromHref(href);
+    if (divarTok) return openDivarInChat(divarTok);
     var code =
       extractLandCodeFromHref(href) ||
       extractHomeLandParam(href);
@@ -214,12 +244,59 @@
     return true;
   }
 
+  function openDivarInChat(token) {
+    token = String(token || '').trim();
+    if (!token) return false;
+    if (token.indexOf('divar:') === 0) token = token.slice(6);
+    var onHome = !!document.getElementById('homeDashboardPage');
+    var hasMessages = !!document.getElementById('aiMessages');
+    function showDivar(tok) {
+      if (typeof window.vinorShowDivarInChat === 'function') {
+        try {
+          window.vinorShowDivarInChat(tok);
+        } catch (_) {}
+        return true;
+      }
+      if (typeof window.vinorShowLandInChat === 'function') {
+        try {
+          window.vinorShowLandInChat('divar:' + tok);
+        } catch (_) {}
+        return true;
+      }
+      return false;
+    }
+    if (onHome && hasMessages) {
+      if (showDivar(token)) return true;
+      try {
+        sessionStorage.setItem('vinor_divar_chat_token', token);
+      } catch (_) {}
+      setTimeout(function () {
+        try {
+          sessionStorage.removeItem('vinor_divar_chat_token');
+        } catch (_) {}
+        showDivar(token);
+      }, 450);
+      return true;
+    }
+    try {
+      sessionStorage.setItem('vinor_divar_chat_token', token);
+    } catch (_) {}
+    var dest = homeUrlWithDivar(token);
+    if (typeof vinorExpressNavigate === 'function' && document.getElementById('vinor-express-page-swap')) {
+      vinorExpressNavigate(dest, { forward: true });
+    } else {
+      window.location.assign(dest);
+    }
+    return true;
+  }
+
   window.vinorOpenLandInChat = openLandInChat;
+  window.vinorOpenDivarInChat = openDivarInChat;
 
   function lookupRoute(pathname) {
     var p = normPath(pathname || '');
     if (ROUTE_REGISTRY[p]) return ROUTE_REGISTRY[p];
-    if (LAND_DETAIL_RE.test(p)) {
+    if (LAND_DETAIL_RE.test(p) || DIVAR_DETAIL_RE.test(p)) {
       /* صفحه جزئیات حذف شد — به خانه هدایت می‌شود */
       return { tab: 'home', depth: 1, bottomNav: true, prefetch: false };
     }
@@ -515,7 +592,8 @@
 
   function isLandDetailHref(href) {
     try {
-      return LAND_DETAIL_RE.test(normPath(parseUrl(href).pathname));
+      var p = normPath(parseUrl(href).pathname);
+      return LAND_DETAIL_RE.test(p) || DIVAR_DETAIL_RE.test(p);
     } catch (_) {
       return false;
     }
@@ -761,7 +839,8 @@
   }
 
   function isLandDetailPath(pathname) {
-    return LAND_DETAIL_RE.test(normPath(pathname || ''));
+    var p = normPath(pathname || '');
+    return LAND_DETAIL_RE.test(p) || DIVAR_DETAIL_RE.test(p);
   }
 
   function isAiPagePath(pathname) {
@@ -1836,6 +1915,7 @@
         if (a.getAttribute('download')) return;
       }
       if (a.getAttribute('target') === '_blank') return;
+      if (a.getAttribute('data-vinor-direct-action')) return;
       var href = a.getAttribute('href');
       if (isGuestPlusCtaLink(a, href)) {
         e.preventDefault();
@@ -1935,6 +2015,7 @@
     if (card) {
       var cardHref = card.getAttribute('data-href');
       if (cardHref && extractLandCodeFromHref(cardHref)) return;
+      if (cardHref && extractDivarTokenFromHref(cardHref)) return;
       if (cardHref && shouldPrefetchNav(window.location.href, cardHref)) prefetchHref(cardHref);
       return;
     }
@@ -1942,6 +2023,7 @@
     if (!a) return;
     var href = a.getAttribute('href');
     if (href && extractLandCodeFromHref(href)) return;
+    if (href && extractDivarTokenFromHref(href)) return;
     if (shouldPrefetchLink(a, href)) prefetchHref(href);
   }
 

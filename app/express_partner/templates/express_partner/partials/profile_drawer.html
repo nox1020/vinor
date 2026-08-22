@@ -1044,14 +1044,6 @@
         tour='special-listings-link',
         row_id='epDrawerListingsBtn'
       ) }}
-      {{ profile_menu_row(
-        url_for('express_partner.special_visit_inbox'),
-        'fa-calendar-check',
-        'بازدید و معامله',
-        tour='special-visit-inbox-link',
-        row_id='epDrawerVisitInboxBtn',
-        badge_key='visit-inbox'
-      ) }}
     </div>
     {% endif %}
 
@@ -1059,11 +1051,12 @@
       <p class="ep-profile-drawer__nav-label">فروش</p>
       {{ profile_menu_row(
         url_for('express_partner.requests'),
-        'fa-clipboard-list',
-        'درخواست‌ها',
-        subtitle='بازدیدها و روند فروش',
+        'fa-route',
+        'پیگیری',
+        subtitle='درخواست، بازدید و معامله',
         tour='profile-section',
-        row_id='epDrawerRequestsBtn'
+        row_id='epDrawerRequestsBtn',
+        badge_key='visit-inbox'
       ) }}
       <a href="{{ url_for('express_partner.commissions') }}"
          id="epDrawerWalletBtn"

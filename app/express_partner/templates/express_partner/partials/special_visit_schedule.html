@@ -1,0 +1,42 @@
+{# تنظیم وقت بازدید پلاس — داخل هدر پیگیری #}
+<details class="sv-schedule relative z-30"{% if schedule_open %} open{% endif %}>
+  <summary class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
+           aria-label="تنظیم وقت بازدید و آدرس حضور">
+    <i class="fas fa-cog ep-partner-header-btn-icon" aria-hidden="true"></i>
+  </summary>
+  <form method="post"
+        action="{{ url_for('express_partner.special_visit_schedule') }}"
+        data-vinor-direct-action
+        class="sv-schedule__panel">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p class="sv-schedule__title">وقت و آدرس حضور</p>
+    <p class="sv-schedule__sub">روز، ساعت و جایی که همکاران برای بازدید می‌آیند.</p>
+    {% if visit_allowed_weekdays_summary %}
+    <p class="sv-schedule__now">{{ visit_allowed_weekdays_summary }}{% if visit_allowed_hours_summary %} · {{ visit_allowed_hours_summary }}{% endif %}</p>
+    {% endif %}
+    <p class="sv-schedule__label">روزهای مجاز</p>
+    <div class="sv-schedule__days">
+      {% for wd in visit_weekday_order %}
+      <label class="sv-chip">
+        <input type="checkbox" name="visit_weekdays" value="{{ wd }}" class="peer sr-only"
+               {% if wd in visit_allowed_weekdays %}checked{% endif %}>
+        <span>{{ visit_weekday_labels.get(wd, wd) }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <p class="sv-schedule__label">ساعت‌های مجاز (تهران)</p>
+    <div class="sv-schedule__hours" dir="ltr">
+      {% for row in visit_hour_rows %}
+      <label class="sv-hour">
+        <input type="checkbox" name="visit_hours" value="{{ row.hour }}" class="peer sr-only"
+               {% if row.selected %}checked{% endif %}>
+        <span>{{ row.label }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <p class="sv-schedule__label">آدرس حضور</p>
+    <textarea name="visit_presence_address" class="sv-schedule__addr" rows="2" maxlength="200"
+              placeholder="دفتر، آدرس ملک، یا نقطهٔ ملاقات">{{ visit_presence_address|default('') }}</textarea>
+    <button type="submit" class="sv-schedule__save">ذخیره</button>
+  </form>
+</details>

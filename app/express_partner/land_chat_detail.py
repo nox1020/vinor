@@ -240,6 +240,88 @@ def render_land_chat_detail_html(code: str) -> Optional[Dict[str, str]]:
     }
 
 
+def prepare_divar_for_chat_detail(token: str) -> Tuple[Optional[Dict[str, Any]], bool]:
+    """آگهی دیوار را به شکل کارت جزئیات چت وینور درمی‌آورد."""
+    from flask import has_request_context
+
+    from .divar_pro_ads import divar_ad_detail_payload, sanitize_divar_post_token
+    from . import routes as ep_routes
+
+    tok = sanitize_divar_post_token(token)
+    if not tok:
+        return None, False
+    ad = divar_ad_detail_payload(tok)
+    if not ad:
+        return None, False
+
+    me_phone = ""
+    if has_request_context():
+        me_phone = (session.get("user_phone") or "").strip()
+    partner_profile = ep_routes._partner_profile_for_phone(me_phone) if me_phone else None
+    try:
+        is_approved = ep_routes._is_partner_approved(partner_profile)
+    except Exception:
+        is_approved = False
+
+    images = [str(u).strip() for u in (ad.get("images") or []) if str(u or "").strip()]
+    if not images and str(ad.get("image_url") or "").strip():
+        images = [str(ad.get("image_url")).strip()]
+
+    try:
+        price_toman = int(ad.get("price_toman") or 0)
+    except (TypeError, ValueError):
+        price_toman = 0
+    try:
+        commission_amount = int(ad.get("commission_amount") or 0)
+    except (TypeError, ValueError):
+        commission_amount = 0
+
+    land: Dict[str, Any] = {
+        "code": f"divar:{tok}",
+        "title": str(ad.get("title") or "آگهی دیوار").strip(),
+        "city": "",
+        "location": str(ad.get("location") or "").strip(),
+        "images": images,
+        "description": str(ad.get("description") or "").strip(),
+        "price_total": price_toman,
+        "price": price_toman,
+        "_price_display": str(ad.get("price") or "").strip(),
+        "_source": "divar",
+        "_divar_url": str(ad.get("divar_url") or ad.get("url") or "").strip(),
+        "_divar_rows": list(ad.get("rows") or []),
+        "_commission_amount": max(0, commission_amount),
+        "_commission_pct": ad.get("commission_pct") or 0,
+        "_assignment_status": "",
+        "_chat_cta": {},
+        "_visit_progress_steps": [],
+        "_visit_progress_summary": {},
+    }
+    return land, is_approved
+
+
+def render_divar_chat_detail_html(token: str) -> Optional[Dict[str, str]]:
+    land, is_approved = prepare_divar_for_chat_detail(token)
+    if not land:
+        return None
+    try:
+        from app.crm.config import VISIT_CALL_TARGET
+
+        visit_call_target = str(VISIT_CALL_TARGET or "09121471301").strip()
+    except Exception:
+        visit_call_target = "09121471301"
+    html = render_template(
+        "express_partner/partials/land_chat_detail.html",
+        land=land,
+        is_approved=is_approved,
+        visit_call_target=visit_call_target,
+    )
+    return {
+        "code": str(land.get("code") or "").strip(),
+        "title": str(land.get("title") or "").strip(),
+        "html": html,
+    }
+
+
 def track_land_view_async(code: str) -> None:
     """ثبت بازدید پس‌زمینه (همان منطق صفحه قدیم)."""
     import threading
