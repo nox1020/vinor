@@ -857,7 +857,7 @@
     var hasWanted = users.some(function (item) {
       return String(item.phone || '').trim() === wanted;
     });
-    var active = hasWanted ? wanted : '';
+    var active = hasWanted ? wanted : String(users[0].phone || '').trim();
 
     users.forEach(function (item) {
       var phone = String(item.phone || '').trim();
