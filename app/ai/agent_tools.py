@@ -4793,8 +4793,21 @@ def _confirm_settlement(*, phone: str, token: str, pending: dict[str, Any]) -> d
 
 
 def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
+    from app.express_partner.partner_roles import partner_can_record_visit_attendance
     from app.express_partner.visit_requests import request_visit_done_confirmation
-    from app.utils.storage import load_express_visit_requests, save_express_visit_requests
+    from app.utils.storage import load_express_partners, load_express_visit_requests, save_express_visit_requests
+
+    partners = load_express_partners() or []
+    profile = next(
+        (
+            p
+            for p in partners
+            if isinstance(p, dict) and str(p.get("phone") or "").strip() == str(phone or "").strip()
+        ),
+        None,
+    )
+    if not partner_can_record_visit_attendance(profile):
+        return {"ok": False, "error": "ثبت انجام بازدید فقط برای ویزیتور و پلاس فعال است."}
 
     visits = load_express_visit_requests() or []
     if not isinstance(visits, list):

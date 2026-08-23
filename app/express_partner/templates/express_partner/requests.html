@@ -326,6 +326,13 @@
     opacity: 0.72;
     font-size: 0.65rem;
   }
+  #partnerRequestsPage .rq-section-label {
+    margin: 0.85rem 1rem 0.15rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #5eead4;
+    letter-spacing: 0.01em;
+  }
   .sv-origin {
     margin: 0 0 0.28rem;
     font-size: 0.62rem;
@@ -515,7 +522,7 @@
       </button>
       <button type="button" class="rq-tab{% if _tab == 'visits' %} is-active{% endif %}" role="tab"
               data-rq-tab="visits" aria-selected="{{ 'true' if _tab == 'visits' else 'false' }}">
-        بازدید{% if _counts.visits %}<span class="rq-tab__count">{{ _counts.visits|fa_digits }}</span>{% endif %}
+        بازدیدها{% if _counts.visits %}<span class="rq-tab__count">{{ _counts.visits|fa_digits }}</span>{% endif %}
       </button>
       <button type="button" class="rq-tab{% if _tab == 'deals' %} is-active{% endif %}" role="tab"
               data-rq-tab="deals" aria-selected="{{ 'true' if _tab == 'deals' else 'false' }}">
@@ -551,7 +558,10 @@
     {% endif %}
 
     {% if items %}
-    <section aria-label="درخواست‌های فروش">
+    <section aria-label="درخواست‌های شما">
+      {% if is_special|default(false) %}
+      <p class="rq-section-label" data-rq-section="mine">بازدیدهای شما</p>
+      {% endif %}
       {% for item in items %}
       {% set st = item.status|default('') %}
       {% set st_cls = 'is-pending' if st in ('pending', 'done_pending') else ('is-done' if st in ('completed', 'approved') else ('is-closed' if st in ('cancelled', 'no_show') else '')) %}
@@ -642,7 +652,7 @@
     </div>
     <div class="rq-empty" data-rq-empty="visits" {% if _tab != 'visits' or _counts.visits %}hidden{% endif %}>
       <p class="rq-empty__title">بازدیدی در جریان نیست</p>
-      <p class="rq-empty__sub">{% if is_special|default(false) %}وقت تأییدشده روی تقویم یا آگهی شما اینجا می‌آید تا نتیجه بازدید ثبت شود.{% else %}وقت نهایی‌شده اینجا می‌آید؛ «بازدید انجام شد» یا «عدم حضور» را از همین کارت ثبت کنید.{% endif %}</p>
+      <p class="rq-empty__sub">{% if is_special|default(false) %}وقت تأییدشده روی تقویم یا آگهی شما اینجا می‌آید تا نتیجه بازدید ثبت شود.{% elif can_record_attendance|default(false) %}وقت نهایی‌شده اینجا می‌آید؛ «بازدید انجام شد» یا «عدم حضور» را از همین کارت ثبت کنید.{% else %}وقت نهایی‌شده اینجا می‌آید.{% endif %}</p>
     </div>
     <div class="rq-empty" data-rq-empty="deals" {% if _tab != 'deals' or _counts.deals %}hidden{% endif %}>
       <p class="rq-empty__title">معامله‌ای در جریان نیست</p>
@@ -723,6 +733,26 @@
     });
     page.querySelectorAll('[data-pipeline]').forEach(function (el) {
       el.hidden = el.getAttribute('data-pipeline') !== next;
+    });
+    page.querySelectorAll('[data-rq-section]').forEach(function (el) {
+      var kind = el.getAttribute('data-rq-section');
+      var sel = kind === 'inbox'
+        ? '.sv-card[data-pipeline="' + next + '"], .sv-offer[data-pipeline="' + next + '"]'
+        : '.rq-card[data-pipeline="' + next + '"]';
+      var visible = false;
+      page.querySelectorAll(sel).forEach(function (card) {
+        if (!card.hidden) visible = true;
+      });
+      el.hidden = !visible;
+      if (kind === 'inbox') {
+        el.textContent = next === 'requests'
+          ? 'درخواست همکاران'
+          : (next === 'deals' ? 'معامله روی آگهی شما' : 'بازدید روی تقویم و آگهی شما');
+      } else if (kind === 'mine') {
+        el.textContent = next === 'requests'
+          ? 'درخواست‌های شما'
+          : (next === 'deals' ? 'معامله‌های شما' : 'بازدیدهای شما');
+      }
     });
     page.querySelectorAll('[data-rq-empty]').forEach(function (el) {
       var key = el.getAttribute('data-rq-empty');

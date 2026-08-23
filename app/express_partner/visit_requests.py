@@ -39,14 +39,22 @@ PIPELINE_TABS = frozenset({PIPELINE_REQUESTS, PIPELINE_VISITS, PIPELINE_DEALS})
 def partner_request_pipeline_tab(
     status: str,
     assignment_status: str = "",
+    *,
+    plus_own: bool = False,
 ) -> str:
-    """قیف بازاریاب: درخواست → بازدید → معامله."""
+    """قیف همکار: درخواست → بازدید → معامله.
+
+    برای پلاس، پروندهٔ خودِ همکار (وقت گرفتن) در تب درخواست می‌ماند؛
+    تب بازدید فقط صندوق تقویم/آگهی است.
+    """
     gs = str(assignment_status or "").strip().lower()
     if gs in ("in_transaction", "sold"):
         return PIPELINE_DEALS
     st = str(status or "").strip()
     if st == COMPLETED_STATUS:
         return PIPELINE_DEALS
+    if plus_own:
+        return PIPELINE_REQUESTS
     if st in (APPROVED_STATUS, DONE_PENDING_STATUS, NO_SHOW_STATUS):
         return PIPELINE_VISITS
     return PIPELINE_REQUESTS
@@ -811,6 +819,8 @@ def partner_request_feed_item(
     can_revisit: bool = False,
     support_phone: str = "",
     assignment_status: str = "",
+    allow_attendance: bool = False,
+    plus_own: bool = False,
 ) -> Dict[str, Any]:
     """کارت سادهٔ صفحهٔ درخواست‌ها برای همکار."""
     del commissions  # پورسانت در کارت ساده لازم نیست
@@ -859,8 +869,9 @@ def partner_request_feed_item(
     support = (support_phone or "").strip()
     can_cancel = st in (PENDING_STATUS, APPROVED_STATUS)
     can_delete = st in (CANCELLED_STATUS, NO_SHOW_STATUS, COMPLETED_STATUS)
-    can_complete = st in (APPROVED_STATUS, DONE_PENDING_STATUS)
-    can_no_show = st in (APPROVED_STATUS, DONE_PENDING_STATUS)
+    can_mark_attendance = bool(allow_attendance) and st in (APPROVED_STATUS, DONE_PENDING_STATUS)
+    can_complete = can_mark_attendance
+    can_no_show = can_mark_attendance
     return {
         "id": str(row.get("id") or "").strip(),
         "kind": "visit",
@@ -887,7 +898,7 @@ def partner_request_feed_item(
         "can_revisit": bool(can_revisit),
         "can_remove": can_cancel or can_delete,
         "assignment_status": assign_st,
-        "pipeline_tab": partner_request_pipeline_tab(st, assign_st),
+        "pipeline_tab": partner_request_pipeline_tab(st, assign_st, plus_own=plus_own),
     }
 
 

@@ -1422,12 +1422,25 @@ def _is_partner_special(profile: Dict[str, Any] | None) -> bool:
 
 
 def _partner_tier_label(profile: Dict[str, Any] | None, *, is_approved: bool | None = None) -> str:
-    approved = _is_partner_approved(profile) if is_approved is None else bool(is_approved)
-    if not approved:
+    from .partner_roles import (
+        COOP_LEVEL_MARKETER,
+        COOP_LEVEL_PLUS,
+        COOP_LEVEL_REGULAR,
+        COOP_LEVEL_VISITOR,
+        partner_coop_level,
+    )
+
+    del is_approved
+    level = partner_coop_level(profile)
+    if level == COOP_LEVEL_PLUS:
+        return "پلاس"
+    if level == COOP_LEVEL_VISITOR:
+        return "ویزیتور"
+    if level == COOP_LEVEL_MARKETER:
+        return "بازاریاب"
+    if level == COOP_LEVEL_REGULAR:
         return "کاربر عادی"
-    if _is_partner_special(profile):
-        return "بازاریاب ویژه"
-    return "بازاریاب فروش"
+    return "کاربر عادی"
 
 
 def require_special_partner(json_response: bool = False):
@@ -4663,6 +4676,7 @@ def requests_page():
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile)
     is_special = _is_partner_special(profile) if is_approved else False
+    from .partner_roles import partner_can_record_visit_attendance
     from .visit_requests import (
         OPEN_VISIT_STATUSES,
         PIPELINE_DEALS,
@@ -4703,6 +4717,7 @@ def requests_page():
         support_phone = '09121471301'
 
     items = []
+    allow_attendance = partner_can_record_visit_attendance(profile)
     for r in mine:
         code = str(r.get('land_code') or '').strip()
         gs = land_status.get(code, 'active')
@@ -4717,6 +4732,7 @@ def requests_page():
             can_revisit=can_revisit,
             support_phone=support_phone,
             assignment_status=gs,
+            allow_attendance=allow_attendance,
         ))
 
     open_count = sum(
@@ -4765,6 +4781,18 @@ def requests_page():
                 offers = offers_for_special_owner(me_phone) or []
         except Exception:
             offers = []
+
+    if is_special and inbox_items:
+        inbox_ids = {
+            str(i.get('id') or '').strip()
+            for i in inbox_items
+            if str(i.get('id') or '').strip()
+        }
+        if inbox_ids:
+            items = [
+                it for it in items
+                if str(it.get('id') or '').strip() not in inbox_ids
+            ]
 
     tab_counts = {
         PIPELINE_REQUESTS: 0,
@@ -4818,6 +4846,7 @@ def requests_page():
         me_phone=me_phone,
         is_approved=is_approved,
         is_special=is_special,
+        can_record_attendance=allow_attendance,
         hide_header=True,
         brand='وینور',
         domain='vinor.ir',
@@ -5060,7 +5089,15 @@ def requests_no_show_visit(vid: str):
 
 def _partner_visit_attendance_action(vid: str, *, outcome: str):
     me_phone = (session.get('user_phone') or '').strip()
+    from .partner_roles import partner_can_record_visit_attendance
     from .visit_requests import record_visit_attendance
+
+    profile = getattr(g, 'express_partner_profile', None)
+    if not partner_can_record_visit_attendance(profile):
+        return _requests_action_json(
+            False,
+            error='ثبت نتیجه بازدید فقط برای ویزیتور و پلاس فعال است.',
+        )
 
     visit_rows = load_express_visit_requests() or []
     if not isinstance(visit_rows, list):
@@ -6519,16 +6556,14 @@ def coop_levels():
     """چهار سطح همکاری از پایین به بالا: عادی، بازاریاب، ویزیتور، پلاس."""
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None)
-    is_approved = _is_partner_approved(profile) if me_phone else False
-    is_special = _is_partner_special(profile) if is_approved else False
-    if is_special:
-        current_level = 'plus'
-    elif is_approved:
-        current_level = 'marketer'
-    elif me_phone:
-        current_level = 'regular'
+    from .partner_roles import partner_coop_level
+
+    if me_phone:
+        current_level = partner_coop_level(profile)
     else:
         current_level = ''
+    is_approved = current_level not in ('', 'regular')
+    is_special = current_level == 'plus'
     return render_template(
         'express_partner/coop_levels.html',
         hide_header=True,
@@ -7558,6 +7593,14 @@ def complete_visit_request(code: str):
             code,
             success=False,
             message='برای ثبت انجام بازدید باید حساب همکاری شما تأیید شده باشد.',
+            category='error',
+        )
+    from .partner_roles import partner_can_record_visit_attendance
+    if not partner_can_record_visit_attendance(partner_profile):
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='ثبت انجام بازدید فقط برای ویزیتور و پلاس فعال است.',
             category='error',
         )
 

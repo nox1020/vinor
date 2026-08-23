@@ -1,12 +1,20 @@
 # -*- coding: utf-8 -*-
-"""سطوح همکار: عادی (بدون پروفایل) / همکار / ویژه."""
+"""سطوح همکار: عادی / بازاریاب / ویزیتور / پلاس."""
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
 APPROVED_PARTNER_STATUSES = frozenset({"approved", "active", "enabled", "ok", "true", "1"})
 PARTNER_TIER_SPECIAL = "special"
+PARTNER_TIER_VISITOR = "visitor"
 PARTNER_TIER_PARTNER = "partner"
+
+COOP_LEVEL_PLUS = "plus"
+COOP_LEVEL_VISITOR = "visitor"
+COOP_LEVEL_MARKETER = "marketer"
+COOP_LEVEL_REGULAR = "regular"
+
+_VISITOR_TIER_ALIASES = frozenset({PARTNER_TIER_VISITOR, "ویزیتور"})
 
 
 def partner_is_approved(profile: Optional[Dict[str, Any]]) -> bool:
@@ -32,6 +40,23 @@ def partner_is_special(profile: Optional[Dict[str, Any]]) -> bool:
     from app.express_partner.plus_subscription import plus_subscription_active
 
     return plus_subscription_active(profile)
+
+
+def partner_coop_level(profile: Optional[Dict[str, Any]]) -> str:
+    """سطح ۱ پلاس، ۲ ویزیتور، ۳ بازاریاب، ۴ عادی."""
+    if partner_is_special(profile):
+        return COOP_LEVEL_PLUS
+    if not partner_is_approved(profile):
+        return COOP_LEVEL_REGULAR
+    raw = str((profile or {}).get("partner_tier") or "").strip().lower()
+    if raw in _VISITOR_TIER_ALIASES:
+        return COOP_LEVEL_VISITOR
+    return COOP_LEVEL_MARKETER
+
+
+def partner_can_record_visit_attendance(profile: Optional[Dict[str, Any]]) -> bool:
+    """ثبت «بازدید انجام شد» و «عدم حضور» فقط سطح ۱ و ۲."""
+    return partner_coop_level(profile) in (COOP_LEVEL_PLUS, COOP_LEVEL_VISITOR)
 
 
 def set_partner_tier(profile: Dict[str, Any], special: bool) -> None:

@@ -37,7 +37,8 @@
 {% endif %}
 
 {% if inbox_items %}
-<section aria-label="صندوق بازدید آگهی‌ها">
+<section aria-label="صندوق بازدید آگهی و تقویم">
+  <p class="rq-section-label" data-rq-section="inbox">بازدید روی تقویم و آگهی شما</p>
   {% for item in inbox_items %}
   <article class="sv-card{% if item.needs_action %} sv-card--need{% endif %}"
            data-pipeline="{{ item.pipeline_tab|default('visits') }}"
