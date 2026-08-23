@@ -114,6 +114,9 @@
     gap: 0.4rem;
     margin-top: 0.75rem;
   }
+  #partnerRequestsPage .rq-actions form {
+    display: contents;
+  }
   #partnerRequestsPage .rq-btn {
     display: inline-flex;
     align-items: center;
@@ -145,6 +148,16 @@
     border-color: rgba(52, 211, 153, 0.35);
     background: rgba(16, 185, 129, 0.12);
     color: #6ee7b7;
+  }
+  #partnerRequestsPage .rq-btn--ok {
+    border-color: rgba(16, 185, 129, 0.45);
+    background: #059669;
+    color: #fff;
+  }
+  #partnerRequestsPage .rq-btn--noshow {
+    border-color: rgba(248, 113, 113, 0.4);
+    background: transparent;
+    color: #fca5a5;
   }
   #partnerRequestsPage .rq-btn--remove {
     border-color: rgba(248, 113, 113, 0.28);
@@ -392,7 +405,7 @@
   .sv-actions { display: flex; flex-direction: column; gap: .55rem; margin-top: .75rem; }
   .sv-actions form { margin: 0; }
   .sv-btn-row {
-    display: grid; grid-template-columns: 1fr auto; gap: .4rem; align-items: stretch;
+    display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; align-items: stretch;
   }
   .sv-btn-row--solo { grid-template-columns: 1fr; }
   .sv-btn-row form { display: flex; min-width: 0; }
@@ -589,6 +602,18 @@
             تماس
           </a>
           {% endif %}
+          {% if item.can_complete %}
+          <form method="post" action="{{ url_for('express_partner.requests_complete_visit', vid=item.id) }}" data-vinor-direct-action class="contents">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="rq-btn rq-btn--ok">بازدید انجام شد</button>
+          </form>
+          {% endif %}
+          {% if item.can_no_show %}
+          <form method="post" action="{{ url_for('express_partner.requests_no_show_visit', vid=item.id) }}" data-vinor-direct-action class="contents">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('عدم حضور ثبت شود؟')">عدم حضور</button>
+          </form>
+          {% endif %}
           {% if item.can_revisit %}
           <button type="button" class="rq-btn rq-btn--revisit" data-rq-revisit>بازدید مجدد</button>
           {% endif %}
@@ -610,7 +635,7 @@
     </div>
     <div class="rq-empty" data-rq-empty="visits" {% if _tab != 'visits' or _counts.visits %}hidden{% endif %}>
       <p class="rq-empty__title">بازدیدی در جریان نیست</p>
-      <p class="rq-empty__sub">{% if is_special|default(false) %}بازدید روی آگهی‌های شما و وقت‌های ثبت‌شده روی تقویم‌تان اینجا جمع می‌شود.{% else %}وقتی بازدید انجام شد یا منتظر تأیید انجام باشد، اینجا می‌آید.{% endif %}</p>
+      <p class="rq-empty__sub">{% if is_special|default(false) %}بازدید روی آگهی‌های شما و وقت‌های ثبت‌شده روی تقویم‌تان اینجا جمع می‌شود.{% else %}وقت نهایی‌شده اینجا می‌آید؛ «بازدید انجام شد» یا «عدم حضور» را از همین کارت ثبت کنید.{% endif %}</p>
     </div>
     <div class="rq-empty" data-rq-empty="deals" {% if _tab != 'deals' or _counts.deals %}hidden{% endif %}>
       <p class="rq-empty__title">معامله‌ای در جریان نیست</p>

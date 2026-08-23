@@ -5040,6 +5040,65 @@ def requests_revisit(vid: str):
     )
 
 
+@express_partner_bp.post('/requests/<vid>/complete', endpoint='requests_complete_visit')
+@require_partner_access()
+def requests_complete_visit(vid: str):
+    """ویزیتور: ثبت «بازدید انجام شد» از کارت پیگیری."""
+    return _partner_visit_attendance_action(vid, outcome='done')
+
+
+@express_partner_bp.post('/requests/<vid>/no-show', endpoint='requests_no_show_visit')
+@require_partner_access()
+def requests_no_show_visit(vid: str):
+    """ویزیتور: ثبت عدم حضور از کارت پیگیری."""
+    return _partner_visit_attendance_action(vid, outcome='no_show')
+
+
+def _partner_visit_attendance_action(vid: str, *, outcome: str):
+    me_phone = (session.get('user_phone') or '').strip()
+    from .visit_requests import record_visit_attendance
+
+    visit_rows = load_express_visit_requests() or []
+    if not isinstance(visit_rows, list):
+        visit_rows = []
+    rec = next(
+        (r for r in visit_rows if isinstance(r, dict) and str(r.get('id') or '') == str(vid or '')),
+        None,
+    )
+    if not rec:
+        return _requests_action_json(False, error='درخواست پیدا نشد.')
+    if str(rec.get('partner_phone') or '').strip() != me_phone:
+        return _requests_action_json(False, error='دسترسی ندارید.')
+    updated, err = record_visit_attendance(visit_rows, str(vid), outcome=outcome)
+    if err == 'already_completed':
+        updated = updated or rec
+        err = None
+    if err == 'invalid_status':
+        return _requests_action_json(False, error='این بازدید الان قابل ثبت نتیجه نیست.')
+    if err or not updated:
+        return _requests_action_json(False, error='ثبت نتیجه ممکن نشد.')
+    try:
+        save_express_visit_requests(visit_rows)
+    except Exception:
+        current_app.logger.exception('visit attendance save failed id=%s', vid)
+        return _requests_action_json(False, error='ذخیره نشد.')
+    try:
+        from .special_visit_inbox import inject_visit_attendance_chat
+
+        inject_visit_attendance_chat(updated, outcome=outcome)
+    except Exception:
+        current_app.logger.exception('visit attendance chat failed id=%s', vid)
+    if outcome == 'no_show':
+        msg = 'عدم حضور ثبت شد.'
+    else:
+        msg = 'بازدید انجام شد ثبت شد.'
+    wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
+    if wants_html:
+        flash(msg, 'success')
+        return redirect(_sales_pipeline_url('visits'))
+    return _requests_action_json(True, message=msg, visit_id=updated.get('id'), status=updated.get('status'))
+
+
 def _inject_visit_registered_into_chat(
     partner_phone: str,
     *,
@@ -6453,7 +6512,7 @@ def cooperation_terms():
 @express_partner_bp.route('/levels', methods=['GET'], endpoint='coop_levels')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def coop_levels():
-    """چهار سطح همکاری: عادی، ویزیتور، بازاریاب، پلاس."""
+    """چهار سطح همکاری از پایین به بالا: عادی، بازاریاب، ویزیتور، پلاس."""
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile) if me_phone else False
@@ -8571,7 +8630,7 @@ def special_visit_action(vid: str, action: str):
     if err and err in extra_err:
         flash(extra_err[err], 'warning')
         return redirect(_sales_pipeline_url('visits'))
-    if err and err not in ('unchanged', 'note_updated'):
+    if err and err not in ('unchanged', 'note_updated', 'already_completed'):
         flash('تغییر وضعیت ناموفق بود.', 'warning')
         return redirect(_sales_pipeline_url('visits'))
 
@@ -8603,13 +8662,24 @@ def special_visit_action(vid: str, action: str):
                 current_app.logger.exception(
                     'special visit partner SMS failed id=%s event=%s', vid, sms_event
                 )
+        if act_l in ('complete', 'no_show'):
+            try:
+                from .special_visit_inbox import inject_visit_attendance_chat
+
+                inject_visit_attendance_chat(
+                    rec, outcome='done' if act_l == 'complete' else 'no_show'
+                )
+            except Exception:
+                current_app.logger.exception('visit attendance chat inject failed id=%s', vid)
 
     if act_l == 'approve':
         flash('بازدید تأیید شد.', 'success')
     elif act_l == 'reject':
         flash('بازدید رد شد.', 'info')
     elif act_l == 'complete':
-        flash('انجام بازدید تأیید شد — مسیر معامله باز است.', 'success')
+        flash('بازدید انجام شد ثبت شد.', 'success')
+    elif act_l == 'no_show':
+        flash('عدم حضور ثبت شد.', 'info')
     elif act_l == 'reject_done':
         flash('انجام بازدید رد شد. همکار می‌تواند دوباره اعلام کند.', 'info')
     elif act_l == 'start_deal':

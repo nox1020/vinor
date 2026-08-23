@@ -140,7 +140,7 @@
   }
   .sv-actions form { margin: 0; }
   .sv-btn-row {
-    display: grid; grid-template-columns: 1fr auto; gap: .4rem; align-items: stretch;
+    display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; align-items: stretch;
   }
   .sv-btn-row--solo { grid-template-columns: 1fr; }
   .sv-btn-row form { display: flex; min-width: 0; }
@@ -342,21 +342,28 @@
           </div>
           {% endif %}
 
-          {% if item.can_complete or item.can_reject_done %}
-          <div class="sv-btn-row{% if not item.can_reject_done or not item.can_complete %} sv-btn-row--solo{% endif %}">
+          {% if item.can_complete or item.can_no_show %}
+          <div class="sv-btn-row{% if not item.can_no_show or not item.can_complete %} sv-btn-row--solo{% endif %}">
             {% if item.can_complete %}
             <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='complete') }}" data-vinor-direct-action>
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="sv-btn sv-btn--ok">تأیید انجام بازدید</button>
+              <button type="submit" class="sv-btn sv-btn--ok">بازدید انجام شد</button>
             </form>
             {% endif %}
-            {% if item.can_reject_done %}
-            <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject_done') }}" data-vinor-direct-action>
+            {% if item.can_no_show %}
+            <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='no_show') }}" data-vinor-direct-action>
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('انجام بازدید رد شود؟ همکار باید دوباره اعلام کند.')">رد انجام</button>
+              <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('عدم حضور ثبت شود؟')">عدم حضور</button>
             </form>
             {% endif %}
           </div>
+          {% endif %}
+
+          {% if item.can_reject_done %}
+          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject_done') }}" data-vinor-direct-action>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="sv-btn sv-btn--ghost" onclick="return confirm('انجام بازدید رد شود؟ همکار باید دوباره اعلام کند.')">رد انجام</button>
+          </form>
           {% endif %}
 
           {% if item.can_start_deal %}
@@ -403,13 +410,6 @@
             </div>
             <input name="notes" class="sv-result__notes" placeholder="یادداشت (اختیاری)" autocomplete="off">
             <button type="submit" class="sv-btn sv-btn--ok">ثبت نتیجه</button>
-          </form>
-          {% endif %}
-
-          {% if item.can_no_show %}
-          <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='no_show') }}" data-vinor-direct-action>
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="sv-btn sv-btn--ghost" onclick="return confirm('عدم حضور مشتری ثبت شود؟')">مشتری حاضر نشد</button>
           </form>
           {% endif %}
         </div>

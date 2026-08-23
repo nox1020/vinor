@@ -40,12 +40,12 @@ def partner_request_pipeline_tab(
     status: str,
     assignment_status: str = "",
 ) -> str:
-    """مرحلهٔ قیف بازاریاب: وقت ثبت‌شده در درخواست‌ها می‌ماند تا بازدید انجام شود."""
+    """مرحلهٔ قیف بازاریاب: وقت نهایی‌شده در تب بازدید است تا نتیجه ثبت شود."""
     gs = str(assignment_status or "").strip().lower()
     if gs in ("in_transaction", "sold"):
         return PIPELINE_DEALS
     st = str(status or "").strip()
-    if st in (DONE_PENDING_STATUS, COMPLETED_STATUS, NO_SHOW_STATUS):
+    if st in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS, NO_SHOW_STATUS):
         return PIPELINE_VISITS
     return PIPELINE_REQUESTS
 
@@ -857,6 +857,8 @@ def partner_request_feed_item(
     support = (support_phone or "").strip()
     can_cancel = st in (PENDING_STATUS, APPROVED_STATUS)
     can_delete = st in (CANCELLED_STATUS, NO_SHOW_STATUS, COMPLETED_STATUS)
+    can_complete = st in (APPROVED_STATUS, DONE_PENDING_STATUS)
+    can_no_show = st in (APPROVED_STATUS, DONE_PENDING_STATUS)
     return {
         "id": str(row.get("id") or "").strip(),
         "kind": "visit",
@@ -878,6 +880,8 @@ def partner_request_feed_item(
         "status_label": labels.get(st, st or "در جریان"),
         "can_cancel": can_cancel,
         "can_delete": can_delete,
+        "can_complete": can_complete,
+        "can_no_show": can_no_show,
         "can_revisit": bool(can_revisit),
         "can_remove": can_cancel or can_delete,
         "assignment_status": assign_st,
@@ -1795,6 +1799,70 @@ def request_visit_done_confirmation(
         rec["status"] = DONE_PENDING_STATUS
         if not rec.get("approved_at"):
             rec["approved_at"] = now_iso
+    return rec, None
+
+
+def mark_visit_done_by_id(
+    requests: List[Dict[str, Any]],
+    visit_id: str,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """اعلام/ثبت «بازدید انجام شد» روی همان رکورد (پلاس یا ویزیتور)."""
+    rec = _find_visit_request(requests, str(visit_id or "").strip())
+    if not rec:
+        return None, "not_found"
+    st = (str(rec.get("status") or "")).strip()
+    if st == COMPLETED_STATUS:
+        return rec, "already_completed"
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    auto = visit_requests_auto_approve_enabled()
+    if st == APPROVED_STATUS:
+        rec["updated_at"] = now_iso
+        rec["visit_done_requested_at"] = now_iso
+        if auto:
+            rec["status"] = COMPLETED_STATUS
+            rec["completed_at"] = now_iso
+            rec["auto_completed"] = True
+        else:
+            rec["status"] = DONE_PENDING_STATUS
+        if not rec.get("approved_at"):
+            rec["approved_at"] = now_iso
+        return rec, None
+    if st == DONE_PENDING_STATUS:
+        rec["status"] = COMPLETED_STATUS
+        rec["completed_at"] = now_iso
+        rec["updated_at"] = now_iso
+        rec["auto_completed"] = True
+        if not rec.get("visit_done_requested_at"):
+            rec["visit_done_requested_at"] = now_iso
+        return rec, None
+    return None, "invalid_status"
+
+
+def record_visit_attendance(
+    requests: List[Dict[str, Any]],
+    visit_id: str,
+    *,
+    outcome: str,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """نتیجه حضور: done | no_show — بدون وابستگی به فلگ نتیجهٔ بازدید."""
+    oc = (outcome or "").strip().lower()
+    if oc in ("done", "complete", "completed"):
+        return mark_visit_done_by_id(requests, visit_id)
+    if oc not in ("no_show", "noshow"):
+        return None, "invalid_outcome"
+    rec = _find_visit_request(requests, str(visit_id or "").strip())
+    if not rec:
+        return None, "not_found"
+    st = (str(rec.get("status") or "")).strip()
+    if st == NO_SHOW_STATUS:
+        return rec, None
+    if st not in (APPROVED_STATUS, DONE_PENDING_STATUS):
+        return None, "invalid_status"
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    rec["status"] = NO_SHOW_STATUS
+    rec["no_show_at"] = now_iso
+    rec["updated_at"] = now_iso
+    rec.pop("completed_at", None)
     return rec, None
 
 

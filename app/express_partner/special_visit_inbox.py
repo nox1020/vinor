@@ -381,9 +381,9 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
 
         can_approve = st == PENDING_STATUS
         can_reject = st == PENDING_STATUS
-        can_complete = st == DONE_PENDING_STATUS
+        can_complete = st in (APPROVED_STATUS, DONE_PENDING_STATUS)
         can_reject_done = st == DONE_PENDING_STATUS
-        can_no_show = no_show_ok and st in (APPROVED_STATUS, DONE_PENDING_STATUS)
+        can_no_show = st in (APPROVED_STATUS, DONE_PENDING_STATUS)
         can_approve_deal = deal_pending and st == COMPLETED_STATUS
         can_reject_deal = can_approve_deal
         can_start_deal = (
@@ -404,9 +404,7 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
         if not owned_listing:
             can_approve = False
             can_reject = False
-            can_complete = False
             can_reject_done = False
-            can_no_show = False
             can_approve_deal = False
             can_reject_deal = False
             can_start_deal = False
@@ -440,7 +438,9 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
                 or progress_summary.get("current_label")
                 or labels.get(st, st)
             )
-        if st == APPROVED_STATUS and not current_hint:
+        if st == APPROVED_STATUS and (can_complete or can_no_show):
+            current_hint = "بعد از بازدید، «بازدید انجام شد» یا «عدم حضور» را ثبت کنید."
+        elif st == APPROVED_STATUS and not current_hint:
             current_hint = "منتظر اعلام «بازدید انجام شد» از سمت همکار."
         if deal_final:
             stage_label = "فروش نهایی شد"
@@ -537,8 +537,8 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
 def special_can_manage_visit(owner_phone: str, visit_row: Dict[str, Any] | None) -> bool:
     if not isinstance(visit_row, dict):
         return False
-    code = str(visit_row.get("land_code") or "").strip()
-    return bool(code) and code in owned_land_codes(owner_phone)
+    codes = owned_land_codes(owner_phone)
+    return _visit_row_for_plus_owner(visit_row, owner_phone, codes)
 
 
 def apply_special_visit_action(
@@ -574,10 +574,9 @@ def apply_special_visit_action(
             return None, "invalid_transition"
         return admin_update_visit_request_status(requests, rid, CANCELLED_STATUS)
     if act == "complete":
-        # فقط از done_pending — مثل ادمین؛ وگرنه فایل روی visit_commission_pending گیر می‌کند
-        if not admin_can_transition_visit(current, COMPLETED_STATUS):
-            return None, "invalid_transition"
-        return admin_update_visit_request_status(requests, rid, COMPLETED_STATUS)
+        from .visit_requests import record_visit_attendance
+
+        return record_visit_attendance(requests, rid, outcome="done")
     if act == "reject_done":
         if current != DONE_PENDING_STATUS:
             return None, "invalid_transition"
@@ -589,24 +588,26 @@ def apply_special_visit_action(
     if act in ("start_deal", "approve_deal", "reject_deal"):
         return _apply_special_deal_action(rec, owner_phone=owner_phone, action=act)
     if act == "no_show":
+        from .visit_requests import record_visit_attendance
+
+        updated, err = record_visit_attendance(requests, rid, outcome="no_show")
+        if err:
+            return None, err
         try:
             from app.visit_result.config import visit_result_ui_enabled
             from app.visit_result.service import register_no_show
 
-            if not visit_result_ui_enabled():
-                return None, "disabled"
-            updated, _result, err = register_no_show(
-                requests,
-                visit_request_id=rid,
-                notes=notes,
-                actor_key=owner_phone,
-                source="special",
-            )
-            if err:
-                return None, err
-            return updated, None
+            if visit_result_ui_enabled():
+                register_no_show(
+                    requests,
+                    visit_request_id=rid,
+                    notes=notes,
+                    actor_key=owner_phone,
+                    source="special",
+                )
         except Exception:
-            return None, "failed"
+            pass
+        return updated, None
     if act == "result":
         try:
             from app.visit_result.config import visit_result_ui_enabled
@@ -636,6 +637,43 @@ def apply_special_visit_action(
         except Exception:
             return None, "failed"
     return None, "invalid_action"
+
+
+def inject_visit_attendance_chat(rec: Dict[str, Any] | None, *, outcome: str) -> None:
+    """پیام نتیجه بازدید را در چت ویزیتور و پلاس بنویس."""
+    if not isinstance(rec, dict):
+        return
+    oc = (outcome or "").strip().lower()
+    try:
+        from .visit_requests import visit_request_display_title
+        from .sales_coach import _inject_partner_system_chat as _inject_chat
+    except Exception:
+        return
+    title = visit_request_display_title(rec)
+    code = str(rec.get("land_code") or "").strip()
+    if oc in ("done", "complete", "completed"):
+        body = f"بازدید «{title}» انجام شد ثبت شد."
+        event = "visit_completed"
+    elif oc in ("no_show", "noshow"):
+        body = f"عدم حضور برای بازدید «{title}» ثبت شد. می‌توانید وقت جدید بگیرید."
+        event = "visit_no_show"
+    else:
+        return
+    seen: set[str] = set()
+    for raw in (rec.get("partner_phone"), rec.get("plus_user_phone")):
+        ph = str(raw or "").strip()
+        if not ph or ph in seen:
+            continue
+        seen.add(ph)
+        try:
+            _inject_chat(
+                ph,
+                land_code=code,
+                body=body,
+                event=event,
+            )
+        except Exception:
+            pass
 
 
 def _apply_special_deal_action(

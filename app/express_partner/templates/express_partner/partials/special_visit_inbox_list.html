@@ -91,21 +91,28 @@
       </div>
       {% endif %}
 
-      {% if item.can_complete or item.can_reject_done %}
-      <div class="sv-btn-row{% if not item.can_reject_done or not item.can_complete %} sv-btn-row--solo{% endif %}">
+      {% if item.can_complete or item.can_no_show %}
+      <div class="sv-btn-row{% if not item.can_no_show or not item.can_complete %} sv-btn-row--solo{% endif %}">
         {% if item.can_complete %}
         <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='complete') }}" data-vinor-direct-action>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--ok">تأیید انجام بازدید</button>
+          <button type="submit" class="sv-btn sv-btn--ok">بازدید انجام شد</button>
         </form>
         {% endif %}
-        {% if item.can_reject_done %}
-        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject_done') }}" data-vinor-direct-action>
+        {% if item.can_no_show %}
+        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='no_show') }}" data-vinor-direct-action>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('انجام بازدید رد شود؟ همکار باید دوباره اعلام کند.')">رد انجام</button>
+          <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('عدم حضور ثبت شود؟')">عدم حضور</button>
         </form>
         {% endif %}
       </div>
+      {% endif %}
+
+      {% if item.can_reject_done %}
+      <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject_done') }}" data-vinor-direct-action>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="sv-btn sv-btn--ghost" onclick="return confirm('انجام بازدید رد شود؟ همکار باید دوباره اعلام کند.')">رد انجام</button>
+      </form>
       {% endif %}
 
       {% if item.can_start_deal %}
@@ -155,12 +162,6 @@
       </form>
       {% endif %}
 
-      {% if item.can_no_show %}
-      <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='no_show') }}" data-vinor-direct-action>
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="sv-btn sv-btn--ghost" onclick="return confirm('عدم حضور مشتری ثبت شود؟')">مشتری حاضر نشد</button>
-      </form>
-      {% endif %}
     </div>
     {% endif %}
   </article>
