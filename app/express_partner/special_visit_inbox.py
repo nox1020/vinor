@@ -154,8 +154,8 @@ def _partner_open_tx_count(assignments: List[Dict[str, Any]] | None, phone: str)
 
 
 def special_inbox_pipeline_tab(item: Dict[str, Any] | None) -> str:
-    """بازدید صندوق پلاس → تب بازدید؛ معامله/فروش → تب معامله."""
-    from .visit_requests import PIPELINE_DEALS, PIPELINE_VISITS
+    """قیف پلاس: درخواست → بازدید → معامله."""
+    from .visit_requests import PIPELINE_DEALS, PIPELINE_REQUESTS, PIPELINE_VISITS
 
     if not isinstance(item, dict):
         return PIPELINE_VISITS
@@ -167,6 +167,11 @@ def special_inbox_pipeline_tab(item: Dict[str, Any] | None) -> str:
     deal_st = str(item.get("deal_commission_status") or "").strip().lower()
     if deal_st in ("pending", "approved", "paid"):
         return PIPELINE_DEALS
+    st = str(item.get("status") or "").strip()
+    if st == COMPLETED_STATUS:
+        return PIPELINE_DEALS
+    if st == PENDING_STATUS:
+        return PIPELINE_REQUESTS
     return PIPELINE_VISITS
 
 
@@ -439,7 +444,10 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
                 or labels.get(st, st)
             )
         if st == APPROVED_STATUS and (can_complete or can_no_show):
+            stage_label = "منتظر بازدید"
             current_hint = "بعد از بازدید، «بازدید انجام شد» یا «عدم حضور» را ثبت کنید."
+        elif st == COMPLETED_STATUS and not can_start_deal and not can_approve_deal:
+            current_hint = current_hint or "بازدید انجام شد. معامله را از چت یا همین پرونده ثبت کنید."
         elif st == APPROVED_STATUS and not current_hint:
             current_hint = "منتظر اعلام «بازدید انجام شد» از سمت همکار."
         if deal_final:

@@ -40,12 +40,14 @@ def partner_request_pipeline_tab(
     status: str,
     assignment_status: str = "",
 ) -> str:
-    """مرحلهٔ قیف بازاریاب: وقت نهایی‌شده در تب بازدید است تا نتیجه ثبت شود."""
+    """قیف بازاریاب: درخواست → بازدید → معامله."""
     gs = str(assignment_status or "").strip().lower()
     if gs in ("in_transaction", "sold"):
         return PIPELINE_DEALS
     st = str(status or "").strip()
-    if st in (APPROVED_STATUS, DONE_PENDING_STATUS, COMPLETED_STATUS, NO_SHOW_STATUS):
+    if st == COMPLETED_STATUS:
+        return PIPELINE_DEALS
+    if st in (APPROVED_STATUS, DONE_PENDING_STATUS, NO_SHOW_STATUS):
         return PIPELINE_VISITS
     return PIPELINE_REQUESTS
 
@@ -1124,6 +1126,8 @@ def visit_progress_steps(
         state = "done" if done[idx] else "todo"
         if idx == current_idx and state == "todo" and status not in (CANCELLED_STATUS, NO_SHOW_STATUS):
             state = "current"
+            if key == "visit_done":
+                label = "ثبت نتیجه بازدید"
         steps.append({"key": key, "label": label, "state": state})
     if status == CANCELLED_STATUS:
         reject_key = _visit_cancelled_reject_step_key(row)

@@ -4798,6 +4798,10 @@ def requests_page():
             requested_tab = PIPELINE_DEALS
         elif is_special and (inbox_needs or inbox_visit_count):
             requested_tab = PIPELINE_VISITS
+        elif tab_counts.get(PIPELINE_VISITS):
+            requested_tab = PIPELINE_VISITS
+        elif tab_counts.get(PIPELINE_DEALS):
+            requested_tab = PIPELINE_DEALS
         else:
             requested_tab = PIPELINE_REQUESTS
 
@@ -5095,7 +5099,7 @@ def _partner_visit_attendance_action(vid: str, *, outcome: str):
     wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
     if wants_html:
         flash(msg, 'success')
-        return redirect(_sales_pipeline_url('visits'))
+        return redirect(_sales_pipeline_url('visits' if outcome == 'no_show' else 'deals'))
     return _requests_action_json(True, message=msg, visit_id=updated.get('id'), status=updated.get('status'))
 
 
@@ -8690,7 +8694,7 @@ def special_visit_action(vid: str, action: str):
         flash('معامله رد شد. همکار می‌تواند دوباره درخواست بدهد.', 'info')
     else:
         flash('وضعیت بروزرسانی شد.', 'success')
-    pipeline_tab = 'deals' if act_l in ('start_deal', 'approve_deal', 'reject_deal') else 'visits'
+    pipeline_tab = 'deals' if act_l in ('complete', 'start_deal', 'approve_deal', 'reject_deal') else 'visits'
     return redirect(_sales_pipeline_url(pipeline_tab))
 
 

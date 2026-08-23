@@ -189,6 +189,11 @@
     text-align: center;
     color: var(--rq-muted);
   }
+  /* تب‌ها: کارت مخفی نباید جای خالی بگیرد */
+  #partnerRequestsPage .rq-empty[hidden],
+  #partnerRequestsPage [data-pipeline][hidden] {
+    display: none !important;
+  }
   #partnerRequestsPage .rq-empty__title {
     margin: 0;
     font-size: 0.95rem;
@@ -630,16 +635,18 @@
 
     <div class="rq-empty" data-rq-empty="requests" {% if _tab != 'requests' or _counts.requests %}hidden{% endif %}>
       <p class="rq-empty__title">هنوز درخواستی نیست</p>
-      <p class="rq-empty__sub">از صفحه اصلی «مشتری دارم» را بزنید تا وقت بازدید اینجا بیاید.</p>
+      <p class="rq-empty__sub">{% if is_special|default(false) %}وقتی همکار وقت بازدید بخواهد، برای تأیید اینجا می‌آید.{% else %}از صفحه اصلی «مشتری دارم» را بزنید تا وقت بازدید اینجا بیاید.{% endif %}</p>
+      {% if not is_special|default(false) %}
       <a class="rq-empty__cta" href="{{ url_for('express_partner.home') }}" data-vinor-express-nav>صفحه اصلی</a>
+      {% endif %}
     </div>
     <div class="rq-empty" data-rq-empty="visits" {% if _tab != 'visits' or _counts.visits %}hidden{% endif %}>
       <p class="rq-empty__title">بازدیدی در جریان نیست</p>
-      <p class="rq-empty__sub">{% if is_special|default(false) %}بازدید روی آگهی‌های شما و وقت‌های ثبت‌شده روی تقویم‌تان اینجا جمع می‌شود.{% else %}وقت نهایی‌شده اینجا می‌آید؛ «بازدید انجام شد» یا «عدم حضور» را از همین کارت ثبت کنید.{% endif %}</p>
+      <p class="rq-empty__sub">{% if is_special|default(false) %}وقت تأییدشده روی تقویم یا آگهی شما اینجا می‌آید تا نتیجه بازدید ثبت شود.{% else %}وقت نهایی‌شده اینجا می‌آید؛ «بازدید انجام شد» یا «عدم حضور» را از همین کارت ثبت کنید.{% endif %}</p>
     </div>
     <div class="rq-empty" data-rq-empty="deals" {% if _tab != 'deals' or _counts.deals %}hidden{% endif %}>
       <p class="rq-empty__title">معامله‌ای در جریان نیست</p>
-      <p class="rq-empty__sub">{% if is_special|default(false) %}ثبت و تأیید فروش نهایی آگهی‌های شما اینجا دیده می‌شود.{% else %}وقتی فایل در حال معامله باشد، پرونده‌اش در این تب می‌آید.{% endif %}</p>
+      <p class="rq-empty__sub">{% if is_special|default(false) %}بعد از انجام بازدید، معامله و تأیید فروش نهایی اینجا می‌آید.{% else %}وقتی بازدید انجام شد یا فایل در حال معامله باشد، پرونده‌اش در این تب می‌آید.{% endif %}</p>
     </div>
   </main>
 
