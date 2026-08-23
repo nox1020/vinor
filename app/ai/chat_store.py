@@ -784,6 +784,33 @@ def messages_for_ui(
     return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience)
 
 
+def _collapse_duplicate_land_detail_messages(
+    messages: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """در نمایش چت، برای هر فایل فقط آخرین کارت جزئیات را نگه دار."""
+    rows = [m for m in (messages or []) if isinstance(m, dict)]
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for item in reversed(rows):
+        meta = item.get("meta") if isinstance(item.get("meta"), dict) else {}
+        is_land = (
+            str(item.get("source") or "").strip().lower() == LAND_DETAIL_SOURCE
+            or bool(meta.get("land_chat_detail"))
+        )
+        if is_land:
+            codes = item.get("land_codes") or []
+            code = str(
+                (codes[0] if codes else "") or meta.get("land_code") or ""
+            ).strip()
+            if code:
+                if code in seen:
+                    continue
+                seen.add(code)
+        out.append(item)
+    out.reverse()
+    return out
+
+
 def _enrich_messages_for_ui(
     user_key: str,
     messages: list[dict[str, Any]],
@@ -794,8 +821,9 @@ def _enrich_messages_for_ui(
     from app.ai.land_cards import land_cards_payload
 
     aud = (audience or "").strip().lower()
+    rows = _collapse_duplicate_land_detail_messages(messages)
     out: list[dict[str, Any]] = []
-    for item in messages or []:
+    for item in rows:
         if not isinstance(item, dict):
             continue
         row = dict(item)
@@ -1139,16 +1167,18 @@ def record_land_chat_view(
     if not th:
         return None
     tid = str(th.get("id") or tid)
-    for item in reversed(list(th.get("messages") or [])):
+    for item in list(th.get("messages") or []):
         if not isinstance(item, dict):
             continue
         if str(item.get("source") or "").strip().lower() != LAND_DETAIL_SOURCE:
-            break
+            continue
+        meta = item.get("meta") if isinstance(item.get("meta"), dict) else {}
         codes = item.get("land_codes") or []
-        last = str((codes[0] if codes else "") or "").strip()
+        last = str(
+            (codes[0] if codes else "") or meta.get("land_code") or ""
+        ).strip()
         if last == code:
             return tid
-        break
     label = str(title or "").strip()
     body = f"جزئیات فایل {code}"
     if label:

@@ -1147,17 +1147,29 @@
           var onHome = !!document.getElementById('homeDashboardPage');
           var landCodeStay = pending || picked;
           if (onHome) {
-            try {
-              if (typeof window.showVinorQuickToast === 'function') {
-                window.showVinorQuickToast({
-                  title: 'ثبت شد',
-                  body: data.message || 'درخواست بازدید ثبت شد.'
-                });
-              }
-            } catch (_) {}
+            var chatRows = Array.isArray(data.messages) ? data.messages : [];
+            var afterLand = Promise.resolve();
             if (landCodeStay && typeof window.vinorShowLandInChat === 'function') {
-              try { window.vinorShowLandInChat(landCodeStay); } catch (_) {}
+              try {
+                afterLand = window.vinorShowLandInChat(landCodeStay) || Promise.resolve();
+              } catch (_) {
+                afterLand = Promise.resolve();
+              }
             }
+            Promise.resolve(afterLand).finally(function () {
+              if (chatRows.length && typeof window.vinorApplyChatMessages === 'function') {
+                try { window.vinorApplyChatMessages(chatRows); } catch (_) {}
+                return;
+              }
+              try {
+                if (typeof window.showVinorQuickToast === 'function') {
+                  window.showVinorQuickToast({
+                    title: 'ثبت شد',
+                    body: data.message || 'درخواست بازدید ثبت شد.'
+                  });
+                }
+              } catch (_) {}
+            });
             submitBtn.disabled = false;
             submitBtn.textContent = prevLabel;
             return;

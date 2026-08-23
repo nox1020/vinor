@@ -218,7 +218,10 @@ def prepare_land_for_chat_detail(code: str) -> Tuple[Optional[Dict[str, Any]], b
 
 def render_land_chat_detail_html(code: str) -> Optional[Dict[str, str]]:
     """HTML جزئیات برای حباب چت. None اگر فایل پیدا نشد."""
-    land, is_approved = prepare_land_for_chat_detail(code)
+    raw = str(code or "").strip()
+    if raw.lower().startswith("divar:"):
+        return render_divar_chat_detail_html(raw.split(":", 1)[-1].strip())
+    land, is_approved = prepare_land_for_chat_detail(raw)
     if not land:
         return None
     try:

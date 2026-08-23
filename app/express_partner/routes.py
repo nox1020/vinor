@@ -5040,6 +5040,99 @@ def requests_revisit(vid: str):
     )
 
 
+def _inject_visit_registered_into_chat(
+    partner_phone: str,
+    *,
+    land_code: str = '',
+    land_title: str = '',
+    visit_id: str = '',
+    date_label: str = '',
+    already: bool = False,
+    fallback_message: str = '',
+) -> List[Dict[str, Any]]:
+    """پیام تأیید بازدید را در همان ترد وینور بنویس تا در چت دیده شود."""
+    phone = str(partner_phone or '').strip()
+    if not phone:
+        return []
+    try:
+        from app.ai.audience import AUDIENCE_PARTNER
+        from app.ai.chat_store import append_exchange, ensure_active_thread
+        from app.ai.agent_tools import support_call_phone
+
+        call_phone = support_call_phone()
+        code = str(land_code or '').strip()
+        title = str(land_title or '').strip() or code
+        file_bit = f' فایل {title}' if title else ''
+        when = str(date_label or '').strip()
+        date_bit = f' برای {when}' if when else ''
+
+        if already:
+            body = str(fallback_message or '').strip() or (
+                f'برای این فایل بازدید باز از قبل دارید.'
+            )
+            body = (
+                f'{body} برای هماهنگی با {call_phone} تماس بگیر. '
+                'اگر بازدید انجام شده، کارت زیر را تأیید کن.'
+            )
+        else:
+            body = (
+                f'بازدید{file_bit}{date_bit} ثبت شد. '
+                f'برای هماهنگی همین حالا با {call_phone} تماس بگیر. '
+                'اگر بازدید انجام شده، کارت زیر را تأیید کن.'
+            )
+
+        actions: List[Dict[str, Any]] = []
+        if code:
+            try:
+                from app.ai.agent_tools import _offer_complete_visit_for_open
+
+                follow = _offer_complete_visit_for_open(
+                    phone=phone,
+                    land_code=code,
+                    existing_visit_id=str(visit_id or ''),
+                )
+                ui = follow.get('ui_action') if isinstance(follow, dict) else None
+                if isinstance(ui, dict):
+                    ui = dict(ui)
+                    ui['show_visit_call'] = True
+                    ui['call_phone'] = call_phone
+                    actions.append(ui)
+            except Exception:
+                pass
+
+        tid = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
+        msgs, _tid = append_exchange(
+            phone,
+            '',
+            body,
+            thread_id=tid,
+            audience=AUDIENCE_PARTNER,
+            assistant_agent_actions=actions or None,
+        )
+        try:
+            from app.ai.agent_tools import _remember_sales
+
+            if not already:
+                _remember_sales(
+                    phone,
+                    'visit',
+                    land_code=code,
+                    detail=when,
+                    audience='partner',
+                )
+        except Exception:
+            pass
+        if msgs:
+            last = msgs[-1]
+            return [last] if isinstance(last, dict) else []
+    except Exception as exc:
+        try:
+            current_app.logger.warning('inject visit chat reply failed: %s', exc)
+        except Exception:
+            pass
+    return []
+
+
 @express_partner_bp.post('/home/register-customer', endpoint='home_register_customer')
 @require_partner_access()
 def home_register_customer():
@@ -5181,10 +5274,21 @@ def home_register_customer():
                 if not closed:
                     return _fail('بازدید قبلی این فایل بسته نشد.')
             elif not partner_can_request_new_visit(st, visit_requests, me_phone, land_code):
+                already_msg = 'برای این فایل بازدید باز از قبل دارید.'
+                chat_msgs = _inject_visit_registered_into_chat(
+                    me_phone,
+                    land_code=land_code,
+                    land_title=land_title,
+                    visit_id=str((open_rec or {}).get('id') or ''),
+                    already=True,
+                    fallback_message=already_msg,
+                )
                 return jsonify({
                     'ok': True,
                     'already_pending': True,
-                    'message': 'برای این فایل بازدید باز از قبل دارید.',
+                    'message': already_msg,
+                    'messages': chat_msgs,
+                    'land_code': land_code,
                     'redirect_url': url_for('express_partner.requests', tab='requests'),
                 })
 
@@ -5207,10 +5311,20 @@ def home_register_customer():
         customer_phone=customer_phone,
     )
     if err == 'already_pending':
+        already_msg = 'برای این فایل بازدید باز از قبل دارید.'
+        chat_msgs = _inject_visit_registered_into_chat(
+            me_phone,
+            land_code=land_code,
+            land_title=land_title,
+            already=True,
+            fallback_message=already_msg,
+        )
         return jsonify({
             'ok': True,
             'already_pending': True,
-            'message': 'برای این فایل بازدید باز از قبل دارید.',
+            'message': already_msg,
+            'messages': chat_msgs,
+            'land_code': land_code,
             'redirect_url': url_for('express_partner.requests', tab='requests'),
         })
     if err == 'weekday_not_allowed':
@@ -5255,10 +5369,13 @@ def home_register_customer():
     )
 
     time_bit = str(next_slot.get('time') or rec.get('visit_time') or '').strip()
+    date_label = (
+        f"{next_slot.get('weekday') or ''} {next_slot.get('jalali_fa') or visit_date}"
+        f"{(' ساعت ' + time_bit) if time_bit else ''}"
+    ).strip()
     msg = (
         f"درخواست تعیین وقت بازدید برای "
-        f"{next_slot.get('weekday') or ''} {next_slot.get('jalali_fa') or visit_date}"
-        f"{(' ساعت ' + time_bit) if time_bit else ''} "
+        f"{date_label} "
         f"ثبت شد."
     ).strip()
     if not sms_admin.get('ok') and not sms_admin.get('skipped'):
@@ -5268,6 +5385,15 @@ def home_register_customer():
     if sms_partner.get('plus_failed'):
         msg += ' (پیامک کاربر پلاس ناموفق بود)'
 
+    chat_msgs = _inject_visit_registered_into_chat(
+        me_phone,
+        land_code=land_code,
+        land_title=land_title,
+        visit_id=str(rec.get('id') or ''),
+        date_label=date_label,
+        already=False,
+        fallback_message=msg,
+    )
     return jsonify({
         'ok': True,
         'message': msg,
@@ -5275,6 +5401,7 @@ def home_register_customer():
         'visit_date': rec.get('visit_date'),
         'visit_date_label': next_slot.get('label') or '',
         'land_code': land_code,
+        'messages': chat_msgs,
         'redirect_url': url_for('express_partner.requests', tab='requests'),
     })
 
@@ -8114,7 +8241,7 @@ def special_listings_divar_profile():
         flash(msg, 'success' if ok else 'error')
     else:
         flash('درخواست نامعتبر است.', 'error')
-    return redirect(url_for('express_partner.special_listings'))
+    return redirect(url_for('express_partner.special_listings', divar_open=1))
 
 
 @express_partner_bp.route('/listings/upload-image', methods=['POST'], endpoint='special_listing_upload_image')
@@ -9566,6 +9693,22 @@ def divar_chat_detail(token: str):
             "error": "not_found",
             "message": "این آگهی دیوار پیدا نشد یا دیگر در دسترس نیست.",
         }), 404
+    try:
+        from app.ai.audience import AUDIENCE_PARTNER, AUDIENCE_PUBLIC
+        from app.ai.chat_store import record_land_chat_view
+        from app.ai.user_key import ai_user_key
+
+        me_phone = (session.get("user_phone") or "").strip()
+        uk = me_phone or ai_user_key()
+        aud = AUDIENCE_PARTNER if me_phone else AUDIENCE_PUBLIC
+        record_land_chat_view(
+            uk,
+            payload["code"],
+            audience=aud,
+            title=str(payload.get("title") or ""),
+        )
+    except Exception:
+        pass
     return jsonify({
         "ok": True,
         "code": payload["code"],

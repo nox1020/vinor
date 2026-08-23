@@ -43,7 +43,7 @@
 
 {% set _home_user_msgs = chat_messages|default([])|selectattr('role', 'equalto', 'user')|list %}
 <div id="homeDashboardPage"
-     class="home-dashboard-page{% if home_ai_enabled|default(false) %} home-dashboard-page--ai{% endif %}{% if home_ai_enabled|default(false) and not _home_user_msgs %} ai-home-is-empty{% endif %} min-h-[100dvh] bg-black{% if not home_ai_enabled|default(false) %} pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-8{% endif %} text-zinc-100"
+     class="home-dashboard-page{% if home_ai_enabled|default(false) %} home-dashboard-page--ai{% endif %}{% if home_ai_enabled|default(false) and not _home_user_msgs and not (request.args.get('land') or request.args.get('divar')) %} ai-home-is-empty{% endif %} min-h-[100dvh] bg-black{% if not home_ai_enabled|default(false) %} pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-8{% endif %} text-zinc-100"
      data-vinor-home-page>
   {% set menu_href = url_for('express_partner.home') %}
   {% set profile_drawer = true %}
@@ -320,7 +320,7 @@
 </script>
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=121"></script>
+<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=127"></script>
 <script>
 (function () {
   function syncHomeDockPad() {
@@ -377,13 +377,18 @@
       try {
         sessionStorage.removeItem('vinor_land_chat_code');
       } catch (_) {}
-      try {
-        var u = new URL(window.location.href);
-        if (u.searchParams.has('land')) {
-          u.searchParams.delete('land');
-          history.replaceState(history.state || {}, '', u.pathname + (u.search || '') + (u.hash || ''));
-        }
-      } catch (_) {}
+      function stripLandQuery() {
+        try {
+          var u = new URL(window.location.href);
+          if (u.searchParams.has('land')) {
+            u.searchParams.delete('land');
+            history.replaceState(history.state || {}, '', u.pathname + (u.search || '') + (u.hash || ''));
+          }
+        } catch (_) {}
+      }
+      stripLandQuery();
+      setTimeout(stripLandQuery, 0);
+      setTimeout(stripLandQuery, 80);
       var tries = 0;
       (function waitShow() {
         tries += 1;

@@ -126,6 +126,115 @@
     return '/express/partner/home?divar=' + encodeURIComponent(token);
   }
 
+  function stripChatOpenQueryFromUrl() {
+    try {
+      var u = new URL(window.location.href);
+      var changed = false;
+      ['land', 'divar'].forEach(function (k) {
+        if (u.searchParams.has(k)) {
+          u.searchParams.delete(k);
+          changed = true;
+        }
+      });
+      if (!changed) return;
+      history.replaceState(
+        history.state || {},
+        '',
+        u.pathname + (u.search || '') + (u.hash || '')
+      );
+    } catch (_) {}
+  }
+
+  function landChatDetailHref(code) {
+    code = String(code || '').trim();
+    if (!code) return '';
+    if (code.indexOf('divar:') === 0) {
+      return '/express/partner/divar/' + encodeURIComponent(code.slice(6)) + '/chat-detail';
+    }
+    return '/express/partner/lands/' + encodeURIComponent(code) + '/chat-detail';
+  }
+
+  function prefetchLandChatDetail(code) {
+    code = String(code || '').trim();
+    if (!code) return;
+    var href = landChatDetailHref(code);
+    if (!href) return;
+    var pending = window.__vinorLandChatPrefetch;
+    if (pending && pending.code === code && pending.promise) return;
+    var promise = fetch(href, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { ok: res.ok, data: data };
+      });
+    }).catch(function () {
+      return { ok: false, data: null };
+    });
+    window.__vinorLandChatPrefetch = { code: code, promise: promise };
+  }
+
+  function prepareHomeForPendingLandChat(root) {
+    var pending = false;
+    try {
+      pending = !!(
+        sessionStorage.getItem('vinor_land_chat_code') ||
+        sessionStorage.getItem('vinor_divar_chat_token')
+      );
+    } catch (_) {}
+    if (!pending) return;
+    var scope = root || document;
+    var page = scope.querySelector('#homeDashboardPage');
+    if (page) page.classList.remove('ai-home-is-empty');
+    var empty = scope.querySelector('#aiHomeEmpty');
+    if (empty) {
+      empty.setAttribute('hidden', 'hidden');
+      empty.setAttribute('aria-hidden', 'true');
+    }
+    var actions =
+      scope.querySelector('#aiHomeEmptyActions') ||
+      scope.querySelector('[data-ai-home-empty-actions]');
+    if (actions) actions.setAttribute('hidden', 'hidden');
+    var divar = scope.querySelector('#homeDivarAdsCarousel');
+    if (divar) {
+      divar.setAttribute('aria-hidden', 'true');
+      divar.setAttribute('inert', '');
+    }
+  }
+
+  function consumePendingLandChat() {
+    var code = '';
+    var divar = '';
+    try { code = sessionStorage.getItem('vinor_land_chat_code') || ''; } catch (_) {}
+    try { divar = sessionStorage.getItem('vinor_divar_chat_token') || ''; } catch (_) {}
+    try {
+      var q = new URLSearchParams(window.location.search);
+      if (!code) code = String(q.get('land') || '').trim();
+      if (!divar) divar = String(q.get('divar') || '').trim();
+    } catch (_) {}
+    stripChatOpenQueryFromUrl();
+    if (!code && !divar) return;
+    try { sessionStorage.removeItem('vinor_land_chat_code'); } catch (_) {}
+    try { sessionStorage.removeItem('vinor_divar_chat_token'); } catch (_) {}
+    var tries = 0;
+    (function tick() {
+      tries += 1;
+      if (code && typeof window.vinorShowLandInChat === 'function') {
+        try { window.vinorShowLandInChat(code); } catch (_) {}
+        return;
+      }
+      if (divar && typeof window.vinorShowDivarInChat === 'function') {
+        try { window.vinorShowDivarInChat(divar); } catch (_) {}
+        return;
+      }
+      if (divar && typeof window.vinorShowLandInChat === 'function') {
+        try { window.vinorShowLandInChat('divar:' + divar); } catch (_) {}
+        return;
+      }
+      if (tries < 40) setTimeout(tick, 100);
+    })();
+  }
+
   function currentlyOnHomePage() {
     return !!document.getElementById('homeDashboardPage') ||
       normPath(window.location.pathname) === '/express/partner/home';
@@ -192,15 +301,21 @@
       try { window.__vinorAiChatSwitchThread(thread); } catch (_) {}
       return true;
     }
+    /* تب خانه روی همین صفحه: اگر چت فایل باز است برگرد به بدو ورود داشبورد */
+    try {
+      if (typeof window.__vinorAiConsumeHomeChatBack === 'function') {
+        window.__vinorAiConsumeHomeChatBack();
+      }
+    } catch (_) {}
     return true;
   }
 
   function openLandFromNavTarget(href) {
     var divarTok = extractDivarTokenFromHref(href);
     if (divarTok) return openDivarInChat(divarTok);
-    var code =
-      extractLandCodeFromHref(href) ||
-      extractHomeLandParam(href);
+    var code = extractLandCodeFromHref(href);
+    /* ?land= فقط وقتی همین‌جا خانه است؛ وگرنه باید به خانه navigate شود */
+    if (!code && currentlyOnHomePage()) code = extractHomeLandParam(href);
     if (!code) return false;
     return openLandInChat(code);
   }
@@ -208,7 +323,7 @@
   function openLandInChat(code) {
     code = String(code || '').trim();
     if (!code) return false;
-    var onHome = !!document.getElementById('homeDashboardPage');
+    var onHome = currentlyOnHomePage() || !!document.getElementById('homeDashboardPage');
     var hasMessages = !!document.getElementById('aiMessages');
     if (onHome && hasMessages) {
       if (typeof window.vinorShowLandInChat === 'function') {
@@ -234,10 +349,12 @@
     }
     try {
       sessionStorage.setItem('vinor_land_chat_code', code);
+      sessionStorage.setItem('vinor_land_chat_from_nav', '1');
     } catch (_) {}
+    prefetchLandChatDetail(code);
     var dest = homeUrlWithLand(code);
     if (typeof vinorExpressNavigate === 'function' && document.getElementById('vinor-express-page-swap')) {
-      vinorExpressNavigate(dest, { forward: true });
+      vinorExpressNavigate(dest, { forward: true, skipLandChat: true });
     } else {
       window.location.assign(dest);
     }
@@ -248,7 +365,7 @@
     token = String(token || '').trim();
     if (!token) return false;
     if (token.indexOf('divar:') === 0) token = token.slice(6);
-    var onHome = !!document.getElementById('homeDashboardPage');
+    var onHome = currentlyOnHomePage() || !!document.getElementById('homeDashboardPage');
     var hasMessages = !!document.getElementById('aiMessages');
     function showDivar(tok) {
       if (typeof window.vinorShowDivarInChat === 'function') {
@@ -280,10 +397,12 @@
     }
     try {
       sessionStorage.setItem('vinor_divar_chat_token', token);
+      sessionStorage.setItem('vinor_land_chat_from_nav', '1');
     } catch (_) {}
+    prefetchLandChatDetail('divar:' + token);
     var dest = homeUrlWithDivar(token);
     if (typeof vinorExpressNavigate === 'function' && document.getElementById('vinor-express-page-swap')) {
-      vinorExpressNavigate(dest, { forward: true });
+      vinorExpressNavigate(dest, { forward: true, skipLandChat: true });
     } else {
       window.location.assign(dest);
     }
@@ -1215,6 +1334,7 @@
     if (typeof window.setupVinorExpressPullRefresh === 'function') {
       try { window.setupVinorExpressPullRefresh(); } catch (_) {}
     }
+    consumePendingLandChat();
   }
 
   function playEnterAnimation(dir) {
@@ -1328,6 +1448,7 @@
       syncAuthSegmentFromDoc(doc);
       swapEl.innerHTML = newSwap.innerHTML;
       hoistBottomNavFromSwap(swapEl);
+      prepareHomeForPendingLandChat(swapEl);
       if (scriptsEl && newScripts) {
         scriptsEl.innerHTML = newScripts.innerHTML;
       }
@@ -1351,6 +1472,7 @@
           }
         } catch (_) {}
       }
+      stripChatOpenQueryFromUrl();
       if (isStaleNav(gen)) return false;
       afterPageSwap(softTabKeyForUrl(finalHref));
       try {
@@ -1519,7 +1641,7 @@
       return Promise.resolve(false);
     }
     try {
-      if (openLandFromNavTarget(href)) {
+      if (!opts.skipLandChat && openLandFromNavTarget(href)) {
         return Promise.resolve(true);
       }
     } catch (_) {}
@@ -1616,6 +1738,7 @@
         syncAuthSegmentFromDoc(doc);
         swapEl.innerHTML = newSwap.innerHTML;
         hoistBottomNavFromSwap(swapEl);
+        prepareHomeForPendingLandChat(swapEl);
         if (scriptsEl && newScripts) {
           scriptsEl.innerHTML = newScripts.innerHTML;
         }
@@ -1916,6 +2039,34 @@
       }
       if (a.getAttribute('target') === '_blank') return;
       if (a.getAttribute('data-vinor-direct-action')) return;
+      var openLandChat =
+        a.getAttribute('data-vinor-open-land-chat') === '1' ||
+        (a.classList && a.classList.contains('sp-row'));
+      if (openLandChat) {
+        var landCodeAttr = (a.getAttribute('data-land-code') || '').trim();
+        if (!landCodeAttr) {
+          try { landCodeAttr = extractLandCodeFromHref(a.getAttribute('href') || ''); } catch (_) {}
+        }
+        if (!landCodeAttr) {
+          try { landCodeAttr = extractHomeLandParam(a.getAttribute('href') || ''); } catch (_) {}
+        }
+        if (landCodeAttr) {
+          e.preventDefault();
+          e.stopPropagation();
+          openLandInChat(landCodeAttr);
+          return;
+        }
+        var divarTokAttr = (a.getAttribute('data-divar-token') || '').trim();
+        if (!divarTokAttr) {
+          try { divarTokAttr = extractDivarTokenFromHref(a.getAttribute('href') || ''); } catch (_) {}
+        }
+        if (divarTokAttr) {
+          e.preventDefault();
+          e.stopPropagation();
+          openDivarInChat(divarTokAttr);
+          return;
+        }
+      }
       var href = a.getAttribute('href');
       if (isGuestPlusCtaLink(a, href)) {
         e.preventDefault();
@@ -1978,6 +2129,13 @@
             var destPath = normPath(parseUrl(href).pathname);
             if (curPath !== destPath) {
               vinorExpressNavigate(href);
+            } else if (
+              destPath === '/express/partner/home' ||
+              destPath === '/express/partner/dashboard'
+            ) {
+              if (typeof window.__vinorAiConsumeHomeChatBack === 'function') {
+                window.__vinorAiConsumeHomeChatBack();
+              }
             }
           } catch (_) {}
           return;

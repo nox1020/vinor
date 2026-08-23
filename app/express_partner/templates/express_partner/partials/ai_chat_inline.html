@@ -976,11 +976,12 @@
      data-open-on-load="{{ '1' if home_ai_open|default(false) else '0' }}"
      data-open-thread="{{ home_ai_open_thread|default('') }}">
   {% set _empty_user_msgs = chat_messages|default([])|selectattr('role', 'equalto', 'user')|list %}
+  {% set _open_land_chat = request.args.get('land') or request.args.get('divar') %}
   <div id="aiHomeEmpty"
        class="ai-home-empty"
        role="region"
        aria-label="شروع گفتگو"
-       {% if _empty_user_msgs %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
+       {% if _empty_user_msgs or _open_land_chat %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
     <h1 class="sr-only">{{ home_ai_empty_title|default('دنبال خرید ملکی یا همکاری با وینور؟') }}</h1>
     <div class="ai-home-news" role="status" aria-live="polite" aria-atomic="true" data-ai-home-news>
       <span class="ai-home-news__dot" aria-hidden="true"></span>

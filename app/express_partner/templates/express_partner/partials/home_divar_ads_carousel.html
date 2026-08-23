@@ -494,7 +494,7 @@
     <a class="vn-home-divar__card"
        role="listitem"
        href="{{ ad.url }}"
-       {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav{% endif %}
+       {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav data-vinor-open-land-chat="1"{% if _src == 'vinor' %} data-land-code="{{ ad.token }}"{% endif %}{% endif %}
        title="{{ ad.title|e }}">
       <div class="vn-home-divar__media">
         {% if ad.image_url %}
@@ -557,7 +557,7 @@
            role="listitem"
            href="{{ ad.url }}"
            data-divar-all-close
-           {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav{% endif %}
+           {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav data-vinor-open-land-chat="1"{% if _src == 'vinor' %} data-land-code="{{ ad.token }}"{% endif %}{% endif %}
            title="{{ ad.title|e }}">
           <div class="vn-home-divar-all__thumb" aria-hidden="true">
             {% if ad.image_url %}
