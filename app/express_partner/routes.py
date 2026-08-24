@@ -4676,7 +4676,7 @@ def requests_page():
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile)
     is_special = _is_partner_special(profile) if is_approved else False
-    from .partner_roles import partner_can_manage_deal, partner_can_record_visit_attendance
+    from .partner_roles import partner_can_manage_deal, partner_can_record_visit_attendance, partner_coop_level
     from .visit_requests import (
         OPEN_VISIT_STATUSES,
         PIPELINE_DEALS,
@@ -4735,6 +4735,8 @@ def requests_page():
             assignment_status=gs,
             allow_attendance=allow_attendance,
             allow_deal=allow_deal,
+            allow_revisit=is_approved,
+            me_phone=me_phone,
         ))
 
     open_count = sum(
@@ -4809,8 +4811,6 @@ def requests_page():
         key = str(it.get('pipeline_tab') or PIPELINE_VISITS)
         if key in tab_counts:
             tab_counts[key] += 1
-    # تب درخواست‌ها: همهٔ درخواست‌های بازدید ارسالی
-    tab_counts[PIPELINE_REQUESTS] = len(items) + len(inbox_items)
     if offers:
         tab_counts[PIPELINE_DEALS] += len(offers)
 
@@ -4823,17 +4823,17 @@ def requests_page():
     requested_tab = str(request.args.get('tab') or '').strip().lower()
     if requested_tab not in PIPELINE_TABS:
         deal_needs = any(
-            i.get('can_approve_deal') or i.get('can_start_deal')
+            i.get('can_approve_deal') or i.get('can_start_deal') or i.get('can_confirm_deal')
+            for i in inbox_items
+        )
+        inbox_action = any(
+            i.get('needs_action') and str(i.get('pipeline_tab') or PIPELINE_VISITS) == PIPELINE_VISITS
             for i in inbox_items
         )
         if is_special and deal_needs:
             requested_tab = PIPELINE_DEALS
-        elif is_special and (inbox_needs or inbox_visit_count):
+        elif is_special and (inbox_action or inbox_visit_count):
             requested_tab = PIPELINE_VISITS
-        elif tab_counts.get(PIPELINE_VISITS):
-            requested_tab = PIPELINE_VISITS
-        elif tab_counts.get(PIPELINE_DEALS):
-            requested_tab = PIPELINE_DEALS
         else:
             requested_tab = PIPELINE_REQUESTS
 
@@ -4850,6 +4850,7 @@ def requests_page():
         me_phone=me_phone,
         is_approved=is_approved,
         is_special=is_special,
+        coop_level=partner_coop_level(profile),
         can_record_attendance=allow_attendance,
         hide_header=True,
         brand='وینور',
@@ -5144,7 +5145,7 @@ def requests_visit_result(vid: str):
     wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
     if wants_html:
         flash(msg, 'success')
-        return redirect(_sales_pipeline_url('deals'))
+        return redirect(_sales_pipeline_url('deals' if outcome == 'interested' else 'requests'))
     return _requests_action_json(True, message=msg, visit_id=updated.get('id'), status=updated.get('status'))
 
 
@@ -5284,7 +5285,7 @@ def _partner_visit_attendance_action(vid: str, *, outcome: str):
     wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
     if wants_html:
         flash(msg, 'success')
-        return redirect(_sales_pipeline_url('visits' if outcome == 'no_show' else 'deals'))
+        return redirect(_sales_pipeline_url('requests'))
     return _requests_action_json(True, message=msg, visit_id=updated.get('id'), status=updated.get('status'))
 
 
@@ -8926,10 +8927,15 @@ def special_visit_action(vid: str, action: str):
             flash('نتیجه بازدید ثبت شد.', 'success')
     else:
         flash('وضعیت بروزرسانی شد.', 'success')
-    pipeline_tab = 'deals' if act_l in (
-        'complete', 'start_deal', 'approve_deal', 'reject_deal',
-        'confirm_deal', 'decline_deal', 'close_deal', 'result',
-    ) else 'visits'
+    if act_l in (
+        'start_deal', 'approve_deal', 'reject_deal',
+        'confirm_deal', 'decline_deal', 'close_deal',
+    ):
+        pipeline_tab = 'deals'
+    elif act_l == 'result' and (request.form.get('outcome') or '').strip() == 'interested':
+        pipeline_tab = 'deals'
+    else:
+        pipeline_tab = 'visits'
     return redirect(_sales_pipeline_url(pipeline_tab))
 
 

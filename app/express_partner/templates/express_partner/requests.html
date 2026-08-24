@@ -137,6 +137,11 @@
   #partnerRequestsPage .rq-actions form {
     display: contents;
   }
+  #partnerRequestsPage .rq-actions form.sv-result {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 100%;
+  }
   #partnerRequestsPage .rq-btn {
     display: inline-flex;
     align-items: center;
@@ -577,7 +582,10 @@
   .sv-result__help {
     margin: 0; font-size: .625rem; line-height: 1.5; color: #9ca3af;
   }
-  .rq-actions .sv-result { flex: 1 1 100%; }
+  #partnerRequestsPage .rq-actions .sv-result,
+  #partnerRequestsPage .rq-actions .sv-hint {
+    flex: 1 1 100%;
+  }
   .sv-card__code { margin: .15rem 0 0; font-size: .6875rem; color: #6b7280; direction: ltr; }
   .sv-progress { display: flex; gap: .28rem; margin-top: .55rem; }
   .sv-progress span {
@@ -619,9 +627,9 @@
 {% set _n_req = _counts.requests|default(0) %}
 {% set _n_vis = _counts.visits|default(0) %}
 {% set _n_deal = _counts.deals|default(0) %}
-{% set _sum_req %}{% if inbox_needs|default(0) %}<strong>{{ inbox_needs|fa_digits }}</strong> اقدام روی آگهی · {% endif %}<strong>{{ _n_req|fa_digits }}</strong> درخواست بازدید{% endset %}
-{% set _sum_vis %}<strong>{{ _n_vis|fa_digits }}</strong> بازدید زمان‌بندی‌شده{% endset %}
-{% set _sum_deal %}<strong>{{ _n_deal|fa_digits }}</strong> پرونده معامله{% endset %}
+{% set _sum_req %}<strong>{{ _n_req|fa_digits }}</strong> درخواست ارسالی{% endset %}
+{% set _sum_vis %}<strong>{{ _n_vis|fa_digits }}</strong> درخواست دریافتی{% endset %}
+{% set _sum_deal %}<strong>{{ _n_deal|fa_digits }}</strong> علاقه‌مند و آماده معامله{% endset %}
 
 <div id="partnerRequestsPage"
      class="partner-page-scroll-pad min-h-[100dvh] bg-black pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16"
@@ -629,11 +637,12 @@
      data-active-tab="{{ _tab }}">
   <main class="mx-auto w-full max-w-lg">
     <div class="rq-tabs-wrap ep-partner-sticky-below-header">
-    <nav class="rq-tabs" role="tablist" aria-label="مراحل پیگیری" dir="rtl">
+    <nav class="rq-tabs" role="tablist" aria-label="صندوق پیگیری" dir="rtl">
       <button type="button" class="rq-tab{% if _tab == 'requests' %} is-active{% endif %}" role="tab"
               id="rqTabRequests"
               data-rq-tab="requests"
               aria-controls="rqFeed"
+              aria-label="درخواست‌های ارسالی من"
               aria-selected="{{ 'true' if _tab == 'requests' else 'false' }}"
               tabindex="{{ '0' if _tab == 'requests' else '-1' }}">
         <span class="rq-tab__label">درخواست‌ها</span>
@@ -643,6 +652,7 @@
               id="rqTabVisits"
               data-rq-tab="visits"
               aria-controls="rqFeed"
+              aria-label="درخواست‌های دریافتی"
               aria-selected="{{ 'true' if _tab == 'visits' else 'false' }}"
               tabindex="{{ '0' if _tab == 'visits' else '-1' }}">
         <span class="rq-tab__label">بازدیدها</span>
@@ -652,6 +662,7 @@
               id="rqTabDeals"
               data-rq-tab="deals"
               aria-controls="rqFeed"
+              aria-label="علاقه‌مند و آماده معامله"
               aria-selected="{{ 'true' if _tab == 'deals' else 'false' }}"
               tabindex="{{ '0' if _tab == 'deals' else '-1' }}">
         <span class="rq-tab__label">معامله</span>
@@ -687,7 +698,7 @@
     {% if items %}
     <section aria-label="درخواست‌های شما">
       {% if is_special|default(false) %}
-      <p class="rq-section-label" data-rq-section="mine">{% if _tab == 'deals' %}معامله‌های شما{% elif _tab == 'visits' %}بازدیدهای شما{% else %}درخواست‌های شما{% endif %}</p>
+      <p class="rq-section-label" data-rq-section="mine">{% if _tab == 'deals' %}علاقه‌مند و معامله{% else %}درخواست‌های ارسالی شما{% endif %}</p>
       {% endif %}
       {% for item in items %}
       {% set st = item.status|default('') %}
@@ -697,8 +708,7 @@
       {% set status_class = st_cls %}
       <article class="rq-card"
                data-pipeline="{{ item.pipeline_tab|default('requests') }}"
-               data-on-requests="1"
-               {% if _tab != 'requests' and (item.pipeline_tab|default('requests')) != _tab %}hidden{% endif %}
+               {% if (item.pipeline_tab|default('requests')) != _tab %}hidden{% endif %}
                data-request-id="{{ item.id }}"
                data-land-code="{{ item.land_code|default('') }}"
                data-remove-url="{{ url_for('express_partner.requests_remove', vid=item.id) }}"
@@ -711,83 +721,9 @@
           {% if item.land_code %}
           <button type="button" class="rq-vcard__open-land" data-rq-open-land data-vinor-direct-action>مشاهده فایل</button>
           {% endif %}
-          {% if phone %}
-          <p class="rq-vcard__drow" style="margin-top:.55rem">
-            <strong>شماره پشتیبان:</strong>
-            <a href="tel:{{ phone }}" dir="ltr" data-vinor-direct-action>{{ phone|fa_digits }}</a>
-          </p>
-          {% endif %}
-        <div class="rq-actions">
-          {% if phone %}
-          <a class="rq-btn rq-btn--call" href="tel:{{ phone }}" data-vinor-direct-action aria-label="تماس با پشتیبانی">
-            <i class="fas fa-phone" aria-hidden="true"></i>
-            تماس
-          </a>
-          {% endif %}
-          {% if item.can_complete %}
-          <form method="post" action="{{ url_for('express_partner.requests_complete_visit', vid=item.id) }}" data-vinor-direct-action class="contents">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="rq-btn rq-btn--ok">بازدید انجام شد</button>
-          </form>
-          {% endif %}
-          {% if item.can_no_show %}
-          <form method="post" action="{{ url_for('express_partner.requests_no_show_visit', vid=item.id) }}" data-vinor-direct-action class="contents">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('عدم حضور ثبت شود؟')">عدم حضور</button>
-          </form>
-          {% endif %}
-          {% if item.can_register_result %}
-          <form method="post" action="{{ url_for('express_partner.requests_visit_result', vid=item.id) }}" data-vinor-direct-action class="sv-result">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <p class="sv-result__label">نتیجه بازدید را ثبت کنید</p>
-            <div class="sv-result__chips" role="radiogroup" aria-label="نتیجه بازدید">
-              <label class="sv-result__chip">
-                <input type="radio" name="outcome" value="interested" checked>
-                <span>علاقه‌مند</span>
-              </label>
-              <label class="sv-result__chip">
-                <input type="radio" name="outcome" value="follow_up">
-                <span>پیگیری دوباره</span>
-              </label>
-              <label class="sv-result__chip sv-result__chip--down">
-                <input type="radio" name="outcome" value="not_interested">
-                <span>بی‌علاقه</span>
-              </label>
-            </div>
-            <p class="sv-result__help">علاقه‌مند: وقت بازدید دوم یا قرارداد نهایی · پیگیری دوباره: بازاریاب تا وقت دوم پیگیری می‌کند · بی‌علاقه: بدون پیگیری</p>
-            <input name="notes" class="sv-result__notes" placeholder="یادداشت (اختیاری)" autocomplete="off">
-            <button type="submit" class="rq-btn rq-btn--ok">ثبت نتیجه</button>
-          </form>
-          {% elif item.visit_outcome_hint %}
-          <p class="sv-hint{% if item.visit_outcome == 'interested' %} sv-hint--ok{% endif %}">{{ item.visit_outcome_hint }}</p>
-          {% endif %}
-          {% if item.can_confirm_deal %}
-          <form method="post" action="{{ url_for('express_partner.requests_confirm_deal', vid=item.id) }}" data-vinor-direct-action class="contents">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="rq-btn rq-btn--ok">{% if item.visit_outcome == 'interested' %}قرارداد نهایی{% else %}تأیید{% endif %}</button>
-          </form>
-          {% endif %}
-          {% if item.can_reject_deal %}
-          <form method="post" action="{{ url_for('express_partner.requests_reject_deal', vid=item.id) }}" data-vinor-direct-action class="contents">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('معامله رد شود؟')">رد</button>
-          </form>
-          {% endif %}
-          {% if item.can_close_deal %}
-          <form method="post" action="{{ url_for('express_partner.requests_close_deal', vid=item.id) }}" data-vinor-direct-action class="contents">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="rq-btn rq-btn--deal" onclick="return confirm('پرونده بسته شود؟')">بستن</button>
-          </form>
-          {% endif %}
-          {% if item.can_revisit %}
-          <button type="button" class="rq-btn rq-btn--revisit" data-rq-revisit>{% if item.visit_outcome in ('interested', 'follow_up') %}بازدید دوم{% else %}بازدید مجدد{% endif %}</button>
-          {% endif %}
-          {% if item.can_cancel %}
-          <button type="button" class="rq-btn rq-btn--remove" data-rq-remove>لغو</button>
-          {% elif item.can_delete %}
-          <button type="button" class="rq-btn rq-btn--remove" data-rq-remove>حذف</button>
-          {% endif %}
-        </div>
+          {% with card_kind='sent' %}
+          {% include 'express_partner/partials/visit_card_actions.html' %}
+          {% endwith %}
         </div>
       </article>
       {% endfor %}
@@ -795,19 +731,19 @@
     {% endif %}
 
     <div class="rq-empty" data-rq-empty="requests" {% if _tab != 'requests' or _counts.requests %}hidden{% endif %}>
-      <p class="rq-empty__title">هنوز درخواستی نیست</p>
-      <p class="rq-empty__sub">{% if is_special|default(false) %}همهٔ درخواست‌های بازدید ارسالی — مال شما و همکاران — اینجا می‌آید.{% else %}از صفحه اصلی «مشتری دارم» را بزنید تا وقت بازدید اینجا بیاید.{% endif %}</p>
+      <p class="rq-empty__title">درخواست ارسالی نیست</p>
+      <p class="rq-empty__sub">{% if is_special|default(false) %}درخواست‌هایی که خودتان برای بازدید فرستاده‌اید اینجا می‌آید.{% else %}از صفحه اصلی «مشتری دارم» را بزنید تا وقت بازدید اینجا بیاید.{% endif %}</p>
       {% if not is_special|default(false) %}
       <a class="rq-empty__cta" href="{{ url_for('express_partner.home') }}" data-vinor-express-nav>صفحه اصلی</a>
       {% endif %}
     </div>
     <div class="rq-empty" data-rq-empty="visits" {% if _tab != 'visits' or _counts.visits %}hidden{% endif %}>
-      <p class="rq-empty__title">بازدیدی در جریان نیست</p>
-      <p class="rq-empty__sub">{% if is_special|default(false) %}وقت تأییدشده روی تقویم یا آگهی شما اینجا می‌آید تا نتیجه بازدید ثبت شود.{% elif can_record_attendance|default(false) %}وقت نهایی‌شده اینجا می‌آید؛ «بازدید انجام شد» یا «عدم حضور» را از همین کارت ثبت کنید.{% else %}وقت نهایی‌شده اینجا می‌آید.{% endif %}</p>
+      <p class="rq-empty__title">درخواست دریافتی نیست</p>
+      <p class="rq-empty__sub">{% if is_special|default(false) %}درخواست همکاران برای بازدید از تقویم یا آگهی شما اینجا می‌آید.{% else %}درخواست دریافتی مربوط به تقویم و آگهی همکار پلاس است.{% endif %}</p>
     </div>
     <div class="rq-empty" data-rq-empty="deals" {% if _tab != 'deals' or _counts.deals %}hidden{% endif %}>
-      <p class="rq-empty__title">معامله‌ای در جریان نیست</p>
-      <p class="rq-empty__sub">{% if is_special|default(false) %}بعد از انجام بازدید، معامله و تأیید فروش نهایی اینجا می‌آید.{% else %}وقتی بازدید انجام شد یا فایل در حال معامله باشد، پرونده‌اش در این تب می‌آید.{% endif %}</p>
+      <p class="rq-empty__title">آماده معامله نیست</p>
+      <p class="rq-empty__sub">{% if is_special|default(false) %}وقتی نتیجه بازدید «علاقه‌مند» باشد، پرونده اینجا می‌آید.{% else %}بعد از بازدید، اگر نتیجه علاقه‌مند باشد پرونده‌اش در این تب می‌آید.{% endif %}</p>
     </div>
     </div>
   </main>
@@ -909,9 +845,7 @@
       if (html) summary.innerHTML = html;
     }
     function cardOnTab(el, tab) {
-      if (el.getAttribute('data-pipeline') === tab) return true;
-      if (tab === 'requests' && el.getAttribute('data-on-requests') === '1') return true;
-      return false;
+      return el.getAttribute('data-pipeline') === tab;
     }
     page.querySelectorAll('[data-pipeline]').forEach(function (el) {
       el.hidden = !cardOnTab(el, next);
@@ -927,13 +861,13 @@
       });
       el.hidden = !visible;
       if (kind === 'inbox') {
-        el.textContent = next === 'requests'
-          ? 'درخواست همکاران'
-          : (next === 'deals' ? 'معامله روی آگهی شما' : 'بازدید روی تقویم و آگهی شما');
+        el.textContent = next === 'deals'
+          ? 'آماده معامله روی آگهی شما'
+          : 'درخواست‌های دریافتی';
       } else if (kind === 'mine') {
-        el.textContent = next === 'requests'
-          ? 'درخواست‌های شما'
-          : (next === 'deals' ? 'معامله‌های شما' : 'بازدیدهای شما');
+        el.textContent = next === 'deals'
+          ? 'علاقه‌مند و معامله'
+          : 'درخواست‌های ارسالی شما';
       }
     });
     page.querySelectorAll('[data-rq-empty]').forEach(function (el) {

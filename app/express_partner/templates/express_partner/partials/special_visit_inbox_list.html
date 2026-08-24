@@ -38,17 +38,19 @@
 
 {% if inbox_items %}
 <section aria-label="صندوق بازدید آگهی و تقویم">
-  <p class="rq-section-label" data-rq-section="inbox">{% if (active_tab|default('requests')) == 'deals' %}معامله روی آگهی شما{% elif (active_tab|default('requests')) == 'visits' %}بازدید روی تقویم و آگهی شما{% else %}درخواست همکاران{% endif %}</p>
+  <p class="rq-section-label" data-rq-section="inbox">{% if (active_tab|default('requests')) == 'deals' %}آماده معامله روی آگهی شما{% else %}درخواست‌های دریافتی{% endif %}</p>
   {% for item in inbox_items %}
   {% set title = item.land_title or item.title %}
   {% set status_class = 'is-pending' if item.needs_action else ('is-done' if item.status in ('completed', 'approved') else ('is-closed' if item.status in ('cancelled', 'no_show') else '')) %}
   <article class="sv-card{% if item.needs_action %} sv-card--need{% endif %}"
            data-pipeline="{{ item.pipeline_tab|default('visits') }}"
-           data-on-requests="1"
            data-request-id="{{ item.id }}"
            data-land-code="{{ item.land_code|default('') }}"
            data-title="{{ title }}"
-           {% if (active_tab|default('requests')) != 'requests' and (item.pipeline_tab|default('visits')) != (active_tab|default('requests')) %}hidden{% endif %}>
+           data-remove-url="{{ url_for('express_partner.requests_remove', vid=item.id) }}"
+           data-revisit-url="{{ url_for('express_partner.requests_revisit', vid=item.id) }}"
+           {% if item.can_cancel %}data-rq-cancel="1"{% endif %}
+           {% if (item.pipeline_tab|default('visits')) != (active_tab|default('requests')) %}hidden{% endif %}>
     {% include 'express_partner/partials/visit_card_face.html' %}
     <div class="rq-vcard__body" data-rq-detail-body hidden>
       {% include 'express_partner/partials/visit_card_detail_facts.html' %}
@@ -66,133 +68,15 @@
       · {{ item.progress_summary.done_count|default(0) }} از {{ item.progress_summary.total|default(item.progress_steps|length) }}
     </p>
     {% endif %}
-    {% if item.current_hint %}
-    <p class="sv-hint{% if item.deal_commission_status in ['approved', 'paid'] %} sv-hint--ok{% endif %}">{{ item.current_hint }}</p>
-    {% endif %}
     {% if item.sale_amount or item.deal_commission_amount %}
     <p class="sv-money">
       {% if item.sale_amount %}مبلغ فروش {{ item.sale_amount|toman }}{% endif %}
       {% if item.deal_commission_amount %}{% if item.sale_amount %} · {% endif %}پورسانت همکار {{ item.deal_commission_amount|toman }}{% endif %}
     </p>
     {% endif %}
-    {% if item.has_actions %}
-    <div class="sv-actions">
-      {% if item.can_approve or item.can_reject %}
-      <div class="sv-btn-row{% if not item.can_reject or not item.can_approve %} sv-btn-row--solo{% endif %}">
-        {% if item.can_approve %}
-        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='approve') }}" data-vinor-direct-action>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--ok">تأیید بازدید</button>
-        </form>
-        {% endif %}
-        {% if item.can_reject %}
-        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject') }}" data-vinor-direct-action>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('این بازدید رد شود؟')">رد</button>
-        </form>
-        {% endif %}
-      </div>
-      {% endif %}
-
-      {% if item.can_complete or item.can_no_show %}
-      <div class="sv-btn-row{% if not item.can_no_show or not item.can_complete %} sv-btn-row--solo{% endif %}">
-        {% if item.can_complete %}
-        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='complete') }}" data-vinor-direct-action>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--ok">بازدید انجام شد</button>
-        </form>
-        {% endif %}
-        {% if item.can_no_show %}
-        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='no_show') }}" data-vinor-direct-action>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('عدم حضور ثبت شود؟')">عدم حضور</button>
-        </form>
-        {% endif %}
-      </div>
-      {% endif %}
-
-      {% if item.can_reject_done %}
-      <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject_done') }}" data-vinor-direct-action>
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="sv-btn sv-btn--ghost" onclick="return confirm('انجام بازدید رد شود؟ همکار باید دوباره اعلام کند.')">رد انجام</button>
-      </form>
-      {% endif %}
-
-      {% if item.can_confirm_deal or item.can_reject_deal or item.can_close_deal %}
-      <div class="sv-btn-row sv-btn-row--3">
-        {% if item.can_confirm_deal %}
-        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='confirm_deal') }}" data-vinor-direct-action>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--ok">{% if item.visit_outcome == 'interested' %}قرارداد نهایی{% else %}تأیید{% endif %}</button>
-        </form>
-        {% endif %}
-        {% if item.can_reject_deal %}
-        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='decline_deal') }}" data-vinor-direct-action>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('معامله رد شود؟')">رد</button>
-        </form>
-        {% endif %}
-        {% if item.can_close_deal %}
-        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='close_deal') }}" data-vinor-direct-action>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--deal" onclick="return confirm('پرونده بسته شود؟')">بستن</button>
-        </form>
-        {% endif %}
-      </div>
-      {% elif item.can_start_deal %}
-      <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='start_deal') }}" data-vinor-direct-action>
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="sv-btn sv-btn--deal" onclick="return confirm('فروش نهایی برای این همکار ثبت شود؟ فایل در حال معامله می‌شود.')">ثبت معامله</button>
-      </form>
-      {% endif %}
-
-      {% if item.can_approve_deal or item.can_reject_deal %}
-      {% if not item.can_confirm_deal and not item.can_close_deal %}
-      <div class="sv-btn-row{% if not item.can_reject_deal or not item.can_approve_deal %} sv-btn-row--solo{% endif %}">
-        {% if item.can_approve_deal %}
-        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='approve_deal') }}" data-vinor-direct-action>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--ok" onclick="return confirm('فروش تأیید و فایل بسته شود؟ پورسانت به کیف پول همکار اضافه می‌شود.')">تأیید فروش و بستن فایل</button>
-        </form>
-        {% endif %}
-        {% if item.can_reject_deal %}
-        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='reject_deal') }}" data-vinor-direct-action>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('معامله رد شود؟ فایل دوباره فعال می‌شود.')">رد</button>
-        </form>
-        {% endif %}
-      </div>
-      {% endif %}
-      {% endif %}
-
-      {% if item.can_register_result %}
-      <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='result') }}" data-vinor-direct-action class="sv-result">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <p class="sv-result__label">نتیجه بازدید</p>
-        <div class="sv-result__chips" role="radiogroup" aria-label="نتیجه بازدید">
-          <label class="sv-result__chip">
-            <input type="radio" name="outcome" value="interested" checked>
-            <span>علاقه‌مند</span>
-          </label>
-          <label class="sv-result__chip">
-            <input type="radio" name="outcome" value="follow_up">
-            <span>پیگیری دوباره</span>
-          </label>
-          <label class="sv-result__chip sv-result__chip--down">
-            <input type="radio" name="outcome" value="not_interested">
-            <span>بی‌علاقه</span>
-          </label>
-        </div>
-        <p class="sv-result__help">علاقه‌مند: وقت بازدید دوم یا قرارداد نهایی · پیگیری دوباره: بازاریاب تا وقت دوم پیگیری می‌کند · بی‌علاقه: بدون پیگیری</p>
-        <input name="notes" class="sv-result__notes" placeholder="یادداشت (اختیاری)" autocomplete="off">
-        <button type="submit" class="sv-btn sv-btn--ok">ثبت نتیجه</button>
-      </form>
-      {% elif item.visit_outcome_hint %}
-      <p class="sv-hint{% if item.visit_outcome == 'interested' %} sv-hint--ok{% endif %}">{{ item.visit_outcome_hint }}</p>
-      {% endif %}
-
-    </div>
-    {% endif %}
+    {% with card_kind='received' %}
+    {% include 'express_partner/partials/visit_card_actions.html' %}
+    {% endwith %}
     </div>
   </article>
   {% endfor %}

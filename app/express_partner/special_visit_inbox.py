@@ -45,6 +45,8 @@ from .visit_requests import (
     admin_visit_workflow_steps,
     format_visit_stamp_label,
     get_plus_visit_presence_address,
+    partner_requests_can_revisit,
+    visit_card_call_phones,
     visit_card_people,
     visit_card_when,
     visit_progress_steps,
@@ -157,24 +159,21 @@ def _partner_open_tx_count(assignments: List[Dict[str, Any]] | None, phone: str)
 
 
 def special_inbox_pipeline_tab(item: Dict[str, Any] | None) -> str:
-    """قیف پلاس: درخواست → بازدید → معامله."""
-    from .visit_requests import PIPELINE_DEALS, PIPELINE_REQUESTS, PIPELINE_VISITS
+    """دریافتی پلاس؛ علاقه‌مند/معامله در تب معامله می‌رود."""
+    from .visit_requests import PIPELINE_DEALS, PIPELINE_VISITS, visit_is_deal_pipeline
 
     if not isinstance(item, dict):
         return PIPELINE_VISITS
-    if item.get("can_start_deal") or item.get("can_approve_deal") or item.get("can_reject_deal"):
+    if visit_is_deal_pipeline(
+        visit_outcome=str(item.get("visit_outcome") or ""),
+        tx_status=str(item.get("tx_status") or ""),
+        deal_commission_status=str(item.get("deal_commission_status") or ""),
+        deal_decision=str(item.get("deal_decision") or ""),
+        can_start_deal=bool(item.get("can_start_deal")),
+        can_approve_deal=bool(item.get("can_approve_deal")),
+        can_confirm_deal=bool(item.get("can_confirm_deal")),
+    ):
         return PIPELINE_DEALS
-    tx = str(item.get("tx_status") or "").strip().lower()
-    if tx in ("in_transaction", "sold"):
-        return PIPELINE_DEALS
-    deal_st = str(item.get("deal_commission_status") or "").strip().lower()
-    if deal_st in ("pending", "approved", "paid"):
-        return PIPELINE_DEALS
-    st = str(item.get("status") or "").strip()
-    if st == COMPLETED_STATUS:
-        return PIPELINE_DEALS
-    if st == PENDING_STATUS:
-        return PIPELINE_REQUESTS
     return PIPELINE_VISITS
 
 
@@ -437,11 +436,14 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
         can_close_deal = bool(deal_flags.get("can_close_deal")) or can_approve_deal
         deal_dec = visit_deal_decision(row)
         outcome = visit_outcome(row)
-        can_register_result = st == COMPLETED_STATUS and not outcome
-        if st == COMPLETED_STATUS and not outcome:
+        waiting_result = st == COMPLETED_STATUS and not outcome and not deal_dec
+        can_register_result = waiting_result
+        if waiting_result:
             can_confirm_deal = False
             can_reject_deal = False
             can_close_deal = False
+            can_start_deal = False
+            can_approve_deal = False
         elif outcome in (VISIT_OUTCOME_NOT_INTERESTED, VISIT_OUTCOME_FOLLOW_UP):
             can_confirm_deal = False
             can_reject_deal = False
@@ -527,6 +529,33 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
         except (TypeError, ValueError):
             sale_amount = 0
 
+        is_own_request = _canon_phone(partner_phone) == _canon_phone(phone)
+        can_cancel = is_own_request and st in (PENDING_STATUS, APPROVED_STATUS)
+        can_delete = is_own_request and st in (
+            CANCELLED_STATUS, NO_SHOW_STATUS, COMPLETED_STATUS
+        )
+        can_revisit = False
+        if is_own_request and code:
+            can_revisit = partner_requests_can_revisit(
+                row,
+                assignment_status=tx_status or "active",
+                visit_requests=rows if isinstance(rows, list) else None,
+                phone=phone,
+            )
+            if (
+                not can_revisit
+                and st == COMPLETED_STATUS
+                and outcome in (VISIT_OUTCOME_FOLLOW_UP, VISIT_OUTCOME_INTERESTED)
+                and tx_status not in ("sold", "in_transaction")
+            ):
+                can_revisit = True
+        calls = visit_card_call_phones(
+            me_phone=phone,
+            visitor_phone=people.get("visitor_phone") or people.get("plus_user_phone"),
+            marketer_phone=people.get("marketer_phone") or partner_phone,
+            customer_phone=people.get("customer_phone"),
+        )
+
         out.append({
             "id": str(row.get("id") or ""),
             "land_code": code,
@@ -575,11 +604,19 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             "visit_outcome": outcome,
             "visit_outcome_label": visit_outcome_label(outcome),
             "visit_outcome_hint": visit_outcome_hint(outcome),
+            "deal_decision": deal_dec,
             "can_start_deal": can_start_deal,
             "can_approve_deal": can_approve_deal,
             "can_reject_deal": can_reject_deal,
             "can_confirm_deal": can_confirm_deal,
             "can_close_deal": can_close_deal,
+            "can_cancel": can_cancel,
+            "can_delete": can_delete,
+            "can_revisit": can_revisit,
+            "is_own_request": is_own_request,
+            "call_visitor_phone": calls["call_visitor_phone"],
+            "call_marketer_phone": calls["call_marketer_phone"],
+            "call_customer_phone": calls["call_customer_phone"],
             "updated_at": str(row.get("updated_at") or ""),
             "needs_action": needs_action,
             "has_actions": needs_action

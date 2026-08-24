@@ -36,27 +36,60 @@ PIPELINE_DEALS = "deals"
 PIPELINE_TABS = frozenset({PIPELINE_REQUESTS, PIPELINE_VISITS, PIPELINE_DEALS})
 
 
+def visit_is_deal_pipeline(
+    *,
+    visit_outcome: str = "",
+    assignment_status: str = "",
+    tx_status: str = "",
+    deal_commission_status: str = "",
+    deal_decision: str = "",
+    can_start_deal: bool = False,
+    can_approve_deal: bool = False,
+    can_confirm_deal: bool = False,
+) -> bool:
+    """علاقه‌مند یا پروندهٔ در حال معامله — تب معامله."""
+    del can_start_deal, can_approve_deal, can_confirm_deal
+    oc = str(visit_outcome or "").strip().lower()
+    if oc in ("not_interested", "follow_up"):
+        return False
+    if oc == "interested":
+        return True
+    gs = str(assignment_status or "").strip().lower()
+    tx = str(tx_status or "").strip().lower()
+    if gs in ("in_transaction", "sold") or tx in ("in_transaction", "sold"):
+        return True
+    ds = str(deal_commission_status or "").strip().lower()
+    if ds in ("pending", "approved", "paid"):
+        return True
+    return str(deal_decision or "").strip().lower() == "approved"
+
+
 def partner_request_pipeline_tab(
     status: str,
     assignment_status: str = "",
     *,
     plus_own: bool = False,
+    visit_outcome: str = "",
+    deal_decision: str = "",
+    can_confirm_deal: bool = False,
+    can_start_deal: bool = False,
+    can_approve_deal: bool = False,
+    deal_commission_status: str = "",
+    tx_status: str = "",
 ) -> str:
-    """قیف همکار: درخواست → بازدید → معامله.
-
-    برای پلاس، پروندهٔ خودِ همکار (وقت گرفتن) در تب درخواست می‌ماند؛
-    تب بازدید فقط صندوق تقویم/آگهی است.
-    """
-    gs = str(assignment_status or "").strip().lower()
-    if gs in ("in_transaction", "sold"):
+    """ارسالی من؛ علاقه‌مند/معامله در تب معامله می‌رود."""
+    del status, plus_own
+    if visit_is_deal_pipeline(
+        visit_outcome=visit_outcome,
+        assignment_status=assignment_status,
+        tx_status=tx_status,
+        deal_commission_status=deal_commission_status,
+        deal_decision=deal_decision,
+        can_start_deal=can_start_deal,
+        can_approve_deal=can_approve_deal,
+        can_confirm_deal=can_confirm_deal,
+    ):
         return PIPELINE_DEALS
-    st = str(status or "").strip()
-    if st == COMPLETED_STATUS:
-        return PIPELINE_DEALS
-    if plus_own:
-        return PIPELINE_REQUESTS
-    if st in (APPROVED_STATUS, DONE_PENDING_STATUS, NO_SHOW_STATUS):
-        return PIPELINE_VISITS
     return PIPELINE_REQUESTS
 
 
@@ -467,6 +500,31 @@ def _canonical_visit_phone(raw: Any) -> str:
         return canonical_partner_phone(phone) or phone
     except Exception:
         return phone
+
+
+def visit_card_call_phones(
+    *,
+    me_phone: str = "",
+    visitor_phone: str = "",
+    marketer_phone: str = "",
+    customer_phone: str = "",
+) -> Dict[str, str]:
+    """شمارهٔ تماس روی کارت — شمارهٔ خودِ بیننده حذف می‌شود."""
+    me = _canonical_visit_phone(me_phone)
+
+    def pick(raw: str) -> str:
+        p = str(raw or "").strip()
+        if not p:
+            return ""
+        if me and _canonical_visit_phone(p) == me:
+            return ""
+        return p
+
+    return {
+        "call_visitor_phone": pick(visitor_phone),
+        "call_marketer_phone": pick(marketer_phone),
+        "call_customer_phone": pick(customer_phone),
+    }
 
 
 def _default_visit_admin_key() -> str:
@@ -903,7 +961,9 @@ def partner_request_feed_item(
     assignment_status: str = "",
     allow_attendance: bool = False,
     allow_deal: bool = False,
+    allow_revisit: bool = True,
     plus_own: bool = False,
+    me_phone: str = "",
 ) -> Dict[str, Any]:
     """کارت سادهٔ صفحهٔ درخواست‌ها برای همکار."""
     del commissions  # پورسانت در کارت ساده لازم نیست
@@ -948,24 +1008,29 @@ def partner_request_feed_item(
     elif st == COMPLETED_STATUS and outcome == VISIT_OUTCOME_NOT_INTERESTED:
         labels[COMPLETED_STATUS] = "بی‌علاقه — بدون پیگیری"
     deal_flags = visit_deal_action_flags(row, allowed=bool(allow_deal))
-    if st == COMPLETED_STATUS and not outcome:
+    waiting_result = st == COMPLETED_STATUS and not outcome and not deal_dec
+    if waiting_result or outcome in (VISIT_OUTCOME_NOT_INTERESTED, VISIT_OUTCOME_FOLLOW_UP):
         deal_flags = {
             "can_confirm_deal": False,
             "can_reject_deal": False,
             "can_close_deal": False,
         }
-    elif outcome in (VISIT_OUTCOME_NOT_INTERESTED, VISIT_OUTCOME_FOLLOW_UP):
-        deal_flags = {
-            "can_confirm_deal": False,
-            "can_reject_deal": False,
-            "can_close_deal": False,
-        }
-    can_register_result = bool(allow_deal) and st == COMPLETED_STATUS and not outcome
-    show_revisit = bool(can_revisit) or (
-        bool(allow_deal)
-        and st == COMPLETED_STATUS
-        and outcome in (VISIT_OUTCOME_FOLLOW_UP, VISIT_OUTCOME_INTERESTED)
-        and bool(land_code)
+    can_register_result = bool(allow_deal) and waiting_result
+    gs_ok = assign_st not in ("sold", "in_transaction")
+    show_revisit = bool(allow_revisit) and (
+        bool(can_revisit)
+        or (
+            st == COMPLETED_STATUS
+            and outcome in (VISIT_OUTCOME_FOLLOW_UP, VISIT_OUTCOME_INTERESTED)
+            and bool(land_code)
+            and gs_ok
+        )
+    )
+    calls = visit_card_call_phones(
+        me_phone=me_phone,
+        visitor_phone=people["visitor_phone"] or plus_user_phone,
+        marketer_phone=people["marketer_phone"] or people["partner_phone"],
+        customer_phone=people["customer_phone"],
     )
     return {
         "id": str(row.get("id") or "").strip(),
@@ -1010,8 +1075,19 @@ def partner_request_feed_item(
         "visit_outcome_hint": visit_outcome_hint(outcome),
         "can_revisit": show_revisit,
         "can_remove": can_cancel or can_delete,
+        "is_own_request": True,
+        "call_visitor_phone": calls["call_visitor_phone"],
+        "call_marketer_phone": calls["call_marketer_phone"],
+        "call_customer_phone": calls["call_customer_phone"],
         "assignment_status": assign_st,
-        "pipeline_tab": partner_request_pipeline_tab(st, assign_st, plus_own=plus_own),
+        "pipeline_tab": partner_request_pipeline_tab(
+            st,
+            assign_st,
+            plus_own=plus_own,
+            visit_outcome=outcome,
+            deal_decision=deal_dec,
+            can_confirm_deal=bool(deal_flags.get("can_confirm_deal")),
+        ),
     }
 
 
@@ -2115,8 +2191,14 @@ def visit_deal_action_flags(row: Dict[str, Any] | None, *, allowed: bool) -> Dic
     dec = visit_deal_decision(row)
     if dec in (DEAL_DECISION_REJECTED, DEAL_DECISION_CLOSED):
         return empty
+    if dec == DEAL_DECISION_APPROVED:
+        return {
+            "can_confirm_deal": False,
+            "can_reject_deal": False,
+            "can_close_deal": True,
+        }
     return {
-        "can_confirm_deal": dec != DEAL_DECISION_APPROVED,
+        "can_confirm_deal": True,
         "can_reject_deal": True,
         "can_close_deal": True,
     }
