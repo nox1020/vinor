@@ -1,0 +1,29 @@
+{# روی کارت: ویزیتور، بازاریاب، مشتری، تاریخ و وقت #}
+<button type="button" class="rq-vcard__face" data-rq-open-detail aria-expanded="false" aria-haspopup="dialog">
+  <span class="rq-vcard__top">
+    <span class="rq-vcard__title">{{ title }}</span>
+    <span class="rq-card__status {{ status_class|default('') }}">{{ item.status_label }}</span>
+  </span>
+  <span class="rq-vcard__facts">
+    <span class="rq-vcard__fact">
+      <span class="rq-vcard__k">ویزیتور</span>
+      <span class="rq-vcard__v">{{ item.visitor_name or '—' }}</span>
+    </span>
+    <span class="rq-vcard__fact">
+      <span class="rq-vcard__k">بازاریاب</span>
+      <span class="rq-vcard__v">{{ item.marketer_name or '—' }}</span>
+    </span>
+    <span class="rq-vcard__fact">
+      <span class="rq-vcard__k">مشتری</span>
+      <span class="rq-vcard__v">{{ item.customer_name or '—' }}</span>
+    </span>
+    <span class="rq-vcard__fact">
+      <span class="rq-vcard__k">تاریخ بازدید</span>
+      <span class="rq-vcard__v">{{ item.visit_date_label or item.visit_date_jalali or '—' }}</span>
+    </span>
+    <span class="rq-vcard__fact">
+      <span class="rq-vcard__k">وقت بازدید</span>
+      <span class="rq-vcard__v">{% if item.visit_time %}ساعت {{ item.visit_time }}{% else %}—{% endif %}</span>
+    </span>
+  </span>
+</button>

@@ -4809,6 +4809,8 @@ def requests_page():
         key = str(it.get('pipeline_tab') or PIPELINE_VISITS)
         if key in tab_counts:
             tab_counts[key] += 1
+    # تب درخواست‌ها: همهٔ درخواست‌های بازدید ارسالی
+    tab_counts[PIPELINE_REQUESTS] = len(items) + len(inbox_items)
     if offers:
         tab_counts[PIPELINE_DEALS] += len(offers)
 
@@ -5089,6 +5091,63 @@ def requests_no_show_visit(vid: str):
     return _partner_visit_attendance_action(vid, outcome='no_show')
 
 
+@express_partner_bp.post('/requests/<vid>/visit-result', endpoint='requests_visit_result')
+@require_partner_access()
+def requests_visit_result(vid: str):
+    """ثبت نتیجه بازدید: علاقه‌مند / پیگیری دوباره / بی‌علاقه."""
+    me_phone = (session.get('user_phone') or '').strip()
+    from .partner_roles import partner_can_manage_deal
+    from .visit_requests import record_visit_outcome, visit_outcome_hint, visit_outcome_label
+
+    profile = getattr(g, 'express_partner_profile', None)
+    if not partner_can_manage_deal(profile):
+        return _requests_action_json(
+            False,
+            error='ثبت نتیجه بازدید فقط برای ویزیتور و پلاس فعال است.',
+        )
+    visit_rows = load_express_visit_requests() or []
+    if not isinstance(visit_rows, list):
+        visit_rows = []
+    rec = next(
+        (r for r in visit_rows if isinstance(r, dict) and str(r.get('id') or '') == str(vid or '')),
+        None,
+    )
+    if not rec:
+        return _requests_action_json(False, error='درخواست پیدا نشد.')
+    if str(rec.get('partner_phone') or '').strip() != me_phone:
+        return _requests_action_json(False, error='دسترسی ندارید.')
+    outcome = (request.form.get('outcome') or '').strip()
+    notes = (request.form.get('notes') or '').strip()
+    updated, err = record_visit_outcome(
+        visit_rows, str(vid), outcome=outcome, notes=notes, actor_phone=me_phone
+    )
+    if err == 'invalid_status':
+        return _requests_action_json(False, error='اول «بازدید انجام شد» را ثبت کنید.')
+    if err == 'invalid_outcome':
+        return _requests_action_json(False, error='یکی از سه نتیجه را انتخاب کنید.')
+    if err or not updated:
+        return _requests_action_json(False, error='ثبت نتیجه ممکن نشد.')
+    try:
+        save_express_visit_requests(visit_rows)
+    except Exception:
+        current_app.logger.exception('visit outcome save failed id=%s', vid)
+        return _requests_action_json(False, error='ذخیره نشد.')
+    try:
+        from .special_visit_inbox import inject_visit_outcome_chat
+
+        inject_visit_outcome_chat(updated, outcome=outcome)
+    except Exception:
+        current_app.logger.exception('visit outcome chat failed id=%s', vid)
+    label = visit_outcome_label(outcome) or 'ثبت شد'
+    hint = visit_outcome_hint(outcome)
+    msg = f'{label} ثبت شد.' + (f' {hint}' if hint else '')
+    wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
+    if wants_html:
+        flash(msg, 'success')
+        return redirect(_sales_pipeline_url('deals'))
+    return _requests_action_json(True, message=msg, visit_id=updated.get('id'), status=updated.get('status'))
+
+
 @express_partner_bp.post('/requests/<vid>/deal-confirm', endpoint='requests_confirm_deal')
 @require_partner_access()
 def requests_confirm_deal(vid: str):
@@ -5221,7 +5280,7 @@ def _partner_visit_attendance_action(vid: str, *, outcome: str):
     if outcome == 'no_show':
         msg = 'عدم حضور ثبت شد.'
     else:
-        msg = 'بازدید انجام شد ثبت شد.'
+        msg = 'بازدید انجام شد. حالا نتیجه را ثبت کنید.'
     wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
     if wants_html:
         flash(msg, 'success')
@@ -8762,6 +8821,8 @@ def special_visit_action(vid: str, action: str):
         'deal_limit': 'این همکار هم‌زمان روی دو فایل در حال معامله است.',
         'already_pending': 'فروش نهایی قبلاً ثبت شده و منتظر تأیید شماست.',
         'blocked': 'رد معامله فعلاً ممکن نیست.',
+        'invalid_status': 'اول «بازدید انجام شد» را ثبت کنید.',
+        'invalid_outcome': 'یکی از سه نتیجه را انتخاب کنید.',
     }
     if err and err in extra_err:
         flash(extra_err[err], 'warning')
@@ -8771,7 +8832,7 @@ def special_visit_action(vid: str, action: str):
         return redirect(_sales_pipeline_url('visits'))
 
     act_l = str(action or '').strip().lower()
-    deal_only = act_l in ('start_deal', 'approve_deal', 'reject_deal', 'result')
+    deal_only = act_l in ('start_deal', 'approve_deal', 'reject_deal')
     if not deal_only:
         try:
             save_express_visit_requests(visit_requests)
@@ -8821,13 +8882,22 @@ def special_visit_action(vid: str, action: str):
                 )
             except Exception:
                 current_app.logger.exception('deal decision chat inject failed id=%s', vid)
+        if act_l == 'result':
+            try:
+                from .special_visit_inbox import inject_visit_outcome_chat
+
+                inject_visit_outcome_chat(
+                    rec, outcome=(request.form.get('outcome') or '').strip()
+                )
+            except Exception:
+                current_app.logger.exception('visit outcome chat inject failed id=%s', vid)
 
     if act_l == 'approve':
         flash('بازدید تأیید شد.', 'success')
     elif act_l == 'reject':
         flash('بازدید رد شد.', 'info')
     elif act_l == 'complete':
-        flash('بازدید انجام شد ثبت شد.', 'success')
+        flash('بازدید انجام شد. حالا نتیجه را ثبت کنید.', 'success')
     elif act_l == 'no_show':
         flash('عدم حضور ثبت شد.', 'info')
     elif act_l == 'reject_done':
@@ -8844,11 +8914,21 @@ def special_visit_action(vid: str, action: str):
         flash('معامله رد شد.', 'info')
     elif act_l == 'close_deal':
         flash('پرونده بسته شد.', 'success')
+    elif act_l == 'result':
+        oc = (request.form.get('outcome') or '').strip()
+        if oc == 'interested':
+            flash('علاقه‌مند ثبت شد. وقت بازدید دوباره یا قرارداد نهایی را تنظیم کنید.', 'success')
+        elif oc == 'follow_up':
+            flash('پیگیری دوباره ثبت شد. بازاریاب تا تعیین وقت بازدید دوم پیگیری می‌کند.', 'success')
+        elif oc == 'not_interested':
+            flash('بی‌علاقه ثبت شد — بدون پیگیری.', 'info')
+        else:
+            flash('نتیجه بازدید ثبت شد.', 'success')
     else:
         flash('وضعیت بروزرسانی شد.', 'success')
     pipeline_tab = 'deals' if act_l in (
         'complete', 'start_deal', 'approve_deal', 'reject_deal',
-        'confirm_deal', 'decline_deal', 'close_deal',
+        'confirm_deal', 'decline_deal', 'close_deal', 'result',
     ) else 'visits'
     return redirect(_sales_pipeline_url(pipeline_tab))
 

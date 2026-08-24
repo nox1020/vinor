@@ -43,7 +43,10 @@ from .visit_requests import (
     admin_can_transition_visit,
     admin_update_visit_request_status,
     admin_visit_workflow_steps,
+    format_visit_stamp_label,
     get_plus_visit_presence_address,
+    visit_card_people,
+    visit_card_when,
     visit_progress_steps,
     visit_progress_summary,
     visit_request_display_title,
@@ -340,6 +343,15 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
     if not isinstance(assignments, list):
         assignments = []
     owner_addr = get_plus_visit_presence_address(phone)
+    owner_name = str(phone or "").strip()
+    try:
+        from .special_listings import _plus_display_name, plus_partner_map
+
+        pmap = plus_partner_map() or {}
+        owner_rec = pmap.get(me) or pmap.get(str(phone or "").strip())
+        owner_name = _plus_display_name(owner_rec, phone) or owner_name
+    except Exception:
+        pass
 
     visit_result_on = False
     no_show_ok = False
@@ -368,12 +380,12 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
         if not _visit_row_for_plus_owner(row, phone, codes):
             continue
         st = str(row.get("status") or PENDING_STATUS).strip() or PENDING_STATUS
-        first = str(row.get("customer_first_name") or "").strip()
-        last = str(row.get("customer_last_name") or "").strip()
-        cust_name = str(row.get("customer_name") or "").strip() or f"{first} {last}".strip()
-        visit_date = str(row.get("visit_date") or "").strip()
-        visit_time = str(row.get("visit_time") or row.get("time") or "").strip()
-        partner_phone = str(row.get("partner_phone") or "").strip()
+        people = visit_card_people(row)
+        when = visit_card_when(row)
+        if people["visitor_name"] in ("", "—") and owner_name:
+            people["visitor_name"] = owner_name
+            people["visitor_phone"] = people["visitor_phone"] or str(phone or "").strip()
+        partner_phone = people["partner_phone"] or str(row.get("partner_phone") or "").strip()
         deal = latest_deal_commission_for_partner(commissions, partner_phone, code)
         deal_st = str((deal or {}).get("status") or "").strip().lower()
         deal_pending = bool(deal) and deal_st == COMMISSION_PENDING
@@ -399,27 +411,43 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             and has_assignment
             and not other_holder
         )
-        can_register_result = visit_result_on and st in (
-            APPROVED_STATUS,
-            DONE_PENDING_STATUS,
-            COMPLETED_STATUS,
-        ) and not deal_pending and not deal_final
+        can_register_result = st == COMPLETED_STATUS
 
         owned_listing = bool(code) and code in codes
         if not owned_listing:
             can_approve = False
             can_reject = False
             can_reject_done = False
-            can_register_result = False
-            # تأیید/رد/بستن معامله روی وقت تقویم هم فعال می‌ماند
+            # نتیجه بازدید و تأیید/رد/بستن معامله روی وقت تقویم هم فعال می‌ماند
 
-        from .visit_requests import visit_deal_action_flags, visit_deal_decision
+        from .visit_requests import (
+            VISIT_OUTCOME_FOLLOW_UP,
+            VISIT_OUTCOME_INTERESTED,
+            VISIT_OUTCOME_NOT_INTERESTED,
+            visit_deal_action_flags,
+            visit_deal_decision,
+            visit_outcome,
+            visit_outcome_hint,
+            visit_outcome_label,
+        )
 
         deal_flags = visit_deal_action_flags(row, allowed=True)
         can_confirm_deal = bool(deal_flags.get("can_confirm_deal")) or can_start_deal
         can_reject_deal = bool(deal_flags.get("can_reject_deal")) or can_reject_deal
         can_close_deal = bool(deal_flags.get("can_close_deal")) or can_approve_deal
         deal_dec = visit_deal_decision(row)
+        outcome = visit_outcome(row)
+        can_register_result = st == COMPLETED_STATUS and not outcome
+        if st == COMPLETED_STATUS and not outcome:
+            can_confirm_deal = False
+            can_reject_deal = False
+            can_close_deal = False
+        elif outcome in (VISIT_OUTCOME_NOT_INTERESTED, VISIT_OUTCOME_FOLLOW_UP):
+            can_confirm_deal = False
+            can_reject_deal = False
+            can_close_deal = False
+            can_start_deal = False
+            can_approve_deal = False
 
         progress_steps = visit_progress_steps(
             row,
@@ -453,7 +481,10 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             stage_label = "منتظر بازدید"
             current_hint = "بعد از بازدید، «بازدید انجام شد» یا «عدم حضور» را ثبت کنید."
         elif st == COMPLETED_STATUS and not can_start_deal and not can_approve_deal:
-            current_hint = current_hint or "بازدید انجام شد. معامله را از چت یا همین پرونده ثبت کنید."
+            if not outcome:
+                current_hint = "بازدید انجام شد. نتیجه را ثبت کنید: علاقه‌مند، پیگیری دوباره، یا بی‌علاقه."
+            else:
+                current_hint = visit_outcome_hint(outcome) or current_hint
         elif st == APPROVED_STATUS and not current_hint:
             current_hint = "منتظر اعلام «بازدید انجام شد» از سمت همکار."
         if deal_final:
@@ -465,14 +496,19 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
         needs_action = bool(
             can_approve or can_complete or can_no_show or can_approve_deal
             or can_confirm_deal or can_reject_deal or can_close_deal
+            or can_register_result
         )
         status_label = labels.get(st, st)
         if deal_dec == "approved":
             status_label = "معامله تأیید شد"
         elif deal_dec == "rejected":
             status_label = "معامله رد شد"
-        elif deal_dec == "closed":
-            status_label = "بسته شد"
+        elif deal_dec == "closed" or outcome == VISIT_OUTCOME_NOT_INTERESTED:
+            status_label = "بی‌علاقه — بدون پیگیری" if outcome == VISIT_OUTCOME_NOT_INTERESTED else "بسته شد"
+        elif outcome == VISIT_OUTCOME_INTERESTED:
+            status_label = "علاقه‌مند — وقت دوم یا قرارداد"
+        elif outcome == VISIT_OUTCOME_FOLLOW_UP:
+            status_label = "پیگیری دوباره تا بازدید دوم"
         elif deal_pending:
             status_label = "منتظر تأیید فروش"
         elif deal_final:
@@ -481,10 +517,6 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             status_label = "معامله رد شد — قابل ثبت مجدد"
         elif tx_status == "in_transaction" and st == COMPLETED_STATUS:
             status_label = "در حال معامله"
-
-        visit_date_jalali = format_iso_date_jalali(visit_date) if visit_date else ""
-        if visit_date_jalali and visit_time:
-            visit_date_jalali = f"{visit_date_jalali} — ساعت {to_fa_digits(visit_time)}"
 
         try:
             deal_amount = int((deal or {}).get("commission_amount") or 0)
@@ -499,14 +531,28 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             "id": str(row.get("id") or ""),
             "land_code": code,
             "land_title": visit_request_display_title(row),
+            "title": visit_request_display_title(row),
             "inbox_origin": "listing" if owned_listing else "calendar",
-            "partner_name": str(row.get("partner_name") or "").strip(),
+            "partner_name": people["partner_name"],
             "partner_phone": partner_phone,
-            "customer_name": cust_name,
-            "customer_phone": str(row.get("customer_phone") or "").strip(),
-            "visit_date": visit_date,
-            "visit_time": visit_time,
-            "visit_date_jalali": visit_date_jalali,
+            "plus_user_name": people["plus_user_name"],
+            "plus_user_phone": people["plus_user_phone"],
+            "visitor_name": people["visitor_name"],
+            "visitor_phone": people["visitor_phone"],
+            "marketer_name": people["marketer_name"],
+            "marketer_phone": people["marketer_phone"],
+            "customer_name": people["customer_name"],
+            "customer_phone": people["customer_phone"],
+            "visit_date": when["visit_date"],
+            "visit_time": when["visit_time"],
+            "visit_date_jalali": when["visit_date_jalali"],
+            "visit_weekday": when["visit_weekday"],
+            "visit_date_label": when["visit_date_label"],
+            "visit_when": when["visit_when"],
+            "notes": str(row.get("notes") or "").strip(),
+            "created_at": str(row.get("created_at") or ""),
+            "created_at_label": format_visit_stamp_label(row.get("created_at")),
+            "updated_at_label": format_visit_stamp_label(row.get("updated_at") or row.get("completed_at")),
             "visit_presence_address": str(row.get("visit_presence_address") or "").strip() or owner_addr,
             "status": st,
             "status_label": status_label,
@@ -526,12 +572,14 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             "can_reject_done": can_reject_done,
             "can_no_show": can_no_show,
             "can_register_result": can_register_result,
+            "visit_outcome": outcome,
+            "visit_outcome_label": visit_outcome_label(outcome),
+            "visit_outcome_hint": visit_outcome_hint(outcome),
             "can_start_deal": can_start_deal,
             "can_approve_deal": can_approve_deal,
             "can_reject_deal": can_reject_deal,
             "can_confirm_deal": can_confirm_deal,
             "can_close_deal": can_close_deal,
-            "created_at": str(row.get("created_at") or ""),
             "updated_at": str(row.get("updated_at") or ""),
             "needs_action": needs_action,
             "has_actions": needs_action
@@ -663,33 +711,18 @@ def apply_special_visit_action(
             pass
         return updated, None
     if act == "result":
-        try:
-            from app.visit_result.config import visit_result_ui_enabled
-            from app.visit_result.service import register_result, valid_outcome
+        from .visit_requests import record_visit_outcome
 
-            if not visit_result_ui_enabled():
-                return None, "disabled"
-            oc = (outcome or "").strip() or "follow_up"
-            if not valid_outcome(oc) or oc == "no_show":
-                # no_show must go through act=no_show (status change)
-                if oc != "no_show" and not valid_outcome(oc):
-                    return None, "invalid_outcome"
-                if oc == "no_show":
-                    return None, "use_no_show_action"
-            result = register_result(
-                visit_request_id=rid,
-                partner_phone=str(rec.get("partner_phone") or ""),
-                land_code=str(rec.get("land_code") or ""),
-                outcome=oc,
-                notes=notes,
-                actor_key=owner_phone,
-                source="special",
-            )
-            if result is None:
-                return None, "failed"
-            return rec, None
-        except Exception:
-            return None, "failed"
+        updated, err = record_visit_outcome(
+            requests,
+            rid,
+            outcome=(outcome or "").strip() or "follow_up",
+            notes=notes,
+            actor_phone=owner_phone,
+        )
+        if err:
+            return None, err
+        return updated or rec, None
     return None, "invalid_action"
 
 
@@ -746,11 +779,58 @@ def inject_visit_attendance_chat(rec: Dict[str, Any] | None, *, outcome: str) ->
     title = visit_request_display_title(rec)
     code = str(rec.get("land_code") or "").strip()
     if oc in ("done", "complete", "completed"):
-        body = f"بازدید «{title}» انجام شد ثبت شد."
+        body = f"بازدید «{title}» انجام شد. نتیجه را ثبت کنید: علاقه‌مند، پیگیری دوباره، یا بی‌علاقه."
         event = "visit_completed"
     elif oc in ("no_show", "noshow"):
         body = f"عدم حضور برای بازدید «{title}» ثبت شد. می‌توانید وقت جدید بگیرید."
         event = "visit_no_show"
+    else:
+        return
+    seen: set[str] = set()
+    for raw in (rec.get("partner_phone"), rec.get("plus_user_phone")):
+        ph = str(raw or "").strip()
+        if not ph or ph in seen:
+            continue
+        seen.add(ph)
+        try:
+            _inject_chat(
+                ph,
+                land_code=code,
+                body=body,
+                event=event,
+            )
+        except Exception:
+            pass
+
+
+def inject_visit_outcome_chat(rec: Dict[str, Any] | None, *, outcome: str) -> None:
+    """پیام نتیجه بازدید (علاقه‌مند / پیگیری / بی‌علاقه) را در چت بنویس."""
+    if not isinstance(rec, dict):
+        return
+    oc = (outcome or "").strip().lower()
+    try:
+        from .visit_requests import (
+            VISIT_OUTCOME_FOLLOW_UP,
+            VISIT_OUTCOME_INTERESTED,
+            VISIT_OUTCOME_NOT_INTERESTED,
+            visit_outcome_hint,
+            visit_request_display_title,
+        )
+        from .sales_coach import _inject_partner_system_chat as _inject_chat
+    except Exception:
+        return
+    title = visit_request_display_title(rec)
+    code = str(rec.get("land_code") or "").strip()
+    hint = visit_outcome_hint(oc)
+    if oc == VISIT_OUTCOME_INTERESTED:
+        body = f"نتیجه بازدید «{title}»: علاقه‌مند. {hint}"
+        event = "visit_outcome_interested"
+    elif oc == VISIT_OUTCOME_FOLLOW_UP:
+        body = f"نتیجه بازدید «{title}»: پیگیری دوباره. {hint}"
+        event = "visit_outcome_follow_up"
+    elif oc == VISIT_OUTCOME_NOT_INTERESTED:
+        body = f"نتیجه بازدید «{title}»: بی‌علاقه. {hint}"
+        event = "visit_outcome_not_interested"
     else:
         return
     seen: set[str] = set()

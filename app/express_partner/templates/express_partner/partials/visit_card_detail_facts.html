@@ -1,0 +1,54 @@
+{# همهٔ اطلاعات پرونده برای پنل جزئیات — انتظار: item #}
+<div class="rq-vcard__dgrid">
+  {% if item.inbox_origin %}
+  <p class="rq-vcard__drow">
+    <strong>منبع:</strong>
+    {% if item.inbox_origin == 'calendar' %}وقت روی تقویم شما{% else %}آگهی شما{% endif %}
+  </p>
+  {% endif %}
+  {% if item.land_code %}
+  <p class="rq-vcard__drow"><strong>کد فایل:</strong> <span dir="ltr">{{ item.land_code }}</span></p>
+  {% endif %}
+  <p class="rq-vcard__drow"><strong>وضعیت:</strong> {{ item.status_label or '—' }}</p>
+  {% if item.stage_label %}
+  <p class="rq-vcard__drow"><strong>مرحله:</strong> {{ item.stage_label }}</p>
+  {% endif %}
+  <p class="rq-vcard__drow">
+    <strong>ویزیتور:</strong> {{ item.visitor_name or '—' }}
+    {% if item.visitor_phone %}
+    · <a href="tel:{{ item.visitor_phone }}" dir="ltr" data-vinor-direct-action>{{ item.visitor_phone|fa_digits }}</a>
+    {% endif %}
+  </p>
+  <p class="rq-vcard__drow">
+    <strong>بازاریاب:</strong> {{ item.marketer_name or '—' }}
+    {% if item.marketer_phone %}
+    · <a href="tel:{{ item.marketer_phone }}" dir="ltr" data-vinor-direct-action>{{ item.marketer_phone|fa_digits }}</a>
+    {% endif %}
+  </p>
+  <p class="rq-vcard__drow">
+    <strong>مشتری:</strong> {{ item.customer_name or '—' }}
+    {% if item.customer_phone %}
+    · <a href="tel:{{ item.customer_phone }}" dir="ltr" data-vinor-direct-action>{{ item.customer_phone|fa_digits }}</a>
+    {% endif %}
+  </p>
+  <p class="rq-vcard__drow"><strong>تاریخ بازدید:</strong> {{ item.visit_date_label or item.visit_date_jalali or '—' }}</p>
+  <p class="rq-vcard__drow"><strong>وقت بازدید:</strong> {% if item.visit_time %}ساعت {{ item.visit_time }}{% else %}—{% endif %}</p>
+  {% if item.visit_presence_address %}
+  <p class="rq-vcard__drow"><strong>آدرس حضور:</strong> {{ item.visit_presence_address }}</p>
+  {% endif %}
+  {% if item.notes %}
+  <p class="rq-vcard__drow"><strong>توضیح:</strong> {{ item.notes }}</p>
+  {% endif %}
+  {% if item.visit_outcome_label %}
+  <p class="rq-vcard__drow"><strong>نتیجه بازدید:</strong> {{ item.visit_outcome_label }}</p>
+  {% endif %}
+  {% if item.tx_status_label %}
+  <p class="rq-vcard__drow"><strong>وضعیت فایل:</strong> {{ item.tx_status_label }}</p>
+  {% endif %}
+  {% if item.created_at_label %}
+  <p class="rq-vcard__drow"><strong>ثبت درخواست:</strong> {{ item.created_at_label }}</p>
+  {% endif %}
+  {% if item.updated_at_label and item.updated_at_label != item.created_at_label %}
+  <p class="rq-vcard__drow"><strong>آخرین تغییر:</strong> {{ item.updated_at_label }}</p>
+  {% endif %}
+</div>

@@ -812,6 +812,88 @@ def visit_request_display_title(row: Dict[str, Any] | None) -> str:
     return "وقت بازدید"
 
 
+def format_visit_stamp_label(raw: Any) -> str:
+    """ISO یا تاریخ → برچسب شمسی برای جزئیات کارت."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    day = s[:10]
+    jalali = ""
+    try:
+        jalali = format_display_jalali_date(day) or format_iso_date_jalali(day) or ""
+    except Exception:
+        jalali = ""
+    time_bit = ""
+    if "T" in s:
+        time_bit = s.split("T", 1)[1][:5].replace("Z", "").strip()
+    if jalali and time_bit:
+        return f"{jalali} — {to_fa_digits(time_bit)}"
+    return jalali or to_fa_digits(s)
+
+
+def visit_card_when(row: Dict[str, Any] | None) -> Dict[str, str]:
+    """تاریخ و ساعت بازدید برای روی کارت."""
+    rec = row if isinstance(row, dict) else {}
+    visit_date = str(rec.get("visit_date") or "").strip()
+    jalali = ""
+    try:
+        jalali = format_display_jalali_date(visit_date) or format_iso_date_jalali(visit_date) or ""
+    except Exception:
+        jalali = format_iso_date_jalali(visit_date) if visit_date else ""
+    weekday = ""
+    try:
+        d = parse_gregorian_iso_date(visit_date)
+        if d is not None:
+            weekday = visit_weekday_label_for_date(d)
+    except Exception:
+        weekday = ""
+    visit_time_raw = str(rec.get("visit_time") or rec.get("time") or "").strip()
+    hour = parse_visit_hour(visit_time_raw)
+    if hour is not None:
+        visit_time = format_visit_hour_label(hour)
+    elif visit_time_raw:
+        visit_time = to_fa_digits(visit_time_raw)
+    else:
+        visit_time = ""
+    date_label = " ".join(p for p in (weekday, jalali) if p)
+    visit_when = date_label
+    if visit_time:
+        visit_when = f"{visit_when} — ساعت {visit_time}".strip(" —")
+    return {
+        "visit_date": visit_date,
+        "visit_date_jalali": jalali,
+        "visit_weekday": weekday,
+        "visit_date_label": date_label or "—",
+        "visit_time": visit_time,
+        "visit_when": visit_when,
+    }
+
+
+def visit_card_people(row: Dict[str, Any] | None) -> Dict[str, str]:
+    """ویزیتور = میزبان تقویم پلاس · بازاریاب = همکار درخواست‌دهنده · مشتری."""
+    rec = row if isinstance(row, dict) else {}
+    first = str(rec.get("customer_first_name") or "").strip()
+    last = str(rec.get("customer_last_name") or "").strip()
+    cust_name = str(rec.get("customer_name") or "").strip() or f"{first} {last}".strip()
+    cust_phone = str(rec.get("customer_phone") or "").strip()
+    partner_phone = str(rec.get("partner_phone") or "").strip()
+    partner_name = str(rec.get("partner_name") or "").strip() or partner_phone
+    plus_phone = str(rec.get("plus_user_phone") or "").strip()
+    plus_name = str(rec.get("plus_user_name") or "").strip() or plus_phone
+    return {
+        "customer_name": cust_name,
+        "customer_phone": cust_phone,
+        "partner_name": partner_name,
+        "partner_phone": partner_phone,
+        "plus_user_name": plus_name,
+        "plus_user_phone": plus_phone,
+        "marketer_name": partner_name or "—",
+        "marketer_phone": partner_phone,
+        "visitor_name": plus_name or "—",
+        "visitor_phone": plus_phone,
+    }
+
+
 def partner_request_feed_item(
     row: Dict[str, Any],
     commissions: List[Dict[str, Any]] | None = None,
@@ -842,35 +924,13 @@ def partner_request_feed_item(
         labels[COMPLETED_STATUS] = "معامله رد شد"
     elif st == COMPLETED_STATUS and deal_dec == DEAL_DECISION_CLOSED:
         labels[COMPLETED_STATUS] = "بسته شد"
-    first = str(row.get("customer_first_name") or "").strip()
-    last = str(row.get("customer_last_name") or "").strip()
-    cust_name = str(row.get("customer_name") or "").strip() or f"{first} {last}".strip()
-    visit_date = str(row.get("visit_date") or "").strip()
-    jalali = format_display_jalali_date(visit_date) or format_iso_date_jalali(visit_date) or ""
-    weekday = ""
-    try:
-        d = parse_gregorian_iso_date(visit_date)
-        if d is not None:
-            weekday = visit_weekday_label_for_date(d)
-    except Exception:
-        weekday = ""
-    visit_time_raw = str(row.get("visit_time") or row.get("time") or "").strip()
-    hour = parse_visit_hour(visit_time_raw)
-    if hour is not None:
-        visit_time = format_visit_hour_label(hour)
-    elif visit_time_raw:
-        visit_time = to_fa_digits(visit_time_raw)
-    else:
-        visit_time = ""
-    when_parts = [p for p in (weekday, jalali) if p]
-    visit_when = " ".join(when_parts)
-    if visit_time:
-        visit_when = f"{visit_when} — ساعت {visit_time}".strip(" —")
+    people = visit_card_people(row)
+    when = visit_card_when(row)
     notes = str(row.get("notes") or "").strip()
     land_code = str(row.get("land_code") or "").strip()
     land_title = visit_request_display_title(row)
-    plus_user_name = str(row.get("plus_user_name") or "").strip()
-    plus_user_phone = str(row.get("plus_user_phone") or "").strip()
+    plus_user_name = people["plus_user_name"]
+    plus_user_phone = people["plus_user_phone"]
     presence_address = _normalize_presence_address(row.get("visit_presence_address"))
     if not presence_address and plus_user_phone:
         presence_address = get_plus_visit_presence_address(plus_user_phone)
@@ -880,7 +940,33 @@ def partner_request_feed_item(
     can_mark_attendance = bool(allow_attendance) and st in (APPROVED_STATUS, DONE_PENDING_STATUS)
     can_complete = can_mark_attendance
     can_no_show = can_mark_attendance
+    outcome = visit_outcome(row)
+    if st == COMPLETED_STATUS and outcome == VISIT_OUTCOME_INTERESTED:
+        labels[COMPLETED_STATUS] = "علاقه‌مند — وقت دوم یا قرارداد"
+    elif st == COMPLETED_STATUS and outcome == VISIT_OUTCOME_FOLLOW_UP:
+        labels[COMPLETED_STATUS] = "پیگیری دوباره تا بازدید دوم"
+    elif st == COMPLETED_STATUS and outcome == VISIT_OUTCOME_NOT_INTERESTED:
+        labels[COMPLETED_STATUS] = "بی‌علاقه — بدون پیگیری"
     deal_flags = visit_deal_action_flags(row, allowed=bool(allow_deal))
+    if st == COMPLETED_STATUS and not outcome:
+        deal_flags = {
+            "can_confirm_deal": False,
+            "can_reject_deal": False,
+            "can_close_deal": False,
+        }
+    elif outcome in (VISIT_OUTCOME_NOT_INTERESTED, VISIT_OUTCOME_FOLLOW_UP):
+        deal_flags = {
+            "can_confirm_deal": False,
+            "can_reject_deal": False,
+            "can_close_deal": False,
+        }
+    can_register_result = bool(allow_deal) and st == COMPLETED_STATUS and not outcome
+    show_revisit = bool(can_revisit) or (
+        bool(allow_deal)
+        and st == COMPLETED_STATUS
+        and outcome in (VISIT_OUTCOME_FOLLOW_UP, VISIT_OUTCOME_INTERESTED)
+        and bool(land_code)
+    )
     return {
         "id": str(row.get("id") or "").strip(),
         "kind": "visit",
@@ -888,15 +974,26 @@ def partner_request_feed_item(
         "land_title": land_title,
         "plus_user_name": plus_user_name,
         "plus_user_phone": plus_user_phone,
+        "partner_name": people["partner_name"],
+        "partner_phone": people["partner_phone"],
+        "visitor_name": people["visitor_name"],
+        "visitor_phone": people["visitor_phone"],
+        "marketer_name": people["marketer_name"],
+        "marketer_phone": people["marketer_phone"],
         "visit_presence_address": presence_address,
         "title": land_title,
-        "customer_name": cust_name,
-        "visit_date": visit_date,
-        "visit_date_jalali": jalali,
-        "visit_weekday": weekday,
-        "visit_time": visit_time,
-        "visit_when": visit_when,
+        "customer_name": people["customer_name"],
+        "customer_phone": people["customer_phone"],
+        "visit_date": when["visit_date"],
+        "visit_date_jalali": when["visit_date_jalali"],
+        "visit_weekday": when["visit_weekday"],
+        "visit_date_label": when["visit_date_label"],
+        "visit_time": when["visit_time"],
+        "visit_when": when["visit_when"],
         "notes": notes,
+        "created_at": str(row.get("created_at") or "").strip(),
+        "created_at_label": format_visit_stamp_label(row.get("created_at")),
+        "updated_at_label": format_visit_stamp_label(row.get("updated_at") or row.get("completed_at")),
         "support_phone": support,
         "status": st,
         "status_label": labels.get(st, st or "در جریان"),
@@ -907,7 +1004,11 @@ def partner_request_feed_item(
         "can_confirm_deal": deal_flags["can_confirm_deal"],
         "can_reject_deal": deal_flags["can_reject_deal"],
         "can_close_deal": deal_flags["can_close_deal"],
-        "can_revisit": bool(can_revisit),
+        "can_register_result": can_register_result,
+        "visit_outcome": outcome,
+        "visit_outcome_label": visit_outcome_label(outcome),
+        "visit_outcome_hint": visit_outcome_hint(outcome),
+        "can_revisit": show_revisit,
         "can_remove": can_cancel or can_delete,
         "assignment_status": assign_st,
         "pipeline_tab": partner_request_pipeline_tab(st, assign_st, plus_own=plus_own),
@@ -1906,6 +2007,91 @@ _DEAL_DECISION_ALIASES = {
     "closed": DEAL_DECISION_CLOSED,
     "close": DEAL_DECISION_CLOSED,
 }
+
+VISIT_OUTCOME_INTERESTED = "interested"
+VISIT_OUTCOME_FOLLOW_UP = "follow_up"
+VISIT_OUTCOME_NOT_INTERESTED = "not_interested"
+_VISIT_OUTCOME_ALIASES = {
+    "interested": VISIT_OUTCOME_INTERESTED,
+    "interest": VISIT_OUTCOME_INTERESTED,
+    "liked": VISIT_OUTCOME_INTERESTED,
+    "follow_up": VISIT_OUTCOME_FOLLOW_UP,
+    "followup": VISIT_OUTCOME_FOLLOW_UP,
+    "follow-up": VISIT_OUTCOME_FOLLOW_UP,
+    "not_interested": VISIT_OUTCOME_NOT_INTERESTED,
+    "not-interested": VISIT_OUTCOME_NOT_INTERESTED,
+    "uninterested": VISIT_OUTCOME_NOT_INTERESTED,
+}
+_VISIT_OUTCOME_LABELS = {
+    VISIT_OUTCOME_INTERESTED: "علاقه‌مند",
+    VISIT_OUTCOME_FOLLOW_UP: "پیگیری دوباره",
+    VISIT_OUTCOME_NOT_INTERESTED: "بی‌علاقه",
+}
+_VISIT_OUTCOME_HINTS = {
+    VISIT_OUTCOME_INTERESTED: "وقت بازدید دوباره یا وقت قرارداد نهایی را تنظیم کنید.",
+    VISIT_OUTCOME_FOLLOW_UP: "بازاریاب پیگیری می‌کند تا وقت بازدید دوم تعیین شود.",
+    VISIT_OUTCOME_NOT_INTERESTED: "بدون پیگیری — پرونده بسته شد.",
+}
+
+
+def visit_outcome(row: Dict[str, Any] | None) -> str:
+    if not isinstance(row, dict):
+        return ""
+    raw = str(row.get("visit_outcome") or row.get("visit_result_outcome") or "").strip().lower()
+    return _VISIT_OUTCOME_ALIASES.get(raw, "")
+
+
+def visit_outcome_label(outcome: str) -> str:
+    return _VISIT_OUTCOME_LABELS.get((outcome or "").strip().lower(), "")
+
+
+def visit_outcome_hint(outcome: str) -> str:
+    return _VISIT_OUTCOME_HINTS.get((outcome or "").strip().lower(), "")
+
+
+def record_visit_outcome(
+    requests: List[Dict[str, Any]],
+    visit_id: str,
+    *,
+    outcome: str,
+    notes: str = "",
+    actor_phone: str = "",
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """ثبت نتیجه بازدید بعد از «بازدید انجام شد»."""
+    rec = _find_visit_request(requests, str(visit_id or "").strip())
+    if not rec:
+        return None, "not_found"
+    st = str(rec.get("status") or "").strip()
+    if st != COMPLETED_STATUS:
+        return None, "invalid_status"
+    oc = _VISIT_OUTCOME_ALIASES.get((outcome or "").strip().lower(), "")
+    if not oc:
+        return None, "invalid_outcome"
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    rec["visit_outcome"] = oc
+    rec["visit_outcome_at"] = now_iso
+    rec["visit_outcome_by"] = str(actor_phone or "").strip()
+    rec["visit_outcome_notes"] = str(notes or "").strip()
+    rec["updated_at"] = now_iso
+    if oc == VISIT_OUTCOME_NOT_INTERESTED:
+        rec["deal_decision"] = DEAL_DECISION_CLOSED
+        rec["deal_decided_at"] = now_iso
+        rec["deal_decided_by"] = str(actor_phone or "").strip()
+    try:
+        from app.visit_result.service import register_result
+
+        register_result(
+            visit_request_id=str(rec.get("id") or ""),
+            partner_phone=str(rec.get("partner_phone") or actor_phone),
+            land_code=str(rec.get("land_code") or ""),
+            outcome=oc,
+            notes=str(notes or "").strip(),
+            actor_key=str(actor_phone or ""),
+            source="partner",
+        )
+    except Exception:
+        pass
+    return rec, None
 
 
 def visit_deal_decision(row: Dict[str, Any] | None) -> str:

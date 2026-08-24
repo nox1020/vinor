@@ -38,15 +38,23 @@
 
 {% if inbox_items %}
 <section aria-label="صندوق بازدید آگهی و تقویم">
-  <p class="rq-section-label" data-rq-section="inbox">بازدید روی تقویم و آگهی شما</p>
+  <p class="rq-section-label" data-rq-section="inbox">{% if (active_tab|default('requests')) == 'deals' %}معامله روی آگهی شما{% elif (active_tab|default('requests')) == 'visits' %}بازدید روی تقویم و آگهی شما{% else %}درخواست همکاران{% endif %}</p>
   {% for item in inbox_items %}
+  {% set title = item.land_title or item.title %}
+  {% set status_class = 'is-pending' if item.needs_action else ('is-done' if item.status in ('completed', 'approved') else ('is-closed' if item.status in ('cancelled', 'no_show') else '')) %}
   <article class="sv-card{% if item.needs_action %} sv-card--need{% endif %}"
            data-pipeline="{{ item.pipeline_tab|default('visits') }}"
-           {% if (item.pipeline_tab|default('visits')) != (active_tab|default('requests')) %}hidden{% endif %}>
-    <p class="sv-origin">{% if item.inbox_origin == 'calendar' %}وقت روی تقویم شما{% else %}آگهی شما{% endif %}</p>
-    <h2 class="sv-card__title">{{ item.land_title }}</h2>
-    {% if item.land_code %}<p class="sv-card__code">{{ item.land_code }}</p>{% endif %}
-    <span class="sv-card__status">{{ item.status_label }}</span>
+           data-on-requests="1"
+           data-request-id="{{ item.id }}"
+           data-land-code="{{ item.land_code|default('') }}"
+           data-title="{{ title }}"
+           {% if (active_tab|default('requests')) != 'requests' and (item.pipeline_tab|default('visits')) != (active_tab|default('requests')) %}hidden{% endif %}>
+    {% include 'express_partner/partials/visit_card_face.html' %}
+    <div class="rq-vcard__body" data-rq-detail-body hidden>
+      {% include 'express_partner/partials/visit_card_detail_facts.html' %}
+      {% if item.land_code %}
+      <button type="button" class="rq-vcard__open-land" data-rq-open-land data-vinor-direct-action>مشاهده فایل</button>
+      {% endif %}
     {% if item.progress_steps %}
     <div class="sv-progress" aria-hidden="true">
       {% for step in item.progress_steps %}
@@ -67,12 +75,6 @@
       {% if item.deal_commission_amount %}{% if item.sale_amount %} · {% endif %}پورسانت همکار {{ item.deal_commission_amount|toman }}{% endif %}
     </p>
     {% endif %}
-    <p class="sv-card__meta">
-      {% if item.customer_name %}مشتری: {{ item.customer_name }}{% if item.customer_phone %} · <a href="tel:{{ item.customer_phone }}" dir="ltr" class="text-sky-300">{{ item.customer_phone }}</a>{% endif %}<br>{% endif %}
-      همکار: {{ item.partner_name or '—' }}{% if item.partner_phone %} · <a href="tel:{{ item.partner_phone }}" dir="ltr" class="text-sky-300">{{ item.partner_phone }}</a>{% endif %}
-      {% if item.visit_date_jalali %}<br>تاریخ بازدید: {{ item.visit_date_jalali }}{% endif %}
-      {% if item.visit_presence_address %}<br>آدرس حضور: {{ item.visit_presence_address }}{% endif %}
-    </p>
     {% if item.has_actions %}
     <div class="sv-actions">
       {% if item.can_approve or item.can_reject %}
@@ -121,7 +123,7 @@
         {% if item.can_confirm_deal %}
         <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='confirm_deal') }}" data-vinor-direct-action>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="sv-btn sv-btn--ok">تأیید</button>
+          <button type="submit" class="sv-btn sv-btn--ok">{% if item.visit_outcome == 'interested' %}قرارداد نهایی{% else %}تأیید{% endif %}</button>
         </form>
         {% endif %}
         {% if item.can_reject_deal %}
@@ -174,20 +176,24 @@
           </label>
           <label class="sv-result__chip">
             <input type="radio" name="outcome" value="follow_up">
-            <span>پیگیری</span>
+            <span>پیگیری دوباره</span>
           </label>
           <label class="sv-result__chip sv-result__chip--down">
             <input type="radio" name="outcome" value="not_interested">
             <span>بی‌علاقه</span>
           </label>
         </div>
+        <p class="sv-result__help">علاقه‌مند: وقت بازدید دوم یا قرارداد نهایی · پیگیری دوباره: بازاریاب تا وقت دوم پیگیری می‌کند · بی‌علاقه: بدون پیگیری</p>
         <input name="notes" class="sv-result__notes" placeholder="یادداشت (اختیاری)" autocomplete="off">
         <button type="submit" class="sv-btn sv-btn--ok">ثبت نتیجه</button>
       </form>
+      {% elif item.visit_outcome_hint %}
+      <p class="sv-hint{% if item.visit_outcome == 'interested' %} sv-hint--ok{% endif %}">{{ item.visit_outcome_hint }}</p>
       {% endif %}
 
     </div>
     {% endif %}
+    </div>
   </article>
   {% endfor %}
 </section>

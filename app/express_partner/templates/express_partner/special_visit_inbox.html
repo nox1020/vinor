@@ -5,118 +5,11 @@
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
 {{ ep_header_start(id='specialVisitInboxHeader') }}
 {% call ep_header_row('بازدید و معامله', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}
-<details class="sv-schedule relative z-30"{% if schedule_open %} open{% endif %}>
-  <summary class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
-           aria-label="تنظیم وقت بازدید و آدرس حضور">
-    <i class="fas fa-cog ep-partner-header-btn-icon" aria-hidden="true"></i>
-  </summary>
-  <form method="post"
-        action="{{ url_for('express_partner.special_visit_schedule') }}"
-        data-vinor-direct-action
-        class="sv-schedule__panel">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <p class="sv-schedule__title">وقت و آدرس حضور</p>
-    <p class="sv-schedule__sub">روز، ساعت و جایی که همکاران برای بازدید می‌آیند.</p>
-    {% if visit_allowed_weekdays_summary %}
-    <p class="sv-schedule__now">{{ visit_allowed_weekdays_summary }}{% if visit_allowed_hours_summary %} · {{ visit_allowed_hours_summary }}{% endif %}</p>
-    {% endif %}
-    <p class="sv-schedule__label">روزهای مجاز</p>
-    <div class="sv-schedule__days">
-      {% for wd in visit_weekday_order %}
-      <label class="sv-chip">
-        <input type="checkbox" name="visit_weekdays" value="{{ wd }}" class="peer sr-only"
-               {% if wd in visit_allowed_weekdays %}checked{% endif %}>
-        <span>{{ visit_weekday_labels.get(wd, wd) }}</span>
-      </label>
-      {% endfor %}
-    </div>
-    <p class="sv-schedule__label">ساعت‌های مجاز (تهران)</p>
-    <div class="sv-schedule__hours" dir="ltr">
-      {% for row in visit_hour_rows %}
-      <label class="sv-hour">
-        <input type="checkbox" name="visit_hours" value="{{ row.hour }}" class="peer sr-only"
-               {% if row.selected %}checked{% endif %}>
-        <span>{{ row.label }}</span>
-      </label>
-      {% endfor %}
-    </div>
-    <p class="sv-schedule__label">آدرس حضور</p>
-    <textarea name="visit_presence_address" class="sv-schedule__addr" rows="2" maxlength="200"
-              placeholder="دفتر، آدرس ملک، یا نقطهٔ ملاقات">{{ visit_presence_address|default('') }}</textarea>
-    <button type="submit" class="sv-schedule__save">ذخیره</button>
-  </form>
-</details>
+  {% include 'express_partner/partials/special_visit_schedule.html' %}
 {% endcall %}
 {{ ep_header_end() }}
 
 <style>
-  #specialVisitInboxHeader,
-  #specialVisitInboxHeader .ep-partner-header-bar {
-    overflow: visible;
-  }
-  .sv-schedule > summary { list-style: none; cursor: pointer; }
-  .sv-schedule > summary::-webkit-details-marker { display: none; }
-  .sv-schedule .sr-only {
-    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
-  }
-  .sv-schedule[open] > summary { color: #5eead4; }
-  .sv-schedule__panel {
-    position: absolute;
-    top: calc(100% + .45rem);
-    left: 0;
-    z-index: 40;
-    width: min(22rem, calc(100vw - 1.5rem));
-    max-height: min(28rem, calc(100dvh - 5.5rem));
-    overflow: auto;
-    padding: .9rem 1rem 1rem;
-    border-radius: .9rem;
-    border: 1px solid rgba(255,255,255,.12);
-    background: #0b1220;
-    box-shadow: 0 18px 40px rgba(0,0,0,.45);
-  }
-  .sv-schedule__title { margin: 0; font-size: .8125rem; font-weight: 800; color: #f3f4f6; }
-  .sv-schedule__sub { margin: .25rem 0 0; font-size: .6875rem; color: #8b919a; line-height: 1.45; }
-  .sv-schedule__now { margin: .4rem 0 0; font-size: .6875rem; color: #5eead4; }
-  .sv-schedule__label { margin: .75rem 0 .35rem; font-size: .6875rem; font-weight: 700; color: #d1d5db; }
-  .sv-schedule__days { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem; }
-  .sv-chip {
-    display: block; cursor: pointer;
-  }
-  .sv-chip span {
-    display: flex; align-items: center; justify-content: center;
-    min-height: 2rem; padding: 0 .4rem; border-radius: .5rem;
-    border: 1px solid rgba(255,255,255,.1);
-    font-size: .6875rem; color: #c4c9d1;
-  }
-  .sv-chip input:checked + span {
-    border-color: rgba(45,212,191,.45); background: rgba(45,212,191,.12); color: #99f6e4;
-  }
-  .sv-schedule__hours { display: grid; grid-template-columns: repeat(4, 1fr); gap: .35rem; }
-  .sv-hour { display: block; cursor: pointer; }
-  .sv-hour span {
-    display: flex; align-items: center; justify-content: center;
-    min-height: 1.85rem; border-radius: .5rem;
-    border: 1px solid rgba(255,255,255,.1);
-    font-size: .625rem; font-weight: 800; color: #9ca3af;
-  }
-  .sv-hour input:checked + span {
-    border-color: #14b8a6; background: #0d9488; color: #fff;
-  }
-  .sv-schedule__save {
-    display: flex; width: 100%; margin-top: .85rem; min-height: 2.25rem;
-    align-items: center; justify-content: center;
-    border: 0; border-radius: .55rem; background: #0d9488; color: #fff;
-    font-size: .75rem; font-weight: 800; font-family: inherit; cursor: pointer;
-  }
-  .sv-schedule__addr {
-    display: block; width: 100%; min-height: 3.4rem; margin: 0;
-    padding: .5rem .6rem; resize: vertical; box-sizing: border-box;
-    border-radius: .5rem; border: 1px solid rgba(255,255,255,.12);
-    background: #111827; color: #e5e7eb; font-size: .75rem; line-height: 1.45;
-    font-family: inherit;
-  }
-  .sv-schedule__addr::placeholder { color: #6b7280; }
   .sv-summary {
     padding: .75rem 1rem; border-bottom: 1px solid rgba(255,255,255,.08);
     font-size: .75rem; color: #8b919a; font-weight: 600;

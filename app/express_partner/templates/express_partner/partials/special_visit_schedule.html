@@ -1,42 +1,275 @@
-{# تنظیم وقت بازدید پلاس — داخل هدر پیگیری #}
-<details class="sv-schedule relative z-30"{% if schedule_open %} open{% endif %}>
-  <summary class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
-           aria-label="تنظیم وقت بازدید و آدرس حضور">
+{# تنظیم وقت بازدید پلاس — تمام‌صفحه #}
+<style>
+  html.sv-schedule-open { overflow: hidden; }
+  .sv-schedule { position: relative; z-index: 30; }
+  .sv-schedule .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+  .sv-schedule.is-open > .sv-schedule__open { color: #5eead4; }
+  .sv-schedule__panel {
+    position: fixed;
+    inset: 0;
+    z-index: 240;
+    width: 100vw !important;
+    width: 100dvw !important;
+    height: 100% !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+    border: 0;
+    border-radius: 0;
+    background: #05070b;
+    box-shadow: none;
+    color: inherit;
+    text-align: right;
+  }
+  .sv-schedule__panel[open],
+  .sv-schedule__panel.sv-schedule__panel--open {
+    display: flex;
+  }
+  .sv-schedule__panel::backdrop {
+    background: #05070b;
+  }
+  .sv-schedule__form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+  }
+  .sv-schedule__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-shrink: 0;
+    padding: 0.9rem 1rem 0.7rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .sv-schedule__head-text { min-width: 0; flex: 1; }
+  .sv-schedule__title { margin: 0; font-size: 1.05rem; font-weight: 800; color: #f3f4f6; }
+  .sv-schedule__sub { margin: 0.3rem 0 0; font-size: 0.75rem; color: #8b919a; line-height: 1.5; }
+  .sv-schedule__now { margin: 0.4rem 0 0; font-size: 0.72rem; color: #5eead4; line-height: 1.5; }
+  .sv-schedule__close {
+    flex-shrink: 0;
+    min-height: 2.35rem;
+    padding: 0 0.9rem;
+    border: 0;
+    border-radius: 0.7rem;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e4e4e7;
+    font-size: 0.8rem;
+    font-weight: 750;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .sv-schedule__body {
+    flex: 1;
+    overflow: auto;
+    padding: 0.35rem 1rem 1rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sv-schedule__label { margin: 0.9rem 0 0.4rem; font-size: 0.75rem; font-weight: 800; color: #d1d5db; }
+  .sv-schedule__days { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+  .sv-chip { display: block; cursor: pointer; }
+  .sv-chip span {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 2.55rem; padding: 0 0.5rem; border-radius: 0.65rem;
+    border: 1px solid rgba(255,255,255,.1);
+    font-size: 0.8rem; font-weight: 700; color: #c4c9d1;
+  }
+  .sv-chip input:checked + span {
+    border-color: rgba(45,212,191,.45); background: rgba(45,212,191,.12); color: #99f6e4;
+  }
+  .sv-schedule__hours { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; }
+  .sv-hour { display: block; cursor: pointer; }
+  .sv-hour span {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 2.4rem; border-radius: 0.6rem;
+    border: 1px solid rgba(255,255,255,.1);
+    font-size: 0.72rem; font-weight: 800; color: #9ca3af;
+  }
+  .sv-hour input:checked + span {
+    border-color: #14b8a6; background: #0d9488; color: #fff;
+  }
+  .sv-schedule__addr {
+    display: block; width: 100%; min-height: 4.2rem; margin: 0;
+    padding: 0.65rem 0.75rem; resize: vertical; box-sizing: border-box;
+    border-radius: 0.65rem; border: 1px solid rgba(255,255,255,.12);
+    background: #111827; color: #e5e7eb; font-size: 0.8rem; line-height: 1.5;
+    font-family: inherit;
+  }
+  .sv-schedule__addr::placeholder { color: #6b7280; }
+  .sv-schedule__save {
+    display: flex; width: calc(100% - 2rem); margin: 0 1rem 0.85rem;
+    min-height: 2.75rem; flex-shrink: 0;
+    align-items: center; justify-content: center;
+    border: 0; border-radius: 0.75rem; background: #0d9488; color: #fff;
+    font-size: 0.88rem; font-weight: 800; font-family: inherit; cursor: pointer;
+  }
+</style>
+<div class="sv-schedule"{% if schedule_open %} data-sv-schedule-start-open="1"{% endif %}>
+  <button type="button"
+          class="sv-schedule__open ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
+          data-sv-schedule-open
+          aria-haspopup="dialog"
+          aria-expanded="false"
+          aria-controls="svSchedulePanel"
+          aria-label="تنظیم وقت بازدید و آدرس حضور">
     <i class="fas fa-cog ep-partner-header-btn-icon" aria-hidden="true"></i>
-  </summary>
-  <form method="post"
-        action="{{ url_for('express_partner.special_visit_schedule') }}"
-        data-vinor-direct-action
-        class="sv-schedule__panel">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <p class="sv-schedule__title">وقت و آدرس حضور</p>
-    <p class="sv-schedule__sub">روز، ساعت و جایی که همکاران برای بازدید می‌آیند.</p>
-    {% if visit_allowed_weekdays_summary %}
-    <p class="sv-schedule__now">{{ visit_allowed_weekdays_summary }}{% if visit_allowed_hours_summary %} · {{ visit_allowed_hours_summary }}{% endif %}</p>
-    {% endif %}
-    <p class="sv-schedule__label">روزهای مجاز</p>
-    <div class="sv-schedule__days">
-      {% for wd in visit_weekday_order %}
-      <label class="sv-chip">
-        <input type="checkbox" name="visit_weekdays" value="{{ wd }}" class="peer sr-only"
-               {% if wd in visit_allowed_weekdays %}checked{% endif %}>
-        <span>{{ visit_weekday_labels.get(wd, wd) }}</span>
-      </label>
-      {% endfor %}
-    </div>
-    <p class="sv-schedule__label">ساعت‌های مجاز (تهران)</p>
-    <div class="sv-schedule__hours" dir="ltr">
-      {% for row in visit_hour_rows %}
-      <label class="sv-hour">
-        <input type="checkbox" name="visit_hours" value="{{ row.hour }}" class="peer sr-only"
-               {% if row.selected %}checked{% endif %}>
-        <span>{{ row.label }}</span>
-      </label>
-      {% endfor %}
-    </div>
-    <p class="sv-schedule__label">آدرس حضور</p>
-    <textarea name="visit_presence_address" class="sv-schedule__addr" rows="2" maxlength="200"
-              placeholder="دفتر، آدرس ملک، یا نقطهٔ ملاقات">{{ visit_presence_address|default('') }}</textarea>
-    <button type="submit" class="sv-schedule__save">ذخیره</button>
-  </form>
-</details>
+  </button>
+  <dialog id="svSchedulePanel" class="sv-schedule__panel" aria-labelledby="svScheduleTitle">
+    <form method="post"
+          action="{{ url_for('express_partner.special_visit_schedule') }}"
+          data-vinor-direct-action
+          class="sv-schedule__form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="sv-schedule__head">
+        <div class="sv-schedule__head-text">
+          <p class="sv-schedule__title" id="svScheduleTitle">وقت و آدرس حضور</p>
+          <p class="sv-schedule__sub">روز، ساعت و جایی که همکاران برای بازدید می‌آیند.</p>
+          {% if visit_allowed_weekdays_summary %}
+          <p class="sv-schedule__now">{{ visit_allowed_weekdays_summary }}{% if visit_allowed_hours_summary %} · {{ visit_allowed_hours_summary }}{% endif %}</p>
+          {% endif %}
+        </div>
+        <button type="button" class="sv-schedule__close" data-sv-schedule-close>بستن</button>
+      </div>
+      <div class="sv-schedule__body">
+        <p class="sv-schedule__label">روزهای مجاز</p>
+        <div class="sv-schedule__days">
+          {% for wd in visit_weekday_order %}
+          <label class="sv-chip">
+            <input type="checkbox" name="visit_weekdays" value="{{ wd }}" class="peer sr-only"
+                   {% if wd in visit_allowed_weekdays %}checked{% endif %}>
+            <span>{{ visit_weekday_labels.get(wd, wd) }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <p class="sv-schedule__label">ساعت‌های مجاز (تهران)</p>
+        <div class="sv-schedule__hours" dir="ltr">
+          {% for row in visit_hour_rows %}
+          <label class="sv-hour">
+            <input type="checkbox" name="visit_hours" value="{{ row.hour }}" class="peer sr-only"
+                   {% if row.selected %}checked{% endif %}>
+            <span>{{ row.label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <p class="sv-schedule__label">آدرس حضور</p>
+        <textarea name="visit_presence_address" class="sv-schedule__addr" rows="3" maxlength="200"
+                  placeholder="دفتر، آدرس ملک، یا نقطهٔ ملاقات">{{ visit_presence_address|default('') }}</textarea>
+      </div>
+      <button type="submit" class="sv-schedule__save">ذخیره</button>
+    </form>
+  </dialog>
+</div>
+<script>
+(function () {
+  var wrap = document.currentScript && document.currentScript.previousElementSibling;
+  if (!wrap || !wrap.classList || !wrap.classList.contains('sv-schedule')) {
+    wrap = document.querySelector('.sv-schedule');
+  }
+  if (!wrap || wrap.__svScheduleBound) return;
+  wrap.__svScheduleBound = true;
+  var panel = wrap.querySelector('.sv-schedule__panel');
+  var openBtn = wrap.querySelector('[data-sv-schedule-open]');
+  if (!panel) return;
+  var homeParent = wrap;
+  var usingDialog = typeof panel.showModal === 'function' && panel.tagName === 'DIALOG';
+
+  function isOpen() {
+    if (usingDialog) return !!panel.open;
+    return panel.classList.contains('sv-schedule__panel--open');
+  }
+
+  function syncChrome(open) {
+    wrap.classList.toggle('is-open', open);
+    if (openBtn) openBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    try {
+      document.documentElement.classList.toggle('sv-schedule-open', open);
+      document.documentElement.classList.toggle('vinor-express-overlay-modal-open', open);
+    } catch (_) {}
+  }
+
+  function placeOnBody(open) {
+    if (open) {
+      if (panel.parentNode !== document.body) document.body.appendChild(panel);
+      return;
+    }
+    if (panel.parentNode !== homeParent) homeParent.appendChild(panel);
+  }
+
+  function openPanel() {
+    if (isOpen()) return;
+    if (usingDialog) {
+      try {
+        if (panel.hasAttribute('open')) panel.removeAttribute('open');
+        panel.showModal();
+        syncChrome(true);
+        return;
+      } catch (_) {
+        usingDialog = false;
+      }
+    }
+    placeOnBody(true);
+    panel.classList.add('sv-schedule__panel--open');
+    panel.setAttribute('open', '');
+    syncChrome(true);
+  }
+
+  function closePanel() {
+    if (usingDialog && typeof panel.close === 'function') {
+      try { if (panel.open) panel.close(); } catch (_) {}
+      syncChrome(false);
+      return;
+    }
+    panel.classList.remove('sv-schedule__panel--open');
+    panel.removeAttribute('open');
+    placeOnBody(false);
+    syncChrome(false);
+  }
+
+  if (openBtn) {
+    openBtn.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      if (isOpen()) closePanel();
+      else openPanel();
+    });
+  }
+  wrap.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    if (t.closest('[data-sv-schedule-close]')) {
+      ev.preventDefault();
+      closePanel();
+    }
+  });
+  panel.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    if (t.closest('[data-sv-schedule-close]')) {
+      ev.preventDefault();
+      closePanel();
+    }
+  });
+  panel.addEventListener('close', function () {
+    placeOnBody(false);
+    syncChrome(false);
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (!isOpen()) return;
+    if (ev.key === 'Escape' || ev.keyCode === 27) closePanel();
+  });
+  window.addEventListener('pagehide', function () { closePanel(); });
+  if (wrap.getAttribute('data-sv-schedule-start-open') === '1') openPanel();
+})();
+</script>
