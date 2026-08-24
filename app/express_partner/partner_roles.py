@@ -59,6 +59,11 @@ def partner_can_record_visit_attendance(profile: Optional[Dict[str, Any]]) -> bo
     return partner_coop_level(profile) in (COOP_LEVEL_PLUS, COOP_LEVEL_VISITOR)
 
 
+def partner_can_manage_deal(profile: Optional[Dict[str, Any]]) -> bool:
+    """تأیید / رد / بستن معامله فقط سطح ۱ پلاس و سطح ۲ ویزیتور."""
+    return partner_coop_level(profile) in (COOP_LEVEL_PLUS, COOP_LEVEL_VISITOR)
+
+
 def set_partner_tier(profile: Dict[str, Any], special: bool) -> None:
     if special:
         profile["partner_tier"] = PARTNER_TIER_SPECIAL

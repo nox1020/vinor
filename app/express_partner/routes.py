@@ -4676,7 +4676,7 @@ def requests_page():
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile)
     is_special = _is_partner_special(profile) if is_approved else False
-    from .partner_roles import partner_can_record_visit_attendance
+    from .partner_roles import partner_can_manage_deal, partner_can_record_visit_attendance
     from .visit_requests import (
         OPEN_VISIT_STATUSES,
         PIPELINE_DEALS,
@@ -4718,6 +4718,7 @@ def requests_page():
 
     items = []
     allow_attendance = partner_can_record_visit_attendance(profile)
+    allow_deal = partner_can_manage_deal(profile)
     for r in mine:
         code = str(r.get('land_code') or '').strip()
         gs = land_status.get(code, 'active')
@@ -4733,6 +4734,7 @@ def requests_page():
             support_phone=support_phone,
             assignment_status=gs,
             allow_attendance=allow_attendance,
+            allow_deal=allow_deal,
         ))
 
     open_count = sum(
@@ -5085,6 +5087,93 @@ def requests_complete_visit(vid: str):
 def requests_no_show_visit(vid: str):
     """ویزیتور: ثبت عدم حضور از کارت پیگیری."""
     return _partner_visit_attendance_action(vid, outcome='no_show')
+
+
+@express_partner_bp.post('/requests/<vid>/deal-confirm', endpoint='requests_confirm_deal')
+@require_partner_access()
+def requests_confirm_deal(vid: str):
+    return _partner_deal_decision_action(vid, decision='approved')
+
+
+@express_partner_bp.post('/requests/<vid>/deal-reject', endpoint='requests_reject_deal')
+@require_partner_access()
+def requests_reject_deal(vid: str):
+    return _partner_deal_decision_action(vid, decision='rejected')
+
+
+@express_partner_bp.post('/requests/<vid>/deal-close', endpoint='requests_close_deal')
+@require_partner_access()
+def requests_close_deal(vid: str):
+    return _partner_deal_decision_action(vid, decision='closed')
+
+
+def _partner_deal_decision_action(vid: str, *, decision: str):
+    me_phone = (session.get('user_phone') or '').strip()
+    from .partner_roles import partner_can_manage_deal
+    from .visit_requests import record_visit_deal_decision
+
+    profile = getattr(g, 'express_partner_profile', None)
+    if not partner_can_manage_deal(profile):
+        return _requests_action_json(
+            False,
+            error='تأیید و بستن معامله فقط برای ویزیتور و پلاس فعال است.',
+        )
+    visit_rows = load_express_visit_requests() or []
+    if not isinstance(visit_rows, list):
+        visit_rows = []
+    rec = next(
+        (r for r in visit_rows if isinstance(r, dict) and str(r.get('id') or '') == str(vid or '')),
+        None,
+    )
+    if not rec:
+        return _requests_action_json(False, error='درخواست پیدا نشد.')
+    if str(rec.get('partner_phone') or '').strip() != me_phone:
+        return _requests_action_json(False, error='دسترسی ندارید.')
+    updated, err = record_visit_deal_decision(
+        visit_rows, str(vid), decision=decision, actor_phone=me_phone
+    )
+    if err == 'already_decided':
+        return _requests_action_json(False, error='برای این پرونده قبلاً تصمیم ثبت شده است.')
+    if err == 'invalid_status':
+        return _requests_action_json(False, error='این پرونده الان در مرحله معامله نیست.')
+    if err or not updated:
+        return _requests_action_json(False, error='ثبت تصمیم ممکن نشد.')
+    try:
+        save_express_visit_requests(visit_rows)
+    except Exception:
+        current_app.logger.exception('deal decision save failed id=%s', vid)
+        return _requests_action_json(False, error='ذخیره نشد.')
+    try:
+        from .special_visit_inbox import inject_visit_deal_chat
+
+        inject_visit_deal_chat(updated, decision=decision)
+    except Exception:
+        current_app.logger.exception('deal decision chat failed id=%s', vid)
+    if str(rec.get('land_code') or '').strip():
+        try:
+            from .special_visit_inbox import _apply_special_deal_action
+
+            listing_act = {
+                'approved': 'start_deal',
+                'rejected': 'reject_deal',
+                'closed': 'approve_deal',
+            }.get(decision)
+            if listing_act:
+                _apply_special_deal_action(
+                    rec, owner_phone=me_phone, action=listing_act
+                )
+        except Exception:
+            pass
+    msg = {
+        'approved': 'معامله تأیید شد.',
+        'rejected': 'معامله رد شد.',
+        'closed': 'پرونده بسته شد.',
+    }.get(decision, 'ثبت شد.')
+    wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
+    if wants_html:
+        flash(msg, 'success')
+        return redirect(_sales_pipeline_url('deals'))
+    return _requests_action_json(True, message=msg, visit_id=updated.get('id'), status=updated.get('status'))
 
 
 def _partner_visit_attendance_action(vid: str, *, outcome: str):
@@ -8718,6 +8807,20 @@ def special_visit_action(vid: str, action: str):
                 )
             except Exception:
                 current_app.logger.exception('visit attendance chat inject failed id=%s', vid)
+        if act_l in ('confirm_deal', 'decline_deal', 'close_deal'):
+            try:
+                from .special_visit_inbox import inject_visit_deal_chat
+
+                inject_visit_deal_chat(
+                    rec,
+                    decision={
+                        'confirm_deal': 'approved',
+                        'decline_deal': 'rejected',
+                        'close_deal': 'closed',
+                    }[act_l],
+                )
+            except Exception:
+                current_app.logger.exception('deal decision chat inject failed id=%s', vid)
 
     if act_l == 'approve':
         flash('بازدید تأیید شد.', 'success')
@@ -8735,9 +8838,18 @@ def special_visit_action(vid: str, action: str):
         flash('فروش نهایی تأیید شد: فایل بسته شد و پورسانت به کیف پول همکار اضافه شد.', 'success')
     elif act_l == 'reject_deal':
         flash('معامله رد شد. همکار می‌تواند دوباره درخواست بدهد.', 'info')
+    elif act_l == 'confirm_deal':
+        flash('معامله تأیید شد.', 'success')
+    elif act_l == 'decline_deal':
+        flash('معامله رد شد.', 'info')
+    elif act_l == 'close_deal':
+        flash('پرونده بسته شد.', 'success')
     else:
         flash('وضعیت بروزرسانی شد.', 'success')
-    pipeline_tab = 'deals' if act_l in ('complete', 'start_deal', 'approve_deal', 'reject_deal') else 'visits'
+    pipeline_tab = 'deals' if act_l in (
+        'complete', 'start_deal', 'approve_deal', 'reject_deal',
+        'confirm_deal', 'decline_deal', 'close_deal',
+    ) else 'visits'
     return redirect(_sales_pipeline_url(pipeline_tab))
 
 

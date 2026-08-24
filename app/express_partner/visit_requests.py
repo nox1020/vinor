@@ -820,6 +820,7 @@ def partner_request_feed_item(
     support_phone: str = "",
     assignment_status: str = "",
     allow_attendance: bool = False,
+    allow_deal: bool = False,
     plus_own: bool = False,
 ) -> Dict[str, Any]:
     """کارت سادهٔ صفحهٔ درخواست‌ها برای همکار."""
@@ -834,6 +835,13 @@ def partner_request_feed_item(
         CANCELLED_STATUS: "لغو شده",
         NO_SHOW_STATUS: "عدم حضور",
     }
+    deal_dec = visit_deal_decision(row)
+    if st == COMPLETED_STATUS and deal_dec == DEAL_DECISION_APPROVED:
+        labels[COMPLETED_STATUS] = "معامله تأیید شد"
+    elif st == COMPLETED_STATUS and deal_dec == DEAL_DECISION_REJECTED:
+        labels[COMPLETED_STATUS] = "معامله رد شد"
+    elif st == COMPLETED_STATUS and deal_dec == DEAL_DECISION_CLOSED:
+        labels[COMPLETED_STATUS] = "بسته شد"
     first = str(row.get("customer_first_name") or "").strip()
     last = str(row.get("customer_last_name") or "").strip()
     cust_name = str(row.get("customer_name") or "").strip() or f"{first} {last}".strip()
@@ -872,6 +880,7 @@ def partner_request_feed_item(
     can_mark_attendance = bool(allow_attendance) and st in (APPROVED_STATUS, DONE_PENDING_STATUS)
     can_complete = can_mark_attendance
     can_no_show = can_mark_attendance
+    deal_flags = visit_deal_action_flags(row, allowed=bool(allow_deal))
     return {
         "id": str(row.get("id") or "").strip(),
         "kind": "visit",
@@ -895,6 +904,9 @@ def partner_request_feed_item(
         "can_delete": can_delete,
         "can_complete": can_complete,
         "can_no_show": can_no_show,
+        "can_confirm_deal": deal_flags["can_confirm_deal"],
+        "can_reject_deal": deal_flags["can_reject_deal"],
+        "can_close_deal": deal_flags["can_close_deal"],
         "can_revisit": bool(can_revisit),
         "can_remove": can_cancel or can_delete,
         "assignment_status": assign_st,
@@ -1878,6 +1890,79 @@ def record_visit_attendance(
     rec["no_show_at"] = now_iso
     rec["updated_at"] = now_iso
     rec.pop("completed_at", None)
+    return rec, None
+
+
+DEAL_DECISION_APPROVED = "approved"
+DEAL_DECISION_REJECTED = "rejected"
+DEAL_DECISION_CLOSED = "closed"
+_DEAL_DECISION_ALIASES = {
+    "approved": DEAL_DECISION_APPROVED,
+    "approve": DEAL_DECISION_APPROVED,
+    "confirm": DEAL_DECISION_APPROVED,
+    "rejected": DEAL_DECISION_REJECTED,
+    "reject": DEAL_DECISION_REJECTED,
+    "decline": DEAL_DECISION_REJECTED,
+    "closed": DEAL_DECISION_CLOSED,
+    "close": DEAL_DECISION_CLOSED,
+}
+
+
+def visit_deal_decision(row: Dict[str, Any] | None) -> str:
+    if not isinstance(row, dict):
+        return ""
+    return str(row.get("deal_decision") or "").strip().lower()
+
+
+def visit_deal_action_flags(row: Dict[str, Any] | None, *, allowed: bool) -> Dict[str, bool]:
+    """تأیید / رد / بستن روی پروندهٔ انجام‌شده."""
+    empty = {
+        "can_confirm_deal": False,
+        "can_reject_deal": False,
+        "can_close_deal": False,
+    }
+    if not allowed or not isinstance(row, dict):
+        return empty
+    st = str(row.get("status") or "").strip()
+    if st != COMPLETED_STATUS:
+        return empty
+    dec = visit_deal_decision(row)
+    if dec in (DEAL_DECISION_REJECTED, DEAL_DECISION_CLOSED):
+        return empty
+    return {
+        "can_confirm_deal": dec != DEAL_DECISION_APPROVED,
+        "can_reject_deal": True,
+        "can_close_deal": True,
+    }
+
+
+def record_visit_deal_decision(
+    requests: List[Dict[str, Any]],
+    visit_id: str,
+    *,
+    decision: str,
+    actor_phone: str = "",
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """ثبت تأیید / رد / بستن معامله روی پروندهٔ بازدید انجام‌شده."""
+    rec = _find_visit_request(requests, str(visit_id or "").strip())
+    if not rec:
+        return None, "not_found"
+    st = str(rec.get("status") or "").strip()
+    if st != COMPLETED_STATUS:
+        return None, "invalid_status"
+    dec = _DEAL_DECISION_ALIASES.get((decision or "").strip().lower(), "")
+    if not dec:
+        return None, "invalid_decision"
+    current = visit_deal_decision(rec)
+    if current in (DEAL_DECISION_REJECTED, DEAL_DECISION_CLOSED):
+        return rec, "already_decided"
+    if current == DEAL_DECISION_APPROVED and dec == DEAL_DECISION_APPROVED:
+        return rec, None
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    rec["deal_decision"] = dec
+    rec["deal_decided_at"] = now_iso
+    rec["deal_decided_by"] = str(actor_phone or "").strip()
+    rec["updated_at"] = now_iso
     return rec, None
 
 

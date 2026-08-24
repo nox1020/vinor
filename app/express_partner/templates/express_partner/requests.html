@@ -154,6 +154,11 @@
     background: #059669;
     color: #fff;
   }
+  #partnerRequestsPage .rq-btn--deal {
+    border-color: rgba(13, 148, 136, 0.45);
+    background: #0d9488;
+    color: #fff;
+  }
   #partnerRequestsPage .rq-btn--noshow {
     border-color: rgba(248, 113, 113, 0.4);
     background: transparent;
@@ -419,6 +424,7 @@
   .sv-btn-row {
     display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; align-items: stretch;
   }
+  .sv-btn-row--3 { grid-template-columns: 1fr 1fr 1fr; }
   .sv-btn-row--solo { grid-template-columns: 1fr; }
   .sv-btn-row form { display: flex; min-width: 0; }
   .sv-btn {
@@ -627,6 +633,24 @@
           <form method="post" action="{{ url_for('express_partner.requests_no_show_visit', vid=item.id) }}" data-vinor-direct-action class="contents">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('عدم حضور ثبت شود؟')">عدم حضور</button>
+          </form>
+          {% endif %}
+          {% if item.can_confirm_deal %}
+          <form method="post" action="{{ url_for('express_partner.requests_confirm_deal', vid=item.id) }}" data-vinor-direct-action class="contents">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="rq-btn rq-btn--ok">تأیید</button>
+          </form>
+          {% endif %}
+          {% if item.can_reject_deal %}
+          <form method="post" action="{{ url_for('express_partner.requests_reject_deal', vid=item.id) }}" data-vinor-direct-action class="contents">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('معامله رد شود؟')">رد</button>
+          </form>
+          {% endif %}
+          {% if item.can_close_deal %}
+          <form method="post" action="{{ url_for('express_partner.requests_close_deal', vid=item.id) }}" data-vinor-direct-action class="contents">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="rq-btn rq-btn--deal" onclick="return confirm('پرونده بسته شود؟')">بستن</button>
           </form>
           {% endif %}
           {% if item.can_revisit %}

@@ -410,10 +410,16 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             can_approve = False
             can_reject = False
             can_reject_done = False
-            can_approve_deal = False
-            can_reject_deal = False
-            can_start_deal = False
             can_register_result = False
+            # تأیید/رد/بستن معامله روی وقت تقویم هم فعال می‌ماند
+
+        from .visit_requests import visit_deal_action_flags, visit_deal_decision
+
+        deal_flags = visit_deal_action_flags(row, allowed=True)
+        can_confirm_deal = bool(deal_flags.get("can_confirm_deal")) or can_start_deal
+        can_reject_deal = bool(deal_flags.get("can_reject_deal")) or can_reject_deal
+        can_close_deal = bool(deal_flags.get("can_close_deal")) or can_approve_deal
+        deal_dec = visit_deal_decision(row)
 
         progress_steps = visit_progress_steps(
             row,
@@ -458,9 +464,16 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
 
         needs_action = bool(
             can_approve or can_complete or can_no_show or can_approve_deal
+            or can_confirm_deal or can_reject_deal or can_close_deal
         )
         status_label = labels.get(st, st)
-        if deal_pending:
+        if deal_dec == "approved":
+            status_label = "معامله تأیید شد"
+        elif deal_dec == "rejected":
+            status_label = "معامله رد شد"
+        elif deal_dec == "closed":
+            status_label = "بسته شد"
+        elif deal_pending:
             status_label = "منتظر تأیید فروش"
         elif deal_final:
             status_label = "فروش تأیید شد"
@@ -516,11 +529,16 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             "can_start_deal": can_start_deal,
             "can_approve_deal": can_approve_deal,
             "can_reject_deal": can_reject_deal,
+            "can_confirm_deal": can_confirm_deal,
+            "can_close_deal": can_close_deal,
             "created_at": str(row.get("created_at") or ""),
             "updated_at": str(row.get("updated_at") or ""),
             "needs_action": needs_action,
             "has_actions": needs_action
             or can_start_deal
+            or can_confirm_deal
+            or can_reject_deal
+            or can_close_deal
             or can_register_result
             or can_reject
             or can_reject_done,
@@ -595,6 +613,34 @@ def apply_special_visit_action(
         )
     if act in ("start_deal", "approve_deal", "reject_deal"):
         return _apply_special_deal_action(rec, owner_phone=owner_phone, action=act)
+    if act in ("confirm_deal", "decline_deal", "close_deal"):
+        from .visit_requests import record_visit_deal_decision
+
+        mapping = {
+            "confirm_deal": "approved",
+            "decline_deal": "rejected",
+            "close_deal": "closed",
+        }
+        updated, err = record_visit_deal_decision(
+            requests,
+            rid,
+            decision=mapping[act],
+            actor_phone=owner_phone,
+        )
+        if err and err not in ("already_decided",):
+            return None, err
+        listing_act = {
+            "confirm_deal": "start_deal",
+            "decline_deal": "reject_deal",
+            "close_deal": "approve_deal",
+        }[act]
+        try:
+            _apply_special_deal_action(
+                rec, owner_phone=owner_phone, action=listing_act
+            )
+        except Exception:
+            pass
+        return updated or rec, None
     if act == "no_show":
         from .visit_requests import record_visit_attendance
 
@@ -645,6 +691,46 @@ def apply_special_visit_action(
         except Exception:
             return None, "failed"
     return None, "invalid_action"
+
+
+def inject_visit_deal_chat(rec: Dict[str, Any] | None, *, decision: str) -> None:
+    """پیام تأیید / رد / بستن معامله را در چت بنویس."""
+    if not isinstance(rec, dict):
+        return
+    dec = (decision or "").strip().lower()
+    try:
+        from .visit_requests import visit_request_display_title
+        from .sales_coach import _inject_partner_system_chat as _inject_chat
+    except Exception:
+        return
+    title = visit_request_display_title(rec)
+    code = str(rec.get("land_code") or "").strip()
+    if dec in ("approved", "approve", "confirm"):
+        body = f"معامله «{title}» تأیید شد."
+        event = "deal_approved"
+    elif dec in ("rejected", "reject", "decline"):
+        body = f"معامله «{title}» رد شد."
+        event = "deal_rejected"
+    elif dec in ("closed", "close"):
+        body = f"پروندهٔ معامله «{title}» بسته شد."
+        event = "deal_closed"
+    else:
+        return
+    seen: set[str] = set()
+    for raw in (rec.get("partner_phone"), rec.get("plus_user_phone")):
+        ph = str(raw or "").strip()
+        if not ph or ph in seen:
+            continue
+        seen.add(ph)
+        try:
+            _inject_chat(
+                ph,
+                land_code=code,
+                body=body,
+                event=event,
+            )
+        except Exception:
+            pass
 
 
 def inject_visit_attendance_chat(rec: Dict[str, Any] | None, *, outcome: str) -> None:

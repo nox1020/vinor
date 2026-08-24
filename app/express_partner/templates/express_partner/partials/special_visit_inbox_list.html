@@ -116,7 +116,28 @@
       </form>
       {% endif %}
 
-      {% if item.can_start_deal %}
+      {% if item.can_confirm_deal or item.can_reject_deal or item.can_close_deal %}
+      <div class="sv-btn-row sv-btn-row--3">
+        {% if item.can_confirm_deal %}
+        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='confirm_deal') }}" data-vinor-direct-action>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="sv-btn sv-btn--ok">تأیید</button>
+        </form>
+        {% endif %}
+        {% if item.can_reject_deal %}
+        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='decline_deal') }}" data-vinor-direct-action>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm('معامله رد شود؟')">رد</button>
+        </form>
+        {% endif %}
+        {% if item.can_close_deal %}
+        <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='close_deal') }}" data-vinor-direct-action>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="sv-btn sv-btn--deal" onclick="return confirm('پرونده بسته شود؟')">بستن</button>
+        </form>
+        {% endif %}
+      </div>
+      {% elif item.can_start_deal %}
       <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='start_deal') }}" data-vinor-direct-action>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="sv-btn sv-btn--deal" onclick="return confirm('فروش نهایی برای این همکار ثبت شود؟ فایل در حال معامله می‌شود.')">ثبت معامله</button>
@@ -124,6 +145,7 @@
       {% endif %}
 
       {% if item.can_approve_deal or item.can_reject_deal %}
+      {% if not item.can_confirm_deal and not item.can_close_deal %}
       <div class="sv-btn-row{% if not item.can_reject_deal or not item.can_approve_deal %} sv-btn-row--solo{% endif %}">
         {% if item.can_approve_deal %}
         <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=item.id, action='approve_deal') }}" data-vinor-direct-action>
@@ -138,6 +160,7 @@
         </form>
         {% endif %}
       </div>
+      {% endif %}
       {% endif %}
 
       {% if item.can_register_result %}
