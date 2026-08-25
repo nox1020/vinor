@@ -582,8 +582,91 @@
     syncScrollBottomBtn();
   }
 
+  var landChatFocusCode = '';
+  var landChatFocusUntil = 0;
+
+  function setLandChatFocus(code) {
+    landChatFocusCode = String(code || '').trim();
+    landChatFocusUntil = landChatFocusCode ? Date.now() + 15000 : 0;
+  }
+
+  try {
+    var bootLand = '';
+    try {
+      bootLand = sessionStorage.getItem('vinor_land_chat_code') || '';
+    } catch (_) {}
+    if (!bootLand) {
+      bootLand = String(new URLSearchParams(window.location.search).get('land') || '').trim();
+    }
+    if (!bootLand) {
+      var bootDivar = '';
+      try {
+        bootDivar = sessionStorage.getItem('vinor_divar_chat_token') || '';
+      } catch (_) {}
+      if (!bootDivar) {
+        bootDivar = String(new URLSearchParams(window.location.search).get('divar') || '').trim();
+      }
+      if (bootDivar) {
+        bootLand = bootDivar.indexOf('divar:') === 0 ? bootDivar : 'divar:' + bootDivar;
+      }
+    }
+    if (bootLand) setLandChatFocus(bootLand);
+  } catch (_) {}
+
+  function landChatFocusWrap() {
+    if (!landChatFocusCode || Date.now() > landChatFocusUntil) return null;
+    var live = document.getElementById('aiMessages');
+    if (live && live.isConnected) list = live;
+    var host = (live && live.isConnected) ? live : list;
+    if (!host) return null;
+    var c = landChatFocusCode;
+    try {
+      if (window.CSS && typeof CSS.escape === 'function') c = CSS.escape(c);
+    } catch (_) {
+      c = c.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    }
+    try {
+      return host.querySelector('.ai-msg-wrap[data-land-chat-code="' + c + '"]');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function applyScrollToElement(target, pad) {
+    if (!target || !target.isConnected) return;
+    var scroller = chatScrollEl();
+    if (!scroller) {
+      try {
+        target.scrollIntoView({ block: 'start', behavior: 'auto' });
+      } catch (_) {}
+      return;
+    }
+    pad = typeof pad === 'number' ? pad : 8;
+    var next = 0;
+    try {
+      var elRect = target.getBoundingClientRect();
+      var scRect = scroller.getBoundingClientRect();
+      next = scroller.scrollTop + (elRect.top - scRect.top) - pad;
+    } catch (_) {
+      next = target.offsetTop || 0;
+    }
+    if (next < 0) next = 0;
+    try {
+      scroller.scrollTop = next;
+    } catch (_) {}
+    try {
+      syncScrollBottomBtn();
+    } catch (_) {}
+  }
+
   function scrollChatToEnd(opts) {
     opts = opts || {};
+    var focus = landChatFocusWrap();
+    if (focus) {
+      stickChatToBottom = false;
+      applyScrollToElement(focus);
+      return;
+    }
     var force = !!opts.force;
     var smooth = !!opts.smooth;
     if (!force && !stickChatToBottom) {
@@ -607,9 +690,45 @@
     syncScrollBottomBtn();
   }
 
+  /* #aiMessages overflow:visible است؛ اسکرول واقعی #vnHomeScroll است */
+  function scrollChatToElement(target, opts) {
+    opts = opts || {};
+    if (!target || !target.isConnected) return;
+    scrollLatestGen += 1;
+    stickChatToBottom = false;
+    var gen = scrollLatestGen;
+    var codeHint = '';
+    try {
+      codeHint = target.getAttribute('data-land-chat-code') || landChatFocusCode || '';
+    } catch (_) {}
+    if (codeHint) setLandChatFocus(codeHint);
+    function go() {
+      if (gen !== scrollLatestGen && !landChatFocusWrap()) return;
+      var live = target.isConnected ? target : landChatFocusWrap();
+      if (!live) return;
+      applyScrollToElement(live, opts.pad);
+    }
+    go();
+    try {
+      requestAnimationFrame(function () {
+        go();
+        requestAnimationFrame(go);
+      });
+    } catch (_) {}
+    if (opts.retries === false) return;
+    [80, 200, 400, 720, 1100, 1600].forEach(function (ms) {
+      setTimeout(go, ms);
+    });
+  }
+
   /* بدو ورود / تعویض ترد: همیشه آخرین پیام — چند تلاش برای layout دیرگاه */
   function scrollChatToLatest(opts) {
     opts = opts || {};
+    var focus = landChatFocusWrap();
+    if (focus) {
+      scrollChatToElement(focus);
+      return;
+    }
     var gen = ++scrollLatestGen;
     stickChatToBottom = true;
     function go() {
@@ -2102,7 +2221,8 @@
     });
     scanLastSyncFromDom();
     syncHomeEmptyState();
-    scrollChatToEnd({ force: homeInline });
+    /* poll نباید کاربر را از کارت فایل (یا اسکرول دستی) بکند پایین */
+    scrollChatToEnd({ force: false });
   }
 
   async function confirmAgentAction(card) {
@@ -2692,7 +2812,11 @@
         syncHomeEmptyState();
       } catch (_) {}
     }
-    scrollChatToEnd({ force: !!(homeInline && (document.getElementById('vnOpsScroll') || document.getElementById('vnHomeScroll'))) });
+    scrollChatToEnd({
+      force:
+        !landChatFocusCode &&
+        !!(homeInline && (document.getElementById('vnOpsScroll') || document.getElementById('vnHomeScroll'))),
+    });
     return wrap;
   }
 
@@ -3758,6 +3882,8 @@
     window.__vinorAiChatSwitchThread = null;
     window.__vinorAiChatSwitchHomeMode = null;
     window.__vinorAiConsumeHomeChatBack = null;
+    try { window.vinorShowLandInChat = null; } catch (_) {}
+    try { window.vinorShowDivarInChat = null; } catch (_) {}
   }
 
   window.__vinorAiChatTeardown = teardownAiChat;
@@ -4420,8 +4546,18 @@
   window.vinorShowLandInChat = function (code) {
     code = String(code || '').trim();
     if (!code) return Promise.resolve(false);
+    var liveList = document.getElementById('aiMessages');
+    if (!liveList || !liveList.isConnected) return Promise.resolve(false);
+    list = liveList;
+    form = document.getElementById('aiChatForm') || form;
+    input = document.getElementById('aiInput') || input;
+    btn = document.getElementById('aiSendBtn') || btn;
     if (landDetailPending === code) return Promise.resolve(false);
     landDetailPending = code;
+    /* ورود از آگهی: اسکرول «آخرین پیام» را لغو کن تا کارت فایل دیده شود */
+    setLandChatFocus(code);
+    scrollLatestGen += 1;
+    stickChatToBottom = false;
 
     /* مستقیم همان چت وینور — لایه را فوری باز کن تا داشبورد فلش نزند */
     try {
@@ -4434,7 +4570,7 @@
       if (!isPostchiMode()) resumePoll();
     } catch (_) {}
 
-    function revealChatWithLand() {
+    function revealChatWithLand(targetEl) {
       try {
         ensureChatVisible();
       } catch (_) {}
@@ -4453,23 +4589,33 @@
       try {
         syncHomeEmptyState();
       } catch (_) {}
-      try {
-        scrollChatToEnd({ force: true });
-      } catch (_) {}
+      var focusEl = targetEl;
+      if (!focusEl || !focusEl.isConnected) {
+        try {
+          focusEl = list && list.querySelector(landChatCodeSelector(code));
+        } catch (_) {
+          focusEl = null;
+        }
+      }
+      if (focusEl) {
+        scrollChatToElement(focusEl);
+      } else {
+        try {
+          scrollChatToEnd({ force: true });
+        } catch (_) {}
+      }
     }
 
     function showLandInVinor() {
       var existing = list.querySelector(landChatCodeSelector(code));
       if (existing) {
-        revealChatWithLand();
+        revealChatWithLand(existing);
         try {
-          refreshLandChatCard(code);
+          Promise.resolve(refreshLandChatCard(code)).then(function () {
+            var again = list.querySelector(landChatCodeSelector(code));
+            if (again) scrollChatToElement(again);
+          }).catch(function () {});
         } catch (_) {}
-        try {
-          existing.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        } catch (_) {
-          scrollChatToEnd({ force: true });
-        }
         landDetailPending = null;
         return Promise.resolve(true);
       }
@@ -4509,9 +4655,12 @@
           }
           var again = list.querySelector(landChatCodeSelector(code));
           if (again) {
-            revealChatWithLand();
+            revealChatWithLand(again);
             try {
-              refreshLandChatCard(code);
+              Promise.resolve(refreshLandChatCard(code)).then(function () {
+                var live = list.querySelector(landChatCodeSelector(code));
+                if (live) scrollChatToElement(live);
+              }).catch(function () {});
             } catch (_) {}
             return true;
           }
@@ -4521,7 +4670,7 @@
             land_detail_html: payload.data.html,
             land_code: payload.data.code || code,
           });
-          revealChatWithLand();
+          revealChatWithLand(list.querySelector(landChatCodeSelector(code)));
           return true;
         })
         .catch(function () {

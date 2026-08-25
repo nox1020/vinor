@@ -365,7 +365,7 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
 
     labels = {
         PENDING_STATUS: "منتظر تأیید (قدیمی)",
-        APPROVED_STATUS: "نهایی شده — منتظر بازدید",
+        APPROVED_STATUS: "منتظر بازدید",
         DONE_PENDING_STATUS: "منتظر تأیید انجام",
         COMPLETED_STATUS: "بازدید انجام شد",
         CANCELLED_STATUS: "رد شده",
@@ -510,7 +510,7 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
         elif outcome == VISIT_OUTCOME_INTERESTED:
             status_label = "علاقه‌مند — وقت دوم یا قرارداد"
         elif outcome == VISIT_OUTCOME_FOLLOW_UP:
-            status_label = "پیگیری دوباره تا بازدید دوم"
+            status_label = "پیگیری دوباره"
         elif deal_pending:
             status_label = "منتظر تأیید فروش"
         elif deal_final:

@@ -355,7 +355,7 @@
          data-land-code="{{ item.code }}"
          class="sp-row">
         <div class="sp-row__thumb" aria-hidden="true">
-          {% if item.image_url %}<img src="{{ item.image_url }}" alt="" loading="lazy">{% endif %}
+          {% if item.image_url %}<img src="{{ item.image_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
         </div>
         <div class="min-w-0 flex-1">
           <h2 class="sp-row__title truncate">{{ item.title }}</h2>

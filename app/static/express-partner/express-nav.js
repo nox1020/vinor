@@ -212,26 +212,31 @@
       if (!code) code = String(q.get('land') || '').trim();
       if (!divar) divar = String(q.get('divar') || '').trim();
     } catch (_) {}
-    stripChatOpenQueryFromUrl();
     if (!code && !divar) return;
-    try { sessionStorage.removeItem('vinor_land_chat_code'); } catch (_) {}
-    try { sessionStorage.removeItem('vinor_divar_chat_token'); } catch (_) {}
     var tries = 0;
     (function tick() {
       tries += 1;
-      if (code && typeof window.vinorShowLandInChat === 'function') {
+      var live = document.getElementById('aiMessages');
+      var ready = !!(live && live.isConnected);
+      if (code && ready && typeof window.vinorShowLandInChat === 'function') {
         try { window.vinorShowLandInChat(code); } catch (_) {}
+        try { sessionStorage.removeItem('vinor_land_chat_code'); } catch (_) {}
+        stripChatOpenQueryFromUrl();
         return;
       }
-      if (divar && typeof window.vinorShowDivarInChat === 'function') {
+      if (divar && ready && typeof window.vinorShowDivarInChat === 'function') {
         try { window.vinorShowDivarInChat(divar); } catch (_) {}
+        try { sessionStorage.removeItem('vinor_divar_chat_token'); } catch (_) {}
+        stripChatOpenQueryFromUrl();
         return;
       }
-      if (divar && typeof window.vinorShowLandInChat === 'function') {
+      if (divar && ready && typeof window.vinorShowLandInChat === 'function') {
         try { window.vinorShowLandInChat('divar:' + divar); } catch (_) {}
+        try { sessionStorage.removeItem('vinor_divar_chat_token'); } catch (_) {}
+        stripChatOpenQueryFromUrl();
         return;
       }
-      if (tries < 40) setTimeout(tick, 100);
+      if (tries < 50) setTimeout(tick, 80);
     })();
   }
 
@@ -952,6 +957,7 @@
       Array.prototype.forEach.call(oldScript.attributes, function (attr) {
         s.setAttribute(attr.name, attr.value);
       });
+      if (s.getAttribute('src')) s.async = false;
       s.textContent = oldScript.textContent;
       oldScript.parentNode.replaceChild(s, oldScript);
     });
@@ -1472,7 +1478,14 @@
           }
         } catch (_) {}
       }
-      stripChatOpenQueryFromUrl();
+      var pendingLandChat = false;
+      try {
+        pendingLandChat = !!(
+          sessionStorage.getItem('vinor_land_chat_code') ||
+          sessionStorage.getItem('vinor_divar_chat_token')
+        );
+      } catch (_) {}
+      if (!pendingLandChat) stripChatOpenQueryFromUrl();
       if (isStaleNav(gen)) return false;
       afterPageSwap(softTabKeyForUrl(finalHref));
       try {
@@ -1485,6 +1498,16 @@
     }
 
     var cached = (!opts.postLogin && shouldUsePrefetchCache(href)) ? prefetchCache[targetHref] : null;
+    try {
+      var landChatQ = parseUrl(href);
+      var landChatPath = normPath(landChatQ.pathname);
+      if (
+        (landChatPath === '/express/partner/home' || landChatPath === '/express/partner/dashboard') &&
+        (landChatQ.searchParams.get('land') || landChatQ.searchParams.get('divar'))
+      ) {
+        cached = null;
+      }
+    } catch (_) {}
     if (cached && isLandDetailPath(normPath(parseUrl(href).pathname)) && !landDetailHtmlLooksValid(cached)) {
       delete prefetchCache[targetHref];
       cached = null;

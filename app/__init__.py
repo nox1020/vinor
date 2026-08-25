@@ -256,7 +256,7 @@ def create_app() -> Flask:
         SESSION_COOKIE_HTTPONLY=True,
         PERMANENT_SESSION_LIFETIME=timedelta(days=180),
         PREFERRED_URL_SCHEME="https" if cookie_secure else "http",
-        TEMPLATES_AUTO_RELOAD=_flask_debug(),
+        TEMPLATES_AUTO_RELOAD=True,
         JSON_AS_ASCII=False,
         UPLOAD_FOLDER=os.environ.get("UPLOAD_FOLDER", default_upload_folder),
         SQLALCHEMY_DATABASE_URI=db_url,

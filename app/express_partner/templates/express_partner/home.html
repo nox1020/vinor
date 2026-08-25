@@ -320,7 +320,7 @@
 </script>
 {% if home_ai_enabled|default(false) %}
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
-<script src="{{ url_for('static', filename='express-partner/ai-chat.js') }}?v=127"></script>
+<script src="{{ 'express-partner/ai-chat.js'|static_version }}"></script>
 <script>
 (function () {
   function syncHomeDockPad() {
@@ -374,29 +374,23 @@
         }
       })();
     if (landCode) {
-      try {
-        sessionStorage.removeItem('vinor_land_chat_code');
-      } catch (_) {}
-      function stripLandQuery() {
-        try {
-          var u = new URL(window.location.href);
-          if (u.searchParams.has('land')) {
-            u.searchParams.delete('land');
-            history.replaceState(history.state || {}, '', u.pathname + (u.search || '') + (u.hash || ''));
-          }
-        } catch (_) {}
-      }
-      stripLandQuery();
-      setTimeout(stripLandQuery, 0);
-      setTimeout(stripLandQuery, 80);
       var tries = 0;
       (function waitShow() {
         tries += 1;
-        if (typeof window.vinorShowLandInChat === 'function') {
+        var live = document.getElementById('aiMessages');
+        if (live && live.isConnected && typeof window.vinorShowLandInChat === 'function') {
           window.vinorShowLandInChat(landCode);
+          try { sessionStorage.removeItem('vinor_land_chat_code'); } catch (_) {}
+          try {
+            var u = new URL(window.location.href);
+            if (u.searchParams.has('land')) {
+              u.searchParams.delete('land');
+              history.replaceState(history.state || {}, '', u.pathname + (u.search || '') + (u.hash || ''));
+            }
+          } catch (_) {}
           return;
         }
-        if (tries < 40) setTimeout(waitShow, 100);
+        if (tries < 50) setTimeout(waitShow, 80);
       })();
     }
   } catch (_) {}
@@ -412,28 +406,29 @@
         }
       })();
     if (divarTok) {
-      try {
-        sessionStorage.removeItem('vinor_divar_chat_token');
-      } catch (_) {}
-      try {
-        var du = new URL(window.location.href);
-        if (du.searchParams.has('divar')) {
-          du.searchParams.delete('divar');
-          history.replaceState(history.state || {}, '', du.pathname + (du.search || '') + (du.hash || ''));
-        }
-      } catch (_) {}
       var dtries = 0;
       (function waitShowDivar() {
         dtries += 1;
-        if (typeof window.vinorShowDivarInChat === 'function') {
+        var live = document.getElementById('aiMessages');
+        var ready = live && live.isConnected;
+        if (ready && typeof window.vinorShowDivarInChat === 'function') {
           window.vinorShowDivarInChat(divarTok);
-          return;
-        }
-        if (typeof window.vinorShowLandInChat === 'function') {
+        } else if (ready && typeof window.vinorShowLandInChat === 'function') {
           window.vinorShowLandInChat('divar:' + divarTok);
+        } else if (dtries < 50) {
+          setTimeout(waitShowDivar, 80);
+          return;
+        } else {
           return;
         }
-        if (dtries < 40) setTimeout(waitShowDivar, 100);
+        try { sessionStorage.removeItem('vinor_divar_chat_token'); } catch (_) {}
+        try {
+          var du = new URL(window.location.href);
+          if (du.searchParams.has('divar')) {
+            du.searchParams.delete('divar');
+            history.replaceState(history.state || {}, '', du.pathname + (du.search || '') + (du.hash || ''));
+          }
+        } catch (_) {}
       })();
     }
   } catch (_) {}

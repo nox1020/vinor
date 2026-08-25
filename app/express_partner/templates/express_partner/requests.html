@@ -35,6 +35,29 @@
     background: #000;
     padding-top: 0.15rem;
   }
+  #partnerRequestsPage #rqFeed {
+    will-change: transform, opacity;
+  }
+  #partnerRequestsPage #rqFeed.rq-feed--from-left {
+    animation: rqFeedFromLeft 0.28s ease;
+  }
+  #partnerRequestsPage #rqFeed.rq-feed--from-right {
+    animation: rqFeedFromRight 0.28s ease;
+  }
+  @keyframes rqFeedFromLeft {
+    from { transform: translateX(-22%); opacity: 0.45; }
+    to { transform: none; opacity: 1; }
+  }
+  @keyframes rqFeedFromRight {
+    from { transform: translateX(22%); opacity: 0.45; }
+    to { transform: none; opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #partnerRequestsPage #rqFeed.rq-feed--from-left,
+    #partnerRequestsPage #rqFeed.rq-feed--from-right {
+      animation: none;
+    }
+  }
   #partnerRequestsPage .rq-card,
   #partnerRequestsPage .sv-card {
     margin: 0 0.85rem 0.7rem;
@@ -68,16 +91,8 @@
   #partnerRequestsPage .rq-vcard__top {
     display: flex;
     align-items: flex-start;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 0.65rem;
-  }
-  #partnerRequestsPage .rq-vcard__title {
-    margin: 0;
-    font-size: 0.88rem;
-    font-weight: 800;
-    color: var(--rq-text);
-    line-height: 1.35;
-    min-width: 0;
   }
   #partnerRequestsPage .rq-vcard__facts {
     margin: 0.65rem 0 0;
@@ -221,7 +236,8 @@
   }
   /* تب‌ها: کارت مخفی نباید جای خالی بگیرد */
   #partnerRequestsPage .rq-empty[hidden],
-  #partnerRequestsPage [data-pipeline][hidden] {
+  #partnerRequestsPage [data-pipeline][hidden],
+  #partnerRequestsPage [data-rq-section][hidden] {
     display: none !important;
   }
   #partnerRequestsPage .rq-empty__title {
@@ -704,7 +720,6 @@
       {% set st = item.status|default('') %}
       {% set st_cls = 'is-pending' if st in ('pending', 'done_pending') else ('is-done' if st in ('completed', 'approved') else ('is-closed' if st in ('cancelled', 'no_show') else '')) %}
       {% set phone = (item.support_phone or _support)|trim %}
-      {% set title = item.title %}
       {% set status_class = st_cls %}
       <article class="rq-card"
                data-pipeline="{{ item.pipeline_tab|default('requests') }}"
@@ -824,14 +839,37 @@
   var delText = document.getElementById('rqDeleteModalText');
   var pendingRemove = null;
 
+  var TAB_ORDER = ['requests', 'visits', 'deals'];
+
   function currentTab() {
     return String(page.getAttribute('data-active-tab') || 'requests');
   }
 
-  function setPipelineTab(tab) {
-    closeDetail();
+  function tabIndexOf(tab) {
+    var i = TAB_ORDER.indexOf(String(tab || ''));
+    return i < 0 ? 0 : i;
+  }
+
+  function playFeedSlide(dir) {
+    var feed = document.getElementById('rqFeed');
+    if (!feed || !dir) return;
+    try {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    } catch (_) {}
+    feed.classList.remove('rq-feed--from-left', 'rq-feed--from-right');
+    void feed.offsetWidth;
+    feed.classList.add(dir > 0 ? 'rq-feed--from-left' : 'rq-feed--from-right');
+  }
+
+  function setPipelineTab(tab, opts) {
+    opts = opts || {};
+    var prev = currentTab();
     var next = String(tab || 'requests');
     if (next !== 'requests' && next !== 'visits' && next !== 'deals') next = 'requests';
+    if (next === prev && opts.fromSwipe) return;
+    closeDetail();
+    var dir = opts.dir;
+    if (dir == null) dir = tabIndexOf(next) - tabIndexOf(prev);
     page.setAttribute('data-active-tab', next);
     page.querySelectorAll('[data-rq-tab]').forEach(function (btn) {
       var on = btn.getAttribute('data-rq-tab') === next;
@@ -892,11 +930,13 @@
         next === 'visits' ? 'rqTabVisits' : (next === 'deals' ? 'rqTabDeals' : 'rqTabRequests')
       );
     }
+    if (next !== prev) playFeedSlide(dir);
   }
 
   page.querySelectorAll('[data-rq-tab]').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      setPipelineTab(btn.getAttribute('data-rq-tab'));
+      var next = btn.getAttribute('data-rq-tab');
+      setPipelineTab(next, { dir: tabIndexOf(next) - tabIndexOf(currentTab()) });
     }, sigOpts);
   });
   var tablist = page.querySelector('.rq-tabs');
@@ -914,10 +954,119 @@
       else nextI = Math.max(0, i - 1);
       if (nextI === i) return;
       ev.preventDefault();
-      setPipelineTab(tabs[nextI].getAttribute('data-rq-tab'));
+      setPipelineTab(tabs[nextI].getAttribute('data-rq-tab'), { dir: nextI - i });
       try { tabs[nextI].focus(); } catch (_) {}
     }, sigOpts);
   }
+
+  var swipe = null;
+  var suppressTabSwipeClick = false;
+
+  function swipeBlocked(el) {
+    if (!el || !el.closest) return true;
+    if (el.closest('#rqDetailModal, #rqDeleteModal, input, textarea, select, [contenteditable="true"]')) {
+      return true;
+    }
+    try {
+      if (document.documentElement.classList.contains('rq-detail-open')) return true;
+      if (document.documentElement.classList.contains('rq-del-modal-open')) return true;
+    } catch (_) {}
+    return false;
+  }
+
+  function beginTabSwipe(x, y, target) {
+    if (swipeBlocked(target)) {
+      swipe = null;
+      return;
+    }
+    var edge = 22;
+    if (x < edge || x > (window.innerWidth || 0) - edge) {
+      swipe = null;
+      return;
+    }
+    swipe = { x0: x, y0: y, axis: '', active: true };
+  }
+
+  function moveTabSwipe(x, y) {
+    if (!swipe || !swipe.active) return;
+    var dx = x - swipe.x0;
+    var dy = y - swipe.y0;
+    if (!swipe.axis) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      swipe.axis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+    }
+    if (swipe.axis === 'y') swipe.active = false;
+  }
+
+  function endTabSwipe(x, y) {
+    if (!swipe || !swipe.active) {
+      swipe = null;
+      return;
+    }
+    var dx = x - swipe.x0;
+    var dy = y - swipe.y0;
+    var wasX = swipe.axis === 'x';
+    swipe = null;
+    if (!wasX) return;
+    if (Math.abs(dx) < 48) return;
+    if (Math.abs(dx) < Math.abs(dy) * 1.25) return;
+    var i = tabIndexOf(currentTab());
+    var dir = dx < 0 ? 1 : -1;
+    var nextI = i + dir;
+    if (nextI < 0 || nextI >= TAB_ORDER.length) return;
+    suppressTabSwipeClick = true;
+    setTimeout(function () { suppressTabSwipeClick = false; }, 350);
+    setPipelineTab(TAB_ORDER[nextI], { dir: dir, fromSwipe: true });
+  }
+
+  page.addEventListener('touchstart', function (e) {
+    if (!e.touches || e.touches.length !== 1) {
+      swipe = null;
+      return;
+    }
+    beginTabSwipe(e.touches[0].clientX, e.touches[0].clientY, e.target);
+  }, { passive: true, signal: sig });
+  page.addEventListener('touchmove', function (e) {
+    if (!swipe || !swipe.active || !e.touches || e.touches.length !== 1) return;
+    moveTabSwipe(e.touches[0].clientX, e.touches[0].clientY);
+    if (swipe && swipe.axis === 'x' && e.cancelable) e.preventDefault();
+  }, { passive: false, signal: sig });
+  page.addEventListener('touchend', function (e) {
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) {
+      swipe = null;
+      return;
+    }
+    endTabSwipe(t.clientX, t.clientY);
+  }, { passive: true, signal: sig });
+  page.addEventListener('touchcancel', function () {
+    swipe = null;
+  }, { passive: true, signal: sig });
+  page.addEventListener('pointerdown', function (e) {
+    if (e.pointerType === 'touch') return;
+    if (e.button != null && e.button !== 0) return;
+    beginTabSwipe(e.clientX, e.clientY, e.target);
+  }, sigOpts);
+  page.addEventListener('pointermove', function (e) {
+    if (e.pointerType === 'touch') return;
+    if (!swipe || !swipe.active) return;
+    moveTabSwipe(e.clientX, e.clientY);
+  }, sigOpts);
+  page.addEventListener('pointerup', function (e) {
+    if (e.pointerType === 'touch') return;
+    endTabSwipe(e.clientX, e.clientY);
+  }, sigOpts);
+  page.addEventListener('pointercancel', function (e) {
+    if (e.pointerType === 'touch') return;
+    swipe = null;
+  }, sigOpts);
+  page.addEventListener('click', function (ev) {
+    if (!suppressTabSwipeClick) return;
+    suppressTabSwipeClick = false;
+    ev.preventDefault();
+    ev.stopPropagation();
+  }, { capture: true, signal: sig });
+
   setPipelineTab(currentTab());
 
   function csrf() {
@@ -967,6 +1116,16 @@
   var parkedParent = null;
   var parkedNext = null;
 
+  function syncOverlayNav() {
+    var detailOpen = !!(detailModal && detailModal.classList.contains('is-open'));
+    var delOpen = !!(delModal && delModal.classList.contains('is-open'));
+    try {
+      document.documentElement.classList.toggle('rq-detail-open', detailOpen);
+      document.documentElement.classList.toggle('rq-del-modal-open', delOpen);
+      document.documentElement.classList.toggle('vinor-express-overlay-modal-open', detailOpen || delOpen);
+    } catch (_) {}
+  }
+
   function closeDetail() {
     var body = detailSlot ? detailSlot.querySelector('[data-rq-detail-body]') : null;
     if (parkedCard) {
@@ -985,7 +1144,7 @@
       detailModal.hidden = true;
       detailModal.setAttribute('aria-hidden', 'true');
     }
-    try { document.documentElement.classList.remove('rq-detail-open'); } catch (_) {}
+    syncOverlayNav();
   }
 
   function openDetail(card) {
@@ -1009,7 +1168,11 @@
     detailModal.hidden = false;
     detailModal.classList.add('is-open');
     detailModal.setAttribute('aria-hidden', 'false');
-    try { document.documentElement.classList.add('rq-detail-open'); } catch (_) {}
+    syncOverlayNav();
+    try {
+      var panel = detailModal.querySelector('.rq-detail-modal__panel');
+      if (panel) panel.focus();
+    } catch (_) {}
   }
 
   function openDeleteModal(card) {
@@ -1037,7 +1200,7 @@
     delModal.hidden = false;
     delModal.classList.add('is-open');
     delModal.setAttribute('aria-hidden', 'false');
-    try { document.documentElement.classList.add('rq-del-modal-open'); } catch (_) {}
+    syncOverlayNav();
   }
 
   function closeDeleteModal() {
@@ -1046,7 +1209,7 @@
     delModal.classList.remove('is-open');
     delModal.hidden = true;
     delModal.setAttribute('aria-hidden', 'true');
-    try { document.documentElement.classList.remove('rq-del-modal-open'); } catch (_) {}
+    syncOverlayNav();
     if (delConfirm) delConfirm.disabled = false;
   }
 

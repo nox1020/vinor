@@ -520,10 +520,22 @@ def visit_card_call_phones(
             return ""
         return p
 
+    vis = pick(visitor_phone)
+    mkt = pick(marketer_phone)
+    cust = pick(customer_phone)
+    vis_n = _canonical_visit_phone(vis)
+    mkt_n = _canonical_visit_phone(mkt)
+    cust_n = _canonical_visit_phone(cust)
+    if mkt_n and vis_n and mkt_n == vis_n:
+        mkt = ""
+    if cust_n and vis_n and cust_n == vis_n:
+        cust = ""
+    if cust_n and mkt_n and cust_n == mkt_n:
+        cust = ""
     return {
-        "call_visitor_phone": pick(visitor_phone),
-        "call_marketer_phone": pick(marketer_phone),
-        "call_customer_phone": pick(customer_phone),
+        "call_visitor_phone": vis,
+        "call_marketer_phone": mkt,
+        "call_customer_phone": cust,
     }
 
 
@@ -1004,7 +1016,7 @@ def partner_request_feed_item(
     if st == COMPLETED_STATUS and outcome == VISIT_OUTCOME_INTERESTED:
         labels[COMPLETED_STATUS] = "علاقه‌مند — وقت دوم یا قرارداد"
     elif st == COMPLETED_STATUS and outcome == VISIT_OUTCOME_FOLLOW_UP:
-        labels[COMPLETED_STATUS] = "پیگیری دوباره تا بازدید دوم"
+        labels[COMPLETED_STATUS] = "پیگیری دوباره"
     elif st == COMPLETED_STATUS and outcome == VISIT_OUTCOME_NOT_INTERESTED:
         labels[COMPLETED_STATUS] = "بی‌علاقه — بدون پیگیری"
     deal_flags = visit_deal_action_flags(row, allowed=bool(allow_deal))
