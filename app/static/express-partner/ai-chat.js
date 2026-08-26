@@ -1,5 +1,6 @@
 /**
  * Vinor AI — چت + منوی کشویی + کارت فایل
+ * home chat history load from empty dashboard
  */
 (function () {
   'use strict';
@@ -226,7 +227,24 @@
     if (bar) bar.removeAttribute('hidden');
   }
 
+  function bindLiveChatDom() {
+    var liveList = document.getElementById('aiMessages');
+    if (liveList && liveList.isConnected) list = liveList;
+    var liveForm = document.getElementById('aiChatForm');
+    if (liveForm) form = liveForm;
+    var liveInput = document.getElementById('aiInput');
+    if (liveInput) input = liveInput;
+    var liveBtn = document.getElementById('aiSendBtn');
+    if (liveBtn) btn = liveBtn;
+    var liveThread = document.getElementById('aiActiveThreadId');
+    if (liveThread) threadInput = liveThread;
+    return list;
+  }
+
+  var historyLoadInFlight = null;
+
   function listHasVinorHistory() {
+    bindLiveChatDom();
     if (!list) return false;
     try {
       if (list.querySelector('.ai-msg-wrap[data-role="user"]')) return true;
@@ -243,6 +261,45 @@
       }
     } catch (_) {}
     return false;
+  }
+
+  function loadVinorHistoryIfEmpty() {
+    bindLiveChatDom();
+    if (listHasVinorHistory()) return Promise.resolve(true);
+    if (historyLoadInFlight) return historyLoadInFlight;
+    var tid = '';
+    try {
+      tid = vinorThreadIdForReturn() || activeThreadId() || '';
+    } catch (_) {
+      tid = '';
+    }
+    if (!tid || tid === postchiThreadId || (typeof isLawyerThreadId === 'function' && isLawyerThreadId(tid))) {
+      return Promise.resolve(false);
+    }
+    var url = historyUrl || (form && form.getAttribute('data-history-url')) || '';
+    if (!url) return Promise.resolve(false);
+    url += (url.indexOf('?') >= 0 ? '&' : '?') + 'thread_id=' + encodeURIComponent(tid);
+    historyLoadInFlight = fetch(url, {
+      credentials: 'same-origin',
+      headers: apiHeaders(false),
+    })
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (data) {
+        bindLiveChatDom();
+        if (listHasVinorHistory()) return true;
+        if (!data || !data.ok || !data.messages || !data.messages.length) return false;
+        renderMessages(data.messages);
+        return listHasVinorHistory();
+      })
+      .catch(function () {
+        return false;
+      })
+      .finally(function () {
+        historyLoadInFlight = null;
+      });
+    return historyLoadInFlight;
   }
 
   function isHomeChatEmpty() {
@@ -537,6 +594,7 @@
     btn.addEventListener('click', function (e) {
       e.preventDefault();
       stickChatToBottom = true;
+      clearLandChatFocus();
       scrollChatToEnd({ force: true, smooth: true });
       btn.hidden = true;
     });
@@ -590,6 +648,11 @@
     landChatFocusUntil = landChatFocusCode ? Date.now() + 15000 : 0;
   }
 
+  function clearLandChatFocus() {
+    landChatFocusCode = '';
+    landChatFocusUntil = 0;
+  }
+
   try {
     var bootLand = '';
     try {
@@ -611,6 +674,9 @@
       }
     }
     if (bootLand) setLandChatFocus(bootLand);
+    else {
+      try { sessionStorage.removeItem('vinor_land_chat_from_nav'); } catch (_) {}
+    }
   } catch (_) {}
 
   function landChatFocusWrap() {
@@ -661,13 +727,16 @@
 
   function scrollChatToEnd(opts) {
     opts = opts || {};
-    var focus = landChatFocusWrap();
-    if (focus) {
-      stickChatToBottom = false;
-      applyScrollToElement(focus);
-      return;
-    }
     var force = !!opts.force;
+    /* ارسال/آخرین پیام: force بر قفل کارت آگهی اولویت دارد */
+    if (!force) {
+      var focus = landChatFocusWrap();
+      if (focus) {
+        stickChatToBottom = false;
+        applyScrollToElement(focus);
+        return;
+      }
+    }
     var smooth = !!opts.smooth;
     if (!force && !stickChatToBottom) {
       syncScrollBottomBtn();
@@ -721,10 +790,22 @@
     });
   }
 
+  /** ورود عادی به گفتگوی وینور/پستچی: همیشه آخر چت (نه کارت آگهی میانی). */
+  function jumpVinorChatToLatest(opts) {
+    opts = opts || {};
+    try {
+      clearLandChatFocus();
+    } catch (_) {}
+    stickChatToBottom = true;
+    try {
+      scrollChatToLatest({ smooth: !!opts.smooth, forceLatest: true });
+    } catch (_) {}
+  }
+
   /* بدو ورود / تعویض ترد: همیشه آخرین پیام — چند تلاش برای layout دیرگاه */
   function scrollChatToLatest(opts) {
     opts = opts || {};
-    var focus = landChatFocusWrap();
+    var focus = !opts.forceLatest ? landChatFocusWrap() : null;
     if (focus) {
       scrollChatToElement(focus);
       return;
@@ -1036,6 +1117,9 @@
     forceShowOpeningInHome = false;
     pollPaused = true;
     try {
+      clearLandChatFocus();
+    } catch (_) {}
+    try {
       cancelTypewriter();
     } catch (_) {}
     try {
@@ -1311,14 +1395,19 @@
   }
 
   function ensureVinorHistoryThen(fn) {
+    bindLiveChatDom();
     var tid = vinorThreadIdForReturn();
     var onSpecial = isPostchiMode() || isLawyerMode();
     var needLoad = onSpecial || !listHasVinorHistory();
     function go() {
-      try {
-        if (typeof fn === 'function') return fn();
-      } catch (_) {}
-      return undefined;
+      var run = function () {
+        try {
+          if (typeof fn === 'function') return fn();
+        } catch (_) {}
+        return undefined;
+      };
+      if (!needLoad || listHasVinorHistory()) return run();
+      return loadVinorHistoryIfEmpty().then(run, run);
     }
     try {
       if (homeInline) {
@@ -1356,13 +1445,30 @@
       }
       homeModeWasEmpty = isHomeChatEmpty();
       homeModeSwitching = true;
-      return Promise.resolve(switchThread(postchiThreadId)).finally(function () {
+      try {
+        clearLandChatFocus();
+      } catch (_) {}
+      return Promise.resolve(switchThread(postchiThreadId, { toLatest: true })).finally(function () {
         homeModeSwitching = false;
         syncHomeModeSwitch();
       });
     }
     if (!isPostchiMode() && !isLawyerMode()) {
       syncHomeModeSwitch();
+      if (homeInline && isHomeChatEmpty()) {
+        var openTid = vinorThreadIdForReturn() || activeThreadId();
+        if (!openTid) return Promise.resolve();
+        homeChatLayerOpen = true;
+        homeEmptyEntryForced = false;
+        try {
+          ensureChatVisible();
+        } catch (_) {}
+        return Promise.resolve(switchThread(openTid, { toLatest: true }));
+      }
+      /* تب وینور وقتی همین‌جا هستیم: برو به آخرین پیام */
+      if (homeInline && homeChatLayerOpen) {
+        jumpVinorChatToLatest();
+      }
       return Promise.resolve();
     }
     if (homeModeWasEmpty) {
@@ -1379,7 +1485,7 @@
       return Promise.resolve();
     }
     homeModeSwitching = true;
-    return Promise.resolve(switchThread(tid)).finally(function () {
+    return Promise.resolve(switchThread(tid, { toLatest: true })).finally(function () {
       homeModeSwitching = false;
       syncHomeModeSwitch();
     });
@@ -2867,6 +2973,7 @@
   }
 
   function renderMessages(messages) {
+    bindLiveChatDom();
     cancelTypewriter();
     list.innerHTML = '';
     seenEscalationIds = {};
@@ -3355,8 +3462,16 @@
     historyTimer = setTimeout(run, 280);
   }
 
-  async function switchThread(threadId) {
+  async function switchThread(threadId, opts) {
+    opts = opts || {};
+    var toLatest = !!opts.toLatest;
     if (!switchUrl || !threadId) return;
+    bindLiveChatDom();
+    if (toLatest) {
+      try {
+        clearLandChatFocus();
+      } catch (_) {}
+    }
     if (String(threadId) === String(activeThreadId())) {
       var hasHistory = typeof listHasVinorHistory === 'function' && listHasVinorHistory();
       var needOpenChat =
@@ -3364,7 +3479,7 @@
         (!homeChatLayerOpen ||
           (typeof isHomeChatEmpty === 'function' && isHomeChatEmpty()) ||
           !hasHistory);
-      if (!needOpenChat) {
+      if (!needOpenChat && hasHistory) {
         if (homeInline) {
           homeChatLayerOpen = true;
           homeEmptyEntryForced = false;
@@ -3375,6 +3490,10 @@
         }
         closeSideMenu();
         syncHomeModeSwitch();
+        /* منو/تب وینور: همیشه آخر گفتگو — نه جایی که قبلاً اسکرول مانده */
+        if (toLatest || !landChatFocusWrap()) {
+          jumpVinorChatToLatest();
+        }
         return;
       }
       /* همان ترد فعال روی بدو ورود خانه است — ادامه بده تا پیام‌ها بیاید و چت باز شود */
@@ -3432,6 +3551,11 @@
       } finally {
         forceShowOpeningInHome = false;
       }
+      if (enterVinorChat && !listHasVinorHistory()) {
+        try {
+          await loadVinorHistoryIfEmpty();
+        } catch (_) {}
+      }
       if (data.threads) applyThreads(data.threads);
       if (data.mode === 'postchi' || data.thread_id === postchiThreadId) {
         pollPaused = true;
@@ -3451,6 +3575,10 @@
       try {
         syncHomeEmptyState();
       } catch (_) {}
+      /* بعد از رندر: ورود عادی → آخر چت؛ باز کردن آگهی land focus را نگه می‌دارد */
+      if (toLatest || ((enterVinorChat || enterSpecialChat) && !landChatFocusWrap())) {
+        jumpVinorChatToLatest();
+      }
     } catch (err) {
       if (err && err.name !== 'AbortError') alert(err.message || 'خطا');
     } finally {
@@ -3638,8 +3766,10 @@
     closeSideMenu();
     if (tid) {
       try {
-        await switchThread(tid);
+        await switchThread(tid, { toLatest: true });
       } catch (_) {}
+    } else {
+      jumpVinorChatToLatest();
     }
     ensureChatVisible();
     showChipBar();
@@ -3656,6 +3786,17 @@
     if (layerGated && !sheetOpen && !homeInline) return;
     var tid = activeThreadId();
     if (!tid) return;
+    bindLiveChatDom();
+    if (homeInline && homeChatLayerOpen && storedMessageCount() === 0) {
+      pollInFlight = true;
+      try {
+        await loadVinorHistoryIfEmpty();
+      } catch (_) {}
+      finally {
+        pollInFlight = false;
+      }
+      if (listHasVinorHistory()) return;
+    }
     if (syncAbort) syncAbort.abort();
     syncAbort = new AbortController();
     pollInFlight = true;
@@ -3967,7 +4108,7 @@
       }
       var tid =
         lawyerOpenBtn.getAttribute('data-lawyer-thread-id') || lawyerThreadId || '__lawyer__';
-      if (tid) switchThread(tid);
+      if (tid) switchThread(tid, { toLatest: true });
     });
   }
 
@@ -3999,7 +4140,8 @@
       e.preventDefault();
       e.stopPropagation();
       var tid = item.getAttribute('data-thread-id');
-      if (tid) switchThread(tid);
+      /* هر بار باز کردن گفتگو از منو → آخرین پیام */
+      if (tid) switchThread(tid, { toLatest: true });
     });
   }
 
@@ -4073,6 +4215,7 @@
     input.value = '';
     autoGrowInput();
     setBusy(true);
+    clearLandChatFocus();
     stickChatToBottom = true;
     scrollChatToEnd({ force: true });
 

@@ -490,11 +490,13 @@
        aria-label="اسکرول افقی آگهی‌ها">
     {% for ad in _divar_ads %}
     {% set _src = (ad.source|default('divar'))|string|lower %}
-    {% set _ext = ad.external|default(_src != 'vinor') %}
+    {% set _ad_url = (ad.url|default(''))|string %}
+    {% set _internal = _ad_url.startswith('/express/partner/') %}
+    {% set _ext = false if _internal else (ad.external|default(_src != 'vinor')) %}
     <a class="vn-home-divar__card"
        role="listitem"
        href="{{ ad.url }}"
-       {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav data-vinor-open-land-chat="1"{% if _src == 'vinor' %} data-land-code="{{ ad.token }}"{% endif %}{% endif %}
+       {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav data-vinor-open-land-chat="1"{% if _src == 'vinor' %} data-land-code="{{ ad.token }}"{% else %} data-divar-token="{{ ad.token }}"{% endif %}{% endif %}
        title="{{ ad.title|e }}">
       <div class="vn-home-divar__media">
         {% if ad.image_url %}
@@ -552,12 +554,14 @@
       <div class="vn-home-divar-all__list no-scrollbar" role="list">
         {% for ad in _divar_ads %}
         {% set _src = (ad.source|default('divar'))|string|lower %}
-        {% set _ext = ad.external|default(_src != 'vinor') %}
+        {% set _ad_url = (ad.url|default(''))|string %}
+        {% set _internal = _ad_url.startswith('/express/partner/') %}
+        {% set _ext = false if _internal else (ad.external|default(_src != 'vinor')) %}
         <a class="vn-home-divar-all__row"
            role="listitem"
            href="{{ ad.url }}"
            data-divar-all-close
-           {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav data-vinor-open-land-chat="1"{% if _src == 'vinor' %} data-land-code="{{ ad.token }}"{% endif %}{% endif %}
+           {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav data-vinor-open-land-chat="1"{% if _src == 'vinor' %} data-land-code="{{ ad.token }}"{% else %} data-divar-token="{{ ad.token }}"{% endif %}{% endif %}
            title="{{ ad.title|e }}">
           <div class="vn-home-divar-all__thumb" aria-hidden="true">
             {% if ad.image_url %}
