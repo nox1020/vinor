@@ -99,7 +99,7 @@
   .ep-home-mode-switch__unread[hidden] {
     display: none !important;
   }
-  /* خانهٔ خالی: هدر قبلی (پلاس وسط). چت وینور/پستچی: سوییچر وسط */
+  /* خانهٔ خالی: هدر قبلی (پلاس وسط). چت وینور/اعلان: سوییچر وسط */
   #homeDashboardPage.ai-home-is-empty .ep-header-float-actions--modes {
     display: none !important;
   }
@@ -310,9 +310,9 @@
             role="tab"
             id="vinorHomeModePostchi"
             data-home-mode="postchi"
-            aria-label="پستچی"
+            aria-label="اعلان"
             aria-selected="{{ 'true' if (active_thread_id|default('') == (postchi_thread_id|default('__postchi__'))) else 'false' }}">
-      <span>پستچی</span>
+      <span>اعلان</span>
       <span id="vinorHomePostchiUnread" class="ep-home-mode-switch__unread" hidden></span>
     </button>
   </div>

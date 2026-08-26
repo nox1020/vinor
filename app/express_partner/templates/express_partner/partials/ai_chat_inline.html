@@ -145,6 +145,12 @@
     );
     pointer-events: none;
   }
+  /* شیت پیوست بالای کارت‌های خانه — جلوگیری از تداخل لایه */
+  #homeDashboardPage.home-dashboard-page--ai .vn-home-composer-dock:has(.ai-attach.is-open),
+  #homeDashboardPage.ai-home-is-empty .vn-home-composer-dock:has(.ai-attach.is-open) {
+    z-index: 70;
+    overflow: visible;
+  }
   #homeDashboardPage.home-dashboard-page--ai .vn-home-composer-dock::before {
     content: "";
     position: absolute;

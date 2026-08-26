@@ -3348,6 +3348,7 @@ def _partner_ai_layer_context(
         'postchi_messages_url': '',
         'postchi_send_url': '',
         'postchi_open_url': '',
+        'ai_upload_url': '',
         'guest_replies_remaining': None,
         'guest_replies_limit': None,
     }
@@ -3481,6 +3482,7 @@ def _partner_ai_layer_context(
             'postchi_messages_url': '',
             'postchi_send_url': '',
             'postchi_open_url': '',
+            'ai_upload_url': url_for('express_partner.ai_upload'),
             'guest_replies_remaining': guest_remaining,
             'guest_replies_limit': guest_limit,
         })
@@ -3585,6 +3587,7 @@ def _partner_ai_layer_context(
         'postchi_messages_url': url_for('express_partner.api_postchi_messages'),
         'postchi_send_url': url_for('express_partner.api_postchi_send'),
         'postchi_open_url': url_for('express_partner.api_postchi_open'),
+        'ai_upload_url': url_for('express_partner.ai_upload'),
     })
     try:
         from app.lawyer.config import lawyer_enabled as _le
@@ -6952,6 +6955,31 @@ def ai_chat():
     chip_intent = (data.get('intent') or data.get('chip_intent') or '').strip()
     hide_user = bool(data.get('hide_user') or data.get('silent') or data.get('hide_ui'))
     mode = (data.get('mode') or '').strip().lower()
+    attachment = data.get('attachment') if isinstance(data.get('attachment'), dict) else None
+    if attachment:
+        att_url = str(attachment.get('url') or '').strip()
+        att_name = str(attachment.get('name') or 'فایل').strip() or 'فایل'
+        att_kind = str(attachment.get('kind') or 'file').strip().lower() or 'file'
+        if att_url:
+            kind_fa = {
+                'image': 'تصویر',
+                'video': 'ویدیو',
+                'file': 'فایل',
+            }.get(att_kind, 'فایل')
+            att_line = f'[پیوست {kind_fa}: {att_name}]'
+            if not message:
+                message = att_line
+            elif att_line not in message:
+                message = f'{att_line}\n{message}'
+            attachment = {
+                'kind': att_kind,
+                'url': att_url,
+                'name': att_name,
+                'mime': str(attachment.get('mime') or '').strip(),
+                'size': int(attachment.get('size') or 0) or 0,
+            }
+        else:
+            attachment = None
     if not message:
         return jsonify({'ok': False, 'error': 'پیام خالی است.'}), 400
     if is_postchi_thread(thread_id):
@@ -6983,6 +7011,7 @@ def ai_chat():
 
     land_codes = [] if voice == VOICE_LAWYER else (result.get('land_codes') or [])
     agent_actions = [] if voice == VOICE_LAWYER else (result.get('agent_actions') or [])
+    user_meta = {'attachment': attachment} if attachment else None
     msgs, tid = append_exchange(
         phone,
         message,
@@ -6992,6 +7021,7 @@ def ai_chat():
         assistant_agent_actions=agent_actions,
         audience=AUDIENCE_PARTNER,
         hide_user=hide_user,
+        user_meta=user_meta,
     )
     result['messages'] = msgs
     result['audience'] = AUDIENCE_PARTNER
@@ -7008,6 +7038,91 @@ def ai_chat():
         result['land_codes'] = []
         result['agent_actions'] = []
     return jsonify(result)
+
+
+@express_partner_bp.post('/ai/upload', endpoint='ai_upload')
+@require_partner_access(allow_pending=True, json_response=True)
+def ai_upload():
+    """آپلود پیوست چت وینور (تصویر / ویدیو / فایل) — پاسخ JSON."""
+    from werkzeug.utils import secure_filename
+    from ..utils.images import normalize_upload_url, save_upload_image
+
+    phone = (session.get('user_phone') or '').strip()
+    if not phone:
+        return jsonify({'ok': False, 'error': 'برای آپلود وارد شوید.', 'need_login': True}), 401
+
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return jsonify({'ok': False, 'error': 'فایلی ارسال نشده است.'}), 400
+
+    kind = (request.form.get('kind') or '').strip().lower()
+    raw_name = str(f.filename or 'file')
+    ext = os.path.splitext(raw_name)[1].lower()
+    mime = (getattr(f, 'mimetype', None) or '').strip().lower()
+
+    image_exts = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif'}
+    video_exts = {'.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'}
+    file_exts = {
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.zip', '.rar',
+        '.png', '.jpg', '.jpeg', '.webp',
+    }
+
+    if not kind:
+        if mime.startswith('image/') or ext in image_exts:
+            kind = 'image'
+        elif mime.startswith('video/') or ext in video_exts:
+            kind = 'video'
+        else:
+            kind = 'file'
+
+    max_bytes = {
+        'image': 12 * 1024 * 1024,
+        'video': 80 * 1024 * 1024,
+        'file': 25 * 1024 * 1024,
+    }.get(kind, 25 * 1024 * 1024)
+
+    # اندازه تقریبی از stream
+    try:
+        f.stream.seek(0, os.SEEK_END)
+        size = int(f.stream.tell() or 0)
+        f.stream.seek(0)
+    except Exception:
+        size = 0
+    if size and size > max_bytes:
+        return jsonify({'ok': False, 'error': 'حجم فایل بیش از حد مجاز است.'}), 400
+
+    upload_folder = os.path.join(current_app.static_folder, 'uploads')
+    os.makedirs(upload_folder, exist_ok=True)
+
+    if kind == 'image':
+        stored = save_upload_image(f, upload_folder)
+        if not stored:
+            return jsonify({'ok': False, 'error': 'ذخیره تصویر ناموفق بود.'}), 400
+        url = normalize_upload_url(stored)
+        path = stored
+    else:
+        if kind == 'video' and ext not in video_exts:
+            return jsonify({'ok': False, 'error': 'فرمت ویدیو مجاز نیست.'}), 400
+        if kind == 'file' and ext and ext not in file_exts and not mime.startswith('image/'):
+            # اجازهٔ پسوندهای رایج؛ بدون پسوند هم قبول
+            if ext not in {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.zip', '.rar'}:
+                return jsonify({'ok': False, 'error': 'فرمت فایل مجاز نیست.'}), 400
+        safe = secure_filename(f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}__{raw_name}") or (
+            datetime.now().strftime('%Y%m%d%H%M%S%f') + '_file'
+        )
+        f.save(os.path.join(upload_folder, safe))
+        path = f'uploads/{safe}'
+        url = normalize_upload_url(path)
+
+    return jsonify({
+        'ok': True,
+        'kind': kind,
+        'path': path,
+        'url': url,
+        'name': raw_name,
+        'mime': mime,
+        'size': size,
+    })
 
 
 @express_partner_bp.post('/ai/agent/confirm', endpoint='ai_agent_confirm')

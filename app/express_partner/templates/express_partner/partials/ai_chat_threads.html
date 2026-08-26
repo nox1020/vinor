@@ -1,4 +1,4 @@
-{# لیست گفتگوها — وینور + پستچی وینور (اگر برای همکار فعال باشد) #}
+{# لیست گفتگوها — وینور + اعلان (اگر برای همکار فعال باشد) #}
 {% set _in_drawer = ai_threads_in_drawer|default(false) %}
 <style id="vinor-ai-thread-smart-icon">
   .ai-thread-smart-icon {
@@ -118,7 +118,7 @@
       {% endif %}
     </button>
   {% if postchi_messages_url|default('') %}
-    {% set pth = _postchi_ns.th or {'id': postchi_thread_id|default('__postchi__'), 'kind': 'postchi', 'is_active': _active_postchi, 'unread': 0, 'title': 'پستچی وینور'} %}
+    {% set pth = _postchi_ns.th or {'id': postchi_thread_id|default('__postchi__'), 'kind': 'postchi', 'is_active': _active_postchi, 'unread': 0, 'title': 'اعلان'} %}
     <button type="button"
             class="ai-thread-item {% if not _in_drawer %}w-full rounded-xl border px-3 py-2.5 text-right transition {% if _active_postchi %}border-emerald-500/40 bg-emerald-500/15{% else %}border-emerald-500/20 bg-emerald-500/[0.06]{% endif %}{% endif %} {% if _active_postchi %}is-active{% endif %}"
             data-thread-id="{{ pth.id or postchi_thread_id|default('__postchi__') }}"
@@ -127,7 +127,7 @@
       <div class="ai-thread-item__row{% if not _in_drawer %} flex items-center justify-between gap-2{% endif %}">
         <span class="ai-thread-item__title {% if not _in_drawer %}text-xs font-semibold text-white line-clamp-2 leading-snug flex items-center gap-1.5{% endif %}">
           <i class="fas fa-envelope text-[10px] text-sky-400 shrink-0" aria-hidden="true"></i>
-          <span>پستچی</span>
+          <span>اعلان</span>
         </span>
         <span class="ai-thread-item__actions{% if not _in_drawer %} flex shrink-0 items-center gap-1{% endif %}">
           {% if pth.unread and pth.unread > 0 %}

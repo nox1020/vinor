@@ -852,6 +852,9 @@ def _enrich_messages_for_ui(
                     pass
             out.append(row)
             continue
+        # پیوست کاربر از meta به سطح پیام برای UI
+        if isinstance(meta, dict) and meta.get("attachment") and not row.get("attachment"):
+            row["attachment"] = meta.get("attachment")
         # پیام‌های قدیمی ناظر با متن فنی (مثل workflow_complete:VisitRequest)
         if str(row.get("source") or "") == "supervisor_agent":
             try:
@@ -995,8 +998,9 @@ def append_exchange(
     assistant_agent_actions: list[dict[str, Any]] | None = None,
     audience: str | None = None,
     hide_user: bool = False,
+    user_meta: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], str]:
-    from app.ai.message_types import MSG_AI, MSG_CARD, MSG_TEXT
+    from app.ai.message_types import MSG_AI, MSG_ATTACHMENT, MSG_CARD, MSG_TEXT
 
     record = load_user_record(user_key, audience)
     tid = thread_id or record.get("active_id") or ""
@@ -1014,16 +1018,22 @@ def append_exchange(
     assistant_text = (assistant_text or "").strip()[:_MAX_CONTENT]
     actions = _normalize_actions(assistant_agent_actions)
     codes = [str(c).strip() for c in (assistant_land_codes or []) if str(c).strip()][:5]
-    if user_text:
+    meta_in = dict(user_meta) if isinstance(user_meta, dict) else {}
+    attachment = meta_in.get("attachment") if isinstance(meta_in.get("attachment"), dict) else None
+    if user_text or attachment:
         user_entry: dict[str, Any] = {
             "id": _new_message_id(),
             "role": "user",
-            "type": MSG_TEXT,
-            "content": user_text,
+            "type": MSG_ATTACHMENT if attachment else MSG_TEXT,
+            "content": user_text or (str((attachment or {}).get("name") or "پیوست")),
             "created_at": ts,
         }
         if hide_user:
             user_entry["hide_ui"] = True
+        if meta_in:
+            user_entry["meta"] = meta_in
+        if attachment:
+            user_entry["attachment"] = dict(attachment)
         msgs.append(user_entry)
         if th.get("title") in (None, "", "گفتگوی جدید", VINOR_THREAD_TITLE) and len(msgs) == 1:
             if str(th.get("kind") or "") == "lawyer" or tid == "__lawyer__":

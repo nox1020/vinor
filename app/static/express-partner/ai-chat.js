@@ -84,6 +84,7 @@
   var activeLandFilter = '';
   var agentConfirmUrl = form.getAttribute('data-agent-confirm-url') || '';
   var agentCancelUrl = form.getAttribute('data-agent-cancel-url') || '';
+  var uploadUrl = form.getAttribute('data-upload-url') || '';
   var postchiThreadId = form.getAttribute('data-postchi-thread-id') || '__postchi__';
   var postchiMessagesUrl = form.getAttribute('data-postchi-messages-url') || '';
   var postchiSendUrl = form.getAttribute('data-postchi-send-url') || '';
@@ -238,6 +239,12 @@
     if (liveBtn) btn = liveBtn;
     var liveThread = document.getElementById('aiActiveThreadId');
     if (liveThread) threadInput = liveThread;
+    attachPanelEl = document.getElementById('aiAttachPanel');
+    attachPreviewEl = document.getElementById('aiAttachPreview');
+    plusBtn = document.getElementById('aiComposerPlus');
+    try {
+      bindAttachUi();
+    } catch (_) {}
     return list;
   }
 
@@ -535,6 +542,12 @@
   var EMPTY_POLL_PAUSE = 60;
   var pollInFlight = false;
   var postchiOpened = false;
+  var pendingAttachment = null;
+  var attachUploading = false;
+  var attachObjectUrl = '';
+  var attachPanelEl = document.getElementById('aiAttachPanel');
+  var attachPreviewEl = document.getElementById('aiAttachPreview');
+  var plusBtn = document.getElementById('aiComposerPlus');
   var onVisChange = null;
   var onKeydown = null;
   var onViewportResize = null;
@@ -1181,6 +1194,7 @@
     if (!form || !input || !btn) return;
     if (
       submitting ||
+      attachUploading ||
       form.classList.contains('ai-composer--readonly') ||
       input.disabled
     ) {
@@ -1190,10 +1204,9 @@
       return;
     }
     var len = (input.value || '').trim().length;
-    var canSend = len >= MIN_MSG_LEN;
-    /* ready فقط برای type-hint؛ دکمه ارسال همیشه دیده می‌شود و با aria-disabled غیرفعال می‌شود */
-    form.classList.toggle('ai-composer--ready', len >= 1);
-    /* disabled واقعی فقط در busy/readonly — خالی بودن با aria-disabled */
+    var hasAttach = !!(pendingAttachment && pendingAttachment.url);
+    var canSend = len >= MIN_MSG_LEN || hasAttach;
+    form.classList.toggle('ai-composer--ready', len >= 1 || hasAttach);
     btn.disabled = false;
     btn.setAttribute('aria-disabled', canSend ? 'false' : 'true');
   }
@@ -1296,7 +1309,7 @@
       form.classList.remove('ai-composer--readonly');
       stopTypeHintPlaceholder({
         dismiss: false,
-        placeholder: 'پیام به پستچی وینور…',
+        placeholder: 'پیام اعلان…',
       });
       hideChipBar();
       syncComposerReady();
@@ -1429,6 +1442,7 @@
     if (wantPostchi) {
       if (isPostchiMode()) {
         syncHomeModeSwitch();
+        jumpVinorChatToLatest();
         return Promise.resolve();
       }
       if (!canUsePostchi()) {
@@ -1440,15 +1454,18 @@
             window.vinorDrawerOpenLogin();
           }
         } catch (_) {}
-        showEphemeralHint('برای پیام به پستچی وینور وارد شوید.');
+        showEphemeralHint('برای دیدن اعلان‌ها وارد شوید.');
         return Promise.resolve();
       }
-      homeModeWasEmpty = isHomeChatEmpty();
       homeModeSwitching = true;
       try {
         clearLandChatFocus();
       } catch (_) {}
+      var unlockPostchi = setTimeout(function () {
+        homeModeSwitching = false;
+      }, 8000);
       return Promise.resolve(switchThread(postchiThreadId, { toLatest: true })).finally(function () {
+        clearTimeout(unlockPostchi);
         homeModeSwitching = false;
         syncHomeModeSwitch();
       });
@@ -1471,21 +1488,19 @@
       }
       return Promise.resolve();
     }
-    if (homeModeWasEmpty) {
-      homeModeWasEmpty = false;
-      returnToHomeEmptyEntry();
-      syncHomeModeSwitch();
-      return Promise.resolve();
-    }
+    /* از اعلان/وکیل → وینور: همیشه همان گفتگو در آخر چت (نه بدو ورود) */
+    homeModeWasEmpty = false;
     var tid = vinorThreadIdForReturn();
     if (!tid) {
-      homeModeWasEmpty = false;
-      returnToHomeEmptyEntry();
       syncHomeModeSwitch();
       return Promise.resolve();
     }
     homeModeSwitching = true;
+    var unlockVinor = setTimeout(function () {
+      homeModeSwitching = false;
+    }, 8000);
     return Promise.resolve(switchThread(tid, { toLatest: true })).finally(function () {
+      clearTimeout(unlockVinor);
       homeModeSwitching = false;
       syncHomeModeSwitch();
     });
@@ -2060,6 +2075,8 @@
       (msg.content && String(msg.content).trim()) ||
       msg.cards_html ||
       msg.land_detail_html ||
+      msg.attachment ||
+      (msg.meta && msg.meta.attachment) ||
       (msg.land_cards && msg.land_cards.length) ||
       (msg.agent_actions && msg.agent_actions.length)
     );
@@ -2756,13 +2773,26 @@
       return null;
     }
     var cardsHtml = buildCardsHtml(msg);
+    var attachment =
+      (msg && msg.attachment) ||
+      (msg && msg.meta && msg.meta.attachment) ||
+      null;
     var isAdmin =
       msg.source === 'admin_escalation' ||
       msgType === 'admin' ||
       msg.source === 'postchi' ||
       (text && text.indexOf('پاسخ تیم وینور') === 0);
 
-    if (!text && !cardsHtml && !msg.land_detail_html && !opts.thinking && !opts.streamShell) return null;
+    if (
+      !text &&
+      !cardsHtml &&
+      !msg.land_detail_html &&
+      !attachment &&
+      !opts.thinking &&
+      !opts.streamShell
+    ) {
+      return null;
+    }
 
     if (!opts.welcome) removeWelcome();
 
@@ -2824,6 +2854,21 @@
       insertCardsAtStart(body, cardsHtml);
     }
 
+    if (attachment && !opts.thinking) {
+      try {
+        var attachNode = buildAttachmentNode(attachment);
+        if (attachNode) body.appendChild(attachNode);
+      } catch (_) {}
+    }
+
+    var displayText = text;
+    if (attachment && displayText) {
+      displayText = String(displayText)
+        .replace(/^\[پیوست[^\]]*\]\s*/u, '')
+        .replace(/^\[پیوست[^\]]*\]\n?/u, '')
+        .trim();
+    }
+
     if (opts.thinking) {
       var thinking = document.createElement('div');
       thinking.className = 'ai-msg-bubble ai-msg-thinking';
@@ -2836,7 +2881,7 @@
       streamBubble.className = 'ai-msg-bubble';
       streamBubble.setAttribute('aria-live', 'off');
       body.appendChild(streamBubble);
-    } else if (text) {
+    } else if (displayText) {
       if (isSupervisor) {
         buildSupervisorMessage(body, msg);
       } else {
@@ -2847,11 +2892,11 @@
         sysLabel.className = 'ai-msg-system-label';
         sysLabel.textContent = msgType === 'timeline' ? 'رویداد' : 'سیستم';
         body.appendChild(sysLabel);
-        bubble.textContent = text;
+        bubble.textContent = displayText;
       } else if (isUser) {
-        bubble.textContent = text;
+        bubble.textContent = displayText;
       } else {
-        bubble.innerHTML = formatAssistantHtml(text);
+        bubble.innerHTML = formatAssistantHtml(displayText);
         bubble.setAttribute('data-formatted', '1');
       }
       body.appendChild(bubble);
@@ -3283,14 +3328,14 @@
     if (canUsePostchi()) {
       if (postchiTh) {
         postchiTh = Object.assign({}, postchiTh, {
-          title: 'پستچی',
+          title: 'اعلان',
           kind: 'postchi',
           is_active: isPostchiMode(),
         });
       } else {
         postchiTh = {
           id: postchiThreadId,
-          title: 'پستچی',
+          title: 'اعلان',
           kind: 'postchi',
           is_active: isPostchiMode(),
           unread: 0,
@@ -3356,7 +3401,7 @@
         '<span class="ai-thread-item__title">' +
         (isPostchi ? postchiIcon : vinorIcon) +
         '<span>' +
-        escapeHtml(isPostchi ? 'پستچی' : 'وینور') +
+        escapeHtml(isPostchi ? 'اعلان' : 'وینور') +
         '</span></span>' +
         '<span class="ai-thread-item__actions' +
         (inDrawer ? '' : ' flex shrink-0 items-center gap-1') +
@@ -4148,6 +4193,10 @@
   onKeydown = function (e) {
     if (e.key !== 'Escape') return;
     if (document.documentElement.classList.contains('vinor-ai-del-modal-open')) return;
+    if (attachPanelEl && attachPanelEl.classList.contains('is-open')) {
+      closeAttachPanel();
+      return;
+    }
     if (sidePanel && sidePanel.classList.contains('is-open')) {
       closeSideMenu();
       return;
@@ -4169,6 +4218,10 @@
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
     if (submitting) return;
+    if (attachUploading) {
+      showEphemeralHint('صبر کنید تا آپلود تمام شود.');
+      return;
+    }
     var silentUser = false;
     try {
       silentUser = form.getAttribute('data-silent-user') === '1';
@@ -4177,9 +4230,18 @@
     var msg = silentMsg || (input.value || '').trim();
     takeSilentUserFlag(); /* clear flag after reading silentMsg */
     if (silentMsg) silentUser = true;
-    if (!msg || msg.length < MIN_MSG_LEN) {
+    var attachToSend =
+      pendingAttachment && pendingAttachment.url ? Object.assign({}, pendingAttachment) : null;
+    if (isPostchiMode() && attachToSend) {
+      showEphemeralHint('در اعلان‌ها فقط متن ارسال کنید.');
+      return;
+    }
+    if ((!msg || msg.length < MIN_MSG_LEN) && !attachToSend) {
       syncComposerReady();
       return;
+    }
+    if (!msg && attachToSend) {
+      msg = '';
     }
 
     /* سقف مهمان: دکمه فعال می‌ماند؛ با ارسال → پیام + منوی ورود */
@@ -4201,13 +4263,18 @@
 
     submitting = true;
     lastSubmitAt = now;
+    closeAttachPanel();
     /* اول لایهٔ چت را باز کن تا #aiChat با CSS بدو ورود مخفی نماند */
     beginHomeChatSend();
     hideChipBar();
     removeWelcome();
     if (!silentUser) {
-      appendMessage({ role: 'user', content: msg }, { pendingUser: true });
+      appendMessage(
+        { role: 'user', content: msg, attachment: attachToSend || undefined },
+        { pendingUser: true }
+      );
     }
+    clearPendingAttachment();
     showThinking();
     try {
       syncHomeEmptyState();
@@ -4274,6 +4341,7 @@
       if (intent) body.intent = intent;
       if (silentUser) body.hide_user = true;
       if (isLawyerMode()) body.mode = 'lawyer';
+      if (attachToSend) body.attachment = attachToSend;
       var resp = await fetch(chatUrl, {
         method: 'POST',
         headers: apiHeaders(true),
@@ -4296,6 +4364,10 @@
             input.value = msg;
             autoGrowInput();
           } catch (_) {}
+          if (attachToSend) {
+            pendingAttachment = attachToSend;
+            renderAttachPreview(null, attachToSend);
+          }
           guestRepliesRemaining = 0;
           noteGuestRepliesFromPayload({ guest_replies_remaining: 0 });
           promptGuestLoginLimit(errText || guestLoginLimitMessage());
@@ -4355,6 +4427,11 @@
         input.value = msg;
         autoGrowInput();
       } catch (_) {}
+      if (attachToSend) {
+        pendingAttachment = attachToSend;
+        renderAttachPreview(null, attachToSend);
+        syncComposerReady();
+      }
       var errMsg = String(err.message || 'خطای ناشناخته');
       showEphemeralHint(errMsg);
       if (/اعتبار API|InsufficientBalance|402/i.test(errMsg)) {
@@ -4382,9 +4459,10 @@
   input.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (submitting) return;
+      if (submitting || attachUploading) return;
       var msg = (input.value || '').trim();
-      if (!msg || msg.length < MIN_MSG_LEN) return;
+      var hasAttach = !!(pendingAttachment && pendingAttachment.url);
+      if ((!msg || msg.length < MIN_MSG_LEN) && !hasAttach) return;
       /* حتی اگر دکمه disabled مانده باشد، Enter ارسال را راه بیندازد */
       try {
         if (typeof form.requestSubmit === 'function') form.requestSubmit();
@@ -4407,12 +4485,13 @@
 
   if (btn) {
     btn.addEventListener('click', function (e) {
-      if (submitting) {
+      if (submitting || attachUploading) {
         e.preventDefault();
         return;
       }
       var msg = (input.value || '').trim();
-      if (!msg || msg.length < MIN_MSG_LEN) {
+      var hasAttach = !!(pendingAttachment && pendingAttachment.url);
+      if ((!msg || msg.length < MIN_MSG_LEN) && !hasAttach) {
         e.preventDefault();
         syncComposerReady();
         return;
@@ -4513,6 +4592,348 @@
       return csrfToken();
     } catch (_) {
       return '';
+    }
+  }
+
+  function formatAttachSize(bytes) {
+    var n = Number(bytes) || 0;
+    if (n <= 0) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10 * 1024 ? 1 : 0) + ' KB';
+    return (n / (1024 * 1024)).toFixed(n < 10 * 1024 * 1024 ? 1 : 0) + ' MB';
+  }
+
+  function buildAttachmentNode(att) {
+    if (!att || !att.url) return null;
+    var kind = String(att.kind || 'file').toLowerCase();
+    var url = String(att.url || '');
+    var name = String(att.name || 'پیوست');
+    var wrap = document.createElement('div');
+    wrap.className = 'ai-msg-attach';
+    wrap.setAttribute('data-attach-kind', kind);
+    if (kind === 'image') {
+      var img = document.createElement('img');
+      img.className = 'ai-msg-attach__media';
+      img.src = url;
+      img.alt = name;
+      img.loading = 'lazy';
+      img.addEventListener('click', function () {
+        try {
+          window.open(url, '_blank', 'noopener');
+        } catch (_) {}
+      });
+      wrap.appendChild(img);
+      return wrap;
+    }
+    if (kind === 'video') {
+      var vid = document.createElement('video');
+      vid.className = 'ai-msg-attach__media';
+      vid.src = url;
+      vid.controls = true;
+      vid.preload = 'metadata';
+      vid.playsInline = true;
+      wrap.appendChild(vid);
+      return wrap;
+    }
+    var link = document.createElement('a');
+    link.className = 'ai-msg-attach__file';
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.innerHTML =
+      '<span class="ai-msg-attach__file-icon" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5"/></svg>' +
+      '</span><span><span class="ai-msg-attach__file-name"></span>' +
+      '<span class="ai-msg-attach__file-sub"></span></span>';
+    var nm = link.querySelector('.ai-msg-attach__file-name');
+    var sub = link.querySelector('.ai-msg-attach__file-sub');
+    if (nm) nm.textContent = name;
+    if (sub) sub.textContent = formatAttachSize(att.size) || 'دانلود فایل';
+    wrap.appendChild(link);
+    return wrap;
+  }
+
+  function closeAttachPanel() {
+    if (!attachPanelEl) return;
+    attachPanelEl.hidden = true;
+    attachPanelEl.classList.remove('is-open');
+    if (plusBtn) {
+      plusBtn.classList.remove('is-open');
+      plusBtn.setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  function openAttachPanel() {
+    if (!attachPanelEl) return;
+    attachPanelEl.hidden = false;
+    try {
+      requestAnimationFrame(function () {
+        attachPanelEl.classList.add('is-open');
+      });
+    } catch (_) {
+      attachPanelEl.classList.add('is-open');
+    }
+    if (plusBtn) {
+      plusBtn.classList.add('is-open');
+      plusBtn.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function toggleAttachPanel() {
+    if (!attachPanelEl) return;
+    if (attachPanelEl.classList.contains('is-open')) closeAttachPanel();
+    else openAttachPanel();
+  }
+
+  function clearPendingAttachment() {
+    pendingAttachment = null;
+    attachUploading = false;
+    if (attachObjectUrl) {
+      try {
+        URL.revokeObjectURL(attachObjectUrl);
+      } catch (_) {}
+      attachObjectUrl = '';
+    }
+    if (attachPreviewEl) {
+      attachPreviewEl.hidden = true;
+      attachPreviewEl.classList.remove('is-uploading');
+      var thumb = attachPreviewEl.querySelector('[data-ai-attach-thumb]');
+      var bar = attachPreviewEl.querySelector('[data-ai-attach-bar]');
+      if (thumb) thumb.innerHTML = '';
+      if (bar) {
+        bar.hidden = true;
+        var fill = bar.querySelector('span');
+        if (fill) fill.style.width = '0%';
+      }
+    }
+    syncComposerReady();
+  }
+
+  function renderAttachPreview(localFile, remote) {
+    if (!attachPreviewEl) return;
+    attachPreviewEl.hidden = false;
+    var thumb = attachPreviewEl.querySelector('[data-ai-attach-thumb]');
+    var nameEl = attachPreviewEl.querySelector('[data-ai-attach-name]');
+    var subEl = attachPreviewEl.querySelector('[data-ai-attach-sub]');
+    var bar = attachPreviewEl.querySelector('[data-ai-attach-bar]');
+    var kind = (remote && remote.kind) || (localFile && localFile.type && localFile.type.indexOf('image/') === 0
+      ? 'image'
+      : localFile && localFile.type && localFile.type.indexOf('video/') === 0
+        ? 'video'
+        : 'file');
+    var name = (remote && remote.name) || (localFile && localFile.name) || 'پیوست';
+    var size = (remote && remote.size) || (localFile && localFile.size) || 0;
+    if (nameEl) nameEl.textContent = name;
+    if (subEl) {
+      subEl.textContent = attachUploading
+        ? 'در حال آپلود…'
+        : formatAttachSize(size) || (kind === 'image' ? 'تصویر' : kind === 'video' ? 'ویدیو' : 'فایل');
+    }
+    if (thumb) {
+      thumb.innerHTML = '';
+      if (kind === 'image' && (attachObjectUrl || (remote && remote.url))) {
+        var img = document.createElement('img');
+        img.src = attachObjectUrl || remote.url;
+        img.alt = '';
+        thumb.appendChild(img);
+      } else if (kind === 'video' && (attachObjectUrl || (remote && remote.url))) {
+        var vid = document.createElement('video');
+        vid.src = attachObjectUrl || remote.url;
+        vid.muted = true;
+        vid.playsInline = true;
+        thumb.appendChild(vid);
+      } else {
+        thumb.innerHTML =
+          '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5"/></svg>';
+      }
+    }
+    if (bar) {
+      bar.hidden = !attachUploading;
+      var fill = bar.querySelector('span');
+      if (fill && !attachUploading) fill.style.width = '0%';
+    }
+    attachPreviewEl.classList.toggle('is-uploading', !!attachUploading);
+  }
+
+  function setAttachProgress(pct) {
+    if (!attachPreviewEl) return;
+    var bar = attachPreviewEl.querySelector('[data-ai-attach-bar]');
+    if (!bar) return;
+    bar.hidden = false;
+    var fill = bar.querySelector('span');
+    if (fill) fill.style.width = Math.max(0, Math.min(100, pct || 0)) + '%';
+  }
+
+  function uploadChatAttachment(file, kind) {
+    if (!file) return Promise.resolve(null);
+    try {
+      uploadUrl = (form && form.getAttribute('data-upload-url')) || uploadUrl || '';
+    } catch (_) {}
+    if (!uploadUrl) {
+      showEphemeralHint('آپلود فعلاً در دسترس نیست.');
+      return Promise.resolve(null);
+    }
+    if (isGuestAuth()) {
+      showEphemeralHint('برای ارسال فایل وارد شوید.');
+      openGuestLoginDrawer('برای ارسال فایل وارد شوید.');
+      return Promise.resolve(null);
+    }
+    closeAttachPanel();
+    if (attachObjectUrl) {
+      try {
+        URL.revokeObjectURL(attachObjectUrl);
+      } catch (_) {}
+    }
+    try {
+      attachObjectUrl = URL.createObjectURL(file);
+    } catch (_) {
+      attachObjectUrl = '';
+    }
+    pendingAttachment = null;
+    attachUploading = true;
+    renderAttachPreview(file, { kind: kind, name: file.name, size: file.size });
+    syncComposerReady();
+
+    return new Promise(function (resolve) {
+      var fd = new FormData();
+      fd.append('file', file);
+      fd.append('kind', kind || 'file');
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', uploadUrl, true);
+      xhr.withCredentials = true;
+      try {
+        var tok = csrfToken();
+        if (tok) xhr.setRequestHeader('X-CSRFToken', tok);
+      } catch (_) {}
+      xhr.upload.onprogress = function (ev) {
+        if (!ev.lengthComputable) return;
+        setAttachProgress((ev.loaded / ev.total) * 100);
+      };
+      xhr.onload = function () {
+        attachUploading = false;
+        var data = null;
+        try {
+          data = JSON.parse(xhr.responseText || '{}');
+        } catch (_) {}
+        if (xhr.status >= 200 && xhr.status < 300 && data && data.ok && data.url) {
+          pendingAttachment = {
+            kind: data.kind || kind || 'file',
+            url: data.url,
+            name: data.name || file.name,
+            mime: data.mime || file.type || '',
+            size: data.size || file.size || 0,
+          };
+          renderAttachPreview(file, pendingAttachment);
+          syncComposerReady();
+          resolve(pendingAttachment);
+          return;
+        }
+        clearPendingAttachment();
+        if (data && data.need_login) {
+          openGuestLoginDrawer((data && data.error) || 'برای ارسال فایل وارد شوید.');
+        } else {
+          showEphemeralHint((data && data.error) || 'آپلود ناموفق بود.');
+        }
+        resolve(null);
+      };
+      xhr.onerror = function () {
+        attachUploading = false;
+        clearPendingAttachment();
+        showEphemeralHint('خطا در آپلود فایل.');
+        resolve(null);
+      };
+      xhr.send(fd);
+    });
+  }
+
+  function bindAttachUi() {
+    plusBtn = document.getElementById('aiComposerPlus') || plusBtn;
+    attachPanelEl = document.getElementById('aiAttachPanel') || attachPanelEl;
+    attachPreviewEl = document.getElementById('aiAttachPreview') || attachPreviewEl;
+    if (!plusBtn || plusBtn.getAttribute('data-ai-attach-bound') === '1') return;
+    plusBtn.setAttribute('data-ai-attach-bound', '1');
+    plusBtn.setAttribute('tabindex', '0');
+
+    plusBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isPostchiMode()) {
+        showEphemeralHint('در اعلان‌ها فقط متن ارسال کنید.');
+        return;
+      }
+      toggleAttachPanel();
+    });
+
+    if (attachPanelEl && attachPanelEl.getAttribute('data-ai-attach-panel-bound') !== '1') {
+      attachPanelEl.setAttribute('data-ai-attach-panel-bound', '1');
+      attachPanelEl.addEventListener('click', function (e) {
+        var btnEl = e.target && e.target.closest && e.target.closest('[data-ai-attach]');
+        if (!btnEl || !attachPanelEl.contains(btnEl)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var kind = btnEl.getAttribute('data-ai-attach') || 'file';
+        var map = {
+          gallery: 'aiAttachInputGallery',
+          camera: 'aiAttachInputCamera',
+          video: 'aiAttachInputVideo',
+          file: 'aiAttachInputFile',
+        };
+        var inputEl = document.getElementById(map[kind] || 'aiAttachInputFile');
+        if (!inputEl) return;
+        closeAttachPanel();
+        try {
+          inputEl.value = '';
+          inputEl.click();
+        } catch (_) {}
+      });
+    }
+
+    var rem = document.getElementById('aiAttachPreviewRemove');
+    if (rem && rem.getAttribute('data-ai-attach-rem-bound') !== '1') {
+      rem.setAttribute('data-ai-attach-rem-bound', '1');
+      rem.addEventListener('click', function (e) {
+        e.preventDefault();
+        clearPendingAttachment();
+      });
+    }
+
+    function onFilePicked(kind) {
+      return function (ev) {
+        var inputEl = ev.target;
+        var file = inputEl && inputEl.files && inputEl.files[0];
+        if (!file) return;
+        var k = kind;
+        if (k === 'gallery' || k === 'camera') k = 'image';
+        uploadChatAttachment(file, k);
+        try {
+          inputEl.value = '';
+        } catch (_) {}
+      };
+    }
+
+    function bindFileInput(id, kind) {
+      var el = document.getElementById(id);
+      if (!el || el.getAttribute('data-ai-attach-input-bound') === '1') return;
+      el.setAttribute('data-ai-attach-input-bound', '1');
+      el.addEventListener('change', onFilePicked(kind));
+    }
+    bindFileInput('aiAttachInputGallery', 'gallery');
+    bindFileInput('aiAttachInputCamera', 'camera');
+    bindFileInput('aiAttachInputVideo', 'video');
+    bindFileInput('aiAttachInputFile', 'file');
+
+    if (document.documentElement.getAttribute('data-ai-attach-doc-bound') !== '1') {
+      document.documentElement.setAttribute('data-ai-attach-doc-bound', '1');
+      document.addEventListener(
+        'click',
+        function (e) {
+          if (!attachPanelEl || !attachPanelEl.classList.contains('is-open')) return;
+          if (plusBtn && plusBtn.contains(e.target)) return;
+          if (attachPanelEl.contains(e.target)) return;
+          closeAttachPanel();
+        },
+        true
+      );
     }
   }
 
@@ -4841,6 +5262,7 @@
   };
 
   bindReportFilters();
+  bindAttachUi();
   autoGrowInput();
   syncComposerReady();
   syncChipBarVisibility();
