@@ -151,6 +151,21 @@
     z-index: 70;
     overflow: visible;
   }
+  /* پردهٔ تیره تا «لیست ملک‌ها» و کارت‌ها زیر منو دیده نشوند */
+  #homeDashboardPage.home-dashboard-page--ai .vn-home-composer-dock:has(.ai-attach.is-open)::after,
+  #homeDashboardPage.ai-home-is-empty .vn-home-composer-dock:has(.ai-attach.is-open)::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: rgba(0, 0, 0, 0.48);
+    pointer-events: auto;
+  }
+  #homeDashboardPage.home-dashboard-page--ai .vn-home-composer-dock:has(.ai-attach.is-open) > *,
+  #homeDashboardPage.ai-home-is-empty .vn-home-composer-dock:has(.ai-attach.is-open) > * {
+    position: relative;
+    z-index: 1;
+  }
   #homeDashboardPage.home-dashboard-page--ai .vn-home-composer-dock::before {
     content: "";
     position: absolute;

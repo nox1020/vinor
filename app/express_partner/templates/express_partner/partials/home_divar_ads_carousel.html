@@ -117,30 +117,6 @@
     font-size: 0.58rem;
     font-weight: 600;
   }
-  #homeDivarAdsCarousel .vn-home-divar__badge {
-    position: absolute;
-    top: 0.42rem;
-    inset-inline-start: 0.42rem;
-    z-index: 1;
-    display: block;
-    width: 0.85rem;
-    height: 0.85rem;
-    padding: 0;
-    border-radius: 999px;
-    border: 2px solid rgba(255, 255, 255, 0.9);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-    background: #dc2626;
-    color: transparent;
-    font-size: 0;
-    line-height: 0;
-    overflow: hidden;
-  }
-  #homeDivarAdsCarousel .vn-home-divar__badge--vinor {
-    background: #2563eb;
-  }
-  #homeDivarAdsCarousel .vn-home-divar__badge--divar {
-    background: #dc2626;
-  }
   #homeDivarAdsCarousel .vn-home-divar__body {
     display: flex;
     flex-direction: column;
@@ -381,30 +357,6 @@
     color: #52525b;
     font-size: 1.1rem;
   }
-  #homeDivarAdsAllModal .vn-home-divar-all__badge {
-    position: absolute;
-    top: 0.36rem;
-    inset-inline-start: 0.36rem;
-    z-index: 1;
-    display: block;
-    width: 0.78rem;
-    height: 0.78rem;
-    padding: 0;
-    border-radius: 999px;
-    border: 2px solid rgba(255, 255, 255, 0.9);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-    background: #dc2626;
-    color: transparent;
-    font-size: 0;
-    line-height: 0;
-    overflow: hidden;
-  }
-  #homeDivarAdsAllModal .vn-home-divar-all__badge--vinor {
-    background: #2563eb;
-  }
-  #homeDivarAdsAllModal .vn-home-divar-all__badge--divar {
-    background: #dc2626;
-  }
   #homeDivarAdsAllModal .vn-home-divar-all__shots {
     position: absolute;
     bottom: 0.28rem;
@@ -506,9 +458,6 @@
         {% else %}
         <div class="vn-home-divar__media-ph" aria-hidden="true"><i class="fas fa-image"></i></div>
         {% endif %}
-        <span class="vn-home-divar__badge{% if _src == 'vinor' %} vn-home-divar__badge--vinor{% else %} vn-home-divar__badge--divar{% endif %}"
-              title="{% if _src == 'vinor' %}وینور{% else %}دیوار{% endif %}"
-              aria-label="{% if _src == 'vinor' %}وینور{% else %}دیوار{% endif %}"></span>
         {% if ad.image_count and ad.image_count > 1 %}
         <span class="vn-home-divar__shots" aria-hidden="true">
           <i class="fas fa-camera"></i>{{ ad.image_count|fa_digits }}
@@ -569,9 +518,6 @@
             {% else %}
             <div class="vn-home-divar-all__thumb-ph"><i class="fas fa-image"></i></div>
             {% endif %}
-            <span class="vn-home-divar-all__badge{% if _src == 'vinor' %} vn-home-divar-all__badge--vinor{% else %} vn-home-divar-all__badge--divar{% endif %}"
-                  title="{% if _src == 'vinor' %}وینور{% else %}دیوار{% endif %}"
-                  aria-label="{% if _src == 'vinor' %}وینور{% else %}دیوار{% endif %}"></span>
             {% if ad.image_count and ad.image_count > 1 %}
             <span class="vn-home-divar-all__shots" aria-hidden="true">
               <i class="fas fa-camera"></i>{{ ad.image_count|fa_digits }}

@@ -4871,17 +4871,28 @@
         if (!btnEl || !attachPanelEl.contains(btnEl)) return;
         e.preventDefault();
         e.stopPropagation();
-        var kind = btnEl.getAttribute('data-ai-attach') || 'file';
+        var kind = btnEl.getAttribute('data-ai-attach') || 'gallery';
         var map = {
           gallery: 'aiAttachInputGallery',
           camera: 'aiAttachInputCamera',
           video: 'aiAttachInputVideo',
           file: 'aiAttachInputFile',
         };
-        var inputEl = document.getElementById(map[kind] || 'aiAttachInputFile');
+        var inputEl = document.getElementById(map[kind] || 'aiAttachInputGallery');
         if (!inputEl) return;
         closeAttachPanel();
         try {
+          /* دوربین: فقط capture — بدون گالری؛ گالری: بدون capture */
+          if (kind === 'camera') {
+            inputEl.setAttribute('accept', 'image/*');
+            inputEl.setAttribute('capture', 'environment');
+          } else if (kind === 'gallery') {
+            inputEl.setAttribute('accept', 'image/*');
+            inputEl.removeAttribute('capture');
+          } else if (kind === 'video') {
+            inputEl.setAttribute('accept', 'video/*');
+            inputEl.removeAttribute('capture');
+          }
           inputEl.value = '';
           inputEl.click();
         } catch (_) {}
