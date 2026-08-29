@@ -42,7 +42,7 @@
     '/express/partner/cooperation-terms': { tab: 'home', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/apply': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
     '/express/partner/thanks': { tab: 'profile', depth: 1, bottomNav: true, prefetch: false },
-    '/express/partner/commissions/transactions': { tab: 'profile', depth: 2, bottomNav: true, prefetch: false },
+    '/express/partner/commissions/transactions': { tab: 'profile', depth: 2, bottomNav: true, prefetch: true },
     '/express/partner/ai': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
     '/express/partner/login': { tab: '', depth: 0, bottomNav: false, prefetch: true },
     '/express/partner/login/otp': { tab: '', depth: 1, bottomNav: false, prefetch: false }
@@ -66,6 +66,19 @@
   var navGeneration = 0;
   var navFetchAbort = null;
   var leaveTimerId = 0;
+
+  /** مسیرهای پرترافیک منو — prefetch برای ناوبری فوری */
+  var MAIN_MENU_PATHS = [
+    '/express/partner/home',
+    '/express/partner/commissions',
+    '/express/partner/favorites',
+    '/express/partner/requests',
+    '/express/partner/training',
+    '/express/partner/invite',
+    '/express/partner/listings',
+    '/express/partner/inbox-visits',
+    '/express/partner/routine'
+  ];
 
   /** از چت AI به جزئیات فایل — بارگذاری کامل (soft-swap UI را خالی می‌کند) */
   function isAiChatLandCard(el) {
@@ -887,15 +900,54 @@
 
   function prefetchPeerMainTabs(navKey) {
     try {
-      if (!isLoggedInUser()) return;
-      var peers = {
-        home: [],
-        profile: ['/express/partner/home', '/express/partner/favorites']
-      };
-      var list = peers[navKey];
-      if (!list || !list.length) return;
-      list.forEach(function (path) {
-        prefetchHref(new URL(path, window.location.origin).href);
+      var current = normPath(window.location.pathname);
+      var paths = [];
+      if (isLoggedInUser()) {
+        if (navKey === 'home') {
+          paths = ['/express/partner/commissions', '/express/partner/favorites', '/express/partner/requests'];
+        } else if (navKey === 'profile') {
+          paths = ['/express/partner/home'];
+          MAIN_MENU_PATHS.forEach(function (p) {
+            if (normPath(p) !== current && paths.indexOf(p) === -1) paths.push(p);
+          });
+        }
+      } else {
+        paths = ['/express/partner/home', '/express/partner/training'];
+      }
+      prefetchMenuPaths(paths, true);
+    } catch (_) {}
+  }
+
+  function prefetchMenuPaths(paths, skipCurrent) {
+    if (!paths || !paths.length) return;
+    var current = normPath(window.location.pathname);
+    paths.forEach(function (path, i) {
+      if (skipCurrent && normPath(path) === current) return;
+      var href = new URL(path, window.location.origin).href;
+      if (!shouldPrefetchNav(window.location.href, href)) return;
+      var run = function () { prefetchHref(href); };
+      if (i === 0) {
+        run();
+        return;
+      }
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 600 + i * 180 });
+      } else {
+        window.setTimeout(run, 80 + i * 120);
+      }
+    });
+  }
+
+  function prefetchDrawerMenuLinks() {
+    try {
+      var drawer = document.getElementById('epProfileDrawer');
+      if (!drawer) return;
+      var seen = Object.create(null);
+      drawer.querySelectorAll('a[data-vinor-express-nav][href]').forEach(function (a) {
+        var href = a.getAttribute('href');
+        if (!href || seen[href]) return;
+        seen[href] = true;
+        if (shouldPrefetchLink(a, href)) prefetchHref(href);
       });
     } catch (_) {}
   }
@@ -1163,21 +1215,12 @@
       try { window.vinorPartnerAvatarCache.apply(document); } catch (_) {}
     }
     if (navKey === 'profile') {
-      var prefetchProfileSubpages = function () {
-        try {
-          [
-            '/express/partner/invite',
-            '/express/partner/routine'
-          ].forEach(function (path) {
-            prefetchHref(new URL(path, window.location.origin).href);
-          });
-        } catch (_) {}
-      };
-      if (typeof window.requestIdleCallback === 'function') {
-        window.requestIdleCallback(prefetchProfileSubpages, { timeout: 2200 });
-      } else {
-        window.setTimeout(prefetchProfileSubpages, 600);
-      }
+      prefetchMenuPaths(
+        MAIN_MENU_PATHS.filter(function (p) {
+          return normPath(p) !== normPath(window.location.pathname);
+        }),
+        false
+      );
     }
     if (navKey === 'home' && currentAuthSegment() === 'guest') {
       /* ورود داخل منو است — prefetch صفحه کامل /login لازم نیست */
@@ -1494,7 +1537,7 @@
       try {
         window.__vinorExpressNavDepth = navDepthForUrl(finalHref);
       } catch (_) {}
-      if (!isLandDetailPath(window.location.pathname)) {
+      if (!isLandDetailPath(window.location.pathname) && !opts.skipEnterAnim) {
         playEnterAnimation(dir);
       }
       return true;
@@ -1517,6 +1560,7 @@
     }
     if (cached) {
       try {
+        opts.skipEnterAnim = true;
         return Promise.resolve(applyHtml(cached, href));
       } catch (_) {
         delete prefetchCache[targetHref];
@@ -1588,10 +1632,7 @@
       var u = parseUrl(href);
       if (u) toDetail = isLandDetailPath(u.pathname);
     } catch (_) {}
-    if (prefersReducedMotion() || toDetail) {
-      return softNavigate(href, dir || 0, navOpts);
-    }
-    if (hasPrefetchedHtml(href) && isRootTabSwitch(href)) {
+    if (prefersReducedMotion() || toDetail || hasPrefetchedHtml(href)) {
       return softNavigate(href, dir || 0, navOpts);
     }
     stripNavClasses(document.documentElement);
@@ -1784,6 +1825,7 @@
   window.vinorExpressSoftRefresh = vinorExpressSoftRefresh;
 
   window.vinorExpressPrefetch = prefetchHref;
+  window.vinorExpressPrefetchDrawerMenu = prefetchDrawerMenuLinks;
   window.vinorExpressClearAuthCache = clearAuthPrefetchCache;
   window.vinorExpressClearPrefetchCache = clearAllPrefetchCache;
 
@@ -2279,13 +2321,11 @@
 
   function prefetchMainTabs() {
     try {
-      var paths = ['/express/partner/home'];
       if (isLoggedInUser()) {
-        paths.push('/express/partner/favorites');
+        prefetchMenuPaths(MAIN_MENU_PATHS, true);
+      } else {
+        prefetchMenuPaths(['/express/partner/home', '/express/partner/training'], true);
       }
-      paths.forEach(function (path) {
-        prefetchHref(new URL(path, window.location.origin).href);
-      });
     } catch (_) {}
   }
 

@@ -336,6 +336,15 @@
         window.location.href = "{{ _menu_href }}";
       }
     });
+    function prefetchDrawerEarly() {
+      try {
+        if (typeof window.vinorExpressPrefetchDrawerMenu === 'function') {
+          window.vinorExpressPrefetchDrawerMenu();
+        }
+      } catch (_) {}
+    }
+    btn.addEventListener('touchstart', prefetchDrawerEarly, { passive: true });
+    btn.addEventListener('mouseenter', prefetchDrawerEarly, { passive: true });
   }
   bindMenuBtn();
   window.addEventListener('vinor:express-page-swap', bindMenuBtn);

@@ -1521,6 +1521,11 @@
         window.VinorNotifyCenter.fetchUnread();
       }
     } catch (_) {}
+    try {
+      if (typeof window.vinorExpressPrefetchDrawerMenu === 'function') {
+        window.vinorExpressPrefetchDrawerMenu();
+      }
+    } catch (_) {}
   }
 
   function closeUserMenu() {
