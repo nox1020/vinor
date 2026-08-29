@@ -796,12 +796,27 @@
 
   function setLandChatFocus(code) {
     landChatFocusCode = String(code || '').trim();
-    landChatFocusUntil = landChatFocusCode ? Date.now() + 15000 : 0;
+    landChatFocusUntil = landChatFocusCode ? Date.now() + 45000 : 0;
   }
 
   function clearLandChatFocus() {
     landChatFocusCode = '';
     landChatFocusUntil = 0;
+  }
+
+  function hasLandChatFocus() {
+    return !!(landChatFocusCode && Date.now() <= landChatFocusUntil);
+  }
+
+  function bumpLandChatFocusLease() {
+    if (landChatFocusCode) landChatFocusUntil = Date.now() + 45000;
+  }
+
+  /** منو/تب → آخر چت؛ ورود از کارت آگهی → focus land حفظ شود */
+  function shouldJumpVinorToLatest(toLatest) {
+    if (toLatest) return true;
+    if (hasLandChatFocus()) return false;
+    return !landChatFocusWrap();
   }
 
   try {
@@ -956,6 +971,9 @@
   /* بدو ورود / تعویض ترد: همیشه آخرین پیام — چند تلاش برای layout دیرگاه */
   function scrollChatToLatest(opts) {
     opts = opts || {};
+    if (!opts.forceLatest && hasLandChatFocus() && !landChatFocusWrap()) {
+      return;
+    }
     var focus = !opts.forceLatest ? landChatFocusWrap() : null;
     if (focus) {
       scrollChatToElement(focus);
@@ -1571,12 +1589,17 @@
         ensureChatVisible();
         syncHomeEmptyState();
       }
+      if (hasLandChatFocus()) bumpLandChatFocusLease();
     } catch (_) {}
-    if (needLoad && tid && tid !== postchiThreadId && !isLawyerThreadId(tid)) {
-      prepareVinorHistoryLoad(tid);
+    if (onSpecial && tid && tid !== postchiThreadId && !isLawyerThreadId(tid)) {
+      return Promise.resolve(switchThread(tid)).then(go, go);
     }
     if (needLoad && tid && tid !== postchiThreadId && !isLawyerThreadId(tid)) {
-      return Promise.resolve(switchThread(tid)).then(go, go);
+      prepareVinorHistoryLoad(tid);
+      if (applyVinorHistoryFromCache(tid, { instantOpening: true })) {
+        return Promise.resolve(go());
+      }
+      return loadVinorHistoryIfEmpty().then(go, go);
     }
     return Promise.resolve(go());
   }
@@ -3217,7 +3240,7 @@
       syncHomeEmptyState();
       syncChipBarVisibility();
       applyReportFilter();
-      scrollChatToLatest();
+      if (!hasLandChatFocus() || landChatFocusWrap()) scrollChatToLatest();
       return;
     }
     rows.forEach(function (m) {
@@ -3232,7 +3255,7 @@
     syncHomeEmptyState();
     syncChipBarVisibility();
     applyReportFilter();
-    scrollChatToLatest();
+    if (!hasLandChatFocus() || landChatFocusWrap()) scrollChatToLatest();
   }
 
   function isOpeningAssistantMsg(msg) {
@@ -3718,7 +3741,7 @@
         try {
           if (!isPostchiMode() && !isLawyerThreadId(threadId)) resumePoll();
         } catch (_) {}
-        if (toLatest || !landChatFocusWrap()) {
+        if (shouldJumpVinorToLatest(toLatest)) {
           jumpVinorChatToLatest();
         }
       }
@@ -3764,7 +3787,7 @@
           if (!isPostchiMode() && !isLawyerThreadId(threadId)) resumePoll();
         } catch (_) {}
         /* منو/تب وینور: همیشه آخر گفتگو — نه جایی که قبلاً اسکرول مانده */
-        if (toLatest || !landChatFocusWrap()) {
+        if (shouldJumpVinorToLatest(toLatest)) {
           jumpVinorChatToLatest();
         }
         return;
@@ -3874,7 +3897,10 @@
         syncHomeEmptyState();
       } catch (_) {}
       /* بعد از رندر: ورود عادی → آخر چت؛ باز کردن آگهی land focus را نگه می‌دارد */
-      if (toLatest || ((enterVinorChat || enterSpecialChat) && !landChatFocusWrap())) {
+      if (
+        toLatest ||
+        ((enterVinorChat || enterSpecialChat) && shouldJumpVinorToLatest(false))
+      ) {
         jumpVinorChatToLatest();
       }
     } catch (err) {
@@ -4100,7 +4126,7 @@
         try {
           if (!isPostchiMode()) resumePoll();
         } catch (_) {}
-        if (!landChatFocusWrap()) {
+        if (shouldJumpVinorToLatest(false)) {
           try {
             jumpVinorChatToLatest();
           } catch (_) {}
@@ -5443,6 +5469,7 @@
     btn = document.getElementById('aiSendBtn') || btn;
     if (landDetailPending === code) return Promise.resolve(false);
     landDetailPending = code;
+    bumpLandChatFocusLease();
     /* ورود از آگهی: اسکرول «آخرین پیام» را لغو کن تا کارت فایل دیده شود */
     setLandChatFocus(code);
     scrollLatestGen += 1;
