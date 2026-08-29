@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+nox1020/
+data/*.db
+data/logs/
+*.xlsx
+*.pdf
+*.lnk
+.DS_Store
+Thumbs.db
+*.env
+*.env.*
+credentials.json
