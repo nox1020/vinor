@@ -1340,6 +1340,9 @@
     if (typeof window.setupVinorExpressPullRefresh === 'function') {
       try { window.setupVinorExpressPullRefresh(); } catch (_) {}
     }
+    if (typeof window.setupVinorHomePullRefresh === 'function') {
+      try { window.setupVinorHomePullRefresh(); } catch (_) {}
+    }
     consumePendingLandChat();
   }
 

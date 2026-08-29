@@ -21,6 +21,7 @@
 
   function shouldSkipGenericPullRefresh() {
     if (isAuthPath()) return true;
+    if (document.getElementById('homeDashboardPage')) return true;
     if (document.querySelector('[data-vinor-ptr="off"]')) return true;
     if (document.querySelector('[data-vinor-postchi-page]')) return true;
     if (document.getElementById('postchiMessages')) return true;

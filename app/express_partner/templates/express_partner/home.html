@@ -110,6 +110,7 @@
 
 {% block scripts %}
 {{ super() }}
+<script src="{{ 'express-partner/express-home-pull-refresh.js'|static_version }}" defer></script>
 <script>
 (function () {
   /* یک‌بار در عمر سند: جمع/باز کارت سفر — پایدار بین رفرش و soft-nav */
