@@ -253,6 +253,23 @@
   }
 
   var historyLoadInFlight = null;
+  var historyLoadGen = 0;
+  var historyLoadSettled = Object.create(null);
+
+  function markHistoryLoadSettled(tid) {
+    tid = String(tid || '').trim();
+    if (tid) historyLoadSettled[tid] = true;
+  }
+
+  function isHistoryLoadSettled(tid) {
+    tid = String(tid || '').trim();
+    return !!(tid && historyLoadSettled[tid]);
+  }
+
+  function clearHistoryLoadSettled(tid) {
+    tid = String(tid || '').trim();
+    if (tid) delete historyLoadSettled[tid];
+  }
 
   function listHasVinorHistory() {
     bindLiveChatDom();
@@ -278,6 +295,13 @@
   function chatListNeedsHistoryFetch() {
     bindLiveChatDom();
     if (!list || listHasVinorHistory()) return false;
+    var tid = '';
+    try {
+      tid = activeThreadId() || vinorThreadIdForReturn() || '';
+    } catch (_) {
+      tid = '';
+    }
+    if (isHistoryLoadSettled(tid)) return false;
     try {
       if (list.querySelector('.ai-msg-wrap[data-role]')) return false;
       if (list.querySelector('.ai-msg-wrap[data-thinking="1"]')) return false;
@@ -305,17 +329,26 @@
     var url = historyUrl || (form && form.getAttribute('data-history-url')) || '';
     if (!url) return Promise.resolve(false);
     url += (url.indexOf('?') >= 0 ? '&' : '?') + 'thread_id=' + encodeURIComponent(tid);
+    var loadGen = ++historyLoadGen;
     historyLoadInFlight = fetch(url, {
       credentials: 'same-origin',
       headers: apiHeaders(false),
     })
       .then(function (res) {
-        return res.json();
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
       })
-      .then(function (data) {
+      .then(function (payload) {
+        if (loadGen !== historyLoadGen) return false;
         bindLiveChatDom();
         if (chatListHasVisibleContent()) return true;
-        if (!data || !data.ok || !data.messages || !data.messages.length) return false;
+        var data = payload && payload.data;
+        if (!payload || !payload.ok || !data || !data.ok) return false;
+        if (!data.messages || !data.messages.length) {
+          markHistoryLoadSettled(tid);
+          return false;
+        }
         var showOpening = false;
         try {
           showOpening = !!(homeInline && homeChatLayerOpen);
@@ -324,6 +357,7 @@
         } finally {
           if (showOpening) forceShowOpeningInHome = false;
         }
+        if (chatListHasVisibleContent()) markHistoryLoadSettled(tid);
         return chatListHasVisibleContent();
       })
       .catch(function () {
@@ -1118,7 +1152,11 @@
   }
 
   function setActiveThreadId(id) {
+    var prev = threadInput ? threadInput.value : '';
     if (threadInput) threadInput.value = id || '';
+    if (String(id || '') !== String(prev || '')) {
+      clearHistoryLoadSettled(String(prev || ''));
+    }
     setComposerMode(isPostchiMode());
     if (isPostchiMode()) {
       pollPaused = true;
@@ -1510,6 +1548,9 @@
       }
       /* تب وینور وقتی همین‌جا هستیم: برو به آخرین پیام */
       if (homeInline && homeChatLayerOpen) {
+        try {
+          if (!isPostchiMode() && pollPaused) resumePoll();
+        } catch (_) {}
         jumpVinorChatToLatest();
       }
       return Promise.resolve();
@@ -3578,7 +3619,7 @@
       }
 
       /* بدو ورود: پیام‌ها در DOM مانده — بدون POST دوباره باز کن */
-      if (needOpenChat && (hasHistory || chatListHasVisibleContent())) {
+      if (needOpenChat && chatListHasVisibleContent()) {
         reopenSameThreadChat();
         return;
       }
@@ -4154,8 +4195,15 @@
     } catch (_) {}
     cancelTypewriter();
     scrollLatestGen += 1;
+    historyLoadGen += 1;
+    historyLoadInFlight = null;
     try {
       if (typeof homeModeUnbind === 'function') homeModeUnbind();
+    } catch (_) {}
+    try {
+      if (historyList && typeof onHistoryListClick === 'function') {
+        historyList.removeEventListener('click', onHistoryListClick);
+      }
     } catch (_) {}
     window.__vinorAiChatTeardown = null;
     window.__vinorAiChatSetSheetOpen = null;
@@ -4264,24 +4312,26 @@
     });
   }
 
-  if (historyList) {
-    historyList.addEventListener('click', function (e) {
-      var delBtn = e.target.closest('.ai-thread-delete');
-      if (delBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        var delId = delBtn.getAttribute('data-thread-id');
-        if (delId) deleteThread(delId);
-        return;
-      }
-      var item = e.target.closest('.ai-thread-item');
-      if (!item) return;
+  function onHistoryListClick(e) {
+    var delBtn = e.target.closest('.ai-thread-delete');
+    if (delBtn) {
       e.preventDefault();
       e.stopPropagation();
-      var tid = item.getAttribute('data-thread-id');
-      /* هر بار باز کردن گفتگو از منو → آخرین پیام */
-      if (tid) switchThread(tid, { toLatest: true });
-    });
+      var delId = delBtn.getAttribute('data-thread-id');
+      if (delId) deleteThread(delId);
+      return;
+    }
+    var item = e.target.closest('.ai-thread-item');
+    if (!item) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var tid = item.getAttribute('data-thread-id');
+    /* هر بار باز کردن گفتگو از منو → آخرین پیام */
+    if (tid) switchThread(tid, { toLatest: true });
+  }
+
+  if (historyList) {
+    historyList.addEventListener('click', onHistoryListClick);
   }
 
   onKeydown = function (e) {
