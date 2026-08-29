@@ -25,6 +25,11 @@
 {%- if n > 0 -%}
 <span class="ai-home-empty__count" aria-hidden="true">{{ n|fa_digits }}</span>
 {%- endif -%}
+{%- elif item.intent == 'followup' or (item.href and '/requests' in item.href) -%}
+{%- set n = home_requests_pipeline_count|default(0)|int -%}
+{%- if n > 0 -%}
+<span class="ai-home-empty__count" aria-hidden="true">{{ n|fa_digits }}</span>
+{%- endif -%}
 {%- endif -%}
 {%- endmacro %}
 

@@ -3285,6 +3285,11 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         limit=1,
     ) if ph else []
 
+    home_requests_pipeline_count = (
+        _home_requests_pipeline_count(ph, profile, visit_rows)
+        if ph and is_approved else 0
+    )
+
     return {
         'success': True,
         'is_logged_in': bool(ph),
@@ -3296,6 +3301,7 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'journey_card': None,
         'mission': None,
         'withdrawable_balance': withdrawable,
+        'home_requests_pipeline_count': home_requests_pipeline_count,
     }
 
 
@@ -3771,6 +3777,7 @@ def home_page():
         suggested_files=payload.get('suggested_files') or [],
         journey_card=payload.get('journey_card'),
         withdrawable_balance=int(payload.get('withdrawable_balance') or 0),
+        home_requests_pipeline_count=int(payload.get('home_requests_pipeline_count') or 0),
         hide_header=True,
         bottom_nav_active='home',
         brand='وینور',
@@ -4671,35 +4678,36 @@ def _sales_pipeline_url(tab: str = 'requests', **extra):
     return url_for('express_partner.requests', **kwargs)
 
 
-@express_partner_bp.get('/requests', endpoint='requests')
-@require_partner_access(allow_pending=True)
-def requests_page():
-    """پیگیری فروش — درخواست، بازدید و معامله در یک صفحه."""
-    me_phone = (session.get('user_phone') or '').strip()
-    profile = getattr(g, 'express_partner_profile', None)
-    is_approved = _is_partner_approved(profile)
-    is_special = _is_partner_special(profile) if is_approved else False
-    from .partner_roles import partner_can_manage_deal, partner_can_record_visit_attendance, partner_coop_level
+def _build_partner_sales_pipeline(
+    me_phone: str,
+    profile,
+    visit_rows: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """آیتم‌ها و شمارش تب‌های پیگیری — مشترک بین /requests و badge خانه."""
+    from .partner_roles import partner_can_manage_deal, partner_can_record_visit_attendance
     from .visit_requests import (
         OPEN_VISIT_STATUSES,
         PIPELINE_DEALS,
         PIPELINE_REQUESTS,
-        PIPELINE_TABS,
         PIPELINE_VISITS,
         partner_request_feed_item,
         partner_requests_can_revisit,
         partner_visits_for_phone,
     )
 
-    visit_rows = load_express_visit_requests() or []
-    if not isinstance(visit_rows, list):
-        visit_rows = []
-    mine = partner_visits_for_phone(visit_rows, me_phone)
+    ph = (me_phone or '').strip()
+    is_approved = _is_partner_approved(profile)
+    is_special = _is_partner_special(profile) if is_approved else False
+
+    rows = visit_rows if visit_rows is not None else (load_express_visit_requests() or [])
+    if not isinstance(rows, list):
+        rows = []
+    mine = partner_visits_for_phone(rows, ph)
 
     land_status: Dict[str, str] = {}
-    if me_phone and is_approved:
+    if ph and is_approved:
         try:
-            lands, _ = _build_partner_dashboard_lands(me_phone, True)
+            lands, _ = _build_partner_dashboard_lands(ph, True)
             for land in lands or []:
                 code = str(land.get('code') or '').strip()
                 if code:
@@ -4719,7 +4727,7 @@ def requests_page():
     except Exception:
         support_phone = '09121471301'
 
-    items = []
+    items: List[Dict[str, Any]] = []
     allow_attendance = partner_can_record_visit_attendance(profile)
     allow_deal = partner_can_manage_deal(profile)
     for r in mine:
@@ -4728,8 +4736,8 @@ def requests_page():
         can_revisit = partner_requests_can_revisit(
             r,
             assignment_status=gs,
-            visit_requests=visit_rows,
-            phone=me_phone,
+            visit_requests=rows,
+            phone=ph,
         )
         items.append(partner_request_feed_item(
             r,
@@ -4739,7 +4747,7 @@ def requests_page():
             allow_attendance=allow_attendance,
             allow_deal=allow_deal,
             allow_revisit=is_approved,
-            me_phone=me_phone,
+            me_phone=ph,
         ))
 
     open_count = sum(
@@ -4770,14 +4778,14 @@ def requests_page():
                 visit_hour_rows,
             )
 
-            inbox_items = visits_for_special_owner(me_phone) or []
+            inbox_items = visits_for_special_owner(ph) or []
             visit_weekday_labels = VISIT_WEEKDAY_LABELS
             visit_weekday_order = VISIT_WEEKDAY_ORDER
-            visit_allowed_weekdays = get_visit_allowed_weekdays(plus_user_phone=me_phone)
-            visit_allowed_weekdays_summary = _days_summary(plus_user_phone=me_phone)
-            visit_hour_rows_data = visit_hour_rows(plus_user_phone=me_phone)
-            visit_allowed_hours_summary = _hours_summary(plus_user_phone=me_phone)
-            visit_presence_address = get_plus_visit_presence_address(me_phone)
+            visit_allowed_weekdays = get_visit_allowed_weekdays(plus_user_phone=ph)
+            visit_allowed_weekdays_summary = _days_summary(plus_user_phone=ph)
+            visit_hour_rows_data = visit_hour_rows(plus_user_phone=ph)
+            visit_allowed_hours_summary = _hours_summary(plus_user_phone=ph)
+            visit_presence_address = get_plus_visit_presence_address(ph)
         except Exception:
             current_app.logger.exception('sales pipeline inbox load failed')
             inbox_items = []
@@ -4785,7 +4793,7 @@ def requests_page():
             from app.commercial.config import commercial_ui_enabled
             if commercial_ui_enabled():
                 from .special_offer_inbox import offers_for_special_owner
-                offers = offers_for_special_owner(me_phone) or []
+                offers = offers_for_special_owner(ph) or []
         except Exception:
             offers = []
 
@@ -4816,6 +4824,62 @@ def requests_page():
             tab_counts[key] += 1
     if offers:
         tab_counts[PIPELINE_DEALS] += len(offers)
+
+    return {
+        'items': items,
+        'inbox_items': inbox_items,
+        'offers': offers,
+        'tab_counts': tab_counts,
+        'open_count': open_count,
+        'is_approved': is_approved,
+        'is_special': is_special,
+        'visit_weekday_labels': visit_weekday_labels,
+        'visit_weekday_order': visit_weekday_order,
+        'visit_allowed_weekdays': visit_allowed_weekdays,
+        'visit_hour_rows_data': visit_hour_rows_data,
+        'visit_allowed_weekdays_summary': visit_allowed_weekdays_summary,
+        'visit_allowed_hours_summary': visit_allowed_hours_summary,
+        'visit_presence_address': visit_presence_address,
+    }
+
+
+def _home_requests_pipeline_count(me_phone: str, profile, visit_rows: List[Dict[str, Any]]) -> int:
+    """مجموع آیتم‌های صندوق پیگیری — برای badge کاشی خانه."""
+    ph = (me_phone or '').strip()
+    if not ph or not _is_partner_approved(profile):
+        return 0
+    try:
+        pipe = _build_partner_sales_pipeline(ph, profile, visit_rows)
+        tab_counts = pipe.get('tab_counts') or {}
+        return sum(int(tab_counts.get(k) or 0) for k in tab_counts)
+    except Exception:
+        return 0
+
+
+@express_partner_bp.get('/requests', endpoint='requests')
+@require_partner_access(allow_pending=True)
+def requests_page():
+    """پیگیری فروش — درخواست، بازدید و معامله در یک صفحه."""
+    me_phone = (session.get('user_phone') or '').strip()
+    profile = getattr(g, 'express_partner_profile', None)
+    from .partner_roles import partner_coop_level
+    from .visit_requests import PIPELINE_TABS, PIPELINE_VISITS
+
+    pipe = _build_partner_sales_pipeline(me_phone, profile)
+    items = pipe['items']
+    inbox_items = pipe['inbox_items']
+    offers = pipe['offers']
+    tab_counts = pipe['tab_counts']
+    open_count = pipe['open_count']
+    is_approved = pipe['is_approved']
+    is_special = pipe['is_special']
+    visit_weekday_labels = pipe['visit_weekday_labels']
+    visit_weekday_order = pipe['visit_weekday_order']
+    visit_allowed_weekdays = pipe['visit_allowed_weekdays']
+    visit_hour_rows_data = pipe['visit_hour_rows_data']
+    visit_allowed_weekdays_summary = pipe['visit_allowed_weekdays_summary']
+    visit_allowed_hours_summary = pipe['visit_allowed_hours_summary']
+    visit_presence_address = pipe['visit_presence_address']
 
     inbox_needs = sum(1 for i in inbox_items if i.get('needs_action')) + len(offers)
     inbox_visit_count = sum(
