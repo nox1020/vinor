@@ -274,6 +274,21 @@
     return false;
   }
 
+  /** DOM خالی است و باید تاریخچه از API کشیده شود (نه خوش‌آمد/typing). */
+  function chatListNeedsHistoryFetch() {
+    bindLiveChatDom();
+    if (!list || listHasVinorHistory()) return false;
+    try {
+      if (list.querySelector('.ai-msg-wrap[data-role]')) return false;
+      if (list.querySelector('.ai-msg-wrap[data-thinking="1"]')) return false;
+    } catch (_) {}
+    return true;
+  }
+
+  function chatListHasVisibleContent() {
+    return listHasVinorHistory() || !chatListNeedsHistoryFetch();
+  }
+
   function loadVinorHistoryIfEmpty() {
     bindLiveChatDom();
     if (listHasVinorHistory()) return Promise.resolve(true);
@@ -301,8 +316,15 @@
         bindLiveChatDom();
         if (listHasVinorHistory()) return true;
         if (!data || !data.ok || !data.messages || !data.messages.length) return false;
-        renderMessages(data.messages);
-        return listHasVinorHistory();
+        var showOpening = false;
+        try {
+          showOpening = !!(homeInline && homeChatLayerOpen);
+          if (showOpening) forceShowOpeningInHome = true;
+          renderMessages(data.messages);
+        } finally {
+          if (showOpening) forceShowOpeningInHome = false;
+        }
+        return chatListHasVisibleContent();
       })
       .catch(function () {
         return false;
@@ -3528,6 +3550,52 @@
         (!homeChatLayerOpen ||
           (typeof isHomeChatEmpty === 'function' && isHomeChatEmpty()) ||
           !hasHistory);
+
+      function reopenSameThreadChat() {
+        if (homeInline) {
+          homeChatLayerOpen = true;
+          homeEmptyEntryForced = false;
+          ensureChatVisible();
+          try {
+            syncHomeEmptyState();
+          } catch (_) {}
+        }
+        closeSideMenu();
+        syncHomeModeSwitch();
+        if (
+          homeInline &&
+          threadId !== postchiThreadId &&
+          !isLawyerThreadId(threadId)
+        ) {
+          pushHomeChatHistory();
+        }
+        if (toLatest || !landChatFocusWrap()) {
+          jumpVinorChatToLatest();
+        }
+      }
+
+      /* بدو ورود: پیام‌ها در DOM مانده — بدون POST دوباره باز کن */
+      if (needOpenChat && (hasHistory || chatListHasVisibleContent())) {
+        reopenSameThreadChat();
+        return;
+      }
+
+      if (needOpenChat && chatListNeedsHistoryFetch()) {
+        if (homeInline) {
+          homeChatLayerOpen = true;
+          homeEmptyEntryForced = false;
+          ensureChatVisible();
+        }
+        try {
+          await loadVinorHistoryIfEmpty();
+          syncHomeEmptyState();
+        } catch (_) {}
+        if (chatListHasVisibleContent()) {
+          reopenSameThreadChat();
+          return;
+        }
+      }
+
       if (!needOpenChat && hasHistory) {
         if (homeInline) {
           homeChatLayerOpen = true;
@@ -3839,7 +3907,7 @@
     var tid = activeThreadId();
     if (!tid) return;
     bindLiveChatDom();
-    if (homeInline && homeChatLayerOpen && storedMessageCount() === 0) {
+    if (homeInline && homeChatLayerOpen && chatListNeedsHistoryFetch()) {
       pollInFlight = true;
       try {
         await loadVinorHistoryIfEmpty();
@@ -3847,7 +3915,7 @@
       finally {
         pollInFlight = false;
       }
-      if (listHasVinorHistory()) {
+      if (chatListHasVisibleContent()) {
         try {
           syncHomeEmptyState();
         } catch (_) {}
