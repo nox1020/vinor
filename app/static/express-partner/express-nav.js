@@ -1340,6 +1340,9 @@
     try {
       window.dispatchEvent(new CustomEvent('vinor:express-page-swap', { detail: { navKey: navKey } }));
     } catch (_) {}
+    if (typeof window.hideVinorPartnerSkeleton === 'function') {
+      try { window.hideVinorPartnerSkeleton(); } catch (_) {}
+    }
     prefetchPeerMainTabs(navKey);
     try {
       if (typeof window.__vinorSyncBottomNavBadges === 'function') {
