@@ -291,7 +291,7 @@
 
   function loadVinorHistoryIfEmpty() {
     bindLiveChatDom();
-    if (listHasVinorHistory()) return Promise.resolve(true);
+    if (chatListHasVisibleContent()) return Promise.resolve(true);
     if (historyLoadInFlight) return historyLoadInFlight;
     var tid = '';
     try {
@@ -314,7 +314,7 @@
       })
       .then(function (data) {
         bindLiveChatDom();
-        if (listHasVinorHistory()) return true;
+        if (chatListHasVisibleContent()) return true;
         if (!data || !data.ok || !data.messages || !data.messages.length) return false;
         var showOpening = false;
         try {
@@ -1437,7 +1437,7 @@
     bindLiveChatDom();
     var tid = vinorThreadIdForReturn();
     var onSpecial = isPostchiMode() || isLawyerMode();
-    var needLoad = onSpecial || !listHasVinorHistory();
+    var needLoad = onSpecial || chatListNeedsHistoryFetch();
     function go() {
       var run = function () {
         try {
@@ -1445,7 +1445,7 @@
         } catch (_) {}
         return undefined;
       };
-      if (!needLoad || listHasVinorHistory()) return run();
+      if (!needLoad || chatListHasVisibleContent()) return run();
       return loadVinorHistoryIfEmpty().then(run, run);
     }
     try {
@@ -3569,6 +3569,9 @@
         ) {
           pushHomeChatHistory();
         }
+        try {
+          if (!isPostchiMode() && !isLawyerThreadId(threadId)) resumePoll();
+        } catch (_) {}
         if (toLatest || !landChatFocusWrap()) {
           jumpVinorChatToLatest();
         }
@@ -3607,6 +3610,9 @@
         }
         closeSideMenu();
         syncHomeModeSwitch();
+        try {
+          if (!isPostchiMode() && !isLawyerThreadId(threadId)) resumePoll();
+        } catch (_) {}
         /* منو/تب وینور: همیشه آخر گفتگو — نه جایی که قبلاً اسکرول مانده */
         if (toLatest || !landChatFocusWrap()) {
           jumpVinorChatToLatest();
@@ -3668,7 +3674,7 @@
       } finally {
         forceShowOpeningInHome = false;
       }
-      if (enterVinorChat && !listHasVinorHistory()) {
+      if (enterVinorChat && chatListNeedsHistoryFetch()) {
         try {
           await loadVinorHistoryIfEmpty();
         } catch (_) {}
@@ -3918,6 +3924,9 @@
       if (chatListHasVisibleContent()) {
         try {
           syncHomeEmptyState();
+        } catch (_) {}
+        try {
+          if (!isPostchiMode()) resumePoll();
         } catch (_) {}
         if (!landChatFocusWrap()) {
           try {
