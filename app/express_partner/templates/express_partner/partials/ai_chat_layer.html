@@ -288,7 +288,9 @@
     }
 
     if (thread && typeof window.__vinorAiChatSwitchThread === 'function') {
-      Promise.resolve(window.__vinorAiChatSwitchThread(thread)).then(afterReady).catch(afterReady);
+      Promise.resolve(window.__vinorAiChatSwitchThread(thread, { toLatest: true }))
+        .then(afterReady)
+        .catch(afterReady);
     } else {
       afterReady();
     }

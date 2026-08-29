@@ -316,7 +316,9 @@
     }
     var thread = String(u.searchParams.get('thread') || '').trim();
     if (thread && typeof window.__vinorAiChatSwitchThread === 'function') {
-      try { window.__vinorAiChatSwitchThread(thread); } catch (_) {}
+      try {
+        window.__vinorAiChatSwitchThread(thread, { toLatest: true });
+      } catch (_) {}
       return true;
     }
     /* تب خانه روی همین صفحه: اگر چت فایل باز است برگرد به بدو ورود داشبورد */

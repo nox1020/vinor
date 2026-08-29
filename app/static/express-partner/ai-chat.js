@@ -239,6 +239,10 @@
     if (liveBtn) btn = liveBtn;
     var liveThread = document.getElementById('aiActiveThreadId');
     if (liveThread) threadInput = liveThread;
+    var liveHistory =
+      (document.querySelector('#epProfileDrawer #aiHistoryList') ||
+        document.getElementById('aiHistoryList'));
+    if (liveHistory && liveHistory.isConnected) historyList = liveHistory;
     attachPanelEl = document.getElementById('aiAttachPanel');
     attachPreviewEl = document.getElementById('aiAttachPreview');
     plusBtn = document.getElementById('aiComposerPlus');
@@ -3600,6 +3604,9 @@
         try {
           await loadVinorHistoryIfEmpty();
         } catch (_) {}
+        try {
+          syncHomeEmptyState();
+        } catch (_) {}
       }
       if (data.threads) applyThreads(data.threads);
       if (data.mode === 'postchi' || data.thread_id === postchiThreadId) {
@@ -3840,7 +3847,17 @@
       finally {
         pollInFlight = false;
       }
-      if (listHasVinorHistory()) return;
+      if (listHasVinorHistory()) {
+        try {
+          syncHomeEmptyState();
+        } catch (_) {}
+        if (!landChatFocusWrap()) {
+          try {
+            jumpVinorChatToLatest();
+          } catch (_) {}
+        }
+        return;
+      }
     }
     if (syncAbort) syncAbort.abort();
     syncAbort = new AbortController();
