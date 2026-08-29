@@ -255,6 +255,90 @@
   var historyLoadInFlight = null;
   var historyLoadGen = 0;
   var historyLoadSettled = Object.create(null);
+  var vinorHistoryCache = Object.create(null);
+  var historyFetchPromises = Object.create(null);
+
+  function cacheVinorHistory(tid, messages) {
+    tid = String(tid || '').trim();
+    if (!tid || !messages || !messages.length) return;
+    try {
+      vinorHistoryCache[tid] = messages.slice();
+    } catch (_) {
+      vinorHistoryCache[tid] = messages;
+    }
+  }
+
+  function peekVinorHistoryCache(tid) {
+    tid = String(tid || '').trim();
+    var rows = tid && vinorHistoryCache[tid];
+    return rows && rows.length ? rows : null;
+  }
+
+  function clearVinorHistoryCache(tid) {
+    if (tid) delete vinorHistoryCache[String(tid || '').trim()];
+    else vinorHistoryCache = Object.create(null);
+  }
+
+  function applyVinorHistoryFromCache(tid, renderOpts) {
+    renderOpts = renderOpts || {};
+    bindLiveChatDom();
+    tid = String(tid || '').trim();
+    if (!tid || listHasVinorHistory()) return false;
+    var rows = peekVinorHistoryCache(tid);
+    if (!rows || !rows.length) return false;
+    var showOpening = !!(homeInline && homeChatLayerOpen);
+    try {
+      if (showOpening) forceShowOpeningInHome = true;
+      renderMessages(rows, { instantOpening: !!renderOpts.instantOpening });
+    } finally {
+      forceShowOpeningInHome = false;
+    }
+    if (chatListHasVisibleContent()) markHistoryLoadSettled(tid);
+    return chatListHasVisibleContent();
+  }
+
+  function fetchVinorHistoryMessages(tid) {
+    tid = String(tid || '').trim();
+    if (!tid) return Promise.resolve([]);
+    var cached = peekVinorHistoryCache(tid);
+    if (cached) return Promise.resolve(cached);
+    if (historyFetchPromises[tid]) return historyFetchPromises[tid];
+    var url = historyUrl || (form && form.getAttribute('data-history-url')) || '';
+    if (!url) return Promise.resolve([]);
+    url += (url.indexOf('?') >= 0 ? '&' : '?') + 'thread_id=' + encodeURIComponent(tid);
+    historyFetchPromises[tid] = fetch(url, {
+      credentials: 'same-origin',
+      headers: apiHeaders(false),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (payload) {
+        var data = payload && payload.data;
+        if (!payload || !payload.ok || !data || !data.ok) return [];
+        var messages = data.messages || [];
+        if (messages.length) cacheVinorHistory(tid, messages);
+        else markHistoryLoadSettled(tid);
+        return messages;
+      })
+      .catch(function () {
+        return [];
+      })
+      .finally(function () {
+        delete historyFetchPromises[tid];
+      });
+    return historyFetchPromises[tid];
+  }
+
+  function prefetchVinorHistory(tid) {
+    if (!homeInline) return;
+    tid = String(tid || vinorThreadIdForReturn() || activeThreadId() || '').trim();
+    if (!tid || tid === postchiThreadId || isLawyerThreadId(tid)) return;
+    if (listHasVinorHistory() || peekVinorHistoryCache(tid)) return;
+    fetchVinorHistoryMessages(tid).catch(function () {});
+  }
 
   function markHistoryLoadSettled(tid) {
     tid = String(tid || '').trim();
@@ -276,6 +360,7 @@
     bindLiveChatDom();
     if (listHasVinorHistory()) return;
     tid = String(tid || vinorThreadIdForReturn() || activeThreadId() || '').trim();
+    if (peekVinorHistoryCache(tid)) return;
     if (tid) clearHistoryLoadSettled(tid);
   }
 
@@ -324,7 +409,6 @@
   function loadVinorHistoryIfEmpty() {
     bindLiveChatDom();
     if (chatListHasVisibleContent()) return Promise.resolve(true);
-    if (historyLoadInFlight) return historyLoadInFlight;
     var tid = '';
     try {
       tid = vinorThreadIdForReturn() || activeThreadId() || '';
@@ -334,34 +418,20 @@
     if (!tid || tid === postchiThreadId || (typeof isLawyerThreadId === 'function' && isLawyerThreadId(tid))) {
       return Promise.resolve(false);
     }
-    var url = historyUrl || (form && form.getAttribute('data-history-url')) || '';
-    if (!url) return Promise.resolve(false);
-    url += (url.indexOf('?') >= 0 ? '&' : '?') + 'thread_id=' + encodeURIComponent(tid);
+    if (applyVinorHistoryFromCache(tid, { instantOpening: true })) return Promise.resolve(true);
+    if (historyLoadInFlight) return historyLoadInFlight;
     var loadGen = ++historyLoadGen;
-    historyLoadInFlight = fetch(url, {
-      credentials: 'same-origin',
-      headers: apiHeaders(false),
-    })
-      .then(function (res) {
-        return res.json().then(function (data) {
-          return { ok: res.ok, data: data };
-        });
-      })
-      .then(function (payload) {
+    historyLoadInFlight = fetchVinorHistoryMessages(tid)
+      .then(function (messages) {
         if (loadGen !== historyLoadGen) return false;
         bindLiveChatDom();
         if (chatListHasVisibleContent()) return true;
-        var data = payload && payload.data;
-        if (!payload || !payload.ok || !data || !data.ok) return false;
-        if (!data.messages || !data.messages.length) {
-          markHistoryLoadSettled(tid);
-          return false;
-        }
+        if (!messages || !messages.length) return false;
         var showOpening = false;
         try {
           showOpening = !!(homeInline && homeChatLayerOpen);
           if (showOpening) forceShowOpeningInHome = true;
-          renderMessages(data.messages);
+          renderMessages(messages, { instantOpening: true });
         } finally {
           if (showOpening) forceShowOpeningInHome = false;
         }
@@ -1555,6 +1625,16 @@
         try {
           ensureChatVisible();
         } catch (_) {}
+        if (applyVinorHistoryFromCache(openTid, { instantOpening: true })) {
+          try {
+            pushHomeChatHistory();
+          } catch (_) {}
+          try {
+            if (!isPostchiMode()) resumePoll();
+          } catch (_) {}
+          jumpVinorChatToLatest();
+          return Promise.resolve();
+        }
         return Promise.resolve(switchThread(openTid, { toLatest: true }));
       }
       /* تب وینور وقتی همین‌جا هستیم: برو به آخرین پیام */
@@ -1597,6 +1677,15 @@
       if (!btn || !sw.contains(btn)) return;
       e.preventDefault();
       switchHomeMode(btn.getAttribute('data-home-mode') || 'vinor');
+    }
+
+    function onVinorPrefetch() {
+      prefetchVinorHistory();
+    }
+
+    var vinorModeBtn = sw.querySelector('[data-home-mode="vinor"]');
+    if (vinorModeBtn) {
+      vinorModeBtn.addEventListener('pointerenter', onVinorPrefetch, { passive: true });
     }
 
     var swipe = null;
@@ -3095,7 +3184,8 @@
     return out;
   }
 
-  function renderMessages(messages) {
+  function renderMessages(messages, renderOpts) {
+    renderOpts = renderOpts || {};
     bindLiveChatDom();
     cancelTypewriter();
     list.innerHTML = '';
@@ -3119,7 +3209,7 @@
         applyReportFilter();
         return;
       }
-      playVinorOpening(rows[0]);
+      playVinorOpening(rows[0], { instant: !!renderOpts.instantOpening });
       if (!isLawyerOpening) {
         injectHomeJourneyCardIntoChat();
       }
@@ -3202,8 +3292,9 @@
       } catch (_) {}
     });
 
-    if (wasOpeningTyped()) {
+    if (opts.instant || wasOpeningTyped()) {
       appendMessage(payload);
+      if (opts.instant) markOpeningTyped();
       return Promise.resolve(null);
     }
 
@@ -3644,6 +3735,10 @@
           homeEmptyEntryForced = false;
           ensureChatVisible();
         }
+        if (applyVinorHistoryFromCache(threadId, { instantOpening: true })) {
+          reopenSameThreadChat();
+          return;
+        }
         try {
           await loadVinorHistoryIfEmpty();
           syncHomeEmptyState();
@@ -3672,6 +3767,25 @@
         if (toLatest || !landChatFocusWrap()) {
           jumpVinorChatToLatest();
         }
+        return;
+      }
+      /* vinor همان ترد: POST switch کند است — history/cache کافی است */
+      if (threadId !== postchiThreadId && !isLawyerThreadId(threadId)) {
+        if (homeInline) {
+          homeChatLayerOpen = true;
+          homeEmptyEntryForced = false;
+          ensureChatVisible();
+        }
+        if (!listHasVinorHistory()) {
+          if (
+            !applyVinorHistoryFromCache(threadId, { instantOpening: true })
+          ) {
+            try {
+              await loadVinorHistoryIfEmpty();
+            } catch (_) {}
+          }
+        }
+        reopenSameThreadChat();
         return;
       }
       /* همان ترد فعال روی بدو ورود خانه است — ادامه بده تا پیام‌ها بیاید و چت باز شود */
@@ -3728,6 +3842,9 @@
         renderMessages(data.messages);
       } finally {
         forceShowOpeningInHome = false;
+      }
+      if (enterVinorChat && data.messages && data.messages.length) {
+        cacheVinorHistory(data.thread_id, data.messages);
       }
       if (enterVinorChat && chatListNeedsHistoryFetch()) {
         try {
@@ -4063,6 +4180,9 @@
     homeEmptyEntryForced = false;
     sheetOpen = true;
     try {
+      clearVinorHistoryCache(activeThreadId());
+    } catch (_) {}
+    try {
       syncHomeEmptyState();
     } catch (_) {}
     pushHomeChatHistory();
@@ -4222,6 +4342,8 @@
     scrollLatestGen += 1;
     historyLoadGen += 1;
     historyLoadInFlight = null;
+    clearVinorHistoryCache();
+    historyFetchPromises = Object.create(null);
     try {
       if (typeof homeModeUnbind === 'function') homeModeUnbind();
     } catch (_) {}
@@ -4277,6 +4399,29 @@
   pollTimer = setInterval(pollSync, POLL_MS);
   if (!embedded) {
     refreshHistory(false);
+  }
+  if (homeInline && historyUrl) {
+    try {
+      var _prefetchTid = vinorThreadIdForReturn() || activeThreadId();
+      if (
+        _prefetchTid &&
+        _prefetchTid !== postchiThreadId &&
+        !isLawyerThreadId(_prefetchTid)
+      ) {
+        setTimeout(function () {
+          prefetchVinorHistory(_prefetchTid);
+        }, 0);
+      }
+    } catch (_) {}
+  }
+  if (menuBtn && homeInline) {
+    menuBtn.addEventListener(
+      'pointerenter',
+      function () {
+        prefetchVinorHistory();
+      },
+      { passive: true }
+    );
   }
   onVisChange = function () {
     if (document.hidden) return;
