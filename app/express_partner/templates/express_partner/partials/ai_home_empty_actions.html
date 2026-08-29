@@ -95,11 +95,13 @@
     <span class="ai-home-empty__tiles-divider" aria-hidden="true"></span>
     {% endif %}
     {% if item.href %}
+    {% set _rq_badge = home_requests_pipeline_count|default(0)|int if item.intent == 'followup' else 0 %}
     <a href="{{ item.href }}"
        class="ai-home-empty__tile"
        role="listitem"
        data-vinor-express-nav
-       title="{{ item.label|e }}">
+       title="{{ item.label|e }}"
+       aria-label="{{ item.label|e }}{% if _rq_badge %} — {{ _rq_badge|fa_digits }} مورد{% endif %}">
       <span class="ai-home-empty__tile-icon" aria-hidden="true">{{ ai_home_empty_icon(item.icon|default('spark')) }}</span>
       <span class="ai-home-empty__tile-text">
         <span class="ai-home-empty__tile-title-row">

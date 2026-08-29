@@ -881,14 +881,6 @@
     }
   }
 
-  function isRootTabSwitch(href) {
-    try {
-      return navDepthForUrl(window.location.href) === 0 && navDepthForUrl(href) === 0;
-    } catch (_) {
-      return false;
-    }
-  }
-
   function hasPrefetchedHtml(href) {
     try {
       if (!shouldUsePrefetchCache(href)) return false;
