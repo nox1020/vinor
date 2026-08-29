@@ -4833,6 +4833,8 @@ def _build_partner_sales_pipeline(
         'open_count': open_count,
         'is_approved': is_approved,
         'is_special': is_special,
+        'support_phone': support_phone,
+        'allow_attendance': allow_attendance,
         'visit_weekday_labels': visit_weekday_labels,
         'visit_weekday_order': visit_weekday_order,
         'visit_allowed_weekdays': visit_allowed_weekdays,
@@ -4863,7 +4865,12 @@ def requests_page():
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None)
     from .partner_roles import partner_coop_level
-    from .visit_requests import PIPELINE_TABS, PIPELINE_VISITS
+    from .visit_requests import (
+        PIPELINE_DEALS,
+        PIPELINE_REQUESTS,
+        PIPELINE_TABS,
+        PIPELINE_VISITS,
+    )
 
     pipe = _build_partner_sales_pipeline(me_phone, profile)
     items = pipe['items']
@@ -4873,6 +4880,8 @@ def requests_page():
     open_count = pipe['open_count']
     is_approved = pipe['is_approved']
     is_special = pipe['is_special']
+    support_phone = pipe['support_phone']
+    allow_attendance = pipe['allow_attendance']
     visit_weekday_labels = pipe['visit_weekday_labels']
     visit_weekday_order = pipe['visit_weekday_order']
     visit_allowed_weekdays = pipe['visit_allowed_weekdays']
