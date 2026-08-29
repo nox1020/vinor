@@ -271,6 +271,14 @@
     if (tid) delete historyLoadSettled[tid];
   }
 
+  /** ورود صریح کاربر به چت — اگر فقط welcome در DOM است دوباره history بکش */
+  function prepareVinorHistoryLoad(tid) {
+    bindLiveChatDom();
+    if (listHasVinorHistory()) return;
+    tid = String(tid || vinorThreadIdForReturn() || activeThreadId() || '').trim();
+    if (tid) clearHistoryLoadSettled(tid);
+  }
+
   function listHasVinorHistory() {
     bindLiveChatDom();
     if (!list) return false;
@@ -303,7 +311,7 @@
     }
     if (isHistoryLoadSettled(tid)) return false;
     try {
-      if (list.querySelector('.ai-msg-wrap[data-role]')) return false;
+      /* welcome/typing ≠ تاریخچه — فقط thinking را نگه دار */
       if (list.querySelector('.ai-msg-wrap[data-thinking="1"]')) return false;
     } catch (_) {}
     return true;
@@ -1494,6 +1502,9 @@
         syncHomeEmptyState();
       }
     } catch (_) {}
+    if (needLoad && tid && tid !== postchiThreadId && !isLawyerThreadId(tid)) {
+      prepareVinorHistoryLoad(tid);
+    }
     if (needLoad && tid && tid !== postchiThreadId && !isLawyerThreadId(tid)) {
       return Promise.resolve(switchThread(tid)).then(go, go);
     }
@@ -3579,6 +3590,9 @@
     var toLatest = !!opts.toLatest;
     if (!switchUrl || !threadId) return;
     bindLiveChatDom();
+    if (threadId !== postchiThreadId && !isLawyerThreadId(threadId)) {
+      prepareVinorHistoryLoad(threadId);
+    }
     if (toLatest) {
       try {
         clearLandChatFocus();
@@ -3976,6 +3990,17 @@
         }
         return;
       }
+    }
+    /* sync با count=0 تاریخچه را bootstrap نمی‌کند — از حلقهٔ خالی جلوگیری کن */
+    if (
+      homeInline &&
+      homeChatLayerOpen &&
+      !listHasVinorHistory() &&
+      isHistoryLoadSettled(tid) &&
+      storedMessageCount() === 0 &&
+      !lastSyncAt
+    ) {
+      return;
     }
     if (syncAbort) syncAbort.abort();
     syncAbort = new AbortController();
