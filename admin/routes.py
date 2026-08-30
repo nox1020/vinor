@@ -65,7 +65,7 @@ from app.express_partner.partner_withdrawals import (
     release_withdrawal_commissions,
 )
 from app.land_category_specs import apply_category_specs_from_form
-from app.services.sms import send_sms_template, send_sms_direct
+from app.services.sms import send_sms_template, send_sms_direct, sms_ir_error_message
 from app.utils.storage import load_users, save_users, load_reports, save_reports, save_ads, load_ads_cached, load_express_lands_cached
 from admin.people_directory import (
     build_admin_people_directory,
@@ -2236,7 +2236,7 @@ def sms_colleagues():
                                         'response': result.get('body', {}),
                                         'source': 'admin_colleagues',
                                         'created_at': datetime.now().isoformat(),
-                                        'error': None if result.get('ok') else str(result.get('body', {}).get('message', 'Unknown error')),
+                                        'error': None if result.get('ok') else sms_ir_error_message(result.get('body')),
                                     })
                                     if result.get('ok'):
                                         sent += 1
@@ -2245,7 +2245,7 @@ def sms_colleagues():
                                         failed_details.append({
                                             'phone': phone_normalized,
                                             'name': partner['name'],
-                                            'error': result.get('body', {}).get('message', 'Unknown error'),
+                                            'error': sms_ir_error_message(result.get('body')),
                                         })
                                 except Exception as e:
                                     failed += 1
@@ -2345,6 +2345,119 @@ def sms_colleagues():
         history_total=history_total,
         history_total_pages=history_total_pages,
     )
+
+
+@admin_bp.route('/sms/system-templates', methods=['GET', 'POST'])
+@login_required
+def sms_system_templates():
+    """مشاهده و ویرایش پیامک‌های سیستمی وینور."""
+    from app.services.system_sms_templates import (
+        category_label,
+        get_template_meta,
+        get_template_body,
+        list_system_sms_templates,
+        render_system_sms,
+        reset_template_override,
+        sample_context,
+        save_template_override,
+    )
+    from app.services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile, sms_ir_error_message
+    from app.services.sms_config import get_sms_line_number
+
+    from app.utils.storage import load_settings
+
+    message = None
+    error = None
+    edit_key = (request.args.get('key') or request.form.get('key') or '').strip()
+    category_filter = (request.args.get('category') or request.form.get('category') or '').strip()
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or '').strip()
+        edit_key = (request.form.get('key') or edit_key).strip()
+        if action == 'save':
+            body = (request.form.get('body') or '').strip()
+            enabled = request.form.get('enabled') != '0'
+            ok, err = save_template_override(
+                edit_key,
+                body,
+                enabled=enabled,
+                updated_by=session.get('admin_user') or session.get('user_phone') or 'admin',
+            )
+            if ok:
+                message = 'قالب ذخیره شد.'
+                _admin_audit('sms_template_save', template_key=edit_key)
+            else:
+                error = err or 'ذخیره انجام نشد.'
+        elif action == 'reset':
+            ok, err = reset_template_override(edit_key)
+            if ok:
+                message = 'قالب به پیش‌فرض بازگشت.'
+                _admin_audit('sms_template_reset', template_key=edit_key)
+            else:
+                error = err or 'بازنشانی انجام نشد.'
+        elif action == 'test':
+            meta = get_template_meta(edit_key)
+            if not meta:
+                error = 'قالب نامعتبر است.'
+            else:
+                settings = load_settings(current_app) or {}
+                admin_phone = normalize_iran_mobile(
+                    str(settings.get('partner_application_admin_phone') or '09121471301')
+                )
+                if not is_valid_iran_mobile(admin_phone):
+                    error = 'شماره ادمین در تنظیمات نامعتبر است.'
+                else:
+                    ctx = sample_context(edit_key)
+                    msg = render_system_sms(edit_key, ctx)
+                    if not msg:
+                        error = 'متن قالب خالی است.'
+                    else:
+                        line = (settings.get('sms_line_number') or get_sms_line_number() or '09981801922').strip()
+                        result = send_sms_direct(
+                            mobile=admin_phone,
+                            message=msg,
+                            line_number=line,
+                            history_source='admin_system_template_test',
+                            recipient_name='admin_test',
+                        )
+                        if result.get('ok'):
+                            message = f'پیامک تست به {admin_phone} ارسال شد.'
+                        else:
+                            error = sms_ir_error_message(result.get('body'), 'ارسال تست ناموفق بود.')
+
+    templates = list_system_sms_templates()
+    if category_filter:
+        templates = [t for t in templates if t.get('category') == category_filter]
+
+    categories = sorted({t.get('category') for t in list_system_sms_templates()}, key=lambda c: category_label(c))
+
+    edit_item = None
+    edit_preview = ''
+    edit_placeholders: List[str] = []
+    if edit_key:
+        for t in list_system_sms_templates():
+            if t.get('key') == edit_key:
+                edit_item = t
+                break
+        if edit_item:
+            edit_placeholders = list(edit_item.get('placeholders') or [])
+            edit_preview = render_system_sms(edit_key, sample_context(edit_key))
+
+    return render_template(
+        'admin/system_sms_templates.html',
+        message=message,
+        error=error,
+        templates=templates,
+        categories=categories,
+        category_filter=category_filter,
+        edit_item=edit_item,
+        edit_key=edit_key,
+        edit_preview=edit_preview,
+        edit_placeholders=edit_placeholders,
+        category_label=category_label,
+        get_template_body=get_template_body,
+    )
+
 
 # -----------------------------------------------------------------------------
 # سابقه ارسال پیامک‌ها
@@ -6489,7 +6602,7 @@ def _approve_express_partner(
                     'response': sms_result.get('body', {}),
                     'source': source,
                     'created_at': datetime.now().isoformat(),
-                    'error': None if sms_result.get('ok') else str(sms_result.get('body', {}).get('message', 'Unknown error')),
+                    'error': None if sms_result.get('ok') else sms_ir_error_message(sms_result.get('body')),
                 }
                 history.append(record)
                 if len(history) > 10000:

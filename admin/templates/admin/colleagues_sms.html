@@ -16,6 +16,18 @@
   </div>
   {% endif %}
 
+  <div class="flex flex-wrap gap-2 text-xs">
+    <a href="{{ url_for('admin.sms_system_templates') }}"
+       class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 text-violet-800 dark:text-violet-200 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition">
+      <i class="fa-solid fa-file-lines"></i>
+      پیامک‌های سیستمی
+    </a>
+    <a href="{{ url_for('admin.sms_notifications') }}"
+       class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition">
+      مرکز پیامک
+    </a>
+  </div>
+
   <!-- گیرنده و فرستنده -->
   <details id="recipientSenderPanel" class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden group">
     <summary class="px-4 py-3 cursor-pointer list-none flex items-center justify-between gap-2 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">

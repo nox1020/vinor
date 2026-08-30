@@ -2106,8 +2106,10 @@ def _send_partner_application_sms(me_phone: str, recipient_name: str) -> dict:
         )
         return {'ok': False, 'skipped': True, 'error': 'invalid_mobile', 'mobile': mobile}
 
+    from app.services.system_sms_templates import get_template_body
+
     settings = load_settings(current_app) or {}
-    sms_message = (settings.get('partner_application_sms_message') or '').strip()
+    sms_message = get_template_body('partner_application').strip()
     if not sms_message:
         sms_message = 'وینور\nدرخواست همکاری‌ت ثبت شد؛ منتظر بررسی.'
     sms_line_number = (settings.get('sms_line_number') or get_sms_line_number() or '09981801922').strip()
@@ -2277,7 +2279,22 @@ def _build_visit_schedule_sms(
     counterpart_name: str = '',
     counterpart_phone: str = '',
 ) -> str:
-    """قالب یکسان تعیین وقت — فقط مشخصات طرف مقابل فرق می‌کند."""
+    """قالب تعیین وقت — از رجیstry پیامک سیستمی."""
+    from app.services.system_sms_templates import visit_schedule_body
+
+    msg = visit_schedule_body(
+        weekday=weekday,
+        jalali_date=jalali_date,
+        visit_time=visit_time,
+        presence_address=presence_address,
+        support_phone=support_phone,
+        counterpart_label=counterpart_label,
+        counterpart_name=counterpart_name,
+        counterpart_phone=counterpart_phone,
+    )
+    if msg:
+        return msg
+    # fallback
     day = (weekday or '').strip()
     date_s = (jalali_date or '').strip()
     time_s = (visit_time or '').strip()

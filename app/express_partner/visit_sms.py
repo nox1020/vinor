@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 from flask import current_app
 
+from app.services.system_sms_templates import get_template_body
 from ..services.sms import send_sms_direct, normalize_iran_mobile, is_valid_iran_mobile
 from ..utils.dates import format_iso_date_jalali, to_fa_digits
 from ..utils.storage import load_settings, load_sms_history, save_sms_history
@@ -189,7 +190,7 @@ def notify_partner_land_tx_sms(
     }
 
     if ev == "visit_approved":
-        custom = (settings.get("visit_approval_sms_message") or "").strip()
+        custom = get_template_body("visit_approved").strip()
         if custom:
             msg = custom
             if addr and "آدرس حضور" not in custom:
@@ -197,7 +198,9 @@ def notify_partner_land_tx_sms(
         else:
             msg = _build_message(ev, ctx)
     else:
-        msg = _build_message(ev, ctx)
+        from app.services.system_sms_templates import visit_event_body
+
+        msg = visit_event_body(ev, ctx) or _build_message(ev, ctx)
 
     if not msg:
         return {"ok": False, "skipped": True, "error": "empty_message"}

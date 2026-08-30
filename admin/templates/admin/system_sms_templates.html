@@ -1,0 +1,164 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}پیامک‌های سیستمی{% endblock %}
+{% block page_title %}پیامک‌های سیستمی وینور{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-4 pb-8">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm text-gray-600 dark:text-gray-400 leading-6 max-w-2xl">
+        متن همهٔ پیامک‌های خودکار وینور (OTP، بازدید، کیف پول، پلاس، ادمین و …) از اینجا قابل مشاهده و ویرایش است.
+        از <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 rounded">{placeholder}</code> برای متغیرها استفاده کنید.
+      </p>
+    </div>
+    <a href="{{ url_for('admin.sms_colleagues') }}"
+       class="text-xs text-blue-600 dark:text-blue-400 hover:underline shrink-0">
+      ← بازگشت به ارسال پیامک
+    </a>
+  </div>
+
+  {% if message %}
+  <div class="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 text-sm">
+    {{ message }}
+  </div>
+  {% endif %}
+  {% if error %}
+  <div class="p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 text-sm">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <div class="flex flex-wrap gap-2 text-xs">
+    <a href="{{ url_for('admin.sms_system_templates') }}"
+       class="px-3 py-1.5 rounded-full border {% if not category_filter %}bg-blue-600 text-white border-blue-600{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300{% endif %}">
+      همه
+    </a>
+    {% for cat in categories %}
+    <a href="{{ url_for('admin.sms_system_templates', category=cat) }}"
+       class="px-3 py-1.5 rounded-full border {% if category_filter == cat %}bg-blue-600 text-white border-blue-600{% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300{% endif %}">
+      {{ category_label(cat) }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+    <!-- لیست -->
+    <div class="lg:col-span-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+        <h2 class="text-sm font-semibold text-gray-900 dark:text-white">فهرست ({{ templates|length }})</h2>
+      </div>
+      <ul class="divide-y divide-gray-100 dark:divide-gray-800 max-h-[70vh] overflow-y-auto">
+        {% for t in templates %}
+        <li>
+          <a href="{{ url_for('admin.sms_system_templates', key=t.key, category=category_filter or none) }}"
+             class="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition {% if edit_key == t.key %}bg-blue-50 dark:bg-blue-900/20 border-s-2 border-blue-500{% endif %}">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ t.title }}</p>
+                <p class="text-[11px] text-gray-500 mt-0.5">{{ t.category_label }} · {{ t.recipient }}</p>
+              </div>
+              <div class="shrink-0 flex flex-col items-end gap-1">
+                {% if t.is_customized %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">سفارشی</span>
+                {% endif %}
+                {% if not t.editable %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500">فقط‌خواندنی</span>
+                {% endif %}
+              </div>
+            </div>
+            {% if t.preview %}
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1 line-clamp-2 whitespace-pre-line">{{ t.preview }}</p>
+            {% endif %}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- ویرایش -->
+    <div class="lg:col-span-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+      {% if edit_item %}
+      <div class="space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-gray-900 dark:text-white">{{ edit_item.title }}</h2>
+          <p class="text-xs text-gray-500 mt-1">{{ edit_item.description or edit_item.trigger }} — گیرنده: {{ edit_item.recipient }}</p>
+        </div>
+
+        {% if edit_placeholders and edit_placeholders|length %}
+        <div class="rounded-lg bg-gray-50 dark:bg-gray-800/50 p-3">
+          <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">متغیرها</p>
+          <p class="text-[11px] text-gray-500 font-mono" dir="ltr">{{ edit_placeholders|join(', ') }}</p>
+        </div>
+        {% endif %}
+
+        {% if edit_item.editable %}
+        <form method="post" class="space-y-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="key" value="{{ edit_key }}">
+          <input type="hidden" name="category" value="{{ category_filter }}">
+          <input type="hidden" name="action" value="save">
+
+          <div>
+            <label for="smsBody" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">متن پیامک</label>
+            <textarea id="smsBody" name="body" rows="10" required maxlength="500"
+                      class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-mono leading-relaxed text-gray-900 dark:text-white">{{ edit_item.effective_body }}</textarea>
+            <p class="text-[11px] text-gray-500 mt-1">حداکثر ۵۰۰ کاراکتر · خط جدید با Enter</p>
+          </div>
+
+          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input type="checkbox" name="enabled" value="1" {% if edit_item.is_enabled %}checked{% endif %} class="rounded">
+            فعال (غیرفعال = ارسال نمی‌شود)
+          </label>
+
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
+              ذخیره
+            </button>
+            <button type="submit" formaction="{{ url_for('admin.sms_system_templates', key=edit_key, category=category_filter or none) }}"
+                    name="action" value="test"
+                    class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800">
+              ارسال تست به ادمین
+            </button>
+          </div>
+        </form>
+
+        <form method="post" onsubmit="return confirm('بازگشت به متن پیش‌فرض؟');" class="pt-2 border-t border-gray-100 dark:border-gray-800">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="key" value="{{ edit_key }}">
+          <input type="hidden" name="category" value="{{ category_filter }}">
+          <input type="hidden" name="action" value="reset">
+          <button type="submit" class="text-xs text-rose-600 dark:text-rose-400 hover:underline">
+            بازگشت به پیش‌فرض
+          </button>
+        </form>
+        {% else %}
+        <div class="rounded-lg bg-gray-50 dark:bg-gray-800/50 p-3 text-sm text-gray-600 dark:text-gray-400">
+          این قالب فقط خواندنی است (مثلاً OTP روی sms.ir یا مربی فروش).
+        </div>
+        <pre class="text-xs whitespace-pre-wrap font-mono bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg text-gray-800 dark:text-gray-200">{{ edit_item.effective_body or edit_item.default_body }}</pre>
+        {% endif %}
+
+        {% if edit_preview %}
+        <div>
+          <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">پیش‌نمایش (با دادهٔ نمونه)</p>
+          <pre class="text-xs whitespace-pre-wrap bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3 rounded-lg text-gray-800 dark:text-gray-200">{{ edit_preview }}</pre>
+        </div>
+        {% endif %}
+
+        {% if edit_item.default_body and edit_item.is_customized %}
+        <details class="text-xs">
+          <summary class="cursor-pointer text-gray-500 hover:text-gray-700">متن پیش‌فرض کارخانه</summary>
+          <pre class="mt-2 whitespace-pre-wrap font-mono bg-gray-50 dark:bg-gray-800/50 p-2 rounded">{{ edit_item.default_body }}</pre>
+        </details>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
+        یک قالب از لیست را انتخاب کنید.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

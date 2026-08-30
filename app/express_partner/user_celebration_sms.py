@@ -210,6 +210,11 @@ def _release_run_lock(fd: Optional[int]) -> None:
 
 def build_birthday_sms_message(*, name: str, jm: int, jd: int) -> str:
     first = _first_name(name)
+    from app.services.system_sms_templates import render_system_sms
+
+    msg = render_system_sms("user_birthday", {"name": first})
+    if msg:
+        return msg
     return (
         f"وینور\n"
         f"{first} جان، تولدت مبارک 🎂\n"
@@ -220,6 +225,11 @@ def build_birthday_sms_message(*, name: str, jm: int, jd: int) -> str:
 def build_membership_anniversary_sms_message(*, name: str, years: int) -> str:
     first = _first_name(name)
     yr = _year_phrase(years)
+    from app.services.system_sms_templates import render_system_sms
+
+    msg = render_system_sms("user_membership_anniversary", {"name": first, "years_phrase": yr})
+    if msg:
+        return msg
     return (
         f"وینور\n"
         f"{first} جان، {yr} با هم بودیم 💚\n"

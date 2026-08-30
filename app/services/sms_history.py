@@ -8,6 +8,7 @@ from typing import Any, Mapping, Optional
 from flask import current_app
 
 from app.utils.storage import load_sms_history, save_sms_history
+from app.services.sms import sms_ir_error_message
 
 SMS_SOURCE_LABELS: dict[str, str] = {
     "admin_colleagues": "ادمین · همکاران",
@@ -15,7 +16,7 @@ SMS_SOURCE_LABELS: dict[str, str] = {
     "admin_colleagues_scheduled": "ادمین · زمان‌دار",
     "admin_colleagues_recurring": "ادمین · تکرارشونده",
     "admin_partner_message": "ادمین · پیام همکار",
-    "admin_sms_campaign": "ادمین · کمپین",
+    "admin_system_template_test": "ادمین · تست قالب",
     "admin_pending_action": "ادمین · اقدام",
     "api": "API",
     "api_bulk": "API · گروهی",
@@ -121,10 +122,7 @@ def record_sms_send_result(
     body = result.get("body") or {}
     err = None
     if not ok:
-        if isinstance(body, dict):
-            err = str(body.get("message") or body.get("error") or "Unknown error")
-        else:
-            err = str(body)[:200] or "Unknown error"
+        err = sms_ir_error_message(body)
     append_sms_history_entry(
         mobile=mobile,
         success=ok,

@@ -107,6 +107,20 @@ def format_otp_sms_message(code: str) -> str:
     )
 
 
+def sms_ir_error_message(body: object, fallback: str = "خطای ارسال پیامک") -> str:
+    """استخراج پیام خطا از پاسخ sms.ir."""
+    if not isinstance(body, dict):
+        return fallback if body is None else str(body)[:200]
+    for key in ("message", "Message", "error", "Error", "title", "detail", "Description"):
+        val = body.get(key)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+    raw = body.get("raw")
+    if raw is not None and str(raw).strip():
+        return str(raw).strip()[:200]
+    return fallback
+
+
 def _sms_ir_response_ok(status_code: int, body: object) -> bool:
     """HTTP 2xx + status==1 در بدنهٔ sms.ir."""
     if not (200 <= status_code < 300):

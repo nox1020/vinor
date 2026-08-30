@@ -12,6 +12,7 @@ from ..services.sms import (
     is_valid_iran_mobile,
     normalize_iran_mobile,
     send_sms_direct,
+    sms_ir_error_message,
 )
 from ..services.sms_config import get_sms_line_number
 from ..utils.storage import load_express_partners, load_settings, load_sms_history, save_sms_history
@@ -94,10 +95,18 @@ def _express_land_detail_url(land_code: str) -> str:
         return f"https://vinor.ir/express/partner/lands/{code}"
 
 
-def build_new_land_partner_sms_message(*, commission_amount: int, detail_url: str = "") -> str:
+def build_new_land_partner_sms_message(*, commission_amount: int, detail_url: str = "", land_code: str = "") -> str:
     amt = _format_toman(commission_amount)
-    lines = [f"وینور\nفایل جدید اومد\nپورسانت تا {amt} تومن"]
     link = (detail_url or "").strip()
+    from app.services.system_sms_templates import render_system_sms
+
+    msg = render_system_sms(
+        "new_express_land",
+        {"commission_amount": amt, "detail_url": link, "land_code": land_code or ""},
+    )
+    if msg:
+        return msg
+    lines = [f"وینور\nفایل جدید اومد\nپورسانت تا {amt} تومن"]
     if link:
         lines.append(link)
     return "\n".join(lines)
@@ -188,7 +197,7 @@ def notify_all_partners_new_express_land(land: Dict[str, Any]) -> Dict[str, Any]
                 "response": result.get("body", {}),
                 "source": "new_express_land_broadcast",
                 "created_at": datetime.utcnow().isoformat() + "Z",
-                "error": None if ok else str((result.get("body") or {}).get("message") or "sms_failed"),
+                "error": None if ok else sms_ir_error_message(result.get("body"), "sms_failed"),
             })
         except Exception as exc:
             failed += 1

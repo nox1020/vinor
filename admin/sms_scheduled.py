@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from flask import Flask, current_app
 
 from admin.sms_recipients import count_sms_recipients, load_sms_recipients, recipient_group_label
-from app.services.sms import send_sms_direct
+from app.services.sms import send_sms_direct, sms_ir_error_message
 from app.services.sms_config import get_sms_line_number
 from app.utils.dates import format_display_jalali_datetime, tehran_now, to_en_digits
 from app.utils.storage import load_sms_history, save_sms_history
@@ -314,7 +314,7 @@ def send_direct_to_recipients(
                 "response": result.get("body", {}),
                 "source": source,
                 "created_at": tehran_now().isoformat(),
-                "error": None if result.get("ok") else str(result.get("body", {}).get("message", "Unknown error")),
+                "error": None if result.get("ok") else sms_ir_error_message(result.get("body")),
             })
             if len(history_batch) >= HISTORY_FLUSH_EVERY:
                 _flush_history()
@@ -326,7 +326,7 @@ def send_direct_to_recipients(
                 failed_details.append({
                     "phone": phone_normalized,
                     "name": partner.get("name"),
-                    "error": result.get("body", {}).get("message", "Unknown error"),
+                    "error": sms_ir_error_message(result.get("body")),
                 })
         except Exception as e:
             failed += 1

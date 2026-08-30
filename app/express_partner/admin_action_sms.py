@@ -41,67 +41,8 @@ def _append_history(entry: dict) -> None:
 
 
 def _build_message(action: str, settings: dict, **kw: Any) -> str:
-    name = (kw.get('partner_name') or '').strip() or (kw.get('partner_phone') or '').strip() or 'همکار'
-    phone = (kw.get('partner_phone') or '').strip()
-
-    if action == 'application':
-        custom = (settings.get('partner_application_admin_sms_message') or '').strip()
-        if custom:
-            return (
-                custom.replace('{name}', name)
-                .replace('{phone}', phone)
-                .replace('{partner_name}', name)
-                .replace('{partner_phone}', phone)
-            )
-        return f'وینور\nهمکاری جدید\n{name}\n{phone}'
-
-    if action == 'withdrawal':
-        bank = (kw.get('bank_summary') or '').strip()
-        amt = _format_toman(int(kw.get('amount') or 0))
-        msg = f'وینور\nبرداشت {amt} تومن\n{name} · {phone}'
-        if bank:
-            msg += f'\n{bank}'
-        return msg
-
-    if action == 'visit':
-        code = str(kw.get('land_code') or '—')
-        vdate = (kw.get('visit_date') or '').strip()
-        msg = f'وینور\nبازدید جدید · {code}\n{name} · {phone}'
-        if vdate and vdate != '—':
-            msg += f'\n{vdate}'
-        return msg
-
-    if action == 'visit_schedule':
-        # درخواست تعیین وقت بازدید از مدال خانه → پیامک پشتیبان
-        lines = ['وینور', 'درخواست تعیین وقت بازدید', name]
-        notes = (kw.get('notes') or '').strip()
-        if notes:
-            lines.append(notes)
-        addr = (kw.get('presence_address') or '').strip()
-        if addr:
-            lines.append(f'آدرس حضور: {addr}')
-        sys_date = (kw.get('system_date') or '').strip()
-        if sys_date:
-            lines.append(sys_date)
-        if phone:
-            lines.append(phone)
-        return '\n'.join(lines)
-
-    if action == 'visit_done':
-        code = str(kw.get('land_code') or '—')
-        return f'وینور\nانجام بازدید · {code}\n{name} · {phone}'
-
-    if action == 'commission':
-        code = str(kw.get('land_code') or '—')
-        amt = _format_toman(int(kw.get('amount') or 0))
-        return f'وینور\nپورسانت {amt} تومن · {code}\n{name} · {phone}'
-
-    # vinor_plus: مسیر اصلی plus_checkout + زرین‌پال؛ SMS فقط fallback
-    if action == 'vinor_plus':
-        return f'وینور\nدرخواست پلاس\n{name}\n{phone}'
-
-    detail = (kw.get('detail') or '').strip()
-    return f'وینور\nاقدام لازم\n{detail or name}'
+    from app.services.system_sms_templates import admin_action_body
+    return admin_action_body(action, settings, **kw)
 
 
 def _send_sms_to(mobile: str, msg: str, *, line: str, action: str, recipient_name: str, **kwargs: Any) -> dict:
@@ -157,6 +98,7 @@ def _notify_special_land_owner(action: str, msg: str, line: str, **kwargs: Any) 
     if not land_code:
         return
     try:
+        from app.services.system_sms_templates import render_system_sms
         from app.express_partner.partner_roles import partner_is_special
         from app.utils.storage import load_ads_cached, load_express_partners
         lands = load_ads_cached() or []
@@ -177,14 +119,20 @@ def _notify_special_land_owner(action: str, msg: str, line: str, **kwargs: Any) 
         )
         if not partner_is_special(profile):
             return
-        owner_msg = msg
-        if action == 'visit':
-            owner_msg = (
-                f"وینور\nبازدید جدید روی آگهی‌ت · {land_code}\n"
-                f"نهایی شد — از صندوق بازدید ببین"
-            )
-        elif action == 'visit_done':
-            owner_msg = (
+        owner_msg = render_system_sms(
+            'special_owner_visit',
+            {'land_code': land_code},
+        ) or (
+            f"وینور\nبازدید جدید روی آگهی‌ت · {land_code}\n"
+            f"نهایی شد — از صندوق بازدید ببین"
+        )
+        if action == 'visit_done':
+            owner_msg = render_system_sms(
+                'special_owner_visit',
+                {'land_code': land_code},
+            ).replace('بازدید جدید', 'انجام بازدید').replace(
+                'نهایی شد — از صندوق بازدید ببین', 'از صندوق بازدید تأیید کن'
+            ) or (
                 f"وینور\nانجام بازدید روی آگهی‌ت · {land_code}\n"
                 f"از صندوق بازدید تأیید کن"
             )

@@ -107,7 +107,9 @@ def notify_partner_commission_txn(
         "bank_summary": bank_summary,
         "title": _txn_title(commission_type=commission_type, land_code=land_code),
     }
-    msg = _build_message(ev, ctx)
+    from app.services.system_sms_templates import wallet_txn_body
+
+    msg = wallet_txn_body(ev, ctx) or _build_message(ev, ctx)
     if not msg:
         return {"ok": False, "skipped": True, "error": "empty_message"}
 

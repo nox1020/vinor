@@ -138,14 +138,19 @@ def build_plus_activation_sms_message(
     days_remaining: str = "",
     custom_template: str = "",
 ) -> str:
-    tpl = (custom_template or "").strip() or _DEFAULT_ACTIVATION
-    return _apply_placeholders(
-        tpl,
-        name=name,
-        phone=phone,
-        expires_jalali=expires_jalali,
-        days_remaining=days_remaining,
-    )
+    tpl = (custom_template or "").strip()
+    ctx = {
+        "name": name,
+        "phone": phone,
+        "expires_jalali": expires_jalali,
+        "days_remaining": days_remaining,
+    }
+    if tpl:
+        return _apply_placeholders(tpl, **ctx)
+    from app.services.system_sms_templates import render_system_sms
+
+    msg = render_system_sms("plus_activated", ctx)
+    return msg or _apply_placeholders(_DEFAULT_ACTIVATION, **ctx)
 
 
 def build_plus_renewal_sms_message(
@@ -156,14 +161,19 @@ def build_plus_renewal_sms_message(
     days_remaining: str = "",
     custom_template: str = "",
 ) -> str:
-    tpl = (custom_template or "").strip() or _DEFAULT_RENEWAL
-    return _apply_placeholders(
-        tpl,
-        name=name,
-        phone=phone,
-        expires_jalali=expires_jalali,
-        days_remaining=days_remaining,
-    )
+    tpl = (custom_template or "").strip()
+    ctx = {
+        "name": name,
+        "phone": phone,
+        "expires_jalali": expires_jalali,
+        "days_remaining": days_remaining,
+    }
+    if tpl:
+        return _apply_placeholders(tpl, **ctx)
+    from app.services.system_sms_templates import render_system_sms
+
+    msg = render_system_sms("plus_renewed", ctx)
+    return msg or _apply_placeholders(_DEFAULT_RENEWAL, **ctx)
 
 
 def build_plus_expiry_reminder_sms_message(
@@ -174,14 +184,19 @@ def build_plus_expiry_reminder_sms_message(
     days_remaining: str = "",
     custom_template: str = "",
 ) -> str:
-    tpl = (custom_template or "").strip() or _DEFAULT_EXPIRY_REMINDER
-    return _apply_placeholders(
-        tpl,
-        name=name,
-        phone=phone,
-        expires_jalali=expires_jalali,
-        days_remaining=days_remaining,
-    )
+    tpl = (custom_template or "").strip()
+    ctx = {
+        "name": name,
+        "phone": phone,
+        "expires_jalali": expires_jalali,
+        "days_remaining": days_remaining,
+    }
+    if tpl:
+        return _apply_placeholders(tpl, **ctx)
+    from app.services.system_sms_templates import render_system_sms
+
+    msg = render_system_sms("plus_expiry_reminder", ctx)
+    return msg or _apply_placeholders(_DEFAULT_EXPIRY_REMINDER, **ctx)
 
 
 def build_plus_expired_sms_message(
@@ -192,14 +207,19 @@ def build_plus_expired_sms_message(
     days_remaining: str = "",
     custom_template: str = "",
 ) -> str:
-    tpl = (custom_template or "").strip() or _DEFAULT_EXPIRED
-    return _apply_placeholders(
-        tpl,
-        name=name,
-        phone=phone,
-        expires_jalali=expires_jalali,
-        days_remaining=days_remaining,
-    )
+    tpl = (custom_template or "").strip()
+    ctx = {
+        "name": name,
+        "phone": phone,
+        "expires_jalali": expires_jalali,
+        "days_remaining": days_remaining,
+    }
+    if tpl:
+        return _apply_placeholders(tpl, **ctx)
+    from app.services.system_sms_templates import render_system_sms
+
+    msg = render_system_sms("plus_expired", ctx)
+    return msg or _apply_placeholders(_DEFAULT_EXPIRED, **ctx)
 
 
 def _state_path(app=None) -> str:
