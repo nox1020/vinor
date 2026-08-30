@@ -34,11 +34,7 @@
       </section>
 
       {% if is_approved %}
-      <section class="grid grid-cols-2 gap-2">
-        <div class="rounded-xl border border-white/10 bg-[#12181f] px-2 py-3 text-center">
-          <p class="text-[10px] text-zinc-500 leading-tight">منتظر تأیید</p>
-          <p class="mt-1 text-lg font-bold text-white tabular-nums">{{ ref_stats.waiting_invites or 0 }}</p>
-        </div>
+      <section>
         <div class="rounded-xl border border-emerald-500/25 bg-emerald-950/25 px-2 py-3 text-center">
           <p class="text-[10px] text-emerald-200/70 leading-tight">دریافت‌شده</p>
           <p class="mt-1 text-sm font-bold text-emerald-300 tabular-nums">{{ (ref_stats.total_earned or 0)|toman }}</p>
