@@ -111,6 +111,7 @@ from admin.sms_scheduled import (
     recurrence_summary,
     send_batch_summary,
     send_direct_to_recipients,
+    update_scheduled_job,
 )
 from app.utils.storage import (
     load_express_partner_apps,
@@ -2063,6 +2064,7 @@ def sms_colleagues():
     form_recurrence_weekday = 5
     form_recurrence_day = 1
     form_send_limit = ''
+    edit_job_id = (request.args.get('edit_job') or '').strip()
 
     if request.method == 'POST':
         action = (request.form.get('action') or '').strip()
@@ -2086,6 +2088,45 @@ def sms_colleagues():
                 or recipient_group
             )
             return redirect(url_for('admin.sms_colleagues', recipient_group=rg))
+        if action == 'update_scheduled':
+            job_id = (request.form.get('job_id') or '').strip()
+            edit_job_id = job_id
+            rg = normalize_recipient_group(
+                request.form.get('recipient_group')
+                or request.args.get('recipient_group')
+                or get_saved_recipient_group()
+                or recipient_group
+            )
+            try:
+                rec_weekday = int(request.form.get('recurrence_weekday') or 5)
+            except ValueError:
+                rec_weekday = 5
+            try:
+                rec_day = int(request.form.get('recurrence_day') or 1)
+            except ValueError:
+                rec_day = 1
+            job, job_error = update_scheduled_job(
+                job_id,
+                message=(request.form.get('direct_message') or '').strip(),
+                recipient_group=normalize_recipient_group(
+                    request.form.get('job_recipient_group') or rg
+                ),
+                send_limit=(request.form.get('send_limit') or '').strip() or None,
+                scheduled_at=(request.form.get('scheduled_at') or '').strip(),
+                recurrence_freq=(request.form.get('recurrence_freq') or '').strip(),
+                recurrence_time=(request.form.get('recurrence_time') or '').strip(),
+                recurrence_weekday=rec_weekday,
+                recurrence_day=rec_day,
+            )
+            if job_error:
+                error = job_error
+                recipient_group = rg
+            else:
+                flash('زمان‌بندی به‌روزرسانی شد.', 'success')
+                return redirect(url_for(
+                    'admin.sms_colleagues',
+                    recipient_group=job.get('recipient_group') or rg,
+                ))
         else:
             send_mode = request.form.get('send_mode', 'direct')
             recipient_group = normalize_recipient_group(request.form.get('recipient_group') or recipient_group)
@@ -2337,6 +2378,7 @@ def sms_colleagues():
         form_recurrence_weekday=form_recurrence_weekday,
         form_recurrence_day=form_recurrence_day,
         form_send_limit=form_send_limit,
+        edit_job_id=edit_job_id,
         scheduled_jobs=scheduled_jobs,
         history=paginated_history,
         history_stats=history_stats,

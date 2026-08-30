@@ -497,6 +497,132 @@ def create_scheduled_job(
     return job, None
 
 
+def format_tehran_datetime_local(iso_or_dt: Any) -> str:
+    """مقدار datetime-local (YYYY-MM-DDTHH:MM) به وقت تهران."""
+    if iso_or_dt is None:
+        return ""
+    try:
+        if isinstance(iso_or_dt, datetime):
+            dt = _to_tehran(iso_or_dt)
+        else:
+            s = str(iso_or_dt or "").strip()
+            if not s:
+                return ""
+            dt = _to_tehran(datetime.fromisoformat(s.replace("Z", "+00:00")))
+        return dt.strftime("%Y-%m-%dT%H:%M")
+    except (TypeError, ValueError):
+        return ""
+
+
+def get_scheduled_job(job_id: str, *, app=None) -> Optional[Dict[str, Any]]:
+    jid = (job_id or "").strip()
+    if not jid:
+        return None
+    for job in load_scheduled_jobs(app):
+        if job.get("id") == jid:
+            return dict(job)
+    return None
+
+
+def update_scheduled_job(
+    job_id: str,
+    *,
+    message: str,
+    recipient_group: str,
+    send_limit: Optional[Any] = None,
+    scheduled_at: Optional[str] = None,
+    recurrence_freq: Optional[str] = None,
+    recurrence_time: Optional[str] = None,
+    recurrence_weekday: Optional[int] = None,
+    recurrence_day: Optional[int] = None,
+    app=None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """ویرایش job در وضعیت pending — نوع زمان‌بندی (یک‌بار/تکرار) عوض نمی‌شود."""
+    jid = (job_id or "").strip()
+    message = (message or "").strip()
+    if not message:
+        return None, "متن پیامک الزامی است."
+
+    from admin.sms_recipients import LARGE_GROUP_REQUIRE_BATCH
+
+    jobs = load_scheduled_jobs(app)
+    job: Optional[Dict[str, Any]] = None
+    for j in jobs:
+        if j.get("id") == jid:
+            job = j
+            break
+    if not job:
+        return None, "زمان‌بندی یافت نشد."
+    if job.get("status") != _STATUS_PENDING:
+        return None, "فقط زمان‌بندی‌های در انتظار قابل ویرایش هستند."
+
+    total = count_sms_recipients(recipient_group)
+    if total < 1:
+        label = recipient_group_label(recipient_group)
+        return None, f"هیچ گیرنده‌ای در گروه «{label}» با شماره معتبر یافت نشد."
+
+    parsed_limit, limit_error = parse_send_limit(send_limit, total)
+    if limit_error:
+        return None, limit_error
+    if total >= LARGE_GROUP_REQUIRE_BATCH and not parsed_limit:
+        return None, (
+            f"گروه {total} نفره است؛ برای جلوگیری از کندی، "
+            f"«تعداد ارسال در هر مرحله» را مشخص کنید (مثلاً ۵۰ تا ۵۰۰)."
+        )
+
+    now = _to_tehran(tehran_now())
+    timing = job.get("send_timing") or SEND_TIMING_SCHEDULED
+
+    job["message"] = message
+    job["recipient_group"] = recipient_group
+    job["recipient_count"] = total
+    job["send_limit"] = parsed_limit
+    job["line_number"] = get_sms_line_number()
+    job["updated_at"] = now.isoformat()
+
+    if timing == SEND_TIMING_SCHEDULED:
+        run_at = parse_tehran_datetime(scheduled_at or "")
+        if not run_at:
+            return None, "تاریخ و ساعت ارسال نامعتبر است (وقت تهران)."
+        if run_at <= now + timedelta(seconds=5):
+            return None, (
+                f"زمان ارسال باید بعد از ساعت تهران باشد "
+                f"(الان: {format_tehran_iso_display(now)})."
+            )
+        job["scheduled_at"] = run_at.isoformat()
+        job["next_run_at"] = run_at.isoformat()
+    elif timing == SEND_TIMING_RECURRING:
+        freq = (recurrence_freq or job.get("recurrence_freq") or RECURRENCE_DAILY).strip().lower()
+        if freq not in (RECURRENCE_DAILY, RECURRENCE_WEEKLY, RECURRENCE_MONTHLY):
+            return None, "نوع تکرار نامعتبر است."
+        parsed_time = parse_time_hm(recurrence_time or job.get("recurrence_time") or "")
+        if not parsed_time:
+            return None, "ساعت تکرار نامعتبر است (وقت تهران)."
+        hour, minute = parsed_time
+        wd = _coerce_int(recurrence_weekday, job.get("recurrence_weekday", 5))
+        dom = recurrence_day if recurrence_day is not None else job.get("recurrence_day")
+        if freq == RECURRENCE_MONTHLY:
+            dom = max(1, min(31, _coerce_int(dom, 1) or 1))
+        next_run = compute_next_recurring_run(
+            freq=freq,
+            hour=hour,
+            minute=minute,
+            weekday=wd,
+            month_day=dom,
+            after=now,
+        )
+        job["recurrence_freq"] = freq
+        job["recurrence_time"] = f"{hour:02d}:{minute:02d}"
+        job["recurrence_weekday"] = wd
+        job["recurrence_day"] = dom
+        job["next_run_at"] = next_run.isoformat()
+    else:
+        return None, "نوع زمان‌بندی نامعتبر است."
+
+    save_scheduled_jobs(jobs, app)
+    return job, None
+
+
 def cancel_scheduled_job(job_id: str) -> bool:
     if not (job_id or "").strip():
         return False
@@ -571,6 +697,12 @@ def list_active_scheduled_jobs(limit: int = 20) -> List[Dict[str, Any]]:
         else:
             row["last_run_status"] = ""
             row["last_run_status_label"] = ""
+        row["scheduled_at_local"] = format_tehran_datetime_local(
+            job.get("scheduled_at") or job.get("next_run_at")
+        )
+        row["send_limit_display"] = (
+            str(job.get("send_limit")) if job.get("send_limit") is not None else ""
+        )
         out.append(row)
     return out
 

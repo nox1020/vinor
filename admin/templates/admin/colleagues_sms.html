@@ -280,14 +280,115 @@
             </p>
             {% endif %}
           </div>
-          <form method="post" class="shrink-0" action="{{ url_for('admin.sms_colleagues', recipient_group=recipient_group) }}" onsubmit="return confirm('این زمان‌بندی لغو شود؟');">
+          <div class="shrink-0 flex items-center gap-1.5">
+            <button type="button"
+                    class="job-edit-toggle text-xs px-2 py-1 rounded border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition"
+                    data-job-id="{{ job.id }}"
+                    aria-expanded="{% if edit_job_id == job.id %}true{% else %}false{% endif %}">
+              ویرایش
+            </button>
+            <form method="post" class="inline" action="{{ url_for('admin.sms_colleagues', recipient_group=recipient_group) }}" onsubmit="return confirm('این زمان‌بندی لغو شود؟');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="cancel_scheduled">
+              <input type="hidden" name="job_id" value="{{ job.id }}">
+              <input type="hidden" name="recipient_group" value="{{ recipient_group or 'approved' }}">
+              <button type="submit" class="text-xs px-2 py-1 rounded border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition">
+                لغو
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div id="job-edit-{{ job.id }}"
+             class="job-edit-panel mt-3 pt-3 border-t border-amber-100 dark:border-amber-900/40 space-y-3 {% if edit_job_id != job.id %}hidden{% endif %}">
+          <form method="post" class="space-y-3" action="{{ url_for('admin.sms_colleagues', recipient_group=recipient_group, edit_job=job.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="cancel_scheduled">
+            <input type="hidden" name="action" value="update_scheduled">
             <input type="hidden" name="job_id" value="{{ job.id }}">
             <input type="hidden" name="recipient_group" value="{{ recipient_group or 'approved' }}">
-            <button type="submit" class="text-xs px-2 py-1 rounded border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20">
-              لغو
-            </button>
+
+            <div>
+              <label for="job_msg_{{ job.id }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">متن پیامک</label>
+              <textarea id="job_msg_{{ job.id }}" name="direct_message" rows="3" required maxlength="500"
+                        class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white">{{ job.message or '' }}</textarea>
+            </div>
+
+            <div>
+              <label for="job_group_{{ job.id }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">گروه گیرندگان</label>
+              <select id="job_group_{{ job.id }}" name="job_recipient_group"
+                      class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white">
+                {% for key, label in recipient_group_labels.items() %}
+                <option value="{{ key }}" {% if job.recipient_group == key %}selected{% endif %}>
+                  {{ label }} ({{ recipient_counts.get(key, 0) }})
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label for="job_limit_{{ job.id }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">تعداد در هر مرحله</label>
+              <input type="number" id="job_limit_{{ job.id }}" name="send_limit" min="1"
+                     value="{{ job.send_limit_display }}"
+                     placeholder="خالی = همه گروه"
+                     class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white">
+            </div>
+
+            {% if job.send_timing == 'scheduled' %}
+            <div>
+              <label for="job_sched_{{ job.id }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">تاریخ و ساعت (تهران)</label>
+              <input type="datetime-local" id="job_sched_{{ job.id }}" name="scheduled_at"
+                     value="{{ job.scheduled_at_local or '' }}" dir="ltr" required
+                     class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-mono text-gray-900 dark:text-white job-scheduled-at">
+            </div>
+            {% elif job.send_timing == 'recurring' %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label for="job_freq_{{ job.id }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">تکرار</label>
+                <select id="job_freq_{{ job.id }}" name="recurrence_freq"
+                        class="job-recurrence-freq w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                        data-job-id="{{ job.id }}">
+                  <option value="daily" {% if job.recurrence_freq == 'daily' %}selected{% endif %}>هر روز</option>
+                  <option value="weekly" {% if job.recurrence_freq == 'weekly' %}selected{% endif %}>هر هفته</option>
+                  <option value="monthly" {% if job.recurrence_freq == 'monthly' %}selected{% endif %}>هر ماه</option>
+                </select>
+              </div>
+              <div>
+                <label for="job_time_{{ job.id }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">ساعت (تهران)</label>
+                <input type="time" id="job_time_{{ job.id }}" name="recurrence_time"
+                       value="{{ job.recurrence_time or '09:00' }}" dir="ltr" required
+                       class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-mono text-gray-900 dark:text-white">
+              </div>
+            </div>
+            <div id="job_weekday_wrap_{{ job.id }}" class="{% if job.recurrence_freq != 'weekly' %}hidden{% endif %}">
+              <label for="job_wd_{{ job.id }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">روز هفته</label>
+              <select id="job_wd_{{ job.id }}" name="recurrence_weekday"
+                      class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white">
+                <option value="5" {% if job.recurrence_weekday == 5 %}selected{% endif %}>شنبه</option>
+                <option value="6" {% if job.recurrence_weekday == 6 %}selected{% endif %}>یکشنبه</option>
+                <option value="0" {% if job.recurrence_weekday == 0 %}selected{% endif %}>دوشنبه</option>
+                <option value="1" {% if job.recurrence_weekday == 1 %}selected{% endif %}>سه‌شنبه</option>
+                <option value="2" {% if job.recurrence_weekday == 2 %}selected{% endif %}>چهارشنبه</option>
+                <option value="3" {% if job.recurrence_weekday == 3 %}selected{% endif %}>پنجشنبه</option>
+                <option value="4" {% if job.recurrence_weekday == 4 %}selected{% endif %}>جمعه</option>
+              </select>
+            </div>
+            <div id="job_monthday_wrap_{{ job.id }}" class="{% if job.recurrence_freq != 'monthly' %}hidden{% endif %}">
+              <label for="job_dom_{{ job.id }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">روز ماه (۱–۳۱)</label>
+              <input type="number" id="job_dom_{{ job.id }}" name="recurrence_day" min="1" max="31"
+                     value="{{ job.recurrence_day or 1 }}"
+                     class="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white">
+            </div>
+            {% endif %}
+
+            <div class="flex flex-wrap gap-2">
+              <button type="submit" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium">
+                ذخیره تغییرات
+              </button>
+              <button type="button" class="job-edit-cancel px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      data-job-id="{{ job.id }}">
+                انصراف
+              </button>
+            </div>
           </form>
         </div>
       </li>
@@ -730,6 +831,58 @@ function confirmSend() {
     row.querySelector('button').addEventListener('click', function () { row.remove(); });
     container.appendChild(row);
   });
+
+  function toggleJobEditPanel(jobId, open) {
+    document.querySelectorAll('.job-edit-panel').forEach(function (panel) {
+      var isTarget = panel.id === 'job-edit-' + jobId;
+      panel.classList.toggle('hidden', !open || !isTarget);
+    });
+    document.querySelectorAll('.job-edit-toggle').forEach(function (btn) {
+      var active = open && btn.getAttribute('data-job-id') === jobId;
+      btn.setAttribute('aria-expanded', active ? 'true' : 'false');
+      btn.classList.toggle('bg-blue-50', active);
+      btn.classList.toggle('dark:bg-blue-900/30', active);
+    });
+    if (open) {
+      var panel = document.getElementById('job-edit-' + jobId);
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  document.querySelectorAll('.job-edit-toggle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var jobId = btn.getAttribute('data-job-id');
+      var panel = document.getElementById('job-edit-' + jobId);
+      var willOpen = !!(panel && panel.classList.contains('hidden'));
+      toggleJobEditPanel(jobId, willOpen);
+    });
+  });
+
+  document.querySelectorAll('.job-edit-cancel').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      toggleJobEditPanel(btn.getAttribute('data-job-id'), false);
+    });
+  });
+
+  document.querySelectorAll('.job-recurrence-freq').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var jobId = sel.getAttribute('data-job-id');
+      var wd = document.getElementById('job_weekday_wrap_' + jobId);
+      var dom = document.getElementById('job_monthday_wrap_' + jobId);
+      if (wd) wd.classList.toggle('hidden', sel.value !== 'weekly');
+      if (dom) dom.classList.toggle('hidden', sel.value !== 'monthly');
+    });
+  });
+
+  document.querySelectorAll('.job-scheduled-at').forEach(function (dt) {
+    if (window.vinorAdminTehranDateTimeLocal) {
+      dt.min = window.vinorAdminTehranDateTimeLocal(null, 1);
+    }
+  });
+
+  {% if edit_job_id %}
+  toggleJobEditPanel('{{ edit_job_id }}', true);
+  {% endif %}
 })();
 </script>
 {% endblock %}
