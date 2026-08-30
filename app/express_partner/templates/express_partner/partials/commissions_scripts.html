@@ -161,6 +161,9 @@
         if (spin) spin.classList.remove('fa-spin');
         setHint(false);
         refreshPromise = null;
+        if (window.__vinorPrefetchWithdrawBankData) {
+          window.__vinorPrefetchWithdrawBankData().catch(function () {});
+        }
         if (window.__vinorCommissionsChrome && window.__vinorCommissionsChrome.sync) {
           window.__vinorCommissionsChrome.sync();
         }
@@ -424,11 +427,26 @@
       }
     }
 
+    function bankSummaryEmptyLabel() {
+      return 'افزودن حساب بانکی';
+    }
+
+    function resetBankSummaryLabel() {
+      if (!bankSummaryEl) return;
+      if (selectedBankId && selectedBankSummary) {
+        bankSummaryEl.textContent = selectedBankSummary;
+        return;
+      }
+      bankSummaryEl.textContent = (bankAccountsCache && bankAccountsCache.length)
+        ? 'انتخاب حساب بانکی'
+        : bankSummaryEmptyLabel();
+    }
+
     function applyDefaultBankSelection(accounts, defaultId) {
       if (!accounts || !accounts.length) {
         selectedBankId = '';
         selectedBankSummary = '';
-        if (bankSummaryEl) bankSummaryEl.textContent = 'انتخاب حساب بانکی';
+        resetBankSummaryLabel();
         syncSubmitState();
         return;
       }
@@ -447,12 +465,20 @@
       syncSubmitState();
     }
 
+    var bankPrefetchPromise = null;
+
     function prefetchWithdrawBankData() {
-      return fetch(API + '/data', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      if (bankPrefetchPromise) return bankPrefetchPromise;
+      bankPrefetchPromise = fetch(API + '/data', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
         .then(function (r) { return r.json(); })
         .then(function (d) {
-          if (!d || !d.success) return d;
+          if (!d || !d.success) {
+            bankAccountsCache = [];
+            resetBankSummaryLabel();
+            return d;
+          }
           bankCatalogCache = d.banks || [];
+          bankAccountsCache = d.accounts || [];
           if (typeof d.requestable_balance === 'number') {
             maxWithdraw = Math.max(0, parseInt(String(d.requestable_balance), 10) || 0);
           } else if (typeof d.withdrawable_balance === 'number') {
@@ -462,10 +488,18 @@
             minWithdraw = Math.max(0, parseInt(String(d.min_withdrawal_amount), 10) || minWithdraw);
           }
           if (balanceEl) balanceEl.textContent = formatToman(maxWithdraw);
-          applyDefaultBankSelection(d.accounts || [], d.default_account_id || '');
+          applyDefaultBankSelection(bankAccountsCache, d.default_account_id || '');
           return d;
         })
-        .catch(function () { return null; });
+        .catch(function () {
+          bankAccountsCache = [];
+          if (bankSummaryEl) bankSummaryEl.textContent = 'خطا در بارگذاری حساب‌ها';
+          return null;
+        })
+        .finally(function () {
+          bankPrefetchPromise = null;
+        });
+      return bankPrefetchPromise;
     }
 
     function withdrawErrorMessage(code) {
@@ -931,7 +965,11 @@
       setInputFromInt(0);
       selectedBankId = '';
       selectedBankSummary = '';
-      if (bankSummaryEl) bankSummaryEl.textContent = 'در حال بارگذاری…';
+      if (bankSummaryEl) {
+        bankSummaryEl.textContent = (bankAccountsCache && bankAccountsCache.length)
+          ? (selectedBankSummary || 'انتخاب حساب بانکی')
+          : ((bankAccountsCache && bankAccountsCache.length === 0) ? bankSummaryEmptyLabel() : 'در حال بارگذاری…');
+      }
       if (elWithdrawErr) { elWithdrawErr.classList.add('hidden'); elWithdrawErr.textContent = ''; }
       if (elWithdrawSuccess) { elWithdrawSuccess.classList.add('hidden'); elWithdrawSuccess.textContent = ''; }
       if (maxWithdraw < minWithdraw) {
@@ -982,6 +1020,10 @@
       if (!t || !t.closest) return false;
       var wdBtn = t.closest('[data-open-withdraw-modal]');
       if (!wdBtn) return false;
+      if (wdBtn.getAttribute('aria-disabled') === 'true') {
+        e.preventDefault();
+        return true;
+      }
       var now = Date.now();
       if (now < openGuardUntil) {
         e.preventDefault();
@@ -1261,6 +1303,8 @@
     }
 
     hoistCommissionModals();
+    prefetchWithdrawBankData();
+    window.__vinorPrefetchWithdrawBankData = prefetchWithdrawBankData;
   })();
 </script>
 {% include 'express_partner/partials/commissions_cancel_script.html' %}
