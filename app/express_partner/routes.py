@@ -3244,6 +3244,109 @@ def _home_ai_empty_title(
     return 'دنبال خرید ملکی یا همکاری با وینور؟'
 
 
+_HOME_NEWS_FALLBACK: List[str] = [
+    'زمین جابان فروش رفت و پورسانت رسید',
+    'فایل گرمابسرد بسته شد و پورسانت نشست',
+    'ویلای آبسرد بسته شد — پورسانت در کیف پول است',
+    'همکار دماوند با یک معامله پورسانت گرفت',
+    'باغ کیلان فروخته شد؛ پورسانت قابل برداشت شد',
+    'زمین رودهن امروز فروش رفت و پورسانت نشست',
+    'فایل بومهن فروخته شد؛ پورسانت تسویه شد',
+    'ویلای گیلاوند بسته شد و پورسانت رسید',
+    'زمین مشا فروخته شد؛ پورسانت همکار واریز شد',
+    'باغ سربندان فروخته شد — پورسانت در حساب است',
+    'فایل دماوند بسته شد؛ پورسانت ثبت شد',
+    'زمین هویر فروش رفت؛ پورسانت تسویه شد',
+]
+
+_HOME_NEWS_TEMPLATES: tuple[str, ...] = (
+    '{label} فروش رفت و پورسانت رسید',
+    '{label} بسته شد — پورسانت در کیف پول است',
+    'فایل {label} فروخته شد؛ پورسانت واریز شد',
+    'معامله {label} بسته شد و پورسانت نشست',
+    '{label} امروز فروش رفت؛ پورسانت قابل برداشت شد',
+)
+
+
+def _home_news_short_label(comm: Dict[str, Any], lands_by_code: Dict[str, Dict[str, Any]]) -> str:
+    code = str(comm.get('land_code') or '').strip()
+    if not code or code == 'referral':
+        return ''
+    land = lands_by_code.get(code)
+    if isinstance(land, dict):
+        loc = str(land.get('location') or '').strip()
+        if loc:
+            return loc
+        city = str(land.get('city') or '').strip()
+        if city:
+            return city
+    title = str(comm.get('land_title') or '').strip()
+    if title:
+        parts = [p.strip() for p in re.split(r'[\s،,]+', title) if p.strip()]
+        if parts:
+            tail = parts[-1]
+            if len(tail) >= 2 and not tail.isdigit():
+                return tail
+        return title[:32].strip()
+    return 'فایل وینور'
+
+
+def _home_news_headlines(*, limit: int = 40) -> List[str]:
+    """تیترهای چرخشی خبر خانه — از معاملات تأییدشده + fallback."""
+    headlines: List[str] = []
+    seen: set[str] = set()
+    try:
+        comms = _express_commissions_cached() or []
+        lands = load_express_lands_cached() or []
+        lands_by_code = {
+            str(L.get('code') or '').strip(): L
+            for L in lands
+            if isinstance(L, dict) and str(L.get('code') or '').strip()
+        }
+        eligible: List[tuple[str, Dict[str, Any]]] = []
+        for c in comms:
+            if not isinstance(c, dict):
+                continue
+            ct = str(c.get('commission_type') or 'deal').strip().lower()
+            if ct in ('referral', 'manual_adjustment', 'visit'):
+                continue
+            st = str(c.get('status') or '').strip().lower()
+            if st not in ('approved', 'paid'):
+                continue
+            code = str(c.get('land_code') or '').strip()
+            if not code or code == 'referral':
+                continue
+            ts = str(
+                c.get('approved_at') or c.get('paid_at') or c.get('created_at') or ''
+            ).strip()
+            eligible.append((ts, c))
+        eligible.sort(key=lambda row: row[0], reverse=True)
+        for i, (_, comm) in enumerate(eligible[: max(limit, 1)]):
+            label = _home_news_short_label(comm, lands_by_code)
+            if not label:
+                continue
+            tpl = _HOME_NEWS_TEMPLATES[i % len(_HOME_NEWS_TEMPLATES)]
+            line = tpl.format(label=label)
+            if line in seen:
+                continue
+            seen.add(line)
+            headlines.append(line)
+    except Exception:
+        try:
+            current_app.logger.exception('home news headlines failed')
+        except Exception:
+            pass
+    for fb in _HOME_NEWS_FALLBACK:
+        if len(headlines) >= limit:
+            break
+        if fb not in seen:
+            seen.add(fb)
+            headlines.append(fb)
+    if headlines:
+        return headlines[:limit]
+    return list(_HOME_NEWS_FALLBACK[:12])
+
+
 def _land_status_from_assigned_lands(assigned_lands: List[Dict[str, Any]]) -> Dict[str, str]:
     land_status: Dict[str, str] = {}
     for land in assigned_lands or []:
@@ -3832,6 +3935,7 @@ def home_page():
         has_pending_app=bool(payload.get('has_pending_app')),
         has_completed_deal=bool(payload.get('has_completed_deal')),
     )
+    ai_ctx['home_news_items'] = _home_news_headlines()
 
     # دادهٔ کشوی پروفایل (منوی GPT روی داشبورد)
     drawer_profile = profile if isinstance(profile, dict) else {}
@@ -4018,6 +4122,7 @@ def home_data():
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None)
     payload = _build_home_dashboard_payload(me_phone, profile)
+    payload['home_news_items'] = _home_news_headlines()
     resp = jsonify(payload)
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     resp.headers['Vary'] = 'Cookie'

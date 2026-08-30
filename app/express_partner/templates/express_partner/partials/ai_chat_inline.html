@@ -1009,7 +1009,7 @@
       <span class="ai-home-news__dot" aria-hidden="true"></span>
       <div class="ai-home-news__body">
         <span class="ai-home-news__label">خبر وینور</span>
-        <span class="ai-home-news__text" data-ai-home-news-text>زمین گرمابسرد فروخته شد؛ پورسانت امروز واریز شد</span>
+        <span class="ai-home-news__text" data-ai-home-news-text>{{ (home_news_items|default([])|first)|default('زمین جابان فروش رفت و پورسانت رسید') }}</span>
       </div>
     </div>
     {% include 'express_partner/partials/ai_home_empty_actions.html' %}
@@ -1131,58 +1131,10 @@
 </script>
 <script>
 (function () {
-  var ITEMS = [
-    'زمین گرمابسرد فروخته شد؛ پورسانت امروز واریز شد',
-    'ویلای آبسرد بسته شد — پورسانت در کیف پول است',
-    'همکار دماوند با یک معامله پورسانت گرفت',
-    'باغ جابان فروخته شد؛ پورسانت قابل برداشت شد',
-    'زمین کیلان امروز فروش رفت و پورسانت نشست',
-    'فایل رودهن فروخته شد؛ پورسانت تسویه شد',
-    'بازدید بومهن به فروش رسید — پورسانت ثبت شد',
-    'زمین مشا فروخته شد؛ پورسانت همکار واریز شد',
-    'ویلای گیلاوند بسته شد و پورسانت رسید',
-    'همکار گرمابسرد امروز پورسانت گرفت',
-    'باغ سربندان فروخته شد — پورسانت در حساب است',
-    'زمین ۳۵۰ متری جابان فروش رفت؛ پورسانت واریز شد',
-    'فایل آبسرد بسته شد؛ پورسانت قابل برداشت شد',
-    'همکار رودهن از فروش دماوند پورسانت گرفت',
-    'زمین کیلان فروخته شد و پورسانت تسویه شد',
-    'ویلای دماوند امروز فروش رفت؛ پورسانت نشست',
-    'باغ گرمابسرد بسته شد — پورسانت واریز شد',
-    'فایل بومهن فروخته شد؛ پورسانت ثبت شد',
-    'زمین آیینه‌ورزان فروش رفت و پورسانت رسید',
-    'همکار آبسرد امروز پورسانت گرفت',
-    'ویلای جابان بسته شد؛ پورسانت قابل برداشت شد',
-    'باغ کیلان فروخته شد — پورسانت در کیف پول است',
-    'زمین رودهن فروش رفت؛ پورسانت واریز شد',
-    'فایل مشا بسته شد و پورسانت نشست',
-    'همکار کیلان با بستن معامله پورسانت گرفت',
-    'زمین سربندان فروخته شد؛ پورسانت تسویه شد',
-    'ویلای بومهن فروش رفت — پورسانت ثبت شد',
-    'باغ آبسرد بسته شد؛ پورسانت واریز شد',
-    'فایل گیلاوند فروخته شد و پورسانت رسید',
-    'همکار جابان امروز پورسانت گرفت',
-    'زمین چنارشرق فروش رفت؛ پورسانت قابل برداشت شد',
-    'ویلای رودهن بسته شد — پورسانت در حساب است',
-    'باغ دماوند فروخته شد؛ پورسانت واریز شد',
-    'فایل گرمابسرد بسته شد و پورسانت نشست',
-    'زمین هویر فروش رفت؛ پورسانت تسویه شد',
-    'همکار بومهن از فروش دماوند پورسانت گرفت',
-    'ویلای کیلان فروخته شد — پورسانت ثبت شد',
-    'باغ رودهن بسته شد؛ پورسانت قابل برداشت شد',
-    'زمین جابان فروش رفت و پورسانت رسید',
-    'فایل آبسرد فروخته شد؛ پورسانت واریز شد',
-    'همکار مشا امروز پورسانت گرفت',
-    'ویلای سربندان بسته شد — پورسانت در کیف پول است',
-    'باغ بومهن فروخته شد؛ پورسانت نشست',
-    'زمین گیلاوند فروش رفت و پورسانت تسویه شد',
-    'فایل دماوند بسته شد؛ پورسانت ثبت شد',
-    'همکار گیلاوند با یک معامله پورسانت گرفت',
-    'زمین تار فروخته شد — پورسانت واریز شد',
-    'ویلای گرمابسرد بسته شد؛ پورسانت قابل برداشت شد',
-    'باغ کیلان فروش رفت و پورسانت رسید',
-    'فایل جابان فروخته شد؛ پورسانت امروز نشست'
-  ];
+  var ITEMS = {{ home_news_items|default([])|tojson }};
+  if (!ITEMS || !ITEMS.length) {
+    ITEMS = ['زمین جابان فروش رفت و پورسانت رسید'];
+  }
 
   var timer = 0;
   var idx = -1;
@@ -1274,6 +1226,26 @@
     else stop();
   }
 
+  var newsRefreshTimer = 0;
+
+  function refreshNewsFromServer() {
+    fetch('/express/partner/home/data', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (data) {
+        var rows = data && data.home_news_items;
+        if (!rows || !rows.length) return;
+        ITEMS = rows;
+        if (!isEmptyHome()) return;
+        showAt(currentIndex());
+      })
+      .catch(function () {});
+  }
+
   function bindPageObserver() {
     if (mo) {
       try { mo.disconnect(); } catch (_) {}
@@ -1293,18 +1265,24 @@
 
   bindPageObserver();
   sync();
+  refreshNewsFromServer();
+  newsRefreshTimer = setInterval(refreshNewsFromServer, 180000);
 
   if (!window.__vinorHomeNewsListeners) {
     window.__vinorHomeNewsListeners = true;
     window.addEventListener('vinor:express-page-swap', function () {
       setTimeout(function () {
         bindPageObserver();
+        refreshNewsFromServer();
         sync();
       }, 0);
     });
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) stop();
-      else sync();
+      else {
+        refreshNewsFromServer();
+        sync();
+      }
     });
   }
 })();
