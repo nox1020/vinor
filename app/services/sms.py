@@ -110,15 +110,39 @@ def format_otp_sms_message(code: str) -> str:
 def sms_ir_error_message(body: object, fallback: str = "خطای ارسال پیامک") -> str:
     """استخراج پیام خطا از پاسخ sms.ir."""
     if not isinstance(body, dict):
-        return fallback if body is None else str(body)[:200]
+        text = fallback if body is None else str(body)[:200]
+        return _friendly_sms_error(text) or text
     for key in ("message", "Message", "error", "Error", "title", "detail", "Description"):
         val = body.get(key)
         if val is not None and str(val).strip():
-            return str(val).strip()
+            text = str(val).strip()
+            return _friendly_sms_error(text) or text
     raw = body.get("raw")
     if raw is not None and str(raw).strip():
-        return str(raw).strip()[:200]
+        text = str(raw).strip()[:200]
+        return _friendly_sms_error(text) or text
     return fallback
+
+
+def _friendly_sms_error(text: str) -> str:
+    """خلاصهٔ خطاهای شبکه/زیرساخت برای نمایش در پنل."""
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    if not sms_is_infrastructure_error(raw):
+        return raw
+    low = raw.lower()
+    if "proxy" in low:
+        return "خطای اتصال (پروکسی)"
+    if "getaddrinfo" in low or "failed to resolve" in low or "name resolution" in low:
+        return "خطای DNS / اتصال اینترنت"
+    if "ssl" in low or "certificate" in low:
+        return "خطای SSL در اتصال به sms.ir"
+    if "timeout" in low or "timed out" in low:
+        return "اتمام مهلت اتصال به sms.ir"
+    if "refused" in low or "unreachable" in low:
+        return "سرور sms.ir در دسترس نیست"
+    return "خطای شبکه در ارسال پیامک"
 
 
 def _sms_ir_response_ok(status_code: int, body: object) -> bool:

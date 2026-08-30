@@ -59,6 +59,13 @@ def normalize_sms_history_row(row: Mapping[str, Any] | None) -> dict[str, Any]:
             out["success"] = False
     if not out.get("source"):
         out["source"] = "system"
+    err = str(out.get("error") or "").strip()
+    if not err or err == "Unknown error":
+        resp = out.get("response")
+        if isinstance(resp, dict):
+            derived = sms_ir_error_message(resp, "")
+            if derived:
+                out["error"] = derived
     return out
 
 

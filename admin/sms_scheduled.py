@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import time
 import uuid
@@ -44,6 +45,66 @@ _WEEKDAY_LABELS = {
 
 _scheduler_started = False
 _run_lock = threading.Lock()
+
+
+def _flask_worker_process() -> bool:
+    """در debug+reloader فقط worker واقعی scheduler را اجرا کند."""
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        return True
+    if os.environ.get("WERKZEUG_SERVER_FD") and not os.environ.get("WERKZEUG_RUN_MAIN"):
+        return False
+    return True
+
+
+def _scheduler_lock_path(app: Flask) -> str:
+    data_dir = os.path.join(app.instance_path, "data")
+    os.makedirs(data_dir, exist_ok=True)
+    return os.path.join(data_dir, ".sms_jobs_runner.lock")
+
+
+def _acquire_scheduler_file_lock(app: Flask) -> int | None:
+    """قفل بین‌پروcesی برای جلوگیری از اجرای همزمان job."""
+    path = _scheduler_lock_path(app)
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_RDWR)
+    except OSError:
+        return None
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return fd
+    except (OSError, BlockingIOError):
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        return None
+
+
+def _release_scheduler_file_lock(fd: int | None) -> None:
+    if fd is None:
+        return
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    except (OSError, BlockingIOError):
+        pass
+    try:
+        os.close(fd)
+    except OSError:
+        pass
 
 
 def _tehran_tz():
@@ -496,6 +557,20 @@ def list_active_scheduled_jobs(limit: int = 20) -> List[Dict[str, Any]]:
             recurrence_summary(job) if job.get("send_timing") == SEND_TIMING_RECURRING else ""
         )
         row["send_batch_label"] = send_batch_summary(job)
+        last = job.get("last_result") if isinstance(job.get("last_result"), dict) else {}
+        failed = int(last.get("failed") or 0)
+        sent = int(last.get("sent") or 0)
+        row["last_failed_count"] = failed
+        row["last_sent_count"] = sent
+        if failed > 0:
+            row["last_run_status"] = "failed"
+            row["last_run_status_label"] = f"{sent} موفق، {failed} خطا"
+        elif sent > 0:
+            row["last_run_status"] = "ok"
+            row["last_run_status_label"] = f"{sent} موفق"
+        else:
+            row["last_run_status"] = ""
+            row["last_run_status_label"] = ""
         out.append(row)
     return out
 
@@ -545,6 +620,11 @@ def _execute_job(app: Flask, job: Dict[str, Any]) -> None:
 
 def process_due_scheduled_jobs(app: Flask) -> int:
     if not _run_lock.acquire(blocking=False):
+        return 0
+
+    file_lock = _acquire_scheduler_file_lock(app)
+    if file_lock is None:
+        _run_lock.release()
         return 0
 
     processed = 0
@@ -609,6 +689,7 @@ def process_due_scheduled_jobs(app: Flask) -> int:
             if changed:
                 save_scheduled_jobs(jobs, app)
     finally:
+        _release_scheduler_file_lock(file_lock)
         _run_lock.release()
 
     return processed
@@ -631,6 +712,9 @@ def schedule_admin_sms_jobs(app: Flask) -> None:
     """PC: thread. هاست اشتراکی: lazy tick خودکار روی درخواست (بدون cron)."""
     global _scheduler_started
     if _scheduler_started:
+        return
+    if not _flask_worker_process():
+        app.logger.debug("Admin SMS scheduler skipped (Flask reloader parent)")
         return
     if os.environ.get("VINOR_DISABLE_SMS_SCHEDULER", "").strip().lower() in ("1", "true", "yes"):
         app.logger.info("Admin SMS scheduler disabled via VINOR_DISABLE_SMS_SCHEDULER")
