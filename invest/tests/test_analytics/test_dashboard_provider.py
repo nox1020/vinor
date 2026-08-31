@@ -1,6 +1,6 @@
-from app.analytics.dashboard_provider import DashboardDataProvider
-from app.analytics.portfolio_analytics_service import PortfolioAnalyticsService
-from app.services.portfolio_service import PortfolioService
+from invest_app.analytics.dashboard_provider import DashboardDataProvider
+from invest_app.analytics.portfolio_analytics_service import PortfolioAnalyticsService
+from invest_app.services.portfolio_service import PortfolioService
 
 
 def test_dashboard_provider(trade_service) -> None:

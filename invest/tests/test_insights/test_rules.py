@@ -1,9 +1,9 @@
 """Unit tests for individual insight rules."""
 
-from app.insights.rules.assets import BestAssetRule, WorstAssetRule
-from app.insights.rules.behavior import InactivePortfolioRule, OverTradingRule
-from app.insights.rules.performance import LowWinRateRule, NegativeRoiRule
-from app.insights.rules.risk import LargeAllocationRule, SingleAssetRiskRule
+from invest_app.insights.rules.assets import BestAssetRule, WorstAssetRule
+from invest_app.insights.rules.behavior import InactivePortfolioRule, OverTradingRule
+from invest_app.insights.rules.performance import LowWinRateRule, NegativeRoiRule
+from invest_app.insights.rules.risk import LargeAllocationRule, SingleAssetRiskRule
 from tests.test_insights.conftest_helpers import (
     make_asset,
     make_bundle,

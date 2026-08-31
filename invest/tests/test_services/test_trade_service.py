@@ -1,4 +1,4 @@
-from app.services.trade_service import TradeService
+from invest_app.services.trade_service import TradeService
 
 
 def test_register_buy_and_inventory(trade_service: TradeService) -> None:

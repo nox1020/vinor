@@ -1,8 +1,8 @@
 """Integration: insights via analytics service."""
 
-from app.insights.provider import InsightProvider
-from app.insights.engine import InvestmentInsightsEngine
-from app.analytics.portfolio_analytics_service import PortfolioAnalyticsService
+from invest_app.insights.provider import InsightProvider
+from invest_app.insights.engine import InvestmentInsightsEngine
+from invest_app.analytics.portfolio_analytics_service import PortfolioAnalyticsService
 
 
 def test_provider_list_insights(trade_service) -> None:

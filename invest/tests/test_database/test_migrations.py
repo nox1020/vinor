@@ -1,5 +1,5 @@
-from app.config import SETTING_THEME, THEME_DARK
-from app.database.migrations import CURRENT_SCHEMA_VERSION, run_migrations
+from invest_app.config import SETTING_THEME, THEME_DARK
+from invest_app.database.migrations import CURRENT_SCHEMA_VERSION, run_migrations
 
 
 def test_run_migrations_baseline(db_conn) -> None:

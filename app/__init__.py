@@ -457,6 +457,11 @@ def create_app() -> Flask:
         app.register_blueprint(auth_otp_bp)
     except Exception as e:
         app.logger.warning("Auth OTP blueprint disabled: %s", e)
+    try:
+        from invest.backend import register_invest_backend
+        register_invest_backend(app)
+    except Exception as e:
+        app.logger.warning("Invest backend disabled: %s", e)
     if sms_api_bp is not None:
         app.register_blueprint(sms_api_bp)
     if push_api_bp is not None:
@@ -566,6 +571,12 @@ def create_app() -> Flask:
         try:
             from app.auth.otp.routes import auth_otp_bp
             csrf.exempt(auth_otp_bp)
+        except Exception:
+            pass
+
+        try:
+            from invest.backend.routes.api import invest_api_bp
+            csrf.exempt(invest_api_bp)
         except Exception:
             pass
 
@@ -832,7 +843,7 @@ def create_app() -> Flask:
                 current_app.logger.debug("PASS (apk-download): %s", path_now)
             return
 
-        safe_prefixes = ("/static", "/api", "/uploads", "/auth")
+        safe_prefixes = ("/static", "/api", "/uploads", "/auth", "/invest")
         if path_now.startswith(safe_prefixes):
             if debug:
                 current_app.logger.debug("PASS (prefix): %s", path_now)

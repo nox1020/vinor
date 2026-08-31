@@ -1,5 +1,5 @@
-from app.analytics.portfolio_analytics_service import PortfolioAnalyticsService
-from app.services.portfolio_service import PortfolioService
+from invest_app.analytics.portfolio_analytics_service import PortfolioAnalyticsService
+from invest_app.services.portfolio_service import PortfolioService
 
 
 def test_analyze_empty(db_conn) -> None:

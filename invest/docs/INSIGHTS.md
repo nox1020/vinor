@@ -19,8 +19,8 @@ AnalyticsBundle  →  InvestmentInsightsEngine  →  InsightBundle
 ## Adding a rule (plugin)
 
 ```python
-from app.insights.rules.base import InsightRule
-from app.insights.rules._helpers import make_insight
+from invest_app.insights.rules.base import InsightRule
+from invest_app.insights.rules._helpers import make_insight
 # ...
 
 class MyRule(InsightRule):

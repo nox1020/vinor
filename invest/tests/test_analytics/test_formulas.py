@@ -1,6 +1,6 @@
 """Formula unit tests."""
 
-from app.analytics.formulas import (
+from invest_app.analytics.formulas import (
     allocation_pct,
     expectancy,
     max_drawdown_from_series,

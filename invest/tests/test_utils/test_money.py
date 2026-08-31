@@ -1,4 +1,4 @@
-from app.utils.money import format_money
+from invest_app.utils.money import format_money
 
 
 def test_format_toman() -> None:

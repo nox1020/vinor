@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
-from app.services.trade_service import TradeService
-from app.utils.dates import today_iso
+from invest_app.services.trade_service import TradeService
+from invest_app.utils.dates import today_iso
 
 
 def test_record_snapshot(trade_service: TradeService, db_conn) -> None:

@@ -1,6 +1,6 @@
-from app.config import TRADE_STATUS_OPEN
-from app.models.trade import Trade
-from app.services.trade_service import TradeService
+from invest_app.config import TRADE_STATUS_OPEN
+from invest_app.models.trade import Trade
+from invest_app.services.trade_service import TradeService
 
 
 def test_trade_repo_create(trade_service: TradeService) -> None:

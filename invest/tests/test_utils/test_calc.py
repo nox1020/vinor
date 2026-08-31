@@ -1,4 +1,4 @@
-from app.utils import calc
+from invest_app.utils import calc
 
 
 def test_realized_pnl_with_fees() -> None:

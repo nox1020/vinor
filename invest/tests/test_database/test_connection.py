@@ -1,4 +1,4 @@
-from app.database.connection import get_connection
+from invest_app.database.connection import get_connection
 
 
 def test_foreign_keys_and_wal(tmp_path) -> None:

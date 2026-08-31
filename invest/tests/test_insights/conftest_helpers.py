@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.analytics.models import (
+from invest_app.analytics.models import (
     AnalyticsBundle,
     AssetAnalyticsRow,
     ChartBundle,

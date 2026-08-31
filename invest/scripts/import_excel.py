@@ -7,18 +7,18 @@ from pathlib import Path
 
 import openpyxl
 
-from app.bootstrap import bootstrap
-from app.config import (
+from invest_app.bootstrap import bootstrap
+from invest_app.config import (
     CALENDAR_JALALI,
     CURRENCY_TOMAN,
     TRADE_STATUS_CLOSED,
     TRADE_STATUS_OPEN,
     THEME_DARK,
 )
-from app.models.asset import Asset
-from app.models.trade import Trade
-from app.utils import calc
-from app.utils.dates import now_iso, today_iso
+from invest_app.models.asset import Asset
+from invest_app.models.trade import Trade
+from invest_app.utils import calc
+from invest_app.utils.dates import now_iso, today_iso
 
 EXCEL_PATH = Path(r"c:\Users\Aseman\OneDrive\Desktop\1405.03.19\invest.xlsx")
 USDT_RATE = 189_000.0  # تومان به ازای هر USDT (از ردیف قیمت USDT در فایل)

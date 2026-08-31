@@ -1,6 +1,6 @@
 """Tests for portfolio snapshot migration / dual-write."""
 
-from app.repositories.portfolio_snapshot_repo import PortfolioSnapshotRepository
+from invest_app.repositories.portfolio_snapshot_repo import PortfolioSnapshotRepository
 
 
 def test_record_snapshot_writes_rich_row(trade_service, db_conn) -> None:

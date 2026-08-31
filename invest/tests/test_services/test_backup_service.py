@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from app.database.connection import get_connection, init_database
-from app.services.backup_service import BackupService
+from invest_app.database.connection import get_connection, init_database
+from invest_app.services.backup_service import BackupService
 
 
 def test_init_database_closes_connection(tmp_path: Path) -> None:

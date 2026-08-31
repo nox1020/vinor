@@ -16,7 +16,7 @@ def _show_fatal_error(message: str) -> None:
         from PySide6.QtWidgets import QApplication, QMessageBox
 
         app = QApplication.instance() or QApplication(sys.argv)
-        from app.config import APP_NAME
+        from invest_app.config import APP_NAME
 
         QMessageBox.critical(None, APP_NAME, text)
         return
@@ -26,7 +26,7 @@ def _show_fatal_error(message: str) -> None:
         try:
             import ctypes
 
-            from app.config import APP_NAME
+            from invest_app.config import APP_NAME
 
             ctypes.windll.user32.MessageBoxW(0, text, APP_NAME, 0x10)
             return
@@ -48,7 +48,7 @@ def _install_excepthook() -> None:
 
 def main() -> int:
     try:
-        from app.logging_config import setup_logging
+        from invest_app.logging_config import setup_logging
 
         setup_logging()
     except Exception as exc:
@@ -62,11 +62,11 @@ def main() -> int:
         from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication
 
-        from app.bootstrap import bootstrap
-        from app.config import APP_NAME
-        from app.ui.dialogs.first_run_wizard import FirstRunWizard
-        from app.ui.main_window import MainWindow
-        from app.ui.theme import apply_theme
+        from invest_app.bootstrap import bootstrap
+        from invest_app.config import APP_NAME
+        from invest_app.ui.dialogs.first_run_wizard import FirstRunWizard
+        from invest_app.ui.main_window import MainWindow
+        from invest_app.ui.theme import apply_theme
     except Exception as exc:
         logging.getLogger(__name__).exception("Import failed during startup")
         _show_fatal_error(

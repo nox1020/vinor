@@ -1,4 +1,4 @@
-from app.insights.rules.assets import GoalProgressRule, GoalTrackingStubRule
+from invest_app.insights.rules.assets import GoalProgressRule, GoalTrackingStubRule
 from tests.test_insights.conftest_helpers import make_bundle, make_capital, make_trades
 
 
@@ -13,7 +13,7 @@ def test_goal_hint_when_missing() -> None:
 
 
 def test_goal_progress_met() -> None:
-    from app.analytics.models import AnalyticsBundle
+    from invest_app.analytics.models import AnalyticsBundle
     from tests.test_insights.conftest_helpers import empty_charts, make_trades
 
     base = make_bundle(

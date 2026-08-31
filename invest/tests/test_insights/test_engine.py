@@ -1,12 +1,12 @@
 """Engine, registry, and provider tests."""
 
-from app.insights.engine import InvestmentInsightsEngine
-from app.insights.registry import InsightRuleRegistry
-from app.insights.rules import DEFAULT_RULES
-from app.insights.rules.base import InsightRule
-from app.insights.models import Insight
-from app.insights.categories import InsightCategory
-from app.insights.severity import InsightSeverity
+from invest_app.insights.engine import InvestmentInsightsEngine
+from invest_app.insights.registry import InsightRuleRegistry
+from invest_app.insights.rules import DEFAULT_RULES
+from invest_app.insights.rules.base import InsightRule
+from invest_app.insights.models import Insight
+from invest_app.insights.categories import InsightCategory
+from invest_app.insights.severity import InsightSeverity
 from tests.test_insights.conftest_helpers import make_asset, make_bundle, make_capital
 
 
@@ -16,7 +16,7 @@ class _AlwaysFireRule(InsightRule):
         return "always_fire_test"
 
     def evaluate(self, bundle):
-        from app.insights.rules._helpers import make_insight
+        from invest_app.insights.rules._helpers import make_insight
 
         return [
             make_insight(

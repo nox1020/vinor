@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from app.config import SCHEMA_PATH
-from app.database.connection import get_connection
-from app.database.migrations import ensure_default_settings, run_migrations
-from app.services.portfolio_service import PortfolioService
-from app.services.service_factory import build_services
-from app.services.trade_service import TradeService
+from invest_app.config import SCHEMA_PATH
+from invest_app.database.connection import get_connection
+from invest_app.database.migrations import ensure_default_settings, run_migrations
+from invest_app.services.portfolio_service import PortfolioService
+from invest_app.services.service_factory import build_services
+from invest_app.services.trade_service import TradeService
 
 
 @pytest.fixture
