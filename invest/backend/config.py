@@ -6,6 +6,22 @@ import os
 from pathlib import Path
 
 INVEST_ROOT = Path(__file__).resolve().parent.parent
+_VERSION_FILE = Path(__file__).resolve().parent / "VERSION"
+
+
+def invest_api_version() -> str:
+    """API version for mobile sync — env override, then VERSION file, then default."""
+    env = (os.environ.get("VINOR_INVEST_API_VERSION") or "").strip()
+    if env:
+        return env
+    try:
+        if _VERSION_FILE.is_file():
+            text = _VERSION_FILE.read_text(encoding="utf-8").strip()
+            if text:
+                return text
+    except OSError:
+        pass
+    return "1.0.0"
 
 
 def invest_enabled() -> bool:

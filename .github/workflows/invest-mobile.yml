@@ -1,0 +1,79 @@
+name: Invest Mobile Build
+
+# When Invest backend changes in vinor, stamp API version and trigger
+# Flutter APK build in https://github.com/nox1020/invest
+#
+# Required secret (vinor → Settings → Secrets → Actions):
+#   INVEST_REPO_DISPATCH_TOKEN — GitHub PAT with `repo` scope on nox1020/invest
+# (GITHUB_TOKEN cannot dispatch to another repository.)
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "invest/**"
+  workflow_dispatch:
+
+concurrency:
+  group: invest-mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  dispatch-mobile-build:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stamp API version
+        run: echo "${GITHUB_SHA::7}" > invest/backend/VERSION
+
+      - name: Commit API version stamp
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add invest/backend/VERSION
+          if git diff --staged --quiet; then
+            echo "VERSION already matches ${GITHUB_SHA::7}"
+            exit 0
+          fi
+          git commit -m "chore(invest): stamp API version ${GITHUB_SHA::7} [skip ci]"
+          git push
+
+      - name: Dispatch Flutter build (nox1020/invest)
+        env:
+          DISPATCH_TOKEN: ${{ secrets.INVEST_REPO_DISPATCH_TOKEN }}
+          VINOR_SHA: ${{ github.sha }}
+          VINOR_REF: ${{ github.ref }}
+          API_VERSION: ${{ github.sha }}
+          COMMIT_MSG: ${{ github.event.head_commit.message || 'manual dispatch' }}
+        run: |
+          if [ -z "$DISPATCH_TOKEN" ]; then
+            echo "::error title=Missing secret::Add INVEST_REPO_DISPATCH_TOKEN to vinor repo secrets (PAT with repo scope on nox1020/invest)."
+            exit 1
+          fi
+          SHORT="${VINOR_SHA:0:7}"
+          PAYLOAD=$(jq -n \
+            --arg sha "$VINOR_SHA" \
+            --arg ref "$VINOR_REF" \
+            --arg ver "$SHORT" \
+            --arg msg "$COMMIT_MSG" \
+            '{event_type:"vinor-backend-updated", client_payload:{vinor_sha:$sha, vinor_ref:$ref, api_version:$ver, commit_message:$msg}}')
+          HTTP=$(curl -sS -w "%{http_code}" -o /tmp/dispatch.json -X POST \
+            -H "Authorization: token ${DISPATCH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/nox1020/invest/dispatches" \
+            -d "$PAYLOAD")
+          if [ "$HTTP" != "204" ]; then
+            echo "::error::repository_dispatch failed (HTTP $HTTP)"
+            cat /tmp/dispatch.json
+            exit 1
+          fi
+          echo "Dispatched vinor-backend-updated (api_version=$SHORT)"

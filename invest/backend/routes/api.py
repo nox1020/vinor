@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request
 from invest_app.models.asset import Asset
 from invest_app.models.settings import AppSettings
 
+from ..config import invest_api_version
 from ..auth import current_invest_phone, require_invest_auth
 from ..context import close_request_context, get_request_context
 from ..serializers import asset_to_dict, metrics_to_dict, settings_to_dict, trade_to_dict
@@ -30,7 +31,12 @@ def _json_err(message: str, *, error: str = "error", status: int = 400):
 
 @invest_api_bp.get("/health")
 def health():
-    return _json_ok(service="invest", status="ok")
+    return _json_ok(service="invest", status="ok", api_version=invest_api_version())
+
+
+@invest_api_bp.get("/app-version")
+def app_version():
+    return _json_ok(api_version=invest_api_version())
 
 
 @invest_api_bp.get("/auth/status")
