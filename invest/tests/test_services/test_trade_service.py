@@ -1,3 +1,5 @@
+import pytest
+
 from invest_app.services.trade_service import TradeService
 
 
@@ -100,6 +102,49 @@ def test_gold_fund_metrics_from_buys_and_sells(trade_service: TradeService) -> N
     gold_asset = trade_service.assets.get(asset.id)
     assert gold_asset is not None
     assert gold_asset.quantity == 6
+
+
+def test_delete_closed_trade_removes_history_not_inventory(
+    trade_service: TradeService,
+) -> None:
+    asset = trade_service.create_asset(
+        name="طلا",
+        symbol="GOLD",
+        quantity=0,
+        avg_buy_price=0,
+        current_price=30_000_000,
+    )
+    trade_service.register_buy(
+        asset_id=asset.id,
+        quantity=10,
+        buy_price=30_000_000,
+    )
+    open_lot = trade_service.trades.list_open()[0]
+    closed = trade_service.close_trade(
+        open_lot.id,
+        sell_price=31_000_000,
+        quantity=4,
+    )
+    assert closed.is_closed
+    trade_service.delete_closed_trade(closed.id)
+    assert trade_service.trades.list_closed() == []
+    remaining = trade_service.trades.list_open()
+    assert len(remaining) == 1
+    assert remaining[0].quantity == 6
+    refreshed = trade_service.assets.get(asset.id)
+    assert refreshed is not None
+    assert refreshed.quantity == 6
+
+
+def test_delete_closed_trade_rejects_open_lot(trade_service: TradeService) -> None:
+    asset = trade_service.create_asset(name="BTC", symbol="BTC", quantity=0)
+    open_lot = trade_service.register_buy(
+        asset_id=asset.id,
+        quantity=1,
+        buy_price=100,
+    )
+    with pytest.raises(ValueError, match="بسته‌شده"):
+        trade_service.delete_closed_trade(open_lot.id)
 
 
 def test_gold_fund_ignores_non_gold(trade_service: TradeService) -> None:

@@ -245,6 +245,33 @@ def trade_sell(trade_id: int):
         return _json_err(str(exc))
 
 
+def _delete_closed_trade(trade_id: int):
+    ctx = get_request_context()
+    try:
+        ctx.trades.delete_closed_trade(trade_id)
+        ctx.invalidate_caches()
+        return _json_ok(deleted=True, id=trade_id)
+    except ValueError as exc:
+        msg = str(exc)
+        if "یافت نشد" in msg:
+            return _json_err(msg, error="not_found", status=404)
+        return _json_err(msg)
+    except Exception as exc:
+        return _json_err(str(exc))
+
+
+@invest_api_bp.delete("/trades/<int:trade_id>")
+@require_invest_auth
+def delete_closed_trade(trade_id: int):
+    return _delete_closed_trade(trade_id)
+
+
+@invest_api_bp.post("/trades/<int:trade_id>/delete")
+@require_invest_auth
+def delete_closed_trade_post(trade_id: int):
+    return _delete_closed_trade(trade_id)
+
+
 @invest_api_bp.get("/settings")
 @require_invest_auth
 def get_settings():
