@@ -160,6 +160,52 @@ class TradeService:
             sell_note=sell_note,
         )
 
+    def update_open_trade(
+        self,
+        trade_id: int,
+        *,
+        quantity: float | None = None,
+        buy_price: float | None = None,
+        buy_fee: float | None = None,
+        buy_date: str | None = None,
+        buy_note: str | None = None,
+    ) -> Trade:
+        trade = self.trades.get(trade_id)
+        if not trade:
+            raise ValueError("معامله یافت نشد.")
+        if not trade.is_open:
+            raise ValueError("فقط معاملات باز را می‌توان ویرایش کرد.")
+
+        new_qty = float(trade.quantity if quantity is None else quantity)
+        new_price = float(trade.buy_price if buy_price is None else buy_price)
+        new_fee = float(trade.buy_fee if buy_fee is None else buy_fee)
+        if new_qty <= 0:
+            raise ValueError("مقدار باید بزرگ‌تر از صفر باشد.")
+        if new_price <= 0:
+            raise ValueError("قیمت خرید باید بزرگ‌تر از صفر باشد.")
+        if new_fee < 0:
+            raise ValueError("کارمزد نمی‌تواند منفی باشد.")
+
+        trade.quantity = new_qty
+        trade.buy_price = new_price
+        trade.buy_fee = new_fee
+        if buy_date:
+            trade.buy_date = str(buy_date).strip()
+        if buy_note is not None:
+            trade.buy_note = str(buy_note)
+
+        try:
+            self.trades.update(trade, commit=False)
+            self._sync_asset_inventory(trade.asset_id, commit=False)
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+
+        self.portfolio.record_snapshot()
+        refreshed = self.trades.get(trade_id)
+        return refreshed if refreshed is not None else trade
+
     def _close_full(
         self,
         trade: Trade,

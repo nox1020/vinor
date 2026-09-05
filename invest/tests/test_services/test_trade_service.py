@@ -147,6 +147,41 @@ def test_delete_closed_trade_rejects_open_lot(trade_service: TradeService) -> No
         trade_service.delete_closed_trade(open_lot.id)
 
 
+def test_update_open_trade_resyncs_inventory(trade_service: TradeService) -> None:
+    asset = trade_service.create_asset(name="BTC", symbol="BTC", quantity=0)
+    open_lot = trade_service.register_buy(
+        asset_id=asset.id,
+        quantity=2,
+        buy_price=100,
+        buy_fee=10,
+    )
+    updated = trade_service.update_open_trade(
+        open_lot.id,
+        quantity=5,
+        buy_price=80,
+        buy_fee=4,
+    )
+    assert updated.quantity == 5
+    assert updated.buy_price == 80
+    assert updated.buy_fee == 4
+    refreshed = trade_service.assets.get(asset.id)
+    assert refreshed is not None
+    assert refreshed.quantity == 5
+    assert abs(refreshed.avg_buy_price - (400 + 4) / 5) < 1e-9
+
+
+def test_update_open_trade_rejects_closed_lot(trade_service: TradeService) -> None:
+    asset = trade_service.create_asset(name="ETH", symbol="ETH", quantity=0)
+    open_lot = trade_service.register_buy(
+        asset_id=asset.id,
+        quantity=1,
+        buy_price=50,
+    )
+    closed = trade_service.close_trade(open_lot.id, sell_price=60)
+    with pytest.raises(ValueError, match="باز"):
+        trade_service.update_open_trade(closed.id, quantity=2, buy_price=50)
+
+
 def test_gold_fund_ignores_non_gold(trade_service: TradeService) -> None:
     trade_service.create_asset(
         name="بیت‌کوین",

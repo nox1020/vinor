@@ -225,6 +225,41 @@ def trade_buy():
         return _json_err(str(exc))
 
 
+def _update_open_trade(trade_id: int):
+    ctx = get_request_context()
+    data = request.get_json(silent=True) or {}
+    try:
+        trade = ctx.trades.update_open_trade(
+            trade_id,
+            quantity=float(data["quantity"]) if data.get("quantity") is not None else None,
+            buy_price=float(data["buy_price"]) if data.get("buy_price") is not None else None,
+            buy_fee=float(data["buy_fee"]) if data.get("buy_fee") is not None else None,
+            buy_date=data.get("buy_date"),
+            buy_note=data.get("buy_note"),
+        )
+        ctx.invalidate_caches()
+        return _json_ok(item=trade_to_dict(trade))
+    except ValueError as exc:
+        msg = str(exc)
+        if "یافت نشد" in msg:
+            return _json_err(msg, error="not_found", status=404)
+        return _json_err(msg)
+    except (TypeError,) as exc:
+        return _json_err(str(exc))
+
+
+@invest_api_bp.patch("/trades/<int:trade_id>")
+@require_invest_auth
+def update_open_trade(trade_id: int):
+    return _update_open_trade(trade_id)
+
+
+@invest_api_bp.put("/trades/<int:trade_id>")
+@require_invest_auth
+def update_open_trade_put(trade_id: int):
+    return _update_open_trade(trade_id)
+
+
 @invest_api_bp.post("/trades/<int:trade_id>/sell")
 @require_invest_auth
 def trade_sell(trade_id: int):
