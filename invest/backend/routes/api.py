@@ -311,7 +311,19 @@ def delete_closed_trade_post(trade_id: int):
 @require_invest_auth
 def get_settings():
     ctx = get_request_context()
-    return _json_ok(settings=settings_to_dict(ctx.settings))
+    payload = settings_to_dict(ctx.settings)
+    try:
+        from invest_app.config import SETTING_GOLD_TMN_PER_GRAM, SETTING_USDT_TMN_RATE
+
+        usdt = ctx.settings_repo.get(SETTING_USDT_TMN_RATE)
+        gold = ctx.settings_repo.get(SETTING_GOLD_TMN_PER_GRAM)
+        if usdt not in (None, ""):
+            payload["usdt_tmn_rate"] = float(usdt)
+        if gold not in (None, ""):
+            payload["gold_tmn_per_gram"] = float(gold)
+    except (TypeError, ValueError):
+        pass
+    return _json_ok(settings=payload)
 
 
 @invest_api_bp.put("/settings")
@@ -341,7 +353,38 @@ def put_settings():
     if "goal_roi_pct" in data:
         raw = data.get("goal_roi_pct")
         s.goal_roi_pct = float(raw) if raw not in (None, "") else None
+    if "wallex_markets_url" in data:
+        url = str(data.get("wallex_markets_url") or "").strip()
+        if url:
+            s.wallex_markets_url = url
+    if "persiantoolbox_url" in data:
+        url = str(data.get("persiantoolbox_url") or "").strip()
+        if url:
+            s.persiantoolbox_url = url
     ctx.save_settings(s)
+    # Optional cached rates (also written by /quotes).
+    if "usdt_tmn_rate" in data and data.get("usdt_tmn_rate") not in (None, ""):
+        try:
+            from invest_app.config import SETTING_USDT_TMN_RATE
+
+            ctx.settings_repo.set(
+                SETTING_USDT_TMN_RATE, f"{float(data['usdt_tmn_rate']):.4f}"
+            )
+        except (TypeError, ValueError):
+            pass
+    if "gold_tmn_per_gram" in data and data.get("gold_tmn_per_gram") not in (
+        None,
+        "",
+    ):
+        try:
+            from invest_app.config import SETTING_GOLD_TMN_PER_GRAM
+
+            ctx.settings_repo.set(
+                SETTING_GOLD_TMN_PER_GRAM,
+                f"{float(data['gold_tmn_per_gram']):.4f}",
+            )
+        except (TypeError, ValueError):
+            pass
     ctx.apply_price_api_settings()
     phone = current_invest_phone()
     if phone and "first_run_done" in data:
