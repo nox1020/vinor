@@ -467,6 +467,14 @@ def put_settings():
     if "goal_roi_pct" in data:
         raw = data.get("goal_roi_pct")
         s.goal_roi_pct = float(raw) if raw not in (None, "") else None
+    if "notifications_enabled" in data:
+        s.notifications_enabled = bool(data["notifications_enabled"])
+    if "notify_trades" in data:
+        s.notify_trades = bool(data["notify_trades"])
+    if "notify_withdrawals" in data:
+        s.notify_withdrawals = bool(data["notify_withdrawals"])
+    if "notify_price_moves" in data:
+        s.notify_price_moves = bool(data["notify_price_moves"])
     if "wallex_markets_url" in data:
         url = str(data.get("wallex_markets_url") or "").strip()
         if url:

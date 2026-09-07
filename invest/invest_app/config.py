@@ -29,6 +29,10 @@ SETTING_PRICE_REFRESH_SEC = "price_refresh_seconds"
 SETTING_WALLEX_URL = "wallex_markets_url"
 SETTING_PERSIANTOOLBOX_URL = "persiantoolbox_url"
 SETTING_GOAL_ROI_PCT = "goal_roi_pct"
+SETTING_NOTIFICATIONS = "notifications_enabled"
+SETTING_NOTIFY_TRADES = "notify_trades"
+SETTING_NOTIFY_WITHDRAWALS = "notify_withdrawals"
+SETTING_NOTIFY_PRICE_MOVES = "notify_price_moves"
 
 # Live price API defaults
 DEFAULT_WALLEX_MARKETS_URL = "https://api.wallex.ir/v1/markets"
@@ -65,6 +69,10 @@ DEFAULT_SETTINGS: dict[str, str] = {
     SETTING_WALLEX_URL: DEFAULT_WALLEX_MARKETS_URL,
     SETTING_PERSIANTOOLBOX_URL: DEFAULT_PERSIANTOOLBOX_URL,
     SETTING_GOAL_ROI_PCT: "",
+    SETTING_NOTIFICATIONS: "1",
+    SETTING_NOTIFY_TRADES: "1",
+    SETTING_NOTIFY_WITHDRAWALS: "1",
+    SETTING_NOTIFY_PRICE_MOVES: "1",
 }
 
 CURRENCY_LABELS: dict[str, str] = {

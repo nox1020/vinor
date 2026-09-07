@@ -17,6 +17,10 @@ from invest_app.config import (
     SETTING_GOLD_API,
     SETTING_GOLD_AUTO_UPDATE,
     SETTING_LIVE_PRICES,
+    SETTING_NOTIFICATIONS,
+    SETTING_NOTIFY_PRICE_MOVES,
+    SETTING_NOTIFY_TRADES,
+    SETTING_NOTIFY_WITHDRAWALS,
     SETTING_PERSIANTOOLBOX_URL,
     SETTING_PRICE_REFRESH_SEC,
     SETTING_THEME,
@@ -64,6 +68,10 @@ class AppSettings:
     wallex_markets_url: str = DEFAULT_WALLEX_MARKETS_URL
     persiantoolbox_url: str = DEFAULT_PERSIANTOOLBOX_URL
     goal_roi_pct: float | None = None
+    notifications_enabled: bool = True
+    notify_trades: bool = True
+    notify_withdrawals: bool = True
+    notify_price_moves: bool = True
 
     @classmethod
     def from_dict(cls, data: dict[str, str]) -> AppSettings:
@@ -91,6 +99,14 @@ class AppSettings:
                 or DEFAULT_PERSIANTOOLBOX_URL
             ),
             goal_roi_pct=_as_optional_float(merged.get(SETTING_GOAL_ROI_PCT)),
+            notifications_enabled=_as_bool(merged.get(SETTING_NOTIFICATIONS), True),
+            notify_trades=_as_bool(merged.get(SETTING_NOTIFY_TRADES), True),
+            notify_withdrawals=_as_bool(
+                merged.get(SETTING_NOTIFY_WITHDRAWALS), True
+            ),
+            notify_price_moves=_as_bool(
+                merged.get(SETTING_NOTIFY_PRICE_MOVES), True
+            ),
         )
 
     def to_dict(self) -> dict[str, str]:
@@ -109,4 +125,8 @@ class AppSettings:
             SETTING_GOAL_ROI_PCT: (
                 "" if self.goal_roi_pct is None else str(self.goal_roi_pct)
             ),
+            SETTING_NOTIFICATIONS: "1" if self.notifications_enabled else "0",
+            SETTING_NOTIFY_TRADES: "1" if self.notify_trades else "0",
+            SETTING_NOTIFY_WITHDRAWALS: "1" if self.notify_withdrawals else "0",
+            SETTING_NOTIFY_PRICE_MOVES: "1" if self.notify_price_moves else "0",
         }

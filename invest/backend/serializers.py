@@ -69,6 +69,10 @@ def settings_to_dict(s: AppSettings) -> Dict[str, Any]:
         "wallex_markets_url": s.wallex_markets_url,
         "persiantoolbox_url": s.persiantoolbox_url,
         "goal_roi_pct": s.goal_roi_pct,
+        "notifications_enabled": s.notifications_enabled,
+        "notify_trades": s.notify_trades,
+        "notify_withdrawals": s.notify_withdrawals,
+        "notify_price_moves": s.notify_price_moves,
         "raw": d,
     }
 
