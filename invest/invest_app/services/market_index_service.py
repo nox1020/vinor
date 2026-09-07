@@ -364,14 +364,15 @@ class MarketIndexService:
             ),
             _quote(
                 id_="gold",
-                name="طلا (گرم)",
-                symbol="XAU",
+                name="طلای ۱۸ عیار",
+                symbol="GOLD",
+                unit="toman_per_gram",
                 price=gold_toman,
                 change24h=gold_change,
             ),
             _quote(
                 id_="coin",
-                name="سکه امامی",
+                name="سکه تمام (تقریبی)",
                 symbol="COIN",
                 price=coin_price,
                 change24h=gold_change,
@@ -380,10 +381,11 @@ class MarketIndexService:
                 id_="btc",
                 name="بیت‌کوین",
                 symbol="BTC",
+                unit="toman" if w_btc and w_btc.get("price") else "usd",
                 price=(w_btc or {}).get("price")
-                or ((btc_usd * usdt) if btc_usd and usdt else None),
+                or (btc_usd if btc_usd else None),
                 change24h=(w_btc or {}).get("change24h"),
-                market_symbol="BTCTMN",
+                market_symbol="BTCTMN" if w_btc and w_btc.get("price") else None,
                 high24h=(w_btc or {}).get("high24h"),
                 low24h=(w_btc or {}).get("low24h"),
                 bid_price=(w_btc or {}).get("bid_price"),
@@ -394,10 +396,11 @@ class MarketIndexService:
                 id_="eth",
                 name="اتریوم",
                 symbol="ETH",
+                unit="toman" if w_eth and w_eth.get("price") else "usd",
                 price=(w_eth or {}).get("price")
-                or ((eth_usd * usdt) if eth_usd and usdt else None),
+                or (eth_usd if eth_usd else None),
                 change24h=(w_eth or {}).get("change24h"),
-                market_symbol="ETHTMN",
+                market_symbol="ETHTMN" if w_eth and w_eth.get("price") else None,
                 high24h=(w_eth or {}).get("high24h"),
                 low24h=(w_eth or {}).get("low24h"),
                 bid_price=(w_eth or {}).get("bid_price"),
@@ -459,7 +462,7 @@ class MarketIndexService:
     def _fetch_inflation(self, history_months: int = 12) -> dict[str, Any] | None:
         probe = _http_json(
             f"{HF_ROWS_URL}?dataset={urllib.parse.quote(HF_DATASET)}"
-            f"&config=default&split=train&offset=0&length=1",
+            f"&config=mart&split=train&offset=0&length=1",
             timeout=20,
         )
         if not probe:
@@ -471,7 +474,7 @@ class MarketIndexService:
         offset = max(0, total - need)
         page = _http_json(
             f"{HF_ROWS_URL}?dataset={urllib.parse.quote(HF_DATASET)}"
-            f"&config=default&split=train&offset={offset}&length={need}",
+            f"&config=mart&split=train&offset={offset}&length={need}",
             timeout=25,
         )
         if not page:
