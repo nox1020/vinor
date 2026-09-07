@@ -57,3 +57,9 @@ def user_profile_path(phone: str, flask_app=None) -> Path:
     profiles = invest_instance_root(flask_app) / "profiles"
     profiles.mkdir(parents=True, exist_ok=True)
     return profiles / f"{safe}.json"
+
+
+def market_index_db_path(flask_app=None) -> Path:
+    """Shared (not per-user) SQLite for شاخص snapshots."""
+    root = invest_instance_root(flask_app)
+    return root / "market_index.db"

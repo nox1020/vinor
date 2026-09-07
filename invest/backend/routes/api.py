@@ -7,13 +7,53 @@ from flask import Blueprint, jsonify, request
 from invest_app.models.asset import Asset
 from invest_app.models.settings import AppSettings
 
-from ..config import invest_api_version
+from ..config import invest_api_version, market_index_db_path
 from ..auth import current_invest_phone, require_invest_auth
 from ..context import close_request_context, get_request_context
 from ..serializers import asset_to_dict, metrics_to_dict, settings_to_dict, trade_to_dict
 from ..users import get_or_create_profile, update_profile
 
 invest_api_bp = Blueprint("invest_api", __name__, url_prefix="/invest/api/v1")
+
+_market_index_service = None
+
+
+def _market_index():
+    """Process-wide shared market index service."""
+    global _market_index_service
+    if _market_index_service is None:
+        from invest_app.services.market_index_service import MarketIndexService
+        from invest_app.services.market_index_store import MarketIndexStore
+
+        store = MarketIndexStore(market_index_db_path())
+        _market_index_service = MarketIndexService(store)
+    return _market_index_service
+
+
+def _sync_portfolio_quotes_from_index(ctx, essentials: list) -> None:
+    """Reuse index USDT/gold into portfolio live rates when present."""
+    if not essentials:
+        return
+    by_id = {
+        str(item.get("id") or ""): item
+        for item in essentials
+        if isinstance(item, dict)
+    }
+    usdt = by_id.get("usdt") or {}
+    gold = by_id.get("gold") or {}
+    try:
+        usdt_price = float(usdt.get("price") or 0)
+    except (TypeError, ValueError):
+        usdt_price = 0.0
+    try:
+        gold_price = float(gold.get("price") or 0)
+    except (TypeError, ValueError):
+        gold_price = 0.0
+    if usdt_price > 0:
+        ctx.fx.apply_fetched_rate(usdt_price, source="market_index")
+    if gold_price > 0:
+        ctx.market.apply_fetched_gold(gold_price, source="market_index")
+    ctx.persist_live_quotes()
 
 
 @invest_api_bp.teardown_request
@@ -106,6 +146,80 @@ def quotes():
         usdt_tmn=ctx.fx.usdt_tmn,
         gold_tmn_per_gram=ctx.market.gold_toman_per_gram,
     )
+
+
+@invest_api_bp.get("/markets/index")
+@require_invest_auth
+def markets_index():
+    """Full شاخص snapshot (essentials + Wallex + inflation), server-cached ~1m."""
+    ctx = get_request_context()
+    force = (request.args.get("force") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    svc = _market_index()
+    # Prefer user-configured URLs when present.
+    wallex = (ctx.settings.wallex_markets_url or "").strip()
+    market = (ctx.settings.persiantoolbox_url or "").strip()
+    if wallex:
+        svc.wallex_url = wallex
+    # Only override market URL when it looks like the market endpoint.
+    if market and "market" in market.lower():
+        svc.market_url = market
+    ttl = float(getattr(ctx.settings, "price_refresh_seconds", 60) or 60)
+    svc.ttl_seconds = max(15.0, min(ttl, 300.0) - 5.0)
+    bundle = svc.get_bundle(force=force)
+    essentials = bundle.get("essentials") or []
+    try:
+        _sync_portfolio_quotes_from_index(ctx, essentials)
+    except Exception:
+        pass
+    return _json_ok(
+        essentials=essentials,
+        wallex_markets=bundle.get("wallex_markets") or [],
+        inflation=bundle.get("inflation"),
+        updated_at=bundle.get("updated_at"),
+        stale=bool(bundle.get("stale")),
+        warning=bundle.get("warning"),
+        error=bundle.get("error"),
+        source=bundle.get("source"),
+    )
+
+
+@invest_api_bp.post("/markets/index")
+@require_invest_auth
+def markets_index_ingest():
+    """Accept a client-built snapshot and persist it on the shared store."""
+    data = request.get_json(silent=True) or {}
+    svc = _market_index()
+    bundle = svc.ingest_client_bundle(data)
+    ctx = get_request_context()
+    try:
+        _sync_portfolio_quotes_from_index(ctx, bundle.get("essentials") or [])
+    except Exception:
+        pass
+    return _json_ok(
+        essentials=bundle.get("essentials") or [],
+        wallex_markets=bundle.get("wallex_markets") or [],
+        inflation=bundle.get("inflation"),
+        updated_at=bundle.get("updated_at"),
+        source=bundle.get("source") or "client",
+    )
+
+
+@invest_api_bp.get("/markets/history")
+@require_invest_auth
+def markets_history():
+    """Minute ticks of essentials stored on the backend."""
+    try:
+        hours = float(request.args.get("hours") or 24)
+    except (TypeError, ValueError):
+        hours = 24.0
+    hours = max(1.0, min(hours, 24 * 14))
+    ticks = _market_index().history(hours=hours)
+    return _json_ok(items=ticks, hours=hours)
 
 
 @invest_api_bp.get("/assets")
