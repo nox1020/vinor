@@ -105,13 +105,37 @@ def github_token(*, allow_git_credential: bool = True) -> str | None:
 
 class _DropAuthRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
-        return urllib.request.Request(
-            newurl,
-            headers={"User-Agent": UA, "Accept": "application/octet-stream"},
-        )
+        from urllib.parse import urlparse
+
+        host = urlparse(newurl).netloc.lower()
+        headers_out = {"User-Agent": UA}
+        if "github.com" in host:
+            headers_out["Accept"] = "application/vnd.github+json"
+            auth = req.get_header("Authorization")
+            if auth:
+                headers_out["Authorization"] = auth
+        else:
+            headers_out["Accept"] = "application/octet-stream"
+        return urllib.request.Request(newurl, headers=headers_out)
 
 
 def api_request(url: str, token: str | None, *, timeout: int = 30) -> tuple[int, bytes]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": UA,
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return int(response.status), response.read()
+    except urllib.error.HTTPError as exc:
+        return int(exc.code), exc.read() or b""
+
+
+def log_request(url: str, token: str | None, *, timeout: int = 60) -> tuple[int, bytes]:
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": UA,
@@ -202,7 +226,7 @@ def dump_failed_logs(owner: str, repo: str, run: dict[str, Any], token: str) -> 
             continue
         job_id = int(job["id"])
         job_name = str(job.get("name") or job_id)
-        log_status, log_body = api_request(
+        log_status, log_body = log_request(
             f"{API}/repos/{owner}/{repo}/actions/jobs/{job_id}/logs",
             token,
             timeout=60,
