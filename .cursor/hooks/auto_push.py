@@ -55,9 +55,11 @@ def git_ok(*args: str) -> str:
 
 
 def in_progress_git_state(git_dir: Path) -> bool:
+    # Only directory/lock markers — leftover refs like REBASE_HEAD can remain
+    # after a finished rebase and would otherwise block auto-push.
     return any(
         (git_dir / name).exists()
-        for name in ("MERGE_HEAD", "REBASE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD")
+        for name in ("MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD")
     )
 
 
