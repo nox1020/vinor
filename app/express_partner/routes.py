@@ -4140,6 +4140,20 @@ def home_data():
     profile = getattr(g, 'express_partner_profile', None)
     payload = _build_home_dashboard_payload(me_phone, profile)
     payload['home_news_items'] = _home_news_headlines()
+    try:
+        from .sales_coach import build_home_ai_quick_prompts
+
+        payload['ai_quick_prompts'] = build_home_ai_quick_prompts(
+            me_phone=me_phone,
+            is_approved=bool(payload.get('is_approved')),
+            has_pending_app=bool(payload.get('has_pending_app')),
+            has_completed_deal=bool(payload.get('has_completed_deal')),
+        )
+    except Exception:
+        payload['ai_quick_prompts'] = []
+    ads_out, ads_count = _home_ads_for_api()
+    payload['divar_pro_ads'] = ads_out
+    payload['divar_pro_ads_count'] = ads_count
     resp = jsonify(payload)
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     resp.headers['Vary'] = 'Cookie'
@@ -4389,6 +4403,63 @@ def _vinor_land_to_home_ad(land: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         'commission_amount': max(0, commission_amount),
         'commission_pct': land.get('_commission_pct') or 0,
     }
+
+
+def _home_ads_for_api() -> tuple:
+    """همان ادغام آگهی خانهٔ وب — برای JSON اپ."""
+    ads: List[Dict[str, Any]] = []
+    try:
+        from .divar_pro_ads import home_divar_ads_context
+        from .home_ads_config import (
+            get_home_ads_settings,
+            home_ads_show_divar,
+            home_ads_show_vinor,
+            home_ads_system_enabled,
+        )
+
+        if not home_ads_system_enabled():
+            return [], 0
+        cfg = get_home_ads_settings() or {}
+        divar_ads_ctx = home_divar_ads_context() or {}
+        vinor_lands: List[Dict[str, Any]] = []
+        if home_ads_show_vinor():
+            try:
+                vinor_lands = _home_public_carousel_lands(
+                    limit=int(cfg.get('vinor_limit') or 40)
+                )
+            except Exception:
+                vinor_lands = []
+        divar_list: List[Dict[str, Any]] = []
+        if home_ads_show_divar():
+            raw = divar_ads_ctx.get('divar_pro_ads')
+            divar_list = raw if isinstance(raw, list) else []
+        ads = _merge_home_ads_carousel(divar_list, vinor_lands)
+    except Exception:
+        ads = []
+    out: List[Dict[str, Any]] = []
+    for ad in ads:
+        if not isinstance(ad, dict):
+            continue
+        try:
+            image_count = int(ad.get('image_count') or 0)
+        except Exception:
+            image_count = 0
+        try:
+            commission_amount = int(ad.get('commission_amount') or 0)
+        except Exception:
+            commission_amount = 0
+        out.append({
+            'title': str(ad.get('title') or '').strip(),
+            'price': str(ad.get('price') or '').strip(),
+            'location': str(ad.get('location') or '').strip(),
+            'image_url': str(ad.get('image_url') or '').strip(),
+            'image_count': image_count,
+            'token': str(ad.get('token') or '').strip(),
+            'source': str(ad.get('source') or '').strip(),
+            'url': str(ad.get('url') or '').strip(),
+            'commission_amount': max(0, commission_amount),
+        })
+    return out, len(out)
 
 
 def _merge_home_ads_carousel(
