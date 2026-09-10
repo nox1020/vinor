@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.utils.apk_meta import version_code_from_name
 from app.utils.apk_version import (
     android_apk_version_payload,
+    is_vinor_apk_request,
     parse_vinor_app_version_code,
     should_show_apk_update,
 )
@@ -77,3 +78,8 @@ def test_parse_version_code_header():
     assert parse_vinor_app_version_code(req) == 10272
     assert parse_vinor_app_version_code(header_code="12") == 12
     assert parse_vinor_app_version_code(_Req({})) == 0
+
+
+def test_native_ua_is_vinor_apk():
+    assert is_vinor_apk_request(_Req({"User-Agent": "VinorApp/Native/1.0.275"}))
+    assert is_vinor_apk_request(_Req({"User-Agent": "VinorApp/WebViewOnly/1.0.9"}))

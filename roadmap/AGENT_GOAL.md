@@ -30,9 +30,9 @@
 |------|-----|-----------|
 | **چت AI** | فروش زنده — پیشنهاد فایل، بازدید، معامله | `/ai` · `app/ai/*` |
 | **پنل ادمین** | کنترل عملیات از چت — فایل، همکار، پورسانت، پیامک، escalation | `/admin` · چت ops + `admin/*` |
-| **APK** | شِل موبایل بازاریاب — WebView روی پنل همکار | repo `apk/` → `https://vinor.ir/express/partner/` |
+| **APK** | اپ نیتیو همکار — چت، فایل، پورسانت، روتین، پروفایل | repo `apk/` · JSON `express/partner` |
 
-چت می‌فروشد؛ ادمین از چت عملیات کنترل می‌کند؛ APK همان پنل همکار را روی گوشی می‌آورد (منو و منطق از وب).
+چت می‌فروشد؛ ادمین از چت عملیات کنترل می‌کند؛ APK همان مسیر همکار را روی گوشی با UI نیتیو می‌آورد.
 
 ---
 
@@ -119,16 +119,16 @@ Handler در کد می‌ماند؛ مدل چت آن‌ها را نمی‌بین
 
 ## APK (اندروید)
 
-شِل WebView-only برای همکار اکسپرس — ناوبری و UI از سایت؛ نیتیو فقط پل‌ها.
+اپ نیتیو همکار اکسپرس — Kotlin · BottomNav · API JSON؛ نه شِل WebView.
 
 | چیست | چیست نیست |
 |------|-----------|
-| WebView روی `express/partner` | اپ نیتیو جدا با منطق فروش |
-| FCM · deep link · آپدیت APK · speech/notify bridge | Fragment/BottomNav جدا از وب |
-| منو از `/api/menu` (وب) | منوی سخت‌کد نیتیو |
+| تب‌های نیتیو: وینور (چت+فایل) · پورسانت · روتین · من | WebView تمام‌صفحه روی سایت |
+| ورود OTP · FCM · deep link · آپدیت APK | منو و منطق فقط از HTML وب |
+| کوکی `vinor_session` مثل وب | توکن Bearer جدا |
 
-ورود پیش‌فرض: `VinorPartnerUrls.ENTRY` → `/express/partner/`  
-کد: repo کنار vinor → `apk/` (`MainActivity`, `VinorPartnerUrls`)
+ورود: `LoginStep1/2` → خانه نیتیو  
+کد: repo کنار vinor → `apk/` (`MainActivity`, `DashboardFragment`, `PartnerApi`)
 
 ---
 

@@ -5,7 +5,7 @@ import re
 from typing import Optional
 
 _VINOR_APP_UA = re.compile(
-    r'VinorApp/(?:Android|WebViewOnly)(?:/([0-9]+(?:\.[0-9]+)*))?',
+    r'VinorApp/(?:Android|WebViewOnly|Native)(?:/([0-9]+(?:\.[0-9]+)*))?',
     re.IGNORECASE,
 )
 
@@ -16,7 +16,7 @@ def is_vinor_apk_request(req) -> bool:
     if (req.headers.get('X-Vinor-App-Version-Code') or '').strip():
         return True
     ua = (req.headers.get('User-Agent') or '')
-    return bool(re.search(r'VinorApp/(?:Android|WebViewOnly)', ua, re.IGNORECASE))
+    return bool(re.search(r'VinorApp/(?:Android|WebViewOnly|Native)', ua, re.IGNORECASE))
 
 
 def parse_vinor_app_version(user_agent: str = '', header_version: str = '') -> str:
