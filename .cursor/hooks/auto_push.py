@@ -9,7 +9,20 @@ import subprocess
 import sys
 from pathlib import Path
 
+HOOKS = Path(__file__).resolve().parent
+if str(HOOKS) not in sys.path:
+    sys.path.insert(0, str(HOOKS))
+
+from ci_watch import snapshot_ci  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[2]
+CI_FOLLOWUP = (
+    "After this push, run `python .cursor/hooks/ci_watch.py --wait` in this repo. "
+    "If it reports failure, read the FAILED_JOB log file, fix the root cause "
+    "(do not weaken or skip the workflow), commit, push, and repeat until green. "
+    "If CI_STATE is none, no workflow ran for this commit — stop. "
+    "If blocked by missing secrets/auth, report that and stop."
+)
 SECRET_RE = re.compile(
     r"(?:^|[/\\])(?:"
     r"\.env(?:\..*)?"
@@ -29,8 +42,11 @@ def log(message: str) -> None:
     print(f"[auto-push] {message}", file=sys.stderr, flush=True)
 
 
-def emit() -> None:
-    sys.stdout.write("{}\n")
+def emit(followup: str | None = None) -> None:
+    payload: dict[str, str] = {}
+    if followup:
+        payload["followup_message"] = followup
+    sys.stdout.write(json.dumps(payload) + "\n")
     sys.stdout.flush()
 
 
@@ -81,6 +97,7 @@ def main() -> int:
     except json.JSONDecodeError:
         payload = {}
 
+    loop_count = int(payload.get("loop_count") or 0)
     if str(payload.get("status") or "").lower() == "aborted":
         log("skipped: agent aborted")
         emit()
@@ -140,18 +157,27 @@ def main() -> int:
         porcelain = git_ok("status", "-sb").splitlines()
         should_push = any("ahead" in line for line in porcelain[:1])
 
+    did_push = False
     if not should_push:
         log("already in sync with origin")
-        emit()
-        return 0
-
-    push = git("push", "origin", "HEAD")
-    if push.returncode != 0:
-        log((push.stderr or push.stdout or "push failed").strip())
     else:
-        log("pushed to origin")
+        push = git("push", "origin", "HEAD")
+        if push.returncode != 0:
+            log((push.stderr or push.stdout or "push failed").strip())
+        else:
+            log("pushed to origin")
+            did_push = True
 
-    emit()
+    followup = None
+    if loop_count < 8:
+        ci = snapshot_ci(allow_git_credential=False)
+        state = str(ci.get("state") or "unknown")
+        log(f"ci state={state}")
+        if did_push or state in {"pending", "failure"}:
+            followup = CI_FOLLOWUP
+        elif state == "unknown" and loop_count == 0:
+            followup = CI_FOLLOWUP
+    emit(followup)
     return 0
 
 

@@ -4,7 +4,8 @@
     "stop": [
       {
         "command": "python .cursor/hooks/auto_push.py",
-        "timeout": 120
+        "timeout": 120,
+        "loop_limit": 10
       }
     ]
   }
