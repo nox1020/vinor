@@ -139,12 +139,36 @@ def dashboard():
 @require_invest_auth
 def quotes():
     ctx = get_request_context()
-    ctx.fx.get_usdt_tmn(force=True)
-    ctx.market.refresh(force=True)
+    bundle = _market_index().get_bundle(force=False)
+    essentials = bundle.get("essentials") or []
+    by_id = {
+        str(item.get("id") or ""): item
+        for item in essentials
+        if isinstance(item, dict)
+    }
+
+    def _price(key: str) -> float | None:
+        try:
+            value = float((by_id.get(key) or {}).get("price") or 0)
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
+    usdt = _price("usdt")
+    gold = _price("gold")
+    if usdt:
+        ctx.fx.apply_fetched_rate(usdt, source="market_index")
+    if gold:
+        ctx.market.apply_fetched_gold(gold, source="market_index")
+    if not usdt:
+        usdt = ctx.fx.get_usdt_tmn(force=False)
+    if not gold:
+        gold = ctx.market.get_gold_toman(force=False)
     ctx.persist_live_quotes()
     return _json_ok(
         usdt_tmn=ctx.fx.usdt_tmn,
         gold_tmn_per_gram=ctx.market.gold_toman_per_gram,
+        stale=bool(bundle.get("stale")),
     )
 
 
@@ -160,16 +184,6 @@ def markets_index():
         "on",
     )
     svc = _market_index()
-    # Prefer user-configured URLs when present.
-    wallex = (ctx.settings.wallex_markets_url or "").strip()
-    market = (ctx.settings.persiantoolbox_url or "").strip()
-    if wallex:
-        svc.wallex_url = wallex
-    # Only override market URL when it looks like the market endpoint.
-    if market and "market" in market.lower():
-        svc.market_url = market
-    ttl = float(getattr(ctx.settings, "price_refresh_seconds", 60) or 60)
-    svc.ttl_seconds = max(15.0, min(ttl, 300.0) - 5.0)
     bundle = svc.get_bundle(force=force)
     essentials = bundle.get("essentials") or []
     try:

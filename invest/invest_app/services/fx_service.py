@@ -103,7 +103,7 @@ class FxService:
 
     def _fetch_live(self) -> UsdtRate | None:
         # Prefer public markets (OTC price needs auth).
-        for fetcher in (self._from_markets, self._from_trades, self._from_otc):
+        for fetcher in (self._from_markets, self._from_trades):
             try:
                 rate = fetcher()
                 if rate is not None and rate.price > 0:
@@ -122,7 +122,7 @@ class FxService:
             },
             method="GET",
         )
-        with urllib.request.urlopen(req, timeout=12) as resp:
+        with urllib.request.urlopen(req, timeout=6) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
     def _from_markets(self) -> UsdtRate | None:

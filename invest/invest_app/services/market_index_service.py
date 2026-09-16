@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import logging
 import threading
@@ -9,6 +10,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from invest_app.config import (
@@ -24,8 +26,13 @@ INFLATION_TTL_SECONDS = 6 * 3600
 COIN_GOLD_GRAMS = 8.133
 HF_DATASET = "Farmaanaa/iran_cpi_and_inflation_multisource"
 HF_ROWS_URL = "https://datasets-server.huggingface.co/rows"
+HTTP_TIMEOUT_MARKET = 8.0
+HTTP_TIMEOUT_WALLEX = 8.0
+HTTP_TIMEOUT_INFLATION = 12.0
+REFRESH_WAIT_SECONDS = 18.0
 
-_REFRESH_LOCK = threading.Lock()
+_HTTP_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="invest-mkt")
+atexit.register(lambda: _HTTP_POOL.shutdown(wait=False, cancel_futures=True))
 
 
 def _num(value: Any) -> float | None:
@@ -45,7 +52,7 @@ def _as_map(value: Any) -> dict[str, Any] | None:
     return None
 
 
-def _http_json(url: str, *, timeout: float = 15.0) -> dict[str, Any] | None:
+def _http_json(url: str, *, timeout: float = HTTP_TIMEOUT_MARKET) -> dict[str, Any] | None:
     req = urllib.request.Request(
         url,
         headers={
@@ -111,32 +118,33 @@ class MarketIndexService:
         self.wallex_url = (wallex_url or DEFAULT_WALLEX_MARKETS_URL).strip()
         self.market_url = (market_url or DEFAULT_PERSIANTOOLBOX_URL).strip()
         self._last_error: str | None = None
+        self._refresh_event: threading.Event | None = None
+        self._refresh_guard = threading.Lock()
+        self._inflation_event: threading.Event | None = None
+        self._inflation_guard = threading.Lock()
 
     @property
     def last_error(self) -> str | None:
         return self._last_error
 
     def get_bundle(self, *, force: bool = False) -> dict[str, Any]:
-        """Return latest bundle, refreshing when stale."""
+        """Return latest bundle. Stale cache is served immediately; refresh is single-flight."""
         cached, updated_at = self.store.load_latest()
         age = self.store.age_seconds(updated_at)
-        need_refresh = force or cached is None or age is None or age >= self.ttl_seconds
+        fresh = (
+            cached is not None
+            and age is not None
+            and age < self.ttl_seconds
+        )
 
-        if need_refresh:
-            with _REFRESH_LOCK:
-                cached2, updated2 = self.store.load_latest()
-                age2 = self.store.age_seconds(updated2)
-                still = force or cached2 is None or age2 is None or age2 >= self.ttl_seconds
-                if still:
-                    refreshed = self._refresh_markets()
-                    if refreshed is not None:
-                        cached, updated_at = refreshed, refreshed.get("updated_at")
-                    elif cached2 is not None:
-                        cached, updated_at = cached2, updated2
-                else:
-                    cached, updated_at = cached2, updated2
+        if force or cached is None:
+            self._kick_market_refresh(wait=True)
+            cached, updated_at = self.store.load_latest()
+            age = self.store.age_seconds(updated_at)
+        elif not fresh:
+            self._kick_market_refresh(wait=False)
 
-        inflation = self._get_inflation(force=force)
+        inflation = self._inflation_nonblocking(force=force)
         if cached is None:
             return {
                 "essentials": [],
@@ -150,7 +158,9 @@ class MarketIndexService:
         out = dict(cached)
         out["inflation"] = inflation
         out["updated_at"] = updated_at or out.get("updated_at")
-        out["stale"] = False
+        out["stale"] = not (
+            age is not None and age < self.ttl_seconds
+        )
         if self._last_error:
             out["warning"] = self._last_error
         return out
@@ -178,9 +188,91 @@ class MarketIndexService:
     def history(self, *, hours: float = 24) -> list[dict[str, Any]]:
         return self.store.load_ticks(hours=hours)
 
+    def _kick_market_refresh(self, *, wait: bool) -> None:
+        with self._refresh_guard:
+            event = self._refresh_event
+            if event is None or event.is_set():
+                event = threading.Event()
+                self._refresh_event = event
+                threading.Thread(
+                    target=self._market_refresh_worker,
+                    args=(event,),
+                    name="invest-mkt-refresh",
+                    daemon=True,
+                ).start()
+        if wait:
+            event.wait(timeout=REFRESH_WAIT_SECONDS)
+
+    def _market_refresh_worker(self, event: threading.Event) -> None:
+        try:
+            self._refresh_markets()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Market index refresh failed: %s", exc)
+            self._last_error = str(exc)
+        finally:
+            event.set()
+
+    def _kick_inflation_refresh(self, *, wait: bool) -> None:
+        with self._inflation_guard:
+            event = self._inflation_event
+            if event is None or event.is_set():
+                event = threading.Event()
+                self._inflation_event = event
+                threading.Thread(
+                    target=self._inflation_refresh_worker,
+                    args=(event,),
+                    name="invest-infl-refresh",
+                    daemon=True,
+                ).start()
+        if wait:
+            event.wait(timeout=HTTP_TIMEOUT_INFLATION + 2.0)
+
+    def _inflation_refresh_worker(self, event: threading.Event) -> None:
+        try:
+            snap = self._fetch_inflation()
+            if snap:
+                self.store.save_inflation(snap)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Inflation refresh failed: %s", exc)
+        finally:
+            event.set()
+
+    def _inflation_nonblocking(self, *, force: bool = False) -> dict[str, Any] | None:
+        cached, updated_at = self.store.load_inflation()
+        age = self.store.age_seconds(updated_at)
+        fresh = (
+            cached is not None
+            and age is not None
+            and age < INFLATION_TTL_SECONDS
+        )
+        if cached is None:
+            self._kick_inflation_refresh(wait=True)
+            cached, _ = self.store.load_inflation()
+        elif force or not fresh:
+            self._kick_inflation_refresh(wait=False)
+        return cached
+
     def _refresh_markets(self) -> dict[str, Any] | None:
-        market = self._fetch_persian_market()
-        wallex = self._fetch_wallex()
+        market_fut = _HTTP_POOL.submit(
+            _http_json, self.market_url, timeout=HTTP_TIMEOUT_MARKET
+        )
+        wallex_fut = _HTTP_POOL.submit(
+            _http_json, self.wallex_url, timeout=HTTP_TIMEOUT_WALLEX
+        )
+        try:
+            market_raw = market_fut.result(timeout=HTTP_TIMEOUT_MARKET + 1.0)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("PersianToolbox wait failed: %s", exc)
+            market_raw = None
+        try:
+            wallex = wallex_fut.result(timeout=HTTP_TIMEOUT_WALLEX + 1.0)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Wallex wait failed: %s", exc)
+            wallex = None
+        market = None
+        if market_raw:
+            nested = _as_map(market_raw.get("data"))
+            market = nested or market_raw
         essentials = self._build_essentials(market, wallex)
         wallex_markets = self._parse_wallex_tmn(wallex)
         has_price = any(_num(q.get("price")) for q in essentials) or any(
@@ -200,35 +292,6 @@ class MarketIndexService:
         # Keep USDT/gold settings in sync for portfolio when available.
         self._last_error = None
         return bundle
-
-    def _get_inflation(self, *, force: bool = False) -> dict[str, Any] | None:
-        cached, updated_at = self.store.load_inflation()
-        age = self.store.age_seconds(updated_at)
-        if (
-            not force
-            and cached is not None
-            and age is not None
-            and age < INFLATION_TTL_SECONDS
-        ):
-            return cached
-        try:
-            snap = self._fetch_inflation()
-            if snap:
-                self.store.save_inflation(snap)
-                return snap
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Inflation refresh failed: %s", exc)
-        return cached
-
-    def _fetch_persian_market(self) -> dict[str, Any] | None:
-        data = _http_json(self.market_url, timeout=12)
-        if not data:
-            return None
-        nested = _as_map(data.get("data"))
-        return nested or data
-
-    def _fetch_wallex(self) -> dict[str, Any] | None:
-        return _http_json(self.wallex_url, timeout=15)
 
     def _symbols_map(self, wallex: dict[str, Any] | None) -> dict[str, Any] | None:
         if not wallex:
@@ -384,7 +447,8 @@ class MarketIndexService:
                 unit="toman" if w_btc and w_btc.get("price") else "usd",
                 price=(w_btc or {}).get("price")
                 or (btc_usd if btc_usd else None),
-                change24h=(w_btc or {}).get("change24h"),
+                change24h=(w_btc or {}).get("change24h")
+                or _num(_as_map(crypto.get("BTC") or {}).get("change24h")),
                 market_symbol="BTCTMN" if w_btc and w_btc.get("price") else None,
                 high24h=(w_btc or {}).get("high24h"),
                 low24h=(w_btc or {}).get("low24h"),
@@ -399,7 +463,8 @@ class MarketIndexService:
                 unit="toman" if w_eth and w_eth.get("price") else "usd",
                 price=(w_eth or {}).get("price")
                 or (eth_usd if eth_usd else None),
-                change24h=(w_eth or {}).get("change24h"),
+                change24h=(w_eth or {}).get("change24h")
+                or _num(_as_map(crypto.get("ETH") or {}).get("change24h")),
                 market_symbol="ETHTMN" if w_eth and w_eth.get("price") else None,
                 high24h=(w_eth or {}).get("high24h"),
                 low24h=(w_eth or {}).get("low24h"),
@@ -463,7 +528,7 @@ class MarketIndexService:
         probe = _http_json(
             f"{HF_ROWS_URL}?dataset={urllib.parse.quote(HF_DATASET)}"
             f"&config=mart&split=train&offset=0&length=1",
-            timeout=20,
+            timeout=HTTP_TIMEOUT_INFLATION,
         )
         if not probe:
             return None
@@ -475,7 +540,7 @@ class MarketIndexService:
         page = _http_json(
             f"{HF_ROWS_URL}?dataset={urllib.parse.quote(HF_DATASET)}"
             f"&config=mart&split=train&offset={offset}&length={need}",
-            timeout=25,
+            timeout=HTTP_TIMEOUT_INFLATION,
         )
         if not page:
             return None
