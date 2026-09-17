@@ -3617,7 +3617,7 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         if ph and is_approved else 0
     )
 
-    return {
+    out: Dict[str, Any] = {
         'success': True,
         'is_logged_in': bool(ph),
         'is_approved': is_approved,
@@ -3629,7 +3629,25 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'mission': None,
         'withdrawable_balance': withdrawable,
         'home_requests_pipeline_count': home_requests_pipeline_count,
+        'customer_modal_lands': [],
+        'customer_modal_plus_users': [],
+        'visit_slots_by_plus': {},
+        'crm_ui_enabled': False,
     }
+    try:
+        ctx = _home_customer_modal_context(ph, is_approved)
+        out['customer_modal_lands'] = ctx.get('customer_modal_lands') or []
+        out['customer_modal_plus_users'] = ctx.get('customer_modal_plus_users') or []
+        out['visit_slots_by_plus'] = ctx.get('visit_slots_by_plus') or {}
+    except Exception:
+        pass
+    try:
+        from app.crm.config import crm_ui_enabled
+
+        out['crm_ui_enabled'] = bool(crm_ui_enabled() and is_approved)
+    except Exception:
+        out['crm_ui_enabled'] = False
+    return out
 
 
 def _partner_ai_welcome(*, is_approved: bool, has_pending_app: bool, me_phone: str) -> str:
