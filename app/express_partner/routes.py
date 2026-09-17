@@ -3630,6 +3630,8 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'withdrawable_balance': withdrawable,
         'home_requests_pipeline_count': home_requests_pipeline_count,
         'customer_modal_lands': [],
+        'is_special': _is_partner_special(profile) if ph and is_approved else False,
+        'lawyer_feature_on': True,
         'customer_modal_plus_users': [],
         'visit_slots_by_plus': {},
         'crm_ui_enabled': False,
@@ -3647,6 +3649,12 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         out['crm_ui_enabled'] = bool(crm_ui_enabled() and is_approved)
     except Exception:
         out['crm_ui_enabled'] = False
+    try:
+        from app.lawyer.config import lawyer_enabled
+
+        out['lawyer_feature_on'] = bool(lawyer_enabled())
+    except Exception:
+        out['lawyer_feature_on'] = True
     return out
 
 
