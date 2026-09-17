@@ -4178,6 +4178,96 @@ def home_data():
     return resp
 
 
+def _apk_json(payload: dict, status: int = 200):
+    resp = jsonify(payload)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    resp.headers['Vary'] = 'Cookie'
+    return resp, status
+
+
+@express_partner_bp.get('/api/training/data', endpoint='apk_training_data')
+@require_partner_access(allow_pending=True, allow_guest=True, json_response=True)
+def apk_training_data():
+    from .apk_native import training_payload
+    return _apk_json(training_payload())
+
+
+@express_partner_bp.get('/api/levels/data', endpoint='apk_levels_data')
+@require_partner_access(allow_pending=True, allow_guest=True, json_response=True)
+def apk_levels_data():
+    from .apk_native import levels_payload, session_phone, session_profile
+    return _apk_json(levels_payload(session_phone(), session_profile()))
+
+
+@express_partner_bp.get('/api/invite/data', endpoint='apk_invite_data')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_invite_data():
+    from .apk_native import invite_payload, session_phone, session_profile
+    return _apk_json(invite_payload(session_phone(), session_profile()))
+
+
+@express_partner_bp.get('/api/apply/data', endpoint='apk_apply_data')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_apply_data():
+    from .apk_native import apply_payload, session_phone
+    return _apk_json(apply_payload(session_phone()))
+
+
+@express_partner_bp.post('/api/apply/submit', endpoint='apk_apply_submit')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_apply_submit():
+    from .apk_native import apply_payload, session_phone
+    me_phone = session_phone()
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+    out = create_partner_application_core(
+        me_phone,
+        data,
+        form_ref=str(data.get('ref') or ''),
+        query_ref=str(request.args.get('ref') or ''),
+    )
+    if out.get('already_partner'):
+        return _apk_json({'ok': True, 'status': 'approved', 'message': out.get('error') or 'حساب همکاری فعال است.'})
+    if out.get('already_pending'):
+        payload = apply_payload(me_phone)
+        payload['message'] = out.get('error') or payload.get('message') or 'درخواست فعال دارید.'
+        return _apk_json(payload)
+    if not out.get('ok'):
+        return _apk_json({'ok': False, 'status': 'form', 'error': out.get('error') or 'ثبت ناموفق بود.'}, 400)
+    if out.get('auto_approved'):
+        return _apk_json({
+            'ok': True,
+            'status': 'approved',
+            'message': out.get('message') or 'همکاری شما تأیید شد.',
+        })
+    payload = apply_payload(me_phone)
+    payload['message'] = out.get('message') or 'درخواست ثبت شد.'
+    return _apk_json(payload)
+
+
+@express_partner_bp.get('/api/requests/data', endpoint='apk_requests_data')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_requests_data():
+    from .apk_native import requests_payload, session_phone, session_profile
+    tab = (request.args.get('tab') or '').strip()
+    return _apk_json(requests_payload(session_phone(), session_profile(), tab))
+
+
+@express_partner_bp.get('/api/listings/data', endpoint='apk_listings_data')
+@require_special_partner(json_response=True)
+def apk_listings_data():
+    from .apk_native import listings_payload, session_phone
+    return _apk_json(listings_payload(session_phone()))
+
+
+@express_partner_bp.get('/api/legal/data', endpoint='apk_legal_data')
+@require_partner_access(allow_pending=True, allow_guest=True, json_response=True)
+def apk_legal_data():
+    from .apk_native import legal_payload
+    return _apk_json(legal_payload(request.args.get('doc') or 'terms'))
+
+
 @express_partner_bp.route('/dashboard', methods=['GET'], endpoint='dashboard')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def dashboard_redirect():
@@ -5076,12 +5166,16 @@ def api_favorites_cards():
         assigned_lands=lands,
         is_approved=is_approved,
     )
+    from .apk_native import land_card
+    items = [land_card(item) for item in lands]
     return jsonify({
         'ok': True,
         'html': html,
         'count': len(lands),
         'requested': len(codes),
         'valid_codes': valid_codes,
+        'items': items,
+        'is_approved': is_approved,
     })
 
 
@@ -5431,8 +5525,11 @@ def requests_visit_result(vid: str):
         return _requests_action_json(False, error='درخواست پیدا نشد.')
     if str(rec.get('partner_phone') or '').strip() != me_phone:
         return _requests_action_json(False, error='دسترسی ندارید.')
-    outcome = (request.form.get('outcome') or '').strip()
-    notes = (request.form.get('notes') or '').strip()
+    body = request.get_json(silent=True) if request.is_json else None
+    if not isinstance(body, dict):
+        body = {}
+    outcome = str(request.form.get('outcome') or body.get('outcome') or '').strip()
+    notes = str(request.form.get('notes') or body.get('notes') or '').strip()
     updated, err = record_visit_outcome(
         visit_rows, str(vid), outcome=outcome, notes=notes, actor_phone=me_phone
     )
