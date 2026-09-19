@@ -872,6 +872,8 @@ def create_app() -> Flask:
             # Public landing pages
             "/partners",
             "/enamad-seal.png",
+            "/my-property",
+            "/my-property/",
             # Express Partner auth paths (public)
             "/express/partner/login", "/express/partner/login/otp", "/express/partner/verify", "/express/partner/otp/resend",
             "/express/partner/api/login-request", "/express/partner/api/verify",

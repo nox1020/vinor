@@ -1163,6 +1163,7 @@ def _dashboard_overview() -> dict[str, Any]:
                 "title": "عملیات",
                 "links": [
                     {"label": "آگهی‌ها", "href": "admin.express_listings", "icon": "fa-building"},
+                    {"label": "آگهی‌ها - ملک", "href": "admin.property_listings", "icon": "fa-house-chimney"},
                     {"label": "همکاران", "href": "admin.express_partners", "icon": "fa-user-group"},
                     {"label": "روند بازدید", "href": "admin.express_visit_requests", "icon": "fa-route"},
                     {"label": "گزارش کاربران", "href": "admin.reports_list", "icon": "fa-flag"},
@@ -4162,6 +4163,89 @@ def express_listings():
         filter_kind=filter_kind,
         stats=stats,
     )
+
+
+@admin_bp.route('/listings/properties', methods=['GET'], endpoint='property_listings')
+@login_required
+def property_listings():
+    cleanup_expired_ads()
+    from .property_listings import collect_rows, filter_rows
+
+    lands_data = load_json(_lands_path())
+    lands_list = lands_data if isinstance(lands_data, list) else []
+    rows, stats = collect_rows(lands_list, expiry_meta)
+    status_filter = (request.args.get('status') or 'all').strip().lower()
+    q = (request.args.get('q') or '').strip()
+    filtered = filter_rows(rows, status_filter, q)
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', PER_PAGE_DEFAULT))
+    pagination = paginate(filtered, page, per_page)
+    return render_template(
+        'admin/property_listings.html',
+        rows=pagination['items'],
+        pagination={'page': pagination['page'], 'pages': pagination['pages']},
+        stats=stats,
+        status_filter=status_filter,
+        q=q,
+    )
+
+
+@admin_bp.post('/listings/properties/bulk', endpoint='property_listings_bulk')
+@login_required
+def property_listings_bulk():
+    cleanup_expired_ads()
+    action = (request.form.get('action') or '').strip().lower()
+    codes = [str(c).strip() for c in request.form.getlist('codes') if str(c).strip()]
+    reason = (request.form.get('reject_reason') or '').strip()
+    if not codes:
+        flash('هیچ آگهی‌ای انتخاب نشده است.', 'warning')
+        return redirect(url_for('admin.property_listings'))
+    if action == 'reject' and not reason:
+        flash('دلیل رد الزامی است.', 'warning')
+        return redirect(url_for('admin.property_listings'))
+
+    lands = load_json(_lands_path())
+    if not isinstance(lands, list):
+        lands = []
+    wanted = set(codes)
+    changed = 0
+    keep: List[Dict[str, Any]] = []
+    for land in lands:
+        if not isinstance(land, dict):
+            keep.append(land)
+            continue
+        code = str(land.get('code') or '').strip()
+        if code not in wanted:
+            keep.append(land)
+            continue
+        if action == 'approve':
+            land['status'] = 'approved'
+            try:
+                land['approved_at'] = iso_z(utcnow())
+            except Exception:
+                pass
+            keep.append(land)
+            changed += 1
+        elif action == 'reject':
+            land['status'] = 'rejected'
+            land['reject_reason'] = reason
+            keep.append(land)
+            changed += 1
+        elif action == 'delete':
+            try:
+                _delete_ad_images(land)
+            except Exception:
+                pass
+            changed += 1
+            continue
+        else:
+            keep.append(land)
+    if action in ('approve', 'reject', 'delete'):
+        save_ads(keep)
+        flash(f'{changed} آگهی به‌روز شد.', 'success')
+    else:
+        flash('عملیات نامعتبر است.', 'warning')
+    return redirect(url_for('admin.property_listings'))
 
 
 @admin_bp.post('/express/transfer')

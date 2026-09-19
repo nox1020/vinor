@@ -1,0 +1,32 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}مشاهده آگهی{% endblock %}
+{% block page_title %}مشاهده آگهی{% endblock %}
+
+{% block content %}
+{% set land = land or {} %}
+<div class="max-w-3xl mx-auto space-y-4">
+  <div class="rounded-xl border border-[#2A3140] bg-[#14171C] p-4">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h2 class="text-white text-lg font-bold m-0">{{ land.title or 'بدون عنوان' }}</h2>
+        <p class="text-xs text-[#8b93a1] mt-1 mb-0">کد {{ land.code }} · {{ land.city or land.location or '—' }}</p>
+      </div>
+      <span class="text-xs px-2 py-1 rounded-full bg-white/5 text-[#c7c7cc]">{{ land.status or 'pending' }}</span>
+    </div>
+    <p class="text-sm text-[#e5e7eb] mt-3">{{ land.description or 'توضیحی ثبت نشده است.' }}</p>
+    <dl class="grid grid-cols-2 gap-3 mt-4 text-sm">
+      <div><dt class="text-[#8b93a1]">قیمت</dt><dd class="text-white">{{ (land.price_total or land.price or 0)|toman }}</dd></div>
+      <div><dt class="text-[#8b93a1]">متراژ</dt><dd class="text-white">{{ land.size or '—' }}</dd></div>
+      <div><dt class="text-[#8b93a1]">مالک</dt><dd class="text-white">{{ land.owner or land.owner_name or '—' }}</dd></div>
+      <div><dt class="text-[#8b93a1]">تاریخ ثبت</dt><dd class="text-white"><span class="jalali-dt" data-dt="{{ land.created_at or '' }}"></span></dd></div>
+    </dl>
+    {% if land.reject_reason %}
+    <p class="mt-3 text-sm text-rose-300">دلیل رد: {{ land.reject_reason }}</p>
+    {% endif %}
+    <div class="flex flex-wrap gap-2 mt-4">
+      <a class="px-3 py-2 rounded-lg bg-[#2DD4BF] text-[#042f2e] text-sm font-bold" href="{{ url_for('admin.edit_land', code=land.code) }}">ویرایش</a>
+      <a class="px-3 py-2 rounded-lg border border-[#2A3140] text-sm" href="{{ url_for('admin.property_listings') }}">بازگشت به آگهی‌ها - ملک</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

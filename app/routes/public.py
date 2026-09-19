@@ -840,10 +840,12 @@ def legacy_consultant_dashboard():
     return _legacy_redirect("express_partner.login", next=url_for("express_partner.home"))
 
 
+@main_bp.route("/my-property")
+@main_bp.route("/my-property/")
 @main_bp.route("/express/partner/my-properties")
 @main_bp.route("/express/partner/my-properties/")
 def legacy_partner_my_properties():
     if session.get("user_phone"):
-        return _legacy_redirect("express_partner.home")
-    return _legacy_redirect("express_partner.login", next=url_for("express_partner.home"))
+        return _legacy_redirect("express_partner.my_property")
+    return _legacy_redirect("express_partner.login", next=url_for("express_partner.my_property"))
 

@@ -1004,6 +1004,15 @@
 
   {% if not me_phone %}
   <nav class="ep-profile-drawer__section ep-profile-drawer__nav" aria-label="منو">
+    <div class="ep-profile-drawer__nav-group" aria-label="ملک">
+      {{ profile_menu_row(
+        url_for('express_partner.my_property'),
+        'fa-house',
+        'ملک من',
+        tour='my-property-link',
+        row_id='epDrawerMyPropertyGuestBtn'
+      ) }}
+    </div>
     <div class="ep-profile-drawer__nav-group" aria-label="آموزش">
       {{ profile_menu_row(
         url_for('express_partner.training'),
@@ -1032,6 +1041,18 @@
   {% set _drawer_avatar = (profile.get('avatar') or '')|trim if profile else '' %}
   {% set _drawer_avatar_url = (_drawer_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _drawer_avatar and profile else '' %}
   <nav class="ep-profile-drawer__section ep-profile-drawer__nav" aria-label="منو">
+
+    <div class="ep-profile-drawer__nav-group" aria-label="ملک">
+      <p class="ep-profile-drawer__nav-label">ملک</p>
+      {{ profile_menu_row(
+        url_for('express_partner.my_property'),
+        'fa-house',
+        'ملک من',
+        subtitle='ارزش، نمودار و بینش ملک',
+        tour='my-property-link',
+        row_id='epDrawerMyPropertyBtn'
+      ) }}
+    </div>
 
     {% if is_approved|default(false) %}
     {% if is_special|default(false) %}

@@ -1,0 +1,269 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}آگهی‌ها - ملک{% endblock %}
+{% block page_title %}مدیریت آگهی‌های ملکی{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+  .pl-kpi { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+  @media (min-width: 900px) { .pl-kpi { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .pl-kpi article {
+    background: #14171c; border: 1px solid #2a3140; border-radius: .9rem; padding: .85rem 1rem;
+  }
+  .pl-kpi b { display: block; font-size: 1.25rem; color: #fff; font-variant-numeric: tabular-nums; }
+  .pl-kpi span { color: #8b93a1; font-size: .75rem; }
+  .pl-toolbar { display: flex; flex-wrap: wrap; gap: .55rem; align-items: center; }
+  .pl-toolbar input, .pl-toolbar select {
+    background: #0e1014; border: 1px solid #2a3140; color: #e5e7eb;
+    border-radius: .65rem; min-height: 2.4rem; padding: 0 .7rem; font-size: .82rem;
+  }
+  .pl-toolbar input { min-width: 12rem; flex: 1; }
+  .pl-add {
+    display: inline-flex; align-items: center; gap: .4rem; min-height: 2.4rem; padding: 0 .9rem;
+    border-radius: .7rem; background: #2dd4bf; color: #042f2e; font-weight: 800; font-size: .82rem;
+  }
+  .pl-table-wrap { overflow-x: auto; border: 1px solid #2a3140; border-radius: .9rem; background: #14171c; }
+  .pl-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+  .pl-table th, .pl-table td { padding: .7rem .65rem; border-bottom: 1px solid #2a3140; text-align: right; }
+  .pl-table tr:hover td { background: rgba(255,255,255,.03); }
+  .pl-thumb { width: 3rem; height: 3rem; border-radius: .55rem; object-fit: cover; background: #0e1014; }
+  .pl-badge { display: inline-flex; border-radius: 999px; padding: .12rem .55rem; font-size: .68rem; font-weight: 800; }
+  .pl-badge.pending { background: rgba(245,158,11,.16); color: #fcd34d; }
+  .pl-badge.approved { background: rgba(16,185,129,.16); color: #6ee7b7; }
+  .pl-badge.rejected { background: rgba(244,63,94,.16); color: #fda4af; }
+  .pl-badge.expired { background: rgba(148,163,184,.16); color: #94a3b8; }
+  .pl-empty { text-align: center; padding: 3rem 1rem; color: #8b93a1; }
+  .pl-cards { display: none; }
+  .pl-modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; place-items: center; z-index: 80; padding: 1rem; }
+  .pl-modal.is-on { display: grid; }
+  .pl-modal__box { width: min(26rem, 100%); background: #14171c; border: 1px solid #2a3140; border-radius: 1rem; padding: 1rem; }
+  .pl-modal textarea { width: 100%; min-height: 6rem; background: #0e1014; color: #e5e7eb; border: 1px solid #2a3140; border-radius: .65rem; padding: .6rem; }
+  @media (max-width: 800px) {
+    .pl-table-wrap { display: none; }
+    .pl-cards { display: grid; gap: .7rem; }
+    .pl-card { background: #14171c; border: 1px solid #2a3140; border-radius: .9rem; padding: .85rem; }
+  }
+  @media (min-width: 801px) and (max-width: 1100px) {
+    .pl-hide-tab { display: none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set st = stats or {} %}
+<div class="space-y-4" x-data="propertyListingsAdmin()">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-bold text-white m-0">مدیریت آگهی‌های ملکی</h2>
+      <p class="text-xs text-[#8b93a1] mt-1 mb-0">تأیید، رد، ویرایش و جستجوی آگهی‌های ثبت‌شده</p>
+    </div>
+    <a class="pl-add" href="{{ url_for('admin.add_land') }}"><i class="fa-solid fa-plus"></i> افزودن آگهی جدید</a>
+  </div>
+
+  <section class="pl-kpi" aria-label="آمار آگهی‌ها">
+    <article><b>{{ (st.total or 0)|toman(false) }}</b><span>کل آگهی‌ها</span></article>
+    <article><b>{{ (st.pending or 0)|toman(false) }}</b><span>در انتظار تایید</span></article>
+    <article><b>{{ (st.approved or 0)|toman(false) }}</b><span>فعال</span></article>
+    <article><b>{{ (st.today or 0)|toman(false) }}</b><span>امروز ثبت شده</span></article>
+  </section>
+
+  <form class="pl-toolbar" method="get" action="{{ url_for('admin.property_listings') }}">
+    <input type="search" name="q" value="{{ q or '' }}" placeholder="جستجو عنوان، مالک، شهر…">
+    <select name="status" onchange="this.form.submit()">
+      {% for key, label in [('all','همه'),('pending','در انتظار'),('approved','تایید شده'),('rejected','رد شده'),('expired','منقضی')] %}
+      <option value="{{ key }}" {% if status_filter == key %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <button class="pl-add" type="submit" style="background:#2a3140;color:#e5e7eb;">اعمال</button>
+  </form>
+
+  {% if rows %}
+  <form method="post" action="{{ url_for('admin.property_listings_bulk') }}" id="plBulk">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="flex flex-wrap gap-2 text-xs text-[#a7b0be]">
+      <button name="action" value="approve" class="pl-add" style="background:#059669;color:#ecfdf5;">تأیید انتخاب‌شده</button>
+      <button name="action" value="reject" class="pl-add" style="background:#be123c;color:#fff;" @click.prevent="openBulkReject()">رد انتخاب‌شده</button>
+      <button name="action" value="delete" class="pl-add" style="background:#3f3f46;color:#e5e7eb;" onclick="return confirm('آگهی‌های انتخاب‌شده حذف شوند؟')">حذف انتخاب‌شده</button>
+    </div>
+    <div class="pl-table-wrap mt-3">
+      <table class="pl-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" @change="toggleAll($event)"></th>
+            <th>تصویر</th>
+            <th>عنوان</th>
+            <th>مالک</th>
+            <th>شهر</th>
+            <th>قیمت</th>
+            <th class="pl-hide-tab">متراژ</th>
+            <th>وضعیت</th>
+            <th class="pl-hide-tab">تاریخ ثبت</th>
+            <th>عملیات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td><input type="checkbox" name="codes" value="{{ row.code }}"></td>
+            <td>
+              {% if row.thumbnail %}
+              <img class="pl-thumb" src="{{ row.thumbnail }}" alt="">
+              {% else %}
+              <div class="pl-thumb"></div>
+              {% endif %}
+            </td>
+            <td>{{ row.title }}</td>
+            <td>{{ row.owner_name }}<div class="text-[11px] text-[#8b93a1]" dir="ltr">{{ row.owner_phone }}</div></td>
+            <td>{{ row.city }}</td>
+            <td>{{ row.price|toman(false) }}</td>
+            <td class="pl-hide-tab">{{ row.sqm|toman(false) }}</td>
+            <td>
+              <span class="pl-badge {{ row.status }}">
+                {% if row.status == 'pending' %}در انتظار
+                {% elif row.status == 'approved' %}تایید شده
+                {% elif row.status == 'rejected' %}رد شده
+                {% else %}منقضی{% endif %}
+              </span>
+            </td>
+            <td class="pl-hide-tab"><span class="jalali-dt" data-dt="{{ row.created_at }}"></span></td>
+            <td>
+              <details class="relative">
+                <summary class="cursor-pointer text-[#2dd4bf] list-none">عملیات</summary>
+                <div class="absolute left-0 z-10 mt-1 min-w-36 rounded-lg border border-[#2a3140] bg-[#0e1014] p-1 text-xs">
+                  {% if row.view_url %}<a class="block px-2 py-1" href="{{ row.view_url }}">مشاهده</a>{% endif %}
+                  {% if row.edit_url %}<a class="block px-2 py-1" href="{{ row.edit_url }}">ویرایش</a>{% endif %}
+                  {% if row.status == 'pending' %}
+                  <form method="post" action="{{ url_for('admin.approve_land', code=row.code) }}" class="block">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="block w-full text-right px-2 py-1" onclick="return confirm('آگهی تأیید شود؟')">تأیید</button>
+                  </form>
+                  <button type="button" class="block w-full text-right px-2 py-1" @click="openReject('{{ row.code }}', '{{ row.title|e }}')">رد</button>
+                  {% endif %}
+                  <form method="post" action="{{ url_for('admin.delete_land') }}" class="block" onsubmit="return confirm('حذف شود؟')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="code" value="{{ row.code }}">
+                    <button class="block w-full text-right px-2 py-1 text-rose-300">حذف</button>
+                  </form>
+                </div>
+              </details>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pl-cards mt-3">
+      {% for row in rows %}
+      <article class="pl-card">
+        <label class="flex items-start gap-3">
+          <input type="checkbox" name="codes" value="{{ row.code }}">
+          <div class="min-w-0 flex-1">
+            <div class="font-bold text-white">{{ row.title }}</div>
+            <div class="text-xs text-[#8b93a1] mt-1">{{ row.city }} · {{ row.owner_name }} · {{ row.price|toman }}</div>
+            <span class="pl-badge {{ row.status }} mt-2">
+              {% if row.status == 'pending' %}در انتظار
+              {% elif row.status == 'approved' %}تایید شده
+              {% elif row.status == 'rejected' %}رد شده
+              {% else %}منقضی{% endif %}
+            </span>
+            <div class="flex flex-wrap gap-2 mt-2 text-xs">
+              {% if row.view_url %}<a href="{{ row.view_url }}">مشاهده</a>{% endif %}
+              {% if row.edit_url %}<a href="{{ row.edit_url }}">ویرایش</a>{% endif %}
+            </div>
+          </div>
+        </label>
+      </article>
+      {% endfor %}
+    </div>
+  </form>
+
+  {% if pagination and pagination.pages > 1 %}
+  <nav class="flex justify-center gap-2 text-sm">
+    {% if pagination.page > 1 %}
+    <a class="px-3 py-2 rounded-lg border border-[#2a3140]" href="?page={{ pagination.page - 1 }}&status={{ status_filter }}&q={{ q }}">قبلی</a>
+    {% endif %}
+    <span class="px-3 py-2">{{ pagination.page }} از {{ pagination.pages }}</span>
+    {% if pagination.page < pagination.pages %}
+    <a class="px-3 py-2 rounded-lg border border-[#2a3140]" href="?page={{ pagination.page + 1 }}&status={{ status_filter }}&q={{ q }}">بعدی</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+
+  {% else %}
+  <div class="pl-empty">
+    <i class="fa-regular fa-building text-4xl text-[#2a3140]"></i>
+    <p class="mt-3 mb-4">هیچ آگهی ملکی یافت نشد</p>
+    <a class="pl-add" href="{{ url_for('admin.add_land') }}">افزودن آگهی جدید</a>
+  </div>
+  {% endif %}
+
+  <div class="pl-modal" :class="rejectOpen ? 'is-on' : ''" @click.self="rejectOpen=false">
+    <div class="pl-modal__box">
+      <h3 class="text-white font-bold m-0" x-text="rejectBulk ? 'رد آگهی‌های انتخاب‌شده' : ('رد آگهی: ' + rejectTitle)"></h3>
+      <form class="mt-3 space-y-3" method="post" :action="rejectAction" id="plRejectForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="reject" x-show="rejectBulk">
+        <div id="plRejectCodes"></div>
+        <p class="text-xs text-[#8b93a1]">دلیل رد الزامی است و برای مالک نمایش داده می‌شود.</p>
+        <textarea name="reject_reason" required placeholder="دلیل رد را بنویسید" x-model="rejectReason"></textarea>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="pl-add" style="background:#2a3140;color:#e5e7eb;" @click="rejectOpen=false">انصراف</button>
+          <button class="pl-add" style="background:#be123c;color:#fff;">ثبت رد</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function propertyListingsAdmin() {
+    var rejectTpl = {{ url_for('admin.reject_land', code='__CODE__')|tojson }};
+    var bulkUrl = {{ url_for('admin.property_listings_bulk')|tojson }};
+    function fillCodes(bulk, code) {
+      var box = document.getElementById('plRejectCodes');
+      if (!box) return;
+      box.innerHTML = '';
+      var codes = bulk
+        ? Array.from(document.querySelectorAll('#plBulk input[name="codes"]:checked')).map(function (el) { return el.value; })
+        : (code ? [code] : []);
+      codes.forEach(function (c) {
+        var i = document.createElement('input');
+        i.type = 'hidden'; i.name = 'codes'; i.value = c;
+        box.appendChild(i);
+      });
+    }
+    return {
+      rejectOpen: false,
+      rejectBulk: false,
+      rejectCode: '',
+      rejectTitle: '',
+      rejectReason: '',
+      get rejectAction() {
+        return this.rejectBulk ? bulkUrl : rejectTpl.replace('__CODE__', encodeURIComponent(this.rejectCode || ''));
+      },
+      openReject(code, title) {
+        this.rejectBulk = false;
+        this.rejectCode = code;
+        this.rejectTitle = title;
+        this.rejectReason = '';
+        this.rejectOpen = true;
+        this.$nextTick(function () { fillCodes(false, code); });
+      },
+      openBulkReject() {
+        this.rejectBulk = true;
+        this.rejectCode = '';
+        this.rejectTitle = '';
+        this.rejectReason = '';
+        this.rejectOpen = true;
+        this.$nextTick(function () { fillCodes(true, ''); });
+      },
+      toggleAll(ev) {
+        document.querySelectorAll('input[name="codes"]').forEach(function (el) {
+          el.checked = ev.target.checked;
+        });
+      }
+    };
+  }
+</script>
+{% endblock %}

@@ -4276,6 +4276,29 @@ def apk_listings_data():
     return _apk_json(listings_payload(session_phone()))
 
 
+@express_partner_bp.get('/my-property', endpoint='my_property')
+@require_partner_access(allow_pending=True)
+def my_property_page():
+    from .my_property import page_payload
+    from .apk_native import session_phone
+    payload = page_payload(session_phone())
+    from .partner_roles import partner_is_special
+    profile = getattr(g, 'express_partner_profile', None)
+    return render_template(
+        'express_partner/my_property.html',
+        property=payload.get('property') or {},
+        is_special=partner_is_special(profile) if profile else False,
+    )
+
+
+@express_partner_bp.get('/api/my-property/data', endpoint='apk_my_property_data')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_data():
+    from .my_property import page_payload
+    from .apk_native import session_phone
+    return _apk_json(page_payload(session_phone()))
+
+
 @express_partner_bp.get('/api/legal/data', endpoint='apk_legal_data')
 @require_partner_access(allow_pending=True, allow_guest=True, json_response=True)
 def apk_legal_data():

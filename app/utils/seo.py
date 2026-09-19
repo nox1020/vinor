@@ -41,6 +41,8 @@ _NOINDEX_PREFIXES = (
     "/express/partner/training",
     "/express/partner/invite",
     "/express/partner/my-properties",
+    "/express/partner/my-property",
+    "/my-property",
     "/express/partner/offline",
     "/express/partner/ai",
 )
@@ -558,6 +560,8 @@ def build_robots_txt() -> str:
         "Disallow: /express/partner/routine",
         "Disallow: /express/partner/ai",
         "Disallow: /express/partner/my-properties",
+        "Disallow: /express/partner/my-property",
+        "Disallow: /my-property",
         "Disallow: /express/partner/ai",
         "",
         f"Sitemap: {SITE_ORIGIN}/sitemap.xml",
