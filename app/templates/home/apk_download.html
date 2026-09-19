@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>وینور برای اندروید</title>
+  <meta name="description" content="دانلود مستقیم اپ اندروید وینور — اپ هوشمند املاک ایران. رایگان، سریع و امن.">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <link rel="canonical" href="https://vinor.ir/">
+  <meta name="theme-color" content="#0e1621">
+  <meta name="color-scheme" content="dark">
+
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+  <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="وینور">
+  <meta property="og:title" content="وینور برای اندروید">
+  <meta property="og:description" content="دانلود مستقیم اپ اندروید وینور. رایگان و بدون فروشگاه.">
+  <meta property="og:url" content="https://vinor.ir/">
+  <meta property="og:image" content="https://vinor.ir/static/icons/icon-512.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="وینور برای اندروید">
+  <meta name="twitter:description" content="دانلود مستقیم اپ اندروید وینور.">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "وینور",
+    "alternateName": "Vinor",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Android",
+    "inLanguage": "fa",
+    "url": "https://vinor.ir/",
+    "image": "https://vinor.ir/static/icons/icon-512.png",
+    "description": "اپ هوشمند املاک ایران. از جستجوی فایل تا بستن معامله.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "IRR" }
+    {%- if android_apk_url -%}
+    ,"downloadUrl": "{{ android_apk_url if android_apk_url.startswith('http') else 'https://vinor.ir' ~ android_apk_url }}"
+    {%- endif -%}
+    {%- if android_apk_version -%}
+    ,"softwareVersion": "{{ android_apk_version }}"
+    {%- endif -%}
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg: #0e1621;
+      --bg-2: #17212b;
+      --blue: #3390ec;
+      --blue-hover: #40a7e3;
+      --text: #fff;
+      --muted: #6d7f8f;
+      --line: #242f3d;
+      --icon: #6ab2f2;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body {
+      font-family: Vazirmatn, "Vazirmatn Fallback", Tahoma, sans-serif;
+      min-height: 100dvh;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    a { color: var(--blue); }
+    .wrap {
+      width: 100%;
+      max-width: 440px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 0 20px;
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0;
+      width: 100%;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: inherit;
+      text-decoration: none;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: .02em;
+    }
+    .brand img {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+    }
+    .web {
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .web:hover { color: var(--blue-hover); }
+    .stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 0 36px;
+      width: 100%;
+    }
+    .hero {
+      width: 100%;
+      text-align: center;
+    }
+    .glow {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      margin: 8px 0 6px;
+    }
+    .glow::before {
+      content: "";
+      position: absolute;
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(51,144,236,.28) 0%, rgba(14,22,33,0) 70%);
+      pointer-events: none;
+    }
+    .app-icon {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      border-radius: 22px;
+      box-shadow: 0 18px 40px rgba(0,0,0,.45);
+    }
+    h1 {
+      margin: 22px 0 8px;
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -.03em;
+      line-height: 1.25;
+    }
+    .lead {
+      margin: 0 auto 28px;
+      max-width: 22rem;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.75;
+      font-weight: 400;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-width: min(100%, 320px);
+      width: 100%;
+      height: 52px;
+      padding: 0 22px;
+      border-radius: 12px;
+      background: var(--blue);
+      color: #fff;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      text-decoration: none;
+      border: 0;
+      cursor: pointer;
+      transition: background .15s ease;
+    }
+    .btn:hover { background: var(--blue-hover); }
+    .btn svg { flex-shrink: 0; }
+    .btn[aria-disabled="true"] {
+      background: #243140;
+      color: var(--muted);
+      pointer-events: none;
+    }
+    .meta {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: .01em;
+    }
+    .meta span + span::before {
+      content: "·";
+      margin: 0 .45em;
+      opacity: .7;
+    }
+    .hint {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .features {
+      list-style: none;
+      margin: 40px 0 0;
+      padding: 0;
+      text-align: right;
+      border-top: 1px solid var(--line);
+    }
+    .features li {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .features li:last-child { border-bottom: 0; }
+    .features li > div { min-width: 0; flex: 1; }
+    .fi {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: #1e2c3a;
+      color: var(--icon);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+    .features h2 {
+      margin: 0 0 4px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .features p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .foot {
+      padding: 8px 0 28px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .foot-links {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin-bottom: 16px;
+    }
+    .foot-links a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .foot-links a:hover { color: var(--blue); }
+    .enamad { margin: 8px 0 14px; }
+    .enamad img { width: 88px; height: 88px; }
+    .copy { opacity: .8; }
+    @media (min-width: 640px) {
+      h1 { font-size: 34px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="{{ url_for('main.index') }}" aria-label="وینور">
+      <img src="{{ url_for('static', filename='icons/icon-96.png') }}" width="34" height="34" alt="">
+      <span>Vinor</span>
+    </a>
+    <a class="web" href="{{ url_for('express_partner.home') }}">نسخه وب</a>
+  </header>
+
+  <main class="stage">
+    <div class="hero">
+      <div class="glow">
+        <img class="app-icon" src="{{ url_for('static', filename='icons/icon-192.png') }}" width="96" height="96" alt="وینور">
+      </div>
+      <h1>وینور برای اندروید</h1>
+      <p class="lead">اپ هوشمند املاک ایران. از جستجوی فایل تا بستن معامله، همه در یک گفتگو.</p>
+
+      {% if android_apk_url %}
+      <a class="btn" href="{{ android_apk_url }}" download="{{ android_apk_filename }}" rel="noopener" data-vinor-apk-download="1">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 3v12m0 0 4.5-4.5M12 15 7.5 10.5M5 19h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        دانلود مستقیم
+      </a>
+      <p class="meta">
+        {% if android_apk_version %}<span>نسخه {{ android_apk_version }}</span>{% endif %}
+        {% if android_apk_size_label %}<span>{{ android_apk_size_label }}</span>{% endif %}
+        <span>APK</span>
+      </p>
+      <p class="hint">رایگان · نصب مستقیم، بدون گوگل‌پلی. در اندروید اجازهٔ نصب از این منبع را بدهید.</p>
+      {% else %}
+      <a class="btn" href="{{ url_for('express_partner.home') }}">ورود به نسخه وب</a>
+      <p class="hint">لینک دانلود اندروید به‌زودی فعال می‌شود.</p>
+      {% endif %}
+
+      <ul class="features">
+        <li>
+          <span class="fi" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M8 10h8M8 14h5M21 12a9 9 0 1 1-3.2-6.9L21 5v4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <div>
+            <h2>با وینور حرف بزن</h2>
+            <p>بگو دنبال چه ملکی هستی؛ وینور فایل مناسب را پیدا می‌کند.</p>
+          </div>
+        </li>
+        <li>
+          <span class="fi" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 20V9l8-5 8 5v11H4Zm4 0v-6h8v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <div>
+            <h2>فروش و همکاری</h2>
+            <p>مشتری را به بازدید ببر و بعد از معاملهٔ تأییدشده پورسانت بگیر.</p>
+          </div>
+        </li>
+        <li>
+          <span class="fi" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 8h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Zm0 0 2.2-3.5A2 2 0 0 1 6.9 3.5h10.2a2 2 0 0 1 1.7.96L21 8M12 14h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <div>
+            <h2>کیف پول شفاف</h2>
+            <p>درآمد و موجودی قابل برداشت را در یک نگاه ببین.</p>
+          </div>
+        </li>
+        <li>
+          <span class="fi" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H12M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v15H6.5A2.5 2.5 0 0 0 4 19.5ZM8 7h8M8 11h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <div>
+            <h2>آموزش و رشد</h2>
+            <p>مسیر فروش را یاد بگیر و سطح همکاری‌ات را بالا ببر.</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <nav class="foot-links" aria-label="پیوندهای قانونی">
+      <a href="{{ url_for('main.privacy') }}">حریم خصوصی</a>
+      <a href="{{ url_for('express_partner.legal_terms') }}">شرایط استفاده</a>
+      <a href="{{ url_for('express_partner.login') }}">ورود</a>
+    </nav>
+    <div class="enamad">
+      <a referrerpolicy="origin" target="_blank" rel="noopener" href="{{ enamad_trust_url }}" aria-label="نماد اعتماد الکترونیکی">
+        <img referrerpolicy="origin" src="{{ url_for('main.enamad_seal') }}" alt="نماد اعتماد الکترونیکی" width="88" height="88" decoding="async" code="{{ enamad_seal_code }}">
+      </a>
+    </div>
+    <div class="copy">vinor.ir</div>
+  </footer>
+</div>
+
+  <script>
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a[data-vinor-apk-download="1"]');
+      if (!a) return;
+      var href = (a.getAttribute('href') || '').trim();
+      if (!href || href === '#') return;
+      e.preventDefault();
+      try {
+        var abs = new URL(href, window.location.origin).href;
+        var frame = document.createElement('iframe');
+        frame.setAttribute('hidden', 'hidden');
+        frame.setAttribute('aria-hidden', 'true');
+        frame.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none';
+        frame.src = abs;
+        document.body.appendChild(frame);
+        window.setTimeout(function () { try { frame.remove(); } catch (_) {} }, 90000);
+      } catch (_) {
+        try { window.location.assign(href); } catch (__) {}
+      }
+    }, true);
+  </script>
+</body>
+</html>

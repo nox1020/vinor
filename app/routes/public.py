@@ -11,7 +11,7 @@ from flask import (
 from . import main_bp
 from ..utils.storage import data_dir, legacy_dir
 from ..utils.storage import load_express_partners_cached, load_landing_views, save_landing_views
-from ..utils.short_urls import public_apk_download_url
+from ..utils.short_urls import apk_public_download_filename, public_apk_download_url
 from datetime import datetime
 from time import time as _now
 
@@ -99,28 +99,84 @@ def inject_vinor_globals():
 # Routes
 # -------------------------
 
+def _apk_size_label(settings) -> str:
+    try:
+        n = int((settings or {}).get("android_apk_size_bytes") or 0)
+        if n >= 1_048_576:
+            return f"{max(1, round(n / 1_048_576))} مگابایت"
+        if n >= 1024:
+            return f"{max(1, round(n / 1024))} کیلوبایت"
+    except Exception:
+        pass
+    return ""
+
+
+def _android_apk_page_vars() -> dict:
+    settings = _get_cached_settings() or {}
+    raw = str((settings or {}).get("android_apk_url") or "").strip()
+    url = public_apk_download_url(settings, external=False) if raw else ""
+    version = str((settings or {}).get("android_apk_version") or "").strip()
+    return {
+        "android_apk_url": url,
+        "android_apk_version": version,
+        "android_apk_size_label": _apk_size_label(settings),
+        "android_apk_filename": apk_public_download_filename(settings) if url else "vinor.apk",
+    }
+
+
+def _guest_index_redirect_headers(resp):
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, private"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    resp.headers["Vary"] = "Cookie"
+    return resp
+
+
 @main_bp.route("/", endpoint="index")
 def index():
-    """
-    صفحهٔ اصلی vinor.ir — مهمان → داشبورد؛ واردشده → داشبورد یا پورسانت بر اساس نقش.
-    لندینگ معرفی همکاری فقط در /partners است.
-    """
-    nxt = request.args.get('next')
-    if nxt and nxt.startswith('/') and not nxt.startswith('//'):
-        resp = redirect(nxt)
-    elif session.get('logged_in'):
-        resp = redirect(url_for('admin.dashboard'))
-    elif session.get('user_phone'):
+    """صفحهٔ اصلی vinor.ir — مهمان: لندینگ دانلود APK؛ واردشده: داشبورد."""
+    nxt = request.args.get("next")
+    if nxt and nxt.startswith("/") and not nxt.startswith("//"):
+        return _guest_index_redirect_headers(redirect(nxt))
+    if session.get("logged_in"):
+        return _guest_index_redirect_headers(redirect(url_for("admin.dashboard")))
+    if session.get("user_phone"):
         from ..express_partner.routes import _redirect_after_login
-        resp = redirect(_redirect_after_login())
-    else:
-        q = (request.args.get('q') or '').strip() or None
-        city = (request.args.get('city') or '').strip() or None
-        resp = redirect(url_for('express_partner.home', q=q, city=city))
-    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
-    resp.headers['Pragma'] = 'no-cache'
-    resp.headers['Expires'] = '0'
-    resp.headers['Vary'] = 'Cookie'
+        return _guest_index_redirect_headers(redirect(_redirect_after_login()))
+
+    web = (request.args.get("web") or "").strip().lower()
+    if web in ("1", "true", "yes", "on"):
+        return _guest_index_redirect_headers(redirect(url_for("express_partner.home")))
+
+    q = (request.args.get("q") or "").strip() or None
+    city = (request.args.get("city") or "").strip() or None
+    if q or city:
+        return _guest_index_redirect_headers(
+            redirect(url_for("express_partner.home", q=q, city=city))
+        )
+
+    try:
+        from ..utils.apk_version import is_vinor_apk_request
+        if is_vinor_apk_request(request):
+            return _guest_index_redirect_headers(redirect(url_for("express_partner.home")))
+    except Exception:
+        pass
+
+    cached = _mc_get("page:apk-landing")
+    if cached:
+        resp = make_response(cached)
+        resp.headers["Cache-Control"] = "private, no-cache"
+        resp.headers["Vary"] = "Cookie"
+        return resp
+
+    html = render_template("home/apk_download.html", **_android_apk_page_vars())
+    try:
+        _mc_set("page:apk-landing", html, ttl=15)
+    except Exception:
+        pass
+    resp = make_response(html)
+    resp.headers["Cache-Control"] = "private, no-cache"
+    resp.headers["Vary"] = "Cookie"
     return resp
 
 @main_bp.route("/partners", endpoint="partners")
@@ -193,26 +249,17 @@ def partners():
         except Exception as e:
             current_app.logger.error(f"Error tracking landing view: {e}", exc_info=True)
 
-    try:
-        from ..utils.storage import load_settings
-        _settings = load_settings()
-    except Exception:
-        _settings = {}
-    _size_label = ''
-    try:
-        n = int((_settings or {}).get('android_apk_size_bytes') or 0)
-        if n >= 1_048_576:
-            _size_label = f'حدود {max(1, round(n / 1_048_576))} مگابایت'
-        elif n >= 1024:
-            _size_label = f'حدود {max(1, round(n / 1024))} کیلوبایت'
-    except Exception:
-        _size_label = ''
-    html = render_template("home/partners.html",
-                           brand="وینور",
-                           domain="vinor.ir",
-                           android_apk_url=public_apk_download_url(_settings),
-                           android_apk_version=_settings.get('android_apk_version') or '',
-                           android_apk_size_label=_size_label)
+    apk = _android_apk_page_vars()
+    html = render_template(
+        "home/partners.html",
+        brand="وینور",
+        domain="vinor.ir",
+        android_apk_url=apk["android_apk_url"],
+        android_apk_version=apk["android_apk_version"],
+        android_apk_size_label=(
+            f"حدود {apk['android_apk_size_label']}" if apk["android_apk_size_label"] else ""
+        ),
+    )
     if guest:
         try:
             _mc_set("page:partners", html, ttl=15)
