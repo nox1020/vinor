@@ -321,7 +321,12 @@ def _admin_upload_src_filter(path: str | None) -> str:
 ADMIN_USERNAME = 'masood1528014@gmail.com'
 ADMIN_PASSWORD = '09121471301'
 ADMIN_LOGIN_OTP_PHONE = '09121471301'
-ADMIN_OTP_COOLDOWN_SECONDS = 60
+
+
+def _admin_otp_cooldown_seconds() -> int:
+    from app.auth.otp.config import admin_otp_resend_cooldown_seconds
+
+    return admin_otp_resend_cooldown_seconds()
 
 # پیش‌فرض صفحه‌بندی برای گرید 3 ستونه
 PER_PAGE_DEFAULT = 9
@@ -950,7 +955,7 @@ def login():
         last_sent_at = max(last_sent_at, float(otp_last_sent(ADMIN_LOGIN_OTP_PHONE, PURPOSE_ADMIN) or 0))
     except Exception:
         pass
-    cooldown_seconds = max(0, ADMIN_OTP_COOLDOWN_SECONDS - int(now_ts - last_sent_at)) if last_sent_at else 0
+    cooldown_seconds = max(0, _admin_otp_cooldown_seconds() - int(now_ts - last_sent_at)) if last_sent_at else 0
 
     def _render_login():
         return render_template(
@@ -962,7 +967,7 @@ def login():
     if request.method == 'GET':
         if cooldown_seconds == 0:
             if _issue_admin_otp():
-                cooldown_seconds = ADMIN_OTP_COOLDOWN_SECONDS
+                cooldown_seconds = _admin_otp_cooldown_seconds()
                 flash('با اشتیاق منتظرتیم', 'info')
             else:
                 flash('ارسال کد ممکن نشد. کمی بعد دوباره تلاش کنید.', 'danger')
@@ -977,7 +982,7 @@ def login():
                 flash(f'امکان ارسال مجدد تا {cooldown_seconds} ثانیه دیگر فعال می‌شود.', 'warning')
                 return _render_login()
             if _issue_admin_otp():
-                cooldown_seconds = ADMIN_OTP_COOLDOWN_SECONDS
+                cooldown_seconds = _admin_otp_cooldown_seconds()
                 flash('با اشتیاق منتظرتیم', 'info')
             else:
                 flash('ارسال کد ممکن نشد. کمی بعد دوباره تلاش کنید.', 'danger')

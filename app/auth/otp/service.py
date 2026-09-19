@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from . import store
 from .config import (
+    admin_otp_resend_cooldown_seconds,
     expose_otp_in_dev,
     otp_digits,
     otp_ip_hourly_limit,
@@ -80,7 +81,12 @@ def _cooldown_left(phone: str, purpose: str) -> int:
     last = store.last_sent_at(phone, purpose)
     if not last:
         return 0
-    left = int(otp_resend_cooldown_seconds() - (time.time() - last))
+    window = (
+        admin_otp_resend_cooldown_seconds()
+        if purpose == PURPOSE_ADMIN
+        else otp_resend_cooldown_seconds()
+    )
+    left = int(window - (time.time() - last))
     return left if left > 0 else 0
 
 

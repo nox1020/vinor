@@ -46,6 +46,10 @@ def otp_resend_cooldown_seconds() -> int:
     return max(1, _env_int("VINOR_OTP_RESEND_COOLDOWN_SECONDS", 60))
 
 
+def admin_otp_resend_cooldown_seconds() -> int:
+    return max(1, _env_int("VINOR_ADMIN_OTP_RESEND_COOLDOWN_SECONDS", 20))
+
+
 def otp_phone_hourly_limit() -> int:
     return max(1, _env_int("VINOR_OTP_PHONE_HOURLY_LIMIT", 5))
 
