@@ -111,6 +111,167 @@ def apply_x_robots_tag(response, path: str, *, logged_in: bool = False):
     return response
 
 
+_OG_IMAGE = f"{SITE_ORIGIN}/static/icons/icon-512.png"
+
+APK_LANDING_FAQS: tuple[tuple[str, str], ...] = (
+    (
+        "وینور چیست؟",
+        "وینور پلتفرم فارسی معاملات ملک است؛ فایل را جستجو می‌کنید، بازدید می‌چینید و مسیر فروش و پورسانت مشاور را در یک اپ دنبال می‌کنید.",
+    ),
+    (
+        "چطور اپ اندروید را نصب کنم؟",
+        "روی دکمهٔ دانلود مستقیم بزنید تا فایل APK ذخیره شود. در تنظیمات اندروید اجازهٔ نصب از این منبع را بدهید و فایل را باز کنید.",
+    ),
+    (
+        "آیا دانلود وینور رایگان است؟",
+        "بله. اپ اندروید وینور رایگان است و بدون گوگل‌پلی، مستقیم از vinor.ir نصب می‌شود.",
+    ),
+    (
+        "نسخه وب هم دارد؟",
+        "بله. اگر الان نمی‌خواهید APK نصب کنید، از نسخهٔ وب وینور در همین دامنه استفاده کنید.",
+    ),
+)
+
+
+def _abs_apk_url(download_url: str) -> str:
+    u = (download_url or "").strip()
+    if not u:
+        return ""
+    if u.startswith("http://") or u.startswith("https://"):
+        if "vinor.ir" in u.replace("www.", ""):
+            return u
+        path = urlparse(u).path or u
+        return f"{SITE_ORIGIN}{path if path.startswith('/') else '/' + path}"
+    if u.startswith("/"):
+        return f"{SITE_ORIGIN}{u}"
+    return f"{SITE_ORIGIN}/{u}"
+
+
+def build_apk_landing_seo(
+    *,
+    version: str = "",
+    size_label: str = "",
+    size_bytes: int = 0,
+    download_url: str = "",
+) -> Dict[str, Any]:
+    """SEO payload for the public Android download homepage."""
+    title = "دانلود اپلیکیشن وینور برای اندروید | املاک"
+    description = (
+        "دانلود مستقیم و رایگان اپ اندروید وینور. جستجوی فایل ملک، همکاری مشاور "
+        "و پورسانت در یک اپ فارسی — نصب APK بدون گوگل‌پلی."
+    )
+    canonical = f"{SITE_ORIGIN}/"
+    abs_download = _abs_apk_url(download_url)
+    org_id = f"{SITE_ORIGIN}/#organization"
+    site_id = f"{SITE_ORIGIN}/#website"
+    page_id = f"{SITE_ORIGIN}/#webpage"
+    app_id = f"{SITE_ORIGIN}/#android-app"
+
+    organization: Dict[str, Any] = {
+        "@type": "Organization",
+        "@id": org_id,
+        "name": "وینور",
+        "alternateName": "Vinor",
+        "url": SITE_ORIGIN,
+        "logo": {
+            "@type": "ImageObject",
+            "url": _OG_IMAGE,
+            "width": 512,
+            "height": 512,
+        },
+    }
+    website: Dict[str, Any] = {
+        "@type": "WebSite",
+        "@id": site_id,
+        "url": canonical,
+        "name": "وینور",
+        "inLanguage": "fa-IR",
+        "publisher": {"@id": org_id},
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": f"{SITE_ORIGIN}/express/partner/home?q={{search_term_string}}",
+            },
+            "query-input": "required name=search_term_string",
+        },
+    }
+    webpage: Dict[str, Any] = {
+        "@type": "WebPage",
+        "@id": page_id,
+        "url": canonical,
+        "name": title,
+        "description": description,
+        "inLanguage": "fa-IR",
+        "isPartOf": {"@id": site_id},
+        "about": {"@id": app_id},
+        "primaryImageOfPage": {
+            "@type": "ImageObject",
+            "url": _OG_IMAGE,
+        },
+    }
+    application: Dict[str, Any] = {
+        "@type": ["SoftwareApplication", "MobileApplication"],
+        "@id": app_id,
+        "name": "وینور",
+        "alternateName": "Vinor",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Android",
+        "softwareRequirements": "Android 5.0",
+        "inLanguage": "fa",
+        "url": canonical,
+        "image": _OG_IMAGE,
+        "description": "اپ هوشمند املاک ایران؛ جستجوی فایل، بازدید، همکاری مشاور و کیف پول.",
+        "publisher": {"@id": org_id},
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "IRR",
+            "availability": "https://schema.org/InStock",
+        },
+    }
+    if abs_download:
+        application["downloadUrl"] = abs_download
+        application["installUrl"] = abs_download
+    ver = (version or "").strip()
+    if ver:
+        application["softwareVersion"] = ver
+    if int(size_bytes or 0) > 0:
+        application["fileSize"] = str(int(size_bytes))
+    elif size_label:
+        application["fileSize"] = size_label
+
+    faq_entities = [
+        {
+            "@type": "Question",
+            "name": q,
+            "acceptedAnswer": {"@type": "Answer", "text": a},
+        }
+        for q, a in APK_LANDING_FAQS
+    ]
+    faq_page: Dict[str, Any] = {
+        "@type": "FAQPage",
+        "@id": f"{SITE_ORIGIN}/#faq",
+        "inLanguage": "fa-IR",
+        "mainEntity": faq_entities,
+    }
+
+    return {
+        "title": title,
+        "description": description,
+        "canonical": canonical,
+        "keywords": "دانلود وینور, اپلیکیشن املاک, اپ مشاور املاک, APK وینور, معاملات ملک",
+        "robots": robots_meta_content("/"),
+        "og_image": _OG_IMAGE,
+        "og_image_alt": "آیکون اپلیکیشن وینور",
+        "faqs": [{"q": q, "a": a} for q, a in APK_LANDING_FAQS],
+        "json_ld": {
+            "@context": "https://schema.org",
+            "@graph": [organization, website, webpage, application, faq_page],
+        },
+    }
+
+
 def _clean_text(val: Any, max_len: int = 320) -> str:
     s = re.sub(r"\s+", " ", str(val or "")).strip()
     if len(s) > max_len:
@@ -416,6 +577,19 @@ def _production_loc(url: str) -> str:
     return SITE_ORIGIN.rstrip("/") + path
 
 
+def _homepage_lastmod() -> str:
+    try:
+        from ..utils.storage import load_settings_cached
+
+        raw = str((load_settings_cached() or {}).get("android_apk_updated_at") or "")
+        day = raw[:10]
+        if re.match(r"^\d{4}-\d{2}-\d{2}$", day):
+            return day
+    except Exception:
+        pass
+    return datetime.now(timezone.utc).date().isoformat()
+
+
 def build_sitemap_entries(app) -> List[Dict[str, str]]:
     """Public indexable URLs with lastmod for sitemap.xml."""
     from flask import url_for
@@ -432,7 +606,7 @@ def build_sitemap_entries(app) -> List[Dict[str, str]]:
         ("express_partner.coop_levels", {}),
     ]
     with app.app_context():
-        entries.append({"loc": SITE_ORIGIN + "/", "lastmod": today})
+        entries.append({"loc": SITE_ORIGIN + "/", "lastmod": _homepage_lastmod()})
         for endpoint, kwargs in static_pages:
             try:
                 loc = url_for(endpoint, _external=True, **kwargs)
@@ -474,11 +648,12 @@ def render_sitemap_xml(entries: List[Dict[str, str]]) -> str:
     ]
     for item in entries:
         loc = item["loc"].replace("&", "&amp;")
+        is_home = loc.rstrip("/") == SITE_ORIGIN or loc.rstrip("/") == SITE_ORIGIN + "/"
         lines.append("  <url>")
         lines.append(f"    <loc>{loc}</loc>")
         lines.append(f"    <lastmod>{item.get('lastmod', '')}</lastmod>")
-        lines.append("    <changefreq>weekly</changefreq>")
-        if loc.rstrip("/") == SITE_ORIGIN or loc.rstrip("/") == SITE_ORIGIN + "/":
+        lines.append(f"    <changefreq>{'daily' if is_home else 'weekly'}</changefreq>")
+        if is_home:
             priority = "1.0"
         elif "/lands/" in loc:
             priority = "0.8"

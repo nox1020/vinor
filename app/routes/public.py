@@ -116,10 +116,15 @@ def _android_apk_page_vars() -> dict:
     raw = str((settings or {}).get("android_apk_url") or "").strip()
     url = public_apk_download_url(settings, external=False) if raw else ""
     version = str((settings or {}).get("android_apk_version") or "").strip()
+    try:
+        size_bytes = int((settings or {}).get("android_apk_size_bytes") or 0)
+    except (TypeError, ValueError):
+        size_bytes = 0
     return {
         "android_apk_url": url,
         "android_apk_version": version,
         "android_apk_size_label": _apk_size_label(settings),
+        "android_apk_size_bytes": size_bytes,
         "android_apk_filename": apk_public_download_filename(settings) if url else "vinor.apk",
     }
 
@@ -165,17 +170,26 @@ def index():
     cached = _mc_get("page:apk-landing")
     if cached:
         resp = make_response(cached)
-        resp.headers["Cache-Control"] = "private, no-cache"
+        resp.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
         resp.headers["Vary"] = "Cookie"
         return resp
 
-    html = render_template("home/apk_download.html", **_android_apk_page_vars())
+    apk = _android_apk_page_vars()
+    from ..utils.seo import build_apk_landing_seo
+
+    seo = build_apk_landing_seo(
+        version=apk["android_apk_version"],
+        size_label=apk["android_apk_size_label"],
+        size_bytes=int(apk.get("android_apk_size_bytes") or 0),
+        download_url=apk["android_apk_url"],
+    )
+    html = render_template("home/apk_download.html", seo=seo, **apk)
     try:
         _mc_set("page:apk-landing", html, ttl=15)
     except Exception:
         pass
     resp = make_response(html)
-    resp.headers["Cache-Control"] = "private, no-cache"
+    resp.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
     resp.headers["Vary"] = "Cookie"
     return resp
 

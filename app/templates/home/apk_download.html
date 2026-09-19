@@ -3,49 +3,46 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>وینور برای اندروید</title>
-  <meta name="description" content="دانلود مستقیم اپ اندروید وینور — اپ هوشمند املاک ایران. رایگان، سریع و امن.">
-  <meta name="robots" content="index, follow, max-image-preview:large">
-  <link rel="canonical" href="https://vinor.ir/">
+  <title>{{ seo.title }}</title>
+  <meta name="description" content="{{ seo.description }}">
+  <meta name="keywords" content="{{ seo.keywords }}">
+  <meta name="robots" content="{{ seo.robots }}">
+  <link rel="canonical" href="{{ seo.canonical }}">
+  <link rel="alternate" hreflang="fa" href="{{ seo.canonical }}">
+  <link rel="alternate" hreflang="x-default" href="{{ seo.canonical }}">
+  <link rel="alternate" href="android-app://ir.vinor.app/https/vinor.ir/">
   <meta name="theme-color" content="#0e1621">
   <meta name="color-scheme" content="dark">
+  <meta name="author" content="وینور | vinor.ir">
 
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
   <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+  <link rel="manifest" href="{{ url_for('serve_manifest') }}">
 
   <meta property="og:type" content="website">
+  <meta property="og:locale" content="fa_IR">
   <meta property="og:site_name" content="وینور">
-  <meta property="og:title" content="وینور برای اندروید">
-  <meta property="og:description" content="دانلود مستقیم اپ اندروید وینور. رایگان و بدون فروشگاه.">
-  <meta property="og:url" content="https://vinor.ir/">
-  <meta property="og:image" content="https://vinor.ir/static/icons/icon-512.png">
+  <meta property="og:title" content="{{ seo.title }}">
+  <meta property="og:description" content="{{ seo.description }}">
+  <meta property="og:url" content="{{ seo.canonical }}">
+  <meta property="og:image" content="{{ seo.og_image }}">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="{{ seo.og_image_alt }}">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="وینور برای اندروید">
-  <meta name="twitter:description" content="دانلود مستقیم اپ اندروید وینور.">
+  <meta name="twitter:title" content="{{ seo.title }}">
+  <meta name="twitter:description" content="{{ seo.description }}">
+  <meta name="twitter:image" content="{{ seo.og_image }}">
+  <meta name="twitter:image:alt" content="{{ seo.og_image_alt }}">
 
+  <link rel="preload" as="image" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+  <link rel="preload" as="font" href="{{ url_for('static', filename='fonts/vazirmatn-bold.woff2') }}" type="font/woff2" crossorigin>
+  <link rel="preload" as="font" href="{{ url_for('static', filename='fonts/vazirmatn-regular.woff2') }}" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
 
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "وینور",
-    "alternateName": "Vinor",
-    "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Android",
-    "inLanguage": "fa",
-    "url": "https://vinor.ir/",
-    "image": "https://vinor.ir/static/icons/icon-512.png",
-    "description": "اپ هوشمند املاک ایران. از جستجوی فایل تا بستن معامله.",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "IRR" }
-    {%- if android_apk_url -%}
-    ,"downloadUrl": "{{ android_apk_url if android_apk_url.startswith('http') else 'https://vinor.ir' ~ android_apk_url }}"
-    {%- endif -%}
-    {%- if android_apk_version -%}
-    ,"softwareVersion": "{{ android_apk_version }}"
-    {%- endif -%}
-  }
-  </script>
+  {% if seo.json_ld %}
+  <script type="application/ld+json">{{ seo.json_ld | tojson }}</script>
+  {% endif %}
 
   <style>
     :root {
@@ -257,6 +254,41 @@
     .enamad { margin: 8px 0 14px; }
     .enamad img { width: 88px; height: 88px; }
     .copy { opacity: .8; }
+    .about {
+      margin: 28px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.8;
+      text-align: right;
+    }
+    .faq {
+      margin: 28px 0 0;
+      text-align: right;
+      border-top: 1px solid var(--line);
+    }
+    .faq > h2 {
+      margin: 18px 0 4px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .faq details {
+      border-bottom: 1px solid var(--line);
+      padding: 12px 0;
+    }
+    .faq summary {
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+      list-style: none;
+    }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq details p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.75;
+    }
     @media (min-width: 640px) {
       h1 { font-size: 34px; }
     }
@@ -266,8 +298,8 @@
 <div class="wrap">
   <header class="top">
     <a class="brand" href="{{ url_for('main.index') }}" aria-label="وینور">
-      <img src="{{ url_for('static', filename='icons/icon-96.png') }}" width="34" height="34" alt="">
-      <span>Vinor</span>
+      <img src="{{ url_for('static', filename='icons/icon-96.png') }}" width="34" height="34" alt="وینور">
+      <span>وینور</span>
     </a>
     <a class="web" href="{{ url_for('express_partner.home') }}">نسخه وب</a>
   </header>
@@ -275,10 +307,10 @@
   <main class="stage">
     <div class="hero">
       <div class="glow">
-        <img class="app-icon" src="{{ url_for('static', filename='icons/icon-192.png') }}" width="96" height="96" alt="وینور">
+        <img class="app-icon" src="{{ url_for('static', filename='icons/icon-192.png') }}" width="96" height="96" alt="آیکون اپلیکیشن وینور" fetchpriority="high" decoding="async">
       </div>
-      <h1>وینور برای اندروید</h1>
-      <p class="lead">اپ هوشمند املاک ایران. از جستجوی فایل تا بستن معامله، همه در یک گفتگو.</p>
+      <h1>دانلود وینور برای اندروید</h1>
+      <p class="lead">اپ هوشمند املاک ایران. جستجوی فایل ملک، همکاری مشاور و پورسانت — از دانلود تا معامله در یک گفتگو.</p>
 
       {% if android_apk_url %}
       <a class="btn" href="{{ android_apk_url }}" download="{{ android_apk_filename }}" rel="noopener" data-vinor-apk-download="1">
@@ -305,7 +337,7 @@
           </span>
           <div>
             <h2>با وینور حرف بزن</h2>
-            <p>بگو دنبال چه ملکی هستی؛ وینور فایل مناسب را پیدا می‌کند.</p>
+            <p>بگو دنبال چه ملکی هستی؛ اپ وینور فایل مناسب را در املاک ایران پیدا می‌کند.</p>
           </div>
         </li>
         <li>
@@ -336,18 +368,41 @@
           </div>
         </li>
       </ul>
+
+      <p class="about">
+        وینور پلتفرم معاملات ملک برای مشاوران و خریداران در ایران است.
+        اپ اندروید را مستقیم از همین صفحه دانلود کنید یا از
+        <a href="{{ url_for('express_partner.home') }}">نسخه وب</a>
+        و صفحهٔ
+        <a href="{{ url_for('main.partners') }}">همکاری با وینور</a>
+        استفاده کنید.
+      </p>
+
+      {% if seo.faqs %}
+      <section class="faq" aria-labelledby="faq-heading">
+        <h2 id="faq-heading">پرسش‌های پرتکرار</h2>
+        {% for item in seo.faqs %}
+        <details>
+          <summary>{{ item.q }}</summary>
+          <p>{{ item.a }}</p>
+        </details>
+        {% endfor %}
+      </section>
+      {% endif %}
     </div>
   </main>
 
   <footer class="foot">
-    <nav class="foot-links" aria-label="پیوندهای قانونی">
+    <nav class="foot-links" aria-label="پیوندهای سایت">
+      <a href="{{ url_for('main.partners') }}">همکاری</a>
+      <a href="{{ url_for('main.help') }}">راهنما</a>
       <a href="{{ url_for('main.privacy') }}">حریم خصوصی</a>
       <a href="{{ url_for('express_partner.legal_terms') }}">شرایط استفاده</a>
       <a href="{{ url_for('express_partner.login') }}">ورود</a>
     </nav>
     <div class="enamad">
       <a referrerpolicy="origin" target="_blank" rel="noopener" href="{{ enamad_trust_url }}" aria-label="نماد اعتماد الکترونیکی">
-        <img referrerpolicy="origin" src="{{ url_for('main.enamad_seal') }}" alt="نماد اعتماد الکترونیکی" width="88" height="88" decoding="async" code="{{ enamad_seal_code }}">
+        <img referrerpolicy="origin" src="{{ url_for('main.enamad_seal') }}" alt="نماد اعتماد الکترونیکی اینماد وینور" width="88" height="88" decoding="async" loading="lazy" code="{{ enamad_seal_code }}">
       </a>
     </div>
     <div class="copy">vinor.ir</div>
