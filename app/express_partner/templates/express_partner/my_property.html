@@ -116,17 +116,17 @@
       <img src="{{ p.cover_image }}" alt="" loading="lazy" decoding="async">
       {% endif %}
       {% if p.is_claimed %}
-      <span class="mp-claimed">مالک تایید شده ✓</span>
+      <span class="mp-claimed">{{ p.badge_label or 'خصوصی' }}</span>
       {% endif %}
       <span class="mp-cover__badge">{{ p.gallery_label or (p.gallery_count or 0)|toman(false) }} عکس</span>
     </div>
-    <h2>{{ p.address }}{% if p.is_claimed %} <span class="mp-claimed-inline">مالک تایید شده ✓</span>{% endif %}</h2>
+    <h2>{{ p.address }}{% if p.is_claimed %} <span class="mp-claimed-inline">{{ p.badge_label or 'خصوصی' }}</span>{% endif %}</h2>
     <p class="mp-sub">{{ p.city }}{% if p.state %}، {{ p.state }}{% endif %}{% if p.zip %} · {{ p.zip_label or p.zip }}{% endif %}</p>
     <p class="mp-meta">{{ p.beds_label or p.beds }} تخت · {{ p.baths_label or p.baths }} حمام · {{ p.sqm_label or p.sqm }} متر مربع · ساخت {{ p.built_year_label or p.built_year }}</p>
+    <p class="mp-tiny" style="margin-top:.55rem;">{{ p.privacy_note or 'فقط شما این قیمت را می‌بینید' }} · برای آگهی منتشر نمی‌شود</p>
     <div class="mp-actions">
-      <a class="mp-btn" href="{{ p.edit_url or url_for('express_partner.settings') }}" data-vinor-express-nav><i class="fas fa-pen"></i> ویرایش اطلاعات</a>
-      <a class="mp-btn" href="{{ p.photos_url or url_for('express_partner.settings') }}" data-vinor-express-nav><i class="fas fa-camera"></i> افزودن عکس</a>
-      <a class="mp-btn" href="{{ p.settings_url or url_for('express_partner.settings') }}" data-vinor-express-nav><i class="fas fa-gear"></i> تنظیمات</a>
+      <a class="mp-btn" href="{{ p.edit_url or url_for('express_partner.my_property') }}" data-vinor-express-nav><i class="fas fa-pen"></i> ویرایش اطلاعات</a>
+      <a class="mp-btn" href="{{ p.photos_url or url_for('express_partner.my_property') }}" data-vinor-express-nav><i class="fas fa-camera"></i> افزودن عکس</a>
     </div>
     {% if p.is_demo %}
     <p class="mp-demo">نمونهٔ نمایشی تا وقتی ملکی به نام شما ثبت شود.</p>
@@ -144,7 +144,7 @@
     <div class="mp-stats">
       <div class="mp-stat"><b>{{ p.price_per_sqm|toman(false) }}</b><span>قیمت هر متر</span></div>
       <div class="mp-stat"><b>{{ p.yearly_change_label }}٪</b><span>تغییر سالانه</span></div>
-      <div class="mp-stat"><b>{{ p.weekly_views|toman(false) }}</b><span>بازدید این هفته</span></div>
+      <div class="mp-stat"><b>{{ (p.neighborhood_avg or 0)|toman(false) }}</b><span>میانگین محله</span></div>
     </div>
   </section>
 
@@ -161,23 +161,12 @@
 
   <div class="mp-insights">
     <section class="mp-card mp-insight">
+      <h3>تغییر قیمت ملک شما</h3>
+      <p>نسبت به ماه گذشته {{ p.monthly_change_label }}٪ و نسبت به سال گذشته {{ p.yearly_change_label }}٪ تغییر کرده است.</p>
+    </section>
+    <section class="mp-card mp-insight">
       <h3>روند بازار محله</h3>
       <p>محله شما {{ p.monthly_change_label }}٪ سریع‌تر از میانگین رشد کرده.</p>
-    </section>
-    <section class="mp-card mp-insight">
-      <h3>ارزش خالص شما</h3>
-      <p>{{ (equity.total or 0)|toman }} — {{ (equity.paid_off_pct or 0)|toman(false) }}٪ از ملک پرداخت شده است.</p>
-      <div class="mp-bar" aria-hidden="true"><i style="width: {{ equity.paid_off_pct or 0 }}%"></i></div>
-    </section>
-    <section class="mp-card mp-insight">
-      <h3>همسایه‌های فروشی</h3>
-      {% for n in (p.nearby_listings or [])[:3] %}
-      <div class="mp-near">
-        <span>{{ n.address }} · {{ n.distance_km }} کیلومتر</span>
-        <b>{{ n.price|toman(false) }}</b>
-      </div>
-      {% endfor %}
-      <a class="mp-link" href="{{ url_for('express_partner.home') }}" data-vinor-express-nav>مشاهده همه</a>
     </section>
   </div>
 
@@ -198,12 +187,6 @@
       </li>
       {% endfor %}
     </ul>
-  </section>
-
-  <section class="mp-cta">
-    <h3>آماده فروش هستید؟</h3>
-    <p>ارزیابی رایگان ملک را بگیرید تا قیمت پیشنهادی فروش را دقیق‌تر ببینید.</p>
-    <a href="{{ p.sell_url or url_for('express_partner.special_listings') if is_special|default(false) else url_for('express_partner.home') }}" data-vinor-express-nav>دریافت ارزیابی رایگان</a>
   </section>
 </article>
 

@@ -112,20 +112,17 @@ def demo_property() -> Dict[str, Any]:
         "monthly_change_label": fa_pct(4.2),
         "yearly_change_pct": 11.8,
         "yearly_change_label": fa_pct(11.8),
-        "weekly_views": 45,
+        "weekly_views": 0,
         "is_claimed": True,
+        "badge_label": "خصوصی",
+        "privacy_note": "فقط شما این قیمت را می‌بینید",
         "neighborhood_avg": 11_750_000_000,
         "equity": {"total": 7_800_000_000, "paid_off_pct": 62},
         "price_history": history,
-        "nearby_listings": [
-            {"address": "کاوه، پلاک ۱۸", "price": 11_200_000_000, "distance_km": 0.3},
-            {"address": "جردن، خیابان چهارم", "price": 13_400_000_000, "distance_km": 0.8},
-            {"address": "زعفرانیه، کوچهٔ گل", "price": 15_900_000_000, "distance_km": 1.4},
-        ],
+        "nearby_listings": [],
         "activity": [
             {"type": "price", "text": "قیمت تخمینی به‌روز شد", "date": "۳ روز پیش"},
-            {"type": "view", "text": "۴۵ نفر ملک شما را دیدند", "date": "۱ هفته پیش"},
-            {"type": "photo", "text": "عکس جدید اضافه شد", "date": "۲ هفته پیش"},
+            {"type": "price", "text": "تغییر ماهانه محاسبه شد", "date": "۱ هفته پیش"},
         ],
         "edit_url": "",
         "photos_url": "",
@@ -146,18 +143,8 @@ def _from_land(land: Dict[str, Any], nearby: List[Dict[str, Any]]) -> Dict[str, 
     equity_pct = 62
     code = str(land.get("code") or "").strip()
     nearby_rows = []
-    for item in nearby[:3]:
-        nearby_rows.append({
-            "address": str(item.get("title") or item.get("location") or "ملک نزدیک").strip() or "ملک نزدیک",
-            "price": _as_int(item.get("price_total") or item.get("price")),
-            "distance_km": round(0.4 + 0.5 * len(nearby_rows), 1),
-            "code": str(item.get("code") or "").strip(),
-        })
-    if not nearby_rows:
-        nearby_rows = demo_property()["nearby_listings"]
-    views = _as_int(land.get("_public_views_count") or land.get("views") or 45, 45)
     try:
-        edit_url = url_for("express_partner.special_listings") if code else ""
+        edit_url = url_for("express_partner.my_property")
     except Exception:
         edit_url = ""
     return {
@@ -185,21 +172,22 @@ def _from_land(land: Dict[str, Any], nearby: List[Dict[str, Any]]) -> Dict[str, 
         "monthly_change_label": fa_pct(monthly),
         "yearly_change_pct": yearly,
         "yearly_change_label": fa_pct(yearly),
-        "weekly_views": views or 45,
+        "weekly_views": 0,
         "is_claimed": True,
+        "badge_label": "خصوصی",
+        "privacy_note": "فقط شما این قیمت را می‌بینید",
         "neighborhood_avg": int(round(price * 0.94)),
         "equity": {"total": int(round(price * equity_pct / 100.0)), "paid_off_pct": equity_pct},
         "price_history": history,
         "nearby_listings": nearby_rows,
         "activity": [
             {"type": "price", "text": "قیمت تخمینی به‌روز شد", "date": "۳ روز پیش"},
-            {"type": "view", "text": f"{fa_digits(views or 45)} نفر ملک شما را دیدند", "date": "۱ هفته پیش"},
-            {"type": "photo", "text": "عکس جدید اضافه شد", "date": "۲ هفته پیش"},
+            {"type": "price", "text": f"تغییر ماهانه {fa_pct(monthly)}٪ ثبت شد", "date": "۱ هفته پیش"},
         ],
         "edit_url": edit_url,
         "photos_url": edit_url,
-        "settings_url": url_for("express_partner.settings") if edit_url else "",
-        "sell_url": edit_url,
+        "settings_url": "",
+        "sell_url": "",
     }
 
 
@@ -210,41 +198,9 @@ def property_for_user(me_phone: str) -> Optional[Dict[str, Any]]:
         owned = listings_owned_home(me_phone) if me_phone else []
     except Exception:
         owned = []
-    city = ""
     land = owned[0] if owned else None
     if land:
-        city = str(land.get("city") or "").strip()
-    nearby: List[Dict[str, Any]] = []
-    if city:
-        try:
-            from ..utils.storage import load_ads_cached
-            ads = load_ads_cached() or []
-        except Exception:
-            ads = []
-        for item in ads:
-            if not isinstance(item, dict):
-                continue
-            if land and str(item.get("code") or "") == str(land.get("code") or ""):
-                continue
-            try:
-                from .special_listings import is_owner_home
-                if is_owner_home(item):
-                    continue
-            except Exception:
-                pass
-            if item.get("public") is False:
-                continue
-            if not item.get("is_express"):
-                continue
-            if str(item.get("status") or "").lower() not in ("", "approved", "active"):
-                continue
-            if str(item.get("city") or "").strip() != city:
-                continue
-            nearby.append(item)
-            if len(nearby) >= 6:
-                break
-    if land:
-        return _from_land(land, nearby)
+        return _from_land(land, [])
     return None
 
 

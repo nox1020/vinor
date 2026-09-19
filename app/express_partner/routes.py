@@ -4300,7 +4300,7 @@ def my_property_page():
         if err:
             flash(SPECIAL_LISTING_ERRORS.get(err, 'ثبت ملک ناموفق بود.'), 'error')
             return _render_owner_home_form(me_phone, is_special=is_special)
-        flash(f'ملک شما با کد {rec.get("code")} ثبت شد و فقط در پنل شما و ادمین دیده می‌شود.', 'success')
+        flash(f'ملک شما با کد {rec.get("code")} ثبت شد. قیمت و تغییرات فقط در پنل شما دیده می‌شود.', 'success')
         return redirect(url_for('express_partner.my_property'))
 
     payload = page_payload(me_phone)
@@ -4331,16 +4331,18 @@ def _render_owner_home_form(me_phone: str = '', *, is_special: bool = False):
         listing_upload_video_url=url_for('express_partner.my_property_upload_video'),
         listing_upload_document_url=url_for('express_partner.my_property_upload_document'),
         listing_page_title='ثبت ملک من',
-        listing_page_subtitle='همان فرم ثبت آگهی پلاس — فقط در پنل شما و ادمین ذخیره می‌شود',
+        listing_page_subtitle='قیمت‌گذاری شخصی — منتشر نمی‌شود و فقط تغییرات قیمت را برای شما نشان می‌دهد',
         listing_vinor_contact_locked=True,
         listing_vinor_contact_default=phone,
         listing_hide_contact_section=True,
         listing_hide_builtin_header=True,
         listing_hide_expert_verified=True,
         listing_hide_broadcast=True,
+        listing_hide_commission=True,
+        listing_hide_payment=True,
         listing_partner_shell=True,
         hide_header=True,
-        listing_submit_label='ثبت و انتشار آگهی',
+        listing_submit_label='ثبت ملک من',
         has_property=False,
         property={},
         is_special=is_special,

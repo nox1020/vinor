@@ -335,7 +335,9 @@ def create_special_listing_from_express_form(
         return None, "invalid_price"
 
     payment_method = (form.get("payment_method") or "").strip()
-    if not payment_method:
+    if owner_home:
+        payment_method = payment_method or "توافقی"
+    elif not payment_method:
         return None, "payment_required"
 
     vinor_contact = _norm_phone(owner)
@@ -361,14 +363,23 @@ def create_special_listing_from_express_form(
     images = _normalize_images_from_form(form, files)
 
     pct_raw = (form.get("express_commission_pct") or "").strip()
-    if not pct_raw:
-        return None, "commission_required"
-    try:
-        express_commission_pct = float(pct_raw)
-        if express_commission_pct <= 0 or express_commission_pct > 100:
+    if owner_home:
+        pct_raw = pct_raw or "0"
+        try:
+            express_commission_pct = float(pct_raw)
+            if express_commission_pct < 0 or express_commission_pct > 100:
+                return None, "invalid_commission"
+        except (ValueError, TypeError):
+            express_commission_pct = 0.0
+    else:
+        if not pct_raw:
+            return None, "commission_required"
+        try:
+            express_commission_pct = float(pct_raw)
+            if express_commission_pct <= 0 or express_commission_pct > 100:
+                return None, "invalid_commission"
+        except (ValueError, TypeError):
             return None, "invalid_commission"
-    except (ValueError, TypeError):
-        return None, "invalid_commission"
 
     price_per_meter_raw = (form.get("price_per_meter") or "").strip()
     price_per_meter_clean = (

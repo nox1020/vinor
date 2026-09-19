@@ -716,6 +716,7 @@
         </div>
       </div>
 
+      {% if not listing_hide_commission|default(false) %}
       <div class="dv-row">
         <label class="dv-label" for="express_commission_pct">پورسانت ٪ <span class="text-red-500">*</span></label>
         <div class="dv-field">
@@ -724,6 +725,10 @@
         </div>
       </div>
       <input type="hidden" id="express_commission_amount" value="" tabindex="-1" aria-hidden="true">
+      {% else %}
+      <input type="hidden" name="express_commission_pct" id="express_commission_pct" value="0">
+      <input type="hidden" id="express_commission_amount" value="" tabindex="-1" aria-hidden="true">
+      {% endif %}
 
       <div class="dv-row dv-row-stack">
         <label class="dv-label w-full max-w-none" for="ad_desc">توضیحات</label>
@@ -760,6 +765,7 @@
 
     <!-- پرداخت -->
     {% set _pm_val = request.form.get('payment_method') if request.method == 'POST' else fld('payment_method', '') %}
+    {% if not listing_hide_payment|default(false) %}
     <section class="dv-card">
       <p class="dv-card-title">نحوه پرداخت</p>
       <div class="dv-row">
@@ -797,6 +803,9 @@
         </div>
       </div>
     </section>
+    {% else %}
+    <input type="hidden" name="payment_method" id="payment_method" value="توافقی">
+    {% endif %}
 
     <!-- موقعیت نقشه -->
     <section class="dv-card" id="mapSection">
