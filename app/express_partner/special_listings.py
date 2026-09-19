@@ -95,6 +95,21 @@ def _next_numeric_code(lands: List[Dict[str, Any]]) -> str:
     return str(max(existing) + 1) if existing else "1"
 
 
+def is_owner_home(land: Dict[str, Any] | None) -> bool:
+    """ملک ثبت‌شده از «ملک من» — خصوصی است و نباید منتشر شود."""
+    if not isinstance(land, dict):
+        return False
+    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+    if land.get("owner_home") or extras.get("owner_home") or extras.get("listed_by_owner"):
+        return True
+    src = str(land.get("source") or "").strip().lower()
+    if src in ("my_property", "owner_home"):
+        return True
+    if str(land.get("ad_type") or "").strip().lower() == "owner_home":
+        return True
+    return False
+
+
 def listings_owned_by(phone: str) -> List[Dict[str, Any]]:
     ph = _norm_phone(phone)
     if not ph:
@@ -104,7 +119,29 @@ def listings_owned_by(phone: str) -> List[Dict[str, Any]]:
     for land in lands if isinstance(lands, list) else []:
         if not isinstance(land, dict):
             continue
+        if is_owner_home(land):
+            continue
         if not land.get("is_express"):
+            continue
+        owner = _norm_phone(str(land.get("owner") or land.get("user_phone") or ""))
+        if owner == ph:
+            out.append(land)
+    try:
+        out.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+    except Exception:
+        pass
+    return out
+
+
+def listings_owned_home(phone: str) -> List[Dict[str, Any]]:
+    """ملک‌های خصوصی «ملک من» متعلق به این شماره."""
+    ph = _norm_phone(phone)
+    if not ph:
+        return []
+    lands = load_ads_cached() or []
+    out: List[Dict[str, Any]] = []
+    for land in lands if isinstance(lands, list) else []:
+        if not isinstance(land, dict) or not is_owner_home(land):
             continue
         owner = _norm_phone(str(land.get("owner") or land.get("user_phone") or ""))
         if owner == ph:
@@ -184,6 +221,8 @@ def listings_owned_by_plus_partners() -> List[Dict[str, Any]]:
     for land in lands if isinstance(lands, list) else []:
         if not isinstance(land, dict) or not land.get("is_express"):
             continue
+        if is_owner_home(land):
+            continue
         if is_admin_created_express_listing(land):
             continue
         owner_raw = str(land.get("owner") or land.get("user_phone") or "")
@@ -260,8 +299,10 @@ def create_special_listing_from_express_form(
     form,
     files,
     cities: Optional[List[str]] = None,
+    owner_home: bool = False,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """ثبت آگهی اکسپرس همکار ویژه — همان فیلدهای فرم ادمین."""
+    """ثبت آگهی اکسپرس همکار ویژه — همان فیلدهای فرم ادمین.
+    owner_home=True: ملک خصوصی «ملک من»؛ در lands.json می‌ماند، منتشر نمی‌شود."""
     owner = _norm_phone(owner_phone)
     if not owner:
         return None, "invalid_owner"
@@ -413,6 +454,22 @@ def create_special_listing_from_express_form(
             "listed_by_special": True,
         },
     }
+    if owner_home:
+        rec["is_express"] = False
+        rec["ad_type"] = "owner_home"
+        rec["status"] = "pending"
+        rec["express_status"] = "hidden"
+        rec["owner_home"] = True
+        rec["public"] = False
+        rec["source"] = "my_property"
+        rec["extras"] = {
+            "express_commission_pct": express_commission_pct,
+            "express_commission_amount": express_commission_amount,
+            "listed_by_special": False,
+            "listed_by_owner": True,
+            "owner_home": True,
+            "public": False,
+        }
     if video_path:
         rec["video"] = video_path
     if latitude is not None:

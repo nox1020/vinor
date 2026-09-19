@@ -10,6 +10,9 @@
       <div>
         <h2 class="text-white text-lg font-bold m-0">{{ land.title or 'بدون عنوان' }}</h2>
         <p class="text-xs text-[#8b93a1] mt-1 mb-0">کد {{ land.code }} · {{ land.city or land.location or '—' }}</p>
+        {% if land.owner_home or land.source == 'my_property' or land.ad_type == 'owner_home' %}
+        <p class="text-xs text-teal-300 mt-1 mb-0">ملک من · خصوصی · منتشر نشده</p>
+        {% endif %}
       </div>
       <span class="text-xs px-2 py-1 rounded-full bg-white/5 text-[#c7c7cc]">{{ land.status or 'pending' }}</span>
     </div>

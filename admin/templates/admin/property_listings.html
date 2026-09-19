@@ -32,6 +32,7 @@
   .pl-badge.approved { background: rgba(16,185,129,.16); color: #6ee7b7; }
   .pl-badge.rejected { background: rgba(244,63,94,.16); color: #fda4af; }
   .pl-badge.expired { background: rgba(148,163,184,.16); color: #94a3b8; }
+  .pl-badge.owner-home { background: rgba(45,212,191,.16); color: #5eead4; }
   .pl-empty { text-align: center; padding: 3rem 1rem; color: #8b93a1; }
   .pl-cards { display: none; }
   .pl-modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; place-items: center; z-index: 80; padding: 1rem; }
@@ -112,7 +113,7 @@
               <div class="pl-thumb"></div>
               {% endif %}
             </td>
-            <td>{{ row.title }}</td>
+            <td>{{ row.title }}{% if row.owner_home %} <span class="pl-badge owner-home">ملک من</span>{% endif %}</td>
             <td>{{ row.owner_name }}<div class="text-[11px] text-[#8b93a1]" dir="ltr">{{ row.owner_phone }}</div></td>
             <td>{{ row.city }}</td>
             <td>{{ row.price|toman(false) }}</td>
@@ -159,7 +160,7 @@
         <label class="flex items-start gap-3">
           <input type="checkbox" name="codes" value="{{ row.code }}">
           <div class="min-w-0 flex-1">
-            <div class="font-bold text-white">{{ row.title }}</div>
+            <div class="font-bold text-white">{{ row.title }}{% if row.owner_home %} <span class="pl-badge owner-home">ملک من</span>{% endif %}</div>
             <div class="text-xs text-[#8b93a1] mt-1">{{ row.city }} · {{ row.owner_name }} · {{ row.price|toman }}</div>
             <span class="pl-badge {{ row.status }} mt-2">
               {% if row.status == 'pending' %}در انتظار

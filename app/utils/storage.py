@@ -182,6 +182,22 @@ def load_ads_cached(app=None):
     _EXPRESS_LANDS_CACHE.update({"path": None, "mtime": None, "size": None, "data": None})
     return data
 
+
+def _is_owner_home_land(land) -> bool:
+    """ملک خصوصی «ملک من» نباید در فید عمومی اکسپرس بیاید."""
+    if not isinstance(land, dict):
+        return False
+    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+    if land.get("owner_home") or extras.get("owner_home") or extras.get("listed_by_owner"):
+        return True
+    src = str(land.get("source") or "").strip().lower()
+    if src in ("my_property", "owner_home"):
+        return True
+    if str(land.get("ad_type") or "").strip().lower() == "owner_home":
+        return True
+    return False
+
+
 def load_express_lands_cached(app=None):
     """لود فایل‌های اکسپرس فیلتر شده با کش جداگانه برای سرعت بیشتر."""
     app = _resolve_app(app)
@@ -202,7 +218,7 @@ def load_express_lands_cached(app=None):
     all_lands = load_ads_cached(app)
     express_lands = [
         l for l in all_lands
-        if l.get('is_express', False)
+        if l.get('is_express', False) and not _is_owner_home_land(l)
     ]
     # مرتب‌سازی بر اساس تاریخ ایجاد (جدیدترین اول)
     express_lands.sort(key=lambda x: x.get('created_at', ''), reverse=True)
@@ -239,7 +255,7 @@ def _update_ads_cache_after_save(path, items):
     # به‌روزرسانی کش اکسپرس
     express_lands = [
         l for l in items
-        if l.get('is_express', False)
+        if l.get('is_express', False) and not _is_owner_home_land(l)
     ]
     express_lands.sort(key=lambda x: x.get('created_at', ''), reverse=True)
     _EXPRESS_LANDS_CACHE.update({"path": path, "mtime": mtime, "size": size, "data": express_lands})

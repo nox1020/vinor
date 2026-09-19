@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from flask import url_for
 
@@ -203,11 +203,11 @@ def _from_land(land: Dict[str, Any], nearby: List[Dict[str, Any]]) -> Dict[str, 
     }
 
 
-def property_for_user(me_phone: str) -> Dict[str, Any]:
+def property_for_user(me_phone: str) -> Optional[Dict[str, Any]]:
     owned: List[Dict[str, Any]] = []
     try:
-        from .special_listings import listings_owned_by
-        owned = listings_owned_by(me_phone) if me_phone else []
+        from .special_listings import listings_owned_home
+        owned = listings_owned_home(me_phone) if me_phone else []
     except Exception:
         owned = []
     city = ""
@@ -226,6 +226,16 @@ def property_for_user(me_phone: str) -> Dict[str, Any]:
                 continue
             if land and str(item.get("code") or "") == str(land.get("code") or ""):
                 continue
+            try:
+                from .special_listings import is_owner_home
+                if is_owner_home(item):
+                    continue
+            except Exception:
+                pass
+            if item.get("public") is False:
+                continue
+            if not item.get("is_express"):
+                continue
             if str(item.get("status") or "").lower() not in ("", "approved", "active"):
                 continue
             if str(item.get("city") or "").strip() != city:
@@ -235,13 +245,19 @@ def property_for_user(me_phone: str) -> Dict[str, Any]:
                 break
     if land:
         return _from_land(land, nearby)
-    return demo_property()
+    return None
 
 
 def page_payload(me_phone: str) -> Dict[str, Any]:
     prop = property_for_user(me_phone)
+    try:
+        form_url = url_for("express_partner.my_property")
+    except Exception:
+        form_url = "/express/partner/my-property"
     return json_ready({
         "ok": True,
         "logged_in": bool(me_phone),
-        "property": prop,
+        "has_property": bool(prop),
+        "form_url": form_url,
+        "property": prop or {},
     })

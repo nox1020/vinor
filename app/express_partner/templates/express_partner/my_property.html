@@ -108,6 +108,7 @@
   .mp-demo { margin: .75rem 0 0; color: #fcd34d; font-size: .72rem; }
 </style>
 
+{% if has_property %}
 <article class="mp" data-mp-root>
   <header>
     <div class="mp-cover">
@@ -254,4 +255,20 @@
   draw(12);
 })();
 </script>
+{% else %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="mx-auto w-full max-w-lg px-3 sm:px-4 pt-2 space-y-2">
+      {% for category, message in messages %}
+      <div class="rounded-xl border px-4 py-3 text-sm {% if category in ['error', 'danger'] %}border-rose-500/30 bg-rose-950/30 text-rose-200{% else %}border-emerald-500/30 bg-emerald-950/30 text-emerald-200{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endwith %}
+  <div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] text-zinc-100">
+    {% include 'admin/partials/_express_listing_form.html' %}
+  </div>
+{% endif %}
 {% endblock %}

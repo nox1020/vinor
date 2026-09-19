@@ -747,7 +747,7 @@
         </label>
       </div>
       {% endif %}
-      {% if not is_edit %}
+      {% if not is_edit and not listing_hide_broadcast|default(false) %}
       <div class="dv-row">
         <label class="dv-toggle">
           <span class="dv-label max-w-none flex-1">ارسال به همه همکاران</span>

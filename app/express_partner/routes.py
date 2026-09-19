@@ -4276,18 +4276,74 @@ def apk_listings_data():
     return _apk_json(listings_payload(session_phone()))
 
 
-@express_partner_bp.get('/my-property', endpoint='my_property')
+@express_partner_bp.route('/my-property', methods=['GET', 'POST'], endpoint='my_property')
 @require_partner_access(allow_pending=True)
 def my_property_page():
     from .my_property import page_payload
     from .apk_native import session_phone
-    payload = page_payload(session_phone())
     from .partner_roles import partner_is_special
+    from .special_listings import SPECIAL_LISTING_ERRORS, create_special_listing_from_express_form
+
+    me_phone = session_phone()
     profile = getattr(g, 'express_partner_profile', None)
+    is_special = partner_is_special(profile) if profile else False
+    cities = load_active_cities() or []
+
+    if request.method == 'POST':
+        rec, err = create_special_listing_from_express_form(
+            owner_phone=me_phone,
+            form=request.form,
+            files=request.files,
+            cities=cities,
+            owner_home=True,
+        )
+        if err:
+            flash(SPECIAL_LISTING_ERRORS.get(err, 'ثبت ملک ناموفق بود.'), 'error')
+            return _render_owner_home_form(me_phone, is_special=is_special)
+        flash(f'ملک شما با کد {rec.get("code")} ثبت شد و فقط در پنل شما و ادمین دیده می‌شود.', 'success')
+        return redirect(url_for('express_partner.my_property'))
+
+    payload = page_payload(me_phone)
+    if not payload.get('has_property'):
+        return _render_owner_home_form(me_phone, is_special=is_special)
     return render_template(
         'express_partner/my_property.html',
         property=payload.get('property') or {},
-        is_special=partner_is_special(profile) if profile else False,
+        has_property=True,
+        is_special=is_special,
+    )
+
+
+def _render_owner_home_form(me_phone: str = '', *, is_special: bool = False):
+    """همان فرم ثبت آگهی پلاس — بدون انتشار عمومی."""
+    cities = load_active_cities() or []
+    phone = (me_phone or '').strip()
+    return render_template(
+        'express_partner/my_property.html',
+        cities=cities,
+        is_edit=False,
+        land={},
+        form_values={'vinor_contact': phone} if phone else {},
+        listing_code='',
+        listing_form_action=url_for('express_partner.my_property'),
+        listing_back_url=url_for('express_partner.home'),
+        listing_upload_image_url=url_for('express_partner.my_property_upload_image'),
+        listing_upload_video_url=url_for('express_partner.my_property_upload_video'),
+        listing_upload_document_url=url_for('express_partner.my_property_upload_document'),
+        listing_page_title='ثبت ملک من',
+        listing_page_subtitle='همان فرم ثبت آگهی پلاس — فقط در پنل شما و ادمین ذخیره می‌شود',
+        listing_vinor_contact_locked=True,
+        listing_vinor_contact_default=phone,
+        listing_hide_contact_section=True,
+        listing_hide_builtin_header=True,
+        listing_hide_expert_verified=True,
+        listing_hide_broadcast=True,
+        listing_partner_shell=True,
+        hide_header=True,
+        listing_submit_label='ثبت و انتشار آگهی',
+        has_property=False,
+        property={},
+        is_special=is_special,
     )
 
 
@@ -4430,6 +4486,15 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
             from .special_listings import is_admin_created_express_listing
 
             if is_admin_created_express_listing(land):
+                continue
+        except Exception:
+            pass
+        if land.get('public') is False or land.get('owner_home'):
+            continue
+        try:
+            from .special_listings import is_owner_home
+
+            if is_owner_home(land):
                 continue
         except Exception:
             pass
@@ -9060,11 +9125,7 @@ def special_listings_divar_profile():
     return redirect(url_for('express_partner.special_listings', divar_open=1))
 
 
-@express_partner_bp.route('/listings/upload-image', methods=['POST'], endpoint='special_listing_upload_image')
-@require_special_partner(json_response=True)
-def special_listing_upload_image():
-    """آپلود فوری تصویر — همان رفتار فرم ادمین اکسپرس."""
-    from werkzeug.utils import secure_filename
+def _listing_upload_image_json():
     from ..utils.images import normalize_upload_url, save_upload_image
 
     f = request.files.get('file') or request.files.get('image')
@@ -9084,10 +9145,7 @@ def special_listing_upload_image():
     })
 
 
-@express_partner_bp.route('/listings/upload-video', methods=['POST'], endpoint='special_listing_upload_video')
-@require_special_partner(json_response=True)
-def special_listing_upload_video():
-    """آپلود فوری ویدئو — همان رفتار فرم ادمین اکسپرس."""
+def _listing_upload_video_json():
     from werkzeug.utils import secure_filename
     from ..utils.images import normalize_upload_url
 
@@ -9113,10 +9171,7 @@ def special_listing_upload_video():
     })
 
 
-@express_partner_bp.route('/listings/upload-document', methods=['POST'], endpoint='special_listing_upload_document')
-@require_special_partner(json_response=True)
-def special_listing_upload_document():
-    """آپلود فوری مدرک — همان رفتار فرم ادمین اکسپرس."""
+def _listing_upload_document_json():
     from .special_listings import save_special_listing_upload_document
 
     f = request.files.get('file') or request.files.get('document')
@@ -9137,6 +9192,45 @@ def special_listing_upload_document():
         'path': stored,
         'name': f.filename,
     })
+
+
+@express_partner_bp.route('/listings/upload-image', methods=['POST'], endpoint='special_listing_upload_image')
+@require_special_partner(json_response=True)
+def special_listing_upload_image():
+    """آپلود فوری تصویر — همان رفتار فرم ادمین اکسپرس."""
+    return _listing_upload_image_json()
+
+
+@express_partner_bp.route('/listings/upload-video', methods=['POST'], endpoint='special_listing_upload_video')
+@require_special_partner(json_response=True)
+def special_listing_upload_video():
+    """آپلود فوری ویدئو — همان رفتار فرم ادمین اکسپرس."""
+    return _listing_upload_video_json()
+
+
+@express_partner_bp.route('/listings/upload-document', methods=['POST'], endpoint='special_listing_upload_document')
+@require_special_partner(json_response=True)
+def special_listing_upload_document():
+    """آپلود فوری مدرک — همان رفتار فرم ادمین اکسپرس."""
+    return _listing_upload_document_json()
+
+
+@express_partner_bp.route('/my-property/upload-image', methods=['POST'], endpoint='my_property_upload_image')
+@require_partner_access(allow_pending=True, json_response=True)
+def my_property_upload_image():
+    return _listing_upload_image_json()
+
+
+@express_partner_bp.route('/my-property/upload-video', methods=['POST'], endpoint='my_property_upload_video')
+@require_partner_access(allow_pending=True, json_response=True)
+def my_property_upload_video():
+    return _listing_upload_video_json()
+
+
+@express_partner_bp.route('/my-property/upload-document', methods=['POST'], endpoint='my_property_upload_document')
+@require_partner_access(allow_pending=True, json_response=True)
+def my_property_upload_document():
+    return _listing_upload_document_json()
 
 
 def _render_special_listing_form(me_phone: str = ''):

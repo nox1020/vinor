@@ -34,6 +34,16 @@ def _owner_name(land: Dict[str, Any]) -> str:
     ).strip() or "—"
 
 
+def _is_owner_home(land: Dict[str, Any]) -> bool:
+    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+    if land.get("owner_home") or extras.get("owner_home") or extras.get("listed_by_owner"):
+        return True
+    src = str(land.get("source") or "").strip().lower()
+    if src in ("my_property", "owner_home"):
+        return True
+    return str(land.get("ad_type") or "").strip().lower() == "owner_home"
+
+
 def _owner_phone(land: Dict[str, Any]) -> str:
     return str(
         land.get("owner")
@@ -98,6 +108,7 @@ def to_row(land: Dict[str, Any], expiry: Optional[Dict[str, Any]] = None) -> Dic
         "created_at": created,
         "created_today": _is_today(created),
         "rejection_reason": str(land.get("reject_reason") or land.get("rejection_reason") or "").strip(),
+        "owner_home": _is_owner_home(land),
         "view_url": _safe_url("admin.view_land", code=code) if code else "",
         "edit_url": _safe_url("admin.edit_land", code=code) if code else "",
     }
@@ -135,6 +146,7 @@ def filter_rows(rows: List[Dict[str, Any]], status: str, q: str) -> List[Dict[st
                 str(row.get("city") or ""),
                 str(row.get("district") or ""),
                 str(row.get("code") or ""),
+                "ملک من" if row.get("owner_home") else "",
             ]).lower()
             return needle in blob
         out = [r for r in out if _hit(r)]
