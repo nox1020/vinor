@@ -3631,7 +3631,8 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'home_requests_pipeline_count': home_requests_pipeline_count,
         'customer_modal_lands': [],
         'is_special': _is_partner_special(profile) if ph and is_approved else False,
-        'lawyer_feature_on': True,
+        'lawyer_feature_on': False,
+        'plus_system_enabled': False,
         'customer_modal_plus_users': [],
         'visit_slots_by_plus': {},
         'crm_ui_enabled': False,
@@ -3654,7 +3655,13 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
 
         out['lawyer_feature_on'] = bool(lawyer_enabled())
     except Exception:
-        out['lawyer_feature_on'] = True
+        out['lawyer_feature_on'] = False
+    try:
+        from .zarinpal_config import plus_system_enabled as _plus_system_enabled
+
+        out['plus_system_enabled'] = bool(_plus_system_enabled())
+    except Exception:
+        out['plus_system_enabled'] = False
     return out
 
 
@@ -9510,6 +9517,20 @@ def profile_data():
             visit_inbox_count = int(visit_inbox_badge_count(me_phone) or 0)
         except Exception:
             visit_inbox_count = 0
+    plus_system_on = False
+    lawyer_feature_on = False
+    try:
+        from .zarinpal_config import plus_system_enabled as _plus_system_enabled
+
+        plus_system_on = bool(_plus_system_enabled())
+    except Exception:
+        plus_system_on = False
+    try:
+        from app.lawyer.config import lawyer_enabled as _lawyer_enabled
+
+        lawyer_feature_on = bool(_lawyer_enabled())
+    except Exception:
+        lawyer_feature_on = False
     return jsonify({
         'success': True,
         'me_phone': me_phone,
@@ -9523,6 +9544,8 @@ def profile_data():
         'android_apk_version': android_apk_version if show_app_update else '',
         'show_app_update': show_app_update,
         'csrf_token': csrf_token,
+        'plus_system_enabled': plus_system_on,
+        'lawyer_feature_on': lawyer_feature_on,
     })
 
 
