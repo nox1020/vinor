@@ -217,3 +217,116 @@ def page_payload(me_phone: str) -> Dict[str, Any]:
         "form_url": form_url,
         "property": prop or {},
     })
+
+
+CATEGORIES = ["زمین", "باغ", "باغچه", "ویلا", "آپارتمان", "تجاری"]
+
+CAT_KIND = {
+    "زمین": "land",
+    "باغ": "garden",
+    "باغچه": "garden",
+    "ویلا": "villa",
+    "آپارتمان": "apartment",
+    "تجاری": "commercial",
+}
+
+SIZE_LABELS = {
+    "land": "متراژ زمین (متر)",
+    "garden": "متراژ زمین (متر)",
+    "villa": "متراژ کل / زمین (متر)",
+    "apartment": "متراژ (متر)",
+    "commercial": "متراژ (متر)",
+    "other": "متراژ",
+}
+
+_OPT = lambda value, label=None: {"value": value, "label": label or value}
+
+SPEC_SCHEMA: Dict[str, List[Dict[str, Any]]] = {
+    "land": [
+        {"key": "frontage", "label": "عرض بر (متر)", "type": "text"},
+        {"key": "length", "label": "طول (متر)", "type": "text"},
+        {"key": "street_width", "label": "عرض گذر (متر)", "type": "text"},
+        {"key": "land_shape", "label": "شکل زمین", "type": "select", "options": [
+            _OPT("مستطیل"), _OPT("مربع"), _OPT("هندسی", "دیگر"),
+        ]},
+        {"key": "land_use", "label": "کاربری", "type": "select", "options": [
+            _OPT("مسکونی"), _OPT("کشاورزی"), _OPT("باغ/ویلایی"), _OPT("تجاری"),
+        ]},
+        {"key": "has_fence", "label": "دیوارکشی", "type": "checkbox"},
+        {"key": "has_corner", "label": "نبش", "type": "checkbox"},
+        {"key": "has_well", "label": "چاه", "type": "checkbox"},
+        {"key": "has_guardroom", "label": "سرایداری", "type": "checkbox"},
+    ],
+    "garden": [
+        {"key": "tree_count", "label": "تعداد درخت", "type": "text"},
+        {"key": "irrigation", "label": "سیستم آبیاری", "type": "select", "options": [
+            _OPT("قطره‌ای"), _OPT("غرقابی"), _OPT("آبیاری سنتی", "سنتی"),
+        ]},
+        {"key": "land_shape", "label": "شکل زمین", "type": "select", "options": [
+            _OPT("مستطیل"), _OPT("مربع"), _OPT("هندسی", "دیگر"),
+        ]},
+        {"key": "land_use", "label": "کاربری", "type": "select", "options": [
+            _OPT("مسکونی"), _OPT("کشاورزی"), _OPT("باغ/ویلایی"),
+        ]},
+        {"key": "frontage", "label": "عرض بر (متر)", "type": "text"},
+    ],
+    "villa": [
+        {"key": "villa_land_area", "label": "متراژ زمین (متر)", "type": "text"},
+        {"key": "villa_built_area", "label": "متراژ بنا (متر)", "type": "text"},
+        {"key": "villa_bedrooms", "label": "اتاق خواب", "type": "text"},
+        {"key": "villa_bathrooms", "label": "سرویس", "type": "text"},
+        {"key": "villa_terrace", "label": "تراس", "type": "select", "options": [
+            _OPT("1", "دارد"), _OPT("0", "ندارد"),
+        ]},
+        {"key": "villa_pool", "label": "استخر", "type": "select", "options": [
+            _OPT("1", "دارد"), _OPT("0", "ندارد"),
+        ]},
+        {"key": "villa_direction", "label": "جهت", "type": "text"},
+        {"key": "year_built", "label": "سال ساخت", "type": "text"},
+    ],
+    "apartment": [
+        {"key": "year_built", "label": "سال ساخت", "type": "text"},
+        {"key": "floor", "label": "طبقه", "type": "text"},
+        {"key": "rooms", "label": "تعداد اتاق", "type": "text"},
+        {"key": "elevator", "label": "آسانسور", "type": "select", "options": [
+            _OPT("1", "دارد"), _OPT("0", "ندارد"),
+        ]},
+        {"key": "parking", "label": "پارکینگ", "type": "select", "options": [
+            _OPT("1", "دارد"), _OPT("0", "ندارد"),
+        ]},
+        {"key": "warehouse", "label": "انباری", "type": "select", "options": [
+            _OPT("1", "دارد"), _OPT("0", "ندارد"),
+        ]},
+    ],
+    "commercial": [
+        {"key": "front_width", "label": "ویترین/بر (متر)", "type": "text"},
+        {"key": "commercial_floor", "label": "طبقه", "type": "text"},
+        {"key": "has_license", "label": "مجوز کسب", "type": "select", "options": [
+            _OPT("1", "دارد"), _OPT("0", "ندارد"),
+        ]},
+        {"key": "commercial_type", "label": "نوع کاربری تجاری", "type": "text",
+         "placeholder": "مثلاً پوشاک، رستوران"},
+    ],
+}
+
+
+def form_meta(me_phone: str) -> Dict[str, Any]:
+    """متادیتای فرم ثبت ملک من برای اپ نیتیو — همان فیلدهای فرم وب."""
+    from app.utils.storage import load_active_cities
+
+    payload = page_payload(me_phone)
+    return json_ready({
+        "ok": True,
+        "logged_in": bool(me_phone),
+        "me_phone": me_phone or "",
+        "has_property": bool(payload.get("has_property")),
+        "page_title": "ثبت ملک من",
+        "page_subtitle": "قیمت‌گذاری شخصی — منتشر نمی‌شود و فقط تغییرات قیمت را برای شما نشان می‌دهد",
+        "submit_label": "ثبت ملک من",
+        "cities": load_active_cities() or [],
+        "categories": CATEGORIES,
+        "cat_kind": CAT_KIND,
+        "size_labels": SIZE_LABELS,
+        "spec_schema": SPEC_SCHEMA,
+        "property": payload.get("property") or {},
+    })

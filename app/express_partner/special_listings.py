@@ -44,6 +44,66 @@ def _save_express_document(file, land_code: str) -> Optional[str]:
     return filename
 
 
+class _JsonForm:
+    """آداپتور dict/JSON برای همان APIی که فرم HTML به create_special_listing می‌دهد."""
+
+    def __init__(self, data: Optional[Dict[str, Any]] = None):
+        self._d = data if isinstance(data, dict) else {}
+
+    def get(self, key, default=None):
+        if key not in self._d:
+            return default
+        return self._stringify(self._d.get(key), default)
+
+    def getlist(self, key):
+        v = self._d.get(key)
+        if v is None:
+            return []
+        if isinstance(v, list):
+            out: List[str] = []
+            for item in v:
+                s = self._stringify(item, "")
+                if s:
+                    out.append(s)
+            return out
+        s = self._stringify(v, "")
+        return [s] if s else []
+
+    @staticmethod
+    def _stringify(v: Any, default: Any) -> Any:
+        if v is None:
+            return default
+        if isinstance(v, bool):
+            return "1" if v else ""
+        if isinstance(v, list):
+            if not v:
+                return default
+            return _JsonForm._stringify(v[0], default)
+        return str(v)
+
+
+class _EmptyFiles:
+    def get(self, key, default=None):
+        return default
+
+    def getlist(self, key):
+        return []
+
+    def items(self):
+        return iter(())
+
+    def __contains__(self, key):
+        return False
+
+
+def form_from_mapping(data: Optional[Dict[str, Any]] = None):
+    return _JsonForm(data)
+
+
+def empty_upload_files():
+    return _EmptyFiles()
+
+
 def _normalize_images_from_form(form, files) -> List[str]:
     image_urls: List[str] = []
     for t in form.getlist("images") or []:

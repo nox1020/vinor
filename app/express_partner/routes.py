@@ -4357,6 +4357,72 @@ def apk_my_property_data():
     return _apk_json(page_payload(session_phone()))
 
 
+@express_partner_bp.get('/api/my-property/form', endpoint='apk_my_property_form')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_form():
+    from .my_property import form_meta
+    from .apk_native import session_phone
+    return _apk_json(form_meta(session_phone()))
+
+
+@express_partner_bp.post('/api/my-property/submit', endpoint='apk_my_property_submit')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_submit():
+    from .my_property import form_meta
+    from .apk_native import session_phone
+    from .special_listings import (
+        SPECIAL_LISTING_ERRORS,
+        create_special_listing_from_express_form,
+        empty_upload_files,
+        form_from_mapping,
+    )
+
+    me_phone = session_phone()
+    data = request.get_json(silent=True)
+    if not data and request.data:
+        try:
+            data = json.loads(request.data.decode('utf-8') if isinstance(request.data, bytes) else request.data)
+        except Exception:
+            data = {}
+    if not isinstance(data, dict):
+        data = {}
+    cities = load_active_cities() or []
+    rec, err = create_special_listing_from_express_form(
+        owner_phone=me_phone,
+        form=form_from_mapping(data),
+        files=empty_upload_files(),
+        cities=cities,
+        owner_home=True,
+    )
+    if err:
+        msg = SPECIAL_LISTING_ERRORS.get(err, 'ثبت ملک ناموفق بود.')
+        return _apk_json({'ok': False, 'error': msg, 'error_code': err}, 400)
+    return _apk_json({
+        'ok': True,
+        'code': rec.get('code') if rec else '',
+        'message': f'ملک شما با کد {rec.get("code")} ثبت شد. قیمت و تغییرات فقط در پنل شما دیده می‌شود.',
+        'form': form_meta(me_phone),
+    })
+
+
+@express_partner_bp.post('/api/my-property/upload-image', endpoint='apk_my_property_upload_image')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_upload_image():
+    return _listing_upload_image_json()
+
+
+@express_partner_bp.post('/api/my-property/upload-video', endpoint='apk_my_property_upload_video')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_upload_video():
+    return _listing_upload_video_json()
+
+
+@express_partner_bp.post('/api/my-property/upload-document', endpoint='apk_my_property_upload_document')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_upload_document():
+    return _listing_upload_document_json()
+
+
 @express_partner_bp.get('/api/legal/data', endpoint='apk_legal_data')
 @require_partner_access(allow_pending=True, allow_guest=True, json_response=True)
 def apk_legal_data():
