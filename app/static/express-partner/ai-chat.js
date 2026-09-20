@@ -50,9 +50,14 @@
         (sessionStorage.getItem('vinor_divar_chat_token') || '') ||
         (new URLSearchParams(window.location.search || '').get('land') || '') ||
         (new URLSearchParams(window.location.search || '').get('divar') || '');
-      if (_pendingLand) {
+      var _wantChat = false;
+      try { _wantChat = sessionStorage.getItem('vinor_open_home_chat') === '1'; } catch (_) {}
+      if (_pendingLand || _wantChat) {
         homeChatLayerOpen = true;
         homeEmptyEntryForced = false;
+        if (_wantChat) {
+          try { sessionStorage.removeItem('vinor_open_home_chat'); } catch (_) {}
+        }
       }
     }
   } catch (_) {}
@@ -1335,6 +1340,9 @@
     try {
       submitting = false;
       unlockComposer();
+    } catch (_) {}
+    try {
+      document.documentElement.classList.remove('vn-chat-ime');
     } catch (_) {}
     try {
       document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
@@ -4235,12 +4243,6 @@
       if (!isPostchiMode()) resumePoll();
     } catch (_) {}
     try {
-      if (input) {
-        input.focus();
-        input.scrollIntoView({ block: 'nearest' });
-      }
-    } catch (_) {}
-    try {
       document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
         el.classList.toggle('is-active', el.getAttribute('data-divar-tab') === 'chat');
       });
@@ -4265,6 +4267,12 @@
       if (homePage) homePage.style.setProperty('--ai-keyboard-inset', px);
       var dock = document.getElementById('vnHomeComposerDock');
       if (dock) dock.style.setProperty('--ai-keyboard-inset', px);
+    } catch (_) {}
+    try {
+      document.documentElement.classList.toggle(
+        'vn-chat-ime',
+        !!(inset > 0 && homeInline && homeChatLayerOpen)
+      );
     } catch (_) {}
   }
 
@@ -4433,6 +4441,14 @@
   setComposerMode(isPostchiMode());
   syncHomeModeSwitch();
   bindHomeModeUi();
+  if (homeInline && homeChatLayerOpen) {
+    try { syncHomeEmptyState(); } catch (_) {}
+    try {
+      document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
+        el.classList.toggle('is-active', el.getAttribute('data-divar-tab') === 'chat');
+      });
+    } catch (_) {}
+  }
   if (isPostchiMode()) {
     pollPaused = true;
     markPostchiOpened();

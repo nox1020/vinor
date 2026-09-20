@@ -1015,7 +1015,9 @@
       if (openChat()) {
         e.preventDefault();
         markTab('chat');
+        return;
       }
+      try { sessionStorage.setItem('vinor_open_home_chat', '1'); } catch (_) {}
       return;
     }
     if (key === 'ads') {

@@ -313,8 +313,11 @@
   #homeDashboardPage.home-dashboard-page--ai #aiChatForm.ai-composer .ai-composer__input {
     pointer-events: auto;
   }
-  html:has(#homeDashboardPage.home-dashboard-page--ai) #bottomNavMenu {
+  html.vn-chat-ime #bottomNavMenu {
     display: none !important;
+  }
+  html.vn-chat-ime #homeDashboardPage.home-dashboard-page--ai .vn-home-composer-dock {
+    bottom: 0;
   }
 
   #aiHomeInline .ai-scroll {
