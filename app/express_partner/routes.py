@@ -4304,7 +4304,7 @@ def my_property_page():
         return redirect(url_for('express_partner.my_property'))
 
     payload = page_payload(me_phone)
-    if not payload.get('has_property'):
+    if request.args.get('register') == '1' or not payload.get('has_property'):
         return _render_owner_home_form(me_phone, is_special=is_special)
     return render_template(
         'express_partner/my_property.html',

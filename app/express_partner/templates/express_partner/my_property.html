@@ -238,6 +238,7 @@
   draw(12);
 })();
 </script>
+{% include 'express_partner/partials/partner_tab_footer.html' %}
 {% else %}
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}

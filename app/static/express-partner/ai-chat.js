@@ -1877,6 +1877,24 @@
     }
   }
 
+  function syncDivarChatBadge(threads) {
+    var n = 0;
+    (threads || []).forEach(function (t) {
+      if (!t) return;
+      if (t.kind === 'postchi' || t.id === postchiThreadId) return;
+      n += Number(t.unread || 0) || 0;
+    });
+    document.querySelectorAll('[data-divar-chat-badge]').forEach(function (el) {
+      if (n > 0) {
+        el.hidden = false;
+        el.textContent = n > 99 ? '99+' : String(n);
+      } else {
+        el.hidden = true;
+        el.textContent = '';
+      }
+    });
+  }
+
   function csrfToken() {
     var el = form.querySelector('input[name="csrf_token"]');
     if (el && el.value) return el.value;
@@ -3497,6 +3515,7 @@
     }
     lastThreadsKey = key;
     updatePostchiUnreadFromThreads(threads);
+    syncDivarChatBadge(threads);
     historyList.innerHTML = '';
     var inDrawer = !!(historyList.closest && historyList.closest('#epProfileDrawer'));
     var vinorTh = null;
