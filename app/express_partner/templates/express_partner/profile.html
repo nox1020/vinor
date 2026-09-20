@@ -1,0 +1,215 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}{{ seo_title|default('وینور من | وینور اکسپرس') }}{% endblock %}
+
+{% block content %}
+{% from 'express_partner/partials/profile_macros.html' import profile_menu_row %}
+{% include 'express_partner/partials/profile_page_styles.html' %}
+
+{% set _wallet = withdrawable_balance|default(0) %}
+{% set _name = (me_name or partner_name or 'همکار وینور')|trim %}
+{% set _approved = is_approved|default(false) %}
+{% set _special = is_special|default(false) %}
+{% set _pending = has_pending_app|default(false) %}
+{% set _plus_on = plus_system_enabled|default(false) %}
+{% set _lawyer_on = lawyer_feature_on|default(lawyer_enabled|default(false)) %}
+{% set _role = 'پلاس' if _special else ('بازاریاب' if _approved else 'عادی') %}
+{% set _avatar = (profile.get('avatar') or '')|trim if profile else '' %}
+{% set _avatar_url = (_avatar|avatar_display_url(profile.get('avatar_updated_at', 0))) if _avatar and profile else '' %}
+
+<style>
+  html:has(#vinorMePage),
+  body:has(#vinorMePage) { background: #000 !important; }
+  #vinorMePage {
+    background: #000;
+    color: #fff;
+  }
+  #vinorMePage .vn-me-shell {
+    max-width: 28rem;
+    margin-inline: auto;
+    padding: 0.75rem 0.9rem 2rem;
+  }
+  #vinorMePage .vn-me-title {
+    height: 2.625rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: #1a1a1a;
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.875rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+  }
+  #vinorMePage .vn-me-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 1rem;
+    background: #1a1a1a;
+    border: 1px solid rgba(255,255,255,0.08);
+    text-decoration: none;
+    color: inherit;
+  }
+  #vinorMePage .vn-me-avatar {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 9999px;
+    background: rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+    font-weight: 700;
+    color: #9CA3AF;
+  }
+  #vinorMePage .vn-me-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  #vinorMePage .vn-me-logout {
+    flex-shrink: 0;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.65rem;
+    background: #212121;
+    border: 0;
+    color: #E5E7EB;
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  #vinorMePage .vn-me-group {
+    margin-top: 0.75rem;
+    border-radius: 1rem;
+    background: #1a1a1a;
+    border: 1px solid rgba(255,255,255,0.08);
+    overflow: hidden;
+  }
+  #vinorMePage .vn-me-guest-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 1rem;
+  }
+  #vinorMePage .vn-me-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.65rem 1rem;
+    border-radius: 0.65rem;
+    background: #2563eb;
+    color: #fff;
+    text-decoration: none;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  #vinorMePage .vn-me-btn--ghost {
+    background: #212121;
+    color: #F9FAFB;
+  }
+</style>
+
+<main id="vinorMePage" class="partner-page-scroll-pad min-h-[100dvh] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
+  <div class="vn-me-shell">
+    <div class="vn-me-title">وینور من</div>
+
+    {% if me_phone %}
+    <div class="vn-me-card">
+      <a href="{{ url_for('express_partner.profile_edit') }}" class="flex min-w-0 flex-1 items-center gap-3 text-inherit no-underline" data-vinor-express-nav>
+        <div class="vn-me-avatar">
+          {% if _avatar_url %}
+          <img src="{{ _avatar_url }}" alt="">
+          {% else %}
+          {{ (_name[:2] if _name else '—') }}
+          {% endif %}
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[16px] font-bold leading-tight">{{ _name }}</div>
+          <div class="mt-0.5 text-[12px] text-zinc-400">{{ me_phone }}</div>
+          <div class="mt-0.5 text-[11px] text-zinc-500">{{ _role }}</div>
+        </div>
+      </a>
+      <form id="meLogoutForm" method="post" action="{{ url_for('express_partner.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="vn-me-logout" data-vinor-logout>خروج</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="vn-me-card" style="flex-direction:column; text-align:center;">
+      <div class="vn-me-avatar" style="margin-inline:auto;">👤</div>
+      <div class="text-[14px] font-bold">کاربر وارد نشده است</div>
+      <div class="text-[12px] text-zinc-400">برای مشاهده و مدیریت پروفایل وارد شوید</div>
+      <div class="vn-me-guest-actions">
+        <a class="vn-me-btn" href="{{ url_for('express_partner.login') }}" data-vinor-express-nav>ورود</a>
+        <a class="vn-me-btn vn-me-btn--ghost" href="{{ url_for('express_partner.apply') }}" data-vinor-express-nav>درخواست همکاری</a>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="vn-me-group">
+      {{ profile_menu_row(url_for('express_partner.my_property'), 'fa-house', 'ملک من', subtitle='ارزش، نمودار و بینش ملک') }}
+      {% if me_phone and _approved %}
+        {% if _special %}
+        {{ profile_menu_row(url_for('express_partner.special_listings'), 'fa-building', 'آگهی‌های من') }}
+        {% endif %}
+        {{ profile_menu_row(url_for('express_partner.requests'), 'fa-route', 'پیگیری', subtitle='درخواست، بازدید و معامله') }}
+        {{ profile_menu_row(url_for('express_partner.commissions'), 'fa-wallet', 'کیف پول', subtitle=_wallet|toman) }}
+        {{ profile_menu_row(url_for('express_partner.favorites'), 'fa-bookmark', 'نشان‌ها') }}
+        {{ profile_menu_row(url_for('express_partner.training'), 'fa-graduation-cap', 'آموزش') }}
+        {{ profile_menu_row(url_for('express_partner.invite_colleagues'), 'fa-user-plus', 'دعوت همکار') }}
+      {% elif me_phone %}
+        {% if _pending %}
+        {{ profile_menu_row(url_for('express_partner.thanks'), 'fa-clock', 'وضعیت درخواست') }}
+        {% else %}
+        {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری') }}
+        {% endif %}
+        {{ profile_menu_row(url_for('express_partner.invite_colleagues'), 'fa-share-nodes', 'دعوت دوستان') }}
+        {{ profile_menu_row(url_for('express_partner.training'), 'fa-graduation-cap', 'آموزش') }}
+      {% else %}
+        {{ profile_menu_row(url_for('express_partner.training'), 'fa-graduation-cap', 'آموزش') }}
+        {{ profile_menu_row(url_for('express_partner.apply'), 'fa-user-plus', 'درخواست همکاری') }}
+      {% endif %}
+      {% if _plus_on %}
+      {{ profile_menu_row(url_for('express_partner.plus'), 'fa-star', 'وینور پلاس' if _special else 'دریافت وینور پلاس') }}
+      {% endif %}
+      {% if _lawyer_on %}
+      {{ profile_menu_row(
+        url_for('express_partner.home', ai=1, thread='__lawyer__') if me_phone else url_for('express_partner.login'),
+        'fa-scale-balanced',
+        'وکیل ملکی',
+        subtitle='مشاوره حقوقی املاک ایران' if me_phone else 'برای استفاده وارد شوید'
+      ) }}
+      {% endif %}
+      {% if me_phone %}
+      {{ profile_menu_row(url_for('express_partner.settings'), 'fa-gear', 'تنظیمات') }}
+      {% endif %}
+    </div>
+  </div>
+</main>
+
+{% set bottom_nav_active = 'profile' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var page = document.getElementById('vinorMePage');
+  if (!page) return;
+  page.addEventListener('click', function (e) {
+    var logoutBtn = e.target.closest && e.target.closest('[data-vinor-logout]');
+    if (!logoutBtn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof window.vinorExpressLogout === 'function') {
+      window.vinorExpressLogout();
+    } else {
+      var form = document.getElementById('meLogoutForm');
+      if (form) form.submit();
+    }
+  });
+})();
+</script>
+{% endblock %}

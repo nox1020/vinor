@@ -253,32 +253,6 @@
   </button>
 </div>
 {% endif %}
-<div class="ep-header-float-actions ep-header-float-actions--start" aria-label="دسترسی سریع" data-tour="home-menu">
-  {% if _use_drawer %}
-  <button type="button"
-          id="epProfileMenuBtn"
-          class="ep-partner-header-btn ep-menu-orb relative vinor-dash-glass-pill comm-header-glass-btn"
-          aria-label="منو"
-          title="منو"
-          aria-expanded="false"
-          aria-controls="epProfileDrawer">
-    <svg class="ep-menu-orb__icon" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6.5 8.25h11"/>
-      <path d="M6.5 12h11"/>
-      <path d="M6.5 15.75h11"/>
-    </svg>
-    <span id="aiMenuUnreadDot" class="hidden absolute" aria-hidden="true"></span>
-  </button>
-  {% else %}
-  <a href="{{ _menu_href }}"
-     data-vinor-express-nav
-     class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
-     aria-label="منو"
-     title="منو">
-    <i class="fas fa-bars ep-partner-header-btn-icon" aria-hidden="true"></i>
-  </a>
-  {% endif %}
-</div>
 <div class="ep-header-float-actions ep-header-float-actions--brand" aria-label="وینور" data-tour="home-brand">
   <span class="ep-header-float-brand">وینور</span>
 </div>

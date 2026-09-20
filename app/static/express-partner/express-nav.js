@@ -303,15 +303,15 @@
     var menu = String(u.searchParams.get('menu') || '').trim();
     if (menu === '1') {
       try {
-        var loginNext = resolvePartnerLoginNext(u.searchParams.get('login_next') || '');
-        if (loginNext && typeof window.vinorDrawerOpenLogin === 'function') {
-          window.vinorDrawerOpenLogin(loginNext);
-          return true;
+        var dest = '/express/partner/profile';
+        if (typeof window.vinorExpressNavigate === 'function') {
+          window.vinorExpressNavigate(dest, { forward: true });
+        } else {
+          window.location.assign(dest);
         }
-        if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
-          window.vinorProfileDrawer.open();
-        }
-      } catch (_) {}
+      } catch (_) {
+        window.location.assign('/express/partner/profile');
+      }
       return true;
     }
     var thread = String(u.searchParams.get('thread') || '').trim();
@@ -626,11 +626,11 @@
     try {
       var next = normalizeNavHref(href);
       if (!next || next.indexOf('/express/partner/home') === 0) {
-        return '/express/partner/home?menu=1';
+        return '/express/partner/login';
       }
-      return '/express/partner/home?menu=1&login_next=' + encodeURIComponent(next);
+      return '/express/partner/login?next=' + encodeURIComponent(next);
     } catch (_) {
-      return '/express/partner/home?menu=1';
+      return '/express/partner/login';
     }
   }
 
@@ -1924,7 +1924,7 @@
     if (window.__vinorAuthPageAbort) {
       try { window.__vinorAuthPageAbort.abort(); } catch (_) {}
     }
-    var dest = destUrl || '/express/partner/home?menu=1';
+    var dest = destUrl || '/express/partner/home';
     var apiUrl = '/express/partner/api/logout';
     return fetch(apiUrl, {
       method: 'POST',

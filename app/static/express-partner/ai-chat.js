@@ -635,7 +635,7 @@
       }
     } catch (_) {}
     try {
-      window.location.assign('/express/partner/home?menu=1');
+      window.location.assign('/express/partner/login');
     } catch (_) {}
     return false;
   }

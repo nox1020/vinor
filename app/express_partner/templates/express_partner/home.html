@@ -45,8 +45,8 @@
 <div id="homeDashboardPage"
      class="home-dashboard-page{% if home_ai_enabled|default(false) %} home-dashboard-page--ai{% endif %}{% if home_ai_enabled|default(false) and not _home_user_msgs and not (request.args.get('land') or request.args.get('divar')) %} ai-home-is-empty{% endif %} min-h-[100dvh] bg-black{% if not home_ai_enabled|default(false) %} pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-8{% endif %} text-zinc-100"
      data-vinor-home-page>
-  {% set menu_href = url_for('express_partner.home') %}
-  {% set profile_drawer = true %}
+  {% set menu_href = url_for('express_partner.profile') %}
+  {% set profile_drawer = false %}
   {% set show_ai_plus = false %}
   {% set show_get_plus = plus_system_enabled|default(false) %}
   {% include 'express_partner/partials/ep_header_float_actions.html' %}
@@ -99,7 +99,6 @@
 </div>
 
 {% include 'express_partner/partials/partner_tab_footer.html' %}
-{% include 'express_partner/partials/profile_drawer.html' %}
 {% if home_ai_enabled|default(false) and is_approved|default(false) %}
 {% include 'express_partner/partials/home_customer_modal.html' %}
 {% endif %}

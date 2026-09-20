@@ -186,10 +186,10 @@
       <i class="fa-solid fa-comment" aria-hidden="true"></i>
       <span>چت</span>
     </a>
-    <button type="button" class="vn-divar-tab{% if _tab_me %} is-active{% endif %}" data-divar-tab="me">
+    <a class="vn-divar-tab{% if _tab_me %} is-active{% endif %}" href="{{ url_for('express_partner.profile') }}" data-divar-tab="me">
       <i class="fa-solid fa-user" aria-hidden="true"></i>
       <span>وینور من</span>
-    </button>
+    </a>
   </div>
 </nav>
 
@@ -954,16 +954,31 @@
 (function () {
   var userLoggedIn = {{ 'true' if session.get('user_phone') else 'false' }};
 
+  var profileUrl = {{ url_for('express_partner.profile')|tojson }};
+  var loginUrl = {{ url_for('express_partner.login')|tojson }};
+  if (!window.vinorProfileDrawer) {
+    window.vinorProfileDrawer = {
+      open: function () { window.location.href = profileUrl; },
+      close: function () {},
+      toggle: function () { window.location.href = profileUrl; },
+      isOpen: function () { return false; },
+      openLogin: function () { window.location.href = loginUrl; },
+      destroy: function () {}
+    };
+  }
+  window.vinorDrawerOpenLogin = window.vinorDrawerOpenLogin || function () {
+    window.location.href = loginUrl;
+  };
+
   function openMe() {
     try {
-      if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
-        window.vinorProfileDrawer.open();
+      if (typeof window.vinorExpressNavigate === 'function') {
+        window.vinorExpressNavigate(profileUrl, { forward: true });
         return true;
       }
     } catch (_) {}
-    var btn = document.getElementById('epProfileMenuBtn');
-    if (btn) { btn.click(); return true; }
-    return false;
+    window.location.href = profileUrl;
+    return true;
   }
 
   function openChat() {
@@ -1007,8 +1022,6 @@
     if (!tab) return;
     var key = tab.getAttribute('data-divar-tab');
     if (key === 'me') {
-      e.preventDefault();
-      openMe();
       return;
     }
     if (key === 'chat') {
@@ -1029,7 +1042,7 @@
     }
     if ((key === 'post' || key === 'favs') && !userLoggedIn) {
       e.preventDefault();
-      openMe();
+      window.location.href = loginUrl;
     }
   }, true);
 })();

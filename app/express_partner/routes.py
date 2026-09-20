@@ -7017,8 +7017,8 @@ def _clear_express_partner_auth_session() -> None:
 
 
 def _logout_dest_url() -> str:
-    """بعد از خروج → خانه با منوی باز (ورود فشرده داخل drawer)."""
-    return url_for('express_partner.home', menu=1)
+    """بعد از خروج → خانه (ورود از تب وینور من)."""
+    return url_for('express_partner.home')
 
 
 @express_partner_bp.route('/login', methods=['GET', 'POST'], endpoint='login')
@@ -9120,11 +9120,39 @@ def otp_resend():
 @express_partner_bp.route('/profile', methods=['GET'], endpoint='profile')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def profile_page():
-    """صفحه پروفایل حذف شد — گزینه‌ها در منوی راست داشبورد هستند."""
+    """وینور من — همه گزینه‌های منوی ساید، بدون کشوی کناری."""
     me_phone = (session.get('user_phone') or '').strip()
-    if not me_phone:
-        return redirect(url_for('express_partner.home', menu=1))
-    return redirect(url_for('express_partner.home', menu=1), code=302)
+    profile = getattr(g, 'express_partner_profile', None) or {}
+    try:
+        is_approved = _is_partner_approved(profile)
+    except Exception:
+        is_approved = False
+    is_special = _is_partner_special(profile) if is_approved else False
+    me_name = (profile.get('name') or '').strip() or 'همکار وینور'
+    has_pending_app = _partner_has_pending_app(me_phone) if me_phone and not is_approved else False
+    withdrawable = _partner_withdrawable_balance(me_phone) if me_phone else 0
+    lawyer_feature_on = False
+    try:
+        from app.lawyer.config import lawyer_enabled as _lawyer_enabled
+
+        lawyer_feature_on = bool(_lawyer_enabled())
+    except Exception:
+        lawyer_feature_on = False
+    return render_template(
+        'express_partner/profile.html',
+        profile=profile,
+        me_phone=me_phone,
+        me_name=me_name,
+        partner_name=me_name,
+        is_approved=is_approved,
+        is_special=is_special,
+        has_pending_app=has_pending_app,
+        withdrawable_balance=withdrawable,
+        lawyer_feature_on=lawyer_feature_on,
+        hide_header=True,
+        bottom_nav_active='profile',
+        seo_title='وینور من | وینور اکسپرس',
+    )
 
 
 @express_partner_bp.route('/listings', methods=['GET'], endpoint='special_listings')
@@ -9694,6 +9722,7 @@ def profile_data():
     except Exception:
         csrf_token = ''
     is_special = _is_partner_special(profile) if is_approved else False
+    has_pending_app = _partner_has_pending_app(me_phone) if me_phone and not is_approved else False
     visit_inbox_count = 0
     if is_special:
         try:
@@ -9723,6 +9752,7 @@ def profile_data():
         'avatar_url': avatar_url,
         'is_approved': is_approved,
         'is_special': is_special,
+        'has_pending_app': has_pending_app,
         'visit_inbox_count': visit_inbox_count,
         'partner_tier': _partner_tier_label(profile, is_approved=is_approved),
         'android_apk_url': android_apk_url if show_app_update else '',
