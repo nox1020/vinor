@@ -1336,6 +1336,11 @@
       submitting = false;
       unlockComposer();
     } catch (_) {}
+    try {
+      document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
+        el.classList.toggle('is-active', el.getAttribute('data-divar-tab') === 'ads');
+      });
+    } catch (_) {}
     return true;
   }
 
@@ -4217,6 +4222,32 @@
     } catch (_) {}
   }
 
+  function openHomeChatLayer() {
+    if (!homeInline) return false;
+    homeChatLayerOpen = true;
+    homeEmptyEntryForced = false;
+    sheetOpen = true;
+    try {
+      syncHomeEmptyState();
+    } catch (_) {}
+    pushHomeChatHistory();
+    try {
+      if (!isPostchiMode()) resumePoll();
+    } catch (_) {}
+    try {
+      if (input) {
+        input.focus();
+        input.scrollIntoView({ block: 'nearest' });
+      }
+    } catch (_) {}
+    try {
+      document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
+        el.classList.toggle('is-active', el.getAttribute('data-divar-tab') === 'chat');
+      });
+    } catch (_) {}
+    return true;
+  }
+
   function syncComposerInset() {
     if (!window.visualViewport) return;
     var vv = window.visualViewport;
@@ -4383,6 +4414,7 @@
     window.__vinorAiChatSwitchThread = null;
     window.__vinorAiChatSwitchHomeMode = null;
     window.__vinorAiConsumeHomeChatBack = null;
+    window.__vinorAiOpenHomeChat = null;
     try { window.vinorShowLandInChat = null; } catch (_) {}
     try { window.vinorShowDivarInChat = null; } catch (_) {}
   }
@@ -4391,6 +4423,7 @@
   window.__vinorAiChatSwitchThread = switchThread;
   window.__vinorAiChatSwitchHomeMode = switchHomeMode;
   window.__vinorAiChatOpenSideMenu = openSideMenu;
+  window.__vinorAiOpenHomeChat = openHomeChatLayer;
 
   if (homeInline) {
     document.addEventListener('click', onHomeQuickPromptClick, true);

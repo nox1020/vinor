@@ -128,7 +128,7 @@
       bottom: 0;
     }
     #homeDashboardPage.ai-home-is-empty .vn-home-composer-dock {
-      padding-bottom: 0;
+      display: none !important;
     }
   }
   #homeDashboardPage.home-dashboard-page--ai .vn-home-composer-dock {
@@ -484,6 +484,10 @@
     gap: 0.85rem;
     pointer-events: none;
   }
+  /* بدو ورود: کامپوزر در داشبورد نیست — فقط تب چت */
+  #homeDashboardPage.ai-home-is-empty #aiChatForm {
+    display: none !important;
+  }
   /* بدو ورود: کامپوزر عادی — بدون تیترِ placeholder */
   #homeDashboardPage.ai-home-is-empty #aiChatForm .ai-composer__shell {
     border-radius: 1.55rem;
@@ -666,13 +670,13 @@
     padding-left: max(0.85rem, env(safe-area-inset-left, 0px));
   }
   #homeDashboardPage.ai-home-is-empty #aiChatForm.ai-composer {
-    padding: 0 1.15rem calc(0.35rem + var(--ai-keyboard-inset, 0px));
+    display: none !important;
   }
   #homeDashboardPage.ai-home-is-empty .vn-home-composer-dock__row:has([data-apk-strip]) > #aiChatForm.ai-composer {
-    padding-left: 0.45rem;
+    display: none !important;
   }
   #homeDashboardPage.ai-home-is-empty #aiChatForm .ai-composer__inner {
-    max-width: 28rem;
+    display: none !important;
   }
 
   /* هاب اکشن‌های خالی — زیر خبر */
@@ -1041,6 +1045,10 @@
     var form = document.getElementById('aiChatForm');
     var draft = (opts.message || '').trim();
     var thread = (opts.thread || '').trim();
+
+    if (typeof window.__vinorAiOpenHomeChat === 'function') {
+      try { window.__vinorAiOpenHomeChat(); } catch (_) {}
+    }
 
     function afterReady() {
       if (input && draft) {

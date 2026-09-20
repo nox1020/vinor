@@ -966,7 +966,18 @@
     return false;
   }
 
-  function focusChat() {
+  function openChat() {
+    if (typeof window.__vinorAiOpenHomeChat === 'function') {
+      try {
+        if (window.__vinorAiOpenHomeChat()) return true;
+      } catch (_) {}
+    }
+    if (window.vinorAiHome && typeof window.vinorAiHome.open === 'function') {
+      try {
+        window.vinorAiHome.open({});
+        return true;
+      } catch (_) {}
+    }
     var input = document.getElementById('aiInput');
     if (input) {
       try { input.focus(); } catch (_) {}
@@ -974,6 +985,21 @@
       return true;
     }
     return false;
+  }
+
+  function closeChatToAds() {
+    if (typeof window.__vinorAiConsumeHomeChatBack === 'function') {
+      try {
+        if (window.__vinorAiConsumeHomeChatBack()) return true;
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  function markTab(key) {
+    document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
+      el.classList.toggle('is-active', el.getAttribute('data-divar-tab') === key);
+    });
   }
 
   document.addEventListener('click', function (e) {
@@ -986,12 +1012,16 @@
       return;
     }
     if (key === 'chat') {
-      if (focusChat()) {
+      if (openChat()) {
         e.preventDefault();
-        document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
-          el.classList.toggle('is-active', el.getAttribute('data-divar-tab') === 'chat');
-        });
-        return;
+        markTab('chat');
+      }
+      return;
+    }
+    if (key === 'ads') {
+      if (closeChatToAds()) {
+        e.preventDefault();
+        markTab('ads');
       }
       return;
     }
