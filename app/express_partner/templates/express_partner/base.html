@@ -260,13 +260,13 @@
     body > .ld-actions[data-land-detail-footer] {
       z-index: 70;
     }
-    /* بدون تب‌بار پایین — فقط safe-area؛ با بنر اپ فضای بیشتر */
+    /* فوتر دیوار‌مانند پایین صفحه */
     @media (max-width: 1023px) {
       [class*="pb-[calc(5.75rem"] {
-        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: calc(4.35rem + env(safe-area-inset-bottom, 0px)) !important;
       }
       html.vinor-has-apk-banner [class*="pb-[calc(5.75rem"] {
-        padding-bottom: calc(4.1rem + env(safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: calc(7.4rem + env(safe-area-inset-bottom, 0px)) !important;
       }
     }
     body > [data-tg-body-modal] {

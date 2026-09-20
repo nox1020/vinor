@@ -1,15 +1,80 @@
-{# بنر دانلود/بروزرسانی اپ — بدون منوی تب پایین #}
+{# فوتر دیوار‌مانند + بنر دانلود/بروزرسانی اپ #}
 <style>
   #bottomNavMenu.tg-tabbar-shell {
     pointer-events: none;
     box-shadow: none !important;
-    background: transparent;
+    background: #000;
     display: flex;
-    justify-content: flex-start;
-    padding-left: max(0.7rem, env(safe-area-inset-left, 0px));
-    padding-right: max(0.7rem, env(safe-area-inset-right, 0px));
-    padding-top: 0.35rem;
-    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: stretch;
+    padding: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  @media (min-width: 1024px) {
+    #bottomNavMenu.tg-tabbar-shell { display: none !important; }
+  }
+  #bottomNavMenu [data-apk-strip] {
+    position: absolute;
+    bottom: calc(100% + 0.55rem);
+    inset-inline-start: 0.7rem;
+    pointer-events: auto;
+  }
+  .vn-divar-tabbar {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    width: 100%;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    min-height: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+    background: #000;
+  }
+  .vn-divar-tab {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.12rem;
+    text-decoration: none;
+    color: #8e8e93;
+    background: transparent;
+    border: 0;
+    padding: 0.2rem 0.1rem 0.15rem;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .vn-divar-tab i {
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+  .vn-divar-tab span {
+    font-size: 0.625rem;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .vn-divar-tab.is-active {
+    color: #fff;
+  }
+  .vn-divar-tab.is-active span {
+    font-weight: 700;
+  }
+  .vn-divar-tab--post .vn-divar-plus {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.65rem;
+    background: #fff;
+    color: #111;
+    display: grid;
+    place-items: center;
+    font-size: 0.95rem;
+  }
+  .vn-divar-tab--post.is-active span {
+    color: #fff;
   }
   /* دکمهٔ جمع دانلود/بروزرسانی اپ — مربع گرد مینیمال */
   .vinor-apk-download-strip {
@@ -93,11 +158,39 @@
     color: #bae6fd;
   }
 </style>
-<nav id="bottomNavMenu" data-tour="bottom-nav" class="tg-tabbar-shell fixed inset-x-0 bottom-0 z-[60]" aria-label="بنر اپلیکیشن">
+<nav id="bottomNavMenu" data-tour="bottom-nav" class="tg-tabbar-shell fixed inset-x-0 bottom-0 z-[60]" aria-label="منوی اصلی">
   {# روی خانهٔ AI بنر بالای کامپوزر است؛ اینجا فقط صفحات بدون کامپوزر #}
   {% if not home_ai_enabled|default(false) %}
   {% include 'express_partner/partials/apk_download_strip.html' %}
   {% endif %}
+  {% set _p = request.path or '' %}
+  {% set _tab_ads = _p.endswith('/home') or _p.rstrip('/').endswith('/partner') or _p.endswith('/express/partner') %}
+  {% set _tab_favs = '/favorites' in _p %}
+  {% set _tab_post = '/listings' in _p or '/my-property' in _p %}
+  {% set _tab_me = '/profile' in _p %}
+  {% set _post_href = url_for('express_partner.special_listing_new') if is_special|default(false) else url_for('express_partner.my_property') %}
+  <div class="vn-divar-tabbar" role="navigation">
+    <a class="vn-divar-tab{% if _tab_ads and not _tab_post %} is-active{% endif %}" href="{{ url_for('express_partner.home') }}" data-divar-tab="ads">
+      <i class="fa-solid fa-house" aria-hidden="true"></i>
+      <span>آگهی‌ها</span>
+    </a>
+    <a class="vn-divar-tab{% if _tab_favs %} is-active{% endif %}" href="{{ url_for('express_partner.favorites') }}" data-divar-tab="favs">
+      <i class="fa-solid fa-bookmark" aria-hidden="true"></i>
+      <span>نشان‌ها</span>
+    </a>
+    <a class="vn-divar-tab vn-divar-tab--post{% if _tab_post %} is-active{% endif %}" href="{{ _post_href }}" data-divar-tab="post">
+      <span class="vn-divar-plus" aria-hidden="true"><i class="fa-solid fa-plus"></i></span>
+      <span>ثبت آگهی</span>
+    </a>
+    <a class="vn-divar-tab" href="{{ url_for('express_partner.home') }}" data-divar-tab="chat">
+      <i class="fa-solid fa-comment" aria-hidden="true"></i>
+      <span>چت</span>
+    </a>
+    <button type="button" class="vn-divar-tab{% if _tab_me %} is-active{% endif %}" data-divar-tab="me">
+      <i class="fa-solid fa-user" aria-hidden="true"></i>
+      <span>وینور من</span>
+    </button>
+  </div>
 </nav>
 
 <script>
@@ -855,5 +948,57 @@
     if (isVinorApkClient()) window.__vinorSyncApkStrip();
   }
 
+})();
+</script>
+<script>
+(function () {
+  var userLoggedIn = {{ 'true' if session.get('user_phone') else 'false' }};
+
+  function openMe() {
+    try {
+      if (window.vinorProfileDrawer && typeof window.vinorProfileDrawer.open === 'function') {
+        window.vinorProfileDrawer.open();
+        return true;
+      }
+    } catch (_) {}
+    var btn = document.getElementById('epProfileMenuBtn');
+    if (btn) { btn.click(); return true; }
+    return false;
+  }
+
+  function focusChat() {
+    var input = document.getElementById('aiInput');
+    if (input) {
+      try { input.focus(); } catch (_) {}
+      try { input.scrollIntoView({ block: 'nearest' }); } catch (_) {}
+      return true;
+    }
+    return false;
+  }
+
+  document.addEventListener('click', function (e) {
+    var tab = e.target.closest && e.target.closest('[data-divar-tab]');
+    if (!tab) return;
+    var key = tab.getAttribute('data-divar-tab');
+    if (key === 'me') {
+      e.preventDefault();
+      openMe();
+      return;
+    }
+    if (key === 'chat') {
+      if (focusChat()) {
+        e.preventDefault();
+        document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
+          el.classList.toggle('is-active', el.getAttribute('data-divar-tab') === 'chat');
+        });
+        return;
+      }
+      return;
+    }
+    if ((key === 'post' || key === 'favs') && !userLoggedIn) {
+      e.preventDefault();
+      openMe();
+    }
+  }, true);
 })();
 </script>
