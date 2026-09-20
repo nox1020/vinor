@@ -4362,7 +4362,13 @@ def apk_my_property_data():
 def apk_my_property_form():
     from .my_property import form_meta
     from .apk_native import session_phone
-    return _apk_json(form_meta(session_phone()))
+    profile = getattr(g, 'express_partner_profile', None)
+    public = (request.args.get('mode') or '').strip().lower() in ('listing', 'public', '1')
+    return _apk_json(form_meta(
+        session_phone(),
+        is_special=_is_partner_special(profile),
+        public_listing=public,
+    ))
 
 
 @express_partner_bp.post('/api/my-property/submit', endpoint='apk_my_property_submit')
@@ -4401,7 +4407,67 @@ def apk_my_property_submit():
         'ok': True,
         'code': rec.get('code') if rec else '',
         'message': f'ملک شما با کد {rec.get("code")} ثبت شد. قیمت و تغییرات فقط در پنل شما دیده می‌شود.',
+        'next': 'my-property',
         'form': form_meta(me_phone),
+    })
+
+
+@express_partner_bp.post('/api/listings/submit', endpoint='apk_listings_submit')
+@require_special_partner(json_response=True)
+def apk_listings_submit():
+    from .apk_native import session_phone
+    from .special_listings import (
+        SPECIAL_LISTING_ERRORS,
+        assign_land_to_all_partners,
+        create_special_listing_from_express_form,
+        empty_upload_files,
+        form_from_mapping,
+    )
+
+    me_phone = session_phone()
+    data = request.get_json(silent=True)
+    if not data and request.data:
+        try:
+            data = json.loads(request.data.decode('utf-8') if isinstance(request.data, bytes) else request.data)
+        except Exception:
+            data = {}
+    if not isinstance(data, dict):
+        data = {}
+    cities = load_active_cities() or []
+    rec, err = create_special_listing_from_express_form(
+        owner_phone=me_phone,
+        form=form_from_mapping(data),
+        files=empty_upload_files(),
+        cities=cities,
+        owner_home=False,
+    )
+    if err:
+        msg = SPECIAL_LISTING_ERRORS.get(err, 'ثبت آگهی ناموفق بود.')
+        return _apk_json({'ok': False, 'error': msg, 'error_code': err}, 400)
+
+    try:
+        from .new_land_sms import notify_all_partners_new_express_land_background
+        notify_all_partners_new_express_land_background(rec)
+    except Exception:
+        current_app.logger.exception(
+            'special listing SMS queue failed code=%s', rec.get('code') if rec else ''
+        )
+
+    send_raw = data.get('auto_send_all_partners')
+    send_all = send_raw is True or str(send_raw or '').strip().lower() in ('1', 'true', 'yes', 'on')
+    if send_all and rec:
+        extras = rec.get('extras') if isinstance(rec.get('extras'), dict) else {}
+        try:
+            pct = float(extras.get('express_commission_pct') or 0)
+        except (TypeError, ValueError):
+            pct = 0.0
+        assign_land_to_all_partners(rec, pct)
+
+    return _apk_json({
+        'ok': True,
+        'code': rec.get('code') if rec else '',
+        'message': f'آگهی با کد {rec.get("code")} ثبت شد.',
+        'next': 'listings',
     })
 
 

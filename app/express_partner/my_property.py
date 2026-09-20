@@ -310,19 +310,41 @@ SPEC_SCHEMA: Dict[str, List[Dict[str, Any]]] = {
 }
 
 
-def form_meta(me_phone: str) -> Dict[str, Any]:
-    """متادیتای فرم ثبت ملک من برای اپ نیتیو — همان فیلدهای فرم وب."""
+def form_meta(
+    me_phone: str,
+    *,
+    is_special: bool = False,
+    public_listing: bool = False,
+) -> Dict[str, Any]:
+    """متادیتای فرم ثبت برای اپ نیتیو — همان فیلدهای فرم وب."""
     from app.utils.storage import load_active_cities
 
     payload = page_payload(me_phone)
+    public = bool(is_special and public_listing)
+    if public:
+        page_title = "ثبت آگهی"
+        page_subtitle = "اطلاعات ملک را وارد و منتشر کنید"
+        submit_label = "ثبت و انتشار آگهی"
+    else:
+        page_title = "ثبت ملک من"
+        page_subtitle = "قیمت‌گذاری شخصی — منتشر نمی‌شود و فقط تغییرات قیمت را برای شما نشان می‌دهد"
+        submit_label = "ثبت ملک من"
     return json_ready({
         "ok": True,
         "logged_in": bool(me_phone),
         "me_phone": me_phone or "",
         "has_property": bool(payload.get("has_property")),
-        "page_title": "ثبت ملک من",
-        "page_subtitle": "قیمت‌گذاری شخصی — منتشر نمی‌شود و فقط تغییرات قیمت را برای شما نشان می‌دهد",
-        "submit_label": "ثبت ملک من",
+        "is_special": bool(is_special),
+        "public_listing": public,
+        "owner_home": not public,
+        "hide_commission": not public,
+        "hide_payment": not public,
+        "hide_broadcast": not public,
+        "page_title": page_title,
+        "page_subtitle": page_subtitle,
+        "submit_label": submit_label,
+        "default_commission_pct": "2" if public else "0",
+        "payment_methods": ["نقدی", "اقساطی", "معاوضه", "توافقی"],
         "cities": load_active_cities() or [],
         "categories": CATEGORIES,
         "cat_kind": CAT_KIND,
