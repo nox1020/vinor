@@ -35,6 +35,8 @@
           <span class="text-red-400">منقضی</span>
         {% elif _reposted %}
           <span class="text-rose-400">نردبان شده</span>
+        {% elif land._status_label %}
+          <span class="{{ land._status_class or 'text-slate-400' }}">{{ land._status_label }}</span>
         {% elif is_approved and land._commission_amount and not _is_sold %}
           <span class="text-emerald-400">پورسانت {{ (land._commission_amount or 0)|toman(false) }} تومان</span>
         {% endif %}

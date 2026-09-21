@@ -4311,7 +4311,9 @@ def my_property_page():
         property=payload.get('property') or {},
         has_property=True,
         is_special=is_special,
-        listings=payload.get('listings') or [],
+        is_approved=_is_partner_approved(profile),
+        items=payload.get('items') or payload.get('listings') or [],
+        listings=payload.get('items') or payload.get('listings') or [],
         divar_profile_entries=payload.get('divar_profiles') or [],
     )
 
@@ -4431,6 +4433,7 @@ def _publish_request_fields() -> Dict[str, Any]:
                 or '2'
             ),
             'send_all': bool(str(send_raw or '').strip()),
+            'code': (request.form.get('code') or '').strip(),
         }
     send_raw = data.get('auto_send_all_partners')
     if send_raw is None:
@@ -4439,6 +4442,7 @@ def _publish_request_fields() -> Dict[str, Any]:
         'payment_method': str(data.get('payment_method') or '').strip(),
         'commission_pct': data.get('express_commission_pct') or data.get('commission_pct') or '2',
         'send_all': send_raw is True or str(send_raw or '').strip().lower() in ('1', 'true', 'yes', 'on'),
+        'code': str(data.get('code') or '').strip(),
     }
 
 
@@ -4454,11 +4458,17 @@ def my_property_publish():
         payment_method=fields['payment_method'],
         commission_pct=fields['commission_pct'],
         send_all=fields['send_all'],
+        land_code=fields.get('code') or '',
     )
     if err:
         flash(SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.'), 'error')
-    else:
-        flash(f'ملک شما با کد {rec.get("code")} برای فروش منتشر شد.', 'success')
+        if fields.get('code'):
+            return redirect(url_for('express_partner.land_detail', code=fields['code']))
+        return redirect(url_for('express_partner.my_property'))
+    flash(f'ملک شما با کد {rec.get("code")} برای فروش منتشر شد.', 'success')
+    code = str((rec or {}).get('code') or fields.get('code') or '').strip()
+    if code:
+        return redirect(url_for('express_partner.land_detail', code=code))
     return redirect(url_for('express_partner.my_property'))
 
 
@@ -4475,6 +4485,7 @@ def apk_my_property_publish():
         payment_method=fields['payment_method'],
         commission_pct=fields['commission_pct'],
         send_all=fields['send_all'],
+        land_code=fields.get('code') or '',
     )
     if err:
         msg = SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.')

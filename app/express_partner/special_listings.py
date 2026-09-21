@@ -661,12 +661,23 @@ def publish_owner_home(
     payment_method: str,
     commission_pct: Any = "2",
     send_all: bool = False,
+    land_code: str = "",
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """انتشار ملک ثبت‌شده در «ملک من» به‌عنوان آگهی فروش عمومی."""
     homes = listings_owned_home(phone)
     if not homes:
         return None, "not_found"
-    land = homes[0]
+    want = str(land_code or "").strip()
+    land = None
+    if want:
+        for home in homes:
+            if str(home.get("code") or "").strip() == want:
+                land = home
+                break
+    else:
+        land = homes[0]
+    if land is None:
+        return None, "not_found"
     if is_published_for_sale(land):
         return None, "already_published"
 

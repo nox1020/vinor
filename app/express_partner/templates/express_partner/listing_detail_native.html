@@ -143,6 +143,39 @@
     font-size: 0.9rem;
     text-decoration: none;
   }
+  #vinorListingDetail .vn-ld__publish {
+    margin: 1.25rem 0 0;
+    padding: 1rem;
+    border-radius: 1rem;
+    background: linear-gradient(160deg, #065f46 0%, #0b1220 70%);
+    border: 1px solid rgba(16,185,129,.28);
+  }
+  #vinorListingDetail .vn-ld__publish h2 { margin: 0; font-size: 1rem; color: #fff; }
+  #vinorListingDetail .vn-ld__publish p { margin: .35rem 0 .7rem; color: #a7f3d0; font-size: .78rem; }
+  #vinorListingDetail .vn-ld__pay { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .7rem; }
+  #vinorListingDetail .vn-ld__pay label {
+    display: inline-flex; align-items: center; gap: .3rem; min-height: 2rem;
+    padding: 0 .7rem; border-radius: .65rem; border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.05); color: #ececec; font-size: .75rem; font-weight: 700;
+  }
+  #vinorListingDetail .vn-ld__field {
+    display: flex; align-items: center; gap: .45rem; margin: 0 0 .7rem; color: #d1d5db; font-size: .78rem;
+  }
+  #vinorListingDetail .vn-ld__field input[type="number"] {
+    width: 4.2rem; min-height: 2rem; border-radius: .55rem; border: 1px solid rgba(255,255,255,.12);
+    background: #111827; color: #fff; text-align: center; font-family: inherit;
+  }
+  #vinorListingDetail .vn-ld__check {
+    display: flex; align-items: center; gap: .4rem; margin: 0 0 .85rem; color: #a1a1aa; font-size: .75rem;
+  }
+  #vinorListingDetail .vn-ld__publish button {
+    display: inline-flex; align-items: center; min-height: 2.4rem; padding: 0 .9rem;
+    border-radius: .75rem; background: #10b981; color: #052e16; font-weight: 800; font-size: .8rem;
+    border: 0; cursor: pointer; font-family: inherit;
+  }
+  #vinorListingDetail .vn-ld__published {
+    margin: .75rem 0 0; font-size: .8rem; font-weight: 700; color: #6ee7b7;
+  }
 </style>
 
 <article id="vinorListingDetail" data-listing-code="{{ d.code|e }}" data-listing-source="{{ d.source|e }}">
@@ -176,6 +209,8 @@
   <div class="vn-ld__body">
     {% if d.source == 'divar' %}
     <span class="vn-ld__badge">دیوار</span>
+    {% elif d.owner_badge %}
+    <span class="vn-ld__badge">{{ d.owner_badge }}</span>
     {% endif %}
     <h1>{{ d.title or 'آگهی' }}</h1>
     {% if d.price %}
@@ -211,6 +246,34 @@
        target="_blank"
        rel="noopener noreferrer"
        data-vinor-direct-action="1">دیدن در دیوار</a>
+    {% endif %}
+
+    {% if d.can_publish %}
+    <form class="vn-ld__publish" method="post" action="{{ url_for('express_partner.my_property_publish') }}" data-vinor-direct-action>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="code" value="{{ d.code }}">
+      <h2>انتشار برای فروش</h2>
+      <p>بعد از انتشار، این ملک در آگهی‌های وینور دیده می‌شود.</p>
+      <div class="vn-ld__pay" role="radiogroup" aria-label="نحوه پرداخت">
+        {% for m in ['نقدی', 'توافقی', 'معاوضه'] %}
+        <label>
+          <input type="radio" name="payment_method" value="{{ m }}"{% if loop.first %} checked{% endif %}>
+          {{ m }}
+        </label>
+        {% endfor %}
+      </div>
+      <label class="vn-ld__field">پورسانت
+        <input type="number" name="express_commission_pct" min="0.1" max="100" step="0.1" value="2" dir="ltr" required>
+        ٪
+      </label>
+      <label class="vn-ld__check">
+        <input type="checkbox" name="auto_send_all_partners" value="1">
+        ارسال به همه همکاران
+      </label>
+      <button type="submit">انتشار برای فروش</button>
+    </form>
+    {% elif d.is_mine and d.published_for_sale %}
+    <p class="vn-ld__published">این ملک برای فروش منتشر شده است.</p>
     {% endif %}
   </div>
 </article>

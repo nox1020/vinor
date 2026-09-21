@@ -221,26 +221,64 @@ def property_for_user(me_phone: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def page_payload(me_phone: str) -> Dict[str, Any]:
-    prop = property_for_user(me_phone)
-    home_code = str((prop or {}).get("code") or (prop or {}).get("id") or "").strip()
-    extra: List[Dict[str, Any]] = []
-    try:
-        from .apk_native import land_card
-        from .special_listings import listings_owned_by
+def property_cards(me_phone: str) -> List[Dict[str, Any]]:
+    """همهٔ ملک‌ها و آگهی‌های این شماره برای لیست کارت دیوار."""
+    from .apk_native import land_card
+    from .special_listings import (
+        is_published_for_sale,
+        listings_owned_by,
+        listings_owned_home,
+    )
 
-        for land in listings_owned_by(me_phone) if me_phone else []:
-            code = str(land.get("code") or "").strip()
-            if not code or code == home_code:
-                continue
-            card = land_card(land)
-            try:
-                card["detail_url"] = url_for("express_partner.land_detail", code=code)
-            except Exception:
-                card["detail_url"] = f"/express/partner/lands/{code}"
-            extra.append(card)
+    seen = set()
+    out: List[Dict[str, Any]] = []
+    rows: List[Dict[str, Any]] = []
+    try:
+        rows.extend(listings_owned_home(me_phone) if me_phone else [])
     except Exception:
-        extra = []
+        pass
+    try:
+        rows.extend(listings_owned_by(me_phone) if me_phone else [])
+    except Exception:
+        pass
+    for land in rows:
+        if not isinstance(land, dict):
+            continue
+        code = str(land.get("code") or "").strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        card = land_card(land)
+        published = False
+        try:
+            published = is_published_for_sale(land)
+        except Exception:
+            published = False
+        img = str(card.get("image_url") or "").strip()
+        images = [img] if img else []
+        try:
+            detail_url = url_for("express_partner.land_detail", code=code)
+        except Exception:
+            detail_url = f"/express/partner/lands/{code}"
+        card.update({
+            "images": images,
+            "image_count": len(images),
+            "published_for_sale": published,
+            "badge_label": "منتشرشده" if published else "خصوصی",
+            "_status_label": "منتشرشده" if published else "خصوصی",
+            "_status_class": "text-emerald-400" if published else "text-slate-400",
+            "_detail_url": detail_url,
+            "detail_url": detail_url,
+            "video": land.get("video") or "",
+            "_commission_amount": int(card.get("commission_amount") or 0),
+        })
+        out.append(card)
+    return out
+
+
+def page_payload(me_phone: str) -> Dict[str, Any]:
+    items = property_cards(me_phone) if me_phone else []
+    prop = property_for_user(me_phone)
     divar: List[Dict[str, Any]] = []
     try:
         from .home_ads_config import partner_divar_profile_entries
@@ -262,13 +300,14 @@ def page_payload(me_phone: str) -> Dict[str, Any]:
     return json_ready({
         "ok": True,
         "logged_in": bool(me_phone),
-        "has_property": bool(prop),
+        "has_property": bool(items),
         "form_url": form_url,
         "publish_url": publish_url,
         "published_for_sale": bool(prop and prop.get("published_for_sale")),
         "payment_methods": ["نقدی", "توافقی", "معاوضه"],
         "default_commission_pct": "2",
-        "listings": extra,
+        "items": items,
+        "listings": items,
         "divar_profiles": divar,
         "property": prop or {},
     })

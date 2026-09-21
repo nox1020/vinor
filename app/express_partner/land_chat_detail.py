@@ -100,17 +100,33 @@ def prepare_land_for_chat_detail(code: str) -> Tuple[Optional[Dict[str, Any]], b
     if not code_s:
         return None, False
 
-    lands = load_ads_cached() or []
-    land = next(
-        (l for l in lands if l.get("code") == code_s and l.get("is_express")),
-        None,
-    )
-    if not land or not isinstance(land, dict):
-        return None, False
-
     me_phone = ""
     if has_request_context():
         me_phone = (session.get("user_phone") or "").strip()
+
+    lands = load_ads_cached() or []
+    land = next(
+        (l for l in lands if str(l.get("code") or "") == code_s and l.get("is_express")),
+        None,
+    )
+    if not land:
+        cand = next(
+            (l for l in lands if isinstance(l, dict) and str(l.get("code") or "") == code_s),
+            None,
+        )
+        if isinstance(cand, dict):
+            try:
+                from .special_listings import _norm_phone, is_my_property_record
+
+                owner = _norm_phone(str(cand.get("owner") or cand.get("user_phone") or ""))
+                me = _norm_phone(me_phone)
+                if is_my_property_record(cand) and owner and me and owner == me:
+                    land = cand
+            except Exception:
+                land = None
+    if not land or not isinstance(land, dict):
+        return None, False
+
     partner_profile = ep_routes._partner_profile_for_phone(me_phone) if me_phone else None
     try:
         is_approved = ep_routes._is_partner_approved(partner_profile)
@@ -490,6 +506,21 @@ def native_listing_detail_payload(code: str, *, source_hint: str = "") -> Option
     meta_parts = [city, location, size, category]
     if source != "divar" and code_out:
         meta_parts.append(code_out)
+    is_mine = False
+    published = False
+    try:
+        from flask import has_request_context as _has_req
+        from .special_listings import _norm_phone, is_my_property_record, is_published_for_sale
+
+        me = ""
+        if _has_req():
+            me = _norm_phone(session.get("user_phone") or "")
+        owner = _norm_phone(str(land.get("owner") or land.get("user_phone") or ""))
+        is_mine = bool(me and owner and me == owner and is_my_property_record(land))
+        published = is_published_for_sale(land)
+    except Exception:
+        is_mine = False
+        published = False
     return {
         "ok": True,
         "source": source,
@@ -512,4 +543,10 @@ def native_listing_detail_payload(code: str, *, source_hint: str = "") -> Option
         "commission_pct": land.get("_commission_pct") or 0,
         "show_divar": source == "divar" and bool(divar_url),
         "can_favorite": source == "vinor",
+        "is_mine": is_mine,
+        "published_for_sale": published if is_mine else True,
+        "can_publish": bool(is_mine and not published),
+        "owner_badge": (
+            "منتشرشده" if is_mine and published else ("خصوصی" if is_mine else "")
+        ),
     }
