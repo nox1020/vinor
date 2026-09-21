@@ -203,7 +203,7 @@ class VisitResultAiToolsFlagTests(unittest.TestCase):
             self.assertNotIn("propose_no_show", names)
 
     def test_tools_present_when_flag_on(self) -> None:
-        """هدف قفل: visit_result/no_show در schema چت نیست."""
+        """نتیجه بازدید در schema چت است وقتی فلگ روشن است (مثل CRM)."""
         with mock.patch.dict(
             os.environ,
             {
@@ -214,11 +214,14 @@ class VisitResultAiToolsFlagTests(unittest.TestCase):
         ):
             from app.ai.agent_tools import tools_schema_for_voice
             from app.ai.audience import VOICE_PARTNER
+            from app.ai.goal import CORE_TOOLS_PARTNER, EXTENDED_CHAT_TOOLS
 
             names = [t["function"]["name"] for t in tools_schema_for_voice(VOICE_PARTNER)]
             self.assertIn("propose_complete_visit", names)
-            self.assertNotIn("propose_visit_result", names)
-            self.assertNotIn("propose_no_show", names)
+            self.assertIn("propose_visit_result", names)
+            self.assertIn("propose_no_show", names)
+            self.assertTrue(set(names).isdisjoint(EXTENDED_CHAT_TOOLS))
+            self.assertTrue(set(names) <= CORE_TOOLS_PARTNER)
 
 
 class VisitResultActivityHookTests(unittest.TestCase):
@@ -247,6 +250,28 @@ class VisitResultActivityHookTests(unittest.TestCase):
             )
             acts = list_activities(actor_key="09125555555", limit=20)
             self.assertTrue(any(a.action == "visit_result_registered" for a in acts))
+
+
+class VisitResultChatPathTests(unittest.TestCase):
+    def test_parse_outcome_phrases(self) -> None:
+        from app.ai.agent_tools import parse_visit_outcome_from_text
+
+        self.assertEqual(parse_visit_outcome_from_text("مشتری علاقه‌مند بود"), "interested")
+        self.assertEqual(parse_visit_outcome_from_text("بی‌علاقه بود"), "not_interested")
+        self.assertEqual(parse_visit_outcome_from_text("باید دوباره پیگیری کنیم"), "follow_up")
+        self.assertEqual(parse_visit_outcome_from_text("نیومد"), "no_show")
+        self.assertEqual(parse_visit_outcome_from_text("نتیجه بازدید را ثبت کن"), "")
+
+    def test_home_peygiri_stays_in_chat(self) -> None:
+        from app.express_partner.sales_coach import build_home_ai_quick_prompts
+
+        items = build_home_ai_quick_prompts(is_approved=True)
+        peygiri = next((i for i in items if i.get("label") == "پیگیری"), None)
+        self.assertIsNotNone(peygiri)
+        assert peygiri is not None
+        self.assertEqual(peygiri.get("intent"), "next_action")
+        self.assertFalse(peygiri.get("href"))
+        self.assertIn("چت", peygiri.get("prompt") or "")
 
 
 if __name__ == "__main__":

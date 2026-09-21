@@ -343,8 +343,8 @@ def agent_system_hint(voice: str | None) -> str:
     return (
         "دستیار فروش: حرف بزن، یک سؤال بعدی بپرس، کارت تأیید آماده کن. "
         "مشتری دارم→نام→موبایل→propose_lead→کارت «برای ثبت تأیید کنید». "
-        "سپس search_lands (حداکثر ۲)→[[LAND]]→visit/complete/deal. "
-        "روزانه: next_action + listing + call/followup. بازدید یکی‌یکی. "
+        "سپس search_lands (حداکثر ۲)→[[LAND]]→visit/complete→نتیجه→deal. "
+        "روزانه: next_action + listing. نتیجه بازدید: propose_visit_result / no_show. "
         "تا tool + کارت + تأیید Backend موفق نشده، نگو ثبت/انجام/ذخیره شد."
     )
 
@@ -455,6 +455,14 @@ def tools_schema_for_voice(voice: str | None) -> list[dict[str, Any]]:
             if crm_ai_tools_enabled():
                 schemas.append(_schema_log_call())
                 schemas.append(_schema_followup())
+        except Exception:
+            pass
+        try:
+            from app.visit_result.config import visit_result_ai_tools_enabled
+
+            if visit_result_ai_tools_enabled():
+                schemas.append(_schema_visit_result())
+                schemas.append(_schema_no_show())
         except Exception:
             pass
         return _shrink_tool_schemas(schemas)
@@ -2479,7 +2487,17 @@ def try_continue_lead_from_user_message(
     from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
 
     chip = str(chip_intent or "").strip().lower()
-    switched = chip in ("find_land", "followup", "next_action", "visit", "marketing", "deal")
+    switched = chip in (
+        "find_land",
+        "followup",
+        "next_action",
+        "visit",
+        "marketing",
+        "deal",
+        "visit_result",
+        "no_show",
+        "complete_visit",
+    )
 
     if awaiting == "name":
         if not _looks_like_customer_name(msg):
@@ -2523,6 +2541,178 @@ def try_continue_lead_from_user_message(
         return _lead_tool_to_chat_result(tool_out)
 
     return None
+
+
+_VISIT_OUTCOME_PHRASES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "interested",
+        ("علاقه‌مند", "دوست داشت", "میخواد بخره", "می‌خواد بخره", "interested"),
+    ),
+    (
+        "not_interested",
+        ("بی‌علاقه", "نخواست", "نپسندید", "رد کرد", "not_interested"),
+    ),
+    (
+        "follow_up",
+        ("پیگیری دوباره", "باید دوباره پیگیری", "follow_up"),
+    ),
+)
+_NO_SHOW_PHRASES = ("نیومد", "نیامد", "عدم حضور", "نرسید", "no show", "no_show")
+_VISIT_RESULT_ASK = "نتیجه بازدید چی بود؟ علاقه‌مند / پیگیری دوباره / بی‌علاقه / نیومد."
+
+
+def parse_visit_outcome_from_text(text: str) -> str:
+    """outcome معتبر از متن آزاد کاربر — خالی اگر مبهم باشد."""
+    msg = (text or "").strip().lower()
+    if not msg:
+        return ""
+    if any(p in msg for p in _NO_SHOW_PHRASES):
+        return "no_show"
+    for outcome, phrases in _VISIT_OUTCOME_PHRASES:
+        if any(p in msg for p in phrases):
+            return outcome
+    return ""
+
+
+def _visit_result_ask_ui(*, land_code: str = "") -> dict[str, Any]:
+    return {
+        "type": "next_action",
+        "title": "نتیجه بازدید",
+        "subtitle": "علاقه‌مند / پیگیری دوباره / بی‌علاقه / نیومد",
+        "cta": "ثبت نتیجه",
+        "chat_prompt": "نتیجه بازدید را ثبت کن",
+        "chat_intent": "visit_result",
+        "land_code": str(land_code or ""),
+        "status": "ready",
+    }
+
+
+def _deal_ask_ui(*, land_code: str = "") -> dict[str, Any]:
+    return {
+        "type": "next_action",
+        "title": "ثبت معامله",
+        "subtitle": "اگر توافق شد، از همین چت معامله را ثبت کن",
+        "cta": "ثبت معامله",
+        "chat_prompt": "ثبت معامله",
+        "chat_intent": "deal",
+        "land_code": str(land_code or ""),
+        "status": "ready",
+    }
+
+
+def try_continue_visit_result_from_user_message(
+    phone: str,
+    text: str,
+    *,
+    audience: str = "",
+    voice: str = "",
+    thread_id: str | None = None,
+    chip_intent: str = "",
+) -> dict[str, Any] | None:
+    """نتیجه بازدید را بدون LLM از متن/چیپ بساز — همان الگوی visit/lead draft."""
+    v = (voice or "").strip().lower()
+    aud = (audience or "").strip().lower()
+    if v in (VOICE_PUBLIC, VOICE_ADMIN, VOICE_LAWYER) or aud == AUDIENCE_ADMIN:
+        return None
+    me = (phone or "").strip()
+    msg = (text or "").strip()
+    if not me or not msg:
+        return None
+    if not partner_is_approved(me):
+        return None
+    if _visit_draft_awaiting(_load_visit_draft(me, thread_id=thread_id)):
+        return None
+    if _lead_draft_awaiting(_load_lead_draft(me, thread_id=thread_id)):
+        return None
+    gate = _visit_result_tools_gate(me)
+    if gate is not None:
+        return None
+
+    chip = str(chip_intent or "").strip().lower()
+    outcome = parse_visit_outcome_from_text(msg)
+    wants_result = chip in ("visit_result", "no_show") or bool(outcome)
+    if not wants_result:
+        return None
+
+    try:
+        from flask import g
+
+        g.ai_tool_thread_id = (thread_id or "").strip() or None
+        g.ai_tool_audience = audience or AUDIENCE_PARTNER
+        g.ai_last_user_message = msg
+    except Exception:
+        pass
+
+    resolved = _resolve_visit_for_result_tools({}, phone=me)
+    if not resolved.get("ok"):
+        if chip in ("visit_result", "no_show"):
+            return {
+                "ok": True,
+                "reply": str(resolved.get("error") or "بازدید فعالی برای ثبت نتیجه نیست."),
+                "agent_actions": [],
+                "meta": {"provider": "visit_result_step", "forced": True},
+            }
+        return None
+
+    if outcome == "no_show" or chip == "no_show":
+        tool_out = run_tool(
+            TOOL_NO_SHOW,
+            {"land_code": resolved.get("land_code") or ""},
+            phone=me,
+            audience=audience,
+            voice=voice,
+            thread_id=thread_id,
+        )
+        mapped = _visit_tool_to_chat_result(tool_out)
+        if mapped:
+            return mapped
+        err = ""
+        if isinstance(tool_out, dict):
+            err = str(tool_out.get("error") or "")
+            mr = tool_out.get("model_result")
+            if not err and isinstance(mr, dict):
+                err = str(mr.get("error") or "")
+        return {
+            "ok": True,
+            "reply": err or "ثبت عدم حضور الان ممکن نیست.",
+            "agent_actions": [],
+            "meta": {"provider": "visit_result_step", "forced": True},
+        }
+
+    if outcome in ("interested", "not_interested", "follow_up"):
+        tool_out = run_tool(
+            TOOL_VISIT_RESULT,
+            {
+                "land_code": resolved.get("land_code") or "",
+                "outcome": outcome,
+            },
+            phone=me,
+            audience=audience,
+            voice=voice,
+            thread_id=thread_id,
+        )
+        mapped = _visit_tool_to_chat_result(tool_out)
+        if mapped:
+            return mapped
+        err = ""
+        if isinstance(tool_out, dict):
+            err = str(tool_out.get("error") or "")
+            mr = tool_out.get("model_result")
+            if not err and isinstance(mr, dict):
+                err = str(mr.get("error") or "")
+        return {
+            "ok": True,
+            "reply": err or "ثبت نتیجه بازدید الان ممکن نیست.",
+            "agent_actions": [],
+            "meta": {"provider": "visit_result_step", "forced": True},
+        }
+
+    return {
+        "ok": True,
+        "reply": _VISIT_RESULT_ASK,
+        "agent_actions": [],
+        "meta": {"provider": "visit_result_step", "forced": True},
+    }
 
 
 def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, Any]:
@@ -3753,7 +3943,10 @@ _SIMPLE_TX_META = {
         "title": "تأیید: بازدید انجام شد",
         "need_mode": ("visit_done",),
         "tool_ok_modes": ("visit_done",),
-        "instruction": "کارت تأیید؛ هنوز ثبت نشده.",
+        "instruction": (
+            "کارت تأیید انجام بازدید؛ هنوز ثبت نشده. "
+            "بعد از تأیید واقعی، نتیجه را بپرس: علاقه‌مند / پیگیری دوباره / بی‌علاقه / نیومد."
+        ),
     },
     "confirm_deal": {
         "title": "تأیید معامله",
@@ -4570,17 +4763,36 @@ def _confirm_visit_result(*, phone: str, token: str, pending: dict[str, Any]) ->
     land = str(result.land_code or payload.get("land_code") or "")
     if outcome == "interested":
         _remember_sales(phone, "liked", land_code=land, detail=outcome)
+        follow = "مشتری علاقه‌مند است. اگر توافق شد، معامله را از همین چت ثبت کن."
+        ui = _deal_ask_ui(land_code=land)
     elif outcome == "not_interested":
         _remember_sales(phone, "rejected", land_code=land, detail=outcome)
+        follow = "ثبت شد. اگر مشتری فایل دیگری می‌خواهد بگو تا جستجو کنم."
+        ui = None
     else:
         _remember_sales(phone, "viewed", land_code=land, detail=outcome)
-    return {
+        follow = "پیگیری ثبت شد. قدم بعدی را از همین چت بپرس."
+        ui = {
+            "type": "next_action",
+            "title": "کار بعدی",
+            "subtitle": follow,
+            "cta": "قدم بعدی",
+            "chat_prompt": "قدم بعدی فروش من چیست؟ از همین چت جلو ببر.",
+            "chat_intent": "next_action",
+            "land_code": land,
+            "status": "ready",
+        }
+    out: dict[str, Any] = {
         "ok": True,
         "message": "نتیجه بازدید ثبت شد.",
+        "followup_message": follow,
         "result_id": result.id,
         "outcome": result.outcome,
         "land_code": result.land_code,
     }
+    if ui:
+        out["ui_action"] = ui
+    return out
 
 
 def _confirm_no_show(*, phone: str, token: str, pending: dict[str, Any]) -> dict[str, Any]:
@@ -4819,6 +5031,34 @@ def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
         return {"ok": False, "error": "ثبت انجام بازدید ممکن نشد."}
     save_express_visit_requests(visits)
     st = str(rec.get("status") or "").strip()
+    result_tools = False
+    try:
+        from app.visit_result.config import visit_result_ai_tools_enabled
+
+        result_tools = bool(visit_result_ai_tools_enabled())
+    except Exception:
+        result_tools = False
+
+    if result_tools:
+        if st == "completed" or err == "already_completed":
+            msg = "بازدید انجام شد ثبت شد."
+            if err == "already_completed":
+                msg = "بازدید قبلاً انجام‌شده ثبت شده."
+        elif err == "already_pending":
+            msg = "قبلاً ثبت شده و منتظر تأیید ادمین است."
+        else:
+            msg = "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است."
+        out: dict[str, Any] = {
+            "ok": True,
+            "message": msg,
+            "followup_message": _VISIT_RESULT_ASK,
+            "ui_action": _visit_result_ask_ui(land_code=code),
+            "land_code": code,
+        }
+        if st == "completed" or err == "already_completed":
+            out["tx_mode"] = "deal"
+        return out
+
     if st == "completed" or err == "already_completed":
         msg = (
             "بازدید انجام شد ثبت و تأیید شد. "

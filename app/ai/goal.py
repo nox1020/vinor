@@ -51,6 +51,8 @@ CORE_TOOLS_PARTNER = frozenset(
         "propose_lead",
         "propose_visit_request",
         "propose_complete_visit",
+        "propose_visit_result",
+        "propose_no_show",
         "propose_deal",
         "propose_release_deal",
         "propose_log_call",
@@ -86,8 +88,6 @@ CORE_TOOLS_ADMIN = frozenset(
 # در کد می‌مانند برای کارت/مسیرهای قدیمی؛ به مدل چت داده نمی‌شوند
 EXTENDED_CHAT_TOOLS = frozenset(
     {
-        "propose_visit_result",
-        "propose_no_show",
         "propose_offer",
         "propose_counter_offer",
         "propose_reservation",

@@ -142,6 +142,31 @@ class IntentTests(unittest.TestCase):
         )
         self.assertIn("search_lands", names)
 
+    def test_visit_result_selected_for_outcome_phrase(self) -> None:
+        from app.ai.tools.selection import select_tool_names_for_request
+
+        names = select_tool_names_for_request(
+            "partner", user_message="مشتری علاقه‌مند بود"
+        )
+        self.assertIn("propose_visit_result", names)
+
+    def test_pipeline_peygiri_selects_next_action_not_crm(self) -> None:
+        from app.ai.tools.selection import select_tool_names_for_request
+
+        names = select_tool_names_for_request("partner", user_message="پیگیری")
+        self.assertIn("suggest_next_action", names)
+        self.assertNotIn("propose_followup", names)
+        self.assertNotIn("propose_log_call", names)
+
+    def test_visit_result_chip_tools(self) -> None:
+        from app.ai.tools.selection import select_tool_names_for_request
+
+        names = select_tool_names_for_request(
+            "partner", user_message="نتیجه بازدید را ثبت کن", chip_intent="visit_result"
+        )
+        self.assertIn("propose_visit_result", names)
+        self.assertIn("propose_no_show", names)
+
 
 if __name__ == "__main__":
     unittest.main()

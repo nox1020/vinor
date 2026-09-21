@@ -42,7 +42,16 @@ CHIP_INTENT_HINTS: dict[str, str] = {
         f"نام مشتری→موبایل→تاریخ یکی‌یکی. تماس: {VISIT_COORD_PHONE}."
     ),
     "complete_visit": (
-        "هدف: بستن قیف. propose_complete_visit + کارت تأیید."
+        "هدف: بستن قیف. اگر بازدید هنوز اعلام نشده propose_complete_visit؛ "
+        "اگر انجام شده propose_visit_result (علاقه‌مند/پیگیری/بی‌علاقه) یا propose_no_show."
+    ),
+    "visit_result": (
+        "هدف: ثبت نتیجه بازدید از همین چت. "
+        "اگر outcome در پیام هست propose_visit_result؛ اگر نیومد/عدم حضور propose_no_show؛ "
+        "وگرنه فقط یکی بپرس: علاقه‌مند / پیگیری دوباره / بی‌علاقه / نیومد. لینک صفحه نده."
+    ),
+    "no_show": (
+        "هدف: عدم حضور مشتری. propose_no_show + کارت تأیید. لینک صفحه نده."
     ),
     "deal": (
         "هدف: معامله نهایی. propose_deal + کارت تأیید."
@@ -88,6 +97,8 @@ PLANNING_SKIP_CHIPS = frozenset(
     {
         "visit",
         "complete_visit",
+        "visit_result",
+        "no_show",
         "deal",
         "release",
         "coop_apply",
@@ -115,9 +126,18 @@ _SIGNAL_KEYWORDS: dict[str, tuple[str, ...]] = {
         "گزینه",
     ),
     "visit": ("بازدید", "visit", "رزرو"),
+    "visit_result": (
+        "نتیجه بازدید",
+        "علاقه‌مند",
+        "بی‌علاقه",
+        "نپسندید",
+        "پیگیری دوباره",
+    ),
+    "no_show": ("نیومد", "نیامد", "عدم حضور", "نرسید", "no_show"),
     "deal": ("معامله", "deal", "فروش", "release", "آزاد"),
     "listing": ("آگهی", "listing", "متن آگهی", "مارکتینگ"),
-    "crm": ("تماس", "پیگیری", "follow", "call", "crm"),
+    "crm": ("تماس", "فالوآپ", "follow", "call", "crm", "ثبت تماس", "یادآوری تماس"),
+    "pipeline": ("پیگیری", "کار بعدی", "قدم بعدی"),
     "lead": ("مشتری دارم", "ثبت مشتری", "customer", "lead"),
     "coop": ("همکاری", "بازاریاب", "coop", "apply", "ثبت نام"),
     "admin_partner": ("همکار", "partner", "درخواست همکاری"),

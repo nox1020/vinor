@@ -252,8 +252,8 @@ class VinorAssistant:
         self, ctx: AssistantContext, text: str, intent: ChatIntent
     ) -> dict[str, Any] | None:
         """
-        این تنها «حالت گفتگو»ی نگه‌داشته‌شده است: پیش‌نویس بازدید و مشتری در
-        Backend ذخیره می‌شوند، پس ادامهٔ مرحله‌ای باید بدون مدل جلو برود.
+        این تنها «حالت گفتگو»ی نگه‌داشته‌شده است: پیش‌نویس بازدید و مشتری و
+        نتیجهٔ بازدید در Backend ذخیره می‌شوند، پس ادامهٔ مرحله‌ای باید بدون مدل جلو برود.
         """
         if ctx.is_lawyer or ctx.is_admin or not ctx.user_key:
             return None
@@ -265,6 +265,7 @@ class VinorAssistant:
         from .agent_tools import (
             try_continue_lead_from_user_message,
             try_continue_visit_from_user_message,
+            try_continue_visit_result_from_user_message,
         )
 
         out = try_continue_visit_from_user_message(
@@ -287,6 +288,17 @@ class VinorAssistant:
         )
         if out and out.get("ok"):
             return self._shortcut_response(ctx, out, provider="lead_step")
+
+        out = try_continue_visit_result_from_user_message(
+            ctx.user_key,
+            text,
+            audience=ctx.audience,
+            voice=ctx.voice,
+            thread_id=ctx.thread_id,
+            chip_intent=intent.chip,
+        )
+        if out and out.get("ok"):
+            return self._shortcut_response(ctx, out, provider="visit_result_step")
         return None
 
     def _reset_visit_draft(self, ctx: AssistantContext) -> None:

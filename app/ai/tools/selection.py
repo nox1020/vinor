@@ -20,6 +20,8 @@ from app.ai.agent_tools import (
     TOOL_RELEASE,
     TOOL_SEARCH,
     TOOL_VISIT,
+    TOOL_VISIT_RESULT,
+    TOOL_NO_SHOW,
 )
 
 from .registry import _schema_tool_name, schemas_for_tool_names
@@ -33,7 +35,9 @@ _CHIP_TOOL_NAMES: dict[str, frozenset[str]] = {
     "next_action": frozenset({TOOL_NEXT}),
     "marketing": frozenset({TOOL_LISTING}),
     "visit": frozenset({TOOL_VISIT}),
-    "complete_visit": frozenset({TOOL_COMPLETE_VISIT}),
+    "complete_visit": frozenset({TOOL_COMPLETE_VISIT, TOOL_VISIT_RESULT, TOOL_NO_SHOW}),
+    "visit_result": frozenset({TOOL_VISIT_RESULT, TOOL_NO_SHOW}),
+    "no_show": frozenset({TOOL_NO_SHOW}),
     "deal": frozenset({TOOL_DEAL}),
     "release": frozenset({TOOL_RELEASE}),
     "find_land": frozenset({TOOL_SEARCH}),
@@ -191,14 +195,21 @@ def select_tool_names_for_request(
             return [TOOL_LEAD]
         if _is_guidance_only_message(user_message, chip_intent):
             return []
-        if sig["visit"]:
-            keep.update({TOOL_VISIT, TOOL_COMPLETE_VISIT})
+        if sig.get("visit_result") or sig.get("no_show"):
+            keep.update({TOOL_VISIT_RESULT, TOOL_NO_SHOW})
+            if sig.get("no_show"):
+                return sorted({TOOL_NO_SHOW, TOOL_VISIT_RESULT})[:3]
+        elif sig["visit"]:
+            keep.update({TOOL_VISIT, TOOL_COMPLETE_VISIT, TOOL_VISIT_RESULT})
         elif sig["deal"]:
             keep.update({TOOL_DEAL, TOOL_RELEASE})
         elif sig["listing"]:
             keep.add(TOOL_LISTING)
         elif sig["lead"]:
             keep.add(TOOL_LEAD)
+        elif sig.get("pipeline"):
+            keep.add(TOOL_NEXT)
+            keep.add(TOOL_VISIT_RESULT)
         elif sig["crm"]:
             keep.update({TOOL_LOG_CALL, TOOL_FOLLOWUP})
         elif sig["search"]:

@@ -496,7 +496,7 @@ def build_messages(
         mem_text = _get_memory_prompt_text()
         if mem_text:
             messages.append({"role": "system", "content": mem_text})
-    if user_key and ab.get("inject_funnel_hint", True) and hist_has_user:
+    if user_key and ab.get("inject_funnel_hint", True):
         try:
             from .prompt_optimize import skip_redundant_sales_hints
 

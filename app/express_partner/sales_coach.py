@@ -998,15 +998,6 @@ def build_home_ai_quick_prompts(
             item["href"] = href
         out.append(item)
 
-    requests_url = "/express/partner/requests"
-    try:
-        from flask import has_request_context, url_for
-
-        if has_request_context():
-            requests_url = url_for("express_partner.requests")
-    except Exception:
-        pass
-
     add(
         "مشتری دارم",
         prompt="مشتری دارم",
@@ -1031,12 +1022,11 @@ def build_home_ai_quick_prompts(
     )
     add(
         "پیگیری",
-        prompt="پیگیری",
-        intent="followup",
+        prompt="قدم بعدی فروش من چیست؟ از همین چت جلو ببر.",
+        intent="next_action",
         icon="clipboard",
         subtitle="درخواست، بازدید و معامله",
         variant="tile",
-        href=requests_url,
     )
     return out[:3]
 
