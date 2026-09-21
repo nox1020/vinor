@@ -1137,6 +1137,8 @@
       /\/profile\/edit$/.test(p) ||
       /\/login/.test(p) ||
       /\/verify/.test(p) ||
+      /\/lands\/[^/]+$/.test(p) ||
+      /\/divar\/[^/]+$/.test(p) ||
       /[?&]register=1(?:&|$)/.test(q);
     var nav = document.getElementById('bottomNavMenu');
     if (nav) {

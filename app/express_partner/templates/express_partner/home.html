@@ -374,24 +374,13 @@
         }
       })();
     if (landCode) {
-      var tries = 0;
-      (function waitShow() {
-        tries += 1;
-        var live = document.getElementById('aiMessages');
-        if (live && live.isConnected && typeof window.vinorShowLandInChat === 'function') {
-          window.vinorShowLandInChat(landCode);
-          try { sessionStorage.removeItem('vinor_land_chat_code'); } catch (_) {}
-          try {
-            var u = new URL(window.location.href);
-            if (u.searchParams.has('land')) {
-              u.searchParams.delete('land');
-              history.replaceState(history.state || {}, '', u.pathname + (u.search || '') + (u.hash || ''));
-            }
-          } catch (_) {}
-          return;
-        }
-        if (tries < 50) setTimeout(waitShow, 80);
-      })();
+      try { sessionStorage.removeItem('vinor_land_chat_code'); } catch (_) {}
+      var landDest = '/express/partner/lands/' + encodeURIComponent(landCode);
+      if (typeof window.vinorExpressNavigate === 'function') {
+        window.vinorExpressNavigate(landDest, { forward: true });
+      } else {
+        window.location.replace(landDest);
+      }
     }
   } catch (_) {}
 
@@ -406,30 +395,13 @@
         }
       })();
     if (divarTok) {
-      var dtries = 0;
-      (function waitShowDivar() {
-        dtries += 1;
-        var live = document.getElementById('aiMessages');
-        var ready = live && live.isConnected;
-        if (ready && typeof window.vinorShowDivarInChat === 'function') {
-          window.vinorShowDivarInChat(divarTok);
-        } else if (ready && typeof window.vinorShowLandInChat === 'function') {
-          window.vinorShowLandInChat('divar:' + divarTok);
-        } else if (dtries < 50) {
-          setTimeout(waitShowDivar, 80);
-          return;
-        } else {
-          return;
-        }
-        try { sessionStorage.removeItem('vinor_divar_chat_token'); } catch (_) {}
-        try {
-          var du = new URL(window.location.href);
-          if (du.searchParams.has('divar')) {
-            du.searchParams.delete('divar');
-            history.replaceState(history.state || {}, '', du.pathname + (du.search || '') + (du.hash || ''));
-          }
-        } catch (_) {}
-      })();
+      try { sessionStorage.removeItem('vinor_divar_chat_token'); } catch (_) {}
+      var divarDest = '/express/partner/divar/' + encodeURIComponent(divarTok);
+      if (typeof window.vinorExpressNavigate === 'function') {
+        window.vinorExpressNavigate(divarDest, { forward: true });
+      } else {
+        window.location.replace(divarDest);
+      }
     }
   } catch (_) {}
 

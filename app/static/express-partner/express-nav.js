@@ -226,31 +226,10 @@
       if (!divar) divar = String(q.get('divar') || '').trim();
     } catch (_) {}
     if (!code && !divar) return;
-    var tries = 0;
-    (function tick() {
-      tries += 1;
-      var live = document.getElementById('aiMessages');
-      var ready = !!(live && live.isConnected);
-      if (code && ready && typeof window.vinorShowLandInChat === 'function') {
-        try { window.vinorShowLandInChat(code); } catch (_) {}
-        try { sessionStorage.removeItem('vinor_land_chat_code'); } catch (_) {}
-        stripChatOpenQueryFromUrl();
-        return;
-      }
-      if (divar && ready && typeof window.vinorShowDivarInChat === 'function') {
-        try { window.vinorShowDivarInChat(divar); } catch (_) {}
-        try { sessionStorage.removeItem('vinor_divar_chat_token'); } catch (_) {}
-        stripChatOpenQueryFromUrl();
-        return;
-      }
-      if (divar && ready && typeof window.vinorShowLandInChat === 'function') {
-        try { window.vinorShowLandInChat('divar:' + divar); } catch (_) {}
-        try { sessionStorage.removeItem('vinor_divar_chat_token'); } catch (_) {}
-        stripChatOpenQueryFromUrl();
-        return;
-      }
-      if (tries < 50) setTimeout(tick, 80);
-    })();
+    try { sessionStorage.removeItem('vinor_land_chat_code'); } catch (_) {}
+    try { sessionStorage.removeItem('vinor_divar_chat_token'); } catch (_) {}
+    if (code) openListingDetail(code);
+    else openListingDetail('divar:' + divar);
   }
 
   function currentlyOnHomePage() {
@@ -330,103 +309,49 @@
     return true;
   }
 
+  function listingDetailHref(code) {
+    code = String(code || '').trim();
+    if (!code) return '';
+    if (code.indexOf('divar:') === 0) {
+      return '/express/partner/divar/' + encodeURIComponent(code.slice(6));
+    }
+    return '/express/partner/lands/' + encodeURIComponent(code);
+  }
+
+  function openListingDetail(code) {
+    var href = listingDetailHref(code);
+    if (!href) return false;
+    try {
+      var here = normPath(window.location.pathname || '');
+      var there = normPath(parseUrl(href).pathname);
+      if (here === there) return true;
+    } catch (_) {}
+    if (typeof vinorExpressNavigate === 'function' && document.getElementById('vinor-express-page-swap')) {
+      vinorExpressNavigate(href, { forward: true });
+    } else {
+      window.location.assign(href);
+    }
+    return true;
+  }
+
   function openLandFromNavTarget(href) {
     var divarTok = extractDivarTokenFromHref(href);
     if (divarTok) return openDivarInChat(divarTok);
     var code = extractLandCodeFromHref(href);
-    /* ?land= فقط وقتی همین‌جا خانه است؛ وگرنه باید به خانه navigate شود */
     if (!code && currentlyOnHomePage()) code = extractHomeLandParam(href);
     if (!code) return false;
     return openLandInChat(code);
   }
 
   function openLandInChat(code) {
-    code = String(code || '').trim();
-    if (!code) return false;
-    var onHome = currentlyOnHomePage() || !!document.getElementById('homeDashboardPage');
-    var hasMessages = !!document.getElementById('aiMessages');
-    if (onHome && hasMessages) {
-      if (typeof window.vinorShowLandInChat === 'function') {
-        try {
-          window.vinorShowLandInChat(code);
-        } catch (_) {}
-        return true;
-      }
-      try {
-        sessionStorage.setItem('vinor_land_chat_code', code);
-      } catch (_) {}
-      setTimeout(function () {
-        if (typeof window.vinorShowLandInChat === 'function') {
-          try {
-            sessionStorage.removeItem('vinor_land_chat_code');
-          } catch (_) {}
-          try {
-            window.vinorShowLandInChat(code);
-          } catch (_) {}
-        }
-      }, 450);
-      return true;
-    }
-    try {
-      sessionStorage.setItem('vinor_land_chat_code', code);
-      sessionStorage.setItem('vinor_land_chat_from_nav', '1');
-    } catch (_) {}
-    prefetchLandChatDetail(code);
-    var dest = homeUrlWithLand(code);
-    if (typeof vinorExpressNavigate === 'function' && document.getElementById('vinor-express-page-swap')) {
-      vinorExpressNavigate(dest, { forward: true, skipLandChat: true });
-    } else {
-      window.location.assign(dest);
-    }
-    return true;
+    return openListingDetail(code);
   }
 
   function openDivarInChat(token) {
     token = String(token || '').trim();
     if (!token) return false;
     if (token.indexOf('divar:') === 0) token = token.slice(6);
-    var onHome = currentlyOnHomePage() || !!document.getElementById('homeDashboardPage');
-    var hasMessages = !!document.getElementById('aiMessages');
-    function showDivar(tok) {
-      if (typeof window.vinorShowDivarInChat === 'function') {
-        try {
-          window.vinorShowDivarInChat(tok);
-        } catch (_) {}
-        return true;
-      }
-      if (typeof window.vinorShowLandInChat === 'function') {
-        try {
-          window.vinorShowLandInChat('divar:' + tok);
-        } catch (_) {}
-        return true;
-      }
-      return false;
-    }
-    if (onHome && hasMessages) {
-      if (showDivar(token)) return true;
-      try {
-        sessionStorage.setItem('vinor_divar_chat_token', token);
-      } catch (_) {}
-      setTimeout(function () {
-        try {
-          sessionStorage.removeItem('vinor_divar_chat_token');
-        } catch (_) {}
-        showDivar(token);
-      }, 450);
-      return true;
-    }
-    try {
-      sessionStorage.setItem('vinor_divar_chat_token', token);
-      sessionStorage.setItem('vinor_land_chat_from_nav', '1');
-    } catch (_) {}
-    prefetchLandChatDetail('divar:' + token);
-    var dest = homeUrlWithDivar(token);
-    if (typeof vinorExpressNavigate === 'function' && document.getElementById('vinor-express-page-swap')) {
-      vinorExpressNavigate(dest, { forward: true, skipLandChat: true });
-    } else {
-      window.location.assign(dest);
-    }
-    return true;
+    return openListingDetail('divar:' + token);
   }
 
   window.vinorOpenLandInChat = openLandInChat;
@@ -436,8 +361,7 @@
     var p = normPath(pathname || '');
     if (ROUTE_REGISTRY[p]) return ROUTE_REGISTRY[p];
     if (LAND_DETAIL_RE.test(p) || DIVAR_DETAIL_RE.test(p)) {
-      /* صفحه جزئیات حذف شد — به خانه هدایت می‌شود */
-      return { tab: 'home', depth: 1, bottomNav: true, prefetch: false };
+      return { tab: 'home', depth: 1, bottomNav: false, prefetch: true };
     }
     if (p.indexOf(PREFIX) === 0) {
       return { tab: '', depth: 1, bottomNav: true, prefetch: true };
@@ -781,8 +705,8 @@
 
   function landDetailHtmlLooksValid(html) {
     if (!html || typeof html !== 'string') return false;
-    return html.indexOf('id="vinor-land-detail-styles"') !== -1 &&
-      html.indexOf('id="landDetailPage"') !== -1;
+    return html.indexOf('id="vinorListingDetail"') !== -1 ||
+      (html.indexOf('id="vinor-land-detail-styles"') !== -1 && html.indexOf('id="landDetailPage"') !== -1);
   }
 
   function isCurrentAuthShell() {

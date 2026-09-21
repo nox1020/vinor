@@ -1,0 +1,243 @@
+{% extends 'express_partner/base.html' %}
+{% set d = detail or {} %}
+{% block title %}{{ (d.title or 'جزئیات آگهی') ~ ' | وینور' }}{% endblock %}
+
+{% block content %}
+<style>
+  html:has(#vinorListingDetail),
+  body:has(#vinorListingDetail) { background: #000 !important; }
+  html:has(#vinorListingDetail) #bottomNavMenu { display: none !important; }
+  #vinorListingDetail {
+    background: #000;
+    color: #ececec;
+    min-height: 100dvh;
+    max-width: 28rem;
+    margin-inline: auto;
+    padding: 0 0 2.5rem;
+    font-family: Vazirmatn, sans-serif;
+  }
+  #vinorListingDetail .vn-ld__bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.75rem 0.45rem;
+  }
+  #vinorListingDetail .vn-ld__orb {
+    width: 2.625rem;
+    height: 2.625rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: #111;
+    color: #ececec;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    text-decoration: none;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+  #vinorListingDetail .vn-ld__title-pill {
+    flex: 1;
+    height: 2.625rem;
+    border-radius: 9999px;
+    background: #111;
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #fff;
+  }
+  #vinorListingDetail .vn-ld__fav.is-on { color: #fbbf24; }
+  #vinorListingDetail .vn-ld__gallery {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    background: #111;
+  }
+  #vinorListingDetail .vn-ld__gallery img {
+    width: 100%;
+    min-width: 100%;
+    height: 14rem;
+    object-fit: cover;
+    scroll-snap-align: start;
+    background: #1a2332;
+    flex-shrink: 0;
+  }
+  #vinorListingDetail .vn-ld__empty {
+    height: 14rem;
+    background: #1a2332;
+    display: grid;
+    place-items: center;
+    color: #52525b;
+    font-size: 2rem;
+  }
+  #vinorListingDetail .vn-ld__body { padding: 1rem; }
+  #vinorListingDetail .vn-ld__badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #bae6fd;
+    background: #152030;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    margin-bottom: 0.45rem;
+  }
+  #vinorListingDetail h1 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.45;
+  }
+  #vinorListingDetail .vn-ld__price {
+    margin: 0.5rem 0 0;
+    font-size: 1rem;
+    color: #94a3b8;
+  }
+  #vinorListingDetail .vn-ld__comm {
+    margin: 0.35rem 0 0;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #34d399;
+  }
+  #vinorListingDetail .vn-ld__meta {
+    margin: 0.5rem 0 0;
+    font-size: 0.8125rem;
+    color: #8e8e93;
+  }
+  #vinorListingDetail .vn-ld__rows {
+    margin: 1rem 0 0;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  #vinorListingDetail .vn-ld__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.8125rem;
+  }
+  #vinorListingDetail .vn-ld__row-k { color: #8e8e93; }
+  #vinorListingDetail .vn-ld__row-v { color: #ececec; font-weight: 600; text-align: left; }
+  #vinorListingDetail .vn-ld__desc {
+    margin: 1rem 0 0;
+    font-size: 0.875rem;
+    line-height: 1.7;
+    color: #e4e4e7;
+    white-space: pre-wrap;
+  }
+  #vinorListingDetail .vn-ld__divar {
+    display: block;
+    margin: 1.25rem 0 0;
+    padding: 0.9rem 1rem;
+    border-radius: 9999px;
+    background: #1c1c1e;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    text-decoration: none;
+  }
+</style>
+
+<article id="vinorListingDetail" data-listing-code="{{ d.code|e }}" data-listing-source="{{ d.source|e }}">
+  <header class="vn-ld__bar">
+    <button type="button" class="vn-ld__orb" id="listingDetailBack" aria-label="بازگشت">‹</button>
+    <div class="vn-ld__title-pill">جزئیات آگهی</div>
+    {% if d.can_favorite %}
+    <button type="button"
+            class="vn-ld__orb vn-ld__fav"
+            data-fav-code="{{ d.code|e }}"
+            data-land-detail-fav
+            aria-label="نشان کردن"
+            aria-pressed="false">
+      <i class="far fa-bookmark vinor-fav-icon" aria-hidden="true"></i>
+    </button>
+    {% else %}
+    <span class="vn-ld__orb" aria-hidden="true"></span>
+    {% endif %}
+  </header>
+
+  {% if d.images %}
+  <div class="vn-ld__gallery" dir="ltr" aria-label="گالری آگهی">
+    {% for img in d.images %}
+    <img src="{{ img|image_thumb_url }}" alt="{{ d.title or '' }}" {% if loop.first %}decoding="async"{% else %}loading="lazy"{% endif %}>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="vn-ld__empty" aria-hidden="true"><i class="fas fa-image"></i></div>
+  {% endif %}
+
+  <div class="vn-ld__body">
+    {% if d.source == 'divar' %}
+    <span class="vn-ld__badge">دیوار</span>
+    {% endif %}
+    <h1>{{ d.title or 'آگهی' }}</h1>
+    {% if d.price %}
+    <p class="vn-ld__price">{{ d.price }}</p>
+    {% elif d.price_toman %}
+    <p class="vn-ld__price">{{ d.price_toman|toman }}</p>
+    {% endif %}
+    {% if d.commission_amount %}
+    <p class="vn-ld__comm">پورسانت {{ d.commission_amount|toman }}</p>
+    {% endif %}
+    {% if d.meta %}
+    <p class="vn-ld__meta">{{ d.meta }}</p>
+    {% endif %}
+
+    {% if d.rows %}
+    <div class="vn-ld__rows">
+      {% for row in d.rows %}
+      <div class="vn-ld__row">
+        <span class="vn-ld__row-k">{{ row.label }}</span>
+        <span class="vn-ld__row-v">{{ row.value }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if d.description %}
+    <p class="vn-ld__desc">{{ d.description }}</p>
+    {% endif %}
+
+    {% if d.show_divar and d.divar_url %}
+    <a class="vn-ld__divar"
+       href="{{ d.divar_url }}"
+       target="_blank"
+       rel="noopener noreferrer"
+       data-vinor-direct-action="1">دیدن در دیوار</a>
+    {% endif %}
+  </div>
+</article>
+
+{% include 'express_partner/partials/vinor_favorites_script.html' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+<script>
+(function () {
+  var back = document.getElementById('listingDetailBack');
+  if (back) {
+    back.addEventListener('click', function () {
+      try {
+        if (window.history.length > 1) {
+          window.history.back();
+          return;
+        }
+      } catch (_) {}
+      if (typeof window.vinorExpressNavigate === 'function') {
+        window.vinorExpressNavigate('/express/partner/home', { back: true });
+      } else {
+        window.location.href = '/express/partner/home';
+      }
+    });
+  }
+  try {
+    if (typeof window.vinorSyncFavButtons === 'function') window.vinorSyncFavButtons();
+  } catch (_) {}
+})();
+</script>
+{% endblock %}

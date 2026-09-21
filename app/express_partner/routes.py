@@ -4496,6 +4496,28 @@ def apk_legal_data():
     return _apk_json(legal_payload(request.args.get('doc') or 'terms'))
 
 
+@express_partner_bp.get('/api/lands/<string:code>/data', endpoint='apk_land_detail_data')
+@require_partner_access(allow_pending=True, allow_guest=True, json_response=True)
+def apk_land_detail_data(code: str):
+    from .land_chat_detail import native_listing_detail_payload
+
+    payload = native_listing_detail_payload(code)
+    if not payload:
+        return _apk_json({"ok": False, "error": "آگهی پیدا نشد."}, 404)
+    return _apk_json(payload)
+
+
+@express_partner_bp.get('/api/divar/<string:token>/data', endpoint='apk_divar_detail_data')
+@require_partner_access(allow_pending=True, allow_guest=True, json_response=True)
+def apk_divar_detail_data(token: str):
+    from .land_chat_detail import native_listing_detail_payload
+
+    payload = native_listing_detail_payload(token, source_hint="divar")
+    if not payload:
+        return _apk_json({"ok": False, "error": "آگهی دیوار پیدا نشد."}, 404)
+    return _apk_json(payload)
+
+
 @express_partner_bp.route('/dashboard', methods=['GET'], endpoint='dashboard')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def dashboard_redirect():
@@ -10870,41 +10892,38 @@ def divar_chat_detail(token: str):
 @express_partner_bp.get('/divar/<string:token>', endpoint='divar_ad_detail')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def divar_ad_detail(token: str):
-    """لینک آگهی دیوار نوار خانه → جزئیات داخل چت وینور."""
-    from .divar_pro_ads import sanitize_divar_post_token
-
-    tok = sanitize_divar_post_token(token)
-    if not tok:
-        return redirect(url_for('express_partner.home'))
-    return redirect(url_for('express_partner.home', divar=tok))
+    """جزئیات آگهی دیوار — صفحهٔ نیتیو."""
+    return _render_native_listing_page(token, source_hint="divar")
 
 
 @express_partner_bp.get('/lands/<string:code>', endpoint='land_detail')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def land_detail(code: str):
-    """لینک‌های قدیمی جزئیات فایل → خانه + تزریق جزئیات در چت."""
+    """جزئیات آگهی وینور — صفحهٔ نیتیو."""
     from ..utils.flash_messages import purge_stale_auth_flashes, purge_stale_land_flashes
-    from .land_chat_detail import track_land_view_async
 
     purge_stale_land_flashes()
     purge_stale_auth_flashes()
-    code_s = (code or '').strip()
-    if not code_s:
-        return redirect(url_for('express_partner.home'))
+    return _render_native_listing_page(code)
 
-    lands = load_ads_cached() or []
-    land = next((l for l in lands if l.get('code') == code_s and l.get('is_express')), None)
-    if not land:
-        flash('این آگهی اکسپرس پیدا نشد یا دیگر در دسترس نیست.', 'warning')
-        return redirect(url_for('express_partner.home'))
 
-    if not _is_prefetch_request():
+def _render_native_listing_page(code: str, *, source_hint: str = ""):
+    from .land_chat_detail import native_listing_detail_payload, track_land_view_async
+
+    payload = native_listing_detail_payload(code, source_hint=source_hint)
+    if not payload:
+        flash('این آگهی پیدا نشد یا دیگر در دسترس نیست.', 'warning')
+        return redirect(url_for('express_partner.home'))
+    if payload.get("source") == "vinor" and not _is_prefetch_request():
+        code_s = str(payload.get("code") or code).strip()
         track_land_view_async(code_s)
         me_phone = (session.get("user_phone") or "").strip()
         partner_profile = _partner_profile_for_phone(me_phone) if me_phone else None
         if me_phone and _is_partner_approved(partner_profile):
             _defer_routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
-
-    return redirect(url_for('express_partner.home', land=code_s))
+    return render_template(
+        'express_partner/listing_detail_native.html',
+        detail=payload,
+    )
 
 

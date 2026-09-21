@@ -380,3 +380,136 @@ def track_land_view_async(code: str) -> None:
         threading.Thread(target=_worker, daemon=True).start()
     except Exception:
         pass
+
+
+def _listing_image_urls(land: Dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    raws = land.get("images") if isinstance(land.get("images"), list) else []
+    for raw in raws:
+        s = str(raw or "").strip()
+        if not s:
+            continue
+        if s.startswith("http://") or s.startswith("https://") or s.startswith("/"):
+            url = s
+        else:
+            url = "/uploads/" + s.lstrip("/")
+        if url not in out:
+            out.append(url)
+        if len(out) >= 8:
+            break
+    return out
+
+
+def _listing_spec_rows(land: Dict[str, Any], *, is_divar: bool) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+
+    def add(label: str, value: Any) -> None:
+        lab = str(label or "").strip()
+        val = str(value or "").strip()
+        if not lab or not val or val in ("—", "-", "–"):
+            return
+        if any(r.get("label") == lab and r.get("value") == val for r in rows):
+            return
+        rows.append({"label": lab, "value": val})
+
+    if is_divar:
+        for item in land.get("_divar_rows") or []:
+            if isinstance(item, dict):
+                add(item.get("label") or item.get("title") or "", item.get("value") or item.get("text") or "")
+        return rows
+
+    st = str(land.get("_assignment_status") or "").strip()
+    if st == "in_transaction":
+        add("وضعیت معامله", "در حال معامله")
+    elif st == "sold":
+        add("وضعیت معامله", "فروخته‌شده")
+    if land.get("category"):
+        add("نوع", land.get("category"))
+    if land.get("size"):
+        add("متراژ", land.get("size"))
+    if land.get("delivery") or land.get("handover") or land.get("delivery_days"):
+        add(
+            "تحویل",
+            land.get("delivery")
+            or land.get("handover")
+            or (str(land.get("delivery_days")) + " روز کاری"),
+        )
+    if land.get("docs_status"):
+        add("وضعیت سند", land.get("docs_status"))
+    if land.get("payment_method"):
+        add("نحوه پرداخت", land.get("payment_method"))
+    try:
+        from app.land_category_specs import land_category_detail_rows
+
+        for item in land_category_detail_rows(land) or []:
+            if isinstance(item, dict):
+                add(item.get("label") or "", item.get("value") or "")
+    except Exception:
+        pass
+    return rows[:18]
+
+
+def native_listing_detail_payload(code: str, *, source_hint: str = "") -> Optional[Dict[str, Any]]:
+    """جزئیات آگهی برای صفحهٔ نیتیو وب و اپ — وینور یا دیوار."""
+    raw = str(code or "").strip()
+    if not raw:
+        return None
+    hint = str(source_hint or "").strip().lower()
+    is_divar = hint == "divar" or raw.lower().startswith("divar:")
+    if is_divar:
+        tok = raw.split(":", 1)[-1].strip() if raw.lower().startswith("divar:") else raw
+        land, _approved = prepare_divar_for_chat_detail(tok)
+    else:
+        land, _approved = prepare_land_for_chat_detail(raw)
+        tok = ""
+    if not land:
+        return None
+    source = "divar" if (is_divar or str(land.get("_source") or "") == "divar") else "vinor"
+    images = _listing_image_urls(land)
+    try:
+        price_toman = int(land.get("price_total") or land.get("price") or 0)
+    except (TypeError, ValueError):
+        price_toman = 0
+    try:
+        commission_amount = int(land.get("_commission_amount") or 0)
+    except (TypeError, ValueError):
+        commission_amount = 0
+    divar_url = str(land.get("_divar_url") or "").strip()
+    if source == "divar" and not divar_url and tok:
+        try:
+            from .divar_pro_ads import divar_public_url
+
+            divar_url = divar_public_url(tok)
+        except Exception:
+            divar_url = f"https://divar.ir/v/{tok}"
+    code_out = str(land.get("code") or raw).strip()
+    city = str(land.get("city") or "").strip()
+    location = str(land.get("location") or "").strip()
+    size = str(land.get("size") or "").strip()
+    category = str(land.get("category") or "").strip()
+    meta_parts = [city, location, size, category]
+    if source != "divar" and code_out:
+        meta_parts.append(code_out)
+    return {
+        "ok": True,
+        "source": source,
+        "code": code_out,
+        "title": str(land.get("title") or "").strip() or ("آگهی دیوار" if source == "divar" else "جزئیات آگهی"),
+        "price": str(land.get("_price_display") or "").strip(),
+        "price_toman": max(0, price_toman),
+        "city": city,
+        "location": location,
+        "size": size,
+        "category": category,
+        "meta": " · ".join(p for p in meta_parts if p),
+        "description": str(land.get("description") or land.get("body") or "").strip(),
+        "images": images,
+        "image_url": images[0] if images else "",
+        "rows": _listing_spec_rows(land, is_divar=source == "divar"),
+        "divar_url": divar_url,
+        "divar_token": tok if source == "divar" else "",
+        "commission_amount": max(0, commission_amount),
+        "commission_pct": land.get("_commission_pct") or 0,
+        "show_divar": source == "divar" and bool(divar_url),
+        "can_favorite": source == "vinor",
+    }
