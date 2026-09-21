@@ -498,16 +498,10 @@
 
   function isHomeChatEmpty() {
     if (!homeInline || !list) return false;
-    /* تب آگهی‌ها: لایه بسته = داشبورد، حتی اگر تاریخچه در DOM باشد */
+    /* تب آگهی‌ها: داشبورد — تاریخچه را نشان نده و poll نکن */
     if (!homeChatLayerOpen) return true;
-    if (isPostchiMode()) return false;
-    if (typeof isLawyerMode === 'function' && isLawyerMode()) return false;
-    if (homeEmptyEntryForced) return true;
-    try {
-      if (list.querySelector('.ai-msg-wrap[data-role="user"]')) return false;
-      if (list.querySelector('.ai-msg-wrap[data-thinking="1"]')) return false;
-    } catch (_) {}
-    return true;
+    /* تب چت: لایه باز است؛ تاریخچه باید فوری بیاید حتی اگر DOM هنوز خالی است */
+    return false;
   }
 
   function syncHomeEmptyState() {
@@ -4300,6 +4294,21 @@
     } catch (_) {}
     pushHomeChatHistory();
     try {
+      var tid = '';
+      try {
+        tid = vinorThreadIdForReturn() || activeThreadId() || '';
+      } catch (_) {
+        tid = '';
+      }
+      prepareVinorHistoryLoad(tid);
+      if (!listHasVinorHistory() && !applyVinorHistoryFromCache(tid, { instantOpening: true })) {
+        loadVinorHistoryIfEmpty();
+      }
+    } catch (_) {}
+    try {
+      jumpVinorChatToLatest();
+    } catch (_) {}
+    try {
       if (!isPostchiMode()) resumePoll();
     } catch (_) {}
     syncHomeDivarTab();
@@ -4538,9 +4547,7 @@
         _prefetchTid !== postchiThreadId &&
         !isLawyerThreadId(_prefetchTid)
       ) {
-        setTimeout(function () {
-          prefetchVinorHistory(_prefetchTid);
-        }, 0);
+        prefetchVinorHistory(_prefetchTid);
       }
     } catch (_) {}
   }
