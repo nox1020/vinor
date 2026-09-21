@@ -260,6 +260,7 @@
   var historyLoadInFlight = null;
   var historyLoadGen = 0;
   var historyLoadSettled = Object.create(null);
+  var HISTORY_CACHE_MAX = 24;
   var vinorHistoryCache = Object.create(null);
   var historyFetchPromises = Object.create(null);
 
@@ -271,12 +272,23 @@
     } catch (_) {
       vinorHistoryCache[tid] = messages;
     }
+    var keys = Object.keys(vinorHistoryCache);
+    if (keys.length > HISTORY_CACHE_MAX) {
+      keys.slice(0, keys.length - HISTORY_CACHE_MAX).forEach(function (k) {
+        delete vinorHistoryCache[k];
+      });
+    }
   }
 
   function peekVinorHistoryCache(tid) {
     tid = String(tid || '').trim();
     var rows = tid && vinorHistoryCache[tid];
-    return rows && rows.length ? rows : null;
+    if (rows && rows.length) {
+      delete vinorHistoryCache[tid];
+      vinorHistoryCache[tid] = rows;
+      return rows;
+    }
+    return null;
   }
 
   function clearVinorHistoryCache(tid) {

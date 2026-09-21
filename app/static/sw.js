@@ -3,7 +3,7 @@
   Scope: '/'
 */
 
-const VERSION = 'v1.2.1-2025-12-23';
+const VERSION = 'v1.2.2-offline-outbox-cap';
 const PRECACHE = `vinor-precache-${VERSION}`;
 const RUNTIME = `vinor-runtime-${VERSION}`;
 const API_CACHE = `vinor-api-${VERSION}`;
@@ -387,16 +387,57 @@ function openQueueDb() {
   });
 }
 
+const QUEUE_MAX = 40;
+const QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isSensitiveQueuedUrl(url) {
+  const p = String(url || '').toLowerCase();
+  return /\/(pay|payment|deal|wallet|settlement|finance|otp|login|logout|verify|ai\/chat)(\/|$)/.test(p);
+}
+
 async function queueRequest(entry) {
   try {
+    if (isSensitiveQueuedUrl(entry && entry.url)) return;
     const db = await openQueueDb();
+    entry.ts = entry.ts || Date.now();
     await new Promise((resolve, reject) => {
       const tx = db.transaction('queue', 'readwrite');
       tx.objectStore('queue').add(entry);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
+    await trimQueueDb(db);
   } catch (e) {}
+}
+
+async function trimQueueDb(db) {
+  const now = Date.now();
+  const items = await new Promise((resolve, reject) => {
+    const out = [];
+    const tx = db.transaction('queue', 'readonly');
+    const req = tx.objectStore('queue').openCursor();
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        out.push({ id: cursor.key, ts: (cursor.value && cursor.value.ts) || 0 });
+        cursor.continue();
+      } else resolve(out);
+    };
+    req.onerror = () => reject(req.error);
+  });
+  const drop = items.filter((it) => now - it.ts > QUEUE_TTL_MS).map((it) => it.id);
+  const live = items.filter((it) => drop.indexOf(it.id) < 0).sort((a, b) => a.ts - b.ts);
+  if (live.length > QUEUE_MAX) {
+    live.slice(0, live.length - QUEUE_MAX).forEach((it) => drop.push(it.id));
+  }
+  if (!drop.length) return;
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('queue', 'readwrite');
+    const store = tx.objectStore('queue');
+    drop.forEach((id) => store.delete(id));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 async function replayQueue() {
@@ -438,6 +479,14 @@ async function handleJsonPostWithQueue(request) {
   try {
     return await fetch(request);
   } catch (e) {
+    if (isSensitiveQueuedUrl(request.url)) {
+      return new Response(JSON.stringify({
+        ok: false,
+        queued: false,
+        offline: true,
+        message: 'برای انجام این عملیات اینترنت لازم است'
+      }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    }
     try {
       const cloned = request.clone();
       let body = null;
@@ -449,7 +498,7 @@ async function handleJsonPostWithQueue(request) {
         try { await self.registration.sync.register('vinor-sync'); } catch(_) {}
       }
     } catch(_) {}
-    return new Response(JSON.stringify({ ok: true, queued: true }), { status: 202, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ ok: false, queued: true, offline: true, message: 'پس از اتصال اینترنت ارسال می‌شود' }), { status: 202, headers: { 'Content-Type': 'application/json' } });
   }
 }
 

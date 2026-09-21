@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.68-apk-offline-sw-bypass';
+const VERSION = 'v1.0.69-offline-outbox';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -24,6 +24,140 @@ async function trimCache(name, maxEntries) {
       await Promise.all(toDelete.map((req) => cache.delete(req)));
     }
   } catch (_) {}
+}
+
+const OUTBOX_MAX = 40;
+const OUTBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const OUTBOX_DB = 'vinor-partner-outbox';
+
+function isSensitivePartnerPost(url) {
+  const p = String(url || '').toLowerCase();
+  return /\/(pay|payment|deal|wallet|settlement|finance|otp|login|logout|verify|ai\/chat)(\/|$)/.test(p);
+}
+
+function isQueueablePartnerPost(url) {
+  try {
+    const p = new URL(url, self.location.origin).pathname.toLowerCase();
+    if (isSensitivePartnerPost(p)) return false;
+    return p === '/express/partner/api/notes' ||
+      p.indexOf('/express/partner/api/notes/') === 0 ||
+      p.indexOf('/express/partner/api/notifications/') === 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+function openOutboxDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(OUTBOX_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('queue')) {
+        db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function enqueueOutbox(entry) {
+  const db = await openOutboxDb();
+  const now = Date.now();
+  entry.ts = entry.ts || now;
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('queue', 'readwrite');
+    const store = tx.objectStore('queue');
+    const req = store.openCursor();
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (!cursor) return;
+      const v = cursor.value || {};
+      if (v.url === entry.url && v.body === entry.body) {
+        cursor.delete();
+      }
+      cursor.continue();
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('queue', 'readwrite');
+    tx.objectStore('queue').add(entry);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  await trimOutbox(db, now);
+}
+
+async function trimOutbox(db, now) {
+  const items = await new Promise((resolve, reject) => {
+    const out = [];
+    const tx = db.transaction('queue', 'readonly');
+    const req = tx.objectStore('queue').openCursor();
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        out.push({ id: cursor.key, ts: (cursor.value && cursor.value.ts) || 0 });
+        cursor.continue();
+      } else resolve(out);
+    };
+    req.onerror = () => reject(req.error);
+  });
+  const drop = [];
+  items.forEach((it) => {
+    if (now - it.ts > OUTBOX_TTL_MS) drop.push(it.id);
+  });
+  if (items.length - drop.length > OUTBOX_MAX) {
+    const keepN = items.length - drop.length - OUTBOX_MAX;
+    items.filter((it) => drop.indexOf(it.id) < 0)
+      .sort((a, b) => a.ts - b.ts)
+      .slice(0, keepN)
+      .forEach((it) => drop.push(it.id));
+  }
+  if (!drop.length) return;
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('queue', 'readwrite');
+    const store = tx.objectStore('queue');
+    drop.forEach((id) => store.delete(id));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function replayOutbox() {
+  const db = await openOutboxDb();
+  const entries = await new Promise((resolve, reject) => {
+    const out = [];
+    const tx = db.transaction('queue', 'readonly');
+    const req = tx.objectStore('queue').openCursor();
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        out.push({ id: cursor.key, ...cursor.value });
+        cursor.continue();
+      } else resolve(out);
+    };
+    req.onerror = () => reject(req.error);
+  });
+  for (const item of entries) {
+    try {
+      const resp = await fetch(item.url, {
+        method: item.method || 'POST',
+        headers: item.headers || { 'Content-Type': 'application/json' },
+        body: item.body || null,
+        credentials: 'include',
+      });
+      if (resp && (resp.ok || resp.status === 409)) {
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction('queue', 'readwrite');
+          tx.objectStore('queue').delete(item.id);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+    } catch (_) { /* keep */ }
+  }
 }
 
 // URLs برای precache در نصب (مختص Express Partner)
@@ -298,6 +432,35 @@ self.addEventListener('fetch', (event) => {
             try {
               return await fetch(request);
             } catch (_) {
+              if (isQueueablePartnerPost(url.href)) {
+                try {
+                  const cloned = request.clone();
+                  let body = null;
+                  try { body = await cloned.text(); } catch (_) {}
+                  const headers = {};
+                  request.headers.forEach((v, k) => { headers[k] = v; });
+                  await enqueueOutbox({
+                    url: url.href,
+                    method: 'POST',
+                    headers,
+                    body,
+                    ts: Date.now(),
+                  });
+                  if (self.registration && 'sync' in self.registration) {
+                    try { await self.registration.sync.register('express-partner-outbox'); } catch (_) {}
+                  }
+                  return new Response(JSON.stringify({
+                    success: false,
+                    ok: false,
+                    queued: true,
+                    offline: true,
+                    message: 'پس از اتصال اینترنت ارسال می‌شود'
+                  }), {
+                    status: 202,
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+                } catch (_) {}
+              }
               return new Response(JSON.stringify({
                 success: false,
                 ok: false,
@@ -450,12 +613,8 @@ self.addEventListener('fetch', (event) => {
 
 // Background Sync برای درخواست‌های queued
 self.addEventListener('sync', (event) => {
-  if (event.tag.startsWith('express-partner-')) {
-    event.waitUntil((async () => {
-      // Handle background sync برای Express Partner
-      // می‌تواند برای sync کردن داده‌ها در پس‌زمینه استفاده شود
-      console.log('Express Partner: Background sync', event.tag);
-    })());
+  if (event.tag === 'express-partner-outbox' || event.tag.startsWith('express-partner-')) {
+    event.waitUntil(replayOutbox());
   }
 });
 
