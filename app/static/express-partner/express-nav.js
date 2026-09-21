@@ -1118,6 +1118,12 @@
   }
 
   function setBottomNavActive(navKey) {
+    try {
+      if (typeof window.__vinorSyncDivarFooter === 'function') {
+        window.__vinorSyncDivarFooter();
+        return;
+      }
+    } catch (_) {}
     var nav = document.getElementById('bottomNavMenu');
     if (!nav || !navKey) return;
     nav.querySelectorAll('#bottomNavItems > a[data-nav-key]').forEach(function (link) {
@@ -2163,6 +2169,8 @@
       if (!isPartnerUrl(href)) return;
 
       var nav = document.getElementById('bottomNavMenu');
+      /* فوتر دیوار را bottom_nav.html کامل هندل می‌کند — اینجا reload/SPA تکراری نساز */
+      if (a.hasAttribute('data-divar-tab') || (a.closest && a.closest('[data-divar-tab]'))) return;
       var isTab = nav && nav.contains(a) && a.hasAttribute('data-nav-key');
       var navAttr = a.getAttribute('data-vinor-express-nav');
       var isBack = navAttr === 'back';

@@ -986,6 +986,13 @@
 </script>
 <script>
 (function () {
+  if (window.__vinorDivarFooterTabsBound) {
+    try {
+      if (typeof window.__vinorSyncDivarFooter === 'function') window.__vinorSyncDivarFooter();
+    } catch (_) {}
+    return;
+  }
+  window.__vinorDivarFooterTabsBound = true;
   var userLoggedIn = {{ 'true' if session.get('user_phone') else 'false' }};
 
   var profileUrl = {{ url_for('express_partner.profile')|tojson }};
@@ -1046,6 +1053,7 @@
   }
 
   function markTab(key) {
+    if (!key) return;
     document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
       var on = el.getAttribute('data-divar-tab') === key;
       el.classList.toggle('is-active', on);
@@ -1054,54 +1062,146 @@
     });
   }
 
+  function pathNorm() {
+    return (location.pathname || '').replace(/\/+$/, '') || '/';
+  }
+
+  function homeChatOpen() {
+    try {
+      if (window.__vinorHomeChatLayerOpen === true) return true;
+    } catch (_) {}
+    try {
+      return sessionStorage.getItem('vinor_open_home_chat') === '1';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function divarTabFromLocation() {
+    var p = pathNorm();
+    var q = location.search || '';
+    if (/\/login/.test(p) || /\/verify/.test(p)) return '';
+    if (/\/listings\/new$/.test(p) || /[?&]register=1(?:&|$)/.test(q)) return 'post';
+    if (/\/favorites/.test(p)) return 'favs';
+    if (homeChatOpen() && (/\/home$/.test(p) || /\/express\/partner$/.test(p))) return 'chat';
+    if (/\/home$/.test(p) || /\/express\/partner$/.test(p) || /\/dashboard$/.test(p)) return 'ads';
+    if (
+      /\/profile/.test(p) ||
+      /\/commissions/.test(p) ||
+      /\/settings/.test(p) ||
+      /\/training/.test(p) ||
+      /\/invite/.test(p) ||
+      /\/requests/.test(p) ||
+      /\/listings/.test(p) ||
+      /\/apply/.test(p) ||
+      /\/thanks/.test(p) ||
+      /\/levels/.test(p) ||
+      /\/plus/.test(p) ||
+      /\/legal/.test(p) ||
+      /\/routine/.test(p) ||
+      /\/cooperation-terms/.test(p) ||
+      /\/my-propert/.test(p) ||
+      /\/inbox-visits/.test(p) ||
+      /\/notes/.test(p) ||
+      /\/notifications/.test(p)
+    ) return 'me';
+    return 'ads';
+  }
+
+  function syncDivarTabs() {
+    syncFooterVisibility();
+    var key = divarTabFromLocation();
+    if (key) markTab(key);
+  }
+
+  function goTab(url) {
+    try {
+      var next = new URL(url, location.origin);
+      var here = pathNorm();
+      var there = (next.pathname || '').replace(/\/+$/, '') || '/';
+      if (there === here && (next.search || '') === (location.search || '')) return;
+    } catch (_) {}
+    try {
+      if (typeof window.vinorExpressNavigate === 'function') {
+        window.vinorExpressNavigate(url, { forward: true });
+        return;
+      }
+    } catch (_) {}
+    window.location.href = url;
+  }
+
   function syncFooterVisibility() {
-    var p = (location.pathname || '').replace(/\/+$/, '');
+    var p = pathNorm();
     var q = location.search || '';
     var hide = /\/listings\/new$/.test(p) ||
       /\/profile\/edit$/.test(p) ||
       /\/login/.test(p) ||
       /\/verify/.test(p) ||
-      q.indexOf('register=1') >= 0;
+      /[?&]register=1(?:&|$)/.test(q);
     var nav = document.getElementById('bottomNavMenu');
-    if (nav) nav.style.display = hide ? 'none' : '';
+    if (nav) {
+      if (hide) {
+        nav.style.display = 'none';
+        nav.setAttribute('hidden', 'hidden');
+      } else {
+        nav.style.removeProperty('display');
+        nav.removeAttribute('hidden');
+      }
+    }
   }
-  syncFooterVisibility();
-  window.addEventListener('vinor:express-page-swap', syncFooterVisibility);
-  window.addEventListener('popstate', syncFooterVisibility);
+  window.__vinorSyncDivarFooter = syncDivarTabs;
+  syncDivarTabs();
+  window.addEventListener('vinor:express-page-swap', syncDivarTabs);
+  window.addEventListener('popstate', syncDivarTabs);
+  window.addEventListener('pageshow', syncDivarTabs);
 
   document.addEventListener('click', function (e) {
     var tab = e.target.closest && e.target.closest('[data-divar-tab]');
     if (!tab) return;
     var key = tab.getAttribute('data-divar-tab');
-    if (key === 'me') {
-      return;
-    }
+    var href = tab.getAttribute('href') || '';
     if (key === 'chat') {
+      e.preventDefault();
+      e.stopPropagation();
       if (openChat()) {
-        e.preventDefault();
         markTab('chat');
         return;
       }
       try { sessionStorage.setItem('vinor_open_home_chat', '1'); } catch (_) {}
+      markTab('chat');
+      goTab(href);
       return;
     }
     if (key === 'ads') {
+      e.preventDefault();
+      e.stopPropagation();
       if (closeChatToAds()) {
-        e.preventDefault();
         markTab('ads');
         return;
       }
       if (document.getElementById('homeDashboardPage')) {
-        e.preventDefault();
         markTab('ads');
-        try { window.scrollTo(0, 0); } catch (_) {}
+        try {
+          var shell = document.getElementById('tg-page-shell');
+          if (shell) shell.scrollTop = 0;
+          window.scrollTo(0, 0);
+        } catch (_) {}
+        return;
       }
+      markTab('ads');
+      goTab(href);
       return;
     }
     if ((key === 'post' || key === 'favs') && !userLoggedIn) {
       e.preventDefault();
+      e.stopPropagation();
       window.location.href = loginUrl;
+      return;
     }
+    e.preventDefault();
+    e.stopPropagation();
+    markTab(key);
+    goTab(href);
   }, true);
 })();
 </script>

@@ -61,6 +61,17 @@
       }
     }
   } catch (_) {}
+  try {
+    Object.defineProperty(window, '__vinorHomeChatLayerOpen', {
+      configurable: true,
+      enumerable: false,
+      get: function () {
+        return !!(homeInline && homeChatLayerOpen);
+      }
+    });
+  } catch (_) {
+    window.__vinorHomeChatLayerOpen = !!(homeInline && homeChatLayerOpen);
+  }
   var forceShowOpeningInHome = false;
   var lastVinorThreadId = '';
   var homeModeWasEmpty = false;
@@ -4454,6 +4465,8 @@
     window.__vinorAiChatSwitchHomeMode = null;
     window.__vinorAiConsumeHomeChatBack = null;
     window.__vinorAiOpenHomeChat = null;
+    try { delete window.__vinorHomeChatLayerOpen; } catch (_) {}
+    try { window.__vinorHomeChatLayerOpen = false; } catch (_) {}
     try { window.vinorShowLandInChat = null; } catch (_) {}
     try { window.vinorShowDivarInChat = null; } catch (_) {}
   }
