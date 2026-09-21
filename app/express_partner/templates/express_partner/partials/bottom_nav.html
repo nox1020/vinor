@@ -1070,11 +1070,7 @@
     try {
       if (window.__vinorHomeChatLayerOpen === true) return true;
     } catch (_) {}
-    try {
-      return sessionStorage.getItem('vinor_open_home_chat') === '1';
-    } catch (_) {
-      return false;
-    }
+    return false;
   }
 
   function divarTabFromLocation() {
@@ -1083,7 +1079,7 @@
     if (/\/login/.test(p) || /\/verify/.test(p)) return '';
     if (/\/listings\/new$/.test(p) || /\/my-propert/.test(p) || /[?&]register=1(?:&|$)/.test(q)) return 'post';
     if (/\/favorites/.test(p)) return 'favs';
-    if (homeChatOpen() && (/\/home$/.test(p) || /\/express\/partner$/.test(p))) return 'chat';
+    if (homeChatOpen() && (/\/home$/.test(p) || /\/express\/partner$/.test(p) || /\/dashboard$/.test(p))) return 'chat';
     if (/\/home$/.test(p) || /\/express\/partner$/.test(p) || /\/dashboard$/.test(p)) return 'ads';
     if (
       /\/profile/.test(p) ||
@@ -1177,12 +1173,10 @@
     if (key === 'ads') {
       e.preventDefault();
       e.stopPropagation();
-      if (closeChatToAds()) {
-        markTab('ads');
-        return;
-      }
+      try { sessionStorage.removeItem('vinor_open_home_chat'); } catch (_) {}
+      closeChatToAds();
+      markTab('ads');
       if (document.getElementById('homeDashboardPage')) {
-        markTab('ads');
         try {
           var shell = document.getElementById('tg-page-shell');
           if (shell) shell.scrollTop = 0;
@@ -1190,7 +1184,6 @@
         } catch (_) {}
         return;
       }
-      markTab('ads');
       goTab(href);
       return;
     }

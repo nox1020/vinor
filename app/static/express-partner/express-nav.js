@@ -190,14 +190,11 @@
   }
 
   function prepareHomeForPendingLandChat(root) {
-    var pending = false;
+    var wantChat = false;
     try {
-      pending = !!(
-        sessionStorage.getItem('vinor_land_chat_code') ||
-        sessionStorage.getItem('vinor_divar_chat_token')
-      );
+      wantChat = sessionStorage.getItem('vinor_open_home_chat') === '1';
     } catch (_) {}
-    if (!pending) return;
+    if (!wantChat) return;
     var scope = root || document;
     var page = scope.querySelector('#homeDashboardPage');
     if (page) page.classList.remove('ai-home-is-empty');
@@ -235,8 +232,11 @@
   }
 
   function currentlyOnHomePage() {
+    var p = normPath(window.location.pathname);
     return !!document.getElementById('homeDashboardPage') ||
-      normPath(window.location.pathname) === '/express/partner/home';
+      p === '/express/partner/home' ||
+      p === '/express/partner' ||
+      p === '/express/partner/dashboard';
   }
 
   function resolvePartnerLoginNext(raw) {
@@ -255,7 +255,7 @@
       var u = parseUrl(href);
       if (!u) return '';
       var p = normPath(u.pathname);
-      if (p === '/express/partner/home' || p === '/express/partner/dashboard') {
+      if (p === '/express/partner/home' || p === '/express/partner/dashboard' || p === '/express/partner') {
         return String(u.searchParams.get('land') || '').trim();
       }
     } catch (_) {}
@@ -270,7 +270,7 @@
     var u = parseUrl(href);
     if (!u) return false;
     var p = normPath(u.pathname);
-    if (p !== '/express/partner/home' && p !== '/express/partner/dashboard') return false;
+    if (p !== '/express/partner/home' && p !== '/express/partner/dashboard' && p !== '/express/partner') return false;
     var land = String(u.searchParams.get('land') || '').trim();
     if (land) {
       openLandInChat(land);
@@ -1478,7 +1478,7 @@
       var landChatQ = parseUrl(href);
       var landChatPath = normPath(landChatQ.pathname);
       if (
-        (landChatPath === '/express/partner/home' || landChatPath === '/express/partner/dashboard') &&
+        (landChatPath === '/express/partner/home' || landChatPath === '/express/partner/dashboard' || landChatPath === '/express/partner') &&
         (landChatQ.searchParams.get('land') || landChatQ.searchParams.get('divar'))
       ) {
         cached = null;
@@ -2131,7 +2131,8 @@
               vinorExpressNavigate(href);
             } else if (
               destPath === '/express/partner/home' ||
-              destPath === '/express/partner/dashboard'
+              destPath === '/express/partner/dashboard' ||
+              destPath === '/express/partner'
             ) {
               if (typeof window.__vinorAiConsumeHomeChatBack === 'function') {
                 window.__vinorAiConsumeHomeChatBack();

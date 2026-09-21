@@ -40,24 +40,20 @@
     homeInline ||
     document.documentElement.classList.contains('vinor-ai-open') ||
     document.documentElement.classList.contains('vinor-ai-sheet-open');
-  /* خانه: لایهٔ چت باز از منو (وینور/پشتیبانی) — Back → بدو ورود */
+  /* خانه: لایهٔ چت فقط با تب چت / ارسال — آگهی‌ها هرگز تاریخچه را نشان نمی‌دهند */
   var homeChatLayerOpen = false;
   var homeEmptyEntryForced = false;
   try {
     if (homeInline) {
-      var _pendingLand =
-        (sessionStorage.getItem('vinor_land_chat_code') || '') ||
-        (sessionStorage.getItem('vinor_divar_chat_token') || '') ||
-        (new URLSearchParams(window.location.search || '').get('land') || '') ||
-        (new URLSearchParams(window.location.search || '').get('divar') || '');
       var _wantChat = false;
       try { _wantChat = sessionStorage.getItem('vinor_open_home_chat') === '1'; } catch (_) {}
-      if (_pendingLand || _wantChat) {
+      if (_wantChat) {
         homeChatLayerOpen = true;
         homeEmptyEntryForced = false;
-        if (_wantChat) {
-          try { sessionStorage.removeItem('vinor_open_home_chat'); } catch (_) {}
-        }
+        try { sessionStorage.removeItem('vinor_open_home_chat'); } catch (_) {}
+      } else {
+        homeChatLayerOpen = false;
+        homeEmptyEntryForced = true;
       }
     }
   } catch (_) {}
@@ -475,14 +471,37 @@
     return historyLoadInFlight;
   }
 
+  function isPartnerHomePath(path) {
+    path = String(path || '').replace(/\/+$/, '') || '/';
+    return path === '/express/partner/home' ||
+      path === '/express/partner' ||
+      path === '/express/partner/dashboard';
+  }
+
+  function syncHomeDivarTab() {
+    try {
+      if (typeof window.__vinorSyncDivarFooter === 'function') {
+        window.__vinorSyncDivarFooter();
+        return;
+      }
+    } catch (_) {}
+    try {
+      var key = homeChatLayerOpen ? 'chat' : 'ads';
+      document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
+        var on = el.getAttribute('data-divar-tab') === key;
+        el.classList.toggle('is-active', on);
+        if (on) el.setAttribute('aria-current', 'page');
+        else el.removeAttribute('aria-current');
+      });
+    } catch (_) {}
+  }
+
   function isHomeChatEmpty() {
     if (!homeInline || !list) return false;
-    /* لایهٔ چت باز از منو / آگهی = دیگر بدو ورود نیست */
-    if (homeChatLayerOpen) return false;
+    /* تب آگهی‌ها: لایه بسته = داشبورد، حتی اگر تاریخچه در DOM باشد */
+    if (!homeChatLayerOpen) return true;
     if (isPostchiMode()) return false;
-    /* وکیل ملکی خوش‌آمد دارد ولی بدو ورود فروش نیست */
     if (typeof isLawyerMode === 'function' && isLawyerMode()) return false;
-    /* تب خانه: داشبورد بدو ورود، حتی اگر تاریخچهٔ همان ترد در DOM باشد */
     if (homeEmptyEntryForced) return true;
     try {
       if (list.querySelector('.ai-msg-wrap[data-role="user"]')) return false;
@@ -560,6 +579,7 @@
         window.__vinorHomeNewsSync();
       }
     } catch (_) {}
+    syncHomeDivarTab();
   }
 
   function syncChipBarVisibility() {
@@ -1367,20 +1387,18 @@
     try {
       document.documentElement.classList.remove('vn-chat-ime');
     } catch (_) {}
-    try {
-      document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
-        el.classList.toggle('is-active', el.getAttribute('data-divar-tab') === 'ads');
-      });
-    } catch (_) {}
+    syncHomeDivarTab();
     return true;
   }
 
-  /** برای express-nav popstate / تب خانه: اگر لایهٔ چت باز است، فقط بدو ورود */
+  /** برای express-nav popstate / تب آگهی‌ها: اگر لایهٔ چت باز است، فقط بدو ورود */
   window.__vinorAiConsumeHomeChatBack = function () {
     if (!homeInline) return false;
     try {
-      var path = String(window.location.pathname || '').replace(/\/+$/, '') || '/';
-      if (path !== '/express/partner/home') return false;
+      if (!document.getElementById('homeDashboardPage')) {
+        var path = String(window.location.pathname || '').replace(/\/+$/, '') || '/';
+        if (!isPartnerHomePath(path)) return false;
+      }
     } catch (_) {}
     if (!homeChatLayerOpen && isHomeChatEmpty()) return false;
     return returnToHomeEmptyEntry();
@@ -4284,11 +4302,7 @@
     try {
       if (!isPostchiMode()) resumePoll();
     } catch (_) {}
-    try {
-      document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
-        el.classList.toggle('is-active', el.getAttribute('data-divar-tab') === 'chat');
-      });
-    } catch (_) {}
+    syncHomeDivarTab();
     return true;
   }
 
@@ -4487,11 +4501,8 @@
   bindHomeModeUi();
   if (homeInline && homeChatLayerOpen) {
     try { syncHomeEmptyState(); } catch (_) {}
-    try {
-      document.querySelectorAll('[data-divar-tab]').forEach(function (el) {
-        el.classList.toggle('is-active', el.getAttribute('data-divar-tab') === 'chat');
-      });
-    } catch (_) {}
+  } else if (homeInline) {
+    try { syncHomeEmptyState(); } catch (_) {}
   }
   if (isPostchiMode()) {
     pollPaused = true;
