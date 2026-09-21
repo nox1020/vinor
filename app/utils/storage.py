@@ -183,9 +183,22 @@ def load_ads_cached(app=None):
     return data
 
 
+def _is_published_my_property(land) -> bool:
+    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+    if extras.get("published_for_sale") is True:
+        return True
+    if str(land.get("source") or "").strip().lower() == "my_property_published":
+        return True
+    if land.get("public") is True and extras.get("listed_by_owner"):
+        return True
+    return False
+
+
 def _is_owner_home_land(land) -> bool:
     """ملک خصوصی «ملک من» نباید در فید عمومی اکسپرس بیاید."""
     if not isinstance(land, dict):
+        return False
+    if _is_published_my_property(land):
         return False
     extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
     if land.get("owner_home") or extras.get("owner_home") or extras.get("listed_by_owner"):

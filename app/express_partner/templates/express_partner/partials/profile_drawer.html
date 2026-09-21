@@ -1048,25 +1048,13 @@
         url_for('express_partner.my_property'),
         'fa-house',
         'ملک من',
-        subtitle='ارزش، نمودار و بینش ملک',
+        subtitle='ثبت ملک و انتشار آگهی',
         tour='my-property-link',
         row_id='epDrawerMyPropertyBtn'
       ) }}
     </div>
 
     {% if is_approved|default(false) %}
-    {% if is_special|default(false) %}
-    <div class="ep-profile-drawer__nav-group" aria-label="آگهی ویژه">
-      <p class="ep-profile-drawer__nav-label">پلاس</p>
-      {{ profile_menu_row(
-        url_for('express_partner.special_listings'),
-        'fa-building',
-        'آگهی‌های من',
-        tour='special-listings-link',
-        row_id='epDrawerListingsBtn'
-      ) }}
-    </div>
-    {% endif %}
 
     <div class="ep-profile-drawer__nav-group" aria-label="فروش">
       <p class="ep-profile-drawer__nav-label">فروش</p>

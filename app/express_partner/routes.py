@@ -4300,7 +4300,7 @@ def my_property_page():
         if err:
             flash(SPECIAL_LISTING_ERRORS.get(err, 'ثبت ملک ناموفق بود.'), 'error')
             return _render_owner_home_form(me_phone, is_special=is_special)
-        flash(f'ملک شما با کد {rec.get("code")} ثبت شد. قیمت و تغییرات فقط در پنل شما دیده می‌شود.', 'success')
+        flash(f'ملک شما با کد {rec.get("code")} ثبت شد. از همین صفحه می‌توانید برای فروش منتشر کنید.', 'success')
         return redirect(url_for('express_partner.my_property'))
 
     payload = page_payload(me_phone)
@@ -4311,6 +4311,8 @@ def my_property_page():
         property=payload.get('property') or {},
         has_property=True,
         is_special=is_special,
+        listings=payload.get('listings') or [],
+        divar_profile_entries=payload.get('divar_profiles') or [],
     )
 
 
@@ -4331,7 +4333,7 @@ def _render_owner_home_form(me_phone: str = '', *, is_special: bool = False):
         listing_upload_video_url=url_for('express_partner.my_property_upload_video'),
         listing_upload_document_url=url_for('express_partner.my_property_upload_document'),
         listing_page_title='ثبت ملک من',
-        listing_page_subtitle='قیمت‌گذاری شخصی — منتشر نمی‌شود و فقط تغییرات قیمت را برای شما نشان می‌دهد',
+        listing_page_subtitle='ابتدا ملک را برای خودتان ثبت کنید؛ بعد از ثبت می‌توانید برای فروش منتشر کنید',
         listing_vinor_contact_locked=True,
         listing_vinor_contact_default=phone,
         listing_hide_contact_section=True,
@@ -4406,9 +4408,83 @@ def apk_my_property_submit():
     return _apk_json({
         'ok': True,
         'code': rec.get('code') if rec else '',
-        'message': f'ملک شما با کد {rec.get("code")} ثبت شد. قیمت و تغییرات فقط در پنل شما دیده می‌شود.',
+        'message': f'ملک شما با کد {rec.get("code")} ثبت شد. از همین صفحه می‌توانید برای فروش منتشر کنید.',
         'next': 'my-property',
         'form': form_meta(me_phone),
+    })
+
+
+def _publish_request_fields() -> Dict[str, Any]:
+    data = request.get_json(silent=True)
+    if not data and request.data:
+        try:
+            data = json.loads(request.data.decode('utf-8') if isinstance(request.data, bytes) else request.data)
+        except Exception:
+            data = {}
+    if not isinstance(data, dict) or not data:
+        send_raw = request.form.get('auto_send_all_partners')
+        return {
+            'payment_method': (request.form.get('payment_method') or '').strip(),
+            'commission_pct': (
+                request.form.get('express_commission_pct')
+                or request.form.get('commission_pct')
+                or '2'
+            ),
+            'send_all': bool(str(send_raw or '').strip()),
+        }
+    send_raw = data.get('auto_send_all_partners')
+    if send_raw is None:
+        send_raw = data.get('send_all')
+    return {
+        'payment_method': str(data.get('payment_method') or '').strip(),
+        'commission_pct': data.get('express_commission_pct') or data.get('commission_pct') or '2',
+        'send_all': send_raw is True or str(send_raw or '').strip().lower() in ('1', 'true', 'yes', 'on'),
+    }
+
+
+@express_partner_bp.route('/my-property/publish', methods=['POST'], endpoint='my_property_publish')
+@require_partner_access(allow_pending=True)
+def my_property_publish():
+    from .apk_native import session_phone
+    from .special_listings import SPECIAL_LISTING_ERRORS, publish_owner_home
+
+    fields = _publish_request_fields()
+    rec, err = publish_owner_home(
+        session_phone(),
+        payment_method=fields['payment_method'],
+        commission_pct=fields['commission_pct'],
+        send_all=fields['send_all'],
+    )
+    if err:
+        flash(SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.'), 'error')
+    else:
+        flash(f'ملک شما با کد {rec.get("code")} برای فروش منتشر شد.', 'success')
+    return redirect(url_for('express_partner.my_property'))
+
+
+@express_partner_bp.post('/api/my-property/publish', endpoint='apk_my_property_publish')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_publish():
+    from .my_property import page_payload
+    from .apk_native import session_phone
+    from .special_listings import SPECIAL_LISTING_ERRORS, publish_owner_home
+
+    fields = _publish_request_fields()
+    rec, err = publish_owner_home(
+        session_phone(),
+        payment_method=fields['payment_method'],
+        commission_pct=fields['commission_pct'],
+        send_all=fields['send_all'],
+    )
+    if err:
+        msg = SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.')
+        return _apk_json({'ok': False, 'error': msg, 'error_code': err}, 400)
+    return _apk_json({
+        'ok': True,
+        'code': rec.get('code') if rec else '',
+        'message': f'ملک شما با کد {rec.get("code")} برای فروش منتشر شد.',
+        'next': 'my-property',
+        **page_payload(session_phone()),
     })
 
 
@@ -4645,7 +4721,7 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
                 continue
         except Exception:
             pass
-        if land.get('public') is False or land.get('owner_home'):
+        if land.get('public') is False:
             continue
         try:
             from .special_listings import is_owner_home
@@ -4653,7 +4729,8 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
             if is_owner_home(land):
                 continue
         except Exception:
-            pass
+            if land.get('owner_home') and land.get('public') is not True:
+                continue
         code = str(land.get('code') or '').strip()
         if not code:
             continue
@@ -9244,33 +9321,10 @@ def profile_page():
 
 
 @express_partner_bp.route('/listings', methods=['GET'], endpoint='special_listings')
-@require_special_partner()
+@require_partner_access(allow_pending=True)
 def special_listings_page():
-    """آگهی‌های من — همکار ویژه."""
-    me_phone = (session.get('user_phone') or '').strip()
-    from .special_listings import listings_owned_by
-    from ..utils.images import partner_card_image_url
-
-    items = []
-    for land in listings_owned_by(me_phone):
-        items.append({
-            'code': land.get('code') or '',
-            'title': land.get('title') or '—',
-            'city': land.get('city') or '',
-            'price_total': int(land.get('price_total') or 0),
-            'image_url': partner_card_image_url(land) or None,
-            'detail_url': url_for('express_partner.land_detail', code=land.get('code')),
-        })
-    from .home_ads_config import partner_divar_profile_entries
-    divar_entries = partner_divar_profile_entries(me_phone)
-    return render_template(
-        'express_partner/special_listings.html',
-        items=items,
-        divar_profile_entries=divar_entries,
-        divar_profile_urls=[e.get('url') for e in divar_entries if e.get('url')],
-        hide_header=True,
-        bottom_nav_active='profile',
-    )
+    """آگهی‌های من با ملک من ادغام شده است."""
+    return redirect(url_for('express_partner.my_property', **request.args.to_dict(flat=True)))
 
 
 @express_partner_bp.post('/listings/divar-profile', endpoint='special_listings_divar_profile')
@@ -9306,7 +9360,7 @@ def special_listings_divar_profile():
         flash(msg, 'success' if ok else 'error')
     else:
         flash('درخواست نامعتبر است.', 'error')
-    return redirect(url_for('express_partner.special_listings', divar_open=1))
+    return redirect(url_for('express_partner.my_property', divar_open=1))
 
 
 def _listing_upload_image_json():
@@ -9429,7 +9483,7 @@ def _render_special_listing_form(me_phone: str = ''):
         form_values={'vinor_contact': phone} if phone else {},
         listing_code='',
         listing_form_action=url_for('express_partner.special_listing_new'),
-        listing_back_url=url_for('express_partner.special_listings'),
+        listing_back_url=url_for('express_partner.my_property'),
         listing_upload_image_url=url_for('express_partner.special_listing_upload_image'),
         listing_upload_video_url=url_for('express_partner.special_listing_upload_video'),
         listing_upload_document_url=url_for('express_partner.special_listing_upload_document'),
@@ -9484,9 +9538,9 @@ def special_listing_new():
             assign_land_to_all_partners(rec, pct)
 
         flash(f'آگهی با کد {rec.get("code")} ثبت شد.', 'success')
-        return redirect(url_for('express_partner.special_listings'))
+        return redirect(url_for('express_partner.my_property'))
 
-    return _render_special_listing_form(me_phone)
+    return redirect(url_for('express_partner.my_property'))
 
 
 @express_partner_bp.route('/inbox-visits', methods=['GET'], endpoint='special_visit_inbox')

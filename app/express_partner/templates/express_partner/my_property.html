@@ -101,14 +101,68 @@
   }
   .mp-cta h3 { margin: 0; font-size: 1rem; color: #fff; }
   .mp-cta p { margin: .35rem 0 .85rem; color: #a7f3d0; font-size: .78rem; }
+  .mp-cta button, .mp-cta .mp-cta-btn {
+    display: inline-flex; align-items: center; min-height: 2.4rem; padding: 0 .9rem;
+    border-radius: .75rem; background: #10b981; color: #052e16; font-weight: 800; font-size: .8rem;
+    text-decoration: none; border: 0; cursor: pointer; font-family: inherit;
+  }
   .mp-cta a {
     display: inline-flex; align-items: center; min-height: 2.4rem; padding: 0 .9rem;
     border-radius: .75rem; background: #10b981; color: #052e16; font-weight: 800; font-size: .8rem; text-decoration: none;
   }
+  .mp-pay { display: flex; flex-wrap: wrap; gap: .4rem; margin: .55rem 0 .7rem; }
+  .mp-pay label {
+    display: inline-flex; align-items: center; gap: .3rem; min-height: 2rem;
+    padding: 0 .7rem; border-radius: .65rem; border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.05); color: #ececec; font-size: .75rem; font-weight: 700; cursor: pointer;
+  }
+  .mp-pay input { accent-color: #10b981; }
+  .mp-field { display: flex; align-items: center; gap: .45rem; margin: 0 0 .7rem; color: #d1d5db; font-size: .78rem; }
+  .mp-field input[type="number"] {
+    width: 4.2rem; min-height: 2rem; border-radius: .55rem; border: 1px solid rgba(255,255,255,.12);
+    background: #111827; color: #fff; padding: 0 .4rem; text-align: center; font-family: inherit;
+  }
+  .mp-check { display: flex; align-items: center; gap: .4rem; margin: 0 0 .85rem; color: #a1a1aa; font-size: .75rem; }
+  .mp-check input { accent-color: #10b981; }
+  .mp-extra { margin-top: .85rem; }
+  .mp-extra h3 { margin: 0 0 .45rem; font-size: .9rem; color: #fff; }
+  .mp-extra a {
+    display: flex; justify-content: space-between; gap: .5rem; padding: .55rem 0;
+    border-bottom: 1px solid rgba(255,255,255,.06); color: inherit; text-decoration: none; font-size: .78rem;
+  }
+  .mp-extra a:last-child { border-bottom: 0; }
+  .mp-extra b { color: #fff; }
+  .mp-divar { margin-top: .85rem; }
+  .mp-divar form { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; margin-top: .45rem; }
+  .mp-divar input[type="url"], .mp-divar input[name="profile_url"] {
+    flex: 1; min-width: 10rem; min-height: 2rem; border-radius: .55rem; border: 1px solid rgba(255,255,255,.12);
+    background: #111827; color: #fff; padding: 0 .5rem; font-family: inherit; font-size: .75rem;
+  }
+  .mp-divar input[type="number"] {
+    width: 3.6rem; min-height: 2rem; border-radius: .55rem; border: 1px solid rgba(255,255,255,.12);
+    background: #111827; color: #fff; text-align: center; font-family: inherit;
+  }
+  .mp-divar button {
+    min-height: 2rem; padding: 0 .65rem; border-radius: .55rem; border: 0; background: #10b981;
+    color: #052e16; font-weight: 800; font-size: .72rem; cursor: pointer; font-family: inherit;
+  }
+  .mp-divar__row { display: flex; align-items: center; gap: .4rem; padding: .4rem 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: .75rem; }
+  .mp-divar__url { color: #93c5fd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 8rem; }
   .mp-demo { margin: .75rem 0 0; color: #fcd34d; font-size: .72rem; }
 </style>
 
 {% if has_property %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="mp" style="padding-bottom:0;">
+    {% for category, message in messages %}
+    <div class="rounded-xl border px-4 py-3 text-sm {% if category in ['error', 'danger'] %}border-rose-500/30 bg-rose-950/30 text-rose-200{% else %}border-emerald-500/30 bg-emerald-950/30 text-emerald-200{% endif %}">
+      {{ message }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endwith %}
 <article class="mp" data-mp-root>
   <header>
     <div class="mp-cover">
@@ -123,11 +177,43 @@
     <h2>{{ p.address }}{% if p.is_claimed %} <span class="mp-claimed-inline">{{ p.badge_label or 'خصوصی' }}</span>{% endif %}</h2>
     <p class="mp-sub">{{ p.city }}{% if p.state %}، {{ p.state }}{% endif %}{% if p.zip %} · {{ p.zip_label or p.zip }}{% endif %}</p>
     <p class="mp-meta">{{ p.beds_label or p.beds }} تخت · {{ p.baths_label or p.baths }} حمام · {{ p.sqm_label or p.sqm }} متر مربع · ساخت {{ p.built_year_label or p.built_year }}</p>
-    <p class="mp-tiny" style="margin-top:.55rem;">{{ p.privacy_note or 'فقط شما این قیمت را می‌بینید' }} · برای آگهی منتشر نمی‌شود</p>
+    <p class="mp-tiny" style="margin-top:.55rem;">{{ p.privacy_note or 'فقط شما این قیمت را می‌بینید' }}</p>
     <div class="mp-actions">
       <a class="mp-btn" href="{{ p.edit_url or url_for('express_partner.my_property') }}" data-vinor-express-nav><i class="fas fa-pen"></i> ویرایش اطلاعات</a>
       <a class="mp-btn" href="{{ p.photos_url or url_for('express_partner.my_property') }}" data-vinor-express-nav><i class="fas fa-camera"></i> افزودن عکس</a>
     </div>
+    {% if p.published_for_sale %}
+    <div class="mp-cta">
+      <h3>برای فروش منتشر شده</h3>
+      <p>این ملک در آگهی‌های وینور نمایش داده می‌شود.</p>
+      {% if p.detail_url %}
+      <a href="{{ p.detail_url }}" data-vinor-express-nav>مشاهده آگهی</a>
+      {% endif %}
+    </div>
+    {% else %}
+    <form class="mp-cta" method="post" action="{{ url_for('express_partner.my_property_publish') }}" data-vinor-direct-action>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h3>انتشار برای فروش</h3>
+      <p>بعد از انتشار، ملک در آگهی‌های وینور دیده می‌شود.</p>
+      <div class="mp-pay" role="radiogroup" aria-label="نحوه پرداخت">
+        {% for m in ['نقدی', 'توافقی', 'معاوضه'] %}
+        <label>
+          <input type="radio" name="payment_method" value="{{ m }}"{% if loop.first %} checked{% endif %}>
+          {{ m }}
+        </label>
+        {% endfor %}
+      </div>
+      <label class="mp-field">پورسانت
+        <input type="number" name="express_commission_pct" min="0.1" max="100" step="0.1" value="2" dir="ltr" required>
+        ٪
+      </label>
+      <label class="mp-check">
+        <input type="checkbox" name="auto_send_all_partners" value="1">
+        ارسال به همه همکاران
+      </label>
+      <button type="submit">انتشار برای فروش</button>
+    </form>
+    {% endif %}
     {% if p.is_demo %}
     <p class="mp-demo">نمونهٔ نمایشی تا وقتی ملکی به نام شما ثبت شود.</p>
     {% endif %}
@@ -188,6 +274,53 @@
       {% endfor %}
     </ul>
   </section>
+
+  {% if listings %}
+  <section class="mp-card mp-extra" aria-label="آگهی‌های منتشرشده">
+    <h3>آگهی‌های منتشرشده</h3>
+    {% for item in listings %}
+    <a href="{{ item.detail_url or url_for('express_partner.land_detail', code=item.code) }}" data-vinor-express-nav>
+      <span><b>{{ item.title }}</b>{% if item.city %} · {{ item.city }}{% endif %}</span>
+      <span>{{ (item.price_total or 0)|toman(false) }}</span>
+    </a>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if is_special %}
+  {% set _entries = divar_profile_entries|default([]) %}
+  <section class="mp-card mp-divar" id="divar-pro" aria-label="دیوار Pro">
+    <h3 style="margin:0;font-size:.9rem;color:#fff;">دیوار Pro</h3>
+    <p class="mp-tiny">آگهی‌های پروفایل دیوار در نوار خانه ادغام می‌شوند.</p>
+    {% for e in _entries %}
+    <div class="mp-divar__row">
+      <a class="mp-divar__url" href="{{ e.url }}" target="_blank" rel="noopener noreferrer" dir="ltr">{{ e.url }}</a>
+      <form method="post" action="{{ url_for('express_partner.special_listings_divar_profile') }}" data-vinor-direct-action>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="set_commission">
+        <input type="hidden" name="profile_url" value="{{ e.url }}">
+        <input name="commission_pct" type="number" inputmode="decimal" step="0.1" min="0" max="100" dir="ltr" required value="{{ e.commission_pct_display }}" aria-label="پورسانت">
+        <span>٪</span>
+        <button type="submit">ثبت</button>
+      </form>
+      <form method="post" action="{{ url_for('express_partner.special_listings_divar_profile') }}" data-vinor-direct-action>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="remove">
+        <input type="hidden" name="profile_url" value="{{ e.url }}">
+        <button type="submit" aria-label="حذف" onclick="return confirm('این پروفایل دیوار حذف شود؟')">حذف</button>
+      </form>
+    </div>
+    {% endfor %}
+    <form method="post" action="{{ url_for('express_partner.special_listings_divar_profile') }}" data-vinor-direct-action>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="add">
+      <input name="profile_url" dir="ltr" inputmode="url" maxlength="200" required placeholder="https://divar.ir/pro/…" autocomplete="off" aria-label="آدرس پروفایل دیوار">
+      <input name="commission_pct" type="number" inputmode="decimal" step="0.1" min="0" max="100" dir="ltr" value="2" aria-label="پورسانت">
+      <span>٪</span>
+      <button type="submit">افزودن</button>
+    </form>
+  </section>
+  {% endif %}
 </article>
 
 <script>
@@ -251,7 +384,7 @@
     </div>
     {% endif %}
   {% endwith %}
-  <div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] text-zinc-100">
+  <div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] text-zinc-100" data-mp-form="1">
     {% include 'admin/partials/_express_listing_form.html' %}
   </div>
 {% endif %}

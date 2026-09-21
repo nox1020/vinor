@@ -209,12 +209,12 @@ def save_home_ads_settings(patch: dict[str, Any]) -> dict[str, Any]:
 
 def add_divar_profile_url(url: str) -> tuple[bool, str, dict[str, Any]]:
     """سازگاری قدیمی — پروفایل‌ها دیگر روی همکار پلاس ذخیره می‌شوند."""
-    return False, "پروفایل دیوار را از آگهی‌های من اضافه کنید.", get_home_ads_settings()
+    return False, "پروفایل دیوار را از ملک من اضافه کنید.", get_home_ads_settings()
 
 
 def remove_divar_profile_url(url: str) -> tuple[bool, str, dict[str, Any]]:
     del url
-    return False, "پروفایل دیوار را از آگهی‌های من حذف کنید.", get_home_ads_settings()
+    return False, "پروفایل دیوار را از ملک من حذف کنید.", get_home_ads_settings()
 
 
 def _find_plus_partner(phone: str):

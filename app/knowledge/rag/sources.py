@@ -79,9 +79,12 @@ def load_land_documents() -> list[LandDocument]:
     for row in rows:
         if not isinstance(row, dict):
             continue
-        if row.get("owner_home") or row.get("public") is False:
+        if row.get("public") is False:
             continue
-        if str(row.get("source") or "").strip().lower() in ("my_property", "owner_home"):
+        src = str(row.get("source") or "").strip().lower()
+        if src in ("my_property", "owner_home"):
+            continue
+        if row.get("owner_home") and row.get("public") is not True:
             continue
         if str(row.get("ad_type") or "").strip().lower() == "owner_home":
             continue

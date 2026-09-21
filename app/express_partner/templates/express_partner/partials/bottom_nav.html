@@ -184,9 +184,9 @@
   {% set _p = request.path or '' %}
   {% set _tab_ads = (_p.endswith('/home') or _p.rstrip('/').endswith('/partner') or _p.endswith('/express/partner')) and not (request.args.get('thread') or request.args.get('ai')) %}
   {% set _tab_favs = '/favorites' in _p %}
-  {% set _tab_post = '/listings/new' in _p or request.args.get('register') == '1' %}
+  {% set _tab_post = '/listings/new' in _p or '/my-property' in _p or request.args.get('register') == '1' %}
   {% set _tab_me = '/profile' in _p and '/profile/edit' not in _p %}
-  {% set _post_href = url_for('express_partner.special_listing_new') if is_special|default(false) else url_for('express_partner.my_property', register=1) %}
+  {% set _post_href = url_for('express_partner.my_property') %}
   <div class="vn-divar-tabbar" role="navigation">
     <a class="vn-divar-tab{% if _tab_ads and not _tab_post %} is-active{% endif %}" href="{{ url_for('express_partner.home') }}" data-divar-tab="ads" aria-label="آگهی‌ها">
       <span class="vn-divar-tab__icon" aria-hidden="true">
@@ -1081,7 +1081,7 @@
     var p = pathNorm();
     var q = location.search || '';
     if (/\/login/.test(p) || /\/verify/.test(p)) return '';
-    if (/\/listings\/new$/.test(p) || /[?&]register=1(?:&|$)/.test(q)) return 'post';
+    if (/\/listings\/new$/.test(p) || /\/my-propert/.test(p) || /[?&]register=1(?:&|$)/.test(q)) return 'post';
     if (/\/favorites/.test(p)) return 'favs';
     if (homeChatOpen() && (/\/home$/.test(p) || /\/express\/partner$/.test(p))) return 'chat';
     if (/\/home$/.test(p) || /\/express\/partner$/.test(p) || /\/dashboard$/.test(p)) return 'ads';
@@ -1100,7 +1100,6 @@
       /\/legal/.test(p) ||
       /\/routine/.test(p) ||
       /\/cooperation-terms/.test(p) ||
-      /\/my-propert/.test(p) ||
       /\/inbox-visits/.test(p) ||
       /\/notes/.test(p) ||
       /\/notifications/.test(p)
@@ -1139,7 +1138,8 @@
       /\/verify/.test(p) ||
       /\/lands\/[^/]+$/.test(p) ||
       /\/divar\/[^/]+$/.test(p) ||
-      /[?&]register=1(?:&|$)/.test(q);
+      /[?&]register=1(?:&|$)/.test(q) ||
+      !!document.querySelector('[data-mp-form]');
     var nav = document.getElementById('bottomNavMenu');
     if (nav) {
       if (hide) {

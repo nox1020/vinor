@@ -115,7 +115,8 @@ def demo_property() -> Dict[str, Any]:
         "weekly_views": 0,
         "is_claimed": True,
         "badge_label": "خصوصی",
-        "privacy_note": "فقط شما این قیمت را می‌بینید",
+        "privacy_note": "فقط شما این قیمت را می‌بینید · بعد از ثبت می‌توانید برای فروش منتشر کنید",
+        "published_for_sale": False,
         "neighborhood_avg": 11_750_000_000,
         "equity": {"total": 7_800_000_000, "paid_off_pct": 62},
         "price_history": history,
@@ -144,9 +145,18 @@ def _from_land(land: Dict[str, Any], nearby: List[Dict[str, Any]]) -> Dict[str, 
     code = str(land.get("code") or "").strip()
     nearby_rows = []
     try:
+        from .special_listings import is_published_for_sale
+        published = is_published_for_sale(land)
+    except Exception:
+        published = False
+    try:
         edit_url = url_for("express_partner.my_property")
     except Exception:
         edit_url = ""
+    try:
+        detail_url = url_for("express_partner.land_detail", code=code) if published and code else ""
+    except Exception:
+        detail_url = f"/express/partner/lands/{code}" if published and code else ""
     return {
         "id": code or "claimed-home",
         "is_demo": False,
@@ -174,8 +184,13 @@ def _from_land(land: Dict[str, Any], nearby: List[Dict[str, Any]]) -> Dict[str, 
         "yearly_change_label": fa_pct(yearly),
         "weekly_views": 0,
         "is_claimed": True,
-        "badge_label": "خصوصی",
-        "privacy_note": "فقط شما این قیمت را می‌بینید",
+        "badge_label": "منتشرشده" if published else "خصوصی",
+        "privacy_note": (
+            "این ملک برای فروش در آگهی‌های وینور منتشر شده است"
+            if published else
+            "فقط شما این قیمت را می‌بینید · برای فروش هنوز منتشر نشده"
+        ),
+        "published_for_sale": published,
         "neighborhood_avg": int(round(price * 0.94)),
         "equity": {"total": int(round(price * equity_pct / 100.0)), "paid_off_pct": equity_pct},
         "price_history": history,
@@ -188,6 +203,8 @@ def _from_land(land: Dict[str, Any], nearby: List[Dict[str, Any]]) -> Dict[str, 
         "photos_url": edit_url,
         "settings_url": "",
         "sell_url": "",
+        "detail_url": detail_url,
+        "code": code,
     }
 
 
@@ -206,15 +223,53 @@ def property_for_user(me_phone: str) -> Optional[Dict[str, Any]]:
 
 def page_payload(me_phone: str) -> Dict[str, Any]:
     prop = property_for_user(me_phone)
+    home_code = str((prop or {}).get("code") or (prop or {}).get("id") or "").strip()
+    extra: List[Dict[str, Any]] = []
+    try:
+        from .apk_native import land_card
+        from .special_listings import listings_owned_by
+
+        for land in listings_owned_by(me_phone) if me_phone else []:
+            code = str(land.get("code") or "").strip()
+            if not code or code == home_code:
+                continue
+            card = land_card(land)
+            try:
+                card["detail_url"] = url_for("express_partner.land_detail", code=code)
+            except Exception:
+                card["detail_url"] = f"/express/partner/lands/{code}"
+            extra.append(card)
+    except Exception:
+        extra = []
+    divar: List[Dict[str, Any]] = []
+    try:
+        from .home_ads_config import partner_divar_profile_entries
+
+        for entry in partner_divar_profile_entries(me_phone) or []:
+            if not isinstance(entry, dict):
+                continue
+            divar.append(entry)
+    except Exception:
+        divar = []
     try:
         form_url = url_for("express_partner.my_property")
     except Exception:
         form_url = "/express/partner/my-property"
+    try:
+        publish_url = url_for("express_partner.apk_my_property_publish")
+    except Exception:
+        publish_url = "/express/partner/api/my-property/publish"
     return json_ready({
         "ok": True,
         "logged_in": bool(me_phone),
         "has_property": bool(prop),
         "form_url": form_url,
+        "publish_url": publish_url,
+        "published_for_sale": bool(prop and prop.get("published_for_sale")),
+        "payment_methods": ["نقدی", "توافقی", "معاوضه"],
+        "default_commission_pct": "2",
+        "listings": extra,
+        "divar_profiles": divar,
         "property": prop or {},
     })
 
@@ -327,7 +382,7 @@ def form_meta(
         submit_label = "ثبت و انتشار آگهی"
     else:
         page_title = "ثبت ملک من"
-        page_subtitle = "قیمت‌گذاری شخصی — منتشر نمی‌شود و فقط تغییرات قیمت را برای شما نشان می‌دهد"
+        page_subtitle = "ابتدا ملک را برای خودتان ثبت کنید؛ بعد از ثبت می‌توانید برای فروش منتشر کنید"
         submit_label = "ثبت ملک من"
     return json_ready({
         "ok": True,

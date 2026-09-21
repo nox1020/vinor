@@ -149,11 +149,8 @@
     {% endif %}
 
     <div class="vn-me-group">
-      {{ profile_menu_row(url_for('express_partner.my_property'), 'fa-house', 'ملک من', subtitle='ارزش، نمودار و بینش ملک') }}
+      {{ profile_menu_row(url_for('express_partner.my_property'), 'fa-house', 'ملک من', subtitle='ثبت ملک و انتشار آگهی') }}
       {% if me_phone and _approved %}
-        {% if _special %}
-        {{ profile_menu_row(url_for('express_partner.special_listings'), 'fa-building', 'آگهی‌های من') }}
-        {% endif %}
         {{ profile_menu_row(url_for('express_partner.requests'), 'fa-route', 'پیگیری', subtitle='درخواست، بازدید و معامله') }}
         {{ profile_menu_row(url_for('express_partner.commissions'), 'fa-wallet', 'کیف پول', subtitle=_wallet|toman) }}
         {{ profile_menu_row(url_for('express_partner.favorites'), 'fa-bookmark', 'نشان‌ها') }}

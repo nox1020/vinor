@@ -33,6 +33,7 @@
     '/express/partner/requests': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/listings': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/listings/new': { tab: 'profile', depth: 2, bottomNav: false, prefetch: false },
+    '/express/partner/my-property': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/inbox-visits': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/invite': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/training': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -76,6 +77,7 @@
     '/express/partner/training',
     '/express/partner/invite',
     '/express/partner/listings',
+    '/express/partner/my-property',
     '/express/partner/inbox-visits',
     '/express/partner/routine'
   ];
@@ -541,6 +543,7 @@
       p === '/express/partner/requests' ||
       p === '/express/partner/listings' ||
       p.indexOf('/express/partner/listings/') === 0 ||
+      p === '/express/partner/my-property' ||
       p === '/express/partner/inbox-visits' ||
       p.indexOf('/express/partner/inbox-visits/') === 0 ||
       isCommissionsPath(p);

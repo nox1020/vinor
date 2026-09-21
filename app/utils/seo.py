@@ -516,7 +516,9 @@ def similar_lands(land: dict, all_lands: List[dict], *, limit: int = 6) -> List[
             continue
         if not item.get("is_express") or item.get("express_status") == "sold":
             continue
-        if item.get("owner_home") or item.get("public") is False:
+        if item.get("public") is False:
+            continue
+        if item.get("owner_home") and item.get("public") is not True:
             continue
         score = 0
         ic = _clean_text(item.get("city"), 40).lower()
@@ -538,7 +540,9 @@ def similar_lands(land: dict, all_lands: List[dict], *, limit: int = 6) -> List[
                 continue
             if not item.get("is_express") or item.get("express_status") == "sold":
                 continue
-            if item.get("owner_home") or item.get("public") is False:
+            if item.get("public") is False:
+                continue
+            if item.get("owner_home") and item.get("public") is not True:
                 continue
             if any(str(x[2].get("code")) == str(item.get("code")) for x in scored):
                 continue

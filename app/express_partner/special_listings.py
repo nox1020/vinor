@@ -155,19 +155,40 @@ def _next_numeric_code(lands: List[Dict[str, Any]]) -> str:
     return str(max(existing) + 1) if existing else "1"
 
 
-def is_owner_home(land: Dict[str, Any] | None) -> bool:
-    """ملک ثبت‌شده از «ملک من» — خصوصی است و نباید منتشر شود."""
+def is_published_for_sale(land: Dict[str, Any] | None) -> bool:
+    """ملک «ملک من» که برای فروش منتشر شده و باید در فید عمومی بیاید."""
     if not isinstance(land, dict):
         return False
     extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
-    if land.get("owner_home") or extras.get("owner_home") or extras.get("listed_by_owner"):
+    if extras.get("published_for_sale") is True:
         return True
+    if str(land.get("source") or "").strip().lower() == "my_property_published":
+        return True
+    if land.get("public") is True and extras.get("listed_by_owner"):
+        return True
+    return False
+
+
+def is_my_property_record(land: Dict[str, Any] | None) -> bool:
+    """رکورد ثبت‌شده از صفحهٔ ملک من — خصوصی یا منتشرشده."""
+    if not isinstance(land, dict):
+        return False
+    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
     src = str(land.get("source") or "").strip().lower()
-    if src in ("my_property", "owner_home"):
+    if src in ("my_property", "my_property_published", "owner_home"):
+        return True
+    if land.get("owner_home") or extras.get("owner_home") or extras.get("listed_by_owner"):
         return True
     if str(land.get("ad_type") or "").strip().lower() == "owner_home":
         return True
     return False
+
+
+def is_owner_home(land: Dict[str, Any] | None) -> bool:
+    """ملک ثبت‌شده از «ملک من» که هنوز برای فروش منتشر نشده."""
+    if not is_my_property_record(land):
+        return False
+    return not is_published_for_sale(land)
 
 
 def listings_owned_by(phone: str) -> List[Dict[str, Any]]:
@@ -194,14 +215,14 @@ def listings_owned_by(phone: str) -> List[Dict[str, Any]]:
 
 
 def listings_owned_home(phone: str) -> List[Dict[str, Any]]:
-    """ملک‌های خصوصی «ملک من» متعلق به این شماره."""
+    """ملک‌های «ملک من» متعلق به این شماره — شامل منتشرشده برای فروش."""
     ph = _norm_phone(phone)
     if not ph:
         return []
     lands = load_ads_cached() or []
     out: List[Dict[str, Any]] = []
     for land in lands if isinstance(lands, list) else []:
-        if not isinstance(land, dict) or not is_owner_home(land):
+        if not isinstance(land, dict) or not is_my_property_record(land):
             continue
         owner = _norm_phone(str(land.get("owner") or land.get("user_phone") or ""))
         if owner == ph:
@@ -350,7 +371,11 @@ SPECIAL_LISTING_ERRORS: Dict[str, str] = {
     "invalid_commission": "درصد پورسانت باید بین ۰ و ۱۰۰ باشد.",
     "installments_required": "برای پرداخت اقساطی حداقل یک قسط معتبر وارد کنید.",
     "save_failed": "ثبت آگهی ناموفق بود.",
+    "not_found": "ابتدا ملک خود را در ملک من ثبت کنید.",
+    "already_published": "این ملک قبلاً برای فروش منتشر شده است.",
 }
+
+PUBLISH_PAYMENT_METHODS = ("نقدی", "توافقی", "معاوضه")
 
 
 def create_special_listing_from_express_form(
@@ -628,6 +653,93 @@ def assign_land_to_all_partners(land: Dict[str, Any], commission_pct: float) -> 
         current_app.logger.exception(
             "assign_land_to_all_partners failed code=%s", land.get("code")
         )
+
+
+def publish_owner_home(
+    phone: str,
+    *,
+    payment_method: str,
+    commission_pct: Any = "2",
+    send_all: bool = False,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """انتشار ملک ثبت‌شده در «ملک من» به‌عنوان آگهی فروش عمومی."""
+    homes = listings_owned_home(phone)
+    if not homes:
+        return None, "not_found"
+    land = homes[0]
+    if is_published_for_sale(land):
+        return None, "already_published"
+
+    method = str(payment_method or "").strip()
+    if method not in PUBLISH_PAYMENT_METHODS:
+        return None, "payment_required"
+
+    pct_raw = str(commission_pct if commission_pct is not None else "").strip() or "2"
+    try:
+        pct = float(pct_raw.replace(",", ".").replace("٪", "").replace("%", ""))
+    except (TypeError, ValueError):
+        return None, "invalid_commission"
+    if pct <= 0 or pct > 100:
+        return None, "invalid_commission"
+
+    code = str(land.get("code") or "").strip()
+    if not code:
+        return None, "not_found"
+
+    items = load_ads() or []
+    if not isinstance(items, list):
+        items = []
+    target = None
+    for item in items:
+        if isinstance(item, dict) and str(item.get("code") or "").strip() == code:
+            target = item
+            break
+    if target is None:
+        return None, "not_found"
+
+    price = 0
+    try:
+        price = int(target.get("price_total") or target.get("price") or 0)
+    except (TypeError, ValueError):
+        price = 0
+    amount = int(round(price * (pct / 100.0))) if price else 0
+
+    extras = dict(target.get("extras") or {}) if isinstance(target.get("extras"), dict) else {}
+    extras.update({
+        "express_commission_pct": pct,
+        "express_commission_amount": amount,
+        "listed_by_special": True,
+        "listed_by_owner": True,
+        "owner_home": False,
+        "public": True,
+        "published_for_sale": True,
+    })
+    target["extras"] = extras
+    target["public"] = True
+    target["is_express"] = True
+    target["ad_type"] = "express"
+    target["status"] = "approved"
+    target["express_status"] = "approved"
+    target["owner_home"] = False
+    target["source"] = "my_property_published"
+    target["payment_method"] = method
+    target["expert_verified"] = bool(target.get("expert_verified"))
+
+    try:
+        save_ads(items)
+    except Exception:
+        current_app.logger.exception("publish owner home save failed code=%s", code)
+        return None, "save_failed"
+
+    try:
+        from .new_land_sms import notify_all_partners_new_express_land_background
+        notify_all_partners_new_express_land_background(target)
+    except Exception:
+        current_app.logger.exception("publish owner home SMS failed code=%s", code)
+
+    if send_all:
+        assign_land_to_all_partners(target, pct)
+    return target, None
 
 
 def save_special_listing_upload_document(file) -> Optional[str]:
