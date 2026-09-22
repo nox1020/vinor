@@ -987,14 +987,6 @@ def build_home_ai_quick_prompts(
         variant="hero",
         ui_action="open_customer_modal",
     )
-    add(
-        "پیگیری",
-        prompt="قدم بعدی فروش من چیست؟ از همین چت جلو ببر.",
-        intent="next_action",
-        icon="clipboard",
-        subtitle="درخواست، بازدید و معامله",
-        variant="tile",
-    )
     return out[:3]
 
 
