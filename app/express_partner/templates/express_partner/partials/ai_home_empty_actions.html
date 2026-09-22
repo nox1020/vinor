@@ -68,10 +68,7 @@
             {% if item.ui_action == 'open_customer_modal' %}
             data-open-customer-modal
             {% elif item.ui_action == 'open_divar_ads_all' %}
-            data-open-divar-ads-all
-            aria-haspopup="dialog"
-            aria-controls="homeDivarAdsAllModal"
-            aria-expanded="false"
+            data-vinor-search-page
             {% else %}
             data-ai-quick-prompt="{{ item.prompt|e }}"
             {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
@@ -121,10 +118,7 @@
             {% if item.ui_action == 'open_customer_modal' %}
             data-open-customer-modal
             {% elif item.ui_action == 'open_divar_ads_all' %}
-            data-open-divar-ads-all
-            aria-haspopup="dialog"
-            aria-controls="homeDivarAdsAllModal"
-            aria-expanded="false"
+            data-vinor-search-page
             {% else %}
             data-ai-quick-prompt="{{ item.prompt|e }}"
             {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
@@ -170,10 +164,7 @@
               {% if item.ui_action == 'open_customer_modal' %}
               data-open-customer-modal
               {% elif item.ui_action == 'open_divar_ads_all' %}
-              data-open-divar-ads-all
-              aria-haspopup="dialog"
-              aria-controls="homeDivarAdsAllModal"
-              aria-expanded="false"
+              data-vinor-search-page
               {% else %}
               data-ai-quick-prompt="{{ item.prompt|e }}"
               {% if item.intent %}data-ai-intent="{{ item.intent|e }}"{% endif %}
@@ -194,3 +185,23 @@
   {% endif %}
 </div>
 {% endif %}
+<script>
+(function () {
+  if (window.__vinorSearchTileBound) return;
+  window.__vinorSearchTileBound = true;
+  var searchUrl = {{ url_for('express_partner.search')|tojson }};
+  document.addEventListener('click', function (ev) {
+    var el = ev.target && ev.target.closest && ev.target.closest('[data-vinor-search-page]');
+    if (!el) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    try {
+      if (typeof window.vinorExpressNavigate === 'function') {
+        window.vinorExpressNavigate(searchUrl, { forward: true });
+        return;
+      }
+    } catch (_) {}
+    window.location.href = searchUrl;
+  }, true);
+})();
+</script>

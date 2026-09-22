@@ -22,7 +22,6 @@
   }
   #vinorSearchPage .vn-search-field {
     position: sticky;
-    top: 0;
     z-index: 2;
     padding: 0.35rem 0.9rem 0.65rem;
     background: #000;
@@ -143,9 +142,9 @@
   #vinorSearchPage .vn-search-row.is-hidden { display: none; }
 </style>
 
-<div id="vinorSearchPage" data-vinor-search-page>
+<div id="vinorSearchPage" class="partner-page-scroll-pad" data-vinor-search-page>
   <div class="vn-search-shell">
-    <div class="vn-search-field">
+    <div class="vn-search-field ep-partner-sticky-below-header">
       <label>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
           <circle cx="11" cy="11" r="7"></circle>
