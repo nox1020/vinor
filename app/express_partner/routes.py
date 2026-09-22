@@ -5084,6 +5084,28 @@ def api_repost_remove():
     except Exception:
         return jsonify({'ok': False, 'error': 'persist_failed'}), 500
 
+@express_partner_bp.get('/search', endpoint='search')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def search_page():
+    """جستجوی ملک — همان لیست آگهی‌های خانه، جدا از صفحهٔ آگهی‌ها."""
+    me_phone = (session.get('user_phone') or '').strip()
+    profile = getattr(g, 'express_partner_profile', None)
+    is_approved = _is_partner_approved(profile)
+    try:
+        search_ads, _ads_count = _home_ads_for_api()
+    except Exception:
+        search_ads = []
+    resp = make_response(render_template(
+        'express_partner/search.html',
+        me_phone=me_phone,
+        is_approved=is_approved,
+        search_ads=search_ads or [],
+        hide_header=True,
+    ))
+    _append_partner_tab_prefetch(resp)
+    return resp
+
+
 @express_partner_bp.get('/favorites', endpoint='favorites')
 @require_partner_access(allow_pending=True)
 def favorites_page():

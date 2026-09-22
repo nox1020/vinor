@@ -183,7 +183,7 @@
   {% endif %}
   {% set _p = request.path or '' %}
   {% set _tab_ads = (_p.endswith('/home') or _p.rstrip('/').endswith('/partner') or _p.endswith('/express/partner')) and not (request.args.get('thread') or request.args.get('ai')) %}
-  {% set _tab_favs = '/favorites' in _p %}
+  {% set _tab_search = '/search' in _p %}
   {% set _tab_post = '/listings/new' in _p or '/my-property' in _p or request.args.get('register') == '1' %}
   {% set _tab_me = '/profile' in _p and '/profile/edit' not in _p %}
   {% set _post_href = url_for('express_partner.my_property') %}
@@ -195,12 +195,12 @@
       </span>
       <span class="vn-divar-tab__label">آگهی‌ها</span>
     </a>
-    <a class="vn-divar-tab{% if _tab_favs %} is-active{% endif %}" href="{{ url_for('express_partner.favorites') }}" data-divar-tab="favs" aria-label="نشان‌ها">
+    <a class="vn-divar-tab{% if _tab_search %} is-active{% endif %}" href="{{ url_for('express_partner.search') }}" data-divar-tab="search" aria-label="جستجو">
       <span class="vn-divar-tab__icon" aria-hidden="true">
-        <svg class="vn-divar-ico vn-divar-ico--off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M7.2 4.6h9.6A1.4 1.4 0 0 1 18.2 6v13.05l-6.2-2.55-6.2 2.55V6a1.4 1.4 0 0 1 1.4-1.4z"/></svg>
-        <svg class="vn-divar-ico vn-divar-ico--on" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+        <svg class="vn-divar-ico vn-divar-ico--off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6.25"/><path d="M16.2 16.2 20 20"/></svg>
+        <svg class="vn-divar-ico vn-divar-ico--on" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
       </span>
-      <span class="vn-divar-tab__label">نشان‌ها</span>
+      <span class="vn-divar-tab__label">جستجو</span>
     </a>
     <a class="vn-divar-tab{% if _tab_post %} is-active{% endif %}" href="{{ _post_href }}" data-divar-tab="post" aria-label="ثبت آگهی">
       <span class="vn-divar-tab__icon" aria-hidden="true">
@@ -1078,10 +1078,11 @@
     var q = location.search || '';
     if (/\/login/.test(p) || /\/verify/.test(p)) return '';
     if (/\/listings\/new$/.test(p) || /\/my-propert/.test(p) || /[?&]register=1(?:&|$)/.test(q)) return 'post';
-    if (/\/favorites/.test(p)) return 'favs';
+    if (/\/search\/?$/.test(p)) return 'search';
     if (homeChatOpen() && (/\/home$/.test(p) || /\/express\/partner$/.test(p) || /\/dashboard$/.test(p))) return 'chat';
     if (/\/home$/.test(p) || /\/express\/partner$/.test(p) || /\/dashboard$/.test(p)) return 'ads';
     if (
+      /\/favorites/.test(p) ||
       /\/profile/.test(p) ||
       /\/commissions/.test(p) ||
       /\/settings/.test(p) ||
@@ -1187,7 +1188,7 @@
       goTab(href);
       return;
     }
-    if ((key === 'post' || key === 'favs') && !userLoggedIn) {
+    if (key === 'post' && !userLoggedIn) {
       e.preventDefault();
       e.stopPropagation();
       window.location.href = loginUrl;

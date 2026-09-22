@@ -147,7 +147,7 @@
   {% endif %}
   {% else %}
   <ul class="ai-home-empty__list" role="presentation">
-    {% for item in ai_quick_prompts %}
+    {% for item in _prompts %}
     <li role="none">
       {% if item.href %}
       <a href="{{ item.href }}"
