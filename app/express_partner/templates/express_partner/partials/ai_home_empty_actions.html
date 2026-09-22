@@ -34,9 +34,10 @@
 {%- endmacro %}
 
 {% if ai_quick_prompts %}
+{% set _prompts = ai_quick_prompts|rejectattr('ui_action', 'equalto', 'open_divar_ads_all')|list %}
 {% set _empty_user_msgs = chat_messages|default([])|selectattr('role', 'equalto', 'user')|list %}
-{% set _heroes = ai_quick_prompts|selectattr('variant', 'equalto', 'hero')|list %}
-{% set _tiles = ai_quick_prompts|rejectattr('variant', 'equalto', 'hero')|list %}
+{% set _heroes = _prompts|selectattr('variant', 'equalto', 'hero')|list %}
+{% set _tiles = _prompts|rejectattr('variant', 'equalto', 'hero')|list %}
 {% set _hub = _heroes|length > 0 %}
 <div id="aiHomeEmptyActions"
      class="ai-home-empty-actions{% if _hub %} ai-home-empty-actions--hub{% else %} ai-home-empty-actions--list{% endif %}"

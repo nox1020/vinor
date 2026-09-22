@@ -34,6 +34,7 @@ _NOINDEX_PREFIXES = (
     "/express/partner/download-app",
     "/express/partner/profile",
     "/express/partner/favorites",
+    "/express/partner/search",
     "/express/partner/commissions",
     "/express/partner/routine",
     "/express/partner/ai",

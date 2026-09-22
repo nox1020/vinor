@@ -895,16 +895,6 @@ def build_limited_ai_quick_prompts(
             href=thanks_url,
         )
         add(
-            "خرید ملک",
-            prompt="یه ملک مناسب می‌خوام",
-            intent="find_land",
-            icon="search",
-            subtitle="جستجوی فایل و ملک",
-            variant="tile",
-        )
-        if out:
-            out[-1]["ui_action"] = "open_divar_ads_all"
-        add(
             "سطوح همکاری",
             icon="users",
             subtitle="شرایط و پورسانت",
@@ -927,16 +917,6 @@ def build_limited_ai_quick_prompts(
         variant="hero",
         href=become_href,
     )
-    add(
-        "خرید ملک",
-        prompt="یه ملک مناسب می‌خوام",
-        intent="find_land",
-        icon="search",
-        subtitle="جستجوی فایل و ملک",
-        variant="tile",
-    )
-    if out:
-        out[-1]["ui_action"] = "open_divar_ads_all"
     add(
         "سطوح همکاری",
         icon="users",
@@ -1006,19 +986,6 @@ def build_home_ai_quick_prompts(
         subtitle="برای مشتری وقت بازدید بگیرید",
         variant="hero",
         ui_action="open_customer_modal",
-    )
-    add(
-        "لیست ملک‌ها",
-        prompt="دنبال ملک مناسب هستم",
-        intent="find_land",
-        icon="search",
-        subtitle=(
-            "فایل مناسب برای مشتری"
-            if has_completed_deal
-            else "جستجوی فایل و ملک"
-        ),
-        variant="tile",
-        ui_action="open_divar_ads_all",
     )
     add(
         "پیگیری",
