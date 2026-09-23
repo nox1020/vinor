@@ -983,7 +983,7 @@ def build_home_ai_quick_prompts(
         prompt="مشتری دارم",
         intent="have_customer",
         icon="user_plus",
-        subtitle="برای مشتری وقت بازدید بگیرید",
+        subtitle="فایل مناسب پیدا کن و بازدید بگیر",
         variant="hero",
         ui_action="open_customer_modal",
     )

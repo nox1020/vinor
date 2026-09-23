@@ -1,0 +1,277 @@
+{# خانهٔ همکار — سلام، کیف پول، مشتری دارم، میانبرها، خبر، فایل پیشنهادی، عملکرد #}
+<style>
+  #homeDashboardPage.ai-home-is-empty .ep-header-float-actions { display: none !important; }
+  #homeDashboardPage.ai-home-is-empty #homeDivarAdsCarousel.vn-home-divar { display: none !important; }
+  #homeDashboardPage.ai-home-is-empty #aiHomeInline { padding-top: calc(env(safe-area-inset-top, 0px) + 0.55rem) !important; }
+  .vn-hub { width: 100%; text-align: start; pointer-events: auto; display: flex; flex-direction: column; gap: 0.85rem; }
+  .vn-hub button { font-family: inherit; appearance: none; -webkit-appearance: none; }
+  .vn-hub__hello { display: flex; align-items: center; gap: 0.65rem; }
+  .vn-hub__avatar {
+    width: 2.6rem; height: 2.6rem; border-radius: 999px; flex: 0 0 auto;
+    background: #1c1c1e; color: #d4d4d8; display: grid; place-items: center;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .vn-hub__avatar svg { width: 1.25rem; height: 1.25rem; }
+  .vn-hub__greet { min-width: 0; flex: 1; }
+  .vn-hub__name { margin: 0; font-size: 0.98rem; font-weight: 700; color: #fafafa; }
+  .vn-hub__ready { margin: 0.1rem 0 0; font-size: 0.75rem; color: #a1a1aa; }
+  .vn-hub__brand { text-align: left; display: flex; align-items: center; gap: 0.45rem; }
+  .vn-hub__brand-name { margin: 0; font-size: 1.05rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+  .vn-hub__brand-sub { margin: 0; font-size: 0.62rem; color: #71717a; }
+  .vn-hub__bell {
+    width: 2.15rem; height: 2.15rem; border-radius: 999px; border: 0; background: #1c1c1e;
+    color: #fafafa; display: grid; place-items: center; text-decoration: none;
+  }
+  .vn-hub__bell svg { width: 1.05rem; height: 1.05rem; }
+  .vn-hub__wallet {
+    display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit;
+    background: #141416; border: 1px solid rgba(255,255,255,0.06); border-radius: 1.05rem;
+    padding: 0.85rem 0.9rem;
+  }
+  .vn-hub__wallet-main { flex: 1; min-width: 0; }
+  .vn-hub__wallet-k { margin: 0; display: flex; align-items: center; gap: 0.25rem; color: #a1a1aa; font-size: 0.75rem; }
+  .vn-hub__wallet-k svg { width: 0.85rem; height: 0.85rem; }
+  .vn-hub__wallet-amt { margin: 0.2rem 0 0; font-size: 1.15rem; font-weight: 800; color: #fafafa; }
+  .vn-hub__growth {
+    flex: 0 0 auto; background: rgba(22,163,74,0.16); color: #4ade80;
+    border-radius: 0.7rem; padding: 0.4rem 0.55rem; font-size: 0.68rem; font-weight: 700; text-align: center; line-height: 1.35;
+  }
+  .vn-hub__hero {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 0.28rem; width: 100%;
+    text-align: start; text-decoration: none; color: inherit; border: 0; cursor: pointer;
+    background: linear-gradient(180deg, #14532d 0%, #052e16 100%);
+    border-radius: 1.15rem; padding: 1rem 1rem 0.9rem;
+    box-shadow: inset 0 0 0 1px rgba(74,222,128,0.28);
+  }
+  .vn-hub__kicker { font-size: 0.72rem; color: #86efac; font-weight: 600; }
+  .vn-hub__hero-title { display: flex; align-items: center; gap: 0.4rem; font-size: 1.25rem; font-weight: 800; color: #fff; }
+  .vn-hub__badge {
+    min-width: 1.25rem; padding: 0.05rem 0.4rem; border-radius: 999px;
+    background: #2563eb; color: #fff; font-size: 0.72rem; font-weight: 800;
+  }
+  .vn-hub__hero-sub { font-size: 0.78rem; color: #d1fae5; }
+  .vn-hub__start {
+    margin-top: 0.45rem; background: #22c55e; color: #052e16; font-weight: 800;
+    border-radius: 999px; padding: 0.42rem 0.95rem; font-size: 0.82rem;
+  }
+  .vn-hub__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
+  .vn-hub__sc {
+    display: flex; align-items: center; gap: 0.45rem; min-height: 3.35rem;
+    background: #161618; border: 1px solid rgba(255,255,255,0.06); border-radius: 0.95rem;
+    padding: 0.7rem 0.75rem; color: #fafafa; text-decoration: none; font-size: 0.82rem; font-weight: 700;
+    position: relative; width: 100%; text-align: start; font-family: inherit;
+  }
+  .vn-hub__sc svg { width: 1.15rem; height: 1.15rem; flex: 0 0 auto; color: #e4e4e7; }
+  .vn-hub__new {
+    margin-inline-start: auto; background: #16a34a; color: #fff; font-size: 0.62rem;
+    border-radius: 999px; padding: 0.05rem 0.35rem; font-weight: 800;
+  }
+  .vn-hub__files-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  .vn-hub__files-head h2 { margin: 0; font-size: 0.92rem; font-weight: 800; color: #fafafa; }
+  .vn-hub__files-head a { color: #60a5fa; font-size: 0.75rem; font-weight: 700; text-decoration: none; }
+  .vn-hub__track {
+    display: flex; gap: 0.65rem; overflow-x: auto; padding-bottom: 0.15rem;
+    scroll-snap-type: x mandatory; scrollbar-width: none;
+  }
+  .vn-hub__track::-webkit-scrollbar { display: none; }
+  .vn-hub__card {
+    flex: 0 0 16.5rem; scroll-snap-align: start; background: #141416;
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 1rem; overflow: hidden;
+  }
+  .vn-hub__photo { position: relative; height: 8.6rem; background: #1a2332; }
+  .vn-hub__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .vn-hub__loc {
+    position: absolute; top: 0.45rem; right: 0.45rem; max-width: 70%;
+    background: rgba(0,0,0,0.55); color: #fff; border-radius: 999px;
+    padding: 0.15rem 0.45rem; font-size: 0.68rem;
+  }
+  .vn-hub__body { padding: 0.65rem 0.7rem 0.7rem; display: flex; flex-direction: column; gap: 0.18rem; }
+  .vn-hub__card-title { margin: 0; font-size: 0.86rem; font-weight: 800; color: #fafafa; }
+  .vn-hub__meta { margin: 0; font-size: 0.72rem; color: #a1a1aa; }
+  .vn-hub__price { margin: 0; font-size: 0.78rem; color: #e4e4e7; font-weight: 700; }
+  .vn-hub__comm { margin: 0; font-size: 0.72rem; color: #4ade80; font-weight: 700; }
+  .vn-hub__acts { display: flex; gap: 0.4rem; margin-top: 0.45rem; }
+  .vn-hub__acts a, .vn-hub__acts button {
+    flex: 1; border-radius: 0.7rem; border: 1px solid rgba(255,255,255,0.1);
+    background: #1c1c1e; color: #fafafa; font-size: 0.72rem; font-weight: 700;
+    padding: 0.42rem 0.3rem; text-align: center; text-decoration: none; cursor: pointer;
+  }
+  .vn-hub__acts button { background: #14532d; border-color: transparent; color: #ecfdf5; }
+  .vn-hub__perf h2 { margin: 0 0 0.45rem; font-size: 0.92rem; font-weight: 800; }
+  .vn-hub__stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem; }
+  .vn-hub__stat {
+    background: #161618; border-radius: 0.85rem; padding: 0.65rem 0.35rem; text-align: center;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .vn-hub__stat b { display: block; font-size: 1.05rem; color: #fafafa; }
+  .vn-hub__stat span { display: block; margin-top: 0.15rem; font-size: 0.65rem; color: #a1a1aa; line-height: 1.35; }
+</style>
+
+{% set _pipe = home_requests_pipeline_count|default(0)|int %}
+{% set _growth = home_month_growth_pct %}
+{% set _apply = url_for('express_partner.apply') %}
+{% set _apply_href = _apply if me_phone else url_for('express_partner.home', menu=1, login_next=_apply) %}
+<div class="vn-hub">
+  <div class="vn-hub__hello">
+    <span class="vn-hub__avatar" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 19.2c.6-3 3.2-4.6 6.5-4.6s5.9 1.6 6.5 4.6" stroke-linecap="round"/></svg>
+    </span>
+    <div class="vn-hub__greet">
+      <p class="vn-hub__name">{% if me_name %}سلام، {{ me_name }}{% else %}سلام، همکار عزیز{% endif %}</p>
+      <p class="vn-hub__ready">{% if is_approved %}آماده‌ای بفروشی؟{% elif has_pending_app %}درخواستت در حال بررسی است{% else %}آماده‌ای همکاری کنی؟{% endif %}</p>
+    </div>
+    <div class="vn-hub__brand">
+      <div>
+        <p class="vn-hub__brand-name">وینور</p>
+        <p class="vn-hub__brand-sub">فرصت بیشتر، درآمد بالاتر</p>
+      </div>
+      <a class="vn-hub__bell" href="{{ url_for('express_partner.notifications') }}" data-vinor-express-nav aria-label="اعلان‌ها">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 1.5H4.5L6 16z" stroke-linejoin="round"/><path d="M10 19a2 2 0 0 0 4 0" stroke-linecap="round"/></svg>
+      </a>
+    </div>
+  </div>
+
+  {% if is_approved %}
+  <a class="vn-hub__wallet" href="{{ url_for('express_partner.commissions') }}" data-vinor-express-nav>
+    <div class="vn-hub__wallet-main">
+      <p class="vn-hub__wallet-k">
+        پورسانت‌های قابل دریافت
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </p>
+      <p class="vn-hub__wallet-amt">{{ (withdrawable_balance|default(0))|toman }}</p>
+    </div>
+    {% if _growth is number %}
+    {% set g = _growth|int %}
+    <div class="vn-hub__growth">رشد این ماه<br>{% if g > 0 %}+{% elif g < 0 %}−{% endif %}{{ (g|abs)|fa_digits }}٪</div>
+    {% endif %}
+  </a>
+  {% endif %}
+
+  {% if is_approved %}
+  <button type="button" class="vn-hub__hero" data-open-customer-modal>
+    <span class="vn-hub__kicker">فرصت در دستان شماست</span>
+    <span class="vn-hub__hero-title">مشتری دارم{% if _pipe > 0 %}<span class="vn-hub__badge">{{ _pipe|fa_digits }}</span>{% endif %}</span>
+    <span class="vn-hub__hero-sub">{% if _pipe > 0 %}نیاز به پیگیری{% else %}فایل مناسب پیدا کن و بازدید بگیر{% endif %}</span>
+    <span class="vn-hub__start">شروع کنید</span>
+  </button>
+  {% elif has_pending_app %}
+  <a class="vn-hub__hero" href="{{ url_for('express_partner.thanks') }}" data-vinor-express-nav>
+    <span class="vn-hub__hero-title">وضعیت درخواست</span>
+    <span class="vn-hub__hero-sub">پیگیری تأیید همکاری</span>
+    <span class="vn-hub__start">ادامه</span>
+  </a>
+  {% else %}
+  <a class="vn-hub__hero" href="{{ _apply_href }}" data-vinor-express-nav>
+    <span class="vn-hub__hero-title">می‌خواهم بازاریاب وینور شوم</span>
+    <span class="vn-hub__hero-sub">شروع همکاری فروش و دریافت پورسانت</span>
+    <span class="vn-hub__start">شروع کنید</span>
+  </a>
+  {% endif %}
+
+  <div class="vn-hub__grid">
+    <a class="vn-hub__sc" href="{{ url_for('express_partner.training') }}" data-vinor-express-nav>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 8l9-4 9 4-9 4-9-4z"/><path d="M7 10.5V15c0 1.2 2.2 2.5 5 2.5s5-1.3 5-2.5v-4.5" stroke-linecap="round"/></svg>
+      آموزش فروش
+    </a>
+    <button type="button" class="vn-hub__sc" data-vinor-open-chat>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 6h14v9H8l-3 3V6z" stroke-linejoin="round"/></svg>
+      چت AI
+      <span class="vn-hub__new">جدید</span>
+    </button>
+    {% if is_approved %}
+    <a class="vn-hub__sc" href="{{ url_for('express_partner.requests') }}" data-vinor-express-nav>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 7h8M8 12h8M8 17h5" stroke-linecap="round"/><rect x="5" y="4" width="14" height="16" rx="2"/></svg>
+      پیگیری مشتری‌ها
+      {% if _pipe > 0 %}<span class="vn-hub__badge">{{ _pipe|fa_digits }}</span>{% endif %}
+    </a>
+    {% else %}
+    <a class="vn-hub__sc" href="{{ url_for('express_partner.coop_levels') }}" data-vinor-express-nav>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3"/></svg>
+      سطوح همکاری
+    </a>
+    {% endif %}
+    <a class="vn-hub__sc" href="{{ url_for('express_partner.my_property') if me_phone else url_for('express_partner.home', menu=1, login_next=url_for('express_partner.my_property')) }}" data-vinor-express-nav>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-5v-5H10v5H5a1 1 0 0 1-1-1v-8z" stroke-linejoin="round"/></svg>
+      فایل‌های من
+    </a>
+  </div>
+
+  <div class="ai-home-news" role="status" aria-live="polite" aria-atomic="true" data-ai-home-news>
+    <span class="ai-home-news__dot" aria-hidden="true"></span>
+    <div class="ai-home-news__body">
+      <span class="ai-home-news__label">خبر وینور</span>
+      <span class="ai-home-news__text" data-ai-home-news-text>{{ (home_news_items|default([])|first)|default('زمین جابان فروش رفت و پورسانت رسید') }}</span>
+    </div>
+  </div>
+
+  {% set _ads = divar_pro_ads|default([]) %}
+  {% if _ads %}
+  <section aria-label="فایل‌های پیشنهادی برای فروش">
+    <div class="vn-hub__files-head">
+      <h2>فایل‌های پیشنهادی برای فروش</h2>
+      <a href="{{ url_for('express_partner.search') }}" data-vinor-express-nav>مشاهده همه</a>
+    </div>
+    <div class="vn-hub__track">
+      {% for ad in _ads %}
+      {% if loop.index <= 8 %}
+      <article class="vn-hub__card">
+        <div class="vn-hub__photo">
+          {% if ad.image_url %}
+          <img src="{{ ad.image_url }}" alt="" loading="lazy">
+          {% endif %}
+          {% if ad.location %}
+          <span class="vn-hub__loc">{{ ad.location }}</span>
+          {% endif %}
+        </div>
+        <div class="vn-hub__body">
+          <h3 class="vn-hub__card-title">{{ ad.title or 'فایل' }}</h3>
+          {% if ad.area %}
+          <p class="vn-hub__meta">{{ ad.area }}</p>
+          {% endif %}
+          {% if ad.price %}
+          <p class="vn-hub__price">{{ ad.price }}</p>
+          {% endif %}
+          {% if is_approved and (ad.commission_amount|default(0)|int) > 0 %}
+          <p class="vn-hub__comm">پورسانت {{ ad.commission_amount|toman }}</p>
+          {% endif %}
+          <div class="vn-hub__acts">
+            {% if ad.url %}
+            <a href="{{ ad.url }}" data-vinor-express-nav>تماس</a>
+            {% endif %}
+            {% if is_approved %}
+            <button type="button" data-open-customer-modal>معرفی به مشتری</button>
+            {% endif %}
+          </div>
+        </div>
+      </article>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if is_approved %}
+  <section class="vn-hub__perf" aria-label="عملکرد من">
+    <h2>عملکرد من</h2>
+    <div class="vn-hub__stats">
+      <div class="vn-hub__stat"><b>{{ (home_deals_done|default(0))|fa_digits }}</b><span>معامله موفق</span></div>
+      <div class="vn-hub__stat"><b>{{ (home_visits_done|default(0))|fa_digits }}</b><span>بازدید انجام‌شده</span></div>
+      <div class="vn-hub__stat"><b>{{ (home_active_customers|default(0))|fa_digits }}</b><span>مشتری فعال</span></div>
+    </div>
+  </section>
+  {% endif %}
+</div>
+<script>
+(function () {
+  if (window.__vinorHubChatBound) return;
+  window.__vinorHubChatBound = true;
+  document.addEventListener('click', function (ev) {
+    var el = ev.target && ev.target.closest && ev.target.closest('[data-vinor-open-chat]');
+    if (!el) return;
+    ev.preventDefault();
+    if (typeof window.__vinorAiOpenHomeChat === 'function') {
+      try { window.__vinorAiOpenHomeChat(); } catch (_) {}
+    }
+  });
+})();
+</script>

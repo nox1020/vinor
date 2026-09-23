@@ -3192,6 +3192,102 @@ def _home_suggested_files(
     return out
 
 
+def _home_ad_area_label(land: Dict[str, Any]) -> str:
+    """متراژ قابل‌نمایش کارت فایل — اگر در داده نباشد خالی می‌ماند."""
+    if not isinstance(land, dict):
+        return ''
+    for key in ('villa_built_area', 'built_area', 'size', 'land_area', 'area'):
+        raw = str(land.get(key) or '').strip()
+        if not raw or raw in ('0', '0.0', 'None'):
+            continue
+        if 'متر' in raw:
+            return raw
+        return f'{raw} متر'
+    return ''
+
+
+def _home_month_growth_pct(commissions: List[Dict[str, Any]]) -> Optional[int]:
+    """درصد تغییر پورسانت تأیید/پرداخت‌شده این ماه نسبت به ماه قبل. بدون پایهٔ ماه قبل None."""
+    from datetime import datetime
+
+    now = datetime.now()
+    this_y, this_m = now.year, now.month
+    if this_m == 1:
+        prev_y, prev_m = this_y - 1, 12
+    else:
+        prev_y, prev_m = this_y, this_m - 1
+    this_amt = 0
+    prev_amt = 0
+    finalized = frozenset({'approved', 'paid'})
+    for c in commissions or []:
+        if not isinstance(c, dict):
+            continue
+        if str(c.get('status') or '').strip().lower() not in finalized:
+            continue
+        raw = c.get('approved_at') or c.get('paid_at') or c.get('created_at') or ''
+        try:
+            dt = parse_datetime_safe(raw)
+        except Exception:
+            dt = None
+        if dt is None:
+            continue
+        try:
+            amt = int(float(c.get('commission_amount') or 0))
+        except Exception:
+            amt = 0
+        year = getattr(dt, 'year', None)
+        month = getattr(dt, 'month', None)
+        if year == this_y and month == this_m:
+            this_amt += amt
+        elif year == prev_y and month == prev_m:
+            prev_amt += amt
+    if prev_amt <= 0:
+        return None
+    return int(round((this_amt - prev_amt) * 100.0 / prev_amt))
+
+
+def _home_performance_stats(
+    phone: str,
+    visit_rows: List[Dict[str, Any]],
+    commissions: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """اعداد واقعی عملکرد خانه: معامله، بازدید انجام‌شده، مشتری باز، رشد ماه."""
+    ph = (phone or '').strip()
+    deals = 0
+    finalized = frozenset({'approved', 'paid'})
+    for c in commissions or []:
+        if not isinstance(c, dict):
+            continue
+        try:
+            if not commission_is_deal(c):
+                continue
+        except Exception:
+            continue
+        if str(c.get('status') or '').strip().lower() in finalized:
+            deals += 1
+    visits_done = 0
+    active: set[str] = set()
+    open_st = frozenset({'pending', 'approved', 'done_pending'})
+    for row in visit_rows or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get('partner_phone') or '').strip() != ph:
+            continue
+        st = str(row.get('status') or '').strip()
+        if st == COMPLETED_STATUS:
+            visits_done += 1
+        if st in open_st:
+            key = str(row.get('customer_phone') or row.get('id') or '').strip()
+            if key:
+                active.add(key)
+    return {
+        'home_deals_done': deals,
+        'home_visits_done': visits_done,
+        'home_active_customers': len(active),
+        'home_month_growth_pct': _home_month_growth_pct(commissions),
+    }
+
+
 def _home_follow_up_count(phone: str, visit_rows: List[Dict[str, Any]]) -> int:
     ph = (phone or '').strip()
     if not ph:
@@ -3616,6 +3712,18 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         )
         if ph and is_approved else 0
     )
+    if ph and is_approved:
+        hub_stats = _home_performance_stats(ph, visit_rows, my_comms)
+    else:
+        hub_stats = {
+            'home_deals_done': 0,
+            'home_visits_done': 0,
+            'home_active_customers': 0,
+            'home_month_growth_pct': None,
+        }
+    me_display = _partner_display_name(ph) if ph else ''
+    if me_display.isdigit():
+        me_display = ''
 
     out: Dict[str, Any] = {
         'success': True,
@@ -3629,6 +3737,11 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'mission': None,
         'withdrawable_balance': withdrawable,
         'home_requests_pipeline_count': home_requests_pipeline_count,
+        'me_name': me_display,
+        'home_deals_done': hub_stats['home_deals_done'],
+        'home_visits_done': hub_stats['home_visits_done'],
+        'home_active_customers': hub_stats['home_active_customers'],
+        'home_month_growth_pct': hub_stats['home_month_growth_pct'],
         'customer_modal_lands': [],
         'is_special': _is_partner_special(profile) if ph and is_approved else False,
         'lawyer_feature_on': False,
@@ -4139,6 +4252,10 @@ def home_page():
         journey_card=payload.get('journey_card'),
         withdrawable_balance=int(payload.get('withdrawable_balance') or 0),
         home_requests_pipeline_count=int(payload.get('home_requests_pipeline_count') or 0),
+        home_deals_done=int(payload.get('home_deals_done') or 0),
+        home_visits_done=int(payload.get('home_visits_done') or 0),
+        home_active_customers=int(payload.get('home_active_customers') or 0),
+        home_month_growth_pct=payload.get('home_month_growth_pct'),
         hide_header=True,
         bottom_nav_active='home',
         brand='وینور',
@@ -4857,6 +4974,7 @@ def _vinor_land_to_home_ad(land: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         'external': False,
         'commission_amount': max(0, commission_amount),
         'commission_pct': land.get('_commission_pct') or 0,
+        'area': _home_ad_area_label(land),
     }
 
 
@@ -4913,6 +5031,7 @@ def _home_ads_for_api() -> tuple:
             'source': str(ad.get('source') or '').strip(),
             'url': str(ad.get('url') or '').strip(),
             'commission_amount': max(0, commission_amount),
+            'area': str(ad.get('area') or '').strip(),
         })
     return out, len(out)
 
