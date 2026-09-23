@@ -550,18 +550,21 @@
   #aiHomeEmpty .ai-home-news {
     display: flex;
     align-items: center;
-    gap: 0.55rem;
+    gap: 0.45rem;
     width: 100%;
     max-width: 100%;
+    height: 3.6rem;
+    min-height: 3.45rem;
+    max-height: 4.05rem;
     margin: 0;
-    padding: 0.58rem 0.75rem;
-    border: 1px solid rgba(52, 211, 153, 0.38);
-    border-radius: 0.75rem;
-    background: rgba(8, 28, 22, 0.92);
+    padding: 0 0.75rem;
+    border: 1px solid rgba(74, 222, 128, 0.28);
+    border-radius: 1rem;
+    background: #101412;
     text-align: right;
     pointer-events: none;
     overflow: hidden;
-    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.06);
+    box-shadow: none;
   }
   #homeDashboardPage:not(.ai-home-is-empty) #aiHomeEmpty .ai-home-news {
     display: none !important;
@@ -572,7 +575,6 @@
     height: 0.45rem;
     border-radius: 9999px;
     background: #34d399;
-    box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
     animation: aiHomeNewsPulse 1.4s ease-in-out infinite;
   }
   @keyframes aiHomeNewsPulse {
@@ -583,23 +585,35 @@
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.45rem;
   }
   #aiHomeEmpty .ai-home-news__label {
-    font-size: 0.62rem;
+    flex: 0 0 auto;
+    font-size: 0.72rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
     color: #6ee7b7;
   }
+  #aiHomeEmpty .ai-home-news__time {
+    flex: 0 0 auto;
+    max-width: 5.5rem;
+    color: #a1a1aa;
+    font-size: 0.68rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #aiHomeEmpty .ai-home-news__time:empty { display: none; }
   #aiHomeEmpty .ai-home-news__text {
-    width: 100%;
-    min-height: 1.35em;
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    min-height: 0;
     color: #ececec;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 500;
-    line-height: 1.45;
+    line-height: 1.35;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1168,6 +1182,7 @@
       '<div class="ai-home-news__body">' +
       '<span class="ai-home-news__label">خبر وینور</span>' +
       '<span class="ai-home-news__text" data-ai-home-news-text></span>' +
+      '<span class="ai-home-news__time" data-ai-home-news-time></span>' +
       '</div>';
     empty.appendChild(box);
     return box.querySelector('[data-ai-home-news-text]');
@@ -1188,14 +1203,25 @@
     return Math.floor(Date.now() / NEWS_INTERVAL_MS) % ITEMS.length;
   }
 
+  function newsParts(item) {
+    if (item && typeof item === 'object') {
+      return { text: item.text || '', time: item.time || '' };
+    }
+    return { text: item == null ? '' : String(item), time: '' };
+  }
+
   function showAt(i) {
     var textEl = elText();
     if (!textEl || !ITEMS.length) return;
+    var empty = document.getElementById('aiHomeEmpty');
+    var timeEl = empty && empty.querySelector('[data-ai-home-news-time]');
     idx = ((i % ITEMS.length) + ITEMS.length) % ITEMS.length;
+    var parts = newsParts(ITEMS[idx]);
     textEl.classList.add('is-swap');
     if (swapTimer) clearTimeout(swapTimer);
     swapTimer = setTimeout(function () {
-      textEl.textContent = ITEMS[idx];
+      textEl.textContent = parts.text;
+      if (timeEl) timeEl.textContent = parts.time;
       textEl.classList.remove('is-swap');
     }, 180);
   }
@@ -1212,7 +1238,11 @@
     var textEl = elText();
     if (!textEl) return;
     idx = currentIndex();
-    textEl.textContent = ITEMS[idx];
+    var parts = newsParts(ITEMS[idx]);
+    var empty = document.getElementById('aiHomeEmpty');
+    var timeEl = empty && empty.querySelector('[data-ai-home-news-time]');
+    textEl.textContent = parts.text;
+    if (timeEl) timeEl.textContent = parts.time;
     textEl.classList.remove('is-swap');
     timer = setInterval(tick, 400);
   }

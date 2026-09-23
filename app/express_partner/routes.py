@@ -3404,9 +3404,64 @@ def _home_news_short_label(comm: Dict[str, Any], lands_by_code: Dict[str, Dict[s
     return 'فایل وینور'
 
 
-def _home_news_headlines(*, limit: int = 40) -> List[str]:
+def _home_relative_label(raw: Any) -> str:
+    """زمان نسبی فقط وقتی تاریخ واقعی در داده باشد."""
+    try:
+        dt = parse_datetime_safe(raw)
+    except Exception:
+        dt = None
+    if dt is None:
+        return ''
+    from datetime import datetime
+
+    now = datetime.now(dt.tzinfo) if getattr(dt, 'tzinfo', None) else datetime.now()
+    try:
+        seconds = int((now - dt).total_seconds())
+    except Exception:
+        return ''
+    if seconds < 0:
+        return ''
+
+    def _fa(n: int) -> str:
+        return str(n).translate(str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹'))
+
+    if seconds < 60:
+        return 'چند لحظه پیش'
+    minutes = seconds // 60
+    if minutes < 60:
+        return f'{_fa(minutes)} دقیقه پیش'
+    hours = minutes // 60
+    if hours < 24:
+        return f'{_fa(hours)} ساعت پیش'
+    days = hours // 24
+    if days < 30:
+        return f'{_fa(days)} روز پیش'
+    months = days // 30
+    if months < 12:
+        return f'{_fa(months)} ماه پیش'
+    return f'{_fa(months // 12)} سال پیش'
+
+
+def _home_ad_facts(land: Dict[str, Any]) -> List[str]:
+    """حداکثر سه مشخصهٔ موجود: متراژ، کاربری، عرض گذر."""
+    if not isinstance(land, dict):
+        return []
+    bits: List[str] = []
+    area = _home_ad_area_label(land)
+    if area:
+        bits.append(area)
+    usage = str(land.get('category') or '').strip()
+    if usage:
+        bits.append(usage)
+    street = str(land.get('street_width') or '').strip()
+    if street and street not in ('0', '0.0', 'None'):
+        bits.append(street if 'متر' in street or 'عرض' in street else f'عرض {street} متر')
+    return bits[:3]
+
+
+def _home_news_headlines(*, limit: int = 40) -> List[Dict[str, str]]:
     """تیترهای چرخشی خبر خانه — از معاملات تأییدشده + fallback."""
-    headlines: List[str] = []
+    headlines: List[Dict[str, str]] = []
     seen: set[str] = set()
     try:
         comms = _express_commissions_cached() or []
@@ -3434,7 +3489,7 @@ def _home_news_headlines(*, limit: int = 40) -> List[str]:
             ).strip()
             eligible.append((ts, c))
         eligible.sort(key=lambda row: row[0], reverse=True)
-        for i, (_, comm) in enumerate(eligible[: max(limit, 1)]):
+        for i, (ts, comm) in enumerate(eligible[: max(limit, 1)]):
             label = _home_news_short_label(comm, lands_by_code)
             if not label:
                 continue
@@ -3443,7 +3498,7 @@ def _home_news_headlines(*, limit: int = 40) -> List[str]:
             if line in seen:
                 continue
             seen.add(line)
-            headlines.append(line)
+            headlines.append({'text': line, 'time': _home_relative_label(ts)})
     except Exception:
         try:
             current_app.logger.exception('home news headlines failed')
@@ -3454,10 +3509,10 @@ def _home_news_headlines(*, limit: int = 40) -> List[str]:
             break
         if fb not in seen:
             seen.add(fb)
-            headlines.append(fb)
+            headlines.append({'text': fb, 'time': ''})
     if headlines:
         return headlines[:limit]
-    return list(_HOME_NEWS_FALLBACK[:12])
+    return [{'text': line, 'time': ''} for line in _HOME_NEWS_FALLBACK[:12]]
 
 
 def _land_status_from_assigned_lands(assigned_lands: List[Dict[str, Any]]) -> Dict[str, str]:
@@ -4975,6 +5030,8 @@ def _vinor_land_to_home_ad(land: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         'commission_amount': max(0, commission_amount),
         'commission_pct': land.get('_commission_pct') or 0,
         'area': _home_ad_area_label(land),
+        'facts': _home_ad_facts(land),
+        'listed_label': _home_relative_label(land.get('updated_at') or land.get('created_at')),
     }
 
 
@@ -5032,6 +5089,8 @@ def _home_ads_for_api() -> tuple:
             'url': str(ad.get('url') or '').strip(),
             'commission_amount': max(0, commission_amount),
             'area': str(ad.get('area') or '').strip(),
+            'facts': [str(x).strip() for x in (ad.get('facts') or []) if str(x).strip()][:3],
+            'listed_label': str(ad.get('listed_label') or '').strip(),
         })
     return out, len(out)
 
