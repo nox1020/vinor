@@ -5284,6 +5284,24 @@ def search_page():
     return resp
 
 
+@express_partner_bp.get('/news', endpoint='news')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def news_page():
+    """صفحهٔ خبر وینور — همان تیترهای خانه، بدون باکس روی آگهی‌ها."""
+    try:
+        news_items = _home_news_headlines()
+    except Exception:
+        news_items = []
+    resp = make_response(render_template(
+        'express_partner/news.html',
+        news_items=news_items or [],
+        hide_header=True,
+        bottom_nav_active='home',
+    ))
+    _append_partner_tab_prefetch(resp)
+    return resp
+
+
 @express_partner_bp.get('/favorites', endpoint='favorites')
 @require_partner_access(allow_pending=True)
 def favorites_page():

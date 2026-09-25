@@ -79,10 +79,6 @@
   }
   .vn-hub__sc svg { width: 18px; height: 18px; flex: 0 0 auto; color: #e4e4e7; }
   .vn-hub__sc span.vn-hub__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .vn-hub__new {
-    margin-inline-start: auto; background: #16a34a; color: #fff; font-size: 0.62rem;
-    border-radius: 999px; padding: 1px 6px; font-weight: 800; flex: 0 0 auto;
-  }
   .vn-hub__files-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
   .vn-hub__files-head h2 { margin: 0; font-size: 0.92rem; font-weight: 800; color: #fafafa; }
   .vn-hub__files-head a { color: #4ade80; font-size: 0.75rem; font-weight: 700; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
@@ -143,9 +139,6 @@
 {% set _growth = home_month_growth_pct %}
 {% set _apply = url_for('express_partner.apply') %}
 {% set _apply_href = _apply if me_phone else url_for('express_partner.home', menu=1, login_next=_apply) %}
-{% set _news0 = (home_news_items|default([]))|first %}
-{% set _news_text = _news0.text if _news0 is mapping else (_news0 or 'زمین جابان فروش رفت و پورسانت رسید') %}
-{% set _news_time = _news0.time if _news0 is mapping else '' %}
 <div class="vn-hub">
   <div class="vn-hub__hello">
     <span class="vn-hub__avatar" aria-hidden="true">
@@ -205,11 +198,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 8l9-4 9 4-9 4-9-4z"/><path d="M7 10.5V15c0 1.2 2.2 2.5 5 2.5s5-1.3 5-2.5v-4.5" stroke-linecap="round"/></svg>
       <span class="vn-hub__label">آموزش فروش</span>
     </a>
-    <button type="button" class="vn-hub__sc" data-vinor-open-chat>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 6h14v9H8l-3 3V6z" stroke-linejoin="round"/></svg>
-      <span class="vn-hub__label">چت AI</span>
-      <span class="vn-hub__new">جدید</span>
-    </button>
+    <a class="vn-hub__sc" href="{{ url_for('express_partner.news') }}" data-vinor-express-nav>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 5h11a2 2 0 0 1 2 2v12H7a2 2 0 0 1-2-2V5z" stroke-linejoin="round"/><path d="M8 9h7M8 12.5h7M8 16h4" stroke-linecap="round"/></svg>
+      <span class="vn-hub__label">خبر وینور</span>
+    </a>
     <a class="vn-hub__sc" href="{{ url_for('express_partner.my_property') if me_phone else url_for('express_partner.home', menu=1, login_next=url_for('express_partner.my_property')) }}" data-vinor-express-nav>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-5v-5H10v5H5a1 1 0 0 1-1-1v-8z" stroke-linejoin="round"/></svg>
       <span class="vn-hub__label">فایل‌های من</span>
@@ -226,15 +218,6 @@
       <span class="vn-hub__label">سطوح همکاری</span>
     </a>
     {% endif %}
-  </div>
-
-  <div class="ai-home-news" role="status" aria-live="polite" aria-atomic="true" data-ai-home-news>
-    <span class="ai-home-news__dot" aria-hidden="true"></span>
-    <div class="ai-home-news__body">
-      <span class="ai-home-news__label">خبر وینور</span>
-      <span class="ai-home-news__text" data-ai-home-news-text>{{ _news_text }}</span>
-      <span class="ai-home-news__time" data-ai-home-news-time>{{ _news_time }}</span>
-    </div>
   </div>
 
   {% set _ads = divar_pro_ads|default([]) %}
@@ -302,17 +285,3 @@
   </section>
   {% endif %}
 </div>
-<script>
-(function () {
-  if (window.__vinorHubChatBound) return;
-  window.__vinorHubChatBound = true;
-  document.addEventListener('click', function (ev) {
-    var el = ev.target && ev.target.closest && ev.target.closest('[data-vinor-open-chat]');
-    if (!el) return;
-    ev.preventDefault();
-    if (typeof window.__vinorAiOpenHomeChat === 'function') {
-      try { window.__vinorAiOpenHomeChat(); } catch (_) {}
-    }
-  });
-})();
-</script>

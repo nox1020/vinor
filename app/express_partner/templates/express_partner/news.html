@@ -1,0 +1,69 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}خبر وینور{% endblock %}
+
+{% block content %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{{ ep_header_start(id='newsPageHeader') }}
+{% call ep_header_row('خبر وینور', url_for('express_partner.home')) %}{% endcall %}
+{{ ep_header_end() }}
+
+<style>
+  html:has(#vinorNewsPage),
+  body:has(#vinorNewsPage) { background: #000 !important; }
+  #vinorNewsPage {
+    background: #000;
+    color: #fff;
+    min-height: 100dvh;
+    padding: 0 0 calc(5.75rem + env(safe-area-inset-bottom, 0px));
+  }
+  #vinorNewsPage .vn-news-shell {
+    max-width: 28rem;
+    margin-inline: auto;
+    padding: 0.35rem 0.9rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+  #vinorNewsPage .vn-news-card {
+    background: #161618;
+    border: 1px solid rgba(74, 222, 128, 0.22);
+    border-radius: 1.1rem;
+    padding: 0.85rem 0.95rem;
+  }
+  #vinorNewsPage .vn-news-text {
+    margin: 0;
+    color: #fafafa;
+    font-size: 0.92rem;
+    font-weight: 700;
+    line-height: 1.55;
+  }
+  #vinorNewsPage .vn-news-time {
+    margin: 0.35rem 0 0;
+    color: #a1a1aa;
+    font-size: 0.75rem;
+  }
+  #vinorNewsPage .vn-news-empty {
+    margin: 1.5rem 0 0;
+    text-align: center;
+    color: #a1a1aa;
+    font-size: 0.88rem;
+  }
+</style>
+
+<div id="vinorNewsPage">
+  <div class="vn-news-shell">
+    {% if news_items %}
+      {% for item in news_items %}
+      <article class="vn-news-card">
+        <p class="vn-news-text">{{ item.text }}</p>
+        {% if item.time %}<p class="vn-news-time">{{ item.time }}</p>{% endif %}
+      </article>
+      {% endfor %}
+    {% else %}
+      <p class="vn-news-empty">خبری ثبت نشده.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}

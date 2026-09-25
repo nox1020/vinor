@@ -22,6 +22,7 @@
   /** @type {Record<string, {tab: string, depth: number, bottomNav?: boolean, prefetch?: boolean}>} */
   var ROUTE_REGISTRY = {
     '/express/partner/home': { tab: 'home', depth: 0, bottomNav: true, prefetch: true },
+    '/express/partner/news': { tab: 'home', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/dashboard': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
     '/express/partner/commissions': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/profile': { tab: 'home', depth: 0, bottomNav: true, prefetch: false },
