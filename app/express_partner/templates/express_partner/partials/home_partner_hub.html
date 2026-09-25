@@ -18,7 +18,8 @@
     position: sticky; top: 0; z-index: 12;
     background: #000;
     margin-inline: -1rem;
-    padding: 0 1rem 4px;
+    margin-bottom: calc(var(--vn-gap) * -1);
+    padding: 0 1rem var(--vn-gap);
   }
   .vn-hub__hello { display: flex; align-items: center; gap: 8px; min-height: 44px; }
   .vn-hub__avatar {
@@ -61,11 +62,14 @@
     display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 4px; width: 100%;
     text-align: start; text-decoration: none; color: inherit; border: 0; cursor: pointer;
     background: linear-gradient(180deg, #166534 0%, #052e16 100%);
-    border-radius: 20px; min-height: 150px; max-height: 180px; padding: 14px 16px; box-sizing: border-box;
+    border-radius: 20px; min-height: 150px; padding: 14px 16px; box-sizing: border-box;
     box-shadow: inset 0 0 0 1px rgba(74,222,128,0.22);
   }
   .vn-hub__kicker { font-size: 0.72rem; color: #86efac; font-weight: 600; }
-  .vn-hub__hero-title { font-size: 1.2rem; font-weight: 800; color: #fff; line-height: 1.25; }
+  .vn-hub__hero-title {
+    font-size: 1.2rem; font-weight: 800; color: #fff; line-height: 1.25;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
   .vn-hub__badge {
     margin-inline-start: auto; min-width: 1.15rem; padding: 0 6px; border-radius: 999px;
     background: #166534; color: #fff; font-size: 0.68rem; font-weight: 800; line-height: 1.4;
@@ -113,6 +117,9 @@
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
   .vn-hub__meta { margin: 0; font-size: 0.72rem; color: #a1a1aa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vn-hub__price, .vn-hub__comm {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .vn-hub__price { margin: 2px 0 0; font-size: 0.82rem; color: #e4e4e7; font-weight: 600; }
   .vn-hub__price b { font-weight: 700; }
   .vn-hub__comm { margin: 0; font-size: 0.78rem; color: #4ade80; font-weight: 700; }
